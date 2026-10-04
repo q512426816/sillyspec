@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-log-window-arity",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-04-log-window-arity:flow:测试绑定FR-01",
+      "tests": [
+        "test/plan-target-files.test.mjs「D7 分支锚定救赎」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-log-window-arity"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-04-log-window-arity:flow:测试绑定FR-02",
+      "tests": [
+        "test/check-syntax.mjs",
+        "test/plan-target-files.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-log-window-arity"
+    }
+  ]
+}

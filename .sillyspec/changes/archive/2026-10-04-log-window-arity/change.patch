@@ -1,0 +1,182 @@
+diff --git a/.sillyspec/changes/2026-10-04-log-window-arity/flow-state.yaml b/.sillyspec/changes/2026-10-04-log-window-arity/flow-state.yaml
+new file mode 100644
+index 00000000..64fa3658
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-log-window-arity/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: 4de262c48dc9f550dae33e157ece35836d37273d
++updatedAt: '2026-10-04T16:16:16.986Z'
++baseline_sha256: 930e710a822d7ab0cd0f0b59a971dd02022467fc2e1956b5a66252f3db269021
++
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 25209f1b..ef311195 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -3714,7 +3714,9 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+       // 锚定变更分支/审计 tag（非 blanket 20 提交——base 提交文件不得误救）
+       const rescueRef = (typeof branchHash === 'string' && branchHash.trim()) ? branch : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
+       if (!rescueRef) throw new Error('no-rescue-ref')
+-      const recent = gitQuiet(cwd, ['log', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
++      // -n 形态计数（2026-10-04-log-window-arity：裸 '20' 在 git ≥2.4x 是 ambiguous argument
++      // fatal——fail-open 静默吞后救赎 note 路径从未生效，plan-target-files D7 在纯 HEAD 稳定红）
++      const recent = gitQuiet(cwd, ['log', '-n', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
+       if (typeof recent === 'string' && recent.trim()) {
+         const files = recent.split('\n').map(l => l.trim()).filter(l => l && !/^[0-9a-f]{7,40}$/.test(l))
+         if (files.length > 0) {
+diff --git a/test/plan-target-files.test.mjs b/test/plan-target-files.test.mjs
+index fc2a1101..69fb93da 100644
+--- a/test/plan-target-files.test.mjs
++++ b/test/plan-target-files.test.mjs
+@@ -751,8 +751,15 @@ if (failed > 0) process.exit(1)
+ 
+ // ── D7. declared-rescue：变更分支锚定救赎（2026-09-24 R9/R11 四连拦根治钉）──
+ {
+-  const dir = mkRepo('tf-rescue-')
++  // 夹具前提修正（2026-10-04-log-window-arity）：救赎路径只在「B1 merge-base 源缺席」形态下
++  // 可达——主干叫 main 时 B1 diff 先命中 declared（rescuedCount=0，note 不发，断言永红：
++  // 纯 HEAD 实证稳定失败）。本块用独立 init -b master 造「merge-base main 失败 → B1 跳过 →
++  // porcelain 恒空 → 仅 B4 分支窗口可救」的真实前提（与注释声明的 isolated worktree 形态一致）。
++  const dir = mkDir('tf-rescue-')
+   try {
++    git(dir, 'init -q -b master')
++    git(dir, 'config user.email t@t.t')
++    git(dir, 'config user.name t')
+     mkdirSync(join(dir, 'src'), { recursive: true })
+     writeFileSync(join(dir, 'src', 'base.js'), 'b')
+     commitAll(dir, 'base')
+diff --git a/.sillyspec/changes/2026-10-04-log-window-arity/design.md b/.sillyspec/changes/2026-10-04-log-window-arity/design.md
+new file mode 100644
+index 00000000..74cbe007
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-log-window-arity/design.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T16:16:16.959Z
++---
++# 设计记录（Design Record）— 2026-10-04-log-window-arity
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++两层修复：①产码——B4 窗口 git log 裸计数 '20' 改 '-n 20'（git 2.45 实测 ambiguous argument fatal，fail-open 吞掉后窗口源从未收集）；②测试——D7 夹具用 mkRepo（主干 main）使 B1 diff 源先命中 declared，救赎路径不可达（断言在纯 HEAD 稳定红，历史只在 B1 失效环境偶绿）；改独立 init -b master 构造注释声明的真实前提（merge-base main 失败→B1 跳过→porcelain 恒空→仅 B4 可救）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++src/verify-postcheck.js collectActual 主仓形态 B4 块一行（git 参数形态）；test/plan-target-files.test.mjs D7 夹具独立建仓（mkRepo→本块内 init -b master）。签名/端点/文件格式零变化；行为恢复=救赎窗口源在 git≥2.4x 重新可收集。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++不适用：对账是收口时点单次读快照，无事件序。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++不适用：纯 git 只读查询 + 测试临时仓，无共享写面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++不适用：无状态引入；fail-open 语义保留（窗口源失败静默省略不阻断对账）。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++不适用：窗口锚定 rescueRef（变更分支/审计 tag），declared-rescue-only 不进全局 union——跨变更污染面维持既有设计不变。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++最大风险：把 D7 改绿被误读为「修测试过门」——但方向相反：产码缺陷（裸计数 fatal）是真修复主体，夹具修正只是让测试重新测到它（修复前该断言在纯 HEAD 稳定红）。试过放弃：只改产码不动夹具（否决——B1 先命中下 note 断言仍永红，测试继续假失败）。
+diff --git a/.sillyspec/changes/2026-10-04-log-window-arity/proposal.md b/.sillyspec/changes/2026-10-04-log-window-arity/proposal.md
+new file mode 100644
+index 00000000..017be6a5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-log-window-arity/proposal.md
+@@ -0,0 +1,23 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T16:16:16.959Z
++---
++# 提案书（Proposal）— 2026-10-04-log-window-arity
++
++## 动机
++
++任务原话转写：动机：pre-push 全量测试暴露预存缺陷——verify-postcheck B4 救赎窗口用裸计数 git log 20（git 2.45 下 ambiguous argument fatal，fail-open 静默吞）——救赎 note 路径在本机从未生效，plan-target-files D7 断言在纯 HEAD 上稳定红。一行修：-n 形态。
++成功标准：
++- B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
++- 既有测试回归绿且 lint 零死导出
++
++## 变更范围
++
++按成功标准机械推导，共 2 条验收面：
++1. B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
++2. 既有测试回归绿且 lint 零死导出
++
++## 成功标准（可验证）
++
++1. B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
++2. 既有测试回归绿且 lint 零死导出
+diff --git a/.sillyspec/changes/2026-10-04-log-window-arity/requirements.md b/.sillyspec/changes/2026-10-04-log-window-arity/requirements.md
+new file mode 100644
+index 00000000..7bd24b1f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-log-window-arity/requirements.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T16:16:16.959Z
++---
++# 需求规格（Requirements）— 2026-10-04-log-window-arity
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
++
++- 系统 MUST 以 -n 形态调用救赎窗口的 git log（裸计数在 git 2.4x 是 ambiguous argument fatal，fail-open 静默吞致窗口源从未收集），且 D7 夹具须真实构造「B1 源缺席+porcelain 恒空」的救赎前提
++
++#### 场景：分支窗口救赎
++
++Given 主干非 main 命名的仓、变更分支上有 per-task 提交、工作树干净
++When reconcileTargetFiles 对账
++Then 声明文件经分支 log 窗口命中救赎，notes 含「对账救赎」且未声明文件不误救
++
++### FR-02: 既有测试回归绿且 lint 零死导出
++
++- 系统 MUST 在既有测试全绿与 lint 零告警下交付（plan-target-files 全量用例回归）
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/plan-target-files.test.mjs「D7 分支锚定救赎」正负例（救赎 ok+note 在场+never.js 不误救）
++FR-02: test/plan-target-files.test.mjs 全量用例 + node test/check-syntax.mjs（收口由 CLI 实测门复跑）
+diff --git a/.sillyspec/changes/2026-10-04-log-window-arity/tasks.md b/.sillyspec/changes/2026-10-04-log-window-arity/tasks.md
+new file mode 100644
+index 00000000..881bae3d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-log-window-arity/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T16:16:16.959Z
++---
++# 任务注册表（Tasks）— 2026-10-04-log-window-arity
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-04-log-window-arity --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-04-log-window-arity` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
++- [x] task-02: 既有测试回归绿且 lint 零死导出

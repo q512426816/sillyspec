@@ -1531,3 +1531,43 @@
 - 场景：默认场景 — Given 系统就绪；When 其余零改动；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-flow-skill-d007-doc/requirements.md#FR-04
 最近确认：34c04d9dd9249f261f837cf8072516cae83b3ba2
+
+## FR-core-engine-101 B4 救赎窗口的 git log 裸计数改为 -n 形态，救赎 note 路径恢复生效且既有 D7 断言转绿
+变更：2026-10-04-log-window-arity
+状态：active
+摘要：分支窗口救赎
+场景正文：
+- 场景：分支窗口救赎 — Given 主干非 main 命名的仓、变更分支上有 per-task 提交、工作树干净；When reconcileTargetFiles 对账；Then 声明文件经分支 log 窗口命中救赎，notes 含「对账救赎」且未声明文件不误救
+全文：.sillyspec/changes/archive/2026-10-04-log-window-arity/requirements.md#FR-01
+最近确认：902c07f2bed907e230808d359c78068279008bd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-log-window-arity:flow:测试绑定FR-01
+  tests: test/plan-target-files.test.mjs「D7 分支锚定救赎」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-log-window-arity
+  status: active
+
+## FR-core-engine-102 既有测试回归绿且 lint 零死导出
+变更：2026-10-04-log-window-arity
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-04-log-window-arity/requirements.md#FR-02
+最近确认：902c07f2bed907e230808d359c78068279008bd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-log-window-arity:flow:测试绑定FR-02
+  tests: test/check-syntax.mjs | test/plan-target-files.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-log-window-arity
+  status: active

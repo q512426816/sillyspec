@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-log-window-arity",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "产码注释把裸计数 fatal 的版本归因限定为『git ≥2.4x』，表述偏窄（无行为影响）",
+      "evidence": "本机实测 git 2.45.1.windows.1：git log 20 --name-only --format=%h <ref> → exit 128（fatal: ambiguous argument '20'）；git log -n 20 … → exit 0。裸数字在 git log 一贯按 rev/path 解析而非提交计数，-n/--max-count 才是计数语法且为历史久远形态（老版本 git 同样合法，兼容面无忧），故 fatal 并非 2.4x 才出现的行为——修复跨版本安全，仅注释版本归因略窄，不构成承诺违反或数据正确性风险。",
+      "location": "src/verify-postcheck.js:3758-3759（change.patch 同内容）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——对账为收口时点单次读快照，B4 修复仅改 git argv 形态，未引入任何事件序假设（design Q1 与实态一致）",
+    "并发": "ok——B4 块纯只读 git 查询，无新增共享写面；fail-open 语义保留（3768 catch 静默省略）；并行会话的 persistLintResult 未提交 hunk（工作区 @@ -2937 区、定义于 2947）未混入 change.patch 冻结面——patch 中 src/verify-postcheck.js 仅含 @@ -3714,7 +3714,9 @@ 一个 hunk，全 patch 无 persistLintResult 字样",
+    "切换": "ok——无状态引入；窗口源失败仍静默省略不阻断对账（fail-open 原样保留，仅从『恒失败』恢复为『可收集』）",
+    "作用域": "ok——declared-rescue-only 未变：B4 块（3754-3767）仅写 commitWindowFiles，无 union.add，源串仍为 main:log-20-commit-window(declared-rescue-only:<ref>)；rescueRef 仍锚定变更分支/审计 tag，跨变更污染面与既有设计一致"
+  },
+  "reviewedAt": "2026-10-04T16:27:13Z",
+  "_evidence": {
+    "checklist1_FR_impl_test": "①-n 修复真实在 diff：change.patch src hunk 前像 ['log','20',…] 后像 ['log','-n','20',…]（工作区 3760 行一致）。②D7 正例在场且语义正确：test/plan-target-files.test.mjs:774-776 断言 r.status==='ok' 且 notes 含『救赎』；负例 778-780 声明 src/never.js 断言 missing_declared 且 missing 含该路径（窗口锚定 sillyspec/tf-rescue，分支上无此文件不误救）。③FR-02 亲测：node test/plan-target-files.test.mjs 全量 113+13 通过 0 失败（含 D7 三断言『分支锚定救赎 → ok』『救赎 note 在场』『未做文件不误救(实际: missing_declared)』）；node test/check-syntax.mjs exit 0。另 B1 用例源串现场出现 main:log-20-commit-window(declared-rescue-only:…)——证明修复后窗口源在本机真实可收集。",
+    "checklist2_修测试判定": "不属『为过门改测试』。产码缺陷真实：裸计数 fatal 已复验（exit 128 vs -n exit 0）。夹具修正让测试测回其声明路径：D7 块头注释（752）与行内注释（773）声明的就是『分支锚定救赎命中』；原 mkRepo（主干 main）下 B1 merge-base diff 先把 declared 收进 union（rescuedCount=0，note 永不发）——救赎路径结构性不可达，断言红与产码修否无关；改独立 init -b master 后『merge-base main 失败→B1 跳过（3720-3721）→porcelain 无交付面→仅 B4 窗口可救』前提成立，与 R9/R11 场景语义（isolated worktree per-task commit 后救赎）一致。且 patch 对断言本体零改动（hunk 只换 dir 构造行），负例 never.js 防止救赎放宽成 blanket——是夹具前提修正，非断言弱化。",
+    "checklist3_边界": "-n <num> 为 git-log/rev-list 久远文档语法，老版本同样合法，无兼容回退；declared-rescue-only（不进全局 union）语义未被触碰——diff 仅改 argv，见作用域 note。",
+    "checklist4_共域混入": "change.patch 冻结面干净：src/verify-postcheck.js 段仅含 B4 一个 hunk（@@ -3714,7 +3714,9 @@），并行会话未提交的 persistLintResult 工作（工作区 @@ -2937,6 +2937,47 hunk、函数定义 src:2947）未出现在 patch 任何位置；patch 其余文件为本 change 自身管理件（flow-state/design/proposal/requirements/tasks），非混入。"
+  }
+}

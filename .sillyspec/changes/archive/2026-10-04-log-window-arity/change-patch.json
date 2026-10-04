@@ -1,0 +1,54 @@
+{
+  "change": "2026-10-04-log-window-arity",
+  "baseline": "4de262c48dc9f550dae33e157ece35836d37273d",
+  "head": "902c07f2bed907e230808d359c78068279008bd4",
+  "files": [
+    ".sillyspec/changes/2026-10-04-log-window-arity/design.md",
+    ".sillyspec/changes/2026-10-04-log-window-arity/flow-state.yaml",
+    ".sillyspec/changes/2026-10-04-log-window-arity/proposal.md",
+    ".sillyspec/changes/2026-10-04-log-window-arity/requirements.md",
+    ".sillyspec/changes/2026-10-04-log-window-arity/tasks.md",
+    "src/verify-postcheck.js",
+    "test/plan-target-files.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 175,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-04T16:22:51.172Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "644d34491a05e5e0ef166125c5250c5870d4e89ceb7275005031a6b063e666bb",
+  "patchStatus": "ok"
+}
