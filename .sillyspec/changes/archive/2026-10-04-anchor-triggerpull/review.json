@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-anchor-triggerpull",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "doc-ref-check 93/93 全量断言未在评审预算内独立复跑",
+      "evidence": "评审仅实证单锚双态命中；93/93 由收口实测面覆盖（test/doc-ref-check.test.mjs 单跑 1/1 绿）",
+      "location": "test/doc-ref-check.test.mjs"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a（纯文档行号，无事件序）",
+    "并发": "n/a（单写方；锚窗已覆盖并行在途 4235 漂移，design 并发问答成立）",
+    "切换": "n/a（无状态/生命周期面）",
+    "作用域": "n/a（无跨仓/多实例数据）"
+  },
+  "reviewedAt": "2026-10-04"
+}

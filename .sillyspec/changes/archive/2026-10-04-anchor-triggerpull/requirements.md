@@ -12,7 +12,7 @@ created_at: 2026-10-04T16:37:28.670Z
 
 ### FR-01: platform-interface-map 的 triggerPull 行号锚刷新为 4234（窗口同时覆盖 HEAD 4232 与工作树 4235），doc-ref-check 93/93 全绿
 
-- platform-interface-map 的 triggerPull 行号锚 MUST 指向 4234（容差窗 [4232,4239] 同时覆盖 HEAD 实态 4232 与并行在途工作树 4235），关键词断言（triggerPull 在窗内）保留不降级
+- 系统 MUST 使 platform-interface-map 的 triggerPull 行号锚指向 4234（容差窗 [4232,4239] 同时覆盖 HEAD 实态 4232 与并行在途工作树 4235），关键词断言（triggerPull 在窗内）保留不降级
 
 #### 场景：doc-ref-check 全量校验
 

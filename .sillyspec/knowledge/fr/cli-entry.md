@@ -5713,3 +5713,24 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-04-strength-should
   status: active
+
+## FR-cli-entry-303 platform-interface-map 的 triggerPull 行号锚刷新为 4234（窗口同时覆盖 HEAD 4232 与工作树 4235），doc-ref-check 93/93 全绿
+变更：2026-10-04-anchor-triggerpull
+状态：active
+摘要：doc-ref-check 全量校验
+场景正文：
+- 场景：doc-ref-check 全量校验 — Given platform-interface-map 刷新后的 93 处行号锚；When doc-ref-check 校验；Then 93/93 全绿（窗口命中且关键词在场）
+全文：.sillyspec/changes/archive/2026-10-04-anchor-triggerpull/requirements.md#FR-01
+最近确认：c172c36ae2f3bba93853424276a0b7d255b74fd2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-anchor-triggerpull:flow:测试绑定FR-01
+  tests: test/doc-ref-check.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-anchor-triggerpull
+  status: active
