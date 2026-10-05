@@ -52,6 +52,28 @@ test('① 定档矩阵：五路信号与豁免举证', () => {
   t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '+++ x\n+asyncio.Lock()', change: 'q3' })
   assert.ok(t.reasons.some((r) => /原语/.test(r)), `原语信号: ${t.reasons}`)
 
+  // cursor 收窄两向（2026-10-06-litest-p1-fixes 实测：原 \bcursor\b 意图抓 DB 游标却撞本仓
+  // harness 名 cursor——纯文案变更因断言 includes('cursor') 被判危险原语起子代理评审）：
+  // 纯名词/harness 名不触发；DB-API 调用 db.cursor() / 分页协议词 next_cursor 用法形态仍触发
+  {
+    const offBucket1 = 'name-off-bucket-c1'
+    const offBucket2 = 'name-off-bucket-c2'
+    assert.equal(sampleBucket(offBucket1), false, '夹具名 c1 在桶外')
+    assert.equal(sampleBucket(offBucket2), false, '夹具名 c2 在桶外')
+    const quietC = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n普通\n')
+    t = classifyReviewNeed({
+      changeDir: quietC.changeDir, change: offBucket1,
+      patchText: "+++ a\n+assert(out.includes('cursor') && harness === 'cursor-agent')\n+const cur = detectCursor(ctx)",
+    })
+    assert.equal(t.required, false, `cursor 纯名词/harness 名不再触发原语: ${t.reasons}`)
+    t = classifyReviewNeed({
+      changeDir: quietC.changeDir, change: offBucket2,
+      patchText: '+++ a\n+const cur = db.cursor()\n+const page = res.next_cursor',
+    })
+    assert.ok(t.reasons.some((r) => /原语/.test(r)), `db.cursor()/next_cursor 用法形态仍触发: ${t.reasons}`)
+    rmSync(quietC.root, { recursive: true, force: true })
+  }
+
   // 决策密度
   t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '', editRatio: 0.75, change: 'q4' })
   assert.ok(t.reasons.some((r) => /决策密度/.test(r)), `密度信号: ${t.reasons}`)

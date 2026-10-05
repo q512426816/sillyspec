@@ -47,8 +47,11 @@ function stripNegatedCrosstalk(text) {
   return t.replace(NEGATED_CROSSTALK_RE, '〔已消解〕')
 }
 
-/** 交付 diff 危险原语（物证面）。 */
-const PRIMITIVE_RE = /asyncio\.(?:Lock|Event|Queue|gather)|threading\.|with_for_update|IntegrityError|ON CONFLICT|AbortSignal|AbortController|signal\.abort|\.rollback\(|since=|\bcursor\b/i
+/** 交付 diff 危险原语（物证面）。cursor 收窄（2026-10-06-litest-p1-fixes 实测：原 \bcursor\b
+ * 意图抓 DB 游标，却撞上本仓 harness 名 cursor——纯文案变更因测试断言 includes('cursor')
+ * 被判危险原语起子代理评审）：只认 DB-API 方法调用 conn.cursor() 与分页协议词 next_cursor
+ * 用法形态；纯名词 cursor / cursor-agent / detectCursor（本仓既有词汇）不命中。 */
+const PRIMITIVE_RE = /asyncio\.(?:Lock|Event|Queue|gather)|threading\.|with_for_update|IntegrityError|ON CONFLICT|AbortSignal|AbortController|signal\.abort|\.rollback\(|since=|\.cursor\(|\bnext_cursor\b/i
 
 /** 豁免抽查采样：确定性哈希 1/4 定额（SALT 防碰巧连坐，调表需同步核对既有夹具零碰撞）。 */
 const SAMPLE_SALT = 7

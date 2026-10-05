@@ -944,6 +944,33 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
         console.log(`📎 归档提交待办（knowledge 蒸馏产物未暂存——核对归属后随归档提交一并带上）：`)
         console.log(`   git add -- ${knowledgePending.join(' ')}`)
       }
+      // 归档提交一笔到位提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：git commit
+      // -- <pathspec> 是部分提交——rename 条目 pathspec 只匹配 archive/ 侧时提交树里源文件
+      // 不会被删（D 留暂存区，源侧得再来一笔）。补暂存只保证暂存面完整，提交 pathspec 仍由
+      // agent 掌握）。聚合本变更归档面全量 staged 路径打印可直接执行的一笔到位 commit 命令：
+      // --name-status 而非 --name-only——R 行输出 src<TAB>dst 两路径，rename 两侧都要进
+      // pathspec 提交才真正落地删除（核对口径 = git diff --cached 全量读取，AGENTS.md 规则 11
+      // 同源）；无 staged 面不打印（幂等重入）。
+      try {
+        const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
+        const mineSet = new Set()
+        for (const line of String(stagedRaw || '').split('\n')) {
+          if (!line.trim()) continue
+          for (const cell of line.split('\t').slice(1)) {
+            const p = cell.trim().replace(/^"|"$/g, '')
+            if (!p) continue
+            if (p.startsWith(changesPrefix + changeName + '/')
+              || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
+              || p.startsWith('.sillyspec/knowledge/')
+              || p.startsWith('.sillyspec/docs/')) mineSet.add(p)
+          }
+        }
+        const mineStaged = [...mineSet]
+        if (mineStaged.length > 0) {
+          console.log(`🧾 归档提交一笔到位（pathspec 已含源侧删除/归档侧/knowledge 全量——防 rename 拆两半，核对后可直接执行）：`)
+          console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${mineStaged.join(' ')}`)
+        }
+      } catch { /* 提示失败不阻断归档（advisory） */ }
       if (othersResidual.length > 0) {
         const owners = [...new Set(othersResidual)].filter(Boolean)
         console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
