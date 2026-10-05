@@ -1,0 +1,425 @@
+diff --git a/src/flow.js b/src/flow.js
+index 7f24bed3..a1348c0b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1010,6 +1010,27 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           console.error(`   结果文件：${t.resultPath}`)
+         }
+       } catch { /* 三件套 best-effort：读不到不阻断 FAIL 主输出 */ }
++      // lint FAIL 件套（坑 flowdone-lint-fail-no-output，2026-10-03 实证：quick-audit 的
++      // runVerifyLintCheck 全程静默、printVerifyLintCheck 未在 flow 路径调用——「命令与输出
++      // 尾部见上」名不副实，agent 只能盲猜或直调同参复现）。对齐 test 三件套：命令 + 输出
++      // 尾部 + 失败文件 + 结果文件（lint 结果已由 persistLintResult 并入 test-result.json
++      // 或独立落盘，kind: 'lint'）。
++      try {
++        const l = gate.lint
++        if (l && l.status === 'failed') {
++          console.error(`   lint 命令：${l.command || '（未知）'}${l.reason ? `（${l.reason}）` : ''}`)
++          const tail = String(l.outputTail || '')
++          if (tail) {
++            const lines = tail.split('\n').filter((x) => x.trim())
++            console.error(`   lint 输出尾部（后 ${Math.min(lines.length, 15)} 行）：`)
++            for (const line of lines.slice(-15)) console.error(`   | ${line.slice(0, 160)}`)
++          }
++          if (Array.isArray(l.failureFiles) && l.failureFiles.length > 0) {
++            console.error(`   lint 失败文件（前 10）：${l.failureFiles.slice(0, 10).join('、')}${l.failureFiles.length > 10 ? ' 等' : ''}`)
++          }
++          if (l.resultPath) console.error(`   lint 结果文件：${l.resultPath}`)
++        }
++      } catch { /* lint 件套 best-effort */ }
+       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
+       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
+       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index efe881f5..5370dff8 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -555,6 +555,14 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     } catch { /* 快照链路异常 → 主仓现行为 */ }
+     }
+   }
++  // failed/test/lint 提升到 try 外（坑 flowdone-lint-fail-no-output 排障顺带发现 + 收编评审 P1）：
++  // 此前三者均声明在 try 块内（块级作用域），finally 的快照回拷读 failed.length、resultPath
++  // 重映射读 [test, lint] 各抛 ReferenceError 被空 catch 吞掉——P6b 回拷 + 重映射自 2026-09-28
++  // 落地即死代码（快照 FAIL 时结果文件随临时目录蒸发、FAIL 三件套的结果文件路径恒死链）。
++  // 收编首版只提升了 failed（重映射引用的 test/lint 仍死）——评审 P1 抓出后三变量齐提升。
++  const failed = []
++  let test = null
++  let lint = null
+   try {
+     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
+     //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
+@@ -577,7 +585,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       // 「零信息误判」主因）。
+       console.log(`⏳ 开始 test+lint 实测${snapshot ? '（隔离快照内）' : ''}——大仓全量可达 15-20 分钟，期间无输出属正常；后台跑 + 长容忍（≥20 分钟），勿按超时杀进程（杀掉不丢进度，但每轮重建沙箱重跑实测耗时成倍）。`)
+     }
+-    let test = testLedgerReuse
++    test = testLedgerReuse
+       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: `${testLedgerReuse.runPlan?.[0]?.runner || 'npm test'} (ledger-reuse)`, exitCode: 0, durationMs: 0, outputTail: null }
+       // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
+       // 与 deps(auto) 只取「实际变更 ∩ 本会话声明」，并行全流程变更 WIP 不再挡死本会话
+@@ -603,7 +611,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         })
+       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
+     }
+-    let lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
++    lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
+     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
+     // 超时杀——主仓 60~110s 正常。按用户建议「自动回退」而非假败/advisory：主仓复跑保硬门，
+     // 并行噪声混入时失败输出带归属鉴定提示）
+@@ -611,7 +619,6 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
+       lint = runVerifyLintCheck({ cwd, specBase })
+     }
+-    const failed = []
+     // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
+     // 证据（区间提交消息标题与正文均无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
+     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2，同 flow 侧 %B%x1e 口径）。
+@@ -693,6 +700,16 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })
+       } catch { /* 提示失败不影响门禁语义 */ }
+     }
++    // lint 结果持久化（坑 flowdone-lint-fail-no-output，2026-10-03）：runVerifyLintCheck 全程
++    // 静默、tally 只记一句退出码——lint 结果对象并入 test 的 test-result.json（modules 并列
++    // 一节）；test 无结果文件（skipped）而 lint 实跑时独立落盘（kind: 'lint'）。快照模式下
++    // 并入写在快照路径、随 P6b FAIL 回拷回主仓（失败恰是排障需要它的时点）。
++    try {
++      if (lint && (lint.status === 'passed' || lint.status === 'failed')) {
++        const { persistLintResult } = await import('../verify-postcheck.js')
++        lint.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint }) || lint.resultPath || null
++      }
++    } catch { /* 持久化 best-effort，不影响门禁语义 */ }
+     return {
+       action: failed.length > 0 ? 'fail' : 'pass',
+       failed,
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index ef311195..b40368ab 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2937,6 +2937,50 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [],
+   return result
+ }
+ 
++/**
++ * lint 结果持久化（坑 flowdone-lint-fail-no-output，2026-10-03 实证：runVerifyLintCheck
++ * 全程静默、tally 只记一句话退出码——lint 门红时 agent 拿不到失败原因只能盲猜）。
++ * 优先并入 test 的 test-result.json（modules 并列一节 `lint` 字段，读改写）；test 无
++ * 结果文件（skipped/未跑）而 lint 实跑时，用 writeRunResult 形状独立落一份（kind: 'lint'
++ * 标识）。返回落盘路径，失败返回 null（best-effort，不阻断门禁）。
++ */
++export function persistLintResult({ specBase, changeName, testResultPath, lint }) {
++  if (!lint || (lint.status !== 'passed' && lint.status !== 'failed')) return null
++  if (testResultPath && existsSync(testResultPath)) {
++    try {
++      const j = JSON.parse(readFileSync(testResultPath, 'utf8'))
++      // 并入节自带 resultPath（收编评审 P3：调用方在 persistLintResult 返回后才给 lint.resultPath
++      // 赋值——只变异对象不重写盘，并入节会永远缺 resultPath。这里预先补齐，调用方赋同值幂等）
++      lint.resultPath = testResultPath
++      j.lint = lint
++      writeFileSync(testResultPath, JSON.stringify(j, null, 2) + '\n')
++      return testResultPath
++    } catch { /* 结果文件损坏 → 退独立落盘 */ }
++  }
++  const holder = { resultPath: null }
++  try {
++    const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
++    const runDir = join(specBase, '.runtime', 'verify-runs', ts)
++    mkdirSync(runDir, { recursive: true })
++    holder.resultPath = join(runDir, 'test-result.json')
++    writeFileSync(holder.resultPath, JSON.stringify({
++      change: changeName || null,
++      kind: 'lint',
++      command: lint.command,
++      exit_code: lint.exitCode,
++      status: lint.status,
++      duration_ms: lint.durationMs,
++      output_tail: lint.outputTail,
++      reason: lint.reason || null,
++      ran_at: new Date().toISOString(),
++    }, null, 2) + '\n')
++    return holder.resultPath
++  } catch (e) {
++    console.warn(`⚠️  lint 结果落盘失败: ${e.message}`)
++    return null
++  }
++}
++
+ /**
+  * 结果落盘到 .runtime/verify-runs/<ts>/test-result.json（供追溯与 SillyHub 消费）。
+  * 多模块时 extra.modules 描述各模块明细。export 供 test 验证台账落盘形状。
+diff --git a/test/flowdone-lint-fail-output.test.mjs b/test/flowdone-lint-fail-output.test.mjs
+new file mode 100644
+index 00000000..65dc1c5a
+--- /dev/null
++++ b/test/flowdone-lint-fail-output.test.mjs
+@@ -0,0 +1,100 @@
++/**
++ * 坑 flowdone-lint-fail-no-output 回归：flow done lint 门 FAIL 时「命令与输出尾部见上」
++ * 名不副实——runVerifyLintCheck 全程静默、lint 结果不落 test-result.json（tally 只记一句）。
++ *
++ * 锁定：
++ *   ① persistLintResult：并入 test 结果文件（modules 并列一节 lint）；test 无结果文件时
++ *      独立落盘（kind: 'lint'）；skipped lint 不落。
++ *   ② e2e：flow done lint 门 FAIL → 输出 lint 命令 + 输出尾部 + 失败文件 + 结果文件，
++ *      test-result.json 含 lint 节。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { persistLintResult } = await import('../src/verify-postcheck.js')
++
++const tmpRoots = []
++function fx() { const d = mkdtempSync(join(tmpdir(), 'lfail-')); tmpRoots.push(d); return d }
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++test('① persistLintResult 三态：并入 / 独立落盘 / skipped 不落', () => {
++  const d = fx()
++  const specBase = join(d, '.sillyspec')
++  // 并入分支：伪造既有 test-result.json
++  const runDir = join(specBase, '.runtime', 'verify-runs', '20260101000000')
++  mkdirSync(runDir, { recursive: true })
++  const trp = join(runDir, 'test-result.json')
++  writeFileSync(trp, JSON.stringify({ change: 'c1', status: 'passed', modules: [] }))
++  const p1 = persistLintResult({ specBase, changeName: 'c1', testResultPath: trp, lint: { status: 'failed', command: 'ruff check .', exitCode: 1, outputTail: 'a.py:1:1 E501', reason: 'lint 命令退出码 1', failureFiles: ['a.py'] } })
++  assert.equal(p1, trp, '返回并入路径')
++  const j = JSON.parse(readFileSync(trp, 'utf8'))
++  assert.equal(j.lint.command, 'ruff check .', 'lint 并入 test-result.json（modules 并列节）')
++  assert.equal(j.modules.length, 0, '既有字段不受扰')
++
++  // 独立落盘分支：无 testResultPath
++  const p2 = persistLintResult({ specBase, changeName: 'c2', testResultPath: null, lint: { status: 'failed', command: 'x', exitCode: 1, outputTail: 'y', reason: null } })
++  assert.ok(p2 && existsSync(p2), '独立落盘在场')
++  const j2 = JSON.parse(readFileSync(p2, 'utf8'))
++  assert.equal(j2.kind, 'lint', 'kind: lint 标识')
++  assert.equal(j2.status, 'failed')
++
++  // skipped 不落
++  const p3 = persistLintResult({ specBase, changeName: 'c3', testResultPath: null, lint: { status: 'skipped' } })
++  assert.equal(p3, null, 'skipped 不落盘')
++})
++
++test('② e2e：flow done lint 门 FAIL 输出 lint 命令/尾部/失败文件，结果并入 test-result.json', () => {
++  const cwd = fx()
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  // lint 命令失败且输出提及本变更文件（归属鉴定硬拦口径）
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node lint-fail.js"\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'lint-fail.js'), "console.error('src/work.js:1:1 E501 line too long (fake lint)'); process.exit(1)\n")
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const cn = '2026-10-03-lint-fail-x'
++  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--input', 'lint 失败输出可见性\n\n成功标准：\n- lint 门红时输出含命令与尾部', '--no-review'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  // 填槽 + 干活提交（task token 进 subject 过哨兵；交付 src/ 代码文件才起 test+lint 门——
++  // 非代码文件不触门，test/lint 双 — 是首轮假绿的根因）
++  // ⚠️ 2026-10-04-thin-docs-v2 适配（zcode-thin-docs-v2 会话代改，非本变更原作者）：起草已是
++  // v2 纯 markdown（零 AGENT 槽）——填槽改正文作答；done 前需 spec 断点批准（flow approve）。
++  const base = join(cwd, '.sillyspec', 'changes', cn)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：lint 输出夹具'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 在 lint 门红时输出命令与尾部（夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：门禁夹具'))
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'work.js'), 'export const x = 1\n')
++  run(['add', 'src/work.js']); run(['commit', '-q', '-m', 'work task-01'])
++  const ap = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'approve', '--change', cn], { cwd, encoding: 'utf8', timeout: 60_000, env })
++  assert.equal(ap.status, 0, `approve 失败: ${ap.stderr}`)
++
++  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 180_000, env })
++  assert.notEqual(s2.status, 0, `lint 门红应 FAIL（实际 ${s2.status}）: ${(s2.stdout + s2.stderr).split('\n').filter((l) => /实测面|测试门/.test(l)).join(' | ')}`)
++  const out = s2.stdout + s2.stderr
++  assert.ok(out.includes('测试门 FAIL'), 'FAIL 主输出在场')
++  assert.ok(out.includes('lint 命令：node lint-fail.js'), `lint 命令打印：${out.split('\n').filter((l) => l.includes('lint 命令')).join(' | ')}`)
++  assert.ok(out.includes('lint 输出尾部'), '输出尾部段在场')
++  assert.ok(out.includes('src/work.js:1:1'), '尾部含失败行内容')
++  assert.ok(out.includes('lint 失败文件') && out.includes('src/work.js'), '失败文件清单在场')
++  assert.ok(out.includes('lint 结果文件'), '结果文件段在场（评审处置：四段齐备）')
++  // 持久化：test-result.json 含 lint 节（test 通过 → 并入分支）
++  const runsDir = join(cwd, '.sillyspec', '.runtime', 'verify-runs')
++  const dirs = readdirSync(runsDir).sort()
++  const latest = dirs[dirs.length - 1]
++  const tr = JSON.parse(readFileSync(join(runsDir, latest, 'test-result.json'), 'utf8'))
++  assert.equal(tr.lint && tr.lint.status, 'failed', `test-result.json 含 lint 节（kind=${tr.kind || 'test'}）`)
++  assert.equal(tr.lint.command, 'node lint-fail.js')
++  assert.ok(typeof tr.lint.resultPath === 'string' && tr.lint.resultPath.includes('test-result.json'), `并入节自带 resultPath（评审处置 P3：${tr.lint.resultPath}）`)
++})
+diff --git a/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/design.md b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/design.md
+new file mode 100644
+index 00000000..71a90bfc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/design.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:44:46.600Z
++---
++# 设计记录（Design Record）— 2026-10-05-flowdone-lintfail-output
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++本变更为在途代码的倒推收尾（坑 flowdone-lint-fail-no-output，2026-10-03 实证；本会话接手收编，非原作者）。三层：① verify-postcheck.js 新增 persistLintResult——lint 结果优先读改写并入 test 的 test-result.json（modules 并列 `lint` 节），test 无结果文件（skipped/未跑）而 lint 实跑时按 writeRunResult 形状独立落盘（kind:lint），best-effort 失败返 null 不阻断门禁；② quick-audit.js 在门收尾处调 persistLintResult 并把 `failed` 数组提升到 try 块外——原块级作用域使 finally 快照回拷（P6b）读 failed.length 抛 ReferenceError 被空 catch 吞，回拷与 resultPath 重映射自 2026-09-28 落地即死代码（快照 FAIL 时结果文件随临时目录蒸发恒死链）；③ flow.js 的 flow done FAIL 输出在 test 三件套之后补 lint 件套（命令/输出尾部后15行/失败文件前10/结果文件路径），best-effort try 包裹。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新增导出 persistLintResult({specBase, changeName, testResultPath, lint})（verify-postcheck.js）→ 落盘路径或 null。test-result.json 文件格式扩展：新增可选顶层 `lint` 节（command/exitCode/status/durationMs/outputTail/reason/failureFiles/resultPath），既有字段（modules 等）不受扰；独立落盘形态带 kind:'lint'。quick-audit runQuickTestLintGate 返回值不变，副作用新增 lint 持久化与 failed 作用域修正（对外行为=快照 FAIL 回拷真实生效）。flow done CLI 输出扩展（lint FAIL 时多四段输出）。runVerifyLintCheck 本体未改。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——persistLintResult 在 lint 实跑完成后单次调用（同步），读改写 test-result.json 时无并发写者（同门内串行）；lint 对象是当场结果非缓存，无迟到重放面。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   同 change 的 quick 门本就单会话串行；跨 change 各写各的 verify-runs 目录（时间戳目录名）。并入分支对 test-result.json 是读改写（非原子）——若恰有他进程并发写同文件，最坏丢一次 lint 节或被他写覆盖（best-effort 显式声明，不阻断门禁）；writeFileSync 整文件覆写不会留半文件交错损坏形态。收编评审 P1 处置补记：finally 的重映射引用 test/lint 原为 try 块级声明（ReferenceError 死代码），三变量齐提升后真实生效。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——三处改动均 try/catch best-effort 包裹（flow 件套输出、persistLintResult、quick-audit 调用点），任一中断只少一段输出/一节落盘，FAIL 主判定（failed.length>0）不受影响；failed 提升只改作用域不改生命周期。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：落盘路径锚 specBase（本变更 .runtime/verify-runs），独立落盘目录名时间戳+读改写仅限传入的 testResultPath；e2e 夹具仓与真仓各自 specBase 隔离。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：读改写 test-result.json 的并入分支在结果文件损坏时静默退独立落盘——同变更可能留下两份结果文件（原损坏件+独立 lint 件），消费端按 kind 字段区分；显式 best-effort 边界已在 JSDoc 声明。倒推收尾特有风险：接手非本会话原创的代码，语义理解偏差——已逐行核对 diff 与既有 test 三件套同构性并实跑其自带 e2e 锁定。放弃的方案：① 在 runVerifyLintCheck 内直接落盘——该函数被多路径复用（verify/quick/flow），落盘时机与归属 change 名在调用方才知道，写入层错位；② 改 tally 记全量输出——tally 是计数器不是存储，扩容错位。均已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/verify-postcheck.js | 新增 export persistLintResult（并入/独立落盘/skipped 不落三态） |
++| 修改 | src/run/quick-audit.js | failed 提升到 try 外（修 P6b 死代码）+ 门收尾调 persistLintResult |
++| 修改 | src/flow.js | flow done FAIL 输出补 lint 件套（best-effort） |
++| 新增 | test/flowdone-lint-fail-output.test.mjs | persistLintResult 三态单测 + lint 门 FAIL e2e 全链路 |
+diff --git a/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/tasks.md b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/tasks.md
+new file mode 100644
+index 00000000..f7b18b5d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:44:46.600Z
++---
++# 任务注册表（Tasks）— 2026-10-05-flowdone-lintfail-output
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-flowdone-lintfail-output --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-flowdone-lintfail-output` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
++- [x] task-02: lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
++- [x] task-03: quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
++- [x] task-04: e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
++- [x] task-05: 评审处置（P1：test/lint 齐提升修 finally 重映射死代码；P2：e2e 补「lint 结果文件」段断言；P3：并入节 resultPath 预补齐 + design 并发措辞纠偏）
+diff --git a/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/proposal.md b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:44:46.600Z
++---
++# 提案书（Proposal）— 2026-10-05-flowdone-lintfail-output
++
++## 动机
++
++任务原话转写：坑 flowdone-lint-fail-no-output（2026-10-03 实证）倒推收尾——在途代码已写好，本会话接手收编：flow done lint 门 FAIL 时「命令与输出尾部见上」名不副实（runVerifyLintCheck 全程静默、printVerifyLintCheck 未在 flow 路径调用、lint 结果不落 test-result.json，agent 只能盲猜或直调同参复现）。顺带修排障发现的死代码：quick-audit 的 failed 变量声明在 try 块内，finally 快照回拷读 failed.length 抛 ReferenceError 被空 catch 吞——P6b 回拷+resultPath 重映射自 2026-09-28 落地即死代码，快照 FAIL 时结果文件随临时目录蒸发恒死链。
++成功标准：
++- flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
++- lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
++- quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
++- e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
++2. lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
++3. quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
++4. e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
++
++## 成功标准（可验证）
++
++1. flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
++2. lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
++3. quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
++4. e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
+
+diff --git a/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/requirements.md b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flowdone-lintfail-output/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:44:46.600Z
++---
++# 需求规格（Requirements）— 2026-10-05-flowdone-lintfail-output
++
++## 功能需求
++
++### FR-01: flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
++
++- flow done 实测门 lint FAIL 时必须在 FAIL 主输出后打印 lint 件套：lint 命令（含 reason）、输出尾部（过滤空行后至多后 15 行、每行截 160 字）、失败文件清单（前 10）、结果文件路径——禁止只留「命令与输出尾部见上」名不副实的空指引。
++
++#### 场景：主路径
++
++- Given: local.yaml 配置 lint 命令（node lint-fail.js，退出码 1、输出提及本变更交付文件）
++- When: flow done 实测门跑 lint FAIL
++- Then: FAIL 输出含「lint 命令：」「lint 输出尾部」「lint 失败文件」「lint 结果文件」四段，尾部含失败行内容
++
++### FR-02: lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
++
++- lint 结果（passed/failed）必须持久化：有 test 结果文件时读改写并入 `lint` 节（既有字段不受扰）；test 无结果文件而 lint 实跑时按 writeRunResult 形状独立落盘（kind:lint 标识）；skipped 不落盘。落盘 best-effort——失败不阻断门禁语义。
++
++#### 场景：主路径
++
++- Given: quick-audit 门跑完 test（passed，有结果文件）+ lint（failed）
++- When: persistLintResult 执行
++- Then: test-result.json 含 lint 节（command/exitCode/outputTail/failureFiles），既有 modules 字段不变；testResultPath 缺席时独立落盘 kind:lint 文件；status=skipped 时返回 null 不落
++
++### FR-03: quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
++
++- `failed` 数组必须声明在 try 块外（块级作用域），使 finally 的快照 FAIL 回拷（P6b）与 resultPath 重映射可达——修复其自 2026-09-28 落地即因 ReferenceError 被空 catch 吞掉的死代码状态。
++
++#### 场景：主路径
++
++- Given: 快照模式跑 quick 门且 lint FAIL（需回拷结果）
++- When: finally 块执行快照回拷
++- Then: failed.length 可读，结果文件回拷主仓、resultPath 重映射为可访问路径（不再随临时快照目录蒸发）
++
++### FR-04: e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
++
++- 必须有单测锁定：persistLintResult 三态（并入/独立落盘/skipped 不落）+ e2e 全链路（真实 CLI 走 flow start→approve→done，lint 门 FAIL 时输出件套与 test-result.json lint 节断言）。
++
++#### 场景：主路径
++
++- Given: 临时仓 + 失败 lint 夹具
++- When: e2e 跑 flow done
++- Then: 断言 FAIL 件套四段与 lint 节形状
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flowdone-lint-fail-output.test.mjs「② e2e：flow done lint 门 FAIL 输出 lint 命令/尾部/失败文件，结果并入 test-result.json」
++FR-02: test/flowdone-lint-fail-output.test.mjs「① persistLintResult 三态：并入 / 独立落盘 / skipped 不落」
++FR-03: test/flowdone-lint-fail-output.test.mjs「② e2e：…结果并入 test-result.json（快照回拷链路经 e2e 门路径覆盖）」
++FR-04: test/flowdone-lint-fail-output.test.mjs「① + ② 双件齐备（fixture 快照）」

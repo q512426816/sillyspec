@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-flowdone-lintfail-output",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "边界已裁决：可接受——design Q2 如实披露并入分支为非原子读改写（verify-postcheck.js:114-119 实为 readFileSync→parse→writeFileSync），最坏丢一次 lint 节、不阻断门禁语义，与既有 writeRunResult 同风险级；P1 处置补记措辞与代码事实一致",
+    "切换": "边界已裁决：可接受——三处 best-effort try/catch 属实（flow.js:1018-1033 件套输出 / quick-audit.js:707-712 调用点 / persistLintResult 内部双分支）；快照 PASS 时 lint 节随快照清理蒸发系 P6b 既有 FAIL-only 回拷语义的继承（与 test 结果同构），FAIL 消费路径（本变更目标）有回拷+重映射覆盖",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-05T13:02:11Z"
+}

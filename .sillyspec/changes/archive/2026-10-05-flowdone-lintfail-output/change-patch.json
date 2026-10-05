@@ -1,0 +1,69 @@
+{
+  "change": "2026-10-05-flowdone-lintfail-output",
+  "baseline": "a7b86621f30f1dea445573c6483aa272d7d27e72",
+  "head": "0830851ef51549bb1cd5e35006403f2165d144b9",
+  "files": [
+    ".sillyspec/changes/2026-10-05-flowdone-lintfail-output/design.md",
+    ".sillyspec/changes/2026-10-05-flowdone-lintfail-output/tasks.md",
+    "src/flow.js",
+    "src/run/quick-audit.js",
+    "src/verify-postcheck.js",
+    "test/flowdone-lint-fail-output.test.mjs",
+    ".sillyspec/changes/2026-10-05-flowdone-lintfail-output/proposal.md",
+    ".sillyspec/changes/2026-10-05-flowdone-lintfail-output/requirements.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 332,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-05T12:58:16.598Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "f673abb7ee41ac75f9802089fecf6e4e7c21b34f8d9ebbc2e0edc53b94d5b4eb",
+  "patchStatus": "ok"
+}

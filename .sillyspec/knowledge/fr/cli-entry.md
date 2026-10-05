@@ -6118,3 +6118,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-visual-downgrade-narrow
   status: active
+
+## FR-cli-entry-324 flow done lint 门 FAIL 时输出 lint 件套：命令、输出尾部（后15行）、失败文件（前10）、结果文件路径（与 test 三件套同构）
+变更：2026-10-05-flowdone-lintfail-output
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flowdone-lintfail-output/requirements.md#FR-01
+最近确认：0830851ef51549bb1cd5e35006403f2165d144b9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-01
+  tests: test/flowdone-lint-fail-output.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flowdone-lintfail-output
+  status: active
+
+## FR-cli-entry-325 lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
+变更：2026-10-05-flowdone-lintfail-output
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flowdone-lintfail-output/requirements.md#FR-02
+最近确认：0830851ef51549bb1cd5e35006403f2165d144b9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-02
+  tests: test/flowdone-lint-fail-output.test.mjs「① persistLintResult 三态：并入 / 独立落盘 / skipped 不落」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flowdone-lintfail-output
+  status: active
+
+## FR-cli-entry-326 quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
+变更：2026-10-05-flowdone-lintfail-output
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flowdone-lintfail-output/requirements.md#FR-03
+最近确认：0830851ef51549bb1cd5e35006403f2165d144b9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-03
+  tests: test/flowdone-lint-fail-output.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flowdone-lintfail-output
+  status: active
+
+## FR-cli-entry-327 e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
+变更：2026-10-05-flowdone-lintfail-output
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flowdone-lintfail-output/requirements.md#FR-04
+最近确认：0830851ef51549bb1cd5e35006403f2165d144b9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-04
+  tests: test/flowdone-lint-fail-output.test.mjs「① + ② 双件齐备（fixture 快照）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flowdone-lintfail-output
+  status: active

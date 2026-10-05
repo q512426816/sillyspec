@@ -1704,3 +1704,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a26821acd8caefeee88ae1031526b8564d124a74
 理由：最大风险：本变更的 run 在极端场景（戳文件被误删/worktree cleanup 先清了 run 戳）真丢戳——声明面静默为空，apply 对 review 声明过的越界文件改报「不在 design 清单」violation，出路从「review 声明自动放行」变成「补 design 声明」——收紧方向可恢复（fail-closed），且该场景本身意味着 run 元数据已损坏，静默信任其声明才是风险面。放弃的方案：① 改 resolver 语义（无戳回退整体删除）——影响 task-done/cross-repo-reconcile 等全部消费方的 marker 漂移恢复路径，锁定面外；② 只改 warning 文案区分无戳来源——保留误挂数据只软化措辞，治标不治本。均已弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-05-flowdone-lintfail-output
+锚点：未记录
+最近确认：0830851ef51549bb1cd5e35006403f2165d144b9
+理由：最大风险：读改写 test-result.json 的并入分支在结果文件损坏时静默退独立落盘——同变更可能留下两份结果文件（原损坏件+独立 lint 件），消费端按 kind 字段区分；显式 best-effort 边界已在 JSDoc 声明。倒推收尾特有风险：接手非本会话原创的代码，语义理解偏差——已逐行核对 diff 与既有 test 三件套同构性并实跑其自带 e2e 锁定。放弃的方案：① 在 runVerifyLintCheck 内直接落盘——该函数被多路径复用（verify/quick/flow），落盘时机与归属 change 名在调用方才知道，写入层错位；② 改 tally 记全量输出——tally 是计数器不是存储，扩容错位。均已弃。

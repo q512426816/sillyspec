@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-flowdone-lintfail-output",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-01",
+      "tests": [
+        "test/flowdone-lint-fail-output.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flowdone-lintfail-output"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-02",
+      "tests": [
+        "test/flowdone-lint-fail-output.test.mjs「① persistLintResult 三态：并入 / 独立落盘 / skipped 不落」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flowdone-lintfail-output"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-03",
+      "tests": [
+        "test/flowdone-lint-fail-output.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flowdone-lintfail-output"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-flowdone-lintfail-output:flow:测试绑定FR-04",
+      "tests": [
+        "test/flowdone-lint-fail-output.test.mjs「① + ② 双件齐备（fixture 快照）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flowdone-lintfail-output"
+    }
+  ]
+}
