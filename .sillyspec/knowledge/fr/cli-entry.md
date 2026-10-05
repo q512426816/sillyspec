@@ -5795,3 +5795,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-wordpos
   status: active
+
+## FR-cli-entry-307 knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
+变更：2026-10-05-dogfood-audit-fixes
+状态：active
+摘要：真实 CLI 调度；直调兜底不回归
+全文：.sillyspec/changes/archive/2026-10-05-dogfood-audit-fixes/requirements.md#FR-01
+最近确认：cb8fddc71b66e78c840ed6120653136904a3df0f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-01
+  tests: test/knowledge-inbox.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-dogfood-audit-fixes
+  status: active
+
+## FR-cli-entry-308 flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
+变更：2026-10-05-dogfood-audit-fixes
+状态：active
+摘要：照新指引书写可被解析
+全文：.sillyspec/changes/archive/2026-10-05-dogfood-audit-fixes/requirements.md#FR-02
+最近确认：cb8fddc71b66e78c840ed6120653136904a3df0f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-02
+  tests: test/flow-draft.test.mjs「design 模板文件变更清单指引=独立章节写法」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-dogfood-audit-fixes
+  status: active
+
+## FR-cli-entry-309 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
+变更：2026-10-05-dogfood-audit-fixes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-dogfood-audit-fixes/requirements.md#FR-03
+最近确认：cb8fddc71b66e78c840ed6120653136904a3df0f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-03
+  tests: test/knowledge-stats.test.mjs「Test 9 断言面收口（三子命令+入口+模板同变更覆盖）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-dogfood-audit-fixes
+  status: active

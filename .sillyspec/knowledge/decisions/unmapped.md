@@ -1634,3 +1634,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a1b0bb6ec15b9aabbf7429bd6c789a2ddc8f818c
 理由：最大风险：文案与未来选道入口漂移（若 flow start 参数形态变更，引导文案会悄悄失效）——以 FR-01 断言「含 flow start 子串」钉住最小锚，入口大改时测试会显式红。放弃的方案：读取本仓 spec 状态做「智能下一步建议」（如检测 .sillyspec/docs 存在性给不同建议）——空态分支的定义就是 progress 无数据可读，智能层没有可靠输入反而引入误判面，且跨仓语义不通用，故弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-05-dogfood-audit-fixes
+锚点：未记录
+最近确认：cb8fddc71b66e78c840ed6120653136904a3df0f
+理由：最大风险：行为修复让「原先静默降级为人类可读」的调用方（若依赖旧错误行为的脚本）突然收到 JSON——属暴露既有契约而非破坏；排查过 index.js 全局解析后 filteredArgs 不含 --json，无其他调用方向实现文件传 json 的路径，影响面封闭在三个子命令。 试过放弃：改 stages/knowledge.js 调度层把 opts.json 注入 args（--json 塞回 args 数组）——污染 args 语义（args 反映用户输入而非程序状态），且 digest 已确立 opts.json 直读惯例，放弃。

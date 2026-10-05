@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-dogfood-audit-fixes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-stats.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-dogfood-audit-fixes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-inbox.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-dogfood-audit-fixes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-draft.test.mjs「design 模板文件变更清单指引=独立章节写法」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-dogfood-audit-fixes"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-dogfood-audit-fixes:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-stats.test.mjs「Test 9 断言面收口（三子命令+入口+模板同变更覆盖）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-dogfood-audit-fixes"
+    }
+  ]
+}

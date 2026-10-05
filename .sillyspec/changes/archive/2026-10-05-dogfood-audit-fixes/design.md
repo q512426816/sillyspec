@@ -6,7 +6,7 @@ created_at: 2026-10-05T02:36:34.334Z
 
 ## 做法概述
 
-本变更怎么解决问题？改哪里、为什么选这个方案（一两段）？
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
 
 两处 --json 判定（knowledge-stats.js cmdKnowledgeStats 的 asJson、knowledge-classify.js cmdKnowledgeInbox 的 wantJson）各改一行：`args.includes('--json') || opts.json === true`。修复面在实现文件而非 stages/knowledge.js 调度层——调度层（cmdKnowledge）已把含 .json 的 opts 原样转发（index.js:3027 `{ specDir, json }` → cmdKnowledge → 各分支 `mod.cmdXxx(dir, args.slice(1), opts)`），断点在实现文件不读 opts.json；对齐 digest 分支既有惯例（stages/knowledge.js:654 注释「opts.json 为正道，rest 兜底」）。cmdKnowledgeClassify 经核实恒输出 JSON（无模式判定），不在修复面。模板指引改 flow-draft.js:276 一行：指引从「接口契约节内加表」改为「独立 ## 文件变更清单 章节 + 表格」，与 change-list.js FILE_LIST_SECTION_RE 的章节识别面一致。
 

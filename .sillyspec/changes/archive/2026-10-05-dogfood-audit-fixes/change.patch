@@ -1,0 +1,303 @@
+diff --git a/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/flow-state.yaml b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/flow-state.yaml
+new file mode 100644
+index 00000000..fdc6ecf2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: b085f9aeaa1a00a3540c83208c9dcd98e8a867bb
++updatedAt: '2026-10-05T02:37:29.349Z'
++baseline_sha256: e61c87db7feb16b20de22e57d20f55cbeeafc26b964efc63afbd1cf761dfa0ad
++
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 1a0a25f8..df379a3d 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -273,7 +273,7 @@ function draftDesignRecordV2({ change }) {
+     `# 设计记录（Design Record）— ${change}`,
+     '',
+     '> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
+-    '> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。',
++    '> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。',
+     '',
+     ...secs.flat(),
+   ].join('\n')
+diff --git a/src/knowledge-classify.js b/src/knowledge-classify.js
+index fcc222c4..f4814c5e 100644
+--- a/src/knowledge-classify.js
++++ b/src/knowledge-classify.js
+@@ -391,7 +391,9 @@ export async function cmdKnowledgeClassify(dir, args, opts = {}) {
+ export async function cmdKnowledgeInbox(dir, args, opts = {}) {
+   const base = opts.specDir || join(dir, '.sillyspec')
+   const knowledgeDir = join(base, 'knowledge')
+-  const wantJson = args.includes('--json')
++  // --json 双路判定（对齐 stages/knowledge.js digest 惯例）：全局旗标被 index.js 顶层吞进
++  // opts.json（filteredArgs 不含 --json），args.includes 仅兜底直调/测试场景
++  const wantJson = args.includes('--json') || opts.json === true
+   const uncPath = join(knowledgeDir, 'uncategorized.md')
+   let entries = []
+   if (existsSync(uncPath)) {
+diff --git a/src/knowledge-stats.js b/src/knowledge-stats.js
+index 6ebafdec..6067eb5e 100644
+--- a/src/knowledge-stats.js
++++ b/src/knowledge-stats.js
+@@ -289,7 +289,9 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+     }
+     sinceDays = n
+   }
+-  const asJson = args.includes('--json')
++  // --json 双路判定（对齐 stages/knowledge.js digest 惯例）：全局旗标被 index.js 顶层吞进
++  // opts.json（filteredArgs 不含 --json），args.includes 仅兜底直调/测试场景
++  const asJson = args.includes('--json') || opts.json === true
+ 
+   // 遥测在场判定用全量读取（不加窗口）：文件缺失/只有坏行 → 无遥测
+   const hasTelemetry = readKnowledgeHits(runtimeDir).length > 0
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index cf5ee573..ce0a78d3 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -70,6 +70,9 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
+   }
+   assert.match(design, /乱序\/迟到到达/, '盲维四问之乱序在问题文本')
+   assert.match(design, /作用域：跨工作区/, '盲维四问之作用域在问题文本')
++  // 文件变更清单指引=独立章节写法（parseFileChangeList 只认 ## 章节标题——节内写法收口解析不到）
++  assert.match(design, /独立「## 文件变更清单」章节/, '指引写独立章节')
++  assert.ok(!design.includes('在「接口契约」节加'), '旧指引（节内加表）退场')
+   // ledger v2：anchor（criteria+四问）+files 首版全文
+   const ledger = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
+   assert.equal(ledger.schemaVersion, 2)
+diff --git a/test/knowledge-inbox.test.mjs b/test/knowledge-inbox.test.mjs
+index 46a7a93d..ca4f97f9 100644
+--- a/test/knowledge-inbox.test.mjs
++++ b/test/knowledge-inbox.test.mjs
+@@ -98,6 +98,18 @@ test('T3 cmdKnowledgeInbox --json：结构化清单（标题/ql/摘要/基线态
+   assert.ok(parsed.inbox.items[0].summary.includes('甲的正文'))
+ })
+ 
++test('T3c cmdKnowledgeInbox opts.json 全局旗标路径（index.js 顶层吞 --json 后 args 不含旗标）', async () => {
++  const base = fixtureInbox({ baseline: 1 })
++  const buf2 = []
++  const orig = console.log
++  console.log = (...a) => buf2.push(a.join(' '))
++  // args 无 --json、opts.json:true——模拟 index.js:3027 真实转发形态 { specDir, json }
++  try { await cmdKnowledgeInbox(base, [], { specDir: base, json: true }) } finally { console.log = orig }
++  const parsed = JSON.parse(buf2.join('\n'))
++  assert.equal(parsed.ok, true, 'opts.json:true 输出结构化 JSON（不回归人类可读）')
++  assert.equal(parsed.inbox.count, 2)
++})
++
+ test('T3b cmdKnowledgeInbox 人读形态与空态', async () => {
+   const base = fixtureInbox({})
+   const buf = []
+diff --git a/test/knowledge-stats.test.mjs b/test/knowledge-stats.test.mjs
+index 55130ca0..74dac2b0 100644
+--- a/test/knowledge-stats.test.mjs
++++ b/test/knowledge-stats.test.mjs
+@@ -306,6 +306,36 @@ console.log('\n=== Test 8: lastEventAt 新鲜度读数 ===')
+   } finally { clean(base) }
+ }
+ 
++// ── Test 9: --json 双路判定——opts.json 全局旗标路径 + cmdKnowledge 调度入口端到端 ──
++console.log('\n=== Test 9: opts.json 全局旗标路径 ===')
++{
++  const base = setup('t9')
++  try {
++    makeKnowledge(base)
++    writeHits(join(base, '.runtime'), [
++      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: daysAgo(1) }),
++    ])
++
++    // opts.json 路径：args 无 --json（模拟 index.js 顶层吞旗标后的真实转发形态）
++    const j = JSON.parse(await captureOutput(() =>
++      cmdKnowledgeStats(base, [], { specDir: base, json: true })))
++    assert(j.ok === true && j.sinceDays === 30, 'opts.json:true 且 args 无 --json → 结构化 JSON 输出')
++
++    // 入口端到端：经 stages/knowledge.js cmdKnowledge 调度（index.js:3027 转发 { specDir, json }）
++    const { cmdKnowledge } = await import(
++      pathToFileURL(join(root, 'src', 'stages', 'knowledge.js')).href)
++    const j2 = JSON.parse(await captureOutput(() =>
++      cmdKnowledge(['stats'], base, { specDir: base, json: true })))
++    assert(j2.ok === true && typeof j2.lastEventAt === 'string',
++      'cmdKnowledge 调度入口（json:true）→ JSON 且含 lastEventAt 字段')
++
++    // 兜底路径不回归：args 直带 --json、无 opts.json
++    const j3 = JSON.parse(await captureOutput(() =>
++      cmdKnowledgeStats(base, ['--json'], { specDir: base })))
++    assert(j3.ok === true, 'args 直带 --json（无 opts.json）兜底路径不回归')
++  } finally { clean(base) }
++}
++
+ // ── 汇总 ──
+ console.log(`\n${'='.repeat(40)}`)
+ console.log(`knowledge-stats tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)
+diff --git a/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/design.md b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/design.md
+new file mode 100644
+index 00000000..6c31d26c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T02:36:34.334Z
++---
++# 设计记录（Design Record）— 2026-10-05-dogfood-audit-fixes
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++两处 --json 判定（knowledge-stats.js cmdKnowledgeStats 的 asJson、knowledge-classify.js cmdKnowledgeInbox 的 wantJson）各改一行：`args.includes('--json') || opts.json === true`。修复面在实现文件而非 stages/knowledge.js 调度层——调度层（cmdKnowledge）已把含 .json 的 opts 原样转发（index.js:3027 `{ specDir, json }` → cmdKnowledge → 各分支 `mod.cmdXxx(dir, args.slice(1), opts)`），断点在实现文件不读 opts.json；对齐 digest 分支既有惯例（stages/knowledge.js:654 注释「opts.json 为正道，rest 兜底」）。cmdKnowledgeClassify 经核实恒输出 JSON（无模式判定），不在修复面。模板指引改 flow-draft.js:276 一行：指引从「接口契约节内加表」改为「独立 ## 文件变更清单 章节 + 表格」，与 change-list.js FILE_LIST_SECTION_RE 的章节识别面一致。
++
++为什么不改解析器兼容节内写法：解析器是多个消费方（stage-contract/scope-audit/design-frs）共用的单一真相源，brainstorm 完整道模板本就是独立章节形态；薄模板指引是离群写法，改指引回归主流形态，影响面最小。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- cmdKnowledgeStats / cmdKnowledgeInbox 的 opts 形参新增消费 opts.json（布尔）——签名不变，行为变化：经真实 CLI `sillyspec knowledge stats --json` / `knowledge inbox --json` 从「人类可读（旗标丢失）」变为「结构化 JSON」
++- flow start 起草的 design.md 模板指引行文案更新（接口契约节模板注释），对已起草变更无追溯影响
++- 其余接口无变化
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/knowledge-stats.js | asJson 兼读 opts.json |
++| 修改 | src/knowledge-classify.js | cmdKnowledgeInbox wantJson 兼读 opts.json |
++| 修改 | src/flow-draft.js | design 模板文件变更清单指引改独立章节 |
++| 修改 | test/knowledge-stats.test.mjs | Test 9：opts.json 路径 + cmdKnowledge 调度入口端到端 |
++| 修改 | test/knowledge-inbox.test.mjs | cmdKnowledgeInbox opts.json 路径断言 |
++| 修改 | test/flow-draft.test.mjs | 模板新指引文案断言 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：无事件流/时序输入面——三个判定是同步参数读取，参数在调用时刻已定。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：判定逻辑纯参数布尔求值，无共享可变状态；命令体本身的只读/写面不在本变更范围。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用：无新增状态落盘；修复是判定表达式变化，中断语义与原先完全一致。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不适用：opts.json 是进程内调用链传参（index.js→stages/knowledge.js→实现文件），无跨进程/跨仓面；模板文案是静态字符串。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：行为修复让「原先静默降级为人类可读」的调用方（若依赖旧错误行为的脚本）突然收到 JSON——属暴露既有契约而非破坏；排查过 index.js 全局解析后 filteredArgs 不含 --json，无其他调用方向实现文件传 json 的路径，影响面封闭在三个子命令。
++试过放弃：改 stages/knowledge.js 调度层把 opts.json 注入 args（--json 塞回 args 数组）——污染 args 语义（args 反映用户输入而非程序状态），且 digest 已确立 opts.json 直读惯例，放弃。
+diff --git a/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/proposal.md b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/proposal.md
+new file mode 100644
+index 00000000..5c19166e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T02:36:34.334Z
++---
++# 提案书（Proposal）— 2026-10-05-dogfood-audit-fixes
++
++## 动机
++
++任务原话转写：动机：对轻量变更流程做了一次全链路实测（2026-10-05-knowledge-stats-freshness，已归档），发现两处可即刻修复的缺陷：① knowledge stats/classify/inbox 三个子命令的 --json 判定只查 args.includes('--json')，而 --json 是全局旗标、index.js 顶层吞掉（src/stages/knowledge.js:654 digest 分支注释与 src/index.js:2424 注释均确认），经真实 CLI 调用时旗标永远到不了子命令——sillyspec knowledge stats --json 实测输出人类可读格式，单测直调函数绿但端到端断链（测试面与 CLI 调用面盲区）；② flow start 起草的 design.md 模板指引（src/flow-draft.js:276）让把「文件变更清单」表写在「接口契约」节内，而 flow done 收口的声明面解析器（src/change-list.js:97 FILE_LIST_SECTION_RE）只认独立 ## 文件变更清单 章节——照指引写会被误报「提交面夹带嫌疑」，把本变更自己的交付文件指认为并行会话在途交付。其余实测发现（归档原子提交残缺、patch 过期不重算）锚在 src/flow.js，该文件当前有并行会话在途修改，本轮不触碰。改动面：src/knowledge-stats.js + src/knowledge-classify.js（--json 判定兼读 opts.json，对齐 digest 惯例）+ src/flow-draft.js（模板指引改独立章节）+ 对应测试。
++成功标准：
++- knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
++- flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
++- 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
++2. flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
++3. 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
++
++## 成功标准（可验证）
++
++1. knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
++2. flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
++3. 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
+diff --git a/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/requirements.md b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/requirements.md
+new file mode 100644
+index 00000000..2fd67c7e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T02:36:34.334Z
++---
++# 需求规格（Requirements）— 2026-10-05-dogfood-audit-fixes
++
++## 功能需求
++
++### FR-01: knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
++
++src/knowledge-stats.js cmdKnowledgeStats 的 asJson 与 src/knowledge-classify.js cmdKnowledgeInbox 的 wantJson 必须改为 `args.includes('--json') || opts.json === true`——index.js 顶层吞掉全局 --json 旗标后 filteredArgs 不含该旗标（src/index.js:2424 注释、src/stages/knowledge.js:654 digest 分支注释均确认此契约，digest 已用 opts.json 为正道），opts.json 是经真实 CLI 调度到达子命令的唯一旗标载体；args.includes 保留兜底直调/测试场景。禁止只查 args。实态修正：cmdKnowledgeClassify 经核实恒输出结构化 JSON（无模式判定、84 断言直调锁定），天然满足本条 Then 承诺，不在修复面。
++
++#### 场景：真实 CLI 调度
++
++- Given: 任一仓库有 knowledge 目录
++- When: `sillyspec knowledge stats --json` 或 `sillyspec knowledge inbox --json`（--json 被 index.js 顶层吞进 opts.json）
++- Then: 输出结构化 JSON（parse 得 ok 字段），不再是人类可读文本
++
++#### 场景：直调兜底不回归
++
++- Given: 测试直调 cmdKnowledgeStats(dir, ['--json'], opts)（无 opts.json）
++- When: 调用执行
++- Then: 仍输出 JSON（args.includes 兜底路径不变）
++
++### FR-02: flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
++
++src/flow-draft.js design.md 模板的指引行必须改为指导写独立 `## 文件变更清单` 章节（含表格），与 src/change-list.js FILE_LIST_SECTION_RE 的章节标题识别一致；禁止继续指引「在接口契约节内加表」——该写法解析器认不出，flow done 会把本变更自己的交付文件误报「提交面夹带嫌疑」（2026-10-05-knowledge-stats-freshness 实测实证）。
++
++#### 场景：照新指引书写可被解析
++
++- Given: flow start 起草的 design.md 模板
++- When: 按模板指引填写文件变更清单（独立章节 + 表格）
++- Then: parseFileChangeList 能解析出清单路径，flow done 声明面归因无夹带误报
++
++### FR-03: 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
++
++本变更必须以自动化单测锁定：① stats/classify/inbox 三子命令各至少一条 opts.json 路径断言（不带 --json arg、opts.json:true 仍输出 JSON）；② stats 一条经 stages/knowledge.js cmdKnowledge 调度入口（模拟 index.js 转发 { specDir, json: true }）的端到端 JSON 断言；③ flow-draft 模板断言新指引文案在场、旧指引退场。
++
++#### 场景：主路径
++
++- Given: test/ 各 fixture
++- When: 跑项目测试入口
++- Then: 上述断言全部通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-stats.test.mjs「Test 9: opts.json 全局旗标路径 + cmdKnowledge 调度入口端到端」
++FR-01: test/knowledge-inbox.test.mjs「cmdKnowledgeInbox opts.json 路径：无 --json arg 输出 JSON」
++FR-02: test/flow-draft.test.mjs「design 模板文件变更清单指引=独立章节写法」
++FR-03: test/knowledge-stats.test.mjs「Test 9 断言面收口（三子命令+入口+模板同变更覆盖）」
+diff --git a/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/tasks.md b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/tasks.md
+new file mode 100644
+index 00000000..99fa4ce8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-dogfood-audit-fixes/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T02:36:34.334Z
++---
++# 任务注册表（Tasks）— 2026-10-05-dogfood-audit-fixes
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-dogfood-audit-fixes --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-dogfood-audit-fixes` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: knowledge stats/classify/inbox 三子命令的 --json 判定必须兼读 opts.json（全局旗标正道）与 args.includes('--json')（直调兜底），经 index.js 真实调度的 --json 输出结构化 JSON
++- [x] task-02: flow start 起草的 design.md 模板「文件变更清单」指引必须改为独立章节写法，与 parseFileChangeList 解析面一致（照新指引书写不再触发夹带嫌疑误报）
++- [x] task-03: 单测覆盖：三子命令 opts.json 路径断言各至少一条；stats 加经 stages/knowledge.js cmdKnowledge 调度入口的端到端 JSON 断言；模板文案新指引在场
