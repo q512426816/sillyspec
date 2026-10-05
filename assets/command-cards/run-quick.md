@@ -9,7 +9,10 @@ quick 通道已于 v3.31.0 直接退役：`sillyspec run quick` 对新会话一�
 范围明确的小修补请走**轻量变更**（/sillyspec:flow）：
 
 ```bash
-sillyspec flow start --change <变更名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"
+sillyspec flow start --change <变更名> --input "<动机与背景>
+
+成功标准：
+- <可验证标准>"
 # → 直接干活（改代码写测试，治理工件 CLI 机器起草）
 sillyspec flow done --change <变更名>
 ```

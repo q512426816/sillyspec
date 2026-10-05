@@ -10,8 +10,11 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
 
 ```bash
 export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
-# ① 立项 + 锁基线（--input 缺「成功标准」条目会被清晰度门拦下）：
-sillyspec flow start --change <变更名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"
+# ① 立项 + 锁基线（--input 引号内换行合法，可照抄；缺「成功标准」条目会被清晰度门拦下）：
+sillyspec flow start --change <变更名> --input "<动机与背景>
+
+成功标准：
+- <可验证标准>"
 # ② 直接干活：改代码写测试；填 design.md 四节 AGENT 槽（空槽 flow done 拒收）；逐条勾 tasks.md 的 task-NN
 #    交付代码显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交不进审计件）
 # ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档）：
