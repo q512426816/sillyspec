@@ -9,6 +9,10 @@ updated_at: 2026-09-02T11:20:00+08:00
 
 # progress
 
+## 职责
+
+进度域——SQLite 进度库：progress.js facade + progress/ 实现模块族，changes/stages/steps 落库、断点恢复与进度查询的唯一权威（.sillyspec/.runtime/sillyspec.db）。
+
 ## 定位
 
 进度恢复管理（W6 重构产物）：`src/progress.js` ProgressManager facade + `src/progress/` 四个职责子模块 + 共享常量。管理项目全局数据与变更级进度（stages / steps / batch_progress），全部状态经 DB（`src/db.js`）持久化到 `.sillyspec/.runtime/sillyspec.db`。对外 ProgressManager API 不变，内部按组 delegate 到子模块（构造注入 pm 引用，组内互调保持 this.X 同 class 语义）。

@@ -6,6 +6,10 @@ updated_at: 2026-06-03T12:30:00+08:00
 
 # Workflow 引擎模块文档
 
+## 职责
+
+工作流域——workflow.js 工作流编排与 postcheck 偷懒识别（占位符/fallback/未分析模式）。
+
 ## 模块信息
 
 | 属性 | 值 |

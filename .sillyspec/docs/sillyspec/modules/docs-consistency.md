@@ -9,6 +9,10 @@ updated_at: 2026-09-19T18:10:00+08:00
 
 # docs-consistency
 
+## 职责
+
+文档一致性域——docs-check 文档源码引用真实性校验（棘轮只降不升）、docs-gate/docs-debt、scan 新鲜度与事实、决策提炼（decision-distill）、归档增量与模块卡维护（archive-delta/module-changelog）。
+
 ## 定位
 
 文档一致性四件（与 dispatch / sillyhub-mcp 同级的独立子系统）：文档行号引用校验、docs ratchet 门、模块文档欠账事实计算、scan 文档新鲜度提示。共同原则「CLI 算事实注入」——用 git / 文件系统算出确定性结论注入 prompt，advisory 不阻断、无信号零输出。

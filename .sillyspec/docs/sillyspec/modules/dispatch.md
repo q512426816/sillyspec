@@ -7,6 +7,10 @@ created_at: 2026-08-07T14:50:00+08:00
 ---
 # dispatch
 
+## 职责
+
+派发域——子代理任务派发抽象：本地执行与 SillyHub MCP 远端 worker 池的能力探测（probe）、策略提示（hint）与自动回退本机。
+
 ## 定位
 
 子代理派发抽象层（task-dispatcher）。统一 execute（及未来 verify/scan）的子代理派发入口，**双后端 + 能力探测**（D-005）：默认/降级 = 本机 Agent tool（现状零回归），探测到 SillyHub MCP 可用且路径A 落地时用 SillyHub worker。

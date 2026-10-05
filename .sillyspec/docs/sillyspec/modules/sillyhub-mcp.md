@@ -8,6 +8,10 @@ created_at: 2026-08-07T14:50:00+08:00
 ---
 # sillyhub-mcp
 
+## 职责
+
+SillyHub MCP 客户端域——sillyhub-mcp/ 与远端平台 MCP 网关的连接、工具调用与鉴权。
+
 ## 定位
 
 SillyHub MCP streamable HTTP 客户端。封装与 SillyHub daemon 的 MCP tool 调用（mission/worker 生命周期），供 `src/dispatch/probe.js`（探测连通性）消费。**best-effort**：网络失败/非2xx/异常一律降级返回，绝不抛穿到 execute（仿 `src/sync.js` 风格）。

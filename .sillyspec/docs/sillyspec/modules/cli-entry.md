@@ -8,6 +8,10 @@ updated_at: 2026-09-29T00:00:00+08:00
 ---
 # cli-entry
 
+## 职责
+
+CLI 入口域——bin 垫片与 src/index.js 命令分发（子命令懒加载）、轻量道 flow 协议（flow*.js）、提交建议（commit-suggest）、跨会话交接（handoff）、hunk 归属等顶层命令面。
+
 > R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：新增 flow 命令族（src/flow.js 2-调用协议 start/done/amend-draft + src/flow-draft.js 机器起草；index.js case flow 接线）
 
 > burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：src/flow.js readFlowConfig 缺省 thin→legacy（:66/:76 两处，用户裁定 flow 族保留实验通道——显式 mode: thin 照旧生效）；协议面/命令面零改动，纯缺省值翻转

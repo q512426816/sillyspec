@@ -8,6 +8,10 @@ created_at: 2026-06-03T07:42:00+08:00
 
 # migration
 
+## 职责
+
+迁移域——migrate.js 历史 .sillyspec 结构迁移；modules.js 模块文档重建（modules rebuild）。
+
 ## 定位
 
 SillySpec 的文档结构迁移与模块索引管理模块。负责：

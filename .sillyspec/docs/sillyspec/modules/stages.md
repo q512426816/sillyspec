@@ -9,6 +9,10 @@ updated_at: 2026-09-22T00:00:00+08:00
 
 # stages
 
+## 职责
+
+阶段定义库——scan/brainstorm/plan/execute/verify/quick 等各阶段的入口契约、产物文件名与门禁清单，供阶段引擎（run/）按状态机消费。
+
 > R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：plan.js 拆分粒度纪律注入（D-006/FR-11——实现+单测同卡默认；禁纯接线/纯 module-map/纯全绿仪式卡；同 Wave 文件不相交语义澄清）
 
 ## 定位

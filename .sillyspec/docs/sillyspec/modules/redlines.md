@@ -9,6 +9,10 @@ updated_at: 2026-09-20T00:45:00+08:00
 
 # redlines
 
+## 职责
+
+红线域——redlines.js 加载 .sillyspec/redlines.yaml 红线规则并在门禁与评审面校验（禁止类规则 fail-closed）。
+
 ## 定位
 
 红线机检评估器（2026-09-20-redline-machine-check）：把语义级设计红线（「已结束会话不得假运行」类）转成机器可查断言——消费者仓 `.sillyspec/redlines.yaml` 条目（forbid/require 正则 × scope glob × severity × origin 文档锚）。机制与内容分离：本模块只供机制，清单消费者仓自持，缺清单零打扰。

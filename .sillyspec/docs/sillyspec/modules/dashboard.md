@@ -8,6 +8,10 @@ created_at: 2026-06-03T07:42:00+08:00
 
 # dashboard
 
+## 职责
+
+本地进度面板子包（packages/dashboard）——chokidar 监听＋ws 推送的独立 Web 面板（前端组件/composables/服务端子模块见 dashboard-* 域）。
+
 ## 定位
 
 SillySpec 的 Web Dashboard，为 CLI 项目提供可视化操作界面。负责：

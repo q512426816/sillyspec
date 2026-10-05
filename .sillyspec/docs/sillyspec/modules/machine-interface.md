@@ -9,6 +9,10 @@ updated_at: 2026-09-17T22:45:00+08:00
 
 # machine-interface
 
+## 职责
+
+机器接口域——统一 JSON envelope＋退出码契约（gate/derive），供 SillyHub driver 模式与外部程序化调用；diagnostic-codes 为诊断码单一来源。
+
 ## 定位
 
 SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验从人类可读输出流抽象成可程序化消费的统一 JSON envelope + 退出码契约（0/1/2）。**只读聚合既有策略引擎，不新增校验逻辑**（design §2 方案 B：独立模块单点封装）。
