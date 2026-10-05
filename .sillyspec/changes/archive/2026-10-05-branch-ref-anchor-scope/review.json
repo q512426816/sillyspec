@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-branch-ref-anchor-scope",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "文件变更清单未声明对既有测试 test/backlog-final-batch.test.mjs 的修改",
+      "evidence": "design.md「## 文件变更清单」仅声明 src/worktree.js（修改）与 test/branch-ref-anchor-scope.test.mjs（新增）两项，但 change.patch 冻结 diff 还含 test/backlog-final-batch.test.mjs +4 行改动——声明面与交付面不一致，正是收口声明面比对会判「夹带嫌疑」的形态；该改动内容本身已独立裁决为 fixture 拓扑修正（断言 78/79/85 行逐字未动，仅补 git checkout -q - 使主仓 HEAD 回主干、对齐生产 cleanup 拓扑「worktree 占 sillyspec/*、主仓 HEAD 在主干」），无改测试迁就实现，故记 P2 而非 P1",
+      "location": ".sillyspec/changes/2026-10-05-branch-ref-anchor-scope/design.md:40-45; test/backlog-final-batch.test.mjs:64-67"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements 内部矛盾：FR-04 称畸形 hash「计入」，FR-03 正文与实际测试断言均为「跳过」",
+      "evidence": "FR-04（requirements.md:41）要求单测锁定「畸形 hash fail-closed（计入）」，但 FR-03 正文（requirements.md:31）明确畸形/未知 hash 返回 null 走既有跳过分支，测试绑定作答（requirements.md:53）与实际测试 ③ 断言（test/branch-ref-anchor-scope.test.mjs 断言 length===0）均为跳过——文档自相矛盾；实现/测试取 FR-03 口径，跳过对非真实对象安全（无 commit 即无可悬空审计链，「误删」面不存在），无数据正确性风险，属文档级瑕疵",
+      "location": ".sillyspec/changes/2026-10-05-branch-ref-anchor-scope/requirements.md:41"
+    },
+    {
+      "severity": "P3",
+      "title": "防护声明「cleanup 持主仓互斥锁、判定与删分支同一临界区」未在请求预算内核验（cannot_verify，非证实为假）",
+      "evidence": "design 乱序作答以主仓互斥锁为前提宣称无乱序窗口；src/worktree.js 全文无锁原语（互斥/lock/临界区 零命中），仓内锁基建 withFileLock（src/quicklog.js:40）在 worktree-apply.js:1014、wt-commit.js:98 有真实使用，但 cleanup→_branchReviewReferences→branch -D 调用链是否落在该锁临界区内需再读 worktree-apply.js 调用点方能裁决，12 次请求帽已用尽；已核实部分与声明一致——双探针均为纯只读 git 查询、无中间态落盘、gitQuiet 失败统一归 null 走计入侧（fail-closed，git-helper.js:145-154 + worktree.js:1313-1316）",
+      "location": "src/worktree.js:1553-1581; src/quicklog.js:40; src/worktree-apply.js:1014"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（探针纯只读快照核实为真；互斥锁前提未核验，见 P3-3，未证实为假）",
+    "并发": "边界已裁决：可接受——半写 review.json → JSON.parse 失败跳过为既有已披露路径（本变更不触碰），代码核实 worktree.js:1287-1295 catch 吞掉属实，fail 方向是少锚定非误删；双探针均无写入面",
+    "切换": "边界已裁决：可接受——探针二 null（含查询失败）→ 计入维持锚定的 fail-closed 在 worktree.js:1316 结构性成立；畸形 hash 跳过（非真实对象无可悬空链）已裁决可接受（FR-04 文字矛盾记 P3-2）；无中间态落盘，tag 已存在检查（worktree.js:1559）保证重跑幂等",
+    "作用域": "边界已裁决：可接受——探针二只看主仓 HEAD 单 ref 不枚举 origin/* 等全部 refs：误锚后果仅多余无害 tag（可 git tag -d），且无漏锚面（HEAD 可达 commit 删分支后恒可达）；_resolveMainRepoRoot（worktree.js:588-611，git-common-dir 反推+缓存）显式主仓根防 native-worktree 复用路径 fail-open 属实，探针二落点 worktree.js:1308；放弃的枚举 refs/rev-list 集合判两方案理由（成本不成比例、收益仅少打无害 tag）成立"
+  },
+  "reviewedAt": "2026-10-05T12:00:00+08:00"
+}

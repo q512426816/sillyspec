@@ -65,3 +65,79 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-10-05-wt-list-resilience
   status: active
+
+## FR-worktree-004 review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
+变更：2026-10-05-branch-ref-anchor-scope
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-branch-ref-anchor-scope/requirements.md#FR-01
+最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-01
+  tests: test/branch-ref-anchor-scope.test.mjs「历史 commit（主仓 HEAD 可达）引用不计入——不锚定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-branch-ref-anchor-scope
+  status: active
+
+## FR-worktree-005 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
+变更：2026-10-05-branch-ref-anchor-scope
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-branch-ref-anchor-scope/requirements.md#FR-02
+最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-02
+  tests: test/branch-ref-anchor-scope.test.mjs「分支独有 commit（checkpoint/task）引用计入——锚定保可达」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-branch-ref-anchor-scope
+  status: active
+
+## FR-worktree-006 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
+变更：2026-10-05-branch-ref-anchor-scope
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-branch-ref-anchor-scope/requirements.md#FR-03
+最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-03
+  tests: test/branch-ref-anchor-scope.test.mjs「畸形/未知 hash 既有跳过语义保持（非真实对象无可悬空链，不产生新误删面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-branch-ref-anchor-scope
+  status: active
+
+## FR-worktree-007 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
+变更：2026-10-05-branch-ref-anchor-scope
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-branch-ref-anchor-scope/requirements.md#FR-04
+最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-04
+  tests: test/branch-ref-anchor-scope.test.mjs「三形态断言齐备（fixture 快照）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-branch-ref-anchor-scope
+  status: active

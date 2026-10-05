@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-branch-ref-anchor-scope",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-01",
+      "tests": [
+        "test/branch-ref-anchor-scope.test.mjs「历史 commit（主仓 HEAD 可达）引用不计入——不锚定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-branch-ref-anchor-scope"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-02",
+      "tests": [
+        "test/branch-ref-anchor-scope.test.mjs「分支独有 commit（checkpoint/task）引用计入——锚定保可达」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-branch-ref-anchor-scope"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-03",
+      "tests": [
+        "test/branch-ref-anchor-scope.test.mjs「畸形/未知 hash 既有跳过语义保持（非真实对象无可悬空链，不产生新误删面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-branch-ref-anchor-scope"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-branch-ref-anchor-scope:flow:测试绑定FR-04",
+      "tests": [
+        "test/branch-ref-anchor-scope.test.mjs「三形态断言齐备（fixture 快照）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-branch-ref-anchor-scope"
+    }
+  ]
+}

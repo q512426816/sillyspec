@@ -1,0 +1,309 @@
+diff --git a/src/worktree.js b/src/worktree.js
+index 4c52fb08..806b558f 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -1299,11 +1299,22 @@ export class WorktreeManager {
+     visit(runsDir);
+     if (candidates.size === 0) return [];
+     const refs = [];
++    // 双探针（2026-10-05-branch-ref-anchor-scope）：worktree 分支自带全部主仓历史，单探针
++    // 「hash 是分支祖先或自身」会把旧 review.json 对历史主仓 commit 的引用全部误中（实证：
++    // 56 个无关历史引用触发锚定打 tag）。锚定只护「分支独有」commit——删分支 ref 后真正会
++    // 悬空的只有 baseline checkpoint/task commit；主仓 HEAD 可达的历史 commit 恒可达，不计入。
++    // 探针二对象显式主仓根（_resolveMainRepoRoot）——native-worktree 复用路径下 cwd 是
++    // worktree、其 HEAD 即分支自身，按 cwd 探会「永不锚定」fail-open。
++    const mainRoot = this._resolveMainRepoRoot();
+     for (const [hash, paths] of candidates) {
+-      // merge-base --is-ancestor：祖先或自身 → exit 0 输出空串（gitQuiet 返回 ''≠null）；
+-      // 非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支内，语义正确）
+-      const probe = gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]);
+-      if (probe !== null) refs.push(...paths);
++      // 探针一（语义不变）：merge-base --is-ancestor 祖先或自身 → exit 0 输出空串（gitQuiet
++      // 返回 ''≠null）；非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支
++      // 内，语义正确——非真实对象无可悬空链）
++      if (gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]) === null) continue;
++      // 探针二（新增）：主仓 HEAD 祖先或自身 → ''≠null → 不计入（删分支后仍可达）；探针失败
++      // （null）按「不在主仓可达」处理即计入——fail-closed 宁误锚不误删
++      if (gitQuiet(mainRoot, ['merge-base', '--is-ancestor', hash, 'HEAD']) !== null) continue;
++      refs.push(...paths);
+     }
+     return [...new Set(refs)];
+   }
+diff --git a/test/backlog-final-batch.test.mjs b/test/backlog-final-batch.test.mjs
+index d19495c0..d3c90925 100644
+--- a/test/backlog-final-batch.test.mjs
++++ b/test/backlog-final-batch.test.mjs
+@@ -61,6 +61,10 @@ console.log('\n=== ② _branchReviewReferences 精确校验 ===')
+   git(['add', '.']); git(['commit', '-q', '-m', 'work'])
+   const tip = git(['rev-parse', 'HEAD']).trim()
+   const tipShort = tip.slice(0, 10)
++  // 切回默认分支再判定：生产 cleanup 拓扑里主仓 HEAD 恒在主干（worktree 占着 sillyspec/* 分支）；
++  // 2026-10-05-branch-ref-anchor-scope 起 _branchReviewReferences 按主仓 HEAD 可达性排除
++  // 历史引用——HEAD 停在被测分支上会让排除面吞掉 tip（fixture 形态 ≠ 生产拓扑）
++  git(['checkout', '-q', '-'])
+   // execute-runs 三个 review.json：tip 全 hash / 无关 commit / tip 缩写
+   const mk = (run, base) => {
+     const dir = join(d, '.sillyspec', '.runtime', 'execute-runs', run, 'tasks', 'task-01')
+diff --git a/test/branch-ref-anchor-scope.test.mjs b/test/branch-ref-anchor-scope.test.mjs
+new file mode 100644
+index 00000000..48293985
+--- /dev/null
++++ b/test/branch-ref-anchor-scope.test.mjs
+@@ -0,0 +1,90 @@
++/**
++ * 2026-10-05-branch-ref-anchor-scope 回归：_branchReviewReferences 双探针——锚定只护分支独有 commit
++ *
++ * 背景（2026-10-05 实证）：worktree 分支自带全部主仓历史，单探针「hash 是分支祖先或自身」把
++ * 旧 review.json 对历史主仓 commit 的引用全部误中（apply 自动 cleanup 打印「被 56 个 task
++ * review.json 引用」实为无关历史件），误打 sillyspec-audit tag + 误导性输出。删分支 ref 后
++ * 真正会悬空的只有分支独有 commit（baseline checkpoint / task commit）。
++ *
++ * 锁定语义：
++ *   1. 引用主仓 HEAD 可达的历史 commit → 不计入（FR-01 不锚定）
++ *   2. 引用分支独有 commit → 计入（FR-02 锚定保可达，既有行为不变）
++ *   3. 未知/畸形 hash → 既有跳过语义保持（FR-03 非真实对象无可悬空链）
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { execSync } from 'child_process'
++import { WorktreeManager } from '../src/worktree.js'
++
++let passed = 0, failed = 0
++const failures = []
++function assert(cond, msg) {
++  if (cond) { passed++; console.log(`  ✅ PASS: ${msg}`) }
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++console.log('=== _branchReviewReferences 双探针（2026-10-05-branch-ref-anchor-scope）===\n')
++
++const root = mkdtempSync(join(tmpdir(), 'wt-anchor-scope-'))
++const gitRun = (cmd) => execSync(cmd, { cwd: root, stdio: ['ignore', 'ignore', 'ignore'] })
++try {
++  gitRun('git init -b main')
++  gitRun('git config user.email t@t')
++  gitRun('git config user.name t')
++  // 主仓历史：c1 → c1b（HEAD 停在 c1b）
++  writeFileSync(join(root, 'a.txt'), 'c1')
++  gitRun('git add . && git commit -m c1')
++  const c1 = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim()
++  writeFileSync(join(root, 'a.txt'), 'c1b')
++  gitRun('git add . && git commit -m c1b')
++  const c1b = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim()
++  // 分支独有 commit：从 c1 切 sillyspec/x，落 c2（不在主仓任何常驻 ref 上）
++  gitRun(`git branch sillyscope-anchor-x ${c1}`)
++  gitRun('git checkout sillyscope-anchor-x')
++  writeFileSync(join(root, 'b.txt'), 'c2')
++  gitRun('git add . && git commit -m c2')
++  const c2 = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim()
++  gitRun('git checkout main')
++  const BRANCH = 'sillyscope-anchor-x'
++  // sanity：c1/c1b 主仓 HEAD 可达，c2 分支独有
++  assert(execSync(`git merge-base --is-ancestor ${c1} HEAD && echo yes`, { cwd: root, encoding: 'utf8' }).trim() === 'yes', 'fixture：c1 是主仓 HEAD 祖先')
++  assert(execSync(`git merge-base --is-ancestor ${c2} ${BRANCH} && echo yes`, { cwd: root, encoding: 'utf8' }).trim() === 'yes', 'fixture：c2 在分支上')
++  let c2OnMain = true
++  try { execSync(`git merge-base --is-ancestor ${c2} HEAD`, { cwd: root, stdio: 'ignore' }) } catch { c2OnMain = false }
++  assert(!c2OnMain, 'fixture：c2 不在主仓 HEAD 可达集（分支独有）')
++
++  // execute-runs review.json fixture（_branchReviewReferences 的候选源）
++  const taskDir = join(root, '.sillyspec', '.runtime', 'execute-runs', 'exec-2026-10-05-110000', 'tasks', 'task-01')
++  mkdirSync(taskDir, { recursive: true })
++  const writeReview = (base, head) => writeFileSync(join(taskDir, 'review.json'), JSON.stringify({ base, head }))
++  const wm = new WorktreeManager({ cwd: root })
++
++  console.log('--- ① 历史 commit（主仓 HEAD 可达）引用不计入——不锚定 ---')
++  writeReview(c1, c1b) // base/head 全是主仓历史 commit（旧 review base 锚常见形态）
++  assert(wm._branchReviewReferences(BRANCH).length === 0, '历史引用不计入（旧实现此处误计入）')
++  writeReview(c1, c2) // base 历史 + head 分支独有 → 只计 head 一条引用
++  const mixed = wm._branchReviewReferences(BRANCH)
++  assert(mixed.length === 1 && mixed[0].includes('task-01'), '混合引用只计分支独有侧（历史侧不计）')
++
++  console.log('--- ② 分支独有 commit 引用计入——锚定保可达（既有行为不变） ---')
++  writeReview(c2, c2)
++  assert(wm._branchReviewReferences(BRANCH).length === 1, '分支独有 commit 引用计入')
++  writeReview('0000000000000000000000000000000000000000', c2)
++  assert(wm._branchReviewReferences(BRANCH).length === 1, '畸形 base + 有效 head：有效侧仍计入')
++
++  console.log('--- ③ 畸形/未知 hash 既有跳过语义保持 ---')
++  writeReview('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', '0000000000000000000000000000000000000000')
++  assert(wm._branchReviewReferences(BRANCH).length === 0, '全畸形引用跳过（非真实对象无可悬空链）')
++
++  rmSync(root, { recursive: true, force: true })
++} catch (e) {
++  console.error('fixture 异常：', e.message)
++  process.exit(1)
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failures.length) { console.log('失败项:'); failures.forEach(f => console.log('  - ' + f)) }
++console.log('='.repeat(50))
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/tasks.md b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/tasks.md
+new file mode 100644
+index 00000000..e612a16d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:44:08.178Z
++---
++# 任务注册表（Tasks）— 2026-10-05-branch-ref-anchor-scope
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-branch-ref-anchor-scope --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-branch-ref-anchor-scope` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
++- [x] task-02: 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
++- [x] task-03: 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
++- [x] task-04: 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
+diff --git a/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/design.md b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:44:08.178Z
++---
++# 设计记录（Design Record）— 2026-10-05-branch-ref-anchor-scope
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++_branchReviewReferences（src/worktree.js，cleanup 第 4 步消费）判「review.json 引用了分支 commit」用单探针 merge-base --is-ancestor hash branch——worktree 分支自带全部主仓历史，旧 review.json 引用历史主仓 commit（base 锚常见形态）全部误中（本会话实证 56 个引用全为无关历史件），误打 sillyspec-audit tag 且输出误导。修法：双探针——hash 在分支上（探针一不变）且**不在主仓 HEAD 可达集**（探针二 merge-base --is-ancestor hash HEAD，探针对象用 _resolveMainRepoRoot() 显式主仓根，防 native-worktree 复用路径下 HEAD=分支自身造成永不锚定的 fail-open）才计入引用。锚定语义收窄为「分支独有 commit」（baseline checkpoint/task commit——删分支 ref 后真正会悬空的只有它们）；主仓可达的历史 commit 删分支后仍可达，不构成悬空审计链。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++_branchReviewReferences(branch)（@private）行为收窄：返回的引用清单从「hash 是分支祖先或自身」改为「hash 是分支祖先或自身 且 不是主仓 HEAD 祖先或自身」；签名不变。cleanup 对外表现：仅当存在分支独有 commit 引用时打 sillyspec-audit tag + 打印审计锚定信息；纯历史引用场景改为直接删分支（details 记 branch deleted）。无 CLI/文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——判定是纯读快照（候选 hash 来自既有 review.json 落盘件，探针是只读 git 查询），主仓 HEAD 在判定瞬间是什么就按什么算；cleanup 持主仓互斥锁跑，判定与删分支在同一临界区内，无乱序窗口。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   两探针均为只读 git 查询无写入面；review.json 并发写读到半写件时既有 JSON.parse 失败跳过分支吞掉（候选集少一条，fail 方向是少锚定非误删——与既有行为一致，本变更不触碰该路径）。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——判定无中间状态落盘；探针二失败（null）时按「不在主仓可达」处理即维持锚定（fail-closed 宁误锚不误删），中断重跑幂等。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：探针二显式锚定 _resolveMainRepoRoot()（git-common-dir 反推主仓根）——native-worktree 复用路径下 cwd 是 worktree 时不会把分支自身当「主仓 HEAD」；跨仓各有各的 execute-runs 注册表与分支命名空间，互不可见。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：主仓 HEAD 恰好不含某历史 hash 但另一常驻 ref（如 origin/main）含——探针二判「不在主仓可达」→ 误锚（多余 tag，不删任何东西，安全方向）；反之不存在漏锚面：hash 要悬空必须同时在分支上且不在任何常驻 ref，而探针二只看 HEAD 这一个 ref——HEAD 不含而 origin/main 含的场景锚定是多余的但无害。放弃的方案：① 枚举全部 refs 逐一判可达——覆盖更全但 N 探针成本与配置面（remote 名不确定）不成比例，且收益仅是少打几个无害 tag；② 改为 rev-list branch ^HEAD 取分支独有集再做集合判——语义等价但一次性拉全集在候选仅个位数时反而更重。均已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/worktree.js | _branchReviewReferences 双探针：+主仓 HEAD 可达性排除（探针对象显式主仓根） |
++| 新增 | test/branch-ref-anchor-scope.test.mjs | 历史 commit 引用不锚定/分支独有 commit 引用锚定/畸形 hash fail-closed 三形态单测 |
+
+diff --git a/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/proposal.md b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:44:08.177Z
++---
++# 提案书（Proposal）— 2026-10-05-branch-ref-anchor-scope
++
++## 动机
++
++任务原话转写：worktree cleanup 的分支审计锚定（_branchReviewReferences，src/worktree.js:1305）只用 merge-base --is-ancestor hash branch 单探针判「review.json 引用了分支 commit」——worktree 分支自带全部主仓历史，任何旧 review.json 引用历史主仓 commit（base/head 锚常见形态）都误中（本会话实证：apply 自动 cleanup 打印「被 56 个 task review.json 引用」，实为无关历史件引用），误打 sillyspec-audit tag + 误导性输出。锚定语义应只护「分支独有 commit」（baseline checkpoint/task commit）——删分支 ref 后真正会悬空的只有它们；主仓 HEAD 可达的历史 commit 永不悬空。
++成功标准：
++- review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
++- 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
++- 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
++- 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
++2. 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
++3. 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
++4. 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
++
++## 成功标准（可验证）
++
++1. review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
++2. 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
++3. 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
++4. 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
+
+diff --git a/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/requirements.md b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:44:08.178Z
++---
++# 需求规格（Requirements）— 2026-10-05-branch-ref-anchor-scope
++
++## 功能需求
++
++### FR-01: review.json 引用的 hash 是主仓 HEAD 可达（历史 commit）时不再计入引用——不打 tag、不打印审计锚定信息
++
++- _branchReviewReferences 必须在「hash 是分支祖先或自身」之上追加主仓可达性排除：hash 同时是主仓 HEAD 祖先或自身（探针对象为 _resolveMainRepoRoot() 显式主仓根）时不计入引用清单——主仓可达的历史 commit 删分支 ref 后仍可达，不构成悬空审计链。
++
++#### 场景：主路径
++
++- Given: 主仓历史 commit（在 sillyspec/<change> 分支与主仓 HEAD 共同祖先线上）被某 execute-runs review.json 的 base/head 引用
++- When: cleanup 走分支删除判定（_branchReviewReferences）
++- Then: 该引用不计入清单——不打 sillyspec-audit tag、不打印审计锚定信息、分支直接删除
++
++### FR-02: 引用的 hash 是分支独有 commit（如 baseline checkpoint/task commit）时锚定行为不变（打 tag 保可达）
++
++- hash 在分支上且不在主仓 HEAD 可达集（分支独有 commit，如 baseline checkpoint/task commit）时必须维持既有锚定行为：计入引用清单 → 打 sillyspec-audit/<branch> tag 保 commit 可达后删分支 ref。
++
++#### 场景：主路径
++
++- Given: review.json 引用的 hash 是 sillyspec/<change> 分支独有 commit（不在主仓任何常驻 ref 上）
++- When: cleanup 走分支删除判定
++- Then: 计入引用清单 → 打 tag 锚定 tip、打印审计锚定信息、删分支 ref（与既有行为逐字一致）
++
++### FR-03: 引用 hash 未知/畸形时维持 fail-closed（按需锚定，宁可误锚不误删）
++
++- 可达性判定失败时必须倒向锚定侧（fail-closed 宁误锚不误删）：新增的主仓可达探针（探针二）返回 null（查询失败）时按「不在主仓可达」处理即计入引用清单维持锚定；既有探针一（分支可达）语义不变——未知/畸形 hash 返回 null 走既有跳过分支（非真实对象、无可悬空审计链，「误删」面不存在，跳过即安全），判定整体异常仍归入外层「有引用」保守分支。
++
++#### 场景：主路径
++
++- Given: review.json 引用未知/畸形 hash（git merge-base 报错非零）
++- When: cleanup 走分支删除判定
++- Then: 既有探针一语义保持（跳过——非真实对象无可悬空链）；探针二失败路径按不可达计入（fail-closed 不产生新误删面）；判定整体异常归入保守分支不裸删
++
++### FR-04: 单测覆盖：历史 commit 引用不锚定、分支独有 commit 引用锚定两形态
++
++- 必须有单测锁定三形态：历史 commit 引用不计入（无锚定）、分支独有 commit 引用计入（锚定）、畸形 hash fail-closed（计入）。
++
++#### 场景：主路径
++
++- Given: git fixture 仓（主仓历史 + sillyspec/* 分支独有 commit + execute-runs review.json）
++- When: _branchReviewReferences 判定
++- Then: 三形态断言各自成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/branch-ref-anchor-scope.test.mjs「历史 commit（主仓 HEAD 可达）引用不计入——不锚定」
++FR-02: test/branch-ref-anchor-scope.test.mjs「分支独有 commit（checkpoint/task）引用计入——锚定保可达」
++FR-03: test/branch-ref-anchor-scope.test.mjs「畸形/未知 hash 既有跳过语义保持（非真实对象无可悬空链，不产生新误删面）」
++FR-04: test/branch-ref-anchor-scope.test.mjs「三形态断言齐备（fixture 快照）」

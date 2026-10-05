@@ -1690,3 +1690,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：33bc4d2857eb29f15e10f062808e3d9d8eee2385
 理由：最大风险：changeName 兜底目录名后，若某历史注册表目录名与变更名不一致（理论上只在手工改名目录时出现），list/doctor 会按目录名匹配——但该形态下旧行为是 undefined 崩溃/失配，兜底严格更优，不构成回退面。放弃的方案：① 渲染器（index.js）侧判空——只修 CLI 一处，doctor 的 undefined 失配仍在，且 index.js 当前被并行会话在途占用（不可改）；② 写入侧强制补全历史件——要迁移已落盘 meta，读侧问题写侧修，收益错位。均已弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-05-branch-ref-anchor-scope
+锚点：未记录
+最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
+理由：最大风险：主仓 HEAD 恰好不含某历史 hash 但另一常驻 ref（如 origin/main）含——探针二判「不在主仓可达」→ 误锚（多余 tag，不删任何东西，安全方向）；反之不存在漏锚面：hash 要悬空必须同时在分支上且不在任何常驻 ref，而探针二只看 HEAD 这一个 ref——HEAD 不含而 origin/main 含的场景锚定是多余的但无害。放弃的方案：① 枚举全部 refs 逐一判可达——覆盖更全但 N 探针成本与配置面（remote 名不确定）不成比例，且收益仅是少打几个无害 tag；② 改为 rev-list branch ^HEAD 取分支独有集再做集合判——语义等价但一次性拉全集在候选仅个位数时反而更重。均已弃。
