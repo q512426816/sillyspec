@@ -1593,10 +1593,10 @@ superseded_by：FR-cli-entry-198
 - row: 2026-09-25-fr-rot-precision:flow:FR-02
   tests: test/cli.test.mjs | test/thin-fr-inject-parity.test.mjs
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
   source_change: 2026-09-25-fr-rot-precision
   status: active
 
@@ -3016,10 +3016,10 @@ superseded_by：FR-cli-entry-198
 - row: 2026-09-27-confirm-on-use:flow:FR-04
   tests: nope.test.mjs | test/confirm-on-use.test.mjs「④」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
   source_change: 2026-09-27-confirm-on-use
   status: active
 
@@ -3082,10 +3082,10 @@ superseded_by：FR-cli-entry-198
 - row: 2026-09-27-confirm-on-use:flow:FR-07
   tests: nope.test.mjs | test/confirm-on-use.test.mjs「④」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
   source_change: 2026-09-27-confirm-on-use
   status: active
 

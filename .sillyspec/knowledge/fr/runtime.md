@@ -943,3 +943,60 @@ superseded_by：FR-cli-entry-102
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-05
 最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+
+## FR-core-engine-106 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
+变更：2026-10-05-status-empty-guide
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-status-empty-guide/requirements.md#FR-01
+最近确认：a1b0bb6ec15b9aabbf7429bd6c789a2ddc8f818c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-status-empty-guide:flow:测试绑定FR-01
+  tests: test/status-empty-guide.test.mjs「空仓库 run status 与顶层 status 均输出引导行且 exit 0 不落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-status-empty-guide
+  status: active
+
+## FR-core-engine-107 有活跃变更时输出与现状逐字节一致（不回归）
+变更：2026-10-05-status-empty-guide
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-status-empty-guide/requirements.md#FR-02
+最近确认：a1b0bb6ec15b9aabbf7429bd6c789a2ddc8f818c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-status-empty-guide:flow:测试绑定FR-02
+  tests: test/status-empty-guide.test.mjs「有活跃变更时 status 展示不含空态引导行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-status-empty-guide
+  status: active
+
+## FR-core-engine-108 新增测试断言空态引导行，全量测试绿
+变更：2026-10-05-status-empty-guide
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-status-empty-guide/requirements.md#FR-03
+最近确认：a1b0bb6ec15b9aabbf7429bd6c789a2ddc8f818c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-status-empty-guide:flow:测试绑定FR-03
+  tests: test/status-empty-guide.test.mjs「三面断言齐全（空态/别名同构/不回归）+ 全量测试绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-status-empty-guide
+  status: active
