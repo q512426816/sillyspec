@@ -20,15 +20,17 @@ const ROOT = join(import.meta.dirname, '..')
 const read = (p) => readFileSync(join(ROOT, p), 'utf8')
 
 test('① 紧凑内联旧形态零残留', () => {
-  for (const p of ['src/run/command.js', 'src/flow.js', 'src/index.js', 'src/hooks/worktree-guard.js']) {
+  // 评审 P3 处置：扫描面与断言口径一致——本测试扫的是 flow start 教学所在 5 文件（非全仓 src）
+  for (const p of ['src/run/command.js', 'src/flow.js', 'src/index.js', 'src/hooks/worktree-guard.js', 'src/stages/brainstorm.js']) {
     assert.ok(!read(p).includes('--input "<动机；成功标准：每行一条可验证标准>"'), `${p} 无紧凑内联形态`)
   }
 })
 
-test('② 4 处教学点均带独立一行『成功标准：』教学', () => {
+test('② 教学点均带独立一行『成功标准：』教学', () => {
   assert.ok(read('src/run/command.js').includes('独立一行『成功标准：』'), 'command.js 空态引导带格式')
   assert.ok(read('src/flow.js').includes('独立一行『成功标准：』'), 'flow.js 重试提示带格式')
   assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
+  assert.ok(read('src/stages/brainstorm.js').includes('独立一行『成功标准：』'), 'brainstorm 规模筛查转轻量建议带格式（评审 P2 处置：第五处教学点）')
   const guard = read('src/hooks/worktree-guard.js')
   assert.ok(!guard.includes('--input "<描述+成功标准>"'), 'worktree-guard 无模糊形态残留')
   assert.ok((guard.match(/独立一行『成功标准：』/g) || []).length >= 3, 'worktree-guard 三处 stage 提示带格式')

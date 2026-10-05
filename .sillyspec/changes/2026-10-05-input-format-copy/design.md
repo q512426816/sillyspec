@@ -12,13 +12,13 @@ created_at: 2026-10-05T14:07:36.085Z
 
 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
 
-纯文案对齐：flow start 的 4 处 CLI 教学点（command.js:1131 空态引导——原紧凑内联形态经 extractSuccessCriteria 实测提取 0 条、flow.js:1740 重试提示、flow.js:1907 用法行、worktree-guard.js 三处 stage 提示）统一改为与 index.js:224 / AGENTS.md 同口径的全格式教学形态（动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』）。清晰的报错教学（flow.js:518-519 清晰度门）本就正确不动；quick 会话一句话 --input 与 run --done 用户原话 --input 属另一语义门不动。源级回归测试锁定三组断言。
+纯文案对齐：flow start 的 CLI 教学点（command.js:1131 空态引导——原紧凑内联形态经 extractSuccessCriteria 实测提取 0 条、flow.js:1740 重试提示、flow.js:1907 用法行、worktree-guard.js 三处 stage 提示、stages/brainstorm.js:58 规模筛查转轻量建议——评审 P2 处置补入的第五处，共 5 文件 7 处）统一改为与 index.js:224 / AGENTS.md 同口径的全格式教学形态（动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』）。清晰的报错教学（flow.js:518-519 清晰度门）本就正确不动；quick 会话一句话 --input 与 run --done 用户原话 --input 属另一语义门不动。源级回归测试锁定三组断言。
 
 ## 接口契约
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
-CLI 输出面文案变化（4 文件 7 处提示字符串）；无命令解析变化、无文件格式变化、无行为变化（清晰度门判定逻辑未触碰）。
+CLI 输出面文案变化（5 文件 7 处提示字符串——评审 P2 处置含 brainstorm.js 第五处）；无命令解析变化、无文件格式变化、无行为变化（清晰度门判定逻辑未触碰）。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
@@ -44,4 +44,5 @@ CLI 输出面文案变化（4 文件 7 处提示字符串）；无命令解析�
 | 修改 | src/run/command.js | 空态引导紧凑内联形态 → 全格式（原形态提取 0 条必弹 exit 2） |
 | 修改 | src/flow.js | 重试提示与 flow 用法行补全格式 |
 | 修改 | src/hooks/worktree-guard.js | 三处 stage 提示模糊形态 → 全格式 |
+| 修改 | src/stages/brainstorm.js | 规模筛查转轻量建议 --input "<需求>" → 全格式（评审 P2 处置补入） |
 | 新增 | test/input-format-copy.test.mjs | 源级回归：旧形态零残留/教学点带格式/另一语义门不受影响 |
