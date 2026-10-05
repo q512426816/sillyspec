@@ -1,0 +1,490 @@
+diff --git a/.sillyspec/changes/2026-10-06-review-anchor-and-negation/flow-state.yaml b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/flow-state.yaml
+new file mode 100644
+index 00000000..f8fccbb2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/flow-state.yaml
+@@ -0,0 +1,33 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  上轮修复（2026-10-06-litest-p1-fixes）收口过程实测暴露两个缺口：
++
++  ① 评审时点 vs 重冻结竞态：复审 PASS 的 review.json 落盘 26 秒后被漂移重冻结机制隔离——隔离逻辑只看「重冻结时刻 review.json 在场」即判「对着旧冻结面不作数」，不区分该评审是否对着当前 HEAD
++  做的（复审实际核对了 HEAD=最新提交+工作区实态，结论有效却被迫手工恢复文件才能收口）。
++
++  ② 「串台」否定消解词表缺裸「不」形态：design 作答「前缀过滤不串台」字面命中承诺词一票升级（NEGATED_CROSSTALK_RE 词表有
++  不会/不存在/没有/无/零/防/杜绝/避免/不含/免，无「不串台」整词），上轮变更因此每次定档都触发信号。
++
++
++  成功标准：
++
++  - 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为
++  7-40 hex）
++
++  - 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++
++  - 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++
++  - NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++
++  - 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
++autopilot: true
++baseline_commit: 4f346a89040c8dae916ed48fc54c70fba4e55c88
++updatedAt: '2026-10-05T23:15:57.725Z'
++baseline_sha256: 07877bbff056085a642f21198012acbff90509ab07255da5a2c1821c40996736
++
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 5b046b45..40bbee97 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -33,8 +33,11 @@ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|
+  * 承诺语态必有断言修饰（与「不丢失」类「不X」形态承诺词本质不同），否定前缀 + 短距内的
+  * 「串台」先替换为占位符再扫；「解决串台」「仍有串台」等非否定语境保留一票升级。仅 design
+  * 作答面应用——input/proposal/requirements 承载用户原话，承诺口径零放松。后缀否定
+- * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。 */
+-const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台/g
++ * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。
++ * 整词「不串台」追加（2026-10-06-review-anchor-and-negation 实测：词表无裸「不」形态，
++ * design 作答「前缀过滤不串台」字面命中一票升级）——只加三字整词不加裸「不」前缀：
++ * 「不排除串台」「不排除有串台」是风险自认（保留升级），裸前缀会把它们误消解。 */
++const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台|不串台/g
+ 
+ /** 风险自认形态（评审 P2 修复）：「无法杜绝串台」「难免串台」「避免不了串台」否定的是
+  * 「阻止」而非风险本身——语义=承认风险在场，必须保留一票升级。这类形态在场时整段保守
+@@ -188,12 +191,23 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+ /**
+  * 评审员任务书（flow done 首次命中需评审时打印——agent 起干净上下文子代理执行）。
+  * 材料有界（change.patch 为冻结件；治理工件已含字节帽意识）；请求预算硬帽防失控勘察（R14 教训）。
++ * head（评审对象锚，2026-10-06-review-anchor-and-negation）：调用方传当前 git HEAD——任务书
++ * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
++ * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
+  */
+-export function renderReviewerTaskbook({ change, changeDir }) {
++export function renderReviewerTaskbook({ change, changeDir, head = null }) {
++  const headFull = String(head || '').trim()
+   return [
+     `⚖️ 独立评审任务书 — ${change}`,
+     `══════════════════════════════════════`,
+     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
++    ...(headFull ? [
++      `【评审对象】工作区实态 + git HEAD（${headFull}）——change.patch 冻结面若落后于该 HEAD，以`,
++      `  工作区实态与 git log/show 核对为准；review.json 的 reviewedAgainst 字段照抄上面的完整 sha。`,
++    ] : [
++      `【评审对象】工作区实态 + git HEAD——review.json 的 reviewedAgainst 字段填 git rev-parse HEAD`,
++      `  输出的完整 sha（评审对象锚，缺失时收口漂移检测会把本评审判为过期隔离重评）。`,
++    ]),
+     ``,
+     `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
+     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
+@@ -216,6 +230,7 @@ export function renderReviewerTaskbook({ change, changeDir }) {
+     `{`,
+     `  "schemaVersion": 1, "change": "${change}", "reviewer": "subagent",`,
+     `  "verdict": "PASS" | "FAIL",`,
++    `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
+     `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
+     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
+     `  "reviewedAt": "<ISO 时间>"`,
+@@ -227,6 +242,8 @@ export function renderReviewerTaskbook({ change, changeDir }) {
+ 
+ /**
+  * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
++ * reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选字段——缺省
++ * 容忍（旧产物向后兼容），存在时须为 7-40 位 hex sha。
+  */
+ export function validateReviewJson(path) {
+   let raw
+@@ -236,6 +253,10 @@ export function validateReviewJson(path) {
+   const errors = []
+   if (r.schemaVersion !== 1) errors.push('schemaVersion 必须为 1')
+   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
++  if (r.reviewedAgainst !== undefined
++    && (typeof r.reviewedAgainst !== 'string' || !/^[0-9a-f]{7,40}$/i.test(r.reviewedAgainst.trim()))) {
++    errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
++  }
+   if (!Array.isArray(r.findings)) errors.push('findings 必须为数组')
+   else {
+     r.findings.forEach((f, i) => {
+@@ -249,4 +270,25 @@ export function validateReviewJson(path) {
+   return { ok: true, errors: [], review: r }
+ }
+ 
+-export default { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket }
++/**
++ * review.json 是否锚定到指定 HEAD（漂移重冻结隔离前的保留判定，
++ * 2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD 做的 PASS 结论
++ * 落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）。reviewedAgainst 缺省/读失败/
++ * 格式非法一律 false（fail-safe：宁可多评一次，不放行无锚证据）。
++ * 匹配口径：双向前缀（reviewedAgainst 允许短 sha 形态，与完整 head 任一方向前缀命中即锚定）。
++ * @param {string} reviewPath - review.json 路径
++ * @param {string} head - 当前完整 HEAD sha
++ * @returns {boolean}
++ */
++export function reviewAnchoredToHead(reviewPath, head) {
++  const h = String(head || '').trim().toLowerCase()
++  if (!h) return false
++  try {
++    const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
++    const ra = typeof r?.reviewedAgainst === 'string' ? r.reviewedAgainst.trim().toLowerCase() : ''
++    if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
++    return h === ra || h.startsWith(ra) || ra.startsWith(h)
++  } catch { return false }
++}
++
++export default { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket }
+diff --git a/src/flow.js b/src/flow.js
+index d906517d..f98a375b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1157,18 +1157,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const reviewPath = join(changeDir, 'review.json')
+         let quarantineOk = true
+         if (existsSync(reviewPath)) {
+-          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
++          // 锚定保留判定（2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD
++          // 做的 PASS 结论落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）：reviewedAgainst
++          // 命中当前 HEAD = 评审对象即最新交付面，结论有效——保留不隔离、review 标记不重置。
++          // 缺省/读失败/格式非法按未锚定处理，隔离行为不变（fail-safe 宁可多评）。
++          let anchoredToHead = false
+           try {
+-            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+-            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+-          } catch (e) {
+-            quarantineOk = false
+-            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
++            const { reviewAnchoredToHead } = await import('./flow-review.js')
++            anchoredToHead = reviewAnchoredToHead(reviewPath, drift.head)
++          } catch { /* 锚定判定失败按未锚定处理 */ }
++          if (anchoredToHead) {
++            console.log(`   review.json 已锚定当前 HEAD（reviewedAgainst 命中 ${String(drift.head || '').slice(0, 8)}）——评审对象即最新交付面，结论保留不隔离`)
++          } else {
++            const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
++            try {
++              renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
++              console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
++            } catch (e) {
++              quarantineOk = false
++              console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
++            }
+           }
+         }
+         if (quarantineOk) {
+           driftRefreeze = true
+-          if (st.substeps?.review === 'done') {
++          if (st.substeps?.review === 'done' && !existsSync(reviewPath)) {
+             // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
+             // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
+             // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
+@@ -1407,8 +1420,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
+       mark('review')
+     } else if (!existsSync(join(changeDir, 'review.json'))) {
++      // 任务书标注评审对象 HEAD（2026-10-06-review-anchor-and-negation）：评审员照抄进
++      // review.json.reviewedAgainst——处置提交后的重入重跑据此保留「对着最新面的刚完成评审」，
++      // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
++      let taskbookHead = null
++      try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
+       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
+-      console.log(renderReviewerTaskbook({ change, changeDir }))
++      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead }))
+       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+       reportMidFail('review')
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+index 35d9cada..4308ffab 100644
+--- a/test/flow-review.test.mjs
++++ b/test/flow-review.test.mjs
+@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import {
+-  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket,
++  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket,
+ } from '../src/flow-review.js'
+ 
+ function makeChangeDir(designText, requirementsText) {
+@@ -130,6 +130,7 @@ test('④ 否定语境消解：design 作答否定式「串台」不再一票升
+     ['无串台面', '不适用：纯输出层追加，无串台面。'],
+     ['不会串台', '不适用：单进程同步变换，不会串台。'],
+     ['杜绝串台', '不适用：零共享状态，杜绝串台与误伤。'],
++    ['不串台（整词，2026-10-06-review-anchor-and-negation）', '不适用：前缀按 changeName 过滤不串台。'],
+   ]) {
+     const { root, changeDir } = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
+     const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+@@ -158,6 +159,7 @@ test('⑥ 非否定语境保留：design 作答「解决串台」照常升级',
+     ['无法杜绝串台（风险自认）', '多实例并发下无法杜绝串台，属已知残留。'],
+     ['难免串台（风险自认）', '跨仓场景难免串台，接受该边界。'],
+     ['避免不了串台（风险自认）', '晚到事件下避免不了串台，文档已声明。'],
++    ['不排除串台（风险自认，整词反向）', '高并发下不排除串台可能，评审需重点看。'],
+   ]) {
+     const { root, changeDir } = makeChangeDir(
+       DESIGN_V2_BND.replace('__ANSWER__', answer),
+@@ -180,6 +182,15 @@ test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
+   assert.match(book, /盲维四问真实性/)
+   assert.match(book, /披露边界显式裁决（必答，不许默认放行/, '边界裁决条款在场')
+   assert.match(book, /未裁决=未审/);
++  // 评审对象锚（2026-10-06-review-anchor-and-negation）：head 传入 → 任务书印 sha + schema
++  // 含 reviewedAgainst；缺省 → 引导评审员自填（git rev-parse HEAD）
++  const sha = 'a'.repeat(40)
++  const bookHead = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1', head: sha })
++  assert.match(bookHead, new RegExp(sha), '任务书印评审对象 HEAD 完整 sha')
++  assert.match(bookHead, /reviewedAgainst.*照抄任务书标注/, 'schema 含 reviewedAgainst 照抄指引')
++  const bookNoHead = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1' })
++  assert.match(bookNoHead, /git rev-parse HEAD/, 'head 缺省 → 引导评审员自填 rev-parse 输出')
++  assert.match(bookNoHead, /reviewedAgainst/, 'head 缺省 schema 仍含 reviewedAgainst 字段')
+ })
+ 
+ test('③ review.json 校验三态', () => {
+@@ -196,5 +207,41 @@ test('③ review.json 校验三态', () => {
+   const bad = validateReviewJson(p)
+   assert.equal(bad.ok, false)
+   assert.ok(bad.errors.length >= 4, `字段错误逐条列出: ${bad.errors}`)
++  // reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选——缺省兼容旧
++  // 产物；合法 hex 通过；非 hex（照抄了别的东西）报错
++  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
++  assert.equal(validateReviewJson(p).ok, true, 'reviewedAgainst 缺省（旧产物）兼容通过')
++  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: 'a'.repeat(40), findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
++  assert.equal(validateReviewJson(p).ok, true, 'reviewedAgainst 合法 40 位 hex 通过')
++  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: 'HEAD~1', findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
++  const badRa = validateReviewJson(p)
++  assert.equal(badRa.ok, false, 'reviewedAgainst 非 hex 报错')
++  assert.ok(badRa.errors.some((e) => /reviewedAgainst/.test(e)), `错误清单点名 reviewedAgainst: ${badRa.errors}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++// ── reviewAnchoredToHead（漂移隔离前的锚定保留判定，2026-10-06-review-anchor-and-negation
++// 实测竞态：复审对着当前 HEAD 做的 PASS 落盘后被误隔离）──
++test('⑦ 评审对象锚定：reviewedAgainst 命中 HEAD → 保留判定 true', () => {
++  const root = mkdtempSync(join(tmpdir(), 'frv-anchor-'))
++  const p = join(root, 'review.json')
++  const headFull = '0f1e2d3c4b5a6978879665544332211f0e9d8c7b' // 40 hex
++  const base = { schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', findings: [], dimensionNotes: {}, reviewedAt: '2026' }
++  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull }))
++  assert.equal(reviewAnchoredToHead(p, headFull), true, '全等命中')
++  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull.slice(0, 12) }))
++  assert.equal(reviewAnchoredToHead(p, headFull), true, '短 sha 前缀命中（reviewedAgainst 短于 head）')
++  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull }))
++  assert.equal(reviewAnchoredToHead(p, headFull.slice(0, 12)), true, 'head 短于 reviewedAgainst 反向命中')
++  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: '99d1c2b3a4f5e6d7c8b9a0f1e2d3c4b5a69788796' }))
++  assert.equal(reviewAnchoredToHead(p, headFull), false, '异 sha 不命中（过期评审 → 隔离）')
++  writeFileSync(p, JSON.stringify(base))
++  assert.equal(reviewAnchoredToHead(p, headFull), false, 'reviewedAgainst 缺省（旧产物）按未锚定处理')
++  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: 'not-a-sha' }))
++  assert.equal(reviewAnchoredToHead(p, headFull), false, '格式非法按未锚定处理（fail-safe）')
++  writeFileSync(p, '{broken json')
++  assert.equal(reviewAnchoredToHead(p, headFull), false, '坏 JSON 按未锚定处理（fail-safe）')
++  assert.equal(reviewAnchoredToHead(join(root, 'nope.json'), headFull), false, '文件不存在 false')
++  assert.equal(reviewAnchoredToHead(p, ''), false, 'head 缺省 false')
+   rmSync(root, { recursive: true, force: true })
+ })
+diff --git a/.sillyspec/changes/2026-10-06-review-anchor-and-negation/design.md b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/design.md
+new file mode 100644
+index 00000000..eeca0ba6
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T23:15:57.077Z
++---
++# 设计记录（Design Record）— 2026-10-06-review-anchor-and-negation
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++两个实测缺口各取最小修法：① 评审时点 vs 重冻结竞态——根因是隔离判定只看「重冻结时刻 review.json 在场」这一个信号，无法区分「对着旧冻结面的过期评审」与「对着当前 HEAD 的刚完成评审」。修法：给评审产物加对象锚——任务书印出当前 HEAD 完整 sha，评审员照抄进 review.json 新增的 reviewedAgainst 字段；漂移隔离前先比对（双向前缀容忍短 sha），命中即保留不隔离。锚定比对提炼为 flow-review.js 纯函数 reviewAnchoredToHead（可单测），flow.js 隔离段仅接线。② 「串台」否定消解漏裸「不」形态——NEGATED_CROSSTALK_RE 只加「不串台」三字整词而不加裸「不」前缀：整词永远是安全声明（口语否定短形），裸前缀会把「不排除串台」风险自认误消解。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- flow-review.js：renderReviewerTaskbook 加可选 head 参数（缺省任务书退自填引导形态，向后兼容）；validateReviewJson 加 reviewedAgainst 可选校验（缺省容忍，存在须 7-40 hex）；新导出 reviewAnchoredToHead(reviewPath, head)；NEGATED_CROSSTALK_RE 内部加「不串台」整词备选（模块私有常量，无签名变化）。
++- flow.js：漂移隔离段加锚定保留分支（命中不隔离不重置标记，日志说明）；review 子步任务书调用传入 rev-parse HEAD（取不到传 null best-effort）。
++- review.json 产物 schema 增量字段 reviewedAgainst（可选，schemaVersion 维持 1 纯可选增量——与 hub_session_id 同款先例）。
++- 测试：flow-review.test.mjs ④/⑥/②/③ 四段扩充 + ⑦ 新增八态用例。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：锚定比对是调用时一次性无状态判定（读文件+字符串前缀比较），无事件序列假设；任务书 sha 印制发生在打印时点，评审员照抄的是当时 HEAD，落盘晚于打印不破坏语义（比对对象就是那个 HEAD）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++review.json 写读竞态：评审子代理落盘瞬间 flow done 恰在读——读失败按未锚定处理（fail-safe 走现行隔离），与既有「读失败容忍」口径一致，不新造崩溃面。锚定保留分支不改写 review.json（只读），无双写。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：锚定判定纯读无半态；保留分支不动 review 子步标记、隔离分支沿用既有 fail-safe（隔离失败整体退回幂等跳过）——中断重入两分支行为幂等（重跑再判一次）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++reviewedAgainst 比对的是本仓 HEAD（drift.head 由 detectPatchDrift 在本仓 rev-parse 取得），review.json 是本变更目录内产物——无跨仓面；多变更并行时各 change 目录隔离，锚定判定按 changeDir 路径定向，按 changeName 前缀过滤口径与既有隔离段同源不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：① reviewedAgainst 伪造（评审员乱填 sha 绕过隔离）——信任层级与 verdict 同级（评审产物本就信任子代理如实填写，schema 校验形态不校验真伪；且填错 sha 的后果是多留一份过期评审，后续 review 子步 validate/P1 判定仍在，防线不单点依赖锚定）。② HEAD 短 sha 前缀碰撞（7 位起）——理论存在但与 git 自身缩写语义一致，碰撞后果同①不致命。
++试过放弃：把裸「不」加进 NEGATED_CROSSTALK_RE 前缀词表——「不[0-8字]串台」会把「不排除串台」「不可能没有串台」等风险自认/双重否定误消解（⑥ 用例即反向锁定），放弃，取三字整词精确匹配。
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow-review.js | 任务书 head 参数 + reviewedAgainst schema/校验 + reviewAnchoredToHead 纯函数 + 「不串台」整词 |
++| 修改 | src/flow.js | 漂移隔离段锚定保留分支接线 + 任务书调用传 HEAD |
++| 修改 | test/flow-review.test.mjs | ④/⑥/②/③ 扩充 + ⑦ reviewAnchoredToHead 八态 |
+diff --git a/.sillyspec/changes/2026-10-06-review-anchor-and-negation/proposal.md b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/proposal.md
+new file mode 100644
+index 00000000..e818d97f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/proposal.md
+@@ -0,0 +1,35 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T23:15:57.077Z
++---
++# 提案书（Proposal）— 2026-10-06-review-anchor-and-negation
++
++## 动机
++
++任务原话转写：上轮修复（2026-10-06-litest-p1-fixes）收口过程实测暴露两个缺口：
++① 评审时点 vs 重冻结竞态：复审 PASS 的 review.json 落盘 26 秒后被漂移重冻结机制隔离——隔离逻辑只看「重冻结时刻 review.json 在场」即判「对着旧冻结面不作数」，不区分该评审是否对着当前 HEAD 做的（复审实际核对了 HEAD=最新提交+工作区实态，结论有效却被迫手工恢复文件才能收口）。
++② 「串台」否定消解词表缺裸「不」形态：design 作答「前缀过滤不串台」字面命中承诺词一票升级（NEGATED_CROSSTALK_RE 词表有 不会/不存在/没有/无/零/防/杜绝/避免/不含/免，无「不串台」整词），上轮变更因此每次定档都触发信号。
++
++成功标准：
++- 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
++- 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++- 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++- NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++- 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
++2. 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++3. 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++4. NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++5. 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
++
++## 成功标准（可验证）
++
++1. 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
++2. 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++3. 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++4. NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++5. 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
+diff --git a/.sillyspec/changes/2026-10-06-review-anchor-and-negation/requirements.md b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/requirements.md
+new file mode 100644
+index 00000000..10386fb5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/requirements.md
+@@ -0,0 +1,75 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T23:15:57.077Z
++---
++# 需求规格（Requirements）— 2026-10-06-review-anchor-and-negation
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
++
++flow-review.js 的 renderReviewerTaskbook 必须接受 head 参数并在任务书正文印出评审对象 HEAD 完整 sha 与「照抄」指引（head 缺省时必须引导评审员自填 git rev-parse HEAD 输出）；任务书产物 schema 必须含 reviewedAgainst 字段行；validateReviewJson 对该字段必须可选校验——缺省容忍（旧产物向后兼容零回归），存在时须为 7-40 位 hex 否则进错误清单。
++
++#### 场景：任务书印锚
++
++- Given: flow done 判定需评审且 rev-parse 取到当前 HEAD
++- When: 渲染评审任务书（head=40 位 sha）
++- Then: 正文含该 sha 与 reviewedAgainst 照抄指引；head 缺省时含「git rev-parse HEAD」自填引导，schema 两形态都含 reviewedAgainst 字段
++
++### FR-02: 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++
++flow.js 漂移重冻结的隔离段必须在隔离前比对 review.json.reviewedAgainst 与当前 HEAD（双向前缀口径）：命中 → 必须保留 review.json 不改名不隔离、不重置 review 子步完成标记，并打印锚定保留日志；未锚定 / 字段缺省 / 读失败 / 格式非法 → 必须保持现行隔离行为（fail-safe：宁可多评一次，不放行无锚证据），patch 重冻结两分支都照常执行。
++
++#### 场景：锚定保留（实测竞态复现，2026-10-06-litest-p1-fixes 收口实证）
++
++- Given: patch 冻结后本变更有新提交（drift 触发）、review.json 在场且 reviewedAgainst == 当前 HEAD
++- When: flow done 重入漂移检测
++- Then: review.json 原样保留（无 .superseded 改名）、review 子步标记不重置、日志说明「已锚定当前 HEAD」；patch 重冻结照常推进
++
++### FR-03: 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++
++锚定比对逻辑必须提炼为 flow-review.js 导出的纯函数 reviewAnchoredToHead(reviewPath, head)：双向前缀匹配（全等 / head 以 reviewedAgainst 为前缀 / reviewedAgainst 以 head 为前缀）；reviewedAgainst 缺省、坏 JSON、非 hex、文件不存在、head 为空一律返回 false；flow.js 只做调用接线（含锚定判定自身异常的 catch 兜底）。
++
++#### 场景：主路径
++
++- Given: review.json 与 head 的各种组合
++- When: 直接调用 reviewAnchoredToHead
++- Then: 全等与双向前缀命中返回 true；异 sha、缺字段、坏 JSON、非 hex、文件缺失、head 空均返回 false
++
++### FR-04: NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++
++NEGATED_CROSSTALK_RE 必须追加「不串台」三字整词备选：design 作答含「…过滤不串台」类整词否定时不再触发「串台」承诺词一票升级；「不排除串台」类风险自认形态必须保留一票升级——禁止把裸「不」加进前缀词表（裸前缀会把「不排除串台」等风险自认误消解）。
++
++#### 场景：整词消解
++
++- Given: design 盲维作答「不适用：前缀按 changeName 过滤不串台。」
++- When: classifyReviewNeed
++- Then: 承诺词信号不触发（其余信号照常独立判定）
++
++#### 场景：风险自认保留
++
++- Given: 作答「高并发下不排除串台可能，评审需重点看。」
++- When: classifyReviewNeed
++- Then: 「串台」一票升级保留
++
++### FR-05: 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
++
++上述两向必须有回归测试锁定（flow-review.test.mjs：④ 段加「不串台」消解形态、⑥ 段加「不排除串台」风险自认反向、② 段加任务书锚断言、③ 段加 reviewedAgainst 可选校验三态、⑦ 新增 reviewAnchoredToHead 八态用例）；改动面测试与 npm run lint 必须全绿，flow-protocol 全量回归无破坏。
++
++#### 场景：主路径
++
++- Given: 本变更代码就位
++- When: node --test test/flow-review.test.mjs test/flow-protocol.test.mjs + npm run lint
++- Then: 全部通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-review.test.mjs「② 评审任务书——head 传入印 sha + reviewedAgainst 照抄指引 / head 缺省引导自填」
++FR-02: test/flow-review.test.mjs「⑦ 评审对象锚定——reviewedAgainst 命中 HEAD 保留判定（flow.js 接线段由 test/flow-protocol.test.mjs 全量回归背书）」
++FR-03: test/flow-review.test.mjs「⑦ 评审对象锚定——全等/双向前缀命中 true、异 sha/缺省/坏 JSON/非 hex/文件缺失/head 空 false」
++FR-04: test/flow-review.test.mjs「④ 否定语境消解——不串台（整词）不升级 + ⑥ 非否定语境保留——不排除串台（风险自认，整词反向）」
++FR-05: test/flow-review.test.mjs「③ review.json 校验三态——reviewedAgainst 可选校验（缺省兼容/合法 hex 通过/非 hex 报错）」
+diff --git a/.sillyspec/changes/2026-10-06-review-anchor-and-negation/tasks.md b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/tasks.md
+new file mode 100644
+index 00000000..d966d43b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-review-anchor-and-negation/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T23:15:57.077Z
++---
++# 任务注册表（Tasks）— 2026-10-06-review-anchor-and-negation
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-review-anchor-and-negation --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-review-anchor-and-negation` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
++- [x] task-02: 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
++- [x] task-03: 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
++- [x] task-04: NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
++- [x] task-05: 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿

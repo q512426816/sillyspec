@@ -6897,3 +6897,98 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-litest-p1-fixes
   status: active
+
+## FR-cli-entry-365 评审任务书标注评审对象 HEAD（sha 印在任务书）且 review.json schema 含 reviewedAgainst 字段（评审员照抄）；validateReviewJson 对该字段可选校验（缺省兼容旧产物，存在须为 7-40 hex）
+变更：2026-10-06-review-anchor-and-negation
+状态：active
+摘要：任务书印锚
+全文：.sillyspec/changes/archive/2026-10-06-review-anchor-and-negation/requirements.md#FR-01
+最近确认：8305cab70fbd5bfc821cb5fc12d3cd8713838280
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-review-anchor-and-negation:flow:测试绑定FR-01
+  tests: test/flow-review.test.mjs「② 评审任务书——head 传入印 sha + reviewedAgainst 照抄指引 / head 缺省引导自填」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-review-anchor-and-negation
+  status: active
+
+## FR-cli-entry-366 漂移隔离前比对：reviewedAgainst 命中当前 HEAD（前缀口径）→ 保留 review.json 不隔离不重置 review 子步标记，日志说明保留原因；未锚定/读失败 → 现行隔离行为不变
+变更：2026-10-06-review-anchor-and-negation
+状态：active
+摘要：锚定保留（实测竞态复现，2026-10-06-litest-p1-fixes 收口实证）
+全文：.sillyspec/changes/archive/2026-10-06-review-anchor-and-negation/requirements.md#FR-02
+最近确认：8305cab70fbd5bfc821cb5fc12d3cd8713838280
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-review-anchor-and-negation:flow:测试绑定FR-02
+  tests: test/flow-protocol.test.mjs | test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-review-anchor-and-negation
+  status: active
+
+## FR-cli-entry-367 比对逻辑提炼为可单测纯函数（flow-review.js 导出），flow.js 仅接线
+变更：2026-10-06-review-anchor-and-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-review-anchor-and-negation/requirements.md#FR-03
+最近确认：8305cab70fbd5bfc821cb5fc12d3cd8713838280
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-review-anchor-and-negation:flow:测试绑定FR-03
+  tests: test/flow-review.test.mjs「⑦ 评审对象锚定——全等/双向前缀命中 true、异 sha/缺省/坏 JSON/非 hex/文件缺失/head 空 false」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-review-anchor-and-negation
+  status: active
+
+## FR-cli-entry-368 NEGATED_CROSSTALK_RE 补「不串台」整词：design 作答「…过滤不串台」不再一票升级；「不排除串台」风险自认形态保留一票升级
+变更：2026-10-06-review-anchor-and-negation
+状态：active
+摘要：整词消解；风险自认保留
+全文：.sillyspec/changes/archive/2026-10-06-review-anchor-and-negation/requirements.md#FR-04
+最近确认：8305cab70fbd5bfc821cb5fc12d3cd8713838280
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-review-anchor-and-negation:flow:测试绑定FR-04
+  tests: test/flow-review.test.mjs「④ 否定语境消解——不串台（整词）不升级 + ⑥ 非否定语境保留——不排除串台（风险自认，整词反向）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-review-anchor-and-negation
+  status: active
+
+## FR-cli-entry-369 新增回归测试覆盖上述两向；npm test 改动面无回归 + lint 绿
+变更：2026-10-06-review-anchor-and-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-review-anchor-and-negation/requirements.md#FR-05
+最近确认：8305cab70fbd5bfc821cb5fc12d3cd8713838280
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-review-anchor-and-negation:flow:测试绑定FR-05
+  tests: test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-review-anchor-and-negation
+  status: active

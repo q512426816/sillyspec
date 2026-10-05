@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-review-anchor-and-negation",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8305cab70fbd5bfc821cb5fc12d3cd8713838280",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok（边界已裁决：可接受——review.json 写读竞态读失败按未锚定 fail-safe 走现行隔离，catch→false→else 隔离分支实测与既有读失败容忍口径一致，保留分支只读不双写）",
+    "切换": "n/a（既有双故障窄路径披露——隔离成功+盘写失败→backfill 按 exempt 误读——已裁决可接受：非本变更引入，flow.js:1184 加 !existsSync 反而收窄了误重置面）",
+    "作用域": "ok（边界已裁决：可接受——reviewedAgainst 伪造信任与 verdict 同级、schema 只校验形态；7 位起短 sha 前缀碰撞与 git 缩写语义同源；两者后果均为多留一份过期评审而非放行坏代码，收口 validateReviewJson 形状校验与 P1 拦截仍在，锚非唯一防线）"
+  },
+  "reviewedAt": "2026-10-06T12:00:00.000Z"
+}

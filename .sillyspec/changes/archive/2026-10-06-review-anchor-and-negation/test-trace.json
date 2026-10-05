@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-review-anchor-and-negation",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-review-anchor-and-negation:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-review.test.mjs「② 评审任务书——head 传入印 sha + reviewedAgainst 照抄指引 / head 缺省引导自填」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-review-anchor-and-negation"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-review-anchor-and-negation:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-protocol.test.mjs",
+        "test/flow-review.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-review-anchor-and-negation"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-review-anchor-and-negation:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review.test.mjs「⑦ 评审对象锚定——全等/双向前缀命中 true、异 sha/缺省/坏 JSON/非 hex/文件缺失/head 空 false」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-review-anchor-and-negation"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-review-anchor-and-negation:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-review.test.mjs「④ 否定语境消解——不串台（整词）不升级 + ⑥ 非否定语境保留——不排除串台（风险自认，整词反向）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-review-anchor-and-negation"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-06-review-anchor-and-negation:flow:测试绑定FR-05",
+      "tests": [
+        "test/flow-review.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-review-anchor-and-negation"
+    }
+  ]
+}
