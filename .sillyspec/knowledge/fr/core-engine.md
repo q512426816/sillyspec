@@ -1571,3 +1571,60 @@
   confirmed_at: null
   source_change: 2026-10-04-log-window-arity
   status: active
+
+## FR-core-engine-103 knowledge stats --json 输出新增 lastEventAt 字段（全量流 max(at) 的 ISO 字符串；无任何遥测记录时为 null）
+变更：2026-10-05-knowledge-stats-freshness
+状态：active
+摘要：多记录乱序取最新；空流为 null
+全文：.sillyspec/changes/archive/2026-10-05-knowledge-stats-freshness/requirements.md#FR-01
+最近确认：d47d4ee37d52454e11d847f138c36bb8873a0481
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-01
+  tests: test/knowledge-stats.test.mjs「Test 8: lastEventAt 新鲜度聚合——多记录乱序取最新 / 单记录 / 无遥测 null」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-knowledge-stats-freshness
+  status: active
+
+## FR-core-engine-104 人类可读模式在遥测计数行展示数据截至日期（有遥测时）；无遥测时不展示该读数
+变更：2026-10-05-knowledge-stats-freshness
+状态：active
+摘要：有遥测；无遥测
+全文：.sillyspec/changes/archive/2026-10-05-knowledge-stats-freshness/requirements.md#FR-02
+最近确认：d47d4ee37d52454e11d847f138c36bb8873a0481
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-02
+  tests: test/knowledge-stats.test.mjs「Test 8: 人类可读数据截至读数——有遥测展示 / 无遥测不展示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-knowledge-stats-freshness
+  status: active
+
+## FR-core-engine-105 单测覆盖三种情形：多记录取最新 at、单记录、无遥测为 null
+变更：2026-10-05-knowledge-stats-freshness
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-knowledge-stats-freshness/requirements.md#FR-03
+最近确认：d47d4ee37d52454e11d847f138c36bb8873a0481
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-03
+  tests: test/knowledge-stats.test.mjs「Test 8: lastEventAt 三情形全断言（同用例组收口）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-knowledge-stats-freshness
+  status: active

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-knowledge-stats-freshness",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "cmdKnowledgeStats JSDoc 的 --json 输出结构清单未同步 lastEventAt",
+      "evidence": "src/knowledge-stats.js:266 用法注释仍写 { ok, sinceDays, hasTelemetry, matrix, neverHit, totalInjects, totalClassifies }，缺 lastEventAt；文件头口径注释（15-16 行）已列——纯文档漂移，无行为影响",
+      "location": "src/knowledge-stats.js:266"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02「与遥测计数同行」未做同行断言",
+      "evidence": "test/knowledge-stats.test.mjs:283-284 以两个独立 includes 分别断言「遥测计数」与「数据截至 <date>」，若回归把读数挪至他行测试仍绿；实现（src/knowledge-stats.js:335）当前确为同一行拼串",
+      "location": "test/knowledge-stats.test.mjs:283"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-05T00:52:22Z"
+}

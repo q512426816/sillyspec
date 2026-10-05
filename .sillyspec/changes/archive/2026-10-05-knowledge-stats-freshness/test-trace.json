@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-knowledge-stats-freshness",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-stats.test.mjs「Test 8: lastEventAt 新鲜度聚合——多记录乱序取最新 / 单记录 / 无遥测 null」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-knowledge-stats-freshness"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-stats.test.mjs「Test 8: 人类可读数据截至读数——有遥测展示 / 无遥测不展示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-knowledge-stats-freshness"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-knowledge-stats-freshness:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-stats.test.mjs「Test 8: lastEventAt 三情形全断言（同用例组收口）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-knowledge-stats-freshness"
+    }
+  ]
+}
