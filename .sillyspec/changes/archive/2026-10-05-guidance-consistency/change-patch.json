@@ -1,0 +1,42 @@
+{
+  "change": "2026-10-05-guidance-consistency",
+  "baseline": "c97265450d0c17e56b8d43785e138d2dd007297d",
+  "head": "7d5e3de151ca53ff4b4ed2d6a185e510347bf8df",
+  "files": [
+    ".sillyspec/changes/2026-10-05-guidance-consistency/design.md",
+    ".sillyspec/changes/2026-10-05-guidance-consistency/flow-state.yaml",
+    ".sillyspec/changes/2026-10-05-guidance-consistency/proposal.md",
+    ".sillyspec/changes/2026-10-05-guidance-consistency/requirements.md",
+    ".sillyspec/changes/2026-10-05-guidance-consistency/tasks.md",
+    "AGENTS.md",
+    "src/run/command.js"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 154,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-05T05:10:48.484Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "d1689146a9466328d996e9622e5a696217c87793e6f08552b6b04878b07b1600",
+  "patchStatus": "ok"
+}

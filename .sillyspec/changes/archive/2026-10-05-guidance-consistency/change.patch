@@ -1,0 +1,200 @@
+diff --git a/.sillyspec/changes/2026-10-05-guidance-consistency/flow-state.yaml b/.sillyspec/changes/2026-10-05-guidance-consistency/flow-state.yaml
+new file mode 100644
+index 00000000..553f9264
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-guidance-consistency/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: c97265450d0c17e56b8d43785e138d2dd007297d
++updatedAt: '2026-10-05T05:04:04.133Z'
++baseline_sha256: a9e0a9eba96e64c89b585b5e6694f6536a231ac92e633bb429811b1aa5ba463c
++
+diff --git a/AGENTS.md b/AGENTS.md
+index 59bbfd6b..eebf90e1 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -12,6 +12,8 @@
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+ | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
+ 
++`--input` 过门格式（轻量道首次调用即过，勿靠报错学）：动机/背景在前；随后独立一行只写「成功标准：」；再每行一条 `- <可验证标准>`。
++
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+ ## 恢复与查看
+diff --git a/src/run/command.js b/src/run/command.js
+index 2e6c1ba1..f6a65bff 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1113,7 +1113,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+ 
+   let progress = pm.read(cwd, changeName)
+ 
+-  // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status/doctor）查询只读短路。
++  // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status；doctor 已于 2026-09-09-doctor-noai
++  // 移出——阶段形态走状态机，顶层 doctor 只读语义由 index.js case 头部分流保真）查询只读短路。
+   // 无显式写 flag 时在 registerChange / ensureStageSteps 之前拦截，零副作用：
+   //   - 目标 progress 不存在 → 提示「只读查询不建变更」exit 0（不 initChange、不建 default 行，治 8b）
+   //   - 目标 progress 存在 → 只读展示，不 seed steps、不刷新 lastActive、不 registerChange
+diff --git a/.sillyspec/changes/2026-10-05-guidance-consistency/design.md b/.sillyspec/changes/2026-10-05-guidance-consistency/design.md
+new file mode 100644
+index 00000000..c6f0c9cb
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-guidance-consistency/design.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T05:04:04.105Z
++---
++# 设计记录（Design Record）— 2026-10-05-guidance-consistency
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++两处指引文本对齐实态：① AGENTS.md 是 agent 会话的第一入口（init 生成可自由编辑），在其轻量道两处 `--input` 提法旁补一句过门格式要点（「成功标准：」独立成行、每行一条 `- <可验证标准>`）——格式门实现在 flow start（报错文案已含格式说明但那是事后），前置到入口文档使首调即过；② src/run/command.js 只读短路块注释的「status/doctor」改为「status」并注明 doctor 移出史（2026-09-09-doctor-noai，与 constants.js 常量内注释同口径）。选注释就地修正而非删除：该块注释承载 D-005@v2/FR-04 的决策出处，纠正覆盖面表述即可保留出处价值。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无：纯文档与注释改动，零执行逻辑触碰，CLI 行为与输出逐字节不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：静态文本修改，无事件序参与。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   AGENTS.md 若与 init 模板更新并发编辑可能行级冲突——git 常规合并面；本变更是孤立两行级插入，冲突概率与解决成本均为常规。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用：无状态变更。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：AGENTS.md 属本仓文档（init 同版本不覆盖用户编辑），注释属本仓源码；不引用本机路径或会话标识。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：AGENTS.md 格式要点若与 flow start 格式门未来演进不同步会变成第二份漂移文档——以「要点级」而非「全文复制」表述（只写行形态不复制报错全文），漂移面最小化。放弃的方案：把格式说明同时写进 flow start 的 --help 输出（入口更近）——该输出文案在 flow.js（并行会话在途），本轮不可触碰；AGENTS.md 已是可动的最近入口，help 面留给在途落盘后。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | AGENTS.md | 轻量道两处 --input 提法补过门格式要点 |
++| 修改 | src/run/command.js | 只读短路注释 status/doctor → status（注明移出史） |
+diff --git a/.sillyspec/changes/2026-10-05-guidance-consistency/proposal.md b/.sillyspec/changes/2026-10-05-guidance-consistency/proposal.md
+new file mode 100644
+index 00000000..8e012512
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-guidance-consistency/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T05:04:04.105Z
++---
++# 提案书（Proposal）— 2026-10-05-guidance-consistency
++
++## 动机
++
++任务原话转写：两处指引文本与实态脱节（实测撞见）：① AGENTS.md 选道表只写 --input "<描述＋成功标准>"，未说过门格式（成功标准：须独立成行、每行一条 "- <可验证标准>"）——首次调用必然 exit 2 撞门后才从报错学格式（2026-10-05 实测）；② src/run/command.js:1116 注释仍写 READONLY_AUXILIARY_STAGES（status/doctor），而 doctor 已于 2026-09-09-doctor-noai 移出该常量（现仅 status）——注释误导后来者以为 doctor 也走只读短路。修：AGENTS.md 轻量道两处 input 提法补格式要点一行；command.js 注释改 status（引用移出记录）。
++成功标准：
++- AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
++- command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
++- 纯文档/注释改动零行为面，全量测试绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
++2. command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
++3. 纯文档/注释改动零行为面，全量测试绿
++
++## 成功标准（可验证）
++
++1. AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
++2. command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
++3. 纯文档/注释改动零行为面，全量测试绿
+diff --git a/.sillyspec/changes/2026-10-05-guidance-consistency/requirements.md b/.sillyspec/changes/2026-10-05-guidance-consistency/requirements.md
+new file mode 100644
+index 00000000..e7f9ca78
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-guidance-consistency/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T05:04:04.105Z
++---
++# 需求规格（Requirements）— 2026-10-05-guidance-consistency
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（收口做门柱对比）；正文与场景块归你。
++
++### FR-01: AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
++
++AGENTS.md 选道表与恢复节的 `--input` 提法必须包含过门格式要点：动机/背景在前，「成功标准：」独立成行，随后每行一条 `- <可验证标准>`——与 flow start 实测格式门一致；禁止只写「描述＋成功标准」而无格式说明（首调必撞 exit 2 的实测摩擦面）。
++
++#### 场景：主路径
++
++- Given：新会话 agent 只读 AGENTS.md 不看 CLI 报错
++- When：按选道表写 --input 起轻量变更
++- Then：写出的 input 首次即过格式门（成功标准条目提取 ≥1 条）
++
++### FR-02: command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
++
++src/run/command.js 只读短路注释必须与 READONLY_AUXILIARY_STAGES 实态一致：只列 status，并注明 doctor 已于 2026-09-09-doctor-noai 移出（阶段形态走状态机、顶层 doctor 只读语义由 index.js 拦截保真）；禁止残留 status/doctor 并列的过时表述。
++
++#### 场景：主路径
++
++- Given：读者依注释理解只读短路覆盖面
++- When：核对 constants.js 的 READONLY_AUXILIARY_STAGES
++- Then：注释清单与常量逐项一致，移出史有出处
++
++### FR-03: 纯文档/注释改动零行为面，全量测试绿
++
++本变更必须零行为面：不改任何执行逻辑，AGENTS.md 与注释外零触碰；全量测试套与 lint 保持绿。
++
++#### 场景：主路径
++
++- Given：交付 diff 仅含 AGENTS.md 与 src/run/command.js 注释行
++- When：跑全量测试与 lint
++- Then：零新增失败（行为面与基线一致）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例」`）
++
++FR-01: 不适用：纯文档指引，无代码行为可断言（格式门自身由 flow start 实测门背书——本 FR 即按该门写出并首调通过）
++FR-02: 不适用：纯注释纠偏，constants.js 实态由既有测试面锁定
++FR-03: 不适用：零行为面变更无专属测试——全量绿由收口实测门（CLI 亲测）背书
+diff --git a/.sillyspec/changes/2026-10-05-guidance-consistency/tasks.md b/.sillyspec/changes/2026-10-05-guidance-consistency/tasks.md
+new file mode 100644
+index 00000000..be7d48fa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-guidance-consistency/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T05:04:04.105Z
++---
++# 任务注册表（Tasks）— 2026-10-05-guidance-consistency
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-guidance-consistency --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-guidance-consistency` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
++- [x] task-02: command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
++- [x] task-03: 纯文档/注释改动零行为面，全量测试绿

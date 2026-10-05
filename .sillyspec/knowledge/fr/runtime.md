@@ -1000,3 +1000,24 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-05-status-empty-guide
   status: active
+
+## FR-runtime-071 AGENTS.md 轻量变更行的 --input 提法包含「成功标准：独立成行＋每行一条 - 可验证标准」格式要点
+变更：2026-10-05-guidance-consistency
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-guidance-consistency/requirements.md#FR-01
+最近确认：7d5e3de151ca53ff4b4ed2d6a185e510347bf8df
+
+## FR-runtime-072 command.js READONLY 短路注释与 constants.js 实态一致（只列 status，注明 doctor 已移出）
+变更：2026-10-05-guidance-consistency
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-guidance-consistency/requirements.md#FR-02
+最近确认：7d5e3de151ca53ff4b4ed2d6a185e510347bf8df
+
+## FR-runtime-073 纯文档/注释改动零行为面，全量测试绿
+变更：2026-10-05-guidance-consistency
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-guidance-consistency/requirements.md#FR-03
+最近确认：7d5e3de151ca53ff4b4ed2d6a185e510347bf8df
