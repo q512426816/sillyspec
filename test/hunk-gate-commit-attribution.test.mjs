@@ -56,9 +56,10 @@ test('① 他侧归因改判：他侧后缀交付不报未归因（信息行 + �
 
     const r = await runHunkAttributionGate({
       cwd: f.cwd, specBase: f.specBase, changeName: f.changeName, baselineCommit: baseline,
-      committedFiles: ['a.js', 'f.js', 'bare.js'], gitFn: (c, a) => git(c, a.slice(1)), gate: 'warn',
+      committedFiles: ['a.js', 'f.js', 'bare.js'], gitFn: (c, a) => git(c, a), gate: 'warn',
     })
     assert.deepEqual(r.unattributed.map((u) => u.file), ['bare.js'], `裸提交保持未归因（实际 ${JSON.stringify(r.unattributed)}）`)
+    assert.ok(r.unattributed[0].hunks >= 1, `hunk 计数真实可得（评审 P3 处置：包装修复后不再恒 -1，实得 ${r.unattributed[0].hunks}）`)
     assert.equal(r.foreignByCommit.length, 1, '他侧后缀交付改判他侧归因')
     assert.equal(r.foreignByCommit[0].file, 'f.js')
     assert.equal(r.foreignByCommit[0].owners[0], OTHER, '归属他侧变更名（提交事实）')
@@ -80,7 +81,7 @@ test('③ 他侧归因不阻 ok（清零行与他侧归因并存）', async () =
     writeFileSync(join(f.changeDir, 'design.md'), `# 设计\n## 文件变更清单\n| 操作 | 路径 |\n|---|---|\n| 修改 | placeholder.js |\n`)
     const r = await runHunkAttributionGate({
       cwd: f.cwd, specBase: f.specBase, changeName: f.changeName, baselineCommit: baseline,
-      committedFiles: ['f.js'], gitFn: (c, a) => git(c, a.slice(1)), gate: 'error',
+      committedFiles: ['f.js'], gitFn: (c, a) => git(c, a), gate: 'error',
     })
     assert.equal(r.unattributed.length, 0, '无未归因')
     assert.equal(r.foreignByCommit.length, 1)
