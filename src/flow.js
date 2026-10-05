@@ -1010,6 +1010,27 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           console.error(`   结果文件：${t.resultPath}`)
         }
       } catch { /* 三件套 best-effort：读不到不阻断 FAIL 主输出 */ }
+      // lint FAIL 件套（坑 flowdone-lint-fail-no-output，2026-10-03 实证：quick-audit 的
+      // runVerifyLintCheck 全程静默、printVerifyLintCheck 未在 flow 路径调用——「命令与输出
+      // 尾部见上」名不副实，agent 只能盲猜或直调同参复现）。对齐 test 三件套：命令 + 输出
+      // 尾部 + 失败文件 + 结果文件（lint 结果已由 persistLintResult 并入 test-result.json
+      // 或独立落盘，kind: 'lint'）。
+      try {
+        const l = gate.lint
+        if (l && l.status === 'failed') {
+          console.error(`   lint 命令：${l.command || '（未知）'}${l.reason ? `（${l.reason}）` : ''}`)
+          const tail = String(l.outputTail || '')
+          if (tail) {
+            const lines = tail.split('\n').filter((x) => x.trim())
+            console.error(`   lint 输出尾部（后 ${Math.min(lines.length, 15)} 行）：`)
+            for (const line of lines.slice(-15)) console.error(`   | ${line.slice(0, 160)}`)
+          }
+          if (Array.isArray(l.failureFiles) && l.failureFiles.length > 0) {
+            console.error(`   lint 失败文件（前 10）：${l.failureFiles.slice(0, 10).join('、')}${l.failureFiles.length > 10 ? ' 等' : ''}`)
+          }
+          if (l.resultPath) console.error(`   lint 结果文件：${l.resultPath}`)
+        }
+      } catch { /* lint 件套 best-effort */ }
       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')

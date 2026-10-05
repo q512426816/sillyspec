@@ -555,6 +555,11 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     } catch { /* 快照链路异常 → 主仓现行为 */ }
     }
   }
+  // failed 提升到 try 外（坑 flowdone-lint-fail-no-output 排障顺带发现）：此前 const failed
+  // 声明在 try 块内（块级作用域），finally 的快照回拷读 failed.length 抛 ReferenceError 被
+  // 空 catch 吞掉——P6b 回拷 + resultPath 重映射自 2026-09-28 落地即死代码（快照 FAIL 时
+  // 结果文件随临时目录蒸发、FAIL 三件套的结果文件路径恒死链）。
+  const failed = []
   try {
     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
     //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
@@ -611,7 +616,6 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
       lint = runVerifyLintCheck({ cwd, specBase })
     }
-    const failed = []
     // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
     // 证据（区间提交消息标题与正文均无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2，同 flow 侧 %B%x1e 口径）。
@@ -693,6 +697,16 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })
       } catch { /* 提示失败不影响门禁语义 */ }
     }
+    // lint 结果持久化（坑 flowdone-lint-fail-no-output，2026-10-03）：runVerifyLintCheck 全程
+    // 静默、tally 只记一句退出码——lint 结果对象并入 test 的 test-result.json（modules 并列
+    // 一节）；test 无结果文件（skipped）而 lint 实跑时独立落盘（kind: 'lint'）。快照模式下
+    // 并入写在快照路径、随 P6b FAIL 回拷回主仓（失败恰是排障需要它的时点）。
+    try {
+      if (lint && (lint.status === 'passed' || lint.status === 'failed')) {
+        const { persistLintResult } = await import('../verify-postcheck.js')
+        lint.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint }) || lint.resultPath || null
+      }
+    } catch { /* 持久化 best-effort，不影响门禁语义 */ }
     return {
       action: failed.length > 0 ? 'fail' : 'pass',
       failed,

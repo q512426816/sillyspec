@@ -2938,6 +2938,47 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
 }
 
 /**
+ * lint 结果持久化（坑 flowdone-lint-fail-no-output，2026-10-03 实证：runVerifyLintCheck
+ * 全程静默、tally 只记一句话退出码——lint 门红时 agent 拿不到失败原因只能盲猜）。
+ * 优先并入 test 的 test-result.json（modules 并列一节 `lint` 字段，读改写）；test 无
+ * 结果文件（skipped/未跑）而 lint 实跑时，用 writeRunResult 形状独立落一份（kind: 'lint'
+ * 标识）。返回落盘路径，失败返回 null（best-effort，不阻断门禁）。
+ */
+export function persistLintResult({ specBase, changeName, testResultPath, lint }) {
+  if (!lint || (lint.status !== 'passed' && lint.status !== 'failed')) return null
+  if (testResultPath && existsSync(testResultPath)) {
+    try {
+      const j = JSON.parse(readFileSync(testResultPath, 'utf8'))
+      j.lint = lint
+      writeFileSync(testResultPath, JSON.stringify(j, null, 2) + '\n')
+      return testResultPath
+    } catch { /* 结果文件损坏 → 退独立落盘 */ }
+  }
+  const holder = { resultPath: null }
+  try {
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
+    const runDir = join(specBase, '.runtime', 'verify-runs', ts)
+    mkdirSync(runDir, { recursive: true })
+    holder.resultPath = join(runDir, 'test-result.json')
+    writeFileSync(holder.resultPath, JSON.stringify({
+      change: changeName || null,
+      kind: 'lint',
+      command: lint.command,
+      exit_code: lint.exitCode,
+      status: lint.status,
+      duration_ms: lint.durationMs,
+      output_tail: lint.outputTail,
+      reason: lint.reason || null,
+      ran_at: new Date().toISOString(),
+    }, null, 2) + '\n')
+    return holder.resultPath
+  } catch (e) {
+    console.warn(`⚠️  lint 结果落盘失败: ${e.message}`)
+    return null
+  }
+}
+
+/**
  * 结果落盘到 .runtime/verify-runs/<ts>/test-result.json（供追溯与 SillyHub 消费）。
  * 多模块时 extra.modules 描述各模块明细。export 供 test 验证台账落盘形状。
  */
