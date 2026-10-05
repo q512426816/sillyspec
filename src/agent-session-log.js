@@ -550,7 +550,7 @@ function detectCursorAgentTranscripts(ctx) {
   return entries.slice(0, 3);
 }
 
-const HARNESS_DETECTORS = [
+export const HARNESS_DETECTORS = [
   { name: 'claude-code', tier: 'precise', detect: detectClaudeCode },
   { name: 'codex', tier: 'precise', detect: detectCodex },
   { name: 'zcode', tier: 'precise', detect: detectZcode },
@@ -560,6 +560,28 @@ const HARNESS_DETECTORS = [
   { name: 'cursor', tier: 'loose', detect: detectCursor },
   { name: 'opencode', tier: 'loose', detect: detectOpencode },
 ];
+
+/** name → 人读展示名（--detect 空态提示用）。缺省回退 name 原样：新 harness 无映射也不漏项，
+ *  只是展示不美化（坑 agent-log-detect-hint，2026-10-06 实证：提示硬编码 3 家与注册表 8 家
+ *  漂移——派生后注册表是唯一真相源，映射只是展示层）。 */
+export const HARNESS_DISPLAY_NAMES = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  zcode: 'ZCode',
+  pi: 'pi',
+  'deepseek-dsh': 'DeepSeek DSH',
+  'cursor-agent': 'cursor-agent',
+  cursor: 'Cursor',
+  opencode: 'opencode',
+};
+
+/** --detect 空态提示行：从探测器注册表派生（注册表新增 harness 提示自动跟上，不再手工同步）。
+ * @param {Array<{name: string}>} [detectors] - 默认 HARNESS_DETECTORS（测试可注入）
+ * @returns {string} 提示行（含 SILLYSPEC_AGENT_LOG 显式指定通道指引） */
+export function renderDetectEmptyHint(detectors = HARNESS_DETECTORS) {
+  const names = detectors.map(h => HARNESS_DISPLAY_NAMES[h.name] ?? h.name).join(' / ');
+  return `   支持: ${names} 自动探测；其他 CLI 用 SILLYSPEC_AGENT_LOG=<日志绝对路径> 显式指定。`;
+}
 
 // ── 会话身份锚定器（2026-09-11-agent-log-attribution-refactor，D-001/D-008）──
 //
@@ -1299,7 +1321,7 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(), 
     }
     if (detected.length === 0) {
       console.log('📭 未探测到本地 agent 会话日志。');
-      console.log('   支持: Claude Code / Codex / ZCode 自动探测；其他 CLI 用 SILLYSPEC_AGENT_LOG=<日志绝对路径> 显式指定。');
+      console.log(renderDetectEmptyHint());
       return;
     }
     console.log(`🔍 现场探测到 ${detected.length} 条 agent 日志：`);

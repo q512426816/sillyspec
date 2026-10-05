@@ -41,6 +41,9 @@ import {
   recordAgentLogInvocation,
   readAgentLogArtifact,
   resolveAgentLogArtifactPath,
+  renderDetectEmptyHint,
+  HARNESS_DETECTORS,
+  HARNESS_DISPLAY_NAMES,
   AGENT_LOG_ENV_OVERRIDE,
   AGENT_LOG_ARTIFACT_FILENAME,
   AGENT_LOG_SCHEMA_VERSION,
@@ -1031,6 +1034,27 @@ console.log('--- 13. CLI 集成：sillyspec agent-log ---')
 
   const empty = runCLI(['agent-log', '--detect'])
   assert(empty.status === 0, '无 agent 环境时 --detect 也 exit 0（非错误态）')
+  // 空态输出走注册表派生提示（2026-10-06-agent-log-detect-hint：防文案与注册表漂移——
+  // 硬编码时代只列 3 家而注册表 8 家）
+  assert(empty.stdout.includes('Claude Code') && empty.stdout.includes('cursor') && empty.stdout.includes('SILLYSPEC_AGENT_LOG'),
+    '--detect 空态提示含品牌名与 loose 档 harness（派生文案非旧 3 家硬编码）')
+}
+
+console.log('--- 14. --detect 空态提示派生（与 HARNESS_DETECTORS 注册表同源，2026-10-06-agent-log-detect-hint）---')
+{
+  // a. 注册表全项含于提示（映射名或 name 原样两种形态都算命中——映射缺省回退不漏项）
+  const hint = renderDetectEmptyHint()
+  assert(HARNESS_DETECTORS.length >= 8, `注册表不少于 8 家（实际 ${HARNESS_DETECTORS.length}）——漂移实证基线`)
+  for (const h of HARNESS_DETECTORS) {
+    const display = HARNESS_DISPLAY_NAMES[h.name] ?? h.name
+    assert(hint.includes(display), `空态提示含已注册 harness：${display}（${h.name}）`)
+  }
+  assert(hint.includes('SILLYSPEC_AGENT_LOG'), '空态提示保留 env 显式指定通道指引')
+
+  // b. 派生性：注入假注册表 → 提示随注入项变化（注册表扩项提示自动跟上，无需改提示代码）
+  const fake = renderDetectEmptyHint([{ name: 'fake-agent-cli', tier: 'precise' }])
+  assert(fake.includes('fake-agent-cli'), '注入假注册表项：提示自动含该项（无映射回退 name 原样）')
+  assert(!fake.includes('zcode') && !fake.includes('ZCode'), '注入替换默认注册表——原注册表项不出现（真派生非半硬编码）')
 }
 
 for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
