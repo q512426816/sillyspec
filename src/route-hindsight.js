@@ -21,7 +21,9 @@
  *     归一后比对）。diff 面先做结构归一：剔 frontmatter 块、HTML 注释标记行（<!--）、空行
  *     ——惰性脚手架行（机器稿里约占半数）会把真实换血稀释到阈值以下（实测整写机器段仅得
  *     0.175-0.275，0.5 阈值永不可达=闭环失效面）；归一是纯结构过滤零语义判定（D-003）。
- *     无快照（旧变更/起草失败）= 0（零信号，不是「实测 0% 改写」）。
+ *     tasks 面另做勾选框状态归一（normalizeTaskCheckbox：[x]/[X]→[ ]——v2 镜像任务行
+ *     翻格是进度簿记非内容改写，2026-10-05-hindsight-checkbox-noise 修复前全勾即 N/(N+1)
+ *     恒超阈）；design 面不归一。无快照（旧变更/起草失败）= 0（零信号，不是「实测 0% 改写」）。
  *   blindDims：收口评审 review.json 的 dimensionNotes 中值为 'finding' 的维数——枚举值
  *     计数（评审员已按任务书 schema 判定的结构化面），非机器语义判定；无 review.json
  *     （评审豁免）= 0。
@@ -74,6 +76,13 @@ function contentSurface(text) {
     out.push(l)
   }
   return out.join('\n')
+}
+
+/** tasks 勾选框状态归一：行首 `- [x]`/`- [X]`/`- [ ]` → `- [ ]`（仅 tasks 比对面消费——
+ *  v2 镜像任务行翻格（勾选）是进度簿记不是内容改写，2026-10-05 四变更实测全勾即 N/(N+1)
+ *  恒超 0.6 阈误标「疑似该走预段」；纯结构 token 替换，D-003 封闭面零语义判定）。 */
+function normalizeTaskCheckbox(text) {
+  return norm(text).replace(/^(\s*[-*]\s+)\[[ xX]\]/gm, '$1[ ]')
 }
 
 function readTextSafe(p) {
@@ -180,10 +189,12 @@ export function computeHindsightMetrics({ changeDir, reviewJson, flowState }) {
     raw.baselinePresent = true
     const pairs = [['design', 'designRewriteRatio'], ['tasks', 'tasksRewriteRatio']]
     for (const [key, outKey] of pairs) {
-      const first = typeof baseline[key] === 'string' ? contentSurface(baseline[key]) : null
+      // tasks 面比对前先勾选框归一（翻格=簿记非改写）；design 面不归一（无此形态，保原口径）
+      const pre = key === 'tasks' ? normalizeTaskCheckbox : (t) => t
+      const first = typeof baseline[key] === 'string' ? contentSurface(pre(baseline[key])) : null
       const finalText = readTextSafe(join(changeDir, `${key}.md`))
       if (first && finalText != null) {
-        const surface = contentSurface(finalText)
+        const surface = contentSurface(pre(finalText))
         const ratio = round4(computeEditRatio(first, surface))
         if (outKey === 'designRewriteRatio') designRewriteRatio = ratio
         else tasksRewriteRatio = ratio

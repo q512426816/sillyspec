@@ -179,3 +179,54 @@ test('④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 疑
   assert.ok(hint.includes('2'), `含实测失败计数: ${hint}`)
   rmSync(root, { recursive: true, force: true })
 })
+
+// ── ⑤ 勾选翻格归一（2026-10-05-hindsight-checkbox-noise）：v2 镜像任务行翻格=簿记非改写 ──
+const TASKS_BASE = [
+  '# 任务注册表（Tasks）— 2026-10-05-c-x',
+  '',
+  '- [ ] task-01: 甲需求文本',
+  '- [ ] task-02: 乙需求文本',
+  '- [ ] task-03: 丙需求文本',
+].join('\n')
+
+test('⑤ 纯勾选翻格零信号：全勾零改写 → tasksRewriteRatio=0 且不标记', () => {
+  const { root, changeDir } = makeRepo()
+  writeBaseline(root, { design: '# 设计\n原文', tasks: TASKS_BASE })
+  writeFileSync(join(changeDir, 'design.md'), '# 设计\n原文')
+  writeFileSync(join(changeDir, 'tasks.md'), [
+    '# 任务注册表（Tasks）— 2026-10-05-c-x',
+    '- [x] task-01: 甲需求文本',
+    '- [x] task-02: 乙需求文本',
+    '- [x] task-03: 丙需求文本',
+  ].join('\n'))
+  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
+  assert.equal(m.tasksRewriteRatio, 0, `纯翻格改写比 0（实测 ${m.tasksRewriteRatio}——修复前 0.75）`)
+  const mk = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: m })
+  assert.equal(mk.marked, false, '四路指标全零信号 → 不落标记')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑤ 翻格+真实改写：只按文本改写行计（3 任务改 1 条 → 0.25）', () => {
+  const { root, changeDir } = makeRepo()
+  writeBaseline(root, { design: '# 设计\n原文', tasks: TASKS_BASE })
+  writeFileSync(join(changeDir, 'design.md'), '# 设计\n原文')
+  writeFileSync(join(changeDir, 'tasks.md'), [
+    '# 任务注册表（Tasks）— 2026-10-05-c-x',
+    '- [x] task-01: 甲需求文本被真实改写',
+    '- [x] task-02: 乙需求文本',
+    '- [X] task-03: 丙需求文本',  // 大写 X 同归一
+  ].join('\n'))
+  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
+  assert.equal(m.tasksRewriteRatio, 0.25, `只计文本改写行 1/4（实测 ${m.tasksRewriteRatio}）`)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑤ design 面不归一：checkbox 形态差异仍计改写（口径与修复前一致）', () => {
+  const { root, changeDir } = makeRepo()
+  writeBaseline(root, { design: '# 设计\n- [x] 旧文本', tasks: TASKS_BASE })
+  writeFileSync(join(changeDir, 'design.md'), '# 设计\n- [ ] 旧文本')
+  writeFileSync(join(changeDir, 'tasks.md'), TASKS_BASE)
+  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
+  assert.equal(m.designRewriteRatio, 0.5, `design checkbox 行差异照计 1/2（实测 ${m.designRewriteRatio}）`)
+  rmSync(root, { recursive: true, force: true })
+})
