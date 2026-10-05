@@ -1,0 +1,221 @@
+diff --git a/.sillyspec/changes/2026-10-05-wordpos/flow-state.yaml b/.sillyspec/changes/2026-10-05-wordpos/flow-state.yaml
+new file mode 100644
+index 00000000..823824b9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-wordpos/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: b419d2243a40b38ae0bd17ef2228fc5fef1541aa
++updatedAt: '2026-10-05T00:14:27.806Z'
++baseline_sha256: a9b25fc7f5b878fdaf90140972777be3fbf48c9b5bdbadc5640761dd60bb41f7
++
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 9a4321a8..1a0a25f8 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -58,10 +58,12 @@ export const DESIGN_QUESTIONS = {
+ }
+ 
+ /** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。
+- *  词表=SHALL/MUST/SHOULD（评审 P2 清偿：模板指引与拒收文案都列 SHOULD 为合法强度，
+- *  词表缺它会把只写 SHOULD 唯一强度句的 FR 误拒收；SHOULD NOT 由 SHOULD\b 前缀覆盖）
+- *  +中文 必须/禁止。 */
+-const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST|SHOULD)\b|必须|禁止/
++ *  词表=SHALL/MUST/SHOULD（2026-10-04-strength-should P2 清偿：模板指引列 SHOULD 为合法
++ *  强度，SHOULD NOT 由 SHOULD\b 前缀覆盖）+中文 必须/禁止。
++ *  位置中英同构（2026-10-05-wordpos：anchor-triggerpull 收口实证——旧版英文被行首锚定
++ *  （须「- 系统 MUST」形态）而中文任意命中，句中写英文强度词的合法行为句被误拒收；
++ *  占位句自带词表字样的误放行由 pending 检查（（待撰写 前缀）独立拦截，不依赖本判据）。 */
++const FR_STRENGTH_RE = /\b(SHALL|MUST|SHOULD)\b|必须|禁止/
+ 
+ /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
+ export function draftLedgerPath(runtimeRoot, changeName) {
+diff --git a/test/thin-docs-v2.test.mjs b/test/thin-docs-v2.test.mjs
+index 9f01e503..8936efcc 100644
+--- a/test/thin-docs-v2.test.mjs
++++ b/test/thin-docs-v2.test.mjs
+@@ -96,17 +96,27 @@ test('④ 结构破坏拒收面：design 节整删 / requirements 整删 / 绑
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
+-test('⑥ 强度词表含 SHOULD/SHOULD NOT（评审 P2 清偿）：唯一 SHOULD 强度句不再误拒收', () => {
++test('⑥ 强度词表含 SHOULD/SHOULD NOT 且中英位置同构（评审 P2 + wordpos 清偿）：句中英文强度句放行；占位句自带词表字样仍拒收', () => {
+   const { root, changeDir, runtimeRoot, ledger, fill, fillAll } = fixture(INPUT)
+-  fillAll()
+-  // 只写 SHOULD 唯一强度句（模板指引列为合法强度词）→ 不因词表缺漏被误拒收
+-  fill('requirements.md', (t) => t.replace(/^- （待撰写.*$/gm, '- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）'))
++  fillAll() // design 四节 + 绑定行就位；两 FR 正文=「- 系统 MUST …」（行首英文形态）
++  const body = '- 系统 MUST 实现该条标准行为'
++  // 位置同构（2026-10-05-wordpos）：句中英文强度词放行——旧实现行首锚定在此误拒收
++  fill('requirements.md', (t) => t.split(body).join('- 本变更 MUST 在句中间出现也命中（wordpos 夹具）'))
+   let v = verifyThinDocsV2({ changeDir, ledger })
+-  assert.equal(v.violations.length, 0, `SHOULD 唯一强度句应放行: ${JSON.stringify(v.violations)}`)
+-  // SHOULD NOT 红线形态同放行（SHOULD\b 前缀覆盖）
+-  fill('requirements.md', (t) => t.replace(/^- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）$/gm, '- 系统 SHOULD NOT 在收口前静默改写锚文本（评审 P2 夹具）'))
++  assert.equal(v.violations.length, 0, `句中 MUST 应放行: ${JSON.stringify(v.violations)}`)
++  fill('requirements.md', (t) => t.split('- 本变更 MUST 在句中间出现也命中（wordpos 夹具）').join('- 边界场景 SHOULD 附偏离理由（wordpos 夹具）'))
++  v = verifyThinDocsV2({ changeDir, ledger })
++  assert.equal(v.violations.length, 0, `句中 SHOULD 唯一强度句应放行（P2 词表）: ${JSON.stringify(v.violations)}`)
++  fill('requirements.md', (t) => t.split('- 边界场景 SHOULD 附偏离理由（wordpos 夹具）').join('- 系统 SHOULD NOT 在收口前静默改写锚文本（wordpos 夹具）'))
++  v = verifyThinDocsV2({ changeDir, ledger })
++  assert.equal(v.violations.length, 0, `SHOULD NOT 红线形态应放行（SHOULD\\b 前缀覆盖）: ${JSON.stringify(v.violations)}`)
++  // 占位句自带词表字样（必须/禁止/SHOULD/可以）不算已撰写——pending 检查独立拦截（仅换 FR-01，
++  // FR-02 保持有效句 → 精确一处违规）
++  fill('requirements.md', (t) => t.replace('- 系统 SHOULD NOT 在收口前静默改写锚文本（wordpos 夹具）',
++    '- （待撰写：把本条成功标准改写为一句可判定的行为规定并标约束强度——必须/禁止/SHOULD/可以）'))
+   v = verifyThinDocsV2({ changeDir, ledger })
+-  assert.equal(v.violations.length, 0, `SHOULD NOT 形态应放行: ${JSON.stringify(v.violations)}`)
++  assert.equal(v.violations.length, 1, `占位句自带词表字样仍拒收且只拒一处: ${JSON.stringify(v.violations)}`)
++  assert.match(v.violations[0], /行为句未撰写/)
+   rmSync(root, { recursive: true, force: true })
+ })
+diff --git a/.sillyspec/changes/2026-10-05-wordpos/design.md b/.sillyspec/changes/2026-10-05-wordpos/design.md
+new file mode 100644
+index 00000000..de929750
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-wordpos/design.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:14:27.780Z
++---
++# 设计记录（Design Record）— 2026-10-05-wordpos
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++单正则去锚：FR_STRENGTH_RE 的英文分支从行首锚定（^…(SHALL|MUST|SHOULD) 带可选「- 系统」前缀）改为  词界任意位置命中——与中文 必须/禁用 分支的位置语义同构。占位句误放行风险由既有 pending 前缀检查（（待撰写 前缀独立拒收）覆盖，不依赖本判据的位置收紧。选最小修法：位置不对称是 anchor-triggerpull 收口的实证假拒（句中 MUST 被判未撰写），词表本身上轮已修齐。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++src/flow-draft.js 模块级常量 FR_STRENGTH_RE 判定面放宽（非导出，零签名变化——行为方向=只放行不收紧，行首旧形态继续命中）；test/thin-docs-v2.test.mjs ⑥ 扩为位置同构状态机（并修原版替换链空转断言——fillAll 已消费待撰写行，原 SHOULD 步骤是无操作空断言）。命令/端点/格式零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++不适用：纯文本模式匹配，无时序。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++不适用：单常量 + 测试文件，CLI 单写方原子写。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++不适用：无状态引入。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++不适用：模块级常量进程内单例；判定只读单文件行。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++最大风险：放宽位置带来假放行——正文 merely 提及 MUST（如引用他人语句）即算已撰写；对冲=占位句由 pending 检查独立拦、评审抽查面兜底，且中文 必须 本就任意命中（风险面对称存在非新增）。试过放弃：要求英文强度词必须在句中动词位（否决——语义判定超出正则职责，宁同构勿复杂）。
+diff --git a/.sillyspec/changes/2026-10-05-wordpos/proposal.md b/.sillyspec/changes/2026-10-05-wordpos/proposal.md
+new file mode 100644
+index 00000000..7734e576
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-wordpos/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:14:27.780Z
++---
++# 提案书（Proposal）— 2026-10-05-wordpos
++
++## 动机
++
++任务原话转写：动机：anchor-triggerpull 收口实证暴露 FR_STRENGTH_RE 词表位置不对称——中文必须禁用任意位置命中，英文 SHALL MUST SHOULD 被行首锚定（须「- 系统 MUST」形态），句中写英文强度词的合法行为句被误拒收（fail-closed 假拒，与模板指引的书写自由度不符）。
++成功标准：
++- FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
++- 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
++- 既有测试回归绿且 lint 零死导出
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
++2. 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
++3. 既有测试回归绿且 lint 零死导出
++
++## 成功标准（可验证）
++
++1. FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
++2. 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
++3. 既有测试回归绿且 lint 零死导出
+diff --git a/.sillyspec/changes/2026-10-05-wordpos/requirements.md b/.sillyspec/changes/2026-10-05-wordpos/requirements.md
+new file mode 100644
+index 00000000..8d6f6d68
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-wordpos/requirements.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:14:27.780Z
++---
++# 需求规格（Requirements）— 2026-10-05-wordpos
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
++
++- FR 行为句正文里的英文强度词（SHALL 或 MUST 或 SHOULD，SHOULD NOT 由前缀覆盖）在句中任意位置出现即视为已撰写——与中文必须/禁用的任意位置命中同构
++
++#### 场景：句中英文强度句
++
++Given 某条 FR 正文写「本变更 MUST …」或「边界场景 SHOULD …」（强度词不在行首）
++When flow done 执行 verifyThinDocsV2
++Then 该 FR 不因位置锚定被误拒收（行首「- 系统 MUST」旧形态继续放行）
++
++### FR-02: 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
++
++- 待撰写占位行仍然拒收——占位句自带的词表字样（必须/禁用/SHOULD/可以）不算已撰写，由 pending 前缀检查独立拦截
++
++#### 场景：占位句词表字样
++
++Given 某条 FR 正文仍是「（待撰写：…必须/禁止/SHOULD/可以）」占位行
++When flow done 执行 verifyThinDocsV2
++Then 该 FR 因 pending 前缀被拒收（本判据放宽不构成绕过面）
++
++### FR-03: 既有测试回归绿且 lint 零死导出
++
++- 交付时既有测试必须全绿，且 lint 零死导出零告警
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/thin-docs-v2.test.mjs「⑥ 强度词表含 SHOULD/SHOULD NOT 且中英位置同构」——句中 MUST/SHOULD 唯一句、行首 SHOULD NOT 三态放行断言
++FR-02: test/thin-docs-v2.test.mjs「⑥」末段——占位句自带词表字样仍拒收且只拒一处
++FR-03: test/thin-docs-v2.test.mjs 全 6 用例 + test/flow-draft.test.mjs 全 16 用例 + node test/check-syntax.mjs（收口由 CLI 实测门复跑）
+diff --git a/.sillyspec/changes/2026-10-05-wordpos/tasks.md b/.sillyspec/changes/2026-10-05-wordpos/tasks.md
+new file mode 100644
+index 00000000..ab2e6d9b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-wordpos/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:14:27.780Z
++---
++# 任务注册表（Tasks）— 2026-10-05-wordpos
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-wordpos --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-wordpos` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
++- [x] task-02: 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
++- [x] task-03: 既有测试回归绿且 lint 零死导出

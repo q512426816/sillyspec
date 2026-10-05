@@ -5734,3 +5734,64 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-04-anchor-triggerpull
   status: active
+
+## FR-cli-entry-304 FR 行为句强度词判定对英文 SHALL MUST SHALL NOT SHOULD 与中文必须禁用同构——句中任意位置命中即视为已撰写
+变更：2026-10-05-wordpos
+状态：active
+摘要：句中英文强度句
+场景正文：
+- 场景：句中英文强度句 — Given 某条 FR 正文写「本变更 MUST …」或「边界场景 SHOULD …」（强度词不在行首）；When flow done 执行 verifyThinDocsV2；Then 该 FR 不因位置锚定被误拒收（行首「- 系统 MUST」旧形态继续放行）
+全文：.sillyspec/changes/archive/2026-10-05-wordpos/requirements.md#FR-01
+最近确认：1793e02b038ff67e1b2610b0aee4a70bcf485bb5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-wordpos:flow:测试绑定FR-01
+  tests: test/thin-docs-v2.test.mjs「⑥ 强度词表含 SHOULD/SHOULD NOT 且中英位置同构」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-wordpos
+  status: active
+
+## FR-cli-entry-305 待撰写占位行仍被拒收——占位句自带的词表字样不算已撰写
+变更：2026-10-05-wordpos
+状态：active
+摘要：占位句词表字样
+场景正文：
+- 场景：占位句词表字样 — Given 某条 FR 正文仍是「（待撰写：…必须/禁止/SHOULD/可以）」占位行；When flow done 执行 verifyThinDocsV2；Then 该 FR 因 pending 前缀被拒收（本判据放宽不构成绕过面）
+全文：.sillyspec/changes/archive/2026-10-05-wordpos/requirements.md#FR-02
+最近确认：1793e02b038ff67e1b2610b0aee4a70bcf485bb5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-wordpos:flow:测试绑定FR-02
+  tests: test/thin-docs-v2.test.mjs「⑥」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-wordpos
+  status: active
+
+## FR-cli-entry-306 既有测试回归绿且 lint 零死导出
+变更：2026-10-05-wordpos
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-wordpos/requirements.md#FR-03
+最近确认：1793e02b038ff67e1b2610b0aee4a70bcf485bb5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-wordpos:flow:测试绑定FR-03
+  tests: test/check-syntax.mjs | test/flow-draft.test.mjs | test/thin-docs-v2.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-wordpos
+  status: active
