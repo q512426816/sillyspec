@@ -11,6 +11,7 @@
 import { runDocsCheck } from '../src/docs-check.js'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -20,6 +21,18 @@ const DOCS = [
 ]
 
 const result = runDocsCheck({ projectRoot: REPO_ROOT, docs: DOCS })
+
+// 本测试驻留 test:core 清单（2026-10-06-litest-p1-fixes FR-02，评审 P2 清偿）：文档行号引用
+// 漂移必须进日常开发入口拦截——基线实证本测试只在全量 npm test 跑，test:core 绿而漂移积到
+// 13 处无人发现。被移出清单即红（防退回「全量才拦截」形态）。
+const coreScript = (() => {
+  try { return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))?.scripts?.['test:core'] || '' }
+  catch { return '' }
+})()
+if (!coreScript.includes('test/doc-ref-check.test.mjs')) {
+  console.error('❌ doc-ref-check: 本测试不在 package.json scripts.test:core 清单——文档引用漂移退回全量才拦截（FR-02 回归，勿移出日常拦截面）')
+  process.exit(1)
+}
 
 if (!result.ok) {
   console.error(`\n❌ doc-ref-check: ${result.invalid.length}/${result.total} 处引用失效：`)

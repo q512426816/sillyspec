@@ -32,7 +32,7 @@ package.json 的 test:core 命令必须包含 test/doc-ref-check.test.mjs——�
 
 ### FR-03: PRIMITIVE_RE 收窄后：含 cursor 纯名词的 patch 文本不再触发评审；DB 游标用法形态（cursor=/next_cursor:/conn.cursor()）仍触发；新增回归测试覆盖两向
 
-flow-review.js 的 PRIMITIVE_RE 必须把 `\bcursor\b` 收窄为用法形态 `\.cursor\(|\bnext_cursor\b`：patch 文本含 cursor 纯名词（harness 名 'cursor' / 'cursor-agent' / detectCursor——本仓既有词汇）时禁止触发原语评审信号；DB-API 方法调用 conn.cursor() 与分页协议词 next_cursor 仍必须触发；两向必须有回归测试锁定。
+flow-review.js 的 PRIMITIVE_RE 必须把 `\bcursor\b` 收窄为用法形态 `\.cursor\(|\bnext_cursor\b`：patch 文本含 cursor 纯名词（harness 名 'cursor' / 'cursor-agent' / detectCursor——本仓既有词汇）时禁止触发原语评审信号；DB-API 方法调用 conn.cursor() 与分页协议词 next_cursor 仍必须触发；两向必须有回归测试锁定。形态口径澄清（标题锚词面 vs 实现规格，评审 P3 清偿）：标题枚举中「cursor=」赋值形态经仓内 grep 实证弃用——src/docs-check.js、src/quicklog.js、src/init.js 等 8+ 处 `cursor =` 循环变量会全部误伤，赋值形态不纳入触发面；以本正文规格 `\.cursor\(|\bnext_cursor\b` 为唯一实现口径（弃用理由详见 design 风险节）。
 
 #### 场景：纯名词不触发（实测复现）
 
@@ -69,7 +69,7 @@ flow-review.js 的 PRIMITIVE_RE 必须把 `\bcursor\b` 收窄为用法形态 `\.
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/doc-ref-check.test.mjs「platform-interface-map.md 93 处引用全通过（关键词断言含）」
-FR-02: test/run-tests.mjs「test:core 参数列表含 doc-ref-check（npm run test:core 执行面）」
+FR-02: test/doc-ref-check.test.mjs「test:core 清单驻留断言（本测试不在 scripts.test:core 即 exit 1——防移出日常拦截面）」
 FR-03: test/flow-review.test.mjs「① 定档矩阵——cursor 收窄两向：纯名词/harness 名不触发 + db.cursor()/next_cursor 用法形态仍触发」
 FR-04: test/archive-cli-git-add.test.mjs「Case 1 确认归档后 archive/ + docs/ 已 staged——归档收尾打印一笔到位 commit 命令 + pathspec 含源侧删除与归档侧路径（rename 两半齐备）」
 FR-05: test/run-tests.mjs「全量套件改动面无回归 + lint（check-syntax 882 文件）」

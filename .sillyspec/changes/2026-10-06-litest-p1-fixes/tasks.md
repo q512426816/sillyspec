@@ -13,5 +13,6 @@ created_at: 2026-10-05T17:20:04.275Z
 - [x] task-01: node --test test/doc-ref-check.test.mjs 全绿（13 处失效清零）
 - [x] task-02: doc-ref-check.test.mjs 列入 test:core 且 npm run test:core 含其执行
 - [x] task-03: PRIMITIVE_RE 收窄后：含 cursor 纯名词的 patch 文本不再触发评审；DB 游标用法形态（cursor=/next_cursor:/conn.cursor()）仍触发；新增回归测试覆盖两向
+- [x] task-03a: （细化，评审 P3 清偿）标题枚举中「cursor=」赋值形态经仓内 grep 实证弃用（docs-check/quicklog/init 等 8+ 处 `cursor =` 循环变量误伤）——实现口径以 requirements FR-03 正文 `\.cursor\(|\bnext_cursor\b` 为准
 - [x] task-04: 归档收尾输出含可执行的一笔到位 git commit 命令（源侧+归档侧+knowledge pathspec 完整）；既有归档测试无回归
 - [x] task-05: npm test 改动面无回归 + lint 绿
