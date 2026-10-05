@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-disposition-refreeze-drift",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design.md 未随处置更新：隔离件命名与失败语义两处仍停在首轮描述",
+      "evidence": "接口契约（design.md:21）仍写「review.json 改名 review.json.superseded（留档不删）」无时间戳槽位，盲维Q3（design.md:30）仍写「.superseded 已在场时 renameSync 失败被 catch 吞」——交付代码已是 superseded-<ts> 时间戳槽位（flow.js:1145）且隔离失败 quarantineOk=false 整体退回幂等跳过并指引人工处置（flow.js:1148-1149/1163），并非吞掉继续；归档设计记录与实现语义漂移，仅审计追溯面失真，无数据正确性风险",
+      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:21,30"
+    },
+    {
+      "severity": "P3",
+      "title": "「盘残留 done 由下轮漂移重检兜底」注释失实——锚已同轮前移，残留 done 在异常重跑下仍可被 backfill 误读 exempt",
+      "evidence": "writeFlowState(review:null) 失败（flow.js:1157）时同轮重冻结已把 change-patch.json.head 写为新 HEAD（flow.js:1302→1320→1337），下轮窗口为空、无漂移可检，注释声称的兜底（flow.js:1155/1157）不成立；盘残留 review:done 且 review.json 缺席时重跑 flow done，backfill 按缺席回填 verdict=exempt（flow.js:1379）免评直通归档——触发需原子写 I/O 故障＋无视 exit-1 评审任务书重跑双故障，极窄；本轮行为由内存重置（flow.js:1158）保正确（首轮 P3② 单故障形态已清偿）",
+      "location": "src/flow.js:1155-1158"
+    },
+    {
+      "severity": "P3",
+      "title": "review 标记重置分支与隔离失败回退分支无测试锁定",
+      "evidence": "e2e 三轮中 review 子步从未达 done（FAIL 拦截路径 exit 前不打标，flow.js:1416），st.substeps.review==='done' 的重置分支（flow.js:1156-1159，豁免后漂移场景——恰是重置有承载作用的面）与 quarantineOk=false 回退分支（flow.js:1148/1163）无任何自动化断言，仅检视验证；两分支正是首轮 P3② 与处置新增的关键防线",
+      "location": "test/flowdone-disposition-drift.test.mjs:185-235"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok｜已核：漂移判据=冻结锚..HEAD 提交事实窗口（既成不可变），detect 与重冻结的 head/face 同轮同源 fresh rev-parse（flow.js:1282/1302），检测与冻结间隙新落提交时面与锚一致前移",
+    "并发": "ok｜已核：同目录 renameSync 原子；并发 existsSync→renameSync TOCTOU 败者走隔离失败回退收敛（fail-safe 方向）；他侧提交经 parseChangeNamesFromSubject 括号 token 全名捕获＋includes 精确等值剔除（foreign-declared.js:210-216），无近似串台；本会话串行为 design 已声明边界",
+    "切换": "finding｜P3×2（findings #1/#2）：design Q3 机制描述未随处置更新（吞→应为整体回退）；writeFlowState 失败盘残留的『下轮漂移重检兜底』注释不成立（锚同轮前移），双故障窄路径可被 exempt backfill 误读——边界本身（中断重跑收敛、隔离失败退现状、隔离成功后必重冻结）经控制流检视成立",
+    "作用域": "ok｜已核：归属=提交 message 括号内变更名全名等值匹配，git 查询锚调用方 cwd、状态件锚各自 changeDir，change-patch.json 各变更目录隔离，无跨仓/跨变更读"
+  },
+  "reviewedAt": "2026-10-05T13:36:06Z"
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-disposition-refreeze-drift",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok｜维持：漂移判据=冻结锚..HEAD 既成提交事实窗口（既成不可变），detect 与重冻结 head 同轮同源 fresh rev-parse（flow.js:1134/1179 起），检测与冻结间隙新落提交时面与锚一致前移；本轮 diff 为注释/design 措辞级，与该维度无交叠",
+    "并发": "ok｜维持：同目录 renameSync 原子+时间戳槽位防跨代覆盖（两代 review.json.superseded-<ts> 并存于重冻结面为活体证据）；live 核对 flow.js:1125-1166 漂移块与冻结 patch 逐行一致",
+    "切换": "ok｜上轮 P3①②清偿核对通过，③接受留档裁决——①flow.js 漂移块失实「下轮漂移重检兜底」注释已删净（live flow.js:1154-1161 重置块内仅存双故障边界如实披露注释；grep「兜底」全文命中均在块外既有注释 342/400/531/538/631/923/1310/1317/1649，与漂移块无涉），同块一真一假互斥状态消除；②design 盲维Q3（design.md:30）已对齐时间戳槽位/fail-safe 语义（「隔离槽位带时间戳，多轮处置各占各槽不互踩，隔离失败则本轮整体退回现状幂等跳过——fail-safe 要么完整交付要么不动」），grep「吞/已在场」design.md 零命中，与接口契约（design.md:21）及实现（flow.js:1145/1148-1149）三方一致；③未测边界披露留档：失败方向有界——最坏=「隔离成功+盘写失败」双故障窄路径下轮 backfill 按 exempt 误读直通归档、缺一次重评，属审计面缺口非数据损坏；本运行行为由同轮内存重置（flow.js:1159）保正确，重置分支主路径经三轮控制流检视成立——无数据正确性风险，接受明示不修裁决；边界机制本身（中断重跑收敛、隔离失败退现状、重冻结幂等）维持成立",
+    "作用域": "ok｜维持：归属=提交 message 括号内变更名全名等值（parseChangeNamesFromSubject，与 filterCommittedFace 同源），git 查询锚调用方 cwd、状态件锚各变更 changeDir，change-patch.json 各变更目录隔离，无跨仓/跨变更读；本轮无代码行为变更"
+  },
+  "reviewedAt": "2026-10-05T13:48:12Z"
+}

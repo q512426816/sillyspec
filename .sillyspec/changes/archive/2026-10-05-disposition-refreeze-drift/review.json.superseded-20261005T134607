@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-disposition-refreeze-drift",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "上轮 P3-2 未清偿：失实注释「盘残留 done 由下轮漂移重检兜底」原样保留，与同块新加的双故障披露注释自相矛盾",
+      "evidence": "task-06 声称注释「改为」如实描述，实为增量追加——src/flow.js:1154-1155 仍断言盘残留 done 由下轮漂移重检兜底，但重置块之后同轮即重冻结并把 change-patch.json.head 写为新 HEAD（flow.js:1169→1305/1323/1340），下轮窗口为空、无漂移可检，兜底不成立；与紧邻新注释 flow.js:1157-1159 所述「下轮残留 done 且 review.json 缺席→backfill 按 exempt 误读」直接互斥——同块两句注释一真一假。仅注释失实，无行为面、无数据正确性风险",
+      "location": "src/flow.js:1154-1159"
+    },
+    {
+      "severity": "P3",
+      "title": "上轮 P3-1 半清偿：design 盲维Q3 仍留首轮语义「.superseded 已在场时 renameSync 失败被 catch 吞」",
+      "evidence": "时间戳槽位落地后（flow.js:1143-1145 目标名含 ts 槽位）「.superseded 已在场致 rename 失败」的单槽碰撞前提已废；隔离失败实况是 quarantineOk=false 整体退回现状幂等跳过+console.error 指引人工处置（flow.js:1147-1150），并非「吞掉继续」——与同文件接口契约已修正的 fail-safe 语义（design.md:21）自相矛盾，归档设计记录内部不一致，仅审计追溯面失真",
+      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:30"
+    },
+    {
+      "severity": "P3",
+      "title": "未测边界披露清单不全：漏列 review 标记重置分支主路径，「需 I/O 故障注入方可锁定」以偏概全",
+      "evidence": "披露（design.md:21）只列隔离失败退回与「隔离成功+盘写失败」双故障两面；上轮 P3-3 首指的 st.substeps.review==='done' 重置分支主路径（flow.js:1156-1163，豁免后漂移场景——恰是重置有承载作用的面）仍未测且未披露——e2e 三轮 review 子步从未达 done（FAIL 拦截 exit 前不打标，flow.js:1412-1419），该分支零自动化断言；且它可用状态夹具（手写 flow-state.yaml+change-patch.json 旧锚）直接锁定，并非必经 I/O 故障注入",
+      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:21"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok｜维持：漂移判据=冻结锚..HEAD 既成提交事实窗口（不可变），detect 与重冻结 head 同轮 fresh rev-parse（flow.js:1134/1305）面与锚同源一致；本轮 diff 为 doc/comment 级，与该维度无交叠",
+    "并发": "ok｜维持：同目录 renameSync 原子+时间戳槽位防跨代覆盖（两代 review.json.superseded-<ts> 并存于重冻结面为活体证据）；本轮 flow.js 仅增注释、零行为变更",
+    "切换": "finding｜P3×3（findings #1/#2/#3）：失实「下轮兜底」注释保留且与新披露同块互斥（flow.js:1154-1159）；design Q3 停在首轮语义（design.md:30）；披露漏 reset 分支主路径（design.md:21）。披露边界显式裁决：可接受——隔离失败退回与「隔离成功+盘写失败」双故障确属 I/O 注入面，失败方向有界（最坏=下轮豁免误读直通归档、缺一次重评，属审计面缺口非数据损坏；本运行行为由同轮内存重置保正确 flow.js:1161），doc 级处置选披露不重构属合理范围控制；但披露清单不全且被保留的失实旧注释在代码内自我削弱。边界机制本身（中断重跑收敛、隔离失败退现状、重冻结幂等）经控制流核验成立",
+    "作用域": "ok｜维持：归属=提交 message 变更名全名等值（parseChangeNamesFromSubject，与 filterCommittedFace 同源），git 查询锚调用方 cwd、状态件锚各变更 changeDir，无跨仓/跨变更读；本轮无代码行为变更"
+  },
+  "reviewedAt": "2026-10-05T13:45:02Z"
+}

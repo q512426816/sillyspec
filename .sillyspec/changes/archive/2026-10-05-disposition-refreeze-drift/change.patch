@@ -1,0 +1,518 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index ec89cff6..9e5238b6 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -14,7 +14,7 @@
+ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+ import { join, relative } from 'node:path'
+ import { execFileSync } from 'node:child_process'
+-import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit } from './foreign-declared.js'
++import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
+ import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { readV2SectionAnswer } from './flow-review.js'
+@@ -212,6 +212,36 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
+   } catch { return base }
+ }
+ 
++/**
++ * patch 冻结面漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：处置重入审计
++ * 错位——评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等跳过让 change.patch/
++ * review.json 停在处置前时点（2026-10-05-review-promise-negation 先例 905397ef；
++ * 2026-10-05-flowdone-lintfail-output 收编活体复现：评审 P1 处置提交后不带 --refreeze 重跑，
++ * 归档件缺处置面）。
++ *
++ * 判定：freezeHead（change-patch.json.head 冻结锚）..HEAD 窗口内存在「本变更名后缀提交」即
++ * 漂移——按提交 message 变更名归属（parseChangeNamesFromSubject，与 filterCommittedFace
++ * 同口径的既成事实切分，非声明抢文件）。仅他侧后缀/裸提交不触发（他侧面归属切分另有防线，
++ * 裸提交保守不动作）。检测自身失败按无漂移（退现状幂等跳过行为，fail-safe 不新造阻断面）。
++ * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
++ * @returns {{ drifted: boolean, ownCommits: string[], head: string|null }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
++ */
++export function detectPatchDrift({ cwd, change, freezeHead }) {
++  try {
++    if (!freezeHead) return { drifted: false, ownCommits: [], head: null }
++    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true }).trim()
++    if (!head || head === freezeHead) return { drifted: false, ownCommits: [], head }
++    const log = execFileSync('git', ['log', '--format=%x00%s', `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++    const own = []
++    for (const block of String(log).split('\x00')) {
++      const subject = block.split('\n').map((l) => l.trim()).filter(Boolean)[0]
++      if (!subject) continue
++      if (parseChangeNamesFromSubject(subject).includes(change)) own.push(subject.slice(0, 80))
++    }
++    return { drifted: own.length > 0, ownCommits: own, head }
++  } catch { return { drifted: false, ownCommits: [], head: null } }
++}
++
+ /**
+  * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
+  * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
+diff --git a/src/flow.js b/src/flow.js
+index a1348c0b..105cdfa5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -25,7 +25,7 @@
+  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
++import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import { join, relative, dirname } from 'node:path'
+ import yaml from 'js-yaml'
+@@ -1122,7 +1122,49 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // 退役后审计件挂变更自身。范围=归属收窄后的本变更文件面（他侧声明剔除、含工作树未提交与
+   // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
+   // 不标 done（重入 done 重试）。
+-  if (st.substeps?.patch === 'done') { skip('patch') } else {
++  let driftRefreeze = false
++  if (st.substeps?.patch === 'done') {
++    // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
++    // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
++    // 2026-10-05-flowdone-lintfail-output 收编活体复现）。漂移 → 自动重冻结（等价 --refreeze）
++    // + review 已有结论则隔离旧 review.json（结论对着旧冻结面不作数）并重置标记强制重评。
++    try {
++      const patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++      const { detectPatchDrift } = await import('./flow-parity.js')
++      const drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
++      if (drift.drifted) {
++        console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
++        // 隔离先行（评审处置 P3：时间戳槽位防跨代覆盖——单槽 .superseded 在 Windows renameSync
++        // 同名碰撞会抛错；隔离失败则整体退回现状幂等跳过（fail-safe：漂移处理要么完整交付要么
++        // 不动，不留半套状态），指引人工处置后重跑）
++        const reviewPath = join(changeDir, 'review.json')
++        let quarantineOk = true
++        if (existsSync(reviewPath)) {
++          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
++          try {
++            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
++            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
++          } catch (e) {
++            quarantineOk = false
++            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
++          }
++        }
++        if (quarantineOk) {
++          driftRefreeze = true
++          if (st.substeps?.review === 'done') {
++            // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
++            // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
++            // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
++            try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 见上边界注释 */ }
++            if (st.substeps) st.substeps.review = null
++            if (!existsSync(reviewPath)) console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
++          }
++        }
++      }
++    } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
++    if (!driftRefreeze) skip('patch')
++  }
++  if (st.substeps?.patch !== 'done' || driftRefreeze) {
+     let patchOk = false
+     try {
+       // patch 面 = 本变更可归属变化（2026-09-25-thin-patch-scope-fix 收窄：dirty 全扫面会把并行
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+new file mode 100644
+index 00000000..80d75fb0
+--- /dev/null
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -0,0 +1,116 @@
++/**
++ * 2026-10-05-disposition-refreeze-drift 回归：处置重入审计时点漂移检测
++ *
++ * 背景（主清单 P1，两例实证）：评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等
++ * 跳过让 change.patch/review.json 停在处置前时点——2026-10-05-review-promise-negation 处置
++ * 提交 905397ef（冻结 patch 查 RISK_ADMITTING_RE 零命中）；2026-10-05-flowdone-lintfail-output
++ * 收编复现（评审 P1 处置提交后不带 --refreeze 重跑，归档件缺处置面）。
++ *
++ * 锁定：
++ *   ① detectPatchDrift 归属三形态：本变更后缀触发 / 他侧后缀不触发 / 裸提交不触发
++ *   ② e2e 处置重入链路：漂移警告 + 自动重冻结（patch 含处置提交）+ review.json 隔离
++ *      （.superseded）+ 重评任务书再现（exit 1 @ review）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { detectPatchDrift } = await import('../src/flow-parity.js')
++
++const tmpRoots = []
++function fx() { const d = mkdtempSync(join(tmpdir(), 'drift-')); tmpRoots.push(d); return d }
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++const CHG = '2026-10-05-drift-x'
++
++function gitRepo(dir) {
++  const run = (args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
++  run(['init', '-q', '-b', 'main']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
++  return run
++}
++
++test('① detectPatchDrift 归属三形态：本变更后缀触发 / 他侧与裸提交不触发', () => {
++  const d = fx()
++  const run = gitRepo(d)
++  writeFileSync(join(d, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
++  // 他侧后缀提交（不触发）
++  writeFileSync(join(d, 'foreign.txt'), 'f\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 他侧交付 (2026-10-05-other-change)'])
++  // 裸提交（不触发——保守不动作）
++  writeFileSync(join(d, 'bare.txt'), 'b\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'chore: 无后缀裸提交'])
++  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
++  assert.equal(r.drifted, false, `他侧+裸提交不触发（ownCommits=${JSON.stringify(r.ownCommits)}）`)
++  // 本变更后缀提交（触发）
++  writeFileSync(join(d, 'own.txt'), 'o\n')
++  run(['add', '.']); run(['commit', '-q', '-m', `fix: 处置提交 (${CHG}) (task-05)`])
++  r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
++  assert.equal(r.drifted, true, '本变更后缀提交触发漂移')
++  assert.equal(r.ownCommits.length, 1, '只计本变更后缀提交（他侧/裸不计入）')
++  assert.match(r.ownCommits[0], /处置提交/)
++  // 冻结锚 == HEAD（无新提交）不触发
++  const nowHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
++  assert.equal(detectPatchDrift({ cwd: d, change: CHG, freezeHead: nowHead }).drifted, false, '锚==HEAD 不触发')
++  // 锚缺失（旧冻结件无 head 字段）不触发
++  assert.equal(detectPatchDrift({ cwd: d, change: CHG, freezeHead: null }).drifted, false, '无锚不触发（旧件兼容）')
++})
++
++test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json 隔离 + 重评任务书再现', () => {
++  const cwd = fx()
++  const run = gitRepo(cwd)
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const cn = '2026-10-05-drift-e2e'
++  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '漂移检测 e2e\n\n成功标准：\n- 处置重入后审计件含处置面'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  // v2 纯 markdown 填法：design 四问作实质作答（触发评审定档）+ FR 正文成形
++  const base = join(cwd, '.sillyspec', 'changes', cn)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：漂移检测链路验证，存在时序窗口（冻结与处置提交之间）。'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 在处置重入时重冻结审计件（夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「② e2e 处置重入」'))
++  // 设计清单声明交付文件（免夹带嫌疑 advisory 噪声干扰）
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n| 修改 | src/work2.js | 处置交付 |\n')
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
++  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
++  // 首轮 done：gate 过 → patch 冻结 → 评审任务书（exit 1）
++  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
++  const out2 = s2.stdout + s2.stderr
++  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
++  assert.ok(existsSync(join(base, 'change-patch.json')), '首轮已冻结 patch')
++  const patch1 = readFileSync(join(base, 'change.patch'), 'utf8')
++  assert.ok(patch1.includes('+++ b/src/work.js') && !patch1.includes('+++ b/src/work2.js'), '首轮冻结面不含处置文件（按 diff hunk 头判——design 清单字样不算）')
++  // 模拟评审 FAIL（P1 发现）——flow done 消费后拦截在 review（不归档，等待处置）
++  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'FAIL', findings: [{ severity: 'P1', title: '夹具发现', evidence: 'e2e', location: 'src/work.js:1' }], dimensionNotes: { 乱序: 'finding', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
++  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
++  const out3 = s3.stdout + s3.stderr
++  assert.ok(out3.includes('独立评审未过'), `第二轮应拦截在评审 FAIL（尾部：${out3.split('\n').slice(-5).join(' | ')}）`)
++  assert.ok(s3.status !== 0, 'FAIL 拦截 exit≠0')
++  // 处置提交（冻结后新交付）
++  writeFileSync(join(cwd, 'src', 'work2.js'), 'export const b = 2\n')
++  run(['add', 'src/work2.js']); run(['commit', '-q', '-m', `fix: 评审处置 (${cn}) (task-02)`])
++  // 第三轮 done：漂移检测应触发——重冻结 + 隔离 FAIL review.json + 重评任务书再现
++  const s4 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
++  const out4 = s4.stdout + s4.stderr
++  assert.ok(out4.includes('审计时点漂移'), `漂移警告在场（尾部：${out4.split('\n').slice(-6).join(' | ')}）`)
++  const quarantined = readdirSync(base).find((f) => f.startsWith('review.json.superseded'))
++  assert.ok(!!quarantined, `旧 review.json 已隔离（时间戳槽位；目录实况：${readdirSync(base).join(',')}）`)
++  assert.ok(!existsSync(join(base, 'review.json')), '隔离后 review.json 不在场（重评入口开）')
++  const patch2 = readFileSync(join(base, 'change.patch'), 'utf8')
++  assert.ok(patch2.includes('+++ b/src/work2.js'), '重冻结面含处置提交（按 diff hunk 头判）')
++  assert.ok(s4.status !== 0, '重评任务书再现（exit 1 @ review）')
++  assert.ok(out4.includes('独立评审任务书'), '重评任务书在场')
++})
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md
+new file mode 100644
+index 00000000..a2b70561
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:20:44.274Z
++---
++# 设计记录（Design Record）— 2026-10-05-disposition-refreeze-drift
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++处置重入审计错位（主清单 P1）：评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等跳过让 change.patch/review.json 停在处置前时点（2026-10-05-review-promise-negation 先例 905397ef；2026-10-05-flowdone-lintfail-output 收编活体复现——处置提交后不带 --refreeze 重跑则归档件缺处置面）。修法两层：① flow-parity.js 新增 detectPatchDrift——以 change-patch.json.head（冻结锚，既有字段零迁移）..HEAD 窗口内「本变更名后缀提交」为漂移判据（parseChangeNamesFromSubject 既成事实口径，与 filterCommittedFace 同源；他侧后缀/裸提交不触发，检测失败按无漂移 fail-safe 退现状行为）；② flow.js patch 跳过分支前置漂移检测——漂移即输出审计时点漂移警告、自动重冻结（落回既有冻结体，等价 --refreeze 免手动）、review.json 在场则隔离为 .superseded 留档、review 子步标记重置（盘写+内存快照同步——本函数后续子步判内存 st，只写盘不生效）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++flow-parity.js 新增导出 detectPatchDrift({cwd, change, freezeHead}) → {drifted, ownCommits, head}。flow done 行为变化：patch 已冻结且冻结锚..HEAD 有本变更后缀提交时，重跑自动重冻结 + review.json 改名 review.json.superseded-<时间戳> 留档（评审处置 P3：时间戳槽位防跨代覆盖）+ review 重新定档（重评任务书再现）；隔离失败时整体退回现状幂等跳过（fail-safe——漂移处理要么完整交付要么不动，指引人工处置）。无漂移（锚==HEAD/仅他侧或裸提交/锚缺失）时幂等跳过行为与现状逐字一致。change-patch.json 格式零变化（head 字段既有）。CLI 参数面无变化（--refreeze 人工口保留）。未测边界披露（评审 P3）：隔离失败退回路径与「隔离成功+盘写失败」双故障残留（下轮 backfill 按 exempt 误读）需 I/O 故障注入方可锁定，本变更为注释与边界披露不作注入重构。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——漂移判据是冻结锚..HEAD 的提交事实窗口（既成提交不可变），检测在 flow done 进程内单次同步执行；窗口内有本变更提交即漂移，与到达顺序无关。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   flow done 本会话串行；review.json 改名 renameSync 同目录原子。并发他侧提交落在窗口内但无本变更后缀 → 不触发（归属切分正确处理）；检测读 git 的瞬间快照即判据，无跨进程竞态面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——重冻结与隔离都在同一 flow done 运行内先于 review/archive 子步完成；中断重跑幂等（重冻结重复执行结果一致；隔离槽位带时间戳，多轮处置各占各槽不互踩，隔离失败则本轮整体退回现状幂等跳过——fail-safe 要么完整交付要么不动）。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：漂移判据锚定本变更名（提交后缀字面等值），change-patch.json/changeDir 各变更目录各自隔离；detectPatchDrift 的 git 查询锚调用方 cwd，不读跨仓数据。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：治理件后补提交（如评审任务书后 agent 修改 design.md 并提交）也带本变更后缀 → 触发重冻结+重评——多一次评审循环的成本换审计面始终对齐最新提交事实，方向正确但循环可能多一轮；重评后无新提交即不再触发，无死循环面（判据窗口每轮前移）。放弃的方案：① 只警告不自动重冻结（弱形态）——警告会被忽略，归档件仍停在旧时点，治标不治本；② 按 review.json 的 reviewedAt 时间戳对比提交时间——时钟不可比（本地钟漂移），且 review.json 可手写，锚点不可靠；head 锚是 git 自身事实。均已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow-parity.js | 新增 export detectPatchDrift（冻结锚窗口本变更后缀提交检测） |
++| 修改 | src/flow.js | patch 跳过分支前置漂移检测：警告+自动重冻结+review.json 隔离+review 标记重置（盘+内存） |
++| 新增 | test/flowdone-disposition-drift.test.mjs | 归属三形态单测 + 处置重入 e2e（漂移警告/重冻结/隔离/任务书再现） |
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/requirements.md b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/requirements.md
+new file mode 100644
+index 00000000..547dfab1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:20:44.274Z
++---
++# 需求规格（Requirements）— 2026-10-05-disposition-refreeze-drift
++
++## 功能需求
++
++### FR-01: 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
++
++- patch 子步幂等跳过前必须检测漂移：change-patch.json.head（冻结锚）..HEAD 窗口内存在本变更名后缀提交时，必须输出「审计时点漂移」警告并自动重冻结（落回冻结体按 baseline..HEAD 最新面重建）——禁止归档件停在处置前时点。
++
++#### 场景：主路径
++
++- Given: flow done 已冻结 patch（锚 H1），此后有本变更名后缀的处置提交落 HEAD
++- When: 重跑 flow done
++- Then: 输出审计时点漂移警告（含本变更提交计数），change.patch 重冻结含处置提交面
++
++### FR-02: review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
++
++- 漂移触发时 review.json 若在场必须隔离（改名 review.json.superseded 留档不删除），review 子步标记必须重置（盘写 + 本函数内存快照同步）——评审结论对着旧冻结面不作数，重跑走重新定档/重评任务书。
++
++#### 场景：主路径
++
++- Given: 评审 FAIL 拦截后处置提交落盘，review.json（FAIL）在场
++- When: 重跑 flow done 触发漂移
++- Then: review.json → review.json.superseded，重评任务书再现（exit≠0 @ review）
++
++### FR-03: 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
++
++- 漂移归属判定必须按提交 message 变更名后缀（既成事实）：仅他侧后缀提交、裸提交或冻结锚==HEAD 时不得触发——幂等跳过行为与现状一致；检测自身失败按无漂移（fail-safe 不新造阻断面）；冻结锚缺失（旧冻结件无 head）不触发。
++
++#### 场景：主路径
++
++- Given: 冻结锚..HEAD 仅含他侧后缀/裸提交，或锚==HEAD
++- When: detectPatchDrift 判定
++- Then: drifted=false，patch 子步幂等跳过
++
++### FR-04: 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
++
++- 必须有单测锁定归属三形态（含锚==HEAD 与锚缺失两边界），与 e2e 全链路（真实 CLI 三轮 flow done：任务书→FAIL 拦截→处置提交→漂移重冻结+隔离+任务书再现）。
++
++#### 场景：主路径
++
++- Given: git fixture / 临时仓夹具
++- When: 单测与 e2e 执行
++- Then: 归属三形态断言与处置重入链路断言各自成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flowdone-disposition-drift.test.mjs「② e2e：处置重入——漂移警告 + 自动重冻结 + review.json 隔离 + 重评任务书再现」
++FR-02: test/flowdone-disposition-drift.test.mjs「② e2e：…review.json.superseded 隔离与任务书再现」
++FR-03: test/flowdone-disposition-drift.test.mjs「① detectPatchDrift 归属三形态：本变更后缀触发 / 他侧与裸提交不触发」
++FR-04: test/flowdone-disposition-drift.test.mjs「① + ② 双件齐备（含锚==HEAD/锚缺失边界）」
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/tasks.md b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/tasks.md
+new file mode 100644
+index 00000000..daa6b9fa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/tasks.md
+@@ -0,0 +1,19 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:13:05.580Z
++---
++# 任务注册表（Tasks）— 2026-10-05-disposition-refreeze-drift
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-disposition-refreeze-drift --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-disposition-refreeze-drift` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
++- [x] task-02: review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
++- [x] task-03: 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
++- [x] task-04: 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
++- [x] task-05: 评审处置（P3×2：隔离槽位带时间戳防跨代覆盖；隔离失败整体退回现状幂等跳过 fail-safe；标记重置独立成块不与 rename 共 catch）
++- [x] task-06: 重评处置（P3×3：design 随处置更新含未测边界披露；「下轮兜底」注释改为双故障边界如实描述；故障注入面显式披露不重构）
++- [x] task-07: 三评处置（P3①②清偿：删除遗留失实注释/design Q3 切换作答对齐时间戳槽位语义；P3③未测边界披露措辞留档——收益递减截止）
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/proposal.md b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:13:05.580Z
++---
++# 提案书（Proposal）— 2026-10-05-disposition-refreeze-drift
++
++## 动机
++
++任务原话转写：处置重入审计错位（P1，2026-10-05-review-promise-negation 先例 905397ef + 2026-10-05-flowdone-lintfail-output 收编活体复现）：评审发现处置若涉及代码修改，重跑 flow done 后 patch 子步幂等跳过，change.patch 与 review.json 停在处置前时点——归档审计件缺处置面（实证：冻结 patch 检 RISK_ADMITTING_RE 零命中，处置 hunks 全缺）。修法：patch 子步跳过前检测漂移——change-patch.json.head（冻结锚）..HEAD 窗口内存在本变更名后缀交付提交即漂移；漂移时自动重冻结（等价 --refreeze）并隔离旧 review.json（评审结论对着旧冻结面不作数，强制重评）。
++成功标准：
++- 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
++- review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
++- 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
++- 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
++2. review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
++3. 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
++4. 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
++
++## 成功标准（可验证）
++
++1. 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
++2. review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
++3. 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
++4. 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
+
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T132947 b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T132947
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T132947
+@@ -0,0 +1,27 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-05-disposition-refreeze-drift",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": ".superseded 单槽留档：重复漂移周期会覆盖上一代隔离件",
++      "evidence": "renameSync 目标名固定为 review.json.superseded，第二次漂移隔离时目标已在场（libuv rename 语义为覆盖替换），上一代 FAIL 结论留档被静默替换——FR-02「留档不删除」对单次事件成立、跨代不成立；仅审计追溯面受损，无数据正确性风险",
++      "location": "src/flow.js:1137"
++    },
++    {
++      "severity": "P3",
++      "title": "漂移处置块整体 catch：rename 成功后 writeFlowState 失败会让 review 标记残留 done，旧结论缺席被 backfill 误读 exempt",
++      "evidence": "renameSync(1137) 成功后 writeFlowState(1145) 抛出会被外层 catch(1151) 吞掉，内存同步(1147)不执行 → review 子步(1355)按快照 st 判 done 跳过，backfill(1361-1368)读 review.json 缺席回填 verdict=exempt → 跳过重评直通归档；触发需原子写 I/O 故障，极窄路径，但该路径为本变更新引入",
++      "location": "src/flow.js:1144-1151"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok｜边界已裁决：可接受（检测失败按无漂移 fail-safe 退现状幂等跳过——不新造阻断面，FR-03 明文要求；漂移窗口为既成提交事实，detect 与重冻结间新落提交时锚随重冻结时点 rev-parse 前移，面与锚同源一致）",
++    "并发": "ok｜边界已裁决：可接受（renameSync 失败被 catch 吞——同目录 rename 原子，失败仅限文件锁/AV 干预的罕见场景，失败方向是不动作而非误归档；并发他侧提交不触发已由单测①他侧形态锁定）",
++    "切换": "ok｜边界已裁决：可接受（治理件后补提交带本变更后缀触发多一轮评审循环——冻结体每轮以新 HEAD 重写锚点 flow.js:1290/1308，窗口前移无死循环，实测中断恢复链路 rename→标记重置→重冻结任一点断掉重跑均收敛；P3② 的 I/O 故障窄路径另入 findings）",
++    "作用域": "ok｜边界已裁决：可接受（裸提交不触发保守口径——与 parseChangeNamesFromSubject/归因切分同源的既成事实标准，includes 全名等值无近似串台，git 查询锚 cwd、状态件锚各变更 changeDir，无跨仓读）"
++  },
++  "reviewedAt": "2026-10-05T13:26:49Z"
++}
+
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T133806 b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T133806
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T133806
+@@ -0,0 +1,33 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-05-disposition-refreeze-drift",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "design.md 未随处置更新：隔离件命名与失败语义两处仍停在首轮描述",
++      "evidence": "接口契约（design.md:21）仍写「review.json 改名 review.json.superseded（留档不删）」无时间戳槽位，盲维Q3（design.md:30）仍写「.superseded 已在场时 renameSync 失败被 catch 吞」——交付代码已是 superseded-<ts> 时间戳槽位（flow.js:1145）且隔离失败 quarantineOk=false 整体退回幂等跳过并指引人工处置（flow.js:1148-1149/1163），并非吞掉继续；归档设计记录与实现语义漂移，仅审计追溯面失真，无数据正确性风险",
++      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:21,30"
++    },
++    {
++      "severity": "P3",
++      "title": "「盘残留 done 由下轮漂移重检兜底」注释失实——锚已同轮前移，残留 done 在异常重跑下仍可被 backfill 误读 exempt",
++      "evidence": "writeFlowState(review:null) 失败（flow.js:1157）时同轮重冻结已把 change-patch.json.head 写为新 HEAD（flow.js:1302→1320→1337），下轮窗口为空、无漂移可检，注释声称的兜底（flow.js:1155/1157）不成立；盘残留 review:done 且 review.json 缺席时重跑 flow done，backfill 按缺席回填 verdict=exempt（flow.js:1379）免评直通归档——触发需原子写 I/O 故障＋无视 exit-1 评审任务书重跑双故障，极窄；本轮行为由内存重置（flow.js:1158）保正确（首轮 P3② 单故障形态已清偿）",
++      "location": "src/flow.js:1155-1158"
++    },
++    {
++      "severity": "P3",
++      "title": "review 标记重置分支与隔离失败回退分支无测试锁定",
++      "evidence": "e2e 三轮中 review 子步从未达 done（FAIL 拦截路径 exit 前不打标，flow.js:1416），st.substeps.review==='done' 的重置分支（flow.js:1156-1159，豁免后漂移场景——恰是重置有承载作用的面）与 quarantineOk=false 回退分支（flow.js:1148/1163）无任何自动化断言，仅检视验证；两分支正是首轮 P3② 与处置新增的关键防线",
++      "location": "test/flowdone-disposition-drift.test.mjs:185-235"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok｜已核：漂移判据=冻结锚..HEAD 提交事实窗口（既成不可变），detect 与重冻结的 head/face 同轮同源 fresh rev-parse（flow.js:1282/1302），检测与冻结间隙新落提交时面与锚一致前移",
++    "并发": "ok｜已核：同目录 renameSync 原子；并发 existsSync→renameSync TOCTOU 败者走隔离失败回退收敛（fail-safe 方向）；他侧提交经 parseChangeNamesFromSubject 括号 token 全名捕获＋includes 精确等值剔除（foreign-declared.js:210-216），无近似串台；本会话串行为 design 已声明边界",
++    "切换": "finding｜P3×2（findings #1/#2）：design Q3 机制描述未随处置更新（吞→应为整体回退）；writeFlowState 失败盘残留的『下轮漂移重检兜底』注释不成立（锚同轮前移），双故障窄路径可被 exempt backfill 误读——边界本身（中断重跑收敛、隔离失败退现状、隔离成功后必重冻结）经控制流检视成立",
++    "作用域": "ok｜已核：归属=提交 message 括号内变更名全名等值匹配，git 查询锚调用方 cwd、状态件锚各自 changeDir，change-patch.json 各变更目录隔离，无跨仓/跨变更读"
++  },
++  "reviewedAt": "2026-10-05T13:36:06Z"
++}
+
+diff --git a/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T134607 b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T134607
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T134607
+@@ -0,0 +1,33 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-05-disposition-refreeze-drift",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "上轮 P3-2 未清偿：失实注释「盘残留 done 由下轮漂移重检兜底」原样保留，与同块新加的双故障披露注释自相矛盾",
++      "evidence": "task-06 声称注释「改为」如实描述，实为增量追加——src/flow.js:1154-1155 仍断言盘残留 done 由下轮漂移重检兜底，但重置块之后同轮即重冻结并把 change-patch.json.head 写为新 HEAD（flow.js:1169→1305/1323/1340），下轮窗口为空、无漂移可检，兜底不成立；与紧邻新注释 flow.js:1157-1159 所述「下轮残留 done 且 review.json 缺席→backfill 按 exempt 误读」直接互斥——同块两句注释一真一假。仅注释失实，无行为面、无数据正确性风险",
++      "location": "src/flow.js:1154-1159"
++    },
++    {
++      "severity": "P3",
++      "title": "上轮 P3-1 半清偿：design 盲维Q3 仍留首轮语义「.superseded 已在场时 renameSync 失败被 catch 吞」",
++      "evidence": "时间戳槽位落地后（flow.js:1143-1145 目标名含 ts 槽位）「.superseded 已在场致 rename 失败」的单槽碰撞前提已废；隔离失败实况是 quarantineOk=false 整体退回现状幂等跳过+console.error 指引人工处置（flow.js:1147-1150），并非「吞掉继续」——与同文件接口契约已修正的 fail-safe 语义（design.md:21）自相矛盾，归档设计记录内部不一致，仅审计追溯面失真",
++      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:30"
++    },
++    {
++      "severity": "P3",
++      "title": "未测边界披露清单不全：漏列 review 标记重置分支主路径，「需 I/O 故障注入方可锁定」以偏概全",
++      "evidence": "披露（design.md:21）只列隔离失败退回与「隔离成功+盘写失败」双故障两面；上轮 P3-3 首指的 st.substeps.review==='done' 重置分支主路径（flow.js:1156-1163，豁免后漂移场景——恰是重置有承载作用的面）仍未测且未披露——e2e 三轮 review 子步从未达 done（FAIL 拦截 exit 前不打标，flow.js:1412-1419），该分支零自动化断言；且它可用状态夹具（手写 flow-state.yaml+change-patch.json 旧锚）直接锁定，并非必经 I/O 故障注入",
++      "location": ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md:21"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok｜维持：漂移判据=冻结锚..HEAD 既成提交事实窗口（不可变），detect 与重冻结 head 同轮 fresh rev-parse（flow.js:1134/1305）面与锚同源一致；本轮 diff 为 doc/comment 级，与该维度无交叠",
++    "并发": "ok｜维持：同目录 renameSync 原子+时间戳槽位防跨代覆盖（两代 review.json.superseded-<ts> 并存于重冻结面为活体证据）；本轮 flow.js 仅增注释、零行为变更",
++    "切换": "finding｜P3×3（findings #1/#2/#3）：失实「下轮兜底」注释保留且与新披露同块互斥（flow.js:1154-1159）；design Q3 停在首轮语义（design.md:30）；披露漏 reset 分支主路径（design.md:21）。披露边界显式裁决：可接受——隔离失败退回与「隔离成功+盘写失败」双故障确属 I/O 注入面，失败方向有界（最坏=下轮豁免误读直通归档、缺一次重评，属审计面缺口非数据损坏；本运行行为由同轮内存重置保正确 flow.js:1161），doc 级处置选披露不重构属合理范围控制；但披露清单不全且被保留的失实旧注释在代码内自我削弱。边界机制本身（中断重跑收敛、隔离失败退现状、重冻结幂等）经控制流核验成立",
++    "作用域": "ok｜维持：归属=提交 message 变更名全名等值（parseChangeNamesFromSubject，与 filterCommittedFace 同源），git 查询锚调用方 cwd、状态件锚各变更 changeDir，无跨仓/跨变更读；本轮无代码行为变更"
++  },
++  "reviewedAt": "2026-10-05T13:45:02Z"
++}

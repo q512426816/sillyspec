@@ -1,0 +1,50 @@
+{
+  "change": "2026-10-05-disposition-refreeze-drift",
+  "baseline": "0a03268540b883ab30429ee05bb7fc4eba9f5c38",
+  "head": "1d1e9fc5c249a43c245f2692e569091449c6e403",
+  "files": [
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/design.md",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/requirements.md",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/tasks.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "test/flowdone-disposition-drift.test.mjs",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/proposal.md",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T132947",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T133806",
+    ".sillyspec/changes/2026-10-05-disposition-refreeze-drift/review.json.superseded-20261005T134607"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 432,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-05T13:46:08.180Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "4fa9f61978e1c71858a09222b8561df7bb14d47c1592a8e163bf75f314bdaa1a",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-disposition-refreeze-drift",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": ".superseded 单槽留档：重复漂移周期会覆盖上一代隔离件",
+      "evidence": "renameSync 目标名固定为 review.json.superseded，第二次漂移隔离时目标已在场（libuv rename 语义为覆盖替换），上一代 FAIL 结论留档被静默替换——FR-02「留档不删除」对单次事件成立、跨代不成立；仅审计追溯面受损，无数据正确性风险",
+      "location": "src/flow.js:1137"
+    },
+    {
+      "severity": "P3",
+      "title": "漂移处置块整体 catch：rename 成功后 writeFlowState 失败会让 review 标记残留 done，旧结论缺席被 backfill 误读 exempt",
+      "evidence": "renameSync(1137) 成功后 writeFlowState(1145) 抛出会被外层 catch(1151) 吞掉，内存同步(1147)不执行 → review 子步(1355)按快照 st 判 done 跳过，backfill(1361-1368)读 review.json 缺席回填 verdict=exempt → 跳过重评直通归档；触发需原子写 I/O 故障，极窄路径，但该路径为本变更新引入",
+      "location": "src/flow.js:1144-1151"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok｜边界已裁决：可接受（检测失败按无漂移 fail-safe 退现状幂等跳过——不新造阻断面，FR-03 明文要求；漂移窗口为既成提交事实，detect 与重冻结间新落提交时锚随重冻结时点 rev-parse 前移，面与锚同源一致）",
+    "并发": "ok｜边界已裁决：可接受（renameSync 失败被 catch 吞——同目录 rename 原子，失败仅限文件锁/AV 干预的罕见场景，失败方向是不动作而非误归档；并发他侧提交不触发已由单测①他侧形态锁定）",
+    "切换": "ok｜边界已裁决：可接受（治理件后补提交带本变更后缀触发多一轮评审循环——冻结体每轮以新 HEAD 重写锚点 flow.js:1290/1308，窗口前移无死循环，实测中断恢复链路 rename→标记重置→重冻结任一点断掉重跑均收敛；P3② 的 I/O 故障窄路径另入 findings）",
+    "作用域": "ok｜边界已裁决：可接受（裸提交不触发保守口径——与 parseChangeNamesFromSubject/归因切分同源的既成事实标准，includes 全名等值无近似串台，git 查询锚 cwd、状态件锚各变更 changeDir，无跨仓读）"
+  },
+  "reviewedAt": "2026-10-05T13:26:49Z"
+}

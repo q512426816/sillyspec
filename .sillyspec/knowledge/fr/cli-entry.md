@@ -6251,3 +6251,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-redomain-preview-bychange
   status: active
+
+## FR-cli-entry-331 冻结后窗口内出现本变更名后缀交付提交时，重跑 flow done 检出漂移：输出审计时点漂移警告并自动重冻结（change.patch 含处置提交面，无需手动 --refreeze）
+变更：2026-10-05-disposition-refreeze-drift
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-disposition-refreeze-drift/requirements.md#FR-01
+最近确认：1d1e9fc5c249a43c245f2692e569091449c6e403
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-disposition-refreeze-drift:flow:测试绑定FR-01
+  tests: test/flowdone-disposition-drift.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-disposition-refreeze-drift
+  status: active
+
+## FR-cli-entry-332 review 已有结论（review.json 在场）时漂移触发隔离：旧件改名 review.json.superseded 留档，review 子步标记重置，本次重新定档/重评
+变更：2026-10-05-disposition-refreeze-drift
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-disposition-refreeze-drift/requirements.md#FR-02
+最近确认：1d1e9fc5c249a43c245f2692e569091449c6e403
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-disposition-refreeze-drift:flow:测试绑定FR-02
+  tests: test/flowdone-disposition-drift.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-disposition-refreeze-drift
+  status: active
+
+## FR-cli-entry-333 窗口内仅他侧提交或无新提交时不触发（幂等跳过行为不变；归属判定按提交 message 变更名后缀）
+变更：2026-10-05-disposition-refreeze-drift
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-disposition-refreeze-drift/requirements.md#FR-03
+最近确认：1d1e9fc5c249a43c245f2692e569091449c6e403
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-disposition-refreeze-drift:flow:测试绑定FR-03
+  tests: test/flowdone-disposition-drift.test.mjs「① detectPatchDrift 归属三形态：本变更后缀触发 / 他侧与裸提交不触发」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-disposition-refreeze-drift
+  status: active
+
+## FR-cli-entry-334 单测覆盖归属判定三形态（本变更后缀触发/他侧后缀不触发/裸提交不触发）+ e2e 锁定处置重入链路（漂移警告+重冻结+隔离+重评任务书再现）
+变更：2026-10-05-disposition-refreeze-drift
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-disposition-refreeze-drift/requirements.md#FR-04
+最近确认：1d1e9fc5c249a43c245f2692e569091449c6e403
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-disposition-refreeze-drift:flow:测试绑定FR-04
+  tests: test/flowdone-disposition-drift.test.mjs「① + ② 双件齐备（含锚==HEAD/锚缺失边界）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-disposition-refreeze-drift
+  status: active
