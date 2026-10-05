@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-visual-downgrade-narrow",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-01",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「元层误伤句与后端降级语境反例：downgradeDeclared=false」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-visual-downgrade-narrow"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-02",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「既有降级正例（视觉收敛降级/样式统一级）与裁决放行回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-visual-downgrade-narrow"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-03",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「反例+正例+跨行回归同文件收口」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-visual-downgrade-narrow"
+    }
+  ]
+}

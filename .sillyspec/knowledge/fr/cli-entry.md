@@ -6061,3 +6061,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-uivisual-word-narrow
   status: active
+
+## FR-cli-entry-321 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
+变更：2026-10-05-visual-downgrade-narrow
+状态：active
+摘要：元层误伤句（2026-10-05-uivisual-word-narrow 实测原文）；后端降级语境
+全文：.sillyspec/changes/archive/2026-10-05-visual-downgrade-narrow/requirements.md#FR-01
+最近确认：546720ea4ed1a70809e69a82b342f3e4bcda12c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-01
+  tests: test/ui-visual-guidance.test.mjs「元层误伤句与后端降级语境反例：downgradeDeclared=false」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-visual-downgrade-narrow
+  status: active
+
+## FR-cli-entry-322 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
+变更：2026-10-05-visual-downgrade-narrow
+状态：active
+摘要：既有正例回归
+全文：.sillyspec/changes/archive/2026-10-05-visual-downgrade-narrow/requirements.md#FR-02
+最近确认：546720ea4ed1a70809e69a82b342f3e4bcda12c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-02
+  tests: test/ui-visual-guidance.test.mjs「既有降级正例（视觉收敛降级/样式统一级）与裁决放行回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-visual-downgrade-narrow
+  status: active
+
+## FR-cli-entry-323 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
+变更：2026-10-05-visual-downgrade-narrow
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-visual-downgrade-narrow/requirements.md#FR-03
+最近确认：546720ea4ed1a70809e69a82b342f3e4bcda12c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-visual-downgrade-narrow:flow:测试绑定FR-03
+  tests: test/ui-visual-guidance.test.mjs「反例+正例+跨行回归同文件收口」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-visual-downgrade-narrow
+  status: active

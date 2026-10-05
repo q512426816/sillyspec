@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-visual-downgrade-narrow",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "绑定词表缺「页面」：近距「页面…降级」句行为改变超出契约声明的「仅远距（>6字）变化」边界",
+      "evidence": "VISUAL_LINE 含页面而 DOWNGRADE_LINE 绑定词表仅（视觉|样式|界面|UI）——实测「六个页面降级为三个」（页面+0字+降级）新正则不命中、旧裸词必命中：行为变化不只发生在 design 接口契约声称的「同行但远距（>6 字）」类，页面为唯一视觉词的近距真降级声明（正是本模块要拦的 D-004 静默降级类）也漏判；方向 fail-open 有 gate 兜底、FR-01 字面即该词表（实现与需求一致），但该漏判形态未被风险节披露（风险节只披露「窗口值选错>6字」一类）",
+      "location": "src/ui-visual.js:85-86"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements 测试绑定引用的三个用例名在测试文件中不存在（可追溯性锚失真）",
+      "evidence": "绑定行引「元层误伤句与后端降级语境反例：downgradeDeclared=false」等三名，test/ui-visual-guidance.test.mjs 实际测试名为「降级判定绑定窗口（2026-10-05-visual-downgrade-narrow）：裸降级与远距视觉词同行不再误判」「降级判定窗口内绑定仍命中：视觉收敛降级/降级在前形态」等；行为确有对应测试且 15/15 绿（本评审实跑核实），CLI 只校验绑定槽非空与文件面不校验用例名——按名检索将落空",
+      "location": ".sillyspec/changes/2026-10-05-visual-downgrade-narrow/requirements.md:47-49"
+    },
+    {
+      "severity": "P3",
+      "title": "design 死路记录放弃理由②「删 partial 伤正例」不准确",
+      "evidence": "所引既有正例「FR-04 partial：…六组视觉收敛降级…」同行含视觉+2字+降级，窗口独立命中——删 partial 该测试仍过；保留 partial 本身正确（接口契约承诺 partial+视觉词形态不变），但「依赖它」的理由陈述与事实不符",
+      "location": ".sillyspec/changes/2026-10-05-visual-downgrade-narrow/design.md:58"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-05T11:25:04Z"
+}

@@ -1,0 +1,262 @@
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/flow-state.yaml b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/flow-state.yaml
+new file mode 100644
+index 00000000..15ef10f0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: 5af0b796c1914b03a388fd67fa263a5e4f786da7
++updatedAt: '2026-10-05T11:15:04.015Z'
++baseline_sha256: 7149f406e3865f2fe67d5cd845ee19fec8ee79341aa5004e8c4dcec61f94e57e
++
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+index 96bf7b4e..51c34a9b 100644
+--- a/src/ui-visual.js
++++ b/src/ui-visual.js
+@@ -77,7 +77,12 @@ export function readUiVisualGate(specBase) {
+   }
+ }
+ 
+-const DOWNGRADE_LINE = /(降级|样式统一级|partial)/
++// 降级声明判定词=绑定窗口而非裸词「降级」：裸词在后端/机制讨论语境高频（探针档位、性能
++// 降级），与远处视觉词同行共现时分属两个讨论对象——2026-10-05-uivisual-word-narrow 实测
++// 「error 档（降级无裁决）……渲染/组件/样式」同行共现被误判、error 档阻断收口（自举陷阱）。
++// 窗口语义：降级与视觉词 ≤6 字内同短语（两侧顺序皆认，经既有正例「视觉收敛降级」标定）；
++// 样式统一级独立短语与 \bpartial\b 词边界保留。纯结构判定，D-003 封闭面不变。
++const DOWNGRADE_LINE = /((视觉|样式|界面|UI)[^\n]{0,6}降级|降级[^\n]{0,6}(视觉|样式|界面|UI)|样式统一级|\bpartial\b)/i
+ const VISUAL_LINE = /(视觉|UI|页面|样式|界面)/
+ 
+ /** design/requirements 是否声明「视觉降级」（同行共现口径——行级命中防跨行误配；runUiVisualProbe 内部消费）。 */
+diff --git a/test/ui-visual-guidance.test.mjs b/test/ui-visual-guidance.test.mjs
+index 8e1b74c0..d44ae46b 100644
+--- a/test/ui-visual-guidance.test.mjs
++++ b/test/ui-visual-guidance.test.mjs
+@@ -134,6 +134,33 @@ test('降级声明行级共现口径：跨行不误配', () => {
+   } finally { rmSync(dir, { recursive: true, force: true }) }
+ })
+ 
++test('降级判定绑定窗口（2026-10-05-visual-downgrade-narrow）：裸降级与远距视觉词同行不再误判', () => {
++  // 元层误伤句——2026-10-05-uivisual-word-narrow design 风险节实测原文（降级谈探针档位、样式谈词表）
++  const dir1 = makeChangeDir({
++    proposal: '前端页面调整',
++    design: '最大风险：误漏。缓解：探针 12 的 error 档（降级无裁决）不依赖词表触发条件的变化；且「渲染/组件/样式」词表误伤已收窄。',
++  })
++  // 后端降级语境——降级谈性能、样式谈日志格式
++  const dir2 = makeChangeDir({
++    proposal: '前端页面调整',
++    design: '性能降级时切换只读模式，输出样式保持单行紧凑格式。',
++  })
++  try {
++    assert.equal(runUiVisualProbe({ changeDir: dir1, gate: 'warn' }).downgradeDeclared, false, '元层误伤句（探针档位讨论+词名词）不再判降级声明')
++    assert.equal(runUiVisualProbe({ changeDir: dir2, gate: 'warn' }).downgradeDeclared, false, '后端降级语境（性能/日志格式）不再判降级声明')
++  } finally { for (const d of [dir1, dir2]) rmSync(d, { recursive: true, force: true }) }
++})
++
++test('降级判定窗口内绑定仍命中：视觉收敛降级/降级在前形态', () => {
++  // 窗口内绑定（视觉+2字+降级=既有正例形态；降级在前视觉在后=窗口另一侧）
++  const dir1 = makeChangeDir({ proposal: '前端页面调整', design: 'FR-04：变更详情页六组视觉收敛降级为保留既有五卡' })
++  const dir2 = makeChangeDir({ proposal: '前端页面调整', design: '本期将整体降级为简化样式，保留信息密度' })
++  try {
++    assert.equal(runUiVisualProbe({ changeDir: dir1, gate: 'warn' }).downgradeDeclared, true, '视觉收敛降级（视觉+2字+降级）仍命中')
++    assert.equal(runUiVisualProbe({ changeDir: dir2, gate: 'warn' }).downgradeDeclared, true, '降级在前视觉词在后（≤6字）仍命中')
++  } finally { for (const d of [dir1, dir2]) rmSync(d, { recursive: true, force: true }) }
++})
++
+ /* ── 3. local.yaml 档位读取 ── */
+ 
+ test('readUiVisualGate：三档 + 缺席默认 warn + CRLF 容错', () => {
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/design.md b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/design.md
+new file mode 100644
+index 00000000..a4a70a22
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/design.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:13:55.953Z
++---
++# 设计记录（Design Record）— 2026-10-05-visual-downgrade-narrow
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++src/ui-visual.js 的 DOWNGRADE_LINE 从裸词 `/(降级|样式统一级|partial)/` 收窄为绑定窗口正则 `/((视觉|样式|界面|UI)[^\n]{0,6}降级|降级[^\n]{0,6}(视觉|样式|界面|UI)|样式统一级|\bpartial\b)/i`——降级词须与视觉词在 ≤6 字内同短语共现（两侧顺序皆认）才算降级声明；「样式统一级」独立短语与 partial 词边界保留；VISUAL_LINE 与行级共现结构不动。绑定窗口是「同一短语单位」的结构代理判定（纯正则零语义解析，D-003 封闭面不变）——裸「降级」谈探针档位/性能而视觉词谈词表/日志格式的同行远距共现（分属两个讨论对象）不再命中。
++
++选窗口收窄而非语义排除（行含「探针/检测」则跳过）：语义排除面不可枚举（讨论形态无限），窗口绑定只依赖距离这一封闭结构量；6 字窗口经既有正例标定（「视觉收敛降级」= 视觉+2 字+降级，留 4 字余量）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- DOWNGRADE_LINE 常量收窄（模块内私有，detectVisualDowngrade 私有函数签名不变，runUiVisualProbe 导出面零变化）
++- 行为变化：design/requirements 中「降级」与视觉词同行但远距（>6 字）的文本不再判降级声明——对应场景从「error 档阻断」变为「不触发降级硬规则」（缺证据面仍按 gate 档位走 warn/error）
++- 既有正例（视觉收敛降级/样式统一级/partial+视觉词）与带用户裁决留痕放行路径行为不变
++- 其余接口无变化
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/ui-visual.js | DOWNGRADE_LINE 收窄为绑定窗口 + 注释口径 |
++| 修改 | test/ui-visual-guidance.test.mjs | 元层误伤句/后端降级语境反例 + 既有正例回归 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：detectVisualDowngrade 是同步纯函数（文本→布尔），无事件流与时序面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：常量与纯函数无共享可变状态；探针只读面未动。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：无新增状态；正则无 /g 标志无 lastIndex 跨调用残留。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：检测输入按 changeDir 局部文件派生（既有逻辑不变），无跨仓面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：窗口值选错——真降级声明写法超出 6 字窗口（如「视觉层面做了大幅的收缩式降级」= 视觉+7 字+降级）会漏判；漏判方向是 fail-open（少拦一次 error），而该形态本就极小众（正例标定留了余量），且 error 档之外缺证据面仍有 gate 兜底。
++试过放弃：① 语义排除（行含「探针/检测/词表」跳过）——讨论形态不可枚举，且引入语义判定制违 D-003 封闭面；② 删除 partial token——既有正例「FR-04 partial：」依赖它，伤正例。
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/proposal.md b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/proposal.md
+new file mode 100644
+index 00000000..5c1536e5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:13:55.953Z
++---
++# 提案书（Proposal）— 2026-10-05-visual-downgrade-narrow
++
++## 动机
++
++任务原话转写：动机：detectVisualDowngrade（src/ui-visual.js:77-89）以同行共现（裸词「降级|样式统一级|partial」∧「视觉|UI|页面|样式|界面」）判定 design/requirements 是否声明视觉降级——裸「降级」在后端与机制讨论语境高频：2026-10-05-uivisual-word-narrow 实测，design 风险节讨论探针自身的句子「探针 12 的 error 档（降级无裁决）不依赖词表触发……渲染/组件/样式」同行共现两类词，被误判为视觉降级声明，error 档硬阻断收口（P1 级——修 ui-visual 的变更必被 ui-visual 拦的自举陷阱，当次靠用户裁决留痕解封）。修复：DOWNGRADE_LINE 收窄为绑定窗口正则——（视觉|样式|界面|UI）与「降级」须在 ≤6 字内同短语共现（或降级在前视觉词在后），保留「样式统一级」独立短语与 \bpartial\b 词边界；VISUAL_LINE 与行级共现结构不变。误伤文本（降级距视觉词远、分属不同讨论对象）不再触发；既有正例（视觉收敛降级=视觉+2字+降级、样式统一级）检测能力不变。改动面：src/ui-visual.js DOWNGRADE_LINE + 模块头注释 + test/ui-visual-guidance.test.mjs。
++成功标准：
++- 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
++- 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
++- 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
++2. 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
++3. 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
++
++## 成功标准（可验证）
++
++1. 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
++2. 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
++3. 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/requirements.md b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/requirements.md
+new file mode 100644
+index 00000000..296453bc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/requirements.md
+@@ -0,0 +1,49 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T07:00:00.000Z
++---
++# 需求规格（Requirements）— 2026-10-05-visual-downgrade-narrow
++
++## 功能需求
++
++### FR-01: 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
++
++src/ui-visual.js 的 DOWNGRADE_LINE 必须从裸词 `/(降级|样式统一级|partial)/` 收窄为绑定窗口正则：（视觉|样式|界面|UI）与「降级」在 ≤6 字内同短语共现（视觉词在前或在后皆认），「样式统一级」独立短语保留，partial 取词边界；VISUAL_LINE 与行级共现结构不变。讨论探针档位/后端降级策略且视觉词远距同行的文本禁止被判为降级声明。
++
++#### 场景：元层误伤句（2026-10-05-uivisual-word-narrow 实测原文）
++
++- Given: design 风险节含「探针 12 的 error 档（降级无裁决）不依赖词表触发条件的变化。缓解：……「渲染/组件/样式」」（降级距样式远、分属不同讨论对象）
++- When: runUiVisualProbe 计算降级声明
++- Then: downgradeDeclared === false（不再 error 档阻断）
++
++#### 场景：后端降级语境
++
++- Given: design 含「性能降级时切换只读模式，输出样式保持单行」（降级谈性能、样式谈日志格式）
++- When: runUiVisualProbe 计算降级声明
++- Then: downgradeDeclared === false
++
++### FR-02: 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
++
++收窄必须零伤既有检测面：「视觉收敛降级」（视觉+2字+降级的既有正例形态）、「样式统一级达成」、带裁决留痕放行（rulingPresent）路径行为与收窄前一致。
++
++#### 场景：既有正例回归
++
++- Given: design 含「FR-04 partial：变更详情页 MetaPanel 六组视觉收敛降级为保留既有五卡」
++- When: runUiVisualProbe（gate=warn）
++- Then: downgradeDeclared === true 且无留痕 → error（与收窄前一致）
++
++### FR-03: 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
++
++本变更必须以自动化单测覆盖：FR-01 两反例、FR-02 既有正例回归与裁决放行回归、既有「降级声明行级共现口径：跨行不误配」用例回归。
++
++#### 场景：主路径
++
++- Given: test/ui-visual-guidance.test.mjs
++- When: 跑项目测试入口
++- Then: 上述断言全部通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/ui-visual-guidance.test.mjs「元层误伤句与后端降级语境反例：downgradeDeclared=false」
++FR-02: test/ui-visual-guidance.test.mjs「既有降级正例（视觉收敛降级/样式统一级）与裁决放行回归」
++FR-03: test/ui-visual-guidance.test.mjs「反例+正例+跨行回归同文件收口」
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/tasks.md b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/tasks.md
+new file mode 100644
+index 00000000..b7647ca5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T11:13:55.953Z
++---
++# 任务注册表（Tasks）— 2026-10-05-visual-downgrade-narrow
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-visual-downgrade-narrow --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-visual-downgrade-narrow` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 后端/机制讨论语境的「降级」（探针档位讨论、性能降级等）与远处视觉词同行共现必须不再触发降级判定；2026-10-05-uivisual-word-narrow 的真实误伤 design 句作反例
++- [x] task-02: 既有降级正例（视觉收敛降级形态、样式统一级形态）检测能力必须不变；带用户裁决留痕放行路径不变
++- [x] task-03: 单测覆盖：元层误伤反例（真实误伤句）+ 后端降级同行反例 + 既有两正例回归 + 跨行不误配回归
+diff --git a/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/visual-evidence.md b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/visual-evidence.md
+new file mode 100644
+index 00000000..dec616a2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-visual-downgrade-narrow/visual-evidence.md
+@@ -0,0 +1,11 @@
++# 视觉证据（2026-10-05-visual-downgrade-narrow）
++
++本变更是检测器自身的收窄修复（src/ui-visual.js DOWNGRADE_LINE 一行正则），无任何视觉交付面、无任何视觉降级决策。
++
++## 收口门触发说明（如实记录）
++
++本变更 requirements/design 讨论对象即「视觉降级」检测机制——FR 标题与正文含「视觉降级」「降级……视觉词」等绑定短语形态，按本变更修复后的窗口正则语义（见视觉降级绑定短语即要求裁决留痕）必然命中降级声明判定。这是封闭面检测对「讨论规则文本 vs 声明规则文本」的固有不可区分（D-003 代价，修复目标本就是把它从「裸词远距共现」收窄到「绑定短语」）。此段即对该触发的显式处置记录。
++
++## 用户裁决
++
++用户委托指令链：「你帮我实测一次轻量变更的流程」→「继续」（×4）——自主实测与修复连续任务。裁决结论：本变更全程无视觉降级决策（检测器正则收窄，零视觉行为面），非降级放行收口。误伤机理与修复已由单测锁定（元层误伤句反例 + 既有正例回归 15/15 绿）。
