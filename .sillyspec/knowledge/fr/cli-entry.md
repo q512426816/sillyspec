@@ -5852,3 +5852,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-dogfood-audit-fixes
   status: active
+
+## FR-cli-entry-310 design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
+变更：2026-10-05-review-promise-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-promise-negation/requirements.md#FR-01
+最近确认：905397ef044a86511a22cc1321fe3d529b74e97f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-promise-negation:flow:测试绑定FR-01
+  tests: test/flow-review.test.mjs「否定语境消解：无串台面/不会串台/杜绝串台不再一票升级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-promise-negation
+  status: active
+
+## FR-cli-entry-311 input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
+变更：2026-10-05-review-promise-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-promise-negation/requirements.md#FR-02
+最近确认：905397ef044a86511a22cc1321fe3d529b74e97f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-promise-negation:flow:测试绑定FR-02
+  tests: test/flow-review.test.mjs「用户原话口径：requirements 非否定串台仍一票升级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-promise-negation
+  status: active
+
+## FR-cli-entry-312 design 作答里「解决串台问题」等非否定语境仍升级
+变更：2026-10-05-review-promise-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-promise-negation/requirements.md#FR-03
+最近确认：905397ef044a86511a22cc1321fe3d529b74e97f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-promise-negation:flow:测试绑定FR-03
+  tests: test/flow-review.test.mjs「非否定语境保留：解决串台/仍存在串台照常升级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-promise-negation
+  status: active
+
+## FR-cli-entry-313 新增/扩展测试锁定上述三面，全量测试绿
+变更：2026-10-05-review-promise-negation
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-promise-negation/requirements.md#FR-04
+最近确认：905397ef044a86511a22cc1321fe3d529b74e97f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-promise-negation:flow:测试绑定FR-04
+  tests: test/flow-review.test.mjs「三面断言 + 既有定档矩阵零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-promise-negation
+  status: active

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-review-promise-negation",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-review-promise-negation:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-review.test.mjs「否定语境消解：无串台面/不会串台/杜绝串台不再一票升级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-promise-negation"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-review-promise-negation:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review.test.mjs「用户原话口径：requirements 非否定串台仍一票升级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-promise-negation"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-review-promise-negation:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review.test.mjs「非否定语境保留：解决串台/仍存在串台照常升级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-promise-negation"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-review-promise-negation:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-review.test.mjs「三面断言 + 既有定档矩阵零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-promise-negation"
+    }
+  ]
+}

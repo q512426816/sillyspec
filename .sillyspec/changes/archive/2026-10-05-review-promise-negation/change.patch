@@ -1,0 +1,291 @@
+diff --git a/.sillyspec/changes/2026-10-05-review-promise-negation/flow-state.yaml b/.sillyspec/changes/2026-10-05-review-promise-negation/flow-state.yaml
+new file mode 100644
+index 00000000..f4b453cb
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-promise-negation/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: 4b24554d277b4a181f7fd933681419f8408781c2
++updatedAt: '2026-10-05T03:13:31.285Z'
++baseline_sha256: 6285adcc0a6c6694da0e7988c9f28485104331a7fa654f85cf73bffb85ddd8d9
++
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 2fbc60bb..c4e80bb8 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -27,6 +27,19 @@ const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不
+ /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
+ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
+ 
++/** design 作答面否定语境消解（2026-10-05-review-promise-negation）：盲维第 4 问作答讨论
++ * 作用域风险时，「无串台面」「不会串台」「杜绝串台」等否定短语按字面命中 PROMISE_RE 一票
++ * 升级（实测：两行 console.log 的变更被定档高危起子代理评审）。「串台」是名词性风险词——
++ * 承诺语态必有断言修饰（与「不丢失」类「不X」形态承诺词本质不同），否定前缀 + 短距内的
++ * 「串台」先替换为占位符再扫；「解决串台」「仍有串台」等非否定语境保留一票升级。仅 design
++ * 作答面应用——input/proposal/requirements 承载用户原话，承诺口径零放松。后缀否定
++ * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。 */
++const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台/g
++function stripNegatedCrosstalk(text) {
++  // 占位符本身禁含「串台」二字——消解产物若残留原词，PROMISE_RE 照样命中（首版实测自坑）
++  return String(text || '').replace(NEGATED_CROSSTALK_RE, '〔已消解〕')
++}
++
+ /** 交付 diff 危险原语（物证面）。 */
+ const PRIMITIVE_RE = /asyncio\.(?:Lock|Event|Queue|gather)|threading\.|with_for_update|IntegrityError|ON CONFLICT|AbortSignal|AbortController|signal\.abort|\.rollback\(|since=|\bcursor\b/i
+ 
+@@ -111,7 +124,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+   for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
+     try {
+       const t = readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n')
+-      texts.push(f === 'design.md' ? stripV2QuestionLines(stripMachineSections(t)) : t)
++      texts.push(f === 'design.md' ? stripNegatedCrosstalk(stripV2QuestionLines(stripMachineSections(t))) : t)
+     } catch { /* 缺件由 redraft/槽位门兜底 */ }
+   }
+   const all = texts.join('\n')
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+index bc9c60d2..cab8293b 100644
+--- a/test/flow-review.test.mjs
++++ b/test/flow-review.test.mjs
+@@ -80,6 +80,65 @@ test('① 定档矩阵：五路信号与豁免举证', () => {
+   assert.ok(t.reasons.some((r) => /抽查采样/.test(r)))
+ })
+ 
++// ── 否定语境消解（2026-10-05-review-promise-negation）：盲维第4问作答的否定式「串台」
++// 不再一票升级；用户原话与非否定语境口径不变。v2 纯 markdown 夹具（四问原文行逐字同源，
++// stripV2QuestionLines 才能剥掉——夹具自污染防护）。──
++const DESIGN_V2_BND = [
++  '# 设计记录',
++  '## 做法概述',
++  '纯文本变换。',
++  '## 边界与并发（盲维四问——每问必答，答不了即设计缺口）',
++  '1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？',
++  '2. 并发写：两个执行体同时操作同一数据/文件会发生什么？',
++  '3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？',
++  '4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？',
++  '__ANSWER__',
++  '## 风险与死路',
++  '见上。',
++].join('\n')
++
++test('④ 否定语境消解：design 作答否定式「串台」不再一票升级', () => {
++  // 桶外名先钉（在桶内就换名直到桶外；若改 SALT 夹具自适应——同既有采样纪律）
++  let quietName = 'neg-off-bucket'
++  for (let i = 0; sampleBucket(quietName); i++) quietName = `neg-off-${i}`
++  assert.equal(sampleBucket(quietName), false)
++
++  // 三种否定形态逐一：不适用开头（避盲维信号）+ 否定串台短语
++  for (const [label, answer] of [
++    ['无串台面', '不适用：纯输出层追加，无串台面。'],
++    ['不会串台', '不适用：单进程同步变换，不会串台。'],
++    ['杜绝串台', '不适用：零共享状态，杜绝串台与误伤。'],
++  ]) {
++    const { root, changeDir } = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
++    const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++    assert.equal(t.required, false, `${label}：不再升级（reasons=${t.reasons}）`)
++    assert.ok(!t.reasons.some((r) => /承诺词/.test(r)), `${label}：承诺词条不在 reasons`)
++    assert.ok(t.exemptEvidence.some((e) => /无高危承诺词/.test(e)), `${label}：豁免证据含无承诺词`)
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('⑤ 用户原话口径：requirements 非否定「串台」仍一票升级', () => {
++  const { root, changeDir } = makeChangeDir(
++    DESIGN_V2_BND.replace('__ANSWER__', '不适用：无。'),
++    '# 需求\n修复跨实例数据串台问题\n',
++  )
++  const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-req-hit' })
++  assert.equal(t.required, true, 'requirements 非否定串台升级')
++  assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `承诺词条在场: ${t.reasons}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑥ 非否定语境保留：design 作答「解决串台」照常升级', () => {
++  const { root, changeDir } = makeChangeDir(
++    DESIGN_V2_BND.replace('__ANSWER__', '本设计的核心是解决多实例间的串台与误归属。'),
++    '# 需求\n普通需求文本\n',
++  )
++  const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-keep-hit' })
++  assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `非否定串台保留升级: ${t.reasons}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
+   const book = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1' })
+   assert.match(book, /请求预算硬帽 12/)
+diff --git a/.sillyspec/changes/2026-10-05-review-promise-negation/design.md b/.sillyspec/changes/2026-10-05-review-promise-negation/design.md
+new file mode 100644
+index 00000000..3ce18f4c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-promise-negation/design.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T03:13:31.258Z
++---
++# 设计记录（Design Record）— 2026-10-05-review-promise-negation
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 `src/flow-review.js` 的承诺词扫描（信号①）前加一步否定语境消解：design.md 作答文本（已剥 MACHINE-DRAFT 机器段与 v2 四问原文行）先经 `stripNegatedCrosstalk` 把「否定前缀 + 短距内『串台』」的短语替换为占位符，再进 `PROMISE_RE` 扫描。选消解而非检测后豁免的原因：消解是文本变换，与既有「剥模板行」同一层次、可组合；检测后豁免要在 reasons 组装处开洞，改动面大。只作用于 design 作答面——input/proposal/requirements 承载用户原话，承诺口径零放松（FR-02）。「串台」是名词性风险词、承诺语态必有断言修饰，这是它与「不丢失」类「不X」形态承诺词的本质差别，也是消解只针对它的依据。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新增模块内私有函数 `stripNegatedCrosstalk(text)` 与常量 `NEGATED_CROSSTALK_RE`，不导出；`classifyReviewNeed` 行为变化仅一处：design 作答面否定式「串台」不再触发一票升级。CLI 命令、参数、输出格式无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：纯同步文本变换（正则替换），无事件序参与。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：函数只读入参字符串、返回新字符串，零共享可变状态、零落盘；classifyReviewNeed 本身也是只读定档。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不变：无状态、无 IO，任意时点中断即无事发生。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   消解只发生在本次 classifyReviewNeed 调用的内存文本上，无串台面；对同一 change 多会话并行收口，定档输入（磁盘工件）只读、结果确定性一致。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：否定前缀清单覆盖不全——作答写「不存在串台」「绝无串台」等清单外否定式仍会误升级（保守方向：多评一次，成本面而非漏报面；后缀否定如「串台为零」暂不覆盖，理由：中文技术作答主流是前缀否定，后缀形态罕见，为它加规则的正则复杂度不划算）。放弃的方案：①把「串台」整个移出 PROMISE_RE——「保证不串台」是真实交付承诺，直接漏报，不可接受；②检测命中后在 reasons 组装处按上下文豁免——要在信号组装层开特例洞，且豁免逻辑与词表分离两处维护，弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow-review.js | 新增 NEGATED_CROSSTALK_RE + stripNegatedCrosstalk，design 作答面扫描前消解 |
++| 修改 | test/flow-review.test.mjs | 三面断言：否定豁免/用户原话不放松/非否定保留升级 |
+diff --git a/.sillyspec/changes/2026-10-05-review-promise-negation/proposal.md b/.sillyspec/changes/2026-10-05-review-promise-negation/proposal.md
+new file mode 100644
+index 00000000..b3c9e5f9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-promise-negation/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T03:13:31.258Z
++---
++# 提案书（Proposal）— 2026-10-05-review-promise-negation
++
++## 动机
++
++任务原话转写：flow-review.js 承诺词一票升级的「串台」是名词性风险词：盲维第4问作答讨论作用域风险时写「无串台面」「不会串台」「防串台」等否定短语按字面命中 PROMISE_RE——实测两行 console.log 变更被定档高危起子代理评审（约 43 万 token）。改为 design 作答面先做否定语境消解再扫：否定前缀（无/不会/不存在/没有/零/防/杜绝/避免/不含/免）+ 短距内「串台」消解；非否定语境（解决串台/仍有串台）保留一票升级；input/proposal/requirements 用户原话口径不变。
++成功标准：
++- design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
++- input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
++- design 作答里「解决串台问题」等非否定语境仍升级
++- 新增/扩展测试锁定上述三面，全量测试绿
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
++2. input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
++3. design 作答里「解决串台问题」等非否定语境仍升级
++4. 新增/扩展测试锁定上述三面，全量测试绿
++
++## 成功标准（可验证）
++
++1. design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
++2. input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
++3. design 作答里「解决串台问题」等非否定语境仍升级
++4. 新增/扩展测试锁定上述三面，全量测试绿
+diff --git a/.sillyspec/changes/2026-10-05-review-promise-negation/requirements.md b/.sillyspec/changes/2026-10-05-review-promise-negation/requirements.md
+new file mode 100644
+index 00000000..45c0b9df
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-promise-negation/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T03:13:31.258Z
++---
++# 需求规格（Requirements）— 2026-10-05-review-promise-negation
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（收口做门柱对比）；正文与场景块归你。
++
++### FR-01: design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
++
++`classifyReviewNeed` 对 design.md 作答面（剥机器段与四问原文行之后）必须先做否定语境消解再扫承诺词：否定前缀（不会/不存在/没有/无/零/防/杜绝/避免/不含/免）加短距（≤8 字符）内的「串台」不得触发承诺词一票升级；消解必须只作用于 design 作答面，且禁止影响其余四路信号（盲维作答/diff 原语/决策密度/声明通道）的判定。
++
++#### 场景：主路径
++
++- Given：design.md 盲维第 4 问作答写「引导文案为通用命令示例，无串台面」，其余工件与信号全静
++- When：运行 `classifyReviewNeed({ changeDir, patchText: '', change: <桶外名> })`
++- Then：`required === false` 且 reasons 不含承诺词条；exemptEvidence 含「无高危承诺词」
++
++### FR-02: input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
++
++input、proposal.md、requirements.md 三面的承诺词扫描口径必须保持不变：非否定语境的「串台」（如「本变更解决串台问题」「仍有串台」）以及全部既有承诺词（不丢失/不重复/不丢不重/不重不漏/at-least-once/exactly-once）在任何工件面命中都必须一票升级评审。
++
++#### 场景：主路径
++
++- Given：requirements.md 正文写「修复跨实例数据串台问题」，design 作答全静
++- When：运行 `classifyReviewNeed`
++- Then：`required === true` 且 reasons 含承诺词命中「串台」
++
++### FR-03: design 作答里「解决串台问题」等非否定语境仍升级
++
++design 作答面内非否定语境的「串台」必须保留一票升级：否定消解只允许吞掉否定前缀短语，作答写「本设计解决两实例间的串台」「仍存在串台风险」时承诺词信号必须照常命中。
++
++#### 场景：主路径
++
++- Given：design.md 作答写「本设计的核心是解决多实例间串台」，其余信号全静
++- When：运行 `classifyReviewNeed`
++- Then：`required === true` 且 reasons 含承诺词命中
++
++### FR-04: 新增/扩展测试锁定上述三面，全量测试绿
++
++上述三面行为必须有自动化测试锁定（否定消解豁免 / 用户原话口径不放松 / 非否定语境保留升级），且全量测试套必须绿；既有 flow-review 定档矩阵断言零回归。
++
++#### 场景：主路径
++
++- Given：扩展 `test/flow-review.test.mjs`
++- When：单独运行该文件与全量测试
++- Then：三面断言全部通过，既有定档矩阵断言不变绿
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/flow-review.test.mjs「否定语境消解：无串台面/不会串台/杜绝串台不再一票升级」
++FR-02: test/flow-review.test.mjs「用户原话口径：requirements 非否定串台仍一票升级」
++FR-03: test/flow-review.test.mjs「非否定语境保留：解决串台/仍存在串台照常升级」
++FR-04: test/flow-review.test.mjs「三面断言 + 既有定档矩阵零回归」
+diff --git a/.sillyspec/changes/2026-10-05-review-promise-negation/tasks.md b/.sillyspec/changes/2026-10-05-review-promise-negation/tasks.md
+new file mode 100644
+index 00000000..1abfe200
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-promise-negation/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T03:13:31.258Z
++---
++# 任务注册表（Tasks）— 2026-10-05-review-promise-negation
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-review-promise-negation --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-review-promise-negation` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: design 作答含「无串台面/不会串台/杜绝串台」时不再因承诺词升级（其余信号不受影响）
++- [x] task-02: input/requirements 里非否定「串台」仍一票升级（漏报防护不放松）
++- [x] task-03: design 作答里「解决串台问题」等非否定语境仍升级
++- [x] task-04: 新增/扩展测试锁定上述三面，全量测试绿
