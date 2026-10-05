@@ -2949,6 +2949,9 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint }
   if (testResultPath && existsSync(testResultPath)) {
     try {
       const j = JSON.parse(readFileSync(testResultPath, 'utf8'))
+      // 并入节自带 resultPath（收编评审 P3：调用方在 persistLintResult 返回后才给 lint.resultPath
+      // 赋值——只变异对象不重写盘，并入节会永远缺 resultPath。这里预先补齐，调用方赋同值幂等）
+      lint.resultPath = testResultPath
       j.lint = lint
       writeFileSync(testResultPath, JSON.stringify(j, null, 2) + '\n')
       return testResultPath

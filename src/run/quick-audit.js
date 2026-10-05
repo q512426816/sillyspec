@@ -555,11 +555,14 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     } catch { /* 快照链路异常 → 主仓现行为 */ }
     }
   }
-  // failed 提升到 try 外（坑 flowdone-lint-fail-no-output 排障顺带发现）：此前 const failed
-  // 声明在 try 块内（块级作用域），finally 的快照回拷读 failed.length 抛 ReferenceError 被
-  // 空 catch 吞掉——P6b 回拷 + resultPath 重映射自 2026-09-28 落地即死代码（快照 FAIL 时
-  // 结果文件随临时目录蒸发、FAIL 三件套的结果文件路径恒死链）。
+  // failed/test/lint 提升到 try 外（坑 flowdone-lint-fail-no-output 排障顺带发现 + 收编评审 P1）：
+  // 此前三者均声明在 try 块内（块级作用域），finally 的快照回拷读 failed.length、resultPath
+  // 重映射读 [test, lint] 各抛 ReferenceError 被空 catch 吞掉——P6b 回拷 + 重映射自 2026-09-28
+  // 落地即死代码（快照 FAIL 时结果文件随临时目录蒸发、FAIL 三件套的结果文件路径恒死链）。
+  // 收编首版只提升了 failed（重映射引用的 test/lint 仍死）——评审 P1 抓出后三变量齐提升。
   const failed = []
+  let test = null
+  let lint = null
   try {
     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
     //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
@@ -582,7 +585,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       // 「零信息误判」主因）。
       console.log(`⏳ 开始 test+lint 实测${snapshot ? '（隔离快照内）' : ''}——大仓全量可达 15-20 分钟，期间无输出属正常；后台跑 + 长容忍（≥20 分钟），勿按超时杀进程（杀掉不丢进度，但每轮重建沙箱重跑实测耗时成倍）。`)
     }
-    let test = testLedgerReuse
+    test = testLedgerReuse
       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: `${testLedgerReuse.runPlan?.[0]?.runner || 'npm test'} (ledger-reuse)`, exitCode: 0, durationMs: 0, outputTail: null }
       // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
       // 与 deps(auto) 只取「实际变更 ∩ 本会话声明」，并行全流程变更 WIP 不再挡死本会话
@@ -608,7 +611,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         })
       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
     }
-    let lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
+    lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
     // 超时杀——主仓 60~110s 正常。按用户建议「自动回退」而非假败/advisory：主仓复跑保硬门，
     // 并行噪声混入时失败输出带归属鉴定提示）

@@ -14,3 +14,4 @@ created_at: 2026-10-05T12:44:46.600Z
 - [x] task-02: lint 结果持久化：并入 test-result.json（modules 并列 lint 节）；test 无结果文件而 lint 实跑时独立落盘（kind:lint）；skipped 不落
 - [x] task-03: quick-audit failed 提升到 try 外，快照 FAIL 回拷（P6b）与 resultPath 重映射真实生效
 - [x] task-04: e2e 单测锁定全链路：lint 门 FAIL 输出件套 + test-result.json 含 lint 节（含 persistLintResult 三态单测）
+- [x] task-05: 评审处置（P1：test/lint 齐提升修 finally 重映射死代码；P2：e2e 补「lint 结果文件」段断言；P3：并入节 resultPath 预补齐 + design 并发措辞纠偏）

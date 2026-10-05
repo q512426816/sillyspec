@@ -88,6 +88,7 @@ test('② e2e：flow done lint 门 FAIL 输出 lint 命令/尾部/失败文件�
   assert.ok(out.includes('lint 输出尾部'), '输出尾部段在场')
   assert.ok(out.includes('src/work.js:1:1'), '尾部含失败行内容')
   assert.ok(out.includes('lint 失败文件') && out.includes('src/work.js'), '失败文件清单在场')
+  assert.ok(out.includes('lint 结果文件'), '结果文件段在场（评审处置：四段齐备）')
   // 持久化：test-result.json 含 lint 节（test 通过 → 并入分支）
   const runsDir = join(cwd, '.sillyspec', '.runtime', 'verify-runs')
   const dirs = readdirSync(runsDir).sort()
@@ -95,4 +96,5 @@ test('② e2e：flow done lint 门 FAIL 输出 lint 命令/尾部/失败文件�
   const tr = JSON.parse(readFileSync(join(runsDir, latest, 'test-result.json'), 'utf8'))
   assert.equal(tr.lint && tr.lint.status, 'failed', `test-result.json 含 lint 节（kind=${tr.kind || 'test'}）`)
   assert.equal(tr.lint.command, 'node lint-fail.js')
+  assert.ok(typeof tr.lint.resultPath === 'string' && tr.lint.resultPath.includes('test-result.json'), `并入节自带 resultPath（评审处置 P3：${tr.lint.resultPath}）`)
 })
