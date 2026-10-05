@@ -14,7 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -106,7 +106,8 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json �
   const s4 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
   const out4 = s4.stdout + s4.stderr
   assert.ok(out4.includes('审计时点漂移'), `漂移警告在场（尾部：${out4.split('\n').slice(-6).join(' | ')}）`)
-  assert.ok(existsSync(join(base, 'review.json.superseded')), '旧 review.json 已隔离为 .superseded')
+  const quarantined = readdirSync(base).find((f) => f.startsWith('review.json.superseded'))
+  assert.ok(!!quarantined, `旧 review.json 已隔离（时间戳槽位；目录实况：${readdirSync(base).join(',')}）`)
   assert.ok(!existsSync(join(base, 'review.json')), '隔离后 review.json 不在场（重评入口开）')
   const patch2 = readFileSync(join(base, 'change.patch'), 'utf8')
   assert.ok(patch2.includes('+++ b/src/work2.js'), '重冻结面含处置提交（按 diff hunk 头判）')

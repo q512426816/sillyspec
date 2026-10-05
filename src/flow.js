@@ -1133,19 +1133,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const { detectPatchDrift } = await import('./flow-parity.js')
       const drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
       if (drift.drifted) {
-        driftRefreeze = true
-        console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点，本次自动重冻结（等价 --refreeze）`)
+        console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
+        // 隔离先行（评审处置 P3：时间戳槽位防跨代覆盖——单槽 .superseded 在 Windows renameSync
+        // 同名碰撞会抛错；隔离失败则整体退回现状幂等跳过（fail-safe：漂移处理要么完整交付要么
+        // 不动，不留半套状态），指引人工处置后重跑）
         const reviewPath = join(changeDir, 'review.json')
+        let quarantineOk = true
         if (existsSync(reviewPath)) {
-          renameSync(reviewPath, reviewPath + '.superseded')
-          console.warn(`   旧 review.json 已隔离为 review.json.superseded（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
-        } else if (st.substeps?.review === 'done') {
-          console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
+          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+          try {
+            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+          } catch (e) {
+            quarantineOk = false
+            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
+          }
         }
-        if (st.substeps?.review === 'done') {
-          writeFlowState(changeDir, { substeps: { review: null } })
-          // 内存态同步重置：本函数后续 review 子步判的是开头快照 st（不重读盘），只写盘会照样跳过
-          if (st.substeps) st.substeps.review = null
+        if (quarantineOk) {
+          driftRefreeze = true
+          // 标记重置独立成块（评审处置 P3 窄路径：rename 与盘写不共 catch——隔离已成功而
+          // writeFlowState 失败时，内存重置保本运行正确，盘残留 done 由下轮漂移重检兜底）
+          if (st.substeps?.review === 'done') {
+            try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 下轮漂移重检兜底 */ }
+            if (st.substeps) st.substeps.review = null
+            if (!existsSync(reviewPath)) console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
+          }
         }
       }
     } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
