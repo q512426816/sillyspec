@@ -18,7 +18,7 @@ created_at: 2026-10-05T13:20:44.274Z
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
-flow-parity.js 新增导出 detectPatchDrift({cwd, change, freezeHead}) → {drifted, ownCommits, head}。flow done 行为变化：patch 已冻结且冻结锚..HEAD 有本变更后缀提交时，重跑自动重冻结 + review.json 改名 review.json.superseded（留档不删）+ review 重新定档（重评任务书再现）；无漂移（锚==HEAD/仅他侧或裸提交/锚缺失）时幂等跳过行为与现状逐字一致。change-patch.json 格式零变化（head 字段既有）。CLI 参数面无变化（--refreeze 人工口保留）。
+flow-parity.js 新增导出 detectPatchDrift({cwd, change, freezeHead}) → {drifted, ownCommits, head}。flow done 行为变化：patch 已冻结且冻结锚..HEAD 有本变更后缀提交时，重跑自动重冻结 + review.json 改名 review.json.superseded-<时间戳> 留档（评审处置 P3：时间戳槽位防跨代覆盖）+ review 重新定档（重评任务书再现）；隔离失败时整体退回现状幂等跳过（fail-safe——漂移处理要么完整交付要么不动，指引人工处置）。无漂移（锚==HEAD/仅他侧或裸提交/锚缺失）时幂等跳过行为与现状逐字一致。change-patch.json 格式零变化（head 字段既有）。CLI 参数面无变化（--refreeze 人工口保留）。未测边界披露（评审 P3）：隔离失败退回路径与「隔离成功+盘写失败」双故障残留（下轮 backfill 按 exempt 误读）需 I/O 故障注入方可锁定，本变更为注释与边界披露不作注入重构。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 

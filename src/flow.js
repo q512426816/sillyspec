@@ -1154,7 +1154,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 标记重置独立成块（评审处置 P3 窄路径：rename 与盘写不共 catch——隔离已成功而
           // writeFlowState 失败时，内存重置保本运行正确，盘残留 done 由下轮漂移重检兜底）
           if (st.substeps?.review === 'done') {
-            try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 下轮漂移重检兜底 */ }
+            // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
+            // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
+            // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
+            try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 见上边界注释 */ }
             if (st.substeps) st.substeps.review = null
             if (!existsSync(reviewPath)) console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
           }
