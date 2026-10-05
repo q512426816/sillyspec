@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { readV2SectionAnswer } from './flow-review.js'
@@ -185,11 +185,31 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
  * 非 .sillyspec/ 全留 + 本变更目录（治理工件）+ .sillyspec/docs/ 交付文档（dogfood 模块卡
  * 是交付物——2026-09-27-gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
  * 他侧 .sillyspec/changes/**（quicklog/knowledge WIP）仍滤除。反斜杠归一。
+ *
+ * 提交事实归属补位（2026-10-05-diff-commit-attribution）：现状「已提交即本变更的」前提是
+ * 单会话——多会话共享仓 baseline..HEAD 混入他侧交付（评审 P2 实证：他会话 knowledge-stats
+ * hunk 冻进本变更审计件）。在现状过滤后剔除「窗口内全部提交均属他侧变更名」的交付文件。
+ * 与否决决策 sentinel-evidence-freeze⑤ 的分界：按提交 message 变更名（既成事实）切，不按
+ * 任何变更的声明清单（该决策禁的是陈旧声明的意图抢夺）。best-effort：变更名自 ownPrefix
+ * 反解，baseline 自 flow-state.yaml 读取；不可得（非 git 仓/无 flow-state/git 失败/归档后
+ * 目录已移走）= 行为与旧版完全一致。保守：被无后缀裸提交触碰过的文件不剔（fail-closed）。
  */
-export function filterCommittedFace(committedRaw, ownPrefix) {
-  return committedRaw
+export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
+  const base = committedRaw
     .map((f) => String(f).replace(/\\/g, '/'))
     .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith(ownPrefix) || p.startsWith('.sillyspec/docs/'))
+  try {
+    const cwd = opts.cwd || process.cwd()
+    const pm = /^\.sillyspec\/changes\/([^/]+)\/$/.exec(String(ownPrefix || ''))
+    if (!pm) return base
+    const specBase = opts.specBase || join(cwd, '.sillyspec')
+    const attr = commitAttributionForChange(cwd, specBase, pm[1], opts.baselineCommit || null)
+    if (!attr) return base
+    return base.filter((p) => {
+      if (p.startsWith('.sillyspec/')) return true // 治理面归属已由上方现状口径裁决
+      return !isForeignByCommit(attr.get(p), pm[1])
+    })
+  } catch { return base }
 }
 
 /**

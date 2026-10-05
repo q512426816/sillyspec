@@ -203,6 +203,70 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
 }
 
 /**
+ * 提交标题 → 变更名数组（2026-10-05-diff-commit-attribution）：项目提交惯例 message 尾部
+ * 携带 "(2026-MM-DD-名)" 后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题
+ * 首部同名形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
+ */
+export function parseChangeNamesFromSubject(subject) {
+  const out = []
+  const re = /\((\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)\)/g
+  let m
+  while ((m = re.exec(String(subject || '')))) out.push(m[1])
+  return out
+}
+
+/**
+ * git log 文本（--format=%x00%s --name-only，每提交 NUL+标题+文件行）→ 文件提交归属映射。
+ * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过
+ * （归属不明，消费端必须保守保留——fail-closed 不因裸提交剔文件）。
+ */
+export function buildCommitAttribution(logText) {
+  const map = new Map()
+  for (const block of String(logText || '').split('\x00')) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+    if (lines.length === 0) continue
+    const names = parseChangeNamesFromSubject(lines[0])
+    for (const f of lines.slice(1)) {
+      const file = f.replace(/\\/g, '/')
+      let e = map.get(file)
+      if (!e) { e = { owners: new Set(), unknown: false }; map.set(file, e) }
+      if (names.length === 0) e.unknown = true
+      else for (const n of names) e.owners.add(n)
+    }
+  }
+  return map
+}
+
+/**
+ * 提交事实归属切分（2026-10-05-diff-commit-attribution）：声明面（collectForeignDeclaredFiles
+ * ②扫描）对已归档他侧变更不可见——他会话在 baseline..HEAD 窗口内交付并归档后目录进
+ * archive/（「archive/ 下不算」），其文件漏归本变更 → patch 冻结面夹带 + FR 域路由触达
+ * 他侧域（双 P1 实证）。按提交 message 变更名归属是已发生的提交事实，不是声明抢文件——
+ * 不触碰否决决策 sentinel-evidence-freeze⑤（其禁的是陈旧声明的意图抢夺）。
+ * baseline 自取：opts.baselineCommit 优先，缺省读当前变更 flow-state.yaml（调用点零改动）。
+ * @returns {Map|null} null=不可得（非 git 仓/无 baseline/git 失败）——消费端退化现状。
+ */
+export function commitAttributionForChange(cwd, specBase, currentChangeName, baselineCommit) {
+  try {
+    let base = baselineCommit || null
+    if (!base && currentChangeName) {
+      const st = readFileSync(join(specBase, 'changes', currentChangeName, 'flow-state.yaml'), 'utf8')
+      const m = /^baseline_commit:\s*(\S+)/m.exec(st)
+      if (m) base = m[1]
+    }
+    if (!base) return null
+    const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%s', `${base}..HEAD`], { trim: false })
+    if (r.value === null) return null
+    return buildCommitAttribution(r.value)
+  } catch { return null }
+}
+
+/** 纯他侧文件判定：有提交归属且全部提交均属他侧（无本变更名、无裸提交触碰）。 */
+export function isForeignByCommit(entry, currentChangeName) {
+  return !!entry && !entry.unknown && entry.owners.size > 0 && !entry.owners.has(currentChangeName)
+}
+
+/**
  * 按他者声明集切分 diff 文件（collectForeignDeclaredFiles 的消费端快捷封装）。
  *
  * own 优先（2026-09-09 坑 verify-reconcile-own-file-foreign-false-positive 修复）：文件在
@@ -214,7 +278,7 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
  * @param {string} cwd 项目根
  * @param {string|null} currentChangeName 本变更名
  * @param {string[]|null} diffFiles 待切分文件列表（null 透传，保持调用方 null 语义）
- * @param {{ specBase?: string, runtimeRoot?: string }} [opts] 平台模式路径（透传 collectForeignDeclaredFiles）
+ * @param {{ specBase?: string, runtimeRoot?: string, baselineCommit?: string }} [opts] 平台模式路径（透传 collectForeignDeclaredFiles）+ 显式 baseline（缺省自取 flow-state）
  * @returns {{ own: string[]|null, foreign: Array<{file: string, owners: string[]}> }}
  */
 export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, opts = {}) {
@@ -222,7 +286,9 @@ export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, op
   const specBase = opts.specBase || join(cwd, '.sillyspec')
   const runtimeRoot = opts.runtimeRoot || join(specBase, '.runtime')
   const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName, { specBase, runtimeRoot })
-  if (foreignMap.size === 0) return { own: diffFiles, foreign: [] }
+  // 提交事实归属补位（声明面归档盲区）：优先级 ownDeclared > 声明面 foreign > 提交归属 foreign > own
+  const commitAttr = commitAttributionForChange(cwd, specBase, currentChangeName, opts.baselineCommit)
+  if (foreignMap.size === 0 && !commitAttr) return { own: diffFiles, foreign: [] }
   const ownDeclared = loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName)
   const own = []
   const foreign = []
@@ -230,7 +296,9 @@ export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, op
     const n = String(f).replace(/\\/g, '/')
     if (ownDeclared.size > 0 && ownDeclared.has(n)) { own.push(f); continue } // own 优先
     const owners = foreignMap.get(n)
-    if (owners) foreign.push({ file: f, owners })
+    if (owners) { foreign.push({ file: f, owners }); continue }
+    const ce = commitAttr ? commitAttr.get(n) : null
+    if (isForeignByCommit(ce, currentChangeName)) foreign.push({ file: f, owners: [...ce.owners] })
     else own.push(f)
   }
   return { own, foreign }
