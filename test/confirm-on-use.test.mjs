@@ -67,7 +67,7 @@ test('②③ 注入面：unconfirmed 透传 + ⚪ 标记 + 抽查提示（至多
   const digest = r.lines.join(NL)
   assert.match(digest, /FR-core-001 .*⚪1未确认绑定/, '条目带 ⚪1未确认 标记')
   assert.match(digest, /抽查确认（至多 [12] 条.*FR-core-001/, '抽查提示点名未确认 anchor')
-  assert.match(digest, /tests confirm --anchor <id> --evidence/, '提示带 confirm 指引')
+  assert.match(digest, /tests --confirm --anchor <id> --evidence/, '提示带 confirm 指引（flag 形态，2026-10-05-tests-confirm-hint 修正）')
   const digest2 = readActiveFrDigest(f.knowledge, ['core'])
   assert.equal(digest2[0].unconfirmed, 1, 'readActiveFrDigest.unconfirmed 透传')
   // 确认后：标记消失、无抽查提示

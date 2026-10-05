@@ -13,3 +13,4 @@ created_at: 2026-10-05T13:49:30.016Z
 - [x] task-01: flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
 - [x] task-02: 全仓不再有「tests confirm 」（子命令形态）的提示残留
 - [x] task-03: 单测锁定提示语形态（防回漂）
+- [x] task-04: 测试门回归处置——confirm-on-use 既有断言同步 flag 形态（门禁真回归抓取）
