@@ -1,0 +1,473 @@
+diff --git a/.sillyspec/changes/2026-10-05-diff-commit-attribution/flow-state.yaml b/.sillyspec/changes/2026-10-05-diff-commit-attribution/flow-state.yaml
+new file mode 100644
+index 00000000..31209c51
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-diff-commit-attribution/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: b54538fb3b390b1a3b48945f4af8802b42cc5731
++updatedAt: '2026-10-05T04:38:09.286Z'
++baseline_sha256: a0ac5a4b34e7ac74eb12b7b6168939c28fd73591acd8e50a125fb6601afbb542
++
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 1383ee9a..ec89cff6 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -14,7 +14,7 @@
+ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+ import { join, relative } from 'node:path'
+ import { execFileSync } from 'node:child_process'
+-import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
++import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit } from './foreign-declared.js'
+ import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { readV2SectionAnswer } from './flow-review.js'
+@@ -185,11 +185,31 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
+  * 非 .sillyspec/ 全留 + 本变更目录（治理工件）+ .sillyspec/docs/ 交付文档（dogfood 模块卡
+  * 是交付物——2026-09-27-gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
+  * 他侧 .sillyspec/changes/**（quicklog/knowledge WIP）仍滤除。反斜杠归一。
++ *
++ * 提交事实归属补位（2026-10-05-diff-commit-attribution）：现状「已提交即本变更的」前提是
++ * 单会话——多会话共享仓 baseline..HEAD 混入他侧交付（评审 P2 实证：他会话 knowledge-stats
++ * hunk 冻进本变更审计件）。在现状过滤后剔除「窗口内全部提交均属他侧变更名」的交付文件。
++ * 与否决决策 sentinel-evidence-freeze⑤ 的分界：按提交 message 变更名（既成事实）切，不按
++ * 任何变更的声明清单（该决策禁的是陈旧声明的意图抢夺）。best-effort：变更名自 ownPrefix
++ * 反解，baseline 自 flow-state.yaml 读取；不可得（非 git 仓/无 flow-state/git 失败/归档后
++ * 目录已移走）= 行为与旧版完全一致。保守：被无后缀裸提交触碰过的文件不剔（fail-closed）。
+  */
+-export function filterCommittedFace(committedRaw, ownPrefix) {
+-  return committedRaw
++export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
++  const base = committedRaw
+     .map((f) => String(f).replace(/\\/g, '/'))
+     .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith(ownPrefix) || p.startsWith('.sillyspec/docs/'))
++  try {
++    const cwd = opts.cwd || process.cwd()
++    const pm = /^\.sillyspec\/changes\/([^/]+)\/$/.exec(String(ownPrefix || ''))
++    if (!pm) return base
++    const specBase = opts.specBase || join(cwd, '.sillyspec')
++    const attr = commitAttributionForChange(cwd, specBase, pm[1], opts.baselineCommit || null)
++    if (!attr) return base
++    return base.filter((p) => {
++      if (p.startsWith('.sillyspec/')) return true // 治理面归属已由上方现状口径裁决
++      return !isForeignByCommit(attr.get(p), pm[1])
++    })
++  } catch { return base }
+ }
+ 
+ /**
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index d63ffb44..cc734815 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -202,6 +202,70 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+   return set
+ }
+ 
++/**
++ * 提交标题 → 变更名数组（2026-10-05-diff-commit-attribution）：项目提交惯例 message 尾部
++ * 携带 "(2026-MM-DD-名)" 后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题
++ * 首部同名形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
++ */
++export function parseChangeNamesFromSubject(subject) {
++  const out = []
++  const re = /\((\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)\)/g
++  let m
++  while ((m = re.exec(String(subject || '')))) out.push(m[1])
++  return out
++}
++
++/**
++ * git log 文本（--format=%x00%s --name-only，每提交 NUL+标题+文件行）→ 文件提交归属映射。
++ * 每文件聚合：owners=触碰过它的全部提交携带的变更名；unknown=被无变更名裸提交触碰过
++ * （归属不明，消费端必须保守保留——fail-closed 不因裸提交剔文件）。
++ */
++export function buildCommitAttribution(logText) {
++  const map = new Map()
++  for (const block of String(logText || '').split('\x00')) {
++    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
++    if (lines.length === 0) continue
++    const names = parseChangeNamesFromSubject(lines[0])
++    for (const f of lines.slice(1)) {
++      const file = f.replace(/\\/g, '/')
++      let e = map.get(file)
++      if (!e) { e = { owners: new Set(), unknown: false }; map.set(file, e) }
++      if (names.length === 0) e.unknown = true
++      else for (const n of names) e.owners.add(n)
++    }
++  }
++  return map
++}
++
++/**
++ * 提交事实归属切分（2026-10-05-diff-commit-attribution）：声明面（collectForeignDeclaredFiles
++ * ②扫描）对已归档他侧变更不可见——他会话在 baseline..HEAD 窗口内交付并归档后目录进
++ * archive/（「archive/ 下不算」），其文件漏归本变更 → patch 冻结面夹带 + FR 域路由触达
++ * 他侧域（双 P1 实证）。按提交 message 变更名归属是已发生的提交事实，不是声明抢文件——
++ * 不触碰否决决策 sentinel-evidence-freeze⑤（其禁的是陈旧声明的意图抢夺）。
++ * baseline 自取：opts.baselineCommit 优先，缺省读当前变更 flow-state.yaml（调用点零改动）。
++ * @returns {Map|null} null=不可得（非 git 仓/无 baseline/git 失败）——消费端退化现状。
++ */
++export function commitAttributionForChange(cwd, specBase, currentChangeName, baselineCommit) {
++  try {
++    let base = baselineCommit || null
++    if (!base && currentChangeName) {
++      const st = readFileSync(join(specBase, 'changes', currentChangeName, 'flow-state.yaml'), 'utf8')
++      const m = /^baseline_commit:\s*(\S+)/m.exec(st)
++      if (m) base = m[1]
++    }
++    if (!base) return null
++    const r = safeGit(cwd, ['log', '--name-only', '--format=%x00%s', `${base}..HEAD`], { trim: false })
++    if (r.value === null) return null
++    return buildCommitAttribution(r.value)
++  } catch { return null }
++}
++
++/** 纯他侧文件判定：有提交归属且全部提交均属他侧（无本变更名、无裸提交触碰）。 */
++export function isForeignByCommit(entry, currentChangeName) {
++  return !!entry && !entry.unknown && entry.owners.size > 0 && !entry.owners.has(currentChangeName)
++}
++
+ /**
+  * 按他者声明集切分 diff 文件（collectForeignDeclaredFiles 的消费端快捷封装）。
+  *
+@@ -214,7 +278,7 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+  * @param {string} cwd 项目根
+  * @param {string|null} currentChangeName 本变更名
+  * @param {string[]|null} diffFiles 待切分文件列表（null 透传，保持调用方 null 语义）
+- * @param {{ specBase?: string, runtimeRoot?: string }} [opts] 平台模式路径（透传 collectForeignDeclaredFiles）
++ * @param {{ specBase?: string, runtimeRoot?: string, baselineCommit?: string }} [opts] 平台模式路径（透传 collectForeignDeclaredFiles）+ 显式 baseline（缺省自取 flow-state）
+  * @returns {{ own: string[]|null, foreign: Array<{file: string, owners: string[]}> }}
+  */
+ export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, opts = {}) {
+@@ -222,7 +286,9 @@ export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, op
+   const specBase = opts.specBase || join(cwd, '.sillyspec')
+   const runtimeRoot = opts.runtimeRoot || join(specBase, '.runtime')
+   const foreignMap = collectForeignDeclaredFiles(cwd, currentChangeName, { specBase, runtimeRoot })
+-  if (foreignMap.size === 0) return { own: diffFiles, foreign: [] }
++  // 提交事实归属补位（声明面归档盲区）：优先级 ownDeclared > 声明面 foreign > 提交归属 foreign > own
++  const commitAttr = commitAttributionForChange(cwd, specBase, currentChangeName, opts.baselineCommit)
++  if (foreignMap.size === 0 && !commitAttr) return { own: diffFiles, foreign: [] }
+   const ownDeclared = loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName)
+   const own = []
+   const foreign = []
+@@ -230,7 +296,9 @@ export function splitOwnVsForeignDiffFiles(cwd, currentChangeName, diffFiles, op
+     const n = String(f).replace(/\\/g, '/')
+     if (ownDeclared.size > 0 && ownDeclared.has(n)) { own.push(f); continue } // own 优先
+     const owners = foreignMap.get(n)
+-    if (owners) foreign.push({ file: f, owners })
++    if (owners) { foreign.push({ file: f, owners }); continue }
++    const ce = commitAttr ? commitAttr.get(n) : null
++    if (isForeignByCommit(ce, currentChangeName)) foreign.push({ file: f, owners: [...ce.owners] })
+     else own.push(f)
+   }
+   return { own, foreign }
+diff --git a/test/commit-attribution-split.test.mjs b/test/commit-attribution-split.test.mjs
+new file mode 100644
+index 00000000..b5db8235
+--- /dev/null
++++ b/test/commit-attribution-split.test.mjs
+@@ -0,0 +1,125 @@
++/**
++ * 提交事实归属切分（2026-10-05-diff-commit-attribution）
++ *
++ * 背景（双 P1 同根实证）：多会话共享仓 baseline..HEAD 混入他侧交付——
++ *   ① patch 冻结件夹带（他会话 knowledge-stats hunk 冻进本变更审计件，评审 P2）；
++ *   ② FR 域路由污染（他侧 src/knowledge-stats.js 匹配 core-engine paths → 本变更 FR 落错域）。
++ * 根因：归属切分器只认 active changes/ 声明面（archive/ 下不算）——他会话窗口内交付并归档后
++ * 声明不可见。修复：按提交 message 携带的变更名后缀（提交事实）切分，不按声明（不触否决
++ * 决策 sentinel-evidence-freeze⑤ 的「声明抢已提交文件」禁区）。
++ *
++ * 锁定语义：
++ *   1. 混窗集成：全部提交均属他侧变更名的文件 → 出 own 面（split）与 patch 冻结面（filter）
++ *   2. 保守保留：本变更名提交 / 无后缀裸提交触碰 / design 清单声明的文件恒 own
++ *   3. 降级现状：非 git 仓 / 无 flow-state baseline / git 失败 → 行为与旧版一致
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import {
++  parseChangeNamesFromSubject, buildCommitAttribution, isForeignByCommit,
++  splitOwnVsForeignDiffFiles,
++} from '../src/foreign-declared.js'
++import { filterCommittedFace } from '../src/flow-parity.js'
++
++const ME = '2026-10-05-my-change'
++const OTHER = '2026-10-05-other-change'
++
++test('① 解析纯函数：标题变更名提取与归属聚合', () => {
++  assert.deepEqual(parseChangeNamesFromSubject('fix(x): 修复 (2026-10-05-a-name) (2026-10-05-b)'), ['2026-10-05-a-name', '2026-10-05-b'])
++  assert.deepEqual(parseChangeNamesFromSubject('chore: misc'), [])
++  // 归档提交标题：chore(archive): 2026-10-05-x 归档留档——首部名无括号包裹不提取
++  assert.deepEqual(parseChangeNamesFromSubject('chore(archive): 2026-10-05-x 归档留档'), [])
++
++  const log = [
++    '\x00fix: 他侧交付 (OTHER)', 'src/other.js', '',
++    `\x00feat: 我的交付 (${ME})`, 'src/mine.js', '',
++    '\x00chore: misc', 'src/bare.js', '',
++    `\x00fix: 又一笔他侧 (OTHER)`, 'src\\win-path.js', '',
++  ].join('\n').replaceAll('OTHER', `(${OTHER})`)
++  const attr = buildCommitAttribution(log)
++  assert.deepEqual([...attr.get('src/other.js').owners], [OTHER])
++  assert.equal(attr.get('src/other.js').unknown, false)
++  assert.equal(isForeignByCommit(attr.get('src/other.js'), ME), true, '纯他侧 → foreign')
++  assert.equal(isForeignByCommit(attr.get('src/mine.js'), ME), false, '含本变更名 → own')
++  assert.equal(isForeignByCommit(attr.get('src/bare.js'), ME), false, '裸提交触碰 → 保守 own')
++  assert.equal(isForeignByCommit(attr.get('src/win-path.js'), ME), true, '反斜杠路径归一后命中')
++  assert.equal(isForeignByCommit(undefined, ME), false, '无记录 → own')
++})
++
++/** 构造真实 git 仓 + 混窗提交序列：base → 他侧交付 → 我的交付 → 裸提交 → 我的清单声明件。 */
++function mkMixedWindowRepo() {
++  const d = mkdtempSync(join(tmpdir(), 'catr-'))
++  const g = (cmd) => execSync(cmd, { cwd: d, encoding: 'utf8', windowsHide: true })
++  g('git init -q')
++  g('git config user.email t@t && git config user.name t')
++  writeFileSync(join(d, 'seed.txt'), 'seed')
++  g('git add seed.txt && git commit -q -m "chore: seed"')
++  const base = g('git rev-parse HEAD').trim()
++  // 我的 flow-state（baseline 自取面）+ design 清单（声明面）
++  const changesDir = join(d, '.sillyspec', 'changes', ME)
++  mkdirSync(changesDir, { recursive: true })
++  writeFileSync(join(changesDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
++  writeFileSync(join(changesDir, 'design.md'), `# d\n\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/declared.js | 声明件 |\n`)
++  g('git add .sillyspec && git commit -q -m "chore(wip)"')
++  // 他侧交付（他侧变更目录不存在——已归档，声明面不可见；纯靠提交归属识别）
++  writeFileSync(join(d, 'src-other.js'), 'other')
++  mkdirSync(join(d, 'src'))
++  writeFileSync(join(d, 'src', 'other.js'), 'other')
++  g('git add src-other.js src/other.js && git commit -q -m "feat(other): 他侧交付 (OTHER)"'.replaceAll('OTHER', OTHER))
++  // 我的交付
++  writeFileSync(join(d, 'src', 'mine.js'), 'mine')
++  writeFileSync(join(d, 'src', 'declared.js'), 'declared')
++  g('git add src/mine.js src/declared.js && git commit -q -m "feat(me): 我的交付 (ME)"'.replaceAll('ME', `(${ME})`))
++  // 裸提交（无变更名后缀）
++  writeFileSync(join(d, 'src', 'bare.js'), 'bare')
++  g('git add src/bare.js && git commit -q -m "chore: misc"')
++  const windowFiles = ['src/other.js', 'src-other.js', 'src/mine.js', 'src/declared.js', 'src/bare.js']
++  return { d, base, windowFiles }
++}
++
++test('② 混窗集成：他侧提交文件出 own 面与 patch 冻结面', () => {
++  const { d, windowFiles } = mkMixedWindowRepo()
++  try {
++    const r = splitOwnVsForeignDiffFiles(d, ME, windowFiles, {})
++    const ownSet = new Set(r.own)
++    assert.equal(ownSet.has('src/other.js'), false, '他侧深层文件被提交归属剔除')
++    assert.equal(ownSet.has('src-other.js'), false, '他侧根级文件被提交归属剔除')
++    assert.ok(r.foreign.some((x) => x.file === 'src/other.js' && x.owners.includes(OTHER)), `foreign 列表点名 owners: ${JSON.stringify(r.foreign)}`)
++    assert.equal(ownSet.has('src/mine.js'), true, '我的提交文件保留')
++    assert.equal(ownSet.has('src/bare.js'), true, '裸提交文件保守保留')
++    assert.equal(ownSet.has('src/declared.js'), true, '声明面文件保留')
++
++    const frozen = filterCommittedFace([...windowFiles, `${'.sillyspec/changes/' + ME}/design.md`, '.sillyspec/changes/2026-10-05-stranger/x.md'], `.sillyspec/changes/${ME}/`, { cwd: d })
++    const fSet = new Set(frozen)
++    assert.equal(fSet.has('src/other.js'), false, 'patch 冻结面剔除他侧纯提交文件')
++    assert.equal(fSet.has('src-other.js'), false, 'patch 冻结面剔除他侧根级文件')
++    assert.equal(fSet.has('src/mine.js'), true)
++    assert.equal(fSet.has('src/bare.js'), true, '裸提交文件不进剔除面（fail-closed）')
++    assert.equal(fSet.has(`.sillyspec/changes/${ME}/design.md`), true, '本变更治理面保留（现状口径）')
++    assert.equal(fSet.has('.sillyspec/changes/2026-10-05-stranger/x.md'), false, '他侧治理面滤除（现状口径）')
++  } finally {
++    try { rmSync(d, { recursive: true, force: true }) } catch {}
++  }
++})
++
++test('③ 降级现状：非 git 仓 / 无 flow-state → 行为与旧版一致', () => {
++  const d = mkdtempSync(join(tmpdir(), 'catr-plain-'))
++  try {
++    // 非 git 目录 + 空 specBase（无声明面、无 flow-state）→ own=输入全量
++    const r = splitOwnVsForeignDiffFiles(d, ME, ['src/a.js', 'src/b.js'], {})
++    assert.deepEqual(r.own, ['src/a.js', 'src/b.js'])
++    assert.deepEqual(r.foreign, [])
++    // filterCommittedFace：ownPrefix 反解出变更名但 flow-state 不可得 → 现状过滤原样
++    const list = ['src/a.js', '.sillyspec/QUICKLOG.md', '.sillyspec/docs/x.md']
++    const frozen = filterCommittedFace(list, `.sillyspec/changes/${ME}/`, { cwd: d })
++    assert.deepEqual(frozen, ['src/a.js', '.sillyspec/docs/x.md'])
++    // 非标准 ownPrefix（无变更名可反解）→ 纯现状
++    assert.deepEqual(filterCommittedFace(list, 'x/'), ['src/a.js', '.sillyspec/docs/x.md'])
++  } finally {
++    try { rmSync(d, { recursive: true, force: true }) } catch {}
++  }
++})
+diff --git a/.sillyspec/changes/2026-10-05-diff-commit-attribution/design.md b/.sillyspec/changes/2026-10-05-diff-commit-attribution/design.md
+new file mode 100644
+index 00000000..6a246fdf
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-diff-commit-attribution/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:38:09.259Z
++---
++# 设计记录（Design Record）— 2026-10-05-diff-commit-attribution
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++新增「提交事实归属」切分器：一次 `git log --name-only --format=<NUL>+<subject>` 拿到 baseline..HEAD 每个提交的 message 与触碰文件，解析 message 携带的变更名后缀（项目提交惯例 `(2026-MM-DD-名)`），按文件聚合出「全量提交均属他侧变更」的文件集。接入两处，且都在函数内部自取 baseline_commit（读当前变更 flow-state.yaml，或从 ownPrefix 反解变更名）——flow.js 调用点零改动（该文件并行会话在途）：① `foreign-declared.js` 的 `splitOwnVsForeignDiffFiles` 把提交归属并入 foreignMap（与既有声明面合并）；② `flow-parity.js` 的 `filterCommittedFace` 在现状过滤后剔除纯他侧提交的交付文件。选提交事实而非扩大声明面扫描（扫 archive/）的原因：提交归属是已发生的事实行刑，不违反否决决策 sentinel-evidence-freeze⑤（其禁的是「陈旧声明抢已提交文件」——意图抢夺）；扫 archive/ 反而会让历史归档变更的清单永久参与抢文件，正是该决策要防的。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新增导出 `parseChangeNamesFromSubject(subject)`（纯函数：提交标题 → 变更名数组）与 `buildCommitAttribution(logText)`（纯函数：git log 文本 → Map<file,{owners:Set,unknown:boolean}>）；`splitOwnVsForeignDiffFiles` 与 `filterCommittedFace` 签名不变（新逻辑经 opts/自取注入，缺省与旧调用完全兼容）。CLI 无变化；行为变化仅一处——多会话混窗时他侧纯提交文件不再进本变更冻结面与 own 面。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：git log 读取的是已定序的提交历史（DAG 线性化），无乱序输入面；单次快照读取，无事件流。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   只读 git 历史与 flow-state.yaml；竞态窗口内他侧新提交可能未被本次快照看到——后果是少剔一个他侧文件（保守方向，与现状等价），不会误剔自己的文件。自身无任何写面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全：无中间态落盘（每次调用即时算即时用）；flow-state.yaml 读取失败即降级现状行为。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：归属计算全部限定在当前仓当前变更的 baseline..HEAD 窗口内，不读他仓、不写任何共享状态；临时仓/主仓/会话专属 worktree 各自独立计算。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：提交 message 未携带变更名后缀的裸提交会污染归属（用户手提交 `fix: typo` 触碰过他侧文件 → 该文件判 unknown → 保留 own → 漏剔）——fail-closed 方向（多冻不错杀），与现状等价不劣化；文档化于 FR-02。放弃的方案：①扫 archive/ 下变更的声明清单参与 foreignMap——历史变更清单永久抢文件，恰是否决决策 sentinel-evidence-freeze⑤ 防的形态，且 7 天陈旧规则对已归档目录语义混乱；②按提交作者 email 归属——多会话共用同一 git 身份（本仓两实测会话同 user），作者维度无区分度；③改 flow.js 调用点显式传 baseline——该文件并行会话在途，整文件提交会夹带他侧未提交改动（规则 11），故全部改为函数内自取。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/foreign-declared.js | 新增 parseChangeNamesFromSubject/buildCommitAttribution 导出；split 内自取 baseline 并合并提交归属进 foreignMap |
++| 修改 | src/flow-parity.js | filterCommittedFace 现状过滤后剔除纯他侧提交文件（best-effort git） |
++| 新增 | test/commit-attribution-split.test.mjs | 解析纯函数单测 + 临时 git 仓混窗集成 + 降级现状三面 |
+diff --git a/.sillyspec/changes/2026-10-05-diff-commit-attribution/proposal.md b/.sillyspec/changes/2026-10-05-diff-commit-attribution/proposal.md
+new file mode 100644
+index 00000000..1a0acbc4
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-diff-commit-attribution/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:38:09.259Z
++---
++# 提案书（Proposal）— 2026-10-05-diff-commit-attribution
++
++## 动机
++
++任务原话转写：两个 P1 同根：多会话共享仓 baseline..HEAD 混入他侧交付——① patch 冻结件夹带（评审实证：他会话 knowledge-stats 的 hunk 进了本变更审计件）② FR 域路由污染（他侧 src/knowledge-stats.js 匹配 core-engine paths → 本变更 FR 落错域）。根因：归属切分器只认 active changes/ 声明面（archive/ 下不算——他会话窗口内交付并归档后声明不可见）；patch 面另有否决决策 sentinel-evidence-freeze⑤ 禁声明切分（防陈旧声明抢已提交文件——但那是意图抢文件，非提交事实）。修法：新增提交事实归属切分——按提交 message 携带的变更名后缀（项目提交惯例）判每个文件的窗口内提交归属；foreign-declared.js 的 splitOwnVsForeignDiffFiles 与 flow-parity.js 的 filterCommittedFace 内部自取 baseline_commit（不改 flow.js 调用点）：前者并入 foreignMap，后者剔除「全部提交均属他侧变更」的交付文件。保守规则：无后缀裸提交触碰的文件不剔（fail-closed）；含本变更名的文件恒 own；ownDeclared 声明优先级不变。
++成功标准：
++- 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
++- 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
++- 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
++- 新增测试锁定上述三面，全量测试绿
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
++2. 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
++3. 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
++4. 新增测试锁定上述三面，全量测试绿
++
++## 成功标准（可验证）
++
++1. 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
++2. 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
++3. 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
++4. 新增测试锁定上述三面，全量测试绿
+diff --git a/.sillyspec/changes/2026-10-05-diff-commit-attribution/requirements.md b/.sillyspec/changes/2026-10-05-diff-commit-attribution/requirements.md
+new file mode 100644
+index 00000000..fe9f1658
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-diff-commit-attribution/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:38:09.259Z
++---
++# 需求规格（Requirements）— 2026-10-05-diff-commit-attribution
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
++
++baseline..HEAD 窗口内，凡「全部提交均携带他侧变更名后缀」的交付文件必须被提交事实归属切分判为他侧：禁止进入本变更的 patch 冻结面（filterCommittedFace）与归属文件面（splitOwnVsForeignDiffFiles 的 own——即实测面与 FR 域路由的输入）；归属依据必须是提交 message 携带的变更名（提交事实），而非任何变更的声明清单（不触碰否决决策 sentinel-evidence-freeze⑤ 的「声明抢已提交文件」禁区）。
++
++#### 场景：主路径
++
++- Given：临时 git 仓，本变更 start 后他侧会话提交 `src/other.js`（message 含 `(他侧变更名)`）并归档其变更目录
++- When：本变更收口跑 `filterCommittedFace` 与 `splitOwnVsForeignDiffFiles`
++- Then：`src/other.js` 不在冻结面与 own 面；本变更自己提交的文件不受影响
++
++### FR-02: 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
++
++归属切分必须保守：文件窗口内任一提交携带本变更名 → 恒判本变更；文件被无变更名后缀的裸提交触碰过（归属不明）→ 禁止剔除（fail-closed 保留）；本变更 design 清单/quick 声明的文件优先级必须保持最高（ownDeclared 先于任何提交归属判定）。
++
++#### 场景：主路径
++
++- Given：本变更窗口内含本变更自己提交的 `src/mine.js`、被裸提交 `chore: misc` 触碰过的 `src/shared.js`、design 清单声明的 `src/declared.js`
++- When：跑归属切分
++- Then：三者均判本变更（own），无一被误剔
++
++### FR-03: 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
++
++既有行为必须零回归：active 变更声明面的优先级与合并语义不变；7 天陈旧忽略规则不变；非 git 仓 / git 命令失败 / flow-state 无 baseline_commit 时必须退化为现状行为（不切分、不剔除），禁止因新逻辑引入新的失败面。
++
++#### 场景：降级面
++
++- Given：cwd 为非 git 目录（或 git 调用超时失败）
++- When：跑 splitOwnVsForeignDiffFiles / filterCommittedFace
++- Then：行为与改动前一致（own=输入全集，无剔除），无异常抛出
++
++### FR-04: 新增测试锁定上述三面，全量测试绿
++
++上述三面必须有自动化测试锁定（混窗剔除 / 保守保留 / 降级现状），含临时 git 仓的真实提交集成场景与解析纯函数单测；全量测试套必须绿，既有 foreign-declared / filter-committed-face / foreign-own-priority 断言零回归。
++
++#### 场景：主路径
++
++- Given：新增测试文件
++- When：单独运行与全量运行
++- Then：三面断言全过，既有断言不变绿
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/commit-attribution-split.test.mjs「混窗集成：他侧提交文件出冻结面与 own 面」
++FR-02: test/commit-attribution-split.test.mjs「保守保留：本变更名/裸提交/声明文件不误剔」
++FR-03: test/commit-attribution-split.test.mjs「降级现状：非 git 仓与无 baseline 行为不变」
++FR-04: test/commit-attribution-split.test.mjs「三面断言齐全 + 解析纯函数单测」
+diff --git a/.sillyspec/changes/2026-10-05-diff-commit-attribution/tasks.md b/.sillyspec/changes/2026-10-05-diff-commit-attribution/tasks.md
+new file mode 100644
+index 00000000..0926b4d8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-diff-commit-attribution/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:38:09.259Z
++---
++# 任务注册表（Tasks）— 2026-10-05-diff-commit-attribution
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-diff-commit-attribution --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-diff-commit-attribution` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
++- [x] task-02: 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
++- [x] task-03: 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
++- [x] task-04: 新增测试锁定上述三面，全量测试绿

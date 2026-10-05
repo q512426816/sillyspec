@@ -5928,3 +5928,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-review-promise-negation
   status: active
+
+## FR-cli-entry-314 集成场景（临时 git 仓双变更混窗）：他侧提交的交付文件不进本变更 patch 冻结面与 attributedChangedFiles，FR 域不再触达他侧文件的域
+变更：2026-10-05-diff-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-diff-commit-attribution/requirements.md#FR-01
+最近确认：45588742ca2f30629a406720cbb28aa270418ceb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-diff-commit-attribution:flow:测试绑定FR-01
+  tests: test/commit-attribution-split.test.mjs「混窗集成：他侧提交文件出冻结面与 own 面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-diff-commit-attribution
+  status: active
+
+## FR-cli-entry-315 本变更提交的文件（含被无后缀裸提交触碰过的）归属不变
+变更：2026-10-05-diff-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-diff-commit-attribution/requirements.md#FR-02
+最近确认：45588742ca2f30629a406720cbb28aa270418ceb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-diff-commit-attribution:flow:测试绑定FR-02
+  tests: test/commit-attribution-split.test.mjs「保守保留：本变更名/裸提交/声明文件不误剔」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-diff-commit-attribution
+  status: active
+
+## FR-cli-entry-316 声明面优先级、7 天陈旧规则、非 git 仓与 git 失败的行为均维持现状
+变更：2026-10-05-diff-commit-attribution
+状态：active
+摘要：降级面
+全文：.sillyspec/changes/archive/2026-10-05-diff-commit-attribution/requirements.md#FR-03
+最近确认：45588742ca2f30629a406720cbb28aa270418ceb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-diff-commit-attribution:flow:测试绑定FR-03
+  tests: test/commit-attribution-split.test.mjs「降级现状：非 git 仓与无 baseline 行为不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-diff-commit-attribution
+  status: active
+
+## FR-cli-entry-317 新增测试锁定上述三面，全量测试绿
+变更：2026-10-05-diff-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-diff-commit-attribution/requirements.md#FR-04
+最近确认：45588742ca2f30629a406720cbb28aa270418ceb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-diff-commit-attribution:flow:测试绑定FR-04
+  tests: test/commit-attribution-split.test.mjs「三面断言齐全 + 解析纯函数单测」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-diff-commit-attribution
+  status: active

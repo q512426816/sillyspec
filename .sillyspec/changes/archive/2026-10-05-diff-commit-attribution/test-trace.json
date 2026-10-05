@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-diff-commit-attribution",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-diff-commit-attribution:flow:测试绑定FR-01",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「混窗集成：他侧提交文件出冻结面与 own 面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-diff-commit-attribution"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-diff-commit-attribution:flow:测试绑定FR-02",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「保守保留：本变更名/裸提交/声明文件不误剔」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-diff-commit-attribution"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-diff-commit-attribution:flow:测试绑定FR-03",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「降级现状：非 git 仓与无 baseline 行为不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-diff-commit-attribution"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-diff-commit-attribution:flow:测试绑定FR-04",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「三面断言齐全 + 解析纯函数单测」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-diff-commit-attribution"
+    }
+  ]
+}
