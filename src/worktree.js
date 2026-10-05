@@ -1232,8 +1232,12 @@ export class WorktreeManager {
       const meta = parseJSON(readFileSync(metaPath, 'utf8'));
       if (!meta) continue;
       results.push({
-        changeName: meta.changeName,
-        branch: meta.branch,
+        // 缺字段 meta 读侧归一化（2026-10-05-wt-list-resilience）：注册表目录名恒由
+        // create() 以 validateChangeName 过的变更名创建，是缺 changeName 件（e2e/旧版
+        // 写入形态残留）的权威事实；branch 缺失展示 '-'。消费端（CLI list 渲染的
+        // i.changeName.length、doctor 孤儿匹配的 metaNames）都要求 string。
+        changeName: typeof meta.changeName === 'string' && meta.changeName ? meta.changeName : entry.name,
+        branch: typeof meta.branch === 'string' && meta.branch ? meta.branch : '-',
         baseHash: meta.baseHash,
         baseBranch: meta.baseBranch,
         createdAt: meta.createdAt,
