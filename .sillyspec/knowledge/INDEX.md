@@ -170,3 +170,4 @@
 - docs-consistency|FR|需求|承接 → [fr/docs-consistency.md](fr/docs-consistency.md)
 - hooks|FR|需求|承接 → [fr/hooks.md](fr/hooks.md)
 - worktree|FR|需求|承接 → [fr/worktree.md](fr/worktree.md)
+- auto-assets|assets|FR|需求|承接 → [fr/auto-assets.md](fr/auto-assets.md)

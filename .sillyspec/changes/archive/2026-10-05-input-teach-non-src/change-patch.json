@@ -1,0 +1,55 @@
+{
+  "change": "2026-10-05-input-teach-non-src",
+  "baseline": "4a51e0fdc341a5fc7865430254086f5f2a089067",
+  "head": "c38dacd49ea5676df369b24cc1078a477cfa5f25",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    ".sillyspec/changes/2026-10-05-input-teach-non-src/design.md",
+    ".sillyspec/changes/2026-10-05-input-teach-non-src/requirements.md",
+    ".sillyspec/changes/2026-10-05-input-teach-non-src/tasks.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "assets/command-cards/flow.md",
+    "assets/command-cards/run-quick.md",
+    "templates/agents-instruction.md",
+    "test/input-teach-copyable.test.mjs",
+    ".sillyspec/changes/2026-10-05-input-teach-non-src/proposal.md"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 248,
+    "deletions": 19
+  },
+  "savedAt": "2026-10-05T15:17:06.494Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": "assets/command-cards",
+      "files": 2
+    },
+    {
+      "dir": ".claude/skills/sillyspec-flow",
+      "files": 1
+    },
+    {
+      "dir": "templates",
+      "files": 1
+    },
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "44f61951583ae90b139ee1e3de265e7994c1c9d835784bd89ec3cdf224c6c13d",
+  "patchStatus": "ok"
+}

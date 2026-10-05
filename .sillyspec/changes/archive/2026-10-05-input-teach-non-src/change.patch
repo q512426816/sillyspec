@@ -1,0 +1,390 @@
+diff --git a/.claude/skills/sillyspec-flow/SKILL.md b/.claude/skills/sillyspec-flow/SKILL.md
+index 88071efe..d6407d35 100644
+--- a/.claude/skills/sillyspec-flow/SKILL.md
++++ b/.claude/skills/sillyspec-flow/SKILL.md
+@@ -16,11 +16,13 @@ description: 轻量变更（默认快道）——需求明确的小/中改动两
+ ### ① flow start（立项 + 锁基线）
+ 
+ ```bash
+-sillyspec flow start --change <变更名> --input "<需求>"
++sillyspec flow start --change <变更名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
+ ```
+ 
+-`--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+-先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
++`--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：引号内换行合法，上方命令即完整可照抄实例。
+ 
+ 变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字——`--input` 首行写这句即成标题（缺省取首行推导），或显式 `--title "<标题>"` 指定（重入 start 可改）。
+ 
+diff --git a/AGENTS.md b/AGENTS.md
+index eebf90e1..9876792f 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -10,9 +10,16 @@
+ | 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+ | 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+-| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
++| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
+ 
+-`--input` 过门格式（轻量道首次调用即过，勿靠报错学）：动机/背景在前；随后独立一行只写「成功标准：」；再每行一条 `- <可验证标准>`。
++`--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
++
++```bash
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
++```
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+diff --git a/CLAUDE.md b/CLAUDE.md
+index ec3e3bf9..b4cb094c 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -11,7 +11,14 @@
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"` → 直接干活 → `sillyspec flow done --change <名>`（quick 通道已退役 v3.30.0 起，仅存量在途会话可 --done/--cancel 收尾）。
++4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`（quick 通道已退役 v3.30.0 起，仅存量在途会话可 --done/--cancel 收尾）。`--input` 引号内换行合法，下例可照抄：
++
++   ```bash
++   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++
++   成功标准：
++   - <可验证标准>"
++   ```
+ 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+ 6. **判规模选档**：≤3 文件、范围明确走轻量变更；多阶段 / 架构级走完整流程。
+ 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `flow start --input "<已做改动＋成功标准>"` → `flow done` 收尾，把已落盘改动如实登记为变更级归档。
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index 44632ec6..2e31571a 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -10,8 +10,11 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
+ 
+ ```bash
+ export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
+-# ① 立项 + 锁基线（--input 缺「成功标准」条目会被清晰度门拦下）：
+-sillyspec flow start --change <变更名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"
++# ① 立项 + 锁基线（--input 引号内换行合法，可照抄；缺「成功标准」条目会被清晰度门拦下）：
++sillyspec flow start --change <变更名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
+ # ② 直接干活：改代码写测试；填 design.md 四节 AGENT 槽（空槽 flow done 拒收）；逐条勾 tasks.md 的 task-NN
+ #    交付代码显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交不进审计件）
+ # ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档）：
+diff --git a/assets/command-cards/run-quick.md b/assets/command-cards/run-quick.md
+index 1e3bbe01..dc499cfb 100644
+--- a/assets/command-cards/run-quick.md
++++ b/assets/command-cards/run-quick.md
+@@ -9,7 +9,10 @@ quick 通道已于 v3.31.0 直接退役：`sillyspec run quick` 对新会话一
+ 范围明确的小修补请走**轻量变更**（/sillyspec:flow）：
+ 
+ ```bash
+-sillyspec flow start --change <变更名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"
++sillyspec flow start --change <变更名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
+ # → 直接干活（改代码写测试，治理工件 CLI 机器起草）
+ sillyspec flow done --change <变更名>
+ ```
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 35695fdb..806d1e1d 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -9,7 +9,16 @@
+ | 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+ | 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+-| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
++| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
++
++`--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
++
++```bash
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
++```
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+diff --git a/test/input-teach-copyable.test.mjs b/test/input-teach-copyable.test.mjs
+index f96fcb15..279f8401 100644
+--- a/test/input-teach-copyable.test.mjs
++++ b/test/input-teach-copyable.test.mjs
+@@ -14,14 +14,26 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { readFileSync } from 'node:fs'
+-import { join } from 'node:path'
++import { readFileSync, readdirSync } from 'node:fs'
++import { join, relative } from 'node:path'
+ import { extractSuccessCriteria } from '../src/flow-draft.js'
+ 
+ const ROOT = join(import.meta.dirname, '..')
+ const read = (p) => readFileSync(join(ROOT, p), 'utf8')
+ 
+-/** 分号内联教学所在文件（2026-10-05-flow-help-status 实测定位 7 处 + 本变更零残留断言新抓 3 处：command.js 两处、stage.js 一处） */
++/** 递归列出目录下指定扩展名文件（workspace 相对路径，/ 分隔——跨平台） */
++const listFiles = (dir, exts) =>
++  readdirSync(join(ROOT, dir), { recursive: true, withFileTypes: true })
++    .filter((e) => e.isFile() && exts.some((x) => e.name.endsWith(x)))
++    .map((e) => relative(ROOT, join(e.parentPath, e.name)).replace(/\\/g, '/'))
++
++/** 分号内联旧形态（照抄提取 0 条——探针实证） */
++const SEMICOLON_FORM = '--input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"'
++
++/** 倒推行引号内联模糊形态（2026-10-05-input-teach-non-src 清零对象） */
++const VAGUE_FORM = '--input "<已做改动的描述＋成功标准>"'
++
++/** src 教学点定点文件（实例在场断言——2026-10-05-flow-help-status 实测定位 7 处 + 零残留断言新抓 3 处） */
+ const TEACH_FILES = [
+   'src/run/command.js',
+   'src/flow.js',
+@@ -31,13 +43,25 @@ const TEACH_FILES = [
+   'src/run/stage.js',
+ ]
+ 
+-/** 分号内联旧形态（照抄提取 0 条——探针实证） */
+-const SEMICOLON_FORM = '--input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"'
++/** 非 src 教学面：定点文件 + 递归目录（init 分发源与本仓已装副本） */
++const NON_SRC_FILES = ['AGENTS.md', 'CLAUDE.md']
++const NON_SRC_DIRS = ['assets/command-cards', '.claude/skills', 'templates']
+ 
+-test('① 分号内联教学形态零残留', () => {
+-  for (const p of TEACH_FILES) {
+-    assert.ok(!read(p).includes(SEMICOLON_FORM), `${p} 无分号内联形态`)
+-  }
++test('① 分号内联教学形态零残留（src 递归遍历——2026-10-05-input-teach-non-src 升级，防新文件回流）', () => {
++  const files = listFiles('src', ['.js', '.mjs', '.cjs'])
++  assert.ok(files.length > 50, `递归扫描面有效（实际 ${files.length} 文件）`)
++  const hits = files.filter((p) => read(p).includes(SEMICOLON_FORM))
++  assert.deepEqual(hits, [], `src 零残留（命中：${hits.join(', ')}）`)
++})
++
++test('①b 非 src 教学面分号形态零残留（逐字三处清零）', () => {
++  const files = [
++    ...NON_SRC_FILES,
++    ...NON_SRC_DIRS.flatMap((d) => listFiles(d, ['.md'])),
++  ]
++  assert.ok(files.length >= 15, `非 src 扫描面有效（实际 ${files.length} 文件）`)
++  const hits = files.filter((p) => read(p).includes(SEMICOLON_FORM))
++  assert.deepEqual(hits, [], `非 src 教学面零残留（命中：${hits.join(', ')}）`)
+ })
+ 
+ test('② 各教学处带可照抄多行实例', () => {
+@@ -51,6 +75,19 @@ test('② 各教学处带可照抄多行实例', () => {
+   assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')
+ })
+ 
++test('②b 非 src 教学面实例在场与模糊形态清零', () => {
++  // 逐字三处（CLAUDE.md / flow.md 卡 / run-quick.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
++  for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'assets/command-cards/run-quick.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
++    const src = read(p)
++    assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行`)
++    assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)
++  }
++  // 倒推行引号内联模糊形态清零（AGENTS.md 与模板源）
++  for (const p of ['AGENTS.md', 'templates/agents-instruction.md']) {
++    assert.ok(!read(p).includes(VAGUE_FORM), `${p} 无倒推行模糊引号形态`)
++  }
++})
++
+ test('③ 实例核心形态可提取成功标准（缩进容忍）', () => {
+   const flat = extractSuccessCriteria('<动机与背景>\n\n成功标准：\n- <可验证标准>')
+   assert.ok(flat.length >= 1, '顶格实例形态提取 ≥ 1 条')
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-non-src/design.md b/.sillyspec/changes/2026-10-05-input-teach-non-src/design.md
+new file mode 100644
+index 00000000..99f04969
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-non-src/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:10:12.699Z
++---
++# 设计记录（Design Record）— 2026-10-05-input-teach-non-src
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++src 教学可照抄化（2026-10-05-input-teach-copyable）向非 src 教学面推广：逐字可照抄三处（CLAUDE.md/flow.md 卡/run-quick.md 卡）改多行实例——命令卡在 bash fenced block 内直接多行化，CLAUDE.md 列表项内嵌 fenced 实例；描述式两处（AGENTS.md 过门格式说明、sillyspec-flow SKILL.md）升级为实例块；倒推行两处（AGENTS.md 选道表 + templates/agents-instruction.md 模板源同款行）引号内联模糊形态改为「格式同上」引用式表述（markdown 表格单元格不可换行，故用引用而非内嵌实例）。同步处置评审 P3：input-teach-copyable.test.mjs ① 断言从定点 6 文件升级为 src 递归遍历（readdirSync 递归 + 排除项），新增 ①b/②b 非 src 面断言。改源不改分发副本的原因：assets/command-cards、.claude/skills、templates/agents-instruction.md 均为 init 分发源（command-cards.js 从 assets 读卡、init.js 从 templates 读 AGENTS 模板、从包内 .claude/skills 复制 SKILL），改源即断新装项目旧形态；本仓 AGENTS.md/CLAUDE.md 为 dogfood 已装副本，一并手改对齐。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名变化。文档/资产面变化：assets/command-cards/flow.md 与 run-quick.md 卡内命令示例多行化；CLAUDE.md 第 4 条教学实例化；AGENTS.md 过门格式说明补 fenced 实例、选道表倒推行表述改写；.claude/skills/sillyspec-flow/SKILL.md 过门格式说明实例化；templates/agents-instruction.md 选道表倒推行同步改写；test/input-teach-copyable.test.mjs 断言升级（① 递归化 + ①b/②b 新增）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用——纯静态文档/模板文案与测试断言，无输入事件流。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用——文档编辑由本会话串行提交；init 分发按尾锚三态幂等（既有机制，本变更不改分发逻辑）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用——已 init 项目不会自动重装（同版本不更新，AGENTS.md 头注语义）；旧副本留存旧形态属可接受存量（本仓自管副本已手改对齐）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用——源资产随 npm 包分发，各项目独立安装副本；本变更只改包内源与本仓副本。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++风险：已 init 存量项目的 AGENTS.md/命令卡仍是旧形态（同版本不更新机制）——接受，存量项目下次大版本 init 会覆盖；新装项目从本变更起拿到可照抄形态。另一风险：CLAUDE.md 各项目形态各异（本仓是 dogfood 特有完整版），改动不可迁移——本变更只对本仓与包内源负责。试过但放弃：倒推行表格单元格内嵌多行实例（markdown 表格不支持换行，<br> 形态在 markdown 源码里不可照抄）——改用「格式同上」引用式表述。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | assets/command-cards/flow.md | 卡内 flow start 教学改多行实例 |
++| 修改 | assets/command-cards/run-quick.md | 重定向卡内教学改多行实例 |
++| 修改 | CLAUDE.md | 第 4 条轻量变更教学内嵌 fenced 实例 |
++| 修改 | AGENTS.md | 过门格式说明补 fenced 实例；选道表倒推行改引用式表述 |
++| 修改 | .claude/skills/sillyspec-flow/SKILL.md | 过门格式说明升级实例块 |
++| 修改 | templates/agents-instruction.md | 选道表倒推行同步改引用式表述（init 模板源） |
++| 修改 | test/input-teach-copyable.test.mjs | ① src 递归遍历升级 + ①b/②b 非 src 面断言新增 |
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-non-src/requirements.md b/.sillyspec/changes/2026-10-05-input-teach-non-src/requirements.md
+new file mode 100644
+index 00000000..1f3a03da
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-non-src/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:10:12.699Z
++---
++# 需求规格（Requirements）— 2026-10-05-input-teach-non-src
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
++
++CLAUDE.md、assets/command-cards/flow.md、assets/command-cards/run-quick.md 中禁止残留分号内联形态 `--input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`；三处必须给出含真实换行的可照抄多行实例（`成功标准：` 独立行 + `- <可验证标准>` 条目行），与 src 教学同口径。
++
++#### 场景：主路径
++
++- Given：Claude 会话读 CLAUDE.md 或命令卡（init 分发的 sillyspec:flow / sillyspec:run-quick 卡）
++- When：agent 照抄卡内实例命令运行 flow start
++- Then：extractSuccessCriteria 提取 ≥ 1 条成功标准，清晰度门放行
++
++### FR-02: AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
++
++AGENTS.md 过门格式说明行与 .claude/skills/sillyspec-flow/SKILL.md 的描述式教学必须升级为含真实换行的可照抄实例；AGENTS.md 选道表倒推行与模板源 templates/agents-instruction.md 同行的引号内联模糊形态 `--input "<已做改动的描述＋成功标准>"` 必须改为引用过门格式的表述（不再教引号内联形态）。
++
++#### 场景：主路径
++
++- Given：agent 从 AGENTS.md 过门格式说明或 sillyspec-flow SKILL.md 学 --input 写法
++- When：照抄实例运行 flow start
++- Then：提取 ≥ 1 条成功标准过门；倒推收尾场景 agent 按过门格式组织 --input（不再照抄模糊引号形态）
++
++### FR-03: 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
++
++既有零残留断言必须从定点 6 文件升级为 src 目录递归遍历（评审 P3 处置——防新文件回流不捕获）；必须新增非 src 教学面断言：分号形态与倒推行模糊引号形态在 AGENTS.md/CLAUDE.md/assets/command-cards/、.claude/skills/、templates/ 零残留，逐字三处（CLAUDE.md/命令卡）与描述式两处（AGENTS.md/SKILL.md）实例组成部分在场。
++
++#### 场景：主路径
++
++- Given：本变更已合入
++- When：向 src 新增含分号形态的文件、或向非 src 教学面回流感形态
++- Then：测试失败（递归遍历与面锁定捕获）
++
++### FR-04: 相关测试全部通过
++
++本变更触达的测试面必须全部通过（含 input-teach-copyable 既有断言不回退）。
++
++#### 场景：主路径
++
++- Given：6 文件改动与测试升级已就位
++- When：运行本变更测试集
++- Then：全部 pass
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/input-teach-copyable.test.mjs「①b 非 src 教学面分号形态零残留（逐字三处）」
++FR-02: test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场与模糊形态清零」
++FR-03: test/input-teach-copyable.test.mjs「① 分号内联教学形态零残留（src 递归遍历升级）」
++FR-04: test/input-teach-copyable.test.mjs 全量 + test/input-format-copy.test.mjs「② 教学点均带可照抄多行实例」
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-non-src/tasks.md b/.sillyspec/changes/2026-10-05-input-teach-non-src/tasks.md
+new file mode 100644
+index 00000000..879153e9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-non-src/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:10:12.699Z
++---
++# 任务注册表（Tasks）— 2026-10-05-input-teach-non-src
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-input-teach-non-src --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-input-teach-non-src` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
++- [x] task-02: AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
++- [x] task-03: 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
++- [x] task-04: 相关测试全部通过
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-non-src/proposal.md b/.sillyspec/changes/2026-10-05-input-teach-non-src/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-non-src/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:10:12.699Z
++---
++# 提案书（Proposal）— 2026-10-05-input-teach-non-src
++
++## 动机
++
++任务原话转写：2026-10-05-input-teach-copyable 独立评审 P2：src 教学可照抄化后，分号内联形态在非 src 教学面逐字存活且可整行照抄——CLAUDE.md:14、assets/command-cards/flow.md:14、assets/command-cards/run-quick.md:12（照抄必提取 0 条 exit 2，同根因失败模式）；另有描述式教学 2 处（AGENTS.md:15、.claude/skills/sillyspec-flow/SKILL.md:23）与倒推行引号内联模糊形态 2 处（AGENTS.md:13、templates/agents-instruction.md:12，为 AGENTS.md/模板源同款）。评审 P3：零残留断言为定点 6 文件扫描非递归，未来新文件回流不捕获。本变更把非 src 教学面统一为可照抄实例，断言升级为 src 递归遍历 + 非-src 面锁定。
++
++成功标准：
++- CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
++- AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
++- 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
++- 相关测试全部通过
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
++2. AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
++3. 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
++4. 相关测试全部通过
++
++## 成功标准（可验证）
++
++1. CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
++2. AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
++3. 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
++4. 相关测试全部通过

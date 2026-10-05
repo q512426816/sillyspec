@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-input-teach-non-src",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-input-teach-non-src:flow:测试绑定FR-01",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「①b 非 src 教学面分号形态零残留（逐字三处）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-non-src"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-input-teach-non-src:flow:测试绑定FR-02",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场与模糊形态清零」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-non-src"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-input-teach-non-src:flow:测试绑定FR-03",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「① 分号内联教学形态零残留（src 递归遍历升级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-non-src"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-input-teach-non-src:flow:测试绑定FR-04",
+      "tests": [
+        "test/input-format-copy.test.mjs「② 教学点均带可照抄多行实例」",
+        "test/input-teach-copyable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-non-src"
+    }
+  ]
+}
