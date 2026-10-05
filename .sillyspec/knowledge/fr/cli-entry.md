@@ -6707,3 +6707,98 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-input-teach-copyable
   status: active
+
+## FR-cli-entry-355 flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
+变更：2026-10-05-flow-tail-polish
+状态：active
+摘要：主路径；降级兜底
+全文：.sillyspec/changes/archive/2026-10-05-flow-tail-polish/requirements.md#FR-01
+最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-tail-polish:flow:测试绑定FR-01
+  tests: test/flow-tail-polish.test.mjs「归档补暂存含未跟踪归档目录 + knowledge 待办清单提示（源码级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-tail-polish
+  status: active
+
+## FR-cli-entry-356 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
+变更：2026-10-05-flow-tail-polish
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flow-tail-polish/requirements.md#FR-02
+最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-tail-polish:flow:测试绑定FR-02
+  tests: test/flow-tail-polish.test.mjs「实测面对账文案含并集去重语义（源码级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-tail-polish
+  status: active
+
+## FR-cli-entry-357 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
+变更：2026-10-05-flow-tail-polish
+状态：active
+摘要：主路径；回退
+全文：.sillyspec/changes/archive/2026-10-05-flow-tail-polish/requirements.md#FR-03
+最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-tail-polish:flow:测试绑定FR-03
+  tests: test/flow-tail-polish.test.mjs「重入 digest 回填 input：flow-state 优先 proposal 回退（行为级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-tail-polish
+  status: active
+
+## FR-cli-entry-358 flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
+变更：2026-10-05-flow-tail-polish
+状态：active
+摘要：主路径；在场
+全文：.sillyspec/changes/archive/2026-10-05-flow-tail-polish/requirements.md#FR-04
+最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-tail-polish:flow:测试绑定FR-04
+  tests: test/flow-tail-polish.test.mjs「flow status 不存在 exit 1 / 在场 exit 0（行为级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-tail-polish
+  status: active
+
+## FR-cli-entry-359 相关测试全部通过
+变更：2026-10-05-flow-tail-polish
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flow-tail-polish/requirements.md#FR-05
+最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-tail-polish:flow:测试绑定FR-05
+  tests: test/flow-protocol.test.mjs | test/flow-tail-polish.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-tail-polish
+  status: active

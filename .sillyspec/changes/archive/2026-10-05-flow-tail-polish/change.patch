@@ -1,0 +1,450 @@
+diff --git a/src/flow.js b/src/flow.js
+index 5d61c60b..d906517d 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -499,7 +499,18 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
+     let resumeDigest = { lines: [], summary: null }
+     try {
+-      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
++      // 重入注入回填（2026-10-05-flow-tail-polish）：input:null 会把注入降级为「语料未命中」，
++      // 首次 start 给的抽查确认指引断点恢复后丢失——flow-state.input 优先，proposal 动机
++      // 「任务原话转写：」剥前缀回退（存量 change 无 input 字段走此路；「（未提供 --input）」占位视为空）。
++      let resumeInput = typeof st.input === 'string' && st.input.trim() ? st.input : null
++      if (!resumeInput) {
++        try {
++          const pText = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
++          const m = /任务原话转写：([^\n]+)/.exec(pText)
++          if (m && !m[1].includes('（未提供 --input）')) resumeInput = m[1].trim()
++        } catch { /* proposal 回退 best-effort */ }
++      }
++      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: resumeInput, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
+     } catch { /* 注入 best-effort */ }
+     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
+     return { recovery: true }
+@@ -563,6 +574,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     born_face: thick ? 'thick' : 'thin',
+     with_tasks: Boolean(withTasks),
+     review_force: reviewForce,
++    // input 原文留存（2026-10-05-flow-tail-polish）：重入 start 知识注入回填的优先源
++    // （增量字段——读侧缺省容错，存量 change 走 proposal 转写回退）
++    input: typeof input === 'string' ? input : null,
+     // autopilot（2026-10-04-thin-docs-v2 FR-06）：用户显式声明跳过 spec 断点人审（--autopilot）；
+     // 缺省 false——flow done 要求 flow approve 批准证据（spec 断点机器化，护栏#2：零 prompt 劝说）
+     autopilot: Boolean(autopilot),
+@@ -1790,6 +1804,9 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
+       } else {
+         console.log(`❓ ${change}：变更不存在`)
++        // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
++        // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走下方正常展示路径 exit 0
++        process.exit(1)
+       }
+       return
+     }
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index ff301d61..2f861ec4 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -858,9 +858,16 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+   // pathspec 把并行会话同目录未提交文件夹带进共享暂存区）：改为窄化——changes 侧只 add 本变更
+   // 归档目录 archive/<destName>/，docs 侧按 module-impact「更新结果」done 行精确文件集（提取
+   // 失败回退目录级 + 前置 warning，见 archiveNarrowedGitAdd）。
++  // destName 推导（2026-10-05-flow-tail-polish 根因修复）：本链签名无 destName——此前下方
++  // 调用引用未声明标识符抛 ReferenceError 被空 catch 静默吞，archiveNarrowedGitAdd 在 flow
++  // done 路径从未生效（归档目录/knowledge/docs 自动暂存全失效，靠 agent 手工兜底——实测
++  // porcelain 实证）。basename(destDir) 与调用方 destDir 恒一致（flow.js 与 run archive 同构）。
++  const destName = basename(destDir)
+   try {
+     archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
+-  } catch {}
++  } catch (e) {
++    console.warn(`⚠️ 归档窄化 git add 异常（不阻断归档，交付面靠下方探测块兜底/agent git status 核对）: ${(e && e.message) || e}`)
++  }
+ 
+   // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
+   // 并行变更的手动归档把 R 残留（源目录 rename 目标行）留在暂存区；本变更归档提交时
+@@ -875,6 +882,10 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+       const changesPrefix = '.sillyspec/changes/'
+       const minePaths = []
+       const othersResidual = []
++      // 兜底信号（2026-10-05-flow-tail-polish）：正常路径 archiveNarrowedGitAdd 已暂存归档目录
++      // 与 knowledge——这两个信号只在窄化 add 失败降级时非空/置位
++      let untrackedArchiveHit = false
++      const knowledgePending = []
+       for (const line of raw.split('\n')) {
+         if (!line || line.length < 4) continue
+         const x = line[0], y = line[1]
+@@ -894,6 +905,16 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+                     || p.startsWith(changesPrefix + 'archive/' + changeName + '/'))) {
+             minePaths.push(p)
+           }
++        } else if (x === '?' && y === '?') {
++          // 未跟踪兜底：归档新目录（目录聚合/逐文件两形态都收，archive/<me>/ 专属本变更零共享）
++          if (dst === `${changesPrefix}archive/${changeName}/` || dst.startsWith(`${changesPrefix}archive/${changeName}/`)) {
++            untrackedArchiveHit = true
++          } else if (dst.startsWith('.sillyspec/knowledge/')) {
++            knowledgePending.push(dst)
++          }
++        } else if (x === ' ' && y === 'M' && dst.startsWith('.sillyspec/knowledge/')) {
++          // knowledge 未暂存修改（同兜底语义）
++          knowledgePending.push(dst)
+         }
+       }
+       if (minePaths.length > 0) {
+@@ -906,6 +927,23 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+         }
+         console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
+       }
++      if (untrackedArchiveHit) {
++        // 文件级枚举补暂存（守 AGENTS.md 规则 11 不用目录级 add；实际仅窄化 add 降级时可达）
++        try {
++          const archFiles = []
++          const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else archFiles.push(p) } }
++          walk(destDir)
++          const rel = archFiles.map((p) => relative(cwd, p).replace(/\\/g, '/'))
++          for (const batch of chunkPaths(rel)) safeGit(cwd, ['add', '--', ...batch])
++          console.log(`🧾 已补暂存未跟踪的归档目录文件（${rel.length} 项，archive/${changeName}/ 专属本变更——窄化 add 降级兜底）`)
++        } catch (e) {
++          console.warn(`⚠️ 归档目录兜底补暂存失败（请手工 git add -- .sillyspec/changes/archive/${changeName}/ 下文件）: ${(e && e.message) || e}`)
++        }
++      }
++      if (knowledgePending.length > 0) {
++        console.log(`📎 归档提交待办（knowledge 蒸馏产物未暂存——核对归属后随归档提交一并带上）：`)
++        console.log(`   git add -- ${knowledgePending.join(' ')}`)
++      }
+       if (othersResidual.length > 0) {
+         const owners = [...new Set(othersResidual)].filter(Boolean)
+         console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index b40368ab..fa99c172 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2030,7 +2030,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+     // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
+     // 全量语义留 CI / 显式 test_strategy: full。
+     const frCount = frPre && frPre.files.length ? frPre.files.length : 0
+-    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
++    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+     mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+   } else {
+     // —— dynamic-empty：变更与测试面零关系——
+diff --git a/test/flow-checkpoints.test.mjs b/test/flow-checkpoints.test.mjs
+index a986f9d1..c1d76f88 100644
+--- a/test/flow-checkpoints.test.mjs
++++ b/test/flow-checkpoints.test.mjs
+@@ -42,9 +42,9 @@ test('① 简报含三断点纪律', () => {
+ 
+ test('② flow status 三态：不存在/进行中/已归档', () => {
+   const { cwd, cli } = makeRepo()
+-  // 不存在
++  // 不存在（2026-10-05-flow-tail-polish 起 exit 1：查询目标缺失=运行错，exit 0 无法与「存在但无进度」区分）
+   const none = cli(['flow', 'status', '--change', '2026-09-01-fc-none'])
+-  assert.equal(none.status, 0)
++  assert.equal(none.status, 1)
+   assert.match(none.stdout, /不存在/)
+   // 进行中
+   assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+diff --git a/test/flow-tail-polish.test.mjs b/test/flow-tail-polish.test.mjs
+new file mode 100644
+index 00000000..76ce14ae
+--- /dev/null
++++ b/test/flow-tail-polish.test.mjs
+@@ -0,0 +1,82 @@
++/**
++ * 2026-10-05-flow-tail-polish 回归：轻量道收口与查询四摩擦点
++ *
++ * 三轮轻量道实测（flow-help-status / input-teach-copyable / input-teach-non-src）发现：
++ * ① flow done 归档后 git 半成品（归档新目录 untracked、knowledge 未暂存、无清单）
++ * ② 实测面对账数字口径不透明（deps 12 + FR 绑定 52 = 53 并集去重语义未说明）
++ * ③ 重入 flow start 知识注入消失（digest input:null，「语料未命中」误导）
++ * ④ flow status 查不存在变更 exit 0（脚本无法区分不存在）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++
++/** 造临时 git 仓 + local.yaml（thin 轻量跑道）。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'ftp-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e 0"\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd }
++}
++
++const cli = (cwd, args) => spawnSync(process.execPath, [CLI, ...args], {
++  cwd, encoding: 'utf8', timeout: 180_000,
++  env: { ...process.env, SILLYSPEC_WATCHER: '0', SILLYSPEC_SESSION_ID: 'ftp-test' },
++})
++
++test('FR-01 归档补暂存含未跟踪归档目录 + knowledge 待办清单提示（源码级）', () => {
++  const src = read('src/run/complete-handlers.js')
++  // untracked（??）归档目录分支在场——归档新目录文件级补暂存
++  assert.ok(src.includes("x === '?'") && src.includes("y === '?'"), '探测块含 untracked 状态分支')
++  assert.ok(/archive['"`/]+ ?\+ ?changeName|archive\/' \+ changeName/.test(src), 'untracked 分支限本变更 archive/<me>/')
++  // knowledge 未暂存 → 打印待办清单提示（不自动暂存）
++  assert.ok(src.includes('knowledge'), '探测块覆盖 knowledge 路径')
++  assert.ok(src.includes('归档提交待办'), 'knowledge 待提交清单提示在场')
++})
++
++test('FR-02 实测面对账文案含并集去重语义（源码级）', () => {
++  const src = read('src/verify-postcheck.js')
++  const line = src.split('\n').find((l) => l.includes('动态测试子集（缺省）'))
++  assert.ok(line, '动态测试子集对账行在场')
++  assert.ok(line.includes('并集去重'), '子集数注明并集去重语义')
++})
++
++test('FR-03 flow-state 落 input 字段 + 重入回填逻辑（行为级 + 源码级）', () => {
++  const { cwd } = makeRepo()
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-i', '--input', '任务动机\n成功标准：\n- 行为 X'])
++  assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
++  const state = readFileSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-ftp-i', 'flow-state.yaml'), 'utf8')
++  assert.ok(/input:/.test(state), 'flow-state.yaml 落 input 字段')
++  // 源码级：重入 digest 回填（st.input ?? proposal 转写剥前缀）
++  const flowSrc = read('src/flow.js')
++  assert.ok(/input: ?(st\.input|resumeInput)/.test(flowSrc), '重入 digest 回填 input')
++  assert.ok(flowSrc.includes('任务原话转写：'), 'proposal 动机转写回退路径在场')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('FR-04 flow status 不存在 exit 1 / 在场 exit 0（行为级）', () => {
++  const { cwd } = makeRepo()
++  const miss = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-none'])
++  assert.equal(miss.status, 1, `不存在应 exit 1（实际 ${miss.status}）`)
++  assert.ok((miss.stdout + miss.stderr).includes('变更不存在'), '保留「变更不存在」文案')
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-ok', '--input', '任务动机\n成功标准：\n- 行为 X'])
++  assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
++  const hit = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-ok'])
++  assert.equal(hit.status, 0, `在场应 exit 0（实际 ${hit.status}）`)
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-10-05-flow-tail-polish/design.md b/.sillyspec/changes/2026-10-05-flow-tail-polish/design.md
+new file mode 100644
+index 00000000..4ad700a8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flow-tail-polish/design.md
+@@ -0,0 +1,55 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:23:16.287Z
++---
++# 设计记录（Design Record）— 2026-10-05-flow-tail-polish
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++四点小修打包：① 根因修复——runArchiveChain 862 行调用 archiveNarrowedGitAdd 时引用未声明标识符 destName，ReferenceError 被外层空 catch{} 静默吞：窄化自动暂存（530 归档目录/543 knowledge 逐文件/571 docs 精确集）在 flow done 路径从未生效，三轮实测「归档后 git 半成品」全是该静默失败的表现。修三层：destName 从 destDir 的 basename 推导（修复后 narrowed add 恢复工作，knowledge 逐文件自动暂存是既有已裁决设计——543 按文件级 status 窄化非目录级，注释明示追加型共享面权衡）；catch{} 改 console.warn 留痕（静默吞正是本次排查难的根因）；探测块加第二道兜底——`??` untracked 归档新目录文件级补暂存（chunkPaths 分批，限 archive/<me>/ 专属零共享）+ knowledge 未暂存项「归档提交待办」清单提示（仅 narrowed add 失败降级时可见，此时人核后提交）。② verify-postcheck.js 对账文案补「并集去重」四字语义。③ flow.js 重入分支 digest 回填 input：writeFlowState 在 start 落 input 字段（增量字段，读侧缺省容错），重入时 st.input ?? proposal.md 动机「任务原话转写：」剥前缀回退。④ flow.js status 分支不存在变更从裸 return 改 process.exit(1)（查询目标缺失=运行错；gate 域不存在场景 exit 2 是用法错语义不同，此处保持 1）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++flow-state.yaml 增量字段 `input`（写侧 start 落盘，读侧缺省容错——存量 change 无此字段不受影响）；flow status exit code 行为变化：查不存在变更 0→1；flow done 归档输出增两条（补暂存归档目录行 + knowledge 待办清单行）；实测子集对账文案措辞。无导出函数签名变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用——四点均为收口尾部一次性动作/查询路径/文案，无事件流。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++knowledge 待办清单只提示不自动暂存——并发 distill 场景他侧 knowledge 文件不会被本变更误 stage（自动 add 的误伤面正是本设计拒绝自动化的原因）；归档目录补暂存限 archive/<me>/ 专属目录零共享。porcelain 扫描与 add 间存在 TOCTOU 窗口——safeGit add 对不存在路径报错被既有 try/catch 吞（best-effort 语义不变）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++flow-state 增量字段：旧版 CLI 读新字段忽略、新版 CLI 读旧文件缺省 undefined 走 proposal 回退——双向兼容；重入 digest 回填失败（proposal 解析空）降级为现状（input:null），不阻断恢复。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用——归档补暂存与 status 查询均限本仓本变更；flow-state.input 是 change 目录内私有字段。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++风险：exit 0→1 是行为变化，依赖旧语义（用 exit 0 判断"查询完成"）的脚本会翻——接受，脚本按惯例以非零为异态，旧行为无法区分不存在才是隐患；machine-interface.test.mjs:420 的 exit 2 断言属 gate execute 域（用法错）不受影响。归档窄化 add 修复后 knowledge 自动入暂存恢复——既有设计已裁决该权衡（文件级 status 窄化非目录级，追加型共享面整文件提交与惯例一致）；兜底层（narrowed add 失败时）才降级为提示不自动暂存。试过但放弃：knowledge 兜底层也自动补暂存——放弃理由：降级场景下无法确认 narrowed add 失败原因，人核后提交更稳（AGENTS.md 规则 11 同因）；再试过：flow-state 不加字段、纯 proposal 回退——放弃理由：proposal 转写含「（未提供 --input）」占位与人工改写风险，state 直存是更可靠的原始面。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/run/complete-handlers.js | 归档探测块扩展：untracked 归档目录文件级补暂存 + knowledge 待办清单提示 |
++| 修改 | src/verify-postcheck.js | 动态测试子集对账文案补「并集去重」语义 |
++| 修改 | src/flow.js | 重入 digest 回填 input（st.input ?? proposal 转写）；flow status 不存在 exit 1；writeFlowState 落 input 字段 |
++| 修改 | test/flow-checkpoints.test.mjs | flow status 三态断言同步（不存在 0→1，FR-04 预期行为变化） |
++| 新增 | test/flow-tail-polish.test.mjs | FR-01/02 源码级断言 + FR-03/04 行为级断言（makeRepo harness） |
+diff --git a/.sillyspec/changes/2026-10-05-flow-tail-polish/requirements.md b/.sillyspec/changes/2026-10-05-flow-tail-polish/requirements.md
+new file mode 100644
+index 00000000..3248499a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flow-tail-polish/requirements.md
+@@ -0,0 +1,87 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:23:16.287Z
++---
++# 需求规格（Requirements）— 2026-10-05-flow-tail-polish
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
++
++flow done 归档链（src/run/complete-handlers.js runArchiveChain）必须修复根因：862 行 archiveNarrowedGitAdd 调用引用了作用域中未声明的 destName 标识符，ReferenceError 被外层空 catch{} 静默吞——窄化自动暂存（归档目录 archive/<me>/ + knowledge 蒸馏产物 + docs 面）在 flow done 路径从未生效（三轮实测 porcelain 实证）。修复必须：destName 从 destDir basename 推导；catch{} 改留痕 warn（静默吞是排查难的根因）；补暂存探测块加 ??（untracked）归档新目录文件级兜底与 knowledge 未暂存待办清单提示（narrowed add 失败降级时的第二道兜底）。
++
++#### 场景：主路径
++
++- Given：change 走完 flow done 八子步
++- When：归档链执行 archiveNarrowedGitAdd（destName 修复后）
++- Then：归档新目录与 knowledge 蒸馏产物均已 staged（porcelain 无 `?? archive/<me>/` 与未暂存 knowledge 项）
++
++#### 场景：降级兜底
++
++- Given：archiveNarrowedGitAdd 再度异常（留痕 warn）
++- When：探测块扫描 porcelain
++- Then：`??` 归档新目录按文件级 pathspec 补暂存（限本变更 archive/<me>/）；knowledge 未暂存项打印「归档提交待办」git add 清单提示（不自动暂存，人核后提交）
++
++### FR-02: 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
++
++动态测试子集对账文案（src/verify-postcheck.js）必须注明子集数是 deps 与 FR 绑定分量的并集去重后的值（消除「deps 12 + FR 绑定 52 = 53」的算术困惑）。
++
++#### 场景：主路径
++
++- Given：flow done 实测子集输出
++- When：渲染「动态测试子集」行
++- Then：文案含「并集去重」语义说明
++
++### FR-03: 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
++
++重入 flow start 的知识 digest（src/flow.js 恢复分支）不得传 input:null——必须回填：flow-state 存有 input 字段时优先用之，否则从 proposal.md 动机节「任务原话转写：」后读回；重入简报必须保持知识注入与抽查确认指引可见（不再显示误导性的「语料未命中知识库」当首次 start 有注入时）。
++
++#### 场景：主路径
++
++- Given：change 首次 start 带有效 --input 且知识库有触达域命中
++- When：重跑 flow start（不带 --input）
++- Then：恢复简报含知识注入行（与首次同源信息），非「语料未命中知识库」
++
++#### 场景：回退
++
++- Given：存量 change 的 flow-state 无 input 字段
++- When：重入 flow start
++- Then：从 proposal.md 动机转写回填 input，注入照常
++
++### FR-04: flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
++
++flow status（src/flow.js status 分支）查不存在的变更必须 exit 1（查询目标缺失——运行错非用法错），输出保留「变更不存在」文案；查在场变更（active/archived）仍 exit 0。行为测试必须锁定两形态。
++
++#### 场景：主路径
++
++- Given：变更不在场
++- When：sillyspec flow status --change <名>
++- Then：exit 1，stderr/stdout 含「变更不存在」
++
++#### 场景：在场
++
++- Given：活跃变更在场
++- When：sillyspec flow status --change <名>
++- Then：exit 0（现状保持）
++
++### FR-05: 相关测试全部通过
++
++本变更触达的测试面必须全部通过（含 flow-protocol/archive-tail-consistency 等回归不破）。
++
++#### 场景：主路径
++
++- Given：五点实现与测试就位
++- When：运行本变更测试集
++- Then：全部 pass
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-tail-polish.test.mjs「归档补暂存含未跟踪归档目录 + knowledge 待办清单提示（源码级）」
++FR-02: test/flow-tail-polish.test.mjs「实测面对账文案含并集去重语义（源码级）」
++FR-03: test/flow-tail-polish.test.mjs「重入 digest 回填 input：flow-state 优先 proposal 回退（行为级）」
++FR-04: test/flow-tail-polish.test.mjs「flow status 不存在 exit 1 / 在场 exit 0（行为级）」
++FR-05: test/flow-tail-polish.test.mjs 全量 + test/flow-protocol.test.mjs 回归
+diff --git a/.sillyspec/changes/2026-10-05-flow-tail-polish/tasks.md b/.sillyspec/changes/2026-10-05-flow-tail-polish/tasks.md
+new file mode 100644
+index 00000000..858540d6
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flow-tail-polish/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:23:16.287Z
++---
++# 任务注册表（Tasks）— 2026-10-05-flow-tail-polish
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-flow-tail-polish --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-flow-tail-polish` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
++- [x] task-02: 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
++- [x] task-03: 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
++- [x] task-04: flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
++- [x] task-05: 相关测试全部通过
+diff --git a/.sillyspec/changes/2026-10-05-flow-tail-polish/proposal.md b/.sillyspec/changes/2026-10-05-flow-tail-polish/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-flow-tail-polish/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:23:16.287Z
++---
++# 提案书（Proposal）— 2026-10-05-flow-tail-polish
++
++## 动机
++
++任务原话转写：三轮轻量道实测（flow-help-status / input-teach-copyable / input-teach-non-src）发现四个收口与查询摩擦点：① flow done 报「归档注销」但 git 侧留半成品——只补暂存源侧移动（x=' ' 的 D/A/M 限 changes 目录），归档新目录（?? changes/archive/<me>/）与 distill 写的 knowledge 更新（changes 目录外）均不暂存也无清单，agent 要自己翻 git log 拼 pathspec（三轮均手工拼 15 项）；② 实测面对账数字口径不透明——「动态测试子集 = 53 个（deps 12 + FR 绑定 52）」12+52≠53，并集去重语义未说明（verify-postcheck.js:2033）；③ 重入 flow start 知识注入消失——重入分支 digest 传 input:null，「语料未命中知识库」误导且首次 start 给的抽查确认指引（FR-cli-entry-324/325）断点恢复后不可见；④ flow status 查不存在的变更 exit 0（flow.js:1792 return 不设 exit）——脚本无法区分「存在但无进度」与「不存在」。
++
++成功标准：
++- flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
++- 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
++- 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
++- flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
++- 相关测试全部通过
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
++2. 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
++3. 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
++4. flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
++5. 相关测试全部通过
++
++## 成功标准（可验证）
++
++1. flow done 归档子步补暂存未跟踪的归档新目录（文件级 pathspec，限本变更 archive/<me>/），归档后仍有未暂存的 distill 产物（knowledge 路径）时打印待提交清单提示
++2. 实测面对账文案注明「并集去重」语义（子集数=deps+FR 绑定分量并集去重后的值）
++3. 重入 flow start 知识 digest 回填 input（flow-state 存 input 优先、proposal 动机转写回退），重入简报保持注入与抽查确认指引可见
++4. flow status 查不存在的变更改非零 exit（exit 1）且输出保留「变更不存在」文案，查在场变更仍 exit 0，测试锁定两形态
++5. 相关测试全部通过

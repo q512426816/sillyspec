@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-flow-tail-polish",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-flow-tail-polish:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-tail-polish.test.mjs「归档补暂存含未跟踪归档目录 + knowledge 待办清单提示（源码级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-tail-polish"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-flow-tail-polish:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-tail-polish.test.mjs「实测面对账文案含并集去重语义（源码级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-tail-polish"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-flow-tail-polish:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-tail-polish.test.mjs「重入 digest 回填 input：flow-state 优先 proposal 回退（行为级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-tail-polish"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-flow-tail-polish:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-tail-polish.test.mjs「flow status 不存在 exit 1 / 在场 exit 0（行为级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-tail-polish"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-05-flow-tail-polish:flow:测试绑定FR-05",
+      "tests": [
+        "test/flow-protocol.test.mjs",
+        "test/flow-tail-polish.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-tail-polish"
+    }
+  ]
+}
