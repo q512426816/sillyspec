@@ -134,6 +134,33 @@ test('降级声明行级共现口径：跨行不误配', () => {
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('降级判定绑定窗口（2026-10-05-visual-downgrade-narrow）：裸降级与远距视觉词同行不再误判', () => {
+  // 元层误伤句——2026-10-05-uivisual-word-narrow design 风险节实测原文（降级谈探针档位、样式谈词表）
+  const dir1 = makeChangeDir({
+    proposal: '前端页面调整',
+    design: '最大风险：误漏。缓解：探针 12 的 error 档（降级无裁决）不依赖词表触发条件的变化；且「渲染/组件/样式」词表误伤已收窄。',
+  })
+  // 后端降级语境——降级谈性能、样式谈日志格式
+  const dir2 = makeChangeDir({
+    proposal: '前端页面调整',
+    design: '性能降级时切换只读模式，输出样式保持单行紧凑格式。',
+  })
+  try {
+    assert.equal(runUiVisualProbe({ changeDir: dir1, gate: 'warn' }).downgradeDeclared, false, '元层误伤句（探针档位讨论+词名词）不再判降级声明')
+    assert.equal(runUiVisualProbe({ changeDir: dir2, gate: 'warn' }).downgradeDeclared, false, '后端降级语境（性能/日志格式）不再判降级声明')
+  } finally { for (const d of [dir1, dir2]) rmSync(d, { recursive: true, force: true }) }
+})
+
+test('降级判定窗口内绑定仍命中：视觉收敛降级/降级在前形态', () => {
+  // 窗口内绑定（视觉+2字+降级=既有正例形态；降级在前视觉在后=窗口另一侧）
+  const dir1 = makeChangeDir({ proposal: '前端页面调整', design: 'FR-04：变更详情页六组视觉收敛降级为保留既有五卡' })
+  const dir2 = makeChangeDir({ proposal: '前端页面调整', design: '本期将整体降级为简化样式，保留信息密度' })
+  try {
+    assert.equal(runUiVisualProbe({ changeDir: dir1, gate: 'warn' }).downgradeDeclared, true, '视觉收敛降级（视觉+2字+降级）仍命中')
+    assert.equal(runUiVisualProbe({ changeDir: dir2, gate: 'warn' }).downgradeDeclared, true, '降级在前视觉词在后（≤6字）仍命中')
+  } finally { for (const d of [dir1, dir2]) rmSync(d, { recursive: true, force: true }) }
+})
+
 /* ── 3. local.yaml 档位读取 ── */
 
 test('readUiVisualGate：三档 + 缺席默认 warn + CRLF 容错', () => {

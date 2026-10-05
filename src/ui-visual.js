@@ -77,7 +77,12 @@ export function readUiVisualGate(specBase) {
   }
 }
 
-const DOWNGRADE_LINE = /(降级|样式统一级|partial)/
+// 降级声明判定词=绑定窗口而非裸词「降级」：裸词在后端/机制讨论语境高频（探针档位、性能
+// 降级），与远处视觉词同行共现时分属两个讨论对象——2026-10-05-uivisual-word-narrow 实测
+// 「error 档（降级无裁决）……渲染/组件/样式」同行共现被误判、error 档阻断收口（自举陷阱）。
+// 窗口语义：降级与视觉词 ≤6 字内同短语（两侧顺序皆认，经既有正例「视觉收敛降级」标定）；
+// 样式统一级独立短语与 \bpartial\b 词边界保留。纯结构判定，D-003 封闭面不变。
+const DOWNGRADE_LINE = /((视觉|样式|界面|UI)[^\n]{0,6}降级|降级[^\n]{0,6}(视觉|样式|界面|UI)|样式统一级|\bpartial\b)/i
 const VISUAL_LINE = /(视觉|UI|页面|样式|界面)/
 
 /** design/requirements 是否声明「视觉降级」（同行共现口径——行级命中防跨行误配；runUiVisualProbe 内部消费）。 */
