@@ -21,7 +21,7 @@ import { tmpdir } from 'os'
 const __filename = fileURLToPath(import.meta.url)
 const root = join(__filename, '..', '..')
 
-const { buildHitMatrix, cmdKnowledgeStats } = await import(
+const { buildHitMatrix, cmdKnowledgeStats, resolveLastEventAt } = await import(
   pathToFileURL(join(root, 'src', 'knowledge-stats.js')).href
 )
 
@@ -255,6 +255,53 @@ console.log('\n=== Test 7: 坏 --since-days 值 ===')
     const j2 = JSON.parse(await captureOutput(() =>
       cmdKnowledgeStats(base, ['--since-days', '-1'], { specDir: base })))
     assert(j2.ok === false, '负数 --since-days 报错')
+  } finally { clean(base) }
+}
+
+// ── Test 8: lastEventAt 新鲜度读数（2026-10-05-knowledge-stats-freshness）──
+console.log('\n=== Test 8: lastEventAt 新鲜度读数 ===')
+{
+  const base = setup('t8')
+  try {
+    makeKnowledge(base)
+    const runtimeDir = join(base, '.runtime')
+    // 时间戳一次算定复用（毫秒级 ISO 串两次求值不等）
+    const T5 = daysAgo(5), T3 = daysAgo(3), T1 = daysAgo(1)
+    // 多记录乱序：最新一条落在中间
+    writeHits(runtimeDir, [
+      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: T5 }),
+      JSON.stringify({ type: 'classify', qlId: 'ql-1', targetFile: 'known-issues.md', at: T1 }),
+      JSON.stringify({ type: 'inject', change: 'c2', query: 'q2', matchedFiles: ['patterns.md#b'], at: T3 }),
+    ])
+    assert(resolveLastEventAt(runtimeDir) === T1, '多记录乱序取最新 at（原样 ISO）')
+
+    const j = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeStats(base, ['--since-days', '1', '--json'], { specDir: base })))
+    assert(j.lastEventAt === T1, '--json lastEventAt=全量 max(at)，不受 --since-days 窗口影响')
+
+    const out = await captureOutput(() => cmdKnowledgeStats(base, [], { specDir: base }))
+    assert(out.includes('遥测计数') && out.includes(`数据截至 ${T1.slice(0, 10)}`),
+      '人类可读遥测计数行含「数据截至 <date>」')
+
+    // 单记录
+    const base2 = setup('t8b')
+    makeKnowledge(base2)
+    const only = daysAgo(2)
+    writeHits(join(base2, '.runtime'), [
+      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: only }),
+    ])
+    assert(resolveLastEventAt(join(base2, '.runtime')) === only, '单记录 lastEventAt=该记录 at')
+
+    // 无遥测：null 且人类可读不展示
+    const base3 = setup('t8c')
+    makeKnowledge(base3)
+    assert(resolveLastEventAt(join(base3, '.runtime')) === null, '无遥测（文件缺失）lastEventAt=null')
+    const j3 = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeStats(base3, ['--json'], { specDir: base3 })))
+    assert(j3.lastEventAt === null && j3.hasTelemetry === false, '--json 无遥测 lastEventAt=null')
+    const out3 = await captureOutput(() => cmdKnowledgeStats(base3, [], { specDir: base3 }))
+    assert(!out3.includes('数据截至'), '无遥测不展示「数据截至」读数')
+    clean(base2, base3)
   } finally { clean(base) }
 }
 

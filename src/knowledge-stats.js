@@ -12,6 +12,8 @@
  * - lastHitAt = 引用该文件的记录 at 最大值（ISO 原样保留；sinceDays 窗口启时时幸存记录
  *   必有可解析 at——readKnowledgeHits 契约滤掉 at 缺失/坏值，'' 兜底仅防御性）；
  * - totalInjects / totalClassifies = 窗口内两类记录条数（按记录计，与 matrix 按条目计独立）；
+ * - lastEventAt = 全量流（不加窗口）最新可解析 at 的原样 ISO（resolveLastEventAt，与
+ *   matrix 的窗口内 lastHitAt 口径分离——「数据截至」不随窗口缩小回退）；无有效记录 null；
  * - 未知 type 不进矩阵不进计数（前向兼容：新事件类型不炸聚合）。
  *
  * neverHit：parseKnowledgeIndex（src/knowledge-match.js 同款解析）得 INDEX.md 唯一 file 全集
@@ -221,6 +223,33 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
   }
 }
 
+// ── 新鲜度读数（2026-10-05-knowledge-stats-freshness）──
+
+/**
+ * 全量遥测流最后写入时间（数据新鲜度读数）。
+ *
+ * 独立于 sinceDays 窗口口径：窗口问「近 N 天统计了多少」，本函数问「这条流最后一次写入
+ * 是什么时候」——窗口缩小不该让「数据截至」跟着回退，故只收 runtimeDir 不收窗口参数。
+ * at 缺失/不可解析的记录不参与取最大（与 readKnowledgeHits 窗口过滤跳过同类）；全部无效
+ * 或零记录 → null（消费方以此区分「有遥测」与「无遥测」两个展示分支）。
+ *
+ * @param {string} runtimeDir - .runtime 目录（knowledge-hits.jsonl 落点）
+ * @returns {string|null} 最新记录 at 的原样 ISO 字符串；无有效记录 null
+ */
+export function resolveLastEventAt(runtimeDir) {
+  let best = null
+  let bestTs = -Infinity
+  for (const record of readKnowledgeHits(runtimeDir)) {
+    const ts = Date.parse(record.at)
+    // >= 同刻取落盘更后者，与 buildHitMatrix touch 的 lastTs 口径一致
+    if (Number.isFinite(ts) && ts >= bestTs) {
+      bestTs = ts
+      best = String(record.at)
+    }
+  }
+  return best
+}
+
 // ── CLI 入口（形态对齐 src/stages/knowledge.js cmdSearch / src/knowledge-classify.js cmdKnowledgeClassify）──
 
 function outputJson(ok, data, error) {
@@ -264,11 +293,12 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
 
   // 遥测在场判定用全量读取（不加窗口）：文件缺失/只有坏行 → 无遥测
   const hasTelemetry = readKnowledgeHits(runtimeDir).length > 0
+  const lastEventAt = resolveLastEventAt(runtimeDir)
   const result = buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays })
   const frIndex = buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays })
 
   if (asJson) {
-    outputJson(true, { sinceDays, hasTelemetry, ...result, frIndex })
+    outputJson(true, { sinceDays, hasTelemetry, lastEventAt, ...result, frIndex })
     return
   }
 
@@ -302,7 +332,7 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
     lines.push('')
   }
 
-  lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次`)
+  lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次${lastEventAt ? ` | 数据截至 ${lastEventAt.slice(0, 10)}` : ''}`)
 
   // FR 索引实验（L3 裁决仪表盘——证伪条款出数面；裁决时建议 --since-days 大窗口读全口径）
   if (frIndex.present) {
