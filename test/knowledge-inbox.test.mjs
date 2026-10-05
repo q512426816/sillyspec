@@ -98,6 +98,18 @@ test('T3 cmdKnowledgeInbox --json：结构化清单（标题/ql/摘要/基线态
   assert.ok(parsed.inbox.items[0].summary.includes('甲的正文'))
 })
 
+test('T3c cmdKnowledgeInbox opts.json 全局旗标路径（index.js 顶层吞 --json 后 args 不含旗标）', async () => {
+  const base = fixtureInbox({ baseline: 1 })
+  const buf2 = []
+  const orig = console.log
+  console.log = (...a) => buf2.push(a.join(' '))
+  // args 无 --json、opts.json:true——模拟 index.js:3027 真实转发形态 { specDir, json }
+  try { await cmdKnowledgeInbox(base, [], { specDir: base, json: true }) } finally { console.log = orig }
+  const parsed = JSON.parse(buf2.join('\n'))
+  assert.equal(parsed.ok, true, 'opts.json:true 输出结构化 JSON（不回归人类可读）')
+  assert.equal(parsed.inbox.count, 2)
+})
+
 test('T3b cmdKnowledgeInbox 人读形态与空态', async () => {
   const base = fixtureInbox({})
   const buf = []

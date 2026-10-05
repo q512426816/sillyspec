@@ -289,7 +289,9 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
     }
     sinceDays = n
   }
-  const asJson = args.includes('--json')
+  // --json 双路判定（对齐 stages/knowledge.js digest 惯例）：全局旗标被 index.js 顶层吞进
+  // opts.json（filteredArgs 不含 --json），args.includes 仅兜底直调/测试场景
+  const asJson = args.includes('--json') || opts.json === true
 
   // 遥测在场判定用全量读取（不加窗口）：文件缺失/只有坏行 → 无遥测
   const hasTelemetry = readKnowledgeHits(runtimeDir).length > 0

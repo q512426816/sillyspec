@@ -306,6 +306,36 @@ console.log('\n=== Test 8: lastEventAt 新鲜度读数 ===')
   } finally { clean(base) }
 }
 
+// ── Test 9: --json 双路判定——opts.json 全局旗标路径 + cmdKnowledge 调度入口端到端 ──
+console.log('\n=== Test 9: opts.json 全局旗标路径 ===')
+{
+  const base = setup('t9')
+  try {
+    makeKnowledge(base)
+    writeHits(join(base, '.runtime'), [
+      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: daysAgo(1) }),
+    ])
+
+    // opts.json 路径：args 无 --json（模拟 index.js 顶层吞旗标后的真实转发形态）
+    const j = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeStats(base, [], { specDir: base, json: true })))
+    assert(j.ok === true && j.sinceDays === 30, 'opts.json:true 且 args 无 --json → 结构化 JSON 输出')
+
+    // 入口端到端：经 stages/knowledge.js cmdKnowledge 调度（index.js:3027 转发 { specDir, json }）
+    const { cmdKnowledge } = await import(
+      pathToFileURL(join(root, 'src', 'stages', 'knowledge.js')).href)
+    const j2 = JSON.parse(await captureOutput(() =>
+      cmdKnowledge(['stats'], base, { specDir: base, json: true })))
+    assert(j2.ok === true && typeof j2.lastEventAt === 'string',
+      'cmdKnowledge 调度入口（json:true）→ JSON 且含 lastEventAt 字段')
+
+    // 兜底路径不回归：args 直带 --json、无 opts.json
+    const j3 = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeStats(base, ['--json'], { specDir: base })))
+    assert(j3.ok === true, 'args 直带 --json（无 opts.json）兜底路径不回归')
+  } finally { clean(base) }
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`knowledge-stats tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

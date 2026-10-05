@@ -391,7 +391,9 @@ export async function cmdKnowledgeClassify(dir, args, opts = {}) {
 export async function cmdKnowledgeInbox(dir, args, opts = {}) {
   const base = opts.specDir || join(dir, '.sillyspec')
   const knowledgeDir = join(base, 'knowledge')
-  const wantJson = args.includes('--json')
+  // --json 双路判定（对齐 stages/knowledge.js digest 惯例）：全局旗标被 index.js 顶层吞进
+  // opts.json（filteredArgs 不含 --json），args.includes 仅兜底直调/测试场景
+  const wantJson = args.includes('--json') || opts.json === true
   const uncPath = join(knowledgeDir, 'uncategorized.md')
   let entries = []
   if (existsSync(uncPath)) {

@@ -70,6 +70,9 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
   }
   assert.match(design, /乱序\/迟到到达/, '盲维四问之乱序在问题文本')
   assert.match(design, /作用域：跨工作区/, '盲维四问之作用域在问题文本')
+  // 文件变更清单指引=独立章节写法（parseFileChangeList 只认 ## 章节标题——节内写法收口解析不到）
+  assert.match(design, /独立「## 文件变更清单」章节/, '指引写独立章节')
+  assert.ok(!design.includes('在「接口契约」节加'), '旧指引（节内加表）退场')
   // ledger v2：anchor（criteria+四问）+files 首版全文
   const ledger = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
   assert.equal(ledger.schemaVersion, 2)
