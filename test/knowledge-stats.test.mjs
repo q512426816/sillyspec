@@ -280,8 +280,9 @@ console.log('\n=== Test 8: lastEventAt 新鲜度读数 ===')
     assert(j.lastEventAt === T1, '--json lastEventAt=全量 max(at)，不受 --since-days 窗口影响')
 
     const out = await captureOutput(() => cmdKnowledgeStats(base, [], { specDir: base }))
-    assert(out.includes('遥测计数') && out.includes(`数据截至 ${T1.slice(0, 10)}`),
-      '人类可读遥测计数行含「数据截至 <date>」')
+    // 正则不加 s 标志：. 不跨行，天然锁定「数据截至」与「遥测计数」同行
+    assert(new RegExp(`遥测计数.*数据截至 ${T1.slice(0, 10)}`).test(out),
+      '人类可读遥测计数行含「数据截至 <date>」（同行）')
 
     // 单记录
     const base2 = setup('t8b')

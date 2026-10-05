@@ -263,7 +263,7 @@ function outputJson(ok, data, error) {
  *
  * 用法：stats [--since-days N] [--json]
  * 默认人类可读输出（命中矩阵表 + 从未命中清单 + 遥测计数）；--json 输出结构化结果
- * （{ ok, sinceDays, hasTelemetry, matrix, neverHit, totalInjects, totalClassifies }）。
+ * （{ ok, sinceDays, hasTelemetry, lastEventAt, matrix, neverHit, totalInjects, totalClassifies }）。
  * 纯只读。
  *
  * @param {string} dir - 项目根目录
