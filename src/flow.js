@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative, dirname } from 'node:path'
 import yaml from 'js-yaml'
@@ -1122,7 +1122,36 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 退役后审计件挂变更自身。范围=归属收窄后的本变更文件面（他侧声明剔除、含工作树未提交与
   // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
   // 不标 done（重入 done 重试）。
-  if (st.substeps?.patch === 'done') { skip('patch') } else {
+  let driftRefreeze = false
+  if (st.substeps?.patch === 'done') {
+    // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
+    // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
+    // 2026-10-05-flowdone-lintfail-output 收编活体复现）。漂移 → 自动重冻结（等价 --refreeze）
+    // + review 已有结论则隔离旧 review.json（结论对着旧冻结面不作数）并重置标记强制重评。
+    try {
+      const patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+      const { detectPatchDrift } = await import('./flow-parity.js')
+      const drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
+      if (drift.drifted) {
+        driftRefreeze = true
+        console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点，本次自动重冻结（等价 --refreeze）`)
+        const reviewPath = join(changeDir, 'review.json')
+        if (existsSync(reviewPath)) {
+          renameSync(reviewPath, reviewPath + '.superseded')
+          console.warn(`   旧 review.json 已隔离为 review.json.superseded（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+        } else if (st.substeps?.review === 'done') {
+          console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
+        }
+        if (st.substeps?.review === 'done') {
+          writeFlowState(changeDir, { substeps: { review: null } })
+          // 内存态同步重置：本函数后续 review 子步判的是开头快照 st（不重读盘），只写盘会照样跳过
+          if (st.substeps) st.substeps.review = null
+        }
+      }
+    } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
+    if (!driftRefreeze) skip('patch')
+  }
+  if (st.substeps?.patch !== 'done' || driftRefreeze) {
     let patchOk = false
     try {
       // patch 面 = 本变更可归属变化（2026-09-25-thin-patch-scope-fix 收窄：dirty 全扫面会把并行

@@ -14,7 +14,7 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit } from './foreign-declared.js'
+import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { readV2SectionAnswer } from './flow-review.js'
@@ -210,6 +210,36 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
       return !isForeignByCommit(attr.get(p), pm[1])
     })
   } catch { return base }
+}
+
+/**
+ * patch 冻结面漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：处置重入审计
+ * 错位——评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等跳过让 change.patch/
+ * review.json 停在处置前时点（2026-10-05-review-promise-negation 先例 905397ef；
+ * 2026-10-05-flowdone-lintfail-output 收编活体复现：评审 P1 处置提交后不带 --refreeze 重跑，
+ * 归档件缺处置面）。
+ *
+ * 判定：freezeHead（change-patch.json.head 冻结锚）..HEAD 窗口内存在「本变更名后缀提交」即
+ * 漂移——按提交 message 变更名归属（parseChangeNamesFromSubject，与 filterCommittedFace
+ * 同口径的既成事实切分，非声明抢文件）。仅他侧后缀/裸提交不触发（他侧面归属切分另有防线，
+ * 裸提交保守不动作）。检测自身失败按无漂移（退现状幂等跳过行为，fail-safe 不新造阻断面）。
+ * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
+ * @returns {{ drifted: boolean, ownCommits: string[], head: string|null }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
+ */
+export function detectPatchDrift({ cwd, change, freezeHead }) {
+  try {
+    if (!freezeHead) return { drifted: false, ownCommits: [], head: null }
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true }).trim()
+    if (!head || head === freezeHead) return { drifted: false, ownCommits: [], head }
+    const log = execFileSync('git', ['log', '--format=%x00%s', `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    const own = []
+    for (const block of String(log).split('\x00')) {
+      const subject = block.split('\n').map((l) => l.trim()).filter(Boolean)[0]
+      if (!subject) continue
+      if (parseChangeNamesFromSubject(subject).includes(change)) own.push(subject.slice(0, 80))
+    }
+    return { drifted: own.length > 0, ownCommits: own, head }
+  } catch { return { drifted: false, ownCommits: [], head: null } }
 }
 
 /**
