@@ -6004,3 +6004,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-diff-commit-attribution
   status: active
+
+## FR-cli-entry-318 detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
+变更：2026-10-05-uivisual-word-narrow
+状态：active
+摘要：CLI 变更描述零误触；真 UI 变更不回归
+全文：.sillyspec/changes/archive/2026-10-05-uivisual-word-narrow/requirements.md#FR-01
+最近确认：d0b5ebb26fe50faf2965f96fd845259506ebdc30
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-uivisual-word-narrow:flow:测试绑定FR-01
+  tests: test/ui-visual-guidance.test.mjs「反例扩充：渲染输出/组件/输出样式后端通用语零命中＋既有五正例回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-uivisual-word-narrow
+  status: active
+
+## FR-cli-entry-319 flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
+变更：2026-10-05-uivisual-word-narrow
+状态：active
+摘要：新起草变更可见防呆
+全文：.sillyspec/changes/archive/2026-10-05-uivisual-word-narrow/requirements.md#FR-02
+最近确认：d0b5ebb26fe50faf2965f96fd845259506ebdc30
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-uivisual-word-narrow:flow:测试绑定FR-02
+  tests: test/flow-draft.test.mjs「模板锚行防呆文案在场断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-uivisual-word-narrow
+  status: active
+
+## FR-cli-entry-320 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
+变更：2026-10-05-uivisual-word-narrow
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-uivisual-word-narrow/requirements.md#FR-03
+最近确认：d0b5ebb26fe50faf2965f96fd845259506ebdc30
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-uivisual-word-narrow:flow:测试绑定FR-03
+  tests: test/ui-visual-guidance.test.mjs「正反例同文件收口覆盖（含 flow-draft 断言合计）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-uivisual-word-narrow
+  status: active

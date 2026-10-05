@@ -1,0 +1,49 @@
+{
+  "change": "2026-10-05-uivisual-word-narrow",
+  "baseline": "bb5289b4046e0f8d7d9192b9732a6a34ae6be8ee",
+  "head": "d0b5ebb26fe50faf2965f96fd845259506ebdc30",
+  "files": [
+    ".sillyspec/changes/2026-10-05-uivisual-word-narrow/design.md",
+    ".sillyspec/changes/2026-10-05-uivisual-word-narrow/flow-state.yaml",
+    ".sillyspec/changes/2026-10-05-uivisual-word-narrow/proposal.md",
+    ".sillyspec/changes/2026-10-05-uivisual-word-narrow/requirements.md",
+    ".sillyspec/changes/2026-10-05-uivisual-word-narrow/tasks.md",
+    "src/flow-draft.js",
+    "src/ui-visual.js",
+    "test/flow-draft.test.mjs",
+    "test/ui-visual-guidance.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 181,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-05T06:32:29.189Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "f0be1c45b9412a1b3b5e60256de37eb3fadf30dda3f3e7807758536ca43a64c2",
+  "patchStatus": "ok"
+}

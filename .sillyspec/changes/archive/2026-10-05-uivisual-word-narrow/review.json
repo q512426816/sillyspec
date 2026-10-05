@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-uivisual-word-narrow",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定「用例名」为描述性转写，非测试文件中的逐字用例标题",
+      "evidence": "requirements.md:47-49 三条绑定引用的「用例名」（如「反例扩充：渲染输出/组件/输出样式后端通用语零命中＋既有五正例回归」「模板锚行防呆文案在场断言」「正反例同文件收口覆盖」）在 test/ui-visual-guidance.test.mjs 与 test/flow-draft.test.mjs 中均无逐字对应（实际为「detectUiTouch 反例（2026-10-05-uivisual-word-narrow）：后端高频通用语渲染/组件/样式零命中」及 flow-draft.test.mjs:77 的场内断言）；机械校验面（src/flow-draft.js:372-383）只验非空/非待填格式故无拒收风险，行为覆盖实测在场（node --test 29/29 绿），仅追溯链按名查找时对不上——可追溯性弱化，无功能风险。",
+      "location": ".sillyspec/changes/2026-10-05-uivisual-word-narrow/requirements.md:47"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "n/a",
+    "作用域": "n/a"
+  },
+  "reviewedAt": "2026-10-05T06:34:26Z"
+}

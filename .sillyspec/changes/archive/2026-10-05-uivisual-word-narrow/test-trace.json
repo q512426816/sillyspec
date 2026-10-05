@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-uivisual-word-narrow",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-uivisual-word-narrow:flow:测试绑定FR-01",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「反例扩充：渲染输出/组件/输出样式后端通用语零命中＋既有五正例回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-uivisual-word-narrow"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-uivisual-word-narrow:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-draft.test.mjs「模板锚行防呆文案在场断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-uivisual-word-narrow"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-uivisual-word-narrow:flow:测试绑定FR-03",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「正反例同文件收口覆盖（含 flow-draft 断言合计）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-uivisual-word-narrow"
+    }
+  ]
+}

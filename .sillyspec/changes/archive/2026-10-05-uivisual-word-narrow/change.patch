@@ -1,0 +1,252 @@
+diff --git a/.sillyspec/changes/2026-10-05-uivisual-word-narrow/flow-state.yaml b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/flow-state.yaml
+new file mode 100644
+index 00000000..5dd458b4
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: bb5289b4046e0f8d7d9192b9732a6a34ae6be8ee
++updatedAt: '2026-10-05T06:29:11.182Z'
++baseline_sha256: 83474dec3934eaa60540a0565ee9791b839bb7056ab2ecd07bc8edf472861d2c
++
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index df379a3d..8ce784ca 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -274,6 +274,7 @@ function draftDesignRecordV2({ change }) {
+     '',
+     '> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
+     '> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。',
++    '> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。',
+     '',
+     ...secs.flat(),
+   ].join('\n')
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+index 73072784..96bf7b4e 100644
+--- a/src/ui-visual.js
++++ b/src/ui-visual.js
+@@ -23,10 +23,13 @@ export const UI_EVIDENCE_FILENAME = 'visual-evidence.md'
+ 
+ /* ── 检测启发式（正反例单测锁定；误判面=默认档一行警告，误漏面由文件面扩展名兜底）── */
+ 
++// 词表不含后端高频通用词「渲染/组件/样式」：CLI「渲染输出」「组件」「输出样式」是常规后端
++// 用语，2026-10-05-knowledge-stats-freshness 实测误触整段 UI 须知+探针 warn（描述该问题的
++// input 自己也复触一次）；真 UI 信号由页面/前端/UI/视觉/界面/布局等词与扩展名兜底承接。
+ const UI_TOUCH_PATTERNS = [
+-  /页面/, /前端/, /\bUI\b/i, /视觉/, /样式/, /界面/, /布局/, /主题色/, /配色/,
++  /页面/, /前端/, /\bUI\b/i, /视觉/, /界面/, /布局/, /主题色/, /配色/,
+   /\.tsx?\b/, /\.jsx\b/, /\.vue\b/, /\.svelte\b/, /\.css\b/, /\.scss\b/, /\.html\b/,
+-  /组件/, /原型/, /截图/, /渲染/,
++  /原型/, /截图/,
+ ]
+ 
+ /** input/规约文本是否触及前端页面或 UI（关键词启发式，≥1 命中即算）。 */
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index ce0a78d3..69d9be21 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -73,6 +73,8 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
+   // 文件变更清单指引=独立章节写法（parseFileChangeList 只认 ## 章节标题——节内写法收口解析不到）
+   assert.match(design, /独立「## 文件变更清单」章节/, '指引写独立章节')
+   assert.ok(!design.includes('在「接口契约」节加'), '旧指引（节内加表）退场')
++  // 锚行防呆（2026-10-05-uivisual-word-narrow）：四问/FR 标题锚从模板复制勿手打
++  assert.match(design, /勿手打重写/, '锚行防呆提示在场')
+   // ledger v2：anchor（criteria+四问）+files 首版全文
+   const ledger = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
+   assert.equal(ledger.schemaVersion, 2)
+diff --git a/test/ui-visual-guidance.test.mjs b/test/ui-visual-guidance.test.mjs
+index 1662a833..8e1b74c0 100644
+--- a/test/ui-visual-guidance.test.mjs
++++ b/test/ui-visual-guidance.test.mjs
+@@ -49,6 +49,12 @@ test('detectUiTouch 反例：后端/CLI/文档变更零命中', () => {
+   assert.equal(detectUiTouch(null), false)
+ })
+ 
++test('detectUiTouch 反例（2026-10-05-uivisual-word-narrow）：后端高频通用语渲染/组件/样式零命中', () => {
++  assert.equal(detectUiTouch('聚合函数 + 渲染 + 对应单测'), false, 'CLI「渲染」输出语境（实测误触形态）')
++  assert.equal(detectUiTouch('重构核心组件的导入关系'), false, '后端「组件」通用语')
++  assert.equal(detectUiTouch('调整日志输出样式为单行'), false, '「输出样式」后端通用语')
++})
++
+ test('detectUiTouchInPaths：前端扩展名兜底（NEW: 前缀剥离）', () => {
+   assert.equal(detectUiTouchInPaths(['NEW:frontend/src/app/page.tsx']), true)
+   assert.equal(detectUiTouchInPaths(['src/components/Button.vue']), true)
+diff --git a/.sillyspec/changes/2026-10-05-uivisual-word-narrow/design.md b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/design.md
+new file mode 100644
+index 00000000..a8ba6ac4
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/design.md
+@@ -0,0 +1,59 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T06:28:30.810Z
++---
++# 设计记录（Design Record）— 2026-10-05-uivisual-word-narrow
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++src/ui-visual.js 的 UI_TOUCH_PATTERNS 删去 /渲染/、/组件/、/样式/ 三个后端高频通用词（CLI「渲染输出」「组件」「输出样式」是常规后端用语——2026-10-05-knowledge-stats-freshness 实测「聚合函数+渲染+对应单删」即误触整段 UI 须知+探针 warn；本变更自己的 input 描述问题时又复触一次，自证误伤面宽）。既有正例五条各含第二信号（页面/前端/UI/视觉/tsx 扩展名）不受影响；误漏兜底走既有设计承诺「文件面扩展名兜底」（detectUiTouchInPaths）。src/flow-draft.js 模板头注加一行锚行防呆（四问/FR 标题锚从模板原样复制勿手打——2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++选词表收窄而非双信号分层（input 命中且文件面佐证才算）：分层会把纯文案改版的真 UI 变更（只改 copy 不动前端文件）漏掉，而收窄三词只损失「input 仅含渲染/组件/样式而无任何其他 UI 信号」的弱形态——该形态本就接近不可判定，扩展名兜底足够。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- UI_TOUCH_PATTERNS 常量减三词（模块内私有，detectUiTouch/detectUiTouchInPaths 导出签名不变）
++- 行为变化：input/规约文本仅含「渲染/组件/样式」而无其他 UI 信号的变更不再判 UI 触达（不再渲染须知段、探针 12 报不适用）；含页面/前端/UI/视觉/界面/布局/原型/截图/主题色/配色/前端扩展名的检测能力不变
++- flow start 起草的 design.md 模板头注新增一行防呆文案（对已起草变更无追溯影响）
++- 其余接口无变化
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/ui-visual.js | UI_TOUCH_PATTERNS 删 /渲染/、/组件/、/样式/ + 模块头注释口径 |
++| 修改 | src/flow-draft.js | design 模板头注锚行防呆一行 |
++| 修改 | test/ui-visual-guidance.test.mjs | 新增后端通用语反例（渲染输出/组件/输出样式）+ 既有正例回归 |
++| 修改 | test/flow-draft.test.mjs | 模板锚行防呆文案断言 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：检测是同步纯函数（字符串→布尔），无事件流与时序面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：词表是模块内不可变常量，检测无共享可变状态；探针只读面未动。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：无新增状态；模板文案是起草时静态字符串，对已起草变更零追溯。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：词表全仓同版本生效（detect 行为确定性），无 per-repo 状态串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：误漏——真 UI 变更的 input 恰好只含「渲染/组件/样式」而无其他信号且文件面无前端扩展名（如纯设计讨论期）。缓解：flow start 须知本就是 advisory 非门禁（漏渲染只少一段提示），且 detectUiTouchInPaths 扩展名兜底覆盖绝大多数真 UI 交付；探针 12 的 error 档（降级无裁决）不依赖词表触发条件的变化。
++试过放弃：① 双信号分层（input 命中 ∧ 文件面/多词佐证）——纯文案改版真 UI 变更会漏，且把简单启发式复杂化；② 全词表保留+对 CLI 仓加白名单——按仓配置引入 per-repo 维护面，与「仓中立」模块承诺冲突。
+diff --git a/.sillyspec/changes/2026-10-05-uivisual-word-narrow/proposal.md b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/proposal.md
+new file mode 100644
+index 00000000..9bbeedbf
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T06:28:30.810Z
++---
++# 提案书（Proposal）— 2026-10-05-uivisual-word-narrow
++
++## 动机
++
++任务原话转写：动机：两个实测确认的小缺陷。① UI 触达检测词表（src/ui-visual.js UI_TOUCH_PATTERNS）含后端高频通用词 /渲染/、/组件/、/样式/——对 proposal+requirements 全文 ≥1 命中即判 UI 触达：CLI 文本变更的 input 写「聚合函数+渲染+对应单测」（渲染=后端 render 输出常规用语）即被误判，flow start 渲染整段 UI 变更执行须知（约 15 行噪音）+ 收口探针 12 warn 缺 visual-evidence.md（2026-10-05-knowledge-stats-freshness 实测实证）。误判面=默认档一行警告+开工误导；模块头注释明示设计权衡「误漏面由文件面扩展名兜底」（detectUiTouchInPaths 的 tsx/jsx/vue/svelte/css/scss/less/html）。既有正例每条都有第二信号托底（页面/前端/UI/视觉/tsx），移除三词零伤正例。② design 模板对锚行（四问原文/FR 标题）零防呆提示——「问题行句号被 agent 手写成问号」在 2026-10-05 两度实测踩坑（dogfood-audit-fixes 与 hindsight-checkbox-noise 的 design 起草，均被 v2 锚对比正确拒收但返工一轮），flow start 指引应加「锚行从模板复制勿手打」。改动面：src/ui-visual.js 词表 + src/flow-draft.js 模板注释 + 对应测试。
++成功标准：
++- detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
++- flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
++- 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
++2. flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
++3. 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
++
++## 成功标准（可验证）
++
++1. detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
++2. flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
++3. 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
+diff --git a/.sillyspec/changes/2026-10-05-uivisual-word-narrow/requirements.md b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/requirements.md
+new file mode 100644
+index 00000000..e1ebc64f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/requirements.md
+@@ -0,0 +1,49 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T06:28:30.810Z
++---
++# 需求规格（Requirements）— 2026-10-05-uivisual-word-narrow
++
++## 功能需求
++
++### FR-01: detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
++
++src/ui-visual.js UI_TOUCH_PATTERNS 必须删去 /渲染/、/组件/、/样式/ 三词；移除后 detectUiTouch 对仅含这三词的后端语境文本必须返回 false，对页面/前端/UI/视觉/界面/布局/原型/截图/主题色/配色及前端扩展名（.tsx/.jsx/.vue/.svelte/.css/.scss/.html）的检测必须与移除前一致。禁止以牺牲既有正例为代价收窄。
++
++#### 场景：CLI 变更描述零误触
++
++- Given: 某 CLI/后端变更的 input 写「聚合函数 + 渲染 + 对应单测」
++- When: flow start 起草并检测 UI 触达
++- Then: 不渲染「UI 变更执行须知」段；收口探针 12 报不适用（非 UI 触达）
++
++#### 场景：真 UI 变更不回归
++
++- Given: input 含「重排工作区列表页面」「前端样式统一」「重构 UI 组件」「视觉走查为硬门」「修改 src/app/page.tsx」
++- When: detectUiTouch 检测
++- Then: 均返回 true（与移除前一致）
++
++### FR-02: flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
++
++src/flow-draft.js 起草模板的头注指引必须新增锚行防呆提示：四问问题原文、FR 标题、镜像任务行等锚必须从机器模板原样保留/复制，禁止手打重写（2026-10-05 两度实证：问题行句号被手写成问号，v2 锚对比正确拒收但返工一轮）。
++
++#### 场景：新起草变更可见防呆
++
++- Given: flow start 起草的 design.md 模板
++- When: 读取模板头注
++- Then: 含「锚」「勿手打」（或同义明确表述）的防呆指引
++
++### FR-03: 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
++
++本变更必须以自动化单测覆盖：detectUiTouch 对「渲染输出」「组件」「输出样式」等后端通用语至少三条新反例（返回 false）；既有五条正例回归不变；flow-draft 模板锚行防呆文案在场断言。
++
++#### 场景：主路径
++
++- Given: test/ui-visual-guidance.test.mjs 与 test/flow-draft.test.mjs
++- When: 跑项目测试入口
++- Then: 上述断言全部通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/ui-visual-guidance.test.mjs「反例扩充：渲染输出/组件/输出样式后端通用语零命中＋既有五正例回归」
++FR-02: test/flow-draft.test.mjs「模板锚行防呆文案在场断言」
++FR-03: test/ui-visual-guidance.test.mjs「正反例同文件收口覆盖（含 flow-draft 断言合计）」
+diff --git a/.sillyspec/changes/2026-10-05-uivisual-word-narrow/tasks.md b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/tasks.md
+new file mode 100644
+index 00000000..4641c155
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-uivisual-word-narrow/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T06:28:30.810Z
++---
++# 任务注册表（Tasks）— 2026-10-05-uivisual-word-narrow
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-uivisual-word-narrow --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-uivisual-word-narrow` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: detectUiTouch 词表必须移除后端高频通用词（渲染/组件/样式）；CLI 变更描述含「渲染输出/组件/输出样式」等后端通用语必须零命中；既有正例（页面/前端/UI/视觉/tsx 扩展名）检测能力必须不变
++- [x] task-02: flow start 起草的 design.md 模板指引必须含锚行防呆提示（四问/FR 标题锚从模板原样复制勿手打）
++- [x] task-03: 单测覆盖：新误伤反例（渲染/组件/样式后端语）至少三条 + 既有正例回归 + 模板文案断言
