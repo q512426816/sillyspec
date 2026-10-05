@@ -3177,8 +3177,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         try {
           const { planRedomain, redomainFrEntries } = await import('./redomain.js')
           if (!has('--write')) {
-            const plan = planRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null })
-            console.log(`🔧 域迁移预览（--write 落盘）：fr/${fromD}.md → fr/${toD}.md，${plan.entries.length} 条`)
+            // 预览与落盘同口径透传 byChange（坑 redomain-plan-preview-by-change-ignored，
+            // 2026-10-02 实证：76338b4d 收编在途工作时此行漏透传——预览列整域、落盘只迁
+            // 分批子集，用户按预览理解会误判整域迁移）。planRedomain 侧过滤本就在场。
+            const plan = planRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null, byChange: byChangeD || null })
+            console.log(`🔧 域迁移预览（--write 落盘）：fr/${fromD}.md → fr/${toD}.md，${plan.entries.length} 条${byChangeD ? `（仅「变更：${byChangeD}」）` : ''}`)
             for (const e of plan.entries.slice(0, 10)) console.log(`   ${e.id} ${e.title}`)
             if (plan.entries.length > 10) console.log(`   … 共 ${plan.entries.length} 条`)
             console.log(`   目标域文件${plan.targetExists ? '在场' : '将新建'}；源域${plan.sourceWillDelete ? '将删空壳' : '保留余条'}；ID 不变（身份保持）`)

@@ -9,6 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -96,4 +97,21 @@ test('⑤ TEST_PATH_TOKEN_RE 不再截断 .tsx（归档绑定行 governance-card
   assert.equal(rows.length, 1)
   assert.equal(rows[0].tests[0], 'frontend/src/components/knowledge/__tests__/governance-cards.test.tsx「伪域分池查看明细」',
     '扩展名完整保留（不再截成 .test.ts）')
+})
+
+test('⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集（坑 redomain-plan-preview-by-change-ignored）', () => {
+  const { knowledgeRoot } = mkKnowledge(['frontend', 'unmapped'])
+  const unmapped = join(knowledgeRoot, 'fr', 'unmapped.md')
+  writeFileSync(unmapped, [
+    '---\nauthor: t\n---\n\n# FR 索引 — unmapped\n',
+    '## FR-unmapped-101 alpha 第一条\n变更：change-alpha\n状态：active\n',
+    '## FR-unmapped-102 beta 条目\n变更：change-beta\n状态：active\n',
+    '## FR-unmapped-103 alpha 第二条\n变更：change-alpha\n状态：active\n',
+  ].join('\n\n') + '\n')
+  const CLI = join(import.meta.dirname, '..', 'src', 'index.js')
+  const out = execFileSync(process.execPath,
+    [CLI, 'tests', '--redomain', '--from', 'unmapped', '--to', 'frontend', '--by-change', 'change-alpha', '--spec-dir', join(knowledgeRoot, '..')],
+    { encoding: 'utf8', timeout: 60_000 })
+  assert.match(out, /2 条（仅「变更：change-alpha」）/, `预览计数只列分批子集：${out.split('\n').find((l) => l.includes('预览'))}`)
+  assert.ok(!out.includes('FR-unmapped-102'), '他变更条目不进预览清单')
 })
