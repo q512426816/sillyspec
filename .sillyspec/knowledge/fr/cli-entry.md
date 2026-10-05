@@ -6498,3 +6498,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-bind-unbind-help
   status: active
+
+## FR-cli-entry-344 src/flow.js 的 flow 用法行包含 flow status --change <名> 子命令提示
+变更：2026-10-05-flow-help-status
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flow-help-status/requirements.md#FR-01
+最近确认：8d31a9e964a58dbd37e6bc7fc6ccc93e3c92d75b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-help-status:flow:测试绑定FR-01
+  tests: test/flow-help-status.test.mjs「用法行列出 flow status 子命令」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-help-status
+  status: active
+
+## FR-cli-entry-345 测试断言用法行包含 flow status 提示
+变更：2026-10-05-flow-help-status
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flow-help-status/requirements.md#FR-02
+最近确认：8d31a9e964a58dbd37e6bc7fc6ccc93e3c92d75b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-help-status:flow:测试绑定FR-02
+  tests: test/flow-help-status.test.mjs「用法行列出 flow status 子命令」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-help-status
+  status: active
+
+## FR-cli-entry-346 相关测试全部通过
+变更：2026-10-05-flow-help-status
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-flow-help-status/requirements.md#FR-03
+最近确认：8d31a9e964a58dbd37e6bc7fc6ccc93e3c92d75b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-flow-help-status:flow:测试绑定FR-03
+  tests: test/flow-help-status.test.mjs「用法行保留 start/done 与 --input 格式教学」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-flow-help-status
+  status: active

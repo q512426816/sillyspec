@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-flow-help-status",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-flow-help-status:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-help-status.test.mjs「用法行列出 flow status 子命令」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-help-status"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-flow-help-status:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-help-status.test.mjs「用法行列出 flow status 子命令」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-help-status"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-flow-help-status:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-help-status.test.mjs「用法行保留 start/done 与 --input 格式教学」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-flow-help-status"
+    }
+  ]
+}
