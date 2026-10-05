@@ -1590,14 +1590,14 @@ superseded_by：FR-cli-entry-198
 
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
-- row: 2026-09-25-fr-rot-precision:flow:FR-02
-  tests: test/cli.test.mjs | test/thin-fr-inject-parity.test.mjs
+- row: manual:muuslbda:test/fr-index.test.mjs
+  tests: test/fr-index.test.mjs
   reason: spec
   state: active
-  discovery: machine
+  discovery: agent
   confirmed_by: agent
-  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
-  source_change: 2026-09-25-fr-rot-precision
+  confirmed_at: 15821c904c3545325d4e7aa9a30f0d643222396e
+  source_change: manual
   status: active
 
 ## FR-cli-entry-092 交付表解析抽公共
@@ -3013,14 +3013,14 @@ superseded_by：FR-cli-entry-198
 
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
-- row: 2026-09-27-confirm-on-use:flow:FR-04
-  tests: nope.test.mjs | test/confirm-on-use.test.mjs「④」
+- row: manual:muuslbo7:test/confirm-on-use.test.mjs
+  tests: test/confirm-on-use.test.mjs
   reason: spec
   state: active
-  discovery: machine
+  discovery: agent
   confirmed_by: agent
-  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
-  source_change: 2026-09-27-confirm-on-use
+  confirmed_at: 15821c904c3545325d4e7aa9a30f0d643222396e
+  source_change: manual
   status: active
 
 ## FR-cli-entry-167 已是 active 幂等提示
@@ -3079,14 +3079,14 @@ superseded_by：FR-cli-entry-198
 
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
-- row: 2026-09-27-confirm-on-use:flow:FR-07
-  tests: nope.test.mjs | test/confirm-on-use.test.mjs「④」
+- row: manual:muuslbz6:test/confirm-on-use.test.mjs
+  tests: test/confirm-on-use.test.mjs
   reason: spec
   state: active
-  discovery: machine
+  discovery: agent
   confirmed_by: agent
-  confirmed_at: b6878fe8a634c944dcdd8e5f613eb4608271c36d
-  source_change: 2026-09-27-confirm-on-use
+  confirmed_at: 15821c904c3545325d4e7aa9a30f0d643222396e
+  source_change: manual
   status: active
 
 ## FR-cli-entry-170 全仓测试绿
