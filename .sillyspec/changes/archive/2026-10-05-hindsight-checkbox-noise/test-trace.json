@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-hindsight-checkbox-noise",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-01",
+      "tests": [
+        "test/route-hindsight.test.mjs「⑤ 勾选翻格零信号：全勾零改写 ratio=0 且不标记」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hindsight-checkbox-noise"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-02",
+      "tests": [
+        "test/route-hindsight.test.mjs「⑤ 翻格+真实改写只计文本行（ratio=0.25）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hindsight-checkbox-noise"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-03",
+      "tests": [
+        "test/route-hindsight.test.mjs「⑤ design 面不归一：checkbox 形态差异仍计改写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hindsight-checkbox-noise"
+    }
+  ]
+}

@@ -327,3 +327,60 @@ created_at: 2026-09-22T09:42:59.537Z
 - 场景：默认场景 — Given 测试 相关模块就绪；When watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm t；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-watcher-fakecheck-retire/requirements.md#FR-03
 最近确认：0972a16c61f70b38c27ee28798adea489f6920e9
+
+## FR-sync-029 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
+变更：2026-10-05-hindsight-checkbox-noise
+状态：active
+摘要：全勾零改写
+全文：.sillyspec/changes/archive/2026-10-05-hindsight-checkbox-noise/requirements.md#FR-01
+最近确认：f689d82f93ee0c0978221d01ff84703090e1946f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-01
+  tests: test/route-hindsight.test.mjs「⑤ 勾选翻格零信号：全勾零改写 ratio=0 且不标记」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hindsight-checkbox-noise
+  status: active
+
+## FR-sync-030 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
+变更：2026-10-05-hindsight-checkbox-noise
+状态：active
+摘要：翻格+单行文本改写
+全文：.sillyspec/changes/archive/2026-10-05-hindsight-checkbox-noise/requirements.md#FR-02
+最近确认：f689d82f93ee0c0978221d01ff84703090e1946f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-02
+  tests: test/route-hindsight.test.mjs「⑤ 翻格+真实改写只计文本行（ratio=0.25）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hindsight-checkbox-noise
+  status: active
+
+## FR-sync-031 design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
+变更：2026-10-05-hindsight-checkbox-noise
+状态：active
+摘要：design 面口径不变
+全文：.sillyspec/changes/archive/2026-10-05-hindsight-checkbox-noise/requirements.md#FR-03
+最近确认：f689d82f93ee0c0978221d01ff84703090e1946f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hindsight-checkbox-noise:flow:测试绑定FR-03
+  tests: test/route-hindsight.test.mjs「⑤ design 面不归一：checkbox 形态差异仍计改写」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hindsight-checkbox-noise
+  status: active

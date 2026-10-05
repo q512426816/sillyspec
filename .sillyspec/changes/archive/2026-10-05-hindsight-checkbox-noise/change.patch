@@ -1,0 +1,288 @@
+diff --git a/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/flow-state.yaml b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/flow-state.yaml
+new file mode 100644
+index 00000000..549929fe
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: 6ad1fe2f00ff25fb7e9f2fba3b4bda049a73ab93
++updatedAt: '2026-10-05T04:23:01.799Z'
++baseline_sha256: 620a4f76d9f851eb3f90baee168fb1315c1ac54361e8b52fa60469eb700df835
++
+diff --git a/src/route-hindsight.js b/src/route-hindsight.js
+index f4e2c5ed..69620873 100644
+--- a/src/route-hindsight.js
++++ b/src/route-hindsight.js
+@@ -21,7 +21,9 @@
+  *     归一后比对）。diff 面先做结构归一：剔 frontmatter 块、HTML 注释标记行（<!--）、空行
+  *     ——惰性脚手架行（机器稿里约占半数）会把真实换血稀释到阈值以下（实测整写机器段仅得
+  *     0.175-0.275，0.5 阈值永不可达=闭环失效面）；归一是纯结构过滤零语义判定（D-003）。
+- *     无快照（旧变更/起草失败）= 0（零信号，不是「实测 0% 改写」）。
++ *     tasks 面另做勾选框状态归一（normalizeTaskCheckbox：[x]/[X]→[ ]——v2 镜像任务行
++ *     翻格是进度簿记非内容改写，2026-10-05-hindsight-checkbox-noise 修复前全勾即 N/(N+1)
++ *     恒超阈）；design 面不归一。无快照（旧变更/起草失败）= 0（零信号，不是「实测 0% 改写」）。
+  *   blindDims：收口评审 review.json 的 dimensionNotes 中值为 'finding' 的维数——枚举值
+  *     计数（评审员已按任务书 schema 判定的结构化面），非机器语义判定；无 review.json
+  *     （评审豁免）= 0。
+@@ -76,6 +78,13 @@ function contentSurface(text) {
+   return out.join('\n')
+ }
+ 
++/** tasks 勾选框状态归一：行首 `- [x]`/`- [X]`/`- [ ]` → `- [ ]`（仅 tasks 比对面消费——
++ *  v2 镜像任务行翻格（勾选）是进度簿记不是内容改写，2026-10-05 四变更实测全勾即 N/(N+1)
++ *  恒超 0.6 阈误标「疑似该走预段」；纯结构 token 替换，D-003 封闭面零语义判定）。 */
++function normalizeTaskCheckbox(text) {
++  return norm(text).replace(/^(\s*[-*]\s+)\[[ xX]\]/gm, '$1[ ]')
++}
++
+ function readTextSafe(p) {
+   try { return readFileSync(p, 'utf8') } catch { return null }
+ }
+@@ -180,10 +189,12 @@ export function computeHindsightMetrics({ changeDir, reviewJson, flowState }) {
+     raw.baselinePresent = true
+     const pairs = [['design', 'designRewriteRatio'], ['tasks', 'tasksRewriteRatio']]
+     for (const [key, outKey] of pairs) {
+-      const first = typeof baseline[key] === 'string' ? contentSurface(baseline[key]) : null
++      // tasks 面比对前先勾选框归一（翻格=簿记非改写）；design 面不归一（无此形态，保原口径）
++      const pre = key === 'tasks' ? normalizeTaskCheckbox : (t) => t
++      const first = typeof baseline[key] === 'string' ? contentSurface(pre(baseline[key])) : null
+       const finalText = readTextSafe(join(changeDir, `${key}.md`))
+       if (first && finalText != null) {
+-        const surface = contentSurface(finalText)
++        const surface = contentSurface(pre(finalText))
+         const ratio = round4(computeEditRatio(first, surface))
+         if (outKey === 'designRewriteRatio') designRewriteRatio = ratio
+         else tasksRewriteRatio = ratio
+diff --git a/test/route-hindsight.test.mjs b/test/route-hindsight.test.mjs
+index 66422a68..bfd33a1b 100644
+--- a/test/route-hindsight.test.mjs
++++ b/test/route-hindsight.test.mjs
+@@ -179,3 +179,54 @@ test('④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 疑
+   assert.ok(hint.includes('2'), `含实测失败计数: ${hint}`)
+   rmSync(root, { recursive: true, force: true })
+ })
++
++// ── ⑤ 勾选翻格归一（2026-10-05-hindsight-checkbox-noise）：v2 镜像任务行翻格=簿记非改写 ──
++const TASKS_BASE = [
++  '# 任务注册表（Tasks）— 2026-10-05-c-x',
++  '',
++  '- [ ] task-01: 甲需求文本',
++  '- [ ] task-02: 乙需求文本',
++  '- [ ] task-03: 丙需求文本',
++].join('\n')
++
++test('⑤ 纯勾选翻格零信号：全勾零改写 → tasksRewriteRatio=0 且不标记', () => {
++  const { root, changeDir } = makeRepo()
++  writeBaseline(root, { design: '# 设计\n原文', tasks: TASKS_BASE })
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n原文')
++  writeFileSync(join(changeDir, 'tasks.md'), [
++    '# 任务注册表（Tasks）— 2026-10-05-c-x',
++    '- [x] task-01: 甲需求文本',
++    '- [x] task-02: 乙需求文本',
++    '- [x] task-03: 丙需求文本',
++  ].join('\n'))
++  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
++  assert.equal(m.tasksRewriteRatio, 0, `纯翻格改写比 0（实测 ${m.tasksRewriteRatio}——修复前 0.75）`)
++  const mk = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: m })
++  assert.equal(mk.marked, false, '四路指标全零信号 → 不落标记')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑤ 翻格+真实改写：只按文本改写行计（3 任务改 1 条 → 0.25）', () => {
++  const { root, changeDir } = makeRepo()
++  writeBaseline(root, { design: '# 设计\n原文', tasks: TASKS_BASE })
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n原文')
++  writeFileSync(join(changeDir, 'tasks.md'), [
++    '# 任务注册表（Tasks）— 2026-10-05-c-x',
++    '- [x] task-01: 甲需求文本被真实改写',
++    '- [x] task-02: 乙需求文本',
++    '- [X] task-03: 丙需求文本',  // 大写 X 同归一
++  ].join('\n'))
++  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
++  assert.equal(m.tasksRewriteRatio, 0.25, `只计文本改写行 1/4（实测 ${m.tasksRewriteRatio}）`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑤ design 面不归一：checkbox 形态差异仍计改写（口径与修复前一致）', () => {
++  const { root, changeDir } = makeRepo()
++  writeBaseline(root, { design: '# 设计\n- [x] 旧文本', tasks: TASKS_BASE })
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n- [ ] 旧文本')
++  writeFileSync(join(changeDir, 'tasks.md'), TASKS_BASE)
++  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
++  assert.equal(m.designRewriteRatio, 0.5, `design checkbox 行差异照计 1/2（实测 ${m.designRewriteRatio}）`)
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/design.md b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/design.md
+new file mode 100644
+index 00000000..ef394cba
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/design.md
+@@ -0,0 +1,56 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:22:10.210Z
++---
++# 设计记录（Design Record）— 2026-10-05-hindsight-checkbox-noise
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 src/route-hindsight.js 加模块内函数 normalizeTaskCheckbox（`^(\s*[-*]\s+)\[[ xX]\]` → `$1[ ]` 的 gm 正则归一），computeHindsightMetrics 的 tasks 比对路在 contentSurface 之前对首版快照与终稿两侧先归一——勾选翻格是进度簿记不是内容改写，归一后翻格行逐字相等不计改写，任务文本真实改写仍计。design 比对面不归一（design 无任务勾选形态，保持原口径）。
++
++选 token 归一而非改 computeEditRatio 或改阈值：归一是纯结构形态过滤（固定 token 替换零语义判定，符合模块头 D-003 封闭面承诺），computeEditRatio 是 flow-draft 共享内核（动它波及起草面），阈值 0.6 本身没错——错的是分子把簿记当改写。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- computeHindsightMetrics 内部新增 tasks 面预处理（normalizeTaskCheckbox，模块内私有不导出）——导出签名与返回结构零变化
++- 行为变化：纯勾选翻格的变更 tasksRewriteRatio 从 ~N/(N+1)（恒超阈）变为 0；标记落库与 flow start 点名提示随之不再因翻格触发
++- 归一仅作用于 tasks 比对双侧；design 比对、盲维计数、实测失败计数口径不变
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/route-hindsight.js | normalizeTaskCheckbox + tasks 比对路归一 + 头注释口径 |
++| 修改 | test/route-hindsight.test.mjs | ⑤ 组：纯翻格零信号 / 翻格+真实改写只计文本行 / design 面不归一 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：无事件流输入——比对的是收口时点静止文件（首版快照 vs 终稿），无乱序面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：computeHindsightMetrics 纯只读（读快照/终稿/记录面），不写任何共享文件；归一是无状态字符串变换。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：无新增状态；归一发生在计算瞬间，中断即无输出，与原先语义一致。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：比对输入按 changeDir/specBase 局部派生（既有逻辑不变），归一不引入任何跨仓面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：正则把非任务行误归一——行首 `- [x]`/`- [ ]` 形态在 tasks.md 语义域内就是任务勾选框，误归一面只可能是 agent 在 tasks.md 写 checkbox 形态的非任务内容（极反形态）；且归一只影响改写比分子，不碰文件本体。
++试过放弃：① 改 computeEditRatio 忽略 checkbox 前缀——共享内核，动它波及 flow-draft 起草面口径，放弃；② 阈值从 0.6 提到 >0.8——治标：4 任务全勾 0.8、5 任务 0.833 恒穿过任何 <1 阈值，翻格噪声是分子问题不是阈值问题，放弃。
+diff --git a/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/proposal.md b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/proposal.md
+new file mode 100644
+index 00000000..2e1e54e4
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:22:10.210Z
++---
++# 提案书（Proposal）— 2026-10-05-hindsight-checkbox-noise
++
++## 动机
++
++任务原话转写：动机：route-hindsight 的 tasksRewriteRatio 把勾选翻格（- [ ] → - [x]）计为整行改写：机器稿 tasks 正文=标题行+N 任务镜像行，任务全勾后 N/(N+1) 恒超 0.6 阈——2026-10-05 四个轻量变更实测全部中标（wordpos/status-empty-guide/dogfood-audit-fixes 各 3 任务=0.75，review-promise-negation 4 任务=0.8），且其中 dogfood-audit-fixes 的 tasks.md 内容零改写（仅翻勾选格），纯勾选翻格复算改写比 0.75 铁证。效果是「诚实勾任务的变更必然被点名疑似该走预段，不勾的反而不标」——信号完全失真。根因：2026-10-04 thin-docs-v2 引入镜像任务行+勾选机制后，hindsight 口径未跟上（既有测试反例只覆盖 v1 槽位纯增行形态）。修复面：src/route-hindsight.js——tasks 比对前做勾选框状态归一（[x]/[X]→[ ]，纯结构 token 归一符合 D-003 封闭面零语义判定），design 面不归一；真实任务文本改写仍正常计入。test/route-hindsight.test.mjs 补形态用例。
++成功标准：
++- 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
++- 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
++- design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
++2. 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
++3. design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
++
++## 成功标准（可验证）
++
++1. 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
++2. 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
++3. design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
+diff --git a/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/requirements.md b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/requirements.md
+new file mode 100644
+index 00000000..16559d79
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:22:10.210Z
++---
++# 需求规格（Requirements）— 2026-10-05-hindsight-checkbox-noise
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
++
++computeHindsightMetrics 的 tasks 比对路必须先做勾选框状态归一（行首 `- [x]`/`- [X]`/`- [ ]` 归一为 `- [ ]`，仅 tasks 面、仅比对输入侧、纯结构 token 替换零语义判定）再算行级改写比；任务全勾而文本零改动的变更禁止被标记 hindsight（2026-10-05 四变更实测 0.75/0.8 恒超阈系勾选翻格被计为整行改写所致）。
++
++#### 场景：全勾零改写
++
++- Given: 首版快照 tasks 正文=标题+3 条 `- [ ] task-NN: …` 镜像行
++- When: 终稿为同样 3 条 `- [x] task-NN: …`（文本零改动）
++- Then: tasksRewriteRatio === 0，markHindsight 不因 tasks 路落标记
++
++### FR-02: 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
++
++归一必须只消勾选框状态差异：任务行文本真实改写的行照常计入改写比分子；翻格本身禁止使改写比虚增，也禁止因归一误把真实改写行判为相同。
++
++#### 场景：翻格+单行文本改写
++
++- Given: 首版快照 tasks 正文=标题+3 条未勾任务行（contentSurface 面 4 行）
++- When: 终稿 3 条全勾且其中 1 条任务文本被改写
++- Then: tasksRewriteRatio === 0.25（1/4——只计文本改写行）
++
++### FR-03: design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
++
++勾选框归一必须只作用于 tasks 比对面，design 比对面禁止归一（design 的行文本差异——含形如 checkbox 的行——仍按原口径计改写）。本变更必须以自动化单测覆盖 FR-01/02/03 三情形。
++
++#### 场景：design 面口径不变
++
++- Given: 首版快照与终稿 design 某行分别为 `- [x] 旧文本` 与 `- [ ] 旧文本`（仅勾选框字符差异）
++- When: computeHindsightMetrics 计算 designRewriteRatio
++- Then: 该行计为改写（design 面不做勾选归一，口径与修复前一致）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/route-hindsight.test.mjs「⑤ 勾选翻格零信号：全勾零改写 ratio=0 且不标记」
++FR-02: test/route-hindsight.test.mjs「⑤ 翻格+真实改写只计文本行（ratio=0.25）」
++FR-03: test/route-hindsight.test.mjs「⑤ design 面不归一：checkbox 形态差异仍计改写」
+diff --git a/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/tasks.md b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/tasks.md
+new file mode 100644
+index 00000000..8a9b9bac
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hindsight-checkbox-noise/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T04:22:10.210Z
++---
++# 任务注册表（Tasks）— 2026-10-05-hindsight-checkbox-noise
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-hindsight-checkbox-noise --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-hindsight-checkbox-noise` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 纯勾选翻格（任务行文本零改动）的 tasksRewriteRatio 必须为 0 且不触发标记
++- [x] task-02: 勾选翻格叠加真实任务文本改写时，改写比只按文本改写行计（翻格不稀释不虚增）
++- [x] task-03: design 比对面不做勾选归一（design 文本含 checkbox 形态差异仍计改写）；单测覆盖上述三情形
