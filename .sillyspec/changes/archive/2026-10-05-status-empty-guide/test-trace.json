@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-status-empty-guide",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-status-empty-guide:flow:测试绑定FR-01",
+      "tests": [
+        "test/status-empty-guide.test.mjs「空仓库 run status 与顶层 status 均输出引导行且 exit 0 不落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-status-empty-guide"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-status-empty-guide:flow:测试绑定FR-02",
+      "tests": [
+        "test/status-empty-guide.test.mjs「有活跃变更时 status 展示不含空态引导行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-status-empty-guide"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-status-empty-guide:flow:测试绑定FR-03",
+      "tests": [
+        "test/status-empty-guide.test.mjs「三面断言齐全（空态/别名同构/不回归）+ 全量测试绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-status-empty-guide"
+    }
+  ]
+}

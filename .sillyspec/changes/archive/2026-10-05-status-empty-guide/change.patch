@@ -1,0 +1,435 @@
+diff --git a/.sillyspec/changes/2026-10-05-status-empty-guide/flow-state.yaml b/.sillyspec/changes/2026-10-05-status-empty-guide/flow-state.yaml
+new file mode 100644
+index 00000000..f02a108a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-status-empty-guide/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: false
++baseline_commit: a3817286b5dbe8430a3696db0020efa682aeeba1
++updatedAt: '2026-10-05T00:38:47.133Z'
++baseline_sha256: d30742cb4f44853f69f49b5486601b97440ae7d5d62b1912e380aa83380df731
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 5158b0c9..b5749ea5 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,8 +130,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1642/1906/1986/1997/2195 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2076/2130/2210 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1646/1906/1986/1997/2195 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2080/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:917（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4234；shared.js:1022 |
+diff --git a/src/knowledge-stats.js b/src/knowledge-stats.js
+index 07549b0e..6ebafdec 100644
+--- a/src/knowledge-stats.js
++++ b/src/knowledge-stats.js
+@@ -12,6 +12,8 @@
+  * - lastHitAt = 引用该文件的记录 at 最大值（ISO 原样保留；sinceDays 窗口启时时幸存记录
+  *   必有可解析 at——readKnowledgeHits 契约滤掉 at 缺失/坏值，'' 兜底仅防御性）；
+  * - totalInjects / totalClassifies = 窗口内两类记录条数（按记录计，与 matrix 按条目计独立）；
++ * - lastEventAt = 全量流（不加窗口）最新可解析 at 的原样 ISO（resolveLastEventAt，与
++ *   matrix 的窗口内 lastHitAt 口径分离——「数据截至」不随窗口缩小回退）；无有效记录 null；
+  * - 未知 type 不进矩阵不进计数（前向兼容：新事件类型不炸聚合）。
+  *
+  * neverHit：parseKnowledgeIndex（src/knowledge-match.js 同款解析）得 INDEX.md 唯一 file 全集
+@@ -221,6 +223,33 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+   }
+ }
+ 
++// ── 新鲜度读数（2026-10-05-knowledge-stats-freshness）──
++
++/**
++ * 全量遥测流最后写入时间（数据新鲜度读数）。
++ *
++ * 独立于 sinceDays 窗口口径：窗口问「近 N 天统计了多少」，本函数问「这条流最后一次写入
++ * 是什么时候」——窗口缩小不该让「数据截至」跟着回退，故只收 runtimeDir 不收窗口参数。
++ * at 缺失/不可解析的记录不参与取最大（与 readKnowledgeHits 窗口过滤跳过同类）；全部无效
++ * 或零记录 → null（消费方以此区分「有遥测」与「无遥测」两个展示分支）。
++ *
++ * @param {string} runtimeDir - .runtime 目录（knowledge-hits.jsonl 落点）
++ * @returns {string|null} 最新记录 at 的原样 ISO 字符串；无有效记录 null
++ */
++export function resolveLastEventAt(runtimeDir) {
++  let best = null
++  let bestTs = -Infinity
++  for (const record of readKnowledgeHits(runtimeDir)) {
++    const ts = Date.parse(record.at)
++    // >= 同刻取落盘更后者，与 buildHitMatrix touch 的 lastTs 口径一致
++    if (Number.isFinite(ts) && ts >= bestTs) {
++      bestTs = ts
++      best = String(record.at)
++    }
++  }
++  return best
++}
++
+ // ── CLI 入口（形态对齐 src/stages/knowledge.js cmdSearch / src/knowledge-classify.js cmdKnowledgeClassify）──
+ 
+ function outputJson(ok, data, error) {
+@@ -234,7 +263,7 @@ function outputJson(ok, data, error) {
+  *
+  * 用法：stats [--since-days N] [--json]
+  * 默认人类可读输出（命中矩阵表 + 从未命中清单 + 遥测计数）；--json 输出结构化结果
+- * （{ ok, sinceDays, hasTelemetry, matrix, neverHit, totalInjects, totalClassifies }）。
++ * （{ ok, sinceDays, hasTelemetry, lastEventAt, matrix, neverHit, totalInjects, totalClassifies }）。
+  * 纯只读。
+  *
+  * @param {string} dir - 项目根目录
+@@ -264,11 +293,12 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+ 
+   // 遥测在场判定用全量读取（不加窗口）：文件缺失/只有坏行 → 无遥测
+   const hasTelemetry = readKnowledgeHits(runtimeDir).length > 0
++  const lastEventAt = resolveLastEventAt(runtimeDir)
+   const result = buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays })
+   const frIndex = buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays })
+ 
+   if (asJson) {
+-    outputJson(true, { sinceDays, hasTelemetry, ...result, frIndex })
++    outputJson(true, { sinceDays, hasTelemetry, lastEventAt, ...result, frIndex })
+     return
+   }
+ 
+@@ -302,7 +332,7 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+     lines.push('')
+   }
+ 
+-  lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次`)
++  lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次${lastEventAt ? ` | 数据截至 ${lastEventAt.slice(0, 10)}` : ''}`)
+ 
+   // FR 索引实验（L3 裁决仪表盘——证伪条款出数面；裁决时建议 --since-days 大窗口读全口径）
+   if (frIndex.present) {
+diff --git a/src/run/command.js b/src/run/command.js
+index 6ab50e53..2e6c1ba1 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1125,6 +1125,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))) {
+     if (!progress) {
+       console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
++      // 空态引导（2026-10-05-status-empty-guide）：新会话拿到下一步入口——静态文案，
++      // 引用通用命令形态而非本仓状态（空态定义即无数据可读）；exit 0 与零落盘语义不变。
++      console.log('   → 可 sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机；成功标准：每行一条可验证标准>" 开始轻量变更')
++      console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
+       process.exit(0)
+     }
+     // 只读展示路径：复用阶段定义渲染当前步骤 prompt（outputStep 对 status/doctor 纯只读），
+diff --git a/test/knowledge-stats.test.mjs b/test/knowledge-stats.test.mjs
+index 9252934d..55130ca0 100644
+--- a/test/knowledge-stats.test.mjs
++++ b/test/knowledge-stats.test.mjs
+@@ -21,7 +21,7 @@ import { tmpdir } from 'os'
+ const __filename = fileURLToPath(import.meta.url)
+ const root = join(__filename, '..', '..')
+ 
+-const { buildHitMatrix, cmdKnowledgeStats } = await import(
++const { buildHitMatrix, cmdKnowledgeStats, resolveLastEventAt } = await import(
+   pathToFileURL(join(root, 'src', 'knowledge-stats.js')).href
+ )
+ 
+@@ -258,6 +258,54 @@ console.log('\n=== Test 7: 坏 --since-days 值 ===')
+   } finally { clean(base) }
+ }
+ 
++// ── Test 8: lastEventAt 新鲜度读数（2026-10-05-knowledge-stats-freshness）──
++console.log('\n=== Test 8: lastEventAt 新鲜度读数 ===')
++{
++  const base = setup('t8')
++  try {
++    makeKnowledge(base)
++    const runtimeDir = join(base, '.runtime')
++    // 时间戳一次算定复用（毫秒级 ISO 串两次求值不等）
++    const T5 = daysAgo(5), T3 = daysAgo(3), T1 = daysAgo(1)
++    // 多记录乱序：最新一条落在中间
++    writeHits(runtimeDir, [
++      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: T5 }),
++      JSON.stringify({ type: 'classify', qlId: 'ql-1', targetFile: 'known-issues.md', at: T1 }),
++      JSON.stringify({ type: 'inject', change: 'c2', query: 'q2', matchedFiles: ['patterns.md#b'], at: T3 }),
++    ])
++    assert(resolveLastEventAt(runtimeDir) === T1, '多记录乱序取最新 at（原样 ISO）')
++
++    const j = JSON.parse(await captureOutput(() =>
++      cmdKnowledgeStats(base, ['--since-days', '1', '--json'], { specDir: base })))
++    assert(j.lastEventAt === T1, '--json lastEventAt=全量 max(at)，不受 --since-days 窗口影响')
++
++    const out = await captureOutput(() => cmdKnowledgeStats(base, [], { specDir: base }))
++    // 正则不加 s 标志：. 不跨行，天然锁定「数据截至」与「遥测计数」同行
++    assert(new RegExp(`遥测计数.*数据截至 ${T1.slice(0, 10)}`).test(out),
++      '人类可读遥测计数行含「数据截至 <date>」（同行）')
++
++    // 单记录
++    const base2 = setup('t8b')
++    makeKnowledge(base2)
++    const only = daysAgo(2)
++    writeHits(join(base2, '.runtime'), [
++      JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: only }),
++    ])
++    assert(resolveLastEventAt(join(base2, '.runtime')) === only, '单记录 lastEventAt=该记录 at')
++
++    // 无遥测：null 且人类可读不展示
++    const base3 = setup('t8c')
++    makeKnowledge(base3)
++    assert(resolveLastEventAt(join(base3, '.runtime')) === null, '无遥测（文件缺失）lastEventAt=null')
++    const j3 = JSON.parse(await captureOutput(() =>
++      cmdKnowledgeStats(base3, ['--json'], { specDir: base3 })))
++    assert(j3.lastEventAt === null && j3.hasTelemetry === false, '--json 无遥测 lastEventAt=null')
++    const out3 = await captureOutput(() => cmdKnowledgeStats(base3, [], { specDir: base3 }))
++    assert(!out3.includes('数据截至'), '无遥测不展示「数据截至」读数')
++    clean(base2, base3)
++  } finally { clean(base) }
++}
++
+ // ── 汇总 ──
+ console.log(`\n${'='.repeat(40)}`)
+ console.log(`knowledge-stats tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)
+diff --git a/test/status-empty-guide.test.mjs b/test/status-empty-guide.test.mjs
+new file mode 100644
+index 00000000..02399c61
+--- /dev/null
++++ b/test/status-empty-guide.test.mjs
+@@ -0,0 +1,79 @@
++/**
++ * 坑 status-empty-guide：status 空态无下一步指引
++ *
++ * 背景（2026-10-05 实测）：`sillyspec status` 在仓库无任何进度数据时只输出一句
++ * 「未找到进度数据（只读查询不建变更）」就 exit 0——新会话 agent/用户得不到任何
++ * 下一步入口指引，只能靠翻文档找 flow start / brainstorm。
++ *
++ * 锁定语义（2026-10-05-status-empty-guide）：
++ *   1. 空仓库：run status 与顶层 status 别名同构——原句之后必有引导行（含 flow start
++ *      子串与 brainstorm 备选），exit 0 不变，且不落盘任何变更目录（只读语义保持）
++ *   2. 有活跃变更：走既有展示路径，禁止出现空态引导行（不回归）
++ */
++import { join } from 'node:path'
++import { mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs'
++import { fileURLToPath } from 'node:url'
++import { execSync } from 'node:child_process'
++import { tmpdir } from 'node:os'
++
++const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
++const root = join(__dirname, '..')
++const binCLI = join(root, 'bin', 'sillyspec.js')
++
++let passed = 0, failed = 0
++const failures = []
++function assert(cond, msg) { cond ? (passed++, console.log(`  ✅ PASS: ${msg}`)) : (failed++, failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
++function run(cmd) {
++  try { return { out: execSync(cmd, { encoding: 'utf8', timeout: 60000 }), status: 0 } }
++  catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), status: e.status } }
++}
++
++console.log('=== status 空态引导（坑 status-empty-guide）===\n')
++
++console.log('--- ① 空仓库 run status：原句 + 引导行 + exit 0 + 零落盘 ---')
++{
++  const d = join(tmpdir(), `seg-empty-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  const r = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(r.out.includes('未找到进度数据'), '保留原空态提示句')
++  assert(r.out.includes('flow start'), '引导行含 flow start 子串')
++  assert(r.out.includes('run brainstorm'), '引导行含 brainstorm 备选')
++  const chDir = join(d, '.sillyspec', 'changes')
++  const created = existsSync(chDir) ? readdirSync(chDir).filter(x => !x.startsWith('.')).length : 0
++  assert(created === 0, `只读不建变更（changes/ 下新建 ${created} 个目录）`)
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log('--- ② 顶层 status 别名同构 ---')
++{
++  const d = join(tmpdir(), `seg-alias-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  const r = run(`node "${binCLI}" --dir "${d}" status`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(r.out.includes('未找到进度数据') && r.out.includes('flow start'), '别名输出与 run status 同构（原句+引导行）')
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log('--- ③ 有活跃变更：既有展示路径，禁止空态引导行 ---')
++{
++  const d = join(tmpdir(), `seg-active-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  const cn = '2026-10-05-active-a'
++  mkdirSync(join(d, '.sillyspec', 'changes', cn), { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" run plan --change ${cn} "x"`)
++  const r = run(`node "${binCLI}" --dir "${d}" status --change ${cn}`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(!r.out.includes('未找到进度数据'), '有变更不走空态分支')
++  assert(!r.out.includes('→ 可 sillyspec flow start'), '空态引导行不出现')
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failures.length) { console.log('失败项:'); failures.forEach(f => console.log('  - ' + f)) }
++console.log('='.repeat(50))
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-05-status-empty-guide/design.md b/.sillyspec/changes/2026-10-05-status-empty-guide/design.md
+new file mode 100644
+index 00000000..778f016f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-status-empty-guide/design.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:38:47.105Z
++---
++# 设计记录（Design Record）— 2026-10-05-status-empty-guide
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 `src/run/command.js` 只读短路的空态分支（`!progress` 时）原句之后追加两行静态引导输出：一行给轻量跑道起步命令（`flow start --change <名> --input "<动机；成功标准：每行一条>"`），一行给需求不明时的 brainstorm 备选。纯输出层追加：不引入任何状态读取、IO 或新依赖，exit 0 与「只读不建变更」语义原样保留——空态的定义就是无数据可读，静态文案是最小且最稳的方案。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名变化；对外可见变化仅一处：`sillyspec status` / `sillyspec run status` 在无进度数据空态的 stdout 由 1 行变 3 行（原句 + 两条引导）。有活跃变更时的展示路径零改动。
++
++文件变更清单：
++
++| 新增/修改 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/run/command.js | 空态分支追加两行引导输出 |
++| 新增 | test/status-empty-guide.test.mjs | 空态引导 / 别名同构 / 有变更不回归三面断言 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：改动点是同步 console 输出，位于进程退出前的单一分支，无事件序参与。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：只读短路路径本身零落盘（该分支的既有语义），引导输出不引入任何共享可变状态；多会话同时跑 status 各自打印，互不干扰。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不变：`process.exit(0)` 与原分支一致，输出后即终止，无中间态。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   引导文案为通用命令示例（`<YYYY-MM-DD-名>` 占位符），不引用本仓路径、变更名或机器标识，任何仓库打印内容一致，无串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：文案与未来选道入口漂移（若 flow start 参数形态变更，引导文案会悄悄失效）——以 FR-01 断言「含 flow start 子串」钉住最小锚，入口大改时测试会显式红。放弃的方案：读取本仓 spec 状态做「智能下一步建议」（如检测 .sillyspec/docs 存在性给不同建议）——空态分支的定义就是 progress 无数据可读，智能层没有可靠输入反而引入误判面，且跨仓语义不通用，故弃。
+diff --git a/.sillyspec/changes/2026-10-05-status-empty-guide/proposal.md b/.sillyspec/changes/2026-10-05-status-empty-guide/proposal.md
+new file mode 100644
+index 00000000..1c95ff53
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-status-empty-guide/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:38:47.105Z
++---
++# 提案书（Proposal）— 2026-10-05-status-empty-guide
++
++## 动机
++
++任务原话转写：status/doctor 只读短路的空态分支（src/run/command.js）在'未找到进度数据'时只输出一句就 exit 0，新会话 agent 得不到下一步指引；改为空态时在原句后追加一行 flow start / brainstorm 引导。
++成功标准：
++- 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
++- 有活跃变更时输出与现状逐字节一致（不回归）
++- 新增测试断言空态引导行，全量测试绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
++2. 有活跃变更时输出与现状逐字节一致（不回归）
++3. 新增测试断言空态引导行，全量测试绿
++
++## 成功标准（可验证）
++
++1. 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
++2. 有活跃变更时输出与现状逐字节一致（不回归）
++3. 新增测试断言空态引导行，全量测试绿
+diff --git a/.sillyspec/changes/2026-10-05-status-empty-guide/requirements.md b/.sillyspec/changes/2026-10-05-status-empty-guide/requirements.md
+new file mode 100644
+index 00000000..6d1ba36d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-status-empty-guide/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:38:47.105Z
++---
++# 需求规格（Requirements）— 2026-10-05-status-empty-guide
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
++
++目标仓库无任何进度数据时，`sillyspec status` 与 `sillyspec run status` 在「未找到进度数据（只读查询不建变更）」之后必须再输出引导行——含 `flow start` 子串的起步命令与 brainstorm 备选各至少一行——且进程必须保持 exit 0、禁止落盘任何变更/进度数据（只读语义不变）。
++
++#### 场景：主路径
++
++- Given：临时空仓库（已 `init`，无任何活跃变更与 progress 数据）
++- When：运行 `sillyspec run status`，再运行顶层别名 `sillyspec status`
++- Then：两次 stdout 均含「未找到进度数据」与「flow start」；exit code 均为 0；`.sillyspec/changes/` 下无新建目录
++
++### FR-02: 有活跃变更时输出与现状逐字节一致（不回归）
++
++存在可读 progress 的活跃变更时，status 展示路径禁止出现空态引导行——引导必须仅在无进度数据的空态分支输出，既有变更展示行为保持不变。
++
++#### 场景：主路径
++
++- Given：仓库存在一个活跃变更且其 progress 可读
++- When：运行 `sillyspec status --change <变更名>`
++- Then：输出为既有变更展示（不含「未找到进度数据」亦不含 `flow start` 引导行）；exit 0
++
++### FR-03: 新增测试断言空态引导行，全量测试绿
++
++本行为必须有自动化测试锁定：空态引导行 + exit 0、顶层别名同构、有变更不回归三个面都必须有断言覆盖，且全量测试套必须绿。
++
++#### 场景：主路径
++
++- Given：新增 `test/status-empty-guide.test.mjs`
++- When：单独运行该文件与全量测试
++- Then：三个面的断言全部通过，全量测试无新增失败
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例」`）
++
++FR-01: test/status-empty-guide.test.mjs「空仓库 run status 与顶层 status 均输出引导行且 exit 0 不落盘」
++FR-02: test/status-empty-guide.test.mjs「有活跃变更时 status 展示不含空态引导行」
++FR-03: test/status-empty-guide.test.mjs「三面断言齐全（空态/别名同构/不回归）+ 全量测试绿」
+diff --git a/.sillyspec/changes/2026-10-05-status-empty-guide/tasks.md b/.sillyspec/changes/2026-10-05-status-empty-guide/tasks.md
+new file mode 100644
+index 00000000..bf47e932
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-status-empty-guide/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T00:38:47.105Z
++---
++# 任务注册表（Tasks）— 2026-10-05-status-empty-guide
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-status-empty-guide --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-status-empty-guide` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 空仓库跑 sillyspec status 与 sillyspec run status 均输出引导行（含 flow start 字样）且 exit 0 不变
++- [x] task-02: 有活跃变更时输出与现状逐字节一致（不回归）
++- [x] task-03: 新增测试断言空态引导行，全量测试绿

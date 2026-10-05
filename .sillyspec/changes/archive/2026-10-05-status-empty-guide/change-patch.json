@@ -1,0 +1,64 @@
+{
+  "change": "2026-10-05-status-empty-guide",
+  "baseline": "a3817286b5dbe8430a3696db0020efa682aeeba1",
+  "head": "3c3ffbb59cf734c862b2ff1ca28a72c8b88124e6",
+  "files": [
+    ".sillyspec/changes/2026-10-05-status-empty-guide/design.md",
+    ".sillyspec/changes/2026-10-05-status-empty-guide/flow-state.yaml",
+    ".sillyspec/changes/2026-10-05-status-empty-guide/proposal.md",
+    ".sillyspec/changes/2026-10-05-status-empty-guide/requirements.md",
+    ".sillyspec/changes/2026-10-05-status-empty-guide/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/knowledge-stats.js",
+    "src/run/command.js",
+    "test/knowledge-stats.test.mjs",
+    "test/status-empty-guide.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 317,
+    "deletions": 6
+  },
+  "savedAt": "2026-10-05T00:57:00.772Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "b162e02ec64c3b57f14154f5f1eeca0bf9fa5fbb71fe88904856f0d6bc3f6b27",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-status-empty-guide",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "change.patch 冻结件夹带并行变更 2026-10-05-knowledge-stats-freshness 的交付，diff 范围与 design 文件清单不符",
+      "evidence": "patch 第 33-190 行含 src/knowledge-stats.js（resolveLastEventAt 新函数）与 test/knowledge-stats.test.mjs（Test 8）两个 hunk，代码注释自带他变更 ID 标签「2026-10-05-knowledge-stats-freshness」，而本变更 design 文件变更清单只申报 command.js / status-empty-guide.test.mjs / platform-interface-map.md 三项——冻结件作为『代码事实唯一来源』被污染（baseline a3817286 早于他变更落盘或 diff 未按本变更 pathspec 收窄），将其当本变更 diff 会错误归因他变更代码。本变更自身三 FR 均实测兑现，无数据正确性风险，故 P2 非 P1。",
+      "location": ".sillyspec/changes/2026-10-05-status-empty-guide/change.patch:33-190"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（代码事实=进程退出前单一分支内两行同步 console.log（src/run/command.js:1130-1131），无事件序参与，design『不适用』属实）",
+    "并发": "ok（新增代码零落盘零共享可变状态，实测空仓跑 status 后 .sillyspec/changes/ 零新建目录，design『不适用』属实）",
+    "切换": "ok（process.exit(0) 紧随输出执行，与原分支一致无中间态，design『不变』属实）",
+    "作用域": "ok（引导文案纯通用占位符 <YYYY-MM-DD-名>/<名>，无本仓路径、变更名或机器标识插值，design『无串台面』属实）"
+  },
+  "reviewedAt": "2026-10-05T01:07:37Z"
+}
