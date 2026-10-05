@@ -147,8 +147,10 @@ test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）', 
     `❓ 需求不够清晰（--input 缺失）——轻量跑道假定输入已含决策，两选一：`,
     `   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`,
     `      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`,
-    `   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`,
-    `      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`,
+    `   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"（引号内换行合法，可照抄形态）：`,
+    `      <动机/背景在前>`,
+    `      成功标准：`,
+    `      - <可验证标准，一行一条>`,
   ]
   for (const line of expected) assert.ok(s.stderr.includes(line), `清晰度门文案逐字保留: ${line}`)
   assert.ok(!/选道自检/.test(s.stderr), '清晰度门拒绝面不渲染自检段（未建变更）')

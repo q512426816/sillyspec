@@ -515,8 +515,11 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——轻量跑道假定输入已含决策，两选一：`)
       console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
       console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`)
-      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`)
-      console.error(`      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`)
+      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"（引号内换行合法，可照抄形态）：`)
+      console.error('      <动机/背景在前>')
+      console.error('')
+      console.error('      成功标准：')
+      console.error('      - <可验证标准，一行一条>')
       process.exit(2)
     }
   }
@@ -1737,7 +1740,12 @@ export async function cmdFlow(args, cwd, specDir = null) {
         assertDatedChangeName(change)
       } catch (e) {
         console.error(`❌ ${e.message}`)
-        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+        // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+        console.error('   重试（--input 引号内换行合法，可照抄）：')
+        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景>')
+        console.error('')
+        console.error('   成功标准：')
+        console.error('   - <可验证标准>"')
         process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
       }
     }
@@ -1905,6 +1913,11 @@ export async function cmdFlow(args, cwd, specDir = null) {
     return r
   }
   console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名>')
+  console.error('      --input 可照抄形态（引号内换行合法）：')
+  console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
+  console.error('')
+  console.error('      成功标准：')
+  console.error('      - <可验证标准>"')
   process.exit(2)
 }
 

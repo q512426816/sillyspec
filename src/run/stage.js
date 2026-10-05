@@ -416,7 +416,11 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       // 注：CLI 进程入口的新会话已被 index.js refuseRetiredQuickFreshStart 预门拦下，本门兜底
       // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
       console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
-      console.error(`   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+      console.error(`   新工作请走轻量变更（--input 引号内换行合法，可照抄）：`)
+      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+      console.error('')
+      console.error('   成功标准：')
+      console.error('   - <可验证标准>"')
       console.error(`   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。`)
       // 进程内路径幻影残留清理（best-effort）：CLI 入口已被 index.js 预门拦下；进程内直调
       // runCommand 的新会话形态在 command.js 已生成 sid + owner.json + current-quick-run-id +

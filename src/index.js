@@ -221,7 +221,12 @@ function refuseRetiredQuickFreshStart(stageArgs) {
     })()
   if (passThrough) return false
   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
-  console.error('   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+  // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+  console.error('   新工作请走轻量变更（--input 引号内换行合法，下例可照抄）：')
+  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+  console.error('')
+  console.error('   成功标准：')
+  console.error('   - <可验证标准>"')
   console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
   process.exit(1)
 }

@@ -833,7 +833,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
             quickSessionId = recent
             quickFallbackUsed = true
           } else {
-            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更（--input 引号内换行合法，可照抄）：')
+            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+            console.log('')
+            console.log('   成功标准：')
+            console.log('   - <可验证标准>"')
             process.exit(0)
           }
         } else {
@@ -1128,7 +1132,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
       // 空态引导（2026-10-05-status-empty-guide）：新会话拿到下一步入口——静态文案，
       // 引用通用命令形态而非本仓状态（空态定义即无数据可读）；exit 0 与零落盘语义不变。
-      console.log('   → 可 sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>" 开始轻量变更')
+      // 可照抄实例（2026-10-05-input-teach-copyable）：分号描述形态照抄提取 0 条（探针实证）；
+      // 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
+      console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
+      console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+      console.log('')
+      console.log('     成功标准：')
+      console.log('     - <可验证标准>"')
       console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
       process.exit(0)
     }
@@ -2016,8 +2026,11 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     const classification = classifyChange({ description: inputText || '', explicitMode, localConfig })
     if (classification.mode === 'quick') {
       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
-      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话）：`)
-      console.log(`   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话；--input 引号内换行合法，可照抄）：`)
+      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+      console.log('')
+      console.log('   成功标准：')
+      console.log('   - <可验证标准>"')
       return
     }
     console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)

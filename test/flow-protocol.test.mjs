@@ -539,11 +539,12 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
   rmSync(cwd, { recursive: true, force: true })
   rmSync(plat, { recursive: true, force: true })
-  // 格式样例（清晰度门文案）
+  // 格式样例（清晰度门文案——2026-10-05-input-teach-copyable 起为可照抄实例形态）
   const cwd2 = makeRepo().cwd
   const gate = cli(cwd2, ['flow', 'start', '--change', '2026-09-01-x1'])
-  assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
-  assert.match(gate.stderr, /- <可验证标准>/)
+  assert.match(gate.stderr, /可照抄/, '过门格式可照抄实例在场')
+  assert.match(gate.stderr, /成功标准：/)
+  assert.match(gate.stderr, /- <可验证标准/)
   rmSync(cwd2, { recursive: true, force: true })
 })
 
