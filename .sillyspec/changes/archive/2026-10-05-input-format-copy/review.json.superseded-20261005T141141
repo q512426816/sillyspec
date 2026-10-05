@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-input-format-copy",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "同类无格式 flow start 教学点残留且未在披露边界显式裁决（brainstorm 阶段提示）",
+      "evidence": "src/stages/brainstorm.js:58 仍教 `sillyspec flow start --change <YYYY-MM-DD-名> --input \"<需求>\"`——与本变更在 flow.js:1740 修掉的形态完全同类（proposal 自身将 `--input \"<需求>\"` 归类为『无格式』缺口）；FR-01 头部称『flow start 的全部 CLI 教学点』、成功标准第 3 条称『flow start 教学行不再出现无格式』，但 requirements/design 均未对该点作出界裁决；照抄该建议命令不带过门格式仍会弹清晰度门 exit 2（flow.js:515-519 有兜底教学可恢复，且该点不在 FR 枚举的 4 处清单内，故 P2 非 P1）",
+      "location": "src/stages/brainstorm.js:58"
+    },
+    {
+      "severity": "P3",
+      "title": "design 接口契约计数失准：声称 7 处提示字符串，patch 实改 6 处",
+      "evidence": "patch 在 src 实改提示字符串共 6 处（src/flow.js:1740、1907 + src/hooks/worktree-guard.js:63、79、83 + src/run/command.js:1131），design『CLI 输出面文案变化（4 文件 7 处提示字符串）』多计 1 处——纯计数误差，无行为影响",
+      "location": ".sillyspec/changes/2026-10-05-input-format-copy/design.md:21"
+    },
+    {
+      "severity": "P3",
+      "title": "回归测试①注释声称『全仓 src』覆盖，断言实扫仅 4 个文件",
+      "evidence": "test ① 循环仅遍历 src/run/command.js、src/flow.js、src/index.js、src/hooks/worktree-guard.js 四文件——紧凑内联形态若回潮到 src/run/stage.js、src/stages/*.js 等其余 src 文件测试仍绿，注释与断言覆盖面不符；当前全仓 grep 实证零残留，无现行影响（与 P2 残留点互为印证：残留正落在扫描面之外）",
+      "location": "test/input-format-copy.test.mjs:9"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-05T14:09:42Z"
+}

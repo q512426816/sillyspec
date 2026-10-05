@@ -1,0 +1,71 @@
+{
+  "change": "2026-10-05-input-format-copy",
+  "baseline": "e56ab96b3f485a4905e3b59ec2813ad921424301",
+  "head": "979e624889e8bfeebaa9a2904da64763bb438620",
+  "files": [
+    ".sillyspec/changes/2026-10-05-input-format-copy/design.md",
+    ".sillyspec/changes/2026-10-05-input-format-copy/requirements.md",
+    ".sillyspec/changes/2026-10-05-input-format-copy/tasks.md",
+    "src/flow.js",
+    "src/hooks/worktree-guard.js",
+    "src/run/command.js",
+    "src/stages/brainstorm.js",
+    "test/input-format-copy.test.mjs",
+    ".sillyspec/changes/2026-10-05-input-format-copy/proposal.md",
+    ".sillyspec/changes/2026-10-05-input-format-copy/review.json.superseded-20261005T141141"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 216,
+    "deletions": 7
+  },
+  "savedAt": "2026-10-05T14:11:42.640Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "aa3d9d5ccbf85c0391116ce4571b96e11077101f8ad132e669246510e5e15918",
+  "patchStatus": "ok"
+}

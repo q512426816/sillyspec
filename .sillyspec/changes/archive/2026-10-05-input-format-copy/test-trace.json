@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-input-format-copy",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-input-format-copy:flow:测试绑定FR-01",
+      "tests": [
+        "test/input-format-copy.test.mjs「① 紧凑内联旧形态零残留 + ② 4 处教学点均带独立一行『成功标准：』教学」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-format-copy"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-input-format-copy:flow:测试绑定FR-02",
+      "tests": [
+        "test/input-format-copy.test.mjs「③ 另一语义门的 --input 不受影响」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-format-copy"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-input-format-copy:flow:测试绑定FR-03",
+      "tests": [
+        "test/input-format-copy.test.mjs「① + ② + ③ 三组断言齐备」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-format-copy"
+    }
+  ]
+}

@@ -6384,3 +6384,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-tests-confirm-hint
   status: active
+
+## FR-cli-entry-338 4 处教学点全部带过门格式（独立一行『成功标准：』+ 每行一条『- 可验证标准』的教学形态）；紧凑内联旧形态零残留
+变更：2026-10-05-input-format-copy
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-format-copy/requirements.md#FR-01
+最近确认：979e624889e8bfeebaa9a2904da64763bb438620
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-format-copy:flow:测试绑定FR-01
+  tests: test/input-format-copy.test.mjs「① 紧凑内联旧形态零残留 + ② 4 处教学点均带独立一行『成功标准：』教学」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-format-copy
+  status: active
+
+## FR-cli-entry-339 quick 会话的 --input "<一句话任务描述>"（另一语义门）与 run --done --input "用户原话" 不受影响
+变更：2026-10-05-input-format-copy
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-format-copy/requirements.md#FR-02
+最近确认：979e624889e8bfeebaa9a2904da64763bb438620
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-format-copy:flow:测试绑定FR-02
+  tests: test/input-format-copy.test.mjs「③ 另一语义门的 --input 不受影响」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-format-copy
+  status: active
+
+## FR-cli-entry-340 源级回归测试锁定：flow start 教学行不再出现无格式/紧凑内联形态
+变更：2026-10-05-input-format-copy
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-format-copy/requirements.md#FR-03
+最近确认：979e624889e8bfeebaa9a2904da64763bb438620
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-format-copy:flow:测试绑定FR-03
+  tests: test/input-format-copy.test.mjs「① + ② + ③ 三组断言齐备」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-format-copy
+  status: active
