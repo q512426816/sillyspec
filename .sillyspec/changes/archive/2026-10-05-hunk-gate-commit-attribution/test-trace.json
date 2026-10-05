@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-hunk-gate-commit-attribution",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-01",
+      "tests": [
+        "test/hunk-gate-commit-attribution.test.mjs「① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 裸提交维持」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hunk-gate-commit-attribution"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-02",
+      "tests": [
+        "test/hunk-gate-commit-attribution.test.mjs「③ 他侧归因不阻 ok（清零行与他侧归因并存）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hunk-gate-commit-attribution"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-03",
+      "tests": [
+        "test/hunk-gate-commit-attribution.test.mjs「④ 切分不可得退化：归属失败（非法基线 → null）保持全量未归因不放宽」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hunk-gate-commit-attribution"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-04",
+      "tests": [
+        "test/hunk-gate-commit-attribution.test.mjs「① + ③ + ④ 三形态齐备」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-hunk-gate-commit-attribution"
+    }
+  ]
+}

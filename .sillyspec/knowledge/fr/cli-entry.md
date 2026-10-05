@@ -6555,3 +6555,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-flow-help-status
   status: active
+
+## FR-cli-entry-347 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
+变更：2026-10-05-hunk-gate-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-hunk-gate-commit-attribution/requirements.md#FR-01
+最近确认：72c50c924f82444521924e13a75859db8a17ec3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-01
+  tests: test/hunk-gate-commit-attribution.test.mjs「① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 裸提交维持」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hunk-gate-commit-attribution
+  status: active
+
+## FR-cli-entry-348 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
+变更：2026-10-05-hunk-gate-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-hunk-gate-commit-attribution/requirements.md#FR-02
+最近确认：72c50c924f82444521924e13a75859db8a17ec3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-02
+  tests: test/hunk-gate-commit-attribution.test.mjs「③ 他侧归因不阻 ok（清零行与他侧归因并存）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hunk-gate-commit-attribution
+  status: active
+
+## FR-cli-entry-349 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
+变更：2026-10-05-hunk-gate-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-hunk-gate-commit-attribution/requirements.md#FR-03
+最近确认：72c50c924f82444521924e13a75859db8a17ec3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-03
+  tests: test/hunk-gate-commit-attribution.test.mjs「④ 切分不可得退化：归属失败（非法基线 → null）保持全量未归因不放宽」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hunk-gate-commit-attribution
+  status: active
+
+## FR-cli-entry-350 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
+变更：2026-10-05-hunk-gate-commit-attribution
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-hunk-gate-commit-attribution/requirements.md#FR-04
+最近确认：72c50c924f82444521924e13a75859db8a17ec3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-hunk-gate-commit-attribution:flow:测试绑定FR-04
+  tests: test/hunk-gate-commit-attribution.test.mjs「① + ③ + ④ 三形态齐备」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-hunk-gate-commit-attribution
+  status: active

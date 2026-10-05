@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-hunk-gate-commit-attribution",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 后半（本变更名提交触碰未声明文件维持未归因）无 gate 级集成用例，仅靠谓词单测锁定",
+      "evidence": "守卫真实存在（src/foreign-declared.js:266 !entry.owners.has(currentChangeName)，且 test/commit-attribution-split.test.mjs:47-50 单测锁定含本变更名→own/裸提交→保守/无记录→own），但新测试文件里 own 后缀提交只触碰已声明的 a.js，own-undeclared 路径未经 runHunkAttributionGate 集成 exercised；FR-04 字面只承诺三形态（他侧改判/裸提交维持/退化），非承诺违反，属覆盖完备性观察",
+      "location": "test/hunk-gate-commit-attribution.test.mjs:115-142"
+    },
+    {
+      "severity": "P3",
+      "title": "测试 gitFn 包装 (c,a)=>git(c,a.slice(1)) 丢掉 git 子命令，fixture 内 hunks 计数与在途残留探测恒失效",
+      "evidence": "gate 以 gitFn(cwd,['diff',...])（src/hunk-attribution.js:87）与 gitFn(cwd,['status','--porcelain'])（:100）调用，包装 slice(1) 削掉首元素后 git -C <cwd> <range> -- <file> 必 fatal→countHunks 恒 -1、collectWorkingTreeModified 恒 null（residue 恒跳过）；现无断言依赖 hunks 数值或 residue 故全部断言仍真且分类路径（走 safeGit 的 commitAttributionForChange）不受影响，但 fixture 保真度低于既有 test/hunk-attribution-gate.test.mjs:72 的恒等包装，属潜伏测试质量面",
+      "location": "test/hunk-gate-commit-attribution.test.mjs:59"
+    },
+    {
+      "severity": "P3",
+      "title": "模块文档的三信号枚举未纳入第四类（他侧归因（提交事实）信息行）",
+      "evidence": "cli-entry.md:113 与 setup.md:94 将 hunk 门信号枚举为未归因/跨变更竞争/在途残留，本变更新增 foreignByCommit 信息类后枚举不完整；两处现有表述无虚假陈述（error 档阻断面描述仍准确），且文档不在 design 文件变更清单声明面内，属可选同步非违反",
+      "location": ".sillyspec/docs/sillyspec/modules/cli-entry.md:113"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-05T14:54:47Z"
+}

@@ -1,0 +1,386 @@
+diff --git a/src/hunk-attribution.js b/src/hunk-attribution.js
+index 329063f7..b479a4c8 100644
+--- a/src/hunk-attribution.js
++++ b/src/hunk-attribution.js
+@@ -9,6 +9,8 @@
+  * 三类信号（诚实口径：机器无法判定「哪行是谁的」，门的目标是把静默混合变成显式中断）：
+  *   ① 未归因文件：提交面文件不在本变更声明面（design 清单 ∪ requirements 测试绑定，
+  *      复用 parseFileChangeList / extractRequirementBindings / testAnchorFile 同源解析）；
++ *      其中「窗口内全部提交均属他侧变更名」的文件改判他侧归因（提交事实，2026-10-05-
++ *      hunk-gate-commit-attribution：归档他侧变更声明面不可见致误报——信息行不计数 ok 面）；
+  *   ② 跨变更竞争：其他活跃变更的声明面与提交面相交——同文件无法按行归属，显式列出
+  *      竞争文件、对方变更名与 hunk 数，收口前人工核对；
+  *   ③ 在途残留：提交面文件当前工作树仍有未提交 diff——活跃并发 WIP 信号。
+@@ -115,7 +117,7 @@ function collectWorkingTreeModified(gitFn, cwd) {
+  *   contended: Array, residue: Array, notes: string[] }}
+  */
+ export async function runHunkAttributionGate({ cwd, specBase, changeName, baselineCommit, committedFiles, gitFn, gate = 'warn' }) {
+-  const result = { ok: true, degraded: false, gate, faceCount: 0, unattributed: [], contended: [], residue: [], notes: [] }
++  const result = { ok: true, degraded: false, gate, faceCount: 0, unattributed: [], foreignByCommit: [], contended: [], residue: [], notes: [] }
+   if (gate === 'off') {
+     result.notes.push('hunk_gate=off——归属门关闭')
+     return result
+@@ -134,8 +136,26 @@ export async function runHunkAttributionGate({ cwd, specBase, changeName, baseli
+ 
+   // ① 未归因文件（声明面全空时降为提示，不指认夹带——advisory 同口径）
+   if (declared.size > 0) {
+-    for (const f of deliverables) {
+-      if (!declared.has(f)) {
++    const undeclared = deliverables.filter((f) => !declared.has(f))
++    // 他侧归因改判（提交事实，2026-10-05-hunk-gate-commit-attribution）：collectForeignDeclarations
++    // 只扫活跃变更（排 archive/）——归档他侧交付落本窗口时报「未归因」，指引「pathspec 隔离/
++    // 补 design 自声明」双误导（F-4 实证：他侧 546720ea 已归档交付被指为在途）。按提交 message
++    // 变更名归属（commitAttributionForChange+isForeignByCommit，与 patch 冻结 filterCommittedFace
++    // 同源）：窗口内全部提交均属他侧变更名 → 他侧归因（ℹ️ 信息行、不计 ok 阻断面）；
++    // 裸提交/本变更名提交触碰的文件保持未归因（fail-closed 原口径）。切分不可得（非 git/
++    // git 失败 → null）保持全量未归因，不放宽。
++    let attr = null
++    let isForeign = null
++    try {
++      const m = await import('./foreign-declared.js')
++      attr = m.commitAttributionForChange(cwd, specBase, changeName, baselineCommit)
++      isForeign = m.isForeignByCommit
++    } catch { /* 同源切分不可得 → 原口径 */ }
++    for (const f of undeclared) {
++      const entry = attr ? attr.get(f) : null
++      if (isForeign && isForeign(entry, changeName)) {
++        result.foreignByCommit.push({ file: f, owners: [...entry.owners] })
++      } else {
+         result.unattributed.push({ file: f, hunks: countHunks(gitFn, cwd, baselineCommit, f) })
+       }
+     }
+@@ -172,8 +192,11 @@ export function renderHunkAttributionLines(r) {
+     for (const n of (r && r.notes) || []) L.push(`- ℹ️ ${n}`)
+     return L
+   }
+-  const attributed = r.faceCount - r.unattributed.length
+-  L.push(`- ℹ️ 提交面 ${r.faceCount} 个交付文件对账：声明面归因 ${attributed}、未归因 ${r.unattributed.length}、跨变更竞争 ${r.contended.length}、在途残留 ${r.residue.length}`)
++  const attributed = r.faceCount - r.unattributed.length - (r.foreignByCommit || []).length
++  L.push(`- ℹ️ 提交面 ${r.faceCount} 个交付文件对账：声明面归因 ${attributed}、他侧归因（提交事实）${(r.foreignByCommit || []).length}、未归因 ${r.unattributed.length}、跨变更竞争 ${r.contended.length}、在途残留 ${r.residue.length}`)
++  for (const fb of (r.foreignByCommit || [])) {
++    L.push(`- ℹ️ 他侧归因（提交事实）：\`${fb.file}\` 窗口提交全部属 ${fb.owners.join('、')}——已归档他侧交付非本变更未归因，patch 冻结面同口径剔除`)
++  }
+   for (const u of r.unattributed) {
+     L.push(`- ⚠️ 未归因：\`${u.file}\`（${u.hunks >= 0 ? `${u.hunks} hunk` : 'hunk 数不可得'}）不在 design 清单与 requirements 测试绑定——属并行会话在途交付则须显式 pathspec 隔离并协调归属；属本变更则补 design 自声明`)
+   }
+diff --git a/test/hunk-gate-commit-attribution.test.mjs b/test/hunk-gate-commit-attribution.test.mjs
+new file mode 100644
+index 00000000..d11ee309
+--- /dev/null
++++ b/test/hunk-gate-commit-attribution.test.mjs
+@@ -0,0 +1,108 @@
++/**
++ * 2026-10-05-hunk-gate-commit-attribution 回归：未归因判定的提交事实归属切分
++ *
++ * 背景（F-4，2026-10-05 本会话实证）：collectForeignDeclarations 只扫活跃变更（排 archive/）
++ * ——已归档他侧交付落本变更 baseline..HEAD 窗口时报「未归因」，指引「pathspec 隔离/补 design
++ * 自声明」双误导；patch 冻结面（filterCommittedFace）同窗口已按提交事实正确剔除——两消费点
++ * 口径不一。
++ *
++ * 锁定三形态：
++ *   ① 他侧归因改判：窗口内全部提交属他侧变更名 → foreignByCommit（ℹ️ 信息行、不计 ok 面）
++ *   ② 裸提交维持：无后缀裸提交触碰的文件保持未归因（fail-closed 原口径）
++ *   ③ 切分不可得退化：归属切分失败（基线非法 → null）保持全量未归因，不放宽
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++import { runHunkAttributionGate, renderHunkAttributionLines } from '../src/hunk-attribution.js'
++
++function git(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++}
++
++function mkRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'hunk-attr-commit-'))
++  git(cwd, ['init', '-q', '-b', 'main'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'user.name', 't'])
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  git(cwd, ['add', '.'])
++  git(cwd, ['commit', '-qm', 'base'])
++  const specBase = join(cwd, '.sillyspec')
++  const changeName = '2026-10-05-mine'
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  return { cwd, specBase, changeName, changeDir, cleanup: () => rmSync(cwd, { recursive: true, force: true }) }
++}
++
++const OWN = '2026-10-05-mine'
++const OTHER = '2026-10-05-archived-other'
++
++test('① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 裸提交维持', async () => {
++  const f = mkRepo()
++  try {
++    // 窗口三提交：own 后缀 / 他侧后缀（已归档变更——声明面不在场）/ 裸提交
++    writeFileSync(join(f.cwd, 'a.js'), 'a\n')
++    git(f.cwd, ['add', 'a.js']); git(f.cwd, ['commit', '-qm', `fix: 自交付 (${OWN})`])
++    writeFileSync(join(f.cwd, 'f.js'), 'f\n')
++    git(f.cwd, ['add', 'f.js']); git(f.cwd, ['commit', '-qm', `fix: 他侧已归档交付 (${OTHER})`])
++    writeFileSync(join(f.cwd, 'bare.js'), 'b\n')
++    git(f.cwd, ['add', 'bare.js']); git(f.cwd, ['commit', '-qm', 'chore: 无后缀裸提交'])
++    const baseline = git(f.cwd, ['rev-parse', 'HEAD~3']).trim()
++    writeFileSync(join(f.changeDir, 'design.md'), `# 设计\n## 文件变更清单\n| 操作 | 路径 |\n|---|---|\n| 修改 | a.js |\n`)
++
++    const r = await runHunkAttributionGate({
++      cwd: f.cwd, specBase: f.specBase, changeName: f.changeName, baselineCommit: baseline,
++      committedFiles: ['a.js', 'f.js', 'bare.js'], gitFn: (c, a) => git(c, a), gate: 'warn',
++    })
++    assert.deepEqual(r.unattributed.map((u) => u.file), ['bare.js'], `裸提交保持未归因（实际 ${JSON.stringify(r.unattributed)}）`)
++    assert.ok(r.unattributed[0].hunks >= 1, `hunk 计数真实可得（评审 P3 处置：包装修复后不再恒 -1，实得 ${r.unattributed[0].hunks}）`)
++    assert.equal(r.foreignByCommit.length, 1, '他侧后缀交付改判他侧归因')
++    assert.equal(r.foreignByCommit[0].file, 'f.js')
++    assert.equal(r.foreignByCommit[0].owners[0], OTHER, '归属他侧变更名（提交事实）')
++    assert.equal(r.ok, false, 'ok 仍被裸提交阻断（未归因面非零）')
++    const lines = renderHunkAttributionLines(r).join('\n')
++    assert.ok(lines.includes('他侧归因（提交事实）：`f.js` 窗口提交全部属 ' + OTHER), '渲染含他侧归因信息行（ℹ️ 非警告）')
++    assert.ok(lines.includes('声明面归因 1、他侧归因（提交事实）1、未归因 1'), `汇总行三计数（${lines.split('\n')[1]}）`)
++    assert.ok(!lines.includes('未归因：`f.js`'), 'f.js 不再出现在未归因警告行')
++  } finally { f.cleanup() }
++})
++
++test('③ 他侧归因不阻 ok（清零行与他侧归因并存）', async () => {
++  const f = mkRepo()
++  try {
++    writeFileSync(join(f.cwd, 'f.js'), 'f\n')
++    git(f.cwd, ['add', 'f.js']); git(f.cwd, ['commit', '-qm', `fix: 他侧交付 (${OTHER})`])
++    const baseline = git(f.cwd, ['rev-parse', 'HEAD~1']).trim()
++    // 声明面非空（declared.size>0 才走未归因判定）——声明一个不在提交面的占位文件
++    writeFileSync(join(f.changeDir, 'design.md'), `# 设计\n## 文件变更清单\n| 操作 | 路径 |\n|---|---|\n| 修改 | placeholder.js |\n`)
++    const r = await runHunkAttributionGate({
++      cwd: f.cwd, specBase: f.specBase, changeName: f.changeName, baselineCommit: baseline,
++      committedFiles: ['f.js'], gitFn: (c, a) => git(c, a), gate: 'error',
++    })
++    assert.equal(r.unattributed.length, 0, '无未归因')
++    assert.equal(r.foreignByCommit.length, 1)
++    assert.equal(r.ok, true, 'gate=error 档他侧归因不阻断（不计 ok 面）')
++    const lines = renderHunkAttributionLines(r).join('\n')
++    assert.ok(lines.includes('✅ 提交面全部文件归属清晰'), '清零行与他侧归因并存')
++  } finally { f.cleanup() }
++})
++
++test('④ 切分不可得退化：归属失败（非法基线 → null）保持全量未归因不放宽', async () => {
++  const f = mkRepo()
++  try {
++    writeFileSync(join(f.cwd, 'f.js'), 'f\n')
++    git(f.cwd, ['add', 'f.js']); git(f.cwd, ['commit', '-qm', `fix: 他侧交付 (${OTHER})`])
++    writeFileSync(join(f.changeDir, 'design.md'), `# 设计\n## 文件变更清单\n| 操作 | 路径 |\n|---|---|\n| 修改 | placeholder.js |\n`)
++    const r = await runHunkAttributionGate({
++      cwd: f.cwd, specBase: f.specBase, changeName: f.changeName,
++      baselineCommit: '0000000000000000000000000000000000000000', // 非法 → git log 失败 → 切分 null
++      committedFiles: ['f.js'], gitFn: () => { throw new Error('不应触达') }, gate: 'warn',
++    })
++    assert.deepEqual(r.unattributed.map((u) => u.file), ['f.js'], '切分不可得时他侧文件保持未归因（fail-closed 原口径）')
++    assert.equal(r.foreignByCommit.length, 0, '不改判')
++  } finally { f.cleanup() }
++})
+diff --git a/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/design.md b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/design.md
+new file mode 100644
+index 00000000..33cf793c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:02:23.631Z
++---
++# 设计记录（Design Record）— 2026-10-05-hunk-gate-commit-attribution
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++收口在 runHunkAttributionGate（src/hunk-attribution.js）的未归因判定：对声明面外的交付文件补提交事实归属切分——commitAttributionForChange(cwd, specBase, changeName, baselineCommit)+isForeignByCommit（与 patch 冻结 filterCommittedFace 完全同源同参数），窗口内全部提交均属他侧变更名的文件从「未归因」改判「他侧归因（提交事实）」新类（ℹ️ 信息行、不参与 ok 阻断面），裸提交/本变更名提交触碰的文件保持未归因原口径（isForeignByCommit 的 unknown/own 守卫天然覆盖）。根因：collectForeignDeclarations 只扫活跃变更声明面（排 archive/），归档他侧交付落窗口时误报（F-4 实证：已归档 546720ea 交付被指引为「在途交付须 pathspec 隔离」）。渲染汇总行加第三计数，清零行条件不含他侧归因（该类即归属清晰）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++runHunkAttributionGate 返回对象新增 foreignByCommit 数组（{file, owners[]}）；unattributed 语义收窄（他侧提交事实文件移出）；ok 计算不变（=unattributed×0 且 contended×0）——他侧归因文件不再影响 ok（含 gate=error 档阻断）。renderHunkAttributionLines 汇总行加「他侧归因（提交事实）N」计数与 ℹ️ 信息行。CLI 无参数面变化；patch 冻结/probes 接线零改动。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——切分输入是 baseline..HEAD 的既成提交事实（不可变窗口），判定单次同步执行；窗口内新提交只会让下轮判定更新，无累积序依赖。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   判定纯只读（git log/声明面文件读取）；并发提交落在窗口内按下轮快照判——与他侧/裸提交同径处理，无竞态写面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——判定无状态不落盘；切分失败（null）即整体退原口径全量未归因，中断重跑幂等。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：commitAttributionForChange 锚调用方 cwd 与显式 baselineCommit（与 patch 冻结同参同锚），不读跨仓数据；他侧变更名取自提交 message 字面后缀，多实例各自窗口各自判。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：提交 message 后缀被伪造（本变更交付冒他侧名）→ 误判他侧归因放过未声明文件——但该伪造同时会骗过 patch 冻结的同一口径（filterCommittedFace 先于此门存在且已裁决：按提交事实归属是已发生的提交事实不是声明抢文件，sentinel-evidence-freeze⑤ 界定），本变更只是让两消费点口径一致，不新增伪造面。放弃的方案：① collectForeignDeclarations 扩扫 archive/ 声明面——用陈旧声明做意图归属正是 sentinel-evidence-freeze⑤ 否决的形态，且 archive 清单庞大性能面差；② 未归因警告文案改软——保留误报数据只软化措辞，治标。均已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/hunk-attribution.js | 未归因判定补提交事实切分：foreignByCommit 新类（ℹ️ 信息行、不阻 ok）+ 渲染汇总三计数 |
++| 新增 | test/hunk-gate-commit-attribution.test.mjs | 他侧改判/裸提交维持/不阻 ok/切分不可得退化四断言组 |
+diff --git a/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/requirements.md b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/requirements.md
+new file mode 100644
+index 00000000..750b7fd8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T15:02:23.631Z
++---
++# 需求规格（Requirements）— 2026-10-05-hunk-gate-commit-attribution
++
++## 功能需求
++
++### FR-01: 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
++
++- hunk 归属门的未归因判定必须补提交事实归属切分（commitAttributionForChange+isForeignByCommit，与 patch 冻结 filterCommittedFace 同源）：窗口内全部提交均属他侧变更名的文件必须改判「他侧归因（提交事实）」ℹ️ 信息行（含归属变更名与「patch 冻结面同口径剔除」注明）；禁止再对该形态报未归因警告（指引「pathspec 隔离/补 design 自声明」双误导）。
++
++#### 场景：主路径
++
++- Given: baseline..HEAD 窗口含他侧变更名后缀提交（该变更已归档，声明面不可见），文件不在本变更声明面
++- When: runHunkAttributionGate 判定
++- Then: 该文件进 foreignByCommit（ℹ️ 信息行、归属他侧变更名），不出现在未归因警告行
++
++### FR-02: 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
++
++- 他侧归因（提交事实）文件必须不计入 ok 阻断面（ok=未归因×0 且 竞争×0——foreignByCommit 不参与）；被裸提交（无后缀）或本变更名提交触碰过的文件必须维持未归因原判定（fail-closed 不因改判放宽）。
++
++#### 场景：主路径
++
++- Given: 窗口仅含他侧后缀交付（无裸提交/本变更名提交触碰未声明文件）
++- When: gate=error 档判定
++- Then: ok=true 不拦，清零行与他侧归因信息行并存
++
++### FR-03: 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
++
++- commitAttributionForChange 不可得（返回 null）时必须保持原口径：未声明文件全量计未归因，不做改判——切分失败不成为放宽面。
++
++#### 场景：主路径
++
++- Given: baselineCommit 非法（git log 失败 → 切分 null）
++- When: 未归因判定
++- Then: 他侧后缀文件仍计未归因（原口径），foreignByCommit 空
++
++### FR-04: 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
++
++- 必须有单测锁定三形态：他侧归因改判（含渲染行与汇总三计数）、裸提交维持未归因、切分不可得退化全量未归因；含他侧归因不阻 ok 的 error 档断言。
++
++#### 场景：主路径
++
++- Given: 真实临时 git 仓三形态 fixture
++- When: runHunkAttributionGate + renderHunkAttributionLines
++- Then: 三形态断言各自成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/hunk-gate-commit-attribution.test.mjs「① 他侧归因改判：他侧后缀交付不报未归因（信息行 + 不计 ok 面）；② 裸提交维持」
++FR-02: test/hunk-gate-commit-attribution.test.mjs「③ 他侧归因不阻 ok（清零行与他侧归因并存）」
++FR-03: test/hunk-gate-commit-attribution.test.mjs「④ 切分不可得退化：归属失败（非法基线 → null）保持全量未归因不放宽」
++FR-04: test/hunk-gate-commit-attribution.test.mjs「① + ③ + ④ 三形态齐备」
+diff --git a/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/tasks.md b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/tasks.md
+new file mode 100644
+index 00000000..7e961e37
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:41:28.144Z
++---
++# 任务注册表（Tasks）— 2026-10-05-hunk-gate-commit-attribution
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-hunk-gate-commit-attribution --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-hunk-gate-commit-attribution` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
++- [x] task-02: 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
++- [x] task-03: 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
++- [x] task-04: 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
++- [x] task-05: 评审处置（P3：测试 gitFn 包装修复（.slice(1) 误删子命令致 hunks 恒 -1）+ hunks 断言补实；own 形态集成用例与模块文档枚举留档——前者已有单测锁定后者无虚假陈述）
+diff --git a/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/proposal.md b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:41:28.144Z
++---
++# 提案书（Proposal）— 2026-10-05-hunk-gate-commit-attribution
++
++## 动机
++
++任务原话转写：hunk 归属门对已归档他侧交付误报「未归因」（F-4，2026-10-05 本会话实证：flow done 对账输出「未归因：src/ui-visual.js…属并行会话在途交付则须 pathspec 隔离；属本变更则补 design 自声明」双误导——实为他侧已归档变更 546720ea 的交付，非在途非本变更）。根因：collectForeignDeclarations 只扫活跃变更声明面（排 archive/），归档后声明面失效；而 patch 冻结面（filterCommittedFace）同窗口已按提交事实归属正确剔除该文件——两个消费点口径不一。修法：对账的未归因判定补提交事实归属切分（commitAttributionForChange+isForeignByCommit 同源）：窗口内全部提交均属他侧变更名的文件改判「他侧归因（提交事实）」ℹ️ 信息行（不计数 ok 阻断面）；裸提交/本变更名提交触碰的文件保持未归因 fail-closed 原口径。
++成功标准：
++- 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
++- 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
++- 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
++- 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
++2. 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
++3. 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
++4. 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
++
++## 成功标准（可验证）
++
++1. 已归档他侧交付（窗口内全部提交属他侧变更名）不再报未归因，改报「他侧归因（提交事实）」信息行并注明 patch 冻结面同口径剔除
++2. 他侧归因文件不计入 ok 阻断面（gate=error 不再因此拦）；裸提交/本变更名提交的文件维持未归因原判定
++3. 归属切分不可得（非 git/无基线/git 失败）时保持原口径全量未归因（fail-closed 不放宽）
++4. 单测覆盖：他侧归因改判/裸提交维持/切分不可得退化三形态
+
+diff --git a/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/review.json.superseded-20261005T145634 b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/review.json.superseded-20261005T145634
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-hunk-gate-commit-attribution/review.json.superseded-20261005T145634
+@@ -0,0 +1,33 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-05-hunk-gate-commit-attribution",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "FR-02 后半（本变更名提交触碰未声明文件维持未归因）无 gate 级集成用例，仅靠谓词单测锁定",
++      "evidence": "守卫真实存在（src/foreign-declared.js:266 !entry.owners.has(currentChangeName)，且 test/commit-attribution-split.test.mjs:47-50 单测锁定含本变更名→own/裸提交→保守/无记录→own），但新测试文件里 own 后缀提交只触碰已声明的 a.js，own-undeclared 路径未经 runHunkAttributionGate 集成 exercised；FR-04 字面只承诺三形态（他侧改判/裸提交维持/退化），非承诺违反，属覆盖完备性观察",
++      "location": "test/hunk-gate-commit-attribution.test.mjs:115-142"
++    },
++    {
++      "severity": "P3",
++      "title": "测试 gitFn 包装 (c,a)=>git(c,a.slice(1)) 丢掉 git 子命令，fixture 内 hunks 计数与在途残留探测恒失效",
++      "evidence": "gate 以 gitFn(cwd,['diff',...])（src/hunk-attribution.js:87）与 gitFn(cwd,['status','--porcelain'])（:100）调用，包装 slice(1) 削掉首元素后 git -C <cwd> <range> -- <file> 必 fatal→countHunks 恒 -1、collectWorkingTreeModified 恒 null（residue 恒跳过）；现无断言依赖 hunks 数值或 residue 故全部断言仍真且分类路径（走 safeGit 的 commitAttributionForChange）不受影响，但 fixture 保真度低于既有 test/hunk-attribution-gate.test.mjs:72 的恒等包装，属潜伏测试质量面",
++      "location": "test/hunk-gate-commit-attribution.test.mjs:59"
++    },
++    {
++      "severity": "P3",
++      "title": "模块文档的三信号枚举未纳入第四类（他侧归因（提交事实）信息行）",
++      "evidence": "cli-entry.md:113 与 setup.md:94 将 hunk 门信号枚举为未归因/跨变更竞争/在途残留，本变更新增 foreignByCommit 信息类后枚举不完整；两处现有表述无虚假陈述（error 档阻断面描述仍准确），且文档不在 design 文件变更清单声明面内，属可选同步非违反",
++      "location": ".sillyspec/docs/sillyspec/modules/cli-entry.md:113"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-05T14:54:47Z"
++}
