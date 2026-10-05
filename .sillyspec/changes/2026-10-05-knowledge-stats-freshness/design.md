@@ -22,9 +22,10 @@ created_at: 2026-10-05T00:39:14.310Z
 - 新增导出：`resolveLastEventAt(runtimeDir)` → `string | null`（src/knowledge-stats.js）
 - `cmdKnowledgeStats --json` 顶层输出新增 `lastEventAt` 字段（string | null），既有字段不变
 - 人类可读输出遥测计数行在有遥测时追加「数据截至 <YYYY-MM-DD>」段；无遥测不追加
-- 文件变更清单：
 
-| 新增/修改 | 路径 | 说明 |
+## 文件变更清单
+
+| 操作 | 路径 | 说明 |
 |---|---|---|
 | 修改 | src/knowledge-stats.js | 新增 resolveLastEventAt 聚合 + 两输出面接线 |
 | 修改 | test/knowledge-stats.test.mjs | Test 8：lastEventAt 三情形 + 人类可读两分支 |
