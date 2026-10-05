@@ -1299,11 +1299,22 @@ export class WorktreeManager {
     visit(runsDir);
     if (candidates.size === 0) return [];
     const refs = [];
+    // 双探针（2026-10-05-branch-ref-anchor-scope）：worktree 分支自带全部主仓历史，单探针
+    // 「hash 是分支祖先或自身」会把旧 review.json 对历史主仓 commit 的引用全部误中（实证：
+    // 56 个无关历史引用触发锚定打 tag）。锚定只护「分支独有」commit——删分支 ref 后真正会
+    // 悬空的只有 baseline checkpoint/task commit；主仓 HEAD 可达的历史 commit 恒可达，不计入。
+    // 探针二对象显式主仓根（_resolveMainRepoRoot）——native-worktree 复用路径下 cwd 是
+    // worktree、其 HEAD 即分支自身，按 cwd 探会「永不锚定」fail-open。
+    const mainRoot = this._resolveMainRepoRoot();
     for (const [hash, paths] of candidates) {
-      // merge-base --is-ancestor：祖先或自身 → exit 0 输出空串（gitQuiet 返回 ''≠null）；
-      // 非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支内，语义正确）
-      const probe = gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]);
-      if (probe !== null) refs.push(...paths);
+      // 探针一（语义不变）：merge-base --is-ancestor 祖先或自身 → exit 0 输出空串（gitQuiet
+      // 返回 ''≠null）；非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支
+      // 内，语义正确——非真实对象无可悬空链）
+      if (gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]) === null) continue;
+      // 探针二（新增）：主仓 HEAD 祖先或自身 → ''≠null → 不计入（删分支后仍可达）；探针失败
+      // （null）按「不在主仓可达」处理即计入——fail-closed 宁误锚不误删
+      if (gitQuiet(mainRoot, ['merge-base', '--is-ancestor', hash, 'HEAD']) !== null) continue;
+      refs.push(...paths);
     }
     return [...new Set(refs)];
   }

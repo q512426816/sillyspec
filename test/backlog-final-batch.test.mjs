@@ -61,6 +61,10 @@ console.log('\n=== ② _branchReviewReferences 精确校验 ===')
   git(['add', '.']); git(['commit', '-q', '-m', 'work'])
   const tip = git(['rev-parse', 'HEAD']).trim()
   const tipShort = tip.slice(0, 10)
+  // 切回默认分支再判定：生产 cleanup 拓扑里主仓 HEAD 恒在主干（worktree 占着 sillyspec/* 分支）；
+  // 2026-10-05-branch-ref-anchor-scope 起 _branchReviewReferences 按主仓 HEAD 可达性排除
+  // 历史引用——HEAD 停在被测分支上会让排除面吞掉 tip（fixture 形态 ≠ 生产拓扑）
+  git(['checkout', '-q', '-'])
   // execute-runs 三个 review.json：tip 全 hash / 无关 commit / tip 缩写
   const mk = (run, base) => {
     const dir = join(d, '.sillyspec', '.runtime', 'execute-runs', run, 'tasks', 'task-01')
