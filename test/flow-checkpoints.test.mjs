@@ -42,9 +42,9 @@ test('① 简报含三断点纪律', () => {
 
 test('② flow status 三态：不存在/进行中/已归档', () => {
   const { cwd, cli } = makeRepo()
-  // 不存在
+  // 不存在（2026-10-05-flow-tail-polish 起 exit 1：查询目标缺失=运行错，exit 0 无法与「存在但无进度」区分）
   const none = cli(['flow', 'status', '--change', '2026-09-01-fc-none'])
-  assert.equal(none.status, 0)
+  assert.equal(none.status, 1)
   assert.match(none.stdout, /不存在/)
   // 进行中
   assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)

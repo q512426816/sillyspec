@@ -2030,7 +2030,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
     // 全量语义留 CI / 显式 test_strategy: full。
     const frCount = frPre && frPre.files.length ? frPre.files.length : 0
-    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
     mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
   } else {
     // —— dynamic-empty：变更与测试面零关系——

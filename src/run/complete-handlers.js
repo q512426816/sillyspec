@@ -858,9 +858,16 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   // pathspec 把并行会话同目录未提交文件夹带进共享暂存区）：改为窄化——changes 侧只 add 本变更
   // 归档目录 archive/<destName>/，docs 侧按 module-impact「更新结果」done 行精确文件集（提取
   // 失败回退目录级 + 前置 warning，见 archiveNarrowedGitAdd）。
+  // destName 推导（2026-10-05-flow-tail-polish 根因修复）：本链签名无 destName——此前下方
+  // 调用引用未声明标识符抛 ReferenceError 被空 catch 静默吞，archiveNarrowedGitAdd 在 flow
+  // done 路径从未生效（归档目录/knowledge/docs 自动暂存全失效，靠 agent 手工兜底——实测
+  // porcelain 实证）。basename(destDir) 与调用方 destDir 恒一致（flow.js 与 run archive 同构）。
+  const destName = basename(destDir)
   try {
     archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
-  } catch {}
+  } catch (e) {
+    console.warn(`⚠️ 归档窄化 git add 异常（不阻断归档，交付面靠下方探测块兜底/agent git status 核对）: ${(e && e.message) || e}`)
+  }
 
   // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
   // 并行变更的手动归档把 R 残留（源目录 rename 目标行）留在暂存区；本变更归档提交时
@@ -875,6 +882,10 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
       const changesPrefix = '.sillyspec/changes/'
       const minePaths = []
       const othersResidual = []
+      // 兜底信号（2026-10-05-flow-tail-polish）：正常路径 archiveNarrowedGitAdd 已暂存归档目录
+      // 与 knowledge——这两个信号只在窄化 add 失败降级时非空/置位
+      let untrackedArchiveHit = false
+      const knowledgePending = []
       for (const line of raw.split('\n')) {
         if (!line || line.length < 4) continue
         const x = line[0], y = line[1]
@@ -894,6 +905,16 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
                     || p.startsWith(changesPrefix + 'archive/' + changeName + '/'))) {
             minePaths.push(p)
           }
+        } else if (x === '?' && y === '?') {
+          // 未跟踪兜底：归档新目录（目录聚合/逐文件两形态都收，archive/<me>/ 专属本变更零共享）
+          if (dst === `${changesPrefix}archive/${changeName}/` || dst.startsWith(`${changesPrefix}archive/${changeName}/`)) {
+            untrackedArchiveHit = true
+          } else if (dst.startsWith('.sillyspec/knowledge/')) {
+            knowledgePending.push(dst)
+          }
+        } else if (x === ' ' && y === 'M' && dst.startsWith('.sillyspec/knowledge/')) {
+          // knowledge 未暂存修改（同兜底语义）
+          knowledgePending.push(dst)
         }
       }
       if (minePaths.length > 0) {
@@ -905,6 +926,23 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
           safeGit(cwd, ['add', '--', ...batch])
         }
         console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
+      }
+      if (untrackedArchiveHit) {
+        // 文件级枚举补暂存（守 AGENTS.md 规则 11 不用目录级 add；实际仅窄化 add 降级时可达）
+        try {
+          const archFiles = []
+          const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else archFiles.push(p) } }
+          walk(destDir)
+          const rel = archFiles.map((p) => relative(cwd, p).replace(/\\/g, '/'))
+          for (const batch of chunkPaths(rel)) safeGit(cwd, ['add', '--', ...batch])
+          console.log(`🧾 已补暂存未跟踪的归档目录文件（${rel.length} 项，archive/${changeName}/ 专属本变更——窄化 add 降级兜底）`)
+        } catch (e) {
+          console.warn(`⚠️ 归档目录兜底补暂存失败（请手工 git add -- .sillyspec/changes/archive/${changeName}/ 下文件）: ${(e && e.message) || e}`)
+        }
+      }
+      if (knowledgePending.length > 0) {
+        console.log(`📎 归档提交待办（knowledge 蒸馏产物未暂存——核对归属后随归档提交一并带上）：`)
+        console.log(`   git add -- ${knowledgePending.join(' ')}`)
       }
       if (othersResidual.length > 0) {
         const owners = [...new Set(othersResidual)].filter(Boolean)

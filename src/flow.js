@@ -499,7 +499,18 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
     let resumeDigest = { lines: [], summary: null }
     try {
-      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
+      // 重入注入回填（2026-10-05-flow-tail-polish）：input:null 会把注入降级为「语料未命中」，
+      // 首次 start 给的抽查确认指引断点恢复后丢失——flow-state.input 优先，proposal 动机
+      // 「任务原话转写：」剥前缀回退（存量 change 无 input 字段走此路；「（未提供 --input）」占位视为空）。
+      let resumeInput = typeof st.input === 'string' && st.input.trim() ? st.input : null
+      if (!resumeInput) {
+        try {
+          const pText = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
+          const m = /任务原话转写：([^\n]+)/.exec(pText)
+          if (m && !m[1].includes('（未提供 --input）')) resumeInput = m[1].trim()
+        } catch { /* proposal 回退 best-effort */ }
+      }
+      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: resumeInput, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
     } catch { /* 注入 best-effort */ }
     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
     return { recovery: true }
@@ -563,6 +574,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     born_face: thick ? 'thick' : 'thin',
     with_tasks: Boolean(withTasks),
     review_force: reviewForce,
+    // input 原文留存（2026-10-05-flow-tail-polish）：重入 start 知识注入回填的优先源
+    // （增量字段——读侧缺省容错，存量 change 走 proposal 转写回退）
+    input: typeof input === 'string' ? input : null,
     // autopilot（2026-10-04-thin-docs-v2 FR-06）：用户显式声明跳过 spec 断点人审（--autopilot）；
     // 缺省 false——flow done 要求 flow approve 批准证据（spec 断点机器化，护栏#2：零 prompt 劝说）
     autopilot: Boolean(autopilot),
@@ -1790,6 +1804,9 @@ export async function cmdFlow(args, cwd, specDir = null) {
         console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
       } else {
         console.log(`❓ ${change}：变更不存在`)
+        // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
+        // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走下方正常展示路径 exit 0
+        process.exit(1)
       }
       return
     }
