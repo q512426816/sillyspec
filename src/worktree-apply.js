@@ -21,7 +21,7 @@ import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
-import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
+import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, readExecuteRunChangeStamp, normalizeRepoKey } from './task-review.js';
 import { collectActiveQuickGuardFiles } from './quicklog.js';
 import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
 import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
@@ -861,6 +861,14 @@ export function collectReviewDeclaredFiles(projectRoot, changeName, opts = {}) {
       || join(projectRoot, '.sillyspec', '.runtime');
     const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName });
     if (!runId) return byRepo;
+    // 归属戳门控（2026-10-05-review-declared-unstamped-gate）：resolver 无戳命中时回退拿
+    // mtime 最新的无主 run——从未跑过 execute 的变更会误挂无关历史 run 的 review 声明
+    // （实证：14 个 8 月无戳 run 文件误报「review 声明了越权文件」）。review changedFiles 是
+    // reviewer 对该 run 实际改动的经验证陈述，信任不跨 run 迁移——无戳即无法证明归属本变更，
+    // 声明面空集（fail-closed：少一份放松面；本变更 run 真丢戳时 apply 收紧报 violations，
+    // 补 design 清单/allowed_paths 即过）。resolver 本体不动——无主回退服务 task-done 等
+    // marker 漂移恢复场景。
+    if (readExecuteRunChangeStamp(runtimeRoot, runId) !== changeName) return byRepo;
     const runTasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks');
     if (!existsSync(runTasksDir)) return byRepo;
     for (const taskId of readdirSync(runTasksDir)) {

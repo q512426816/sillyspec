@@ -1015,7 +1015,7 @@ export function stampExecuteRunChange(runtimeRoot, runId, changeName) {
  * 读 run 目录的 change 归属戳。
  * @returns {string|null} 戳内容（trim 后非空），无戳/读失败返回 null
  */
-function readExecuteRunChangeStamp(runtimeRoot, runId) {
+export function readExecuteRunChangeStamp(runtimeRoot, runId) {
   try {
     const c = readFileSync(join(runtimeRoot, 'execute-runs', runId, 'change'), 'utf8').trim()
     return c || null
