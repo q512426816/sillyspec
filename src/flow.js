@@ -1157,18 +1157,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const reviewPath = join(changeDir, 'review.json')
         let quarantineOk = true
         if (existsSync(reviewPath)) {
-          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+          // 锚定保留判定（2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD
+          // 做的 PASS 结论落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）：reviewedAgainst
+          // 命中当前 HEAD = 评审对象即最新交付面，结论有效——保留不隔离、review 标记不重置。
+          // 缺省/读失败/格式非法按未锚定处理，隔离行为不变（fail-safe 宁可多评）。
+          let anchoredToHead = false
           try {
-            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
-            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
-          } catch (e) {
-            quarantineOk = false
-            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
+            const { reviewAnchoredToHead } = await import('./flow-review.js')
+            anchoredToHead = reviewAnchoredToHead(reviewPath, drift.head)
+          } catch { /* 锚定判定失败按未锚定处理 */ }
+          if (anchoredToHead) {
+            console.log(`   review.json 已锚定当前 HEAD（reviewedAgainst 命中 ${String(drift.head || '').slice(0, 8)}）——评审对象即最新交付面，结论保留不隔离`)
+          } else {
+            const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+            try {
+              renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+              console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+            } catch (e) {
+              quarantineOk = false
+              console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
+            }
           }
         }
         if (quarantineOk) {
           driftRefreeze = true
-          if (st.substeps?.review === 'done') {
+          if (st.substeps?.review === 'done' && !existsSync(reviewPath)) {
             // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
             // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
             // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
@@ -1407,8 +1420,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
       mark('review')
     } else if (!existsSync(join(changeDir, 'review.json'))) {
+      // 任务书标注评审对象 HEAD（2026-10-06-review-anchor-and-negation）：评审员照抄进
+      // review.json.reviewedAgainst——处置提交后的重入重跑据此保留「对着最新面的刚完成评审」，
+      // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
+      let taskbookHead = null
+      try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
-      console.log(renderReviewerTaskbook({ change, changeDir }))
+      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead }))
       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
       reportMidFail('review')

@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket,
+  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket,
 } from '../src/flow-review.js'
 
 function makeChangeDir(designText, requirementsText) {
@@ -130,6 +130,7 @@ test('④ 否定语境消解：design 作答否定式「串台」不再一票升
     ['无串台面', '不适用：纯输出层追加，无串台面。'],
     ['不会串台', '不适用：单进程同步变换，不会串台。'],
     ['杜绝串台', '不适用：零共享状态，杜绝串台与误伤。'],
+    ['不串台（整词，2026-10-06-review-anchor-and-negation）', '不适用：前缀按 changeName 过滤不串台。'],
   ]) {
     const { root, changeDir } = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
     const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
@@ -158,6 +159,7 @@ test('⑥ 非否定语境保留：design 作答「解决串台」照常升级', 
     ['无法杜绝串台（风险自认）', '多实例并发下无法杜绝串台，属已知残留。'],
     ['难免串台（风险自认）', '跨仓场景难免串台，接受该边界。'],
     ['避免不了串台（风险自认）', '晚到事件下避免不了串台，文档已声明。'],
+    ['不排除串台（风险自认，整词反向）', '高并发下不排除串台可能，评审需重点看。'],
   ]) {
     const { root, changeDir } = makeChangeDir(
       DESIGN_V2_BND.replace('__ANSWER__', answer),
@@ -180,6 +182,15 @@ test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
   assert.match(book, /盲维四问真实性/)
   assert.match(book, /披露边界显式裁决（必答，不许默认放行/, '边界裁决条款在场')
   assert.match(book, /未裁决=未审/);
+  // 评审对象锚（2026-10-06-review-anchor-and-negation）：head 传入 → 任务书印 sha + schema
+  // 含 reviewedAgainst；缺省 → 引导评审员自填（git rev-parse HEAD）
+  const sha = 'a'.repeat(40)
+  const bookHead = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1', head: sha })
+  assert.match(bookHead, new RegExp(sha), '任务书印评审对象 HEAD 完整 sha')
+  assert.match(bookHead, /reviewedAgainst.*照抄任务书标注/, 'schema 含 reviewedAgainst 照抄指引')
+  const bookNoHead = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1' })
+  assert.match(bookNoHead, /git rev-parse HEAD/, 'head 缺省 → 引导评审员自填 rev-parse 输出')
+  assert.match(bookNoHead, /reviewedAgainst/, 'head 缺省 schema 仍含 reviewedAgainst 字段')
 })
 
 test('③ review.json 校验三态', () => {
@@ -196,5 +207,41 @@ test('③ review.json 校验三态', () => {
   const bad = validateReviewJson(p)
   assert.equal(bad.ok, false)
   assert.ok(bad.errors.length >= 4, `字段错误逐条列出: ${bad.errors}`)
+  // reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选——缺省兼容旧
+  // 产物；合法 hex 通过；非 hex（照抄了别的东西）报错
+  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
+  assert.equal(validateReviewJson(p).ok, true, 'reviewedAgainst 缺省（旧产物）兼容通过')
+  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: 'a'.repeat(40), findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
+  assert.equal(validateReviewJson(p).ok, true, 'reviewedAgainst 合法 40 位 hex 通过')
+  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: 'HEAD~1', findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
+  const badRa = validateReviewJson(p)
+  assert.equal(badRa.ok, false, 'reviewedAgainst 非 hex 报错')
+  assert.ok(badRa.errors.some((e) => /reviewedAgainst/.test(e)), `错误清单点名 reviewedAgainst: ${badRa.errors}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
+// ── reviewAnchoredToHead（漂移隔离前的锚定保留判定，2026-10-06-review-anchor-and-negation
+// 实测竞态：复审对着当前 HEAD 做的 PASS 落盘后被误隔离）──
+test('⑦ 评审对象锚定：reviewedAgainst 命中 HEAD → 保留判定 true', () => {
+  const root = mkdtempSync(join(tmpdir(), 'frv-anchor-'))
+  const p = join(root, 'review.json')
+  const headFull = '0f1e2d3c4b5a6978879665544332211f0e9d8c7b' // 40 hex
+  const base = { schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', findings: [], dimensionNotes: {}, reviewedAt: '2026' }
+  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull }))
+  assert.equal(reviewAnchoredToHead(p, headFull), true, '全等命中')
+  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull.slice(0, 12) }))
+  assert.equal(reviewAnchoredToHead(p, headFull), true, '短 sha 前缀命中（reviewedAgainst 短于 head）')
+  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: headFull }))
+  assert.equal(reviewAnchoredToHead(p, headFull.slice(0, 12)), true, 'head 短于 reviewedAgainst 反向命中')
+  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: '99d1c2b3a4f5e6d7c8b9a0f1e2d3c4b5a69788796' }))
+  assert.equal(reviewAnchoredToHead(p, headFull), false, '异 sha 不命中（过期评审 → 隔离）')
+  writeFileSync(p, JSON.stringify(base))
+  assert.equal(reviewAnchoredToHead(p, headFull), false, 'reviewedAgainst 缺省（旧产物）按未锚定处理')
+  writeFileSync(p, JSON.stringify({ ...base, reviewedAgainst: 'not-a-sha' }))
+  assert.equal(reviewAnchoredToHead(p, headFull), false, '格式非法按未锚定处理（fail-safe）')
+  writeFileSync(p, '{broken json')
+  assert.equal(reviewAnchoredToHead(p, headFull), false, '坏 JSON 按未锚定处理（fail-safe）')
+  assert.equal(reviewAnchoredToHead(join(root, 'nope.json'), headFull), false, '文件不存在 false')
+  assert.equal(reviewAnchoredToHead(p, ''), false, 'head 缺省 false')
   rmSync(root, { recursive: true, force: true })
 })

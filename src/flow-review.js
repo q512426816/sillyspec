@@ -33,8 +33,11 @@ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|�
  * 承诺语态必有断言修饰（与「不丢失」类「不X」形态承诺词本质不同），否定前缀 + 短距内的
  * 「串台」先替换为占位符再扫；「解决串台」「仍有串台」等非否定语境保留一票升级。仅 design
  * 作答面应用——input/proposal/requirements 承载用户原话，承诺口径零放松。后缀否定
- * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。 */
-const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台/g
+ * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。
+ * 整词「不串台」追加（2026-10-06-review-anchor-and-negation 实测：词表无裸「不」形态，
+ * design 作答「前缀过滤不串台」字面命中一票升级）——只加三字整词不加裸「不」前缀：
+ * 「不排除串台」「不排除有串台」是风险自认（保留升级），裸前缀会把它们误消解。 */
+const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台|不串台/g
 
 /** 风险自认形态（评审 P2 修复）：「无法杜绝串台」「难免串台」「避免不了串台」否定的是
  * 「阻止」而非风险本身——语义=承认风险在场，必须保留一票升级。这类形态在场时整段保守
@@ -188,12 +191,23 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
 /**
  * 评审员任务书（flow done 首次命中需评审时打印——agent 起干净上下文子代理执行）。
  * 材料有界（change.patch 为冻结件；治理工件已含字节帽意识）；请求预算硬帽防失控勘察（R14 教训）。
+ * head（评审对象锚，2026-10-06-review-anchor-and-negation）：调用方传当前 git HEAD——任务书
+ * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
+ * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
  */
-export function renderReviewerTaskbook({ change, changeDir }) {
+export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+  const headFull = String(head || '').trim()
   return [
     `⚖️ 独立评审任务书 — ${change}`,
     `══════════════════════════════════════`,
     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
+    ...(headFull ? [
+      `【评审对象】工作区实态 + git HEAD（${headFull}）——change.patch 冻结面若落后于该 HEAD，以`,
+      `  工作区实态与 git log/show 核对为准；review.json 的 reviewedAgainst 字段照抄上面的完整 sha。`,
+    ] : [
+      `【评审对象】工作区实态 + git HEAD——review.json 的 reviewedAgainst 字段填 git rev-parse HEAD`,
+      `  输出的完整 sha（评审对象锚，缺失时收口漂移检测会把本评审判为过期隔离重评）。`,
+    ]),
     ``,
     `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
@@ -216,6 +230,7 @@ export function renderReviewerTaskbook({ change, changeDir }) {
     `{`,
     `  "schemaVersion": 1, "change": "${change}", "reviewer": "subagent",`,
     `  "verdict": "PASS" | "FAIL",`,
+    `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
     `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
     `  "reviewedAt": "<ISO 时间>"`,
@@ -227,6 +242,8 @@ export function renderReviewerTaskbook({ change, changeDir }) {
 
 /**
  * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
+ * reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选字段——缺省
+ * 容忍（旧产物向后兼容），存在时须为 7-40 位 hex sha。
  */
 export function validateReviewJson(path) {
   let raw
@@ -236,6 +253,10 @@ export function validateReviewJson(path) {
   const errors = []
   if (r.schemaVersion !== 1) errors.push('schemaVersion 必须为 1')
   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
+  if (r.reviewedAgainst !== undefined
+    && (typeof r.reviewedAgainst !== 'string' || !/^[0-9a-f]{7,40}$/i.test(r.reviewedAgainst.trim()))) {
+    errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
+  }
   if (!Array.isArray(r.findings)) errors.push('findings 必须为数组')
   else {
     r.findings.forEach((f, i) => {
@@ -249,4 +270,25 @@ export function validateReviewJson(path) {
   return { ok: true, errors: [], review: r }
 }
 
-export default { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket }
+/**
+ * review.json 是否锚定到指定 HEAD（漂移重冻结隔离前的保留判定，
+ * 2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD 做的 PASS 结论
+ * 落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）。reviewedAgainst 缺省/读失败/
+ * 格式非法一律 false（fail-safe：宁可多评一次，不放行无锚证据）。
+ * 匹配口径：双向前缀（reviewedAgainst 允许短 sha 形态，与完整 head 任一方向前缀命中即锚定）。
+ * @param {string} reviewPath - review.json 路径
+ * @param {string} head - 当前完整 HEAD sha
+ * @returns {boolean}
+ */
+export function reviewAnchoredToHead(reviewPath, head) {
+  const h = String(head || '').trim().toLowerCase()
+  if (!h) return false
+  try {
+    const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
+    const ra = typeof r?.reviewedAgainst === 'string' ? r.reviewedAgainst.trim().toLowerCase() : ''
+    if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
+    return h === ra || h.startsWith(ra) || ra.startsWith(h)
+  } catch { return false }
+}
+
+export default { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket }
