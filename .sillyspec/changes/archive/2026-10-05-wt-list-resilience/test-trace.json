@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-wt-list-resilience",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-wt-list-resilience:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-list-resilience.test.mjs「缺字段 meta 兜底列出不崩溃（changeName=目录名、branch=-）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-wt-list-resilience"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-wt-list-resilience:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-list-resilience.test.mjs「完整 meta 原值透传不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-wt-list-resilience"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-wt-list-resilience:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-list-resilience.test.mjs「解析失败 meta 跳过不进列表」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-wt-list-resilience"
+    }
+  ]
+}

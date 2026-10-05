@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-wt-list-resilience",
+  "appliedAt": "2026-10-05T11:33:43.232Z",
+  "baseHash": "718d0e899519380fecdd2a362dbfe1651d3dabce",
+  "files": [
+    {
+      "path": "src/worktree.js",
+      "sha256": "5a2fa1c8120bea0cf472cd5049ea498d53475380dfb73c2547a54b33ad979f21"
+    },
+    {
+      "path": "test/worktree-list-resilience.test.mjs",
+      "sha256": "95cc85703c7fc22cccb0425ffb930931f1400ed29f89725f9635a0185f4f4500"
+    }
+  ]
+}

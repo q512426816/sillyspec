@@ -1,0 +1,54 @@
+{
+  "change": "2026-10-05-wt-list-resilience",
+  "baseline": "ce9fe4596c430fd2ab0d0a2ced5439454b25b316",
+  "head": "33bc4d2857eb29f15e10f062808e3d9d8eee2385",
+  "files": [
+    ".sillyspec/changes/2026-10-05-wt-list-resilience/tasks.md",
+    "src/worktree.js",
+    "test/worktree-list-resilience.test.mjs",
+    ".sillyspec/changes/2026-10-05-wt-list-resilience/apply-manifest.json",
+    ".sillyspec/changes/2026-10-05-wt-list-resilience/design.md",
+    ".sillyspec/changes/2026-10-05-wt-list-resilience/proposal.md",
+    ".sillyspec/changes/2026-10-05-wt-list-resilience/requirements.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 244,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-05T11:36:47.037Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "72166a8f0977214c9f6a66656adca6e3145b133a5580fd33f88a147b7e8acda2",
+  "patchStatus": "ok"
+}
