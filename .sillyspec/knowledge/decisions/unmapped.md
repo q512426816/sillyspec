@@ -1788,3 +1788,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a39154be47e8c14fb3b00b2935218208c46400fb
 理由：最大风险：展示名映射 HARNESS_DISPLAY_NAMES 成为新的次要漂移点（新 harness 忘加映射→展示退化为 name 原样）。已用缺省回退消解——退化形态仍含全部家数，只是不美化，且测试遍历断言按「映射名或 name 原样」命中，两种形态都受覆盖。 试过放弃：① 仅更新硬编码文案为 8 家——不解决根因，注册表再扩仍漂移，放弃；② 提示全部用 name 原样拼接（claude-code / deepseek-dsh）——零映射零漂移但可读性差（品牌大小写混乱），放弃，取映射+回退折中。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-litest-p1-fixes
+锚点：未记录
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+理由：最大风险：① cursor 收窄漏报——若未来代码引入非 db.cursor() 形态的真游标（如 cursor.execute 独立出现），RE 不命中。权衡：该形态必先有 conn.cursor() 创建点（Python DB-API 惯例），`.cursor(` 已锚定；next_cursor 覆盖主流分页协议。漏报面远小于原误报面（本仓每个提及 cursor harness 的 patch 都误触发）。② 行号锚会随源码演进再漂移——这是 doc-ref-check 机制的设计预期（漂移即红），test:core 纳入后漂移在日常工作流被拦，不再是沉积债。 试过放弃：cursor 收窄为「赋值/字段形态 `\bcursor\b\s*[=:]`」——grep 实证本仓 docs-check.js/quicklog.js/init.js 有 8+ 处循环变量 `cursor =` 命中，误伤面仍大，放弃；归档聚合用 `--name-only`——实现期测试即暴露 rename 折叠丢源侧路径（部分提交语义下源文件不会被删），改 `--name-status`。

@@ -6802,3 +6802,98 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-flow-tail-polish
   status: active
+
+## FR-cli-entry-360 node --test test/doc-ref-check.test.mjs 全绿（13 处失效清零）
+变更：2026-10-06-litest-p1-fixes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-litest-p1-fixes/requirements.md#FR-01
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-litest-p1-fixes:flow:测试绑定FR-01
+  tests: test/doc-ref-check.test.mjs「platform-interface-map.md 93 处引用全通过（关键词断言含）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-litest-p1-fixes
+  status: active
+
+## FR-cli-entry-361 doc-ref-check.test.mjs 列入 test:core 且 npm run test:core 含其执行
+变更：2026-10-06-litest-p1-fixes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-litest-p1-fixes/requirements.md#FR-02
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-litest-p1-fixes:flow:测试绑定FR-02
+  tests: test/doc-ref-check.test.mjs「test:core 清单驻留断言（本测试不在 scripts.test:core 即 exit 1——防移出日常拦截面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-litest-p1-fixes
+  status: active
+
+## FR-cli-entry-362 PRIMITIVE_RE 收窄后：含 cursor 纯名词的 patch 文本不再触发评审；DB 游标用法形态（cursor=/next_cursor:/conn.cursor()）仍触发；新增回归测试覆盖两向
+变更：2026-10-06-litest-p1-fixes
+状态：active
+摘要：纯名词不触发（实测复现）；用法形态仍触发
+全文：.sillyspec/changes/archive/2026-10-06-litest-p1-fixes/requirements.md#FR-03
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-litest-p1-fixes:flow:测试绑定FR-03
+  tests: test/flow-review.test.mjs「① 定档矩阵——cursor 收窄两向：纯名词/harness 名不触发 + db.cursor()/next_cursor 用法形态仍触发」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-litest-p1-fixes
+  status: active
+
+## FR-cli-entry-363 归档收尾输出含可执行的一笔到位 git commit 命令（源侧+归档侧+knowledge pathspec 完整）；既有归档测试无回归
+变更：2026-10-06-litest-p1-fixes
+状态：active
+摘要：主路径（归档后提示）
+全文：.sillyspec/changes/archive/2026-10-06-litest-p1-fixes/requirements.md#FR-04
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-litest-p1-fixes:flow:测试绑定FR-04
+  tests: test/archive-cli-git-add.test.mjs「Case 1 确认归档后 archive/ + docs/ 已 staged——归档收尾打印一笔到位 commit 命令 + pathspec 含源侧删除与归档侧路径（rename 两半齐备）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-litest-p1-fixes
+  status: active
+
+## FR-cli-entry-364 npm test 改动面无回归 + lint 绿
+变更：2026-10-06-litest-p1-fixes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-litest-p1-fixes/requirements.md#FR-05
+最近确认：c201930f1fd64e106bbb76006cef12a7dbc2e5e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-litest-p1-fixes:flow:测试绑定FR-05
+  tests: test/run-tests.mjs「全量套件改动面无回归 + lint（check-syntax 882 文件）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-litest-p1-fixes
+  status: active

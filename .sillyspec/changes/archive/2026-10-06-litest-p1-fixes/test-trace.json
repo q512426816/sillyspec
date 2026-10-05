@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-litest-p1-fixes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-litest-p1-fixes:flow:测试绑定FR-01",
+      "tests": [
+        "test/doc-ref-check.test.mjs「platform-interface-map.md 93 处引用全通过（关键词断言含）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-litest-p1-fixes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-litest-p1-fixes:flow:测试绑定FR-02",
+      "tests": [
+        "test/doc-ref-check.test.mjs「test:core 清单驻留断言（本测试不在 scripts.test:core 即 exit 1——防移出日常拦截面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-litest-p1-fixes"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-litest-p1-fixes:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review.test.mjs「① 定档矩阵——cursor 收窄两向：纯名词/harness 名不触发 + db.cursor()/next_cursor 用法形态仍触发」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-litest-p1-fixes"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-litest-p1-fixes:flow:测试绑定FR-04",
+      "tests": [
+        "test/archive-cli-git-add.test.mjs「Case 1 确认归档后 archive/ + docs/ 已 staged——归档收尾打印一笔到位 commit 命令 + pathspec 含源侧删除与归档侧路径（rename 两半齐备）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-litest-p1-fixes"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-06-litest-p1-fixes:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs「全量套件改动面无回归 + lint（check-syntax 882 文件）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-litest-p1-fixes"
+    }
+  ]
+}

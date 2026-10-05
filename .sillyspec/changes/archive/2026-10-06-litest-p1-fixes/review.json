@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-litest-p1-fixes",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "作用域": "ok",
+    "切换": "n/a"
+  },
+  "reviewedAt": "2026-10-05T17:48:05Z"
+}
