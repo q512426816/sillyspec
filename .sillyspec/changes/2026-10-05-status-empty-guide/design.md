@@ -19,12 +19,13 @@ created_at: 2026-10-05T00:38:47.105Z
 
 无函数签名变化；对外可见变化仅一处：`sillyspec status` / `sillyspec run status` 在无进度数据空态的 stdout 由 1 行变 3 行（原句 + 两条引导）。有活跃变更时的展示路径零改动。
 
-文件变更清单：
+### 文件变更清单
 
 | 新增/修改 | 路径 | 说明 |
 |---|---|---|
 | 修改 | src/run/command.js | 空态分支追加两行引导输出 |
 | 新增 | test/status-empty-guide.test.mjs | 空态引导 / 别名同构 / 有变更不回归三面断言 |
+| 修改 | docs/sillyspec/platform-interface-map.md | 行号锚 1642→1646、2076→2080 刷新（本变更插行漂移） |
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
