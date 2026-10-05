@@ -35,9 +35,16 @@ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|�
  * 作答面应用——input/proposal/requirements 承载用户原话，承诺口径零放松。后缀否定
  * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。 */
 const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台/g
+
+/** 风险自认形态（评审 P2 修复）：「无法杜绝串台」「难免串台」「避免不了串台」否定的是
+ * 「阻止」而非风险本身——语义=承认风险在场，必须保留一票升级。这类形态在场时整段保守
+ * 不消解（宁可多评不可漏报）；「杜绝串台」等安全声明无引导词不受影响。 */
+const RISK_ADMITTING_RE = /(?:无法|未能|没能|不可能不)[^\n]{0,8}?(?:杜绝|避免|防止|阻止|消除|防)[^\n]{0,8}?串台|(?:难免|避免不了|避不了|少不了)[^\n]{0,4}?串台/
 function stripNegatedCrosstalk(text) {
+  const t = String(text || '')
+  if (RISK_ADMITTING_RE.test(t)) return t
   // 占位符本身禁含「串台」二字——消解产物若残留原词，PROMISE_RE 照样命中（首版实测自坑）
-  return String(text || '').replace(NEGATED_CROSSTALK_RE, '〔已消解〕')
+  return t.replace(NEGATED_CROSSTALK_RE, '〔已消解〕')
 }
 
 /** 交付 diff 危险原语（物证面）。 */

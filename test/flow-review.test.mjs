@@ -130,13 +130,21 @@ test('⑤ 用户原话口径：requirements 非否定「串台」仍一票升级
 })
 
 test('⑥ 非否定语境保留：design 作答「解决串台」照常升级', () => {
-  const { root, changeDir } = makeChangeDir(
-    DESIGN_V2_BND.replace('__ANSWER__', '本设计的核心是解决多实例间的串台与误归属。'),
-    '# 需求\n普通需求文本\n',
-  )
-  const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-keep-hit' })
-  assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `非否定串台保留升级: ${t.reasons}`)
-  rmSync(root, { recursive: true, force: true })
+  for (const [label, answer] of [
+    ['解决串台', '本设计的核心是解决多实例间的串台与误归属。'],
+    ['仍存在串台', '切换中途中断时仍存在串台风险，需评审重点看。'],
+    ['无法杜绝串台（风险自认）', '多实例并发下无法杜绝串台，属已知残留。'],
+    ['难免串台（风险自认）', '跨仓场景难免串台，接受该边界。'],
+    ['避免不了串台（风险自认）', '晚到事件下避免不了串台，文档已声明。'],
+  ]) {
+    const { root, changeDir } = makeChangeDir(
+      DESIGN_V2_BND.replace('__ANSWER__', answer),
+      '# 需求\n普通需求文本\n',
+    )
+    const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-keep-hit' })
+    assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `${label}：保留升级（reasons=${t.reasons}）`)
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
