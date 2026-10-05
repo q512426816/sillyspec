@@ -6327,3 +6327,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-disposition-refreeze-drift
   status: active
+
+## FR-cli-entry-335 flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
+变更：2026-10-05-tests-confirm-hint
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-tests-confirm-hint/requirements.md#FR-01
+最近确认：4e4aa7d58299154c82c9fe863a5ee191795fb5f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-tests-confirm-hint:flow:测试绑定FR-01
+  tests: test/tests-confirm-hint-syntax.test.mjs「① 抽查提示含 flag 形态 tests --confirm --anchor」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-tests-confirm-hint
+  status: active
+
+## FR-cli-entry-336 全仓不再有「tests confirm 」（子命令形态）的提示残留
+变更：2026-10-05-tests-confirm-hint
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-tests-confirm-hint/requirements.md#FR-02
+最近确认：4e4aa7d58299154c82c9fe863a5ee191795fb5f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-tests-confirm-hint:flow:测试绑定FR-02
+  tests: test/tests-confirm-hint-syntax.test.mjs「② 全仓 src 无「tests confirm 」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-tests-confirm-hint
+  status: active
+
+## FR-cli-entry-337 单测锁定提示语形态（防回漂）
+变更：2026-10-05-tests-confirm-hint
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-tests-confirm-hint/requirements.md#FR-03
+最近确认：4e4aa7d58299154c82c9fe863a5ee191795fb5f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-tests-confirm-hint:flow:测试绑定FR-03
+  tests: test/tests-confirm-hint-syntax.test.mjs「① + ② 双断言齐备」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-tests-confirm-hint
+  status: active

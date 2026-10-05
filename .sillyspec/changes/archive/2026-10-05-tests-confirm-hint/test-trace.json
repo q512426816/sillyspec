@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-tests-confirm-hint",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-tests-confirm-hint:flow:测试绑定FR-01",
+      "tests": [
+        "test/tests-confirm-hint-syntax.test.mjs「① 抽查提示含 flag 形态 tests --confirm --anchor」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-tests-confirm-hint"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-tests-confirm-hint:flow:测试绑定FR-02",
+      "tests": [
+        "test/tests-confirm-hint-syntax.test.mjs「② 全仓 src 无「tests confirm 」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-tests-confirm-hint"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-tests-confirm-hint:flow:测试绑定FR-03",
+      "tests": [
+        "test/tests-confirm-hint-syntax.test.mjs「① + ② 双断言齐备」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-tests-confirm-hint"
+    }
+  ]
+}

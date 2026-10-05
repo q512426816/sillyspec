@@ -1,0 +1,225 @@
+diff --git a/src/flow.js b/src/flow.js
+index 105cdfa5..dfcdf598 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -197,7 +197,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
+         const unconfirmed = injectable.filter((f) => f.unconfirmed > 0).slice(0, 2)
+         if (unconfirmed.length > 0) {
+-          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
++          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>\`（翻 active；--confirm 是 flag 非子命令——形态与 index.js 实现及其用法文案一致，2026-10-05-tests-confirm-hint 修正错形态静默空转）；不符则不动，留给 knowledge digest 信号`)
+         }
+       }
+     }
+diff --git a/test/confirm-on-use.test.mjs b/test/confirm-on-use.test.mjs
+index 792285dd..a3dc33da 100644
+--- a/test/confirm-on-use.test.mjs
++++ b/test/confirm-on-use.test.mjs
+@@ -67,7 +67,7 @@ test('②③ 注入面：unconfirmed 透传 + ⚪ 标记 + 抽查提示（至多
+   const digest = r.lines.join(NL)
+   assert.match(digest, /FR-core-001 .*⚪1未确认绑定/, '条目带 ⚪1未确认 标记')
+   assert.match(digest, /抽查确认（至多 [12] 条.*FR-core-001/, '抽查提示点名未确认 anchor')
+-  assert.match(digest, /tests confirm --anchor <id> --evidence/, '提示带 confirm 指引')
++  assert.match(digest, /tests --confirm --anchor <id> --evidence/, '提示带 confirm 指引（flag 形态，2026-10-05-tests-confirm-hint 修正）')
+   const digest2 = readActiveFrDigest(f.knowledge, ['core'])
+   assert.equal(digest2[0].unconfirmed, 1, 'readActiveFrDigest.unconfirmed 透传')
+   // 确认后：标记消失、无抽查提示
+diff --git a/test/tests-confirm-hint-syntax.test.mjs b/test/tests-confirm-hint-syntax.test.mjs
+new file mode 100644
+index 00000000..518ef95c
+--- /dev/null
++++ b/test/tests-confirm-hint-syntax.test.mjs
+@@ -0,0 +1,40 @@
++/**
++ * 2026-10-05-tests-confirm-hint 回归：抽查提示命令形态与实现一致
++ *
++ * 背景（主清单项 2）：flow start 抽查提示曾教 `sillyspec tests confirm --anchor …`（子命令
++ * 形态），实现只认 `tests --confirm`（flag 形态）——照抄静默降级为行展示，confirm 空转
++ * （本会话两次 flow start 输出复现）。修正取提示语侧，与 index.js case 'tests' 的
++ * has('--confirm') 及其 fail 用法文案对齐。
++ *
++ * 锁定：
++ *   ① flow.js 抽查提示含 flag 形态 `tests --confirm --anchor`
++ *   ② 全仓 src 无「tests confirm 」子命令形态提示残留
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, readdirSync, statSync } from 'node:fs'
++import { join } from 'node:path'
++
++const ROOT = join(import.meta.dirname, '..')
++
++test('① 抽查提示含 flag 形态 tests --confirm --anchor', () => {
++  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.ok(flowSrc.includes('tests --confirm --anchor <id> --evidence <真实测试路径>'),
++    '提示语为 flag 形态（与 index.js has(--confirm) 实现一致）')
++})
++
++test('② 全仓 src 无「tests confirm 」子命令形态提示残留', () => {
++  const hits = []
++  const walk = (dir) => {
++    for (const e of readdirSync(dir, { withFileTypes: true })) {
++      const p = join(dir, e.name)
++      if (e.isDirectory()) walk(p)
++      else if (e.name.endsWith('.js')) {
++        const text = readFileSync(p, 'utf8')
++        if (text.includes('tests confirm ')) hits.push(p)
++      }
++    }
++  }
++  walk(join(ROOT, 'src'))
++  assert.deepEqual(hits, [], `子命令形态提示残留（应全改为 --confirm flag 形态）: ${hits.join(', ')}`)
++})
+diff --git a/.sillyspec/changes/2026-10-05-tests-confirm-hint/design.md b/.sillyspec/changes/2026-10-05-tests-confirm-hint/design.md
+new file mode 100644
+index 00000000..9bdb93eb
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-tests-confirm-hint/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:53:52.768Z
++---
++# 设计记录（Design Record）— 2026-10-05-tests-confirm-hint
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++单点文案修复：flow.js 抽查提示（知识注入块）由子命令形态 `tests confirm --anchor` 改为 flag 形态 `tests --confirm --anchor`，与 index.js case 'tests' 的 has('--confirm') 实现及其 fail 用法文案对齐。修提示语而非让 index.js 兼容子命令形态：实现侧的 fail 文案本来就教正确形态（第二漂移源），再加一个兼容分支只会让两种形态长期并存；提示语是唯一漂移点，源头收口。加源级回归测试（提示含 flag 形态 + 全仓 src 无子命令形态残留）防回漂。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++flow start 输出面：抽查确认提示的命令文本变化（子命令形态 → flag 形态，随附「--confirm 是 flag 非子命令」说明）。无命令实现变化（index.js 未触碰）、无文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：纯静态提示文本，无输入序。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：提示是流式输出行，无共享可变状态。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用：无状态面。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：提示文案随 CLI 进程输出，不落盘不跨实例。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：提示语与实现将来再度漂移（实现改形态而提示没跟）——已加源级回归测试锁定形态一致性，漂移即测试红。放弃的方案：index.js 兼容子命令形态（解析 tests 后首个位置参数 confirm）——双形态长期并存扩大漂移面，且与既有 fail 文案（教 flag 形态）冲突。已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow.js | 抽查提示改 flag 形态 tests --confirm --anchor（附形态说明） |
++| 新增 | test/tests-confirm-hint-syntax.test.mjs | 源级回归：提示含 flag 形态 + 全仓无子命令形态残留 |
+diff --git a/.sillyspec/changes/2026-10-05-tests-confirm-hint/requirements.md b/.sillyspec/changes/2026-10-05-tests-confirm-hint/requirements.md
+new file mode 100644
+index 00000000..3d3c59a8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-tests-confirm-hint/requirements.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:53:52.768Z
++---
++# 需求规格（Requirements）— 2026-10-05-tests-confirm-hint
++
++## 功能需求
++
++### FR-01: flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
++
++- flow start 抽查确认提示必须教 flag 形态 `sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>`——与 index.js case 'tests' 的 has('--confirm') 实现及其 fail 用法文案逐字一致；禁止教实现不认的子命令形态（照抄静默降级为行展示，confirm 空转）。
++
++#### 场景：主路径
++
++- Given: flow start 注入未确认 FR（unconfirmed>0）
++- When: 输出抽查提示
++- Then: 提示命令为 tests --confirm --anchor 形态，逐字可执行
++
++### FR-02: 全仓不再有「tests confirm 」（子命令形态）的提示残留
++
++- src/ 全域禁止再出现「tests confirm 」（带空格子命令形态）提示文本——防第二漂移源。
++
++#### 场景：主路径
++
++- Given: src/ 任意 .js 文件
++- When: 全文扫描
++- Then: 无「tests confirm 」命中
++
++### FR-03: 单测锁定提示语形态（防回漂）
++
++- 必须有源级回归测试：断言 flow.js 提示含 flag 形态、全仓 src 无子命令形态残留。
++
++#### 场景：主路径
++
++- Given: 仓内源码
++- When: 回归测试执行
++- Then: 两断言成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/tests-confirm-hint-syntax.test.mjs「① 抽查提示含 flag 形态 tests --confirm --anchor」
++FR-02: test/tests-confirm-hint-syntax.test.mjs「② 全仓 src 无「tests confirm 」子命令形态提示残留」
++FR-03: test/tests-confirm-hint-syntax.test.mjs「① + ② 双断言齐备」
+diff --git a/.sillyspec/changes/2026-10-05-tests-confirm-hint/tasks.md b/.sillyspec/changes/2026-10-05-tests-confirm-hint/tasks.md
+new file mode 100644
+index 00000000..3fe7b142
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-tests-confirm-hint/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:49:30.016Z
++---
++# 任务注册表（Tasks）— 2026-10-05-tests-confirm-hint
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-tests-confirm-hint --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-tests-confirm-hint` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
++- [x] task-02: 全仓不再有「tests confirm 」（子命令形态）的提示残留
++- [x] task-03: 单测锁定提示语形态（防回漂）
++- [x] task-04: 测试门回归处置——confirm-on-use 既有断言同步 flag 形态（门禁真回归抓取）
+diff --git a/.sillyspec/changes/2026-10-05-tests-confirm-hint/proposal.md b/.sillyspec/changes/2026-10-05-tests-confirm-hint/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-tests-confirm-hint/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:49:30.016Z
++---
++# 提案书（Proposal）— 2026-10-05-tests-confirm-hint
++
++## 动机
++
++任务原话转写：tests confirm 语法错配（主清单项 2）：flow start 抽查提示（src/flow.js:200）教的是 sillyspec tests confirm --anchor <id> --evidence <路径>（子命令形态），实现只认 tests --confirm（flag 形态，index.js case 'tests' 的 has('--confirm')）——照提示语逐字抄会静默降级为行展示（confirm 不执行、FR 不翻 active），全部空转。本会话两次 flow start 输出均复现该提示。修法取提示语侧：改为与实现及 index.js 自身 fail 文案一致的 tests --confirm --anchor <id> --evidence <路径>。
++成功标准：
++- flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
++- 全仓不再有「tests confirm 」（子命令形态）的提示残留
++- 单测锁定提示语形态（防回漂）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
++2. 全仓不再有「tests confirm 」（子命令形态）的提示残留
++3. 单测锁定提示语形态（防回漂）
++
++## 成功标准（可验证）
++
++1. flow start 抽查提示教的命令形态与实现一致：sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>（flag 形态）
++2. 全仓不再有「tests confirm 」（子命令形态）的提示残留
++3. 单测锁定提示语形态（防回漂）
