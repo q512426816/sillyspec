@@ -1,0 +1,54 @@
+{
+  "change": "2026-10-06-agent-log-detect-hint",
+  "baseline": "ee45a0a379fb99ffdba82646aebd0f4529f76ad2",
+  "head": "a39154be47e8c14fb3b00b2935218208c46400fb",
+  "files": [
+    ".sillyspec/changes/2026-10-06-agent-log-detect-hint/design.md",
+    ".sillyspec/changes/2026-10-06-agent-log-detect-hint/flow-state.yaml",
+    ".sillyspec/changes/2026-10-06-agent-log-detect-hint/proposal.md",
+    ".sillyspec/changes/2026-10-06-agent-log-detect-hint/requirements.md",
+    ".sillyspec/changes/2026-10-06-agent-log-detect-hint/tasks.md",
+    "src/agent-session-log.js",
+    "test/agent-session-log.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 230,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-05T17:07:03.651Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "bfa8fbc73f50a0118bcc2fdd5a52e1f11327c6baca6b11345a795758d78cdf79",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,298 @@
+diff --git a/.sillyspec/changes/2026-10-06-agent-log-detect-hint/flow-state.yaml b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/flow-state.yaml
+new file mode 100644
+index 00000000..24343dad
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/flow-state.yaml
+@@ -0,0 +1,24 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  agent-log --detect 空态提示文案落后于探测器注册表：src/agent-session-log.js 只列「Claude Code / Codex / ZCode」3 家，HARNESS_DETECTORS 实际注册
++  8 家（另有 pi / deepseek-dsh / cursor-agent / cursor / opencode）。pi/dsh/cursor 用户看到提示会误判 CLI 不支持自己的
++  harness，且文案硬编码零测试覆盖，注册表再扩还会继续漂移。
++
++
++  成功标准：
++
++  - --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++
++  - 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++
++  - npm test 全绿
++autopilot: true
++baseline_commit: ee45a0a379fb99ffdba82646aebd0f4529f76ad2
++updatedAt: '2026-10-05T16:53:28.125Z'
++baseline_sha256: c9670932049d1b1fd8c1e09a5612b78395e983da51177a0eb8a3795afe97463d
++
+diff --git a/src/agent-session-log.js b/src/agent-session-log.js
+index 9607fa43..7bfdd91b 100644
+--- a/src/agent-session-log.js
++++ b/src/agent-session-log.js
+@@ -550,7 +550,7 @@ function detectCursorAgentTranscripts(ctx) {
+   return entries.slice(0, 3);
+ }
+ 
+-const HARNESS_DETECTORS = [
++export const HARNESS_DETECTORS = [
+   { name: 'claude-code', tier: 'precise', detect: detectClaudeCode },
+   { name: 'codex', tier: 'precise', detect: detectCodex },
+   { name: 'zcode', tier: 'precise', detect: detectZcode },
+@@ -561,6 +561,28 @@ const HARNESS_DETECTORS = [
+   { name: 'opencode', tier: 'loose', detect: detectOpencode },
+ ];
+ 
++/** name → 人读展示名（--detect 空态提示用）。缺省回退 name 原样：新 harness 无映射也不漏项，
++ *  只是展示不美化（坑 agent-log-detect-hint，2026-10-06 实证：提示硬编码 3 家与注册表 8 家
++ *  漂移——派生后注册表是唯一真相源，映射只是展示层）。 */
++export const HARNESS_DISPLAY_NAMES = {
++  'claude-code': 'Claude Code',
++  codex: 'Codex',
++  zcode: 'ZCode',
++  pi: 'pi',
++  'deepseek-dsh': 'DeepSeek DSH',
++  'cursor-agent': 'cursor-agent',
++  cursor: 'Cursor',
++  opencode: 'opencode',
++};
++
++/** --detect 空态提示行：从探测器注册表派生（注册表新增 harness 提示自动跟上，不再手工同步）。
++ * @param {Array<{name: string}>} [detectors] - 默认 HARNESS_DETECTORS（测试可注入）
++ * @returns {string} 提示行（含 SILLYSPEC_AGENT_LOG 显式指定通道指引） */
++export function renderDetectEmptyHint(detectors = HARNESS_DETECTORS) {
++  const names = detectors.map(h => HARNESS_DISPLAY_NAMES[h.name] ?? h.name).join(' / ');
++  return `   支持: ${names} 自动探测；其他 CLI 用 SILLYSPEC_AGENT_LOG=<日志绝对路径> 显式指定。`;
++}
++
+ // ── 会话身份锚定器（2026-09-11-agent-log-attribution-refactor，D-001/D-008）──
+ //
+ // own 集合 = 本 run 所属 agent 会话的日志文件（锚定主会话 + zcode parent_id 子代理链）。
+@@ -1299,7 +1321,7 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(),
+     }
+     if (detected.length === 0) {
+       console.log('📭 未探测到本地 agent 会话日志。');
+-      console.log('   支持: Claude Code / Codex / ZCode 自动探测；其他 CLI 用 SILLYSPEC_AGENT_LOG=<日志绝对路径> 显式指定。');
++      console.log(renderDetectEmptyHint());
+       return;
+     }
+     console.log(`🔍 现场探测到 ${detected.length} 条 agent 日志：`);
+diff --git a/test/agent-session-log.test.mjs b/test/agent-session-log.test.mjs
+index cde82ad0..f8915ba5 100644
+--- a/test/agent-session-log.test.mjs
++++ b/test/agent-session-log.test.mjs
+@@ -41,6 +41,9 @@ import {
+   recordAgentLogInvocation,
+   readAgentLogArtifact,
+   resolveAgentLogArtifactPath,
++  renderDetectEmptyHint,
++  HARNESS_DETECTORS,
++  HARNESS_DISPLAY_NAMES,
+   AGENT_LOG_ENV_OVERRIDE,
+   AGENT_LOG_ARTIFACT_FILENAME,
+   AGENT_LOG_SCHEMA_VERSION,
+@@ -1031,6 +1034,27 @@ console.log('--- 13. CLI 集成：sillyspec agent-log ---')
+ 
+   const empty = runCLI(['agent-log', '--detect'])
+   assert(empty.status === 0, '无 agent 环境时 --detect 也 exit 0（非错误态）')
++  // 空态输出走注册表派生提示（2026-10-06-agent-log-detect-hint：防文案与注册表漂移——
++  // 硬编码时代只列 3 家而注册表 8 家）
++  assert(empty.stdout.includes('Claude Code') && empty.stdout.includes('cursor') && empty.stdout.includes('SILLYSPEC_AGENT_LOG'),
++    '--detect 空态提示含品牌名与 loose 档 harness（派生文案非旧 3 家硬编码）')
++}
++
++console.log('--- 14. --detect 空态提示派生（与 HARNESS_DETECTORS 注册表同源，2026-10-06-agent-log-detect-hint）---')
++{
++  // a. 注册表全项含于提示（映射名或 name 原样两种形态都算命中——映射缺省回退不漏项）
++  const hint = renderDetectEmptyHint()
++  assert(HARNESS_DETECTORS.length >= 8, `注册表不少于 8 家（实际 ${HARNESS_DETECTORS.length}）——漂移实证基线`)
++  for (const h of HARNESS_DETECTORS) {
++    const display = HARNESS_DISPLAY_NAMES[h.name] ?? h.name
++    assert(hint.includes(display), `空态提示含已注册 harness：${display}（${h.name}）`)
++  }
++  assert(hint.includes('SILLYSPEC_AGENT_LOG'), '空态提示保留 env 显式指定通道指引')
++
++  // b. 派生性：注入假注册表 → 提示随注入项变化（注册表扩项提示自动跟上，无需改提示代码）
++  const fake = renderDetectEmptyHint([{ name: 'fake-agent-cli', tier: 'precise' }])
++  assert(fake.includes('fake-agent-cli'), '注入假注册表项：提示自动含该项（无映射回退 name 原样）')
++  assert(!fake.includes('zcode') && !fake.includes('ZCode'), '注入替换默认注册表——原注册表项不出现（真派生非半硬编码）')
+ }
+ 
+ for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
+diff --git a/.sillyspec/changes/2026-10-06-agent-log-detect-hint/design.md b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/design.md
+new file mode 100644
+index 00000000..d4555119
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/design.md
+@@ -0,0 +1,56 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T16:51:28.108Z
++---
++# 设计记录（Design Record）— 2026-10-06-agent-log-detect-hint
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++问题：cmdAgentLog --detect 空态提示（src/agent-session-log.js）硬编码「Claude Code / Codex / ZCode」3 家，与同文件 HARNESS_DETECTORS 注册表（8 家：另有 pi / deepseek-dsh / cursor-agent / cursor / opencode）漂移，且零测试覆盖。
++
++方案：新增导出纯函数 renderDetectEmptyHint(detectors)——从注册表数组运行时派生提示行（展示名小映射 HARNESS_DISPLAY_NAMES，缺省回退 name 原样），cmdAgentLog 空态分支改调它并传入 HARNESS_DETECTORS；同时导出 HARNESS_DETECTORS 供测试遍历断言。选派生而非更新一遍硬编码：漂移根因是「注册表与文案两处真相」，派生后注册表是唯一真相源，新增 harness（加一个探测器对象）提示自动跟上。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新增导出（src/agent-session-log.js）：renderDetectEmptyHint(detectors = HARNESS_DETECTORS) → string（纯函数零副作用，可注入注册表供测试）；HARNESS_DETECTORS（模块私有 const 改导出，只读消费）；HARNESS_DISPLAY_NAMES（name→展示名映射，缺省回退 name）。
++- CLI 行为变化：`sillyspec agent-log --detect` 探测为空时的提示行从「支持: Claude Code / Codex / ZCode 自动探测…」变为全注册表 8 家的派生文案；SILLYSPEC_AGENT_LOG 指引保留。--json 输出、探测/登记/上报行为零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：提示是调用时一次性派生的纯字符串，无输入序列、无时序假设；注册表顺序即展示顺序（模块加载期固定）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：renderDetectEmptyHint 纯函数不写盘不加锁；HARNESS_DETECTORS 是模块级冻结常量，并发只读安全。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：无状态无半态——空态分支同步渲染一行输出，中断无残留。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：注册表是本 CLI 模块内常量，与 cwd/项目/平台实例无关；提示内容全局一致（支持的 harness 清单本就是 CLI 能力面，非项目态）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：展示名映射 HARNESS_DISPLAY_NAMES 成为新的次要漂移点（新 harness 忘加映射→展示退化为 name 原样）。已用缺省回退消解——退化形态仍含全部家数，只是不美化，且测试遍历断言按「映射名或 name 原样」命中，两种形态都受覆盖。
++试过放弃：① 仅更新硬编码文案为 8 家——不解决根因，注册表再扩仍漂移，放弃；② 提示全部用 name 原样拼接（claude-code / deepseek-dsh）——零映射零漂移但可读性差（品牌大小写混乱），放弃，取映射+回退折中。
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/agent-session-log.js | 空态提示改注册表派生：导出 HARNESS_DETECTORS / HARNESS_DISPLAY_NAMES / renderDetectEmptyHint，cmdAgentLog --detect 空态分支改调 |
++| 修改 | test/agent-session-log.test.mjs | 新增空态提示派生断言：注册表全项含于提示、注入假注册表项自动跟上、CLI 空态输出走派生提示 |
+diff --git a/.sillyspec/changes/2026-10-06-agent-log-detect-hint/proposal.md b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/proposal.md
+new file mode 100644
+index 00000000..a4c43734
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T16:51:28.108Z
++---
++# 提案书（Proposal）— 2026-10-06-agent-log-detect-hint
++
++## 动机
++
++任务原话转写：agent-log --detect 空态提示文案落后于探测器注册表：src/agent-session-log.js 只列「Claude Code / Codex / ZCode」3 家，HARNESS_DETECTORS 实际注册 8 家（另有 pi / deepseek-dsh / cursor-agent / cursor / opencode）。pi/dsh/cursor 用户看到提示会误判 CLI 不支持自己的 harness，且文案硬编码零测试覆盖，注册表再扩还会继续漂移。
++
++成功标准：
++- --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++- 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++- npm test 全绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++2. 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++3. npm test 全绿
++
++## 成功标准（可验证）
++
++1. --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++2. 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++3. npm test 全绿
+diff --git a/.sillyspec/changes/2026-10-06-agent-log-detect-hint/requirements.md b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/requirements.md
+new file mode 100644
+index 00000000..fdaa014e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/requirements.md
+@@ -0,0 +1,53 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T16:51:28.108Z
++---
++# 需求规格（Requirements）— 2026-10-06-agent-log-detect-hint
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++
++`sillyspec agent-log --detect` 探测结果为空时打印的支持提示，必须列出 HARNESS_DETECTORS 注册表中的全部 harness（precise 与 loose 档皆含），且提示文案必须由注册表数据在运行时派生；禁止以硬编码清单手工同步注册表（现文案只列 3 家，注册表实有 8 家，即为漂移实证）。
++
++#### 场景：空态提示与注册表一致
++
++- Given: 运行环境无任何可探测的活跃 agent 会话日志
++- When: 执行 `sillyspec agent-log --detect`
++- Then: 空态提示含全部已注册 harness 的展示名（映射缺省回退注册表 name 原样），且保留 SILLYSPEC_AGENT_LOG 显式指定通道指引
++
++#### 场景：注册表扩项提示自动跟上
++
++- Given: 注册表新增一项 harness（如 fake-cli，无展示名映射）
++- When: 渲染空态提示
++- Then: 提示自动包含该项（name 原样形态），无需改提示代码
++
++### FR-02: 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++
++必须新增单元测试覆盖空态提示派生逻辑：遍历 HARNESS_DETECTORS 断言提示含每项的展示名（注册表扩项时测试循环自动覆盖新项，无需手改断言）；并至少一条 CLI 集成断言验证 `--detect` 空态真实输出走派生提示。
++
++#### 场景：主路径
++
++- Given: 测试导入 renderDetectEmptyHint 与 HARNESS_DETECTORS
++- When: 逐项检查提示串
++- Then: 每个注册表项（映射名或 name 原样）都出现在提示中
++
++### FR-03: npm test 全绿
++
++本变更合入后 `npm test`（全量套件）与 `npm run lint` 必须全绿——既有 agent-session-log 测试无回归，新断言通过。
++
++#### 场景：主路径
++
++- Given: 本变更的代码与测试已就位
++- When: 运行 npm test 与 npm run lint
++- Then: 全部通过，无失败项
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」
++FR-02: test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」
++FR-03: test/run-tests.mjs「全量套件（npm test）——本变更改动面无回归、新用例通过」
+diff --git a/.sillyspec/changes/2026-10-06-agent-log-detect-hint/tasks.md b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/tasks.md
+new file mode 100644
+index 00000000..c943339e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-agent-log-detect-hint/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T16:51:28.108Z
++---
++# 任务注册表（Tasks）— 2026-10-06-agent-log-detect-hint
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-agent-log-detect-hint --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-agent-log-detect-hint` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
++- [x] task-02: 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
++- [x] task-03: npm test 全绿

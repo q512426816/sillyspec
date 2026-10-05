@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-agent-log-detect-hint",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-agent-log-detect-hint:flow:测试绑定FR-01",
+      "tests": [
+        "test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-agent-log-detect-hint"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-agent-log-detect-hint:flow:测试绑定FR-02",
+      "tests": [
+        "test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-agent-log-detect-hint"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-agent-log-detect-hint:flow:测试绑定FR-03",
+      "tests": [
+        "test/run-tests.mjs「全量套件（npm test）——本变更改动面无回归、新用例通过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-agent-log-detect-hint"
+    }
+  ]
+}

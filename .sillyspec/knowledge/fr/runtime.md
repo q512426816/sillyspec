@@ -1021,3 +1021,60 @@ superseded_by：FR-cli-entry-102
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-05-guidance-consistency/requirements.md#FR-03
 最近确认：7d5e3de151ca53ff4b4ed2d6a185e510347bf8df
+
+## FR-runtime-074 --detect 空态提示覆盖全部已注册 harness，且从 HARNESS_DETECTORS 派生（注册表新增 harness 时提示自动跟上，不再手工同步）
+变更：2026-10-06-agent-log-detect-hint
+状态：active
+摘要：空态提示与注册表一致；注册表扩项提示自动跟上
+全文：.sillyspec/changes/archive/2026-10-06-agent-log-detect-hint/requirements.md#FR-01
+最近确认：a39154be47e8c14fb3b00b2935218208c46400fb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-agent-log-detect-hint:flow:测试绑定FR-01
+  tests: test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-agent-log-detect-hint
+  status: active
+
+## FR-runtime-075 新增单元测试：断言提示含全部已注册 harness 名（现零覆盖）
+变更：2026-10-06-agent-log-detect-hint
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-agent-log-detect-hint/requirements.md#FR-02
+最近确认：a39154be47e8c14fb3b00b2935218208c46400fb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-agent-log-detect-hint:flow:测试绑定FR-02
+  tests: test/agent-session-log.test.mjs「§14 空态提示派生——注册表全项含于提示 / 注入假注册表项自动跟上 / CLI 空态输出走派生提示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-agent-log-detect-hint
+  status: active
+
+## FR-runtime-076 npm test 全绿
+变更：2026-10-06-agent-log-detect-hint
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-agent-log-detect-hint/requirements.md#FR-03
+最近确认：a39154be47e8c14fb3b00b2935218208c46400fb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-agent-log-detect-hint:flow:测试绑定FR-03
+  tests: test/run-tests.mjs「全量套件（npm test）——本变更改动面无回归、新用例通过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-agent-log-detect-hint
+  status: active
