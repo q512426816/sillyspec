@@ -1113,7 +1113,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   let progress = pm.read(cwd, changeName)
 
-  // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status/doctor）查询只读短路。
+  // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status；doctor 已于 2026-09-09-doctor-noai
+  // 移出——阶段形态走状态机，顶层 doctor 只读语义由 index.js case 头部分流保真）查询只读短路。
   // 无显式写 flag 时在 registerChange / ensureStageSteps 之前拦截，零副作用：
   //   - 目标 progress 不存在 → 提示「只读查询不建变更」exit 0（不 initChange、不建 default 行，治 8b）
   //   - 目标 progress 存在 → 只读展示，不 seed steps、不刷新 lastActive、不 registerChange
