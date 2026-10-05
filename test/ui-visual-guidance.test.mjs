@@ -155,10 +155,12 @@ test('降级判定窗口内绑定仍命中：视觉收敛降级/降级在前形�
   // 窗口内绑定（视觉+2字+降级=既有正例形态；降级在前视觉在后=窗口另一侧）
   const dir1 = makeChangeDir({ proposal: '前端页面调整', design: 'FR-04：变更详情页六组视觉收敛降级为保留既有五卡' })
   const dir2 = makeChangeDir({ proposal: '前端页面调整', design: '本期将整体降级为简化样式，保留信息密度' })
+  const dir3 = makeChangeDir({ proposal: '前端页面调整', design: '六个页面降级为三个（评审 P2：页面词表补齐）' })
   try {
     assert.equal(runUiVisualProbe({ changeDir: dir1, gate: 'warn' }).downgradeDeclared, true, '视觉收敛降级（视觉+2字+降级）仍命中')
     assert.equal(runUiVisualProbe({ changeDir: dir2, gate: 'warn' }).downgradeDeclared, true, '降级在前视觉词在后（≤6字）仍命中')
-  } finally { for (const d of [dir1, dir2]) rmSync(d, { recursive: true, force: true }) }
+    assert.equal(runUiVisualProbe({ changeDir: dir3, gate: 'warn' }).downgradeDeclared, true, '页面与降级 0 字距离仍命中（词表与 VISUAL_LINE 同集）')
+  } finally { for (const d of [dir1, dir2, dir3]) rmSync(d, { recursive: true, force: true }) }
 })
 
 /* ── 3. local.yaml 档位读取 ── */
