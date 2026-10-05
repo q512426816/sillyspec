@@ -27,7 +27,7 @@ flow-parity.js 新增导出 detectPatchDrift({cwd, change, freezeHead}) → {dri
 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
    flow done 本会话串行；review.json 改名 renameSync 同目录原子。并发他侧提交落在窗口内但无本变更后缀 → 不触发（归属切分正确处理）；检测读 git 的瞬间快照即判据，无跨进程竞态面。
 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
-   安全——重冻结与隔离都在同一 flow done 运行内先于 review/archive 子步完成；中断重跑幂等（重冻结重复执行结果一致，.superseded 已在场时 renameSync 失败被 catch 吞、review.json 已不在场即跳过）。
+   安全——重冻结与隔离都在同一 flow done 运行内先于 review/archive 子步完成；中断重跑幂等（重冻结重复执行结果一致；隔离槽位带时间戳，多轮处置各占各槽不互踩，隔离失败则本轮整体退回现状幂等跳过——fail-safe 要么完整交付要么不动）。
 4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
    无串台面：漂移判据锚定本变更名（提交后缀字面等值），change-patch.json/changeDir 各变更目录各自隔离；detectPatchDrift 的 git 查询锚调用方 cwd，不读跨仓数据。
 

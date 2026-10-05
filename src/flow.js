@@ -1151,8 +1151,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
         if (quarantineOk) {
           driftRefreeze = true
-          // 标记重置独立成块（评审处置 P3 窄路径：rename 与盘写不共 catch——隔离已成功而
-          // writeFlowState 失败时，内存重置保本运行正确，盘残留 done 由下轮漂移重检兜底）
           if (st.substeps?.review === 'done') {
             // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
             // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
