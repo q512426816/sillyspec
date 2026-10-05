@@ -60,7 +60,7 @@ const STAGE_HINTS = {
     '没有检测到活跃的 SillySpec 流程。',
     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
     '',
-    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
   ],
@@ -76,11 +76,11 @@ const STAGE_HINTS = {
   'verify': [
     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
     '如需修改，请先回到 execute 阶段，或收口后开轻量变更：',
-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
   ],
   'archive': [
     '当前在 archive（归档）阶段，不修改源码。',
-    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
   ],
   'explore': [
     '当前在 explore（探索）阶段，只读不写。',

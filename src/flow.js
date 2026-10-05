@@ -1737,7 +1737,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
         assertDatedChangeName(change)
       } catch (e) {
         console.error(`❌ ${e.message}`)
-        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<需求>"`)
+        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
         process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
       }
     }
@@ -1904,7 +1904,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<任务>" [--thick|--with-tasks] | sillyspec flow done --change <名>')
+  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名>')
   process.exit(2)
 }
 
