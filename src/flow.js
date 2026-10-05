@@ -197,7 +197,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
         const unconfirmed = injectable.filter((f) => f.unconfirmed > 0).slice(0, 2)
         if (unconfirmed.length > 0) {
-          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
+          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests --confirm --anchor <id> --evidence <真实测试路径>\`（翻 active；--confirm 是 flag 非子命令——形态与 index.js 实现及其用法文案一致，2026-10-05-tests-confirm-hint 修正错形态静默空转）；不符则不动，留给 knowledge digest 信号`)
         }
       }
     }
