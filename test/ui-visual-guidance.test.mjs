@@ -49,6 +49,12 @@ test('detectUiTouch 反例：后端/CLI/文档变更零命中', () => {
   assert.equal(detectUiTouch(null), false)
 })
 
+test('detectUiTouch 反例（2026-10-05-uivisual-word-narrow）：后端高频通用语渲染/组件/样式零命中', () => {
+  assert.equal(detectUiTouch('聚合函数 + 渲染 + 对应单测'), false, 'CLI「渲染」输出语境（实测误触形态）')
+  assert.equal(detectUiTouch('重构核心组件的导入关系'), false, '后端「组件」通用语')
+  assert.equal(detectUiTouch('调整日志输出样式为单行'), false, '「输出样式」后端通用语')
+})
+
 test('detectUiTouchInPaths：前端扩展名兜底（NEW: 前缀剥离）', () => {
   assert.equal(detectUiTouchInPaths(['NEW:frontend/src/app/page.tsx']), true)
   assert.equal(detectUiTouchInPaths(['src/components/Button.vue']), true)
