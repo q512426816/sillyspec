@@ -3093,7 +3093,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const reason = flag('--reason') || 'spec'
       const fail = (msg) => { console.error(`❌ ${msg}`); process.exitCode = 1 }
       // repair-paths/--redomain 自带用法门，不走 anchor/change 前置守卫
-      if (!anchor && !change && !has('--repair-paths') && !filteredArgs.slice(1).includes('repair-paths') && !has('--redomain')) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression] | repair-paths | --redomain --from <域> --to <域>'); break }
+      if (!anchor && !change && !has('--repair-paths') && !filteredArgs.slice(1).includes('repair-paths') && !has('--redomain')) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression] | repair-paths | --redomain --from <域> --to <域>\n  语义：--bind 追加一条新绑定行（不替换旧行；row_id 缺省自动生成 manual:*）；--unbind 按 --row-id <id> 删行（或 --tests 路径反查）；不带 bind/unbind 只读展示'); break }
       // 变更期局部锚（FR-NN 未铸全局）只读拒绝修改——修理工仅面向提升后行
       const isLocalAnchor = anchor && /^FR-\d+$/.test(anchor)
       if ((has('--bind') || has('--unbind')) && isLocalAnchor) { fail(`变更期局部锚「${anchor}」只读——修理工仅面向提升后的全局锚（FR-<域>-NNN / ql-…）`); break }
