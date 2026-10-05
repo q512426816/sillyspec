@@ -74,8 +74,8 @@ console.log('--- ③ resolver 无主回退语义不变 ---')
 console.log('--- ④ 带戳他变更 + 无戳并存仍空（三形态齐备） ---')
 {
   const root = mkRuntime()
-  mkRun(root, 'exec-2026-09-01-090000', { stamp: '2026-09-01-theirs' })
-  mkRun(root, 'exec-2026-08-19-112600') // 无戳 mtime 更旧但无主 → 回退仍拿它
+  mkRun(root, 'exec-2026-09-01-090000', { stamp: '2026-09-01-theirs' }) // 有主（他变更）——mtime 最新但不等值不取
+  mkRun(root, 'exec-2026-08-19-112600') // 无戳（无主）——回退命中它
   const byRepo = collectReviewDeclaredFiles(root, CHG, { runtimeRoot: root })
   assert(byRepo.size === 0, `回退拿无戳 run 经门控后声明面仍空（实际 ${JSON.stringify([...byRepo])}）`)
   rmSync(root, { recursive: true, force: true })

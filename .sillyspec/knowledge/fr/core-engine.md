@@ -1628,3 +1628,79 @@
   confirmed_at: null
   source_change: 2026-10-05-knowledge-stats-freshness
   status: active
+
+## FR-core-engine-109 collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
+变更：2026-10-05-review-declared-unstamped-gate
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-declared-unstamped-gate/requirements.md#FR-01
+最近确认：a26821acd8caefeee88ae1031526b8564d124a74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-01
+  tests: test/review-declared-unstamped-gate.test.mjs「无戳 run（回退形态）声明面为空」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-declared-unstamped-gate
+  status: active
+
+## FR-core-engine-110 戳等值命中（run 归属本变更）时声明收集行为不变
+变更：2026-10-05-review-declared-unstamped-gate
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-declared-unstamped-gate/requirements.md#FR-02
+最近确认：a26821acd8caefeee88ae1031526b8564d124a74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-02
+  tests: test/review-declared-unstamped-gate.test.mjs「带戳等值 run 收集行为不变（切片+产物过滤）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-declared-unstamped-gate
+  status: active
+
+## FR-core-engine-111 resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
+变更：2026-10-05-review-declared-unstamped-gate
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-declared-unstamped-gate/requirements.md#FR-03
+最近确认：a26821acd8caefeee88ae1031526b8564d124a74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-03
+  tests: test/review-declared-unstamped-gate.test.mjs「resolver 回退语义不变（无主 run 仍被解析返回）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-declared-unstamped-gate
+  status: active
+
+## FR-core-engine-112 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
+变更：2026-10-05-review-declared-unstamped-gate
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-review-declared-unstamped-gate/requirements.md#FR-04
+最近确认：a26821acd8caefeee88ae1031526b8564d124a74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-04
+  tests: test/review-declared-unstamped-gate.test.mjs「带戳他变更+无戳并存仍空（三形态齐备）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-review-declared-unstamped-gate
+  status: active

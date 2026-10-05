@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-review-declared-unstamped-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试④注释「无戳 mtime 更旧」与 fixture 实际相反",
+      "evidence": "test ④ 中无戳 run 在带戳他变更 run 之后创建（mtime 更新），行内注释却写「无戳 mtime 更旧但无主」——注释误述 fixture；断言与覆盖不受影响（resolver 唯一无主候选恒被选中，且 ③ 已直接锁定回退语义），仅误导后续维护者",
+      "location": "test/review-declared-unstamped-gate.test.mjs:78"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——门控为单次同步读（src/worktree-apply.js:871），无累积状态；设计作答与代码一致",
+    "并发": "ok——readExecuteRunChangeStamp 半写/读失败 catch 返 null（src/task-review.js:1022）→ 按无戳门控为空，fail 方向是少收集声明（收紧 apply）非误放行，设计作答属实",
+    "切换": "ok——门控无状态不落盘；风险节声明的「本变更 run 真丢戳→声明面静默为空，apply 改报不在 design 清单 violation」边界已裁决：可接受——fail-closed 收紧方向、补 design 清单/allowed_paths 即过且可恢复，丢戳本身即元数据损坏，信任无主声明才是数据正确性风险",
+    "作用域": "ok——runtimeRoot 单点解析（src/worktree-apply.js:858-861）供 resolver 与门控共用同一作用域，review.repo 跨仓切片（normalizeRepoKey，src/task-review.js:56）在门控之后原样执行；design 声明的保留 resolver 无主回退（不改本体）边界已裁决：可接受——FR-03 明确锁定且测试③实证回退语义不变"
+  },
+  "reviewedAt": "2026-10-05T12:11:47Z"
+}

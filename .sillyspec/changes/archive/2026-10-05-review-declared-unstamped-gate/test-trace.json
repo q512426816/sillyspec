@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-review-declared-unstamped-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-declared-unstamped-gate.test.mjs「无戳 run（回退形态）声明面为空」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-declared-unstamped-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/review-declared-unstamped-gate.test.mjs「带戳等值 run 收集行为不变（切片+产物过滤）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-declared-unstamped-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-declared-unstamped-gate.test.mjs「resolver 回退语义不变（无主 run 仍被解析返回）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-declared-unstamped-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-review-declared-unstamped-gate:flow:测试绑定FR-04",
+      "tests": [
+        "test/review-declared-unstamped-gate.test.mjs「带戳他变更+无戳并存仍空（三形态齐备）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-review-declared-unstamped-gate"
+    }
+  ]
+}

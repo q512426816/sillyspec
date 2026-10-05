@@ -1,0 +1,303 @@
+diff --git a/src/task-review.js b/src/task-review.js
+index cc61eda1..f570fbc9 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -1015,7 +1015,7 @@ export function stampExecuteRunChange(runtimeRoot, runId, changeName) {
+  * 读 run 目录的 change 归属戳。
+  * @returns {string|null} 戳内容（trim 后非空），无戳/读失败返回 null
+  */
+-function readExecuteRunChangeStamp(runtimeRoot, runId) {
++export function readExecuteRunChangeStamp(runtimeRoot, runId) {
+   try {
+     const c = readFileSync(join(runtimeRoot, 'execute-runs', runId, 'change'), 'utf8').trim()
+     return c || null
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 1144a318..79f549e1 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -21,7 +21,7 @@ import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js
+ import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
+ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
+ import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
+-import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
++import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, readExecuteRunChangeStamp, normalizeRepoKey } from './task-review.js';
+ import { collectActiveQuickGuardFiles } from './quicklog.js';
+ import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
+ import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
+@@ -861,6 +861,14 @@ export function collectReviewDeclaredFiles(projectRoot, changeName, opts = {}) {
+       || join(projectRoot, '.sillyspec', '.runtime');
+     const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName });
+     if (!runId) return byRepo;
++    // 归属戳门控（2026-10-05-review-declared-unstamped-gate）：resolver 无戳命中时回退拿
++    // mtime 最新的无主 run——从未跑过 execute 的变更会误挂无关历史 run 的 review 声明
++    // （实证：14 个 8 月无戳 run 文件误报「review 声明了越权文件」）。review changedFiles 是
++    // reviewer 对该 run 实际改动的经验证陈述，信任不跨 run 迁移——无戳即无法证明归属本变更，
++    // 声明面空集（fail-closed：少一份放松面；本变更 run 真丢戳时 apply 收紧报 violations，
++    // 补 design 清单/allowed_paths 即过）。resolver 本体不动——无主回退服务 task-done 等
++    // marker 漂移恢复场景。
++    if (readExecuteRunChangeStamp(runtimeRoot, runId) !== changeName) return byRepo;
+     const runTasksDir = join(runtimeRoot, 'execute-runs', runId, 'tasks');
+     if (!existsSync(runTasksDir)) return byRepo;
+     for (const taskId of readdirSync(runTasksDir)) {
+diff --git a/test/review-declared-unstamped-gate.test.mjs b/test/review-declared-unstamped-gate.test.mjs
+new file mode 100644
+index 00000000..de2f1116
+--- /dev/null
++++ b/test/review-declared-unstamped-gate.test.mjs
+@@ -0,0 +1,88 @@
++/**
++ * 2026-10-05-review-declared-unstamped-gate 回归：collectReviewDeclaredFiles 归属戳门控
++ *
++ * 背景（2026-10-05 实证）：resolver（resolveLatestExecuteRunIdWithTasks）在变更名无戳命中时
++ * 回退拿 mtime 最新的无主 run——从未跑过 execute 的变更误挂 8 月无戳旧 run 的 review.json
++ * changedFiles（14 个无关文件），apply 预检误报「review 声明了越权文件」且嫌疑标注误导。
++ *
++ * 锁定语义：
++ *   1. 无戳 run（resolver 回退形态）→ 声明面空 Map（FR-01）
++ *   2. 戳等值命中 → 收集行为不变：repo 切片 + .sillyspec//meta.json 产物过滤（FR-02）
++ *   3. resolver 无主回退语义不变（task-done 等消费方零影响）（FR-03）
++ *   4. 带戳他变更 + 无戳并存 → 回退仍拿无戳 → 门控后空（FR-04 三形态齐备）
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { collectReviewDeclaredFiles } from '../src/worktree-apply.js'
++import { resolveLatestExecuteRunIdWithTasks } from '../src/task-review.js'
++
++let passed = 0, failed = 0
++const failures = []
++function assert(cond, msg) {
++  if (cond) { passed++; console.log(`  ✅ PASS: ${msg}`) }
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++console.log('=== collectReviewDeclaredFiles 归属戳门控（2026-10-05-review-declared-unstamped-gate）===\n')
++
++const CHG = '2026-10-05-my-change'
++const mkRuntime = () => mkdtempSync(join(tmpdir(), 'revdecl-gate-'))
++const mkRun = (root, runId, { stamp, changedFiles = ['src-app.js', 'src-facade.js'], repo = 'main' } = {}, taskId = 'task-01') => {
++  const taskDir = join(root, 'execute-runs', runId, 'tasks', taskId)
++  mkdirSync(taskDir, { recursive: true })
++  if (stamp !== undefined) writeFileSync(join(root, 'execute-runs', runId, 'change'), stamp + '\n')
++  writeFileSync(join(taskDir, 'review.json'), JSON.stringify({
++    schemaVersion: 2, task: taskId, base: '0'.repeat(40), head: '1'.repeat(40),
++    changedFiles, repo, specVerdict: 'pass', qualityVerdict: 'pass',
++  }))
++}
++
++console.log('--- ① 无戳 run（回退形态）声明面为空 ---')
++{
++  const root = mkRuntime()
++  mkRun(root, 'exec-2026-08-19-112600') // 无戳旧 run（实证形态）
++  const byRepo = collectReviewDeclaredFiles(root, CHG, { runtimeRoot: root })
++  assert(byRepo.size === 0, `无戳 run 声明面空 Map（实际 ${JSON.stringify([...byRepo])}）`)
++  rmSync(root, { recursive: true, force: true })
++}
++
++console.log('--- ② 带戳等值 run 收集行为不变（切片+产物过滤） ---')
++{
++  const root = mkRuntime()
++  // 单 run 多 task（真实形态：resolver 只取最新 run，声明按 tasks/* 聚合）
++  mkRun(root, 'exec-2026-10-05-100000', { stamp: CHG, changedFiles: ['src-app.js', '.sillyspec/quicklog/Q.md', 'meta.json'] })
++  mkRun(root, 'exec-2026-10-05-100000', { stamp: CHG, changedFiles: ['src-other.js'], repo: 'other' }, 'task-02')
++  const byRepo = collectReviewDeclaredFiles(root, CHG, { runtimeRoot: root })
++  const main = byRepo.get('main') || []
++  assert(main.includes('src-app.js'), '带戳等值收集正常（src-app.js 在列）')
++  assert(!main.some(f => f.startsWith('.sillyspec/') || f === 'meta.json'), '运行时产物过滤不变')
++  assert(!(byRepo.get('main') || []).includes('src-other.js') && (byRepo.get('other') || []).includes('src-other.js'), '跨仓切片不变（repo:other 不进 main）')
++  rmSync(root, { recursive: true, force: true })
++}
++
++console.log('--- ③ resolver 无主回退语义不变 ---')
++{
++  const root = mkRuntime()
++  mkRun(root, 'exec-2026-08-16-231102', { stamp: '2026-08-16-someone-else' }) // 有主（他变更）
++  mkRun(root, 'exec-2026-08-19-112600') // 无戳（无主）
++  const runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot: root, changeName: CHG })
++  assert(runId === 'exec-2026-08-19-112600', `resolver 仍回退拿无主 run（实际 ${runId}）——task-done 等消费方零影响`)
++  rmSync(root, { recursive: true, force: true })
++}
++
++console.log('--- ④ 带戳他变更 + 无戳并存仍空（三形态齐备） ---')
++{
++  const root = mkRuntime()
++  mkRun(root, 'exec-2026-09-01-090000', { stamp: '2026-09-01-theirs' })
++  mkRun(root, 'exec-2026-08-19-112600') // 无戳 mtime 更旧但无主 → 回退仍拿它
++  const byRepo = collectReviewDeclaredFiles(root, CHG, { runtimeRoot: root })
++  assert(byRepo.size === 0, `回退拿无戳 run 经门控后声明面仍空（实际 ${JSON.stringify([...byRepo])}）`)
++  rmSync(root, { recursive: true, force: true })
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failures.length) { console.log('失败项:'); failures.forEach(f => console.log('  - ' + f)) }
++console.log('='.repeat(50))
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/tasks.md b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/tasks.md
+new file mode 100644
+index 00000000..6a509a8c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:03:05.695Z
++---
++# 任务注册表（Tasks）— 2026-10-05-review-declared-unstamped-gate
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-review-declared-unstamped-gate --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-review-declared-unstamped-gate` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
++- [x] task-02: 戳等值命中（run 归属本变更）时声明收集行为不变
++- [x] task-03: resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
++- [x] task-04: 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
+diff --git a/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/design.md b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:03:05.695Z
++---
++# 设计记录（Design Record）— 2026-10-05-review-declared-unstamped-gate
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++门控收口在 collectReviewDeclaredFiles（src/worktree-apply.js）内：resolveLatestExecuteRunIdWithTasks 返回 runId 后补一道归属戳校验（readExecuteRunChangeStamp(runtimeRoot, runId) !== changeName 即返回空 Map）。review.json changedFiles 是 reviewer 对该 run 实际改动的经验证陈述（verifyReviewGitEvidence 曾对真实 diff 交叉核验），信任不跨 run 迁移——无戳 run 无法证明归属本变更，挂其声明只会产误导性「越权声明」误报（实证：14 个无关历史文件）。不改 resolver 本体：其无主回退服务 task-done 写回定位等 marker 漂移恢复场景，语义另有锁定——门控只在声明收集口收紧，消费面单一、爆炸半径最小。D-003 相交过滤（不相交剔除出放行面）保持不变——本变更是把误挂消灭在收集源头，让「review 声明了越权文件」报告行只在真有本变更 review 声明越权时出现。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++collectReviewDeclaredFiles(projectRoot, changeName, opts) 返回语义收窄：resolver 回退拿到的无戳 run（戳缺失或戳≠changeName）返回空 Map（原行为：挂该 run 全部 review changedFiles）；戳等值命中时行为不变。task-review.js 的 readExecuteRunChangeStamp 加 export（函数体零改动）——新增导出面供 worktree-apply.js 消费（该方向 import 既有，无环）。resolveLatestExecuteRunIdWithTasks 及其全部其他消费方（task-done/cross-repo-reconcile）语义零变化。CLI 层无签名变化；apply 预检输出：无关历史声明的「review 声明了越权文件」warning 消失，真实越权声明 warning 不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——门控是单次同步读（戳文件读一次即判定），无累积状态；戳文件在 run 创建时一次性写入，run 归属不随时间漂移，迟到到达的 review.json 只影响已空门控的收集量（无戳恒空）。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   归属戳是 run 创建时原子写定、此后只读的事实文件（无重写路径）；读到半写戳时 readExecuteRunChangeStamp 既有 catch 返 null → 按无戳门控为空——fail 方向是少收集声明（收紧 apply），不是误放行。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——门控无状态不落盘；本变更 run 真丢戳的恢复场景下声明面为空只是收紧（apply violations 报清单，补 design 清单/任务卡 allowed_paths 后重跑即过），不产生半态。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：门控判的是「run 戳 == 本变更名」的等值事实，runtimeRoot 由调用方解析（平台模式指针/本地），跨仓切片（review.repo）逻辑在门控之后原样执行，多实例各自读各自 execute-runs。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：本变更的 run 在极端场景（戳文件被误删/worktree cleanup 先清了 run 戳）真丢戳——声明面静默为空，apply 对 review 声明过的越界文件改报「不在 design 清单」violation，出路从「review 声明自动放行」变成「补 design 声明」——收紧方向可恢复（fail-closed），且该场景本身意味着 run 元数据已损坏，静默信任其声明才是风险面。放弃的方案：① 改 resolver 语义（无戳回退整体删除）——影响 task-done/cross-repo-reconcile 等全部消费方的 marker 漂移恢复路径，锁定面外；② 只改 warning 文案区分无戳来源——保留误挂数据只软化措辞，治标不治本。均已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/worktree-apply.js | collectReviewDeclaredFiles 补归属戳门控：无戳/戳不等值 run 返回空 Map |
++| 修改 | src/task-review.js | readExecuteRunChangeStamp 加 export（函数体零改动） |
++| 新增 | test/review-declared-unstamped-gate.test.mjs | 无戳空声明/带戳等值收集/带戳他变更+无戳并存三形态单测 |
+
+diff --git a/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/proposal.md b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:03:05.695Z
++---
++# 提案书（Proposal）— 2026-10-05-review-declared-unstamped-gate
++
++## 动机
++
++任务原话转写：worktree apply 的 review 声明收集（collectReviewDeclaredFiles，src/worktree-apply.js）经 resolveLatestExecuteRunIdWithTasks 定位 run：变更名无戳命中时 resolver 回退拿 mtime 最新的无戳旧 run——从未跑过 execute 的变更会误挂无关历史 run 的 review.json changedFiles（本会话实证：apply 预检误报「14 个 review 声明文件不在 allow 面」且嫌疑标注误导——review 失实/并行混入均非实情，实为 8 月无戳旧 run）。review 声明是 reviewer 对该 run 实际改动的经验证陈述，信任不跨 run 迁移；无戳即无法证明归属。D-003 相交过滤虽 fail-closed 兜住放行面，但误报噪音与误导性嫌疑标注治标不治本。
++成功标准：
++- collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
++- 戳等值命中（run 归属本变更）时声明收集行为不变
++- resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
++- 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
++2. 戳等值命中（run 归属本变更）时声明收集行为不变
++3. resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
++4. 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
++
++## 成功标准（可验证）
++
++1. collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
++2. 戳等值命中（run 归属本变更）时声明收集行为不变
++3. resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
++4. 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
+
+diff --git a/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/requirements.md b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-review-declared-unstamped-gate/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T12:03:05.695Z
++---
++# 需求规格（Requirements）— 2026-10-05-review-declared-unstamped-gate
++
++## 功能需求
++
++### FR-01: collectReviewDeclaredFiles 对 resolver 回退拿到的无戳 run 返回空声明面（不再挂无关 run 的 changedFiles）
++
++- collectReviewDeclaredFiles 必须在 resolver 返回 runId 后校验归属戳：readExecuteRunChangeStamp(runtimeRoot, runId) 不等值 changeName（无戳或戳属他变更——resolver 无主回退形态）时必须返回空 Map，禁止把该 run 的 review changedFiles 挂为本变更声明面。
++
++#### 场景：主路径
++
++- Given: execute-runs 存在无戳旧 run（其 review.json 声明了与本变更无关的文件），本变更从未跑过 execute（无戳等值命中）
++- When: collectReviewDeclaredFiles 解析声明面
++- Then: 返回空 Map——apply 预检不再出现「review 声明了越权文件」误报
++
++### FR-02: 戳等值命中（run 归属本变更）时声明收集行为不变
++
++- run 归属戳等值 changeName 时声明收集必须与既有行为逐字一致：按 review.repo 切片聚合 changedFiles、过滤 .sillyspec//meta.json 运行时产物。
++
++#### 场景：主路径
++
++- Given: execute-runs 存在戳==本变更名的 run，其 tasks/*/review.json 声明 changedFiles
++- When: collectReviewDeclaredFiles 解析声明面
++- Then: 声明面与门控前逐字一致（repo 切片/产物过滤不变）
++
++### FR-03: resolver 其他消费方（task-done/cross-repo-reconcile）语义零变化（门控只在 collectReviewDeclaredFiles 内）
++
++- 门控必须只落在 collectReviewDeclaredFiles 内：resolveLatestExecuteRunIdWithTasks 函数体及 task-done/cross-repo-reconcile 等其他消费方的解析语义零变化（无主回退保留）。
++
++#### 场景：主路径
++
++- Given: 任意消费方（如 writeTaskReview 定位）经 resolver 解析 run
++- When: changeName 无戳命中、存在无戳旧 run
++- Then: resolver 仍返回该无戳 run（回退语义不变）——只有声明收集口按戳门控
++
++### FR-04: 单测覆盖：无戳 run 空声明/带戳等值收集正常/带戳他变更+无戳并存仍空三形态
++
++- 必须有单测锁定三形态：无戳 run（回退形态）空声明、带戳等值 run 收集正常、带戳他变更 run 与无戳 run 并存时（回退仍拿无戳）空声明。
++
++#### 场景：主路径
++
++- Given: 临时 runtimeRoot 内构造三形态 fixture
++- When: collectReviewDeclaredFiles 判定
++- Then: 三形态断言各自成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/review-declared-unstamped-gate.test.mjs「无戳 run（回退形态）声明面为空」
++FR-02: test/review-declared-unstamped-gate.test.mjs「带戳等值 run 收集行为不变（切片+产物过滤）」
++FR-03: test/review-declared-unstamped-gate.test.mjs「resolver 回退语义不变（无主 run 仍被解析返回）」
++FR-04: test/review-declared-unstamped-gate.test.mjs「带戳他变更+无戳并存仍空（三形态齐备）」
