@@ -1,0 +1,76 @@
+{
+  "change": "2026-10-05-input-teach-copyable",
+  "baseline": "ee6c61e8e200d3d1124506c8973e1f5ac1aee594",
+  "head": "72c50c924f82444521924e13a75859db8a17ec3b",
+  "files": [
+    ".sillyspec/changes/2026-10-05-input-teach-copyable/design.md",
+    ".sillyspec/changes/2026-10-05-input-teach-copyable/requirements.md",
+    ".sillyspec/changes/2026-10-05-input-teach-copyable/tasks.md",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "src/hooks/worktree-guard.js",
+    "src/index.js",
+    "src/run/command.js",
+    "src/run/stage.js",
+    "src/stages/brainstorm.js",
+    "test/flow-clarity-probe.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/input-format-copy.test.mjs",
+    "test/input-teach-copyable.test.mjs",
+    ".sillyspec/changes/2026-10-05-input-teach-copyable/proposal.md"
+  ],
+  "totals": {
+    "files": 15,
+    "additions": 325,
+    "deletions": 26
+  },
+  "savedAt": "2026-10-05T14:58:08.596Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "1a4eb2c3ed49da8709f7c2623ec0302d3d9abec6f6435cd8f919697ee6401d24",
+  "patchStatus": "ok"
+}

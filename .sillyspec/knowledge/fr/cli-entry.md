@@ -6631,3 +6631,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-hunk-gate-commit-attribution
   status: active
+
+## FR-cli-entry-351 src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
+变更：2026-10-05-input-teach-copyable
+状态：active
+摘要：主路径；缩进容忍
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-copyable/requirements.md#FR-01
+最近确认：0e463ef9124e8455cd4d534ad7254ec42e464404
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-copyable:flow:测试绑定FR-01
+  tests: test/input-teach-copyable.test.mjs「分号内联教学形态零残留」 | test/input-teach-copyable.test.mjs「各教学处带可照抄实例」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-copyable
+  status: active
+
+## FR-cli-entry-352 design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
+变更：2026-10-05-input-teach-copyable
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-copyable/requirements.md#FR-02
+最近确认：0e463ef9124e8455cd4d534ad7254ec42e464404
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-copyable:flow:测试绑定FR-02
+  tests: test/input-teach-copyable.test.mjs「design 模板锚教学防替换措辞」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-copyable
+  status: active
+
+## FR-cli-entry-353 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
+变更：2026-10-05-input-teach-copyable
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-copyable/requirements.md#FR-03
+最近确认：0e463ef9124e8455cd4d534ad7254ec42e464404
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-copyable:flow:测试绑定FR-03
+  tests: test/input-teach-copyable.test.mjs「教学实例核心形态可提取成功标准」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-copyable
+  status: active
+
+## FR-cli-entry-354 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
+变更：2026-10-05-input-teach-copyable
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-copyable/requirements.md#FR-04
+最近确认：0e463ef9124e8455cd4d534ad7254ec42e464404
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-copyable:flow:测试绑定FR-04
+  tests: test/input-format-copy.test.mjs「教学点断言同步（锁新实例形态）」 | test/input-teach-copyable.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-copyable
+  status: active

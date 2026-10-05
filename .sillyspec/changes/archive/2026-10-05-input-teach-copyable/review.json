@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-input-teach-copyable",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "禁残的分号内联形态逐字存活于非 src 教学面（CLAUDE.md 与命令卡），且未作范围边界披露",
+      "evidence": "CLAUDE.md:14 / assets/command-cards/flow.md:14 / assets/command-cards/run-quick.md:12 含与 FR-01 禁残字面逐字相同的 `--input \"<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>\"` 可照抄命令——单行、无独立「成功标准：」行，extractSuccessCriteria（flow-draft.js:130-155）提取 0 条 → exit 2，即本变更要根治的「照抄必碰壁」失败模式在 Claude 会话注入指令面与命令卡原样存活；AGENTS.md:15 与 .claude/skills/sillyspec-flow/SKILL.md:23 亦为描述式教学（散文形态、非字面命令，照抄诱因较低）。FR-01 字面限 src（本评审独立 grep 实测 src 零残留），故不判 FAIL；但 design/requirements 未声明「非 src 教学面不在本变更范围」取舍，属未披露边界，建议后续变更统一覆盖。",
+      "location": "CLAUDE.md:14（另 assets/command-cards/flow.md:14、assets/command-cards/run-quick.md:12）"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03「src 全仓零残留断言」实为定点 6 文件扫描，断言保护面窄于 FR 文面",
+      "evidence": "test ① 仅对 TEACH_FILES 固定 6 文件断言 !includes(SEMICOLON_FORM)，无 src 递归遍历；当前零残留 claim 为真（本评审 grep src 零命中），但未来新文件回流分号形态不会被该测试捕获。同型先例：test/input-format-copy.test.mjs ① 为定点 5 文件扫描而头注写「全仓 src」（其 :23 注释已自认定点口径）。",
+      "location": "test/input-teach-copyable.test.mjs:25"
+    },
+    {
+      "severity": "P3",
+      "title": "裁决留痕（非缺陷）：design 声明的边界与取舍逐条裁决——均可接受",
+      "evidence": "风险节及用法面共四项：①输出变长（worktree-guard ~9→~11 行）/terminal 折行粘连——行数小增换可照抄性且主会话实测过门，可接受；②教学实例字面与测试断言耦合——这正是断言目的（锁可照抄性），可接受；③放弃放宽 extractSuccessCriteria 使内联形态过门——保住门语义（内联形态无法区分动机句与标准条目），test ③b 已锁「分号形态提取 0 条」佐证该取舍自洽，可接受；④flow.js 用法行保留 ＋ 概要式概要并紧随补可照抄实例——FR-01 对用法行口径即「同步给出同口径实例/说明」，已满足，可接受。",
+      "location": "design.md:45"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a——已核实 diff：仅静态文案/模板字符串与 console 输出，无输入事件流，design「不适用」作答属实；边界已裁决：可接受",
+    "并发": "n/a——已核实 diff：无新增共享状态/落盘面（STAGE_HINTS 为模块级常量数组、join 渲染逻辑未触；design.md 生成走既有串行 flow start 协议）；边界已裁决：可接受",
+    "切换": "n/a——已核实：教学文案随代码分发、无运行时状态；声明边界「已生成旧 change 的 design.md 不回填」已裁决：可接受——收口锚（四问原文/节标题）未随本变更改动（diff 仅触 flow-draft.js 模板顶部两行教学引言，:272-280 区），旧变更锚对比不受影响",
+    "作用域": "n/a——已核实：实例均为通用占位形态（<动机与背景>/<可验证标准>/<YYYY-MM-DD-名>），不引用本仓/工作区状态，多实例输出一致；边界已裁决：可接受"
+  },
+  "reviewedAt": "2026-10-05T15:05:00Z"
+}

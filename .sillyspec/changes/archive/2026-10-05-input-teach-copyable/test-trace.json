@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-input-teach-copyable",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-input-teach-copyable:flow:测试绑定FR-01",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「分号内联教学形态零残留」",
+        "test/input-teach-copyable.test.mjs「各教学处带可照抄实例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-copyable"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-input-teach-copyable:flow:测试绑定FR-02",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「design 模板锚教学防替换措辞」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-copyable"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-input-teach-copyable:flow:测试绑定FR-03",
+      "tests": [
+        "test/input-teach-copyable.test.mjs「教学实例核心形态可提取成功标准」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-copyable"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-05-input-teach-copyable:flow:测试绑定FR-04",
+      "tests": [
+        "test/input-format-copy.test.mjs「教学点断言同步（锁新实例形态）」",
+        "test/input-teach-copyable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-input-teach-copyable"
+    }
+  ]
+}

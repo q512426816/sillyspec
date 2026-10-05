@@ -1,0 +1,534 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 8ce784ca..d68c68af 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -272,9 +272,9 @@ function draftDesignRecordV2({ change }) {
+     '---',
+     `# 设计记录（Design Record）— ${change}`,
+     '',
+-    '> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
++    '> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
+     '> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。',
+-    '> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。',
++    '> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。',
+     '',
+     ...secs.flat(),
+   ].join('\n')
+diff --git a/src/flow.js b/src/flow.js
+index 98de7264..5d61c60b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -515,8 +515,11 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+       console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——轻量跑道假定输入已含决策，两选一：`)
+       console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
+       console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`)
+-      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`)
+-      console.error(`      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`)
++      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"（引号内换行合法，可照抄形态）：`)
++      console.error('      <动机/背景在前>')
++      console.error('')
++      console.error('      成功标准：')
++      console.error('      - <可验证标准，一行一条>')
+       process.exit(2)
+     }
+   }
+@@ -1737,7 +1740,12 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         assertDatedChangeName(change)
+       } catch (e) {
+         console.error(`❌ ${e.message}`)
+-        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
++        // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
++        console.error('   重试（--input 引号内换行合法，可照抄）：')
++        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景>')
++        console.error('')
++        console.error('   成功标准：')
++        console.error('   - <可验证标准>"')
+         process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
+       }
+     }
+@@ -1905,6 +1913,11 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     return r
+   }
+   console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名>')
++  console.error('      --input 可照抄形态（引号内换行合法）：')
++  console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
++  console.error('')
++  console.error('      成功标准：')
++  console.error('      - <可验证标准>"')
+   process.exit(2)
+ }
+ 
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 1929c9ab..2598e858 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -60,7 +60,11 @@ const STAGE_HINTS = {
+     '没有检测到活跃的 SillySpec 流程。',
+     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
+     '',
+-    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
++    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）——--input 引号内换行合法，下例可照抄：',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '',
++    '  成功标准：',
++    '  - <可验证标准>"',
+     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
+     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
+   ],
+@@ -75,12 +79,19 @@ const STAGE_HINTS = {
+   ],
+   'verify': [
+     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+-    '如需修改，请先回到 execute 阶段，或收口后开轻量变更：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
++    '如需修改，请先回到 execute 阶段，或收口后开轻量变更（--input 引号内换行合法，可照抄）：',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '',
++    '  成功标准：',
++    '  - <可验证标准>"',
+   ],
+   'archive': [
+     '当前在 archive（归档）阶段，不修改源码。',
+-    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"',
++    '如需修改，请开启新变更（--input 引号内换行合法，可照抄）：',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '',
++    '  成功标准：',
++    '  - <可验证标准>"',
+   ],
+   'explore': [
+     '当前在 explore（探索）阶段，只读不写。',
+diff --git a/src/index.js b/src/index.js
+index 66f4e42d..23a7a766 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -221,7 +221,12 @@ function refuseRetiredQuickFreshStart(stageArgs) {
+     })()
+   if (passThrough) return false
+   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
+-  console.error('   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
++  // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
++  console.error('   新工作请走轻量变更（--input 引号内换行合法，下例可照抄）：')
++  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++  console.error('')
++  console.error('   成功标准：')
++  console.error('   - <可验证标准>"')
+   console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
+   process.exit(1)
+ }
+diff --git a/src/run/command.js b/src/run/command.js
+index 24b3af87..befb14ce 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -833,7 +833,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+             quickSessionId = recent
+             quickFallbackUsed = true
+           } else {
+-            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
++            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更（--input 引号内换行合法，可照抄）：')
++            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++            console.log('')
++            console.log('   成功标准：')
++            console.log('   - <可验证标准>"')
+             process.exit(0)
+           }
+         } else {
+@@ -1128,7 +1132,13 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+       // 空态引导（2026-10-05-status-empty-guide）：新会话拿到下一步入口——静态文案，
+       // 引用通用命令形态而非本仓状态（空态定义即无数据可读）；exit 0 与零落盘语义不变。
+-      console.log('   → 可 sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>" 开始轻量变更')
++      // 可照抄实例（2026-10-05-input-teach-copyable）：分号描述形态照抄提取 0 条（探针实证）；
++      // 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
++      console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
++      console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++      console.log('')
++      console.log('     成功标准：')
++      console.log('     - <可验证标准>"')
+       console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
+       process.exit(0)
+     }
+@@ -2016,8 +2026,11 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     const classification = classifyChange({ description: inputText || '', explicitMode, localConfig })
+     if (classification.mode === 'quick') {
+       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
+-      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话）：`)
+-      console.log(`   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
++      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话；--input 引号内换行合法，可照抄）：`)
++      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++      console.log('')
++      console.log('   成功标准：')
++      console.log('   - <可验证标准>"')
+       return
+     }
+     console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 93321f70..6c7135a7 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -416,7 +416,11 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+       // 注：CLI 进程入口的新会话已被 index.js refuseRetiredQuickFreshStart 预门拦下，本门兜底
+       // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
+       console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
+-      console.error(`   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
++      console.error(`   新工作请走轻量变更（--input 引号内换行合法，可照抄）：`)
++      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++      console.error('')
++      console.error('   成功标准：')
++      console.error('   - <可验证标准>"')
+       console.error(`   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。`)
+       // 进程内路径幻影残留清理（best-effort）：CLI 入口已被 index.js 预门拦下；进程内直调
+       // runCommand 的新会话形态在 command.js 已生成 sid + owner.json + current-quick-run-id +
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 6b4d318c..f41d4cb8 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -55,7 +55,16 @@ export const definition = {
+ 
+ ### 早期规模筛查（判断是否该走轻量变更）
+ 加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模（判据同 Step 8 复杂度/上下文轴——2026-09-29-brainstorm-exit-thin-default）：
+-- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
++- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
++
++\`\`\`
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++
++成功标准：
++- <可验证标准>"
++\`\`\`
++
++（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
+ - **明显 large**（需要 Wave 并行编排/上下文分片/多阶段治理，或用户显式要求完整流程）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
+ - **拿不准 → 继续探索**（这正是头脑风暴的职责；澄清完成后 Step 8 按同轴精判——注意：经过头脑风暴澄清的需求通常已可单上下文吞吐，出口默认收编轻量道）。
+ - 这是**粗判**，只为让明显的纯执行小变更免走设计流程；后续「生成规范文件」步骤做精判兜底。
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+index 7f29bbae..10ca926b 100644
+--- a/test/flow-clarity-probe.test.mjs
++++ b/test/flow-clarity-probe.test.mjs
+@@ -147,8 +147,10 @@ test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）',
+     `❓ 需求不够清晰（--input 缺失）——轻量跑道假定输入已含决策，两选一：`,
+     `   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`,
+     `      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`,
+-    `   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`,
+-    `      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`,
++    `   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"（引号内换行合法，可照抄形态）：`,
++    `      <动机/背景在前>`,
++    `      成功标准：`,
++    `      - <可验证标准，一行一条>`,
+   ]
+   for (const line of expected) assert.ok(s.stderr.includes(line), `清晰度门文案逐字保留: ${line}`)
+   assert.ok(!/选道自检/.test(s.stderr), '清晰度门拒绝面不渲染自检段（未建变更）')
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index cf001995..ef2b22c2 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -539,11 +539,12 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
+   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
+   rmSync(cwd, { recursive: true, force: true })
+   rmSync(plat, { recursive: true, force: true })
+-  // 格式样例（清晰度门文案）
++  // 格式样例（清晰度门文案——2026-10-05-input-teach-copyable 起为可照抄实例形态）
+   const cwd2 = makeRepo().cwd
+   const gate = cli(cwd2, ['flow', 'start', '--change', '2026-09-01-x1'])
+-  assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
+-  assert.match(gate.stderr, /- <可验证标准>/)
++  assert.match(gate.stderr, /可照抄/, '过门格式可照抄实例在场')
++  assert.match(gate.stderr, /成功标准：/)
++  assert.match(gate.stderr, /- <可验证标准/)
+   rmSync(cwd2, { recursive: true, force: true })
+ })
+ 
+diff --git a/test/input-format-copy.test.mjs b/test/input-format-copy.test.mjs
+index 77e8b626..d09030b6 100644
+--- a/test/input-format-copy.test.mjs
++++ b/test/input-format-copy.test.mjs
+@@ -26,14 +26,14 @@ test('① 紧凑内联旧形态零残留', () => {
+   }
+ })
+ 
+-test('② 教学点均带独立一行『成功标准：』教学', () => {
+-  assert.ok(read('src/run/command.js').includes('独立一行『成功标准：』'), 'command.js 空态引导带格式')
+-  assert.ok(read('src/flow.js').includes('独立一行『成功标准：』'), 'flow.js 重试提示带格式')
++test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式）', () => {
++  for (const p of ['src/run/command.js', 'src/flow.js', 'src/stages/brainstorm.js']) {
++    assert.ok(read(p).includes('--input "<动机与背景>'), `${p} 教学带实例起行`)
++  }
+   assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
+-  assert.ok(read('src/stages/brainstorm.js').includes('独立一行『成功标准：』'), 'brainstorm 规模筛查转轻量建议带格式（评审 P2 处置：第五处教学点）')
+   const guard = read('src/hooks/worktree-guard.js')
+   assert.ok(!guard.includes('--input "<描述+成功标准>"'), 'worktree-guard 无模糊形态残留')
+-  assert.ok((guard.match(/独立一行『成功标准：』/g) || []).length >= 3, 'worktree-guard 三处 stage 提示带格式')
++  assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')
+ })
+ 
+ test('③ 另一语义门的 --input 不受影响', () => {
+diff --git a/test/input-teach-copyable.test.mjs b/test/input-teach-copyable.test.mjs
+new file mode 100644
+index 00000000..f96fcb15
+--- /dev/null
++++ b/test/input-teach-copyable.test.mjs
+@@ -0,0 +1,70 @@
++/**
++ * 2026-10-05-input-teach-copyable 回归：--input 教学可照抄化 + design 模板锚教学防替换
++ *
++ * 背景（2026-10-05-flow-help-status 实测）：7 处 CLI 教学为分号内联描述形态，
++ * 字面照抄 extractSuccessCriteria 提取 0 条、exit 2（探针实证）；design 模板
++ * 「答案直接写在问题下方」未防「答案整块替换问题原文」失败模式（三度同型锚拒收）。
++ *
++ * 锁定：
++ *   ① 分号内联旧教学形态零残留（7 处教学所在文件）
++ *   ② 各教学处带可照抄多行实例（--input "<动机与背景> 起行 + - <可验证标准>" 收行）
++ *   ③ 实例核心形态（顶格/缩进两版）喂 extractSuccessCriteria 提取 ≥ 1 条；
++ *      分号内联形态提取 0 条（零残留断言的语义依据）
++ *   ④ design 模板锚教学含「问题行勿删勿改勿替换 + 答案另起一行」措辞
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { extractSuccessCriteria } from '../src/flow-draft.js'
++
++const ROOT = join(import.meta.dirname, '..')
++const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++
++/** 分号内联教学所在文件（2026-10-05-flow-help-status 实测定位 7 处 + 本变更零残留断言新抓 3 处：command.js 两处、stage.js 一处） */
++const TEACH_FILES = [
++  'src/run/command.js',
++  'src/flow.js',
++  'src/index.js',
++  'src/hooks/worktree-guard.js',
++  'src/stages/brainstorm.js',
++  'src/run/stage.js',
++]
++
++/** 分号内联旧形态（照抄提取 0 条——探针实证） */
++const SEMICOLON_FORM = '--input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"'
++
++test('① 分号内联教学形态零残留', () => {
++  for (const p of TEACH_FILES) {
++    assert.ok(!read(p).includes(SEMICOLON_FORM), `${p} 无分号内联形态`)
++  }
++})
++
++test('② 各教学处带可照抄多行实例', () => {
++  for (const p of TEACH_FILES) {
++    const src = read(p)
++    assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行（--input "<动机与背景>）`)
++    assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行（- <可验证标准>）`)
++  }
++  // worktree-guard 三处 stage 提示各带一份实例
++  const guard = read('src/hooks/worktree-guard.js')
++  assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')
++})
++
++test('③ 实例核心形态可提取成功标准（缩进容忍）', () => {
++  const flat = extractSuccessCriteria('<动机与背景>\n\n成功标准：\n- <可验证标准>')
++  assert.ok(flat.length >= 1, '顶格实例形态提取 ≥ 1 条')
++  const indented = extractSuccessCriteria('     <动机与背景>\n\n     成功标准：\n     - <可验证标准>')
++  assert.ok(indented.length >= 1, '带展示缩进的照抄形态提取 ≥ 1 条（行级 trim）')
++})
++
++test('③b 分号内联形态提取 0 条（零残留断言的语义依据）', () => {
++  const out = extractSuccessCriteria('修复文档缺口；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』')
++  assert.equal(out.length, 0)
++})
++
++test('④ design 模板锚教学防替换措辞', () => {
++  const src = read('src/flow-draft.js')
++  assert.ok(src.includes('勿删勿改'), '模板教学含「勿删勿改」')
++  assert.ok(src.includes('答案另起一行'), '模板教学含「答案另起一行写在问题行下方」')
++})
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-copyable/design.md b/.sillyspec/changes/2026-10-05-input-teach-copyable/design.md
+new file mode 100644
+index 00000000..c83de21a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-copyable/design.md
+@@ -0,0 +1,61 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:48:26.336Z
++---
++# 设计记录（Design Record）— 2026-10-05-input-teach-copyable
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++两类改动：① 教学面——7 处分号内联教学（command.js status 空态 / flow.js 变更名重试 / index.js quick 退役 / worktree-guard.js 三处 / brainstorm.js 转轻量建议）统一改为含真实换行的可照抄多行实例（`成功标准：` 独立行 + `- <可验证标准>` 条目行），flow.js 清晰度门 ② 引导与 flow 用法行同步补实例/口径；② 模板面——flow-draft.js design 模板教学措辞强化为「问题行原样保留（勿删勿改勿替换），答案另起一行写在问题行下方」，并把实证计数从两度更新为三度、补「答案整块替换问题原文」失败模式。实例可照抄的依据：extractSuccessCriteria 逐行 trim（flow-draft.js:133）容忍展示缩进，`成功标准：` 独立行 + `- ` 条目行即过门——选择直接给实例而非改提取器，因为提取器语义（独立行门）是对的，缺口在教学侧。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名/文件格式变化。CLI 输出面变化：status 空态引导、flow 变更名重试提示、quick 退役引导、worktree-guard 三处 stage 提示、brainstorm 转轻量建议、flow 清晰度门 ② 引导、flow 用法行输出，由单行分号描述形态变为含多行可照抄实例的输出（行数增加）；worktree-guard 提示数组 STAGE_HINTS 元素数增加（join('\n') 渲染不变）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用——改动是静态输出文案与模板教学文本，无输入事件流。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用——仅 console 输出路径与模板字符串常量；唯一落盘面是 design.md 生成（既有 flow start 串行协议不变）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用——教学文案随代码分发，无运行时状态；已生成的旧 change 的 design.md 不回填（新措辞只对后续 flow start 生效）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用——实例文案为通用占位形态（<动机与背景>/<可验证标准>），不引用本仓状态；多实例输出一致。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++风险：多行教学使部分命令输出变长（worktree-guard 拦截提示从 ~9 行变 ~11 行）；terminal 折行下实例可能视觉粘连——接受，实例行保持短行、缩进区分。另一风险：教学实例字面与本变更测试断言耦合，未来改教学须同步测试——这正是断言的目的（锁可照抄性），可接受。试过但放弃：改 extractSuccessCriteria 使分号内联形态也过门——放弃理由：内联形态无法区分「动机句」与「标准条目」，放宽会把动机文本误收为标准，门语义受损；教学侧给实例是更小且语义正确的修复面。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/run/command.js | 三处教学改可照抄多行实例（status 空态 / quick 会话空态 / auto 模式小变更引导——后两处为零残留断言新抓） |
++| 修改 | src/flow.js | 变更名重试提示/清晰度门②引导/用法行三处补可照抄实例口径 |
++| 修改 | src/index.js | quick 退役引导改可照抄多行实例 |
++| 修改 | src/hooks/worktree-guard.js | STAGE_HINTS 三处 flow start 教学改多行实例（数组拆行） |
++| 修改 | src/stages/brainstorm.js | 转轻量建议教学改多行实例（prompt 文案，markdown 代码块） |
++| 修改 | src/run/stage.js | quick 兜底门新工作引导改多行实例（零残留断言新抓） |
++| 修改 | src/flow-draft.js | design 模板教学措辞强化（问题行勿删勿改勿替换） |
++| 修改 | test/input-format-copy.test.mjs | 教学点断言 ② 同步锁新实例形态 |
++| 修改 | test/flow-clarity-probe.test.mjs | 清晰度门 ② 文案逐字断言同步新实例形态 |
++| 修改 | test/flow-protocol.test.mjs | 清晰度门格式样例正则断言同步新实例形态 |
++| 新增 | test/input-teach-copyable.test.mjs | 分号零残留 + 实例在场 + 核心形态可提取三组断言 |
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-copyable/requirements.md b/.sillyspec/changes/2026-10-05-input-teach-copyable/requirements.md
+new file mode 100644
+index 00000000..4d6455c0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-copyable/requirements.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:48:26.336Z
++---
++# 需求规格（Requirements）— 2026-10-05-input-teach-copyable
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
++
++src 中禁止残留分号内联教学形态 `--input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`；实测定位的 7 处教学点（src/run/command.js status 空态、src/flow.js 变更名重试提示、src/index.js quick 退役引导、src/hooks/worktree-guard.js 三处 stage 提示、src/stages/brainstorm.js 转轻量建议）必须改为含真实换行的可照抄实例——实例含 `成功标准：` 独立行与 `- <可验证标准>` 条目行；src/flow.js 清晰度门 ② 引导与 flow 用法行同步给出同口径实例/说明。零残留断言若新抓到残留点（实测抓到 command.js 两处、stage.js 一处）同标准一并修复。
++
++#### 场景：主路径
++
++- Given：agent 从任一 CLI 教学输出（status 空态 / hook 提示 / 拒收引导）照抄实例命令
++- When：以照抄的 `--input` 值运行 flow start
++- Then：extractSuccessCriteria 提取 ≥ 1 条成功标准，清晰度门放行（不再 exit 2）
++
++#### 场景：缩进容忍
++
++- Given：教学实例带展示缩进（行首空格）
++- When：照抄时连缩进一起传入 --input
++- Then：行级 trim 后仍过门（extractSuccessCriteria 逐行 trim，flow-draft.js:133）
++
++### FR-02: design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
++
++src/flow-draft.js 的 design 模板教学注释必须显式说明：四问问题行/节标题原样保留，勿删勿改勿用答案替换；答案另起一行写在问题行下方。措辞须覆盖「整块替换问题原文」失败模式（2026-10-05-flow-help-status 三度实证），锚文本（四问原文、节标题）不得随本变更改动。
++
++#### 场景：主路径
++
++- Given：agent 按 flow start 生成的 design.md 模板教学填答
++- When：agent 在问题行下方插入答案段落（问题行未动）
++- Then：flow done artifacts 锚对比通过，无「问题文本被改写」拒收
++
++### FR-03: 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
++
++必须新增测试文件锁定 FR-01/FR-02：① src 全仓分号内联形态零残留断言；② 各教学处实例组成部分（`成功标准：` 独立行、`- <可验证标准>` 条目行）在场断言；③ 实例核心形态（`<动机>\n\n成功标准：\n- <条目>`）喂 extractSuccessCriteria 断言提取 ≥ 1 条。
++
++#### 场景：主路径
++
++- Given：本变更已合入
++- When：运行新增测试
++- Then：三条断言全过；若分号形态回流或实例形态改坏到不可提取，测试失败
++
++### FR-04: 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
++
++本变更触达的测试面必须全部通过；test/input-format-copy.test.mjs 的教学点断言（② 教学点均带『独立一行『成功标准：』』教学）必须随教学形态升级同步为锁新实例形态（教学从「描述式字样」升级为「可照抄实例」，旧断言字样随形态消失）。
++
++#### 场景：主路径
++
++- Given：7 处教学已改为实例形态，input-format-copy 断言已同步
++- When：运行本变更测试集（新增测试 + input-format-copy + flow/help 相关回归）
++- Then：全部 pass
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/input-teach-copyable.test.mjs「分号内联教学形态零残留」「各教学处带可照抄实例」
++FR-02: test/input-teach-copyable.test.mjs「design 模板锚教学防替换措辞」
++FR-03: test/input-teach-copyable.test.mjs「教学实例核心形态可提取成功标准」
++FR-04: test/input-format-copy.test.mjs「教学点断言同步（锁新实例形态）」、test/input-teach-copyable.test.mjs 全量
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-copyable/tasks.md b/.sillyspec/changes/2026-10-05-input-teach-copyable/tasks.md
+new file mode 100644
+index 00000000..eb35d4ba
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-copyable/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:48:26.336Z
++---
++# 任务注册表（Tasks）— 2026-10-05-input-teach-copyable
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-input-teach-copyable --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-input-teach-copyable` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
++- [x] task-02: design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
++- [x] task-03: 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
++- [x] task-04: 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
+diff --git a/.sillyspec/changes/2026-10-05-input-teach-copyable/proposal.md b/.sillyspec/changes/2026-10-05-input-teach-copyable/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-input-teach-copyable/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:48:26.336Z
++---
++# 提案书（Proposal）— 2026-10-05-input-teach-copyable
++
++## 动机
++
++任务原话转写：2026-10-05-flow-help-status 实测发现教学面两类缺口：① CLI 输出 7 处 --input 教学为分号内联描述形态（src/run/command.js status 空态、src/flow.js 变更名重试提示、src/index.js quick 退役引导、src/hooks/worktree-guard.js 三处 stage 提示、src/stages/brainstorm.js 转轻量建议），字面照抄实测 extractSuccessCriteria 提取 0 条、exit 2——CLI 无一处可照抄实例，新手第一次照抄必碰壁；② design.md 模板「答案直接写在问题下方」措辞未防「答案整块替换问题原文」失败模式（flow-help-status 实测三度同型锚拒收）。本变更把 7 处教学统一为含真实换行的可照抄实例（行级 trim 容忍缩进，带缩进展示照抄亦过门），并强化 design 模板锚教学措辞。
++
++成功标准：
++- src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
++- design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
++- 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
++- 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
++2. design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
++3. 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
++4. 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
++
++## 成功标准（可验证）
++
++1. src 全仓 7 处分号内联教学形态零残留，各教学处给出含「成功标准：」独立行与「- <可验证标准>」条目行的可照抄多行实例
++2. design 模板教学措辞显式说明问题行原样保留（勿删勿改勿替换）、答案另起一行写在问题行下方
++3. 测试锁定：分号形态零残留断言 + 教学实例组成部分在场断言 + 实例核心形态喂 extractSuccessCriteria 提取大于等于 1 条断言
++4. 相关测试全部通过（含 input-format-copy 教学点断言同步更新）
