@@ -1,0 +1,199 @@
+diff --git a/src/index.js b/src/index.js
+index 53c557da..66f4e42d 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3093,7 +3093,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       const reason = flag('--reason') || 'spec'
+       const fail = (msg) => { console.error(`❌ ${msg}`); process.exitCode = 1 }
+       // repair-paths/--redomain 自带用法门，不走 anchor/change 前置守卫
+-      if (!anchor && !change && !has('--repair-paths') && !filteredArgs.slice(1).includes('repair-paths') && !has('--redomain')) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression] | repair-paths | --redomain --from <域> --to <域>'); break }
++      if (!anchor && !change && !has('--repair-paths') && !filteredArgs.slice(1).includes('repair-paths') && !has('--redomain')) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression] | repair-paths | --redomain --from <域> --to <域>\n  语义：--bind 追加一条新绑定行（不替换旧行；row_id 缺省自动生成 manual:*）；--unbind 按 --row-id <id> 删行（或 --tests 路径反查）；不带 bind/unbind 只读展示'); break }
+       // 变更期局部锚（FR-NN 未铸全局）只读拒绝修改——修理工仅面向提升后行
+       const isLocalAnchor = anchor && /^FR-\d+$/.test(anchor)
+       if ((has('--bind') || has('--unbind')) && isLocalAnchor) { fail(`变更期局部锚「${anchor}」只读——修理工仅面向提升后的全局锚（FR-<域>-NNN / ql-…）`); break }
+diff --git a/test/bind-unbind-help.test.mjs b/test/bind-unbind-help.test.mjs
+new file mode 100644
+index 00000000..ac8b974f
+--- /dev/null
++++ b/test/bind-unbind-help.test.mjs
+@@ -0,0 +1,28 @@
++/**
++ * 2026-10-05-bind-unbind-help 回归：tests 用法行含 --bind/--unbind 语义说明
++ *
++ * 背景（主清单项 4）：--bind 新增绑定行不替换旧行（row_id 显式或自动 manual:*）、
++ * --unbind 按 --row-id（或 --tests 路径）删行——用法行只列 flag 名不说明语义，只能试。
++ *
++ * 锁定：
++ *   ① 用法行含语义短注（追加新行不替换 / 按 --row-id 或 --tests 删行 / 缺省只读展示）
++ *   ② 语义与实现一致锚：bind 行构造为 append（旧行不删）、unbind 删行 id 来源两口径
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++const ROOT = join(import.meta.dirname, '..')
++const src = readFileSync(join(ROOT, 'src', 'index.js'), 'utf8')
++
++test('① 用法行含 --bind/--unbind 语义说明', () => {
++  // 源码面匹配：fail 字符串里是字面 \n（两字符），输出时才成换行——正则按源码文本匹配
++  const m = /用法: sillyspec tests[^\n]*\\n\s*语义：--bind 追加一条新绑定行（不替换旧行；row_id 缺省自动生成 manual:\*）；--unbind 按 --row-id <id> 删行（或 --tests 路径反查）；不带 bind\/unbind 只读展示/.exec(src)
++  assert.ok(!!m, 'tests 用法行带语义短注（与实现同口径）')
++})
++
++test('② 语义与实现一致锚（append 构造 + 删行 id 两口径）', () => {
++  assert.ok(src.includes("const row = { anchor, row_id: rowId || `manual:"), 'bind 行构造 append 语义锚（row_id 缺省自动 manual:*）')
++  assert.ok(src.includes("--unbind 须配 --row-id <id> 或 --tests"), 'unbind 删行 id 来源两口径锚（--row-id / --tests）')
++})
+diff --git a/.sillyspec/changes/2026-10-05-bind-unbind-help/design.md b/.sillyspec/changes/2026-10-05-bind-unbind-help/design.md
+new file mode 100644
+index 00000000..a3f0febc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-bind-unbind-help/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:20:11.277Z
++---
++# 设计记录（Design Record）— 2026-10-05-bind-unbind-help
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++单点文案补充：tests 用法行（index.js fail 门）随附语义短注——--bind 追加一条新绑定行（不替换旧行；row_id 缺省自动生成 manual:*）、--unbind 按 --row-id 删行（或 --tests 路径反查）、不带 bind/unbind 只读展示。语义依据实现事实（index.js 行构造 append 语义 + unbind id 两口径 fail 提示）。源级回归测试双锚锁定：用法行语义文本在场 + 实现一致性锚（bind 行构造/unbind id 口径的源文本）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++tests 命令无参/缺参时的用法输出多一行语义短注；命令解析与行为零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：纯静态用法文案，无输入序。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：流式输出行，无共享可变状态。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用：无状态面。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：用法文案随 CLI 进程输出，不落盘不跨实例。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：语义短注将来与实现漂移（bind 改替换语义等）——回归测试带实现一致性锚（锚源文本随实现改而红，提示同步文案）。放弃的方案：把语义写进模块文档而非用法行——用户在 CLI 报错现场最需要语义，文档是第二落点；两处都写扩大漂移面，取现场单点。已弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/index.js | tests 用法行随附 --bind/--unbind 语义短注 |
++| 新增 | test/bind-unbind-help.test.mjs | 源级回归：用法行语义在场 + 实现一致性双锚 |
+diff --git a/.sillyspec/changes/2026-10-05-bind-unbind-help/requirements.md b/.sillyspec/changes/2026-10-05-bind-unbind-help/requirements.md
+new file mode 100644
+index 00000000..70b8137c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-bind-unbind-help/requirements.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:20:11.277Z
++---
++# 需求规格（Requirements）— 2026-10-05-bind-unbind-help
++
++## 功能需求
++
++### FR-01: tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
++
++- tests 命令用法输出必须随附语义短注：--bind 追加一条新绑定行（不替换旧行；row_id 缺省自动生成 manual:*）、--unbind 按 --row-id <id> 删行（或 --tests 路径反查）、不带 bind/unbind 只读展示——禁止只列 flag 名不说明语义。
++
++#### 场景：主路径
++
++- Given: 运行 sillyspec tests（无参/缺参）
++- When: 用法门输出
++- Then: 用法行后随语义短注一行
++
++### FR-02: 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
++
++- 语义短注必须与实现事实一致：bind 行构造为 append（旧行保留）、unbind 删行 id 来源 --row-id / --tests 两口径——由源级回归的实现一致性锚锁定。
++
++#### 场景：主路径
++
++- Given: 源级回归测试
++- When: 断言实现锚文本（row 构造 / unbind id fail 提示）
++- Then: 两锚在场（实现变更时锚红提示同步文案）
++
++### FR-03: 源级回归测试锁定用法行语义文本在场
++
++- 必须有源级回归测试：断言用法行语义文本在场与实现一致性双锚。
++
++#### 场景：主路径
++
++- Given: 仓内源码
++- When: 回归测试执行
++- Then: 双断言成立
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/bind-unbind-help.test.mjs「① 用法行含 --bind/--unbind 语义说明」
++FR-02: test/bind-unbind-help.test.mjs「② 语义与实现一致锚（append 构造 + 删行 id 两口径）」
++FR-03: test/bind-unbind-help.test.mjs「① + ② 双断言齐备」
+diff --git a/.sillyspec/changes/2026-10-05-bind-unbind-help/tasks.md b/.sillyspec/changes/2026-10-05-bind-unbind-help/tasks.md
+new file mode 100644
+index 00000000..cf80e1ea
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-bind-unbind-help/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:15:38.829Z
++---
++# 任务注册表（Tasks）— 2026-10-05-bind-unbind-help
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-bind-unbind-help --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-bind-unbind-help` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
++- [x] task-02: 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
++- [x] task-03: 源级回归测试锁定用法行语义文本在场
+diff --git a/.sillyspec/changes/2026-10-05-bind-unbind-help/proposal.md b/.sillyspec/changes/2026-10-05-bind-unbind-help/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-bind-unbind-help/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T14:15:38.829Z
++---
++# 提案书（Proposal）— 2026-10-05-bind-unbind-help
++
++## 动机
++
++任务原话转写：tests 命令 --bind/--unbind 语义无文档（主清单项 4）：--bind 是新增绑定行不替换旧行（row_id 显式或自动 manual:*，同锚旧行保留）、--unbind 按 --row-id（或 --tests 路径）删行——help 用法行只列 flag 名不说明语义，行为只能试。实测语义依据 index.js:3110-3121（row 对象构造 append、unbind ids 按 rowId/tests 删）。修法：用法行随附语义短注 + 源级回归锁定。
++成功标准：
++- tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
++- 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
++- 源级回归测试锁定用法行语义文本在场
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
++2. 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
++3. 源级回归测试锁定用法行语义文本在场
++
++## 成功标准（可验证）
++
++1. tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
++2. 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
++3. 源级回归测试锁定用法行语义文本在场

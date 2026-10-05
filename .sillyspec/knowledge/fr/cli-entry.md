@@ -6441,3 +6441,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-input-format-copy
   status: active
+
+## FR-cli-entry-341 tests 用法行含 --bind/--unbind 语义说明（追加新行不替换旧行 / 按 --row-id 或 --tests 删行）
+变更：2026-10-05-bind-unbind-help
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-bind-unbind-help/requirements.md#FR-01
+最近确认：e0d2fe4eb987a2ada4d328d6faee428defbb4f9e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-bind-unbind-help:flow:测试绑定FR-01
+  tests: test/bind-unbind-help.test.mjs「① 用法行含 --bind/--unbind 语义说明」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-bind-unbind-help
+  status: active
+
+## FR-cli-entry-342 语义说明与实现一致（bind 行构造 append 语义、unbind 删行 id 来源两口径）
+变更：2026-10-05-bind-unbind-help
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-bind-unbind-help/requirements.md#FR-02
+最近确认：e0d2fe4eb987a2ada4d328d6faee428defbb4f9e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-bind-unbind-help:flow:测试绑定FR-02
+  tests: test/bind-unbind-help.test.mjs「② 语义与实现一致锚（append 构造 + 删行 id 两口径）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-bind-unbind-help
+  status: active
+
+## FR-cli-entry-343 源级回归测试锁定用法行语义文本在场
+变更：2026-10-05-bind-unbind-help
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-bind-unbind-help/requirements.md#FR-03
+最近确认：e0d2fe4eb987a2ada4d328d6faee428defbb4f9e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-bind-unbind-help:flow:测试绑定FR-03
+  tests: test/bind-unbind-help.test.mjs「① + ② 双断言齐备」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-bind-unbind-help
+  status: active

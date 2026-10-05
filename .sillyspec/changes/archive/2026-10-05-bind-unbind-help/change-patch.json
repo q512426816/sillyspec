@@ -1,0 +1,46 @@
+{
+  "change": "2026-10-05-bind-unbind-help",
+  "baseline": "af5e72c026a8b9f3c355af7e7aff7329f8404d13",
+  "head": "e0d2fe4eb987a2ada4d328d6faee428defbb4f9e",
+  "files": [
+    ".sillyspec/changes/2026-10-05-bind-unbind-help/design.md",
+    ".sillyspec/changes/2026-10-05-bind-unbind-help/requirements.md",
+    ".sillyspec/changes/2026-10-05-bind-unbind-help/tasks.md",
+    "src/index.js",
+    "test/bind-unbind-help.test.mjs",
+    ".sillyspec/changes/2026-10-05-bind-unbind-help/proposal.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 158,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-05T14:19:59.494Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "a95986ff609f7116cd05b9989a666f160ff873261aa2006d88410ee760999d3b",
+  "patchStatus": "ok"
+}

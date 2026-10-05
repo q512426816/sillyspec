@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-bind-unbind-help",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-bind-unbind-help:flow:测试绑定FR-01",
+      "tests": [
+        "test/bind-unbind-help.test.mjs「① 用法行含 --bind/--unbind 语义说明」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-bind-unbind-help"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-bind-unbind-help:flow:测试绑定FR-02",
+      "tests": [
+        "test/bind-unbind-help.test.mjs「② 语义与实现一致锚（append 构造 + 删行 id 两口径）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-bind-unbind-help"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-bind-unbind-help:flow:测试绑定FR-03",
+      "tests": [
+        "test/bind-unbind-help.test.mjs「① + ② 双断言齐备」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-bind-unbind-help"
+    }
+  ]
+}
