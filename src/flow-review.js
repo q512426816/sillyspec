@@ -27,6 +27,19 @@ const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不�
 /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
 const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
 
+/** design 作答面否定语境消解（2026-10-05-review-promise-negation）：盲维第 4 问作答讨论
+ * 作用域风险时，「无串台面」「不会串台」「杜绝串台」等否定短语按字面命中 PROMISE_RE 一票
+ * 升级（实测：两行 console.log 的变更被定档高危起子代理评审）。「串台」是名词性风险词——
+ * 承诺语态必有断言修饰（与「不丢失」类「不X」形态承诺词本质不同），否定前缀 + 短距内的
+ * 「串台」先替换为占位符再扫；「解决串台」「仍有串台」等非否定语境保留一票升级。仅 design
+ * 作答面应用——input/proposal/requirements 承载用户原话，承诺口径零放松。后缀否定
+ * （「串台为零」）不覆盖：中文技术作答主流为前缀否定，为此加规则的复杂度不划算。 */
+const NEGATED_CROSSTALK_RE = /(?:不会|不存在|没有|无|零|防|杜绝|避免|不含|免)[^\n]{0,8}?串台/g
+function stripNegatedCrosstalk(text) {
+  // 占位符本身禁含「串台」二字——消解产物若残留原词，PROMISE_RE 照样命中（首版实测自坑）
+  return String(text || '').replace(NEGATED_CROSSTALK_RE, '〔已消解〕')
+}
+
 /** 交付 diff 危险原语（物证面）。 */
 const PRIMITIVE_RE = /asyncio\.(?:Lock|Event|Queue|gather)|threading\.|with_for_update|IntegrityError|ON CONFLICT|AbortSignal|AbortController|signal\.abort|\.rollback\(|since=|\bcursor\b/i
 
@@ -111,7 +124,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
   for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
     try {
       const t = readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n')
-      texts.push(f === 'design.md' ? stripV2QuestionLines(stripMachineSections(t)) : t)
+      texts.push(f === 'design.md' ? stripNegatedCrosstalk(stripV2QuestionLines(stripMachineSections(t))) : t)
     } catch { /* 缺件由 redraft/槽位门兜底 */ }
   }
   const all = texts.join('\n')

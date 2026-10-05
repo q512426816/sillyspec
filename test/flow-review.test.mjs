@@ -80,6 +80,65 @@ test('① 定档矩阵：五路信号与豁免举证', () => {
   assert.ok(t.reasons.some((r) => /抽查采样/.test(r)))
 })
 
+// ── 否定语境消解（2026-10-05-review-promise-negation）：盲维第4问作答的否定式「串台」
+// 不再一票升级；用户原话与非否定语境口径不变。v2 纯 markdown 夹具（四问原文行逐字同源，
+// stripV2QuestionLines 才能剥掉——夹具自污染防护）。──
+const DESIGN_V2_BND = [
+  '# 设计记录',
+  '## 做法概述',
+  '纯文本变换。',
+  '## 边界与并发（盲维四问——每问必答，答不了即设计缺口）',
+  '1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？',
+  '2. 并发写：两个执行体同时操作同一数据/文件会发生什么？',
+  '3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？',
+  '4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？',
+  '__ANSWER__',
+  '## 风险与死路',
+  '见上。',
+].join('\n')
+
+test('④ 否定语境消解：design 作答否定式「串台」不再一票升级', () => {
+  // 桶外名先钉（在桶内就换名直到桶外；若改 SALT 夹具自适应——同既有采样纪律）
+  let quietName = 'neg-off-bucket'
+  for (let i = 0; sampleBucket(quietName); i++) quietName = `neg-off-${i}`
+  assert.equal(sampleBucket(quietName), false)
+
+  // 三种否定形态逐一：不适用开头（避盲维信号）+ 否定串台短语
+  for (const [label, answer] of [
+    ['无串台面', '不适用：纯输出层追加，无串台面。'],
+    ['不会串台', '不适用：单进程同步变换，不会串台。'],
+    ['杜绝串台', '不适用：零共享状态，杜绝串台与误伤。'],
+  ]) {
+    const { root, changeDir } = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
+    const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+    assert.equal(t.required, false, `${label}：不再升级（reasons=${t.reasons}）`)
+    assert.ok(!t.reasons.some((r) => /承诺词/.test(r)), `${label}：承诺词条不在 reasons`)
+    assert.ok(t.exemptEvidence.some((e) => /无高危承诺词/.test(e)), `${label}：豁免证据含无承诺词`)
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('⑤ 用户原话口径：requirements 非否定「串台」仍一票升级', () => {
+  const { root, changeDir } = makeChangeDir(
+    DESIGN_V2_BND.replace('__ANSWER__', '不适用：无。'),
+    '# 需求\n修复跨实例数据串台问题\n',
+  )
+  const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-req-hit' })
+  assert.equal(t.required, true, 'requirements 非否定串台升级')
+  assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `承诺词条在场: ${t.reasons}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑥ 非否定语境保留：design 作答「解决串台」照常升级', () => {
+  const { root, changeDir } = makeChangeDir(
+    DESIGN_V2_BND.replace('__ANSWER__', '本设计的核心是解决多实例间的串台与误归属。'),
+    '# 需求\n普通需求文本\n',
+  )
+  const t = classifyReviewNeed({ changeDir, patchText: '+++ a\n+let x = 1', change: 'neg-keep-hit' })
+  assert.ok(t.reasons.some((r) => /承诺词命中「串台」/.test(r)), `非否定串台保留升级: ${t.reasons}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
   const book = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1' })
   assert.match(book, /请求预算硬帽 12/)
