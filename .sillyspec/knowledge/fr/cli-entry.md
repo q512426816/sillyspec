@@ -6194,3 +6194,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-05-flowdone-lintfail-output
   status: active
+
+## FR-cli-entry-328 tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
+变更：2026-10-05-redomain-preview-bychange
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-redomain-preview-bychange/requirements.md#FR-01
+最近确认：4eedf8e6ace5f2f63e346672f7d198e055cdb863
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-redomain-preview-bychange:flow:测试绑定FR-01
+  tests: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-redomain-preview-bychange
+  status: active
+
+## FR-cli-entry-329 他变更条目不进预览清单
+变更：2026-10-05-redomain-preview-bychange
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-redomain-preview-bychange/requirements.md#FR-02
+最近确认：4eedf8e6ace5f2f63e346672f7d198e055cdb863
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-redomain-preview-bychange:flow:测试绑定FR-02
+  tests: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ 他变更条目不进预览清单」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-redomain-preview-bychange
+  status: active
+
+## FR-cli-entry-330 CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
+变更：2026-10-05-redomain-preview-bychange
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-redomain-preview-bychange/requirements.md#FR-03
+最近确认：4eedf8e6ace5f2f63e346672f7d198e055cdb863
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-redomain-preview-bychange:flow:测试绑定FR-03
+  tests: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 级单测（execFileSync 真实 CLI 路径）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-redomain-preview-bychange
+  status: active

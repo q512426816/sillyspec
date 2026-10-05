@@ -1,0 +1,7 @@
+{"ts":1791205440349,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791205460062,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791205466730,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791205466730,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1791205480063,"kind":"commit","stage":null,"detail":"4eedf8e6","provisional":true}
+{"ts":1791205513040,"kind":"gate-run","stage":"verify","detail":"门实测 passed（32.7s） · 20261005130511","provisional":true}
+{"ts":1791205753657,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

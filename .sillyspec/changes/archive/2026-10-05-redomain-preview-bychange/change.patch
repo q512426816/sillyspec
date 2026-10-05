@@ -1,0 +1,203 @@
+diff --git a/src/index.js b/src/index.js
+index eb020565..53c557da 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3177,8 +3177,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         try {
+           const { planRedomain, redomainFrEntries } = await import('./redomain.js')
+           if (!has('--write')) {
+-            const plan = planRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null })
+-            console.log(`🔧 域迁移预览（--write 落盘）：fr/${fromD}.md → fr/${toD}.md，${plan.entries.length} 条`)
++            // 预览与落盘同口径透传 byChange（坑 redomain-plan-preview-by-change-ignored，
++            // 2026-10-02 实证：76338b4d 收编在途工作时此行漏透传——预览列整域、落盘只迁
++            // 分批子集，用户按预览理解会误判整域迁移）。planRedomain 侧过滤本就在场。
++            const plan = planRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null, byChange: byChangeD || null })
++            console.log(`🔧 域迁移预览（--write 落盘）：fr/${fromD}.md → fr/${toD}.md，${plan.entries.length} 条${byChangeD ? `（仅「变更：${byChangeD}」）` : ''}`)
+             for (const e of plan.entries.slice(0, 10)) console.log(`   ${e.id} ${e.title}`)
+             if (plan.entries.length > 10) console.log(`   … 共 ${plan.entries.length} 条`)
+             console.log(`   目标域文件${plan.targetExists ? '在场' : '将新建'}；源域${plan.sourceWillDelete ? '将删空壳' : '保留余条'}；ID 不变（身份保持）`)
+diff --git a/test/fr-domain-guard-and-redomain-bychange.test.mjs b/test/fr-domain-guard-and-redomain-bychange.test.mjs
+index 270d675a..c8ea70d9 100644
+--- a/test/fr-domain-guard-and-redomain-bychange.test.mjs
++++ b/test/fr-domain-guard-and-redomain-bychange.test.mjs
+@@ -9,6 +9,7 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { execFileSync } from 'node:child_process'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ 
+@@ -97,3 +98,20 @@ test('⑤ TEST_PATH_TOKEN_RE 不再截断 .tsx（归档绑定行 governance-card
+   assert.equal(rows[0].tests[0], 'frontend/src/components/knowledge/__tests__/governance-cards.test.tsx「伪域分池查看明细」',
+     '扩展名完整保留（不再截成 .test.ts）')
+ })
++
++test('⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集（坑 redomain-plan-preview-by-change-ignored）', () => {
++  const { knowledgeRoot } = mkKnowledge(['frontend', 'unmapped'])
++  const unmapped = join(knowledgeRoot, 'fr', 'unmapped.md')
++  writeFileSync(unmapped, [
++    '---\nauthor: t\n---\n\n# FR 索引 — unmapped\n',
++    '## FR-unmapped-101 alpha 第一条\n变更：change-alpha\n状态：active\n',
++    '## FR-unmapped-102 beta 条目\n变更：change-beta\n状态：active\n',
++    '## FR-unmapped-103 alpha 第二条\n变更：change-alpha\n状态：active\n',
++  ].join('\n\n') + '\n')
++  const CLI = join(import.meta.dirname, '..', 'src', 'index.js')
++  const out = execFileSync(process.execPath,
++    [CLI, 'tests', '--redomain', '--from', 'unmapped', '--to', 'frontend', '--by-change', 'change-alpha', '--spec-dir', join(knowledgeRoot, '..')],
++    { encoding: 'utf8', timeout: 60_000 })
++  assert.match(out, /2 条（仅「变更：change-alpha」）/, `预览计数只列分批子集：${out.split('\n').find((l) => l.includes('预览'))}`)
++  assert.ok(!out.includes('FR-unmapped-102'), '他变更条目不进预览清单')
++})
+diff --git a/.sillyspec/changes/2026-10-05-redomain-preview-bychange/tasks.md b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/tasks.md
+new file mode 100644
+index 00000000..e75060e1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:03:31.030Z
++---
++# 任务注册表（Tasks）— 2026-10-05-redomain-preview-bychange
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-05-redomain-preview-bychange --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-05-redomain-preview-bychange` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
++- [x] task-02: 他变更条目不进预览清单
++- [x] task-03: CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
+diff --git a/.sillyspec/changes/2026-10-05-redomain-preview-bychange/design.md b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/design.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:03:31.030Z
++---
++# 设计记录（Design Record）— 2026-10-05-redomain-preview-bychange
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——从本模板原样保留或复制，勿手打重写（标点也要逐字：2026-10-05 两度实证句号手写成问号被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在途代码倒推收尾（坑 redomain-plan-preview-by-change-ignored，2026-10-02 实证；本会话接手收编，非原作者）。单点修复：index.js 的 `tests --redomain` 预览分支调 planRedomain 时补透传 `byChange: byChangeD || null`（76338b4d 收编在途工作时漏传——落盘分支已透传，planRedomain 侧 byChange 过滤本就在场，预览漏传导致预览列整域而 --write 只迁分批子集）；预览计数行随动带「（仅「变更：X」）」标注让子集口径在输出面显式。CLI 级单测（execFileSync 走真实 CLI）锁定子集计数与排除项。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++CLI `sillyspec tests --redomain --from <域> --to <域> [--by-change <变更名>]` 预览输出行为变化：带 --by-change 时预览条目集与计数收窄为该变更子集并带标注（此前恒列整域）；--write 落盘行为不变（本就按 byChange 过滤）。无 JS API 签名变化（planRedomain 未改）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——预览是单次同步只读计算（planRedomain 扫 knowledge/fr 文件内存态过滤），无状态累积；knowledge 文件此刻是什么就预览什么。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   预览路径零写盘（--write 才落盘），并发写者只影响单次预览读到的新旧快照，无损坏面；落盘分支并发语义未改（本变更不触碰）。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——预览无落盘无中间态；中断重跑幂等。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   无串台面：byChange 透传的是 CLI 参数字面值，planRedomain 在调用方给定的 knowledgeRoot 内过滤，不读跨仓数据；--spec-dir 锚定各自的 knowledge 根。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：byChangeD 为空字符串时 `byChangeD || null` 归 null——与既有落盘分支同款归一（非新行为），无新增面。倒推收尾特有风险：接手代码语义理解偏差——diff 仅一行透传 + 一行文案，已逐行核对并实跑其自带 CLI 单测。放弃的方案：无（更深的重构——如把预览/落盘共用一条参数组装路径——超出坑修复面，不动）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/index.js | tests --redomain 预览分支补 byChange 透传 + 计数行子集标注 |
++| 修改 | test/fr-domain-guard-and-redomain-bychange.test.mjs | 新增 CLI 级单测 ⑥：预览只列分批子集、他变更条目不进清单 |
+
+diff --git a/.sillyspec/changes/2026-10-05-redomain-preview-bychange/proposal.md b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:03:31.030Z
++---
++# 提案书（Proposal）— 2026-10-05-redomain-preview-bychange
++
++## 动机
++
++任务原话转写：坑 redomain-plan-preview-by-change-ignored（2026-10-02 实证，76338b4d 收编在途工作时此行漏透传）倒推收尾——在途代码已写好，本会话接手收编：tests --redomain 预览路径不透传 byChange，预览列整域条目而 --write 只迁分批子集，用户按预览理解会误判整域迁移。修法：index.js 预览调用补 byChange 透传（planRedomain 侧过滤本就在场）+ 预览计数带「仅变更」标注 + CLI 级单测锁定。
++成功标准：
++- tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
++- 他变更条目不进预览清单
++- CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
++2. 他变更条目不进预览清单
++3. CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
++
++## 成功标准（可验证）
++
++1. tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
++2. 他变更条目不进预览清单
++3. CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
+
+diff --git a/.sillyspec/changes/2026-10-05-redomain-preview-bychange/requirements.md b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-05-redomain-preview-bychange/requirements.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-05T13:03:31.030Z
++---
++# 需求规格（Requirements）— 2026-10-05-redomain-preview-bychange
++
++## 功能需求
++
++### FR-01: tests --redomain --by-change 预览与落盘同口径：只列该变更条目，计数带「（仅「变更：X」）」标注
++
++- `tests --redomain` 预览分支必须透传 byChange 给 planRedomain（与落盘分支同口径）：带 --by-change 时预览只列该变更条目，计数行带「（仅「变更：X」）」标注；禁止预览列整域而落盘只迁子集的口径分裂。
++
++#### 场景：主路径
++
++- Given: knowledge fr/<from>.md 含多变更条目（change-alpha 2 条 + change-beta 1 条）
++- When: tests --redomain --from <from> --to <to> --by-change change-alpha（无 --write 干跑）
++- Then: 预览计数为 2 并带「（仅「变更：change-alpha」）」标注
++
++### FR-02: 他变更条目不进预览清单
++
++- 预览清单必须只含 byChange 等值条目——他变更条目（如 change-beta）禁止出现在预览行中。
++
++#### 场景：主路径
++
++- Given: 同 FR-01 fixture
++- When: 同 FR-01 命令
++- Then: 输出不含 FR-<域>-102（change-beta 条目）行
++
++### FR-03: CLI 级单测锁定（execFileSync 走真实 CLI 预览路径断言子集计数与排除项）
++
++- 必须有 CLI 级单测：真实 CLI 进程跑预览路径，断言子集计数标注与排除项（防 planRedomain 纯函数级测试漏掉 CLI 参数组装层回归）。
++
++#### 场景：主路径
++
++- Given: 临时 knowledge fixture
++- When: execFileSync 真实 CLI tests --redomain --by-change
++- Then: 断言 /N 条（仅「变更：X」）/ 与他变更条目缺席
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集」
++FR-02: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ 他变更条目不进预览清单」
++FR-03: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 级单测（execFileSync 真实 CLI 路径）」

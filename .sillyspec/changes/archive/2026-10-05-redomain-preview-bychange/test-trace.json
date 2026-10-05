@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-05-redomain-preview-bychange",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-05-redomain-preview-bychange:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-redomain-preview-bychange"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-05-redomain-preview-bychange:flow:测试绑定FR-02",
+      "tests": [
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ 他变更条目不进预览清单」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-redomain-preview-bychange"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-05-redomain-preview-bychange:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 级单测（execFileSync 真实 CLI 路径）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-05-redomain-preview-bychange"
+    }
+  ]
+}
