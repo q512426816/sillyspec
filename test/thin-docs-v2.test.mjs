@@ -96,17 +96,27 @@ test('④ 结构破坏拒收面：design 节整删 / requirements 整删 / 绑�
   rmSync(root, { recursive: true, force: true })
 })
 
-test('⑥ 强度词表含 SHOULD/SHOULD NOT（评审 P2 清偿）：唯一 SHOULD 强度句不再误拒收', () => {
+test('⑥ 强度词表含 SHOULD/SHOULD NOT 且中英位置同构（评审 P2 + wordpos 清偿）：句中英文强度句放行；占位句自带词表字样仍拒收', () => {
   const { root, changeDir, runtimeRoot, ledger, fill, fillAll } = fixture(INPUT)
-  fillAll()
-  // 只写 SHOULD 唯一强度句（模板指引列为合法强度词）→ 不因词表缺漏被误拒收
-  fill('requirements.md', (t) => t.replace(/^- （待撰写.*$/gm, '- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）'))
+  fillAll() // design 四节 + 绑定行就位；两 FR 正文=「- 系统 MUST …」（行首英文形态）
+  const body = '- 系统 MUST 实现该条标准行为'
+  // 位置同构（2026-10-05-wordpos）：句中英文强度词放行——旧实现行首锚定在此误拒收
+  fill('requirements.md', (t) => t.split(body).join('- 本变更 MUST 在句中间出现也命中（wordpos 夹具）'))
   let v = verifyThinDocsV2({ changeDir, ledger })
-  assert.equal(v.violations.length, 0, `SHOULD 唯一强度句应放行: ${JSON.stringify(v.violations)}`)
-  // SHOULD NOT 红线形态同放行（SHOULD\b 前缀覆盖）
-  fill('requirements.md', (t) => t.replace(/^- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）$/gm, '- 系统 SHOULD NOT 在收口前静默改写锚文本（评审 P2 夹具）'))
+  assert.equal(v.violations.length, 0, `句中 MUST 应放行: ${JSON.stringify(v.violations)}`)
+  fill('requirements.md', (t) => t.split('- 本变更 MUST 在句中间出现也命中（wordpos 夹具）').join('- 边界场景 SHOULD 附偏离理由（wordpos 夹具）'))
   v = verifyThinDocsV2({ changeDir, ledger })
-  assert.equal(v.violations.length, 0, `SHOULD NOT 形态应放行: ${JSON.stringify(v.violations)}`)
+  assert.equal(v.violations.length, 0, `句中 SHOULD 唯一强度句应放行（P2 词表）: ${JSON.stringify(v.violations)}`)
+  fill('requirements.md', (t) => t.split('- 边界场景 SHOULD 附偏离理由（wordpos 夹具）').join('- 系统 SHOULD NOT 在收口前静默改写锚文本（wordpos 夹具）'))
+  v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `SHOULD NOT 红线形态应放行（SHOULD\\b 前缀覆盖）: ${JSON.stringify(v.violations)}`)
+  // 占位句自带词表字样（必须/禁止/SHOULD/可以）不算已撰写——pending 检查独立拦截（仅换 FR-01，
+  // FR-02 保持有效句 → 精确一处违规）
+  fill('requirements.md', (t) => t.replace('- 系统 SHOULD NOT 在收口前静默改写锚文本（wordpos 夹具）',
+    '- （待撰写：把本条成功标准改写为一句可判定的行为规定并标约束强度——必须/禁止/SHOULD/可以）'))
+  v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 1, `占位句自带词表字样仍拒收且只拒一处: ${JSON.stringify(v.violations)}`)
+  assert.match(v.violations[0], /行为句未撰写/)
   rmSync(root, { recursive: true, force: true })
 })
 
