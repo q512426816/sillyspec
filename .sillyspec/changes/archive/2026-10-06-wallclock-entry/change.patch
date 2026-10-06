@@ -1,0 +1,303 @@
+diff --git a/src/datetime.js b/src/datetime.js
+index 3fab4b86..6efed6fd 100644
+--- a/src/datetime.js
++++ b/src/datetime.js
+@@ -18,3 +18,20 @@ export function nowWallClock(d = new Date()) {
+   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
+     + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+ }
++
++/**
++ * 任意时刻输入 → 本地墙钟串（YYYY-MM-DD HH:mm:ss）：Date 实例 / epoch 毫秒数 /
++ * 时间字符串（解析委托 Date 构造器——开放解析面归语言规范，不建格式枚举白名单）。
++ * 无效输入（非三类之一，或解析产物为 NaN 时刻）抛 TypeError，message 含输入的字符串形式。
++ * @param {Date|number|string} input
++ * @returns {string}
++ */
++export function toWallClock(input) {
++  const d = input instanceof Date ? input
++    : (typeof input === 'number' || typeof input === 'string') ? new Date(input)
++    : null;
++  if (!d || Number.isNaN(d.getTime())) {
++    throw new TypeError(`toWallClock: 无法解析的时间输入：${String(input)}`);
++  }
++  return nowWallClock(d);
++}
+diff --git a/src/scan-facts.js b/src/scan-facts.js
+index cd196ebc..d162a54d 100644
+--- a/src/scan-facts.js
++++ b/src/scan-facts.js
+@@ -18,6 +18,7 @@ import { join, relative } from 'node:path'
+ import { scanBackendEndpoints, scanFrontendApiCalls } from './endpoint-extractor.js'
+ import { estimateSourceSize } from './run/scan-profile.js'
+ import { safeGit } from './git-helper.js'
++import { toWallClock } from './datetime.js'
+ 
+ /** 底稿各清单的上限（防大仓把底稿撑爆反而变成新的 token 黑洞） */
+ const MAX_ENDPOINTS = 60
+@@ -98,7 +99,7 @@ export function collectScanFacts({ cwd, projectPath = null }) {
+     : manifest.manifests.includes('Cargo.toml') ? 'rust'
+     : 'generic'
+   return {
+-    generatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
++    generatedAt: toWallClock(new Date()),
+     projectPath,
+     type,
+     pkgName: manifest.pkgName,
+diff --git a/test/datetime-wallclock.test.mjs b/test/datetime-wallclock.test.mjs
+index 668a3dd2..0588bf47 100644
+--- a/test/datetime-wallclock.test.mjs
++++ b/test/datetime-wallclock.test.mjs
+@@ -8,7 +8,7 @@
+  * 锁定语义：本地时区 + YYYY-MM-DD HH:mm:ss（各段补零），构造参数用本地时间轴（new Date(y,m,d,h,m,s)）
+  * ——断言值与构造参数一致即证明无时区偏移（toISOString 会差一个时区）。
+  */
+-import { nowWallClock } from '../src/datetime.js'
++import { nowWallClock, toWallClock } from '../src/datetime.js'
+ 
+ let failed = 0
+ let passed = 0
+@@ -33,6 +33,43 @@ console.log('=== nowWallClock 本地墙钟 ===\n')
+   assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s), `缺省时钟输出形状合法（${s}）`)
+ }
+ 
++console.log('\n=== toWallClock 统一入口（2026-10-06-wallclock-entry）===\n')
++
++{
++  // 同一时刻三入口一致性：epoch 毫秒 / Date 实例 / ISO 字符串必须产出同一本地墙钟串。
++  // 字符串入口不做 UTC 直显（UTC+8 下 ISO 串直显与本地轴差 8 小时，被此断言抓出；
++  // tz=0 环境无偏移可抓——形状与同串断言兜底，与上方 nowWallClock 用例同一取舍）。
++  const epoch = new Date(2026, 7, 23, 9, 39, 7).getTime()
++  const viaDate = toWallClock(new Date(epoch))
++  assert(viaDate === toWallClock(epoch), 'Date 实例与 epoch 毫秒同串（毫秒入口不偏轴）')
++  assert(viaDate === toWallClock(new Date(epoch).toISOString()), 'ISO 字符串（UTC 轴）归一到同一本地串')
++  assert(viaDate === '2026-08-23 09:39:07', '本地轴构造的时刻经统一入口原样输出')
++  const d = new Date(2026, 0, 2, 3, 4, 5)
++  assert(toWallClock(d) === nowWallClock(d), '与 nowWallClock 同形同值')
++  const s = toWallClock(new Date().toISOString())
++  assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s), `字符串入口输出形状合法（${s}）`)
++}
++
++{
++  // 无效输入：TypeError 且 message 含输入的字符串形式（不建格式枚举——解析委托 Date 构造器）
++  const cases = [
++    { in: 'not-a-time', label: '不可解析字符串' },
++    { in: NaN, label: 'NaN 数字' },
++    { in: Infinity, label: '非有限数字' },
++    { in: undefined, label: 'undefined' },
++    { in: null, label: 'null' },
++    { in: {}, label: '普通对象' },
++    { in: true, label: '布尔值' },
++    { in: new Date('not-a-time'), label: 'Invalid Date 实例' },
++  ]
++  for (const { in: bad, label } of cases) {
++    let threw = null
++    try { toWallClock(bad) } catch (e) { threw = e }
++    assert(threw instanceof TypeError, `${label}：抛 TypeError（实际 ${threw && threw.constructor.name}）`)
++    assert(threw && String(threw.message).includes(String(bad)), `${label}：message 含输入字符串形式`)
++  }
++}
++
+ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
+ console.log(`${'='.repeat(50)}`)
+diff --git a/test/scan-facts.test.mjs b/test/scan-facts.test.mjs
+index bb6ada30..c74e0b49 100644
+--- a/test/scan-facts.test.mjs
++++ b/test/scan-facts.test.mjs
+@@ -133,5 +133,24 @@ console.log('\n=== Test 5: 子项目 projectPath ===')
+   clean(cwd)
+ }
+ 
++// ── 6: generatedAt 本地墙钟形（2026-10-06-wallclock-entry：toISOString 截断的 UTC 直显退役） ──
++console.log('\n=== Test 6: generatedAt 本地墙钟形 ===')
++{
++  const cwd = setup('t6')
++  writeFileSync(join(cwd, 'package.json'), '{"name":"ts"}')
++  const before = Date.now()
++  const facts = collectScanFacts({ cwd })
++  const after = Date.now()
++  assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(facts.generatedAt), `generatedAt 人读形状（实际 ${facts.generatedAt}）`)
++  // 本地轴邻近：按本地时刻解析应落在采集窗口内。UTC 直显实现在非零时区下整时区偏移被抓出
++  // （tz=0 环境无偏移可抓，形状断言兜底——与 datetime-wallclock.test.mjs 同一取舍）。
++  const parsedLocal = new Date(facts.generatedAt.replace(' ', 'T')).getTime()
++  assert(Number.isFinite(parsedLocal) && parsedLocal >= before - 1000 && parsedLocal <= after + 1000,
++    `generatedAt 为本地时刻非 UTC 直显（解析 ${facts.generatedAt}）`)
++  const md = renderScanFactsMd(facts)
++  assert(md.includes(`· ${facts.generatedAt} ·`), 'markdown 头行携带 generatedAt')
++  clean(cwd)
++}
++
+ console.log(`\n结果: ${passed} passed, ${failed} failed`)
+ if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-06-wallclock-entry/tasks.md b/.sillyspec/changes/2026-10-06-wallclock-entry/tasks.md
+new file mode 100644
+index 00000000..18d0bef0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-wallclock-entry/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:09:49.007Z
++---
++# 任务注册表（Tasks）— 2026-10-06-wallclock-entry
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-wallclock-entry --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-wallclock-entry` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
++- [x] task-02: scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
++- [x] task-03: 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
+diff --git a/.sillyspec/changes/2026-10-06-wallclock-entry/design.md b/.sillyspec/changes/2026-10-06-wallclock-entry/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-wallclock-entry/design.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:09:49.007Z
++---
++# 设计记录（Design Record）— 2026-10-06-wallclock-entry
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 datetime.js 增加统一入口 `toWallClock(input)`：把 Date 实例 / epoch 毫秒 / 时间字符串三类常见来源归一到 `nowWallClock` 的本地墙钟形输出。字符串解析整体委托 `new Date(input)`（语言规范定义的开放解析面，不建格式枚举白名单）；解析产物为 NaN 时刻时抛 `TypeError` 并把输入的字符串形式放进 message。scan-facts.js 的 `generatedAt` 从 `toISOString().replace('T',' ').slice(0,19)`（UTC 轴冒充人读形，datetime.js 头注释所述坑）改走 `toWallClock(new Date())`。
++
++选这个方案是因为它只加一个纯函数 + 一行替换，输出形状与现行人读约定完全一致，机器可读面（JSON/DB 的 ISO 惯例）不动。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `src/datetime.js` 新增导出 `toWallClock(input)`：`(Date | number | string) => string`（本地 `YYYY-MM-DD HH:mm:ss`）；无效输入抛 `TypeError`。`nowWallClock` 签名不变（内部改为复用同一格式化路径）。
++- `src/scan-facts.js` `collectScanFacts` 返回值中 `generatedAt` 值域变化：UTC 形 `2026-08-23T01:39:07`（截断 ISO）→ 本地墙钟形 `2026-08-23 09:39:07`。该字段仅渲染进 scan facts markdown 头行（`renderScanFactsMd`），无 git `--since` 等机器消费面（verify-postcheck 的 R-06 读的是 verify-facts.json，非本字段）。
++- CLI 命令、文件格式 schema：无变化。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++| --- | --- | --- |
++| 修改 | src/datetime.js | 新增导出 toWallClock（归一化输入后委托 nowWallClock；nowWallClock 本体不变） |
++| 修改 | src/scan-facts.js | generatedAt 改走 toWallClock（本地墙钟人读形） |
++| 修改 | test/datetime-wallclock.test.mjs | 新增 toWallClock 三类输入/时区不偏移/无效输入断言 |
++| 修改 | test/scan-facts.test.mjs | 新增 generatedAt 本地墙钟形回归断言 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用——纯同步格式化函数，无事件流；输入是单个时刻值，不存在到达顺序问题。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用——函数无共享可变状态；scan-facts 调用点本就无锁语义（每次调用独立取 `new Date()`），并发调用互不影响。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——无状态、无持久化；中断后重跑结果一致（除时刻本身前进）。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——不读写任何跨作用域存储；输出只依赖输入值与进程本地时区。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：scan facts markdown 的 `generatedAt` 消费者（人读文档、快照 diff）看到值形状变化（UTC→本地）。已核实仓库内无测试断言 UTC 形、无机器按该字段做时间运算（git --since 消费的是 verify-facts.json），风险面收敛于人读显示。
++放弃的方案：让 toWallClock 只接受 ISO 字符串并手写正则解析——放弃，正则白名单就是格式枚举，开放解析面应委托 Date 构造器；再如给 scan-facts 保留 UTC 但加后缀标注——放弃，与 datetime.js 既定的人读=本地墙钟约定冲突，制造两种并存形状。
+
+diff --git a/.sillyspec/changes/2026-10-06-wallclock-entry/proposal.md b/.sillyspec/changes/2026-10-06-wallclock-entry/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-wallclock-entry/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:09:49.007Z
++---
++# 提案书（Proposal）— 2026-10-06-wallclock-entry
++
++## 动机
++
++任务原话转写：动机：datetime.js 的人读墙钟函数 nowWallClock 只接受 Date 实例，而调用方手里常是 ISO 字符串或 epoch 毫秒（git/DB/JSON 来源），没有统一入口导致各处手工拼接。实证一处：scan-facts.js generatedAt 用 toISOString().replace('T',' ').slice(0,19) 手工拼——落 UTC 却长着人读形状，正是 datetime.js 头注释所述坑（人读时间字段应本地墙钟）。
++
++成功标准：
++- datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
++- scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
++- 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
++2. scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
++3. 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
++
++## 成功标准（可验证）
++
++1. datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
++2. scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
++3. 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
+
+diff --git a/.sillyspec/changes/2026-10-06-wallclock-entry/requirements.md b/.sillyspec/changes/2026-10-06-wallclock-entry/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-wallclock-entry/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:09:49.007Z
++---
++# 需求规格（Requirements）— 2026-10-06-wallclock-entry
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
++
++- 必须：`toWallClock(input)` 在 input 为 Date 实例、number（epoch 毫秒）、string（可被 `new Date(string)` 解析）三类时，输出与 `nowWallClock` 同形的本地墙钟串 `YYYY-MM-DD HH:mm:ss`；无效输入（解析后时刻为 NaN，或 input 非 string/number/Date 之外的类型）必须抛 `TypeError`，报错信息必须含输入值的字符串形式。
++- 禁止：在输出中引入 toISOString 的 UTC 轴（人读语义按 datetime.js 头注释走本地墙钟）；禁止对字符串输入做特定格式枚举白名单——解析整体委托 Date 构造器（开放世界交给语言规范，不自建清单）。
++
++#### 场景：主路径
++
++- Given 本地时区任意（如 UTC+8）
++- When `toWallClock('2026-08-23T01:39:07.000Z')`（ISO 字符串，UTC 轴）
++- Then 输出 `2026-08-23 09:39:07`（转本地轴、形状与 nowWallClock 一致——时区偏移即被断言抓出）
++
++#### 场景：无效输入
++
++- Given input 为不可解析字符串（如 `'not-a-time'`）或 NaN 时刻
++- When 调用 `toWallClock(input)`
++- Then 抛 `TypeError`，message 含 `String(input)` 的内容
++
++### FR-02: scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
++
++- 必须：`collectScanFacts` 的 `generatedAt` 字段值由本地墙钟串产生（`toWallClock(new Date())`），渲染进 scan facts markdown 头行时呈现 `YYYY-MM-DD HH:mm:ss` 本地时区；禁止再出现 `toISOString().replace('T',' ')` 的 UTC 手工拼接。
++
++#### 场景：主路径
++
++- Given 任意本地时区的运行环境
++- When `collectScanFacts({ cwd })` 执行
++- Then `facts.generatedAt` 匹配 `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$` 且为本地时刻（注入固定时钟比对时与本地轴一致）
++
++### FR-03: 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
++
++- 必须：新增/更新测试文件覆盖 FR-01（三类输入 + 时区不偏移 + 无效输入抛 TypeError）、FR-02（generatedAt 本地墙钟形）；测试全绿后方可收口。
++
++#### 场景：主路径
++
++- Given 测试运行环境
++- When 执行 datetime 与 scan-facts 相关测试
++- Then 全部断言通过（含本地轴一致性与抛错类型/message 断言）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」
++FR-02: test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」
++FR-03: test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」＋test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」

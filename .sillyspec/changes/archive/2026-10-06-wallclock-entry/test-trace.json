@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-wallclock-entry",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-wallclock-entry:flow:测试绑定FR-01",
+      "tests": [
+        "test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-wallclock-entry"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-wallclock-entry:flow:测试绑定FR-02",
+      "tests": [
+        "test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-wallclock-entry"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-wallclock-entry:flow:测试绑定FR-03",
+      "tests": [
+        "test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」",
+        "test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-wallclock-entry"
+    }
+  ]
+}

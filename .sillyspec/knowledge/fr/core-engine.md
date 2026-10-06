@@ -1704,3 +1704,60 @@
   confirmed_at: null
   source_change: 2026-10-05-review-declared-unstamped-gate
   status: active
+
+## FR-core-engine-113 datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与 nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
+变更：2026-10-06-wallclock-entry
+状态：active
+摘要：主路径；无效输入
+全文：.sillyspec/changes/archive/2026-10-06-wallclock-entry/requirements.md#FR-01
+最近确认：9946796884354bfe0a55318aeb740575d61f4127
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-wallclock-entry:flow:测试绑定FR-01
+  tests: test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-wallclock-entry
+  status: active
+
+## FR-core-engine-114 scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
+变更：2026-10-06-wallclock-entry
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-wallclock-entry/requirements.md#FR-02
+最近确认：9946796884354bfe0a55318aeb740575d61f4127
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-wallclock-entry:flow:测试绑定FR-02
+  tests: test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-wallclock-entry
+  status: active
+
+## FR-core-engine-115 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
+变更：2026-10-06-wallclock-entry
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-wallclock-entry/requirements.md#FR-03
+最近确认：9946796884354bfe0a55318aeb740575d61f4127
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-wallclock-entry:flow:测试绑定FR-03
+  tests: test/datetime-wallclock.test.mjs「toWallClock 三类输入与无效输入」 | test/scan-facts.test.mjs「generatedAt 本地墙钟形回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-wallclock-entry
+  status: active

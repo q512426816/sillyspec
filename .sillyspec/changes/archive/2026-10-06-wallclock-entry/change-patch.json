@@ -1,0 +1,55 @@
+{
+  "change": "2026-10-06-wallclock-entry",
+  "baseline": "a414699acd56dd3baa90fc58fd28d41188222ca0",
+  "head": "9946796884354bfe0a55318aeb740575d61f4127",
+  "files": [
+    ".sillyspec/changes/2026-10-06-wallclock-entry/tasks.md",
+    "src/datetime.js",
+    "src/scan-facts.js",
+    "test/datetime-wallclock.test.mjs",
+    "test/scan-facts.test.mjs",
+    ".sillyspec/changes/2026-10-06-wallclock-entry/design.md",
+    ".sillyspec/changes/2026-10-06-wallclock-entry/proposal.md",
+    ".sillyspec/changes/2026-10-06-wallclock-entry/requirements.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 224,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-06T06:26:23.114Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "790274905670ba9b778834464349ed0e5ca35beef081bc89c6d4613d3975b455",
+  "patchStatus": "ok"
+}

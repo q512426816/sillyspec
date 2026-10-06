@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  动机：datetime.js 的人读墙钟函数 nowWallClock 只接受 Date 实例，而调用方手里常是 ISO 字符串或 epoch 毫秒（git/DB/JSON
+  来源），没有统一入口导致各处手工拼接。实证一处：scan-facts.js generatedAt 用 toISOString().replace('T',' ').slice(0,19) 手工拼——落 UTC 却长着人读形状，正是
+  datetime.js 头注释所述坑（人读时间字段应本地墙钟）。
+
+
+  成功标准：
+
+  - datetime.js 新增 toWallClock(input)：接受 Date 实例 / epoch 毫秒数 / 可被 Date 解析的时间字符串三类输入，统一输出本地时区 YYYY-MM-DD HH:mm:ss（与
+  nowWallClock 同形）；无效输入（NaN 时刻/不可解析字符串）抛 TypeError 且信息含输入的字符串形式
+
+  - scan-facts.js 的 generatedAt 改走 toWallClock，scan facts markdown 头行呈现本地墙钟人读形
+
+  - 测试覆盖：三类输入正确（含时区不偏移断言）、无效输入抛错、scan-facts generatedAt 新形状回归
+autopilot: true
+baseline_commit: a414699acd56dd3baa90fc58fd28d41188222ca0
+updatedAt: '2026-10-06T06:26:24.603Z'
+baseline_sha256: 4d772ba3f020dbebec6b86fb8ecf37cffa909e32c19ab1e0ac88c0d94a91e729
+gate_summary: >-
+  test: passed ← module[]+deps(js7)（2.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006062540\test-result.json｜lint: passed
+  ← npm run lint（41.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006062540\test-result.json｜门文件 7 个
+
