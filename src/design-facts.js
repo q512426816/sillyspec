@@ -341,7 +341,8 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
 
   lines.push('## 接口定义')
   lines.push('')
-  lines.push('<!-- TODO（代码类任务必填）：方法签名、数据结构 -->')
+  lines.push('<!-- TODO（代码类任务必填）：方法签名、数据结构。本变更无接口改动时，把下面这行声明粘贴到本节正文（探针矩阵认该声明行，同义式「无接口变更/不涉及接口/零端点」亦可；留在本注释内不生效——2026-10-06-verify-friction-fix）： -->')
+  lines.push('<!-- 本变更接口面：0 端点（无接口变更） -->')
   lines.push('')
 
   lines.push('## 生命周期契约表')

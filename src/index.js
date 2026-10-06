@@ -564,7 +564,7 @@ async function main() {
       const gateChangeIdx = args.indexOf('--change');
       const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
-        console.error('用法: sillyspec gate <stage> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...');
+        console.error('用法: sillyspec gate <stage|last> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
@@ -601,6 +601,41 @@ async function main() {
         if (_ctx) gateOpts.ctx = _ctx;
       } catch (e) {
         console.warn(`⚠️ gate ctx 构造失败，降级单仓核验（${e.message}）`);
+      }
+      // ── gate last（2026-10-06-verify-friction-fix task-02）── 读 verify-runs 稳定锚点：
+      // writeVerifyGatePointer（quick-D）只写不读，看上轮 blocked 原因只能重跑全量 gate
+      // （postmortem 实证 --json 超时转后台 + task id 抄错绕 3 轮）或手翻两层 JSON。此处
+      // 直读指针 + 其指向取证目录的 reconcile/probe-consistency 明细；exit code 反映是否存在
+      // 阻断（无记录/未阻断=0，blocked=1），只读不写不重跑。
+      if (gateStage === 'last') {
+        const { summarizeVerifyGatePointer } = await import('./machine-interface.js');
+        const summary = summarizeVerifyGatePointer({ specBase: gateSpecBase || gateOpts.specBase || dir, changeName: gateChange });
+        if (json) {
+          console.log(JSON.stringify(summary, null, 2));
+        } else if (!summary.found) {
+          console.log(`📭 无 gate-last 记录（${summary.pointerPath}）——该变更尚未发生 verify --done 阻断落锚。`);
+        } else if (summary.unreadable) {
+          console.error(`❌ gate-last 指针不可读: ${summary.pointerPath}（${summary.error || 'JSON 损坏'}）——删除该文件后重跑一次 verify --done 重建锚点。`);
+        } else {
+          console.log(`📌 gate-last [${gateChange}] blocked=${summary.blocked}${summary.note ? `（${summary.note}）` : ''}  written_at=${summary.written_at || '?'}`);
+          console.log(`   最新取证目录: ${summary.run_dir_resolved || summary.latest_run_dir || '?'}`);
+          if (summary.reconcile) {
+            const rc = summary.reconcile;
+            console.log(`   target_files 对账: status=${rc.status} missing=${(rc.missing || []).length} undeclared=${(rc.undeclared || []).length} matched=${(rc.matched || []).length}`);
+            for (const m of (rc.missing || []).slice(0, 10)) console.log(`     ✗ missing: ${typeof m === 'string' ? m : JSON.stringify(m)}`);
+            for (const u of (rc.undeclared || []).slice(0, 10)) console.log(`     ⚠ undeclared: ${typeof u === 'string' ? u : JSON.stringify(u)}`);
+            if ((rc.missing || []).length > 10) console.log(`     …另有 ${rc.missing.length - 10} 条 missing，直读 ${summary.run_dir_resolved || summary.latest_run_dir}`);
+          }
+          if (summary.probeConsistency) {
+            const pc = summary.probeConsistency;
+            const mm = pc.mismatches || [];
+            console.log(`   探针一致性抽查: status=${pc.status} severity=${pc.result_severity || pc.severity || '?'} mismatches=${mm.length}`);
+            for (const m of mm.slice(0, 10)) console.log(`     ✗ 探针${m && m.probe ? m.probe : '?'}: ${(m && (m.note || m.expected)) ? String(m.note || m.expected) : JSON.stringify(m)}`);
+            if (pc.skip_reason) console.log(`     skip: ${pc.skip_reason}`);
+          }
+        }
+        process.exitCode = summary.found && !summary.unreadable && summary.blocked ? 1 : 0;
+        break;
       }
       const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, gateOpts));
       if (json) {
@@ -1272,16 +1307,24 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const vpForce = args.includes('--force');
       const vpDraft = args.includes('--draft');
       const vpAmendDraft = args.includes('--amend-draft');
+      // --refresh-probes（2026-10-06-verify-friction-fix task-01）：定向刷新通道——只刷新仍含
+      // 待填占位的探针机械段（表格已填行按行携载），已手填段保留；与 --force 互斥（force 是
+      // 显式全量重置通道，refresh 是保手填通道，并存语义矛盾拒跑）。
+      const vpRefresh = args.includes('--refresh-probes');
       if (vpDraft && !vpInit) {
         console.error('❌ --draft 需与 --init 同用（draft 是骨架生成的机器起草模式）——sillyspec verify-probes --change <名> --init --draft');
         process.exit(2);
       }
+      if (vpRefresh && vpForce) {
+        console.error('❌ --refresh-probes 与 --force 互斥——refresh 只刷新未手填的探针段（保手填），force 是全量重置（自动备份后覆盖）；两者并存语义矛盾。');
+        process.exit(2);
+      }
       if (!vpChange) {
-        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
+        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--refresh-probes] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）；--force 覆盖重生成全骨架（覆盖前自动备份到 .runtime/verify-runs/ 并打印路径）；\n  --refresh-probes 定向刷新：只替换仍含待填占位的探针预填段（表格已填行携载保留），已手填段不动——预填段过期但手填内容舍不得时的安全刷新通道（同样先自动备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote } = await import('./verify-probes.js');
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections } = await import('./verify-probes.js');
       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
@@ -1327,6 +1370,37 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
         break;
       }
       console.log(renderVerifyProbesReport(vpResult));
+      // ── --refresh-probes 定向刷新（2026-10-06-verify-friction-fix task-01）── 独立于 --init：
+      // 预填段过期但手填内容舍不得时的安全刷新通道。先自动备份，再只替换仍含待填占位的探针
+      // 机械段（表格已填行按行携载），已手填段原样保留并逐段报告。刷新后 enricher 不在此跑
+      // （那些是 --init 的幂等补段面，与探针段刷新正交；需要时再跑 --init，已存在 no-op 安全）。
+      if (vpRefresh) {
+        const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
+        if (!existsSync(vpReportPath)) {
+          console.error(`❌ 无 verify-result.md 可刷新: ${vpReportPath}——先 sillyspec verify-probes --change ${vpChange} --init 生成骨架`);
+          process.exit(2);
+        }
+        const { resolveRuntimeRoot: vpRefreshRTR } = await import('./run/shared.js');
+        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase) });
+        const vpOld = readFileSync(vpReportPath, 'utf8');
+        const vpRef = refreshProbeSections(vpOld, renderVerifyProbesReport(vpResult));
+        if (vpRef.text !== vpOld) {
+          writeFileSync(vpReportPath, vpRef.text);
+          await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpRef.text);
+        }
+        console.log(`\n🔄 --refresh-probes 定向刷新完成: ${vpReportPath}${vpPlatformNote}`);
+        if (vpBackupPath) console.log(`🗄️  刷新前已自动备份: ${vpBackupPath}`);
+        const fmt = (arr) => arr.length > 0 ? arr.map(n => `探针${n}`).join('、') : '无';
+        console.log(`   替换（仍含待填占位的机械段）: ${fmt(vpRef.replaced)}；保留（已手填/无占位，原样不动）: ${fmt(vpRef.kept)}；新注入: ${fmt(vpRef.appended)}；表格已填行携载 ${vpRef.carriedRows} 行`);
+        if (vpRef.kept.length > 0) {
+          console.log(`   保留段如确需强刷（预填过期且确认无手填内容），用 --init --force（自动备份后全量重生成）。`);
+        }
+        try {
+          const { triggerSync } = await import('./run/shared.js');
+          triggerSync(dir, vpChange, { specRoot: vpSpecBase });
+        } catch { /* 同步触发失败不阻断探针命令 */ }
+        break;
+      }
       if (vpInit) {
         const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
         if (existsSync(vpReportPath)) {
@@ -1345,12 +1419,21 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
           } else if (vpForce) {
-            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置，
-            // 醒目警告 + 备份指引（预填段过期/骨架仍是「无接口面」注记时的刷新通道）
+            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置。
+            // 2026-10-06-verify-friction-fix：覆盖前自动备份（postmortem 实证 38 格手填复核成果
+            // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
+            // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
+            const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
+            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase) });
             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
             writeFileSync(vpReportPath, vpSkeleton);
             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
-            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从 git 或备份找回后回填）${vpPlatformNote}`);
+            if (vpBackupPath) {
+              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（手填内容被重置时从这里找回回填）`);
+            } else {
+              console.error(`\n⚠️ 自动备份失败——若 verify-result.md 含手填内容，请立即手动复制保存后重跑本命令。`);
+            }
+            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从上方备份找回后回填）${vpPlatformNote}`);
           } else {
             console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
           }
@@ -4371,6 +4454,9 @@ SillySpec taskcard — 生成 Windows 安全的 TaskCard 骨架
 用法:
   sillyspec taskcard <change-name> --task task-01[,task-02...] [--title <t>] [--title-zh <t>] [--set key=value]... [--force]
   sillyspec taskcard <change-name> --all [--set key=value]... [--force]
+  sillyspec taskcard <change-name> --validate
+    校验全部任务卡（plan 门禁同源规则：frontmatter YAML 合法性含分诊、必要字段、占位符、
+    target_files 严格形态），失败 exit 1——填卡后先自检，免 plan Step 4 门禁批量报错返工。
 
 骨架由 CLI 直写（LF 行尾 + frontmatter 闭合 + 硬校验 9 字段齐全），标题自动取自 tasks.md
 checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；--set 批量注入 design
@@ -4409,6 +4495,35 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       if (all && taskVal) {
         console.error('❌ --all 与 --task 互斥（--all 取 plan.md 全部任务，--task 显式指定）');
         process.exit(1);
+      }
+      // ── --validate（2026-10-06-verify-friction-fix task-03）── plan 门禁同源规则的零成本自检：
+      // 填卡后、plan Step 4 门禁前先跑，把「门禁时一次撞一批」前移成「提交前自检」（厚流程
+      // 实证 6 轮 YAML 门禁试错）。规则同源 plan-postcheck（frontmatter 合法性/必要字段/占位符
+      // /target_files 严格形态），失败 exit 1——此处报的错 --done 门禁同样会拦。
+      if (filteredArgs.includes('--validate')) {
+        if (all || taskVal) {
+          console.error('❌ --validate 与 --all/--task 互斥（--validate 校验变更下全部任务卡）');
+          process.exit(2);
+        }
+        const tcValSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
+        const tcValChangeDir = join(tcValSpecDir, 'changes', tcName);
+        if (!existsSync(tcValChangeDir)) {
+          console.error(`❌ 变更目录不存在: ${tcValChangeDir}`);
+          process.exit(2);
+        }
+        const { validateTaskcardsCli } = await import('./stages/plan-postcheck.js');
+        const tcVal = validateTaskcardsCli({ changeDir: tcValChangeDir, projectRoot: dir });
+        if (tcVal.ok) {
+          console.log(`✅ 任务卡校验通过（${tcVal.files} 张卡${tcVal.files === 0 ? '——无 tasks/ 目录（thin 变更无可校验卡）' : tcVal.warnings.length > 0 ? `，${tcVal.warnings.length} 条 warning（不阻断，供审查线索）` : ''}）`);
+          for (const w of tcVal.warnings) console.log(`  ⚠ ${w}`);
+        } else {
+          console.error(`❌ 任务卡校验失败（${tcVal.files} 张卡，${tcVal.errors.length} 项 error）：`);
+          for (const e of tcVal.errors) console.error(`  ✗ ${e}`);
+          for (const w of tcVal.warnings) console.error(`  ⚠ ${w}`);
+          console.error(`修复后重跑: sillyspec taskcard ${tcName} --validate（这些错误在 plan Step 4 门禁同样会拦——同源规则）。`);
+          process.exitCode = 1;
+        }
+        break;
       }
       if (!all && !taskVal) {
         console.error('❌ 用法: sillyspec taskcard <change-name> --task task-01[,task-02...] | --all [--force]');
@@ -4994,6 +5109,7 @@ SillySpec config — local.yaml 配置键速查
         'scan-runs': '平台模式 scan/workflow 取证目录',
         'artifacts': '派生产物目录（init 预建）',
         'contract-artifacts': 'execute endpoint 契约产物（verify 阶段读取）',
+        'verify-runs': 'verify --done 门禁取证目录（reconcile-result.json / probe-consistency-result.json 明细 + gate-last-<change>.json 稳定锚点；sillyspec gate last --change <名> 直读锚点与 blocked 明细，verify-result-backup-*.md 是 --force/--refresh-probes 的自动备份）',
         'history': '历史记录目录（init 预建）',
         'logs': '日志目录（init 预建）',
         'templates': '工作流模板目录（init 预建）',

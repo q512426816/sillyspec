@@ -55,3 +55,34 @@ export function parseTaskFrontmatter(content) {
   }
   return { ok: true, hasFrontmatter: true, fm, error: null }
 }
+
+/**
+ * js-yaml 报错分诊（2026-10-06-verify-friction-fix task-03）：消息 + 出错行内容双信号映射中文
+ * 修复动作。背景：分诊知识长期躺在 templates/prompts/taskcard-rules.md L19-23 未接进门禁报错，
+ * 厚流程实证 agent 连撞 6 轮 YAML 门禁；且 js-yaml v4 真实消息与文档措辞有漂移（实证
+ * `title: A: B` 报 bad indentation 而非 mapping values），只匹配消息文本不可靠——先看出错行
+ * 的首字符是否保留指示符，再看行内是否「冒号+空格」，消息文本作家族归类兜底。
+ * @param {string} message js-yaml 异常 message（单行化后）
+ * @param {string} [errorLineText] 出错行原文（文件 1 基行内容；缺省只按消息分诊）
+ * @returns {string} 中文修复动作（非空）
+ */
+export function diagnoseTaskYamlError(message, errorLineText = '') {
+  const msg = String(message || '')
+  const line = String(errorLineText || '').replace(/\r$/, '')
+  // 剥列表项/缩进前缀后看首个 token 字符：反引号/@/% 是 YAML 保留指示符，js-yaml 对其报的
+  // 消息家族不稳定（实测反引号列表项报 bad indentation of a sequence entry），行内容才是可靠信号
+  const itemBody = line.replace(/^\s*(?:-\s*)?/, '')
+  if (/^[`@%]/.test(itemBody)) {
+    return '列表项/值以 YAML 保留指示符开头（反引号 `、@、%）——行首加普通文字前缀（如「执行 」）或给整行值加单引号包裹'
+  }
+  if (/quoted scalar/i.test(msg)) return '引号不成对——补齐成对引号，或改用中文引号/去掉引号'
+  if (/duplicated mapping key/i.test(msg)) return '同一字段写了两次——保留正确一处删除其余（骨架已反填的键勿重复手填）'
+  if (/expected ',' or ']'/i.test(msg)) return '方括号流序列内有裸特殊字符——改块式列表（键名换行后每项一行「  - 路径」）；空 [] 占位不受影响'
+  if (/expected ',' or '}'/i.test(msg)) return '花括号且内部含冒号或引号（JS 对象/模板字面量）——改用不含这些字符的中文描述'
+  if (/mapping values are not allowed|bad indentation/i.test(msg)) {
+    if (/: /.test(line)) return '值含「冒号+空格」（如 A: B、url: http://x）被当成嵌套映射键——去掉冒号后的空格（写 A:B）或改写为不含「: 」的中文描述'
+    return '缩进或映射结构错——块式列表项保持两空格缩进、与上级键名对齐；值含「: 」时改写描述'
+  }
+  if (/cannot start any token/i.test(msg)) return '行内含 YAML 无法起始 token 的字符（如反引号/@ 开头）——加文字前缀或用引号包裹该值'
+  return '值含特殊字符——给值加单引号、去掉「: 」冒号空格，或改块式列表（规则全表见 templates/prompts/taskcard-rules.md）'
+}

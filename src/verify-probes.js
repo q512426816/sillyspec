@@ -24,7 +24,7 @@
  * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
 import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
 import { gitQuiet, unquoteGitPath } from './git-helper.js'
 import { hasUnconfirmedPrefill } from './prefill.js'
@@ -1081,6 +1081,10 @@ const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z
 // 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
 const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
 const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+// 声明宽收（2026-10-06-verify-friction-fix task-04）：同义零端点措辞认作 declared=0——厚流程实证
+// agent 写「无接口变更/不涉及接口」散文不被数字式声明行识别，被迫写伪表格绕过。(?<!\d) 防
+// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）。
+const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|零端点|无端点|(?<!\d)0\s*端点/
 
 /**
  * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
@@ -1091,8 +1095,13 @@ const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
  */
 export function parseDesignApiTable(designMd) {
   const text = String(designMd || '').replace(/\r\n/g, '\n')
-  const dm = text.match(API_FACE_DECLARED_RE)
-  const declared = dm ? parseInt(dm[1], 10) : null
+  // 声明匹配面剥 HTML 注释（task-04 宽收配套）：design 骨架的接口段 TODO 指引自带可粘贴句式
+  // 「本变更接口面：0 端点（无接口变更）」，留在注释里被匹配会让每份新骨架自动声明零端点。
+  // 数字式声明在注释内的同理由不算（注释是写作指引不是声明正文——fail-closed 方向收紧）。
+  const textNoComments = text.replace(/<!--[\s\S]*?-->/g, '')
+  const dm = textNoComments.match(API_FACE_DECLARED_RE)
+  let declared = dm ? parseInt(dm[1], 10) : null
+  if (declared === null && API_FACE_DECLARED_ZERO_RE.test(textNoComments)) declared = 0
   const endpoints = []
   const sectionHint = []
   for (const sec of splitMdSections(text)) {
@@ -3642,4 +3651,175 @@ export function generateVerifyResultSkeleton(result) {
     '',
   ]
   return L.join('\n')
+}
+
+// ── 防丢失与定向刷新（2026-10-06-verify-friction-fix task-01）──
+// postmortem（sess_4769fd5d）：--force 整体重置全骨架且无备份，38 格手填复核成果被清后只能靠
+// 对话记录重建。两件护栏：
+//   backupVerifyResult——覆盖/刷新前落时间戳备份（fail-soft：失败返回 null 不阻断，但 CLI 层
+//     会醒目提示手动备份）；
+//   refreshProbeSections——定向刷新：只动「仍含待填占位（<待填 / <!--TODO）的探针机械段」，
+//     已手填段保留；被刷新段内的表格已填行按行携载到新渲染（半填矩阵不丢已填格）。安全方向
+//     取「宁可少刷新不误删」：探针 1/3/5/6 等直接渲染结论行、无占位的段永远保留旧文（stale
+//     由 gate 的 checkProbeConsistency 独立把关，不靠 refresh 兜）。
+
+/**
+ * 覆盖/刷新 verify-result.md 前自动备份到 <runtimeRoot>/verify-runs/。
+ * @param {{ mdPath: string, runtimeRoot: string, label?: string }} opts
+ * @returns {string|null} 备份文件绝对路径；目标缺失/写失败返回 null（fail-soft，调用方提示）
+ */
+export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result' }) {
+  try {
+    if (!existsSync(mdPath)) return null
+    const runsDir = join(runtimeRoot, 'verify-runs')
+    mkdirSync(runsDir, { recursive: true })
+    // 毫秒精度时间戳：同秒连跑两次不互相覆盖（秒级 ts 会静默吞前一份备份）
+    const ts = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17)
+    const backupPath = join(runsDir, `${label}-backup-${ts}.md`)
+    copyFileSync(mdPath, backupPath)
+    return backupPath
+  } catch {
+    return null
+  }
+}
+
+const PROBE_SECTION_HEADING_RE = /^#### 探针 (\d+)[：:]/
+
+/**
+ * 按行切出探针段范围（#### 探针 N： 起，至下一任意级别标题或 EOF 止）。
+ * @param {string} text 全文
+ * @returns {{ lines: string[], sections: Array<{ num: number, startLine: number, endLine: number }> }}
+ */
+function splitProbeSectionRanges(text) {
+  const lines = String(text ?? '').split('\n')
+  const sections = []
+  let cur = null
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(PROBE_SECTION_HEADING_RE)
+    if (m) {
+      if (cur) sections.push({ ...cur, endLine: i })
+      cur = { num: parseInt(m[1], 10), startLine: i }
+    } else if (cur && /^#{1,3} /.test(lines[i])) {
+      sections.push({ ...cur, endLine: i })
+      cur = null
+    }
+  }
+  if (cur) sections.push({ ...cur, endLine: lines.length })
+  return { lines, sections }
+}
+
+/**
+ * 段级合并：用 fresh 渲染替换段内容，但旧段里已填的表格行（不含 <待填/<TODO 占位）按首列
+ * 键携载到新渲染的同键行上——半填矩阵的已填格不丢。旧已填行在新渲染无同键行时追加到段尾
+ * （验收项从 design 撤下等 stale 形态，宁可保留给 agent 裁决）。
+ * @param {string[]} oldLines 旧段行
+ * @param {string[]} freshLines 新渲染行
+ * @returns {{ text: string, carried: number }}
+ */
+function mergeProbeSection(oldLines, freshLines) {
+  const firstCell = (l) => {
+    const cell = l.split('|')[1]
+    return cell ? cell.trim() : null
+  }
+  const oldFilled = new Map()
+  for (const l of oldLines) {
+    if (!/^\s*\|/.test(l)) continue
+    if (/<待填|<TODO/.test(l)) continue
+    const key = firstCell(l)
+    if (!key || /^-{3,}$/.test(key)) continue // 分隔行/空键不携载
+    oldFilled.set(key, l)
+  }
+  if (oldFilled.size === 0) return { text: freshLines.join('\n'), carried: 0 }
+  let carried = 0
+  const out = []
+  const used = new Set()
+  for (const l of freshLines) {
+    if (/^\s*\|/.test(l)) {
+      const key = firstCell(l)
+      if (key && oldFilled.has(key)) {
+        out.push(oldFilled.get(key))
+        used.add(key)
+        carried++
+        continue
+      }
+    }
+    out.push(l)
+  }
+  const stale = [...oldFilled.entries()].filter(([k]) => !used.has(k))
+  if (stale.length > 0) {
+    out.push('', '<!-- refresh 携载的已填行（新渲染中无同键行，agent 裁决去留） -->')
+    for (const [, l] of stale) out.push(l)
+  }
+  return { text: out.join('\n'), carried }
+}
+
+/**
+ * 定向刷新探针预填段（--refresh-probes 的核心，纯函数）。
+ * 语义（安全方向：宁可少刷新不误删）：
+ *   - 含待填占位（<待填 或 <!--TODO）的旧探针段 → 用 fresh 同号段替换（表格已填行携载）；
+ *   - 无占位的旧探针段（已手填或纯机械结论行）→ 原样保留；
+ *   - fresh 里有而旧文没有的探针号 → 追加（有旧段时插在最后一个旧探针段后，无旧段时按
+ *     --init 补注入口径带包装标题整体注入）；
+ *   - 旧文有而 fresh 没有的探针号 → 保留不动（残段不销毁）。
+ * @param {string} existingText verify-result.md 现文
+ * @param {string} freshReportText renderVerifyProbesReport 新渲染
+ * @returns {{ text: string, replaced: number[], kept: number[], appended: number[], carriedRows: number }}
+ */
+export function refreshProbeSections(existingText, freshReportText) {
+  const { lines, sections } = splitProbeSectionRanges(existingText)
+  const fresh = splitProbeSectionRanges(freshReportText)
+  const freshByNum = new Map(fresh.sections.map(s => [s.num, s]))
+  const replaced = []
+  const kept = []
+  const appended = []
+  let carriedRows = 0
+
+  // 替换计划：旧段起始行 → { endLine, mergedText }
+  const replaceMap = new Map()
+  for (const s of sections) {
+    const freshSec = freshByNum.get(s.num)
+    if (!freshSec) continue // 残段保留
+    const oldText = lines.slice(s.startLine, s.endLine).join('\n')
+    if (/<待填|<!--TODO/.test(oldText)) {
+      const merged = mergeProbeSection(
+        lines.slice(s.startLine, s.endLine),
+        fresh.lines.slice(freshSec.startLine, freshSec.endLine),
+      )
+      carriedRows += merged.carried
+      replaceMap.set(s.startLine, { endLine: s.endLine, text: merged.text })
+      replaced.push(s.num)
+    } else {
+      kept.push(s.num)
+    }
+  }
+  for (const num of freshByNum.keys()) {
+    if (!sections.some(o => o.num === num)) appended.push(num)
+  }
+
+  // 新段插入点（原行号空间）：有旧探针段 → 最后一个旧段结束处；无 → EOF
+  const insertions = new Map()
+  if (appended.length > 0) {
+    const appendText = appended
+      .map(num => fresh.lines.slice(freshByNum.get(num).startLine, freshByNum.get(num).endLine).join('\n'))
+      .join('\n')
+    const insIdx = sections.length > 0 ? sections[sections.length - 1].endLine : lines.length
+    insertions.set(insIdx, sections.length > 0
+      ? [appendText, '']
+      : ['', '## 探针结果（CLI 机械预填，--refresh-probes 补注入） [层：可复跑探针——gate 抽查防篡改]', appendText, ''])
+  }
+
+  const out = []
+  for (let i = 0; i <= lines.length; i++) {
+    const ins = insertions.get(i)
+    if (ins) out.push(...ins)
+    if (i === lines.length) break
+    const rep = replaceMap.get(i)
+    if (rep) {
+      out.push(rep.text)
+      i = rep.endLine - 1
+      continue
+    }
+    out.push(lines[i])
+  }
+  return { text: out.join('\n'), replaced, kept, appended, carriedRows }
 }

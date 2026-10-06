@@ -508,6 +508,11 @@ ${taskList}
 5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
 6. 等待所有 batch 子代理完成
 7. 验证每个 task-N.md 文件已生成且非空
+8. **全部卡片填充完成后，主 agent 跑一次零成本自检（plan 门禁同源规则前置暴露，免 Step 4 门禁批量报错返工）**：
+   \`\`\`
+   sillyspec taskcard ${changeName} --validate
+   \`\`\`
+   报错即门禁报错（frontmatter YAML/占位符/必要字段/target_files 形态，YAML 错误带中文分诊动作）；修复后重跑至通过再进下一步。
 
 > 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
 

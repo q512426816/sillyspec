@@ -854,3 +854,44 @@ export function writeGateResultArtifact({ specBase, stage, changeName, envelope 
     return null // fail-soft：落盘是审计附件，失败只缺附件不误门
   }
 }
+
+/**
+ * gate last 的读取面（2026-10-06-verify-friction-fix task-02）：writeVerifyGatePointer（gates.js
+ * quick-D）只写不读——看上轮 verify --done blocked 原因只能重跑全量 gate（超时转后台）或手翻
+ * 两层 JSON。本函数读稳定指针并带上其指向取证目录里的 reconcile/probe-consistency 明细。
+ * run 目录用指针内 latest_run_dir 的 basename 在当前根下重推导（指针里的绝对路径可能来自
+ * 另一机器/根，跨环境直接拼会静默指空）。fail-soft：指针缺失 → found:false；损坏 → unreadable。
+ * @param {{ specBase: string, changeName: string }} opts
+ * @returns {{ found: boolean, pointerPath: string, unreadable?: boolean, error?: string } &
+ *   Partial<{ blocked: boolean, note: string, latest_run_dir: string, run_dir_resolved: string,
+ *     written_at: string, reconcile: object, probeConsistency: object }>}
+ */
+export function summarizeVerifyGatePointer({ specBase, changeName }) {
+  const runsDir = join(specBase, '.runtime', 'verify-runs')
+  const pointerPath = join(runsDir, `gate-last-${changeName || 'change'}.json`)
+  if (!existsSync(pointerPath)) return { found: false, pointerPath }
+  let pointer
+  try {
+    pointer = JSON.parse(readFileSync(pointerPath, 'utf8'))
+  } catch (e) {
+    return { found: true, unreadable: true, pointerPath, error: e.message }
+  }
+  const out = { found: true, pointerPath, ...pointer }
+  const runDirName = pointer.latest_run_dir
+    ? String(pointer.latest_run_dir).split(/[\\/]/).filter(Boolean).pop()
+    : null
+  if (runDirName) {
+    const runDir = join(runsDir, runDirName)
+    out.run_dir_resolved = runDir
+    for (const [key, file] of [['reconcile', 'reconcile-result.json'], ['probeConsistency', 'probe-consistency-result.json']]) {
+      const p = join(runDir, file)
+      if (!existsSync(p)) continue
+      try {
+        out[key] = JSON.parse(readFileSync(p, 'utf8'))
+      } catch (e) {
+        out[key] = { unreadable: true, error: e.message }
+      }
+    }
+  }
+  return out
+}

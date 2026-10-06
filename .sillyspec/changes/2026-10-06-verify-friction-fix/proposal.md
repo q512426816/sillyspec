@@ -1,0 +1,37 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-06T13:38:06.171Z
+---
+# 提案书（Proposal）— 2026-10-06-verify-friction-fix
+
+## 动机
+
+任务原话转写：厚流程 postmortem（会话 sess_4769fd5d，变更 provider-multi-agent-kind）暴露四个 CLI 误工/数据丢失缺陷，本变更一次清偿：
+1) verify-probes --init --force 整体重置全骨架且无备份，38 格手填复核成果被清后只能靠对话记录重建（src/index.js:1347-1353，全仓无备份逻辑）；
+2) gate-last-<change>.json 只写不读（src/run/gates.js:2069-2094 纯 writer），看上轮 blocked 原因只能重跑全量 gate（实测超时转后台）或手翻两层 JSON；
+3) 任务卡 frontmatter 校验完全后置在 plan postcheck（src/stages/plan-postcheck.js:1303-1316 透传 js-yaml 英文原文），分诊知识已在 templates/prompts/taskcard-rules.md:19-23 却未接进报错，厚流程实测连撞 6 轮；
+4) design.md 接口声明行机制已存在（src/verify-probes.js:1083 API_FACE_DECLARED_RE）但措辞窄，会话中散文式零端点声明不命中被迫写伪表格绕过，design 骨架 TODO（src/design-facts.js:342-344）未给可粘贴句式。
+
+成功标准：
+- verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
+- sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
+- plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
+- API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
+- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
+2. sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
+3. plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
+4. API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
+5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+
+## 成功标准（可验证）
+
+1. verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
+2. sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
+3. plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
+4. API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
+5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core

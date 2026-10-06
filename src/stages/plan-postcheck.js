@@ -21,7 +21,7 @@ import { parseFileChangeList, pathMatches } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
 import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
 import { validateScriptCommands } from './cmd-existence.js'
-import { parseTaskFrontmatter } from '../taskcard-frontmatter.js'
+import { parseTaskFrontmatter, diagnoseTaskYamlError } from '../taskcard-frontmatter.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -1309,8 +1309,12 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     if (!fmParse.ok) {
       const isDupReported = dupKeys.length > 0 && /duplicated mapping key/i.test(fmParse.error.message)
       if (!isDupReported) {
+        // 分诊（2026-10-06-verify-friction-fix task-03）：js-yaml 消息 + 出错行双信号给中文修复
+        // 动作——知识源是 taskcard-rules.md，此前只透传英文原文，厚流程实证连撞 6 轮门禁
+        const errLineText = (content.split('\n')[fmParse.error.line - 1] || '').replace(/\r$/, '')
+        const fmDiag = diagnoseTaskYamlError(fmParse.error.message, errLineText)
         errors.push(
-          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；修复卡片 frontmatter（值含方括号/全角括号时加引号或改块式列表）`
+          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；分诊：${fmDiag}`
         )
       }
     }
@@ -1470,6 +1474,45 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
   // 这在 run.js 的 postcheck contract 中已检查，这里不重复
 
   return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
+ * taskcard --validate 的 CLI 入口（2026-10-06-verify-friction-fix task-03）：plan 门禁同源规则
+ * 的零成本自检面——填卡后、--done 门禁前先跑，把「门禁时一次撞一批」前移成「提交前自检」。
+ * 在 validatePlanFeasibility 之上补 target_files 严格形态检查（对账门规则，plan feasibility 不含）。
+ * 注意防环：本函数留在 plan-postcheck（其依赖链已有 taskcard-frontmatter/placeholders），
+ * taskcard.js 不得反向 import 本模块（taskcard-placeholders.js jsdoc 的 ESM 循环告诫同源）。
+ * @param {{ changeDir: string, projectRoot?: string|null }} opts
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], files: number }}
+ */
+export function validateTaskcardsCli({ changeDir, projectRoot = null }) {
+  const res = validatePlanFeasibility(changeDir, projectRoot)
+  const errors = [...res.errors]
+  const warnings = [...res.warnings]
+  let files = 0
+  try {
+    const tasksDir = pJoin(changeDir, 'tasks')
+    if (existsSync(tasksDir)) {
+      const list = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
+      files = list.length
+      for (const f of list) {
+        const content = _readFileSync(pJoin(tasksDir, f), 'utf8')
+        const fmParse = parseTaskFrontmatter(content)
+        if (!fmParse.ok) continue // 0b 已报，不双报
+        const tf = parseTargetFiles(content)
+        if (!tf.missing) {
+          const bad = tf.entries.filter(e => e.invalid)
+          if (bad.length > 0) {
+            const id = (content.match(/^id:\s*(.+)/m)?.[1] || '').trim() || f
+            errors.push(`${id}: target_files 形态非法——${bad.map(b => `${b.raw}（${b.invalid}）`).join('；')}`)
+          }
+        }
+      }
+    }
+  } catch {
+    // 目录不可读 → 可行性结果原样返回（其 errors/warnings 已如实反映）
+  }
+  return { ok: errors.length === 0, errors, warnings, files }
 }
 
 /**
