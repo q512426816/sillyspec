@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-archive-cmd-race-and-brief",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-01",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「resolveArchiveCommitPathspecs 构成（HEAD 锚 src/目录 dst/共享面在场判定）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-cmd-race-and-brief"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-02",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「竞态注入：幽灵 A 条目被丢弃且命令仍可执行/瞬时条目提示在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-cmd-race-and-brief"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-done-fail-brief.test.mjs「remainingSubstepsAtFail 并集口径（历史 done + 本轮 doneList + failed 剔除）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-cmd-race-and-brief"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-04",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「test:core 清单驻留断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-cmd-race-and-brief"
+    }
+  ]
+}

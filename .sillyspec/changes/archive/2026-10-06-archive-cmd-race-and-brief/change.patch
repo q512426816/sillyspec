@@ -1,0 +1,652 @@
+diff --git a/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/flow-state.yaml b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/flow-state.yaml
+new file mode 100644
+index 00000000..d8aec4cd
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/flow-state.yaml
+@@ -0,0 +1,27 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  轻量变更全流程实测（2026-10-06-flow-status-json）发现两处工具缺陷：① flow done 归档收尾打印的「一笔到位 commit 命令」照抄执行报 pathspec did not match——多
++  agent 共享仓下，建议生成与执行之间暂存区可被兄弟会话/后台同步瞬改，生成器把转瞬即逝的 A 条目源侧路径抄进 pathspec，且 dst 侧逐文件罗列放大竞态面（镜像单会话复盘命令干净，真仓竞态必现一次）；② flow done
++  首轮中断简报「待办」把本轮刚完成的子步也列出（st 为运行开始时旧态，mark() 只写盘不回填内存）——重入后显示才正确，首轮误导。修复：① pathspec 构成改为 src 侧锚定不可变 HEAD 树 + dst
++  侧收拢为本变更专属归档目录 pathspec + 残余竞态给 fallback 提示；② 待办计算并入本轮 doneList。
++
++
++  成功标准：
++
++  - 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++
++  - 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++
++  - flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++
++  - 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
++autopilot: true
++baseline_commit: 3b89b22219ed2758e8da12fe0c7785d87f9976c7
++updatedAt: '2026-10-06T05:44:41.789Z'
++baseline_sha256: 5dc0a5198fcb06bb4db3165702f07cf9dcc0daa8ccacd21fa8aa934c8f527d02
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 6157b270..8622169a 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2681` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2734` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/package.json b/package.json
+index 31c2a102..043eb0d0 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/flow.js b/src/flow.js
+index 49494081..8b7369f5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -738,6 +738,19 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
+  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
+  */
++/**
++ * 中断简报「待办」计算（2026-10-06-archive-cmd-race-and-brief：陈旧读修复）。
++ * 旧口径只看运行头快照 st.substeps——mark() 只写盘不回填内存快照，首轮运行时本轮刚
++ * 完成/跳过的子步全被误列进待办（实测 flow-status-json 首轮：已完成 artifacts、ledger、
++ * patch，待办仍列全部 8 子步）。正确口径 = 全部子步 − 盘上历史 done（快照）− 本轮
++ * doneList（含 (skip) 后缀）− 中断子步；重入时历史 done 已含上轮标记，两口径收敛同值。
++ * 纯函数，单测直接钉口径。
++ */
++export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], failed } = {}) {
++  const doneNow = new Set((doneList || []).map((d) => String(d).replace(/\(skip\)$/, '')))
++  return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
++}
++
+ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+@@ -785,7 +798,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     } catch { /* 遥测 best-effort */ }
+   }
+   const reportMidFail = (failed) => {
+-    console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
++    console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${remainingSubstepsAtFail({ snapshotSubsteps: st.substeps, doneList, failed }).join('、') || '（无）'}`)
+     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
+   }
+ 
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 4317cbd4..c86e5f29 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -731,6 +731,60 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir,
+  *
+  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+  */
++/**
++ * 归档提交 pathspec 构成（2026-10-06-archive-cmd-race-and-brief：共享暂存区竞态加固）。
++ *
++ * 背景：旧实现照抄 `git diff --cached --name-status` 单元格——多 agent 共享仓下，兄弟会话/
++ * 后台同步可在「打印→执行」窗口瞬改暂存区（实测 flow-status-json 收尾：建议命令含转瞬即逝
++ * 的源侧 A 条目，照抄执行报 pathspec did not match；单会话镜像复盘命令干净=竞态即现即逝）。
++ *
++ * 构成按稳定性分级：
++ *   - src 侧（changes/<名>/ 非归档）：仅取 HEAD 树在册路径——HEAD 不可变，不受暂存区竞态
++ *     影响；rename src / 删除 D 恒在册，转瞬即逝的源侧 A 条目恒不在册（天然滤幽灵）。
++ *   - dst 侧：本变更专属归档目录单条 pathspec（archive/<名>/ 与窄化 add 同一专属前提），
++ *     目录在场即匹配，条目级抖动无感。
++ *   - knowledge/docs 共享面：HEAD 在册（M 形态）或工作区在场（蒸馏新产 A 形态）才入列。
++ *   - 其余丢弃并回报（dropped），由调用方显式提示。
++ *
++ * 纯函数（git 读数由调用方喂入），单测直接钉构成口径。
++ * @param {{changeName:string, stagedNameStatus:string, headTreeFiles:string, existsFn?:(p:string)=>boolean}} p
++ * @returns {{pathspecs:string[], dropped:string[]}}
++ */
++export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, headTreeFiles, existsFn }) {
++  const changesPrefix = '.sillyspec/changes/'
++  // 与旧实现同源的单元格收集（--name-status：R 行 src<TAB>dst 两格，A/M 单格）
++  const mineCells = new Set()
++  for (const line of String(stagedNameStatus || '').split('\n')) {
++    if (!line.trim()) continue
++    for (const cell of line.split('\t').slice(1)) {
++      const p = cell.trim().replace(/^"|"$/g, '')
++      if (!p) continue
++      if (p.startsWith(changesPrefix + changeName + '/')
++        || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
++        || p.startsWith('.sillyspec/knowledge/')
++        || p.startsWith('.sillyspec/docs/')) mineCells.add(p)
++    }
++  }
++  const headSet = new Set(String(headTreeFiles || '').split('\n').map((s) => s.trim()).filter(Boolean))
++  const srcPaths = []
++  let archiveHit = false
++  const sharedPaths = []
++  const dropped = []
++  for (const p of mineCells) {
++    if (p.startsWith(changesPrefix + 'archive/' + changeName + '/')) {
++      archiveHit = true
++    } else if (p.startsWith(changesPrefix + changeName + '/')) {
++      if (headSet.has(p)) srcPaths.push(p)
++      else dropped.push(p)
++    } else {
++      if (headSet.has(p) || (typeof existsFn === 'function' && existsFn(p))) sharedPaths.push(p)
++      else dropped.push(p)
++    }
++  }
++  const pathspecs = [...(archiveHit ? [`${changesPrefix}archive/${changeName}/`] : []), ...srcPaths, ...sharedPaths]
++  return { pathspecs, dropped }
++}
++
+ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null } = {}) {
+   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
+   // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
+@@ -944,33 +998,32 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+         console.log(`📎 归档提交待办（knowledge 蒸馏产物未暂存——核对归属后随归档提交一并带上）：`)
+         console.log(`   git add -- ${knowledgePending.join(' ')}`)
+       }
+-      // 归档提交一笔到位提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：git commit
+-      // -- <pathspec> 是部分提交——rename 条目 pathspec 只匹配 archive/ 侧时提交树里源文件
+-      // 不会被删（D 留暂存区，源侧得再来一笔）。补暂存只保证暂存面完整，提交 pathspec 仍由
+-      // agent 掌握）。聚合本变更归档面全量 staged 路径打印可直接执行的一笔到位 commit 命令：
+-      // --name-status 而非 --name-only——R 行输出 src<TAB>dst 两路径，rename 两侧都要进
+-      // pathspec 提交才真正落地删除（核对口径 = git diff --cached 全量读取，AGENTS.md 规则 11
+-      // 同源）；无 staged 面不打印（幂等重入）。
+-      try {
+-        const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
+-        const mineSet = new Set()
+-        for (const line of String(stagedRaw || '').split('\n')) {
+-          if (!line.trim()) continue
+-          for (const cell of line.split('\t').slice(1)) {
+-            const p = cell.trim().replace(/^"|"$/g, '')
+-            if (!p) continue
+-            if (p.startsWith(changesPrefix + changeName + '/')
+-              || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
+-              || p.startsWith('.sillyspec/knowledge/')
+-              || p.startsWith('.sillyspec/docs/')) mineSet.add(p)
+-          }
+-        }
+-        const mineStaged = [...mineSet]
+-        if (mineStaged.length > 0) {
+-          console.log(`🧾 归档提交一笔到位（pathspec 已含源侧删除/归档侧/knowledge 全量——防 rename 拆两半，核对后可直接执行）：`)
+-          console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${mineStaged.join(' ')}`)
+-        }
+-      } catch { /* 提示失败不阻断归档（advisory） */ }
++// 归档提交一笔到位提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：git commit
++// -- <pathspec> 是部分提交——rename 条目 pathspec 只匹配 archive/ 侧时提交树里源文件
++// 不会被删（D 留暂存区，源侧得再来一笔）。补暂存只保证暂存面完整，提交 pathspec 仍由
++// agent 掌握）。聚合本变更归档面全量 staged 路径打印可直接执行的一笔到位 commit 命令。
++// 2026-10-06-archive-cmd-race-and-brief 竞态加固：真仓实测（flow-status-json 收尾）照抄执行报
++// pathspec did not match——共享仓多会话/后台同步可在「打印→执行」窗口瞬改暂存区，单会话镜像
++// 复盘命令干净（竞态即现即逝）。照抄暂存面不可靠，pathspec 构成按稳定性分级（见
++// resolveArchiveCommitPathspecs JSDoc）；无 staged 面不打印（幂等重入）。
++try {
++  const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
++  const headTreeRaw = gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD'])
++  const { pathspecs, dropped } = resolveArchiveCommitPathspecs({
++    changeName,
++    stagedNameStatus: String(stagedRaw || ''),
++    headTreeFiles: String(headTreeRaw || ''),
++    existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
++  })
++  if (pathspecs.length > 0) {
++    console.log(`🧾 归档提交一笔到位（src 锚 HEAD 树/归档侧目录 pathspec/共享面按在场——共享暂存区竞态加固）：`)
++    console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`)
++    if (dropped.length > 0) {
++      console.log(`   ⚠️ 丢弃 ${dropped.length} 个瞬时暂存条目（HEAD 不在册且工作区不在场——并行会话动了共享暂存区，未入命令）：${dropped.join('、')}`)
++    }
++    console.log(`   （若执行报 pathspec 不匹配：共享仓暂存区在打印→执行间又被并行会话改动——git diff --cached --name-only 全量重核，以实际面替换 pathspec 后再提交）`)
++  }
++} catch { /* 提示失败不阻断归档（advisory） */ }
+       if (othersResidual.length > 0) {
+         const owners = [...new Set(othersResidual)].filter(Boolean)
+         console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
+diff --git a/test/archive-cli-git-add.test.mjs b/test/archive-cli-git-add.test.mjs
+index 6b94e36e..6e31095f 100644
+--- a/test/archive-cli-git-add.test.mjs
++++ b/test/archive-cli-git-add.test.mjs
+@@ -114,12 +114,16 @@ console.log('--- Case 1: 确认归档后 archive/ + docs/ 已 staged ---')
+     'git index 含 docs/sillyspec/modules/newmod.md（模块文档暂存）')
+ 
+   // 一笔到位提交命令提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：pathspec 只写
+-  // archive/ 会把 rename 的源侧删除留在暂存区）——stdout 含完整命令且 pathspec 覆盖两侧
++  // archive/ 会把 rename 的源侧删除留在暂存区）——stdout 含完整命令且 pathspec 覆盖两侧。
++  // 2026-10-06-archive-cmd-race-and-brief 竞态加固后契约：src 侧逐文件（HEAD 树在册锚），
++  // dst 侧收拢为 archive/<dest>/ 目录 pathspec（条目级竞态无感）——两半齐备意图不变
+   assert(r.combined.includes('git commit -m "chore(archive): ' + cn + ' 归档留档" -- '),
+     '归档收尾打印一笔到位 commit 命令')
+   const cmdLine = r.combined.split('\n').find(l => l.includes('git commit -m "chore(archive): ' + cn))
+-  assert(cmdLine.includes(`.sillyspec/changes/${cn}/plan.md`) && cmdLine.includes(`.sillyspec/changes/archive/${destName}/plan.md`),
+-    '命令 pathspec 含源侧删除与归档侧路径（rename 两半齐备）')
++  assert(cmdLine.includes(`.sillyspec/changes/${cn}/plan.md`),
++    '命令 pathspec 含源侧删除路径（HEAD 树在册锚——rename 前半落地）')
++  assert(cmdLine.includes(`.sillyspec/changes/archive/${destName}/`),
++    '命令 pathspec 含归档目录路径spec（目录收拢——rename 后半整目录落地）')
+ }
+ 
+ // ── Case 2: 归档移动 + 注销正常（safeGit add 不阻断归档主流程）──
+diff --git a/test/archive-commit-suggest-race.test.mjs b/test/archive-commit-suggest-race.test.mjs
+new file mode 100644
+index 00000000..ee87db21
+--- /dev/null
++++ b/test/archive-commit-suggest-race.test.mjs
+@@ -0,0 +1,160 @@
++/**
++ * 2026-10-06-archive-cmd-race-and-brief 回归：归档提交建议命令的共享暂存区竞态加固
++ *
++ * 背景（真仓实测）：flow-status-json 收尾时，CLI 打印的「归档提交一笔到位」命令照抄执行报
++ * pathspec did not match——共享仓多会话/后台同步在「打印→执行」窗口瞬改暂存区，旧实现把
++ * 转瞬即逝的源侧 A 条目抄进 pathspec；单会话镜像复盘命令干净（竞态即现即逝）。
++ *
++ * 覆盖：
++ *   ① 纯函数构成：src 侧仅 HEAD 在册（幽灵 A 源侧条目被丢弃并回报）；dst 侧收拢为单条
++ *      归档目录 pathspec；knowledge 共享面按「HEAD 在册 ∨ 工作区在场」收
++ *   ② runArchiveChain 真链（临时 git 仓）：正常形态打印命令原样执行 exit 0 且提交含
++ *      归档侧与源侧删除（rename 两侧都落地）
++ *   ③ 竞态注入：源侧幽灵 A 条目先进暂存区（打印时可见）后消失，打印命令仍可执行
++ *      exit 0 且提交面不含幽灵路径 + 「丢弃 N 个瞬时暂存条目」提示在场
++ *   ④ test:core 清单驻留断言（防移出日常拦截面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { execFileSync, spawnSync } from 'node:child_process'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { resolveArchiveCommitPathspecs, runArchiveChain } = await import(pathToFileURL(join(ROOT, '..', 'src', 'run', 'complete-handlers.js')).href)
++const { ProgressManager } = await import(pathToFileURL(join(ROOT, '..', 'src', 'progress.js')).href)
++
++const CHANGE = '2026-10-06-race-x'
++
++function git(dir, args) {
++  return execFileSync('git', ['-c', 'core.quotepath=false', ...args], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
++}
++
++// Windows 容错清理：ProgressManager 的 SQLite 句柄可能短暂持有 temp 目录（EPERM）——
++// 重试后仍失败则留垃圾不失败（与 _cli-step-harness cleanup 同策略，断言结果不受掩盖）
++function cleanup(dir) {
++  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch { /* 句柄占用留待系统清理 */ }
++}
++
++test('① 纯函数构成：HEAD 锚 src / 目录 dst / 共享面在场判定 / 幽灵丢弃回报', () => {
++  const staged = [
++    `R100\t.sillyspec/changes/${CHANGE}/design.md\t.sillyspec/changes/archive/${CHANGE}/design.md`,
++    `A\t.sillyspec/changes/archive/${CHANGE}/review.json`,
++    `A\t.sillyspec/changes/${CHANGE}/phantom-sibling.json`, // 竞态幽灵：源侧 A、HEAD 不在册
++    `M\t.sillyspec/knowledge/fr.md`, // 共享面 M：HEAD 在册
++    `A\t.sillyspec/knowledge/new-domain.md`, // 共享面新产：工作区在场
++    `A\t.sillyspec/knowledge/gone.json`, // 共享面幽灵：HEAD 不在册且不在场
++  ].join('\n')
++  const headTree = [`.sillyspec/changes/${CHANGE}/design.md`, '.sillyspec/knowledge/fr.md'].join('\n')
++  const { pathspecs, dropped } = resolveArchiveCommitPathspecs({
++    changeName: CHANGE,
++    stagedNameStatus: staged,
++    headTreeFiles: headTree,
++    existsFn: (p) => p === '.sillyspec/knowledge/new-domain.md',
++  })
++  assert.deepEqual(pathspecs, [
++    `.sillyspec/changes/archive/${CHANGE}/`,
++    `.sillyspec/changes/${CHANGE}/design.md`,
++    '.sillyspec/knowledge/fr.md',
++    '.sillyspec/knowledge/new-domain.md',
++  ], '目录 dst 单条 + HEAD 锚 src + 共享面按在场')
++  assert.deepEqual(dropped, [`.sillyspec/changes/${CHANGE}/phantom-sibling.json`, '.sillyspec/knowledge/gone.json'], '两处幽灵均丢弃并回报')
++})
++
++async function buildRepo({ phantom = false } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'acsr-'))
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'user.name', 't'])
++  const c = join(cwd, '.sillyspec', 'changes', CHANGE)
++  const k = join(cwd, '.sillyspec', 'knowledge')
++  mkdirSync(c, { recursive: true })
++  mkdirSync(k, { recursive: true })
++  writeFileSync(join(c, 'design.md'), 'design v1\n')
++  writeFileSync(join(c, 'flow-state.yaml'), 'tier: thin\n')
++  writeFileSync(join(k, 'fr.md'), 'kn base\n')
++  git(cwd, ['add', '-A', '--', '.sillyspec'])
++  git(cwd, ['commit', '-qm', 'base'])
++  if (phantom) {
++    // 竞态注入（真竞态形态）：兄弟会话的瞬时暂存条目——index 在册但无物理文件
++    // （先 add 后 unlink，条目存续）；打印→执行窗口内条目再被并行移出（测试后半段 reset）
++    writeFileSync(join(c, 'phantom-sibling.json'), '{"transient":true}\n')
++    git(cwd, ['add', '--', `.sillyspec/changes/${CHANGE}/phantom-sibling.json`])
++    rmSync(join(c, 'phantom-sibling.json'))
++  }
++  return { cwd, c }
++}
++
++async function driveArchiveChain(cwd) {
++  const specBase = join(cwd, '.sillyspec')
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init(cwd)
++  await pm.initChange(cwd, CHANGE)
++  const lines = []
++  const orig = console.log
++  console.log = (...a) => { lines.push(a.join(' ')) }
++  try {
++    await runArchiveChain({
++      pm, cwd, specBase, changeName: CHANGE,
++      srcDir: join(specBase, 'changes', CHANGE),
++      destDir: join(specBase, 'changes', 'archive', CHANGE),
++      skipPlanCheck: true,
++    })
++  } finally {
++    console.log = orig
++  }
++  return lines.join('\n')
++}
++
++function execPrintedCommand(cwd, printed) {
++  const line = printed.split('\n').find((l) => l.includes('git commit -m '))
++  assert.ok(line, `应打印一笔到位命令，实际：${printed}`)
++  const rest = line.trim().replace(/^git commit -m "chore\(archive\): [^"]+" -- /, '')
++  const paths = rest.split(/\s+/).filter(Boolean)
++  const msg = line.match(/-m "([^"]+)"/)[1]
++  return { status: spawnSync('git', ['-C', cwd, 'commit', '-m', msg, '--', ...paths], { encoding: 'utf8' }).status, paths }
++}
++
++test('② runArchiveChain 真链正常形态：打印命令原样执行 exit 0，rename 两侧都落地', { timeout: 60000 }, async () => {
++  const { cwd } = await buildRepo()
++  try {
++    const printed = await driveArchiveChain(cwd)
++    assert.ok(printed.includes('归档提交一笔到位'), '建议块在场')
++    assert.ok(printed.includes('pathspec 不匹配'), 'fallback 指引在场')
++    const r = execPrintedCommand(cwd, printed)
++    assert.equal(r.status, 0, `打印命令应 exit 0（paths=${r.paths.join(' ')}）`)
++    const show = git(cwd, ['show', '--name-status', '--format=', 'HEAD'])
++    assert.ok(show.includes(`R100\t.sillyspec/changes/${CHANGE}/design.md\t.sillyspec/changes/archive/${CHANGE}/design.md`) || show.includes(`R\t.sillyspec/changes/${CHANGE}/design.md`), `源侧删除应随提交落地：${show}`)
++    assert.ok(show.includes(`A\t.sillyspec/changes/archive/${CHANGE}/design.md`) || show.includes(`archive/${CHANGE}/design.md`), '归档侧文件应进提交')
++    // 命令构成钉：dst 为目录 pathspec、src 为 HEAD 在册路径
++    assert.ok(r.paths.includes(`.sillyspec/changes/archive/${CHANGE}/`), 'dst 收拢为归档目录 pathspec')
++    assert.ok(r.paths.includes(`.sillyspec/changes/${CHANGE}/design.md`), 'src 侧 HEAD 在册路径保留')
++    assert.ok(!r.paths.some((p) => p.startsWith(`.sillyspec/changes/archive/${CHANGE}/`) && p.length > `.sillyspec/changes/archive/${CHANGE}/`.length), 'dst 不再逐文件罗列')
++  } finally { cleanup(cwd) }
++})
++
++test('③ 竞态注入：幽灵 A 先进暂存区后消失，命令仍可执行且提交面不含幽灵', { timeout: 60000 }, async () => {
++  const { cwd } = await buildRepo({ phantom: true })
++  try {
++    const printed = await driveArchiveChain(cwd)
++    assert.ok(printed.includes('丢弃 1 个瞬时暂存条目'), `幽灵应被丢弃并提示，实际：${printed}`)
++    assert.ok(printed.includes('phantom-sibling.json'), '提示含幽灵路径')
++    // 模拟竞态后半段：幽灵条目被兄弟会话移出暂存区（打印→执行窗口内消失）
++    git(cwd, ['reset', '-q', 'HEAD', '--', `.sillyspec/changes/${CHANGE}/phantom-sibling.json`])
++    const r = execPrintedCommand(cwd, printed)
++    assert.equal(r.status, 0, `竞态形态下打印命令仍应 exit 0（paths=${r.paths.join(' ')}）`)
++    assert.ok(!r.paths.includes(`.sillyspec/changes/${CHANGE}/phantom-sibling.json`), '幽灵路径不进命令')
++    const show = git(cwd, ['show', '--name-status', '--format=', 'HEAD'])
++    assert.ok(!show.includes('phantom-sibling'), `提交面不得含幽灵：${show}`)
++  } finally { cleanup(cwd) }
++})
++
++test('④ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {
++  const pkg = JSON.parse(readFileSync(join(ROOT, '..', 'package.json'), 'utf8'))
++  assert.ok(
++    (pkg.scripts?.['test:core'] || '').includes('test/archive-commit-suggest-race.test.mjs'),
++    'test:core 必须包含 test/archive-commit-suggest-race.test.mjs',
++  )
++})
+diff --git a/test/flow-done-fail-brief.test.mjs b/test/flow-done-fail-brief.test.mjs
+new file mode 100644
+index 00000000..a5128794
+--- /dev/null
++++ b/test/flow-done-fail-brief.test.mjs
+@@ -0,0 +1,56 @@
++/**
++ * 2026-10-06-archive-cmd-race-and-brief 回归：flow done 中断简报「待办」口径
++ *
++ * 背景（真仓实测）：旧口径只看运行头快照 st.substeps——mark() 只写盘不回填内存快照，
++ * 首轮运行时本轮刚完成/跳过的子步全被误列进待办（flow-status-json 首轮：已完成
++ * artifacts、ledger、patch，待办仍列全部 8 子步；重入后显示才正确）。
++ *
++ * 覆盖：
++ *   ① 首轮形态：快照空、doneList 含本轮完成/跳过 → 待办恰为剩余子步（不含已完成）
++ *   ② 重入形态：快照含历史 done、doneList 为本轮 skip → 两口径收敛
++ *   ③ 边界：failed 恒剔除；(skip) 后缀形态识别
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { remainingSubstepsAtFail } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++
++test('① 首轮形态：本轮 doneList 并入口径，刚完成子步不进待办', () => {
++  const left = remainingSubstepsAtFail({
++    snapshotSubsteps: {},
++    doneList: ['artifacts', 'ledger', 'patch'],
++    failed: 'review',
++  })
++  assert.deepEqual(left, ['probes', 'distill', 'archive', 'events'], `待办应恰为四剩余子步，实际：${left.join('、')}`)
++})
++
++test('①b 首轮含 skip 形态：(skip) 后缀识别为已完成', () => {
++  const left = remainingSubstepsAtFail({
++    snapshotSubsteps: {},
++    doneList: ['artifacts(skip)', 'ledger(skip)', 'patch'],
++    failed: 'review',
++  })
++  assert.deepEqual(left, ['probes', 'distill', 'archive', 'events'], 'skip 与 done 同口径剔除')
++})
++
++test('② 重入形态：快照历史 done 与本轮 doneList 收敛同值', () => {
++  const left = remainingSubstepsAtFail({
++    snapshotSubsteps: { artifacts: 'done', ledger: 'done', patch: 'done' },
++    doneList: ['artifacts(skip)', 'ledger(skip)', 'patch(skip)'],
++    failed: 'review',
++  })
++  assert.deepEqual(left, ['probes', 'distill', 'archive', 'events'], '两口径重叠不漏不重')
++})
++
++test('③ 边界：failed 恒剔除；全完成时待办为空数组', () => {
++  const all = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
++  const left = remainingSubstepsAtFail({ snapshotSubsteps: {}, doneList: all.slice(0, 7), failed: 'events' })
++  assert.deepEqual(left, [])
++  // failed 即便不在 doneList 也不出现在待办
++  const left2 = remainingSubstepsAtFail({ snapshotSubsteps: {}, doneList: [], failed: 'review' })
++  assert.ok(!left2.includes('review'))
++  assert.deepEqual(left2, ['artifacts', 'ledger', 'patch', 'probes', 'distill', 'archive', 'events'])
++})
+diff --git a/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/design.md b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/design.md
+new file mode 100644
+index 00000000..f535c7d2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/design.md
+@@ -0,0 +1,55 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:44:41.765Z
++---
++# 设计记录（Design Record）— 2026-10-06-archive-cmd-race-and-brief
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++缺陷①（归档建议命令竞态）：把 pathspec 构成从「照抄 `git diff --cached --name-status` 单元格」改为「按稳定性分级」——src 侧锚定不可变的 HEAD 树（`git ls-tree -r --name-only HEAD` 在册才入列，rename 的 src 恒在 HEAD、转瞬即逝的 A 条目恒不在，天然滤掉竞态幽灵）；dst 侧收拢为本变更专属归档目录单条 pathspec（目录在场即匹配，逐文件罗列的条目级抖动无感）；knowledge/docs 共享面按「HEAD 在册 ∨ 工作区在场」收，丢弃项显式提示。构成逻辑抽成纯函数 resolveArchiveCommitPathspecs（输入=staged name-status 文本 + HEAD 树清单 + 在场判定函数），runArchiveChain 只喂 git 读数。缺陷②（中断简报陈旧读）：待办计算抽成纯函数 remainingSubstepsAtFail（历史盘上 done ∪ 本轮 doneList − failed），消除对运行头快照 st 的陈旧依赖。选纯函数抽取是因为两处缺陷都是「计算口径」问题，纯函数可被单测直接钉住，不需要驱动重型归档链。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新增导出 resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, headTreeFiles, existsFn })→{ pathspecs, dropped }（src/run/complete-handlers.js，纯函数）与 remainingSubstepsAtFail({ snapshotSubsteps, doneList, failed })（src/flow.js，纯函数）。runArchiveChain 建议块行为变化：命令构成按上述分级；丢弃瞬时条目时多一行 ⚠️ 提示；建议块固定附一行 fallback 指引（pathspec 不匹配时以 git diff --cached --name-only 重核替换）。cmdFlowDone 中断简报「待办」行口径修正（不再列本轮已完成子步）。无命令行参数面变化、无文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++构成函数输入是两个瞬时快照（staged name-status、HEAD 树）+ 在场探测；HEAD 不可变保证 src 侧判定与到达顺序无关；staged 快照的乱序行不影响 Set 语义。成立。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++这正是本变更要加固的场景：兄弟会话在打印→执行窗口改暂存区——src 侧 HEAD 锚不受影响；dst 侧目录 pathspec 只要求目录在场（归档目录本变更专属，无他者写入面）；共享 knowledge 面的残余竞态由丢弃提示 + fallback 指引兜底（无法在打印时消除未来窗口的变更，只能让失败可恢复）。函数自身无写行为。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++两函数均纯计算无副作用；中断简报修正只改读取口径（历史 done 来自盘上 flow-state，本轮 doneList 来自内存），重入幂等——重入时历史 done 已含上轮标记，两种读法收敛同值。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++pathspec 过滤前缀仍以本变更名收窄（changes/<名>/、archive/<名>/），knowledge 面沿既有共享整文件惯例；HEAD 树读取锚定当前仓，worktree 场景下 HEAD 即各 worktree 自己的 HEAD，不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：knowledge/docs 共享面仍有残余竞态（打印→执行窗口内新文件被并行移走）——HEAD 锚不适用于「本轮蒸馏新产、HEAD 尚不在册」的 A 条目，只能以在场判定收窄 + fallback 指引兜底；发生概率低（蒸馏产物刚由本链写盘）。试过放弃：① 打印时逐条目 `git ls-files` 校验——校验的是同一瞬态 index，幽灵当场在册照样通过，治标不治本；② 建议裸 `git commit`（无 pathspec）——违反 AGENTS.md 规则 11（共享暂存区会卷入他会话条目），且把「执行时暂存区又变」的窗口风险放大成全量面。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/run/complete-handlers.js | 建议块重构：新增导出纯函数 resolveArchiveCommitPathspecs，runArchiveChain 按 HEAD 锚/目录 dst/共享面在场三级构成命令 + 丢弃提示 + fallback 指引 |
++| 修改 | src/flow.js | 新增导出纯函数 remainingSubstepsAtFail；reportMidFail 待办口径修正（历史 done ∪ 本轮 doneList − failed） |
++| 新增 | test/archive-commit-suggest-race.test.mjs | 纯函数构成钉 + runArchiveChain 真链两形态（正常执行 exit 0 / 竞态注入丢弃幽灵仍可执行）+ test:core 驻留断言 |
++| 新增 | test/flow-done-fail-brief.test.mjs | remainingSubstepsAtFail 口径钉（首轮与重入两形态） |
++| 修改 | package.json | test:core 登记两个新测试文件 |
+diff --git a/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/proposal.md b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/proposal.md
+new file mode 100644
+index 00000000..1840749a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:44:41.764Z
++---
++# 提案书（Proposal）— 2026-10-06-archive-cmd-race-and-brief
++
++## 动机
++
++任务原话转写：轻量变更全流程实测（2026-10-06-flow-status-json）发现两处工具缺陷：① flow done 归档收尾打印的「一笔到位 commit 命令」照抄执行报 pathspec did not match——多 agent 共享仓下，建议生成与执行之间暂存区可被兄弟会话/后台同步瞬改，生成器把转瞬即逝的 A 条目源侧路径抄进 pathspec，且 dst 侧逐文件罗列放大竞态面（镜像单会话复盘命令干净，真仓竞态必现一次）；② flow done 首轮中断简报「待办」把本轮刚完成的子步也列出（st 为运行开始时旧态，mark() 只写盘不回填内存）——重入后显示才正确，首轮误导。修复：① pathspec 构成改为 src 侧锚定不可变 HEAD 树 + dst 侧收拢为本变更专属归档目录 pathspec + 残余竞态给 fallback 提示；② 待办计算并入本轮 doneList。
++
++成功标准：
++- 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++- 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++- flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++- 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++2. 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++3. flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++4. 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
++
++## 成功标准（可验证）
++
++1. 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++2. 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++3. flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++4. 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
+diff --git a/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/requirements.md b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/requirements.md
+new file mode 100644
+index 00000000..02395a38
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:44:41.765Z
++---
++# 需求规格（Requirements）— 2026-10-06-archive-cmd-race-and-brief
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++
++- 必须：归档收尾建议命令的源侧（`changes/<名>/` 非归档）pathspec 只允许出现 HEAD 树在册路径；归档侧收拢为单条 `.sillyspec/changes/archive/<名>/` 目录 pathspec（该目录为本变更专属，工具既有窄化 add 同一前提）；knowledge/docs 共享面条目须 HEAD 在册或工作区在场方可入列。正常归档形态下打印命令原样执行必须 exit 0 且提交包含归档目录文件与源侧删除。
++
++#### 场景：主路径
++
++- Given：变更归档完成、暂存面为归档 rename + 新增 + knowledge 修改的正常形态
++- When：执行打印的一笔到位 commit 命令
++- Then：exit 0；`git show --name-status` 含 archive/ 侧文件与源侧 rename/删除；源侧 pathspec 全部 HEAD 在册
++
++### FR-02: 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++
++- 必须：共享仓并行会话在「打印→执行」窗口内改动暂存区（幽灵 A 条目先进后出）时，打印命令仍可执行成功（exit 0），且幽灵路径不得进入提交面；被丢弃的瞬时条目必须显式提示（数量+路径）。建议块必须附带 fallback 指引：执行报 pathspec 不匹配时以 `git diff --cached --name-only` 全量重核替换。
++
++#### 场景：竞态注入
++
++- Given：源侧幽灵文件被暂存（A）后 runArchiveChain 打印建议，随后条目被移出暂存区（模拟兄弟会话瞬改）
++- When：原样执行打印命令
++- Then：exit 0；提交面不含幽灵路径；打印含「丢弃 N 个瞬时暂存条目」提示
++
++### FR-03: flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++
++- 必须：中断简报的「待办」= 全部子步 − 盘上历史 done − 本轮 doneList（含 skip）− 中断子步；禁止把本轮刚完成/跳过的子步列入待办（st 运行头快照不回填导致的陈旧读必须消除）。
++
++#### 场景：主路径
++
++- Given：无任何预完成子步的变更，artifacts/ledger/patch 本轮完成后 review 中断
++- When：读取中断简报「待办」行
++- Then：待办恰为 probes、distill、archive、events（不含 artifacts/ledger/patch/review）
++
++### FR-04: 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
++
++- 必须：新增测试文件覆盖 FR-01/02（纯函数 pathspec 构成 + runArchiveChain 真链执行打印命令两形态）与 FR-03（待办计算函数），登记进 package.json test:core；test:core 全量跑绿。
++
++#### 场景：主路径
++
++- Given：仓库含本变更实现
++- When：`npm run test:core`
++- Then：全部用例通过，含新增测试文件
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/archive-commit-suggest-race.test.mjs「resolveArchiveCommitPathspecs 构成（HEAD 锚 src/目录 dst/共享面在场判定）」+「runArchiveChain 正常形态打印命令原样执行 exit 0」
++FR-02: test/archive-commit-suggest-race.test.mjs「竞态注入：幽灵 A 条目被丢弃且命令仍可执行/瞬时条目提示在场」
++FR-03: test/flow-done-fail-brief.test.mjs「remainingSubstepsAtFail 并集口径（历史 done + 本轮 doneList + failed 剔除）」
++FR-04: test/archive-commit-suggest-race.test.mjs「test:core 清单驻留断言」
+diff --git a/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/tasks.md b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/tasks.md
+new file mode 100644
+index 00000000..37b2b66d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:44:41.765Z
++---
++# 任务注册表（Tasks）— 2026-10-06-archive-cmd-race-and-brief
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-archive-cmd-race-and-brief --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-archive-cmd-race-and-brief` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
++- [x] task-02: 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
++- [x] task-03: flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
++- [x] task-04: 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿

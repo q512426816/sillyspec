@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-archive-cmd-race-and-brief",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ade6768faef8810e2127a2b7590f2d892a5f466c",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定标题为近似转写而非测试用例名逐字匹配（可追溯性精度）",
+      "evidence": "requirements.md 测试绑定以「」引用的用例名是实际测试标题的意译（如 FR-01 绑定「runArchiveChain 正常形态打印命令原样执行 exit 0」对实际用例 '② runArchiveChain 真链正常形态：打印命令原样执行 exit 0，rename 两侧都落地'）；所绑测试均真实存在、内容覆盖并断言对应 FR 行为，属命名精度而非绑定缺失",
+      "location": ".sillyspec/changes/2026-10-06-archive-cmd-race-and-brief/requirements.md:55-58"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok（边界已裁决：可接受——design 声明的 knowledge/docs 共享面残余竞态为真实存在且已显式裁决：HEAD 锚不适用于本轮新产 A 条目，以在场判定收窄 + 丢弃提示 + fallback 指引兜底，建议命令为 advisory 输出且失败可恢复，非数据正确性风险）",
+    "切换": "ok",
+    "作用域": "ok（边界已裁决：可接受——knowledge/docs 沿既有共享整文件惯例为声明的既有边界；pathspec 前缀斜杠终止防兄弟变更名前缀串台，HEAD 树按 cwd 锚定当前仓）"
+  },
+  "reviewedAt": "2026-10-06T06:03:16Z"
+}

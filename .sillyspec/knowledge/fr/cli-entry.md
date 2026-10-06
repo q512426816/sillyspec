@@ -7049,3 +7049,79 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-flow-status-json
   status: active
+
+## FR-cli-entry-373 归档建议命令的 src 侧 pathspec 仅含 HEAD 树在册路径（转瞬即逝的源侧 A 条目不进命令）；dst 侧为单条归档目录 pathspec；正常形态下打印命令可原样执行成功（exit 0）
+变更：2026-10-06-archive-cmd-race-and-brief
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-archive-cmd-race-and-brief/requirements.md#FR-01
+最近确认：ade6768faef8810e2127a2b7590f2d892a5f466c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-01
+  tests: test/archive-commit-suggest-race.test.mjs「resolveArchiveCommitPathspecs 构成（HEAD 锚 src/目录 dst/共享面在场判定）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-cmd-race-and-brief
+  status: active
+
+## FR-cli-entry-374 竞态注入形态（源侧幽灵 A 条目进暂存区后消失）下，打印命令仍可执行成功且提交面不含幽灵路径
+变更：2026-10-06-archive-cmd-race-and-brief
+状态：active
+摘要：竞态注入
+全文：.sillyspec/changes/archive/2026-10-06-archive-cmd-race-and-brief/requirements.md#FR-02
+最近确认：ade6768faef8810e2127a2b7590f2d892a5f466c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-02
+  tests: test/archive-commit-suggest-race.test.mjs「竞态注入：幽灵 A 条目被丢弃且命令仍可执行/瞬时条目提示在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-cmd-race-and-brief
+  status: active
+
+## FR-cli-entry-375 flow done 首轮中断简报的「待办」不再包含本轮已完成/已跳过的子步（与重入后口径一致）
+变更：2026-10-06-archive-cmd-race-and-brief
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-archive-cmd-race-and-brief/requirements.md#FR-03
+最近确认：ade6768faef8810e2127a2b7590f2d892a5f466c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-03
+  tests: test/flow-done-fail-brief.test.mjs「remainingSubstepsAtFail 并集口径（历史 done + 本轮 doneList + failed 剔除）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-cmd-race-and-brief
+  status: active
+
+## FR-cli-entry-376 新增单元测试覆盖上述三点并纳入 test:core，test:core 全绿
+变更：2026-10-06-archive-cmd-race-and-brief
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-archive-cmd-race-and-brief/requirements.md#FR-04
+最近确认：ade6768faef8810e2127a2b7590f2d892a5f466c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-cmd-race-and-brief:flow:测试绑定FR-04
+  tests: test/archive-commit-suggest-race.test.mjs「test:core 清单驻留断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-cmd-race-and-brief
+  status: active
