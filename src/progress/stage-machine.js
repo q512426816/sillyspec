@@ -6,6 +6,7 @@
 import { mkdirSync, existsSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { writeAtomicSync } from '../fs-atomic.js';
+import { timeAgo } from '../datetime.js';
 import { runValidators } from '../stage-contract.js';
 import { QUICK_SID_RE } from '../run/shared.js';
 import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, STALL_WARN_DAYS, emptyStage } from './shared.js';
@@ -831,13 +832,9 @@ export class StageMachine {
   _timeAgo(dateStr) {
     const ts = _parseFlexibleTs(dateStr);
     if (ts === null) return dateStr || '未知';
-    const diff = Date.now() - ts;
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes} 分钟前`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} 小时前`;
-    return `${Math.floor(hours / 24)} 天前`;
+    // 档位换算委托 datetime.timeAgo（单源）；zh-CN 旧格式容错解析与失败回退留在调用方
+    // ——是对本模块存量 lastActive 数据的展示职责（2026-10-06-datetime-timeago 收敛）。
+    return timeAgo(ts);
   }
 }
 
