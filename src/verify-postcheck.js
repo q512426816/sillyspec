@@ -2860,7 +2860,12 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
   }
 }
 
-function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null }) {
+/**
+ * 动态子集执行（module 命令 + deps 批 + FR 关联回归）。2026-10-06-fr-priority-overlap 起
+ * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
+ * runVerifyTestCheck 全链只为断言组卷接线）。
+ */
+export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
@@ -2877,6 +2882,11 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
   if (!fr) {
     try { fr = collectFrLinkedTests({ specBase, changeName, changedFiles: changedFiles || [], projectRoot: cwd }) } catch { fr = null }
   }
+  // 优先面全量口径（2026-10-06-fr-priority-overlap）：frLinked 只含与 deps 无重叠的「新增」
+  // 绑定文件——重叠者此前拿不到优先权，仍按普通依赖受帽字母序弃置（resume-title 收口实测
+  // 64 绑定弃 14）。绑定面钦定即优先，不论与 import 依赖面是否重叠；fr 缺席回退空数组
+  // （与现状一致）。frLinked 另有职责：并集去重的增量面 + frReport.addedCount 披露口径，保留不动。
+  const frAll = fr && Array.isArray(fr.files) ? fr.files : []
   if (fr) {
     if (fr.files.length > 0) {
       const added = fr.files.filter(f => !deps.includes(f))
@@ -2891,7 +2901,7 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
   const depsAll = [...new Set([...deps, ...frLinked])].sort()
   let depsBatches = []
   if (depsAll.length > 0) {
-    depsBatches = buildDepsBatches({ deps: depsAll, changedFiles, hits, cwd, priorityFiles: frLinked })
+    depsBatches = buildDepsBatches({ deps: depsAll, changedFiles, hits, cwd, priorityFiles: frAll })
     for (const b of depsBatches) {
       if (b.skip) {
         // JSX 无项目运行器批（residual-runner-parity）：skip 不跑不拦，reason 点名让漏测可见
