@@ -1,0 +1,23 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  实测发现：裸跑 sillyspec status（无 --change）在进度库存在 ≥2 个活跃变更时，read() 因「多活跃无法自动推导」返回 null（src/progress.js:416-424），只读空态分支一律打「ℹ️
+  未找到进度数据（只读查询不建变更）」——数据明明存在（本仓实测 10 个 active 行、其中 2 个有真实目录待收口），文案却断言无数据，误导 AGENTS.md「恢复与查看」面。
+
+
+  成功标准：
+
+  - 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
+
+  - 零活跃或库不存在时维持既有空态引导文案（不回归）
+
+  - 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
+autopilot: true
+baseline_commit: 2faced26e0c4129d1489655c68b78a21c1cbc90a
+updatedAt: '2026-10-06T14:08:14.274Z'
+baseline_sha256: e4d0b9aa725d592652b82e2db6be81dd7675ad664d774b612020ab7d288d134f
+

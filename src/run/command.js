@@ -215,6 +215,22 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
  * run <stage> --help/-h 的用法帮助（runCommand 内 --help 短路调用）。
  * 只打印不落盘：帮助查询不该有副作用（建会话/写 QUICKLOG）。
  */
+/**
+ * 只读空态引导文案（2026-10-05-status-empty-guide 首创；2026-10-06-status-multi-active-list
+ * 抽出单一源——库不在场前置门与 read 后空分支共用一份，防两处文案漂移）。静态文案——引用
+ * 通用命令形态而非本仓状态（空态定义即无数据可读）。可照抄实例（2026-10-05-input-teach-copyable）：
+ * 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
+ */
+function emitReadonlyEmptyGuide() {
+  console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+  console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
+  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+  console.log('')
+  console.log('     成功标准：')
+  console.log('     - <可验证标准>"')
+  console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
+}
+
 function printStageUsage(stageName) {
   const stage = stageRegistry[stageName]
   console.log(`
@@ -1115,6 +1131,19 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
 
+  // 只读辅助阶段的写意图 flag 清单（下方两处只读短路共用：库不在场前置门 + read 后短路）
+  const READONLY_WRITE_ACTIONS = ['--cleanup-remnant', '--align-execute-progress', '--done', '--skip', '--reset', '--reopen', '--wait', '--continue']
+
+  // 只读前置门（2026-10-06-status-multi-active-list）：库文件不在场时不得进入 pm.read()——
+  // read() 无显式 --change 先走 listChanges→_ensureDB，会凭空新建空库（只读承诺破防，实测）；
+  // 空库撞残留 schema-version 戳无表可查，首个 SELECT 直接崩（no such table: changes）。
+  // 库不在场=字面意义的零进度：与零活跃同款空态引导 + exit 0，零落盘。
+  if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))
+      && !existsSync(pm._runtimePath(cwd, 'sillyspec.db'))) {
+    emitReadonlyEmptyGuide()
+    process.exit(0)
+  }
+
   let progress = pm.read(cwd, changeName)
 
   // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status；doctor 已于 2026-09-09-doctor-noai
@@ -1126,20 +1155,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 显式写意图不短路：doctor 写操作 flag（--cleanup-remnant / --align-execute-progress）与
   // 步骤动作 flag（--done/--skip/--reset/--reopen/--wait/--continue）走原写路径；--status 本身
   // 是只读查询，纳入短路。--fix 是 worktree doctor 的 flag 不在此列（design.md Phase 4）。
-  const READONLY_WRITE_ACTIONS = ['--cleanup-remnant', '--align-execute-progress', '--done', '--skip', '--reset', '--reopen', '--wait', '--continue']
   if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))) {
     if (!progress) {
-      console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
-      // 空态引导（2026-10-05-status-empty-guide）：新会话拿到下一步入口——静态文案，
-      // 引用通用命令形态而非本仓状态（空态定义即无数据可读）；exit 0 与零落盘语义不变。
-      // 可照抄实例（2026-10-05-input-teach-copyable）：分号描述形态照抄提取 0 条（探针实证）；
-      // 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
-      console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
-      console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
-      console.log('')
-      console.log('     成功标准：')
-      console.log('     - <可验证标准>"')
-      console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
+      // 多活跃分流（2026-10-06-status-multi-active-list）：read() 无显式 --change 在 ≥2 活跃
+      // 时同样返回 null——「有数据但需要点名」被空态文案一律误报成「无数据」（本仓实测
+      // 10 行 active、2 个目录待收口却被告知未找到）。前置门保证走到这库必在场，listChanges
+      // 纯读；显式 --change 未命中仍走空态引导（点名失败与未点名歧义是两件事）。
+      let activeChanges = []
+      try { activeChanges = pm.listChanges(cwd) || [] } catch { activeChanges = [] }
+      if (!changeName && activeChanges.length >= 2) {
+        console.log(`ℹ️ 进度数据存在，但有 ${activeChanges.length} 个活跃变更（未指定 --change，无法确定展示哪个）：`)
+        for (const name of activeChanges) {
+          // DB 行与目录是两个真相层：目录缺失的幽灵行如实标注（清幽灵走既有 doctor --cleanup-remnant）
+          console.log(`   - ${name}${existsSync(pm._changePath(cwd, name)) ? '' : '（本地无目录）'}`)
+        }
+        console.log(`   → 指定查看其一：sillyspec status --change ${activeChanges[0]}`)
+        console.log('   → 恢复面：sillyspec flow status --change <名>')
+        process.exit(0)
+      }
+      emitReadonlyEmptyGuide()
       process.exit(0)
     }
     // 只读展示路径：复用阶段定义渲染当前步骤 prompt（outputStep 对 status/doctor 纯只读），

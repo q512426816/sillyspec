@@ -71,7 +71,10 @@ export class DB {
     // 4. 创建表结构（仅当 schema 版本戳不匹配时——W4-H）：
     //    schema 已最新则跳过建表，省 DDL 开销。node:sqlite 打开即持久化，
     //    _createSchema 内 DDL 直接落盘，无需 _save。
-    //    戳在但 db 缺表属"手动改 db"边角（SillySpec 不支持），不在本层兜底。
+    //    戳只对它伴生的库文件作证：库文件被删而戳残留（孤儿戳）时戳匹配是假信号——
+    //    _openWithFallback 的全新建库分支以 _freshCreate 标记（2026-10-06-status-multi-active-list
+    //    实测：空库无表首个 SELECT 即 no such table 崩溃）。戳在但库有内容的缺表属
+    //    "手动改 db"边角（SillySpec 不支持），仍不在本层兜底。
     const versionPath = `${this.dbPath}.schema-version`;
     let schemaCurrent = false;
     try {
@@ -79,7 +82,7 @@ export class DB {
         && readFileSync(versionPath, 'utf8').trim() === String(DB_SCHEMA_VERSION);
     } catch { /* 戳读取失败保守重跑 schema */ }
 
-    if (!schemaCurrent) {
+    if (!schemaCurrent || this._freshCreate) {
       this._createSchema();
       try { writeFileSync(versionPath, String(DB_SCHEMA_VERSION)); } catch { /* 戳写入失败不阻断，下次重跑 */ }
     }
@@ -183,7 +186,11 @@ export class DB {
 
     // 3. 都不可用
     if (readValid(this.dbPath) === null) {
-      // 主库与备份都不存在 → 全新项目，建空库
+      // 主库与备份都不存在 → 全新项目，建空库。
+      // 全新标记（2026-10-06-status-multi-active-list）：schema 戳只对它伴生的库文件作证——
+      // 库文件被删而戳残留时，init() 步骤4 的戳匹配会让全新空库跳过建表（孤儿戳空库，
+      // 首个 SELECT 即 no such table 崩溃，实测）。全新空库必须无视残留戳重跑 _createSchema。
+      this._freshCreate = true;
       return openDatabase(this.dbPath);
     }
     // 主库曾存在（空/损坏）但无法恢复 → 数据丢失，必须 fail-loud（不静默建空库吞进度）
