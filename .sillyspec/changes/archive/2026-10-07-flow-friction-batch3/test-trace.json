@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-flow-friction-batch3",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-01",
+      "tests": [
+        "test/gate-stage-review-hint.test.mjs「H1 默认档：缺 review → stage-review-hint informational + register 指引；在场 → 静默 ok」",
+        "test/gate-stage-review-hint.test.mjs「H1b 默认档 verify 同款提示」",
+        "test/gate-stage-review-hint.test.mjs「H2 --full 档 full-stage-review 的 id 与 error 语义不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-02",
+      "tests": [
+        "test/design-ref-suggest.test.mjs「S1 幻觉路径：报错附相近既有路径（basename did-you-mean）」",
+        "test/design-ref-suggest.test.mjs「S2 无相近/NEW: 前缀：不加建议段不误报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-friction-batch3.test.mjs「W1 同 Wave 共享文件 error 含 plan-adopt-waves 一键重排指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-friction-batch3.test.mjs「F1 fillModuleImpactSkipped：pending/待办→skipped、reason 进操作列、done 行不动、幂等」",
+        "test/flow-friction-batch3.test.mjs「F2 CLI：--fill-skipped 落盘生效；缺 module-impact.md exit 2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-05",
+      "tests": [
+        "test/design-ref-suggest.test.mjs「U1 UI 触达 + 证据缺失 → 前置 advisory 含落盘路径与 verify 执法提示」",
+        "test/design-ref-suggest.test.mjs「U2 证据在场 / 非 UI → null 零打扰」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-07-flow-friction-batch3:flow:测试绑定FR-06",
+      "tests": [
+        "test/gate-stage-review-hint.test.mjs「H2 --full 档 full-stage-review 的 id 与 error 语义不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-flow-friction-batch3"
+    }
+  ]
+}

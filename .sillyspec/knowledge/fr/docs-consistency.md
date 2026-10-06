@@ -647,3 +647,133 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-06-verify-friction-fix
   status: active
+
+## FR-docs-consistency-031 gate execute/verify 默认档新增 stage-review informational 检查：缺 review.json 时 warning 含 register-stage-review 指引、在场时静默 ok；--full 档 full-stage-review 的 error 语义与 id 均不变（默认档用独立 check id 不碰撞）
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：缺 review 的默认档提示；--full 不回归
+场景正文：
+- 场景：缺 review 的默认档提示 — Given execute 变更未注册 stage review / When gate execute（默认档）/ Then checks 含 stage-review-
+- 场景：--full 不回归 — Given 同上 / When gate execute --full / Then full-stage-review 在场、ok=false（缺 review 即 er
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-01
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-01
+  tests: test/gate-stage-review-hint.test.mjs「H1 默认档：缺 review → stage-review-hint informational + register 指引；在场 → 静默 ok」 | test/gate-stage-review-hint.test.mjs「H1b 默认档 verify 同款提示」 | test/gate-stage-review-hint.test.mjs「H2 --full 档 full-stage-review 的 id 与 error 语义不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active
+
+## FR-docs-consistency-032 design_file_ref_invalid 报错：根下存在 basename 相同的既有文件时附「相近既有路径：…」（至多 3 条），无相近时不附建议段（不加噪）；NEW: 前缀提示保留
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：缺前缀幻觉；零命中零加噪
+场景正文：
+- 场景：缺前缀幻觉 — Given 根下有 backend/app/modules/x.py 而 design 清单写 app/modules/x.py / When 校验 / Then 报错含「
+- 场景：零命中零加噪 — Given 清单路径的 basename 在根下无同名文件 / When 校验 / Then 报错不含「相近既有路径」段。
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-02
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-02
+  tests: test/design-ref-suggest.test.mjs「S1 幻觉路径：报错附相近既有路径（basename did-you-mean）」 | test/design-ref-suggest.test.mjs「S2 无相近/NEW: 前缀：不加建议段不误报」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active
+
+## FR-docs-consistency-033 同 Wave 共享文件 error 文案含 plan-adopt-waves 一键重排指引；伪并行串行链报错（既有）不回归
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：冲突指路
+场景正文：
+- 场景：冲突指路 — 
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-03
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-03
+  tests: test/flow-friction-batch3.test.mjs「W1 同 Wave 共享文件 error 含 plan-adopt-waves 一键重排指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active
+
+## FR-docs-consistency-034 sillyspec module-impact --change <名> --fill-skipped [--reason "..."]：pending/待办行状态改 skipped、--reason 追加进操作列、其余内容逐字不动；无 module-impact.md 或无更新结果表时 exit 2 报错；幂等（重跑零改动）
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：批量回填；缺文件拒跑
+场景正文：
+- 场景：批量回填 — Given 更新结果表 2 行 pending/待办 + 1 行 done / When --fill-skipped --reason "模块卡同步并入下批" / The
+- 场景：缺文件拒跑 — Given 变更目录无 module-impact.md / When 同命令 / Then exit 2 且报错点名文件。
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-04
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-04
+  tests: test/flow-friction-batch3.test.mjs「F1 fillModuleImpactSkipped：pending/待办→skipped、reason 进操作列、done 行不动、幂等」 | test/flow-friction-batch3.test.mjs「F2 CLI：--fill-skipped 落盘生效；缺 module-impact.md exit 2」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active
+
+## FR-docs-consistency-035 execute 收口对 UI 触达且缺 visual-evidence.md 的变更打前置 advisory（warn 级，含落盘路径与 verify 执法提示）；非 UI 变更零输出零行为变化
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：前置提醒；零打扰
+场景正文：
+- 场景：前置提醒 — Given design 清单含前端 .tsx 且变更目录无 visual-evidence.md / When execute --done 收口 / Then cons
+- 场景：零打扰 — Given 非 UI 变更 / When execute --done 收口 / Then 无该 advisory 输出。
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-05
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-05
+  tests: test/design-ref-suggest.test.mjs「U1 UI 触达 + 证据缺失 → 前置 advisory 含落盘路径与 verify 执法提示」 | test/design-ref-suggest.test.mjs「U2 证据在场 / 非 UI → null 零打扰」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active
+
+## FR-docs-consistency-036 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+变更：2026-10-07-flow-friction-batch3
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更全部实现合入 / When npm run test:core 与 npm run lint / Then 均零失
+全文：.sillyspec/changes/archive/2026-10-07-flow-friction-batch3/requirements.md#FR-06
+最近确认：ea25b2c67fabd8c926fe19389cb2b01dbade271e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-flow-friction-batch3:flow:测试绑定FR-06
+  tests: test/gate-stage-review-hint.test.mjs「H2 --full 档 full-stage-review 的 id 与 error 语义不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-flow-friction-batch3
+  status: active

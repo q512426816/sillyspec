@@ -1,0 +1,92 @@
+{
+  "change": "2026-10-07-flow-friction-batch3",
+  "baseline": "6cc95cc8282fc9a7f5408f47d6164757b5c664d2",
+  "head": "ea25b2c67fabd8c926fe19389cb2b01dbade271e",
+  "files": [
+    ".sillyspec/changes/2026-10-07-flow-friction-batch3/design.md",
+    ".sillyspec/changes/2026-10-07-flow-friction-batch3/flow-state.yaml",
+    ".sillyspec/changes/2026-10-07-flow-friction-batch3/proposal.md",
+    ".sillyspec/changes/2026-10-07-flow-friction-batch3/requirements.md",
+    ".sillyspec/changes/2026-10-07-flow-friction-batch3/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "package.json",
+    "src/design-facts.js",
+    "src/index.js",
+    "src/machine-interface.js",
+    "src/run/complete-handlers.js",
+    "src/run/gates.js",
+    "src/stages/plan-postcheck.js",
+    "src/ui-visual.js",
+    "test/design-ref-suggest.test.mjs",
+    "test/flow-friction-batch3.test.mjs",
+    "test/gate-stage-review-hint.test.mjs"
+  ],
+  "totals": {
+    "files": 17,
+    "additions": 721,
+    "deletions": 14
+  },
+  "savedAt": "2026-10-06T16:31:10.835Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "machine-interface",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/machine-interface.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "0461137b9269b958f933956419b5b926575266a6cc9cb9f2682ec4a9e03d2f48",
+  "patchStatus": "ok"
+}
