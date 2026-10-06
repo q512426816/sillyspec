@@ -22,7 +22,7 @@
  *   decision_module_check_skipped（skipped 原因字符串，接线层包 code）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { parseDecisions } from './decision-distill.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDesignCoverageByRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
@@ -418,14 +418,47 @@ function stripPathPlaceholders(p) {
  * @param {{ changeDir: string, cwd: string }} opts
  * @returns {{ ok: boolean, errors: Array<{path, message}>, warnings: string[] }}
  */
+/**
+ * 相近既有路径建议（2026-10-07-flow-friction-batch3 task-02）：design 清单幻觉路径的
+ * basename did-you-mean。受控 BFS：跳过 node_modules/.git/dist/build/venv 类重目录与
+ * 隐藏目录，扫描量上限 8000 文件（超限即止——建议是锦上添花不是承诺）；只收 basename
+ * 全等命中，至多 3 条按路径长度升序（最短=最像根级缺前缀的正确答案）。纯读无副作用。
+ * @param {string} root 仓根（或跨仓根）
+ * @param {string} normalized 失效路径（已剥占位符）
+ * @returns {string[]} 仓根相对 posix 路径建议（≤3 条，零命中返回 []）
+ */
+function suggestClosePaths(root, normalized) {
+  const base = normalized.split('/').pop().toLowerCase()
+  if (!base || base.length < 3) return []
+  const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out', 'venv', '.venv', '__pycache__', '.runtime', 'coverage', 'target', '.sillyspec'])
+  const hits = []
+  let scanned = 0
+  const queue = [root]
+  while (queue.length > 0 && hits.length < 3 && scanned < 8000) {
+    const dir = queue.shift()
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || SKIP_DIRS.has(e.name)) continue
+      const abs = join(dir, e.name)
+      if (e.isDirectory()) { queue.push(abs); continue }
+      scanned++
+      if (e.name.toLowerCase() === base) {
+        hits.push(relative(root, abs).split('\\').join('/'))
+        if (hits.length >= 3) break
+      }
+    }
+  }
+  return hits.sort((a, b) => a.length - b.length)
+}
+
 export function validateDesignFileList({ changeDir, cwd } = {}) {
   const errors = []
   const warnings = []
   try {
     if (!changeDir || !cwd) {
       return { ok: true, errors, warnings: ['design 清单核验跳过：缺少 changeDir/cwd'] }
-    }
-    const designPath = join(changeDir, 'design.md')
+    }    const designPath = join(changeDir, 'design.md')
     if (!existsSync(designPath)) {
       return { ok: true, errors, warnings: ['design 清单核验跳过：design.md 不存在'] }
     }
@@ -443,9 +476,13 @@ export function validateDesignFileList({ changeDir, cwd } = {}) {
         const normalized = stripPathPlaceholders(rawPath)
         if (!normalized || normalized === '.') continue
         if (!existsSync(join(root, normalized))) {
+          // 相近路径指路（2026-10-07-flow-friction-batch3 task-02）：幻觉路径多为缺目录前缀
+          // （如漏 backend/）或近似书写——basename did-you-mean 把「三轮试错」压成「一眼改对」；
+          // 无相近命中不附建议段（不加噪）
+          const close = suggestClosePaths(root, normalized)
           errors.push({
             path: rawPath,
-            message: `design_file_ref_invalid：文件变更清单条目「${rawPath}」在${repoLabel}（${root}）下不存在且无 NEW: 前缀（幻觉路径/书写错误）——修正路径，或计划新建的文件改为 NEW:${rawPath} 前缀`,
+            message: `design_file_ref_invalid：文件变更清单条目「${rawPath}」在${repoLabel}（${root}）下不存在且无 NEW: 前缀（幻觉路径/书写错误）——修正路径，或计划新建的文件改为 NEW:${rawPath} 前缀${close.length > 0 ? `；相近既有路径：${close.join('、')}` : ''}`,
           })
         }
       }

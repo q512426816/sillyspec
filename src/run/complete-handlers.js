@@ -411,6 +411,60 @@ export function extractPendingDocSyncRows(content) {
 }
 
 /**
+ * module-impact.md pending 死信一键回填（2026-10-07-flow-friction-batch3 task-04）：verify 硬拦
+ * 「更新结果」表 pending/待办行后，agent 实测写一次性 node 脚本批量回填——CLI 化。语义对齐
+ * 文件内规则行「确定不同步的行改 skipped 并在操作列写明原因」：状态列 pending/待办→skipped，
+ * --reason 追加进操作列（`——skipped：<reason>`）；done/其余状态行与表外内容逐字不动；幂等
+ * （无 pending 行时零写盘）。与 extractPendingDocSyncRows 同一节段解析口径（不二算规则集）。
+ * @param {string} mdPath module-impact.md 路径
+ * @param {{ reason?: string }} opts reason 追加进操作列的一句话原因（缺省只翻状态）
+ * @returns {{ filled: number, ok: boolean, error?: string }} filled=回填行数；ok=false 时 error 带原因
+ */
+export function fillModuleImpactSkipped(mdPath, { reason = '' } = {}) {
+  let content
+  try { content = readFileSync(mdPath, 'utf8') } catch (e) {
+    return { filled: 0, ok: false, error: `module-impact.md 不可读：${mdPath}（${e && e.message ? e.message : e}）` }
+  }
+  const normalized = content.replace(/\r\n/g, '\n')
+  const sectionStart = normalized.search(/^#{2,3}\s*更新结果\s*$/m)
+  if (sectionStart === -1) return { filled: 0, ok: false, error: 'module-impact.md 无「更新结果」小节——无可回填行（先核对文件是否为骨架未填形态）' }
+  const titleMatch = normalized.slice(sectionStart).match(/^#{2,3}\s*更新结果\s*$/m)
+  const bodyStart = sectionStart + titleMatch[0].length
+  const afterTitle = normalized.slice(bodyStart)
+  const nextSection = afterTitle.search(/^#{1,3}\s/m)
+  const section = nextSection === -1 ? afterTitle : afterTitle.slice(0, nextSection)
+  const sectionEnd = nextSection === -1 ? normalized.length : bodyStart + nextSection
+  const PENDING_STATUSES = new Set(['pending', '待办', '未同步', 'not-done', 'todo'])
+  let filled = 0
+  const newSection = section.split('\n').map((line) => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) return line
+    const cells = trimmed.split('|').map(c => c.trim())
+    const lastCell = cells[cells.length - 1]
+    if (lastCell === '' && cells.length >= 2) cells.pop()
+    const statusCell = cells[cells.length - 1]
+    if (!statusCell || !PENDING_STATUSES.has(statusCell.toLowerCase())) return line
+    filled++
+    // 结构 | 目标 | 操作 | 状态 | → cells ['', 目标, 操作, 状态]；操作列 = 倒数第二格
+    if (cells.length >= 3 && reason) {
+      cells[cells.length - 2] = `${cells[cells.length - 2]}——skipped：${reason}`
+    }
+    cells[cells.length - 1] = 'skipped'
+    // 重拼保留「| a | b | c |」空格形态（cells[0] 是行首 | 产生的空串）；行首缩进对齐原行
+    const indent = line.slice(0, line.indexOf('|'))
+    return `${indent}| ${cells.slice(1).join(' | ')} |`
+  }).join('\n')
+  if (filled === 0) return { filled: 0, ok: true }
+  const next = normalized.slice(0, bodyStart) + newSection + normalized.slice(sectionEnd)
+  try {
+    writeFileSync(mdPath, next, 'utf8')
+    return { filled, ok: true }
+  } catch (e) {
+    return { filled: 0, ok: false, error: `回填写盘失败：${e && e.message ? e.message : e}` }
+  }
+}
+
+/**
  * 提取 module-impact.md「更新结果」表中的已完成（done）行声明的目标文档路径（债单 D-4 窄口径）。
  *
  * done 行首列是目标标识：`modules/<id>.md`（模块卡片）、`_module-map.yaml`（映射索引）、

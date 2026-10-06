@@ -494,6 +494,32 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       }
     }
 
+    // ── e3. stage-review 默认档提示（2026-10-07-flow-friction-batch3 task-01）── postmortem
+    //    （provider-model-list）：gate execute 默认档不含 Stage Review 检查（在 --full 档），
+    //    agent 跑 gate 见 ok、--done 却被 Stage Review Gate 拦。默认档补 informational 探测
+    //    （同一 getLatestStageReviewRunId 只读 marker 存在性，秒级）：缺 review → warning 带
+    //    register 指引；在场 → 静默 ok。独立 check id 不与 --full 的 full-stage-review 碰撞，
+    //    error 语义（--done 拦）仍归 --full 档与 --done 本体。
+    if (!full && (stage === 'verify' || stage === 'execute')) {
+      try {
+        const { getLatestStageReviewRunId } = await import('./stage-review.js');
+        const rrRoot = runtimeRoot || join(specRoot, '.runtime');
+        const runId = getLatestStageReviewRunId(rrRoot, stage, changeName);
+        checks.push({
+          id: 'stage-review-hint',
+          code: 'stage_review_hint',
+          ok: true,
+          informational: true,
+          warnings: runId ? [] : [
+            `缺 ${stage} 阶段的 stage review.json——verify/execute --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
+          ],
+          data: { runId: runId || null },
+        });
+      } catch (e) {
+        // fail-open：探测装配失败不留痕（默认档零行为变化承诺）
+      }
+    }
+
     // ── 综合结论：所有非 informational check 均 ok ──
     const ok = checks.filter((c) => !c.informational).every((c) => c.ok);
     const exitCode = ok ? EXIT_OK : EXIT_BLOCKED;

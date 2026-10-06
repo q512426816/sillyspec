@@ -151,6 +151,28 @@ export function runUiVisualProbe({ changeDir, gate = 'warn' }) {
   }
 }
 
+/**
+ * execute 收口的前置 advisory（2026-10-07-flow-friction-batch3 task-05）：UI 触达变更的
+ * visual-evidence.md 应在执行期随手落盘，但执法只在 verify 收口（error 档）——postmortem
+ * （provider-model-list）实证 agent 到 verify 末步才发现缺证据。本函数供 execute --done 的
+ * gates 调用（warn 级提示，不阻断 execute；verify 的 error 档语义不动）：UI 触达且证据
+ * 缺失时返回提示串，否则 null（非 UI / 证据在场 / gate off 零打扰）。
+ * @param {{ changeDir: string, specBase?: string }} opts
+ * @returns {string|null}
+ */
+export function uiEvidenceExecuteAdvisory({ changeDir, specBase = null }) {
+  try {
+    const gate = readUiVisualGate(specBase || join(changeDir, '..', '..', '..'))
+    const probe = runUiVisualProbe({ changeDir, gate })
+    if (!probe.applicable) return null
+    if (probe.evidencePresent) return null
+    const hard = gate === 'error'
+    return `UI 触达变更但变更目录尚无 ${UI_EVIDENCE_FILENAME}——渲染对照证据应在执行期随手落盘（截图/对照结论，收口只验在场不产新证据）${hard ? '；本仓 ui_visual_gate=error，verify 收口会硬拦' : '；verify 收口会警告'}。落盘路径：${join(changeDir, UI_EVIDENCE_FILENAME)}`
+  } catch {
+    return null // fail-soft：探测异常零打扰（verify 侧同款口径兜底）
+  }
+}
+
 /** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解）。 */
 function extractQuotedPaths(designText) {
   if (!designText) return []

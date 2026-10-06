@@ -1723,13 +1723,35 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
     case 'module-impact': {
       // archive 模块影响矩阵骨架（2026-08-21 审计第三批 D3）：文件×模块归属按 _module-map.yaml
       // paths 前缀匹配预填（机械），影响类型/review 标记留 <!--TODO-->（语义）。已存在不覆盖。
+      // --fill-skipped（2026-10-07-flow-friction-batch3 task-04）：pending 死信一键回填——verify
+      // 硬拦「更新结果」pending/待办行后 agent 实测写一次性脚本批量回填，CLI 化（与门禁
+      // extractPendingDocSyncRows 同源解析口径）。
       const miChangeIdx = args.indexOf('--change');
       const miChange = miChangeIdx >= 0 && args[miChangeIdx + 1] && !String(args[miChangeIdx + 1]).startsWith("--") ? args[miChangeIdx + 1] : null;
       if (!miChange) {
-        console.error('用法: sillyspec module-impact --change <name> [--json] [--spec-dir <path>]\n  生成 module-impact.md 骨架（模块影响矩阵按 module-map 预填 + 未匹配文件清单；已存在不覆盖）');
+        console.error('用法: sillyspec module-impact --change <name> [--json] [--spec-dir <path>]\n  生成 module-impact.md 骨架（模块影响矩阵按 module-map 预填 + 未匹配文件清单；已存在不覆盖）\n  sillyspec module-impact --change <name> --fill-skipped [--reason "<一句话原因>"]\n    「更新结果」表 pending/待办行一键回填 skipped（--reason 追加进操作列——对齐文件内规则「确定不同步的行改 skipped 并在操作列写明原因」）；done 行与其余内容逐字不动，幂等');
         process.exit(2);
       }
       assertSafeChangeName(miChange, '--change 变更名');
+      if (args.includes('--fill-skipped')) {
+        const miSpecBase0 = resolvePlatformSpecDir(dir, specDir) || specDir || join(dir, '.sillyspec');
+        const miPath0 = join(miSpecBase0, 'changes', miChange, 'module-impact.md');
+        const miReasonIdx = args.indexOf('--reason');
+        const miReason = miReasonIdx >= 0 && args[miReasonIdx + 1] && !String(args[miReasonIdx + 1]).startsWith("--") ? args[miReasonIdx + 1] : '';
+        const { fillModuleImpactSkipped } = await import('./run/complete-handlers.js');
+        const miRes = fillModuleImpactSkipped(miPath0, { reason: miReason });
+        if (!miRes.ok) {
+          console.error(`❌ ${miRes.error}`);
+          process.exit(2);
+        }
+        if (miRes.filled === 0) {
+          console.log(`ℹ️ 无 pending/待办行可回填（幂等零改动）: ${miPath0}`);
+        } else {
+          console.log(`✅ 已回填 ${miRes.filled} 行 pending/待办 → skipped${miReason ? `（操作列追加——skipped：${miReason}）` : '（未给 --reason 只翻状态——建议补真实原因）'}: ${miPath0}`);
+          console.log(`   verify 门禁（extractPendingDocSyncRows 同源口径）将不再拦这些行；reason 是审计面，请确认真实。`);
+        }
+        break;
+      }
       const { generateModuleImpactSkeleton } = await import('./module-impact.js');
       const miResult = generateModuleImpactSkeleton({ cwd: dir, changeName: miChange, specDir });
       if (!miResult) {

@@ -1571,9 +1571,20 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           console.warn(`\n⚠️ module-impact.md「更新结果」表有 ${execPendingRows.length} 个 pending/待办项（文档同步债）——verify 阶段会硬拦：`)
           for (const row of execPendingRows) console.warn(`   - ${row}`)
           console.warn('   建议 execute 收尾就完成模块文档同步并回填 done/skipped（说明原因），别把债拖到 verify 末尾。')
+          console.warn('   批量跳过不同步行可一键回填：sillyspec module-impact --change <变更名> --fill-skipped --reason "<真实原因>"')
         }
       }
     } catch { /* 提示失败不阻断 execute */ }
+    // UI 视觉证据前置 advisory（2026-10-07-flow-friction-batch3 task-05）：证据应执行期随手落盘、
+    // verify 收口才执法（postmortem 实证发现时机太晚）。warn 级不阻断 execute；fail-soft。
+    try {
+      const uiChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+      if (uiChangeDir) {
+        const { uiEvidenceExecuteAdvisory } = await import('../ui-visual.js')
+        const uiAdv = uiEvidenceExecuteAdvisory({ changeDir: uiChangeDir, specBase })
+        if (uiAdv) console.warn(`\n⚠️ ${uiAdv}`)
+      }
+    } catch { /* advisory 失败不阻断 execute */ }
   }
 
   // ── Execute Task Review Gate 已退役（2026-09-26-task-review-retire）──
