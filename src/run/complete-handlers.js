@@ -731,6 +731,60 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
  *
  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
  */
+/**
+ * 归档提交 pathspec 构成（2026-10-06-archive-cmd-race-and-brief：共享暂存区竞态加固）。
+ *
+ * 背景：旧实现照抄 `git diff --cached --name-status` 单元格——多 agent 共享仓下，兄弟会话/
+ * 后台同步可在「打印→执行」窗口瞬改暂存区（实测 flow-status-json 收尾：建议命令含转瞬即逝
+ * 的源侧 A 条目，照抄执行报 pathspec did not match；单会话镜像复盘命令干净=竞态即现即逝）。
+ *
+ * 构成按稳定性分级：
+ *   - src 侧（changes/<名>/ 非归档）：仅取 HEAD 树在册路径——HEAD 不可变，不受暂存区竞态
+ *     影响；rename src / 删除 D 恒在册，转瞬即逝的源侧 A 条目恒不在册（天然滤幽灵）。
+ *   - dst 侧：本变更专属归档目录单条 pathspec（archive/<名>/ 与窄化 add 同一专属前提），
+ *     目录在场即匹配，条目级抖动无感。
+ *   - knowledge/docs 共享面：HEAD 在册（M 形态）或工作区在场（蒸馏新产 A 形态）才入列。
+ *   - 其余丢弃并回报（dropped），由调用方显式提示。
+ *
+ * 纯函数（git 读数由调用方喂入），单测直接钉构成口径。
+ * @param {{changeName:string, stagedNameStatus:string, headTreeFiles:string, existsFn?:(p:string)=>boolean}} p
+ * @returns {{pathspecs:string[], dropped:string[]}}
+ */
+export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, headTreeFiles, existsFn }) {
+  const changesPrefix = '.sillyspec/changes/'
+  // 与旧实现同源的单元格收集（--name-status：R 行 src<TAB>dst 两格，A/M 单格）
+  const mineCells = new Set()
+  for (const line of String(stagedNameStatus || '').split('\n')) {
+    if (!line.trim()) continue
+    for (const cell of line.split('\t').slice(1)) {
+      const p = cell.trim().replace(/^"|"$/g, '')
+      if (!p) continue
+      if (p.startsWith(changesPrefix + changeName + '/')
+        || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
+        || p.startsWith('.sillyspec/knowledge/')
+        || p.startsWith('.sillyspec/docs/')) mineCells.add(p)
+    }
+  }
+  const headSet = new Set(String(headTreeFiles || '').split('\n').map((s) => s.trim()).filter(Boolean))
+  const srcPaths = []
+  let archiveHit = false
+  const sharedPaths = []
+  const dropped = []
+  for (const p of mineCells) {
+    if (p.startsWith(changesPrefix + 'archive/' + changeName + '/')) {
+      archiveHit = true
+    } else if (p.startsWith(changesPrefix + changeName + '/')) {
+      if (headSet.has(p)) srcPaths.push(p)
+      else dropped.push(p)
+    } else {
+      if (headSet.has(p) || (typeof existsFn === 'function' && existsFn(p))) sharedPaths.push(p)
+      else dropped.push(p)
+    }
+  }
+  const pathspecs = [...(archiveHit ? [`${changesPrefix}archive/${changeName}/`] : []), ...srcPaths, ...sharedPaths]
+  return { pathspecs, dropped }
+}
+
 export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null } = {}) {
   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
   // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
@@ -944,33 +998,32 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
         console.log(`📎 归档提交待办（knowledge 蒸馏产物未暂存——核对归属后随归档提交一并带上）：`)
         console.log(`   git add -- ${knowledgePending.join(' ')}`)
       }
-      // 归档提交一笔到位提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：git commit
-      // -- <pathspec> 是部分提交——rename 条目 pathspec 只匹配 archive/ 侧时提交树里源文件
-      // 不会被删（D 留暂存区，源侧得再来一笔）。补暂存只保证暂存面完整，提交 pathspec 仍由
-      // agent 掌握）。聚合本变更归档面全量 staged 路径打印可直接执行的一笔到位 commit 命令：
-      // --name-status 而非 --name-only——R 行输出 src<TAB>dst 两路径，rename 两侧都要进
-      // pathspec 提交才真正落地删除（核对口径 = git diff --cached 全量读取，AGENTS.md 规则 11
-      // 同源）；无 staged 面不打印（幂等重入）。
-      try {
-        const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
-        const mineSet = new Set()
-        for (const line of String(stagedRaw || '').split('\n')) {
-          if (!line.trim()) continue
-          for (const cell of line.split('\t').slice(1)) {
-            const p = cell.trim().replace(/^"|"$/g, '')
-            if (!p) continue
-            if (p.startsWith(changesPrefix + changeName + '/')
-              || p.startsWith(changesPrefix + 'archive/' + changeName + '/')
-              || p.startsWith('.sillyspec/knowledge/')
-              || p.startsWith('.sillyspec/docs/')) mineSet.add(p)
-          }
-        }
-        const mineStaged = [...mineSet]
-        if (mineStaged.length > 0) {
-          console.log(`🧾 归档提交一笔到位（pathspec 已含源侧删除/归档侧/knowledge 全量——防 rename 拆两半，核对后可直接执行）：`)
-          console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${mineStaged.join(' ')}`)
-        }
-      } catch { /* 提示失败不阻断归档（advisory） */ }
+// 归档提交一笔到位提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：git commit
+// -- <pathspec> 是部分提交——rename 条目 pathspec 只匹配 archive/ 侧时提交树里源文件
+// 不会被删（D 留暂存区，源侧得再来一笔）。补暂存只保证暂存面完整，提交 pathspec 仍由
+// agent 掌握）。聚合本变更归档面全量 staged 路径打印可直接执行的一笔到位 commit 命令。
+// 2026-10-06-archive-cmd-race-and-brief 竞态加固：真仓实测（flow-status-json 收尾）照抄执行报
+// pathspec did not match——共享仓多会话/后台同步可在「打印→执行」窗口瞬改暂存区，单会话镜像
+// 复盘命令干净（竞态即现即逝）。照抄暂存面不可靠，pathspec 构成按稳定性分级（见
+// resolveArchiveCommitPathspecs JSDoc）；无 staged 面不打印（幂等重入）。
+try {
+  const stagedRaw = gitQuiet(cwd, ['diff', '--cached', '--name-status'])
+  const headTreeRaw = gitQuiet(cwd, ['ls-tree', '-r', '--name-only', 'HEAD'])
+  const { pathspecs, dropped } = resolveArchiveCommitPathspecs({
+    changeName,
+    stagedNameStatus: String(stagedRaw || ''),
+    headTreeFiles: String(headTreeRaw || ''),
+    existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
+  })
+  if (pathspecs.length > 0) {
+    console.log(`🧾 归档提交一笔到位（src 锚 HEAD 树/归档侧目录 pathspec/共享面按在场——共享暂存区竞态加固）：`)
+    console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`)
+    if (dropped.length > 0) {
+      console.log(`   ⚠️ 丢弃 ${dropped.length} 个瞬时暂存条目（HEAD 不在册且工作区不在场——并行会话动了共享暂存区，未入命令）：${dropped.join('、')}`)
+    }
+    console.log(`   （若执行报 pathspec 不匹配：共享仓暂存区在打印→执行间又被并行会话改动——git diff --cached --name-only 全量重核，以实际面替换 pathspec 后再提交）`)
+  }
+} catch { /* 提示失败不阻断归档（advisory） */ }
       if (othersResidual.length > 0) {
         const owners = [...new Set(othersResidual)].filter(Boolean)
         console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)

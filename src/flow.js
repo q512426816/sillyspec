@@ -738,6 +738,19 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
  */
+/**
+ * 中断简报「待办」计算（2026-10-06-archive-cmd-race-and-brief：陈旧读修复）。
+ * 旧口径只看运行头快照 st.substeps——mark() 只写盘不回填内存快照，首轮运行时本轮刚
+ * 完成/跳过的子步全被误列进待办（实测 flow-status-json 首轮：已完成 artifacts、ledger、
+ * patch，待办仍列全部 8 子步）。正确口径 = 全部子步 − 盘上历史 done（快照）− 本轮
+ * doneList（含 (skip) 后缀）− 中断子步；重入时历史 done 已含上轮标记，两口径收敛同值。
+ * 纯函数，单测直接钉口径。
+ */
+export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], failed } = {}) {
+  const doneNow = new Set((doneList || []).map((d) => String(d).replace(/\(skip\)$/, '')))
+  return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
+}
+
 export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
@@ -785,7 +798,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     } catch { /* 遥测 best-effort */ }
   }
   const reportMidFail = (failed) => {
-    console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
+    console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${remainingSubstepsAtFail({ snapshotSubsteps: st.substeps, doneList, failed }).join('、') || '（无）'}`)
     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
   }
 
