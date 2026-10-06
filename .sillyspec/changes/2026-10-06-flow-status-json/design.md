@@ -20,7 +20,7 @@ created_at: 2026-10-06T05:06:35.656Z
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
-命令行 `sillyspec flow status --change <名>` 新增可选 `--json`：stdout 输出单个 JSON 对象。活跃形态含 change/status="active"/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps（已完成子步名数组）/substepsTotal，升厚遗留时附 legacyFallback:true；三前置形态输出 change/status（"missing"|"archived"|"dir-no-state"）两字段。退出码与人类可读路径同点同值：missing exit 1，其余 exit 0。不带 `--json` 时输出与现状逐字一致。无导出函数签名变化（cmdFlow 内部重构），无文件格式变化。
+命令行 `sillyspec flow status --change <名>` 新增可选 `--json`：stdout 输出单个 JSON 对象。活跃形态含 change/status="active"/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps（已完成子步名数组）/substepsTotal，升厚遗留时附 legacyFallback:true；三前置形态输出 change/status（"missing"|"archived"|"dir-no-state"）两字段。退出码与人类可读路径同点同值：missing exit 1，其余 exit 0。不带 `--json` 时输出与现状逐字一致。导出函数签名仅 cmdFlow 增可选第 4 参 opts.json（缺省 {}，既有三参调用全兼容）；无文件格式变化。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
