@@ -1,0 +1,46 @@
+{
+  "change": "2026-10-06-git-optional-locks",
+  "baseline": "4bfe9a11f95656531c803afad67869d5b30df431",
+  "head": "549d1fd1ad01c69a24799dc22016c6fe1a976dac",
+  "files": [
+    ".sillyspec/changes/2026-10-06-git-optional-locks/tasks.md",
+    "src/git-helper.js",
+    "test/git-optional-locks.test.mjs",
+    ".sillyspec/changes/2026-10-06-git-optional-locks/design.md",
+    ".sillyspec/changes/2026-10-06-git-optional-locks/proposal.md",
+    ".sillyspec/changes/2026-10-06-git-optional-locks/requirements.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 269,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-06T09:45:56.575Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "e178debf6a03f5e8737a1984c5e521078cf58db76fe25bd1b139d3fc0b49c58d",
+  "patchStatus": "ok"
+}

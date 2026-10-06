@@ -141,3 +141,60 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-10-05-branch-ref-anchor-scope
   status: active
+
+## FR-worktree-008 git-helper.js 的 safeGit 与 git 两个 exec 点统一注入 GIT_OPTIONAL_LOCKS=0（env 合并语义：与调用方传入 env 展开合并，不裸替换丢 Windows 系统变量）——CLI 自建的全部 git 子进程不再机会性抢 index.lock；写命令（add/commit 等）行为不变
+变更：2026-10-06-git-optional-locks
+状态：active
+摘要：锁窗口消失（实测根因形态）
+全文：.sillyspec/changes/archive/2026-10-06-git-optional-locks/requirements.md#FR-01
+最近确认：549d1fd1ad01c69a24799dc22016c6fe1a976dac
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-git-optional-locks:flow:测试绑定FR-01
+  tests: test/git-optional-locks.test.mjs「读调用无锁窗口（index 字节不变）+ 写调用照常」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-git-optional-locks
+  status: active
+
+## FR-worktree-009 watcher 等常驻/后台轮询进程经公共入口自动获得该行为（gitQuiet 委托 git），无需逐调用点改造
+变更：2026-10-06-git-optional-locks
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-git-optional-locks/requirements.md#FR-02
+最近确认：549d1fd1ad01c69a24799dc22016c6fe1a976dac
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-git-optional-locks:flow:测试绑定FR-02
+  tests: test/git-optional-locks.test.mjs「gitQuiet 公共入口链同样无锁窗口」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-git-optional-locks
+  status: active
+
+## FR-worktree-010 测试覆盖：①经 git-helper 的 status 读调用在 stat 缓存脏场景下不改写 .git/index 字节（锁窗口消失的代理断言）；②带注入 env 的 add 照常暂存成功；③调用方自定义 env（如 baseline checkpoint 的 GIT identity 注入）仍生效不被覆盖
+变更：2026-10-06-git-optional-locks
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-git-optional-locks/requirements.md#FR-03
+最近确认：549d1fd1ad01c69a24799dc22016c6fe1a976dac
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-git-optional-locks:flow:测试绑定FR-03
+  tests: test/git-optional-locks.test.mjs「全量用例（含调用方 env 合并）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-git-optional-locks
+  status: active

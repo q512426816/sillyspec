@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-git-optional-locks",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-git-optional-locks:flow:测试绑定FR-01",
+      "tests": [
+        "test/git-optional-locks.test.mjs「读调用无锁窗口（index 字节不变）+ 写调用照常」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-git-optional-locks"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-git-optional-locks:flow:测试绑定FR-02",
+      "tests": [
+        "test/git-optional-locks.test.mjs「gitQuiet 公共入口链同样无锁窗口」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-git-optional-locks"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-git-optional-locks:flow:测试绑定FR-03",
+      "tests": [
+        "test/git-optional-locks.test.mjs「全量用例（含调用方 env 合并）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-git-optional-locks"
+    }
+  ]
+}
