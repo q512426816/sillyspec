@@ -109,18 +109,20 @@ function changedFilesSinceBaseline(cwd, baselineCommit) {
 }
 
 /** 递归取路径最新 mtime（目录取全体成员最大值——目录自身 mtime 只随成员增删动，不随成员内容写动）。
- * 安全帽：walk 预算 2000 条（巨型未跟踪树防遍历失控），超帽/stat 失败返回 Infinity（=「新」，
- * 调用方保守保留）。开放世界：时间戳是唯一裁判，不按路径形态设例外。 */
-function newestMtime(p, budget = { left: 2000 }) {
+ * stat/readdir 失败与超帽一律返回 Infinity（=「新」，调用方保守保留——评审 P3 清偿：readdir
+ * 抛错曾返回 stat 时刻的目录自身 mtime，窄角竞态下会把真被干活触及的目录误剔）。安全帽：walk
+ * 预算 2000 条（巨型未跟踪树防遍历失控）。开放世界：时间戳是唯一裁判，不按路径形态设例外。
+ * statFn 注入缝（resolveArchiveCommitPathspecs 的 existsFn 同款先例）：仅测试可达。 */
+function newestMtime(p, budget = { left: 2000 }, statFn = statSync) {
   let st
-  try { st = statSync(p) } catch { return Infinity }
+  try { st = statFn(p) } catch { return Infinity }
   if (!st.isDirectory()) return st.mtimeMs
   let max = st.mtimeMs
   let entries
-  try { entries = readdirSync(p, { withFileTypes: true }) } catch { return max }
+  try { entries = readdirSync(p, { withFileTypes: true }) } catch { return Infinity }
   for (const e of entries) {
     if (--budget.left < 0) return Infinity
-    const m = newestMtime(join(p, e.name), budget)
+    const m = newestMtime(join(p, e.name), budget, statFn)
     if (m > max) max = m
   }
   return max
@@ -138,9 +140,10 @@ function newestMtime(p, budget = { left: 2000 }) {
  * @param {string} cwd 工作区根
  * @param {string[]} files changedFilesSinceBaseline 产出的路径面（含 `??` 原样目录条目）
  * @param {number|null} birthTs 变更出生时刻（epoch 毫秒；null=不过滤）
+ * @param {{ statFn?: (p: string) => object }} [opts] 测试注入缝（statFn 缺省真 statSync）
  * @returns {string[]} 过滤后的路径面
  */
-export function filterPreChangeUntracked(cwd, files, birthTs) {
+export function filterPreChangeUntracked(cwd, files, birthTs, opts = {}) {
   if (!Array.isArray(files) || files.length === 0) return Array.isArray(files) ? files : []
   if (typeof birthTs !== 'number' || !Number.isFinite(birthTs)) return files
   const s = gitQuiet(cwd, ['status', '--porcelain'])
@@ -153,10 +156,11 @@ export function filterPreChangeUntracked(cwd, files, birthTs) {
     if (p) untracked.add(p.replace(/\\/g, '/'))
   }
   if (untracked.size === 0) return files
+  const statFn = typeof opts.statFn === 'function' ? opts.statFn : statSync
   return files.filter((f) => {
     const norm = String(f).replace(/\\/g, '/')
     if (!untracked.has(norm)) return true // 非 ?? 条目（跟踪/区间 diff）不滤
-    return !(newestMtime(join(cwd, norm)) < birthTs) // 最新 mtime 早于出生时刻 → 剔除
+    return !(newestMtime(join(cwd, norm), { left: 2000 }, statFn) < birthTs) // 最新 mtime 早于出生时刻 → 剔除
   })
 }
 

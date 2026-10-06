@@ -14,7 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, utimesSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, utimesSync, statSync as statSyncReal } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -83,6 +83,13 @@ test('① filterPreChangeUntracked 过滤判据各分支', () => {
     // 无出生时戳 → 不过滤（保守=现状）
     const noop = filterPreChangeUntracked(cwd, files, null)
     assert.deepEqual(noop.sort(), [...files].sort(), '无 birthTs 时原样返回')
+
+    // stat 失败 → 保守保留（评审 P2 清偿：注入缝注入抛错的 statFn，只有旧垃圾条目受影响）
+    const statFail = filterPreChangeUntracked(cwd, files, BIRTH, {
+      statFn: (p) => { if (p.endsWith('old-file.log')) throw new Error('EACCES'); return statSyncReal(p) },
+    })
+    assert.ok(statFail.includes('old-file.log'), `stat 失败的条目应保守保留，实际：${statFail}`)
+    assert.ok(!statFail.includes('old-junk/'), `stat 正常的旧垃圾目录照常剔除，实际：${statFail}`)
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 
