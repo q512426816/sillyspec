@@ -1387,6 +1387,92 @@ export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailabl
   return scopeCount > 0 ? 'dynamic-subset' : 'dynamic-empty-skip'
 }
 
+// ── 实测门增量重跑（2026-10-07-test-incremental-rerun）──
+// postmortem 实测：verify --done 跑 10 分钟级测试子集 → 挂 N 个 → 修一行 → 重跑 --done 又
+// 全量重跑子集（green cache 只在指纹不变时命中，改一行即失效）——每轮返工整轮全跑。修法：
+// 失败轮把「失败批测试文件 + 当时 git HEAD」落稳定指针 ledger；下一轮先算增量面 =
+// 「自失败 HEAD 以来的变更文件（含未提交与 untracked）∪ 前轮失败批文件」，是其真子集时
+// 只跑增量面（三源推断以增量输入重算——修复文件的 import 依赖与 FR 关联回归自然入面），
+// 基线绿面（未触碰文件）复用不重跑。逃生：local.yaml verify.test_rerun: full / env
+// SILLYSPEC_TEST_RERUN=full 恒全子集（2026-10-07 前现状）。
+
+/** 增量重跑档位读取：env SILLYSPEC_TEST_RERUN 优先，次 local.yaml verify: 段 test_rerun（宽松匹配行，fail-open incremental）。 */
+function readTestRerunConfig(specBase) {
+  const env = String(process.env.SILLYSPEC_TEST_RERUN || '').trim().toLowerCase()
+  if (env === 'full' || env === 'incremental') return env
+  try {
+    const p = join(specBase, 'local.yaml')
+    if (!existsSync(p)) return 'incremental'
+    const m = readFileSync(p, 'utf8').match(/^\s*test_rerun:\s*(full|incremental)\s*$/m)
+    return m ? m[1] : 'incremental'
+  } catch { /* 读失败 → 缺省 */ }
+  return 'incremental'
+}
+
+function testRerunLedgerPath(specBase, changeName) {
+  return join(specBase, '.runtime', `test-rerun-${changeName || 'change'}.json`)
+}
+
+/**
+ * 读增量重跑 ledger（fail-soft：缺失/损坏/null）。shape: { head, failedFiles, inputFiles, mode, status, ranAt }
+ */
+export function readTestRerunLedger({ specBase, changeName }) {
+  try {
+    return JSON.parse(readFileSync(testRerunLedgerPath(specBase, changeName), 'utf8'))
+  } catch { return null }
+}
+
+/** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。 */
+export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, mode, status }) {
+  try {
+    const dir = join(specBase, '.runtime')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(testRerunLedgerPath(specBase, changeName), JSON.stringify({
+      change: changeName || null, head: head || null,
+      inputFiles: inputFiles || [], failedFiles: failedFiles || [],
+      mode: mode || null, status: status || null, ranAt: new Date().toISOString(),
+    }, null, 2) + '\n')
+  } catch { /* ledger 写失败不阻断实测门（下轮退化全子集） */ }
+}
+
+/** 自基线 HEAD 以来的变更文件（committed+unstaged diff ∪ untracked），posix 归一。 */
+function listFilesSince({ cwd, sinceHead }) {
+  const out = []
+  try {
+    const diff = gitQuiet(cwd, ['diff', '--name-only', sinceHead])
+    if (diff) out.push(...diff.split('\n'))
+  } catch { /* diff 失败 → 空贡献 */ }
+  try {
+    const untracked = gitQuiet(cwd, ['ls-files', '--others', '--exclude-standard'])
+    if (untracked) out.push(...untracked.split('\n'))
+  } catch { /* untracked 失败 → 空贡献 */ }
+  return [...new Set(out.map(s => s.trim().replace(/\\/g, '/')).filter(Boolean))]
+}
+
+function currentGitHead(cwd) {
+  try { return (gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null } catch { return null }
+}
+
+/**
+ * 增量重跑面计算（纯函数，export 供测）：返回 null = 不增量（走全子集现状），否则返回
+ * { files, note }。判定：ledger 在场、有失败文件、有基线 head；since 非空或失败面非空；
+ * 增量面严格小于全量面且是子集（保护：绝不比全子集多跑）。
+ */
+export function computeIncrementalFace({ ledger, filesSince, fullFace }) {
+  if (!ledger || !Array.isArray(ledger.failedFiles) || ledger.failedFiles.length === 0 || !ledger.head) return null
+  const since = Array.isArray(filesSince) ? filesSince : []
+  const inc = [...new Set([...since, ...ledger.failedFiles])]
+    .map(f => String(f).replace(/\\/g, '/'))
+    .filter(f => f && !f.startsWith('.sillyspec/'))
+  if (inc.length === 0) return null
+  // 增量面必须严格小于全量面才有增量价值（≥ 面大小时回全子集——宁多跑不绕过基线）
+  if (inc.length >= (fullFace || []).length) return null
+  return {
+    files: inc,
+    note: `增量重跑面 ${inc.length} 文件（前轮失败批 ${ledger.failedFiles.length} ∪ 基线以来变更 ${since.length}；全量子集基线 ${(fullFace || []).length} 文件，未触碰绿面复用不重跑）`,
+  }
+}
+
 /**
  * TAP 结构化判账（2026-09-28-tap-judge，P2 一期）：node --test 双报告器（spec→stderr 人读、
  * tap→stdout 机读）批次按 `not ok` 行用例粒度判账——自由文本正则误计（fixture 预期错误文案、
@@ -1496,11 +1582,52 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
     exitCode,
     durationMs,
     outputTail,
+    // 全量输出（内存态，不落盘）：增量重跑的失败文件归因源（TAP 顶层 Subtest 段 / pytest
+    // FAILED 行）——outputTail 截断后归因面残缺（2026-10-07-test-incremental-rerun）
+    outputFull: output,
     reason: judged.reason,
     exemptedCount: judged.exemptedCount,
     failureRemaining: judged.remainingLines,
     failureExempted: judged.exemptedLines,
   }
+}
+
+/**
+ * 失败批 → 失败测试文件归因（2026-10-07-test-incremental-rerun）：node --test 文件作参数时
+ * TAP 顶层条目名是测试标题非文件名，但每个 `not ok` 块的 YAML 诊断（location/stack）带绝对
+ * 路径——按块内路径归一后 includes 匹配批内相对路径；非 TAP 输出（pytest 等）回退
+ * FAILED/ERROR 行带路径匹配；归因不出保守全记批文件（增量退化不误报）。
+ */
+function attributeFailedFiles(result) {
+  const files = result.files || []
+  if (files.length === 0) return []
+  const text = String(result.outputFull || result.outputTail || '')
+  if (!text) return files
+  const norm = (p) => String(p).replace(/\\/g, '/')
+  // 按 TAP 顶层行切 not ok 块（块体 = 该行到下一顶层行之间的缩进诊断）
+  const blocks = []
+  const lines = text.split(/\r?\n/)
+  let cur = null
+  for (const line of lines) {
+    if (/^not ok \d+/.test(line)) { cur = [line]; blocks.push(cur); continue }
+    if (/^(?:ok \d+|not ok \d+|#\s|1\.\.\d+|TAP version)/.test(line)) { cur = null; continue }
+    if (cur) cur.push(line)
+  }
+  const failing = new Set()
+  for (const block of blocks) {
+    const seg = norm(block.join('\n'))
+    for (const f of files) {
+      if (seg.includes(norm(f))) failing.add(f)
+    }
+  }
+  let hits = files.filter(f => failing.has(f))
+  if (hits.length === 0 && /FAILED|ERROR/.test(text)) {
+    hits = files.filter(f => {
+      const esc = norm(f).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return new RegExp(`(?:FAILED|ERROR)[^\\n]{0,200}${esc}`).test(text)
+    })
+  }
+  return hits.length > 0 ? hits : files
 }
 
 // refSpec 来源 meta.json（agent 可写），仅放行 git ref/range 安全字符（含 HEAD~1..HEAD 类区间），
@@ -2029,9 +2156,45 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     // —— 动态子集（2026-09-26-dynamic-test-inference 缺省路径）——
     // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
     // 全量语义留 CI / 显式 test_strategy: full。
+    // 增量重跑（2026-10-07-test-incremental-rerun）：前轮失败 + 本轮有修复 delta → 输入面
+    // 收窄为「失败批文件 ∪ 基线以来变更」，未触碰绿面复用——返工轮不再整轮全跑。
+    let subsetInput = lastChangedFiles
+    let incremental = null
+    if (readTestRerunConfig(specBase) === 'incremental') {
+      const ledger = readTestRerunLedger({ specBase, changeName })
+      if (ledger) {
+        const filesSince = listFilesSince({ cwd, sinceHead: ledger.head })
+        incremental = computeIncrementalFace({ ledger, filesSince, fullFace: lastChangedFiles })
+      }
+    }
     const frCount = frPre && frPre.files.length ? frPre.files.length : 0
-    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+    if (incremental) {
+      subsetInput = incremental.files
+      console.log(`⚡ ${incremental.note}`)
+      console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ FR 关联回归 ∪ import 依赖），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null })
+      if (mainResult && typeof mainResult === 'object') {
+        mainResult.mode = 'incremental-rerun'
+        mainResult.reason = mainResult.reason
+          ? `${mainResult.reason}（增量重跑：${incremental.note}）`
+          : `增量重跑通过：${incremental.note}`
+      }
+    } else {
+      console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+    }
+    // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
+    // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
+    try {
+      writeTestRerunLedger({
+        specBase, changeName,
+        head: currentGitHead(cwd),
+        inputFiles: subsetInput,
+        failedFiles: (mainResult && Array.isArray(mainResult.failedFiles)) ? mainResult.failedFiles : [],
+        mode: incremental ? 'incremental-rerun' : 'dynamic-subset',
+        status: mainResult && mainResult.status,
+      })
+    } catch { /* 记账失败不阻断（下轮退化全子集） */ }
   } else {
     // —— dynamic-empty：变更与测试面零关系——
     // 无自身测试、无 import 依赖测试、无 FR 关联绑定 → 不硬跑全量（防超时/预存失败面，
@@ -2685,8 +2848,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped })
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true })
+  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
   if (jsProjectRun.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)
@@ -2698,7 +2861,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0 })
+      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
     } else {
       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }
@@ -2910,6 +3073,7 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
         continue
       }
       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
+      perModule[perModule.length - 1].files = b.files || [] // 增量重跑面组成（task-B failedFiles 聚合源）
       console.log(formatDepsBatchLine(b))
       // 防御披露（2026-10-06-fr-regress-cap-drop）：quotaFill 构造保证优先面零弃置——此计数
       // >0 说明组卷逻辑被后续改动破坏（钦定回归被弃），loud 披露不静默。
@@ -2952,6 +3116,17 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
     mode: 'dynamic-subset',
     fallbackReason: null,
     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
+    // 失败批测试文件集聚合（2026-10-07-test-incremental-rerun）：增量重跑面的组成之一——
+    // 前轮失败批的文件下轮必入面（无论修复是否触碰它们）。归因粒度：node --test TAP 顶层
+    // not ok 以测试文件为套件名（not ok N - test/b.test.mjs），用判账行集匹配批内文件名把
+    // 「批失败」收窄到「文件失败」；归因不出（非 TAP/行集缺文件名）保守全记批文件。
+    failedFiles: (() => {
+      const out = new Set()
+      for (const r of perModule.filter(x => x.status === 'failed')) {
+        for (const f of attributeFailedFiles(r)) out.add(f)
+      }
+      return [...out].sort()
+    })(),
     // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——
     // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
     failureRemaining: perModule.flatMap(r => r.failureRemaining || []),

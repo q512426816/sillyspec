@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  厚流程优化方案落地（用户批准的 4 方案之 2+3），postmortem 实测痛点：
+
+  1) Wave 划分返工链（provider-model-list 三轮：同 Wave 共享→手工拆→非合法 Wave 号→伪并行串行链）——adopt-waves 一键重排是机械活（按 depends_on 拓扑），却要等
+  postcheck 拦了才知道该跑。修法：executePlanPostcheck 的「蓝图一致性校验」（src/stages/plan-postcheck.js:2121
+  validateBlueprintConsistency）与伪并行守卫（assessWaveStructure，L1670 报错文案已含指路）发现 Wave 形态类错误且**无其他类错误**时，自动跑
+  adoptPlanWaves（src/plan-adopt-waves.js:73，幂等、同步任务总表 W 列）重排后复验：干净即过并醒目公告（重排前后 Wave 数）；仍脏则报重排后的真问题（附「已自动重排仍不过」说明）。逃生键
+  local.yaml plan.auto_adopt_waves: false（config-schema 注册，缺省 true=自动）。
+
+  2) 评审两轮报同类问题（Grill 6×P1 修复后二轮重审把已确认修复又核一遍；flow done 复审同类）——修法：①flow-review.js renderReviewerTaskbook（flow.js:1552 消费）读
+  changeDir 既有 review.json，在场时任务书注入前轮 findings 清单 +「已报项只验修复与回归，重点找新增问题——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值）；②brainstorm.js
+  Design Grill 步骤（L406）prompt 加同款指引（前轮发现在场时先验修复与新问题）。
+
+
+  成功标准：
+
+  - plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves
+  更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+
+  - plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+
+  - renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+
+  - Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+
+  - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+autopilot: true
+baseline_commit: 9b3bfb0699629b7351b7c82b945491fa1f846b84
+updatedAt: '2026-10-06T23:09:36.921Z'
+baseline_sha256: 7ab17cb5a02fcd0c78ad747dcdc3170292d6688458ba7d0a4b0e3e04f2632b56
+

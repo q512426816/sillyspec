@@ -2054,7 +2054,46 @@ function deriveModuleIdFor(filePath, mapYaml) {
  * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
  * @throws {Error} 校验失败时抛出
  */
+/**
+ * Wave 形态错误自动重排判定（2026-10-07-wave-auto-adopt-review-dedup task-01）：postmortem
+ * （provider-model-list）实测 Wave 返工链三轮——同 Wave 冲突/伪并行串行链都是 adopt-waves
+ * 机械可解的形态，却要 agent 撞 postcheck 后按文案找命令。此处错误全为 Wave 形态类时自动
+ * 跑 plan-adopt-waves 重排并整体复跑 postcheck（预算 1 次，防环）；逃生键 local.yaml
+ * plan.auto_adopt_waves: false（缺省 true）。混有非 Wave 类错误不自动重排（行为=现状）——
+ * 重排会掩盖真实问题的上下文。
+ */
+const WAVE_SHAPE_ERROR_RE = /被 Wave \d+ 内 \d+ 个 task 修改|伪并行串行链|Wave 依赖方向违规/
+function allWaveShapeErrors(errors) {
+  const list = Array.isArray(errors) ? errors : []
+  return list.length > 0 && list.every(e => WAVE_SHAPE_ERROR_RE.test(String(e)))
+}
+function autoAdoptWavesEnabled(specDir) {
+  try {
+    const p = pJoin(specDir, 'local.yaml')
+    if (!existsSync(p)) return true
+    const doc = jsYaml.load(_readFileSync(p, 'utf8'))
+    return !(doc && doc.plan && doc.plan.auto_adopt_waves === false)
+  } catch { return true }
+}
+async function tryAutoAdoptWaves(errors, changeDir, specDir, budget) {
+  if (budget <= 0) return false
+  if (!allWaveShapeErrors(errors)) return false
+  if (!autoAdoptWavesEnabled(specDir)) return false
+  const { adoptPlanWaves } = await import('../plan-adopt-waves.js')
+  const res = adoptPlanWaves({ changeDir })
+  if (!res || !res.ok) {
+    console.warn(`  ⚠️ Wave 自动拓扑重排未成（${res && res.error ? res.error : '未知原因'}）——按原报错处理（手工出口：sillyspec plan-adopt-waves --change <变更名>）`)
+    return false
+  }
+  console.log(`\n🔀 检测到 Wave 形态问题——已自动按 depends_on 拓扑重排 plan.md（plan-adopt-waves，任务总表 W 列同步）并整体复跑校验：`)
+  return true
+}
+
 export async function executePlanPostcheck(context) {
+  return executePlanPostcheckRun(context, { autoAdoptBudget: 1 })
+}
+
+async function executePlanPostcheckRun(context, { autoAdoptBudget = 0 } = {}) {
   const { cwd, specRoot, resolveChangeDir, progress } = context
 
   const specDir = specRoot || pJoin(cwd, '.sillyspec')
@@ -2251,6 +2290,14 @@ export async function executePlanPostcheck(context) {
 
   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
   if (failures.length > 0) {
+    // Wave 形态自动重排判定（task-01）：唯一失败组是蓝图一致性且错误全为 Wave 形态 → 自动
+    // adopt-waves 重排并整体复跑一次（预算 1）。挂统一收口点而非 consistency 单点：混有
+    // feasibility/coverage 等其他类错误时不重排（重排会掩盖真实问题上下文，实测 WA4 形态）。
+    if (failures.length === 1 && failures[0].name === '蓝图一致性校验') {
+      if (await tryAutoAdoptWaves(failures[0].errors, changeDir, specDir, autoAdoptBudget)) {
+        return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
+      }
+    }
     console.error(`\n❌ plan postcheck 失败（${failures.length} 类问题，已全部列出——一次修复后重跑，无需逐个迭代）：`)
     for (const f of failures) {
       console.error(`\n   【${f.name}】`)
@@ -2391,6 +2438,10 @@ export async function executePlanPostcheck(context) {
           const structure = assessWaveStructure({ existingWaves, topoWaves: waves, depMap, wavePathSets })
           if (structure.advisory) console.warn(`  ⚠️ ${structure.advisory}`)
           if (structure.error) {
+            // 伪并行碎片自动重排（task-01）：mergeable 对 ≥2 是 adopt-waves 的标准解
+            if (await tryAutoAdoptWaves([structure.error], changeDir, specDir, autoAdoptBudget)) {
+              return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
+            }
             console.error(`\n❌ ${structure.error}`)
             throw new Error(structure.error)
           }

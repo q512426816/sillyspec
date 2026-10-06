@@ -121,6 +121,7 @@ export const LOCAL_YAML_SCHEMA = {
       title: '测试策略',
       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
       keys: [
+        { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
       ],
     },
@@ -195,6 +196,7 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'plan 阶段 TaskCard 填充派发策略。默认主 agent 直填（2026-09-20 对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；task 总数超阈值且跨模块才 batch 派子代理——阈值按项目体系可调（厚流程实证 11 任务 3 子代理 430 万 token 模板化产出后引入）。',
       keys: [
         { path: 'plan.fill_batch_min_tasks', type: 'integer', optional: true, status: 'live', readers: ['buildCoordinatorStep (src/stages/plan.js — 协调器 prompt 阈值插值)'], desc: '填卡 batch 派发阈值：task 总数 ≤N（或单仓单模块）→ 主 agent 直填不派子代理；>N 且跨模块/跨仓才按 batch 分派。≥1 整数，缺省 8（内置）；非法值回退 8（fail-safe）。调大 = 更少派子代理省 token；调小 = 大变更更早并行省墙钟。', example: '12' },
+        { path: 'plan.auto_adopt_waves', type: 'boolean', optional: true, status: 'live', readers: ['executePlanPostcheck 自动重排门 (src/stages/plan-postcheck.js — tryAutoAdoptWaves)'], desc: 'Wave 形态错误自动重排：plan postcheck 发现「同 Wave 冲突/伪并行串行链」且无其他类错误时，自动跑 plan-adopt-waves 按 depends_on 拓扑重排并整体复跑校验（预算 1 次防环）。缺省 true；置 false 关闭（报错指路手工跑，2026-10-07 前现状）。方向违规自动修复（既有）不受本键影响。', example: 'true' },
       ],
     },
     {
@@ -419,6 +421,8 @@ dispatch:
 # skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
 # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
 # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
+# verify:
+#   test_rerun: incremental   # 实测门失败后重跑档：incremental（缺省，下轮只跑失败批∪修复面）| full（恒全子集重跑，保守项目用）
 
 # ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
 # ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
@@ -518,6 +522,7 @@ docs-check:
 # 仅 task 总数超阈值且跨模块/跨仓才按 batch 派子代理（并行省墙钟有真实收益）。
 # plan:
 #   fill_batch_min_tasks: 12             # 填卡 batch 派发阈值（内置 8；调大=更少派子代理省 token，调小=大变更更早并行）
+#   auto_adopt_waves: true               # Wave 形态错误自动拓扑重排（内置 true；false=报错指路手工跑）
 
 # ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价）──
 # blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。

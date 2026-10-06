@@ -197,7 +197,25 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
  */
 export function renderReviewerTaskbook({ change, changeDir, head = null }) {
   const headFull = String(head || '').trim()
-  return [
+  // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
+  // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
+  // （postmortem 实证评审员两轮报同类问题，多跑一整轮成本）。读不到/无 findings 零注入
+  // （首评任务书与现状逐字一致）。
+  let priorFindingsMd = ''
+  try {
+    const prev = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8'))
+    if (Array.isArray(prev.findings) && prev.findings.length > 0) {
+      priorFindingsMd = [
+        ``,
+        `【前轮评审 findings（${prev.findings.length} 项，前轮 verdict=${String(prev.verdict || '?')}）——本轮是复审】`,
+        ...prev.findings.slice(0, 20).map((f, i) => `  ${i + 1}. [${f && f.severity ? f.severity : '?'}] ${f && f.title ? f.title : String(f).slice(0, 120)}`),
+        ``,
+        `  复审优先级：已报项只验「修复到位 + 未引入回归」（逐条给修复验证锚点），把请求预算主力投向新增问题——`,
+        `  勿把前轮清单原样重报一遍（换视角有独立价值，重复报告挤占 12 次请求预算）。`,
+      ].join('\n')
+    }
+  } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
+  const taskbook = [
     `⚖️ 独立评审任务书 — ${change}`,
     `══════════════════════════════════════`,
     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
@@ -213,6 +231,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
     `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
+    ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
     ``,
     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
     `  1. FR↔实现↔测试三方一致：每条 FR 的实现兑现承诺？绑定作答声称的测试真存在且断言该行为？`,
@@ -238,6 +257,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
     ``,
     `完成后由主会话重跑：sillyspec flow done --change ${change}（断点续，已完成子步幂等跳过）`,
   ].join('\n')
+  return taskbook
 }
 
 /**
