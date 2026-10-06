@@ -1882,6 +1882,13 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     }
     const subDone = SUBSTEPS.filter((k) => st.substeps?.[k] === 'done')
     const subLeft = SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done')
+    // 变更标题（2026-10-06-flow-status-title）：flow start/--title 写入进度库，status 只读回显
+    // （getChangeTitle 前置判 DB 在场——只读查询不建库；读取失败按无标题渲染，输出与现状一致）
+    let changeTitle = null
+    try {
+      const { ProgressManager } = await import('./progress.js')
+      changeTitle = new ProgressManager({ specDir: specBase }).getChangeTitle(cwd, change)
+    } catch { /* 标题 best-effort */ }
     // 槽位快检
     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
     try {
@@ -1950,7 +1957,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     } catch { /* 无 tasks.md */ }
     if (json) {
       console.log(JSON.stringify({
-        change, status: 'active', phase,
+        change, status: 'active', phase, title: changeTitle,
         designFilled, frFilled, bindingsFilled, bindingsTotal,
         tasksChecked, tasksTotal,
         substeps: subDone, substepsTotal: SUBSTEPS.length,
@@ -1960,6 +1967,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     }
     console.log([
       `📋 ${change}`,
+      ...(changeTitle ? [`   标题：${changeTitle}`] : []),
       `   阶段：${phase}`,
       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
       hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,

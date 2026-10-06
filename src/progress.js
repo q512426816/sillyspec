@@ -1088,6 +1088,9 @@ export class ProgressManager {
   /** 读变更所有者会话标识；无行/未登记/无主 → null */
   getChangeOwner(cwd, changeName) { return this._changeRegistry.getChangeOwner(cwd, changeName); }
 
+  /** 读变更标题（2026-10-06-flow-status-title）：纯读不抛、无 DB 不建库，缺值 → null */
+  getChangeTitle(cwd, changeName) { return this._changeRegistry.getChangeTitle(cwd, changeName); }
+
   /** 认领所有权：首建写 own、已有值不覆盖；返回实际 owner（string|null） */
   claimChangeOwner(cwd, changeName, session) { return this._changeRegistry.claimChangeOwner(cwd, changeName, session); }
 

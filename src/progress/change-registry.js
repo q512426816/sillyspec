@@ -223,6 +223,26 @@ export class ChangeRegistry {
   }
 
   /**
+   * 读变更标题（2026-10-06-flow-status-title：flow status 显示面消费——flow start/--title 写入侧
+   * 的对读）。只读不抛（与 getChangeOwner 同族容错）：DB 文件不在场/行缺失/title 空/读取失败 → null。
+   * 前置 existsSync 判 DB 在场——只读查询路径不得经 _ensureDB 的建库副作用新建 sillyspec.db。
+   * @param {string} cwd
+   * @param {string} changeName
+   * @returns {string|null} 变更标题，无值返回 null
+   */
+  getChangeTitle(cwd, changeName) {
+    if (!changeName) return null;
+    try {
+      if (!existsSync(this.pm._runtimePath(cwd, 'sillyspec.db'))) return null;
+      const db = this.pm._ensureDB(cwd);
+      const row = db.getDb().prepare('SELECT title FROM changes WHERE name = ?').get(changeName);
+      return (row && typeof row.title === 'string' && row.title) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * 认领变更所有权（2026-09-14-change-ownership-guards task-01 数据载体）：
    * - 行不存在 → 创建并写 owner=session（首建者获得）；
    * - 行存在且 owner 非空 → 不覆盖，返回既有 owner（调用方对比可知认领未成功）；
