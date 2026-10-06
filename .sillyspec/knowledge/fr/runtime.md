@@ -1078,3 +1078,60 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-06-agent-log-detect-hint
   status: active
+
+## FR-runtime-077 complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
+变更：2026-10-06-archive-stage-claim
+状态：active
+摘要：add 失败（实测形态：2026-10-06-module-map-list-leak 收口声称补暂存 1 项但暂存面无该删除）
+全文：.sillyspec/changes/archive/2026-10-06-archive-stage-claim/requirements.md#FR-01
+最近确认：04fcb08208bc2ed0a411e8c9d69d1cbc35b75ecf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-stage-claim:flow:测试绑定FR-01
+  tests: test/archive-stage-claim.test.mjs「add 失败告警不打成功提示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-stage-claim
+  status: active
+
+## FR-runtime-078 全部成功时维持既有成功提示不变（含 N 项计数）
+变更：2026-10-06-archive-stage-claim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-archive-stage-claim/requirements.md#FR-02
+最近确认：04fcb08208bc2ed0a411e8c9d69d1cbc35b75ecf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-stage-claim:flow:测试绑定FR-02
+  tests: test/archive-stage-claim.test.mjs「add 成功提示与暂存实态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-stage-claim
+  status: active
+
+## FR-runtime-079 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
+变更：2026-10-06-archive-stage-claim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-archive-stage-claim/requirements.md#FR-03
+最近确认：04fcb08208bc2ed0a411e8c9d69d1cbc35b75ecf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-archive-stage-claim:flow:测试绑定FR-03
+  tests: test/archive-stage-claim.test.mjs「全量用例」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-archive-stage-claim
+  status: active

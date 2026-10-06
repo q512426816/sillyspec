@@ -1,0 +1,351 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 8622169a..b3aa753d 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2734` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2776` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index c86e5f29..0515735d 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -508,6 +508,47 @@ export function resolveArchiveDocAddPaths(cwd, specBase, tokens) {
+   return [...out]
+ }
+ 
++/**
++ * 归档源侧移动补暂存（坑 archive-stage-claim，2026-10-06-module-map-list-leak 收口实测发现）。
++ *
++ * safeGit 契约是返回 {value, error} 不抛错——此前调用方忽略返回值无条件打成功提示，add 失败
++ * （index.lock 竞态等）时「已补暂存 N 项」假成功、暂存面实际缺项（实测声称 1 项暂存面为空，
++ * 靠核对暂存面纪律兜住后手工补提交）。本助手逐批 add 并校验 error，失败明细返回给调用方
++ * 择路打印（fail-soft：不抛错不阻断归档链，幂等 add 重跑同值）。
++ *
++ * @param {{ cwd: string, paths: string[] }} opts paths 已按本变更目录名过滤的精确 pathspec
++ * @returns {{ ok: boolean, count: number, failures: Array<{ path: string, error: string }> }}
++ */
++export function stageArchiveSourceSideMoves({ cwd, paths }) {
++  const failures = []
++  let count = 0
++  for (const batch of chunkPaths(paths)) {
++    const r = safeGit(cwd, ['add', '--', ...batch])
++    if (r && r.error) {
++      for (const p of batch) failures.push({ path: p, error: r.error })
++    } else {
++      count += batch.length
++    }
++  }
++  return { ok: failures.length === 0, count, failures }
++}
++
++/**
++ * 补暂存结果文案（成功=既有提示逐字不变；失败=⚠️ 告警含失败路径与 error 首行 + 手工兜底指引；
++ * 空清单零文案）。独立导出供测试断言两半（返回值与文案），打印决策归调用方。
++ * @param {{ ok: boolean, count: number, failures: Array<{ path: string, error: string }> }} r
++ * @returns {string}
++ */
++export function renderStageSourceSideMovesMessage(r) {
++  if (!r || r.count === 0 && (!r.failures || r.failures.length === 0)) return ''
++  if (r.ok) return `🧾 已补暂存本变更归档的源侧移动（${r.count} 项，归档成单次原子提交）`
++  const lines = [`⚠️ 补暂存本变更归档的源侧移动失败（${r.failures.length} 个路径，成功 ${r.count} 项）——暂存面可能缺项，归档提交前请核对 git diff --cached --name-only：`]
++  for (const f of r.failures.slice(0, 10)) lines.push(`   - ${f.path}（${f.error}）`)
++  if (r.failures.length > 10) lines.push(`   … 共 ${r.failures.length} 个`)
++  lines.push(`   手工兜底：git add -- <上述路径> 后重跑收口命令（归档子步幂等续）`)
++  return lines.join('\n')
++}
++
+ /**
+  * 归档收尾的窄化 git add（ql-20260915-001 修复④，坑 archive-git-add-sweeps-parallel-docs）。
+  *
+@@ -975,11 +1016,12 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+         // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
+         // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
+         // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
+-        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）
+-        for (const batch of chunkPaths(minePaths)) {
+-          safeGit(cwd, ['add', '--', ...batch])
+-        }
+-        console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
++        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）。
++        // 坑 archive-stage-claim（2026-10-06-module-map-list-leak 收口实测）：safeGit 不抛错返回
++        // {value,error}——此前忽略返回值无条件打成功提示，add 失败（index.lock 竞态等）时假成功。
++        const staged = stageArchiveSourceSideMoves({ cwd, paths: minePaths })
++        const msg = renderStageSourceSideMovesMessage(staged)
++        if (msg) (staged.ok ? console.log : console.warn)(msg)
+       }
+       if (untrackedArchiveHit) {
+         // 文件级枚举补暂存（守 AGENTS.md 规则 11 不用目录级 add；实际仅窄化 add 降级时可达）
+diff --git a/test/archive-stage-claim.test.mjs b/test/archive-stage-claim.test.mjs
+new file mode 100644
+index 00000000..42447072
+--- /dev/null
++++ b/test/archive-stage-claim.test.mjs
+@@ -0,0 +1,99 @@
++/**
++ * 坑 archive-stage-claim 回归（2026-10-06-module-map-list-leak 收口实测发现）：
++ * runArchiveChain「补暂存源侧移动」批处理调用 safeGit(add) 后无条件打印成功提示——
++ * safeGit 契约是返回 {value, error} 不抛错（git-helper.js），add 失败（index.lock 竞态等）
++ * 时成功提示照印，暂存面实际缺项（实测声称补暂存 1 项但暂存面无该删除，靠人工核对
++ * 暂存面纪律兜住后手工补提交）。
++ *
++ * 锁定语义：失败 → ⚠️ 告警（失败路径 + error 首行 + 手工兜底指引）且不打成功提示；
++ * 成功 → 既有成功提示逐字不变（含 N 项计数），暂存实态与提示一致。失败注入用
++ * .git/index.lock（确定性：git add 遇锁文件必败，非 sleep/时序依赖）。
++ */
++import { writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { stageArchiveSourceSideMoves, renderStageSourceSideMovesMessage } from '../src/run/complete-handlers.js'
++
++let passed = 0, failed = 0
++function assert(cond, msg) {
++  if (cond) { passed++; console.log(`  ✅ PASS: ${msg}`) }
++  else { failed++; console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++function git(dir, args) {
++  return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
++}
++
++console.log('=== stageArchiveSourceSideMoves 结果校验（坑 archive-stage-claim）===\n')
++
++// ── 1: 成功路径——提示逐字不变 + 暂存实态 ──
++console.log('--- Test 1: add 成功——ok:true + 既有文案 + 暂存区真实含删除 ---')
++{
++  const cwd = mkdtempSync(join(tmpdir(), 'stgclaim-1-'))
++  try {
++    git(cwd, ['init', '-q']); git(cwd, ['config', 'user.email', 't@t']); git(cwd, ['config', 'user.name', 't'])
++    writeFileSync(join(cwd, 'base.txt'), 'b\n')
++    git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'b'])
++    // 制造源侧移动形态：tracked 文件在 worktree 删除（未暂存 D）
++    const p = '.sillyspec/changes/2026-10-06-x/tasks.md'
++    mkdirSync(join(cwd, '.sillyspec/changes/2026-10-06-x'), { recursive: true })
++    writeFileSync(join(cwd, p), '- [x] task-01: a\n')
++    git(cwd, ['add', '--', p]); git(cwd, ['commit', '-q', '-m', 'tasks'])
++    rmSync(join(cwd, p))
++
++    const r = stageArchiveSourceSideMoves({ cwd, paths: [p] })
++    assert(r.ok === true && r.count === 1 && (r.failures || []).length === 0,
++      `返回 {ok:true, count:1, failures:[]}（实际 ${JSON.stringify(r)}）`)
++    const msg = renderStageSourceSideMovesMessage(r)
++    assert(msg.includes('已补暂存本变更归档的源侧移动（1 项，归档成单次原子提交）'),
++      `成功文案与既有提示逐字一致（实际 ${JSON.stringify(msg)}）`)
++    assert(!msg.includes('⚠️'), '成功文案不含告警')
++    const staged = git(cwd, ['diff', '--cached', '--name-status'])
++    assert(staged.includes('D') && staged.includes('tasks.md'), `暂存区真实含删除（实际 ${staged}）`)
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++}
++
++// ── 2: 失败路径——index.lock 逼 add 失败：告警不打成功提示 ──
++console.log('--- Test 2: add 失败——ok:false + 告警文案（路径/指引）+ 不打成功提示 ---')
++{
++  const cwd = mkdtempSync(join(tmpdir(), 'stgclaim-2-'))
++  try {
++    git(cwd, ['init', '-q']); git(cwd, ['config', 'user.email', 't@t']); git(cwd, ['config', 'user.name', 't'])
++    writeFileSync(join(cwd, 'base.txt'), 'b\n')
++    git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'b'])
++    const p = '.sillyspec/changes/2026-10-06-x/tasks.md'
++    mkdirSync(join(cwd, '.sillyspec/changes/2026-10-06-x'), { recursive: true })
++    writeFileSync(join(cwd, p), '- [x] task-01: a\n')
++    git(cwd, ['add', '--', p]); git(cwd, ['commit', '-q', '-m', 'tasks'])
++    rmSync(join(cwd, p))
++    // 确定性失败注入：持有 index.lock，git add 必败
++    writeFileSync(join(cwd, '.git', 'index.lock'), '')
++
++    const r = stageArchiveSourceSideMoves({ cwd, paths: [p] })
++    assert(r.ok === false, `返回 ok:false（实际 ${JSON.stringify(r)}）`)
++    assert((r.failures || []).length === 1 && r.failures[0].path === p,
++      `failures 含失败路径（实际 ${JSON.stringify(r.failures)}）`)
++    assert(typeof r.failures[0].error === 'string' && r.failures[0].error.length > 0, 'failures 含 error 首行')
++    const msg = renderStageSourceSideMovesMessage(r)
++    assert(msg.startsWith('⚠️'), `告警文案以 ⚠️ 开头（实际 ${JSON.stringify(msg.slice(0, 30))}）`)
++    assert(msg.includes(p), '告警文案含失败路径')
++    assert(msg.includes('git add -- '), '告警文案含手工兜底指引（git add -- <路径>）')
++    assert(!msg.includes('已补暂存本变更归档的源侧移动'), '失败时不打成功提示')
++    // 释放锁后重跑 → 成功（fail-soft 幂等：告警不阻断，人工/重试自愈）
++    rmSync(join(cwd, '.git', 'index.lock'))
++    const r2 = stageArchiveSourceSideMoves({ cwd, paths: [p] })
++    assert(r2.ok === true, '锁释放后重跑成功（fail-soft 幂等）')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++}
++
++// ── 3: 空清单——零行为（不打印任何提示） ──
++console.log('--- Test 3: 空清单零输出 ---')
++{
++  const r = stageArchiveSourceSideMoves({ cwd: tmpdir(), paths: [] })
++  assert(r.ok === true && r.count === 0, '空清单 {ok:true, count:0}')
++  assert(renderStageSourceSideMovesMessage(r) === '', '空清单渲染零文案')
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-06-archive-stage-claim/tasks.md b/.sillyspec/changes/2026-10-06-archive-stage-claim/tasks.md
+new file mode 100644
+index 00000000..6b0f31e2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-stage-claim/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T07:15:04.788Z
++---
++# 任务注册表（Tasks）— 2026-10-06-archive-stage-claim
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-archive-stage-claim --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-archive-stage-claim` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
++- [x] task-02: 全部成功时维持既有成功提示不变（含 N 项计数）
++- [x] task-03: 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
+diff --git a/.sillyspec/changes/2026-10-06-archive-stage-claim/design.md b/.sillyspec/changes/2026-10-06-archive-stage-claim/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-stage-claim/design.md
+@@ -0,0 +1,49 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T07:15:04.788Z
++---
++# 设计记录（Design Record）— 2026-10-06-archive-stage-claim
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++把 runArchiveChain 内「补暂存源侧移动」的 minePaths 批处理循环抽成导出助手 `stageArchiveSourceSideMoves({ cwd, paths })`：逐批 `safeGit(cwd, ['add', '--', ...batch])` 后**校验返回的 error**（safeGit 契约是返回 `{value, error}` 不抛错——忽略返回值即吞错），失败收集 `{path, error}` 明细，返回 `{ ok, count, failures }`。文案渲染独立成导出函数（成功文案维持既有逐字不变；告警文案列失败路径与 error 首行 + 手工兜底指引），runArchiveChain 按结果择一打印。
++
++选这个方案是因为它只加「结果校验 + 分支打印」，暂存语义与批处理（chunkPaths 防 Windows argv 上限）零变化；测试通过导出助手直接断言两半（返回值 + 文案），无需驱动整条归档链。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `src/run/complete-handlers.js` 新增导出 `stageArchiveSourceSideMoves({ cwd, paths })`（返回 `{ok, count, failures}`）与文案渲染导出；runArchiveChain 的 minePaths 段改为调用助手并按结果打印。
++- 行为可见面：add 失败时归档链输出从「假成功提示」变为 ⚠️ 告警（含手工兜底指引）；成功路径输出与现状逐字一致。CLI 命令、文件格式：无变化。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++| --- | --- | --- |
++| 修改 | src/run/complete-handlers.js | minePaths 批处理抽助手 + 结果校验 + 分支打印 |
++| 新增 | test/archive-stage-claim.test.mjs | 失败/成功两路径单元回归（index.lock 逼失败） |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用——单次批处理调用，输入是既定路径清单，无事件序问题。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   add 与他进程写 index 的竞态（index.lock）正是本变更要诚实暴露的失败面——失败不再被吞，告警 + 手工兜底指引；重跑幂等（归档子步断点续）。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——助手无跨调用状态；失败不抛错不阻断归档链（fail-soft 与现状一致），部分成功批的暂存保持在场（幂等 add 重跑同值）。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——cwd 显式传入，只 add 调用方给的路径清单（minePaths 已按本变更目录名过滤）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：告警面打扰——add 失败从静默变告警，若失败高频（如持续锁竞争）会重复提示。可接受：假成功比告警贵（实测已付出一笔手工补提交）；告警自带兜底指引可执行。
++放弃的方案：①让 safeGit 失败时抛错（改公共错误语义）——放弃，影响全部调用方，超本变更刀口；②失败时自动重试 add——放弃，锁竞争类失败的重试时序不可控（此前已实证 add 竞态即现即逝），诚实暴露 + 人工重跑更稳。
+
+diff --git a/.sillyspec/changes/2026-10-06-archive-stage-claim/proposal.md b/.sillyspec/changes/2026-10-06-archive-stage-claim/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-stage-claim/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T07:15:04.788Z
++---
++# 提案书（Proposal）— 2026-10-06-archive-stage-claim
++
++## 动机
++
++任务原话转写：动机：2026-10-06-module-map-list-leak 收口实测发现归档「补暂存源侧移动」与实态脱节——complete-handlers.js 补暂存循环调用 safeGit(cwd, ['add', '--', ...batch]) 后无条件打印「已补暂存本变更归档的源侧移动（N 项）」，但 safeGit 语义是返回 {value, error} 不抛错（git-helper.js），add 失败（锁竞争/路径异常等）时成功提示照印，暂存面实际缺项；实测该变更收口时声称补暂存 1 项但暂存面无该删除，靠人工核对暂存面纪律兜住后手工补提交。相邻的未跟踪归档目录兜底分支反而是 try/catch+告警的正确形态。
++
++成功标准：
++- complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
++- 全部成功时维持既有成功提示不变（含 N 项计数）
++- 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
++2. 全部成功时维持既有成功提示不变（含 N 项计数）
++3. 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
++
++## 成功标准（可验证）
++
++1. complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
++2. 全部成功时维持既有成功提示不变（含 N 项计数）
++3. 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
+
+diff --git a/.sillyspec/changes/2026-10-06-archive-stage-claim/requirements.md b/.sillyspec/changes/2026-10-06-archive-stage-claim/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-archive-stage-claim/requirements.md
+@@ -0,0 +1,49 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T07:15:04.788Z
++---
++# 需求规格（Requirements）— 2026-10-06-archive-stage-claim
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: complete-handlers.js 补暂存循环逐批校验 safeGit 返回的 error：任一批失败时不再打印成功提示，改为 ⚠️ 告警（含失败路径与 error 首行）并给出手工兜底指引（git add -- <源侧路径> 后重跑收口）——与相邻 untrackedArchiveHit 兜底分支的告警形态一致
++
++- 必须：补暂存源侧移动的批处理（runArchiveChain 内 minePaths 循环）逐批检查 `safeGit` 返回的 `error` 字段（safeGit 不抛错、返回 `{value, error}`——忽略返回值即吞错）；任一批失败时禁止打印既有成功提示「已补暂存本变更归档的源侧移动（N 项…）」，必须打印 ⚠️ 告警：列出失败路径与 error 首行，并给出手工兜底指引（`git add -- <失败路径>` 后重跑收口命令，归档子步幂等续）。
++- 实现形态：暂存循环抽为导出助手 `stageArchiveSourceSideMoves({ cwd, paths })`（逐批 add + 结果校验，返回 `{ ok, count, failures: [{ path, error }] }`），文案渲染抽为导出函数（成功文案 / 告警文案可分别断言）；runArchiveChain 接线两者。
++
++#### 场景：add 失败（实测形态：2026-10-06-module-map-list-leak 收口声称补暂存 1 项但暂存面无该删除）
++
++- Given git add 因故失败（如 .git/index.lock 被并行进程持有）
++- When runArchiveChain 补暂存源侧移动
++- Then 输出 ⚠️ 告警（含路径与 error 首行 + 手工兜底指引），不输出成功提示；不抛错不阻断归档链（fail-soft 语义与现状一致）
++
++### FR-02: 全部成功时维持既有成功提示不变（含 N 项计数）
++
++- 必须：所有批次 add 成功时，维持既有成功提示原样（含 N 项计数与「归档成单次原子提交」语义），行为零变化。
++- 禁止：成功路径新增任何额外输出或行为改变。
++
++#### 场景：主路径
++
++- Given 源侧移动待补暂存且 add 全部成功
++- When runArchiveChain 补暂存
++- Then 输出与现状逐字一致的成功提示；对应删除/新增真实进入暂存区
++
++### FR-03: 测试覆盖：add 失败路径告警且不打成功提示 / add 成功路径提示不变的单元回归
++
++- 必须：新增测试覆盖 FR-01/FR-02：失败路径（.git/index.lock 逼 add 失败——确定性手段，非 sleep/时序依赖）断言 `{ok:false, failures}` 且告警文案含路径与指引、成功文案不在场；成功路径断言 `{ok:true, count}` 与既有成功文案逐字一致、暂存区真实含删除；全绿后收口。
++
++#### 场景：主路径
++
++- Given 测试运行环境
++- When 执行新增测试
++- Then 全部断言通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/archive-stage-claim.test.mjs「add 失败告警不打成功提示」
++FR-02: test/archive-stage-claim.test.mjs「add 成功提示与暂存实态」
++FR-03: test/archive-stage-claim.test.mjs「全量用例」

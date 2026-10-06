@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-archive-stage-claim",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-archive-stage-claim:flow:测试绑定FR-01",
+      "tests": [
+        "test/archive-stage-claim.test.mjs「add 失败告警不打成功提示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-stage-claim"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-archive-stage-claim:flow:测试绑定FR-02",
+      "tests": [
+        "test/archive-stage-claim.test.mjs「add 成功提示与暂存实态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-stage-claim"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-archive-stage-claim:flow:测试绑定FR-03",
+      "tests": [
+        "test/archive-stage-claim.test.mjs「全量用例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-archive-stage-claim"
+    }
+  ]
+}
