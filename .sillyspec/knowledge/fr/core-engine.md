@@ -1909,3 +1909,79 @@
   confirmed_at: null
   source_change: 2026-10-06-fr-priority-overlap
   status: active
+
+## FR-core-engine-123 src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
+变更：2026-10-06-datetime-timeago
+状态：active
+摘要：无效输入
+全文：.sillyspec/changes/archive/2026-10-06-datetime-timeago/requirements.md#FR-01
+最近确认：c886ad61490707995a4a33279c7a4c01ac9cded7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-datetime-timeago:flow:测试绑定FR-01
+  tests: test/datetime-timeago.test.mjs「三类输入面（Date / epoch 毫秒 / 时间字符串）与注入时钟」 | test/datetime-timeago.test.mjs「无效输入抛 TypeError 且 message 含输入字符串形式」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-datetime-timeago
+  status: active
+
+## FR-core-engine-124 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
+变更：2026-10-06-datetime-timeago
+状态：active
+摘要：档位边界
+全文：.sillyspec/changes/archive/2026-10-06-datetime-timeago/requirements.md#FR-02
+最近确认：c886ad61490707995a4a33279c7a4c01ac9cded7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-datetime-timeago:flow:测试绑定FR-02
+  tests: test/datetime-timeago.test.mjs「timeAgo 档位形状与 stage-machine 现状逐字一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-datetime-timeago
+  status: active
+
+## FR-core-engine-125 stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
+变更：2026-10-06-datetime-timeago
+状态：active
+摘要：解析失败回退
+全文：.sillyspec/changes/archive/2026-10-06-datetime-timeago/requirements.md#FR-03
+最近确认：c886ad61490707995a4a33279c7a4c01ac9cded7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-datetime-timeago:flow:测试绑定FR-03
+  tests: test/datetime-timeago.test.mjs「stage-machine._timeAgo 委托 datetime.timeAgo 且解析失败回退原串」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-datetime-timeago
+  status: active
+
+## FR-core-engine-126 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
+变更：2026-10-06-datetime-timeago
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-datetime-timeago/requirements.md#FR-04
+最近确认：c886ad61490707995a4a33279c7a4c01ac9cded7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-datetime-timeago:flow:测试绑定FR-04
+  tests: test/datetime-timeago.test.mjs「收录 test:core 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-datetime-timeago
+  status: active

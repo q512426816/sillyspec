@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-datetime-timeago",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "c886ad61490707995a4a33279c7a4c01ac9cded7",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "stage-machine 模块内仍存在一处手写天换算表达式（_daysSince，前置存量）——按 FR-03 意图裁决为范围外，仅记录不阻断",
+      "evidence": "src/progress/stage-machine.js:829 的 _daysSince 保留 Math.floor((Date.now() - ts) / 86400000)，字面上落在 FR-03「模块内禁止再保留手写的分钟/小时/天换算表达式」的射程内；但该函数是滞留告警的整数天阈值度量（对 STALL_WARN_DAYS 比较，非 timeAgo 人读档位链），本变更 patch 未触及、文件变更清单亦不含它，收敛它需要 datetime 提供尚不存在的 diffDays API。裁决：非 FR-03 所指的档位换算复刻面，不构成承诺违反；留档供后续若做天度量单源化时参考。",
+      "location": "src/progress/stage-machine.js:829"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok；边界已裁决：可接受（design Q4 声明的时区口径边界——相对时间为 epoch 差运算，与时区无关，且与改前行为逐字一致，纯展示语义无数据正确性风险）"
+  },
+  "reviewedAt": "2026-10-06T13:06:37Z"
+}

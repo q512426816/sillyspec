@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  进度面板（stage-machine._timeAgo）手写了一段人读相对时间逻辑（刚刚/N 分钟前/N 小时前/N 天前），与 datetime.js 人读墙钟工具职责重叠；时间格式化口径应收敛到 datetime.js 单源。
+
+
+  成功标准：
+
+  - src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message
+  含输入字符串形式
+
+  - 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
+
+  - stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
+
+  - 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
+autopilot: true
+baseline_commit: 89eff1602377a18d99c272631a257e2eaada7e0a
+updatedAt: '2026-10-06T13:07:06.833Z'
+baseline_sha256: 90c9ca9765b61c59d370ec0b9c748a404163fa2b51cbb409a2eea8a079cf083f
+gate_summary: >-
+  test: passed ← module[]+deps(js15)+fr(5)（13.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006130222\test-result.json｜lint: passed
+  ← npm run lint（41.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006130222\test-result.json｜门文件 7 个
+

@@ -1,0 +1,355 @@
+diff --git a/package.json b/package.json
+index e2f1014f..249ecc40 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/datetime.js b/src/datetime.js
+index 6efed6fd..9c948ffa 100644
+--- a/src/datetime.js
++++ b/src/datetime.js
+@@ -20,18 +20,52 @@ export function nowWallClock(d = new Date()) {
+ }
+ 
+ /**
+- * 任意时刻输入 → 本地墙钟串（YYYY-MM-DD HH:mm:ss）：Date 实例 / epoch 毫秒数 /
++ * 输入 → Date 的私有强转（toWallClock/timeAgo 共用）：Date 实例 / epoch 毫秒数 /
+  * 时间字符串（解析委托 Date 构造器——开放解析面归语言规范，不建格式枚举白名单）。
+  * 无效输入（非三类之一，或解析产物为 NaN 时刻）抛 TypeError，message 含输入的字符串形式。
+- * @param {Date|number|string} input
+- * @returns {string}
+  */
+-export function toWallClock(input) {
++function coerceClock(input, fnName) {
+   const d = input instanceof Date ? input
+     : (typeof input === 'number' || typeof input === 'string') ? new Date(input)
+     : null;
+   if (!d || Number.isNaN(d.getTime())) {
+-    throw new TypeError(`toWallClock: 无法解析的时间输入：${String(input)}`);
++    throw new TypeError(`${fnName}: 无法解析的时间输入：${String(input)}`);
++  }
++  return d;
++}
++
++/**
++ * 任意时刻输入 → 本地墙钟串（YYYY-MM-DD HH:mm:ss）：Date 实例 / epoch 毫秒数 /
++ * 时间字符串。无效输入抛 TypeError，message 含输入的字符串形式。
++ * @param {Date|number|string} input
++ * @returns {string}
++ */
++export function toWallClock(input) {
++  return nowWallClock(coerceClock(input, 'toWallClock'));
++}
++
++/**
++ * 任意时刻输入 → 人读相对时间串，档位与进度面板（stage-machine._timeAgo）逐字同构：
++ * 差值折算分钟 floor 后 <1（含负差/未来时间）→「刚刚」；<60 →「N 分钟前」；折算小时
++ * 后 <24 →「N 小时前」；否则「N 天前」。人读串硬编码不依赖 locale/ICU（与 nowWallClock
++ * 同理：Node small-icu 构建下 toLocaleString 不可靠）。
++ * @param {Date|number|string} input
++ * @param {Date|number} [now] 可注入「当前时刻」（测试钉档位边界用），缺省当前时间；
++ *   仅接受 Date 实例或 epoch 毫秒，非法值抛 TypeError
++ * @returns {string}
++ */
++export function timeAgo(input, now = new Date()) {
++  const ts = coerceClock(input, 'timeAgo').getTime();
++  const nowTs = now instanceof Date ? now.getTime()
++    : typeof now === 'number' ? now
++    : NaN;
++  if (!Number.isFinite(nowTs)) {
++    throw new TypeError(`timeAgo: 无法解析的当前时刻：${String(now)}`);
+   }
+-  return nowWallClock(d);
++  const minutes = Math.floor((nowTs - ts) / 60000);
++  if (minutes < 1) return '刚刚';
++  if (minutes < 60) return `${minutes} 分钟前`;
++  const hours = Math.floor(minutes / 60);
++  if (hours < 24) return `${hours} 小时前`;
++  return `${Math.floor(hours / 24)} 天前`;
+ }
+diff --git a/src/progress/stage-machine.js b/src/progress/stage-machine.js
+index 0fdac2c9..e7867566 100644
+--- a/src/progress/stage-machine.js
++++ b/src/progress/stage-machine.js
+@@ -6,6 +6,7 @@
+ import { mkdirSync, existsSync, readdirSync, readFileSync } from 'fs';
+ import { join, resolve, basename } from 'path';
+ import { writeAtomicSync } from '../fs-atomic.js';
++import { timeAgo } from '../datetime.js';
+ import { runValidators } from '../stage-contract.js';
+ import { QUICK_SID_RE } from '../run/shared.js';
+ import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, STALL_WARN_DAYS, emptyStage } from './shared.js';
+@@ -831,13 +832,9 @@ export class StageMachine {
+   _timeAgo(dateStr) {
+     const ts = _parseFlexibleTs(dateStr);
+     if (ts === null) return dateStr || '未知';
+-    const diff = Date.now() - ts;
+-    const minutes = Math.floor(diff / 60000);
+-    if (minutes < 1) return '刚刚';
+-    if (minutes < 60) return `${minutes} 分钟前`;
+-    const hours = Math.floor(minutes / 60);
+-    if (hours < 24) return `${hours} 小时前`;
+-    return `${Math.floor(hours / 24)} 天前`;
++    // 档位换算委托 datetime.timeAgo（单源）；zh-CN 旧格式容错解析与失败回退留在调用方
++    // ——是对本模块存量 lastActive 数据的展示职责（2026-10-06-datetime-timeago 收敛）。
++    return timeAgo(ts);
+   }
+ }
+ 
+diff --git a/test/datetime-timeago.test.mjs b/test/datetime-timeago.test.mjs
+new file mode 100644
+index 00000000..eee2d083
+--- /dev/null
++++ b/test/datetime-timeago.test.mjs
+@@ -0,0 +1,63 @@
++// 2026-10-06-datetime-timeago 回归：datetime.timeAgo 人读相对时间（档位与 stage-machine._timeAgo
++// 现状逐字一致）+ stage-machine 委托后行为不变（含解析失败回退）。
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { timeAgo, toWallClock } from '../src/datetime.js';
++import { StageMachine } from '../src/progress/stage-machine.js';
++
++const NOW = new Date(2026, 9, 6, 12, 0, 0); // 注入「当前时刻」（本地时区，跨时区机器同样确定）
++const ago = (ms) => timeAgo(new Date(NOW.getTime() - ms), NOW);
++
++test('timeAgo 档位形状与 stage-machine 现状逐字一致', () => {
++  assert.equal(ago(0), '刚刚');
++  assert.equal(ago(59 * 1000), '刚刚');                       // 差值不足 1 分钟
++  assert.equal(ago(-5 * 60 * 1000), '刚刚');                  // 未来时间（负差）
++  assert.equal(ago(30 * 60 * 1000), '30 分钟前');
++  assert.equal(ago(59 * 60 * 1000 + 59 * 1000), '59 分钟前'); // floor：59 分 59 秒不进位
++  assert.equal(ago(60 * 60 * 1000), '1 小时前');
++  assert.equal(ago(23 * 3600 * 1000 + 59 * 60 * 1000), '23 小时前');
++  assert.equal(ago(24 * 3600 * 1000), '1 天前');
++  assert.equal(ago(3 * 24 * 3600 * 1000), '3 天前');
++});
++
++test('三类输入面（Date / epoch 毫秒 / 时间字符串）与注入时钟', () => {
++  const past = new Date(NOW.getTime() - 5 * 60 * 1000);
++  assert.equal(timeAgo(past, NOW), '5 分钟前');                 // Date 实例
++  assert.equal(timeAgo(past.getTime(), NOW.getTime()), '5 分钟前'); // epoch 毫秒（input 与 now 均可）
++  assert.equal(timeAgo(past.toISOString(), NOW), '5 分钟前');   // 时间字符串（解析面归语言规范，钉 ISO 一形即可）
++});
++
++test('无效输入抛 TypeError 且 message 含输入字符串形式', () => {
++  for (const bad of [null, undefined, {}, true, 'not-a-date', NaN, Infinity]) {
++    assert.throws(
++      () => timeAgo(bad, NOW),
++      (e) => e instanceof TypeError && e.message.includes(String(bad)),
++      `输入 ${String(bad)} 应抛含输入串的 TypeError`,
++    );
++  }
++  // 非法 now 同样抛 TypeError（契约面：Date 或 epoch 毫秒）
++  assert.throws(() => timeAgo(new Date(), 'x'), TypeError);
++  assert.throws(() => timeAgo(new Date(), NaN), TypeError);
++});
++
++test('stage-machine._timeAgo 委托 datetime.timeAgo 且解析失败回退原串', () => {
++  const sm = new StageMachine(null);
++  // 真实时钟相对量（90 分钟前 → 1 小时前），不依赖绝对日期
++  assert.equal(sm._timeAgo(new Date(Date.now() - 30 * 60 * 1000).toISOString()), '30 分钟前');
++  assert.equal(sm._timeAgo(new Date(Date.now() - 90 * 60 * 1000).toISOString()), '1 小时前');
++  // zh-CN 本地旧格式（_parseFlexibleTs 回退面，非 padded 形状）仍可算档位
++  const past = new Date(Date.now() - 90 * 60 * 1000);
++  const legacy = `${past.getFullYear()}/${past.getMonth() + 1}/${past.getDate()} ${past.getHours()}:${String(past.getMinutes()).padStart(2, '0')}`;
++  assert.equal(sm._timeAgo(legacy), '1 小时前');
++  // 解析失败回退：乱串原样返回；空输入 → 未知
++  assert.equal(sm._timeAgo('not-a-date'), 'not-a-date');
++  assert.equal(sm._timeAgo(''), '未知');
++  assert.equal(sm._timeAgo(undefined), '未知');
++});
++
++test('toWallClock 既有行为不受 coerceClock 内部重构影响', () => {
++  const d = new Date(2026, 9, 6, 8, 5, 9);
++  assert.equal(toWallClock(d), '2026-10-06 08:05:09');
++  assert.equal(toWallClock(d.getTime()), '2026-10-06 08:05:09');
++  assert.throws(() => toWallClock('not-a-date'), (e) => e instanceof TypeError && e.message.includes('not-a-date'));
++});
+diff --git a/.sillyspec/changes/2026-10-06-datetime-timeago/tasks.md b/.sillyspec/changes/2026-10-06-datetime-timeago/tasks.md
+new file mode 100644
+index 00000000..0be00ab1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-datetime-timeago/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T12:55:39.218Z
++---
++# 任务注册表（Tasks）— 2026-10-06-datetime-timeago
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-datetime-timeago --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-datetime-timeago` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
++- [x] task-02: 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
++- [x] task-03: stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
++- [x] task-04: 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
+diff --git a/.sillyspec/changes/2026-10-06-datetime-timeago/design.md b/.sillyspec/changes/2026-10-06-datetime-timeago/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-datetime-timeago/design.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T12:55:39.218Z
++---
++# 设计记录（Design Record）— 2026-10-06-datetime-timeago
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 `src/datetime.js` 新增 `timeAgo(input[, now])` 纯函数：输入解析面与既有 `toWallClock` 同构（Date / epoch 毫秒 / 时间字符串，委托 Date 构造器，开放解析面归语言规范，不建格式枚举白名单），档位换算逐字复刻 stage-machine `_timeAgo` 现状（刚刚 / N 分钟前 / N 小时前 / N 天前，分钟/小时均 floor，负差与未来时间落入「刚刚」）。第二参数 now 为可注入当前时刻（Date/epoch 毫秒），测试可钉住档位边界。
++
++`src/progress/stage-machine.js` 的 `_timeAgo` 改为：`_parseFlexibleTs` 解析（zh-CN 旧格式回退是对该模块存量 lastActive 数据的既有职责，保留在调用方）得 epoch 后委托 `datetime.timeAgo(ts)`，解析失败回退 `dateStr || '未知'` 逐字不动。选这个切分是因为 datetime 的契约是「合法时刻 → 人读串」（无效即抛），而「容错解析 + 回退原串」是进度面板对脏数据的展示职责——两职分开后双方都无需为对方放宽契约。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新增导出：`datetime.timeAgo(input, now?)` → string（对外新 API）。既有 `nowWallClock`/`toWallClock` 签名与行为不变（内部抽私有 `coerceClock` 共用强转与抛错路径，错误 message 形状不变）。
++- `stage-machine._timeAgo(dateStr)`：私有方法，对外行为逐字不变（含解析失败回退）。
++- `package.json` 的 `test:core` 脚本清单追加 `test/datetime-timeago.test.mjs`（npm script 面）。
++- 端点/命令/文件格式：无。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——timeAgo 是无状态纯函数（输入 + now → 输出），各调用独立求值，不存在跨调用的顺序假设；stage-machine 每次渲染对同一 lastActive 重复求值与现状一致。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用：本变更只读输入、返回字符串，无共享可变状态、无文件/DB 写入。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用：无中间状态可残留；flow done 中断重入时函数幂等，无生命周期面。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会：纯函数无实例状态；时区口径沿用本地墙钟（与 nowWallClock 同族语义），跨时区机器渲染同一时刻会得到各自本地口径的相对串——这是现状语义，不在本变更放大。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：档位换算复刻不严导致进度面板展示漂移（如 59 分 59 秒被四舍五入进位）。对策：逐字复刻 floor 链（分钟 floor → 小时 floor(分钟/60) → 天 floor(小时/24)）+ 测试钉住全部档位边界（含 59 分 59 秒 / 23 小时 59 分 / 未来时间）。
++试过放弃①：把解析失败回退（返回原串/『未知』）做进 timeAgo 内部——会让「无效输入必须抛 TypeError」的契约失效，且容错回退是 stage-machine 对脏数据的展示职责，塞进通用工具语义含糊，放弃。
++试过放弃②：解析也一并迁给 datetime（让 timeAgo 吃 _parseFlexibleTs 的 zh-CN 回退）——回退正则是进度面板对存量 lastActive 的兼容面，迁走等于把调用方私有数据形态泄漏进通用模块，放弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/datetime.js | 新增 timeAgo 导出；内部抽 coerceClock 私有强转（toWallClock 复用，行为不变） |
++| 修改 | src/progress/stage-machine.js | _timeAgo 换算委托 datetime.timeAgo，解析与回退留在调用方 |
++| 新增 | test/datetime-timeago.test.mjs | 档位边界/三类输入/无效输入/委托回退回归测试 |
++| 修改 | package.json | test:core 清单追加新测试文件 |
+
+diff --git a/.sillyspec/changes/2026-10-06-datetime-timeago/proposal.md b/.sillyspec/changes/2026-10-06-datetime-timeago/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-datetime-timeago/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T12:55:39.218Z
++---
++# 提案书（Proposal）— 2026-10-06-datetime-timeago
++
++## 动机
++
++任务原话转写：进度面板（stage-machine._timeAgo）手写了一段人读相对时间逻辑（刚刚/N 分钟前/N 小时前/N 天前），与 datetime.js 人读墙钟工具职责重叠；时间格式化口径应收敛到 datetime.js 单源。
++
++成功标准：
++- src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
++- 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
++- stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
++- 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
++2. 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
++3. stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
++4. 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
++
++## 成功标准（可验证）
++
++1. src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
++2. 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
++3. stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
++4. 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
+
+diff --git a/.sillyspec/changes/2026-10-06-datetime-timeago/requirements.md b/.sillyspec/changes/2026-10-06-datetime-timeago/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-datetime-timeago/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T12:55:39.218Z
++---
++# 需求规格（Requirements）— 2026-10-06-datetime-timeago
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: src/datetime.js 提供 timeAgo(input) 公共导出：接受 Date/epoch 毫秒/时间字符串（解析面与 toWallClock 同构），无效输入抛 TypeError 且 message 含输入字符串形式
++
++必须：`timeAgo(input[, now])` 接受 Date 实例 / epoch 毫秒数 / 时间字符串三类输入并输出人读相对时间串；解析面与 toWallClock 同构（委托 Date 构造器，开放解析面归语言规范，禁止建格式枚举白名单）；无效输入（非三类之一或解析产物为 NaN 时刻）必须抛 TypeError 且 message 含输入的字符串形式；第二参数 now 为可注入「当前时刻」（Date 或 epoch 毫秒，测试用），缺省当前时间，非法 now 同样抛 TypeError。
++
++#### 场景：无效输入
++
++- Given 任意非 Date/number/string 输入，或不可解析为时刻的字符串/NaN 数值
++- When 调用 `timeAgo(input)`
++- Then 抛 TypeError，message 含 `String(input)` 形式
++
++### FR-02: 输出形状与 stage-machine 现状逐字一致：刚刚 / N 分钟前 / N 小时前 / N 天前（负差与未来时间按刚刚处理）
++
++必须：输出档位与 `src/progress/stage-machine.js` 既有 `_timeAgo` 逐字一致——差值折算分钟 floor 后 <1（含负差/未来时间）→ `刚刚`；<60 → `N 分钟前`；折算小时后 <24 → `N 小时前`；否则 `N 天前`（天 = floor(小时/24)）。禁止引入 locale/ICU 依赖（与 nowWallClock 同理：Node small-icu 构建下 toLocaleString 不可靠）。
++
++#### 场景：档位边界
++
++- Given 注入固定 now，输入时刻分别距 now 0、30 分钟、59 分 59 秒、60 分钟、23 小时 59 分、24 小时、3 天、未来 5 分钟
++- When 逐个调用 `timeAgo(input, now)`
++- Then 输出依次为 刚刚 / 30 分钟前 / 59 分钟前 / 1 小时前 / 23 小时前 / 1 天前 / 3 天前 / 刚刚
++
++### FR-03: stage-machine._timeAgo 改为委托 datetime.timeAgo（行为不变），模块内不再手写分钟/小时/天换算
++
++必须：`_timeAgo` 的档位换算委托 `datetime.timeAgo`（解析面继续走 `_parseFlexibleTs`——zh-CN 旧格式回退是该模块对存量数据的既有职责）；解析失败回退原样返回 `dateStr || '未知'` 的行为必须逐字保持；模块内禁止再保留手写的分钟/小时/天换算表达式。
++
++#### 场景：解析失败回退
++
++- Given lastActive 为空串或不可解析字符串
++- When 调用 `stageMachine._timeAgo(dateStr)`
++- Then 返回 `dateStr || '未知'`（空输入 → 未知，乱串 → 原样返回），不抛错
++
++### FR-04: 新增回归测试覆盖各档位与无效输入，npm run test:core 全绿
++
++必须：新增回归测试覆盖 FR-01/02/03 全部场景（三类输入、档位边界含未来时间、无效输入抛错、委托后回退行为），并收录进 `npm run test:core`；跑 `npm run test:core` 全绿。
++
++#### 场景：主路径
++
++- Given 本变更落地
++- When 运行 `npm run test:core`
++- Then 全部测试通过（exit 0）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/datetime-timeago.test.mjs「三类输入面（Date / epoch 毫秒 / 时间字符串）与注入时钟」「无效输入抛 TypeError 且 message 含输入字符串形式」
++FR-02: test/datetime-timeago.test.mjs「timeAgo 档位形状与 stage-machine 现状逐字一致」
++FR-03: test/datetime-timeago.test.mjs「stage-machine._timeAgo 委托 datetime.timeAgo 且解析失败回退原串」
++FR-04: test/datetime-timeago.test.mjs「收录 test:core 全绿」（npm run test:core 亲测，package.json test:core 清单含本文件）

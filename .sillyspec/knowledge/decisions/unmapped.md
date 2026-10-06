@@ -1872,3 +1872,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：7f921a670bb4e9e4504acb8d5a6863f260db62df
 理由：最大风险：优先面扩大（全量绑定文件含重叠）进一步放大执行批尺寸——与 fr-regress-cap-drop 已裁决的边界同族（TEST_TIMEOUT_MS 兜底、绑定面是知识库声明面有治理），增量只是重叠子集（本仓实测 14 个），可忽略。放弃的方案：① 在 buildDepsBatches 内部把 priorityFiles 语义改为「并集口径」——调用方语义应显式，函数不该猜调用者意图；② 去重时把 frLinked 换成 fr.files 并顺带删 added 计算——frReport 的 addedCount（新增并入 N）是既有披露口径，动了会漂移控制台文案语义。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-datetime-timeago
+锚点：未记录
+最近确认：c886ad61490707995a4a33279c7a4c01ac9cded7
+理由：最大风险：档位换算复刻不严导致进度面板展示漂移（如 59 分 59 秒被四舍五入进位）。对策：逐字复刻 floor 链（分钟 floor → 小时 floor(分钟/60) → 天 floor(小时/24)）+ 测试钉住全部档位边界（含 59 分 59 秒 / 23 小时 59 分 / 未来时间）。 试过放弃①：把解析失败回退（返回原串/『未知』）做进 timeAgo 内部——会让「无效输入必须抛 TypeError」的契约失效，且容错回退是 stage-machine 对脏数据的展示职责，塞进通用工具语义含糊，放弃。 试过放弃②：解析也一并迁给 datetime（让 timeAgo 吃 _parseFlexibleTs 的 zh-CN 回退）——回退正则是进度面板对存量 lastActive 的兼容面，迁走等于把调用方私有数据形态泄漏进通用模块，放弃。

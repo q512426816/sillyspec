@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-datetime-timeago",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-datetime-timeago:flow:测试绑定FR-01",
+      "tests": [
+        "test/datetime-timeago.test.mjs「三类输入面（Date / epoch 毫秒 / 时间字符串）与注入时钟」",
+        "test/datetime-timeago.test.mjs「无效输入抛 TypeError 且 message 含输入字符串形式」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-datetime-timeago"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-datetime-timeago:flow:测试绑定FR-02",
+      "tests": [
+        "test/datetime-timeago.test.mjs「timeAgo 档位形状与 stage-machine 现状逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-datetime-timeago"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-datetime-timeago:flow:测试绑定FR-03",
+      "tests": [
+        "test/datetime-timeago.test.mjs「stage-machine._timeAgo 委托 datetime.timeAgo 且解析失败回退原串」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-datetime-timeago"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-datetime-timeago:flow:测试绑定FR-04",
+      "tests": [
+        "test/datetime-timeago.test.mjs「收录 test:core 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-datetime-timeago"
+    }
+  ]
+}
