@@ -540,7 +540,13 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       }
       resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: resumeInput, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
     } catch { /* 注入 best-effort */ }
-    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
+    // 恢复简报标题（2026-10-06-resume-title）：getChangeTitle 单源只读（与 flow status 同族），
+    // best-effort——读取失败按无标题渲染（与现状输出一致）
+    let resumeTitle = null
+    try {
+      resumeTitle = new ProgressManager({ specDir: specBase }).getChangeTitle(cwd, change)
+    } catch { /* 标题 best-effort */ }
+    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines, title: resumeTitle })
     return { recovery: true }
     }
   }
@@ -735,8 +741,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   return { change, baseline, materials }
 }
 
-/** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。 */
-function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines = [] }) {
+/** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。
+ * title（2026-10-06-resume-title）：进度库登记的变更标题（string|null）——仅非空时在头两行后渲染。 */
+function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines = [], title = null }) {
   const done = []
   const left = []
   for (const k of SUBSTEPS) (st.substeps?.[k] === 'done' ? done : left).push(k)
@@ -753,7 +760,8 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
   const hasLedger = existsSync(join(runtimeRoot, `verify-quality-scan-${change}.json`))
   console.log([
     `🔁 flow start 恢复简报（重入）: ${change}（tier=${st.tier}${st.legacy_fallback ? '，legacy_fallback=true 混跑回退中' : ''}）`,
-    `══════════════════════════════════════`,
+    `══════════════════════════════════════════════════════`,
+    ...(title ? [`- 标题：${title}`] : []),
     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
