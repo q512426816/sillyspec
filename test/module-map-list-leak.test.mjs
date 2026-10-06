@@ -3,9 +3,10 @@
  * 三个手写 _module-map.yaml 解析器（decision-distill.parseModulePathsSubset /
  * module-impact.parseModuleMapPaths / modules.parseModuleMapSimple）对块式列表的收集
  * 终止条件残缺——paths: 块之后遇未知字段头（tags/aliases/entrypoints/depends_on/…开放集）
- * 不终止收集，后续列表项漏进 paths/core_files。量化：8 个项目 map 950 实路径 vs 1375
- * 泄漏项；散文斜杠词 git/DB/JSON 前缀命中 tag 'git' → flow start 触达域冒充真域
- * server-parser。
+ * 不终止收集，后续列表项漏进 paths/core_files。量化（jsYaml ground truth 对账）：8 个项目
+ * map 真实声明 500 条带斜杠 paths；修复前解析面共 1375 条泄漏项（含 450 条带斜杠垃圾——
+ * 入口注释/路由串/模块描述，早期粗计的「950 实路径」即被这 450 条污染）。散文斜杠词
+ * git/DB/JSON 前缀命中 tag 'git' → flow start 触达域冒充真域 server-parser。
  *
  * 锁定语义（开放世界判据，禁止字段名枚举白名单）：任何缩进 4 的字段头行终结上一个
  * list 字段的收集——未来新增字段名自动安全；已知字段（含内联数组）语义不变。
