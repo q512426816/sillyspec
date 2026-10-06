@@ -18,6 +18,7 @@ import { join, relative } from 'node:path'
 import { scanBackendEndpoints, scanFrontendApiCalls } from './endpoint-extractor.js'
 import { estimateSourceSize } from './run/scan-profile.js'
 import { safeGit } from './git-helper.js'
+import { toWallClock } from './datetime.js'
 
 /** 底稿各清单的上限（防大仓把底稿撑爆反而变成新的 token 黑洞） */
 const MAX_ENDPOINTS = 60
@@ -98,7 +99,7 @@ export function collectScanFacts({ cwd, projectPath = null }) {
     : manifest.manifests.includes('Cargo.toml') ? 'rust'
     : 'generic'
   return {
-    generatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    generatedAt: toWallClock(new Date()),
     projectPath,
     type,
     pkgName: manifest.pkgName,

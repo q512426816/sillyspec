@@ -18,3 +18,20 @@ export function nowWallClock(d = new Date()) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
     + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
+
+/**
+ * 任意时刻输入 → 本地墙钟串（YYYY-MM-DD HH:mm:ss）：Date 实例 / epoch 毫秒数 /
+ * 时间字符串（解析委托 Date 构造器——开放解析面归语言规范，不建格式枚举白名单）。
+ * 无效输入（非三类之一，或解析产物为 NaN 时刻）抛 TypeError，message 含输入的字符串形式。
+ * @param {Date|number|string} input
+ * @returns {string}
+ */
+export function toWallClock(input) {
+  const d = input instanceof Date ? input
+    : (typeof input === 'number' || typeof input === 'string') ? new Date(input)
+    : null;
+  if (!d || Number.isNaN(d.getTime())) {
+    throw new TypeError(`toWallClock: 无法解析的时间输入：${String(input)}`);
+  }
+  return nowWallClock(d);
+}

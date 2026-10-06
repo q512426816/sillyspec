@@ -133,5 +133,24 @@ console.log('\n=== Test 5: 子项目 projectPath ===')
   clean(cwd)
 }
 
+// ── 6: generatedAt 本地墙钟形（2026-10-06-wallclock-entry：toISOString 截断的 UTC 直显退役） ──
+console.log('\n=== Test 6: generatedAt 本地墙钟形 ===')
+{
+  const cwd = setup('t6')
+  writeFileSync(join(cwd, 'package.json'), '{"name":"ts"}')
+  const before = Date.now()
+  const facts = collectScanFacts({ cwd })
+  const after = Date.now()
+  assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(facts.generatedAt), `generatedAt 人读形状（实际 ${facts.generatedAt}）`)
+  // 本地轴邻近：按本地时刻解析应落在采集窗口内。UTC 直显实现在非零时区下整时区偏移被抓出
+  // （tz=0 环境无偏移可抓，形状断言兜底——与 datetime-wallclock.test.mjs 同一取舍）。
+  const parsedLocal = new Date(facts.generatedAt.replace(' ', 'T')).getTime()
+  assert(Number.isFinite(parsedLocal) && parsedLocal >= before - 1000 && parsedLocal <= after + 1000,
+    `generatedAt 为本地时刻非 UTC 直显（解析 ${facts.generatedAt}）`)
+  const md = renderScanFactsMd(facts)
+  assert(md.includes(`· ${facts.generatedAt} ·`), 'markdown 头行携带 generatedAt')
+  clean(cwd)
+}
+
 console.log(`\n结果: ${passed} passed, ${failed} failed`)
 if (failed > 0) process.exit(1)
