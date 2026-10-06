@@ -452,6 +452,8 @@ export function parseModuleMapSimple(content) {
   let currentArray = null;
 
   for (const line of content.split('\n')) {
+    // 空行/注释行：保状态（列表块内允许空行与注释穿插——结构守卫前的免死金牌）
+    if (line.trim() === '' || line.trim().startsWith('#')) continue;
     // 模块 id 字符集含点（db.engine 等，与 module-impact.js classifyFile 同口径）：
     // 不含点时带点 id 的条目被静默丢弃，上下文注入/scan-diff 侧与 module-impact 侧给相反结论
     const moduleMatch = line.match(/^  ([a-zA-Z0-9_.\-]+):$/);
@@ -501,6 +503,13 @@ export function parseModuleMapSimple(content) {
       currentArray.push(itemMatch[1].trim());
       continue;
     }
+
+    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：list 收集只在
+    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——未知字段头（字段名开放集，不枚举；
+    // 枚举白名单外的字段头此前不重置收集，其列表项漏进上一个 list 字段如 paths）、顶层段
+    // （span_risk:/blast:）、异缩进项——终结收集并落盘已收集项。字段名识别仍按白名单（语义面），
+    // 收集边界按行结构（开放世界安全）。
+    if (currentArray && currentKey) { modules[currentModule][currentKey] = currentArray; currentArray = null; currentKey = null; }
   }
 
   // Flush last

@@ -26,9 +26,12 @@ import { resolveSpecDir } from './run/shared.js'
 export function parseModuleMapPaths(yamlText) {
   const map = new Map()
   if (!yamlText) return map
+  // CRLF 归一（Windows 生成的 map：块式行靠 \s*$/.trim() 蒙混，内联数组正则恒失配——
+  // sillyhub-daemon 整图内联 CRLF 实证漏 343 条）
+  const text = String(yamlText).replace(/\r\n/g, '\n')
   let currentModule = null
   let inPaths = false
-  for (const line of yamlText.split('\n')) {
+  for (const line of text.split('\n')) {
     if (!line.trim() || line.trim().startsWith('#')) continue
     if (!/^\s/.test(line)) {
       inPaths = line.startsWith('modules:')
@@ -38,6 +41,18 @@ export function parseModuleMapPaths(yamlText) {
     const modMatch = line.match(/^  ([A-Za-z0-9_.\-]+):\s*$/)
     if (modMatch) {
       currentModule = modMatch[1]
+      inPaths = false
+      continue
+    }
+    // 内联 paths 数组（ground truth 审计实证：sillyhub-daemon 整图内联写法，本解析器此前
+    // 恒漏 343 条 paths＝归属全盲——对齐 parseModulePathsSubset / parseModuleMapSimple 的既有内联支持）
+    const inlinePaths = currentModule && line.match(/^    paths: \[(.*)\]$/)
+    if (inlinePaths) {
+      if (!map.has(currentModule)) map.set(currentModule, [])
+      for (const v of inlinePaths[1].split(',').map(s => s.trim()).filter(Boolean)) {
+        const unquoted = v.replace(/^(['"])([\s\S]*)\1$/, '$2')
+        map.get(currentModule).push(unquoted.replace(/\\/g, '/'))
+      }
       inPaths = false
       continue
     }
@@ -56,8 +71,14 @@ export function parseModuleMapPaths(yamlText) {
         const raw = item[1].trim()
         const unquoted = raw.replace(/^(['"])([\s\S]*)\1$/, '$2')
         map.get(currentModule).push(unquoted.replace(/\\/g, '/'))
+        continue
       }
     }
+    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：paths 收集只在
+    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——字段头（字段名开放集不枚举）、顶层段
+    // （span_risk:/blast:）、异缩进项（2 缩进 "- prefixes:"）——终结收集，防 tags/aliases/
+    // depends_on 字段项与顶层 blast prefixes 漏进 paths 污染 classifyFile 归属分类。
+    inPaths = false
   }
   return map
 }

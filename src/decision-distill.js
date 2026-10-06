@@ -195,20 +195,29 @@ export function parseModulePathsSubset(content) {
   let cur = null
   let key = null
   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+    // 空行/注释行：保状态（列表块内允许空行与注释穿插）
+    if (line.trim() === '' || line.trim().startsWith('#')) continue
     const mm = line.match(/^  ([a-zA-Z0-9_-]+):$/)
     if (mm) { cur = mm[1]; modules[cur] = { paths: [] }; key = null; continue }
     if (!cur) continue
+    const item = line.match(/^      - (.+)$/)
+    if (item && key) { modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, '')); continue }
     const inline = line.match(/^    (paths|core_files): \[(.*)\]$/)
     if (inline) {
       modules[cur][inline[1]] = inline[2].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
       key = null; continue
     }
-    const block = line.match(/^    (paths|core_files):$/)
+    const block = line.match(/^    (paths|core_files):\s*$/)
     if (block) { key = block[1]; modules[cur][key] = modules[cur][key] || []; continue }
     const doc = line.match(/^    doc: (.+)$/)
     if (doc) { modules[cur].doc = doc[1].trim().replace(/^['"]|['"]$/g, ''); key = null; continue }
-    const item = line.match(/^      - (.+)$/)
-    if (item && key) modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, ''))
+    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：list 收集只在
+    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——字段头（字段名开放集不枚举）、顶层段
+    // （span_risk:/blast:）、异缩进项（2 缩进 "- prefixes:"）——终结收集。此前 paths: 块后的
+    // tags/aliases/entrypoints/depends_on 字段项与顶层 blast prefixes 全部漏进 paths（8 项目
+    // map 500 实声明 vs 1375 泄漏项；散文斜杠词 git/DB/JSON 前缀命中 tag 'git' 误路由触达域、
+    // bin 模块双重归属 src/db.js）。
+    key = null
   }
   return modules
 }

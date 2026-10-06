@@ -132,6 +132,34 @@ function extractInputPaths(input) {
 }
 
 /**
+ * 域路由用 input 路径样 token：在场或图内过滤（坑 module-map-list-leak 实测次生——散文斜杠词
+ * git/DB/JSON 被当路径参与路由，冒充真域 server-parser）。判据：token 相对 cwd 在文件系统在场
+ * （existsSync），或被模块图声明的路径覆盖（matchedModuleIds——图内尚不存在的目标文件照常路由，
+ * thin-fr-inject-parity ④ 契约：--input 提到将新建的 src/cli/login.js 须命中 cli 域）。
+ * 两判据都不建前缀/扩展名白名单——文件系统与仓内模块图即开放世界裁判；散文斜杠词两者皆不
+ * 成立即出局（走「起点无依据」诚实提示）。绿地草案（bsPaths）不过滤：绿地语料允许指向
+ * 尚不存在目标，模块图从零起草恰需它们。
+ * @param {string} cwd 工作区根
+ * @param {string} specBase .sillyspec 根
+ * @param {string} input --input 语料
+ * @returns {string[]} 在场或图内的路径样 token
+ */
+export async function extractRoutingInputPaths(cwd, specBase, input) {
+  let moduleIndex = null
+  let matchedModuleIds = null
+  try {
+    const dd = await import('./decision-distill.js')
+    const fi = await import('./fr-index.js')
+    moduleIndex = dd.discoverModuleIndex(join(specBase, 'knowledge'))
+    matchedModuleIds = fi.matchedModuleIds
+  } catch { /* best-effort：图缺席则只按在场判 */ }
+  return extractInputPaths(input).filter((p) => {
+    try { if (existsSync(join(cwd, p))) return true } catch { /* 落到图内判 */ }
+    try { return (matchedModuleIds(moduleIndex, p) || []).length > 0 } catch { return false }
+  })
+}
+
+/**
  * 轻量道知识注入段（2026-09-25-thin-fr-inject-parity）：默认快道读取面对齐——
  * {FR_INDEX_DIGEST}/{DECISION_HITS}/execute 知识命中报告此前只在 run 族装配，轻量道 fresh
  * 不经 brainstorm，knowledge/fr 现行 FR、否决决策、已知坑对 agent 全不可见（实证：FR-runtime-020
@@ -635,9 +663,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   } catch (e) { console.warn(`⚠️ 绿地模块图草案起草失败（best-effort 不阻断 start）：${(e && e.message) || e}`) }
   // 知识注入（2026-09-25-thin-fr-inject-parity）：fresh 起点域路由用 --input 提取的路径样
   // token（best-effort）——brainstorm 的 {FR_INDEX_DIGEST}/{DECISION_HITS} 注入面对齐到轻量道。
+  // 在场过滤（坑 module-map-list-leak）：散文斜杠词（git/DB/JSON）不参与路由。
   let digest = { lines: [], summary: { domains: [], frCount: 0, rejectedDecisions: 0, knowledgeEntries: 0 } }
   try {
-    digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: extractInputPaths(input) })
+    digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: await extractRoutingInputPaths(cwd, specBase, input) })
   } catch { /* 注入 best-effort 不阻断 start */ }
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,

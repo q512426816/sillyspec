@@ -229,18 +229,26 @@ export function parseChangeRequirements(changeDir) {
  * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。
  * filesOverride（2026-09-22-thin-fr-distill-sync）：显式交付文件清单旁路 design.md 解析——轻量变更
  * 变更无 design.md（轻量工件面三件套），flow done 以基线以来交付 diff 供清单，伪域路由同口径。 */
+/** 路径 ↔ 模块匹配规则（精确或目录前缀）——resolveTouchedDomains 域路由与 flow start 在场
+ * 过滤（坑 module-map-list-leak）共用同一判定的单一来源。@returns {string[]} 命中模块 id */
+export function matchedModuleIds(moduleIndex, filePath) {
+  if (!moduleIndex) return [];
+  const hits = [];
+  for (const [modId, mod] of Object.entries(moduleIndex)) {
+    const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
+    if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
+      hits.push(modId);
+    }
+  }
+  return hits;
+}
+
 export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = null, knowledgeRoot = null) {
   const domains = new Set();
   const designPath = join(changeDir, 'design.md');
   const files = [];
   const matchModules = (filePath) => {
-    if (!moduleIndex) return;
-    for (const [modId, mod] of Object.entries(moduleIndex)) {
-      const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
-      if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
-        domains.add(modId);
-      }
-    }
+    for (const modId of matchedModuleIds(moduleIndex, filePath)) domains.add(modId);
   };
   if (Array.isArray(filesOverride)) {
     for (const f of filesOverride) {
