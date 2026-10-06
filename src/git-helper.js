@@ -80,6 +80,18 @@ function buildFullArgs(cwd, args) {
 const GIT_MAX_BUFFER = 256 * 1024 * 1024
 
 /**
+ * CLI 自建 git 子进程的统一 env：GIT_OPTIONAL_LOCKS=0（坑 git-optional-locks，
+ * 2026-10-06-module-map-list-leak 收口 add 静默失效根因收口）——status/diff 等读命令的
+ * 机会性 index 刷新会短暂持 index.lock（watcher 每 ~3s 轮询 status 即常驻锁源），并发
+ * git add 落进窗口即失败。该开关只禁机会性锁，add/commit 等真写的必需锁不受影响；
+ * 权威注入（调用方显式值不覆盖）——「CLI 子进程恒不机会性抢锁」是统一不变量，不逐调用点分叉。
+ * 展开合并不裸替换（丢 SystemRoot/USERPROFILE/TEMP 会毁 Windows 子进程，终批-③ 同坑）。
+ */
+function gitChildEnv(env) {
+  return { ...(env || process.env), GIT_OPTIONAL_LOCKS: '0' }
+}
+
+/**
  * 安全执行 git：失败不抛，返回 { value, error } 结构。
  * @param {string} cwd
  * @param {string[]} args
@@ -99,7 +111,7 @@ export function safeGit(cwd, args, opts = {}) {
   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
   const attempt = (t) => {
     try {
-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(), windowsHide: true })
       if (trim) value = value.trim()
       return { value, errorObj: null }
     } catch (e) {
@@ -127,8 +139,9 @@ export function git(cwd, args, opts = {}) {
   const { trim = true, timeout = 5000, encoding = 'utf8', env } = opts
   const fullArgs = buildFullArgs(cwd, args)
   // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
-  // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）
-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env, windowsHide: true })
+  // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）；
+  // 最终经 gitChildEnv 展开合并并权威注入 GIT_OPTIONAL_LOCKS=0（调用方 GIT 键照常透传）
+  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(env), windowsHide: true })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
 }
