@@ -114,12 +114,16 @@ console.log('--- Case 1: 确认归档后 archive/ + docs/ 已 staged ---')
     'git index 含 docs/sillyspec/modules/newmod.md（模块文档暂存）')
 
   // 一笔到位提交命令提示（2026-10-06-litest-p1-fixes 实测 b112d738/2c8fd25c：pathspec 只写
-  // archive/ 会把 rename 的源侧删除留在暂存区）——stdout 含完整命令且 pathspec 覆盖两侧
+  // archive/ 会把 rename 的源侧删除留在暂存区）——stdout 含完整命令且 pathspec 覆盖两侧。
+  // 2026-10-06-archive-cmd-race-and-brief 竞态加固后契约：src 侧逐文件（HEAD 树在册锚），
+  // dst 侧收拢为 archive/<dest>/ 目录 pathspec（条目级竞态无感）——两半齐备意图不变
   assert(r.combined.includes('git commit -m "chore(archive): ' + cn + ' 归档留档" -- '),
     '归档收尾打印一笔到位 commit 命令')
   const cmdLine = r.combined.split('\n').find(l => l.includes('git commit -m "chore(archive): ' + cn))
-  assert(cmdLine.includes(`.sillyspec/changes/${cn}/plan.md`) && cmdLine.includes(`.sillyspec/changes/archive/${destName}/plan.md`),
-    '命令 pathspec 含源侧删除与归档侧路径（rename 两半齐备）')
+  assert(cmdLine.includes(`.sillyspec/changes/${cn}/plan.md`),
+    '命令 pathspec 含源侧删除路径（HEAD 树在册锚——rename 前半落地）')
+  assert(cmdLine.includes(`.sillyspec/changes/archive/${destName}/`),
+    '命令 pathspec 含归档目录路径spec（目录收拢——rename 后半整目录落地）')
 }
 
 // ── Case 2: 归档移动 + 注销正常（safeGit add 不阻断归档主流程）──
