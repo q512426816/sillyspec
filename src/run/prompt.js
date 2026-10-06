@@ -2126,11 +2126,9 @@ ${maskVolatileForGuide(guideTemplate)}
       // 旧指纹清理（2026-10-06-verify-docs-prefill task-05）：同步骤旧指纹 guide 永久共存会让
       // 自行 ls/glob 目录的 agent 读到旧版本指引（厚流程 step5/step6 错位疑云）。白名单 =
       // 新写的 guide ∪ 仍被任一变更 state 引用的 guide（他变更复入短输出依赖 existsSync 回退，
-      // 被引用文件误删只退化全量重印但无谓）；清理 fail-soft。
-      try {
-        const pruned = pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths: [guideFile] })
-        if (pruned > 0) console.log(`🧹 已清理 ${pruned} 份本步骤旧指纹 step-guide（仍被引用的保留）`)
-      } catch { /* 清理 best-effort */ }
+      // 被引用文件误删只退化全量重印但无谓）；清理 fail-soft 且静默——步骤输出是字节中立面
+      // （knowledge-inject A/B 对比、guidance-output-neutrality），运维日志不进 prompt 流。
+      try { pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths: [guideFile] }) } catch { /* 清理 best-effort */ }
       }
     } catch { /* guide/state 落盘 best-effort：失败仅退化回全量重印，不阻断步骤输出 */ }
   }
