@@ -117,3 +117,50 @@ test('design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自�
   assert.ok(sk.includes('本变更接口面：0 端点'), '骨架含可粘贴句式');
   assert.ok(/<!--[^>]*本变更接口面：0 端点/.test(sk), '句式在 HTML 注释内（不自动声明）');
 });
+
+// ── 2026-10-06-verify-docs-prefill task-04：变更一评审 P3 三项清偿回归 ──
+
+test('P3-1 清偿：backupVerifyResult 传 changeName 时备份文件名含 change 段', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vp-backup3-'));
+  const mdPath = join(root, 'verify-result.md');
+  writeFileSync(mdPath, '# x\n', 'utf8');
+  const p = backupVerifyResult({ mdPath, runtimeRoot: join(root, '.runtime'), changeName: 'demo-change' });
+  assert.ok(p && p.includes('demo-change'), `备份名含 change 段：${p}`);
+  assert.ok(!p.includes('demo-change-backup-verify-result'), '命名序为 verify-result-backup-<change>-<ts>');
+  // 不传 changeName：兼容旧形态（无 change 段）
+  const p2 = backupVerifyResult({ mdPath, runtimeRoot: join(root, '.runtime') });
+  assert.ok(p2 && !p2.includes('demo-change'), '缺省无 change 段（向后兼容）');
+});
+
+test('P3-2 清偿：「非零端点」不再被零端点同义正则误命中', () => {
+  assert.equal(parseDesignApiTable('## 接口定义\n\n本变更接口面非零端点场景需另行评审\n').declared, null, '非零端点 → 不认作零声明');
+  assert.equal(parseDesignApiTable('## 接口定义\n\n零端点\n').declared, 0, '正向零端点仍认');
+});
+
+test('P3-3 清偿：含占位段后的手写 #### 子节在定向刷新后存活', () => {
+  const existing = [
+    '# 验证报告', '',
+    '#### 探针 7：验收×测试覆盖矩阵',
+    '| 验收 | 判定 | 证据 |',
+    '|---|---|---|',
+    '| task-01 验收 A | <待填：五选一> | <待填：用例 ID> |',
+    '',
+    '#### 手写补充说明',
+    '这是 agent 手写的子节叙述——刷新不得吞。',
+    '',
+    '## 测试结果 [层：确定性检查]',
+  ].join('\n');
+  const fresh = [
+    '#### 探针 7：验收×测试覆盖矩阵',
+    '| 验收 | 判定 | 证据 |',
+    '|---|---|---|',
+    '| task-01 验收 A | <待填：五选一> | <待填：用例 ID> |',
+    '| task-09 新验收 | <待填：五选一> | <待填：用例 ID> |',
+    '',
+  ].join('\n');
+  const r = refreshProbeSections(existing, fresh);
+  assert.ok(r.replaced.includes(7), '探针 7 含占位被刷新');
+  assert.ok(r.text.includes('#### 手写补充说明'), '手写 #### 子节标题存活');
+  assert.ok(r.text.includes('刷新不得吞'), '手写子节正文存活');
+  assert.ok(r.text.includes('task-09 新验收'), '新渲染行进入');
+});

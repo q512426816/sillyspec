@@ -564,7 +564,7 @@ async function main() {
       const gateChangeIdx = args.indexOf('--change');
       const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
-        console.error('用法: sillyspec gate <stage|last> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
+        console.error('用法: sillyspec gate <stage|last> --change <name> [--json] [--full|--docs-only]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  --full 覆盖 --done 独有贵检查（reconcile/stage review 预检）；--docs-only 轻量档（verify）跳过 test/lint 执行只核文档契约面；两者互斥\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
         process.exit(2);
       }
       // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
@@ -578,6 +578,16 @@ async function main() {
       // P1 --full 只读预检档（batch3 task-03）：覆盖 --done 独有检查面（reconcile/stage review）——
       // 预检过=必过（同因），省一轮 gate 失败重跑的整 agent 回合
       if (args.includes('--full')) gateOpts.full = true;
+      // --docs-only 轻量预检档（2026-10-06-verify-docs-prefill task-01）：跳过 verify-test/lint
+      // 执行只核文档契约面（毫秒级）——纯文档缺项（visual-evidence/结论槽/移交项）一次列清再
+      // --done，免逐轮撞门。与 --full 互斥（一个减执行检查一个加检查面，并存语义矛盾）。
+      if (args.includes('--docs-only')) {
+        if (args.includes('--full')) {
+          console.error('❌ --docs-only 与 --full 互斥——docs-only 跳过 test/lint 执行只核文档契约面，full 追加 --done 独有的贵检查；两者并存语义矛盾，按需择一。');
+          process.exit(2);
+        }
+        gateOpts.docsOnly = true;
+      }
       // A4：平台指针 / 显式 --spec-dir / 本地 fallback 三合一解析 specBase——平台模式（指针指向外部
       // specDir）下 gate 也能核验（原只传 cwd 致 runGate 的 resolveSpecDir 指向本地孤儿库，恒
       // 「无法核验」exit 2）。resolvePlatformSpecDir 指针失效时抛 PointerUnreachableError，由顶层 catch 优雅 fail-closed。
@@ -1381,7 +1391,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
           process.exit(2);
         }
         const { resolveRuntimeRoot: vpRefreshRTR } = await import('./run/shared.js');
-        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase) });
+        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase), changeName: vpChange });
         const vpOld = readFileSync(vpReportPath, 'utf8');
         const vpRef = refreshProbeSections(vpOld, renderVerifyProbesReport(vpResult));
         if (vpRef.text !== vpOld) {
@@ -1424,7 +1434,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
             // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
             const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
-            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase) });
+            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase), changeName: vpChange });
             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
             writeFileSync(vpReportPath, vpSkeleton);
             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);

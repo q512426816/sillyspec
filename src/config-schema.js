@@ -190,6 +190,14 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'plan',
+      title: '计划阶段派发',
+      note: 'plan 阶段 TaskCard 填充派发策略。默认主 agent 直填（2026-09-20 对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；task 总数超阈值且跨模块才 batch 派子代理——阈值按项目体系可调（厚流程实证 11 任务 3 子代理 430 万 token 模板化产出后引入）。',
+      keys: [
+        { path: 'plan.fill_batch_min_tasks', type: 'integer', optional: true, status: 'live', readers: ['buildCoordinatorStep (src/stages/plan.js — 协调器 prompt 阈值插值)'], desc: '填卡 batch 派发阈值：task 总数 ≤N（或单仓单模块）→ 主 agent 直填不派子代理；>N 且跨模块/跨仓才按 batch 分派。≥1 整数，缺省 8（内置）；非法值回退 8（fail-safe）。调大 = 更少派子代理省 token；调小 = 大变更更早并行省墙钟。', example: '12' },
+      ],
+    },
+    {
       id: 'auto_mode',
       title: '变更规模自动分类',
       note: 'sillyspec run auto 时，readAutoModeFromLocalYaml 读本段传 classifyChange 的 localConfig，force_*_patterns 匹配需求描述则强制对应模式。',

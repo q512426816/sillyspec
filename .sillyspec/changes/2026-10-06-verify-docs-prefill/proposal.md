@@ -1,0 +1,43 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-06T14:20:51.352Z
+---
+# 提案书（Proposal）— 2026-10-06-verify-docs-prefill
+
+## 动机
+
+任务原话转写：厚流程 postmortem（sess_4769fd5d，provider-multi-agent-kind）第二批误工清偿 + 变更一评审 P3 清偿，共六项：
+
+1) gate verify 预检缺轻量档：gate verify 只读重跑全量检查含测试执行（postmortem 实证 --json 超时转后台 + task id 抄错绕 3 轮），纯文档契约缺项（visual-evidence/结论槽/移交项等）其实毫秒级可查——src/machine-interface.js runGate 加 docsOnly 档：verify 阶段跳过 verify-test/verify-lint 执行（informational 占位说明），其余检查照跑；CLI gate --docs-only 接线（与 --full 互斥）。
+2) 探针 7 矩阵手誊 40 分钟：无归属测试的卡预填「无归属测试——判定大概率 uncovered」，而 FR 关联回归既有用例（本变更未改动）本可由 collectFrLinkedTests（src/fr-index.js:933）机械给出——接入为无归属卡的既有用例候选（注记行区分「既有用例，未改动」），省 agent 全仓找锚点。
+3) 填卡 batch 阈值硬编码：stages/plan.js L499-500「task 总数 ≤8」写死在 prompt 文案，430 万 token 实证后阈值应项目可调——local.yaml 新键 plan.fill_batch_min_tasks（integer ≥1，缺省 8），buildCoordinatorStep 插值，config-schema 注册。
+4) 变更一评审 P3 三项清偿：备份文件名不含 change 段（backupVerifyResult 加 changeName 参数）；「非零端点」被零端点同义正则误命中 declared=0（API_FACE_DECLARED_ZERO_RE 零端点分支加 (?<!非) 前瞻）；refreshProbeSections 段边界不认非探针 #### 标题致手写子节被吞（splitProbeSectionRanges 边界改认任意 #{1,4} 标题）。
+5) step-guides 旧指纹文件永久共存：agent 自行 ls/glob 目录会读到旧版本指引（postmortem step5/step6 错位疑云），写新 guide 时按 state 引用白名单清理同步骤旧指纹文件（src/run/prompt.js 落盘分支）。
+6) 评审档位撤销说明：postmortem「零代码变更 55 万 token」的病根是厚流程选道错位（运维修复应走轻量道），档位机器已存在（review-tier S0/S1→self + flow-review 五路危险证据定档 + 1/4 抽样校准）——本变更不再新增 self 档（会破坏抽样校准机制），以本条记录裁决。
+
+成功标准：
+- sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
+- 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
+- local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
+- backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
+- 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
+- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+
+## 变更范围
+
+按成功标准机械推导，共 6 条验收面：
+1. sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
+2. 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
+3. local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
+4. backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
+5. 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
+6. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+
+## 成功标准（可验证）
+
+1. sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
+2. 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
+3. local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
+4. backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
+5. 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
+6. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core

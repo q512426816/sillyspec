@@ -19,12 +19,45 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, dirname, join } from 'node:path'
-import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
+
+/**
+ * step-guide 旧指纹清理（2026-10-06-verify-docs-prefill task-05）：guide 文件名 =
+ * `${stage}-step${idx}-${指纹8位}.md` 跨变更共享、旧指纹永不清理——同步骤多版本共存会让自行
+ * ls/glob 目录的 agent 读到旧版本指引。白名单 = keepAbsPaths（本次新写的 guide）∪ 仍被任一
+ * 变更 state 文件（`${stage}-step${idx}-*.json`）引用的 guidePath；白名单外的同前缀文件删除。
+ * 纯目录操作 fail-soft：目录缺失/坏 state 均不抛，返回清理计数。
+ * @param {{ guideRoot: string, stateRoot: string, stageName: string, stepIndex: number, keepAbsPaths: string[] }} opts
+ * @returns {number} 实际删除的文件数
+ */
+export function pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths = [] }) {
+  const prefix = `${stageName}-step${stepIndex}-`
+  const keep = new Set((keepAbsPaths || []).map(String))
+  try {
+    for (const sf of readdirSync(stateRoot)) {
+      if (!sf.startsWith(prefix)) continue
+      try {
+        const st = JSON.parse(readFileSync(join(stateRoot, sf), 'utf8'))
+        if (st && typeof st.guidePath === 'string') keep.add(st.guidePath)
+      } catch { /* 坏 state 不参与白名单（其指向的文件按无引用清理——复入时 existsSync 回退全量重印，fail-soft） */ }
+    }
+  } catch { /* stateRoot 缺失 → 空白名单 */ }
+  let pruned = 0
+  try {
+    for (const gf of readdirSync(guideRoot)) {
+      if (!gf.startsWith(prefix) || !gf.endsWith('.md')) continue
+      const abs = join(guideRoot, gf)
+      if (keep.has(abs)) continue
+      try { rmSync(abs, { force: true }); pruned++ } catch { /* 单文件删除失败继续 */ }
+    }
+  } catch { /* guideRoot 缺失 → 0 */ }
+  return pruned
+}
 import { materializeStageTemplates } from '../stage-templates.js'
 import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
 
@@ -2090,6 +2123,14 @@ ${maskVolatileForGuide(guideTemplate)}
 `, 'utf8')
       mkdirSync(stateRoot, { recursive: true })
       writeFileSync(stateFile, JSON.stringify({ fingerprint, guidePath: guideFile, changeName: changeName || null, stage: stageName, stepIndex, at: new Date().toISOString() }, null, 1) + '\n', 'utf8')
+      // 旧指纹清理（2026-10-06-verify-docs-prefill task-05）：同步骤旧指纹 guide 永久共存会让
+      // 自行 ls/glob 目录的 agent 读到旧版本指引（厚流程 step5/step6 错位疑云）。白名单 =
+      // 新写的 guide ∪ 仍被任一变更 state 引用的 guide（他变更复入短输出依赖 existsSync 回退，
+      // 被引用文件误删只退化全量重印但无谓）；清理 fail-soft。
+      try {
+        const pruned = pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths: [guideFile] })
+        if (pruned > 0) console.log(`🧹 已清理 ${pruned} 份本步骤旧指纹 step-guide（仍被引用的保留）`)
+      } catch { /* 清理 best-effort */ }
       }
     } catch { /* guide/state 落盘 best-effort：失败仅退化回全量重印，不阻断步骤输出 */ }
   }

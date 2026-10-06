@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import path from 'path'
+import jsYaml from 'js-yaml'
 import { getRule } from '../stage-contract-spec.js'
 import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
 
@@ -414,6 +415,20 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
  */
 export function buildCoordinatorStep(changeDir, taskNames) {
   const changeName = path.basename(changeDir)
+  // 填卡 batch 阈值项目化（2026-10-06-verify-docs-prefill task-03）：「task 总数 ≤N 主 agent 直填」
+  // 原硬编码 8——430 万 token 填卡实证后按项目体系可调（local.yaml plan.fill_batch_min_tasks，
+  // integer ≥1，非法/缺省回退 8）。specBase 自 changeDir 推导（changes/<名> 的父目录）。
+  const fillBatchMin = (() => {
+    try {
+      const specBase = String(changeDir || '').replace(/[\\/]+changes[\\/]+[^\\/]+$/, '')
+      if (!specBase || specBase === changeDir) return 8
+      const p = path.join(specBase, 'local.yaml')
+      if (!existsSync(p)) return 8
+      const doc = jsYaml.load(readFileSync(p, 'utf8'))
+      const v = doc && doc.plan ? Number(doc.plan.fill_batch_min_tasks) : NaN
+      return Number.isInteger(v) && v >= 1 ? v : 8
+    } catch { return 8 }
+  })()
   const taskList = taskNames.map(t => {
     const num = t.num
     return `- task-${num}: ${t.name}`
@@ -496,8 +511,8 @@ ${taskList}
    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
 1. 确认 \`${changeDir}/tasks/\` 目录存在（上一步预生成会自动创建）
 2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
-   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
-   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
+   - task 总数 ≤${fillBatchMin} 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
+   - 仅当 task 总数 >${fillBatchMin} **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
 3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch

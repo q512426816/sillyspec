@@ -34,6 +34,7 @@ import {
 } from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
+import { collectFrLinkedTests } from './fr-index.js'
 import { writeChangeTrace, orphanAccRef } from './test-bindings.js'
 import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
@@ -1083,8 +1084,10 @@ const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
 const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
 // 声明宽收（2026-10-06-verify-friction-fix task-04）：同义零端点措辞认作 declared=0——厚流程实证
 // agent 写「无接口变更/不涉及接口」散文不被数字式声明行识别，被迫写伪表格绕过。(?<!\d) 防
-// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）。
-const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|零端点|无端点|(?<!\d)0\s*端点/
+// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）；(?<!非) 防「非零端点」
+// 误命中（2026-10-06-verify-docs-prefill task-04 评审 P3-2 清偿——critical 判级下误命中会把
+// D-005 零面硬错降为 warning，影响面不止 advisory 渲染）。
+const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|(?<!非)零端点|无端点|(?<!\d)0\s*端点/
 
 /**
  * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
@@ -1958,6 +1961,11 @@ function renderProbe7Lines(p7) {
   for (const t of (p7.tasks || [])) {
     L.push('')
     L.push(`**${t.task}**`)
+    if (Array.isArray(t.existingTests) && t.existingTests.length > 0) {
+      // 既有用例注记（2026-10-06-verify-docs-prefill task-02）：归属列里的这些测试是 FR 关联回归
+      // 候选（本变更未改动）——与自身新建测试区分，判定仍由 agent 复核（命中≠结论）
+      L.push(`- ℹ️ 既有用例候选（FR 关联回归面，本变更未改动；判定仍由你复核，命中≠结论）：${t.existingTests.map(f => `\`${f}\``).join('、')}`)
+    }
     if (t.fmError) {
       // 坏 YAML 如实陈述（2026-09-20-taskcard-yaml-hardgate）：非「无 acceptance」防御——
       // plan 门禁 0b 硬校验应已拦截；已过 plan 门仍见此行 = 门禁失效信号（可反馈工具缺陷）
@@ -2196,6 +2204,15 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           }
         }
       } catch { /* 注册表不可读 → 无跨仓根（fail-open） */ }
+      // ── 既有用例候选（2026-10-06-verify-docs-prefill task-02）：FR 关联回归面（active FR
+      //    覆盖 ∩ 本变更触碰文件的绑定 tests——CLI 收口实测面三源之二）作为无归属卡的预填
+      //    候选。postmortem 实证 38 格矩阵手誊 40 分钟：无归属格预填「判定大概率 uncovered」，
+      //    agent 只能全仓找既有测试锚点。只注入 testFiles 为空的卡（有自身归属的卡零噪音）；
+      //    变更级一次计算，逐卡不重算；命中≠判定（预填语义同其他格子——agent 复核改写）。
+      let frLinkedExisting = null
+      try {
+        frLinkedExisting = collectFrLinkedTests({ specBase, changeName, changedFiles: detailed.map(e => e.path), projectRoot: cwd })
+      } catch { frLinkedExisting = null /* FR 索引不可读 → 无候选（行为与现状一致） */ }
       // 跨卡归属（坑 probe7-provider-tests-in-consumer-card，2026-09-16 E 变更 verify 实证：8 格
       // 被机械预填 uncovered——task-03（测试卡）的用例测的是 task-01（provider）的导出函数，但归属
       // 只看本卡 allowed_paths ∪ review changedFiles，provider 卡的 acceptance 永远连不上消费卡的
@@ -2225,12 +2242,21 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           }
         }
         const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
+        // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
+        const existingTests = []
+        if (frLinkedExisting && testFiles.length === 0) {
+          for (const f of frLinkedExisting.files) {
+            if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
+          }
+        }
+        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])] : testFiles
         probe7.tasks.push({
           task: card.task,
           acceptance: card.acceptance,
           fmError: card.fmError || null,
-          testFiles,
-          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
+          testFiles: finalTestFiles,
+          existingTests,
+          hints: buildAcceptanceHints(card.acceptance, finalTestFiles, cwd, wtRoot, probe7CrossRoots),
         })
       }
       // ── trace 落盘（2026-09-24-fr-test-bindings task-03，fr-test-binding 写侧）：矩阵归属
@@ -3668,14 +3694,17 @@ export function generateVerifyResultSkeleton(result) {
  * @param {{ mdPath: string, runtimeRoot: string, label?: string }} opts
  * @returns {string|null} 备份文件绝对路径；目标缺失/写失败返回 null（fail-soft，调用方提示）
  */
-export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result' }) {
+export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result', changeName = null }) {
   try {
     if (!existsSync(mdPath)) return null
     const runsDir = join(runtimeRoot, 'verify-runs')
     mkdirSync(runsDir, { recursive: true })
     // 毫秒精度时间戳：同秒连跑两次不互相覆盖（秒级 ts 会静默吞前一份备份）
     const ts = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17)
-    const backupPath = join(runsDir, `${label}-backup-${ts}.md`)
+    // change 段（2026-10-06-verify-docs-prefill task-04 评审 P3-1 清偿）：多 change 并行时备份
+    // 归属靠文件名可辨，不靠内容；缺省不带（向后兼容旧调用形态）
+    const changeSeg = changeName ? `${changeName.replace(/[^A-Za-z0-9._-]/g, '_')}-` : ''
+    const backupPath = join(runsDir, `${label}-backup-${changeSeg}${ts}.md`)
     copyFileSync(mdPath, backupPath)
     return backupPath
   } catch {
@@ -3699,7 +3728,9 @@ function splitProbeSectionRanges(text) {
     if (m) {
       if (cur) sections.push({ ...cur, endLine: i })
       cur = { num: parseInt(m[1], 10), startLine: i }
-    } else if (cur && /^#{1,3} /.test(lines[i])) {
+    } else if (cur && /^#{1,4} /.test(lines[i])) {
+      // 边界认任意 1-4 级标题（2026-10-06-verify-docs-prefill task-04 评审 P3-3 清偿）：只认
+      // #{1,3} 时 agent 在含占位段后手写的 #### 子节会被并入段内，刷新时连带被吞
       sections.push({ ...cur, endLine: i })
       cur = null
     }

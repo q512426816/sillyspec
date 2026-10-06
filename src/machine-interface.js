@@ -141,7 +141,7 @@ function greenCachedCheck({ kind, greenRoot, cwd, specBase, changeName }, runRea
   return result;
 }
 
-export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false } = {}) {
+export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false, docsOnly = false } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
   // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
   // specDir，默认解析会指向本地孤儿库，与下方 planContent/changeDir 的 specRoot 两套事实源混拼。
@@ -312,7 +312,28 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     }
 
     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
-    if (stage === 'verify') {
+    // docsOnly 预检档（2026-10-06-verify-docs-prefill task-01）：纯文档契约缺项（visual-evidence/
+    // 结论槽/移交项等）毫秒级可查，却因 gate verify 含测试执行而整体变贵（postmortem 实证
+    // --json 超时转后台）——本档跳过 test/lint 执行（informational 占位明示），其余检查照跑；
+    // 测试客观核验仍以完整 gate verify / verify --done 为准。
+    if (stage === 'verify' && docsOnly) {
+      checks.push({
+        id: 'verify-test',
+        code: checkCode('verify-test'),
+        ok: true,
+        informational: true,
+        warnings: ['verify-test 跳过（--docs-only 预检档）——本档只核文档/契约面不执行测试；测试客观核验以完整 gate verify（不带 --docs-only）或 verify --done 为准'],
+        data: { status: 'docs-only-skip' },
+      });
+      checks.push({
+        id: 'verify-lint',
+        code: checkCode('verify-lint'),
+        ok: true,
+        informational: true,
+        warnings: ['verify-lint 跳过（--docs-only 预检档）——同上，lint 客观核验以完整 gate 或 verify --done 为准'],
+        data: { status: 'docs-only-skip' },
+      });
+    } else if (stage === 'verify') {
       // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
       let greenRoot = null;
       try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
