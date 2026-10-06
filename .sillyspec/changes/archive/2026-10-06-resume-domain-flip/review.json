@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-resume-domain-flip",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0abe84727a51666483b538a2f4515a7c25865e1f",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——过滤是纯时间点快照比较（条目 mtime vs DB created_at），与到达顺序无关；并集 new Set 可交换（src/flow.js:613）；「mtime 只增不回拨（正常语义下）」限定词已披露，对抗性回拨只影响 advisory 注入面，无数据正确性风险）",
+    "并发": "ok（边界已裁决：可接受——首轮 P3 已清偿：stat 抛错（src/flow.js:118）与 readdir 抛错（:122）现均返 Infinity=保守保留，walk 超帽（:124）同返 Infinity，设计并发作答「readdir/stat 抛错→保守保留」与代码逐字一致；stat 失败保留分支经 opts.statFn 注入缝真测（test/resume-domain-flip.test.mjs:88-92）并跑绿。残留 stat-比较窗口 TOCTOU 属快照语义固有的已披露边界，仅 advisory 面）",
+    "切换": "ok（边界已裁决：可接受——filterPreChangeUntracked 纯函数不落盘、幂等（src/flow.js:146-165 无写操作）；出生时刻为 DB created_at 快照不随重入漂移；_ensureDB 在同 resume 路径更早处（:573 标题读取）已调用，birthTs 读取（:603）无新增落盘副作用；接口契约声明「行为变化仅 resume 注入，fresh/adopt/done 不变」经 diff 核验属实——changedFilesSinceBaseline 内部（:89-109）与其余调用点未动）",
+    "作用域": "ok（边界已裁决：可接受——gitQuiet(cwd)/join(cwd,norm)/pm._ensureDB(cwd) 全部 cwd 域内无跨仓读取；「无 DB/无行不过滤=现状」best-effort 边界经代码（:601-608 try/catch→birthTs=null）与测试① birthTs=null deepEqual 断言双核验真实）"
+  },
+  "reviewNotes": "第二轮评审（清偿复核）。首轮三条 findings 逐一验证清偿：① P2 stat 失败保留无测试→已补：opts.statFn 注入缝（src/flow.js:159）+ 用例断言保留与照常剔除双侧（test:87-92），跑绿；② P3 readdir 抛错返陈旧 mtime→已改返 Infinity（src/flow.js:122），对齐设计并发作答；③ P3 绑定用例名漂移→requirements.md:81-86 绑定行与实际 test 标题（①②③④）逐字对齐，按名可检索。FR↔实现↔测试三方一致逐条核验成立：FR-01 并集去重（:609-614）+ e2e ② 断言 input 域恢复/无误导行/无伪域；FR-02 时间判据过滤无路径白名单（:146-165）+ ① 六分支断言；FR-03 created_at best-effort（:601-608）+ ① null 断言；FR-04 fr-rot-precision ⑥（test/fr-rot-precision.test.mjs:136-138）与本测试 ③ 双源码钉跑绿、调用形态逐字保留（:609）；FR-05 覆盖面齐且 ④ 断言 test:core 驻留（package.json 实含）；FR-06 npm run test:core 亲测 263/263 全绿 exit 0。声明边界逐条裁决均「可接受」（理由见 dimensionNotes）：mtime 不可信误剔（对称面 collectFreezeFiles 不滤、审计/冻结面不动，advisory 变窄不丢事实）、clock skew 同机同时钟、best-effort 三态保守=现状、walk 超帽保守保留、行为变化仅 resume 注入面。防护声明全部代码实证生效。生成物同步：无类型/契约文件面；tasks.md 六格全勾与实证一致；change.patch 冻结面与工作区、HEAD 三者一致（git diff HEAD 对 4 个交付文件为空）。walk 超帽分支无独立单测，但 FR-05 承诺枚举不含该支（首轮已裁），不构成缺口。FR-06 绑定「test:core 亲测全绿」非用例名但自我注明「非单测断言」且为本评审独立复现，非虚假存在声明。",
+  "reviewedAt": "2026-10-06T13:37:59Z"
+}

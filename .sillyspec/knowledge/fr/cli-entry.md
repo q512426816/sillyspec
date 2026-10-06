@@ -7251,3 +7251,117 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-resume-title
   status: active
+
+## FR-cli-entry-383 resume 路由面 = 过滤后的基线以来文件面 ∪ --input 路径语料路由面（重入知识面 ⊇ fresh 知识面）
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：重入早于干活（复现面）
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-01
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-01
+  tests: test/resume-domain-flip.test.mjs「② 重入早于干活：垃圾未跟踪目录不劫持触达域、input 域恢复注入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active
+
+## FR-cli-entry-384 未跟踪条目「变更出生时刻之前从未写过」（最新 mtime 早于变更出生时刻；目录递归取成员最大 mtime，walk 带安全帽；stat 失败/超帽/无出生时戳保守保留）时不再进入路由面——判据是时间不是路径形态，不建路径白名单
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：他侧遗留垃圾；干活期新写的未跟踪文件
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-02
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-02
+  tests: test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active
+
+## FR-cli-entry-385 变更出生时刻取进度库 changes.created_at（best-effort：无 DB/无行不过滤，行为同现状）
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：无 DB 的存量变更
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-03
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-03
+  tests: test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active
+
+## FR-cli-entry-386 fr-rot-precision ⑥ 的源码级钉（resume 复用 changedFilesSinceBaseline）保持绿
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-04
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-04
+  tests: test/resume-domain-flip.test.mjs「③ 源码钉：resume 路由面包裹 filterPreChangeUntracked 并并集 input 路由面（⑥ 调用形态不变）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active
+
+## FR-cli-entry-387 新增回归测试覆盖：过滤判据各分支 + 重入简报端到端（垃圾未跟踪目录不再劫持触达域、input 域恢复注入）
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-05
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-05
+  tests: test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」 | test/resume-domain-flip.test.mjs「② 重入早于干活：垃圾未跟踪目录不劫持触达域、input 域恢复注入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active
+
+## FR-cli-entry-388 npm run test:core 全绿
+变更：2026-10-06-resume-domain-flip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-resume-domain-flip/requirements.md#FR-06
+最近确认：0abe84727a51666483b538a2f4515a7c25865e1f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-domain-flip:flow:测试绑定FR-06
+  tests: test/resume-domain-flip.test.mjs「test:core 亲测全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-domain-flip
+  status: active

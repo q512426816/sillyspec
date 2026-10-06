@@ -1,0 +1,43 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量变更实测发现：flow start 重入（恢复简报）的知识注入触达域会被先于变更存在的他侧未跟踪文件劫持——resume 路由面 changedFilesSinceBaseline 经 git status --porcelain
+  把其他会话遗留的未跟踪目录（如 .claude/skills/*）扫进来；重入时若本变更尚无提交与工作树改动，路由面仅剩这批垃圾，域被劫持成伪域 auto-*，fresh 简报从 --input 提取的真实域（如
+  core-engine）与相关 FR 注入在断点恢复后全部丢失——恢复时最需要上下文反而最瞎。
+
+
+  成功标准：
+
+  - resume 路由面 = 过滤后的基线以来文件面 ∪ --input 路径语料路由面（重入知识面 ⊇ fresh 知识面）
+
+  - 未跟踪条目「变更出生时刻之前从未写过」（最新 mtime 早于变更出生时刻；目录递归取成员最大 mtime，walk 带安全帽；stat 失败/超帽/无出生时戳保守保留）时不再进入路由面——判据是时间不是路径形态，不建路径白名单
+
+  - 变更出生时刻取进度库 changes.created_at（best-effort：无 DB/无行不过滤，行为同现状）
+
+  - fr-rot-precision ⑥ 的源码级钉（resume 复用 changedFilesSinceBaseline）保持绿
+
+  - 新增回归测试覆盖：过滤判据各分支 + 重入简报端到端（垃圾未跟踪目录不再劫持触达域、input 域恢复注入）
+
+  - npm run test:core 全绿
+autopilot: true
+baseline_commit: f9bab21a51d765666fd240342e68f9db56def467
+updatedAt: '2026-10-06T13:38:26.367Z'
+baseline_sha256: 0413646cb73ed363efdf13966d4a9c8715151047168dd4c9d9e2dc042e6b65c0
+gate_summary: >-
+  test: passed ← module[]+deps(js65)+fr(64)（191.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006132422\test-result.json｜lint: passed
+  ← npm run lint（39.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006132422\test-result.json｜门文件 6 个
+

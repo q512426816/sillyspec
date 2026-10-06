@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-resume-domain-flip",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5139f1b8e7f4c4ed467888368e3f34e8b3b9db60",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-05 承诺的「stat 失败保留」测试分支缺失——六支承诺覆盖只交付五支",
+      "evidence": "FR-05 必须-强度明确列举过滤判据分支含「stat 失败保留」，但 test ①（filterPreChangeUntracked 过滤判据各分支）只覆盖旧 mtime 剔除/目录递归/新 mtime 保留/混合目录拉高/跟踪条目不滤/无出生时戳不滤，无任何 stat 失败（→Infinity 保守保留）用例；walk 超帽分支同样未测（不在 FR-05 列举内）。行为本身是保守=现状方向，无数据正确性风险，纯测试覆盖承诺缺口。",
+      "location": "test/resume-domain-flip.test.mjs:54"
+    },
+    {
+      "severity": "P3",
+      "title": "newestMtime 的 readdirSync 失败分支返回陈旧目录 mtime 而非保守 Infinity，偏离设计声明的「readdir/stat 抛错 → 保守保留」防护",
+      "evidence": "设计并发作答声称「成员被并发删除 → readdir/stat 抛错 → 保守保留，两方向都不会把真在干活的文件误剔」；代码 statSync 抛错确返回 Infinity（保守，src/flow.js:116），但 readdirSync 抛错返回 max（stat 时刻的目录自身 mtime，src/flow.js:120）——窄角竞态（stat 成功后 readdir 失败 + 目录 mtime 早于出生时刻 + 成员为原地改写不增删）下真被干活触及的未跟踪目录会被误剔。影响面仅 advisory 路由注入窄化（收口冻结面/审计面不受影响），且触发条件罕见（Windows 句柄竞态）。保守修法一行：catch 返回 Infinity。",
+      "location": "src/flow.js:120"
+    },
+    {
+      "severity": "P3",
+      "title": "测试绑定声称的用例名与实际 test 标题漂移（实质断言在场）",
+      "evidence": "requirements.md 测试绑定引用「干活期新写的未跟踪文件保留在路由面」（FR-02）、「无出生时戳不过滤（行为同现状）」（FR-03）、「fr-rot-precision ⑥ 源码钉保持（changedFilesSinceBaseline 调用形态不变）」（FR-04）——三个名字均不存在为独立用例（实际标题为 ①/③ 带 ①②③④ 前缀的不同措辞），对应断言散在 ① 与 ③ 内部且运行通过（fresh-work.txt 保留断言、birthTs=null deepEqual 断言、源码钉 includes 断言）。绑定锚名不可按名检索，三方一致的实质成立、名不符。",
+      "location": ".sillyspec/changes/2026-10-06-resume-domain-flip/requirements.md:82"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——过滤为纯时间点快照比较、并集可交换，与事件到达顺序无关；设计声明的「mtime 只增不回拨（正常语义下）」限定词属对抗性场景，仅 advisory 注入面）",
+    "并发": "finding（P3——readdir 抛错分支返回陈旧 mtime 非声明保守保留；stat 抛错/成员删除→Infinity 保守、porcelain 失败原样返回等其余防护经代码核验真实生效。声明边界「walk 期间他侧并发写读到更晚 mtime → 保留」已裁决：可接受）",
+    "切换": "ok（边界已裁决：可接受——filterPreChangeUntracked 纯函数不落盘、重入幂等；出生时刻为 DB created_at 快照；接口契约声明「行为变化仅 resume 注入，fresh/adopt/done 不变」经 diff 核验属实——changedFilesSinceBaseline 另两处调用点（src/flow.js:828 dirty 计数、:877 收口测试门）语义未动）",
+    "作用域": "ok（边界已裁决：可接受——gitQuiet(cwd)/join(cwd,norm)/pm._ensureDB(cwd) 全部 cwd 域内，无跨仓读取；「无 DB/无行不过滤=现状」best-effort 边界经代码与测试① birthTs=null 分支核验真实）"
+  },
+  "reviewedAt": "2026-10-06T13:30:45Z"
+}

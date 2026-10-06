@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-resume-domain-flip",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-01",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「② 重入早于干活：垃圾未跟踪目录不劫持触达域、input 域恢复注入」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-02",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-03",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-04",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「③ 源码钉：resume 路由面包裹 filterPreChangeUntracked 并并集 input 路由面（⑥ 调用形态不变）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-05",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「① filterPreChangeUntracked 过滤判据各分支」",
+        "test/resume-domain-flip.test.mjs「② 重入早于干活：垃圾未跟踪目录不劫持触达域、input 域恢复注入」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-06-resume-domain-flip:flow:测试绑定FR-06",
+      "tests": [
+        "test/resume-domain-flip.test.mjs「test:core 亲测全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-domain-flip"
+    }
+  ]
+}
