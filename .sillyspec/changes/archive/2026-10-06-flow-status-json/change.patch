@@ -1,0 +1,548 @@
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/flow-state.yaml b/.sillyspec/changes/2026-10-06-flow-status-json/flow-state.yaml
+new file mode 100644
+index 00000000..52a1657a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/flow-state.yaml
+@@ -0,0 +1,24 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  多 agent 并行场景下，外层编排器与其他 agent 需要程序化读取轻量变更状态（阶段/槽位/任务勾选进度）来决定下一步动作；当前 flow status 只有人类可读渲染文本，脚本无法稳定解析，只能靠 fragile 文本匹配。给
++  flow status 增加 --json 输出：结构化给出变更状态全貌，人类可读路径行为保持不变。
++
++
++  成功标准：
++
++  - flow status --change <存在的活跃变更> --json 输出合法 JSON，含
++  change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++
++  - 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++
++  - 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
++autopilot: true
++baseline_commit: e62d3bc5fa384609d2b1b906becd51d3a3c80f46
++updatedAt: '2026-10-06T05:06:52.416Z'
++baseline_sha256: b5f930bb9ac766adfc1f8a60492bd4f27948140cda36175bec8cba598fb3f22c
++
+diff --git a/package.json b/package.json
+index ddfedc93..31c2a102 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/flow.js b/src/flow.js
+index f98a375b..49494081 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1703,9 +1703,15 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null }) {
+   console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：编辑 flow-state.yaml 删除 spec_approved 三字段。`)
+ }
+ 
+-export async function cmdFlow(args, cwd, specDir = null) {
++export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+   const sub = args[0] || ''
+   const rest = args.slice(1)
++  // 全局 --json 透传（2026-10-06-flow-status-json）：index.js 顶层把 --json 从 filteredArgs
++  // 剥进全局变量，flow 族此前在真实 CLI 入口下永远收不到该 flag（in-process 直调 cmdFlow 带
++  // --json 才生效）——cmdFlowStart 的 json 信封成了死代码、status 无机器可读面。统一入口
++  // 形状：第 4 参 opts.json 由 index.js 传入，与 args 内残余 --json（直调/测试路径）取或，
++  // 两路同语义不分叉。
++  const jsonGlobal = opts.json === true
+   // 平台参数面（2026-09-25-thin-platform-args，平台侧三子代理核对驱动）：specBase 统一走
+   // resolvePlatformSpecDir——显式 --spec-dir/--spec-root > .sillyspec-platform.json 指针（fail-closed，
+   // 指针失效报错不静默回退本地防状态分裂）> 本地。此前 flow 族零平台支持：--spec-dir 是 ENOENT
+@@ -1791,7 +1797,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+       autopilot: hasFlag('--autopilot'),
+       cwd, specBase,
+-      json: hasFlag('--json'),
++      json: hasFlag('--json') || jsonGlobal,
+     })
+   }
+   if (sub === 'approve') {
+@@ -1809,6 +1815,10 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     await reportAgentLog(change, sub)
+     const changeDir = join(specBase, 'changes', change)
+     const st = readFlowState(changeDir)
++    // --json（2026-10-06-flow-status-json）：机器可读单对象输出——事实与人类渲染同源同判定，
++    // 退出码同点（missing=1，其余=0），程序化消费方不再 fragile 文本匹配。
++    // 入口双路：jsonGlobal 来自 index.js 全局透传（真实 CLI），hasFlag 覆盖直调/测试路径
++    const json = jsonGlobal || hasFlag('--json')
+     if (!st) {
+       // 归档检测：归档后目录搬至 changes/archive/<日期>-<名>（原目录不存在）——查 archive 目录
+       const archiveDir = join(specBase, 'changes', 'archive')
+@@ -1816,16 +1826,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
+       try {
+         if (existsSync(archiveDir)) isArchived = readdirSync(archiveDir).some((e) => e === change) // 精确匹配（fr-governance-sweep：归档目录名恒等 change 名，includes 子串会把 flow-check 误命中 flow-checkpoints）
+       } catch { /* best-effort */ }
+-      if (isArchived) {
+-        console.log(`📦 ${change}：已归档`)
+-      } else if (existsSync(changeDir)) {
+-        console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
+-      } else {
+-        console.log(`❓ ${change}：变更不存在`)
+-        // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
+-        // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走下方正常展示路径 exit 0
+-        process.exit(1)
+-      }
++      // 前置形态先归一（archived/dir-no-state/missing）——--json 与人类渲染共用同一判定，防两路径各算各的漂移
++      const form = isArchived ? 'archived' : (existsSync(changeDir) ? 'dir-no-state' : 'missing')
++      if (json) console.log(JSON.stringify({ change, status: form }))
++      else if (form === 'archived') console.log(`📦 ${change}：已归档`)
++      else if (form === 'dir-no-state') console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
++      else console.log(`❓ ${change}：变更不存在`)
++      // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
++      // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走上方形态路径 exit 0。
++      // --json 与人类路径同点退出（分叉会让脚本消费方无法复用退出码判定）
++      if (form === 'missing') process.exit(1)
+       return
+     }
+     const subDone = SUBSTEPS.filter((k) => st.substeps?.[k] === 'done')
+@@ -1887,11 +1897,30 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         }
+       }
+     } catch { /* 心跳 fail-soft */ }
++    // 任务勾选预计算（--json 与人类渲染共用同源；正则与原内联 IIFE 逐字一致；hasTasks 保住
++    // 「缺 tasks.md 时不渲染该行」的现状——人类输出不得因本变更变形）
++    let tasksChecked = 0, tasksTotal = 0, hasTasks = false
++    try {
++      const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
++      hasTasks = true
++      tasksChecked = (t.match(/^- \[x\]/gm) || []).length
++      tasksTotal = (t.match(/^- \[( |x)\]/gm) || []).length
++    } catch { /* 无 tasks.md */ }
++    if (json) {
++      console.log(JSON.stringify({
++        change, status: 'active', phase,
++        designFilled, frFilled, bindingsFilled, bindingsTotal,
++        tasksChecked, tasksTotal,
++        substeps: subDone, substepsTotal: SUBSTEPS.length,
++        ...(st.legacy_fallback ? { legacyFallback: true } : {}),
++      }))
++      return
++    }
+     console.log([
+       `📋 ${change}`,
+       `   阶段：${phase}`,
+       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+-      (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
++      hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,
+       ...(heartbeat || []),
+       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
+       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
+@@ -1947,7 +1976,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
+     return r
+   }
+-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名>')
++  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json]')
+   console.error('      --input 可照抄形态（引号内换行合法）：')
+   console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
+   console.error('')
+diff --git a/src/index.js b/src/index.js
+index 23a7a766..c25886ce 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -4568,9 +4568,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+       break;
+     }
+     case 'flow': {
+-      // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2
++      // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2。
++      // --json 全局透传（2026-10-06-flow-status-json）：该 flag 在上方全局解析段被剥出
++      // filteredArgs，flow 族经此收到 {json} 才在真实入口下生效（status 机器可读输出 /
++      // start JSON 信封同门，与 gate/derive 族「index 消费全局 flag、显式传子命令」同款形状）
+       const flowMod = await import('./flow.js');
+-      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir);
++      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir, { json });
+       break;
+     }
+     case 'workflow': {
+diff --git a/test/flow-status-json.test.mjs b/test/flow-status-json.test.mjs
+new file mode 100644
+index 00000000..a68ac58f
+--- /dev/null
++++ b/test/flow-status-json.test.mjs
+@@ -0,0 +1,169 @@
++/**
++ * 2026-10-06-flow-status-json 回归：flow status --json 机器可读输出
++ *
++ * 覆盖：
++ *   ① 活跃变更 --json：stdout 单对象合法 JSON，九字段齐备（change/phase/designFilled/
++ *      frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps），
++ *      值与人类可读路径同源（同 fixture 两条路径跑出同事实）
++ *   ② 前置三形态：missing exit 1（子进程验真退出码——in-process 会杀 runner），与人类
++ *      路径退出码一致；archived / dir-no-state exit 0 且 JSON 带对应 status 标记
++ *   ③ 人类可读回归：不带 --json 关键行仍在（事实/渲染分离不得改坏渲染面；缺 tasks.md
++ *      时不渲染任务勾选行的现状一并钉住）
++ *   ④ test:core 清单驻留断言（防移出日常拦截面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { spawnSync } from 'node:child_process'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { cmdFlow } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++const binCLI = join(ROOT, '..', 'bin', 'sillyspec.js')
++
++const CHANGE = '2026-10-06-fsj'
++
++function fixture({ withTasks = true } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'fsj-'))
++  const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
++  writeFileSync(join(dir, 'design.md'), [
++    '# D', '',
++    '<!--AGENT:槽1 -->', '答一', '',
++    '<!--AGENT:槽2 -->', '答二', '',
++    '<!--AGENT:槽3 -->', '答三', '',
++    '<!--AGENT:槽4 -->', '答四', '',
++  ].join('\n'))
++  writeFileSync(join(dir, 'requirements.md'), [
++    '# R', '',
++    '<!--AGENT:FR区 -->', '### FR-01: 某需求', '- 场景：x', '',
++    '<!--AGENT:测试绑定FR-01 -->', 'test/a.test.mjs「用例」', '',
++  ].join('\n'))
++  if (withTasks) {
++    writeFileSync(join(dir, 'tasks.md'), [
++      '---', 'author: t', '---', '# T', '',
++      '- [x] task-01: 第一件', '',
++      '- [ ] task-02: 第二件', '',
++      '- [ ] task-03: 第三件', '',
++    ].join('\n'))
++  }
++  return { cwd, dir }
++}
++
++async function runStatus(cwd, args = []) {
++  const orig = console.log
++  let out = ''
++  console.log = (...a) => { out += a.join('\n') + '\n' }
++  try {
++    await cmdFlow(['status', '--change', CHANGE, ...args], cwd, null)
++  } finally {
++    console.log = orig
++  }
++  return out
++}
++
++test('① 活跃变更 --json：单对象合法 JSON，九字段齐备且与人类路径同源', async () => {
++  const { cwd } = fixture()
++  try {
++    const out = await runStatus(cwd, ['--json'])
++    const lines = out.split('\n').filter((l) => l.trim() !== '')
++    assert.equal(lines.length, 1, `stdout 应恰一行 JSON，实际：${out}`)
++    const j = JSON.parse(lines[0])
++    for (const f of ['change', 'phase', 'designFilled', 'frFilled', 'bindingsFilled', 'bindingsTotal', 'tasksChecked', 'tasksTotal', 'substeps']) {
++      assert.ok(f in j, `字段 ${f} 缺失：${JSON.stringify(j)}`)
++    }
++    assert.equal(j.change, CHANGE)
++    assert.equal(j.status, 'active')
++    assert.ok(j.phase.startsWith('②'), `槽已填应判②执行，实际：${j.phase}`)
++    assert.equal(j.designFilled, true)
++    assert.equal(j.frFilled, true)
++    assert.equal(j.bindingsFilled, 1)
++    assert.equal(j.bindingsTotal, 1)
++    assert.equal(j.tasksChecked, 1)
++    assert.equal(j.tasksTotal, 3)
++    assert.deepEqual(j.substeps, [])
++    // 同源：同 fixture 人类路径渲染出的事实值与 JSON 字段一致
++    const human = await runStatus(cwd)
++    assert.ok(human.includes('阶段：②'), '人类路径同判②')
++    assert.ok(human.includes('design 槽：✅ 已填') && human.includes('FR 区：✅ 已填'), '人类路径槽位事实一致')
++    assert.ok(human.includes('绑定槽：1/1'), '人类路径绑定事实一致')
++    assert.ok(human.includes('任务勾选：1/3'), '人类路径勾选事实一致')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('①b 真实 CLI 入口（bin）：--json 经 index.js 全局解析透传进 flow 族（透传钉）', () => {
++  const { cwd } = fixture()
++  try {
++    const r = spawnSync(process.execPath, [binCLI, 'flow', 'status', '--change', CHANGE, '--json'], { cwd, encoding: 'utf8' })
++    assert.equal(r.status, 0, `应 exit 0，实际 ${r.status}（stdout=${r.stdout} stderr=${r.stderr}）`)
++    const lines = (r.stdout || '').split('\n').filter((l) => l.trim() !== '')
++    assert.equal(lines.length, 1, `stdout 应恰一行 JSON，实际：${r.stdout}`)
++    const j = JSON.parse(lines[0])
++    assert.equal(j.change, CHANGE)
++    assert.equal(j.status, 'active')
++    assert.equal(j.tasksChecked, 1)
++    assert.equal(j.tasksTotal, 3)
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('②a 已归档形态：JSON 标记 archived，exit 0（in-process 正常返回即 0）', async () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fsj-arc-'))
++  try {
++    mkdirSync(join(cwd, '.sillyspec', 'changes', 'archive', CHANGE), { recursive: true })
++    const out = await runStatus(cwd, ['--json'])
++    const j = JSON.parse(out.trim())
++    assert.equal(j.change, CHANGE)
++    assert.equal(j.status, 'archived')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('②b 目录在场无 flow-state：JSON 标记 dir-no-state，exit 0', async () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fsj-dir-'))
++  try {
++    const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
++    mkdirSync(dir, { recursive: true })
++    writeFileSync(join(dir, 'design.md'), '# D\n')
++    const out = await runStatus(cwd, ['--json'])
++    const j = JSON.parse(out.trim())
++    assert.equal(j.change, CHANGE)
++    assert.equal(j.status, 'dir-no-state')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('②c 变更不存在：JSON 标记 missing 且 exit 1——与人类路径退出码一致（子进程验真）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fsj-miss-'))
++  try {
++    const miss = '2099-01-01-no-such-change'
++    const jrun = spawnSync(process.execPath, [binCLI, 'flow', 'status', '--change', miss, '--json'], { cwd, encoding: 'utf8' })
++    assert.equal(jrun.status, 1, `--json missing 应 exit 1，实际 ${jrun.status}（stdout=${jrun.stdout} stderr=${jrun.stderr}）`)
++    const j = JSON.parse(jrun.stdout.trim())
++    assert.equal(j.change, miss)
++    assert.equal(j.status, 'missing')
++    const hrun = spawnSync(process.execPath, [binCLI, 'flow', 'status', '--change', miss], { cwd, encoding: 'utf8' })
++    assert.equal(hrun.status, 1, `人类路径 missing 应 exit 1，实际 ${hrun.status}`)
++    assert.ok(hrun.stdout.includes('变更不存在'), '人类路径文案在场')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('③ 人类可读回归：不带 --json 关键行未变形；缺 tasks.md 时不渲染勾选行', async () => {
++  const { cwd } = fixture({ withTasks: false })
++  try {
++    const out = await runStatus(cwd)
++    assert.ok(out.includes(`📋 ${CHANGE}`), '标题行在场')
++    assert.ok(out.includes('阶段：'), '阶段行在场')
++    assert.ok(out.includes('design 槽：') && out.includes('FR 区：') && out.includes('绑定槽：'), '槽位行在场')
++    assert.ok(!out.includes('任务勾选：'), '缺 tasks.md 时不得渲染任务勾选行（现状钉）')
++    assert.ok(out.includes('子步：0/8'), '子步行在场且计数正确')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('④ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {
++  const pkg = JSON.parse(readFileSync(join(ROOT, '..', 'package.json'), 'utf8'))
++  assert.ok(
++    (pkg.scripts?.['test:core'] || '').includes('test/flow-status-json.test.mjs'),
++    'test:core 必须包含 test/flow-status-json.test.mjs',
++  )
++})
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/design.md b/.sillyspec/changes/2026-10-06-flow-status-json/design.md
+new file mode 100644
+index 00000000..58401993
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/design.md
+@@ -0,0 +1,56 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:06:35.656Z
++---
++# 设计记录（Design Record）— 2026-10-06-flow-status-json
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++在 cmdFlow 的 status 分支把「状态事实计算」与「渲染」分离：先算出唯一一份事实（前置形态判定：不存在/已归档/目录在场无 state；活跃形态的阶段推断、design/FR/绑定槽、任务勾选计数、已完成子步），再按 `--json` 有无选择 JSON.stringify 单行输出或现有人类可读渲染。选这个方案是因为现有渲染与事实计算内联在同一段，程序化消费方只能 fragile 文本匹配；分离后两条渲染路径共享同一份事实变量，天然同源不漂移。
++
++实测发现并一并修复（子进程验真抓到）：index.js 顶层全局解析把 `--json` 剥出 filteredArgs，`case 'flow'` 派发时未透传——flow 族在真实 CLI 入口下永远收不到该 flag（cmdFlowStart 的 json 信封因此是死代码，in-process 直调才生效）。修复按 CLI 既有模式做族级透传：index.js 给 cmdFlow 传第 4 参 `{json}`，cmdFlow 内与 args 残余 `--json`（直调/测试路径）取或，两路同语义不分叉，不做逐子命令特判。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++命令行 `sillyspec flow status --change <名>` 新增可选 `--json`：stdout 输出单个 JSON 对象。活跃形态含 change/status="active"/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps（已完成子步名数组）/substepsTotal，升厚遗留时附 legacyFallback:true；三前置形态输出 change/status（"missing"|"archived"|"dir-no-state"）两字段。退出码与人类可读路径同点同值：missing exit 1，其余 exit 0。不带 `--json` 时输出与现状逐字一致。导出函数签名仅 cmdFlow 增可选第 4 参 opts.json（缺省 {}，既有三参调用全兼容）；无文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++status 是只读查询，读的是 flow-state.yaml/tasks.md/design.md/requirements.md 的落盘快照；文件缺失或不完整沿既有 fail-soft 语义（缺=未填/0），不新增到达顺序假设。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++本命令不写任何业务文件；多执行体同时跑 status 各自独立计算独立输出，无共享可变状态，无锁需求。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++无状态命令，中途中断无残留副作用；退出码在两种渲染路径下出自同一判定点，不存在「JSON 路径 exit 0、人类路径 exit 1」的分叉。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++specBase 解析沿用 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > 平台指针 > 本地，fail-closed），不引入新目录解析路径；JSON 只含本变更事实，跨实例不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：事实/渲染分离时改坏现有人类可读输出（heartbeat 等测试逐字钉渲染行）。对策：人类可读路径保留原渲染字符串本身，仅把渲染数组里的内联计算换成同语义的预计算变量（正则与语义逐字不变），并用测试钉住不带 --json 的关键行。试过放弃：对渲染文本做「文本→JSON 反解」包装层——放弃，文本是给人看的不是契约，反解正是本变更要消灭的 fragile 匹配。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow.js | status 分支事实/渲染分离 + --json 输出三形态标记与同点退出码；cmdFlow 增第 4 参 opts.json 族级透传 |
++| 修改 | src/index.js | case 'flow' 派发传入 {json}——全局 --json 剥离后显式透传（修 flow 族真实入口收不到 --json 的族级缺陷） |
++| 新增 | test/flow-status-json.test.mjs | 活跃九字段（in-process + bin 真实入口透传钉）/三前置形态退出码/人类可读回归/test:core 驻留断言 |
++| 修改 | package.json | test:core 清单登记 test/flow-status-json.test.mjs |
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/proposal.md b/.sillyspec/changes/2026-10-06-flow-status-json/proposal.md
+new file mode 100644
+index 00000000..bff2a53b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:06:35.656Z
++---
++# 提案书（Proposal）— 2026-10-06-flow-status-json
++
++## 动机
++
++任务原话转写：多 agent 并行场景下，外层编排器与其他 agent 需要程序化读取轻量变更状态（阶段/槽位/任务勾选进度）来决定下一步动作；当前 flow status 只有人类可读渲染文本，脚本无法稳定解析，只能靠 fragile 文本匹配。给 flow status 增加 --json 输出：结构化给出变更状态全貌，人类可读路径行为保持不变。
++
++成功标准：
++- flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++- 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++- 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++2. 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++3. 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
++
++## 成功标准（可验证）
++
++1. flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++2. 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++3. 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/requirements.md b/.sillyspec/changes/2026-10-06-flow-status-json/requirements.md
+new file mode 100644
+index 00000000..fee0afa7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/requirements.md
+@@ -0,0 +1,53 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:06:35.656Z
++---
++# 需求规格（Requirements）— 2026-10-06-flow-status-json
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++
++- 必须：`--json` 在场时 stdout 输出单个合法 JSON 对象（末尾一次换行），包含 change、phase、designFilled、frFilled、bindingsFilled、bindingsTotal、tasksChecked、tasksTotal、substeps 九字段，字段值与人类可读路径同源（同一份状态推断逻辑产出，两条渲染路径不得各自计算）；禁止在 JSON 行之外向 stdout 混入人类可读文案行。不带 `--json` 时输出必须与现状逐字一致。
++
++#### 场景：主路径
++
++- Given：变更目录在场且 flow-state.yaml 存在（spec 槽已填、任务部分勾选）
++- When：`flow status --change <名> --json`
++- Then：stdout 整体可被 JSON.parse，九字段齐备，substeps 为已完成子步名数组，phase 为阶段字符串
++- Given：同上 fixture，经真实 CLI 入口（bin/sillyspec.js）调用
++- When：`node bin/sillyspec.js flow status --change <名> --json`
++- Then：stdout 同为单行合法 JSON（--json 经 index.js 全局解析透传进 flow 族，不得因入口层剥离而失效）
++
++### FR-02: 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++
++- 必须：变更不存在时 `--json` 输出含不存在标记的 JSON 对象且进程 exit 1；已归档时输出含已归档标记的 JSON 对象且 exit 0；变更目录在场但无 flow-state（头脑风暴预段形态）时输出含对应标记的 JSON 且 exit 0。三形态退出码必须与不带 `--json` 的现行路径完全一致。
++
++#### 场景：三形态退出码与标记
++
++- Given：changes/ 与 changes/archive/ 下均无该变更目录
++- When：`flow status --change <名> --json`
++- Then：stdout 为合法 JSON 且含不存在状态标记，进程 exit 1
++- Given：仅 changes/archive/<名> 在场
++- When：同上
++- Then：stdout 为合法 JSON 且含已归档状态标记，exit 0
++
++### FR-03: 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
++
++- 必须：新增测试文件覆盖活跃、不存在、已归档、目录在场无 flow-state 四形态的 `--json` 输出与退出码，并断言不带 `--json` 的人类可读关键行未回归；测试文件必须登记进 package.json 的 test:core 清单；test:core 全量跑绿。
++
++#### 场景：主路径
++
++- Given：仓库工作区含本变更实现
++- When：`npm run test:core`
++- Then：全部用例通过，含新增测试文件
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-status-json.test.mjs「活跃变更 --json 九字段齐备且与人类路径同源」
++FR-02: test/flow-status-json.test.mjs「不存在 exit 1 / 已归档与目录在场无 state exit 0——与人类路径一致」
++FR-03: test/flow-status-json.test.mjs「test:core 清单驻留断言 + 人类可读回归行」
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/tasks.md b/.sillyspec/changes/2026-10-06-flow-status-json/tasks.md
+new file mode 100644
+index 00000000..73a099e0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T05:06:35.656Z
++---
++# 任务注册表（Tasks）— 2026-10-06-flow-status-json
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-flow-status-json --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-flow-status-json` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
++- [x] task-02: 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
++- [x] task-03: 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-json/review.json.superseded-20261006T052600 b/.sillyspec/changes/2026-10-06-flow-status-json/review.json.superseded-20261006T052600
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-json/review.json.superseded-20261006T052600
+@@ -0,0 +1,22 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-06-flow-status-json",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "aa560d148800539e7c116c167422afd8fdcd7cd4",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "接口契约节「无导出函数签名变化」与文件变更清单「cmdFlow 增第 4 参」表述不一致",
++      "evidence": "cmdFlow 为 export 函数且签名实际新增 opts = {} 第 4 参（src/flow.js:1721 附近签名行）；同文档文件变更清单已如实披露该参数，可选参带默认值向后兼容、仅 index.js 一处调用方更新，无行为风险——契约节该句是文档精度问题非交付缺陷",
++      "location": ".sillyspec/changes/2026-10-06-flow-status-json/design.md:23"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-06T05:24:58Z"
++}

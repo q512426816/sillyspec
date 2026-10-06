@@ -6992,3 +6992,60 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-review-anchor-and-negation
   status: active
+
+## FR-cli-entry-370 flow status --change <存在的活跃变更> --json 输出合法 JSON，含 change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
+变更：2026-10-06-flow-status-json
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-json/requirements.md#FR-01
+最近确认：e751e152e63cf842c15237779705e29b87ab9124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-json:flow:测试绑定FR-01
+  tests: test/flow-status-json.test.mjs「活跃变更 --json 九字段齐备且与人类路径同源」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-json
+  status: active
+
+## FR-cli-entry-371 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
+变更：2026-10-06-flow-status-json
+状态：active
+摘要：三形态退出码与标记
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-json/requirements.md#FR-02
+最近确认：e751e152e63cf842c15237779705e29b87ab9124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-json:flow:测试绑定FR-02
+  tests: test/flow-status-json.test.mjs「不存在 exit 1 / 已归档与目录在场无 state exit 0——与人类路径一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-json
+  status: active
+
+## FR-cli-entry-372 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
+变更：2026-10-06-flow-status-json
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-json/requirements.md#FR-03
+最近确认：e751e152e63cf842c15237779705e29b87ab9124
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-json:flow:测试绑定FR-03
+  tests: test/flow-status-json.test.mjs「test:core 清单驻留断言 + 人类可读回归行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-json
+  status: active

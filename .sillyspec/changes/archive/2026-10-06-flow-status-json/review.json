@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-flow-status-json",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e751e152e63cf842c15237779705e29b87ab9124",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定「用例名」为释义式聚合，与实际用例名不逐字一致",
+      "evidence": "requirements.md 测试绑定行所引「用例名」在 test/flow-status-json.test.mjs 中无逐字同名用例：FR-02 行「不存在 exit 1 / 已归档与目录在场无 state exit 0——与人类路径一致」实际由 ②a/②b/②c 三个用例分摊，FR-03 行由 ③/④ 两用例分摊，FR-01 行为实际用例名的删节版（实际名含「① …：单对象合法 JSON，」前后缀）；所指测试均真实存在且断言对应行为（本评审实测 7 用例全绿），属绑定行命名精度问题，非覆盖缺口",
+      "location": ".sillyspec/changes/2026-10-06-flow-status-json/requirements.md:51"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-06T05:29:58Z"
+}

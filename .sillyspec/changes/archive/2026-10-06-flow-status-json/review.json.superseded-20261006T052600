@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-flow-status-json",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "aa560d148800539e7c116c167422afd8fdcd7cd4",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "接口契约节「无导出函数签名变化」与文件变更清单「cmdFlow 增第 4 参」表述不一致",
+      "evidence": "cmdFlow 为 export 函数且签名实际新增 opts = {} 第 4 参（src/flow.js:1721 附近签名行）；同文档文件变更清单已如实披露该参数，可选参带默认值向后兼容、仅 index.js 一处调用方更新，无行为风险——契约节该句是文档精度问题非交付缺陷",
+      "location": ".sillyspec/changes/2026-10-06-flow-status-json/design.md:23"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-06T05:24:58Z"
+}

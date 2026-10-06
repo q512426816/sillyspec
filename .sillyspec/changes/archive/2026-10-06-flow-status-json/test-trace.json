@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-flow-status-json",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-flow-status-json:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-status-json.test.mjs「活跃变更 --json 九字段齐备且与人类路径同源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-json"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-flow-status-json:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-status-json.test.mjs「不存在 exit 1 / 已归档与目录在场无 state exit 0——与人类路径一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-json"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-flow-status-json:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-status-json.test.mjs「test:core 清单驻留断言 + 人类可读回归行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-json"
+    }
+  ]
+}
