@@ -481,3 +481,60 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-09-29-brainstorm-exit-thin-default
   status: active
+
+## FR-docs-consistency-023 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
+变更：2026-10-06-module-map-list-leak
+状态：active
+摘要：块式多字段（实测形态）；未识别自定义字段（开放世界）
+全文：.sillyspec/changes/archive/2026-10-06-module-map-list-leak/requirements.md#FR-01
+最近确认：bb882b535e34e2a82d97f0324d0f88e4420bf591
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-module-map-list-leak:flow:测试绑定FR-01
+  tests: test/module-map-list-leak.test.mjs「块式多字段不泄漏（三解析器）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-module-map-list-leak
+  status: active
+
+## FR-docs-consistency-024 flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
+变更：2026-10-06-module-map-list-leak
+状态：active
+摘要：散文斜杠词不路由（实测回归）；图内目标文件（尚不存在）照常路由；绿地草案不受影响
+全文：.sillyspec/changes/archive/2026-10-06-module-map-list-leak/requirements.md#FR-02
+最近确认：bb882b535e34e2a82d97f0324d0f88e4420bf591
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-module-map-list-leak:flow:测试绑定FR-02
+  tests: test/module-map-list-leak.test.mjs「域路由在场过滤与绿地草案不受影响」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-module-map-list-leak
+  status: active
+
+## FR-docs-consistency-025 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
+变更：2026-10-06-module-map-list-leak
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-06-module-map-list-leak/requirements.md#FR-03
+最近确认：bb882b535e34e2a82d97f0324d0f88e4420bf591
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-module-map-list-leak:flow:测试绑定FR-03
+  tests: test/module-map-list-leak.test.mjs「全量用例（含 resolveTouchedDomains 端到端误路由回归）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-module-map-list-leak
+  status: active

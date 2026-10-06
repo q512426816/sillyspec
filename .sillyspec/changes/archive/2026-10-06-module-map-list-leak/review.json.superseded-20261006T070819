@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-module-map-list-leak",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d09a40d895d1c60d0565fc1086b734c1ed1cb2e3",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "同一泄漏审计的量化口径在交付物间不一致（500 vs 950 实路径）",
+      "evidence": "src/decision-distill.js 结构守卫注释与 git 提交信息均写「8 项目 map 500 实声明 vs 1375 泄漏项」，而 proposal.md 与 test/module-map-list-leak.test.mjs 头注释写「8 个项目 map 950 实路径 vs 1375 泄漏项」——同一审计给出两个互斥的实路径总数，其一必误；纯注释/文案面，无功能影响（评审员独立自跑 jsYaml 对账 7 个可发现 map，三解析器 missing=0 extra=0，不受该口径影响）",
+      "location": "src/decision-distill.js:217"
+    }
+  ],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-06T15:06:58+08:00"
+}

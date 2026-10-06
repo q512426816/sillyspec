@@ -1,0 +1,628 @@
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 7e46da57..cbc8f4d2 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -195,20 +195,29 @@ export function parseModulePathsSubset(content) {
+   let cur = null
+   let key = null
+   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
++    // 空行/注释行：保状态（列表块内允许空行与注释穿插）
++    if (line.trim() === '' || line.trim().startsWith('#')) continue
+     const mm = line.match(/^  ([a-zA-Z0-9_-]+):$/)
+     if (mm) { cur = mm[1]; modules[cur] = { paths: [] }; key = null; continue }
+     if (!cur) continue
++    const item = line.match(/^      - (.+)$/)
++    if (item && key) { modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, '')); continue }
+     const inline = line.match(/^    (paths|core_files): \[(.*)\]$/)
+     if (inline) {
+       modules[cur][inline[1]] = inline[2].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+       key = null; continue
+     }
+-    const block = line.match(/^    (paths|core_files):$/)
++    const block = line.match(/^    (paths|core_files):\s*$/)
+     if (block) { key = block[1]; modules[cur][key] = modules[cur][key] || []; continue }
+     const doc = line.match(/^    doc: (.+)$/)
+     if (doc) { modules[cur].doc = doc[1].trim().replace(/^['"]|['"]$/g, ''); key = null; continue }
+-    const item = line.match(/^      - (.+)$/)
+-    if (item && key) modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, ''))
++    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：list 收集只在
++    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——字段头（字段名开放集不枚举）、顶层段
++    // （span_risk:/blast:）、异缩进项（2 缩进 "- prefixes:"）——终结收集。此前 paths: 块后的
++    // tags/aliases/entrypoints/depends_on 字段项与顶层 blast prefixes 全部漏进 paths（8 项目
++    // map 500 实声明 vs 1375 泄漏项；散文斜杠词 git/DB/JSON 前缀命中 tag 'git' 误路由触达域、
++    // bin 模块双重归属 src/db.js）。
++    key = null
+   }
+   return modules
+ }
+diff --git a/src/flow.js b/src/flow.js
+index 8b7369f5..2298541c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -131,6 +131,34 @@ function extractInputPaths(input) {
+   return [...out]
+ }
+ 
++/**
++ * 域路由用 input 路径样 token：在场或图内过滤（坑 module-map-list-leak 实测次生——散文斜杠词
++ * git/DB/JSON 被当路径参与路由，冒充真域 server-parser）。判据：token 相对 cwd 在文件系统在场
++ * （existsSync），或被模块图声明的路径覆盖（matchedModuleIds——图内尚不存在的目标文件照常路由，
++ * thin-fr-inject-parity ④ 契约：--input 提到将新建的 src/cli/login.js 须命中 cli 域）。
++ * 两判据都不建前缀/扩展名白名单——文件系统与仓内模块图即开放世界裁判；散文斜杠词两者皆不
++ * 成立即出局（走「起点无依据」诚实提示）。绿地草案（bsPaths）不过滤：绿地语料允许指向
++ * 尚不存在目标，模块图从零起草恰需它们。
++ * @param {string} cwd 工作区根
++ * @param {string} specBase .sillyspec 根
++ * @param {string} input --input 语料
++ * @returns {string[]} 在场或图内的路径样 token
++ */
++export async function extractRoutingInputPaths(cwd, specBase, input) {
++  let moduleIndex = null
++  let matchedModuleIds = null
++  try {
++    const dd = await import('./decision-distill.js')
++    const fi = await import('./fr-index.js')
++    moduleIndex = dd.discoverModuleIndex(join(specBase, 'knowledge'))
++    matchedModuleIds = fi.matchedModuleIds
++  } catch { /* best-effort：图缺席则只按在场判 */ }
++  return extractInputPaths(input).filter((p) => {
++    try { if (existsSync(join(cwd, p))) return true } catch { /* 落到图内判 */ }
++    try { return (matchedModuleIds(moduleIndex, p) || []).length > 0 } catch { return false }
++  })
++}
++
+ /**
+  * 轻量道知识注入段（2026-09-25-thin-fr-inject-parity）：默认快道读取面对齐——
+  * {FR_INDEX_DIGEST}/{DECISION_HITS}/execute 知识命中报告此前只在 run 族装配，轻量道 fresh
+@@ -635,9 +663,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   } catch (e) { console.warn(`⚠️ 绿地模块图草案起草失败（best-effort 不阻断 start）：${(e && e.message) || e}`) }
+   // 知识注入（2026-09-25-thin-fr-inject-parity）：fresh 起点域路由用 --input 提取的路径样
+   // token（best-effort）——brainstorm 的 {FR_INDEX_DIGEST}/{DECISION_HITS} 注入面对齐到轻量道。
++  // 在场过滤（坑 module-map-list-leak）：散文斜杠词（git/DB/JSON）不参与路由。
+   let digest = { lines: [], summary: { domains: [], frCount: 0, rejectedDecisions: 0, knowledgeEntries: 0 } }
+   try {
+-    digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: extractInputPaths(input) })
++    digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: await extractRoutingInputPaths(cwd, specBase, input) })
+   } catch { /* 注入 best-effort 不阻断 start */ }
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+diff --git a/src/fr-index.js b/src/fr-index.js
+index bbfae0dc..f9a45738 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -229,18 +229,26 @@ export function parseChangeRequirements(changeDir) {
+  * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。
+  * filesOverride（2026-09-22-thin-fr-distill-sync）：显式交付文件清单旁路 design.md 解析——轻量变更
+  * 变更无 design.md（轻量工件面三件套），flow done 以基线以来交付 diff 供清单，伪域路由同口径。 */
++/** 路径 ↔ 模块匹配规则（精确或目录前缀）——resolveTouchedDomains 域路由与 flow start 在场
++ * 过滤（坑 module-map-list-leak）共用同一判定的单一来源。@returns {string[]} 命中模块 id */
++export function matchedModuleIds(moduleIndex, filePath) {
++  if (!moduleIndex) return [];
++  const hits = [];
++  for (const [modId, mod] of Object.entries(moduleIndex)) {
++    const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
++    if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
++      hits.push(modId);
++    }
++  }
++  return hits;
++}
++
+ export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = null, knowledgeRoot = null) {
+   const domains = new Set();
+   const designPath = join(changeDir, 'design.md');
+   const files = [];
+   const matchModules = (filePath) => {
+-    if (!moduleIndex) return;
+-    for (const [modId, mod] of Object.entries(moduleIndex)) {
+-      const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
+-      if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
+-        domains.add(modId);
+-      }
+-    }
++    for (const modId of matchedModuleIds(moduleIndex, filePath)) domains.add(modId);
+   };
+   if (Array.isArray(filesOverride)) {
+     for (const f of filesOverride) {
+diff --git a/src/module-impact.js b/src/module-impact.js
+index 4a708ec8..d80f686e 100644
+--- a/src/module-impact.js
++++ b/src/module-impact.js
+@@ -26,9 +26,12 @@ import { resolveSpecDir } from './run/shared.js'
+ export function parseModuleMapPaths(yamlText) {
+   const map = new Map()
+   if (!yamlText) return map
++  // CRLF 归一（Windows 生成的 map：块式行靠 \s*$/.trim() 蒙混，内联数组正则恒失配——
++  // sillyhub-daemon 整图内联 CRLF 实证漏 343 条）
++  const text = String(yamlText).replace(/\r\n/g, '\n')
+   let currentModule = null
+   let inPaths = false
+-  for (const line of yamlText.split('\n')) {
++  for (const line of text.split('\n')) {
+     if (!line.trim() || line.trim().startsWith('#')) continue
+     if (!/^\s/.test(line)) {
+       inPaths = line.startsWith('modules:')
+@@ -41,6 +44,18 @@ export function parseModuleMapPaths(yamlText) {
+       inPaths = false
+       continue
+     }
++    // 内联 paths 数组（ground truth 审计实证：sillyhub-daemon 整图内联写法，本解析器此前
++    // 恒漏 343 条 paths＝归属全盲——对齐 parseModulePathsSubset / parseModuleMapSimple 的既有内联支持）
++    const inlinePaths = currentModule && line.match(/^    paths: \[(.*)\]$/)
++    if (inlinePaths) {
++      if (!map.has(currentModule)) map.set(currentModule, [])
++      for (const v of inlinePaths[1].split(',').map(s => s.trim()).filter(Boolean)) {
++        const unquoted = v.replace(/^(['"])([\s\S]*)\1$/, '$2')
++        map.get(currentModule).push(unquoted.replace(/\\/g, '/'))
++      }
++      inPaths = false
++      continue
++    }
+     if (currentModule && /^    paths:\s*$/.test(line)) {
+       inPaths = true
+       if (!map.has(currentModule)) map.set(currentModule, [])
+@@ -56,8 +71,14 @@ export function parseModuleMapPaths(yamlText) {
+         const raw = item[1].trim()
+         const unquoted = raw.replace(/^(['"])([\s\S]*)\1$/, '$2')
+         map.get(currentModule).push(unquoted.replace(/\\/g, '/'))
++        continue
+       }
+     }
++    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：paths 收集只在
++    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——字段头（字段名开放集不枚举）、顶层段
++    // （span_risk:/blast:）、异缩进项（2 缩进 "- prefixes:"）——终结收集，防 tags/aliases/
++    // depends_on 字段项与顶层 blast prefixes 漏进 paths 污染 classifyFile 归属分类。
++    inPaths = false
+   }
+   return map
+ }
+diff --git a/src/modules.js b/src/modules.js
+index df77c3ea..caa50f79 100644
+--- a/src/modules.js
++++ b/src/modules.js
+@@ -452,6 +452,8 @@ export function parseModuleMapSimple(content) {
+   let currentArray = null;
+ 
+   for (const line of content.split('\n')) {
++    // 空行/注释行：保状态（列表块内允许空行与注释穿插——结构守卫前的免死金牌）
++    if (line.trim() === '' || line.trim().startsWith('#')) continue;
+     // 模块 id 字符集含点（db.engine 等，与 module-impact.js classifyFile 同口径）：
+     // 不含点时带点 id 的条目被静默丢弃，上下文注入/scan-diff 侧与 module-impact 侧给相反结论
+     const moduleMatch = line.match(/^  ([a-zA-Z0-9_.\-]+):$/);
+@@ -501,6 +503,13 @@ export function parseModuleMapSimple(content) {
+       currentArray.push(itemMatch[1].trim());
+       continue;
+     }
++
++    // 结构守卫（坑 module-map-list-leak，2026-10-06-wallclock-entry 实测发现）：list 收集只在
++    // 「6 缩进项行 / 空行 / 注释」上存活，其余任何行——未知字段头（字段名开放集，不枚举；
++    // 枚举白名单外的字段头此前不重置收集，其列表项漏进上一个 list 字段如 paths）、顶层段
++    // （span_risk:/blast:）、异缩进项——终结收集并落盘已收集项。字段名识别仍按白名单（语义面），
++    // 收集边界按行结构（开放世界安全）。
++    if (currentArray && currentKey) { modules[currentModule][currentKey] = currentArray; currentArray = null; currentKey = null; }
+   }
+ 
+   // Flush last
+diff --git a/test/module-map-list-leak.test.mjs b/test/module-map-list-leak.test.mjs
+new file mode 100644
+index 00000000..bfe61938
+--- /dev/null
++++ b/test/module-map-list-leak.test.mjs
+@@ -0,0 +1,202 @@
++/**
++ * 坑 module-map-list-leak 回归（2026-10-06-wallclock-entry 轻量道实测发现）：
++ * 三个手写 _module-map.yaml 解析器（decision-distill.parseModulePathsSubset /
++ * module-impact.parseModuleMapPaths / modules.parseModuleMapSimple）对块式列表的收集
++ * 终止条件残缺——paths: 块之后遇未知字段头（tags/aliases/entrypoints/depends_on/…开放集）
++ * 不终止收集，后续列表项漏进 paths/core_files。量化（jsYaml ground truth 对账）：8 个项目
++ * map 真实声明 500 条带斜杠 paths；修复前解析面共 1375 条泄漏项（含 450 条带斜杠垃圾——
++ * 入口注释/路由串/模块描述，早期粗计的「950 实路径」即被这 450 条污染）。散文斜杠词
++ * git/DB/JSON 前缀命中 tag 'git' → flow start 触达域冒充真域 server-parser。
++ *
++ * 锁定语义（开放世界判据，禁止字段名枚举白名单）：任何缩进 4 的字段头行终结上一个
++ * list 字段的收集——未来新增字段名自动安全；已知字段（含内联数组）语义不变。
++ * 次生锁定：flow start fresh 域路由的 input token 在场过滤（文件系统当裁判），
++ * 绿地草案路径提取不受过滤。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { parseModulePathsSubset } from '../src/decision-distill.js'
++import { parseModuleMapPaths } from '../src/module-impact.js'
++import { parseModuleMapSimple } from '../src/modules.js'
++import { resolveTouchedDomains } from '../src/fr-index.js'
++import { extractRoutingInputPaths } from '../src/flow.js'
++import { draftModuleMap } from '../src/greenfield-bootstrap.js'
++
++let passed = 0, failed = 0
++function assert(cond, msg) {
++  if (cond) { passed++; console.log(`  ✅ PASS: ${msg}`) }
++  else { failed++; console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++// 实测形态 fixture：块式 paths 在前、tags/aliases/entrypoints/depends_on/used_by 在后
++//（dashboard 侧 server-parser 原样缩影）＋ 未识别自定义字段 owner_tags（开放世界用例）。
++const MAP_YAML = [
++  'modules:',
++  '  server-parser:',
++  '    status: active',
++  '    doc: modules/server-parser.md',
++  '    paths:',
++  '      - "packages/dashboard/server/parser.js"',
++  '    tags:',
++  '      - parser',
++  '      - output',
++  '      - git',
++  '      - techstack',
++  '    aliases:',
++  '      - output-parser',
++  '    entrypoints:',
++  '      - parseProjectOverview',
++  '    depends_on: []',
++  '    used_by:',
++  '      - server-index',
++  '    owner_tags:',
++  '      - future-field-item',
++  '',
++  '  core-mod:',
++  '    status: active',
++  '    paths:',
++  '      - src/core/',
++  '    core_files:',
++  '      - src/core/a.js',
++  '    owner_tags:',
++  '      - leak-candidate',
++  '',
++  '  inline-mod:',
++  '    paths: [src/inline/x.js, src/inline/y.js]',
++  '    tags: [alpha, beta]',
++  '',
++  // 顶层段（span_risk/blast 形态——末模块之后）：旧行为把 6 缩进项漏进末模块 paths
++  'span_risk:',
++  '  - migrate',
++  'blast:',
++  '  - prefixes:',
++  '      - src/leak-a.js',
++  '    tier: S3',
++  '  - prefixes:',
++  '      - src/leak-b.js',
++  '',
++].join('\n')
++
++console.log('\n=== Test 1: parseModulePathsSubset（decision-distill）块式多字段不泄漏 ===')
++{
++  const parsed = parseModulePathsSubset(MAP_YAML)
++  const sp = parsed['server-parser']
++  assert(JSON.stringify(sp.paths) === JSON.stringify(['packages/dashboard/server/parser.js']),
++    `server-parser.paths 恰只含声明项（实际 ${JSON.stringify(sp.paths)}）`)
++  const cm = parsed['core-mod']
++  assert(JSON.stringify(cm.paths) === JSON.stringify(['src/core/']), `core-mod.paths 恰只含声明项`)
++  assert(JSON.stringify(cm.core_files) === JSON.stringify(['src/core/a.js']),
++    `core-mod.core_files 恰只含声明项（实际 ${JSON.stringify(cm.core_files)}）`)
++  const im = parsed['inline-mod']
++  assert(JSON.stringify(im.paths) === JSON.stringify(['src/inline/x.js', 'src/inline/y.js']),
++    '内联数组行为不变')
++  assert(!JSON.stringify(parsed).includes('future-field-item') && !JSON.stringify(parsed).includes('leak-candidate'),
++    '未识别自定义字段（owner_tags）项不出现在任何收集字段（开放世界性）')
++  const dump = JSON.stringify(parsed)
++  assert(!dump.includes('src/leak-a.js') && !dump.includes('src/leak-b.js') && !dump.includes('migrate'),
++    '顶层段（span_risk/blast）项不漏进末模块（bin 双重归属形态）')
++}
++
++console.log('\n=== Test 2: parseModuleMapPaths（module-impact）块式多字段不泄漏 ===')
++{
++  const map = parseModuleMapPaths(MAP_YAML)
++  const sp = map.get('server-parser') || []
++  assert(JSON.stringify(sp) === JSON.stringify(['packages/dashboard/server/parser.js']),
++    `server-parser paths 恰只含声明项（实际 ${JSON.stringify(sp)}）`)
++  const cm = map.get('core-mod') || []
++  assert(JSON.stringify(cm) === JSON.stringify(['src/core/']), 'core-mod paths 恰只含声明项')
++  const im = map.get('inline-mod') || []
++  assert(JSON.stringify(im) === JSON.stringify(['src/inline/x.js', 'src/inline/y.js']),
++    `内联 paths 数组可识别（sillyhub-daemon 整图内联写法此前恒漏，实际 ${JSON.stringify(im)}）`)
++  const flatVals = [...map.values()].flat()
++  assert(!flatVals.includes('git') && !flatVals.includes('future-field-item'),
++    'tags 项与自定义字段项不进任何模块 paths')
++  assert(!flatVals.includes('migrate') && !flatVals.includes('src/leak-a.js') && !flatVals.includes('src/leak-b.js'),
++    '顶层段（span_risk/blast）项不漏进末模块 paths')
++}
++
++console.log('\n=== Test 3: parseModuleMapSimple（modules）未知字段头终结收集 ===')
++{
++  const mods = parseModuleMapSimple(MAP_YAML)
++  const sp = mods['server-parser'] || {}
++  // 注：本解析器块式项不剥引号是既有行为（与 module-impact 的剥引号口径不一致属另一议题，
++  // 不在本修复面）——断言剥引号后比较，聚焦「不泄漏」语义。
++  assert(JSON.stringify((sp.paths || []).map(p => p.replace(/^"|"$/g, ''))) === JSON.stringify(['packages/dashboard/server/parser.js']),
++    `server-parser.paths 恰只含声明项（实际 ${JSON.stringify(sp.paths)}）`)
++  assert(JSON.stringify(sp.tags) === JSON.stringify(['parser', 'output', 'git', 'techstack']),
++    '已知字段 tags 语义不变（仍正确解析）')
++  assert(JSON.stringify(sp.aliases) === JSON.stringify(['output-parser']), '已知字段 aliases 语义不变')
++  const im = mods['inline-mod'] || {}
++  assert(JSON.stringify(im.paths) === JSON.stringify(['src/inline/x.js', 'src/inline/y.js']),
++    '内联数组行为不变')
++  const all = JSON.stringify(mods)
++  assert(!all.includes('future-field-item') && !all.includes('leak-candidate'),
++    '枚举外字段（owner_tags）项不追加进任何 list 字段（开放世界性）')
++  assert(!all.includes('src/leak-a.js') && !all.includes('src/leak-b.js') && !all.includes('migrate'),
++    '顶层段（span_risk/blast）项不追加进末模块任何 list 字段')
++}
++
++console.log('\n=== Test 4: resolveTouchedDomains 端到端——散文斜杠词不再冒充真域 ===')
++{
++  // 模块索引来自修复后的解析器（而非手搓对象）——端到端锁「解析→路由」全链
++  const moduleIndex = {}
++  for (const [id, m] of Object.entries(parseModulePathsSubset(MAP_YAML))) {
++    moduleIndex[id] = { paths: m.paths || [], core_files: m.core_files || [] }
++  }
++  const d1 = resolveTouchedDomains(tmpdir(), moduleIndex, ['git/DB/JSON'], null)
++  assert(!d1.includes('server-parser'), `git/DB/JSON 不再命中 server-parser（实际 ${JSON.stringify(d1)}）`)
++  const d2 = resolveTouchedDomains(tmpdir(), moduleIndex, ['api/v1/users'], null)
++  assert(!d2.includes('server-parser') && !d2.includes('server-index'), 'api/v1/users 不误命中')
++  const d3 = resolveTouchedDomains(tmpdir(), moduleIndex, ['packages/dashboard/server/parser.js'], null)
++  assert(d3.includes('server-parser'), '真实路径仍正确路由')
++}
++
++console.log('\n=== Test 5: extractRoutingInputPaths 在场或图内过滤（文件系统+模块图当裁判） ===')
++{
++  const cwd = mkdtempSync(join(tmpdir(), 'mmlist-'))
++  try {
++    mkdirSync(join(cwd, 'src'), { recursive: true })
++    writeFileSync(join(cwd, 'src', 'datetime.js'), 'export const x = 1\n')
++    // 模块图声明 cli 域（src/cli/ 前缀）——图内不存在文件照常路由（thin-fr-inject-parity ④ 契约）
++    const specBase = join(cwd, '.sillyspec')
++    mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++    writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'),
++      'modules:\n  cli:\n    paths:\n      - src/cli/\n')
++    const input = '动机：改 src/datetime.js 与将新建的 src/cli/login2.js，来源（git/DB/JSON）散词\n成功标准：\n- 登录行为保持'
++    const routing = await extractRoutingInputPaths(cwd, specBase, input)
++    assert(JSON.stringify(routing) === JSON.stringify(['src/datetime.js', 'src/cli/login2.js']),
++      `路由 token 只留在场真实路径与图内目标（实际 ${JSON.stringify(routing)}）`)
++    const none = await extractRoutingInputPaths(cwd, specBase, '动机：仅散文 git/DB/JSON 无真实路径')
++    assert(JSON.stringify(none) === JSON.stringify([]), '全散文 token → 空路由面（走诚实提示不铸伪域）')
++    // 目录 token 在场同样参与（模块 paths 常是目录前缀）
++    mkdirSync(join(cwd, 'packages', 'api'), { recursive: true })
++    const withDir = await extractRoutingInputPaths(cwd, specBase, '动机：动 packages/api 与 src/datetime.js')
++    assert(withDir.includes('packages/api') && withDir.includes('src/datetime.js'), '在场目录 token 保留')
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++}
++
++console.log('\n=== Test 6: 绿地草案路径提取不受在场过滤影响 ===')
++{
++  const cwd = mkdtempSync(join(tmpdir(), 'mmgreen-'))
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    // 绿地语料指向尚不存在的目标（packages/api/server.py 等）——草案恰需它们起草（不过滤；
++    // 注：目录段须非泛化（src/test/docs…被 groupByModule 视为泛化），绿地 fixture 用 packages/）
++    const r = draftModuleMap({ cwd, specBase, paths: ['packages/api/server.py', 'packages/api/client.js'] })
++    assert(r.written === true && r.path, `绿地草案照常起草（实际 ${JSON.stringify(r)}）`)
++    if (r.path) {
++      // groupByModule 按目录段聚合（packages/api/）——语料文件本身不存在正是本用例要点
++      const mapText = readFileSync(r.path, 'utf8')
++      assert(mapText.includes('packages/api/') && (r.moduleIds || []).includes('api'),
++        '草案由尚不存在的路径语料起草（在场过滤未波及绿地草案）')
++    }
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-06-module-map-list-leak/tasks.md b/.sillyspec/changes/2026-10-06-module-map-list-leak/tasks.md
+new file mode 100644
+index 00000000..85d757ec
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-module-map-list-leak/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:35:49.994Z
++---
++# 任务注册表（Tasks）— 2026-10-06-module-map-list-leak
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-module-map-list-leak --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-module-map-list-leak` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
++- [x] task-02: flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
++- [x] task-03: 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
+diff --git a/.sillyspec/changes/2026-10-06-module-map-list-leak/design.md b/.sillyspec/changes/2026-10-06-module-map-list-leak/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-module-map-list-leak/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:35:49.994Z
++---
++# 设计记录（Design Record）— 2026-10-06-module-map-list-leak
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++修三个手写 `_module-map.yaml` 解析器的列表收集终止条件：在各自的已知字段分支之后、列表项收集分支之前，加一条**通用字段头守卫**——任何缩进 4 的 `字段名:` 行（无论识别与否）终结当前 list 字段的收集。这是开放世界判据（yaml 字段集不可枚举，未来新字段自动安全），与 parseModuleMapSimple 现有的字段名枚举白名单正相反——枚举正是漏点而非防线。
++
++次生修复：flow start fresh 起点域路由的 input 路径样 token 加「在场或图内」过滤（新助手 `extractRoutingInputPaths(cwd, specBase, input)` = 提取 + existsSync/模块图覆盖双判，只用于域路由 filesOverride；绿地草案 bsPaths 仍用未过滤的 extractInputPaths）。散文斜杠词（git/DB/JSON）两判据皆不成立即出局，落空走既有「起点无依据」诚实提示——判据是文件系统在场性与仓内模块图（开放世界注册表），不建前缀/扩展名白名单。「图内」判据保住既有契约（thin-fr-inject-parity ④）：--input 提到将新建的 src/cli/login.js 仍命中 cli 域——纯在场判会误杀该用例（实测全量回归第一轮即抓出）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `src/decision-distill.js` `parseModulePathsSubset`：解析结果收紧——paths/core_files 不再吸收后续未知字段（tags/aliases/entrypoints/main_symbols/depends_on/used_by/concerns/review_reasons…）的列表项。签名不变。
++- `src/module-impact.js` `parseModuleMapPaths`：同上收紧。签名不变。
++- `src/modules.js` `parseModuleMapSimple`：同上收紧（枚举外字段头也终结收集）。签名不变；已识别字段（含内联数组）行为不变。
++- `src/flow.js` 新增导出 `extractRoutingInputPaths(cwd, specBase, input)`（async）；cmdFlowStart fresh 起点的 flowKnowledgeDigest filesOverride 改用之（绿地 bsPaths 不变）。
++- `src/fr-index.js` 新增导出 `matchedModuleIds(moduleIndex, filePath)`——路径↔模块匹配规则单一来源，resolveTouchedDomains 内联规则改为复用（行为不变）。
++- `src/module-impact.js` `parseModuleMapPaths` 增内联 `paths: [..]` 识别与 CRLF 归一（ground truth 审计实证：sillyhub-daemon 整图内联 CRLF 写法此前恒漏 343 条＝模块归属全盲）。
++- 行为可见面：flow start 知识注入触达域不再被散文斜杠词误路由/铸伪域；frCoverageFiles TierA 覆盖排名、module-impact 归属分类的原料数据去污。CLI 命令、文件格式：无变化。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++| --- | --- | --- |
++| 修改 | src/decision-distill.js | parseModulePathsSubset 通用字段头守卫 |
++| 修改 | src/module-impact.js | parseModuleMapPaths 通用字段头守卫 |
++| 修改 | src/modules.js | parseModuleMapSimple 未知字段头终结收集 |
++| 修改 | src/flow.js | 新增 extractRoutingInputPaths；fresh 域路由 filesOverride 换用 |
++| 新增 | test/module-map-list-leak.test.mjs | 三解析器不泄漏/开放世界性/在场过滤/绿地不受影响/端到端误路由回归 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——解析是单遍行级状态机，输入是完整文本快照，无乱序概念；字段头守卫只依赖行结构（缩进+冒号），与字段出现顺序无关。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用——解析纯函数无写；map 文件被并行重写时读侧拿到旧/新快照之一（readFileSync 原子性边界），与本修复无交互。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——无跨调用状态；中断重跑结果一致。在场过滤是即时 existsSync 探测，路径被并行创建/删除的瞬态最多让该 token 本轮参与/不参与路由，下一轮自愈。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——解析对象是各仓自己的 map；extractRoutingInputPaths 的 cwd 是调用方显式传入的工作区根，不读全局状态。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：依赖「泄漏项」的行为面——若有下游逻辑意外依赖污染数据（如某模块故意把单段 tag 当 path 用、或测试断言了污染形态），收紧后行为变化。已核：仓内测试 fixtures 均无 paths 后跟 tags 的块式写法（这正是泄漏长期不可见的原因）；泄漏项全是 tags/aliases/symbols/deps 值，语义上就不是路径。次风险：在场过滤把「动机里提到的未来新文件」token 滤掉致路由落空——已按「在场或图内」双判收敛（图内目标文件照常路由），落空走诚实提示（起点无依据），优于误路由冒充真域，取舍在设计里写明。量化口径注记（评审 P3 清偿）：早期粗计「950 条实路径」是修复前解析面计数（含 450 条带斜杠泄漏垃圾：入口注释/路由串/模块描述）；jsYaml ground truth 对账真实声明为 500 条，泄漏项合计 1375 条——test 头注释与本设计以 500/1375 为准，proposal 转写中的 950 为过程记录不再修正（历史镜像）。
++放弃的方案：①parseModuleMapSimple 式字段名枚举白名单补全三解析器——放弃，开放世界字段集枚举不全即是本 bug 的成因（用户约束亦禁止）；②换 js-yaml 整体解析——放弃，三个解析器各有「只取平面子集、坏段不缺省不拦截」的容错立场（注释明示），整体解析改变坏段行为与性能面，超出本修复的刀口。
+
+diff --git a/.sillyspec/changes/2026-10-06-module-map-list-leak/proposal.md b/.sillyspec/changes/2026-10-06-module-map-list-leak/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-module-map-list-leak/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:35:49.994Z
++---
++# 提案书（Proposal）— 2026-10-06-module-map-list-leak
++
++## 动机
++
++任务原话转写：动机：轻量道实测（2026-10-06-wallclock-entry）发现 flow start 知识注入触达域误判——input 散文斜杠词 git/DB/JSON 被提取为路径样 token，前缀命中 dashboard 项目 server-parser 模块泄漏进 paths 的 tag 项 'git'，伪路由冒充真域 server-parser。根因：_module-map.yaml 的三个手写解析器对块式列表的收集终止条件残缺——parseModulePathsSubset（decision-distill.js，域路由/FR 覆盖排名/complete-handlers 消费）与 parseModuleMapPaths（module-impact.js，归属分类消费）只认已知字段，paths: 块之后遇到任意未知字段头（tags/aliases/entrypoints/main_symbols/depends_on/used_by…开放集）不重置收集 key，后续列表项全部漏进 paths/core_files；parseModuleMapSimple（modules.js）依赖字段名枚举白名单，枚举外新字段同样漏。量化：docs/ 下 8 个项目 map 合计 950 条实路径 vs 1375 条泄漏项；api/v1/users、server/client 等常见 token 均误命中。次生发现：fresh 起点域路由对 input token 无在场校验，散文斜杠词直接参与路由。
++
++成功标准：
++- 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
++- flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
++- 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
++2. flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
++3. 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
++
++## 成功标准（可验证）
++
++1. 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
++2. flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
++3. 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
+
+diff --git a/.sillyspec/changes/2026-10-06-module-map-list-leak/requirements.md b/.sillyspec/changes/2026-10-06-module-map-list-leak/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-module-map-list-leak/requirements.md
+@@ -0,0 +1,70 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T06:35:49.994Z
++---
++# 需求规格（Requirements）— 2026-10-06-module-map-list-leak
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 三个解析器（parseModulePathsSubset / parseModuleMapPaths / parseModuleMapSimple）修复列表收集终止条件：任何缩进 4 的字段头行（形如 '字段名:' 或 '字段名: 值'——开放世界判据，不枚举字段名清单）终结上一个 list 字段的收集；块式 paths 后跟 tags/aliases/depends_on 的 yaml 解析后 paths/core_files 恰只含各自声明的列表项；未来新增字段名（当前未识别的自定义字段）同样不泄漏；既有内联 'paths: [..]' 行为不变
++
++- 必须：三个解析器对块式列表字段的收集以「字段头行」为终止边界——任何形如 `    <字段名>:` 或 `    <字段名>: <值>` 的行（无论字段名是否被识别）都必须终结上一个 list 字段的收集，之后到下一个已知 list 字段头之间的 `- ` 项不得并入任何 list 字段。
++- 禁止：以字段名枚举白名单实现终止判定（开放世界字段集不可枚举——parseModuleMapSimple 现状即此形态，枚举外字段仍泄漏）；禁止改变字段语义识别（各解析器仍只取自己关心的字段，未知字段内容丢弃）。
++- 必须保持：内联数组写法（`paths: [a, b]`）与既有已知字段（doc/status 等）行为不变——本修复只收紧收集边界，不新增字段语义。
++- 必须：parseModuleMapPaths 补齐内联 `paths: [..]` 识别（ground truth 审计实证：sillyhub-daemon 整图内联写法，该解析器此前恒漏 343 条 paths＝模块归属全盲）——对齐另两个解析器的既有内联支持。
++
++#### 场景：块式多字段（实测形态）
++
++- Given yaml 模块段：`paths:` 块（1 项）后依次跟 `tags:`/`aliases:`/`depends_on:` 各含列表项
++- When 任一解析器解析该内容
++- Then paths 只含其声明项，tags/aliases/depends_on 的项不出现在 paths/core_files
++
++#### 场景：未识别自定义字段（开放世界）
++
++- Given yaml 模块段：`core_files:` 块后跟当前代码未识别的自定义字段（如 `owner_tags:`）含列表项
++- When 解析
++- Then core_files 只含其声明项；owner_tags 的项不出现在任何 list 字段
++
++### FR-02: flow start fresh 起点域路由的 input token 增加在场过滤：token 相对 cwd 在文件系统存在（existsSync）才参与域路由——文件系统当裁判不建前缀白名单；绿地模块图草案的路径提取（bsPaths）保持不过滤（绿地语料允许指向尚不存在的目标）；实测误路由用例回归：git/DB/JSON 不再路由到 server-parser
++
++- 必须：flow start fresh 起点传给域路由（flowKnowledgeDigest 的 filesOverride）的 input 路径样 token 先经「在场或图内」过滤——token 相对 cwd 用 existsSync 判定在场，或被模块图声明的路径覆盖（matchedModuleIds 单一匹配规则：图内尚不存在的目标文件照常路由，保住 thin-fr-inject-parity ④ 契约「--input 提到将新建的 src/cli/login.js 须命中 cli 域」）；两判据都不成立即不参与路由（落空则走既有「起点无依据」诚实提示，不静默造伪域）。
++- 禁止：以前缀白名单/扩展名清单/特定目录名枚举做过滤判据（文件系统在场性与仓内模块图即开放世界裁判）。
++- 必须保持：绿地模块图草案路径提取（bsPaths）不过滤——绿地场景 --input 路径语料允许指向尚不存在的目标，草案恰需它们起草。
++
++#### 场景：散文斜杠词不路由（实测回归）
++
++- Given 仓内模块图模块 paths 只含多段真实路径（解析器已修复无泄漏项）；--input 语料含 `git/DB/JSON` 这类散文斜杠词、在场真实路径、以及图内声明的尚不存在目标路径
++- When flow start fresh 域路由
++- Then 散文 token 因不在场且不在图内被过滤；在场与图内 token 正常路由；不出现由散文 token 铸出的伪域
++
++#### 场景：图内目标文件（尚不存在）照常路由
++
++- Given 模块图声明模块 cli 覆盖 `src/cli/` 前缀；--input 提到 `src/cli/login2.js`（文件尚未创建）
++- When flow start fresh 域路由
++- Then 该 token 命中 cli 域（thin-fr-inject-parity ④ 契约保持）
++
++#### 场景：绿地草案不受影响
++
++- Given 模块图缺席的绿地仓，--input 含尚不存在的路径语料（如 src/server.py）
++- When flow start 起草绿地模块图草案
++- Then 草案路径提取仍含该 token（不在场过滤只作用于域路由，不作用于绿地草案）
++
++### FR-03: 测试覆盖：三解析器的块式多字段不泄漏回归、未识别自定义字段名不泄漏（开放世界性）、routing 在场过滤保留真实路径 token 且过滤散文斜杠词、绿地草案路径提取不受影响
++
++- 必须：新增测试文件覆盖 FR-01（三解析器 × 块式多字段 / 自定义字段两场景）、FR-02（在场过滤保留真实 token、过滤散文 token；绿地提取不过滤；resolveTouchedDomains 端到端不误路由）；全绿后方可收口。
++
++#### 场景：主路径
++
++- Given 测试运行环境
++- When 执行新增测试
++- Then 全部断言通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/module-map-list-leak.test.mjs「块式多字段不泄漏（三解析器）」
++FR-02: test/module-map-list-leak.test.mjs「域路由在场过滤与绿地草案不受影响」
++FR-03: test/module-map-list-leak.test.mjs「全量用例（含 resolveTouchedDomains 端到端误路由回归）」
+
+diff --git a/.sillyspec/changes/2026-10-06-module-map-list-leak/review.json.superseded-20261006T070819 b/.sillyspec/changes/2026-10-06-module-map-list-leak/review.json.superseded-20261006T070819
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-module-map-list-leak/review.json.superseded-20261006T070819
+@@ -0,0 +1,17 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-06-module-map-list-leak",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "d09a40d895d1c60d0565fc1086b734c1ed1cb2e3",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "同一泄漏审计的量化口径在交付物间不一致（500 vs 950 实路径）",
++      "evidence": "src/decision-distill.js 结构守卫注释与 git 提交信息均写「8 项目 map 500 实声明 vs 1375 泄漏项」，而 proposal.md 与 test/module-map-list-leak.test.mjs 头注释写「8 个项目 map 950 实路径 vs 1375 泄漏项」——同一审计给出两个互斥的实路径总数，其一必误；纯注释/文案面，无功能影响（评审员独立自跑 jsYaml 对账 7 个可发现 map，三解析器 missing=0 extra=0，不受该口径影响）",
++      "location": "src/decision-distill.js:217"
++    }
++  ],
++  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
++  "reviewedAt": "2026-10-06T15:06:58+08:00"
++}

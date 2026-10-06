@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-module-map-list-leak",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "bb882b535e34e2a82d97f0324d0f88e4420bf591",
+  "reviewedAgainstNote": "任务给定的完整 sha bb882b53d2a94f56caed57e838646e79cf4f8a37 在仓库中不存在（git bad object）；其前缀 bb882b53 唯一命中实际 HEAD bb882b535e34e2a82d97f0324d0f88e4420bf591（即描述中的口径统一提交），故照实记录真实 sha 以保证可验证性。",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewChecklist": {
+    "frImplementationTestConsistency": "一致。FR-01：三解析器均以行结构守卫终结 list 收集（src/decision-distill.js:214-220 落到 key=null；src/module-impact.js:77-81 落到 inPaths=false；src/modules.js:507-512 落盘已收集项并重置）——终止判定不依赖字段名枚举（modules.js 的字段白名单仅语义识别面，收集边界开放世界，与 FR-01「禁止改变字段语义识别」一致）；module-impact 内联 paths 识别（src/module-impact.js:49-58）与 CRLF 归一（:31）在码。FR-02：extractRoutingInputPaths（src/flow.js:147-160）=提取+existsSync 在场或 matchedModuleIds 图内双判，flow.js:669 fresh 域路由 filesOverride 换用，绿地 bsPaths（flow.js:653）仍走未过滤 extractInputPaths。FR-03：test/module-map-list-leak.test.mjs 存在，Test 1-3 断言三解析器块式多字段恰只含声明项+owner_tags 开放世界不泄漏+内联不变+顶层段不泄漏；Test 4 断言 resolveTouchedDomains 端到端 git/DB/JSON 不再冒充 server-parser；Test 5 断言在场/图内双保留、全散文空路由、在场目录 token；Test 6 断言绿地草案由不存在路径语料照常起草。断言与 FR 场景逐条对应。",
+    "blindDimensions": "四问与代码实态相符：解析器均为单遍行级状态机处理完整文本快照（乱序 ok）；纯读无写，map 并行重写时读侧拿快照（并发 ok）；无跨调用状态、中断重跑一致、existsSync 瞬态下一轮自愈（切换 ok）；cwd/specBase 显式传入、模块图各仓自持、不读全局状态（作用域 ok）。",
+    "disclosureBoundaryRulings": [
+      "「在场或图内」双判+落空走诚实提示：可接受——误路由是静默污染知识注入面（数据正确性风险），落空有可见提示可人工补域，代价不对称支持此取舍。",
+      "绿地 bsPaths 不过滤：可接受——绿地语料定义上指向尚不存在目标；接线层已核实（flow.js:653）走未过滤 extractInputPaths，与过滤版物理隔离。",
+      "放弃 js-yaml 整体解析、保留三解析器「坏段不缺省不拦截」容错立场：可接受——换整体解析改变坏段行为与性能面，超出本修复刀口；结构守卫已达成开放世界安全。",
+      "parseModuleMapSimple 语义识别保留字段白名单、收集边界按行结构：可接受——FR-01 自身规定不得改变字段语义识别，白名单只决定「取什么」不决定「何时停」。",
+      "量化口径 950 为历史镜像不再修正：可接受——proposal 是过程记录，design 与 test 头注释已统一为 jsYaml ground truth 口径（真实声明 500/泄漏 1375）。"
+    ],
+    "protectionClaims": "matchedModuleIds 单一匹配规则真实生效：src/fr-index.js:234 定义，resolveTouchedDomains（:251）与 flow.js:158 两消费方均复用同一导出，无平行内联副本。ground truth 对账（missing=0 extra=0）为一次性审计过程声明，代码内不可复核，以 fixture 断言+提交信息互证接受为过程证据。引号剥离、CRLF 归一、内联识别等防护均在码且有断言。",
+    "generatedArtifacts": "不适用——纯 JS 手写解析器与流程命令，无类型/契约 codegen 生成物。",
+    "incrementReview": "本次 HEAD 相对前次评审（d09a40d8）的增量仅 bb882b53 一笔：test/module-map-list-leak.test.mjs 头注释 4+/3-（量化口径文案统一），git show 证实无任何逻辑变更，注释不参与执行，与 design.md 风险节口径注记一致——无新风险。"
+  },
+  "reviewedAt": "2026-10-06T07:50:00.000Z"
+}
