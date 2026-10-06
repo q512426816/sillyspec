@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  flow status 已显示变更标题（2026-10-06-flow-status-title），但 flow start 重入的恢复简报（printRecoveryBriefing）仍只打变更名——断点恢复场景与 status
+  查看面信息不对齐。补齐：恢复简报头行后显示标题（有则显示）。
+
+
+  成功标准：
+
+  - DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
+
+  - 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
+
+  - 标题读取复用 getChangeTitle 单源（不另开读取路径）
+autopilot: true
+baseline_commit: 85cf03cc57acf3c6d50cf67bed86c4cf5ade0ead
+updatedAt: '2026-10-06T11:41:17.923Z'
+baseline_sha256: 584a8f4ff3ac1872cc22be8064dd38f9a06088a0a91ce5ae9c945fc3bb1ace21
+gate_summary: >-
+  test: passed ← module[]+deps(js50)+fr(63)（217.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006114031\test-result.json｜lint: passed
+  ← npm run lint（43.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006114031\test-result.json｜门文件 6 个
+

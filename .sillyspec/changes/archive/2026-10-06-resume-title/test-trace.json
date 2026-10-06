@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-resume-title",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-resume-title:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-resume-title.test.mjs「恢复简报显示标题行（登记 title 时）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-title"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-resume-title:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-resume-title.test.mjs「无 DB 不新增标题行且不新建 DB」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-title"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-resume-title:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-resume-title.test.mjs「读取单源（getChangeTitle 调用面静态断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-resume-title"
+    }
+  ]
+}

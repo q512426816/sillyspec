@@ -7188,3 +7188,66 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-flow-status-title
   status: active
+
+## FR-cli-entry-380 DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
+变更：2026-10-06-resume-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 临时仓的活跃变更 X（flow-state 在场）且进度库登记 title="中文标题"；When 重入执行 flow start --change X（不带 --input）；Then 输出含「🔁 flow start 恢复简报（重入）」行，其后出现「- 标题：中文标题」行且先于「- 做到哪」行
+全文：.sillyspec/changes/archive/2026-10-06-resume-title/requirements.md#FR-01
+最近确认：86a88f5c2c0f24dc9992636cacb7933a0aa5e222
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-title:flow:测试绑定FR-01
+  tests: test/flow-resume-title.test.mjs「恢复简报显示标题行（登记 title 时）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-title
+  status: active
+
+## FR-cli-entry-381 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
+变更：2026-10-06-resume-title
+状态：active
+摘要：无 DB
+场景正文：
+- 场景：无 DB — Given 临时仓的活跃变更 X（无 sillyspec.db）；When 重入执行 flow start --change X；Then 恢复简报不含「标题：」行（读取器只读性由 flow-status-title 回归钉住）
+全文：.sillyspec/changes/archive/2026-10-06-resume-title/requirements.md#FR-02
+最近确认：86a88f5c2c0f24dc9992636cacb7933a0aa5e222
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-title:flow:测试绑定FR-02
+  tests: test/flow-resume-title.test.mjs「无 DB 不新增标题行且不新建 DB」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-title
+  status: active
+
+## FR-cli-entry-382 标题读取复用 getChangeTitle 单源（不另开读取路径）
+变更：2026-10-06-resume-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given flow.js 恢复路径代码；When 静态审查；Then 标题来源唯一（getChangeTitle 调用），无第二读取实现
+全文：.sillyspec/changes/archive/2026-10-06-resume-title/requirements.md#FR-03
+最近确认：86a88f5c2c0f24dc9992636cacb7933a0aa5e222
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-resume-title:flow:测试绑定FR-03
+  tests: test/flow-resume-title.test.mjs「读取单源（getChangeTitle 调用面静态断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-resume-title
+  status: active

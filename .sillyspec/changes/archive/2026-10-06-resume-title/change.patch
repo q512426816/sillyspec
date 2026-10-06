@@ -1,0 +1,336 @@
+diff --git a/package.json b/package.json
+index e0960549..cd566ecb 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/fr-regress-cap-drop.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/fr-regress-cap-drop.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/flow.js b/src/flow.js
+index 2a84a024..fd8912f2 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -540,7 +540,13 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+       }
+       resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: resumeInput, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
+     } catch { /* 注入 best-effort */ }
+-    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
++    // 恢复简报标题（2026-10-06-resume-title）：getChangeTitle 单源只读（与 flow status 同族），
++    // best-effort——读取失败按无标题渲染（与现状输出一致）
++    let resumeTitle = null
++    try {
++      resumeTitle = new ProgressManager({ specDir: specBase }).getChangeTitle(cwd, change)
++    } catch { /* 标题 best-effort */ }
++    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines, title: resumeTitle })
+     return { recovery: true }
+     }
+   }
+@@ -735,8 +741,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   return { change, baseline, materials }
+ }
+ 
+-/** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。 */
+-function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines = [] }) {
++/** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。
++ * title（2026-10-06-resume-title）：进度库登记的变更标题（string|null）——仅非空时在头两行后渲染。 */
++function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines = [], title = null }) {
+   const done = []
+   const left = []
+   for (const k of SUBSTEPS) (st.substeps?.[k] === 'done' ? done : left).push(k)
+@@ -753,7 +760,8 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+   const hasLedger = existsSync(join(runtimeRoot, `verify-quality-scan-${change}.json`))
+   console.log([
+     `🔁 flow start 恢复简报（重入）: ${change}（tier=${st.tier}${st.legacy_fallback ? '，legacy_fallback=true 混跑回退中' : ''}）`,
+-    `══════════════════════════════════════`,
++    `══════════════════════════════════════════════════════`,
++    ...(title ? [`- 标题：${title}`] : []),
+     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
+     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
+     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
+diff --git a/test/flow-resume-title.test.mjs b/test/flow-resume-title.test.mjs
+new file mode 100644
+index 00000000..3ca69075
+--- /dev/null
++++ b/test/flow-resume-title.test.mjs
+@@ -0,0 +1,116 @@
++/**
++ * 2026-10-06-resume-title 回归：flow start 重入恢复简报显示变更标题
++ *
++ * 覆盖：
++ *   ① 登记 title 的活跃变更重入 → 恢复简报头两行后渲染「- 标题：<title>」（先于「做到哪」）
++ *   ② 无 DB/无 title → 不渲染标题行（现状钉；读取器只读不建库由 flow-status-title ③ 钉）
++ *   ③ 读取单源：flow.js 复用 getChangeTitle，无第二读取路径（静态断言）
++ *   ④ test:core 清单驻留断言（防移出日常拦截面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { cmdFlow } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++const { ProgressManager } = await import(pathToFileURL(join(ROOT, '..', 'src', 'progress.js')).href)
++
++const CHANGE = '2026-10-06-frt'
++const TITLE = '中文标题：恢复简报验证'
++
++/** 活跃变更 fixture（flow-state 在场 → flow start 走 resume 分支）。 */
++function fixture() {
++  const cwd = mkdtempSync(join(tmpdir(), 'frt-'))
++  const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
++  return { cwd, dir }
++}
++
++function seedProgressDb(cwd, title) {
++  new ProgressManager().initChange(cwd, CHANGE, title ? { title } : {})
++}
++
++// 收尾：先关静态池连接（Windows 句柄锁 rmSync EPERM——change-delete.test.mjs 同款）
++async function cleanup(cwd) {
++  const key = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
++  try {
++    const db = ProgressManager._dbPool.get(key)
++    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(key) }
++  } catch { /* 池里无实例则无需处理 */ }
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* Windows 句柄竞态容忍 */ }
++}
++
++/** 重入 flow start（resume 路径）——SILLYSPEC_WATCHER=0 防 watcher 副作用，捕获 console 输出。 */
++async function runResumeStart(cwd) {
++  const origLog = console.log
++  const origWarn = console.warn
++  const origWatcher = process.env.SILLYSPEC_WATCHER
++  let out = ''
++  console.log = (...a) => { out += a.join('\n') + '\n' }
++  console.warn = () => {}
++  process.env.SILLYSPEC_WATCHER = '0'
++  try {
++    await cmdFlow(['start', '--change', CHANGE], cwd, null)
++  } finally {
++    console.log = origLog
++    console.warn = origWarn
++    if (origWatcher === undefined) delete process.env.SILLYSPEC_WATCHER
++    else process.env.SILLYSPEC_WATCHER = origWatcher
++  }
++  return out
++}
++
++test('① 登记 title → 恢复简报渲染「- 标题：<title>」且先于「做到哪」', async () => {
++  const { cwd } = fixture()
++  try {
++    seedProgressDb(cwd, TITLE)
++    const out = await runResumeStart(cwd)
++    assert.ok(out.includes('🔁 flow start 恢复简报（重入）'), `恢复简报在场，实际：${out.slice(0, 200)}`)
++    const lines = out.split('\n')
++    const titleIdx = lines.findIndex((l) => l === `- 标题：${TITLE}`)
++    const doingIdx = lines.findIndex((l) => l.startsWith('- 做到哪'))
++    assert.ok(titleIdx !== -1, `标题行逐字在场，实际含标题的行：${lines.filter((l) => l.includes('标题：'))}`)
++    assert.ok(doingIdx !== -1 && titleIdx < doingIdx, `标题行先于「做到哪」（titleIdx=${titleIdx} doingIdx=${doingIdx}）`)
++    // 头两行（标题行+分隔线）之后
++    const headerIdx = lines.findIndex((l) => l.includes('🔁 flow start 恢复简报'))
++    assert.ok(titleIdx > headerIdx + 1, '标题行在头两行之后')
++  } finally { await cleanup(cwd) }
++})
++
++test('② 无 DB / 无 title → 不渲染标题行（现状钉）', async () => {
++  const noDb = fixture()
++  try {
++    const out = await runResumeStart(noDb.cwd)
++    assert.ok(out.includes('🔁 flow start 恢复简报（重入）'), '恢复简报在场')
++    assert.ok(!out.includes('标题：'), `无 DB 不得渲染标题行，实际：${out.split('\n').filter((l) => l.includes('标题'))}`)
++  } finally { await cleanup(noDb.cwd) }
++
++  const noTitle = fixture()
++  try {
++    seedProgressDb(noTitle.cwd, null)
++    const out = await runResumeStart(noTitle.cwd)
++    assert.ok(!out.includes('- 标题：'), '无 title 不得渲染标题行')
++  } finally { await cleanup(noTitle.cwd) }
++})
++
++test('③ 读取单源：flow.js 复用 getChangeTitle，无第二读取路径（静态断言）', async () => {
++  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  // FR-03 承诺面：简报的标题读取走 getChangeTitle（status 路径一次 + resume 路径一次 ≥2 处调用）。
++  // 注：resume 分支存量的 title 补写块（--input/--title 重入回填）自有 inline SQL，先于本变更
++  // 存在、读且可写——非本变更读取面，不在单源断言射程内。
++  const calls = (src.match(/getChangeTitle\(cwd,\s*change\)/g) || []).length
++  assert.ok(calls >= 2, `flow.js 应有 ≥2 处 getChangeTitle(cwd, change) 调用（status+resume），实际 ${calls}`)
++  assert.ok(/resumeTitle = new ProgressManager\(\{ specDir: specBase \}\)\.getChangeTitle\(cwd, change\)/.test(src), 'resume 分支标题读取必须经 ProgressManager.getChangeTitle 单源')
++})
++
++test('④ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {
++  const pkg = JSON.parse(readFileSync(join(ROOT, '..', 'package.json'), 'utf8'))
++  assert.ok(
++    (pkg.scripts?.['test:core'] || '').includes('test/flow-resume-title.test.mjs'),
++    'test:core 必须包含 test/flow-resume-title.test.mjs',
++  )
++})
+diff --git a/.sillyspec/changes/2026-10-06-resume-title/tasks.md b/.sillyspec/changes/2026-10-06-resume-title/tasks.md
+new file mode 100644
+index 00000000..094a84dc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-resume-title/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:32:00.197Z
++---
++# 任务注册表（Tasks）— 2026-10-06-resume-title
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-resume-title --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-resume-title` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
++- [x] task-02: 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
++- [x] task-03: 标题读取复用 getChangeTitle 单源（不另开读取路径）
+diff --git a/.sillyspec/changes/2026-10-06-resume-title/design.md b/.sillyspec/changes/2026-10-06-resume-title/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-resume-title/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:32:00.197Z
++---
++# 设计记录（Design Record）— 2026-10-06-resume-title
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手打成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++恢复简报（printRecoveryBriefing）是 flow start 重入路径的断点恢复面，与 flow status 查看面同族——status 已显示标题（2026-10-06-flow-status-title），恢复面缺同款上下文。方案：cmdFlowStart 的 resume 分支在渲染简报前经 `new ProgressManager({ specDir: specBase }).getChangeTitle(cwd, change)` 读标题（既有只读访问器单源复用，best-effort try/catch），透传 printRecoveryBriefing 新增可选参数 title；简报在分隔线后、首条「做到哪」前渲染「- 标题：<title>」（仅非空时）。渲染与读取分离，无 DB/无 title 走现状零变化。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines })` 新增可选参数 `title`（string|null，缺省 null 不渲染标题行）——模块内私有函数，无外部签名面。
++- `sillyspec flow start --change <名>`（重入恢复路径）：进度库登记了非空 title 时恢复简报多一行「- 标题：<title>」（此前无此行——行为变化本体）；fresh/adopt 路径零变化。
++- 其余命令、DB schema、文件格式：无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用级别的影响——恢复简报是时点快照读，title 低频写（start/--title 时写）；读到新旧值都是合法时点态，无顺序依赖。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   只读 SELECT 与并行会话 updateChangeMeta 写之间是 SQLite 单语句读写（WAL）；getChangeTitle 前置判 DB 在场不建库，无锁竞争面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   恢复简报无状态迁移；标题读取失败走 try/catch 降级 null——与「无 DB」同输出形态，中断无半态。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   DB 定位走 specBase 锚定的 ProgressManager（与 start/done/status 同构），读的是同一进度库，不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：恢复路径在测试里跑 cmdFlow start 会拉起 watcher/补起草等副作用——测试须以 SILLYSPEC_WATCHER=0 逃生阀与临时仓隔离（既有 watcher 测试同款），否则测试环境噪声。放弃的方案：① 在 flow-state.yaml 冗余存 title（双源漂移，DB 已是权威源）；② 恢复简报改为直接复用 flow status 的渲染函数（两版面文案/结构不同，强行共用会把 status 的阶段推断耦合进恢复面，超出本变更范围）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow.js | resume 分支读 title 透传；printRecoveryBriefing 渲染标题行 |
++| 新增 | test/flow-resume-title.test.mjs | FR-01~03 回归（fixture 临时仓 + 静态单源断言） |
++| 修改 | package.json | test:core 清单收录新测试 |
+
+diff --git a/.sillyspec/changes/2026-10-06-resume-title/proposal.md b/.sillyspec/changes/2026-10-06-resume-title/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-resume-title/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:32:00.197Z
++---
++# 提案书（Proposal）— 2026-10-06-resume-title
++
++## 动机
++
++任务原话转写：flow status 已显示变更标题（2026-10-06-flow-status-title），但 flow start 重入的恢复简报（printRecoveryBriefing）仍只打变更名——断点恢复场景与 status 查看面信息不对齐。补齐：恢复简报头行后显示标题（有则显示）。
++
++成功标准：
++- DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
++- 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
++- 标题读取复用 getChangeTitle 单源（不另开读取路径）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
++2. 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
++3. 标题读取复用 getChangeTitle 单源（不另开读取路径）
++
++## 成功标准（可验证）
++
++1. DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
++2. 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
++3. 标题读取复用 getChangeTitle 单源（不另开读取路径）
+
+diff --git a/.sillyspec/changes/2026-10-06-resume-title/requirements.md b/.sillyspec/changes/2026-10-06-resume-title/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-resume-title/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:32:00.197Z
++---
++# 需求规格（Requirements）— 2026-10-06-resume-title
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: DB 登记过非空 title 的活跃变更重入 flow start，恢复简报在「🔁 flow start 恢复简报（重入）」行后显示「- 标题：<title>」行，文本与进度库登记值逐字一致
++
++活跃变更重入 `sillyspec flow start --change <名>` 时，恢复简报必须在头两行（标题行与分隔线）之后、首条「做到哪」之前显示「- 标题：<title>」一行；标题文本必须与进度库 changes.title 登记值逐字一致。
++
++#### 场景：主路径
++
++Given 临时仓的活跃变更 X（flow-state 在场）且进度库登记 title="中文标题"
++When 重入执行 flow start --change X（不带 --input）
++Then 输出含「🔁 flow start 恢复简报（重入）」行，其后出现「- 标题：中文标题」行且先于「- 做到哪」行
++
++### FR-02: 无 DB/无 title 时恢复简报与现状逐字一致（不新增标题行）
++
++进度库文件缺失或行上 title 为空/NULL 时：恢复简报必须禁止新增任何标题行（与现状输出逐字一致）；标题读取必须沿用只读容错语义（读取器自身不建库——该性质由 test/flow-status-title.test.mjs ③ 钉住；恢复路径既有 title 补写块的建库副作用是存量行为，非本变更面）。
++
++#### 场景：无 DB
++
++Given 临时仓的活跃变更 X（无 sillyspec.db）
++When 重入执行 flow start --change X
++Then 恢复简报不含「标题：」行（读取器只读性由 flow-status-title 回归钉住）
++
++### FR-03: 标题读取复用 getChangeTitle 单源（不另开读取路径）
++
++恢复简报的标题读取必须复用 ProgressManager.getChangeTitle（2026-10-06-flow-status-title 建立的唯一只读访问器），禁止在 flow.js 内另开 SQL/直读读取路径；读取失败按无标题渲染（best-effort 不阻断恢复简报）。
++
++#### 场景：主路径
++
++Given flow.js 恢复路径代码
++When 静态审查
++Then 标题来源唯一（getChangeTitle 调用），无第二读取实现
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-resume-title.test.mjs「恢复简报显示标题行（登记 title 时）」
++FR-02: test/flow-resume-title.test.mjs「无 DB 不新增标题行且不新建 DB」
++FR-03: test/flow-resume-title.test.mjs「读取单源（getChangeTitle 调用面静态断言）」
