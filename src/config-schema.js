@@ -513,6 +513,12 @@ docs-check:
 # change-ownership:
 #   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
 
+# ── 计划阶段派发（plan：TaskCard 填充派发策略）──
+# 默认主 agent 直填（对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；
+# 仅 task 总数超阈值且跨模块/跨仓才按 batch 派子代理（并行省墙钟有真实收益）。
+# plan:
+#   fill_batch_min_tasks: 12             # 填卡 batch 派发阈值（内置 8；调大=更少派子代理省 token，调小=大变更更早并行）
+
 # ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价）──
 # blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
 # 项目化定价（每个项目体系不一样，起点与阈值可配——只升不降纪律不开放配置）：
