@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-fr-regress-cap-drop",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "dee59107324624cc525f561ac2e42bb1a7a21cd6",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定「用例名」与实际测试用例名不逐字一致（4/4 条绑定均为描述性概括名）",
+      "evidence": "requirements.md:61-64 绑定名（如「既有 runner 结构推断回归」「优先面超帽整跑+未满帽填余」）在所指测试文件中无逐字同名用例：fr-regress-cap-drop.test.mjs 实际用例名为『① 优先面超帽：整跑不弃（普通依赖零席位）…』『② 优先面未满帽…』『③ py/js 混组…』『④ 披露行分列…』；dynamic-test-inference.test.mjs 中无名为「既有 runner 结构推断回归」的用例（实际为 .py runner/tsx runner 推断等 10 个用例）。行为覆盖真实且实测全绿（node --test 四文件 23/23 pass），属可追溯性口径问题而非覆盖缺失。",
+      "location": ".sillyspec/changes/2026-10-06-fr-regress-cap-drop/requirements.md:61-64"
+    },
+    {
+      "severity": "P3",
+      "title": "deps(auto-jsx) 批对象缺 prioCount/prioDropped——优先面计数披露在 jsx 项目运行器分流面缺席",
+      "evidence": "verify-postcheck.js:2701（及 :2703 skip 批）构造的 deps(auto-jsx) 批只带 count/dropped，无 prioCount/prioDropped；当优先面文件（变更自身 .tsx 测试或 FR 钦定 vitest 依赖）落入该批时，formatDepsBatchLine 因 Number(undefined)>0 为 false 而不打优先面计数段，prioDropped 防御警告对该批也无附着点。零弃置语义未被破坏（quotaFill 先行整取优先面，native/project 分流与 e2e 过滤均不丢 run 集文件），属 FR-02「deps 批对象新增 prioCount」在 jsx 分流面的披露缺口，非数据正确性风险。",
+      "location": "src/verify-postcheck.js:2701"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok；边界已裁决：可接受——「优先面无上界、批尺寸护栏由 TEST_TIMEOUT_MS 兜底」声明核实为真：src/verify-postcheck.js:60 定义缺省 600s（SILLYSPEC_TEST_TIMEOUT_MS 可调）、:1447 施于 runOneModule、超时=失败 fail-closed 不变；无上界优先面是本变更的目的语义且风险段有实测数据支撑（63 文件≈100s）",
+    "切换": "ok",
+    "作用域": "ok；边界已裁决：可接受——priorityFiles/changedFiles 由调用方按变更归属收窄传入，本 diff 不触及收集面与路径归一化口径（norm 反斜杠→斜杠原样保留，:2600-2604）"
+  },
+  "reviewedAt": "2026-10-06T11:30:37Z"
+}

@@ -1,0 +1,382 @@
+diff --git a/package.json b/package.json
+index dcb8ed81..e0960549 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/fr-regress-cap-drop.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index fa99c172..e0f7fbca 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2590,6 +2590,11 @@ function inferFullTestCommand(projectRoot) {
+  * 修法：按扩展名分组（.py 一组 / 其余 node --test 一组），组内「本次变更的测试文件优先」排序，
+  * 每组按比例分 30 帽（保底 5）；.py 组运行器从命中模块命令推断（含 pytest 的命令取其 pytest
+  * 前缀——如 `cd backend && uv run pytest` 的 `uv run pytest`；无命中模块兜底 python -m pytest）。
++ * 优先面豁免帽（2026-10-06-fr-regress-cap-drop，flow-status-title 收口实测缺陷）：变更自身
++ * 测试 ∪ priorityFiles（FR 钦定回归）是本变更验收面本体——旧 slice(0, cap) 只保证优先面
++ * 「先入序」，优先面自身超帽时照样被字母序挤出（实测 63 绑定文件实跑 30、静默弃 33 含最
++ * 相关回归）。组卷改配额制：每组优先面整跑，普通 import 依赖只填剩余席位（可为 0）——帽
++ * 只界普通依赖尾。批尺寸上界护栏由 TEST_TIMEOUT_MS 兜底（超时=失败 fail-closed 不变）。
+  */
+ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
+   const norm = (p2) => String(p2).replace(/\\/g, '/')
+@@ -2602,8 +2607,18 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   const CAP = 30
+   const pyCap = py.length === 0 ? 0 : js.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + js.length))))
+   const jsCap = CAP - pyCap
+-  const pyRun = py.slice(0, pyCap)
+-  const jsRun = js.slice(0, jsCap)
++  // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
++  // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
++  const quotaFill = (group, quota) => {
++    const prioInGroup = group.filter(f => prio(f) === 0)
++    const ordinary = group.filter(f => prio(f) !== 0)
++    const ordinaryRun = ordinary.slice(0, Math.max(0, quota - prioInGroup.length))
++    return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
++  }
++  const pyQ = quotaFill(py, pyCap)
++  const jsQ = quotaFill(js, jsCap)
++  const pyRun = pyQ.run
++  const jsRun = jsQ.run
+   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
+   // ② 无命中命令时自项目结构——首个 .py 文件最近 pyproject/uv.lock 祖先（uv 优先）。
+   // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
+@@ -2667,8 +2682,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
+   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
+   const batches = []
+-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length, tap: true })
++  // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
++  // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
++  // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
++  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true })
+   if (jsProjectRun.length > 0) {
+     if (jsxRunner) {
+       const isVitest = /vitest/.test(jsxRunner)
+@@ -2693,7 +2711,21 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   return batches
+ }
+ 
+-export { buildDepsBatches }
++/**
++ * deps 批披露行（2026-10-06-fr-regress-cap-drop）：runModuleSubset 批日志的单源格式化——
++ * 计数分列（实跑总数 / 优先面豁免计数 / 普通依赖弃置），「超帽弃」只对普通依赖成立。
++ * 抽为纯函数供直测钉格式（runModuleSubset 需真跑测试，不宜为格式断言起进程）。
++ */
++function formatDepsBatchLine(b) {
++  const runnerNote = b.name === 'deps(auto-py)'
++    ? 'pytest 运行器按最近 pyproject/uv 祖先推断'
++    : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'
++  const prio = Number(b.prioCount) > 0 ? `（优先面 ${b.prioCount}：变更/FR 回归豁免帽）` : ''
++  const drop = Number(b.dropped) > 0 ? `（超帽弃 ${b.dropped} 普通依赖）` : ''
++  return `ℹ️ 动态子集批 ${b.name}：${b.count} 个${prio}${drop}（${runnerNote}——治 node 跑 .py 伪败与字母序偏科）`
++}
++
++export { buildDepsBatches, formatDepsBatchLine }
+ 
+ // ── trace residual adapter（2026-09-24-fr-test-readside，fr-test-binding §3.3/§3.6 读侧）──
+ // 锚点集=本变更 task 卡 requirement_ids 并集；残差=trace active 行 tests 并集按保守差集
+@@ -2868,7 +2900,10 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [],
+         continue
+       }
+       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
+-      console.log(`ℹ️ 动态子集批 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 运行器按最近 pyproject/uv 祖先推断' : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
++      console.log(formatDepsBatchLine(b))
++      // 防御披露（2026-10-06-fr-regress-cap-drop）：quotaFill 构造保证优先面零弃置——此计数
++      // >0 说明组卷逻辑被后续改动破坏（钦定回归被弃），loud 披露不静默。
++      if (Number(b.prioDropped) > 0) console.warn(`⚠️ ${b.name}：优先面 ${b.prioDropped} 个被弃（组卷构造上不应发生——工具缺陷，请上报）`)
+     }
+   }
+   const status = aggregateStatus(perModule)
+diff --git a/test/fr-regress-cap-drop.test.mjs b/test/fr-regress-cap-drop.test.mjs
+new file mode 100644
+index 00000000..07436bc0
+--- /dev/null
++++ b/test/fr-regress-cap-drop.test.mjs
+@@ -0,0 +1,96 @@
++/**
++ * 2026-10-06-fr-regress-cap-drop 回归：优先面（变更自身测试 ∪ FR 钦定回归）豁免 deps 组卷帽
++ *
++ * 背景（flow-status-title 收口实测）：buildDepsBatches 的 priorityFiles 设计意图是「绑定面
++ * 钦定的回归不该被字母序挤出跑面」，但 slice(0, cap) 对优先面无豁免——优先面自身超帽时
++ * 照样被字母序挤出（实测 FR 绑定 63 文件实跑 30、静默弃 33）。
++ *
++ * 覆盖：
++ *   ① 优先面超帽：整跑（普通依赖零席位），dropped 只计普通依赖
++ *   ② 优先面未满帽：普通依赖按字母序填余，组内序保持「优先前缀+字母序」
++ *   ③ py/js 混组：两组优先面各自豁免本组配额，比例配额计算不变
++ *   ④ 披露计数分列：批对象 prioCount/prioDropped 与日志行格式（优先面计数在场、超帽弃限定普通依赖）
++ *   ⑤ test:core 清单驻留断言（防移出日常拦截面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { buildDepsBatches, formatDepsBatchLine } = await import(pathToFileURL(join(ROOT, '..', 'src', 'verify-postcheck.js')).href)
++
++const jsBatch = (batches) => batches.find((b) => b.short === 'js')
++const pyBatch = (batches) => batches.find((b) => b.short === 'py')
++const cmdFiles = (b) => b.command.split(' ').filter((t) => /^test\//.test(t) || /\.py$/.test(t))
++
++const names = (n, prefix) => Array.from({ length: n }, (_, i) => `test/${prefix}-${String(i).padStart(3, '0')}.test.mjs`)
++
++test('① 优先面超帽：整跑不弃（普通依赖零席位），dropped 只计普通依赖', () => {
++  const prio = names(40, 'prio')
++  const ordinary = names(20, 'ord')
++  const batches = buildDepsBatches({ deps: [...prio, ...ordinary], changedFiles: [], priorityFiles: prio, cwd: null })
++  const js = jsBatch(batches)
++  assert.ok(js, 'js 批在场')
++  assert.equal(js.count, 40, '优先面 40 个整跑（豁免 30 帽）')
++  assert.equal(js.dropped, 20, 'dropped 只计普通依赖弃置')
++  assert.equal(js.prioCount, 40, 'prioCount=实跑优先面数')
++  assert.equal(js.prioDropped, 0, '优先面零弃置')
++  const files = cmdFiles(js)
++  for (const p of prio) assert.ok(files.includes(p), `优先文件 ${p} 必须在执行命令中`)
++})
++
++test('② 优先面未满帽：普通依赖填余，组内序保持「优先前缀+字母序」', () => {
++  const prio = names(5, 'prio')
++  const ordinary = names(40, 'ord')
++  const batches = buildDepsBatches({ deps: [...ordinary, ...prio], changedFiles: [], priorityFiles: prio, cwd: null })
++  const js = jsBatch(batches)
++  assert.equal(js.count, 30, '5 优先 + 25 普通 = 30')
++  assert.equal(js.dropped, 15, '普通依赖弃 15')
++  const files = cmdFiles(js)
++  for (const p of prio) assert.ok(files.includes(p), `优先文件 ${p} 在场`)
++  // 序：优先前缀在前，其后普通依赖按字母序
++  const prioIdx = files.map((f, i) => (prio.includes(f) ? i : -1)).filter((i) => i >= 0)
++  assert.equal(Math.max(...prioIdx), prio.length - 1, '优先文件全部前置于普通依赖')
++  const ordRun = files.slice(prio.length)
++  assert.deepEqual(ordRun, [...ordRun].sort((a, b) => a.localeCompare(b)), '普通依赖按字母序')
++})
++
++test('③ py/js 混组：两组优先面各自豁免本组配额，比例配额计算不变', () => {
++  const pyPrio = ['test/a1.test.py', 'test/a2.test.py', 'test/a3.test.py']
++  const pyOrd = ['test/b1.test.py', 'test/b2.test.py', 'test/b3.test.py', 'test/b4.test.py', 'test/b5.test.py']
++  const jsPrio = names(10, 'prio')
++  const jsOrd = names(50, 'ord')
++  const batches = buildDepsBatches({ deps: [...pyPrio, ...pyOrd, ...jsPrio, ...jsOrd], changedFiles: [], priorityFiles: [...pyPrio, ...jsPrio], cwd: null })
++  // 比例配额：py=8 / 总 68 → pyCap=5（保底 5），jsCap=25——配额计算与旧口径一致
++  const py = pyBatch(batches)
++  const js = jsBatch(batches)
++  assert.equal(py.count, 5, 'py 组配额 5：3 优先整跑 + 2 普通填余')
++  assert.equal(py.prioCount, 3)
++  assert.equal(py.dropped, 3, 'py 普通依赖弃 3')
++  assert.equal(js.count, 25, 'js 组配额 25：10 优先整跑 + 15 普通填余')
++  assert.equal(js.prioCount, 10)
++  assert.equal(js.dropped, 35, 'js 普通依赖弃 35')
++  // 优先面超组配额时豁免：js 组 30 优先 + 0 普通 → 整跑 30
++  const b2 = buildDepsBatches({ deps: [...names(30, 'prio'), ...pyOrd], changedFiles: [], priorityFiles: [...names(30, 'prio'), ...pyOrd.slice(0, 0)], cwd: null })
++  const js2 = jsBatch(b2)
++  assert.equal(js2.count, 30, 'js 优先 30 = 配额 30 整跑')
++})
++
++test('④ 披露行分列：优先面计数在场，「超帽弃」限定普通依赖', () => {
++  const line = formatDepsBatchLine({ name: 'deps(auto-js)', count: 63, prioCount: 63, dropped: 97, prioDropped: 0, short: 'js' })
++  assert.ok(line.includes('63'), '实跑总数在场')
++  assert.ok(line.includes('优先面 63'), '优先面计数在场')
++  assert.ok(line.includes('超帽弃 97 普通依赖'), '超帽弃限定普通依赖')
++  const lineNoDrop = formatDepsBatchLine({ name: 'deps(auto-js)', count: 5, prioCount: 0, dropped: 0, prioDropped: 0, short: 'js' })
++  assert.ok(!lineNoDrop.includes('超帽弃'), '零弃置不打超帽弃')
++})
++
++test('⑤ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {
++  const pkg = JSON.parse(readFileSync(join(ROOT, '..', 'package.json'), 'utf8'))
++  assert.ok(
++    (pkg.scripts?.['test:core'] || '').includes('test/fr-regress-cap-drop.test.mjs'),
++    'test:core 必须包含 test/fr-regress-cap-drop.test.mjs',
++  )
++})
+diff --git a/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/tasks.md b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/tasks.md
+new file mode 100644
+index 00000000..638291ba
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:20:52.294Z
++---
++# 任务注册表（Tasks）— 2026-10-06-fr-regress-cap-drop
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-fr-regress-cap-drop --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-fr-regress-cap-drop` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
++- [x] task-02: 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
++- [x] task-03: 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
++- [x] task-04: 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
+diff --git a/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/design.md b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:20:52.294Z
++---
++# 设计记录（Design Record）— 2026-10-06-fr-regress-cap-drop
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手打成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++单点修 buildDepsBatches（src/verify-postcheck.js）的组卷选择：旧代码按语言分组后 `slice(0, cap)`——优先排序只影响入序，优先面自身超帽时照样被字母序挤出（2026-10-06-flow-status-title 收口实测：FR 绑定 63 文件实跑 30、静默弃 33，含最相关回归；回执却写 62 个「进实测面」）。修法：组卷改配额制——每组先取优先面全集（变更自身测试 ∪ priorityFiles 钦定回归），普通 import 依赖只填剩余席位（可为 0）；dropped 语义收窄为「普通依赖弃置」，批对象新增 prioCount（实跑优先面数）与 prioDropped（防御恒 0，>0 打警告）。runModuleSubset 的批日志同步分列披露。语言分组/运行器推断/e2e 过滤/cd 重定基零改动——帽语义修正不动分组语义，符合「不写死语言框架」的既有结构推断边界（分组按扩展名、运行器自项目结构推断，本变更不新增任何语言特判）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `buildDepsBatches({deps, changedFiles, hits, cwd, priorityFiles})`（模块内函数，经 export 供直测）：返回批对象新增 `prioCount`（实跑中优先面文件数）与 `prioDropped`（防御路径计数，构造上恒 0）；`count` 仍为实跑总数（优先面超帽时 >CAP）；`dropped` 语义收窄为普通依赖弃置数。
++- runModuleSubset 批日志文案：`动态子集批 <名>：N 个（优先面 P：变更/FR 回归豁免帽）（超帽弃 D 普通依赖）`——披露计数分列；命令标签 `deps(js<N>)` 的 N 由此含优先面（此前被帽压低的假数字消失）。
++- CLI 命令面、DB schema、文件格式：无变化。调用方两处（runModuleSubset、trace 残差 adapter）行为变化均为「优先面不再被弃」单一方向。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   组卷是对 deps 快照的纯函数计算，无时序依赖；deps/priorityFiles 来源（import 图扫描、FR 索引读）在调用前完成。不适用。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   buildDepsBatches 纯内存计算无写面；执行批的并发语义（known_failures 匹配、进程超时护栏 TEST_TIMEOUT_MS）不变。优先面豁免后批尺寸上限从 30 变为「优先面基数（无上界）」——单批超时护栏仍由 TEST_TIMEOUT_MS（600s 缺省，env 可调）兜底，超时=失败 fail-closed 不变。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   组卷无落盘状态；批执行中断的重试/断点语义在 runOneModule 与外层幂等设计里，本变更不触及。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   优先面判定输入（changedFiles/priorityFiles）由调用方按变更归属收窄后传入（flow done 有归属收窄清单），仓内路径归一化（反斜杠→斜杠）既有口径不变。不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：优先面无上界放大单批执行时长（病态绑定面大仓单批逼近超时帽）。评估：本仓实测 63 文件 ≈ 100s，远低于 600s 帽；FR 绑定面本身是知识库声明面（有治理），放大是「该跑的终于跑了」而非噪声放大；超时护栏仍在。放弃的方案：① 给优先面另设上限（如 120）——重新引入「钦定回归被弃」，只是把弃置线上移，披露语义又得分层，复杂度不值；② 帽内优先面按 FR 命中数加权选择——仍是弃置，只是更聪明的弃置，与「绑定面即测试需求」哲学冲突；③ 只修披露不修行为（标签改准、弃置照旧）——回执诚实了但钦定回归照丢，假绿风险留存，不彻底。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/verify-postcheck.js | buildDepsBatches 配额制组卷+批对象计数分列；runModuleSubset 批日志分列披露 |
++| 新增 | test/fr-regress-cap-drop.test.mjs | FR-01/02/04 直测（三种配额形态+披露计数） |
++| 修改 | package.json | test:core 清单收录新测试 |
+
+diff --git a/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/proposal.md b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:20:52.294Z
++---
++# 提案书（Proposal）— 2026-10-06-fr-regress-cap-drop
++
++## 动机
++
++任务原话转写：轻量变更实测（2026-10-06-flow-status-title 收口）发现实测面缺陷：buildDepsBatches 的 priorityFiles（FR 关联回归面）设计意图是「绑定面钦定的回归不该被字母序挤出跑面」，但 30 帽对优先面无豁免——优先面自身超帽时照样被字母序挤出。实测数据：FR 绑定回归 63 文件，实跑 30（全部 FR 命中），33 个 FR 钦定回归静默丢弃（含与本次改动最相关的 change-title-flow.test.mjs 等）；同时控制台与回执打「绑定测试 62 个进实测面」「fr(62)」，归档件 verify-result.md 审计口径失真。修复：优先面（变更自身测试 ∪ FR 钦定回归）豁免帽整跑，帽只界普通 import 依赖尾；弃置披露只计普通依赖并分列优先面计数。
++
++成功标准：
++- priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
++- 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
++- 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
++- 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
++2. 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
++3. 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
++4. 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
++
++## 成功标准（可验证）
++
++1. priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
++2. 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
++3. 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
++4. 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
+
+diff --git a/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/requirements.md b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-fr-regress-cap-drop/requirements.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:20:52.294Z
++---
++# 需求规格（Requirements）— 2026-10-06-fr-regress-cap-drop
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
++
++buildDepsBatches 组卷时，优先面（priorityFiles ∪ changedFiles 命中的测试文件）必须整跑豁免 CAP：任一语言组内优先面数量超过该组配额时，普通 import 依赖让位（剩余席位可为 0），禁止弃置任何优先面文件；组内文件序必须保持「优先前缀 + 字母序」不变。
++
++#### 场景：优先面超帽
++
++Given js 组 40 个优先文件 + 20 个普通依赖（jsCap=30）
++When buildDepsBatches 组卷
++Then 实跑 40（全部优先文件），普通依赖 0 席、dropped=20，无任何优先文件被弃
++
++#### 场景：优先面未满帽
++
++Given js 组 5 个优先文件 + 40 个普通依赖（jsCap=30）
++When buildDepsBatches 组卷
++Then 实跑 30（5 优先 + 25 普通按字母序），dropped=15（全部普通依赖）
++
++### FR-02: 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
++
++deps 批对象的 count 必须为实跑文件总数，dropped 必须只计普通依赖弃置数，并新增 prioCount（实跑中的优先面文件数）与 prioDropped（防御路径，构造上恒 0）；runModuleSubset 的批日志必须披露优先面计数，「超帽弃」文案必须限定为普通依赖，prioDropped>0 时必须打警告。
++
++#### 场景：主路径
++
++Given FR 关联回归并入 63 个绑定文件（超 30 帽）
++When runModuleSubset 组卷执行
++Then 日志含优先面计数与「超帽弃 N 普通依赖」，全部 63 个绑定文件进入执行命令
++
++### FR-03: 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
++
++本变更必须禁止改动既有分组与运行器推断语义：.py/其余 的语言分组、pytest/vitest 运行器双源推断（命中命令串 + 项目结构）、e2e 目录与项目运行器收集面取交集、cd 前缀重定基——行为必须与现状逐字一致（既有直测回归钉住）。
++
++#### 场景：主路径
++
++Given 既有 test/dynamic-test-inference.test.mjs、test/residual-runner-parity.test.mjs、test/deps-cwd-prefix.test.mjs 全绿基线
++When 应用本变更后重跑
++Then 上述测试全部照旧通过
++
++### FR-04: 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
++
++本变更必须自带直测覆盖三种配额形态：① 优先面超帽（普通依赖零席位）② 优先面未满帽（普通依赖填余）③ py/js 混组（两组优先面各自豁免本组配额，比例配额计算不变）。
++
++#### 场景：主路径
++
++Given 构造 3+2+40 个测试文件的三组 fixture
++When 直测 buildDepsBatches
++Then 三种形态的选择结果与计数断言全绿
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/fr-regress-cap-drop.test.mjs「优先面超帽整跑+未满帽填余」
++FR-02: test/fr-regress-cap-drop.test.mjs「批计数分列与控制台披露」
++FR-03: test/dynamic-test-inference.test.mjs「既有 runner 结构推断回归」
++FR-04: test/fr-regress-cap-drop.test.mjs「py/js 混组优先豁免」

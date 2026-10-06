@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-fr-regress-cap-drop",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-regress-cap-drop.test.mjs「优先面超帽整跑+未满帽填余」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-regress-cap-drop"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-02",
+      "tests": [
+        "test/fr-regress-cap-drop.test.mjs「批计数分列与控制台披露」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-regress-cap-drop"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-03",
+      "tests": [
+        "test/dynamic-test-inference.test.mjs「既有 runner 结构推断回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-regress-cap-drop"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-04",
+      "tests": [
+        "test/fr-regress-cap-drop.test.mjs「py/js 混组优先豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-regress-cap-drop"
+    }
+  ]
+}

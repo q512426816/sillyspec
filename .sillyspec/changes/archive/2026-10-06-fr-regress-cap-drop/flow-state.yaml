@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量变更实测（2026-10-06-flow-status-title 收口）发现实测面缺陷：buildDepsBatches 的 priorityFiles（FR 关联回归面）设计意图是「绑定面钦定的回归不该被字母序挤出跑面」，但
+  30 帽对优先面无豁免——优先面自身超帽时照样被字母序挤出。实测数据：FR 绑定回归 63 文件，实跑 30（全部 FR 命中），33 个 FR 钦定回归静默丢弃（含与本次改动最相关的
+  change-title-flow.test.mjs 等）；同时控制台与回执打「绑定测试 62 个进实测面」「fr(62)」，归档件 verify-result.md 审计口径失真。修复：优先面（变更自身测试 ∪ FR
+  钦定回归）豁免帽整跑，帽只界普通 import 依赖尾；弃置披露只计普通依赖并分列优先面计数。
+
+
+  成功标准：
+
+  - priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
+
+  - 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
+
+  - 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
+
+  - 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
+autopilot: true
+baseline_commit: 900ccb029bcb5310fb3be39649f537859cf38d93
+updatedAt: '2026-10-06T11:31:28.915Z'
+baseline_sha256: 456913601d65f639ea5c7b0db8431f98f34f6231de6770f8bef7424d7cef3e61
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(9)（47.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006112718\test-result.json｜lint: passed
+  ← npm run lint（44.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006112718\test-result.json｜门文件 6 个
+

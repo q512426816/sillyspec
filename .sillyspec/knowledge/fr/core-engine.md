@@ -1761,3 +1761,88 @@
   confirmed_at: null
   source_change: 2026-10-06-wallclock-entry
   status: active
+
+## FR-core-engine-116 priorityFiles ∪ 变更自身测试文件不再被 CAP 弃置：优先面整跑（组内序保持优先前缀+字母序），帽只界普通 import 依赖（fill 剩余席位）
+变更：2026-10-06-fr-regress-cap-drop
+状态：active
+摘要：优先面超帽；优先面未满帽
+场景正文：
+- 场景：优先面超帽 — Given js 组 40 个优先文件 + 20 个普通依赖（jsCap=30）；When buildDepsBatches 组卷；Then 实跑 40（全部优先文件），普通依赖 0 席、dropped=20，无任何优先文件被弃
+- 场景：优先面未满帽 — Given js 组 5 个优先文件 + 40 个普通依赖（jsCap=30）；When buildDepsBatches 组卷；Then 实跑 30（5 优先 + 25 普通按字母序），dropped=15（全部普通依赖）
+全文：.sillyspec/changes/archive/2026-10-06-fr-regress-cap-drop/requirements.md#FR-01
+最近确认：dee59107324624cc525f561ac2e42bb1a7a21cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-01
+  tests: test/fr-regress-cap-drop.test.mjs「优先面超帽整跑+未满帽填余」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-regress-cap-drop
+  status: active
+
+## FR-core-engine-117 批对象披露计数分列：count=实跑总数、dropped 只计普通依赖弃置、新增优先面计数；控制台「超帽弃」文案只对普通依赖成立，优先面计数在场
+变更：2026-10-06-fr-regress-cap-drop
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given FR 关联回归并入 63 个绑定文件（超 30 帽）；When runModuleSubset 组卷执行；Then 日志含优先面计数与「超帽弃 N 普通依赖」，全部 63 个绑定文件进入执行命令
+全文：.sillyspec/changes/archive/2026-10-06-fr-regress-cap-drop/requirements.md#FR-02
+最近确认：dee59107324624cc525f561ac2e42bb1a7a21cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-02
+  tests: test/fr-regress-cap-drop.test.mjs「批计数分列与控制台披露」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-regress-cap-drop
+  status: active
+
+## FR-core-engine-118 既有分组/运行器推断行为不变：.py/tsx/jsx 组、pytest/vitest 推断、e2e 目录过滤、cd 重定基照旧（回归测试钉住）
+变更：2026-10-06-fr-regress-cap-drop
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 既有 test/dynamic-test-inference.test.mjs、test/residual-runner-parity.test.mjs、tes；When 应用本变更后重跑；Then 上述测试全部照旧通过
+全文：.sillyspec/changes/archive/2026-10-06-fr-regress-cap-drop/requirements.md#FR-03
+最近确认：dee59107324624cc525f561ac2e42bb1a7a21cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-03
+  tests: test/dynamic-test-inference.test.mjs「既有 runner 结构推断回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-regress-cap-drop
+  status: active
+
+## FR-core-engine-119 直测覆盖三种配额形态：优先面超帽（普通依赖零席位）、优先面未满帽（普通填余）、py/js 混组优先豁免
+变更：2026-10-06-fr-regress-cap-drop
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 构造 3+2+40 个测试文件的三组 fixture；When 直测 buildDepsBatches；Then 三种形态的选择结果与计数断言全绿
+全文：.sillyspec/changes/archive/2026-10-06-fr-regress-cap-drop/requirements.md#FR-04
+最近确认：dee59107324624cc525f561ac2e42bb1a7a21cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-regress-cap-drop:flow:测试绑定FR-04
+  tests: test/fr-regress-cap-drop.test.mjs「py/js 混组优先豁免」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-regress-cap-drop
+  status: active
