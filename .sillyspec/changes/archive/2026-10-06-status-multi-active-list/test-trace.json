@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-status-multi-active-list",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-01",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「①多活跃列表：计数+全名+--change 提示+无空态误报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-01",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「②幽灵行标注本地无目录」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-02",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「③零活跃空态引导不回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-02",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「④库不在场走空态且不新建库」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-02",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「⑥库丢失后写路径可恢复」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-03",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「④库不在场走空态且不新建库」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-status-multi-active-list:flow:测试绑定FR-03",
+      "tests": [
+        "test/status-multi-active-list.test.mjs「⑤多活跃分支只读零落盘（不新增 changes 目录）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-status-multi-active-list"
+    }
+  ]
+}

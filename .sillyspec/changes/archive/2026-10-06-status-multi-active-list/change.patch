@@ -1,0 +1,476 @@
+diff --git a/.sillyspec/changes/2026-10-06-status-multi-active-list/flow-state.yaml b/.sillyspec/changes/2026-10-06-status-multi-active-list/flow-state.yaml
+new file mode 100644
+index 00000000..4f3fd7ff
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-status-multi-active-list/flow-state.yaml
+@@ -0,0 +1,23 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  实测发现：裸跑 sillyspec status（无 --change）在进度库存在 ≥2 个活跃变更时，read() 因「多活跃无法自动推导」返回 null（src/progress.js:416-424），只读空态分支一律打「ℹ️
++  未找到进度数据（只读查询不建变更）」——数据明明存在（本仓实测 10 个 active 行、其中 2 个有真实目录待收口），文案却断言无数据，误导 AGENTS.md「恢复与查看」面。
++
++
++  成功标准：
++
++  - 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++
++  - 零活跃或库不存在时维持既有空态引导文案（不回归）
++
++  - 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
++autopilot: true
++baseline_commit: 2faced26e0c4129d1489655c68b78a21c1cbc90a
++updatedAt: '2026-10-06T14:08:14.274Z'
++baseline_sha256: e4d0b9aa725d592652b82e2db6be81dd7675ad664d774b612020ab7d288d134f
++
+diff --git a/package.json b/package.json
+index e3abb208..71373835 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/db.js b/src/db.js
+index f8a7a6e7..4f59d619 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -71,7 +71,10 @@ export class DB {
+     // 4. 创建表结构（仅当 schema 版本戳不匹配时——W4-H）：
+     //    schema 已最新则跳过建表，省 DDL 开销。node:sqlite 打开即持久化，
+     //    _createSchema 内 DDL 直接落盘，无需 _save。
+-    //    戳在但 db 缺表属"手动改 db"边角（SillySpec 不支持），不在本层兜底。
++    //    戳只对它伴生的库文件作证：库文件被删而戳残留（孤儿戳）时戳匹配是假信号——
++    //    _openWithFallback 的全新建库分支以 _freshCreate 标记（2026-10-06-status-multi-active-list
++    //    实测：空库无表首个 SELECT 即 no such table 崩溃）。戳在但库有内容的缺表属
++    //    "手动改 db"边角（SillySpec 不支持），仍不在本层兜底。
+     const versionPath = `${this.dbPath}.schema-version`;
+     let schemaCurrent = false;
+     try {
+@@ -79,7 +82,7 @@ export class DB {
+         && readFileSync(versionPath, 'utf8').trim() === String(DB_SCHEMA_VERSION);
+     } catch { /* 戳读取失败保守重跑 schema */ }
+ 
+-    if (!schemaCurrent) {
++    if (!schemaCurrent || this._freshCreate) {
+       this._createSchema();
+       try { writeFileSync(versionPath, String(DB_SCHEMA_VERSION)); } catch { /* 戳写入失败不阻断，下次重跑 */ }
+     }
+@@ -183,7 +186,11 @@ export class DB {
+ 
+     // 3. 都不可用
+     if (readValid(this.dbPath) === null) {
+-      // 主库与备份都不存在 → 全新项目，建空库
++      // 主库与备份都不存在 → 全新项目，建空库。
++      // 全新标记（2026-10-06-status-multi-active-list）：schema 戳只对它伴生的库文件作证——
++      // 库文件被删而戳残留时，init() 步骤4 的戳匹配会让全新空库跳过建表（孤儿戳空库，
++      // 首个 SELECT 即 no such table 崩溃，实测）。全新空库必须无视残留戳重跑 _createSchema。
++      this._freshCreate = true;
+       return openDatabase(this.dbPath);
+     }
+     // 主库曾存在（空/损坏）但无法恢复 → 数据丢失，必须 fail-loud（不静默建空库吞进度）
+diff --git a/src/run/command.js b/src/run/command.js
+index befb14ce..b1c8840c 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -215,6 +215,22 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
+  * run <stage> --help/-h 的用法帮助（runCommand 内 --help 短路调用）。
+  * 只打印不落盘：帮助查询不该有副作用（建会话/写 QUICKLOG）。
+  */
++/**
++ * 只读空态引导文案（2026-10-05-status-empty-guide 首创；2026-10-06-status-multi-active-list
++ * 抽出单一源——库不在场前置门与 read 后空分支共用一份，防两处文案漂移）。静态文案——引用
++ * 通用命令形态而非本仓状态（空态定义即无数据可读）。可照抄实例（2026-10-05-input-teach-copyable）：
++ * 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
++ */
++function emitReadonlyEmptyGuide() {
++  console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
++  console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
++  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++  console.log('')
++  console.log('     成功标准：')
++  console.log('     - <可验证标准>"')
++  console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
++}
++
+ function printStageUsage(stageName) {
+   const stage = stageRegistry[stageName]
+   console.log(`
+@@ -1115,6 +1131,19 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     }
+   }
+ 
++  // 只读辅助阶段的写意图 flag 清单（下方两处只读短路共用：库不在场前置门 + read 后短路）
++  const READONLY_WRITE_ACTIONS = ['--cleanup-remnant', '--align-execute-progress', '--done', '--skip', '--reset', '--reopen', '--wait', '--continue']
++
++  // 只读前置门（2026-10-06-status-multi-active-list）：库文件不在场时不得进入 pm.read()——
++  // read() 无显式 --change 先走 listChanges→_ensureDB，会凭空新建空库（只读承诺破防，实测）；
++  // 空库撞残留 schema-version 戳无表可查，首个 SELECT 直接崩（no such table: changes）。
++  // 库不在场=字面意义的零进度：与零活跃同款空态引导 + exit 0，零落盘。
++  if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))
++      && !existsSync(pm._runtimePath(cwd, 'sillyspec.db'))) {
++    emitReadonlyEmptyGuide()
++    process.exit(0)
++  }
++
+   let progress = pm.read(cwd, changeName)
+ 
+   // task-03 (D-005@v2 / FR-04): READONLY_AUXILIARY_STAGES（status；doctor 已于 2026-09-09-doctor-noai
+@@ -1126,20 +1155,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 显式写意图不短路：doctor 写操作 flag（--cleanup-remnant / --align-execute-progress）与
+   // 步骤动作 flag（--done/--skip/--reset/--reopen/--wait/--continue）走原写路径；--status 本身
+   // 是只读查询，纳入短路。--fix 是 worktree doctor 的 flag 不在此列（design.md Phase 4）。
+-  const READONLY_WRITE_ACTIONS = ['--cleanup-remnant', '--align-execute-progress', '--done', '--skip', '--reset', '--reopen', '--wait', '--continue']
+   if (READONLY_AUXILIARY_STAGES.includes(stageName) && !flags.some(f => READONLY_WRITE_ACTIONS.includes(f))) {
+     if (!progress) {
+-      console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+-      // 空态引导（2026-10-05-status-empty-guide）：新会话拿到下一步入口——静态文案，
+-      // 引用通用命令形态而非本仓状态（空态定义即无数据可读）；exit 0 与零落盘语义不变。
+-      // 可照抄实例（2026-10-05-input-teach-copyable）：分号描述形态照抄提取 0 条（探针实证）；
+-      // 引号内换行合法，extractSuccessCriteria 行级 trim 容忍缩进，带缩进照抄亦过门。
+-      console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
+-      console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+-      console.log('')
+-      console.log('     成功标准：')
+-      console.log('     - <可验证标准>"')
+-      console.log('   → 需求不明可 sillyspec run brainstorm --change <名> 先探索')
++      // 多活跃分流（2026-10-06-status-multi-active-list）：read() 无显式 --change 在 ≥2 活跃
++      // 时同样返回 null——「有数据但需要点名」被空态文案一律误报成「无数据」（本仓实测
++      // 10 行 active、2 个目录待收口却被告知未找到）。前置门保证走到这库必在场，listChanges
++      // 纯读；显式 --change 未命中仍走空态引导（点名失败与未点名歧义是两件事）。
++      let activeChanges = []
++      try { activeChanges = pm.listChanges(cwd) || [] } catch { activeChanges = [] }
++      if (!changeName && activeChanges.length >= 2) {
++        console.log(`ℹ️ 进度数据存在，但有 ${activeChanges.length} 个活跃变更（未指定 --change，无法确定展示哪个）：`)
++        for (const name of activeChanges) {
++          // DB 行与目录是两个真相层：目录缺失的幽灵行如实标注（清幽灵走既有 doctor --cleanup-remnant）
++          console.log(`   - ${name}${existsSync(pm._changePath(cwd, name)) ? '' : '（本地无目录）'}`)
++        }
++        console.log(`   → 指定查看其一：sillyspec status --change ${activeChanges[0]}`)
++        console.log('   → 恢复面：sillyspec flow status --change <名>')
++        process.exit(0)
++      }
++      emitReadonlyEmptyGuide()
+       process.exit(0)
+     }
+     // 只读展示路径：复用阶段定义渲染当前步骤 prompt（outputStep 对 status/doctor 纯只读），
+diff --git a/test/status-multi-active-list.test.mjs b/test/status-multi-active-list.test.mjs
+new file mode 100644
+index 00000000..0a17e6bb
+--- /dev/null
++++ b/test/status-multi-active-list.test.mjs
+@@ -0,0 +1,123 @@
++/**
++ * 坑 status-multi-active-list：裸 status 多活跃误报空态 + 库不在场只读破防
++ *
++ * 背景（2026-10-06 实测，变更 2026-10-06-status-multi-active-list）：
++ *   1. `sillyspec status`（无 --change）在进度库 ≥2 活跃变更时，read() 因「多活跃无法自动
++ *      推导」返回 null，只读空态分支一律打「未找到进度数据（只读查询不建变更）」——数据
++ *      存在、歧义在选谁，被误报成无数据（本仓实测 10 行 active、2 个目录待收口）。
++ *   2. `.runtime/sillyspec.db` 被删（schema-version 戳残留）时，裸 status 经 read()→
++ *      listChanges→_ensureDB 凭空新建空库，空库撞孤儿戳无表可查，`no such table: changes`
++ *      裸栈崩溃 exit 1——只读承诺双重破防（建了库、崩了查询）。
++ *
++ * 锁定语义：
++ *   ① 多活跃（≥2）：列出全部活跃变更名 + 计数 + --change 提示，禁止「未找到进度数据」
++ *   ② 幽灵行（DB active 但目录缺失）标注「本地无目录」
++ *   ③ 零活跃：既有空态引导逐字不回归
++ *   ④ 库不在场：走空态引导、exit 0、零落盘（不新建 sillyspec.db / changes/ 目录）
++ *   ⑤ 多活跃分支只读零落盘（不新增 changes/ 目录）
++ *   ⑥ 库丢失后写路径可恢复：全新建库分支重跑建表，首个写命令不再 no-such-table 崩溃
++ */
++import { join } from 'node:path'
++import { mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs'
++import { fileURLToPath } from 'node:url'
++import { execSync } from 'node:child_process'
++import { tmpdir } from 'node:os'
++
++const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
++const root = join(__dirname, '..')
++const binCLI = join(root, 'bin', 'sillyspec.js')
++
++let passed = 0, failed = 0
++const failures = []
++function assert(cond, msg) { cond ? (passed++, console.log(`  ✅ PASS: ${msg}`)) : (failed++, failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
++function run(cmd) {
++  try { return { out: execSync(cmd, { encoding: 'utf8', timeout: 60000 }), status: 0 } }
++  catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), status: e.status } }
++}
++function countChanges(d) {
++  const chDir = join(d, '.sillyspec', 'changes')
++  return existsSync(chDir) ? readdirSync(chDir).filter(x => !x.startsWith('.')).length : 0
++}
++
++console.log('=== 裸 status 多活跃清单 + 库不在场只读语义（2026-10-06-status-multi-active-list）===\n')
++
++console.log('--- ① 多活跃列表：计数+全名+--change 提示+无空态误报+只读零落盘（⑤） ---')
++{
++  const d = join(tmpdir(), `smal-multi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  for (const cn of ['2026-10-06-a', '2026-10-06-b']) {
++    mkdirSync(join(d, '.sillyspec', 'changes', cn), { recursive: true })
++    run(`node "${binCLI}" --dir "${d}" run plan --change ${cn} "x"`)
++  }
++  const before = countChanges(d)
++  const r = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(r.out.includes('2 个活跃变更'), '输出含「2 个活跃变更」计数')
++  assert(r.out.includes('2026-10-06-a') && r.out.includes('2026-10-06-b'), '两个活跃变更名都在清单中')
++  assert(r.out.includes('--change'), '含 --change 指定提示')
++  assert(!r.out.includes('未找到进度数据'), '不再误报「未找到进度数据」')
++  assert(countChanges(d) === before, `只读零落盘：changes/ 目录数不变（${before}）`)
++  const alias = run(`node "${binCLI}" --dir "${d}" status`)
++  assert(alias.status === 0 && alias.out.includes('2 个活跃变更') && !alias.out.includes('未找到进度数据'),
++    '顶层 status 别名与 run status 同构（清单分支）')
++
++  console.log('--- ② 幽灵行标注本地无目录 ---')
++  rmSync(join(d, '.sillyspec', 'changes', '2026-10-06-b'), { recursive: true, force: true })
++  const g = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(g.status === 0, `exit 0（实际 ${g.status}）`)
++  const lines = g.out.split('\n').map(s => s.trim()).filter(s => s.startsWith('- '))
++  const ghost = lines.find(l => l.startsWith('- 2026-10-06-b'))
++  const alive = lines.find(l => l.startsWith('- 2026-10-06-a'))
++  assert(!!ghost && ghost.includes('本地无目录'), `幽灵行标注本地无目录（实际：${ghost}）`)
++  assert(!!alive && !alive.includes('本地无目录'), `目录在场行不带标注（实际：${alive}）`)
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log('--- ③ 零活跃：既有空态引导不回归 ---')
++{
++  const d = join(tmpdir(), `smal-zero-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  const r = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(r.out.includes('未找到进度数据'), '保留原空态提示句')
++  assert(r.out.includes('flow start'), '引导行含 flow start 子串')
++  assert(r.out.includes('run brainstorm'), '引导行含 brainstorm 备选')
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log('--- ④ 库不在场：走空态引导且不新建库（FR-02/FR-03） ---')
++{
++  const d = join(tmpdir(), `smal-nodb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
++  mkdirSync(d, { recursive: true })
++  run(`node "${binCLI}" --dir "${d}" init`)
++  const dbPath = join(d, '.sillyspec', '.runtime', 'sillyspec.db')
++  // 删主库及 WAL/SHM 侧车，保留 schema-version 戳（复现实测的孤儿戳形态）
++  for (const p of [dbPath, dbPath + '-wal', dbPath + '-shm']) {
++    try { rmSync(p, { force: true }) } catch {}
++  }
++  const before = countChanges(d)
++  const r = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
++  assert(r.out.includes('未找到进度数据') && r.out.includes('flow start'), '库不在场走既有空态引导')
++  assert(!r.out.includes('no such table'), '不因缺库裸栈崩溃')
++  assert(!existsSync(dbPath), '只读不新建 sillyspec.db')
++  assert(countChanges(d) === before, `只读不建变更目录（${before} 不变）`)
++
++  console.log('--- ⑥ 库丢失后写路径可恢复：全新建库重跑建表 ---')
++  mkdirSync(join(d, '.sillyspec', 'changes', '2026-10-06-c'), { recursive: true })
++  const w = run(`node "${binCLI}" --dir "${d}" run plan --change 2026-10-06-c "x"`)
++  assert(w.status === 0, `库丢失后首个写命令 exit 0（实际 ${w.status}）`)
++  assert(!w.out.includes('no such table'), '不再 no such table 崩溃')
++  assert(existsSync(dbPath), '写路径正常重建库文件')
++  const s = run(`node "${binCLI}" --dir "${d}" run status`)
++  assert(s.status === 0 && !s.out.includes('未找到进度数据'), '重建库后单活跃可正常展示')
++  try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failures.length) { console.log('失败项:'); failures.forEach(f => console.log('  - ' + f)) }
++console.log('='.repeat(50))
++if (failed > 0) process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-06-status-multi-active-list/design.md b/.sillyspec/changes/2026-10-06-status-multi-active-list/design.md
+new file mode 100644
+index 00000000..b9356065
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-status-multi-active-list/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:07:58.424Z
++---
++# 设计记录（Design Record）— 2026-10-06-status-multi-active-list
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++只改 src/run/command.js 只读短路 `!progress` 分支（READONLY_AUXILIARY_STAGES 唯一成员 status 的空态入口）：read() 无显式 --change 在「≥2 活跃变更」时与「零活跃」同样返回 null（src/progress.js:416-424 单活跃才自动推导），旧分支把两者一律当「无数据」打空态引导。修法：分支内先做库在场前置检查（existsSync pm._runtimePath(cwd,'sillyspec.db')，与 change-registry getChangeTitle 同款防 _ensureDB 建库副作用），在场则 pm.listChanges(cwd) 读活跃名，≥2 时打印「N 个活跃变更」清单（每行 existsSync pm._changePath 判目录，缺失标「本地无目录」）+ 可照抄的 --change 提示行后 exit 0；其余（0 活跃/库不在场/显式 --change 未命中且单活跃）维持原空态引导不动。选这个方案因为歧义发生在「选谁展示」这一层，read() 的单活跃自动推导语义不动、只读短路的零副作用承诺不动，是最小切口。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名/文件格式变更。对外可见行为变化仅一处：裸 `sillyspec status`（无 --change）在进度库 ≥2 活跃变更时，输出从「未找到进度数据（只读查询不建变更）+ 空态引导」变为「N 个活跃变更清单 + --change 提示行」，exit 0 不变；0 活跃/库不在场/显式 --change 场景输出逐字不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用：本分支是查询时点的只读快照（单条 SQL SELECT），无跨事件时序假设；清单内容即查询时刻 DB 真相，乱序不构成输入。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   SQLite 单读无锁竞争；并发的归档/删除把某行 status 改走最多让清单少列一行（查询时点真相），不误报、不抛错。listChanges 与后续逐行 existsSync 之间存在行被归档/目录被搬的竞态：行已归档则本清单多列一行（下次查询自愈），目录刚消失则如实标「本地无目录」——两向偏差都是展示级，无写路径可损坏。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全：分支纯读 + console.log 后立即 process.exit(0)，无中间状态落盘，中断点任意重跑幂等。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会：cwd/specBase 解析在进入本分支前完成（既有逻辑），listChanges/_changePath 均以该 cwd 为根；会话专属 worktree 场景下 status 只读短路不触发 spec 锚定改写（本分支晚于 worktree 锚定代码），读的是锚定后 spec 的库。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：幽灵行刷屏——DB 残留大量 status='active' 但目录早已不在的行时，清单较长且多数标「本地无目录」。可接受：这正是 DB 真相，且 doctor --cleanup-remnant 是既有清幽灵通道，本分支只负责如实展示。放弃的方案：①在 listChanges（库函数）里过滤无目录行——污染库语义，DB 行与目录存在性是两个真相层，别处依赖 DB 口径；②改 read() 让多活跃返回特殊值——动核心推导语义，调用方十余处，风险与收益不成比例；③清单截断加「其余 N 个略」——现实活跃数是个位数到两位数，截断只省屏幕不省正确性，反藏信息。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/run/command.js | 只读短路两处：库不在场前置门（不进 pm.read，杜绝建库副作用）+ !progress 分支多活跃（≥2）清单与提示；空态引导抽 emitReadonlyEmptyGuide 单一源 |
++| 修改 | src/db.js | _openWithFallback 全新建库分支标 _freshCreate，init 无视孤儿 schema-version 戳重跑 _createSchema（实测问题#2：库被删戳残留→空库无表→首 SELECT 崩） |
++| 新增 | test/status-multi-active-list.test.mjs | ①多活跃列表 ②幽灵行标注 ③零活跃不回归 ④库不在场零副作用 ⑤只读零落盘 ⑥库丢失写路径恢复 |
++| 修改 | package.json | 新测试收录 test:core（近期惯例） |
+diff --git a/.sillyspec/changes/2026-10-06-status-multi-active-list/proposal.md b/.sillyspec/changes/2026-10-06-status-multi-active-list/proposal.md
+new file mode 100644
+index 00000000..8539ad1f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-status-multi-active-list/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:07:58.424Z
++---
++# 提案书（Proposal）— 2026-10-06-status-multi-active-list
++
++## 动机
++
++任务原话转写：实测发现：裸跑 sillyspec status（无 --change）在进度库存在 ≥2 个活跃变更时，read() 因「多活跃无法自动推导」返回 null（src/progress.js:416-424），只读空态分支一律打「ℹ️ 未找到进度数据（只读查询不建变更）」——数据明明存在（本仓实测 10 个 active 行、其中 2 个有真实目录待收口），文案却断言无数据，误导 AGENTS.md「恢复与查看」面。
++
++成功标准：
++- 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++- 零活跃或库不存在时维持既有空态引导文案（不回归）
++- 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++2. 零活跃或库不存在时维持既有空态引导文案（不回归）
++3. 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
++
++## 成功标准（可验证）
++
++1. 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++2. 零活跃或库不存在时维持既有空态引导文案（不回归）
++3. 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
+diff --git a/.sillyspec/changes/2026-10-06-status-multi-active-list/requirements.md b/.sillyspec/changes/2026-10-06-status-multi-active-list/requirements.md
+new file mode 100644
+index 00000000..a51fffa9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-status-multi-active-list/requirements.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:07:58.424Z
++---
++# 需求规格（Requirements）— 2026-10-06-status-multi-active-list
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++
++- 无显式 `--change` 的只读 status 查询在进度库存在 ≥2 个活跃变更时，必须列出全部活跃变更名（按 listChanges 顺序）并以可照抄的命令形态提示用 `--change` 指定查看；同场景禁止输出「未找到进度数据（只读查询不建变更）」——数据存在，歧义在选谁，语义是「点名」不是「无数据」。
++- 列表条目对本地不存在变更目录的行必须标注「本地无目录」（DB 真相与目录真相分离展示，幽灵行可辨识）。
++
++#### 场景：多活跃主路径
++
++- Given 已 init 的仓，进度库有 2 个 status='active' 的变更行（目录在场）
++- When 裸跑 `sillyspec status`（无 --change）
++- Then exit 0；输出含「2 个活跃变更」与两个变更名；含 `--change` 提示行；不含「未找到进度数据」
++
++#### 场景：活跃行含目录缺失的幽灵
++
++- Given 进度库 ≥2 活跃行，其中 1 行的 changes/ 目录已被手工移走
++- When 裸跑 `sillyspec status`
++- Then 该行名后标注「本地无目录」，其余行为不变
++
++### FR-02: 零活跃或库不存在时维持既有空态引导文案（不回归）
++
++- 进度库 0 个活跃变更、或 `.sillyspec/.runtime/sillyspec.db` 不在场时，status 必须维持既有空态引导（「未找到进度数据」原句 + flow start 可照抄例 + brainstorm 备选）与 exit 0，禁止引入新分支改变该文案形态。
++
++#### 场景：零活跃
++
++- Given 已 init 的仓，进度库无 status='active' 行
++- When 裸跑 `sillyspec status`
++- Then 输出与既有空态引导同构（含「未找到进度数据」「flow start」「run brainstorm」），exit 0
++
++#### 场景：库不在场
++
++- Given `.sillyspec` 目录在但 `.runtime/sillyspec.db` 文件不在
++- When 裸跑 `sillyspec status`
++- Then 走空态引导（不因缺库报错），且运行后库文件仍不存在
++
++### FR-03: 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
++
++- 本变更触及的 status 只读短路路径必须保持既有副作用面：不 initChange、不新建 changes/ 目录、库不在场时不新建 sillyspec.db（活跃清单读取前必须前置库在场检查，禁止经 _ensureDB 的建库副作用）；多活跃分支与空态分支均 exit 0。
++
++#### 场景：库不在场零副作用
++
++- Given `.sillyspec` 在、`.runtime/sillyspec.db` 不在，changes/ 目录条目数记为 N
++- When 裸跑 `sillyspec status`
++- Then exit 0；运行后 sillyspec.db 仍不存在；changes/ 条目数仍为 N
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/status-multi-active-list.test.mjs「①多活跃列表：计数+全名+--change 提示+无空态误报」
++FR-01: test/status-multi-active-list.test.mjs「②幽灵行标注本地无目录」
++FR-02: test/status-multi-active-list.test.mjs「③零活跃空态引导不回归」
++FR-02: test/status-multi-active-list.test.mjs「④库不在场走空态且不新建库」
++FR-02: test/status-multi-active-list.test.mjs「⑥库丢失后写路径可恢复」
++FR-03: test/status-multi-active-list.test.mjs「④库不在场走空态且不新建库」
++FR-03: test/status-multi-active-list.test.mjs「⑤多活跃分支只读零落盘（不新增 changes 目录）」
+diff --git a/.sillyspec/changes/2026-10-06-status-multi-active-list/tasks.md b/.sillyspec/changes/2026-10-06-status-multi-active-list/tasks.md
+new file mode 100644
+index 00000000..0d2d74b2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-status-multi-active-list/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:07:58.424Z
++---
++# 任务注册表（Tasks）— 2026-10-06-status-multi-active-list
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-status-multi-active-list --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-status-multi-active-list` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
++- [x] task-02: 零活跃或库不存在时维持既有空态引导文案（不回归）
++- [x] task-03: 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
++- [x] task-04: 实测问题#2 修复：db.js 全新建库分支标 _freshCreate，孤儿 schema-version 戳不再让空库跳过建表（库丢失后首个写命令 no-such-table 崩溃）
++- [x] task-05: 新测试收录 test:core；lint 通过

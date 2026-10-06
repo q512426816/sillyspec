@@ -1985,3 +1985,60 @@
   confirmed_at: null
   source_change: 2026-10-06-datetime-timeago
   status: active
+
+## FR-core-engine-127 裸 status 在多活跃（≥2）时列出全部活跃变更名并提示 --change 指定查看，不再出现「未找到进度数据」
+变更：2026-10-06-status-multi-active-list
+状态：active
+摘要：多活跃主路径；活跃行含目录缺失的幽灵
+全文：.sillyspec/changes/archive/2026-10-06-status-multi-active-list/requirements.md#FR-01
+最近确认：9e0a8c4df213f6b3a1dfb2b66a9f2714e30bafc6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-status-multi-active-list:flow:测试绑定FR-01
+  tests: test/status-multi-active-list.test.mjs「②幽灵行标注本地无目录」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-status-multi-active-list
+  status: active
+
+## FR-core-engine-128 零活跃或库不存在时维持既有空态引导文案（不回归）
+变更：2026-10-06-status-multi-active-list
+状态：active
+摘要：零活跃；库不在场
+全文：.sillyspec/changes/archive/2026-10-06-status-multi-active-list/requirements.md#FR-02
+最近确认：9e0a8c4df213f6b3a1dfb2b66a9f2714e30bafc6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-status-multi-active-list:flow:测试绑定FR-02
+  tests: test/status-multi-active-list.test.mjs「⑥库丢失后写路径可恢复」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-status-multi-active-list
+  status: active
+
+## FR-core-engine-129 只读短路语义不变：不 initChange、不新建 sillyspec.db（库不在场时）、exit 0
+变更：2026-10-06-status-multi-active-list
+状态：active
+摘要：库不在场零副作用
+全文：.sillyspec/changes/archive/2026-10-06-status-multi-active-list/requirements.md#FR-03
+最近确认：9e0a8c4df213f6b3a1dfb2b66a9f2714e30bafc6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-status-multi-active-list:flow:测试绑定FR-03
+  tests: test/status-multi-active-list.test.mjs「⑤多活跃分支只读零落盘（不新增 changes 目录）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-status-multi-active-list
+  status: active
