@@ -2590,6 +2590,11 @@ function inferFullTestCommand(projectRoot) {
  * 修法：按扩展名分组（.py 一组 / 其余 node --test 一组），组内「本次变更的测试文件优先」排序，
  * 每组按比例分 30 帽（保底 5）；.py 组运行器从命中模块命令推断（含 pytest 的命令取其 pytest
  * 前缀——如 `cd backend && uv run pytest` 的 `uv run pytest`；无命中模块兜底 python -m pytest）。
+ * 优先面豁免帽（2026-10-06-fr-regress-cap-drop，flow-status-title 收口实测缺陷）：变更自身
+ * 测试 ∪ priorityFiles（FR 钦定回归）是本变更验收面本体——旧 slice(0, cap) 只保证优先面
+ * 「先入序」，优先面自身超帽时照样被字母序挤出（实测 63 绑定文件实跑 30、静默弃 33 含最
+ * 相关回归）。组卷改配额制：每组优先面整跑，普通 import 依赖只填剩余席位（可为 0）——帽
+ * 只界普通依赖尾。批尺寸上界护栏由 TEST_TIMEOUT_MS 兜底（超时=失败 fail-closed 不变）。
  */
 function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
   const norm = (p2) => String(p2).replace(/\\/g, '/')
@@ -2602,8 +2607,18 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const CAP = 30
   const pyCap = py.length === 0 ? 0 : js.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + js.length))))
   const jsCap = CAP - pyCap
-  const pyRun = py.slice(0, pyCap)
-  const jsRun = js.slice(0, jsCap)
+  // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
+  // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
+  const quotaFill = (group, quota) => {
+    const prioInGroup = group.filter(f => prio(f) === 0)
+    const ordinary = group.filter(f => prio(f) !== 0)
+    const ordinaryRun = ordinary.slice(0, Math.max(0, quota - prioInGroup.length))
+    return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
+  }
+  const pyQ = quotaFill(py, pyCap)
+  const jsQ = quotaFill(js, jsCap)
+  const pyRun = pyQ.run
+  const jsRun = jsQ.run
   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
   // ② 无命中命令时自项目结构——首个 .py 文件最近 pyproject/uv.lock 祖先（uv 优先）。
   // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
@@ -2667,8 +2682,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
   const batches = []
-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length, tap: true })
+  // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
+  // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
+  // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
+  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true })
   if (jsProjectRun.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)
@@ -2693,7 +2711,21 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   return batches
 }
 
-export { buildDepsBatches }
+/**
+ * deps 批披露行（2026-10-06-fr-regress-cap-drop）：runModuleSubset 批日志的单源格式化——
+ * 计数分列（实跑总数 / 优先面豁免计数 / 普通依赖弃置），「超帽弃」只对普通依赖成立。
+ * 抽为纯函数供直测钉格式（runModuleSubset 需真跑测试，不宜为格式断言起进程）。
+ */
+function formatDepsBatchLine(b) {
+  const runnerNote = b.name === 'deps(auto-py)'
+    ? 'pytest 运行器按最近 pyproject/uv 祖先推断'
+    : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'
+  const prio = Number(b.prioCount) > 0 ? `（优先面 ${b.prioCount}：变更/FR 回归豁免帽）` : ''
+  const drop = Number(b.dropped) > 0 ? `（超帽弃 ${b.dropped} 普通依赖）` : ''
+  return `ℹ️ 动态子集批 ${b.name}：${b.count} 个${prio}${drop}（${runnerNote}——治 node 跑 .py 伪败与字母序偏科）`
+}
+
+export { buildDepsBatches, formatDepsBatchLine }
 
 // ── trace residual adapter（2026-09-24-fr-test-readside，fr-test-binding §3.3/§3.6 读侧）──
 // 锚点集=本变更 task 卡 requirement_ids 并集；残差=trace active 行 tests 并集按保守差集
@@ -2868,7 +2900,10 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
         continue
       }
       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
-      console.log(`ℹ️ 动态子集批 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 运行器按最近 pyproject/uv 祖先推断' : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+      console.log(formatDepsBatchLine(b))
+      // 防御披露（2026-10-06-fr-regress-cap-drop）：quotaFill 构造保证优先面零弃置——此计数
+      // >0 说明组卷逻辑被后续改动破坏（钦定回归被弃），loud 披露不静默。
+      if (Number(b.prioDropped) > 0) console.warn(`⚠️ ${b.name}：优先面 ${b.prioDropped} 个被弃（组卷构造上不应发生——工具缺陷，请上报）`)
     }
   }
   const status = aggregateStatus(perModule)
