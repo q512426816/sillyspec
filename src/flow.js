@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative, dirname } from 'node:path'
 import yaml from 'js-yaml'
@@ -106,6 +106,58 @@ function changedFilesSinceBaseline(cwd, baselineCommit) {
     }
   }
   return [...files]
+}
+
+/** 递归取路径最新 mtime（目录取全体成员最大值——目录自身 mtime 只随成员增删动，不随成员内容写动）。
+ * 安全帽：walk 预算 2000 条（巨型未跟踪树防遍历失控），超帽/stat 失败返回 Infinity（=「新」，
+ * 调用方保守保留）。开放世界：时间戳是唯一裁判，不按路径形态设例外。 */
+function newestMtime(p, budget = { left: 2000 }) {
+  let st
+  try { st = statSync(p) } catch { return Infinity }
+  if (!st.isDirectory()) return st.mtimeMs
+  let max = st.mtimeMs
+  let entries
+  try { entries = readdirSync(p, { withFileTypes: true }) } catch { return max }
+  for (const e of entries) {
+    if (--budget.left < 0) return Infinity
+    const m = newestMtime(join(p, e.name), budget)
+    if (m > max) max = m
+  }
+  return max
+}
+
+/**
+ * 重入路由面的未跟踪前置过滤（坑 resume-domain-flip，2026-10-06 轻量道实测）：resume 域路由
+ * 复用 changedFilesSinceBaseline（fr-rot-precision ⑥ 口径——含未跟踪是对的：干活期创建未提交
+ * 的交付文件必须路由），但 `git status --porcelain` 会把**先于变更存在**的他侧未跟踪遗留一并
+ * 扫进来；重入早于干活时区间 diff 为空、本变更无工作树改动，路由面只剩这批垃圾 → 域被劫持成
+ * 伪域、fresh 简报的 input 域与 FR 注入全丢。判据是时间不是路径形态：未跟踪（??）条目的最新
+ * mtime 早于变更出生时刻 = 本变更存活期内从未写过 = 不属本变更的路由面，剔除。
+ * 保守保留（行为同现状）：birthTs 空/非有限、stat 失败、walk 超帽。跟踪条目（区间 diff、M/D）
+ * 不过此滤——提交与工作树修改是明确的变更事实。
+ * @param {string} cwd 工作区根
+ * @param {string[]} files changedFilesSinceBaseline 产出的路径面（含 `??` 原样目录条目）
+ * @param {number|null} birthTs 变更出生时刻（epoch 毫秒；null=不过滤）
+ * @returns {string[]} 过滤后的路径面
+ */
+export function filterPreChangeUntracked(cwd, files, birthTs) {
+  if (!Array.isArray(files) || files.length === 0) return Array.isArray(files) ? files : []
+  if (typeof birthTs !== 'number' || !Number.isFinite(birthTs)) return files
+  const s = gitQuiet(cwd, ['status', '--porcelain'])
+  if (!s) return files
+  const untracked = new Set()
+  for (const line of String(s).split('\n')) {
+    if (!line || line.length < 4) continue
+    if (!line.startsWith('??')) continue
+    const p = line.slice(3).trim().replace(/^"|"$/g, '')
+    if (p) untracked.add(p.replace(/\\/g, '/'))
+  }
+  if (untracked.size === 0) return files
+  return files.filter((f) => {
+    const norm = String(f).replace(/\\/g, '/')
+    if (!untracked.has(norm)) return true // 非 ?? 条目（跟踪/区间 diff）不滤
+    return !(newestMtime(join(cwd, norm)) < birthTs) // 最新 mtime 早于出生时刻 → 剔除
+  })
 }
 
 /** 材料路径清单（稳定前缀——缓存最优；按在场性列出，不读内容）。 */
@@ -538,7 +590,24 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           if (m && !m[1].includes('（未提供 --input）')) resumeInput = m[1].trim()
         } catch { /* proposal 回退 best-effort */ }
       }
-      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: resumeInput, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
+      // 路由面 = 过滤后的基线以来文件面 ∪ input 路径语料路由面（resume-domain-flip 修复：
+      // 未跟踪遗留先于变更存在 → 时间过滤剔除；并集保证重入知识面 ⊇ fresh——重入早于干活时
+      // 文件面只剩他侧垃圾，input 面是唯一真实依据）。出生时刻读进度库 changes.created_at
+      // （best-effort：无 DB/无行/解析失败不过滤，行为同现状）。
+      let birthTs = null
+      try {
+        const row = pm._ensureDB(cwd).getDb().prepare('SELECT created_at FROM changes WHERE name = ?').get(change)
+        if (row && row.created_at) {
+          const t = Date.parse(row.created_at)
+          if (Number.isFinite(t)) birthTs = t
+        }
+      } catch { /* 出生时刻 best-effort */ }
+      const diffFace = changedFilesSinceBaseline(cwd, st.baseline_commit)
+      const inputFace = resumeInput ? (await extractRoutingInputPaths(cwd, specBase, resumeInput)) : []
+      resumeDigest = await flowKnowledgeDigest({
+        specBase, change, changeDir, input: resumeInput,
+        filesOverride: [...new Set([...filterPreChangeUntracked(cwd, diffFace, birthTs), ...inputFace])],
+      })
     } catch { /* 注入 best-effort */ }
     // 恢复简报标题（2026-10-06-resume-title）：getChangeTitle 单源只读（与 flow status 同族），
     // best-effort——读取失败按无标题渲染（与现状输出一致）
