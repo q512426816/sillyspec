@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  2026-10-06-fr-regress-cap-drop 修复后的重测（2026-10-06-resume-title 收口）暴露残留缺口：runModuleSubset 给 buildDepsBatches 传
+  priorityFiles: frLinked——只含与 deps 无重叠的「新增」绑定文件；与 import 依赖面重叠的 FR 绑定文件拿不到优先权，仍按普通依赖受 30 帽字母序弃置（实测 64 绑定文件弃 14，如
+  flow-protocol/fr-rot-precision 等）。修复：优先面传全量 fr.files（重叠与否不论——绑定面钦定即优先），重叠文件优先权不影响并集去重语义。
+
+
+  成功标准：
+
+  - runModuleSubset 的 priorityFiles 传全量 FR 绑定文件（fr.files），与 deps 重叠的绑定文件不再被帽弃（fixture：绑定文件同时在 import
+  依赖面内、字母序最末，修复后必入执行批）
+
+  - 并集去重与批计数语义不变（depsAll 构造照旧；披露标签如实反映实跑数）
+
+  - 直测覆盖重叠形态（绑定文件 ∈ deps）：修复后该文件在执行命令中；无 FR 索引/零绑定时行为与现状一致
+autopilot: true
+baseline_commit: 86a88f5c2c0f24dc9992636cacb7933a0aa5e222
+updatedAt: '2026-10-06T11:56:02.803Z'
+baseline_sha256: 3f8a71bd7fbaa030f961bfa98aa4e46b711e3749abc60d93f5e3ce6d19100d3d
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(11)（48.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006114810\test-result.json｜lint: passed
+  ← npm run lint（44.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006114810\test-result.json｜门文件 6 个
+

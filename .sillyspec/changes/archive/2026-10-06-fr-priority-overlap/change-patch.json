@@ -1,0 +1,48 @@
+{
+  "change": "2026-10-06-fr-priority-overlap",
+  "baseline": "86a88f5c2c0f24dc9992636cacb7933a0aa5e222",
+  "head": "7f921a670bb4e9e4504acb8d5a6863f260db62df",
+  "files": [
+    ".sillyspec/changes/2026-10-06-fr-priority-overlap/requirements.md",
+    ".sillyspec/changes/2026-10-06-fr-priority-overlap/tasks.md",
+    "package.json",
+    "src/verify-postcheck.js",
+    "test/fr-priority-overlap.test.mjs",
+    ".sillyspec/changes/2026-10-06-fr-priority-overlap/design.md",
+    ".sillyspec/changes/2026-10-06-fr-priority-overlap/proposal.md",
+    ".sillyspec/changes/2026-10-06-fr-priority-overlap/review.json.superseded-20261006T115321"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 293,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-06T11:53:22.338Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "7d3259306b18537c414cfb4238b35c4798d1fcf887bf1a71764d64c6fdf77c8b",
+  "patchStatus": "ok"
+}

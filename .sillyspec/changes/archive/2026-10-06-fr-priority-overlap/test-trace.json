@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-fr-priority-overlap",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-fr-priority-overlap:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-priority-overlap.test.mjs「① 重叠形态：绑定文件 ∈ deps 且字母序最末 → 必入执行批（修复前被 30 帽弃置）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-priority-overlap"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-fr-priority-overlap:flow:测试绑定FR-02",
+      "tests": [
+        "test/fr-priority-overlap.test.mjs「① 重叠形态（标签 deps(js30)+fr(1) 如实断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-priority-overlap"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-fr-priority-overlap:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-priority-overlap.test.mjs「① 重叠形态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-fr-priority-overlap"
+    }
+  ]
+}

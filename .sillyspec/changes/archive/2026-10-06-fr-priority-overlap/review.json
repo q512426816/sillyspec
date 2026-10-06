@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-fr-priority-overlap",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7f921a670bb4e9e4504acb8d5a6863f260db62df",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02/FR-03 绑定行对用例的引用为指称式非逐字（用例可唯一定位、断言在场、实跑绿）",
+      "evidence": "requirements.md:46 写「① 重叠形态（标签 deps(js30)+fr(1) 如实断言）」而实际用例名为「① 重叠形态：绑定文件 ∈ deps 且字母序最末 → 必入执行批（修复前被 30 帽弃置）」（test/fr-priority-overlap.test.mjs:88），括注为评审方说明非用例名原文；「② 无 FR 索引：纯字母序配额帽行为现状一致」缺尾部括注「（最末文件被弃、批 passed）」（test/fr-priority-overlap.test.mjs:100）。两用例均真实在场、所指断言（deps(js30)+fr(1) 于 :96；zz-bound 不在命令 + 恰 30 文件于 :102-105）真实存在，node --test 实跑 3/3 通过。FR-01 绑定（requirements.md:45）已逐字。前轮 P2 的两要件（用例不存在、计数口径相悖）均已清偿，本条仅剩转写精度，非阻断。",
+      "location": ".sillyspec/changes/2026-10-06-fr-priority-overlap/requirements.md:46-47 vs test/fr-priority-overlap.test.mjs:88,96,100"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 场景的「优先面超帽时 N>帽值」形态无直测（仅帽内形态被钉）",
+      "evidence": "requirements.md:31 场景 Then 陈述两种形态（帽内 N=帽值 / 超帽 N>帽值），测试仅对帽内形态断言（test/fr-priority-overlap.test.mjs:96 deps(js30)+fr(1)，fixture 41 deps+1 重叠绑定 → prioInGroup=1、ordinaryRun=slice(0,30-1)=29、批=30）。超帽形态的正确性由 quotaFill 构造保证（src/verify-postcheck.js:2612-2616：ordinaryRun=Math.max(0, quota-prioInGroup.length)，优先面超 quota 时整跑、ordinaryRun=0，count=jsNative.length>帽值）且 count 派生自实跑数（src:2689）——机制如实，但该分支无 fixture 钉住，后续改动若破坏该数学不触发红灯。覆盖面披露，非正确性缺陷。",
+      "location": ".sillyspec/changes/2026-10-06-fr-priority-overlap/requirements.md:31 vs test/fr-priority-overlap.test.mjs:88-106 + src/verify-postcheck.js:2612-2616"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-06T11:55:29Z"
+}

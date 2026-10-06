@@ -1846,3 +1846,66 @@
   confirmed_at: null
   source_change: 2026-10-06-fr-regress-cap-drop
   status: active
+
+## FR-core-engine-120 runModuleSubset 的 priorityFiles 传全量 FR 绑定文件（fr.files），与 deps 重叠的绑定文件不再被帽弃（fixture：绑定文件同时在 import 依赖面内、字母序最末，修复后必入执行批）
+变更：2026-10-06-fr-priority-overlap
+状态：active
+摘要：重叠绑定
+场景正文：
+- 场景：重叠绑定 — When 调 runModuleSubset（changedFiles=[src/lib.js]）；Then 执行批命令包含 test/zz-bound.test.mjs（修复前字母序最末被 30 帽弃置）
+全文：.sillyspec/changes/archive/2026-10-06-fr-priority-overlap/requirements.md#FR-01
+最近确认：7f921a670bb4e9e4504acb8d5a6863f260db62df
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-priority-overlap:flow:测试绑定FR-01
+  tests: test/fr-priority-overlap.test.mjs「① 重叠形态：绑定文件 ∈ deps 且字母序最末 → 必入执行批（修复前被 30 帽弃置）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-priority-overlap
+  status: active
+
+## FR-core-engine-121 并集去重与批计数语义不变（depsAll 构造照旧；披露标签如实反映实跑数）
+变更：2026-10-06-fr-priority-overlap
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 重叠 fixture；When runModuleSubset 执行；Then 披露标签如实反映实跑与绑定面：帽内时 deps(js N) 的 N=帽值（绑定文件占帽内席位而非加帽）、优先面超帽时 N>帽值；绑定文件禁止被计入弃置数；fr(
+全文：.sillyspec/changes/archive/2026-10-06-fr-priority-overlap/requirements.md#FR-02
+最近确认：7f921a670bb4e9e4504acb8d5a6863f260db62df
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-priority-overlap:flow:测试绑定FR-02
+  tests: test/fr-priority-overlap.test.mjs「① 重叠形态（标签 deps(js30)+fr(1) 如实断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-priority-overlap
+  status: active
+
+## FR-core-engine-122 直测覆盖重叠形态（绑定文件 ∈ deps）：修复后该文件在执行命令中；无 FR 索引/零绑定时行为与现状一致
+变更：2026-10-06-fr-priority-overlap
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given ①② 两组 fixture；When 直测 runModuleSubset；Then 两组断言全绿
+全文：.sillyspec/changes/archive/2026-10-06-fr-priority-overlap/requirements.md#FR-03
+最近确认：7f921a670bb4e9e4504acb8d5a6863f260db62df
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-fr-priority-overlap:flow:测试绑定FR-03
+  tests: test/fr-priority-overlap.test.mjs「① 重叠形态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-fr-priority-overlap
+  status: active

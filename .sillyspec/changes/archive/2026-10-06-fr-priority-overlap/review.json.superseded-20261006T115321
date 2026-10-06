@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-fr-priority-overlap",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8e38d826c7eb9a561758c9575566f56b397df190",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-02 绑定作答声称的用例「标签计数含优先面（deps(js31) 形态）」不存在，且批计数披露面无任何断言、声称数字与实现语义相悖",
+      "evidence": "requirements.md:46 声称的用例名在 test/fr-priority-overlap.test.mjs 中无对应（grep「标签计数」零命中，全文件仅 ①②③ 三用例），也无任何用例断言 count/prioCount/dropped——FR-02「披露标签如实反映实跑数」仅由构造间接成立（count 派生自 jsNative.length，src/verify-postcheck.js:2689）；且 deps(js31) 数字与 quotaFill 实际语义不符：优先面占帽内席位（src/verify-postcheck.js:2615-2616，ordinaryRun=slice(0, quota-prioInGroup.length)），重叠 fixture 实跑批=1 优先+29 普通=30 而非 31——按声称名补写该测试会失败",
+      "location": ".sillyspec/changes/2026-10-06-fr-priority-overlap/requirements.md:46 + test/fr-priority-overlap.test.mjs:87-113"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01/FR-03 绑定用例名为转写非逐字（行为断言在且实跑绿）",
+      "evidence": "绑定作答「重叠绑定文件必入执行批」「无 FR 索引行为现状一致」与实际用例名「① 重叠形态：…必入执行批…」「② 无 FR 索引：纯字母序配额帽行为现状一致…」语义一致但非逐字；两用例存在、断言对应行为（cmd 含 zz-bound / 无索引时 30 帽弃 zz-bound）且 node --test 实跑 3/3 通过",
+      "location": ".sillyspec/changes/2026-10-06-fr-priority-overlap/requirements.md:45,47 vs test/fr-priority-overlap.test.mjs:87,97"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-06T11:52:02Z"
+}
