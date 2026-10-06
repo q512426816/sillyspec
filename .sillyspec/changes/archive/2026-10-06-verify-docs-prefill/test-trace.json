@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-verify-docs-prefill",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-01",
+      "tests": [
+        "test/gate-docs-only.test.mjs「D1 docsOnly：verify-test/verify-lint informational 占位，测试命令不执行，artifacts 照跑」",
+        "test/gate-docs-only.test.mjs「D2 对照：完整档走真实决策路径（非 docs-only 占位；跳过时有 CLI 自身的 dynamic-empty 理由）」",
+        "test/gate-docs-only.test.mjs「D3 CLI 互斥：--docs-only 与 --full 并存 exit 2（先于变更存在性检查）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-02",
+      "tests": [
+        "test/probe7-fr-prefill.test.mjs「P1 无归属卡 + FR 命中：既有用例进 testFiles 且渲染注记行」",
+        "test/probe7-fr-prefill.test.mjs「P3 无 FR 知识：行为与现状一致（无注入、无注记）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-03",
+      "tests": [
+        "test/plan-fill-batch-config.test.mjs「B1 未配置：文案含「≤8」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-probes-refresh-backup.test.mjs「P3-1 清偿：backupVerifyResult 传 changeName 时备份文件名含 change 段」",
+        "test/verify-probes-refresh-backup.test.mjs「P3-2 清偿：「非零端点」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-05",
+      "tests": [
+        "test/step-guide-prune.test.mjs「G1-G3：旧指纹清理 / state 引用保留 / 他步骤不动」",
+        "test/step-guide-prune.test.mjs「目录缺失：返回 0 不抛（fail-soft）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-06-verify-docs-prefill:flow:测试绑定FR-06",
+      "tests": [
+        "test/step-guide-prune.test.mjs「目录缺失：返回 0 不抛（fail-soft）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-docs-prefill"
+    }
+  ]
+}

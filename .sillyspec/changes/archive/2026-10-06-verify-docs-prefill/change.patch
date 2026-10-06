@@ -1,0 +1,1069 @@
+diff --git a/.sillyspec/changes/2026-10-06-verify-docs-prefill/flow-state.yaml b/.sillyspec/changes/2026-10-06-verify-docs-prefill/flow-state.yaml
+new file mode 100644
+index 00000000..de26b9fa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-docs-prefill/flow-state.yaml
+@@ -0,0 +1,51 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  厚流程 postmortem（sess_4769fd5d，provider-multi-agent-kind）第二批误工清偿 + 变更一评审 P3 清偿，共六项：
++
++
++  1) gate verify 预检缺轻量档：gate verify 只读重跑全量检查含测试执行（postmortem 实证 --json 超时转后台 + task id 抄错绕 3
++  轮），纯文档契约缺项（visual-evidence/结论槽/移交项等）其实毫秒级可查——src/machine-interface.js runGate 加 docsOnly 档：verify 阶段跳过
++  verify-test/verify-lint 执行（informational 占位说明），其余检查照跑；CLI gate --docs-only 接线（与 --full 互斥）。
++
++  2) 探针 7 矩阵手誊 40 分钟：无归属测试的卡预填「无归属测试——判定大概率 uncovered」，而 FR 关联回归既有用例（本变更未改动）本可由
++  collectFrLinkedTests（src/fr-index.js:933）机械给出——接入为无归属卡的既有用例候选（注记行区分「既有用例，未改动」），省 agent 全仓找锚点。
++
++  3) 填卡 batch 阈值硬编码：stages/plan.js L499-500「task 总数 ≤8」写死在 prompt 文案，430 万 token 实证后阈值应项目可调——local.yaml 新键
++  plan.fill_batch_min_tasks（integer ≥1，缺省 8），buildCoordinatorStep 插值，config-schema 注册。
++
++  4) 变更一评审 P3 三项清偿：备份文件名不含 change 段（backupVerifyResult 加 changeName 参数）；「非零端点」被零端点同义正则误命中
++  declared=0（API_FACE_DECLARED_ZERO_RE 零端点分支加 (?<!非) 前瞻）；refreshProbeSections 段边界不认非探针 ####
++  标题致手写子节被吞（splitProbeSectionRanges 边界改认任意 #{1,4} 标题）。
++
++  5) step-guides 旧指纹文件永久共存：agent 自行 ls/glob 目录会读到旧版本指引（postmortem step5/step6 错位疑云），写新 guide 时按 state
++  引用白名单清理同步骤旧指纹文件（src/run/prompt.js 落盘分支）。
++
++  6) 评审档位撤销说明：postmortem「零代码变更 55 万 token」的病根是厚流程选道错位（运维修复应走轻量道），档位机器已存在（review-tier S0/S1→self + flow-review 五路危险证据定档 +
++  1/4 抽样校准）——本变更不再新增 self 档（会破坏抽样校准机制），以本条记录裁决。
++
++
++  成功标准：
++
++  - sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational
++  跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++
++  - 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++
++  - local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++
++  - backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections
++  后手写 #### 子节存活
++
++  - 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++
++  - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++autopilot: true
++baseline_commit: 9d24e7481af277f71ff525d1f0a879a669cdd2bd
++updatedAt: '2026-10-06T14:20:51.379Z'
++baseline_sha256: 7e08353a1263242ec366d0d9299ca72fdfb4c968a875d0bc4073d17025eea17c
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 4db1aba7..1125927a 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1659/1906/1986/1997/2195 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2098/2130/2210 |
+-| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:926（`recordAgentLogInvocation`） |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1693/1906/1986/1997/2195 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2132/2130/2210 |
++| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4324；shared.js:1022 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2829/3108；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4244；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4196；sync.js:2232 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4334；shared.js:1022 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2840/3119；shared.js:1046 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4254；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4206；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4009/4038；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4020/4049；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -163,10 +163,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - `--workspace-id <id>` / `--scan-run-id <id>` → 配套元信息
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+-- **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:242`）公共入口，flag 在 `command.js:396`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
++- **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:259`）公共入口，flag 在 `command.js:414`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+ - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:276` 解析后经 `case 'init'`（`index.js:393`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:830（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:840（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:407` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4106`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4116`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/package.json b/package.json
+index e3abb208..1676d846 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/config-schema.js b/src/config-schema.js
+index f866d7d2..3ae6a58f 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -189,6 +189,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'stage.wall', type: 'enum', values: ['advisory', 'hard'], optional: true, status: 'live', readers: ['readStageWall (src/run/shared.js) + runStage 入口墙 (src/run/stage.js)'], desc: '阶段边界会话墙：advisory（缺省）= 阶段完成时提示可 handoff 换会话，不阻断；hard = 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）→ run <stage> 拒启动（exit 1），指引 sillyspec handoff 生成交接块换新会话续跑；--same-session 显式逃生口（应急/平台编排）。墙后阶段 = execute/verify（上下文最贵两段：R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。stage-session ledger 缺失/会话标识不可判定 → 放行（fail-open，与账本 best-effort 一致）。', example: 'hard' },
+       ],
+     },
++    {
++      id: 'plan',
++      title: '计划阶段派发',
++      note: 'plan 阶段 TaskCard 填充派发策略。默认主 agent 直填（2026-09-20 对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；task 总数超阈值且跨模块才 batch 派子代理——阈值按项目体系可调（厚流程实证 11 任务 3 子代理 430 万 token 模板化产出后引入）。',
++      keys: [
++        { path: 'plan.fill_batch_min_tasks', type: 'integer', optional: true, status: 'live', readers: ['buildCoordinatorStep (src/stages/plan.js — 协调器 prompt 阈值插值)'], desc: '填卡 batch 派发阈值：task 总数 ≤N（或单仓单模块）→ 主 agent 直填不派子代理；>N 且跨模块/跨仓才按 batch 分派。≥1 整数，缺省 8（内置）；非法值回退 8（fail-safe）。调大 = 更少派子代理省 token；调小 = 大变更更早并行省墙钟。', example: '12' },
++      ],
++    },
+     {
+       id: 'auto_mode',
+       title: '变更规模自动分类',
+@@ -505,6 +513,12 @@ docs-check:
+ # change-ownership:
+ #   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
+ 
++# ── 计划阶段派发（plan：TaskCard 填充派发策略）──
++# 默认主 agent 直填（对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；
++# 仅 task 总数超阈值且跨模块/跨仓才按 batch 派子代理（并行省墙钟有真实收益）。
++# plan:
++#   fill_batch_min_tasks: 12             # 填卡 batch 派发阈值（内置 8；调大=更少派子代理省 token，调小=大变更更早并行）
++
+ # ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价）──
+ # blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
+ # 项目化定价（每个项目体系不一样，起点与阈值可配——只升不降纪律不开放配置）：
+diff --git a/src/index.js b/src/index.js
+index 15c53849..8ad879f5 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -564,7 +564,7 @@ async function main() {
+       const gateChangeIdx = args.indexOf('--change');
+       const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
+       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
+-        console.error('用法: sillyspec gate <stage|last> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
++        console.error('用法: sillyspec gate <stage|last> --change <name> [--json] [--full|--docs-only]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  --full 覆盖 --done 独有贵检查（reconcile/stage review 预检）；--docs-only 轻量档（verify）跳过 test/lint 执行只核文档契约面；两者互斥\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
+         process.exit(2);
+       }
+       // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
+@@ -578,6 +578,16 @@ async function main() {
+       // P1 --full 只读预检档（batch3 task-03）：覆盖 --done 独有检查面（reconcile/stage review）——
+       // 预检过=必过（同因），省一轮 gate 失败重跑的整 agent 回合
+       if (args.includes('--full')) gateOpts.full = true;
++      // --docs-only 轻量预检档（2026-10-06-verify-docs-prefill task-01）：跳过 verify-test/lint
++      // 执行只核文档契约面（毫秒级）——纯文档缺项（visual-evidence/结论槽/移交项）一次列清再
++      // --done，免逐轮撞门。与 --full 互斥（一个减执行检查一个加检查面，并存语义矛盾）。
++      if (args.includes('--docs-only')) {
++        if (args.includes('--full')) {
++          console.error('❌ --docs-only 与 --full 互斥——docs-only 跳过 test/lint 执行只核文档契约面，full 追加 --done 独有的贵检查；两者并存语义矛盾，按需择一。');
++          process.exit(2);
++        }
++        gateOpts.docsOnly = true;
++      }
+       // A4：平台指针 / 显式 --spec-dir / 本地 fallback 三合一解析 specBase——平台模式（指针指向外部
+       // specDir）下 gate 也能核验（原只传 cwd 致 runGate 的 resolveSpecDir 指向本地孤儿库，恒
+       // 「无法核验」exit 2）。resolvePlatformSpecDir 指针失效时抛 PointerUnreachableError，由顶层 catch 优雅 fail-closed。
+@@ -1381,7 +1391,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+           process.exit(2);
+         }
+         const { resolveRuntimeRoot: vpRefreshRTR } = await import('./run/shared.js');
+-        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase) });
++        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase), changeName: vpChange });
+         const vpOld = readFileSync(vpReportPath, 'utf8');
+         const vpRef = refreshProbeSections(vpOld, renderVerifyProbesReport(vpResult));
+         if (vpRef.text !== vpOld) {
+@@ -1424,7 +1434,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+             // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
+             // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
+             const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
+-            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase) });
++            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase), changeName: vpChange });
+             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+             writeFileSync(vpReportPath, vpSkeleton);
+             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index a66db9d5..f4a638fa 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -141,7 +141,7 @@ function greenCachedCheck({ kind, greenRoot, cwd, specBase, changeName }, runRea
+   return result;
+ }
+ 
+-export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false } = {}) {
++export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false, docsOnly = false } = {}) {
+   const specRoot = specBase || resolveSpecDir(cwd);
+   // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
+   // specDir，默认解析会指向本地孤儿库，与下方 planContent/changeDir 的 specRoot 两套事实源混拼。
+@@ -312,7 +312,28 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     }
+ 
+     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
+-    if (stage === 'verify') {
++    // docsOnly 预检档（2026-10-06-verify-docs-prefill task-01）：纯文档契约缺项（visual-evidence/
++    // 结论槽/移交项等）毫秒级可查，却因 gate verify 含测试执行而整体变贵（postmortem 实证
++    // --json 超时转后台）——本档跳过 test/lint 执行（informational 占位明示），其余检查照跑；
++    // 测试客观核验仍以完整 gate verify / verify --done 为准。
++    if (stage === 'verify' && docsOnly) {
++      checks.push({
++        id: 'verify-test',
++        code: checkCode('verify-test'),
++        ok: true,
++        informational: true,
++        warnings: ['verify-test 跳过（--docs-only 预检档）——本档只核文档/契约面不执行测试；测试客观核验以完整 gate verify（不带 --docs-only）或 verify --done 为准'],
++        data: { status: 'docs-only-skip' },
++      });
++      checks.push({
++        id: 'verify-lint',
++        code: checkCode('verify-lint'),
++        ok: true,
++        informational: true,
++        warnings: ['verify-lint 跳过（--docs-only 预检档）——同上，lint 客观核验以完整 gate 或 verify --done 为准'],
++        data: { status: 'docs-only-skip' },
++      });
++    } else if (stage === 'verify') {
+       // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
+       let greenRoot = null;
+       try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 8cff0304..530c9487 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -19,12 +19,45 @@
+  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
+  */
+ import { basename, dirname, join } from 'node:path'
+-import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
++import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import jsYaml from 'js-yaml'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
++
++/**
++ * step-guide 旧指纹清理（2026-10-06-verify-docs-prefill task-05）：guide 文件名 =
++ * `${stage}-step${idx}-${指纹8位}.md` 跨变更共享、旧指纹永不清理——同步骤多版本共存会让自行
++ * ls/glob 目录的 agent 读到旧版本指引。白名单 = keepAbsPaths（本次新写的 guide）∪ 仍被任一
++ * 变更 state 文件（`${stage}-step${idx}-*.json`）引用的 guidePath；白名单外的同前缀文件删除。
++ * 纯目录操作 fail-soft：目录缺失/坏 state 均不抛，返回清理计数。
++ * @param {{ guideRoot: string, stateRoot: string, stageName: string, stepIndex: number, keepAbsPaths: string[] }} opts
++ * @returns {number} 实际删除的文件数
++ */
++export function pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths = [] }) {
++  const prefix = `${stageName}-step${stepIndex}-`
++  const keep = new Set((keepAbsPaths || []).map(String))
++  try {
++    for (const sf of readdirSync(stateRoot)) {
++      if (!sf.startsWith(prefix)) continue
++      try {
++        const st = JSON.parse(readFileSync(join(stateRoot, sf), 'utf8'))
++        if (st && typeof st.guidePath === 'string') keep.add(st.guidePath)
++      } catch { /* 坏 state 不参与白名单（其指向的文件按无引用清理——复入时 existsSync 回退全量重印，fail-soft） */ }
++    }
++  } catch { /* stateRoot 缺失 → 空白名单 */ }
++  let pruned = 0
++  try {
++    for (const gf of readdirSync(guideRoot)) {
++      if (!gf.startsWith(prefix) || !gf.endsWith('.md')) continue
++      const abs = join(guideRoot, gf)
++      if (keep.has(abs)) continue
++      try { rmSync(abs, { force: true }); pruned++ } catch { /* 单文件删除失败继续 */ }
++    }
++  } catch { /* guideRoot 缺失 → 0 */ }
++  return pruned
++}
+ import { materializeStageTemplates } from '../stage-templates.js'
+ import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
+ 
+@@ -2090,6 +2123,12 @@ ${maskVolatileForGuide(guideTemplate)}
+ `, 'utf8')
+       mkdirSync(stateRoot, { recursive: true })
+       writeFileSync(stateFile, JSON.stringify({ fingerprint, guidePath: guideFile, changeName: changeName || null, stage: stageName, stepIndex, at: new Date().toISOString() }, null, 1) + '\n', 'utf8')
++      // 旧指纹清理（2026-10-06-verify-docs-prefill task-05）：同步骤旧指纹 guide 永久共存会让
++      // 自行 ls/glob 目录的 agent 读到旧版本指引（厚流程 step5/step6 错位疑云）。白名单 =
++      // 新写的 guide ∪ 仍被任一变更 state 引用的 guide（他变更复入短输出依赖 existsSync 回退，
++      // 被引用文件误删只退化全量重印但无谓）；清理 fail-soft 且静默——步骤输出是字节中立面
++      // （knowledge-inject A/B 对比、guidance-output-neutrality），运维日志不进 prompt 流。
++      try { pruneStaleStepGuides({ guideRoot, stateRoot, stageName, stepIndex, keepAbsPaths: [guideFile] }) } catch { /* 清理 best-effort */ }
+       }
+     } catch { /* guide/state 落盘 best-effort：失败仅退化回全量重印，不阻断步骤输出 */ }
+   }
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 6ea2a906..869d73a3 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -1,5 +1,6 @@
+ import { existsSync, readFileSync, readdirSync } from 'fs'
+ import path from 'path'
++import jsYaml from 'js-yaml'
+ import { getRule } from '../stage-contract-spec.js'
+ import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
+ 
+@@ -414,6 +415,20 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
+  */
+ export function buildCoordinatorStep(changeDir, taskNames) {
+   const changeName = path.basename(changeDir)
++  // 填卡 batch 阈值项目化（2026-10-06-verify-docs-prefill task-03）：「task 总数 ≤N 主 agent 直填」
++  // 原硬编码 8——430 万 token 填卡实证后按项目体系可调（local.yaml plan.fill_batch_min_tasks，
++  // integer ≥1，非法/缺省回退 8）。specBase 自 changeDir 推导（changes/<名> 的父目录）。
++  const fillBatchMin = (() => {
++    try {
++      const specBase = String(changeDir || '').replace(/[\\/]+changes[\\/]+[^\\/]+$/, '')
++      if (!specBase || specBase === changeDir) return 8
++      const p = path.join(specBase, 'local.yaml')
++      if (!existsSync(p)) return 8
++      const doc = jsYaml.load(readFileSync(p, 'utf8'))
++      const v = doc && doc.plan ? Number(doc.plan.fill_batch_min_tasks) : NaN
++      return Number.isInteger(v) && v >= 1 ? v : 8
++    } catch { return 8 }
++  })()
+   const taskList = taskNames.map(t => {
+     const num = t.num
+     return `- task-${num}: ${t.name}`
+@@ -496,8 +511,8 @@ ${taskList}
+    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
+ 1. 确认 \`${changeDir}/tasks/\` 目录存在（上一步预生成会自动创建）
+ 2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
+-   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
+-   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
++   - task 总数 ≤${fillBatchMin} 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
++   - 仅当 task 总数 >${fillBatchMin} **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
+ 3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
+    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 58333b3f..86ca7cc8 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -164,7 +164,8 @@ export const definition = {
+ 2. 如果存在：
+    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
+-   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/covered-service/partial/uncovered/non-testable 五选一——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点）与证据——covered/covered-service/partial 附测试锚点（file:line / \`.test.\` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
++   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/covered-service/partial/uncovered/non-testable 五选一——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点）与证据——covered/covered-service/partial 附测试锚点（file:line / \`.test.\` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）；矩阵里带「既有用例候选（FR 关联回归面）」注记的测试是本变更未改动的既有回归用例——复核其覆盖性后如实填判定，命中≠结论
++   - **收口前预检（免逐轮撞门）**：verify-result.md 各节填完后、跑 \`--done\` 前，先跑 \`sillyspec gate verify --change <change-name> --docs-only\`——秒级只读预检纯文档契约缺项（visual-evidence/结论槽/移交项结构化等一次列清，不执行测试）；缺项清零后再走 \`--done\` 的完整实测门
+ 3. 如果不存在：跳过此步骤
+ 
+ ### 输出
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 050e293b..14b77b2c 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -34,6 +34,7 @@ import {
+ } from './verify-facts-schema.js'
+ import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseDecisions } from './decision-distill.js'
++import { collectFrLinkedTests } from './fr-index.js'
+ import { writeChangeTrace, orphanAccRef } from './test-bindings.js'
+ import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+@@ -1083,8 +1084,10 @@ const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
+ const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+ // 声明宽收（2026-10-06-verify-friction-fix task-04）：同义零端点措辞认作 declared=0——厚流程实证
+ // agent 写「无接口变更/不涉及接口」散文不被数字式声明行识别，被迫写伪表格绕过。(?<!\d) 防
+-// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）。
+-const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|零端点|无端点|(?<!\d)0\s*端点/
++// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）；(?<!非) 防「非零端点」
++// 误命中（2026-10-06-verify-docs-prefill task-04 评审 P3-2 清偿——critical 判级下误命中会把
++// D-005 零面硬错降为 warning，影响面不止 advisory 渲染）。
++const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|(?<!非)零端点|无端点|(?<!\d)0\s*端点/
+ 
+ /**
+  * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
+@@ -1958,6 +1961,11 @@ function renderProbe7Lines(p7) {
+   for (const t of (p7.tasks || [])) {
+     L.push('')
+     L.push(`**${t.task}**`)
++    if (Array.isArray(t.existingTests) && t.existingTests.length > 0) {
++      // 既有用例注记（2026-10-06-verify-docs-prefill task-02）：归属列里的这些测试是 FR 关联回归
++      // 候选（本变更未改动）——与自身新建测试区分，判定仍由 agent 复核（命中≠结论）
++      L.push(`- ℹ️ 既有用例候选（FR 关联回归面，本变更未改动；判定仍由你复核，命中≠结论）：${t.existingTests.map(f => `\`${f}\``).join('、')}`)
++    }
+     if (t.fmError) {
+       // 坏 YAML 如实陈述（2026-09-20-taskcard-yaml-hardgate）：非「无 acceptance」防御——
+       // plan 门禁 0b 硬校验应已拦截；已过 plan 门仍见此行 = 门禁失效信号（可反馈工具缺陷）
+@@ -2196,6 +2204,15 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+           }
+         }
+       } catch { /* 注册表不可读 → 无跨仓根（fail-open） */ }
++      // ── 既有用例候选（2026-10-06-verify-docs-prefill task-02）：FR 关联回归面（active FR
++      //    覆盖 ∩ 本变更触碰文件的绑定 tests——CLI 收口实测面三源之二）作为无归属卡的预填
++      //    候选。postmortem 实证 38 格矩阵手誊 40 分钟：无归属格预填「判定大概率 uncovered」，
++      //    agent 只能全仓找既有测试锚点。只注入 testFiles 为空的卡（有自身归属的卡零噪音）；
++      //    变更级一次计算，逐卡不重算；命中≠判定（预填语义同其他格子——agent 复核改写）。
++      let frLinkedExisting = null
++      try {
++        frLinkedExisting = collectFrLinkedTests({ specBase, changeName, changedFiles: detailed.map(e => e.path), projectRoot: cwd })
++      } catch { frLinkedExisting = null /* FR 索引不可读 → 无候选（行为与现状一致） */ }
+       // 跨卡归属（坑 probe7-provider-tests-in-consumer-card，2026-09-16 E 变更 verify 实证：8 格
+       // 被机械预填 uncovered——task-03（测试卡）的用例测的是 task-01（provider）的导出函数，但归属
+       // 只看本卡 allowed_paths ∪ review changedFiles，provider 卡的 acceptance 永远连不上消费卡的
+@@ -2225,12 +2242,21 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+           }
+         }
+         const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
++        // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
++        const existingTests = []
++        if (frLinkedExisting && testFiles.length === 0) {
++          for (const f of frLinkedExisting.files) {
++            if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
++          }
++        }
++        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])] : testFiles
+         probe7.tasks.push({
+           task: card.task,
+           acceptance: card.acceptance,
+           fmError: card.fmError || null,
+-          testFiles,
+-          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
++          testFiles: finalTestFiles,
++          existingTests,
++          hints: buildAcceptanceHints(card.acceptance, finalTestFiles, cwd, wtRoot, probe7CrossRoots),
+         })
+       }
+       // ── trace 落盘（2026-09-24-fr-test-bindings task-03，fr-test-binding 写侧）：矩阵归属
+@@ -3668,14 +3694,17 @@ export function generateVerifyResultSkeleton(result) {
+  * @param {{ mdPath: string, runtimeRoot: string, label?: string }} opts
+  * @returns {string|null} 备份文件绝对路径；目标缺失/写失败返回 null（fail-soft，调用方提示）
+  */
+-export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result' }) {
++export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result', changeName = null }) {
+   try {
+     if (!existsSync(mdPath)) return null
+     const runsDir = join(runtimeRoot, 'verify-runs')
+     mkdirSync(runsDir, { recursive: true })
+     // 毫秒精度时间戳：同秒连跑两次不互相覆盖（秒级 ts 会静默吞前一份备份）
+     const ts = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17)
+-    const backupPath = join(runsDir, `${label}-backup-${ts}.md`)
++    // change 段（2026-10-06-verify-docs-prefill task-04 评审 P3-1 清偿）：多 change 并行时备份
++    // 归属靠文件名可辨，不靠内容；缺省不带（向后兼容旧调用形态）
++    const changeSeg = changeName ? `${changeName.replace(/[^A-Za-z0-9._-]/g, '_')}-` : ''
++    const backupPath = join(runsDir, `${label}-backup-${changeSeg}${ts}.md`)
+     copyFileSync(mdPath, backupPath)
+     return backupPath
+   } catch {
+@@ -3699,7 +3728,9 @@ function splitProbeSectionRanges(text) {
+     if (m) {
+       if (cur) sections.push({ ...cur, endLine: i })
+       cur = { num: parseInt(m[1], 10), startLine: i }
+-    } else if (cur && /^#{1,3} /.test(lines[i])) {
++    } else if (cur && /^#{1,4} /.test(lines[i])) {
++      // 边界认任意 1-4 级标题（2026-10-06-verify-docs-prefill task-04 评审 P3-3 清偿）：只认
++      // #{1,3} 时 agent 在含占位段后手写的 #### 子节会被并入段内，刷新时连带被吞
+       sections.push({ ...cur, endLine: i })
+       cur = null
+     }
+diff --git a/test/gate-docs-only.test.mjs b/test/gate-docs-only.test.mjs
+new file mode 100644
+index 00000000..355dfc94
+--- /dev/null
++++ b/test/gate-docs-only.test.mjs
+@@ -0,0 +1,97 @@
++/**
++ * 2026-10-06-verify-docs-prefill — gate verify --docs-only 只读预检档回归
++ *
++ * postmortem（sess_4769fd5d）：gate verify 只读重跑含测试执行，--json 实测超时转后台 + task id
++ * 抄错绕 3 轮；纯文档契约缺项（visual-evidence/结论槽/移交项等）毫秒级可查却无轻量档。
++ * 锁死契约：
++ *   D1 docsOnly：verify-test/verify-lint 以 informational 占位（skip 说明），测试命令不执行
++ *      （marker 文件法证明）；其余检查（artifacts 等）照跑。
++ *   D2 对照：无 docsOnly 的完整 gate 真执行 commands.test（marker 在场）。
++ *   D3 CLI 互斥：--docs-only 与 --full 并存 exit 2（一个减检查一个加检查，语义矛盾）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++import { runGate } from '../src/machine-interface.js'
++import { ProgressManager } from '../src/progress.js'
++
++const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspec.js')
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++
++async function fixture() {
++  const proj = mk('docsgate-')
++  const specBase = join(proj, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'main.js'), 'console.log(1)\n')
++  git(proj, ['init', '-q']); git(proj, ['add', '.']); git(proj, ['commit', '-qm', 'init'])
++  // marker 法：commands.test 指向写 marker 的脚本——docsOnly 生效则 marker 不出现
++  const marker = join(proj, 'marker-ran.txt')
++  writeFileSync(join(proj, 'marker.js'), `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')\n`)
++  writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: "node marker.js"\n')
++  // 测试面（D2 对照需要动态子集非空——零测试面的变更完整档也合法 skip）
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  mkdirSync(join(proj, 'test'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'lib.js'), 'export const a = 1\n')
++  writeFileSync(join(proj, 'test', 'lib.test.mjs'), "import { test } from 'node:test'\nimport { a } from '../src/lib.js'\ntest('t', () => { if (a !== 1) throw new Error('x') })\n")
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init(proj)
++  await pm.initChange(proj, 'c1')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), '---\nchange: c1\n---\n# 设计\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/lib.js | 改动 |\n')
++  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: full\n---\n\n# 计划\n\n## Wave 1\n- task-01\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: t\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++    '---', 'id: task-01', 'title: t', 'title_zh: t', 'author: t',
++    'created_at: 2026-10-06 00:00:00', 'priority: P0', 'depends_on: []', 'blocks: []',
++    'requirement_ids: []', 'decision_ids: []', 'allowed_paths:', '  - src/lib.js',
++    'goal: >', '  g', 'implementation:', '  - i', 'acceptance:', '  - a',
++    'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
++  ].join('\n'))
++  return { cwd: proj, specBase, changeName: 'c1', marker }
++}
++
++const checkById = (envelope, id) => (envelope.checks || []).find(c => c.id === id)
++
++test('D1 docsOnly：verify-test/verify-lint informational 占位，测试命令不执行，artifacts 照跑', async () => {
++  const { cwd, specBase, changeName, marker } = await fixture()
++  const { envelope, exitCode } = await runGate('verify', changeName, { cwd, specBase, docsOnly: true })
++  const vt = checkById(envelope, 'verify-test')
++  const vl = checkById(envelope, 'verify-lint')
++  assert.ok(vt, 'verify-test 检查在场（占位形态）')
++  assert.equal(vt.informational, true, 'verify-test informational')
++  assert.ok((vt.warnings || []).some(w => w.includes('--docs-only')), `skip 说明含档位名：${vt.warnings}`)
++  assert.equal(vt.data && vt.data.status, 'docs-only-skip', 'data.status=docs-only-skip')
++  assert.ok(vl, 'verify-lint 检查在场（占位形态）')
++  assert.equal(vl.informational, true, 'verify-lint informational')
++  assert.ok(checkById(envelope, 'artifacts'), 'artifacts 检查照跑（文档契约面不缩水）')
++  assert.ok(!existsSync(marker), '测试命令未执行（marker 不在场）')
++  assert.notEqual(exitCode, 2, 'docs-only 预检不是「无法核验」态')
++})
++
++test('D2 对照：完整档走真实决策路径（非 docs-only 占位；跳过时有 CLI 自身的 dynamic-empty 理由）', async () => {
++  const { cwd, specBase, changeName } = await fixture()
++  const { envelope } = await runGate('verify', changeName, { cwd, specBase })
++  const vt = checkById(envelope, 'verify-test')
++  assert.ok(vt && vt.informational !== true, '完整档 verify-test 是实检/实决策非占位')
++  assert.notEqual(vt.data && vt.data.status, 'docs-only-skip', '状态不是 docs-only 占位态')
++  // 本夹具无 execute 交付态（无 worktree meta/无 head commit），完整档合法 skip 且给出 CLI 自身
++  // 理由（动态子集空）——与 docsOnly 的跳过可区分；marker 法在此形态下无法区分两者，故不适用
++  if (vt.data && vt.data.status === 'skipped') {
++    assert.ok((vt.warnings || []).some(w => w.includes('动态子集空') || w.includes('未核验测试')), 'skip 带 CLI 自身理由（非档位跳过）')
++  }
++})
++
++test('D3 CLI 互斥：--docs-only 与 --full 并存 exit 2（先于变更存在性检查）', () => {
++  const r = spawnSync(process.execPath, [BIN, 'gate', 'verify', '--change', 'no-such-change', '--docs-only', '--full'], { encoding: 'utf8' })
++  assert.equal(r.status, 2, `exit 2（实际 ${r.status}）：${r.stderr}`)
++  assert.ok(String(r.stderr).includes('互斥'), '报错含互斥说明')
++})
+diff --git a/test/plan-fill-batch-config.test.mjs b/test/plan-fill-batch-config.test.mjs
+new file mode 100644
+index 00000000..71a4b17e
+--- /dev/null
++++ b/test/plan-fill-batch-config.test.mjs
+@@ -0,0 +1,52 @@
++/**
++ * 2026-10-06-verify-docs-prefill — 填卡 batch 阈值配置化回归
++ *
++ * postmortem（sess_4769fd5d）：3 个填卡子代理 430 万 token 产出模板化内容——「task 总数 ≤8
++ * 主 agent 直填」的阈值写死在 plan 阶段协调器 prompt 文案，项目无法按自己的体系调。
++ * 锁死契约：
++ *   B1 未配置：文案含「≤8」（内置缺省，现状一致）；
++ *   B2 配 plan.fill_batch_min_tasks: 3：文案含「≤3」（两处阈值口径同步插值）；
++ *   B3 非法值（0 / 负数 / 字符串）：回退 8（fail-safe）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { buildCoordinatorStep } from '../src/stages/plan.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function changeDirWith(yaml) {
++  const root = mk('fillcfg-')
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  if (yaml != null) writeFileSync(join(specBase, 'local.yaml'), yaml)
++  return changeDir
++}
++
++const stepPrompt = (changeDir) => {
++  const step = buildCoordinatorStep(changeDir, ['task-01', 'task-02'])
++  return String(step && (step.prompt || step.output || step.text || ''))
++}
++
++test('B1 未配置：文案含「≤8」（缺省，现状一致）', () => {
++  const p = stepPrompt(changeDirWith(null))
++  assert.ok(p.includes('≤8'), '阈值插值为内置 8')
++})
++
++test('B2 配 plan.fill_batch_min_tasks: 3：文案两处口径均插值为 3', () => {
++  const p = stepPrompt(changeDirWith('plan:\n  fill_batch_min_tasks: 3\n'))
++  assert.ok(p.includes('≤3'), '直填阈值插值 3')
++  assert.ok(!p.includes('≤8') && !p.includes('>8'), `旧硬编码 8 不再出现：${p.match(/task 总数[^\n]*\n[^\n]*/) ? p.slice(p.indexOf('task 总数') - 40, p.indexOf('task 总数') + 200) : '?'}`)
++})
++
++test('B3 非法值回退 8', () => {
++  for (const v of ['plan:\n  fill_batch_min_tasks: 0\n', 'plan:\n  fill_batch_min_tasks: -2\n', 'plan:\n  fill_batch_min_tasks: abc\n', 'plan: [broken\n']) {
++    const p = stepPrompt(changeDirWith(v))
++    assert.ok(p.includes('≤8'), `非法值 ${v.trim().split('\n').pop()} 回退 8`)
++  }
++})
+diff --git a/test/probe7-fr-prefill.test.mjs b/test/probe7-fr-prefill.test.mjs
+new file mode 100644
+index 00000000..47717be2
+--- /dev/null
++++ b/test/probe7-fr-prefill.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * 2026-10-06-verify-docs-prefill — 探针 7 既有用例候选预填回归
++ *
++ * postmortem（sess_4769fd5d）：38 格矩阵手誊 40 分钟——无归属测试的卡预填「无归属测试——
++ * 判定大概率 uncovered」，而 FR 关联回归既有用例（collectFrLinkedTests，本变更未改动）本可
++ * 机械给出。锁死契约：
++ *   P1 无归属卡 + FR 命中：既有用例进 testFiles + 渲染「既有用例」注记行；
++ *   P2 有归属卡（own test）：existingTests 为空，注记行不出（零噪音）；
++ *   P3 无 FR 知识：行为与现状一致（testFiles 空、无注记行）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { runVerifyProbes, renderVerifyProbesReport } from '../src/verify-probes.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function fixture({ withFr }) {
++  const root = mk('p7fr-')
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(join(specBase, 'changes', 'demo'), { recursive: true })
++  mkdirSync(join(root, 'src'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  writeFileSync(join(root, 'src', 'lib.js'), 'export const a = 1\n')
++  writeFileSync(join(root, 'test', 'existing-regress.test.mjs'), "import { test } from 'node:test'\nimport { a } from '../src/lib.js'\ntest('regress', () => { if (a !== 1) throw new Error('x') })\n")
++  writeFileSync(join(root, 'test', 'own.test.mjs'), "import { test } from 'node:test'\nimport { a } from '../src/lib.js'\ntest('own', () => { if (a !== 1) throw new Error('x') })\n")
++  const changeDir = join(specBase, 'changes', 'demo')
++  writeFileSync(join(changeDir, 'design.md'), [
++    '---', 'change: demo', '---', '# 设计', '',
++    '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/lib.js | 改动 |', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'tasks.md'), '---\nauthor: t\n---\n\n# 任务注册表\n\n- [ ] task-01: 无归属任务\n- [ ] task-02: 自带测试任务\n')
++  const card = (id, allowed) => [
++    '---', `id: ${id}`, `title: t-${id}`, `title_zh: 任务${id}`, 'author: t',
++    'created_at: 2026-10-06 00:00:00', 'priority: P0', 'depends_on: []', 'blocks: []',
++    'requirement_ids: []', 'decision_ids: []',
++    'allowed_paths:', ...allowed.map(p => `  - ${p}`),
++    'goal: >', '  g', 'implementation:', '  - i',
++    'acceptance:', '  - 返回值 a 恒为 1',
++    'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
++  ].join('\n')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), card('task-01', ['src/lib.js']))
++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'), card('task-02', ['src/lib.js', 'test/own.test.mjs']))
++  if (withFr) {
++    mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++    mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++    mkdirSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change'), { recursive: true })
++    writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  core:\n    paths:\n      - src/\n')
++    writeFileSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change', 'change-patch.json'), '{"files": ["src/lib.js"]}\n')
++    writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [
++      '## FR-core-001 库行为', '变更：2026-09-20-old-change', '状态：active', '摘要：返回值恒定', '',
++      '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++      '- row: 2026-09-20-old-change:task-01:FR-01', '  tests: test/existing-regress.test.mjs',
++      '  reason: spec', '  state: candidate', '  discovery: machine',
++      '  confirmed_by: null', '  confirmed_at: null', '',
++    ].join('\n'))
++  }
++  return { root, specBase }
++}
++
++test('P1 无归属卡 + FR 命中：既有用例进 testFiles 且渲染注记行', () => {
++  const { root, specBase } = fixture({ withFr: true })
++  const r = runVerifyProbes({ cwd: root, changeName: 'demo', specDir: specBase })
++  const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
++  const t2 = r.probe7.tasks.find(t => t.task === 'task-02')
++  assert.ok(t1, 'task-01 在矩阵')
++  assert.ok((t1.testFiles || []).includes('test/existing-regress.test.mjs'), `既有用例进归属：${t1.testFiles}`)
++  assert.ok((t1.existingTests || []).includes('test/existing-regress.test.mjs'), 'existingTests 标注在场')
++  assert.deepEqual(t2.existingTests || [], [], 'P2 有归属卡不注入（零噪音）')
++  assert.ok((t2.testFiles || []).includes('test/own.test.mjs'), '有归属卡自身归属不变')
++  const md = renderVerifyProbesReport(r)
++  assert.ok(md.includes('既有用例候选'), `渲染注记行：${md.slice(md.indexOf('**task-01**'), md.indexOf('**task-01**') + 400)}`)
++  const t1Section = md.slice(md.indexOf('**task-01**'), md.indexOf('**task-02**'))
++  const t2Section = md.slice(md.indexOf('**task-02**'))
++  assert.ok(t1Section.includes('既有用例候选'), '注记行在 task-01 段内')
++  assert.ok(!t2Section.includes('既有用例候选'), 'task-02 段无注记行')
++})
++
++test('P3 无 FR 知识：行为与现状一致（无注入、无注记）', () => {
++  const { root, specBase } = fixture({ withFr: false })
++  const r = runVerifyProbes({ cwd: root, changeName: 'demo', specDir: specBase })
++  const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
++  assert.deepEqual(t1.testFiles || [], [], '无 FR 知识时归属为空（现状一致）')
++  assert.deepEqual(t1.existingTests || [], [], '无注入')
++  const md = renderVerifyProbesReport(r)
++  assert.ok(!md.includes('既有用例候选'), '无注记行')
++})
+diff --git a/test/step-guide-prune.test.mjs b/test/step-guide-prune.test.mjs
+new file mode 100644
+index 00000000..75671d9e
+--- /dev/null
++++ b/test/step-guide-prune.test.mjs
+@@ -0,0 +1,47 @@
++/**
++ * 2026-10-06-verify-docs-prefill — step-guide 旧指纹清理回归
++ *
++ * postmortem（sess_4769fd5d）：step-guides 目录同一步多版本共存且永不清理——agent 自行
++ * ls/glob 目录会读到旧版本指引（step5 内容实为 step6 指引的错位疑云）。锁死契约：
++ *   G1 写新 guide 后：同步骤旧指纹文件被清理；
++ *   G2 仍被任一变更 state 引用的文件保留（他变更复入短输出依赖 existsSync 回退）；
++ *   G3 其他步骤的文件不动。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { pruneStaleStepGuides } from '../src/run/prompt.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('G1-G3：旧指纹清理 / state 引用保留 / 他步骤不动', () => {
++  const root = mk('guideprune-')
++  const guideRoot = join(root, 'step-guides')
++  const stateRoot = join(root, 'step-guide-state')
++  mkdirSync(guideRoot, { recursive: true })
++  mkdirSync(stateRoot, { recursive: true })
++  const aaaa = join(guideRoot, 'plan-step0-aaaa1111.md')
++  const bbbb = join(guideRoot, 'plan-step0-bbbb2222.md')
++  const cccc = join(guideRoot, 'plan-step1-cccc3333.md')
++  const fresh = join(guideRoot, 'plan-step0-dead4444.md')
++  for (const p of [aaaa, bbbb, cccc, fresh]) writeFileSync(p, 'x\n')
++  writeFileSync(join(stateRoot, 'plan-step0-other-change.json'), JSON.stringify({ fingerprint: 'bbbb2222', guidePath: bbbb }))
++
++  const pruned = pruneStaleStepGuides({ guideRoot, stateRoot, stageName: 'plan', stepIndex: 0, keepAbsPaths: [fresh] })
++
++  assert.equal(pruned, 1, `只清 1 个（实际 ${pruned}）`)
++  assert.ok(!existsSync(aaaa), 'G1: 无引用旧指纹被清理')
++  assert.ok(existsSync(bbbb), 'G2: state 引用文件保留')
++  assert.ok(existsSync(fresh), 'keep 集合内新文件保留')
++  assert.ok(existsSync(cccc), 'G3: 其他步骤文件不动')
++})
++
++test('目录缺失：返回 0 不抛（fail-soft）', () => {
++  const root = mk('guideprune2-')
++  const n = pruneStaleStepGuides({ guideRoot: join(root, 'none'), stateRoot: join(root, 'none2'), stageName: 'plan', stepIndex: 0, keepAbsPaths: [] })
++  assert.equal(n, 0)
++})
+diff --git a/test/verify-probes-refresh-backup.test.mjs b/test/verify-probes-refresh-backup.test.mjs
+index f1336ae1..fd13b409 100644
+--- a/test/verify-probes-refresh-backup.test.mjs
++++ b/test/verify-probes-refresh-backup.test.mjs
+@@ -117,3 +117,50 @@ test('design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自
+   assert.ok(sk.includes('本变更接口面：0 端点'), '骨架含可粘贴句式');
+   assert.ok(/<!--[^>]*本变更接口面：0 端点/.test(sk), '句式在 HTML 注释内（不自动声明）');
+ });
++
++// ── 2026-10-06-verify-docs-prefill task-04：变更一评审 P3 三项清偿回归 ──
++
++test('P3-1 清偿：backupVerifyResult 传 changeName 时备份文件名含 change 段', () => {
++  const root = mkdtempSync(join(tmpdir(), 'vp-backup3-'));
++  const mdPath = join(root, 'verify-result.md');
++  writeFileSync(mdPath, '# x\n', 'utf8');
++  const p = backupVerifyResult({ mdPath, runtimeRoot: join(root, '.runtime'), changeName: 'demo-change' });
++  assert.ok(p && p.includes('demo-change'), `备份名含 change 段：${p}`);
++  assert.ok(!p.includes('demo-change-backup-verify-result'), '命名序为 verify-result-backup-<change>-<ts>');
++  // 不传 changeName：兼容旧形态（无 change 段）
++  const p2 = backupVerifyResult({ mdPath, runtimeRoot: join(root, '.runtime') });
++  assert.ok(p2 && !p2.includes('demo-change'), '缺省无 change 段（向后兼容）');
++});
++
++test('P3-2 清偿：「非零端点」不再被零端点同义正则误命中', () => {
++  assert.equal(parseDesignApiTable('## 接口定义\n\n本变更接口面非零端点场景需另行评审\n').declared, null, '非零端点 → 不认作零声明');
++  assert.equal(parseDesignApiTable('## 接口定义\n\n零端点\n').declared, 0, '正向零端点仍认');
++});
++
++test('P3-3 清偿：含占位段后的手写 #### 子节在定向刷新后存活', () => {
++  const existing = [
++    '# 验证报告', '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| 验收 | 判定 | 证据 |',
++    '|---|---|---|',
++    '| task-01 验收 A | <待填：五选一> | <待填：用例 ID> |',
++    '',
++    '#### 手写补充说明',
++    '这是 agent 手写的子节叙述——刷新不得吞。',
++    '',
++    '## 测试结果 [层：确定性检查]',
++  ].join('\n');
++  const fresh = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| 验收 | 判定 | 证据 |',
++    '|---|---|---|',
++    '| task-01 验收 A | <待填：五选一> | <待填：用例 ID> |',
++    '| task-09 新验收 | <待填：五选一> | <待填：用例 ID> |',
++    '',
++  ].join('\n');
++  const r = refreshProbeSections(existing, fresh);
++  assert.ok(r.replaced.includes(7), '探针 7 含占位被刷新');
++  assert.ok(r.text.includes('#### 手写补充说明'), '手写 #### 子节标题存活');
++  assert.ok(r.text.includes('刷新不得吞'), '手写子节正文存活');
++  assert.ok(r.text.includes('task-09 新验收'), '新渲染行进入');
++});
+diff --git a/.sillyspec/changes/2026-10-06-verify-docs-prefill/design.md b/.sillyspec/changes/2026-10-06-verify-docs-prefill/design.md
+new file mode 100644
+index 00000000..41ba37e8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-docs-prefill/design.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:20:51.352Z
++---
++# 设计记录（Design Record）— 2026-10-06-verify-docs-prefill
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++五件各自对症，延续变更一（2026-10-06-verify-friction-fix）的「同源规则复用 + fail-soft」路线：① gate verify 轻量预检档——runGate 加 docsOnly 参数，verify 阶段的 verify-test/verify-lint 两执行类检查以 informational 占位（warnings 明示档位语义与完整核验通道），artifacts/transition 等文档契约检查照跑；CLI --docs-only 接线并与 --full 互斥（先于变更存在性检查，exit 2）；verify 阶段步骤指引补「收口前预检」提示。选占位而非删除检查条目：消费方（driver/agent）按 check.id 订阅，占位保形不破契约。② 探针 7 既有用例候选——runVerifyProbes 在 probe7 块内变更级一次调 collectFrLinkedTests（FR 索引不可读 fail-soft 为 null），只对三源归属（allowed_paths/review/依赖卡）为空的卡注入 FR 关联测试文件到 testFiles（hints/预填/trace 自然受益），新增 existingTests 字段渲染注记行「既有用例候选（FR 关联回归面，本变更未改动）」；有归属卡零注入零噪音。③ 填卡阈值配置化——buildCoordinatorStep 从 changeDir 推导 specBase 读 local.yaml plan.fill_batch_min_tasks（integer ≥1，非法/缺省回退 8），prompt 文案两处口径插值；config-schema 注册 plan 段。④ 变更一评审 P3 清偿——backupVerifyResult 加 changeName 参数进文件名（缺省不带向后兼容）；零端点同义正则加 (?<!非) 前瞻防「非零端点」误命中；splitProbeSectionRanges 段边界从 #{1,3} 放宽到 #{1,4}（手写 #### 子节不再被并入探针段吞掉）。⑤ step-guide 旧指纹清理——pruneStaleStepGuides 纯函数（guideRoot 白名单=新写文件∪state 引用文件，删同前缀其余），prompt.js 落盘分支接线。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++CLI 新增一个 flag：sillyspec gate <stage> --change <名> --docs-only（与 --full 互斥 exit 2；verify 阶段生效，其他阶段该 flag 无行为差异——只在 verify 分支分流）。local.yaml 新配置键 plan.fill_batch_min_tasks（integer ≥1，缺省 8，非法回退 8）。新导出：run/prompt.js pruneStaleStepGuides({guideRoot,stateRoot,stageName,stepIndex,keepAbsPaths})→number。行为变更四处（均有回归钉住）：① docsOnly 下 verify-test/verify-lint 为 informational + data.status='docs-only-skip'（完整档不变）；② probe7 无归属卡的 testFiles 可能含 FR 关联既有用例 + 新增 existingTests 字段与注记行（消费方按数组读取向后兼容；无 FR 知识时逐字一致）；③ backupVerifyResult 文件名在传 changeName 时含 change 段（verify-probes --force/--refresh-probes 的 CLI 调用均传）；④ parseDesignApiTable 对「非零端点」不再返回 0（返回 null）。无端点、无 schema、无既有配置键语义变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：无事件流。docsOnly 是单次只读查询内的分支；collectFrLinkedTests 每次全量重算无状态；pruneStaleStepGuides 在 guide 落盘之后同分支执行（新文件必在 keep 集，不存在「先删后写」窗口）；refresh 段边界放宽只影响纯函数的段切分，输入是同一份现文快照。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++guide 清理与并发写新 guide 的竞争：白名单读取 state 列表与删除之间，另一进程可能刚写了新 state+guide——其 guide 若不在本次白名单可能被误删；后果是该变更复入时 existsSync 回退全量重印（fail-soft 既有机制），无数据损坏。备份/探针/阈值读取均只读或幂等写，语义同变更一。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++docsOnly 不写任何状态（gate 只读契约 D-002@v1 不破）；probe7 注入只影响渲染与 trace 候选行（candidate/confirmed_by=null 语义不变）；prune 中断最坏留下旧指纹文件（下次写入再清）；fill 阈值每次渲染重读，配置中途变更即时生效无缓存态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++collectFrLinkedTests 以 specBase 为根（FR 知识按仓隔离）；probe7 跨仓卡不注入 FR 候选（FR 索引是本仓知识面，files 为仓根相对路径，只对本仓卡有意义——跨仓卡既有 crossRoots 机制不受影响）；guide 清理白名单按 stage-stepIndex 前缀圈定，不跨步骤误删；备份 change 段使多 change 并行时备份归属按文件名可辨。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：②的候选注入是变更级近似（frHits 无逐卡文件映射面，无法精确到「这张卡的 acceptance 连哪个 FR」）——无归属卡收到的是全部 FR 关联文件的并集，可能含无关用例。缓解：只注入无归属卡（有归属卡零噪音）、注记行明示「候选，命中≠结论，判定由你复核」、判定枚举仍由 agent 改写；宁可多给候选不回到「无归属测试——大概率 uncovered」的零信息预填。第二个风险：①的占位检查可能被 driver 误读为「测试通过」——warnings 三处明示「本档不含测试客观核验，以完整 gate/--done 为准」，exit code 语义不变（占位 ok=true 但整 envelope 的 ok 仍由 artifacts 等真检查决定）。试过但放弃：a) docsOnly 用命令子形态（gate docs <stage>）——与既有 --full flag 家族不一致；b) probe7 逐卡精确映射（requirement_ids→active FR）——本变更新 FR 与知识库 active FR 是两个编号系，映射需标题相似度启发（frTitleOverlap），误配代价高于并集噪音；c) guide 清理按 mtime 过期——时间窗语义在多变更并行下比引用白名单更粗暴。另：本变更撤销了最初计划的「评审三档」——档位机器已存在（review-tier S0/S1→self + flow-review 五路证据定档 + 1/4 抽样校准），再加 self 档会破坏抽样校准机制；55 万 token 病根是厚流程选道错位（运维修复应走轻量道），属选道纪律非档位缺失。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/machine-interface.js | runGate docsOnly 档（verify-test/lint informational 占位） |
++| 修改 | src/index.js | gate --docs-only flag + --full 互斥 + usage；备份调用传 changeName |
++| 修改 | src/verify-probes.js | probe7 既有用例注入 + 注记行；P3 清偿三项（备份名/前瞻/段边界）；import fr-index |
++| 修改 | src/stages/plan.js | fillBatchMin 配置读取 + 文案插值；import js-yaml |
++| 修改 | src/config-schema.js | plan 段注册（fill_batch_min_tasks） |
++| 修改 | src/run/prompt.js | pruneStaleStepGuides 导出 + 落盘分支接线；import rmSync |
++| 修改 | src/stages/verify.js | 探针 7 既有用例说明 + 收口前 docs-only 预检提示 |
++| 修改 | docs/sillyspec/platform-interface-map.md | 12 处行号锚同步（本变更 7 处 + 并行变更 9e0a8c4d 遗留 5 处 command.js 锚） |
++| 修改 | package.json | 四个新测试收录 test:core |
++| 新增 | NEW:test/gate-docs-only.test.mjs | docs-only 三契约（占位/分支区分/互斥） |
++| 新增 | NEW:test/probe7-fr-prefill.test.mjs | 既有用例注入三态 |
++| 新增 | NEW:test/plan-fill-batch-config.test.mjs | 阈值配置三态（含非法回退） |
++| 新增 | NEW:test/step-guide-prune.test.mjs | 清理白名单语义 |
++| 修改 | test/verify-probes-refresh-backup.test.mjs | 变更一评审 P3 三项清偿回归追加 |
+diff --git a/.sillyspec/changes/2026-10-06-verify-docs-prefill/proposal.md b/.sillyspec/changes/2026-10-06-verify-docs-prefill/proposal.md
+new file mode 100644
+index 00000000..7d4e354d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-docs-prefill/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:20:51.352Z
++---
++# 提案书（Proposal）— 2026-10-06-verify-docs-prefill
++
++## 动机
++
++任务原话转写：厚流程 postmortem（sess_4769fd5d，provider-multi-agent-kind）第二批误工清偿 + 变更一评审 P3 清偿，共六项：
++
++1) gate verify 预检缺轻量档：gate verify 只读重跑全量检查含测试执行（postmortem 实证 --json 超时转后台 + task id 抄错绕 3 轮），纯文档契约缺项（visual-evidence/结论槽/移交项等）其实毫秒级可查——src/machine-interface.js runGate 加 docsOnly 档：verify 阶段跳过 verify-test/verify-lint 执行（informational 占位说明），其余检查照跑；CLI gate --docs-only 接线（与 --full 互斥）。
++2) 探针 7 矩阵手誊 40 分钟：无归属测试的卡预填「无归属测试——判定大概率 uncovered」，而 FR 关联回归既有用例（本变更未改动）本可由 collectFrLinkedTests（src/fr-index.js:933）机械给出——接入为无归属卡的既有用例候选（注记行区分「既有用例，未改动」），省 agent 全仓找锚点。
++3) 填卡 batch 阈值硬编码：stages/plan.js L499-500「task 总数 ≤8」写死在 prompt 文案，430 万 token 实证后阈值应项目可调——local.yaml 新键 plan.fill_batch_min_tasks（integer ≥1，缺省 8），buildCoordinatorStep 插值，config-schema 注册。
++4) 变更一评审 P3 三项清偿：备份文件名不含 change 段（backupVerifyResult 加 changeName 参数）；「非零端点」被零端点同义正则误命中 declared=0（API_FACE_DECLARED_ZERO_RE 零端点分支加 (?<!非) 前瞻）；refreshProbeSections 段边界不认非探针 #### 标题致手写子节被吞（splitProbeSectionRanges 边界改认任意 #{1,4} 标题）。
++5) step-guides 旧指纹文件永久共存：agent 自行 ls/glob 目录会读到旧版本指引（postmortem step5/step6 错位疑云），写新 guide 时按 state 引用白名单清理同步骤旧指纹文件（src/run/prompt.js 落盘分支）。
++6) 评审档位撤销说明：postmortem「零代码变更 55 万 token」的病根是厚流程选道错位（运维修复应走轻量道），档位机器已存在（review-tier S0/S1→self + flow-review 五路危险证据定档 + 1/4 抽样校准）——本变更不再新增 self 档（会破坏抽样校准机制），以本条记录裁决。
++
++成功标准：
++- sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++- 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++- local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++- backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
++- 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 变更范围
++
++按成功标准机械推导，共 6 条验收面：
++1. sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++2. 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++3. local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++4. backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
++5. 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++6. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 成功标准（可验证）
++
++1. sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++2. 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++3. local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++4. backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
++5. 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++6. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+diff --git a/.sillyspec/changes/2026-10-06-verify-docs-prefill/requirements.md b/.sillyspec/changes/2026-10-06-verify-docs-prefill/requirements.md
+new file mode 100644
+index 00000000..0db4e009
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-docs-prefill/requirements.md
+@@ -0,0 +1,80 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:20:51.352Z
++---
++# 需求规格（Requirements）— 2026-10-06-verify-docs-prefill
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++
++`gate verify --docs-only` 必须把 verify-test/verify-lint 置为 informational 占位（warnings 含 --docs-only 档位说明、data.status='docs-only-skip'）且不执行测试命令，其余检查（artifacts/transition 等）必须照跑；--docs-only 与 --full 并存必须 exit 2（互斥，先于变更存在性检查）。
++
++#### 场景：docs-only 预检
++
++Given 任一 verify 阶段变更 / When `sillyspec gate verify --change <名> --docs-only` / Then verify-test/verify-lint 为 informational 占位且本地测试命令未被触发，文档契约类检查（如 verify-result.md 缺失）照常出现在 errors。
++
++#### 场景：互斥
++
++Given 任一变更名 / When `gate verify --change <名> --docs-only --full` / Then exit 2 且报错含互斥说明。
++
++### FR-02: 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++
++runVerifyProbes 的探针 7 必须对三源归属（allowed_paths 测试模式/review changedFiles/依赖卡）为空的卡，把 collectFrLinkedTests 的 FR 关联测试文件注入其 testFiles 并在渲染中给出「既有用例候选（FR 关联回归面，本变更未改动）」注记行（existingTests 字段）；有归属的卡禁止注入（零噪音）；FR 索引不可读或零命中时行为必须与现状逐字一致。
++
++#### 场景：无归属卡获得候选
++
++Given 变更触碰 src/lib.js、知识库有 active FR 覆盖该文件且绑定 test/existing.test.mjs、task-01 卡 allowed_paths 无测试路径 / When runVerifyProbes / Then task-01 的 testFiles 含 test/existing.test.mjs 且渲染含既有用例注记行；有自身测试归属的 task-02 的 existingTests 为空。
++
++#### 场景：无 FR 知识
++
++Given 知识库无 FR 索引 / When runVerifyProbes / Then 无归属卡 testFiles 仍为空、无注记行（现状一致）。
++
++### FR-03: local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++
++buildCoordinatorStep 必须读取 specBase 的 local.yaml `plan.fill_batch_min_tasks`（integer ≥1）并插值进协调器 prompt 的两处阈值口径；未配置或非法值（0/负数/非整数/坏 YAML）必须回退内置 8。
++
++#### 场景：配置生效
++
++Given local.yaml 含 plan.fill_batch_min_tasks: 3 / When buildCoordinatorStep / Then 文案含「≤3」且不含「≤8」/「>8」。
++
++#### 场景：缺省与非法回退
++
++Given 无 local.yaml 或键值非法 / When buildCoordinatorStep / Then 文案含「≤8」（与现状一致）。
++
++### FR-04: backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
++
++backupVerifyResult 传 changeName 时备份文件名必须含 change 段（verify-result-backup-<change>-<ts>.md，缺省不带向后兼容）；parseDesignApiTable 对「非零端点」措辞必须返回 declared=null（(?<!非) 前瞻，正向「零端点」仍认 0）；refreshProbeSections 的段边界必须认任意 1-4 级标题——含占位探针段之后的手写 #### 子节在刷新后必须存活。
++
++#### 场景：三项清偿
++
++Given 变更一评审 P3 三项形态（多 change 备份归属/非零端点散文/占位段后手写子节）/ When 各自调用 / When 定向刷新 / Then 备份名含 change 段、declared=null、手写子节标题与正文存活。
++
++### FR-05: 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++
++pruneStaleStepGuides 必须以「keepAbsPaths ∪ 仍被任一 state 文件引用的 guidePath」为白名单删除同步骤前缀的其余 guide 文件，返回删除计数；目录缺失必须返回 0 不抛（fail-soft）。
++
++#### 场景：白名单清理
++
++Given guideRoot 有同步骤三份不同指纹 + 他步骤一份，state 引用其中一份 / When 清理（keep=新文件）/ Then 未引用旧指纹被删、被引用文件与他步骤文件保留。
++
++### FR-06: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++新增四个测试文件（gate-docs-only/probe7-fr-prefill/plan-fill-batch-config/step-guide-prune）必须收录进 package.json 的 test:core 清单；收口时 test:core 必须全绿（290 用例 0 失败）且 npm run lint 必须 0 报错。
++
++#### 场景：主路径
++
++Given 本变更全部实现合入 / When `npm run test:core` 与 `npm run lint` / Then 均零失败退出（CLI 冒烟另证：--docs-only 秒级出文档缺项清单、test/lint informational 占位）。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/gate-docs-only.test.mjs「D1 docsOnly：verify-test/verify-lint informational 占位，测试命令不执行，artifacts 照跑」「D3 CLI 互斥：--docs-only 与 --full 并存 exit 2（先于变更存在性检查）」「D2 对照：完整档走真实决策路径（非 docs-only 占位；跳过时有 CLI 自身的 dynamic-empty 理由）」
++FR-02: test/probe7-fr-prefill.test.mjs「P1 无归属卡 + FR 命中：既有用例进 testFiles 且渲染注记行」「P3 无 FR 知识：行为与现状一致（无注入、无注记）」
++FR-03: test/plan-fill-batch-config.test.mjs「B1 未配置：文案含「≤8」（缺省，现状一致）」「B2 配 plan.fill_batch_min_tasks: 3：文案两处口径均插值为 3」「B3 非法值回退 8」
++FR-04: test/verify-probes-refresh-backup.test.mjs「P3-1 清偿：backupVerifyResult 传 changeName 时备份文件名含 change 段」「P3-2 清偿：「非零端点」不再被零端点同义正则误命中」「P3-3 清偿：含占位段后的手写 #### 子节在定向刷新后存活」
++FR-05: test/step-guide-prune.test.mjs「G1-G3：旧指纹清理 / state 引用保留 / 他步骤不动」「目录缺失：返回 0 不抛（fail-soft）」
++FR-06: test/step-guide-prune.test.mjs「目录缺失：返回 0 不抛（fail-soft）」（连同全量 test:core 290 用例 0 失败 + lint 0 报错，见变更提交链）
+diff --git a/.sillyspec/changes/2026-10-06-verify-docs-prefill/tasks.md b/.sillyspec/changes/2026-10-06-verify-docs-prefill/tasks.md
+new file mode 100644
+index 00000000..a432ed22
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-docs-prefill/tasks.md
+@@ -0,0 +1,18 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T14:20:51.352Z
++---
++# 任务注册表（Tasks）— 2026-10-06-verify-docs-prefill
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-verify-docs-prefill --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-verify-docs-prefill` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
++- [x] task-02: 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
++- [x] task-03: local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
++- [x] task-04: backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
++- [x] task-05: 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
++- [x] task-06: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core

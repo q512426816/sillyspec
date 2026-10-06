@@ -1000,3 +1000,132 @@ created_at: 2026-09-20T18:20:21.442Z
 - 场景：默认场景 — Given 系统就绪；When 纯文档+example 模板注释行，不改任何门档位缺省值与运行逻辑；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-27-pushgate-green-repair/requirements.md#FR-02
 最近确认：eb946a2e7bf4a93671effef01ac7778043b7ba3f
+
+## FR-setup-061 sillyspec gate verify --change <名> --docs-only 输出含 verify-test/verify-lint 的 informational 跳过说明、不执行测试命令、其余检查照跑；--docs-only 与 --full 并存 exit 2
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：docs-only 预检；互斥
+场景正文：
+- 场景：docs-only 预检 — Given 任一 verify 阶段变更 / When `sillyspec gate verify --change <名> --docs-only` / Then ve
+- 场景：互斥 — Given 任一变更名 / When `gate verify --change <名> --docs-only --full` / Then exit 2 且报错含互斥说
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-01
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-01
+  tests: test/gate-docs-only.test.mjs「D1 docsOnly：verify-test/verify-lint informational 占位，测试命令不执行，artifacts 照跑」 | test/gate-docs-only.test.mjs「D2 对照：完整档走真实决策路径（非 docs-only 占位；跳过时有 CLI 自身的 dynamic-empty 理由）」 | test/gate-docs-only.test.mjs「D3 CLI 互斥：--docs-only 与 --full 并存 exit 2（先于变更存在性检查）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
+
+## FR-setup-062 探针 7 对 testFiles 为空的卡注入 FR 关联回归测试候选（渲染「既有用例」注记行，有归属卡的格子不受影响）；无 FR 知识/无命中时行为与现状逐字一致
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：无归属卡获得候选；无 FR 知识
+场景正文：
+- 场景：无归属卡获得候选 — Given 变更触碰 src/lib.js、知识库有 active FR 覆盖该文件且绑定 test/existing.test.mjs、task-01 卡 allowed
+- 场景：无 FR 知识 — Given 知识库无 FR 索引 / When runVerifyProbes / Then 无归属卡 testFiles 仍为空、无注记行（现状一致）。
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-02
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-02
+  tests: test/probe7-fr-prefill.test.mjs「P1 无归属卡 + FR 命中：既有用例进 testFiles 且渲染注记行」 | test/probe7-fr-prefill.test.mjs「P3 无 FR 知识：行为与现状一致（无注入、无注记）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
+
+## FR-setup-063 local.yaml 配 plan.fill_batch_min_tasks: 3 后 buildCoordinatorStep 文案含「≤3」；未配置时含「≤8」（现状一致）
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：配置生效；缺省与非法回退
+场景正文：
+- 场景：配置生效 — Given local.yaml 含 plan.fill_batch_min_tasks: 3 / When buildCoordinatorStep / Then 文案含
+- 场景：缺省与非法回退 — Given 无 local.yaml 或键值非法 / When buildCoordinatorStep / Then 文案含「≤8」（与现状一致）。
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-03
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-03
+  tests: test/plan-fill-batch-config.test.mjs「B1 未配置：文案含「≤8」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
+
+## FR-setup-064 backupVerifyResult 传 changeName 时备份文件名含 change 段；parseDesignApiTable 对「非零端点」返回 declared=null；refreshProbeSections 后手写 #### 子节存活
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：三项清偿
+场景正文：
+- 场景：三项清偿 — 
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-04
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-04
+  tests: test/verify-probes-refresh-backup.test.mjs「P3-1 清偿：backupVerifyResult 传 changeName 时备份文件名含 change 段」 | test/verify-probes-refresh-backup.test.mjs「P3-2 清偿：「非零端点」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
+
+## FR-setup-065 写新 step guide 后，同步骤旧指纹 guide 文件被清理、仍被任一 state 引用的文件保留
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：白名单清理
+场景正文：
+- 场景：白名单清理 — Given guideRoot 有同步骤三份不同指纹 + 他步骤一份，state 引用其中一份 / When 清理（keep=新文件）/ Then 未引用旧指纹被删、被引用
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-05
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-05
+  tests: test/step-guide-prune.test.mjs「G1-G3：旧指纹清理 / state 引用保留 / 他步骤不动」 | test/step-guide-prune.test.mjs「目录缺失：返回 0 不抛（fail-soft）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
+
+## FR-setup-066 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+变更：2026-10-06-verify-docs-prefill
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更全部实现合入 / When `npm run test:core` 与 `npm run lint` / Then 均零失败退出（CLI 冒烟另证：--d
+全文：.sillyspec/changes/archive/2026-10-06-verify-docs-prefill/requirements.md#FR-06
+最近确认：e9c01f7cd4f66c5a2fb43bc6775ab9eb3723fad1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-docs-prefill:flow:测试绑定FR-06
+  tests: test/step-guide-prune.test.mjs「目录缺失：返回 0 不抛（fail-soft）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-docs-prefill
+  status: active
