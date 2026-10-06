@@ -1,0 +1,24 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  多 agent 并行场景下，外层编排器与其他 agent 需要程序化读取轻量变更状态（阶段/槽位/任务勾选进度）来决定下一步动作；当前 flow status 只有人类可读渲染文本，脚本无法稳定解析，只能靠 fragile 文本匹配。给
+  flow status 增加 --json 输出：结构化给出变更状态全貌，人类可读路径行为保持不变。
+
+
+  成功标准：
+
+  - flow status --change <存在的活跃变更> --json 输出合法 JSON，含
+  change/phase/designFilled/frFilled/bindingsFilled/bindingsTotal/tasksChecked/tasksTotal/substeps 字段
+
+  - 变更不存在与已归档两种形态下 --json 亦输出结构化 JSON（带对应状态标记）且进程退出码与现有人类可读路径一致
+
+  - 新增单元测试覆盖上述三种形态并纳入 test:core，全部跑绿
+autopilot: true
+baseline_commit: e62d3bc5fa384609d2b1b906becd51d3a3c80f46
+updatedAt: '2026-10-06T05:06:52.416Z'
+baseline_sha256: b5f930bb9ac766adfc1f8a60492bd4f27948140cda36175bec8cba598fb3f22c
+

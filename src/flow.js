@@ -1703,9 +1703,15 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null }) {
   console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：编辑 flow-state.yaml 删除 spec_approved 三字段。`)
 }
 
-export async function cmdFlow(args, cwd, specDir = null) {
+export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
   const sub = args[0] || ''
   const rest = args.slice(1)
+  // 全局 --json 透传（2026-10-06-flow-status-json）：index.js 顶层把 --json 从 filteredArgs
+  // 剥进全局变量，flow 族此前在真实 CLI 入口下永远收不到该 flag（in-process 直调 cmdFlow 带
+  // --json 才生效）——cmdFlowStart 的 json 信封成了死代码、status 无机器可读面。统一入口
+  // 形状：第 4 参 opts.json 由 index.js 传入，与 args 内残余 --json（直调/测试路径）取或，
+  // 两路同语义不分叉。
+  const jsonGlobal = opts.json === true
   // 平台参数面（2026-09-25-thin-platform-args，平台侧三子代理核对驱动）：specBase 统一走
   // resolvePlatformSpecDir——显式 --spec-dir/--spec-root > .sillyspec-platform.json 指针（fail-closed，
   // 指针失效报错不静默回退本地防状态分裂）> 本地。此前 flow 族零平台支持：--spec-dir 是 ENOENT
@@ -1791,7 +1797,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
       autopilot: hasFlag('--autopilot'),
       cwd, specBase,
-      json: hasFlag('--json'),
+      json: hasFlag('--json') || jsonGlobal,
     })
   }
   if (sub === 'approve') {
@@ -1809,6 +1815,10 @@ export async function cmdFlow(args, cwd, specDir = null) {
     await reportAgentLog(change, sub)
     const changeDir = join(specBase, 'changes', change)
     const st = readFlowState(changeDir)
+    // --json（2026-10-06-flow-status-json）：机器可读单对象输出——事实与人类渲染同源同判定，
+    // 退出码同点（missing=1，其余=0），程序化消费方不再 fragile 文本匹配。
+    // 入口双路：jsonGlobal 来自 index.js 全局透传（真实 CLI），hasFlag 覆盖直调/测试路径
+    const json = jsonGlobal || hasFlag('--json')
     if (!st) {
       // 归档检测：归档后目录搬至 changes/archive/<日期>-<名>（原目录不存在）——查 archive 目录
       const archiveDir = join(specBase, 'changes', 'archive')
@@ -1816,16 +1826,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
       try {
         if (existsSync(archiveDir)) isArchived = readdirSync(archiveDir).some((e) => e === change) // 精确匹配（fr-governance-sweep：归档目录名恒等 change 名，includes 子串会把 flow-check 误命中 flow-checkpoints）
       } catch { /* best-effort */ }
-      if (isArchived) {
-        console.log(`📦 ${change}：已归档`)
-      } else if (existsSync(changeDir)) {
-        console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
-      } else {
-        console.log(`❓ ${change}：变更不存在`)
-        // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
-        // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走下方正常展示路径 exit 0
-        process.exit(1)
-      }
+      // 前置形态先归一（archived/dir-no-state/missing）——--json 与人类渲染共用同一判定，防两路径各算各的漂移
+      const form = isArchived ? 'archived' : (existsSync(changeDir) ? 'dir-no-state' : 'missing')
+      if (json) console.log(JSON.stringify({ change, status: form }))
+      else if (form === 'archived') console.log(`📦 ${change}：已归档`)
+      else if (form === 'dir-no-state') console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
+      else console.log(`❓ ${change}：变更不存在`)
+      // exit 1（2026-10-05-flow-tail-polish）：查询目标缺失=运行错——exit 0 时脚本无法区分
+      // 「存在但无进度」与「不存在」；在场两形态（已归档/目录在场）仍走上方形态路径 exit 0。
+      // --json 与人类路径同点退出（分叉会让脚本消费方无法复用退出码判定）
+      if (form === 'missing') process.exit(1)
       return
     }
     const subDone = SUBSTEPS.filter((k) => st.substeps?.[k] === 'done')
@@ -1887,11 +1897,30 @@ export async function cmdFlow(args, cwd, specDir = null) {
         }
       }
     } catch { /* 心跳 fail-soft */ }
+    // 任务勾选预计算（--json 与人类渲染共用同源；正则与原内联 IIFE 逐字一致；hasTasks 保住
+    // 「缺 tasks.md 时不渲染该行」的现状——人类输出不得因本变更变形）
+    let tasksChecked = 0, tasksTotal = 0, hasTasks = false
+    try {
+      const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
+      hasTasks = true
+      tasksChecked = (t.match(/^- \[x\]/gm) || []).length
+      tasksTotal = (t.match(/^- \[( |x)\]/gm) || []).length
+    } catch { /* 无 tasks.md */ }
+    if (json) {
+      console.log(JSON.stringify({
+        change, status: 'active', phase,
+        designFilled, frFilled, bindingsFilled, bindingsTotal,
+        tasksChecked, tasksTotal,
+        substeps: subDone, substepsTotal: SUBSTEPS.length,
+        ...(st.legacy_fallback ? { legacyFallback: true } : {}),
+      }))
+      return
+    }
     console.log([
       `📋 ${change}`,
       `   阶段：${phase}`,
       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
-      (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
+      hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,
       ...(heartbeat || []),
       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
@@ -1947,7 +1976,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名>')
+  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json]')
   console.error('      --input 可照抄形态（引号内换行合法）：')
   console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
   console.error('')

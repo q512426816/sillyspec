@@ -4568,9 +4568,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       break;
     }
     case 'flow': {
-      // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2
+      // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2。
+      // --json 全局透传（2026-10-06-flow-status-json）：该 flag 在上方全局解析段被剥出
+      // filteredArgs，flow 族经此收到 {json} 才在真实入口下生效（status 机器可读输出 /
+      // start JSON 信封同门，与 gate/derive 族「index 消费全局 flag、显式传子命令」同款形状）
       const flowMod = await import('./flow.js');
-      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir);
+      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir, { json });
       break;
     }
     case 'workflow': {
