@@ -1,0 +1,97 @@
+{
+  "change": "2026-10-06-verify-friction-fix",
+  "baseline": "0abe84727a51666483b538a2f4515a7c25865e1f",
+  "head": "2faced26e0c4129d1489655c68b78a21c1cbc90a",
+  "files": [
+    ".sillyspec/changes/2026-10-06-verify-friction-fix/design.md",
+    ".sillyspec/changes/2026-10-06-verify-friction-fix/flow-state.yaml",
+    ".sillyspec/changes/2026-10-06-verify-friction-fix/proposal.md",
+    ".sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md",
+    ".sillyspec/changes/2026-10-06-verify-friction-fix/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "package.json",
+    "src/design-facts.js",
+    "src/index.js",
+    "src/machine-interface.js",
+    "src/stages/plan-postcheck.js",
+    "src/stages/plan.js",
+    "src/taskcard-frontmatter.js",
+    "src/verify-probes.js",
+    "templates/prompts/taskcard-rules.md",
+    "test/gate-last-reader.test.mjs",
+    "test/taskcard-yaml-triage-validate.test.mjs",
+    "test/verify-probes-refresh-backup.test.mjs"
+  ],
+  "totals": {
+    "files": 18,
+    "additions": 969,
+    "deletions": 20
+  },
+  "savedAt": "2026-10-06T14:05:00.707Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "machine-interface",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/machine-interface.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    },
+    {
+      "dir": "templates/prompts",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "012dd379e7405b4fe753e959546745c46003d22035327b67c9bc469167b59ded",
+  "patchStatus": "ok"
+}

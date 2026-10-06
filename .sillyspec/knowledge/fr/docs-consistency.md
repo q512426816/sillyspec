@@ -538,3 +538,112 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-06-module-map-list-leak
   status: active
+
+## FR-docs-consistency-026 verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
+变更：2026-10-06-verify-friction-fix
+状态：active
+摘要：手填结论在刷新后存活；force 重置可找回
+场景正文：
+- 场景：手填结论在刷新后存活 — Given verify-result.md 已手填结论枚举与探针 7 部分矩阵格 / When `verify-probes --change <名> --refresh
+- 场景：force 重置可找回 — Given verify-result.md 含手填内容 / When `verify-probes --change <名> --init --force` / Then
+全文：.sillyspec/changes/archive/2026-10-06-verify-friction-fix/requirements.md#FR-01
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-friction-fix:flow:测试绑定FR-01
+  tests: test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：落时间戳备份，原文不动，路径在 verify-runs 下」 | test/verify-probes-refresh-backup.test.mjs「refreshProbeSections：含待填占位的段被刷新，已手填段保留，表格已填行携载」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-friction-fix
+  status: active
+
+## FR-docs-consistency-027 sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
+变更：2026-10-06-verify-friction-fix
+状态：active
+摘要：无锚点；blocked 锚点直读
+场景正文：
+- 场景：无锚点 — Given 该变更从未发生 verify --done 阻断落锚 / When `gate last --change <名>` / Then 打印「无 gate-last
+- 场景：blocked 锚点直读 — Given gate-last 指针 blocked=true 且指向的取证目录含 reconcile-result.json（missing 1 条）/ When `ga
+全文：.sillyspec/changes/archive/2026-10-06-verify-friction-fix/requirements.md#FR-02
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-friction-fix:flow:测试绑定FR-02
+  tests: test/gate-last-reader.test.mjs「blocked 指针 + 取证目录 → 摘要含 reconcile missing/undeclared 与 probe mismatches」 | test/gate-last-reader.test.mjs「无指针 → found:false（不抛）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-friction-fix
+  status: active
+
+## FR-docs-consistency-028 plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
+变更：2026-10-06-verify-friction-fix
+状态：active
+摘要：冒号值卡的分诊；validate 拦严格形态
+场景正文：
+- 场景：冒号值卡的分诊 — Given 任务卡 frontmatter 含 `title: A: B` 形态（js-yaml 报 bad indentation of a mapping entry）
+- 场景：validate 拦严格形态 — Given 任务卡 target_files 含 `src/*.js` glob 条目 / When `taskcard <change> --validate` / Th
+全文：.sillyspec/changes/archive/2026-10-06-verify-friction-fix/requirements.md#FR-03
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-friction-fix:flow:测试绑定FR-03
+  tests: test/taskcard-yaml-triage-validate.test.mjs「diagnoseTaskYamlError：冒号值 / 反引号指示符 / 引号不成对 / 流序列四类分诊」 | test/taskcard-yaml-triage-validate.test.mjs「validatePlanFeasibility：非法 YAML 报错含分诊动作」 | test/taskcard-yaml-triage-validate.test.mjs「validateTaskcardsCli：好卡过、target_files 非法形态拦、占位骨架拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-friction-fix
+  status: active
+
+## FR-docs-consistency-029 API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
+变更：2026-10-06-verify-friction-fix
+状态：active
+摘要：散文零端点声明入矩阵；骨架句式不自动生效
+场景正文：
+- 场景：散文零端点声明入矩阵 — Given design.md 接口段写「本变更不涉及接口」/ When parseDesignApiTable / Then declared=0（API 矩阵按 age
+- 场景：骨架句式不自动生效 — Given design.md 由新版骨架生成、声明句式仍在 HTML 注释内未被粘贴为正文 / When parseDesignApiTable / Then decla
+全文：.sillyspec/changes/archive/2026-10-06-verify-friction-fix/requirements.md#FR-04
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-friction-fix:flow:测试绑定FR-04
+  tests: test/verify-probes-refresh-backup.test.mjs「design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自动生效）」 | test/verify-probes-refresh-backup.test.mjs「parseDesignApiTable 声明宽收：同义零端点 → declared=0；数字优先；注释内不认」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-friction-fix
+  status: active
+
+## FR-docs-consistency-030 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+变更：2026-10-06-verify-friction-fix
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更全部实现合入 / When `npm run test:core` 与 `npm run lint` / Then 两者均 0 失败退出（E2E 冒烟另证
+全文：.sillyspec/changes/archive/2026-10-06-verify-friction-fix/requirements.md#FR-05
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-verify-friction-fix:flow:测试绑定FR-05
+  tests: test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：目标缺失时返回 null 不抛（fail-soft）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-verify-friction-fix
+  status: active

@@ -1,0 +1,1239 @@
+diff --git a/.sillyspec/changes/2026-10-06-verify-friction-fix/flow-state.yaml b/.sillyspec/changes/2026-10-06-verify-friction-fix/flow-state.yaml
+new file mode 100644
+index 00000000..581963b4
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-friction-fix/flow-state.yaml
+@@ -0,0 +1,40 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  厚流程 postmortem（会话 sess_4769fd5d，变更 provider-multi-agent-kind）暴露四个 CLI 误工/数据丢失缺陷，本变更一次清偿：
++
++  1) verify-probes --init --force 整体重置全骨架且无备份，38 格手填复核成果被清后只能靠对话记录重建（src/index.js:1347-1353，全仓无备份逻辑）；
++
++  2) gate-last-<change>.json 只写不读（src/run/gates.js:2069-2094 纯 writer），看上轮 blocked 原因只能重跑全量 gate（实测超时转后台）或手翻两层 JSON；
++
++  3) 任务卡 frontmatter 校验完全后置在 plan postcheck（src/stages/plan-postcheck.js:1303-1316 透传 js-yaml 英文原文），分诊知识已在
++  templates/prompts/taskcard-rules.md:19-23 却未接进报错，厚流程实测连撞 6 轮；
++
++  4) design.md 接口声明行机制已存在（src/verify-probes.js:1083 API_FACE_DECLARED_RE）但措辞窄，会话中散文式零端点声明不命中被迫写伪表格绕过，design 骨架
++  TODO（src/design-facts.js:342-344）未给可粘贴句式。
++
++
++  成功标准：
++
++  - verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes
++  定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++
++  - sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code
++  反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++
++  - plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any
++  token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN]
++  独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++
++  - API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++
++  - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++autopilot: true
++baseline_commit: 0abe84727a51666483b538a2f4515a7c25865e1f
++updatedAt: '2026-10-06T13:38:16.936Z'
++baseline_sha256: bb39ce62cec11cb2edcb5bf783a418971ee0f7e5ec584855c1e1c45a237b89b2
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index b3aa753d..4db1aba7 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2098/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:926（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4240；shared.js:1022 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2746/3015；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4161；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4113；sync.js:2232 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4324；shared.js:1022 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2829/3108；shared.js:1046 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4244；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4196；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3926/3882；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4009/4038；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -166,7 +166,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:242`）公共入口，flag 在 `command.js:396`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+ - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:276` 解析后经 `case 'init'`（`index.js:393`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:794（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:830（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:407` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4023`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4106`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/package.json b/package.json
+index e89c9564..e3abb208 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/design-facts.js b/src/design-facts.js
+index 11c31dd6..44bf4915 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -341,7 +341,8 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+ 
+   lines.push('## 接口定义')
+   lines.push('')
+-  lines.push('<!-- TODO（代码类任务必填）：方法签名、数据结构 -->')
++  lines.push('<!-- TODO（代码类任务必填）：方法签名、数据结构。本变更无接口改动时，把下面这行声明粘贴到本节正文（探针矩阵认该声明行，同义式「无接口变更/不涉及接口/零端点」亦可；留在本注释内不生效——2026-10-06-verify-friction-fix）： -->')
++  lines.push('<!-- 本变更接口面：0 端点（无接口变更） -->')
+   lines.push('')
+ 
+   lines.push('## 生命周期契约表')
+diff --git a/src/index.js b/src/index.js
+index c25886ce..15c53849 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -564,7 +564,7 @@ async function main() {
+       const gateChangeIdx = args.indexOf('--change');
+       const gateChange = gateChangeIdx >= 0 && args[gateChangeIdx + 1] && !String(args[gateChangeIdx + 1]).startsWith("--") ? args[gateChangeIdx + 1] : null;
+       if (!gateStage || gateStage.startsWith('-') || !gateChange) {
+-        console.error('用法: sillyspec gate <stage> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...');
++        console.error('用法: sillyspec gate <stage|last> --change <name> [--json]\n  stage: brainstorm | plan | execute | verify | archive | ...\n  gate last --change <name>：读上轮 verify --done 阻断稳定锚点（gate-last-<change>.json）并打印 blocked 明细，不重跑检查');
+         process.exit(2);
+       }
+       // 与 run 入口同源消毒（防路径穿越；gate 下游拼 marker/changes 路径）
+@@ -602,6 +602,41 @@ async function main() {
+       } catch (e) {
+         console.warn(`⚠️ gate ctx 构造失败，降级单仓核验（${e.message}）`);
+       }
++      // ── gate last（2026-10-06-verify-friction-fix task-02）── 读 verify-runs 稳定锚点：
++      // writeVerifyGatePointer（quick-D）只写不读，看上轮 blocked 原因只能重跑全量 gate
++      // （postmortem 实证 --json 超时转后台 + task id 抄错绕 3 轮）或手翻两层 JSON。此处
++      // 直读指针 + 其指向取证目录的 reconcile/probe-consistency 明细；exit code 反映是否存在
++      // 阻断（无记录/未阻断=0，blocked=1），只读不写不重跑。
++      if (gateStage === 'last') {
++        const { summarizeVerifyGatePointer } = await import('./machine-interface.js');
++        const summary = summarizeVerifyGatePointer({ specBase: gateSpecBase || gateOpts.specBase || dir, changeName: gateChange });
++        if (json) {
++          console.log(JSON.stringify(summary, null, 2));
++        } else if (!summary.found) {
++          console.log(`📭 无 gate-last 记录（${summary.pointerPath}）——该变更尚未发生 verify --done 阻断落锚。`);
++        } else if (summary.unreadable) {
++          console.error(`❌ gate-last 指针不可读: ${summary.pointerPath}（${summary.error || 'JSON 损坏'}）——删除该文件后重跑一次 verify --done 重建锚点。`);
++        } else {
++          console.log(`📌 gate-last [${gateChange}] blocked=${summary.blocked}${summary.note ? `（${summary.note}）` : ''}  written_at=${summary.written_at || '?'}`);
++          console.log(`   最新取证目录: ${summary.run_dir_resolved || summary.latest_run_dir || '?'}`);
++          if (summary.reconcile) {
++            const rc = summary.reconcile;
++            console.log(`   target_files 对账: status=${rc.status} missing=${(rc.missing || []).length} undeclared=${(rc.undeclared || []).length} matched=${(rc.matched || []).length}`);
++            for (const m of (rc.missing || []).slice(0, 10)) console.log(`     ✗ missing: ${typeof m === 'string' ? m : JSON.stringify(m)}`);
++            for (const u of (rc.undeclared || []).slice(0, 10)) console.log(`     ⚠ undeclared: ${typeof u === 'string' ? u : JSON.stringify(u)}`);
++            if ((rc.missing || []).length > 10) console.log(`     …另有 ${rc.missing.length - 10} 条 missing，直读 ${summary.run_dir_resolved || summary.latest_run_dir}`);
++          }
++          if (summary.probeConsistency) {
++            const pc = summary.probeConsistency;
++            const mm = pc.mismatches || [];
++            console.log(`   探针一致性抽查: status=${pc.status} severity=${pc.result_severity || pc.severity || '?'} mismatches=${mm.length}`);
++            for (const m of mm.slice(0, 10)) console.log(`     ✗ 探针${m && m.probe ? m.probe : '?'}: ${(m && (m.note || m.expected)) ? String(m.note || m.expected) : JSON.stringify(m)}`);
++            if (pc.skip_reason) console.log(`     skip: ${pc.skip_reason}`);
++          }
++        }
++        process.exitCode = summary.found && !summary.unreadable && summary.blocked ? 1 : 0;
++        break;
++      }
+       const { envelope, exitCode } = await withJsonOutput(json, () => runGate(gateStage, gateChange, gateOpts));
+       if (json) {
+         process.stdout.write(JSON.stringify(envelope));
+@@ -1272,16 +1307,24 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const vpForce = args.includes('--force');
+       const vpDraft = args.includes('--draft');
+       const vpAmendDraft = args.includes('--amend-draft');
++      // --refresh-probes（2026-10-06-verify-friction-fix task-01）：定向刷新通道——只刷新仍含
++      // 待填占位的探针机械段（表格已填行按行携载），已手填段保留；与 --force 互斥（force 是
++      // 显式全量重置通道，refresh 是保手填通道，并存语义矛盾拒跑）。
++      const vpRefresh = args.includes('--refresh-probes');
+       if (vpDraft && !vpInit) {
+         console.error('❌ --draft 需与 --init 同用（draft 是骨架生成的机器起草模式）——sillyspec verify-probes --change <名> --init --draft');
+         process.exit(2);
+       }
++      if (vpRefresh && vpForce) {
++        console.error('❌ --refresh-probes 与 --force 互斥——refresh 只刷新未手填的探针段（保手填），force 是全量重置（自动备份后覆盖）；两者并存语义矛盾。');
++        process.exit(2);
++      }
+       if (!vpChange) {
+-        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
++        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--refresh-probes] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）；--force 覆盖重生成全骨架（覆盖前自动备份到 .runtime/verify-runs/ 并打印路径）；\n  --refresh-probes 定向刷新：只替换仍含待填占位的探针预填段（表格已填行携载保留），已手填段不动——预填段过期但手填内容舍不得时的安全刷新通道（同样先自动备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
+         process.exit(2);
+       }
+       assertSafeChangeName(vpChange, '--change 变更名');
+-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote } = await import('./verify-probes.js');
++      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections } = await import('./verify-probes.js');
+       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
+       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
+       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
+@@ -1327,6 +1370,37 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+         break;
+       }
+       console.log(renderVerifyProbesReport(vpResult));
++      // ── --refresh-probes 定向刷新（2026-10-06-verify-friction-fix task-01）── 独立于 --init：
++      // 预填段过期但手填内容舍不得时的安全刷新通道。先自动备份，再只替换仍含待填占位的探针
++      // 机械段（表格已填行按行携载），已手填段原样保留并逐段报告。刷新后 enricher 不在此跑
++      // （那些是 --init 的幂等补段面，与探针段刷新正交；需要时再跑 --init，已存在 no-op 安全）。
++      if (vpRefresh) {
++        const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
++        if (!existsSync(vpReportPath)) {
++          console.error(`❌ 无 verify-result.md 可刷新: ${vpReportPath}——先 sillyspec verify-probes --change ${vpChange} --init 生成骨架`);
++          process.exit(2);
++        }
++        const { resolveRuntimeRoot: vpRefreshRTR } = await import('./run/shared.js');
++        const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpRefreshRTR({}, vpSpecBase) });
++        const vpOld = readFileSync(vpReportPath, 'utf8');
++        const vpRef = refreshProbeSections(vpOld, renderVerifyProbesReport(vpResult));
++        if (vpRef.text !== vpOld) {
++          writeFileSync(vpReportPath, vpRef.text);
++          await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpRef.text);
++        }
++        console.log(`\n🔄 --refresh-probes 定向刷新完成: ${vpReportPath}${vpPlatformNote}`);
++        if (vpBackupPath) console.log(`🗄️  刷新前已自动备份: ${vpBackupPath}`);
++        const fmt = (arr) => arr.length > 0 ? arr.map(n => `探针${n}`).join('、') : '无';
++        console.log(`   替换（仍含待填占位的机械段）: ${fmt(vpRef.replaced)}；保留（已手填/无占位，原样不动）: ${fmt(vpRef.kept)}；新注入: ${fmt(vpRef.appended)}；表格已填行携载 ${vpRef.carriedRows} 行`);
++        if (vpRef.kept.length > 0) {
++          console.log(`   保留段如确需强刷（预填过期且确认无手填内容），用 --init --force（自动备份后全量重生成）。`);
++        }
++        try {
++          const { triggerSync } = await import('./run/shared.js');
++          triggerSync(dir, vpChange, { specRoot: vpSpecBase });
++        } catch { /* 同步触发失败不阻断探针命令 */ }
++        break;
++      }
+       if (vpInit) {
+         const vpReportPath = join(vpSpecBase, 'changes', vpChange, 'verify-result.md');
+         if (existsSync(vpReportPath)) {
+@@ -1345,12 +1419,21 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
+             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
+           } else if (vpForce) {
+-            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置，
+-            // 醒目警告 + 备份指引（预填段过期/骨架仍是「无接口面」注记时的刷新通道）
++            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置。
++            // 2026-10-06-verify-friction-fix：覆盖前自动备份（postmortem 实证 38 格手填复核成果
++            // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
++            // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
++            const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
++            const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase) });
+             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+             writeFileSync(vpReportPath, vpSkeleton);
+             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
+-            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从 git 或备份找回后回填）${vpPlatformNote}`);
++            if (vpBackupPath) {
++              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（手填内容被重置时从这里找回回填）`);
++            } else {
++              console.error(`\n⚠️ 自动备份失败——若 verify-result.md 含手填内容，请立即手动复制保存后重跑本命令。`);
++            }
++            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从上方备份找回后回填）${vpPlatformNote}`);
+           } else {
+             console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
+           }
+@@ -4371,6 +4454,9 @@ SillySpec taskcard — 生成 Windows 安全的 TaskCard 骨架
+ 用法:
+   sillyspec taskcard <change-name> --task task-01[,task-02...] [--title <t>] [--title-zh <t>] [--set key=value]... [--force]
+   sillyspec taskcard <change-name> --all [--set key=value]... [--force]
++  sillyspec taskcard <change-name> --validate
++    校验全部任务卡（plan 门禁同源规则：frontmatter YAML 合法性含分诊、必要字段、占位符、
++    target_files 严格形态），失败 exit 1——填卡后先自检，免 plan Step 4 门禁批量报错返工。
+ 
+ 骨架由 CLI 直写（LF 行尾 + frontmatter 闭合 + 硬校验 9 字段齐全），标题自动取自 tasks.md
+ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；--set 批量注入 design
+@@ -4410,6 +4496,35 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+         console.error('❌ --all 与 --task 互斥（--all 取 plan.md 全部任务，--task 显式指定）');
+         process.exit(1);
+       }
++      // ── --validate（2026-10-06-verify-friction-fix task-03）── plan 门禁同源规则的零成本自检：
++      // 填卡后、plan Step 4 门禁前先跑，把「门禁时一次撞一批」前移成「提交前自检」（厚流程
++      // 实证 6 轮 YAML 门禁试错）。规则同源 plan-postcheck（frontmatter 合法性/必要字段/占位符
++      // /target_files 严格形态），失败 exit 1——此处报的错 --done 门禁同样会拦。
++      if (filteredArgs.includes('--validate')) {
++        if (all || taskVal) {
++          console.error('❌ --validate 与 --all/--task 互斥（--validate 校验变更下全部任务卡）');
++          process.exit(2);
++        }
++        const tcValSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
++        const tcValChangeDir = join(tcValSpecDir, 'changes', tcName);
++        if (!existsSync(tcValChangeDir)) {
++          console.error(`❌ 变更目录不存在: ${tcValChangeDir}`);
++          process.exit(2);
++        }
++        const { validateTaskcardsCli } = await import('./stages/plan-postcheck.js');
++        const tcVal = validateTaskcardsCli({ changeDir: tcValChangeDir, projectRoot: dir });
++        if (tcVal.ok) {
++          console.log(`✅ 任务卡校验通过（${tcVal.files} 张卡${tcVal.files === 0 ? '——无 tasks/ 目录（thin 变更无可校验卡）' : tcVal.warnings.length > 0 ? `，${tcVal.warnings.length} 条 warning（不阻断，供审查线索）` : ''}）`);
++          for (const w of tcVal.warnings) console.log(`  ⚠ ${w}`);
++        } else {
++          console.error(`❌ 任务卡校验失败（${tcVal.files} 张卡，${tcVal.errors.length} 项 error）：`);
++          for (const e of tcVal.errors) console.error(`  ✗ ${e}`);
++          for (const w of tcVal.warnings) console.error(`  ⚠ ${w}`);
++          console.error(`修复后重跑: sillyspec taskcard ${tcName} --validate（这些错误在 plan Step 4 门禁同样会拦——同源规则）。`);
++          process.exitCode = 1;
++        }
++        break;
++      }
+       if (!all && !taskVal) {
+         console.error('❌ 用法: sillyspec taskcard <change-name> --task task-01[,task-02...] | --all [--force]');
+         process.exit(1);
+@@ -4994,6 +5109,7 @@ SillySpec config — local.yaml 配置键速查
+         'scan-runs': '平台模式 scan/workflow 取证目录',
+         'artifacts': '派生产物目录（init 预建）',
+         'contract-artifacts': 'execute endpoint 契约产物（verify 阶段读取）',
++        'verify-runs': 'verify --done 门禁取证目录（reconcile-result.json / probe-consistency-result.json 明细 + gate-last-<change>.json 稳定锚点；sillyspec gate last --change <名> 直读锚点与 blocked 明细，verify-result-backup-*.md 是 --force/--refresh-probes 的自动备份）',
+         'history': '历史记录目录（init 预建）',
+         'logs': '日志目录（init 预建）',
+         'templates': '工作流模板目录（init 预建）',
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index b4d86cae..a66db9d5 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -854,3 +854,44 @@ export function writeGateResultArtifact({ specBase, stage, changeName, envelope
+     return null // fail-soft：落盘是审计附件，失败只缺附件不误门
+   }
+ }
++
++/**
++ * gate last 的读取面（2026-10-06-verify-friction-fix task-02）：writeVerifyGatePointer（gates.js
++ * quick-D）只写不读——看上轮 verify --done blocked 原因只能重跑全量 gate（超时转后台）或手翻
++ * 两层 JSON。本函数读稳定指针并带上其指向取证目录里的 reconcile/probe-consistency 明细。
++ * run 目录用指针内 latest_run_dir 的 basename 在当前根下重推导（指针里的绝对路径可能来自
++ * 另一机器/根，跨环境直接拼会静默指空）。fail-soft：指针缺失 → found:false；损坏 → unreadable。
++ * @param {{ specBase: string, changeName: string }} opts
++ * @returns {{ found: boolean, pointerPath: string, unreadable?: boolean, error?: string } &
++ *   Partial<{ blocked: boolean, note: string, latest_run_dir: string, run_dir_resolved: string,
++ *     written_at: string, reconcile: object, probeConsistency: object }>}
++ */
++export function summarizeVerifyGatePointer({ specBase, changeName }) {
++  const runsDir = join(specBase, '.runtime', 'verify-runs')
++  const pointerPath = join(runsDir, `gate-last-${changeName || 'change'}.json`)
++  if (!existsSync(pointerPath)) return { found: false, pointerPath }
++  let pointer
++  try {
++    pointer = JSON.parse(readFileSync(pointerPath, 'utf8'))
++  } catch (e) {
++    return { found: true, unreadable: true, pointerPath, error: e.message }
++  }
++  const out = { found: true, pointerPath, ...pointer }
++  const runDirName = pointer.latest_run_dir
++    ? String(pointer.latest_run_dir).split(/[\\/]/).filter(Boolean).pop()
++    : null
++  if (runDirName) {
++    const runDir = join(runsDir, runDirName)
++    out.run_dir_resolved = runDir
++    for (const [key, file] of [['reconcile', 'reconcile-result.json'], ['probeConsistency', 'probe-consistency-result.json']]) {
++      const p = join(runDir, file)
++      if (!existsSync(p)) continue
++      try {
++        out[key] = JSON.parse(readFileSync(p, 'utf8'))
++      } catch (e) {
++        out[key] = { unreadable: true, error: e.message }
++      }
++    }
++  }
++  return out
++}
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index dfc99709..82969b29 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -21,7 +21,7 @@ import { parseFileChangeList, pathMatches } from '../change-list.js'
+ import { getRule } from '../stage-contract-spec.js'
+ import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
+ import { validateScriptCommands } from './cmd-existence.js'
+-import { parseTaskFrontmatter } from '../taskcard-frontmatter.js'
++import { parseTaskFrontmatter, diagnoseTaskYamlError } from '../taskcard-frontmatter.js'
+ 
+ // ═══════════════════════════════════════════════════════════════
+ // 解析工具（从 plan.js 迁移）
+@@ -1309,8 +1309,12 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
+     if (!fmParse.ok) {
+       const isDupReported = dupKeys.length > 0 && /duplicated mapping key/i.test(fmParse.error.message)
+       if (!isDupReported) {
++        // 分诊（2026-10-06-verify-friction-fix task-03）：js-yaml 消息 + 出错行双信号给中文修复
++        // 动作——知识源是 taskcard-rules.md，此前只透传英文原文，厚流程实证连撞 6 轮门禁
++        const errLineText = (content.split('\n')[fmParse.error.line - 1] || '').replace(/\r$/, '')
++        const fmDiag = diagnoseTaskYamlError(fmParse.error.message, errLineText)
+         errors.push(
+-          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；修复卡片 frontmatter（值含方括号/全角括号时加引号或改块式列表）`
++          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；分诊：${fmDiag}`
+         )
+       }
+     }
+@@ -1472,6 +1476,45 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
+   return { ok: errors.length === 0, errors, warnings }
+ }
+ 
++/**
++ * taskcard --validate 的 CLI 入口（2026-10-06-verify-friction-fix task-03）：plan 门禁同源规则
++ * 的零成本自检面——填卡后、--done 门禁前先跑，把「门禁时一次撞一批」前移成「提交前自检」。
++ * 在 validatePlanFeasibility 之上补 target_files 严格形态检查（对账门规则，plan feasibility 不含）。
++ * 注意防环：本函数留在 plan-postcheck（其依赖链已有 taskcard-frontmatter/placeholders），
++ * taskcard.js 不得反向 import 本模块（taskcard-placeholders.js jsdoc 的 ESM 循环告诫同源）。
++ * @param {{ changeDir: string, projectRoot?: string|null }} opts
++ * @returns {{ ok: boolean, errors: string[], warnings: string[], files: number }}
++ */
++export function validateTaskcardsCli({ changeDir, projectRoot = null }) {
++  const res = validatePlanFeasibility(changeDir, projectRoot)
++  const errors = [...res.errors]
++  const warnings = [...res.warnings]
++  let files = 0
++  try {
++    const tasksDir = pJoin(changeDir, 'tasks')
++    if (existsSync(tasksDir)) {
++      const list = readdirSync(tasksDir).filter(f => /^task-\d+\.md$/.test(f)).sort()
++      files = list.length
++      for (const f of list) {
++        const content = _readFileSync(pJoin(tasksDir, f), 'utf8')
++        const fmParse = parseTaskFrontmatter(content)
++        if (!fmParse.ok) continue // 0b 已报，不双报
++        const tf = parseTargetFiles(content)
++        if (!tf.missing) {
++          const bad = tf.entries.filter(e => e.invalid)
++          if (bad.length > 0) {
++            const id = (content.match(/^id:\s*(.+)/m)?.[1] || '').trim() || f
++            errors.push(`${id}: target_files 形态非法——${bad.map(b => `${b.raw}（${b.invalid}）`).join('；')}`)
++          }
++        }
++      }
++    }
++  } catch {
++    // 目录不可读 → 可行性结果原样返回（其 errors/warnings 已如实反映）
++  }
++  return { ok: errors.length === 0, errors, warnings, files }
++}
++
+ /**
+  * Plan 产物校验：检查 plan.md 和 tasks/ 是否齐全
+  * @param {string} changeDir - 变更目录
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index d4c59bf6..6ea2a906 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -508,6 +508,11 @@ ${taskList}
+ 5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+ 6. 等待所有 batch 子代理完成
+ 7. 验证每个 task-N.md 文件已生成且非空
++8. **全部卡片填充完成后，主 agent 跑一次零成本自检（plan 门禁同源规则前置暴露，免 Step 4 门禁批量报错返工）**：
++   \`\`\`
++   sillyspec taskcard ${changeName} --validate
++   \`\`\`
++   报错即门禁报错（frontmatter YAML/占位符/必要字段/target_files 形态，YAML 错误带中文分诊动作）；修复后重跑至通过再进下一步。
+ 
+ > 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
+ 
+diff --git a/src/taskcard-frontmatter.js b/src/taskcard-frontmatter.js
+index ca66851e..c29c0550 100644
+--- a/src/taskcard-frontmatter.js
++++ b/src/taskcard-frontmatter.js
+@@ -55,3 +55,34 @@ export function parseTaskFrontmatter(content) {
+   }
+   return { ok: true, hasFrontmatter: true, fm, error: null }
+ }
++
++/**
++ * js-yaml 报错分诊（2026-10-06-verify-friction-fix task-03）：消息 + 出错行内容双信号映射中文
++ * 修复动作。背景：分诊知识长期躺在 templates/prompts/taskcard-rules.md L19-23 未接进门禁报错，
++ * 厚流程实证 agent 连撞 6 轮 YAML 门禁；且 js-yaml v4 真实消息与文档措辞有漂移（实证
++ * `title: A: B` 报 bad indentation 而非 mapping values），只匹配消息文本不可靠——先看出错行
++ * 的首字符是否保留指示符，再看行内是否「冒号+空格」，消息文本作家族归类兜底。
++ * @param {string} message js-yaml 异常 message（单行化后）
++ * @param {string} [errorLineText] 出错行原文（文件 1 基行内容；缺省只按消息分诊）
++ * @returns {string} 中文修复动作（非空）
++ */
++export function diagnoseTaskYamlError(message, errorLineText = '') {
++  const msg = String(message || '')
++  const line = String(errorLineText || '').replace(/\r$/, '')
++  // 剥列表项/缩进前缀后看首个 token 字符：反引号/@/% 是 YAML 保留指示符，js-yaml 对其报的
++  // 消息家族不稳定（实测反引号列表项报 bad indentation of a sequence entry），行内容才是可靠信号
++  const itemBody = line.replace(/^\s*(?:-\s*)?/, '')
++  if (/^[`@%]/.test(itemBody)) {
++    return '列表项/值以 YAML 保留指示符开头（反引号 `、@、%）——行首加普通文字前缀（如「执行 」）或给整行值加单引号包裹'
++  }
++  if (/quoted scalar/i.test(msg)) return '引号不成对——补齐成对引号，或改用中文引号/去掉引号'
++  if (/duplicated mapping key/i.test(msg)) return '同一字段写了两次——保留正确一处删除其余（骨架已反填的键勿重复手填）'
++  if (/expected ',' or ']'/i.test(msg)) return '方括号流序列内有裸特殊字符——改块式列表（键名换行后每项一行「  - 路径」）；空 [] 占位不受影响'
++  if (/expected ',' or '}'/i.test(msg)) return '花括号且内部含冒号或引号（JS 对象/模板字面量）——改用不含这些字符的中文描述'
++  if (/mapping values are not allowed|bad indentation/i.test(msg)) {
++    if (/: /.test(line)) return '值含「冒号+空格」（如 A: B、url: http://x）被当成嵌套映射键——去掉冒号后的空格（写 A:B）或改写为不含「: 」的中文描述'
++    return '缩进或映射结构错——块式列表项保持两空格缩进、与上级键名对齐；值含「: 」时改写描述'
++  }
++  if (/cannot start any token/i.test(msg)) return '行内含 YAML 无法起始 token 的字符（如反引号/@ 开头）——加文字前缀或用引号包裹该值'
++  return '值含特殊字符——给值加单引号、去掉「: 」冒号空格，或改块式列表（规则全表见 templates/prompts/taskcard-rules.md）'
++}
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index b28dc849..050e293b 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -24,7 +24,7 @@
+  * ②--init 同步落盘 verify-facts.json 机器底稿（探针命令行 + 首跑关键指标 + 时间戳，CLI 全权写，
+  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
+  */
+-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
++import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
+ import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
+ import { gitQuiet, unquoteGitPath } from './git-helper.js'
+ import { hasUnconfirmedPrefill } from './prefill.js'
+@@ -1081,6 +1081,10 @@ const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z
+ // 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
+ const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
+ const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
++// 声明宽收（2026-10-06-verify-friction-fix task-04）：同义零端点措辞认作 declared=0——厚流程实证
++// agent 写「无接口变更/不涉及接口」散文不被数字式声明行识别，被迫写伪表格绕过。(?<!\d) 防
++// 「10 端点」的尾 0 误命中（数字声明优先级在前，并存时同义式不参与）。
++const API_FACE_DECLARED_ZERO_RE = /无接口变更|不涉及接口(?:变更)?|零端点|无端点|(?<!\d)0\s*端点/
+ 
+ /**
+  * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
+@@ -1091,8 +1095,13 @@ const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+  */
+ export function parseDesignApiTable(designMd) {
+   const text = String(designMd || '').replace(/\r\n/g, '\n')
+-  const dm = text.match(API_FACE_DECLARED_RE)
+-  const declared = dm ? parseInt(dm[1], 10) : null
++  // 声明匹配面剥 HTML 注释（task-04 宽收配套）：design 骨架的接口段 TODO 指引自带可粘贴句式
++  // 「本变更接口面：0 端点（无接口变更）」，留在注释里被匹配会让每份新骨架自动声明零端点。
++  // 数字式声明在注释内的同理由不算（注释是写作指引不是声明正文——fail-closed 方向收紧）。
++  const textNoComments = text.replace(/<!--[\s\S]*?-->/g, '')
++  const dm = textNoComments.match(API_FACE_DECLARED_RE)
++  let declared = dm ? parseInt(dm[1], 10) : null
++  if (declared === null && API_FACE_DECLARED_ZERO_RE.test(textNoComments)) declared = 0
+   const endpoints = []
+   const sectionHint = []
+   for (const sec of splitMdSections(text)) {
+@@ -3643,3 +3652,174 @@ export function generateVerifyResultSkeleton(result) {
+   ]
+   return L.join('\n')
+ }
++
++// ── 防丢失与定向刷新（2026-10-06-verify-friction-fix task-01）──
++// postmortem（sess_4769fd5d）：--force 整体重置全骨架且无备份，38 格手填复核成果被清后只能靠
++// 对话记录重建。两件护栏：
++//   backupVerifyResult——覆盖/刷新前落时间戳备份（fail-soft：失败返回 null 不阻断，但 CLI 层
++//     会醒目提示手动备份）；
++//   refreshProbeSections——定向刷新：只动「仍含待填占位（<待填 / <!--TODO）的探针机械段」，
++//     已手填段保留；被刷新段内的表格已填行按行携载到新渲染（半填矩阵不丢已填格）。安全方向
++//     取「宁可少刷新不误删」：探针 1/3/5/6 等直接渲染结论行、无占位的段永远保留旧文（stale
++//     由 gate 的 checkProbeConsistency 独立把关，不靠 refresh 兜）。
++
++/**
++ * 覆盖/刷新 verify-result.md 前自动备份到 <runtimeRoot>/verify-runs/。
++ * @param {{ mdPath: string, runtimeRoot: string, label?: string }} opts
++ * @returns {string|null} 备份文件绝对路径；目标缺失/写失败返回 null（fail-soft，调用方提示）
++ */
++export function backupVerifyResult({ mdPath, runtimeRoot, label = 'verify-result' }) {
++  try {
++    if (!existsSync(mdPath)) return null
++    const runsDir = join(runtimeRoot, 'verify-runs')
++    mkdirSync(runsDir, { recursive: true })
++    // 毫秒精度时间戳：同秒连跑两次不互相覆盖（秒级 ts 会静默吞前一份备份）
++    const ts = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17)
++    const backupPath = join(runsDir, `${label}-backup-${ts}.md`)
++    copyFileSync(mdPath, backupPath)
++    return backupPath
++  } catch {
++    return null
++  }
++}
++
++const PROBE_SECTION_HEADING_RE = /^#### 探针 (\d+)[：:]/
++
++/**
++ * 按行切出探针段范围（#### 探针 N： 起，至下一任意级别标题或 EOF 止）。
++ * @param {string} text 全文
++ * @returns {{ lines: string[], sections: Array<{ num: number, startLine: number, endLine: number }> }}
++ */
++function splitProbeSectionRanges(text) {
++  const lines = String(text ?? '').split('\n')
++  const sections = []
++  let cur = null
++  for (let i = 0; i < lines.length; i++) {
++    const m = lines[i].match(PROBE_SECTION_HEADING_RE)
++    if (m) {
++      if (cur) sections.push({ ...cur, endLine: i })
++      cur = { num: parseInt(m[1], 10), startLine: i }
++    } else if (cur && /^#{1,3} /.test(lines[i])) {
++      sections.push({ ...cur, endLine: i })
++      cur = null
++    }
++  }
++  if (cur) sections.push({ ...cur, endLine: lines.length })
++  return { lines, sections }
++}
++
++/**
++ * 段级合并：用 fresh 渲染替换段内容，但旧段里已填的表格行（不含 <待填/<TODO 占位）按首列
++ * 键携载到新渲染的同键行上——半填矩阵的已填格不丢。旧已填行在新渲染无同键行时追加到段尾
++ * （验收项从 design 撤下等 stale 形态，宁可保留给 agent 裁决）。
++ * @param {string[]} oldLines 旧段行
++ * @param {string[]} freshLines 新渲染行
++ * @returns {{ text: string, carried: number }}
++ */
++function mergeProbeSection(oldLines, freshLines) {
++  const firstCell = (l) => {
++    const cell = l.split('|')[1]
++    return cell ? cell.trim() : null
++  }
++  const oldFilled = new Map()
++  for (const l of oldLines) {
++    if (!/^\s*\|/.test(l)) continue
++    if (/<待填|<TODO/.test(l)) continue
++    const key = firstCell(l)
++    if (!key || /^-{3,}$/.test(key)) continue // 分隔行/空键不携载
++    oldFilled.set(key, l)
++  }
++  if (oldFilled.size === 0) return { text: freshLines.join('\n'), carried: 0 }
++  let carried = 0
++  const out = []
++  const used = new Set()
++  for (const l of freshLines) {
++    if (/^\s*\|/.test(l)) {
++      const key = firstCell(l)
++      if (key && oldFilled.has(key)) {
++        out.push(oldFilled.get(key))
++        used.add(key)
++        carried++
++        continue
++      }
++    }
++    out.push(l)
++  }
++  const stale = [...oldFilled.entries()].filter(([k]) => !used.has(k))
++  if (stale.length > 0) {
++    out.push('', '<!-- refresh 携载的已填行（新渲染中无同键行，agent 裁决去留） -->')
++    for (const [, l] of stale) out.push(l)
++  }
++  return { text: out.join('\n'), carried }
++}
++
++/**
++ * 定向刷新探针预填段（--refresh-probes 的核心，纯函数）。
++ * 语义（安全方向：宁可少刷新不误删）：
++ *   - 含待填占位（<待填 或 <!--TODO）的旧探针段 → 用 fresh 同号段替换（表格已填行携载）；
++ *   - 无占位的旧探针段（已手填或纯机械结论行）→ 原样保留；
++ *   - fresh 里有而旧文没有的探针号 → 追加（有旧段时插在最后一个旧探针段后，无旧段时按
++ *     --init 补注入口径带包装标题整体注入）；
++ *   - 旧文有而 fresh 没有的探针号 → 保留不动（残段不销毁）。
++ * @param {string} existingText verify-result.md 现文
++ * @param {string} freshReportText renderVerifyProbesReport 新渲染
++ * @returns {{ text: string, replaced: number[], kept: number[], appended: number[], carriedRows: number }}
++ */
++export function refreshProbeSections(existingText, freshReportText) {
++  const { lines, sections } = splitProbeSectionRanges(existingText)
++  const fresh = splitProbeSectionRanges(freshReportText)
++  const freshByNum = new Map(fresh.sections.map(s => [s.num, s]))
++  const replaced = []
++  const kept = []
++  const appended = []
++  let carriedRows = 0
++
++  // 替换计划：旧段起始行 → { endLine, mergedText }
++  const replaceMap = new Map()
++  for (const s of sections) {
++    const freshSec = freshByNum.get(s.num)
++    if (!freshSec) continue // 残段保留
++    const oldText = lines.slice(s.startLine, s.endLine).join('\n')
++    if (/<待填|<!--TODO/.test(oldText)) {
++      const merged = mergeProbeSection(
++        lines.slice(s.startLine, s.endLine),
++        fresh.lines.slice(freshSec.startLine, freshSec.endLine),
++      )
++      carriedRows += merged.carried
++      replaceMap.set(s.startLine, { endLine: s.endLine, text: merged.text })
++      replaced.push(s.num)
++    } else {
++      kept.push(s.num)
++    }
++  }
++  for (const num of freshByNum.keys()) {
++    if (!sections.some(o => o.num === num)) appended.push(num)
++  }
++
++  // 新段插入点（原行号空间）：有旧探针段 → 最后一个旧段结束处；无 → EOF
++  const insertions = new Map()
++  if (appended.length > 0) {
++    const appendText = appended
++      .map(num => fresh.lines.slice(freshByNum.get(num).startLine, freshByNum.get(num).endLine).join('\n'))
++      .join('\n')
++    const insIdx = sections.length > 0 ? sections[sections.length - 1].endLine : lines.length
++    insertions.set(insIdx, sections.length > 0
++      ? [appendText, '']
++      : ['', '## 探针结果（CLI 机械预填，--refresh-probes 补注入） [层：可复跑探针——gate 抽查防篡改]', appendText, ''])
++  }
++
++  const out = []
++  for (let i = 0; i <= lines.length; i++) {
++    const ins = insertions.get(i)
++    if (ins) out.push(...ins)
++    if (i === lines.length) break
++    const rep = replaceMap.get(i)
++    if (rep) {
++      out.push(rep.text)
++      i = rep.endLine - 1
++      continue
++    }
++    out.push(lines[i])
++  }
++  return { text: out.join('\n'), replaced, kept, appended, carriedRows }
++}
+diff --git a/templates/prompts/taskcard-rules.md b/templates/prompts/taskcard-rules.md
+index fd2baeb6..5200f9a9 100644
+--- a/templates/prompts/taskcard-rules.md
++++ b/templates/prompts/taskcard-rules.md
+@@ -33,3 +33,4 @@ TaskCard 格式规则（必须严格遵守）：
+   - allowed_paths 非空（至少一个真实源文件路径；回归类 task 无源码改动时填被验证的关键入口文件）
+   - acceptance 与 verify 都在 frontmatter 内（漏写会被 plan-postcheck 报「缺少验收标准」/「缺少验证步骤」）
+ - **生成方式**：由主 agent 一次性 `sillyspec taskcard <change-name> --all` 预生成全部安全骨架（LF 行尾 + frontmatter 必闭合 + 九个硬校验字段齐全 + author/created_at 自动填；幂等，已存在跳过）。**子代理不要并行跑 taskcard CLI**（2026-08-25 实证撞进度库 SQLite 锁），只往骨架里填语义内容（LF 行尾 + frontmatter 必闭合 + 九个硬校验字段齐全 + author/created_at 自动填），再往骨架里填语义内容——**勿用 Write tool 整文件手写**（CRLF / 漏闭合 `---` / 漏字段的根源，postcheck 报错大多由此来）；已存在的卡命令会跳过不覆盖，局部修改用 Edit 定点改
++- **填完即自检**：`sillyspec taskcard <change-name> --validate`——plan 门禁同源规则的零成本快照（frontmatter YAML 合法性含中文分诊/必要字段/占位符/target_files 形态），报错即门禁报错，修复后重跑至通过再推进（免 Step 4 门禁批量报错返工）
+diff --git a/test/gate-last-reader.test.mjs b/test/gate-last-reader.test.mjs
+new file mode 100644
+index 00000000..32cb1e61
+--- /dev/null
++++ b/test/gate-last-reader.test.mjs
+@@ -0,0 +1,63 @@
++/**
++ * 2026-10-06-verify-friction-fix — gate last 读取面回归
++ *
++ * 厚流程 postmortem（sess_4769fd5d）实证：gate-last-<change>.json 只有 writer（quick-D）没有
++ * reader——看上轮 verify --done blocked 原因只能重跑全量 gate（实测超时转后台）或手翻两层 JSON
++ * （gate-last → reconcile-result.json）。本文件钉 summarizeVerifyGatePointer 三态：
++ *   ① 无指针 → found:false 不抛；
++ *   ② blocked 指针 + 取证目录 → 摘要含 reconcile missing/undeclared 与 probe mismatches；
++ *   ③ 指针损坏 → unreadable:true 不抛（fail-soft，与 writer 口径一致）。
++ */
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { summarizeVerifyGatePointer } from '../src/machine-interface.js';
++
++test('无指针 → found:false（不抛）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'gl-'));
++  const r = summarizeVerifyGatePointer({ specBase: join(root, 'spec'), changeName: 'demo' });
++  assert.equal(r.found, false);
++  assert.ok(r.pointerPath.includes('gate-last-demo.json'), `指针路径回显：${r.pointerPath}`);
++});
++
++test('blocked 指针 + 取证目录 → 摘要含 reconcile missing/undeclared 与 probe mismatches', () => {
++  const root = mkdtempSync(join(tmpdir(), 'gl2-'));
++  const specBase = join(root, 'spec');
++  const runsDir = join(specBase, '.runtime', 'verify-runs');
++  const runDir = join(runsDir, '20261006120000');
++  mkdirSync(runDir, { recursive: true });
++  writeFileSync(
++    join(runDir, 'reconcile-result.json'),
++    JSON.stringify({ status: 'blocked', missing: ['src/a.js'], undeclared: ['src/b.js'], matched: ['src/c.js'] }),
++    'utf8',
++  );
++  writeFileSync(
++    join(runDir, 'probe-consistency-result.json'),
++    JSON.stringify({ status: 'mismatch', severity: 'error', mismatches: [{ probe: 1, note: 'x' }] }),
++    'utf8',
++  );
++  writeFileSync(
++    join(runsDir, 'gate-last-demo.json'),
++    JSON.stringify({ change: 'demo', blocked: true, note: 'target_files ②类（missing_declared）阻断', latest_run_dir: runDir, written_at: '2026-10-06T12:00:00Z' }),
++    'utf8',
++  );
++  const r = summarizeVerifyGatePointer({ specBase, changeName: 'demo' });
++  assert.equal(r.found, true);
++  assert.equal(r.blocked, true);
++  assert.equal(r.note, 'target_files ②类（missing_declared）阻断');
++  assert.deepEqual(r.reconcile.missing, ['src/a.js']);
++  assert.deepEqual(r.reconcile.undeclared, ['src/b.js']);
++  assert.equal(r.probeConsistency.mismatches.length, 1);
++});
++
++test('指针 JSON 损坏 → unreadable 不抛', () => {
++  const root = mkdtempSync(join(tmpdir(), 'gl3-'));
++  const runsDir = join(root, 'spec', '.runtime', 'verify-runs');
++  mkdirSync(runsDir, { recursive: true });
++  writeFileSync(join(runsDir, 'gate-last-demo.json'), '{not json', 'utf8');
++  const r = summarizeVerifyGatePointer({ specBase: join(root, 'spec'), changeName: 'demo' });
++  assert.equal(r.found, true);
++  assert.equal(r.unreadable, true);
++});
+diff --git a/test/taskcard-yaml-triage-validate.test.mjs b/test/taskcard-yaml-triage-validate.test.mjs
+new file mode 100644
+index 00000000..54852ff5
+--- /dev/null
++++ b/test/taskcard-yaml-triage-validate.test.mjs
+@@ -0,0 +1,110 @@
++/**
++ * 2026-10-06-verify-friction-fix — YAML 报错分诊与 taskcard 独立校验回归
++ *
++ * 厚流程 postmortem（sess_4769fd5d）实证：任务卡 frontmatter 校验完全后置在 plan postcheck，
++ * js-yaml 英文原文直接透传，分诊知识已在 templates/prompts/taskcard-rules.md 却未接进报错，
++ * 实测连撞 6 轮门禁。本文件钉三件行为：
++ *   ① diagnoseTaskYamlError：消息 + 出错行内容双信号分诊（js-yaml v4 真实报错形态实证：
++ *      `title: A: B` 报 bad indentation 而非 mapping values——不能只匹配消息文本）；
++ *   ② validatePlanFeasibility 的非法 YAML 报错含「分诊：」动作行；
++ *   ③ validateTaskcardsCli：独立校验入口（好卡过 / 占位骨架拦 / target_files 严格形态拦）。
++ */
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { diagnoseTaskYamlError } from '../src/taskcard-frontmatter.js';
++import { validatePlanFeasibility, validateTaskcardsCli } from '../src/stages/plan-postcheck.js';
++
++const GOOD_CARD = `---
++id: task-01
++title: Add force backup
++title_zh: 强制重生成前备份
++allowed_paths:
++  - src/verify-probes.js
++goal: >
++  覆盖重生成前自动备份手填内容
++implementation:
++  - 备份函数与接线
++acceptance:
++  - 备份文件落 verify-runs 目录
++verify:
++  - node --test test/verify-probes-refresh-backup.test.mjs
++constraints:
++  - 不改变无备份时的行为语义
++---
++正文
++`;
++
++test('diagnoseTaskYamlError：冒号值 / 反引号指示符 / 引号不成对 / 流序列四类分诊', () => {
++  const colon = diagnoseTaskYamlError('bad indentation of a mapping entry (1:9)', 'title: Add backup: force path');
++  assert.ok(colon.includes('冒号'), `冒号分诊：${colon}`);
++  const bt = diagnoseTaskYamlError('bad indentation of a sequence entry (2:5)', '  - `node --test a.mjs` 执行');
++  assert.ok(bt.includes('反引号') || bt.includes('指示符'), `指示符分诊：${bt}`);
++  const q = diagnoseTaskYamlError('unexpected end of the stream within a double quoted scalar (2:1)', 'title: "未闭合');
++  assert.ok(q.includes('引号'), `引号分诊：${q}`);
++  const flow = diagnoseTaskYamlError("expected ',' or ']' (1:20)", 'allowed_paths: [src/a.js, }b]');
++  assert.ok(flow.includes('块式') || flow.includes('流序列'), `流序列分诊：${flow}`);
++});
++
++test('diagnoseTaskYamlError：未知消息给通用兜底动作（不返回空）', () => {
++  const fb = diagnoseTaskYamlError('some future js-yaml message', 'whatever: line');
++  assert.ok(typeof fb === 'string' && fb.length > 4, `兜底非空：${fb}`);
++});
++
++test('validatePlanFeasibility：非法 YAML 报错含分诊动作', () => {
++  const root = mkdtempSync(join(tmpdir(), 'tc-triage-'));
++  const changeDir = join(root, 'change');
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true });
++  writeFileSync(
++    join(changeDir, 'tasks', 'task-01.md'),
++    GOOD_CARD.replace('title: Add force backup', 'title: Add backup: force path'),
++    'utf8',
++  );
++  const r = validatePlanFeasibility(changeDir, null);
++  assert.ok(!r.ok, '坏卡应失败');
++  assert.ok(
++    r.errors.some(e => e.includes('分诊') && e.includes('冒号')),
++    `报错含分诊：${r.errors.join(' | ')}`,
++  );
++});
++
++test('validateTaskcardsCli：好卡过、target_files 非法形态拦、占位骨架拦', () => {
++  const root = mkdtempSync(join(tmpdir(), 'tc-validate-'));
++  const changeDir = join(root, 'change');
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true });
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), GOOD_CARD, 'utf8');
++  const ok = validateTaskcardsCli({ changeDir, projectRoot: null });
++  assert.equal(ok.ok, true, `好卡应过：${ok.errors.join(' | ')}`);
++  assert.equal(ok.files, 1);
++
++  // target_files 含 glob（严格形态：禁通配符）
++  writeFileSync(
++    join(changeDir, 'tasks', 'task-02.md'),
++    GOOD_CARD.replace('id: task-01', 'id: task-02').replace('constraints:', 'target_files:\n  - src/*.js\nconstraints:'),
++    'utf8',
++  );
++  const bad = validateTaskcardsCli({ changeDir, projectRoot: null });
++  assert.ok(!bad.ok, 'glob 形态应拦');
++  assert.ok(
++    bad.errors.some(e => e.includes('target_files') && e.includes('通配')),
++    `glob 拦截：${bad.errors.join(' | ')}`,
++  );
++
++  // 占位骨架（goal 未替换占位标记）
++  const root2 = mkdtempSync(join(tmpdir(), 'tc-validate2-'));
++  const changeDir2 = join(root2, 'change');
++  mkdirSync(join(changeDir2, 'tasks'), { recursive: true });
++  writeFileSync(
++    join(changeDir2, 'tasks', 'task-01.md'),
++    GOOD_CARD.replace('  覆盖重生成前自动备份手填内容', '  一句话说明这个 task'),
++    'utf8',
++  );
++  const ph = validateTaskcardsCli({ changeDir: changeDir2, projectRoot: null });
++  assert.ok(!ph.ok, '占位骨架应拦');
++  assert.ok(
++    ph.errors.some(e => e.includes('骨架') || e.includes('占位')),
++    `占位拦截：${ph.errors.join(' | ')}`,
++  );
++});
+diff --git a/test/verify-probes-refresh-backup.test.mjs b/test/verify-probes-refresh-backup.test.mjs
+new file mode 100644
+index 00000000..f1336ae1
+--- /dev/null
++++ b/test/verify-probes-refresh-backup.test.mjs
+@@ -0,0 +1,119 @@
++/**
++ * 2026-10-06-verify-friction-fix — 防丢失与定向刷新回归
++ *
++ * 厚流程 postmortem（sess_4769fd5d）实证：verify-probes --init --force 整体重置全骨架且无备份，
++ * 38 格手填复核成果被清后只能靠对话记录重建。本文件钉三件行为：
++ *   ① backupVerifyResult：覆盖/刷新前落时间戳备份（verify-runs 目录，原文不动）；
++ *   ② refreshProbeSections：定向刷新——含待填占位（<待填 / <!--TODO）的机械段被替换，
++ *      已手填段保留；表格已填行按行携载到新渲染（半填矩阵不丢已填格）；
++ *   ③ parseDesignApiTable 声明宽收：同义零端点声明（无接口变更/不涉及接口/零端点/0 端点）
++ *      认作 declared=0；数字声明优先；HTML 注释内的声明句式不自动生效（骨架指引防误判）。
++ */
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import {
++  backupVerifyResult, refreshProbeSections, parseDesignApiTable,
++} from '../src/verify-probes.js';
++import { generateDesignSkeleton } from '../src/design-facts.js';
++
++test('backupVerifyResult：落时间戳备份，原文不动，路径在 verify-runs 下', () => {
++  const root = mkdtempSync(join(tmpdir(), 'vp-backup-'));
++  const mdPath = join(root, 'verify-result.md');
++  writeFileSync(mdPath, '# 原文\n\n手填结论\n', 'utf8');
++  const runtimeRoot = join(root, '.runtime');
++  const p = backupVerifyResult({ mdPath, runtimeRoot });
++  assert.ok(p, '返回备份路径');
++  assert.ok(existsSync(p), '备份文件存在');
++  assert.ok(p.includes(join('.runtime', 'verify-runs')), `落在 verify-runs 目录：${p}`);
++  assert.equal(readFileSync(p, 'utf8'), '# 原文\n\n手填结论\n', '备份内容=覆盖前原文');
++  assert.equal(readFileSync(mdPath, 'utf8'), '# 原文\n\n手填结论\n', '原文件未被改动');
++});
++
++test('backupVerifyResult：目标缺失时返回 null 不抛（fail-soft）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'vp-backup2-'));
++  const p = backupVerifyResult({ mdPath: join(root, 'none.md'), runtimeRoot: join(root, '.runtime') });
++  assert.equal(p, null);
++});
++
++test('refreshProbeSections：含待填占位的段被刷新，已手填段保留，表格已填行携载', () => {
++  const existing = [
++    '# 验证报告',
++    '',
++    '## 结论 [层：人工判断]',
++    '',
++    '结论枚举：PASS WITH NOTES（手填——不可被刷新动）',
++    '',
++    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
++    '#### 探针 1：未实现标记扫描（design 清单文件）',
++    '- ✅ 无 TODO/FIXME 标记命中',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| 验收 | 判定 | 证据 |',
++    '|---|---|---|',
++    '| task-01 验收 A | covered | test/a.test.mjs（手填） |',
++    '| task-02 验收 B | <待填：五选一> | <待填：用例 ID> |',
++    '',
++    '## 测试结果 [层：确定性检查]',
++    '手填叙述保留',
++  ].join('\n');
++  const fresh = [
++    '#### 探针 1：未实现标记扫描（design 清单文件）',
++    '- ⚠️ `src/x.js:1` TODO 标记（新扫描结果）',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| 验收 | 判定 | 证据 |',
++    '|---|---|---|',
++    '| task-01 验收 A | <待填：五选一> | <待填：用例 ID> |',
++    '| task-02 验收 B | <待填：五选一> | <待填：用例 ID> |',
++    '| task-03 验收 C | <待填：五选一> | <待填：用例 ID> |',
++    '',
++  ].join('\n');
++  const r = refreshProbeSections(existing, fresh);
++  // 探针 1 无占位（机械结论行直接渲染）→ 保留旧段不动；探针 7 含 <待填 → 刷新但已填行携载
++  assert.ok(r.kept.includes(1), `探针 1（无占位）保留：kept=${r.kept}`);
++  assert.ok(r.replaced.includes(7), `探针 7（含待填占位）被刷新：replaced=${r.replaced}`);
++  assert.ok(r.text.includes('covered | test/a.test.mjs（手填）'), '已填表格行按行携载保留');
++  assert.ok(r.text.includes('task-03 验收 C'), '新增矩阵行进入');
++  assert.ok(r.text.includes('结论枚举：PASS WITH NOTES'), '结论槽行不动');
++  assert.ok(r.text.includes('手填叙述保留'), '非探针段正文不动');
++  assert.ok(!r.text.includes('| task-01 验收 A | <待填'), '旧已填行未被待填占位覆盖');
++  assert.ok(r.carriedRows >= 1, `携载计数 carriedRows=${r.carriedRows}`);
++});
++
++test('refreshProbeSections：全新探针段追加（有既有段时插在其后 / 无段时整体补注入）', () => {
++  const withProbe = ['# x', '', '#### 探针 3：验收标准测试覆盖', '- ℹ️ 旧注记（已含结论，无占位）', '', '## 测试结果', ''].join('\n');
++  const fresh = '#### 探针 4：决策追踪覆盖\n<!--TODO: 语义探针 -->\n\n#### 探针 5：API Contract Parity\n- backend 0 端点 / frontend 0 调用\n';
++  const r = refreshProbeSections(withProbe, fresh);
++  assert.deepEqual(r.appended, [4, 5], `两个全新探针都追加：appended=${r.appended}`);
++  assert.ok(r.text.includes('#### 探针 4'), '探针 4 注入');
++  assert.ok(r.text.indexOf('#### 探针 3') < r.text.indexOf('#### 探针 4'), '追加在既有探针段之后');
++
++  const noProbe = ['# 验证报告', '', '结论枚举：PASS', ''].join('\n');
++  const fresh3 = '#### 探针 3：验收标准测试覆盖\n- ✅ task-01: 找到 2 个测试文件\n';
++  const r2 = refreshProbeSections(noProbe, fresh3);
++  assert.deepEqual(r2.appended, [3]);
++  assert.ok(r2.text.includes('#### 探针 3：验收标准测试覆盖'), '无既有探针段时新段注入');
++  assert.ok(r2.text.includes('结论枚举：PASS'), '既有正文不动');
++});
++
++test('parseDesignApiTable 声明宽收：同义零端点 → declared=0；数字优先；注释内不认', () => {
++  const mk = (s) => `## 接口定义\n\n${s}\n`;
++  assert.equal(parseDesignApiTable(mk('本变更无接口变更，仅内部重构')).declared, 0);
++  assert.equal(parseDesignApiTable(mk('本变更不涉及接口')).declared, 0);
++  assert.equal(parseDesignApiTable(mk('零端点')).declared, 0);
++  assert.equal(parseDesignApiTable(mk('本变更接口面：0 端点')).declared, 0);
++  assert.equal(parseDesignApiTable(mk('本变更接口面：3 端点')).declared, 3, '原数字形态不回归');
++  // 数字优先于同义措辞（并存时以数字声明为准，同既有「声明与解析并存以解析为准」口径的声明侧内序）
++  assert.equal(parseDesignApiTable('本变更接口面：10 端点（另有无接口变更的既有说明）').declared, 10);
++  // HTML 注释内的声明句式不算（design 骨架指引防自动生效）
++  assert.equal(parseDesignApiTable('<!-- 本变更接口面：0 端点（无接口变更） -->\n## 接口定义\nGET /a').declared, null);
++});
++
++test('design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自动生效）', () => {
++  const sk = generateDesignSkeleton({ changeName: 'demo', decisionsText: '', author: 't', now: new Date('2026-10-06T00:00:00Z') });
++  assert.ok(sk.includes('本变更接口面：0 端点'), '骨架含可粘贴句式');
++  assert.ok(/<!--[^>]*本变更接口面：0 端点/.test(sk), '句式在 HTML 注释内（不自动声明）');
++});
+diff --git a/.sillyspec/changes/2026-10-06-verify-friction-fix/design.md b/.sillyspec/changes/2026-10-06-verify-friction-fix/design.md
+new file mode 100644
+index 00000000..c7921a7a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-friction-fix/design.md
+@@ -0,0 +1,63 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T13:38:06.171Z
++---
++# 设计记录（Design Record）— 2026-10-06-verify-friction-fix
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++四件误工/丢失缺陷各自对症，全部走「同源规则复用 + fail-soft 兜底」路线，不引入新依赖：① `--force` 数据丢失——`backupVerifyResult`（verify-probes.js）在覆盖前把现文 copyFileSync 到 `<runtimeRoot>/verify-runs/verify-result-backup-<ms 时间戳>.md`（毫秒精度防同秒互吞），CLI 打印备份路径；新增 `--refresh-probes` 定向刷新通道：`refreshProbeSections` 纯函数只替换「仍含 `<待填`/`<!--TODO` 占位」的探针机械段，段内已填表格行按首列键携载到新渲染（半填矩阵不丢已填格），已手填段原样保留并逐段报告——安全方向取「宁可少刷新不误删」，与 `--force` 互斥。② gate-last 只写不读——machine-interface.js 新增 `summarizeVerifyGatePointer` 读指针 + 按 basename 在当前根重推导 run 目录（指针内绝对路径跨机器不可信），带上 reconcile/probe-consistency 明细；CLI `gate last` 子命令打印，exit code 反映 blocked。③ YAML 门禁 6 轮试错——taskcard-frontmatter.js 新增 `diagnoseTaskYamlError`（js-yaml v4 实证：`title: A: B` 报 bad indentation 而非 mapping values，故用「消息家族 + 出错行内容」双信号分诊而非纯文本匹配），plan-postcheck 0b 门报错内联「分诊：」动作；plan-postcheck 新增 `validateTaskcardsCli` 出口（补 target_files 严格形态检查），CLI `taskcard <change> --validate` 零成本自检、失败 exit 1，plan.js 填卡指引第 8 步接线。④ 接口零端点声明不被识别——`API_FACE_DECLARED_ZERO_RE` 宽收同义式（数字声明优先、`(?<!\d)0` 防「10 端点」尾 0 误命中），声明匹配面剥 HTML 注释（骨架指引句式留在注释内不自动生效），design 骨架接口段 TODO 附可粘贴句式。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++CLI 新增/变更四个用法：`sillyspec verify-probes --change <名> --init --force`（行为变更：覆盖前自动备份并打印路径）、`sillyspec verify-probes --change <名> --refresh-probes`（新增 flag，与 --force 互斥，无骨架时 exit 2）、`sillyspec gate last --change <名>`（新增子命令，无记录/未阻断 exit 0、blocked exit 1、指针损坏打印修复指引）、`sillyspec taskcard <change> --validate`（新增 flag，失败 exit 1，与 --all/--task 互斥）。新导出函数：verify-probes.js `backupVerifyResult({mdPath, runtimeRoot, label?})`/`refreshProbeSections(existingText, freshReportText)`（返回 {text, replaced, kept, appended, carriedRows}）、machine-interface.js `summarizeVerifyGatePointer({specBase, changeName})`、taskcard-frontmatter.js `diagnoseTaskYamlError(message, errorLineText?)`、plan-postcheck.js `validateTaskcardsCli({changeDir, projectRoot?})`。行为变更两点：plan postcheck YAML 硬门报错文案从泛化一句改为含「分诊：」针对性动作（仍同 errors 通道，不新增状态）；parseDesignApiTable 声明匹配剥 HTML 注释且同义零端点声明认 declared=0（此前恒 null——收紧与放宽同在：注释内数字声明不再认，属 fail-closed 方向）。数据格式：verify-runs 目录新增 verify-result-backup-*.md 工件；runtime list KNOWN 登记新条目。无端点、无 schema、无配置键变更。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不涉及事件流。探针渲染是每次全量重算（runVerifyProbes 无状态），refresh 拿「现文 + 最新渲染」做纯函数合并——迟到到达的旧渲染只会少刷新（kept 方向），不会误删；备份是先于写发生的单线程 copyFileSync，顺序由 CLI 调用序保证。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++verify-result.md 的既有并发语义不变（单 agent 工作物，gate 侧 checkProbeConsistency 管篡改）。新增面：备份文件名含毫秒时间戳，同秒两次 --force 各自成档不互吞；两进程同时 --force 仍是后写胜（与现状同），但两份备份都在，数据不丢。gate last / taskcard --validate / diagnose 均纯只读。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++所有新写入（备份、refresh 后的 verify-result.md）都是整文件单次 writeFileSync/copyFileSync，无中间态；refresh 前置备份意味着中断在写正文前后任一点，旧内容都可从备份找回。gate last 读指针失败三态（found:false / unreadable / 正常）各自有出路文案，不产生半态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++备份与指针都落 change 级路径（verify-runs/ 下按文件名区分 change 与用途），无跨 change 共享态；summarizeVerifyGatePointer 对指针内绝对路径做 basename 重推导，跨机器/迁移根不串台。--validate 的 specBase 解析走 resolvePlatformSpecDir（平台指针 fail-closed 语义同源 taskcard 主路径）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：refresh 的「已手填」判定依赖占位标记启发（`<待填`/`<!--TODO` 缺席 = 已填）——探针 1/3/5/6 这类直接渲染结论行、永无占位的段永远判 kept，预填过期要靠 --force（有备份兜底）；反向误判（agent 在段内追加叙述但占位仍在）会连带被替换，靠前置备份 + 逐段报告暴露，属可接受残余。试过但放弃：① 按「新旧渲染逐字节 diff」判定未触碰——需保存历史渲染指纹，gate 抽查机制已占用该信号位，复杂度不成比例；② refresh 时整段保留已填行、只重排未填行——行级携载已覆盖 38 格矩阵主场景，全行保真方案把 stale 行永远带下去；③ 给 gate last 加 --full 重跑——那正是要消灭的超时路径，读盘 3ms 解决。第二个风险：声明宽收的「不涉及接口」可能在个别 design 的无关散文中出现而误判 declared=0——影响面是 API 矩阵渲染少一行（advisory 层），且数字声明优先，已在测试钉住优先序。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/verify-probes.js | backupVerifyResult/refreshProbeSections 新增；声明宽收 + 注释剥离 |
++| 修改 | src/index.js | verify-probes 备份/refresh 接线；gate last 子命令；taskcard --validate；KNOWN 登记 |
++| 修改 | src/machine-interface.js | summarizeVerifyGatePointer 新增 |
++| 修改 | src/taskcard-frontmatter.js | diagnoseTaskYamlError 新增 |
++| 修改 | src/stages/plan-postcheck.js | 0b 报错分诊接线；validateTaskcardsCli 新增 |
++| 修改 | src/stages/plan.js | 填卡指引第 8 步 --validate 自检 |
++| 修改 | src/design-facts.js | 接口段 TODO 附可粘贴声明句式 |
++| 修改 | templates/prompts/taskcard-rules.md | 填完即自检条目 |
++| 修改 | docs/sillyspec/platform-interface-map.md | 行号漂移 7 处同步（本变更插入所致） |
++| 修改 | package.json | 三个新测试收录 test:core |
++| 新增 | NEW:test/verify-probes-refresh-backup.test.mjs | 备份/refresh/声明宽收/骨架句式回归 |
++| 新增 | NEW:test/taskcard-yaml-triage-validate.test.mjs | 分诊 + validateTaskcardsCli 回归 |
++| 新增 | NEW:test/gate-last-reader.test.mjs | gate last 读取三态回归 |
+diff --git a/.sillyspec/changes/2026-10-06-verify-friction-fix/proposal.md b/.sillyspec/changes/2026-10-06-verify-friction-fix/proposal.md
+new file mode 100644
+index 00000000..8515fe3a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-friction-fix/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T13:38:06.171Z
++---
++# 提案书（Proposal）— 2026-10-06-verify-friction-fix
++
++## 动机
++
++任务原话转写：厚流程 postmortem（会话 sess_4769fd5d，变更 provider-multi-agent-kind）暴露四个 CLI 误工/数据丢失缺陷，本变更一次清偿：
++1) verify-probes --init --force 整体重置全骨架且无备份，38 格手填复核成果被清后只能靠对话记录重建（src/index.js:1347-1353，全仓无备份逻辑）；
++2) gate-last-<change>.json 只写不读（src/run/gates.js:2069-2094 纯 writer），看上轮 blocked 原因只能重跑全量 gate（实测超时转后台）或手翻两层 JSON；
++3) 任务卡 frontmatter 校验完全后置在 plan postcheck（src/stages/plan-postcheck.js:1303-1316 透传 js-yaml 英文原文），分诊知识已在 templates/prompts/taskcard-rules.md:19-23 却未接进报错，厚流程实测连撞 6 轮；
++4) design.md 接口声明行机制已存在（src/verify-probes.js:1083 API_FACE_DECLARED_RE）但措辞窄，会话中散文式零端点声明不命中被迫写伪表格绕过，design 骨架 TODO（src/design-facts.js:342-344）未给可粘贴句式。
++
++成功标准：
++- verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++- sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++- plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++- API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++2. sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++3. plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++4. API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 成功标准（可验证）
++
++1. verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++2. sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++3. plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++4. API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+diff --git a/.sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md b/.sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md
+new file mode 100644
+index 00000000..c816db3b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md
+@@ -0,0 +1,75 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T13:38:06.171Z
++---
++# 需求规格（Requirements）— 2026-10-06-verify-friction-fix
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++
++`verify-probes --init --force` 必须在覆盖写骨架前把现 verify-result.md 复制到 `<runtimeRoot>/verify-runs/verify-result-backup-<毫秒时间戳>.md` 并在输出打印备份路径；`--refresh-probes` 必须只替换仍含 `<待填`/`<!--TODO` 占位的探针机械段（段内已填表格行按首列键携载到新渲染），已手填段原样保留并在汇总行逐类报告（替换/保留/新注入/携载行数）；禁止 `--refresh-probes` 与 `--force` 并存执行（语义矛盾，exit 2）。
++
++#### 场景：手填结论在刷新后存活
++
++Given verify-result.md 已手填结论枚举与探针 7 部分矩阵格 / When `verify-probes --change <名> --refresh-probes` / Then 结论槽行与已填矩阵行逐字保留，仅含占位的机械段被替换，且刷新前存在自动备份文件。
++
++#### 场景：force 重置可找回
++
++Given verify-result.md 含手填内容 / When `verify-probes --change <名> --init --force` / Then 手填内容被重置但备份文件内容与覆盖前原文逐字一致。
++
++### FR-02: sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++
++`sillyspec gate last --change <名>` 必须直读 `.runtime/verify-runs/gate-last-<change>.json` 稳定锚点并打印 blocked 状态、note、取证目录及其内 reconcile-result.json 的 missing/undeclared 摘要与 probe-consistency-result.json 的 mismatches（不重跑任何检查）；无记录或未阻断时 exit 0，blocked 时 exit 1；`runtime list` 的 KNOWN 清单必须登记 verify-runs 条目（含 gate last 用法提示）。
++
++#### 场景：无锚点
++
++Given 该变更从未发生 verify --done 阻断落锚 / When `gate last --change <名>` / Then 打印「无 gate-last 记录」与指针路径，exit 0。
++
++#### 场景：blocked 锚点直读
++
++Given gate-last 指针 blocked=true 且指向的取证目录含 reconcile-result.json（missing 1 条）/ When `gate last --change <名>` / Then 输出含 blocked=true、该 missing 条目明细，exit 1。
++
++### FR-03: plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++
++plan postcheck 的 frontmatter 非法 YAML 报错必须内联「分诊：」前缀的中文修复动作，分诊按「出错行内容 + js-yaml 消息家族」双信号至少覆盖冒号+空格值、保留指示符开头（反引号/@/%）、引号不成对、流序列/花括号四类（js-yaml v4 真实消息与文档措辞有漂移，禁止只匹配消息文本）；`sillyspec taskcard <change> --validate` 必须用 plan 门禁同源规则（frontmatter 合法性、必要字段、占位符、target_files 严格形态）校验全部任务卡，存在 error 时 exit 1。
++
++#### 场景：冒号值卡的分诊
++
++Given 任务卡 frontmatter 含 `title: A: B` 形态（js-yaml 报 bad indentation of a mapping entry）/ When 校验 / When plan postcheck / Then 报错含「分诊：」且动作提到冒号+空格处置法。
++
++#### 场景：validate 拦严格形态
++
++Given 任务卡 target_files 含 `src/*.js` glob 条目 / When `taskcard <change> --validate` / Then 报 target_files 形态非法（通配符）且 exit 1。
++
++### FR-04: API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++
++parseDesignApiTable 必须把同义零端点声明（无接口变更/不涉及接口/零端点/无端点/0 端点）认作 declared=0；数字式声明必须优先于同义式（含 `(?<!\d)` 防护，禁止「10 端点」的尾 0 误命中零式）；声明匹配面必须剥 HTML 注释（design 骨架指引句式留在注释内不得自动生效）；design 骨架接口段 TODO 必须附含「本变更接口面：0 端点」的可粘贴句式且置于注释内。
++
++#### 场景：散文零端点声明入矩阵
++
++Given design.md 接口段写「本变更不涉及接口」/ When parseDesignApiTable / Then declared=0（API 矩阵按 agent 声明渲染零面行，而非不识别）。
++
++#### 场景：骨架句式不自动生效
++
++Given design.md 由新版骨架生成、声明句式仍在 HTML 注释内未被粘贴为正文 / When parseDesignApiTable / Then declared=null（不自动声明零端点）。
++
++### FR-05: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++新增的三个测试文件（test/verify-probes-refresh-backup.test.mjs、test/taskcard-yaml-triage-validate.test.mjs、test/gate-last-reader.test.mjs）必须收录进 package.json 的 test:core 清单；收口时 test:core 必须全绿（276+ 用例 0 失败）且 npm run lint 必须 0 报错。
++
++#### 场景：主路径
++
++Given 本变更全部实现合入 / When `npm run test:core` 与 `npm run lint` / Then 两者均 0 失败退出（E2E 冒烟另证：手填结论经 --refresh-probes 存活、--force 前自动备份、gate last 三态输出）。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：落时间戳备份，原文不动，路径在 verify-runs 下」「refreshProbeSections：含待填占位的段被刷新，已手填段保留，表格已填行携载」
++FR-02: test/gate-last-reader.test.mjs「blocked 指针 + 取证目录 → 摘要含 reconcile missing/undeclared 与 probe mismatches」「无指针 → found:false（不抛）」
++FR-03: test/taskcard-yaml-triage-validate.test.mjs「diagnoseTaskYamlError：冒号值 / 反引号指示符 / 引号不成对 / 流序列四类分诊」「validateTaskcardsCli：好卡过、target_files 非法形态拦、占位骨架拦」「validatePlanFeasibility：非法 YAML 报错含分诊动作」
++FR-04: test/verify-probes-refresh-backup.test.mjs「parseDesignApiTable 声明宽收：同义零端点 → declared=0；数字优先；注释内不认」「design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自动生效）」
++FR-05: test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：目标缺失时返回 null 不抛（fail-soft）」（连同全量 test:core 276 用例 0 失败 + lint 0 报错，见变更提交链）
+diff --git a/.sillyspec/changes/2026-10-06-verify-friction-fix/tasks.md b/.sillyspec/changes/2026-10-06-verify-friction-fix/tasks.md
+new file mode 100644
+index 00000000..2fc71375
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-verify-friction-fix/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T13:38:06.171Z
++---
++# 任务注册表（Tasks）— 2026-10-06-verify-friction-fix
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-verify-friction-fix --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-verify-friction-fix` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: verify-probes --init --force 覆盖前自动落带时间戳备份到 .sillyspec/.runtime/verify-runs/ 并打印备份路径；新增 --refresh-probes 定向刷新：只刷新未手填的探针预填段，已手填段保留并逐段报告跳过原因
++- [x] task-02: sillyspec gate last --change <名> 直接打印 gate-last 指针内容与 blocked 明细（含 reconcile missing/undeclared 摘要），exit code 反映是否存在阻断；sillyspec runtime list 的 KNOWN 清单登记 verify-runs
++- [x] task-03: plan postcheck YAML 硬门报错按 js-yaml 错误类型分诊：至少覆盖半角冒号（mapping values are not allowed）、保留指示符（cannot start any token，含反引号）、流序列（expected , or ]）三类，各给中文修复动作；新增 sillyspec taskcard validate [--all|--task task-NN] 独立校验命令（frontmatter/必要字段/占位符/target_files 形态），失败 exit 1
++- [x] task-04: API_FACE_DECLARED_RE 宽收同义声明（无接口变更/不涉及接口/零端点/无端点/0 端点），design 骨架接口段 TODO 注释附可直接粘贴的声明句式；宽收有回归测试钉住
++- [x] task-05: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-verify-friction-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-verify-friction-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：落时间戳备份，原文不动，路径在 verify-runs 下」",
+        "test/verify-probes-refresh-backup.test.mjs「refreshProbeSections：含待填占位的段被刷新，已手填段保留，表格已填行携载」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-friction-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-verify-friction-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/gate-last-reader.test.mjs「blocked 指针 + 取证目录 → 摘要含 reconcile missing/undeclared 与 probe mismatches」",
+        "test/gate-last-reader.test.mjs「无指针 → found:false（不抛）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-friction-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-verify-friction-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/taskcard-yaml-triage-validate.test.mjs「diagnoseTaskYamlError：冒号值 / 反引号指示符 / 引号不成对 / 流序列四类分诊」",
+        "test/taskcard-yaml-triage-validate.test.mjs「validatePlanFeasibility：非法 YAML 报错含分诊动作」",
+        "test/taskcard-yaml-triage-validate.test.mjs「validateTaskcardsCli：好卡过、target_files 非法形态拦、占位骨架拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-friction-fix"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-06-verify-friction-fix:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-probes-refresh-backup.test.mjs「design 骨架接口段 TODO 附可粘贴声明句式（注释形态不自动生效）」",
+        "test/verify-probes-refresh-backup.test.mjs「parseDesignApiTable 声明宽收：同义零端点 → declared=0；数字优先；注释内不认」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-friction-fix"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-06-verify-friction-fix:flow:测试绑定FR-05",
+      "tests": [
+        "test/verify-probes-refresh-backup.test.mjs「backupVerifyResult：目标缺失时返回 null 不抛（fail-soft）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-verify-friction-fix"
+    }
+  ]
+}

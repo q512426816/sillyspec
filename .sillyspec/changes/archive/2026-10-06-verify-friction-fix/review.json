@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-verify-friction-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "2faced26e0c4129d1489655c68b78a21c1cbc90a",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "备份文件名不含 change 名，design 盲维「作用域」作答与实现不符",
+      "evidence": "design 边界四答称「verify-runs/ 下按文件名区分 change 与用途」，但 backupVerifyResult 默认 label=verify-result，文件名仅 verify-result-backup-<毫秒ts>.md 无 change 标识（gate-last-<change>.json 有、备份没有）；多 change 并行时备份归属只能靠内容辨认。数据本身不串台：每次备份是整文件快照、毫秒时间戳互不覆盖，CLI 即时回显路径",
+      "location": "src/verify-probes.js:3671"
+    },
+    {
+      "severity": "P3",
+      "title": "同义零端点正则无否定前瞻，「非零端点」误命中 declared=0；design 披露的影响面偏小",
+      "evidence": "API_FACE_DECLARED_ZERO_RE 的「零端点」分支是子串匹配，实证 parseDesignApiTable('本变更接口面非零端点').declared===0；design 风险节把影响记为「API 矩阵渲染少一行（advisory 层）」，实际 critical 判级下同义误命中会把 D-005「接口面不可静默为零」硬错（stage-contract.js:1202 要求 declared===null）降为 warning（1210）。缓解在场：数字声明优先（已测 10 端点→10）、零面声明行进矩阵强制 agent 填五选一（未填仍硬错）、critical×0 端点保留 warning 复核——判可接受残余",
+      "location": "src/verify-probes.js:1087"
+    },
+    {
+      "severity": "P3",
+      "title": "refreshProbeSections 段边界不识别非探针 #### 标题，含占位段后的手写子节被连带删除",
+      "evidence": "splitProbeSectionRanges 只认「#### 探针 N：」起始与 #{1,3} 级终止，段间手写的「#### 补充说明」子节并入前段；实证：探针 7 占位未清时刷新后手写子节标题与叙述均被删（仅表格已填行携载）。属 design 声明的「段内追加叙述连带被替换」残余的外延形态（用户视角是独立小节而非段内），前置备份逐字保原文 + 汇总行逐段报告暴露，判可接受",
+      "location": "src/verify-probes.js:3693"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 标题的命令形态与实现不一致（taskcard validate 子命令 vs --validate flag）",
+      "evidence": "requirements.md FR-03 标题（tasks.md task-03 镜像同文）写「sillyspec taskcard validate [--all|--task task-NN]」，实现为 `taskcard <change> --validate` 且与 --all/--task 互斥（index.js:4499 起，并存 exit 2）；按标题字面跑 `taskcard validate` 会报变更目录不存在。FR 正文/场景/design 接口契约/usage 文案均与实现一致，仅标题措辞压缩失真",
+      "location": ".sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md:37"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-10-06T14:14:43Z"
+}
