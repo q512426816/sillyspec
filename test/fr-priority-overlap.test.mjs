@@ -91,6 +91,8 @@ test('① 重叠形态：绑定文件 ∈ deps 且字母序最末 → 必入执�
     assert.equal(result.status, 'passed', `批应 passed，reason=${result.reason}`)
     assert.ok(cmd.includes('node --test'), 'deps(auto-js) 命令在场')
     assert.ok(cmd.includes('test/zz-bound.test.mjs'), `重叠绑定文件必须在执行命令中（字母序最末，无优先权时必被弃），命令：${cmd.slice(0, 160)}…`)
+    // 标签如实（FR-02）：帽内时 N=帽值（绑定文件占帽内席位而非加帽），fr(M)=绑定面数
+    assert.ok(result.command.includes('deps(js30)+fr(1)'), `披露标签应如实反映实跑与绑定面，实际：${result.command}`)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
