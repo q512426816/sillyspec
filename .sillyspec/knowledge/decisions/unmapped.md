@@ -1844,3 +1844,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：549d1fd1ad01c69a24799dc22016c6fe1a976dac
 理由：最大风险：读命令不再刷新 stat 缓存，后续读每次都要重扫文件 stat——大仓上 status 略慢、index 文件 mtime 不再被本工具更新。可接受：正确性无差（status 结果仍如实反映工作区），性能差在毫秒级轮询场景不可观测。 放弃的方案：①逐调用点加 `--no-optional-locks` flag——放弃，只覆盖被改的调用点且维护面碎；watcher/后台全覆盖需要枚举改点，恰是要避免的形态。②在 stageArchiveSourceSideMoves 里对 lock 类错误做有界重试——放弃（本变更时点）：重试是下游补丁，治标；上游消灭锁窗口后本工具自扰的锁冲突已不存在，外部进程的偶发冲突由 archive-stage-claim 的告警面兜住。若外部冲突实测高频再议。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-flow-status-title
+锚点：未记录
+最近确认：0d7576c8d969d19ca20b4c561ad9c5e815c8f305
+理由：最大风险：JSON 消费方对新增字段的兼容性——单对象加字段对 JSON.parse 消费方是非破坏性变更，风险低；人类渲染变更可能影响既有文本匹配测试（test/flow-status-json.test.mjs ③ 人类路径回归已覆盖关键行，本变更加 fixture 断言钉住新旧两态）。放弃的方案：① 在 flow-state.yaml 里冗余存 title（写两处状态有漂移风险，DB 已是权威源）；② status 输出全量改由 DB 驱动（超出本变更范围，且 flow-state/盘面事实才是 status 主源）。

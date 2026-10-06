@@ -1,0 +1,31 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  flow start 已把变更标题（title）写入进度库（面板显示用），但 flow status 人类渲染只打变更名——恢复/查看时看不到标题语义，断点恢复缺上下文。把标题显示出来。
+
+  成功标准：
+  - DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
+  - flow status --json 输出增加 title 字段（无记录时为 null）
+  - 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
+autopilot: true
+baseline_commit: fb31d0c04a2ff8c63be0ef815d74f1e51a9308b6
+updatedAt: '2026-10-06T11:14:40.872Z'
+baseline_sha256: bf1ff8e39f4d0e49d2879352a535e3c95eb57c55dd1589b8aeb342b060ab0ee4
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(62)（48.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006111353\test-result.json｜lint: passed
+  ← npm run lint（44.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261006111353\test-result.json｜门文件 8 个
+

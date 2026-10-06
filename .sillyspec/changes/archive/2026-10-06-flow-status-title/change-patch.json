@@ -1,0 +1,56 @@
+{
+  "change": "2026-10-06-flow-status-title",
+  "baseline": "fb31d0c04a2ff8c63be0ef815d74f1e51a9308b6",
+  "head": "0d7576c8d969d19ca20b4c561ad9c5e815c8f305",
+  "files": [
+    ".sillyspec/changes/2026-10-06-flow-status-title/tasks.md",
+    "package.json",
+    "src/flow.js",
+    "src/progress.js",
+    "src/progress/change-registry.js",
+    "test/flow-status-title.test.mjs",
+    ".sillyspec/changes/2026-10-06-flow-status-title/design.md",
+    ".sillyspec/changes/2026-10-06-flow-status-title/proposal.md",
+    ".sillyspec/changes/2026-10-06-flow-status-title/requirements.md"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 308,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-06T11:14:39.358Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "progress",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "af5e06f9f2e0e6ef2b439b94b93a67f0328651f04050294eede3a60d355c5890",
+  "patchStatus": "ok"
+}

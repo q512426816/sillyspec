@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-06-flow-status-title",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-06-flow-status-title:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-status-title.test.mjs「人类输出显示标题行（登记 title 时）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-title"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-06-flow-status-title:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-status-title.test.mjs「--json 输出 title 字段（有值与 null 两态）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-title"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-06-flow-status-title:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-status-title.test.mjs「无 DB/无 title 不新增标题行且不新建 DB」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-06-flow-status-title"
+    }
+  ]
+}

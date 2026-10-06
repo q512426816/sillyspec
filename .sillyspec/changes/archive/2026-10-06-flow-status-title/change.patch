@@ -1,0 +1,397 @@
+diff --git a/package.json b/package.json
+index 043eb0d0..dcb8ed81 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/flow.js b/src/flow.js
+index 2298541c..2a84a024 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1882,6 +1882,13 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     }
+     const subDone = SUBSTEPS.filter((k) => st.substeps?.[k] === 'done')
+     const subLeft = SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done')
++    // 变更标题（2026-10-06-flow-status-title）：flow start/--title 写入进度库，status 只读回显
++    // （getChangeTitle 前置判 DB 在场——只读查询不建库；读取失败按无标题渲染，输出与现状一致）
++    let changeTitle = null
++    try {
++      const { ProgressManager } = await import('./progress.js')
++      changeTitle = new ProgressManager({ specDir: specBase }).getChangeTitle(cwd, change)
++    } catch { /* 标题 best-effort */ }
+     // 槽位快检
+     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
+     try {
+@@ -1950,7 +1957,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     } catch { /* 无 tasks.md */ }
+     if (json) {
+       console.log(JSON.stringify({
+-        change, status: 'active', phase,
++        change, status: 'active', phase, title: changeTitle,
+         designFilled, frFilled, bindingsFilled, bindingsTotal,
+         tasksChecked, tasksTotal,
+         substeps: subDone, substepsTotal: SUBSTEPS.length,
+@@ -1960,6 +1967,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     }
+     console.log([
+       `📋 ${change}`,
++      ...(changeTitle ? [`   标题：${changeTitle}`] : []),
+       `   阶段：${phase}`,
+       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+       hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,
+diff --git a/src/progress.js b/src/progress.js
+index beded080..fade7439 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -1088,6 +1088,9 @@ export class ProgressManager {
+   /** 读变更所有者会话标识；无行/未登记/无主 → null */
+   getChangeOwner(cwd, changeName) { return this._changeRegistry.getChangeOwner(cwd, changeName); }
+ 
++  /** 读变更标题（2026-10-06-flow-status-title）：纯读不抛、无 DB 不建库，缺值 → null */
++  getChangeTitle(cwd, changeName) { return this._changeRegistry.getChangeTitle(cwd, changeName); }
++
+   /** 认领所有权：首建写 own、已有值不覆盖；返回实际 owner（string|null） */
+   claimChangeOwner(cwd, changeName, session) { return this._changeRegistry.claimChangeOwner(cwd, changeName, session); }
+ 
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 3c05391f..4162431d 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -222,6 +222,26 @@ export class ChangeRegistry {
+     }
+   }
+ 
++  /**
++   * 读变更标题（2026-10-06-flow-status-title：flow status 显示面消费——flow start/--title 写入侧
++   * 的对读）。只读不抛（与 getChangeOwner 同族容错）：DB 文件不在场/行缺失/title 空/读取失败 → null。
++   * 前置 existsSync 判 DB 在场——只读查询路径不得经 _ensureDB 的建库副作用新建 sillyspec.db。
++   * @param {string} cwd
++   * @param {string} changeName
++   * @returns {string|null} 变更标题，无值返回 null
++   */
++  getChangeTitle(cwd, changeName) {
++    if (!changeName) return null;
++    try {
++      if (!existsSync(this.pm._runtimePath(cwd, 'sillyspec.db'))) return null;
++      const db = this.pm._ensureDB(cwd);
++      const row = db.getDb().prepare('SELECT title FROM changes WHERE name = ?').get(changeName);
++      return (row && typeof row.title === 'string' && row.title) || null;
++    } catch {
++      return null;
++    }
++  }
++
+   /**
+    * 认领变更所有权（2026-09-14-change-ownership-guards task-01 数据载体）：
+    * - 行不存在 → 创建并写 owner=session（首建者获得）；
+diff --git a/test/flow-status-title.test.mjs b/test/flow-status-title.test.mjs
+new file mode 100644
+index 00000000..44beb345
+--- /dev/null
++++ b/test/flow-status-title.test.mjs
+@@ -0,0 +1,136 @@
++/**
++ * 2026-10-06-flow-status-title 回归：flow status 显示变更标题（进度库 changes.title）
++ *
++ * 覆盖：
++ *   ① 人类输出：登记 title 的活跃变更渲染「   标题：<title>」行（紧随变更名行）；
++ *      行缺失/无 title 时不渲染（与现状逐字一致）
++ *   ② --json：新增 title 字段（登记值逐字 / null 两态），既有九字段原样保留
++ *   ③ 无 DB：status 只读查询不得新建 sillyspec.db；title=null 且无标题行
++ *   ④ test:core 清单驻留断言（防移出日常拦截面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { cmdFlow } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++const { ProgressManager } = await import(pathToFileURL(join(ROOT, '..', 'src', 'progress.js')).href)
++
++const CHANGE = '2026-10-06-fst'
++const TITLE = '中文标题：显示验证'
++
++/** 变更目录 fixture（flow-state + 槽位已填 → ②执行相，与 flow-status-json fixture 同构）。 */
++function fixtureChangeDir(cwd) {
++  const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
++  writeFileSync(join(dir, 'design.md'), [
++    '# D', '',
++    '<!--AGENT:槽1 -->', '答一', '',
++    '<!--AGENT:槽2 -->', '答二', '',
++    '<!--AGENT:槽3 -->', '答三', '',
++    '<!--AGENT:槽4 -->', '答四', '',
++  ].join('\n'))
++  writeFileSync(join(dir, 'requirements.md'), [
++    '# R', '',
++    '<!--AGENT:FR区 -->', '### FR-01: 某需求', '- 场景：x', '',
++    '<!--AGENT:测试绑定FR-01 -->', 'test/a.test.mjs「用例」', '',
++  ].join('\n'))
++  return dir
++}
++
++/** 登记进度库行（title 可空）——initChange 与 flow start 写入侧同 API。 */
++function seedProgressDb(cwd, title) {
++  const pm = new ProgressManager()
++  pm.initChange(cwd, CHANGE, title ? { title } : {})
++}
++
++// 收尾：先关 ProgressManager 静态池里该路径的连接（Windows 下打开的 SQLite 句柄锁文件，
++// 直接 rmSync 必 EPERM——change-delete.test.mjs 同款），删除失败仍兜底吞错（断言已过不因清理红）
++async function cleanup(cwd) {
++  try {
++    const db = ProgressManager._dbPool.get(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'))
++    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')) }
++  } catch { /* 池里无实例则无需处理 */ }
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* Windows 句柄竞态容忍 */ }
++}
++
++async function runStatus(cwd, args = []) {
++  const orig = console.log
++  let out = ''
++  console.log = (...a) => { out += a.join('\n') + '\n' }
++  try {
++    await cmdFlow(['status', '--change', CHANGE, ...args], cwd, null)
++  } finally {
++    console.log = orig
++  }
++  return out
++}
++
++test('① 人类输出：登记 title → 变更名行后渲染标题行；无 title → 不渲染（现状钉）', async () => {
++  const withTitle = mkdtempSync(join(tmpdir(), 'fst-y-'))
++  try {
++    fixtureChangeDir(withTitle)
++    seedProgressDb(withTitle, TITLE)
++    const out = await runStatus(withTitle)
++    const lines = out.split('\n')
++    const nameIdx = lines.findIndex((l) => l.includes(`📋 ${CHANGE}`))
++    assert.ok(nameIdx !== -1, `变更名行在场，实际：${out}`)
++    assert.equal(lines[nameIdx + 1], `   标题：${TITLE}`, `标题行应紧随变更名行，实际：${JSON.stringify(lines.slice(nameIdx, nameIdx + 3))}`)
++  } finally { await cleanup(withTitle) }
++
++  const noTitle = mkdtempSync(join(tmpdir(), 'fst-n-'))
++  try {
++    fixtureChangeDir(noTitle)
++    seedProgressDb(noTitle, null)
++    const out = await runStatus(noTitle)
++    assert.ok(!out.includes('标题：'), `无 title 不得渲染标题行，实际：${out}`)
++  } finally { await cleanup(noTitle) }
++})
++
++test('② --json：title 字段登记值逐字 / null 两态，既有九字段原样保留', async () => {
++  const withTitle = mkdtempSync(join(tmpdir(), 'fst-jy-'))
++  try {
++    fixtureChangeDir(withTitle)
++    seedProgressDb(withTitle, TITLE)
++    const out = await runStatus(withTitle, ['--json'])
++    const lines = out.split('\n').filter((l) => l.trim() !== '')
++    assert.equal(lines.length, 1, `stdout 应恰一行 JSON，实际：${out}`)
++    const j = JSON.parse(lines[0])
++    assert.equal(j.title, TITLE)
++    for (const f of ['change', 'phase', 'designFilled', 'frFilled', 'bindingsFilled', 'bindingsTotal', 'tasksChecked', 'tasksTotal', 'substeps']) {
++      assert.ok(f in j, `既有字段 ${f} 缺失：${JSON.stringify(j)}`)
++    }
++  } finally { await cleanup(withTitle) }
++
++  const noTitle = mkdtempSync(join(tmpdir(), 'fst-jn-'))
++  try {
++    fixtureChangeDir(noTitle)
++    seedProgressDb(noTitle, null)
++    const j = JSON.parse((await runStatus(noTitle, ['--json'])).trim())
++    assert.equal(j.title, null)
++  } finally { await cleanup(noTitle) }
++})
++
++test('③ 无 DB：不新建 sillyspec.db，无标题行，json title=null', async () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fst-nodb-'))
++  try {
++    fixtureChangeDir(cwd)
++    const human = await runStatus(cwd)
++    assert.ok(!human.includes('标题：'), `无 DB 不得渲染标题行，实际：${human}`)
++    const j = JSON.parse((await runStatus(cwd, ['--json'])).trim())
++    assert.equal(j.title, null)
++    assert.ok(!existsSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')), '只读 status 不得新建进度库文件')
++  } finally { await cleanup(cwd) }
++})
++
++test('④ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {
++  const pkg = JSON.parse(readFileSync(join(ROOT, '..', 'package.json'), 'utf8'))
++  assert.ok(
++    (pkg.scripts?.['test:core'] || '').includes('test/flow-status-title.test.mjs'),
++    'test:core 必须包含 test/flow-status-title.test.mjs',
++  )
++})
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-title/tasks.md b/.sillyspec/changes/2026-10-06-flow-status-title/tasks.md
+new file mode 100644
+index 00000000..99ca5e30
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-title/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:05:59.743Z
++---
++# 任务注册表（Tasks）— 2026-10-06-flow-status-title
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-06-flow-status-title --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-06-flow-status-title` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
++- [x] task-02: flow status --json 输出增加 title 字段（无记录时为 null）
++- [x] task-03: 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-title/design.md b/.sillyspec/changes/2026-10-06-flow-status-title/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-title/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:05:59.743Z
++---
++# 设计记录（Design Record）— 2026-10-06-flow-status-title
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++标题在 flow start 已写入进度库（ProgressManager→changes.title，面板显示用），flow status 只缺读取与渲染。方案：change-registry 新增只读访问器 `getChangeTitle(cwd, changeName)`（与 getChangeOwner 同族容错，额外做「DB 文件不在场即返回 null」前置判——只读 status 不得触发 _ensureDB 的建库副作用）；flow.js 的 status 分支经 ProgressManager（specBase 锚定，与 start/done 同构）读 title，人类渲染在「📋 <变更名>」行后追加「   标题：<title>」（仅非空时），--json 增补 title 字段（恒在场，缺省 null）。渲染与事实分离：title 读取一次，两路径共用同一变量。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新增 `ChangeRegistry.getChangeTitle(cwd, changeName) → string|null`（src/progress/change-registry.js），`ProgressManager.getChangeTitle` 为同名委托（src/progress.js）——纯读不抛，DB 缺席/行缺失/title 空 → null，且 DB 文件缺失时不创建。
++- `sillyspec flow status --change <名>`：人类输出在登记了非空 title 时多一行「   标题：<title>」（此前无此行——这是行为变化本体）；`--json` 单对象新增 `title` 字段（string|null），既有九字段不变。
++- 其余命令、DB schema、文件格式：无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用级别的影响——status 是时点快照读，title 是低频写入的元数据（start/--title 重入时写）。读到新旧值都是合法时点态，无顺序依赖。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   flow status 只读（SELECT），与并行会话经 updateChangeMeta 写 title 之间是 SQLite 单语句读写；本项目 DB 为同进程连接池单例+短进程生命周期（_ensureDB 注释），跨进程并发读不阻塞写（WAL）。读路径不写库（getChangeTitle 前置 existsSync 判 DB 在场，缺失即 null），无锁竞争面。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   status 无状态迁移；title 读取失败（库损坏/文件锁）走 try/catch 降级 null——与「无 DB」同输出形态，中断无半态。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   DB 定位走 `_runtimePath(cwd)`（=specDir/.runtime），specDir 由 resolvePlatformSpecDir 解析（平台指针/本地同源）——与 start/done 写入侧同一定位逻辑，读的是同一个库，不串台。平台多实例共享远端库不经过本路径（本地 CLI 恒读本地库）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：JSON 消费方对新增字段的兼容性——单对象加字段对 JSON.parse 消费方是非破坏性变更，风险低；人类渲染变更可能影响既有文本匹配测试（test/flow-status-json.test.mjs ③ 人类路径回归已覆盖关键行，本变更加 fixture 断言钉住新旧两态）。放弃的方案：① 在 flow-state.yaml 里冗余存 title（写两处状态有漂移风险，DB 已是权威源）；② status 输出全量改由 DB 驱动（超出本变更范围，且 flow-state/盘面事实才是 status 主源）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/progress/change-registry.js | 新增 getChangeTitle 只读访问器 |
++| 修改 | src/progress.js | 同名委托 |
++| 修改 | src/flow.js | status 分支读 title+人类渲染行+--json 字段 |
++| 新增 | test/flow-status-title.test.mjs | FR-01~03 回归（fixture 临时仓） |
++| 修改 | package.json | test:core 清单收录新测试（日常拦截面驻留） |
+
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-title/proposal.md b/.sillyspec/changes/2026-10-06-flow-status-title/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-title/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:05:59.743Z
++---
++# 提案书（Proposal）— 2026-10-06-flow-status-title
++
++## 动机
++
++任务原话转写：flow start 已把变更标题（title）写入进度库（面板显示用），但 flow status 人类渲染只打变更名——恢复/查看时看不到标题语义，断点恢复缺上下文。把标题显示出来。
++
++成功标准：
++- DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
++- flow status --json 输出增加 title 字段（无记录时为 null）
++- 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
++2. flow status --json 输出增加 title 字段（无记录时为 null）
++3. 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
++
++## 成功标准（可验证）
++
++1. DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
++2. flow status --json 输出增加 title 字段（无记录时为 null）
++3. 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
+
+diff --git a/.sillyspec/changes/2026-10-06-flow-status-title/requirements.md b/.sillyspec/changes/2026-10-06-flow-status-title/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-06-flow-status-title/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T11:05:59.743Z
++---
++# 需求规格（Requirements）— 2026-10-06-flow-status-title
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
++
++活跃变更的进度库（changes.title）登记了非空标题时，`sillyspec flow status --change <名>` 的人类可读输出必须紧随变更名行显示「   标题：<title>」一行；标题文本必须与进度库登记值逐字一致。
++
++#### 场景：主路径
++
++Given 临时仓的进度库以 initChange/updateChangeMeta 登记了变更 X 的 title="中文标题"
++When 执行 flow status --change X（不带 --json）
++Then 输出首行为「📋 X」且下一非空行为「   标题：中文标题」
++
++### FR-02: flow status --json 输出增加 title 字段（无记录时为 null）
++
++`flow status --json` 的单对象输出必须包含 `title` 字段：进度库登记了非空标题时为其逐字值，否则为 null；既有九字段必须原样保留。
++
++#### 场景：主路径
++
++Given 变更 X 活跃且 title 已登记
++When 执行 flow status --change X --json
++Then stdout 单行 JSON 解析后 title === 登记值，且既有九字段全部在场
++
++### FR-03: 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
++
++进度库文件缺失、库中无该变更行、或行上 title 为空/NULL 时：人类输出必须禁止新增任何标题行（与现状逐字一致）；--json 输出的 title 必须为 null。查询路径必须禁止为只读 status 创建新的进度库文件（无 DB 不落 DB）。
++
++#### 场景：无 DB
++
++Given 临时仓只有变更目录（无 sillyspec.db）
++When 执行 flow status --change X
++Then 输出不含「标题：」行，且磁盘上仍无 sillyspec.db 被 status 新建
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-status-title.test.mjs「人类输出显示标题行（登记 title 时）」
++FR-02: test/flow-status-title.test.mjs「--json 输出 title 字段（有值与 null 两态）」
++FR-03: test/flow-status-title.test.mjs「无 DB/无 title 不新增标题行且不新建 DB」

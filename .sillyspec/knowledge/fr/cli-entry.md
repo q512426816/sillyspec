@@ -7125,3 +7125,66 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-archive-cmd-race-and-brief
   status: active
+
+## FR-cli-entry-377 DB 登记过 title 的活跃变更，flow status 人类输出包含「标题：<title>」行
+变更：2026-10-06-flow-status-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 临时仓的进度库以 initChange/updateChangeMeta 登记了变更 X 的 title="中文标题"；When 执行 flow status --change X（不带 --json）；Then 输出首行为「📋 X」且下一非空行为「   标题：中文标题」
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-title/requirements.md#FR-01
+最近确认：0d7576c8d969d19ca20b4c561ad9c5e815c8f305
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-title:flow:测试绑定FR-01
+  tests: test/flow-status-title.test.mjs「人类输出显示标题行（登记 title 时）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-title
+  status: active
+
+## FR-cli-entry-378 flow status --json 输出增加 title 字段（无记录时为 null）
+变更：2026-10-06-flow-status-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 变更 X 活跃且 title 已登记；When 执行 flow status --change X --json；Then stdout 单行 JSON 解析后 title === 登记值，且既有九字段全部在场
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-title/requirements.md#FR-02
+最近确认：0d7576c8d969d19ca20b4c561ad9c5e815c8f305
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-title:flow:测试绑定FR-02
+  tests: test/flow-status-title.test.mjs「--json 输出 title 字段（有值与 null 两态）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-title
+  status: active
+
+## FR-cli-entry-379 无 DB 或无 title 时输出与现状一致（不新增标题行，json 里 title=null）
+变更：2026-10-06-flow-status-title
+状态：active
+摘要：无 DB
+场景正文：
+- 场景：无 DB — Given 临时仓只有变更目录（无 sillyspec.db）；When 执行 flow status --change X；Then 输出不含「标题：」行，且磁盘上仍无 sillyspec.db 被 status 新建
+全文：.sillyspec/changes/archive/2026-10-06-flow-status-title/requirements.md#FR-03
+最近确认：0d7576c8d969d19ca20b4c561ad9c5e815c8f305
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-06-flow-status-title:flow:测试绑定FR-03
+  tests: test/flow-status-title.test.mjs「无 DB/无 title 不新增标题行且不新建 DB」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-06-flow-status-title
+  status: active
