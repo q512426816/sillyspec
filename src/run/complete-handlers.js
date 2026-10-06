@@ -509,6 +509,47 @@ export function resolveArchiveDocAddPaths(cwd, specBase, tokens) {
 }
 
 /**
+ * 归档源侧移动补暂存（坑 archive-stage-claim，2026-10-06-module-map-list-leak 收口实测发现）。
+ *
+ * safeGit 契约是返回 {value, error} 不抛错——此前调用方忽略返回值无条件打成功提示，add 失败
+ * （index.lock 竞态等）时「已补暂存 N 项」假成功、暂存面实际缺项（实测声称 1 项暂存面为空，
+ * 靠核对暂存面纪律兜住后手工补提交）。本助手逐批 add 并校验 error，失败明细返回给调用方
+ * 择路打印（fail-soft：不抛错不阻断归档链，幂等 add 重跑同值）。
+ *
+ * @param {{ cwd: string, paths: string[] }} opts paths 已按本变更目录名过滤的精确 pathspec
+ * @returns {{ ok: boolean, count: number, failures: Array<{ path: string, error: string }> }}
+ */
+export function stageArchiveSourceSideMoves({ cwd, paths }) {
+  const failures = []
+  let count = 0
+  for (const batch of chunkPaths(paths)) {
+    const r = safeGit(cwd, ['add', '--', ...batch])
+    if (r && r.error) {
+      for (const p of batch) failures.push({ path: p, error: r.error })
+    } else {
+      count += batch.length
+    }
+  }
+  return { ok: failures.length === 0, count, failures }
+}
+
+/**
+ * 补暂存结果文案（成功=既有提示逐字不变；失败=⚠️ 告警含失败路径与 error 首行 + 手工兜底指引；
+ * 空清单零文案）。独立导出供测试断言两半（返回值与文案），打印决策归调用方。
+ * @param {{ ok: boolean, count: number, failures: Array<{ path: string, error: string }> }} r
+ * @returns {string}
+ */
+export function renderStageSourceSideMovesMessage(r) {
+  if (!r || r.count === 0 && (!r.failures || r.failures.length === 0)) return ''
+  if (r.ok) return `🧾 已补暂存本变更归档的源侧移动（${r.count} 项，归档成单次原子提交）`
+  const lines = [`⚠️ 补暂存本变更归档的源侧移动失败（${r.failures.length} 个路径，成功 ${r.count} 项）——暂存面可能缺项，归档提交前请核对 git diff --cached --name-only：`]
+  for (const f of r.failures.slice(0, 10)) lines.push(`   - ${f.path}（${f.error}）`)
+  if (r.failures.length > 10) lines.push(`   … 共 ${r.failures.length} 个`)
+  lines.push(`   手工兜底：git add -- <上述路径> 后重跑收口命令（归档子步幂等续）`)
+  return lines.join('\n')
+}
+
+/**
  * 归档收尾的窄化 git add（ql-20260915-001 修复④，坑 archive-git-add-sweeps-parallel-docs）。
  *
  * changes 侧：本变更归档目录精确 pathspec（closeSingleQuickLinkedChange 的 :1641 先例）——
@@ -975,11 +1016,12 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
         // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
         // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
         // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
-        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）
-        for (const batch of chunkPaths(minePaths)) {
-          safeGit(cwd, ['add', '--', ...batch])
-        }
-        console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
+        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）。
+        // 坑 archive-stage-claim（2026-10-06-module-map-list-leak 收口实测）：safeGit 不抛错返回
+        // {value,error}——此前忽略返回值无条件打成功提示，add 失败（index.lock 竞态等）时假成功。
+        const staged = stageArchiveSourceSideMoves({ cwd, paths: minePaths })
+        const msg = renderStageSourceSideMovesMessage(staged)
+        if (msg) (staged.ok ? console.log : console.warn)(msg)
       }
       if (untrackedArchiveHit) {
         // 文件级枚举补暂存（守 AGENTS.md 规则 11 不用目录级 add；实际仅窄化 add 降级时可达）
