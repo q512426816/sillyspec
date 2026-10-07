@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-thin-tasks-v3",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9ec6d3ec65b64a88e641bba8a3409ed6580f2c29",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "design「风险与死路」声明的存量收紧出口 --allow-batch-tick 实际解不了哨兵 fake 拒收",
+      "evidence": "design 称存量在途变更收紧拒收的出口是「补 token 提交或 --allow-batch-tick」；但 fake 拒收路径（flow.js 哨兵断言拒收→process.exit(1)）无任何旗标检查，allowBatchTick 唯一消费点是节奏门 resolveBatchTickAction（flow.js:1081）——存量镜像面全勾零 token 的变更带旗重跑仍被拒，声明出口误导运维（真实出口=补 token/review.json/取消勾选）。收紧本身属预期行为，此为设计承诺与代码不符的文档级缺陷",
+      "location": "src/flow.js:1032-1039（对照 design.md 风险与死路节）"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 测试绑定指向本变更内已删除的文件",
+      "evidence": "绑定行写 test/sentinel-mirror-waiver.test.mjs「镜像零证据全勾→fake（豁免移除）」，该文件在本变更被删除重建为 sentinel-unified-evidence.test.mjs（①/①-b/⑥ 覆盖同场景，sentinel-wiring A2 断言反转为拒收）——行为覆盖在场且方向正确，绑定文本在 HEAD 时点已失效",
+      "location": ".sillyspec/changes/2026-10-07-thin-tasks-v3/requirements.md:56"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04 声明的「工作队列非空门」测试覆盖不存在",
+      "evidence": "grep 全 test/ 对「工作队列不可为空/无任何 task-NN」零命中（唯一在场的是实现行 src/flow-draft.js:384）；thin-docs-v2.test.mjs ③ 只覆盖零 advisory 半边，绑定行宣称的非空拒收门无任何用例断言（行为本身在代码中在场，无旧断言会挂）",
+      "location": "src/flow-draft.js:384（对照 requirements.md:58 绑定行）"
+    },
+    {
+      "severity": "P3",
+      "title": "design 盲维一机理描述与代码不符（结论仍成立）",
+      "evidence": "design 称「检测端按 ts 排序后判最大跳」；readWatcherEvents（watcher.js:473）与 detectBatchCheckCadence 均不排序——但最坏跳是对全事件集合取最大值、maxCliBelow 抬起点计算亦与到达序无关，乱序不影响去重的结论真实成立；失真的只是排序机理描述，无代码风险面",
+      "location": "src/sentinel-assertions.js:detectBatchCheckCadence"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-05「test:core 全绿」未独立验证 + v1 draftTasks 零>行仅源码钉覆盖",
+      "evidence": "评审约束只读禁止跑测试套件，「全绿」只能记自述未核（已核：18 文件 diff 面与清单一致；删除导出 mirroredTaskIds/isMirrorUntouchedFace/readBaselineTasks* 全仓零存活引用仅注释提及；受影响测试断言与新契约方向逐一对上）。另 FR-05 称新增覆盖含 draftTasks（v1 backfill）零 `>` 行——实际只有源码文本钉（batch-tick-gate③/flow-status-heartbeat④ 的 !draftSrc.includes 断言），无渲染产物级断言",
+      "location": "test/（聚合）；test/batch-tick-gate.test.mjs:70-72"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "boundaryAdjudications": [
+    "存量在途变更升级后收紧拒收：可接受——假完成主张本就该拦，真实出口=补 token 提交/review.json/取消勾选；但 design 所列 --allow-batch-tick 出口对哨兵 fake 拒收无效（见 P2 finding）",
+    "D-007 不动（中间零必需交互）：可接受——task tick 仍自愿，事件直写是翻格后的 best-effort 副作用，未新增任何必需协议调用",
+    "去重 M 值碰撞错误剔除采样事件：可接受——剔除发生在最坏跳计算之前，错删只会漏报（放宽/fail-open）不会误拦老实逐格勾，方向与声明一致（sentinel-assertions.js detectBatchCheckCadence 结构证实）"
+  ],
+  "frVerdicts": {
+    "FR-01": "兑现——flow-draft.js 四起草函数（v2 三件+v1 backfill）`>` 指导块全删；test/flow-draft.test.mjs① 对四件产物有 !/^> /m 行为断言",
+    "FR-02": "兑现——detectFakeCheckCompletion 删 baselineTasksMd/mirrored 出参，flow.js/quick-audit.js 双收口删豁免与 mirror_autotick 代勾（零勾仅警告），governance token 代勾保留；sentinel-unified-evidence.test.mjs①①-b②③④⑥+sentinel-wiring A2 真实断言；绑定行文件名已失效（P3）",
+    "FR-03": "兑现——task-tick.js 翻格后追加 source:'task-tick' 精确事件（writeAtomicSync 之后、try/catch best-effort）；detectBatchCheckCadence 按落点 M 去重+起点抬高；task-tick.test.mjs③（jsonl 落盘行为断言+幂等零新事件）④a/b/c（去重/纯 Edit 检出/混合折算）覆盖 FR 场景原样",
+    "FR-04": "兑现——横幅 thin/adopt 两处改工作分解契约、verifyThinDocsV2 删 tasks 镜像 advisory（inTasks 行删除）、零任务行文案改工作队列、命令卡步骤②同步；thin-docs-v2③ 零 advisory 断言在场；非空门无测试（P3）",
+    "FR-05": "diff 面一致（18/18 文件与清单精确对上，git show --stat ~5..HEAD 核对）；测试更新方向逐一对上新契约；全绿未独立验证（P3）"
+  },
+  "reviewedAt": "2026-10-07T07:32:53Z"
+}

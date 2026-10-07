@@ -1,0 +1,42 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  实测对比 openspec 发现 thin 流程 tasks.md 逐格勾选失效：任务面=成功标准镜像（验收形态，只能结尾一起成真）+ 文件内指令与横幅自相矛盾 + 收口代勾兜底教会懒行为 + watcher
+  采样合并误伤老实逐格勾。按对比结论重构（用户裁定）。
+
+
+  成功标准：
+
+  - tasks.md 变为纯工作分解：机器稿与 backfill 稿均无任何 > 指导块，requirements.md/design.md 文件内 > 指导块同步移除，必要书写规则由 flow start 输出与命令卡承载（- [ ]
+  task-NN: 行形态保留）
+
+  - 哨兵镜像豁免与收口代勾（mirror_autotick）移除：已勾任务统一按提交 token/review.json 证据判（detectFakeCheckCompletion 不再吃 baselineTasksMd）；agent
+  全未勾时收口只警告不代勾
+
+  - task tick 直写精确 task-done 事件进 watcher 事件流（source 标记），detectBatchCheckCadence 对采样合并去重——CLI 快速连续 tick 不再被节奏门误判拒收
+
+  - flow start 横幅（thin/adopt 两处）任务面文案改为工作分解契约，verifyThinDocsV2 去镜像 advisory，命令卡 flow.md 同步
+
+  - 相关测试更新至新契约（sentinel-mirror-waiver/batch-tick-gate/flow-draft/thin-docs-v2/task-tick 等）且 npm run test:core 全绿
+autopilot: true
+baseline_commit: 52c13a2b9fc8324c29a9f480a6bb05ddeb95856a
+updatedAt: '2026-10-07T07:33:40.767Z'
+baseline_sha256: ee0d28a1b4eef96b4b07ab79f920657a466c3aa5c19ff0573563fed588b7b37e
+gate_summary: >-
+  test: passed ← module[]+deps(js74)+fr(73)（165.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007072806\test-result.json｜lint: passed
+  ← npm run lint（35.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007072806\test-result.json｜门文件 21 个
+

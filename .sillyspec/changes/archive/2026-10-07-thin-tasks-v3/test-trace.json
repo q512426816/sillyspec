@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-thin-tasks-v3",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-thin-tasks-v3:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-draft.test.mjs「① draftAll v2 形态——零 > 指导块断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-thin-tasks-v3"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-thin-tasks-v3:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-mirror-waiver.test.mjs「镜像零证据全勾→fake（豁免移除）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-thin-tasks-v3"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-thin-tasks-v3:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick.test.mjs「tick 事件直写+节奏门去重」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-thin-tasks-v3"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-07-thin-tasks-v3:flow:测试绑定FR-04",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「tasks 零镜像 advisory/工作队列非空门」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-thin-tasks-v3"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-07-thin-tasks-v3:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-thin-tasks-v3"
+    }
+  ]
+}

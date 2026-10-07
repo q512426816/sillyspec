@@ -7365,3 +7365,106 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-06-resume-domain-flip
   status: active
+
+## FR-cli-entry-389 工件文件零指令行
+变更：2026-10-07-thin-tasks-v3
+状态：active
+摘要：新变革起草
+场景正文：
+- 场景：新变革起草 — Given flow start --input 含 4 条成功标准；When 机器起草落盘；Then tasks.md 无任何 `>` 开头行；requirements.md/design.md 无文件级 `>` 指导块（FR 占位「（待撰写…）」槽保留——那是
+全文：.sillyspec/changes/archive/2026-10-07-thin-tasks-v3/requirements.md#FR-01
+最近确认：9ec6d3ec65b64a88e641bba8a3409ed6580f2c29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-01
+  tests: test/flow-draft.test.mjs「① draftAll v2 形态——零 > 指导块断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-thin-tasks-v3
+  status: active
+
+## FR-cli-entry-390 哨兵统一证据判据（镜像豁免与收口代勾移除）
+变更：2026-10-07-thin-tasks-v3
+状态：active
+摘要：全勾但镜像行零 token
+场景正文：
+- 场景：全勾但镜像行零 token — Given tasks.md 四行全部勾选、区间提交无任何 task-NN token、无 review.json；When flow done 哨兵判定；Then status=fake 拒收（不再因「与机器稿逐字相同」豁免）
+全文：.sillyspec/changes/archive/2026-10-07-thin-tasks-v3/requirements.md#FR-02
+最近确认：9ec6d3ec65b64a88e641bba8a3409ed6580f2c29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-02
+  tests: test/sentinel-mirror-waiver.test.mjs「镜像零证据全勾→fake（豁免移除）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-thin-tasks-v3
+  status: active
+
+## FR-cli-entry-391 task tick 精确事件与节奏门去重
+变更：2026-10-07-thin-tasks-v3
+状态：active
+摘要：一条命令内连续两 tick
+场景正文：
+- 场景：一条命令内连续两 tick — Given tasks.md 4 格未勾，agent 在 1 秒内连续执行 task tick task-01、task tick task-02（watcher 3s 轮；When flow done 节奏门读取事件流；Then CLI 两条 0→1、1→2 事件在场，采样 0→2 被去重，无单拍跳 ≥2 判定，不拒收
+全文：.sillyspec/changes/archive/2026-10-07-thin-tasks-v3/requirements.md#FR-03
+最近确认：9ec6d3ec65b64a88e641bba8a3409ed6580f2c29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-03
+  tests: test/task-tick.test.mjs「tick 事件直写+节奏门去重」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-thin-tasks-v3
+  status: active
+
+## FR-cli-entry-392 协议提示面更新为工作分解契约
+变更：2026-10-07-thin-tasks-v3
+状态：active
+摘要：收口漂移判定
+场景正文：
+- 场景：收口漂移判定 — Given agent 将 tasks.md 全部改写为实现步骤（成功标准原文不在 tasks.md 出现）；When flow done artifacts 校验；Then 无 tasks 相关 advisory（requirements FR 标题锚在场即不漂移）
+全文：.sillyspec/changes/archive/2026-10-07-thin-tasks-v3/requirements.md#FR-04
+最近确认：9ec6d3ec65b64a88e641bba8a3409ed6580f2c29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-04
+  tests: test/thin-docs-v2.test.mjs「tasks 零镜像 advisory/工作队列非空门」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-thin-tasks-v3
+  status: active
+
+## FR-cli-entry-393 测试面同步新契约
+变更：2026-10-07-thin-tasks-v3
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-07-thin-tasks-v3/requirements.md#FR-05
+最近确认：9ec6d3ec65b64a88e641bba8a3409ed6580f2c29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-05
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-thin-tasks-v3
+  status: active

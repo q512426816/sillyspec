@@ -1,0 +1,31 @@
+{"ts":1791355778307,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791355801098,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791355807757,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791355844303,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow-draft.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791355993979,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow.js.tmp.3680.700995e14316——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791356199069,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/route-hindsight.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791356251082,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/sentinel-unified-evidence.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791356300149,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/sentinel-wiring.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791357010014,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791357384068,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/tick-loop-nudge.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791357394091,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/input-teach-copyable.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791357657837,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-status-heartbeat.test.mjs、test/thin-workunits.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791357845387,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791357851068,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791357852115,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791357852115,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791357852115,"kind":"commit","stage":null,"detail":"5f86aba4","provisional":true}
+{"ts":1791357873855,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791357875306,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791357875306,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791357875306,"kind":"commit","stage":null,"detail":"de34fff8","provisional":true}
+{"ts":1791357882451,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791357882902,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791357885353,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791357885353,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1791357885353,"kind":"commit","stage":null,"detail":"369bf605","provisional":true}
+{"ts":1791357892580,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1791357895484,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791357895484,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1791357922251,"kind":"commit","stage":null,"detail":"9ec6d3ec","provisional":true}
+{"ts":1791358087432,"kind":"gate-run","stage":"verify","detail":"门实测 passed（165.0s） · 20261007072806","provisional":true}
