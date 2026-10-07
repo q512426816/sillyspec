@@ -1,0 +1,46 @@
+{
+  "change": "2026-10-07-tick-timing-first-commit",
+  "baseline": "677130f2451ee942ec8133e112c544b895016d15",
+  "head": "0a843cdd7f5c87bbb361ab4d7b59d5270752b5e6",
+  "files": [
+    ".sillyspec/changes/2026-10-07-tick-timing-first-commit/design.md",
+    ".sillyspec/changes/2026-10-07-tick-timing-first-commit/requirements.md",
+    ".sillyspec/changes/2026-10-07-tick-timing-first-commit/tasks.md",
+    "src/flow.js",
+    "test/tick-loop-nudge.test.mjs",
+    ".sillyspec/changes/2026-10-07-tick-timing-first-commit/proposal.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 122,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-07T11:44:47.490Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "91c0c0cd174cb31cf9229fd683510455e9572725dc519519e89d96f51066e002",
+  "patchStatus": "ok"
+}

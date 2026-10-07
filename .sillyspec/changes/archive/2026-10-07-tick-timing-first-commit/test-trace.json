@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-tick-timing-first-commit",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-tick-timing-first-commit:flow:测试绑定FR-01",
+      "tests": [
+        "test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉（首提锚定/一把勾 warn/untracked warn/fail-soft）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-tick-timing-first-commit"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-tick-timing-first-commit:flow:测试绑定FR-02",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-tick-timing-first-commit"
+    }
+  ]
+}

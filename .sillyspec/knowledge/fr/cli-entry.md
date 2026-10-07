@@ -7468,3 +7468,44 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-07-thin-tasks-v3
   status: active
+
+## FR-cli-entry-394 勾选时点判定按 tasks.md 首次提交锚定
+变更：2026-10-07-tick-timing-first-commit
+状态：active
+摘要：渐进提交形态不再误报；真一把勾照旧警告
+场景正文：
+- 场景：渐进提交形态不再误报 — Given agent 每任务提交时一并 pathspec 提交 tasks.md（历史 0→1→2 渐进勾选），窗口最后一笔提交触碰 tasks.md；When flow done 时点判定；Then 无「一把勾模式」警告（untracked 分支亦不触发）
+- 场景：真一把勾照旧警告 — Given tasks.md 的唯一一笔提交就是窗口最后一笔提交；When flow done 时点判定；Then 出「首次 git 提交 == 收口最后提交（一把勾模式）」警告
+全文：.sillyspec/changes/archive/2026-10-07-tick-timing-first-commit/requirements.md#FR-01
+最近确认：0a843cdd7f5c87bbb361ab4d7b59d5270752b5e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-tick-timing-first-commit:flow:测试绑定FR-01
+  tests: test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉（首提锚定/一把勾 warn/untracked warn/fail-soft）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-tick-timing-first-commit
+  status: active
+
+## FR-cli-entry-395 测试钉同步新口径
+变更：2026-10-07-tick-timing-first-commit
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-07-tick-timing-first-commit/requirements.md#FR-02
+最近确认：0a843cdd7f5c87bbb361ab4d7b59d5270752b5e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-tick-timing-first-commit:flow:测试绑定FR-02
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-tick-timing-first-commit
+  status: active

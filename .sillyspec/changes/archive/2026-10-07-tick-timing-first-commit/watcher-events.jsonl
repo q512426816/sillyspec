@@ -1,0 +1,14 @@
+{"ts":1791372729917,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791372729917,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791372729917,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791372736852,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791372743728,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791372825620,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791372828587,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791372828587,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791372828587,"kind":"commit","stage":null,"detail":"11ca4bb5","provisional":true}
+{"ts":1791373259688,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791373260552,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791373260552,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791373260552,"kind":"commit","stage":null,"detail":"0a843cdd","provisional":true}
+{"ts":1791373450688,"kind":"gate-run","stage":"verify","detail":"门实测 passed（187.5s） · 20261007114409","provisional":true}

@@ -1,0 +1,27 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-07T11:31:34.074Z
+---
+# 提案书（Proposal）— 2026-10-07-tick-timing-first-commit
+
+## 动机
+
+任务原话转写：完整实测发现「勾选时点」advisory 误报：实现取 tasks.md 的最近一次提交（git log -n 1）与 HEAD 比，只要最后一个提交碰过 tasks.md 就触发「首次提交==最后提交（一把勾模式）」——每任务随交付提交 tasks.md 的好行为（git 历史 0→1→2 渐进勾选）也被误报，训练 agent 无视该警告。
+
+成功标准：
+- 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
+- tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
+- 全量测试绿（npm test 723+）
+
+## 变更范围
+
+按成功标准机械推导，共 3 条验收面：
+1. 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
+2. tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
+3. 全量测试绿（npm test 723+）
+
+## 成功标准（可验证）
+
+1. 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
+2. tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
+3. 全量测试绿（npm test 723+）

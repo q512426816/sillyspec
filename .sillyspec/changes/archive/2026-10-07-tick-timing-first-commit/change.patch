@@ -1,0 +1,169 @@
+diff --git a/src/flow.js b/src/flow.js
+index 72bb9192..e58e336e 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1042,8 +1042,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
+           // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
+           // 这是提醒边干边勾纪律，非假勾）。tasks.md 全程 untracked（未随交付提交）时同款提醒。
++          // 首提锚定（2026-10-07-tick-timing-first-commit）：--reverse 全 history 首行=首次提交——
++          // 旧实现 -n 1 取最近一次提交，每任务随交付提交 tasks.md 的渐进形态（首提早于 HEAD）
++          // 被误报一把勾（完整实测实证：历史 0→1→2 渐进勾选仍出警告）。
+           try {
+-            const tasksIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1', '--', tasksPath])
++            const _firstRaw = gitQuiet(cwd, ['log', '--reverse', '--format=%h', '--', tasksPath])
++            const tasksIn = _firstRaw ? (String(_firstRaw).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null) : null
+             const lastIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1'])
+             if (!tasksIn) {
+               console.warn(`⚠️ 勾选时点：tasks.md 未随交付提交（untracked 直至归档）——勾选证据链靠归档兜底，git 历史不可回溯；下次收口前 tasks.md 一并显式 pathspec 提交`)
+diff --git a/test/tick-loop-nudge.test.mjs b/test/tick-loop-nudge.test.mjs
+index 3dae9269..1f168b97 100644
+--- a/test/tick-loop-nudge.test.mjs
++++ b/test/tick-loop-nudge.test.mjs
+@@ -45,6 +45,7 @@ test('④ 哨兵时点判定钉（一把勾 warn / untracked warn / fail-soft）
+   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
+   assert.ok(src.includes('一把勾模式'), '一把勾模式 warn 文案')
+   assert.ok(src.includes('tasks.md 未随交付提交'), 'untracked warn 文案')
+-  assert.ok(src.includes("['log', '--format=%h', '-n', '1', '--', tasksPath]"), 'tasks.md 首次提交锚定')
++  assert.ok(src.includes("['log', '--reverse', '--format=%h', '--', tasksPath]"), 'tasks.md 首次提交锚定（--reverse 全 history 首行——2026-10-07-tick-timing-first-commit）')
++  assert.ok(!src.includes("['log', '--format=%h', '-n', '1', '--', tasksPath]"), '旧最近一次提交锚定零残留（渐进提交形态曾误报一把勾）')
+   assert.ok(src.includes('时点判定 fail-soft'), 'fail-soft')
+ })
+diff --git a/.sillyspec/changes/2026-10-07-tick-timing-first-commit/design.md b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/design.md
+new file mode 100644
+index 00000000..98aee810
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T11:31:34.074Z
++---
++# 设计记录（Design Record）— 2026-10-07-tick-timing-first-commit
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++flow.js 哨兵「勾选时点」块一处改动：tasksIn 从 `git log -n 1 -- path`（最近一次提交）改为 `git log --reverse --format=%h -- path` 全 history 取首行（首次提交），空输出（untracked）归 null 走原分支。选 --reverse 首行而非 rev-list|tail 是单次 gitQuiet 调用内可完成、参数面与既有钉同构。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++cmdFlowDone 内部时点判定锚定变化；无函数签名/命令/文件格式变化。用户可见行为：渐进提交形态不再出「一把勾模式」advisory。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：git history 只读判定，无事件序依赖。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：只读 git 查询；收口单写者上下文。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：判定幂等（每次 done 重算），中断重入语义不变。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：git 查询按 cwd 与路径参数限定，无跨仓面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：超大 history 下 --reverse 全量列举的耗时（路径限定后通常个位数提交，实际无感）。试过放弃：`git rev-list | tail -1`——需二次管道/字符串处理且 rev-list 无 --format；放弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow.js | 勾选时点判定改首提锚定（--reverse 首行 + 空输出归 null） |
++| 修改 | test/tick-loop-nudge.test.mjs | ④ 时点钉更新为新参数形态 |
+diff --git a/.sillyspec/changes/2026-10-07-tick-timing-first-commit/requirements.md b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/requirements.md
+new file mode 100644
+index 00000000..bc198983
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/requirements.md
+@@ -0,0 +1,32 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T11:31:34.074Z
++---
++# 需求规格（Requirements）— 2026-10-07-tick-timing-first-commit
++
++## 功能需求
++
++### FR-01: 勾选时点判定按 tasks.md 首次提交锚定
++
++必须：flow done 哨兵「勾选时点」advisory 的锚定改为 tasks.md 的 **git 首次提交**（路径全 history 最早一条，`--reverse` 首行）与收口窗口最后提交（HEAD）比对：首提 != HEAD（每任务随交付提交 tasks.md 的渐进形态）禁止出「一把勾模式」警告；首提 == HEAD（真一把勾——tasks.md 全程只在最后一笔提交出现）与 untracked（从未提交）两分支文案与行为不变。
++
++#### 场景：渐进提交形态不再误报
++
++Given agent 每任务提交时一并 pathspec 提交 tasks.md（历史 0→1→2 渐进勾选），窗口最后一笔提交触碰 tasks.md
++When flow done 时点判定
++Then 无「一把勾模式」警告（untracked 分支亦不触发）
++
++#### 场景：真一把勾照旧警告
++
++Given tasks.md 的唯一一笔提交就是窗口最后一笔提交
++When flow done 时点判定
++Then 出「首次 git 提交 == 收口最后提交（一把勾模式）」警告
++
++### FR-02: 测试钉同步新口径
++
++必须：tick-loop-nudge.test.mjs 时点钉更新为首提锚定参数形态（`--reverse`），断言旧 `-n 1` 参数形态零残留；全量 npm test 绿。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉（首提锚定/一把勾 warn/untracked warn/fail-soft）」
++FR-02: test/run-tests.mjs（全量绿）
+diff --git a/.sillyspec/changes/2026-10-07-tick-timing-first-commit/tasks.md b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/tasks.md
+new file mode 100644
+index 00000000..e4539037
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/tasks.md
+@@ -0,0 +1,8 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T11:32:16.047Z
++---
++# 任务注册表（Tasks）— 2026-10-07-tick-timing-first-commit
++
++- [x] task-01: flow.js 时点判定改首提锚定 + tick-loop-nudge 钉更新，相关测试绿
++- [x] task-02: 全量 npm test 绿 + wt 床行为级复验（渐进提交形态警告消失）+ 收口
+diff --git a/.sillyspec/changes/2026-10-07-tick-timing-first-commit/proposal.md b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-tick-timing-first-commit/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T11:31:34.074Z
++---
++# 提案书（Proposal）— 2026-10-07-tick-timing-first-commit
++
++## 动机
++
++任务原话转写：完整实测发现「勾选时点」advisory 误报：实现取 tasks.md 的最近一次提交（git log -n 1）与 HEAD 比，只要最后一个提交碰过 tasks.md 就触发「首次提交==最后提交（一把勾模式）」——每任务随交付提交 tasks.md 的好行为（git 历史 0→1→2 渐进勾选）也被误报，训练 agent 无视该警告。
++
++成功标准：
++- 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
++- tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
++- 全量测试绿（npm test 723+）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
++2. tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
++3. 全量测试绿（npm test 723+）
++
++## 成功标准（可验证）
++
++1. 勾选时点判定改按 tasks.md 的 git 首次提交（rev/log 全history首条）与 HEAD 比：首提!=HEAD（渐进提交形态）不再出「一把勾模式」警告；首提==HEAD（真一把勾）与 untracked 两分支行为不变
++2. tick-loop-nudge.test.mjs 的时点钉更新为新口径（首提锚定），并补行为级断言（渐进提交不出警告语义以源码钉+wt 床实测验证）
++3. 全量测试绿（npm test 723+）
