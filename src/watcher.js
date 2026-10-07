@@ -461,6 +461,27 @@ export function watcherEventsPath(runtimeRoot, changeName) {
 }
 
 /**
+ * 工件内容变更重推判定（2026-10-07-allticked-gate-docs-resync，纯函数）：事件面出现
+ * tasks/design/requirements/proposal 四工件的内容变更（file 出现/file-update）→ true。
+ * 消费面：watcher 主循环触发 spec-sync 文档重推（防抖冷却）——修「平台停留 start 时点
+ * 初稿快照」（真实会话实证：agent 中途重写 tasks/design，spec-sync 只在协议调用时点推，
+ * 平台恒显初稿）。匹配口径与 inferEvents 的 detail 格式成对（`${key} 出现`/`${key} 内容变更`，
+ * key=工件文件名）。fail-open：解析不了的事件不触发重推。
+ */
+export function shouldResyncDocs(events) {
+  const DOC_KEYS = ['tasks.md', 'design.md', 'requirements.md', 'proposal.md'];
+  for (const e of events || []) {
+    if (!e || (e.kind !== 'file' && e.kind !== 'file-update')) continue;
+    const detail = String(e.detail || '');
+    if (DOC_KEYS.some((k) => detail.includes(k))) return true;
+  }
+  return false;
+}
+
+/** 工件重推防抖冷却（同 change 连续改写只触发一轮后台同步；bg-sync 自带单飞锁，双保险）。 */
+const DOCS_RESYNC_COOLDOWN_MS = 10_000;
+
+/**
  * 读事件流（纯读：解析+过滤，`watcher alerts`/`watcher timeline` 命令与测试消费；不写盘不推平台）。
  * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
  * path 直读形态（2026-09-28-archive-timeline-bake）：传 path 时按该路径解析（同一坏行容忍
@@ -942,6 +963,8 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
   let everHadHead = prev.head != null;
   const hardDeadline = startedAt + MAX_LIFETIME_MS;
   let lastActivityAt = Date.now();
+  // 工件重推防抖锚（2026-10-07-allticked-gate-docs-resync）
+  let lastDocsResyncAt = 0;
   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
@@ -1019,6 +1042,16 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
       console.warn(`[watcher] 事件落盘异常（best-effort 继续）: ${(e && e.message) || e}`);
     }
     await pushEventsToPlatform({ specBase, changeName, events: batch, env });
+    // 工件内容变更即时重推（2026-10-07-allticked-gate-docs-resync）：tasks/design 等被改写
+    // （含 Edit 勾格/任务面重写）→ 防抖后触发 spec-sync 文档重推——平台不再停留 start 快照。
+    // best-effort：triggerSync 内部自带未连接预判/单飞锁/后台化，此处只挡异常不挡语义。
+    if (shouldResyncDocs(events) && Date.now() - lastDocsResyncAt > DOCS_RESYNC_COOLDOWN_MS) {
+      lastDocsResyncAt = Date.now();
+      try {
+        const { triggerSync } = await import('./run/shared.js');
+        await triggerSync(cwd, changeName, { specRoot: specBase });
+      } catch { /* 重推 best-effort：绝不影响事件流主循环 */ }
+    }
     if (events.some((e) => e.kind === 'archived')) {
       console.log(`[watcher] archived 终态，监听结束: ${changeName}`);
       break;
@@ -1031,4 +1064,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 }
 
 export { isPidAlive };
-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toPlatformChangeEvents, pushEventsToPlatform };
+export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toPlatformChangeEvents, pushEventsToPlatform, shouldResyncDocs };

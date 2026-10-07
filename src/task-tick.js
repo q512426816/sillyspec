@@ -104,6 +104,12 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
         detail: `checked ${from}→${r.checked}`, provisional: true, source: 'task-tick',
       }) + '\n', 'utf8')
     } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
+    // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
+    // spec-sync，平台不再停留 start 时点快照（真实会话实证：改写后平台恒显初稿）。best-effort。
+    try {
+      const { triggerSync } = await import('./run/shared.js')
+      await triggerSync(cwd, changeName, { specRoot: specBase })
+    } catch { /* 重推 best-effort：失败不影响翻格主流程 */ }
   }
   const nextTip = r.next
     ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
