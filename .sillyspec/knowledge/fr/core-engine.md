@@ -2042,3 +2042,86 @@
   confirmed_at: null
   source_change: 2026-10-06-status-multi-active-list
   status: active
+
+## FR-core-engine-130 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
+变更：2026-10-07-scope-audit-thin-patch-replay
+状态：active
+摘要：归档 thin 变更查询；patch 采集失败留痕形态
+全文：.sillyspec/changes/archive/2026-10-07-scope-audit-thin-patch-replay/requirements.md#FR-01
+最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-01
+  tests: test/scope-audit-thin-patch-replay.test.mjs「patchStatus=failed：文件集回放 + 行数 null 档不出伪数据」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-scope-audit-thin-patch-replay
+  status: active
+
+## FR-core-engine-131 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
+变更：2026-10-07-scope-audit-thin-patch-replay
+状态：active
+摘要：冻结后主仓演进；--file 冻结切片与篡改检测
+全文：.sillyspec/changes/archive/2026-10-07-scope-audit-thin-patch-replay/requirements.md#FR-02
+最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-02
+  tests: test/scope-audit-thin-patch-replay.test.mjs「冻结语义：后续演进不进表 + baseAnchor=meta.baseline + --file 冻结切片与 sha256 篡改拒绝」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-scope-audit-thin-patch-replay
+  status: active
+
+## FR-core-engine-132 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
+变更：2026-10-07-scope-audit-thin-patch-replay
+状态：active
+摘要：快照优先级；双缺兜底不回归
+全文：.sillyspec/changes/archive/2026-10-07-scope-audit-thin-patch-replay/requirements.md#FR-03
+最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-03
+  tests: test/scope-audit-thin-patch-replay.test.mjs「优先级：快照在时快照优先；双缺走开放区间兜底（既有断言口径）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-scope-audit-thin-patch-replay
+  status: active
+
+## FR-core-engine-133 multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
+变更：2026-10-07-scope-audit-thin-patch-replay
+状态：active
+摘要：旧归档立即受益
+全文：.sillyspec/changes/archive/2026-10-07-scope-audit-thin-patch-replay/requirements.md#FR-04
+最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
+
+## FR-core-engine-134 全量测试绿（含新增回放夹具测试）
+变更：2026-10-07-scope-audit-thin-patch-replay
+状态：active
+摘要：全量门
+全文：.sillyspec/changes/archive/2026-10-07-scope-audit-thin-patch-replay/requirements.md#FR-05
+最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-05
+  tests: test/run-tests.mjs「全量套件（723 既有 + 新增）跑绿，既有断言零改动」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-scope-audit-thin-patch-replay
+  status: active

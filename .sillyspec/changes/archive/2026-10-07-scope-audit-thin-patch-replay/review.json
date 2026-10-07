@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-scope-audit-thin-patch-replay",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b85f80489c9572069baca866c4e5eb2ab62b8965",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "设计盲维「并发」的写侧依据不实：change-patch.json 落盘用 node:fs writeFileSync 直写，非 fs-atomic",
+      "evidence": "design 盲维2 称「写侧 writeFileSync 原子性由 fs-atomic 保证」，但 src/flow.js:28 从 node:fs 导入 writeFileSync、:33 另行导入 writeAtomicSync，:1468 写 change-patch.json 用的是前者（fs-atomic 仅导出 writeAtomicSync/renameSyncRetry 且该行未用）——并发读窗口理论上可读到半份 json；读侧 readChangePatchMeta catch→null→回退开放区间兜底（fail-soft，不出伪数据），后果有界为瞬时回放缺失，但作答依据错误。",
+      "location": "src/flow.js:1468"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 三态中「计划外（unplanned）」分支无测试断言覆盖",
+      "evidence": "新夹具冻结面 ownFiles（a.js/b.js/design.md）全部落在 design 清单内或被 filterDeliverableFiles 滤除，scope-audit.js:1130-1134 的 unplanned verdict 分支在 test/scope-audit-thin-patch-replay.test.mjs 四用例中零断言（实现存在且与主链路 :1297 同款，仅覆盖缺口）。",
+      "location": "test/scope-audit-thin-patch-replay.test.mjs:274"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-07T15:17:45Z"
+}

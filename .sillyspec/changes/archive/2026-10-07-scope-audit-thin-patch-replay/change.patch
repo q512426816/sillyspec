@@ -1,0 +1,623 @@
+diff --git a/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/flow-state.yaml b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/flow-state.yaml
+new file mode 100644
+index 00000000..7ec12bbf
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/flow-state.yaml
+@@ -0,0 +1,30 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  修复工具缺陷（记录：multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md）：thin 轻量变更 flow done 只冻结
++  change-patch.json/change.patch、不落 execute --done 链的 scope-audit.json 快照；归档 thin 变更查范围对账时快照缺失 → 实时开放区间兜底 → 无 baseAnchor
++  → HEAD 未提交窗口（干净树=空）→ design 清单全行恒「计划未动 +0/−0」，纯失真（实测样例 multi-agent-platform 2026-10-07-taskboard-tasks-md：7 文件
++  +328/−34 显示成 3 行计划未动）。修法取读侧兼容：settled 分支快照缺失时回读 change-patch.json + change.patch 当冻结对账记录，旧归档立即受益。
++
++
++  成功标准：
++
++  - 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch
++  按段统计（binary/new/deleted 三档对齐既有口径）
++
++  - 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++
++  - 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++
++  - multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++
++  - 全量测试绿（含新增回放夹具测试）
++autopilot: true
++baseline_commit: 2de19fbc0f14f5d6275fadd0ce4b039364d36a68
++updatedAt: '2026-10-07T14:52:19.187Z'
++baseline_sha256: 9424857ab1e0337cafc95aaa5620f586e1d28c7d3674561946f7021f0441c81c
++
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 3228ea67..ac9e85fe 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -41,3 +41,4 @@
+ - ql-20260920-004 | ceremony 项目化定价（每个项目体系不一样，S0~S3 判定阈值可配）：computeCeremonyTier 加 config 参（纯函数零 IO 保持——default_tier/span 两阈值/friction 起爆线/risk_tier_map 部分覆写五键，normalizeTierConfig 非法逐项回退内置默认且 reasons 留痕；「只升不降」纪律无配置出口防裸奔）+src/ceremony-config.js readCeremonyPricingConfig（local.yaml ceremony: 段 pricing 五键，best-effort，force_tier/shadow 归 prompt 面 readCeremonyLocalConfig 语义不混载）+review-tier/verify-postcheck 双跑两侧同源注入（配置不一致会造假 mismatch）+config-schema 五键登记；test/ceremony-pricing-config.test.mjs 18/18（五键生效/非法回退/纪律不受配置影响/读取器四态/零配置零回归）；既有 ceremony-tier 111/111 零回归
+ - ql-20260920-010-7a19 | verify-postcheck 伪影分诊 classifyTestFailureArtifact（四类沙箱伪影签名纯函数分类，消费侧 run/verify-quality-scan 编排主树对照）+ test_strategy 缺省收窄（modules 已配未显式 → 缺省 module，未配仓零打扰）；test/verify-artifact-triage.test.mjs 13/13
+ - 2026-09-21-r5-efficiency-batch1 | 新增 assembleExecuteTaskMaterials（execute 任务材料包两段式装配：稳定段先行/24KB 截尾保锚/只摘不译/无映射零输出）——B-④，review-material-pack.js 纯增量导出，test/execute-materials.test.mjs 锁定
++| 2026-10-07 | 2026-10-07-scope-audit-thin-patch-replay | scope-audit settled 分支 thin 冻结记录回放（缺陷 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md 读侧清偿）：execute 快照缺失时回读 change-patch.json + change.patch 出真实三态——文件集 meta.files 过 filterDeliverableFiles、行数自冻结 patch 按段统计（parseFrozenPatchStats，new/deleted/binary 三档对齐 numstat 口径）、基点 meta.baseline；--file 经 frozenPatchPath 自动走冻结切片 + A-F01 sha256 篡改校验；回退链 execute 快照 > change-patch 回放 > 实时开放区间不变。归档 thin 变更不再恒「计划未动 +0/−0」失真（multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测三计划内文件全 ✓ +218/−34）；test/scope-audit-thin-patch-replay.test.mjs 4 夹具，scope-audit 既有 58 断言零改动。 |
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 42d40c68..e4b2a6b3 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -267,6 +267,72 @@ function readFrozenPatch(changeDir) {
+   } catch { return null }
+ }
+ 
++/**
++ * flow done 冻结记录读取（2026-10-07-scope-audit-thin-patch-replay）：change-patch.json 是
++ * thin 轻量变更 flow done 时点冻结的归属面（files/baseline/head/totals/patchSha256）——thin
++ * 通道不落 execute --done 快照，本件即其对账级冻结记录。缺 json / files 非数组 → null
++ * （调用方回退实时开放区间，不出伪数据）。
++ */
++function readChangePatchMeta(changeDir) {
++  if (!changeDir) return null
++  try {
++    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++    if (meta && typeof meta === 'object' && Array.isArray(meta.files)) return meta
++  } catch { /* 缺失/损坏 → null */ }
++  return null
++}
++
++/**
++ * 冻结 patch 正文读取（thin 回放数据源）：变更目录 change.patch；缺失/空 → null。
++ * @returns {string|null}
++ */
++function readChangePatchText(changeDir) {
++  if (!changeDir) return null
++  try {
++    const text = readFileSync(join(changeDir, 'change.patch'), 'utf8')
++    return text && text.trim() ? text : null
++  } catch { return null }
++}
++
++/**
++ * 冻结 patch 按段行数统计（thin 回放数据源）：`diff --git a/<old> b/<new>` 段头切分
++ * （正则与 filterPatchForFiles/slicePatchForFile 同款，取 b/ 新路径），段内 +/− 前缀行计数
++ * （+++ / --- 文件头与 \ 续行标记不计）；`new file mode` → new、`deleted file mode` →
++ * deleted、Binary/GIT binary patch → null 档——三档与 collectNumstatByPath 口径对齐。
++ * 自包含解析（不采 git numstat）：冻结面含 done 时点工作树件（治理工件/untracked），且不
++ * 依赖 git 对象库存活。
++ * @returns {Map<string, {additions: number|null, deletions: number|null, kind: 'binary'|'new'|'modified'|'deleted'}>}
++ */
++function parseFrozenPatchStats(patchText) {
++  const stats = new Map()
++  if (!patchText) return stats
++  let cur = null
++  const flush = () => {
++    if (cur && cur.path) {
++      stats.set(cur.path, cur.binary
++        ? { additions: null, deletions: null, kind: 'binary' }
++        : { additions: cur.additions, deletions: cur.deletions, kind: cur.kind })
++    }
++    cur = null
++  }
++  for (const line of String(patchText).split('\n')) {
++    if (line.startsWith('diff --git ')) {
++      flush()
++      const m = line.match(/^diff --git a\/(.+) b\/(.+)$/)
++      cur = m ? { path: toPosix(m[2]), additions: 0, deletions: 0, kind: 'modified', binary: false } : null
++      continue
++    }
++    if (!cur) continue
++    if (line.startsWith('new file mode')) cur.kind = 'new'
++    else if (line.startsWith('deleted file mode')) cur.kind = 'deleted'
++    else if (line.startsWith('Binary') || line.startsWith('GIT binary patch')) cur.binary = true
++    else if (line.startsWith('+') && !line.startsWith('+++')) cur.additions++
++    else if (line.startsWith('-') && !line.startsWith('---')) cur.deletions++
++  }
++  flush()
++  return stats
++}
++
+ /**
+  * patch 段过滤（quick-90015473）：全量 diff 按 `diff --git a/<old> b/<new>` 段头切分，
+  * 只保留 files 集合内的段——json rows（退栈归属集）与 patch 同口径，多会话仓不把并行
+@@ -1036,6 +1102,63 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+         note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
+       }
+     }
++    // —— thin flow done 冻结记录回放（2026-10-07-scope-audit-thin-patch-replay）：thin 轻量变更
++    // flow done 只冻 change-patch.json + change.patch、不落 execute 快照——快照缺失时回读冻结件
++    // 出真实三态（存量归档立即受益），不再落「实时开放区间 → 干净树空 → 清单全行计划未动
++    // +0/−0」的失真链。文件集 = meta.files 过 filterDeliverableFiles（与 actual 侧同口径，
++    // 治理工件不进表）；行数自冻结 patch 按段统计（parseFrozenPatchStats，自包含）；三态按
++    // design 清单 pathMatches 判定（与主链路三态判定同款）；跨仓条目维持 v1 ⊘ untouched 形态
++    // （thin 冻结件只有主仓 patch，不假装对账过）。
++    const doneMeta = readChangePatchMeta(changeDirInfo.dir)
++    if (doneMeta && doneMeta.files.length > 0) {
++      const frozenFiles = filterDeliverableFiles([...new Set(doneMeta.files.map(toPosix).filter(Boolean))]).sort()
++      const patchOk = doneMeta.patchStatus === 'ok'
++      const segStats = patchOk ? parseFrozenPatchStats(readChangePatchText(changeDirInfo.dir)) : new Map()
++      const doneRows = []
++      const doneMatched = new Set()
++      for (const f of frozenFiles) {
++        // 段缺失（冻结面零 diff 文件）/ patch 采集失败 → 行数 null 档（—），不出伪数据
++        const st = segStats.get(f) || { additions: null, deletions: null, kind: 'modified' }
++        const row = { path: f, additions: st.additions, deletions: st.deletions, kind: st.kind }
++        if (!planDegraded) {
++          const entry = plannedEntries.find(e => pathMatches(f, e.path))
++          if (entry) {
++            doneMatched.add(entry.path)
++            row.planned = entry.operation || null
++            row.verdict = 'planned'
++          } else {
++            row.planned = null
++            row.verdict = 'unplanned'
++            const facility = classifyToolScaffold(f)
++            if (facility) row.facility = facility
++          }
++        }
++        doneRows.push(row)
++      }
++      // 计划未动补行：清单文件不在冻结面 → untouched 0/0（与主链路补行同款语义）
++      for (const e of plannedEntries) {
++        if (doneMatched.has(e.path)) continue
++        doneRows.push(e.repo
++          ? { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: e.repo }
++          : { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' })
++      }
++      const doneSettleLabel = changeDirInfo.archived ? '已归档' : 'execute 已收尾（分支已清理，待 verify/archive）'
++      const doneSavedAt = doneMeta.savedAt ? '，' + String(doneMeta.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : ''
++      return {
++        ...base,
++        ok: true,
++        degradedReason: planDegraded,
++        baseAnchor: typeof doneMeta.baseline === 'string' && /^[0-9a-f]{7,40}$/.test(doneMeta.baseline) ? doneMeta.baseline : null,
++        totals: { files: doneRows.length, ...sumTotals(doneRows) },
++        rows: doneRows,
++        excluded: { foreignDeclared: [] },
++        patchSha256: doneMeta.patchSha256 || null,
++        patchStatus: doneMeta.patchStatus || null,
++        // --file 冻结切片消费（getFileDiff 唯一读取方）：指向 change.patch，sha256 校验 A-F01 同款
++        ...(patchOk ? { frozenPatchPath: join(changeDirInfo.dir, 'change.patch') } : {}),
++        note: `${doneSettleLabel}——flow done 时点冻结 patch 记录（change-patch.json + change.patch${doneSavedAt}）：文件集与行数封闭在 done 时点（thin 轻量变更无 execute 快照），主仓后续改动不反映到本表${patchOk ? '' : '；冻结 patch 当时采集失败——行数列不可得（—），文件集仍为 done 时点冻结面'}；需要看当前工作区实时状态请跑 git status`,
++      }
++    }
+     // 快照缺失 → 实时开放区间兜底（下方主链路），note 追加漂移警告
+     noSnapshotDrift = true
+   }
+@@ -1047,7 +1170,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+   // 已收尾但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义——快照机制上线
+   // （2026-09-10）前收尾的旧变更冻结记录无法重建，如实告知替代渠道。
+   if (noSnapshotDrift) {
+-    notes.push('快照缺失（变更已收尾——已归档或 execute 分支已清理；快照机制上线前收尾的变更无法重建冻结记录）——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；记录态参考 verify-result.md / git log')
++    notes.push('快照缺失（变更已收尾——已归档或 execute 分支已清理；快照与 flow done 冻结 patch 记录（change-patch.json）均无，无法重建冻结记录——快照机制与冻结件留档上线前收尾的变更即此形态）——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；记录态参考 verify-result.md / git log')
+   }
+ 
+   // —— 行数采集根与基点 ——
+diff --git a/test/scope-audit-thin-patch-replay.test.mjs b/test/scope-audit-thin-patch-replay.test.mjs
+new file mode 100644
+index 00000000..8a6f9cda
+--- /dev/null
++++ b/test/scope-audit-thin-patch-replay.test.mjs
+@@ -0,0 +1,215 @@
++/**
++ * thin flow done 冻结记录回放夹具（变更 2026-10-07-scope-audit-thin-patch-replay）。
++ *
++ * 缺陷背景（multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md）：
++ * thin 轻量变更 flow done 只冻 change-patch.json + change.patch、不落 execute --done 快照；
++ * 归档后 scope-audit 快照缺失 → 实时开放区间兜底 → 无 baseAnchor → HEAD 未提交窗口
++ * （干净树=空）→ design 清单全行恒「计划未动 +0/−0」失真。
++ *
++ * 覆盖（requirements FR-01~03）：
++ *   1. FR-01 主路径：快照缺失 + change-patch.json 在 → 三态真实表（计划内带冻结行数）
++ *   2. FR-01 failed 留痕：patchStatus=failed → 文件集回放 + 行数 null 档不出伪数据
++ *   3. FR-02 冻结语义：后续演进不进表 + --file 冻结切片 + sha256 篡改拒绝
++ *   4. FR-03 优先级：快照在时快照优先；快照与 change-patch 双缺走开放区间兜底（既有口径）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { createHash } from 'node:crypto'
++import { computeChangeScopeAudit, renderScopeAuditTable, getFileDiff, buildFrozenPatch } from '../src/scope-audit.js'
++
++/** git 调用：数组参数不经 shell（Windows 路径安全），stdio pipe 吞输出 */
++function sh(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], {
++    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
++  })
++}
++
++function cleanup(d) {
++  try { rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* Windows 句柄延迟，重试后仍失败留给 OS Temp 回收 */ }
++}
++
++/** 临时 git 仓：main 分支 + 身份配置 + gitignore .sillyspec/（夹具内 spec 产物不进窗口） */
++function makeRepo(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  sh(d, ['init', '-q', '-b', 'main'])
++  sh(d, ['config', 'user.email', 't@t.com'])
++  sh(d, ['config', 'user.name', 't'])
++  writeFileSync(join(d, '.gitignore'), '.sillyspec/\n')
++  return d
++}
++
++function head(d) { return sh(d, ['rev-parse', 'HEAD']).trim() }
++
++const DESIGN_TABLE = '| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | 计划内实改 |\n| 新增 | src/b.js | 计划内新增 |\n| 修改 | src/c.js | 清单声明未动 |\n'
++
++/**
++ * 归档 thin 变更夹具：init（baseline）→ 提交交付面（head）→ changes/archive/<名>/ 落
++ * design.md + change.patch + change-patch.json（冻结件形态对齐 flow.js flow done 写侧：
++ * committed 面走 baseRef..headRef 区间 diff，治理工件目录 untracked 自拼 hunk）。
++ */
++function makeThinArchive(prefix, { patchStatus = 'ok', changeName = 'thin-demo' } = {}) {
++  const d = makeRepo(prefix)
++  mkdirSync(join(d, 'src'), { recursive: true })
++  writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
++  writeFileSync(join(d, 'src', 'c.js'), 'c1\n')
++  sh(d, ['add', '-A'])
++  sh(d, ['commit', '-q', '-m', 'init'])
++  const baseline = head(d)
++  // 交付面：a.js 修改（+2）、b.js 新增——c.js 保持不动（design 声明但未动的真·untouched）
++  writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\na3\na4\n')
++  writeFileSync(join(d, 'src', 'b.js'), 'b1\n')
++  sh(d, ['add', '-A'])
++  sh(d, ['commit', '-q', '-m', 'thin work'])
++  const headCommit = head(d)
++
++  const changeDir = join(d, '.sillyspec', 'changes', 'archive', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), `# design（fixture）\n\n## 文件变更清单\n\n${DESIGN_TABLE}`)
++
++  const ownFiles = ['src/a.js', 'src/b.js', `.sillyspec/changes/archive/${changeName}/design.md`]
++  const meta = {
++    change: changeName,
++    baseline,
++    head: headCommit,
++    files: ownFiles,
++    totals: { files: ownFiles.length, additions: 3, deletions: 0 },
++    savedAt: '2026-10-07T15:00:00.000Z',
++    note: 'flow done 时点冻结（fixture）',
++  }
++  if (patchStatus === 'ok') {
++    const patchText = (buildFrozenPatch(d, ownFiles, { baseRef: baseline, headRef: headCommit }) || '') + '\n'
++    writeFileSync(join(changeDir, 'change.patch'), patchText)
++    meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
++  }
++  meta.patchStatus = patchStatus
++  writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
++  return { d, changeDir, baseline, headCommit }
++}
++
++// ───────────────────────── FR-01：三态真实表 ─────────────────────────
++
++test('FR-01 归档 thin 回放：快照缺失 + change-patch.json 在 → 三态真实表（计划内带冻结行数，不再恒计划未动）', async () => {
++  const { d, baseline } = makeThinArchive('sa-thin-')
++  try {
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'thin-demo' })
++    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
++    assert.equal(r.mode, 'full-flow')
++    assert.equal(r.baseAnchor, baseline, 'baseAnchor = meta.baseline')
++
++    const byPath = new Map(r.rows.map(x => [x.path, x]))
++    const a = byPath.get('src/a.js')
++    assert.ok(a, '冻结面计划内文件在 rows')
++    assert.equal(a.verdict, 'planned', '计划内实改 → planned（不再恒 untouched）')
++    assert.equal(a.planned, '修改')
++    assert.equal(a.additions, 2, '行数自冻结 patch 按段统计（+2）')
++    assert.equal(a.deletions, 0)
++    assert.equal(a.kind, 'modified')
++
++    const b = byPath.get('src/b.js')
++    assert.ok(b)
++    assert.equal(b.verdict, 'planned')
++    assert.equal(b.planned, '新增')
++    assert.equal(b.kind, 'new', 'new file 段 → kind=new')
++    assert.equal(b.additions, 1)
++
++    const c = byPath.get('src/c.js')
++    assert.ok(c, '清单内未进冻结面 → untouched 补行')
++    assert.equal(c.verdict, 'untouched')
++    assert.equal(c.additions, 0)
++    assert.equal(c.deletions, 0)
++
++    assert.ok(!byPath.has('.sillyspec/changes/archive/thin-demo/design.md'), '治理工件不进表（filterDeliverableFiles 同口径）')
++    assert.equal(r.totals.files, 3)
++    assert.equal(r.totals.additions, 3)
++
++    assert.ok(r.note && r.note.includes('flow done') && r.note.includes('冻结 patch 记录'), `note 点名冻结记录（实际 ${r.note}）`)
++    assert.ok(!r.note.includes('快照缺失'), '不再落「快照缺失→开放区间」失真链')
++
++    const out = renderScopeAuditTable(r)
++    assert.ok(out.includes('✓ 计划内'), '渲染含计划内标记')
++    assert.ok(out.includes('已归档'), '渲染含归档态说明')
++  } finally { cleanup(d) }
++})
++
++test('FR-01 patchStatus=failed：文件集回放 + 行数 null 档不出伪数据', async () => {
++  const { d } = makeThinArchive('sa-thinfail-', { patchStatus: 'failed' })
++  try {
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'thin-demo' })
++    assert.equal(r.ok, true)
++    assert.equal(r.patchStatus, 'failed')
++    const a = r.rows.find(x => x.path === 'src/a.js')
++    assert.ok(a)
++    assert.equal(a.verdict, 'planned', '文件集独立冻结——三态仍真实')
++    assert.equal(a.additions, null, '行数不可得 → null（—）不出伪数据')
++    assert.equal(r.totals.additions, 0, 'null 行不入合计')
++    assert.ok(r.note && r.note.includes('采集失败'), `note 明示行数不可得原因（实际 ${r.note}）`)
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── FR-02：冻结语义 + --file 切片 ─────────────────────────
++
++test('FR-02 冻结语义：后续演进不进表 + --file 冻结切片与 sha256 篡改拒绝', async () => {
++  const { d, changeDir } = makeThinArchive('sa-thinfrz-')
++  try {
++    // 主仓后续演进：新文件 + 冻结面文件再改（未提交）
++    writeFileSync(join(d, 'src', 'later.js'), 'later\n')
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\na3\na4\nDRIFT\n')
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'thin-demo' })
++    const byPath = new Map(r.rows.map(x => [x.path, x]))
++    assert.ok(!byPath.has('src/later.js'), '冻结后主仓新文件不进表')
++    assert.equal(byPath.get('src/a.js').additions, 2, '冻结面行数不随后续再改漂移')
++
++    // --file：冻结 patch 切片（收尾时点内容，无 DRIFT 混入）
++    const fd = await getFileDiff({ cwd: d, changeName: 'thin-demo', filePath: 'src/a.js' })
++    assert.equal(fd.ok, true)
++    assert.ok(fd.anchorLabel && fd.anchorLabel.includes('冻结 patch'), `--file 走冻结切片（实际 ${fd.anchorLabel}）`)
++    assert.ok(fd.diff && fd.diff.includes('a3') && !fd.diff.includes('DRIFT'), 'diff 为冻结时点内容')
++
++    // 篡改检测（A-F01 同款）：change.patch 被改致 sha256 与 meta 不匹配 → 拒绝出 diff
++    writeFileSync(join(changeDir, 'change.patch'), readFileSync(join(changeDir, 'change.patch'), 'utf8') + 'TAMPER\n')
++    const bad = await getFileDiff({ cwd: d, changeName: 'thin-demo', filePath: 'src/a.js' })
++    assert.equal(bad.ok, false)
++    assert.ok(bad.note && bad.note.includes('篡改'), `sha 不匹配 → 告警拒绝（实际 ${bad.note}）`)
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── FR-03：优先级与双缺兜底 ─────────────────────────
++
++test('FR-03 优先级：快照在时快照优先；双缺走开放区间兜底（既有口径）', async () => {
++  const { d, changeDir } = makeThinArchive('sa-thinprio-')
++  try {
++    // ① 快照在 → 快照回放赢（行数取快照值），change-patch 回放让位
++    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({
++      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'snap0000',
++      totals: { files: 1, additions: 999, deletions: 0 },
++      rows: [{ path: 'src/a.js', planned: '修改', additions: 999, deletions: 0, kind: 'modified', verdict: 'planned' }],
++      excluded: { foreignDeclared: [] }, savedAt: '2026-09-10T00:00:00.000Z',
++    }))
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'thin-demo' })
++    assert.equal(r.totals.additions, 999, '快照行数胜出（change-patch 回放让位）')
++    assert.ok(r.note.includes('execute --done 时点冻结快照'), 'note 点名快照记录态')
++  } finally { cleanup(d) }
++
++  // ② 快照与 change-patch 双缺 → 实时开放区间兜底 + 既有漂移警告口径
++  const d2 = makeRepo('sa-thinmiss-')
++  try {
++    mkdirSync(join(d2, 'src'), { recursive: true })
++    writeFileSync(join(d2, 'src', 'a.js'), 'a1\n')
++    sh(d2, ['add', '-A'])
++    sh(d2, ['commit', '-q', '-m', 'init'])
++    const cd2 = join(d2, '.sillyspec', 'changes', 'archive', 'miss-demo')
++    mkdirSync(cd2, { recursive: true })
++    writeFileSync(join(cd2, 'design.md'), '# design（fixture）\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | 说明 |\n')
++    const r2 = await computeChangeScopeAudit({ cwd: d2, changeName: 'miss-demo' })
++    assert.equal(r2.ok, true)
++    assert.ok(r2.note && r2.note.includes('快照缺失') && r2.note.includes('开放区间'), `双缺走兜底（实际 ${r2.note}）`)
++    assert.ok(r2.note.includes('change-patch.json'), '兜底 note 明示冻结件双缺')
++    const out = renderScopeAuditTable(r2)
++    assert.ok(out.includes('计划未动') && out.includes('快照缺失'), '既有兜底渲染口径不变')
++  } finally { cleanup(d2) }
++})
+diff --git a/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/design.md b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/design.md
+new file mode 100644
+index 00000000..bf523836
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/design.md
+@@ -0,0 +1,55 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:50:14.029Z
++---
++# 设计记录（Design Record）— 2026-10-07-scope-audit-thin-patch-replay
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++缺陷（multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md）：thin 流程 `flow done` 只冻结 change-patch.json + change.patch，不落 execute --done 链才写的 scope-audit.json 快照；归档 thin 变更查范围对账时快照缺失 → 实时开放区间兜底 → 无 baseAnchor → HEAD 未提交窗口（干净树=空）→ design 清单全行恒「计划未动 +0/−0」，纯失真。
++
++修法取读侧兼容（缺陷记录修复方向之二，优先于写侧补快照）：`computeFullFlowAudit` 的 settled 分支在快照缺失时，回读变更目录 change-patch.json（files/baseline/head/totals/patchSha256）+ change.patch（冻结正文）当冻结对账记录回放——数据在 flow done 时点已经全部冻结，读侧补一条回放链即可让**所有存量归档**（含 2026-10-07-taskboard-tasks-md）立即受益，无需重新归档。不做写侧补快照：thin 已有一份 sha256 锚定的冻结件，再落一份 scope-audit.json 会造出双冻结源（两件可能漂移），单一真相优于重复留痕。
++
++回放行数不改采 git（baseline..head 区间对 committed 面成立，但冻结面还含 done 时点工作树件，且依赖对象库存活），直接解析 change.patch 的 `diff --git` 段统计 +/− 行——自包含、确定性、与冻结件 sha256 同源。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新增内部函数（src/scope-audit.js，不导出）：`readChangePatchMeta(changeDir)`（读 change-patch.json，files 数组合法才返回，否则 null）、`readChangePatchText(changeDir)`（读 change.patch 正文）与 `parseFrozenPatchStats(patchText)`（按段返回 Map<path,{additions,deletions,kind}>，new/deleted/binary 三档与 collectNumstatByPath 口径对齐）。
++- `computeChangeScopeAudit` 返回值增量字段：thin 回放态带 `frozenPatchPath`（指向 change.patch，仅 getFileDiff 消费，grep 确认无其他消费方）与 `patchSha256`/`patchStatus`（透传 meta）；既有字段语义零变化——快照回放态、实时态、quick 态不受影响。additive 契约，平台/前端按存在性读取。
++- `getFileDiff`（--file）零代码改动：回放结果带 frozenPatchPath 后自动走冻结切片 + A-F01 sha256 校验链。
++- CLI 命令面（scope-audit / scope-audit --json / --file）签名与输出结构零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立：回放只读 flow done 时点已冻结的静态件，无时序输入。change-patch.json 与 change.patch 不一致（一侧后写）时以 json 的 files 为文件集、patch 提供行数，patch 缺段行数落 null 档不出伪数据，sha256 不匹配由 --file 链拒绝——乱序不产生伪真值。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   回放路径纯读（computeChangeScopeAudit 全程无落盘契约不变）；若查询时点恰逢另一会话对该变更 --refreeze（change-patch.json 重写），读到的是某一完整版本（写侧 writeFileSync 原子性由 fs-atomic 保证，读侧 JSON.parse 失败即回退下一链路），不会读到半份 json。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   变更已归档 = 流程终态，冻结件不再变化；--refreeze 重冻结是写侧显式操作，重冻后回放自动取新版 meta。查询中断无状态残留（纯读、fail-soft 全 catch）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   change-patch.json 按 changeDir（changes/archive/<名>/ 或活跃目录）定位，与 resolveChangeDir 既有口径同源，不跨变更串台；meta.files 是本变更归属面（flow done 已按 own-vs-foreign 切分并排除他会话声明文件），回放不重新归属；跨仓条目（design .repo 标注）回放保持 v1 ⊘ untouched 形态（thin 冻结件只有主仓 patch，不假装对账过）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：patch 段解析与 git 真实 numstat 的口径偏差（路径含空格的引号形态、rename 段、\ No newline 标记）。缓解：段头正则与既有 filterPatchForFiles/slicePatchForFile 同款（b/ 新路径），\ 开头续行不计，rename 场景 thin 冻结面罕见且行数偏差不改变三态判定；测试对拍 buildFrozenPatch 产物。放弃的方案：① flow done 补写 scope-audit.json（写侧）——只救新变更救不了存量归档，且造双冻结源；② 行数按 meta.baseline..head 提交区间改采 git numstat——对 committed 面精确但冻结面含 done 时点工作树件（治理工件/untracked），且引入对 git 对象库存活的依赖，不如解析冻结 patch 自包含。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/scope-audit.js | settled 分支快照缺失时回读 change-patch.json/change.patch 回放三态；新增 readChangePatchMeta / readChangePatchText / parseFrozenPatchStats 内部函数；getFileDiff 经 frozenPatchPath 自动冻结切片 |
++| 新增 | test/scope-audit-thin-patch-replay.test.mjs | 归档 thin 回放夹具：三态真实表 / failed 留痕 / 冻结语义与 --file 切片 / 快照优先级与双缺兜底 |
+diff --git a/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/proposal.md b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/proposal.md
+new file mode 100644
+index 00000000..14180c78
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:50:14.029Z
++---
++# 提案书（Proposal）— 2026-10-07-scope-audit-thin-patch-replay
++
++## 动机
++
++任务原话转写：修复工具缺陷（记录：multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md）：thin 轻量变更 flow done 只冻结 change-patch.json/change.patch、不落 execute --done 链的 scope-audit.json 快照；归档 thin 变更查范围对账时快照缺失 → 实时开放区间兜底 → 无 baseAnchor → HEAD 未提交窗口（干净树=空）→ design 清单全行恒「计划未动 +0/−0」，纯失真（实测样例 multi-agent-platform 2026-10-07-taskboard-tasks-md：7 文件 +328/−34 显示成 3 行计划未动）。修法取读侧兼容：settled 分支快照缺失时回读 change-patch.json + change.patch 当冻结对账记录，旧归档立即受益。
++
++成功标准：
++- 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
++- 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++- 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++- multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++- 全量测试绿（含新增回放夹具测试）
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
++2. 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++3. 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++4. multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++5. 全量测试绿（含新增回放夹具测试）
++
++## 成功标准（可验证）
++
++1. 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
++2. 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++3. 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++4. multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++5. 全量测试绿（含新增回放夹具测试）
+diff --git a/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/requirements.md b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/requirements.md
+new file mode 100644
+index 00000000..47ab70f1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/requirements.md
+@@ -0,0 +1,84 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:50:14.029Z
++---
++# 需求规格（Requirements）— 2026-10-07-scope-audit-thin-patch-replay
++
++## 功能需求
++
++### FR-01: 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
++
++- scope-audit 的已收尾（settled）分支在 execute 快照缺失时，**必须**回读变更目录的 change-patch.json + change.patch（flow done 时点冻结件）作为冻结对账记录出表：文件集取 meta.files 过 filterDeliverableFiles（与 actual 侧同口径），三态按 design 清单 pathMatches 判定（planned/unplanned/untouched 补行），行数自冻结 patch 按 `diff --git` 段统计（+/− 行计数；`new file mode`→new、`deleted file mode`→deleted、binary→null 档），baseAnchor 取 meta.baseline；行数**禁止**按当前工作树实时采集（那是被修的失真源）。
++
++#### 场景：归档 thin 变更查询
++
++- Given：变更已归档于 changes/archive/<名>/，目录有 change-patch.json（files/baseline/head/totals/patchSha256）与 change.patch，无 scope-audit.json（thin flow done 从不落快照），主仓工作树干净
++- When：computeChangeScopeAudit / `sillyspec scope-audit --change <名>`
++- Then：冻结面文件按三态出表——design 清单内文件「✓ 计划内」带冻结时点 +N/−M；清单外冻结文件「计划外」；清单内未进冻结面文件「计划未动」0/0；note 点名 flow done 冻结 patch 记录与落盘时间；不再出现「全行计划未动 +0/−0」
++
++#### 场景：patch 采集失败留痕形态
++
++- Given：change-patch.json 存在但 patchStatus=failed（change.patch 缺失）
++- When：同上查询
++- Then：文件集与三态仍按 meta.files 回放（文件集是独立冻结面），行数列为 null（—，不出伪数据），note 明示行数不可得原因
++
++### FR-02: 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++
++- 回放表**必须**封闭在 flow done 时点冻结面：主仓后续新文件/再修改不得进表；`--file` 单文件 diff **必须**优先切片冻结 patch（结果带 frozenPatchPath 与 patchSha256，sha256 不匹配时按 A-F01 同款拒绝并告警），patch 不可得才退实时锚。回放结果**禁止**携带随主仓漂移的实时行数。
++
++#### 场景：冻结后主仓演进
++
++- Given：归档 thin 变更已回放出表，随后主仓新增 src/later.js、再修改冻结面内文件（未提交）
++- When：再次跑 scope-audit 同一变更
++- Then：later.js 不进表；冻结面行数不变（不随工作树漂移）
++
++#### 场景：--file 冻结切片与篡改检测
++
++- Given：同上变更，change.patch 完好
++- When：getFileDiff（--file）查冻结面内文件
++- Then：diff 取冻结 patch 切片，anchorLabel 标「冻结 patch」；若 change.patch 被改致 sha256 与 meta.patchSha256 不匹配 → 拒绝出 diff 并告警「可能被篡改」
++
++### FR-03: 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++
++- 回退链顺序**必须**保持：execute --done 快照（scope-audit.json / runtime 存量）> change-patch.json 回放（本变更新增）> 实时开放区间兜底；双缺时兜底路径的既有 note（「快照缺失……开放区间……verify-result.md」）与既有测试断言**禁止**变化。
++
++#### 场景：快照优先级
++
++- Given：归档变更同时有 scope-audit.json 与 change-patch.json
++- When：scope-audit 查询
++- Then：出快照记录态表（note 点名 execute --done 快照），change-patch 回放不参与
++
++#### 场景：双缺兜底不回归
++
++- Given：归档变更既无快照也无 change-patch.json
++- When：scope-audit 查询
++- Then：走实时开放区间兜底，note 含「快照缺失」「开放区间」（既有断言原样绿）
++
++### FR-04: multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++
++- 修复后在本机 multi-agent-platform 仓对旧归档 2026-10-07-taskboard-tasks-md 实测：`sillyspec scope-audit --change 2026-10-07-taskboard-tasks-md` **必须**让 design 清单三个计划内文件（backend/app/modules/task/parser.py、backend/app/modules/task/tests/test_parser.py、backend/app/modules/spec_workspace/tests/test_task_reparse_on_sync.py）显示「✓ 计划内」而非「计划未动」，且不改该仓任何文件（纯读验收）。
++
++#### 场景：旧归档立即受益
++
++- Given：multi-agent-platform 仓（已发布 3.32.0 装的 CLI 不含本修复——用本仓工作区 CLI 指向该仓跑）
++- When：`node <本仓>/bin/sillyspec.js scope-audit --change 2026-10-07-taskboard-tasks-md`（cwd=multi-agent-platform）
++- Then：三计划内文件 verdict=planned，行数为冻结时点真值（与 change.patch 对拍），全仓零写入
++
++### FR-05: 全量测试绿（含新增回放夹具测试）
++
++- 本变更**必须**新增回放夹具测试（覆盖 FR-01/02/03 场景）并全量套件跑绿；**禁止**改既有测试断言来适配新行为（回归面靠既有断言守住）。
++
++#### 场景：全量门
++
++- Given：新增 test/scope-audit-thin-patch-replay.test.mjs 入套
++- When：npm test（node test/run-tests.mjs）
++- Then：全量绿，既有 scope-audit 断言零改动
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/scope-audit-thin-patch-replay.test.mjs「归档 thin 回放：快照缺失 + change-patch.json 在 → 三态真实表（计划内带冻结行数，不再恒计划未动）」
++FR-01: test/scope-audit-thin-patch-replay.test.mjs「patchStatus=failed：文件集回放 + 行数 null 档不出伪数据」
++FR-02: test/scope-audit-thin-patch-replay.test.mjs「冻结语义：后续演进不进表 + baseAnchor=meta.baseline + --file 冻结切片与 sha256 篡改拒绝」
++FR-03: test/scope-audit-thin-patch-replay.test.mjs「优先级：快照在时快照优先；双缺走开放区间兜底（既有断言口径）」
++FR-04: 不适用：跨仓实测验收（multi-agent-platform 本机仓，非本仓测试面）——验收留痕见收口前实测输出
++FR-05: test/run-tests.mjs「全量套件（723 既有 + 新增）跑绿，既有断言零改动」
+diff --git a/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/tasks.md b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/tasks.md
+new file mode 100644
+index 00000000..b061f28c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:50:14.029Z
++---
++# 任务注册表（Tasks）— 2026-10-07-scope-audit-thin-patch-replay
++
++- [x] task-01: 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch 按段统计（binary/new/deleted 三档对齐既有口径）
++- [x] task-02: 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
++- [x] task-03: 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
++- [x] task-04: multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
++- [x] task-05: 全量测试绿（含新增回放夹具测试）

@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -25,6 +33,11 @@ input: >-
   - 全量测试绿（含新增回放夹具测试）
 autopilot: true
 baseline_commit: 2de19fbc0f14f5d6275fadd0ce4b039364d36a68
-updatedAt: '2026-10-07T14:52:19.187Z'
+updatedAt: '2026-10-07T15:19:42.492Z'
 baseline_sha256: 9424857ab1e0337cafc95aaa5620f586e1d28c7d3674561946f7021f0441c81c
+gate_summary: >-
+  test: passed ← module[]+deps(js4)+fr(2)（20.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007150520\test-result.json｜lint: passed
+  ← npm run lint（42.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007150520\test-result.json｜门文件 6 个
 

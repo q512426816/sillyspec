@@ -1,0 +1,16 @@
+{"ts":1791384704151,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791384730530,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791385414107,"kind":"commit","stage":null,"detail":"901aa239","provisional":true}
+{"ts":1791385422893,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791385423127,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791385423367,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791385423675,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791385423965,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1791385424310,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791385424310,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1791385455055,"kind":"commit","stage":null,"detail":"f7e4e821","provisional":true}
+{"ts":1791385488059,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791385501249,"kind":"commit","stage":null,"detail":"b85f8048","provisional":true}
+{"ts":1791385501564,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-07-scope-audit-thin-patch-replay/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791385521289,"kind":"gate-run","stage":"verify","detail":"门实测 passed（20.2s） · 20261007150520","provisional":true}
+{"ts":1791386346292,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}

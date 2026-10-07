@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-scope-audit-thin-patch-replay",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-01",
+      "tests": [
+        "test/scope-audit-thin-patch-replay.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-scope-audit-thin-patch-replay"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-01",
+      "tests": [
+        "test/scope-audit-thin-patch-replay.test.mjs「patchStatus=failed：文件集回放 + 行数 null 档不出伪数据」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-scope-audit-thin-patch-replay"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-02",
+      "tests": [
+        "test/scope-audit-thin-patch-replay.test.mjs「冻结语义：后续演进不进表 + baseAnchor=meta.baseline + --file 冻结切片与 sha256 篡改拒绝」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-scope-audit-thin-patch-replay"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-03",
+      "tests": [
+        "test/scope-audit-thin-patch-replay.test.mjs「优先级：快照在时快照优先；双缺走开放区间兜底（既有断言口径）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-scope-audit-thin-patch-replay"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-07-scope-audit-thin-patch-replay:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs「全量套件（723 既有 + 新增）跑绿，既有断言零改动」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-scope-audit-thin-patch-replay"
+    }
+  ]
+}
