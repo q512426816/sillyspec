@@ -1056,12 +1056,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             }
           } catch { /* 时点判定 fail-soft */ }
         }
-        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype；2026-10-03 修零提交静默；
-        // 2026-10-07-thin-tasks-v3 收口代勾退役）：不勾不是假勾是漏账——只警告不代勾不阻断
-        // （机器不再一把全勾替 agent 背书；governance-autopilot 的 token 代勾照旧走上方通道）。
-        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0) {
-          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾——`)
-          console.warn(`   规范动作是完成一个单元即勾一格：sillyspec task tick --change ${change} --task task-NN（或 Edit 翻格 - [ ] → - [x]）；本次放行不阻断`)
+        // 全勾硬门（2026-10-07-allticked-gate-docs-resync，openspec all_done 对齐）：tasks.md 是
+        // 完成状态机——有任务行但未全勾即拒收（旧「勾选缺失 advisory 放行」退役：懒路径零勾也
+        // 能归档教会了无视任务面）。出口：逐格 task tick（每格需提交 token 证据——哨兵同门）；
+        // 任务面与实际不符可先改写 tasks.md（工作分解归 agent）再逐格勾。token 代勾（governance-
+        // autopilot）已在上方先跑：有证据未勾的格子已代勾，此处拒的纯属零证据未完成面。
+        if (sent.claimTotal > 0 && sent.checked < sent.claimTotal) {
+          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json），全勾后重跑 flow done`)
+          console.error('   任务面与实际实现路径不符时，先改写 tasks.md（工作分解归你，增删改随意）再逐格勾；查下一任务：sillyspec task tick --change ' + `${change}` + ' --task task-NN（回显进度与指针）')
+          appendTelemetry({ sentinel: 'incomplete-tasks', checked: sent.checked, total: sent.claimTotal })
+          reportMidFail('ledger')
+          process.exit(1)
         }
         }
       }

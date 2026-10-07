@@ -119,7 +119,8 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
     assert.match(ok.stdout, /哨兵：全勾/, '哨兵绿行在场（正文 token 计证据）')
     rmSync(cwd, { recursive: true, force: true })
   }
-  // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
+  // 形态 C：非全勾（默认未勾）→ 拒收（2026-10-07-allticked-gate：tasks.md 是完成状态机，
+  // openspec all_done 对齐——旧 advisory 放行退役）
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-partial'
@@ -128,9 +129,10 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
     execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
-    const ok = cli(['flow', 'done', '--change', change])
-    assert.equal(ok.status, 0, '非全勾放行不变')
-    assert.doesNotMatch(ok.stdout, /哨兵断言拒收/)
+    const f = cli(['flow', 'done', '--change', change])
+    assert.equal(f.status, 1, '未全勾应拒收')
+    assert.match(f.stdout + f.stderr, /任务未全勾/, '全勾硬门文案')
+    assert.match(f.stdout + f.stderr, /task tick/, '出口指引含 tick 动词')
     rmSync(cwd, { recursive: true, force: true })
   }
 })

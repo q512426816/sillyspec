@@ -79,22 +79,20 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
+test('④ 全勾硬门：有提交未勾任务 → 拒收（2026-10-07-allticked-gate，openspec all_done 对齐）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-09-01-ftp-3'
   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
   fillSlots(cwd, change)
-  // 认领面（agent 覆写过任务行）一条未勾 → advisory（2026-10-03-voluntary-task-tick 语义分岔：
-  // 镜像未认领面已改走收口代勾自愈——见 task-tick.test.mjs ④；本钉守住「认领了却没勾」的提醒面）
+  // 认领面（agent 覆写过任务行）一条未勾 → 拒收（旧 advisory 放行退役——tasks.md 是完成状态机）
   const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
   writeFileSync(tp, readFileSync(tp, 'utf8').replace(/^- \[ \] task-01: .*$/m, '- [ ] task-01: agent 认领的步骤'))
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work（不勾选）'], { cwd, stdio: 'pipe' })
   const d = cli(['flow', 'done', '--change', change])
-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, 'advisory 在场')
+  assert.equal(d.status, 1, '未全勾应拒收')
+  assert.match(d.stdout + d.stderr, /任务未全勾（0\/1）/, '全勾硬门文案（进度面）')
   assert.match(d.stdout + d.stderr, /task tick/, '指引含 tick 动词')
-  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '认领面不代勾')
   rmSync(cwd, { recursive: true, force: true })
 })

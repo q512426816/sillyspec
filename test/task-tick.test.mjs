@@ -8,8 +8,10 @@
  *      checked N→M 单格口径）；幂等重勾零事件；
  *   ④ 节奏门去重：CLI 连续两 tick + watcher 采样合并跳（0→2）同流 → detectBatchCheckCadence
  *      判 null（不再误伤快速逐格勾）；纯 Edit 一把勾（无 CLI 事件）仍检出；
- *   ⑤ done 收口不代勾（2026-10-07-thin-tasks-v3：mirror_autotick 退役）：不勾+有交付 →
- *      仅 advisory 警告、归档件保持未勾；认领未勾完（覆写面）同判；零提交也显形。
+ *   ⑤ done 全勾硬门（2026-10-07-allticked-gate，openspec all_done 对齐）：不勾/部分勾 → 拒收，
+ *      补齐 token 提交并 tick 后放行（完成状态机——旧 advisory 放行与收口代勾均已退役）；
+ *   ⑥ 工件即时重推（2026-10-07-allticked-gate-docs-resync）：shouldResyncDocs 纯函数判定
+ *      四工件内容变更；task tick 后 best-effort triggerSync；watcher 循环防抖消费接线钉。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -162,42 +164,70 @@ test('④c 混合面：CLI 勾 1 格 + Edit 一把翻 2 格 → 跳幅按 CLI �
   assert.equal(worst.to, 3)
 })
 
-// ── ⑤ done 收口不代勾（mirror_autotick 退役）──
+// ── ⑤ done 全勾硬门（2026-10-07-allticked-gate：openspec all_done 对齐）──
 
-test('⑤a 不勾+有交付 → 仅 advisory 警告、放行、归档件保持未勾（机器不再一把全勾）', () => {
+test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-2'
   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work（不勾选——0/12 事故同型场景）'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work（不勾选——懒路径同型场景）'], { cwd, stdio: 'pipe' })
   const d = cli(['flow', 'done', '--change', change])
-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, '勾选缺失 advisory 在场')
-  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '收口代勾已退役')
-  const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
-  assert.equal(existsSync(arch), true, '已归档')
-  const md = readFileSync(arch, 'utf8')
-  assert.match(md, /^- \[ \] task-01:/m, '归档件保持未勾（不代勾）')
-  assert.match(md, /^- \[ \] task-02:/m)
+  assert.equal(d.status, 1, '未全勾应拒收')
+  assert.match(d.stdout + d.stderr, /任务未全勾（0\/2）/, '全勾硬门文案（进度面）')
+  assert.match(d.stdout + d.stderr, /task tick/, '出口指引含 tick 动词')
+  assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', change)), true, 'change 保持 active（断点续）')
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('⑤b 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形', () => {
+test('⑤b 部分勾选（认领面勾一半）→ 同样拒收；补齐 token 提交后放行', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-3'
   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
   fillSlots(cwd, change)
-  // agent 覆写任务面（认领）但一条未勾；交付走 dirty+--freeze-dirty（区间零提交——旧前提下的静默面）
-  const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
-  writeFileSync(tp, readFileSync(tp, 'utf8').replace(/^- \[ \] task-01: .*$/m, '- [ ] task-01: agent 自己的步骤一').replace(/^- \[ \] task-02: .*$/m, '- [ ] task-02: agent 自己的步骤二'))
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
-  const d = cli(['flow', 'done', '--change', change, '--freeze-dirty'])
-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, '零提交场景 advisory 在场（0/12 静默修复）')
-  const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
-  const md = readFileSync(arch, 'utf8')
-  assert.match(md, /^- \[ \] task-01: agent 自己的步骤一/m, '覆写面保持未勾（advisory 不代勾）')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'feat: 行为甲 (task-01)'], { cwd, stdio: 'pipe' })
+  const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+  assert.equal(t1.status, 0, 'tick task-01（有 token 证据）')
+  const d = cli(['flow', 'done', '--change', change])
+  assert.equal(d.status, 1, '部分勾选拒收（1/2）')
+  assert.match(d.stdout + d.stderr, /任务未全勾（1\/2）/, '进度面文案')
+  // 出口走通：补第二格的 token 提交 → tick → 放行
+  writeFileSync(join(cwd, 'work2.js'), 'export const b = 2\n')
+  execFileSync('git', ['add', 'work2.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'feat: 行为乙 (task-02)'], { cwd, stdio: 'pipe' })
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
+  const ok = cli(['flow', 'done', '--change', change])
+  assert.equal(ok.status, 0, `补齐后放行: ${ok.stdout}\n${ok.stderr}`)
   rmSync(cwd, { recursive: true, force: true })
+})
+
+// ── ⑥ 工件即时重推接线钉（2026-10-07-allticked-gate-docs-resync）──
+
+test('⑥a shouldResyncDocs 纯函数：四工件内容变更触发、无关事件不触发', async () => {
+  const { shouldResyncDocs } = await import('../src/watcher.js')
+  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'tasks.md 内容变更' }]), true, 'tasks 变更')
+  assert.equal(shouldResyncDocs([{ kind: 'file', detail: 'design.md 出现' }]), true, 'design 出现')
+  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'requirements.md 内容变更' }]), true)
+  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'proposal.md 内容变更' }]), true)
+  assert.equal(shouldResyncDocs([{ kind: 'task-done', detail: 'checked 0→1' }]), false, '勾选事件不是文档变更')
+  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'tasks/task-01.md 内容变更' }]), false, '任务卡文件不在四工件面（卡内容走既有事件链）')
+  assert.equal(shouldResyncDocs([{ kind: 'commit', detail: 'abc' }, { kind: 'file-update', detail: 'src/x.js 内容变更' }]), false, '代码/提交事件不触发')
+  assert.equal(shouldResyncDocs([]), false)
+  assert.equal(shouldResyncDocs(null), false)
+})
+
+test('⑥b 重推接线钉：task tick 后触发 triggerSync；watcher 循环消费 shouldResyncDocs+防抖', () => {
+  const tickSrc = readFileSync(join(ROOT, 'src', 'task-tick.js'), 'utf8')
+  assert.ok(tickSrc.includes('triggerSync(cwd, changeName'), 'task tick 翻格后 best-effort triggerSync')
+  assert.ok(tickSrc.includes('2026-10-07-allticked-gate-docs-resync'), '留痕注释')
+  const watcherSrc = readFileSync(join(ROOT, 'src', 'watcher.js'), 'utf8')
+  assert.ok(watcherSrc.includes('shouldResyncDocs(events)'), 'watcher 主循环消费判定函数')
+  assert.ok(watcherSrc.includes('DOCS_RESYNC_COOLDOWN_MS'), '防抖冷却在场')
+  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+  assert.ok(flowSrc.includes('任务未全勾'), 'flow done 全勾硬门文案在场')
+  assert.ok(flowSrc.includes("sentinel: 'incomplete-tasks'"), '拒收落遥测')
 })
