@@ -3844,7 +3844,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-01
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3866,7 +3866,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-02
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3888,7 +3888,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-03
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3910,7 +3910,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-04
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3932,7 +3932,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-05
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3954,7 +3954,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-06
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3976,7 +3976,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-07
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -3998,7 +3998,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-mirror-waiver:flow:FR-08
-  tests: test/sentinel-mirror-waiver.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
+  tests: test/sentinel-unified-evidence.test.mjs「①镜像豁免／②覆写守卫／③无基线 fail-safe／④边界」
   reason: spec
   state: candidate
   discovery: machine
@@ -4020,7 +4020,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-waiver-hardening:flow:FR-01
-  tests: test/sentinel-mirror-waiver.test.mjs「⑥ 零提交不豁免」
+  tests: test/sentinel-unified-evidence.test.mjs「⑥ 零提交不豁免」
   reason: spec
   state: candidate
   discovery: machine
@@ -4042,7 +4042,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-waiver-hardening:flow:FR-02
-  tests: test/sentinel-mirror-waiver.test.mjs「⑦ 锚定验证读取器（篡改检出/按无基线从严）」
+  tests: test/sentinel-unified-evidence.test.mjs「⑦ 锚定验证读取器（篡改检出/按无基线从严）」
   reason: spec
   state: candidate
   discovery: machine
@@ -4063,7 +4063,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-waiver-hardening:flow:FR-03
-  tests: test/sentinel-mirror-waiver.test.mjs「①②③④」 | test/sentinel-wiring.test.mjs「形态 A/A2/B/B2/C」
+  tests: test/sentinel-unified-evidence.test.mjs「①②③④」 | test/sentinel-wiring.test.mjs「形态 A/A2/B/B2/C」
   reason: spec
   state: candidate
   discovery: machine
@@ -4107,7 +4107,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-09-28-sentinel-waiver-hardening:flow:FR-05
-  tests: test/sentinel-mirror-waiver.test.mjs「⑥⑦」
+  tests: test/sentinel-unified-evidence.test.mjs「⑥⑦」
   reason: spec
   state: candidate
   discovery: machine
@@ -7399,7 +7399,7 @@ superseded_by：FR-cli-entry-198
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
 - row: 2026-10-07-thin-tasks-v3:flow:测试绑定FR-02
-  tests: test/sentinel-mirror-waiver.test.mjs「镜像零证据全勾→fake（豁免移除）」
+  tests: test/sentinel-unified-evidence.test.mjs「镜像零证据全勾→fake（豁免移除）」
   reason: spec
   state: candidate
   discovery: machine
