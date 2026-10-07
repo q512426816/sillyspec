@@ -73,7 +73,7 @@ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；�
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   writeFileSync(join(cwd, 'foreign-page.tsx'), '// 并行会话旧分叉快照\nexport {}\n')
   execFileSync('git', ['add', 'work.txt', 'foreign-page.tsx'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work（夹带 foreign-page.tsx）'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work（夹带 foreign-page.tsx）（task-01）'], { cwd, stdio: 'pipe' })
 
   const s2 = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(s2.status, 0, `done 应 advisory 不阻断: ${s2.stdout}\n${s2.stderr}`)
@@ -92,7 +92,7 @@ test('② 声明面全空：不指认夹带，降为「无声明面」软提示'
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   const s2 = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(s2.status, 0, `done 不阻断: ${s2.stdout}\n${s2.stderr}`)
   const out = s2.stdout + s2.stderr

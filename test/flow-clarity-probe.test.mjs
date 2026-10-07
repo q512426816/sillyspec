@@ -166,7 +166,7 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02) (task-03)'], { cwd, stdio: 'pipe' })
   const cd = join(cwd, SPEC, 'changes', c1)
   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
   const base = readFileSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${c1}.json`), 'utf8')

@@ -129,7 +129,7 @@ test('③ flow done 收口周期：done 调用面同样登记（last_command=don
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK, '--no-review'], { agentLog }).status, 0)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   run(['add', 'work.txt'])
-  run(['commit', '-q', '-m', 'work'])
+  run(['commit', '-q', '-m', 'work (task-01)'])
   fillSlots(cwd, change)
 
   const d = cli(cwd, ['flow', 'done', '--change', change], { agentLog })

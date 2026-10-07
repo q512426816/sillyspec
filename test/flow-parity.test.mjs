@@ -171,7 +171,7 @@ test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账�
   writeFileSync(join(cwd, 'src', 'core', 'a.js'), 'export const a = 1\n')
   writeFileSync(join(cwd, '.sillyspec', 'docs', 'demo', 'modules', 'core.md'), '# core\na=1\n')
   run(['add', 'src/core/a.js', '.sillyspec/docs/demo/modules/core.md'])
-  run(['commit', '-q', '-m', 'feat: core 变更（task-01）'])
+  run(['commit', '-q', '-m', 'feat: core 变更（task-01）（task-02）'])
   fillDesignSlots(cwd, change)
   const s2 = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)

@@ -97,6 +97,9 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+�
 
   // advisory（缺省）：测绿 → flow done exit 0 + 醒目打印 + 遥测记一笔
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  // 全勾硬门夹具配套：token 提交（autopilot 自动勾 task-01）——路由面用例不测任务门
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
   const done = cli(['flow', 'done', '--change', change])
@@ -126,6 +129,9 @@ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
   const big = amendWithRatio(cwd, change, 0.75)
   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  // 全勾硬门夹具配套：token 提交（block 档断言的是路由门文案，须先过任务门）
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
   const done = cli(['flow', 'done', '--change', change])

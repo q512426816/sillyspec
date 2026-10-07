@@ -341,6 +341,8 @@ test('⑥ 轻量跑道 e2e（v2）：spec 断点机器门——未批准拒收 /
 
   // agent 干活（代码文件）+治理面正文作答（v2：FR 行为句/design 四节/绑定行——全部写正文）
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  // 全勾硬门夹具配套：token 提交（autopilot 自动勾两格）
+  g(['add', 'work.js']); g(['commit', '-q', '-m', 'work (task-01) (task-02)'])
   const fill = (f, fn) => writeFileSync(join(changeDir, f), fn(readFileSync(join(changeDir, f), 'utf8')))
   fill('design.md', (t) => t.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：e2e 夹具一行答'))
   fill('requirements.md', (t) => t
@@ -377,6 +379,7 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接�
   const changeDir = join(cwd, '.sillyspec', 'changes', change)
   assert.match(readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8'), /autopilot: true/, 'autopilot 声明留痕')
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  g(['add', 'work.js']); g(['commit', '-q', '-m', 'work (task-01) (task-02)'])
   const fill = (f, fn) => writeFileSync(join(changeDir, f), fn(readFileSync(join(changeDir, f), 'utf8')))
   fill('design.md', (t) => t.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：e2e 夹具一行答'))
   fill('requirements.md', (t) => t

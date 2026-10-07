@@ -96,10 +96,10 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，�
   assert.match(st, /baseline_commit:/)
   assert.match(st, /tier: thin/)
 
-  // agent 干活（非协议调用：纯文件+git）
+  // agent 干活（非协议调用：纯文件+git）——token 提交配套全勾硬门（autopilot 自动勾 task-01）
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
 
   // 协议调用 2/2：flow done
@@ -137,6 +137,8 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
   // 动态子集实测它（pass.flag 缺席→红）；原 fixtures 经 commands.test=node check.js 全量触达
   writeFileSync(join(cwd, 'work.test.mjs'), "import { test } from 'node:test'\nimport { existsSync } from 'node:fs'\nimport assert from 'node:assert/strict'\ntest('flip', () => { assert.ok(existsSync('pass.flag'), 'pass.flag 缺席=失败') })\n")
+  execFileSync('git', ['add', 'work.test.mjs'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   approve(cwd, change)
   const specBase = join(cwd, '.sillyspec')
@@ -212,7 +214,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
   mkdirSync(join(cwd, 'backend', 'app'), { recursive: true })
   writeFileSync(join(cwd, 'backend', 'app', 'deliv.txt'), 'x\n')
   execFileSync('git', ['add', 'backend'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'deliv'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'deliv (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   approve(cwd, change)
 
@@ -232,7 +234,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   const specBase = join(cwd, '.sillyspec')
 
   // 空节 → artifacts 子步拒收 exit 1（v2：verifyThinDocsV2 点名未作答节），change 仍 active
@@ -274,7 +276,7 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   const base = join(cwd, '.sillyspec', 'changes', change)
   // design 四节作答 + FR 行为句 + 绑定行写真实测试路径（v2 纯 markdown；触发行提取与提升）
   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：绑定链夹具'))
@@ -348,10 +350,10 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变�
   assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /^FR-01: （待填/m, '绑定行收编追加（v2 纯文本）')
   assert.ok(existsSync(join(changeDir, 'tasks.md')), '缺件 tasks 补齐')
 
-  // 干活 + FR 行为句/绑定行作答 → done（design 四节豁免、绑定门生效）
+  // 干活 + FR 行为句/绑定行作答 → done（design 四节豁免、绑定门生效）——token×2 配套全勾硬门
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02)'], { cwd, stdio: 'pipe' })
   writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
     .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成收编行为（design 豁免+绑定行追加）')
     .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flow-protocol.test.mjs ⑬ 收编用例'))
@@ -394,7 +396,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS �
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   approve(cwd, change)
   const specBase = join(cwd, '.sillyspec')
@@ -435,7 +437,7 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复�
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   approve(cwd, change)
   const changeDir = join(cwd, '.sillyspec', 'changes', change)
@@ -458,6 +460,9 @@ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () =
   const { cwd } = makeRepo()
   const change = '2026-09-02-flow-h2-t17'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   fillDesignSlots(cwd, change)
   approve(cwd, change)
   const f = cli(cwd, ['flow', 'done', '--change', change])
@@ -479,7 +484,7 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落�
   assert.ok(existsSync(join(plat, '.runtime', 'sillyspec.db')), '进度库落外置根（DB 与工件同根）')
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，正文作答（v2）
   const pc = join(plat, 'changes', change)
   writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：平台参数面夹具'))
@@ -560,7 +565,7 @@ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
   writeFileSync(join(cwd, 'late-dirty.py'), 'x = 1\n') // 未提交交付文件 → --freeze-dirty 并入
   fillDesignSlots(cwd, change)
   approve(cwd, change)
