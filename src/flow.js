@@ -1042,8 +1042,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
           // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
           // 这是提醒边干边勾纪律，非假勾）。tasks.md 全程 untracked（未随交付提交）时同款提醒。
+          // 首提锚定（2026-10-07-tick-timing-first-commit）：--reverse 全 history 首行=首次提交——
+          // 旧实现 -n 1 取最近一次提交，每任务随交付提交 tasks.md 的渐进形态（首提早于 HEAD）
+          // 被误报一把勾（完整实测实证：历史 0→1→2 渐进勾选仍出警告）。
           try {
-            const tasksIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1', '--', tasksPath])
+            const _firstRaw = gitQuiet(cwd, ['log', '--reverse', '--format=%h', '--', tasksPath])
+            const tasksIn = _firstRaw ? (String(_firstRaw).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null) : null
             const lastIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1'])
             if (!tasksIn) {
               console.warn(`⚠️ 勾选时点：tasks.md 未随交付提交（untracked 直至归档）——勾选证据链靠归档兜底，git 历史不可回溯；下次收口前 tasks.md 一并显式 pathspec 提交`)

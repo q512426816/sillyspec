@@ -45,6 +45,7 @@ test('④ 哨兵时点判定钉（一把勾 warn / untracked warn / fail-soft）
   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
   assert.ok(src.includes('一把勾模式'), '一把勾模式 warn 文案')
   assert.ok(src.includes('tasks.md 未随交付提交'), 'untracked warn 文案')
-  assert.ok(src.includes("['log', '--format=%h', '-n', '1', '--', tasksPath]"), 'tasks.md 首次提交锚定')
+  assert.ok(src.includes("['log', '--reverse', '--format=%h', '--', tasksPath]"), 'tasks.md 首次提交锚定（--reverse 全 history 首行——2026-10-07-tick-timing-first-commit）')
+  assert.ok(!src.includes("['log', '--format=%h', '-n', '1', '--', tasksPath]"), '旧最近一次提交锚定零残留（渐进提交形态曾误报一把勾）')
   assert.ok(src.includes('时点判定 fail-soft'), 'fail-soft')
 })
