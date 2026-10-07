@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-wave-auto-adopt-review-dedup",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ca7d3580e8bb802db06ff5175d1cf3e4df87e660",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "前轮 P3（清单缺 guard 测试）清偿声明未兑现：文件变更清单表格仍无 test/plan-wave-structure-guard.test.mjs 行，文件名仅出现在「评审清偿与勘误」节散文里",
+      "evidence": "design.md「## 文件变更清单」表格（HEAD ca7d3580 实读）仍列 7 文件（plan-postcheck/flow-review/verify-postcheck/config-schema/package.json/两新测试），无第 8 文件行；清偿 bullet 声称「design 文件清单补 test/plan-wave-structure-guard.test.mjs」但补的只是清偿节散文——该节不在 parseFileChangeList 的识别面内（FILE_LIST_SECTION_RE 只锚「## 文件变更清单」节，src/change-list.js:97，条目仅自节内表格解析），对账面口径漂移风险与前轮原状相同。纯文档面，无代码/数据风险。",
+      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md:44-56（清单表格）与 :60-62（清偿声明）"
+    },
+    {
+      "severity": "P3",
+      "title": "前轮 P3（撤销三项不在风险节）清偿声明位置失实：三项仅记于「评审清偿与勘误」bullet，「风险与死路」节仍无该三项",
+      "evidence": "清偿 bullet 明文「撤销三项（self 档不实施 / --answer 补 wait 视为已修复 / --step 断言保留）补记于本文件「风险与死路」在档」，但 HEAD 实读 design.md「## 风险与死路」只含增量假绿/自动重排改写/放弃方案 a-c，无该三项；FR-06 自declared验证面（design 风险节在档）在位置上仍未落。信息面已不丢（三项与措辞在清偿节在场可查），属声明与实际不符的文档准确性问题，无代码面。",
+      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md:38-40（风险与死路）与 :61（清偿声明）"
+    }
+  ],
+  "fixVerification": {
+    "P2（增量守卫对比基错位）": "已修复到位：computeIncrementalFace 对比基线改为 ledger.scopeFiles（非空数组时），缺省回退 inputFiles||fullFace（src/verify-postcheck.js:1471-1475，回退方向保守——基线更小更易回全子集）；runModuleSubset 结果新增 scopeFiles=逐批实跑测试文件去重全集（:3138，skip 批无 files 正确不入集）经 writeTestRerunLedger 入账（:2196-2202）；IR1 级联用例真实钉住修复——该输入在旧代码（inc=4≥fullFace=4）必返 null，新代码 4<63 触发增量，断言 files.length=4 且公告含「基线实测测试集 63」（test/test-incremental-rerun.test.mjs:41-50）；JSDoc 已撤「是子集」不实声明与长度比较一致。",
+    "P3（非法 Wave 号无独立族）": "已清偿：design 评审清偿节补记定性（塌缩为伪并行族报出、退化安全、枚举 token 承接成功标准原文），文档化处置与前轮安全方向判定一致。",
+    "P3（清单缺 guard 测试）": "未兑现，见 findings[0]。",
+    "P3（撤销三项不在风险节）": "部分兑现（信息在档但位置与声明不符），见 findings[1]。"
+  },
+  "regressionCheck": "三触及测试文件（test-incremental-rerun/wave-auto-adopt/plan-wave-structure-guard）node --test 17/17 绿；全量 npm run test:core 309/309 绿 0 失败（与 FR-05 声明的 309 用例数精确吻合）；修复为纯函数基线切换+ledger/result 增量字段（向后兼容缺省参数），无触及面外消费者破坏。",
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-07T00:25:10Z"
+}

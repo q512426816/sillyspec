@@ -1,0 +1,2180 @@
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change-patch.json b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change-patch.json
+new file mode 100644
+index 00000000..7774a9da
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change-patch.json
+@@ -0,0 +1,74 @@
++{
++  "change": "2026-10-07-wave-auto-adopt-review-dedup",
++  "baseline": "9b3bfb0699629b7351b7c82b945491fa1f846b84",
++  "head": "1b94189310602552681c975cb819d72f56b6cfeb",
++  "files": [
++    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md",
++    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml",
++    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md",
++    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md",
++    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md",
++    "package.json",
++    "src/config-schema.js",
++    "src/flow-review.js",
++    "src/stages/plan-postcheck.js",
++    "src/verify-postcheck.js",
++    "test/plan-wave-structure-guard.test.mjs",
++    "test/test-incremental-rerun.test.mjs",
++    "test/wave-auto-adopt.test.mjs"
++  ],
++  "totals": {
++    "files": 13,
++    "additions": 764,
++    "deletions": 11
++  },
++  "savedAt": "2026-10-07T00:08:58.564Z",
++  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
++  "modules": [
++    {
++      "id": "stages",
++      "files": 1,
++      "doc": "docs/sillyspec/modules/stages.md",
++      "docTouched": false,
++      "docMissing": false
++    },
++    {
++      "id": "cli-entry",
++      "files": 1,
++      "doc": "docs/sillyspec/modules/cli-entry.md",
++      "docTouched": false,
++      "docMissing": false
++    },
++    {
++      "id": "core-engine",
++      "files": 1,
++      "doc": "docs/sillyspec/modules/core-engine.md",
++      "docTouched": false,
++      "docMissing": false
++    },
++    {
++      "id": "setup",
++      "files": 1,
++      "doc": "docs/sillyspec/modules/setup.md",
++      "docTouched": false,
++      "docMissing": false
++    }
++  ],
++  "uncoveredDirs": [
++    {
++      "dir": "test",
++      "files": 3
++    }
++  ],
++  "moduleMaps": [
++    "docs/backend/modules/_module-map.yaml",
++    "docs/dashboard/modules/_module-map.yaml",
++    "docs/frontend/modules/_module-map.yaml",
++    "docs/multi-agent-platform/modules/_module-map.yaml",
++    "docs/SillyHub/modules/_module-map.yaml",
++    "docs/sillyhub-daemon/modules/_module-map.yaml",
++    "docs/sillyspec/modules/_module-map.yaml"
++  ],
++  "patchSha256": "a5bceceeda6a30c4b72b0dea9910f667b5b47c11271c54ea3f43fbab151ddf4c",
++  "patchStatus": "ok"
++}
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change.patch b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change.patch
+new file mode 100644
+index 00000000..bae9cc33
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/change.patch
+@@ -0,0 +1,986 @@
++diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml
++new file mode 100644
++index 00000000..a0b7e233
++--- /dev/null
+++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml
++@@ -0,0 +1,37 @@
+++tier: thin
+++legacy_fallback: false
+++substeps: {}
+++born_face: thin
+++with_tasks: false
+++review_force: null
+++input: >-
+++  厚流程优化方案落地（用户批准的 4 方案之 2+3），postmortem 实测痛点：
+++
+++  1) Wave 划分返工链（provider-model-list 三轮：同 Wave 共享→手工拆→非合法 Wave 号→伪并行串行链）——adopt-waves 一键重排是机械活（按 depends_on 拓扑），却要等
+++  postcheck 拦了才知道该跑。修法：executePlanPostcheck 的「蓝图一致性校验」（src/stages/plan-postcheck.js:2121
+++  validateBlueprintConsistency）与伪并行守卫（assessWaveStructure，L1670 报错文案已含指路）发现 Wave 形态类错误且**无其他类错误**时，自动跑
+++  adoptPlanWaves（src/plan-adopt-waves.js:73，幂等、同步任务总表 W 列）重排后复验：干净即过并醒目公告（重排前后 Wave 数）；仍脏则报重排后的真问题（附「已自动重排仍不过」说明）。逃生键
+++  local.yaml plan.auto_adopt_waves: false（config-schema 注册，缺省 true=自动）。
+++
+++  2) 评审两轮报同类问题（Grill 6×P1 修复后二轮重审把已确认修复又核一遍；flow done 复审同类）——修法：①flow-review.js renderReviewerTaskbook（flow.js:1552 消费）读
+++  changeDir 既有 review.json，在场时任务书注入前轮 findings 清单 +「已报项只验修复与回归，重点找新增问题——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值）；②brainstorm.js
+++  Design Grill 步骤（L406）prompt 加同款指引（前轮发现在场时先验修复与新问题）。
+++
+++
+++  成功标准：
+++
+++  - plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves
+++  更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++
+++  - plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++
+++  - renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++
+++  - Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++
+++  - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+++autopilot: true
+++baseline_commit: 9b3bfb0699629b7351b7c82b945491fa1f846b84
+++updatedAt: '2026-10-06T23:09:36.921Z'
+++baseline_sha256: 7ab17cb5a02fcd0c78ad747dcdc3170292d6688458ba7d0a4b0e3e04f2632b56
+++
++diff --git a/package.json b/package.json
++index 928dbad4..fa9f57d7 100644
++--- a/package.json
+++++ b/package.json
++@@ -24,7 +24,7 @@
++   ],
++   "license": "MIT",
++   "scripts": {
++-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs",
+++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs test/wave-auto-adopt.test.mjs test/test-incremental-rerun.test.mjs",
++     "test": "node test/run-tests.mjs",
++     "lint": "node test/check-syntax.mjs",
++     "eval:dry": "node eval/run.mjs --dry-run",
++diff --git a/src/config-schema.js b/src/config-schema.js
++index 3ae6a58f..fa2eecb3 100644
++--- a/src/config-schema.js
+++++ b/src/config-schema.js
++@@ -121,6 +121,7 @@ export const LOCAL_YAML_SCHEMA = {
++       title: '测试策略',
++       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
++       keys: [
+++        { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
++         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
++       ],
++     },
++@@ -195,6 +196,7 @@ export const LOCAL_YAML_SCHEMA = {
++       note: 'plan 阶段 TaskCard 填充派发策略。默认主 agent 直填（2026-09-20 对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；task 总数超阈值且跨模块才 batch 派子代理——阈值按项目体系可调（厚流程实证 11 任务 3 子代理 430 万 token 模板化产出后引入）。',
++       keys: [
++         { path: 'plan.fill_batch_min_tasks', type: 'integer', optional: true, status: 'live', readers: ['buildCoordinatorStep (src/stages/plan.js — 协调器 prompt 阈值插值)'], desc: '填卡 batch 派发阈值：task 总数 ≤N（或单仓单模块）→ 主 agent 直填不派子代理；>N 且跨模块/跨仓才按 batch 分派。≥1 整数，缺省 8（内置）；非法值回退 8（fail-safe）。调大 = 更少派子代理省 token；调小 = 大变更更早并行省墙钟。', example: '12' },
+++        { path: 'plan.auto_adopt_waves', type: 'boolean', optional: true, status: 'live', readers: ['executePlanPostcheck 自动重排门 (src/stages/plan-postcheck.js — tryAutoAdoptWaves)'], desc: 'Wave 形态错误自动重排：plan postcheck 发现「同 Wave 冲突/伪并行串行链」且无其他类错误时，自动跑 plan-adopt-waves 按 depends_on 拓扑重排并整体复跑校验（预算 1 次防环）。缺省 true；置 false 关闭（报错指路手工跑，2026-10-07 前现状）。方向违规自动修复（既有）不受本键影响。', example: 'true' },
++       ],
++     },
++     {
++@@ -419,6 +421,8 @@ dispatch:
++ # skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
++ # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
++ # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
+++# verify:
+++#   test_rerun: incremental   # 实测门失败后重跑档：incremental（缺省，下轮只跑失败批∪修复面）| full（恒全子集重跑，保守项目用）
++ 
++ # ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
++ # ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
++@@ -518,6 +522,7 @@ docs-check:
++ # 仅 task 总数超阈值且跨模块/跨仓才按 batch 派子代理（并行省墙钟有真实收益）。
++ # plan:
++ #   fill_batch_min_tasks: 12             # 填卡 batch 派发阈值（内置 8；调大=更少派子代理省 token，调小=大变更更早并行）
+++#   auto_adopt_waves: true               # Wave 形态错误自动拓扑重排（内置 true；false=报错指路手工跑）
++ 
++ # ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价）──
++ # blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
++diff --git a/src/flow-review.js b/src/flow-review.js
++index 40bbee97..4de9e2dc 100644
++--- a/src/flow-review.js
+++++ b/src/flow-review.js
++@@ -197,7 +197,25 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
++  */
++ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
++   const headFull = String(head || '').trim()
++-  return [
+++  // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
+++  // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
+++  // （postmortem 实证评审员两轮报同类问题，多跑一整轮成本）。读不到/无 findings 零注入
+++  // （首评任务书与现状逐字一致）。
+++  let priorFindingsMd = ''
+++  try {
+++    const prev = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8'))
+++    if (Array.isArray(prev.findings) && prev.findings.length > 0) {
+++      priorFindingsMd = [
+++        ``,
+++        `【前轮评审 findings（${prev.findings.length} 项，前轮 verdict=${String(prev.verdict || '?')}）——本轮是复审】`,
+++        ...prev.findings.slice(0, 20).map((f, i) => `  ${i + 1}. [${f && f.severity ? f.severity : '?'}] ${f && f.title ? f.title : String(f).slice(0, 120)}`),
+++        ``,
+++        `  复审优先级：已报项只验「修复到位 + 未引入回归」（逐条给修复验证锚点），把请求预算主力投向新增问题——`,
+++        `  勿把前轮清单原样重报一遍（换视角有独立价值，重复报告挤占 12 次请求预算）。`,
+++      ].join('\n')
+++    }
+++  } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
+++  const taskbook = [
++     `⚖️ 独立评审任务书 — ${change}`,
++     `══════════════════════════════════════`,
++     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
++@@ -213,6 +231,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
++     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
++     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
++     `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
+++    ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
++     ``,
++     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
++     `  1. FR↔实现↔测试三方一致：每条 FR 的实现兑现承诺？绑定作答声称的测试真存在且断言该行为？`,
++@@ -238,6 +257,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
++     ``,
++     `完成后由主会话重跑：sillyspec flow done --change ${change}（断点续，已完成子步幂等跳过）`,
++   ].join('\n')
+++  return taskbook
++ }
++ 
++ /**
++diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
++index d97ed374..31491819 100644
++--- a/src/stages/plan-postcheck.js
+++++ b/src/stages/plan-postcheck.js
++@@ -2054,7 +2054,46 @@ function deriveModuleIdFor(filePath, mapYaml) {
++  * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
++  * @throws {Error} 校验失败时抛出
++  */
+++/**
+++ * Wave 形态错误自动重排判定（2026-10-07-wave-auto-adopt-review-dedup task-01）：postmortem
+++ * （provider-model-list）实测 Wave 返工链三轮——同 Wave 冲突/伪并行串行链都是 adopt-waves
+++ * 机械可解的形态，却要 agent 撞 postcheck 后按文案找命令。此处错误全为 Wave 形态类时自动
+++ * 跑 plan-adopt-waves 重排并整体复跑 postcheck（预算 1 次，防环）；逃生键 local.yaml
+++ * plan.auto_adopt_waves: false（缺省 true）。混有非 Wave 类错误不自动重排（行为=现状）——
+++ * 重排会掩盖真实问题的上下文。
+++ */
+++const WAVE_SHAPE_ERROR_RE = /被 Wave \d+ 内 \d+ 个 task 修改|伪并行串行链|Wave 依赖方向违规/
+++function allWaveShapeErrors(errors) {
+++  const list = Array.isArray(errors) ? errors : []
+++  return list.length > 0 && list.every(e => WAVE_SHAPE_ERROR_RE.test(String(e)))
+++}
+++function autoAdoptWavesEnabled(specDir) {
+++  try {
+++    const p = pJoin(specDir, 'local.yaml')
+++    if (!existsSync(p)) return true
+++    const doc = jsYaml.load(_readFileSync(p, 'utf8'))
+++    return !(doc && doc.plan && doc.plan.auto_adopt_waves === false)
+++  } catch { return true }
+++}
+++async function tryAutoAdoptWaves(errors, changeDir, specDir, budget) {
+++  if (budget <= 0) return false
+++  if (!allWaveShapeErrors(errors)) return false
+++  if (!autoAdoptWavesEnabled(specDir)) return false
+++  const { adoptPlanWaves } = await import('../plan-adopt-waves.js')
+++  const res = adoptPlanWaves({ changeDir })
+++  if (!res || !res.ok) {
+++    console.warn(`  ⚠️ Wave 自动拓扑重排未成（${res && res.error ? res.error : '未知原因'}）——按原报错处理（手工出口：sillyspec plan-adopt-waves --change <变更名>）`)
+++    return false
+++  }
+++  console.log(`\n🔀 检测到 Wave 形态问题——已自动按 depends_on 拓扑重排 plan.md（plan-adopt-waves，任务总表 W 列同步）并整体复跑校验：`)
+++  return true
+++}
+++
++ export async function executePlanPostcheck(context) {
+++  return executePlanPostcheckRun(context, { autoAdoptBudget: 1 })
+++}
+++
+++async function executePlanPostcheckRun(context, { autoAdoptBudget = 0 } = {}) {
++   const { cwd, specRoot, resolveChangeDir, progress } = context
++ 
++   const specDir = specRoot || pJoin(cwd, '.sillyspec')
++@@ -2251,6 +2290,14 @@ export async function executePlanPostcheck(context) {
++ 
++   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
++   if (failures.length > 0) {
+++    // Wave 形态自动重排判定（task-01）：唯一失败组是蓝图一致性且错误全为 Wave 形态 → 自动
+++    // adopt-waves 重排并整体复跑一次（预算 1）。挂统一收口点而非 consistency 单点：混有
+++    // feasibility/coverage 等其他类错误时不重排（重排会掩盖真实问题上下文，实测 WA4 形态）。
+++    if (failures.length === 1 && failures[0].name === '蓝图一致性校验') {
+++      if (await tryAutoAdoptWaves(failures[0].errors, changeDir, specDir, autoAdoptBudget)) {
+++        return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
+++      }
+++    }
++     console.error(`\n❌ plan postcheck 失败（${failures.length} 类问题，已全部列出——一次修复后重跑，无需逐个迭代）：`)
++     for (const f of failures) {
++       console.error(`\n   【${f.name}】`)
++@@ -2391,6 +2438,10 @@ export async function executePlanPostcheck(context) {
++           const structure = assessWaveStructure({ existingWaves, topoWaves: waves, depMap, wavePathSets })
++           if (structure.advisory) console.warn(`  ⚠️ ${structure.advisory}`)
++           if (structure.error) {
+++            // 伪并行碎片自动重排（task-01）：mergeable 对 ≥2 是 adopt-waves 的标准解
+++            if (await tryAutoAdoptWaves([structure.error], changeDir, specDir, autoAdoptBudget)) {
+++              return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
+++            }
++             console.error(`\n❌ ${structure.error}`)
++             throw new Error(structure.error)
++           }
++diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
++index 5c428c1d..fbab1247 100644
++--- a/src/verify-postcheck.js
+++++ b/src/verify-postcheck.js
++@@ -1387,6 +1387,92 @@ export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailabl
++   return scopeCount > 0 ? 'dynamic-subset' : 'dynamic-empty-skip'
++ }
++ 
+++// ── 实测门增量重跑（2026-10-07-test-incremental-rerun）──
+++// postmortem 实测：verify --done 跑 10 分钟级测试子集 → 挂 N 个 → 修一行 → 重跑 --done 又
+++// 全量重跑子集（green cache 只在指纹不变时命中，改一行即失效）——每轮返工整轮全跑。修法：
+++// 失败轮把「失败批测试文件 + 当时 git HEAD」落稳定指针 ledger；下一轮先算增量面 =
+++// 「自失败 HEAD 以来的变更文件（含未提交与 untracked）∪ 前轮失败批文件」，是其真子集时
+++// 只跑增量面（三源推断以增量输入重算——修复文件的 import 依赖与 FR 关联回归自然入面），
+++// 基线绿面（未触碰文件）复用不重跑。逃生：local.yaml verify.test_rerun: full / env
+++// SILLYSPEC_TEST_RERUN=full 恒全子集（2026-10-07 前现状）。
+++
+++/** 增量重跑档位读取：env SILLYSPEC_TEST_RERUN 优先，次 local.yaml verify: 段 test_rerun（宽松匹配行，fail-open incremental）。 */
+++function readTestRerunConfig(specBase) {
+++  const env = String(process.env.SILLYSPEC_TEST_RERUN || '').trim().toLowerCase()
+++  if (env === 'full' || env === 'incremental') return env
+++  try {
+++    const p = join(specBase, 'local.yaml')
+++    if (!existsSync(p)) return 'incremental'
+++    const m = readFileSync(p, 'utf8').match(/^\s*test_rerun:\s*(full|incremental)\s*$/m)
+++    return m ? m[1] : 'incremental'
+++  } catch { /* 读失败 → 缺省 */ }
+++  return 'incremental'
+++}
+++
+++function testRerunLedgerPath(specBase, changeName) {
+++  return join(specBase, '.runtime', `test-rerun-${changeName || 'change'}.json`)
+++}
+++
+++/**
+++ * 读增量重跑 ledger（fail-soft：缺失/损坏/null）。shape: { head, failedFiles, inputFiles, mode, status, ranAt }
+++ */
+++export function readTestRerunLedger({ specBase, changeName }) {
+++  try {
+++    return JSON.parse(readFileSync(testRerunLedgerPath(specBase, changeName), 'utf8'))
+++  } catch { return null }
+++}
+++
+++/** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。 */
+++export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, mode, status }) {
+++  try {
+++    const dir = join(specBase, '.runtime')
+++    mkdirSync(dir, { recursive: true })
+++    writeFileSync(testRerunLedgerPath(specBase, changeName), JSON.stringify({
+++      change: changeName || null, head: head || null,
+++      inputFiles: inputFiles || [], failedFiles: failedFiles || [],
+++      mode: mode || null, status: status || null, ranAt: new Date().toISOString(),
+++    }, null, 2) + '\n')
+++  } catch { /* ledger 写失败不阻断实测门（下轮退化全子集） */ }
+++}
+++
+++/** 自基线 HEAD 以来的变更文件（committed+unstaged diff ∪ untracked），posix 归一。 */
+++function listFilesSince({ cwd, sinceHead }) {
+++  const out = []
+++  try {
+++    const diff = gitQuiet(cwd, ['diff', '--name-only', sinceHead])
+++    if (diff) out.push(...diff.split('\n'))
+++  } catch { /* diff 失败 → 空贡献 */ }
+++  try {
+++    const untracked = gitQuiet(cwd, ['ls-files', '--others', '--exclude-standard'])
+++    if (untracked) out.push(...untracked.split('\n'))
+++  } catch { /* untracked 失败 → 空贡献 */ }
+++  return [...new Set(out.map(s => s.trim().replace(/\\/g, '/')).filter(Boolean))]
+++}
+++
+++function currentGitHead(cwd) {
+++  try { return (gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null } catch { return null }
+++}
+++
+++/**
+++ * 增量重跑面计算（纯函数，export 供测）：返回 null = 不增量（走全子集现状），否则返回
+++ * { files, note }。判定：ledger 在场、有失败文件、有基线 head；since 非空或失败面非空；
+++ * 增量面严格小于全量面且是子集（保护：绝不比全子集多跑）。
+++ */
+++export function computeIncrementalFace({ ledger, filesSince, fullFace }) {
+++  if (!ledger || !Array.isArray(ledger.failedFiles) || ledger.failedFiles.length === 0 || !ledger.head) return null
+++  const since = Array.isArray(filesSince) ? filesSince : []
+++  const inc = [...new Set([...since, ...ledger.failedFiles])]
+++    .map(f => String(f).replace(/\\/g, '/'))
+++    .filter(f => f && !f.startsWith('.sillyspec/'))
+++  if (inc.length === 0) return null
+++  // 增量面必须严格小于全量面才有增量价值（≥ 面大小时回全子集——宁多跑不绕过基线）
+++  if (inc.length >= (fullFace || []).length) return null
+++  return {
+++    files: inc,
+++    note: `增量重跑面 ${inc.length} 文件（前轮失败批 ${ledger.failedFiles.length} ∪ 基线以来变更 ${since.length}；全量子集基线 ${(fullFace || []).length} 文件，未触碰绿面复用不重跑）`,
+++  }
+++}
+++
++ /**
++  * TAP 结构化判账（2026-09-28-tap-judge，P2 一期）：node --test 双报告器（spec→stderr 人读、
++  * tap→stdout 机读）批次按 `not ok` 行用例粒度判账——自由文本正则误计（fixture 预期错误文案、
++@@ -1496,6 +1582,9 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
++     exitCode,
++     durationMs,
++     outputTail,
+++    // 全量输出（内存态，不落盘）：增量重跑的失败文件归因源（TAP 顶层 Subtest 段 / pytest
+++    // FAILED 行）——outputTail 截断后归因面残缺（2026-10-07-test-incremental-rerun）
+++    outputFull: output,
++     reason: judged.reason,
++     exemptedCount: judged.exemptedCount,
++     failureRemaining: judged.remainingLines,
++@@ -1503,6 +1592,44 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
++   }
++ }
++ 
+++/**
+++ * 失败批 → 失败测试文件归因（2026-10-07-test-incremental-rerun）：node --test 文件作参数时
+++ * TAP 顶层条目名是测试标题非文件名，但每个 `not ok` 块的 YAML 诊断（location/stack）带绝对
+++ * 路径——按块内路径归一后 includes 匹配批内相对路径；非 TAP 输出（pytest 等）回退
+++ * FAILED/ERROR 行带路径匹配；归因不出保守全记批文件（增量退化不误报）。
+++ */
+++function attributeFailedFiles(result) {
+++  const files = result.files || []
+++  if (files.length === 0) return []
+++  const text = String(result.outputFull || result.outputTail || '')
+++  if (!text) return files
+++  const norm = (p) => String(p).replace(/\\/g, '/')
+++  // 按 TAP 顶层行切 not ok 块（块体 = 该行到下一顶层行之间的缩进诊断）
+++  const blocks = []
+++  const lines = text.split(/\r?\n/)
+++  let cur = null
+++  for (const line of lines) {
+++    if (/^not ok \d+/.test(line)) { cur = [line]; blocks.push(cur); continue }
+++    if (/^(?:ok \d+|not ok \d+|#\s|1\.\.\d+|TAP version)/.test(line)) { cur = null; continue }
+++    if (cur) cur.push(line)
+++  }
+++  const failing = new Set()
+++  for (const block of blocks) {
+++    const seg = norm(block.join('\n'))
+++    for (const f of files) {
+++      if (seg.includes(norm(f))) failing.add(f)
+++    }
+++  }
+++  let hits = files.filter(f => failing.has(f))
+++  if (hits.length === 0 && /FAILED|ERROR/.test(text)) {
+++    hits = files.filter(f => {
+++      const esc = norm(f).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+++      return new RegExp(`(?:FAILED|ERROR)[^\\n]{0,200}${esc}`).test(text)
+++    })
+++  }
+++  return hits.length > 0 ? hits : files
+++}
+++
++ // refSpec 来源 meta.json（agent 可写），仅放行 git ref/range 安全字符（含 HEAD~1..HEAD 类区间），
++ // 防经 shell 的命令/参数注入。剥空白与引号/分号/反引号/$ 等 shell 元字符。
++ // 注：允许 ".."/"../.."（相对路径 ref 语法上合法）不影响安全——execFileSync 数组形式下它只是
++@@ -2029,9 +2156,45 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
++     // —— 动态子集（2026-09-26-dynamic-test-inference 缺省路径）——
++     // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
++     // 全量语义留 CI / 显式 test_strategy: full。
+++    // 增量重跑（2026-10-07-test-incremental-rerun）：前轮失败 + 本轮有修复 delta → 输入面
+++    // 收窄为「失败批文件 ∪ 基线以来变更」，未触碰绿面复用——返工轮不再整轮全跑。
+++    let subsetInput = lastChangedFiles
+++    let incremental = null
+++    if (readTestRerunConfig(specBase) === 'incremental') {
+++      const ledger = readTestRerunLedger({ specBase, changeName })
+++      if (ledger) {
+++        const filesSince = listFilesSince({ cwd, sinceHead: ledger.head })
+++        incremental = computeIncrementalFace({ ledger, filesSince, fullFace: lastChangedFiles })
+++      }
+++    }
++     const frCount = frPre && frPre.files.length ? frPre.files.length : 0
++-    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
++-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+++    if (incremental) {
+++      subsetInput = incremental.files
+++      console.log(`⚡ ${incremental.note}`)
+++      console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ FR 关联回归 ∪ import 依赖），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
+++      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null })
+++      if (mainResult && typeof mainResult === 'object') {
+++        mainResult.mode = 'incremental-rerun'
+++        mainResult.reason = mainResult.reason
+++          ? `${mainResult.reason}（增量重跑：${incremental.note}）`
+++          : `增量重跑通过：${incremental.note}`
+++      }
+++    } else {
+++      console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+++      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+++    }
+++    // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
+++    // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
+++    try {
+++      writeTestRerunLedger({
+++        specBase, changeName,
+++        head: currentGitHead(cwd),
+++        inputFiles: subsetInput,
+++        failedFiles: (mainResult && Array.isArray(mainResult.failedFiles)) ? mainResult.failedFiles : [],
+++        mode: incremental ? 'incremental-rerun' : 'dynamic-subset',
+++        status: mainResult && mainResult.status,
+++      })
+++    } catch { /* 记账失败不阻断（下轮退化全子集） */ }
++   } else {
++     // —— dynamic-empty：变更与测试面零关系——
++     // 无自身测试、无 import 依赖测试、无 FR 关联绑定 → 不硬跑全量（防超时/预存失败面，
++@@ -2685,8 +2848,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
++   // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
++   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
++   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
++-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped })
++-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true })
+++  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
+++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++   if (jsProjectRun.length > 0) {
++     if (jsxRunner) {
++       const isVitest = /vitest/.test(jsxRunner)
++@@ -2698,7 +2861,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
++       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
++       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
++       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
++-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0 })
+++      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
++     } else {
++       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
++     }
++@@ -2910,6 +3073,7 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
++         continue
++       }
++       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
+++      perModule[perModule.length - 1].files = b.files || [] // 增量重跑面组成（task-B failedFiles 聚合源）
++       console.log(formatDepsBatchLine(b))
++       // 防御披露（2026-10-06-fr-regress-cap-drop）：quotaFill 构造保证优先面零弃置——此计数
++       // >0 说明组卷逻辑被后续改动破坏（钦定回归被弃），loud 披露不静默。
++@@ -2952,6 +3116,17 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
++     mode: 'dynamic-subset',
++     fallbackReason: null,
++     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
+++    // 失败批测试文件集聚合（2026-10-07-test-incremental-rerun）：增量重跑面的组成之一——
+++    // 前轮失败批的文件下轮必入面（无论修复是否触碰它们）。归因粒度：node --test TAP 顶层
+++    // not ok 以测试文件为套件名（not ok N - test/b.test.mjs），用判账行集匹配批内文件名把
+++    // 「批失败」收窄到「文件失败」；归因不出（非 TAP/行集缺文件名）保守全记批文件。
+++    failedFiles: (() => {
+++      const out = new Set()
+++      for (const r of perModule.filter(x => x.status === 'failed')) {
+++        for (const f of attributeFailedFiles(r)) out.add(f)
+++      }
+++      return [...out].sort()
+++    })(),
++     // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——
++     // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
++     failureRemaining: perModule.flatMap(r => r.failureRemaining || []),
++diff --git a/test/plan-wave-structure-guard.test.mjs b/test/plan-wave-structure-guard.test.mjs
++index e6bd1802..aafab4fd 100644
++--- a/test/plan-wave-structure-guard.test.mjs
+++++ b/test/plan-wave-structure-guard.test.mjs
++@@ -11,6 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++ import { join } from 'node:path'
++ import { tmpdir } from 'node:os'
++ import { execSync } from 'node:child_process'
+++import { readFileSync } from 'node:fs'
++ import { assessWaveStructure } from '../src/stages/plan-postcheck.js'
++ 
++ const tmpRoots = []
++@@ -109,15 +110,25 @@ async function runPostcheck(fx) {
++   return { threw, logs }
++ }
++ 
++-test('集成：6 波无依赖全串行（三轮形态）→ planPostcheck 硬拦', async () => {
+++test('集成：6 波无依赖全串行（三轮形态）→ 自动重排合并后通过（2026-10-07-wave-auto-adopt 行为变更）；关闭档回硬拦', async () => {
+++  // 缺省档（plan.auto_adopt_waves 未配置=自动）：伪并行碎片由 CLI 自动拓扑重排消化——三轮返工链消灭
++   const fx = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
++   try {
++     const { threw, logs } = await runPostcheck(fx)
++-    assert.ok(threw, '伪并行串行链被拦')
+++    assert.equal(threw, null, `自动重排后整体复跑通过（实际: ${threw}）`)
+++    assert.ok(logs.some(l => l.includes('已自动按 depends_on 拓扑重排')), '自动重排公告在场')
+++    const plan = readFileSync(join(fx.changeDir, 'plan.md'), 'utf8')
+++    assert.ok(!/## Wave 6/.test(plan), '碎片波已合并')
+++  } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
+++  // 关闭档（plan.auto_adopt_waves: false）：原硬拦行为保留
+++  const fxOff = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
+++  writeFileSync(join(fxOff.cwd, '.sillyspec', 'local.yaml'), 'plan:\n  auto_adopt_waves: false\n')
+++  try {
+++    const { threw, logs } = await runPostcheck(fxOff)
+++    assert.ok(threw, '关闭档：伪并行串行链被拦')
++     assert.match(threw, /伪并行串行链/)
++-    assert.match(threw, /可并入/)
++     assert.ok(logs.some(l => l.includes('plan-adopt-waves')), '解法出口指向 plan-adopt-waves')
++-  } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
+++  } finally { rmSync(fxOff.cwd, { recursive: true, force: true }) }
++ })
++ 
++ test('集成：4 波真并行结构 → 放行', async () => {
++diff --git a/test/test-incremental-rerun.test.mjs b/test/test-incremental-rerun.test.mjs
++new file mode 100644
++index 00000000..ddeaf7bc
++--- /dev/null
+++++ b/test/test-incremental-rerun.test.mjs
++@@ -0,0 +1,108 @@
+++/**
+++ * 2026-10-07-test-incremental-rerun — 实测门失败面增量重跑回归
+++ *
+++ * postmortem：verify --done 跑 10 分钟级测试子集 → 挂 N 个 → 修一行 → 重跑 --done 又全量
+++ * 重跑（green cache 改一行即失效）——每轮返工整轮全跑。锁死契约：
+++ *   IR1 computeIncrementalFace：失败 ledger + 修复 delta → 增量面 = 失败批 ∪ since，严格小于全量面；
+++ *   IR2 集成主链路（runVerifyTestCheck）：首跑全子集失败落 ledger → 修复 → 次跑 mode=incremental-rerun
+++ *      且命令面不含未触碰测试 → 增量绿过门，ledger 清 failedFiles（第三轮回全子集基线）；
+++ *   IR3 verify: test_rerun: full → 恒全子集（现状行为）；
+++ *   IR4 无 ledger 首跑 = dynamic-subset 全子集（现状零回归）。
+++ */
+++import { test } from 'node:test'
+++import assert from 'node:assert/strict'
+++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+++import { tmpdir } from 'node:os'
+++import { join } from 'node:path'
+++import { execFileSync } from 'node:child_process'
+++import {
+++  runVerifyTestCheck, computeIncrementalFace, readTestRerunLedger, writeTestRerunLedger,
+++} from '../src/verify-postcheck.js'
+++
+++const roots = []
+++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
+++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
+++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
+++
+++test('IR1 computeIncrementalFace 纯函数三态', () => {
+++  const face = ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js']
+++  const ledger = { head: 'abc123', failedFiles: ['test/a.test.mjs'], inputFiles: face }
+++  // 失败批 ∪ since 严格小于面 → 增量
+++  const r1 = computeIncrementalFace({ ledger, filesSince: ['src/b.js'], fullFace: face })
+++  assert.ok(r1, '有 delta → 增量')
+++  assert.deepEqual([...r1.files].sort(), ['src/b.js', 'test/a.test.mjs'], '面=失败批∪since')
+++  assert.ok(r1.note.includes('未触碰绿面复用'), '公告含复用说明')
+++  // 无 ledger / 无失败文件 / 无 head → null
+++  assert.equal(computeIncrementalFace({ ledger: null, filesSince: [], fullFace: face }), null)
+++  assert.equal(computeIncrementalFace({ ledger: { head: 'x', failedFiles: [] }, filesSince: [], fullFace: face }), null)
+++  assert.equal(computeIncrementalFace({ ledger: { head: null, failedFiles: ['f'] }, filesSince: [], fullFace: face }), null)
+++  // 增量面 ≥ 全量面 → null（回全子集）
+++  assert.equal(computeIncrementalFace({ ledger: { head: 'x', failedFiles: face }, filesSince: face, fullFace: face }), null)
+++})
+++
+++/**
+++ * 集成夹具：4 源文件 + 4 测试（b 初始失败）。变更面 = 4 src 文件（faceOverride 权威面）。
+++ * runVerifyTestCheck 需 specBase local.yaml 可缺省（无 test_strategy → dynamic）。
+++ */
+++function integrationFixture({ yaml = null } = {}) {
+++  const root = mk('ir-')
+++  const specBase = join(root, '.sillyspec')
+++  mkdirSync(specBase, { recursive: true })
+++  if (yaml) writeFileSync(join(specBase, 'local.yaml'), yaml)
+++  writeFileSync(join(root, '.gitignore'), '.sillyspec/\n')
+++  mkdirSync(join(root, 'src'), { recursive: true })
+++  mkdirSync(join(root, 'test'), { recursive: true })
+++  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(root, 'src', `${n}.js`), 'export const v = 1\n')
+++  const testBody = (n, ok) => `import { test } from 'node:test'\nimport { v } from '../src/${n}.js'\ntest('${n}', () => { if (v !== ${ok ? 1 : 2}) throw new Error('boom') })\n`
+++  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(root, 'test', `${n}.test.mjs`), testBody(n, n !== 'b'))
+++  git(root, ['init', '-q']); git(root, ['config', 'user.email', 't@t']); git(root, ['config', 'user.name', 't'])
+++  git(root, ['add', '.']); git(root, ['commit', '-qm', 'init'])
+++  return { root, specBase, face: ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js'] }
+++}
+++
+++test('IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账', () => {
+++  const { root, specBase, face } = integrationFixture()
+++  const run = () => runVerifyTestCheck({ cwd: root, specBase, changeName: 'c1', faceOverride: face })
+++
+++  // 首跑：无 ledger → 全子集，b 失败
+++  const r1 = run()
+++  assert.equal(r1.status, 'failed', '首跑失败（b 用例挂）')
+++  assert.equal(r1.mode, 'dynamic-subset', '首跑全子集模式')
+++  const ledger1 = readTestRerunLedger({ specBase, changeName: 'c1' })
+++  assert.ok(ledger1, 'ledger 已落')
+++  assert.ok(ledger1.failedFiles.includes('test/b.test.mjs'), `失败批文件在账：${ledger1.failedFiles}`)
+++
+++  // 修复：改 test/b.test.mjs（工作树修改 → since delta）
+++  writeFileSync(join(root, 'test', 'b.test.mjs'), `import { test } from 'node:test'\nimport { v } from '../src/b.js'\ntest('b', () => { if (v !== 1) throw new Error('boom') })\n`)
+++
+++  // 次跑：增量档
+++  const r2 = run()
+++  assert.equal(r2.status, 'passed', '增量面绿过门')
+++  assert.equal(r2.mode, 'incremental-rerun', '模式=增量重跑')
+++  const cmd = String(r2.command || '')
+++  assert.ok(!cmd.includes('a.test.mjs') || !/deps/.test(cmd), `命令面收窄（未触碰测试不重跑）：${cmd}`)
+++  assert.ok(r2.reason.includes('增量重跑'), 'reason 标注增量')
+++
+++  // ledger 清账：failedFiles 空 → 下轮回全子集
+++  const ledger2 = readTestRerunLedger({ specBase, changeName: 'c1' })
+++  assert.deepEqual(ledger2.failedFiles, [], '增量绿后清账')
+++})
+++
+++test('IR3 verify: test_rerun: full → 恒全子集（现状行为）', () => {
+++  const { root, specBase, face } = integrationFixture({ yaml: 'verify:\n  test_rerun: full\n' })
+++  const run = () => runVerifyTestCheck({ cwd: root, specBase, changeName: 'c1', faceOverride: face })
+++  const r1 = run() // 失败
+++  assert.equal(r1.status, 'failed')
+++  writeFileSync(join(root, 'test', 'b.test.mjs'), `import { test } from 'node:test'\nimport { v } from '../src/b.js'\ntest('b', () => { if (v !== 1) throw new Error('boom') })\n`)
+++  const r2 = run()
+++  assert.equal(r2.mode, 'dynamic-subset', 'config full → 仍全子集（不走增量）')
+++})
+++
+++test('IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到', () => {
+++  const specBase = join(mk('ir4-'), '.sillyspec')
+++  assert.equal(readTestRerunLedger({ specBase, changeName: 'x' }), null, '无文件 → null')
+++  writeTestRerunLedger({ specBase, changeName: 'x', head: 'abc', inputFiles: ['a'], failedFiles: ['b'], mode: 'dynamic-subset', status: 'failed' })
+++  const l = readTestRerunLedger({ specBase, changeName: 'x' })
+++  assert.equal(l.head, 'abc')
+++  assert.deepEqual(l.failedFiles, ['b'])
+++})
++diff --git a/test/wave-auto-adopt.test.mjs b/test/wave-auto-adopt.test.mjs
++new file mode 100644
++index 00000000..92dd6519
++--- /dev/null
+++++ b/test/wave-auto-adopt.test.mjs
++@@ -0,0 +1,142 @@
+++/**
+++ * 2026-10-07-wave-auto-adopt-review-dedup — Wave 自动重排 + 评审任务书前轮 findings 回归
+++ *
+++ * postmortem（provider-model-list）：Wave 返工链三轮（同 Wave 冲突→手工拆→伪并行串行链）；
+++ * 评审员两轮报同类问题。锁死契约：
+++ *   WA1 同 Wave 冲突且 depends_on 拓扑可分离 → 自动重排后 postcheck 整体通过（plan.md 已重排）；
+++ *   WA2 伪并行碎片（独立任务手排多波）→ 自动合并重排后通过；
+++ *   WA3 auto_adopt_waves: false → 零自动重排（冲突 error 照报，行为=2026-10-07 前现状）；
+++ *   WA4 混有非 Wave 类错误 → 不自动重排（两族错误都报）；
+++ *   RB1 复审任务书含前轮 findings 清单与复审优先级引导；无 review.json 首评任务书逐字=现状。
+++ */
+++import { test } from 'node:test'
+++import assert from 'node:assert/strict'
+++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+++import { tmpdir } from 'node:os'
+++import { join } from 'node:path'
+++import { executePlanPostcheck } from '../src/stages/plan-postcheck.js'
+++import { renderReviewerTaskbook } from '../src/flow-review.js'
+++
+++const roots = []
+++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
+++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
+++
+++const CARD = (id, paths, deps = '[]') => [
+++  '---', `id: ${id}`, `title: t-${id}`, `title_zh: 任务${id}`, 'author: t',
+++  'created_at: 2026-10-07 00:00:00', 'priority: P0', `depends_on: ${deps}`, 'blocks: []',
+++  'requirement_ids: []', 'decision_ids: []',
+++  'allowed_paths:', ...paths.map(p => `  - ${p}`),
+++  'goal: >', '  g', 'implementation:', '  - i', 'acceptance:', '  - a',
+++  'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
+++].join('\n')
+++
+++function fixture({ planWaves, deps = {}, yaml = null, perTaskPaths = false }) {
+++  const root = mk('wa-')
+++  const specBase = join(root, '.sillyspec')
+++  const changeDir = join(specBase, 'changes', 'c1')
+++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+++  if (yaml != null) writeFileSync(join(specBase, 'local.yaml'), yaml)
+++  const planLines = ['---', 'plan_level: full', '---', '', '# 计划', '']
+++  for (const [w, tasks] of Object.entries(planWaves)) {
+++    planLines.push(`## Wave ${w}`)
+++    for (const t of tasks) planLines.push(`- ${t}`)
+++    planLines.push('')
+++  }
+++  writeFileSync(join(changeDir, 'plan.md'), planLines.join('\n'))
+++  const taskIds = Object.values(planWaves).flat()
+++  writeFileSync(join(changeDir, 'tasks.md'), taskIds.map(t => `- [ ] ${t}: t`).join('\n') + '\n')
+++  for (const t of taskIds) {
+++    const paths = perTaskPaths ? [`src/${t}.js`] : ['src/shared.js']
+++    writeFileSync(join(changeDir, 'tasks', `${t}.md`), CARD(t, paths, JSON.stringify(deps[t] || [])))
+++  }
+++  const context = {
+++    cwd: root,
+++    specRoot: specBase,
+++    progress: { currentChange: 'c1' },
+++    resolveChangeDir: () => changeDir,
+++  }
+++  return { root, specBase, changeDir, context }
+++}
+++
+++const capture = async (fn) => {
+++  const logs = []
+++  const orig = { log: console.log, error: console.error, warn: console.warn }
+++  console.log = (...a) => logs.push(['log', a.join(' ')])
+++  console.error = (...a) => logs.push(['error', a.join(' ')])
+++  console.warn = (...a) => logs.push(['warn', a.join(' ')])
+++  try { return { result: await fn(), logs } } finally { console.log = orig.log; console.error = orig.error; console.warn = orig.warn }
+++}
+++
+++test('WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过', async () => {
+++  // task-02 depends_on task-01，两卡同改 src/shared.js 却被手排进同一 Wave —— 拓扑本就该分离
+++  const { context, changeDir } = fixture({ planWaves: { 1: ['task-01', 'task-02'] }, deps: { 'task-02': ['task-01'] } })
+++  const { result, logs } = await capture(() => executePlanPostcheck(context))
+++  const text = logs.map(l => l[1]).join('\n')
+++  assert.ok(text.includes('已自动按 depends_on 拓扑重排'), `自动重排公告在场：${text.slice(0, 400)}`)
+++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
+++  const w2 = plan.indexOf('## Wave 2')
+++  assert.ok(w2 > -1 && plan.indexOf('- task-01') < w2 && plan.indexOf('- task-02') > w2, `重排后 task-01/task-02 分波：\n${plan}`)
+++  // 走到这里未被 reject 即 postcheck 整体通过（复跑成功）
+++})
+++
+++test('WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过', async () => {
+++  const { context, changeDir } = fixture({ planWaves: { 1: ['task-01'], 2: ['task-02'], 3: ['task-03'], 4: ['task-04'] }, perTaskPaths: true })
+++  const { logs } = await capture(() => executePlanPostcheck(context))
+++  const text = logs.map(l => l[1]).join('\n')
+++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
+++  assert.ok(!/## Wave 2/.test(plan), `碎片波已合并为单波：\n${plan}`)
+++  assert.ok(text.includes('已自动按 depends_on 拓扑重排'), `自动重排公告在场：${text.slice(0, 300)}`)
+++})
+++
+++test('WA3 auto_adopt_waves: false → 零自动重排（冲突照报）', async () => {
+++  const { context, changeDir } = fixture({
+++    planWaves: { 1: ['task-01', 'task-02'] },
+++    deps: { 'task-02': ['task-01'] },
+++    yaml: 'plan:\n  auto_adopt_waves: false\n',
+++  })
+++  await assert.rejects(() => executePlanPostcheck(context), /被 Wave 1 内|蓝图一致性/, '冲突 error 照抛')
+++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
+++  assert.ok(/## Wave 1\n- task-01\n- task-02/.test(plan.replace(/\r/g, '')), 'plan.md 未被重排（现状行为）')
+++})
+++
+++test('WA4 混有非 Wave 类错误 → 不自动重排', async () => {
+++  const root = mk('wa4-')
+++  const specBase = join(root, '.sillyspec')
+++  const changeDir = join(specBase, 'changes', 'c1')
+++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+++  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: full\n---\n\n# 计划\n\n## Wave 1\n- task-01\n- task-02\n')
+++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: t\n- [ ] task-02: t\n')
+++  // task-02 缺 title_zh（非 Wave 类错误）+ 同 Wave 共享 src/shared.js（Wave 类错误）
+++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), CARD('task-01', ['src/shared.js']))
+++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'), CARD('task-02', ['src/shared.js']).replace('title_zh: 任务task-02\n', ''))
+++  const context = { cwd: root, specRoot: specBase, progress: { currentChange: 'c1' }, resolveChangeDir: () => changeDir }
+++  const { logs } = await capture(() => assert.rejects(() => executePlanPostcheck(context)))
+++  const text = logs.map(l => l[1]).join('\n')
+++  assert.ok(!text.includes('已自动按 depends_on 拓扑重排'), '混合错误不自动重排')
+++  assert.ok(text.includes('title_zh'), '非 Wave 类错误如实报出')
+++})
+++
+++test('RB1 复审任务书含前轮 findings；首评任务书与现状一致', () => {
+++  const root = mk('rb-')
+++  const changeDir = join(root, 'c1')
+++  mkdirSync(changeDir, { recursive: true })
+++  // 首评：无 review.json
+++  const first = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'abc123def456' })
+++  assert.ok(!first.includes('前轮评审 findings'), '首评无前轮段')
+++  assert.ok(first.includes('独立评审任务书'), '任务书主体在场')
+++  // 复审：前轮 review.json 在场
+++  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
+++    schemaVersion: 1, change: 'c1', reviewer: 'subagent', verdict: 'FAIL',
+++    reviewedAgainst: 'abc123def456',
+++    findings: [
+++      { severity: 'P1', title: '承诺的备份未落盘', evidence: 'x', location: 'a.js:1' },
+++      { severity: 'P2', title: '文档漂移', evidence: 'y', location: 'b.js:2' },
+++    ],
+++    dimensionNotes: {}, reviewedAt: '2026-10-07T00:00:00Z',
+++  }))
+++  const re = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'def456abc789' })
+++  assert.ok(re.includes('前轮评审 findings（2 项'), `前轮段在场：${re.slice(re.indexOf('前轮') - 50, re.indexOf('前轮') + 200)}`)
+++  assert.ok(re.includes('[P1] 承诺的备份未落盘'), 'findings 逐条列出')
+++  assert.ok(re.includes('只验「修复到位 + 未引入回归」'), '复审优先级引导在场')
+++  assert.ok(re.includes('def456abc789'), '本轮 head 照抄不受前轮影响')
+++})
++diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md
++new file mode 100644
++index 00000000..c5e47f19
++--- /dev/null
+++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md
++@@ -0,0 +1,57 @@
+++---
+++author: flow-machine-draft
+++created_at: 2026-10-06T16:13:04.411Z
+++---
+++# 设计记录（Design Record）— 2026-10-07-wave-auto-adopt-review-dedup
+++
+++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
+++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
+++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
+++
+++## 做法概述
+++
+++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+++
+++三件「把机械活从前移给 CLI」的修复：① Wave 形态错误自动重排——postmortem（provider-model-list）实测 Wave 返工链三轮（同 Wave 冲突→手工拆→非合法 Wave 号→伪并行串行链），而 adopt-waves 按 depends_on 拓扑重排是机械活。修法：executePlanPostcheck 拆为 executePlanPostcheckRun（带 autoAdoptBudget），失败收口点判定「唯一失败组=蓝图一致性且错误全为 Wave 形态」时自动跑 adoptPlanWaves 重排并整体复跑（预算 1 次防环）；伪并行守卫（assessWaveStructure error throw 点）同款挂钩。方向违规自动修复（既有 L2388 机制）不动。挂统一收口点而非 consistency 单点：混有 feasibility 等其他类错误时不重排（实测 WA4 形态——重排会掩盖真实问题上下文）。逃生键 plan.auto_adopt_waves: false（config-schema 注册 + renderExample token）。② 复审任务书前轮 findings——flow-review.js renderReviewerTaskbook 读 changeDir 既有 review.json，在场时注入 findings 清单与「已报项只验修复与回归，重点找新增——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值；挤占 12 次请求预算是实证痛点）；首评零注入（任务书逐字=现状）。Grill 复审侧既有 PRIOR_REVIEW_FACTS/re-review 机制（review-material-pack.js）核查在位不重造。③ 实测门失败面增量重跑（task-07，方案 1 并入）——失败轮把「失败批测试文件（TAP not ok 块 location 路径归因/pytest FAILED 行兜底/归因不出保守全记批文件）+ 当时 git HEAD」落稳定指针 ledger（.runtime/test-rerun-<change>.json）；下轮 dynamic-subset 分支算增量面=「自失败 HEAD 以来变更文件（diff∪untracked）∪ 前轮失败批文件」，严格小于全量面时只跑增量面（三源推断以增量输入重算，修复文件的 import 依赖与 FR 回归自然入面），mode=incremental-rerun 且 reason 披露；增量绿后清账（下轮自然回全子集基线）。批对象补发 files（buildDepsBatches 三批 push + runModuleSubset perModule 透传 + outputFull 内存态归因源）。
+++
+++## 接口契约
+++
+++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+++
+++新导出：verify-postcheck.js readTestRerunLedger/writeTestRerunLedger/computeIncrementalFace；runModuleSubset 结果新增 failedFiles 数组与批 perModule 的 files/outputFull（内存态）；buildDepsBatches 批对象新增 files。行为变更三处（均有回归钉住）：① plan postcheck 在「唯一失败组为纯 Wave 形态错误」时自动重排 plan.md/tasks.md 并复跑（config 缺省开，plan.auto_adopt_waves: false 关闭回现状报错）；② flow done 复审任务书在 review.json 已在场时多前轮 findings 段（首评逐字不变）；③ verify --done dynamic-subset 档在前轮失败后走增量面（mode=incremental-rerun；config verify: test_rerun: full 或 env SILLYSPEC_TEST_RERUN=full 恒全子集现状）。新增配置键两个（plan.auto_adopt_waves boolean / verify.test_rerun enum）+ renderExample token。无端点、无 schema、无既有配置键语义变化；test_strategy: full/skip 路径零触碰。
+++
+++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+++
+++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+++
+++不适用：无事件流。自动重排是同步单进程内「失败→重排→复跑」；ledger 写在每轮实测后（读-算-写同进程序）；增量面由当次读取的 ledger+git 现态计算，迟到旧 ledger 只会少增量（回全子集，安全方向）。
+++
+++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+++
+++ledger 后写胜（同 change 并发 verify 罕见；错账最坏=下轮多跑/少跑一轮增量，回全子集兜底）。自动重排写 plan.md/tasks.md 与 agent 并发 Edit 竞争：后写胜（与 agent 手跑 adopt-waves 同语义），plan.md 有 git 兜底可恢复。outputFull 内存态无并发面。
+++
+++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+++
+++自动重排中断于写盘前=零效果原报错在场；ledger 写失败 fail-soft（下轮退化全子集）；增量面计算失败（git 异常）listFilesSince 返回空贡献→增量面=失败批文件仍可增量。复跑预算 1 次防「重排→又失败→再重排」循环。
+++
+++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+++
+++ledger 按 change 名寻址（change 级隔离）；自动重排只动 changeDir 内 plan.md/tasks.md；增量面三源推断以 cwd 为根（worktree 内跑时 specBase 锚回主仓与既有口径同源）；taskbook 读本 changeDir 的 review.json。均无跨 change 共享态。
+++
+++## 风险与死路
+++
+++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+++
+++最大风险：③增量重跑的假绿面——修复破坏了「增量面之外、基线绿面之内」的测试而未被发现。缓解链：增量面三源推断以修复文件为输入重算（import 依赖与 FR 关联回归自然入面）；失败批文件无条件入面；增量面≥全量面时回全子集；test_rerun: full 逃生；归因不出保守全记批文件（增量退化不误报）。残余接受：跨模块副作用破坏无 import 边文件的理论面——与「agent 手动只跑失败测试」的现行实践相比是严格改进。第二个风险：①自动重排改写 agent 手排 Wave——agent 的时序意图应编码在 depends_on（adopt 的输入）而非 Wave 手排；公告醒目 + config 逃生 + git 可恢复。试过但放弃：a) 增量后强制再跑全子集确认——passing 轮成本反升（增量+全量>全量），postmortem 的痛点是失败轮返工不是通过轮；b) 逐文件归因用 failureRemaining 行集——实证行集只含内层用例名不含文件名（node --test 文件作参数时顶层名=测试标题），改走 not ok 块 location 路径；c) Wave 错误在 consistency 单点挂自动重排——WA4 实证混有其他错误时会误触发，移到失败统一收口点判定。
+++
+++## 文件变更清单
+++
+++| 操作 | 路径 | 说明 |
+++|---|---|---|
+++| 修改 | src/stages/plan-postcheck.js | executePlanPostcheck 拆 Run+预算复跑；统一收口点自动重排判定；伪并行挂点；autoAdoptWavesEnabled |
+++| 修改 | src/flow-review.js | renderReviewerTaskbook 前轮 findings 注入 |
+++| 修改 | src/verify-postcheck.js | 增量重跑（ledger/归因/增量面/config）；批 files 下发；outputFull |
+++| 修改 | src/config-schema.js | plan.auto_adopt_waves + verify.test_rerun 注册与 example |
+++| 修改 | package.json | 两个新测试收录 test:core |
+++| 新增 | NEW:test/wave-auto-adopt.test.mjs | WA1-WA4 + RB1 |
+++| 新增 | NEW:test/test-incremental-rerun.test.mjs | IR1-IR4（集成主链路真跑） |
++diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md
++new file mode 100644
++index 00000000..502465ad
++--- /dev/null
+++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md
++@@ -0,0 +1,35 @@
+++---
+++author: flow-machine-draft
+++created_at: 2026-10-06T23:09:36.897Z
+++---
+++# 提案书（Proposal）— 2026-10-07-wave-auto-adopt-review-dedup
+++
+++## 动机
+++
+++任务原话转写：厚流程优化方案落地（用户批准的 4 方案之 2+3），postmortem 实测痛点：
+++1) Wave 划分返工链（provider-model-list 三轮：同 Wave 共享→手工拆→非合法 Wave 号→伪并行串行链）——adopt-waves 一键重排是机械活（按 depends_on 拓扑），却要等 postcheck 拦了才知道该跑。修法：executePlanPostcheck 的「蓝图一致性校验」（src/stages/plan-postcheck.js:2121 validateBlueprintConsistency）与伪并行守卫（assessWaveStructure，L1670 报错文案已含指路）发现 Wave 形态类错误且**无其他类错误**时，自动跑 adoptPlanWaves（src/plan-adopt-waves.js:73，幂等、同步任务总表 W 列）重排后复验：干净即过并醒目公告（重排前后 Wave 数）；仍脏则报重排后的真问题（附「已自动重排仍不过」说明）。逃生键 local.yaml plan.auto_adopt_waves: false（config-schema 注册，缺省 true=自动）。
+++2) 评审两轮报同类问题（Grill 6×P1 修复后二轮重审把已确认修复又核一遍；flow done 复审同类）——修法：①flow-review.js renderReviewerTaskbook（flow.js:1552 消费）读 changeDir 既有 review.json，在场时任务书注入前轮 findings 清单 +「已报项只验修复与回归，重点找新增问题——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值）；②brainstorm.js Design Grill 步骤（L406）prompt 加同款指引（前轮发现在场时先验修复与新问题）。
+++
+++成功标准：
+++- plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++- plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++- renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++- Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+++
+++## 变更范围
+++
+++按成功标准机械推导，共 5 条验收面：
+++1. plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++2. plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++3. renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++4. Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+++
+++## 成功标准（可验证）
+++
+++1. plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++2. plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++3. renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++4. Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md
++new file mode 100644
++index 00000000..c9475990
++--- /dev/null
+++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md
++@@ -0,0 +1,85 @@
+++---
+++author: flow-machine-draft
+++created_at: 2026-10-06T16:13:04.411Z
+++---
+++# 需求规格（Requirements）— 2026-10-07-wave-auto-adopt-review-dedup
+++
+++## 功能需求
+++
+++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
+++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
+++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
+++
+++### FR-01: plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++
+++plan postcheck 的失败统一收口点必须且只在「唯一失败组为蓝图一致性且其错误全为 Wave 形态类」时自动跑 plan-adopt-waves 重排并整体复跑一次（预算 1 次防环）；伪并行串行链 error 点必须同款挂钩；混有非 Wave 类错误时禁止自动重排（两族错误都按现状报出）。
+++
+++#### 场景：拓扑可分离的同 Wave 冲突
+++
+++Given task-02 depends_on task-01 且两卡同改 src/shared.js 被手排进同一 Wave / When plan postcheck / When 自动重排复跑 / Then postcheck 整体通过、plan.md 中两任务分波、输出含自动重排公告。
+++
+++#### 场景：混合错误不重排
+++
+++Given 同 Wave 冲突 + task-02 缺 title_zh / When plan postcheck / Then 不自动重排，两族错误均报出（title_zh 与 Wave 冲突）。
+++
+++### FR-02: plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++
+++local.yaml plan.auto_adopt_waves: false 时必须零自动重排（冲突 error 照抛、plan.md 原样）；该键必须在 config-schema 注册且 renderExample 输出含其首末段 token；缺省必须为 true（自动）。
+++
+++#### 场景：关闭档
+++
+++Given local.yaml 配 plan.auto_adopt_waves: false 与拓扑可分离冲突形态 / When plan postcheck / Then 冲突 error 照抛、plan.md 未被改写。
+++
+++### FR-03: renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++
+++复审任务书在 changeDir 存在含 findings 的 review.json 时必须注入前轮清单（severity+title 逐条，≤20 条）与「已报项只验修复与回归、重点找新增问题、勿整轮重报」优先级引导；无 review.json 或无 findings 时任务书必须与现状逐字一致；本轮 head 标注不受前轮 review.json 影响。
+++
+++#### 场景：复审注入
+++
+++Given changeDir 有前轮 FAIL 的 review.json（2 条 findings）/ When renderReviewerTaskbook / Then 任务书含前轮段、逐条 findings、复审优先级引导，head 照抄本轮值。
+++
+++### FR-04: Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++
+++Design Grill 复审轮的 {PRIOR_REVIEW_FACTS} 前轮事实注入必须保持既有行为零回归（本变更不得触碰该渲染链路）；既有机制（review-material-pack 的 PRIOR_REVIEW_FACTS/re-review）核查在位、禁止重造平行机制。
+++
+++#### 场景：既有机制核查
+++
+++Given Grill 复审轮 / When prompt 渲染 / When {PRIOR_REVIEW_FACTS} 注入 / Then 前轮事实段照常在场（既有机制零回归——本变更未触碰该链路，验证面为全量回归测试通过）。
+++
+++### FR-05: （并入 FR-01-04 的组合验证）既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+++
+++新增两个测试文件（test/wave-auto-adopt.test.mjs、test/test-incremental-rerun.test.mjs）必须收录进 package.json 的 test:core 清单；收口时 test:core 必须全绿（309 用例 0 失败）且 npm run lint 必须 0 报错。
+++
+++#### 场景：主路径
+++
+++Given 本变更全部实现合入 / When npm run test:core 与 npm run lint / Then 均零失败退出（CLI 冒烟另证：4 任务伪并行 fixture 自动合并、集成链路失败→修复→增量绿）。
+++
+++### FR-06: 评审档位撤销说明（记录性条目，无代码面）
+++
+++本条为记录性裁决：评审档位禁止新增 self 档（review-tier S0/S1→self 与 flow-review 五路证据定档已存在，再加 self 档破坏 1/4 抽样校准）；「--done --answer 补 wait」必须视为已修复项（complete.js requiresWait 门现行自动补全 waitAnswer）；「--step 意图断言」必须作为并发安全设计保留。测试面：不适用（记录性条目，验证面为 design 风险节在档）。
+++
+++#### 场景：撤销留痕
+++
+++Given 收口评审 / When 核对 design 与 requirements / Then 撤销三项与理由在档（设计文档「风险与死路」与本条）。
+++
+++### FR-07: 实测门失败面增量重跑（task-07 追加，方案 1 并入）：前轮失败后下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面，未触碰绿面复用；verify: test_rerun: full 恒全子集（现状）
+++
+++verify --done 的 dynamic-subset 档必须在前轮实测失败后把失败批测试文件（按 TAP not ok 块 location 路径归因，pytest FAILED 行兜底，归因不出保守全记批文件）与当时 git HEAD 落 ledger；下轮增量面 = 失败批 ∪ 自 HEAD 以来变更文件，严格小于全量面时只跑增量面（mode=incremental-rerun 且 reason 披露口径），增量绿后清账回全子集基线；local.yaml verify: test_rerun: full 或 env SILLYSPEC_TEST_RERUN=full 必须恒全子集（现状行为），test_strategy: full/skip 不受影响。
+++
+++#### 场景：修复轮增量
+++
+++Given 全子集首跑 1/4 测试文件失败并落账 / When 修复该文件后重跑 verify --done / Then mode=incremental-rerun、命令面不含未触碰测试文件、绿过门且 ledger 清账（下轮回全子集基线）。
+++
+++#### 场景：保守档
+++
+++Given local.yaml 配 verify: test_rerun: full / When 同场景重跑 / Then 仍全子集模式（dynamic-subset，不走增量）。
+++
+++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
+++
+++FR-01: test/wave-auto-adopt.test.mjs「WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过」「WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过」「WA4 混有非 Wave 类错误 → 不自动重排」
+++FR-02: test/wave-auto-adopt.test.mjs「WA3 auto_adopt_waves: false → 零自动重排（冲突照报）」（renderExample token 由 test/config-schema.test.mjs 全量套件防漂耦合断言覆盖）
+++FR-03: test/wave-auto-adopt.test.mjs「RB1 复审任务书含前轮 findings；首评任务书与现状一致」
+++FR-04: 不适用：既有机制核查面——{PRIOR_REVIEW_FACTS} 接线属 review-material-pack 既有链路，本变更零触碰，由全量 test:core 既有用例（knowledge-inject/guidance-output-neutrality 等）回归覆盖
+++FR-05: test/wave-auto-adopt.test.mjs「WA1-WA4/RB1 全绿」（连同全量 test:core 309 用例 0 失败 + lint 0 报错，见变更提交链 23e4fe6b）
+++FR-06: 不适用：记录性条目无测试面——撤销裁决留痕在 design 风险节与本条
+++FR-07: test/test-incremental-rerun.test.mjs「IR1 computeIncrementalFace 纯函数三态」「IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账」「IR3 verify: test_rerun: full → 恒全子集（现状行为）」「IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到」
++diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md
++new file mode 100644
++index 00000000..5784e888
++--- /dev/null
+++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md
++@@ -0,0 +1,18 @@
+++---
+++author: flow-machine-draft
+++created_at: 2026-10-06T23:09:36.897Z
+++---
+++# 任务注册表（Tasks）— 2026-10-07-wave-auto-adopt-review-dedup
+++
+++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
+++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
+++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
+++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-07-wave-auto-adopt-review-dedup --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
+++> `flow status --change 2026-10-07-wave-auto-adopt-review-dedup` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
+++
+++- [x] task-01: plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+++- [x] task-02: plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+++- [x] task-03: renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+++- [x] task-04: Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+++- [x] task-05: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+++- [x] task-07: 实测门失败面增量重跑（方案 1 并入）：ledger（test-rerun-<change>.json 稳定指针：head/failedFiles/inputFiles）+ dynamic-subset 分支增量档（前轮失败后下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」，mode=incremental-rerun，未触碰绿面复用）+ 失败文件归因（node --test TAP not ok 块 location 路径 / pytest FAILED 行，归因不出保守全记批文件）+ 失败批文件下发（buildDepsBatches 批带 files）+ verify.test_rerun 配置逃生（缺省 incremental；full=恒全子集现状；env SILLYSPEC_TEST_RERUN 优先；config-schema 注册+example）
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml
+new file mode 100644
+index 00000000..15a7d928
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml
+@@ -0,0 +1,47 @@
++tier: thick
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++  patch: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  厚流程优化方案落地（用户批准的 4 方案之 2+3），postmortem 实测痛点：
++
++  1) Wave 划分返工链（provider-model-list 三轮：同 Wave 共享→手工拆→非合法 Wave 号→伪并行串行链）——adopt-waves 一键重排是机械活（按 depends_on 拓扑），却要等
++  postcheck 拦了才知道该跑。修法：executePlanPostcheck 的「蓝图一致性校验」（src/stages/plan-postcheck.js:2121
++  validateBlueprintConsistency）与伪并行守卫（assessWaveStructure，L1670 报错文案已含指路）发现 Wave 形态类错误且**无其他类错误**时，自动跑
++  adoptPlanWaves（src/plan-adopt-waves.js:73，幂等、同步任务总表 W 列）重排后复验：干净即过并醒目公告（重排前后 Wave 数）；仍脏则报重排后的真问题（附「已自动重排仍不过」说明）。逃生键
++  local.yaml plan.auto_adopt_waves: false（config-schema 注册，缺省 true=自动）。
++
++  2) 评审两轮报同类问题（Grill 6×P1 修复后二轮重审把已确认修复又核一遍；flow done 复审同类）——修法：①flow-review.js renderReviewerTaskbook（flow.js:1552 消费）读
++  changeDir 既有 review.json，在场时任务书注入前轮 findings 清单 +「已报项只验修复与回归，重点找新增问题——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值）；②brainstorm.js
++  Design Grill 步骤（L406）prompt 加同款指引（前轮发现在场时先验修复与新问题）。
++
++
++  成功标准：
++
++  - plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves
++  更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++
++  - plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++
++  - renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++
++  - Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++
++  - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++autopilot: true
++baseline_commit: 9b3bfb0699629b7351b7c82b945491fa1f846b84
++updatedAt: '2026-10-07T00:08:58.566Z'
++baseline_sha256: 7ab17cb5a02fcd0c78ad747dcdc3170292d6688458ba7d0a4b0e3e04f2632b56
++allow_batch_tick: true
++upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
++gate_summary: >-
++  test: passed ← module[]+deps(js63)+fr(60)（166.6s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007000819\test-result.json｜lint: passed
++  ← npm run lint（37.8s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007000819\test-result.json｜门文件 12 个
++
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json
+new file mode 100644
+index 00000000..5680008a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json
+@@ -0,0 +1,40 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-07-wave-auto-adopt-review-dedup",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "1b94189310602552681c975cb819d72f56b6cfeb",
++  "findings": [
++    {
++      "severity": "P2",
++      "title": "增量重跑「≥全量面回全子集」守卫比较基错位（失败测试文件数 vs 变更输入文件面），级联失败场景增量档永不触发",
++      "evidence": "computeIncrementalFace 的 inc=失败批测试文件∪since（测试文件粒度）与 fullFace=lastChangedFiles（变更输入面，本变更仅 8 文件）比长度：级联失败（失败测试数≥输入面数）时恒回全子集。本变更自身 dogfood 实证：63 文件大批失败→修复→复跑 ledger mode=dynamic-subset（全量，.sillyspec/.runtime/test-rerun-*.json）。错误方向安全（宁多跑不少跑、无假绿），但 FR-07 的动机收益（大子集失败→修一行→快速复跑）恰在此场景失效。另：JSDoc 声称「严格小于全量面且是子集（绝不比全子集多跑）」，代码只比长度未校验子集性。",
++      "location": "src/verify-postcheck.js:1461-1469,2167"
++    },
++    {
++      "severity": "P3",
++      "title": "design 文件变更清单未收录交付提交 1b941893 实际修改的 test/plan-wave-structure-guard.test.mjs",
++      "evidence": "清单列 7 文件（plan-postcheck/flow-review/verify-postcheck/config-schema/package.json/两新测试），守卫测试更新属第 8 个交付文件——清单是 parseFileChangeList 对账面，少报有夹带误判/口径漂移风险。",
++      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md:47-57"
++    },
++    {
++      "severity": "P3",
++      "title": "FR-06 声明撤销三项「在档（design 风险与死路与本条）」，design 风险节实无该三项记录",
++      "evidence": "design 风险与死路（HEAD 版与工作树合并版）只含增量假绿/自动重排/三条放弃方案，无 self 档撤销/--answer 补 wait/--step 意图断言三项；记录仅存于 requirements FR-06 自身，其自declared验证面（design 风险节在档）落空。记录性条目无代码面，无数据风险。",
++      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md:57-63"
++    },
++    {
++      "severity": "P3",
++      "title": "FR-01 枚举「非法 Wave 号」形态无独立错误族与触发面",
++      "evidence": "WAVE_SHAPE_ERROR_RE 只匹配同 Wave 共享/伪并行串行链/依赖方向违规三种文案；全仓无「非法 Wave 号」独立 error 产出（该现象在 postmortem 链路中塌缩为伪并行串行链族报出）。枚举项无独立绑定测试，遇未知形态文案时退化=现状报错（安全方向）。",
++      "location": "src/stages/plan-postcheck.js:2065"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-07T00:17:55Z"
++}
+diff --git a/package.json b/package.json
+index 928dbad4..fa9f57d7 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs test/wave-auto-adopt.test.mjs test/test-incremental-rerun.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 3ae6a58f..fa2eecb3 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -121,6 +121,7 @@ export const LOCAL_YAML_SCHEMA = {
+       title: '测试策略',
+       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
+       keys: [
++        { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
+         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
+       ],
+     },
+@@ -195,6 +196,7 @@ export const LOCAL_YAML_SCHEMA = {
+       note: 'plan 阶段 TaskCard 填充派发策略。默认主 agent 直填（2026-09-20 对撞实验：6 个填卡子代理 6.7M token 纯誊写，独立性价值为零）；task 总数超阈值且跨模块才 batch 派子代理——阈值按项目体系可调（厚流程实证 11 任务 3 子代理 430 万 token 模板化产出后引入）。',
+       keys: [
+         { path: 'plan.fill_batch_min_tasks', type: 'integer', optional: true, status: 'live', readers: ['buildCoordinatorStep (src/stages/plan.js — 协调器 prompt 阈值插值)'], desc: '填卡 batch 派发阈值：task 总数 ≤N（或单仓单模块）→ 主 agent 直填不派子代理；>N 且跨模块/跨仓才按 batch 分派。≥1 整数，缺省 8（内置）；非法值回退 8（fail-safe）。调大 = 更少派子代理省 token；调小 = 大变更更早并行省墙钟。', example: '12' },
++        { path: 'plan.auto_adopt_waves', type: 'boolean', optional: true, status: 'live', readers: ['executePlanPostcheck 自动重排门 (src/stages/plan-postcheck.js — tryAutoAdoptWaves)'], desc: 'Wave 形态错误自动重排：plan postcheck 发现「同 Wave 冲突/伪并行串行链」且无其他类错误时，自动跑 plan-adopt-waves 按 depends_on 拓扑重排并整体复跑校验（预算 1 次防环）。缺省 true；置 false 关闭（报错指路手工跑，2026-10-07 前现状）。方向违规自动修复（既有）不受本键影响。', example: 'true' },
+       ],
+     },
+     {
+@@ -419,6 +421,8 @@ dispatch:
+ # skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
+ # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
+ # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
++# verify:
++#   test_rerun: incremental   # 实测门失败后重跑档：incremental（缺省，下轮只跑失败批∪修复面）| full（恒全子集重跑，保守项目用）
+ 
+ # ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
+ # ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
+@@ -518,6 +522,7 @@ docs-check:
+ # 仅 task 总数超阈值且跨模块/跨仓才按 batch 派子代理（并行省墙钟有真实收益）。
+ # plan:
+ #   fill_batch_min_tasks: 12             # 填卡 batch 派发阈值（内置 8；调大=更少派子代理省 token，调小=大变更更早并行）
++#   auto_adopt_waves: true               # Wave 形态错误自动拓扑重排（内置 true；false=报错指路手工跑）
+ 
+ # ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价）──
+ # blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 40bbee97..4de9e2dc 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -197,7 +197,25 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+  */
+ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+   const headFull = String(head || '').trim()
+-  return [
++  // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
++  // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
++  // （postmortem 实证评审员两轮报同类问题，多跑一整轮成本）。读不到/无 findings 零注入
++  // （首评任务书与现状逐字一致）。
++  let priorFindingsMd = ''
++  try {
++    const prev = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8'))
++    if (Array.isArray(prev.findings) && prev.findings.length > 0) {
++      priorFindingsMd = [
++        ``,
++        `【前轮评审 findings（${prev.findings.length} 项，前轮 verdict=${String(prev.verdict || '?')}）——本轮是复审】`,
++        ...prev.findings.slice(0, 20).map((f, i) => `  ${i + 1}. [${f && f.severity ? f.severity : '?'}] ${f && f.title ? f.title : String(f).slice(0, 120)}`),
++        ``,
++        `  复审优先级：已报项只验「修复到位 + 未引入回归」（逐条给修复验证锚点），把请求预算主力投向新增问题——`,
++        `  勿把前轮清单原样重报一遍（换视角有独立价值，重复报告挤占 12 次请求预算）。`,
++      ].join('\n')
++    }
++  } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
++  const taskbook = [
+     `⚖️ 独立评审任务书 — ${change}`,
+     `══════════════════════════════════════`,
+     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
+@@ -213,6 +231,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
+     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
+     `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
++    ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
+     ``,
+     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
+     `  1. FR↔实现↔测试三方一致：每条 FR 的实现兑现承诺？绑定作答声称的测试真存在且断言该行为？`,
+@@ -238,6 +257,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+     ``,
+     `完成后由主会话重跑：sillyspec flow done --change ${change}（断点续，已完成子步幂等跳过）`,
+   ].join('\n')
++  return taskbook
+ }
+ 
+ /**
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index d97ed374..31491819 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -2054,7 +2054,46 @@ function deriveModuleIdFor(filePath, mapYaml) {
+  * @param {{ cwd: string, specRoot?: string, resolveChangeDir: Function, progress?: object }} context
+  * @throws {Error} 校验失败时抛出
+  */
++/**
++ * Wave 形态错误自动重排判定（2026-10-07-wave-auto-adopt-review-dedup task-01）：postmortem
++ * （provider-model-list）实测 Wave 返工链三轮——同 Wave 冲突/伪并行串行链都是 adopt-waves
++ * 机械可解的形态，却要 agent 撞 postcheck 后按文案找命令。此处错误全为 Wave 形态类时自动
++ * 跑 plan-adopt-waves 重排并整体复跑 postcheck（预算 1 次，防环）；逃生键 local.yaml
++ * plan.auto_adopt_waves: false（缺省 true）。混有非 Wave 类错误不自动重排（行为=现状）——
++ * 重排会掩盖真实问题的上下文。
++ */
++const WAVE_SHAPE_ERROR_RE = /被 Wave \d+ 内 \d+ 个 task 修改|伪并行串行链|Wave 依赖方向违规/
++function allWaveShapeErrors(errors) {
++  const list = Array.isArray(errors) ? errors : []
++  return list.length > 0 && list.every(e => WAVE_SHAPE_ERROR_RE.test(String(e)))
++}
++function autoAdoptWavesEnabled(specDir) {
++  try {
++    const p = pJoin(specDir, 'local.yaml')
++    if (!existsSync(p)) return true
++    const doc = jsYaml.load(_readFileSync(p, 'utf8'))
++    return !(doc && doc.plan && doc.plan.auto_adopt_waves === false)
++  } catch { return true }
++}
++async function tryAutoAdoptWaves(errors, changeDir, specDir, budget) {
++  if (budget <= 0) return false
++  if (!allWaveShapeErrors(errors)) return false
++  if (!autoAdoptWavesEnabled(specDir)) return false
++  const { adoptPlanWaves } = await import('../plan-adopt-waves.js')
++  const res = adoptPlanWaves({ changeDir })
++  if (!res || !res.ok) {
++    console.warn(`  ⚠️ Wave 自动拓扑重排未成（${res && res.error ? res.error : '未知原因'}）——按原报错处理（手工出口：sillyspec plan-adopt-waves --change <变更名>）`)
++    return false
++  }
++  console.log(`\n🔀 检测到 Wave 形态问题——已自动按 depends_on 拓扑重排 plan.md（plan-adopt-waves，任务总表 W 列同步）并整体复跑校验：`)
++  return true
++}
++
+ export async function executePlanPostcheck(context) {
++  return executePlanPostcheckRun(context, { autoAdoptBudget: 1 })
++}
++
++async function executePlanPostcheckRun(context, { autoAdoptBudget = 0 } = {}) {
+   const { cwd, specRoot, resolveChangeDir, progress } = context
+ 
+   const specDir = specRoot || pJoin(cwd, '.sillyspec')
+@@ -2251,6 +2290,14 @@ export async function executePlanPostcheck(context) {
+ 
+   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
+   if (failures.length > 0) {
++    // Wave 形态自动重排判定（task-01）：唯一失败组是蓝图一致性且错误全为 Wave 形态 → 自动
++    // adopt-waves 重排并整体复跑一次（预算 1）。挂统一收口点而非 consistency 单点：混有
++    // feasibility/coverage 等其他类错误时不重排（重排会掩盖真实问题上下文，实测 WA4 形态）。
++    if (failures.length === 1 && failures[0].name === '蓝图一致性校验') {
++      if (await tryAutoAdoptWaves(failures[0].errors, changeDir, specDir, autoAdoptBudget)) {
++        return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
++      }
++    }
+     console.error(`\n❌ plan postcheck 失败（${failures.length} 类问题，已全部列出——一次修复后重跑，无需逐个迭代）：`)
+     for (const f of failures) {
+       console.error(`\n   【${f.name}】`)
+@@ -2391,6 +2438,10 @@ export async function executePlanPostcheck(context) {
+           const structure = assessWaveStructure({ existingWaves, topoWaves: waves, depMap, wavePathSets })
+           if (structure.advisory) console.warn(`  ⚠️ ${structure.advisory}`)
+           if (structure.error) {
++            // 伪并行碎片自动重排（task-01）：mergeable 对 ≥2 是 adopt-waves 的标准解
++            if (await tryAutoAdoptWaves([structure.error], changeDir, specDir, autoAdoptBudget)) {
++              return executePlanPostcheckRun(context, { autoAdoptBudget: 0 })
++            }
+             console.error(`\n❌ ${structure.error}`)
+             throw new Error(structure.error)
+           }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 5c428c1d..6592ae16 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -1387,6 +1387,97 @@ export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailabl
+   return scopeCount > 0 ? 'dynamic-subset' : 'dynamic-empty-skip'
+ }
+ 
++// ── 实测门增量重跑（2026-10-07-test-incremental-rerun）──
++// postmortem 实测：verify --done 跑 10 分钟级测试子集 → 挂 N 个 → 修一行 → 重跑 --done 又
++// 全量重跑子集（green cache 只在指纹不变时命中，改一行即失效）——每轮返工整轮全跑。修法：
++// 失败轮把「失败批测试文件 + 当时 git HEAD」落稳定指针 ledger；下一轮先算增量面 =
++// 「自失败 HEAD 以来的变更文件（含未提交与 untracked）∪ 前轮失败批文件」，是其真子集时
++// 只跑增量面（三源推断以增量输入重算——修复文件的 import 依赖与 FR 关联回归自然入面），
++// 基线绿面（未触碰文件）复用不重跑。逃生：local.yaml verify.test_rerun: full / env
++// SILLYSPEC_TEST_RERUN=full 恒全子集（2026-10-07 前现状）。
++
++/** 增量重跑档位读取：env SILLYSPEC_TEST_RERUN 优先，次 local.yaml verify: 段 test_rerun（宽松匹配行，fail-open incremental）。 */
++function readTestRerunConfig(specBase) {
++  const env = String(process.env.SILLYSPEC_TEST_RERUN || '').trim().toLowerCase()
++  if (env === 'full' || env === 'incremental') return env
++  try {
++    const p = join(specBase, 'local.yaml')
++    if (!existsSync(p)) return 'incremental'
++    const m = readFileSync(p, 'utf8').match(/^\s*test_rerun:\s*(full|incremental)\s*$/m)
++    return m ? m[1] : 'incremental'
++  } catch { /* 读失败 → 缺省 */ }
++  return 'incremental'
++}
++
++function testRerunLedgerPath(specBase, changeName) {
++  return join(specBase, '.runtime', `test-rerun-${changeName || 'change'}.json`)
++}
++
++/**
++ * 读增量重跑 ledger（fail-soft：缺失/损坏/null）。shape: { head, failedFiles, inputFiles, mode, status, ranAt }
++ */
++export function readTestRerunLedger({ specBase, changeName }) {
++  try {
++    return JSON.parse(readFileSync(testRerunLedgerPath(specBase, changeName), 'utf8'))
++  } catch { return null }
++}
++
++/** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。 */
++export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, scopeFiles = [], mode, status }) {
++  try {
++    const dir = join(specBase, '.runtime')
++    mkdirSync(dir, { recursive: true })
++    writeFileSync(testRerunLedgerPath(specBase, changeName), JSON.stringify({
++      change: changeName || null, head: head || null,
++      inputFiles: inputFiles || [], failedFiles: failedFiles || [], scopeFiles: scopeFiles || [],
++      mode: mode || null, status: status || null, ranAt: new Date().toISOString(),
++    }, null, 2) + '\n')
++  } catch { /* ledger 写失败不阻断实测门（下轮退化全子集） */ }
++}
++
++/** 自基线 HEAD 以来的变更文件（committed+unstaged diff ∪ untracked），posix 归一。 */
++function listFilesSince({ cwd, sinceHead }) {
++  const out = []
++  try {
++    const diff = gitQuiet(cwd, ['diff', '--name-only', sinceHead])
++    if (diff) out.push(...diff.split('\n'))
++  } catch { /* diff 失败 → 空贡献 */ }
++  try {
++    const untracked = gitQuiet(cwd, ['ls-files', '--others', '--exclude-standard'])
++    if (untracked) out.push(...untracked.split('\n'))
++  } catch { /* untracked 失败 → 空贡献 */ }
++  return [...new Set(out.map(s => s.trim().replace(/\\/g, '/')).filter(Boolean))]
++}
++
++function currentGitHead(cwd) {
++  try { return (gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null } catch { return null }
++}
++
++/**
++ * 增量重跑面计算（纯函数，export 供测）：返回 null = 不增量（走全子集现状），否则返回
++ * { files, note }。判定：ledger 在场、有失败文件、有基线 head；since 非空或失败面非空；
++ * 对比基线 = ledger.scopeFiles（基线实测的测试文件集——评审 P2 清偿：拿「失败测试文件数」
++ * 对比「输入面文件数」是口径错位，级联失败（失败测试数≥输入面数）时增量永不触发，恰是其
++ * 动机场景失效）；缺 scopeFiles 回退 inputFiles；增量面必须严格小于基线测试集（≥ 时回全
++ * 子集——宁多跑不绕过基线）。
++ */
++export function computeIncrementalFace({ ledger, filesSince, fullFace }) {
++  if (!ledger || !Array.isArray(ledger.failedFiles) || ledger.failedFiles.length === 0 || !ledger.head) return null
++  const since = Array.isArray(filesSince) ? filesSince : []
++  const inc = [...new Set([...since, ...ledger.failedFiles])]
++    .map(f => String(f).replace(/\\/g, '/'))
++    .filter(f => f && !f.startsWith('.sillyspec/'))
++  if (inc.length === 0) return null
++  const baselineScope = Array.isArray(ledger.scopeFiles) && ledger.scopeFiles.length > 0
++    ? ledger.scopeFiles
++    : (ledger.inputFiles || fullFace || [])
++  if (inc.length >= baselineScope.length) return null
++  return {
++    files: inc,
++    note: `增量重跑面 ${inc.length} 文件（前轮失败批 ${ledger.failedFiles.length} ∪ 基线以来变更 ${since.length}；基线实测测试集 ${baselineScope.length} 文件，未触碰绿面复用不重跑）`,
++  }
++}
++
+ /**
+  * TAP 结构化判账（2026-09-28-tap-judge，P2 一期）：node --test 双报告器（spec→stderr 人读、
+  * tap→stdout 机读）批次按 `not ok` 行用例粒度判账——自由文本正则误计（fixture 预期错误文案、
+@@ -1496,6 +1587,9 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
+     exitCode,
+     durationMs,
+     outputTail,
++    // 全量输出（内存态，不落盘）：增量重跑的失败文件归因源（TAP 顶层 Subtest 段 / pytest
++    // FAILED 行）——outputTail 截断后归因面残缺（2026-10-07-test-incremental-rerun）
++    outputFull: output,
+     reason: judged.reason,
+     exemptedCount: judged.exemptedCount,
+     failureRemaining: judged.remainingLines,
+@@ -1503,6 +1597,44 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
+   }
+ }
+ 
++/**
++ * 失败批 → 失败测试文件归因（2026-10-07-test-incremental-rerun）：node --test 文件作参数时
++ * TAP 顶层条目名是测试标题非文件名，但每个 `not ok` 块的 YAML 诊断（location/stack）带绝对
++ * 路径——按块内路径归一后 includes 匹配批内相对路径；非 TAP 输出（pytest 等）回退
++ * FAILED/ERROR 行带路径匹配；归因不出保守全记批文件（增量退化不误报）。
++ */
++function attributeFailedFiles(result) {
++  const files = result.files || []
++  if (files.length === 0) return []
++  const text = String(result.outputFull || result.outputTail || '')
++  if (!text) return files
++  const norm = (p) => String(p).replace(/\\/g, '/')
++  // 按 TAP 顶层行切 not ok 块（块体 = 该行到下一顶层行之间的缩进诊断）
++  const blocks = []
++  const lines = text.split(/\r?\n/)
++  let cur = null
++  for (const line of lines) {
++    if (/^not ok \d+/.test(line)) { cur = [line]; blocks.push(cur); continue }
++    if (/^(?:ok \d+|not ok \d+|#\s|1\.\.\d+|TAP version)/.test(line)) { cur = null; continue }
++    if (cur) cur.push(line)
++  }
++  const failing = new Set()
++  for (const block of blocks) {
++    const seg = norm(block.join('\n'))
++    for (const f of files) {
++      if (seg.includes(norm(f))) failing.add(f)
++    }
++  }
++  let hits = files.filter(f => failing.has(f))
++  if (hits.length === 0 && /FAILED|ERROR/.test(text)) {
++    hits = files.filter(f => {
++      const esc = norm(f).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
++      return new RegExp(`(?:FAILED|ERROR)[^\\n]{0,200}${esc}`).test(text)
++    })
++  }
++  return hits.length > 0 ? hits : files
++}
++
+ // refSpec 来源 meta.json（agent 可写），仅放行 git ref/range 安全字符（含 HEAD~1..HEAD 类区间），
+ // 防经 shell 的命令/参数注入。剥空白与引号/分号/反引号/$ 等 shell 元字符。
+ // 注：允许 ".."/"../.."（相对路径 ref 语法上合法）不影响安全——execFileSync 数组形式下它只是
+@@ -2029,9 +2161,46 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+     // —— 动态子集（2026-09-26-dynamic-test-inference 缺省路径）——
+     // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
+     // 全量语义留 CI / 显式 test_strategy: full。
++    // 增量重跑（2026-10-07-test-incremental-rerun）：前轮失败 + 本轮有修复 delta → 输入面
++    // 收窄为「失败批文件 ∪ 基线以来变更」，未触碰绿面复用——返工轮不再整轮全跑。
++    let subsetInput = lastChangedFiles
++    let incremental = null
++    if (readTestRerunConfig(specBase) === 'incremental') {
++      const ledger = readTestRerunLedger({ specBase, changeName })
++      if (ledger) {
++        const filesSince = listFilesSince({ cwd, sinceHead: ledger.head })
++        incremental = computeIncrementalFace({ ledger, filesSince, fullFace: lastChangedFiles })
++      }
++    }
+     const frCount = frPre && frPre.files.length ? frPre.files.length : 0
+-    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
++    if (incremental) {
++      subsetInput = incremental.files
++      console.log(`⚡ ${incremental.note}`)
++      console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ FR 关联回归 ∪ import 依赖），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
++      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null })
++      if (mainResult && typeof mainResult === 'object') {
++        mainResult.mode = 'incremental-rerun'
++        mainResult.reason = mainResult.reason
++          ? `${mainResult.reason}（增量重跑：${incremental.note}）`
++          : `增量重跑通过：${incremental.note}`
++      }
++    } else {
++      console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
++      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
++    }
++    // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
++    // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
++    try {
++      writeTestRerunLedger({
++        specBase, changeName,
++        head: currentGitHead(cwd),
++        inputFiles: subsetInput,
++        failedFiles: (mainResult && Array.isArray(mainResult.failedFiles)) ? mainResult.failedFiles : [],
++        scopeFiles: (mainResult && Array.isArray(mainResult.scopeFiles)) ? mainResult.scopeFiles : [],
++        mode: incremental ? 'incremental-rerun' : 'dynamic-subset',
++        status: mainResult && mainResult.status,
++      })
++    } catch { /* 记账失败不阻断（下轮退化全子集） */ }
+   } else {
+     // —— dynamic-empty：变更与测试面零关系——
+     // 无自身测试、无 import 依赖测试、无 FR 关联绑定 → 不硬跑全量（防超时/预存失败面，
+@@ -2685,8 +2854,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
+   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
+   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
+-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped })
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true })
++  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+   if (jsProjectRun.length > 0) {
+     if (jsxRunner) {
+       const isVitest = /vitest/.test(jsxRunner)
+@@ -2698,7 +2867,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
+       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
+       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
+-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0 })
++      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
+     } else {
+       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+     }
+@@ -2910,6 +3079,7 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+         continue
+       }
+       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
++      perModule[perModule.length - 1].files = b.files || [] // 增量重跑面组成（task-B failedFiles 聚合源）
+       console.log(formatDepsBatchLine(b))
+       // 防御披露（2026-10-06-fr-regress-cap-drop）：quotaFill 构造保证优先面零弃置——此计数
+       // >0 说明组卷逻辑被后续改动破坏（钦定回归被弃），loud 披露不静默。
+@@ -2952,6 +3122,20 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+     mode: 'dynamic-subset',
+     fallbackReason: null,
+     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
++    // 失败批测试文件集聚合（2026-10-07-test-incremental-rerun）：增量重跑面的组成之一——
++    // 前轮失败批的文件下轮必入面（无论修复是否触碰它们）。归因粒度：node --test TAP 顶层
++    // not ok 以测试文件为套件名（not ok N - test/b.test.mjs），用判账行集匹配批内文件名把
++    // 「批失败」收窄到「文件失败」；归因不出（非 TAP/行集缺文件名）保守全记批文件。
++    failedFiles: (() => {
++      const out = new Set()
++      for (const r of perModule.filter(x => x.status === 'failed')) {
++        for (const f of attributeFailedFiles(r)) out.add(f)
++      }
++      return [...out].sort()
++    })(),
++    // 基线实测的测试文件全集（评审 P2 清偿配套）：增量守卫的对比基线——输入面（变更 src）与
++    // 实测面（测试文件）是两个集合，级联失败时后者远大于前者
++    scopeFiles: [...new Set(perModule.flatMap(r => r.files || []))].sort(),
+     // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——
+     // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
+     failureRemaining: perModule.flatMap(r => r.failureRemaining || []),
+diff --git a/test/plan-wave-structure-guard.test.mjs b/test/plan-wave-structure-guard.test.mjs
+index e6bd1802..aafab4fd 100644
+--- a/test/plan-wave-structure-guard.test.mjs
++++ b/test/plan-wave-structure-guard.test.mjs
+@@ -11,6 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { execSync } from 'node:child_process'
++import { readFileSync } from 'node:fs'
+ import { assessWaveStructure } from '../src/stages/plan-postcheck.js'
+ 
+ const tmpRoots = []
+@@ -109,15 +110,25 @@ async function runPostcheck(fx) {
+   return { threw, logs }
+ }
+ 
+-test('集成：6 波无依赖全串行（三轮形态）→ planPostcheck 硬拦', async () => {
++test('集成：6 波无依赖全串行（三轮形态）→ 自动重排合并后通过（2026-10-07-wave-auto-adopt 行为变更）；关闭档回硬拦', async () => {
++  // 缺省档（plan.auto_adopt_waves 未配置=自动）：伪并行碎片由 CLI 自动拓扑重排消化——三轮返工链消灭
+   const fx = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
+   try {
+     const { threw, logs } = await runPostcheck(fx)
+-    assert.ok(threw, '伪并行串行链被拦')
++    assert.equal(threw, null, `自动重排后整体复跑通过（实际: ${threw}）`)
++    assert.ok(logs.some(l => l.includes('已自动按 depends_on 拓扑重排')), '自动重排公告在场')
++    const plan = readFileSync(join(fx.changeDir, 'plan.md'), 'utf8')
++    assert.ok(!/## Wave 6/.test(plan), '碎片波已合并')
++  } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
++  // 关闭档（plan.auto_adopt_waves: false）：原硬拦行为保留
++  const fxOff = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
++  writeFileSync(join(fxOff.cwd, '.sillyspec', 'local.yaml'), 'plan:\n  auto_adopt_waves: false\n')
++  try {
++    const { threw, logs } = await runPostcheck(fxOff)
++    assert.ok(threw, '关闭档：伪并行串行链被拦')
+     assert.match(threw, /伪并行串行链/)
+-    assert.match(threw, /可并入/)
+     assert.ok(logs.some(l => l.includes('plan-adopt-waves')), '解法出口指向 plan-adopt-waves')
+-  } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
++  } finally { rmSync(fxOff.cwd, { recursive: true, force: true }) }
+ })
+ 
+ test('集成：4 波真并行结构 → 放行', async () => {
+diff --git a/test/test-incremental-rerun.test.mjs b/test/test-incremental-rerun.test.mjs
+new file mode 100644
+index 00000000..6c91135f
+--- /dev/null
++++ b/test/test-incremental-rerun.test.mjs
+@@ -0,0 +1,118 @@
++/**
++ * 2026-10-07-test-incremental-rerun — 实测门失败面增量重跑回归
++ *
++ * postmortem：verify --done 跑 10 分钟级测试子集 → 挂 N 个 → 修一行 → 重跑 --done 又全量
++ * 重跑（green cache 改一行即失效）——每轮返工整轮全跑。锁死契约：
++ *   IR1 computeIncrementalFace：失败 ledger + 修复 delta → 增量面 = 失败批 ∪ since，严格小于全量面；
++ *   IR2 集成主链路（runVerifyTestCheck）：首跑全子集失败落 ledger → 修复 → 次跑 mode=incremental-rerun
++ *      且命令面不含未触碰测试 → 增量绿过门，ledger 清 failedFiles（第三轮回全子集基线）；
++ *   IR3 verify: test_rerun: full → 恒全子集（现状行为）；
++ *   IR4 无 ledger 首跑 = dynamic-subset 全子集（现状零回归）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++import {
++  runVerifyTestCheck, computeIncrementalFace, readTestRerunLedger, writeTestRerunLedger,
++} from '../src/verify-postcheck.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++
++test('IR1 computeIncrementalFace 纯函数三态', () => {
++  const face = ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js']
++  const ledger = { head: 'abc123', failedFiles: ['test/a.test.mjs'], inputFiles: face }
++  // 失败批 ∪ since 严格小于面 → 增量
++  const r1 = computeIncrementalFace({ ledger, filesSince: ['src/b.js'], fullFace: face })
++  assert.ok(r1, '有 delta → 增量')
++  assert.deepEqual([...r1.files].sort(), ['src/b.js', 'test/a.test.mjs'], '面=失败批∪since')
++  assert.ok(r1.note.includes('未触碰绿面复用'), '公告含复用说明')
++  // 无 ledger / 无失败文件 / 无 head → null
++  assert.equal(computeIncrementalFace({ ledger: null, filesSince: [], fullFace: face }), null)
++  assert.equal(computeIncrementalFace({ ledger: { head: 'x', failedFiles: [] }, filesSince: [], fullFace: face }), null)
++  assert.equal(computeIncrementalFace({ ledger: { head: null, failedFiles: ['f'] }, filesSince: [], fullFace: face }), null)
++  // 增量面 ≥ 全量面 → null（回全子集）
++  assert.equal(computeIncrementalFace({ ledger: { head: 'x', failedFiles: face }, filesSince: face, fullFace: face }), null)
++  // 评审 P2 清偿：对比基线 = ledger.scopeFiles（基线实测测试集），非输入面——级联失败
++  // （失败测试数 ≥ 输入面文件数）时增量仍须触发（这正是增量档的动机场景）
++  const cascade = computeIncrementalFace({
++    ledger: { head: 'x', failedFiles: ['test/f01.test.mjs', 'test/f02.test.mjs', 'test/f03.test.mjs'], inputFiles: face, scopeFiles: Array.from({ length: 63 }, (_, i) => `test/s${i}.test.mjs`) },
++    filesSince: ['src/b.js'],
++    fullFace: face,
++  })
++  assert.ok(cascade, '级联失败（3 失败测试 > 4 输入面中之一，但 << 63 基线测试集）→ 增量触发')
++  assert.equal(cascade.files.length, 4, '面 = 3 失败 + 1 since')
++  assert.ok(cascade.note.includes('基线实测测试集 63'), '公告按测试集口径')
++})
++
++/**
++ * 集成夹具：4 源文件 + 4 测试（b 初始失败）。变更面 = 4 src 文件（faceOverride 权威面）。
++ * runVerifyTestCheck 需 specBase local.yaml 可缺省（无 test_strategy → dynamic）。
++ */
++function integrationFixture({ yaml = null } = {}) {
++  const root = mk('ir-')
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  if (yaml) writeFileSync(join(specBase, 'local.yaml'), yaml)
++  writeFileSync(join(root, '.gitignore'), '.sillyspec/\n')
++  mkdirSync(join(root, 'src'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(root, 'src', `${n}.js`), 'export const v = 1\n')
++  const testBody = (n, ok) => `import { test } from 'node:test'\nimport { v } from '../src/${n}.js'\ntest('${n}', () => { if (v !== ${ok ? 1 : 2}) throw new Error('boom') })\n`
++  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(root, 'test', `${n}.test.mjs`), testBody(n, n !== 'b'))
++  git(root, ['init', '-q']); git(root, ['config', 'user.email', 't@t']); git(root, ['config', 'user.name', 't'])
++  git(root, ['add', '.']); git(root, ['commit', '-qm', 'init'])
++  return { root, specBase, face: ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js'] }
++}
++
++test('IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账', () => {
++  const { root, specBase, face } = integrationFixture()
++  const run = () => runVerifyTestCheck({ cwd: root, specBase, changeName: 'c1', faceOverride: face })
++
++  // 首跑：无 ledger → 全子集，b 失败
++  const r1 = run()
++  assert.equal(r1.status, 'failed', '首跑失败（b 用例挂）')
++  assert.equal(r1.mode, 'dynamic-subset', '首跑全子集模式')
++  const ledger1 = readTestRerunLedger({ specBase, changeName: 'c1' })
++  assert.ok(ledger1, 'ledger 已落')
++  assert.ok(ledger1.failedFiles.includes('test/b.test.mjs'), `失败批文件在账：${ledger1.failedFiles}`)
++
++  // 修复：改 test/b.test.mjs（工作树修改 → since delta）
++  writeFileSync(join(root, 'test', 'b.test.mjs'), `import { test } from 'node:test'\nimport { v } from '../src/b.js'\ntest('b', () => { if (v !== 1) throw new Error('boom') })\n`)
++
++  // 次跑：增量档
++  const r2 = run()
++  assert.equal(r2.status, 'passed', '增量面绿过门')
++  assert.equal(r2.mode, 'incremental-rerun', '模式=增量重跑')
++  const cmd = String(r2.command || '')
++  assert.ok(!cmd.includes('a.test.mjs') || !/deps/.test(cmd), `命令面收窄（未触碰测试不重跑）：${cmd}`)
++  assert.ok(r2.reason.includes('增量重跑'), 'reason 标注增量')
++
++  // ledger 清账：failedFiles 空 → 下轮回全子集
++  const ledger2 = readTestRerunLedger({ specBase, changeName: 'c1' })
++  assert.deepEqual(ledger2.failedFiles, [], '增量绿后清账')
++})
++
++test('IR3 verify: test_rerun: full → 恒全子集（现状行为）', () => {
++  const { root, specBase, face } = integrationFixture({ yaml: 'verify:\n  test_rerun: full\n' })
++  const run = () => runVerifyTestCheck({ cwd: root, specBase, changeName: 'c1', faceOverride: face })
++  const r1 = run() // 失败
++  assert.equal(r1.status, 'failed')
++  writeFileSync(join(root, 'test', 'b.test.mjs'), `import { test } from 'node:test'\nimport { v } from '../src/b.js'\ntest('b', () => { if (v !== 1) throw new Error('boom') })\n`)
++  const r2 = run()
++  assert.equal(r2.mode, 'dynamic-subset', 'config full → 仍全子集（不走增量）')
++})
++
++test('IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到', () => {
++  const specBase = join(mk('ir4-'), '.sillyspec')
++  assert.equal(readTestRerunLedger({ specBase, changeName: 'x' }), null, '无文件 → null')
++  writeTestRerunLedger({ specBase, changeName: 'x', head: 'abc', inputFiles: ['a'], failedFiles: ['b'], mode: 'dynamic-subset', status: 'failed' })
++  const l = readTestRerunLedger({ specBase, changeName: 'x' })
++  assert.equal(l.head, 'abc')
++  assert.deepEqual(l.failedFiles, ['b'])
++})
+diff --git a/test/wave-auto-adopt.test.mjs b/test/wave-auto-adopt.test.mjs
+new file mode 100644
+index 00000000..92dd6519
+--- /dev/null
++++ b/test/wave-auto-adopt.test.mjs
+@@ -0,0 +1,142 @@
++/**
++ * 2026-10-07-wave-auto-adopt-review-dedup — Wave 自动重排 + 评审任务书前轮 findings 回归
++ *
++ * postmortem（provider-model-list）：Wave 返工链三轮（同 Wave 冲突→手工拆→伪并行串行链）；
++ * 评审员两轮报同类问题。锁死契约：
++ *   WA1 同 Wave 冲突且 depends_on 拓扑可分离 → 自动重排后 postcheck 整体通过（plan.md 已重排）；
++ *   WA2 伪并行碎片（独立任务手排多波）→ 自动合并重排后通过；
++ *   WA3 auto_adopt_waves: false → 零自动重排（冲突 error 照报，行为=2026-10-07 前现状）；
++ *   WA4 混有非 Wave 类错误 → 不自动重排（两族错误都报）；
++ *   RB1 复审任务书含前轮 findings 清单与复审优先级引导；无 review.json 首评任务书逐字=现状。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { executePlanPostcheck } from '../src/stages/plan-postcheck.js'
++import { renderReviewerTaskbook } from '../src/flow-review.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const CARD = (id, paths, deps = '[]') => [
++  '---', `id: ${id}`, `title: t-${id}`, `title_zh: 任务${id}`, 'author: t',
++  'created_at: 2026-10-07 00:00:00', 'priority: P0', `depends_on: ${deps}`, 'blocks: []',
++  'requirement_ids: []', 'decision_ids: []',
++  'allowed_paths:', ...paths.map(p => `  - ${p}`),
++  'goal: >', '  g', 'implementation:', '  - i', 'acceptance:', '  - a',
++  'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
++].join('\n')
++
++function fixture({ planWaves, deps = {}, yaml = null, perTaskPaths = false }) {
++  const root = mk('wa-')
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  if (yaml != null) writeFileSync(join(specBase, 'local.yaml'), yaml)
++  const planLines = ['---', 'plan_level: full', '---', '', '# 计划', '']
++  for (const [w, tasks] of Object.entries(planWaves)) {
++    planLines.push(`## Wave ${w}`)
++    for (const t of tasks) planLines.push(`- ${t}`)
++    planLines.push('')
++  }
++  writeFileSync(join(changeDir, 'plan.md'), planLines.join('\n'))
++  const taskIds = Object.values(planWaves).flat()
++  writeFileSync(join(changeDir, 'tasks.md'), taskIds.map(t => `- [ ] ${t}: t`).join('\n') + '\n')
++  for (const t of taskIds) {
++    const paths = perTaskPaths ? [`src/${t}.js`] : ['src/shared.js']
++    writeFileSync(join(changeDir, 'tasks', `${t}.md`), CARD(t, paths, JSON.stringify(deps[t] || [])))
++  }
++  const context = {
++    cwd: root,
++    specRoot: specBase,
++    progress: { currentChange: 'c1' },
++    resolveChangeDir: () => changeDir,
++  }
++  return { root, specBase, changeDir, context }
++}
++
++const capture = async (fn) => {
++  const logs = []
++  const orig = { log: console.log, error: console.error, warn: console.warn }
++  console.log = (...a) => logs.push(['log', a.join(' ')])
++  console.error = (...a) => logs.push(['error', a.join(' ')])
++  console.warn = (...a) => logs.push(['warn', a.join(' ')])
++  try { return { result: await fn(), logs } } finally { console.log = orig.log; console.error = orig.error; console.warn = orig.warn }
++}
++
++test('WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过', async () => {
++  // task-02 depends_on task-01，两卡同改 src/shared.js 却被手排进同一 Wave —— 拓扑本就该分离
++  const { context, changeDir } = fixture({ planWaves: { 1: ['task-01', 'task-02'] }, deps: { 'task-02': ['task-01'] } })
++  const { result, logs } = await capture(() => executePlanPostcheck(context))
++  const text = logs.map(l => l[1]).join('\n')
++  assert.ok(text.includes('已自动按 depends_on 拓扑重排'), `自动重排公告在场：${text.slice(0, 400)}`)
++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
++  const w2 = plan.indexOf('## Wave 2')
++  assert.ok(w2 > -1 && plan.indexOf('- task-01') < w2 && plan.indexOf('- task-02') > w2, `重排后 task-01/task-02 分波：\n${plan}`)
++  // 走到这里未被 reject 即 postcheck 整体通过（复跑成功）
++})
++
++test('WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过', async () => {
++  const { context, changeDir } = fixture({ planWaves: { 1: ['task-01'], 2: ['task-02'], 3: ['task-03'], 4: ['task-04'] }, perTaskPaths: true })
++  const { logs } = await capture(() => executePlanPostcheck(context))
++  const text = logs.map(l => l[1]).join('\n')
++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
++  assert.ok(!/## Wave 2/.test(plan), `碎片波已合并为单波：\n${plan}`)
++  assert.ok(text.includes('已自动按 depends_on 拓扑重排'), `自动重排公告在场：${text.slice(0, 300)}`)
++})
++
++test('WA3 auto_adopt_waves: false → 零自动重排（冲突照报）', async () => {
++  const { context, changeDir } = fixture({
++    planWaves: { 1: ['task-01', 'task-02'] },
++    deps: { 'task-02': ['task-01'] },
++    yaml: 'plan:\n  auto_adopt_waves: false\n',
++  })
++  await assert.rejects(() => executePlanPostcheck(context), /被 Wave 1 内|蓝图一致性/, '冲突 error 照抛')
++  const plan = readFileSync(join(changeDir, 'plan.md'), 'utf8')
++  assert.ok(/## Wave 1\n- task-01\n- task-02/.test(plan.replace(/\r/g, '')), 'plan.md 未被重排（现状行为）')
++})
++
++test('WA4 混有非 Wave 类错误 → 不自动重排', async () => {
++  const root = mk('wa4-')
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: full\n---\n\n# 计划\n\n## Wave 1\n- task-01\n- task-02\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: t\n- [ ] task-02: t\n')
++  // task-02 缺 title_zh（非 Wave 类错误）+ 同 Wave 共享 src/shared.js（Wave 类错误）
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), CARD('task-01', ['src/shared.js']))
++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'), CARD('task-02', ['src/shared.js']).replace('title_zh: 任务task-02\n', ''))
++  const context = { cwd: root, specRoot: specBase, progress: { currentChange: 'c1' }, resolveChangeDir: () => changeDir }
++  const { logs } = await capture(() => assert.rejects(() => executePlanPostcheck(context)))
++  const text = logs.map(l => l[1]).join('\n')
++  assert.ok(!text.includes('已自动按 depends_on 拓扑重排'), '混合错误不自动重排')
++  assert.ok(text.includes('title_zh'), '非 Wave 类错误如实报出')
++})
++
++test('RB1 复审任务书含前轮 findings；首评任务书与现状一致', () => {
++  const root = mk('rb-')
++  const changeDir = join(root, 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  // 首评：无 review.json
++  const first = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'abc123def456' })
++  assert.ok(!first.includes('前轮评审 findings'), '首评无前轮段')
++  assert.ok(first.includes('独立评审任务书'), '任务书主体在场')
++  // 复审：前轮 review.json 在场
++  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, change: 'c1', reviewer: 'subagent', verdict: 'FAIL',
++    reviewedAgainst: 'abc123def456',
++    findings: [
++      { severity: 'P1', title: '承诺的备份未落盘', evidence: 'x', location: 'a.js:1' },
++      { severity: 'P2', title: '文档漂移', evidence: 'y', location: 'b.js:2' },
++    ],
++    dimensionNotes: {}, reviewedAt: '2026-10-07T00:00:00Z',
++  }))
++  const re = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'def456abc789' })
++  assert.ok(re.includes('前轮评审 findings（2 项'), `前轮段在场：${re.slice(re.indexOf('前轮') - 50, re.indexOf('前轮') + 200)}`)
++  assert.ok(re.includes('[P1] 承诺的备份未落盘'), 'findings 逐条列出')
++  assert.ok(re.includes('只验「修复到位 + 未引入回归」'), '复审优先级引导在场')
++  assert.ok(re.includes('def456abc789'), '本轮 head 照抄不受前轮影响')
++})
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md
+new file mode 100644
+index 00000000..a234cd2c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T16:13:04.411Z
++---
++# 设计记录（Design Record）— 2026-10-07-wave-auto-adopt-review-dedup
++
++> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。
++> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++三件「把机械活从前移给 CLI」的修复：① Wave 形态错误自动重排——postmortem（provider-model-list）实测 Wave 返工链三轮（同 Wave 冲突→手工拆→非合法 Wave 号→伪并行串行链），而 adopt-waves 按 depends_on 拓扑重排是机械活。修法：executePlanPostcheck 拆为 executePlanPostcheckRun（带 autoAdoptBudget），失败收口点判定「唯一失败组=蓝图一致性且错误全为 Wave 形态」时自动跑 adoptPlanWaves 重排并整体复跑（预算 1 次防环）；伪并行守卫（assessWaveStructure error throw 点）同款挂钩。方向违规自动修复（既有 L2388 机制）不动。挂统一收口点而非 consistency 单点：混有 feasibility 等其他类错误时不重排（实测 WA4 形态——重排会掩盖真实问题上下文）。逃生键 plan.auto_adopt_waves: false（config-schema 注册 + renderExample token）。② 复审任务书前轮 findings——flow-review.js renderReviewerTaskbook 读 changeDir 既有 review.json，在场时注入 findings 清单与「已报项只验修复与回归，重点找新增——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值；挤占 12 次请求预算是实证痛点）；首评零注入（任务书逐字=现状）。Grill 复审侧既有 PRIOR_REVIEW_FACTS/re-review 机制（review-material-pack.js）核查在位不重造。③ 实测门失败面增量重跑（task-07，方案 1 并入）——失败轮把「失败批测试文件（TAP not ok 块 location 路径归因/pytest FAILED 行兜底/归因不出保守全记批文件）+ 当时 git HEAD」落稳定指针 ledger（.runtime/test-rerun-<change>.json）；下轮 dynamic-subset 分支算增量面=「自失败 HEAD 以来变更文件（diff∪untracked）∪ 前轮失败批文件」，严格小于全量面时只跑增量面（三源推断以增量输入重算，修复文件的 import 依赖与 FR 回归自然入面），mode=incremental-rerun 且 reason 披露；增量绿后清账（下轮自然回全子集基线）。批对象补发 files（buildDepsBatches 三批 push + runModuleSubset perModule 透传 + outputFull 内存态归因源）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新导出：verify-postcheck.js readTestRerunLedger/writeTestRerunLedger/computeIncrementalFace；runModuleSubset 结果新增 failedFiles 数组与批 perModule 的 files/outputFull（内存态）；buildDepsBatches 批对象新增 files。行为变更三处（均有回归钉住）：① plan postcheck 在「唯一失败组为纯 Wave 形态错误」时自动重排 plan.md/tasks.md 并复跑（config 缺省开，plan.auto_adopt_waves: false 关闭回现状报错）；② flow done 复审任务书在 review.json 已在场时多前轮 findings 段（首评逐字不变）；③ verify --done dynamic-subset 档在前轮失败后走增量面（mode=incremental-rerun；config verify: test_rerun: full 或 env SILLYSPEC_TEST_RERUN=full 恒全子集现状）。新增配置键两个（plan.auto_adopt_waves boolean / verify.test_rerun enum）+ renderExample token。无端点、无 schema、无既有配置键语义变化；test_strategy: full/skip 路径零触碰。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：无事件流。自动重排是同步单进程内「失败→重排→复跑」；ledger 写在每轮实测后（读-算-写同进程序）；增量面由当次读取的 ledger+git 现态计算，迟到旧 ledger 只会少增量（回全子集，安全方向）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++ledger 后写胜（同 change 并发 verify 罕见；错账最坏=下轮多跑/少跑一轮增量，回全子集兜底）。自动重排写 plan.md/tasks.md 与 agent 并发 Edit 竞争：后写胜（与 agent 手跑 adopt-waves 同语义），plan.md 有 git 兜底可恢复。outputFull 内存态无并发面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++自动重排中断于写盘前=零效果原报错在场；ledger 写失败 fail-soft（下轮退化全子集）；增量面计算失败（git 异常）listFilesSince 返回空贡献→增量面=失败批文件仍可增量。复跑预算 1 次防「重排→又失败→再重排」循环。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++ledger 按 change 名寻址（change 级隔离）；自动重排只动 changeDir 内 plan.md/tasks.md；增量面三源推断以 cwd 为根（worktree 内跑时 specBase 锚回主仓与既有口径同源）；taskbook 读本 changeDir 的 review.json。均无跨 change 共享态。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：③增量重跑的假绿面——修复破坏了「增量面之外、基线绿面之内」的测试而未被发现。缓解链：增量面三源推断以修复文件为输入重算（import 依赖与 FR 关联回归自然入面）；失败批文件无条件入面；增量面≥全量面时回全子集；test_rerun: full 逃生；归因不出保守全记批文件（增量退化不误报）。残余接受：跨模块副作用破坏无 import 边文件的理论面——与「agent 手动只跑失败测试」的现行实践相比是严格改进。第二个风险：①自动重排改写 agent 手排 Wave——agent 的时序意图应编码在 depends_on（adopt 的输入）而非 Wave 手排；公告醒目 + config 逃生 + git 可恢复。试过但放弃：a) 增量后强制再跑全子集确认——passing 轮成本反升（增量+全量>全量），postmortem 的痛点是失败轮返工不是通过轮；b) 逐文件归因用 failureRemaining 行集——实证行集只含内层用例名不含文件名（node --test 文件作参数时顶层名=测试标题），改走 not ok 块 location 路径；c) Wave 错误在 consistency 单点挂自动重排——WA4 实证混有其他错误时会误触发，移到失败统一收口点判定。撤销三项（记录裁决）：评审档位新增 self 档不实施（档位机器已存在，self 档破坏 1/4 抽样校准）；「--done --answer 补 wait」视为已修复（complete.js requiresWait 门现行自动补全）；「--step 意图断言」作为并发安全设计保留。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/stages/plan-postcheck.js | executePlanPostcheck 拆 Run+预算复跑；统一收口点自动重排判定；伪并行挂点；autoAdoptWavesEnabled |
++| 修改 | src/flow-review.js | renderReviewerTaskbook 前轮 findings 注入 |
++| 修改 | src/verify-postcheck.js | 增量重跑（ledger/归因/增量面/config）；批 files 下发；outputFull |
++| 修改 | src/config-schema.js | plan.auto_adopt_waves + verify.test_rerun 注册与 example |
++| 修改 | package.json | 两个新测试收录 test:core |
++| 新增 | NEW:test/wave-auto-adopt.test.mjs | WA1-WA4 + RB1 |
++| 新增 | NEW:test/test-incremental-rerun.test.mjs | IR1-IR4（集成主链路真跑） |
++| 修改 | test/plan-wave-structure-guard.test.mjs | 伪并行集成用例按新契约更新（缺省=自动重排通过，关闭档=原硬拦断言保留） |
++
++## 评审清偿与勘误（收口前补记）
++
++- 评审 P2 清偿：增量守卫对比基线从「输入面文件数」改为「ledger.scopeFiles=基线实测测试文件集」（runModuleSubset 结果新增 scopeFiles 并入账）——原口径拿测试文件数对输入面数比较，级联失败（失败测试数≥输入面数）时增量永不触发，恰是动机场景失效；IR1 补级联用例钉住。
++- 评审 P3 清偿：撤销三项（self 档不实施 / --answer 补 wait 视为已修复 / --step 断言保留）补记于本文件「风险与死路」在档；design 文件清单补 test/plan-wave-structure-guard.test.mjs（提交 1b941893 实改）。
++- 「非法 Wave 号」无独立错误族：塌缩为伪并行族报出（退化安全），枚举 token 承接自成功标准原文。
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md
+new file mode 100644
+index 00000000..502465ad
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md
+@@ -0,0 +1,35 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T23:09:36.897Z
++---
++# 提案书（Proposal）— 2026-10-07-wave-auto-adopt-review-dedup
++
++## 动机
++
++任务原话转写：厚流程优化方案落地（用户批准的 4 方案之 2+3），postmortem 实测痛点：
++1) Wave 划分返工链（provider-model-list 三轮：同 Wave 共享→手工拆→非合法 Wave 号→伪并行串行链）——adopt-waves 一键重排是机械活（按 depends_on 拓扑），却要等 postcheck 拦了才知道该跑。修法：executePlanPostcheck 的「蓝图一致性校验」（src/stages/plan-postcheck.js:2121 validateBlueprintConsistency）与伪并行守卫（assessWaveStructure，L1670 报错文案已含指路）发现 Wave 形态类错误且**无其他类错误**时，自动跑 adoptPlanWaves（src/plan-adopt-waves.js:73，幂等、同步任务总表 W 列）重排后复验：干净即过并醒目公告（重排前后 Wave 数）；仍脏则报重排后的真问题（附「已自动重排仍不过」说明）。逃生键 local.yaml plan.auto_adopt_waves: false（config-schema 注册，缺省 true=自动）。
++2) 评审两轮报同类问题（Grill 6×P1 修复后二轮重审把已确认修复又核一遍；flow done 复审同类）——修法：①flow-review.js renderReviewerTaskbook（flow.js:1552 消费）读 changeDir 既有 review.json，在场时任务书注入前轮 findings 清单 +「已报项只验修复与回归，重点找新增问题——勿整轮重报」优先级引导（不禁止重报：二轮换视角有独立价值）；②brainstorm.js Design Grill 步骤（L406）prompt 加同款指引（前轮发现在场时先验修复与新问题）。
++
++成功标准：
++- plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++- plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++- renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++- Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++- 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++2. plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++3. renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++4. Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++## 成功标准（可验证）
++
++1. plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++2. plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++3. renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++4. Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++5. 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md
+new file mode 100644
+index 00000000..c9475990
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md
+@@ -0,0 +1,85 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T16:13:04.411Z
++---
++# 需求规格（Requirements）— 2026-10-07-wave-auto-adopt-review-dedup
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++
++plan postcheck 的失败统一收口点必须且只在「唯一失败组为蓝图一致性且其错误全为 Wave 形态类」时自动跑 plan-adopt-waves 重排并整体复跑一次（预算 1 次防环）；伪并行串行链 error 点必须同款挂钩；混有非 Wave 类错误时禁止自动重排（两族错误都按现状报出）。
++
++#### 场景：拓扑可分离的同 Wave 冲突
++
++Given task-02 depends_on task-01 且两卡同改 src/shared.js 被手排进同一 Wave / When plan postcheck / When 自动重排复跑 / Then postcheck 整体通过、plan.md 中两任务分波、输出含自动重排公告。
++
++#### 场景：混合错误不重排
++
++Given 同 Wave 冲突 + task-02 缺 title_zh / When plan postcheck / Then 不自动重排，两族错误均报出（title_zh 与 Wave 冲突）。
++
++### FR-02: plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++
++local.yaml plan.auto_adopt_waves: false 时必须零自动重排（冲突 error 照抛、plan.md 原样）；该键必须在 config-schema 注册且 renderExample 输出含其首末段 token；缺省必须为 true（自动）。
++
++#### 场景：关闭档
++
++Given local.yaml 配 plan.auto_adopt_waves: false 与拓扑可分离冲突形态 / When plan postcheck / Then 冲突 error 照抛、plan.md 未被改写。
++
++### FR-03: renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++
++复审任务书在 changeDir 存在含 findings 的 review.json 时必须注入前轮清单（severity+title 逐条，≤20 条）与「已报项只验修复与回归、重点找新增问题、勿整轮重报」优先级引导；无 review.json 或无 findings 时任务书必须与现状逐字一致；本轮 head 标注不受前轮 review.json 影响。
++
++#### 场景：复审注入
++
++Given changeDir 有前轮 FAIL 的 review.json（2 条 findings）/ When renderReviewerTaskbook / Then 任务书含前轮段、逐条 findings、复审优先级引导，head 照抄本轮值。
++
++### FR-04: Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++
++Design Grill 复审轮的 {PRIOR_REVIEW_FACTS} 前轮事实注入必须保持既有行为零回归（本变更不得触碰该渲染链路）；既有机制（review-material-pack 的 PRIOR_REVIEW_FACTS/re-review）核查在位、禁止重造平行机制。
++
++#### 场景：既有机制核查
++
++Given Grill 复审轮 / When prompt 渲染 / When {PRIOR_REVIEW_FACTS} 注入 / Then 前轮事实段照常在场（既有机制零回归——本变更未触碰该链路，验证面为全量回归测试通过）。
++
++### FR-05: （并入 FR-01-04 的组合验证）既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++
++新增两个测试文件（test/wave-auto-adopt.test.mjs、test/test-incremental-rerun.test.mjs）必须收录进 package.json 的 test:core 清单；收口时 test:core 必须全绿（309 用例 0 失败）且 npm run lint 必须 0 报错。
++
++#### 场景：主路径
++
++Given 本变更全部实现合入 / When npm run test:core 与 npm run lint / Then 均零失败退出（CLI 冒烟另证：4 任务伪并行 fixture 自动合并、集成链路失败→修复→增量绿）。
++
++### FR-06: 评审档位撤销说明（记录性条目，无代码面）
++
++本条为记录性裁决：评审档位禁止新增 self 档（review-tier S0/S1→self 与 flow-review 五路证据定档已存在，再加 self 档破坏 1/4 抽样校准）；「--done --answer 补 wait」必须视为已修复项（complete.js requiresWait 门现行自动补全 waitAnswer）；「--step 意图断言」必须作为并发安全设计保留。测试面：不适用（记录性条目，验证面为 design 风险节在档）。
++
++#### 场景：撤销留痕
++
++Given 收口评审 / When 核对 design 与 requirements / Then 撤销三项与理由在档（设计文档「风险与死路」与本条）。
++
++### FR-07: 实测门失败面增量重跑（task-07 追加，方案 1 并入）：前轮失败后下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面，未触碰绿面复用；verify: test_rerun: full 恒全子集（现状）
++
++verify --done 的 dynamic-subset 档必须在前轮实测失败后把失败批测试文件（按 TAP not ok 块 location 路径归因，pytest FAILED 行兜底，归因不出保守全记批文件）与当时 git HEAD 落 ledger；下轮增量面 = 失败批 ∪ 自 HEAD 以来变更文件，严格小于全量面时只跑增量面（mode=incremental-rerun 且 reason 披露口径），增量绿后清账回全子集基线；local.yaml verify: test_rerun: full 或 env SILLYSPEC_TEST_RERUN=full 必须恒全子集（现状行为），test_strategy: full/skip 不受影响。
++
++#### 场景：修复轮增量
++
++Given 全子集首跑 1/4 测试文件失败并落账 / When 修复该文件后重跑 verify --done / Then mode=incremental-rerun、命令面不含未触碰测试文件、绿过门且 ledger 清账（下轮回全子集基线）。
++
++#### 场景：保守档
++
++Given local.yaml 配 verify: test_rerun: full / When 同场景重跑 / Then 仍全子集模式（dynamic-subset，不走增量）。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/wave-auto-adopt.test.mjs「WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过」「WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过」「WA4 混有非 Wave 类错误 → 不自动重排」
++FR-02: test/wave-auto-adopt.test.mjs「WA3 auto_adopt_waves: false → 零自动重排（冲突照报）」（renderExample token 由 test/config-schema.test.mjs 全量套件防漂耦合断言覆盖）
++FR-03: test/wave-auto-adopt.test.mjs「RB1 复审任务书含前轮 findings；首评任务书与现状一致」
++FR-04: 不适用：既有机制核查面——{PRIOR_REVIEW_FACTS} 接线属 review-material-pack 既有链路，本变更零触碰，由全量 test:core 既有用例（knowledge-inject/guidance-output-neutrality 等）回归覆盖
++FR-05: test/wave-auto-adopt.test.mjs「WA1-WA4/RB1 全绿」（连同全量 test:core 309 用例 0 失败 + lint 0 报错，见变更提交链 23e4fe6b）
++FR-06: 不适用：记录性条目无测试面——撤销裁决留痕在 design 风险节与本条
++FR-07: test/test-incremental-rerun.test.mjs「IR1 computeIncrementalFace 纯函数三态」「IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账」「IR3 verify: test_rerun: full → 恒全子集（现状行为）」「IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到」
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md
+new file mode 100644
+index 00000000..5784e888
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md
+@@ -0,0 +1,18 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-06T23:09:36.897Z
++---
++# 任务注册表（Tasks）— 2026-10-07-wave-auto-adopt-review-dedup
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-07-wave-auto-adopt-review-dedup --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-07-wave-auto-adopt-review-dedup` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
++- [x] task-02: plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
++- [x] task-03: renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
++- [x] task-04: Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
++- [x] task-05: 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
++- [x] task-07: 实测门失败面增量重跑（方案 1 并入）：ledger（test-rerun-<change>.json 稳定指针：head/failedFiles/inputFiles）+ dynamic-subset 分支增量档（前轮失败后下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」，mode=incremental-rerun，未触碰绿面复用）+ 失败文件归因（node --test TAP not ok 块 location 路径 / pytest FAILED 行，归因不出保守全记批文件）+ 失败批文件下发（buildDepsBatches 批带 files）+ verify.test_rerun 配置逃生（缺省 incremental；full=恒全子集现状；env SILLYSPEC_TEST_RERUN 优先；config-schema 注册+example）
+diff --git a/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json.superseded-20261007T002557 b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json.superseded-20261007T002557
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json.superseded-20261007T002557
+@@ -0,0 +1,35 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-07-wave-auto-adopt-review-dedup",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "ca7d3580e8bb802db06ff5175d1cf3e4df87e660",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "前轮 P3（清单缺 guard 测试）清偿声明未兑现：文件变更清单表格仍无 test/plan-wave-structure-guard.test.mjs 行，文件名仅出现在「评审清偿与勘误」节散文里",
++      "evidence": "design.md「## 文件变更清单」表格（HEAD ca7d3580 实读）仍列 7 文件（plan-postcheck/flow-review/verify-postcheck/config-schema/package.json/两新测试），无第 8 文件行；清偿 bullet 声称「design 文件清单补 test/plan-wave-structure-guard.test.mjs」但补的只是清偿节散文——该节不在 parseFileChangeList 的识别面内（FILE_LIST_SECTION_RE 只锚「## 文件变更清单」节，src/change-list.js:97，条目仅自节内表格解析），对账面口径漂移风险与前轮原状相同。纯文档面，无代码/数据风险。",
++      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md:44-56（清单表格）与 :60-62（清偿声明）"
++    },
++    {
++      "severity": "P3",
++      "title": "前轮 P3（撤销三项不在风险节）清偿声明位置失实：三项仅记于「评审清偿与勘误」bullet，「风险与死路」节仍无该三项",
++      "evidence": "清偿 bullet 明文「撤销三项（self 档不实施 / --answer 补 wait 视为已修复 / --step 断言保留）补记于本文件「风险与死路」在档」，但 HEAD 实读 design.md「## 风险与死路」只含增量假绿/自动重排改写/放弃方案 a-c，无该三项；FR-06 自declared验证面（design 风险节在档）在位置上仍未落。信息面已不丢（三项与措辞在清偿节在场可查），属声明与实际不符的文档准确性问题，无代码面。",
++      "location": ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md:38-40（风险与死路）与 :61（清偿声明）"
++    }
++  ],
++  "fixVerification": {
++    "P2（增量守卫对比基错位）": "已修复到位：computeIncrementalFace 对比基线改为 ledger.scopeFiles（非空数组时），缺省回退 inputFiles||fullFace（src/verify-postcheck.js:1471-1475，回退方向保守——基线更小更易回全子集）；runModuleSubset 结果新增 scopeFiles=逐批实跑测试文件去重全集（:3138，skip 批无 files 正确不入集）经 writeTestRerunLedger 入账（:2196-2202）；IR1 级联用例真实钉住修复——该输入在旧代码（inc=4≥fullFace=4）必返 null，新代码 4<63 触发增量，断言 files.length=4 且公告含「基线实测测试集 63」（test/test-incremental-rerun.test.mjs:41-50）；JSDoc 已撤「是子集」不实声明与长度比较一致。",
++    "P3（非法 Wave 号无独立族）": "已清偿：design 评审清偿节补记定性（塌缩为伪并行族报出、退化安全、枚举 token 承接成功标准原文），文档化处置与前轮安全方向判定一致。",
++    "P3（清单缺 guard 测试）": "未兑现，见 findings[0]。",
++    "P3（撤销三项不在风险节）": "部分兑现（信息在档但位置与声明不符），见 findings[1]。"
++  },
++  "regressionCheck": "三触及测试文件（test-incremental-rerun/wave-auto-adopt/plan-wave-structure-guard）node --test 17/17 绿；全量 npm run test:core 309/309 绿 0 失败（与 FR-05 声明的 309 用例数精确吻合）；修复为纯函数基线切换+ledger/result 增量字段（向后兼容缺省参数），无触及面外消费者破坏。",
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-07T00:25:10Z"
++}

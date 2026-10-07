@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-wave-auto-adopt-review-dedup",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-01",
+      "tests": [
+        "test/wave-auto-adopt.test.mjs「WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过」",
+        "test/wave-auto-adopt.test.mjs「WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过」",
+        "test/wave-auto-adopt.test.mjs「WA4 混有非 Wave 类错误 → 不自动重排」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-wave-auto-adopt-review-dedup"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-02",
+      "tests": [
+        "test/config-schema.test.mjs",
+        "test/wave-auto-adopt.test.mjs「WA3 auto_adopt_waves: false → 零自动重排（冲突照报）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-wave-auto-adopt-review-dedup"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-03",
+      "tests": [
+        "test/wave-auto-adopt.test.mjs「RB1 复审任务书含前轮 findings；首评任务书与现状一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-wave-auto-adopt-review-dedup"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-05",
+      "tests": [
+        "test/wave-auto-adopt.test.mjs「WA1-WA4/RB1 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-wave-auto-adopt-review-dedup"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-07",
+      "tests": [
+        "test/test-incremental-rerun.test.mjs「IR1 computeIncrementalFace 纯函数三态」",
+        "test/test-incremental-rerun.test.mjs「IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账」",
+        "test/test-incremental-rerun.test.mjs「IR3 verify: test_rerun: full → 恒全子集（现状行为）」",
+        "test/test-incremental-rerun.test.mjs「IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-wave-auto-adopt-review-dedup"
+    }
+  ]
+}

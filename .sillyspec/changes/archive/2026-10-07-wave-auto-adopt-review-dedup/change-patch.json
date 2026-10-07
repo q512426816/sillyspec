@@ -1,12 +1,13 @@
 {
   "change": "2026-10-07-wave-auto-adopt-review-dedup",
   "baseline": "9b3bfb0699629b7351b7c82b945491fa1f846b84",
-  "head": "1b94189310602552681c975cb819d72f56b6cfeb",
+  "head": "87d6b17a841895df9e83a7304e629f07a1cfded8",
   "files": [
     ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/design.md",
     ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/flow-state.yaml",
     ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/proposal.md",
     ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/requirements.md",
+    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json",
     ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/tasks.md",
     "package.json",
     "src/config-schema.js",
@@ -15,14 +16,15 @@
     "src/verify-postcheck.js",
     "test/plan-wave-structure-guard.test.mjs",
     "test/test-incremental-rerun.test.mjs",
-    "test/wave-auto-adopt.test.mjs"
+    "test/wave-auto-adopt.test.mjs",
+    ".sillyspec/changes/2026-10-07-wave-auto-adopt-review-dedup/review.json.superseded-20261007T002557"
   ],
   "totals": {
-    "files": 13,
-    "additions": 764,
+    "files": 15,
+    "additions": 826,
     "deletions": 11
   },
-  "savedAt": "2026-10-07T00:08:58.564Z",
+  "savedAt": "2026-10-07T00:25:58.590Z",
   "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
   "modules": [
     {
@@ -69,6 +71,6 @@
     "docs/sillyhub-daemon/modules/_module-map.yaml",
     "docs/sillyspec/modules/_module-map.yaml"
   ],
-  "patchSha256": "a5bceceeda6a30c4b72b0dea9910f667b5b47c11271c54ea3f43fbab151ddf4c",
+  "patchSha256": "818ed86d22378c0f773f22252120d833f2eef019632169a9ecd3d04b9a60ea80",
   "patchStatus": "ok"
 }

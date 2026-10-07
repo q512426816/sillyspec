@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-wave-auto-adopt-review-dedup",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "87d6b17a841895df9e83a7304e629f07a1cfded8",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "n/a",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-07T09:05:00+08:00"
+}

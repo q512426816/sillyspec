@@ -1129,3 +1129,128 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-06-verify-docs-prefill
   status: active
+
+## FR-setup-067 plan postcheck：仅 Wave 形态错误（同 Wave 共享/非法 Wave 号/伪并行串行链）时自动重排复验通过（输出含自动重排公告，plan.md/tasks.md W 列已被 adoptPlanWaves 更新）；重排后仍有错则报新错误并说明已自动重排；混有非 Wave 类错误时不自动重排（行为=现状）
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：拓扑可分离的同 Wave 冲突；混合错误不重排
+场景正文：
+- 场景：拓扑可分离的同 Wave 冲突 — Given task-02 depends_on task-01 且两卡同改 src/shared.js 被手排进同一 Wave / When plan postcheck
+- 场景：混合错误不重排 — Given 同 Wave 冲突 + task-02 缺 title_zh / When plan postcheck / Then 不自动重排，两族错误均报出（title_
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-01
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-01
+  tests: test/wave-auto-adopt.test.mjs「WA1 同 Wave 冲突且拓扑可分离 → 自动重排后 postcheck 通过」 | test/wave-auto-adopt.test.mjs「WA2 伪并行碎片（4 独立任务手排四波，≥2 可合并对）→ 自动合并后通过」 | test/wave-auto-adopt.test.mjs「WA4 混有非 Wave 类错误 → 不自动重排」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-wave-auto-adopt-review-dedup
+  status: active
+
+## FR-setup-068 plan.auto_adopt_waves: false 时零自动重排（报错现状 + adopt-waves 指路），config-schema 注册该键且 renderExample 含 token
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：关闭档
+场景正文：
+- 场景：关闭档 — Given local.yaml 配 plan.auto_adopt_waves: false 与拓扑可分离冲突形态 / When plan postcheck / The
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-02
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-02
+  tests: test/config-schema.test.mjs | test/wave-auto-adopt.test.mjs「WA3 auto_adopt_waves: false → 零自动重排（冲突照报）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-wave-auto-adopt-review-dedup
+  status: active
+
+## FR-setup-069 renderReviewerTaskbook：changeDir 有既有 review.json 时任务书含前轮 findings 列表（severity+title）与去重引导语；无 review.json 时任务书与现状逐字一致
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：复审注入
+场景正文：
+- 场景：复审注入 — Given changeDir 有前轮 FAIL 的 review.json（2 条 findings）/ When renderReviewerTaskbook / Th
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-03
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-03
+  tests: test/wave-auto-adopt.test.mjs「RB1 复审任务书含前轮 findings；首评任务书与现状一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-wave-auto-adopt-review-dedup
+  status: active
+
+## FR-setup-070 Design Grill 步骤 prompt 含前轮发现去重引导（对既有 review 语义无损）
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：既有机制核查
+场景正文：
+- 场景：既有机制核查 — Given Grill 复审轮 / When prompt 渲染 / When {PRIOR_REVIEW_FACTS} 注入 / Then 前轮事实段照常在场（既有机制零
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-04
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+## FR-setup-071 （并入 FR-01-04 的组合验证）既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更全部实现合入 / When npm run test:core 与 npm run lint / Then 均零失败退出（CLI 冒烟另证：4 任务伪并行
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-05
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-05
+  tests: test/wave-auto-adopt.test.mjs「WA1-WA4/RB1 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-wave-auto-adopt-review-dedup
+  status: active
+
+## FR-setup-072 评审档位撤销说明（记录性条目，无代码面）
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：撤销留痕
+场景正文：
+- 场景：撤销留痕 — Given 收口评审 / When 核对 design 与 requirements / Then 撤销三项与理由在档（设计文档「风险与死路」与本条）。
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-06
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+## FR-setup-073 实测门失败面增量重跑（task-07 追加，方案 1 并入）：前轮失败后下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面，未触碰绿面复用；verify: test_rerun: full 恒全子集（现状）
+变更：2026-10-07-wave-auto-adopt-review-dedup
+状态：active
+摘要：修复轮增量；保守档
+场景正文：
+- 场景：修复轮增量 — Given 全子集首跑 1/4 测试文件失败并落账 / When 修复该文件后重跑 verify --done / Then mode=incremental-rerun、
+- 场景：保守档 — Given local.yaml 配 verify: test_rerun: full / When 同场景重跑 / Then 仍全子集模式（dynamic-subset，
+全文：.sillyspec/changes/archive/2026-10-07-wave-auto-adopt-review-dedup/requirements.md#FR-07
+最近确认：87d6b17a841895df9e83a7304e629f07a1cfded8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-wave-auto-adopt-review-dedup:flow:测试绑定FR-07
+  tests: test/test-incremental-rerun.test.mjs「IR1 computeIncrementalFace 纯函数三态」 | test/test-incremental-rerun.test.mjs「IR2 集成主链路：全子集失败→修复→增量绿→ledger 清账」 | test/test-incremental-rerun.test.mjs「IR3 verify: test_rerun: full → 恒全子集（现状行为）」 | test/test-incremental-rerun.test.mjs「IR4 ledger 读写 fail-soft + 首跑前 ledger 读不到」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-wave-auto-adopt-review-dedup
+  status: active
