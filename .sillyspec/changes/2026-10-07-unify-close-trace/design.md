@@ -26,7 +26,7 @@ created_at: 2026-10-07T15:27:48.775Z
 
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
 
-   成立：写函数入参全部来自收尾时点已算好的内存值（patchText/snapObj/stats），无跨事件状态；四件由单函数同步顺序写（patch 双份→两 json），不构成部分可观测的中间态消费面——读侧要么读到旧四件要么读到新四件，json 与 patch 的 sha 锚在函数内一次计算，不存在「两 json 各自算 hash 不一致」的时序窗口。
+   成立：写函数入参全部来自收尾时点已算好的内存值（patchText/snapObj/stats），无跨事件状态；四件由单函数同步顺序写（patch 双份→两 json），sha256 锚在函数内一次计算——不存在「两 json 各自算 hash 不一致」的时序窗口。注意：四次顺序 writeFileSync 之间存在新旧文件混合的可观测窗口（非原子组写，评审 P3 清偿——原文「要么旧四件要么新四件」措辞强于实现）；该窗口的实质防线是 sha 同锚 + 读侧 catch 回退（半份 json 被丢弃走下一链路，不出伪数据）。
 
 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
 
@@ -38,7 +38,7 @@ created_at: 2026-10-07T15:27:48.775Z
 
 4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
 
-   四件全部落在变更目录（changes/<名>/ 或归档侧），按 changeDir 定位不跨变更；thin 快照行只含主仓 face（filterDeliverableFiles），heavy 沉淀面投影显式排除 crossRepo 行——跨仓行不进本仓 patch/meta，各仓归属不串台。closedBy 只标通道名，无环境耦合。
+   四件全部落在变更目录（changes/<名>/ 或归档侧），按 changeDir 定位不跨变更；thin 快照行只含主仓 face（filterDeliverableFiles），heavy 沉淀面投影（flow-parity.projectTraceFaceRows）显式排除 crossRepo 行——跨仓行不进本仓 patch/meta，各仓归属不串台。closedBy 只标通道名，无环境耦合。声明边界：thin 快照的 excluded.foreignDeclared 恒为静态空数组（dirty 面他侧声明剔除只走 console 警告，不回填快照——评审 P3 披露；剔除语义以 change-patch.json 的归属切分与警告留痕为准）。
 
 ## 风险与死路
 

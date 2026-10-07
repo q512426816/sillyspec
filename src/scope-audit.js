@@ -1084,7 +1084,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
             : { foreignDeclared: [] },
           patchSha256: snap.patchSha256 || null,
           patchStatus: snap.patchStatus || null,
-          note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
+          note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在收尾时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
         }
       }
       return {

@@ -335,6 +335,25 @@ export function buildThinSnapshotRows({ ownFiles, stats, planEntries }) {
 }
 
 /**
+ * heavy 通道沉淀资产面投影（writeCloseTraceArtifacts 的 files/totals 数据源，纯函数；
+ * 2026-10-07-unify-close-trace，评审 P3 覆盖清偿抽纯函数）：rows → 主仓实改行——
+ * untouched 0/0 是声明不是改动、crossRepo 行 patch 不在主仓，均不入；verdict 缺失行
+ * （计划侧降级形态）按实改保留；null 行数不计合计（不出伪数据）。
+ * @returns {{ rows: object[], files: string[], totals: { files: number, additions: number, deletions: number } }}
+ */
+export function projectTraceFaceRows(rows) {
+  const face = (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && typeof r === 'object' && !r.crossRepo && r.verdict !== 'untouched')
+  let additions = 0
+  let deletions = 0
+  for (const r of face) {
+    if (Number.isFinite(r.additions)) additions += r.additions
+    if (Number.isFinite(r.deletions)) deletions += r.deletions
+  }
+  return { rows: face, files: face.map((r) => r.path), totals: { files: face.length, additions, deletions } }
+}
+
+/**
  * 双通道收尾留痕统一写（2026-10-07-unify-close-trace，缺陷 thin-flow-done-no-scope-
  * audit-snapshot 修复方向③）：thin（flow done）与 heavy（execute --done）此前各写各的
  * 留痕（沉淀资产面 change.patch/change-patch.json vs 对账快照面 scope-audit.patch/

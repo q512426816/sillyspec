@@ -20,7 +20,7 @@ import { join, isAbsolute, resolve } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
-import { writeCloseTraceArtifacts } from '../flow-parity.js'
+import { writeCloseTraceArtifacts, projectTraceFaceRows } from '../flow-parity.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer } from './shared.js'
 import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
@@ -1112,22 +1112,16 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
     snap.closedBy = 'execute --done'
     // 沉淀资产面投影（2026-10-07-unify-close-trace）：files/totals = 主仓实改行（planned+
     // unplanned；untouched 0/0 是声明不是改动、crossRepo 行 patch 不在主仓——均不入）。
-    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件（sha256 双套同锚）。
-    const faceRows = (Array.isArray(snap.rows) ? snap.rows : [])
-      .filter((r) => r && typeof r === 'object' && !r.crossRepo && r.verdict !== 'untouched')
-    let faceAdditions = 0
-    let faceDeletions = 0
-    for (const r of faceRows) {
-      if (Number.isFinite(r.additions)) faceAdditions += r.additions
-      if (Number.isFinite(r.deletions)) faceDeletions += r.deletions
-    }
+    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件（sha256 双套同锚）；
+    // 投影口径抽 flow-parity.projectTraceFaceRows 纯函数（排除路径有单测钉住）。
+    const face = projectTraceFaceRows(snap.rows)
     const closeTrace = writeCloseTraceArtifacts({
       changeDir,
       change: changeName,
       baseline: typeof snap.baseAnchor === 'string' ? snap.baseAnchor : null,
       head: String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null,
-      files: faceRows.map((r) => r.path),
-      metaTotals: { files: faceRows.length, additions: faceAdditions, deletions: faceDeletions },
+      files: face.files,
+      metaTotals: face.totals,
       patchText: typeof frozenPatch === 'string' && frozenPatch ? frozenPatch : null,
       savedAt: new Date().toISOString(),
       snapObj: snap,

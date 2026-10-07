@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
-import { writeCloseTraceArtifacts, buildThinSnapshotRows } from '../src/flow-parity.js'
+import { writeCloseTraceArtifacts, buildThinSnapshotRows, projectTraceFaceRows } from '../src/flow-parity.js'
 import { computeChangeScopeAudit, getFileDiff } from '../src/scope-audit.js'
 import { makeRepo, initChange, seedStage, runCLI, runStage } from './_cli-step-harness.mjs'
 import { ProgressManager } from '../src/progress.js'
@@ -133,6 +133,24 @@ test('FR-01 buildThinSnapshotRows：三态/治理过滤/跨仓补行/stats 缺�
   // planEntries 空 → 实际侧 only（无 verdict）
   const noPlan = buildThinSnapshotRows({ ownFiles: ['src/a.js'], stats: new Map(), planEntries: [] })
   assert.ok(!('verdict' in noPlan.rows[0]), '清单缺失 → 行无 verdict（与主链路降级同语义）')
+})
+
+// ───────────────────────── FR-02：heavy 投影纯函数单测 ─────────────────────────
+
+test('FR-02 projectTraceFaceRows：untouched/crossRepo 排除、verdict 缺失保留、null 不计合计', () => {
+  const { rows, files, totals } = projectTraceFaceRows([
+    { path: 'src/a.js', verdict: 'planned', additions: 10, deletions: 2 },
+    { path: 'src/e.js', verdict: 'unplanned', additions: 3, deletions: 0 },
+    { path: 'src/decl.js', verdict: 'untouched', additions: 0, deletions: 0 },        // 声明非改动 → 排除
+    { path: 'other/x.py', verdict: 'planned', additions: 5, deletions: 0, crossRepo: 'other' }, // 跨仓 → 排除
+    { path: 'src/nv.js', additions: 1, deletions: 1 },                                 // 计划侧降级无 verdict → 保留
+    { path: 'src/bin.js', verdict: 'planned', additions: null, deletions: null },      // binary/null → 保留但行数不计
+    null, 'not-a-row',                                                                  // 畸形防御
+  ])
+  assert.deepEqual(files, ['src/a.js', 'src/e.js', 'src/nv.js', 'src/bin.js'])
+  assert.equal(rows.length, 4)
+  assert.deepEqual(totals, { files: 4, additions: 14, deletions: 3 }, 'null 行不计合计')
+  assert.deepEqual(projectTraceFaceRows(undefined), { rows: [], files: [], totals: { files: 0, additions: 0, deletions: 0 } }, '空入参防御')
 })
 
 // ───────────────────────── FR-04：写读 round-trip ─────────────────────────
