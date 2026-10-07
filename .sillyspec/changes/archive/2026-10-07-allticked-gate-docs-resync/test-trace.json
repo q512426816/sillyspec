@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-allticked-gate-docs-resync",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-01",
+      "tests": [
+        "test/task-tick.test.mjs「⑤a 不勾+有交付 → 拒收」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-allticked-gate-docs-resync"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-02",
+      "tests": [
+        "test/task-tick.test.mjs「⑥b 重推接线钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-allticked-gate-docs-resync"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick.test.mjs「⑥a shouldResyncDocs 纯函数」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-allticked-gate-docs-resync"
+    }
+  ]
+}

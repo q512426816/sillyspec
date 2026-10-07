@@ -1,0 +1,650 @@
+diff --git a/src/flow.js b/src/flow.js
+index e58e336e..34bf13f6 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1056,12 +1056,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             }
+           } catch { /* 时点判定 fail-soft */ }
+         }
+-        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype；2026-10-03 修零提交静默；
+-        // 2026-10-07-thin-tasks-v3 收口代勾退役）：不勾不是假勾是漏账——只警告不代勾不阻断
+-        // （机器不再一把全勾替 agent 背书；governance-autopilot 的 token 代勾照旧走上方通道）。
+-        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0) {
+-          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾——`)
+-          console.warn(`   规范动作是完成一个单元即勾一格：sillyspec task tick --change ${change} --task task-NN（或 Edit 翻格 - [ ] → - [x]）；本次放行不阻断`)
++        // 全勾硬门（2026-10-07-allticked-gate-docs-resync，openspec all_done 对齐）：tasks.md 是
++        // 完成状态机——有任务行但未全勾即拒收（旧「勾选缺失 advisory 放行」退役：懒路径零勾也
++        // 能归档教会了无视任务面）。出口：逐格 task tick（每格需提交 token 证据——哨兵同门）；
++        // 任务面与实际不符可先改写 tasks.md（工作分解归 agent）再逐格勾。token 代勾（governance-
++        // autopilot）已在上方先跑：有证据未勾的格子已代勾，此处拒的纯属零证据未完成面。
++        if (sent.claimTotal > 0 && sent.checked < sent.claimTotal) {
++          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json），全勾后重跑 flow done`)
++          console.error('   任务面与实际实现路径不符时，先改写 tasks.md（工作分解归你，增删改随意）再逐格勾；查下一任务：sillyspec task tick --change ' + `${change}` + ' --task task-NN（回显进度与指针）')
++          appendTelemetry({ sentinel: 'incomplete-tasks', checked: sent.checked, total: sent.claimTotal })
++          reportMidFail('ledger')
++          process.exit(1)
+         }
+         }
+       }
+diff --git a/src/task-tick.js b/src/task-tick.js
+index df890180..af6f38d4 100644
+--- a/src/task-tick.js
++++ b/src/task-tick.js
+@@ -104,6 +104,12 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
+         detail: `checked ${from}→${r.checked}`, provisional: true, source: 'task-tick',
+       }) + '\n', 'utf8')
+     } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
++    // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
++    // spec-sync，平台不再停留 start 时点快照（真实会话实证：改写后平台恒显初稿）。best-effort。
++    try {
++      const { triggerSync } = await import('./run/shared.js')
++      await triggerSync(cwd, changeName, { specRoot: specBase })
++    } catch { /* 重推 best-effort：失败不影响翻格主流程 */ }
+   }
+   const nextTip = r.next
+     ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
+diff --git a/src/watcher.js b/src/watcher.js
+index 7c7c32ec..f87d4c43 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -460,6 +460,27 @@ export function watcherEventsPath(runtimeRoot, changeName) {
+   return join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
+ }
+ 
++/**
++ * 工件内容变更重推判定（2026-10-07-allticked-gate-docs-resync，纯函数）：事件面出现
++ * tasks/design/requirements/proposal 四工件的内容变更（file 出现/file-update）→ true。
++ * 消费面：watcher 主循环触发 spec-sync 文档重推（防抖冷却）——修「平台停留 start 时点
++ * 初稿快照」（真实会话实证：agent 中途重写 tasks/design，spec-sync 只在协议调用时点推，
++ * 平台恒显初稿）。匹配口径与 inferEvents 的 detail 格式成对（`${key} 出现`/`${key} 内容变更`，
++ * key=工件文件名）。fail-open：解析不了的事件不触发重推。
++ */
++export function shouldResyncDocs(events) {
++  const DOC_KEYS = ['tasks.md', 'design.md', 'requirements.md', 'proposal.md'];
++  for (const e of events || []) {
++    if (!e || (e.kind !== 'file' && e.kind !== 'file-update')) continue;
++    const detail = String(e.detail || '');
++    if (DOC_KEYS.some((k) => detail.includes(k))) return true;
++  }
++  return false;
++}
++
++/** 工件重推防抖冷却（同 change 连续改写只触发一轮后台同步；bg-sync 自带单飞锁，双保险）。 */
++const DOCS_RESYNC_COOLDOWN_MS = 10_000;
++
+ /**
+  * 读事件流（纯读：解析+过滤，`watcher alerts`/`watcher timeline` 命令与测试消费；不写盘不推平台）。
+  * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
+@@ -942,6 +963,8 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+   let everHadHead = prev.head != null;
+   const hardDeadline = startedAt + MAX_LIFETIME_MS;
+   let lastActivityAt = Date.now();
++  // 工件重推防抖锚（2026-10-07-allticked-gate-docs-resync）
++  let lastDocsResyncAt = 0;
+   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
+   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
+   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
+@@ -1019,6 +1042,16 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+       console.warn(`[watcher] 事件落盘异常（best-effort 继续）: ${(e && e.message) || e}`);
+     }
+     await pushEventsToPlatform({ specBase, changeName, events: batch, env });
++    // 工件内容变更即时重推（2026-10-07-allticked-gate-docs-resync）：tasks/design 等被改写
++    // （含 Edit 勾格/任务面重写）→ 防抖后触发 spec-sync 文档重推——平台不再停留 start 快照。
++    // best-effort：triggerSync 内部自带未连接预判/单飞锁/后台化，此处只挡异常不挡语义。
++    if (shouldResyncDocs(events) && Date.now() - lastDocsResyncAt > DOCS_RESYNC_COOLDOWN_MS) {
++      lastDocsResyncAt = Date.now();
++      try {
++        const { triggerSync } = await import('./run/shared.js');
++        await triggerSync(cwd, changeName, { specRoot: specBase });
++      } catch { /* 重推 best-effort：绝不影响事件流主循环 */ }
++    }
+     if (events.some((e) => e.kind === 'archived')) {
+       console.log(`[watcher] archived 终态，监听结束: ${changeName}`);
+       break;
+@@ -1031,4 +1064,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+ }
+ 
+ export { isPidAlive };
+-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toPlatformChangeEvents, pushEventsToPlatform };
++export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toPlatformChangeEvents, pushEventsToPlatform, shouldResyncDocs };
+diff --git a/test/flow-agent-log-report.test.mjs b/test/flow-agent-log-report.test.mjs
+index d42d04f9..2d708c4d 100644
+--- a/test/flow-agent-log-report.test.mjs
++++ b/test/flow-agent-log-report.test.mjs
+@@ -129,7 +129,7 @@ test('③ flow done 收口周期：done 调用面同样登记（last_command=don
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK, '--no-review'], { agentLog }).status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   run(['add', 'work.txt'])
+-  run(['commit', '-q', '-m', 'work'])
++  run(['commit', '-q', '-m', 'work (task-01)'])
+   fillSlots(cwd, change)
+ 
+   const d = cli(cwd, ['flow', 'done', '--change', change], { agentLog })
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+index 10ca926b..5e2a6e1b 100644
+--- a/test/flow-clarity-probe.test.mjs
++++ b/test/flow-clarity-probe.test.mjs
+@@ -166,7 +166,7 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
+   // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02) (task-03)'], { cwd, stdio: 'pipe' })
+   const cd = join(cwd, SPEC, 'changes', c1)
+   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
+   const base = readFileSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${c1}.json`), 'utf8')
+diff --git a/test/flow-done-carry-suspect-advisory.test.mjs b/test/flow-done-carry-suspect-advisory.test.mjs
+index 5f17c8aa..b9231373 100644
+--- a/test/flow-done-carry-suspect-advisory.test.mjs
++++ b/test/flow-done-carry-suspect-advisory.test.mjs
+@@ -73,7 +73,7 @@ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   writeFileSync(join(cwd, 'foreign-page.tsx'), '// 并行会话旧分叉快照\nexport {}\n')
+   execFileSync('git', ['add', 'work.txt', 'foreign-page.tsx'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work（夹带 foreign-page.tsx）'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work（夹带 foreign-page.tsx）（task-01）'], { cwd, stdio: 'pipe' })
+ 
+   const s2 = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(s2.status, 0, `done 应 advisory 不阻断: ${s2.stdout}\n${s2.stderr}`)
+@@ -92,7 +92,7 @@ test('② 声明面全空：不指认夹带，降为「无声明面」软提示'
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   const s2 = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(s2.status, 0, `done 不阻断: ${s2.stdout}\n${s2.stderr}`)
+   const out = s2.stdout + s2.stderr
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 0d303a0b..cc21d5ad 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -341,6 +341,8 @@ test('⑥ 轻量跑道 e2e（v2）：spec 断点机器门——未批准拒收 /
+ 
+   // agent 干活（代码文件）+治理面正文作答（v2：FR 行为句/design 四节/绑定行——全部写正文）
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  // 全勾硬门夹具配套：token 提交（autopilot 自动勾两格）
++  g(['add', 'work.js']); g(['commit', '-q', '-m', 'work (task-01) (task-02)'])
+   const fill = (f, fn) => writeFileSync(join(changeDir, f), fn(readFileSync(join(changeDir, f), 'utf8')))
+   fill('design.md', (t) => t.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：e2e 夹具一行答'))
+   fill('requirements.md', (t) => t
+@@ -377,6 +379,7 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接
+   const changeDir = join(cwd, '.sillyspec', 'changes', change)
+   assert.match(readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8'), /autopilot: true/, 'autopilot 声明留痕')
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  g(['add', 'work.js']); g(['commit', '-q', '-m', 'work (task-01) (task-02)'])
+   const fill = (f, fn) => writeFileSync(join(changeDir, f), fn(readFileSync(join(changeDir, f), 'utf8')))
+   fill('design.md', (t) => t.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：e2e 夹具一行答'))
+   fill('requirements.md', (t) => t
+diff --git a/test/flow-parity.test.mjs b/test/flow-parity.test.mjs
+index 1975aed5..80072542 100644
+--- a/test/flow-parity.test.mjs
++++ b/test/flow-parity.test.mjs
+@@ -171,7 +171,7 @@ test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账
+   writeFileSync(join(cwd, 'src', 'core', 'a.js'), 'export const a = 1\n')
+   writeFileSync(join(cwd, '.sillyspec', 'docs', 'demo', 'modules', 'core.md'), '# core\na=1\n')
+   run(['add', 'src/core/a.js', '.sillyspec/docs/demo/modules/core.md'])
+-  run(['commit', '-q', '-m', 'feat: core 变更（task-01）'])
++  run(['commit', '-q', '-m', 'feat: core 变更（task-01）（task-02）'])
+   fillDesignSlots(cwd, change)
+   const s2 = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index ef2b22c2..bfcaa0d9 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -96,10 +96,10 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，
+   assert.match(st, /baseline_commit:/)
+   assert.match(st, /tier: thin/)
+ 
+-  // agent 干活（非协议调用：纯文件+git）
++  // agent 干活（非协议调用：纯文件+git）——token 提交配套全勾硬门（autopilot 自动勾 task-01）
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+ 
+   // 协议调用 2/2：flow done
+@@ -137,6 +137,8 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
+   // 动态子集实测它（pass.flag 缺席→红）；原 fixtures 经 commands.test=node check.js 全量触达
+   writeFileSync(join(cwd, 'work.test.mjs'), "import { test } from 'node:test'\nimport { existsSync } from 'node:fs'\nimport assert from 'node:assert/strict'\ntest('flip', () => { assert.ok(existsSync('pass.flag'), 'pass.flag 缺席=失败') })\n")
++  execFileSync('git', ['add', 'work.test.mjs'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+   const specBase = join(cwd, '.sillyspec')
+@@ -212,7 +214,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
+   mkdirSync(join(cwd, 'backend', 'app'), { recursive: true })
+   writeFileSync(join(cwd, 'backend', 'app', 'deliv.txt'), 'x\n')
+   execFileSync('git', ['add', 'backend'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'deliv'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'deliv (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+ 
+@@ -232,7 +234,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   const specBase = join(cwd, '.sillyspec')
+ 
+   // 空节 → artifacts 子步拒收 exit 1（v2：verifyThinDocsV2 点名未作答节），change 仍 active
+@@ -274,7 +276,7 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   const base = join(cwd, '.sillyspec', 'changes', change)
+   // design 四节作答 + FR 行为句 + 绑定行写真实测试路径（v2 纯 markdown；触发行提取与提升）
+   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：绑定链夹具'))
+@@ -348,10 +350,10 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变
+   assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /^FR-01: （待填/m, '绑定行收编追加（v2 纯文本）')
+   assert.ok(existsSync(join(changeDir, 'tasks.md')), '缺件 tasks 补齐')
+ 
+-  // 干活 + FR 行为句/绑定行作答 → done（design 四节豁免、绑定门生效）
++  // 干活 + FR 行为句/绑定行作答 → done（design 四节豁免、绑定门生效）——token×2 配套全勾硬门
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02)'], { cwd, stdio: 'pipe' })
+   writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+     .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成收编行为（design 豁免+绑定行追加）')
+     .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flow-protocol.test.mjs ⑬ 收编用例'))
+@@ -394,7 +396,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+   const specBase = join(cwd, '.sillyspec')
+@@ -435,7 +437,7 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+   const changeDir = join(cwd, '.sillyspec', 'changes', change)
+@@ -458,6 +460,9 @@ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () =
+   const { cwd } = makeRepo()
+   const change = '2026-09-02-flow-h2-t17'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+   const f = cli(cwd, ['flow', 'done', '--change', change])
+@@ -479,7 +484,7 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落
+   assert.ok(existsSync(join(plat, '.runtime', 'sillyspec.db')), '进度库落外置根（DB 与工件同根）')
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，正文作答（v2）
+   const pc = join(plat, 'changes', change)
+   writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：平台参数面夹具'))
+@@ -560,7 +565,7 @@ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   writeFileSync(join(cwd, 'late-dirty.py'), 'x = 1\n') // 未提交交付文件 → --freeze-dirty 并入
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index 5c449fa0..a79c1e33 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -97,6 +97,9 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+
+ 
+   // advisory（缺省）：测绿 → flow done exit 0 + 醒目打印 + 遥测记一笔
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  // 全勾硬门夹具配套：token 提交（autopilot 自动勾 task-01）——路由面用例不测任务门
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
+   const done = cli(['flow', 'done', '--change', change])
+@@ -126,6 +129,9 @@ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
+   const big = amendWithRatio(cwd, change, 0.75)
+   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  // 全勾硬门夹具配套：token 提交（block 档断言的是路由门文案，须先过任务门）
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+   fillDesignSlots(cwd, change)
+   assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
+   const done = cli(['flow', 'done', '--change', change])
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+index be8e0530..98c46d9e 100644
+--- a/test/flow-tick-prototype.test.mjs
++++ b/test/flow-tick-prototype.test.mjs
+@@ -79,22 +79,20 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+-test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
++test('④ 全勾硬门：有提交未勾任务 → 拒收（2026-10-07-allticked-gate，openspec all_done 对齐）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-09-01-ftp-3'
+   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+   fillSlots(cwd, change)
+-  // 认领面（agent 覆写过任务行）一条未勾 → advisory（2026-10-03-voluntary-task-tick 语义分岔：
+-  // 镜像未认领面已改走收口代勾自愈——见 task-tick.test.mjs ④；本钉守住「认领了却没勾」的提醒面）
++  // 认领面（agent 覆写过任务行）一条未勾 → 拒收（旧 advisory 放行退役——tasks.md 是完成状态机）
+   const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
+   writeFileSync(tp, readFileSync(tp, 'utf8').replace(/^- \[ \] task-01: .*$/m, '- [ ] task-01: agent 认领的步骤'))
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work（不勾选）'], { cwd, stdio: 'pipe' })
+   const d = cli(['flow', 'done', '--change', change])
+-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
+-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, 'advisory 在场')
++  assert.equal(d.status, 1, '未全勾应拒收')
++  assert.match(d.stdout + d.stderr, /任务未全勾（0\/1）/, '全勾硬门文案（进度面）')
+   assert.match(d.stdout + d.stderr, /task tick/, '指引含 tick 动词')
+-  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '认领面不代勾')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+index 04dcd6ed..d2209676 100644
+--- a/test/sentinel-wiring.test.mjs
++++ b/test/sentinel-wiring.test.mjs
+@@ -119,7 +119,8 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+     assert.match(ok.stdout, /哨兵：全勾/, '哨兵绿行在场（正文 token 计证据）')
+     rmSync(cwd, { recursive: true, force: true })
+   }
+-  // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
++  // 形态 C：非全勾（默认未勾）→ 拒收（2026-10-07-allticked-gate：tasks.md 是完成状态机，
++  // openspec all_done 对齐——旧 advisory 放行退役）
+   {
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-02-sw-partial'
+@@ -128,9 +129,10 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+     execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+-    const ok = cli(['flow', 'done', '--change', change])
+-    assert.equal(ok.status, 0, '非全勾放行不变')
+-    assert.doesNotMatch(ok.stdout, /哨兵断言拒收/)
++    const f = cli(['flow', 'done', '--change', change])
++    assert.equal(f.status, 1, '未全勾应拒收')
++    assert.match(f.stdout + f.stderr, /任务未全勾/, '全勾硬门文案')
++    assert.match(f.stdout + f.stderr, /task tick/, '出口指引含 tick 动词')
+     rmSync(cwd, { recursive: true, force: true })
+   }
+ })
+diff --git a/test/task-tick.test.mjs b/test/task-tick.test.mjs
+index 29a623d2..c3a89509 100644
+--- a/test/task-tick.test.mjs
++++ b/test/task-tick.test.mjs
+@@ -8,8 +8,10 @@
+  *      checked N→M 单格口径）；幂等重勾零事件；
+  *   ④ 节奏门去重：CLI 连续两 tick + watcher 采样合并跳（0→2）同流 → detectBatchCheckCadence
+  *      判 null（不再误伤快速逐格勾）；纯 Edit 一把勾（无 CLI 事件）仍检出；
+- *   ⑤ done 收口不代勾（2026-10-07-thin-tasks-v3：mirror_autotick 退役）：不勾+有交付 →
+- *      仅 advisory 警告、归档件保持未勾；认领未勾完（覆写面）同判；零提交也显形。
++ *   ⑤ done 全勾硬门（2026-10-07-allticked-gate，openspec all_done 对齐）：不勾/部分勾 → 拒收，
++ *      补齐 token 提交并 tick 后放行（完成状态机——旧 advisory 放行与收口代勾均已退役）；
++ *   ⑥ 工件即时重推（2026-10-07-allticked-gate-docs-resync）：shouldResyncDocs 纯函数判定
++ *      四工件内容变更；task tick 后 best-effort triggerSync；watcher 循环防抖消费接线钉。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -162,42 +164,70 @@ test('④c 混合面：CLI 勾 1 格 + Edit 一把翻 2 格 → 跳幅按 CLI 
+   assert.equal(worst.to, 3)
+ })
+ 
+-// ── ⑤ done 收口不代勾（mirror_autotick 退役）──
++// ── ⑤ done 全勾硬门（2026-10-07-allticked-gate：openspec all_done 对齐）──
+ 
+-test('⑤a 不勾+有交付 → 仅 advisory 警告、放行、归档件保持未勾（机器不再一把全勾）', () => {
++test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-2'
+   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+-  execFileSync('git', ['commit', '-q', '-m', 'work（不勾选——0/12 事故同型场景）'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work（不勾选——懒路径同型场景）'], { cwd, stdio: 'pipe' })
+   const d = cli(['flow', 'done', '--change', change])
+-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
+-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, '勾选缺失 advisory 在场')
+-  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '收口代勾已退役')
+-  const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
+-  assert.equal(existsSync(arch), true, '已归档')
+-  const md = readFileSync(arch, 'utf8')
+-  assert.match(md, /^- \[ \] task-01:/m, '归档件保持未勾（不代勾）')
+-  assert.match(md, /^- \[ \] task-02:/m)
++  assert.equal(d.status, 1, '未全勾应拒收')
++  assert.match(d.stdout + d.stderr, /任务未全勾（0\/2）/, '全勾硬门文案（进度面）')
++  assert.match(d.stdout + d.stderr, /task tick/, '出口指引含 tick 动词')
++  assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', change)), true, 'change 保持 active（断点续）')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+-test('⑤b 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形', () => {
++test('⑤b 部分勾选（认领面勾一半）→ 同样拒收；补齐 token 提交后放行', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-3'
+   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+   fillSlots(cwd, change)
+-  // agent 覆写任务面（认领）但一条未勾；交付走 dirty+--freeze-dirty（区间零提交——旧前提下的静默面）
+-  const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
+-  writeFileSync(tp, readFileSync(tp, 'utf8').replace(/^- \[ \] task-01: .*$/m, '- [ ] task-01: agent 自己的步骤一').replace(/^- \[ \] task-02: .*$/m, '- [ ] task-02: agent 自己的步骤二'))
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+-  const d = cli(['flow', 'done', '--change', change, '--freeze-dirty'])
+-  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
+-  assert.match(d.stdout + d.stderr, /任务勾选缺失/, '零提交场景 advisory 在场（0/12 静默修复）')
+-  const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
+-  const md = readFileSync(arch, 'utf8')
+-  assert.match(md, /^- \[ \] task-01: agent 自己的步骤一/m, '覆写面保持未勾（advisory 不代勾）')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'feat: 行为甲 (task-01)'], { cwd, stdio: 'pipe' })
++  const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
++  assert.equal(t1.status, 0, 'tick task-01（有 token 证据）')
++  const d = cli(['flow', 'done', '--change', change])
++  assert.equal(d.status, 1, '部分勾选拒收（1/2）')
++  assert.match(d.stdout + d.stderr, /任务未全勾（1\/2）/, '进度面文案')
++  // 出口走通：补第二格的 token 提交 → tick → 放行
++  writeFileSync(join(cwd, 'work2.js'), 'export const b = 2\n')
++  execFileSync('git', ['add', 'work2.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'feat: 行为乙 (task-02)'], { cwd, stdio: 'pipe' })
++  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
++  const ok = cli(['flow', 'done', '--change', change])
++  assert.equal(ok.status, 0, `补齐后放行: ${ok.stdout}\n${ok.stderr}`)
+   rmSync(cwd, { recursive: true, force: true })
+ })
++
++// ── ⑥ 工件即时重推接线钉（2026-10-07-allticked-gate-docs-resync）──
++
++test('⑥a shouldResyncDocs 纯函数：四工件内容变更触发、无关事件不触发', async () => {
++  const { shouldResyncDocs } = await import('../src/watcher.js')
++  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'tasks.md 内容变更' }]), true, 'tasks 变更')
++  assert.equal(shouldResyncDocs([{ kind: 'file', detail: 'design.md 出现' }]), true, 'design 出现')
++  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'requirements.md 内容变更' }]), true)
++  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'proposal.md 内容变更' }]), true)
++  assert.equal(shouldResyncDocs([{ kind: 'task-done', detail: 'checked 0→1' }]), false, '勾选事件不是文档变更')
++  assert.equal(shouldResyncDocs([{ kind: 'file-update', detail: 'tasks/task-01.md 内容变更' }]), false, '任务卡文件不在四工件面（卡内容走既有事件链）')
++  assert.equal(shouldResyncDocs([{ kind: 'commit', detail: 'abc' }, { kind: 'file-update', detail: 'src/x.js 内容变更' }]), false, '代码/提交事件不触发')
++  assert.equal(shouldResyncDocs([]), false)
++  assert.equal(shouldResyncDocs(null), false)
++})
++
++test('⑥b 重推接线钉：task tick 后触发 triggerSync；watcher 循环消费 shouldResyncDocs+防抖', () => {
++  const tickSrc = readFileSync(join(ROOT, 'src', 'task-tick.js'), 'utf8')
++  assert.ok(tickSrc.includes('triggerSync(cwd, changeName'), 'task tick 翻格后 best-effort triggerSync')
++  assert.ok(tickSrc.includes('2026-10-07-allticked-gate-docs-resync'), '留痕注释')
++  const watcherSrc = readFileSync(join(ROOT, 'src', 'watcher.js'), 'utf8')
++  assert.ok(watcherSrc.includes('shouldResyncDocs(events)'), 'watcher 主循环消费判定函数')
++  assert.ok(watcherSrc.includes('DOCS_RESYNC_COOLDOWN_MS'), '防抖冷却在场')
++  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.ok(flowSrc.includes('任务未全勾'), 'flow done 全勾硬门文案在场')
++  assert.ok(flowSrc.includes("sentinel: 'incomplete-tasks'"), '拒收落遥测')
++})
+diff --git a/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/design.md b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/design.md
+new file mode 100644
+index 00000000..782f69e0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/design.md
+@@ -0,0 +1,59 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T12:56:19.089Z
++---
++# 设计记录（Design Record）— 2026-10-07-allticked-gate-docs-resync
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++三个触点：① flow.js 哨兵位的勾选缺失 advisory 块升级为拒收（判定条件从 checked===0 收宽到 checked<claimTotal——openspec all_done 语义：checkbox 是完成状态机，不全勾不能收口；token 代勾先行，拒的纯属零证据未完成面）；② task-tick.js 翻格成功后 best-effort triggerSync（CLI 写任务面的时点即重推时点）；③ watcher.js 新增 shouldResyncDocs 纯函数（四工件名匹配 file/file-update 事件）+ 主循环 10s 防抖消费——覆盖 Edit 勾格与中途重写。选此方案因 platform 陈旧的根因是「文档推送只在协议调用时点」，两条写入路径（CLI tick / 文件变更）各挂一个触发器即闭环，不动 spec-sync 本体。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++flow done 行为变更：未全勾拒收（原 advisory 放行）。task tick 新增 best-effort 副作用（triggerSync）。watcher 新增导出 shouldResyncDocs(events)→boolean 与内部防抖常量。无端点/文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用/已防：重推触发是幂等副作用（spec-sync 全量对账式同步，后到覆盖先到）；全勾门只读收口时点终态，无序不敏感。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++triggerSync 内部自带单飞锁与后台合并（bg-sync spawn 决策），watcher 与 task tick 同时触发也只会合并为一轮后台同步；失败方向全 best-effort。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++拒收是幂等断点（重入幂等跳过已完成子步）；防抖锚是 watcher 进程内存变量，重启冷却归零仅多触发一轮幂等同步。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：triggerSync 按 cwd+change 定位；watcher 事件按 change 目录采样，无跨变更面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：全勾硬门对存量在途变更的收紧（未勾收口从放行变拒收）——出口明确（补 token 提交+tick 或改写任务面），且与证据门同哲学；次风险：tick 触发的后台同步在网络差时堆积——bg-sync 单飞锁+合并天然防堆积。试过放弃：时序门（tick 时 token 提交须已存在，先证后勾）——用户裁定参考 openspec：openspec 无任何时序/证据审计，完成状态机（全勾才收口）+自愿循环指令即是其全部机制，我们已有证据门加全勾门已强于它，时序门属过度强制，放弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow.js | 勾选缺失 advisory 升级为全勾硬门拒收 |
++| 修改 | src/task-tick.js | 翻格后 best-effort triggerSync |
++| 修改 | src/watcher.js | shouldResyncDocs 纯函数 + 主循环防抖重推 |
++| 修改 | test/task-tick.test.mjs | ⑤ 反转为拒收断言 + ⑥ 重推纯函数与接线钉 |
++| 修改 | test/sentinel-wiring.test.mjs | 形态 C 反转为拒收 |
++| 修改 | test/flow-tick-prototype.test.mjs | ④ 反转为拒收 |
++| 修改 | test/flow-parity.test.mjs | 夹具 token 补全 |
++| 修改 | test/flow-done-carry-suspect-advisory.test.mjs | 夹具 token 补全 |
++| 修改 | test/flow-draft.test.mjs | 夹具 token 补全（两处） |
++| 修改 | test/flow-agent-log-report.test.mjs | 夹具 token 补全 |
++| 修改 | test/flow-clarity-probe.test.mjs | 夹具 token 补全 |
++| 修改 | test/flow-route.test.mjs | 夹具 token 补全（两处） |
++| 修改 | test/flow-protocol.test.mjs | 夹具 token 补全（九处） |
+diff --git a/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/requirements.md b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/requirements.md
+new file mode 100644
+index 00000000..a51521fd
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/requirements.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T12:56:19.088Z
++---
++# 需求规格（Requirements）— 2026-10-07-allticked-gate-docs-resync
++
++## 功能需求
++
++### FR-01: flow done 全勾硬门（openspec all_done 对齐）
++
++必须：flow done 哨兵位新增完成状态机判定——tasks.md 有任务行但未全勾（含零勾与部分勾）即拒收 exit 1，文案给三出口：逐格 task tick（每格需提交 token/review.json 证据）、先改写任务面再逐格勾、task tick 回显下一任务指针。governance-autopilot 的 token 代勾先跑：有证据未勾的格子已自动勾，拒的纯属零证据未完成面。旧「任务勾选缺失 advisory 放行」退役。
++
++#### 场景：懒路径零勾
++
++Given tasks.md 2 条任务零勾、区间有交付提交但无 token
++When flow done
++Then 拒收（任务未全勾（0/2）），change 保持 active 断点续
++
++### FR-02: task tick 触发工件重推
++
++必须：task tick 翻格成功后 best-effort 触发 spec-sync（triggerSync）——任务面变更即时上平台，失败不阻断翻格。
++
++### FR-03: watcher 工件内容变更重推（防抖）
++
++必须：watcher 主循环检测 tasks/design/requirements/proposal 四工件内容变更事件（shouldResyncDocs 纯函数：file/file-update 且 detail 含四工件名）→ 防抖冷却 10s 后 best-effort triggerSync；任务卡/代码/提交事件不触发。
++
++#### 场景：Edit 勾格/中途重写任务面
++
++Given watcher 在跑，agent 用 Edit 改写 tasks.md
++When 下一轮采样产出 file-update(tasks.md)
++Then 10s 冷却窗外即触发 spec-sync 文档重推——平台不再停留 start 时点快照
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/task-tick.test.mjs「⑤a 不勾+有交付 → 拒收」
++FR-02: test/task-tick.test.mjs「⑥b 重推接线钉」
++FR-03: test/task-tick.test.mjs「⑥a shouldResyncDocs 纯函数」
+diff --git a/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/tasks.md b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/tasks.md
+new file mode 100644
+index 00000000..9b011215
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T13:17:30.227Z
++---
++# 任务注册表（Tasks）— 2026-10-07-allticked-gate-docs-resync
++
++- [x] task-01: flow.js 全勾硬门 + 三个测试文件旧断言反转（task-tick ⑤/sentinel-wiring 形态C/flow-tick-prototype ④）
++- [x] task-02: task-tick.js 翻格后 triggerSync + watcher shouldResyncDocs/防抖 + ⑥ 纯函数与接线钉
++- [x] task-03: 七个 e2e 夹具 token 补全（flow-parity/carry-suspect/draft×2/agent-log/clarity/route×2/protocol×9）+ 全量 npm test 绿 + 收口
+diff --git a/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/proposal.md b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-allticked-gate-docs-resync/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T12:56:19.088Z
++---
++# 提案书（Proposal）— 2026-10-07-allticked-gate-docs-resync
++
++## 动机
++
++任务原话转写：真实会话（hide-quicklog-tab，跑的是修复版 CLI）暴露两个残留：① agent 全部干完后 for 循环一把连勾 4 格、先勾后补 token——机器面每格独立事件正常，但「不全勾不能收口」没有牙齿（openspec 的完成状态机：archive 拒绝直到 all_done）；② 平台工件快照陈旧——spec-sync 只在协议调用时点推文档，agent 中途重写 tasks/design 后平台永远显示 start 初稿（用户看到 4 任务+空 design，磁盘实态是 5 任务+已作答）。用户裁定：时序门不加，参考 openspec——全勾成为收口硬门；平台重推修掉。
++
++成功标准：
++- flow done：tasks.md 有任务行但未全勾 → 拒收（指引逐格 tick/每格 token 证据/可先改写任务面），不再 advisory 放行（openspec all_done 对齐）
++- task tick 翻格成功后 best-effort 触发 spec-sync 文档重推；watcher 检测 tasks/design/requirements/proposal 内容变更事件（防抖冷却）触发同款重推——平台不再停留 start 时点快照
++- 相关测试更新全绿（task-tick ⑤、sentinel-wiring 形态C 反转为拒收；新增 shouldResyncDocs 纯函数与接线钉）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. flow done：tasks.md 有任务行但未全勾 → 拒收（指引逐格 tick/每格 token 证据/可先改写任务面），不再 advisory 放行（openspec all_done 对齐）
++2. task tick 翻格成功后 best-effort 触发 spec-sync 文档重推；watcher 检测 tasks/design/requirements/proposal 内容变更事件（防抖冷却）触发同款重推——平台不再停留 start 时点快照
++3. 相关测试更新全绿（task-tick ⑤、sentinel-wiring 形态C 反转为拒收；新增 shouldResyncDocs 纯函数与接线钉）
++
++## 成功标准（可验证）
++
++1. flow done：tasks.md 有任务行但未全勾 → 拒收（指引逐格 tick/每格 token 证据/可先改写任务面），不再 advisory 放行（openspec all_done 对齐）
++2. task tick 翻格成功后 best-effort 触发 spec-sync 文档重推；watcher 检测 tasks/design/requirements/proposal 内容变更事件（防抖冷却）触发同款重推——平台不再停留 start 时点快照
++3. 相关测试更新全绿（task-tick ⑤、sentinel-wiring 形态C 反转为拒收；新增 shouldResyncDocs 纯函数与接线钉）

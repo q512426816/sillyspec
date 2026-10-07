@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  真实会话（hide-quicklog-tab，跑的是修复版 CLI）暴露两个残留：① agent 全部干完后 for 循环一把连勾 4 格、先勾后补 token——机器面每格独立事件正常，但「不全勾不能收口」没有牙齿（openspec
+  的完成状态机：archive 拒绝直到 all_done）；② 平台工件快照陈旧——spec-sync 只在协议调用时点推文档，agent 中途重写 tasks/design 后平台永远显示 start 初稿（用户看到 4 任务+空
+  design，磁盘实态是 5 任务+已作答）。用户裁定：时序门不加，参考 openspec——全勾成为收口硬门；平台重推修掉。
+
+
+  成功标准：
+
+  - flow done：tasks.md 有任务行但未全勾 → 拒收（指引逐格 tick/每格 token 证据/可先改写任务面），不再 advisory 放行（openspec all_done 对齐）
+
+  - task tick 翻格成功后 best-effort 触发 spec-sync 文档重推；watcher 检测 tasks/design/requirements/proposal
+  内容变更事件（防抖冷却）触发同款重推——平台不再停留 start 时点快照
+
+  - 相关测试更新全绿（task-tick ⑤、sentinel-wiring 形态C 反转为拒收；新增 shouldResyncDocs 纯函数与接线钉）
+autopilot: true
+baseline_commit: 16df630b3c0058c751dd1ec3f18acab1cb946999
+updatedAt: '2026-10-07T13:21:37.783Z'
+baseline_sha256: a3d02cd32186c81938dcc648c4e9c92882c843c51d9fd20c5c3814cb3fc9e7c7
+gate_summary: >-
+  test: passed ← module[]+deps(js69)+fr(67)（167.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007132059\test-result.json｜lint: passed
+  ← npm run lint（36.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007132059\test-result.json｜门文件 17 个
+

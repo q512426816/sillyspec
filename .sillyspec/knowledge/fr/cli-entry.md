@@ -7509,3 +7509,64 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-07-tick-timing-first-commit
   status: active
+
+## FR-cli-entry-396 flow done 全勾硬门（openspec all_done 对齐）
+变更：2026-10-07-allticked-gate-docs-resync
+状态：active
+摘要：懒路径零勾
+场景正文：
+- 场景：懒路径零勾 — Given tasks.md 2 条任务零勾、区间有交付提交但无 token；When flow done；Then 拒收（任务未全勾（0/2）），change 保持 active 断点续
+全文：.sillyspec/changes/archive/2026-10-07-allticked-gate-docs-resync/requirements.md#FR-01
+最近确认：bf7c122935343fcb176cc50aece2ceb99fcb072c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-01
+  tests: test/task-tick.test.mjs「⑤a 不勾+有交付 → 拒收」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-allticked-gate-docs-resync
+  status: active
+
+## FR-cli-entry-397 task tick 触发工件重推
+变更：2026-10-07-allticked-gate-docs-resync
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-07-allticked-gate-docs-resync/requirements.md#FR-02
+最近确认：bf7c122935343fcb176cc50aece2ceb99fcb072c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-02
+  tests: test/task-tick.test.mjs「⑥b 重推接线钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-allticked-gate-docs-resync
+  status: active
+
+## FR-cli-entry-398 watcher 工件内容变更重推（防抖）
+变更：2026-10-07-allticked-gate-docs-resync
+状态：active
+摘要：Edit 勾格/中途重写任务面
+场景正文：
+- 场景：Edit 勾格/中途重写任务面 — Given watcher 在跑，agent 用 Edit 改写 tasks.md；When 下一轮采样产出 file-update(tasks.md)；Then 10s 冷却窗外即触发 spec-sync 文档重推——平台不再停留 start 时点快照
+全文：.sillyspec/changes/archive/2026-10-07-allticked-gate-docs-resync/requirements.md#FR-03
+最近确认：bf7c122935343fcb176cc50aece2ceb99fcb072c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-allticked-gate-docs-resync:flow:测试绑定FR-03
+  tests: test/task-tick.test.mjs「⑥a shouldResyncDocs 纯函数」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-allticked-gate-docs-resync
+  status: active

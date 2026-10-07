@@ -1935,3 +1935,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：0a843cdd7f5c87bbb361ab4d7b59d5270752b5e6
 理由：最大风险：超大 history 下 --reverse 全量列举的耗时（路径限定后通常个位数提交，实际无感）。试过放弃：`git rev-list | tail -1`——需二次管道/字符串处理且 rev-list 无 --format；放弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-07-allticked-gate-docs-resync
+锚点：未记录
+最近确认：bf7c122935343fcb176cc50aece2ceb99fcb072c
+理由：最大风险：全勾硬门对存量在途变更的收紧（未勾收口从放行变拒收）——出口明确（补 token 提交+tick 或改写任务面），且与证据门同哲学；次风险：tick 触发的后台同步在网络差时堆积——bg-sync 单飞锁+合并天然防堆积。试过放弃：时序门（tick 时 token 提交须已存在，先证后勾）——用户裁定参考 openspec：openspec 无任何时序/证据审计，完成状态机（全勾才收口）+自愿循环指令即是其全部机制，我们已有证据门加全勾门已强于它，时序门属过度强制，放弃。
