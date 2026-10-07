@@ -1,0 +1,31 @@
+---
+author: sillyspec-fr-index
+created_at: 2026-10-07T14:27:54.389Z
+---
+
+# FR 索引 — auto-claude
+
+> fr-index 从归档变更 requirements.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为机械解析契约，勿手改。
+> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。
+> 伪域（auto- 前缀）：由文件路径段投票派生，无模块卡——为该域补模块卡后，新变更将自动落回真域
+
+## FR-auto-claude-001 版本号 3.32.0 发布
+变更：2026-10-07-release-3-32-0
+状态：active
+摘要：锚同步
+场景正文：
+- 场景：锚同步 — Given 版本升至 3.32.0；When quick-retired 测试运行；Then R5 断言 pkg.version === '3.32.0' 通过
+全文：.sillyspec/changes/archive/2026-10-07-release-3-32-0/requirements.md#FR-01
+最近确认：48b4e0a4f52dd3ec05cc03e3929a037f61e4d4c8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-release-3-32-0:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs「R5 版本锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-release-3-32-0
+  status: active

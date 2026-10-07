@@ -1,0 +1,13 @@
+{"ts":1791382728209,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：ackage.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791382731412,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791382731412,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791382731412,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791382737510,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791382738293,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791382738293,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791382738293,"kind":"commit","stage":null,"detail":"506f1085","provisional":true}
+{"ts":1791383233139,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791383233799,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791383233799,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791383233799,"kind":"commit","stage":null,"detail":"48b4e0a4","provisional":true}
+{"ts":1791383237669,"kind":"gate-run","stage":"verify","detail":"门实测 passed（2.9s） · 20261007142717","provisional":true}

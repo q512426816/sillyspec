@@ -1,0 +1,158 @@
+diff --git a/package.json b/package.json
+index fa9f57d7..bd9414d6 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.31.0",
++  "version": "3.32.0",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index e9e28503..e6af7e9c 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -9,7 +9,7 @@
+  * R3 --change 指向不存在会话：兜底网拒绝 exit 1
+  * R4 在途会话收尾（FR-02）：夹具预置 → 渲染（含退役 ℹ️ 提示）→ 三步 --done 全通
+  * R5 文档与版本（FR-03）：模板/AGENTS.md 含「已退役」墓碑、无「存量过渡通道」表述；
+- *    package.json 3.31.0（init 按版本差刷新存量 AGENTS.md）
++ *    package.json 3.32.0（init 按版本差刷新存量 AGENTS.md）
+  */
+ import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
+ import { join, resolve, dirname } from 'node:path'
+@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.31.0', `R5 package.json 版本 3.31.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.0', `R5 package.json 版本 3.32.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/.sillyspec/changes/2026-10-07-release-3-32-0/design.md b/.sillyspec/changes/2026-10-07-release-3-32-0/design.md
+new file mode 100644
+index 00000000..3efc89fc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-release-3-32-0/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:18:21.981Z
++---
++# 设计记录（Design Record）— 2026-10-07-release-3-32-0
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++发版 chore：package.json 版本字段 + quick-retired R5 版本锚两处同步。发版内容为已归档的五批变更（thin-tasks-v3/tick-timing-first-commit/allticked-gate-docs-resync 及平台仓两批），本变更仅版本仪式。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++package.json version 3.31.0→3.32.0；无代码/端点变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：纯版本字段。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不适用：发布时点单写者（push 后 tag 即定）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++不适用：幂等字段替换。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++无显式风险；未试过其它方案。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | package.json | version 3.32.0 |
++| 修改 | test/quick-retired.test.mjs | R5 版本锚同步 |
+diff --git a/.sillyspec/changes/2026-10-07-release-3-32-0/requirements.md b/.sillyspec/changes/2026-10-07-release-3-32-0/requirements.md
+new file mode 100644
+index 00000000..6e8bd5ee
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-release-3-32-0/requirements.md
+@@ -0,0 +1,21 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:18:21.980Z
++---
++# 需求规格（Requirements）— 2026-10-07-release-3-32-0
++
++## 功能需求
++
++### FR-01: 版本号 3.32.0 发布
++
++必须：package.json version=3.32.0；quick-retired 测试 R5 版本锚同步（assert 与注释）；历史事实锚（run-quick.md「v3.31.0 起」）不动；quick-retired 测试绿。
++
++#### 场景：锚同步
++
++Given 版本升至 3.32.0
++When quick-retired 测试运行
++Then R5 断言 pkg.version === '3.32.0' 通过
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/quick-retired.test.mjs「R5 版本锚」
+diff --git a/.sillyspec/changes/2026-10-07-release-3-32-0/tasks.md b/.sillyspec/changes/2026-10-07-release-3-32-0/tasks.md
+new file mode 100644
+index 00000000..8b00a9a0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-release-3-32-0/tasks.md
+@@ -0,0 +1,8 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:18:48.145Z
++---
++# 任务注册表（Tasks）— 2026-10-07-release-3-32-0
++
++- [x] task-01: 版本字段与测试锚同步，quick-retired 绿，收口后推送 origin main
++- [x] task-02: npm publish 3.32.0 并核验（npm view 版本与 fileCount）
+diff --git a/.sillyspec/changes/2026-10-07-release-3-32-0/proposal.md b/.sillyspec/changes/2026-10-07-release-3-32-0/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-release-3-32-0/proposal.md
+@@ -0,0 +1,24 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T14:18:21.980Z
++---
++# 提案书（Proposal）— 2026-10-07-release-3-32-0
++
++## 动机
++
++任务原话转写：发布 3.32.0：本版含 thin 任务面重构（工作分解契约/文件内指令清零/哨兵统一证据判据/收口代勾退役/tick 事件直写与节奏门去重/全勾硬门 openspec all_done 对齐/勾选时点首提锚定）与平台工件即时重推（tick 与 watcher 触发 spec-sync）。
++
++成功标准：
++- package.json 版本 3.32.0；quick-retired 测试 R5 版本锚同步 3.32.0（run-quick.md 的『v3.31.0 起』为历史事实锚不动）
++- quick-retired 及相关测试绿；flow done 收口后推送 origin main 并 npm publish 3.32.0
++
++## 变更范围
++
++按成功标准机械推导，共 2 条验收面：
++1. package.json 版本 3.32.0；quick-retired 测试 R5 版本锚同步 3.32.0（run-quick.md 的『v3.31.0 起』为历史事实锚不动）
++2. quick-retired 及相关测试绿；flow done 收口后推送 origin main 并 npm publish 3.32.0
++
++## 成功标准（可验证）
++
++1. package.json 版本 3.32.0；quick-retired 测试 R5 版本锚同步 3.32.0（run-quick.md 的『v3.31.0 起』为历史事实锚不动）
++2. quick-retired 及相关测试绿；flow done 收口后推送 origin main 并 npm publish 3.32.0
