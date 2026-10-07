@@ -15,7 +15,10 @@ sillyspec flow start --change <变更名> --input "<动机与背景>
 
 成功标准：
 - <可验证标准>"
-# ② 直接干活：改代码写测试；填 design.md 四节 AGENT 槽（空槽 flow done 拒收）；逐条勾 tasks.md 的 task-NN
+# ② 直接干活：改代码写测试；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
+#    tasks.md 是你的工作队列——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态），
+#    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN
+#    即时回显进度与下一任务）→ 下一行；每格勾选要有对应提交（消息带 task-NN），一把勾收口被拒。
 #    交付代码显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交不进审计件）
 # ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档）：
 sillyspec flow done --change <变更名>

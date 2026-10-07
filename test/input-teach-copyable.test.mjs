@@ -100,8 +100,10 @@ test('③b 分号内联形态提取 0 条（零残留断言的语义依据）', 
   assert.equal(out.length, 0)
 })
 
-test('④ design 模板锚教学防替换措辞', () => {
-  const src = read('src/flow-draft.js')
-  assert.ok(src.includes('勿删勿改'), '模板教学含「勿删勿改」')
-  assert.ok(src.includes('答案另起一行'), '模板教学含「答案另起一行写在问题行下方」')
+test('④ design 锚防改写教学在协议提示面（2026-10-07-thin-tasks-v3 文件内指令迁出）', () => {
+  const draftSrc = read('src/flow-draft.js')
+  assert.ok(!draftSrc.includes('勿删勿改'), '模板文件内指令已清零')
+  const flowSrc = read('src/flow.js')
+  assert.ok(flowSrc.includes('答案写在问题下方'), '横幅：作答位置教学（答案写在问题下方）')
+  assert.ok(flowSrc.includes('勿改写'), '横幅：锚行防改写教学')
 })

@@ -31,7 +31,7 @@ test('③ 覆写语义文案钉：简报/advisory 三处 + 旧聚类文案零残
   const flow = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
   const hits = (flow.match(/任务面归你/g) || []).length
   assert.ok(hits >= 2, `fresh/adopt 简报应有覆写语义（实际 ${hits} 处）`)
-  assert.ok(flow.includes('按实际实现路径覆写'), '覆写指引在场')
+  assert.ok(flow.includes('按真实实现路径改写') || flow.includes('增删改'), '覆写指引在场（2026-10-07-thin-tasks-v3 措辞：工作分解种子可增删改）')
   assert.ok(!/完成一个工作单元（该域实现\+测试绿）/.test(flow), '聚类语义文案零残留')
 })
 
