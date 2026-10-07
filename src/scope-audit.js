@@ -1038,6 +1038,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
       // execute --done 落盘，complete.js `...snap` 展开零改动自动携带）原样回放；旧快照无该键
       // → undefined（JSON.stringify 自动省略——单仓/旧快照零新增字段，additive 契约）。
       const snapRepos = Array.isArray(snap.repos) ? snap.repos : undefined
+      // 通道标注（2026-10-07-unify-close-trace）：新快照带 closedBy（flow done / execute --done）
+      // ——thin 快照回放不再误标 execute --done；旧快照无键缺省兼容。
+      const closeChannel = typeof snap.closedBy === 'string' && snap.closedBy ? snap.closedBy : 'execute --done'
       // 旧快照跨仓注记（R-07）：快照冻结于跨仓对账上线前（跨仓行恒 untouched 的 v1 ⊘ 形态、
       // 无 repos 键）——照旧回放不重算（「快照说什么是什么」契约不破），注记指明人工渠道
       // （该仓锚点锡点冻结在 execute-runs reviews，可人工 git diff 核实）。
@@ -1081,7 +1084,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
             : { foreignDeclared: [] },
           patchSha256: snap.patchSha256 || null,
           patchStatus: snap.patchStatus || null,
-          note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
+          note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
         }
       }
       return {
@@ -1099,7 +1102,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
           : { foreignDeclared: [] },
         patchSha256: snap.patchSha256 || null,
         patchStatus: snap.patchStatus || null,
-        note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
+        note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在收尾时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
       }
     }
     // —— thin flow done 冻结记录回放（2026-10-07-scope-audit-thin-patch-replay）：thin 轻量变更

@@ -18,9 +18,9 @@
  */
 import { join, isAbsolute, resolve } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
+import { writeCloseTraceArtifacts } from '../flow-parity.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer } from './shared.js'
 import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
@@ -1109,16 +1109,33 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
     mkdirSync(changeDir, { recursive: true })
     const { frozenPatch, ...snap } = result
     snap.note = 'execute --done 时点冻结（本文件落盘时采集）'
-    if (typeof frozenPatch === 'string') {
-      const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
-      writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
-      snap.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
-      snap.patchStatus = 'ok'
-    } else if (frozenPatch === null) {
-      snap.patchStatus = 'failed'
+    snap.closedBy = 'execute --done'
+    // 沉淀资产面投影（2026-10-07-unify-close-trace）：files/totals = 主仓实改行（planned+
+    // unplanned；untouched 0/0 是声明不是改动、crossRepo 行 patch 不在主仓——均不入）。
+    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件（sha256 双套同锚）。
+    const faceRows = (Array.isArray(snap.rows) ? snap.rows : [])
+      .filter((r) => r && typeof r === 'object' && !r.crossRepo && r.verdict !== 'untouched')
+    let faceAdditions = 0
+    let faceDeletions = 0
+    for (const r of faceRows) {
+      if (Number.isFinite(r.additions)) faceAdditions += r.additions
+      if (Number.isFinite(r.deletions)) faceDeletions += r.deletions
     }
-    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
-    console.log(`   📦 范围快照已落变更目录（scope-audit.json${snap.patchStatus === 'ok' ? ' + scope-audit.patch（收尾时点冻结，sha256 已锚）' : snap.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}）`)
+    const closeTrace = writeCloseTraceArtifacts({
+      changeDir,
+      change: changeName,
+      baseline: typeof snap.baseAnchor === 'string' ? snap.baseAnchor : null,
+      head: String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null,
+      files: faceRows.map((r) => r.path),
+      metaTotals: { files: faceRows.length, additions: faceAdditions, deletions: faceDeletions },
+      patchText: typeof frozenPatch === 'string' && frozenPatch ? frozenPatch : null,
+      savedAt: new Date().toISOString(),
+      snapObj: snap,
+      meta: {
+        note: 'execute --done 时点冻结（沉淀资产面：主仓实改行投影——thin flow done 对等；治理工件目录与其后 verify/archive 演进不在内）',
+      },
+    })
+    console.log(`   📦 范围快照 + 沉淀资产双轨落盘（scope-audit.json${closeTrace.patchStatus === 'ok' ? ' + scope-audit.patch' : ''} + change-patch.json${closeTrace.patchStatus === 'ok' ? ' + change.patch' : ''}${closeTrace.patchStatus === 'ok' ? '——收尾时点冻结，sha256 同锚' : '——patch 采集失败已留痕'}）`)
   } catch (e) {
     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
   }

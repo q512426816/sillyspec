@@ -26,7 +26,6 @@
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { join, relative, dirname } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
@@ -1400,7 +1399,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
         }
         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
-          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
+          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
+            && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
         if (ownFiles.length === 0) {
           console.log('📦 patch 留档跳过：本变更可归属文件面为空')
           patchOk = true
@@ -1416,7 +1416,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
           // 排除项与 ownFiles 同款（change.patch/change-patch.json）——否则上一轮冻结件作为
           // untracked 新文件被全文自嵌入（自引用循环：旧 patch 内容混进新 patch，三评 P1 根因）。
-          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
+          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
+            && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
           const worktreeSet = new Set([...dirFilesForPatch, ...((freeze.dirtyAdded) || [])].map(toPosix))
           const committedFace = freeze.files.map(toPosix).filter((f) => !worktreeSet.has(f))
           const frozenCommitted = buildFrozenPatch(cwd, committedFace, { baseRef: st.baseline_commit, headRef: headCommit })
@@ -1445,28 +1446,43 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
             moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
           } catch { /* 对账 best-effort（三键空数组兜底） */ }
-          const meta = {
+          // 双通道收尾留痕统一（2026-10-07-unify-close-trace）：共用 writeCloseTraceArtifacts
+          // 一次写齐四件——沉淀资产面（change.patch + change-patch.json，键结构/口径不变）+
+          // 对账快照面（scope-audit.json + scope-audit.patch，thin 通道新增）：同点同锚
+          // （同一 patchText 一次 sha256），新变更两条通道留痕对称，读侧回退退化为存量兜底。
+          let planEntries = []
+          try {
+            const { parseFileChangeListDetailed } = await import('./change-list.js')
+            planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true })
+          } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
+          const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
+          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles, stats, planEntries })
+          const closeTrace = writeCloseTraceArtifacts({
+            changeDir,
             change,
             baseline: st.baseline_commit,
             head: typeof head === 'string' ? head.trim() : null,
             files: ownFiles,
-            totals: { files: ownFiles.length, additions, deletions },
+            metaTotals: { files: ownFiles.length, additions, deletions },
+            patchText: typeof frozen === 'string' && frozen ? frozen : null,
             savedAt: new Date().toISOString(),
-            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
-            // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径（与 files[]
-            // 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响（可能未登记——看 uncoveredDirs）
-            ...moduleScope,
-          }
-          if (typeof frozen === 'string' && frozen) {
-            const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
-            writeFileSync(join(changeDir, 'change.patch'), patchText)
-            meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
-            meta.patchStatus = 'ok'
-          } else {
-            meta.patchStatus = 'failed'
-          }
-          writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
-          console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+            snapObj: {
+              mode: 'full-flow', ok: true, degradedReason: null,
+              baseAnchor: st.baseline_commit || null,
+              totals: snapTotals,
+              rows: snapRows,
+              excluded: { foreignDeclared: [] },
+              note: 'flow done 时点冻结（本文件落盘时采集）',
+              closedBy: 'flow done',
+            },
+            meta: {
+              note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
+              // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径
+              // （与 files[] 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响
+              ...moduleScope,
+            },
+          })
+          console.log(`📦 变更 patch 留档（双轨统一）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}）+ scope-audit.json + scope-audit.patch（对账快照同点冻结）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
           // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
           // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
           // 阻断——可能是范围裁剪了但 design 没同步更新）

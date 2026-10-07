@@ -10,15 +10,21 @@
  *    厚道有轻量变更缺的审计资产；机器合成勿手改。
  * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
+ * ④ writeCloseTraceArtifacts / buildThinSnapshotRows：双通道收尾留痕统一写
+ *    （2026-10-07-unify-close-trace）——thin flow done 与 heavy execute --done 共用一处一次
+ *    写齐四件（沉淀资产面 + 对账快照面，sha256 双套同锚），新变更两通道留痕对称。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { readV2SectionAnswer } from './flow-review.js'
 import { DESIGN_QUESTIONS } from './flow-draft.js'
+import { pathMatches } from './change-list.js'
+import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
 
 /**
  * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
@@ -270,6 +276,113 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
   } catch { /* 归属切分失败：exclusive 保留全量（声明即边界），共享主仓退全量警告 */ }
   if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [] }
   return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+}
+
+/**
+ * thin 通道三态行构造（writeCloseTraceArtifacts 的 snapObj.rows 数据源，纯函数）：
+ * ownFiles 过 filterDeliverableFiles（与 scope-audit actual 侧同口径——治理工件目录不进
+ * 快照行）× design 清单 pathMatches 判三态（planned/unplanned；与主链路三态判定同款）；
+ * stats（collectNumstatByPath 产物 Map）缺档落 null 行数（不出伪数据）；planEntries 空/缺省
+ * → 实际侧 only 行（无 verdict，与主链路计划侧降级同语义）。清单条目未命中冻结面 →
+ * untouched 0/0 补行（跨仓条目带 crossRepo 保持 ⊘ 形态，主链路补行同语义）。
+ * @returns {{ rows: Array<object>, totals: { files: number, additions: number, deletions: number } }}
+ */
+export function buildThinSnapshotRows({ ownFiles, stats, planEntries }) {
+  const plan = Array.isArray(planEntries) ? planEntries : []
+  const statMap = stats instanceof Map ? stats : new Map()
+  const rowFiles = filterDeliverableFiles([...new Set((Array.isArray(ownFiles) ? ownFiles : [])
+    .map((f) => String(f).replace(/\\/g, '/')).filter(Boolean))]).sort()
+  const rows = []
+  const matched = new Set()
+  for (const f of rowFiles) {
+    const st = statMap.get(f) || {}
+    const row = {
+      path: f,
+      additions: Number.isFinite(st.additions) ? st.additions : null,
+      deletions: Number.isFinite(st.deletions) ? st.deletions : null,
+      kind: st.kind || 'modified',
+    }
+    if (plan.length > 0) {
+      const entry = plan.find((e) => e && pathMatches(f, e.path))
+      if (entry) {
+        matched.add(entry.path)
+        row.planned = entry.operation || null
+        row.verdict = 'planned'
+      } else {
+        row.planned = null
+        row.verdict = 'unplanned'
+        const facility = classifyToolScaffold(f)
+        if (facility) row.facility = facility
+      }
+    }
+    rows.push(row)
+  }
+  for (const e of plan) {
+    if (!e || matched.has(e.path)) continue
+    rows.push({
+      path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
+      kind: 'modified', verdict: 'untouched',
+      ...(e.repo ? { crossRepo: e.repo } : {}),
+    })
+  }
+  let additions = 0
+  let deletions = 0
+  for (const r of rows) {
+    if (Number.isFinite(r.additions)) additions += r.additions
+    if (Number.isFinite(r.deletions)) deletions += r.deletions
+  }
+  return { rows, totals: { files: rows.length, additions, deletions } }
+}
+
+/**
+ * 双通道收尾留痕统一写（2026-10-07-unify-close-trace，缺陷 thin-flow-done-no-scope-
+ * audit-snapshot 修复方向③）：thin（flow done）与 heavy（execute --done）此前各写各的
+ * 留痕（沉淀资产面 change.patch/change-patch.json vs 对账快照面 scope-audit.patch/
+ * scope-audit.json），消费方各认一份致每类变更恰好一张卡失真——本函数一处写齐四件，
+ * sha256/patchStatus 双套同锚（同一 patchText 一次计算：change.patch ≡ scope-audit.patch
+ * 字节一致、两 json 同 hash，两套留痕不可能漂移）。patchText 空/null → 双套同标 failed、
+ * 不落 patch 文件（heavy 旧「空串当 ok」形态收口）。读侧兼容链（快照 > change-patch
+ * 回放 > 实时区间，2026-10-07-scope-audit-thin-patch-replay）不动——本函数让新变更两套
+ * 齐备，回退退化为存量归档兜底。
+ *
+ * @param {string} changeDir 变更目录（活跃或归档侧——归档竞态由调用方解析）
+ * @param {object} snapObj scope-audit.json 主体（mode/ok/degradedReason/baseAnchor/totals/
+ *   rows/excluded/note[/repos]；closedBy 由调用方携带标收尾通道——读侧回放按它标注，
+ *   缺省 'execute --done' 兼容旧快照）
+ * @param {object} meta change-patch.json 增量键（note/moduleScope 等，展开在 totals 后）
+ * @returns {{ patchStatus: 'ok'|'failed', patchSha256: string|null }}
+ */
+export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {} }) {
+  const fileList = Array.isArray(files) ? files : []
+  const patchOk = typeof patchText === 'string' && patchText.length > 0
+  const patchBody = patchOk ? (patchText.endsWith('\n') ? patchText : patchText + '\n') : null
+  const patchSha256 = patchBody
+    ? createHash('sha256').update(patchBody.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+    : null
+  if (patchOk) {
+    writeFileSync(join(changeDir, 'change.patch'), patchBody)
+    writeFileSync(join(changeDir, 'scope-audit.patch'), patchBody)
+  }
+  writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({
+    change,
+    baseline: baseline ?? null,
+    head: head ?? null,
+    files: fileList,
+    totals: metaTotals && typeof metaTotals === 'object'
+      ? metaTotals
+      : { files: fileList.length, additions: 0, deletions: 0 },
+    savedAt,
+    ...meta,
+    ...(patchSha256 ? { patchSha256 } : {}),
+    patchStatus: patchOk ? 'ok' : 'failed',
+  }, null, 2) + '\n')
+  writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({
+    ...snapObj,
+    ...(patchSha256 ? { patchSha256 } : {}),
+    patchStatus: patchOk ? 'ok' : 'failed',
+    savedAt,
+  }, null, 2) + '\n')
+  return { patchStatus: patchOk ? 'ok' : 'failed', patchSha256 }
 }
 
 /**
