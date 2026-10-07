@@ -268,6 +268,72 @@ function readFrozenPatch(changeDir) {
 }
 
 /**
+ * flow done 冻结记录读取（2026-10-07-scope-audit-thin-patch-replay）：change-patch.json 是
+ * thin 轻量变更 flow done 时点冻结的归属面（files/baseline/head/totals/patchSha256）——thin
+ * 通道不落 execute --done 快照，本件即其对账级冻结记录。缺 json / files 非数组 → null
+ * （调用方回退实时开放区间，不出伪数据）。
+ */
+function readChangePatchMeta(changeDir) {
+  if (!changeDir) return null
+  try {
+    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+    if (meta && typeof meta === 'object' && Array.isArray(meta.files)) return meta
+  } catch { /* 缺失/损坏 → null */ }
+  return null
+}
+
+/**
+ * 冻结 patch 正文读取（thin 回放数据源）：变更目录 change.patch；缺失/空 → null。
+ * @returns {string|null}
+ */
+function readChangePatchText(changeDir) {
+  if (!changeDir) return null
+  try {
+    const text = readFileSync(join(changeDir, 'change.patch'), 'utf8')
+    return text && text.trim() ? text : null
+  } catch { return null }
+}
+
+/**
+ * 冻结 patch 按段行数统计（thin 回放数据源）：`diff --git a/<old> b/<new>` 段头切分
+ * （正则与 filterPatchForFiles/slicePatchForFile 同款，取 b/ 新路径），段内 +/− 前缀行计数
+ * （+++ / --- 文件头与 \ 续行标记不计）；`new file mode` → new、`deleted file mode` →
+ * deleted、Binary/GIT binary patch → null 档——三档与 collectNumstatByPath 口径对齐。
+ * 自包含解析（不采 git numstat）：冻结面含 done 时点工作树件（治理工件/untracked），且不
+ * 依赖 git 对象库存活。
+ * @returns {Map<string, {additions: number|null, deletions: number|null, kind: 'binary'|'new'|'modified'|'deleted'}>}
+ */
+function parseFrozenPatchStats(patchText) {
+  const stats = new Map()
+  if (!patchText) return stats
+  let cur = null
+  const flush = () => {
+    if (cur && cur.path) {
+      stats.set(cur.path, cur.binary
+        ? { additions: null, deletions: null, kind: 'binary' }
+        : { additions: cur.additions, deletions: cur.deletions, kind: cur.kind })
+    }
+    cur = null
+  }
+  for (const line of String(patchText).split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      flush()
+      const m = line.match(/^diff --git a\/(.+) b\/(.+)$/)
+      cur = m ? { path: toPosix(m[2]), additions: 0, deletions: 0, kind: 'modified', binary: false } : null
+      continue
+    }
+    if (!cur) continue
+    if (line.startsWith('new file mode')) cur.kind = 'new'
+    else if (line.startsWith('deleted file mode')) cur.kind = 'deleted'
+    else if (line.startsWith('Binary') || line.startsWith('GIT binary patch')) cur.binary = true
+    else if (line.startsWith('+') && !line.startsWith('+++')) cur.additions++
+    else if (line.startsWith('-') && !line.startsWith('---')) cur.deletions++
+  }
+  flush()
+  return stats
+}
+
+/**
  * patch 段过滤（quick-90015473）：全量 diff 按 `diff --git a/<old> b/<new>` 段头切分，
  * 只保留 files 集合内的段——json rows（退栈归属集）与 patch 同口径，多会话仓不把并行
  * 会话改动重复冻结进每份 patch（实测 341KB 中 98% 为并行文件）。
@@ -1036,6 +1102,63 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
         note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
       }
     }
+    // —— thin flow done 冻结记录回放（2026-10-07-scope-audit-thin-patch-replay）：thin 轻量变更
+    // flow done 只冻 change-patch.json + change.patch、不落 execute 快照——快照缺失时回读冻结件
+    // 出真实三态（存量归档立即受益），不再落「实时开放区间 → 干净树空 → 清单全行计划未动
+    // +0/−0」的失真链。文件集 = meta.files 过 filterDeliverableFiles（与 actual 侧同口径，
+    // 治理工件不进表）；行数自冻结 patch 按段统计（parseFrozenPatchStats，自包含）；三态按
+    // design 清单 pathMatches 判定（与主链路三态判定同款）；跨仓条目维持 v1 ⊘ untouched 形态
+    // （thin 冻结件只有主仓 patch，不假装对账过）。
+    const doneMeta = readChangePatchMeta(changeDirInfo.dir)
+    if (doneMeta && doneMeta.files.length > 0) {
+      const frozenFiles = filterDeliverableFiles([...new Set(doneMeta.files.map(toPosix).filter(Boolean))]).sort()
+      const patchOk = doneMeta.patchStatus === 'ok'
+      const segStats = patchOk ? parseFrozenPatchStats(readChangePatchText(changeDirInfo.dir)) : new Map()
+      const doneRows = []
+      const doneMatched = new Set()
+      for (const f of frozenFiles) {
+        // 段缺失（冻结面零 diff 文件）/ patch 采集失败 → 行数 null 档（—），不出伪数据
+        const st = segStats.get(f) || { additions: null, deletions: null, kind: 'modified' }
+        const row = { path: f, additions: st.additions, deletions: st.deletions, kind: st.kind }
+        if (!planDegraded) {
+          const entry = plannedEntries.find(e => pathMatches(f, e.path))
+          if (entry) {
+            doneMatched.add(entry.path)
+            row.planned = entry.operation || null
+            row.verdict = 'planned'
+          } else {
+            row.planned = null
+            row.verdict = 'unplanned'
+            const facility = classifyToolScaffold(f)
+            if (facility) row.facility = facility
+          }
+        }
+        doneRows.push(row)
+      }
+      // 计划未动补行：清单文件不在冻结面 → untouched 0/0（与主链路补行同款语义）
+      for (const e of plannedEntries) {
+        if (doneMatched.has(e.path)) continue
+        doneRows.push(e.repo
+          ? { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: e.repo }
+          : { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' })
+      }
+      const doneSettleLabel = changeDirInfo.archived ? '已归档' : 'execute 已收尾（分支已清理，待 verify/archive）'
+      const doneSavedAt = doneMeta.savedAt ? '，' + String(doneMeta.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘' : ''
+      return {
+        ...base,
+        ok: true,
+        degradedReason: planDegraded,
+        baseAnchor: typeof doneMeta.baseline === 'string' && /^[0-9a-f]{7,40}$/.test(doneMeta.baseline) ? doneMeta.baseline : null,
+        totals: { files: doneRows.length, ...sumTotals(doneRows) },
+        rows: doneRows,
+        excluded: { foreignDeclared: [] },
+        patchSha256: doneMeta.patchSha256 || null,
+        patchStatus: doneMeta.patchStatus || null,
+        // --file 冻结切片消费（getFileDiff 唯一读取方）：指向 change.patch，sha256 校验 A-F01 同款
+        ...(patchOk ? { frozenPatchPath: join(changeDirInfo.dir, 'change.patch') } : {}),
+        note: `${doneSettleLabel}——flow done 时点冻结 patch 记录（change-patch.json + change.patch${doneSavedAt}）：文件集与行数封闭在 done 时点（thin 轻量变更无 execute 快照），主仓后续改动不反映到本表${patchOk ? '' : '；冻结 patch 当时采集失败——行数列不可得（—），文件集仍为 done 时点冻结面'}；需要看当前工作区实时状态请跑 git status`,
+      }
+    }
     // 快照缺失 → 实时开放区间兜底（下方主链路），note 追加漂移警告
     noSnapshotDrift = true
   }
@@ -1047,7 +1170,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   // 已收尾但快照缺失（上方分支置位）：实时开放区间兜底，明示漂移语义——快照机制上线
   // （2026-09-10）前收尾的旧变更冻结记录无法重建，如实告知替代渠道。
   if (noSnapshotDrift) {
-    notes.push('快照缺失（变更已收尾——已归档或 execute 分支已清理；快照机制上线前收尾的变更无法重建冻结记录）——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；记录态参考 verify-result.md / git log')
+    notes.push('快照缺失（变更已收尾——已归档或 execute 分支已清理；快照与 flow done 冻结 patch 记录（change-patch.json）均无，无法重建冻结记录——快照机制与冻结件留档上线前收尾的变更即此形态）——下表为实时开放区间（基点→当前工作树，含并行会话与后续演进，随主仓改动漂移），非本变更冻结范围；记录态参考 verify-result.md / git log')
   }
 
   // —— 行数采集根与基点 ——
