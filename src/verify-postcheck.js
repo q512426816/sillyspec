@@ -1423,13 +1423,13 @@ export function readTestRerunLedger({ specBase, changeName }) {
 }
 
 /** 写增量重跑 ledger（fail-soft：git 失败记 head=null——下一轮自动回全子集）。 */
-export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, mode, status }) {
+export function writeTestRerunLedger({ specBase, changeName, head, inputFiles, failedFiles, scopeFiles = [], mode, status }) {
   try {
     const dir = join(specBase, '.runtime')
     mkdirSync(dir, { recursive: true })
     writeFileSync(testRerunLedgerPath(specBase, changeName), JSON.stringify({
       change: changeName || null, head: head || null,
-      inputFiles: inputFiles || [], failedFiles: failedFiles || [],
+      inputFiles: inputFiles || [], failedFiles: failedFiles || [], scopeFiles: scopeFiles || [],
       mode: mode || null, status: status || null, ranAt: new Date().toISOString(),
     }, null, 2) + '\n')
   } catch { /* ledger 写失败不阻断实测门（下轮退化全子集） */ }
@@ -1456,7 +1456,10 @@ function currentGitHead(cwd) {
 /**
  * 增量重跑面计算（纯函数，export 供测）：返回 null = 不增量（走全子集现状），否则返回
  * { files, note }。判定：ledger 在场、有失败文件、有基线 head；since 非空或失败面非空；
- * 增量面严格小于全量面且是子集（保护：绝不比全子集多跑）。
+ * 对比基线 = ledger.scopeFiles（基线实测的测试文件集——评审 P2 清偿：拿「失败测试文件数」
+ * 对比「输入面文件数」是口径错位，级联失败（失败测试数≥输入面数）时增量永不触发，恰是其
+ * 动机场景失效）；缺 scopeFiles 回退 inputFiles；增量面必须严格小于基线测试集（≥ 时回全
+ * 子集——宁多跑不绕过基线）。
  */
 export function computeIncrementalFace({ ledger, filesSince, fullFace }) {
   if (!ledger || !Array.isArray(ledger.failedFiles) || ledger.failedFiles.length === 0 || !ledger.head) return null
@@ -1465,11 +1468,13 @@ export function computeIncrementalFace({ ledger, filesSince, fullFace }) {
     .map(f => String(f).replace(/\\/g, '/'))
     .filter(f => f && !f.startsWith('.sillyspec/'))
   if (inc.length === 0) return null
-  // 增量面必须严格小于全量面才有增量价值（≥ 面大小时回全子集——宁多跑不绕过基线）
-  if (inc.length >= (fullFace || []).length) return null
+  const baselineScope = Array.isArray(ledger.scopeFiles) && ledger.scopeFiles.length > 0
+    ? ledger.scopeFiles
+    : (ledger.inputFiles || fullFace || [])
+  if (inc.length >= baselineScope.length) return null
   return {
     files: inc,
-    note: `增量重跑面 ${inc.length} 文件（前轮失败批 ${ledger.failedFiles.length} ∪ 基线以来变更 ${since.length}；全量子集基线 ${(fullFace || []).length} 文件，未触碰绿面复用不重跑）`,
+    note: `增量重跑面 ${inc.length} 文件（前轮失败批 ${ledger.failedFiles.length} ∪ 基线以来变更 ${since.length}；基线实测测试集 ${baselineScope.length} 文件，未触碰绿面复用不重跑）`,
   }
 }
 
@@ -2191,6 +2196,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         head: currentGitHead(cwd),
         inputFiles: subsetInput,
         failedFiles: (mainResult && Array.isArray(mainResult.failedFiles)) ? mainResult.failedFiles : [],
+        scopeFiles: (mainResult && Array.isArray(mainResult.scopeFiles)) ? mainResult.scopeFiles : [],
         mode: incremental ? 'incremental-rerun' : 'dynamic-subset',
         status: mainResult && mainResult.status,
       })
@@ -3127,6 +3133,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
       }
       return [...out].sort()
     })(),
+    // 基线实测的测试文件全集（评审 P2 清偿配套）：增量守卫的对比基线——输入面（变更 src）与
+    // 实测面（测试文件）是两个集合，级联失败时后者远大于前者
+    scopeFiles: [...new Set(perModule.flatMap(r => r.files || []))].sort(),
     // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——
     // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
     failureRemaining: perModule.flatMap(r => r.failureRemaining || []),

@@ -1,6 +1,9 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -32,6 +35,13 @@ input: >-
   - 既有 test:core 全绿，npm run lint 通过，新增测试收录 test:core
 autopilot: true
 baseline_commit: 9b3bfb0699629b7351b7c82b945491fa1f846b84
-updatedAt: '2026-10-06T23:09:36.921Z'
+updatedAt: '2026-10-07T00:08:58.566Z'
 baseline_sha256: 7ab17cb5a02fcd0c78ad747dcdc3170292d6688458ba7d0a4b0e3e04f2632b56
+allow_batch_tick: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js63)+fr(60)（166.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007000819\test-result.json｜lint: passed
+  ← npm run lint（37.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261007000819\test-result.json｜门文件 12 个
 

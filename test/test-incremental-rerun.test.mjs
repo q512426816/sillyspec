@@ -38,6 +38,16 @@ test('IR1 computeIncrementalFace 纯函数三态', () => {
   assert.equal(computeIncrementalFace({ ledger: { head: null, failedFiles: ['f'] }, filesSince: [], fullFace: face }), null)
   // 增量面 ≥ 全量面 → null（回全子集）
   assert.equal(computeIncrementalFace({ ledger: { head: 'x', failedFiles: face }, filesSince: face, fullFace: face }), null)
+  // 评审 P2 清偿：对比基线 = ledger.scopeFiles（基线实测测试集），非输入面——级联失败
+  // （失败测试数 ≥ 输入面文件数）时增量仍须触发（这正是增量档的动机场景）
+  const cascade = computeIncrementalFace({
+    ledger: { head: 'x', failedFiles: ['test/f01.test.mjs', 'test/f02.test.mjs', 'test/f03.test.mjs'], inputFiles: face, scopeFiles: Array.from({ length: 63 }, (_, i) => `test/s${i}.test.mjs`) },
+    filesSince: ['src/b.js'],
+    fullFace: face,
+  })
+  assert.ok(cascade, '级联失败（3 失败测试 > 4 输入面中之一，但 << 63 基线测试集）→ 增量触发')
+  assert.equal(cascade.files.length, 4, '面 = 3 失败 + 1 since')
+  assert.ok(cascade.note.includes('基线实测测试集 63'), '公告按测试集口径')
 })
 
 /**
