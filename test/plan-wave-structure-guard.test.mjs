@@ -11,6 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { assessWaveStructure } from '../src/stages/plan-postcheck.js'
 
 const tmpRoots = []
@@ -109,15 +110,25 @@ async function runPostcheck(fx) {
   return { threw, logs }
 }
 
-test('集成：6 波无依赖全串行（三轮形态）→ planPostcheck 硬拦', async () => {
+test('集成：6 波无依赖全串行（三轮形态）→ 自动重排合并后通过（2026-10-07-wave-auto-adopt 行为变更）；关闭档回硬拦', async () => {
+  // 缺省档（plan.auto_adopt_waves 未配置=自动）：伪并行碎片由 CLI 自动拓扑重排消化——三轮返工链消灭
   const fx = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
   try {
     const { threw, logs } = await runPostcheck(fx)
-    assert.ok(threw, '伪并行串行链被拦')
-    assert.match(threw, /伪并行串行链/)
-    assert.match(threw, /可并入/)
-    assert.ok(logs.some(l => l.includes('plan-adopt-waves')), '解法出口指向 plan-adopt-waves')
+    assert.equal(threw, null, `自动重排后整体复跑通过（实际: ${threw}）`)
+    assert.ok(logs.some(l => l.includes('已自动按 depends_on 拓扑重排')), '自动重排公告在场')
+    const plan = readFileSync(join(fx.changeDir, 'plan.md'), 'utf8')
+    assert.ok(!/## Wave 6/.test(plan), '碎片波已合并')
   } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
+  // 关闭档（plan.auto_adopt_waves: false）：原硬拦行为保留
+  const fxOff = makeFx({ wavesSpec: [['task-01'], ['task-02'], ['task-03'], ['task-04'], ['task-05'], ['task-06']] })
+  writeFileSync(join(fxOff.cwd, '.sillyspec', 'local.yaml'), 'plan:\n  auto_adopt_waves: false\n')
+  try {
+    const { threw, logs } = await runPostcheck(fxOff)
+    assert.ok(threw, '关闭档：伪并行串行链被拦')
+    assert.match(threw, /伪并行串行链/)
+    assert.ok(logs.some(l => l.includes('plan-adopt-waves')), '解法出口指向 plan-adopt-waves')
+  } finally { rmSync(fxOff.cwd, { recursive: true, force: true }) }
 })
 
 test('集成：4 波真并行结构 → 放行', async () => {
