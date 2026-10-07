@@ -66,19 +66,19 @@ test('② 门柱漂移 advisory：FR 标题锚被整段改写（锚文本消失�
   rmSync(root, { recursive: true, force: true })
 })
 
-test('③ tasks 镜像+细化行：追加细化行零违规；镜像行整删 → advisory', () => {
+test('③ tasks 工作分解自由度：追加/整删种子行均零违规零 advisory（镜像锚退役）', () => {
   const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
   fillAll()
-  // agent 追加细化行（FR-08：镜像行勿删、细化行可追加）
+  // agent 追加细化行
   fill('tasks.md', (t) => t.replace(/^- \[ \] task-02: 标准乙$/m, '- [ ] task-02: 标准乙\n- [ ] task-03: 细化——先写测试再实现\n- [ ] task-04: 细化——回归跑绿'))
   let v = verifyThinDocsV2({ changeDir, ledger })
   assert.equal(v.violations.length, 0, `细化行追加零违规: ${JSON.stringify(v.violations)}`)
-  assert.equal(v.advisories.length, 0, '镜像行全在场零漂移')
-  // 镜像行 task-01 整删（仅留细化行）→ advisory（任务锚漂移）
-  fill('tasks.md', (t) => t.replace('### ', '### ').replace(/^- \[ \] task-01: 标准甲$/m, ''))
+  assert.equal(v.advisories.length, 0, '全在场零漂移')
+  // 种子行 task-01 整删（agent 全改写为实现步骤——工作分解归 agent）→ 零 advisory
+  fill('tasks.md', (t) => t.replace(/^- \[ \] task-01: 标准甲$/m, '- [ ] task-01: agent 自己的实现步骤'))
   v = verifyThinDocsV2({ changeDir, ledger })
-  assert.equal(v.violations.length, 0, 'tasks 仍有行——不拒收（漂移属 advisory 面）')
-  assert.ok(v.advisories.some((a) => /标准甲.*tasks/.test(a) || /镜像行/.test(a)), `镜像行删除出 advisory: ${JSON.stringify(v.advisories)}`)
+  assert.equal(v.violations.length, 0, 'tasks 仍有行——不拒收')
+  assert.equal(v.advisories.length, 0, `tasks 侧零 advisory（成功标准对账只看 requirements FR 标题锚）: ${JSON.stringify(v.advisories)}`)
   rmSync(root, { recursive: true, force: true })
 })
 

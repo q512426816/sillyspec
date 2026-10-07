@@ -47,11 +47,13 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
   assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'design.md', 'tasks.md'])
   assert.equal(a.schema, 2, 'v2 起草代别回执')
   assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
-  // v2 纯 markdown：四件零指纹标记零 AGENT 槽注释（真标记语法——正文提及词不算）
+  // v2 纯 markdown：四件零指纹标记零 AGENT 槽注释零 > 指导行（2026-10-07-thin-tasks-v3
+  // 文件内指令清零——书写规则唯一源=flow start 横幅+命令卡）
   for (const f of ['proposal.md', 'requirements.md', 'design.md', 'tasks.md']) {
     const text = readFileSync(join(changeDir, f), 'utf8')
     assert.ok(!/<!--\s*MACHINE-DRAFT:/.test(text), `${f} 零指纹标记`)
     assert.ok(!/<!--\s*AGENT:/.test(text), `${f} 零 AGENT 槽注释`)
+    assert.ok(!/^> /m.test(text), `${f} 零 > 指导行`)
   }
   // requirements：FR 标题锚=成功标准原文逐字；绑定行纯文本；无 GWT 骨架预填
   const reqsText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
@@ -59,10 +61,9 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
   assert.match(reqsText, /^FR-01: （待填/m, '纯文本绑定行在场')
   assert.ok(!reqsText.includes('Then 行为符合本条标准描述'), '无占位 Then 骨架')
   assert.ok(!/^When /m.test(reqsText), '无预填 When 行')
-  // tasks：镜像行=标准原文全文本（不截断）；细化行追加指引在场
+  // tasks：工作行=标准原文全文本（不截断）的工作分解种子（镜像锚契约退役——文件内零指令）
   const tasks = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
-  assert.match(tasks, /- \[ \] task-01: 事件恒带 provisional:true/, '镜像行全文本')
-  assert.match(tasks, /追加细化行/, '细化行指引在场')
+  assert.match(tasks, /- \[ \] task-01: 事件恒带 provisional:true/, '种子行全文本')
   // design：四节标题+四问原文（DESIGN_QUESTIONS 单一源逐字）+无作答（作答归 agent）
   const design = readFileSync(join(changeDir, 'design.md'), 'utf8')
   for (const h of ['## 做法概述', '## 接口契约', '## 边界与并发（盲维四问——每问必答，答不了即设计缺口）', '## 风险与死路']) {
@@ -70,11 +71,10 @@ test('① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡
   }
   assert.match(design, /乱序\/迟到到达/, '盲维四问之乱序在问题文本')
   assert.match(design, /作用域：跨工作区/, '盲维四问之作用域在问题文本')
-  // 文件变更清单指引=独立章节写法（parseFileChangeList 只认 ## 章节标题——节内写法收口解析不到）
-  assert.match(design, /独立「## 文件变更清单」章节/, '指引写独立章节')
+  // 文件变更清单/锚行防呆指引移至 flow start 横幅（文件内零指令；横幅侧钉在
+  // batch-tick-gate 源码测试）——此处钉设计稿不含旧指引残留
   assert.ok(!design.includes('在「接口契约」节加'), '旧指引（节内加表）退场')
-  // 锚行防呆（2026-10-05-uivisual-word-narrow）：四问/FR 标题锚从模板复制勿手打
-  assert.match(design, /勿手打重写/, '锚行防呆提示在场')
+  assert.ok(!design.includes('勿手打重写'), '锚行防呆提示移至横幅（文件内零指令）')
   // ledger v2：anchor（criteria+四问）+files 首版全文
   const ledger = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
   assert.equal(ledger.schemaVersion, 2)

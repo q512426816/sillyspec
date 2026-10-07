@@ -6,9 +6,9 @@
  * <成功标准原文>），SHALL 正文与 Scenario 场景块由 agent 撰写（空答/缺强度词在 flow done
  * 拒收）；防篡改锚点（成功标准原文 + design 四问文本）搬进 draft ledger 机器态
  * （schemaVersion:2 的 anchor 字段），flow done 做文档↔锚对比——问题被删/节被清空拒收，
- * 成功标准在 requirements/tasks 面消失出漂移 advisory。四问文本单一源=DESIGN_QUESTIONS
- * 常量（起草端与验收端同源，防镜像漂移）。tasks.md：镜像行=成功标准逐条全文本（不截断）
- * 任务锚 + 显式允许 agent 追加细化行（task-NN 编号顺延）。
+ * 成功标准在 requirements 面消失出漂移 advisory。四问文本单一源=DESIGN_QUESTIONS
+ * 常量（起草端与验收端同源，防镜像漂移）。tasks.md：成功标准逐条转写的工作分解种子
+ * （2026-10-07-thin-tasks-v3——镜像锚契约退役，agent 自由增删改；文件内零指令）。
  *
  * v1（存量在途变更，冻结不改）：全件机器起草 + MACHINE-DRAFT 指纹标记 + AGENT 槽书写面；
  *   - proposal：--input 机械转写；requirements：GWT 骨架预填；tasks：成功标准→checkbox 镜像；
@@ -245,10 +245,6 @@ function draftRequirementsV2({ change, criteria }) {
     '',
     '## 功能需求',
     '',
-    '> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；',
-    '> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。',
-    '> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。',
-    '',
     ...frBlocks.flatMap((b) => [b, '']),
     '## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）',
     '',
@@ -272,15 +268,13 @@ function draftDesignRecordV2({ change }) {
     '---',
     `# 设计记录（Design Record）— ${change}`,
     '',
-    '> 四节每节必答——问题行原样保留（勿删勿改勿用答案替换），答案另起一行写在问题行下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
-    '> 需要列改动文件时加独立「## 文件变更清单」章节+表格（| 操作 | 路径 | 说明 |）——章节标题是 parseFileChangeList 的识别面，勿写在「接口契约」节内（收口声明面解析不到会误报夹带嫌疑）。',
-    '> 四问原文/FR 标题/镜像任务行是收口锚——问题行/标题从本模板原样保留或复制，勿删勿改、勿用答案整块替换问题原文、勿手打重写（标点也要逐字：2026-10-05 三度实证——句号手写成问号、答案整块替换问题原文均被锚对比拒收）。',
-    '',
     ...secs.flat(),
   ].join('\n')
 }
 
-/** tasks v2：镜像行=成功标准逐条全文本（不截断）任务锚 + agent 细化行追加指引。 */
+/** tasks v2：工作分解种子（2026-10-07-thin-tasks-v3，镜像锚契约退役）——成功标准逐条转写为
+ * `- [ ] task-NN:` 工作行（多数成功标准本就是祈使工作语句），agent 按真实实现路径自由增删改；
+ * 零文件内指令（书写规则由 flow start 横幅与命令卡承载——文件里只剩任务本体）。 */
 function draftTasksV2({ change, criteria, withTasks }) {
   const crit = criteria || []
   const rows = crit.length > 0
@@ -293,12 +287,6 @@ function draftTasksV2({ change, criteria, withTasks }) {
     '---',
     `# 任务注册表（Tasks）— ${change}`,
     '',
-    '> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径',
-    '> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——',
-    `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}）。`,
-    `> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change ${change} --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。`,
-    `> \`flow status --change ${change}\` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。`,
-    '',
     ...rows,
     '',
   ].join('\n')
@@ -307,8 +295,9 @@ function draftTasksV2({ change, criteria, withTasks }) {
 /**
  * v2 工件校验（flow done artifacts 子步消费面；ledger.schemaVersion===2 时取代指纹三态+槽位门）。
  * 拒收项（violations）：四问被删/节空答、FR 未撰写行为句（缺强度词）、绑定行空/待填、
- * 四件缺失/结构缺失。漂移 advisory：锚内成功标准在 requirements FR 标题与 tasks 镜像行中
- * 失踪（门柱漂移嫌疑——agent 改写是合法例外，advisory 提示审核面核对，不阻断）。
+ * 四件缺失/结构缺失、tasks 工作队列空。漂移 advisory：锚内成功标准在 requirements FR 标题中
+ * 失踪（门柱漂移嫌疑——agent 改写是合法例外，advisory 提示审核面核对，不阻断；tasks 侧
+ * 零 advisory——工作分解归 agent，2026-10-07-thin-tasks-v3）。
  * adopted brainstorm 变更（opts.skipDesign）豁免 design 四节门（设计承诺以 brainstorm design 为准）。
  */
 export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
@@ -386,12 +375,13 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
     }
   }
 
-  // tasks：镜像行在场（缺失 → advisory 漂移；零任务行 → 拒收）
+  // tasks：工作队列非空（零任务行 → 拒收）。镜像锚契约退役（2026-10-07-thin-tasks-v3）：
+  // 任务面归 agent 自由改写，成功标准对账面只在 requirements FR 标题锚——tasks 侧零 advisory。
   const tText = read('tasks.md')
   if (tText === null) violations.push('tasks.md 缺失——删除后重入 flow start 补生成')
   else {
     const taskRows = [...tText.matchAll(/^- \[([ xX])\] (task-\d+):/gm)]
-    if (taskRows.length === 0) violations.push('tasks.md 无任何 task-NN 行——镜像任务锚不可整删（细化可追加，锚行勿删）')
+    if (taskRows.length === 0) violations.push('tasks.md 无任何 task-NN 行——工作队列不可为空（至少一条 `- [ ] task-NN:` 实现步骤）')
   }
 
   // proposal：在场 + 成功标准节非空
@@ -400,16 +390,14 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
   else if (!/^##\s*成功标准/m.test(pText)) violations.push('proposal「## 成功标准」节缺失——门柱锚（删除会致漂移判定失真）')
 
   // 漂移 advisory：requirements 的 FR 标题锚是对账面（归档索引用它）——锚文本从 requirements
-  // 消失即 advisory（子串包含语义：轻改写保留原文不误报；agent 合法改写是书写面权利，advisory
-  // 交审核面核对语义未失真，不阻断）。tasks 镜像行同判（仅 requirements 在场时才查——FR 面已
-  // 漂移的不重复报）。proposal 不参与（成功标准节=--input 转写件，非对账面）。
+  // 消失即 advisory（子字包含语义：轻改写保留原文不误报；agent 合法改写是书写面权利，advisory
+  // 交审核面核对语义未失真，不阻断）。tasks 不参与（2026-10-07-thin-tasks-v3：工作分解归 agent，
+  // 成功标准对账只看 FR 标题锚）。proposal 不参与（成功标准节=--input 转写件，非对账面）。
   for (let i = 0; i < anchorCriteria.length; i++) {
     const c = String(anchorCriteria[i] || '').trim()
     if (!c) continue
     const inFr = rText !== null && rText.includes(c)
-    const inTasks = tText !== null && tText.includes(c)
     if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
-    else if (!inTasks) advisories.push(`成功标准第 ${i + 1} 条未在 tasks.md 见到镜像行（任务锚漂移嫌疑——镜像行勿删，细化行可追加）`)
   }
   return { violations, advisories }
 }
@@ -758,13 +746,10 @@ function draftTasks({ change, criteria, withTasks }) {
     '---',
     `# 任务注册表（Tasks）— ${change}`,
     '',
-    '> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；',
-    `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
-    `> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针 + 2026-10-03-voluntary-task-tick tick 动词）：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾 \`[x]\`（sillyspec task tick --change ${change} --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（勾选是进度锚与哨兵证据面，watcher 实时上平台）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口证据只读 tasks.md。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 \`- [ ]\`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。\`flow status --change <名>\` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。`,
-    '',
     // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
     // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。
     // 改为裸 markdown，agent 直接勾；哨兵的防假勾逻辑独立于指纹（按提交 token 判据）。
+    // 2026-10-07-thin-tasks-v3：文件内指令块移除（v1 backfill 轨同 v2 契约——规则在横幅/命令卡）。
     rows.join('\n'),
     '',
   ].join('\n')
