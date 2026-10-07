@@ -59,9 +59,10 @@ function makeThinArchive(prefix, { patchStatus = 'ok', changeName = 'thin-demo' 
   sh(d, ['add', '-A'])
   sh(d, ['commit', '-q', '-m', 'init'])
   const baseline = head(d)
-  // 交付面：a.js 修改（+2）、b.js 新增——c.js 保持不动（design 声明但未动的真·untouched）
+  // 交付面：a.js 修改（+2）、b.js 新增、extra.js 清单外改动——c.js 保持不动（design 声明但未动的真·untouched）
   writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\na3\na4\n')
   writeFileSync(join(d, 'src', 'b.js'), 'b1\n')
+  writeFileSync(join(d, 'src', 'extra.js'), 'x1\n')
   sh(d, ['add', '-A'])
   sh(d, ['commit', '-q', '-m', 'thin work'])
   const headCommit = head(d)
@@ -70,7 +71,7 @@ function makeThinArchive(prefix, { patchStatus = 'ok', changeName = 'thin-demo' 
   mkdirSync(changeDir, { recursive: true })
   writeFileSync(join(changeDir, 'design.md'), `# design（fixture）\n\n## 文件变更清单\n\n${DESIGN_TABLE}`)
 
-  const ownFiles = ['src/a.js', 'src/b.js', `.sillyspec/changes/archive/${changeName}/design.md`]
+  const ownFiles = ['src/a.js', 'src/b.js', 'src/extra.js', `.sillyspec/changes/archive/${changeName}/design.md`]
   const meta = {
     change: changeName,
     baseline,
@@ -116,6 +117,12 @@ test('FR-01 归档 thin 回放：快照缺失 + change-patch.json 在 → 三态
     assert.equal(b.kind, 'new', 'new file 段 → kind=new')
     assert.equal(b.additions, 1)
 
+    const x = byPath.get('src/extra.js')
+    assert.ok(x, '清单外冻结面文件在 rows')
+    assert.equal(x.verdict, 'unplanned', '清单外 → unplanned（评审 P3 覆盖清偿）')
+    assert.equal(x.planned, null)
+    assert.equal(x.additions, 1)
+
     const c = byPath.get('src/c.js')
     assert.ok(c, '清单内未进冻结面 → untouched 补行')
     assert.equal(c.verdict, 'untouched')
@@ -123,8 +130,8 @@ test('FR-01 归档 thin 回放：快照缺失 + change-patch.json 在 → 三态
     assert.equal(c.deletions, 0)
 
     assert.ok(!byPath.has('.sillyspec/changes/archive/thin-demo/design.md'), '治理工件不进表（filterDeliverableFiles 同口径）')
-    assert.equal(r.totals.files, 3)
-    assert.equal(r.totals.additions, 3)
+    assert.equal(r.totals.files, 4)
+    assert.equal(r.totals.additions, 4)
 
     assert.ok(r.note && r.note.includes('flow done') && r.note.includes('冻结 patch 记录'), `note 点名冻结记录（实际 ${r.note}）`)
     assert.ok(!r.note.includes('快照缺失'), '不再落「快照缺失→开放区间」失真链')

@@ -31,7 +31,7 @@ created_at: 2026-10-07T14:50:14.029Z
 
 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
 
-   回放路径纯读（computeChangeScopeAudit 全程无落盘契约不变）；若查询时点恰逢另一会话对该变更 --refreeze（change-patch.json 重写），读到的是某一完整版本（写侧 writeFileSync 原子性由 fs-atomic 保证，读侧 JSON.parse 失败即回退下一链路），不会读到半份 json。
+   回放路径纯读（computeChangeScopeAudit 全程无落盘契约不变）；若查询时点恰逢另一会话对该变更 --refreeze（change-patch.json 重写），读侧 JSON.parse 失败/形态不合法即回退下一链路（readChangePatchMeta 返回 null → 开放区间兜底）。写侧 flow.js 为 writeFileSync 直写、非原子（评审 P3 清偿：原文误称由 fs-atomic 保证）——最坏读到旧版完整件或瞬时回放缺失，不出半份伪数据。
 
 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
 
