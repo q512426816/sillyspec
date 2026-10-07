@@ -48,16 +48,16 @@ function fillSlots(cwd, change) {
   assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
-test('① flow done 哨兵：覆写全勾零证据拒收 / 镜像全勾零证据豁免 / 全勾+token 放行 / 非全勾放行', () => {
-  // 形态 A：覆写任务全勾零证据 → 拒（2026-09-28-sentinel-mirror-waiver 起：镜像任务豁免，
-  // 拒收路径须先覆写打破镜像——守卫语义不变，验的是 agent 认领过的任务面）
+test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全勾+token 放行 / 非全勾放行', () => {
+  // 形态 A：覆写任务全勾零证据 → 拒（每格勾选=完成主张，一律要 per-task 证据——
+  // 2026-10-07-thin-tasks-v3 起统一判据，不再区分镜像/覆写来源）
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-fake'
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
-    // 覆写任务面（真实实现路径形态）再全勾——与机器稿逐字不同 → 无镜像豁免
+    // 覆写任务面（真实实现路径形态）再全勾
     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \] task-\d+: [^\n]+/, '- [ ] task-01: 实现行为 X 的真实工作单元').replace(/- \[ \]/g, '- [x]'))
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
@@ -68,8 +68,8 @@ test('① flow done 哨兵：覆写全勾零证据拒收 / 镜像全勾零证据
     assert.match(f.stdout + f.stderr, /哨兵断言拒收/, '哨兵文案')
     rmSync(cwd, { recursive: true, force: true })
   }
-  // 形态 A2：镜像任务全勾零证据 → 豁免放行（本变更新契约：与机器稿逐字相同的勾选＝成功标准
-  // 镜像面，免 per-task 证据——修「验 agent 从未认领的任务面」假阳性）
+  // 形态 A2：机器种子行全勾零证据 → 同样拒收（2026-10-07-thin-tasks-v3：镜像豁免退役——
+  // 种子行勾选同样是完成主张；出口=补 token 提交或 --allow-batch-tick 类显式旁路）
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-mirror'
@@ -80,10 +80,9 @@ test('① flow done 哨兵：覆写全勾零证据拒收 / 镜像全勾零证据
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
     execFileSync('git', ['commit', '-q', '-m', 'work（无 task token）'], { cwd, stdio: 'pipe' })
-    const ok = cli(['flow', 'done', '--change', change])
-    assert.equal(ok.status, 0, `镜像全勾零证据应豁免放行: ${ok.stdout}\n${ok.stderr}`)
-    assert.match(ok.stdout, /镜像任务勾选/, '豁免说明行在场')
-    assert.doesNotMatch(ok.stdout + ok.stderr, /哨兵断言拒收/, '不再拒收镜像面')
+    const f = cli(['flow', 'done', '--change', change])
+    assert.equal(f.status, 1, `种子行全勾零证据应拒收（豁免已退役）: ${f.stdout}\n${f.stderr}`)
+    assert.match(f.stdout + f.stderr, /哨兵断言拒收/, '统一判据拒收文案')
     rmSync(cwd, { recursive: true, force: true })
   }
   // 形态 B：全勾 + 提交标题带 token → 过（哨兵绿行，收口继续）

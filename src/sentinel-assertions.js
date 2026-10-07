@@ -25,67 +25,6 @@ function taskTokenRe(id) {
   return new RegExp(`${id}(?!\\d)`);
 }
 
-/** 任务行可比文本：`- [x] task-01: 描述` → `task-01: 描述`（剥 checkbox 态，保留 id+描述）。 */
-function taskLineComparable(line) {
-  const m = String(line || '').match(/^[-*] \[(?: |x|X)\] (.+)$/);
-  return m ? m[1].trim() : null;
-}
-
-/**
- * 镜像任务 id 集（2026-09-28-sentinel-mirror-waiver）：当前 tasks.md 与机器稿基线
- * （route-hindsight-baseline 快照的 tasks 全文）逐字相同的任务行——即 agent 未覆写的
- * 「成功标准镜像」任务。此类勾选的证据面是整变更交付（实测门/patch/review），不要求
- * per-task 提交 token——要求了就是验一个 agent 从未认领的任务面（本会话三连假阳性实证）。
- * 纯函数；baselineTasksMd 空/失配 → 空集（fail-safe：全部按覆写任务从严）。
- */
-export function mirroredTaskIds({ tasksMd, baselineTasksMd } = {}) {
-  const collect = (md) => {
-    const map = new Map();
-    for (const line of String(md || '').split(/\r?\n/)) {
-      const t = taskLineComparable(line);
-      if (t && /^task-\d+/.test(t)) {
-        const id = t.match(/^(task-\d+)/)[1];
-        map.set(id, t);
-      }
-    }
-    return map;
-  };
-  const cur = collect(tasksMd);
-  const base = collect(baselineTasksMd);
-  const out = new Set();
-  for (const [id, text] of cur) {
-    if (base.get(id) === text) out.add(id);
-  }
-  return out;
-}
-
-/**
- * 镜像未认领判定（2026-10-03-voluntary-task-tick，收口自愈代勾的判别面）：
- * 当前 tasks.md 与机器稿基线「逐字相同且全未勾」——即 agent 既未覆写任务面（认领）也
- * 未勾任何一格。此形态下勾选簿记缺失是机器稿镜像的固有留白而非 agent 漏账，收口侧
- * 可代勾自愈（自愿路径裁决：不升格拒收/重做）。与 mirroredTaskIds 的分界：那是「已勾行
- * 是否镜像」的豁免判别；这是「整面是否从未被认领」的代勾判别。纯函数；基线空/行集
- * 不同/任一格已勾 → false（fail-safe 不代勾）。
- */
-export function isMirrorUntouchedFace({ tasksMd, baselineTasksMd } = {}) {
-  const collect = (md) => {
-    const map = new Map()
-    for (const line of String(md || '').split(/\r?\n/)) {
-      const m = line.match(/^[-*] \[( |x|X)\] (task-\d+)(?::(.*))?$/)
-      if (m) map.set(m[2], { text: (m[2] + (m[3] || '')).trim(), checked: m[1].toLowerCase() === 'x' })
-    }
-    return map
-  }
-  const cur = collect(tasksMd)
-  const base = collect(baselineTasksMd)
-  if (base.size === 0 || cur.size !== base.size) return { untouched: false, claimTotal: cur.size }
-  for (const [id, info] of cur) {
-    const b = base.get(id)
-    if (!b || b.text !== info.text || info.checked || b.checked) return { untouched: false, claimTotal: cur.size }
-  }
-  return { untouched: true, claimTotal: cur.size }
-}
-
 /**
  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
  */
@@ -113,7 +52,12 @@ function listReviewEvidence(changeDir, opts) {
 }
 
 /**
- * 假勾选三态判定（L0 收口拒收支点，下批接线）。
+ * 假勾选三态判定（L0 收口拒收支点）。
+ *
+ * 证据判据统一（2026-10-07-thin-tasks-v3，镜像豁免退役）：tasks.md 是 agent 的工作分解
+ * 队列，每格勾选都是 agent 的完成主张——一律按 per-task 证据判（提交消息含完整 token
+ * task-NN（负向前瞻，task-01 不证 task-010）或对应 review.json 在场）。机器种子与
+ * agent 改写行同判，不再区分「镜像/覆写」。
  *
  * @param {object} args
  * @param {string|null} args.changeDir 变更目录（推导 specBase 定位 execute-runs；null/探测
@@ -121,15 +65,12 @@ function listReviewEvidence(changeDir, opts) {
  * @param {string|null} args.tasksMd tasks.md 全文（判集=行首 checkbox+task-NN id 行）
  * @param {Array<string|{message:string}|{subject:string}>} args.commits 提交组（消息含
  *   task-NN 即该任务证据）
- * @param {string|null} [args.baselineTasksMd] 机器稿基线 tasks.md 全文（route-hindsight-baseline
- *   快照；null/缺省 → 无镜像豁免，全部按覆写任务判——fail-safe 维持旧行为）
  * @param {{listReviewsImpl?: Function}} [args.opts] 注入面（测试替身）
- * @returns {{status:'complete'|'fake'|'none', claimTotal:number, checked:number, missing:string[], mirrored:string[]}}
+ * @returns {{status:'complete'|'fake'|'none', claimTotal:number, checked:number, missing:string[]}}
  *   none=无完成主张（判集空或未全勾）；complete=全勾且零 missing；fake=全勾且有零证据
- *   任务（missing 列其 id，收口侧拒收依据）；mirrored=已勾且与基线逐字相同的任务 id
- *   （成功标准镜像面——不在 missing 内，消费方渲染豁免说明）。
+ *   任务（missing 列其 id，收口侧拒收依据）
  */
-export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, baselineTasksMd = null, opts = {} } = {}) {
+export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = {} } = {}) {
   const entries = [];
   for (const line of String(tasksMd || '').split(/\r?\n/)) {
     const m = line.match(CHECKED_TASK_LINE_RE);
@@ -139,63 +80,82 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, baselin
   const checked = entries.filter((e) => e.checked).length;
   const messages = (Array.isArray(commits) ? commits : [])
     .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
-  // 零提交不豁免（2026-09-28-sentinel-waiver-hardening 角度 A 实证：镜像全勾＋区间零提交曾
-  // 空转收口——「实测门/patch/review 整体背书」论证在纯文档变更有缺口。豁免前提=有交付）。
-  const mirror = messages.length > 0 ? mirroredTaskIds({ tasksMd, baselineTasksMd }) : new Set();
-  const mirrored = entries.filter((e) => e.checked && mirror.has(e.id)).map((e) => e.id);
   if (claimTotal === 0 || checked < claimTotal) {
-    return { status: 'none', claimTotal, checked, missing: [], mirrored };
+    return { status: 'none', claimTotal, checked, missing: [] };
   }
   const reviews = listReviewEvidence(changeDir, opts);
   const missing = entries
     .filter((e) => {
-      if (mirror.has(e.id)) return false; // 镜像勾选免 per-task 证据（成功标准面由收口交付门背书）
+      if (!e.checked) return false;
       const re = taskTokenRe(e.id);
       const byCommit = messages.some((msg) => re.test(msg));
       const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`));
       return !(byCommit || byReview);
     })
     .map((e) => e.id);
-  return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing, mirrored };
+  return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing };
 }
 
 /**
- * 勾选节奏检测（2026-09-26-thin-check-cadence）：watcher 事件流里 task-done 单拍跳 ≥2 格 =
- * 一把全勾（未按工作单元逐个勾）——thin-agent-tasks 纪律的收口侧 advisory 判定面（warn 不
- * 阻断，接线在 flow done ledger 子步；节奏是习惯问题非造假主张，L0 硬门另有其人）。
- * 纯函数：事件清单→最大跳格记录；无多格跳返回 null。detail 与 watcher inferEvents 生成
- * 格式成对（`checked N→M`）；解析失配（格式漂移/坏行/非 task-done）按无证据静默——fail-open。
+ * 勾选节奏检测（2026-09-26-thin-check-cadence；2026-10-07-thin-tasks-v3 采样去重）：
+ * 事件流里 task-done 单拍跳 ≥2 格 = 一把全勾（未按工作单元逐个勾）。
+ * 事件两源同流：`task tick` 命令直写的精确事件（source:'task-tick'，一次一格）与 watcher
+ * 3s 轮询的采样事件（快速连续 tick 被合并成一跳）。判最大跳以 CLI 精确事件为权威：
+ *   ① 采样事件落点计数 M 与任一 CLI 事件落点相同 → 整跳被 CLI 精确序列覆盖，剔除；
+ *   ② 其余采样事件起点按「小于其落点的最大 CLI 落点」抬高（CLI 已勾到的格不重复计入跳幅）。
+ * 纯函数：事件清单→最大跳格记录；无多格跳返回 null。detail 与事件生成格式成对
+ * （`checked N→M`）；解析失配（格式漂移/坏行/非 task-done）按无证据静默——fail-open。
  */
 export function detectBatchCheckCadence(events) {
-  let worst = null;
+  const taskEvents = [];
   for (const e of events || []) {
-    if (!e || e.kind !== 'task-done') continue;
+    if (e && e.kind === 'task-done') taskEvents.push(e);
+  }
+  const parse = (e) => {
     const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));
-    if (!m) continue;
-    const from = Number(m[1]);
-    const to = Number(m[2]);
-    if (to - from < 2) continue;
-    if (!worst || to - from > worst.to - worst.from) worst = { from, to, detail: e.detail, ts: e.ts };
+    return m ? { from: Number(m[1]), to: Number(m[2]) } : null;
+  };
+  const cliParsed = [];
+  for (const e of taskEvents) {
+    if (e.source !== 'task-tick') continue;
+    const r = parse(e);
+    if (r) cliParsed.push(r);
+  }
+  const cliTargets = new Set(cliParsed.map((r) => r.to));
+  const maxCliBelow = (to) => {
+    let best = 0;
+    for (const r of cliParsed) if (r.to < to && r.to > best) best = r.to;
+    return best;
+  };
+  let worst = null;
+  for (const e of taskEvents) {
+    const r = parse(e);
+    if (!r) continue;
+    const isCli = e.source === 'task-tick';
+    if (!isCli && cliTargets.has(r.to)) continue; // 采样合并跳被 CLI 精确序列覆盖
+    const from = isCli ? r.from : Math.max(r.from, maxCliBelow(r.to));
+    if (r.to - from < 2) continue;
+    if (!worst || r.to - from > worst.to - worst.from) worst = { from, to: r.to, detail: e.detail, ts: e.ts };
   }
   return worst;
 }
 
 /**
- * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：watcher 检出单拍跳（batchTick 非 null）
- * 时的收口动作裁决。四态（决策顺序即豁免优先序）：
- *   'silent'   镜像-only（非镜像勾选面=0）——镜像豁免哲学：镜像批量勾是常态非纪律失守；
+ * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
+ * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
+ * 工作分解，无镜像面）。四态（决策顺序即豁免优先序）：
+ *   'silent'   无单拍跳；
  *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
- *   'advisory' 哨兵面未知（nonMirrorCount=null，fail-open 防误拒）；或机器代勾可解释整跳
- *              （autopilotTicked >= 跳幅——governance-autopilot 代勾是单拍多格机械写，非 agent
- *              纪律面；代勾数不可解释最大跳时落到 reject——防「留一格给代勾补、自身大跳蹭豁免」
- *              的对抗绕过，二轮评审 P3-E）；
- *   'reject'   非镜像面存在、代勾解释不了整跳、未旁路——agent 一把勾，拒收。
+ *   'advisory' 机器代勾可解释整跳（autopilotTicked >= 跳幅——governance-autopilot 代勾是
+ *              单拍多格机械写，非 agent 纪律面；代勾数不可解释最大跳时落到 reject——防「留
+ *              一格给代勾补、自身大跳蹭豁免」的对抗绕过，二轮评审 P3-E）；
+ *   'reject'   非旁路、代勾解释不了整跳——agent 一把勾，拒收。
  * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
+ *   nonMirrorCount 保留为哨兵面未知信号（null → fail-open advisory）；镜像-only 语义已退役。
  * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
  */
 export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0 } = {}) {
   if (!batchTick) return { action: 'silent', reason: 'no-batch-tick' };
-  if (nonMirrorCount === 0) return { action: 'silent', reason: 'mirror-only' };
   if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
   if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
   if (autopilotTicked >= batchTick.to - batchTick.from) return { action: 'advisory', reason: 'autopilot-ticked' };

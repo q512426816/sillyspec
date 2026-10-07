@@ -139,32 +139,11 @@ export function baselineSha256({ specBase, change }) {
 }
 
 /**
- * 锚定验证读取（2026-09-28-sentinel-waiver-hardening F2：校验逻辑抽离可单测）——消费侧统一入口。
- * 有锚定（anchoredSha256 非空）且与文件现哈希不符 → {tasksMd: null, tampered: true}（按无基线从严）；
- * 无锚定（过渡期）/相符/缺文件 → {tasksMd, tampered: false}。
+ * 机器稿基线读取面退役（2026-10-07-thin-tasks-v3）：哨兵镜像豁免与收口代勾下线后，
+ * readBaselineTasks/readBaselineTasksVerified（哨兵侧判别源）零消费删除——基线快照本体
+ * （snapshotBaseline/baselineSha256）保留，供 hindsight 改写比指标（computeHindsightMetrics
+ * 直读快照 JSON）与 flow-state 锚定。
  */
-export function readBaselineTasksVerified({ specBase, change, anchoredSha256 }) {
-  const tasksMd = readBaselineTasks({ specBase, change })
-  if (tasksMd == null || !anchoredSha256) return { tasksMd, tampered: false }
-  const now = baselineSha256({ specBase, change })
-  if (now && now !== anchoredSha256) return { tasksMd: null, tampered: true }
-  return { tasksMd, tampered: false }
-}
-
-/**
- * 机器稿基线 tasks.md 全文读取（2026-09-28-sentinel-mirror-waiver：哨兵镜像豁免的判别源）。
- * 文件缺失/损坏/字段非字符串 → null（消费方 fail-safe 按无基线从严）。
- */
-export function readBaselineTasks({ specBase, change }) {
-  try {
-    const p = join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`)
-    if (!existsSync(p)) return null
-    const j = JSON.parse(readTextSafe(p))
-    return typeof j.tasks === 'string' ? j.tasks : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * 收口指标计算（封闭面：只读文件与既有记录，无语义判定）。

@@ -631,21 +631,9 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         const _logOk = !!(_log && !_log.error)
         const commitMsgs = _logOk ? String(_log.value) || '' : ''
         if (_logOk) { // 空串（区间零提交）照跑——零提交不豁免，哨兵从严
-          // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选免 per-task
-          // 证据（quick 道现状无基线快照面——readBaselineTasks 恒 null 走 fail-safe 旧判据，接线为
-          // 基线面将来扩到 quick 道时的零改动就绪）。
-          const { readBaselineTasksVerified } = await import('../route-hindsight.js')
-          let _anchored = null
-          try {
-            const _fsText = readFileSync(join(specBase, 'changes', changeName, 'flow-state.yaml'), 'utf8')
-            _anchored = (/^baseline_sha256:\s*([0-9a-f]+)\s*$/m.exec(_fsText) || [])[1] || null
-          } catch { /* 锚定缺失=过渡期信任 */ }
-          const _bv = changeName ? readBaselineTasksVerified({ specBase, change: changeName, anchoredSha256: _anchored }) : { tasksMd: null, tampered: false }
-          const _baselineTasksMd = _bv.tasksMd
-          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitMsgs.split('\x1e').map((x) => x.trim()).filter(Boolean), baselineTasksMd: _baselineTasksMd })
-          if (sent.mirrored && sent.mirrored.length > 0) {
-            console.log(`ℹ️ 哨兵：${sent.mirrored.length} 处镜像任务勾选（成功标准镜像面，免 per-task 提交证据）`)
-          }
+          // 证据判据统一（2026-10-07-thin-tasks-v3）：已勾任务一律按 per-task 证据判（提交 token /
+          // review.json），镜像豁免与基线读取退役（quick 道本就无基线快照面）。
+          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitMsgs.split('\x1e').map((x) => x.trim()).filter(Boolean) })
           if (sent.status === 'fake') {
             console.error(`\n🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token）：${sent.missing.join('、')}`)
             console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
