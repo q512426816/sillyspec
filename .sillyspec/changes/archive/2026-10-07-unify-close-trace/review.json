@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-unify-close-trace",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9af14d8c29bb7e21e54b30c53b51800944473664",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 投影的排除路径（untouched/crossRepo 不入）无测试断言覆盖",
+      "evidence": "heavy e2e 只断言 files 含 src/app.js 与 totals.files==files.length（后者由 writer 构造恒真），未断言 meta.files ⊆ 快照实改行或 untouched/crossRepo 行被排除——夹具 design 无清单条目，complete.js:1117 的过滤器排除分支零覆盖；实现本身与 FR-02 一致，仅测试证据面偏弱。",
+      "location": "test/close-trace-unified.test.mjs:258-270"
+    },
+    {
+      "severity": "P3",
+      "title": "thin 快照 excluded.foreignDeclared 恒为静态空数组，他侧声明剔除面不回填（隐性边界未披露）",
+      "evidence": "flow.js:1474 snapObj.excluded 写死 { foreignDeclared: [] }，而 flow done 的 dirty 面确会剔除他侧声明文件（flow.js:1356-1362 仅 console 警告即逝；collectFreezeFiles 内切分不入档）——剔除发生后快照 excluded 仍声称零剔除，thin 通道对账明细缺「为何缺文件」的持久化记录；rows 本身正确，仅 excluded 元数据欠账。design/requirements 均未披露此简化（FR-01 只钉键集未钉内容）。",
+      "location": "src/flow.js:1474"
+    },
+    {
+      "severity": "P3",
+      "title": "盲维 Q1「读侧要么读到旧四件要么读到新四件」措辞强于实现保证",
+      "evidence": "writer 为四次顺序 writeFileSync（patch×2→json×2），并发读侧可观测新旧混合中间态（如新 change.patch+旧 scope-audit.json）——与 Q2 自认的 writeFileSync 非原子窗口部分相悖；实质防线（sha 一次计算双写、读侧 catch 回退）真实成立，风险受控，仅 Q1 的绝对化表述不成立。",
+      "location": "src/flow-parity.js:362-384"
+    },
+    {
+      "severity": "P3",
+      "title": "thin 快照行数缺档回放走补采分支时 note 残留 heavy 术语「apply 时点」",
+      "evidence": "scope-audit.js:1087 补采分支 note 已按 closedBy 正确插值通道标签，但尾句「文件集封闭在 apply 时点」未随通道改写——thin 通道（无 apply 动作）命中该分支（buildThinSnapshotRows stats 缺档产 null 行 → needsStats）时措辞失真；纯措辞瑕疵，数据与回放语义无误。",
+      "location": "src/scope-audit.js:1087"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-10-07T15:53:03Z"
+}

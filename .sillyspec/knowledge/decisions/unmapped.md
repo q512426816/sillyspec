@@ -1956,3 +1956,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：2d63d0471894624eb4c2ce18b93046c90ec57f05
 理由：最大风险：patch 段解析与 git 真实 numstat 的口径偏差（路径含空格的引号形态、rename 段、\ No newline 标记）。缓解：段头正则与既有 filterPatchForFiles/slicePatchForFile 同款（b/ 新路径），\ 开头续行不计，rename 场景 thin 冻结面罕见且行数偏差不改变三态判定；测试对拍 buildFrozenPatch 产物。放弃的方案：① flow done 补写 scope-audit.json（写侧）——只救新变更救不了存量归档，且造双冻结源；② 行数按 meta.baseline..head 提交区间改采 git numstat——对 committed 面精确但冻结面含 done 时点工作树件（治理工件/untracked），且引入对 git 对象库存活的依赖，不如解析冻结 patch 自包含。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-07-unify-close-trace
+锚点：未记录
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+理由：最大风险：两写点行为收口的回归面——thin 侧 console 字样/键序、heavy 侧「空 patch 当 ok」形态变化可能碰隐性消费者。缓解：thin 侧键结构与输出前缀逐字保留（flow-protocol 断言钉住）；heavy 空 patch 形态经全量套件与 e2e 验证；快照新增 closedBy 为 additive 键，旧快照读侧缺省兼容。放弃的方案：① 只做读侧不写统一（第 2 层已做）——新变更永远靠回退兜底，两卡不对称长期存在；② heavy 侧沉淀面在 archive --confirm 才写——语义上更「终态」，但需在归档点重建采集上下文（worktree/分支已清），且与快照时点（execute --done）不一致会造成两套留痕时点漂移，不如同点同锚；③ scope-audit.json 里引用 change.patch 路径省一份 patch 文件——读侧（getFileDiff/平台）认死 scope-audit.patch 文件名，省字节收益小于读面改动风险（同字节 git blob 本去重，零仓容成本）。

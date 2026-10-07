@@ -7570,3 +7570,98 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-07-allticked-gate-docs-resync
   status: active
+
+## FR-cli-entry-399 flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
+变更：2026-10-07-unify-close-trace
+状态：active
+摘要：thin 收尾四件齐备
+全文：.sillyspec/changes/archive/2026-10-07-unify-close-trace/requirements.md#FR-01
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-unify-close-trace:flow:测试绑定FR-01
+  tests: test/close-trace-unified.test.mjs「thin CLI e2e：flow done 后四件齐备，快照 rows 三态、治理工件不进 rows」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-unify-close-trace
+  status: active
+
+## FR-cli-entry-400 execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
+变更：2026-10-07-unify-close-trace
+状态：active
+摘要：heavy 收尾四件齐备
+全文：.sillyspec/changes/archive/2026-10-07-unify-close-trace/requirements.md#FR-02
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-unify-close-trace:flow:测试绑定FR-02
+  tests: test/close-trace-unified.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-unify-close-trace
+  status: active
+
+## FR-cli-entry-401 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
+变更：2026-10-07-unify-close-trace
+状态：active
+摘要：同锚与失败留痕
+全文：.sillyspec/changes/archive/2026-10-07-unify-close-trace/requirements.md#FR-03
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-unify-close-trace:flow:测试绑定FR-03
+  tests: test/close-trace-unified.test.mjs「同锚断言：change.patch≡scope-audit.patch、两 json patchSha256 相等；failed 双标」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-unify-close-trace
+  status: active
+
+## FR-cli-entry-402 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
+变更：2026-10-07-unify-close-trace
+状态：active
+摘要：新 thin 归档查询与重跑
+全文：.sillyspec/changes/archive/2026-10-07-unify-close-trace/requirements.md#FR-04
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-unify-close-trace:flow:测试绑定FR-04
+  tests: test/close-trace-unified.test.mjs「round-trip：writer 产物 → computeChangeScopeAudit 快照回放 note=closedBy；重冻结不自嵌入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-unify-close-trace
+  status: active
+
+## FR-cli-entry-403 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
+变更：2026-10-07-unify-close-trace
+状态：active
+摘要：全量门
+全文：.sillyspec/changes/archive/2026-10-07-unify-close-trace/requirements.md#FR-05
+最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-07-unify-close-trace:flow:测试绑定FR-05
+  tests: test/run-tests.mjs「全量套件跑绿，既有断言零改动」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-07-unify-close-trace
+  status: active

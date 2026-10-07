@@ -1,0 +1,68 @@
+{
+  "change": "2026-10-07-unify-close-trace",
+  "baseline": "a63a69be4b2dc2d1873f31eee53d7ea5f445d1ed",
+  "head": "9af14d8c29bb7e21e54b30c53b51800944473664",
+  "files": [
+    ".sillyspec/changes/2026-10-07-unify-close-trace/design.md",
+    ".sillyspec/changes/2026-10-07-unify-close-trace/flow-state.yaml",
+    ".sillyspec/changes/2026-10-07-unify-close-trace/proposal.md",
+    ".sillyspec/changes/2026-10-07-unify-close-trace/requirements.md",
+    ".sillyspec/changes/2026-10-07-unify-close-trace/tasks.md",
+    ".sillyspec/docs/sillyspec/modules/bin.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/run/complete.js",
+    "src/scope-audit.js",
+    "test/close-trace-unified.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs"
+  ],
+  "totals": {
+    "files": 14,
+    "additions": 697,
+    "deletions": 33
+  },
+  "savedAt": "2026-10-07T15:46:27.409Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "d220d50b26eb3e38d8938bb8a928fde76792d95c9ebbac31e0f28bd734f59690",
+  "patchStatus": "ok"
+}

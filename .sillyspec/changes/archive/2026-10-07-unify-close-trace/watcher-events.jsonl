@@ -1,0 +1,15 @@
+{"ts":1791386910968,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791386940640,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791387483986,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flowdone-disposition-drift.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791387749416,"kind":"commit","stage":null,"detail":"374d3379","provisional":true}
+{"ts":1791387756980,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791387757135,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791387757292,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791387757434,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791387757578,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1791387759200,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791387759200,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1791387769527,"kind":"commit","stage":null,"detail":"9af14d8c","provisional":true}
+{"ts":1791387776387,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-07-unify-close-trace/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791387951713,"kind":"gate-run","stage":"verify","detail":"门实测 passed（172.5s） · 20261007154550","provisional":true}
+{"ts":1791388455300,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}

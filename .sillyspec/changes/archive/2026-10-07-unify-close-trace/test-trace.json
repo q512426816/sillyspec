@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-07-unify-close-trace",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-01",
+      "tests": [
+        "test/close-trace-unified.test.mjs「writer 单测：四件齐备/同锚/失败留痕 + buildThinSnapshotRows 三态行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-01",
+      "tests": [
+        "test/close-trace-unified.test.mjs「thin CLI e2e：flow done 后四件齐备，快照 rows 三态、治理工件不进 rows」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-02",
+      "tests": [
+        "test/close-trace-unified.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-03",
+      "tests": [
+        "test/close-trace-unified.test.mjs「同锚断言：change.patch≡scope-audit.patch、两 json patchSha256 相等；failed 双标」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-04",
+      "tests": [
+        "test/close-trace-unified.test.mjs「round-trip：writer 产物 → computeChangeScopeAudit 快照回放 note=closedBy；重冻结不自嵌入」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-07-unify-close-trace:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs「全量套件跑绿，既有断言零改动」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-07-unify-close-trace"
+    }
+  ]
+}

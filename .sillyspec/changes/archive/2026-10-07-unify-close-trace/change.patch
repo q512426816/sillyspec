@@ -1,0 +1,899 @@
+diff --git a/.sillyspec/changes/2026-10-07-unify-close-trace/flow-state.yaml b/.sillyspec/changes/2026-10-07-unify-close-trace/flow-state.yaml
+new file mode 100644
+index 00000000..59ff1155
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-unify-close-trace/flow-state.yaml
+@@ -0,0 +1,34 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  双通道收尾留痕统一（缺陷记录 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md 修复方向之三；第 2 层读侧回读已由
++  2026-10-07-scope-audit-thin-patch-replay 落地）：thin（flow done）只写 change.patch/change-patch.json、heavy（execute --done）只写
++  scope-audit.json/scope-audit.patch，两条通道留痕不对称——平台两张卡各认一份，每类变更恰好一张卡失真（轻量对账明细恒假计划未动〔读侧已修〕；厚道归档留档 patch
++  块空）。修法：flow-parity.js 新增共用 writeCloseTraceArtifacts——一次写齐四件（沉淀资产面 change.patch+change-patch.json、对账快照面
++  scope-audit.patch+scope-audit.json），sha256/patchStatus 双套同锚；flow done 与 printExecuteScopeAudit
++  双接线，新变更两通道留痕对称，读侧回退（快照>change-patch 回放>实时区间）退化为存量兜底。
++
++
++  成功标准：
++
++  - flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+
++  scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++
++  - execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+
++  change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++
++  - 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++
++  - 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow
++  done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++
++  - 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
++autopilot: true
++baseline_commit: a63a69be4b2dc2d1873f31eee53d7ea5f445d1ed
++updatedAt: '2026-10-07T15:28:01.856Z'
++baseline_sha256: 0f84bb9eaa77c02bf44d42b3853dba3e2202e98fee9058155daad84f4e58e0ea
++
+diff --git a/.sillyspec/docs/sillyspec/modules/bin.changelog.md b/.sillyspec/docs/sillyspec/modules/bin.changelog.md
+new file mode 100644
+index 00000000..87651260
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/bin.changelog.md
+@@ -0,0 +1 @@
++| 2026-10-07 | 2026-10-07-unify-close-trace | printExecuteScopeAudit 双轨落盘（缺陷 thin-flow-done-no-scope-audit-snapshot 修复方向③）：execute --done 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件——既有 scope-audit.json/patch 形态不变（fail-soft/归档竞态判定/closedBy='execute --done' 增量键），新增 change-patch.json + change.patch（files/totals=主仓实改行投影：planned+unplanned 非 crossRepo 行；baseline=快照锚、head=当点 HEAD）；空 patchText 从「ok+空文件」收口为 failed 双标。heavy 归档的沉淀资产卡自此有数，平台侧读回退成双保险。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 9a7e3794..6e579505 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -18,3 +18,4 @@
+ - ql-20260911-029-2892 | 紧急包小修：index.js next --apply 的 ESM __dirname ReferenceError 改 fileURLToPath；modules resolve --json 死条件改用顶层 json 变量
+ - ql-20260912-008-8eff | flag 值位守卫全量收口（52 三元形+解析器 5 分支）：值位为 flag 名/缺值视为未提供——--change --json 不再吞 flag
+ - ql-20260920-003 | P1-5 v1 阶段跑者瘦会话：sillyspec handoff 命令（src/handoff.js——交接块=新会话启动块[保持SILLYSPEC_SESSION_ID]+下一阶段建议[进行中续跑/完成后继]+状态摘要；纯只读；--json）+ 主流程阶段完成尾提示（complete.js——brainstorm/plan/execute/verify 完成时点一行 advisory）+handoff.test.mjs 12/12（CLI实跑夹具）——对撞实验主会话203请求63M肥上下文重发税的结构性出口
++| 2026-10-07 | 2026-10-07-unify-close-trace | flow done 收尾留痕双轨统一（缺陷 thin-flow-done-no-scope-audit-snapshot 修复方向③）：flow-parity 新导出 writeCloseTraceArtifacts（一次写齐 change.patch/change-patch.json + scope-audit.patch/scope-audit.json 四件，同一 patchText 一次 sha256 双套同锚；空 patch 双标 failed 不落 patch 文件）与 buildThinSnapshotRows（thin 三态行纯函数：filterDeliverableFiles × pathMatches，stats 缺档 null 不出伪数据）；flow done 留档块改走共用函数（既有键结构/口径/console 前缀不变），冻结面排除面追加 scope-audit.json/patch（防重跑自嵌入）。thin/heavy 双通道留痕自此对称，读侧回退（2026-10-07-scope-audit-thin-patch-replay）退化为存量兜底；test/close-trace-unified.test.mjs 6 夹具 + flowdone-disposition-drift 增量断言。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index ac9e85fe..9d17e613 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -42,3 +42,4 @@
+ - ql-20260920-010-7a19 | verify-postcheck 伪影分诊 classifyTestFailureArtifact（四类沙箱伪影签名纯函数分类，消费侧 run/verify-quality-scan 编排主树对照）+ test_strategy 缺省收窄（modules 已配未显式 → 缺省 module，未配仓零打扰）；test/verify-artifact-triage.test.mjs 13/13
+ - 2026-09-21-r5-efficiency-batch1 | 新增 assembleExecuteTaskMaterials（execute 任务材料包两段式装配：稳定段先行/24KB 截尾保锚/只摘不译/无映射零输出）——B-④，review-material-pack.js 纯增量导出，test/execute-materials.test.mjs 锁定
+ | 2026-10-07 | 2026-10-07-scope-audit-thin-patch-replay | scope-audit settled 分支 thin 冻结记录回放（缺陷 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md 读侧清偿）：execute 快照缺失时回读 change-patch.json + change.patch 出真实三态——文件集 meta.files 过 filterDeliverableFiles、行数自冻结 patch 按段统计（parseFrozenPatchStats，new/deleted/binary 三档对齐 numstat 口径）、基点 meta.baseline；--file 经 frozenPatchPath 自动走冻结切片 + A-F01 sha256 篡改校验；回退链 execute 快照 > change-patch 回放 > 实时开放区间不变。归档 thin 变更不再恒「计划未动 +0/−0」失真（multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测三计划内文件全 ✓ +218/−34）；test/scope-audit-thin-patch-replay.test.mjs 4 夹具，scope-audit 既有 58 断言零改动。 |
++| 2026-10-07 | 2026-10-07-unify-close-trace | 快照回放 note 通道标注：settled 分支读侧按 snap.closedBy（flow done / execute --done，2026-10-07-unify-close-trace 起收尾写侧随快照落盘）插值标注收尾通道，旧快照无键缺省 'execute --done' 兼容——thin 通道快照（flow done 双轨统一落盘）回放不再误标 execute --done；读取链与回放语义零变化。 |
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 9e5238b6..935b7fb4 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -10,15 +10,21 @@
+  *    厚道有轻量变更缺的审计资产；机器合成勿手改。
+  * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
+  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
++ * ④ writeCloseTraceArtifacts / buildThinSnapshotRows：双通道收尾留痕统一写
++ *    （2026-10-07-unify-close-trace）——thin flow done 与 heavy execute --done 共用一处一次
++ *    写齐四件（沉淀资产面 + 对账快照面，sha256 双套同锚），新变更两通道留痕对称。
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+ import { join, relative } from 'node:path'
++import { createHash } from 'node:crypto'
+ import { execFileSync } from 'node:child_process'
+ import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
+ import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { readV2SectionAnswer } from './flow-review.js'
+ import { DESIGN_QUESTIONS } from './flow-draft.js'
++import { pathMatches } from './change-list.js'
++import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
+ 
+ /**
+  * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
+@@ -272,6 +278,113 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
+   return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+ }
+ 
++/**
++ * thin 通道三态行构造（writeCloseTraceArtifacts 的 snapObj.rows 数据源，纯函数）：
++ * ownFiles 过 filterDeliverableFiles（与 scope-audit actual 侧同口径——治理工件目录不进
++ * 快照行）× design 清单 pathMatches 判三态（planned/unplanned；与主链路三态判定同款）；
++ * stats（collectNumstatByPath 产物 Map）缺档落 null 行数（不出伪数据）；planEntries 空/缺省
++ * → 实际侧 only 行（无 verdict，与主链路计划侧降级同语义）。清单条目未命中冻结面 →
++ * untouched 0/0 补行（跨仓条目带 crossRepo 保持 ⊘ 形态，主链路补行同语义）。
++ * @returns {{ rows: Array<object>, totals: { files: number, additions: number, deletions: number } }}
++ */
++export function buildThinSnapshotRows({ ownFiles, stats, planEntries }) {
++  const plan = Array.isArray(planEntries) ? planEntries : []
++  const statMap = stats instanceof Map ? stats : new Map()
++  const rowFiles = filterDeliverableFiles([...new Set((Array.isArray(ownFiles) ? ownFiles : [])
++    .map((f) => String(f).replace(/\\/g, '/')).filter(Boolean))]).sort()
++  const rows = []
++  const matched = new Set()
++  for (const f of rowFiles) {
++    const st = statMap.get(f) || {}
++    const row = {
++      path: f,
++      additions: Number.isFinite(st.additions) ? st.additions : null,
++      deletions: Number.isFinite(st.deletions) ? st.deletions : null,
++      kind: st.kind || 'modified',
++    }
++    if (plan.length > 0) {
++      const entry = plan.find((e) => e && pathMatches(f, e.path))
++      if (entry) {
++        matched.add(entry.path)
++        row.planned = entry.operation || null
++        row.verdict = 'planned'
++      } else {
++        row.planned = null
++        row.verdict = 'unplanned'
++        const facility = classifyToolScaffold(f)
++        if (facility) row.facility = facility
++      }
++    }
++    rows.push(row)
++  }
++  for (const e of plan) {
++    if (!e || matched.has(e.path)) continue
++    rows.push({
++      path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
++      kind: 'modified', verdict: 'untouched',
++      ...(e.repo ? { crossRepo: e.repo } : {}),
++    })
++  }
++  let additions = 0
++  let deletions = 0
++  for (const r of rows) {
++    if (Number.isFinite(r.additions)) additions += r.additions
++    if (Number.isFinite(r.deletions)) deletions += r.deletions
++  }
++  return { rows, totals: { files: rows.length, additions, deletions } }
++}
++
++/**
++ * 双通道收尾留痕统一写（2026-10-07-unify-close-trace，缺陷 thin-flow-done-no-scope-
++ * audit-snapshot 修复方向③）：thin（flow done）与 heavy（execute --done）此前各写各的
++ * 留痕（沉淀资产面 change.patch/change-patch.json vs 对账快照面 scope-audit.patch/
++ * scope-audit.json），消费方各认一份致每类变更恰好一张卡失真——本函数一处写齐四件，
++ * sha256/patchStatus 双套同锚（同一 patchText 一次计算：change.patch ≡ scope-audit.patch
++ * 字节一致、两 json 同 hash，两套留痕不可能漂移）。patchText 空/null → 双套同标 failed、
++ * 不落 patch 文件（heavy 旧「空串当 ok」形态收口）。读侧兼容链（快照 > change-patch
++ * 回放 > 实时区间，2026-10-07-scope-audit-thin-patch-replay）不动——本函数让新变更两套
++ * 齐备，回退退化为存量归档兜底。
++ *
++ * @param {string} changeDir 变更目录（活跃或归档侧——归档竞态由调用方解析）
++ * @param {object} snapObj scope-audit.json 主体（mode/ok/degradedReason/baseAnchor/totals/
++ *   rows/excluded/note[/repos]；closedBy 由调用方携带标收尾通道——读侧回放按它标注，
++ *   缺省 'execute --done' 兼容旧快照）
++ * @param {object} meta change-patch.json 增量键（note/moduleScope 等，展开在 totals 后）
++ * @returns {{ patchStatus: 'ok'|'failed', patchSha256: string|null }}
++ */
++export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {} }) {
++  const fileList = Array.isArray(files) ? files : []
++  const patchOk = typeof patchText === 'string' && patchText.length > 0
++  const patchBody = patchOk ? (patchText.endsWith('\n') ? patchText : patchText + '\n') : null
++  const patchSha256 = patchBody
++    ? createHash('sha256').update(patchBody.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
++    : null
++  if (patchOk) {
++    writeFileSync(join(changeDir, 'change.patch'), patchBody)
++    writeFileSync(join(changeDir, 'scope-audit.patch'), patchBody)
++  }
++  writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({
++    change,
++    baseline: baseline ?? null,
++    head: head ?? null,
++    files: fileList,
++    totals: metaTotals && typeof metaTotals === 'object'
++      ? metaTotals
++      : { files: fileList.length, additions: 0, deletions: 0 },
++    savedAt,
++    ...meta,
++    ...(patchSha256 ? { patchSha256 } : {}),
++    patchStatus: patchOk ? 'ok' : 'failed',
++  }, null, 2) + '\n')
++  writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({
++    ...snapObj,
++    ...(patchSha256 ? { patchSha256 } : {}),
++    patchStatus: patchOk ? 'ok' : 'failed',
++    savedAt,
++  }, null, 2) + '\n')
++  return { patchStatus: patchOk ? 'ok' : 'failed', patchSha256 }
++}
++
+ /**
+  * 实测面回填（修复③：ledger 子步断点续跑 skip 后回执不失忆）——从 verify-runs 最近
+  * test-result.json（带 change 键）重建摘要；无匹配返回 null。
+diff --git a/src/flow.js b/src/flow.js
+index 34bf13f6..b7080430 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -26,7 +26,6 @@
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
+-import { createHash } from 'node:crypto'
+ import { join, relative, dirname } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+@@ -1400,7 +1399,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+         }
+         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
+-          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
++          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
++            && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
+         if (ownFiles.length === 0) {
+           console.log('📦 patch 留档跳过：本变更可归属文件面为空')
+           patchOk = true
+@@ -1416,7 +1416,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
+           // 排除项与 ownFiles 同款（change.patch/change-patch.json）——否则上一轮冻结件作为
+           // untracked 新文件被全文自嵌入（自引用循环：旧 patch 内容混进新 patch，三评 P1 根因）。
+-          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
++          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
++            && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
+           const worktreeSet = new Set([...dirFilesForPatch, ...((freeze.dirtyAdded) || [])].map(toPosix))
+           const committedFace = freeze.files.map(toPosix).filter((f) => !worktreeSet.has(f))
+           const frozenCommitted = buildFrozenPatch(cwd, committedFace, { baseRef: st.baseline_commit, headRef: headCommit })
+@@ -1445,28 +1446,43 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
+             moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
+           } catch { /* 对账 best-effort（三键空数组兜底） */ }
+-          const meta = {
++          // 双通道收尾留痕统一（2026-10-07-unify-close-trace）：共用 writeCloseTraceArtifacts
++          // 一次写齐四件——沉淀资产面（change.patch + change-patch.json，键结构/口径不变）+
++          // 对账快照面（scope-audit.json + scope-audit.patch，thin 通道新增）：同点同锚
++          // （同一 patchText 一次 sha256），新变更两条通道留痕对称，读侧回退退化为存量兜底。
++          let planEntries = []
++          try {
++            const { parseFileChangeListDetailed } = await import('./change-list.js')
++            planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true })
++          } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
++          const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
++          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles, stats, planEntries })
++          const closeTrace = writeCloseTraceArtifacts({
++            changeDir,
+             change,
+             baseline: st.baseline_commit,
+             head: typeof head === 'string' ? head.trim() : null,
+             files: ownFiles,
+-            totals: { files: ownFiles.length, additions, deletions },
++            metaTotals: { files: ownFiles.length, additions, deletions },
++            patchText: typeof frozen === 'string' && frozen ? frozen : null,
+             savedAt: new Date().toISOString(),
+-            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
+-            // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径（与 files[]
+-            // 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响（可能未登记——看 uncoveredDirs）
+-            ...moduleScope,
+-          }
+-          if (typeof frozen === 'string' && frozen) {
+-            const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+-            writeFileSync(join(changeDir, 'change.patch'), patchText)
+-            meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+-            meta.patchStatus = 'ok'
+-          } else {
+-            meta.patchStatus = 'failed'
+-          }
+-          writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+-          console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
++            snapObj: {
++              mode: 'full-flow', ok: true, degradedReason: null,
++              baseAnchor: st.baseline_commit || null,
++              totals: snapTotals,
++              rows: snapRows,
++              excluded: { foreignDeclared: [] },
++              note: 'flow done 时点冻结（本文件落盘时采集）',
++              closedBy: 'flow done',
++            },
++            meta: {
++              note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
++              // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径
++              // （与 files[] 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响
++              ...moduleScope,
++            },
++          })
++          console.log(`📦 变更 patch 留档（双轨统一）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}）+ scope-audit.json + scope-audit.patch（对账快照同点冻结）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
+           // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
+           // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
+           // 阻断——可能是范围裁剪了但 design 没同步更新）
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 9f6cc23e..21faa353 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -18,9 +18,9 @@
+  */
+ import { join, isAbsolute, resolve } from 'node:path'
+ import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
+-import { createHash } from 'node:crypto'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
++import { writeCloseTraceArtifacts } from '../flow-parity.js'
+ import { withFileLock } from '../quicklog.js'
+ import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer } from './shared.js'
+ import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
+@@ -1109,16 +1109,33 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
+     mkdirSync(changeDir, { recursive: true })
+     const { frozenPatch, ...snap } = result
+     snap.note = 'execute --done 时点冻结（本文件落盘时采集）'
+-    if (typeof frozenPatch === 'string') {
+-      const patchText = frozenPatch.endsWith('\n') ? frozenPatch : frozenPatch + '\n'
+-      writeFileSync(join(changeDir, 'scope-audit.patch'), patchText)
+-      snap.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+-      snap.patchStatus = 'ok'
+-    } else if (frozenPatch === null) {
+-      snap.patchStatus = 'failed'
+-    }
+-    writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({ ...snap, savedAt: new Date().toISOString() }, null, 2) + '\n')
+-    console.log(`   📦 范围快照已落变更目录（scope-audit.json${snap.patchStatus === 'ok' ? ' + scope-audit.patch（收尾时点冻结，sha256 已锚）' : snap.patchStatus === 'failed' ? '——patch 采集失败已留痕' : ''}）`)
++    snap.closedBy = 'execute --done'
++    // 沉淀资产面投影（2026-10-07-unify-close-trace）：files/totals = 主仓实改行（planned+
++    // unplanned；untouched 0/0 是声明不是改动、crossRepo 行 patch 不在主仓——均不入）。
++    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件（sha256 双套同锚）。
++    const faceRows = (Array.isArray(snap.rows) ? snap.rows : [])
++      .filter((r) => r && typeof r === 'object' && !r.crossRepo && r.verdict !== 'untouched')
++    let faceAdditions = 0
++    let faceDeletions = 0
++    for (const r of faceRows) {
++      if (Number.isFinite(r.additions)) faceAdditions += r.additions
++      if (Number.isFinite(r.deletions)) faceDeletions += r.deletions
++    }
++    const closeTrace = writeCloseTraceArtifacts({
++      changeDir,
++      change: changeName,
++      baseline: typeof snap.baseAnchor === 'string' ? snap.baseAnchor : null,
++      head: String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null,
++      files: faceRows.map((r) => r.path),
++      metaTotals: { files: faceRows.length, additions: faceAdditions, deletions: faceDeletions },
++      patchText: typeof frozenPatch === 'string' && frozenPatch ? frozenPatch : null,
++      savedAt: new Date().toISOString(),
++      snapObj: snap,
++      meta: {
++        note: 'execute --done 时点冻结（沉淀资产面：主仓实改行投影——thin flow done 对等；治理工件目录与其后 verify/archive 演进不在内）',
++      },
++    })
++    console.log(`   📦 范围快照 + 沉淀资产双轨落盘（scope-audit.json${closeTrace.patchStatus === 'ok' ? ' + scope-audit.patch' : ''} + change-patch.json${closeTrace.patchStatus === 'ok' ? ' + change.patch' : ''}${closeTrace.patchStatus === 'ok' ? '——收尾时点冻结，sha256 同锚' : '——patch 采集失败已留痕'}）`)
+   } catch (e) {
+     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
+   }
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index e4b2a6b3..e051383f 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -1038,6 +1038,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+       // execute --done 落盘，complete.js `...snap` 展开零改动自动携带）原样回放；旧快照无该键
+       // → undefined（JSON.stringify 自动省略——单仓/旧快照零新增字段，additive 契约）。
+       const snapRepos = Array.isArray(snap.repos) ? snap.repos : undefined
++      // 通道标注（2026-10-07-unify-close-trace）：新快照带 closedBy（flow done / execute --done）
++      // ——thin 快照回放不再误标 execute --done；旧快照无键缺省兼容。
++      const closeChannel = typeof snap.closedBy === 'string' && snap.closedBy ? snap.closedBy : 'execute --done'
+       // 旧快照跨仓注记（R-07）：快照冻结于跨仓对账上线前（跨仓行恒 untouched 的 v1 ⊘ 形态、
+       // 无 repos 键）——照旧回放不重算（「快照说什么是什么」契约不破），注记指明人工渠道
+       // （该仓锚点锡点冻结在 execute-runs reviews，可人工 git diff 核实）。
+@@ -1081,7 +1084,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+             : { foreignDeclared: [] },
+           patchSha256: snap.patchSha256 || null,
+           patchStatus: snap.patchStatus || null,
+-          note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
++          note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
+         }
+       }
+       return {
+@@ -1099,7 +1102,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+           : { foreignDeclared: [] },
+         patchSha256: snap.patchSha256 || null,
+         patchStatus: snap.patchStatus || null,
+-        note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
++        note: `${settleLabel}——${closeChannel} 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在收尾时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
+       }
+     }
+     // —— thin flow done 冻结记录回放（2026-10-07-scope-audit-thin-patch-replay）：thin 轻量变更
+diff --git a/test/close-trace-unified.test.mjs b/test/close-trace-unified.test.mjs
+new file mode 100644
+index 00000000..657348e8
+--- /dev/null
++++ b/test/close-trace-unified.test.mjs
+@@ -0,0 +1,297 @@
++/**
++ * 双通道收尾留痕统一夹具（变更 2026-10-07-unify-close-trace）。
++ *
++ * 根因：thin（flow done）只写 change.patch/change-patch.json、heavy（execute --done）只写
++ * scope-audit.json/scope-audit.patch——消费方各认一份，每类变更恰好一张卡失真。本变更落
++ * 共用 writeCloseTraceArtifacts：一次写齐四件、sha256 双套同锚（缺陷 thin-flow-done-no-
++ * scope-audit-snapshot 修复方向③；方向②读侧回退由 2026-10-07-scope-audit-thin-patch-replay 落地）。
++ *
++ * 覆盖（requirements FR-01~04）：
++ *   1. writer 单测：ok 态四件齐备/同锚；failed 态双标不落 patch（FR-01/03）
++ *   2. buildThinSnapshotRows：三态/治理过滤/跨仓补行/stats 缺档（FR-01）
++ *   3. round-trip：writer 产物 → computeChangeScopeAudit 快照回放（closedBy 标注）+ --file 切片（FR-04）
++ *   4. thin CLI e2e：flow done 全链四件齐备 + 查询走快照态（FR-01/04）
++ *   5. heavy CLI e2e：execute --done 双轨落盘，change-patch.json=主仓实改行投影（FR-02）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++import { createHash } from 'node:crypto'
++import { writeCloseTraceArtifacts, buildThinSnapshotRows } from '../src/flow-parity.js'
++import { computeChangeScopeAudit, getFileDiff } from '../src/scope-audit.js'
++import { makeRepo, initChange, seedStage, runCLI, runStage } from './_cli-step-harness.mjs'
++import { ProgressManager } from '../src/progress.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function sh(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++}
++function cleanup(d) {
++  try { rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* Windows 句柄延迟 */ }
++}
++function sha256(text) {
++  return createHash('sha256').update(String(text).replace(/\r\n/g, '\n'), 'utf8').digest('hex')
++}
++
++const PATCH_A = 'diff --git a/src/a.js b/src/a.js\nindex 111..222 100644\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,2 +1,3 @@\n a1\n a2\n+a3\n'
++
++// ───────────────────────── FR-01/03：writer 单测 ─────────────────────────
++
++test('FR-01/03 writer 单测：ok 态四件齐备、两 patch 同字节、两 json 同锚', () => {
++  const d = mkdtempSync(join(tmpdir(), 'ct-ok-'))
++  try {
++    const dir = join(d, 'chg')
++    mkdirSync(dir, { recursive: true })
++    const r = writeCloseTraceArtifacts({
++      changeDir: dir, change: 'chg', baseline: 'abc123', head: 'def456',
++      files: ['src/a.js'], metaTotals: { files: 1, additions: 1, deletions: 0 },
++      patchText: PATCH_A, savedAt: '2026-10-07T16:00:00.000Z',
++      snapObj: {
++        mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc123',
++        totals: { files: 1, additions: 1, deletions: 0 },
++        rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
++        excluded: { foreignDeclared: [] },
++        note: 'flow done 时点冻结（本文件落盘时采集）', closedBy: 'flow done',
++      },
++      meta: { note: 'flow done 时点冻结（fixture）' },
++    })
++    assert.equal(r.patchStatus, 'ok')
++    assert.equal(r.patchSha256, sha256(PATCH_A), '返回 sha 与 patch 正文一致（LF 归一口径，正文已带结尾换行不重复补）')
++    const cp = readFileSync(join(dir, 'change.patch'), 'utf8')
++    const sp = readFileSync(join(dir, 'scope-audit.patch'), 'utf8')
++    assert.equal(cp, sp, 'change.patch ≡ scope-audit.patch（字节一致）')
++    const cMeta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
++    const snap = JSON.parse(readFileSync(join(dir, 'scope-audit.json'), 'utf8'))
++    assert.equal(cMeta.patchSha256, sha256(cp), 'change-patch.json 锚定')
++    assert.equal(snap.patchSha256, cMeta.patchSha256, '两 json patchSha256 相同（双套同锚）')
++    assert.equal(cMeta.patchStatus, 'ok'); assert.equal(snap.patchStatus, 'ok')
++    assert.equal(cMeta.change, 'chg'); assert.deepEqual(cMeta.files, ['src/a.js'])
++    assert.equal(cMeta.baseline, 'abc123'); assert.equal(cMeta.head, 'def456')
++    assert.equal(snap.closedBy, 'flow done', '快照带收尾通道标注')
++    assert.equal(snap.savedAt, '2026-10-07T16:00:00.000Z', 'savedAt 落盘')
++  } finally { cleanup(d) }
++})
++
++test('FR-03 writer 单测：patchText 空 → 双套同标 failed、不落 patch 文件', () => {
++  const d = mkdtempSync(join(tmpdir(), 'ct-fail-'))
++  try {
++    const dir = join(d, 'chg')
++    mkdirSync(dir, { recursive: true })
++    const r = writeCloseTraceArtifacts({
++      changeDir: dir, change: 'chg', baseline: null, head: null,
++      files: ['src/a.js'], metaTotals: { files: 1, additions: 0, deletions: 0 },
++      patchText: null, savedAt: '2026-10-07T16:01:00.000Z',
++      snapObj: { mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: null, totals: { files: 1, additions: 0, deletions: 0 }, rows: [], excluded: { foreignDeclared: [] }, note: 'n', closedBy: 'execute --done' },
++      meta: {},
++    })
++    assert.equal(r.patchStatus, 'failed'); assert.equal(r.patchSha256, null)
++    assert.ok(!existsSync(join(dir, 'change.patch')), 'failed 不落 change.patch')
++    assert.ok(!existsSync(join(dir, 'scope-audit.patch')), 'failed 不落 scope-audit.patch')
++    const cMeta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
++    const snap = JSON.parse(readFileSync(join(dir, 'scope-audit.json'), 'utf8'))
++    assert.equal(cMeta.patchStatus, 'failed'); assert.equal(snap.patchStatus, 'failed', '双套同标')
++    assert.ok(!('patchSha256' in cMeta) && !('patchSha256' in snap), '无伪 hash')
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── FR-01：buildThinSnapshotRows 单测 ─────────────────────────
++
++test('FR-01 buildThinSnapshotRows：三态/治理过滤/跨仓补行/stats 缺档不出伪数据', () => {
++  const { rows, totals } = buildThinSnapshotRows({
++    ownFiles: [
++      'src/a.js', 'src/b.js', 'src/extra.js',
++      '.sillyspec/changes/chg/design.md', // 治理工件 → 不进快照行
++    ],
++    stats: new Map([
++      ['src/a.js', { additions: 2, deletions: 0, kind: 'modified' }],
++      ['src/b.js', { additions: 1, deletions: 0, kind: 'new' }],
++      // src/extra.js 无 stats → 行数 null 档
++    ]),
++    planEntries: [
++      { path: 'src/a.js', operation: '修改' },
++      { path: 'src/c.js', operation: '修改' },           // 清单声明未动 → untouched 补行
++      { path: 'other/x.py', operation: '新增', repo: 'other' }, // 跨仓 → ⊘ untouched 补行
++    ],
++  })
++  const byPath = new Map(rows.map((r) => [r.path, r]))
++  assert.equal(byPath.get('src/a.js').verdict, 'planned')
++  assert.equal(byPath.get('src/a.js').additions, 2)
++  assert.equal(byPath.get('src/b.js').verdict, 'unplanned')
++  assert.equal(byPath.get('src/extra.js').additions, null, 'stats 缺档 → null 不出伪数据')
++  assert.equal(byPath.get('src/c.js').verdict, 'untouched')
++  assert.equal(byPath.get('src/c.js').additions, 0)
++  assert.equal(byPath.get('other/x.py').crossRepo, 'other', '跨仓补行带 crossRepo（⊘ 形态）')
++  assert.ok(!byPath.has('.sillyspec/changes/chg/design.md'), '治理工件被 filterDeliverableFiles 滤除')
++  assert.equal(totals.files, 5)
++  assert.equal(totals.additions, 3, 'null 行不计合计')
++  // planEntries 空 → 实际侧 only（无 verdict）
++  const noPlan = buildThinSnapshotRows({ ownFiles: ['src/a.js'], stats: new Map(), planEntries: [] })
++  assert.ok(!('verdict' in noPlan.rows[0]), '清单缺失 → 行无 verdict（与主链路降级同语义）')
++})
++
++// ───────────────────────── FR-04：写读 round-trip ─────────────────────────
++
++test('FR-04 round-trip：writer 产物 → 快照回放（closedBy 标注）+ --file 冻结切片', async () => {
++  const d = mkdtempSync(join(tmpdir(), 'ct-rt-'))
++  try {
++    sh(d, ['init', '-q', '-b', 'main'])
++    sh(d, ['config', 'user.email', 't@t.com']); sh(d, ['config', 'user.name', 't'])
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'a.js'), 'a1\na2\n')
++    writeFileSync(join(d, '.gitignore'), '.sillyspec/\n')
++    sh(d, ['add', '-A']); sh(d, ['commit', '-q', '-m', 'init'])
++    const baseline = sh(d, ['rev-parse', 'HEAD']).trim()
++
++    const changeDir = join(d, '.sillyspec', 'changes', 'archive', 'rt-chg')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'design.md'), '# design（fixture）\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/a.js | 说明 |\n')
++    const { rows, totals } = buildThinSnapshotRows({
++      ownFiles: ['src/a.js', '.sillyspec/changes/archive/rt-chg/design.md'],
++      stats: new Map([['src/a.js', { additions: 1, deletions: 0, kind: 'modified' }]]),
++      planEntries: [{ path: 'src/a.js', operation: '修改' }],
++    })
++    writeCloseTraceArtifacts({
++      changeDir: changeDir, change: 'rt-chg', baseline, head: baseline,
++      files: ['src/a.js', '.sillyspec/changes/archive/rt-chg/design.md'],
++      metaTotals: { files: 2, additions: 1, deletions: 0 },
++      patchText: PATCH_A, savedAt: '2026-10-07T16:02:00.000Z',
++      snapObj: { mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: baseline, totals, rows, excluded: { foreignDeclared: [] }, note: 'flow done 时点冻结（本文件落盘时采集）', closedBy: 'flow done' },
++      meta: { note: 'flow done 时点冻结（fixture）' },
++    })
++
++    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'rt-chg' })
++    assert.equal(r.ok, true)
++    assert.ok(r.note && r.note.includes('flow done 时点冻结快照'), `note 按通道标注（实际 ${r.note}）`)
++    assert.ok(!r.note.includes('execute --done 时点冻结快照'), 'thin 快照不再误标 execute --done')
++    assert.equal(r.baseAnchor, baseline)
++    const a = r.rows.find((x) => x.path === 'src/a.js')
++    assert.ok(a && a.verdict === 'planned', '快照回放出真实三态')
++
++    const fd = await getFileDiff({ cwd: d, changeName: 'rt-chg', filePath: 'src/a.js' })
++    assert.equal(fd.ok, true)
++    assert.ok(fd.anchorLabel && fd.anchorLabel.includes('冻结 patch'), `--file 走冻结切片（实际 ${fd.anchorLabel}）`)
++    assert.ok(fd.diff && fd.diff.includes('+a3'), 'diff 为冻结时点内容')
++  } finally { cleanup(d) }
++})
++
++// ───────────────────────── FR-01/04：thin CLI e2e ─────────────────────────
++
++test('FR-01/04 thin CLI e2e：flow done 全链四件齐备 + 查询走快照态', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'ct-thin-'))
++  try {
++    sh(cwd, ['init', '-q', '-b', 'main'])
++    sh(cwd, ['config', 'user.email', 't@t.com']); sh(cwd, ['config', 'user.name', 't'])
++    mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++    writeFileSync(join(cwd, 'base.txt'), 'base\n')
++    sh(cwd, ['add', '.']); sh(cwd, ['commit', '-q', '-m', 'base'])
++    const cn = '2026-10-07-ct-thin-e2e'
++    const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '双轨留档 e2e\n\n成功标准：\n- flow done 后四件齐备'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++    const base = join(cwd, '.sillyspec', 'changes', cn)
++    // design 四问一行作答（plain，不触发评审定档）+ 文件变更清单声明交付文件
++    writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++      .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规')
++      + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 新增 | src/work.js | 交付 |\n')
++    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
++    // 任务面收敛为单任务 + 证据提交 + 勾选
++    writeFileSync(join(base, 'tasks.md'), '---\nauthor: fixture\n---\n\n# 任务注册表（Tasks）\n\n- [x] task-01: 交付 src/work.js（e2e 夹具）\n')
++    mkdirSync(join(cwd, 'src'), { recursive: true })
++    writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
++    sh(cwd, ['add', 'src/work.js']); sh(cwd, ['commit', '-q', '-m', `work (${cn}) (task-01)`])
++
++    const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
++    const out2 = s2.stdout + s2.stderr
++    assert.equal(s2.status, 0, `done 失败: ${out2.split('\n').slice(-8).join(' | ')}`)
++    assert.match(out2, /变更 patch 留档（双轨统一）/, '双轨留档行（保既有前缀断言兼容）')
++
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', cn)
++    for (const f of ['change.patch', 'change-patch.json', 'scope-audit.json', 'scope-audit.patch']) {
++      assert.ok(existsSync(join(arch, f)), `归档目录含 ${f}`)
++    }
++    const snap = JSON.parse(readFileSync(join(arch, 'scope-audit.json'), 'utf8'))
++    assert.equal(snap.closedBy, 'flow done', 'thin 快照带通道标注')
++    const work = (snap.rows || []).find((r) => r.path === 'src/work.js')
++    assert.ok(work && work.verdict === 'planned', '快照行真实三态（work.js planned）')
++    const cp = readFileSync(join(arch, 'change.patch'), 'utf8')
++    assert.equal(readFileSync(join(arch, 'scope-audit.patch'), 'utf8'), cp, '两 patch 同字节')
++    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    assert.equal(meta.patchSha256, snap.patchSha256, '两 json 同锚')
++
++    // 查询面：归档后走快照记录态（closedBy 标注），不再依赖 change-patch 回放兜底
++    const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'scope-audit', '--change', cn], { cwd, encoding: 'utf8', timeout: 60_000, env })
++    const out3 = s3.stdout + s3.stderr
++    assert.equal(s3.status, 0, `scope-audit 失败: ${out3}`)
++    assert.ok(out3.includes('flow done 时点冻结快照'), `查询 note 标通道（实际 ${out3.split('\n').slice(2, 5).join(' | ')}）`)
++    assert.ok(out3.includes('✓ 计划内'), '查询出真实三态')
++  } finally { cleanup(cwd) }
++})
++
++// ───────────────────────── FR-02：heavy CLI e2e ─────────────────────────
++
++function writePlan(changeDir, allChecked) {
++  const t3 = allChecked ? '[x]' : '[ ]'
++  writeFileSync(join(changeDir, 'tasks.md'), `- [x] task-01: a\n- [x] task-02: b\n- ${t3} task-03: c\n`, 'utf8')
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n- task-03\n', 'utf8')
++}
++function writeWorktreeMeta(specBase, cn) {
++  const dir = join(specBase, '.runtime', 'worktrees', cn)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'meta.json'), JSON.stringify({ depsStatus: 'n/a', mode: 'in-place-fallback' }), 'utf8')
++}
++const FIXED_RUN_ID = 'exec-2026-10-07-100000'
++function writePassingTaskReviews(specBase, cn, gitHead) {
++  const runtimeRoot = join(specBase, '.runtime')
++  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
++  for (const taskNum of ['01', '02', '03']) {
++    const dir = join(runtimeRoot, 'execute-runs', FIXED_RUN_ID, 'tasks', `task-${taskNum}`)
++    mkdirSync(dir, { recursive: true })
++    writeFileSync(join(dir, 'review.json'), JSON.stringify({
++      schemaVersion: 1, task: `task-${taskNum}`, base: gitHead, head: gitHead,
++      changedFiles: [], specVerdict: 'pass', qualityVerdict: 'pass', reviewerNotes: 't', requiredEvidence: [],
++    }), 'utf8')
++  }
++}
++
++test('FR-02 heavy CLI e2e：execute --done 双轨落盘，change-patch.json=主仓实改行投影', async () => {
++  const { cwd, specBase } = makeRepo('ct-heavy-')
++  const cn = '2026-10-07-ct-heavy-e2e'
++  const pm = await initChange(cwd, specBase, cn)
++  writePlan(join(specBase, 'changes', cn), true)
++  writeWorktreeMeta(specBase, cn)
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'app.js'), 'module.exports = 1\n') // 未提交交付 → 实改行
++  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
++  writePassingTaskReviews(specBase, cn, head)
++  runCLI(['--dir', cwd, 'run', 'execute', '--change', cn], { cwd })
++  const realSteps = (await pm.read(cwd, cn)).stages.execute.steps
++  const waveIdx = realSteps.findIndex((s) => s.name.includes('Wave 1 执行'))
++  await seedStage(pm, cwd, cn, 'execute', realSteps.map((s, i) => ({ name: s.name, status: i < waveIdx ? 'completed' : 'pending' })))
++
++  const r = runStage('execute', cn, cwd, { done: true, output: 'step done' })
++  assert.equal(r.status, 0, `execute --done 失败: ${r.combined.slice(-200)}`)
++  assert.match(r.combined, /双轨落盘/, '双轨落盘行')
++
++  const changeDir = join(specBase, 'changes', cn)
++  for (const f of ['change.patch', 'change-patch.json', 'scope-audit.json', 'scope-audit.patch']) {
++    assert.ok(existsSync(join(changeDir, f)), `heavy 收尾后含 ${f}`)
++  }
++  const snap = JSON.parse(readFileSync(join(changeDir, 'scope-audit.json'), 'utf8'))
++  assert.equal(snap.closedBy, 'execute --done', 'heavy 快照带通道标注')
++  const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++  assert.equal(meta.change, cn)
++  assert.ok(meta.files.includes('src/app.js'), 'files=主仓实改行投影（含未提交交付）')
++  assert.equal(meta.totals.files, meta.files.length, 'totals.files 与投影行数一致')
++  const cp = readFileSync(join(changeDir, 'change.patch'), 'utf8')
++  assert.equal(readFileSync(join(changeDir, 'scope-audit.patch'), 'utf8'), cp, '两 patch 同字节')
++  assert.equal(meta.patchSha256, snap.patchSha256, '两 json 同锚')
++})
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+index 80d75fb0..1652d84c 100644
+--- a/test/flowdone-disposition-drift.test.mjs
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -113,4 +113,11 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json 
+   assert.ok(patch2.includes('+++ b/src/work2.js'), '重冻结面含处置提交（按 diff hunk 头判）')
+   assert.ok(s4.status !== 0, '重评任务书再现（exit 1 @ review）')
+   assert.ok(out4.includes('独立评审任务书'), '重评任务书在场')
++  // 双轨留痕不自嵌入（2026-10-07-unify-close-trace 增量断言）：首轮 done 已落 scope-audit.json/
++  // patch（双轨统一），重冻结时这两件与 change.patch/change-patch.json 同档排除——否则上一轮
++  // 冻结件作为 untracked 新文件被全文自嵌入（自引用循环）。
++  const meta2 = JSON.parse(readFileSync(join(base, 'change-patch.json'), 'utf8'))
++  assert.ok(!meta2.files.some((f) => f.endsWith('scope-audit.json') || f.endsWith('scope-audit.patch')),
++    `重冻结 files 面不含快照件（实际 ${meta2.files.filter((f) => f.includes('scope-audit')).join(',')}）`)
++  assert.ok(!/^diff --git a\/[^\n]*scope-audit\.(json|patch)/m.test(patch2), '重冻结 patch 无快照件段（自引用防线）')
+ })
+diff --git a/.sillyspec/changes/2026-10-07-unify-close-trace/design.md b/.sillyspec/changes/2026-10-07-unify-close-trace/design.md
+new file mode 100644
+index 00000000..69acf5b3
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-unify-close-trace/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T15:27:48.775Z
++---
++# 设计记录（Design Record）— 2026-10-07-unify-close-trace
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++根因：thin（flow done）与 heavy（execute --done）两条通道收尾各写各的留痕文件——thin 只写 change.patch/change-patch.json（沉淀资产面），heavy 只写 scope-audit.json/scope-audit.patch（对账快照面），消费方（平台两张卡、scope-audit 读链）各认一份，导致每类变更恰好一张卡失真。第 2 层（读侧回退，2026-10-07-scope-audit-thin-patch-replay）已让旧归档对账明细恢复真实；本变更做第 3 层写统一：新变更两条通道收尾即两套齐备，读侧回退退化为存量兜底。
++
++方案：flow-parity.js（thin/heavy 对等性的家）新增共用 `writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta })`——一次写四件（patch 双份同字节、两 json 共享同一 sha256/patchStatus，LF 归一口径与既有同式），返回 { patchStatus, patchSha256 }。配套纯函数 `buildThinSnapshotRows({ ownFiles, stats, planEntries })`（thin 侧三态行构造：filterDeliverableFiles × pathMatches，与 scope-audit 主链路同语义）。接线两处：flow.js flow done 的留档块（替换原手写两件落盘，补排除面）；run/complete.js printExecuteScopeAudit（替换原快照落盘，沉淀面=主仓实改行投影）。scope-audit.js 快照回放 note 按 `snap.closedBy || 'execute --done'` 标通道（additive 键，旧快照默认）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- flow-parity.js 新导出：`writeCloseTraceArtifacts`（写侧四件统一）与 `buildThinSnapshotRows`（thin 三态行纯函数）——既有导出零变化。
++- flow.js flow done：change.patch/change-patch.json 键结构与口径不变（files/totals/note/moduleScope/baseline/head/patchSha256/patchStatus 照旧）；新增 scope-audit.json/scope-audit.patch 落盘；ownFiles 与 dirFilesForPatch 排除面追加 scope-audit.json/scope-audit.patch；console 行保留「变更 patch 留档」前缀（flow-protocol 正则断言兼容）。
++- run/complete.js printExecuteScopeAudit：scope-audit.json/patch 形态不变（note/closedBy=fail-soft/归档竞态判定照旧，closedBy='execute --done' 为增量键）；新增 change-patch.json/change.patch（files=主仓实改行投影：planned+unplanned 非 crossRepo 行）；空 patchText 从旧「ok+空文件」收口为 failed（双套同标）。
++- scope-audit.js：仅快照回放 note 的通道标签插值（closedBy 缺省 'execute --done'），读取链与回放语义零变化。
++- CLI 命令签名零变化；--json 契约零变化（快照回放本就原样透传）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立：写函数入参全部来自收尾时点已算好的内存值（patchText/snapObj/stats），无跨事件状态；四件由单函数同步顺序写（patch 双份→两 json），不构成部分可观测的中间态消费面——读侧要么读到旧四件要么读到新四件，json 与 patch 的 sha 锚在函数内一次计算，不存在「两 json 各自算 hash 不一致」的时序窗口。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   两通道收尾点天然互斥（同一变更不会同时走 flow done 与 execute --done）；重入形态（漂移重冻结/处置重跑）是串行重跑，写函数整组覆盖四件。writeFileSync 直写非原子（沿既有两写点现状，上轮评审 P3 已如实入档）：最坏窗口读到半份 json——读侧 readScopeSnapshot/readChangePatchMeta 均 catch 回退下一链路，不出伪数据。多会话并发对**不同**变更各写各目录，无共享文件面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   写函数无跨调用状态（纯入参→落盘）；中断在四件写一半的窗口，重跑收尾整组覆盖自愈（幂等重冻结既有语义）；归档竞态（目录已被并行归档移动）沿 printExecuteScopeAudit 既有 active→archive 目录判定，写函数只接收已解析的 changeDir。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   四件全部落在变更目录（changes/<名>/ 或归档侧），按 changeDir 定位不跨变更；thin 快照行只含主仓 face（filterDeliverableFiles），heavy 沉淀面投影显式排除 crossRepo 行——跨仓行不进本仓 patch/meta，各仓归属不串台。closedBy 只标通道名，无环境耦合。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：两写点行为收口的回归面——thin 侧 console 字样/键序、heavy 侧「空 patch 当 ok」形态变化可能碰隐性消费者。缓解：thin 侧键结构与输出前缀逐字保留（flow-protocol 断言钉住）；heavy 空 patch 形态经全量套件与 e2e 验证；快照新增 closedBy 为 additive 键，旧快照读侧缺省兼容。放弃的方案：① 只做读侧不写统一（第 2 层已做）——新变更永远靠回退兜底，两卡不对称长期存在；② heavy 侧沉淀面在 archive --confirm 才写——语义上更「终态」，但需在归档点重建采集上下文（worktree/分支已清），且与快照时点（execute --done）不一致会造成两套留痕时点漂移，不如同点同锚；③ scope-audit.json 里引用 change.patch 路径省一份 patch 文件——读侧（getFileDiff/平台）认死 scope-audit.patch 文件名，省字节收益小于读面改动风险（同字节 git blob 本去重，零仓容成本）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/flow-parity.js | 新导出 writeCloseTraceArtifacts（四件统一写、sha 同锚）与 buildThinSnapshotRows（thin 三态行纯函数） |
++| 修改 | src/flow.js | flow done 留档块改走共用写函数（补 scope-audit 两件）；冻结面排除面追加 scope-audit.json/patch；console 行保前缀 |
++| 修改 | src/run/complete.js | printExecuteScopeAudit 改走共用写函数（补 change-patch 两件，主仓实改行投影；空 patch 收口 failed） |
++| 修改 | src/scope-audit.js | 快照回放 note 通道标签按 closedBy 插值（缺省 execute --done） |
++| 新增 | test/close-trace-unified.test.mjs | writer 单测（四件/同锚/failed）+ buildThinSnapshotRows + 写读 round-trip + thin CLI e2e + 重冻结不自嵌入 |
+diff --git a/.sillyspec/changes/2026-10-07-unify-close-trace/proposal.md b/.sillyspec/changes/2026-10-07-unify-close-trace/proposal.md
+new file mode 100644
+index 00000000..64fa8ced
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-unify-close-trace/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T15:27:48.775Z
++---
++# 提案书（Proposal）— 2026-10-07-unify-close-trace
++
++## 动机
++
++任务原话转写：双通道收尾留痕统一（缺陷记录 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md 修复方向之三；第 2 层读侧回读已由 2026-10-07-scope-audit-thin-patch-replay 落地）：thin（flow done）只写 change.patch/change-patch.json、heavy（execute --done）只写 scope-audit.json/scope-audit.patch，两条通道留痕不对称——平台两张卡各认一份，每类变更恰好一张卡失真（轻量对账明细恒假计划未动〔读侧已修〕；厚道归档留档 patch 块空）。修法：flow-parity.js 新增共用 writeCloseTraceArtifacts——一次写齐四件（沉淀资产面 change.patch+change-patch.json、对账快照面 scope-audit.patch+scope-audit.json），sha256/patchStatus 双套同锚；flow done 与 printExecuteScopeAudit 双接线，新变更两通道留痕对称，读侧回退（快照>change-patch 回放>实时区间）退化为存量兜底。
++
++成功标准：
++- flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++- execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++- 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++- 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++- 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++2. execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++3. 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++4. 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++5. 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
++
++## 成功标准（可验证）
++
++1. flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++2. execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++3. 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++4. 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++5. 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
+diff --git a/.sillyspec/changes/2026-10-07-unify-close-trace/requirements.md b/.sillyspec/changes/2026-10-07-unify-close-trace/requirements.md
+new file mode 100644
+index 00000000..0bde5c67
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-unify-close-trace/requirements.md
+@@ -0,0 +1,66 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T15:27:48.775Z
++---
++# 需求规格（Requirements）— 2026-10-07-unify-close-trace
++
++## 功能需求
++
++### FR-01: flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++
++- flow done 的 patch 留档子步**必须**经共用写函数一次落齐四件：既有沉淀资产面 change.patch + change-patch.json 的键结构与口径（files=ownFiles 含治理工件目录、totals、moduleScope 三键、note、baseline/head）**禁止**变化；新增对账快照面 scope-audit.json（mode/ok/baseAnchor=st.baseline_commit/totals/rows/excluded/note/closedBy='flow done'/patchSha256/patchStatus/savedAt）与 scope-audit.patch（与 change.patch 同文）。三态行**必须**由 ownFiles 过 filterDeliverableFiles × design 清单 pathMatches 判定（planned/unplanned/untouched 补行，与 scope-audit 主链路同款语义）。
++
++#### 场景：thin 收尾四件齐备
++
++- Given：thin 变更走 flow done 至 patch 留档子步
++- When：留档完成
++- Then：变更目录有 change.patch、change-patch.json、scope-audit.json、scope-audit.patch 四件；快照 rows 含 verdict 三态且治理工件目录文件不在 rows；两 patch 字节一致
++
++### FR-02: execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++
++- printExecuteScopeAudit **必须**经同一共用写函数落盘：既有 scope-audit.json/scope-audit.patch 形态（快照结构、note、fail-soft 不阻断、归档竞态目录判定）**禁止**变化；新增 change-patch.json（change/baseline=snap.baseAnchor/head=当点 HEAD/files/totals/savedAt/patchSha256/patchStatus）与 change.patch（与 scope-audit.patch 同文）。files 与 totals **必须**是主仓实改行投影（planned+unplanned 行；untouched 0/0 声明行与 crossRepo 行不入）。
++
++#### 场景：heavy 收尾四件齐备
++
++- Given：full-flow 变更 execute --done 完成
++- When：范围快照落盘
++- Then：变更目录四件齐备；change-patch.json.files ⊆ 快照主仓实改行路径，totals 与该行集合计一致
++
++### FR-03: 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++
++- 共用写函数**必须**对同一 patchText 只算一次 sha256 并写进两份 json（LF 归一口径，与既有 sha256PatchNormalized 同式）；patchText 为空/null 时**必须**双套同标 patchStatus=failed 且不落 patch 文件（heavy 旧「空串当 ok」形态收口为 failed）。
++
++#### 场景：同锚与失败留痕
++
++- Given：任一通道收尾，patch 采集成功/失败两态
++- When：写函数执行
++- Then：成功态两 patch 同字节、两 json 同 hash；失败态两 json 同标 failed、无 patch 文件
++
++### FR-04: 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++
++- 快照回放 note **必须**按快照 closedBy 标注收尾通道（缺省 'execute --done' 兼容旧快照）；flow done 的冻结面收集（ownFiles 过滤与治理工件目录切分）**必须**排除 scope-audit.json/scope-audit.patch（与 change.patch/change-patch.json 同档），防重跑自嵌入。
++
++#### 场景：新 thin 归档查询与重跑
++
++- Given：thin 变更归档后（含快照）查询 scope-audit；此后处置重入重跑 flow done 触发重冻结
++- When：查询 / 重冻结
++- Then：出快照记录态表（note 含「flow done 时点冻结快照」）真实三态；重冻结后 change.patch 不含 scope-audit.json/scope-audit.patch 段、meta.files 不含这两件
++
++### FR-05: 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
++
++- 本变更**必须**新增测试覆盖：writeCloseTraceArtifacts 单测（ok/failed 两态）、写读 round-trip（writer 产物 → computeChangeScopeAudit 快照回放）、thin CLI e2e（flow done 后四件齐备 + 查询走快照态）；既有测试断言**禁止**改动（flow-protocol 归档双件与「变更 patch 留档」字样断言原样绿）。
++
++#### 场景：全量门
++
++- Given：新增 test/close-trace-unified.test.mjs 入套
++- When：npm test
++- Then：全量绿，既有断言零改动
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/close-trace-unified.test.mjs「writer 单测：四件齐备/同锚/失败留痕 + buildThinSnapshotRows 三态行」
++FR-01: test/close-trace-unified.test.mjs「thin CLI e2e：flow done 后四件齐备，快照 rows 三态、治理工件不进 rows」
++FR-02: test/close-trace-unified.test.mjs「heavy 夹具：printExecuteScopeAudit 通道 change-patch.json=主仓实改行投影（经 CLI execute --done 或等价驱动）」
++FR-03: test/close-trace-unified.test.mjs「同锚断言：change.patch≡scope-audit.patch、两 json patchSha256 相等；failed 双标」
++FR-04: test/close-trace-unified.test.mjs「round-trip：writer 产物 → computeChangeScopeAudit 快照回放 note=closedBy；重冻结不自嵌入」
++FR-05: test/run-tests.mjs「全量套件跑绿，既有断言零改动」
+diff --git a/.sillyspec/changes/2026-10-07-unify-close-trace/tasks.md b/.sillyspec/changes/2026-10-07-unify-close-trace/tasks.md
+new file mode 100644
+index 00000000..f0bd63b9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-07-unify-close-trace/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-07T15:27:48.775Z
++---
++# 任务注册表（Tasks）— 2026-10-07-unify-close-trace
++
++- [x] task-01: flow done（thin）收尾后变更目录四件齐备：change.patch/change-patch.json（既有语义不变——files 含治理工件目录、totals 口径不变）+ scope-audit.json/scope-audit.patch（新增：三态行含 verdict、baseAnchor=baseline、closedBy=flow done）
++- [x] task-02: execute --done（heavy）收尾后同样四件齐备：scope-audit.json/patch（既有语义不变）+ change-patch.json/change.patch（新增：files=主仓实改行投影、baseline=快照锚、head=当点 HEAD）
++- [x] task-03: 同一次收尾的四件 sha256 同锚：change.patch 与 scope-audit.patch 字节一致，两份 json 的 patchSha256 相同
++- [x] task-04: 读面双路径验证：新 thin 归档查 scope-audit 走快照记录态（note 标 flow done 时点，不再误标 execute --done）；重跑 flow done（漂移重冻结）不自嵌入（scope-audit.json/patch 进排除面）
++- [x] task-05: 全量测试绿（含新增 writer 单测/round-trip/双通道 CLI 夹具）；既有断言零改动（flow-protocol 归档双件断言原样）
