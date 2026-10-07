@@ -6,14 +6,19 @@
  * 事件链实时上平台——闭环确认是 OpenSpec apply 循环「勾后重询」的本地对等物（2026-10-03
  * local-usage-caliber-fix 0/12 事故的自愿路径修复：正反馈替代验证强制）。
  *
+ * 事件直写（2026-10-07-thin-tasks-v3）：翻格成功后向本变更 watcher 事件流追加分级精确
+ * task-done 事件（source:'task-tick'，checked N→M 逐格口径）——watcher 3s 轮询对快速连续
+ * tick 只能采样出合并跳，收口节奏门以 CLI 精确事件为权威去重（detectBatchCheckCadence）。
+ * best-effort：事件写失败不阻断翻格（节奏门退回采样判，fail 方向安全）。
+ *
  * 边界：
  *   - 纯簿记动词：无 review/verdict/ownership 仪式（与 task done 四合一的分界——那是厚档
- *     任务卡的收尾件；本动词对 thin 镜像面与覆写面同样适用，自愿使用不违 D-007）。
- *   - 幂等：已勾再勾走 already 分支（exit 0）——并发/重放零副作用；写盘走 writeAtomicSync。
+ *     任务卡的收尾件；本动词对 thin 工作分解面与覆写面同样适用，自愿使用不违 D-007）。
+ *   - 幂等：已勾再勾走 already 分支（exit 0，零事件直写）——并发/重放零副作用；写盘走 writeAtomicSync。
  *   - 行内替换只动 checkbox 态字符，其余字节（含 CRLF）逐字保留。
  *   - 归档件只读：变更已归档时拒收（exit 2）。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** 任务行（宽容缩进/星号有序标记，与哨兵判集行锚同口径 + 缩进容差）。 */
@@ -88,6 +93,17 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
   if (r.kind === 'ticked') {
     const { writeAtomicSync } = await import('./fs-atomic.js')
     writeAtomicSync(tasksPath, r.tasksMd)
+    // 事件直写（2026-10-07-thin-tasks-v3）：精确单格跳进事件流，节奏门按 source 去重采样合并跳。
+    try {
+      const { resolveRuntimeRoot } = await import('./run/shared.js')
+      const runtimeRoot = resolveRuntimeRoot({}, specBase)
+      const eventsPath = join(runtimeRoot, `watcher-events-${changeName}.jsonl`)
+      const from = Math.max(0, r.checked - 1)
+      appendFileSync(eventsPath, JSON.stringify({
+        ts: Date.now(), kind: 'task-done', stage: 'tasks',
+        detail: `checked ${from}→${r.checked}`, provisional: true, source: 'task-tick',
+      }) + '\n', 'utf8')
+    } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
   }
   const nextTip = r.next
     ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`

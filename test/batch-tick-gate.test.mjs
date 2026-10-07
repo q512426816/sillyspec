@@ -1,14 +1,15 @@
 /**
- * batch-tick-gate.test.mjs — 单拍勾选硬门（2026-09-29-batch-tick-gate）
+ * batch-tick-gate.test.mjs — 单拍勾选硬门（2026-09-29-batch-tick-gate；2026-10-07-thin-tasks-v3 契约刷新）
  *
- * B 层牙齿：watcher 事件流单拍 checked N→M（跳 ≥2）+ 非镜像勾选面 → flow done 拒收；
- * --allow-batch-tick 显式旁路留痕；镜像-only / 观测缺席 / 哨兵面未知 → 不拒。
- * A 层形状：spec 期任务面定稿 + openspec 式执行循环指令（简报两路 + tasks.md 头部）。
+ * B 层牙齿：事件流单拍 checked N→M（跳 ≥2，CLI 精确事件去重后）+ 任务面在场 → flow done 拒收；
+ * --allow-batch-tick 显式旁路留痕；观测缺席 / 哨兵面未知 → 不拒；机器代勾可解释整跳 → advisory。
+ * 镜像-only 豁免分支退役（镜像面契约整体下线）。
+ * A 层形状：工作分解契约（横幅两路：fresh/adopt）+ 执行循环指令——文件内指令已清零。
  *
  * 覆盖：
- *   ① detectBatchCheckCadence 纯函数已在 sentinel 系覆盖——此处钉接线与文案（源码级）
- *   ② 硬门三态接线：拒收出口 / --allow-batch-tick 旁路留痕 / 镜像-only 不拒（哨兵非镜像计数=0 静默）
- *   ③ A 层文案三处钉（fresh 简报循环指令 / resume 简报 / draftTasks 头部）
+ *   ① detectBatchCheckCadence 纯函数（含采样去重）已在 sentinel/task-tick 系覆盖——此处钉接线与文案（源码级）
+ *   ② 硬门三态接线：拒收出口 / --allow-batch-tick 旁路留痕 / 哨兵面未知降级
+ *   ③ A 层文案钉（fresh 简报工作分解契约 + adopt 简报 + tasks.md 文件内零指令）
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -25,7 +26,7 @@ test('② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面', () => {
   assert.ok(src.includes('单拍勾选拒收'), '拒收文案在场')
   assert.ok(src.includes('--allow-batch-tick 显式留痕过门'), '出口指引（旁路留痕）')
   assert.ok(src.includes('allow_batch_tick: true'), '旁路留痕写 flow-state')
-  assert.ok(src.includes('哨兵非镜像面未知（fail-open 防误拒）'), '哨兵面未知降级 advisory（文案钉）')
+  assert.ok(src.includes('哨兵任务面未知（fail-open 防误拒）'), '哨兵面未知降级 advisory（文案钉）')
   assert.ok(src.includes("appendTelemetry({ sentinel: 'batch-tick'"), '拒收落遥测')
 })
 
@@ -33,9 +34,9 @@ test('②b 决策纯函数行为级（resolveBatchTickAction 四态 + 豁免优�
   const { resolveBatchTickAction } = await import(pathToFileURL(join(ROOT, '..', 'src', 'sentinel-assertions.js')).href)
   const bt = { from: 0, to: 3, detail: 'checked 0→3', ts: 1 }
   assert.equal(resolveBatchTickAction({ batchTick: null }).action, 'silent', '无单拍跳→silent')
-  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 0 }).action, 'silent', '镜像-only→silent（豁免哲学）')
-  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 0, allowBatchTick: true }).action, 'silent', '镜像-only 优先于旁路旗标')
-  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, allowBatchTick: true }).action, 'bypass', '非镜像+旗标→bypass')
+  // 镜像-only 豁免退役（2026-10-07-thin-tasks-v3）：任务面在场即按统一判据——0 也拒
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 0 }).action, 'reject', '镜像-only 分支已删——统一拒收')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, allowBatchTick: true }).action, 'bypass', '有任务面+旗标→bypass')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null }).action, 'advisory', '哨兵面未知→advisory（fail-open）')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null, allowBatchTick: true }).action, 'bypass', '哨兵面未知仍可显式旁路')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 3 }).action, 'advisory', '机器代勾解释整跳（3>=3）→advisory（autopilot 单拍机械写不误拒）')
@@ -53,16 +54,19 @@ test('②c autopilot 交互钉（评审清偿）：代勾计数接线 + 重入�
   assert.ok(sen.includes('autopilotTicked >= batchTick.to - batchTick.from'), '代勾解释整跳判据在决策函数（P3-E 防蹭豁免）')
 })
 
-test('③ A 层文案钉：spec 定稿 + openspec 式循环（三处）', () => {
+test('③ A 层文案钉：工作分解契约（fresh/adopt 两路）+ tasks.md 文件内零指令', () => {
   const flowSrc = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
-  assert.ok(flowSrc.includes('spec 阶段先定稿任务面'), 'fresh 简报：定稿指令')
-  assert.ok(flowSrc.includes('Working on task N/M'), 'fresh 简报：openspec 式循环指令（含输出拍）')
-  // 2026-10-03-voluntary-task-tick 措辞刷新：循环口径改第一人称时序「做一件→测试绿→当场勾一格」，
-  // 并点名 tick 动词与 TodoWrite 不替代（0/12 事故）——钉随语义走（A 层协议形状不变）
-  assert.ok(flowSrc.includes('执行循环（边干边勾，自愿纪律）：Working on task N/M'), '循环口径（边干边勾时序）')
+  assert.ok(flowSrc.includes('工作分解契约'), 'fresh 简报：任务面契约标签')
+  assert.ok(flowSrc.includes('执行循环：对每个未勾行 Working on task N/M'), 'fresh 简报：逐行循环指令')
   assert.ok(flowSrc.includes('task tick --change'), 'tick 动词用法在场')
   assert.ok(flowSrc.includes('TodoWrite 类工具是会话内便利面'), 'harness todo 竞争点名')
+  assert.ok(flowSrc.includes('把 tasks.md 改写为工作分解'), 'adopt 简报：spec 期定稿工作分解')
+  // 书写规则迁入横幅（2026-10-07-thin-tasks-v3 文件内指令清零的承接面）
+  assert.ok(flowSrc.includes('「## 文件变更清单」节'), '横幅：文件变更清单节名规则在场（原 design 文件内指引迁入）')
+  assert.ok(flowSrc.includes('勿改写'), '横幅：锚行规则在场（原模板防呆迁入）')
   const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
-  assert.ok(draftSrc.includes('任务面在 ①spec 阶段定稿'), 'tasks.md 头部：定稿要求')
-  assert.ok(draftSrc.includes('收口硬门拒单拍多格勾选'), 'tasks.md 头部：硬门提示')
+  // 文件内指令清零（2026-10-07-thin-tasks-v3）：起草模板不再产出 > 指导行——书写规则唯一源=横幅+命令卡
+  assert.ok(!draftSrc.includes('勿删勿改写'), 'tasks.md 模板：镜像锚话术退役')
+  assert.ok(!draftSrc.includes('> 边干边勾'), 'tasks.md 模板：纪律指令行退役')
+  assert.ok(!draftSrc.includes('> 机器预填草稿'), 'v1 backfill 模板：指令行退役')
 })

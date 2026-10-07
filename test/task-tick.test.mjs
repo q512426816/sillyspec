@@ -1,12 +1,15 @@
 /**
- * task-tick.test.mjs — 轻量勾选动词 + 镜像未认领判定 + 收口自愈（2026-10-03-voluntary-task-tick）
+ * task-tick.test.mjs — 轻量勾选动词 + 事件直写 + 收口不代勾（2026-10-07-thin-tasks-v3）
  *
  * 验收面：
  *   ① tickTasksMd 纯函数：翻格保字节（含 CRLF）/幂等/未知 id 列可选/进度与下一任务指针；
- *   ② isMirrorUntouchedFace 纯函数：未认领真/覆写假/部分勾假/无基线假；
- *   ③ CLI 端到端：task tick 翻格+回显+幂等（exit 0）+未知 id（exit 2）+已归档拒收；
- *   ④ done 收口自愈：镜像未认领+有交付 → 机器代勾全部镜像行（不阻断、mirror_autotick 留痕）；
- *   ⑤ done 认领未勾完（覆写面）→ advisory 不代勾不阻断——零提交场景也显形（0/12 事故静默修复）。
+ *   ② CLI 端到端：task tick 翻格+回显+幂等（exit 0）+未知 id（exit 2）+已归档拒收；
+ *   ③ 事件直写：翻格成功向 watcher 事件流追加精确 task-done 事件（source:'task-tick'，
+ *      checked N→M 单格口径）；幂等重勾零事件；
+ *   ④ 节奏门去重：CLI 连续两 tick + watcher 采样合并跳（0→2）同流 → detectBatchCheckCadence
+ *      判 null（不再误伤快速逐格勾）；纯 Edit 一把勾（无 CLI 事件）仍检出；
+ *   ⑤ done 收口不代勾（2026-10-07-thin-tasks-v3：mirror_autotick 退役）：不勾+有交付 →
+ *      仅 advisory 警告、归档件保持未勾；认领未勾完（覆写面）同判；零提交也显形。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -17,7 +20,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { tickTasksMd } from '../src/task-tick.js'
-import { isMirrorUntouchedFace } from '../src/sentinel-assertions.js'
+import { detectBatchCheckCadence } from '../src/sentinel-assertions.js'
+import { readWatcherEvents } from '../src/watcher.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
@@ -85,29 +89,9 @@ test('①c 未知 id：列可选 id；末格勾完 next=null', () => {
   assert.equal(last.total, 1)
 })
 
-// ── ② isMirrorUntouchedFace 纯函数 ──
+// ── ② CLI 端到端 ──
 
-const MIRROR = '- [ ] task-01: 镜像标准甲\n- [ ] task-02: 镜像标准乙\n'
-
-test('②a 与机器稿逐字相同且全未勾 → untouched=true', () => {
-  const r = isMirrorUntouchedFace({ tasksMd: MIRROR, baselineTasksMd: MIRROR })
-  assert.equal(r.untouched, true); assert.equal(r.claimTotal, 2)
-})
-
-test('②b 覆写（描述变化）→ false；部分勾 → false；行集不同 → false', () => {
-  assert.equal(isMirrorUntouchedFace({ tasksMd: '- [ ] task-01: agent 自己的步骤\n- [ ] task-02: 镜像标准乙\n', baselineTasksMd: MIRROR }).untouched, false)
-  assert.equal(isMirrorUntouchedFace({ tasksMd: '- [x] task-01: 镜像标准甲\n- [ ] task-02: 镜像标准乙\n', baselineTasksMd: MIRROR }).untouched, false)
-  assert.equal(isMirrorUntouchedFace({ tasksMd: '- [ ] task-01: 镜像标准甲\n', baselineTasksMd: MIRROR }).untouched, false)
-})
-
-test('②c 无基线/空基线 → false（fail-safe 不代勾）', () => {
-  assert.equal(isMirrorUntouchedFace({ tasksMd: MIRROR, baselineTasksMd: null }).untouched, false)
-  assert.equal(isMirrorUntouchedFace({ tasksMd: MIRROR, baselineTasksMd: '' }).untouched, false)
-})
-
-// ── ③ CLI 端到端 ──
-
-test('③a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', () => {
+test('②a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-1'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
@@ -127,9 +111,60 @@ test('③a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', 
   rmSync(cwd, { recursive: true, force: true })
 })
 
-// ── ④⑤ done 收口自愈 ──
+// ── ③ 事件直写（2026-10-07-thin-tasks-v3）──
 
-test('④ 镜像未认领+有交付 → 机器代勾全部镜像行（不阻断、留痕、归档件全勾）', () => {
+test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，单格跳）；幂等重勾零新事件', () => {
+  const { cwd, cli } = makeRepo()
+  const change = '2026-10-01-vtt-4'
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  const evPath = join(cwd, '.sillyspec', '.runtime', `watcher-events-${change}.jsonl`)
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0)
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
+  const stream = readWatcherEvents({ path: evPath })
+  assert.equal(stream.exists, true, '事件流文件在场')
+  const ticks = stream.events.filter((e) => e.kind === 'task-done' && e.source === 'task-tick')
+  assert.deepEqual(ticks.map((e) => e.detail), ['checked 0→1', 'checked 1→2'], '逐格精确事件（watcher 进程缺席，事件全部来自 CLI 直写）')
+  const before = readWatcherEvents({ path: evPath }).events.length
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0, '幂等重勾')
+  const after = readWatcherEvents({ path: evPath }).events.length
+  assert.equal(after, before, '幂等分支零新事件')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ── ④ 节奏门去重（纯函数）──
+
+test('④a CLI 连续 tick 的采样合并跳被去重 → 无单拍多格判定', () => {
+  const events = [
+    { ts: 1, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', source: 'task-tick' },
+    { ts: 1.1, kind: 'task-done', stage: 'tasks', detail: 'checked 1→2', source: 'task-tick' },
+    { ts: 2, kind: 'task-done', stage: 'tasks', detail: 'checked 0→2' }, // watcher 3s 采样合并
+  ]
+  assert.equal(detectBatchCheckCadence(events), null, 'CLI 精确序列在案，采样合并跳剔除')
+})
+
+test('④b 纯 Edit 一把勾（无 CLI 事件）→ 仍检出最大跳', () => {
+  const events = [
+    { ts: 1, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1' },
+    { ts: 5, kind: 'task-done', stage: 'tasks', detail: 'checked 1→4' }, // 采样：一次翻三格
+  ]
+  const worst = detectBatchCheckCadence(events)
+  assert.equal(worst.from, 1); assert.equal(worst.to, 4)
+})
+
+test('④c 混合面：CLI 勾 1 格 + Edit 一把翻 2 格 → 跳幅按 CLI 落点折算后仍检出 Edit 批量', () => {
+  const events = [
+    { ts: 1, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', source: 'task-tick' },
+    { ts: 2, kind: 'task-done', stage: 'tasks', detail: 'checked 0→3' }, // 采样：含 CLI 那格 + Edit 两格
+  ]
+  const worst = detectBatchCheckCadence(events)
+  assert.ok(worst, '仍有不可解释的批量跳')
+  assert.equal(worst.from, 1, '起点按 CLI 落点抬高（CLI 已勾的 1 格不重复计入跳幅）')
+  assert.equal(worst.to, 3)
+})
+
+// ── ⑤ done 收口不代勾（mirror_autotick 退役）──
+
+test('⑤a 不勾+有交付 → 仅 advisory 警告、放行、归档件保持未勾（机器不再一把全勾）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-2'
   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
@@ -139,16 +174,17 @@ test('④ 镜像未认领+有交付 → 机器代勾全部镜像行（不阻断�
   execFileSync('git', ['commit', '-q', '-m', 'work（不勾选——0/12 事故同型场景）'], { cwd, stdio: 'pipe' })
   const d = cli(['flow', 'done', '--change', change])
   assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
-  assert.match(d.stdout + d.stderr, /收口代勾/, '代勾事实显形')
+  assert.match(d.stdout + d.stderr, /任务勾选缺失/, '勾选缺失 advisory 在场')
+  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '收口代勾已退役')
   const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
   assert.equal(existsSync(arch), true, '已归档')
   const md = readFileSync(arch, 'utf8')
-  assert.match(md, /^- \[x\] task-01:/m)
-  assert.match(md, /^- \[x\] task-02:/m)
+  assert.match(md, /^- \[ \] task-01:/m, '归档件保持未勾（不代勾）')
+  assert.match(md, /^- \[ \] task-02:/m)
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('⑤ 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形', () => {
+test('⑤b 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-3'
   assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
@@ -160,7 +196,6 @@ test('⑤ 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提
   const d = cli(['flow', 'done', '--change', change, '--freeze-dirty'])
   assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
   assert.match(d.stdout + d.stderr, /任务勾选缺失/, '零提交场景 advisory 在场（0/12 静默修复）')
-  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '认领面绝不代勾')
   const arch = join(cwd, '.sillyspec', 'changes', 'archive', change, 'tasks.md')
   const md = readFileSync(arch, 'utf8')
   assert.match(md, /^- \[ \] task-01: agent 自己的步骤一/m, '覆写面保持未勾（advisory 不代勾）')
