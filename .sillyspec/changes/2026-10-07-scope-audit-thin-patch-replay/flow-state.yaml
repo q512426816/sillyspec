@@ -1,0 +1,30 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  修复工具缺陷（记录：multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md）：thin 轻量变更 flow done 只冻结
+  change-patch.json/change.patch、不落 execute --done 链的 scope-audit.json 快照；归档 thin 变更查范围对账时快照缺失 → 实时开放区间兜底 → 无 baseAnchor
+  → HEAD 未提交窗口（干净树=空）→ design 清单全行恒「计划未动 +0/−0」，纯失真（实测样例 multi-agent-platform 2026-10-07-taskboard-tasks-md：7 文件
+  +328/−34 显示成 3 行计划未动）。修法取读侧兼容：settled 分支快照缺失时回读 change-patch.json + change.patch 当冻结对账记录，旧归档立即受益。
+
+
+  成功标准：
+
+  - 归档 thin 变更（无 scope-audit.json、有 change-patch.json）跑 scope-audit：计划内文件显示「✓ 计划内」+ 冻结时点真实行数，不再恒「计划未动 0/0」；行数自冻结 patch
+  按段统计（binary/new/deleted 三档对齐既有口径）
+
+  - 冻结语义：主仓后续演进（新文件/再修改）不进回放表；基点取 meta.baseline；--file 单文件 diff 走冻结 patch 切片（sha256 校验同 A-F01）
+
+  - 既有行为不回归：execute 快照在时快照优先；快照与 change-patch 双缺的归档仍走开放区间兜底+漂移警告（既有断言绿）
+
+  - multi-agent-platform 旧归档 2026-10-07-taskboard-tasks-md 实测：三个计划内文件（backend/app/modules/task/parser.py 等）显示计划内
+
+  - 全量测试绿（含新增回放夹具测试）
+autopilot: true
+baseline_commit: 2de19fbc0f14f5d6275fadd0ce4b039364d36a68
+updatedAt: '2026-10-07T14:52:19.187Z'
+baseline_sha256: 9424857ab1e0337cafc95aaa5620f586e1d28c7d3674561946f7021f0441c81c
+
