@@ -18,7 +18,7 @@ created_at: 2026-10-08T01:03:04.661Z
 
 - `parseChangeNamesFromSubject(subject)`：签名不变，匹配面放宽（全角/混合括号、thin 前缀、名字后附注）；既有半角匹配零回退（locked 用例钉住）。
 - `cmdFlowDone` 新参数 `acceptDirtyGap = false`（CLI flag `--accept-dirty-gap`，:2070 hasFlag 解析处同款接线）；`--freeze-dirty` 行为零变化。
-- flow done 行为变化（本变更目的）：dirtyWarned>0 无显式处置 → exit 1 停在 patch 子步（原先警告后继续归档）；exit 码语义与 review 中断同款（非零=半态可重入）。声明边界（评审 P3 清偿披露）：`--freeze-dirty` 与 `--accept-dirty-gap` 同给时 **--freeze-dirty 优先**（exclusive 路径 dirty 并入、缺口不存在，acceptedDirtyGap 不落键，console 显式告警）。
+- flow done 行为变化（本变更目的）：dirtyWarned>0 无显式处置 → exit 1 停在 patch 子步（原先警告后继续归档）；exit 码语义与 review 中断同款（非零=半态可重入）。声明边界（评审 P3 清偿披露）：`--freeze-dirty` 与 `--accept-dirty-gap` 同给时 **--freeze-dirty 优先**（exclusive 路径 dirty 并入、dirtyWarned 恒空故门与 acceptedDirtyGap 键均不触发——结构性优先，非告警式）。
 - change-patch.json 增量键 `acceptedDirtyGap: <N>`（仅 --accept-dirty-gap 且有缺口时落）。
 - 其余命令/模块零变化。
 
