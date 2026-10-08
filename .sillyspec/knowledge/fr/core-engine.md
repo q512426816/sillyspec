@@ -2125,3 +2125,88 @@
   confirmed_at: null
   source_change: 2026-10-07-scope-audit-thin-patch-replay
   status: active
+
+## FR-core-engine-135 --fr-only 在场时输出仅含 FR 索引段
+变更：2026-10-08-knowledge-stats-fr-only
+状态：active
+摘要：人类模式过滤；JSON 模式过滤
+场景正文：
+- 场景：人类模式过滤 — Given 本仓有 FR 索引和知识命中数据；When `sillyspec knowledge stats --fr-only`；Then 输出包含「FR 索引实验」标题但不包含「命中矩阵」或「conventions」相关段落
+- 场景：JSON 模式过滤 — Given 同上；When `sillyspec knowledge stats --fr-only --json`；Then `data` 对象有 `frIndex` 键且无 `matrix` 键
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-stats-fr-only/requirements.md#FR-01
+最近确认：920137ffb776865a0f44eb31da0ce8c9c0abcdb1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-01
+  tests: test/knowledge-stats-fr-only.test.mjs「--fr-only 人类模式仅含 FR 索引段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-stats-fr-only
+  status: active
+
+## FR-core-engine-136 不带 flag 行为零变化
+变更：2026-10-08-knowledge-stats-fr-only
+状态：active
+摘要：默认路径回归
+场景正文：
+- 场景：默认路径回归 — Given 未传 --fr-only；When `sillyspec knowledge stats` 或 `sillyspec knowledge stats --json`；Then 输出与改动前完全一致
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-stats-fr-only/requirements.md#FR-02
+最近确认：920137ffb776865a0f44eb31da0ce8c9c0abcdb1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-02
+  tests: test/knowledge-stats-fr-only.test.mjs「不带 flag 行为零变化（字节一致）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-stats-fr-only
+  status: active
+
+## FR-core-engine-137 --json + --fr-only 组合 envelope 不变
+变更：2026-10-08-knowledge-stats-fr-only
+状态：active
+摘要：envelope 完整性
+场景正文：
+- 场景：envelope 完整性 — Given --json 模式；When 加 --fr-only；Then 顶层键集不变（schema_version/ok 等），data.frIndex 在场
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-stats-fr-only/requirements.md#FR-03
+最近确认：920137ffb776865a0f44eb31da0ce8c9c0abcdb1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-03
+  tests: test/knowledge-stats-fr-only.test.mjs「--json --fr-only envelope 不变仅过滤 data」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-stats-fr-only
+  status: active
+
+## FR-core-engine-138 测试覆盖三态
+变更：2026-10-08-knowledge-stats-fr-only
+状态：active
+摘要：三态全绿
+场景正文：
+- 场景：三态全绿 — Given 测试套件；When 跑 knowledge-stats 相关测试；Then 三种形态断言全过
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-stats-fr-only/requirements.md#FR-04
+最近确认：920137ffb776865a0f44eb31da0ce8c9c0abcdb1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-04
+  tests: test/knowledge-stats-fr-only.test.mjs「三态全覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-stats-fr-only
+  status: active

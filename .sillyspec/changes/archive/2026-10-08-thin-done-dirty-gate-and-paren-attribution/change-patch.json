@@ -1,0 +1,63 @@
+{
+  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
+  "baseline": "f01702b303e1f84ffef10054b50341465f6cdbfc",
+  "head": "e6dd2adac5bfb1bb563bc0e367e8918d270ba450",
+  "files": [
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/flow-state.yaml",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/proposal.md",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/tasks.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/foreign-declared.js",
+    "src/verify-postcheck.js",
+    "test/commit-attribution-split.test.mjs",
+    "test/flow-agent-log-report.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/thin-done-dirty-gate.test.mjs",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T015127",
+    ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T020335"
+  ],
+  "totals": {
+    "files": 15,
+    "additions": 520,
+    "deletions": 19
+  },
+  "savedAt": "2026-10-08T02:03:36.779Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "patchSha256": "a24278894c6141d6f10c659717bef7a7af739d85c699bb948d43317a3bb16e84",
+  "patchStatus": "ok"
+}

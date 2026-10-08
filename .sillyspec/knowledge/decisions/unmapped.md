@@ -1963,3 +1963,17 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：4366f8b36d046f344f3d798a52f80a62fddb9271
 理由：最大风险：两写点行为收口的回归面——thin 侧 console 字样/键序、heavy 侧「空 patch 当 ok」形态变化可能碰隐性消费者。缓解：thin 侧键结构与输出前缀逐字保留（flow-protocol 断言钉住）；heavy 空 patch 形态经全量套件与 e2e 验证；快照新增 closedBy 为 additive 键，旧快照读侧缺省兼容。放弃的方案：① 只做读侧不写统一（第 2 层已做）——新变更永远靠回退兜底，两卡不对称长期存在；② heavy 侧沉淀面在 archive --confirm 才写——语义上更「终态」，但需在归档点重建采集上下文（worktree/分支已清），且与快照时点（execute --done）不一致会造成两套留痕时点漂移，不如同点同锚；③ scope-audit.json 里引用 change.patch 路径省一份 patch 文件——读侧（getFileDiff/平台）认死 scope-audit.patch 文件名，省字节收益小于读面改动风险（同字节 git blob 本去重，零仓容成本）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-08-knowledge-stats-fr-only
+锚点：未记录
+最近确认：920137ffb776865a0f44eb31da0ce8c9c0abcdb1
+理由：最大风险：输出层过滤遗漏某个段导致「跳过」不完全。对策：测试覆盖三态断言段级完整性与字节一致性。放弃的方案：在计算层直接跳过 matrix/conventions 计算——弃，因为计算层是共用函数（被其他消费方引用），跳过会改共用函数签名引入回归面。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+锚点：未记录
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+理由：最大风险：阻断门改变既有收口习惯——依赖「警告后继续」的自动化/脚本会开始拿到 exit 1。缓解：exit 语义=半态可重入（与 review 中断一致，CLI 文化内既有形态）；--accept-dirty-gap 一 flag 恢复旧行为且留痕；flow-protocol ⑥b 同步更新锁定新语义。放弃的方案：① 归档态 `flow done --refreeze` 重入口——治存量不治源头，且对终态归档件开重写面（review/快照/sha 锚一致性要另设计），阻断门落地后坏状态不再产生，存量用已验证的协议重入修法，留档后续可选；② dirty 警告时自动 --freeze-dirty——把「无法归属」静默升级成「全归属」，跨变更审计双计风险（他侧在途文件误入冻），违背归属保守原则；③ 提交信息解析支持任意前缀文本（不限 thin）——误匹配面扩大无实测形态支撑，收窄为 thin 前缀 + 附注。

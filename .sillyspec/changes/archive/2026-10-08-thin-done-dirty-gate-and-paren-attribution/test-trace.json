@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-01",
+      "tests": [
+        "test/commit-attribution-split.test.mjs「全角/混合/thin 前缀/附注形态解析（增量断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-done-dirty-gate.test.mjs「detectPatchDrift 全角括号提交判 drifted」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-done-dirty-gate.test.mjs「dirty 门三态：裸跑阻断（exit 1 @ patch 不归档）/--freeze-dirty 并入/--accept-dirty-gap 留痕完成」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-done-dirty-gate.test.mjs「阻断→提交（全角括号）→重跑：冻结面含 src」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-protocol.test.mjs「⑥b wip-dirty 按新门语义：首次阻断 + --accept-dirty-gap 完成（断言更新）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-04",
+      "tests": [
+        "test/run-tests.mjs「全量套件跑绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-06",
+      "tests": [
+        "test/thin-done-dirty-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution"
+    }
+  ]
+}

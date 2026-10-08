@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "30fee3ca60ca3638c53716fe8e9eed0e223e08aa",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design 披露括注「console 显式告警」措辞滞后——描述的告警已随 30fee3ca 死代码移除而不存在",
+      "evidence": "30fee3ca 唯一改动 src/flow.js（3+/3-）：移除不可达的 acceptDirtyGap && freezeDirty 告警分支并留注释，行为等价（该作用域 freezeDirty 恒假，else if(acceptDirtyGap)→if(acceptDirtyGap) 不变量下等价；node --check 通过，源码 grep 无残留）。design.md:21 的优先级语义披露（--freeze-dirty 优先、exclusive 路径 dirty 并入、acceptedDirtyGap 不落键）仍准确在场，唯括注末「console 显式告警」四字所指标的已不存在——纯文档措辞残留，无代码/行为影响，可在后续文档性提交顺手修",
+      "location": ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md:21"
+    }
+  ],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-08T02:01:51Z"
+}

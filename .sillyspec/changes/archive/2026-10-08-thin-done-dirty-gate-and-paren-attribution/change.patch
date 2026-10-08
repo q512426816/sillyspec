@@ -1,0 +1,711 @@
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/flow-state.yaml b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/flow-state.yaml
+new file mode 100644
+index 00000000..7fab872e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/flow-state.yaml
+@@ -0,0 +1,33 @@
++tier: thick
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  修复 thin 收尾链两个新坑（记录：multi-agent-platform
++  docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md，2026-10-07-assets-patch-scope-audit-fallback
++  活体实证——冻结 patch 只吸并行会话 9 文件、本变更 4 个 src 全缺席）：坑一，flow done 对「未提交交付文件未入冻结面」只警告不阻断，autopilot
++  单跑到底直接归档，三选一（接受缺口/--freeze-dirty/worktree）里 ②③ 在归档后不可达（flow done 只认活跃目录）；坑二，提交归属解析 parseChangeNamesFromSubject
++  只认半角括号，中文输入法惯例的全角（thin <变更名>；…）形态让 drift 归因静默失灵（漂移重冻结不触发、提交归属全落 unknown）。
++
++
++  成功标准：
++
++  - 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++
++  - flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随
++  change-patch.json 留痕）
++
++  - 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++
++  - 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++
++  - 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
++autopilot: true
++baseline_commit: f01702b303e1f84ffef10054b50341465f6cdbfc
++updatedAt: '2026-10-08T01:26:43.255Z'
++baseline_sha256: de617a3fea24b44abd92726f2048e2e0a41731f6789072fa0775ba3942141f36
++upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
++
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index dbe1dedb..9f9c271e 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -258,7 +258,11 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
+   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+   let dirty = []
+   try {
+-    const out = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++    // -uall（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：全新目录会折叠成
++    // `dir/` token（porcelain 缺省形态）——readFileSync(目录) 静默 skip，--freeze-dirty
++    // 声称并入却漏目录内交付文件（dg-freeze 夹具实证 src/ 折叠）。逐文件展开与
++    // scope-audit/flow.js 状态采集口径对齐。
++    const out = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+     for (const line of String(out).split('\n')) {
+       if (!line || line.length < 4) continue
+       const p = line.slice(3).trim().replace(/^"|"$/g, '')
+diff --git a/src/flow.js b/src/flow.js
+index b7080430..0ff1ed0d 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -862,7 +862,7 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [],
+   return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
+ }
+ 
+-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
++export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, allowBatchTick = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+   if (!st) {
+@@ -1395,8 +1395,26 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+         if (freeze.dirtyWarned.length > 0) {
+           console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+-          console.warn(`   ① 本次接受缺口（审计面少这些文件）② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 下次用会话专属 worktree。Git 中间提交可归档后压扁（见收口指引）`)
++          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交可归档后压扁（见收口指引）`)
+           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
++          // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
++          // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
++          // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
++          // 缺口在场且未显式处置 → 停在 patch 子步标记之前（半态可重入，与 review 中断同款
++          // exit 语义）：处置后重跑，patch 全量重建自动并入已提交 src。
++          if (!freezeDirty && !acceptDirtyGap) {
++            console.error('⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：')
++            console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
++            console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
++            console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
++            reportMidFail('patch')
++            process.exit(1)
++          }
++          if (acceptDirtyGap) {
++            // 双 flag 同给时 --freeze-dirty 优先（exclusive 路径 dirtyWarned 恒空，本分支不进
++            // ——设计接口契约已披露；无告警代码即无死代码，二轮评审 P3 清偿）
++            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
++          }
+         }
+         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
+           .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
+@@ -1480,6 +1498,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+               // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径
+               // （与 files[] 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响
+               ...moduleScope,
++              // dirty 缺口显式接受留痕（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：
++              // --accept-dirty-gap 放行时缺口数入档（审计面可见，非只 console）
++              ...(acceptDirtyGap && freeze.dirtyWarned.length > 0 ? { acceptedDirtyGap: freeze.dirtyWarned.length } : {}),
+             },
+           })
+           console.log(`📦 变更 patch 留档（双轨统一）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}）+ scope-audit.json + scope-audit.patch（对账快照同点冻结）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
+@@ -2067,7 +2088,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
+       }
+     }
+-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), allowBatchTick: hasFlag('--allow-batch-tick') })
++    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), allowBatchTick: hasFlag('--allow-batch-tick') })
+   }
+   if (sub === 'amend-draft') {
+     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index cc734815..14799d55 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -204,12 +204,16 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+ 
+ /**
+  * 提交标题 → 变更名数组（2026-10-05-diff-commit-attribution）：项目提交惯例 message 尾部
+- * 携带 "(2026-MM-DD-名)" 后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题
+- * 首部同名形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
++ * 携带变更名括号后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题首部同名
++ * 形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
++ * 括号形态双收（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑
++ * thin-done-src-commit-order-and-attribution-paren：中文输入法惯例写全角
++ * `（thin <名>；…）`，旧正则只认半角 → drift 归因静默失灵）：开/闭括号半全角任意组合，
++ * 括号内允许 `thin ` 前缀与名字后附注文本；变更名本体模式（日期前缀 + 白名单字符）不放宽。
+  */
+ export function parseChangeNamesFromSubject(subject) {
+   const out = []
+-  const re = /\((\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)\)/g
++  const re = /[（(]\s*(?:thin\s+)?(\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)[^()（）]*[)）]/g
+   let m
+   while ((m = re.exec(String(subject || '')))) out.push(m[1])
+   return out
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 6592ae16..8a569e11 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2773,8 +2773,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   const prio = (f) => (changedSet.has(norm(f)) || prioritySet.has(norm(f))) ? 0 : 1 // 变更/FR 回归测试文件优先
+   const py = deps.filter(f => f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
+   const js = deps.filter(f => !f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
++  // 套件编排器过滤（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑：FR 绑定把
++  // run-tests.mjs 收进 deps 批 → 内嵌执行=递归全量套件——嵌套 runner 污染 + 15-20 分钟窗口，
++  // 实测 not ok 假败阻断收口）。run-tests.mjs 是 npm test 的组卷入口不是单测文件：执行面剔除
++  // 并 loud 披露；全量门由收口实测与 CI 层的 npm test 承担（本就覆盖该文件的全部语义）。
++  const SUITE_META_RE = /(^|\/)run-tests\.mjs$/
++  const jsMeta = js.filter(f => SUITE_META_RE.test(norm(f)))
++  const jsList = js.filter(f => !SUITE_META_RE.test(norm(f)))
+   const CAP = 30
+-  const pyCap = py.length === 0 ? 0 : js.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + js.length))))
++  const pyCap = py.length === 0 ? 0 : jsList.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + jsList.length))))
+   const jsCap = CAP - pyCap
+   // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
+   // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
+@@ -2785,7 +2792,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+     return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
+   }
+   const pyQ = quotaFill(py, pyCap)
+-  const jsQ = quotaFill(js, jsCap)
++  const jsQ = quotaFill(jsList, jsCap)
+   const pyRun = pyQ.run
+   const jsRun = jsQ.run
+   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
+@@ -2855,7 +2862,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
+   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
+   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsList.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++  if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
+   if (jsProjectRun.length > 0) {
+     if (jsxRunner) {
+       const isVitest = /vitest/.test(jsxRunner)
+diff --git a/test/commit-attribution-split.test.mjs b/test/commit-attribution-split.test.mjs
+index b5db8235..6a590e98 100644
+--- a/test/commit-attribution-split.test.mjs
++++ b/test/commit-attribution-split.test.mjs
+@@ -33,6 +33,16 @@ test('① 解析纯函数：标题变更名提取与归属聚合', () => {
+   assert.deepEqual(parseChangeNamesFromSubject('chore: misc'), [])
+   // 归档提交标题：chore(archive): 2026-10-05-x 归档留档——首部名无括号包裹不提取
+   assert.deepEqual(parseChangeNamesFromSubject('chore(archive): 2026-10-05-x 归档留档'), [])
++  // 括号形态双收（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑
++  // thin-done-src-commit-order-and-attribution-paren）：全角/混合闭合/thin 前缀/名字后附注
++  assert.deepEqual(parseChangeNamesFromSubject('fix: 评审处置（2026-10-08-foo）'), ['2026-10-08-foo'])
++  assert.deepEqual(parseChangeNamesFromSubject('fix: 评审处置（thin 2026-10-08-foo；quick）'), ['2026-10-08-foo'])
++  assert.deepEqual(parseChangeNamesFromSubject('fix: 混合开（2026-10-08-bar) 与闭(2026-10-08-baz）'), ['2026-10-08-bar', '2026-10-08-baz'])
++  assert.deepEqual(parseChangeNamesFromSubject('fix: 附注 (thin 2026-10-08-qux; task-01)'), ['2026-10-08-qux'])
++  assert.deepEqual(parseChangeNamesFromSubject('fix: 日期不在括号内 2026-10-08-无匹配'), [])
++  // 变更名本体模式不放宽：日期前缀缺失/非法字符不提取
++  assert.deepEqual(parseChangeNamesFromSubject('fix: （thin foo-bar）'), [])
++  assert.deepEqual(parseChangeNamesFromSubject('fix: （2026-1-8-short）'), [])
+ 
+   const log = [
+     '\x00fix: 他侧交付 (OTHER)', 'src/other.js', '',
+diff --git a/test/flow-agent-log-report.test.mjs b/test/flow-agent-log-report.test.mjs
+index 2d708c4d..ebe7a861 100644
+--- a/test/flow-agent-log-report.test.mjs
++++ b/test/flow-agent-log-report.test.mjs
+@@ -132,7 +132,9 @@ test('③ flow done 收口周期：done 调用面同样登记（last_command=don
+   run(['commit', '-q', '-m', 'work (task-01)'])
+   fillSlots(cwd, change)
+ 
+-  const d = cli(cwd, ['flow', 'done', '--change', change], { agentLog })
++  // --accept-dirty-gap（2026-10-08-thin-done-dirty-gate）：fake-agent-session.jsonl 是日志观测
++  // fixture（非交付）——新 dirty 门要求显式处置，接受缺口（与 flow-protocol ③ pass.flag 同款）
++  const d = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'], { agentLog })
+   assert.equal(d.status, 0, `done 失败: ${d.stdout}\n${d.stderr}`)
+   assert.match(d.stdout, /flow done 完成（2\/2 协议调用收口）/)
+   assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', change)), false, '已归档')
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index bfcaa0d9..d4f95ce7 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -151,9 +151,11 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   assert.match(fail.stdout + fail.stderr, /整单 FAIL/)
+   assert.ok(existsSync(join(specBase, 'changes', change)), '未归档（归档子步未执行）')
+ 
+-  // 修复（pass.flag 进会话 overlay）后重入：artifacts 已完成幂等跳过，从 ledger 断点续
++  // 修复（pass.flag 进会话 overlay）后重入：artifacts 已完成幂等跳过，从 ledger 断点续。
++  // --accept-dirty-gap（2026-10-08-thin-done-dirty-gate）：pass.flag 是测试翻转旗（非交付），
++  // 新 dirty 门要求显式处置——接受缺口走旧行为语义（旗本就不入冻结面）
+   writeFileSync(join(cwd, 'pass.flag'), '1\n')
+-  const retry = cli(cwd, ['flow', 'done', '--change', change])
++  const retry = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'])
+   assert.equal(retry.status, 0, `重入失败: ${retry.stdout}\n${retry.stderr}`)
+   assert.match(retry.stdout, /artifacts\(skip\)/, '已完成子步幂等跳过')
+   assert.equal(existsSync(join(specBase, 'changes', change)), false, '重入后归档完成')
+@@ -247,10 +249,18 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）+ patch 留档 + 绑定链
+   fillDesignSlots(cwd, change)
+   approve(cwd, change)
+-  writeFileSync(join(cwd, 'wip-dirty.txt'), 'uncommitted') // 未提交交付文件 → 冻结面警告（R16 P2 修复①）
+-  const ok = cli(cwd, ['flow', 'done', '--change', change])
+-  assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
+-  assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
++  writeFileSync(join(cwd, 'wip-dirty.txt'), 'uncommitted') // 未提交交付文件 → dirty 缺口门（2026-10-08-thin-done-dirty-gate：旧行为「警告后继续归档」改为阻断——三选一在归档后不可达的坑）
++  const blocked = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(blocked.status, 1, `dirty 缺口未处置应阻断: ${blocked.stdout}\n${blocked.stderr}`)
++  assert.match(blocked.stdout + blocked.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
++  assert.match(blocked.stdout + blocked.stderr, /三选一/, '三选一指引在场（评审 P2② 断言，移至阻断轮）')
++  assert.match(blocked.stdout + blocked.stderr, /收口阻断/, '阻断信息在场')
++  assert.match(blocked.stdout + blocked.stderr, /中断于子步「patch」/, '阻断点=patch 子步（半态可重入）')
++  assert.ok(existsSync(join(specBase, 'changes', change)), '阻断不归档（change 仍 active）')
++  const ok = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'])
++  assert.equal(ok.status, 0, `显式接受缺口后应通过: ${ok.stdout}\n${ok.stderr}`)
++  // 实测面对账行在阻断轮（ledger 先于 patch 执行；重跑轮 ledger 幂等 skip 不再输出）
++  assert.match(blocked.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
+   assert.match(ok.stdout, /变更 patch 留档/, 'patch 留档行（noAI 冻结）')
+   const archDir = join(specBase, 'changes', 'archive')
+   const archived = readdirSync(archDir)[0]
+@@ -264,8 +274,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
+   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
+   assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
+-  assert.match(ok.stdout + ok.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
+-  assert.match(ok.stdout + ok.stderr, /三选一/, '三选一指引在场（评审 P2② 补断言）')
++  assert.equal(patchMeta.acceptedDirtyGap, 1, '缺口数随 change-patch.json acceptedDirtyGap 留痕')
+   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/test/thin-done-dirty-gate.test.mjs b/test/thin-done-dirty-gate.test.mjs
+new file mode 100644
+index 00000000..38dd59df
+--- /dev/null
++++ b/test/thin-done-dirty-gate.test.mjs
+@@ -0,0 +1,181 @@
++/**
++ * thin 收尾链两坑修复夹具（变更 2026-10-08-thin-done-dirty-gate-and-paren-attribution）。
++ *
++ * 坑记录：multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md
++ *   坑①：flow done 对「未提交交付文件未入冻结面」只警告不阻断——autopilot 单跑到底直接归档，
++ *        三选一（接受缺口 / --freeze-dirty / worktree）在归档后不可达。
++ *   坑②：提交归属解析只认半角括号——全角（thin <变更名>；…）形态让 drift 归因静默失灵。
++ *
++ * 覆盖（requirements FR-01~03）：
++ *   1. detectPatchDrift 全角括号交付提交判 drifted（FR-01）
++ *   2. dirty 门三态：裸跑阻断（exit 1 @ patch 不归档）/ --freeze-dirty 并入 / --accept-dirty-gap 留痕完成（FR-02）
++ *   3. 阻断→提交（全角括号尾缀）→重跑：冻结面自动并入 src（FR-03）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { detectPatchDrift } from '../src/flow-parity.js'
++import { buildDepsBatches } from '../src/verify-postcheck.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++const tmpRoots = []
++function fx() { const d = mkdtempSync(join(tmpdir(), 'dirtygate-')); tmpRoots.push(d); return d }
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++function gitRepo(dir) {
++  const run = (args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim()
++  run(['init', '-q', '-b', 'main']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
++  return run
++}
++
++/** thin 变更夹具：start(autopilot) → 四问一行作答 + 清单 → tasks 收敛单任务 → 证据提交。
++ *  leaveDirty=true 时不提交 src/work.js（留作未提交交付缺口）。 */
++function setupThinChange(cwd, cn, { leaveDirty = false } = {}) {
++  const run = gitRepo(cwd)
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++  // --no-review 在 start 落 flow-state（reviewForce 一票豁免；done 时传无效）——sampleBucket
++  // 按变更名确定性哈希（1/4 桶），不钉会出现「夹具名决定要不要评审」的假红（dg-freeze 落桶实证）
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', 'dirty 门 e2e\n\n成功标准：\n- 收口门行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  const base = join(cwd, '.sillyspec', 'changes', cn)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规')
++    + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 新增 | src/work.js | 交付 |\n')
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
++  writeFileSync(join(base, 'tasks.md'), '---\nauthor: fixture\n---\n\n# 任务注册表（Tasks）\n\n- [x] task-01: 交付 src/work.js（e2e 夹具）\n')
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
++  // 勾选证据面：全勾硬门要 task-NN 证据提交——leaveDirty 形态也要有（与 dirty 缺口无关的独立小件）
++  writeFileSync(join(cwd, 'ev.txt'), 'tick evidence\n')
++  run(['add', 'ev.txt'])
++  run(['commit', '-q', '-m', 'chore: task tick evidence (task-01)'])
++  if (!leaveDirty) {
++    run(['add', 'src/work.js'])
++    run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
++  }
++  return { run, env, base }
++}
++
++function doneCmd(cwd, cn, env, extra = []) {
++  return spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn, ...extra], { cwd, encoding: 'utf8', timeout: 300_000, env })
++}
++
++// ───────────────────────── FR-01：drift 全角括号 ─────────────────────────
++
++test('FR-01 detectPatchDrift：全角括号交付提交判 drifted（旧正则静默失灵的坑②）', () => {
++  const d = fx()
++  const run = gitRepo(d)
++  writeFileSync(join(d, 'a.txt'), 'a\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  const freezeHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
++  const CHG = '2026-10-08-dg-unit'
++  // 全角括号 + thin 前缀 + 附注（坑记录实测形态）
++  writeFileSync(join(d, 'b.txt'), 'b\n')
++  run(['add', '.']); run(['commit', '-q', '-m', `fix: 评审处置（thin ${CHG}；task-02）`])
++  let r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
++  assert.equal(r.drifted, true, `全角括号提交触发漂移（实际 ${JSON.stringify(r)}）`)
++  assert.ok(r.ownCommits.some((s) => s.includes(CHG)), 'ownCommits 含该提交')
++  // 反向：裸提交不触发
++  writeFileSync(join(d, 'c.txt'), 'c\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'chore: 无后缀裸提交'])
++  r = detectPatchDrift({ cwd: d, change: CHG, freezeHead })
++  assert.equal(r.drifted, true, '仍只计归属提交（裸提交不计入不稀释）')
++  // 反向：他变更名不触发
++  writeFileSync(join(d, 'e.txt'), 'e\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'fix: 他侧（2026-10-08-other-x）'])
++  r = detectPatchDrift({ cwd: d, change: '2026-10-08-other-y', freezeHead })
++  assert.equal(r.drifted, false, '他变更名不触发本变更漂移')
++})
++
++// ───────────────────────── FR-06：套件编排器不进 deps 批 ─────────────────────────
++
++test('FR-06 buildDepsBatches：run-tests.mjs（套件编排器）剔出执行面转 loud skip——FR 绑定收进来也不递归全量', () => {
++  const batches = buildDepsBatches({
++    deps: ['test/run-tests.mjs', 'test/a-plain.test.mjs', 'test/b-plain.test.mjs'],
++    changedFiles: [],
++    hits: [],
++    cwd: null,
++    priorityFiles: ['test/run-tests.mjs'], // FR 绑定钦定优先面（坑形态：绑定指向套件入口）
++  })
++  const jsBatch = batches.find((b) => b.name === 'deps(auto-js)')
++  const skipBatch = batches.find((b) => b.name === 'deps(auto-js-meta-skip)')
++  assert.ok(jsBatch, '普通 js 批在场')
++  assert.ok(!jsBatch.command.includes('run-tests.mjs'), '执行命令不含套件编排器')
++  assert.ok(jsBatch.command.includes('test/a-plain.test.mjs'), '普通测试照跑')
++  assert.ok(skipBatch && skipBatch.skip === true, '套件编排器转 skip 批')
++  assert.deepEqual(skipBatch.files, ['test/run-tests.mjs'])
++  assert.ok(skipBatch.reason.includes('递归全量'), 'skip 理由 loud 披露')
++})
++
++// ───────────────────────── FR-02/03：门三态 e2e ─────────────────────────
++
++test('FR-02/03 裸跑阻断→全角提交→重跑并入：patch 子步半态可重入（坑①+②合围）', () => {
++  const cwd = fx()
++  const cn = '2026-10-08-dg-block'
++  const { run, env, base } = setupThinChange(cwd, cn, { leaveDirty: true })
++  try {
++    // 裸跑：dirty 缺口未处置 → 停在 patch 子步（exit 1、不归档）
++    const s1 = doneCmd(cwd, cn, env)
++    const out1 = s1.stdout + s1.stderr
++    assert.ok(s1.status !== 0, `阻断应非零退出（实际 ${s1.status}）`)
++    assert.ok(out1.includes('收口阻断'), `阻断信息在场（尾部 ${out1.split('\n').slice(-6).join(' | ')}）`)
++    assert.ok(out1.includes('中断于子步「patch」'), '中断点=patch 子步')
++    assert.ok(existsSync(base), 'change 仍 active（未归档）')
++    assert.ok(!existsSync(join(base, 'change-patch.json')), '阻断时未落冻结件')
++
++    // 处置①：提交 src（全角括号尾缀——坑②形态），重跑 → 并入 + 完成收口
++    run(['add', 'src/work.js'])
++    run(['commit', '-q', '-m', `feat: 交付 work（${cn}）(task-01)`])
++    const s2 = doneCmd(cwd, cn, env)
++    const out2 = s2.stdout + s2.stderr
++    assert.equal(s2.status, 0, `重跑应完成收口: ${out2.split('\n').slice(-8).join(' | ')}`)
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', cn)
++    const patch = readFileSync(join(arch, 'change.patch'), 'utf8')
++    assert.ok(patch.includes('+++ b/src/work.js'), '重跑冻结面含已提交 src（全角括号归属并入）')
++    assert.ok(!out2.includes('收口阻断'), '处置后无阻断')
++  } finally { rmSync(cwd, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('FR-02 --freeze-dirty：显式声明并入冻结（既有行为零回退）', () => {
++  const cwd = fx()
++  const cn = '2026-10-08-dg-freeze'
++  const { env } = setupThinChange(cwd, cn, { leaveDirty: true })
++  try {
++    const s = doneCmd(cwd, cn, env, ['--freeze-dirty'])
++    const out = s.stdout + s.stderr
++    assert.equal(s.status, 0, `--freeze-dirty 应完成: ${out.split('\n').slice(-8).join(' | ')}`)
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', cn)
++    const metaB = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    const patchB = readFileSync(join(arch, 'change.patch'), 'utf8')
++    assert.ok(patchB.includes('+++ b/src/work.js'), `dirty 交付并入冻结面（files: ${metaB.files.join(',')}；patch 头: ${patchB.split('\n').slice(0, 4).join(' | ')}）`)
++    assert.ok(!('acceptedDirtyGap' in metaB), '无缺口留痕键')
++  } finally { rmSync(cwd, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('FR-02 --accept-dirty-gap：显式接受缺口留痕完成', () => {
++  const cwd = fx()
++  const cn = '2026-10-08-dg-accept'
++  const { env } = setupThinChange(cwd, cn, { leaveDirty: true })
++  try {
++    const s = doneCmd(cwd, cn, env, ['--accept-dirty-gap'])
++    const out = s.stdout + s.stderr
++    assert.equal(s.status, 0, `--accept-dirty-gap 应完成: ${out.split('\n').slice(-8).join(' | ')}`)
++    assert.ok(out.includes('--accept-dirty-gap'), 'console 留痕在场')
++    const arch = join(cwd, '.sillyspec', 'changes', 'archive', cn)
++    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    assert.equal(meta.acceptedDirtyGap, 1, '缺口数随 change-patch.json 留痕')
++    assert.ok(!readFileSync(join(arch, 'change.patch'), 'utf8').includes('+++ b/src/work.js'), '缺口文件不入冻结面')
++  } finally { rmSync(cwd, { recursive: true, force: true, maxRetries: 3 }) }
++})
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md
+new file mode 100644
+index 00000000..ad051e62
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md
+@@ -0,0 +1,59 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T01:03:04.661Z
++---
++# 设计记录（Design Record）— 2026-10-08-thin-done-dirty-gate-and-paren-attribution
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++两个坑同一收尾链（记录：multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）。坑二（归属只认半角括号）在单一真相源修：`parseChangeNamesFromSubject`（foreign-declared.js）正则改双括号收——`[（(]…[)）]` 开闭各自半/全角任意组合，括号内允许 `thin ` 前缀与名字后附注（`（thin <名>；quick）` 实测形态），变更名本体模式不放宽；buildCommitAttribution / detectPatchDrift / filterCommittedFace / splitOwnVsForeignDiffFiles 全部经此单点自动受益，零各自实现。
++
++坑一（dirty 缺口静默归档）在 flow done 的 patch 子步加阻断门：dirtyWarned>0 且未显式处置（--freeze-dirty / 新增 --accept-dirty-gap）时 `reportMidFail('patch')` + exit 1——patch 子步不标 done，半态可重入；用户处置（提交 / --freeze-dirty / --accept-dirty-gap）后重跑，从断点续。这把「三选一」从不可达的事后选项变成收口前的强制选择，且复用既有子步断点机制（review 中断同款），零新状态机。--accept-dirty-gap 走 change-patch.json 增量键 acceptedDirtyGap 留痕（审计面可见，非只 console）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `parseChangeNamesFromSubject(subject)`：签名不变，匹配面放宽（全角/混合括号、thin 前缀、名字后附注）；既有半角匹配零回退（locked 用例钉住）。
++- `cmdFlowDone` 新参数 `acceptDirtyGap = false`（CLI flag `--accept-dirty-gap`，:2070 hasFlag 解析处同款接线）；`--freeze-dirty` 行为零变化。
++- flow done 行为变化（本变更目的）：dirtyWarned>0 无显式处置 → exit 1 停在 patch 子步（原先警告后继续归档）；exit 码语义与 review 中断同款（非零=半态可重入）。声明边界（评审 P3 清偿披露）：`--freeze-dirty` 与 `--accept-dirty-gap` 同给时 **--freeze-dirty 优先**（exclusive 路径 dirty 并入、dirtyWarned 恒空故门与 acceptedDirtyGap 键均不触发——结构性优先，非告警式）。
++- change-patch.json 增量键 `acceptedDirtyGap: <N>`（仅 --accept-dirty-gap 且有缺口时落）。
++- 其余命令/模块零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立：门读的是收口时点的盘面事实（collectFreezeFiles 的 dirtyWarned），无跨事件状态；阻断不写任何冻结件（停在写之前），重跑看到的是最新盘面——迟到的提交在重跑时自然并入，不产生先后序依赖。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   门本身只读+exit；flow-state 子步标记写走既有 writeFlowState 路径（与 review 中断同款并发面，无新增）。多会话各自 change 隔离；dirtyWarned 的归属切分（splitOwnVsForeignDiffFiles）在共享主仓下已排除他侧声明文件——他会的 dirty 不会误触本变更的门。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   阻断点在 patch 子步标记 done 之前：中断/切换后重跑走全量冻结路径（非漂移路径），幂等重建；--accept-dirty-gap 是单次 flag 不落 state（重跑不带 flag 且仍有缺口会再次阻断——显式性保持，不会一次接受永久放行）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   门按 change 的 freeze 面判定；正则放宽只影响「提交信息里含日期前缀变更名」的归属解析，跨仓各仓独立跑各自的 git log。潜在误归属面：消息正文引用他变更名（如 "(参见 2026-09-01-x)"）本就属既有语义（半角同形），全角放宽不新增风险等级。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：阻断门改变既有收口习惯——依赖「警告后继续」的自动化/脚本会开始拿到 exit 1。缓解：exit 语义=半态可重入（与 review 中断一致，CLI 文化内既有形态）；--accept-dirty-gap 一 flag 恢复旧行为且留痕；flow-protocol ⑥b 同步更新锁定新语义。放弃的方案：① 归档态 `flow done --refreeze` 重入口——治存量不治源头，且对终态归档件开重写面（review/快照/sha 锚一致性要另设计），阻断门落地后坏状态不再产生，存量用已验证的协议重入修法，留档后续可选；② dirty 警告时自动 --freeze-dirty——把「无法归属」静默升级成「全归属」，跨变更审计双计风险（他侧在途文件误入冻），违背归属保守原则；③ 提交信息解析支持任意前缀文本（不限 thin）——误匹配面扩大无实测形态支撑，收窄为 thin 前缀 + 附注。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/foreign-declared.js | parseChangeNamesFromSubject 双括号收 + thin 前缀/附注兼容（单点修复） |
++| 修改 | src/flow-parity.js | collectFreezeFiles dirty 采集加 --untracked-files=all（全新目录折叠 `dir/` token 致 --freeze-dirty 漏采目录内交付的实证修复，dg-freeze 夹具即回归钉） |
++| 修改 | src/flow.js | patch 子步 dirty 阻断门（reportMidFail+exit 1）+ --accept-dirty-gap 参数与 acceptedDirtyGap 留痕（flag 解析在 flow.js cmdFlow :2070 hasFlag 处，index.js 零改动） |
++| 新增 | test/thin-done-dirty-gate.test.mjs | drift 全角单测 + 门三态 e2e + 阻断→提交→重跑 e2e |
++| 修改 | test/commit-attribution-split.test.mjs | 解析形态增量断言（全角/混合/thin 前缀/附注） |
++| 修改 | test/flow-protocol.test.mjs | ⑥b wip-dirty 按新门语义（首次阻断 + --accept-dirty-gap 完成），冻结面断言保留 |
++| 修改 | src/verify-postcheck.js | buildDepsBatches 套件编排器过滤（run-tests.mjs 剔出执行面转 loud skip 批；既有底部导出供直测）——收口实测门自埋雷排除：FR 绑定指向套件入口时递归全量假败 |
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/proposal.md b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/proposal.md
+new file mode 100644
+index 00000000..06271840
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T01:03:04.661Z
++---
++# 提案书（Proposal）— 2026-10-08-thin-done-dirty-gate-and-paren-attribution
++
++## 动机
++
++任务原话转写：修复 thin 收尾链两个新坑（记录：multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md，2026-10-07-assets-patch-scope-audit-fallback 活体实证——冻结 patch 只吸并行会话 9 文件、本变更 4 个 src 全缺席）：坑一，flow done 对「未提交交付文件未入冻结面」只警告不阻断，autopilot 单跑到底直接归档，三选一（接受缺口/--freeze-dirty/worktree）里 ②③ 在归档后不可达（flow done 只认活跃目录）；坑二，提交归属解析 parseChangeNamesFromSubject 只认半角括号，中文输入法惯例的全角（thin <变更名>；…）形态让 drift 归因静默失灵（漂移重冻结不触发、提交归属全落 unknown）。
++
++成功标准：
++- 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++- flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
++- 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++- 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++- 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++2. flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
++3. 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++4. 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++5. 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
++
++## 成功标准（可验证）
++
++1. 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++2. flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
++3. 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++4. 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++5. 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md
+new file mode 100644
+index 00000000..5b9696dd
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md
+@@ -0,0 +1,78 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T01:03:04.661Z
++---
++# 需求规格（Requirements）— 2026-10-08-thin-done-dirty-gate-and-paren-attribution
++
++## 功能需求
++
++### FR-01: 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++
++- `parseChangeNamesFromSubject`（foreign-declared.js，归属解析单一真相源）**必须**兼容：半角 `(<名>)`（既有形态零回退）、全角 `（<名>）`、混合闭合 `（<名>)`/`(<名>）`、括号内 `thin ` 前缀与名字后附注文本（`（thin <名>；quick）` 形态）；变更名本体模式（`YYYY-MM-DD-[A-Za-z0-9._-]+`）**禁止**放宽。detectPatchDrift 经同一解析链对全角括号交付提交**必须**判 drifted=true。
++
++#### 场景：全角惯例提交
++
++- Given：提交信息 `fix: 评审处置（thin 2026-10-08-foo；quick）`
++- When：parseChangeNamesFromSubject / detectPatchDrift
++- Then：解析出 `2026-10-08-foo`；freezeHead..HEAD 含该提交时 drifted=true（漂移重冻结触发）
++
++### FR-02: flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
++
++- flow done 的 patch 子步在 dirtyWarned>0 且未带 `--freeze-dirty`/`--accept-dirty-gap` 时**必须**阻断收口：`reportMidFail('patch')` + exit 1，patch 子步不标 done（重跑重入全量冻结/漂移检测），不进 archive；`--freeze-dirty` 行为修正性保留（**必须**以 `--untracked-files=all` 采集 dirty 面——旧口径全新目录折叠成 `dir/` token，声称并入却漏目录内交付文件）；`--accept-dirty-gap` **必须**放行并在 change-patch.json 落 `acceptedDirtyGap: <N>` 增量键 + console 留痕。
++
++#### 场景：三态门与目录折叠
++
++- Given：thin 变更交付 src 未提交（含置于全新目录的形态），flow done 收口
++- When：裸跑 / 带 --freeze-dirty / 带 --accept-dirty-gap
++- Then：裸跑 exit 1 停在 patch（change 仍 active、无归档）；--freeze-dirty 冻结面含该文件（全新目录内文件逐文件并入，不折叠漏采）；--accept-dirty-gap 完成收口、change-patch.json 含 acceptedDirtyGap=1、冻结面不含该文件
++
++### FR-03: 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++
++- 阻断后用户提交 src（信息尾缀带变更名，全角/半角均可）再重跑 flow done：patch 子步**必须**重跑并把该文件并入冻结面（首次阻断时 patch 未标 done → 全量冻结路径；已冻结后补提交 → 漂移重冻结路径）。
++
++#### 场景：阻断→提交→重跑
++
++- Given：FR-02 场景的阻断态
++- When：提交 src（`fix: x（<变更名>）`）后重跑 flow done
++- Then：收口推进，change.patch 含该 src 文件
++
++### FR-04: 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++
++- 本变更**必须**新增测试：解析单测（全角/混合/thin 前缀/附注）、detectPatchDrift 全角单测、dirty 门三态 e2e、阻断→提交→重跑 e2e；flow-protocol ⑥b 的 wip-dirty 用例**必须**改走新门语义（首次阻断 + --accept-dirty-gap 完成），其冻结面断言保留；全量套件绿。
++
++#### 场景：全量门
++
++- Given：新增 test/thin-done-dirty-gate.test.mjs + commit-attribution-split 增量断言
++- When：npm test
++- Then：全量绿
++
++### FR-05: 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
++
++- 本变更**禁止**实现归档态 flow done --refreeze 入口：阻断门（FR-02）使「带缺口归档」无法再产生，存量坏归档已有验证过的协议重入修法（坑记录修复路径 1-4 步）；归档态重入口涉及对终态件的重写面，如确需另开变更设计。本条为设计留档，无测试面。
++
++#### 场景：范围声明
++
++- Given：本变更合入
++- When：审视交付面
++- Then：无归档态重冻结代码；坑记录与 decisions 留档指向后续可选变更
++
++### FR-06: 动态测试推断不把套件编排器（run-tests.mjs）收进执行面——FR 绑定指向它时转 loud skip
++
++- buildDepsBatches **必须**把 `run-tests.mjs`（npm test 组卷入口）剔出 deps 执行面并转 skip 批（理由 loud 披露）：内嵌执行=递归全量套件（嵌套 runner 污染 + 15-20 分钟窗口，实测 not ok 假败阻断收口）；普通 .mjs 测试照跑、优先面配额不受挤占。
++
++#### 场景：FR 绑定指向套件入口
++
++- Given：FR 关联回归把 test/run-tests.mjs 收进 deps（绑定钦定优先面）
++- When：buildDepsBatches 组卷
++- Then：执行命令不含 run-tests.mjs；skip 批点名理由；普通测试照常执行
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/commit-attribution-split.test.mjs「全角/混合/thin 前缀/附注形态解析（增量断言）」
++FR-01: test/thin-done-dirty-gate.test.mjs「detectPatchDrift 全角括号提交判 drifted」
++FR-02: test/thin-done-dirty-gate.test.mjs「dirty 门三态：裸跑阻断（exit 1 @ patch 不归档）/--freeze-dirty 并入/--accept-dirty-gap 留痕完成」
++FR-03: test/thin-done-dirty-gate.test.mjs「阻断→提交（全角括号）→重跑：冻结面含 src」
++FR-04: test/flow-protocol.test.mjs「⑥b wip-dirty 按新门语义：首次阻断 + --accept-dirty-gap 完成（断言更新）」
++FR-04: test/run-tests.mjs「全量套件跑绿」
++FR-05: 不适用：设计留档条目（无代码无测试面）——裁决与理由见 design 风险节
++FR-06: test/thin-done-dirty-gate.test.mjs「run-tests.mjs（套件编排器）剔出执行面转 loud skip」
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/tasks.md b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/tasks.md
+new file mode 100644
+index 00000000..78c509fa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T01:03:04.661Z
++---
++# 任务注册表（Tasks）— 2026-10-08-thin-done-dirty-gate-and-paren-attribution
++
++- [x] task-01: 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
++- [x] task-02: flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
++- [x] task-03: 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
++- [x] task-04: 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
++- [x] task-05: 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
++- [x] task-06: 动态测试推断不把套件编排器（run-tests.mjs）收进执行面——FR 绑定指向它时转 loud skip（收口实测门自埋雷排除）
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T015127 b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T015127
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T015127
+@@ -0,0 +1,23 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
++  "reviewer": "subagent",
++  "verdict": "FAIL",
++  "reviewedAgainst": "4ecf57a60e386049c42e32779490883789f9ce58",
++  "findings": [
++    {
++      "severity": "P1",
++      "title": "FR-04「全量套件绿」在 HEAD 不成立：新 dirty 门击穿未适配的既有 e2e（flow-agent-log-report ③）",
++      "evidence": "fixture（change 2026-09-29-flow-alr-t3）收口时留未提交交付文件 fake-agent-session.jsonl → src/flow.js:1405-1411 新门阻断，输出含「⛔ 未提交交付缺口未显式处置——收口阻断」「❌ flow done 中断于子步「patch」」原文（新代码独有文案），CLI exit 1；test/flow-agent-log-report.test.mjs:136 断言 assert.equal(status, 0) 实得 1。全量 npm test（run-tests.mjs，728 文件）726 绿 1 败，该文件单跑隔离复现确定性失败；其末次改动在 bf7c1229（先于实现提交 6093ac7c），本变更只适配了 flow-protocol ③/⑥b，漏适配此文件——「既有测试适配+全量」承诺被违反",
++      "location": "test/flow-agent-log-report.test.mjs:136（根因 src/flow.js:1405-1411 新门；非门本身缺陷，是适配面遗漏）"
++    },
++    {
++      "severity": "P3",
++      "title": "隐性边界未声明：--freeze-dirty 与 --accept-dirty-gap 同给时 freeze 静默胜出，acceptedDirtyGap 留痕条件双静默不落",
++      "evidence": "exclusive（--freeze-dirty）路径 collectFreezeFiles 返回 dirtyWarned:[]（src/flow-parity.js:281）→ 门不触发，且留痕展开 acceptDirtyGap && freeze.dirtyWarned.length > 0（src/flow.js:1501）恒假——双 flag 同给时冻结面胜出、无 acceptedDirtyGap 键。行为自洽（「--freeze-dirty 行为零变化」承诺成立、无数据正确性风险），但 design/requirements 均未裁决该 flag 组合",
++      "location": "src/flow-parity.js:281 + src/flow.js:1501"
++    }
++  ],
++  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
++  "reviewedAt": "2026-10-08T01:44:17Z"
++}
+
+diff --git a/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T020335 b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T020335
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/review.json.superseded-20261008T020335
+@@ -0,0 +1,17 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "30fee3ca60ca3638c53716fe8e9eed0e223e08aa",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "design 披露括注「console 显式告警」措辞滞后——描述的告警已随 30fee3ca 死代码移除而不存在",
++      "evidence": "30fee3ca 唯一改动 src/flow.js（3+/3-）：移除不可达的 acceptDirtyGap && freezeDirty 告警分支并留注释，行为等价（该作用域 freezeDirty 恒假，else if(acceptDirtyGap)→if(acceptDirtyGap) 不变量下等价；node --check 通过，源码 grep 无残留）。design.md:21 的优先级语义披露（--freeze-dirty 优先、exclusive 路径 dirty 并入、acceptedDirtyGap 不落键）仍准确在场，唯括注末「console 显式告警」四字所指标的已不存在——纯文档措辞残留，无代码/行为影响，可在后续文档性提交顺手修",
++      "location": ".sillyspec/changes/2026-10-08-thin-done-dirty-gate-and-paren-attribution/design.md:21"
++    }
++  ],
++  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
++  "reviewedAt": "2026-10-08T02:01:51Z"
++}

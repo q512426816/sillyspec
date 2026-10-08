@@ -1,0 +1,85 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "f01702b303e1f84ffef10054b50341465f6cdbfc",
+  "totals": {
+    "files": 8,
+    "additions": 258,
+    "deletions": 19
+  },
+  "rows": [
+    {
+      "path": "src/flow-parity.js",
+      "additions": 5,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow.js",
+      "additions": 24,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/foreign-declared.js",
+      "additions": 7,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 11,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/commit-attribution-split.test.mjs",
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-agent-log-report.test.mjs",
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/flow-protocol.test.mjs",
+      "additions": 17,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/thin-done-dirty-gate.test.mjs",
+      "additions": 181,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "a24278894c6141d6f10c659717bef7a7af739d85c699bb948d43317a3bb16e84",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T02:03:36.779Z"
+}

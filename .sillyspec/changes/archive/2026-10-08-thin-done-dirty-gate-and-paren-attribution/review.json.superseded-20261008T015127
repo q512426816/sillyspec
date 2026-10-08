@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
+  "reviewer": "subagent",
+  "verdict": "FAIL",
+  "reviewedAgainst": "4ecf57a60e386049c42e32779490883789f9ce58",
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "FR-04「全量套件绿」在 HEAD 不成立：新 dirty 门击穿未适配的既有 e2e（flow-agent-log-report ③）",
+      "evidence": "fixture（change 2026-09-29-flow-alr-t3）收口时留未提交交付文件 fake-agent-session.jsonl → src/flow.js:1405-1411 新门阻断，输出含「⛔ 未提交交付缺口未显式处置——收口阻断」「❌ flow done 中断于子步「patch」」原文（新代码独有文案），CLI exit 1；test/flow-agent-log-report.test.mjs:136 断言 assert.equal(status, 0) 实得 1。全量 npm test（run-tests.mjs，728 文件）726 绿 1 败，该文件单跑隔离复现确定性失败；其末次改动在 bf7c1229（先于实现提交 6093ac7c），本变更只适配了 flow-protocol ③/⑥b，漏适配此文件——「既有测试适配+全量」承诺被违反",
+      "location": "test/flow-agent-log-report.test.mjs:136（根因 src/flow.js:1405-1411 新门；非门本身缺陷，是适配面遗漏）"
+    },
+    {
+      "severity": "P3",
+      "title": "隐性边界未声明：--freeze-dirty 与 --accept-dirty-gap 同给时 freeze 静默胜出，acceptedDirtyGap 留痕条件双静默不落",
+      "evidence": "exclusive（--freeze-dirty）路径 collectFreezeFiles 返回 dirtyWarned:[]（src/flow-parity.js:281）→ 门不触发，且留痕展开 acceptDirtyGap && freeze.dirtyWarned.length > 0（src/flow.js:1501）恒假——双 flag 同给时冻结面胜出、无 acceptedDirtyGap 键。行为自洽（「--freeze-dirty 行为零变化」承诺成立、无数据正确性风险），但 design/requirements 均未裁决该 flag 组合",
+      "location": "src/flow-parity.js:281 + src/flow.js:1501"
+    }
+  ],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-08T01:44:17Z"
+}

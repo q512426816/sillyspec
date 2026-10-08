@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-thin-done-dirty-gate-and-paren-attribution",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e6dd2adac5bfb1bb563bc0e367e8918d270ba450",
+  "findings": [],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-08T02:04:24Z"
+}

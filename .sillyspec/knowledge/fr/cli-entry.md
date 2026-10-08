@@ -7665,3 +7665,105 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-07-unify-close-trace
   status: active
+
+## FR-cli-entry-404 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：全角惯例提交
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-01
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-01
+  tests: test/thin-done-dirty-gate.test.mjs「detectPatchDrift 全角括号提交判 drifted」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+  status: active
+
+## FR-cli-entry-405 flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：三态门与目录折叠
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-02
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-02
+  tests: test/thin-done-dirty-gate.test.mjs「dirty 门三态：裸跑阻断（exit 1 @ patch 不归档）/--freeze-dirty 并入/--accept-dirty-gap 留痕完成」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+  status: active
+
+## FR-cli-entry-406 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：阻断→提交→重跑
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-03
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-03
+  tests: test/thin-done-dirty-gate.test.mjs「阻断→提交（全角括号）→重跑：冻结面含 src」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+  status: active
+
+## FR-cli-entry-407 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：全量门
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-04
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-04
+  tests: test/run-tests.mjs「全量套件跑绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+  status: active
+
+## FR-cli-entry-408 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：范围声明
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-05
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+## FR-cli-entry-409 动态测试推断不把套件编排器（run-tests.mjs）收进执行面——FR 绑定指向它时转 loud skip
+变更：2026-10-08-thin-done-dirty-gate-and-paren-attribution
+状态：active
+摘要：FR 绑定指向套件入口
+全文：.sillyspec/changes/archive/2026-10-08-thin-done-dirty-gate-and-paren-attribution/requirements.md#FR-06
+最近确认：e6dd2adac5bfb1bb563bc0e367e8918d270ba450
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-thin-done-dirty-gate-and-paren-attribution:flow:测试绑定FR-06
+  tests: test/thin-done-dirty-gate.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+  status: active

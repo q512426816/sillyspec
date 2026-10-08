@@ -2,6 +2,13 @@ tier: thick
 legacy_fallback: false
 substeps:
   artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -27,7 +34,12 @@ input: >-
   - 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
 autopilot: true
 baseline_commit: f01702b303e1f84ffef10054b50341465f6cdbfc
-updatedAt: '2026-10-08T01:26:43.255Z'
+updatedAt: '2026-10-08T02:04:48.283Z'
 baseline_sha256: de617a3fea24b44abd92726f2048e2e0a41731f6789072fa0775ba3942141f36
 upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js79+js-meta-skip1)+fr(78)（52.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008013300\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（45.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008013300\test-result.json｜门文件 13 个
 
