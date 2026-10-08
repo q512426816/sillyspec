@@ -4,6 +4,15 @@ created_at: 2026-10-08T08:12:53.293Z
 ---
 # 设计记录（Design Record）— 2026-10-08-batch-tick-false-positive
 
+## 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 修改 | src/watcher.js | inferEvents 首现 task-done 收敛任务面（stage='tasks' 才发；design 预勾零幻影） |
+| 修改 | src/sentinel-assertions.js | detectBatchCheckCadence 节奏域过滤（stage 非 tasks 出域，缺省视同 tasks） |
+| 修改 | test/watcher.test.mjs | inferEvents 首现双态用例（design 预勾零 task-done / tasks.md 带勾仍发） |
+| 修改 | test/sentinel-rules.test.mjs | 契约刷新（design 出域）+ 误伤混流回归（真实事故流形态） |
+
 ## 做法概述
 
 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
