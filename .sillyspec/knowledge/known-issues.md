@@ -220,3 +220,176 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 - 现象（退役前）：execute 每任务 review.json 门在无嵌套派发环境全降自审表演——R18 对撞实证 15 次拦截中 5 次是它的形式合规（缺件/假 hash/枚举错），实质拦截为零；前置豁免通道（2026-09-26-review-unsupervised-exit）覆盖无派发环境后仍留形式拦截摩擦。
 - 状态：已退役（2026-09-26-task-review-retire）。三处消费门删除（gates.js 的 Execute Task Review Gate 整块与 enforceReviewJsonGate、enforceAlignExecuteReviewGate 的 Task Review 段）；生成侧停写（complete.js 两处 autoCheckPlanFromReviews + generateTaskReviewDrafts 兜底）；勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）；假勾防线=detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账。Stage Review 层（阶段粒度）保留；task-review.js/stage-review.js 模块保留作历史归档 doctor/回放兼容读侧（writeVerifyRequiredEvidence/printReviewResult 两个零引用导出按 22e-b 死码裁决删除）；verify-required-evidence.json 停写、在场兼容读。旧变更若 resume 撞到「缺 review.json」类指引均为退役前文案，按手动勾选语义继续。
 - 涉及：docs/analysis/R18-对撞-*（实证依据）、2026-09-26-review-unsupervised-exit（前置豁免）、2026-09-26-task-review-retire（本退役）。
+
+## 🟢 install.sh 改动需重建 backend 镜像才下发（baked into image）+ bash heredoc 转义陷阱（修复：.cmd wrapper 改 %~dp0 自相对）
+
+> 2026-06-30 记录；与 [[install.sh WSL 下 1c/1d 盘符转换 bug]]、[[backend rebuild apt 连不上 deb.debian.org]] 同属 daemon 分发链路。
+
+- **生效路径**：`sillyhub-daemon/scripts/install.sh` 不是运行时读取，而是 backend 镜像构建时 `COPY scripts/install.sh /app/daemon-dist/install.sh`（backend/Dockerfile:86）baked 进镜像，由公开端点 `/daemon/install.sh` 下发（`app/modules/daemon/dist_router.py`，无 /api 前缀）。改 install.sh 后必须**重建并重新部署 backend 镜像**，新安装的用户才拿到新版；仅改文件不重建，下发的仍是旧镜像里的 install.sh。`config.py` 的 `daemon_dist_dir` 仅在测试用 tmp_path 覆盖，生产是镜像内固定路径。
+- **heredoc 转义陷阱**：bash 无引号 heredoc（`<<EOF`）中，`\${VAR}` 的反斜杠会转义 `$` → 输出字面 `${VAR}` 不展开；要展开须让 `$` 前无反斜杠，或用 `\\` 分隔。install.sh 生成 `.cmd` wrapper 时写 `"${win_bin_dir}\${BUNDLE_NAME}"`，Windows 路径反斜杠紧贴 `${` 触发此陷阱，生成的 .cmd 含字面量 `${BUNDLE_NAME}`。修复：bundle 路径改用 cmd 内置 `%~dp0`（=该 .cmd 自身所在目录，自相对、bash heredoc 不碰 `%`、不依赖运行时 PATH）。
+- **本机已装实例**：install.sh 重建下发只影响**新安装**；本机已生成的 `~/.sillyhub/daemon/bin/sillyhub-daemon.cmd` 需手工修或重装才修复。
+
+## 🟢 sync_stage_status 找不到 change_key 的 dual-db 问题（修复：_resolve_db_path 加 fallback）
+
+- SpecWorkspace（platform-managed）和 workspace root_path 各有独立的 `.sillyspec/.runtime/sillyspec.db`。
+- `_resolve_db_path` 优先用 SpecWorkspace.spec_root，但 Agent worktree 里的 SillySpec CLI 写入的是 workspace root_path 下的 sillyspec.db。
+- `sync_stage_status` 在 spec_root 的 db 里找不到 change_key → `synced=False` → `auto_dispatch_next_step` 不触发 → `complete_stage` 不执行 → `human_gate` 永远是 `none`。
+- 修复：`_resolve_db_path` 增加 fallback，change_key 不在首选 db 时自动切换到 root_path db。
+
+## 🟢 auto_dispatch_next_step 只在 has_pending_step 时触发（修复：条件并入 stage_completed）
+
+- `agent/service.py` 原逻辑：`if sync_result.synced and sync_result.has_pending_step` 才调用 `auto_dispatch_next_step`。
+- brainstorm 完成时所有 steps completed → `has_pending_step=False` → 不调用 → `complete_stage` 永远不执行。
+- 修复：条件改为 `sync_result.synced and (sync_result.has_pending_step or sync_result.stage_completed)`。
+
+## 🟢 complete_stage 不调用 reparse 导致文档不全（修复：complete_stage 前先 reparse）
+
+- Agent 生成文件后写入磁盘，但 `complete_stage` 只更新 DB 状态（current_stage, human_gate），不同步 `change_documents` 表。
+- 前端看到的文档列表来自 DB，磁盘上的新文件（design.md, requirements.md, tasks.md）不会出现。
+- 修复：`auto_dispatch_next_step` 在调用 `complete_stage` 前先 `reparse` 同步文档。
+
+## 🟡 Alembic migration 目录在 backend/migrations/versions + schema 领先版本号的处理（stamp 对齐）
+
+- **目录路径**：`backend/alembic.ini` 的 `script_location = migrations`，所以 migration 文件真实路径是 `backend/migrations/versions/`，**不是**默认的 `backend/alembic/versions/`。确认 head 用 `cd backend && alembic history` / `alembic heads`。
+- **schema 领先 alembic 版本号**：当 model 先加列但漏补 migration 时，开发库会因某次 SQLModel `metadata.create_all` / 手动改动已把列加进表，而 `alembic_version` 表还停在旧 head。此时 `alembic upgrade head` 对新 migration 的 `ADD COLUMN` 报 `DuplicateColumnError`。
+- **正确处理**（不破坏数据、不手动改表）：`alembic stamp <新revision>` 把版本号对齐到新 migration（告诉 alembic「列已存在，版本到此」），再 `alembic downgrade -1` + `alembic upgrade head` 往返验证双向 DDL。`stamp` 是 alembic 处理「schema 已手动变更但版本号滞后」的标准手段。
+- **干净库不受影响**：全新库 upgrade head 会从建表 migration 顺序执行到新 ADD COLUMN，列那时不存在，正常通过——这正是补 migration 要解决的「干净部署必崩」。
+- **模块文档惯例**：`backend/migrations/versions/**` 不命中任何业务模块 glob（如 `backend/app/modules/agent/**`），故 migration 改动跳过模块文档同步。
+
+## 🟢 login_enabled 必须在 get_current_user 检查，不能只在 login 入口（修复 commit d62ec975）
+
+- 仅在 `auth/service.py:login()` 检查 `user.login_enabled` 是不够的：用户已持有有效 JWT，管理员调用 `disable-login` 后，旧 token 在自然过期前仍能访问所有 `/api/*` 端点。
+- 必须在 `backend/app/core/auth_deps.py:get_current_user()` 内补一道 `if not getattr(user, "login_enabled", True): raise AuthUserLoginDisabled(...)`，配合 `users_service._revoke_sessions()` 在 disable-login 时把 sessions 全部标记 revoked_at，才能让 token 立即失效。
+- **已修复**（2026-07-05 核实，commit `d62ec975`）：`repo://sillyhub/backend/app/core/auth_deps.py:78-79` 已有 `if not getattr(user, "login_enabled", True): raise AuthUserLoginDisabled(...)`。本条保留作安全模式回溯。
+- E2E 验证：disable-login 后立刻拿旧 token GET `/api/auth/me`，期望 401；用密码重新登录，期望 401 + `HTTP_401_AUTH_USER_LOGIN_DISABLED`。
+
+## 🟢 alembic.ini 注释含 UTF-8 em-dash 导致 Windows gbk configparser 崩溃（修复：注释改 ASCII）
+
+- 现象：Windows 中文 locale 下 `uv run alembic <cmd>` 报 `UnicodeDecodeError: 'gbk' codec can't decode byte 0x94`。根因：`backend/alembic.ini` 注释含 UTF-8 em-dash（`—` = e2 80 94），alembic `compat.read_config_parser` 用 locale 默认编码（Windows zh = gbk/cp936）读 ini 解码失败。
+- `PYTHONUTF8=1` / `python -X utf8 -m alembic` **均无效**（alembic compat 层不走 utf8 mode；直接 `configparser.read()` + `-X utf8` 能读，但 alembic CLI 入口路径不行）。
+- **已修复**（2026-07-05 核实）：`backend/alembic.ini` em-dash 计数为 0，注释已改 ASCII。
+- 通用坑：Windows 本地跑 alembic 的项目，alembic.ini / 其他 .ini 注释避免 UTF-8 特殊标点（em-dash/智能引号），用 ASCII。
+
+## 🟢 cursor-agent 官方 ps1 版本目录正则不匹配新版目录命名，导致 cursor 完全不可用（修复 ql-20260620-002-f8c1）
+
+- 现象：daemon 注册的 cursor runtime 版本显示「待识别」（实际注册 'unknown'），cursor task 启动即崩（exit 1）。其他 provider 正常。daemon 心跳/在线正常（因为 resolveBinPath 找到 cursor-agent.cmd 就算 available，与版本探测是否成功无关）。
+- 根因：cursor-agent 官方安装在 `%LOCALAPPDATA%\cursor-agent\`，`cursor-agent.cmd` → `cursor-agent.ps1`。ps1 用正则 `^\d{4}\.\d{1,2}\.\d{1,2}-[a-f0-9]+$` 找 `versions/` 下最新版本目录，但新版 cursor 的目录名是 `YYYY.MM.DD-HH-MM-SS-commit`（含时分秒、多段 `-`），`-` 后非纯十六进制 → 不匹配 → ps1 `Write-Error "No version directories found"` + `exit 1`。
+- 修复（ql-20260620-002-f8c1）：daemon 侧绕过 ps1 —— 新增 `resolveCursorVersionEntry` 扫描 versions 目录取最新；`agent-detector` cursor 版本探测 fallback 取目录名作版本；`cmd-shim` 模式0 把 `cursor-agent.ps1` 解析为 version 目录的 `node.exe index.js` 入口让 task-runner 直跑。
+- 通用坑：第三方 CLI 的启动包装脚本（.ps1/.cmd）若用正则找自更新版本目录，正则可能跟不上自身新版目录命名格式变化。遇到「CLI `--version` / 启动报奇怪错误且 exit 1、但二进制确实存在」时，先检查其包装脚本的版本查找逻辑是否过时，必要时绕过包装层直接调 version 目录的真实入口。
+
+## 🟢 ETL 迁移函数执行顺序依赖 maps 构建时机，ppm 模块整表成孤儿（修复 ql-20260621-004-f2a1）
+
+- `backend/scripts/migrate_from_ruoyi.py` 的 `migrate_plan_node_module.plan_node_id` 实际指向 `ps_plan_node`（里程碑，非 plan_node 模板），但原 main() 把它排在 `migrate_ps_plan_node`（构建 `maps["ps_plan_node"]`）之前 → `map_fk` 全失败 → `fallback_keep=True` 保留源数字 ID → 被 ALTER varchar→uuid 迁移丢弃为 NULL → 模块成孤儿。
+- 排查线索：对照组 `migrate_ps_plan_node_detail`（排在 ps_plan_node 之后）正常映射，唯独 module 全军覆没；"子表全空"时优先查 FK 列 NULL 比例即可定位，别只盯前端。
+- 修复（ql-20260621-004-f2a1）：main() 顺序调整，module 移到 ps_plan_node 之后；已落地的孤儿用 `backend/scripts/resync_modules.py`（幂等 DELETE+INSERT，id 用确定性 uuid5）重同步。
+- 通用坑：ETL 脚本里各 `migrate_*` 函数依赖前序函数构建的 maps dict，新增/调整迁移函数时务必确认其 `map_fk` 依赖的 map_key 已由排在前面的函数构建。
+
+## 🟢 interactive driver 自行 spawn 时漏接 resolveWindowsCmdShim 致 Windows spawn EINVAL（修复 ql-20260624-002-b2f7）
+
+> 来源：ql-20260624-002-b2f7（codex-app-server-driver）。batch task-runner 早有 resolveWindowsCmdShim，interactive codex driver 漏接。
+
+- 现象：codex interactive session 在 Windows 永远起不来，daemon 日志 `interactive_session_create_failed code=EINVAL error=spawn EINVAL`。
+- 根因：agent-detector 在 Windows 给的是 npm cmd-shim `codex.cmd`；driver 直接 `spawn(codex.cmd, args, {stdio})` 无 shell/无 wrapper 解析 → Windows CreateProcess 对 `.cmd/.bat/.ps1` 返回 EINVAL。batch `task-runner.ts` 早用通用 `cmd-shim.ts` 的 `resolveWindowsCmdShim`，唯独 interactive codex driver 漏接。
+- codex 特殊点：cmd-shim 引用的不是真 .exe 而是 `codex.js`（node ESM 入口），`codex.js` 内部 `stdio:"inherit"` spawn 真 `codex.exe`，故解析结果 = `node.exe + [codex.js]`。
+- 通用坑（防回归）：**任何自己 `child_process.spawn` 的路径**（interactive driver / 新 provider runtime / 任何长驻 stdio 子进程），Windows 上 spawn agent-detector 给的 `.cmd/.bat/.ps1` wrapper 前必须先 `resolveWindowsCmdShim` 解析成 `{exe, prependArgs}` 再 `spawn(exe, [...prependArgs, ...业务args], {shell:false})`，解析失败才回退 `shell:true`。新增 interactive driver 时对照 `task-runner.ts` 接线，别各自 spawn——否则只在 Windows 环境暴露（posix CI 跑不到，易漏）。
+
+## 🟡 codex turn 收敛强契约：turn/completed 不可被 parse 吞信号（设计决策：不加 turn 超时兜底）
+
+> 来源：ql-20260624-007-a9e3（json-rpc.ts parseTurnCompleted）。
+
+- **turn/completed 是 codex 的 claude-result 等价收尾信号**：codex app-server 是被动 server，单 turn 完成后不自动 exit，**唯一**的单 turn 收尾信号就是 turn/completed notification。
+- **强契约不可吞**：parseTurnCompleted 原在 `params.turn` 缺失/非 object 时 `return null`，把收尾信号当"非法 notification"吞掉 → complete event 不产出 → consume 卡在 `await currentTurnPromise` → `notifyRunResult` 永不执行 → backend AgentRun 永卡 active。对齐 claude：result 一到即 `onResult`，零吞信号；codex 同理：turn/completed 一到必产 complete event（params.turn 异常时降级 unknown→driver 转 failed 上报）。
+- **为什么 claude 不卡、codex 卡**：claude 走 SDK 强契约（每 turn 必 yield result，generator 自然结束）；codex 靠自己 spawn+readline 解析 turn/completed 推断 turn 边界，信号被吞就永久挂起。
+- **daemon-network-resilience 变更救不了这种卡死**：那个变更针对"回传调用失败"（notifyRunResult 调了但网络丢）；这里是"压根没调 notifyRunResult"。属更上游缺陷。
+- 诊断兜底：codex 子进程 stdout 现已落盘 `~/.sillyhub/daemon/runs/codex-interactive/<sessionId>.log`，下次卡死秒级看 turn/completed 是否到达。
+- 用户决策：**不加 turn 超时兜底**（会误杀推理模型正常长 turn），靠对齐 claude 强契约（不吞收尾信号）根治。
+
+## 🟡 Next.js rewrite proxy 对长请求 socket hang up + daemon 分发以 git SHA 为版本号（未 commit 改动不递增）
+
+- **Next.js rewrite proxy 超时**：frontend `next.config.mjs` 用 `rewrites` 把 `/api/:path*` 代理到 backend（Next.js 14.2.5 standalone node server，非 nginx）。backend 处理慢（>~20-30s）时 proxy 端 `socket hang up / ECONNRESET` 返 500 给浏览器，但 backend 仍在后台跑完（业务成功、前端误报）。根治：耗时端点改 SSE 流式（text/event-stream 长连接 + 阶段事件 + 长阻塞段每 5s yield `: keepalive` 注释行保活），前端原生 fetch+ReadableStream 解析（不复用 JSON 的 apiFetch）。参考范式：`agent/router.py:_SSE_HEADERS` + `StreamingResponse(gen, media_type="text/event-stream")`。
+- **daemon 分发以 git SHA 为版本号**：`pnpm bundle` 的 `BUILD_ID={commit-sha}-{timestamp}`（build-bundle.sh 写 src/build-id.ts），backend `/daemon/latest.json` 分发此 version，daemon `preflight` 启动时比较本地 vs 服务器 SHA 决定是否自更新。**未 commit 的 daemon 改动 bundle 后 BUILD_ID 仍是当前 HEAD SHA**——若用户 daemon 已是该 SHA，preflight 判定版本相同不更新，新代码不生效。故 daemon 改动必须**先 commit（新 SHA）→ 再 bundle → 再 rebuild backend**，分发版本才会递增。
+- **apply_sync 黑盒 vs SSE 分阶段**：原 `apply_sync`（写盘+reparse 整体返回 int）无法在 SSE 中途 yield reparse 阶段进度。解法：提取 `_write_spec_root`（写盘+commit clean）供 apply_sync 与 SSE 生成器共用，SSE 顺序调 `_write_spec_root`→`_reparse_phase(scan_docs)`→`_reparse_phase(change)`，每步 yield 事件。两阶段 reparse 各自 try/except 设 dirty 不阻断（D-003，docs/changes 独立数据，部分成功优于全失败）。
+
+## 🟢 跨端 mock 各自绿但契约断裂：字段命名/时间戳形态三端对不齐（修复 sillyspec 9a63466）
+
+> 来源：2026-08-19-runtime-live-daemon-read execute acceptance review 抓到的 P0。
+
+- 现象：runtime 进度链路（sillyspec CLI dump → daemon 透传 → backend pydantic）三端测试全绿，端到端却断链——dump 输出 camelCase（currentStage/startedAt/sizeBytes），backend `RuntimeProgress` 是 snake_case；pydantic 默认**静默忽略未知字段**，model_validate 通过但核心字段全落 None，前端进度页成空壳。第二层坑：DB 内历史斜杠时间戳（`2026/7/22 13:38:35`）pydantic datetime 直接拒收。
+- 根因：三端测试各自 mock 了「自以为对」的数据形态（backend mock snake_case、daemon mock snake_case、sillyspec 断言 camelCase），没有一侧用**真实对端输出**做契约测试。task review 铁律「只看当前 task 的 diff」天然覆盖不到跨 task 交界——这正是 stage acceptance review 的兜底价值。
+- 修复范式（sillyspec 9a63466，2026-10-08 核实存在于本仓）：生产端（dump）转 snake_case + 时间戳规范化（ISO 与斜杠统一 ISO）；测试加**跨端契约守护断言**（camelCase 残留检测 + ISO 形态检测）；验收必做端到端（真实 DB → CLI 输出 → pydantic model_validate 全字段断言，不能只看「校验通过」——要看字段值非空）。
+- 通用坑：① pydantic 忽略未知字段是静默降级，`model_validate` 不报错 ≠ 数据进了模型，跨端契约测试必须断言**字段值**而非仅校验成功。② 多端链路的「mock 契约」要有一侧锚定真实输出形态（fixture 从真实 CLI 输出固化），否则三端各绿 = 三端各错。
+
+## 🟡 Windows 下 execFile 调 npm 全局 CLI 必 ENOENT，须 spawn+shell 或 cmd-shim 解析（待确认）
+
+> 来源：同上 task-11 实现期实测 + 仓内先例交叉验证。
+
+- 现象：`execFile('sillyspec', [...])` 在 Windows 返回 ENOENT——npm 全局 bin 是 `.cmd` shim（`C:\nvm4w\nodejs\sillyspec.cmd`），execFile 无 PATHEXT 解析；Node ≥18.20 同时因 CVE-2024-27980 拒绝无 shell 调 `.cmd`/.bat。
+- 仓内范式：① `spec-sync.ts runInitCmd`（X-06 注释）`spawn(cmd, {shell:true})` + 超时 taskkill /T /F 杀树；② `cmd-shim.ts resolveWindowsCmdShim` 读 `.cmd` 提取真实 exe + target 直接 spawn（重任务用）；③ `preflight.ts runWithTreeKill` 同范式。
+- 注入防线：shell:true 时命令串拼接是注入面，入参必须白名单（本例 workspace_id UUID 正则先于拼接，`; rm -rf` / `&& calc` / `$(whoami)` / 反引号全拒）。
+- 通用坑：task 卡/设计文档写「execFile 非 shell 防注入」在 Windows 调 npm bin 场景是**纸上方案**——落地前先实测平台行为，防注入诉求改为入参白名单 + shell 隔离双层。
+
+## 🟢 backend rebuild apt 连不上 deb.debian.org：base image digest 漂移致 apt 缓存失效裸奔（修复 ql-20260713-001-9f3e）
+
+> 来源：ql-20260713-001-9f3e（install.sh 修复 ql-20260710-003 上线时触发）。与 [[install.sh 改动需重建 backend 镜像才下发]] 同属 daemon 分发链路。
+
+- 现象：`docker compose up --build` 重建 backend 在 `[runtime 3/14] RUN apt-get update` 报 `Could not connect to deb.debian.org`（Connection refused）→ `Unable to locate package curl/git` → 整个 build 失败。运行中的旧容器不受影响（仍 healthy）。
+- 根因：runtime stage 的 apt 层平时缓存命中不需联网；当 base image `python:3.12-slim` 上游 digest 漂移（docker hub 重新推送同 tag），FROM 层变化使后续所有层缓存失效，apt-get update 需重新联网，而 deb.debian.org 在国内网络不可达——pip（tsinghua）/npm（npmmirror）都已配国内源，唯独 apt 漏配。
+- 修复（ql-20260713-001-9f3e）：backend/Dockerfile L66-76 在 apt-get update 前加 `find /etc/apt \( -name sources.list -o -name '*.sources' \) -exec sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' {} +`。trixie 用 DEB822 `/etc/apt/sources.list.d/debian.sources`，旧版用 `sources.list`，find 双覆盖；找不到文件时 `-exec` 不执行、退出码仍 0，无副作用。
+- 通用坑：Dockerfile 多阶段里 pip/npm 配了国内镜像但 apt 漏配是常见隐患——平时缓存命中掩盖了 apt 源不可达，一旦 base image digest 漂移或 `--no-cache` 就裸奔 build 失败。新项目 Dockerfile apt 层统一配国内源，与 pip/npm 对齐。
+
+## 🟢 install.sh WSL 下 1c/1d 盘符转换 bug（/e/ vs /mnt/e/）+ CMD `bash` 默认解析到 WSL（修复 ql-20260713-003-b3d7）
+
+> 来源：ql-20260713-003-b3d7。与 [[install.sh 改动需重建 backend 镜像才下发]] 同属 daemon install.sh 链路。
+
+- 现象：用户 node 在 `E:\Software\nvm`（nvm-windows，NVM_SYMLINK=E:\Software\nodejs → 版本目录），从 CMD 跑 `curl .../daemon/install.sh | bash` 报"未检测到 node，安装中止"。但 install.sh 1d PowerShell 注册表逻辑本身在本机直接跑能找到 `E:\Software\nodejs\node.exe`（注册表 PATH 有）。
+- 根因①（CMD `bash` 解析）：用户系统装了 WSL（Ubuntu），CMD 敲 `bash` 默认解析到 `C:\Windows\System32\bash.exe`（WSL），**不是** Git Bash——除非 Git Bash 的 `bash.exe` 在 PATH 更前。install.sh 在 WSL 跑（IS_WSL=1）。
+- 根因②（盘符转换 bug）：1c（cmd where）+ 1d（powershell 注册表）都成功拿到 Windows 路径 `E:\Software\nodejs\node.exe`，但盘符转换硬编码 `/${drive}${path:2}`（Git Bash 风格 `/e/`），WSL 下 `/e/` 不存在（应 `/mnt/e/`）→ `[[ -f /e/... ]]` 失败 → NODE_BIN 空。1a（WSL PATH 不含 Windows node）+ 1b（候选路径无 /mnt/e/）也失败，1c/1d 是唯一救命稻草却被盘符转换坑了。
+- 修复（ql-20260713-003-b3d7）：install.sh 抽 `win_to_unix_path` 函数，按 IS_WSL 决定前缀（WSL → `/mnt/<drive>/`，Git Bash → `/<drive>/`），1c/1d 改调它。验证：WSL 内层跑改后脚本 check_node = 找到 node（注册表 PATH）: `/mnt/e/Software/nodejs/node.exe` v24.14.1。
+- 通用坑：跨 Git Bash/WSL 的 shell 脚本，Windows 路径转 unix 路径必须区分两种映射（MSYS `/c/` vs WSL `/mnt/c/`），不能硬编码其中一种。WSL 默认 automount 所有 Windows 盘到 `/mnt/<drive>/`；Git Bash (MSYS) 挂到 `/<drive>/`。检测 IS_WSL（`/proc/sys/kernel/osrelease` 含 `microsoft`）后选对应前缀。写 Windows 安装脚本时**别假设 `bash` = Git Bash**——Win10/11 装了 WSL 后，CMD/PowerShell 里 `bash` 默认是 WSL 的 bash.exe。
+
+## 🟢 install.sh WSL 下 $USER ≠ Windows 用户名（拼 /mnt/c/Users/<name> 目录坑）（修复 ql-20260713-004-7e2a）
+
+> 来源：ql-20260713-004-7e2a。继 [[install.sh WSL 下 1c/1d 盘符转换 bug]] 之后又一个 WSL 兼容坑。
+
+- 现象：install.sh 在 WSL 下 `mkdir -p "$INSTALL_DIR"` 报 `Permission denied`（node 检测 + fetch_latest 都过了，卡在 download_bundle 的 mkdir）。
+- 根因：WSL 的 `$USER` 是 **Linux 用户名**（默认常 root），≠ Windows 用户名。install.sh WSL 分支原用 `$USER` 拼 `/mnt/c/Users/${USER}/.sillyhub/daemon`，若 WSL $USER=root 则 `/mnt/c/Users/root/` 不存在（Windows 用户目录是 `<winname>`，如 12532），`mkdir -p` 在 `C:\Users\` 下建 `root/` 被 drvfs 拒。
+- 修复（ql-20260713-004）：WSL 下改用 `/mnt/c/Windows/System32/cmd.exe /c "echo %USERPROFILE%"` 拿真实 Windows 用户目录（`C:\Users\<winname>`），转 `/mnt/<drive>/...` 拼 INSTALL_DIR。**`powershell $env:USERPROFILE` 在 WSL root 下不展开**（`$env` 被 bash/interop 吃，返回空），`cmd.exe echo %USERPROFILE%` 可靠。
+- 通用坑：WSL 下要拿 Windows 用户目录/用户名，**别用 WSL 的 `$USER`/`$HOME`**（是 Linux 的，常 root），用 `cmd.exe /c "echo %USERPROFILE%"`/`%USERNAME%` 或读注册表。跨 Git Bash/WSL 的脚本里 `$USER` 语义不同：Git Bash `$USER`=Windows 用户名，WSL `$USER`=Linux 用户名——不能假设一致。
+
+## 🟢 SILLYSPEC_MASTER_KEY 必须 v1:<64位hex>，非 hex 值致 get_cipher() 裸 ValueError 全模块 500（修复 ql-20260729-001-b3af；裸 ValueError 健壮性建议保留）
+
+> 来源：ql-20260729-001-b3af（GET /api/llm-providers 500 修复）。
+
+- 现象：GET /api/llm-providers 返回 500（及所有走 `CredentialCipher` 的接口：llm_provider / git_identity / worktree 等）。后端日志 `ValueError: non-hexadecimal number found in fromhex() arg at position 0`，栈顶在 `repo://sillyhub/backend/app/modules/llm_provider/service.py:170 _default_cipher` → `repo://sillyhub/backend/app/core/crypto.py:58 bytes.fromhex`。
+- 根因：`deploy/.env` 的 `SILLYSPEC_MASTER_KEY` 被填成人类可读标识串 `msk-sillyhub-dev-90d223fd-...`（看着像密钥，实则非十六进制）。`crypto._load_master_key()` 只对**空值**抛友好 `MasterKeyMissing`，非空但非 hex 直接走 `bytes.fromhex(hex_key)` → 裸 `ValueError` → `get_cipher()` 构造期崩溃 → 任何 `new LlmProviderService(session)` / `WorktreeService(...)` 立即 500（list 接口构造 service 时就炸，根本到不了 SQL）。
+- 修复（ql-20260729-001-b3af）：`deploy/.env` 第5行换成合法 `v1:<secrets.token_hex(32) 生成的 64位hex>`；`docker compose up -d --force-recreate backend` 重建容器重读 env。零数据风险：`llm_providers`/`git_identities` 表均空、`api_keys` 为 hash 存储不依赖 master key。
+- 通用坑：① `SILLYSPEC_MASTER_KEY` 格式必须是 `<key_id>:<64位hex>`（如 `v1:ab12...`）或裸 64 位 hex，**不能**填标识串/base64/明文密码；生成命令 `python -c "import secrets; print(f'v1:{secrets.token_hex(32)}')"`（`repo://sillyhub/backend/app/core/crypto.py:42` MasterKeyMissing 的 hint 已给）。② `deploy/.env` 被 `.gitignore`，改它不进 `git status`，靠重建容器重读 env 落地（`docker compose up -d` 检测到 backend env 变化会自动 recreate，保险用 `--force-recreate backend`）。③ `_load_master_key` 对「非空但格式非法」抛裸 ValueError 是健壮性缺陷——建议后续把 `bytes.fromhex` 包 try/except 转 `MasterKeyMissing`（带 hint），避免 500 时栈里只有裸 fromhex 难定位。
+
+## 🟡 antd v6 实测三坑：Image 无 wrapperClassName、Modal 语义 styles.container、枚举式 vi.mock 须随桶导出同步（待确认）
+
+> 来源：2026-08-26-file-fullscreen-preview execute（task-03/04 实现期实测 + QA 验收抓回归）。
+
+- Image：v6 已删 `wrapperClassName`，撑高外层 wrapper 用语义槽 `classNames={{ root: "..." }}`（grep @rc-component/image 确认 root 落 wrapper div）；img 的百分比 max-h 需 wrapper 有高度基准，否则解析不了。
+- Modal：v6 语义键是 `styles.container`（v5 的 `styles.content` 不再命中内容容器）；`style+width` 挂 `.ant-modal` 根，默认 `top:100/max-width:calc(100vw-32px)`，做全屏需同时覆盖 `width=100vw + style={{top:0, maxWidth:"100vw"}}`。
+- 测试：枚举式 `vi.mock("桶文件", () => ({...}))` 工厂在桶文件新增导出时会让模块作用域引用（如 RENDERER_MAP）直接炸套件（"No X export is defined on the mock"）——桶加导出必须同步补 mock 工厂，且这类断裂是套件级（0 test 收集），vitest 汇总里表现为 1 test file failed 而非用例 failed。
+
+## 🟡 AgentMission.session_id 判别口径：列非 NULL 不可信，须查表确认指向真实 AgentSession
+
+session_id 列 NOT NULL + default_factory=uuid4（为兼容 ~50 处存量构造不传该字段的测试/路径）意味着"列非 NULL"不等于"绑定会话"——存量/旧链路 mission 会带随机 uuid。判别会话 mission 的正确口径=查表确认 session_id 指向真实存在的 AgentSession（patrol/finalizer 的 _mission_bound_session 同源实现）。来源：2026-08-22-team-session-unify task-01/06（Grill NEW-4 延伸）。
+
+## 🟡 后台子代理脱离平台 running turn 后权限回调 fail-closed 死锁
+
+> 来源：2026-08-24-platform-session-feedback-fix Wave 1 执行期（task-01 / task-08 后台子代理）。
+
+- 现象：子代理（`run_in_background: true`）在父 turn 派发后若干分钟完成读码/设计，开始写操作（Edit/Write/Bash 非只读/MCP sillyhub）时，全部被拒绝：`session not in running turn`。只读操作（Read/Grep/Glob/git status/ls/cat）正常。协调者（本 agent）通过监控循环「保活 turn」无法改变子代理绑定的平台 SessionState——子代理的 canUseTool 回调与父 turn 的 currentRunId 解耦，只有真实用户新消息开新 turn 才恢复写权限。
+- 根因：`repo://sillyhub/sillyhub-daemon/src/interactive/session-manager.ts:811` 与 `:1585` 的 canUseTool 回调在 `state.status !== 'running' || !state.currentRunId` 时直接 deny；后台子代理存活到 turn 结束后，currentRunId 失效，所有写操作 fail-closed。当前平台无「子代理权限请求路由到父会话/排队重试」机制。
+- 规避：execute 阶段派耗时子代理时，改用 `run_in_background: false` 同步子代理，确保子代理在父 turn 的真实 run 窗口内完成全部写操作；若必须后台并行，则把「只读调研」放后台，写操作集中在主 turn 内由同步子代理机械应用。该现象本身也印证了本变更 FR-03（后台 Agent 任务进度可见）的痛点：会话不应在后台子代理仍在工作时提前失去 running 态。
+- 修复建议（平台侧）：canUseTool 对子代理或派生会话引入 grace period / 父会话委托 / 队列重试，避免正常后台工作被 turn 边界切断。
+
+## 🟢 字面量端点被两段式参数路由吞致 422 + 审查盲区三连（sessions/events，修复 commit 0c7860f7）
+
+> 来源：2026-08-24-sessions-live-updates verify 真实运行时冒烟（commit 0c7860f7 修复）。
+
+- 现象：`GET /api/daemon/sessions/events` 带鉴权请求返回 422 uuid_parsing——"events" 被两段式参数路由 `GET /sessions/{session_id}`（get_session_detail）当作 {session_id} 吞掉，端点在真实路由下不可达；task-04 注释只要求先于三段式 `/sessions/{id}/...`，漏了两段式详情路由。
+- 盲区三连：① 审查 grep 用单行模式 `@router.get("` 漏掉多行装饰器（路径在下一行）；② 端点测试直接调路由函数（`await stream_sessions_events(user=...)`）绕过路由表，路由顺序永不进入测试；③ 唯一路由级测试只断言未登录 401——FastAPI auth 依赖先于路径参数校验触发，遮蔽路由下同样 401，红不了。
+- 规避：新增字面量路径且同前缀存在参数路由时——审查用多行感知 grep（`grep -A1 '@router\.get($'`）；测试补路由表级断言（按注册序找首个方法+regex 匹配，断言 endpoint 是预期函数，不消费 body）；SSE/无限流端点测试勿走 httpx client 消费 body（ASGITransport 收全量 body 才返回，`client.stream()` 也挂死），路由可达性用路由表断言替代。真实运行时冒烟（真 uvicorn + curl）是最后防线——本缺陷单测 5186 全绿仍存在。与 [[ppm export-excel 路由必须前置 item_id]] 同构（该条 422、路由顺序），互为印证。

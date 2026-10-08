@@ -1,0 +1,22 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  动机：knowledge/uncategorized.md 收件箱积压 39 条（另含 1 个掉标题孤儿块）待归类经验，条目已成熟（多带修复记录与来源变更），需清账迁入分类文件并加 INDEX 索引，便于后续按关键词命中注入。
+
+  成功标准：
+  - uncategorized.md 清空至仅保留文件头说明与清账留痕，0 条待归类
+  - 全部条目按内容归入 known-issues / patterns / conventions / testing-gotchas / sillyspec-gotchas 之一，正文信息无损迁移
+  - 已修复条目按 known-issues 惯例标注（🟢 + 已修复 + 修复凭据）
+  - INDEX.md 为全部迁入条目补关键词索引行，Uncategorized 段描述同步更新
+autopilot: false
+baseline_commit: 71f2a7b0f6687e2bd51c3b3eaebf34e26490009d
+updatedAt: '2026-10-08T03:24:15.381Z'
+baseline_sha256: 42d92987682a83f706e894834bf26022d0f929c0f7d078b590c9e1dc63d1c220
+spec_approved: true
+spec_approved_at: '2026-10-08T03:24:15.378Z'
+spec_approved_by: zcode-kb-triage-1008
+

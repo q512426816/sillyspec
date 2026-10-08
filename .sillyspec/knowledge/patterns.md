@@ -135,3 +135,57 @@ backend 无可达文件系统（daemon-client 唯一模式）时，「远端写�
 - 生产者轮询回执（周期 ≤1s）：done → 直接返回；failed / 超时 → 回滚占坑行 + 抛 ChangeWriteError（结构化 code 供前端 toast）。
 
 依据：`.sillyspec/docs/SillyHub/flows/daemon-change-write.md`。
+
+## 单类巨石拆 facade+子包的 import 策略（避免 module-level 循环 / 跨域调用 / 测试 patch 跟随）
+
+> 来源：2026-06-22-daemon-service-split（DaemonService 3324 行拆 runtime/lease/run_sync/session/patch 5 子包）。decisions.md D-005/D-006。
+
+- **循环 import 坑**：facade 顶部模块级 `from .subpackage.service import SubService` + 子 service 顶部 `from .service import SomeError`（异常类暂留 facade）= 双向模块级循环，import 即 `ImportError`。
+- **解法（D-005）**：facade `__init__` 内**函数级 lazy import** 子 service 类（repo://sillyhub/backend/app/modules/daemon/group/router.py:53 同款模式），子 service 顶层 import facade 异常类。依赖单向（子→facade），循环解除。
+- **跨域调用（D-006）**：子 service 调未迁/跨域方法持 `self._facade` 引用——facade `__init__` 构造子 service 后注入 `self._x._facade = self`，方法体 `self._facade.cross_domain_method()`。`TYPE_CHECKING` import facade 类型避免运行时循环。全部子域迁完后 facade 保留委托，引用继续兼容，**不耦合 Wave 顺序**。
+- **测试 patch 跟随**：模块级符号（如 `get_redis`）从 facade 迁子 service 后，测试 `patch("...daemon.service.get_redis")` 失效，patch 目标必须跟随到子包模块（`...daemon.run_sync.service.get_redis`）。源码 API 零变化，仅 patch 物理位置变。
+- **grep 调用点范围**：迁移方法时 grep 调用点必须搜 `router.py` + 全 `backend/app/` + `tests/`，不能只搜当前文件——router 可能直接调 service 私有方法。
+- **异常类最终归位**：收尾阶段把异常类从 facade 迁各子包定义 + facade re-export（显式列出禁 `import *`），此时 facade 可模块级 re-export 子包符号（子包不反向 import facade，单向无循环）。
+- **通用**：任何"单类拆子包 + facade 兼容（签名不变/router 零改动）"的重构适用此 import 策略组合。
+
+## Codex Interactive Session：provider-neutral driver 抽象
+
+> 来源：2026-06-23-codex-interactive-session（D-001@v1 ~ D-010@v1）。把单一 provider 的 interactive session 控制层抽象成 provider-neutral driver 的实践。
+
+- **Provider driver 抽象（D-001@v1, D-009@v1）**：把 SessionManager 从「只驱动单一 provider SDK」改为「按 provider 选 driver」。`SessionManagerDeps.drivers: Partial<Record<'claude' | 'codex', InteractiveDriver>>`，driver 契约 provider-neutral（`start`/`consume`/`interrupt`），driver 内部各自做 provider 协议 ↔ provider-neutral `UserTurnInput` 转换。session 生命周期层不依赖具体 SDK 类型；新增 provider 只加 driver，不触碰 SessionManager 控制面。
+- **Codex app-server stdio JSON-RPC 长驻 driver（D-002@v1, D-004@v1）**：`codex app-server --listen stdio://` 作为长驻子进程，driver 内做 `initialize` → `notifications/initialized` → `thread/start` → 串行 `turn/start`；`thread/resume(threadId)` 支持 reopen/recovery；消息映射成 flat message 上报 backend。interactive 与 batch 是**两套审批策略隔离点**，别共用审批状态。
+- **Fail-closed 审批策略（D-006@v1, D-008@v1）**：provider-neutral server request 默认走 `PermissionResolver`，backend send 失败/超时/session 已结束/driver 被 interrupt 时返回 deny/cancel，**绝不无条件自动 accept**。权限 deny 时返回**空 profile**（不扩权），而非按请求 granted。
+- **MCP elicitation 复杂场景如实标注（D-008@v1, D-010@v1）**：可归一化成现有 `AskUserDialogCard` 的简单 form/url 才阻塞等待用户；不支持的复杂 schema fail-closed 并上报 error，**不写成「全面支持 MCP elicitation」**。
+- **缺 thread id 的 Codex session 不能伪造（D-007@v1）**：ended/failed Codex session 若缺 threadId，应显示失败且**不伪造新 thread**（避免历史串线）。
+
+## daemon allowed_roots 只管 list_dir RPC，不管 CC 执行 cwd
+
+> 来源：2026-06-26-daemon-root-path-translation execute（design D-002 superseded）。
+
+- daemon `assertWithinAllowedRoots`（`sillyhub-daemon/src/file-rpc.ts`）只被 `listDir` 调用（list_dir RPC），**不用于 CC 执行的 cwd/文件访问**。CC 的 cwd 由 `task-runner.ts` `prepareWorkspace` 分支0 `statSync(rootPath)` 决定，CC 访问文件走 OS 权限（独立进程）。
+- 设计 daemon 侧"放行 CC 访问"类功能时，勿误以为 allowed_roots 管 CC 执行——它只管 daemon 自身的 list_dir RPC（前端浏览目录场景）。CC 能否在项目根执行 + 访问源码，取决于 backend 下发的 root_path 是否为 daemon 可 statSync 的宿主机路径。
+
+## Claude Agent SDK task_* 生命周期系统消息可消费
+
+SDK 0.3.181（捆 CLI 2.1.181+）运行时确实发射 `system/task_started`（task_id+tool_use_id+description+subagent_type）、`task_notification`（status:completed|failed|stopped + output_file，~64s 量级延迟）、`task_updated`（patch.status/end_time）与 `background_tasks_changed`；**task_progress 短任务零发射**（"正在做什么"展示需回退 transcript 推导）。消费点：session-manager `_onMessage` system 分支（2026-08-27-background-subagent-progress task-03），持久化方言 `[TASK_*]` stdout 单行 JSON 行带 parent_tool_use_id。（来源：同变更 task-01 spike 静态+动态双实证）
+
+## 会话 token 两套口径：计费量（Σ 跨调用可加）vs 上下文量（瞬时，取最近一次调用）
+
+- **语义勘误**：Anthropic 原生 stream 事件里 `cache_read/cache_creation_input_tokens` 是**本调用**的缓存前缀量（replace 取最新 = 最近一次调用的缓存读取），不是"会话级累计快照"（ql-20260710-001 旧注释误读；batch stream-json.ts 实为 :498-511 逐调用 `+=`，:552/1143-1148 引用有误）。
+- **SDK result usage 聚合口径**（7 会话 28 轮 DB 实证，spike-r09.md）：`SDKResultSuccess.usage.input_tokens` = 该 query 内 Σ 逐调用 input；跨轮不累计（与 daemon 会话累计计数器是两个量）。
+- **设计教训**：上下文窗口用量（CtxUsageRing 分子）必须是"最近一次调用的 input+cache_read+cache_creation"（`AgentRun.ctx_tokens`，last-write-wins、终态不覆盖）；各轮 input_tokens 求和会跨轮重复计历史（6 轮 394 万 vs 200K 窗口爆表）。实时/终态口径必须同类（本轮计费量），否则轮结束数字跳变。
+- 关联变更：2026-08-27-session-token-usage-fix（D-001@v2/D-006）。
+
+## daemon 本机集成验证：WS 鉴权只认 X-API-Key + USERPROFILE 隔离跑第二实例
+
+- daemon 的 WS 升级鉴权（backend `_authenticate_ws_upgrade`）走 `X-API-Key`（或 shk_live_ 前缀 Bearer）；`--token`（JWT）只能过 REST，WS 会 403 `ws_upgrade_auth_rejected`——本机起 daemon↔backend 真实集成时必须 `--api-key`（key 经 POST /api/auth/api-keys 签发）。
+- daemon 单实例守卫是全局 `~/.sillyhub/daemon/daemon.pid`（不分 server）；本机已有真实 daemon 时，集成验证进程用 `USERPROFILE=<临时目录>` 启动即可整树隔离（config/locks/pid 全落临时 HOME，Windows 上 os.homedir() 读 USERPROFILE），零副作用跑第二实例，验后删目录。
+- 来源：2026-08-31-machine-sillyspec-version verify Runtime Evidence（task: verify 集成验证）
+
+## aiosqlite 不支持 SELECT FOR UPDATE：并发唯一性守卫用部分唯一索引+IntegrityError 捕获
+
+agent 模块测试跑 SQLite（aiosqlite），FOR UPDATE 语法不被支持（直接报错，不是静默忽略），需要并发防重的场景（如懒建 mission 防同 turn 双建）应：DB 层建部分唯一索引（WHERE 业务活跃条件）兜底 + 应用层捕获 IntegrityError 后 rollback 重查复用先到者。本仓先例：uq_agent_missions_session_active（20260822090000 迁移）+ mcp_tools 懒建守卫。来源：2026-08-22-team-session-unify task-05。
+
+## MCP server 子进程不继承 claude.exe 完整环境：env 必须放 mcpServers[*].env
+
+claude.exe（2.1.x）spawn MCP server 子进程时 env 为「白名单基线（PATH/HOME 等 12 个）+ per-server env 覆盖合并」，不继承完整父环境。给 MCP server 注入自定义变量（如 MCP_SESSION_ID）必须放在 options.mcpServers['<server>'].env（daemon mcp-config.ts 的 server config env 字段），放 SDK 顶层 options.env 无效。证据链：repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:407 透传 → sdk.d.ts 的 McpStdioServerConfig.env（SDK 类型声明在 node_modules 依赖包内，行号随包版本漂移不入锚）→ sdk.mjs --mcp-config 全量序列化 → claude.exe StdioClientTransport.start spawn env 合并。来源：2026-08-22-team-session-unify spike-01。

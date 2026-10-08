@@ -94,3 +94,12 @@ Tailwind 的 `md:` / `lg:` 等前缀按**浏览器视口**宽度生效，与组�
 ## 模块卡片 H1 用中文名（module-id）
 
 平台（SillyHub）文档列表按 markdown 首个 H1 提取 title 展示（backend scan_docs parser._extract_title）。模块卡片 H1 必须写「# 中文短名（module-id）」全角括号格式（如 `# 变更中心（change）`），不能只写英文 module-id——否则平台文档列表显示一墙英文代号不可读。scan 文档/flows/术语表同理用中文标题。墓碑卡中文名带「已删除」标记。2026-08-18 ql-20260818-003 补齐 200 张卡片时确立。
+
+## daemon 单测只能落 tests/**（vitest include 不含 src）
+
+sillyhub-daemon 的 vitest.config.ts include 仅 `tests/**/*.test.ts`——src 内任何 `__tests__/` 目录不被发现（`pnpm vitest run src/...` 报 No test files found，spikes 目录就是因此单独建了 config）。新增 daemon 测试一律落 `tests/interactive/` 等既有子目录。（来源：2026-08-27-background-subagent-progress task-04）
+
+## backend daemon 模块测试双目录惯例
+
+- daemon 模块测试主要在 `backend/app/modules/daemon/tests/`（conftest + 绝大多数用例，如 test_pending_update_upsert / test_machines_router / test_register_heartbeat_daemon）；顶层 `backend/tests/modules/daemon/` 只有契约/迁移/版本管理少数文件（test_protocol_session_contract / test_daemon_version_management）。写 TaskCard allowed_paths 与 verify 命令时先按此归属，别把 app/modules/... 的测试写到 tests/modules/... 路径。
+- 来源：2026-08-31-machine-sillyspec-version task-02/task-03（design 首版路径写错目录，plan 阶段修正）

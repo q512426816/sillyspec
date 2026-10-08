@@ -50,3 +50,34 @@ created_at: 2026-07-05 02:00:00
 - markdown-text.tsx 用 `next/dynamic` `ssr:false`，jsdom 测试同步 `render` 处于 loading（返回 null），assistant 文本不进 DOM 致 `getByText` 失败。
 - 修法：测试文件顶部 `vi.mock` 成纯文本渲染（测父组件逻辑而非 markdown 库本身）。
 - 影响组件：agent-log-viewer / interactive-session-panel / runtime-session-dialog。
+
+## 后端：daemon 列表测试造 status 必须符合 cleanup_stale_runtimes 不变量
+
+> 来源：2026-07-07-daemon-machine-runtime-hierarchy task-04 排序用例。
+
+- `list_machines` / `list_runtimes_page` 进入先调 `cleanup_stale_runtimes()`（DEFAULT_RUNTIME_STALE_SECONDS=45）：选 `status='online'` 且心跳 >45s（或 NULL）的 instance 改 offline，**不反向 resurrect**（offline→online 由心跳端点主动刷新）。
+- 测试造 data：设 `status="online"` 的 instance，`last_heartbeat_at` 必须 `<45s`（如 `now - timedelta(seconds=30)`），否则 cleanup 改 offline 污染排序/统计断言；设 `status="offline"` + 新心跳的 instance 保持 offline（cleanup 不 resurrect），可安全验证"online 优先于心跳新鲜度"。
+- 通用坑：调用 `list_*`（内部 cleanup）的测试，造的 instance.status 必须与 last_heartbeat_at 一致（online ⟺ <45s），不能凭空设 online + 老 heartbeat。
+
+## 后端：Pydantic 必填派生字段不能用 model_validate(ORM)+model_copy 两段式
+
+> 来源：2026-07-07-daemon-machine-runtime-hierarchy task-03/04（_build_machine_read bug，task-04 测试捕获）。
+
+- 现象：DTO 含必填派生字段（如 `runtime_count: int` 无 default），用 `Model.model_validate(orm_instance)` + `model_copy(update={派生字段: 值})` 两段式构造时，`model_validate` 在 `model_copy` 填值**前**就抛 `ValidationError: Field required`（ORM 无此属性）。
+- 解法：派生字段在构造时显式传——全字段直构 `Model(field1=orm.x, ..., 派生字段=value)`；或给派生字段加 `default=0`（model_validate 用 default 不崩，model_copy 覆盖真实值，适合派生字段总有组装覆盖的场景）。
+- 对比 `_runtime_read`（repo://sillyhub/backend/app/modules/daemon/router/runtimes.py:260）用 model_validate + model_copy 不崩，因 DaemonRuntimeRead 所有字段在 ORM 都有或 optional；DaemonMachineRead 崩是因 runtime_count/online_runtime_count 必填且 ORM 无。
+- 通用坑：DTO 有"派生/聚合"必填字段（不在源 ORM 上）时，避开 model_validate(ORM) 两段式，用全字段直构或给派生字段 default。
+
+## 后端：admin 套件 login 限流 429 致偶发 FAILED（预存，测试态跨用例累计）
+
+> 来源：ql-20260808-001-4068（安全加固三联）跑 `tests/modules/admin` 时发现。
+
+- 现象：`tests/modules/admin/test_users_router.py` 全量跑时 `test_update_username_change_success`（及 `test_create_user_then_login_by_username`）偶发 `assert 429 == 200`（`HTTP_429_LOGIN_RATE_LIMITED`）；单独跑该用例 100% 过。
+- 根因：auth login 限流是**跨用例共享的测试态累计**（同 IP 127.0.0.1 的 INCR 计数在套件内不被重置）；`test_login_by_email_or_username` 单测发 5 次 `/api/auth/login`（故意测 4 次失败防枚举），把限流计数顶到阈值，后续断言「登录成功=200」的用例撞限流。conftest `_isolate_permission_timers` 只清 daemon `_permission_timers`，不含 login 限流。
+- 判定为预存非回归：`git stash` 干净 HEAD 复跑 `test_users_router.py` 同样 FAILED 且**更糟**（2 用例 429）；安全加固新增测试用 `create_access_token` 铸 token、零 `/api/auth/login` 调用，不增加登录计数。
+- 通用坑：① 套件级「偶发 429」基本是限流跨用例累计，先用「单跑该用例是否过 + git stash 干净 HEAD 是否复现」两步定位为预存再归因，别误判成新改动引入。② 修复方向（待做）：给 login 限流加测试态隔离（per-test 清零计数，或在 fixture 里 mock/抬高阈值），参照 `_isolate_permission_timers` 范式。③ 测「非登录路径」的权限/断言用 `create_access_token` 直接铸 token，绕开 login 限流，别走 `/api/auth/login`。
+
+## 前端：jsdom 下 shadcn/Radix Avatar 的 AvatarImage 永不渲染——需 stub window.Image
+
+- Radix AvatarImage 内部 `new Image()` 等 load 事件才挂 `<img>`，jsdom 不加载资源永不触发 → 头像图用例断言 img 永远拿不到、只见 AvatarFallback 首字。解法：测试里 stub `window.Image`（getter/setter 赋 src 时同步置 complete=true、naturalWidth=64 并 dispatch load），`URL.createObjectURL` 由 src/test/setup.ts 全局 polyfill 兜底。适用于一切经 useAvatarSrc（blob objectURL）→ shadcn Avatar 展示头像的组件测试（top-bar-avatar.test.tsx 实证）。
+- 来源：2026-09-10-account-avatar-upload task-09
