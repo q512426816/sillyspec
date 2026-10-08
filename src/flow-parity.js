@@ -258,7 +258,11 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
   let dirty = []
   try {
-    const out = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    // -uall（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：全新目录会折叠成
+    // `dir/` token（porcelain 缺省形态）——readFileSync(目录) 静默 skip，--freeze-dirty
+    // 声称并入却漏目录内交付文件（dg-freeze 夹具实证 src/ 折叠）。逐文件展开与
+    // scope-audit/flow.js 状态采集口径对齐。
+    const out = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
     for (const line of String(out).split('\n')) {
       if (!line || line.length < 4) continue
       const p = line.slice(3).trim().replace(/^"|"$/g, '')

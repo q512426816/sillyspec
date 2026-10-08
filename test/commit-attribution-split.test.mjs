@@ -33,6 +33,16 @@ test('① 解析纯函数：标题变更名提取与归属聚合', () => {
   assert.deepEqual(parseChangeNamesFromSubject('chore: misc'), [])
   // 归档提交标题：chore(archive): 2026-10-05-x 归档留档——首部名无括号包裹不提取
   assert.deepEqual(parseChangeNamesFromSubject('chore(archive): 2026-10-05-x 归档留档'), [])
+  // 括号形态双收（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑
+  // thin-done-src-commit-order-and-attribution-paren）：全角/混合闭合/thin 前缀/名字后附注
+  assert.deepEqual(parseChangeNamesFromSubject('fix: 评审处置（2026-10-08-foo）'), ['2026-10-08-foo'])
+  assert.deepEqual(parseChangeNamesFromSubject('fix: 评审处置（thin 2026-10-08-foo；quick）'), ['2026-10-08-foo'])
+  assert.deepEqual(parseChangeNamesFromSubject('fix: 混合开（2026-10-08-bar) 与闭(2026-10-08-baz）'), ['2026-10-08-bar', '2026-10-08-baz'])
+  assert.deepEqual(parseChangeNamesFromSubject('fix: 附注 (thin 2026-10-08-qux; task-01)'), ['2026-10-08-qux'])
+  assert.deepEqual(parseChangeNamesFromSubject('fix: 日期不在括号内 2026-10-08-无匹配'), [])
+  // 变更名本体模式不放宽：日期前缀缺失/非法字符不提取
+  assert.deepEqual(parseChangeNamesFromSubject('fix: （thin foo-bar）'), [])
+  assert.deepEqual(parseChangeNamesFromSubject('fix: （2026-1-8-short）'), [])
 
   const log = [
     '\x00fix: 他侧交付 (OTHER)', 'src/other.js', '',

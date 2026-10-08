@@ -151,9 +151,11 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   assert.match(fail.stdout + fail.stderr, /整单 FAIL/)
   assert.ok(existsSync(join(specBase, 'changes', change)), '未归档（归档子步未执行）')
 
-  // 修复（pass.flag 进会话 overlay）后重入：artifacts 已完成幂等跳过，从 ledger 断点续
+  // 修复（pass.flag 进会话 overlay）后重入：artifacts 已完成幂等跳过，从 ledger 断点续。
+  // --accept-dirty-gap（2026-10-08-thin-done-dirty-gate）：pass.flag 是测试翻转旗（非交付），
+  // 新 dirty 门要求显式处置——接受缺口走旧行为语义（旗本就不入冻结面）
   writeFileSync(join(cwd, 'pass.flag'), '1\n')
-  const retry = cli(cwd, ['flow', 'done', '--change', change])
+  const retry = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'])
   assert.equal(retry.status, 0, `重入失败: ${retry.stdout}\n${retry.stderr}`)
   assert.match(retry.stdout, /artifacts\(skip\)/, '已完成子步幂等跳过')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '重入后归档完成')
@@ -247,10 +249,18 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）+ patch 留档 + 绑定链
   fillDesignSlots(cwd, change)
   approve(cwd, change)
-  writeFileSync(join(cwd, 'wip-dirty.txt'), 'uncommitted') // 未提交交付文件 → 冻结面警告（R16 P2 修复①）
-  const ok = cli(cwd, ['flow', 'done', '--change', change])
-  assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
-  assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
+  writeFileSync(join(cwd, 'wip-dirty.txt'), 'uncommitted') // 未提交交付文件 → dirty 缺口门（2026-10-08-thin-done-dirty-gate：旧行为「警告后继续归档」改为阻断——三选一在归档后不可达的坑）
+  const blocked = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(blocked.status, 1, `dirty 缺口未处置应阻断: ${blocked.stdout}\n${blocked.stderr}`)
+  assert.match(blocked.stdout + blocked.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
+  assert.match(blocked.stdout + blocked.stderr, /三选一/, '三选一指引在场（评审 P2② 断言，移至阻断轮）')
+  assert.match(blocked.stdout + blocked.stderr, /收口阻断/, '阻断信息在场')
+  assert.match(blocked.stdout + blocked.stderr, /中断于子步「patch」/, '阻断点=patch 子步（半态可重入）')
+  assert.ok(existsSync(join(specBase, 'changes', change)), '阻断不归档（change 仍 active）')
+  const ok = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'])
+  assert.equal(ok.status, 0, `显式接受缺口后应通过: ${ok.stdout}\n${ok.stderr}`)
+  // 实测面对账行在阻断轮（ledger 先于 patch 执行；重跑轮 ledger 幂等 skip 不再输出）
+  assert.match(blocked.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
   assert.match(ok.stdout, /变更 patch 留档/, 'patch 留档行（noAI 冻结）')
   const archDir = join(specBase, 'changes', 'archive')
   const archived = readdirSync(archDir)[0]
@@ -264,8 +274,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
   assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
-  assert.match(ok.stdout + ok.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
-  assert.match(ok.stdout + ok.stderr, /三选一/, '三选一指引在场（评审 P2② 补断言）')
+  assert.equal(patchMeta.acceptedDirtyGap, 1, '缺口数随 change-patch.json acceptedDirtyGap 留痕')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })

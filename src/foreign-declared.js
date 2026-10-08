@@ -204,12 +204,16 @@ function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
 
 /**
  * 提交标题 → 变更名数组（2026-10-05-diff-commit-attribution）：项目提交惯例 message 尾部
- * 携带 "(2026-MM-DD-名)" 后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题
- * 首部同名形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
+ * 携带变更名括号后缀（多变更并列各自提取；归档提交 chore(archive): <名> 的标题首部同名
+ * 形态不提取——归档提交触碰的是治理面移动，交付文件归属看交付提交）。
+ * 括号形态双收（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑
+ * thin-done-src-commit-order-and-attribution-paren：中文输入法惯例写全角
+ * `（thin <名>；…）`，旧正则只认半角 → drift 归因静默失灵）：开/闭括号半全角任意组合，
+ * 括号内允许 `thin ` 前缀与名字后附注文本；变更名本体模式（日期前缀 + 白名单字符）不放宽。
  */
 export function parseChangeNamesFromSubject(subject) {
   const out = []
-  const re = /\((\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)\)/g
+  const re = /[（(]\s*(?:thin\s+)?(\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)[^()（）]*[)）]/g
   let m
   while ((m = re.exec(String(subject || '')))) out.push(m[1])
   return out

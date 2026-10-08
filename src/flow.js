@@ -862,7 +862,7 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], 
   return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
 }
 
-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, allowBatchTick = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -1395,8 +1395,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
         if (freeze.dirtyWarned.length > 0) {
           console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
-          console.warn(`   ① 本次接受缺口（审计面少这些文件）② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 下次用会话专属 worktree。Git 中间提交可归档后压扁（见收口指引）`)
+          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交可归档后压扁（见收口指引）`)
           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+          // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
+          // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
+          // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
+          // 缺口在场且未显式处置 → 停在 patch 子步标记之前（半态可重入，与 review 中断同款
+          // exit 语义）：处置后重跑，patch 全量重建自动并入已提交 src。
+          if (!freezeDirty && !acceptDirtyGap) {
+            console.error('⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：')
+            console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
+            console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
+            console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
+            reportMidFail('patch')
+            process.exit(1)
+          }
+          if (acceptDirtyGap) {
+            console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
+          }
         }
         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
           .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
@@ -1480,6 +1496,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径
               // （与 files[] 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响
               ...moduleScope,
+              // dirty 缺口显式接受留痕（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：
+              // --accept-dirty-gap 放行时缺口数入档（审计面可见，非只 console）
+              ...(acceptDirtyGap && freeze.dirtyWarned.length > 0 ? { acceptedDirtyGap: freeze.dirtyWarned.length } : {}),
             },
           })
           console.log(`📦 变更 patch 留档（双轨统一）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}）+ scope-audit.json + scope-audit.patch（对账快照同点冻结）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
@@ -2067,7 +2086,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
       }
     }
-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), allowBatchTick: hasFlag('--allow-batch-tick') })
+    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), allowBatchTick: hasFlag('--allow-batch-tick') })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
