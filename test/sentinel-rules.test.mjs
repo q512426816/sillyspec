@@ -539,10 +539,29 @@ test('节奏 逐格勾选不判：0→1、1→2、2→3 全程返回 null', () =
   assert.equal(detectBatchCheckCadence([td(0, 1, 111), td(1, 2, 222), td(2, 3, 333)]), null)
 })
 
-test('节奏 单任务变更 0→1 不判；design 阶段同判', () => {
+test('节奏 单任务变更 0→1 不判；design 阶段出域（契约刷新 2026-10-08-batch-tick-false-positive）', () => {
   assert.equal(detectBatchCheckCadence([td(0, 1)]), null)
-  const r = detectBatchCheckCadence([td(0, 2, 999, 'design')])
-  assert.equal(r.to, 2, 'design.md 多格勾选同入判（STAGE_FILES 双工件面）')
+  // 旧契约「design 阶段同判（STAGE_FILES 双工件面）」退役：design.md 自审清单按模板就是
+  // 整体写盘的预勾断言（authored-whole），watcher 首现计数恒为 0→N「单拍大跳」——把 design
+  // 段计入节奏域会把正常路径误判（实证：2026-10-08-knowledge-graph 六次独立 tick 被拒收）。
+  assert.equal(detectBatchCheckCadence([td(0, 2, 999, 'design')]), null, 'design 段事件出节奏域')
+  assert.equal(detectBatchCheckCadence([td(0, 8, 999, 'design')]), null, 'design 首现 0→8 幻影不再入判')
+})
+
+test('节奏 误伤回归：design 首现 0→8 + 六次独立 tick 混流 → null（2026-10-08 实证流）', () => {
+  // 真实事件流形态：design.md 整体写盘产生 stage=design 的 0→8（自审 8 项预勾），
+  // tasks 面六次独立 task tick（CLI 精确事件）+ watcher 采样镜像——混流必须判无单拍跳
+  const mix = [
+    td(0, 8, 1791438708879, 'design'),
+    { ts: 1791440438536, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true, source: 'task-tick' },
+    { ts: 1791440440070, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true },
+    { ts: 1791440763160, kind: 'task-done', stage: 'tasks', detail: 'checked 1→2', provisional: true, source: 'task-tick' },
+    { ts: 1791440879517, kind: 'task-done', stage: 'tasks', detail: 'checked 2→3', provisional: true, source: 'task-tick' },
+    { ts: 1791440994388, kind: 'task-done', stage: 'tasks', detail: 'checked 3→4', provisional: true, source: 'task-tick' },
+    { ts: 1791441356368, kind: 'task-done', stage: 'tasks', detail: 'checked 4→5', provisional: true, source: 'task-tick' },
+    { ts: 1791441691143, kind: 'task-done', stage: 'tasks', detail: 'checked 5→6', provisional: true, source: 'task-tick' },
+  ]
+  assert.equal(detectBatchCheckCadence(mix), null, '六次独立 tick 不得被 design 幻影连坐')
 })
 
 test('节奏 容错：空清单/null/坏 detail/非 task-done/坏对象行不抛且返回 null', () => {

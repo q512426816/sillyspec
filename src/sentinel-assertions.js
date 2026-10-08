@@ -109,7 +109,12 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
 export function detectBatchCheckCadence(events) {
   const taskEvents = [];
   for (const e of events || []) {
-    if (e && e.kind === 'task-done') taskEvents.push(e);
+    if (!e || e.kind !== 'task-done') continue;
+    // 节奏域过滤（2026-10-08-batch-tick-false-positive）：只认任务队列面（stage='tasks'，缺省
+    // 视同 tasks 兼容 legacy 流）。其他阶段的 task-done（如 design.md 自审预勾的首现计数）不是
+    // tick 信号——混入会把逐格勾选误判成单拍大跳（实证：design 0→8 拒收六次独立 tick）。
+    if (e.stage != null && e.stage !== 'tasks') continue;
+    taskEvents.push(e);
   }
   const parse = (e) => {
     const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));

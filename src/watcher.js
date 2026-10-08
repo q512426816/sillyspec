@@ -339,8 +339,12 @@ export function inferEvents(prev, next) {
     const p = prev.files[key];
     const n = next.files[key];
     if (!p && n) {
-      events.push(mk('file', n.stage, `${key} 出现`));
-      if (n.checked > 0) events.push(mk('task-done', n.stage, `checked 0→${n.checked}`));
+      events.push(mk('file', n.stage, `${key} 出现`))
+      // 勾选节奏域=任务队列文件（tasks.md / tasks/*.md，stage='tasks'）。其余阶段文件首现的
+      // 勾选计数不是 tick 信号：design.md 自审清单天然预勾（整体写盘的已完成断言）——发了就是
+      // 幻影单拍跳（2026-10-08-batch-tick-false-positive 实证：design 首现 0→8 被节奏门误拒
+      // 六次独立 tick）；tasks.md 首现带已勾仍发（保住「整卡预勾创建」的真实捕捉面）。
+      if (n.checked > 0 && n.stage === 'tasks') events.push(mk('task-done', n.stage, `checked 0→${n.checked}`))
     } else if (p && n && p.hash !== n.hash) {
       events.push(mk('file-update', n.stage, `${key} 内容变更`));
     }

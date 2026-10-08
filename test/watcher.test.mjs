@@ -59,6 +59,17 @@ test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
   assert.equal(ev[0].provisional, true)
 })
 
+test('inferEvents: 非任务面首现预勾不发 task-done；tasks.md 首现带勾仍发（2026-10-08-batch-tick-false-positive）', () => {
+  // design.md 自审清单 authored-whole（整体写盘的预勾断言）——首现只报 file；
+  // 旧实现发 checked 0→8 幻影，被收口节奏门连坐拒收六次独立 tick（实证流 ts 1791438708879）
+  const dEv = inferEvents(snap(), snap({ files: { 'design.md': { hash: 'a', stage: 'design', checked: 8, total: 8 } } }))
+  assert.deepEqual(dEv.map((e) => e.kind), ['file'], 'design 首现预勾零 task-done')
+  // tasks.md 首现带已勾格——保住「整卡预勾创建」的真实捕捉面
+  const tEv = inferEvents(snap(), snap({ files: { 'tasks.md': { hash: 'a', stage: 'tasks', checked: 3, total: 6 } } }))
+  assert.deepEqual(tEv.map((e) => e.kind).sort(), ['file', 'task-done'])
+  assert.match(tEv.find((e) => e.kind === 'task-done').detail, /checked 0→3/)
+})
+
 test('inferEvents: 内容变更→file-update；checkbox 勾选数增加→task-done', () => {
   const prev = snap({ files: { 'tasks.md': { hash: 'a', stage: 'tasks', checked: 1, total: 3 } } })
   const next = snap({ files: { 'tasks.md': { hash: 'b', stage: 'tasks', checked: 2, total: 3 } } })
