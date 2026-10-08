@@ -15,15 +15,14 @@ export const definition = {
    - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
    - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
    - \`.sillyspec/changes/<change-name>/design.md\`
-3. 可以用 \`rg\` / \`ls\` / \`cat\` 调查已有结构和集成点
-4. 话题涉及影响面 / 历史决策 / 需求谱系时，优先用知识图谱查询拿真实关系面（全只读，替代词面考古）：
-   - \`sillyspec knowledge graph impact <文件|模块|变更名>\` —— 改动影响面（多跳闭包 + 防复潮可达的已否决决策）
-   - \`sillyspec knowledge graph neighbors <锚点>\` / \`path <A> <B>\` —— 一跳关联与推理链（如"这条 FR 被谁取代""决策钉在哪个文件"）
-   - \`sillyspec knowledge graph summary\` —— 知识面整体健康度（孤儿/断链/文档缺口）
-   - 比较方案前先查 impact 里的 rejected/⚰️死路条目——已被否决的路不重新兜售；全部命令支持 \`--json\` 结构化消费
-5. 输出 2-3 个有价值方向、关键风险和下一步建议
-6. 如果用户要求保存结论，先明确保存位置，再写入对应文档
-7. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
+3. 调查兵器按话题选（话题→兵器映射，全只读）：
+   - 词面考古（"这段代码在哪/怎么写的"）→ \`rg\` / \`ls\` / \`cat\`
+   - 坑史检索（"这话题以前踩过什么坑"）→ \`sillyspec knowledge search --query "<关键词>"\`（四层召回）
+   - 关系面（影响面/历史决策/需求谱系）→ \`sillyspec knowledge graph impact <文件|模块|变更名>\` 多跳闭包与防复潮可达的已否决决策、\`neighbors <锚点>\` / \`path <A> <B>\` 推理链、\`summary\` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 \`--json\`
+   - 在途面（出方向建议前）→ \`sillyspec status\` 活跃变更一览——结论别跟在途工作撞车
+4. 输出 2-3 个有价值方向、关键风险和下一步建议
+5. 如果用户要求保存结论，先明确保存位置，再写入对应文档
+6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
 
 ### HTML 原型生成（仅用户明确要求时）
 探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（"要不要出个原型看效果"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：
