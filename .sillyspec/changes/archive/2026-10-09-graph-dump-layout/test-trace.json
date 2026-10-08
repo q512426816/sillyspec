@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-graph-dump-layout",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-graph-dump-layout:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-graph-dump-layout"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-graph-dump-layout:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-graph-dump-layout"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-graph-dump-layout:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-graph-dump-layout"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-09-graph-dump-layout:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-graph-dump-layout"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-09-graph-dump-layout:flow:测试绑定FR-06",
+      "tests": [
+        "test/check-syntax.mjs",
+        "test/knowledge-graph.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-graph-dump-layout"
+    }
+  ]
+}

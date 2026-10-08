@@ -1,0 +1,44 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  平台仓 2026-10-09-knowledge-graph-fullmap 跨仓前置：knowledge graph dump --layout 子命令——输出全量 {nodes:[{id,type,label,x,y}],
+  edges:[{s,t,type,strength}], stats:summary 同源}；布局=归档原型 prototype-data-gen.cjs 逐行移植（comm 粗分组：decision/fr 按域、module
+  单组、file 按顶级目录、doc 单组、change、ql、其他；簇 count 降序；主环 sqrt(gi+1)*300；簇内 16*sqrt(j+1) 按节点序；黄金角 2.39999；相位
+  +gi；Math.round）；确定性硬约束（同输入两次调用逐位一致）；缺 --layout 回 usage 错。
+
+
+  成功标准：
+
+  - sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
+
+  - 连续两次调用 JSON 逐字节一致（确定性）
+
+  - dump 不带 --layout 回 layout_required usage 错不崩
+
+  - USAGE 行与 stages available 收编 dump
+
+  - 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
+
+  - 既有 11 用例零回归；lint 零问题
+autopilot: true
+baseline_commit: c1e3129ccb5c5e4b897d8ef24ea108d8d32ba0ff
+updatedAt: '2026-10-08T16:57:15.891Z'
+baseline_sha256: 1429da5ab856465b4eadeaf2d1945c476454aec7703b1cda619cb33654885538
+gate_summary: >-
+  test: passed ← module[]+deps(js2)+fr(2)（33.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008164954\test-result.json｜lint: passed
+  ← npm run lint（33.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008164954\test-result.json｜门文件 6 个
+

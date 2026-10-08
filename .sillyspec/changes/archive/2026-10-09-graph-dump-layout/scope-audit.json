@@ -1,0 +1,39 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "c1e3129ccb5c5e4b897d8ef24ea108d8d32ba0ff",
+  "totals": {
+    "files": 3,
+    "additions": 104,
+    "deletions": 3
+  },
+  "rows": [
+    {
+      "path": "src/knowledge-graph.js",
+      "additions": 56,
+      "deletions": 2,
+      "kind": "modified"
+    },
+    {
+      "path": "src/stages/knowledge.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified"
+    },
+    {
+      "path": "test/knowledge-graph.test.mjs",
+      "additions": 47,
+      "deletions": 0,
+      "kind": "modified"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "8ccf2b27493324a2888a7dc2b57b919bfbcb5e10fee3c5764139f5b0ebfc3062",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T16:55:04.259Z"
+}

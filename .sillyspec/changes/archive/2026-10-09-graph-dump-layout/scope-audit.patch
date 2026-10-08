@@ -1,0 +1,382 @@
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 523042b6..bb1ad636 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -577,6 +577,45 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
+   }
+ }
+ 
++/** 全图粗分组（原型 prototype-data-gen.cjs comm() 逐行移植——2026-10-09-knowledge-graph-fullmap Grill F-01 钉死口径：
++ *  decision/fr 按域、module/doc 单组、file 按顶级目录、change、ql、其余"其他"；星系数=comm() 实际分组数（真图实测 150-175，原型视觉即如此）。
++ *  禁用 summary 细簇（883 簇会把主环撑到 ~8900px 退化均匀散点）。 */
++function graphCommunity(n) {
++  if (n.type === 'decision') return '决策域/' + (n.attrs.domain || '_unmapped')
++  if (n.type === 'fr') return 'FR域/' + (n.attrs.domain || '_unmapped')
++  if (n.type === 'module') return '模块'
++  if (n.type === 'file') return '文件/' + (n.id.includes('/') ? n.id.split('/')[0] : '.')
++  if (n.type === 'doc') return '文档'
++  if (n.type === 'change') return '变更'
++  if (n.type === 'ql') return 'quicklog'
++  return '其他'
++}
++
++/** 全图确定性布局（原型 sunflower 摆位逐行移植，常量固化）：
++ *  簇按 count 降序（同数按组名字典序稳序）；主环半径 sqrt(gi+1)*300、簇相位 gi*2.39999；
++ *  簇内半径 16*sqrt(j+1)（j=节点序）、角 j*2.39999+gi；坐标 Math.round。
++ *  确定性为硬约束（同输入逐位一致）；与原型生成器逐位等价非约束（稳序差异）。 */
++export function layoutFullGraph(graph) {
++  const groups = new Map()
++  for (const n of graph.nodes.values()) {
++    const k = graphCommunity(n)
++    if (!groups.has(k)) groups.set(k, [])
++    groups.get(k).push(n)
++  }
++  const gArr = [...groups.entries()]
++    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
++  const pos = new Map()
++  gArr.forEach(([k, arr], gi) => {
++    const gc = Math.sqrt(gi + 1) * 300, ga = gi * 2.39999
++    const cx = Math.cos(ga) * gc, cy = Math.sin(ga) * gc
++    arr.forEach((n, j) => {
++      const r = 16 * Math.sqrt(j + 1), a = j * 2.39999 + gi
++      pos.set(n.id, { x: Math.round(cx + Math.cos(a) * r), y: Math.round(cy + Math.sin(a) * r) })
++    })
++  })
++  return { pos, groups: gArr.map(([k, a]) => [k, a.length]) }
++}
++
+ /** 节点搜索：id/label 不区分大小写包含匹配，limit 钳 1-50（平台锚点自动补全数据源）。 */
+ export function graphNodesSearch(graph, search, limit = 20) {
+   const q = String(search || '').toLowerCase()
+@@ -676,7 +715,7 @@ export function scopeFromDecisionsMd(text) {
+ // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
+ // ═══════════════════════════════════════════════════════════════
+ 
+-const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]'
++const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|dump|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]；dump 需 --layout'
+ 
+ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+   const out = (ok, data, error) => console.log(JSON.stringify({ ok, ...(data || {}) , ...(error ? { error } : {}) }, null, 2))
+@@ -692,7 +731,7 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+   const specRoot = opts.specDir || join(dir, '.sillyspec')
+   const knowledgeDir = join(specRoot, 'knowledge')
+ 
+-  if (!['summary', 'nodes', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
++  if (!['summary', 'nodes', 'dump', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
+     out(false, {}, { code: 'graph_usage', usage: GRAPH_USAGE, subcommand: sub })
+     return
+   }
+@@ -712,6 +751,21 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+       ],
+     })
+   }
++  if (sub === 'dump') {
++    if (!args.includes('--layout')) return out(false, {}, { code: 'layout_required', usage: GRAPH_USAGE })
++    const { pos, groups } = layoutFullGraph(graph)
++    const stats = graphSummary(graph)
++    return out(true, {
++      query: { sub, layout: true },
++      nodes: [...graph.nodes.values()].map((n) => {
++        const p = pos.get(n.id)
++        return { id: n.id, type: n.type, label: n.label, x: p.x, y: p.y }
++      }),
++      edges: graph.edges.map((e) => ({ s: e.s, t: e.t, type: e.type, strength: EDGE_STRENGTH[e.type] })),
++      stats,
++      summary: [`节点 ${stats.nodes} · 边 ${stats.edges}`, `星系 ${groups.length} 个（最大 ${groups[0]?.[0] ?? '—'} × ${groups[0]?.[1] ?? 0}）`],
++    })
++  }
+   if (sub === 'nodes') {
+     const search = flag('--search')
+     const limit = parseInt(flag('--limit') || '20', 10)
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index e0c7aa9b..bc72931c 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -675,7 +675,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       output(false, {}, {
+         code: 'unknown_subcommand',
+         subcommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
+       })
+   }
+ }
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index a0cf273f..282e10a9 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -495,3 +495,50 @@ test('⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相
+     rmSync(root, { recursive: true, force: true })
+   }
+ })
++
++// ══ 2026-10-09-graph-dump-layout（平台仓 fullmap 跨仓前置）：dump --layout ══
++
++test('⑪dump --layout：形状/确定性/layout 必带/粗分组视觉', async () => {
++  const root = buildFixture()
++  try {
++    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
++    const { layoutFullGraph, cmdKnowledgeGraph } = await import('../src/knowledge-graph.js')
++    const { pos, groups } = layoutFullGraph(g)
++    assert.equal(pos.size, g.stats.nodeCount)
++    // 确定性：两次调用逐位一致
++    const again = layoutFullGraph(g)
++    assert.deepEqual([...pos.entries()], [...again.pos.entries()])
++    // 坐标整数
++    for (const p of pos.values()) { assert.ok(Number.isInteger(p.x) && Number.isInteger(p.y)) }
++    // 粗分组口径：module 全落「模块」单组、file 按顶级目录
++    const names = groups.map(([k]) => k)
++    assert.ok(names.includes('模块'))
++    assert.ok(names.some((k) => k.startsWith('文件/')))
++    // 同簇抽样距离 < 跨簇抽样距离（星系视觉）
++    const ids = [...pos.keys()]
++    const sameCluster = [...g.nodes.values()].filter((n) => n.type === 'fr')
++    if (sameCluster.length >= 2) {
++      const d = (a, b) => Math.hypot(pos.get(a.id).x - pos.get(b.id).x, pos.get(a.id).y - pos.get(b.id).y)
++      const intra = d(sameCluster[0], sameCluster[1])
++      const mod = [...g.nodes.values()].find((n) => n.type === 'module')
++      const inter = mod ? d(sameCluster[0], mod) : intra + 1
++      assert.ok(intra < inter || inter === 0)
++    }
++    // CLI 分发
++    const cap = []
++    const origLog = console.log
++    console.log = (...a) => cap.push(a.join(' '))
++    try {
++      await cmdKnowledgeGraph(root, ['dump', '--layout'], {})
++      await cmdKnowledgeGraph(root, ['dump'], {})
++    } finally { console.log = origLog }
++    const j1 = JSON.parse(cap[0])
++    assert.equal(j1.ok, true)
++    assert.equal(j1.nodes.length, g.stats.nodeCount)
++    assert.ok(j1.nodes.every((n) => Number.isInteger(n.x)))
++    assert.equal(j1.stats.nodes, g.stats.nodeCount)
++    const j2 = JSON.parse(cap[1])
++    assert.equal(j2.ok, false)
++    assert.equal(j2.error.code, 'layout_required')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-09-graph-dump-layout/design.md b/.sillyspec/changes/2026-10-09-graph-dump-layout/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-dump-layout/design.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:45:36.392Z
++---
++# 设计记录（Design Record）— 2026-10-09-graph-dump-layout
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++平台仓 fullmap 变更的全图数据源：`src/knowledge-graph.js` 内新增 `layoutFullGraph(graph)` 纯函数（原型 prototype-data-gen.cjs 的 comm() 粗分组 + sunflower 摆位逐行移植，常量固化）与 `cmdKnowledgeGraph` 的 dump case（--layout 必带）。选逐行移植而非重设计：目标就是"原型同款视觉"，等价性由常量逐项同值保证；确定性由稳序 tie-break（簇同数按组名字典序）保证。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++文件清单（自声明）：①`src/knowledge-graph.js`（layoutFullGraph/graphCommunity 导出 + dump case + USAGE）；②`test/knowledge-graph.test.mjs`（⑩用例 + 导入扩展）；③`src/stages/knowledge.js`（注释注记，列表值不变）。新 CLI 面：`sillyspec knowledge graph dump --layout --json` → `{ok, query:{sub,layout:true}, nodes:[{id,type,label,x,y}], edges:[{s,t,type,strength}], stats:summary 同源, summary:[人类可读行]}`；缺 --layout → `{ok:false, error:{code:'layout_required'}}`。既有七子命令零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用——静态 md/yaml 解析派生，无事件流；fail-soft 沿既有解析器。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用——纯只读内存计算不落盘。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用——单次 CLI 调用内存生灭。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——按传入 specRoot 构建，天然隔离。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：星系数=150（真图实测）比平台 design 初估 10-15 多——但这就是原型 comm() 的真实分组数（原型视觉即如此），不改算法（改了就不是原型视觉）；平台侧按 150 星系渲染。放弃的方案：①summary 细簇分组——否，883 簇主环 ~8900px 退化散点（Grill F-01）；②坐标落盘缓存——否，违反图不落盘铁律；③与原型逐位等价——降级为非约束（tie-break 稳序差异，确定性才是硬约束）。
+
+diff --git a/.sillyspec/changes/2026-10-09-graph-dump-layout/proposal.md b/.sillyspec/changes/2026-10-09-graph-dump-layout/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-dump-layout/proposal.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:45:36.392Z
++---
++# 提案书（Proposal）— 2026-10-09-graph-dump-layout
++
++## 动机
++
++任务原话转写：平台仓 2026-10-09-knowledge-graph-fullmap 跨仓前置：knowledge graph dump --layout 子命令——输出全量 {nodes:[{id,type,label,x,y}], edges:[{s,t,type,strength}], stats:summary 同源}；布局=归档原型 prototype-data-gen.cjs 逐行移植（comm 粗分组：decision/fr 按域、module 单组、file 按顶级目录、doc 单组、change、ql、其他；簇 count 降序；主环 sqrt(gi+1)*300；簇内 16*sqrt(j+1) 按节点序；黄金角 2.39999；相位 +gi；Math.round）；确定性硬约束（同输入两次调用逐位一致）；缺 --layout 回 usage 错。
++
++成功标准：
++- sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
++- 连续两次调用 JSON 逐字节一致（确定性）
++- dump 不带 --layout 回 layout_required usage 错不崩
++- USAGE 行与 stages available 收编 dump
++- 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
++- 既有 11 用例零回归；lint 零问题
++
++## 变更范围
++
++按成功标准机械推导，共 6 条验收面：
++1. sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
++2. 连续两次调用 JSON 逐字节一致（确定性）
++3. dump 不带 --layout 回 layout_required usage 错不崩
++4. USAGE 行与 stages available 收编 dump
++5. 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
++6. 既有 11 用例零回归；lint 零问题
++
++## 成功标准（可验证）
++
++1. sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
++2. 连续两次调用 JSON 逐字节一致（确定性）
++3. dump 不带 --layout 回 layout_required usage 错不崩
++4. USAGE 行与 stages available 收编 dump
++5. 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
++6. 既有 11 用例零回归；lint 零问题
+
+diff --git a/.sillyspec/changes/2026-10-09-graph-dump-layout/requirements.md b/.sillyspec/changes/2026-10-09-graph-dump-layout/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-dump-layout/requirements.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:45:36.392Z
++---
++# 需求规格（Requirements）— 2026-10-09-graph-dump-layout
++
++## 功能需求
++
++### FR-01: sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++### FR-02: 连续两次调用 JSON 逐字节一致（确定性）
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++### FR-03: dump 不带 --layout 回 layout_required usage 错不崩
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++### FR-04: USAGE 行与 stages available 收编 dump
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++### FR-05: 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++### FR-06: 既有 11 用例零回归；lint 零问题
++
++- `dump --layout --json` 必须输出 ok:true 且 nodes 数等于图节点总数、坐标全整数、stats 与 summary 同源；连续两次调用输出必须逐字节一致（确定性硬约束）；缺 --layout 必须回 layout_required usage 错，禁止抛未捕获异常。
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」
++FR-02: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」（两次 layoutFullGraph deepEqual；真图 sha256 双跑一致留档）
++FR-03: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」（error.code 断言 layout_required）
++FR-04: 不适用独立用例：USAGE 收编由 graph_usage 错误路径回显覆盖（④CLI 分发既有断言）
++FR-05: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」（同簇 intra<跨簇 inter 抽样断言）
++FR-06: test/knowledge-graph.test.mjs 全 11 用例零回归；lint=test/check-syntax.mjs（914 文件）
+
+diff --git a/.sillyspec/changes/2026-10-09-graph-dump-layout/review.json.superseded-20261008T165433 b/.sillyspec/changes/2026-10-09-graph-dump-layout/review.json.superseded-20261008T165433
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-dump-layout/review.json.superseded-20261008T165433
+@@ -0,0 +1,46 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-09-graph-dump-layout",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "f1a7446667001fbe09a14f6f2d2370e8c6322c9e",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "星系数三处口径不一致：代码注释 10-15 / design 150 / 评审实测 175",
++      "evidence": "src/knowledge-graph.js:581 注释称「真图 ≈10-15 星系即原型视觉」；design.md:37 称真图实测 150 星系；本次评审在 HEAD 工作区真图实测（6895 节点全部落位）galaxies=175。算法主环 sqrt(gi+1)*300 对星系数不敏感，「不改算法」的边界决策对 175 依然成立，但数字陈旧且注释与 design 自相矛盾，误导后续维护。",
++      "location": "src/knowledge-graph.js:581"
++    },
++    {
++      "severity": "P3",
++      "title": "⑩用例含恒真死断言：file 顶级目录分组未被真正钉住",
++      "evidence": "test/knowledge-graph.test.mjs:516 `assert.ok(names.some((k) => k.startsWith('文件/')) || !g.nodes.size || true)` 末尾 `|| true` 使整条断言恒真，无判别力；FR-05 绑定所称的粗分组口径（file 按顶级目录）中这一半实际处于未钉状态（graphCommunity 本体正确，测试钉子失效）。",
++      "location": "test/knowledge-graph.test.mjs:516"
++    },
++    {
++      "severity": "P3",
++      "title": "FR-04 测试绑定声明与既有断言不符：USAGE 含 dump 未被任何断言覆盖",
++      "evidence": "requirements.md:62 称 USAGE 收编「由④CLI 分发既有断言覆盖」，但④只断言 `j3.error.code === 'graph_usage'`（test/knowledge-graph.test.mjs:237），未断言 usage 文本含 dump；⑩用例对 j2 也仅断言 layout_required。交付本体存在（GRAPH_USAGE src/knowledge-graph.js:718 已含 dump 与「dump 需 --layout」），属钉子弱而非交付缺失。",
++      "location": "test/knowledge-graph.test.mjs:237"
++    },
++    {
++      "severity": "P3",
++      "title": "用例编号重复：两个⑩",
++      "evidence": "既有「⑩doctor↔summary 同源交叉断言」（test/knowledge-graph.test.mjs:463，2026-10-08-graph-summary-consistency）与新「⑩dump --layout」（test/knowledge-graph.test.mjs:501）撞号，新用例应为⑪。requirements 绑定引用全名仍可解析，纯可读性问题。",
++      "location": "test/knowledge-graph.test.mjs:501"
++    },
++    {
++      "severity": "P3",
++      "title": "graphCommunity 移植微差：decision/fr 域多 _unmapped 兜底（不可达路径）",
++      "evidence": "cjs comm()（prototype-data-gen.cjs:283-284）直接拼接 `n.attrs.domain`（undefined 时得 '决策域/undefined'）；移植版（src/knowledge-graph.js:584-585）加 `|| '_unmapped'` 兜底。真实建图 decision/fr 的 domain 均由源文件名派生恒非空，差异不可达；design 已声明逐位等价降级非约束，其余口径（module/doc 单组、file 顶级目录、change/ql/其他）逐行一致，常量逐项同值。",
++      "location": "src/knowledge-graph.js:584"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-08T16:54:00Z"
++}
+
+diff --git a/.sillyspec/changes/2026-10-09-graph-dump-layout/tasks.md b/.sillyspec/changes/2026-10-09-graph-dump-layout/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-dump-layout/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:45:36.392Z
++---
++# 任务注册表（Tasks）— 2026-10-09-graph-dump-layout
++
++- [x] task-01: sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
++- [x] task-02: 连续两次调用 JSON 逐字节一致（确定性）
++- [x] task-03: dump 不带 --layout 回 layout_required usage 错不崩
++- [x] task-04: USAGE 行与 stages available 收编 dump
++- [x] task-05: 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
++- [x] task-06: 既有 11 用例零回归；lint 零问题

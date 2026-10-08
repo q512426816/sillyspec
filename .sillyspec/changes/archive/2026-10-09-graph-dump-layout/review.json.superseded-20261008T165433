@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-graph-dump-layout",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f1a7446667001fbe09a14f6f2d2370e8c6322c9e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "星系数三处口径不一致：代码注释 10-15 / design 150 / 评审实测 175",
+      "evidence": "src/knowledge-graph.js:581 注释称「真图 ≈10-15 星系即原型视觉」；design.md:37 称真图实测 150 星系；本次评审在 HEAD 工作区真图实测（6895 节点全部落位）galaxies=175。算法主环 sqrt(gi+1)*300 对星系数不敏感，「不改算法」的边界决策对 175 依然成立，但数字陈旧且注释与 design 自相矛盾，误导后续维护。",
+      "location": "src/knowledge-graph.js:581"
+    },
+    {
+      "severity": "P3",
+      "title": "⑩用例含恒真死断言：file 顶级目录分组未被真正钉住",
+      "evidence": "test/knowledge-graph.test.mjs:516 `assert.ok(names.some((k) => k.startsWith('文件/')) || !g.nodes.size || true)` 末尾 `|| true` 使整条断言恒真，无判别力；FR-05 绑定所称的粗分组口径（file 按顶级目录）中这一半实际处于未钉状态（graphCommunity 本体正确，测试钉子失效）。",
+      "location": "test/knowledge-graph.test.mjs:516"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04 测试绑定声明与既有断言不符：USAGE 含 dump 未被任何断言覆盖",
+      "evidence": "requirements.md:62 称 USAGE 收编「由④CLI 分发既有断言覆盖」，但④只断言 `j3.error.code === 'graph_usage'`（test/knowledge-graph.test.mjs:237），未断言 usage 文本含 dump；⑩用例对 j2 也仅断言 layout_required。交付本体存在（GRAPH_USAGE src/knowledge-graph.js:718 已含 dump 与「dump 需 --layout」），属钉子弱而非交付缺失。",
+      "location": "test/knowledge-graph.test.mjs:237"
+    },
+    {
+      "severity": "P3",
+      "title": "用例编号重复：两个⑩",
+      "evidence": "既有「⑩doctor↔summary 同源交叉断言」（test/knowledge-graph.test.mjs:463，2026-10-08-graph-summary-consistency）与新「⑩dump --layout」（test/knowledge-graph.test.mjs:501）撞号，新用例应为⑪。requirements 绑定引用全名仍可解析，纯可读性问题。",
+      "location": "test/knowledge-graph.test.mjs:501"
+    },
+    {
+      "severity": "P3",
+      "title": "graphCommunity 移植微差：decision/fr 域多 _unmapped 兜底（不可达路径）",
+      "evidence": "cjs comm()（prototype-data-gen.cjs:283-284）直接拼接 `n.attrs.domain`（undefined 时得 '决策域/undefined'）；移植版（src/knowledge-graph.js:584-585）加 `|| '_unmapped'` 兜底。真实建图 decision/fr 的 domain 均由源文件名派生恒非空，差异不可达；design 已声明逐位等价降级非约束，其余口径（module/doc 单组、file 顶级目录、change/ql/其他）逐行一致，常量逐项同值。",
+      "location": "src/knowledge-graph.js:584"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T16:54:00Z"
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-graph-dump-layout",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "19b2d5dd92c2d8149860d606cf80eeafe9f17685",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-04 测试绑定声明与既有断言不符：USAGE 含 dump 未被任何断言覆盖",
+      "evidence": "requirements.md 称 USAGE 收编「由④CLI 分发既有断言覆盖」，但④只断言 `j3.error.code === 'graph_usage'`（test/knowledge-graph.test.mjs:237），未断言 usage 文本含 dump；⑪用例对 j2 也仅断言 layout_required。交付本体存在（GRAPH_USAGE src/knowledge-graph.js:718 已含 dump 与「dump 需 --layout」），属钉子弱而非交付缺失。",
+      "location": "test/knowledge-graph.test.mjs:237"
+    },
+    {
+      "severity": "P3",
+      "title": "graphCommunity 移植微差：decision/fr 域多 _unmapped 兜底（不可达路径）",
+      "evidence": "cjs comm()（prototype-data-gen.cjs:283-284）直接拼接 `n.attrs.domain`（undefined 时得 '决策域/undefined'）；移植版（src/knowledge-graph.js:584-585）加 `|| '_unmapped'` 兜底。真实建图 decision/fr 的 domain 均由源文件名派生恒非空，差异不可达；design 已声明逐位等价降级非约束，其余口径（module/doc 单组、file 顶级目录、change/ql/其他）逐行一致，常量逐项同值。",
+      "location": "src/knowledge-graph.js:584"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T16:56:47Z"
+}
