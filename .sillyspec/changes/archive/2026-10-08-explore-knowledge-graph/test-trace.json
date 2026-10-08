@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-explore-knowledge-graph",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-explore-knowledge-graph:flow:测试绑定FR-01",
+      "tests": [
+        "test/explore-graph-guidance.test.mjs「explore 只读铁律零漂移（图查询接入不破界）」",
+        "test/explore-graph-guidance.test.mjs「explore 图查询指引：impact/neighbors/path/summary 四命令 + 防复潮提示在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-explore-knowledge-graph"
+    }
+  ]
+}

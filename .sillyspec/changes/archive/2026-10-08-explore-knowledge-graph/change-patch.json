@@ -1,0 +1,63 @@
+{
+  "change": "2026-10-08-explore-knowledge-graph",
+  "baseline": "5ca8a4fde6536620697f5b66cfa54e1e1c322dd3",
+  "head": "16db850f0b8916acec0ecc26383b269a191fd0f3",
+  "files": [
+    ".claude/skills/sillyspec-explore/SKILL.md",
+    ".sillyspec/changes/2026-10-08-explore-knowledge-graph/design.md",
+    ".sillyspec/changes/2026-10-08-explore-knowledge-graph/requirements.md",
+    ".sillyspec/changes/2026-10-08-explore-knowledge-graph/tasks.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/explore.md",
+    "package.json",
+    "src/stages/explore.js",
+    "test/explore-graph-guidance.test.mjs",
+    ".sillyspec/changes/2026-10-08-explore-knowledge-graph/proposal.md",
+    ".sillyspec/changes/2026-10-08-explore-knowledge-graph/review.json.superseded-20261008T164056"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 277,
+    "deletions": 26
+  },
+  "savedAt": "2026-10-08T16:40:56.805Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-explore",
+      "files": 1
+    },
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "patchSha256": "bec10fffa74ea75ca4c3da1d1adc4a8c5b6c079f4dc8591425d1d940417c1af6",
+  "patchStatus": "ok"
+}

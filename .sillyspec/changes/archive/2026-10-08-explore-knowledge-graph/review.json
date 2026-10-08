@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-explore-knowledge-graph",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "16db850f0b8916acec0ecc26383b269a191fd0f3",
+  "reviewerNotes": "二轮增量复审：P2 清偿核验（补真钉子测试+绑定改真实用例）。首轮 PASS（reviewedAgainst=766e9aad…9627，2026-10-08T16:38:30Z）后按 F-01 建议清偿，本轮仅核验清偿提交 16db850f：test/explore-graph-guidance.test.mjs 真实 import src/stages/explore.js（非空壳），2 用例名与 requirements.md FR-01 新绑定行逐字一致并注明「评审 P2 清偿」；package.json test:core 已登记新文件；提交 footprint=3 文件（新测试+requirements.md+package.json），「其余面零变化」与 git show --stat 吻合。评审实测：新测试 2/2 PASS、npm run test:core 323/323 全绿（0 fail，14.4s）、npm run lint 914 文件零问题（exit 0）。注：FR-04 绑定行数字仍写「test:core 321 全绿」（清偿前计数，现 323），属数字滞后一行说明，「全绿」承诺实质满足，不另立 finding。",
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P2",
+      "title": "[RESOLVED 二轮] 收口测试证据链与绑定声明不符：门记录 test=skipped 且绑定所引用的测试用例不存在",
+      "evidence": [
+        "首轮：.sillyspec/.runtime/verify-runs/20261008162833/test-result.json status=skipped（dynamic-empty），理由「无 FR 关联绑定」与 FR-01 显式绑定矛盾；test/output-step-render.test.mjs 无「explore 阶段渲染回归」用例，全 test/ 对 stages/explore 零引用",
+        "二轮清偿：16db850f 新增 test/explore-graph-guidance.test.mjs（+27 行，import definition 真钉子）——用例「explore 图查询指引：impact/neighbors/path/summary 四命令 + 防复潮提示在场」（断言 steps.length===1、四命令串、rejected、全只读）与「explore 只读铁律零漂移（图查询接入不破界）」（断言四条铁律关键句在场）；requirements.md FR-01 绑定行改引这两用例并注明「评审 P2 清偿」；package.json test:core 追加该文件"
+      ],
+      "impact": "已清偿：explore prompt 面由零钉子变为有自动化护栏；绑定引用与实际用例逐字一致。实质零回归两轮均由评审实测确认（首轮 64/64+321/321；二轮 2/2+323/323+lint 914 零问题）",
+      "recommendation": "无遗留义务。备注一：钉子为 includes 在场断言——铁律「零漂移」用例对「删条目」报警、对「保留关键词的措辞改写」不报警，如需更强可后续升级为全文快照对比（非本变更义务）。备注二：gate 动态测试面「FR 关联绑定」解析缺陷（skip 理由错误陈述）系既有工具问题，建议另行反馈",
+      "status": "resolved"
+    },
+    {
+      "id": "F-02",
+      "severity": "P3",
+      "title": "change.patch 与实现提交中 _extracted.json 含 16 hunk（19+/19-），多数为其他变更遗留镜像滞后的机械收编",
+      "evidence": [
+        "实现提交 60c33cd3 的 _extracted.json diff 跨 @@ -22 至 @@ -598 共 16 hunk；本变更仅编辑 src/stages/explore.js 一个 stage 源",
+        "node docs/prompt/_extract.mjs 幂等重跑后 git diff --exit-code=0（零变化）——证明提交内 38 行变更恰为当前全部 stage 源的机械输出，非手工夹带",
+        "scope-audit.json：4 文件全 planned、42+/25-，与提交四代码文件（+7/0、19/19、8/3、8/3）逐一吻合，ok=true"
+      ],
+      "impact": "无违规：属 design 已声明的「机械提取重跑产物」全量再生成的自然结果；但 patch 阅读者会看到跨变更文本演进（薄跑→轻量跑等），需知噪声来源",
+      "recommendation": "留档说明即可，无需动作",
+      "status": "informational"
+    },
+    {
+      "id": "F-03",
+      "severity": "P3",
+      "title": "披露边界两条取舍逐条裁决：均可接受",
+      "evidence": [
+        "取舍 A「旧版 CLI 无 graph 命令时指引落空（fail-soft 回退 rg）」：可接受——prompt 与命令族同源发布（stages/explore.js 即 CLI 源），失配窗口仅限老 CLI 配新拷贝技能卡的混合态；措辞为「优先」非「必须」，命令缺失时报错可发现、回退无损，只读面零数据风险",
+        "取舍 B「弃流程化步骤（--wait）/ 弃 CLI 预取注入（{GRAPH_FACTS}）」：可接受——explore 的价值在 1 步无结构自由探索，流程化会改交互形态且引入状态面；探索话题不可预知时全量预取是浪费并复刻既有知识注入面；该取舍同时使「纯 prompt/文档变更、零运行时代码」的声明成立（清偿提交仅测试+文档，未引入运行时代码，声明在二轮后仍成立）"
+      ],
+      "impact": "无",
+      "recommendation": "维持现设计",
+      "status": "accepted"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T16:43:20Z",
+  "checklistResults": {
+    "1_FR三方一致": "PASS——60c33cd3 对 src/stages/explore.js 仅一个 hunk（@@ -16,9 +16,14 @@）：操作清单插第 4 项含四命令（impact/neighbors/path/summary 各一句场景）、防复潮提示（「已被否决的路不重新兜售」）、全只读声明；原 4-6 顺延 5-7；铁律节显式对比 5ca8a4fd vs 当前逐字一致且在 hunk 外（零变化）。渲染冒烟：node src/index.js run explore --help exit 0（CLI 加载 definition 并渲染 title/description）+ 模块级断言 steps[0].prompt 六关键串全 OK、stepsCount=1。注：未直接跑 run explore 阶段命令——只读纪律下避免对活跃变更写阶段状态，以 --help+模块导入+回归测试等效覆盖",
+    "2_镜像保真": "PASS——docs/prompt/explore.md 唯一围栏（````markdown）内容与 _extracted.json 的 explore.steps[0].prompt 逐字节相等（1348 字符，node 断言 byte-exact）；重跑 node docs/prompt/_extract.mjs 后 git diff --exit-code=0（幂等），工作区快照前后无新增变化",
+    "3_技能卡": "PASS——SKILL.md:55「查知识图谱（真实关系面，全只读）」能力段在场（何时用/四命令一览/--json/防复潮）；frontmatter name/description 与本变更前基线 5ca8a4fd（=60c33cd3^，真前置）逐字一致；提交 diff +7/-0 纯插入佐证。注：协调方建议的 HEAD~（=60c33cd3）已含本变更编辑、对照将恒等无意义，故改用真前置基线",
+    "4_披露边界": "已裁决，两条均可接受（见 F-03）",
+    "5_回归面": "PASS（二轮终态）——首轮实测：node --test test/output-step-render.test.mjs 64/64、test:core 321/321（0 fail）；二轮清偿后实测：node --test test/explore-graph-guidance.test.mjs 2/2 PASS（两用例名与 FR-01 绑定行逐字一致）、npm run test:core 323/323 全绿（0 fail）、npm run lint 914 文件零问题（exit 0）。lint 收口留档（verify-runs/20261008162833）passed 亦在档"
+  },
+  "reviewMeta": {
+    "headSha": "16db850f0b8916acec0ecc26383b269a191fd0f3",
+    "implCommit": "60c33cd3d3556090fac4f874ec1444a5f1c8aba1",
+    "remediationCommit": "16db850f0b8916acec0ecc26383b269a191fd0f3（=二轮 HEAD：+test/explore-graph-guidance.test.mjs 27 行、requirements.md 绑定行 1 行改、package.json test:core 登记 1 行改，共 29+/2-）",
+    "preChangeBaseline": "5ca8a4fde6536620697f5b66cfa54e1e1c322dd3",
+    "firstRound": "verdict=PASS, reviewedAgainst=766e9aad725f7077e0af8d6c73207bd3c5229627, reviewedAt=2026-10-08T16:38:30Z, findings=P2×1+P3×2",
+    "secondRound": "verdict=PASS, reviewedAgainst=16db850f0b8916acec0ecc26383b269a191fd0f3, reviewedAt=2026-10-08T16:43:20Z, F-01(P2) resolved, F-02/F-03 保留, 新增 findings 0",
+    "note": "HEAD(766e9aad) 为 design.md docs 提交；代码四文件在 60c33cd3（其父=5ca8a4fd）；16db850f 为 P2 清偿提交。工作区四声明文件与 HEAD 一致。change.patch 为 baseline→工作区累积 diff，跨变更噪声说明见 F-02"
+  }
+}

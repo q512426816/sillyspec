@@ -1,0 +1,69 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "5ca8a4fde6536620697f5b66cfa54e1e1c322dd3",
+  "totals": {
+    "files": 6,
+    "additions": 70,
+    "deletions": 26
+  },
+  "rows": [
+    {
+      "path": ".claude/skills/sillyspec-explore/SKILL.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 19,
+      "deletions": 19,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/explore.md",
+      "additions": 8,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/stages/explore.js",
+      "additions": 8,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/explore-graph-guidance.test.mjs",
+      "additions": 27,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "bec10fffa74ea75ca4c3da1d1adc4a8c5b6c079f4dc8591425d1d940417c1af6",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T16:40:56.805Z"
+}

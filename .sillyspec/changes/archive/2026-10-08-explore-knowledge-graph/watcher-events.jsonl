@@ -1,0 +1,16 @@
+{"ts":1791476843855,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791476853368,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791476853627,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791476853890,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791476853721,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791476853721,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1791476853721,"kind":"commit","stage":null,"detail":"60c33cd3","provisional":true}
+{"ts":1791476854158,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791476857842,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791476857842,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1791476890477,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791476900364,"kind":"commit","stage":null,"detail":"766e9aad","provisional":true}
+{"ts":1791476913573,"kind":"gate-run","stage":"verify","detail":"门实测 skipped · 20261008162833","provisional":true}
+{"ts":1791477555292,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package.json、test/explore-graph-guidance.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791477647483,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791477657332,"kind":"commit","stage":null,"detail":"16db850f","provisional":true}

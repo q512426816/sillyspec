@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-explore-knowledge-graph",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "766e9aad725f7077e0af8d6c73207bd3c5229627",
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P2",
+      "title": "收口测试证据链与绑定声明不符：门记录 test=skipped 且绑定所引用的测试用例不存在",
+      "evidence": [
+        ".sillyspec/.runtime/verify-runs/20261008162833/test-result.json：status=skipped、scope=dynamic-empty，理由称「8 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定」——与 requirements.md FR-01 显式绑定「test/output-step-render.test.mjs」直接矛盾",
+        "test/output-step-render.test.mjs 中不存在「explore 阶段渲染回归（prompt 结构与铁律面零变化）」用例；grep 全 test/ 目录对 stages/explore 与 'knowledge graph impact' 零命中——explore prompt 面实际无自动化钉子（该文件 64 断言全绿但其『探索』命中均为 brainstorm 的『对话式探索与需求澄清』步）",
+        "FR-04 绑定文本声明「test:core 321 全绿（verify-runs 留档）」，但留档实际记录的是 skip 而非 321 全绿跑"
+      ],
+      "impact": "FR-04 的『已验证』主张未由收口门自身留档支撑；explore prompt/铁律面『零变化』承诺无回归护栏，未来漂移不会被引用的测试捕获。实质零回归由本评审实测补齐：node --test test/output-step-render.test.mjs 64/64 PASS、npm run test:core 321/321 PASS（0 fail，14.4s）、lint 留档 passed（exit 0，913 文件）",
+      "recommendation": "非阻断。后续变更修正绑定文本（引用真实用例名，或如实声明『无既有钉子+人工冒烟』）并补一条 explore prompt 结构/铁律面钉子测试；同时向 gate 的动态测试面推断反馈『FR 关联绑定』解析缺陷（skip 理由中的错误陈述即其症状）",
+      "status": "accepted_with_note"
+    },
+    {
+      "id": "F-02",
+      "severity": "P3",
+      "title": "change.patch 与实现提交中 _extracted.json 含 16 hunk（19+/19-），多数为其他变更遗留镜像滞后的机械收编",
+      "evidence": [
+        "实现提交 60c33cd3 的 _extracted.json diff 跨 @@ -22 至 @@ -598 共 16 hunk；本变更仅编辑 src/stages/explore.js 一个 stage 源",
+        "node docs/prompt/_extract.mjs 幂等重跑后 git diff --exit-code=0（零变化，工作区快照前后一致）——证明提交内 38 行变更恰为当前全部 stage 源的机械输出，非手工夹带",
+        "scope-audit.json：4 文件全 planned、42+/25-，与提交四代码文件（+7/0、19/19、8/3、8/3）逐一吻合，ok=true"
+      ],
+      "impact": "无违规：属 design 已声明的『机械提取重跑产物』全量再生成的自然结果；但 patch 阅读者会看到跨变更文本演进（薄跑→轻量跑等），需知噪声来源",
+      "recommendation": "留档说明即可，无需动作",
+      "status": "informational"
+    },
+    {
+      "id": "F-03",
+      "severity": "P3",
+      "title": "披露边界两条取舍逐条裁决：均可接受",
+      "evidence": [
+        "取舍 A「旧版 CLI 无 graph 命令时指引落空（fail-soft 回退 rg）」：可接受——prompt 与命令族同源发布（stages/explore.js 即 CLI 源，2026-10-08-knowledge-graph 同仓交付），失配窗口仅限老 CLI 配新拷贝技能卡的混合态；措辞为『优先』非『必须』，命令缺失时 unknown subcommand 报错可发现、回退 rg 无损，只读面零数据风险",
+        "取舍 B「弃流程化步骤（--wait）/ 弃 CLI 预取注入（{GRAPH_FACTS}）」：可接受——explore 的价值在 1 步无结构自由探索，流程化会把思考伙伴变成向导机且引入状态面；探索话题不可预知时全量预取是浪费并复刻既有知识注入面；该取舍同时使『纯 prompt/文档变更、零运行时代码』的声明成立（实现提交 diff 佐证：无逻辑代码变更）"
+      ],
+      "impact": "无",
+      "recommendation": "维持现设计",
+      "status": "accepted"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T16:38:30Z",
+  "checklistResults": {
+    "1_FR三方一致": "PASS——60c33cd3 对 src/stages/explore.js 仅一个 hunk（@@ -16,9 +16,14 @@）：操作清单插第 4 项含四命令（impact/neighbors/path/summary 各一句场景）、防复潮提示（『已被否决的路不重新兜售』）、全只读声明；原 4-6 顺延 5-7；铁律节显式对比 5ca8a4fd vs 当前逐字一致且在 hunk 外（零变化）。渲染冒烟：node src/index.js run explore --help exit 0（CLI 加载 definition 并渲染 title/description）+ 模块级断言 steps[0].prompt 六关键串全 OK、stepsCount=1。注：未直接跑 run explore 阶段命令——只读纪律下避免对活跃变更写阶段状态，以 --help+模块导入+回归测试等效覆盖",
+    "2_镜像保真": "PASS——docs/prompt/explore.md 唯一围栏（````markdown）内容与 _extracted.json 的 explore.steps[0].prompt 逐字节相等（1348 字符，node 断言 byte-exact）；重跑 node docs/prompt/_extract.mjs 后 git diff --exit-code=0（幂等），工作区快照前后无新增变化",
+    "3_技能卡": "PASS——SKILL.md:55『查知识图谱（真实关系面，全只读）』能力段在场（何时用/四命令一览/--json/防复潮）；frontmatter name/description 与本变更前基线 5ca8a4fd（=60c33cd3^，真前置）逐字一致；提交 diff +7/-0 纯插入佐证。注：协调方建议的 HEAD~（=60c33cd3）已含本变更编辑、对照将恒等无意义，故改用真前置基线",
+    "4_披露边界": "已裁决，两条均可接受（见 F-03）",
+    "5_回归面": "PASS——node --test test/output-step-render.test.mjs 64/64 全绿（评审实测）；npm run test:core 321/321 全绿 0 fail（评审实测）；lint 收口留档 passed（npm run lint exit 0，913 文件）。证据链瑕疵见 F-01（门记录 test=skipped 与绑定声明不符，实质由本评审实测补齐）"
+  },
+  "reviewMeta": {
+    "headSha": "766e9aad725f7077e0af8d6c73207bd3c5229627",
+    "implCommit": "60c33cd3d3556090fac4f874ec1444a5f1c8aba1",
+    "preChangeBaseline": "5ca8a4fde6536620697f5b66cfa54e1e1c322dd3",
+    "note": "HEAD(766e9aad) 为 design.md docs 提交；代码四文件在 60c33cd3（其父=5ca8a4fd）。工作区四声明文件与 HEAD 一致（git status 对其零 modified）。change.patch 为 baseline→工作区累积 diff，跨变更噪声说明见 F-02"
+  }
+}

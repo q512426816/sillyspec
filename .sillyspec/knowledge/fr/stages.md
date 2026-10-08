@@ -91,3 +91,43 @@ created_at: 2026-09-20T15:18:10.810Z
 - 场景：错键形态可判 — Given fixtures 含三类 R4 真实错键形态（键名单复数错配 / 前后端 payload 键漂移 / 路径段后缀错配）；When 测试以 fixtures 喂 verify-probes 键原语（extractPayloadKeys / extractFrontendPayloadFiel；Then 原语对错键形态判不匹配/不覆盖（防线敏感性机械可证）
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch1/requirements.md#FR-04
 最近确认：33d66c90
+
+## FR-stages-009 src/stages/explore.js 操作清单含知识图谱查询项：影响面/历史决策/需求谱系类话题优先 graph 命令（impact/neighbors/path/summary 用例与场景各一句），并声明只读姿态不变（graph 命令全只读）
+变更：2026-10-08-explore-knowledge-graph
+状态：active
+摘要：渲染面
+全文：.sillyspec/changes/archive/2026-10-08-explore-knowledge-graph/requirements.md#FR-01
+最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-explore-knowledge-graph:flow:测试绑定FR-01
+  tests: test/explore-graph-guidance.test.mjs「explore 只读铁律零漂移（图查询接入不破界）」 | test/explore-graph-guidance.test.mjs「explore 图查询指引：impact/neighbors/path/summary 四命令 + 防复潮提示在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-explore-knowledge-graph
+  status: active
+
+## FR-stages-010 docs/prompt/_extract.mjs 重跑后 explore.md prompt 正文与 _extracted.json 逐字一致（机械提取保真纪律）
+变更：2026-10-08-explore-knowledge-graph
+状态：active
+摘要：镜像对账
+全文：.sillyspec/changes/archive/2026-10-08-explore-knowledge-graph/requirements.md#FR-02
+最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
+
+## FR-stages-011 .claude/skills/sillyspec-explore/SKILL.md 补「知识图谱查询」能力段（何时用/用哪些命令/防复潮提示）
+变更：2026-10-08-explore-knowledge-graph
+状态：active
+摘要：技能卡
+全文：.sillyspec/changes/archive/2026-10-08-explore-knowledge-graph/requirements.md#FR-03
+最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
+
+## FR-stages-012 全量测试与 lint 零回归（output-step-render 等钉 explore prompt 的测试面核对）
+变更：2026-10-08-explore-knowledge-graph
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-08-explore-knowledge-graph/requirements.md#FR-04
+最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
