@@ -29,3 +29,33 @@ created_at: 2026-10-07T14:27:54.389Z
   confirmed_at: null
   source_change: 2026-10-07-release-3-32-0
   status: active
+
+## FR-auto-claude-002 版本号 3.32.1 发布（载四个已归档修复）
+变更：2026-10-08-release-3-32-1
+状态：active
+摘要：锚同步
+场景正文：
+- 场景：锚同步 — Given 版本升至 3.32.1；When quick-retired 测试运行；Then R5 断言 pkg.version === '3.32.1' 通过
+全文：.sillyspec/changes/archive/2026-10-08-release-3-32-1/requirements.md#FR-01
+最近确认：7df3a2298f02c43be047969c862edbcd30166d29
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-release-3-32-1:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs「R5 版本锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-release-3-32-1
+  status: active
+
+## FR-auto-claude-003 npm 发布与核验
+变更：2026-10-08-release-3-32-1
+状态：active
+摘要：发布核验
+场景正文：
+- 场景：发布核验 — Given 工作区版本面与测试绿；When npm publish && npm view sillyspec version；Then 输出 3.32.1；推送后 origin/main 与本地一致
+全文：.sillyspec/changes/archive/2026-10-08-release-3-32-1/requirements.md#FR-02
+最近确认：7df3a2298f02c43be047969c862edbcd30166d29

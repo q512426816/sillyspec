@@ -1,0 +1,213 @@
+diff --git a/.sillyspec/changes/2026-10-08-release-3-32-1/flow-state.yaml b/.sillyspec/changes/2026-10-08-release-3-32-1/flow-state.yaml
+new file mode 100644
+index 00000000..aa4d2538
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-release-3-32-1/flow-state.yaml
+@@ -0,0 +1,27 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  发版 3.32.1：把 main 上已归档的两个修复带出去——2026-10-07-scope-audit-thin-patch-replay（第 2 层读兼容：归档 thin 变更快照缺失时回读 change-patch.json
++  冻结记录回放真实三态，存量旧归档对账明细不再恒「计划未动 0/0」）与 2026-10-07-unify-close-trace（第 3 层写统一：thin/heavy 双通道收尾经共用 writeCloseTraceArtifacts
++  一次写齐四件留痕、sha256 双套同锚、closedBy 通道标注）。缺陷记录 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md
++  已由使用方翻 finished/，本版是其工具侧根治的载体。
++
++
++  成功标准：
++
++  - package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚（run-quick.md v3.31.0 起）不动
++
++  - quick-retired 测试绿 + lint 绿；全量套件在 pre-push 钩子复跑绿
++
++  - npm publish 成功且 npm view sillyspec version=3.32.1（latest 核验）
++
++  - 发版规格工件随归档留档，推送 origin/main
++autopilot: true
++baseline_commit: f01702b303e1f84ffef10054b50341465f6cdbfc
++updatedAt: '2026-10-08T00:58:28.489Z'
++baseline_sha256: a5a72921ce6f7e33591059d25b1256b5e4298a13f986f373717a14f8c8de73c2
++
+diff --git a/package.json b/package.json
+index bd9414d6..430f9a93 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.0",
++  "version": "3.32.1",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index e6af7e9c..d2f83937 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -9,7 +9,7 @@
+  * R3 --change 指向不存在会话：兜底网拒绝 exit 1
+  * R4 在途会话收尾（FR-02）：夹具预置 → 渲染（含退役 ℹ️ 提示）→ 三步 --done 全通
+  * R5 文档与版本（FR-03）：模板/AGENTS.md 含「已退役」墓碑、无「存量过渡通道」表述；
+- *    package.json 3.32.0（init 按版本差刷新存量 AGENTS.md）
++ *    package.json 3.32.1（init 按版本差刷新存量 AGENTS.md）
+  */
+ import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
+ import { join, resolve, dirname } from 'node:path'
+@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.0', `R5 package.json 版本 3.32.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.1', `R5 package.json 版本 3.32.1（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/.sillyspec/changes/2026-10-08-release-3-32-1/design.md b/.sillyspec/changes/2026-10-08-release-3-32-1/design.md
+new file mode 100644
+index 00000000..8577dd21
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-release-3-32-1/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T00:58:10.015Z
++---
++# 设计记录（Design Record）— 2026-10-08-release-3-32-1
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++照 3.32.0 发版模式（变更 2026-10-07-release-3-32-0 同款最小面）：版本号承载面就两处——package.json version 与 test/quick-retired.test.mjs 的 R5 版本锚（init 按版本差刷新存量 AGENTS.md 的驱动信号，锚必须与版本同步否则测试红）。本版把 main 上四个已归档变更带出去（读兼容 / 写统一 / 收尾链三洞+门 / knowledge-stats flag），无其他面改动。发布流程：版本面绿 → 显式 pathspec 提交（信息带半角括号变更名——新归属解析下的守则）→ npm publish → npm view 核验 latest → flow done 归档 → 推送（pre-push 钩子复跑 lint+全量+docs gate）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++package.json version 3.32.0→3.32.1；quick-retired R5 锚同步。CLI 命令/模块接口零变化（四个承载变更各自已归档并留有接口契约记录）。npm 包版本面即对外可见变化的全部。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：纯版本号与锚的静态同步，无时序输入。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++package.json 为共享面高频文件——本变更用显式 pathspec 提交（AGENTS 规则 11），并行会话的暂存不被卷走（同日实证两次：knowledge-stats 归档件与 .claude/skills 在途件均未被误提交）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++发布原子性由 npm registry 保证（同版本不可重发）；本地半态（已提交未发布/已发布未推送）各自可续：重跑 flow done 断点续、git push 幂等。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不适用：版本号单一事实源 package.json，无跨仓数据面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：publish 后发现版本面遗漏（如 AGENTS.md 头部版本字样）——3.32.0 发版已验证该面不需要随动（init 生成物、按版本差自动刷新），R5 锚即防漏钉。放弃的方案：无（照抄上版发版模式，无新设计面）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | package.json | version 3.32.1 |
++| 修改 | test/quick-retired.test.mjs | R5 版本锚同步（assert + 注释） |
+diff --git a/.sillyspec/changes/2026-10-08-release-3-32-1/proposal.md b/.sillyspec/changes/2026-10-08-release-3-32-1/proposal.md
+new file mode 100644
+index 00000000..0478f08a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-release-3-32-1/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T00:58:10.015Z
++---
++# 提案书（Proposal）— 2026-10-08-release-3-32-1
++
++## 动机
++
++任务原话转写：发版 3.32.1：把 main 上已归档的两个修复带出去——2026-10-07-scope-audit-thin-patch-replay（第 2 层读兼容：归档 thin 变更快照缺失时回读 change-patch.json 冻结记录回放真实三态，存量旧归档对账明细不再恒「计划未动 0/0」）与 2026-10-07-unify-close-trace（第 3 层写统一：thin/heavy 双通道收尾经共用 writeCloseTraceArtifacts 一次写齐四件留痕、sha256 双套同锚、closedBy 通道标注）。缺陷记录 multi-agent-platform docs/sillyspec/thin-flow-done-no-scope-audit-snapshot.md 已由使用方翻 finished/，本版是其工具侧根治的载体。
++
++成功标准：
++- package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚（run-quick.md v3.31.0 起）不动
++- quick-retired 测试绿 + lint 绿；全量套件在 pre-push 钩子复跑绿
++- npm publish 成功且 npm view sillyspec version=3.32.1（latest 核验）
++- 发版规格工件随归档留档，推送 origin/main
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚（run-quick.md v3.31.0 起）不动
++2. quick-retired 测试绿 + lint 绿；全量套件在 pre-push 钩子复跑绿
++3. npm publish 成功且 npm view sillyspec version=3.32.1（latest 核验）
++4. 发版规格工件随归档留档，推送 origin/main
++
++## 成功标准（可验证）
++
++1. package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚（run-quick.md v3.31.0 起）不动
++2. quick-retired 测试绿 + lint 绿；全量套件在 pre-push 钩子复跑绿
++3. npm publish 成功且 npm view sillyspec version=3.32.1（latest 核验）
++4. 发版规格工件随归档留档，推送 origin/main
+diff --git a/.sillyspec/changes/2026-10-08-release-3-32-1/requirements.md b/.sillyspec/changes/2026-10-08-release-3-32-1/requirements.md
+new file mode 100644
+index 00000000..04514466
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-release-3-32-1/requirements.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T00:58:10.015Z
++---
++# 需求规格（Requirements）— 2026-10-08-release-3-32-1
++
++## 功能需求
++
++### FR-01: 版本号 3.32.1 发布（载四个已归档修复）
++
++必须：package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert 与注释）；历史事实锚（run-quick.md「v3.31.0 起」）不动；quick-retired 测试绿。本版内容 = main 上四个已归档变更：2026-10-07-scope-audit-thin-patch-replay（归档 thin 变更对账读兼容）、2026-10-07-unify-close-trace（双通道收尾留痕统一）、2026-10-08-thin-done-dirty-gate-and-paren-attribution（收尾链三洞+实测门自埋雷）、并行会话的 2026-10-08-knowledge-stats-fr-only。
++
++#### 场景：锚同步
++
++Given 版本升至 3.32.1
++When quick-retired 测试运行
++Then R5 断言 pkg.version === '3.32.1' 通过
++
++### FR-02: npm 发布与核验
++
++必须：npm publish 成功且 npm view sillyspec version=3.32.1（latest 标签核验）；发版规格工件随归档留档并推送 origin/main（pre-push 钩子 lint+全量+docs gate 复跑绿）。
++
++#### 场景：发布核验
++
++Given 工作区版本面与测试绿
++When npm publish && npm view sillyspec version
++Then 输出 3.32.1；推送后 origin/main 与本地一致
++
++实测留痕（2026-10-08）：`npm publish` → `+ sillyspec@3.32.1`（shasum 1fb613c0…，328 files，unpacked 13.2 MB）；`npm view sillyspec version`=3.32.1、`dist-tags`={ latest: '3.32.1' }。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/quick-retired.test.mjs「R5 版本锚」
++FR-02: 不适用：发布核验为外部动作（npm registry + origin 远端），非本仓测试面——核验输出随归档 verify 留痕
+diff --git a/.sillyspec/changes/2026-10-08-release-3-32-1/tasks.md b/.sillyspec/changes/2026-10-08-release-3-32-1/tasks.md
+new file mode 100644
+index 00000000..143af709
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-release-3-32-1/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T00:58:10.015Z
++---
++# 任务注册表（Tasks）— 2026-10-08-release-3-32-1
++
++- [x] task-01: package.json version=3.32.1；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚（run-quick.md v3.31.0 起）不动
++- [x] task-02: quick-retired 测试绿 + lint 绿；全量套件在 pre-push 钩子复跑绿
++- [x] task-03: npm publish 成功且 npm view sillyspec version=3.32.1（latest 核验）
++- [x] task-04: 发版规格工件随归档留档，推送 origin/main
