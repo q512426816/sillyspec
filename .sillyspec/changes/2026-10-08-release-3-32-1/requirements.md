@@ -26,6 +26,8 @@ Given 工作区版本面与测试绿
 When npm publish && npm view sillyspec version
 Then 输出 3.32.1；推送后 origin/main 与本地一致
 
+实测留痕（2026-10-08）：`npm publish` → `+ sillyspec@3.32.1`（shasum 1fb613c0…，328 files，unpacked 13.2 MB）；`npm view sillyspec version`=3.32.1、`dist-tags`={ latest: '3.32.1' }。
+
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/quick-retired.test.mjs「R5 版本锚」
