@@ -59,3 +59,31 @@ created_at: 2026-10-07T14:27:54.389Z
 - 场景：发布核验 — Given 工作区版本面与测试绿；When npm publish && npm view sillyspec version；Then 输出 3.32.1；推送后 origin/main 与本地一致
 全文：.sillyspec/changes/archive/2026-10-08-release-3-32-1/requirements.md#FR-02
 最近确认：7df3a2298f02c43be047969c862edbcd30166d29
+
+## FR-auto-claude-004 uncategorized.md 收件箱必须清空且仅留头部与清账留痕
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：清账后收件箱为空
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-01
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-005 全部内容块必须按语义无损迁入五个分类文件
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：逐块对号入座
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-02
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-006 已修复条目必须按 known-issues 惯例标注且不得虚标
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：修复凭据分级标注
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-03
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-007 INDEX.md 必须补齐迁入条目索引且不动他会话未提交 hunks
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：关键词命中新落点
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-04
+最近确认：bda98076636049009a2f2e032aade374999ea969

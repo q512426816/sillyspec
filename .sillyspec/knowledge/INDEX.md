@@ -20,6 +20,8 @@
 - basemodel|apperror|异常命名|分层|schema.py|service|请求内实例化|sqlmodel基类 → [backend 模块分层与基类/异常约定](conventions.md#backend-模块分层与基类异常约定routerserviceschema--basemodel--apperror)
 - sse|fetch-sse|eventsource|流式|ReadableStream|authorization → [前端 SSE 消费统一 fetch-sse：token 走 Authorization header，禁用 EventSource](conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource)
 - tailwind|md:|断点|视口|容器断点|侧栏|grid-cols → [Tailwind md: 是视口断点非容器断点：侧栏内嵌组件禁用响应式前缀](conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀)
+- daemon|vitest|单测目录|tests/**|src|__tests__|include|no test files → [daemon 单测只能落 tests/**（vitest include 不含 src）](conventions.md#daemon-单测只能落-testsvitest-include-不含-src)
+- daemon|测试目录|双目录|app/modules/daemon/tests|tests/modules/daemon|TaskCard|allowed_paths|归属 → [backend daemon 模块测试双目录惯例](conventions.md#backend-daemon-模块测试双目录惯例)
 
 ## Patterns
 
@@ -33,22 +35,30 @@
 - base_ts|base_version|乐观锁|字典序|冲突|进度上行 → [platform_sync 两套乐观锁语义：base_ts 字典序与 base_version 整数版本](patterns.md#platform_sync-两套乐观锁语义base_ts-字典序与-base_version-整数版本)
 - spec|增量同步|manifest|fileop|spec-sync|spec-manifest|软删 → [Spec 文件增量同步协议：manifest 比对 + FileOp 上行 + apply_ops 单写者](patterns.md#spec-文件增量同步协议manifest-比对--fileop-上行--apply_ops-单写者)
 - change_write|代写|占坑|claim|daemon_change_writes|回灌|sync-manual → [Daemon 代写队列：占坑 commit + lease-polling claim + GC 回灌](patterns.md#daemon-代写队列占坑-commit--lease-polling-claim--gc-回灌)
+- facade|拆分|子包|lazy import|循环|TYPE_CHECKING|patch 跟随|巨石|import 策略 → [单类巨石拆 facade+子包的 import 策略（避免 module-level 循环 / 跨域调用 / 测试 patch 跟随）](patterns.md#单类巨石拆-facade子包的-import-策略避免-module-level-循环--跨域调用--测试-patch-跟随)
+- codex|interactive|driver|provider-neutral|app-server|json-rpc|thread|fail-closed|elicitation → [Codex Interactive Session：provider-neutral driver 抽象](patterns.md#codex-interactive-sessionprovider-neutral-driver-抽象)
+- allowed_roots|list_dir|cc 执行|cwd|statSync|root_path|放行范围 → [daemon allowed_roots 只管 list_dir RPC，不管 CC 执行 cwd](patterns.md#daemon-allowed_roots-只管-list_dir-rpc不管-cc-执行-cwd)
+- task_started|task_notification|task_updated|background_tasks_changed|sdk|子代理|生命周期 → [Claude Agent SDK task_* 生命周期系统消息可消费](patterns.md#claude-agent-sdk-task_-生命周期系统消息可消费)
+- token|计费量|上下文量|ctx_tokens|cache_read|聚合口径|瞬时|usage → [会话 token 两套口径：计费量（Σ 跨调用可加）vs 上下文量（瞬时，取最近一次调用）](patterns.md#会话-token-两套口径计费量σ-跨调用可加vs-上下文量瞬时取最近一次调用)
+- 集成验证|x-api-key|ws 升级|403|userprofile|第二实例|daemon.pid|隔离 → [daemon 本机集成验证：WS 鉴权只认 X-API-Key + USERPROFILE 隔离跑第二实例](patterns.md#daemon-本机集成验证ws-鉴权只认-x-api-key--userprofile-隔离跑第二实例)
+- aiosqlite|for update|sqlite|部分唯一索引|integrityerror|并发防重|懒建 → [aiosqlite 不支持 SELECT FOR UPDATE：并发唯一性守卫用部分唯一索引+IntegrityError 捕获](patterns.md#aiosqlite-不支持-select-for-update并发唯一性守卫用部分唯一索引integrityerror-捕获)
+- mcp|env|mcpServers|白名单|claude.exe|注入|stdio|子进程环境 → [MCP server 子进程不继承 claude.exe 完整环境：env 必须放 mcpServers[*].env](patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv)
 
 ## Known Issues
 - 导出|乱码|GBK|控制台码页|PYTHONIOENCODING|TOOL_RESULT|替换字符 → [会话日志 TOOL_RESULT 中文乱码（Windows 控制台码页，落库即坏不可导出还原）](known-issues.md#会话日志-tool_result-中文乱码windows-控制台码页落库即坏不可导出还原)
 
-- daemon|python|node|重写|typescript → [sillyhub-daemon 从 Python 重写为 Node.js](known-issues.md#sillyhub-daemon-于-2026-06-14-从-python-重写为-nodejs)
-- ci|hook|git-add|绕过|pretooluse → [CI hook 复合命令可绕过 claude PreToolUse 层](known-issues.md#ci-hook-复合命令可绕过-claude-pretooluse-层)
+- daemon|python|node|重写|typescript → [sillyhub-daemon 从 Python 重写为 Node.js](known-issues.md#-sillyhub-daemon-于-2026-06-14-从-python-重写为-nodejs)
+- ci|hook|git-add|绕过|pretooluse → [CI hook 复合命令可绕过 claude PreToolUse 层](known-issues.md#-ci-hook-复合命令可绕过-claude-pretooluse-层)
 - daemon|session|卡死|重启|recovery|已修复 → [daemon 重启 session 恢复已修复](known-issues.md#-daemon-重启-session-恢复已修复gap-83--commit-40e21d3)
-- agentrunlog|metadata|日志|submit-messages → [AgentRunLog 无 metadata 列](known-issues.md#agentrunlog-无-metadata-列三层日志-metadata-丢失)
-- daemon|实例|taskkill|pid → [本机可能存在多个 daemon 实例](known-issues.md#本机可能存在多个-daemon-实例)
+- agentrunlog|metadata|日志|submit-messages → [AgentRunLog 无 metadata 列](known-issues.md#-agentrunlog-无-metadata-列--三层日志-metadata-丢失)
+- daemon|实例|taskkill|pid → [本机可能存在多个 daemon 实例](known-issues.md#-本机可能存在多个-daemon-实例)
 - docker|backend|热重载|reload|rebuild|挂载 → [Docker backend 容器不热重载](known-issues.md#-docker-backend-容器不热重载挂载非-app无---reload)
 - healthcheck|busybox|frontend|已解决|node-fetch → [frontend healthcheck busybox 误报已解决](known-issues.md#-frontend-healthcheck-busybox-误报问题已解决commit-46591be0)
-- daemon|pnpm|overrides|claude-agent-sdk|二进制|钉死|0.3.181 → [daemon pnpm overrides 钉死 claude-agent-sdk 8 平台二进制](known-issues.md#-daemon-pnpm-overrides-把-claude-agent-sdk-8-平台二进制硬钉-0.3.181)
+- daemon|pnpm|overrides|claude-agent-sdk|二进制|钉死|0.3.181 → [daemon pnpm overrides 钉死 claude-agent-sdk 8 平台二进制](known-issues.md#-daemon-pnpm-overrides-把-claude-agent-sdk-8-平台二进制硬钉-03181)
 - frontend|react-query|已启用|queryclient|apifetch|zustand → [frontend react-query 已正式启用](known-issues.md#-frontend-react-query-已正式启用2026-07-openapi-类型迁移commit-fecaa155--29b3c86b)
 - frontend|lockfile|antd|shadcn|双ui库 → [frontend 与 daemon 各自独立 lockfile + 双 UI 库并存](known-issues.md#-frontend-与-daemon-各自独立-lockfile--双-ui-库并存)
 - audit|audit_hooks|审计|auditlog|测试|生产 → [audit_hooks 只在测试 lifespan 注册](known-issues.md#-audit_hooks-只在测试-lifespan-注册生产审计要业务代码显式写-auditlog)
-- docker|postgres|pg|端口|映射|alembic|连不上 → [全 Docker 部署本地 PG 容器端口未映射 host](known-issues.md#-全-docker-部署本地-pg-容器端口未映射-hostrun-alembicpytest-连不上)
+- docker|postgres|pg|端口|映射|alembic|连不上 → [全 Docker 部署本地 PG 容器端口未映射 host](known-issues.md#-全-docker-部署本地-pg-容器端口未映射-hosthost-跑-alembicpytest-连不上)
 - export-excel|路由顺序|422|uuid|路径参数|item_id|fastapi|ppm|导出|字面量 → [ppm export-excel 路由必须前置 item_id](known-issues.md#-ppm-导出-export-excel-路由必须前置于-item_id-路由)
 - alembic|migration|多head|revision|crash|并行 → [alembic 并行变更撞 revision 多 head：启动 crash-loop](known-issues.md#-alembic-并行变更撞-revision-多-head启动-crash-loop)
 - gen:types|api-types|漂移|e2e|playwright|puppeteer|闸门 → [前端测试闸门缺口：gen:types:check 未进 CI，E2E 零落地](known-issues.md#-前端测试闸门缺口gentypescheck-未进-cie2e-零落地)
@@ -57,6 +67,28 @@
 - worktree|gc|expires_at|租约|回收|泄漏 → [worktree 过期租约无自动 GC：expires_at 与索引闲置](known-issues.md#-worktree-过期租约无自动-gcexpires_at-与索引闲置)
 - spec_guardian|tool_gateway|死代码|run_guard|守护门 → [spec_guardian 死代码与 tool_gateway 注释失配：守护门从未在生产生效](known-issues.md#-spec_guardian-死代码与-tool_gateway-注释失配守护门从未在生产生效)
 - god 文件|daemon.ts|session-manager|task-runner|大文件 → [daemon 三个 3000+ 行 god 文件（daemon.ts 4047 / session-manager.ts 3897 / task-runner.ts 3156）](known-issues.md#-daemon-三个-3000-行-god-文件daemonts-4047--session-managerts-3897--task-runnerts-3156)
+- install.sh|backend 镜像|baked|下发|heredoc|转义|重建镜像|%~dp0 → [install.sh 改动需重建 backend 镜像才下发（baked into image）+ bash heredoc 转义陷阱（修复：.cmd wrapper 改 %~dp0 自相对）](known-issues.md#-installsh-改动需重建-backend-镜像才下发baked-into-image-bash-heredoc-转义陷阱修复cmd-wrapper-改-dp0-自相对)
+- sync_stage_status|dual-db|change_key|_resolve_db_path|fallback|human_gate → [sync_stage_status 找不到 change_key 的 dual-db 问题（修复：_resolve_db_path 加 fallback）](known-issues.md#-sync_stage_status-找不到-change_key-的-dual-db-问题修复_resolve_db_path-加-fallback)
+- auto_dispatch|has_pending_step|stage_completed|触发条件|brainstorm 完成 → [auto_dispatch_next_step 只在 has_pending_step 时触发（修复：条件并入 stage_completed）](known-issues.md#-auto_dispatch_next_step-只在-has_pending_step-时触发修复条件并入-stage_completed)
+- reparse|文档列表|change_documents|前端|同步 → [complete_stage 不调用 reparse 导致文档不全（修复：complete_stage 前先 reparse）](known-issues.md#-complete_stage-不调用-reparse-导致文档不全修复complete_stage-前先-reparse)
+- alembic|migrations/versions|stamp|downgrade|DuplicateColumn|script_location|版本号领先 → [Alembic migration 目录在 backend/migrations/versions + schema 领先版本号的处理（stamp 对齐）](known-issues.md#-alembic-migration-目录在-backendmigrationsversions--schema-领先版本号的处理stamp-对齐)
+- login_enabled|get_current_user|disable-login|jwt|立即失效|auth_deps → [login_enabled 必须在 get_current_user 检查，不能只在 login 入口（修复 commit d62ec975）](known-issues.md#-login_enabled-必须在-get_current_user-检查不能只在-login-入口修复-commit-d62ec975)
+- alembic.ini|em-dash|gbk|UnicodeDecodeError|configparser|ascii|windows → [alembic.ini 注释含 UTF-8 em-dash 导致 Windows gbk configparser 崩溃（修复：注释改 ASCII）](known-issues.md#-alembicini-注释含-utf-8-em-dash-导致-windows-gbk-configparser-崩溃修复注释改-ascii)
+- cursor-agent|ps1|正则|版本目录|resolveCursorVersionEntry|cmd-shim|待识别 → [cursor-agent 官方 ps1 版本目录正则不匹配新版目录命名，导致 cursor 完全不可用（修复 ql-20260620-002-f8c1）](known-issues.md#-cursor-agent-官方-ps1-版本目录正则不匹配新版目录命名导致-cursor-完全不可用修复-ql-20260620-002-f8c1)
+- etl|migrate_from_ruoyi|maps|执行顺序|孤儿|uuid5|resync → [ETL 迁移函数执行顺序依赖 maps 构建时机，ppm 模块整表成孤儿（修复 ql-20260621-004-f2a1）](known-issues.md#-etl-迁移函数执行顺序依赖-maps-构建时机ppm-模块整表成孤儿修复-ql-20260621-004-f2a1)
+- spawn|einval|resolveWindowsCmdShim|windows|interactive driver|cmd-shim|.cmd → [interactive driver 自行 spawn 时漏接 resolveWindowsCmdShim 致 Windows spawn EINVAL（修复 ql-20260624-002-b2f7）](known-issues.md#-interactive-driver-自行-spawn-时漏接-resolvewindowscmdshim-致-windows-spawn-einval修复-ql-20260624-002-b2f7)
+- turn/completed|parse|吞信号|卡死|notifyRunResult|收敛|codex → [codex turn 收敛强契约：turn/completed 不可被 parse 吞信号（设计决策：不加 turn 超时兜底）](known-issues.md#-codex-turn-收敛强契约turncompleted-不可被-parse-吞信号设计决策不加-turn-超时兜底)
+- next.js|rewrite|代理|socket hang up|econnreset|sse|git sha|build_id|preflight → [Next.js rewrite proxy 对长请求 socket hang up + daemon 分发以 git SHA 为版本号（未 commit 改动不递增）](known-issues.md#-nextjs-rewrite-proxy-对长请求-socket-hang-up--daemon-分发以-git-sha-为版本号未-commit-改动不递增)
+- 跨端|mock|契约|pydantic|静默忽略|snake_case|camelCase|时间戳形态 → [跨端 mock 各自绿但契约断裂：字段命名/时间戳形态三端对不齐（修复 sillyspec 9a63466）](known-issues.md#-跨端-mock-各自绿但契约断裂字段命名时间戳形态三端对不齐修复-sillyspec-9a63466)
+- execfile|enoent|npm 全局|patext|cve-2024-27980|shell:true|白名单 → [Windows 下 execFile 调 npm 全局 CLI 必 ENOENT，须 spawn+shell 或 cmd-shim 解析（待确认）](known-issues.md#-windows-下-execfile-调-npm-全局-cli-必-enoent须-spawnshell-或-cmd-shim-解析待确认)
+- apt|deb.debian.org|digest|漂移|国内源|tuna|dockerfile|缓存失效 → [backend rebuild apt 连不上 deb.debian.org：base image digest 漂移致 apt 缓存失效裸奔（修复 ql-20260713-001-9f3e）](known-issues.md#-backend-rebuild-apt-连不上-debdebianorgbase-image-digest-漂移致-apt-缓存失效裸奔修复-ql-20260713-001-9f3e)
+- wsl|盘符|/mnt/|win_to_unix_path|is_wsl|cmd bash|git bash|解析 → [install.sh WSL 下 1c/1d 盘符转换 bug（/e/ vs /mnt/e/）+ CMD bash 默认解析到 WSL（修复 ql-20260713-003-b3d7）](known-issues.md#-installsh-wsl-下-1c1d-盘符转换-buge-vs-mnte-cmd-bash-默认解析到-wsl修复-ql-20260713-003-b3d7)
+- wsl|$user|userprofile|用户名|drvfs|permission denied|cmd.exe → [install.sh WSL 下 $USER ≠ Windows 用户名（拼 /mnt/c/Users/<name> 目录坑）（修复 ql-20260713-004-7e2a）](known-issues.md#-installsh-wsl-下-user--windows-用户名拼-mntcusersname-目录坑修复-ql-20260713-004-7e2a)
+- master_key|v1:|hex|credentialcipher|fromhex|500|token_hex|裸 valueerror → [SILLYSPEC_MASTER_KEY 必须 v1:<64位hex>，非 hex 值致 get_cipher() 裸 ValueError 全模块 500（修复 ql-20260729-001-b3af；裸 ValueError 健壮性建议保留）](known-issues.md#-sillyspec_master_key-必须-v164位hex非-hex-值致-get_cipher-裸-valueerror-全模块-500修复-ql-20260729-001-b3af裸-valueerror-健壮性建议保留)
+- antd v6|wrapperClassName|classNames|styles.container|vi.mock|桶导出|modal 全屏 → [antd v6 实测三坑：Image 无 wrapperClassName、Modal 语义 styles.container、枚举式 vi.mock 须随桶导出同步（待确认）](known-issues.md#-antd-v6-实测三坑image-无-wrapperclassnamemodal-语义-stylescontainer枚举式-vimock-须随桶导出同步待确认)
+- agentmission|session_id|判别口径|非 null|查表|uuid4|绑定会话 → [AgentMission.session_id 判别口径：列非 NULL 不可信，须查表确认指向真实 AgentSession](known-issues.md#-agentmissionsession_id-判别口径列非-null-不可信须查表确认指向真实-agentsession)
+- 后台子代理|canusetool|fail-closed|running turn|死锁|run_in_background|权限 → [后台子代理脱离平台 running turn 后权限回调 fail-closed 死锁](known-issues.md#-后台子代理脱离平台-running-turn-后权限回调-fail-closed-死锁)
+- 路由顺序|字面量|参数路由|422|uuid_parsing|sessions/events|盲区|asgitransport → [字面量端点被两段式参数路由吞致 422 + 审查盲区三连（sessions/events，修复 commit 0c7860f7）](known-issues.md#-字面量端点被两段式参数路由吞致-422--审查盲区三连sessionsevents修复-commit-0c7860f7)
 
 ## SillySpec Gotchas
 
@@ -70,6 +102,10 @@
 - sillyspec|execute|exec-run|review.json|残留|复用 → [exec-run ID 复用 review.json 残留](sillyspec-gotchas.md#execute-的-exec-run-id-可能复用旧目录reviewjson-残留需先-read-再覆盖)
 - sillyspec|plan|postcheck|多变更|resolvechangedir|空 progress → [plan postcheck 多变更校验错](sillyspec-gotchas.md#plan-postcheck-多变更环境校验错变更progressjson-空--sort-reverse)
 - sillyspec|reopen|from-step|done|回填|completed|重开 → [reopen --from-step N 后 --done 会把后续未执行步骤回填 completed](sillyspec-gotchas.md#reopen---from-step-n-后---done-会把后续未执行步骤回填-completed)
+- worktree|doctor|junction|installed|node_modules|静默失败|复核 → [worktree doctor --fix 标记 installed 但 node_modules junction 实际未建](sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建)
+- mklink|junction|git bash|msys|powershell|new-item|cygpath|补链 → [Git Bash 下修 worktree node_modules junction：cmd mklink 传参必败，用 PowerShell New-Item Junction](sillyspec-gotchas.md#git-bash-下修-worktree-node_modules-junctioncmd-mklink-传参必败用-powershell-new-item-junction)
+- worktree|产物分裂|verify-result|主仓库|both-added|回写|回归任务 → [worktree 内执行回归/文档任务时 SillySpec 产物与主仓库分裂](sillyspec-gotchas.md#worktree-内执行回归文档任务时-sillyspec-产物与主仓库分裂)
+- quick|--done|危险文件|force-baseline|allow-new|并发会话|脏文件|判归属 → [quick --done 边界审计把并发会话的 .sillyspec 脏文件判危险（用 --force-baseline 但不暂存）](sillyspec-gotchas.md#quick---done-边界审计把并发会话的-sillyspec-脏文件判危险用---force-baseline-但不暂存)
 
 ## Testing Gotchas
 
@@ -79,10 +115,15 @@
 - antd|datepicker|dayjs|locale|中文|日历表头 → [antd v5 DatePicker dayjs locale](testing-gotchas.md#前端antd-v5-datepicker-周几日历表头显示英文仅-configprovider-locale-不够)
 - antd|autoletterspacing|中文按钮|getbyrole|字间空格 → [antd v5 autoLetterSpacing 字间空格](testing-gotchas.md#前端antd-v5-两字中文按钮-autoletterspacing-致-dom-字间空格getbyrole-匹配失败)
 - markdown-text|next/dynamic|ssr:false|jsdom|null|getbytext → [MarkdownText jsdom 渲染 null](testing-gotchas.md#前端markdowntext-用-nextdynamic-ssrfalsejsdom-测试同步-render-得-null)
+- cleanup_stale_runtimes|status|heartbeat|45s|online|offline|list_machines|resurrect → [后端：daemon 列表测试造 status 必须符合 cleanup_stale_runtimes 不变量](testing-gotchas.md#后端daemon-列表测试造-status-必须符合-cleanup_stale_runtimes-不变量)
+- pydantic|model_validate|model_copy|派生字段|必填|validationerror|全字段直构 → [后端：Pydantic 必填派生字段不能用 model_validate(ORM)+model_copy 两段式](testing-gotchas.md#后端pydantic-必填派生字段不能用-model_validateormmodel_copy-两段式)
+- 429|限流|login|测试态|跨用例|预存|create_access_token|git stash → [后端：admin 套件 login 限流 429 致偶发 FAILED（预存，测试态跨用例累计）](testing-gotchas.md#后端admin-套件-login-限流-429-致偶发-failed预存测试态跨用例累计)
+- avatar|jsdom|window.Image|naturalWidth|objectURL|radix|stub|头像 → [前端：jsdom 下 shadcn/Radix Avatar 的 AvatarImage 永不渲染——需 stub window.Image](testing-gotchas.md#前端jsdom-下-shadcnradix-avatar-的-avatarimage-永不渲染需-stub-windowimage)
 
 ## Uncategorized（暂存区，未加索引）
 
-`uncategorized.md` 存放项目特定架构经验、历史记录、尚未提炼成通用 pattern 的知识。条目成熟后应迁出到上述分类文件。当前内容包括：install.sh 分发机制、sync_stage_status / auto_dispatch / complete_stage stage 调度链路、Alembic migration 目录惯例、cursor-agent 版本探测、ETL 迁移顺序、单类拆 facade import 策略、Codex interactive driver 抽象、Windows spawn EINVAL、codex turn 收敛强契约、daemon allowed_roots 范围、Next.js rewrite proxy 等。直接读 `uncategorized.md` 浏览。
+`uncategorized.md` 存放项目特定架构经验、历史记录、尚未提炼成通用 pattern 的知识。条目成熟后应迁出到上述分类文件并在此加索引。
+**2026-10-08 已清账**（变更 2026-10-08-knowledge-inbox-triage）：历史 39 条 + 1 个掉标题孤儿块全部迁出——known-issues 22 块（🟢 已修复 15 / 🟡 在案 7）、patterns 8、conventions 2、testing-gotchas 4、sillyspec-gotchas 4，本 INDEX 已补全索引。新暂存条目仍先落 `uncategorized.md`，直接读该文件浏览。
 
 ## Decisions
 - unmapped|decision|决策|三波交付|打包 → [decisions/unmapped.md](decisions/unmapped.md)
@@ -145,11 +186,7 @@
 - codex-settings|FR|需求|承接 → [fr/codex-settings.md](fr/codex-settings.md)
 - skill-manager|FR|需求|承接 → [fr/skill-manager.md](fr/skill-manager.md)
 - types|FR|需求|承接 → [fr/types.md](fr/types.md)
-- auto-frontend|frontend|FR|需求|承接 → [fr/auto-frontend.md](fr/auto-frontend.md)
-- auto-sillyhub-daemon|sillyhub-daemon|FR|需求|承接 → [fr/auto-sillyhub-daemon.md](fr/auto-sillyhub-daemon.md)
-- auto-backend|backend|FR|需求|承接 → [fr/auto-backend.md](fr/auto-backend.md)
 - spec-sync|FR|需求|承接 → [fr/spec-sync.md](fr/spec-sync.md)
-- auto-sillyspec|sillyspec|FR|需求|承接 → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)
 - claude-settings|FR|需求|承接 → [fr/claude-settings.md](fr/claude-settings.md)
 - bin|FR|需求|承接 → [fr/bin.md](fr/bin.md)
 - cli-entry|FR|需求|承接 → [fr/cli-entry.md](fr/cli-entry.md)
@@ -161,10 +198,10 @@
 - sync|FR|需求|承接 → [fr/sync.md](fr/sync.md)
 - server-executor|FR|需求|承接 → [fr/server-executor.md](fr/server-executor.md)
 - auto-round5|round5|FR|需求|承接 → [fr/auto-round5.md](fr/auto-round5.md)
-- same-session|force|knownFlags|白名单|flag 死路 → [CLI flag 白名单死路](known-issues.md#cli-flag-白名单死路报错指引指向未登记-flag双实例)
-- 摘录|碎片|截断|slice|续行合并|括号换行 → [机器摘录碎片化](known-issues.md#机器摘录碎片化行级切分拆括号换行--tasks-渲染-slice060-硬切)
-- verify|批量快进|noAI|亲测|互锁|integrationRan → [verify 批量快进互锁](known-issues.md#verify-批量快进与-noai-亲测步互锁四步绕行)
-- 绿地|伪域|auto-|unmapped|模块图|bootstrap|deliverableFiles → [绿地伪域断流](known-issues.md#绿地无模块图仓-fr-知识落伪域与-unmapped-大池断流)
+- same-session|force|knownFlags|白名单|flag 死路 → [CLI flag 白名单死路](known-issues.md#-cli-flag-白名单死路报错指引指向未登记-flag双实例)
+- 摘录|碎片|截断|slice|续行合并|括号换行 → [机器摘录碎片化](known-issues.md#-机器摘录碎片化行级切分拆括号换行--tasks-渲染-slice060-硬切)
+- verify|批量快进|noAI|亲测|互锁|integrationRan → [verify 批量快进互锁](known-issues.md#-verify-批量快进与-noai-亲测步互锁四步绕行)
+- 绿地|伪域|auto-|unmapped|模块图|bootstrap|deliverableFiles → [绿地伪域断流](known-issues.md#-绿地无模块图仓-fr-知识落伪域与-unmapped-大池断流)
 - 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/unmapped.md](decisions/unmapped.md)
 - change-management|FR|需求|承接 → [fr/change-management.md](fr/change-management.md)
 - docs-consistency|FR|需求|承接 → [fr/docs-consistency.md](fr/docs-consistency.md)
@@ -172,3 +209,6 @@
 - worktree|FR|需求|承接 → [fr/worktree.md](fr/worktree.md)
 - auto-assets|assets|FR|需求|承接 → [fr/auto-assets.md](fr/auto-assets.md)
 - auto-claude|claude|FR|需求|承接 → [fr/auto-claude.md](fr/auto-claude.md)
+- backend|FR|需求|承接 → [fr/backend.md](fr/backend.md)
+- frontend|FR|需求|承接 → [fr/frontend.md](fr/frontend.md)
+- sillyspec|FR|需求|承接 → [fr/sillyspec.md](fr/sillyspec.md)

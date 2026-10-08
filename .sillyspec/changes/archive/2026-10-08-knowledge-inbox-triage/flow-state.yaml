@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -14,9 +22,10 @@ input: |-
   - INDEX.md 为全部迁入条目补关键词索引行，Uncategorized 段描述同步更新
 autopilot: false
 baseline_commit: 71f2a7b0f6687e2bd51c3b3eaebf34e26490009d
-updatedAt: '2026-10-08T03:24:15.381Z'
+updatedAt: '2026-10-08T03:26:19.343Z'
 baseline_sha256: 42d92987682a83f706e894834bf26022d0f929c0f7d078b590c9e1dc63d1c220
 spec_approved: true
 spec_approved_at: '2026-10-08T03:24:15.378Z'
 spec_approved_by: zcode-kb-triage-1008
+gate_summary: 'test: —｜lint: —｜门文件 4 个'
 

@@ -1,0 +1,48 @@
+{
+  "change": "2026-10-08-knowledge-inbox-triage",
+  "baseline": "71f2a7b0f6687e2bd51c3b3eaebf34e26490009d",
+  "head": "bda98076636049009a2f2e032aade374999ea969",
+  "files": [
+    ".sillyspec/changes/2026-10-08-knowledge-inbox-triage/design.md",
+    ".sillyspec/changes/2026-10-08-knowledge-inbox-triage/flow-state.yaml",
+    ".sillyspec/changes/2026-10-08-knowledge-inbox-triage/proposal.md",
+    ".sillyspec/changes/2026-10-08-knowledge-inbox-triage/requirements.md",
+    ".sillyspec/changes/2026-10-08-knowledge-inbox-triage/tasks.md",
+    ".claude/skills/sillyspec-export/SKILL.md",
+    ".claude/skills/sillyspec-quick/SKILL.md",
+    ".claude/skills/sillyspec-resume/SKILL.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 369,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-08T03:26:17.971Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-export",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-quick",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-resume",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "0af3e312d50e83747ca4bc18e1e26252545bd5369b26cf5b5334757c60170dda",
+  "patchStatus": "ok"
+}

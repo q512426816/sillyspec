@@ -1,0 +1,39 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "71f2a7b0f6687e2bd51c3b3eaebf34e26490009d",
+  "totals": {
+    "files": 3,
+    "additions": 194,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".claude/skills/sillyspec-export/SKILL.md",
+      "additions": 57,
+      "deletions": 0,
+      "kind": "new"
+    },
+    {
+      "path": ".claude/skills/sillyspec-quick/SKILL.md",
+      "additions": 116,
+      "deletions": 0,
+      "kind": "new"
+    },
+    {
+      "path": ".claude/skills/sillyspec-resume/SKILL.md",
+      "additions": 21,
+      "deletions": 0,
+      "kind": "new"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "0af3e312d50e83747ca4bc18e1e26252545bd5369b26cf5b5334757c60170dda",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T03:26:17.971Z"
+}

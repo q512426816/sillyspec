@@ -1198,3 +1198,42 @@
 - 场景：默认场景 — Given 三主题任一；Then 状态条颜色全走 themes.ts 消费链（brand 徽标/accent ↑/warning ↓与黄条/success +/error −）零硬编码 hex；
 全文：.sillyspec/changes/archive/2026-08-26-workspace-git-status/requirements.md#FR-07
 最近确认：69bf8e3c5
+
+## FR-auto-sillyhub-daemon-001 轮任务派生
+变更：2026-09-07-pi-task-events
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-004@v1
+场景正文：
+- 场景：默认场景 — Given pi 会话产生一轮 turn（turn_start → ... → turn_end）；When 轮内出现 tool_execution_start；Then 归一化器产出一组任务事件：turn_start 时 running（task_id=pi-t<seq>），turn_end 时按 stopReason 映射终态
+全文：.sillyspec/changes/archive/2026-09-07-pi-task-events/requirements.md#FR-01
+最近确认：35f3d6528
+
+## FR-auto-sillyhub-daemon-002 上报链路复用
+变更：2026-09-07-pi-task-events
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given 归一化器产出 status/agent_task_status 事件；Then 经既有 envelope→_onMessage→_dispatchStatusEvent→cli onSessionEvent→notifyAgentTaskS
+全文：.sillyspec/changes/archive/2026-09-07-pi-task-events/requirements.md#FR-02
+最近确认：35f3d6528
+
+## FR-auto-sillyhub-daemon-003 异常流防御
+变更：2026-09-07-pi-task-events
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 上一轮任务仍 running 时新 turn_start 到达（上轮 turn_end 丢失）；Then 先补发上轮 completed 再开新行，不产生悬挂 running
+全文：.sillyspec/changes/archive/2026-09-07-pi-task-events/requirements.md#FR-03
+最近确认：35f3d6528
+
+## FR-auto-sillyhub-daemon-004 既有行为零回归
+变更：2026-09-07-pi-task-events
+状态：active
+摘要：默认场景
+依据决策：D-004@v1
+场景正文：
+- 场景：默认场景 — Given 全部既有 pi-events 用例与 claude/codex 会话；Then 映射表零改动；既有用例仅 expected 数组适配（追加派生事件）；claude/codex 零变化
+全文：.sillyspec/changes/archive/2026-09-07-pi-task-events/requirements.md#FR-04
+最近确认：35f3d6528
