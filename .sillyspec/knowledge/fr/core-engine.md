@@ -2286,3 +2286,129 @@
   confirmed_at: null
   source_change: 2026-10-08-knowledge-graph
   status: active
+
+## FR-core-engine-143 sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given buildFixture 九面全形态 specRoot / When graphSummary(g) / Then nodes/edges 等于 g.stats
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-01
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active
+
+## FR-core-engine-144 clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given fixture 含 fr:core-engine 簇（belongs-module 域）与 decision:core-engine 簇（域文件名） / Whe
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-02
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active
+
+## FR-core-engine-145 sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given fixture / When graphNodesSearch(g, 'FR-CORE-ENGINE-001', 10) 与 label 中文包含「第一个需求」
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-03
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active
+
+## FR-core-engine-146 nodes --search 空串/缺省返回 usage 错误不崩
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given fixture / When cmdKnowledgeGraph(root, ['nodes']) / Then ok:false 且 error.code==
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-04
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-04
+  tests: test/knowledge-graph.test.mjs「⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active
+
+## FR-core-engine-147 现有五子命令回归全绿；新增两子命令进 usage 行
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 既有 ④CLI 分发用例 / When 回归 / Then 全绿且 usage 文案含七子命令。
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-05
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-05
+  tests: test/knowledge-graph.test.mjs「④CLI 分发：knowledge graph 子命令 --json/--edges 热测」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active
+
+## FR-core-engine-148 lint/test 与仓内惯例一致
+变更：2026-10-08-graph-summary-nodes
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 仓内 lint/test 命令 / When 跑 / Then 零失败。
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-nodes/requirements.md#FR-06
+最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-nodes:flow:测试绑定FR-06
+  tests: test/check-syntax.mjs | test/knowledge-graph.test.mjs「⑧summary 聚合 + ⑨nodes 搜索」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-nodes
+  status: active

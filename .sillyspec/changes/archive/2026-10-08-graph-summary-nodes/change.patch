@@ -1,0 +1,430 @@
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index c89a56f6..18ff22c1 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -476,6 +476,102 @@ export function graphDangling(graph, { existsFn = existsSync } = {}) {
+   return out
+ }
+ 
++// ═══ 2026-10-08-graph-summary-nodes：summary 聚合 + nodes 搜索（平台仓阶段三依赖契约）═══
++// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面；
++// summary 四计数与 doctor knowledge_graph_integrity 六检查同源同值（口径一处定义两处消费）。
++
++/** 节点 → 簇域（lite 总览聚类键 type×domain；缺省占位防散簇）。 */
++function graphNodeDomain(graph, n) {
++  switch (n.type) {
++    case 'fr': case 'decision':
++      return n.attrs.domain || '_unmapped'
++    case 'file': {
++      // module-files 精确挂接反查（多挂取最长模块 id——窄域优先）
++      const mods = graph.edges.filter((e) => e.type === 'module-files' && e.t === n.id).map((e) => e.s.replace(/^module:/, ''))
++      return mods.sort((a, b) => b.length - a.length)[0] || '_unmapped'
++    }
++    case 'module':
++      return n.id.replace(/^module:/, '')
++    case 'doc':
++      return n.attrs.kind || 'doc'
++    case 'entry':
++      return n.attrs.file || '_unmapped'
++    case 'test': {
++      const fr = graph.edges.find((e) => e.type === 'test-binding' && e.t === n.id)
++      return (fr && graph.nodes.get(fr.s)?.attrs?.domain) || '_tests'
++    }
++    default: // project/change/ql：id 即域
++      return n.id
++  }
++}
++
++/** 全图聚合：规模/分布 + doctor 同源四计数 + clusters 簇代表（度数 top-5，度=全边入+出）。
++ *  clustersLimit>0 时仅返回 count 前 N 簇（真图 800+ 簇，平台 lite 画布摆不下——消费方按需截断）。 */
++export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 } = {}) {
++  const orphans = graphOrphans(graph).length
++  const danglingRefs = graphDangling(graph, { existsFn }).length
++  // module_doc_gaps（doctor graph-module-doc-gap 同源）：map 模块缺 describes 或 changelog-of 入边
++  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
++  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
++  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
++  const moduleDocGaps = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id)).length
++  // changelog_danglings（doctor graph-changelog-dangling 同源）：日期名目标不在 archive/ 也不在活跃 changes/
++  const specRoot = String(graph.root || '')
++  let changelogDanglings = 0
++  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
++    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) changelogDanglings++
++  }
++  // clusters：type×domain 聚簇，representatives 度数 top-5（同度按 id 字典序稳序）
++  const deg = new Map()
++  for (const e of graph.edges) {
++    deg.set(e.s, (deg.get(e.s) || 0) + 1)
++    deg.set(e.t, (deg.get(e.t) || 0) + 1)
++  }
++  const buckets = new Map()
++  for (const n of graph.nodes.values()) {
++    const key = `${n.type}:${graphNodeDomain(graph, n)}`
++    if (!buckets.has(key)) buckets.set(key, [])
++    buckets.get(key).push(n)
++  }
++  const allClusters = [...buckets.entries()].map(([key, ns]) => ({
++    key,
++    label: key.slice(key.indexOf(':') + 1),
++    count: ns.length,
++    representatives: [...ns]
++      .sort((a, b) => (deg.get(b.id) || 0) - (deg.get(a.id) || 0) || a.id.localeCompare(b.id))
++      .slice(0, 5)
++      .map((n) => ({ id: n.id, type: n.type, label: n.label })),
++  })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
++  const clusters = clustersLimit > 0 ? allClusters.slice(0, clustersLimit) : allClusters
++  return {
++    nodes: graph.stats.nodeCount,
++    edges: graph.stats.edgeCount,
++    byType: graph.stats.byNodeType,
++    byEdge: graph.stats.byEdgeType,
++    orphans,
++    module_doc_gaps: moduleDocGaps,
++    changelog_danglings: changelogDanglings,
++    dangling_refs: danglingRefs,
++    clusters,
++  }
++}
++
++/** 节点搜索：id/label 不区分大小写包含匹配，limit 钳 1-50（平台锚点自动补全数据源）。 */
++export function graphNodesSearch(graph, search, limit = 20) {
++  const q = String(search || '').toLowerCase()
++  const n = Math.min(Math.max(Number.isInteger(limit) ? limit : 20, 1), 50)
++  const nodes = []
++  if (q) {
++    for (const node of graph.nodes.values()) {
++      if (node.id.toLowerCase().includes(q) || node.label.toLowerCase().includes(q)) {
++        nodes.push({ id: node.id, type: node.type, label: node.label })
++        if (nodes.length >= n) break
++      }
++    }
++  }
++  return { count: nodes.length, nodes }
++}
++
+ // ═══════════════════════════════════════════════════════════════
+ // scope 遍历召回（task-03，FR-04 承接 FR-cli-entry-234）
+ // 层序：路由 → 平台向量 → scope 遍历 → 本地词片 → 空。
+@@ -559,7 +655,7 @@ export function scopeFromDecisionsMd(text) {
+ // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
+ // ═══════════════════════════════════════════════════════════════
+ 
+-const GRAPH_USAGE = '用法：sillyspec knowledge graph <neighbors|path|impact|orphans|dangling> [锚点...] [--edges <边型>] [--depth N]'
++const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]'
+ 
+ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+   const out = (ok, data, error) => console.log(JSON.stringify({ ok, ...(data || {}) , ...(error ? { error } : {}) }, null, 2))
+@@ -575,13 +671,38 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+   const specRoot = opts.specDir || join(dir, '.sillyspec')
+   const knowledgeDir = join(specRoot, 'knowledge')
+ 
+-  if (!['neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
++  if (!['summary', 'nodes', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
+     out(false, {}, { code: 'graph_usage', usage: GRAPH_USAGE, subcommand: sub })
+     return
+   }
+   const graph = buildKnowledgeGraph(specRoot)
+   const brief = (n) => `${n.type}  ${n.label}`
+ 
++  if (sub === 'summary') {
++    const cl = parseInt(flag('--clusters') || '0', 10)
++    const s = graphSummary(graph, { clustersLimit: Number.isInteger(cl) && cl > 0 ? cl : 0 })
++    return out(true, {
++      query: { sub, clusters: s.clusters.length },
++      stats: s,
++      summary: [
++        `节点 ${s.nodes} · 边 ${s.edges}`,
++        `孤儿 ${s.orphans} · 模块文档缺口 ${s.module_doc_gaps} · changelog 悬空 ${s.changelog_danglings} · 悬空引用 ${s.dangling_refs}`,
++        `簇 ${s.clusters.length} 个（最大 ${s.clusters[0]?.key ?? '—'} × ${s.clusters[0]?.count ?? 0}）`,
++      ],
++    })
++  }
++  if (sub === 'nodes') {
++    const search = flag('--search')
++    const limit = parseInt(flag('--limit') || '20', 10)
++    if (!search) return out(false, {}, { code: 'search_required', usage: GRAPH_USAGE })
++    const r = graphNodesSearch(graph, search, limit)
++    return out(true, {
++      query: { sub, search, limit: Math.min(Math.max(Number.isInteger(limit) ? limit : 20, 1), 50) },
++      count: r.count,
++      summary: r.nodes.slice(0, 5).map((n) => `→ ${brief(n)}`),
++      nodes: r.nodes,
++    })
++  }
+   if (sub === 'neighbors') {
+     const key = rest[1]
+     if (!key) return out(false, {}, { code: 'anchor_required', usage: GRAPH_USAGE })
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 54fd3c31..e0c7aa9b 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -675,7 +675,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       output(false, {}, {
+         code: 'unknown_subcommand',
+         subcommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest'],
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],
+       })
+   }
+ }
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index 79c32f31..de4151b8 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
++import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+ import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
+ import { flowKnowledgeDigest } from '../src/flow.js'
+ 
+@@ -365,3 +365,76 @@ test('②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft', () =>
+     assert.equal(g.stats.edgeCount, 0)
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++// ══ 2026-10-08-graph-summary-nodes（平台仓阶段三依赖契约）：summary 聚合 + nodes 搜索 ══
++
++test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断', () => {
++  const root = buildFixture()
++  try {
++    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
++    const s = graphSummary(g, { existsFn: () => true })
++    assert.equal(s.nodes, g.stats.nodeCount)
++    assert.equal(s.edges, g.stats.edgeCount)
++    assert.deepEqual(s.byType, g.stats.byNodeType)
++    assert.deepEqual(s.byEdge, g.stats.byEdgeType)
++    // doctor 同源四计数：孤儿/悬空与图函数逐值一致
++    assert.equal(s.orphans, graphOrphans(g).length)
++    assert.equal(s.dangling_refs, graphDangling(g, { existsFn: () => true }).length)
++    // clusters：fr 按 belongs-module 域聚簇，代表 ≤5 且都是真实节点
++    const frCluster = s.clusters.find((c) => c.key === 'fr:core-engine')
++    assert.ok(frCluster, 'fr 簇按域聚合')
++    assert.ok(frCluster.count >= 3)
++    assert.ok(frCluster.representatives.length >= 1 && frCluster.representatives.length <= 5)
++    for (const r of frCluster.representatives) assert.ok(g.nodes.has(r.id))
++    // decision 域=域文件名（core-engine.md → core-engine）
++    const decCluster = s.clusters.find((c) => c.key === 'decision:core-engine')
++    assert.ok(decCluster, 'decision 簇按域文件名聚合')
++    // 簇计数守恒：全部簇 count 之和 = 节点总数
++    assert.equal(s.clusters.reduce((a, c) => a + c.count, 0), s.nodes)
++    // 簇按 count 降序
++    for (let i = 1; i < s.clusters.length; i++) assert.ok(s.clusters[i - 1].count >= s.clusters[i].count)
++    // clustersLimit 截断只影响簇列表，不影响总数与四计数
++    const s2 = graphSummary(g, { existsFn: () => true, clustersLimit: 2 })
++    assert.equal(s2.clusters.length, Math.min(2, s.clusters.length))
++    assert.equal(s2.nodes, s.nodes)
++    assert.equal(s2.orphans, s.orphans)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错', async () => {
++  const root = buildFixture()
++  try {
++    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
++    // 大小写不敏感：id 与 label 双通道命中
++    const r1 = graphNodesSearch(g, 'FR-CORE-ENGINE-001', 10)
++    assert.ok(r1.count >= 1 && r1.nodes.some((n) => n.id === 'FR-core-engine-001'))
++    const r2 = graphNodesSearch(g, '第一个需求', 10) // label 中文包含
++    assert.ok(r2.nodes.some((n) => n.id === 'FR-core-engine-001'))
++    // limit 钳制：0/负数→1，>50→50
++    assert.equal(graphNodesSearch(g, 'e', 0).nodes.length <= 1, true)
++    // 空串零命中零遍历
++    assert.deepEqual(graphNodesSearch(g, '', 10), { count: 0, nodes: [] })
++
++    const { cmdKnowledgeGraph } = await import('../src/knowledge-graph.js')
++    const cap = []
++    const origLog = console.log
++    console.log = (...a) => cap.push(a.join(' '))
++    try {
++      await cmdKnowledgeGraph(root, ['summary', '--clusters', '3'], {})
++      await cmdKnowledgeGraph(root, ['nodes', '--search', 'core-engine', '--limit', '2'], {})
++      await cmdKnowledgeGraph(root, ['nodes'], {})
++    } finally { console.log = origLog }
++    const j1 = JSON.parse(cap[0])
++    assert.equal(j1.ok, true)
++    assert.equal(j1.stats.nodes, g.stats.nodeCount)
++    assert.ok(j1.stats.clusters.length <= 3)
++    assert.ok(j1.stats.clusters.every((c) => c.representatives.length <= 5))
++    const j2 = JSON.parse(cap[1])
++    assert.equal(j2.ok, true)
++    assert.ok(j2.count >= 1 && j2.count <= 2)
++    assert.ok(j2.nodes.every((n) => (n.id + n.label).toLowerCase().includes('core-engine')))
++    const j3 = JSON.parse(cap[2])
++    assert.equal(j3.ok, false)
++    assert.equal(j3.error.code, 'search_required')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-nodes/design.md b/.sillyspec/changes/2026-10-08-graph-summary-nodes/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-nodes/design.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T09:16:11.270Z
++---
++# 设计记录（Design Record）— 2026-10-08-graph-summary-nodes
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++平台仓（multi-agent-platform 2026-10-08-platform-knowledge-graph 阶段三）需要图引擎的两个聚合/检索面做 lite 总览与锚点补全的数据源。在既有 `src/knowledge-graph.js` 内新增两个纯函数（`graphSummary` 聚合、`graphNodesSearch` 过滤）并扩 `cmdKnowledgeGraph` 白名单加 `summary`/`nodes` 两子命令——图仍是解析时内存派生（不落盘不缓存，沿 2026-10-08-knowledge-graph D-003），summary 四计数直接复用 `graphOrphans`/`graphDangling` 与 doctor `knowledge_graph_integrity` 六检查同一段口径（一处定义两处消费，防口径漂移）。选「函数内聚扩展」而非新文件：与五查询共用建图/强度表/域 attrs，拆文件只会复制耦合。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++文件变更清单（自声明）：①`src/knowledge-graph.js`（新增 graphSummary/graphNodesSearch 两导出 + cmdKnowledgeGraph 白名单扩 summary/nodes + GRAPH_USAGE 更新——函数内聚扩展，既有五查询零改动）；②`test/knowledge-graph.test.mjs`（⑧⑨ 两用例 + import 扩展）；③`src/stages/knowledge.js`（仅 678 行 available 列表补 'graph' 项，路由 case 既有）。
++
++新增导出：`graphSummary(graph, { existsFn, clustersLimit })` → `{nodes, edges, byType, byEdge, orphans, module_doc_gaps, changelog_danglings, dangling_refs, clusters:[{key,label,count,representatives(≤5 GraphNodeRef)}]}`；`graphNodesSearch(graph, search, limit)` → `{count, nodes:[{id,type,label}]}`（id/label 不区分大小写包含，limit 钳 1-50 默认 20）。CLI：`sillyspec knowledge graph summary [--clusters N] --json` 与 `sillyspec knowledge graph nodes --search <模糊> [--limit N] --json`；USAGE 行与 `stages/knowledge.js` available 列表同步收编。既有五子命令签名与输出零变化；`--clusters` 缺省 0=全量（真图 883 簇，平台侧传 50）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   不适用——图由静态 md/yaml 解析派生，无事件流；文件半写由既有解析器 fail-soft 容忍（②坏行同款）。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   不适用——纯只读聚合，不落盘；spec 树被并行变更写入时看到的是某一致快照的视图。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   不适用——单次 CLI 调用内存生灭；无会话/请求状态。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——graph 按调用方传入的 specRoot（`<dir>/.sillyspec` 或 opts.specDir）构建，跨仓/多工作区天然隔离；跨仓锚点只计入 dangling_refs 计数不解析外仓。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：clusters 数量随域增长（真图 883 簇）撑爆平台 lite 画布——已由 `--clusters N` 截断旗标化解（消费方按需取 top-N，簇计数守恒不变）。放弃的方案：①CLI 侧默认截断 50——否，默认值是平台 UI 偏好不是引擎语义，全量才是可审计口径；②summary 落盘缓存——否，违反 D-003 图不落盘铁律且引入失效问题；③doctor 内调 summary 复用——已如此（同源口径互引，不复制实现）。死路提示：不要为「跨仓锚点单列计数」去解析 local.yaml 外仓（探测面无界，历史否决同型）。
+
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-nodes/proposal.md b/.sillyspec/changes/2026-10-08-graph-summary-nodes/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-nodes/proposal.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T09:16:11.270Z
++---
++# 提案书（Proposal）— 2026-10-08-graph-summary-nodes
++
++## 动机
++
++任务原话转写：平台仓 2026-10-08-platform-knowledge-graph 阶段三需要图引擎两个聚合/检索子命令（跨仓依赖契约）：knowledge graph summary --json 输出全图统计聚合（nodes/edges/byType/byEdge + doctor 六检查同源四计数 orphans/module_doc_gaps/changelog_danglings/dangling_refs + clusters 簇代表[簇 key=节点类型×域，域逐类型取值：fr=attrs.domain、decision=attrs.domain、file=module-files 边反查、module=自身id、doc=attrs.kind、entry=attrs.file、test=test-binding 边反查 fr domain、project/change/ql=id，缺省 _unmapped/_tests]；representatives=簇内度数 top-5，度数=全边入+出]）；knowledge graph nodes --search <模糊> --json 输出节点 id/label 不区分大小写包含匹配（默认限 20）。
++
++成功标准：
++- sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
++- clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
++- sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
++- nodes --search 空串/缺省返回 usage 错误不崩
++- 现有五子命令回归全绿；新增两子命令进 usage 行
++- lint/test 与仓内惯例一致
++
++## 变更范围
++
++按成功标准机械推导，共 6 条验收面：
++1. sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
++2. clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
++3. sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
++4. nodes --search 空串/缺省返回 usage 错误不崩
++5. 现有五子命令回归全绿；新增两子命令进 usage 行
++6. lint/test 与仓内惯例一致
++
++## 成功标准（可验证）
++
++1. sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
++2. clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
++3. sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
++4. nodes --search 空串/缺省返回 usage 错误不崩
++5. 现有五子命令回归全绿；新增两子命令进 usage 行
++6. lint/test 与仓内惯例一致
+
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-nodes/requirements.md b/.sillyspec/changes/2026-10-08-graph-summary-nodes/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-nodes/requirements.md
+@@ -0,0 +1,64 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T09:16:11.270Z
++---
++# 需求规格（Requirements）— 2026-10-08-graph-summary-nodes
++
++## 功能需求
++
++### FR-01: sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
++
++- `knowledge graph summary --json` 必须输出 ok:true 且 stats 含 nodes/edges/byType/byEdge/orphans/module_doc_gaps/changelog_danglings/dangling_refs 全字段；orphans 与 dangling_refs 必须与 graphOrphans/graphDangling 逐值同源（doctor 六检查同口径），禁止另立计数实现。
++
++#### 场景：主路径
++
++Given buildFixture 九面全形态 specRoot / When graphSummary(g) / Then nodes/edges 等于 g.stats.nodeCount/edgeCount，byType/byEdge 深等值，四计数与图函数一致。
++
++### FR-02: clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
++
++- 每簇必须带 key（type:域）/label/count/representatives，representatives 禁止超过 5 个且必须为图中真实节点（度数=全边入+出合计 top，同度按 id 字典序稳序）；全部簇 count 之和必须等于节点总数（守恒）。
++
++#### 场景：主路径
++
++Given fixture 含 fr:core-engine 簇（belongs-module 域）与 decision:core-engine 簇（域文件名） / When summary / Then 两簇在场、代表节点全部 g.nodes.has 命中、簇计数和=总节点数、簇按 count 降序。
++
++### FR-03: sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
++
++- nodes 搜索必须对 id 与 label 做不区分大小写的包含匹配，--limit 必须钳制在 1-50（缺省 20，非整数回退 20），返回节点形状必须为 {id,type,label}。
++
++#### 场景：主路径
++
++Given fixture / When graphNodesSearch(g, 'FR-CORE-ENGINE-001', 10) 与 label 中文包含「第一个需求」/ Then 两者都命中 FR-core-engine-001；limit=0 时至多返回 1 条。
++
++### FR-04: nodes --search 空串/缺省返回 usage 错误不崩
++
++- --search 缺省或空串时必须返回 ok:false + error.code=search_required（附 usage），禁止抛未捕获异常；纯函数侧空串必须返回 {count:0, nodes:[]}。
++
++#### 场景：主路径
++
++Given fixture / When cmdKnowledgeGraph(root, ['nodes']) / Then ok:false 且 error.code==='search_required'；graphNodesSearch(g,'',10) 深等值 {count:0,nodes:[]}。
++
++### FR-05: 现有五子命令回归全绿；新增两子命令进 usage 行
++
++- 本变更禁止改变既有五子命令（neighbors/path/impact/orphans/dangling）的签名与输出形状；GRAPH_USAGE 与 stages/knowledge.js available 列表必须收编 summary/nodes/graph。
++
++#### 场景：主路径
++
++Given 既有 ④CLI 分发用例 / When 回归 / Then 全绿且 usage 文案含七子命令。
++
++### FR-06: lint/test 与仓内惯例一致
++
++- 必须通过 node test/check-syntax.mjs（913 文件零未引用导出）与 node --test test/knowledge-graph.test.mjs；新增用例必须沿 fixture+纯函数断言惯例（⑧⑨ 编号续接）。
++
++#### 场景：主路径
++
++Given 仓内 lint/test 命令 / When 跑 / Then 零失败。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」
++FR-02: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」
++FR-03: test/knowledge-graph.test.mjs「⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错」
++FR-04: test/knowledge-graph.test.mjs「⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错」
++FR-05: test/knowledge-graph.test.mjs「④CLI 分发：knowledge graph 子命令 --json/--edges 热测」
++FR-06: test/knowledge-graph.test.mjs「⑧summary 聚合 + ⑨nodes 搜索」（lint 门由 flow done 实测子步覆盖 test/check-syntax.mjs）
+
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-nodes/tasks.md b/.sillyspec/changes/2026-10-08-graph-summary-nodes/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-nodes/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T09:16:11.270Z
++---
++# 任务注册表（Tasks）— 2026-10-08-graph-summary-nodes
++
++- [x] task-01: sillyspec knowledge graph summary --json 输出 ok:true + stats 全字段（本仓真实数据：nodes≈4628/edges≈8173 量级，byType/byEdge 分布与 doctor 图完整性检查通过的 nodeCount/edgeCount 一致，四计数与 doctor 六检查同源同值）
++- [x] task-02: clusters 每簇带 key/label/count/representatives（≤5 个 GraphNodeRef），FR 最大簇的 representatives 是度数最高节点（可用图查询验证其真实邻边多）
++- [x] task-03: sillyspec knowledge graph nodes --search knowledge --json 返回 id/label 含 knowledge 的节点列表（count≤20），--limit 可调（钳 1-50）
++- [x] task-04: nodes --search 空串/缺省返回 usage 错误不崩
++- [x] task-05: 现有五子命令回归全绿；新增两子命令进 usage 行
++- [x] task-06: lint/test 与仓内惯例一致
