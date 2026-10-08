@@ -477,8 +477,29 @@ export function graphDangling(graph, { existsFn = existsSync } = {}) {
 }
 
 // ═══ 2026-10-08-graph-summary-nodes：summary 聚合 + nodes 搜索（平台仓阶段三依赖契约）═══
-// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面；
-// summary 四计数与 doctor knowledge_graph_integrity 六检查同源同值（口径一处定义两处消费）。
+// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面。
+// doctor 同源三判定（2026-10-08-graph-summary-consistency 收敛为真单一源）：graphModuleDocGaps /
+// graphChangelogDanglings / graphOrphans+graphDangling 的判定逻辑只在 knowledge-graph.js 定义，
+// doctor 六检查与 summary 四计数消费同一函数——「口径一处定义两处消费」由测试交叉断言钉死。
+
+/** 模块文档缺口判定（doctor graph-module-doc-gap 单一源）：map 模块缺 describes 或 changelog-of 入边。 */
+export function graphModuleDocGaps(graph) {
+  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
+  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
+  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
+  return mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id))
+}
+
+/** changelog 行悬空判定（doctor graph-changelog-dangling 单一源）：日期名目标不在 archive/ 也不在
+ *  活跃 changes/（ql 目标豁免——quicklog 条目无目录形态，其家在 QUICKLOG md 文件）。 */
+export function graphChangelogDanglings(graph, { existsFn = existsSync } = {}) {
+  const specRoot = String(graph.root || '')
+  const out = []
+  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
+    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) out.push(id)
+  }
+  return out
+}
 
 /** 节点 → 簇域（lite 总览聚类键 type×domain；缺省占位防散簇）。 */
 function graphNodeDomain(graph, n) {
@@ -509,18 +530,16 @@ function graphNodeDomain(graph, n) {
  *  clustersLimit>0 时仅返回 count 前 N 簇（真图 800+ 簇，平台 lite 画布摆不下——消费方按需截断）。 */
 export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 } = {}) {
   const orphans = graphOrphans(graph).length
-  const danglingRefs = graphDangling(graph, { existsFn }).length
-  // module_doc_gaps（doctor graph-module-doc-gap 同源）：map 模块缺 describes 或 changelog-of 入边
-  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
-  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
-  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
-  const moduleDocGaps = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id)).length
-  // changelog_danglings（doctor graph-changelog-dangling 同源）：日期名目标不在 archive/ 也不在活跃 changes/
-  const specRoot = String(graph.root || '')
-  let changelogDanglings = 0
-  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
-    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) changelogDanglings++
-  }
+  const dangling = graphDangling(graph, { existsFn })
+  const danglingRefs = dangling.length
+  // 分强度计数（附加字段——dangling_refs 是两类之和，消费方对账 doctor 时按 breakdown 拆）
+  const danglingBreakdown = dangling.reduce((a, d) => {
+    if (EDGE_STRENGTH[d.edge.type] === 'strong') a.strong_anchors++
+    else if (EDGE_STRENGTH[d.edge.type] === 'medium') a.medium_doc_refs++
+    return a
+  }, { strong_anchors: 0, medium_doc_refs: 0 })
+  const moduleDocGaps = graphModuleDocGaps(graph).length
+  const changelogDanglings = graphChangelogDanglings(graph, { existsFn }).length
   // clusters：type×domain 聚簇，representatives 度数 top-5（同度按 id 字典序稳序）
   const deg = new Map()
   for (const e of graph.edges) {
@@ -552,6 +571,8 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
     module_doc_gaps: moduleDocGaps,
     changelog_danglings: changelogDanglings,
     dangling_refs: danglingRefs,
+    // dangling_refs 构成（附加字段，向后兼容）：doctor graph-dangling-anchor（强）+ graph-doc-dangling-ref（中）之和
+    dangling_refs_breakdown: danglingBreakdown,
     clusters,
   }
 }

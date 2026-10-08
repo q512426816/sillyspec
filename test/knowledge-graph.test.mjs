@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
 import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
 import { flowKnowledgeDigest } from '../src/flow.js'
 
@@ -377,9 +377,30 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/�
     assert.equal(s.edges, g.stats.edgeCount)
     assert.deepEqual(s.byType, g.stats.byNodeType)
     assert.deepEqual(s.byEdge, g.stats.byEdgeType)
-    // doctor 同源四计数：孤儿/悬空与图函数逐值一致
+    // doctor 同源四计数：孤儿/悬空与图函数逐值一致（helper 单一源消费面）
     assert.equal(s.orphans, graphOrphans(g).length)
     assert.equal(s.dangling_refs, graphDangling(g, { existsFn: () => true }).length)
+    // module_doc_gaps/changelog_danglings：helper 单一源 + 双 existsFn 态（2026-10-08-graph-summary-consistency）
+    assert.equal(s.module_doc_gaps, graphModuleDocGaps(g).length)
+    assert.deepEqual(graphChangelogDanglings(g, { existsFn: () => true }), [])
+    const sFalse = graphSummary(g, { existsFn: () => false })
+    // fixture changelog 目标：alpha（archive 在）+ beta（archive 在）+ ql（豁免）→ 全假存在性下日期名悬空=2
+    assert.equal(sFalse.changelog_danglings, graphChangelogDanglings(g, { existsFn: () => false }).length)
+    assert.equal(sFalse.changelog_danglings, 2)
+    // breakdown 与总数守恒：dangling_refs = strong_anchors + medium_doc_refs（doctor 两类之和口径）
+    assert.equal(sFalse.dangling_refs, sFalse.dangling_refs_breakdown.strong_anchors + sFalse.dangling_refs_breakdown.medium_doc_refs)
+    assert.ok(sFalse.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
+    // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
+    const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
+    try {
+      mkdirSync(join(gapRoot, '.sillyspec/knowledge'), { recursive: true })
+      writeFileSync(join(gapRoot, '.sillyspec/knowledge/INDEX.md'), '# x\n')
+      mkdirSync(join(gapRoot, '.sillyspec/docs/p/modules'), { recursive: true })
+      writeFileSync(join(gapRoot, '.sillyspec/docs/p/modules/_module-map.yaml'), 'modules:\n  m1:\n    status: active\n    paths:\n      - src/\n')
+      const gGap = buildKnowledgeGraph(join(gapRoot, '.sillyspec'))
+      assert.equal(graphModuleDocGaps(gGap).map((n) => n.id).join(), 'module:m1')
+      assert.equal(graphSummary(gGap, { existsFn: () => true }).module_doc_gaps, 1)
+    } finally { rmSync(gapRoot, { recursive: true, force: true }) }
     // clusters：fr 按 belongs-module 域聚簇，代表 ≤5 且都是真实节点
     const frCluster = s.clusters.find((c) => c.key === 'fr:core-engine')
     assert.ok(frCluster, 'fr 簇按域聚合')
@@ -437,4 +458,40 @@ test('⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 
     assert.equal(j3.ok, false)
     assert.equal(j3.error.code, 'search_required')
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相等（单一源契约钉，2026-10-08-graph-summary-consistency）', async () => {
+  const { detectKnowledgeGraphIntegrity } = await import('../src/doctor-diagnostics.js')
+  const root = buildFixture()
+  const prevCwd = process.cwd()
+  try {
+    process.chdir(root)
+    // 被引用文件落盘 + 制造脏面：删锚点目标（dangling-anchor）+ 删路由目标文件
+    for (const f of ['src/foo.js', 'src/bar.js', 'src/deep.js', 'src/extra.js', 'test/foo.test.mjs', 'test/ql-side.test.mjs']) {
+      mkdirSync(join(root, f.replace(/\/[^/]+$/, '')), { recursive: true })
+      writeFileSync(join(root, f), '// x\n')
+    }
+    writeFileSync(join(root, '.sillyspec', 'knowledge', 'conventions.md'), '# 约定\n\n## Foo 条目\n\n正文\n')
+    rmSync(join(root, 'src/foo.js')) // 脏面：两条决策锚点悬空（强边）
+    rmSync(join(root, 'src/bar.js')) // 脏面：卡片 doc-refs 悬空（中边）
+
+    const specRoot = join(root, '.sillyspec')
+    const r = detectKnowledgeGraphIntegrity(root, specRoot)
+    assert.equal(r.pass, false)
+    const s = graphSummary(buildKnowledgeGraph(specRoot)) // 双方同用默认 existsSync——同源同值
+    // 从 doctor findings 文本解析四计数（doctor 输出格式即契约面——格式漂移本测试即红）
+    const cnt = (re) => { const m = r.findings.join('\n').match(re); return m ? Number(m[1]) : 0 }
+    assert.equal(cnt(/graph-orphan-entry：(\d+) 个/), s.orphans, 'orphans 同值')
+    assert.equal(cnt(/graph-module-doc-gap：(\d+) 个/), s.module_doc_gaps, 'module_doc_gaps 同值')
+    assert.equal(cnt(/graph-changelog-dangling：(\d+) 条/), s.changelog_danglings, 'changelog_danglings 同值')
+    const anchor = cnt(/graph-dangling-anchor：(\d+) 条/)
+    const docRef = cnt(/graph-doc-dangling-ref：(\d+) 条/)
+    assert.equal(anchor + docRef, s.dangling_refs, 'dangling_refs = doctor anchor+doc-ref 之和')
+    assert.equal(anchor, s.dangling_refs_breakdown.strong_anchors, 'breakdown 强边桶 = doctor dangling-anchor')
+    assert.equal(docRef, s.dangling_refs_breakdown.medium_doc_refs, 'breakdown 中边桶 = doctor doc-dangling-ref')
+    assert.ok(anchor >= 1 && docRef >= 1, '脏面两桶均非零（断言有区分度）')
+  } finally {
+    process.chdir(prevCwd)
+    rmSync(root, { recursive: true, force: true })
+  }
 })

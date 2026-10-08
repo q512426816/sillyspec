@@ -2205,19 +2205,14 @@ export function detectKnowledgeGraphIntegrity(cwd, specDir) {
     const orphans = graphOrphans(graph)
     if (orphans.length > 0) findings.push(`graph-orphan-entry：${orphans.length} 个零关联节点（样本 ${sample(orphans.map((o) => o.node.label)).join('、')}）`)
 
-    // ⑤ 模块文档缺口：map 模块无 describes 或 changelog-of 入边
-    const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
-    const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
-    const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
-    const docGap = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id))
+    // ⑤ 模块文档缺口 / ⑥ changelog 行悬空：单一源判定（2026-10-08-graph-summary-consistency）
+    // ——graphModuleDocGaps/graphChangelogDanglings 只在 knowledge-graph.js 定义，summary 四计数
+    // 消费同一函数（口径一处定义两处消费，doctor↔summary 交叉断言钉死，防手抄副本漂移）
+    const { graphModuleDocGaps, graphChangelogDanglings } = requireKnowledgeGraph()
+    const docGap = graphModuleDocGaps(graph)
     if (docGap.length > 0) findings.push(`graph-module-doc-gap：${docGap.length} 个模块缺卡片或 changelog（样本 ${sample(docGap.map((n) => n.id.replace(/^module:/, ''))).join('、')}）`)
 
-    // ⑥ changelog 行悬空：日期名目标变更既不在 archive/ 也不在活跃 changes/（ql 目标豁免——
-    //    quicklog 条目无目录形态，其家在 QUICKLOG md 文件）
-    const chlogTargets = new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))
-    const chlogDangling = [...chlogTargets].filter((id) =>
-      /^\d{4}-\d{2}-\d{2}-/.test(id) &&
-      !existsSync(join(specDir, 'changes', 'archive', id)) && !existsSync(join(specDir, 'changes', id)))
+    const chlogDangling = graphChangelogDanglings(graph)
     if (chlogDangling.length > 0) findings.push(`graph-changelog-dangling：${chlogDangling.length} 条 changelog 行指向不存在变更/ql（样本 ${sample(chlogDangling).join('、')}）`)
 
     if (findings.length === 0) {
