@@ -40,7 +40,7 @@ created_at: 2026-10-08T16:24:25.004Z
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/output-step-render.test.mjs「explore 阶段渲染回归（prompt 结构与铁律面零变化）」+ `node src/index.js run explore` 渲染冒烟（graph 指引四命令在场）
+FR-01: test/explore-graph-guidance.test.mjs「explore 图查询指引：impact/neighbors/path/summary 四命令 + 防复潮提示在场」「explore 只读铁律零漂移（图查询接入不破界）」（评审 P2 清偿：原绑定误引不存在的用例名，补真钉子测试替代）
 FR-02: 不适用：镜像文档由 docs/prompt/_extract.mjs 机械生成并对账（脚本回验断言），无独立测试文件面
 FR-03: 不适用：技能卡是 init 拷贝源的静态文档（无运行时消费面），description 不变由本变更 diff 自证
 FR-04: test:core 321 全绿 + npm run lint 零告警（verify-runs 留档）
