@@ -1,0 +1,312 @@
+diff --git a/.claude/skills/sillyspec-explore/SKILL.md b/.claude/skills/sillyspec-explore/SKILL.md
+index ea9c1b1a..34692fdf 100644
+--- a/.claude/skills/sillyspec-explore/SKILL.md
++++ b/.claude/skills/sillyspec-explore/SKILL.md
+@@ -50,14 +50,12 @@ sillyspec run explore --status                     # 查看阶段状态
+ 
+ **探索问题空间**：问澄清问题、挑战假设、重新定义问题
+ 
+-**调查代码库**：映射相关架构、找集成点、识别已有模式、暴露隐藏复杂性
++**调查兵器（话题→兵器映射，全只读）**：按话题选兵器，别只用 rg 词面考古——
+ 
+-**查知识图谱（真实关系面，全只读）**：话题涉及影响面、历史决策、需求谱系时，别只靠 rg 词面考古——用图查询拿结构化事实：
+-
+-- `sillyspec knowledge graph impact <文件|模块|变更名>` — 改动影响面：多跳闭包 + 沿途锚定的决策/FR + **防复潮可达的已否决方案（rejected/⚰️死路）**
+-- `sillyspec knowledge graph neighbors <锚点>` / `path <A> <B>` — 一跳关联与推理链（"这条 FR 被谁取代""决策钉在哪个文件"）
+-- `sillyspec knowledge graph summary` — 知识面整体健康度（孤儿条目/断链/模块文档缺口），治理类话题的现成证据
+-- 全部命令支持 `--json` 结构化消费；比较方案前先查 impact 里的否决条目——**已被否决的路不重新兜售**（除非复潮条件明确满足）
++- 词面考古（"这段代码在哪/怎么写的"）→ `rg` / `ls` / `cat`
++- 坑史检索（"这话题以前踩过什么坑"）→ `sillyspec knowledge search --query "<关键词>"`（四层召回）
++- 关系面（影响面/历史决策/需求谱系）→ `sillyspec knowledge graph impact <文件|模块|变更名>`（多跳闭包 + 防复潮可达的已否决方案）、`neighbors <锚点>` / `path <A> <B>`（推理链："这条 FR 被谁取代""决策钉在哪个文件"）、`summary`（知识面健康度）——**比较方案前先查 impact 里的 rejected/⚰️死路条目，已否决的路不重新兜售**（除非复潮条件明确满足）；全部支持 `--json`
++- 在途面（出方向建议前）→ `sillyspec status` 活跃变更一览——结论别跟在途工作撞车
+ 
+ **比较选项**：头脑风暴多种方案、建对比表、画权衡分析
+ 
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 164bc26e..fa393538 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -334,7 +334,7 @@
+       {
+         "index": 0,
+         "name": "自由探索",
+-        "prompt": "围绕用户给出的话题做技术探索，不进入实现。\n\n### 操作\n1. 明确探索边界：这次只讨论、调研、画图和识别风险\n2. 如果需要代码库上下文，可以读取：\n   - `.sillyspec/projects/*.yaml`\n   - `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`\n   - `.sillyspec/docs/<project>/scan/CONVENTIONS.md`\n   - `.sillyspec/changes/<change-name>/design.md`\n3. 可以用 `rg` / `ls` / `cat` 调查已有结构和集成点\n4. 话题涉及影响面 / 历史决策 / 需求谱系时，优先用知识图谱查询拿真实关系面（全只读，替代词面考古）：\n   - `sillyspec knowledge graph impact <文件|模块|变更名>` —— 改动影响面（多跳闭包 + 防复潮可达的已否决决策）\n   - `sillyspec knowledge graph neighbors <锚点>` / `path <A> <B>` —— 一跳关联与推理链（如\"这条 FR 被谁取代\"\"决策钉在哪个文件\"）\n   - `sillyspec knowledge graph summary` —— 知识面整体健康度（孤儿/断链/文档缺口）\n   - 比较方案前先查 impact 里的 rejected/⚰️死路条目——已被否决的路不重新兜售；全部命令支持 `--json` 结构化消费\n5. 输出 2-3 个有价值方向、关键风险和下一步建议\n6. 如果用户要求保存结论，先明确保存位置，再写入对应文档\n7. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行\n\n### HTML 原型生成（仅用户明确要求时）\n探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（\"要不要出个原型看效果\"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：\n- 单文件 HTML（内联 CSS + JS），浏览器直接打开\n- 高保真呈现讨论中的布局/组件/交互流程——用户看到的是\"这个方案做出来长什么样\"，不是示意图\n- 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格\n- 保存到 `{SPEC_ROOT}/explore/prototype-<名称>.html`（目录不存在则先创建；用户指定了其他位置则从其指定）\n- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/` 可直接复用为该变更的原型\n\n### 输出\n探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径\n\n### 铁律\n- 不写实现代码\n- 不安装依赖\n- 不修改文件，除非用户明确要求保存探索结论或生成原型\n- 不强行推进到 brainstorm/plan/execute",
++        "prompt": "围绕用户给出的话题做技术探索，不进入实现。\n\n### 操作\n1. 明确探索边界：这次只讨论、调研、画图和识别风险\n2. 如果需要代码库上下文，可以读取：\n   - `.sillyspec/projects/*.yaml`\n   - `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`\n   - `.sillyspec/docs/<project>/scan/CONVENTIONS.md`\n   - `.sillyspec/changes/<change-name>/design.md`\n3. 调查兵器按话题选（话题→兵器映射，全只读）：\n   - 词面考古（\"这段代码在哪/怎么写的\"）→ `rg` / `ls` / `cat`\n   - 坑史检索（\"这话题以前踩过什么坑\"）→ `sillyspec knowledge search --query \"<关键词>\"`（四层召回）\n   - 关系面（影响面/历史决策/需求谱系）→ `sillyspec knowledge graph impact <文件|模块|变更名>` 多跳闭包与防复潮可达的已否决决策、`neighbors <锚点>` / `path <A> <B>` 推理链、`summary` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 `--json`\n   - 在途面（出方向建议前）→ `sillyspec status` 活跃变更一览——结论别跟在途工作撞车\n4. 输出 2-3 个有价值方向、关键风险和下一步建议\n5. 如果用户要求保存结论，先明确保存位置，再写入对应文档\n6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行\n\n### HTML 原型生成（仅用户明确要求时）\n探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（\"要不要出个原型看效果\"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：\n- 单文件 HTML（内联 CSS + JS），浏览器直接打开\n- 高保真呈现讨论中的布局/组件/交互流程——用户看到的是\"这个方案做出来长什么样\"，不是示意图\n- 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格\n- 保存到 `{SPEC_ROOT}/explore/prototype-<名称>.html`（目录不存在则先创建；用户指定了其他位置则从其指定）\n- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/` 可直接复用为该变更的原型\n\n### 输出\n探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径\n\n### 铁律\n- 不写实现代码\n- 不安装依赖\n- 不修改文件，除非用户明确要求保存探索结论或生成原型\n- 不强行推进到 brainstorm/plan/execute",
+         "outputHint": "探索结论",
+         "optional": false
+       }
+diff --git a/docs/prompt/explore.md b/docs/prompt/explore.md
+index 77505fc0..35703f7c 100644
+--- a/docs/prompt/explore.md
++++ b/docs/prompt/explore.md
+@@ -35,15 +35,14 @@
+    - `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`
+    - `.sillyspec/docs/<project>/scan/CONVENTIONS.md`
+    - `.sillyspec/changes/<change-name>/design.md`
+-3. 可以用 `rg` / `ls` / `cat` 调查已有结构和集成点
+-4. 话题涉及影响面 / 历史决策 / 需求谱系时，优先用知识图谱查询拿真实关系面（全只读，替代词面考古）：
+-   - `sillyspec knowledge graph impact <文件|模块|变更名>` —— 改动影响面（多跳闭包 + 防复潮可达的已否决决策）
+-   - `sillyspec knowledge graph neighbors <锚点>` / `path <A> <B>` —— 一跳关联与推理链（如"这条 FR 被谁取代""决策钉在哪个文件"）
+-   - `sillyspec knowledge graph summary` —— 知识面整体健康度（孤儿/断链/文档缺口）
+-   - 比较方案前先查 impact 里的 rejected/⚰️死路条目——已被否决的路不重新兜售；全部命令支持 `--json` 结构化消费
+-5. 输出 2-3 个有价值方向、关键风险和下一步建议
+-6. 如果用户要求保存结论，先明确保存位置，再写入对应文档
+-7. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
++3. 调查兵器按话题选（话题→兵器映射，全只读）：
++   - 词面考古（"这段代码在哪/怎么写的"）→ `rg` / `ls` / `cat`
++   - 坑史检索（"这话题以前踩过什么坑"）→ `sillyspec knowledge search --query "<关键词>"`（四层召回）
++   - 关系面（影响面/历史决策/需求谱系）→ `sillyspec knowledge graph impact <文件|模块|变更名>` 多跳闭包与防复潮可达的已否决决策、`neighbors <锚点>` / `path <A> <B>` 推理链、`summary` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 `--json`
++   - 在途面（出方向建议前）→ `sillyspec status` 活跃变更一览——结论别跟在途工作撞车
++4. 输出 2-3 个有价值方向、关键风险和下一步建议
++5. 如果用户要求保存结论，先明确保存位置，再写入对应文档
++6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
+ 
+ ### HTML 原型生成（仅用户明确要求时）
+ 探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（"要不要出个原型看效果"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：
+diff --git a/src/stages/explore.js b/src/stages/explore.js
+index 04e20020..7d52d5ef 100644
+--- a/src/stages/explore.js
++++ b/src/stages/explore.js
+@@ -15,15 +15,14 @@ export const definition = {
+    - \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`
+    - \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`
+    - \`.sillyspec/changes/<change-name>/design.md\`
+-3. 可以用 \`rg\` / \`ls\` / \`cat\` 调查已有结构和集成点
+-4. 话题涉及影响面 / 历史决策 / 需求谱系时，优先用知识图谱查询拿真实关系面（全只读，替代词面考古）：
+-   - \`sillyspec knowledge graph impact <文件|模块|变更名>\` —— 改动影响面（多跳闭包 + 防复潮可达的已否决决策）
+-   - \`sillyspec knowledge graph neighbors <锚点>\` / \`path <A> <B>\` —— 一跳关联与推理链（如"这条 FR 被谁取代""决策钉在哪个文件"）
+-   - \`sillyspec knowledge graph summary\` —— 知识面整体健康度（孤儿/断链/文档缺口）
+-   - 比较方案前先查 impact 里的 rejected/⚰️死路条目——已被否决的路不重新兜售；全部命令支持 \`--json\` 结构化消费
+-5. 输出 2-3 个有价值方向、关键风险和下一步建议
+-6. 如果用户要求保存结论，先明确保存位置，再写入对应文档
+-7. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
++3. 调查兵器按话题选（话题→兵器映射，全只读）：
++   - 词面考古（"这段代码在哪/怎么写的"）→ \`rg\` / \`ls\` / \`cat\`
++   - 坑史检索（"这话题以前踩过什么坑"）→ \`sillyspec knowledge search --query "<关键词>"\`（四层召回）
++   - 关系面（影响面/历史决策/需求谱系）→ \`sillyspec knowledge graph impact <文件|模块|变更名>\` 多跳闭包与防复潮可达的已否决决策、\`neighbors <锚点>\` / \`path <A> <B>\` 推理链、\`summary\` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 \`--json\`
++   - 在途面（出方向建议前）→ \`sillyspec status\` 活跃变更一览——结论别跟在途工作撞车
++4. 输出 2-3 个有价值方向、关键风险和下一步建议
++5. 如果用户要求保存结论，先明确保存位置，再写入对应文档
++6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行
+ 
+ ### HTML 原型生成（仅用户明确要求时）
+ 探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（"要不要出个原型看效果"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：
+diff --git a/test/explore-graph-guidance.test.mjs b/test/explore-graph-guidance.test.mjs
+index a1d8a494..48195411 100644
+--- a/test/explore-graph-guidance.test.mjs
++++ b/test/explore-graph-guidance.test.mjs
+@@ -1,6 +1,7 @@
+ /**
+- * explore-graph-guidance.test.mjs — 2026-10-08-explore-knowledge-graph（评审 P2 清偿）
+- * explore prompt 图查询指引钉子：四命令在场 + 防复潮提示 + 只读铁律零漂移。
++ * explore-graph-guidance.test.mjs — 2026-10-08-explore-knowledge-graph 起
++ * （2026-10-09-explore-arsenal-map 重组织为话题→兵器映射并扩两兵器）
++ * explore prompt 兵器映射钉子：graph 四命令 + search/status 新兵器 + 防复潮提示 + 只读铁律零漂移。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -8,19 +9,22 @@ import { definition } from '../src/stages/explore.js'
+ 
+ const prompt = definition.steps[0].prompt
+ 
+-test('explore 图查询指引：impact/neighbors/path/summary 四命令 + 防复潮提示在场', () => {
++test('explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场', () => {
+   assert.equal(definition.steps.length, 1, '仍为 1 步无结构阶段')
+   for (const cmd of [
+     'knowledge graph impact',
+-    'knowledge graph neighbors',
+-    'path <A> <B>', // 与 neighbors 同行共享 knowledge graph 前缀
+-    'knowledge graph summary',
++    'neighbors <锚点>', // 与 graph 前缀同行共享（映射形态，2026-10-09 重组织）
++    'path <A> <B>',
++    'summary', // 关系面行内的健康度命令
++    'knowledge search --query', // 坑史检索兵器（新）
++    'sillyspec status', // 在途面兵器（新）
++    '话题→兵器映射', // 映射节标题
+   ]) assert.ok(prompt.includes(cmd), `缺指引：${cmd}`)
+   assert.ok(prompt.includes('rejected'), '防复潮提示在场（先查已否决条目）')
+   assert.ok(prompt.includes('全只读'), '只读声明在场')
+ })
+ 
+-test('explore 只读铁律零漂移（图查询接入不破界）', () => {
++test('explore 只读铁律零漂移（兵器扩展不破界）', () => {
+   for (const rule of ['不写实现代码', '不安装依赖', '不修改文件', '不强行推进到']) {
+     assert.ok(prompt.includes(rule), `铁律缺：${rule}`)
+   }
+diff --git a/.sillyspec/changes/2026-10-09-explore-arsenal-map/design.md b/.sillyspec/changes/2026-10-09-explore-arsenal-map/design.md
+new file mode 100644
+index 00000000..790c0dac
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-explore-arsenal-map/design.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:29:00.160Z
++---
++# 设计记录（Design Record）— 2026-10-09-explore-arsenal-map
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/stages/explore.js | 操作清单原第 3/4 项（rg 1 行 + 图谱 8 行）重组织为「话题→兵器映射」小节（4 行：rg/search/graph/status）；清单 7 项→6 项；铁律节零变化 |
++| 修改 | docs/prompt/_extracted.json | 机械提取重跑产物 |
++| 修改 | docs/prompt/explore.md | prompt 正文块逐字镜像（脚本回验） |
++| 修改 | .claude/skills/sillyspec-explore/SKILL.md | 「调查代码库」行与「查知识图谱」段合并为同形态映射块；frontmatter 逐字不变 |
++| 修改 | test/explore-graph-guidance.test.mjs | 钉子测试重组织断言（映射节标题/四命令新锚串口径）+ 增 search/status 两兵器断言 |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++2026-10-08-explore-knowledge-graph 把图查询以 8 行罗列插进操作清单后清单达 7 项——逐条堆兵器会稀释探索注意力。本变更按评审建议（用户采纳）重组织为「话题→兵器映射」一小节：词面考古 rg / 坑史检索 search / 关系面 graph / 在途面 status 四行各带场景，顺带补齐第一梯队两兵器（knowledge search 四层召回防坑考古、sillyspec status 在途变更防撞车）。映射形态按「话题类型」而非「命令族」组织——agent 拿到话题先对号入座再选兵器，prompt 净变短（替换 9 行为 6 行）且可扫。技能卡同步同形态保持双面一致；description 触发词面逐字不动（不改变技能触发行为）。钉子测试断言口径随映射形态更新（neighbors/summary 与 graph 前缀同行共享），并扩两新兵器断言。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- stages/explore.js definition.steps[0].prompt 文本重组织（操作清单 6 项 + 映射节）；step 结构/数量/铁律/outputHint 零变化；`sillyspec run explore` 渲染随新形态。
++- 无函数签名/端点/文件格式变更；SKILL.md frontmatter 逐字不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   不适用：纯 prompt/文档文本变更，无事件面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   不适用：改动面是 git 管理的静态源文件，无运行时共享态。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   不适用：prompt 按次渲染无状态；兵器命令（search/status/graph）全只读即起即落。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   兵器命令均锚 cwd/.sillyspec（或 --spec-dir），各会话各查各仓，无串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：映射行内塞多命令（关系面一行含 impact/neighbors/path/summary 四命令）信息密度高——单行过长可能被 agent 扫读跳过。缓解：行内用顿号分层（主命令 impact 打头、推理链与健康度退居从句）；钉子测试锚串保证四命令不丢。旧版 CLI（<3.33）项目跑新兵器命令报 unknown subcommand 自然回退 rg（fail-soft，与 graph 兵器同款既裁边界）。放弃的方案：兵器逐条加操作项（search/status 各一项）——弃，清单会回到 9 项且场景与兵器割裂；CLI 侧预取注入（{ARSENAL_FACTS} 类占位符）——弃，探索话题不可预知，全量预取浪费且复刻知识注入面。
+diff --git a/.sillyspec/changes/2026-10-09-explore-arsenal-map/requirements.md b/.sillyspec/changes/2026-10-09-explore-arsenal-map/requirements.md
+new file mode 100644
+index 00000000..acf58776
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-explore-arsenal-map/requirements.md
+@@ -0,0 +1,55 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:29:00.160Z
++---
++# 需求规格（Requirements）— 2026-10-09-explore-arsenal-map
++
++## 功能需求
++
++### FR-01: src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
++
++- 操作清单必须以「话题→兵器映射」小节承载调查兵器（四行：词面考古 rg / 坑史检索 search / 关系面 graph / 在途面 status），映射节行数必须少于被替换的原第 3/4 项合计；铁律节必须逐字零变化。
++
++#### 场景：映射面
++
++- Given 修改后的 prompt；When 渲染；Then 映射节在场（含节标题「话题→兵器映射」与全只读声明），铁律四条逐字在场。
++
++### FR-02: 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
++
++- knowledge search --query 与 sillyspec status 必须进映射（各带一句场景）；graph 四命令（impact/neighbors/path/summary）、防复潮提示（rejected/⚰️死路不重新兜售）、全只读声明必须保留。
++
++#### 场景：兵器齐备
++
++- Given prompt 全文；Then 六兵器锚串全部在场（钉子测试断言口径）。
++
++### FR-03: docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
++
++- explore.md prompt 正文块必须与 _extract.mjs 产物逐字一致（机械镜像纪律）。
++
++#### 场景：镜像对账
++
++- Given 重跑提取；Then 围栏内文本 === _extracted.json 的 explore.steps[0].prompt。
++
++### FR-04: 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
++
++- 技能卡调查类能力段必须合并为同形态映射块；frontmatter name/description 必须逐字不变（触发词面零变化）。
++
++#### 场景：技能卡
++
++- Given 更新后 SKILL.md；Then 映射块在场且 frontmatter 与更新前一致。
++
++### FR-05: 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归
++
++- 钉子测试必须扩至断言 search/status 两新兵器在场；全量测试必须绿、lint 必须零告警。
++
++#### 场景：回归面
++
++- Given 全部落盘；When 全量测试与 lint；Then 零失败零新告警。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」（节标题/全只读断言）
++FR-02: test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」
++FR-03: 不适用：镜像文档由 docs/prompt/_extract.mjs 机械生成（脚本回验断言逐字一致），无独立测试文件面
++FR-04: 不适用：技能卡为 init 拷贝源静态文档，frontmatter 不变由本变更 diff 自证（正文块替换不触 frontmatter）
++FR-05: test/explore-graph-guidance.test.mjs「explore 只读铁律零漂移（兵器扩展不破界）」+ test:core 325 全绿与 lint 零告警（verify-runs 留档）
+diff --git a/.sillyspec/changes/2026-10-09-explore-arsenal-map/tasks.md b/.sillyspec/changes/2026-10-09-explore-arsenal-map/tasks.md
+new file mode 100644
+index 00000000..90c8ec12
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-explore-arsenal-map/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:29:00.160Z
++---
++# 任务注册表（Tasks）— 2026-10-09-explore-arsenal-map
++
++- [x] task-01: src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
++- [x] task-02: 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
++- [x] task-03: docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
++- [x] task-04: 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
++- [x] task-05: 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归
+diff --git a/.sillyspec/changes/2026-10-09-explore-arsenal-map/proposal.md b/.sillyspec/changes/2026-10-09-explore-arsenal-map/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-explore-arsenal-map/proposal.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:29:00.160Z
++---
++# 提案书（Proposal）— 2026-10-09-explore-arsenal-map
++
++## 动机
++
++任务原话转写：explore prompt 重组织为「话题→兵器映射」：补齐 search/status 两兵器且比现状更短。
++
++动机与背景：
++2026-10-08-explore-knowledge-graph 把图查询以 8 行罗列插进操作清单，清单已 7 项——继续逐条堆会稀释注意力。评审建议（用户采纳）：重组织为话题→兵器映射一小节，四类兵器各一行带场景：文本考古 rg / 坑史检索 knowledge search（新增兵器——四层召回防坑考古）/ 关系面 graph（既有）/ 在途面 status（新增兵器——方向建议前查活跃变更防撞车）。prompt 净变短更可扫；技能卡同步同形态；description 触发词面不动。
++
++成功标准：
++- src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
++- 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
++- docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
++- 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
++- 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
++2. 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
++3. docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
++4. 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
++5. 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归
++
++## 成功标准（可验证）
++
++1. src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
++2. 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
++3. docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
++4. 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
++5. 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归

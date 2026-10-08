@@ -131,3 +131,74 @@ created_at: 2026-09-20T15:18:10.810Z
 摘要：回归面
 全文：.sillyspec/changes/archive/2026-10-08-explore-knowledge-graph/requirements.md#FR-04
 最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
+
+## FR-stages-013 src/stages/explore.js：操作清单原第 3/4 项（rg 一行+图谱 8 行）合并重组织为「话题→兵器映射」小节（四兵器各一行带场景），总行数少于现状；铁律节与只读姿态零变化
+变更：2026-10-09-explore-arsenal-map
+状态：active
+摘要：映射面
+全文：.sillyspec/changes/archive/2026-10-09-explore-arsenal-map/requirements.md#FR-01
+最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-explore-arsenal-map:flow:测试绑定FR-01
+  tests: test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-explore-arsenal-map
+  status: active
+
+## FR-stages-014 新增兵器落地：knowledge search --query（坑史检索）与 sillyspec status（在途面）进映射；graph 四命令/防复潮提示/全只读声明保留（钉子测试 explore-graph-guidance 既有断言不红）
+变更：2026-10-09-explore-arsenal-map
+状态：active
+摘要：兵器齐备
+全文：.sillyspec/changes/archive/2026-10-09-explore-arsenal-map/requirements.md#FR-02
+最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-explore-arsenal-map:flow:测试绑定FR-02
+  tests: test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-explore-arsenal-map
+  status: active
+
+## FR-stages-015 docs/prompt/_extract.mjs 重跑 + explore.md 逐字镜像
+变更：2026-10-09-explore-arsenal-map
+状态：active
+摘要：镜像对账
+全文：.sillyspec/changes/archive/2026-10-09-explore-arsenal-map/requirements.md#FR-03
+最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
+
+## FR-stages-016 技能卡同步：调查类能力段合并为同形态映射块，frontmatter 逐字不变
+变更：2026-10-09-explore-arsenal-map
+状态：active
+摘要：技能卡
+全文：.sillyspec/changes/archive/2026-10-09-explore-arsenal-map/requirements.md#FR-04
+最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
+
+## FR-stages-017 钉子测试扩展：新兵器两断言（search/status 在场）；全量测试与 lint 零回归
+变更：2026-10-09-explore-arsenal-map
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-09-explore-arsenal-map/requirements.md#FR-05
+最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-explore-arsenal-map:flow:测试绑定FR-05
+  tests: test/explore-graph-guidance.test.mjs「explore 只读铁律零漂移（兵器扩展不破界）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-explore-arsenal-map
+  status: active

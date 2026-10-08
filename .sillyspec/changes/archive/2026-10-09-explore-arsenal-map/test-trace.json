@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-explore-arsenal-map",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-explore-arsenal-map:flow:测试绑定FR-01",
+      "tests": [
+        "test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-explore-arsenal-map"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-explore-arsenal-map:flow:测试绑定FR-02",
+      "tests": [
+        "test/explore-graph-guidance.test.mjs「explore 话题→兵器映射：graph 四命令 + search/status 新兵器 + 防复潮提示在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-explore-arsenal-map"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-09-explore-arsenal-map:flow:测试绑定FR-05",
+      "tests": [
+        "test/explore-graph-guidance.test.mjs「explore 只读铁律零漂移（兵器扩展不破界）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-explore-arsenal-map"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "7dc576d50c7109aa07a3b0e4121b998da5ac3ccd",
+  "totals": {
+    "files": 5,
+    "additions": 33,
+    "deletions": 33
+  },
+  "rows": [
+    {
+      "path": ".claude/skills/sillyspec-explore/SKILL.md",
+      "additions": 5,
+      "deletions": 7,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/explore.md",
+      "additions": 8,
+      "deletions": 9,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/explore.js",
+      "additions": 8,
+      "deletions": 9,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/explore-graph-guidance.test.mjs",
+      "additions": 11,
+      "deletions": 7,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "ae81298854fa8e62f801dfcee91fbb31c1f5d37b0571a69cdfe9cd57fa47ec7a",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T17:34:56.856Z"
+}

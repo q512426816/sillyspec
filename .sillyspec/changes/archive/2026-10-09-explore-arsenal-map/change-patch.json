@@ -1,0 +1,61 @@
+{
+  "change": "2026-10-09-explore-arsenal-map",
+  "baseline": "7dc576d50c7109aa07a3b0e4121b998da5ac3ccd",
+  "head": "61bf5923b9cb4e3826834ecfaceee0a09cb49622",
+  "files": [
+    ".claude/skills/sillyspec-explore/SKILL.md",
+    ".sillyspec/changes/2026-10-09-explore-arsenal-map/design.md",
+    ".sillyspec/changes/2026-10-09-explore-arsenal-map/requirements.md",
+    ".sillyspec/changes/2026-10-09-explore-arsenal-map/tasks.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/explore.md",
+    "src/stages/explore.js",
+    "test/explore-graph-guidance.test.mjs",
+    ".sillyspec/changes/2026-10-09-explore-arsenal-map/proposal.md"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 187,
+    "deletions": 33
+  },
+  "savedAt": "2026-10-08T17:34:56.856Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-explore",
+      "files": 1
+    },
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "patchSha256": "ae81298854fa8e62f801dfcee91fbb31c1f5d37b0571a69cdfe9cd57fa47ec7a",
+  "patchStatus": "ok"
+}
