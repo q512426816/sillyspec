@@ -1,0 +1,261 @@
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 84d6dfda..be19540a 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -109,7 +109,12 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts =
+ export function detectBatchCheckCadence(events) {
+   const taskEvents = [];
+   for (const e of events || []) {
+-    if (e && e.kind === 'task-done') taskEvents.push(e);
++    if (!e || e.kind !== 'task-done') continue;
++    // 节奏域过滤（2026-10-08-batch-tick-false-positive）：只认任务队列面（stage='tasks'，缺省
++    // 视同 tasks 兼容 legacy 流）。其他阶段的 task-done（如 design.md 自审预勾的首现计数）不是
++    // tick 信号——混入会把逐格勾选误判成单拍大跳（实证：design 0→8 拒收六次独立 tick）。
++    if (e.stage != null && e.stage !== 'tasks') continue;
++    taskEvents.push(e);
+   }
+   const parse = (e) => {
+     const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));
+diff --git a/src/watcher.js b/src/watcher.js
+index f87d4c43..5d3ec931 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -339,8 +339,12 @@ export function inferEvents(prev, next) {
+     const p = prev.files[key];
+     const n = next.files[key];
+     if (!p && n) {
+-      events.push(mk('file', n.stage, `${key} 出现`));
+-      if (n.checked > 0) events.push(mk('task-done', n.stage, `checked 0→${n.checked}`));
++      events.push(mk('file', n.stage, `${key} 出现`))
++      // 勾选节奏域=任务队列文件（tasks.md / tasks/*.md，stage='tasks'）。其余阶段文件首现的
++      // 勾选计数不是 tick 信号：design.md 自审清单天然预勾（整体写盘的已完成断言）——发了就是
++      // 幻影单拍跳（2026-10-08-batch-tick-false-positive 实证：design 首现 0→8 被节奏门误拒
++      // 六次独立 tick）；tasks.md 首现带已勾仍发（保住「整卡预勾创建」的真实捕捉面）。
++      if (n.checked > 0 && n.stage === 'tasks') events.push(mk('task-done', n.stage, `checked 0→${n.checked}`))
+     } else if (p && n && p.hash !== n.hash) {
+       events.push(mk('file-update', n.stage, `${key} 内容变更`));
+     }
+diff --git a/test/sentinel-rules.test.mjs b/test/sentinel-rules.test.mjs
+index 8d70acda..75f64254 100644
+--- a/test/sentinel-rules.test.mjs
++++ b/test/sentinel-rules.test.mjs
+@@ -539,10 +539,29 @@ test('节奏 逐格勾选不判：0→1、1→2、2→3 全程返回 null', () =
+   assert.equal(detectBatchCheckCadence([td(0, 1, 111), td(1, 2, 222), td(2, 3, 333)]), null)
+ })
+ 
+-test('节奏 单任务变更 0→1 不判；design 阶段同判', () => {
++test('节奏 单任务变更 0→1 不判；design 阶段出域（契约刷新 2026-10-08-batch-tick-false-positive）', () => {
+   assert.equal(detectBatchCheckCadence([td(0, 1)]), null)
+-  const r = detectBatchCheckCadence([td(0, 2, 999, 'design')])
+-  assert.equal(r.to, 2, 'design.md 多格勾选同入判（STAGE_FILES 双工件面）')
++  // 旧契约「design 阶段同判（STAGE_FILES 双工件面）」退役：design.md 自审清单按模板就是
++  // 整体写盘的预勾断言（authored-whole），watcher 首现计数恒为 0→N「单拍大跳」——把 design
++  // 段计入节奏域会把正常路径误判（实证：2026-10-08-knowledge-graph 六次独立 tick 被拒收）。
++  assert.equal(detectBatchCheckCadence([td(0, 2, 999, 'design')]), null, 'design 段事件出节奏域')
++  assert.equal(detectBatchCheckCadence([td(0, 8, 999, 'design')]), null, 'design 首现 0→8 幻影不再入判')
++})
++
++test('节奏 误伤回归：design 首现 0→8 + 六次独立 tick 混流 → null（2026-10-08 实证流）', () => {
++  // 真实事件流形态：design.md 整体写盘产生 stage=design 的 0→8（自审 8 项预勾），
++  // tasks 面六次独立 task tick（CLI 精确事件）+ watcher 采样镜像——混流必须判无单拍跳
++  const mix = [
++    td(0, 8, 1791438708879, 'design'),
++    { ts: 1791440438536, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true, source: 'task-tick' },
++    { ts: 1791440440070, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true },
++    { ts: 1791440763160, kind: 'task-done', stage: 'tasks', detail: 'checked 1→2', provisional: true, source: 'task-tick' },
++    { ts: 1791440879517, kind: 'task-done', stage: 'tasks', detail: 'checked 2→3', provisional: true, source: 'task-tick' },
++    { ts: 1791440994388, kind: 'task-done', stage: 'tasks', detail: 'checked 3→4', provisional: true, source: 'task-tick' },
++    { ts: 1791441356368, kind: 'task-done', stage: 'tasks', detail: 'checked 4→5', provisional: true, source: 'task-tick' },
++    { ts: 1791441691143, kind: 'task-done', stage: 'tasks', detail: 'checked 5→6', provisional: true, source: 'task-tick' },
++  ]
++  assert.equal(detectBatchCheckCadence(mix), null, '六次独立 tick 不得被 design 幻影连坐')
+ })
+ 
+ test('节奏 容错：空清单/null/坏 detail/非 task-done/坏对象行不抛且返回 null', () => {
+diff --git a/test/watcher.test.mjs b/test/watcher.test.mjs
+index 48dee77d..b364e6c2 100644
+--- a/test/watcher.test.mjs
++++ b/test/watcher.test.mjs
+@@ -59,6 +59,17 @@ test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
+   assert.equal(ev[0].provisional, true)
+ })
+ 
++test('inferEvents: 非任务面首现预勾不发 task-done；tasks.md 首现带勾仍发（2026-10-08-batch-tick-false-positive）', () => {
++  // design.md 自审清单 authored-whole（整体写盘的预勾断言）——首现只报 file；
++  // 旧实现发 checked 0→8 幻影，被收口节奏门连坐拒收六次独立 tick（实证流 ts 1791438708879）
++  const dEv = inferEvents(snap(), snap({ files: { 'design.md': { hash: 'a', stage: 'design', checked: 8, total: 8 } } }))
++  assert.deepEqual(dEv.map((e) => e.kind), ['file'], 'design 首现预勾零 task-done')
++  // tasks.md 首现带已勾格——保住「整卡预勾创建」的真实捕捉面
++  const tEv = inferEvents(snap(), snap({ files: { 'tasks.md': { hash: 'a', stage: 'tasks', checked: 3, total: 6 } } }))
++  assert.deepEqual(tEv.map((e) => e.kind).sort(), ['file', 'task-done'])
++  assert.match(tEv.find((e) => e.kind === 'task-done').detail, /checked 0→3/)
++})
++
+ test('inferEvents: 内容变更→file-update；checkbox 勾选数增加→task-done', () => {
+   const prev = snap({ files: { 'tasks.md': { hash: 'a', stage: 'tasks', checked: 1, total: 3 } } })
+   const next = snap({ files: { 'tasks.md': { hash: 'b', stage: 'tasks', checked: 2, total: 3 } } })
+diff --git a/.sillyspec/changes/2026-10-08-batch-tick-false-positive/design.md b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/design.md
+new file mode 100644
+index 00000000..e0bb2c1e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/design.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T08:12:53.293Z
++---
++# 设计记录（Design Record）— 2026-10-08-batch-tick-false-positive
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/watcher.js | inferEvents 首现 task-done 收敛任务面（stage='tasks' 才发；design 预勾零幻影） |
++| 修改 | src/sentinel-assertions.js | detectBatchCheckCadence 节奏域过滤（stage 非 tasks 出域，缺省视同 tasks） |
++| 修改 | test/watcher.test.mjs | inferEvents 首现双态用例（design 预勾零 task-done / tasks.md 带勾仍发） |
++| 修改 | test/sentinel-rules.test.mjs | 契约刷新（design 出域）+ 误伤混流回归（真实事故流形态） |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++双层修复单拍勾选门的误伤（2026-10-08-knowledge-graph 收口实证：六次独立 task tick 被「checked 0→8」幻影连坐拒收）。①源头层 watcher.js inferEvents：文件首现的 task-done 事件收敛到任务队列面（stage='tasks'）——design.md 自审清单 authored-whole 预勾首现只报 file 不报勾选跳，幻影的生成面直接消除；tasks.md 首现带勾仍发，保住「整卡预勾创建」捕捉面。②消费层 sentinel-assertions.js detectBatchCheckCadence：节奏检测域过滤 stage（只认 tasks，缺省视同 tasks 兼容 legacy 流），纵深防御任何非任务面的勾选计数混入。选双层而非单层：源头修了新生成面，但历史流/未知发射面仍可能混入，消费层过滤保证门语义只锚任务节奏域。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- watcher.inferEvents(prev, next) 行为变化：非 tasks 阶段文件首现且 checked>0 时不再产 `task-done` 事件（此前产 `checked 0→N`）；tasks 面不变。事件消费方影响：sentinel 停滞判活（task-done 作活跃信号——design 首现事件本就不该计活，无回归）、平台展示面。
++- detectBatchCheckCadence(events) 行为变化：stage 非 'tasks' 且非空的 task-done 事件出域；返回结构与其余判定（CLI 去重/最大跳选取）零变化。resolveBatchTickAction 四态零变化。
++- 无端点/命令/文件格式变更。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立：检测按事件流顺序扫最大跳，与既有语义一致；design 首现事件出域后不存在乱序幻影面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   inferEvents 是纯函数（快照 diff），多 watcher 竞态由既有快照机制承担；本变更不引入新共享面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   事件流按 change 隔离（watcher-events-<change>.jsonl），无跨变更状态；收口重入幂等（子步断点续）不受影响。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   stage 判定来自快照内文件→STAGE_FILES 映射（本地 changeDir 纯盘面），无跨工作区/跨仓串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：消费层 stage 过滤放宽了检测面——若未来有真实「design.md 勾选框被 agent 一把勾」的纪律诉求，本门不再覆盖（须另立信号面）。接受理由：design 自审是 authored-whole 断言面（模板即如此），一把勾与整体写盘不可区分，覆盖它的成本就是本次实证的误伤。放弃的方案：仅修 watcher 源头层（历史流与未知发射面无纵深）；仅修消费层（幻影事件仍进平台展示流污染时间线）。
+diff --git a/.sillyspec/changes/2026-10-08-batch-tick-false-positive/requirements.md b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/requirements.md
+new file mode 100644
+index 00000000..6aa57778
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/requirements.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T08:12:53.293Z
++---
++# 需求规格（Requirements）— 2026-10-08-batch-tick-false-positive
++
++## 功能需求
++
++### FR-01: watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
++
++- 文件首现（`!p && n`）的 task-done 事件必须只对任务队列面（stage='tasks'：tasks.md 与 tasks/*.md）发射；其余阶段文件（design.md 自审清单等 authored-whole 预勾形态）首现只报 `file` 事件，禁止发 task-done。
++
++#### 场景：design.md 整体写盘
++
++- Given watcher 快照无 design.md；When 下一拍 design.md 出现且含 8 个预勾 `- [x]`（自审 authored-whole）；Then 只产 1 条 `file`（stage=design）事件，零 task-done。
++
++#### 场景：tasks.md 整卡预勾创建
++
++- Given 快照无 tasks.md；When tasks.md 出现且已勾 3 格；Then 产 `file` + `task-done（checked 0→3）`——捕捉面保留。
++
++### FR-02: detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
++
++- 节奏检测域必须限定 stage='tasks'（缺省 stage 视同 tasks 兼容 legacy 流）；其他阶段的 task-done 事件必须出域。既有能力不回归：tasks 段单拍 0→8（无 CLI 覆盖）仍检出、CLI 精确事件去重行为不变、resolveBatchTickAction 四态不变。
++
++#### 场景：误伤回归（真实事故流）
++
++- Given 2026-10-08-knowledge-graph 归档事件流（47 条，含 stage=design 的 checked 0→8 幻影 + 六次独立 source=task-tick 事件）；When detectBatchCheckCadence 执行；Then 返回 null。
++
++#### 场景：真实单拍仍可检出
++
++- Given 仅一条 stage=tasks 的 checked 0→8（无 CLI 事件）；When 检测；Then 返回 {from:0,to:8} 证据记录。
++
++### FR-03: 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试
++
++- watcher/sentinel-rules/batch-tick-gate/task-tick 四测试文件必须全绿；test:core 全量与 lint 零回归。旧契约「design 阶段同判（STAGE_FILES 双工件面）」随本变更退役——前提被实证证伪（自研清单按模板即 authored-whole 预勾，非逐格勾选面）。
++
++#### 场景：回归面
++
++- Given 修复落盘；When `node --test test/watcher.test.mjs test/sentinel-rules.test.mjs test/batch-tick-gate.test.mjs test/task-tick.test.mjs` 与 `npm run test:core` + `npm run lint`；Then 全绿零新告警。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/watcher.test.mjs「inferEvents: 非任务面首现预勾不发 task-done；tasks.md 首现带勾仍发（2026-10-08-batch-tick-false-positive）」
++FR-02: test/sentinel-rules.test.mjs「节奏 误伤回归：design 首现 0→8 + 六次独立 tick 混流 → null（2026-10-08 实证流）」
++FR-02: test/sentinel-rules.test.mjs「节奏 正例：单拍 0→8 返回证据记录（字段完整）」
++FR-02: test/sentinel-rules.test.mjs「节奏 单任务变更 0→1 不判；design 阶段出域（契约刷新 2026-10-08-batch-tick-false-positive）」
++FR-03: test/batch-tick-gate.test.mjs「② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面」
++FR-03: test/task-tick.test.mjs「（CLI 精确事件生成面回归——detectBatchCheckCadence 消费契约不变）」
+diff --git a/.sillyspec/changes/2026-10-08-batch-tick-false-positive/tasks.md b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/tasks.md
+new file mode 100644
+index 00000000..1cbfe250
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T08:12:53.293Z
++---
++# 任务注册表（Tasks）— 2026-10-08-batch-tick-false-positive
++
++- [x] task-01: watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
++- [x] task-02: detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
++- [x] task-03: 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试
+diff --git a/.sillyspec/changes/2026-10-08-batch-tick-false-positive/proposal.md b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-batch-tick-false-positive/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T08:12:53.293Z
++---
++# 提案书（Proposal）— 2026-10-08-batch-tick-false-positive
++
++## 动机
++
++任务原话转写：收口硬门「单拍勾选拒收」误伤修复。
++
++动机与背景：
++2026-10-08-knowledge-graph 收口时哨兵报「一拍勾选 checked 0→8」拒收，但事件流实证是六次独立 task tick（source:task-tick，跨 25 分钟逐格 0→1…5→6）。根因两处叠加：
++① src/watcher.js:343——任意 STAGE_FILES 文件「首现且含勾选框」即发 task-done 事件 checked 0→N；brainstorm 预段/厚道 plan 段中 design.md 中途物化是常态路径，自审清单天然预勾（8 个 [x] 断言）→ 幻影事件（实测：ts 13:51:48 stage=design checked 0→8）。
++② src/sentinel-assertions.js detectBatchCheckCadence 消费事件流不过滤 stage——design 段的 0→8 不在 CLI tick 去重面（cliTargets={1..6}）内 → 判单拍跳 8 格拒收。
++本次被迫 --allow-batch-tick 旁路留痕（假旁路面污染平台时间线）。
++
++成功标准：
++- watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
++- detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
++- 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
++2. detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
++3. 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试
++
++## 成功标准（可验证）
++
++1. watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
++2. detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
++3. 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试

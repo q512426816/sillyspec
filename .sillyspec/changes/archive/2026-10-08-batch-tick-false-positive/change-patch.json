@@ -1,0 +1,49 @@
+{
+  "change": "2026-10-08-batch-tick-false-positive",
+  "baseline": "a370d4103c3d85527841ab1b64362e9282c7347b",
+  "head": "b125a8940021463953eae7f26d8a24e083acba31",
+  "files": [
+    ".sillyspec/changes/2026-10-08-batch-tick-false-positive/design.md",
+    ".sillyspec/changes/2026-10-08-batch-tick-false-positive/requirements.md",
+    ".sillyspec/changes/2026-10-08-batch-tick-false-positive/tasks.md",
+    "src/sentinel-assertions.js",
+    "src/watcher.js",
+    "test/sentinel-rules.test.mjs",
+    "test/watcher.test.mjs",
+    ".sillyspec/changes/2026-10-08-batch-tick-false-positive/proposal.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 187,
+    "deletions": 6
+  },
+  "savedAt": "2026-10-08T08:24:30.391Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "sync",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "patchSha256": "75ca841a29f14098d0aafb2d552f839d65f147c2f66bed31587552222a06810f",
+  "patchStatus": "ok"
+}

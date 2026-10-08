@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-batch-tick-false-positive",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b125a8940021463953eae7f26d8a24e083acba31",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 括注「stage='tasks'：tasks.md 与 tasks/*.md」宽于实际事件追踪面",
+      "evidence": "STAGE_FILES 仅映射 'tasks.md':'tasks'，且注释明言「未列出的文件不发事件，防噪声」——tasks/*.md 既无 file 也无 task-done 事件（本变更未触碰的既有盘面）。FR-01 的规范性主张「首现 task-done 只对任务队列面发射」仍成立（watcher.js:347 以 n.stage==='tasks' 为门），但括注把任务面描述得比实际追踪面宽，属文档精度问题，非行为回归、非本次引入。",
+      "location": "src/watcher.js:62-72（对照 requirements.md FR-01 括注）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "boundaryRulings": [
+    {
+      "boundary": "消费层 stage 过滤放宽检测面（design 段一把勾不再覆盖）",
+      "ruling": "可接受",
+      "reason": "design 自审是 authored-whole 断言面：一把勾与整体写盘在 watcher 快照面同为首现 0→N，不可区分；保留覆盖必然保留本次实证的误伤路径（六次独立 tick 连坐拒收）。若未来需要 design 段勾选纪律，应另立 stage-aware 信号面而非复用任务节奏门。契约刷新有测试钉死（sentinel-rules.test.mjs:542-555）。边界已裁决：可接受。"
+    },
+    {
+      "boundary": "旧契约「design 阶段同判（STAGE_FILES 双工件面）」退役",
+      "ruling": "可接受",
+      "reason": "旧契约前提（design.md 存在逐格勾选面）被归档实证流证伪：design.md 首现即 checked 0→8 authored-whole（ts 1791438708879）。proposal/requirements/design/test 四处一致披露，退役有新断言钉住（design 出域 → null），无隐蔽行为面。边界已裁决：可接受。"
+    },
+    {
+      "boundary": "tasks.md 首现带勾仍发 task-done（首现 0→N 仍入节奏门）",
+      "ruling": "可接受",
+      "reason": "这是有意保留的捕捉面而非泄漏：整卡预勾创建 tasks.md 正是单拍勾选门要拦的真实异常形态。合法逐格流的误报由 CLI 精确事件去重承担——真实 47 行归档流（六 tick + watcher 镜像混流）实测 null，混流回归测试在册（sentinel-rules.test.mjs:551）。残留：无 CLI 覆盖的整卡预勾 tasks.md 仍会被拦，与违规形态不可区分，属门语义内正确行为。边界已裁决：可接受。"
+    },
+    {
+      "boundary": "（附加裁决）R4 停滞判活消费面：design 首现幻影 task-done 此前会把相位锁存到 execute，修复后不再",
+      "ruling": "可接受",
+      "reason": "watcher.js:688 锁存信号语义是执行活性（task-done 或 tasks.md+新 commit），design.md 物化本不该计执行活——原锁存是幻影副作用，移除后与该行注释意图及 timeline.js:39 的既有 stage='tasks' 过滤方向一致。design 接口契约节已显式披露此项消费方影响。"
+    }
+  ],
+  "verification": {
+    "boundTests": "node --test test/watcher.test.mjs test/sentinel-rules.test.mjs test/batch-tick-gate.test.mjs test/task-tick.test.mjs → 79/79 pass；六条测试绑定（FR-01×1、FR-02×3、FR-03×2）全部实名在册且断言对应行为",
+    "testCore": "npm run test:core → 318/318 pass",
+    "lint": "npm run lint → pass（913 文件，未引用导出 0 项，零新告警）",
+    "endToEnd": "归档事故流 .sillyspec/changes/archive/2026-10-08-knowledge-graph/watcher-events.jsonl：47 行全解析；stage=design 的 checked 0→8 幻影在场（ts 1791438708879）；source=task-tick 恰 6 条（stage=tasks，0→1…5→6）；detectBatchCheckCadence(全流) = null——存在性证明成立",
+    "protectionClaims": "tasks.md 首现捕捉面保留（watcher.js:347 门 + watcher.test.mjs:62 断言 checked 0→3）；缺省 stage 兼容 legacy（sentinel-assertions.js:114 e.stage != null 才排除，无 stage 事件通行，既有无 stage 用例全绿佐证）",
+    "blindDimensions": "inferEvents 纯函数（快照 diff，无外部状态）；事件流按 change 隔离（watcher.js:464 watcher-events-<change>.jsonl）；STAGE_FILES 为 watcher.js 本地常量映射（62-72），无跨仓串台面"
+  },
+  "reviewedAt": "2026-10-08T08:31:47Z"
+}

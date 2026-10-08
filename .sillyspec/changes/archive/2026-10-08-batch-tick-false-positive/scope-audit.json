@@ -1,0 +1,53 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "a370d4103c3d85527841ab1b64362e9282c7347b",
+  "totals": {
+    "files": 4,
+    "additions": 45,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": "src/sentinel-assertions.js",
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/watcher.js",
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "additions": 22,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/watcher.test.mjs",
+      "additions": 11,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "75ca841a29f14098d0aafb2d552f839d65f147c2f66bed31587552222a06810f",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T08:24:30.391Z"
+}

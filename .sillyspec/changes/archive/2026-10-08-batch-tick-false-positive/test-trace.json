@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-batch-tick-false-positive",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-01",
+      "tests": [
+        "test/watcher.test.mjs「inferEvents: 非任务面首现预勾不发 task-done；tasks.md 首现带勾仍发（2026-10-08-batch-tick-false-positive）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-rules.test.mjs「节奏 误伤回归：design 首现 0→8 + 六次独立 tick 混流 → null（2026-10-08 实证流）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-rules.test.mjs「节奏 正例：单拍 0→8 返回证据记录（字段完整）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-rules.test.mjs「节奏 单任务变更 0→1 不判；design 阶段出域（契约刷新 2026-10-08-batch-tick-false-positive）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-03",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-batch-tick-false-positive:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick.test.mjs「（CLI 精确事件生成面回归——detectBatchCheckCadence 消费契约不变）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-batch-tick-false-positive"
+    }
+  ]
+}

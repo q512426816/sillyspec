@@ -384,3 +384,60 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-10-05-hindsight-checkbox-noise
   status: active
+
+## FR-sync-032 watcher.inferEvents：非 tasks 阶段文件（design.md 形态）首现带预勾框不再发 task-done；tasks.md 首现带已勾格仍发（保住「tasks.md 整卡预勾创建」的真实捕捉面）
+变更：2026-10-08-batch-tick-false-positive
+状态：active
+摘要：design.md 整体写盘；tasks.md 整卡预勾创建
+全文：.sillyspec/changes/archive/2026-10-08-batch-tick-false-positive/requirements.md#FR-01
+最近确认：b125a8940021463953eae7f26d8a24e083acba31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-batch-tick-false-positive:flow:测试绑定FR-01
+  tests: test/watcher.test.mjs「inferEvents: 非任务面首现预勾不发 task-done；tasks.md 首现带勾仍发（2026-10-08-batch-tick-false-positive）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-batch-tick-false-positive
+  status: active
+
+## FR-sync-033 detectBatchCheckCadence 只消费 stage='tasks' 事件（纵深防御）；混流（design 0→8 + 六次独立 tick）判无单拍跳；tasks 段无 CLI 覆盖的单拍大跳仍可检出
+变更：2026-10-08-batch-tick-false-positive
+状态：active
+摘要：误伤回归（真实事故流）；真实单拍仍可检出
+全文：.sillyspec/changes/archive/2026-10-08-batch-tick-false-positive/requirements.md#FR-02
+最近确认：b125a8940021463953eae7f26d8a24e083acba31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-batch-tick-false-positive:flow:测试绑定FR-02
+  tests: test/sentinel-rules.test.mjs「节奏 单任务变更 0→1 不判；design 阶段出域（契约刷新 2026-10-08-batch-tick-false-positive）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-batch-tick-false-positive
+  status: active
+
+## FR-sync-034 既有 watcher/sentinel 相关测试全绿 + 新增误伤场景回归测试
+变更：2026-10-08-batch-tick-false-positive
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-08-batch-tick-false-positive/requirements.md#FR-03
+最近确认：b125a8940021463953eae7f26d8a24e083acba31
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-batch-tick-false-positive:flow:测试绑定FR-03
+  tests: test/task-tick.test.mjs「（CLI 精确事件生成面回归——detectBatchCheckCadence 消费契约不变）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-batch-tick-false-positive
+  status: active
