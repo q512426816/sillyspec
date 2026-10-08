@@ -1,0 +1,33 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-08T01:03:04.661Z
+---
+# 提案书（Proposal）— 2026-10-08-thin-done-dirty-gate-and-paren-attribution
+
+## 动机
+
+任务原话转写：修复 thin 收尾链两个新坑（记录：multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md，2026-10-07-assets-patch-scope-audit-fallback 活体实证——冻结 patch 只吸并行会话 9 文件、本变更 4 个 src 全缺席）：坑一，flow done 对「未提交交付文件未入冻结面」只警告不阻断，autopilot 单跑到底直接归档，三选一（接受缺口/--freeze-dirty/worktree）里 ②③ 在归档后不可达（flow done 只认活跃目录）；坑二，提交归属解析 parseChangeNamesFromSubject 只认半角括号，中文输入法惯例的全角（thin <变更名>；…）形态让 drift 归因静默失灵（漂移重冻结不触发、提交归属全落 unknown）。
+
+成功标准：
+- 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
+- flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
+- 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
+- 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
+- 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
+2. flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
+3. 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
+4. 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
+5. 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
+
+## 成功标准（可验证）
+
+1. 全角/半角/混合括号与 thin 前缀形态的变更名提交都能被 parseChangeNamesFromSubject 解析；detectPatchDrift 对全角括号交付提交正确判 drifted
+2. flow done 在 dirtyWarned>0 且无显式处置时停在 patch 子步（exit 1、半态可重入、不归档）；--freeze-dirty 并入照旧；新增 --accept-dirty-gap 显式接受缺口（缺口数随 change-patch.json 留痕）
+3. 提交后重跑：patch 子步重跑自动并入已提交 src（漂移/全量冻结路径均可）
+4. 全量测试绿；flow-protocol ⑥b 的旧行为断言按新门语义更新（行为变更是本变更目的，非迁就）
+5. 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
