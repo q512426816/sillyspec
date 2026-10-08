@@ -476,6 +476,102 @@ export function graphDangling(graph, { existsFn = existsSync } = {}) {
   return out
 }
 
+// ═══ 2026-10-08-graph-summary-nodes：summary 聚合 + nodes 搜索（平台仓阶段三依赖契约）═══
+// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面；
+// summary 四计数与 doctor knowledge_graph_integrity 六检查同源同值（口径一处定义两处消费）。
+
+/** 节点 → 簇域（lite 总览聚类键 type×domain；缺省占位防散簇）。 */
+function graphNodeDomain(graph, n) {
+  switch (n.type) {
+    case 'fr': case 'decision':
+      return n.attrs.domain || '_unmapped'
+    case 'file': {
+      // module-files 精确挂接反查（多挂取最长模块 id——窄域优先）
+      const mods = graph.edges.filter((e) => e.type === 'module-files' && e.t === n.id).map((e) => e.s.replace(/^module:/, ''))
+      return mods.sort((a, b) => b.length - a.length)[0] || '_unmapped'
+    }
+    case 'module':
+      return n.id.replace(/^module:/, '')
+    case 'doc':
+      return n.attrs.kind || 'doc'
+    case 'entry':
+      return n.attrs.file || '_unmapped'
+    case 'test': {
+      const fr = graph.edges.find((e) => e.type === 'test-binding' && e.t === n.id)
+      return (fr && graph.nodes.get(fr.s)?.attrs?.domain) || '_tests'
+    }
+    default: // project/change/ql：id 即域
+      return n.id
+  }
+}
+
+/** 全图聚合：规模/分布 + doctor 同源四计数 + clusters 簇代表（度数 top-5，度=全边入+出）。
+ *  clustersLimit>0 时仅返回 count 前 N 簇（真图 800+ 簇，平台 lite 画布摆不下——消费方按需截断）。 */
+export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 } = {}) {
+  const orphans = graphOrphans(graph).length
+  const danglingRefs = graphDangling(graph, { existsFn }).length
+  // module_doc_gaps（doctor graph-module-doc-gap 同源）：map 模块缺 describes 或 changelog-of 入边
+  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
+  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
+  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
+  const moduleDocGaps = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id)).length
+  // changelog_danglings（doctor graph-changelog-dangling 同源）：日期名目标不在 archive/ 也不在活跃 changes/
+  const specRoot = String(graph.root || '')
+  let changelogDanglings = 0
+  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
+    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) changelogDanglings++
+  }
+  // clusters：type×domain 聚簇，representatives 度数 top-5（同度按 id 字典序稳序）
+  const deg = new Map()
+  for (const e of graph.edges) {
+    deg.set(e.s, (deg.get(e.s) || 0) + 1)
+    deg.set(e.t, (deg.get(e.t) || 0) + 1)
+  }
+  const buckets = new Map()
+  for (const n of graph.nodes.values()) {
+    const key = `${n.type}:${graphNodeDomain(graph, n)}`
+    if (!buckets.has(key)) buckets.set(key, [])
+    buckets.get(key).push(n)
+  }
+  const allClusters = [...buckets.entries()].map(([key, ns]) => ({
+    key,
+    label: key.slice(key.indexOf(':') + 1),
+    count: ns.length,
+    representatives: [...ns]
+      .sort((a, b) => (deg.get(b.id) || 0) - (deg.get(a.id) || 0) || a.id.localeCompare(b.id))
+      .slice(0, 5)
+      .map((n) => ({ id: n.id, type: n.type, label: n.label })),
+  })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+  const clusters = clustersLimit > 0 ? allClusters.slice(0, clustersLimit) : allClusters
+  return {
+    nodes: graph.stats.nodeCount,
+    edges: graph.stats.edgeCount,
+    byType: graph.stats.byNodeType,
+    byEdge: graph.stats.byEdgeType,
+    orphans,
+    module_doc_gaps: moduleDocGaps,
+    changelog_danglings: changelogDanglings,
+    dangling_refs: danglingRefs,
+    clusters,
+  }
+}
+
+/** 节点搜索：id/label 不区分大小写包含匹配，limit 钳 1-50（平台锚点自动补全数据源）。 */
+export function graphNodesSearch(graph, search, limit = 20) {
+  const q = String(search || '').toLowerCase()
+  const n = Math.min(Math.max(Number.isInteger(limit) ? limit : 20, 1), 50)
+  const nodes = []
+  if (q) {
+    for (const node of graph.nodes.values()) {
+      if (node.id.toLowerCase().includes(q) || node.label.toLowerCase().includes(q)) {
+        nodes.push({ id: node.id, type: node.type, label: node.label })
+        if (nodes.length >= n) break
+      }
+    }
+  }
+  return { count: nodes.length, nodes }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // scope 遍历召回（task-03，FR-04 承接 FR-cli-entry-234）
 // 层序：路由 → 平台向量 → scope 遍历 → 本地词片 → 空。
@@ -559,7 +655,7 @@ export function scopeFromDecisionsMd(text) {
 // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
 // ═══════════════════════════════════════════════════════════════
 
-const GRAPH_USAGE = '用法：sillyspec knowledge graph <neighbors|path|impact|orphans|dangling> [锚点...] [--edges <边型>] [--depth N]'
+const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]'
 
 export async function cmdKnowledgeGraph(dir, args, opts = {}) {
   const out = (ok, data, error) => console.log(JSON.stringify({ ok, ...(data || {}) , ...(error ? { error } : {}) }, null, 2))
@@ -575,13 +671,38 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
   const specRoot = opts.specDir || join(dir, '.sillyspec')
   const knowledgeDir = join(specRoot, 'knowledge')
 
-  if (!['neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
+  if (!['summary', 'nodes', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
     out(false, {}, { code: 'graph_usage', usage: GRAPH_USAGE, subcommand: sub })
     return
   }
   const graph = buildKnowledgeGraph(specRoot)
   const brief = (n) => `${n.type}  ${n.label}`
 
+  if (sub === 'summary') {
+    const cl = parseInt(flag('--clusters') || '0', 10)
+    const s = graphSummary(graph, { clustersLimit: Number.isInteger(cl) && cl > 0 ? cl : 0 })
+    return out(true, {
+      query: { sub, clusters: s.clusters.length },
+      stats: s,
+      summary: [
+        `节点 ${s.nodes} · 边 ${s.edges}`,
+        `孤儿 ${s.orphans} · 模块文档缺口 ${s.module_doc_gaps} · changelog 悬空 ${s.changelog_danglings} · 悬空引用 ${s.dangling_refs}`,
+        `簇 ${s.clusters.length} 个（最大 ${s.clusters[0]?.key ?? '—'} × ${s.clusters[0]?.count ?? 0}）`,
+      ],
+    })
+  }
+  if (sub === 'nodes') {
+    const search = flag('--search')
+    const limit = parseInt(flag('--limit') || '20', 10)
+    if (!search) return out(false, {}, { code: 'search_required', usage: GRAPH_USAGE })
+    const r = graphNodesSearch(graph, search, limit)
+    return out(true, {
+      query: { sub, search, limit: Math.min(Math.max(Number.isInteger(limit) ? limit : 20, 1), 50) },
+      count: r.count,
+      summary: r.nodes.slice(0, 5).map((n) => `→ ${brief(n)}`),
+      nodes: r.nodes,
+    })
+  }
   if (sub === 'neighbors') {
     const key = rest[1]
     if (!key) return out(false, {}, { code: 'anchor_required', usage: GRAPH_USAGE })

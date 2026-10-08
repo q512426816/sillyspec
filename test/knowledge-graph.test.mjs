@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
 import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
 import { flowKnowledgeDigest } from '../src/flow.js'
 
@@ -363,5 +363,78 @@ test('②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft', () => 
     const g = buildKnowledgeGraph(join(root, '.sillyspec'))
     assert.equal(g.stats.nodeCount, 1) // 仅 INDEX 文档节点
     assert.equal(g.stats.edgeCount, 0)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+// ══ 2026-10-08-graph-summary-nodes（平台仓阶段三依赖契约）：summary 聚合 + nodes 搜索 ══
+
+test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断', () => {
+  const root = buildFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const s = graphSummary(g, { existsFn: () => true })
+    assert.equal(s.nodes, g.stats.nodeCount)
+    assert.equal(s.edges, g.stats.edgeCount)
+    assert.deepEqual(s.byType, g.stats.byNodeType)
+    assert.deepEqual(s.byEdge, g.stats.byEdgeType)
+    // doctor 同源四计数：孤儿/悬空与图函数逐值一致
+    assert.equal(s.orphans, graphOrphans(g).length)
+    assert.equal(s.dangling_refs, graphDangling(g, { existsFn: () => true }).length)
+    // clusters：fr 按 belongs-module 域聚簇，代表 ≤5 且都是真实节点
+    const frCluster = s.clusters.find((c) => c.key === 'fr:core-engine')
+    assert.ok(frCluster, 'fr 簇按域聚合')
+    assert.ok(frCluster.count >= 3)
+    assert.ok(frCluster.representatives.length >= 1 && frCluster.representatives.length <= 5)
+    for (const r of frCluster.representatives) assert.ok(g.nodes.has(r.id))
+    // decision 域=域文件名（core-engine.md → core-engine）
+    const decCluster = s.clusters.find((c) => c.key === 'decision:core-engine')
+    assert.ok(decCluster, 'decision 簇按域文件名聚合')
+    // 簇计数守恒：全部簇 count 之和 = 节点总数
+    assert.equal(s.clusters.reduce((a, c) => a + c.count, 0), s.nodes)
+    // 簇按 count 降序
+    for (let i = 1; i < s.clusters.length; i++) assert.ok(s.clusters[i - 1].count >= s.clusters[i].count)
+    // clustersLimit 截断只影响簇列表，不影响总数与四计数
+    const s2 = graphSummary(g, { existsFn: () => true, clustersLimit: 2 })
+    assert.equal(s2.clusters.length, Math.min(2, s.clusters.length))
+    assert.equal(s2.nodes, s.nodes)
+    assert.equal(s2.orphans, s.orphans)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit 钳/usage 错', async () => {
+  const root = buildFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    // 大小写不敏感：id 与 label 双通道命中
+    const r1 = graphNodesSearch(g, 'FR-CORE-ENGINE-001', 10)
+    assert.ok(r1.count >= 1 && r1.nodes.some((n) => n.id === 'FR-core-engine-001'))
+    const r2 = graphNodesSearch(g, '第一个需求', 10) // label 中文包含
+    assert.ok(r2.nodes.some((n) => n.id === 'FR-core-engine-001'))
+    // limit 钳制：0/负数→1，>50→50
+    assert.equal(graphNodesSearch(g, 'e', 0).nodes.length <= 1, true)
+    // 空串零命中零遍历
+    assert.deepEqual(graphNodesSearch(g, '', 10), { count: 0, nodes: [] })
+
+    const { cmdKnowledgeGraph } = await import('../src/knowledge-graph.js')
+    const cap = []
+    const origLog = console.log
+    console.log = (...a) => cap.push(a.join(' '))
+    try {
+      await cmdKnowledgeGraph(root, ['summary', '--clusters', '3'], {})
+      await cmdKnowledgeGraph(root, ['nodes', '--search', 'core-engine', '--limit', '2'], {})
+      await cmdKnowledgeGraph(root, ['nodes'], {})
+    } finally { console.log = origLog }
+    const j1 = JSON.parse(cap[0])
+    assert.equal(j1.ok, true)
+    assert.equal(j1.stats.nodes, g.stats.nodeCount)
+    assert.ok(j1.stats.clusters.length <= 3)
+    assert.ok(j1.stats.clusters.every((c) => c.representatives.length <= 5))
+    const j2 = JSON.parse(cap[1])
+    assert.equal(j2.ok, true)
+    assert.ok(j2.count >= 1 && j2.count <= 2)
+    assert.ok(j2.nodes.every((n) => (n.id + n.label).toLowerCase().includes('core-engine')))
+    const j3 = JSON.parse(cap[2])
+    assert.equal(j3.ok, false)
+    assert.equal(j3.error.code, 'search_required')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
