@@ -1,6 +1,7 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -26,6 +27,7 @@ input: >-
   - 不做归档态 --refreeze 入口（阻断门从源头消除坏状态；存量坏归档由各仓协议重入处理，后续如需另开变更——设计留档）
 autopilot: true
 baseline_commit: f01702b303e1f84ffef10054b50341465f6cdbfc
-updatedAt: '2026-10-08T01:03:06.095Z'
+updatedAt: '2026-10-08T01:26:43.255Z'
 baseline_sha256: de617a3fea24b44abd92726f2048e2e0a41731f6789072fa0775ba3942141f36
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
 

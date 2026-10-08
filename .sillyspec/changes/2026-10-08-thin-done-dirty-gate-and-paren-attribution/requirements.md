@@ -56,6 +56,16 @@ created_at: 2026-10-08T01:03:04.661Z
 - When：审视交付面
 - Then：无归档态重冻结代码；坑记录与 decisions 留档指向后续可选变更
 
+### FR-06: 动态测试推断不把套件编排器（run-tests.mjs）收进执行面——FR 绑定指向它时转 loud skip
+
+- buildDepsBatches **必须**把 `run-tests.mjs`（npm test 组卷入口）剔出 deps 执行面并转 skip 批（理由 loud 披露）：内嵌执行=递归全量套件（嵌套 runner 污染 + 15-20 分钟窗口，实测 not ok 假败阻断收口）；普通 .mjs 测试照跑、优先面配额不受挤占。
+
+#### 场景：FR 绑定指向套件入口
+
+- Given：FR 关联回归把 test/run-tests.mjs 收进 deps（绑定钦定优先面）
+- When：buildDepsBatches 组卷
+- Then：执行命令不含 run-tests.mjs；skip 批点名理由；普通测试照常执行
+
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/commit-attribution-split.test.mjs「全角/混合/thin 前缀/附注形态解析（增量断言）」
@@ -65,3 +75,4 @@ FR-03: test/thin-done-dirty-gate.test.mjs「阻断→提交（全角括号）→
 FR-04: test/flow-protocol.test.mjs「⑥b wip-dirty 按新门语义：首次阻断 + --accept-dirty-gap 完成（断言更新）」
 FR-04: test/run-tests.mjs「全量套件跑绿」
 FR-05: 不适用：设计留档条目（无代码无测试面）——裁决与理由见 design 风险节
+FR-06: test/thin-done-dirty-gate.test.mjs「run-tests.mjs（套件编排器）剔出执行面转 loud skip」

@@ -56,3 +56,4 @@ created_at: 2026-10-08T01:03:04.661Z
 | 新增 | test/thin-done-dirty-gate.test.mjs | drift 全角单测 + 门三态 e2e + 阻断→提交→重跑 e2e |
 | 修改 | test/commit-attribution-split.test.mjs | 解析形态增量断言（全角/混合/thin 前缀/附注） |
 | 修改 | test/flow-protocol.test.mjs | ⑥b wip-dirty 按新门语义（首次阻断 + --accept-dirty-gap 完成），冻结面断言保留 |
+| 修改 | src/verify-postcheck.js | buildDepsBatches 套件编排器过滤（run-tests.mjs 剔出执行面转 loud skip 批；既有底部导出供直测）——收口实测门自埋雷排除：FR 绑定指向套件入口时递归全量假败 |

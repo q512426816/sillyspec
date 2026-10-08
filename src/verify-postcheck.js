@@ -2773,8 +2773,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const prio = (f) => (changedSet.has(norm(f)) || prioritySet.has(norm(f))) ? 0 : 1 // 变更/FR 回归测试文件优先
   const py = deps.filter(f => f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
   const js = deps.filter(f => !f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
+  // 套件编排器过滤（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑：FR 绑定把
+  // run-tests.mjs 收进 deps 批 → 内嵌执行=递归全量套件——嵌套 runner 污染 + 15-20 分钟窗口，
+  // 实测 not ok 假败阻断收口）。run-tests.mjs 是 npm test 的组卷入口不是单测文件：执行面剔除
+  // 并 loud 披露；全量门由收口实测与 CI 层的 npm test 承担（本就覆盖该文件的全部语义）。
+  const SUITE_META_RE = /(^|\/)run-tests\.mjs$/
+  const jsMeta = js.filter(f => SUITE_META_RE.test(norm(f)))
+  const jsList = js.filter(f => !SUITE_META_RE.test(norm(f)))
   const CAP = 30
-  const pyCap = py.length === 0 ? 0 : js.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + js.length))))
+  const pyCap = py.length === 0 ? 0 : jsList.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + jsList.length))))
   const jsCap = CAP - pyCap
   // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
   // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
@@ -2785,7 +2792,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
   }
   const pyQ = quotaFill(py, pyCap)
-  const jsQ = quotaFill(js, jsCap)
+  const jsQ = quotaFill(jsList, jsCap)
   const pyRun = pyQ.run
   const jsRun = jsQ.run
   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
@@ -2855,7 +2862,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: js.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsList.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+  if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
   if (jsProjectRun.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)

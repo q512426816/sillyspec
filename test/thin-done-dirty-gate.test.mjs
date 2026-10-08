@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { detectPatchDrift } from '../src/flow-parity.js'
+import { buildDepsBatches } from '../src/verify-postcheck.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
@@ -96,6 +97,26 @@ test('FR-01 detectPatchDrift：全角括号交付提交判 drifted（旧正则�
   run(['add', '.']); run(['commit', '-q', '-m', 'fix: 他侧（2026-10-08-other-x）'])
   r = detectPatchDrift({ cwd: d, change: '2026-10-08-other-y', freezeHead })
   assert.equal(r.drifted, false, '他变更名不触发本变更漂移')
+})
+
+// ───────────────────────── FR-06：套件编排器不进 deps 批 ─────────────────────────
+
+test('FR-06 buildDepsBatches：run-tests.mjs（套件编排器）剔出执行面转 loud skip——FR 绑定收进来也不递归全量', () => {
+  const batches = buildDepsBatches({
+    deps: ['test/run-tests.mjs', 'test/a-plain.test.mjs', 'test/b-plain.test.mjs'],
+    changedFiles: [],
+    hits: [],
+    cwd: null,
+    priorityFiles: ['test/run-tests.mjs'], // FR 绑定钦定优先面（坑形态：绑定指向套件入口）
+  })
+  const jsBatch = batches.find((b) => b.name === 'deps(auto-js)')
+  const skipBatch = batches.find((b) => b.name === 'deps(auto-js-meta-skip)')
+  assert.ok(jsBatch, '普通 js 批在场')
+  assert.ok(!jsBatch.command.includes('run-tests.mjs'), '执行命令不含套件编排器')
+  assert.ok(jsBatch.command.includes('test/a-plain.test.mjs'), '普通测试照跑')
+  assert.ok(skipBatch && skipBatch.skip === true, '套件编排器转 skip 批')
+  assert.deepEqual(skipBatch.files, ['test/run-tests.mjs'])
+  assert.ok(skipBatch.reason.includes('递归全量'), 'skip 理由 loud 披露')
 })
 
 // ───────────────────────── FR-02/03：门三态 e2e ─────────────────────────
