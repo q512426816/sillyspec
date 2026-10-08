@@ -368,3 +368,42 @@ supersedes：D-001@v1
 理由：扩翻新面：两测试文件补翻新（夹具 map 补 span_risk 段走真实装载路径——比注入更端到端），design 文件清单/任务卡 allowed_paths/tasks.md 同步扩面；阈值措辞全文修正为「阈值 8/3/2 三常量」（约束实质=三常量零改动，已满足且继续满足）。非破坏性：可逆、局部、不改 D-001~D-004 语义、不越变更边界（两文件属本变更行为契约的直接连带测试，FR-03 同类翻新义务）。
 故障面：夹具补段后夹具 map 与真实 map 演进脱节（token 变更夹具不跟）——夹具只钉本变更语义所需最小 token 集（auth 族），真实口径以仓 map 为准。
 退役判据：无（连带翻新属一次性收口）。
+
+## D-001@v1 收口范围=方案B（读面闭环+遍历召回接线）
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：未记录
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：用户选方案B：读面闭环（本体表 + knowledge-graph.js 派生图 + knowledge graph 子命令 + doctor 图完整性检查）+ matchKnowledgeHybrid 新增 scope 遍历召回层与防复潮保底；平台侧 graph-search 端点与 stats 图维度指标不在本变更范围
+
+## D-002@v1 本体三档强度与逐边传递规则，遍历召回只走强边
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：未记录
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：三档分强/中/弱：强边（anchors/supersedes/from-change/belongs-module/module-dep/module-files/deliverables/change-modules/test-binding/describes/changelog-of/changelog-entry）可进 impact 闭包与召回传播；中边（doc-refs/scan-refs，随代码漂移的正文引用）仅查询展示；弱边（route/entry-link 预留）仅展示与自检。可传递边仅 supersedes（版本链）与 module-dep（依赖闭包）
+故障面：强弱分档错误导致召回漏（错标弱）或洪水（错标强）；分档表为 design.md 本体节定稿契约
+退役判据：实测遍历召回命中率持续低于本地词片回退层时重审分档
+
+## D-003@v1 与 project-map 墓碑切割——无导航文档/无刷新机制/内存派生
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：未记录
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：不新增任何人读导航文档；不新增任何刷新/缓存机制；图=buildKnowledgeGraph() 解析时内存派生随建随用；md/yaml 真相源一字不动。产出只有机器查询面与自检面
+
+## D-004@v1 查询入口键=机器算，agent 不以自由文本为图查询键
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：未记录
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：入口三键全部机器算：①变更执行期 scope 文件集（resolveVerifyChangedFiles 既有函数，CLI 算事实）；②需求期承接引用（brainstorm Step8 注入清单）∪ 声明模块域反查（belongs-module）∪ 词面三层兜底（既有）；③手动 CLI 锚点（文件/模块/变更名）。词面是弱入口（既有三层在管），结构键（diff/承接/模块域）是强入口（本变更新增）
+故障面：scope 集计算失败/为空时整层静默跳过（降级即现状），不抛错阻断调用方
+退役判据：若实测 scope 遍历召回命中与词面三层高度重合（增量趋零），重审第四层存续
+
+## D-005@v1 deliverables 双源=design.md 交付表 ∪ change-patch.json files
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：src/fr-index.js:frCoverageFiles
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：双源并集（fr-index frCoverageFiles 同款）：厚道主源 design.md 交付清单表（剥反引号/NEW: 前缀），thin 主源 change-patch.json 的 files；统一剔 .sillyspec/ 前缀、POSIX 归一。change-modules 边由 deliverables ∩ 模块 paths 前缀匹配派生（最长前缀优先）

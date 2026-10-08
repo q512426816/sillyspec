@@ -2210,3 +2210,79 @@
   confirmed_at: null
   source_change: 2026-10-08-knowledge-stats-fr-only
   status: active
+
+## FR-core-engine-139 图引擎按本体契约解析九面知识为内存派生图
+变更：2026-10-08-knowledge-graph
+状态：active
+摘要：全形态解析；坏行容忍
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-graph/requirements.md#FR-01
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-graph:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-graph
+  status: active
+
+## FR-core-engine-140 knowledge graph 查询面五子命令（文本与 --json 双出口）
+变更：2026-10-08-knowledge-graph
+状态：active
+摘要：impact 强边闭包；边型筛选
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-graph/requirements.md#FR-02
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-graph:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「④CLI 分发：knowledge graph 子命令 --json/--edges 热测」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-graph
+  status: active
+
+## FR-core-engine-141 doctor 六项图完整性检查（全 warning 不阻断）
+变更：2026-10-08-knowledge-graph
+状态：active
+摘要：断链命中；干净面零告警
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-graph/requirements.md#FR-03
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-graph:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「⑤doctor 六检查：断链命中与干净面零告警」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-graph
+  status: active
+
+## FR-core-engine-142 matchKnowledgeHybrid 新增 scope 遍历召回层（防复潮保底）
+变更：2026-10-08-knowledge-graph
+状态：active
+摘要：无 scope 与现状逐字节等价；保底命中；封顶
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-graph/requirements.md#FR-04
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-knowledge-graph:flow:测试绑定FR-04
+  tests: test/knowledge-graph.test.mjs「⑦消费方透传：flow touched 传递与 complete 锚点提取」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-knowledge-graph
+  status: active

@@ -3,11 +3,17 @@ legacy_fallback: false
 substeps:
   artifacts: done
   ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 adopted_from: brainstorm
 review_force: null
 baseline_commit: 60f0d6680abe450efb7bf162915d8dcd5fa69f05
-updatedAt: '2026-10-08T08:00:02.177Z'
+updatedAt: '2026-10-08T08:06:57.749Z'
 baseline_sha256: a3c0c55346e8c52267f2c6256d15a5afe11a580437588f3e6dec7855feec3405
 spec_approved: true
 spec_approved_at: '2026-10-08T07:56:54.629Z'

@@ -1,0 +1,82 @@
+{
+  "change": "2026-10-08-knowledge-graph",
+  "baseline": "60f0d6680abe450efb7bf162915d8dcd5fa69f05",
+  "head": "a677be8ad7b448ce17fa8eecea3d6112b0cdfd69",
+  "files": [
+    ".sillyspec/changes/2026-10-08-knowledge-graph/decisions.md",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/design.md",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/flow-state.yaml",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/proposal.md",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/prototype-data-gen.cjs",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/prototype-data.js",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/prototype-knowledge-graph.html",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/requirements.md",
+    ".sillyspec/changes/2026-10-08-knowledge-graph/tasks.md",
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "package.json",
+    "src/doctor-diagnostics.js",
+    "src/flow.js",
+    "src/knowledge-graph.js",
+    "src/knowledge-match.js",
+    "src/knowledge-vector.js",
+    "src/run/complete.js",
+    "src/stages/knowledge.js",
+    "test/decision-route-vocab.test.mjs",
+    "test/knowledge-graph.test.mjs"
+  ],
+  "totals": {
+    "files": 20,
+    "additions": 2424,
+    "deletions": 14
+  },
+  "savedAt": "2026-10-08T08:00:53.171Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "patchSha256": "9ab281c02a20e25960ba75d70d9abc76c31264aa9e5c416dc54e88b7b27f709a",
+  "patchStatus": "ok"
+}

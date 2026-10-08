@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-knowledge-graph",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「①解析全形态：节点边数与本体落位（含同号跨变更不折叠/不落盘）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「③查询面：impact 强边闭包深度与不可达判定 + 边型筛选」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「④CLI 分发：knowledge graph 子命令 --json/--edges 热测」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑤doctor 六检查：断链命中与干净面零告警」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑥召回接线：层序四层 + 无 scope 逐字节等价 + 保底命中 + 20/3 封顶」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-knowledge-graph:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑦消费方透传：flow touched 传递与 complete 锚点提取」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-graph"
+    }
+  ]
+}

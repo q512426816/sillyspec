@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-knowledge-graph",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a677be8ad7b448ce17fa8eecea3d6112b0cdfd69",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "impact 传递例外只追一跳，长链 supersedes/module-dep 不完整传播",
+      "evidence": "graphImpact 对闭包快照 [...closure] 上的传递边只扩展一跳（新入节点不再扩展），代码注释自认「再沿一跳」；FR-02/design 措辞为「传递例外」未限定一跳——链深>1 时闭包欠报，方向保守（不会多报），无数据正确性风险",
+      "location": "src/knowledge-graph.js:419-428"
+    },
+    {
+      "severity": "P3",
+      "title": "flow 注入段 touched 语义为 either/or，FR-04 措辞为「filesOverride ∪ design 交付表」",
+      "evidence": "filesOverride 在场时 touched 仅取 filesOverride、不再并入 design 交付表文件（flow.js 238-246 既有 if/else 变量原样复用）；design 自称「既有变量」故为措辞-实现差，漏报方向保守",
+      "location": "src/flow.js:238-246"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04「封顶」场景的 20 截断无超限 fixture 直接断言",
+      "evidence": "test ⑥ 断言 entries≤3 与 rejected 排前，但无可达条目>20 的 fixture 验证 decisionHits 截断为 20；20 封顶仅有代码面事实（knowledge-graph.js:521 rejectedFirst.length>20 截断）支撑，绑定作答的断言覆盖略超实际",
+      "location": "test/knowledge-graph.test.mjs:268-277"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "boundaryRulings": [
+    {
+      "boundary": "prompt.js 零改动（design 文件清单执行期裁定：渲染点在 brainstorm Step2，decisions.md 未形成，无结构键可传）",
+      "ruling": "可接受",
+      "reason": "git log 60f0d668..HEAD 确认 src/run/prompt.js 零提交；时点论证成立且与 D-004（不以自由文本为图键）一致"
+    },
+    {
+      "boundary": "decision-route-vocab 钉子词面替换：「拆分」→「误拆」（INDEX 新路由词碰撞漂移）",
+      "ruling": "可接受",
+      "reason": "注释留痕漂移来源（test/decision-route-vocab.test.mjs:83-86），测试意图（回退层带出教训条目）保留，实测 3/3 通过"
+    },
+    {
+      "boundary": "图构建每次全量、无缓存文件、无刷新机制（D-003 与 project-map 墓碑切割）",
+      "ruling": "可接受",
+      "reason": "buildKnowledgeGraph 纯函数每次重建，fs import 仅 existsSync/readFileSync/readdirSync，测试①断言构建前后文件集逐字节不变"
+    },
+    {
+      "boundary": "doctor 悬空跨仓目标聚合计数（计入不豁免、样本封顶不逐条展开，doctor-diagnostics.js:2177/2197）",
+      "ruling": "可接受",
+      "reason": "warning 级 advisory 不改退出码；跨仓目标存在性本仓不可判定，聚合计数+样本≤3 是诚实且防刷屏的口径"
+    },
+    {
+      "boundary": "CLI 注册落点为 src/stages/knowledge.js 而非 design 初稿 index.js（design 已自声明对齐）",
+      "ruling": "可接受",
+      "reason": "懒加载 tryImportSubcommandImpl 与 classify 同款（stages/knowledge.js:612-617），测试④ CLI 热测通过"
+    },
+    {
+      "boundary": "测试文件扩展名 .test.mjs（design 初稿误写 .js，已声明修正）",
+      "ruling": "可接受",
+      "reason": "符合 test/ 目录既有约定，package.json test:core 已按 .test.mjs 登记"
+    },
+    {
+      "boundary": "entry-link 边型预留契约位不采集（本体表「本变更不启用写入」）",
+      "ruling": "可接受",
+      "reason": "EDGE_STRENGTH 占位弱档无采集器，测试③按 16 边型/12-2-2 分档钉子核对一致"
+    },
+    {
+      "boundary": "scopeRecall 的 supersedes 只追一跳（design §5 明文「+supersedes 一跳」）",
+      "ruling": "可接受",
+      "reason": "实现与声明逐字一致（knowledge-graph.js:501-507），非未声明偏差"
+    }
+  ],
+  "reviewedAt": "2026-10-08T08:06:09Z"
+}

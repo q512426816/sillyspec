@@ -4421,13 +4421,15 @@ superseded_by：FR-cli-entry-198
 
 ## FR-cli-entry-234 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/kn
 变更：2026-09-29-knowledge-vector-recall
-状态：active
+状态：superseded
+superseded_by：FR-core-engine-142
+取代链：FR-cli-entry-234 ← FR-core-engine-142（2026-10-08-knowledge-graph 承接）
 骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-knowledge-vector-recall/requirements.md#FR-06
-最近确认：bc68334cae0cfbf1adada8f8b25e62f83b9e57f3
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
 
 测试绑定：
 <!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
@@ -4439,7 +4441,7 @@ superseded_by：FR-cli-entry-198
   confirmed_by: null
   confirmed_at: null
   source_change: 2026-09-29-knowledge-vector-recall
-  status: active
+  status: superseded
 
 ## FR-cli-entry-235 既有同步 matchKnowledge 行为零变化（其他调用方不动）
 变更：2026-09-29-knowledge-vector-recall

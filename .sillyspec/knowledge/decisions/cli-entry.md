@@ -83,3 +83,10 @@
 supersedes：D-010@v1
 故障面：同 v1（未配置用户走厚档=intentional）。
 退役判据：薄道转正时再翻回。
+
+## D-001@v1 收口范围=方案B（读面闭环+遍历召回接线）
+状态：implemented
+变更：2026-10-08-knowledge-graph
+锚点：未记录
+最近确认：a677be8ad7b448ce17fa8eecea3d6112b0cdfd69
+理由：用户选方案B：读面闭环（本体表 + knowledge-graph.js 派生图 + knowledge graph 子命令 + doctor 图完整性检查）+ matchKnowledgeHybrid 新增 scope 遍历召回层与防复潮保底；平台侧 graph-search 端点与 stats 图维度指标不在本变更范围

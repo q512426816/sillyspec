@@ -1,0 +1,117 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "60f0d6680abe450efb7bf162915d8dcd5fa69f05",
+  "totals": {
+    "files": 12,
+    "additions": 1128,
+    "deletions": 14
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 68,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow.js",
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-graph.js",
+      "additions": 646,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-match.js",
+      "additions": 5,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-vector.js",
+      "additions": 17,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 4,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/knowledge.js",
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/decision-route-vocab.test.mjs",
+      "additions": 6,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/knowledge-graph.test.mjs",
+      "additions": 367,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "9ab281c02a20e25960ba75d70d9abc76c31264aa9e5c416dc54e88b7b27f709a",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T08:00:53.171Z"
+}
