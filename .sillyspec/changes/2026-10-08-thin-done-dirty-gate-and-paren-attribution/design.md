@@ -6,7 +6,7 @@ created_at: 2026-10-08T01:03:04.661Z
 
 ## 做法概述
 
-本变更怎么解决问题？改哪里、为什么选这个方案（一两段）？
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
 
 两个坑同一收尾链（记录：multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）。坑二（归属只认半角括号）在单一真相源修：`parseChangeNamesFromSubject`（foreign-declared.js）正则改双括号收——`[（(]…[)）]` 开闭各自半/全角任意组合，括号内允许 `thin ` 前缀与名字后附注（`（thin <名>；quick）` 实测形态），变更名本体模式不放宽；buildCommitAttribution / detectPatchDrift / filterCommittedFace / splitOwnVsForeignDiffFiles 全部经此单点自动受益，零各自实现。
 
