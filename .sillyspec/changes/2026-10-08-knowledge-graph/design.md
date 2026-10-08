@@ -95,15 +95,18 @@ scale: small
 
 | 操作 | 文件路径 | 说明 |
 |---|---|---|
-| 新增 | NEW:src/knowledge-graph.js | 图引擎：buildKnowledgeGraph + 查询 API（本体表实现） |
-| 修改 | src/index.js | 注册 knowledge graph 子命令（文本/--json 双出口，--edges 筛选） |
+| 新增 | NEW:src/knowledge-graph.js | 图引擎：buildKnowledgeGraph + 查询 API（本体表实现）+ scope 召回 + CLI 入口 |
+| 修改 | src/stages/knowledge.js | 注册 graph 子命令（cmdKnowledge switch 懒加载——classify 同款；执行期落点修正：非 design 初稿所写 index.js） |
 | 修改 | src/knowledge-vector.js | matchKnowledgeHybrid 增 opts.scopeFiles 参数与第三层遍历召回。数据流：producer=变更面调用方（flow.js 注入段 / run/complete.js knowledge-gate）传 scope 文件集 → hybrid 参数 → knowledge-graph.js 遍历 → consumer=decisionHits/entries（matchKnowledge 同构四键，封顶沿既有 20/3） |
-| 修改 | src/knowledge-match.js | 遍历召回结果构造器（复用 frTitleOverlap 排序与 rejected 优先序）；同步入口 matchKnowledge 行为零变化 |
-| 修改 | src/doctor-diagnostics.js | 六项图完整性检查（见总体方案 §4） |
-| 修改 | src/flow.js | 注入段调用 hybrid 时传 scope 集（变更 touched files 既有口径） |
-| 修改 | src/run/complete.js | knowledge-gate 防复潮保底：scope 可达 rejected/死路保底进场 |
+| 修改 | src/knowledge-match.js | DECISION_FIELD_RE 增收 supersedes 字段（supersedesText）+ anchorFilePaths 导出（anchors 边采集复用）；同步入口 matchKnowledge 行为零变化 |
+| 修改 | src/doctor-diagnostics.js | knowledge_graph_integrity 维度：六项图完整性检查（见总体方案 §4） |
+| 修改 | src/flow.js | 注入段调用 hybrid 时传 scope 集（touched=filesOverride ∪ design 交付表既有变量） |
+| 修改 | src/run/complete.js | knowledge-gate 防复潮保底：decisions.md「锚点：」提取 scope（scopeFromDecisionsMd）传入 hybrid |
 | 修改 | src/run/prompt.js | ~~{DECISION_HITS} 消费点透传 scope~~ **执行期裁定：零改动**——该渲染点在 brainstorm Step2（tasks.md 尚未生成、decisions.md 未形成，src/run/prompt.js:1390 注释可证），时点上无结构键可传；维持既有词面行为（D-004 纪律反推：不以自由文本为图键） |
-| 新增 | NEW:test/knowledge-graph.test.js | 本体解析（每类节点/边 fixture）/遍历查询/召回接线层序/无 scope 退化路径与现状等价回归/doctor 新检查项 |
+| 新增 | NEW:test/knowledge-graph.test.mjs | 七组用例（①解析②坏行③查询+本体钉子④CLI⑤doctor⑥接线⑦消费方）；执行期修正：扩展名按 test/ 目录 .test.mjs 既有约定（design 初稿误写 .js） |
+| 修改 | test/decision-route-vocab.test.mjs | 预存红修复：钉子测试词面与 2026-10-08-knowledge-inbox-triage 归档后的 INDEX 新路由词（「拆分」）碰撞——查询二改用「误拆」保留回退层测试意图，注释留痕漂移来源 |
+| 修改 | package.json | test:core 显式清单登记 test/knowledge-graph.test.mjs |
+| 修改 | .sillyspec/docs/sillyspec/modules/_module-map.yaml | core-engine 模块 paths 补录 src/knowledge-graph.js（lint 模块归属盲区门） |
 
 ## 接口定义
 

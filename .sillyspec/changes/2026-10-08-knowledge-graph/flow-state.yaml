@@ -1,0 +1,21 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+born_face: thin
+adopted_from: brainstorm
+review_force: null
+baseline_commit: 60f0d6680abe450efb7bf162915d8dcd5fa69f05
+updatedAt: '2026-10-08T08:00:02.177Z'
+baseline_sha256: a3c0c55346e8c52267f2c6256d15a5afe11a580437588f3e6dec7855feec3405
+spec_approved: true
+spec_approved_at: '2026-10-08T07:56:54.629Z'
+spec_approved_by: zcode-knowledge-graph
+allow_batch_tick: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js96+js-meta-skip1)+fr(95)（48.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008075926\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（35.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008075926\test-result.json｜门文件 13 个
+
