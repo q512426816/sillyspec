@@ -578,7 +578,7 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
 }
 
 /** 全图粗分组（原型 prototype-data-gen.cjs comm() 逐行移植——2026-10-09-knowledge-graph-fullmap Grill F-01 钉死口径：
- *  decision/fr 按域、module/doc 单组、file 按顶级目录、change、ql、其余"其他"；真图 ≈10-15 星系即原型视觉。
+ *  decision/fr 按域、module/doc 单组、file 按顶级目录、change、ql、其余"其他"；星系数=comm() 实际分组数（真图实测 150-175，原型视觉即如此）。
  *  禁用 summary 细簇（883 簇会把主环撑到 ~8900px 退化均匀散点）。 */
 function graphCommunity(n) {
   if (n.type === 'decision') return '决策域/' + (n.attrs.domain || '_unmapped')

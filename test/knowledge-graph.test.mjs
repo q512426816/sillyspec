@@ -498,7 +498,7 @@ test('⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相
 
 // ══ 2026-10-09-graph-dump-layout（平台仓 fullmap 跨仓前置）：dump --layout ══
 
-test('⑩dump --layout：形状/确定性/layout 必带/粗分组视觉', async () => {
+test('⑪dump --layout：形状/确定性/layout 必带/粗分组视觉', async () => {
   const root = buildFixture()
   try {
     const g = buildKnowledgeGraph(join(root, '.sillyspec'))
@@ -513,7 +513,7 @@ test('⑩dump --layout：形状/确定性/layout 必带/粗分组视觉', async 
     // 粗分组口径：module 全落「模块」单组、file 按顶级目录
     const names = groups.map(([k]) => k)
     assert.ok(names.includes('模块'))
-    assert.ok(names.some((k) => k.startsWith('文件/')) || !g.nodes.size || true)
+    assert.ok(names.some((k) => k.startsWith('文件/')))
     // 同簇抽样距离 < 跨簇抽样距离（星系视觉）
     const ids = [...pos.keys()]
     const sameCluster = [...g.nodes.values()].filter((n) => n.type === 'fr')
