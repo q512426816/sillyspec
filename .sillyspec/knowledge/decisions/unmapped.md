@@ -2005,3 +2005,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a2f725df2eb9b67e6dd7a6e095f0cba9e2bc9e4a
 理由：最大风险：clusters 数量随域增长（真图 883 簇）撑爆平台 lite 画布——已由 `--clusters N` 截断旗标化解（消费方按需取 top-N，簇计数守恒不变）。放弃的方案：①CLI 侧默认截断 50——否，默认值是平台 UI 偏好不是引擎语义，全量才是可审计口径；②summary 落盘缓存——否，违反 D-003 图不落盘铁律且引入失效问题；③doctor 内调 summary 复用——已如此（同源口径互引，不复制实现）。死路提示：不要为「跨仓锚点单列计数」去解析 local.yaml 外仓（探测面无界，历史否决同型）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-08-graph-summary-consistency
+锚点：未记录
+最近确认：78cb671e6f0c7a5f0027bcabf27d41ab46b1205b
+理由：最大风险：⑩交叉断言解析 doctor finding 文本计数——doctor 输出格式（「graph-module-doc-gap：N 个」）成为测试契约面，未来改 finding 文案需同步改测试正则。接受：该格式本就是平台时间线展示面，钉住它等于钉住消费契约；格式漂移测试红属正确报警。放弃的方案：doctor 直接消费 graphSummary 拿计数——弃，doctor 需要 finding 样本明细（样本列表进 warning 文本），纯计数接口喂不饱；维持两函数但加注释声明对齐义务——弃，注释不是牙齿（本变更要修的正是注释与实现脱节的先例）。

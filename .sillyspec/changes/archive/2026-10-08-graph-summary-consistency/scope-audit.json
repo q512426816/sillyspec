@@ -1,0 +1,45 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "0c640c25f144e81f29e1558c8a3747c23749cb3d",
+  "totals": {
+    "files": 3,
+    "additions": 100,
+    "deletions": 27
+  },
+  "rows": [
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 6,
+      "deletions": 11,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-graph.js",
+      "additions": 35,
+      "deletions": 14,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/knowledge-graph.test.mjs",
+      "additions": 59,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "03346bb3eac00cf1ae2713c9bd969531848de63d5b4350f0e280a36d120b3813",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T16:17:40.914Z"
+}

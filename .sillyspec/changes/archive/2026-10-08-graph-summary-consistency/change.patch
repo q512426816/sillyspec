@@ -1,0 +1,352 @@
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index b2b0b2fa..abd81491 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -2205,19 +2205,14 @@ export function detectKnowledgeGraphIntegrity(cwd, specDir) {
+     const orphans = graphOrphans(graph)
+     if (orphans.length > 0) findings.push(`graph-orphan-entry：${orphans.length} 个零关联节点（样本 ${sample(orphans.map((o) => o.node.label)).join('、')}）`)
+ 
+-    // ⑤ 模块文档缺口：map 模块无 describes 或 changelog-of 入边
+-    const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
+-    const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
+-    const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
+-    const docGap = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id))
++    // ⑤ 模块文档缺口 / ⑥ changelog 行悬空：单一源判定（2026-10-08-graph-summary-consistency）
++    // ——graphModuleDocGaps/graphChangelogDanglings 只在 knowledge-graph.js 定义，summary 四计数
++    // 消费同一函数（口径一处定义两处消费，doctor↔summary 交叉断言钉死，防手抄副本漂移）
++    const { graphModuleDocGaps, graphChangelogDanglings } = requireKnowledgeGraph()
++    const docGap = graphModuleDocGaps(graph)
+     if (docGap.length > 0) findings.push(`graph-module-doc-gap：${docGap.length} 个模块缺卡片或 changelog（样本 ${sample(docGap.map((n) => n.id.replace(/^module:/, ''))).join('、')}）`)
+ 
+-    // ⑥ changelog 行悬空：日期名目标变更既不在 archive/ 也不在活跃 changes/（ql 目标豁免——
+-    //    quicklog 条目无目录形态，其家在 QUICKLOG md 文件）
+-    const chlogTargets = new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))
+-    const chlogDangling = [...chlogTargets].filter((id) =>
+-      /^\d{4}-\d{2}-\d{2}-/.test(id) &&
+-      !existsSync(join(specDir, 'changes', 'archive', id)) && !existsSync(join(specDir, 'changes', id)))
++    const chlogDangling = graphChangelogDanglings(graph)
+     if (chlogDangling.length > 0) findings.push(`graph-changelog-dangling：${chlogDangling.length} 条 changelog 行指向不存在变更/ql（样本 ${sample(chlogDangling).join('、')}）`)
+ 
+     if (findings.length === 0) {
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 18ff22c1..523042b6 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -477,8 +477,29 @@ export function graphDangling(graph, { existsFn = existsSync } = {}) {
+ }
+ 
+ // ═══ 2026-10-08-graph-summary-nodes：summary 聚合 + nodes 搜索（平台仓阶段三依赖契约）═══
+-// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面；
+-// summary 四计数与 doctor knowledge_graph_integrity 六检查同源同值（口径一处定义两处消费）。
++// 平台侧（multi-agent-platform 2026-10-08-platform-knowledge-graph）经 daemon RPC 直采本面。
++// doctor 同源三判定（2026-10-08-graph-summary-consistency 收敛为真单一源）：graphModuleDocGaps /
++// graphChangelogDanglings / graphOrphans+graphDangling 的判定逻辑只在 knowledge-graph.js 定义，
++// doctor 六检查与 summary 四计数消费同一函数——「口径一处定义两处消费」由测试交叉断言钉死。
++
++/** 模块文档缺口判定（doctor graph-module-doc-gap 单一源）：map 模块缺 describes 或 changelog-of 入边。 */
++export function graphModuleDocGaps(graph) {
++  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
++  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
++  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
++  return mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id))
++}
++
++/** changelog 行悬空判定（doctor graph-changelog-dangling 单一源）：日期名目标不在 archive/ 也不在
++ *  活跃 changes/（ql 目标豁免——quicklog 条目无目录形态，其家在 QUICKLOG md 文件）。 */
++export function graphChangelogDanglings(graph, { existsFn = existsSync } = {}) {
++  const specRoot = String(graph.root || '')
++  const out = []
++  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
++    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) out.push(id)
++  }
++  return out
++}
+ 
+ /** 节点 → 簇域（lite 总览聚类键 type×domain；缺省占位防散簇）。 */
+ function graphNodeDomain(graph, n) {
+@@ -509,18 +530,16 @@ function graphNodeDomain(graph, n) {
+  *  clustersLimit>0 时仅返回 count 前 N 簇（真图 800+ 簇，平台 lite 画布摆不下——消费方按需截断）。 */
+ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 } = {}) {
+   const orphans = graphOrphans(graph).length
+-  const danglingRefs = graphDangling(graph, { existsFn }).length
+-  // module_doc_gaps（doctor graph-module-doc-gap 同源）：map 模块缺 describes 或 changelog-of 入边
+-  const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
+-  const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
+-  const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
+-  const moduleDocGaps = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id)).length
+-  // changelog_danglings（doctor graph-changelog-dangling 同源）：日期名目标不在 archive/ 也不在活跃 changes/
+-  const specRoot = String(graph.root || '')
+-  let changelogDanglings = 0
+-  for (const id of new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))) {
+-    if (/^\d{4}-\d{2}-\d{2}-/.test(id) && !existsFn(join(specRoot, 'changes', 'archive', id)) && !existsFn(join(specRoot, 'changes', id))) changelogDanglings++
+-  }
++  const dangling = graphDangling(graph, { existsFn })
++  const danglingRefs = dangling.length
++  // 分强度计数（附加字段——dangling_refs 是两类之和，消费方对账 doctor 时按 breakdown 拆）
++  const danglingBreakdown = dangling.reduce((a, d) => {
++    if (EDGE_STRENGTH[d.edge.type] === 'strong') a.strong_anchors++
++    else if (EDGE_STRENGTH[d.edge.type] === 'medium') a.medium_doc_refs++
++    return a
++  }, { strong_anchors: 0, medium_doc_refs: 0 })
++  const moduleDocGaps = graphModuleDocGaps(graph).length
++  const changelogDanglings = graphChangelogDanglings(graph, { existsFn }).length
+   // clusters：type×domain 聚簇，representatives 度数 top-5（同度按 id 字典序稳序）
+   const deg = new Map()
+   for (const e of graph.edges) {
+@@ -552,6 +571,8 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
+     module_doc_gaps: moduleDocGaps,
+     changelog_danglings: changelogDanglings,
+     dangling_refs: danglingRefs,
++    // dangling_refs 构成（附加字段，向后兼容）：doctor graph-dangling-anchor（强）+ graph-doc-dangling-ref（中）之和
++    dangling_refs_breakdown: danglingBreakdown,
+     clusters,
+   }
+ }
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index de4151b8..a0cf273f 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
++import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+ import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
+ import { flowKnowledgeDigest } from '../src/flow.js'
+ 
+@@ -377,9 +377,30 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/
+     assert.equal(s.edges, g.stats.edgeCount)
+     assert.deepEqual(s.byType, g.stats.byNodeType)
+     assert.deepEqual(s.byEdge, g.stats.byEdgeType)
+-    // doctor 同源四计数：孤儿/悬空与图函数逐值一致
++    // doctor 同源四计数：孤儿/悬空与图函数逐值一致（helper 单一源消费面）
+     assert.equal(s.orphans, graphOrphans(g).length)
+     assert.equal(s.dangling_refs, graphDangling(g, { existsFn: () => true }).length)
++    // module_doc_gaps/changelog_danglings：helper 单一源 + 双 existsFn 态（2026-10-08-graph-summary-consistency）
++    assert.equal(s.module_doc_gaps, graphModuleDocGaps(g).length)
++    assert.deepEqual(graphChangelogDanglings(g, { existsFn: () => true }), [])
++    const sFalse = graphSummary(g, { existsFn: () => false })
++    // fixture changelog 目标：alpha（archive 在）+ beta（archive 在）+ ql（豁免）→ 全假存在性下日期名悬空=2
++    assert.equal(sFalse.changelog_danglings, graphChangelogDanglings(g, { existsFn: () => false }).length)
++    assert.equal(sFalse.changelog_danglings, 2)
++    // breakdown 与总数守恒：dangling_refs = strong_anchors + medium_doc_refs（doctor 两类之和口径）
++    assert.equal(sFalse.dangling_refs, sFalse.dangling_refs_breakdown.strong_anchors + sFalse.dangling_refs_breakdown.medium_doc_refs)
++    assert.ok(sFalse.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
++    // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
++    const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
++    try {
++      mkdirSync(join(gapRoot, '.sillyspec/knowledge'), { recursive: true })
++      writeFileSync(join(gapRoot, '.sillyspec/knowledge/INDEX.md'), '# x\n')
++      mkdirSync(join(gapRoot, '.sillyspec/docs/p/modules'), { recursive: true })
++      writeFileSync(join(gapRoot, '.sillyspec/docs/p/modules/_module-map.yaml'), 'modules:\n  m1:\n    status: active\n    paths:\n      - src/\n')
++      const gGap = buildKnowledgeGraph(join(gapRoot, '.sillyspec'))
++      assert.equal(graphModuleDocGaps(gGap).map((n) => n.id).join(), 'module:m1')
++      assert.equal(graphSummary(gGap, { existsFn: () => true }).module_doc_gaps, 1)
++    } finally { rmSync(gapRoot, { recursive: true, force: true }) }
+     // clusters：fr 按 belongs-module 域聚簇，代表 ≤5 且都是真实节点
+     const frCluster = s.clusters.find((c) => c.key === 'fr:core-engine')
+     assert.ok(frCluster, 'fr 簇按域聚合')
+@@ -438,3 +459,39 @@ test('⑨nodes 搜索 + CLI 分发 summary/nodes：包含匹配/大小写/limit
+     assert.equal(j3.error.code, 'search_required')
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++test('⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相等（单一源契约钉，2026-10-08-graph-summary-consistency）', async () => {
++  const { detectKnowledgeGraphIntegrity } = await import('../src/doctor-diagnostics.js')
++  const root = buildFixture()
++  const prevCwd = process.cwd()
++  try {
++    process.chdir(root)
++    // 被引用文件落盘 + 制造脏面：删锚点目标（dangling-anchor）+ 删路由目标文件
++    for (const f of ['src/foo.js', 'src/bar.js', 'src/deep.js', 'src/extra.js', 'test/foo.test.mjs', 'test/ql-side.test.mjs']) {
++      mkdirSync(join(root, f.replace(/\/[^/]+$/, '')), { recursive: true })
++      writeFileSync(join(root, f), '// x\n')
++    }
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'conventions.md'), '# 约定\n\n## Foo 条目\n\n正文\n')
++    rmSync(join(root, 'src/foo.js')) // 脏面：两条决策锚点悬空（强边）
++    rmSync(join(root, 'src/bar.js')) // 脏面：卡片 doc-refs 悬空（中边）
++
++    const specRoot = join(root, '.sillyspec')
++    const r = detectKnowledgeGraphIntegrity(root, specRoot)
++    assert.equal(r.pass, false)
++    const s = graphSummary(buildKnowledgeGraph(specRoot)) // 双方同用默认 existsSync——同源同值
++    // 从 doctor findings 文本解析四计数（doctor 输出格式即契约面——格式漂移本测试即红）
++    const cnt = (re) => { const m = r.findings.join('\n').match(re); return m ? Number(m[1]) : 0 }
++    assert.equal(cnt(/graph-orphan-entry：(\d+) 个/), s.orphans, 'orphans 同值')
++    assert.equal(cnt(/graph-module-doc-gap：(\d+) 个/), s.module_doc_gaps, 'module_doc_gaps 同值')
++    assert.equal(cnt(/graph-changelog-dangling：(\d+) 条/), s.changelog_danglings, 'changelog_danglings 同值')
++    const anchor = cnt(/graph-dangling-anchor：(\d+) 条/)
++    const docRef = cnt(/graph-doc-dangling-ref：(\d+) 条/)
++    assert.equal(anchor + docRef, s.dangling_refs, 'dangling_refs = doctor anchor+doc-ref 之和')
++    assert.equal(anchor, s.dangling_refs_breakdown.strong_anchors, 'breakdown 强边桶 = doctor dangling-anchor')
++    assert.equal(docRef, s.dangling_refs_breakdown.medium_doc_refs, 'breakdown 中边桶 = doctor doc-dangling-ref')
++    assert.ok(anchor >= 1 && docRef >= 1, '脏面两桶均非零（断言有区分度）')
++  } finally {
++    process.chdir(prevCwd)
++    rmSync(root, { recursive: true, force: true })
++  }
++})
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-consistency/design.md b/.sillyspec/changes/2026-10-08-graph-summary-consistency/design.md
+new file mode 100644
+index 00000000..d928db48
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-consistency/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:09:40.486Z
++---
++# 设计记录（Design Record）— 2026-10-08-graph-summary-consistency
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/knowledge-graph.js | 抽 graphModuleDocGaps/graphChangelogDanglings 单一源导出；graphSummary 消费 helper + 增 dangling_refs_breakdown 双桶字段 |
++| 修改 | src/doctor-diagnostics.js | 六检查⑤⑥删内联手抄副本、改消费 helper（requireKnowledgeGraph 桥既有） |
++| 修改 | test/knowledge-graph.test.mjs | ⑧补三组断言（helper 同值/双 existsFn 态/breakdown 守恒 + mini-fixture 正值）；新增⑩doctor↔summary 交叉断言 |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++把 graph-summary-nodes 留下的两份手抄判定收敛为单一源：module_doc_gaps / changelog_danglings 的判定逻辑抽成 knowledge-graph.js 导出函数（graphModuleDocGaps / graphChangelogDanglings），doctor 六检查与 graphSummary 四计数消费同一函数；「口径一处定义两处消费」从注释愿望变成代码事实，并由⑩交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值对账）钉死——今后改任一边漂移即测试红。另补 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（dangling_refs 语义不动，平台阶段三消费面向后兼容），消解「合并口径对不上 doctor 单类计数」的对账缺口。选 helper 抽取而非 doctor 消费 graphSummary：doctor 需要 finding 样本明细而非纯计数，helper 返回数组（.length 即计数）双方各取所需，改动面最小。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新导出：graphModuleDocGaps(graph) → Node[]、graphChangelogDanglings(graph, {existsFn}) → string[]（knowledge-graph.js）。
++- graphSummary 返回增键 dangling_refs_breakdown（附加字段，既有键零变化）；CLI `knowledge graph summary` 输出随之多一个字段（JSON 消费方向后兼容）。
++- doctor 六检查行为零变化（同判定同值——交叉断言与真图终验 11/64/1/4156 锚定）；无端点/命令面变更。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立——helper 是图对象的纯函数（无时序面）；doctor 与 summary 各自调用同函数，无事件序依赖。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   图是调用方内存对象（D-003 内存派生），helper 无写盘无共享态；不引入新并发面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   无状态持久化（无缓存文件）；doctor/CLI 每次调用重建图，中断无残留。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   changelog 悬空判定锚 graph.root（建图传入的 specRoot），doctor 与 CLI 同源传参——无双根口径；无串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：⑩交叉断言解析 doctor finding 文本计数——doctor 输出格式（「graph-module-doc-gap：N 个」）成为测试契约面，未来改 finding 文案需同步改测试正则。接受：该格式本就是平台时间线展示面，钉住它等于钉住消费契约；格式漂移测试红属正确报警。放弃的方案：doctor 直接消费 graphSummary 拿计数——弃，doctor 需要 finding 样本明细（样本列表进 warning 文本），纯计数接口喂不饱；维持两函数但加注释声明对齐义务——弃，注释不是牙齿（本变更要修的正是注释与实现脱节的先例）。
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-consistency/requirements.md b/.sillyspec/changes/2026-10-08-graph-summary-consistency/requirements.md
+new file mode 100644
+index 00000000..87ce156c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-consistency/requirements.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:09:40.486Z
++---
++# 需求规格（Requirements）— 2026-10-08-graph-summary-consistency
++
++## 功能需求
++
++### FR-01: 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
++
++- module_doc_gaps 与 changelog_danglings 的判定逻辑必须在 knowledge-graph.js 单一源（graphModuleDocGaps/graphChangelogDanglings 导出函数）定义；doctor-diagnostics.js 六检查与 graphSummary 必须消费同一函数，禁止保留手抄内联副本。
++
++#### 场景：单一源对账
++
++- Given fixture 图；When 分别运行 detectKnowledgeGraphIntegrity 与 graphSummary；Then 两面 module-doc-gap / changelog-dangling 计数逐值相等（交叉断言钉死）。
++
++### FR-02: summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
++
++- graphSummary 返回必须新增 dangling_refs_breakdown { strong_anchors, medium_doc_refs }；dangling_refs 既有字段与语义（两类之和）禁止变化。
++
++#### 场景：分桶守恒
++
++- Given existsFn 全假；When graphSummary；Then dangling_refs = strong_anchors + medium_doc_refs，且 doctor 的 dangling-anchor / doc-dangling-ref 两计数与两桶逐值相等。
++
++### FR-03: 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
++
++- 测试必须覆盖：module_doc_gaps 正值（mini-fixture 无卡模块=1）、changelog_danglings 双 existsFn 态（全真=0 / 全假=2 且与 helper 逐值相等）、doctor↔summary 脏 fixture 四计数交叉断言（含 finding 文本解析与 breakdown 双桶对账）。
++
++#### 场景：脏面对账
++
++- Given fixture 删除锚点目标与卡片引用目标制造两类悬空；When 双面运行；Then 四计数与 breakdown 全部逐值相等且两桶非零（断言有区分度）。
++
++### FR-04: 既有图测试 9 组 + doctor 回归全绿，lint 零告警
++
++- 既有图测试十组必须全绿、test:core 全量绿、lint 零告警（未引用导出 / module-map 覆盖门全过）。
++
++#### 场景：回归面
++
++- Given 修复落盘；When 全量测试与 lint；Then 零失败零新告警。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-graph.test.mjs「⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相等（单一源契约钉，2026-10-08-graph-summary-consistency）」
++FR-02: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」（breakdown 守恒与双桶断言）
++FR-03: test/knowledge-graph.test.mjs「⑧summary 聚合」（module_doc_gaps 正值 mini-fixture + changelog 双 existsFn 态）
++FR-04: test/knowledge-graph.test.mjs「十组全绿面」+ test:core/lint 收口实测（verify-runs 留档）
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-consistency/tasks.md b/.sillyspec/changes/2026-10-08-graph-summary-consistency/tasks.md
+new file mode 100644
+index 00000000..c189d26b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-consistency/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:09:40.486Z
++---
++# 任务注册表（Tasks）— 2026-10-08-graph-summary-consistency
++
++- [x] task-01: 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
++- [x] task-02: summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
++- [x] task-03: 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
++- [x] task-04: 既有图测试 9 组 + doctor 回归全绿，lint 零告警
+diff --git a/.sillyspec/changes/2026-10-08-graph-summary-consistency/proposal.md b/.sillyspec/changes/2026-10-08-graph-summary-consistency/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-08-graph-summary-consistency/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T16:09:40.486Z
++---
++# 提案书（Proposal）— 2026-10-08-graph-summary-consistency
++
++## 动机
++
++任务原话转写：graph summary 与 doctor 图检查「同源」声明落实为真单一源。
++
++动机与背景：
++2026-10-08-graph-summary-nodes 的 summary 四计数注释声称与 doctor 六检查「口径一处定义两处消费」，实测为两份手抄副本（module_doc_gaps/changelog_danglings 判定逻辑在 doctor-diagnostics.js 与 knowledge-graph.js 各写一遍）——今天同值靠复制时刻相同，明天改任一边即静默漂移；平台仓阶段三（2026-10-08-platform-knowledge-graph）正拿该面当跨仓依赖契约。评审另指出：module_doc_gaps/changelog_danglings 两计数零测试断言；dangling_refs 合并口径（=doctor 强边 2717+中边 1439 两类之和）未注——消费方对不上账。
++
++成功标准：
++- 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
++- summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
++- 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
++- 既有图测试 9 组 + doctor 回归全绿，lint 零告警
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
++2. summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
++3. 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
++4. 既有图测试 9 组 + doctor 回归全绿，lint 零告警
++
++## 成功标准（可验证）
++
++1. 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
++2. summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
++3. 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
++4. 既有图测试 9 组 + doctor 回归全绿，lint 零告警

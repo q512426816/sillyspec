@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-graph-summary-consistency",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-graph-summary-consistency:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相等（单一源契约钉，2026-10-08-graph-summary-consistency）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-graph-summary-consistency"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-graph-summary-consistency:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-graph-summary-consistency"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-graph-summary-consistency:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑧summary 聚合」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-graph-summary-consistency"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-graph-summary-consistency:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-graph.test.mjs「十组全绿面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-graph-summary-consistency"
+    }
+  ]
+}

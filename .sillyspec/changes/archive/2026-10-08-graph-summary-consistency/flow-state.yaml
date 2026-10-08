@@ -1,0 +1,50 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  graph summary 与 doctor 图检查「同源」声明落实为真单一源。
+
+
+  动机与背景：
+
+  2026-10-08-graph-summary-nodes 的 summary 四计数注释声称与 doctor 六检查「口径一处定义两处消费」，实测为两份手抄副本（module_doc_gaps/changelog_danglings
+  判定逻辑在 doctor-diagnostics.js 与 knowledge-graph.js
+  各写一遍）——今天同值靠复制时刻相同，明天改任一边即静默漂移；平台仓阶段三（2026-10-08-platform-knowledge-graph）正拿该面当跨仓依赖契约。评审另指出：module_doc_gaps/changelog_danglings
+  两计数零测试断言；dangling_refs 合并口径（=doctor 强边 2717+中边 1439 两类之和）未注——消费方对不上账。
+
+
+  成功标准：
+
+  - 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费
+  helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
+
+  - summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
+
+  - 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析
+  doctor finding 计数与 summary 字段逐值相等）
+
+  - 既有图测试 9 组 + doctor 回归全绿，lint 零告警
+autopilot: false
+baseline_commit: 0c640c25f144e81f29e1558c8a3747c23749cb3d
+updatedAt: '2026-10-08T16:21:57.744Z'
+baseline_sha256: e6f0e206c67e714b535e87e41dc4f6ccd340dad542d4733712b02459799bac29
+spec_approved: true
+spec_approved_at: '2026-10-08T16:16:20.578Z'
+spec_approved_by: zcode-graph-consistency
+gate_summary: >-
+  test: passed ← module[]+deps(js13)+fr(2)（35.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008161657\test-result.json｜lint: passed
+  ← npm run lint（33.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008161657\test-result.json｜门文件 7 个
+

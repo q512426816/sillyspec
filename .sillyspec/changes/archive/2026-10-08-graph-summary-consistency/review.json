@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-graph-summary-consistency",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "78cb671e6f0c7a5f0027bcabf27d41ab46b1205b",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T16:21:26Z",
+  "evidence": {
+    "tests": "node --test test/knowledge-graph.test.mjs → 10/10 全绿（含⑧⑩）；npm run lint → 913 文件检查通过，未引用导出 0（hard fail），module-map 覆盖全，零告警",
+    "singleSource": "grep hasDescribes|chlogTargets|hasChlog|mapModules src/doctor-diagnostics.js → 零匹配（内联手抄副本删净）；doctor-diagnostics.js:2211-2215 经 requireKnowledgeGraph() 消费 graphModuleDocGaps/graphChangelogDanglings；knowledge-graph.js:541-542 graphSummary 消费同一函数——非再抄；helper 体与被删内联副本逐行等值（change.patch 核对），根锚等值（doctor:2186 buildKnowledgeGraph(specDir)，helper 用 graph.root，同值无双根）",
+    "blindDims": "design 四问与 diff 对照全部成立：helper 为图对象纯函数无时序面；无写盘无共享态；无状态持久化；changelog 悬空锚 graph.root 且 doctor(:2186) 与 CLI(knowledge-graph.js:699) 同源传参",
+    "disclosures": {
+      "⑩解析finding文本为契约面": "可接受——doctor finding 文本本就是平台时间线展示面，钉住等于钉住消费契约，格式漂移测试红属正确报警；正则与现行格式精确匹配（真图输出逐条核对）",
+      "dangling_refs语义不动仅附加": "可接受——dangling_refs 仍为 graphDangling().length，breakdown 由同一 dangling 数组 reduce 派生；真图 2717+1439=4156 守恒；JSON 消费向后兼容",
+      "放弃doctor消费graphSummary": "可接受——doctor finding 需样本明细（真图输出含样本列表），纯计数接口喂不饱；helper 返回数组 .length 双方各取所需，改动面最小，⑩交叉断言补上牙齿"
+    },
+    "protections": "test ⑩（文件尾部）真实解析 doctor findings（cnt() 正则五处）并与 summary 四计数+breakdown 双桶逐值对账，含 anchor===strong_anchors、docRef===medium_doc_refs、两桶均≥1；mini-fixture 正值断言在码（graphModuleDocGaps==='module:m1'、summary module_doc_gaps===1）",
+    "realGraph": "summary CLI：orphans=11 / module_doc_gaps=64 / changelog_danglings=1 / dangling_refs=4156 / breakdown{strong_anchors:2717, medium_doc_refs:1439}；doctor（动态 import detectKnowledgeGraphIntegrity）：orphan 11 / doc-gap 64 / chlog-dangling 1 / dangling-anchor 2717 / doc-dangling-ref 1439——五值逐项对齐，2717+1439=4156"
+  }
+}

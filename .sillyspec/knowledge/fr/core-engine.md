@@ -2412,3 +2412,79 @@
   confirmed_at: null
   source_change: 2026-10-08-graph-summary-nodes
   status: active
+
+## FR-core-engine-149 判定逻辑抽共享 helper（graphModuleDocGaps/graphChangelogDanglings 落 knowledge-graph.js 单一源），doctor 六检查消费 helper（删内联副本），summary 四计数消费 helper——「一处定义两处消费」注释成真
+变更：2026-10-08-graph-summary-consistency
+状态：active
+摘要：单一源对账
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-consistency/requirements.md#FR-01
+最近确认：78cb671e6f0c7a5f0027bcabf27d41ab46b1205b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-consistency:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相等（单一源契约钉，2026-10-08-graph-summary-consistency）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-consistency
+  status: active
+
+## FR-core-engine-150 summary 增 dangling_refs_breakdown { strong_anchors, medium_doc_refs } 附加字段（不动 dangling_refs 既有语义——平台消费面兼容）
+变更：2026-10-08-graph-summary-consistency
+状态：active
+摘要：分桶守恒
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-consistency/requirements.md#FR-02
+最近确认：78cb671e6f0c7a5f0027bcabf27d41ab46b1205b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-consistency:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/代表与截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-consistency
+  status: active
+
+## FR-core-engine-151 测试补齐：module_doc_gaps 正值断言（mini-fixture 无卡模块）、changelog_danglings 双 existsFn 态断言、doctor↔summary 四计数交叉断言（脏 fixture 上解析 doctor finding 计数与 summary 字段逐值相等）
+变更：2026-10-08-graph-summary-consistency
+状态：active
+摘要：脏面对账
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-consistency/requirements.md#FR-03
+最近确认：78cb671e6f0c7a5f0027bcabf27d41ab46b1205b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-consistency:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「⑧summary 聚合」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-consistency
+  status: active
+
+## FR-core-engine-152 既有图测试 9 组 + doctor 回归全绿，lint 零告警
+变更：2026-10-08-graph-summary-consistency
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-08-graph-summary-consistency/requirements.md#FR-04
+最近确认：78cb671e6f0c7a5f0027bcabf27d41ab46b1205b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-08-graph-summary-consistency:flow:测试绑定FR-04
+  tests: test/knowledge-graph.test.mjs「十组全绿面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-08-graph-summary-consistency
+  status: active
