@@ -299,6 +299,45 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
   const result = buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays })
   const frIndex = buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays })
 
+  // --fr-only（2026-10-08-knowledge-stats-fr-only）：输出层过滤——仅保留 FR 索引段/键。
+  // 计算层保持全量（buildHitMatrix/buildFrIndexStats 签名与共用面零改动），flag 只影响渲染。
+  const frOnly = args.includes('--fr-only')
+  if (frOnly) {
+    if (asJson) {
+      // envelope 顶层键集与不带 --fr-only 时完全一致（outputJson 的外壳 schema_version/ok 不动），
+      // data 仅含 frIndex——跳过 matrix/conventions/neverHit/totalInjects/totalClassifies
+      outputJson(true, { sinceDays, hasTelemetry, lastEventAt, frIndex })
+      return
+    }
+    // 人类模式：仅渲染 FR 索引段（标题到承接引用率/裁决候选——不加遥测计数行和矩阵段）
+    const lines = []
+    if (frIndex.present) {
+      const e = frIndex.events
+      const i = frIndex.index
+      lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）`)
+      lines.push(`  注入 fr-inject ${e.frInject} 次（${e.frInjectChanges} 变更） | 取代链 fr-supersede ${e.frSupersede} 次（${e.frSupersedeChanges} 变更） | 重复拦截 fr-duplicate-warning ${e.frDuplicateWarning} 次（${e.frDuplicateWarningCandidates || e.frDuplicateCandidates || 0} 候选）`)
+      lines.push(`  腐烂 suspect fr-rot-suspect ${e.frRotSuspect || 0} 次（${e.frRotSuspectChanges || 0} 变更${e.frRotSuspectByDomain && e.frRotSuspectByDomain.length > 0 ? `，按域 ${e.frRotSuspectByDomain.map(d => `${d.domain}×${d.count}`).join('，')}` : ''}）`)
+      if (e.frUnreferenced.length > 0) {
+        const top = e.frUnreferenced.slice(0, 5).map((u) => `${u.domain}×${u.count}`).join('，')
+        lines.push(`  删除缺口信号 fr-unreferenced：${top}${e.frUnreferenced.length > 5 ? ' …' : ''}（观察信号·不算 L3 门禁）`)
+      }
+      lines.push(`  索引面：${i.entries} 条（active ${i.active} / superseded ${i.superseded}）| 来源变更 ${i.sourceChanges} 个 | 域 ${i.domains.join(', ') || '—'}`)
+      lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
+      const cand = frIndex.adjudicationCandidates || []
+      if (cand.length > 0) {
+        lines.push('  裁决候选 Top-10（suspect×unref 条目级聚合——候选非裁决，确认无人承接→承接翻链或人工退休）：')
+        for (const c of cand.slice(0, 10)) {
+          lines.push(`    - ${c.id} suspect×${c.suspect} unref×${c.unreferenced}${c.change ? `（来源 ${c.change}）` : ''}`)
+        }
+      }
+    } else {
+      lines.push('（FR 索引面不存在——knowledge/fr/ 目录缺失或无条目；归档完整流程变更后此处可查）')
+    }
+    console.log(lines.join('\n'))
+    return
+  }
+  const asJsonBak = asJson // fr-only 已在上方 return 短路，此处原路径零改动
+  void asJsonBak
   if (asJson) {
     outputJson(true, { sinceDays, hasTelemetry, lastEventAt, ...result, frIndex })
     return
