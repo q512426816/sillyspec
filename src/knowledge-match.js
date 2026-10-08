@@ -62,7 +62,7 @@ function isDecisionRoute(entry) {
 }
 
 const DECISION_HEADER_RE = /^##\s+(D-\d+@v\d+)\s*(.*)$/
-const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件)\s*[：:]\s*(.*)$/
+const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
 // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
 // 误吞进 reason（Grill X-002 隐性回归）。
@@ -87,9 +87,9 @@ const ANCHOR_FILE_TOKEN_RE = /[\w./-]+\.(?:mjs|cjs|jsx|tsx|js|ts|py|go|java|rs)/
  * 锚点值 → 代码文件路径集（条目无「文件：」字段时的兜底命中源）。
  * 真实先例：D-905 形态「锚点：src/quicklog.js:493」→ 提取 src/quicklog.js
  * （token 字符类不含 : 故止于行号前，再防御性剥 :line/:line-line/:符号 后缀）。
- * 「未记录」/无路径形态 token → []。
+ * 「未记录」/无路径形态 token → []。导出供 knowledge-graph.js 采集 anchors 边复用。
  */
-function anchorFilePaths(anchor) {
+export function anchorFilePaths(anchor) {
   const a = String(anchor || '').trim().replace(/\\/g, '/')
   if (!a || a === '未记录') return []
   const out = new Set()
@@ -129,7 +129,7 @@ function parseDecisionFile(filePath, file) {
     const h = line.match(DECISION_HEADER_RE)
     if (h) {
       flush()
-      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '', change: '' }
+      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '', change: '', supersedesText: '' }
       continue
     }
     if (!cur) continue
@@ -145,6 +145,7 @@ function parseDecisionFile(filePath, file) {
     const value = f[2].trim()
     if (f[1] === '状态') cur.status = value.toLowerCase()
     else if (f[1] === '文件') cur.files = splitDecisionFiles(value)
+    else if (f[1] === 'supersedes') cur.supersedesText = value
     else if (f[1] === '否决理由') cur.reason = value
     else if (f[1] === '复潮条件') cur.revisitWhen = value
     else if (!cur.reason) cur.reason = value // 理由：仅作 implemented（或否决理由缺失）时的回填

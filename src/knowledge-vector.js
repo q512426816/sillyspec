@@ -1,8 +1,9 @@
 /**
  * knowledge-vector.js — 平台向量召回层（CLI 侧，2026-09-29-knowledge-vector-recall）
  *
- * 检索三层：路由 tag 命中 →（零命中）平台向量召回（本模块，已连接平台时）→ 本地词片
- * 复现窗口（knowledge-match.js fallbackByQueryShingles）→ 空。
+ * 检索四层（2026-10-08-knowledge-graph 起）：路由 tag 命中 →（零命中）平台向量召回（本模块，
+ * 已连接平台时）→ scope 遍历召回（knowledge-graph.js，scopeFiles 在场时）→ 本地词片复现窗口
+ * （knowledge-match.js fallbackByQueryShingles）→ 空。
  *
  * 原则（用户裁决 2026-09-29）：平台只做语义召回——返回「哪个文件哪个条目」的候选
  * （spec_path＋anchor＋score）；条目 status/deathPath/回显资格等全部策略面在本地解析
@@ -143,8 +144,11 @@ function buildResultFromPlatform(indexDir, pvResults) {
 
 /**
  * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
- * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ 本地词片 → 空。
+ * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ scope 遍历 → 本地词片 → 空。
  * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
+ * opts.scopeFiles（2026-10-08-knowledge-graph，FR-04 承接 FR-cli-entry-234）：变更触碰文件集
+ * ——机器算的图查询键（D-004：flow 注入段传 touched、complete 门传 decisions.md 锚点提取）。
+ * 缺省/空数组 → 遍历层整体跳过，行为与不携带该参数的旧行为逐字段一致（回归钉死）。
  */
 export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
   const r = matchByRouting(indexDir, taskContext)
@@ -154,6 +158,16 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
     const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
     const built = pv ? buildResultFromPlatform(indexDir, pv.results) : null
     if (built) return built
+  }
+  // scope 遍历层（第三层）：只在 scope 非空且向量零命中后接管；fail-soft（图构建异常静默降级词片）
+  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
+  if (scopeFiles.length > 0) {
+    try {
+      const { buildKnowledgeGraph, scopeRecall, buildScopeRecallResult } = await import('./knowledge-graph.js')
+      const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
+      const built = buildScopeRecallResult(scopeRecall(buildKnowledgeGraph(specRoot), scopeFiles))
+      if (built) return built
+    } catch { /* 图构建 fail-soft——降级词片层 */ }
   }
   const fb = fallbackByQueryShingles(indexDir, taskContext)
   return fb || r

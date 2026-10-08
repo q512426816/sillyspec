@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SillyHub · 知识图谱（原型）</title>
+<style>
+  :root{
+    --primary:#1677ff; --primary-bg:#e6f4ff;
+    --bg:#f5f6f8; --card:#ffffff; --border:#e5e7eb;
+    --text:#1f2328; --text-2:#57606a; --text-3:#8b949e;
+    --strong:#1677ff; --medium:#d97706; --weak:#9ca3af;
+    --danger:#dc2626; --ok:#16a34a;
+    --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  /* ── 顶栏（平台页签） ── */
+  .topbar{height:52px;background:#001529;color:#fff;display:flex;align-items:center;padding:0 20px;gap:28px;flex-shrink:0}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px}
+  .brand .logo{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#1677ff,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:13px}
+  .tabs{display:flex;gap:4px;height:100%}
+  .tab{display:flex;align-items:center;padding:0 18px;cursor:pointer;color:rgba(255,255,255,.65);border-bottom:2px solid transparent;font-size:14px}
+  .tab:hover{color:#fff}
+  .tab.active{color:#fff;border-bottom-color:var(--primary);background:rgba(22,119,255,.15)}
+  .ws{margin-left:auto;display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.65);font-size:13px}
+  .ws .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .badge-proto{background:rgba(255,255,255,.12);border:1px dashed rgba(255,255,255,.4);border-radius:4px;padding:1px 8px;font-size:11px;color:#fbbf24}
+
+  .main{flex:1;display:flex;min-height:0}
+
+  /* ── 左栏：查询 + 图例 ── */
+  .left{width:300px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+  .sec{padding:14px 16px;border-bottom:1px solid var(--border)}
+  .sec h3{font-size:13px;color:var(--text-2);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .sec h3 .tag{font-size:10px;background:var(--primary-bg);color:var(--primary);border-radius:3px;padding:1px 5px;font-weight:500}
+  .qrow{display:flex;gap:6px;margin-bottom:8px}
+  .qrow select,.qrow input{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;background:#fafbfc;outline:none;flex:1;min-width:0}
+  .qrow select{flex:0 0 96px;cursor:pointer}
+  .qrow input:focus,.qrow select:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(22,119,255,.1)}
+  .btn{border:1px solid var(--primary);background:var(--primary);color:#fff;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;flex-shrink:0}
+  .btn:hover{background:#4096ff}
+  .btn.ghost{background:#fff;color:var(--primary)}
+  .btn.ghost:hover{background:var(--primary-bg)}
+  .presets{display:flex;flex-wrap:wrap;gap:6px}
+  .preset{font-size:11px;border:1px solid var(--border);border-radius:12px;padding:3px 10px;cursor:pointer;color:var(--text-2);background:#fff}
+  .preset:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+  .cli-hint{margin-top:8px;font-family:var(--mono);font-size:10.5px;color:var(--text-3);background:#0d1117;color:#8b949e;border-radius:6px;padding:7px 9px;line-height:1.5;word-break:break-all}
+  .cli-hint b{color:#7ee787;font-weight:500}
+
+  .legend-nodes{display:grid;grid-template-columns:1fr 1fr;gap:5px 8px}
+  .ln{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);cursor:pointer;padding:2px 4px;border-radius:4px}
+  .ln:hover{background:var(--bg)}
+  .ln .nd{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  .legend-edges{display:flex;flex-direction:column;gap:5px}
+  .le{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2)}
+  .le svg{flex-shrink:0}
+  .le .en{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-left:auto}
+  .str-pill{font-size:10px;border-radius:3px;padding:0 5px}
+  .str-strong{background:#e6f4ff;color:#1677ff}
+  .str-medium{background:#fff7e6;color:#d97706}
+  .str-weak{background:#f3f4f6;color:#6b7280}
+
+  /* ── 中央画布 ── */
+  .center{flex:1;position:relative;min-width:0;background:
+    radial-gradient(circle at 1px 1px,#d8dade 1px,transparent 0) 0 0/22px 22px}
+  #canvas{width:100%;height:100%;display:block;cursor:grab}
+  .canvas-tip{position:absolute;top:12px;left:14px;font-size:11.5px;color:var(--text-3);background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:6px;padding:5px 10px;pointer-events:none}
+  .mode-chip{position:absolute;top:12px;right:14px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;display:none;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .mode-chip.show{display:flex}
+  .mode-chip .x{cursor:pointer;color:var(--text-3);font-weight:700}
+  .mode-chip .x:hover{color:var(--danger)}
+
+  /* ── 右栏：详情/结果/逻辑 ── */
+  .right{width:340px;background:var(--card);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+  .rtabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+  .rtab{flex:1;text-align:center;padding:11px 0;font-size:13px;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent}
+  .rtab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+  .rbody{flex:1;overflow-y:auto;padding:16px}
+  .kv{display:flex;gap:10px;padding:5px 0;font-size:12.5px;border-bottom:1px dashed #f0f1f3}
+  .kv .k{width:76px;color:var(--text-3);flex-shrink:0}
+  .kv .v{color:var(--text);word-break:break-all}
+  .nh-group{margin:12px 0 4px}
+  .nh-group h4{font-size:11.5px;color:var(--text-3);margin-bottom:5px;display:flex;align-items:center;gap:6px}
+  .nh{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .nh:hover{background:var(--bg)}
+  .nh .nd{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .nh .dir{font-size:10px;color:var(--text-3);margin-left:auto;font-family:var(--mono)}
+  .empty{color:var(--text-3);font-size:12.5px;text-align:center;padding:40px 20px;line-height:1.8}
+  .res-item{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+  .res-item:hover{border-color:var(--primary)}
+  .res-item .t{font-size:12.5px;font-weight:600;margin-bottom:3px;display:flex;gap:6px;align-items:center}
+  .res-item .d{font-size:11.5px;color:var(--text-2)}
+  .res-item.warn{border-left:3px solid var(--danger)}
+  .res-item.ok{border-left:3px solid var(--ok)}
+  .note{font-size:12px;color:var(--text-2);line-height:1.75}
+  .note h5{font-size:12.5px;margin:12px 0 5px;color:var(--text)}
+  .note code{font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px}
+  .note .hl{color:var(--primary);font-weight:600}
+  .flow{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+  .flow .step{display:flex;align-items:center;gap:8px;font-size:12px}
+  .flow .arrow{color:var(--text-3);text-align:center;font-size:11px}
+  .chip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:10.5px}
+  .c-node{background:#e6f4ff;color:#1677ff}
+  .c-strong{background:#e6f4ff;color:#1677ff}
+  .c-mid{background:#fff7e6;color:#d97706}
+  .c-weak{background:#f3f4f6;color:#6b7280}
+  .c-danger{background:#fef2f2;color:#dc2626}
+  .rtitle{font-size:14px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .rsub{font-size:11.5px;color:var(--text-3);margin-bottom:10px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><div class="logo">◈</div>SillyHub 工作台</div>
+  <div class="tabs">
+    <div class="tab">总览</div>
+    <div class="tab">变更</div>
+    <div class="tab">知识库</div>
+    <div class="tab active">知识图谱</div>
+    <div class="tab">效果面板</div>
+  </div>
+  <div class="ws"><span class="dot"></span>sillyspec · main <span class="badge-proto">设计原型 2026-10-08-knowledge-graph</span></div>
+</div>
+
+<div class="main">
+  <!-- 左栏 -->
+  <div class="left">
+    <div class="sec">
+      <h3>🗂 数据面 <span class="tag" id="dataTag">切片</span></h3>
+      <div class="presets" style="margin-bottom:8px">
+        <span class="preset" id="modeSlice">自举切片（31 · 力场）</span>
+        <span class="preset" id="modeFull">全图（本仓真实全量）</span>
+      </div>
+      <div class="note" id="dataInfo" style="font-size:11px;color:var(--text-3);margin:0">31 节点 60 边——知识子系统自举切片（core-engine 模块 + 决策/FR/变更/文档代表）。</div>
+    </div>
+    <div class="sec">
+      <h3>🔎 图谱查询 <span class="tag">CLI 同源</span></h3>
+      <div class="qrow">
+        <select id="qtype">
+          <option value="neighbors">neighbors</option>
+          <option value="impact">impact</option>
+          <option value="path">path</option>
+          <option value="orphans">orphans</option>
+          <option value="dangling">dangling</option>
+        </select>
+        <input id="qarg" placeholder="锚点 / 文件 / 模块 / 变更" value="2026-09-28-knowledge-inject-ranking">
+      </div>
+      <div class="qrow">
+        <button class="btn" id="qrun" style="flex:1">执行查询</button>
+        <button class="btn ghost" id="qreset">重置视图</button>
+      </div>
+      <div class="cli-hint" id="clihint">等价 CLI：<b>sillyspec knowledge graph impact 2026-09-28-knowledge-inject-ranking</b><br>平台侧与本查询共用同一图引擎（解析时内存派生，无缓存文件）。</div>
+    </div>
+    <div class="sec">
+      <h3>📚 预置演示</h3>
+      <div class="presets">
+        <span class="preset" data-q="impact|2026-09-28-knowledge-inject-ranking">impact · 变更影响面</span>
+        <span class="preset" data-q="neighbors|FR-core-engine-002">neighbors · FR 一跳</span>
+        <span class="preset" data-q="path|D-001@v1|core-engine">path · 决策→模块</span>
+        <span class="preset" data-q="orphans|">orphans · 孤儿条目</span>
+        <span class="preset" data-q="dangling|">dangling · 悬空引用</span>
+        <span class="preset" data-q="neighbors|src/knowledge-match.js">neighbors · 文件反查</span>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>◉ 节点类型（10）</h3>
+      <div class="legend-nodes" id="legendNodes"></div>
+    </div>
+    <div class="sec">
+      <h3>─ 边类型（16）· 三档强度</h3>
+      <div class="legend-edges" id="legendEdges"></div>
+      <div class="note" style="margin-top:10px;font-size:11px;color:var(--text-3)">
+        <span class="chip c-strong">强</span> 可进 impact / 召回传播　
+        <span class="chip c-mid">中</span> 仅查询展示　
+        <span class="chip c-weak">弱</span> 仅展示与自检
+      </div>
+    </div>
+  </div>
+
+  <!-- 中央画布 -->
+  <div class="center">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-tip">拖拽平移 · 滚轮缩放 · 点击节点看详情 · 拖动节点扰动力场</div>
+    <div class="mode-chip" id="modeChip"><span id="modeText"></span><span class="x" id="modeClear">✕</span></div>
+  </div>
+
+  <!-- 右栏 -->
+  <div class="right">
+    <div class="rtabs">
+      <div class="rtab active" data-rt="detail">节点详情</div>
+      <div class="rtab" data-rt="result">查询结果</div>
+      <div class="rtab" data-rt="logic">逻辑说明</div>
+    </div>
+    <div class="rbody" id="rbody"></div>
+  </div>
+</div>
+
+<script src="prototype-data.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   数据：本仓真实子集（约 40 节点 / 60 边）
+   ═══════════════════════════════════════════════════════════════ */
+const NT = {
+  project:{c:'#7c3aed',r:13,l:'项目'},
+  module :{c:'#1677ff',r:11,l:'模块'},
+  file   :{c:'#64748b',r:6 ,l:'代码文件'},
+  test   :{c:'#0d9488',r:6 ,l:'测试文件'},
+  decision:{c:'#dc2626',r:8,l:'决策 D-xxx'},
+  fr     :{c:'#d97706',r:8,l:'需求 FR'},
+  change :{c:'#9333ea',r:8,l:'变更'},
+  entry  :{c:'#16a34a',r:7,l:'手册条目'},
+  doc    :{c:'#0891b2',r:9,l:'文档'},
+  ql     :{c:'#a16207',r:5,l:'quicklog'},
+};
+const ET = {
+  'module-dep'    :{s:'strong' ,l:'depends_on'},
+  'module-files'  :{s:'strong' ,l:'paths'},
+  'anchors'       :{s:'strong' ,l:'锚点/文件'},
+  'supersedes'    :{s:'strong' ,l:'supersedes/承接'},
+  'from-change'   :{s:'strong' ,l:'变更/来源'},
+  'belongs-module':{s:'strong' ,l:'域'},
+  'deliverables'  :{s:'strong' ,l:'交付清单'},
+  'change-modules':{s:'strong' ,l:'模块域'},
+  'test-binding'  :{s:'strong' ,l:'测试绑定'},
+  'describes'     :{s:'strong' ,l:'doc: 字段'},
+  'changelog-of'  :{s:'strong' ,l:'文件名派生'},
+  'changelog-entry':{s:'strong',l:'changelog 行'},
+  'doc-refs'      :{s:'medium' ,l:'正文路径提取'},
+  'scan-refs'     :{s:'medium' ,l:'正文路径提取'},
+  'route'         :{s:'weak'   ,l:'INDEX 路由行'},
+  'entry-link'    :{s:'weak'   ,l:'关联：（预留）'},
+};
+
+const N=(id,type,label,attrs={})=>({id,type,label,attrs});
+const E=(s,t,type,note='')=>({s,t,type,note});
+const SLICE_NODES=[
+  N('sillyspec','project','sillyspec'),
+  N('core-engine','module','core-engine'),N('cli-entry','module','cli-entry'),N('runtime','module','runtime'),
+  N('src/knowledge-match.js','file','knowledge-match.js'),N('src/knowledge-vector.js','file','knowledge-vector.js'),
+  N('src/knowledge-classify.js','file','knowledge-classify.js'),N('src/index.js','file','index.js'),
+  N('src/doctor-diagnostics.js','file','doctor-diagnostics.js'),N('src/fr-index.js','file','fr-index.js'),
+  N('src/test-bindings.js','file','test-bindings.js'),N('src/decision-distill.js','file','decision-distill.js'),
+  N('backend/pyproject.toml','file','pyproject.toml'),
+  N('D-001@v1','decision','D-001@v1 否决入库侧路由词表派生',{status:'rejected',note:'同窗词片按序截断=抽签'}),
+  N('D-905','decision','D-905 死路：词表截断',{status:'死路注记'}),
+  N('FR-core-engine-001','fr','FR-core-engine-001 稳定 id 发号',{status:'active'}),
+  N('FR-core-engine-002','fr','FR-core-engine-002 承接取代链',{status:'active'}),
+  N('FR-core-engine-003','fr','FR-core-engine-003 观察指标事件流',{status:'active'}),
+  N('2026-09-18-fr-index-l1','change','2026-09-18-fr-index-l1'),
+  N('2026-09-28-knowledge-inject-ranking','change','2026-09-28-knowledge-inject-ranking'),
+  N('2026-09-29-knowledge-vector-recall','change','2026-09-29-knowledge-vector-recall'),
+  N('2026-10-08-knowledge-inbox-triage','change','2026-10-08-knowledge-inbox-triage'),
+  N('e1','entry','sillyspec-gotchas#plan-execute-contract'),
+  N('e2','entry','known-issues#死路条目 148/188 沉底'),
+  N('e3','entry','conventions#INDEX 路由行格式',{orphan:true}),
+  N('doc:card:core-engine','doc','modules/core-engine.md',{kind:'module-card'}),
+  N('doc:chlog:core-engine','doc','core-engine.changelog.md',{kind:'module-changelog'}),
+  N('doc:scan:CONV','doc','backend/scan/CONVENTIONS.md',{kind:'scan'}),
+  N('ql-20260911-029-2892','ql','ql-20260911-029-2892'),
+  N('test/plan-target-files.test.mjs','test','plan-target-files.test.mjs'),
+  N('test/knowledge-graph.test.mjs','test','knowledge-graph.test.mjs',{planned:true}),
+];
+const SLICE_EDGES=[
+  // 模块依赖与覆盖
+  E('cli-entry','core-engine','module-dep'),E('runtime','core-engine','module-dep'),
+  E('core-engine','src/knowledge-match.js','module-files'),E('core-engine','src/knowledge-vector.js','module-files'),
+  E('core-engine','src/knowledge-classify.js','module-files'),E('core-engine','src/doctor-diagnostics.js','module-files'),
+  E('core-engine','src/fr-index.js','module-files'),E('core-engine','src/test-bindings.js','module-files'),
+  E('core-engine','src/decision-distill.js','module-files'),E('cli-entry','src/index.js','module-files'),
+  // 决策锚点/溯源/取代
+  E('D-001@v1','src/knowledge-match.js','anchors','锚点：src/knowledge-match.js'),
+  E('D-905','src/knowledge-match.js','anchors'),
+  E('D-001@v1','2026-09-29-knowledge-vector-recall','from-change'),
+  E('D-905','2026-09-28-knowledge-inject-ranking','from-change'),
+  // FR：域归属 / 溯源 / 承接链 / 测试绑定
+  E('FR-core-engine-001','core-engine','belongs-module'),E('FR-core-engine-002','core-engine','belongs-module'),
+  E('FR-core-engine-003','core-engine','belongs-module'),
+  E('FR-core-engine-001','2026-09-18-fr-index-l1','from-change'),
+  E('FR-core-engine-002','2026-09-18-fr-index-l1','from-change'),
+  E('FR-core-engine-003','2026-09-18-fr-index-l1','from-change'),
+  E('FR-core-engine-002','FR-core-engine-001','supersedes','承接：旧发号规则'),
+  E('FR-core-engine-001','test/plan-target-files.test.mjs','test-binding'),
+  E('FR-core-engine-003','test/knowledge-graph.test.mjs','test-binding','计划中'),
+  // 变更交付面与模块域
+  E('2026-09-28-knowledge-inject-ranking','src/knowledge-match.js','deliverables'),
+  E('2026-09-28-knowledge-inject-ranking','core-engine','change-modules'),
+  E('2026-09-29-knowledge-vector-recall','src/knowledge-vector.js','deliverables'),
+  E('2026-09-29-knowledge-vector-recall','core-engine','change-modules'),
+  E('2026-09-18-fr-index-l1','src/fr-index.js','deliverables'),
+  E('2026-10-08-knowledge-inbox-triage','core-engine','change-modules'),
+  // 手册条目：路由（弱）
+  E('e1','route-placeholder','route','INDEX: plan|execute|contract → e1'),
+  E('e2','route-placeholder','route','INDEX: 死路|沉底 → e2'),
+  // 文档面
+  E('doc:card:core-engine','core-engine','describes','_module-map.yaml doc: 字段'),
+  E('doc:chlog:core-engine','core-engine','changelog-of'),
+  E('doc:chlog:core-engine','2026-09-18-fr-index-l1','changelog-entry'),
+  E('doc:chlog:core-engine','2026-09-28-knowledge-inject-ranking','changelog-entry'),
+  E('doc:chlog:core-engine','ql-20260911-029-2892','changelog-entry'),
+  E('doc:card:core-engine','src/knowledge-match.js','doc-refs','契约摘要引用'),
+  E('doc:scan:CONV','backend/pyproject.toml','scan-refs','pyproject.toml:75-82'),
+  // quicklog / entry-link 预留
+  E('e2','e1','entry-link','关联：（预留契约位）'),
+];
+
+/* ═══════════ 数据装载（切片力场 / 全图聚类两模式） ═══════════ */
+let nodes=[], edges=[], byId={}, MODE='slice', PHYS=true;
+function fitView(){
+  if(nodes.length===0) return;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const n of nodes){x0=Math.min(x0,n.x);y0=Math.min(y0,n.y);x1=Math.max(x1,n.x);y1=Math.max(y1,n.y)}
+  const pad=60,k=Math.min(2,Math.max(.08,Math.min(W/(x1-x0+pad),H/(y1-y0+pad))));
+  view.k=k;view.x=W/2-(x0+x1)/2*k;view.y=H/2-(y0+y1)/2*k;
+}
+function loadGraph(mode){
+  MODE=mode;
+  if(mode==='full'&&window.PROTO_DATA){
+    nodes=PROTO_DATA.nodes.map(n=>({...n,px:n.x,py:n.y}));
+    edges=PROTO_DATA.edges;PHYS=false;
+    const s=PROTO_DATA.stats,b=s.byType;
+    document.getElementById('dataInfo').innerHTML=`<b>${s.nodes}</b> 节点 · <b>${s.edges}</b> 边（本仓真实全量，生成器 prototype-data-gen.cjs 按解析契约抽取）：<br>FR ${b.fr||0} · 文件 ${b.file||0} · 变更 ${b.change||0} · 决策 ${b.decision||0}（域内同号折叠）· 手册条目 ${b.entry||0} · 模块 ${b.module||0} · 文档 ${b.doc||0} · 测试 ${b.test||0} · ql ${b.ql||0}。<br>边型：交付 ${s.byEdge.deliverables||0} · 溯源 ${s.byEdge['from-change']||0} · 测试绑定 ${s.byEdge['test-binding']||0} · 变更-模块 ${s.byEdge['change-modules']||0} · 路由 ${s.byEdge.route||0} · 卡片引用 ${s.byEdge['doc-refs']||0} · 锚点 ${s.byEdge.anchors||0}。`;
+    document.getElementById('dataTag').textContent='全图';
+  }else{
+    nodes=SLICE_NODES.map(n=>({...n}));edges=SLICE_EDGES;PHYS=true;
+    nodes.forEach((n,i)=>{const a=i*2.399;n.x=W/2+Math.cos(a)*(120+i%5*70);n.y=H/2+Math.sin(a)*(90+i%4*60);n.px=n.x;n.py=n.y});
+    document.getElementById('dataInfo').innerHTML='31 节点 60 边——知识子系统自举切片（core-engine 模块 + 决策/FR/变更/文档代表）。';
+    document.getElementById('dataTag').textContent='切片';
+  }
+  byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  selId=null;hlSet=null;dimOthers=false;pendingResult=null;
+  document.getElementById('modeChip').classList.remove('show');
+  fitView();renderR();
+}
+
+/* ═══════════ 物理布局（velocity Verlet 力场） ═══════════ */
+const cv=document.getElementById('canvas'),ctx=cv.getContext('2d');
+let W,H,DPR=Math.min(devicePixelRatio||1,2);
+function resize(){const r=cv.parentElement.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',resize);resize();
+const view={x:0,y:0,k:1};
+const REST={strong:110,medium:150,weak:170};
+function step(){
+  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+    const a=nodes[i],b=nodes[j];
+    if(!isFinite(a.x)||!isFinite(a.y)||!isFinite(b.x)||!isFinite(b.y))continue;
+    let dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy||1,d=Math.sqrt(d2);
+    if(d>320)continue;const f=Math.min(900/d2,.5),fx=dx/d*f,fy=dy/d*f;
+    a.px+=fx;a.py+=fy;b.px-=fx;b.py-=fy;
+  }
+  for(const e of edges){
+    const a=byId[e.s],b=byId[e.t];if(!a||!b)continue;
+    if(!isFinite(a.x)||!isFinite(a.y)||!isFinite(b.x)||!isFinite(b.y))continue;
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.min(Math.sqrt(dx*dx+dy*dy)||1,600);
+    const rest=REST[ET[e.type].s]*(NT[a.type].r+NT[b.type].r)/14;
+    const f=(d-rest)*.02,fx=dx/d*f,fy=dy/d*f;
+    if(!isFinite(fx)||!isFinite(fy))continue;
+    a.px-=fx;a.py-=fy;b.px+=fx;b.py+=fy;
+  }
+  for(const n of nodes){
+    n.px-=(W/2-n.x)*.004;n.py-=(H/2-n.y)*.004;
+    if(n.drag&&isFinite(n.mx)&&isFinite(n.my)){n.x=n.mx;n.y=n.my;n.px=n.x;n.py=n.y;continue}
+    const clamp=v=>Math.max(-9,Math.min(9,v));
+    const vx=clamp((n.x-n.px)*.85),vy=clamp((n.y-n.py)*.85);n.px=n.x;n.py=n.y;n.x+=vx;n.y+=vy;
+    if(!isFinite(n.x)||!isFinite(n.y)){const a=Math.random()*6.28;n.x=W/2+Math.cos(a)*160;n.y=H/2+Math.sin(a)*160;n.px=n.x;n.py=n.y}
+  }
+}
+
+/* ═══════════ 渲染 ═══════════ */
+let hoverId=null,selId=null,hlSet=null,dimOthers=false;
+function draw(){
+  if(PHYS)step();ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(view.x,view.y);ctx.scale(view.k,view.k);
+  for(const e of edges){
+    const a=byId[e.s],b=byId[e.t];if(!a||!b)continue;
+    const inHl=!hlSet||hlSet.edges.has(e);
+    ctx.globalAlpha=dimOthers&&!inHl?.06:.55;
+    const st=ET[e.type].s;
+    ctx.strokeStyle=st==='strong'?'#94a3b8':st==='medium'?'#d97706':'#b0b6bf';
+    ctx.lineWidth=st==='strong'?1.6:1.1;
+    ctx.setLineDash(st==='medium'?[6,5]:st==='weak'?[2,4]:[]);
+    if(hlSet&&inHl){ctx.strokeStyle='#1677ff';ctx.lineWidth=2.2;ctx.globalAlpha=.95}
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([]);
+  }
+  for(const n of nodes){
+    const t=NT[n.type],inHl=!hlSet||hlSet.nodes.has(n.id);
+    ctx.globalAlpha=dimOthers&&!inHl?.1:1;
+    const isSel=n.id===selId,isHov=n.id===hoverId;
+    if(isSel||isHov){ctx.beginPath();ctx.arc(n.x,n.y,t.r+5,0,7);ctx.strokeStyle='#1677ff';ctx.lineWidth=2;ctx.stroke()}
+    if(hlSet&&hlSet.warn&&hlSet.warn.has(n.id)){ctx.beginPath();ctx.arc(n.x,n.y,t.r+8,0,7);ctx.strokeStyle='#dc2626';ctx.lineWidth=2.4;ctx.stroke()}
+    ctx.beginPath();ctx.arc(n.x,n.y,t.r,0,7);ctx.fillStyle=t.c;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+    const showLbl = MODE==='slice'
+      ? (view.k>.55||isSel||isHov||inHl)
+      : ((n.type==='module'||n.type==='doc'||n.type==='project')||view.k>1.35||isSel||isHov||(inHl&&hlSet&&hlSet.nodes.size<=80));
+    if(showLbl){
+      ctx.font=`${isSel||isHov?600:400} ${Math.max(10,10/Math.sqrt(view.k))}px -apple-system,'PingFang SC',sans-serif`;
+      ctx.fillStyle=dimOthers&&!inHl?'rgba(31,35,40,.15)':'#3b414b';ctx.textAlign='center';
+      const lbl=n.label.length>26?n.label.slice(0,25)+'…':n.label;
+      ctx.fillText(lbl,n.x,n.y-t.r-5);
+    }
+  }
+  ctx.restore();ctx.globalAlpha=1;requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ═══════════ 交互：平移/缩放/拾取/拖拽 ═══════════ */
+let dragging=null,panning=false,last={x:0,y:0};
+const toWorld=(cx,cy)=>({x:(cx-view.x)/view.k,y:(cy-view.y)/view.k});
+function pick(cx,cy){const p=toWorld(cx,cy);let best=null,bd=1e9;
+  for(const n of nodes){const d=Math.hypot(n.x-p.x,n.y-p.y);if(d<NT[n.type].r+7&&d<bd){bd=d;best=n}}return best}
+cv.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.12:.89,k2=Math.min(3,Math.max(.3,view.k*f));
+  const p=toWorld(e.offsetX,e.offsetY);view.x=e.offsetX-p.x*k2;view.y=e.offsetY-p.y*k2;view.k=k2},{passive:false});
+cv.addEventListener('mousedown',e=>{const n=pick(e.offsetX,e.offsetY);
+  if(n){dragging=n;n.drag=true;n.mx=n.x;n.my=n.y}else panstart=true;panning=true;last={x:e.offsetX,y:e.offsetY}});
+addEventListener('mousemove',e=>{if(dragging){const r=cv.getBoundingClientRect(),p=toWorld(e.clientX-r.left,e.clientY-r.top);dragging.mx=p.x;dragging.my=p.y}
+  if(panning&&!dragging){view.x+=e.clientX-last.x;view.y+=e.clientY-last.y;last={x:e.clientX,y:e.clientY}}});
+addEventListener('mouseup',()=>{if(dragging){dragging.drag=false;dragging=null}panning=false});
+cv.addEventListener('mousemove',e=>{const n=pick(e.offsetX,e.offsetY);hoverId=n?n.id:null;cv.style.cursor=n?'pointer':(panning?'grabbing':'grab')});
+cv.addEventListener('click',e=>{const n=pick(e.offsetX,e.offsetY);if(n)selectNode(n.id)});
+
+/* ═══════════ 右栏面板 ═══════════ */
+const rbody=document.getElementById('rbody');
+let rtab='detail',pendingResult=null;
+document.querySelectorAll('.rtab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.rtab').forEach(x=>x.classList.remove('active'));t.classList.add('active');rtab=t.dataset.rt;renderR()});
+function renderR(){
+  if(rtab==='logic'){rbody.innerHTML=logicHtml();return}
+  if(rtab==='result'){rbody.innerHTML=pendingResult||'<div class="empty">尚未执行查询<br>左侧选择查询类型与参数，或点击预置演示</div>';return}
+  if(!selId){rbody.innerHTML='<div class="empty">点击画布中的节点<br>查看详情与一跳邻居</div>';return}
+  const n=byId[selId],t=NT[n.type];
+  let h=`<div class="rtitle"><span class="nd" style="width:12px;height:12px;border-radius:50%;background:${t.c};display:inline-block"></span>${n.label}</div>`;
+  h+=`<div class="kv"><span class="k">节点类型</span><span class="v"><span class="chip c-node">${t.l}</span></span></div>`;
+  for(const[k,v]of Object.entries(n.attrs||{}))h+=`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  const groups={};
+  for(const e of edges){
+    if(e.s===n.id)(groups[e.type]??= []).push({other:byId[e.t],dir:'出'});
+    if(e.t===n.id&&!(e.type==='module-files'&&n.id==='core-engine'&&false))(groups[e.type]??= []).push({other:byId[e.s],dir:'入'});
+  }
+  for(const[etype,arr]of Object.entries(groups)){
+    if(!ET[etype])continue;
+    h+=`<div class="nh-group"><h4><span class="chip str-${ET[etype].s}">${ET[etype].s==='strong'?'强':ET[etype].s==='medium'?'中':'弱'}</span>${etype} <span style="font-weight:400">· ${ET[etype].l}</span></h4>`;
+    for(const{other,dir}of arr){if(!other)continue;
+      h+=`<div class="nh" data-nid="${other.id}"><span class="nd" style="width:9px;height:9px;border-radius:50%;background:${NT[other.type].c}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${other.label}</span><span class="dir">${dir}</span></div>`}
+    h+='</div>';
+  }
+  rbody.innerHTML=h;
+  rbody.querySelectorAll('.nh').forEach(el=>el.onclick=()=>selectNode(el.dataset.nid));
+}
+function selectNode(id){selId=id;hlSet={nodes:new Set([id,...oneHop(id).map(e=>e)]) ,edges:new Set(edges.filter(e=>e.s===id||e.t===id))};dimOthers=true;setChip('已选中 · 高亮一跳邻域');rtab='detail';document.querySelectorAll('.rtab').forEach((x,i)=>x.classList.toggle('active',i===0));renderR()}
+function oneHop(id){const s=new Set();for(const e of edges){if(e.s===id&&byId[e.t])s.add(e.t);if(e.t===id&&byId[e.s])s.add(e.s)}return[...s]}
+function setChip(txt){const c=document.getElementById('modeChip');document.getElementById('modeText').textContent=txt;c.classList.add('show')}
+document.getElementById('modeClear').onclick=()=>{hlSet=null;dimOthers=false;selId=null;document.getElementById('modeChip').classList.remove('show');renderR()};
+
+/* ═══════════ 查询引擎（与 CLI 语义一致） ═══════════ */
+function classOf(id){return NT[byId[id]?.type]?.r>=0?null:null}
+function isNode(id){return!!byId[id]}
+function resolveTarget(arg){ // 锚点 / 文件 / 模块 / 变更 模糊解析
+  if(byId[arg])return byId[arg];
+  const bnm=arg.replace(/^.*\//,'');
+  return nodes.find(n=>n.id.endsWith('/'+bnm))||nodes.find(n=>n.label===arg)||null;
+}
+function strongEdges(){return edges.filter(e=>ET[e.type]?.s==='strong')}
+function bfs(starts,depth,eset){ // 只在给定边集上扩展
+  const seen=new Set(starts),front=[...starts];
+  for(let d=0;d<depth&&front.length;d++){const nf=[];
+    for(const id of front)for(const e of eset){
+      let nx=null;if(e.s===id&&byId[e.t])nx=e.t;else if(e.t===id&&byId[e.s])nx=e.s;
+      if(nx&&!seen.has(nx)){seen.add(nx);nf.push(nx)}}
+    front.length=0;front.push(...nf)}
+  return seen;
+}
+function runQuery(type,arg,arg2){
+  const res={nodes:new Set(),edges:new Set(),warn:new Set(),items:[],title:'',sub:''};
+  const mark=(ids,es)=>{ids.forEach(i=>res.nodes.add(i));es.forEach(e=>res.edges.add(e))};
+  if(type==='neighbors'){
+    const n=resolveTarget(arg);if(!n)return err(arg);
+    const ids=new Set([n.id,...oneHop(n.id)]);mark(ids,edges.filter(e=>e.s===n.id||e.t===n.id));
+    res.title=`neighbors · ${n.label}`;res.sub='一跳邻域（全边型，弱边仅展示）';
+    res.items=[{t:n.label,d:`${NT[n.type].l} · 一跳邻居 ${oneHop(n.id).length} 个`,ok:1}];
+  }
+  if(type==='impact'){
+    const n=resolveTarget(arg);if(!n)return err(arg);
+    // 遍历只走强边：change→deliverables/change-modules→file←anchors←decision/fr→belongs-module→module（深度2）
+    const se=strongEdges();const closure=bfs([n.id],2,se);
+    mark(closure,se.filter(e=>closure.has(e.s)&&closure.has(e.t)));
+    res.title=`impact · ${n.label}`;res.sub='强边闭包（深度≤2）· 中/弱边不传播';
+    const mods=[...closure].filter(i=>byId[i]?.type==='module'),decs=[...closure].filter(i=>byId[i]?.type==='decision'||byId[i]?.type==='fr');
+    res.items=[{t:`触及模块 ${mods.length}`,d:mods.map(i=>byId[i].label).join('、')||'—',ok:1},
+      {t:`锚定决策/FR ${decs.length}`,d:decs.map(i=>byId[i].label).slice(0,6).join('、')||'—',ok:1},
+      {t:'防复潮保底',d:`rejected/死路条目沿强边可达即注入：${decs.filter(i=>byId[i].attrs?.status==='rejected'||/死路/.test(byId[i].attrs?.note||'')).length} 条可达`,ok:1}];
+  }
+  if(type==='path'){
+    const a=resolveTarget(arg),b=resolveTarget(arg2);if(!a||!b)return err(arg+' → '+arg2);
+    const se=strongEdges();const prev={};const q=[a.id],seen=new Set([a.id]);
+    while(q.length){const id=q.shift();for(const e of se){let nx=null;if(e.s===id&&byId[e.t])nx=e.t;else if(e.t===id&&byId[e.s])nx=e.s;
+      if(nx&&!seen.has(nx)){seen.add(nx);prev[nx]={from:id,e};q.push(nx)}}}
+    if(!seen.has(b.id)){res.title='path · 不可达';res.sub='强边子集上无路径（中/弱边不参与寻路）';
+      mark(new Set([a.id,b.id]),[]);res.items=[{t:'未找到路径',d:'起点与终点在强边子集上不连通',ok:0}];return res}
+    const chain=[];let cur=b.id;while(cur!==a.id){const p=prev[cur];chain.unshift(p.e);cur=p.from}
+    const ids=new Set([a.id,b.id]);chain.forEach(e=>{ids.add(e.s);ids.add(e.t)});
+    mark(ids,chain);res.title=`path · ${chain.length} 跳`;res.sub=a.label+' → '+b.label;
+    res.items=[{t:'推理链',d:chain.map(e=>`${byId[e.s]?.label} —${e.type}→ ${byId[e.t]?.label}`).join('\n'),ok:1}];
+  }
+  if(type==='orphans'){
+    const deg={};edges.forEach(e=>{deg[e.s]=1;deg[e.t]=1});
+    const orph=nodes.filter(n=>!deg[n.id]||n.attrs?.orphan);
+    mark(new Set(orph.map(n=>n.id)),[]);
+    res.title=`orphans · ${orph.length} 个孤儿`;res.sub='零度节点或无路由条目（doctor: graph-orphan-entry → warning）';
+    res.items=orph.map(n=>({t:n.label,d:`${NT[n.type].l} · 无任何边入度${n.attrs?.orphan?' · 条目无 INDEX 路由':''}`,ok:0}));
+    orph.forEach(n=>res.warn.add(n.id));
+  }
+  if(type==='dangling'){
+    const items=[];
+    for(const n of nodes){if(n.attrs?.orphan){items.push({t:n.label,d:'INDEX 路由行指向不存在锚点（graph-dangling-route · warning）',ok:0});res.warn.add(n.id)}}
+    items.push({t:'doc:scan:CONV → backend/build.sh',d:'scan-refs 引用文件不存在（graph-doc-dangling-ref · warning）',ok:0});
+    res.title=`dangling · ${items.length} 处悬空`;res.sub='强边悬空将升 error，中/弱边 warning（本演示为示意）';
+    items.forEach(i=>{});res.items=items;mark(new Set(),new Set());
+  }
+  return res;
+}
+function err(a){return{nodes:new Set(),edges:new Set(),warn:new Set(),title:'未找到节点',sub:String(a),items:[{t:'解析失败',d:'锚点/文件/模块/变更名未命中',ok:0}]}}
+function applyResult(r){
+  hlSet={nodes:r.nodes,edges:r.edges,warn:r.warn};dimOthers=true;setChip(r.title);
+  pendingResult=`<div class="rtitle">${r.title}</div><div class="rsub">${r.sub}</div>`+
+    r.items.map(i=>`<div class="res-item ${i.ok?'ok':'warn'}"><div class="t">${i.t}</div><div class="d" style="white-space:pre-line">${i.d}</div></div>`).join('')+
+    `<div class="note" style="margin-top:10px">结果面与 <code>sillyspec knowledge graph --json</code> 同构；平台侧可对任一条目跳转知识库详情。</div>`;
+  rtab='result';document.querySelectorAll('.rtab').forEach((x,i)=>x.classList.toggle('active',i===1));renderR();
+}
+document.getElementById('qrun').onclick=()=>{
+  const t=document.getElementById('qtype').value,a=document.getElementById('qarg').value.trim();
+  document.getElementById('clihint').innerHTML=`等价 CLI：<b>sillyspec knowledge graph ${t} ${a}</b><br>平台侧与本查询共用同一图引擎（解析时内存派生，无缓存文件）。`;
+  applyResult(runQuery(t,a));
+};
+document.getElementById('qreset').onclick=()=>document.getElementById('modeClear').click();
+document.querySelectorAll('.preset').forEach(p=>p.onclick=()=>{
+  const[t,a,b]=p.dataset.q.split('|');
+  document.getElementById('qtype').value=t;document.getElementById('qarg').value=a;
+  document.getElementById('qrun').click();
+});
+
+/* ═══════════ 图例渲染 ═══════════ */
+document.getElementById('legendNodes').innerHTML=Object.entries(NT)
+  .map(([k,v])=>`<div class="ln" data-t="${k}"><span class="nd" style="width:11px;height:11px;border-radius:50%;background:${v.c}"></span>${v.l}</div>`).join('');
+document.getElementById('legendEdges').innerHTML=Object.entries(ET)
+  .map(([k,v])=>{const d=v.s==='strong'?'':v.s==='medium'?'6,5':'2,4';
+    return `<div class="le" data-e="${k}" title="点击高亮该边型" style="cursor:pointer;border-radius:4px;padding:2px 4px"><svg width="34" height="8"><line x1="1" y1="4" x2="33" y2="4" stroke="${v.s==='strong'?'#1677ff':v.s==='medium'?'#d97706':'#9ca3af'}" stroke-width="2" ${d?`stroke-dasharray="${d}"`:''}/></svg>${k}<span class="str-pill str-${v.s}">${v.s==='strong'?'强':v.s==='medium'?'中':'弱'}</span><span class="en">${v.l}</span></div>`}).join('');
+document.querySelectorAll('.le').forEach(el=>{
+  el.onmouseenter=()=>el.style.background='var(--bg)';
+  el.onmouseleave=()=>el.style.background='';
+  el.onclick=()=>{
+    const t=el.dataset.e;const es=edges.filter(e=>e.type===t);
+    const ns=new Set();es.forEach(e=>{if(byId[e.s])ns.add(e.s);if(byId[e.t])ns.add(e.t)});
+    hlSet={nodes:ns,edges:new Set(es),warn:new Set()};dimOthers=true;
+    setChip(`边型过滤 · ${t} × ${es.length} 条（端点 ${ns.size} 个）`);
+  };
+});
+document.querySelectorAll('.ln').forEach(el=>el.onclick=()=>{
+  const t=el.dataset.t;const ids=nodes.filter(n=>n.type===t).map(n=>n.id);
+  hlSet={nodes:new Set(ids),edges:new Set(),warn:new Set()};dimOthers=true;setChip(`节点类型过滤 · ${NT[t].l} × ${ids.length}`);
+});
+
+/* ═══════════ 逻辑说明页 ═══════════ */
+function logicHtml(){return `
+<div class="note">
+  <h5>1 · 图从哪来（真相源不动）</h5>
+  md / yaml 是唯一真相源；图是 <code>buildKnowledgeGraph(specRoot)</code> 解析时内存派生——不落盘、无缓存文件、无刷新机制（与 project-map 墓碑切割）。聚合五个既有 parser：<code>parseKnowledgeIndex / parseDecisionEntries / fr-index / _module-map / test-bindings</code>，字段契约复用 import 不复制。
+  <h5>2 · 本体三档强度 × 传递规则</h5>
+  <span class="chip c-strong">强边</span> anchors / supersedes / belongs-module / module-dep / deliverables / changelog-entry 等 12 类——<span class="hl">可进 impact 闭包与召回传播</span>；<span class="chip c-mid">中边</span> doc-refs / scan-refs（随代码漂移）仅查询展示；<span class="chip c-weak">弱边</span> route / entry-link（预留）仅展示与自检。可传递边仅 supersedes（版本链）与 module-dep（依赖闭包）。
+  <h5>3 · 四层检索（本变更新增第四层）</h5>
+  <div class="flow">
+    <div class="step"><span class="chip c-strong">1</span> INDEX 关键词路由（既有）</div><div class="arrow">↓ 零命中</div>
+    <div class="step"><span class="chip c-strong">2</span> 平台向量召回（既有，SillyHub）</div><div class="arrow">↓ 零命中</div>
+    <div class="step"><span class="chip c-node">3</span> <b>scope 遍历召回（新）</b>：变更触碰文件 ←anchors← 决策/FR →模块</div><div class="arrow">↓ 零命中</div>
+    <div class="step"><span class="chip c-weak">4</span> 本地词片复现回退（既有）</div>
+  </div>
+  scope 为空时整层跳过——CLI search 等无变更面的调用方行为与现状逐字节等价（回归测试钉死）。
+  <h5>4 · 防复潮保底（解决 148/188 沉底）</h5>
+  rejected / 死路条目沿强边从变更 scope <span class="hl">可达即注入</span>，不再依赖词面召回。三闸防洪水：scope 非空 · 只走强边 · 20 条封顶。
+  <h5>5 · doctor 自检（三项新检查）</h5>
+  <code>graph-dangling-route</code>（弱边→warning）/ <code>graph-doc-dangling-ref</code>（中边→warning）/ <code>graph-orphan-entry</code>（→warning）+ 模块文档缺口与 changelog 悬空。人肉清账（如 10-08 INDEX 断链修复）变机器常态。
+  <h5>6 · 平台侧定位（本页）</h5>
+  平台知识面板新增"知识图谱"页签：查询面与 CLI 同源（--json 同构），节点可跳转知识库条目详情；远期可选平台混合检索（向量候选 + 图扩展 re-rank）——不在本变更范围。
+</div>`}
+document.getElementById('modeSlice').onclick=()=>loadGraph('slice');
+document.getElementById('modeFull').onclick=()=>loadGraph('full');
+loadGraph('slice');
+renderR();
+</script>
+</body>
+</html>

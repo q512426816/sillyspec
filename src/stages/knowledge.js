@@ -609,6 +609,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       return cmdRefresh(dir, args.slice(1), opts)
     case 'propose':
       return cmdPropose(dir, args.slice(1), opts)
+    case 'graph': {
+      // 知识图谱查询面（2026-10-08-knowledge-graph）：neighbors/path/impact/orphans/dangling，
+      // --edges 边型筛选；全 JSON 出口（与 search/validate 同族）。
+      const mod = await tryImportSubcommandImpl('../knowledge-graph.js', 'knowledge-graph.js')
+      if (!mod || typeof mod.cmdKnowledgeGraph !== 'function') {
+        output(false, {}, { code: 'not_implemented', subcommand: 'graph' })
+        return
+      }
+      return mod.cmdKnowledgeGraph(dir, args.slice(1), opts)
+    }
     case 'classify': {
       const mod = await tryImportSubcommandImpl('../knowledge-classify.js', 'knowledge-classify.js')
       if (!mod || typeof mod.cmdKnowledgeClassify !== 'function') {

@@ -114,6 +114,7 @@ modules:
       - src/knowledge-classify.js
       - src/knowledge-stats.js
       - src/knowledge-vector.js
+      - src/knowledge-graph.js
       - src/greenfield-bootstrap.js
       - src/fr-index.js
       - src/knowledge-digest.js

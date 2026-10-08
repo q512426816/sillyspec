@@ -1506,7 +1506,8 @@ export async function runDoctorDiagnostics({ cwd }) {
     )
   } catch { gateLeakRuntimeRoot = null }
   const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak];
+  const knowledgeGraphIntegrity = detectKnowledgeGraphIntegrity(cwd, authoritySpecDir || join(cwd, '.sillyspec'))
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
 
   return {
     dimensions,
@@ -2167,4 +2168,70 @@ export async function gcUnstampedExecuteRuns({ cwd, specDir = null, confirm = fa
     removed: confirm ? removed : [],
     count: candidates.length,
   }
+}
+
+// ══ 2026-10-08-knowledge-graph（task-05，FR-03）：知识图完整性面 knowledge_graph_integrity ══
+// 六检查项（design §4）：graph-dangling-route / graph-doc-dangling-ref / graph-dangling-anchor /
+// graph-orphan-entry / graph-module-doc-gap / graph-changelog-dangling——全 warning 不阻断
+// （沿 apply_manifest_drift advisory 先例）。图=解析时内存派生（D-003：不落盘不刷新）。
+// 悬空目标可能活在跨仓（local.yaml repos 注册的其他仓）——聚合计数+样本，不逐条刷屏。
+export function detectKnowledgeGraphIntegrity(cwd, specDir) {
+  const base = { name: 'knowledge_graph_integrity', label: '知识图完整性', safe_actions: [] }
+  try {
+    if (!specDir || !existsSync(join(specDir, 'knowledge'))) {
+      return { ...base, findings: ['无 knowledge/ 目录——skipped'], pass: true, severity: null, skipped: true }
+    }
+    // 动态 import 防加载面放大（doctor 主路径不触发图构建成本）
+    const { graphOrphans, graphDangling, buildKnowledgeGraph } = requireKnowledgeGraph()
+    const graph = buildKnowledgeGraph(specDir)
+    const findings = []
+    const sample = (arr, n = 3) => arr.slice(0, n).map(String)
+
+    // ① route 悬空（弱边）：INDEX 路由行指向不存在锚点——条目节点存在性由建图保证，
+    //    此处查目标手册文件本体（file 属性）是否在场
+    const routeTargets = new Set()
+    for (const e of (graph.byEdgeType.get('route') || [])) routeTargets.add(graph.nodes.get(e.t)?.attrs?.file || '')
+    const danglingRoute = [...routeTargets].filter((f) => f && !existsSync(join(specDir, 'knowledge', f)))
+    if (danglingRoute.length > 0) findings.push(`graph-dangling-route：${danglingRoute.length} 条 INDEX 路由指向不存在文件（${sample(danglingRoute).join('、')}）`)
+
+    // ②③ 引用/锚点悬空（中/强边）：文件系统存在性（跨仓目标聚合计数不展开）
+    const dangling = graphDangling(graph)
+    const byStrength = { strong: [], medium: [], weak: [] }
+    for (const d of dangling) byStrength[d.strength]?.push(`${d.edge.type}→${d.missing}`)
+    if (byStrength.strong.length > 0) findings.push(`graph-dangling-anchor：${byStrength.strong.length} 条强边锚点指向本仓不存在文件（跨仓目标计入；样本 ${sample(byStrength.strong).join('、')}）`)
+    if (byStrength.medium.length > 0) findings.push(`graph-doc-dangling-ref：${byStrength.medium.length} 条文档引用悬空（样本 ${sample(byStrength.medium).join('、')}）`)
+
+    // ④ 孤儿条目
+    const orphans = graphOrphans(graph)
+    if (orphans.length > 0) findings.push(`graph-orphan-entry：${orphans.length} 个零关联节点（样本 ${sample(orphans.map((o) => o.node.label)).join('、')}）`)
+
+    // ⑤ 模块文档缺口：map 模块无 describes 或 changelog-of 入边
+    const hasDescribes = new Set((graph.byEdgeType.get('describes') || []).map((e) => e.t))
+    const hasChlog = new Set((graph.byEdgeType.get('changelog-of') || []).map((e) => e.t))
+    const mapModules = [...graph.nodes.values()].filter((n) => n.type === 'module' && n.attrs.project && !n.attrs.fromFrDomain)
+    const docGap = mapModules.filter((n) => !hasDescribes.has(n.id) || !hasChlog.has(n.id))
+    if (docGap.length > 0) findings.push(`graph-module-doc-gap：${docGap.length} 个模块缺卡片或 changelog（样本 ${sample(docGap.map((n) => n.id.replace(/^module:/, ''))).join('、')}）`)
+
+    // ⑥ changelog 行悬空：日期名目标变更既不在 archive/ 也不在活跃 changes/（ql 目标豁免——
+    //    quicklog 条目无目录形态，其家在 QUICKLOG md 文件）
+    const chlogTargets = new Set((graph.byEdgeType.get('changelog-entry') || []).map((e) => e.t))
+    const chlogDangling = [...chlogTargets].filter((id) =>
+      /^\d{4}-\d{2}-\d{2}-/.test(id) &&
+      !existsSync(join(specDir, 'changes', 'archive', id)) && !existsSync(join(specDir, 'changes', id)))
+    if (chlogDangling.length > 0) findings.push(`graph-changelog-dangling：${chlogDangling.length} 条 changelog 行指向不存在变更/ql（样本 ${sample(chlogDangling).join('、')}）`)
+
+    if (findings.length === 0) {
+      return { ...base, findings: [`图完整性六检查通过（${graph.stats.nodeCount} 节点 / ${graph.stats.edgeCount} 边）`], pass: true, severity: null }
+    }
+    return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+  } catch (e) {
+    return { ...base, findings: [`图构建降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+// ESM 同步 require 桥：doctor 主体是同步管线，图模块按需加载（失败走上方 catch 的 skipped 分支）
+import { createRequire as _kgCreateRequire } from 'module'
+const _kgRequire = _kgCreateRequire(import.meta.url)
+function requireKnowledgeGraph() {
+  return _kgRequire('./knowledge-graph.js')
 }

@@ -80,9 +80,12 @@ test('③ 真实库钉子：谓词守卫/顿号拆分 命中 unmapped 且条目�
   assert.ok(kmP.entries.some((e) => String(e.file).includes('unmapped')), '文件级指向 unmapped')
   assert.ok(kmP.decisionHits.some((h) => /谓词/.test(`${h.title} ${h.reason || ''}`)), '含谓词条目进 decisionHits')
 
-  const kmD = matchKnowledge(REAL_KB, '方案：顿号拆分缝补齐')
-  assert.ok(kmD.matched, '顿号拆分 命中')
-  assert.ok(kmD.decisionHits.some((h) => /拆分|误拆/.test(`${h.title} ${h.reason || ''}`)), '含拆分/误拆条目进 decisionHits')
+  // 2026-10-08-knowledge-inbox-triage 归档后 INDEX 新增关键词「拆分」（patterns.md 路由行）——
+  // 含「拆分」的查询被路由层先截胡、不再落到词片回退。查询词面改用「误拆」（不含「拆分」子串），
+  // 测试意图不变：回退层仍能带出误拆教训条目。
+  const kmD = matchKnowledge(REAL_KB, '方案：关键词误拆的缝补策略')
+  assert.ok(kmD.matched, '误拆缝补 命中')
+  assert.ok(kmD.decisionHits.some((h) => /误拆/.test(`${h.title} ${h.reason || ''}`)), '含误拆条目进 decisionHits')
 
   const kmEnum = matchKnowledge(REAL_KB, '方案：用枚举词表扫描开放世界')
   assert.equal(kmEnum.json && kmEnum.json.fallback, undefined, '枚举词表仍走路由')

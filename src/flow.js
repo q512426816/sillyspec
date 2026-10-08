@@ -286,7 +286,9 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     }
     const { matchKnowledgeHybrid } = await import('./knowledge-vector.js')
     const { deathPathNote } = await import('./knowledge-match.js')
-    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase) })
+    // scope 遍历召回（2026-10-08-knowledge-graph，FR-04）：touched=机器算的图查询键
+    // （filesOverride ∪ design 交付表——上方既有变量），词面三层零命中时沿强边保底防复潮
+    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase), scopeFiles: touched })
     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
     // 蹭进回显是行为实测三例的噪音源，不再注入）

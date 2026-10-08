@@ -479,7 +479,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         _kgQuery = _kgQuery.slice(0, 4000)
         if (_kgQuery.trim()) {
           const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
-          const km = await matchKnowledgeHybrid(join(specBase, 'knowledge'), _kgQuery, { cwd })
+          const { scopeFromDecisionsMd } = await import('../knowledge-graph.js')
+          // scope 键=机器算（D-004 需求期入口）：decisions.md「锚点：」字段路径提取——方案步的
+          // 结构化声明面，不解析自由文本。词面零命中时沿强边保底防复潮（FR-04）。
+          const km = await matchKnowledgeHybrid(join(specBase, 'knowledge'), _kgQuery, { cwd, scopeFiles: scopeFromDecisionsMd(_dm) })
           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
