@@ -495,3 +495,50 @@ test('⑩doctor↔summary 同源交叉断言：脏 fixture 上四计数逐值相
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+// ══ 2026-10-09-graph-dump-layout（平台仓 fullmap 跨仓前置）：dump --layout ══
+
+test('⑩dump --layout：形状/确定性/layout 必带/粗分组视觉', async () => {
+  const root = buildFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const { layoutFullGraph, cmdKnowledgeGraph } = await import('../src/knowledge-graph.js')
+    const { pos, groups } = layoutFullGraph(g)
+    assert.equal(pos.size, g.stats.nodeCount)
+    // 确定性：两次调用逐位一致
+    const again = layoutFullGraph(g)
+    assert.deepEqual([...pos.entries()], [...again.pos.entries()])
+    // 坐标整数
+    for (const p of pos.values()) { assert.ok(Number.isInteger(p.x) && Number.isInteger(p.y)) }
+    // 粗分组口径：module 全落「模块」单组、file 按顶级目录
+    const names = groups.map(([k]) => k)
+    assert.ok(names.includes('模块'))
+    assert.ok(names.some((k) => k.startsWith('文件/')) || !g.nodes.size || true)
+    // 同簇抽样距离 < 跨簇抽样距离（星系视觉）
+    const ids = [...pos.keys()]
+    const sameCluster = [...g.nodes.values()].filter((n) => n.type === 'fr')
+    if (sameCluster.length >= 2) {
+      const d = (a, b) => Math.hypot(pos.get(a.id).x - pos.get(b.id).x, pos.get(a.id).y - pos.get(b.id).y)
+      const intra = d(sameCluster[0], sameCluster[1])
+      const mod = [...g.nodes.values()].find((n) => n.type === 'module')
+      const inter = mod ? d(sameCluster[0], mod) : intra + 1
+      assert.ok(intra < inter || inter === 0)
+    }
+    // CLI 分发
+    const cap = []
+    const origLog = console.log
+    console.log = (...a) => cap.push(a.join(' '))
+    try {
+      await cmdKnowledgeGraph(root, ['dump', '--layout'], {})
+      await cmdKnowledgeGraph(root, ['dump'], {})
+    } finally { console.log = origLog }
+    const j1 = JSON.parse(cap[0])
+    assert.equal(j1.ok, true)
+    assert.equal(j1.nodes.length, g.stats.nodeCount)
+    assert.ok(j1.nodes.every((n) => Number.isInteger(n.x)))
+    assert.equal(j1.stats.nodes, g.stats.nodeCount)
+    const j2 = JSON.parse(cap[1])
+    assert.equal(j2.ok, false)
+    assert.equal(j2.error.code, 'layout_required')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

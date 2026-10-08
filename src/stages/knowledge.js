@@ -675,7 +675,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       output(false, {}, {
         code: 'unknown_subcommand',
         subcommand: subCommand,
-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],
+        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
       })
   }
 }

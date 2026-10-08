@@ -577,6 +577,45 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
   }
 }
 
+/** 全图粗分组（原型 prototype-data-gen.cjs comm() 逐行移植——2026-10-09-knowledge-graph-fullmap Grill F-01 钉死口径：
+ *  decision/fr 按域、module/doc 单组、file 按顶级目录、change、ql、其余"其他"；真图 ≈10-15 星系即原型视觉。
+ *  禁用 summary 细簇（883 簇会把主环撑到 ~8900px 退化均匀散点）。 */
+function graphCommunity(n) {
+  if (n.type === 'decision') return '决策域/' + (n.attrs.domain || '_unmapped')
+  if (n.type === 'fr') return 'FR域/' + (n.attrs.domain || '_unmapped')
+  if (n.type === 'module') return '模块'
+  if (n.type === 'file') return '文件/' + (n.id.includes('/') ? n.id.split('/')[0] : '.')
+  if (n.type === 'doc') return '文档'
+  if (n.type === 'change') return '变更'
+  if (n.type === 'ql') return 'quicklog'
+  return '其他'
+}
+
+/** 全图确定性布局（原型 sunflower 摆位逐行移植，常量固化）：
+ *  簇按 count 降序（同数按组名字典序稳序）；主环半径 sqrt(gi+1)*300、簇相位 gi*2.39999；
+ *  簇内半径 16*sqrt(j+1)（j=节点序）、角 j*2.39999+gi；坐标 Math.round。
+ *  确定性为硬约束（同输入逐位一致）；与原型生成器逐位等价非约束（稳序差异）。 */
+export function layoutFullGraph(graph) {
+  const groups = new Map()
+  for (const n of graph.nodes.values()) {
+    const k = graphCommunity(n)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(n)
+  }
+  const gArr = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+  const pos = new Map()
+  gArr.forEach(([k, arr], gi) => {
+    const gc = Math.sqrt(gi + 1) * 300, ga = gi * 2.39999
+    const cx = Math.cos(ga) * gc, cy = Math.sin(ga) * gc
+    arr.forEach((n, j) => {
+      const r = 16 * Math.sqrt(j + 1), a = j * 2.39999 + gi
+      pos.set(n.id, { x: Math.round(cx + Math.cos(a) * r), y: Math.round(cy + Math.sin(a) * r) })
+    })
+  })
+  return { pos, groups: gArr.map(([k, a]) => [k, a.length]) }
+}
+
 /** 节点搜索：id/label 不区分大小写包含匹配，limit 钳 1-50（平台锚点自动补全数据源）。 */
 export function graphNodesSearch(graph, search, limit = 20) {
   const q = String(search || '').toLowerCase()
@@ -676,7 +715,7 @@ export function scopeFromDecisionsMd(text) {
 // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
 // ═══════════════════════════════════════════════════════════════
 
-const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]'
+const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|dump|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]；dump 需 --layout'
 
 export async function cmdKnowledgeGraph(dir, args, opts = {}) {
   const out = (ok, data, error) => console.log(JSON.stringify({ ok, ...(data || {}) , ...(error ? { error } : {}) }, null, 2))
@@ -692,7 +731,7 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
   const specRoot = opts.specDir || join(dir, '.sillyspec')
   const knowledgeDir = join(specRoot, 'knowledge')
 
-  if (!['summary', 'nodes', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
+  if (!['summary', 'nodes', 'dump', 'neighbors', 'path', 'impact', 'orphans', 'dangling'].includes(sub)) {
     out(false, {}, { code: 'graph_usage', usage: GRAPH_USAGE, subcommand: sub })
     return
   }
@@ -710,6 +749,21 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
         `孤儿 ${s.orphans} · 模块文档缺口 ${s.module_doc_gaps} · changelog 悬空 ${s.changelog_danglings} · 悬空引用 ${s.dangling_refs}`,
         `簇 ${s.clusters.length} 个（最大 ${s.clusters[0]?.key ?? '—'} × ${s.clusters[0]?.count ?? 0}）`,
       ],
+    })
+  }
+  if (sub === 'dump') {
+    if (!args.includes('--layout')) return out(false, {}, { code: 'layout_required', usage: GRAPH_USAGE })
+    const { pos, groups } = layoutFullGraph(graph)
+    const stats = graphSummary(graph)
+    return out(true, {
+      query: { sub, layout: true },
+      nodes: [...graph.nodes.values()].map((n) => {
+        const p = pos.get(n.id)
+        return { id: n.id, type: n.type, label: n.label, x: p.x, y: p.y }
+      }),
+      edges: graph.edges.map((e) => ({ s: e.s, t: e.t, type: e.type, strength: EDGE_STRENGTH[e.type] })),
+      stats,
+      summary: [`节点 ${stats.nodes} · 边 ${stats.edges}`, `星系 ${groups.length} 个（最大 ${groups[0]?.[0] ?? '—'} × ${groups[0]?.[1] ?? 0}）`],
     })
   }
   if (sub === 'nodes') {
