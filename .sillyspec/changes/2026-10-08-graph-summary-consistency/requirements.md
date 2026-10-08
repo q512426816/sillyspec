@@ -32,7 +32,7 @@ created_at: 2026-10-08T16:09:40.486Z
 
 ### FR-04: 既有图测试 9 组 + doctor 回归全绿，lint 零告警
 
-- 既有图测试十组全绿、test:core 全量绿、lint 零告警（未引用导出 / module-map 覆盖门全过）。
+- 既有图测试十组必须全绿、test:core 全量绿、lint 零告警（未引用导出 / module-map 覆盖门全过）。
 
 #### 场景：回归面
 
