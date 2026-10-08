@@ -486,6 +486,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+          // impact 防复潮可达集（2026-10-09-brainstorm-impact-antirevival）：锚点+模块域双结构键
+          // → graphImpact 闭包内 rejected/死路保底进场——方案步锚点常空（confirmed 才必填），
+          // 模块域是生成规范文件步硬校验的在场键；viaImpact 条目绕过 score 门槛（结构可达即
+          // 防复潮先验，与死路同待遇）。图构建 fail-soft（失败不阻断门）。
+          try {
+            const { buildKnowledgeGraph, impactFromDecisionsMd } = await import('../knowledge-graph.js')
+            const _viaImpact = impactFromDecisionsMd(buildKnowledgeGraph(specBase), _dm)
+              .filter((h) => !_hits.some((x) => x.file === h.file && x.id === h.id && (x.change || '') === (h.change || '')))
+            _hits.push(..._viaImpact)
+          } catch { /* 图构建/键解析 fail-soft——词面命中面不受影响 */ }
           // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
           // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
           const _answered = _dm
@@ -503,7 +513,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
               const _note = h.status === 'rejected'
                 ? ` 否决理由：${h.reason || '（未记录）'}`
                 : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''
-              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}`)
+              const _via = h.viaImpact ? ` 🧭impact 可达（键：${h.impactKey}）` : ''
+              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}${_via}`)
             }
             for (const e of _entries.slice(0, 3)) {
               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, impactFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
 import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
 import { flowKnowledgeDigest } from '../src/flow.js'
 
@@ -540,5 +540,42 @@ test('⑪dump --layout：形状/确定性/layout 必带/粗分组视觉', async 
     const j2 = JSON.parse(cap[1])
     assert.equal(j2.ok, false)
     assert.equal(j2.error.code, 'layout_required')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact 可达集（2026-10-09-brainstorm-impact-antirevival）', () => {
+  const root = buildFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    // 双键 decisions.md：锚点命中 src/foo.js（rejected D-001@v1@alpha 锚定其上）+ 模块域 core-engine
+    const dm = [
+      '# 决策记录（Decisions）', '',
+      '## D-001@v1: 某方案',
+      '- type: architecture',
+      '- status: accepted',
+      '- 锚点：src/foo.js:10',
+      '- 模块域: core-engine', '',
+      '## D-002@v1: 另一方案',
+      '- 模块域：NEW:future-mod, core-engine', '',
+    ].join('\n')
+    const hits = impactFromDecisionsMd(g, dm)
+    // rejected D-001@v1@alpha 经 src/foo.js anchors 可达
+    const rej = hits.find((h) => h.id === 'D-001@v1' && h.change === '2026-01-01-alpha')
+    assert.ok(rej, '锚点键命中 rejected 条目')
+    assert.equal(rej.status, 'rejected')
+    assert.equal(rej.viaImpact, true)
+    assert.ok(hits.every((h) => h.viaImpact === true), '全部带 viaImpact 标记')
+    // NEW: 前缀剥除后未入图（future-mod 无 module 节点）→ 静默跳过不抛
+    // 空文本/无结构键文本 → []
+    assert.deepEqual(impactFromDecisionsMd(g, ''), [])
+    assert.deepEqual(impactFromDecisionsMd(g, '# 只有标题\n\n无字段\n'), [])
+    // 纯模块域键（无锚点）：module:core ←change-modules— alpha（其交付 src/foo.js 落 core 模块域）
+    // → 闭包含 alpha → from-change 反查命中 rejected D-001@v1@alpha——模块键经变更交付面可达是本体设计（change-modules 强边）
+    const modOnly = impactFromDecisionsMd(g, '## D-001@v1: x\n- 模块域: core\n')
+    assert.equal(modOnly.length, 1)
+    assert.equal(modOnly[0].id, 'D-001@v1')
+    assert.equal(modOnly[0].impactKey, 'module:core')
+    // 未入图模块（fr 域裸节点 id 无 module: 前缀）静默跳过
+    assert.deepEqual(impactFromDecisionsMd(g, '## D-001@v1: x\n- 模块域: core-engine\n'), [])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

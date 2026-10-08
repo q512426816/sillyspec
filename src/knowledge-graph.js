@@ -710,6 +710,41 @@ export function scopeFromDecisionsMd(text) {
   return [...out]
 }
 
+/** decisions.md「模块域：」字段 → 模块 id 集（剥 NEW: 前缀——规划中模块按裸名入键，未入图由调用方跳过）。 */
+function moduleIdsFromDecisionsMd(text) {
+  const out = new Set()
+  for (const m of String(text || '').replace(/\r\n/g, '\n').matchAll(/^(?:-\s*)?模块域\s*[：:]\s*(.+)$/gm)) {
+    for (const raw of m[1].split(/[,，、]/)) {
+      const v = raw.trim().replace(/^NEW:/, '')
+      if (v) out.add(v)
+    }
+  }
+  return [...out]
+}
+
+/** 方案步防复潮可达集（2026-10-09-brainstorm-impact-antirevival）：decisions.md 结构键
+ *  （锚点：路径 ∪ 模块域：模块 id——均为 CLI 校验字段，D-004 机器键纪律）→ 逐键 graphImpact
+ *  闭包 → rejected∪死路 条目去重合并。条目=parseDecisionEntries 原生形态 + viaImpact:true
+ *  （消费方零重解析；结构可达即防复潮先验，与词面 score 无关）。键未入图（NEW: 未落地模块/
+ *  幻路径）静默跳过；空文本/零可达 → []。 */
+export function impactFromDecisionsMd(graph, text) {
+  const keys = [...new Set([...scopeFromDecisionsMd(text), ...moduleIdsFromDecisionsMd(text).map((m) => `module:${m}`)])]
+  const out = []
+  const seen = new Set()
+  for (const k of keys) {
+    const node = resolveGraphNode(graph, k)
+    if (!node) continue
+    const imp = graphImpact(graph, node.id)
+    for (const n of imp.rejectedReachable || []) {
+      const dedupe = `${n.attrs.hit?.file}#${n.attrs.hit?.id}#${n.attrs.hit?.change || ''}`
+      if (seen.has(dedupe)) continue
+      seen.add(dedupe)
+      out.push({ ...n.attrs.hit, viaImpact: true, impactKey: k })
+    }
+  }
+  return out
+}
+
 // ═══════════════════════════════════════════════════════════════
 // CLI 子命令（task-02）——stages/knowledge.js 懒加载（classify 同款）。
 // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
