@@ -2019,3 +2019,17 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：16db850f0b8916acec0ecc26383b269a191fd0f3
 理由：最大风险：旧项目无 knowledge graph 能力（sillyspec < 3.33 未装图命令）时 explore prompt 指引落空——agent 跑命令报 unknown subcommand 后自然回退 rg 考古（fail-soft，无阻断面）；后续 init 升级即补齐。接受：指引措辞是「优先」非「必须」。放弃的方案：把 graph 查询做成 explore 独立步骤（--wait 流程化）——弃，explore 的价值恰在无结构自由姿态，流程化会把思考伙伴变成向导机；在 CLI 侧为 explore 注入图预取数据（{GRAPH_FACTS} 占位符）——弃，探索话题不可预知，全量注入是浪费且复刻知识注入面已有的活。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-09-graph-dump-layout
+锚点：未记录
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+理由：最大风险：星系数=150（真图实测）比平台 design 初估 10-15 多——但这就是原型 comm() 的真实分组数（原型视觉即如此），不改算法（改了就不是原型视觉）；平台侧按 150 星系渲染。放弃的方案：①summary 细簇分组——否，883 簇主环 ~8900px 退化散点（Grill F-01）；②坐标落盘缓存——否，违反图不落盘铁律；③与原型逐位等价——降级为非约束（tie-break 稳序差异，确定性才是硬约束）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-09-brainstorm-impact-antirevival
+锚点：未记录
+最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce
+理由：最大风险：impact 闭包比 scopeRecall 宽（深度 2 + 传递例外 + change-modules 反查），模块域键在热区模块（如 core-engine）上可达条目多——回显前 5 条封顶沿用，但"无关 rejected 挤占席位"的噪音面变大。缓解：已回应不重弹过滤沿用（evidence 回应过即静默）；真实仓实测 9 条可达属合理密度；若实测噪音超标，收窄方向是把 impact 深度对 gate 场景降为 1 或按 impactKey 分组限额——留运行时证据再动。放弃的方案：拓 scopeRecall 吃模块键（模块→文件→决策两跳，丢失 change-modules/supersedes 可达面且要改检索器签名）；解析 --output 提取路径入键（违 D-004 自由文本纪律，弃）。

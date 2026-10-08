@@ -2488,3 +2488,169 @@
   confirmed_at: null
   source_change: 2026-10-08-graph-summary-consistency
   status: active
+
+## FR-core-engine-153 sillyspec knowledge graph dump --layout --json 输出 ok:true + nodes 数=summary nodes 数 + 坐标全整数
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-01
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-dump-layout:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-dump-layout
+  status: active
+
+## FR-core-engine-154 连续两次调用 JSON 逐字节一致（确定性）
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-02
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-dump-layout:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-dump-layout
+  status: active
+
+## FR-core-engine-155 dump 不带 --layout 回 layout_required usage 错不崩
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-03
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-dump-layout:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-dump-layout
+  status: active
+
+## FR-core-engine-156 USAGE 行与 stages available 收编 dump
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-04
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+## FR-core-engine-157 同簇节点抽样距离小于跨簇抽样（粗分组视觉成立）
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-05
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-dump-layout:flow:测试绑定FR-05
+  tests: test/knowledge-graph.test.mjs「⑩dump --layout：形状/确定性/layout 必带/粗分组视觉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-dump-layout
+  status: active
+
+## FR-core-engine-158 既有 11 用例零回归；lint 零问题
+变更：2026-10-09-graph-dump-layout
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-graph-dump-layout/requirements.md#FR-06
+最近确认：19b2d5dd92c2d8149860d606cf80eeafe9f17685
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-dump-layout:flow:测试绑定FR-06
+  tests: test/check-syntax.mjs | test/knowledge-graph.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-dump-layout
+  status: active
+
+## FR-core-engine-159 knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
+变更：2026-10-09-brainstorm-impact-antirevival
+状态：active
+摘要：双键命中；模块键经交付面可达
+全文：.sillyspec/changes/archive/2026-10-09-brainstorm-impact-antirevival/requirements.md#FR-01
+最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact 可达集（2026-10-09-brainstorm-impact-antirevival）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-brainstorm-impact-antirevival
+  status: active
+
+## FR-core-engine-160 complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
+变更：2026-10-09-brainstorm-impact-antirevival
+状态：active
+摘要：保底进场；fail-soft
+全文：.sillyspec/changes/archive/2026-10-09-brainstorm-impact-antirevival/requirements.md#FR-02
+最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-02
+  tests: test/knowledge-gate-denoise.test.mjs「（词面过滤与已回应不重弹既有回归面——impact 并入复用同一管线，3 用例全绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-brainstorm-impact-antirevival
+  status: active
+
+## FR-core-engine-161 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
+变更：2026-10-09-brainstorm-impact-antirevival
+状态：active
+摘要：回归钉
+全文：.sillyspec/changes/archive/2026-10-09-brainstorm-impact-antirevival/requirements.md#FR-03
+最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-brainstorm-impact-antirevival
+  status: active
+
+## FR-core-engine-162 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）
+变更：2026-10-09-brainstorm-impact-antirevival
+状态：active
+摘要：纪律面
+全文：.sillyspec/changes/archive/2026-10-09-brainstorm-impact-antirevival/requirements.md#FR-04
+最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce

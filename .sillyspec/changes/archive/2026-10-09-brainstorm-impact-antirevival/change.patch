@@ -1,0 +1,302 @@
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index bb1ad636..c5b997a0 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -710,6 +710,41 @@ export function scopeFromDecisionsMd(text) {
+   return [...out]
+ }
+ 
++/** decisions.md「模块域：」字段 → 模块 id 集（剥 NEW: 前缀——规划中模块按裸名入键，未入图由调用方跳过）。 */
++function moduleIdsFromDecisionsMd(text) {
++  const out = new Set()
++  for (const m of String(text || '').replace(/\r\n/g, '\n').matchAll(/^(?:-\s*)?模块域\s*[：:]\s*(.+)$/gm)) {
++    for (const raw of m[1].split(/[,，、]/)) {
++      const v = raw.trim().replace(/^NEW:/, '')
++      if (v) out.add(v)
++    }
++  }
++  return [...out]
++}
++
++/** 方案步防复潮可达集（2026-10-09-brainstorm-impact-antirevival）：decisions.md 结构键
++ *  （锚点：路径 ∪ 模块域：模块 id——均为 CLI 校验字段，D-004 机器键纪律）→ 逐键 graphImpact
++ *  闭包 → rejected∪死路 条目去重合并。条目=parseDecisionEntries 原生形态 + viaImpact:true
++ *  （消费方零重解析；结构可达即防复潮先验，与词面 score 无关）。键未入图（NEW: 未落地模块/
++ *  幻路径）静默跳过；空文本/零可达 → []。 */
++export function impactFromDecisionsMd(graph, text) {
++  const keys = [...new Set([...scopeFromDecisionsMd(text), ...moduleIdsFromDecisionsMd(text).map((m) => `module:${m}`)])]
++  const out = []
++  const seen = new Set()
++  for (const k of keys) {
++    const node = resolveGraphNode(graph, k)
++    if (!node) continue
++    const imp = graphImpact(graph, node.id)
++    for (const n of imp.rejectedReachable || []) {
++      const dedupe = `${n.attrs.hit?.file}#${n.attrs.hit?.id}#${n.attrs.hit?.change || ''}`
++      if (seen.has(dedupe)) continue
++      seen.add(dedupe)
++      out.push({ ...n.attrs.hit, viaImpact: true, impactKey: k })
++    }
++  }
++  return out
++}
++
+ // ═══════════════════════════════════════════════════════════════
+ // CLI 子命令（task-02）——stages/knowledge.js 懒加载（classify 同款）。
+ // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
+diff --git a/src/run/complete.js b/src/run/complete.js
+index aa332626..4fa59530 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -486,6 +486,16 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
+           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
+           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
++          // impact 防复潮可达集（2026-10-09-brainstorm-impact-antirevival）：锚点+模块域双结构键
++          // → graphImpact 闭包内 rejected/死路保底进场——方案步锚点常空（confirmed 才必填），
++          // 模块域是生成规范文件步硬校验的在场键；viaImpact 条目绕过 score 门槛（结构可达即
++          // 防复潮先验，与死路同待遇）。图构建 fail-soft（失败不阻断门）。
++          try {
++            const { buildKnowledgeGraph, impactFromDecisionsMd } = await import('../knowledge-graph.js')
++            const _viaImpact = impactFromDecisionsMd(buildKnowledgeGraph(specBase), _dm)
++              .filter((h) => !_hits.some((x) => x.file === h.file && x.id === h.id && (x.change || '') === (h.change || '')))
++            _hits.push(..._viaImpact)
++          } catch { /* 图构建/键解析 fail-soft——词面命中面不受影响 */ }
+           // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
+           // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
+           const _answered = _dm
+@@ -503,7 +513,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+               const _note = h.status === 'rejected'
+                 ? ` 否决理由：${h.reason || '（未记录）'}`
+                 : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''
+-              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}`)
++              const _via = h.viaImpact ? ` 🧭impact 可达（键：${h.impactKey}）` : ''
++              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}${_via}`)
+             }
+             for (const e of _entries.slice(0, 3)) {
+               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index 282e10a9..3a8ac0f8 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+-import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
++import { buildKnowledgeGraph, parseChangelogEntries, graphNeighbors, graphPath, graphImpact, graphOrphans, graphDangling, graphSummary, graphNodesSearch, graphModuleDocGaps, graphChangelogDanglings, resolveGraphNode, scopeRecall, buildScopeRecallResult, scopeFromDecisionsMd, impactFromDecisionsMd, EDGE_STRENGTH, TRANSMISSIVE_EDGES } from '../src/knowledge-graph.js'
+ import { matchKnowledgeHybrid } from '../src/knowledge-vector.js'
+ import { flowKnowledgeDigest } from '../src/flow.js'
+ 
+@@ -542,3 +542,40 @@ test('⑪dump --layout：形状/确定性/layout 必带/粗分组视觉', async
+     assert.equal(j2.error.code, 'layout_required')
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++test('⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact 可达集（2026-10-09-brainstorm-impact-antirevival）', () => {
++  const root = buildFixture()
++  try {
++    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
++    // 双键 decisions.md：锚点命中 src/foo.js（rejected D-001@v1@alpha 锚定其上）+ 模块域 core-engine
++    const dm = [
++      '# 决策记录（Decisions）', '',
++      '## D-001@v1: 某方案',
++      '- type: architecture',
++      '- status: accepted',
++      '- 锚点：src/foo.js:10',
++      '- 模块域: core-engine', '',
++      '## D-002@v1: 另一方案',
++      '- 模块域：NEW:future-mod, core-engine', '',
++    ].join('\n')
++    const hits = impactFromDecisionsMd(g, dm)
++    // rejected D-001@v1@alpha 经 src/foo.js anchors 可达
++    const rej = hits.find((h) => h.id === 'D-001@v1' && h.change === '2026-01-01-alpha')
++    assert.ok(rej, '锚点键命中 rejected 条目')
++    assert.equal(rej.status, 'rejected')
++    assert.equal(rej.viaImpact, true)
++    assert.ok(hits.every((h) => h.viaImpact === true), '全部带 viaImpact 标记')
++    // NEW: 前缀剥除后未入图（future-mod 无 module 节点）→ 静默跳过不抛
++    // 空文本/无结构键文本 → []
++    assert.deepEqual(impactFromDecisionsMd(g, ''), [])
++    assert.deepEqual(impactFromDecisionsMd(g, '# 只有标题\n\n无字段\n'), [])
++    // 纯模块域键（无锚点）：module:core ←change-modules— alpha（其交付 src/foo.js 落 core 模块域）
++    // → 闭包含 alpha → from-change 反查命中 rejected D-001@v1@alpha——模块键经变更交付面可达是本体设计（change-modules 强边）
++    const modOnly = impactFromDecisionsMd(g, '## D-001@v1: x\n- 模块域: core\n')
++    assert.equal(modOnly.length, 1)
++    assert.equal(modOnly[0].id, 'D-001@v1')
++    assert.equal(modOnly[0].impactKey, 'module:core')
++    // 未入图模块（fr 域裸节点 id 无 module: 前缀）静默跳过
++    assert.deepEqual(impactFromDecisionsMd(g, '## D-001@v1: x\n- 模块域: core-engine\n'), [])
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/design.md b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/design.md
+new file mode 100644
+index 00000000..9e80aecb
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:13:03.280Z
++---
++# 设计记录（Design Record）— 2026-10-09-brainstorm-impact-antirevival
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/knowledge-graph.js | 新导出 impactFromDecisionsMd（锚点∪模块域键 → graphImpact 可达集）+ 内部 moduleIdsFromDecisionsMd |
++| 修改 | src/run/complete.js | 方案步 knowledge-gate 词面命中后并入 impact 可达集（去重/绕 score 门槛/🧭注记渲染/fail-soft） |
++| 修改 | test/knowledge-graph.test.mjs | 新增⑫用例（双键命中/NEW: 剥除/未入图跳过/空文本/模块键交付面正例——执行期实测修正原预期） |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++方案步 knowledge-gate 的 scope 键现状只取 decisions.md「锚点：」——但锚点是 confirmed 状态才必填，方案步的决策条目普遍没写，第四层（scope 遍历召回）实际很少点火。本变更把方案步的防复潮入口升级为 impactFromDecisionsMd：键扩为「锚点：路径 ∪ 模块域：模块 id」（模块域是生成规范文件步 CLI 硬校验的在场字段，NEW: 前缀剥除），逐键跑 graphImpact 闭包（比 scopeRecall 一跳宽：深度 2 + supersedes/module-dep 传递 + change-modules 经变更交付面反查），rejected∪死路可达集并入 gate 回显。选 impact 闭包而非再拓 scopeRecall：图查询面已具备该能力（查询 API 同源复用），且模块键→变更→决策的可达链正是本体 change-modules 强边的设计语义；D-004 纪律不破——键全部来自 CLI 校验字段，不碰自由文本。viaImpact 条目绕过零分不弹门槛与死路同待遇：结构可达即防复潮先验，score 是词面维度与结构维度无关。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新导出 impactFromDecisionsMd(graph, text) → parseDecisionEntries 原生形态条目数组（+viaImpact:true、impactKey:string）。
++- complete.js 方案步 --done 回显行为变化：词面零命中但 decisions.md 结构键可达 rejected/死路时，也出现 [knowledge-gate] 警告段（条目带 🧭impact 可达（键：…）注记）；既有词面命中/已回应过滤/零分不弹语义零变化。
++- 无端点/命令/文件格式变更；matchKnowledgeHybrid 签名与四层层序零变化（本变更在 gate 消费侧并行并入，不动检索器）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   不适用（无事件面）——helper 是图+文本的纯函数，gate 每次调用即时求值。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   decisions.md 读取与图构建各为进程内只读快照；并发写 decisions.md 由 git/流程纪律承担，本变更不引入共享态。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   gate 调用即起即落、fail-soft 包裹（图构建异常静默降级词面面），中断无残留状态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   图锚 specBase（本变更目录），decisions.md 锚同一变更 changeDir——同根双源无串台；NEW: 模块未入图静默跳过不误伤他仓。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：impact 闭包比 scopeRecall 宽（深度 2 + 传递例外 + change-modules 反查），模块域键在热区模块（如 core-engine）上可达条目多——回显前 5 条封顶沿用，但"无关 rejected 挤占席位"的噪音面变大。缓解：已回应不重弹过滤沿用（evidence 回应过即静默）；真实仓实测 9 条可达属合理密度；若实测噪音超标，收窄方向是把 impact 深度对 gate 场景降为 1 或按 impactKey 分组限额——留运行时证据再动。放弃的方案：拓 scopeRecall 吃模块键（模块→文件→决策两跳，丢失 change-modules/supersedes 可达面且要改检索器签名）；解析 --output 提取路径入键（违 D-004 自由文本纪律，弃）。
+diff --git a/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/requirements.md b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/requirements.md
+new file mode 100644
+index 00000000..10f93000
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:13:03.280Z
++---
++# 需求规格（Requirements）— 2026-10-09-brainstorm-impact-antirevival
++
++## 功能需求
++
++### FR-01: knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
++
++- impactFromDecisionsMd(graph, text) 必须以 decisions.md 机器校验字段为键（锚点：路径 ∪ 模块域：模块 id，NEW: 前缀剥除），逐键 graphImpact 取 rejectedReachable，按 file+id+change 去重合并；条目必须为 parseDecisionEntries 原生形态 + viaImpact/impactKey 标记；键未入图必须静默跳过；空文本必须返回 []。
++
++#### 场景：双键命中
++
++- Given fixture decisions.md 含 `- 锚点：src/foo.js:10` 与 `- 模块域: core-engine, NEW:future-mod`；When 执行；Then rejected D-001@v1@alpha 经 src/foo.js 锚点键可达且带 viaImpact，future-mod 未入图跳过不抛。
++
++#### 场景：模块键经交付面可达
++
++- Given `- 模块域: core`（该模块域内有 alpha 变更交付文件）；When 执行；Then alpha 的 rejected 决策经 change-modules 强边（本体设计）进入可达集。
++
++### FR-02: complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
++
++- complete.js 方案步 knowledge-gate 必须在词面命中之后并入 impactFromDecisionsMd 可达集：viaImpact 条目必须绕过 score>0 门槛；与词面命中按 file+id+change 去重；必须过既有已回应不重弹过滤；渲染必须带 🧭impact 可达注记；图构建异常必须 fail-soft 不阻断门。
++
++#### 场景：保底进场
++
++- Given 方案步 --done 时 decisions.md 有模块域键、词面三层零命中；Then 可达 rejected/死路条目仍进回显（含键与注记）。
++
++#### 场景：fail-soft
++
++- Given 图构建抛错；Then 门照常按词面命中面输出，无异常冒泡。
++
++### FR-03: 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
++
++- 测试必须覆盖 impactFromDecisionsMd 单元面：双键命中 / viaImpact 标记 / NEW: 前缀剥除 / 未入图模块跳过 / 空文本与无字段文本零返回 / 模块键经交付面可达正例（执行期实测修正：模块键可达是本体设计预期，原「无锚定→空」预期错误）。
++
++#### 场景：回归钉
++
++- Given 修复落盘；When node --test test/knowledge-graph.test.mjs；Then ⑫ 用例绿且既有全部用例绿。
++
++### FR-04: 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）
++
++- 全量测试必须绿（test:core）、lint 必须零告警；键源必须限于 decisions.md 机器校验字段（锚点/模块域），禁止解析 agent 自由文本作图查询键（D-004 纪律）。
++
++#### 场景：纪律面
++
++- Given 代码审查；Then impactFromDecisionsMd 仅为字段正则提取 + 图遍历，无 --output/正文自由文本入键路径。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact 可达集（2026-10-09-brainstorm-impact-antirevival）」
++FR-02: test/knowledge-gate-denoise.test.mjs「（词面过滤与已回应不重弹既有回归面——impact 并入复用同一管线，3 用例全绿）」+ 渲染注记源码断言（complete.js 🧭impact 可达渲染行）
++FR-03: test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd」（NEW: 剥除/未入图跳过/空文本/模块键交付面正例）
++FR-04: test:core 325 全绿 + npm run lint 零告警（verify-runs 留档）
+diff --git a/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/tasks.md b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/tasks.md
+new file mode 100644
+index 00000000..6c396172
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:13:03.280Z
++---
++# 任务注册表（Tasks）— 2026-10-09-brainstorm-impact-antirevival
++
++- [x] task-01: knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
++- [x] task-02: complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
++- [x] task-03: 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
++- [x] task-04: 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）
+diff --git a/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/proposal.md b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-brainstorm-impact-antirevival/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-08T17:13:03.280Z
++---
++# 提案书（Proposal）— 2026-10-09-brainstorm-impact-antirevival
++
++## 动机
++
++任务原话转写：brainstorm 方案步 knowledge-gate 防复潮升级：锚点+模块域双结构键吃 graphImpact 可达集。
++
++动机与背景：
++2026-10-08-knowledge-graph 给方案步 --done 的 knowledge-gate 接了 scope 遍历召回，但 scope 键只取 decisions.md「锚点：」字段——方案步的决策条目通常还没写锚点（锚点是 confirmed 状态才必填），scope 常空 → 第四层实际不点火，防复潮仍靠词面三层。方案步真正在场的结构键是「模块域：」（CLI 在生成规范文件步硬校验的可选字段、允许 NEW: 前缀）；且 graphImpact 的可达面比 scopeRecall 一跳宽（深度 2 闭包 + supersedes/module-dep 传递 + belongs-module 侧线）。
++
++成功标准：
++- knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
++- complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
++- 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
++- 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
++2. complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
++3. 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
++4. 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）
++
++## 成功标准（可验证）
++
++1. knowledge-graph.js 新导出 impactFromDecisionsMd(graph, decisionsMd)：键=锚点：路径 ∪ 模块域：模块 id（剥 NEW: 前缀，未入图跳过）→ 逐键 graphImpact → rejectedReachable 去重合并，条目带 viaImpact 标记（parseDecisionEntries 原生形态，消费方零重解析）
++2. complete.js 方案步 gate：词面命中（含既有零分不弹过滤）之后并入 impact 可达集——viaImpact 条目绕过 score>0 门槛（结构可达即防复潮先验，与死路同待遇），与词面命中按 file+id+change 去重，过既有已回应不重弹过滤，渲染带 impact 可达注记；图构建 fail-soft
++3. 测试：⑪ impactFromDecisionsMd 单元面（fixture 锚点+模块域双键命中 rejected 条目 / NEW: 前缀剥除 / 未知模块跳过 / 空文本零返回）+ gate 合并去重路径
++4. 全量测试与 lint 零回归；D-004 纪律保持（键全部来自 decisions.md 机器校验字段，不解析自由文本）

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-brainstorm-impact-antirevival",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9baab96fea518c5de08e6106909100fb7c5d65ce",
+  "findings": [
+    {
+      "id": "R-1",
+      "severity": "P3",
+      "type": "informational",
+      "title": "披露边界显式裁决（检查单第 4 项必答，逐条结论）",
+      "detail": "取舍一「impact 闭包比 scopeRecall 宽、热区模块可达条目多→噪音面变大（前 5 封顶+已回应过滤缓解，留运行时证据再收窄）」：可接受。依据：(a) gate 为 warn 不阻断的提示级（complete.js 注释 v1 只 warn 不阻断），误弹代价=一行噪音；(b) 本评审真图实测 9 条可达、回显 slice(0,5) 封顶始终在场；(c) 已回应不重弹过滤复用既有管线且位于 impact push 之后（complete.js _echoHits=_hits.filter(!_answered)），evidence 回应即静默；(d) 设计给出具体收窄方向（深度降 1 / impactKey 分组限额）且实测数据（9 条）与设计声称一致。取舍二「弃拓 scopeRecall、弃解析 --output」：均可接受。弃拓 scopeRecall：scope 一跳文件→决策吃不下模块键两跳，且要改 matchKnowledgeHybrid 检索器签名——本变更消费侧并行并入、检索器零改动（change.patch 未触及 src/knowledge-vector.js，接口契约声明与实态相符）。弃解析 --output：--output 为 agent 自由文本，入键违 D-004 机器键纪律，且其词面已由既有词面三层覆盖，弃之无防复潮损失。"
+    },
+    {
+      "id": "R-2",
+      "severity": "P3",
+      "type": "coverage-note",
+      "title": "FR-02 行为级测试面薄：gate 并入路径无专属行为用例",
+      "detail": "FR-02 场景「保底进场/fail-soft」无测试实例化，测试绑定=knowledge-gate-denoise 既有 3 用例回归（3/3 绿，但 fixture 无结构键时 impact 路径惰性）+渲染行源码断言——绑定方式系 requirements.md 自身声明，非承诺违反。本评审以源码直读补偿：绕 score 门槛=filter（complete.js L488）之后的 push（L495-497）；去重三元组 file+id+change（gate 侧 L496 与 impactFromDecisionsMd 内部 file#id#change 双层）；_answered 过滤在 push 之后应用故覆盖 impact 条目（L507）；fail-soft 内层 try/catch 包住 import+buildKnowledgeGraph+键解析+push（L493-498）外层再包整个 gate（L462-529）；🧭impact 可达注记渲染在场（L516-517）。留档建议：后续变更可补一条含模块域键的方案步 --done 行为用例钉住保底进场。"
+    },
+    {
+      "id": "R-3",
+      "severity": "P3",
+      "type": "coverage-note",
+      "title": "test:core 全量与 lint 未由本评审独立重跑",
+      "detail": "检查单第 1 项指定测试面（node --test test/knowledge-graph.test.mjs 12/12 绿含⑫；test/knowledge-gate-denoise.test.mjs 3/3 绿）已实测通过。FR-04 声明的 test:core 325 全绿+lint 零告警未独立复跑，依赖 flow done 收口时 CLI 实测（触及 src/test 必实测）与 verify-runs 留档兜底。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-08T17:27:17Z"
+}

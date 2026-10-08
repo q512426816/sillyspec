@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-brainstorm-impact-antirevival",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact 可达集（2026-10-09-brainstorm-impact-antirevival）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-brainstorm-impact-antirevival"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-gate-denoise.test.mjs「（词面过滤与已回应不重弹既有回归面——impact 并入复用同一管线，3 用例全绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-brainstorm-impact-antirevival"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-brainstorm-impact-antirevival:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-graph.test.mjs「⑫impactFromDecisionsMd」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-brainstorm-impact-antirevival"
+    }
+  ]
+}
