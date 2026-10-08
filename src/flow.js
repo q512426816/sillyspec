@@ -1410,7 +1410,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             reportMidFail('patch')
             process.exit(1)
           }
-          if (acceptDirtyGap) {
+          if (acceptDirtyGap && freezeDirty) {
+            console.warn('⚠️ --freeze-dirty 与 --accept-dirty-gap 同给：--freeze-dirty 优先（dirty 并入冻结面、缺口不存在，acceptedDirtyGap 不落键）')
+          } else if (acceptDirtyGap) {
             console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
           }
         }

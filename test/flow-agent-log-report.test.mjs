@@ -132,7 +132,9 @@ test('③ flow done 收口周期：done 调用面同样登记（last_command=don
   run(['commit', '-q', '-m', 'work (task-01)'])
   fillSlots(cwd, change)
 
-  const d = cli(cwd, ['flow', 'done', '--change', change], { agentLog })
+  // --accept-dirty-gap（2026-10-08-thin-done-dirty-gate）：fake-agent-session.jsonl 是日志观测
+  // fixture（非交付）——新 dirty 门要求显式处置，接受缺口（与 flow-protocol ③ pass.flag 同款）
+  const d = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'], { agentLog })
   assert.equal(d.status, 0, `done 失败: ${d.stdout}\n${d.stderr}`)
   assert.match(d.stdout, /flow done 完成（2\/2 协议调用收口）/)
   assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', change)), false, '已归档')
