@@ -2654,3 +2654,55 @@
 摘要：纪律面
 全文：.sillyspec/changes/archive/2026-10-09-brainstorm-impact-antirevival/requirements.md#FR-04
 最近确认：9baab96fea518c5de08e6106909100fb7c5d65ce
+
+## FR-core-engine-163 detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
+变更：2026-10-09-archive-integrity-thin-aware
+状态：active
+摘要：thin 豁免
+全文：.sillyspec/changes/archive/2026-10-09-archive-integrity-thin-aware/requirements.md#FR-01
+最近确认：2edde8bd4addf24e870503ff287d587447203d68
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-archive-integrity-thin-aware:flow:测试绑定FR-01
+  tests: test/doctor-archive-integrity.test.mjs「14a thin 归档无 plan.md → pass（flow-state.yaml 在场豁免）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-archive-integrity-thin-aware
+  status: active
+
+## FR-core-engine-164 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
+变更：2026-10-09-archive-integrity-thin-aware
+状态：active
+摘要：豁免不洗白
+全文：.sillyspec/changes/archive/2026-10-09-archive-integrity-thin-aware/requirements.md#FR-02
+最近确认：2edde8bd4addf24e870503ff287d587447203d68
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-archive-integrity-thin-aware:flow:测试绑定FR-02
+  tests: test/doctor-archive-integrity.test.mjs「14b thin 任务未勾 → 仍报（豁免不洗白完成面）」 | test/doctor-archive-integrity.test.mjs「15a-c thin 勾选契约 epoch 三断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-archive-integrity-thin-aware
+  status: active
+
+## FR-core-engine-165 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
+变更：2026-10-09-archive-integrity-thin-aware
+状态：active
+摘要：清账终态
+全文：.sillyspec/changes/archive/2026-10-09-archive-integrity-thin-aware/requirements.md#FR-03
+最近确认：2edde8bd4addf24e870503ff287d587447203d68
+
+## FR-core-engine-166 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归
+变更：2026-10-09-archive-integrity-thin-aware
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-09-archive-integrity-thin-aware/requirements.md#FR-04
+最近确认：2edde8bd4addf24e870503ff287d587447203d68
