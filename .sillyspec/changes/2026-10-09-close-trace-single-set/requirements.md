@@ -47,6 +47,6 @@ created_at: 2026-10-09T06:51:08.912Z
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/close-trace-unified.test.mjs「writer ok-state 写恰好两件 + scopeAudit 子对象」「thin/heavy CLI e2e 落盘两件」
-FR-02: test/scope-audit-thin-patch-replay.test.mjs「快照优先级：scopeAudit 子对象 > 旧 scope-audit.json > thin 回放」+ test/scope-audit.test.mjs「--file 冻结切片与防篡改（新旧形态）」
+FR-02: test/scope-audit-thin-patch-replay.test.mjs「FR-03 优先级：scopeAudit 子对象 > 旧 scope-audit.json > thin 回放；双缺走开放区间兜底」+「FR-02 新形态防篡改：change-patch.json 顶级 patchSha256 作伴生锚，篡改 change.patch → 拒绝出 diff」（评审 P3 清偿：绑定测试名改精确引用 + 补新形态伴生锚负向用例）+ test/scope-audit.test.mjs「A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒绝出 diff」（旧形态伴生锚既有用例）
 FR-03: 不适用（CLI 仓测试面）：平台仓改动为前端渲染分支与注释/文档，验证走平台仓自有流程与人工预览；CLI 侧无对应测试面
 FR-04: test/close-trace-unified.test.mjs 全文件 + 收口 CLI 亲测全量回归（P2 账本/实测记录）

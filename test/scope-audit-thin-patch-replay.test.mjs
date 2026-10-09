@@ -186,6 +186,34 @@ test('FR-02 冻结语义：后续演进不进表 + --file 冻结切片与 sha256
   } finally { cleanup(d) }
 })
 
+test('FR-02 新形态防篡改：change-patch.json 顶级 patchSha256 作伴生锚，篡改 change.patch → 拒绝出 diff', async () => {
+  const { d, changeDir } = makeThinArchive('sa-thinfrz2-')
+  try {
+    // 升级为新形态：对账面并入 scopeAudit 子对象（patchSha256/patchStatus/savedAt 维持顶级）
+    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+    const { rows } = (() => {
+      const stats = new Map([['src/a.js', { additions: 2, deletions: 0, kind: 'modified' }]])
+      return { rows: [{ path: 'src/a.js', planned: '修改', additions: 2, deletions: 0, kind: 'modified', verdict: 'planned' }] }
+    })()
+    meta.scopeAudit = {
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: meta.baseline,
+      totals: { files: 1, additions: 2, deletions: 0 }, rows,
+      excluded: { foreignDeclared: [] }, note: 'flow done 时点冻结（fixture）', closedBy: 'flow done',
+    }
+    writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+
+    // 未篡改：照常冻结切片
+    const ok = await getFileDiff({ cwd: d, changeName: 'thin-demo', filePath: 'src/a.js' })
+    assert.equal(ok.ok, true, '新形态（scopeAudit 子对象 + 顶级 sha）切片照常')
+
+    // 篡改：change.patch 与 change-patch.json 顶级 patchSha256 不匹配 → 拒绝
+    writeFileSync(join(changeDir, 'change.patch'), readFileSync(join(changeDir, 'change.patch'), 'utf8') + 'TAMPER\n')
+    const bad = await getFileDiff({ cwd: d, changeName: 'thin-demo', filePath: 'src/a.js' })
+    assert.equal(bad.ok, false)
+    assert.ok(bad.note && bad.note.includes('篡改'), `顶级 patchSha256 伴生锚生效（实际 ${bad.note}）`)
+  } finally { cleanup(d) }
+})
+
 // ───────────────────────── FR-03：优先级与双缺兜底 ─────────────────────────
 
 test('FR-03 优先级：scopeAudit 子对象 > 旧 scope-audit.json > thin 回放；双缺走开放区间兜底', async () => {
