@@ -155,7 +155,9 @@ export function syncModuleDocSidecars({ cwd, changeName, note, specDir = null })
     const cardPath = join(modulesDir, `${mod}.md`)
     try {
       const card = readFileSync(cardPath, 'utf8')
-      const stamped = card.replace(/^updated_at:.*$/m, `updated_at: ${new Date().toISOString().slice(0, 19) + '+08:00'}`)
+      // 全量 ISO（机器可比时间戳，scan-postcheck 同字段同口径）——旧式 UTC 数字拼硬编码
+      // '+08:00' 的瞬间恒早真实时刻 8h（数字取 UTC、偏移写死，机器无关地错）
+      const stamped = card.replace(/^updated_at:.*$/m, `updated_at: ${new Date().toISOString()}`)
       if (stamped !== card) writeFileSync(cardPath, stamped)
     } catch { /* 卡不存在——sidecar 照写，卡内容留给 agent */ }
     synced.push(proj ? `${proj}/${mod}` : mod)
