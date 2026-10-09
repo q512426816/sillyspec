@@ -1,0 +1,182 @@
+diff --git a/package.json b/package.json
+index bd06bcbf..2600d60e 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.2",
++  "version": "3.32.3",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index 2719f3b3..c1c03890 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.2', `R5 package.json 版本 3.32.2（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.3', `R5 package.json 版本 3.32.3（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-3/requirements.md b/.sillyspec/changes/2026-10-09-release-3-32-3/requirements.md
+new file mode 100644
+index 00000000..66477238
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-3/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T15:28:35.294Z
++---
++# 需求规格（Requirements）— 2026-10-09-release-3-32-3
++
++## 功能需求
++
++### FR-01: package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
++
++- package.json version **必须**为 3.32.3，且 test/quick-retired.test.mjs 的 R5 版本锚断言同步为 pkg.version === '3.32.3'，测试运行**必须**全绿。
++
++#### 场景：主路径
++
++- Given：线上 latest 与本地均为 3.32.2，本次 patch+1
++- When：node --test test/quick-retired.test.mjs
++- Then：R5 断言 pkg.version === '3.32.3' 通过，套件零失败
++
++### FR-02: git push origin main 成功（含本变更归档）
++
++- 版本面提交与本变更归档件**必须**以显式 pathspec 提交并成功推送 origin main（pre-push hook 拦截时修复问题而非跳过）。
++
++#### 场景：主路径
++
++- Given：main 领先 origin 若干提交（含 rejected-write-side 五笔与本次版本面）
++- When：git push origin main
++- Then：推送成功，远端 main 与本地一致
++
++### FR-03: npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
++
++- npm publish **必须**成功，且发布后 npm view sillyspec version **必须**返回 3.32.3（latest 核验通过）。
++
++#### 场景：主路径
++
++- Given：npm 线上 latest=3.32.2，本地 package.json 已是 3.32.3
++- When：npm publish && npm view sillyspec version
++- Then：发布成功，npm view 返回 3.32.3
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/quick-retired.test.mjs「R5 package.json 版本 3.32.3 版本锚」（本次已跑零失败）
++FR-02: 不适用：git push 为外部传输操作，无单测面；由推送命令输出与远端状态核验
++FR-03: 不适用：npm publish 为外部发布操作，无单测面；由 npm view sillyspec version=3.32.3 核验
++
++## 核验留痕
++
++- FR-01 ✅：node --test test/quick-retired.test.mjs 零失败（R5 断言 pkg.version === '3.32.3'）；flow done 实测与 pre-push 门全绿。
++- FR-02 ✅：git push origin main 成功（344cbf7d..3d34bf06，pre-push lint+test+docs gate 39=基线放行）；归档件随后续推送上远端。
++- FR-03 ✅：npm publish 成功（+ sillyspec@3.32.3，shasum 4e6fc9f5b39838eed13578d2c8f7ecf313a14028，330 files）；传播约 3 分钟后 npm view sillyspec version=3.32.3、dist-tags latest=3.32.3 双核验通过。
++- 过程注记：发布时 registry.npmjs.org 本地 DNS 与阿里 DoH 均被劫持至停放 IP 103.73.220.77，腾讯 DoH（1.12.12.12）解析出真实 Cloudflare IP 段（104.16.x.34）；经进程级 DNS 钉扎（NODE_OPTIONS --require 临时脚本，仅本进程、零系统改动，复刻 3.32.2 发版同款绕行）完成发布与核验；github.com 解析不受影响，推送照常。
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-3/tasks.md b/.sillyspec/changes/2026-10-09-release-3-32-3/tasks.md
+new file mode 100644
+index 00000000..48a118b2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-3/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T15:28:35.294Z
++---
++# 任务注册表（Tasks）— 2026-10-09-release-3-32-3
++
++- [x] task-01: package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
++- [x] task-02: git push origin main 成功（含本变更归档）
++- [x] task-03: npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-3/design.md b/.sillyspec/changes/2026-10-09-release-3-32-3/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-3/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T15:28:35.294Z
++---
++# 设计记录（Design Record）— 2026-10-09-release-3-32-3
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++纯发版版本面（历次惯例：package.json + quick-retired R5 版本锚两文件，如 3.32.1/3.32.2 同款）：3.32.2→3.32.3（patch+1，用户准绳「最小版本加一」，线上 latest 实为 3.32.2 而非用户猜测的 3.32.3，故不做 3.32.4 跳号）。本版载 2026-10-09-rejected-write-side（防复潮 rejected 通道写侧供料：brainstorm 提出方案步第 6 条+对账步漏网补记、flow 槽4 收割提示行底稿定性+skill bullet、docs/prompt 镜像同步）。收口后 push → npm publish → npm view 核验 latest。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名/端点/文件格式变化。变化面两行：package.json version 字段 3.32.2→3.32.3；test/quick-retired.test.mjs R5 断言字符串同步。对外可见行为变化：npm 包版本号（init 按版本差刷新存量 AGENTS.md 的触发面），行为本体（载入的写侧供料指令）已在 rejected-write-side 变更交付。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++成立。版本号是静态标量，无顺序依赖；R5 锚与 package.json 同提交原子变更，不存在版本号与锚断言错位的中间可观测态（git 提交为原子单元）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++他侧会话并行发版的窗口极小且 npm publish 对同版本号幂等拒绝（403 已存在），双发同号会撞墙而非双写；package.json 竞态由 git 工作区互斥承担。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++安全。版本面两文件为落盘态；中断于 push/publish 之间的窗口重跑同命令幂等（push 幂等、publish 撞已存在版本报错可判读），无半写状态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不会。版本号单一源在 package.json；发布操作单仓单包；消费仓经 npm 拉新版本，无串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：npm publish 凭证/2FA 环节失败（本地 npmrc 有 always-auth 告警配置）——失败则重试或转用户处理，版本面提交与推送不受影响可先行落定。放弃方案①：发 3.32.4（用户口头版本号）——线上 latest 实为 3.32.2，跳 3.32.3 违反用户自己给的准绳「最小版本加一」，选 3.32.3 并在交付说明中向用户说明差异。放弃方案②：npm version patch 自动提交——自动提交不走本仓显式 pathspec 纪律，手工两文件编辑+显式清单提交。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | package.json | version 3.32.2→3.32.3 |
++| 修改 | test/quick-retired.test.mjs | R5 版本锚断言同步 3.32.3 |
+
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-3/proposal.md b/.sillyspec/changes/2026-10-09-release-3-32-3/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-3/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T15:28:35.294Z
++---
++# 提案书（Proposal）— 2026-10-09-release-3-32-3
++
++## 动机
++
++任务原话转写：发版 3.32.3（patch+1，线上 latest 与本地均为 3.32.2）——载 2026-10-09-rejected-write-side：防复潮 rejected 通道写侧供料（brainstorm 提出方案步第6条+对账步漏网补记；flow 槽4收割提示行底稿定性+/sillyspec:flow skill 底稿整理 bullet；docs/prompt 镜像同步）。
++
++成功标准：
++- package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
++- git push origin main 成功（含本变更归档）
++- npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
++2. git push origin main 成功（含本变更归档）
++3. npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
++
++## 成功标准（可验证）
++
++1. package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
++2. git push origin main 成功（含本变更归档）
++3. npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）

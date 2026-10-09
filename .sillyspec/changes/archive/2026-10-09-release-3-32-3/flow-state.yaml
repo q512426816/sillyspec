@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  发版 3.32.3（patch+1，线上 latest 与本地均为 3.32.2）——载 2026-10-09-rejected-write-side：防复潮 rejected 通道写侧供料（brainstorm
+  提出方案步第6条+对账步漏网补记；flow 槽4收割提示行底稿定性+/sillyspec:flow skill 底稿整理 bullet；docs/prompt 镜像同步）。
+
+
+  成功标准：
+
+  - package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
+
+  - git push origin main 成功（含本变更归档）
+
+  - npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
+autopilot: true
+baseline_commit: be2ea5c01161e28ff9a4d6b9988021ec2f7c5808
+updatedAt: '2026-10-09T15:55:15.196Z'
+baseline_sha256: 4608d481545fb7fcd20ff6968e7312e12c1c4fca10ed8a40823bf24c4b45ae42
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（2.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009154717\test-result.json｜lint: passed
+  ← npm run lint（42.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009154717\test-result.json｜门文件 2 个
+

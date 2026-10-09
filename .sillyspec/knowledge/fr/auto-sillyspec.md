@@ -60,3 +60,36 @@ created_at: 2026-10-09T01:37:47.453Z
 摘要：推送核验
 全文：.sillyspec/changes/archive/2026-10-09-release-3-32-2/requirements.md#FR-04
 最近确认：00d055829104a462706e76c956221b7f38cbb8bb
+
+## FR-auto-sillyspec-012 package.json version=3.32.3 且 quick-retired 测试 R5 版本锚同步（pkg.version === '3.32.3' 断言绿）
+变更：2026-10-09-release-3-32-3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-release-3-32-3/requirements.md#FR-01
+最近确认：308772b24b892fe6d8dc028af0bba46b60902a74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-release-3-32-3:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-release-3-32-3
+  status: active
+
+## FR-auto-sillyspec-013 git push origin main 成功（含本变更归档）
+变更：2026-10-09-release-3-32-3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-release-3-32-3/requirements.md#FR-02
+最近确认：308772b24b892fe6d8dc028af0bba46b60902a74
+
+## FR-auto-sillyspec-014 npm publish 成功且 npm view sillyspec version=3.32.3（latest 核验）
+变更：2026-10-09-release-3-32-3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-release-3-32-3/requirements.md#FR-03
+最近确认：308772b24b892fe6d8dc028af0bba46b60902a74

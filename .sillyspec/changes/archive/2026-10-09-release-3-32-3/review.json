@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-release-3-32-3",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "308772b24b892fe6d8dc028af0bba46b60902a74",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-02「含本变更归档」推送面未闭合：归档留痕提交 308772b2 未推送且 design/proposal 等归档面文件未跟踪",
+      "evidence": "版本面推送已兑现（origin/main 跟踪引用=3d34bf06，与留痕声称的 push 344cbf7d..3d34bf06 一致），但 HEAD=308772b2（提交了 requirements.md+tasks.md 的归档留痕提交）尚未推送；且 git status 显示 design.md/proposal.md/change.patch/change-patch.json/flow-state.yaml 均为未跟踪——FR-02 承诺的「归档件以显式 pathspec 提交并成功推送」在评审时点未完成。留痕已自我披露「归档件随后续推送上远端」，评审产物 review.json 本身属同一归档面（归档收尾必然后于评审），非隐瞒、无数据正确性风险，故定 P2 而非 P1；该面应在归档收尾时随最终推送闭合。",
+      "location": ".sillyspec/changes/2026-10-09-release-3-32-3/requirements.md:21"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "dimensionRationale": {
+    "乱序": "边界已裁决：可接受——design 声称「R5 锚与 package.json 同提交原子变更」经 git 核实属实（3d34bf06 单提交同时含 package.json 与 test/quick-retired.test.mjs），不存在版本号与锚错位的中间可观测态。",
+    "并发": "边界已裁决：可接受——npm 对同版本号重复发布 403 拒绝为平台实际行为，双发撞墙而非双写；package.json 竞态由 git 工作区互斥承担，声明与事实相符。",
+    "切换": "边界已裁决：可接受——版本面两文件已落盘（工作区实态 package.json:3=3.32.3、test:146 锚=3.32.3），push 幂等、publish 撞已存在版本报错可判读，无半写态。",
+    "作用域": "边界已裁决：可接受——版本号单一源在 package.json，发布单仓单包，官方 registry 直连核验 latest=3.32.3 无串台。"
+  },
+  "disclosureAdjudications": [
+    "发 3.32.3 而非用户口头 3.32.4（design 风险与死路·放弃方案①）：可接受——发布前线上 latest 实为 3.32.2（本次独立核验亦确认发布后 latest=3.32.3），3.32.3 才是「最小版本加一」准绳的正确落点，跳号反而违反准绳，且已在交付说明中向用户披露差异。",
+    "弃用 npm version patch 自动提交、改手工两文件编辑+显式 pathspec 提交（design 风险与死路·放弃方案②）：可接受——自动提交与本仓 AGENTS.md 规则 11 显式 pathspec 纪律冲突；3d34bf06 提交面仅 3 文件（package.json/test/tasks.md），纪律执行有据。",
+    "DNS 劫持经腾讯 DoH 真实 IP + 进程级钉扎绕行（requirements 核验留痕·过程注记）：可接受——本次独立复核证实：系统 DNS 下 registry.npmjs.org 直连超时（劫持至不可达停放 IP），腾讯 DNSPod(119.29.29.29) 解析出真实 Cloudflare 段 104.16.x.34（与留痕记载一致），钉扎直连官方 registry 返回 {\"latest\":\"3.32.3\"}；绕行仅限发布进程、零系统改动，留痕注记真实。",
+    "「归档件随后续推送上远端」（requirements 核验留痕·FR-02 括注）：属时序披露而非取舍边界——对应 FR-02 承诺面的未闭合部分，已进 findings（P2），不作为可接受边界默认放行。"
+  ],
+  "verificationEvidence": {
+    "FR-01": "工作区实态 package.json:3 version=3.32.3；test/quick-retired.test.mjs:146 断言 pkg.version === '3.32.3'（与 change.patch 冻结面一致）；断言读取同源 REPO_ROOT/package.json，绑定用例「R5 package.json 版本 3.32.3 版本锚」存在且断言该行为，静态面必然绿。",
+    "FR-02": "origin/main 本地跟踪引用=3d34bf06c817 与留痕 push 范围（344cbf7d..3d34bf06）吻合，版本面推送属实；归档面未闭合进 findings P2。3d34bf06 之前紧邻 344cbf7d「docs 基线棘轮重锚 37→39（pre-push 自动落盘）」，与留痕「docs gate 39=基线放行」互证。",
+    "FR-03": "普通 npm view 返回 3.32.2 系 DNS 劫持导致连接不可达时 npm 本地缓存回落，非线上实态；钉扎真实 Cloudflare IP（104.16.1.34）直连官方 registry dist-tags 端点返回 {\"latest\":\"3.32.3\"}，独立核验通过，留痕声称属实。"
+  },
+  "generatedArtifactsSync": "无类型/契约文件面（纯版本面变更），n/a。",
+  "reviewedAt": "2026-10-09T15:54:41Z"
+}
