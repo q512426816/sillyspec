@@ -10,9 +10,10 @@
  *    厚道有轻量变更缺的审计资产；机器合成勿手改。
  * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
- * ④ writeCloseTraceArtifacts / buildThinSnapshotRows：双通道收尾留痕统一写
- *    （2026-10-07-unify-close-trace）——thin flow done 与 heavy execute --done 共用一处一次
- *    写齐四件（沉淀资产面 + 对账快照面，sha256 双套同锚），新变更两通道留痕对称。
+ * ④ writeCloseTraceArtifacts / buildThinSnapshotRows：收口留痕单套写
+ *    （2026-10-09-close-trace-single-set）——thin flow done 与 heavy execute --done 共用
+ *    一处只写 change.patch + change-patch.json 两件（对账面并入 scopeAudit 子对象；
+ *    此前 2026-10-07-unify-close-trace 的四件双轨形态收口为单套，旧名读侧兼容兜存量）。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -358,21 +359,21 @@ export function projectTraceFaceRows(rows) {
 }
 
 /**
- * 双通道收尾留痕统一写（2026-10-07-unify-close-trace，缺陷 thin-flow-done-no-scope-
- * audit-snapshot 修复方向③）：thin（flow done）与 heavy（execute --done）此前各写各的
- * 留痕（沉淀资产面 change.patch/change-patch.json vs 对账快照面 scope-audit.patch/
- * scope-audit.json），消费方各认一份致每类变更恰好一张卡失真——本函数一处写齐四件，
- * sha256/patchStatus 双套同锚（同一 patchText 一次计算：change.patch ≡ scope-audit.patch
- * 字节一致、两 json 同 hash，两套留痕不可能漂移）。patchText 空/null → 双套同标 failed、
- * 不落 patch 文件（heavy 旧「空串当 ok」形态收口）。读侧兼容链（快照 > change-patch
- * 回放 > 实时区间，2026-10-07-scope-audit-thin-patch-replay）不动——本函数让新变更两套
- * 齐备，回退退化为存量归档兜底。
+ * 收口留痕单套写（2026-10-09-close-trace-single-set）：thin（flow done）与 heavy
+ * （execute --done）统一只落 change.patch + change-patch.json 两件。原对账快照面
+ * （scope-audit.json + scope-audit.patch，2026-10-07-unify-close-trace 起与沉淀资产面
+ * 双轨并写）停写：对账数据并入 change-patch.json 的 scopeAudit 子对象，顶级键
+ * （change/baseline/head/files/totals/savedAt/note/moduleScope 等）原位不动——
+ * fr-index/knowledge-graph/flow 漂移检测与平台 assets.py/parser.py 等顶级字段读方零改动。
+ * patchText 一次 sha256 锚定 patch 与 patchStatus；patchText 空/null → failed、不落
+ * patch 文件。读侧兼容链（scopeAudit 子对象 > 旧 scope-audit.json > .runtime 快照 >
+ * thin 回放 > 实时区间）兜存量归档，旧名只读不写。
  *
  * @param {string} changeDir 变更目录（活跃或归档侧——归档竞态由调用方解析）
- * @param {object} snapObj scope-audit.json 主体（mode/ok/degradedReason/baseAnchor/totals/
- *   rows/excluded/note[/repos]；closedBy 由调用方携带标收尾通道——读侧回放按它标注，
- *   缺省 'execute --done' 兼容旧快照）
- * @param {object} meta change-patch.json 增量键（note/moduleScope 等，展开在 totals 后）
+ * @param {object} snapObj scopeAudit 子对象主体（mode/ok/degradedReason/baseAnchor/
+ *   totals/rows/excluded/note[/repos]；closedBy 由调用方携带标收尾通道——读侧回放按它
+ *   标注，缺省 'execute --done' 兼容旧快照）
+ * @param {object} meta change-patch.json 顶级增量键（note/moduleScope 等，展开在 totals 后）
  * @returns {{ patchStatus: 'ok'|'failed', patchSha256: string|null }}
  */
 export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {} }) {
@@ -382,10 +383,7 @@ export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, fi
   const patchSha256 = patchBody
     ? createHash('sha256').update(patchBody.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
     : null
-  if (patchOk) {
-    writeFileSync(join(changeDir, 'change.patch'), patchBody)
-    writeFileSync(join(changeDir, 'scope-audit.patch'), patchBody)
-  }
+  if (patchOk) writeFileSync(join(changeDir, 'change.patch'), patchBody)
   writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({
     change,
     baseline: baseline ?? null,
@@ -396,14 +394,9 @@ export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, fi
       : { files: fileList.length, additions: 0, deletions: 0 },
     savedAt,
     ...meta,
+    scopeAudit: { ...snapObj },
     ...(patchSha256 ? { patchSha256 } : {}),
     patchStatus: patchOk ? 'ok' : 'failed',
-  }, null, 2) + '\n')
-  writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({
-    ...snapObj,
-    ...(patchSha256 ? { patchSha256 } : {}),
-    patchStatus: patchOk ? 'ok' : 'failed',
-    savedAt,
   }, null, 2) + '\n')
   return { patchStatus: patchOk ? 'ok' : 'failed', patchSha256 }
 }

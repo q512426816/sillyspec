@@ -113,8 +113,9 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json �
   assert.ok(patch2.includes('+++ b/src/work2.js'), '重冻结面含处置提交（按 diff hunk 头判）')
   assert.ok(s4.status !== 0, '重评任务书再现（exit 1 @ review）')
   assert.ok(out4.includes('独立评审任务书'), '重评任务书在场')
-  // 双轨留痕不自嵌入（2026-10-07-unify-close-trace 增量断言）：首轮 done 已落 scope-audit.json/
-  // patch（双轨统一），重冻结时这两件与 change.patch/change-patch.json 同档排除——否则上一轮
+  // 留痕不自嵌入（2026-10-07-unify-close-trace 增量断言；2026-10-09-close-trace-single-set
+  // 后新收口只落 change.patch/change-patch.json 两件，但旧轮冻结件可能仍有 scope-audit.json/
+  // patch——排除清单四名全保留，legacy 防护同档）：重冻结时四件同档排除——否则上一轮
   // 冻结件作为 untracked 新文件被全文自嵌入（自引用循环）。
   const meta2 = JSON.parse(readFileSync(join(base, 'change-patch.json'), 'utf8'))
   assert.ok(!meta2.files.some((f) => f.endsWith('scope-audit.json') || f.endsWith('scope-audit.patch')),

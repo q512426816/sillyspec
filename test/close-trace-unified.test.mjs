@@ -1,17 +1,18 @@
 /**
- * 双通道收尾留痕统一夹具（变更 2026-10-07-unify-close-trace）。
+ * 收口留痕单套契约夹具（变更 2026-10-09-close-trace-single-set）。
  *
- * 根因：thin（flow done）只写 change.patch/change-patch.json、heavy（execute --done）只写
- * scope-audit.json/scope-audit.patch——消费方各认一份，每类变更恰好一张卡失真。本变更落
- * 共用 writeCloseTraceArtifacts：一次写齐四件、sha256 双套同锚（缺陷 thin-flow-done-no-
- * scope-audit-snapshot 修复方向③；方向②读侧回退由 2026-10-07-scope-audit-thin-patch-replay 落地）。
+ * 沿革：2026-10-07-unify-close-trace 曾把 thin/heavy 两通道统一为四件双轨（change.patch +
+ * change-patch.json + scope-audit.json + scope-audit.patch，两 patch 同字节、两 json 同锚）；
+ * 本变更收敛为单套——只写 change.patch + change-patch.json 两件，对账面数据并入
+ * change-patch.json 的 scopeAudit 子对象（顶级键原位不动），scope-audit.json/.patch 停写
+ * （读侧旧名兼容链兜存量归档，兼容面由 scope-audit-thin-patch-replay / scope-audit 系钉住）。
  *
- * 覆盖（requirements FR-01~04）：
- *   1. writer 单测：ok 态四件齐备/同锚；failed 态双标不落 patch（FR-01/03）
- *   2. buildThinSnapshotRows：三态/治理过滤/跨仓补行/stats 缺档（FR-01）
- *   3. round-trip：writer 产物 → computeChangeScopeAudit 快照回放（closedBy 标注）+ --file 切片（FR-04）
- *   4. thin CLI e2e：flow done 全链四件齐备 + 查询走快照态（FR-01/04）
- *   5. heavy CLI e2e：execute --done 双轨落盘，change-patch.json=主仓实改行投影（FR-02）
+ * 覆盖（2026-10-09-close-trace-single-set requirements FR-01~04）：
+ *   1. writer 单测：ok 态恰好两件 + scopeAudit 子对象完整；failed 态不落 patch、scopeAudit 仍在（FR-01）
+ *   2. buildThinSnapshotRows：三态/治理过滤/跨仓补行/stats 缺档（FR-01，纯函数不动）
+ *   3. round-trip：writer 产物 → computeChangeScopeAudit 快照回放（closedBy 标注）+ --file 切片（FR-02）
+ *   4. thin CLI e2e：flow done 落盘恰好两件 + 查询走快照态（FR-01/02）
+ *   5. heavy CLI e2e：execute --done 单套落盘，files=主仓实改行投影（FR-01/02）
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -41,9 +42,9 @@ function sha256(text) {
 
 const PATCH_A = 'diff --git a/src/a.js b/src/a.js\nindex 111..222 100644\n--- a/src/a.js\n+++ b/src/a.js\n@@ -1,2 +1,3 @@\n a1\n a2\n+a3\n'
 
-// ───────────────────────── FR-01/03：writer 单测 ─────────────────────────
+// ───────────────────────── FR-01：writer 单测 ─────────────────────────
 
-test('FR-01/03 writer 单测：ok 态四件齐备、两 patch 同字节、两 json 同锚', () => {
+test('FR-01 writer 单测：ok 态恰好两件、scopeAudit 子对象完整、sha 单锚', () => {
   const d = mkdtempSync(join(tmpdir(), 'ct-ok-'))
   try {
     const dir = join(d, 'chg')
@@ -51,7 +52,7 @@ test('FR-01/03 writer 单测：ok 态四件齐备、两 patch 同字节、两 js
     const r = writeCloseTraceArtifacts({
       changeDir: dir, change: 'chg', baseline: 'abc123', head: 'def456',
       files: ['src/a.js'], metaTotals: { files: 1, additions: 1, deletions: 0 },
-      patchText: PATCH_A, savedAt: '2026-10-07T16:00:00.000Z',
+      patchText: PATCH_A, savedAt: '2026-10-09T16:00:00.000Z',
       snapObj: {
         mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc123',
         totals: { files: 1, additions: 1, deletions: 0 },
@@ -64,21 +65,26 @@ test('FR-01/03 writer 单测：ok 态四件齐备、两 patch 同字节、两 js
     assert.equal(r.patchStatus, 'ok')
     assert.equal(r.patchSha256, sha256(PATCH_A), '返回 sha 与 patch 正文一致（LF 归一口径，正文已带结尾换行不重复补）')
     const cp = readFileSync(join(dir, 'change.patch'), 'utf8')
-    const sp = readFileSync(join(dir, 'scope-audit.patch'), 'utf8')
-    assert.equal(cp, sp, 'change.patch ≡ scope-audit.patch（字节一致）')
-    const cMeta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
-    const snap = JSON.parse(readFileSync(join(dir, 'scope-audit.json'), 'utf8'))
-    assert.equal(cMeta.patchSha256, sha256(cp), 'change-patch.json 锚定')
-    assert.equal(snap.patchSha256, cMeta.patchSha256, '两 json patchSha256 相同（双套同锚）')
-    assert.equal(cMeta.patchStatus, 'ok'); assert.equal(snap.patchStatus, 'ok')
-    assert.equal(cMeta.change, 'chg'); assert.deepEqual(cMeta.files, ['src/a.js'])
-    assert.equal(cMeta.baseline, 'abc123'); assert.equal(cMeta.head, 'def456')
-    assert.equal(snap.closedBy, 'flow done', '快照带收尾通道标注')
-    assert.equal(snap.savedAt, '2026-10-07T16:00:00.000Z', 'savedAt 落盘')
+    assert.ok(!existsSync(join(dir, 'scope-audit.json')), '单套契约：不写 scope-audit.json')
+    assert.ok(!existsSync(join(dir, 'scope-audit.patch')), '单套契约：不写 scope-audit.patch')
+    const meta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
+    assert.equal(meta.patchSha256, sha256(cp), 'change-patch.json 锚定 patch 正文')
+    assert.equal(meta.patchStatus, 'ok')
+    assert.equal(meta.change, 'chg'); assert.deepEqual(meta.files, ['src/a.js'])
+    assert.equal(meta.baseline, 'abc123'); assert.equal(meta.head, 'def456')
+    assert.equal(meta.savedAt, '2026-10-09T16:00:00.000Z', 'savedAt 顶级落盘')
+    assert.ok(meta.note, 'meta 增量键展开在顶级')
+    // scopeAudit 子对象：原 scope-audit.json 全字段并入
+    const sa = meta.scopeAudit
+    assert.ok(sa && typeof sa === 'object', 'scopeAudit 子对象在场')
+    assert.equal(sa.mode, 'full-flow'); assert.equal(sa.ok, true); assert.equal(sa.baseAnchor, 'abc123')
+    assert.deepEqual(sa.rows, [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }])
+    assert.equal(sa.closedBy, 'flow done', '子对象带收尾通道标注')
+    assert.ok(!('patchSha256' in sa) && !('patchStatus' in sa) && !('savedAt' in sa), '锚/状态/时间维持顶级，不在子对象内重复')
   } finally { cleanup(d) }
 })
 
-test('FR-03 writer 单测：patchText 空 → 双套同标 failed、不落 patch 文件', () => {
+test('FR-01 writer 单测：patchText 空 → failed、不落 patch 文件、scopeAudit 面仍完整', () => {
   const d = mkdtempSync(join(tmpdir(), 'ct-fail-'))
   try {
     const dir = join(d, 'chg')
@@ -86,17 +92,18 @@ test('FR-03 writer 单测：patchText 空 → 双套同标 failed、不落 patch
     const r = writeCloseTraceArtifacts({
       changeDir: dir, change: 'chg', baseline: null, head: null,
       files: ['src/a.js'], metaTotals: { files: 1, additions: 0, deletions: 0 },
-      patchText: null, savedAt: '2026-10-07T16:01:00.000Z',
+      patchText: null, savedAt: '2026-10-09T16:01:00.000Z',
       snapObj: { mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: null, totals: { files: 1, additions: 0, deletions: 0 }, rows: [], excluded: { foreignDeclared: [] }, note: 'n', closedBy: 'execute --done' },
       meta: {},
     })
     assert.equal(r.patchStatus, 'failed'); assert.equal(r.patchSha256, null)
     assert.ok(!existsSync(join(dir, 'change.patch')), 'failed 不落 change.patch')
-    assert.ok(!existsSync(join(dir, 'scope-audit.patch')), 'failed 不落 scope-audit.patch')
-    const cMeta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
-    const snap = JSON.parse(readFileSync(join(dir, 'scope-audit.json'), 'utf8'))
-    assert.equal(cMeta.patchStatus, 'failed'); assert.equal(snap.patchStatus, 'failed', '双套同标')
-    assert.ok(!('patchSha256' in cMeta) && !('patchSha256' in snap), '无伪 hash')
+    assert.ok(!existsSync(join(dir, 'scope-audit.patch')), 'failed 不落 scope-audit.patch（单套本就不写）')
+    const meta = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
+    assert.equal(meta.patchStatus, 'failed')
+    assert.ok(!('patchSha256' in meta), '无伪 hash')
+    assert.ok(meta.scopeAudit && Array.isArray(meta.scopeAudit.rows), 'scopeAudit 面仍完整在场')
+    assert.equal(meta.scopeAudit.closedBy, 'execute --done')
   } finally { cleanup(d) }
 })
 
@@ -153,9 +160,9 @@ test('FR-02 projectTraceFaceRows：untouched/crossRepo 排除、verdict 缺失�
   assert.deepEqual(projectTraceFaceRows(undefined), { rows: [], files: [], totals: { files: 0, additions: 0, deletions: 0 } }, '空入参防御')
 })
 
-// ───────────────────────── FR-04：写读 round-trip ─────────────────────────
+// ───────────────────────── FR-02：写读 round-trip ─────────────────────────
 
-test('FR-04 round-trip：writer 产物 → 快照回放（closedBy 标注）+ --file 冻结切片', async () => {
+test('FR-02 round-trip：writer 产物 → 快照回放（scopeAudit 子对象）+ --file 冻结切片（change.patch）', async () => {
   const d = mkdtempSync(join(tmpdir(), 'ct-rt-'))
   try {
     sh(d, ['init', '-q', '-b', 'main'])
@@ -178,7 +185,7 @@ test('FR-04 round-trip：writer 产物 → 快照回放（closedBy 标注）+ --
       changeDir: changeDir, change: 'rt-chg', baseline, head: baseline,
       files: ['src/a.js', '.sillyspec/changes/archive/rt-chg/design.md'],
       metaTotals: { files: 2, additions: 1, deletions: 0 },
-      patchText: PATCH_A, savedAt: '2026-10-07T16:02:00.000Z',
+      patchText: PATCH_A, savedAt: '2026-10-09T16:02:00.000Z',
       snapObj: { mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: baseline, totals, rows, excluded: { foreignDeclared: [] }, note: 'flow done 时点冻结（本文件落盘时采集）', closedBy: 'flow done' },
       meta: { note: 'flow done 时点冻结（fixture）' },
     })
@@ -198,9 +205,9 @@ test('FR-04 round-trip：writer 产物 → 快照回放（closedBy 标注）+ --
   } finally { cleanup(d) }
 })
 
-// ───────────────────────── FR-01/04：thin CLI e2e ─────────────────────────
+// ───────────────────────── FR-01/02：thin CLI e2e ─────────────────────────
 
-test('FR-01/04 thin CLI e2e：flow done 全链四件齐备 + 查询走快照态', () => {
+test('FR-01/02 thin CLI e2e：flow done 落盘恰好两件 + 查询走快照态', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'ct-thin-'))
   try {
     sh(cwd, ['init', '-q', '-b', 'main'])
@@ -209,9 +216,9 @@ test('FR-01/04 thin CLI e2e：flow done 全链四件齐备 + 查询走快照态'
     writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
     writeFileSync(join(cwd, 'base.txt'), 'base\n')
     sh(cwd, ['add', '.']); sh(cwd, ['commit', '-q', '-m', 'base'])
-    const cn = '2026-10-07-ct-thin-e2e'
+    const cn = '2026-10-09-ct-thin-a1' // 抽查桶外名（sampleBucket 1/4 定额——e2e 夹具不进评审采样）
     const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
-    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '双轨留档 e2e\n\n成功标准：\n- flow done 后四件齐备'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '单套留档 e2e\n\n成功标准：\n- flow done 后恰好两件'], { cwd, encoding: 'utf8', timeout: 120_000, env })
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     const base = join(cwd, '.sillyspec', 'changes', cn)
     // design 四问一行作答（plain，不触发评审定档）+ 文件变更清单声明交付文件
@@ -230,22 +237,23 @@ test('FR-01/04 thin CLI e2e：flow done 全链四件齐备 + 查询走快照态'
     const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
     const out2 = s2.stdout + s2.stderr
     assert.equal(s2.status, 0, `done 失败: ${out2.split('\n').slice(-8).join(' | ')}`)
-    assert.match(out2, /变更 patch 留档（双轨统一）/, '双轨留档行（保既有前缀断言兼容）')
+    assert.match(out2, /变更 patch 留档（单套）/, '单套留档行')
 
     const arch = join(cwd, '.sillyspec', 'changes', 'archive', cn)
-    for (const f of ['change.patch', 'change-patch.json', 'scope-audit.json', 'scope-audit.patch']) {
+    for (const f of ['change.patch', 'change-patch.json']) {
       assert.ok(existsSync(join(arch, f)), `归档目录含 ${f}`)
     }
-    const snap = JSON.parse(readFileSync(join(arch, 'scope-audit.json'), 'utf8'))
+    assert.ok(!existsSync(join(arch, 'scope-audit.json')), '单套契约：归档目录不再有 scope-audit.json')
+    assert.ok(!existsSync(join(arch, 'scope-audit.patch')), '单套契约：归档目录不再有 scope-audit.patch')
+    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
+    const snap = meta.scopeAudit
+    assert.ok(snap && Array.isArray(snap.rows), 'scopeAudit 子对象在场')
     assert.equal(snap.closedBy, 'flow done', 'thin 快照带通道标注')
     const work = (snap.rows || []).find((r) => r.path === 'src/work.js')
     assert.ok(work && work.verdict === 'planned', '快照行真实三态（work.js planned）')
-    const cp = readFileSync(join(arch, 'change.patch'), 'utf8')
-    assert.equal(readFileSync(join(arch, 'scope-audit.patch'), 'utf8'), cp, '两 patch 同字节')
-    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
-    assert.equal(meta.patchSha256, snap.patchSha256, '两 json 同锚')
+    assert.equal(meta.patchSha256, sha256(readFileSync(join(arch, 'change.patch'), 'utf8')), 'sha 单锚（json 锚定唯一 patch 正文）')
 
-    // 查询面：归档后走快照记录态（closedBy 标注），不再依赖 change-patch 回放兜底
+    // 查询面：归档后走快照记录态（scopeAudit 子对象回放，closedBy 标注），不再依赖 thin 回放兜底
     const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'scope-audit', '--change', cn], { cwd, encoding: 'utf8', timeout: 60_000, env })
     const out3 = s3.stdout + s3.stderr
     assert.equal(s3.status, 0, `scope-audit 失败: ${out3}`)
@@ -254,7 +262,7 @@ test('FR-01/04 thin CLI e2e：flow done 全链四件齐备 + 查询走快照态'
   } finally { cleanup(cwd) }
 })
 
-// ───────────────────────── FR-02：heavy CLI e2e ─────────────────────────
+// ───────────────────────── FR-01/02：heavy CLI e2e ─────────────────────────
 
 function writePlan(changeDir, allChecked) {
   const t3 = allChecked ? '[x]' : '[ ]'
@@ -266,7 +274,7 @@ function writeWorktreeMeta(specBase, cn) {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'meta.json'), JSON.stringify({ depsStatus: 'n/a', mode: 'in-place-fallback' }), 'utf8')
 }
-const FIXED_RUN_ID = 'exec-2026-10-07-100000'
+const FIXED_RUN_ID = 'exec-2026-10-09-100000'
 function writePassingTaskReviews(specBase, cn, gitHead) {
   const runtimeRoot = join(specBase, '.runtime')
   writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
@@ -280,9 +288,9 @@ function writePassingTaskReviews(specBase, cn, gitHead) {
   }
 }
 
-test('FR-02 heavy CLI e2e：execute --done 双轨落盘，change-patch.json=主仓实改行投影', async () => {
+test('FR-01/02 heavy CLI e2e：execute --done 单套落盘，files=主仓实改行投影', async () => {
   const { cwd, specBase } = makeRepo('ct-heavy-')
-  const cn = '2026-10-07-ct-heavy-e2e'
+  const cn = '2026-10-09-ct-heavy-e2e'
   const pm = await initChange(cwd, specBase, cn)
   writePlan(join(specBase, 'changes', cn), true)
   writeWorktreeMeta(specBase, cn)
@@ -297,19 +305,20 @@ test('FR-02 heavy CLI e2e：execute --done 双轨落盘，change-patch.json=主�
 
   const r = runStage('execute', cn, cwd, { done: true, output: 'step done' })
   assert.equal(r.status, 0, `execute --done 失败: ${r.combined.slice(-200)}`)
-  assert.match(r.combined, /双轨落盘/, '双轨落盘行')
+  assert.match(r.combined, /单套/, '单套落盘行')
 
   const changeDir = join(specBase, 'changes', cn)
-  for (const f of ['change.patch', 'change-patch.json', 'scope-audit.json', 'scope-audit.patch']) {
+  for (const f of ['change.patch', 'change-patch.json']) {
     assert.ok(existsSync(join(changeDir, f)), `heavy 收尾后含 ${f}`)
   }
-  const snap = JSON.parse(readFileSync(join(changeDir, 'scope-audit.json'), 'utf8'))
-  assert.equal(snap.closedBy, 'execute --done', 'heavy 快照带通道标注')
+  assert.ok(!existsSync(join(changeDir, 'scope-audit.json')), '单套契约：heavy 收尾不再有 scope-audit.json')
+  assert.ok(!existsSync(join(changeDir, 'scope-audit.patch')), '单套契约：heavy 收尾不再有 scope-audit.patch')
   const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
   assert.equal(meta.change, cn)
   assert.ok(meta.files.includes('src/app.js'), 'files=主仓实改行投影（含未提交交付）')
   assert.equal(meta.totals.files, meta.files.length, 'totals.files 与投影行数一致')
-  const cp = readFileSync(join(changeDir, 'change.patch'), 'utf8')
-  assert.equal(readFileSync(join(changeDir, 'scope-audit.patch'), 'utf8'), cp, '两 patch 同字节')
-  assert.equal(meta.patchSha256, snap.patchSha256, '两 json 同锚')
+  const snap = meta.scopeAudit
+  assert.ok(snap && Array.isArray(snap.rows), 'scopeAudit 子对象在场')
+  assert.equal(snap.closedBy, 'execute --done', 'heavy 快照带通道标注')
+  assert.equal(meta.patchSha256, sha256(readFileSync(join(changeDir, 'change.patch'), 'utf8')), 'sha 单锚（json 锚定唯一 patch 正文）')
 })

@@ -1126,7 +1126,8 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
     snap.closedBy = 'execute --done'
     // 沉淀资产面投影（2026-10-07-unify-close-trace）：files/totals = 主仓实改行（planned+
     // unplanned；untouched 0/0 是声明不是改动、crossRepo 行 patch 不在主仓——均不入）。
-    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处写四件（sha256 双套同锚）；
+    // 经共用 writeCloseTraceArtifacts 与 thin flow done 同一处单套写两件（2026-10-09-
+    // close-trace-single-set：对账面并入 change-patch.json 的 scopeAudit 子对象）；
     // 投影口径抽 flow-parity.projectTraceFaceRows 纯函数（排除路径有单测钉住）。
     const face = projectTraceFaceRows(snap.rows)
     const closeTrace = writeCloseTraceArtifacts({
@@ -1143,7 +1144,7 @@ async function printExecuteScopeAudit({ cwd, changeName, specBase, platformOpts,
         note: 'execute --done 时点冻结（沉淀资产面：主仓实改行投影——thin flow done 对等；治理工件目录与其后 verify/archive 演进不在内）',
       },
     })
-    console.log(`   📦 范围快照 + 沉淀资产双轨落盘（scope-audit.json${closeTrace.patchStatus === 'ok' ? ' + scope-audit.patch' : ''} + change-patch.json${closeTrace.patchStatus === 'ok' ? ' + change.patch' : ''}${closeTrace.patchStatus === 'ok' ? '——收尾时点冻结，sha256 同锚' : '——patch 采集失败已留痕'}）`)
+    console.log(`   📦 范围快照落盘（单套）：change-patch.json${closeTrace.patchStatus === 'ok' ? ' + change.patch' : ''}（对账面并入 scopeAudit 子对象${closeTrace.patchStatus === 'ok' ? '，收尾时点冻结 sha256 已锚' : '——patch 采集失败已留痕'}）`)
   } catch (e) {
     console.warn(`   ⚠️ 范围对账快照写入失败（不阻断，verify 漂移对比将按无快照降级）：${e && e.message ? String(e.message).split('\n')[0] : e}`)
   }
@@ -1161,13 +1162,21 @@ async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, 
     return
   }
   let snapshot = null
-  // 快照读取链（quick-359a48f1）：变更目录（审计级，execute --done 落）→ .runtime（存量兼容）
+  // 快照读取链（2026-10-09-close-trace-single-set）：change-patch.json.scopeAudit（单套
+  // 新形态）→ 旧 scope-audit.json（存量归档）→ .runtime/scope-audit-<change>.json（更早
+  // 存量兼容）——scopeAuditPathSet 只吃 rows，子对象与旧顶级形态同构直用
   try {
-    snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
-  } catch {
+    const merged = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'change-patch.json'), 'utf8'))
+    if (merged && typeof merged.scopeAudit === 'object' && merged.scopeAudit) snapshot = merged.scopeAudit
+  } catch { /* 新形态缺失 → 旧名兜底 */ }
+  if (!snapshot) {
     try {
-      snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
-    } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
+      snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
+    } catch {
+      try {
+        snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
+      } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
+    }
   }
   if (!snapshot || snapshot.ok !== true) {
     console.log(`   ${scopeLine}（无 execute 时点快照可对比——完整表跑 sillyspec scope-audit --change ${changeName}）`)

@@ -1421,6 +1421,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.warn(`⚠️ --accept-dirty-gap：显式接受 ${freeze.dirtyWarned.length} 个未提交交付文件不进冻结面（缺口数随 change-patch.json acceptedDirtyGap 留痕）`)
           }
         }
+        // 收口留痕四名全排除（2026-10-09-close-trace-single-set 后只写 change.patch/
+        // change-patch.json 两件，但旧轮冻结件里可能仍有 scope-audit.json/.patch——
+        // legacy 防护保留）：上一轮留痕件作为 untracked 新文件被全文自嵌入即自引用循环
+        // （旧 patch 内容混进新 patch，三评 P1 根因）。
         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
           .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
             && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
@@ -1437,8 +1441,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           const toPosix = (p) => String(p).replace(/\\/g, '/')
           // 复审 P2/P3a 清偿：工作树口径集 = 治理工件目录（含已提交后又改的槽位/勾选——工作树
           // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
-          // 排除项与 ownFiles 同款（change.patch/change-patch.json）——否则上一轮冻结件作为
-          // untracked 新文件被全文自嵌入（自引用循环：旧 patch 内容混进新 patch，三评 P1 根因）。
+          // 排除项与 ownFiles 同款（四名全排，含 scope-audit.* 旧轮冻结件 legacy 防护）。
           const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
             && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
           const worktreeSet = new Set([...dirFilesForPatch, ...((freeze.dirtyAdded) || [])].map(toPosix))
@@ -1469,10 +1472,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
             moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
           } catch { /* 对账 best-effort（三键空数组兜底） */ }
-          // 双通道收尾留痕统一（2026-10-07-unify-close-trace）：共用 writeCloseTraceArtifacts
-          // 一次写齐四件——沉淀资产面（change.patch + change-patch.json，键结构/口径不变）+
-          // 对账快照面（scope-audit.json + scope-audit.patch，thin 通道新增）：同点同锚
-          // （同一 patchText 一次 sha256），新变更两条通道留痕对称，读侧回退退化为存量兜底。
+          // 收口留痕单套写（2026-10-09-close-trace-single-set）：共用 writeCloseTraceArtifacts
+          // 只写 change.patch + change-patch.json 两件——对账面数据并入 JSON 的 scopeAudit
+          // 子对象（thin 通道同样有对账面），旧名 scope-audit.* 停写、读侧兼容兜存量归档。
           let planEntries = []
           try {
             const { parseFileChangeListDetailed } = await import('./change-list.js')
@@ -1508,7 +1510,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               ...(acceptDirtyGap && freeze.dirtyWarned.length > 0 ? { acceptedDirtyGap: freeze.dirtyWarned.length } : {}),
             },
           })
-          console.log(`📦 变更 patch 留档（双轨统一）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}）+ scope-audit.json + scope-audit.patch（对账快照同点冻结）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
+          console.log(`📦 变更 patch 留档（单套）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}，对账面并入 scopeAudit 子对象）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
           // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
           // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
           // 阻断——可能是范围裁剪了但 design 没同步更新）

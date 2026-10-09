@@ -237,12 +237,26 @@ function resolveDiffRoot(sb, changeName, form, cwd) {
 }
 
 /**
- * execute --done 时点快照读取（归档记录态数据源）：结构即 computeFullFlowAudit 返回值 +
- * savedAt。读取链（quick-359a48f1）：变更目录 scope-audit.json（审计级，随归档入库）→
- * .runtime/scope-audit-<change>.json（存量兼容）→ null（调用方降级，不出伪数据）。
+ * 收口时点快照读取（归档记录态数据源）：结构即 computeFullFlowAudit 返回值 + savedAt。
+ * 读取链（2026-10-09-close-trace-single-set）：变更目录 change-patch.json 的 scopeAudit
+ * 子对象（单套新形态——顶级 patchSha256/patchStatus/savedAt 原位注入返回值，下游回放
+ * 注记与 getFileDiff 防篡改锚口径不变）→ 旧 scope-audit.json（存量归档）→ .runtime/
+ * scope-audit-<change>.json（更早存量兼容）→ null（调用方降级，不出伪数据）。
  */
 function readScopeSnapshot(changeDir, runtimeRoot, changeName) {
   if (changeDir) {
+    try {
+      const merged = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+      if (merged && typeof merged === 'object' && merged.scopeAudit && typeof merged.scopeAudit === 'object'
+        && Array.isArray(merged.scopeAudit.rows)) {
+        return {
+          ...merged.scopeAudit,
+          ...(merged.patchSha256 ? { patchSha256: merged.patchSha256 } : {}),
+          ...(merged.patchStatus ? { patchStatus: merged.patchStatus } : {}),
+          ...(merged.savedAt ? { savedAt: merged.savedAt } : {}),
+        }
+      }
+    } catch { /* 新形态缺失/损坏 → 旧名兜底 */ }
     try {
       const snap = JSON.parse(readFileSync(join(changeDir, 'scope-audit.json'), 'utf8'))
       if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
@@ -253,18 +267,6 @@ function readScopeSnapshot(changeDir, runtimeRoot, changeName) {
     if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
   } catch { /* 缺失/损坏 → null */ }
   return null
-}
-
-/**
- * 冻结 patch 读取（审计级存储，--file 已收尾切片的数据源）：变更目录 scope-audit.patch。
- * @returns {string|null}
- */
-function readFrozenPatch(changeDir) {
-  if (!changeDir) return null
-  try {
-    const text = readFileSync(join(changeDir, 'scope-audit.patch'), 'utf8')
-    return text && text.trim() ? text : null
-  } catch { return null }
 }
 
 /**
@@ -846,10 +848,19 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   // 审查 C-F02：预执行判定必须排除归档（归档=流程走完，58/77 归档变更三信号全缺被误判
   // 「未执行」实证——tag 只在分支被 review 引用时才打）+ 补四类证据：快照文件本身 /
   // execute-runs change 戳（task-review readExecuteRunChangeStamp 同口径）/ apply-pathspec /
-  // execute-cleanup 回执。任一命中 = 进过 execute。
-  const hasSnapshotFile = changeDirInfo
-    ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
-    : existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
+  // execute-cleanup 回执。任一命中 = 进过 execute。快照存在性（2026-10-09-close-trace-
+  // single-set）：新形态读 change-patch.json 的 scopeAudit 子对象（非文件裸存在——旧 thin
+  // 冻结件无子对象不误判），旧形态 scope-audit.json / .runtime 快照照旧。
+  const hasMergedScopeAudit = changeDirInfo ? (() => {
+    try {
+      const merged = JSON.parse(readFileSync(join(changeDirInfo.dir, 'change-patch.json'), 'utf8'))
+      return !!(merged && typeof merged === 'object' && merged.scopeAudit && typeof merged.scopeAudit === 'object')
+    } catch { return false }
+  })() : false
+  const hasSnapshotFile = hasMergedScopeAudit
+    || (changeDirInfo
+      ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
+      : existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`)))
   const hasApplyPathspec = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
   const hasCleanupReceipt = existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
   let hasExecuteRunStamp = false
@@ -1575,19 +1586,34 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
     }
 
     // —— 真·当时内容比对（quick-359a48f1）：已收尾变更优先冻结 patch 切片 ——
-    // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 scope-audit.patch。
+    // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 change.patch（单套新形态，
+    // 2026-10-09-close-trace-single-set）→ scope-audit.patch（存量 heavy 归档兜底）。
     // patch 冻结在收尾时点，不含后续演进——实时锚 diff 只作 patch 缺失的兜底（口径标注）。
     // A-F01：读取时按 json 记录的 patchSha256 校验，不匹配显式告警（防低级篡改）。
     const patchRecord = result.frozenPatchPath
       ? { path: result.frozenPatchPath, sha: result.patchSha256 || null }
-      : (() => { const d = resolveChangeDir(sb, changeName); return d ? { path: join(d.dir, 'scope-audit.patch'), sha: null } : null })()
+      : (() => {
+          const d = resolveChangeDir(sb, changeName)
+          if (!d) return null
+          for (const name of ['change.patch', 'scope-audit.patch']) {
+            const p = join(d.dir, name)
+            if (existsSync(p)) return { path: p, sha: null }
+          }
+          return null
+        })()
     let recordedSha = patchRecord ? patchRecord.sha : null
     if (patchRecord && !recordedSha && result.rows) {
-      // json 里未直接带回 hash（记录态捷径不透传）→ 读 json 原文取（快照/quick 记录都存该字段）
+      // json 里未直接带回 hash（记录态捷径不透传）→ 读 json 原文取（快照/quick 记录都存该
+      // 字段）。full-flow 伴生 json：change-patch.json（新形态顶级键）优先，旧形态 heavy
+      // 归档（无 change-patch.json）兜底读 scope-audit.json。
       try {
-        const snapRaw = JSON.parse(readFileSync(result.frozenPatchPath
+        const d = resolveChangeDir(sb, changeName)
+        const companionPath = result.frozenPatchPath
           ? result.frozenPatchPath.replace(/\.patch$/, '.json')
-          : join(resolveChangeDir(sb, changeName).dir, 'scope-audit.json'), 'utf8'))
+          : (d && existsSync(join(d.dir, 'change-patch.json'))
+              ? join(d.dir, 'change-patch.json')
+              : join(d.dir, 'scope-audit.json'))
+        const snapRaw = JSON.parse(readFileSync(companionPath, 'utf8'))
         recordedSha = snapRaw.patchSha256 || null
       } catch { /* json 不可读 → 无 hash 可校验（null=不校验） */ }
     }

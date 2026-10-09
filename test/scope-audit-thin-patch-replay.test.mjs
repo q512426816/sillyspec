@@ -10,7 +10,8 @@
  *   1. FR-01 主路径：快照缺失 + change-patch.json 在 → 三态真实表（计划内带冻结行数）
  *   2. FR-01 failed 留痕：patchStatus=failed → 文件集回放 + 行数 null 档不出伪数据
  *   3. FR-02 冻结语义：后续演进不进表 + --file 冻结切片 + sha256 篡改拒绝
- *   4. FR-03 优先级：快照在时快照优先；快照与 change-patch 双缺走开放区间兜底（既有口径）
+ *   4. FR-03 优先级（2026-10-09-close-trace-single-set 新序）：scopeAudit 子对象 > 旧
+ *      scope-audit.json > thin 回放；双缺走开放区间兜底（既有口径）
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -187,10 +188,33 @@ test('FR-02 冻结语义：后续演进不进表 + --file 冻结切片与 sha256
 
 // ───────────────────────── FR-03：优先级与双缺兜底 ─────────────────────────
 
-test('FR-03 优先级：快照在时快照优先；双缺走开放区间兜底（既有口径）', async () => {
+test('FR-03 优先级：scopeAudit 子对象 > 旧 scope-audit.json > thin 回放；双缺走开放区间兜底', async () => {
+  // ⓪ 新形态最高优先：change-patch.json 带 scopeAudit 子对象 → 胜过同名旧 scope-audit.json
+  const { d: d0, changeDir: cd0 } = makeThinArchive('sa-thinprio0-')
+  try {
+    writeFileSync(join(cd0, 'scope-audit.json'), JSON.stringify({
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'snap0000',
+      totals: { files: 1, additions: 999, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 999, deletions: 0, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, savedAt: '2026-09-10T00:00:00.000Z',
+    }))
+    const meta0 = JSON.parse(readFileSync(join(cd0, 'change-patch.json'), 'utf8'))
+    meta0.scopeAudit = {
+      mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'snap1111',
+      totals: { files: 1, additions: 777, deletions: 0 },
+      rows: [{ path: 'src/a.js', planned: '修改', additions: 777, deletions: 0, kind: 'modified', verdict: 'planned' }],
+      excluded: { foreignDeclared: [] }, note: 'flow done 时点冻结（fixture）', closedBy: 'flow done',
+    }
+    writeFileSync(join(cd0, 'change-patch.json'), JSON.stringify(meta0, null, 2) + '\n')
+    const r0 = await computeChangeScopeAudit({ cwd: d0, changeName: 'thin-demo' })
+    assert.equal(r0.totals.additions, 777, 'scopeAudit 子对象胜出（旧 scope-audit.json 让位）')
+    assert.equal(r0.baseAnchor, 'snap1111')
+  } finally { cleanup(d0) }
+
+  // ① 旧形态兜底：change-patch.json 无子对象（旧 thin 冻结件）+ 旧 scope-audit.json 在
+  //    → 旧名快照回放赢（行数取快照值），change-patch 回放让位
   const { d, changeDir } = makeThinArchive('sa-thinprio-')
   try {
-    // ① 快照在 → 快照回放赢（行数取快照值），change-patch 回放让位
     writeFileSync(join(changeDir, 'scope-audit.json'), JSON.stringify({
       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'snap0000',
       totals: { files: 1, additions: 999, deletions: 0 },
@@ -202,7 +226,7 @@ test('FR-03 优先级：快照在时快照优先；双缺走开放区间兜底�
     assert.ok(r.note.includes('execute --done 时点冻结快照'), 'note 点名快照记录态')
   } finally { cleanup(d) }
 
-  // ② 快照与 change-patch 双缺 → 实时开放区间兜底 + 既有漂移警告口径
+  // ② 快照（新子对象与旧名）双缺 → 实时开放区间兜底 + 既有漂移警告口径
   const d2 = makeRepo('sa-thinmiss-')
   try {
     mkdirSync(join(d2, 'src'), { recursive: true })
