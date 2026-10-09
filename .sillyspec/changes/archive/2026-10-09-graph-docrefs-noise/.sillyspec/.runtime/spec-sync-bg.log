@@ -1,4 +1,0 @@
-[spec-sync-bg] 第 1/5 轮开始 2026-10-09T06:51:09.113Z: 2026-10-09-close-trace-single-set
-[sync] 变更目录不存在（可能是已归档，继续从 DB 同步最终状态）: 2026-10-09-close-trace-single-set
-[sync] 变更无进度数据 (无活跃进度): 2026-10-09-close-trace-single-set
-[spec-sync-bg] 后台同步完成 2026-10-09T06:51:09.213Z: 2026-10-09-close-trace-single-set
