@@ -42,12 +42,16 @@ const ANCHOR_RE = /[\w./-]+\.(?:mjs|cjs|jsx|tsx|js|ts|py|go|java|rs|yaml|yml|jso
 const posix = (p) => String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
 
 /** 文本中的代码路径 token 提取（doc-refs/scan-refs 采集器——中强度引用边）。
- *  与 knowledge-match anchorFilePaths 同款剥法，但面向正文全量文本；cap 限边数防噪。 */
+ *  与 knowledge-match anchorFilePaths 同款剥法，但面向正文全量文本；cap 限边数防噪。
+ *  产物守卫（2026-10-09-graph-docrefs-noise）：剥 :line/:sym 后缀后的空串/纯数字丢弃
+ *  （`413.js` 形 token 剥出数字段、`.js` 裸扩展段——解析噪声不建边）。 */
 function extractFilePaths(text, cap = 15) {
   const raw = String(text || '').replace(/\r\n/g, '\n').match(ANCHOR_RE) || []
   const out = []
   for (const t of raw) {
-    const p = posix(t.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, ''))
+    const stripped = t.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '').replace(/^\/+/, '')
+    if (!stripped || /^\d+$/.test(stripped) || stripped.startsWith('.')) continue
+    const p = posix(stripped)
     if (p && !out.includes(p)) out.push(p)
     if (out.length >= cap) break
   }
@@ -151,7 +155,10 @@ export function buildKnowledgeGraph(specRoot) {
         else if ((m = line.match(/^取代链\s*[：:]\s*(.*)$/))) {
           // 「FR-x-001, FR-x-002 ← 本条目（变更 承接）」——箭头左侧为被取代 id 列表
           cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9-]+-\d+/g) || [])
-        } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) cur.tests.push(posix(m[1]))
+        } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) {
+          // 剥 #锚后缀（tests: test/x.test.mjs#① ——# 起是用例名注记非路径）
+          cur.tests.push(posix(m[1].replace(/#.*$/, '')))
+        }
       }
       flush()
     }
@@ -185,6 +192,8 @@ export function buildKnowledgeGraph(specRoot) {
         const mid = `module:${modId}`
         addNode(mid, 'module', modId, { project: proj.name })
         for (const p of (mod.paths || []).map(posix)) {
+          // glob 形态（docs/** 等）不建边不判存在——模式非文件（2026-10-09-graph-docrefs-noise）
+          if (/[?*[{]/.test(p)) continue
           addNode(p, 'file', p.endsWith('/') ? p : p.split('/').pop(), { isDir: p.endsWith('/') })
           addEdge(mid, p, 'module-files')
           modulePathIndex.push([mid, p])
@@ -245,8 +254,13 @@ export function buildKnowledgeGraph(specRoot) {
           const dir = join(archiveRoot, n.id)
           const addFile = (f) => {
             // 剥反引号与 NEW: 前缀（fr-index deliverableFilesFromDesignText 同款契约——29.4% 厚道条目带壳）
-            const v = posix(String(f || '').replace(/^`+|`+$/g, '').replace(/^NEW:/, ''))
-            if (!v || v.startsWith('.sillyspec/')) return
+            // + 尾部中文括号注记（`test/x.test.mjs`（或同名）形态）；glob 形态（docs/** 等）跳过——
+            // 模式非文件，存在性判定必假悬空（2026-10-09-graph-docrefs-noise）
+            const v = posix(String(f || '')
+              .replace(/^`+|`+$/g, '')
+              .replace(/^NEW:/, '')
+              .replace(/[（(][^（）()]*[）)]\s*$/, ''))
+            if (!v || v.startsWith('.sillyspec/') || /[?*[{]/.test(v)) return
             addNode(v, 'file', v.split('/').pop())
             addEdge(n.id, v, 'deliverables')
             const mid = moduleOf(v)
@@ -302,15 +316,23 @@ export function buildKnowledgeGraph(specRoot) {
 export function parseChangelogEntries(content) {
   const out = []
   const seen = new Set()
-  const push = (name) => {
-    const n = String(name || '').trim().replace(/[（(]quick[）)]/, '').trim()
-    if (!n || seen.has(n)) return
-    if (/^ql-/.test(n) || /^\d{4}-\d{2}-\d{2}-/.test(n)) { seen.add(n); out.push(n) }
+  // 名字归一（2026-10-09-graph-docrefs-noise）：先剥尾括号段再验形态（（P2）/（quick）类注记后缀；
+  // 旧实现前缀校验放行了「日期名（P2）」整串——归档名查存在性必假悬空。变更名合法字符集不含括号，
+  // 剥离优先安全；仅当剥离后匹配日期/ql 形态才接受，原样形态兜底防误剥。
+  const push = (raw) => {
+    const raw0 = String(raw || '').trim()
+    const stripped = raw0.replace(/[（(][^（）()]*[）)]\s*$/, '').trim() || raw0
+    for (const n0 of [stripped, raw0]) {
+      const n = n0.replace(/[（(]quick[）)]/, '').trim()
+      if (!n || seen.has(n)) continue
+      if (/^ql-/.test(n) || /^\d{4}-\d{2}-\d{2}-/.test(n)) { seen.add(n); out.push(n); return }
+    }
   }
   for (const line of String(content || '').replace(/\r\n/g, '\n').split('\n')) {
     let m
     if ((m = line.match(/^\|\s*\d{4}-\d{2}-\d{2}\s*\|\s*([^|]+?)\s*\|/))) push(m[1]) // 表格行
     else if ((m = line.match(/^-\s+(ql-[\w-]+|\d{4}-\d{2}-\d{2}-[\w.-]+)/))) push(m[1]) // 列表行
+    else if ((m = line.match(/^-\s+(.+?)\s*\|/))) push(m[1]) // 列表行带注记后缀（- 名（P2） | 摘要）
     else if ((m = line.match(/^##\s+\d{4}-\d{2}-\d{2}\s*[—-]\s+.*[（(](\d{4}-\d{2}-\d{2}-[\w.-]+)(?:\s+task-\d+)?[）)]/))) push(m[1]) // 标题态（backend 主形态）
   }
   return out
@@ -458,19 +480,38 @@ export function graphOrphans(graph) {
 }
 
 /** 悬空检测：路由/引用/锚点边指向不存在文件（doctor: graph-*-dangling-* 消费）。 */
+/**
+ * 悬空检测（doctor 消费）。口径（2026-10-09-graph-docrefs-noise 分层）：
+ *  - 文档引用面（doc-refs/scan-refs，中强度）：裸文件名（无 /）不判——文档短引用合法且
+ *    438 种裸名中 304 种多义不可盲连（config.py 各模块同名）；跨仓前缀（顶级目录本仓不存在，
+ *    如 backend/frontend——平台代码在独立仓）单独计 crossRepo 不计本仓悬空。
+ *  - 结构面（anchors/deliverables/test-binding/module-files，强边）：保持全判（跨仓目标
+ *    aggregated 计入——锚点是机器声明，跨仓也有对账价值），但顶级目录不存在时标 crossRepo
+ *    供 doctor 文案分流。
+ * 返回条目 { edge, missing, strength, crossRepo }。
+ */
 export function graphDangling(graph, { existsFn = existsSync } = {}) {
   const out = []
   const rootDir = String(graph.root || '')
+  const topExists = (p) => {
+    const top = String(p).split('/')[0]
+    if (!top || top === '.') return true
+    return existsFn(join(rootDir, top)) || existsFn(top)
+  }
   for (const e of graph.edges) {
     if (!['route', 'doc-refs', 'scan-refs', 'anchors', 'deliverables', 'test-binding', 'module-files'].includes(e.type)) continue
-    // 两端都在图中（建图保证）——悬空语义=目标文件在文件系统不存在
     const t = graph.nodes.get(e.t)
     const s = graph.nodes.get(e.s)
     const target = t?.type === 'file' || t?.type === 'test' ? t : (s?.type === 'file' ? s : null)
     if (!target) continue
     if (target.attrs?.isDir) continue
-    if (!existsFn(join(rootDir, target.id)) && !existsFn(target.id)) {
-      out.push({ edge: e, missing: target.id, strength: EDGE_STRENGTH[e.type] })
+    const id = String(target.id)
+    const isDocRef = e.type === 'doc-refs' || e.type === 'scan-refs'
+    if (isDocRef && !id.includes('/')) continue // 裸文件名短引用：文档语境合法，不判悬空
+    const crossRepo = !topExists(id)
+    if (isDocRef && crossRepo) continue // 跨仓文档引用：目标活在独立仓，不计本仓悬空
+    if (!existsFn(join(rootDir, id)) && !existsFn(id)) {
+      out.push({ edge: e, missing: id, strength: EDGE_STRENGTH[e.type], crossRepo })
     }
   }
   return out

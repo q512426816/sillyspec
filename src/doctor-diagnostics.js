@@ -2208,9 +2208,15 @@ export function detectKnowledgeGraphIntegrity(cwd, specDir) {
 
     // ②③ 引用/锚点悬空（中/强边）：文件系统存在性（跨仓目标聚合计数不展开）
     const dangling = graphDangling(graph)
+    // 跨仓分流（2026-10-09-graph-docrefs-noise）：crossRepo 目标活在独立仓（backend/frontend 等），
+    // 计数注记不点名；本仓悬空点名样本。文档引用面的裸名短引用与跨仓引用在 graphDangling 已豁免。
     const byStrength = { strong: [], medium: [], weak: [] }
-    for (const d of dangling) byStrength[d.strength]?.push(`${d.edge.type}→${d.missing}`)
-    if (byStrength.strong.length > 0) findings.push(`graph-dangling-anchor：${byStrength.strong.length} 条强边锚点指向本仓不存在文件（跨仓目标计入；样本 ${sample(byStrength.strong).join('、')}）`)
+    let crossRepoCount = 0
+    for (const d of dangling) {
+      if (d.crossRepo) { crossRepoCount++; continue }
+      byStrength[d.strength]?.push(`${d.edge.type}→${d.missing}`)
+    }
+    if (byStrength.strong.length > 0) findings.push(`graph-dangling-anchor：${byStrength.strong.length} 条强边锚点指向本仓不存在文件${crossRepoCount > 0 ? `（另有 ${crossRepoCount} 条跨仓目标不点名——平台代码在独立仓）` : ''}（样本 ${sample(byStrength.strong).join('、')}）`)
     if (byStrength.medium.length > 0) findings.push(`graph-doc-dangling-ref：${byStrength.medium.length} 条文档引用悬空（样本 ${sample(byStrength.medium).join('、')}）`)
 
     // ④ 孤儿条目

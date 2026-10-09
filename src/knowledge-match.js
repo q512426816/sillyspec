@@ -94,8 +94,12 @@ export function anchorFilePaths(anchor) {
   if (!a || a === '未记录') return []
   const out = new Set()
   for (const token of a.match(ANCHOR_FILE_TOKEN_RE) || []) {
-    const p = token.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
-    if (p) out.add(p)
+    // 前导斜杠剥除（2026-10-09-graph-docrefs-noise）：repo:// URL 被正则吃成 //sillyhub/... 碎片，
+    // 剥后 sillyhub/ 顶级由图侧按跨仓口径处理；纯数字/裸扩展段丢弃（解析噪声）
+    const p = token
+      .replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
+      .replace(/^\/+/, '')
+    if (p && !/^\d+$/.test(p)) out.add(p)
   }
   return [...out]
 }

@@ -383,13 +383,18 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/�
     // module_doc_gaps/changelog_danglings：helper 单一源 + 双 existsFn 态（2026-10-08-graph-summary-consistency）
     assert.equal(s.module_doc_gaps, graphModuleDocGaps(g).length)
     assert.deepEqual(graphChangelogDanglings(g, { existsFn: () => true }), [])
+    // 「顶级目录在、文件不在」判型（2026-10-09-graph-docrefs-noise）：全假 existsFn 会让一切
+    // 看起来像跨仓（topExists 全假→doc 引用全 skip），中桶断言需保 src/ 顶级在场
+    const sFilesGone = graphSummary(g, { existsFn: (p) => /(^|[\\/])src$/.test(String(p)) })
     const sFalse = graphSummary(g, { existsFn: () => false })
     // fixture changelog 目标：alpha（archive 在）+ beta（archive 在）+ ql（豁免）→ 全假存在性下日期名悬空=2
     assert.equal(sFalse.changelog_danglings, graphChangelogDanglings(g, { existsFn: () => false }).length)
     assert.equal(sFalse.changelog_danglings, 2)
     // breakdown 与总数守恒：dangling_refs = strong_anchors + medium_doc_refs（doctor 两类之和口径）
-    assert.equal(sFalse.dangling_refs, sFalse.dangling_refs_breakdown.strong_anchors + sFalse.dangling_refs_breakdown.medium_doc_refs)
-    assert.ok(sFalse.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
+    assert.equal(sFilesGone.dangling_refs, sFilesGone.dangling_refs_breakdown.strong_anchors + sFilesGone.dangling_refs_breakdown.medium_doc_refs)
+    assert.ok(sFilesGone.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
+    // 跨仓口径：全假存在性下 doc 引用全按跨仓豁免 → 中桶归零（裸名+跨仓双豁免钉）
+    assert.equal(sFalse.dangling_refs_breakdown.medium_doc_refs, 0, '顶级全不在场=跨仓形态，文档引用不计本仓悬空')
     // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
     const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
     try {
