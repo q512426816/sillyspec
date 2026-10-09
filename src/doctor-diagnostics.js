@@ -1177,10 +1177,20 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
   for (const name of names) {
     const dir = join(archiveDir, name);
     const reasons = [];
-    // ② plan.md 在场性
+    // ② plan.md 在场性——thin 协议归档豁免（2026-10-09-archive-integrity-thin-aware）：
+    //    flow-state.yaml 在场 = flow 轻量道归档，plan.md 非其契约面（厚道五阶段 plan 阶段产物）；
+    //    2026-09-29 thin-default 后轻量道成默认路径，一刀切要求 plan.md 把 172 份正常 thin 归档
+    //    全判欠账（检查模型漂移，非真欠账）。任务未勾检查不豁免——thin 也要全勾。
+    const isThinArchive = existsSync(join(dir, 'flow-state.yaml'));
+    // thin 勾选契约 epoch（2026-10-09-archive-integrity-thin-aware）：2026-10-07-thin-tasks-v3 起
+    // tasks.md checkbox 才是进度状态机/完成契约；此前 thin 归档的 tasks.md 是机器占位稿（0 勾为
+    // 当时常态，完成证据=flow done 六子步——change.patch/verify-result 在场性），勾选检查豁免。
+    // 实证：2026-09-25 thin 试验批 17 份 + 09-22/24/27/10-03 共 36 份 0-N 勾归档全属此形态。
+    const THIN_TASKS_EPOCH = '2026-10-07';
+    const isPreEpochThin = isThinArchive && String(name) < THIN_TASKS_EPOCH;
     const planPath = join(dir, 'plan.md');
     const hasPlan = existsSync(planPath);
-    if (!hasPlan) reasons.push('plan.md 缺失（归档自愈基准文件）');
+    if (!hasPlan && !isThinArchive) reasons.push('plan.md 缺失（归档自愈基准文件）');
     // ①③ 任务注册表：tasks.md 优先回退 plan.md；存在但不可读必须显式报（区分「缺席」与「读不了」）。
     // 2026-08-20-task-truth-unify 之前的旧归档完成态勾在 plan.md（tasks.md 是留给后人的未勾任务清单）——
     // tasks.md 有 checkbox 行但 0 勾、而 plan.md 有 ≥1 勾时，完成证据在 plan.md，切 plan.md 为完成源
@@ -1200,7 +1210,9 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
       return { total: t, checked: c };
     };
     const regPath = existsSync(tasksPath) ? tasksPath : hasPlan ? planPath : null;
-    if (regPath) {
+    if (regPath && !isPreEpochThin) {
+      // ^ pre-epoch thin 跳过勾选检查（占位稿形态，见 THIN_TASKS_EPOCH 注释）；
+      //   注册表「存在但不可读」显式报的语义对 pre-epoch thin 同样不适用（其不可读非欠账面）
       try {
         let stat = readRegistry(regPath);
         if (regPath === tasksPath && stat.total > 0 && stat.checked === 0 && hasPlan) {

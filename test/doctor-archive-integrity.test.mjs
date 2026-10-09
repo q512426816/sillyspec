@@ -17,6 +17,8 @@
  *      前完成态在 plan.md；真实仓 sqlite-migration tasks 0/15 + plan 15/15 首扫实证）
  *  12. tasks 与 plan 都 0 勾 → 仍报未勾（完成源切换不许洗白真欠账）
  *  13. 无 tasks.md + plan.md 全勾 → pass（纯 plan 旧契约，防回归）
+ * 14. thin 协议归档（flow-state.yaml）无 plan.md → pass（2026-10-09-archive-integrity-thin-aware：
+ *     plan.md 非轻量道契约面）；thin 任务未勾 → 仍报（豁免不洗白完成面）
  *
  * 风格：自研 assert + tmp fixture（同 doctor-lifecycle-doc.test.mjs）。
  */
@@ -57,13 +59,14 @@ function getDim(result) {
 }
 
 /** 在 fixture 的 changes/archive/ 下造一份归档。tasks:'dir' 模拟不可读（同名目录 → readFileSync EISDIR）。 */
-function makeArchive(root, name, { tasks, plan } = {}) {
+function makeArchive(root, name, { tasks, plan, flowState } = {}) {
   const dir = join(root, '.sillyspec', 'changes', 'archive', name)
   mkdirSync(dir, { recursive: true })
   if (tasks === 'dir') mkdirSync(join(dir, 'tasks.md'))
   else if (tasks != null) writeFileSync(join(dir, 'tasks.md'), tasks)
   if (plan === true) writeFileSync(join(dir, 'plan.md'), '# 计划\nlegacy 占位（无 checkbox）\n')
   else if (typeof plan === 'string') writeFileSync(join(dir, 'plan.md'), plan)
+  if (flowState) writeFileSync(join(dir, 'flow-state.yaml'), 'stage: done\n')
   return dir
 }
 
@@ -323,6 +326,33 @@ async function frCase(prefix, { archiveName, requirements, indexChange, indexWit
   const out = sh(`node "${join(cliRoot, 'bin', 'sillyspec.js')}" doctor --json`, root)
   assert(out.includes('"archive_integrity"'), '10a doctor --json dimensions 含 archive_integrity')
   assert(/"name":\s*"archive_integrity"[\s\S]*?"pass":\s*true/.test(out), '10b 端到端完整归档 pass=true')
+}
+
+// ── 15. thin 勾选契约 epoch（THIN_TASKS_EPOCH=2026-10-07，thin-tasks-v3 前占位稿形态）──
+{
+  const root = makeTmpDir('dr-arch-15-')
+  makeArchive(root, '2026-09-25-thin-placeholder', { tasks: '- [ ] task-01: 完成实现并使 flow done 六子步全绿\n', flowState: true })
+  let dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, '15a pre-epoch thin 未勾（占位稿）→ pass（完成证据=flow done 六子步）')
+  makeArchive(root, '2026-10-08-thin-real', { tasks: PARTIAL_TASKS, flowState: true })
+  dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  const off = (dim.offenders || []).find((o) => o.name === '2026-10-08-thin-real')
+  assert(off, '15b post-epoch thin 未勾 → 仍报（勾选契约生效后不豁免）')
+  const offPre = (dim.offenders || []).find((o) => o.name === '2026-09-25-thin-placeholder')
+  assert(!offPre, '15c pre-epoch thin 不进 offenders')
+}
+
+// ── 14. thin 协议归档豁免 plan.md（2026-10-09-archive-integrity-thin-aware）──
+{
+  const root = makeTmpDir('dr-arch-14-')
+  makeArchive(root, '2026-10-08-thin-ok', { tasks: ALL_CHECKED_TASKS, flowState: true })
+  let dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, '14a thin 归档无 plan.md → pass（flow-state.yaml 在场豁免）')
+  makeArchive(root, '2026-10-09-thin-unch', { tasks: PARTIAL_TASKS, flowState: true })
+  dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  const off = (dim.offenders || []).find((o) => o.name === '2026-10-09-thin-unch')
+  assert(dim && dim.pass === false && off, '14b thin 任务未勾 → 仍报（豁免不洗白完成面）')
+  assert(off && !off.reasons.some((r) => r.includes('plan.md')), '14c 未勾 offender 不含 plan.md 假理由')
 }
 
 for (const dir of tmpRoots) {
