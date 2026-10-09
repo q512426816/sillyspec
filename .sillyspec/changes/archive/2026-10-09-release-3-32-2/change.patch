@@ -1,0 +1,183 @@
+diff --git a/package.json b/package.json
+index 400c15ce..bd06bcbf 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.1",
++  "version": "3.32.2",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index d2f83937..2719f3b3 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.1', `R5 package.json 版本 3.32.1（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.2', `R5 package.json 版本 3.32.2（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-2/design.md b/.sillyspec/changes/2026-10-09-release-3-32-2/design.md
+new file mode 100644
+index 00000000..790b3641
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-2/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T01:16:29.488Z
++---
++# 设计记录（Design Record）— 2026-10-09-release-3-32-2
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++载 2026-10-09-zcode-skills-sentinel-shorthand（zcode 技能落点双层缺口 + 收口证据连写组展开 + sillyspec-export/quick/resume 三内嵌技能）发版 3.32.2，镜像 3.32.1 发版路径（b17d0cd2 + 7df3a229 + 71f2a7b0）：package.json version 3.32.1→3.32.2 一行 + quick-retired 测试 R5 版本锚同步（assert 期望值与注释文案），随后 npm publish + npm view latest 核验留痕、flow done 归档、推送 origin/main。CLI 命令/模块接口零变化——npm 包版本面即对外可见变化的全部。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- package.json：version 3.32.1→3.32.2（对外可见变化仅此一项——包内容含已归档变更的交付面）。
++- test/quick-retired.test.mjs：R5 锚 assert 期望值与注释文案同步 3.32.2（仓内测试面，非对外接口）。
++- CLI 命令、模块导出、文件格式：无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++   成立——本变更只动版本常量与对应测试锚，无事件/时序面。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++   package.json 单行版本字段，发版窗口内本会话独占（SILLYSPEC_SESSION_ID 所有权判定 + 显式 pathspec 提交不夹带他侧）。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++   安全——npm publish 幂等性由 npm 侧版本唯一性保证（同版本重发被拒）；中断重入按 flow done 断点续跑，版本面提交先于 publish。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++   不会——版本号只存在于 package.json 单点；npm registry latest tag 由版本序唯一决定。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：publish 与 push 顺序——3.32.1 实证先 publish 后 push 的窗口内 registry 与 origin 短暂不一致（可接受：包内容同树，安装者拿到的代码一致）；npm 2FA/令牌失效会阻断 publish（届时停下向用户报错，不假绿）。试过但放弃：无——发版路径完全镜像既有 3.32.1 惯例，无新方案尝试。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| M | package.json | version 3.32.1→3.32.2 |
++| M | test/quick-retired.test.mjs | R5 版本锚 assert 期望值 + 注释文案同步 3.32.2 |
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-2/requirements.md b/.sillyspec/changes/2026-10-09-release-3-32-2/requirements.md
+new file mode 100644
+index 00000000..4a53b6e2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-2/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T01:16:29.488Z
++---
++# 需求规格（Requirements）— 2026-10-09-release-3-32-2
++
++## 功能需求
++
++### FR-01: package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
++
++- package.json version 必须升至 3.32.2；quick-retired 测试 R5 版本锚必须同步（assert 期望值与注释文案同步为 3.32.2）；历史事实锚（如 run-quick.md v3.31.0 起的事实记述）禁止改动。
++
++#### 场景：R5 锚同步
++
++- Given package.json version=3.32.2；When quick-retired 测试运行；Then R5 断言 pkg.version === '3.32.2' 通过
++
++### FR-02: quick-retired 测试绿 + lint 绿
++
++- 发版时点 quick-retired 测试必须全绿（0 失败）且仓库 lint 必须通过；全量套件必须在 pre-push 钩子复跑绿。
++
++#### 场景：发版前实测
++
++- Given 版本面落盘；When 运行 quick-retired 测试与 lint；Then 25 用例全过、lint 零报错
++
++### FR-03: npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
++
++- 必须 npm publish 成功，且 npm view sillyspec version 必须回读为 3.32.2（latest tag 核验）。
++
++#### 场景：latest 核验
++
++- Given npm publish 完成；When npm view sillyspec version；Then 输出 3.32.2
++
++### FR-04: 发版规格工件随归档留档，推送 origin/main
++
++- 发版规格工件必须随 flow done 归档留档，全部提交必须推送 origin/main。
++
++#### 场景：推送核验
++
++- Given 归档与留痕提交完成；When git push origin main；Then origin/main 与本地一致（pre-push 全量复跑绿）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/quick-retired.test.mjs「R5 package.json 版本 3.32.2（init 按版本差刷新存量 AGENTS.md）」
++FR-02: test/quick-retired.test.mjs「✅ 通过: 25 ❌ 失败: 0」；lint 由收口实测门覆盖
++FR-03: 不适用：npm publish/view 是外部副作用核验，无仓内测试面（留痕见 requirements 核验注记）
++FR-04: 不适用：推送为 git 远端操作，无仓内测试面（pre-push 钩子全量复跑即核验）
++
++## 核验留痕
++
++- npm publish 成功：`+ sillyspec@3.32.2`（shasum b6ac2905f3df715f68cff3771d160a76a64ab4d4，329 files，4.9 MB）；registry 传播约 1 分钟后 `npm view sillyspec version` = 3.32.2、dist-tags latest = 3.32.2
++- 过程注记：发布时 registry.npmjs.org 国内 DNS 解析被劫持至 redirect-cnzz 停放 IP（自签证书），经临时 DNS 钉扎（Cloudflare 真实 IP 直连，NODE_OPTIONS --require 注入，仅本进程、零系统改动）完成发布与核验；github.com 解析不受影响，推送照常
++
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-2/tasks.md b/.sillyspec/changes/2026-10-09-release-3-32-2/tasks.md
+new file mode 100644
+index 00000000..fc7d87d5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-2/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T01:16:29.488Z
++---
++# 任务注册表（Tasks）— 2026-10-09-release-3-32-2
++
++- [x] task-01: package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
++- [x] task-02: quick-retired 测试绿 + lint 绿
++- [x] task-03: npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
++- [x] task-04: 发版规格工件随归档留档，推送 origin/main
+diff --git a/.sillyspec/changes/2026-10-09-release-3-32-2/proposal.md b/.sillyspec/changes/2026-10-09-release-3-32-2/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-release-3-32-2/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T01:16:29.488Z
++---
++# 提案书（Proposal）— 2026-10-09-release-3-32-2
++
++## 动机
++
++任务原话转写：载 2026-10-09-zcode-skills-sentinel-shorthand（zcode 技能落点双层缺口 + 收口证据连写组展开 + 三内嵌技能 export/quick/resume）发版 3.32.2。npm 包版本面即对外可见变化：package.json version 3.32.1→3.32.2 + quick-retired 测试 R5 版本锚同步；CLI 命令/模块接口零变化。
++
++成功标准：
++- package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
++- quick-retired 测试绿 + lint 绿
++- npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
++- 发版规格工件随归档留档，推送 origin/main
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
++2. quick-retired 测试绿 + lint 绿
++3. npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
++4. 发版规格工件随归档留档，推送 origin/main
++
++## 成功标准（可验证）
++
++1. package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
++2. quick-retired 测试绿 + lint 绿
++3. npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
++4. 发版规格工件随归档留档，推送 origin/main

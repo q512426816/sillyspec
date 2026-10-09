@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-release-3-32-2",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-release-3-32-2:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-retired.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-release-3-32-2"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-release-3-32-2:flow:测试绑定FR-02",
+      "tests": [
+        "test/quick-retired.test.mjs「✅ 通过: 25 ❌ 失败: 0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-release-3-32-2"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "22613ce1c50d84f4d950cd30a9b2e55252012ac7",
+  "totals": {
+    "files": 2,
+    "additions": 2,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/quick-retired.test.mjs",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "beabf364c6b1f9bfbd0f43ab958d512118a2f5cae143394ba6c8a374b1519ab5",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-09T01:37:17.893Z"
+}

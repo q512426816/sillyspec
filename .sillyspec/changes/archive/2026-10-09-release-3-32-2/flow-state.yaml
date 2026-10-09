@@ -1,0 +1,38 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  载 2026-10-09-zcode-skills-sentinel-shorthand（zcode 技能落点双层缺口 + 收口证据连写组展开 + 三内嵌技能 export/quick/resume）发版 3.32.2。npm
+  包版本面即对外可见变化：package.json version 3.32.1→3.32.2 + quick-retired 测试 R5 版本锚同步；CLI 命令/模块接口零变化。
+
+
+  成功标准：
+
+  - package.json version=3.32.2；quick-retired 测试 R5 版本锚同步（assert + 注释）；历史事实锚不动
+
+  - quick-retired 测试绿 + lint 绿
+
+  - npm publish 成功且 npm view sillyspec version=3.32.2（latest 核验）
+
+  - 发版规格工件随归档留档，推送 origin/main
+autopilot: true
+baseline_commit: 22613ce1c50d84f4d950cd30a9b2e55252012ac7
+updatedAt: '2026-10-09T01:37:48.489Z'
+baseline_sha256: 4407a7bc9e2341b9e45573a06309c5cc01810a7fe747a241d64e8182b59e23ed
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（2.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009013629\test-result.json｜lint: passed
+  ← npm run lint（47.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009013629\test-result.json｜门文件 3 个
+

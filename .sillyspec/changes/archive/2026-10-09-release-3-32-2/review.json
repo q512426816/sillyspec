@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-release-3-32-2",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "00d055829104a462706e76c956221b7f38cbb8bb",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "边界裁决": "已裁决可接受：①「先 publish 后 push 的 registry/origin 短暂不一致窗口」——包内容同树（同一工作区打包发布），安装者拿到的代码与 git 面一致，窗口分钟级；②「CLI 命令/模块接口零变化」——diff 仅 package.json 版本行与 quick-retired R5 锚两处，接口面实核零改动；③「DNS 劫持绕行（临时 DNS 钉扎）」——NODE_OPTIONS --require 仅注入发布进程内存，不改系统 hosts/证书库，发布后 npm view 官方回读 latest=3.32.2 核验通过，绕行手段已在 requirements 核验留痕披露。检查单逐条：1) FR-01↔package.json:3 3.32.2 + test/quick-retired.test.mjs:146 锚同步（亲跑 25/0 绿）；FR-02↔quick-retired 25 用例全过 + lint 916 文件零问题（亲跑）；FR-03↔npm publish + sillyspec@3.32.2 + npm view latest=3.32.2（requirements 核验留痕在案）；FR-04 归档/推送由收口与 pre-push 全量复跑闭环；2) 盲维四问与版本常量变更实态相符（乱序 n/a）；4) 无防护机制声明；5) 无类型/契约生成物，不适用"
+  },
+  "reviewedAt": "2026-10-09T01:36:20.000Z"
+}
