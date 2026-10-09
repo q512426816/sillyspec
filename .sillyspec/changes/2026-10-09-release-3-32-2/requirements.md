@@ -44,3 +44,9 @@ FR-01: test/quick-retired.test.mjs「R5 package.json 版本 3.32.2（init 按版
 FR-02: test/quick-retired.test.mjs「✅ 通过: 25 ❌ 失败: 0」；lint 由收口实测门覆盖
 FR-03: 不适用：npm publish/view 是外部副作用核验，无仓内测试面（留痕见 requirements 核验注记）
 FR-04: 不适用：推送为 git 远端操作，无仓内测试面（pre-push 钩子全量复跑即核验）
+
+## 核验留痕
+
+- npm publish 成功：`+ sillyspec@3.32.2`（shasum b6ac2905f3df715f68cff3771d160a76a64ab4d4，329 files，4.9 MB）；registry 传播约 1 分钟后 `npm view sillyspec version` = 3.32.2、dist-tags latest = 3.32.2
+- 过程注记：发布时 registry.npmjs.org 国内 DNS 解析被劫持至 redirect-cnzz 停放 IP（自签证书），经临时 DNS 钉扎（Cloudflare 真实 IP 直连，NODE_OPTIONS --require 注入，仅本进程、零系统改动）完成发布与核验；github.com 解析不受影响，推送照常
+
