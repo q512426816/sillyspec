@@ -1,0 +1,812 @@
+diff --git a/.gitignore b/.gitignore
+index 1bf7b4f5..b9c00280 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -33,3 +33,5 @@ sa-rename-probe/
+ /round5/_gsd/
+ .sillyspec/sillyspec.db/
+ .sillyspec/sillyspec.db
++# 归档变更目录内嵌套的运行时异物（cwd 漂移事故遗留 db/日志——archive 机械 add 曾夹带入库）
++.sillyspec/changes/archive/**/.sillyspec/
+diff --git a/.sillyspec/changes/2026-10-09-verify-papercuts/flow-state.yaml b/.sillyspec/changes/2026-10-09-verify-papercuts/flow-state.yaml
+new file mode 100644
+index 00000000..335a3dfe
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-verify-papercuts/flow-state.yaml
+@@ -0,0 +1,24 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: |-
++  2026-10-09-verify-reuse-friction 全流程实证暴露的四个 CLI 小刺（摩擦源为本人会话实测）：
++  ①任务卡 verify/implementation 命令提取器吞全角标点——『npm run test；模块卡』的全角分号被拼进 script 名，plan postcheck 误报命令不存在，多跑 3 轮；
++  ②verify-probes --init --force 无差别重置 verify-result.md——已填的探针矩阵判定/决策矩阵/移交项全部被 wipe，整套重填（本次最大单点浪费）；
++  ③主代理直改形态（无 worktree/分支锚）对账盲区——交付已 commit 后 actual 只剩工作区脏面单源，②类全量假红，需手工喂 apply-pathspec 才能过（撞 3 轮才定位到 B3 机制）；
++  ④archive 收尾的机械 git add 夹带——目录级暂存把他变更遗留的嵌套 .sillyspec/ 运行时异物（db/日志）一并提交（违反仓规第 11 条自己的规则）。
++
++  成功标准：
++  - 全角标点（；。：，）不再进命令名：『npm run test；xxx』提取为 script=test 且校验通过（回归测试钉住）
++  - --init --force 刷新机器段时保留已填人工面：结论槽/移交项表/探针矩阵已填判定行/决策矩阵已填格不被 wipe（回归测试钉住）
++  - 无分支锚形态下，含变更名的近期提交窗口自动作为 declared-rescue 源：已 commit 的声明文件不再假红 ②类，undeclared 侧不受影响（不放大 scope creep 盲区）（回归测试钉住）
++  - archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）
++autopilot: true
++baseline_commit: 0591b534de6d11695aeee20adf5663991d7fab7d
++updatedAt: '2026-10-09T14:30:38.983Z'
++baseline_sha256: 8f0338ee2c5169a18a33a6af3b721a863e71de564386d0293a7aba053cac303d
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 81b51b2d..b3d1a998 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2132/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4359；shared.js:1022 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2862/3141；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4279；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4231；sync.js:2232 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4367；shared.js:1022 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2870/3141；shared.js:1046 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4287；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4239；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4045/4072；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4053/4072；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4141`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4149`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/git-helper.js b/src/git-helper.js
+index 9f77012b..c6d25e75 100644
+--- a/src/git-helper.js
++++ b/src/git-helper.js
+@@ -187,10 +187,32 @@ export function stageArchiveArtifacts(cwd) {
+   const skipped = []
+   const existing = candidates.filter(p => existsSync(p))
+   if (existing.length === 0) return { staged, skipped }
+-  const r = safeGit(cwd, ['add', ...existing])
++  // 2026-10-09-verify-papercuts ④：排除嵌套运行时异物——归档变更目录内嵌套的 .sillyspec/
++  // （历史 cwd 漂移事故的遗留 db/日志）会被目录级 add 一并扫进暂存（当日实证：他变更的
++  // sillyspec.db 与 spec-sync-bg.log 被夹带提交）。pathspec exclude 精确拦截该形态，正常
++  // 归档产物（md/json/patch）零影响；检出异物在场时点名提示清理（不静默吞）。
++  const excludes = [
++    ':(exclude).sillyspec/changes/archive/*/.sillyspec',
++    ':(exclude).sillyspec/changes/archive/*/.sillyspec/**',
++  ]
++  let nestedJunk = []
++  try {
++    const archRoot = join(specBase, 'changes', 'archive')
++    for (const e of readdirSync(archRoot, { withFileTypes: true })) {
++      if (e.isDirectory() && existsSync(join(archRoot, e.name, '.sillyspec'))) {
++        nestedJunk.push(join(archRoot, e.name, '.sillyspec'))
++      }
++    }
++  } catch { /* 归档目录不可读 → 跳过提示 */ }
++  const r = safeGit(cwd, ['add', ...existing, ...excludes])
+   if (r && r.error) {
+     console.warn(`  ⚠️ 归档产物 git add 失败（可手动处理）：${String(r.error).slice(0, 120)}`)
+     return { staged, skipped: existing }
+   }
++  if (nestedJunk.length > 0) {
++    console.warn(`  ⚠️ 检出 ${nestedJunk.length} 个归档目录内嵌套 .sillyspec/ 运行时异物（已从本次暂存排除）：`)
++    for (const j of nestedJunk.slice(0, 5)) console.warn(`     - ${j}`)
++    console.warn(`     处置：确认无归属后删除目录；若已被 git 跟踪先 git rm -r --cached <路径>（不该入库的 db/日志）`)
++  }
+   return { staged: existing, skipped }
+ }
+diff --git a/src/index.js b/src/index.js
+index dc29484f..07284165 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1334,7 +1334,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+         process.exit(2);
+       }
+       assertSafeChangeName(vpChange, '--change 变更名');
+-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections } = await import('./verify-probes.js');
++      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections, applySkeletonPreservingHuman } = await import('./verify-probes.js');
+       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
+       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
+       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
+@@ -1429,21 +1429,29 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
+             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
+           } else if (vpForce) {
+-            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置。
++            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）。
+             // 2026-10-06-verify-friction-fix：覆盖前自动备份（postmortem 实证 38 格手填复核成果
+             // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
+             // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
++            // 2026-10-09-verify-papercuts ②：语义升级——机器段全量重刷 + 人工面按段携载
++            // （applySkeletonPreservingHuman：结论槽/移交项表/矩阵已填行不再被 wipe），备份
++            // 保留为兜底通道。
+             const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
+             const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase), changeName: vpChange });
+             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+-            writeFileSync(vpReportPath, vpSkeleton);
+-            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
++            const vpOldText = readFileSync(vpReportPath, 'utf8');
++            const vpApplied = applySkeletonPreservingHuman(vpOldText, vpSkeleton);
++            writeFileSync(vpReportPath, vpApplied.text);
++            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpApplied.text);
+             if (vpBackupPath) {
+-              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（手填内容被重置时从这里找回回填）`);
++              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（携载语义之外的极端形态从这里找回）`);
+             } else {
+               console.error(`\n⚠️ 自动备份失败——若 verify-result.md 含手填内容，请立即手动复制保存后重跑本命令。`);
+             }
+-            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从上方备份找回后回填）${vpPlatformNote}`);
++            const vpCarriedNote = vpApplied.carriedSections.length > 0
++              ? `已填人工面按段携载保留：${vpApplied.carriedSections.join('、')}（携载表格行 ${vpApplied.carriedRows}）——与机器段新渲染不符的携载内容由 gate 一致性抽查把关`
++              : `未发现已填人工面（全文占位形态——行为与旧版全量重置一致）`;
++            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；${vpCarriedNote}）${vpPlatformNote}`);
+           } else {
+             console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
+           }
+diff --git a/src/stages/cmd-existence.js b/src/stages/cmd-existence.js
+index 1618694f..1e0653dc 100644
+--- a/src/stages/cmd-existence.js
++++ b/src/stages/cmd-existence.js
+@@ -18,7 +18,11 @@ import { join, isAbsolute } from 'path'
+ // 提取 `npm|pnpm|yarn run <script>` 命令。
+ // 对齐 scan-postcheck:136 的 `/npm run (\S+)/g`，扩展包管理器 + 容忍多空白。
+ // 捕获组 1 = 包管理器（npm|pnpm|yarn），捕获组 2 = script 名。
+-const SCRIPT_CMD_RE = /(npm|pnpm|yarn)\s+run\s+(\S+)/g
++// script 名收敛为合法字符集（2026-10-09-verify-papercuts ①）：原 \S+ 会把紧跟的全角标点
++// （；。，等）/句读拼进 script 名——『verify: npm run test；模块卡 diff 一致』被提取为
++// script=test；模块卡 → 误报「命令不存在」逼 agent 改写法（plan postcheck 实证多跑 3 轮）。
++// npm script 名本身只含字母数字与 : _ - .，按此截断即安全（&& / | / 全角标点自然止步）。
++const SCRIPT_CMD_RE = /(npm|pnpm|yarn)\s+run\s+([A-Za-z0-9:_.\-]+)/g
+ 
+ // 识别紧贴命令前的 `cd <subdir> &&` 前缀（anchored at end of the slice before the command）。
+ // subdir token 不含空白与 & ; | 等分隔符；末尾的 `&&` 可带任意空白后接命令。
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index c6cbc4f3..27b3e1e5 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -4089,7 +4089,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+     try {
+       // 锚定变更分支/审计 tag（非 blanket 20 提交——base 提交文件不得误救）
+       const rescueRef = (typeof branchHash === 'string' && branchHash.trim()) ? branch : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
+-      if (!rescueRef) throw new Error('no-rescue-ref')
++      if (rescueRef) {
+       // -n 形态计数（2026-10-04-log-window-arity：裸 '20' 在 git ≥2.4x 是 ambiguous argument
+       // fatal——fail-open 静默吞后救赎 note 路径从未生效，plan-target-files D7 在纯 HEAD 稳定红）
+       const recent = gitQuiet(cwd, ['log', '-n', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
+@@ -4100,6 +4100,34 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+           sources.push(`main:log-20-commit-window(declared-rescue-only:${rescueRef})`)
+         }
+       }
++      } else {
++        // ③ 提交信息锚定窗口（2026-10-09-verify-papercuts ③）：主代理直改形态（无 worktree/
++        // 分支/审计 tag——交付直接 commit 到主干、消息含变更名）此前救援窗口恒空 → ②类全量
++        // 假红，只能手工喂 apply-pathspec 才能过（当日收口实证撞 3 轮）。锚定规则：近 30 提交中
++        // 消息含变更名的提交，其 --name-only 触及面进窗口——declared-rescue-only 语义不变
++        // （不进 union、只救「声明而 missing」），他变更提交的文件不满足消息锚定天然不入窗。
++        try {
++          const msgWindow = gitQuiet(cwd, ['log', '-n', '30', '--name-only', '--format=%h %s'], { timeout: 30 * 1000, trim: false })
++          // 边界锚定（审查 P3 修正）：子串 includes 会把同日前缀变更名（A=…-x 是 B=…-x2 的
++          // 前缀）误纳——改为变更名两侧不得紧贴 [\w-]（消息里的括号/空格/行首尾都是自然边界）。
++          const msgAnchorRe = new RegExp('(?<![\\w-])' + String(changeName).replace(/[\\.*+?^${}()|[\\]]/g, '\\$&') + '(?![\\w-])')
++          if (typeof msgWindow === 'string' && msgAnchorRe.test(msgWindow)) {
++            const files = []
++            let inOwnCommit = false
++            for (const l of msgWindow.split(String.fromCharCode(10))) {
++              const t = l.trim()
++              if (!t) { continue }
++              const header = t.match(/^[0-9a-f]{7,40} /)
++              if (header) { inOwnCommit = msgAnchorRe.test(t); continue }
++              if (inOwnCommit && !/^[0-9a-f]{7,40}$/.test(t)) files.push(t)
++            }
++            if (files.length > 0) {
++              commitWindowFiles = files
++              sources.push('main:log-msg-window(declared-rescue-only:HEAD)')
++            }
++          }
++        } catch { /* 消息窗口失败静默省略（不干扰主链） */ }
++      }
+     } catch { /* 窗口源失败静默省略 */ }
+     // B3 apply-pathspec 兜底（存在则并入，读取失败静默忽略——前两源不受影响）
+     const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 006e36eb..27af9144 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -3860,3 +3860,138 @@ export function refreshProbeSections(existingText, freshReportText) {
+   }
+   return { text: out.join('\n'), replaced, kept, appended, carriedRows }
+ }
++
++// ── --force 保人工面（2026-10-09-verify-papercuts ②）──
++// postmortem（2026-10-09-verify-reuse-friction 收口实证）：--force 全骨架重置虽有自动备份，
++// 但结论槽/移交项表/探针矩阵已填判定/决策矩阵已填格仍全部被 wipe——重填整套人工面是当日
++// 最大单点浪费（备份在 .runtime 里，找回-回填的来回远比携载贵）。本组合器把 --force 语义
++// 从「全量重置 + 备份找回」升级为「机器段全量重刷 + 人工面按段携载」：
++//   - 纯人工段（结论/移交项/证据账/集成回执/任务完成度/设计一致性/独立复核/风险等级）：
++//     旧段已填（无 <待填/<TODO 占位）→ 原样保留；未填 → 用新骨架（占位换新占位，无损失）；
++//   - 矩阵段（决策追踪矩阵/接口验证覆盖矩阵）：表格行按首列键携载（mergeProbeSection 同
++//     款语义——已填 Evidence/判定行不丢，新增行从新骨架进场）；
++//   - 探针容器段（## 探针结果）：逐探针号 merge（已填表格行携载，机器结论行刷新）；
++//   - 其余机器段：新骨架；旧文独有的自定义段：追加保留（不销毁用户内容）。
++// 安全方向与 refreshProbeSections 一致：宁可少刷新不误删；stale 由 gate 的
++// checkProbeConsistency 独立把关。备份照旧保留（兜底通道不撤）。
++
++/** 顶层段切分（^## 标题行起，至下一 ^## 或 EOF；# 级更细的 #### 归属其容器段） */
++function splitTopSections(text) {
++  const lines = String(text ?? '').split('\n')
++  const sections = []
++  let cur = null
++  for (let i = 0; i < lines.length; i++) {
++    if (/^## /.test(lines[i])) {
++      if (cur) cur.endLine = i
++      cur = { headingLine: lines[i], startLine: i, endLine: lines.length }
++      sections.push(cur)
++    }
++  }
++  return { lines, sections }
++}
++
++/** 段身份键：剥 [层：…] 尾注与（…）括注——同族段跨渲染措辞漂移仍可对上 */
++function topSectionKey(headingLine) {
++  return headingLine
++    .replace(/^##\s*/, '')
++    .replace(/\s*\[.*\]\s*$/, '')
++    .replace(/（.*$/, '')
++    .trim()
++}
++
++const HUMAN_SECTION_KEYS = ['结论', '移交项', '证据账', '集成验证回执', '任务完成度', '设计一致性', '独立复核', '变更风险等级', '技术债务', 'Runtime Evidence', '代码审查']
++const MATRIX_SECTION_KEYS = ['决策追踪矩阵', '接口验证覆盖矩阵']
++const PROBE_CONTAINER_KEY = '探针结果'
++
++/** 探针容器段合并：新骨架容器为基，逐探针号对旧容器做已填行携载；旧独有探针号追加 */
++function mergeProbeContainer(oldContainerLines, freshContainerLines) {
++  const oldParsed = splitProbeSectionRanges(oldContainerLines.join('\n'))
++  const freshParsed = splitProbeSectionRanges(freshContainerLines.join('\n'))
++  const out = [...freshParsed.lines]
++  let carriedRows = 0
++  const oldByNum = new Map(oldParsed.sections.map(s => [s.num, s]))
++  for (let idx = freshParsed.sections.length - 1; idx >= 0; idx--) {
++    const fs = freshParsed.sections[idx]
++    const os = oldByNum.get(fs.num)
++    if (!os) continue
++    const merged = mergeProbeSection(
++      oldParsed.lines.slice(os.startLine, os.endLine),
++      freshParsed.lines.slice(fs.startLine, fs.endLine),
++    )
++    // 倒序替换（审查 P2 修正，2026-10-09-verify-papercuts）：mergeProbeSection 对含 stale
++    // 键的段会在段尾追加（行数 > freshSeg），正序 splice 会使后续探针段 startLine 错位——
++    // 从后往前替换则前面行号不受影响，任一段行数膨胀都安全。
++    carriedRows += merged.carried
++    // 用 merged 文本替换 fresh 容器中该探针段（逐段行数已知，从后往前替换保行号稳定）
++    const freshSeg = freshParsed.lines.slice(fs.startLine, fs.endLine)
++    out.splice(fs.startLine, freshSeg.length, ...merged.text.split('\n'))
++  }
++  const freshNums = new Set(freshParsed.sections.map(s => s.num))
++  for (const os of oldParsed.sections) {
++    if (!freshNums.has(os.num)) {
++      out.push('', ...oldParsed.lines.slice(os.startLine, os.endLine))
++    }
++  }
++  return { text: out.join('\n'), carriedRows }
++}
++
++/**
++ * --force 应用骨架：机器段全量重刷 + 人工面携载（纯函数，导出供回归直测）。
++ * @param {string} existingText 现文（含已填人工面）
++ * @param {string} skeletonText generateVerifyResultSkeleton 新骨架
++ * @returns {{ text: string, carriedSections: string[], carriedRows: number }}
++ */
++export function applySkeletonPreservingHuman(existingText, skeletonText) {
++  const old = splitTopSections(existingText)
++  const fresh = splitTopSections(skeletonText)
++  const oldByKey = new Map()
++  for (const s of old.sections) {
++    const k = topSectionKey(s.headingLine)
++    if (!oldByKey.has(k)) oldByKey.set(k, s) // 同键段取首个（重复标题形态保首段）
++  }
++  const carriedSections = []
++  let carriedRows = 0
++  const out = []
++  let cursor = 0
++  for (const fs of fresh.sections) {
++    // 骨架段前的行原样带过
++    for (; cursor < fs.startLine; cursor++) out.push(fresh.lines[cursor])
++    const k = topSectionKey(fs.headingLine)
++    const os = oldByKey.get(k)
++    const freshSeg = fresh.lines.slice(fs.startLine, fs.endLine)
++    if (!os) {
++      out.push(...freshSeg)
++    } else if (HUMAN_SECTION_KEYS.includes(k)) {
++      const oldSeg = old.lines.slice(os.startLine, os.endLine)
++      if (/<待填|<!--TODO/.test(oldSeg.join('\n'))) {
++        out.push(...freshSeg) // 未填 → 换新骨架占位
++      } else {
++        out.push(...oldSeg) // 已填 → 原样保留
++        carriedSections.push(k)
++      }
++    } else if (MATRIX_SECTION_KEYS.includes(k)) {
++      const merged = mergeProbeSection(old.lines.slice(os.startLine, os.endLine), freshSeg)
++      carriedRows += merged.carried
++      out.push(...merged.text.split('\n'))
++      if (merged.carried > 0) carriedSections.push(k)
++    } else if (k === PROBE_CONTAINER_KEY) {
++      const merged = mergeProbeContainer(old.lines.slice(os.startLine, os.endLine), freshSeg)
++      carriedRows += merged.carriedRows
++      out.push(...merged.text.split('\n'))
++      if (merged.carriedRows > 0) carriedSections.push(k)
++    } else {
++      out.push(...freshSeg) // 机器段（探针概览/接口声明等）→ 新骨架
++    }
++    cursor = fs.endLine
++    oldByKey.delete(k)
++  }
++  for (; cursor < fresh.lines.length; cursor++) out.push(fresh.lines[cursor])
++  // 旧文独有段（用户自定义节）追加保留
++  if (oldByKey.size > 0) {
++    out.push('')
++    for (const [, s] of oldByKey) {
++      out.push(...old.lines.slice(s.startLine, s.endLine))
++    }
++  }
++  return { text: out.join('\n'), carriedSections, carriedRows }
++}
+diff --git a/test/verify-papercuts-batch.test.mjs b/test/verify-papercuts-batch.test.mjs
+new file mode 100644
+index 00000000..6dd35033
+--- /dev/null
++++ b/test/verify-papercuts-batch.test.mjs
+@@ -0,0 +1,286 @@
++/**
++ * verify-papercuts 四小修回归锁（2026-10-09-verify-papercuts）。
++ * ①cmd-existence script 名合法字符集截断（全角标点不拼入）
++ * ②verify-probes --force 保人工面（applySkeletonPreservingHuman 按段携载）
++ * ③无分支锚形态的提交信息锚定救援窗口（declared-rescue-only 语义不变）
++ * ④stageArchiveArtifacts 排除归档目录内嵌套 .sillyspec/ 运行时异物
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync, execFileSync } from 'node:child_process'
++import { validateScriptCommands } from '../src/stages/cmd-existence.js'
++import { applySkeletonPreservingHuman } from '../src/verify-probes.js'
++import { reconcileTargetFiles } from '../src/verify-postcheck.js'
++import { stageArchiveArtifacts } from '../src/git-helper.js'
++
++function git(dir, args) {
++  return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++}
++
++test('① 全角标点不拼入 script 名：『npm run test；模块卡』提取 script=test 校验通过', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'papercut1-'))
++  try {
++    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'node -e 0', lint: 'node -e 0' } }))
++    const r = validateScriptCommands('verify: npm run test；模块卡 diff 一致', { projectRoot: dir })
++    assert.equal(r.checked, 1, '恰好提取一条命令')
++    assert.equal(r.invalid.length, 0, `全角分号截断后 script=test 存在（实得 ${JSON.stringify(r.invalid)}）`)
++    const r2 = validateScriptCommands('implementation: pnpm run build。附带说明', { projectRoot: dir })
++    assert.equal(r2.checked, 1)
++    assert.ok(r2.invalid.length === 1 && r2.invalid[0].cmd === 'pnpm run build', '句点截断后 script=build 仍按真实存在性校验（不存在→报）')
++    const r3 = validateScriptCommands('npm run lint && npm run typecheck, 可选', { projectRoot: dir })
++    assert.equal(r3.invalid.length, 1, 'ASCII 分隔符（&&/,）同样截断；typecheck 不存在如实报')
++  } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++})
++
++test('② --force 保人工面：结论/移交项/矩阵已填行按段携载，占位段换新骨架', () => {
++  const oldText = [
++    '# 验证报告',
++    '',
++    '## 结论 [层：人工判断]',
++    '',
++    '结论枚举：`PASS WITH NOTES`——手填结论在场',
++    '',
++    '## 移交项（结构化） [层：人工判断——CLI 清单核验]',
++    '| 类型 | 条目 | 复跑/验收条件 |',
++    '|---|---|---|',
++    '| other | 手填移交条目 | 复跑条件 |',
++    '',
++    '## 任务完成度 [层：人工判断]',
++    '<!--TODO: 逐 task 对照-->',
++    '',
++    '## 决策追踪矩阵',
++    '| 决策 ID | FR | Task | Evidence | 状态 |',
++    '|---|---|---|---|---|',
++    '| D-001@v1 | FR-01 | task-01 | 手填证据 | closed |',
++    '',
++    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
++    '|---|---|---|---|',
++    '| 已填验收项 | `test/a.test.mjs` | covered | 手填证据 |',
++    '',
++    '## 自定义补充节 [层：用户]',
++    '',
++    '用户手写内容不应被销毁',
++    '',
++  ].join('\n')
++  const skeleton = [
++    '# 验证报告',
++    '',
++    '## 结论 [层：人工判断]',
++    '',
++    '结论枚举：`<待填：三选一>`',
++    '',
++    '## 移交项（结构化） [层：人工判断——CLI 清单核验]',
++    '| 类型 | 条目 | 复跑/验收条件 |',
++    '|---|---|---|',
++    '| <待填> | <待填> | <待填> |',
++    '',
++    '## 任务完成度 [层：人工判断]',
++    '<!--TODO: 新骨架占位-->',
++    '',
++    '## 决策追踪矩阵',
++    '| 决策 ID | FR | Task | Evidence | 状态 |',
++    '|---|---|---|---|---|',
++    '| D-001@v1 | <待填> | <待填> | <待填：证据回指> | <待填> |',
++    '| D-002@v1 | <待填> | <待填> | <待填：证据回指> | <待填> |',
++    '',
++    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
++    '|---|---|---|---|',
++    '| 已填验收项 | `test/` | <待填：五选一> | <待填：锚点> |',
++    '| 新增验收项 | `test/b.test.mjs` | <待填：五选一> | <待填：锚点> |',
++    '',
++  ].join('\n')
++  const r = applySkeletonPreservingHuman(oldText, skeleton)
++  assert.ok(r.text.includes('结论枚举：`PASS WITH NOTES`——手填结论在场'), '已填结论原样保留')
++  assert.ok(r.text.includes('| other | 手填移交条目 | 复跑条件 |'), '已填移交行携载')
++  assert.ok(r.text.includes('新骨架占位'), 'TODO 段换新骨架（未填无损失）')
++  assert.ok(r.text.includes('| D-001@v1 | FR-01 | task-01 | 手填证据 | closed |'), '决策矩阵已填行携载')
++  assert.ok(r.text.includes('| D-002@v1'), '决策矩阵新增行从骨架进场')
++  assert.ok(r.text.includes('| 已填验收项 | `test/a.test.mjs` | covered | 手填证据 |'), '探针 7 已填行携载')
++  assert.ok(r.text.includes('| 新增验收项 |'), '探针 7 新增行进场')
++  assert.ok(r.text.includes('用户手写内容不应被销毁'), '自定义节不销毁')
++  assert.ok(r.carriedSections.includes('结论') && r.carriedSections.includes('移交项'), `携载段清单如实（实得 ${JSON.stringify(r.carriedSections)}）`)
++})
++
++test('③ 无分支锚形态：含变更名的提交消息锚定窗口救赎已 commit 的声明文件（②类不再假红）', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'papercut3-'))
++  try {
++    git(dir, ['init', '-q'])
++    git(dir, ['config', 'user.email', 't@t.local'])
++    git(dir, ['config', 'user.name', 't'])
++    writeFileSync(join(dir, 'README.md'), 'init\n')
++    git(dir, ['add', '-A'])
++    git(dir, ['commit', '-qm', 'init'])
++    const cn = '2026-10-09-x'
++    const specBase = join(dir, '.sillyspec')
++    mkdirSync(join(specBase, 'changes', cn, 'tasks'), { recursive: true })
++    // task 卡声明交付文件（无分支/tag/meta——主代理直改形态）
++    writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-01.md'), [
++      '---', 'id: task-01', 'title: t', 'title_zh: t', 'status: draft', 'depends_on: []',
++      'goal: g', 'implementation: i', 'verify: node a.js', 'constraints: c',
++      'acceptance:', '  - a1',
++      'target_files:', '  - src/delivered.js', '  - test/delivered.test.mjs', '---', '',
++    ].join('\n'))
++    // 交付直接 commit 到主干（消息含变更名），工作区干净
++    mkdirSync(join(dir, 'src'), { recursive: true })
++    mkdirSync(join(dir, 'test'), { recursive: true })
++    writeFileSync(join(dir, 'src', 'delivered.js'), 'export const x = 1\n')
++    writeFileSync(join(dir, 'test', 'delivered.test.mjs'), 'export const t = 1\n')
++    git(dir, ['add', 'src/delivered.js', 'test/delivered.test.mjs'])
++    git(dir, ['commit', '-m', 'feat: 交付 (2026-10-09-x) (task-01)'])
++    const r = reconcileTargetFiles({ cwd: dir, specBase, changeName: cn, runtimeRoot: join(specBase, '.runtime'), strictMode: false })
++    assert.equal(r.status, 'ok', `对账通过（实得 ${r.status}: ${JSON.stringify(r.missing)}）`)
++    assert.equal(r.missing.length, 0, '已 commit 的声明文件不再假红 ②类')
++    assert.ok(r.sources.some((x) => String(x).includes('log-msg-window')), `来源含消息锚定窗口（实得 ${JSON.stringify(r.sources)}）`)
++    assert.equal(r.undeclared.length, 0, 'undeclared 面不受影响（declared-rescue-only 不放大）')
++    // 反向钉：他变更消息的提交不救——声明一个未交付文件
++    writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-02.md'), [
++      '---', 'id: task-02', 'title: t', 'title_zh: t', 'status: draft', 'depends_on: []',
++      'goal: g', 'implementation: i', 'verify: node a.js', 'constraints: c',
++      'acceptance:', '  - a1',
++      'target_files:', '  - src/never-delivered.js', '---', '',
++    ].join('\n'))
++    const r2 = reconcileTargetFiles({ cwd: dir, specBase, changeName: cn, runtimeRoot: join(specBase, '.runtime'), strictMode: false })
++    assert.ok(r2.missing.some((m) => String(m.path || m).includes('never-delivered')), '真未交付仍如实报 ②类（消息窗口不误救）')
++  } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++})
++
++test('④ 归档暂存排除嵌套 .sillyspec/ 异物：正常产物进暂存，db/日志不进', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'papercut4-'))
++  try {
++    git(dir, ['init', '-q'])
++    git(dir, ['config', 'user.email', 't@t.local'])
++    git(dir, ['config', 'user.name', 't'])
++    writeFileSync(join(dir, 'README.md'), 'init\n')
++    git(dir, ['add', '-A'])
++    git(dir, ['commit', '-qm', 'init'])
++    const arch = join(dir, '.sillyspec', 'changes', 'archive', '2026-10-09-y')
++    mkdirSync(join(arch, '.sillyspec', '.runtime'), { recursive: true })
++    writeFileSync(join(arch, 'verify-result.md'), '# 报告\n')
++    writeFileSync(join(arch, '.sillyspec', '.runtime', 'sillyspec.db'), 'junk')
++    writeFileSync(join(arch, '.sillyspec', 'spec-sync-bg.log'), 'junk')
++    const r = stageArchiveArtifacts(dir)
++    const staged = execSync('git diff --cached --name-only', { cwd: dir, encoding: 'utf8' }).trim().split('\n').filter(Boolean)
++    assert.ok(staged.some((p) => p.endsWith('verify-result.md')), '正常归档产物进暂存')
++    assert.ok(!staged.some((p) => p.includes('.sillyspec/changes/archive') && p.includes('/.sillyspec/')), `嵌套 .sillyspec 异物不进暂存（实得 ${JSON.stringify(staged)}）`)
++    assert.ok(Array.isArray(r.staged), '返回结构不变（兼容调用方）')
++  } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++})
++
++test('②b 审查 P2 修正：stale 携载行 + 多探针段时输出不损坏（倒序替换）', () => {
++  const oldText = [
++    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
++    '|---|---|---|---|',
++    '| 已填项 | `test/a.test.mjs` | covered | 手填 |',
++    '| 已撤下项 | `test/old.test.mjs` | covered | stale 手填 |',
++    '',
++    '#### 探针 8：载荷字段契约对账',
++    '| 字段 | 在场 |',
++    '|---|---|',
++    '| src/x.js | yes |',
++    '',
++  ].join('\n')
++  const skeleton = [
++    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
++    '|---|---|---|---|',
++    '| 已填项 | `test/` | <待填：五选一> | <待填：锚点> |',
++    '',
++    '#### 探针 8：载荷字段契约对账',
++    '| 字段 | 在场 |',
++    '|---|---|',
++    '| src/x.js | <待填> |',
++    '| src/y.js | <待填> |',
++    '',
++  ].join('\n')
++  const r = applySkeletonPreservingHuman(oldText, skeleton)
++  // 探针 7：已填行携载 + stale 追加（不丢）
++  assert.ok(r.text.includes('| 已填项 | `test/a.test.mjs` | covered | 手填 |'), '探针 7 已填行携载')
++  assert.ok(r.text.includes('已撤下项'), 'stale 行携载保留（agent 裁决）')
++  // 探针 8：正序错位会残留探针 7 的表尾/待填——倒序后应干净
++  const p8 = r.text.slice(r.text.indexOf('#### 探针 8'))
++  assert.ok(p8.includes('| src/x.js | yes |'), '探针 8 已填行按首列键携载（错位修复的判别锚）')
++  assert.ok(!p8.includes('|---|---|---|---|'), '探针 8 段无他表（探针 7 的四列分隔行）串入（正序错位的残留信号）')
++  assert.ok(!p8.includes('已撤下项'), '探针 8 段无探针 7 的 stale 行串入')
++  assert.ok(p8.includes('| src/y.js |'), '探针 8 新增行进场')
++  assert.ok(!p8.slice(p8.indexOf('| src/x.js |')).includes('|---|---|---|---|'), '无他表分隔行串入')
++})
++
++test('③b 审查 P3 修正：前缀变更名不误纳（边界锚定）', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'papercut3b-'))
++  try {
++    git(dir, ['init', '-q'])
++    git(dir, ['config', 'user.email', 't@t.local'])
++    git(dir, ['config', 'user.name', 't'])
++    writeFileSync(join(dir, 'README.md'), 'init\n')
++    git(dir, ['add', '-A'])
++    git(dir, ['commit', '-qm', 'init'])
++    // 变更 B（名含 A 作前缀）先提交他自己的文件
++    mkdirSync(join(dir, 'src'), { recursive: true })
++    writeFileSync(join(dir, 'src', 'b-only.js'), 'export const b = 1\n')
++    git(dir, ['add', 'src/b-only.js'])
++    git(dir, ['commit', '-m', 'feat: B 交付 (2026-10-09-x2)'])
++    // 变更 A 声明了 B 的文件（跨变更误声明形态）——A 无自己提交
++    const cn = '2026-10-09-x'
++    const specBase = join(dir, '.sillyspec')
++    mkdirSync(join(specBase, 'changes', cn, 'tasks'), { recursive: true })
++    writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-01.md'), [
++      '---', 'id: task-01', 'title: t', 'title_zh: t', 'status: draft', 'depends_on: []',
++      'goal: g', 'implementation: i', 'verify: node a.js', 'constraints: c',
++      'acceptance:', '  - a1',
++      'target_files:', '  - src/b-only.js', '---', '',
++    ].join('\n'))
++    const r = reconcileTargetFiles({ cwd: dir, specBase, changeName: cn, runtimeRoot: join(specBase, '.runtime'), strictMode: false })
++    assert.ok(r.missing.some((m) => String(m.path || m).includes('b-only')), `B 的提交不救 A 的声明（子串误纳已修；实得 missing=${JSON.stringify(r.missing)} sources=${JSON.stringify(r.sources)}）`)
++    assert.ok(!r.sources.some((x) => String(x).includes('log-msg-window')), 'A 的窗口源不应被 B 的提交激活')
++  } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
++})
++
++test('②c 审查 P3 修正：技术债务/Runtime Evidence/代码审查 段同享人工面携载', () => {
++  const oldText = [
++    '## 技术债务 [层：人工判断]',
++    '',
++    '手填债务叙述在场',
++    '',
++    '## Runtime Evidence [层：人工判断]',
++    '',
++    '手填运行时证据在场',
++    '',
++    '## 代码审查 [层：人工判断]',
++    '',
++    '手填审查叙述在场',
++    '',
++  ].join('\n')
++  const skeleton = [
++    '## 技术债务 [层：人工判断]',
++    '',
++    '<!--TODO: 技术债务-->',
++    '',
++    '## Runtime Evidence [层：人工判断]',
++    '',
++    '<!--TODO: 运行时证据-->',
++    '',
++    '## 代码审查 [层：人工判断]',
++    '',
++    '<!--TODO: 代码审查-->',
++    '',
++  ].join('\n')
++  const r = applySkeletonPreservingHuman(oldText, skeleton)
++  for (const marker of ['手填债务叙述在场', '手填运行时证据在场', '手填审查叙述在场']) {
++    assert.ok(r.text.includes(marker), `${marker} 携载`)
++  }
++  assert.ok(!r.text.includes('<!--TODO'), '已填段不再回到占位')
++})
+diff --git a/.sillyspec/changes/2026-10-09-verify-papercuts/design.md b/.sillyspec/changes/2026-10-09-verify-papercuts/design.md
+new file mode 100644
+index 00000000..0165e4ee
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-verify-papercuts/design.md
+@@ -0,0 +1,41 @@
++---
++author: zcode-verify-friction
++created_at: 2026-10-09T20:55:00+08:00
++---
++# 设计记录（Design Record）— 2026-10-09-verify-papercuts
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++四小修各一处单点：①cmd-existence.js 的 SCRIPT_CMD_RE 把 script 名从 \S+ 收敛为 [A-Za-z0-9:_.\-]+——全角标点/&&/| 自然截断，不再拼入 script 名误报。②verify-probes.js 新增 applySkeletonPreservingHuman（--force 分支接线）：机器段全量重刷、纯人工段已填则原样保留、矩阵段与探针容器按首列键携载已填行；备份保留兜底。③verify-postcheck.js 救援窗口第三候选：无分支/审计 tag 时，近 30 提交中消息含变更名者的触及面进 declared-rescue 窗口（不进 union、只救声明而 missing）。④git-helper.js stageArchiveArtifacts 的 add 附 :(exclude) 排除归档嵌套 .sillyspec/ 并在场提示；历史异物 git rm --cached + .gitignore 防线。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++新增导出 applySkeletonPreservingHuman(existingText, skeletonText)（纯函数）；SCRIPT_CMD_RE 语义收紧（validateScriptCommands 返回结构不变）；reconcileTargetFiles sources 新增标签 main:log-msg-window(declared-rescue-only:HEAD)（字符串展示面）；stageArchiveArtifacts 签名/返回不变。无端点/文件格式变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立：四修均为无状态解析/一次性窗口采集，无事件面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   applySkeletonPreservingHuman 纯函数（写盘沿既有单命令进程语义）；救援窗口只读 git log；add 的 exclude 不影响他进程暂存面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   --force 中断沿既有备份+写盘语义，无新半态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   消息锚定窗口按「提交消息含本变更名」过滤，他变更提交天然不入窗；exclude pathspec 只作用于归档子树。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：②的段携载把 stale 人工面带进新骨架——沿 refreshProbeSections 既定安全方向（宁可少刷新不误删），stale 行追加段尾留 agent 裁决，gate 一致性抽查独立把关。放弃的方案：①按空白截断（script 名合法字符外还有大量 Unicode，白名单比黑名单稳定）；③无锚 blanket 20 提交全入窗（他变更文件污染窗口，必须消息锚定）；②只备份不携载（现状——找回回填来回比携载贵，当日实证）。
+diff --git a/.sillyspec/changes/2026-10-09-verify-papercuts/proposal.md b/.sillyspec/changes/2026-10-09-verify-papercuts/proposal.md
+new file mode 100644
+index 00000000..ba0fc005
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-verify-papercuts/proposal.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T14:08:47.326Z
++---
++# 提案书（Proposal）— 2026-10-09-verify-papercuts
++
++## 动机
++
++任务原话转写：2026-10-09-verify-reuse-friction 全流程实证暴露的四个 CLI 小刺（摩擦源为本人会话实测）：
++①任务卡 verify/implementation 命令提取器吞全角标点——『npm run test；模块卡』的全角分号被拼进 script 名，plan postcheck 误报命令不存在，多跑 3 轮；
++②verify-probes --init --force 无差别重置 verify-result.md——已填的探针矩阵判定/决策矩阵/移交项全部被 wipe，整套重填（本次最大单点浪费）；
++③主代理直改形态（无 worktree/分支锚）对账盲区——交付已 commit 后 actual 只剩工作区脏面单源，②类全量假红，需手工喂 apply-pathspec 才能过（撞 3 轮才定位到 B3 机制）；
++④archive 收尾的机械 git add 夹带——目录级暂存把他变更遗留的嵌套 .sillyspec/ 运行时异物（db/日志）一并提交（违反仓规第 11 条自己的规则）。
++
++成功标准：
++- 全角标点（；。：，）不再进命令名：『npm run test；xxx』提取为 script=test 且校验通过（回归测试钉住）
++- --init --force 刷新机器段时保留已填人工面：结论槽/移交项表/探针矩阵已填判定行/决策矩阵已填格不被 wipe（回归测试钉住）
++- 无分支锚形态下，含变更名的近期提交窗口自动作为 declared-rescue 源：已 commit 的声明文件不再假红 ②类，undeclared 侧不受影响（不放大 scope creep 盲区）（回归测试钉住）
++- archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 全角标点（；。：，）不再进命令名：『npm run test；xxx』提取为 script=test 且校验通过（回归测试钉住）
++2. --init --force 刷新机器段时保留已填人工面：结论槽/移交项表/探针矩阵已填判定行/决策矩阵已填格不被 wipe（回归测试钉住）
++3. 无分支锚形态下，含变更名的近期提交窗口自动作为 declared-rescue 源：已 commit 的声明文件不再假红 ②类，undeclared 侧不受影响（不放大 scope creep 盲区）（回归测试钉住）
++4. archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）
++
++## 成功标准（可验证）
++
++1. 全角标点（；。：，）不再进命令名：『npm run test；xxx』提取为 script=test 且校验通过（回归测试钉住）
++2. --init --force 刷新机器段时保留已填人工面：结论槽/移交项表/探针矩阵已填判定行/决策矩阵已填格不被 wipe（回归测试钉住）
++3. 无分支锚形态下，含变更名的近期提交窗口自动作为 declared-rescue 源：已 commit 的声明文件不再假红 ②类，undeclared 侧不受影响（不放大 scope creep 盲区）（回归测试钉住）
++4. archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）
+diff --git a/.sillyspec/changes/2026-10-09-verify-papercuts/requirements.md b/.sillyspec/changes/2026-10-09-verify-papercuts/requirements.md
+new file mode 100644
+index 00000000..8423072f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-verify-papercuts/requirements.md
+@@ -0,0 +1,46 @@
++---
++author: zcode-verify-friction
++created_at: 2026-10-09T20:55:00+08:00
++---
++# 需求规格（Requirements）— 2026-10-09-verify-papercuts
++
++## 功能需求
++
++### FR-01: 命令提取器标点截断
++
++- validateScriptCommands 提取的 script 名必须只含 [A-Za-z0-9:_.\-]——全角标点（；。，：）与 ASCII 分隔符（&& / , / |）禁止拼入 script 名；被截断后的 script 名仍必须按 package.json 真实存在性校验（不因截断而豁免）。
++
++#### 场景：全角句读
++
++- Given task 卡 verify 字段「npm run test；模块卡 diff 一致」且 package.json 有 test script；When plan postcheck 校验；Then 提取 script=test 校验通过，不误报命令不存在。
++
++### FR-02: --force 保人工面
++
++- verify-probes --init --force 重生成骨架时必须按段携载已填人工面：纯人工段（结论/移交项/证据账/集成回执/任务完成度/设计一致性/独立复核/变更风险等级）已填（无 <待填/<TODO 占位）则原样保留；矩阵段（决策追踪/接口验证覆盖）与探针段的已填表格行必须按首列键携载；未填段/占位段必须换新骨架；旧文独有自定义段禁止销毁。
++
++#### 场景：force 后重填归零
++
++- Given verify-result.md 已填结论 PASS WITH NOTES + 移交项行 + 探针 7 covered 行；When --init --force；When 直读新文；Then 上述已填内容在场，新增矩阵行从骨架进场。
++
++### FR-03: 消息锚定救援窗口
++
++- 无分支/审计 tag 锚的主代理直改形态下，对账 actual 采集必须补充「提交信息锚定窗口」：近 30 提交中消息含变更名的提交，其触及面进入 declared-rescue 窗口；窗口文件禁止进入全局 union（undeclared 面不受影响）；真未交付的声明文件必须仍如实报 ②类。
++
++#### 场景：直改已 commit 不假红
++
++- Given task 卡声明 src/delivered.js 且该文件已随含变更名消息提交到主干、工作区干净、无 sillyspec/<变更> 分支；When reconcileTargetFiles；Then 该文件不落 ②类 missing，sources 含 log-msg-window；声明 src/never-delivered.js（从未交付）仍落 ②类。
++
++### FR-04: 归档暂存排除嵌套异物
++
++- stageArchiveArtifacts 的 git add 必须排除归档目录内嵌套的 .sillyspec/ 子树（pathspec exclude）；嵌套异物在场时必须点名提示处置；正常归档产物必须不受排除影响照常进暂存。
++
++#### 场景：夹带拦截
++
++- Given 归档目录含 verify-result.md 与嵌套 .sillyspec/.runtime/sillyspec.db；When archive 收尾暂存；Then md 进暂存、db/日志不进。
++
++## 测试绑定（每条 FR 至少一行：`FR-NN: test/路径「用例名」`）
++
++FR-01: test/verify-papercuts-batch.test.mjs「① 全角标点不拼入 script 名」
++FR-02: test/verify-papercuts-batch.test.mjs「② --force 保人工面」
++FR-03: test/verify-papercuts-batch.test.mjs「③ 无分支锚形态：消息锚定窗口救赎」
++FR-04: test/verify-papercuts-batch.test.mjs「④ 归档暂存排除嵌套 .sillyspec 异物」
+diff --git a/.sillyspec/changes/2026-10-09-verify-papercuts/tasks.md b/.sillyspec/changes/2026-10-09-verify-papercuts/tasks.md
+new file mode 100644
+index 00000000..0871b83c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-verify-papercuts/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T14:08:47.327Z
++---
++# 任务注册表（Tasks）— 2026-10-09-verify-papercuts
++
++- [x] task-01: 全角标点（；。：，）不再进命令名：『npm run test；xxx』提取为 script=test 且校验通过（回归测试钉住）
++- [x] task-02: --init --force 刷新机器段时保留已填人工面：结论槽/移交项表/探针矩阵已填判定行/决策矩阵已填格不被 wipe（回归测试钉住）
++- [x] task-03: 无分支锚形态下，含变更名的近期提交窗口自动作为 declared-rescue 源：已 commit 的声明文件不再假红 ②类，undeclared 侧不受影响（不放大 scope creep 盲区）（回归测试钉住）
++- [x] task-04: archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）

@@ -2,6 +2,11 @@ tier: thin
 legacy_fallback: false
 substeps:
   artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -19,6 +24,11 @@ input: |-
   - archive 暂存面只含本变更归档产物与固定路径，嵌套 .sillyspec/ 运行时异物不进暂存；已提交的历史异物清理出库（回归测试钉住）
 autopilot: true
 baseline_commit: 0591b534de6d11695aeee20adf5663991d7fab7d
-updatedAt: '2026-10-09T14:30:38.983Z'
+updatedAt: '2026-10-09T14:58:30.777Z'
 baseline_sha256: 8f0338ee2c5169a18a33a6af3b721a863e71de564386d0293a7aba053cac303d
+gate_summary: >-
+  test: skipped ← module[]+deps(js43+js-meta-skip1)+fr(43)（61.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009143228\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（51.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009143228\test-result.json｜门文件 8 个
 

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-verify-papercuts",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-verify-papercuts:flow:测试绑定FR-01",
+      "tests": [
+        "test/verify-papercuts-batch.test.mjs「① 全角标点不拼入 script 名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-papercuts"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-verify-papercuts:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-papercuts-batch.test.mjs「② --force 保人工面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-papercuts"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-verify-papercuts:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-papercuts-batch.test.mjs「③ 无分支锚形态：消息锚定窗口救赎」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-papercuts"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-09-verify-papercuts:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-papercuts-batch.test.mjs「④ 归档暂存排除嵌套 .sillyspec 异物」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-papercuts"
+    }
+  ]
+}

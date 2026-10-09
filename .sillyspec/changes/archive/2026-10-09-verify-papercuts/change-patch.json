@@ -1,0 +1,147 @@
+{
+  "change": "2026-10-09-verify-papercuts",
+  "baseline": "0591b534de6d11695aeee20adf5663991d7fab7d",
+  "head": "f60b9d54ff7e11da1551f89d07ccbcf3cb1edfd4",
+  "files": [
+    ".gitignore",
+    ".sillyspec/changes/2026-10-09-verify-papercuts/design.md",
+    ".sillyspec/changes/2026-10-09-verify-papercuts/flow-state.yaml",
+    ".sillyspec/changes/2026-10-09-verify-papercuts/proposal.md",
+    ".sillyspec/changes/2026-10-09-verify-papercuts/requirements.md",
+    ".sillyspec/changes/2026-10-09-verify-papercuts/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/git-helper.js",
+    "src/index.js",
+    "src/stages/cmd-existence.js",
+    "src/verify-postcheck.js",
+    "src/verify-probes.js",
+    "test/verify-papercuts-batch.test.mjs"
+  ],
+  "totals": {
+    "files": 13,
+    "additions": 662,
+    "deletions": 15
+  },
+  "savedAt": "2026-10-09T14:51:47.946Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "0591b534de6d11695aeee20adf5663991d7fab7d",
+    "totals": {
+      "files": 8,
+      "additions": 500,
+      "deletions": 15
+    },
+    "rows": [
+      {
+        "path": ".gitignore",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "src/git-helper.js",
+        "additions": 23,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 14,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/cmd-existence.js",
+        "additions": 5,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 29,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 135,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/verify-papercuts-batch.test.mjs",
+        "additions": 286,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "47300120f27e9641da86db2b515f4d5966634023e468b5ff16d75bc4c247a69e",
+  "patchStatus": "ok"
+}

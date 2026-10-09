@@ -198,3 +198,79 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-10-06-git-optional-locks
   status: active
+
+## FR-worktree-011 命令提取器标点截断
+变更：2026-10-09-verify-papercuts
+状态：active
+摘要：全角句读
+全文：.sillyspec/changes/archive/2026-10-09-verify-papercuts/requirements.md#FR-01
+最近确认：f60b9d54ff7e11da1551f89d07ccbcf3cb1edfd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-verify-papercuts:flow:测试绑定FR-01
+  tests: test/verify-papercuts-batch.test.mjs「① 全角标点不拼入 script 名」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-verify-papercuts
+  status: active
+
+## FR-worktree-012 --force 保人工面
+变更：2026-10-09-verify-papercuts
+状态：active
+摘要：force 后重填归零
+全文：.sillyspec/changes/archive/2026-10-09-verify-papercuts/requirements.md#FR-02
+最近确认：f60b9d54ff7e11da1551f89d07ccbcf3cb1edfd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-verify-papercuts:flow:测试绑定FR-02
+  tests: test/verify-papercuts-batch.test.mjs「② --force 保人工面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-verify-papercuts
+  status: active
+
+## FR-worktree-013 消息锚定救援窗口
+变更：2026-10-09-verify-papercuts
+状态：active
+摘要：直改已 commit 不假红
+全文：.sillyspec/changes/archive/2026-10-09-verify-papercuts/requirements.md#FR-03
+最近确认：f60b9d54ff7e11da1551f89d07ccbcf3cb1edfd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-verify-papercuts:flow:测试绑定FR-03
+  tests: test/verify-papercuts-batch.test.mjs「③ 无分支锚形态：消息锚定窗口救赎」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-verify-papercuts
+  status: active
+
+## FR-worktree-014 归档暂存排除嵌套异物
+变更：2026-10-09-verify-papercuts
+状态：active
+摘要：夹带拦截
+全文：.sillyspec/changes/archive/2026-10-09-verify-papercuts/requirements.md#FR-04
+最近确认：f60b9d54ff7e11da1551f89d07ccbcf3cb1edfd4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-verify-papercuts:flow:测试绑定FR-04
+  tests: test/verify-papercuts-batch.test.mjs「④ 归档暂存排除嵌套 .sillyspec 异物」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-verify-papercuts
+  status: active
