@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-08-knowledge-stats-fr-only",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-stats-fr-only.test.mjs「--fr-only 人类模式仅含 FR 索引段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-stats-fr-only"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-stats-fr-only.test.mjs「不带 flag 行为零变化（字节一致）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-stats-fr-only"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-stats-fr-only.test.mjs「--json --fr-only envelope 不变仅过滤 data」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-stats-fr-only"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-08-knowledge-stats-fr-only:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-stats-fr-only.test.mjs「三态全覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-08-knowledge-stats-fr-only"
+    }
+  ]
+}

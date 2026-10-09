@@ -1,0 +1,37 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "e637619c33015e8664862ed78c4bf5df129ed471",
+  "totals": {
+    "files": 2,
+    "additions": 131,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/knowledge-stats.js",
+      "additions": 39,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/knowledge-stats-fr-only.test.mjs",
+      "additions": 92,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "e1481498d2c9735c889931a7c126bb2f04a1eecd3521ca44735ed59f453d7eb6",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-08T01:37:38.304Z"
+}

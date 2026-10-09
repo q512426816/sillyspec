@@ -1,0 +1,41 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  给 knowledge stats 加 --fr-only flag：只输出 FR 索引统计段（跳过命中矩阵和 conventions 段），便于 CI/L3 裁决脚本快速读取 frRotSuspect/frSupersede
+  等键而不解析全量输出。
+
+
+  成功标准：
+
+  - --fr-only 在场时输出仅含 FR 索引段（人类模式一段 markdown / --json 模式仅 frIndex 键）
+
+  - 不带 flag 行为零变化（字节一致）
+
+  - --json + --fr-only 组合可用且 envelope 不变（只过滤 data 键内容）
+
+  - 测试覆盖三态（无 flag/--fr-only/--fr-only --json）
+autopilot: true
+baseline_commit: e637619c33015e8664862ed78c4bf5df129ed471
+updatedAt: '2026-10-08T01:37:39.834Z'
+baseline_sha256: f547f6e26ba059de1f7098ddf3f20d1898a08492a0f1ed5d3ea61281a72fb7e2
+spec_approved: true
+spec_approved_at: '2026-10-08T01:27:46.603Z'
+spec_approved_by: zcode-thin-vs-ospec
+gate_summary: >-
+  test: passed ← module[]+deps(js3)+fr(1)（0.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008013626\test-result.json｜lint: passed
+  ← npm run lint（41.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008013626\test-result.json｜门文件 6 个
+
