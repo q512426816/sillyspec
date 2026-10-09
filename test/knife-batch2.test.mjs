@@ -39,12 +39,22 @@ function mkSyncFx() {
 test('syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过', () => {
   const fx = mkSyncFx()
   try {
+    const before = Date.now()
     const r1 = syncModuleDocSidecars({ cwd: fx.cwd, changeName: '2026-09-09-t1', note: '测试变更' })
+    const after = Date.now()
     assert.deepEqual(r1.synced, ['proj/core'])  // 2026-09-21 multimap 修复后 synced 带项目前缀（多项目仓模块身份含项目）
     const sc = readFileSync(join(fx.mapDir, 'core.changelog.md'), 'utf8')
     assert.ok(sc.includes('- 2026-09-09-t1 | 测试变更'), '追加行在场')
     const card = readFileSync(join(fx.mapDir, 'core.md'), 'utf8')
     assert.ok(!card.includes('2020-01-01'), 'updated_at 已戳')
+    // 戳为全量 ISO 且瞬间正确（2026-10-09-module-card-updated-at-iso）：Date.parse 落
+    // 同步前后窗内——旧实现（UTC 数字拼 '+08:00'）解析瞬间恒早真实时刻 8h，必出窗。
+    const m = /^updated_at: (\S+)$/m.exec(card)
+    assert.ok(m, 'updated_at 行在场')
+    assert.ok(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(m[1]), `全量 ISO 形状（实得 ${m[1]}）`)
+    const ts = Date.parse(m[1])
+    assert.ok(Number.isFinite(ts) && ts >= before - 1000 && ts <= after + 1000,
+      `解析瞬间落窗 [${before - 1000}, ${after + 1000}]（实得 ${ts}，旧实现恒偏 -8h）`)
     // 幂等
     const r2 = syncModuleDocSidecars({ cwd: fx.cwd, changeName: '2026-09-09-t1', note: '测试变更' })
     assert.deepEqual(r2.skipped, ['proj/core'], '二跑跳过')
