@@ -10,6 +10,7 @@ import { execFileSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
 import { dirname } from 'path'
+import { nowWallClock } from '../src/datetime.js'
 const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspec.js')
 
 function mkProj() {
@@ -32,6 +33,23 @@ test('fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆
     // 幂等
     const out2 = execFileSync(process.execPath, [bin, 'fourpiece-init', '--change', 'c1'], { cwd, encoding: 'utf8' })
     assert.ok(out2.includes('已存在，不覆盖') && out2.includes('proposal.md'))
+  } finally { rmSync(cwd, { recursive: true, force: true }) }
+})
+
+test('fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）', () => {
+  const cwd = mkProj()
+  try {
+    const before = nowWallClock()
+    execFileSync(process.execPath, [bin, 'fourpiece-init', '--change', 'c-local'], { cwd, encoding: 'utf8' })
+    const after = nowWallClock()
+    for (const f of ['proposal.md', 'requirements.md', 'decisions.md']) {
+      const m = /^created_at: (.+)$/m.exec(readFileSync(join(cwd, '.sillyspec', 'changes', 'c-local', f), 'utf8'))
+      assert.ok(m, `${f} created_at 在场`)
+      const stamp = m[1].trim()
+      // 字典序比较成立：YYYY-MM-DD HH:mm:ss 定宽形状。UTC 写入（toISOString 裸形状）
+      // 在非 UTC 时区机上必偏移出窗（实证机 UTC+8 偏 8h），断言失败拦回归。
+      assert.ok(stamp >= before && stamp <= after, `${f} created_at=${stamp} 应落本地墙钟窗 [${before}, ${after}]`)
+    }
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 
