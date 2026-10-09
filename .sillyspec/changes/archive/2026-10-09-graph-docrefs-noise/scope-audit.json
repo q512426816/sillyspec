@@ -1,0 +1,573 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "ec5ee3dcd9db863a0f11c382b79bafee9c8b3cce",
+  "totals": {
+    "files": 69,
+    "additions": 522,
+    "deletions": 18
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/SillyHub/modules/preview_office.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/build.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/change_writer.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/core.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/health.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/incident.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/mcp_registry.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/migrations.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/models.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/notification.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/release.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/scan_docs.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/skill_source.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/task.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/backend/modules/tool_gateway.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/dashboard/modules/components.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/dashboard/modules/composables.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/dashboard/modules/server-index.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-admin-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-agent-profiles-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-api-routes.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-layouts.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-mobile-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-ppm-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-sessions-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/app-workspace-pages.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/components-admin.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/components-file-center.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/components-workspace-config.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-auth.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-git-identities.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-settings.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-spec-workspaces.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-token-refresh.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/lib-workspaces.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/frontend/modules/styles.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/deploy.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/prototype.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/scripts.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/sillyspec.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/multi-agent-platform/modules/spikes.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/adapter-jsonl.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/adapter-ndjson.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/adapter-pi-json.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/adapter-stream-json.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/adapter-text.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/api-types.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/autostart.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/cli.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/codex-settings.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/index.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/mcp-server.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/pi-settings.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/protocol.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/terminal-launcher.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyhub-daemon/modules/version.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/dashboard-components.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/dashboard-composables.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/dashboard-frontend.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/dashboard-server.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/dashboard.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/redlines.changelog.md",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 8,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-graph.js",
+      "additions": 53,
+      "deletions": 12,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/knowledge-match.js",
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/knowledge-graph.test.mjs",
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/{backend,frontend,sillyhub-daemon,dashboard,multi-agent-platform,SillyHub,sillyspec}/modules/*.changelog.md ×64",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "9fb47c4936f16d074b2fa3e6c840aa621284d20668f186b975d8dafe251a277f",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-09T00:39:11.146Z"
+}

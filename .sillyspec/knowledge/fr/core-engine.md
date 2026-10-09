@@ -2706,3 +2706,74 @@
 摘要：回归面
 全文：.sillyspec/changes/archive/2026-10-09-archive-integrity-thin-aware/requirements.md#FR-04
 最近确认：2edde8bd4addf24e870503ff287d587447203d68
+
+## FR-core-engine-167 parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
+变更：2026-10-09-graph-docrefs-noise
+状态：active
+摘要：后缀名
+全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-01
+最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-docrefs-noise:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-docrefs-noise
+  status: active
+
+## FR-core-engine-168 graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
+变更：2026-10-09-graph-docrefs-noise
+状态：active
+摘要：真图降噪
+全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-02
+最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-docrefs-noise:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「⑧summary 聚合」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-docrefs-noise
+  status: active
+
+## FR-core-engine-169 extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
+变更：2026-10-09-graph-docrefs-noise
+状态：active
+摘要：噪声守卫
+全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-03
+最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-graph-docrefs-noise:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「①解析全形态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-graph-docrefs-noise
+  status: active
+
+## FR-core-engine-170 降噪后真图复跑：doc/scan 悬空降到真实数（本仓存在性可判的带路径引用）；平台侧 64 缺卡清单钉进 doctor 输出（已有 graph-module-doc-gap）并对其中本仓可产内容的部分（backend 14 张——scan STRUCTURE 目录职责表在场）补定位级卡片，跨仓不可产的（frontend/daemon 等源码不在本仓）留 doctor advisory 不伪造
+变更：2026-10-09-graph-docrefs-noise
+状态：active
+摘要：双归零
+全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-04
+最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04
+
+## FR-core-engine-171 全量测试与 lint 零回归
+变更：2026-10-09-graph-docrefs-noise
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-05
+最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04

@@ -1,0 +1,1207 @@
+diff --git a/.sillyspec/docs/SillyHub/modules/preview_office.changelog.md b/.sillyspec/docs/SillyHub/modules/preview_office.changelog.md
+new file mode 100644
+index 00000000..5df2bbb1
+--- /dev/null
++++ b/.sillyspec/docs/SillyHub/modules/preview_office.changelog.md
+@@ -0,0 +1,7 @@
++# preview_office 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/build.changelog.md b/.sillyspec/docs/backend/modules/build.changelog.md
+new file mode 100644
+index 00000000..fc338811
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/build.changelog.md
+@@ -0,0 +1,7 @@
++# build 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/change_writer.changelog.md b/.sillyspec/docs/backend/modules/change_writer.changelog.md
+new file mode 100644
+index 00000000..0d007491
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/change_writer.changelog.md
+@@ -0,0 +1,7 @@
++# change_writer 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/core.changelog.md b/.sillyspec/docs/backend/modules/core.changelog.md
+new file mode 100644
+index 00000000..20c08e09
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/core.changelog.md
+@@ -0,0 +1,7 @@
++# core 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/health.changelog.md b/.sillyspec/docs/backend/modules/health.changelog.md
+new file mode 100644
+index 00000000..7b102e95
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/health.changelog.md
+@@ -0,0 +1,7 @@
++# health 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/incident.changelog.md b/.sillyspec/docs/backend/modules/incident.changelog.md
+new file mode 100644
+index 00000000..334bdb8c
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/incident.changelog.md
+@@ -0,0 +1,7 @@
++# incident 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/mcp_registry.changelog.md b/.sillyspec/docs/backend/modules/mcp_registry.changelog.md
+new file mode 100644
+index 00000000..903face6
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/mcp_registry.changelog.md
+@@ -0,0 +1,7 @@
++# mcp_registry 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/migrations.changelog.md b/.sillyspec/docs/backend/modules/migrations.changelog.md
+new file mode 100644
+index 00000000..db135730
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/migrations.changelog.md
+@@ -0,0 +1,7 @@
++# migrations 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/models.changelog.md b/.sillyspec/docs/backend/modules/models.changelog.md
+new file mode 100644
+index 00000000..f73a9ab8
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/models.changelog.md
+@@ -0,0 +1,7 @@
++# models 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/notification.changelog.md b/.sillyspec/docs/backend/modules/notification.changelog.md
+new file mode 100644
+index 00000000..73b319d3
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/notification.changelog.md
+@@ -0,0 +1,7 @@
++# notification 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/release.changelog.md b/.sillyspec/docs/backend/modules/release.changelog.md
+new file mode 100644
+index 00000000..a969f3a9
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/release.changelog.md
+@@ -0,0 +1,7 @@
++# release 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/scan_docs.changelog.md b/.sillyspec/docs/backend/modules/scan_docs.changelog.md
+new file mode 100644
+index 00000000..c1f050d1
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/scan_docs.changelog.md
+@@ -0,0 +1,7 @@
++# scan_docs 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/skill_source.changelog.md b/.sillyspec/docs/backend/modules/skill_source.changelog.md
+new file mode 100644
+index 00000000..a47b660c
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/skill_source.changelog.md
+@@ -0,0 +1,7 @@
++# skill_source 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/task.changelog.md b/.sillyspec/docs/backend/modules/task.changelog.md
+new file mode 100644
+index 00000000..4ee32b2f
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/task.changelog.md
+@@ -0,0 +1,7 @@
++# task 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/backend/modules/tool_gateway.changelog.md b/.sillyspec/docs/backend/modules/tool_gateway.changelog.md
+new file mode 100644
+index 00000000..d2b3af11
+--- /dev/null
++++ b/.sillyspec/docs/backend/modules/tool_gateway.changelog.md
+@@ -0,0 +1,7 @@
++# tool_gateway 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/dashboard/modules/components.changelog.md b/.sillyspec/docs/dashboard/modules/components.changelog.md
+new file mode 100644
+index 00000000..90fbf88f
+--- /dev/null
++++ b/.sillyspec/docs/dashboard/modules/components.changelog.md
+@@ -0,0 +1,7 @@
++# components 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/dashboard/modules/composables.changelog.md b/.sillyspec/docs/dashboard/modules/composables.changelog.md
+new file mode 100644
+index 00000000..f87ba0e7
+--- /dev/null
++++ b/.sillyspec/docs/dashboard/modules/composables.changelog.md
+@@ -0,0 +1,7 @@
++# composables 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/dashboard/modules/server-index.changelog.md b/.sillyspec/docs/dashboard/modules/server-index.changelog.md
+new file mode 100644
+index 00000000..e547dd18
+--- /dev/null
++++ b/.sillyspec/docs/dashboard/modules/server-index.changelog.md
+@@ -0,0 +1,7 @@
++# server-index 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-admin-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-admin-pages.changelog.md
+new file mode 100644
+index 00000000..26d18730
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-admin-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-admin-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-agent-profiles-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-agent-profiles-pages.changelog.md
+new file mode 100644
+index 00000000..76121997
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-agent-profiles-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-agent-profiles-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-api-routes.changelog.md b/.sillyspec/docs/frontend/modules/app-api-routes.changelog.md
+new file mode 100644
+index 00000000..42010bb4
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-api-routes.changelog.md
+@@ -0,0 +1,7 @@
++# app-api-routes 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-layouts.changelog.md b/.sillyspec/docs/frontend/modules/app-layouts.changelog.md
+new file mode 100644
+index 00000000..e24f9aeb
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-layouts.changelog.md
+@@ -0,0 +1,7 @@
++# app-layouts 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-mobile-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-mobile-pages.changelog.md
+new file mode 100644
+index 00000000..4660fd26
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-mobile-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-mobile-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-ppm-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-ppm-pages.changelog.md
+new file mode 100644
+index 00000000..cf7fe215
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-ppm-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-ppm-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-sessions-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-sessions-pages.changelog.md
+new file mode 100644
+index 00000000..dfe791d5
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-sessions-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-sessions-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/app-workspace-pages.changelog.md b/.sillyspec/docs/frontend/modules/app-workspace-pages.changelog.md
+new file mode 100644
+index 00000000..96e38052
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/app-workspace-pages.changelog.md
+@@ -0,0 +1,7 @@
++# app-workspace-pages 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/components-admin.changelog.md b/.sillyspec/docs/frontend/modules/components-admin.changelog.md
+new file mode 100644
+index 00000000..f6d0e8a4
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/components-admin.changelog.md
+@@ -0,0 +1,7 @@
++# components-admin 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/components-file-center.changelog.md b/.sillyspec/docs/frontend/modules/components-file-center.changelog.md
+new file mode 100644
+index 00000000..853f3ff4
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/components-file-center.changelog.md
+@@ -0,0 +1,7 @@
++# components-file-center 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/components-workspace-config.changelog.md b/.sillyspec/docs/frontend/modules/components-workspace-config.changelog.md
+new file mode 100644
+index 00000000..2b6a4f91
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/components-workspace-config.changelog.md
+@@ -0,0 +1,7 @@
++# components-workspace-config 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-auth.changelog.md b/.sillyspec/docs/frontend/modules/lib-auth.changelog.md
+new file mode 100644
+index 00000000..5fe1e73d
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-auth.changelog.md
+@@ -0,0 +1,7 @@
++# lib-auth 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-git-identities.changelog.md b/.sillyspec/docs/frontend/modules/lib-git-identities.changelog.md
+new file mode 100644
+index 00000000..558adf3a
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-git-identities.changelog.md
+@@ -0,0 +1,7 @@
++# lib-git-identities 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-settings.changelog.md b/.sillyspec/docs/frontend/modules/lib-settings.changelog.md
+new file mode 100644
+index 00000000..9669c5bd
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-settings.changelog.md
+@@ -0,0 +1,7 @@
++# lib-settings 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-spec-workspaces.changelog.md b/.sillyspec/docs/frontend/modules/lib-spec-workspaces.changelog.md
+new file mode 100644
+index 00000000..33ea3289
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-spec-workspaces.changelog.md
+@@ -0,0 +1,7 @@
++# lib-spec-workspaces 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-token-refresh.changelog.md b/.sillyspec/docs/frontend/modules/lib-token-refresh.changelog.md
+new file mode 100644
+index 00000000..eedc1640
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-token-refresh.changelog.md
+@@ -0,0 +1,7 @@
++# lib-token-refresh 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/lib-workspaces.changelog.md b/.sillyspec/docs/frontend/modules/lib-workspaces.changelog.md
+new file mode 100644
+index 00000000..d2f83c14
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/lib-workspaces.changelog.md
+@@ -0,0 +1,7 @@
++# lib-workspaces 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/frontend/modules/styles.changelog.md b/.sillyspec/docs/frontend/modules/styles.changelog.md
+new file mode 100644
+index 00000000..5db82b13
+--- /dev/null
++++ b/.sillyspec/docs/frontend/modules/styles.changelog.md
+@@ -0,0 +1,7 @@
++# styles 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/deploy.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/deploy.changelog.md
+new file mode 100644
+index 00000000..df5d7b40
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/deploy.changelog.md
+@@ -0,0 +1,7 @@
++# deploy 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+new file mode 100644
+index 00000000..df0e64ad
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -0,0 +1,7 @@
++# docs 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/prototype.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/prototype.changelog.md
+new file mode 100644
+index 00000000..23d873ae
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/prototype.changelog.md
+@@ -0,0 +1,7 @@
++# prototype 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/scripts.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/scripts.changelog.md
+new file mode 100644
+index 00000000..7ee0c4e7
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/scripts.changelog.md
+@@ -0,0 +1,7 @@
++# scripts 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.changelog.md
+new file mode 100644
+index 00000000..e9689c98
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.changelog.md
+@@ -0,0 +1,7 @@
++# sillyhub-daemon 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/sillyspec.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/sillyspec.changelog.md
+new file mode 100644
+index 00000000..1ca02d59
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/sillyspec.changelog.md
+@@ -0,0 +1,7 @@
++# sillyspec 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/spikes.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/spikes.changelog.md
+new file mode 100644
+index 00000000..70dbb3a4
+--- /dev/null
++++ b/.sillyspec/docs/multi-agent-platform/modules/spikes.changelog.md
+@@ -0,0 +1,7 @@
++# spikes 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/adapter-jsonl.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/adapter-jsonl.changelog.md
+new file mode 100644
+index 00000000..9d00baa0
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/adapter-jsonl.changelog.md
+@@ -0,0 +1,7 @@
++# adapter-jsonl 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/adapter-ndjson.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/adapter-ndjson.changelog.md
+new file mode 100644
+index 00000000..813ceec5
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/adapter-ndjson.changelog.md
+@@ -0,0 +1,7 @@
++# adapter-ndjson 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/adapter-pi-json.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/adapter-pi-json.changelog.md
+new file mode 100644
+index 00000000..7f31ca75
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/adapter-pi-json.changelog.md
+@@ -0,0 +1,7 @@
++# adapter-pi-json 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/adapter-stream-json.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/adapter-stream-json.changelog.md
+new file mode 100644
+index 00000000..7739e290
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/adapter-stream-json.changelog.md
+@@ -0,0 +1,7 @@
++# adapter-stream-json 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/adapter-text.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/adapter-text.changelog.md
+new file mode 100644
+index 00000000..b48c8234
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/adapter-text.changelog.md
+@@ -0,0 +1,7 @@
++# adapter-text 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/api-types.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/api-types.changelog.md
+new file mode 100644
+index 00000000..5fbe537b
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/api-types.changelog.md
+@@ -0,0 +1,7 @@
++# api-types 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/autostart.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/autostart.changelog.md
+new file mode 100644
+index 00000000..13fab84c
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/autostart.changelog.md
+@@ -0,0 +1,7 @@
++# autostart 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/cli.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/cli.changelog.md
+new file mode 100644
+index 00000000..e01b54a3
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/cli.changelog.md
+@@ -0,0 +1,7 @@
++# cli 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/codex-settings.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/codex-settings.changelog.md
+new file mode 100644
+index 00000000..a6db0033
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/codex-settings.changelog.md
+@@ -0,0 +1,7 @@
++# codex-settings 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/index.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/index.changelog.md
+new file mode 100644
+index 00000000..c7a9f449
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/index.changelog.md
+@@ -0,0 +1,7 @@
++# index 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/mcp-server.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/mcp-server.changelog.md
+new file mode 100644
+index 00000000..40dbb4f3
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/mcp-server.changelog.md
+@@ -0,0 +1,7 @@
++# mcp-server 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/pi-settings.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/pi-settings.changelog.md
+new file mode 100644
+index 00000000..8c3d0255
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/pi-settings.changelog.md
+@@ -0,0 +1,7 @@
++# pi-settings 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/protocol.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/protocol.changelog.md
+new file mode 100644
+index 00000000..72c9ea7b
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/protocol.changelog.md
+@@ -0,0 +1,7 @@
++# protocol 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/terminal-launcher.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/terminal-launcher.changelog.md
+new file mode 100644
+index 00000000..1fba96e1
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/terminal-launcher.changelog.md
+@@ -0,0 +1,7 @@
++# terminal-launcher 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyhub-daemon/modules/version.changelog.md b/.sillyspec/docs/sillyhub-daemon/modules/version.changelog.md
+new file mode 100644
+index 00000000..a27db9c2
+--- /dev/null
++++ b/.sillyspec/docs/sillyhub-daemon/modules/version.changelog.md
+@@ -0,0 +1,7 @@
++# version 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/dashboard-components.changelog.md b/.sillyspec/docs/sillyspec/modules/dashboard-components.changelog.md
+new file mode 100644
+index 00000000..fa0ccda5
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/dashboard-components.changelog.md
+@@ -0,0 +1,7 @@
++# dashboard-components 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/dashboard-composables.changelog.md b/.sillyspec/docs/sillyspec/modules/dashboard-composables.changelog.md
+new file mode 100644
+index 00000000..8b538f2f
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/dashboard-composables.changelog.md
+@@ -0,0 +1,7 @@
++# dashboard-composables 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/dashboard-frontend.changelog.md b/.sillyspec/docs/sillyspec/modules/dashboard-frontend.changelog.md
+new file mode 100644
+index 00000000..718a91a6
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/dashboard-frontend.changelog.md
+@@ -0,0 +1,7 @@
++# dashboard-frontend 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/dashboard-server.changelog.md b/.sillyspec/docs/sillyspec/modules/dashboard-server.changelog.md
+new file mode 100644
+index 00000000..6845f190
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/dashboard-server.changelog.md
+@@ -0,0 +1,7 @@
++# dashboard-server 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/dashboard.changelog.md b/.sillyspec/docs/sillyspec/modules/dashboard.changelog.md
+new file mode 100644
+index 00000000..6a83add7
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/dashboard.changelog.md
+@@ -0,0 +1,7 @@
++# dashboard 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/.sillyspec/docs/sillyspec/modules/redlines.changelog.md b/.sillyspec/docs/sillyspec/modules/redlines.changelog.md
+new file mode 100644
+index 00000000..f9e7ae71
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/redlines.changelog.md
+@@ -0,0 +1,7 @@
++# redlines 变更索引
++
++> 由 2026-10-09-graph-docrefs-noise 建立空索引（此前变更记录散在模块卡「变更历史」节）；新条目继续追加到本文件，勿写回模块卡。
++
++## 变更索引（表格，初始为空）
++| 日期 | 变更名 | 摘要 |
++|------|--------|------|
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index 4abe0832..892ba2b2 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -2208,9 +2208,15 @@ export function detectKnowledgeGraphIntegrity(cwd, specDir) {
+ 
+     // ②③ 引用/锚点悬空（中/强边）：文件系统存在性（跨仓目标聚合计数不展开）
+     const dangling = graphDangling(graph)
++    // 跨仓分流（2026-10-09-graph-docrefs-noise）：crossRepo 目标活在独立仓（backend/frontend 等），
++    // 计数注记不点名；本仓悬空点名样本。文档引用面的裸名短引用与跨仓引用在 graphDangling 已豁免。
+     const byStrength = { strong: [], medium: [], weak: [] }
+-    for (const d of dangling) byStrength[d.strength]?.push(`${d.edge.type}→${d.missing}`)
+-    if (byStrength.strong.length > 0) findings.push(`graph-dangling-anchor：${byStrength.strong.length} 条强边锚点指向本仓不存在文件（跨仓目标计入；样本 ${sample(byStrength.strong).join('、')}）`)
++    let crossRepoCount = 0
++    for (const d of dangling) {
++      if (d.crossRepo) { crossRepoCount++; continue }
++      byStrength[d.strength]?.push(`${d.edge.type}→${d.missing}`)
++    }
++    if (byStrength.strong.length > 0) findings.push(`graph-dangling-anchor：${byStrength.strong.length} 条强边锚点指向本仓不存在文件${crossRepoCount > 0 ? `（另有 ${crossRepoCount} 条跨仓目标不点名——平台代码在独立仓）` : ''}（样本 ${sample(byStrength.strong).join('、')}）`)
+     if (byStrength.medium.length > 0) findings.push(`graph-doc-dangling-ref：${byStrength.medium.length} 条文档引用悬空（样本 ${sample(byStrength.medium).join('、')}）`)
+ 
+     // ④ 孤儿条目
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index c5b997a0..4c523dd9 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -42,12 +42,16 @@ const ANCHOR_RE = /[\w./-]+\.(?:mjs|cjs|jsx|tsx|js|ts|py|go|java|rs|yaml|yml|jso
+ const posix = (p) => String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+ 
+ /** 文本中的代码路径 token 提取（doc-refs/scan-refs 采集器——中强度引用边）。
+- *  与 knowledge-match anchorFilePaths 同款剥法，但面向正文全量文本；cap 限边数防噪。 */
++ *  与 knowledge-match anchorFilePaths 同款剥法，但面向正文全量文本；cap 限边数防噪。
++ *  产物守卫（2026-10-09-graph-docrefs-noise）：剥 :line/:sym 后缀后的空串/纯数字丢弃
++ *  （`413.js` 形 token 剥出数字段、`.js` 裸扩展段——解析噪声不建边）。 */
+ function extractFilePaths(text, cap = 15) {
+   const raw = String(text || '').replace(/\r\n/g, '\n').match(ANCHOR_RE) || []
+   const out = []
+   for (const t of raw) {
+-    const p = posix(t.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, ''))
++    const stripped = t.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '').replace(/^\/+/, '')
++    if (!stripped || /^\d+$/.test(stripped) || stripped.startsWith('.')) continue
++    const p = posix(stripped)
+     if (p && !out.includes(p)) out.push(p)
+     if (out.length >= cap) break
+   }
+@@ -151,7 +155,10 @@ export function buildKnowledgeGraph(specRoot) {
+         else if ((m = line.match(/^取代链\s*[：:]\s*(.*)$/))) {
+           // 「FR-x-001, FR-x-002 ← 本条目（变更 承接）」——箭头左侧为被取代 id 列表
+           cur.supersedes = (m[1].split('←')[0].match(/FR-[A-Za-z0-9-]+-\d+/g) || [])
+-        } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) cur.tests.push(posix(m[1]))
++        } else if ((m = line.match(/^\s+tests\s*[：:]\s*([^\s「]+)/))) {
++          // 剥 #锚后缀（tests: test/x.test.mjs#① ——# 起是用例名注记非路径）
++          cur.tests.push(posix(m[1].replace(/#.*$/, '')))
++        }
+       }
+       flush()
+     }
+@@ -185,6 +192,8 @@ export function buildKnowledgeGraph(specRoot) {
+         const mid = `module:${modId}`
+         addNode(mid, 'module', modId, { project: proj.name })
+         for (const p of (mod.paths || []).map(posix)) {
++          // glob 形态（docs/** 等）不建边不判存在——模式非文件（2026-10-09-graph-docrefs-noise）
++          if (/[?*[{]/.test(p)) continue
+           addNode(p, 'file', p.endsWith('/') ? p : p.split('/').pop(), { isDir: p.endsWith('/') })
+           addEdge(mid, p, 'module-files')
+           modulePathIndex.push([mid, p])
+@@ -245,8 +254,13 @@ export function buildKnowledgeGraph(specRoot) {
+           const dir = join(archiveRoot, n.id)
+           const addFile = (f) => {
+             // 剥反引号与 NEW: 前缀（fr-index deliverableFilesFromDesignText 同款契约——29.4% 厚道条目带壳）
+-            const v = posix(String(f || '').replace(/^`+|`+$/g, '').replace(/^NEW:/, ''))
+-            if (!v || v.startsWith('.sillyspec/')) return
++            // + 尾部中文括号注记（`test/x.test.mjs`（或同名）形态）；glob 形态（docs/** 等）跳过——
++            // 模式非文件，存在性判定必假悬空（2026-10-09-graph-docrefs-noise）
++            const v = posix(String(f || '')
++              .replace(/^`+|`+$/g, '')
++              .replace(/^NEW:/, '')
++              .replace(/[（(][^（）()]*[）)]\s*$/, ''))
++            if (!v || v.startsWith('.sillyspec/') || /[?*[{]/.test(v)) return
+             addNode(v, 'file', v.split('/').pop())
+             addEdge(n.id, v, 'deliverables')
+             const mid = moduleOf(v)
+@@ -302,15 +316,23 @@ export function buildKnowledgeGraph(specRoot) {
+ export function parseChangelogEntries(content) {
+   const out = []
+   const seen = new Set()
+-  const push = (name) => {
+-    const n = String(name || '').trim().replace(/[（(]quick[）)]/, '').trim()
+-    if (!n || seen.has(n)) return
+-    if (/^ql-/.test(n) || /^\d{4}-\d{2}-\d{2}-/.test(n)) { seen.add(n); out.push(n) }
++  // 名字归一（2026-10-09-graph-docrefs-noise）：先剥尾括号段再验形态（（P2）/（quick）类注记后缀；
++  // 旧实现前缀校验放行了「日期名（P2）」整串——归档名查存在性必假悬空。变更名合法字符集不含括号，
++  // 剥离优先安全；仅当剥离后匹配日期/ql 形态才接受，原样形态兜底防误剥。
++  const push = (raw) => {
++    const raw0 = String(raw || '').trim()
++    const stripped = raw0.replace(/[（(][^（）()]*[）)]\s*$/, '').trim() || raw0
++    for (const n0 of [stripped, raw0]) {
++      const n = n0.replace(/[（(]quick[）)]/, '').trim()
++      if (!n || seen.has(n)) continue
++      if (/^ql-/.test(n) || /^\d{4}-\d{2}-\d{2}-/.test(n)) { seen.add(n); out.push(n); return }
++    }
+   }
+   for (const line of String(content || '').replace(/\r\n/g, '\n').split('\n')) {
+     let m
+     if ((m = line.match(/^\|\s*\d{4}-\d{2}-\d{2}\s*\|\s*([^|]+?)\s*\|/))) push(m[1]) // 表格行
+     else if ((m = line.match(/^-\s+(ql-[\w-]+|\d{4}-\d{2}-\d{2}-[\w.-]+)/))) push(m[1]) // 列表行
++    else if ((m = line.match(/^-\s+(.+?)\s*\|/))) push(m[1]) // 列表行带注记后缀（- 名（P2） | 摘要）
+     else if ((m = line.match(/^##\s+\d{4}-\d{2}-\d{2}\s*[—-]\s+.*[（(](\d{4}-\d{2}-\d{2}-[\w.-]+)(?:\s+task-\d+)?[）)]/))) push(m[1]) // 标题态（backend 主形态）
+   }
+   return out
+@@ -458,19 +480,38 @@ export function graphOrphans(graph) {
+ }
+ 
+ /** 悬空检测：路由/引用/锚点边指向不存在文件（doctor: graph-*-dangling-* 消费）。 */
++/**
++ * 悬空检测（doctor 消费）。口径（2026-10-09-graph-docrefs-noise 分层）：
++ *  - 文档引用面（doc-refs/scan-refs，中强度）：裸文件名（无 /）不判——文档短引用合法且
++ *    438 种裸名中 304 种多义不可盲连（config.py 各模块同名）；跨仓前缀（顶级目录本仓不存在，
++ *    如 backend/frontend——平台代码在独立仓）单独计 crossRepo 不计本仓悬空。
++ *  - 结构面（anchors/deliverables/test-binding/module-files，强边）：保持全判（跨仓目标
++ *    aggregated 计入——锚点是机器声明，跨仓也有对账价值），但顶级目录不存在时标 crossRepo
++ *    供 doctor 文案分流。
++ * 返回条目 { edge, missing, strength, crossRepo }。
++ */
+ export function graphDangling(graph, { existsFn = existsSync } = {}) {
+   const out = []
+   const rootDir = String(graph.root || '')
++  const topExists = (p) => {
++    const top = String(p).split('/')[0]
++    if (!top || top === '.') return true
++    return existsFn(join(rootDir, top)) || existsFn(top)
++  }
+   for (const e of graph.edges) {
+     if (!['route', 'doc-refs', 'scan-refs', 'anchors', 'deliverables', 'test-binding', 'module-files'].includes(e.type)) continue
+-    // 两端都在图中（建图保证）——悬空语义=目标文件在文件系统不存在
+     const t = graph.nodes.get(e.t)
+     const s = graph.nodes.get(e.s)
+     const target = t?.type === 'file' || t?.type === 'test' ? t : (s?.type === 'file' ? s : null)
+     if (!target) continue
+     if (target.attrs?.isDir) continue
+-    if (!existsFn(join(rootDir, target.id)) && !existsFn(target.id)) {
+-      out.push({ edge: e, missing: target.id, strength: EDGE_STRENGTH[e.type] })
++    const id = String(target.id)
++    const isDocRef = e.type === 'doc-refs' || e.type === 'scan-refs'
++    if (isDocRef && !id.includes('/')) continue // 裸文件名短引用：文档语境合法，不判悬空
++    const crossRepo = !topExists(id)
++    if (isDocRef && crossRepo) continue // 跨仓文档引用：目标活在独立仓，不计本仓悬空
++    if (!existsFn(join(rootDir, id)) && !existsFn(id)) {
++      out.push({ edge: e, missing: id, strength: EDGE_STRENGTH[e.type], crossRepo })
+     }
+   }
+   return out
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 380b6982..b77809d7 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -94,8 +94,12 @@ export function anchorFilePaths(anchor) {
+   if (!a || a === '未记录') return []
+   const out = new Set()
+   for (const token of a.match(ANCHOR_FILE_TOKEN_RE) || []) {
+-    const p = token.replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
+-    if (p) out.add(p)
++    // 前导斜杠剥除（2026-10-09-graph-docrefs-noise）：repo:// URL 被正则吃成 //sillyhub/... 碎片，
++    // 剥后 sillyhub/ 顶级由图侧按跨仓口径处理；纯数字/裸扩展段丢弃（解析噪声）
++    const p = token
++      .replace(/:(?:\d+(?:-\d+)?|[A-Za-z_$][A-Za-z0-9_$]*)$/, '')
++      .replace(/^\/+/, '')
++    if (p && !/^\d+$/.test(p)) out.add(p)
+   }
+   return [...out]
+ }
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index 3a8ac0f8..d188b5c5 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -383,13 +383,18 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/
+     // module_doc_gaps/changelog_danglings：helper 单一源 + 双 existsFn 态（2026-10-08-graph-summary-consistency）
+     assert.equal(s.module_doc_gaps, graphModuleDocGaps(g).length)
+     assert.deepEqual(graphChangelogDanglings(g, { existsFn: () => true }), [])
++    // 「顶级目录在、文件不在」判型（2026-10-09-graph-docrefs-noise）：全假 existsFn 会让一切
++    // 看起来像跨仓（topExists 全假→doc 引用全 skip），中桶断言需保 src/ 顶级在场
++    const sFilesGone = graphSummary(g, { existsFn: (p) => /(^|[\\/])src$/.test(String(p)) })
+     const sFalse = graphSummary(g, { existsFn: () => false })
+     // fixture changelog 目标：alpha（archive 在）+ beta（archive 在）+ ql（豁免）→ 全假存在性下日期名悬空=2
+     assert.equal(sFalse.changelog_danglings, graphChangelogDanglings(g, { existsFn: () => false }).length)
+     assert.equal(sFalse.changelog_danglings, 2)
+     // breakdown 与总数守恒：dangling_refs = strong_anchors + medium_doc_refs（doctor 两类之和口径）
+-    assert.equal(sFalse.dangling_refs, sFalse.dangling_refs_breakdown.strong_anchors + sFalse.dangling_refs_breakdown.medium_doc_refs)
+-    assert.ok(sFalse.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
++    assert.equal(sFilesGone.dangling_refs, sFilesGone.dangling_refs_breakdown.strong_anchors + sFilesGone.dangling_refs_breakdown.medium_doc_refs)
++    assert.ok(sFilesGone.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
++    // 跨仓口径：全假存在性下 doc 引用全按跨仓豁免 → 中桶归零（裸名+跨仓双豁免钉）
++    assert.equal(sFalse.dangling_refs_breakdown.medium_doc_refs, 0, '顶级全不在场=跨仓形态，文档引用不计本仓悬空')
+     // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
+     const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
+     try {
+diff --git a/.sillyspec/changes/2026-10-09-graph-docrefs-noise/design.md b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/design.md
+new file mode 100644
+index 00000000..00449f55
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/design.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:27:19.171Z
++---
++# 设计记录（Design Record）— 2026-10-09-graph-docrefs-noise
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/knowledge-graph.js | parseChangelogEntries 剥离优先归一；graphDangling 文档面双豁免（裸名/跨仓）+ crossRepo 标记；extractFilePaths 守卫（空/纯数字/前导斜杠/点段丢弃）；建图守卫（glob 跳过/tests 剥 #锚/deliverables 剥尾括号注记） |
++| 修改 | src/knowledge-match.js | anchorFilePaths 同款守卫（前导斜杠剥除+纯数字丢弃）——repo:// URL 碎片归跨仓口径 |
++| 修改 | src/doctor-diagnostics.js | graph-dangling-anchor 文案按 crossRepo 分流（本仓点名+跨仓聚合计数注记） |
++| 修改 | test/knowledge-graph.test.mjs | ⑧ 增跨仓双豁免断言（全假存在性中桶归零）；判型函数改「顶级在场文件不在」 |
++| 新增 | .sillyspec/docs/{backend,frontend,sillyhub-daemon,dashboard,multi-agent-platform,SillyHub,sillyspec}/modules/*.changelog.md ×64 | 空变更索引（标准头+空表，沿 core-engine.changelog.md 形态） |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++doctor graph-doc-dangling-ref 报 1439 条悬空，普查分层：813 裸文件名短引用（合法文档语境，438 种中 304 种多义不可盲连——悬空判定对它们不成立）+ ~260 跨仓目标（backend/frontend/sillyhub-daemon 前缀，平台代码在独立仓）+ 少量解析伪影（URL 前导斜杠碎片、纯数字段、glob 模式、#锚后缀、（P2）类注记）。修法全部在口径侧：graphDangling 文档面双豁免（裸名/跨仓）+ crossRepo 分流标记；两个提取器守卫收紧；changelog 名字归一改剥离优先（旧前缀校验放行「日期名（P2）」整串致假悬空）。降噪后真欠账水落石出：64 个"模块文档缺口"实查全为仅缺 changelog 索引（卡全在）——批量建 64 个空索引（机械合法，modules split-changelog 迁出机制既有形态）；13 条本仓强边悬空为真历史欠账（声明交付物从未落地/改名，如 docs/agent-provider-onboarding.md），advisory 点名留人工判，不伪造文件。选口径修复而非逐条清文档：伪影占 96%，先修秤再称重。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- graphDangling 返回条目增 crossRepo:boolean 字段（doctor 消费分流）；dangling 数值口径变化（文档面裸名/跨仓出域）——summary.dangling_refs/dangling_refs_breakdown 字段与「本仓+跨仓总和」语义不变，数值随之下降。
++- parseChangelogEntries/extractFilePaths/anchorFilePaths 为内部归一增强，签名零变化。
++- doctor graph-dangling-anchor 文案分流（本仓点名样本+跨仓计数注记）。
++- 64 个 changelog.md 为数据文件新增（模块卡配套索引，modules 机制既有格式）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   不适用：全部为解析/纯函数判定，无事件面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   只读判定无共享态；64 个 changelog 为一次性新增文件（git 管理，无覆盖面——已核对全部不存在才写）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   无状态（图随建随用）；文件写入为新建非改写，中断无半态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   跨仓判定锚本仓文件系统顶级目录存在性（纯本地事实）；同顶级名歧义（src/ 两仓都有）保留在 65 条 advisory 中不强行归跨仓——诚实呈现歧义而非猜。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：跨仓豁免把"真失效的跨仓引用"也隐掉（文档引用了平台仓某文件而该文件确已被删）——本仓无法核验独立仓文件系统，豁免是诚实的能力边界而非判断。缓解：crossRepo 计数仍注记（2446 条），平台仓侧若有同类检查可对账。次风险：64 个空 changelog 索引若模块实际有变更史（散在卡内「变更历史」节），空表欠信息——头部注明来源指引，后续 split-changelog 迁移时补。放弃的方案：裸名 basename 唯一消解连边（304/438 多义，盲连错边比不连更糟）；逐条修 1439 条文档引用（96% 是伪影，修秤优先于迁就坏秤）；为 13 条真欠账伪造占位文件（篡改交付语义，点名留人工判才对）。
+diff --git a/.sillyspec/changes/2026-10-09-graph-docrefs-noise/requirements.md b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/requirements.md
+new file mode 100644
+index 00000000..dda72abf
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/requirements.md
+@@ -0,0 +1,55 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:27:19.171Z
++---
++# 需求规格（Requirements）— 2026-10-09-graph-docrefs-noise
++
++## 功能需求
++
++### FR-01: parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
++
++- parseChangelogEntries 名字归一必须剥离优先（先剥尾括号段再验日期/ql 形态，原样形态兜底）；变更名合法字符集不含括号，剥离优先必须安全。
++
++#### 场景：后缀名
++
++- Given 表格行「2026-09-10-review-dispatch（P2）」；When 解析；Then 产出 2026-09-10-review-dispatch（去后缀），归档目录存在性判定不再假悬空——真图 changelog_danglings 归零。
++
++### FR-02: graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
++
++- graphDangling 对文档引用面（doc-refs/scan-refs）必须：裸文件名（无 /）不判悬空（短引用合法且多义不可盲连）；跨仓前缀（顶级目录本仓不存在）不计本仓悬空；结构面（强边）保持全判但必须带 crossRepo 标记供 doctor 分流（本仓点名样本、跨仓聚合计数）。
++
++#### 场景：真图降噪
++
++- Given 真图；When 复跑；Then doc/scan 悬空 1439→65（余为同顶级名歧义的跨仓相对路径与少量真失效引用，advisory 保留）；本仓强边悬空与跨仓计数分流呈现。
++
++### FR-03: extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
++
++- extractFilePaths/anchorFilePaths 剥 :line/:sym 与前导斜杠后的产物为空串/纯数字/裸点段时必须丢弃；repo:// URL 碎片（//sillyhub/...）剥后按跨仓口径处理。
++
++#### 场景：噪声守卫
++
++- Given 含 URL/glob/行号语料的文档；When 提取建边；Then 无空/数字/前导斜杠伪路径节点。
++
++### FR-04: 降噪后真图复跑：doc/scan 悬空降到真实数（本仓存在性可判的带路径引用）；平台侧 64 缺卡清单钉进 doctor 输出（已有 graph-module-doc-gap）并对其中本仓可产内容的部分（backend 14 张——scan STRUCTURE 目录职责表在场）补定位级卡片，跨仓不可产的（frontend/daemon 等源码不在本仓）留 doctor advisory 不伪造
++
++- 缺口实查（64 全仅缺 changelog 索引、卡全在）必须批量建 64 个 <module>.changelog.md 空索引（标准头+空表，沿 core-engine.changelog.md 形态）；建图守卫必须含 glob 路径跳过建边（module-files/deliverables）、tests 字段剥 #锚后缀、deliverables 剥尾部中文括号注记。
++
++#### 场景：双归零
++
++- Given 真图复跑；Then module_doc_gaps=0、changelog_danglings=0、本仓强边悬空 26→13（余为声明未落地的真历史欠账 advisory 点名）。
++
++### FR-05: 全量测试与 lint 零回归
++
++- 全量测试必须绿（test:core）、lint 必须零告警。
++
++#### 场景：回归面
++
++- Given 全部落盘；When 全量测试与 lint；Then 零失败零新告警。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/knowledge-graph.test.mjs「②坏行容忍：changelog 三态坏行与侧车缺省 fail-soft」（后缀剥除断言随同源 helper 钉）
++FR-02: test/knowledge-graph.test.mjs「⑧summary 聚合」（跨仓双豁免钉：全假存在性下中桶归零 + 顶级在场时中桶计断言）
++FR-03: test/knowledge-graph.test.mjs「①解析全形态」（提取守卫随建图断言面）
++FR-04: 真图终验（module_doc_gaps=0 / changelog_danglings=0 / 本仓强边 13 advisory 点名）+ 64 个 changelog 文件 diff 自证
++FR-05: test:core 325 全绿 + npm run lint 零告警（verify-runs 留档）
+diff --git a/.sillyspec/changes/2026-10-09-graph-docrefs-noise/tasks.md b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/tasks.md
+new file mode 100644
+index 00000000..4db07f19
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:27:19.171Z
++---
++# 任务注册表（Tasks）— 2026-10-09-graph-docrefs-noise
++
++- [x] task-01: parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
++- [x] task-02: graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
++- [x] task-03: extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
++- [x] task-04: 降噪后真图复跑 + 缺口实查处置：缺口实为「64 全仅缺 changelog 索引（卡全在）」→ 批量建 64 个 <module>.changelog.md 空索引（沿 core-engine.changelog.md 头形态）；建图守卫补齐（glob 路径不建边/tests 剥 #锚后缀/deliverables 剥尾部中文括号注记）——module_doc_gaps 与 changelog_danglings 双归零、本仓强边悬空 41→13（余为真历史欠账 advisory 点名）
++- [x] task-05: 全量测试与 lint 零回归
+diff --git a/.sillyspec/changes/2026-10-09-graph-docrefs-noise/proposal.md b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-graph-docrefs-noise/proposal.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:27:19.171Z
++---
++# 提案书（Proposal）— 2026-10-09-graph-docrefs-noise
++
++## 动机
++
++任务原话转写：知识图文档引用检查降噪 + 平台侧文档真欠账处置。
++
++动机与背景：
++doctor graph-doc-dangling-ref 报 1439 条悬空，普查实证大部分是检查口径伪影：①813 条裸文件名引用（config.py 实指 backend/app/core/config.py 类短引用）——文档语境合法，且 438 种裸名中 304 种多义不可盲连，悬空判定对它们不成立；②约 260 条跨仓目标（backend/frontend/sillyhub-daemon 前缀——平台代码在独立仓 multi-agent-platform，本仓无目录）；③changelog 悬空 1 条是（P2）后缀没剥的解析 bug；④提取器少量空/纯数字产物。修完后剩余才是真文档欠账：平台侧 64 张缺卡（backend 14/frontend 18/daemon 15 等）与本仓可核实的失效引用。
++
++成功标准：
++- parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
++- graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
++- extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
++- 降噪后真图复跑：doc/scan 悬空降到真实数（本仓存在性可判的带路径引用）；平台侧 64 缺卡清单钉进 doctor 输出（已有 graph-module-doc-gap）并对其中本仓可产内容的部分（backend 14 张——scan STRUCTURE 目录职责表在场）补定位级卡片，跨仓不可产的（frontend/daemon 等源码不在本仓）留 doctor advisory 不伪造
++- 全量测试与 lint 零回归
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
++2. graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
++3. extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
++4. 降噪后真图复跑：doc/scan 悬空降到真实数（本仓存在性可判的带路径引用）；平台侧 64 缺卡清单钉进 doctor 输出（已有 graph-module-doc-gap）并对其中本仓可产内容的部分（backend 14 张——scan STRUCTURE 目录职责表在场）补定位级卡片，跨仓不可产的（frontend/daemon 等源码不在本仓）留 doctor advisory 不伪造
++5. 全量测试与 lint 零回归
++
++## 成功标准（可验证）
++
++1. parseChangelogEntries 尾括号后缀剥除（（P2）类；仅当剥离后匹配日期/ql 形态才接受，防剥坏正常名）——changelog_danglings 归零
++2. graphDangling 文档引用面（doc-refs/scan-refs）口径修正：裸文件名（无 /）不判悬空；跨仓前缀（顶级目录本仓不存在）单独计跨仓引用不计本仓悬空；doctor 文案注记两类构成
++3. extractFilePaths/anchorFilePaths 剥后缀产物为空或纯数字时丢弃
++4. 降噪后真图复跑：doc/scan 悬空降到真实数（本仓存在性可判的带路径引用）；平台侧 64 缺卡清单钉进 doctor 输出（已有 graph-module-doc-gap）并对其中本仓可产内容的部分（backend 14 张——scan STRUCTURE 目录职责表在场）补定位级卡片，跨仓不可产的（frontend/daemon 等源码不在本仓）留 doctor advisory 不伪造
++5. 全量测试与 lint 零回归
