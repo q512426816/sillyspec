@@ -1,0 +1,47 @@
+{
+  "change": "2026-10-09-module-card-updated-at-iso",
+  "baseline": "ba0b5d1bf243b717af3a8ac13de70afa5a799d9a",
+  "head": "7cbdba1009a347093ab7be9d7d4309b86acd2c57",
+  "files": [
+    ".sillyspec/changes/2026-10-09-module-card-updated-at-iso/design.md",
+    ".sillyspec/changes/2026-10-09-module-card-updated-at-iso/flow-state.yaml",
+    ".sillyspec/changes/2026-10-09-module-card-updated-at-iso/proposal.md",
+    ".sillyspec/changes/2026-10-09-module-card-updated-at-iso/requirements.md",
+    ".sillyspec/changes/2026-10-09-module-card-updated-at-iso/tasks.md",
+    "src/module-impact.js",
+    "test/knife-batch2.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 171,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-09T04:27:35.721Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "f8c889d5eb736be073579e491b4e641f8824df6c216d1fb693be38f196710146",
+  "patchStatus": "ok"
+}

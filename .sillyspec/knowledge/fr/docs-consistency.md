@@ -777,3 +777,60 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-07-flow-friction-batch3
   status: active
+
+## FR-docs-consistency-037 syncModuleDocSidecars 戳的卡 updated_at 为全量 ISO（toISOString()，带 Z），瞬间正确（解析值=真实写入时刻），不再拼硬编码偏移
+变更：2026-10-09-module-card-updated-at-iso
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-module-card-updated-at-iso/requirements.md#FR-01
+最近确认：7cbdba1009a347093ab7be9d7d4309b86acd2c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-01
+  tests: test/knife-batch2.test.mjs「syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-module-card-updated-at-iso
+  status: active
+
+## FR-docs-consistency-038 回归测试：同步后卡 updated_at 经 Date.parse 落在同步前后时刻窗内（旧实现恒偏 8h 必出窗）
+变更：2026-10-09-module-card-updated-at-iso
+状态：active
+摘要：时区拼接回归被拦
+全文：.sillyspec/changes/archive/2026-10-09-module-card-updated-at-iso/requirements.md#FR-02
+最近确认：7cbdba1009a347093ab7be9d7d4309b86acd2c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-02
+  tests: test/knife-batch2.test.mjs「syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-module-card-updated-at-iso
+  status: active
+
+## FR-docs-consistency-039 既有 module-docs-sync 测试面（knife-batch2.test.mjs 等）全绿
+变更：2026-10-09-module-card-updated-at-iso
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-module-card-updated-at-iso/requirements.md#FR-03
+最近确认：7cbdba1009a347093ab7be9d7d4309b86acd2c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-03
+  tests: test/knife-batch2.test.mjs | test/r4-followup-fixes.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-module-card-updated-at-iso
+  status: active

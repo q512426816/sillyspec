@@ -1,0 +1,37 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "ba0b5d1bf243b717af3a8ac13de70afa5a799d9a",
+  "totals": {
+    "files": 2,
+    "additions": 13,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": "src/module-impact.js",
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/knife-batch2.test.mjs",
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "f8c889d5eb736be073579e491b4e641f8824df6c216d1fb693be38f196710146",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-09T04:27:35.721Z"
+}

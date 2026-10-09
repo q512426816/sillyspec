@@ -1,0 +1,21 @@
+{"ts":1791519883440,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791519883440,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791519908829,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791519910079,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791519910079,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791519910079,"kind":"commit","stage":null,"detail":"875c5217","provisional":true}
+{"ts":1791519933889,"kind":"commit","stage":null,"detail":"5527b26d","provisional":true}
+{"ts":1791519957223,"kind":"commit","stage":null,"detail":"8ee4a719","provisional":true}
+{"ts":1791519957410,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/knife-batch2.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791519996555,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791519996800,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791519996634,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791519996634,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791519996634,"kind":"commit","stage":null,"detail":"9c41464c","provisional":true}
+{"ts":1791520000382,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791520000382,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791520000382,"kind":"commit","stage":null,"detail":"7cbdba10","provisional":true}
+{"ts":1791520004124,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-09-module-card-updated-at-iso/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791520007211,"kind":"gate-run","stage":"verify","detail":"门实测 passed（1.5s） · 20261009042646","provisional":true}
+{"ts":1791520056337,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1791520056337,"kind":"file","stage":"verify","detail":"verify-result.md 出现","provisional":true}

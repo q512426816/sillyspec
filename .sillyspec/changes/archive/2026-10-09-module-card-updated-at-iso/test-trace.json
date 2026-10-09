@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-module-card-updated-at-iso",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-01",
+      "tests": [
+        "test/knife-batch2.test.mjs「syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-module-card-updated-at-iso"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-02",
+      "tests": [
+        "test/knife-batch2.test.mjs「syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-module-card-updated-at-iso"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-module-card-updated-at-iso:flow:测试绑定FR-03",
+      "tests": [
+        "test/knife-batch2.test.mjs",
+        "test/r4-followup-fixes.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-module-card-updated-at-iso"
+    }
+  ]
+}
