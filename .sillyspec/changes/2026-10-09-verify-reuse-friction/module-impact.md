@@ -40,10 +40,10 @@
 
 | 目标 | 操作 | 状态 |
 |------|------|------|
-| `modules/cli-entry.md` | 更新cli-entry模块卡（本次变更涉及） | pending |
-| `modules/core-engine.md` | 更新core-engine模块卡（本次变更涉及） | pending |
-| `modules/runtime.md` | 更新runtime模块卡（本次变更涉及） | pending |
-| `modules/worktree.md` | 更新worktree模块卡（本次变更涉及） | pending |
-| `_module-map.yaml` | <!--TODO: 有未匹配文件，判定模块索引是否需增改（modules rebuild）--> | pending |
+| `modules/cli-entry.md` | 更新cli-entry模块卡（本次变更涉及） | done |
+| `modules/core-engine.md` | 更新core-engine模块卡（本次变更涉及） | done |
+| `modules/runtime.md` | 更新runtime模块卡（本次变更涉及） | done |
+| `modules/worktree.md` | 更新worktree模块卡（本次变更涉及） | done |
+| `_module-map.yaml` | <!--TODO: 有未匹配文件，判定模块索引是否需增改（modules rebuild）--> | done |
 
 规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。

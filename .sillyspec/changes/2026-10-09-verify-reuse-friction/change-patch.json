@@ -1,0 +1,224 @@
+{
+  "change": "2026-10-09-verify-reuse-friction",
+  "baseline": "head-uncommitted-window",
+  "head": "39600c2940425a04a3d942e010e890f5ef205fad",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/index.js",
+    "src/verify-postcheck.js",
+    "src/wt-commit.js",
+    "test/wt-commit-crossrepo-infer.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 81,
+    "deletions": 28
+  },
+  "savedAt": "2026-10-09T12:09:47.769Z",
+  "note": "execute --done 时点冻结（沉淀资产面：主仓实改行投影——thin flow done 对等；治理工件目录与其后 verify/archive 演进不在内）",
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "head-uncommitted-window",
+    "totals": {
+      "files": 23,
+      "additions": 81,
+      "deletions": 28
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 5,
+        "deletions": 21,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/wt-commit.js",
+        "additions": 42,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/wt-commit-crossrepo-infer.test.mjs",
+        "additions": 25,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "NEW:src/run/code-face-key.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/run/green-cache.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/run/gate-snapshot.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/run/gates.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/friction-tally.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/test-bindings.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/cross-repo-reconcile.js",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/verify-quality-scan-reuse-actual-scope.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/gates-snapshot-fallback-visibility.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/code-face-key-doc-commit-survival.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/verify-test-result-reuse-observability.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/gates-verify-cheap-gates-first.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/test-bindings-crossrepo-row-resolution.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "NEW:test/cross-repo-reconcile-baseline-anchor.test.mjs",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/*.md 与 *.changelog.md",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "execute --done 时点冻结（本文件落盘时采集）",
+    "closedBy": "execute --done"
+  },
+  "patchSha256": "3f59b830752d1cacbebf9a3f74b9db99655cb7dac1188323c1a6757e790061be",
+  "patchStatus": "ok"
+}

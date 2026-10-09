@@ -1,0 +1,178 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 36fd3942..9d19189b 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -42,4 +42,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-09-21-r5-efficiency-batch2 | M1 指令指纹增量（run/prompt.js：静态段 sha256 指纹+落盘 step-guides+复入短输出，动态段永不缓存；v1 SILLYSPEC_STEP_GUIDE=1 显式开，D-001@v1）+ M2 gate 快照分叉态取 worktree 血统（gate-snapshot.js 仅③态翻转+警告对齐指引，①②态逐字节不动；batch1 假红根治，三态钉 gate-snapshot-lineage + verify-gate-snapshot 端到端复刻，D-002@v2）。
+ - 2026-09-21-r5-efficiency-batch3 | P2 测试结果记账（test-ledger 三键指纹 fail-closed+verify-test/quick 实测门双消费，账本自排除防自毁键）/ P3 归档就绪度（buildArchiveReadinessReport 纯函数+verify 收尾渲染：面探测+双草拟待确认+老化强提示）/ P4 M1 缺省开（STEP_GUIDE 未设=开，=0 逃生门，测试族迁移）。
+ - 2026-09-24-gate-snapshot-lifecycle | 门禁快照生命周期根治：账本（create 登记/双清确认后销账，active-gate-snapshots.json 原子写幂等）+ fail-closed 双守卫（isSafeSnapshotRoot 路径 / isSafeLedgerEntry 结构，账本可篡改故删除前必过）+ TTL(24h/env)×pid 三态保守判定 + 下个 create 前 best-effort 自愈回收（空结果零输出）+ createGateSnapshot 显式 runtimeRoot 形参（quick/verify 透传，禁 cwd 猜）+ doctor gate_snapshot_leak 维度（warning 级，阈值 env/24h 单源、零新增参数面）+ cleanupSnapshot 可注入清理体（rmSync 重试+非法 --quiet flag 修正+remove 失败补 prune）；实证根因：旧 cleanup 的 `git worktree remove --quiet` 非法 flag 致 remove 恒失败+rmSync 无重试+被杀无 cleanup，攒出 41 目录+2 prunable；测试 gate-snapshot-lifecycle（24 例含真实临时仓 create→cleanup/崩溃自愈/活跃零误删）+ gate-snapshot-cleanup（故障注入 4 例），均入 test:core。
+-- 2026-10-09-verify-reuse-friction | verify 复用链路四修（multi-agent-platform tombstone 72min/13轮取证驱动）：①快照口径死循环断根（D-003@v1）——executeVerifyQualityScan 两复用闸（passed幂等/failed签名去重）移到快照创建后按实际口径 Boolean(snap) 判定，快照慢性失败 false==false 收敛命中（原计划口径恒失配 4 轮纯浪费）；②快照回退高可见（FR-02）——gate-snapshot 新增 reportGateSnapshotFallback（⚠️ 告警块+gate_snapshot_fallback 摩擦事件，null/异常同覆盖；gates.js 与质量扫描两调用点，测试 mock 缺导出防御）；③指纹代码树内容键化（D-002@v1）——新模块 run/code-face-key.js（filterCodePorcelain 迁入+isNonCodePath 单点+computeCodeTreeKey：git ls-tree -r -z 过滤哈希，整树 oid 快路径），green-cache 与质量扫描两指纹 HEAD 分量替换为树键——纯文档提交不击穿、代码提交必击穿；④复用观测落盘（FR-04）——真跑轮 test-result.json 携 fingerprint/reuse_decision，复用命中轮落 verify-runs/reuse-decisions-<change>.jsonl，质量扫描记录携 miss_reason/scope_decision；⑤纯事实门前移（D-004@v1）——required-evidence 与 target_files 对账门移到实测门前并入 R16 聚合（②类声明缺失秒级失败零测试执行；reconcileRuntimeRoot/isStrictCheck 提升补作用域）。新测试 7 文件：reuse-actual-scope/snapshot-fallback-visibility/code-face-key-doc-commit-survival/verify-test-result-reuse-observability/gates-verify-cheap-gates-first。
++- 2026-10-09-verify-reuse-friction | verify 复用链路四修（multi-agent-platform tombstone 72min/13轮取证驱动）：①快照口径死循环断根（D-003@v1）——executeVerifyQualityScan 两复用闸（passed幂等/failed签名去重）移到快照创建后按实际口径 Boolean(snap) 判定，快照慢性失败 false==false 收敛命中（原计划口径恒失配 4 轮纯浪费）；②快照回退高可见（FR-02）——gate-snapshot 新增 reportGateSnapshotFallback（⚠️ 告警块+gate_snapshot_fallback 摩擦事件，null/异常同覆盖；gates.js 与质量扫描两调用点，测试 mock 缺导出防御）；③指纹代码树内容键化（D-002@v1）——新模块 run/code-face-key.js（filterCodePorcelain 迁入+isNonCodePath 单点+computeCodeTreeKey：git ls-tree -r -z 过滤哈希，整树 oid 快路径），green-cache 与质量扫描两指纹 HEAD 分量替换为树键——纯文档提交不击穿、代码提交必击穿；④复用观测落盘（FR-04）——真跑轮 test-result.json 携 fingerprint/reuse_decision，复用命中轮落 verify-runs/reuse-decisions-<change>.jsonl，质量扫描记录携 miss_reason/scope_decision；⑤纯事实门前移（D-004@v1）——required-evidence 与 target_files 对账门移到实测门前并入 R16 聚合（②类声明缺失秒级失败零测试执行；reconcileRuntimeRoot/isStrictCheck 提升补作用域）。新测试 5 文件（本模块面）：reuse-actual-scope / snapshot-fallback-visibility / code-face-key-doc-commit-survival / verify-test-result-reuse-observability / gates-verify-cheap-gates-first（全变更新增 8 个，另 3 个见 core-engine/cli-entry 卡）。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index c3082838..81b51b2d 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2132/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4375；shared.js:1022 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4359；shared.js:1022 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2862/3141；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4295；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4247；sync.js:2232 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4279；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4231；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4061/4072；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4045/4072；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4157`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4141`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index cf1fda62..dc29484f 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3374,27 +3374,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         else if (wtCommitFlags[i] === '--pathspec-from-file' && wtCommitFlags[i + 1]) wtCommitPathspecFile = wtCommitFlags[++i];
+       }
+       if (!wtCommitChange) {
+-        const inferred = String(dir).match(/[\\/]worktrees[\\/]([^\\/]+)/);
+-        let seg = inferred ? inferred[1] : null;
+-        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 worktree 名
+-        // <change>--<repoKey>——仅当后缀命中 repos 注册表才剥（不猜切分）；二级校验：
+-        // 全段命中主仓已知变更目录不剥（防变更真名恰以 --repoKey 结尾），剥出候选也须
+-        // 是已知变更。均不中 → 原样透传（现状行为，runWtCommit 自然报错引导显式 --change）。
+-        if (seg && seg.includes('--')) {
+-          try {
+-            const specBaseGuess = join(dir, '..', '..', '..')
+-            const knownWhole = existsSync(join(specBaseGuess, 'changes', seg))
+-            const dash = seg.lastIndexOf('--')
+-            const cand = seg.slice(0, dash)
+-            const suffix = seg.slice(dash + 2)
+-            if (!knownWhole && cand && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
+-              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+-              const reg = parseRepoRegistry(readFileSync(join(specBaseGuess, 'local.yaml'), 'utf8'))
+-              if (reg.has(suffix) && existsSync(join(specBaseGuess, 'changes', cand))) seg = cand
+-            }
+-          } catch { /* 注册表不可读 → 原样透传（fail-safe） */ }
+-        }
+-        wtCommitChange = seg;
++        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 <change>--<repoKey>
++        // 注册表校验剥后缀——逻辑单点在 wt-commit.js（导出 inferChangeFromWorktreeCwd
++        // 供三态回归直测，index.js dispatch 不留内联逻辑）
++        const { inferChangeFromWorktreeCwd } = await import('./wt-commit.js')
++        wtCommitChange = await inferChangeFromWorktreeCwd(dir)
+       }
+       try {
+         const { runWtCommit } = await import('./wt-commit.js');
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index c4984606..c6cbc4f3 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -1893,7 +1893,9 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+           const d1 = gitQuiet(wtPath, ['diff', '--name-only', base])
+           const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'])
+           const mergedWt = [...new Set(String(d1 || '').split(String.fromCharCode(10)).concat(String(d2 || '').split(String.fromCharCode(10))))].map(x => x.trim()).filter(x => x && x !== 'meta.json' && !x.startsWith('.sillyspec/'))
+-          files = mergedWt.length > 0 || d1 !== null || d2 !== null ? mergedWt : []
++          // 与 cross-repo-reconcile B' 档同语义：双查皆失败（d1/d2 双 null）→ 不成窗，
++          // files 保持 null 回退 HEAD~1..HEAD（低报不如口径如实降级）
++          if (d1 !== null || d2 !== null) files = mergedWt
+         }
+       }
+     } catch { /* 回退 HEAD~1..HEAD */ }
+diff --git a/src/wt-commit.js b/src/wt-commit.js
+index d34b4bb8..d0d6d4a4 100644
+--- a/src/wt-commit.js
++++ b/src/wt-commit.js
+@@ -55,6 +55,48 @@ async function gitWithLockRetry(cwd, args, label, { retries = 6, waitMs = 1000 }
+  * @returns {Promise<{ok:boolean,skipped:boolean,head:string,shortHead:string,worktreePath:string,changeName:string,files:string[]}>}
+  *   ok=false 时抛错（调用方打错误 + exit 1），skipped=无变更可提交（HEAD 不动，不算失败）。
+  */
++/**
++ * 从 cwd 推断变更名（wt-commit 免 --change 通道；FR-08 / D-006@v1）。
++ * 跨仓 worktree 名 <change>--<repoKey>——仅当后缀命中 repos 注册表（worktrees 上两级
++ * local.yaml）且剥出候选是已知变更目录才剥（不猜切分）；全段命中主仓已知变更不剥（防
++ * 变更真名恰以 --repoKey 结尾）；均不中 → 原样透传（现状行为，调用方自然报错引导
++ * 显式 --change）。导出供三态回归直测（index.js dispatch 内联形态不可测——独立审查指出的
++ * 验证面缺口）。
++ */
++export async function inferChangeFromWorktreeCwd(dir) {
++  // 深路径归一（FR-08）：cwd 可能在 worktree 内多层深处——specBase 推导须从 worktree 根起算。
++  // 找 'worktrees' 目录段在原路径中的位置，根 = 该段后第一段截尾；specBaseGuess = 根上溯
++  // 三级（worktrees → .runtime → .sillyspec 的父，即主仓 specBase）。
++  const s = String(dir)
++  const norm = s.split('\\').join('/')
++  const wtIdx = norm.lastIndexOf('/worktrees/')
++  let seg = null
++  let specBaseGuess = null
++  if (wtIdx !== -1) {
++    const rest = norm.slice(wtIdx + '/worktrees/'.length)
++    const rootRel = rest.split('/')[0]
++    seg = rootRel || null
++    const rootNorm = norm.slice(0, wtIdx + '/worktrees/'.length + rootRel.length)
++    specBaseGuess = rootNorm.split('/').slice(0, -3).join('/')
++  }
++  if (seg && seg.includes('--')) {
++    try {
++      if (specBaseGuess) {
++        const knownWhole = existsSync(join(specBaseGuess, 'changes', seg))
++        const dash = seg.lastIndexOf('--')
++        const cand = seg.slice(0, dash)
++        const suffix = seg.slice(dash + 2)
++        if (!knownWhole && cand && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
++          const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
++          const reg = parseRepoRegistry(readFileSync(join(specBaseGuess, 'local.yaml'), 'utf8'))
++          if (reg.has(suffix) && existsSync(join(specBaseGuess, 'changes', cand))) seg = cand
++        }
++      }
++    } catch { /* 注册表不可读 → 原样透传（fail-safe） */ }
++  }
++  return seg
++}
++
+ export async function runWtCommit({ changeName, message, pathspecs = [], pathspecFile = null, cwd = process.cwd() }) {
+   if (!changeName) throw new Error('缺少 --change <变更名>（worktree 名；在 worktree 内运行时可省略，CLI 从 cwd 推断）')
+   if (!message || !message.trim()) throw new Error('缺少 -m/--message <提交信息>（建议 "<task-NN 摘要>"）')
+diff --git a/test/wt-commit-crossrepo-infer.test.mjs b/test/wt-commit-crossrepo-infer.test.mjs
+index c746539b..c9c14d88 100644
+--- a/test/wt-commit-crossrepo-infer.test.mjs
++++ b/test/wt-commit-crossrepo-infer.test.mjs
+@@ -78,3 +78,28 @@ test('runWtCommit：cwd 不属于本变更的 worktree（他变更目录）→ 
+     try { rmSync(f.cross, { recursive: true, force: true }) } catch {}
+   }
+ })
++
++test('推断三态：注册 repoKey 剥后缀 / 全段命中已知变更不剥 / 未注册不剥（D-006@v1 直测）', async () => {
++  const { inferChangeFromWorktreeCwd } = await import('../src/wt-commit.js')
++  const main = mkdtempSync(join(tmpdir(), 'wtci3-main-'))
++  const cross = mkdtempSync(join(tmpdir(), 'wtci3-cross-'))
++  try {
++    const specBase = join(main, '.sillyspec')
++    mkdirSync(join(specBase, 'changes', '2026-10-09-x', 'tasks'), { recursive: true })
++    // 真实同名陷阱：变更真名恰以 --crossrepo 结尾
++    mkdirSync(join(specBase, 'changes', '2026-10-09-y--crossrepo'), { recursive: true })
++    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-x--crossrepo', 'deep'), { recursive: true })
++    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-y--crossrepo'), { recursive: true })
++    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-z--unknownrepo'), { recursive: true })
++    writeFileSync(join(specBase, 'local.yaml'), 'repos:' + '\n' + '  crossrepo: ' + (isAbsolute(cross) ? cross.split('\\').join('/') : cross) + '\n')
++    // ① 注册 repoKey + 剥出候选是已知变更 → 剥
++    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-x--crossrepo', 'deep', 'file.js')), '2026-10-09-x', '注册后缀剥除（深路径也命中——推断按目录段不问深度）')
++    // ② 全段命中已知变更（变更真名恰含 --crossrepo）→ 不剥
++    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-y--crossrepo', 'f.js')), '2026-10-09-y--crossrepo', '全段命中已知变更不剥（防真名误拆）')
++    // ③ 后缀未注册 → 不剥（原样透传）
++    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-z--unknownrepo', 'f.js')), '2026-10-09-z--unknownrepo', '未注册后缀不剥（现状透传，调用方自然报错引导显式 --change）')
++  } finally {
++    try { rmSync(main, { recursive: true, force: true }) } catch {}
++    try { rmSync(cross, { recursive: true, force: true }) } catch {}
++  }
++})

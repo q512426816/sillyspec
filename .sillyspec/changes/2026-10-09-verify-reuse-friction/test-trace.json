@@ -1,0 +1,559 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-verify-reuse-friction",
+  "rows": [
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-01:acc-0-16442c82",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/verify-quality-scan-reuse-actual-scope.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-01:acc-1-68112fa6",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/verify-quality-scan-reuse-actual-scope.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-01:acc-2-e5e18a66",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/verify-quality-scan-reuse-actual-scope.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-02:acc-0-845f8694",
+      "tests": [
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-02:acc-1-3d564bfa",
+      "tests": [
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-02:acc-2-73c5bc23",
+      "tests": [
+        "test/gates-snapshot-fallback-visibility.test.mjs",
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-03:acc-0-d44341c9",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-03:acc-1-c3c998ad",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-03:acc-2-3e31b257",
+      "tests": [
+        "test/code-face-key-doc-commit-survival.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-04:acc-0-a0fe68fe",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-04:acc-1-9c231087",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-04:acc-2-04bc7c01",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs",
+        "test/verify-test-result-reuse-observability.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-05:acc-0-bcc488b5",
+      "tests": [
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-05:acc-1-1889c131",
+      "tests": [
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-05:acc-2-101e9e45",
+      "tests": [
+        "test/gates-verify-cheap-gates-first.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-06:acc-0-6a31e066",
+      "tests": [
+        "src/test-bindings.js",
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-06:acc-1-4c0f358c",
+      "tests": [
+        "src/test-bindings.js",
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-06:acc-2-fba16de8",
+      "tests": [
+        "src/test-bindings.js",
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs",
+        "test/test-bindings-crossrepo-row-resolution.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-07:acc-0-83ca3687",
+      "tests": [
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-07:acc-1-8bb14fce",
+      "tests": [
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-07:acc-2-f99ca2bb",
+      "tests": [
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-08:acc-0-2e241cb8",
+      "tests": [
+        "test/wt-commit-crossrepo-infer.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-08:acc-1-8bb20c84",
+      "tests": [
+        "test/wt-commit-crossrepo-infer.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-08:acc-2-b7938e5d",
+      "tests": [
+        "test/wt-commit-crossrepo-infer.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-08:acc-3-f99ca2bb",
+      "tests": [
+        "test/wt-commit-crossrepo-infer.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-09:acc-0-37f66029",
+      "tests": [
+        "test/align-execute-review-gate.test.mjs",
+        "test/archive-cli-git-add.test.mjs",
+        "test/archive-commit-suggest-race.test.mjs",
+        "test/archive-stage-claim.test.mjs",
+        "test/archive-timeline-bake.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/batch-tick-gate.test.mjs",
+        "test/bind-unbind-help.test.mjs",
+        "test/change-name-date-gate.test.mjs",
+        "test/check-syntax.mjs",
+        "test/confirm-on-use.test.mjs",
+        "test/deps-cwd-prefix.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/dynamic-test-inference.test.mjs",
+        "test/execute-batch-endtoend-checkbox.test.mjs",
+        "test/execute-run-dir-fail-loud.test.mjs",
+        "test/execute-run-marker-drift.test.mjs",
+        "test/execution-mode-render.test.mjs",
+        "test/filter-committed-face.test.mjs",
+        "test/flow-done-fail-brief.test.mjs",
+        "test/flow-draft-binding-extract.test.mjs",
+        "test/flow-draft.test.mjs",
+        "test/flow-protocol.test.mjs",
+        "test/flow-review.test.mjs",
+        "test/flow-route.test.mjs",
+        "test/flow-status-json.test.mjs",
+        "test/flow-tail-polish.test.mjs",
+        "test/flow-tick-prototype.test.mjs",
+        "test/flowdone-lint-fail-output.test.mjs",
+        "test/fourpiece-init.test.mjs",
+        "test/fr-compound-split.test.mjs",
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs",
+        "test/fr-priority-overlap.test.mjs",
+        "test/fr-regress-cap-drop.test.mjs",
+        "test/gate-snapshot-layout-guard.test.mjs",
+        "test/governance-autopilot.test.mjs",
+        "test/input-format-copy.test.mjs",
+        "test/input-teach-copyable.test.mjs",
+        "test/plan-target-files.test.mjs",
+        "test/reconcile-source-isolation.test.mjs",
+        "test/redomain.test.mjs",
+        "test/residual-runner-parity.test.mjs",
+        "test/review-json-field-gate.test.mjs",
+        "test/review-unsupervised-exit.test.mjs",
+        "test/run-complete-noai-done-gate.test.mjs",
+        "test/run-complete-step-execute-batch.test.mjs",
+        "test/run-tests.mjs",
+        "test/skeleton-provenance.test.mjs",
+        "test/stage-completion-atomicity.test.mjs",
+        "test/status-empty-guide.test.mjs",
+        "test/tap-judge.test.mjs",
+        "test/task-done.test.mjs",
+        "test/task-review-retire.test.mjs",
+        "test/task-tick.test.mjs",
+        "test/task-truth-unify.test.mjs",
+        "test/thin-done-dirty-gate.test.mjs",
+        "test/tick-loop-nudge.test.mjs",
+        "test/verify-gate-restrict-source.test.mjs",
+        "test/verify-gate-restrictfiles.test.mjs",
+        "test/verify-postcheck-known-failures.test.mjs",
+        "test/watcher-timeline.test.mjs",
+        "test/watcher.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    },
+    {
+      "anchor": null,
+      "row_id": "2026-10-09-verify-reuse-friction:task-09:acc-1-25eb7195",
+      "tests": [
+        "test/align-execute-review-gate.test.mjs",
+        "test/archive-cli-git-add.test.mjs",
+        "test/archive-commit-suggest-race.test.mjs",
+        "test/archive-stage-claim.test.mjs",
+        "test/archive-timeline-bake.test.mjs",
+        "test/backfill-reviews.test.mjs",
+        "test/batch-tick-gate.test.mjs",
+        "test/bind-unbind-help.test.mjs",
+        "test/change-name-date-gate.test.mjs",
+        "test/check-syntax.mjs",
+        "test/confirm-on-use.test.mjs",
+        "test/deps-cwd-prefix.test.mjs",
+        "test/dispatch-contract.test.mjs",
+        "test/doc-ref-check.test.mjs",
+        "test/dynamic-test-inference.test.mjs",
+        "test/execute-batch-endtoend-checkbox.test.mjs",
+        "test/execute-run-dir-fail-loud.test.mjs",
+        "test/execute-run-marker-drift.test.mjs",
+        "test/execution-mode-render.test.mjs",
+        "test/filter-committed-face.test.mjs",
+        "test/flow-done-fail-brief.test.mjs",
+        "test/flow-draft-binding-extract.test.mjs",
+        "test/flow-draft.test.mjs",
+        "test/flow-protocol.test.mjs",
+        "test/flow-review.test.mjs",
+        "test/flow-route.test.mjs",
+        "test/flow-status-json.test.mjs",
+        "test/flow-tail-polish.test.mjs",
+        "test/flow-tick-prototype.test.mjs",
+        "test/flowdone-lint-fail-output.test.mjs",
+        "test/fourpiece-init.test.mjs",
+        "test/fr-compound-split.test.mjs",
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs",
+        "test/fr-priority-overlap.test.mjs",
+        "test/fr-regress-cap-drop.test.mjs",
+        "test/gate-snapshot-layout-guard.test.mjs",
+        "test/governance-autopilot.test.mjs",
+        "test/input-format-copy.test.mjs",
+        "test/input-teach-copyable.test.mjs",
+        "test/plan-target-files.test.mjs",
+        "test/reconcile-source-isolation.test.mjs",
+        "test/redomain.test.mjs",
+        "test/residual-runner-parity.test.mjs",
+        "test/review-json-field-gate.test.mjs",
+        "test/review-unsupervised-exit.test.mjs",
+        "test/run-complete-noai-done-gate.test.mjs",
+        "test/run-complete-step-execute-batch.test.mjs",
+        "test/run-tests.mjs",
+        "test/skeleton-provenance.test.mjs",
+        "test/stage-completion-atomicity.test.mjs",
+        "test/status-empty-guide.test.mjs",
+        "test/tap-judge.test.mjs",
+        "test/task-done.test.mjs",
+        "test/task-review-retire.test.mjs",
+        "test/task-tick.test.mjs",
+        "test/task-truth-unify.test.mjs",
+        "test/thin-done-dirty-gate.test.mjs",
+        "test/tick-loop-nudge.test.mjs",
+        "test/verify-gate-restrict-source.test.mjs",
+        "test/verify-gate-restrictfiles.test.mjs",
+        "test/verify-postcheck-known-failures.test.mjs",
+        "test/watcher-timeline.test.mjs",
+        "test/watcher.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-verify-reuse-friction"
+    }
+  ]
+}
