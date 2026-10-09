@@ -17,7 +17,7 @@
  *
  * 成功返回 HEAD hash（review.json 的 head 锚点直接可用）；无变更 → ok=true + skipped。
  */
-import { join, resolve } from 'node:path'
+import { join, resolve, relative, sep, basename, dirname } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { withFileLock } from './quicklog.js'
 import { safeGit } from './git-helper.js'
@@ -77,10 +77,47 @@ export async function runWtCommit({ changeName, message, pathspecs = [], pathspe
   // 隔离模式（worktree 目录存在）→ 提交目标 = worktree 本体；in-place-fallback（meta 声明无
   // worktree 直改主仓）→ 主仓根（与 MultiRepoContext 主仓 entry 的 worktreePath 兜底口径一致）。
   // 顺序先看目录再看 meta：worktree 目录存在即隔离态，meta 缺失/损坏不改变目标（fail-safe）。
+  // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：cwd 已在本变更的 worktree 内 →
+  // 提交目标=该 worktree 本体。跨仓 worktree 名 <change>--<repoKey> 不在 getWorktreePath
+  // 的主仓命名域（原路径必落「worktree 不存在」错）；主仓 worktree 场景与原值同目录零漂移。
+  // 归属校验（不猜）：worktree 根段 === changeName，或 === changeName--<注册repoKey>（repos
+  // 注册表读自 worktreeBase 上两级的 local.yaml；注册表不可读 → 只认精确名，fail-safe）。
   let target = null
-  if (existsSync(worktreePath)) {
+  {
+    // 基座发现（目录事实）：优先 wm.worktreeBase（主仓）；cwd 不在其下时向上找名为 worktrees
+    // 的目录作基座（跨仓 worktree 是跨仓仓的 git worktree，WorktreeManager 从其 cwd 算不出
+    // 主仓基座——跨仓 worktree 的父目录本身就是 worktrees 基座）。
+    let base = resolve(wm.worktreeBase)
+    {
+      let d = resolve(cwd)
+      for (;;) {
+        if (dirname(d) === base) break
+        const parent = dirname(d)
+        if (basename(parent) === 'worktrees') { base = parent; break }
+        if (parent === d) break
+        d = parent
+      }
+    }
+    const cwdAbs = resolve(cwd)
+    if (cwdAbs.startsWith(base + sep)) {
+      const wtRoot = relative(base, cwdAbs).split(sep)[0]
+      let own = wtRoot === changeName
+      if (!own && wtRoot.startsWith(changeName + '--')) {
+        const suffix = wtRoot.slice(changeName.length + 2)
+        if (suffix && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
+          try {
+            const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+            const reg = parseRepoRegistry(readFileSync(join(base, '..', '..', 'local.yaml'), 'utf8'))
+            own = reg.has(suffix)
+          } catch { own = false }
+        }
+      }
+      if (own && existsSync(join(base, wtRoot))) target = join(base, wtRoot)
+    }
+  }
+  if (!target && existsSync(worktreePath)) {
     target = worktreePath
-  } else {
+  } else if (!target) {
     const meta = wm.getMeta(changeName)
     if (meta && meta.mode === 'in-place-fallback') {
       target = resolve(wm.worktreeBase, '..', '..', '..') // <main>/.sillyspec/.runtime/worktrees → <main>

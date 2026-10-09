@@ -41,6 +41,25 @@ function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
 }
 
+/**
+ * 快照回退主仓的可见性 + 摩擦记账（2026-10-09-verify-reuse-friction FR-02）。
+ * 2026-10-09 取证：快照创建慢性失败静默回退主仓口径——apply 前实测的是「无变更代码」的
+ * HEAD 且绿结论可被 --done 复用消费（正确性风险），全程零可见零记账，只能靠 .runtime 考古
+ * 发现。本 helper 统一两处调用点（gates.js verify 实测门 / verify-quality-scan.js noAI 动作）
+ * 的告警块与 gate_snapshot_fallback 摩擦事件；记账 best-effort 不影响门禁。
+ */
+export async function reportGateSnapshotFallback({ cwd, changeName, platformOpts = null, where, reason }) {
+  console.warn(`⚠️ [gate-snapshot-fallback] ${where}：隔离快照创建失败——实测回退主仓口径。`)
+  console.warn(`   影响并行 WIP 可能混入判定；apply 前主仓 HEAD 可能不含本变更代码——实测结论须按主仓口径解读，收口前确认变更代码已落主仓。`)
+  console.warn(`   原因：${reason}`)
+  console.warn(`   排查：git worktree 可用性（.git/worktrees 可写）与变更文件集非空；确要主仓口径显式设 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1（口径切换会使复用指纹失配一次后收敛）。`)
+  try {
+    const { recordFrictionEvent } = await import('../friction-tally.js')
+    await recordFrictionEvent({ cwd, platformOpts, changeName, type: 'gate_snapshot_fallback', detail: `${where}: ${String(reason).slice(0, 160)}` })
+  } catch { /* 记账失败不影响门禁 */ }
+}
+
+
 /** worktree 注册是否仍登记该 root（跨平台路径归一 + win32 大小写不敏感） */
 function worktreeListContains(cwd, snapshotRoot) {
   const out = git(cwd, ['worktree', 'list', '--porcelain'])

@@ -33,6 +33,7 @@ import { join, isAbsolute, resolve } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { parseRepoRegistry } from './stages/plan-postcheck.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
+import { crossWorktreePath } from './worktree-cross.js'
 import { resolveLatestExecuteRunIdWithTasks, readReview } from './task-review.js'
 
 // 与 verify-postcheck normalizeReconcilePath 同口径（本地实现防环）：剥 ./ 前缀、反斜杠归一
@@ -227,6 +228,38 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
         return { repo: repoKey, repoPath, anchor: range.anchor, files: [...union].sort(), degradedReason: null }
       }
     }
+
+    // 3b) B' 档 worktree-baseline 窗口（2026-10-09-verify-reuse-friction FR-07）：跨仓
+    //     worktree 在场时（verify 常跑在 apply 前）交付面在 worktree——meta.baseHash..工作树
+    //     全量窗口，多笔提交与未提交改动全覆盖；原 B 档 HEAD~1..HEAD 只看跨仓主副本最近一笔
+    //     提交，对 worktree 多笔交付是假信号（2026-10-09 tombstone 取证：声明 4 实测 0）。
+    //     meta 缺失/worktree 不在场/不可读 → 回退 B 档（不回退语义）。
+    try {
+      const wtPath = crossWorktreePath(specBase, changeName, repoKey)
+      const metaPath = join(wtPath, 'meta.json')
+      if (existsSync(metaPath)) {
+        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+        const base = meta && meta.baseHash
+        if (base && typeof base === 'string' && /^[0-9a-f]{7,40}$/i.test(base)) {
+          const union2 = new Set()
+          // baseline→工作树（已提交+已改）∪ 未跟踪新文件；两查任一可用即成窗
+          const d1 = gitQuiet(wtPath, ['diff', '--name-only', base], { timeout: GIT_TIMEOUT })
+          const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'], { timeout: GIT_TIMEOUT })
+          if (d1 !== null || d2 !== null) {
+            for (const src of [d1, d2]) {
+              for (const f of String(src || '').split('\n')) {
+                const n = normalizeRepoPath(f)
+                if (n && n !== 'meta.json' && !n.startsWith('.sillyspec/')) union2.add(n)
+              }
+            }
+            collectStatusInto(repoPath, union2)
+            return { repo: repoKey, repoPath,
+              anchor: { source: 'worktree-baseline-window', base, head: null, label: `跨仓 worktree baseline 窗口（base=${base.slice(0, 8)}…HEAD+工作树；多笔提交全覆盖）` },
+              files: [...union2].sort(), degradedReason: null }
+          }
+        }
+      }
+    } catch { /* meta 不可读/键缺失 → 回退 B 档 */ }
 
     // 4) B/C 档：diff HEAD~1..HEAD（现行 reconcile 口径）∪ status；diff 失败仅 status → C 档
     const union = new Set()

@@ -2180,6 +2180,9 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
             task: fmId || f.replace(/\.md$/, ''),
             acceptance: parsed.acceptance,
             fmError: parsed.status === 'invalid-yaml' ? parsed.error : null,
+            // FR-06（2026-10-09-verify-reuse-friction）：行 repo 归属写侧透传（跨仓卡 tests
+            // 仓根相对，读侧按行根解析）
+            repo: parseRepo(raw) || null,
             raw,
           })
         }
@@ -2280,6 +2283,9 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
                 discovery: 'machine',
                 confirmed_by: null,
                 source_change: changeName,
+                // FR-06（2026-10-09-verify-reuse-friction）：跨仓卡的 tests 是仓根相对——
+                // 行携 repo 归属供读侧按行根解析（缺省不落键=主仓，D-005@v1）。
+                ...(t.repo && t.repo !== 'main' ? { repo: t.repo } : {}),
               })
             })
           }

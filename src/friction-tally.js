@@ -30,7 +30,7 @@ import { withFileLock } from './quicklog.js'
 import { resolveRuntimeRoot, resolveQuickSessionsDir } from './run/shared.js'
 
 /** 摩擦事件类型枚举（D-004）：审查打回走专属 review_rejected，不与 gate_rollback 重复计 */
-const FRICTION_TYPES = new Set(['gate_rollback', 'verify_run_failed', 'review_rejected'])
+const FRICTION_TYPES = new Set(['gate_rollback', 'verify_run_failed', 'review_rejected', 'gate_snapshot_fallback'])
 
 /** history 截尾上限（同 verify-lint-tally 的 20 条口径——台账防病态体量，不承载完整审计） */
 const FRICTION_HISTORY_CAP = 20
@@ -43,6 +43,7 @@ const FRICTION_LABELS = [
   ['gate_rollback', 'gate 回滚'],
   ['verify_run_failed', '验证失败'],
   ['review_rejected', '审查打回'],
+  ['gate_snapshot_fallback', '快照回退主仓'],
 ]
 
 /**

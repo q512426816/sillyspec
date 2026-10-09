@@ -872,6 +872,78 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     }
   }
 
+  // 前移（2026-10-09-verify-reuse-friction FR-05）：reconcileRuntimeRoot 提升为函数级——探针一致性/draft 门等后续消费方与对账门同源口径
+  const reconcileRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+  if (stageName === 'verify' && changeName) {
+    // ── 纯事实门前移（2026-10-09-verify-reuse-friction FR-05 / D-004@v1）：required-evidence
+    //    与 target_files 对账门只依赖 git/文档事实（存在×mtime×diff 交集 / git 三源差集），
+    //    与实测结果零数据依赖——移到实测门（test/lint）之前并入文档面收集（R16 聚合一次全列）。
+    //    2026-10-09 取证：target_files 声明缺失时每处偏差先付 3.5 分钟实测再被拦（14:00-14:10
+    //    每轮先测后拦）；前移后秒级失败零测试执行。依赖实测结果的门（PASS 封顶/parity/超时
+    //    降档）位置不动。
+    // ── required-evidence 对账（2026-09-08-ir-verify-facts FR-03：v2 起 cannot_verify 不闭环阻断）──
+    // verify-required-evidence.json 由退役前的 execute Task Review Gate 写入
+    // （2026-09-26-task-review-retire 起停写；在场则消费=历史变更兼容读，缺席=无 cannot_verify 任务）。
+    // v2 槽优先分类核验（FR-02）：blocked = missing 无豁免或 satisfied 核验不过 → 阻断 verify 完成
+    // （此前 advisory 只查「提及」——死链不闭环）；无槽存量 md 降级 legacy 子串对账（warning 不阻断）。
+    const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck, trackVerifyResultRegression } = await import('../verify-postcheck.js')
+    const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName, verifyStartAt: verifyStartAtIso })
+    printVerifyRequiredEvidenceCheck(evidenceCheck)
+    // verify-result.md 内容回退检测（2026-09-10 用户反馈③：报告被平台同步覆盖回旧版一次，
+    // 只能靠人眼发现重写）：高水位指纹（hash+mtime）检出「内容变且 mtime 回退」→ ⚠️ 告警。
+    // 纯 advisory——真回退也由 agent 决定重写，CLI 只保证可见。
+    try {
+      const vr = trackVerifyResultRegression(specBase, changeName, join(specBase, 'changes', changeName, 'verify-result.md'))
+      if (vr.regressed) {
+        console.warn(`\n⚠️ verify-result.md 疑被覆盖回旧版（内容变化 + mtime 回退至 ${new Date(vr.prevMtime).toLocaleString('zh-CN')} 之前）——平台/daemon 按服务端旧版本回写的指纹。`)
+        console.warn(`   若你刚重写过请忽略本行（下次读取刷新高水位）；否则当前盘上可能是旧内容，需对照记忆/git 重新补写。`)
+      }
+    } catch { /* 检测失败静默（advisory） */ }
+    if (evidenceCheck.status === 'blocked') {
+      console.error(`\n❌ verify 阶段被阻断：cannot_verify 证据账未闭环（${evidenceCheck.summary}）。`)
+      for (const d of (evidenceCheck.detailed || [])) {
+        console.error(`   - ${d.task} [${d.status}${d.exempt ? '/豁免' : ''}] ${d.reason}`)
+        for (const v of (d.verification || [])) {
+          if (v && v.reason) console.error(`     · ${v.path || '(无路径)'} [${v.pathClass || '?'}] ${v.reason}（filesExist=${v.filesExist} mtimeOk=${v.mtimeOk} diffHit=${v.diffHit}）`)
+        }
+      }
+      console.error(`   修复：在 verify-result.md「## 证据账（cannot_verify 任务）」槽段逐 task 一行——`)
+      console.error(`   - task-NN: satisfied | verifiedFiles: <精确路径>（CLI 核验：代码类 存在×mtime×diff 交集；日志/文档类豁免 diff）`)
+      console.error(`   - 确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径`)
+      docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `cannot_verify 证据账未闭环（${evidenceCheck.summary}）` })
+    }
+    // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
+    // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
+    // 事实源，execute 的 scope creep 只有 symbol-impact 试图抓。reconcileTargetFiles 用 git 三源
+    // 口径亲自取 actual，与 plan 阶段 task 卡 target_files 声明做三类差集：②类（声明未做）在场
+    // 即阻断——verify 的语义是「按计划交付且客观核验」，声明没做不能盖章归档；③类（做了没
+    // 声明=scope creep）启发式噪音面大（并行 WIP 剔除后仍可能有工具产物），WARNING 放行留审计；
+    // skipped/degraded（无 task 卡 / 全无声明 / git 不可用）降级不误红（存量变更零红门禁）。
+    // 阻断形态照 runVerifyTestCheck 先例：逐条列 task + path + 修复提示 + rollbackCompletionAndReturn。
+    const { reconcileTargetFiles, isStrictChange } = await import('../verify-postcheck.js')
+    const reconcileCheck = reconcileTargetFiles({
+      cwd, specBase, changeName,
+      // runtimeRoot 口径与上方 parity 对账同源（B3 apply-pathspec 兜底源在此根下；平台模式下
+      // specBase 与 .runtime 分离，不传会读不到兜底清单 → 假降级）
+      runtimeRoot: reconcileRuntimeRoot,
+      // IR 严格档（2026-09-07-ir-hardening D-003@v1）：主仓卡全零声明 → strictViolation → ERROR
+      strictMode: isStrictChange({ pm, cwd, changeName }),
+    })
+    const reconcileEnvelope = buildReconcileTargetFilesEnvelope(reconcileCheck)
+    const reconcileBlocked = printReconcileTargetFilesCheck(reconcileCheck, reconcileEnvelope)
+    // 跨仓 per-repo 对账明细渲染（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004
+    // 分期）：reconcileTargetFiles 的 crossRepo 字段（advisory 不阻断）——各仓 对上/②缺/③多
+    // 逐仓一行 + ②缺明细（跨仓声明落空是该去对应仓干活的信号，但不翻主仓状态——锚点窗口
+    // 脆弱期会假信号）。无跨仓卡时 crossRepo 为空数组零输出。
+    printCrossRepoReconcile(reconcileCheck.crossRepo)
+    // 结果落盘（design Wave 2 承诺：对齐 .runtime/verify-runs/<ts>/ 先例）——五状态全落（含
+    // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
+    writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
+    if (reconcileBlocked) {
+      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'target_files ②类（missing_declared）阻断' })
+      docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'target_files 对账阻断（②类「声明未做」——计划落空，明细见上）' })
+    }
+  }
   // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
   //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
   if (stageName === 'verify' && docGateFailures.length > 0) {
@@ -926,8 +998,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
         if (verifyGateSnap) {
           console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+        } else {
+          // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账
+          try {
+            const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
+            if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' })
+          } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
         }
-      } catch { /* 快照链路异常 → 主仓现行为 */ }
+      } catch (e) {
+        try {
+          const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
+          if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: e && e.message ? e.message : String(e) })
+        } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
+      }
     }
     const gateCwd = verifyGateSnap ? verifyGateSnap.snapshotRoot : cwd
     const gateSpecBase = verifyGateSnap ? join(verifyGateSnap.snapshotRoot, '.sillyspec') : specBase
@@ -970,6 +1053,20 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       gateFingerprint = computeGateFingerprint({ cwd, specBase })
       if (gateFingerprint) greenHit = lookupGreenCache({ runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), scope: changeName, kind: 'test', fingerprint: gateFingerprint })
     } catch { /* fail-open：缓存链异常回退真跑 */ }
+    // ── 复用观测（2026-10-09-verify-reuse-friction FR-04）：真跑轮随 test-result.json 落
+    //    fingerprint/reuse_decision；复用命中轮落 reuse-decisions-<change>.jsonl——取证直读，
+    //    不再依赖 stdout 考古（tombstone 取证只能靠 sqlite 会话记录的教训）。──
+    let _obsQualityScanFp = null
+    try {
+      const { computeQualityScanFingerprint } = await import('./verify-quality-scan.js')
+      _obsQualityScanFp = computeQualityScanFingerprint({ cwd, specBase })
+    } catch { /* 观测 best-effort */ }
+    const _obsFingerprint = { gate: gateFingerprint, quality_scan: _obsQualityScanFp }
+    const _obsJournal = (layer, hit, reason) => {
+      import('../verify-postcheck.js').then(({ appendReuseDecision }) =>
+        appendReuseDecision({ specBase, changeName, decision: { layer, hit, reason, fingerprint: _obsFingerprint } }))
+        .catch(() => { /* 观测失败不阻断 */ })
+    }
     if (ledgerReuse) {
       testCheck = {
         status: 'passed',
@@ -980,10 +1077,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
       console.log(`\n♻️ Verify 测试对账：P2 账本复用（三键全等，免重跑；实测于 ${ledgerReuse.result.ranAt}）`)
       printVerifyTestCheck(testCheck)
+      _obsJournal('ledger', true, null)
     } else if (reusableScan && reusableScan.testResult) {
       testCheck = reusableScan.testResult
       console.log(`\n♻️ Verify 测试对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑；实测于 ${reusableScan.ranAt || '本变更 verify 期间'}${testCheck.resultPath ? `，台账 ${testCheck.resultPath}` : ''}）`)
       printVerifyTestCheck(testCheck)
+      _obsJournal('quality-scan', true, null)
     } else if (greenHit) {
       testCheck = {
         status: 'passed',
@@ -992,8 +1091,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         exitCode: 0, durationMs: 0, outputTail: null,
         resultPath: null, strategy: null, cached: true,
       }
-      console.log(`\n♻️ Verify 测试对账：green-cache 同指纹复用（HEAD+代码脏面+local.yaml 全等，近期真跑绿——P2 账本未命中时的第二层免重跑；SILLYSPEC_GREEN_CACHE_OFF=1 可关闭）`)
+      console.log(`\n♻️ Verify 测试对账：green-cache 同指纹复用（代码树键+代码脏面+local.yaml 全等，近期真跑绿——P2 账本未命中时的第二层免重跑；SILLYSPEC_GREEN_CACHE_OFF=1 可关闭）`)
       printVerifyTestCheck(testCheck)
+      _obsJournal('green-cache', true, null)
     } else {
       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
@@ -1007,7 +1107,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
         _restrict = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase: gateSpecBase })
       } catch { /* 解析异常走全量（restrictFiles 不传） */ }
-      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
+      const _missReason = [
+        `账本: ${traceHasActiveRows ? '停用（active trace 行——fail-closed 护栏）' : '未命中/不可用'}`,
+        `质量扫描: ${reusableScan ? '命中（上层未消费）' : '指纹失配/无记录'}`,
+        `green-cache: ${greenHit ? '命中（上层未消费）' : '指纹失配/过期/无记录'}`,
+      ].join('；')
+      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, observability: { fingerprint: _obsFingerprint, reuse_decision: { layer: 'real-run', hit: false, reason: _missReason } }, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
       printVerifyTestCheck(testCheck)
       // 自动绑定补全（full-autopilot-parity，R21 thin 迁移）：测试已跑、test-result.json 已落盘，
       // verify --done 收口时从测试结果自动补全 requirements.md 的空绑定槽——与 thin 同逻辑（逐行扫描）。
@@ -1231,69 +1336,6 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
     const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
     printVerifyDeletionCheck(deletionCheck)
-    // ── required-evidence 对账（2026-09-08-ir-verify-facts FR-03：v2 起 cannot_verify 不闭环阻断）──
-    // verify-required-evidence.json 由退役前的 execute Task Review Gate 写入
-    // （2026-09-26-task-review-retire 起停写；在场则消费=历史变更兼容读，缺席=无 cannot_verify 任务）。
-    // v2 槽优先分类核验（FR-02）：blocked = missing 无豁免或 satisfied 核验不过 → 阻断 verify 完成
-    // （此前 advisory 只查「提及」——死链不闭环）；无槽存量 md 降级 legacy 子串对账（warning 不阻断）。
-    const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck, trackVerifyResultRegression } = await import('../verify-postcheck.js')
-    const evidenceCheck = runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName, verifyStartAt: verifyStartAtIso })
-    printVerifyRequiredEvidenceCheck(evidenceCheck)
-    // verify-result.md 内容回退检测（2026-09-10 用户反馈③：报告被平台同步覆盖回旧版一次，
-    // 只能靠人眼发现重写）：高水位指纹（hash+mtime）检出「内容变且 mtime 回退」→ ⚠️ 告警。
-    // 纯 advisory——真回退也由 agent 决定重写，CLI 只保证可见。
-    try {
-      const vr = trackVerifyResultRegression(specBase, changeName, join(specBase, 'changes', changeName, 'verify-result.md'))
-      if (vr.regressed) {
-        console.warn(`\n⚠️ verify-result.md 疑被覆盖回旧版（内容变化 + mtime 回退至 ${new Date(vr.prevMtime).toLocaleString('zh-CN')} 之前）——平台/daemon 按服务端旧版本回写的指纹。`)
-        console.warn(`   若你刚重写过请忽略本行（下次读取刷新高水位）；否则当前盘上可能是旧内容，需对照记忆/git 重新补写。`)
-      }
-    } catch { /* 检测失败静默（advisory） */ }
-    if (evidenceCheck.status === 'blocked') {
-      console.error(`\n❌ verify 阶段被阻断：cannot_verify 证据账未闭环（${evidenceCheck.summary}）。`)
-      for (const d of (evidenceCheck.detailed || [])) {
-        console.error(`   - ${d.task} [${d.status}${d.exempt ? '/豁免' : ''}] ${d.reason}`)
-        for (const v of (d.verification || [])) {
-          if (v && v.reason) console.error(`     · ${v.path || '(无路径)'} [${v.pathClass || '?'}] ${v.reason}（filesExist=${v.filesExist} mtimeOk=${v.mtimeOk} diffHit=${v.diffHit}）`)
-        }
-      }
-      console.error(`   修复：在 verify-result.md「## 证据账（cannot_verify 任务）」槽段逐 task 一行——`)
-      console.error(`   - task-NN: satisfied | verifiedFiles: <精确路径>（CLI 核验：代码类 存在×mtime×diff 交集；日志/文档类豁免 diff）`)
-      console.error(`   - 确实无法验证 → 填 missing 并加（豁免：<一句话理由>）后缀；部分满足 → partial + 已核验路径`)
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-    }
-    // ── target_files 声明 ↔ 实际改动 对账（task-05 / ir-stage-p3a：②ERROR 阻断 / ③WARNING 放行）──
-    // 「计划落空」（task 卡声明没做）此前全盲区：review.json changedFiles 是 agent 手写不能当
-    // 事实源，execute 的 scope creep 只有 symbol-impact 试图抓。reconcileTargetFiles 用 git 三源
-    // 口径亲自取 actual，与 plan 阶段 task 卡 target_files 声明做三类差集：②类（声明未做）在场
-    // 即阻断——verify 的语义是「按计划交付且客观核验」，声明没做不能盖章归档；③类（做了没
-    // 声明=scope creep）启发式噪音面大（并行 WIP 剔除后仍可能有工具产物），WARNING 放行留审计；
-    // skipped/degraded（无 task 卡 / 全无声明 / git 不可用）降级不误红（存量变更零红门禁）。
-    // 阻断形态照 runVerifyTestCheck 先例：逐条列 task + path + 修复提示 + rollbackCompletionAndReturn。
-    const { reconcileTargetFiles, isStrictChange } = await import('../verify-postcheck.js')
-    const reconcileRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase)
-    const reconcileCheck = reconcileTargetFiles({
-      cwd, specBase, changeName,
-      // runtimeRoot 口径与上方 parity 对账同源（B3 apply-pathspec 兜底源在此根下；平台模式下
-      // specBase 与 .runtime 分离，不传会读不到兜底清单 → 假降级）
-      runtimeRoot: reconcileRuntimeRoot,
-      // IR 严格档（2026-09-07-ir-hardening D-003@v1）：主仓卡全零声明 → strictViolation → ERROR
-      strictMode: isStrictChange({ pm, cwd, changeName }),
-    })
-    const reconcileEnvelope = buildReconcileTargetFilesEnvelope(reconcileCheck)
-    const reconcileBlocked = printReconcileTargetFilesCheck(reconcileCheck, reconcileEnvelope)
-    // 跨仓 per-repo 对账明细渲染（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004
-    // 分期）：reconcileTargetFiles 的 crossRepo 字段（advisory 不阻断）——各仓 对上/②缺/③多
-    // 逐仓一行 + ②缺明细（跨仓声明落空是该去对应仓干活的信号，但不翻主仓状态——锚点窗口
-    // 脆弱期会假信号）。无跨仓卡时 crossRepo 为空数组零输出。
-    printCrossRepoReconcile(reconcileCheck.crossRepo)
-    // 结果落盘（design Wave 2 承诺：对齐 .runtime/verify-runs/<ts>/ 先例）——五状态全落（含
-    // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
-    writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
-    if (reconcileBlocked) {
-      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'target_files ②类（missing_declared）阻断' })
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-    }
     // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
     // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
     // 基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。checkProbeConsistency 重跑只读
@@ -1302,7 +1344,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // skipped（存量旧格式报告/无 changeName）/degraded（重跑异常 fail-soft）→ 放行提示。
     // 接线形态照上方 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
     // supportedFixes）+ verify-runs 落盘 + rollbackCompletionAndReturn。
-    const { checkProbeConsistency } = await import('../verify-postcheck.js')
+    const { checkProbeConsistency, isStrictChange } = await import('../verify-postcheck.js')
     const probeCheck = checkProbeConsistency({
       // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
       // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency

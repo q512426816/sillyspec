@@ -157,6 +157,8 @@ export function normalizeRow(row, opts = {}) {
     confirmed_at: row.confirmed_at && row.confirmed_at !== 'null' ? row.confirmed_at : null,
     reconfirm: ['unchanged', 'rebound'].includes(row.reconfirm) ? row.reconfirm : null,
     status: row.status === 'superseded' ? 'superseded' : 'active',
+    // FR-06（2026-10-09-verify-reuse-friction）：行 repo 归属（additive，缺省不落键=主仓）
+    ...(row.repo && row.repo !== 'main' ? { repo: String(row.repo) } : {}),
     source_change: row.source_change && row.source_change !== 'null' ? row.source_change : null,
   }
 }

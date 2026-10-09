@@ -27,8 +27,8 @@ import { createHash } from 'crypto'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { resolveRuntimeRoot } from './run/shared.js'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
-import { join, resolve } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync } from 'fs'
+import { join, resolve, isAbsolute } from 'path'
 import { readChangeTrace, testAnchorFile } from './test-bindings.js'
 import { collectFrLinkedTests } from './fr-index.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
@@ -47,7 +47,8 @@ import { discoverModuleIndex } from './decision-distill.js'
 import { writeAtomicSync } from './fs-atomic.js'
 // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
 // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
-import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
+import { parseTargetFiles, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
+import { crossWorktreePath } from './worktree-cross.js'
 // 探针重跑（P3b task-02 一致性抽查）：依赖方向已核实无环——verify-probes 只依赖
 // fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
 // 不反向依赖本模块，此处直连不引入循环。smoke 机器段一致性（2026-09-17-api-coverage-smoke
@@ -1878,7 +1879,25 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   let anyAvailable = mainFiles !== null
   for (const entry of crossEntries) {
     // 跨仓仓 gitDir = 跨仓仓根（MultiRepoContext._buildCrossRepoEntry 已 fail-closed 保证可达）
-    const files = runGitDiffNameOnly(entry.gitDir, 'HEAD~1..HEAD')
+    // FR-07（2026-10-09-verify-reuse-friction）：跨仓 worktree 在场（verify 常在 apply 前）时
+    // 交付面在 worktree——meta.baseHash..工作树 窗口（多笔提交+未提交全覆盖）；HEAD~1..HEAD
+    // 只看主副本最近一笔，对多笔交付是假信号。meta 缺失回退现行窗口。
+    let files = null
+    try {
+      const wtPath = crossWorktreePath(opts.specBase || join(cwd, '.sillyspec'), changeName, entry.repoKey)
+      const metaPath = join(wtPath, 'meta.json')
+      if (existsSync(metaPath)) {
+        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+        const base = meta && meta.baseHash
+        if (base && /^[0-9a-f]{7,40}$/i.test(base)) {
+          const d1 = gitQuiet(wtPath, ['diff', '--name-only', base])
+          const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'])
+          const mergedWt = [...new Set(String(d1 || '').split(String.fromCharCode(10)).concat(String(d2 || '').split(String.fromCharCode(10))))].map(x => x.trim()).filter(x => x && x !== 'meta.json' && !x.startsWith('.sillyspec/'))
+          files = mergedWt.length > 0 || d1 !== null || d2 !== null ? mergedWt : []
+        }
+      }
+    } catch { /* 回退 HEAD~1..HEAD */ }
+    if (files === null) files = runGitDiffNameOnly(entry.gitDir, 'HEAD~1..HEAD')
     if (files !== null) {
       anyAvailable = true
       for (const f of files) {
@@ -1991,7 +2010,7 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
  *   resultPath: string|null,
  * }}
  */
-export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null, faceOverride = null }) {
+export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null, faceOverride = null, observability = null }) {
   // restrictFiles（坑 quick-gate-并行全流程变更脏文件误伤，2026-09-21 实证）：本会话声明
   // 文件集（quick gate 传 allowedFiles）——提供时 module 子集的变更文件面收窄到
   // 「实际变更 ∩ restrictFiles」，窗口内未声明的并行全流程变更 WIP 文件不再进模块选择
@@ -2186,7 +2205,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       }
     } else {
       console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
-      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre, observability })
     }
     // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
     // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
@@ -2924,21 +2943,54 @@ export function resolveVerifyAnchorSet({ specBase, changeName }) {
   return [...ids]
 }
 
-/** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling } */
+/**
+ * trace 行 repo 归属解析根（2026-10-09-verify-reuse-friction FR-06 / D-005@v1）：
+ * 行 repo 字段（additive，缺省=主仓）经 local.yaml repos 注册表换根——跨仓 task 卡抄入的
+ * 仓根相对 tests 路径不再按主仓解析恒悬空（2026-10-09 tombstone 取证：3 文件悬空 fail-fast
+ * 连烧 4 轮实测）。注册表缺失/键未注册 → 该行回退主仓根（现状行为），dangling 消息带
+ * repo: 前缀使错配可见。读法同 verify-probes 探针 7 先例（join(specBase,'local.yaml') +
+ * parseRepoRegistry，相对路径按主仓 cwd resolve）。
+ */
+function traceRepoRoots({ specBase, cwd }) {
+  try {
+    const yamlPath = join(specBase, 'local.yaml')
+    if (!existsSync(yamlPath)) return new Map()
+    const reg = parseRepoRegistry(readFileSync(yamlPath, 'utf8'))
+    const m = new Map()
+    for (const [k, v] of reg) m.set(k, isAbsolute(v) ? v : resolve(cwd, v))
+    return m
+  } catch { return new Map() }
+}
+
+/** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling, perFile } */
 export function resolveTraceResidual({ specBase, changeName, cwd }) {
   const anchors = resolveVerifyAnchorSet({ specBase, changeName })
-  if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [] }
+  if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [], perFile: [] }
   const rows = readChangeTrace(join(specBase, 'changes', changeName))
     .filter(r => anchors.includes(r.anchor) && r.state === 'active' && r.status !== 'superseded')
-  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚
-  const files = [...new Set(rows.flatMap(r => (r.tests || []).map(testAnchorFile)))].sort()
-  const dangling = files.filter(f => !existsSync(resolve(cwd, f)))
-  return { anchors, rows, files, dangling }
+  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚。
+  // FR-06（2026-10-09）：文件按行 repo 归属配对（perFile），悬空判定/残差执行按行根解析。
+  const repoRoots = traceRepoRoots({ specBase, cwd })
+  const seen = new Set()
+  const perFile = []
+  for (const r of rows) {
+    const repoKey = r.repo && r.repo !== 'main' ? r.repo : null
+    for (const t of (r.tests || [])) {
+      const f = testAnchorFile(t)
+      const key = (repoKey ? repoKey + ' ' : '') + f
+      if (!seen.has(key)) { seen.add(key); perFile.push({ repo: repoKey, file: f }) }
+    }
+  }
+  const files = [...new Set(perFile.map(x => x.file))].sort()
+  const dangling = perFile
+    .filter(x => !existsSync(resolve((x.repo && repoRoots.get(x.repo)) || cwd, x.file)))
+    .map(x => x.repo ? `${x.repo}:${x.file}` : x.file)
+  return { anchors, rows, files, dangling, perFile }
 }
 
 /** 残差执行段：按 buildDepsBatches 同口径组卷（扩展名分语言/pytest 前缀自模块命令推断），
  * 30/块分卷破 deps 面的帽（残差是绑定面钦定必须跑的，不适用发现面防膨胀帽）。 */
-function runTraceResidual({ cwd, files, hits, knownFailures = [] }) {
+function runTraceResidual({ cwd, files, groups = null, hits, knownFailures = [] }) {
   // 嵌套 test-runner 防污染：孙代 node --test 会误连外层 reporter（NODE_TEST_* 环境变量，
   // 单测实测：嵌套下挂测被误判 passed）——spawn 前剥除、跑完还原（同步窗口安全；真实门禁
   // 进程无此变量，零影响）。
@@ -2946,12 +2998,17 @@ function runTraceResidual({ cwd, files, hits, knownFailures = [] }) {
   const strippedKeys = []
   for (const k of Object.keys(process.env)) { if (k.startsWith('NODE_TEST')) { strippedKeys.push(k); delete process.env[k] } }
   try {
-    return runTraceResidualInner({ cwd, files, hits, knownFailures })
+    // FR-06（2026-10-09-verify-reuse-friction）：残差按行 repo 分组执行——跨仓组在其仓根
+    // 跑（组卷 cwd=组根），主仓组现状不变；groups 缺席回退旧 files 单主仓组（零迁移）。
+    const execGroups = Array.isArray(groups) && groups.length > 0
+      ? groups
+      : [{ repo: null, root: cwd, files }]
+    return execGroups.flatMap(g => runTraceResidualInner({ cwd: g.root, repoLabel: g.repo, files: g.files, hits, knownFailures }))
   } finally {
     for (const k of strippedKeys) process.env[k] = savedEnv[k]
   }
 }
-function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
+function runTraceResidualInner({ cwd, repoLabel = null, files, hits, knownFailures }) {
   const norm = (p) => String(p).replace(/\\/g, '/')
   const segments = []
   for (let i = 0; i < files.length; i += 30) {
@@ -2998,6 +3055,19 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
   const provable = (action === 'deps-auto-subset' || action === 'dynamic-subset')
     ? new Set((depsAutoFiles || []).map(f => String(f).replace(/\\/g, '/'))) : new Set()
   const residualFiles = tr.files.filter(f => !provable.has(f))
+  // FR-06（2026-10-09-verify-reuse-friction）：残差执行面按行 repo 分组（provable 差集按
+  // 文件名判，跨仓文件同样成立）；组根=注册表仓根，未注册回退主仓（与悬空判定同口径）。
+  const _repoRoots = traceRepoRoots({ specBase, cwd })
+  const _gmap = new Map()
+  for (const x of (tr.perFile || [])) {
+    if (provable.has(String(x.file).replace(/\\/g, '/'))) continue
+    const _rk = x.repo || null
+    const _root = (_rk && _repoRoots.get(_rk)) || cwd
+    const _gk = _rk + ' ' + _root
+    if (!_gmap.has(_gk)) _gmap.set(_gk, { repo: _rk, root: _root, files: [] })
+    _gmap.get(_gk).files.push(x.file)
+  }
+  const residualGroups = [..._gmap.values()].map(g => ({ ...g, files: [...new Set(g.files)] }))
   try {
     writeTraceDisclosure({
       specBase, changeName,
@@ -3015,7 +3085,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
   if (residualFiles.length === 0) return mainResult
   let segs
   try {
-    segs = runTraceResidual({ cwd, files: residualFiles, hits, knownFailures })
+    segs = runTraceResidual({ cwd, files: residualFiles, groups: residualGroups, hits, knownFailures })
   } catch (e) {
     return { ...mainResult, status: 'failed', reason: `trace 残差段执行异常（fail-closed）：${e && e.message ? e.message : e}` }
   }
@@ -3042,7 +3112,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
  * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
  * runVerifyTestCheck 全链只为断言组卷接线）。
  */
-export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null }) {
+export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, observability = null }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
@@ -3158,6 +3228,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
     changeName,
     result,
     extra: {
+      // 复用观测（2026-10-09-verify-reuse-friction FR-04）：真跑轮携带指纹与判定原因——
+      // 取证直读 test-result.json，不再依赖 stdout 考古。additive：调用方未传则零字段。
+      ...(observability || {}),
       modules: perModule.map(r => ({
         name: r.name,
         command: r.command,
@@ -3216,6 +3289,26 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint }
     console.warn(`⚠️  lint 结果落盘失败: ${e.message}`)
     return null
   }
+}
+
+/**
+ * 复用判定追加日志（2026-10-09-verify-reuse-friction FR-04）：复用命中轮不产生
+ * test-result.json（无真实执行——那是它的语义），判定落
+ * .runtime/verify-runs/reuse-decisions-<change>.jsonl 逐行追加（ts + layer + hit +
+ * reason + fingerprint 摘要），与真跑轮 test-result.json 的 fingerprint/reuse_decision
+ * 互为对照——取证直读文件，不再依赖 stdout。best-effort：追加失败不阻断任何路径。
+ */
+export function appendReuseDecision({ specBase, changeName, decision }) {
+  try {
+    if (!specBase || !changeName || !decision || typeof decision !== 'object') return false
+    const dir = join(specBase, '.runtime', 'verify-runs')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, `reuse-decisions-${changeName}.jsonl`), JSON.stringify({
+      ts: new Date().toISOString(),
+      ...decision,
+    }) + '\n')
+    return true
+  } catch { /* 观测失败不阻断 */ return false }
 }
 
 /**

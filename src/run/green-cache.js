@@ -39,36 +39,28 @@ function safeGit(cwd, args) {
 
 /**
  * porcelain 行过滤为「代码面」：剔 .sillyspec/、docs/ 与 *.md（含 rename 两侧任一命中）。
- * 纯函数（口径单点，watcher dirtyCode / quality-scan 同源判据）；排序保序（同输入同输出）。
+ * 实现已迁 code-face-key.js（口径单点，2026-10-09-verify-reuse-friction FR-03）——此处
+ * re-export 保持既有 import 路径兼容。
  */
-export function filterCodePorcelain(porcelain) {
-  return String(porcelain || '')
-    .split(/\r?\n/)
-    .filter((line) => {
-      if (!line.trim()) return false;
-      const raw = line.slice(3).trim();
-      if (!raw) return false;
-      // rename 行「old -> new」两侧任一是文档面即整行剔除（防 rename 伪装穿透）
-      const parts = raw.split(' -> ').map((p) => p.replace(/^"|"$/g, ''));
-      return !parts.every((p) => p.startsWith('.sillyspec/') || p.startsWith('docs/') || /\.md$/i.test(p));
-    })
-    .sort();
-}
+export { filterCodePorcelain } from './code-face-key.js';
+import { filterCodePorcelain, computeCodeTreeKey } from './code-face-key.js';
 
 /**
- * 计算门禁绿缓存指纹：HEAD + 代码脏面 + local.yaml 内容。
+ * 计算门禁绿缓存指纹：代码树内容键 + 代码脏面 + local.yaml 内容。
+ * 2026-10-09-verify-reuse-friction（D-002@v1）：HEAD 分量替换为代码树内容键（ls-tree
+ * 过滤哈希）——纯文档提交不再击穿缓存，代码提交必击穿；整树 oid 快路径见 code-face-key。
  * git 不可用（非仓目录）返回 null → 调用方按 miss 处理。
  */
 export function computeGateFingerprint({ cwd, specBase }) {
-  const head = safeGit(cwd, ['rev-parse', 'HEAD']);
-  if (head === null) return null;
+  const treeKey = computeCodeTreeKey({ cwd });
+  if (treeKey === null) return null;
   const porcelain = safeGit(cwd, ['status', '--porcelain']) ?? '';
   let localYaml = '';
   try {
     const yamlPath = join(specBase, 'local.yaml');
     if (existsSync(yamlPath)) localYaml = readFileSync(yamlPath, 'utf8');
-  } catch { /* 读不到按空——指纹仍含 HEAD+脏面，miss 风险方向安全 */ }
-  return sha1([head.trim(), filterCodePorcelain(porcelain).join('\n'), localYaml].join('\u0000'));
+  } catch { /* 读不到按空——指纹仍含树键+脏面，miss 风险方向安全 */ }
+  return sha1([treeKey, filterCodePorcelain(porcelain).join('\n'), localYaml].join('\u0000'));
 }
 
 function greenCacheFile({ runtimeRoot, scope, kind }) {
