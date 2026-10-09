@@ -2068,3 +2068,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：00d055829104a462706e76c956221b7f38cbb8bb
 理由：最大风险：publish 与 push 顺序——3.32.1 实证先 publish 后 push 的窗口内 registry 与 origin 短暂不一致（可接受：包内容同树，安装者拿到的代码一致）；npm 2FA/令牌失效会阻断 publish（届时停下向用户报错，不假绿）。试过但放弃：无——发版路径完全镜像既有 3.32.1 惯例，无新方案尝试。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-09-fourpiece-created-at-local
+锚点：未记录
+最近确认：ba0b5d1bf243b717af3a8ac13de70afa5a799d9a
+理由：最大风险：存量已写 UTC 的 `created_at` 不自愈（如 2026-10-09-workspace-init-skill-gate 的 requirements/proposal 02:04:06），时间线对旧变更仍显示旧错值——接受：历史工件不改写，变更事实以 watcher 事件流为准，新变更起生效。试过放弃：①读取端按 UTC 解析无时区裸形状——无法区分「本地墙钟约定值」与「UTC 误写值」，猜错方向比不猜更糟；②created_at 显式带时区偏移（+08:00）——与 datetime.js 立的「YYYY-MM-DD HH:mm:ss 形状」约定冲突，牵动 CLI/平台全部读取面，超出本修范围。

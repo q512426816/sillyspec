@@ -7852,3 +7852,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-09-zcode-skills-sentinel-shorthand
   status: active
+
+## FR-cli-entry-415 fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
+变更：2026-10-09-fourpiece-created-at-local
+状态：active
+摘要：非 UTC 时区生成
+全文：.sillyspec/changes/archive/2026-10-09-fourpiece-created-at-local/requirements.md#FR-01
+最近确认：ba0b5d1bf243b717af3a8ac13de70afa5a799d9a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-01
+  tests: test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-fourpiece-created-at-local
+  status: active
+
+## FR-cli-entry-416 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
+变更：2026-10-09-fourpiece-created-at-local
+状态：active
+摘要：UTC 写入回归被拦
+全文：.sillyspec/changes/archive/2026-10-09-fourpiece-created-at-local/requirements.md#FR-02
+最近确认：ba0b5d1bf243b717af3a8ac13de70afa5a799d9a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-02
+  tests: test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-fourpiece-created-at-local
+  status: active
+
+## FR-cli-entry-417 既有 fourpiece-init 测试面全绿
+变更：2026-10-09-fourpiece-created-at-local
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-fourpiece-created-at-local/requirements.md#FR-03
+最近确认：ba0b5d1bf243b717af3a8ac13de70afa5a799d9a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-03
+  tests: test/fourpiece-init.test.mjs「fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆盖」 | test/skeleton-provenance.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-fourpiece-created-at-local
+  status: active

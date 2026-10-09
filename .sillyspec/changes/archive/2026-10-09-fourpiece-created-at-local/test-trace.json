@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-fourpiece-created-at-local",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-01",
+      "tests": [
+        "test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-fourpiece-created-at-local"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-02",
+      "tests": [
+        "test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-fourpiece-created-at-local"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-fourpiece-created-at-local:flow:测试绑定FR-03",
+      "tests": [
+        "test/fourpiece-init.test.mjs「fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆盖」",
+        "test/skeleton-provenance.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-fourpiece-created-at-local"
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+diff --git a/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/flow-state.yaml b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/flow-state.yaml
+new file mode 100644
+index 00000000..58820cd3
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/flow-state.yaml
+@@ -0,0 +1,26 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  平台时间线「变更诞生」时刻错 8 小时（2026-10-09-workspace-init-skill-gate 实证：requirements/proposal created_at=02:04:06 而
++  design.md=09:58:48，watcher 事件流证实文件真实出现于本地 10:04:08）。根因：fourpiece-init 骨架 created_at 用 toISOString() 写 UTC
++  数字的裸形状（无时区标记），平台/CLI 读取端按本地墙钟解析直接显示 UTC 值。datetime.js 已立规（坑 taskcard-created-at-utc：frontmatter
++  人读时间统一本地墙钟），taskcard/design-init 均已改 nowWallClock，fourpiece-init 是漏网点（src/index.js:2175-2177）。
++
++
++  成功标准：
++
++  - fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD
++  HH:mm:ss，与 taskcard/design-init 同口径）
++
++  - 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++
++  - 既有 fourpiece-init 测试面全绿
++autopilot: true
++baseline_commit: db3d6ea88301748f11299d38deecda764141661d
++updatedAt: '2026-10-09T03:59:16.221Z'
++baseline_sha256: d22ec25453067144b2a5f2fde41b71f6c210d2cfdd7d3f755721997d26af88bd
++
+diff --git a/src/index.js b/src/index.js
+index c16b5ba8..0d4a916f 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -2172,9 +2172,10 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const fpSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+       const fpDir = join(fpSpecBase, 'changes', fpChange);
+       mkdirSync(fpDir, { recursive: true });
+-      const fpNow = new Date();
+-      const fpDate = fpNow.toISOString().slice(0, 10);
+-      const fpStamp = fpNow.toISOString().slice(0, 19).replace('T', ' ');
++      // 本地墙钟（datetime.js 坑 taskcard-created-at-utc 同族：frontmatter 人读时间禁
++      // toISOString 写 UTC 裸形状——无时区标记被读取端按本地解析，2026-10-09 平台时间线 born 锚偏 8h 实证）
++      const { nowWallClock } = await import('./datetime.js');
++      const fpStamp = nowWallClock();
+       const generated = [];
+       const mk = (fname, body) => {
+         const p = join(fpDir, fname);
+diff --git a/test/fourpiece-init.test.mjs b/test/fourpiece-init.test.mjs
+index 9dba85f5..ed317530 100644
+--- a/test/fourpiece-init.test.mjs
++++ b/test/fourpiece-init.test.mjs
+@@ -10,6 +10,7 @@ import { execFileSync } from 'child_process'
+ import { fileURLToPath } from 'url'
+ 
+ import { dirname } from 'path'
++import { nowWallClock } from '../src/datetime.js'
+ const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspec.js')
+ 
+ function mkProj() {
+@@ -35,6 +36,23 @@ test('fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆
+   } finally { rmSync(cwd, { recursive: true, force: true }) }
+ })
+ 
++test('fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）', () => {
++  const cwd = mkProj()
++  try {
++    const before = nowWallClock()
++    execFileSync(process.execPath, [bin, 'fourpiece-init', '--change', 'c-local'], { cwd, encoding: 'utf8' })
++    const after = nowWallClock()
++    for (const f of ['proposal.md', 'requirements.md', 'decisions.md']) {
++      const m = /^created_at: (.+)$/m.exec(readFileSync(join(cwd, '.sillyspec', 'changes', 'c-local', f), 'utf8'))
++      assert.ok(m, `${f} created_at 在场`)
++      const stamp = m[1].trim()
++      // 字典序比较成立：YYYY-MM-DD HH:mm:ss 定宽形状。UTC 写入（toISOString 裸形状）
++      // 在非 UTC 时区机上必偏移出窗（实证机 UTC+8 偏 8h），断言失败拦回归。
++      assert.ok(stamp >= before && stamp <= after, `${f} created_at=${stamp} 应落本地墙钟窗 [${before}, ${after}]`)
++    }
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
+ test('MSYS 污染 output → exit 2 阻断（升档回归锁）', () => {
+   const cwd = mkProj()
+   try {
+diff --git a/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/design.md b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/design.md
+new file mode 100644
+index 00000000..446a1f8a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T03:58:40.335Z
++---
++# 设计记录（Design Record）— 2026-10-09-fourpiece-created-at-local
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++`src/index.js` fourpiece-init case 的 `fpStamp` 由 `new Date().toISOString().slice(0,19)` 改为 `datetime.js nowWallClock()`——与 taskcard.js:238、design-init（index.js:2282-2287，`await import('./datetime.js')` 同款注入面）同口径。选生成端修复而非读取端兼容：datetime.js 头注已立规「frontmatter 人读时间字段统一本地墙钟」，CLI readBirthTs（Date.parse 裸形状按本地）与平台 `_read_born_at` 透传 + 前端本地解析都是既定读取口径，读取端为 UTC 旧值猜时区反而引入歧义。死变量 `fpDate`（toISOString 日期切片，case 内仅定义无消费）一并移除。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++命令行输出与文件结构零变化；唯一行为变化：三件骨架 frontmatter `created_at` 值从「UTC 数字的裸形状」变为「本地墙钟 YYYY-MM-DD HH:mm:ss」。无函数签名变化（case 内局部常量替换）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   不适用——单次 CLI 调用内同步计算时间戳并写盘，无事件流、无乱序面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   既有幂等保护不变（已存在不覆盖）；两进程并发首生同 change 目录的竞态是既有行为，本次只换时间戳来源，不新增竞态面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   无状态；进程中断最坏留下已写的骨架，重跑不覆盖属既有幂等语义，不受时间戳来源影响。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   时间戳取进程本机时区的本地墙钟——这正是口径（人读本机时间）；跨时区机器各自生成各自的本地墙钟，git 合并面不含 frontmatter 时间字段冲突基线，不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：存量已写 UTC 的 `created_at` 不自愈（如 2026-10-09-workspace-init-skill-gate 的 requirements/proposal 02:04:06），时间线对旧变更仍显示旧错值——接受：历史工件不改写，变更事实以 watcher 事件流为准，新变更起生效。试过放弃：①读取端按 UTC 解析无时区裸形状——无法区分「本地墙钟约定值」与「UTC 误写值」，猜错方向比不猜更糟；②created_at 显式带时区偏移（+08:00）——与 datetime.js 立的「YYYY-MM-DD HH:mm:ss 形状」约定冲突，牵动 CLI/平台全部读取面，超出本修范围。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/index.js | fourpiece-init `fpStamp` 改 `nowWallClock()`（约 2175-2177 行），移除死变量 `fpDate` |
++| 修改 | test/fourpiece-init.test.mjs | 新增本地墙钟窗回归用例（三件骨架 created_at 落窗断言） |
+diff --git a/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/proposal.md b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/proposal.md
+new file mode 100644
+index 00000000..68957d38
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T03:58:40.335Z
++---
++# 提案书（Proposal）— 2026-10-09-fourpiece-created-at-local
++
++## 动机
++
++任务原话转写：平台时间线「变更诞生」时刻错 8 小时（2026-10-09-workspace-init-skill-gate 实证：requirements/proposal created_at=02:04:06 而 design.md=09:58:48，watcher 事件流证实文件真实出现于本地 10:04:08）。根因：fourpiece-init 骨架 created_at 用 toISOString() 写 UTC 数字的裸形状（无时区标记），平台/CLI 读取端按本地墙钟解析直接显示 UTC 值。datetime.js 已立规（坑 taskcard-created-at-utc：frontmatter 人读时间统一本地墙钟），taskcard/design-init 均已改 nowWallClock，fourpiece-init 是漏网点（src/index.js:2175-2177）。
++
++成功标准：
++- fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
++- 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++- 既有 fourpiece-init 测试面全绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
++2. 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++3. 既有 fourpiece-init 测试面全绿
++
++## 成功标准（可验证）
++
++1. fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
++2. 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++3. 既有 fourpiece-init 测试面全绿
+diff --git a/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/requirements.md b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/requirements.md
+new file mode 100644
+index 00000000..22650451
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/requirements.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T03:58:40.335Z
++---
++# 需求规格（Requirements）— 2026-10-09-fourpiece-created-at-local
++
++## 功能需求
++
++### FR-01: fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
++
++- fourpiece-init 生成的三件骨架 frontmatter `created_at` **必须**为本地墙钟（`datetime.js nowWallClock()`，形状 YYYY-MM-DD HH:mm:ss），**禁止** `toISOString()` 写 UTC 数字的裸形状（无时区标记，读取端按本地墙钟解析会偏时区数）。
++
++#### 场景：非 UTC 时区生成
++
++- Given 机器时区非 UTC（实证机 UTC+8）
++- When 执行 `sillyspec fourpiece-init --change <名>` 生成三件骨架
++- Then 三件骨架 `created_at` 与生成时刻本地墙钟一致（以生成前后各取一次 nowWallClock 构成的窗断言落窗内）
++
++### FR-02: 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++
++- `test/fourpiece-init.test.mjs` **必须**新增回归用例：生成前后取本地墙钟窗，断言三件骨架 `created_at` 全部落窗；实现若退回 UTC 写入形态，在非 UTC 时区机上该断言**必须**失败（偏移出窗）。
++
++#### 场景：UTC 写入回归被拦
++
++- Given 实现退回 `toISOString()` 写入（机器时区非 UTC）
++- When 运行该回归用例
++- Then 断言失败（created_at 偏移出本地墙钟窗）
++
++### FR-03: 既有 fourpiece-init 测试面全绿
++
++- 改动落盘后，既有 fourpiece 触点测试面（`test/fourpiece-init.test.mjs` 全部用例 + `test/skeleton-provenance.test.mjs`）**必须**保持全绿。
++
++#### 场景：主路径
++
++- Given 改动已落盘
++- When `node --test test/fourpiece-init.test.mjs test/skeleton-provenance.test.mjs`
++- Then 全部用例 pass
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」
++FR-02: test/fourpiece-init.test.mjs「fourpiece-init：created_at 为本地墙钟（坑 taskcard-created-at-utc 同族回归锁）」
++FR-03: test/fourpiece-init.test.mjs「fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆盖」+ test/skeleton-provenance.test.mjs 全文件
+diff --git a/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/tasks.md b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/tasks.md
+new file mode 100644
+index 00000000..77a9defa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-fourpiece-created-at-local/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T03:58:40.335Z
++---
++# 任务注册表（Tasks）— 2026-10-09-fourpiece-created-at-local
++
++- [x] task-01: fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD HH:mm:ss，与 taskcard/design-init 同口径）
++- [x] task-02: 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
++- [x] task-03: 既有 fourpiece-init 测试面全绿

@@ -1,0 +1,39 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  平台时间线「变更诞生」时刻错 8 小时（2026-10-09-workspace-init-skill-gate 实证：requirements/proposal created_at=02:04:06 而
+  design.md=09:58:48，watcher 事件流证实文件真实出现于本地 10:04:08）。根因：fourpiece-init 骨架 created_at 用 toISOString() 写 UTC
+  数字的裸形状（无时区标记），平台/CLI 读取端按本地墙钟解析直接显示 UTC 值。datetime.js 已立规（坑 taskcard-created-at-utc：frontmatter
+  人读时间统一本地墙钟），taskcard/design-init 均已改 nowWallClock，fourpiece-init 是漏网点（src/index.js:2175-2177）。
+
+
+  成功标准：
+
+  - fourpiece-init 生成的 proposal.md/requirements.md/decisions.md 骨架 created_at 为本地墙钟（datetime.js nowWallClock，YYYY-MM-DD
+  HH:mm:ss，与 taskcard/design-init 同口径）
+
+  - 新增回归测试：生成前后本地墙钟窗断言三件骨架 created_at 全落窗内（UTC 写入在非 UTC 时区必偏移出窗）
+
+  - 既有 fourpiece-init 测试面全绿
+autopilot: true
+baseline_commit: db3d6ea88301748f11299d38deecda764141661d
+updatedAt: '2026-10-09T04:05:48.791Z'
+baseline_sha256: d22ec25453067144b2a5f2fde41b71f6c210d2cfdd7d3f755721997d26af88bd
+gate_summary: >-
+  test: passed ← module[]+deps(js29)+fr(16)（44.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009040459\test-result.json｜lint: passed
+  ← npm run lint（47.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009040459\test-result.json｜门文件 3 个
+

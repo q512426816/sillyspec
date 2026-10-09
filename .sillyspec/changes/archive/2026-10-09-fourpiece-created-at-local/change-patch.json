@@ -1,0 +1,47 @@
+{
+  "change": "2026-10-09-fourpiece-created-at-local",
+  "baseline": "db3d6ea88301748f11299d38deecda764141661d",
+  "head": "ba0b5d1bf243b717af3a8ac13de70afa5a799d9a",
+  "files": [
+    ".sillyspec/changes/2026-10-09-fourpiece-created-at-local/design.md",
+    ".sillyspec/changes/2026-10-09-fourpiece-created-at-local/flow-state.yaml",
+    ".sillyspec/changes/2026-10-09-fourpiece-created-at-local/proposal.md",
+    ".sillyspec/changes/2026-10-09-fourpiece-created-at-local/requirements.md",
+    ".sillyspec/changes/2026-10-09-fourpiece-created-at-local/tasks.md",
+    "src/index.js",
+    "test/fourpiece-init.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 182,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-09T04:05:47.283Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "9112f171e89481d4eb039841aa6f7784d0d36d7a9efb6cec98a49b6fd184fe03",
+  "patchStatus": "ok"
+}
