@@ -1686,7 +1686,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     try {
       const { harvestSlot4Decision } = await import('./flow-parity.js')
       const h = harvestSlot4Decision({ changeDir, change })
-      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（随蒸馏链进 knowledge）`)
+      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（底稿——作答里的放弃方案请拆成 rejected 条目再收口；随蒸馏链进 knowledge）`)
     } catch { /* 收割 best-effort */ }
     try {
       const { distillIntoKnowledge } = await import('./decision-distill.js')
