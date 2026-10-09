@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-archive-integrity-thin-aware",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-archive-integrity-thin-aware:flow:测试绑定FR-01",
+      "tests": [
+        "test/doctor-archive-integrity.test.mjs「14a thin 归档无 plan.md → pass（flow-state.yaml 在场豁免）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-archive-integrity-thin-aware"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-archive-integrity-thin-aware:flow:测试绑定FR-02",
+      "tests": [
+        "test/doctor-archive-integrity.test.mjs「14b thin 任务未勾 → 仍报（豁免不洗白完成面）」",
+        "test/doctor-archive-integrity.test.mjs「15a-c thin 勾选契约 epoch 三断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-archive-integrity-thin-aware"
+    }
+  ]
+}

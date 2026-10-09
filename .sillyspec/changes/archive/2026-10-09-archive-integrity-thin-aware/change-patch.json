@@ -1,0 +1,47 @@
+{
+  "change": "2026-10-09-archive-integrity-thin-aware",
+  "baseline": "264c4cc42098d4f3371f5124af4c208e35096c97",
+  "head": "2edde8bd4addf24e870503ff287d587447203d68",
+  "files": [
+    ".sillyspec/changes/2026-10-09-archive-integrity-thin-aware/design.md",
+    ".sillyspec/changes/2026-10-09-archive-integrity-thin-aware/requirements.md",
+    ".sillyspec/changes/2026-10-09-archive-integrity-thin-aware/tasks.md",
+    "src/doctor-diagnostics.js",
+    "test/doctor-archive-integrity.test.mjs",
+    ".sillyspec/changes/2026-10-09-archive-integrity-thin-aware/proposal.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 186,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-09T00:19:42.430Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 9,
+  "patchSha256": "b8f20180c1bec78b866f1a3aa93f33769a5802ef2a4e8ad2ef9254a7323297e1",
+  "patchStatus": "ok"
+}

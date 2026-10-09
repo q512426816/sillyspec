@@ -1,0 +1,37 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "264c4cc42098d4f3371f5124af4c208e35096c97",
+  "totals": {
+    "files": 2,
+    "additions": 46,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 15,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/doctor-archive-integrity.test.mjs",
+      "additions": 31,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "flow done 时点冻结（本文件落盘时采集）",
+  "closedBy": "flow done",
+  "patchSha256": "b8f20180c1bec78b866f1a3aa93f33769a5802ef2a4e8ad2ef9254a7323297e1",
+  "patchStatus": "ok",
+  "savedAt": "2026-10-09T00:19:42.430Z"
+}

@@ -1,0 +1,264 @@
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index abd81491..4abe0832 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -1177,10 +1177,20 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
+   for (const name of names) {
+     const dir = join(archiveDir, name);
+     const reasons = [];
+-    // ② plan.md 在场性
++    // ② plan.md 在场性——thin 协议归档豁免（2026-10-09-archive-integrity-thin-aware）：
++    //    flow-state.yaml 在场 = flow 轻量道归档，plan.md 非其契约面（厚道五阶段 plan 阶段产物）；
++    //    2026-09-29 thin-default 后轻量道成默认路径，一刀切要求 plan.md 把 172 份正常 thin 归档
++    //    全判欠账（检查模型漂移，非真欠账）。任务未勾检查不豁免——thin 也要全勾。
++    const isThinArchive = existsSync(join(dir, 'flow-state.yaml'));
++    // thin 勾选契约 epoch（2026-10-09-archive-integrity-thin-aware）：2026-10-07-thin-tasks-v3 起
++    // tasks.md checkbox 才是进度状态机/完成契约；此前 thin 归档的 tasks.md 是机器占位稿（0 勾为
++    // 当时常态，完成证据=flow done 六子步——change.patch/verify-result 在场性），勾选检查豁免。
++    // 实证：2026-09-25 thin 试验批 17 份 + 09-22/24/27/10-03 共 36 份 0-N 勾归档全属此形态。
++    const THIN_TASKS_EPOCH = '2026-10-07';
++    const isPreEpochThin = isThinArchive && String(name) < THIN_TASKS_EPOCH;
+     const planPath = join(dir, 'plan.md');
+     const hasPlan = existsSync(planPath);
+-    if (!hasPlan) reasons.push('plan.md 缺失（归档自愈基准文件）');
++    if (!hasPlan && !isThinArchive) reasons.push('plan.md 缺失（归档自愈基准文件）');
+     // ①③ 任务注册表：tasks.md 优先回退 plan.md；存在但不可读必须显式报（区分「缺席」与「读不了」）。
+     // 2026-08-20-task-truth-unify 之前的旧归档完成态勾在 plan.md（tasks.md 是留给后人的未勾任务清单）——
+     // tasks.md 有 checkbox 行但 0 勾、而 plan.md 有 ≥1 勾时，完成证据在 plan.md，切 plan.md 为完成源
+@@ -1200,7 +1210,9 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
+       return { total: t, checked: c };
+     };
+     const regPath = existsSync(tasksPath) ? tasksPath : hasPlan ? planPath : null;
+-    if (regPath) {
++    if (regPath && !isPreEpochThin) {
++      // ^ pre-epoch thin 跳过勾选检查（占位稿形态，见 THIN_TASKS_EPOCH 注释）；
++      //   注册表「存在但不可读」显式报的语义对 pre-epoch thin 同样不适用（其不可读非欠账面）
+       try {
+         let stat = readRegistry(regPath);
+         if (regPath === tasksPath && stat.total > 0 && stat.checked === 0 && hasPlan) {
+diff --git a/test/doctor-archive-integrity.test.mjs b/test/doctor-archive-integrity.test.mjs
+index 428412dd..556f0758 100644
+--- a/test/doctor-archive-integrity.test.mjs
++++ b/test/doctor-archive-integrity.test.mjs
+@@ -17,6 +17,8 @@
+  *      前完成态在 plan.md；真实仓 sqlite-migration tasks 0/15 + plan 15/15 首扫实证）
+  *  12. tasks 与 plan 都 0 勾 → 仍报未勾（完成源切换不许洗白真欠账）
+  *  13. 无 tasks.md + plan.md 全勾 → pass（纯 plan 旧契约，防回归）
++ * 14. thin 协议归档（flow-state.yaml）无 plan.md → pass（2026-10-09-archive-integrity-thin-aware：
++ *     plan.md 非轻量道契约面）；thin 任务未勾 → 仍报（豁免不洗白完成面）
+  *
+  * 风格：自研 assert + tmp fixture（同 doctor-lifecycle-doc.test.mjs）。
+  */
+@@ -57,13 +59,14 @@ function getDim(result) {
+ }
+ 
+ /** 在 fixture 的 changes/archive/ 下造一份归档。tasks:'dir' 模拟不可读（同名目录 → readFileSync EISDIR）。 */
+-function makeArchive(root, name, { tasks, plan } = {}) {
++function makeArchive(root, name, { tasks, plan, flowState } = {}) {
+   const dir = join(root, '.sillyspec', 'changes', 'archive', name)
+   mkdirSync(dir, { recursive: true })
+   if (tasks === 'dir') mkdirSync(join(dir, 'tasks.md'))
+   else if (tasks != null) writeFileSync(join(dir, 'tasks.md'), tasks)
+   if (plan === true) writeFileSync(join(dir, 'plan.md'), '# 计划\nlegacy 占位（无 checkbox）\n')
+   else if (typeof plan === 'string') writeFileSync(join(dir, 'plan.md'), plan)
++  if (flowState) writeFileSync(join(dir, 'flow-state.yaml'), 'stage: done\n')
+   return dir
+ }
+ 
+@@ -325,6 +328,33 @@ async function frCase(prefix, { archiveName, requirements, indexChange, indexWit
+   assert(/"name":\s*"archive_integrity"[\s\S]*?"pass":\s*true/.test(out), '10b 端到端完整归档 pass=true')
+ }
+ 
++// ── 15. thin 勾选契约 epoch（THIN_TASKS_EPOCH=2026-10-07，thin-tasks-v3 前占位稿形态）──
++{
++  const root = makeTmpDir('dr-arch-15-')
++  makeArchive(root, '2026-09-25-thin-placeholder', { tasks: '- [ ] task-01: 完成实现并使 flow done 六子步全绿\n', flowState: true })
++  let dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, '15a pre-epoch thin 未勾（占位稿）→ pass（完成证据=flow done 六子步）')
++  makeArchive(root, '2026-10-08-thin-real', { tasks: PARTIAL_TASKS, flowState: true })
++  dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  const off = (dim.offenders || []).find((o) => o.name === '2026-10-08-thin-real')
++  assert(off, '15b post-epoch thin 未勾 → 仍报（勾选契约生效后不豁免）')
++  const offPre = (dim.offenders || []).find((o) => o.name === '2026-09-25-thin-placeholder')
++  assert(!offPre, '15c pre-epoch thin 不进 offenders')
++}
++
++// ── 14. thin 协议归档豁免 plan.md（2026-10-09-archive-integrity-thin-aware）──
++{
++  const root = makeTmpDir('dr-arch-14-')
++  makeArchive(root, '2026-10-08-thin-ok', { tasks: ALL_CHECKED_TASKS, flowState: true })
++  let dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, '14a thin 归档无 plan.md → pass（flow-state.yaml 在场豁免）')
++  makeArchive(root, '2026-10-09-thin-unch', { tasks: PARTIAL_TASKS, flowState: true })
++  dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  const off = (dim.offenders || []).find((o) => o.name === '2026-10-09-thin-unch')
++  assert(dim && dim.pass === false && off, '14b thin 任务未勾 → 仍报（豁免不洗白完成面）')
++  assert(off && !off.reasons.some((r) => r.includes('plan.md')), '14c 未勾 offender 不含 plan.md 假理由')
++}
++
+ for (const dir of tmpRoots) {
+   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
+ }
+diff --git a/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/design.md b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/design.md
+new file mode 100644
+index 00000000..d9cfbf1d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:07:21.418Z
++---
++# 设计记录（Design Record）— 2026-10-09-archive-integrity-thin-aware
++
++## 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | src/doctor-diagnostics.js | detectArchiveIntegrity：thin 协议归档判别（flow-state.yaml → plan.md 豁免）+ THIN_TASKS_EPOCH=2026-10-07 勾选契约时代规则 |
++| 修改 | test/doctor-archive-integrity.test.mjs | makeArchive 增 flowState 选项；用例 14（thin plan 豁免/未勾不洗白）+ 用例 15（epoch 三断言） |
++| 修改 | .sillyspec/archive-integrity-exempt.yaml | 批量补录 42 条历史形态条目（五类理由，走本变更裁决） |
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++推送 pre-push 的 advisory 点名 200+ 份归档欠账，普查实证为检查模型漂移而非真欠账：①172 份 flow-state.yaml 在场的 thin 归档无 plan.md 属契约正常（plan.md 是厚道 plan 阶段产物；2026-09-29 thin-default 后轻量道成默认路径，误报持续增长）——修检查：thin 判别豁免 plan.md 在场性；②36 份 2026-10-07-thin-tasks-v3 之前的 thin 归档 tasks 0 勾属当时占位稿形态（完成证据=flow done 六子步，勾选契约 v3 才建立）——修检查：THIN_TASKS_EPOCH 时代规则；③42 份真历史形态（pre-plan-约定双无/quick 通道/纯提案 spike/远古未勾/09-10 手写分解/thin-FR 蒸馏接线落地前窗口）——按账本纪律走本变更裁决批量入账（不伪造 plan.md/不补勾篡改历史）。修检查与入账的分工沿既有先例：系统性协议变迁用代码规则（task-truth-unify 回退同款），个案形态用账本。终态：627 份归档全过、offenders=0、58 份豁免在案——advisory 从此只对未来新账响。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- detectArchiveIntegrity 行为变化：thin 归档（flow-state.yaml）不再报 plan.md 缺失；pre-epoch（<2026-10-07）thin 归档不再报任务未勾与注册表不可读；厚道归档两项检查零变化；FR 索引检查零变化。
++- doctor 输出：archive_integrity 维度 findings 从「200+ 份欠账 advisory」变为「N 份归档完整 + 豁免注记」。
++- 无端点/命令/文件格式变更；豁免账本为数据文件增条（格式沿既有 entries 段）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   不适用：检查为归档目录纯读快照，无事件面；epoch 比较为目录名字典序（日期前缀归档名恒定，无乱序可能）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   只读检查无共享写面；账本追加为一次性变更内编辑（git 管理）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   检查即起即落无状态；中断不产生半态（账本为静态文件）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   扫描锚 authoritySpecDir 的 changes/archive，各仓各自扫各自豁免；无串台面。flow-state.yaml 判别为目录内事实，无跨目录推断。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：epoch 豁免面过宽——若有人在 2026-10-07 前的 thin 归档里真留了未完成工作，本检查不再点名（归档完成门在 flow done 六子步当时已判，事后无法区分占位稿与漏勾）。接受理由：v3 前勾选不是完成契约（无机械区分依据），误报 36 份 vs 漏检理论值的代价权衡明确；新账（epoch 后）照常严查。次风险：批量入账 42 条若混入真欠账——逐条按五类理由归类（每类有形态证据：quick 通道产物有 decisions+delta 无 flow-state、spike 仅 proposal.md 等），且账本条目带 exempted_at 可追溯，stale 条目 doctor 会提示清理。放弃的方案：簿记补勾 36 份 pre-epoch thin（伪造完成态，违 2026-09-17 裁决）；全部走账本不修检查（172 份系统性误报逐条入账是拿账本抹平检查缺陷，且未来 thin 归档持续新增误报）；只修检查不入账（42 份真历史形态继续亮红，advisory 狼来了）。
+diff --git a/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/requirements.md b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/requirements.md
+new file mode 100644
+index 00000000..1ea43190
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/requirements.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:07:21.418Z
++---
++# 需求规格（Requirements）— 2026-10-09-archive-integrity-thin-aware
++
++## 功能需求
++
++### FR-01: detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
++
++- detectArchiveIntegrity 对 flow-state.yaml 在场的归档（thin 协议）必须豁免 plan.md 在场性要求（plan.md 是厚道五阶段产物、非 thin 契约面）；任务未勾检查与厚道归档的 plan.md 要求必须零变化。
++
++#### 场景：thin 豁免
++
++- Given fixture：tasks 全勾 + flow-state.yaml + 无 plan.md；When 扫描；Then pass 且零 offender。
++
++### FR-02: 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
++
++- 测试必须覆盖：thin 无 plan.md → pass；thin 任务未勾 → 仍报且理由不含 plan.md；pre-epoch（<2026-10-07）thin 未勾占位稿 → pass；post-epoch thin 未勾 → 仍报。
++
++#### 场景：豁免不洗白
++
++- Given thin 归档 tasks 部分勾；When 扫描；Then offender 在场（理由仅未勾）。
++
++### FR-03: 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
++
++- 实现必须含 THIN_TASKS_EPOCH=2026-10-07 时代规则（2026-10-07-thin-tasks-v3 前 thin 归档 tasks.md 为机器占位稿、完成证据=flow done 六子步——勾选检查豁免；v3 后不豁免）；豁免账本必须补录剩余历史形态条目（双无远古/quick 通道/纯提案 spike/远古未勾/09-10 手写分解/thin-FR 蒸馏接线前窗口五类理由），本变更为裁决流程。
++
++#### 场景：清账终态
++
++- Given 本变更落盘；When 真图 doctor 扫描；Then offenders=0、627 份归档 pass、58 份豁免在案。
++
++### FR-04: 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归
++
++- 全量测试必须绿（test:core）、lint 必须零告警。
++
++#### 场景：回归面
++
++- Given 全部落盘；When 全量测试与 lint；Then 零失败零新告警。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/doctor-archive-integrity.test.mjs「14a thin 归档无 plan.md → pass（flow-state.yaml 在场豁免）」
++FR-02: test/doctor-archive-integrity.test.mjs「14b thin 任务未勾 → 仍报（豁免不洗白完成面）」「15a-c thin 勾选契约 epoch 三断言」
++FR-03: 真图终验（doctor archive_integrity offenders=0 / 627 pass / 58 豁免）+ 账本 diff 自证（42 条五类理由批量入账）
++FR-04: test:core 325 全绿 + npm run lint 零告警（verify-runs 留档）
+diff --git a/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/tasks.md b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/tasks.md
+new file mode 100644
+index 00000000..7a1b42dc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:07:21.418Z
++---
++# 任务注册表（Tasks）— 2026-10-09-archive-integrity-thin-aware
++
++- [x] task-01: detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
++- [x] task-02: 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
++- [x] task-03: 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
++- [x] task-04: 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归
+diff --git a/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/proposal.md b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-09-archive-integrity-thin-aware/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-09T00:07:21.418Z
++---
++# 提案书（Proposal）— 2026-10-09-archive-integrity-thin-aware
++
++## 动机
++
++任务原话转写：D14 归档完整性重扫误报治理：thin 协议归档 plan.md 豁免 + 历史形态账本清账。
++
++动机与背景：
++推送时 pre-push advisory 点名 200+ 份归档欠账。普查实证其构成：172 份是 flow-state.yaml 在场的 thin 协议归档（无 plan.md 属契约正常——plan.md 是厚道五阶段 plan 阶段产物；2026-09-29 thin-default 后轻量道成默认路径，误报持续增长）；~24 份双无（pre-plan-约定远古/quick 通道退役形态/纯提案 spike）；3 份任务未勾（pre-2026-08-20 历史形态，完成证据无处回查）。D14 把厚道契约一刀切套全量归档——检查模型漂移，非真欠账。
++
++成功标准：
++- detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
++- 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
++- 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
++- 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
++2. 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
++3. 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
++4. 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归
++
++## 成功标准（可验证）
++
++1. detectArchiveIntegrity 增 thin 协议归档判别（flow-state.yaml 在场 → plan.md 在场性要求豁免，注记归档形态）；任务未勾检查不豁免（thin 也要全勾）；厚道（无 flow-state.yaml）plan.md 要求不变
++2. 测试新增：thin 归档无 plan.md → pass；thin 归档任务未勾 → 仍报（豁免不洗白）
++3. 豁免账本补录剩余历史形态条目（双无远古/quick 形态/纯提案 spike/未勾三份）——本变更即裁决流程（账本纪律：入账须走变更流程）
++4. 真图终验：doctor archive_integrity offenders 归零（或仅剩未来新账）；全量测试与 lint 零回归

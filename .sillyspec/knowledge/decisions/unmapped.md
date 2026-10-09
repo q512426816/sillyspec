@@ -2040,3 +2040,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：61bf5923b9cb4e3826834ecfaceee0a09cb49622
 理由：最大风险：映射行内塞多命令（关系面一行含 impact/neighbors/path/summary 四命令）信息密度高——单行过长可能被 agent 扫读跳过。缓解：行内用顿号分层（主命令 impact 打头、推理链与健康度退居从句）；钉子测试锚串保证四命令不丢。旧版 CLI（<3.33）项目跑新兵器命令报 unknown subcommand 自然回退 rg（fail-soft，与 graph 兵器同款既裁边界）。放弃的方案：兵器逐条加操作项（search/status 各一项）——弃，清单会回到 9 项且场景与兵器割裂；CLI 侧预取注入（{ARSENAL_FACTS} 类占位符）——弃，探索话题不可预知，全量预取浪费且复刻知识注入面。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-09-archive-integrity-thin-aware
+锚点：未记录
+最近确认：2edde8bd4addf24e870503ff287d587447203d68
+理由：最大风险：epoch 豁免面过宽——若有人在 2026-10-07 前的 thin 归档里真留了未完成工作，本检查不再点名（归档完成门在 flow done 六子步当时已判，事后无法区分占位稿与漏勾）。接受理由：v3 前勾选不是完成契约（无机械区分依据），误报 36 份 vs 漏检理论值的代价权衡明确；新账（epoch 后）照常严查。次风险：批量入账 42 条若混入真欠账——逐条按五类理由归类（每类有形态证据：quick 通道产物有 decisions+delta 无 flow-state、spike 仅 proposal.md 等），且账本条目带 exempted_at 可追溯，stale 条目 doctor 会提示清理。放弃的方案：簿记补勾 36 份 pre-epoch thin（伪造完成态，违 2026-09-17 裁决）；全部走账本不修检查（172 份系统性误报逐条入账是拿账本抹平检查缺陷，且未来 thin 归档持续新增误报）；只修检查不入账（42 份真历史形态继续亮红，advisory 狼来了）。
