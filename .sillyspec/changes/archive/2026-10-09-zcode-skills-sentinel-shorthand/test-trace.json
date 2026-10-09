@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-zcode-skills-sentinel-shorthand",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-01",
+      "tests": [
+        "test/init-zcode-skills.test.mjs「① .zcode 在场 → zcode 进发现列表」",
+        "test/init-zcode-skills.test.mjs「② skillToolDirs 含 zcode 映射（源级钉）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-zcode-skills-sentinel-shorthand"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-02",
+      "tests": [
+        "test/sentinel-token-shorthand.test.mjs「① 连写组三形态展开：三任务全有证据（不再误拒）」",
+        "test/sentinel-token-shorthand.test.mjs「② expandTaskShorthand 纯函数：补零/边界/非连写零变化」",
+        "test/sentinel-token-shorthand.test.mjs「③ 前瞻边界：task-01 不证 task-010；未勾全不误判」",
+        "test/sentinel-token-shorthand.test.mjs「④ 既有独立 token 行为零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-zcode-skills-sentinel-shorthand"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-03",
+      "tests": [
+        "test/init-zcode-skills.test.mjs「③ 既有六信号发现零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-zcode-skills-sentinel-shorthand"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-05",
+      "tests": [
+        "test/init-zcode-skills.test.mjs「①-③ 全绿」",
+        "test/sentinel-token-shorthand.test.mjs「①-④ 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-zcode-skills-sentinel-shorthand"
+    }
+  ]
+}

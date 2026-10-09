@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-zcode-skills-sentinel-shorthand",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "016968bd0934f80bd16955b92803cdee7fcdda67",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "边界裁决": "已裁决可接受：①「CLI 命令面/npm 入口零变化」——diff 仅新增导出与内部分支，无命令注册面改动；②FR-04 三技能无独立测试面——纯文档资产随包分发，落点同步行为由 FR-01 用例（test/init-zcode-skills.test.mjs①②）钉住；③detectTools 私有改导出——仅加法扩大可测面，无消费者破坏。检查单逐条：1) FR↔实现↔测试三方核对（FR-01↔init.js 两分支↔测试①②；FR-02↔expandTaskShorthand+哨兵/autopilot 双消费点↔测试①-④；FR-03↔六信号分支未动↔测试③；FR-05↔7 用例亲跑全过+lint 916 文件零问题）；2) 盲维四问与纯函数/存在性快照实态相符；4) 前瞻防护（尾数前瞻断言 + 1-2 位数字段双约束）在源码在场且被测试③（task-010 不证、task-01/013 整组不切）锁死；5) 无类型/契约生成物，不适用"
+  },
+  "reviewedAt": "2026-10-09T01:15:30.000Z"
+}

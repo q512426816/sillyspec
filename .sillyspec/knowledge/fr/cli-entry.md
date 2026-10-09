@@ -7769,3 +7769,86 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-08-thin-done-dirty-gate-and-paren-attribution
   status: active
+
+## FR-cli-entry-410 .zcode 在场 → detectTools 发现 zcode；skillToolDirs 含 zcode→.zcode/skills 映射（--tool zcode 技能可落）
+变更：2026-10-09-zcode-skills-sentinel-shorthand
+状态：active
+摘要：.zcode 项目技能同步
+全文：.sillyspec/changes/archive/2026-10-09-zcode-skills-sentinel-shorthand/requirements.md#FR-01
+最近确认：016968bd0934f80bd16955b92803cdee7fcdda67
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-01
+  tests: test/init-zcode-skills.test.mjs「① .zcode 在场 → zcode 进发现列表」 | test/init-zcode-skills.test.mjs「② skillToolDirs 含 zcode 映射（源级钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-zcode-skills-sentinel-shorthand
+  status: active
+
+## FR-cli-entry-411 连写组三形态（斜杠/顿号/逗号+空格）展开后任务全有完成证据；补零归一；task-010/版本串三连数字不误切；既有独立 token 行为零变化
+变更：2026-10-09-zcode-skills-sentinel-shorthand
+状态：active
+摘要：连写组一次交付多任务
+全文：.sillyspec/changes/archive/2026-10-09-zcode-skills-sentinel-shorthand/requirements.md#FR-02
+最近确认：016968bd0934f80bd16955b92803cdee7fcdda67
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-02
+  tests: test/sentinel-token-shorthand.test.mjs「① 连写组三形态展开：三任务全有证据（不再误拒）」 | test/sentinel-token-shorthand.test.mjs「② expandTaskShorthand 纯函数：补零/边界/非连写零变化」 | test/sentinel-token-shorthand.test.mjs「③ 前瞻边界：task-01 不证 task-010；未勾全不误判」 | test/sentinel-token-shorthand.test.mjs「④ 既有独立 token 行为零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-zcode-skills-sentinel-shorthand
+  status: active
+
+## FR-cli-entry-412 既有六工具信号（claude/cursor/openclaw/codex/gemini/opencode）发现零变化
+变更：2026-10-09-zcode-skills-sentinel-shorthand
+状态：active
+摘要：六信号回归
+全文：.sillyspec/changes/archive/2026-10-09-zcode-skills-sentinel-shorthand/requirements.md#FR-03
+最近确认：016968bd0934f80bd16955b92803cdee7fcdda67
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-03
+  tests: test/init-zcode-skills.test.mjs「③ 既有六信号发现零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-zcode-skills-sentinel-shorthand
+  status: active
+
+## FR-cli-entry-413 三个新技能随 .claude/skills 源分发，init 同步可达
+变更：2026-10-09-zcode-skills-sentinel-shorthand
+状态：active
+摘要：CLI 升级刷新技能
+全文：.sillyspec/changes/archive/2026-10-09-zcode-skills-sentinel-shorthand/requirements.md#FR-04
+最近确认：016968bd0934f80bd16955b92803cdee7fcdda67
+
+## FR-cli-entry-414 新增两测试文件（7 用例）+ lint 全绿
+变更：2026-10-09-zcode-skills-sentinel-shorthand
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-10-09-zcode-skills-sentinel-shorthand/requirements.md#FR-05
+最近确认：016968bd0934f80bd16955b92803cdee7fcdda67
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-zcode-skills-sentinel-shorthand:flow:测试绑定FR-05
+  tests: test/init-zcode-skills.test.mjs「①-③ 全绿」 | test/sentinel-token-shorthand.test.mjs「①-④ 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-zcode-skills-sentinel-shorthand
+  status: active
