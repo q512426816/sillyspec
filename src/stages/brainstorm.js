@@ -220,6 +220,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
 3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案
 4. 给出推荐方案和理由
 5. 用户选定方案后，把选择结果**当场追加**到 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则
 
 ### 铁律 — 必须等待用户选择方案
 - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
@@ -382,7 +383,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
    - 已落盘条目按 D-xxx@vN 判重，不重复追加；补全缺失的九字段与可选字段
-   - 前序遗漏未落盘、确有实现影响的决策（增量规则漏网的），此时补写；每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
+   - 前序遗漏未落盘、确有实现影响的决策（增量规则漏网的），此时补写；每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...；放弃方案属此类——「提出方案」步的落选方案若未各记 rejected 条目（否决理由/复潮条件必填），此时补记
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
    - 九字段之外可另加四个可选字段，按需填写、不强制全填（旧格式决策记录缺这些字段不受影响）：
