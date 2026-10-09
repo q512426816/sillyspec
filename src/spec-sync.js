@@ -463,6 +463,94 @@ function clearSpecConflictMarker(specRoot, changeName) {
   } catch { /* 清理失败不影响同步结果 */ }
 }
 
+// ── 2026-10-09-tombstone-conflict-root-fix FR-01：纯墓碑拒收按被删变更归因记账 ──
+// 背景（91 条实证）：整树同步被墓碑整批拒收时按「当轮同步标签」落冲突文件——一个
+// 根因（changes/salv 两路径）伪装成 91 个变更的冲突；该批变更归档后永不再以同名
+// 同步成功，clearSpecConflictMarker 永远轮不到 → 记录单调累积。归因记账：从
+// platform_deleted 路径剥被删变更名（真凶），每被删变更一条记录幂等维护。
+
+/**
+ * 从 platform_deleted 路径剥被删变更名：活跃区 changes/<name>/… 与归档区
+ * changes/archive/<name>/… 两前缀；剥不出的路径归 __unattributed__ 聚合桶
+ * （正常不出现——守卫只对 changes/ 前缀写墓碑；出现即提示人工核查）。
+ */
+export function extractTombstonedChanges(platformDeleted) {
+  const byChange = new Map();
+  for (const p of platformDeleted) {
+    let name = '__unattributed__';
+    const m = typeof p === 'string' ? p.match(/^changes\/(?:archive\/)?([^/]+)\//) : null;
+    if (m) name = m[1];
+    const list = byChange.get(name) || [];
+    list.push(p);
+    byChange.set(name, list);
+  }
+  return byChange;
+}
+
+/**
+ * 归因记账落盘（幂等合并）：spec-sync-conflict-<被删变更>.json，created_at 首见
+ * 保持、platform_deleted 路径并集、last_seen 每轮刷新；kind='tombstone' 供
+ * progress show / daemon 摘要按形态区分（stage-machine 优先读 kind 透传 type）。
+ * 返回 { byChange, written } 供横幅单根因叙事。
+ */
+export function writeTombstoneAttribution(specRoot, platformDeleted) {
+  const byChange = extractTombstonedChanges(platformDeleted);
+  const written = [];
+  for (const [name, paths] of byChange) {
+    const filePath = join(specRoot, '.runtime', `spec-sync-conflict-${name}.json`);
+    let prev = null;
+    try { prev = JSON.parse(readFileSync(filePath, 'utf8')); } catch { /* 首见 */ }
+    const record = {
+      change: name,
+      kind: 'tombstone',
+      created_at: (prev && prev.created_at) || new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+      server_versions: {},
+      conflicting_paths: [],
+      platform_deleted: [...new Set([...((prev && prev.platform_deleted) || []), ...paths])],
+      note: '路径被平台删除墓碑拒收（非版本冲突，resolve 重推无效）。恢复通道：平台 manifest-heal 清墓碑后重推；或平台删除变更时 tombstone_cleanup 收敛本机目录（.runtime/tombstone-quarantine/ 隔离区）。',
+    };
+    try {
+      mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+      writeFileSync(filePath, JSON.stringify(record, null, 2) + '\n', 'utf8');
+      written.push(filePath);
+    } catch (e) {
+      console.warn(`[spec-sync] 墓碑冲突文件写入失败（信息仅打印）: ${e.message}`);
+    }
+  }
+  return { byChange, written };
+}
+
+/**
+ * 全绿同步清陈旧纯墓碑记录（2026-10-09 FR-01）：判定式 = conflicting_paths 为空
+ * 且 platform_deleted 非空（kind 无关——覆盖 kind:'tombstone'、现行 kind:'spec-tree'
+ * 纯墓碑与存量旧格式 91 条）；混合形态（conflicting_paths 非空）永不清理。返回
+ * 清理条数。挂在两个全绿点：POST 成功无冲突分支与无差异跳过分支。
+ */
+export function clearStaleTombstoneMarkers(specRoot) {
+  const runtimeDir = join(specRoot, '.runtime');
+  let files = [];
+  try { files = readdirSync(runtimeDir); } catch { return 0; }
+  let cleared = 0;
+  for (const f of files) {
+    if (!f.startsWith('spec-sync-conflict-') || !f.endsWith('.json')) continue;
+    const p = join(runtimeDir, f);
+    try {
+      const j = JSON.parse(readFileSync(p, 'utf8'));
+      const cp = Array.isArray(j.conflicting_paths) ? j.conflicting_paths : null;
+      const pd = Array.isArray(j.platform_deleted) ? j.platform_deleted : null;
+      if (cp !== null && cp.length === 0 && pd !== null && pd.length > 0) {
+        unlinkSync(p);
+        cleared++;
+      }
+    } catch { /* 损坏文件不动 */ }
+  }
+  if (cleared > 0) {
+    console.log(`[spec-sync] 全绿同步清理 ${cleared} 条陈旧墓碑冲突记录（被删变更已收敛）`);
+  }
+  return cleared;
+}
+
 // follower/stale 提示的跨轮去重（坑 spec-sync-follow-banner-spam，2026-09-08 用户反馈③）：
 // 「N 个本地未改动文件自动跟随服务器」的信息只在集合**首次出现/变化**时有价值。基线快照锚定
 // local-at-last-sync（见 writeBaseSnapshot 注释），本地落后于服务器的文件每轮都重新算出同样的
@@ -584,6 +672,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
 
   if (ops.length === 0) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${changeName}`);
+    clearStaleTombstoneMarkers(specRoot);
     return { synced: 0 };
   }
 
@@ -634,27 +723,15 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // 纯墓碑形态：版本冲突面为空、拒收全是墓碑 → 不写/不清通用冲突标记（clear 会把
       // 状态洗成「已消解」误导 status），单独落冲突文件 + 正确恢复指引。
       if (realPaths.length === 0 && tombstoned.length > 0) {
-        let tombConflictPath = null;
-        try {
-          const runtimeDir = join(specRoot, '.runtime');
-          mkdirSync(runtimeDir, { recursive: true });
-          tombConflictPath = join(runtimeDir, `spec-sync-conflict-${changeName}.json`);
-          writeFileSync(tombConflictPath, JSON.stringify({
-            change: changeName,
-            kind: 'spec-tree',
-            created_at: new Date().toISOString(),
-            server_versions: {},
-            conflicting_paths: [],
-            platform_deleted: tombstoned,
-            note: '路径被平台删除墓碑拒收（非版本冲突，resolve 重推无效）。恢复通道：平台 manifest-heal 清墓碑后重推，或联系管理员确认删除是否有意。',
-          }, null, 2) + '\n', 'utf8');
-        } catch (e) {
-          console.warn(`[spec-sync] 墓碑冲突文件写入失败（信息仅打印）: ${e.message}`);
-        }
+        // 归因记账（2026-10-09 FR-01）：按被删变更落 spec-sync-conflict-<被删变更>.json
+        // （不再用当轮同步标签——91 条累积根因），幂等合并；横幅按被删变更单根因叙事。
+        const { byChange, written } = writeTombstoneAttribution(specRoot, tombstoned);
         console.warn('');
-        console.warn(`⚠️ [spec-sync] ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve --keep-local 重推无效）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`);
-        console.warn(`⚠️ 恢复通道：平台 manifest-heal（清墓碑后重推即闭环）；详情: ${tombConflictPath || '(写入失败)'}`);
-        return { synced: 0, conflict: true, serverVersions: {}, tombstoned, conflictPath: tombConflictPath };
+        for (const [name, paths] of byChange) {
+          console.warn(`⚠️ [spec-sync] 变更 ${name} 被平台删除墓碑拒收（${paths.length} 个路径，非版本冲突，resolve --keep-local 重推无效）: ${paths.slice(0, 5).join(', ')}${paths.length > 5 ? ' 等' : ''}`);
+        }
+        console.warn(`⚠️ 恢复通道：平台 manifest-heal（清墓碑后重推即闭环）或 tombstone_cleanup 收敛本机目录；详情: ${written.join(', ') || '(写入失败)'}`);
+        return { synced: 0, conflict: true, serverVersions: {}, tombstoned, conflictPath: written[0] || null, tombstonedChanges: [...byChange.keys()] };
       }
       const tombNote = tombstoned.length > 0
         ? `\n⚠️ 另有 ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve 无效；恢复走平台 manifest-heal）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`
@@ -717,6 +794,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
     // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）
     clearSpecConflictMarker(specRoot, changeName);
+    clearStaleTombstoneMarkers(specRoot);
     writeLastSyncTs(specRoot);
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };

@@ -369,12 +369,19 @@ export class StageMachine {
       if (!(isProgress || f.startsWith('spec-sync-conflict-')) || !f.endsWith('.json')) continue;
       let change = f.replace(/^spec-sync-conflict-|^sync-conflict-/, '').replace(/\.json$/, '');
       let createdAt = null;
+      let kind = null;
       try {
         const cf = JSON.parse(readFileSync(join(runtimeDir, f), 'utf8'));
         change = cf.change || change;
         createdAt = cf.created_at || null;
+        kind = typeof cf.kind === 'string' ? cf.kind : null;
       } catch { /* 损坏文件按文件名兜底，不崩 */ }
-      conflicts.push({ change, created_at: createdAt, type: isProgress ? 'progress' : 'spec-tree' });
+      // 2026-10-09-tombstone-conflict-root-fix FR-01：kind='tombstone' 优先透传
+      // （归因记账新形态——daemon 摘要/前端据此区分墓碑冲突与版本冲突）；文件名
+      // 前缀判定保留兜底（旧格式/损坏文件）。
+      const type = kind === 'tombstone' ? 'tombstone'
+        : isProgress ? 'progress' : 'spec-tree';
+      conflicts.push({ change, created_at: createdAt, type });
     }
     return conflicts;
   }
