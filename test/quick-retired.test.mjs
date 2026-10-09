@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
-  assert(pkg.version === '3.32.1', `R5 package.json 版本 3.32.1（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+  assert(pkg.version === '3.32.2', `R5 package.json 版本 3.32.2（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
 }
 
 cleanupTmpDirs()
