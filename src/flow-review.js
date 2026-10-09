@@ -244,6 +244,10 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
     `  5. 生成物同步（如涉及）：类型/契约文件与实现对齐？`,
     ``,
     `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
+    // 代行惯例（坑 flow-done-sentinel-token-split ②，2026-10-08 实证）：宿主无已注册子代理
+    // 通道时无法照做「起子代理」——主会话按检查单代行自审可接受，reviewer 字段如实标注
+    // 降级（如 inline-self（环境无已注册子代理）），独立性承诺的折扣显式留痕。
+    `【无子代理通道时】宿主 agents 目录为空 → 主会话可按检查单代行自审，reviewer 字段如实标注（如 "inline-self（环境无已注册子代理，主会话代行）"）——降级留痕，勿伪装 subagent。`,
     ``,
     `【产物 schema（写到 ${join(changeDir, 'review.json')}，UTF-8 JSON）】`,
     `{`,

@@ -26,6 +26,24 @@ function taskTokenRe(id) {
 }
 
 /**
+ * 提交消息连写 token 组展开（坑 flow-done-sentinel-token-split，2026-10-08 实证）：
+ * `task-01/02/03`、`task-1、2，03` 等自然语言连写组只含首个完整 token——字面匹配判
+ * 其余为零完成证据误拒收。展开为独立规范 token（补零到两位，与判集行锚同形）后再判；
+ * 尾数不跟数字（防 task-013 版本串误切）。纯函数，供哨兵判定与 autopilot 勾选提取共用。
+ */
+export function expandTaskShorthand(messages) {
+  return (Array.isArray(messages) ? messages : []).map((msg) =>
+    String(msg ?? '').replace(
+      /task-(\d{1,2})((?:\s*[\/、，,；;]\s*\d{1,2}(?!\d))+)/gi,
+      (full, first, rest) =>
+        ' ' + [first, ...(rest.match(/\d{1,2}/g) || [])]
+          .map((n) => `task-${String(Number(n)).padStart(2, '0')}`)
+          .join(' ') + ' '
+    )
+  );
+}
+
+/**
  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
  */
 function listReviewEvidence(changeDir, opts) {
@@ -84,11 +102,13 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
     return { status: 'none', claimTotal, checked, missing: [] };
   }
   const reviews = listReviewEvidence(changeDir, opts);
+  // 连写组先展开（坑 flow-done-sentinel-token-split）：task-01/02/03 → 独立 token 再字面判
+  const expanded = expandTaskShorthand(messages);
   const missing = entries
     .filter((e) => {
       if (!e.checked) return false;
       const re = taskTokenRe(e.id);
-      const byCommit = messages.some((msg) => re.test(msg));
+      const byCommit = expanded.some((msg) => re.test(msg));
       const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`));
       return !(byCommit || byReview);
     })

@@ -995,7 +995,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (_tickLog) {
           const _commitTexts = String(_tickLog).split('\x1e').map(x => x.trim()).filter(Boolean).join('\n')
           const _evidencedTasks = new Set()
-          for (const m of _commitTexts.matchAll(/task-(\d{1,2})/gi)) _evidencedTasks.add(String(Number(m[1])).padStart(2, '0'))
+          // 连写组展开（坑 flow-done-sentinel-token-split）：task-01/02/03 的 02/03 缩写不带
+          // task- 前缀、裸正则提取不到——与哨兵判定同口径先展开再提。
+          const { expandTaskShorthand } = await import('./sentinel-assertions.js')
+          for (const m of expandTaskShorthand([_commitTexts])[0].matchAll(/task-(\d{1,2})/gi)) _evidencedTasks.add(String(Number(m[1])).padStart(2, '0'))
           if (_evidencedTasks.size > 0) {
             let _tasksMd = readFileSync(_tasksMdPath, 'utf8')
             let _autoTicked = 0

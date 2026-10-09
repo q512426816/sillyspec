@@ -270,11 +270,12 @@ export function injectClaudePointer(projectDir) {
 
 // ── 检测工具 ──
 
-function detectTools(projectDir) {
+export function detectTools(projectDir) {
   const found = [];
   if (existsSync(join(projectDir, '.claude'))) found.push('claude');
   if (existsSync(join(projectDir, '.cursor'))) found.push('cursor');
   if (existsSync(join(projectDir, '.openclaw'))) found.push('openclaw');
+  if (existsSync(join(projectDir, '.zcode'))) found.push('zcode');
   if (existsSync(join(projectDir, 'AGENTS.md'))) found.push('codex');
   if (existsSync(join(projectDir, 'GEMINI.md'))) found.push('gemini');
   if (existsSync(join(projectDir, 'INSTRUCTIONS.md'))) found.push('opencode');
@@ -480,6 +481,9 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
     codex: '.codex/skills',
     openclaw: '.openclaw/skills',
     opencode: '.opencode/skills',
+    // zcode（坑 init-skills-sync-no-zcode，2026-10-08 实证：命令卡面有落点、技能复制面漏——
+    // .zcode/skills 已在场时 detectTools 不发现 + 显式 --tool zcode 也拿不到技能，双层缺口）
+    zcode: '.zcode/skills',
   }
   const skillsSource = join(__dirname, '..', '.claude', 'skills');
   if (existsSync(skillsSource)) {
