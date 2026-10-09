@@ -68,11 +68,21 @@
 - 多项目且用户已指定：直接确认，不需要等待
 - 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目
 
-### 早期规模筛查（判断是否该走 quick）
-加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
-- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走 quick 流程」+ 一句依据，给出建议命令 `sillyspec run quick "<需求>"`。用户同意则本阶段可在此收尾（`--done` 并提示转 quick），不必继续走完整设计流程。
-- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示 quick，继续进入下一步「对话式探索与需求澄清」。
-- 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
+### 早期规模筛查（判断是否该走轻量变更）
+加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模（判据同 Step 8 复杂度/上下文轴——2026-09-29-brainstorm-exit-thin-default）：
+- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
+
+```
+sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+
+成功标准：
+- <可验证标准>"
+```
+
+（2 调用协议收口）。用户同意则本阶段可在此收尾（`--done` 并提示转轻量变更），不必继续走完整设计流程。
+- **明显 large**（需要 Wave 并行编排/上下文分片/多阶段治理，或用户显式要求完整流程）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
+- **拿不准 → 继续探索**（这正是头脑风暴的职责；澄清完成后 Step 8 按同轴精判——注意：经过头脑风暴澄清的需求通常已可单上下文吞吐，出口默认收编轻量道）。
+- 这是**粗判**，只为让明显的纯执行小变更免走设计流程；后续「生成规范文件」步骤做精判兜底。
 
 ### 输出
 项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议
@@ -104,8 +114,8 @@
 **提示词原文**
 
 ````markdown
-### ⚡ 薄跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
-**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**薄跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。薄跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用薄跑、永不省**。
+### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
+**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。
 
 通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
 
@@ -240,12 +250,14 @@
 
 ````markdown
 基于需求理解和澄清结果，提出 2-3 种实现方案。
-
+{UI_VISUAL_GUIDANCE}
 ### 操作
 1. 每种方案列出：核心思路、优势、劣势
 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
-3. 给出推荐方案和理由
-4. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query "<机制词>"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案
+4. 给出推荐方案和理由
+5. 用户选定方案后，把选择结果**当场追加**到 `{SPEC_ROOT}/changes/<change-name>/decisions.md`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+6. 落选方案**各记一条 rejected 条目**（防复潮——蒸馏链 rejected 通道与 knowledge 否决注入只认独立条目，落选理由埋在所选方案 answer 散文里进不了通道）：question 复用同一取舍问句，type 用 architecture、status 用 rejected，否决理由记该方案当轮的劣势与成本，复潮条件记劣势消解或成本反转的前提（如「依赖 X 下线」「改动面降到 Y 以下」）——两字段必填性见「写设计文档」步对账规则
 
 ### 铁律 — 必须等待用户选择方案
 - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
@@ -284,9 +296,10 @@
 1. 简单项目：几句话整体描述
 2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字
 3. 展示完整设计方案（不要逐段停顿，一次性展示）
-4. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
-5. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
-6. 暂停等待用户确认或修改意见
+4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query "<机制词>"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
+5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+6. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
+7. 暂停等待用户确认或修改意见
 
 ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
 判定对象是**改造后的界面相对现状的变化程度**：
@@ -429,7 +442,7 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
    - decisions.md 是本次变更的决策台账，不是长期术语表
    - 只记录有实现/验收影响的决策，闲聊和低风险偏好不记录
    - 已落盘条目按 D-xxx@vN 判重，不重复追加；补全缺失的九字段与可选字段
-   - 前序遗漏未落盘、确有实现影响的决策（增量规则漏网的），此时补写；每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...
+   - 前序遗漏未落盘、确有实现影响的决策（增量规则漏网的），此时补写；每条记录必须有稳定版本 ID：D-001@v1、D-002@v1 ...；放弃方案属此类——「提出方案」步的落选方案若未各记 rejected 条目（否决理由/复潮条件必填），此时补记
    - 若后续 Design Grill 修正该决策，新记录使用 D-001@v2，并写明 supersedes: D-001@v1
    - 每条记录必须包含：type、status、source、question、answer、normalized_requirement、impacts、evidence、priority
    - 九字段之外可另加四个可选字段，按需填写、不强制全填（旧格式决策记录缺这些字段不受影响）：
@@ -482,8 +495,8 @@ design.md 文件路径 + 自审结果
 ### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
 - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
@@ -502,7 +515,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理
 - S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json
 - S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）
-当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方降级兜底执行并留 degraded 痕（reviewerNotes「降级：环境无子代理可用」）；S0/S1 的 self 是档位定价的正常形态，不是降级。
+当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）；S0/S1 的 self 是档位定价的正常形态，不是降级。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
@@ -535,6 +548,8 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - scan/module docs 或源码中的真实约束与 design.md 假设
 - 涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过
 - 涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）
+- **承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）
+- **三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许"实现跟 design、spec 跟 design"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）
 后两条为命中条件注入项：变更涉及角色/权限/字典类数据或新页面/前端路由时必查。
 
 ### 问答处理
@@ -614,16 +629,17 @@ status: passed | needs-user-input | blocked | skipped
 按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。
 
 ### 规模评估（展示前先做）
-读取 design.md 的「文件变更清单」，判断本次变更规模：
-- **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更
-- **large（大变更）**：不满足上述任意一条
+按**复杂度/上下文轴**判断本次变更规模（2026-09-29-brainstorm-exit-thin-default：此前文件数轴「≤2 文件才 small」与选道表第 3 行的复杂度措辞不一致，且模糊需求探索完很少只碰 2 文件——出口几乎必然五阶段，实测坐实）：
+- **small（收编轻量道）**：单上下文可吞吐——预计无需 Wave 并行编排、无需上下文分片（单会话吃得下全部任务）、无多阶段治理/设计期人机对抗需求
+- **large（完整五阶段）**：需要 Wave 并行编排、或单任务规模大需上下文分片、或多阶段治理、或用户显式要求完整流程
+- **拿不准 → small**（与 thin-default-flip 同哲学：预判反诱发误升厚——R16 实证；升厚留运行时证据：实测失败自动升厚＋--upgrade-thick 用户决策）
 在 design.md frontmatter 写入 `scale: small` 或 `scale: large`（frontmatter 不存在则补 `author`/`created_at`/`scale`）。规模决定下面的产物范围和实现路径。
-（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）
+（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design 方案实质做精判兜底——判据同轴。）
 
 ### 操作
 1. **按规模生成规范文件**：
    - **scale=large**：在 `{SPEC_ROOT}/changes/<change-name>/` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → `sillyspec run plan --change <变更名>`
-   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → `sillyspec run quick --linked-changes <变更名>`
+   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 由轻量变更机器稿补齐），实现路径 → `sillyspec flow start --change <变更名>`（轻量变更收编头脑风暴产物，2 调用收口）
    - 两种规模都执行 `git add {SPEC_ROOT}/changes/<change-name>/` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 
 2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）
@@ -636,109 +652,15 @@ created_at: <now-datetime>
 ---
 ```
 
-### proposal.md 格式要求
-```markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 提案书（Proposal）
-
-## 动机
-为什么做、解决什么核心问题
-
-## 关键问题
-为什么现有方案不够（展开 2-3 个具体痛点）
-
-## 变更范围
-本次做什么
-
-## 不在范围内（显式清单）
-- 不做 X
-- 不做 Y
-
-## 成功标准（可验证）
-- 旧配置默认行为不变
-- 新功能在配置后可用
-- ...
-```
+### 产物格式模板（出上下文——R16 减负批次 2026-09-24）
+proposal.md / requirements.md / tasks.md / decisions.md 四份产物的完整格式模板**不再内嵌本说明书**（每轮全量回放是 brainstorm 段 token 膨胀主源），已由 CLI 落盘：
+`{SPEC_ROOT}/.runtime/templates/brainstorm-artifact-templates.md`
+**生成任一规范文件前先 Read 该模板文件一次**，严格按模板结构与 frontmatter 产出——缺章节/缺 frontmatter 会被本步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则），届时重读模板修复即可。
+模板要点速览（细则以模板文件为准）：proposal=动机/关键问题/变更范围/不在范围内/成功标准；requirements=角色表 + FR-XX GWT 块（含覆盖决策行与承接行）+ 非功能需求 + 决策覆盖矩阵；tasks=task-NN checkbox 骨架（只列任务名，plan 阶段展开写回）；decisions=D-xxx@vN 九字段 + 可选字段（锚点/模块域/否决理由/复潮条件/故障面/退役判据）。
 
 ### 触达域现行 FR（FR 索引注入，2026-09-18-fr-index-l1）
 {FR_INDEX_DIGEST}
 写作纪律（防重复 FR——L1 索引实验的承接数据源）：改写/取代上列已有行为 → 对应新 FR 块**必须加承接行**引用全局 id（如 `承接: FR-core-engine-003`，多个逗号分隔）；全新行为 → 新 FR 块不加承接。承接行在归档时由 CLI 翻旧条目 superseded 并建取代链。
-
-### requirements.md 格式要求
-```markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 需求规格（Requirements）
-
-## 角色
-| 角色 | 说明 |
-|---|---|
-| 开发者 | ... |
-
-## 功能需求
-
-### FR-01: 需求名称
-覆盖决策：D-001@v1, D-002@v1（如适用）
-承接: FR-<域>-NNN（如适用——改写/取代上列注入清单中的已有行为时必填，全新行为省略本行）
-Given 前提条件
-When 触发动作
-Then 期望结果
-
-（每个边界条件独立 GWT 块；场景名行 `#### 场景：X` 会被归档索引用作摘要，建议保留）
-（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
-
-## 非功能需求
-- 兼容性：...
-- 可回退：...
-- 可测试：...
-
-## 决策覆盖矩阵（如存在 decisions.md）
-| 决策 ID | 覆盖的 FR | 说明 |
-|---|---|---|
-| D-001@v1 | FR-01 | ... |
-```
-
-### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
-```markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 任务清单（Tasks）
-
-- [ ] task-01: <任务名>
-- [ ] task-02: <任务名>
-```
-> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
-
-### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
-```markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-
-# 决策记录（Decisions）
-
-## D-001@v1: 决策短标题
-- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
-- priority: P0 | P1 | P2
-- status: accepted | unresolved | rejected | superseded
-- supersedes:
-- source: user | code | docs
-- question: 被解决的问题
-- answer: 用户确认或代码查证结果
-- normalized_requirement: 可测试的约束
-- impacts: [FR-01, task-01, verify-01]
-- evidence: 用户回答轮次或代码/文档路径
-```
-
-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
 
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：
