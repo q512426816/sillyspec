@@ -1,0 +1,148 @@
+{
+  "change": "2026-10-09-close-trace-single-set",
+  "baseline": "41edfc3e23334a762758ada79303a0b84f04ab5d",
+  "head": "e0a193430426463421f1973427882ae2fe0ebefb",
+  "files": [
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/design.md",
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/flow-state.yaml",
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/proposal.md",
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/requirements.md",
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/tasks.md",
+    ".sillyspec/docs/sillyspec/modules/bin.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/run/complete.js",
+    "src/scope-audit.js",
+    "test/close-trace-unified.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs",
+    "test/scope-audit-thin-patch-replay.test.mjs",
+    ".sillyspec/changes/2026-10-09-close-trace-single-set/review.json.superseded-20261009T075005"
+  ],
+  "totals": {
+    "files": 16,
+    "additions": 426,
+    "deletions": 128
+  },
+  "savedAt": "2026-10-09T07:50:06.762Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "41edfc3e23334a762758ada79303a0b84f04ab5d",
+    "totals": {
+      "files": 10,
+      "additions": 223,
+      "deletions": 128
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/bin.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-parity.js",
+        "additions": 19,
+        "deletions": 26,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 9,
+        "deletions": 7,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 16,
+        "deletions": 7,
+        "kind": "modified"
+      },
+      {
+        "path": "src/scope-audit.js",
+        "additions": 50,
+        "deletions": 24,
+        "kind": "modified"
+      },
+      {
+        "path": "test/close-trace-unified.test.mjs",
+        "additions": 67,
+        "deletions": 58,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flowdone-disposition-drift.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/scope-audit-thin-patch-replay.test.mjs",
+        "additions": 56,
+        "deletions": 4,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "e6fd04eeaff6152a0a02f03707878d661691ceb354615088d9bc349dbcdb66f8",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-close-trace-single-set",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-09-close-trace-single-set:flow:测试绑定FR-01",
+      "tests": [
+        "test/close-trace-unified.test.mjs「thin/heavy CLI e2e 落盘两件」",
+        "test/close-trace-unified.test.mjs「writer ok-state 写恰好两件 + scopeAudit 子对象」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-close-trace-single-set"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-09-close-trace-single-set:flow:测试绑定FR-02",
+      "tests": [
+        "test/scope-audit-thin-patch-replay.test.mjs",
+        "test/scope-audit.test.mjs「A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒绝出 diff」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-close-trace-single-set"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-09-close-trace-single-set:flow:测试绑定FR-04",
+      "tests": [
+        "test/close-trace-unified.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-09-close-trace-single-set"
+    }
+  ]
+}

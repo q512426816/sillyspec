@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-close-trace-single-set",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "744db4b938e53cb68397d7c0312daa03289327a7",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 测试绑定引用的用例名是转述，非 test/scope-audit.test.mjs 中的实际用例名（覆盖实质在场）",
+      "evidence": "requirements.md FR-02 绑定写「--file 冻结切片与防篡改（新旧形态）」，该文件无此名用例；实际覆盖为 scope-audit.test.mjs:847 旧形态切片（scope-audit.patch）+ :591 A-F01 篡改拒绝（旧形态）+ close-trace-unified.test.mjs:165 round-trip 新形态切片与 sha 校验通过——三面覆盖齐但缺新形态篡改拒绝负例（同一比对代码路径，风险低）",
+      "location": ".sillyspec/changes/2026-10-09-close-trace-single-set/requirements.md:50"
+    },
+    {
+      "severity": "P3",
+      "title": "execute 证据信号对 scopeAudit 子对象的校验比 readScopeSnapshot 宽（不查 rows 数组）",
+      "evidence": "hasMergedScopeAudit（src/scope-audit.js:854-859）只判 scopeAudit 为对象，readScopeSnapshot（:250-251）另要求 Array.isArray(rows)；scopeAudit 键唯一写入方是 writeCloseTraceArtifacts，存在性即证据，无误判面，仅宽严不一致的风格差",
+      "location": "src/scope-audit.js:854"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-09T07:48:10Z"
+}

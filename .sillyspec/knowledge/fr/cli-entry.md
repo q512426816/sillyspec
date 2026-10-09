@@ -7909,3 +7909,67 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-09-fourpiece-created-at-local
   status: active
+
+## FR-cli-entry-418 thin（flow done）与 heavy（execute --done）两条通道收口后落盘恰好 change.patch + change-patch.json 两件，JSON 含完整 scopeAudit 面
+变更：2026-10-09-close-trace-single-set
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-close-trace-single-set/requirements.md#FR-01
+最近确认：e0a193430426463421f1973427882ae2fe0ebefb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-close-trace-single-set:flow:测试绑定FR-01
+  tests: test/close-trace-unified.test.mjs「thin/heavy CLI e2e 落盘两件」 | test/close-trace-unified.test.mjs「writer ok-state 写恰好两件 + scopeAudit 子对象」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-close-trace-single-set
+  status: active
+
+## FR-cli-entry-419 旧形态归档（四件套/thin 双件/heavy 双件）读链全部不回退：scope-audit 表回放、--file 冻结切片、FR 覆盖、知识图谱交付边、漂移检测照常工作
+变更：2026-10-09-close-trace-single-set
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-close-trace-single-set/requirements.md#FR-02
+最近确认：e0a193430426463421f1973427882ae2fe0ebefb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-close-trace-single-set:flow:测试绑定FR-02
+  tests: test/scope-audit-thin-patch-replay.test.mjs | test/scope-audit.test.mjs「A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒绝出 diff」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-close-trace-single-set
+  status: active
+
+## FR-cli-entry-420 平台 assets 端点与前端文件预览对新形态可读，旧归档不白屏
+变更：2026-10-09-close-trace-single-set
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-close-trace-single-set/requirements.md#FR-03
+最近确认：e0a193430426463421f1973427882ae2fe0ebefb
+
+## FR-cli-entry-421 相关测试全绿（close-trace-unified、scope-audit 全家、flow-protocol 等）
+变更：2026-10-09-close-trace-single-set
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-close-trace-single-set/requirements.md#FR-04
+最近确认：e0a193430426463421f1973427882ae2fe0ebefb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-09-close-trace-single-set:flow:测试绑定FR-04
+  tests: test/close-trace-unified.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-09-close-trace-single-set
+  status: active

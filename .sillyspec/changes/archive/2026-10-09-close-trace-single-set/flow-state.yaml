@@ -1,0 +1,43 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  收口留痕四件套（change.patch + change-patch.json + scope-audit.json + scope-audit.patch）合并为单套：change.patch + change-patch.json
+  幸存，原 scope-audit.json 的对账面数据（mode/ok/degradedReason/baseAnchor/totals/rows/excluded/closedBy/repos）作为 scopeAudit 子对象并入
+  change-patch.json（现有顶级键原位不动，CLI 与平台读方零改动）；scope-audit.json/scope-audit.patch 停写，读侧留旧名兼容链兜存量归档（247
+  个旧形态归档不动）。平台侧（multi-agent-platform）前端 structured-views 新增 change-patch.json 结构化渲染分支、schema 契约注释更新、契约文档演进注记。
+
+
+  成功标准：
+
+  - thin（flow done）与 heavy（execute --done）两条通道收口后落盘恰好 change.patch + change-patch.json 两件，JSON 含完整 scopeAudit 面
+
+  - 旧形态归档（四件套/thin 双件/heavy 双件）读链全部不回退：scope-audit 表回放、--file 冻结切片、FR 覆盖、知识图谱交付边、漂移检测照常工作
+
+  - 平台 assets 端点与前端文件预览对新形态可读，旧归档不白屏
+
+  - 相关测试全绿（close-trace-unified、scope-audit 全家、flow-protocol 等）
+autopilot: false
+baseline_commit: 41edfc3e23334a762758ada79303a0b84f04ab5d
+updatedAt: '2026-10-09T07:52:43.911Z'
+baseline_sha256: e21174248ed60318915c57e049ce1bf41c9ae9428a7d8b398fbf3ea60fc24429
+spec_approved: true
+spec_approved_at: '2026-10-09T06:53:39.247Z'
+spec_approved_by: zcode-close-trace-single-set
+gate_summary: >-
+  test: skipped ← module[]+deps(js91+js-meta-skip1)+fr(92)（63.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009074057\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（45.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261009074057\test-result.json｜门文件 8 个
+
