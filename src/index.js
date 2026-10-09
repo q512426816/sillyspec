@@ -2172,9 +2172,10 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const fpSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
       const fpDir = join(fpSpecBase, 'changes', fpChange);
       mkdirSync(fpDir, { recursive: true });
-      const fpNow = new Date();
-      const fpDate = fpNow.toISOString().slice(0, 10);
-      const fpStamp = fpNow.toISOString().slice(0, 19).replace('T', ' ');
+      // 本地墙钟（datetime.js 坑 taskcard-created-at-utc 同族：frontmatter 人读时间禁
+      // toISOString 写 UTC 裸形状——无时区标记被读取端按本地解析，2026-10-09 平台时间线 born 锚偏 8h 实证）
+      const { nowWallClock } = await import('./datetime.js');
+      const fpStamp = nowWallClock();
       const generated = [];
       const mk = (fname, body) => {
         const p = join(fpDir, fname);
