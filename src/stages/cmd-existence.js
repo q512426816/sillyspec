@@ -18,7 +18,11 @@ import { join, isAbsolute } from 'path'
 // 提取 `npm|pnpm|yarn run <script>` 命令。
 // 对齐 scan-postcheck:136 的 `/npm run (\S+)/g`，扩展包管理器 + 容忍多空白。
 // 捕获组 1 = 包管理器（npm|pnpm|yarn），捕获组 2 = script 名。
-const SCRIPT_CMD_RE = /(npm|pnpm|yarn)\s+run\s+(\S+)/g
+// script 名收敛为合法字符集（2026-10-09-verify-papercuts ①）：原 \S+ 会把紧跟的全角标点
+// （；。，等）/句读拼进 script 名——『verify: npm run test；模块卡 diff 一致』被提取为
+// script=test；模块卡 → 误报「命令不存在」逼 agent 改写法（plan postcheck 实证多跑 3 轮）。
+// npm script 名本身只含字母数字与 : _ - .，按此截断即安全（&& / | / 全角标点自然止步）。
+const SCRIPT_CMD_RE = /(npm|pnpm|yarn)\s+run\s+([A-Za-z0-9:_.\-]+)/g
 
 // 识别紧贴命令前的 `cd <subdir> &&` 前缀（anchored at end of the slice before the command）。
 // subdir token 不含空白与 & ; | 等分隔符；末尾的 `&&` 可带任意空白后接命令。

@@ -187,10 +187,32 @@ export function stageArchiveArtifacts(cwd) {
   const skipped = []
   const existing = candidates.filter(p => existsSync(p))
   if (existing.length === 0) return { staged, skipped }
-  const r = safeGit(cwd, ['add', ...existing])
+  // 2026-10-09-verify-papercuts ④：排除嵌套运行时异物——归档变更目录内嵌套的 .sillyspec/
+  // （历史 cwd 漂移事故的遗留 db/日志）会被目录级 add 一并扫进暂存（当日实证：他变更的
+  // sillyspec.db 与 spec-sync-bg.log 被夹带提交）。pathspec exclude 精确拦截该形态，正常
+  // 归档产物（md/json/patch）零影响；检出异物在场时点名提示清理（不静默吞）。
+  const excludes = [
+    ':(exclude).sillyspec/changes/archive/*/.sillyspec',
+    ':(exclude).sillyspec/changes/archive/*/.sillyspec/**',
+  ]
+  let nestedJunk = []
+  try {
+    const archRoot = join(specBase, 'changes', 'archive')
+    for (const e of readdirSync(archRoot, { withFileTypes: true })) {
+      if (e.isDirectory() && existsSync(join(archRoot, e.name, '.sillyspec'))) {
+        nestedJunk.push(join(archRoot, e.name, '.sillyspec'))
+      }
+    }
+  } catch { /* 归档目录不可读 → 跳过提示 */ }
+  const r = safeGit(cwd, ['add', ...existing, ...excludes])
   if (r && r.error) {
     console.warn(`  ⚠️ 归档产物 git add 失败（可手动处理）：${String(r.error).slice(0, 120)}`)
     return { staged, skipped: existing }
+  }
+  if (nestedJunk.length > 0) {
+    console.warn(`  ⚠️ 检出 ${nestedJunk.length} 个归档目录内嵌套 .sillyspec/ 运行时异物（已从本次暂存排除）：`)
+    for (const j of nestedJunk.slice(0, 5)) console.warn(`     - ${j}`)
+    console.warn(`     处置：确认无归属后删除目录；若已被 git 跟踪先 git rm -r --cached <路径>（不该入库的 db/日志）`)
   }
   return { staged: existing, skipped }
 }

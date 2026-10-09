@@ -1334,7 +1334,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
-      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections } = await import('./verify-probes.js');
+      const { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton, resolveVerifyProbesSpecBase, writeVerifyFacts, formatPlatformPathNote, backupVerifyResult, refreshProbeSections, applySkeletonPreservingHuman } = await import('./verify-probes.js');
       // spec 根统一走漂移锚定（坑 worktree-spec-artifact-misplace）：在 worktree 内跑时锚回主仓，
       // 探针读取与 --init 骨架都落主仓——与 plan/execute/verify/archive 的 command.js 守卫同口径。
       // resolvePlatformSpecDir 仍先调（保留平台接管 fail-closed 检查副作用），但仅 pointer 存在时
@@ -1429,21 +1429,29 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
           } else if (vpForce) {
-            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置。
+            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）。
             // 2026-10-06-verify-friction-fix：覆盖前自动备份（postmortem 实证 38 格手填复核成果
             // 被清后只能靠对话记录重建——「从 git 或备份找回」的话术备份此前并不存在）；备份
             // 失败时醒目提示手动复制再重跑（fail-soft 但不静默）。
+            // 2026-10-09-verify-papercuts ②：语义升级——机器段全量重刷 + 人工面按段携载
+            // （applySkeletonPreservingHuman：结论槽/移交项表/矩阵已填行不再被 wipe），备份
+            // 保留为兜底通道。
             const { resolveRuntimeRoot: vpForceRTR } = await import('./run/shared.js');
             const vpBackupPath = backupVerifyResult({ mdPath: vpReportPath, runtimeRoot: vpForceRTR({}, vpSpecBase), changeName: vpChange });
             const vpSkeleton = generateVerifyResultSkeleton(vpResult);
-            writeFileSync(vpReportPath, vpSkeleton);
-            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
+            const vpOldText = readFileSync(vpReportPath, 'utf8');
+            const vpApplied = applySkeletonPreservingHuman(vpOldText, vpSkeleton);
+            writeFileSync(vpReportPath, vpApplied.text);
+            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpApplied.text);
             if (vpBackupPath) {
-              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（手填内容被重置时从这里找回回填）`);
+              console.log(`\n🗄️  --force 覆盖前已自动备份: ${vpBackupPath}（携载语义之外的极端形态从这里找回）`);
             } else {
               console.error(`\n⚠️ 自动备份失败——若 verify-result.md 含手填内容，请立即手动复制保存后重跑本命令。`);
             }
-            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从上方备份找回后回填）${vpPlatformNote}`);
+            const vpCarriedNote = vpApplied.carriedSections.length > 0
+              ? `已填人工面按段携载保留：${vpApplied.carriedSections.join('、')}（携载表格行 ${vpApplied.carriedRows}）——与机器段新渲染不符的携载内容由 gate 一致性抽查把关`
+              : `未发现已填人工面（全文占位形态——行为与旧版全量重置一致）`;
+            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；${vpCarriedNote}）${vpPlatformNote}`);
           } else {
             console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
           }

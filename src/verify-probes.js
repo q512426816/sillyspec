@@ -3860,3 +3860,134 @@ export function refreshProbeSections(existingText, freshReportText) {
   }
   return { text: out.join('\n'), replaced, kept, appended, carriedRows }
 }
+
+// ── --force 保人工面（2026-10-09-verify-papercuts ②）──
+// postmortem（2026-10-09-verify-reuse-friction 收口实证）：--force 全骨架重置虽有自动备份，
+// 但结论槽/移交项表/探针矩阵已填判定/决策矩阵已填格仍全部被 wipe——重填整套人工面是当日
+// 最大单点浪费（备份在 .runtime 里，找回-回填的来回远比携载贵）。本组合器把 --force 语义
+// 从「全量重置 + 备份找回」升级为「机器段全量重刷 + 人工面按段携载」：
+//   - 纯人工段（结论/移交项/证据账/集成回执/任务完成度/设计一致性/独立复核/风险等级）：
+//     旧段已填（无 <待填/<TODO 占位）→ 原样保留；未填 → 用新骨架（占位换新占位，无损失）；
+//   - 矩阵段（决策追踪矩阵/接口验证覆盖矩阵）：表格行按首列键携载（mergeProbeSection 同
+//     款语义——已填 Evidence/判定行不丢，新增行从新骨架进场）；
+//   - 探针容器段（## 探针结果）：逐探针号 merge（已填表格行携载，机器结论行刷新）；
+//   - 其余机器段：新骨架；旧文独有的自定义段：追加保留（不销毁用户内容）。
+// 安全方向与 refreshProbeSections 一致：宁可少刷新不误删；stale 由 gate 的
+// checkProbeConsistency 独立把关。备份照旧保留（兜底通道不撤）。
+
+/** 顶层段切分（^## 标题行起，至下一 ^## 或 EOF；# 级更细的 #### 归属其容器段） */
+function splitTopSections(text) {
+  const lines = String(text ?? '').split('\n')
+  const sections = []
+  let cur = null
+  for (let i = 0; i < lines.length; i++) {
+    if (/^## /.test(lines[i])) {
+      if (cur) cur.endLine = i
+      cur = { headingLine: lines[i], startLine: i, endLine: lines.length }
+      sections.push(cur)
+    }
+  }
+  return { lines, sections }
+}
+
+/** 段身份键：剥 [层：…] 尾注与（…）括注——同族段跨渲染措辞漂移仍可对上 */
+function topSectionKey(headingLine) {
+  return headingLine
+    .replace(/^##\s*/, '')
+    .replace(/\s*\[.*\]\s*$/, '')
+    .replace(/（.*$/, '')
+    .trim()
+}
+
+const HUMAN_SECTION_KEYS = ['结论', '移交项', '证据账', '集成验证回执', '任务完成度', '设计一致性', '独立复核', '变更风险等级']
+const MATRIX_SECTION_KEYS = ['决策追踪矩阵', '接口验证覆盖矩阵']
+const PROBE_CONTAINER_KEY = '探针结果'
+
+/** 探针容器段合并：新骨架容器为基，逐探针号对旧容器做已填行携载；旧独有探针号追加 */
+function mergeProbeContainer(oldContainerLines, freshContainerLines) {
+  const oldParsed = splitProbeSectionRanges(oldContainerLines.join('\n'))
+  const freshParsed = splitProbeSectionRanges(freshContainerLines.join('\n'))
+  const out = [...freshParsed.lines]
+  let carriedRows = 0
+  const oldByNum = new Map(oldParsed.sections.map(s => [s.num, s]))
+  for (const fs of freshParsed.sections) {
+    const os = oldByNum.get(fs.num)
+    if (!os) continue
+    const merged = mergeProbeSection(
+      oldParsed.lines.slice(os.startLine, os.endLine),
+      freshParsed.lines.slice(fs.startLine, fs.endLine),
+    )
+    carriedRows += merged.carried
+    // 用 merged 文本替换 fresh 容器中该探针段（逐段行数已知，从后往前替换保行号稳定）
+    const freshSeg = freshParsed.lines.slice(fs.startLine, fs.endLine)
+    out.splice(fs.startLine, freshSeg.length, ...merged.text.split('\n'))
+  }
+  const freshNums = new Set(freshParsed.sections.map(s => s.num))
+  for (const os of oldParsed.sections) {
+    if (!freshNums.has(os.num)) {
+      out.push('', ...oldParsed.lines.slice(os.startLine, os.endLine))
+    }
+  }
+  return { text: out.join('\n'), carriedRows }
+}
+
+/**
+ * --force 应用骨架：机器段全量重刷 + 人工面携载（纯函数，导出供回归直测）。
+ * @param {string} existingText 现文（含已填人工面）
+ * @param {string} skeletonText generateVerifyResultSkeleton 新骨架
+ * @returns {{ text: string, carriedSections: string[], carriedRows: number }}
+ */
+export function applySkeletonPreservingHuman(existingText, skeletonText) {
+  const old = splitTopSections(existingText)
+  const fresh = splitTopSections(skeletonText)
+  const oldByKey = new Map()
+  for (const s of old.sections) {
+    const k = topSectionKey(s.headingLine)
+    if (!oldByKey.has(k)) oldByKey.set(k, s) // 同键段取首个（重复标题形态保首段）
+  }
+  const carriedSections = []
+  let carriedRows = 0
+  const out = []
+  let cursor = 0
+  for (const fs of fresh.sections) {
+    // 骨架段前的行原样带过
+    for (; cursor < fs.startLine; cursor++) out.push(fresh.lines[cursor])
+    const k = topSectionKey(fs.headingLine)
+    const os = oldByKey.get(k)
+    const freshSeg = fresh.lines.slice(fs.startLine, fs.endLine)
+    if (!os) {
+      out.push(...freshSeg)
+    } else if (HUMAN_SECTION_KEYS.includes(k)) {
+      const oldSeg = old.lines.slice(os.startLine, os.endLine)
+      if (/<待填|<!--TODO/.test(oldSeg.join('\n'))) {
+        out.push(...freshSeg) // 未填 → 换新骨架占位
+      } else {
+        out.push(...oldSeg) // 已填 → 原样保留
+        carriedSections.push(k)
+      }
+    } else if (MATRIX_SECTION_KEYS.includes(k)) {
+      const merged = mergeProbeSection(old.lines.slice(os.startLine, os.endLine), freshSeg)
+      carriedRows += merged.carried
+      out.push(...merged.text.split('\n'))
+      if (merged.carried > 0) carriedSections.push(k)
+    } else if (k === PROBE_CONTAINER_KEY) {
+      const merged = mergeProbeContainer(old.lines.slice(os.startLine, os.endLine), freshSeg)
+      carriedRows += merged.carriedRows
+      out.push(...merged.text.split('\n'))
+      if (merged.carriedRows > 0) carriedSections.push(k)
+    } else {
+      out.push(...freshSeg) // 机器段（探针概览/接口声明等）→ 新骨架
+    }
+    cursor = fs.endLine
+    oldByKey.delete(k)
+  }
+  for (; cursor < fresh.lines.length; cursor++) out.push(fresh.lines[cursor])
+  // 旧文独有段（用户自定义节）追加保留
+  if (oldByKey.size > 0) {
+    out.push('')
+    for (const [, s] of oldByKey) {
+      out.push(...old.lines.slice(s.startLine, s.endLine))
+    }
+  }
+  return { text: out.join('\n'), carriedSections, carriedRows }
+}

@@ -4089,7 +4089,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
     try {
       // 锚定变更分支/审计 tag（非 blanket 20 提交——base 提交文件不得误救）
       const rescueRef = (typeof branchHash === 'string' && branchHash.trim()) ? branch : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
-      if (!rescueRef) throw new Error('no-rescue-ref')
+      if (rescueRef) {
       // -n 形态计数（2026-10-04-log-window-arity：裸 '20' 在 git ≥2.4x 是 ambiguous argument
       // fatal——fail-open 静默吞后救赎 note 路径从未生效，plan-target-files D7 在纯 HEAD 稳定红）
       const recent = gitQuiet(cwd, ['log', '-n', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
@@ -4099,6 +4099,31 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
           commitWindowFiles = files
           sources.push(`main:log-20-commit-window(declared-rescue-only:${rescueRef})`)
         }
+      }
+      } else {
+        // ③ 提交信息锚定窗口（2026-10-09-verify-papercuts ③）：主代理直改形态（无 worktree/
+        // 分支/审计 tag——交付直接 commit 到主干、消息含变更名）此前救援窗口恒空 → ②类全量
+        // 假红，只能手工喂 apply-pathspec 才能过（当日收口实证撞 3 轮）。锚定规则：近 30 提交中
+        // 消息含变更名的提交，其 --name-only 触及面进窗口——declared-rescue-only 语义不变
+        // （不进 union、只救「声明而 missing」），他变更提交的文件不满足消息锚定天然不入窗。
+        try {
+          const msgWindow = gitQuiet(cwd, ['log', '-n', '30', '--name-only', '--format=%h %s'], { timeout: 30 * 1000, trim: false })
+          if (typeof msgWindow === 'string' && msgWindow.includes(changeName)) {
+            const files = []
+            let inOwnCommit = false
+            for (const l of msgWindow.split(String.fromCharCode(10))) {
+              const t = l.trim()
+              if (!t) { continue }
+              const header = t.match(/^[0-9a-f]{7,40} /)
+              if (header) { inOwnCommit = t.includes(changeName); continue }
+              if (inOwnCommit && !/^[0-9a-f]{7,40}$/.test(t)) files.push(t)
+            }
+            if (files.length > 0) {
+              commitWindowFiles = files
+              sources.push('main:log-msg-window(declared-rescue-only:HEAD)')
+            }
+          }
+        } catch { /* 消息窗口失败静默省略（不干扰主链） */ }
       }
     } catch { /* 窗口源失败静默省略 */ }
     // B3 apply-pathspec 兜底（存在则并入，读取失败静默忽略——前两源不受影响）
