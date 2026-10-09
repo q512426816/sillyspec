@@ -55,6 +55,48 @@ async function gitWithLockRetry(cwd, args, label, { retries = 6, waitMs = 1000 }
  * @returns {Promise<{ok:boolean,skipped:boolean,head:string,shortHead:string,worktreePath:string,changeName:string,files:string[]}>}
  *   ok=false 时抛错（调用方打错误 + exit 1），skipped=无变更可提交（HEAD 不动，不算失败）。
  */
+/**
+ * 从 cwd 推断变更名（wt-commit 免 --change 通道；FR-08 / D-006@v1）。
+ * 跨仓 worktree 名 <change>--<repoKey>——仅当后缀命中 repos 注册表（worktrees 上两级
+ * local.yaml）且剥出候选是已知变更目录才剥（不猜切分）；全段命中主仓已知变更不剥（防
+ * 变更真名恰以 --repoKey 结尾）；均不中 → 原样透传（现状行为，调用方自然报错引导
+ * 显式 --change）。导出供三态回归直测（index.js dispatch 内联形态不可测——独立审查指出的
+ * 验证面缺口）。
+ */
+export async function inferChangeFromWorktreeCwd(dir) {
+  // 深路径归一（FR-08）：cwd 可能在 worktree 内多层深处——specBase 推导须从 worktree 根起算。
+  // 找 'worktrees' 目录段在原路径中的位置，根 = 该段后第一段截尾；specBaseGuess = 根上溯
+  // 三级（worktrees → .runtime → .sillyspec 的父，即主仓 specBase）。
+  const s = String(dir)
+  const norm = s.split('\\').join('/')
+  const wtIdx = norm.lastIndexOf('/worktrees/')
+  let seg = null
+  let specBaseGuess = null
+  if (wtIdx !== -1) {
+    const rest = norm.slice(wtIdx + '/worktrees/'.length)
+    const rootRel = rest.split('/')[0]
+    seg = rootRel || null
+    const rootNorm = norm.slice(0, wtIdx + '/worktrees/'.length + rootRel.length)
+    specBaseGuess = rootNorm.split('/').slice(0, -3).join('/')
+  }
+  if (seg && seg.includes('--')) {
+    try {
+      if (specBaseGuess) {
+        const knownWhole = existsSync(join(specBaseGuess, 'changes', seg))
+        const dash = seg.lastIndexOf('--')
+        const cand = seg.slice(0, dash)
+        const suffix = seg.slice(dash + 2)
+        if (!knownWhole && cand && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
+          const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+          const reg = parseRepoRegistry(readFileSync(join(specBaseGuess, 'local.yaml'), 'utf8'))
+          if (reg.has(suffix) && existsSync(join(specBaseGuess, 'changes', cand))) seg = cand
+        }
+      }
+    } catch { /* 注册表不可读 → 原样透传（fail-safe） */ }
+  }
+  return seg
+}
+
 export async function runWtCommit({ changeName, message, pathspecs = [], pathspecFile = null, cwd = process.cwd() }) {
   if (!changeName) throw new Error('缺少 --change <变更名>（worktree 名；在 worktree 内运行时可省略，CLI 从 cwd 推断）')
   if (!message || !message.trim()) throw new Error('缺少 -m/--message <提交信息>（建议 "<task-NN 摘要>"）')

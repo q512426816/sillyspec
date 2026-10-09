@@ -8,16 +8,16 @@
 
 | 模块 | 变更文件 | 影响类型 | 需 review |
 |---|---|---|---|
-| cli-entry | `src/index.js` | <!--TODO--> | <!--TODO--> |
-| core-engine | `src/verify-postcheck.js` | <!--TODO--> | <!--TODO--> |
-| core-engine | `src/test-bindings.js` | <!--TODO--> | <!--TODO--> |
-| core-engine | `src/cross-repo-reconcile.js` | <!--TODO--> | <!--TODO--> |
-| runtime | `src/run/code-face-key.js` | <!--TODO--> | <!--TODO--> |
-| runtime | `src/run/green-cache.js` | <!--TODO--> | <!--TODO--> |
-| runtime | `src/run/verify-quality-scan.js` | <!--TODO--> | <!--TODO--> |
-| runtime | `src/run/gates.js` | <!--TODO--> | <!--TODO--> |
-| runtime | `src/friction-tally.js` | <!--TODO--> | <!--TODO--> |
-| worktree | `src/wt-commit.js` | <!--TODO--> | <!--TODO--> |
+| cli-entry | `src/index.js` | 逻辑变更 | 否——wt-commit 推断内部化，回归 test/wt-commit-crossrepo-infer |
+| core-engine | `src/verify-postcheck.js` | 逻辑变更+接口变更（additive） | 是——trace per-repo 解析/观测穿参/跨仓窗口，回归 crossrepo-row-resolution+observability |
+| core-engine | `src/test-bindings.js` | 数据结构变更（additive repo 字段） | 否——存量行零迁移，回归 normalizeRow 用例 |
+| core-engine | `src/cross-repo-reconcile.js` | 逻辑变更（B' 档新锚点） | 是——回归 cross-repo-reconcile-baseline-anchor |
+| runtime | `src/run/code-face-key.js` | 新增 | 是——两指纹消费方，回归 code-face-key-doc-commit-survival |
+| runtime | `src/run/green-cache.js` | 逻辑变更（指纹树键化+re-export） | 否——签名不变，回归 green-cache 5 用例 |
+| runtime | `src/run/verify-quality-scan.js` | 逻辑变更+接口变更（additive store 参数） | 是——死循环断根+观测，回归 reuse-actual-scope+observability |
+| runtime | `src/run/gates.js` | 逻辑变更（门序前移+可见性） | 是——回归 gates-verify-cheap-gates-first+smoke-gate |
+| runtime | `src/friction-tally.js` | 配置变更（枚举 +1） | 否——回归 friction 1 用例 |
+| worktree | `src/wt-commit.js` | 逻辑变更（目标定向） | 是——回归 wt-commit-crossrepo-infer |
 
 ## 未匹配文件
 

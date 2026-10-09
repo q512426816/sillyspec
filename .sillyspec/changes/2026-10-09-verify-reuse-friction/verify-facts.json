@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-10-09-verify-reuse-friction",
+  "generatedAt": "2026-10-09T12:18:12.753Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "matches": 43,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "tasks": 9,
+        "hasTest": 9
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-10-09-verify-reuse-friction",
+      "metrics": {
+        "checkedFiles": 10,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 3,
+    "items": [
+      {
+        "type": "other",
+        "item": "快照慢性失败根因（createVerifyGateSnapshot null 路径）未修——无现存复现环境",
+        "condition": "复现环境出现后另立变更（本变更已兜：失败可见+复用不死循环+口径如实标记）",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "轻量道（flow done）无摩擦记账/聚合清单——独立缺口",
+        "condition": "另行立项（proposal Non-Goals 第 2 条）",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "gate verify 预检无缓存层且未默认 --docs-only",
+        "condition": "低优尾巴（proposal Non-Goals 第 3 条）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": 0,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/verify-quality-scan-reuse-actual-scope.test.mjs",
+      "test/gates-snapshot-fallback-visibility.test.mjs",
+      "test/code-face-key-doc-commit-survival.test.mjs",
+      "test/verify-test-result-reuse-observability.test.mjs",
+      "test/gates-verify-cheap-gates-first.test.mjs",
+      "test/test-bindings-crossrepo-row-resolution.test.mjs",
+      "test/cross-repo-reconcile-baseline-anchor.test.mjs",
+      "test/wt-commit-crossrepo-infer.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured"
+}

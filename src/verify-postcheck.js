@@ -1893,7 +1893,9 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
           const d1 = gitQuiet(wtPath, ['diff', '--name-only', base])
           const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'])
           const mergedWt = [...new Set(String(d1 || '').split(String.fromCharCode(10)).concat(String(d2 || '').split(String.fromCharCode(10))))].map(x => x.trim()).filter(x => x && x !== 'meta.json' && !x.startsWith('.sillyspec/'))
-          files = mergedWt.length > 0 || d1 !== null || d2 !== null ? mergedWt : []
+          // 与 cross-repo-reconcile B' 档同语义：双查皆失败（d1/d2 双 null）→ 不成窗，
+          // files 保持 null 回退 HEAD~1..HEAD（低报不如口径如实降级）
+          if (d1 !== null || d2 !== null) files = mergedWt
         }
       }
     } catch { /* 回退 HEAD~1..HEAD */ }

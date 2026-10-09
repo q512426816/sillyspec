@@ -78,3 +78,28 @@ test('runWtCommit：cwd 不属于本变更的 worktree（他变更目录）→ �
     try { rmSync(f.cross, { recursive: true, force: true }) } catch {}
   }
 })
+
+test('推断三态：注册 repoKey 剥后缀 / 全段命中已知变更不剥 / 未注册不剥（D-006@v1 直测）', async () => {
+  const { inferChangeFromWorktreeCwd } = await import('../src/wt-commit.js')
+  const main = mkdtempSync(join(tmpdir(), 'wtci3-main-'))
+  const cross = mkdtempSync(join(tmpdir(), 'wtci3-cross-'))
+  try {
+    const specBase = join(main, '.sillyspec')
+    mkdirSync(join(specBase, 'changes', '2026-10-09-x', 'tasks'), { recursive: true })
+    // 真实同名陷阱：变更真名恰以 --crossrepo 结尾
+    mkdirSync(join(specBase, 'changes', '2026-10-09-y--crossrepo'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-x--crossrepo', 'deep'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-y--crossrepo'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'worktrees', '2026-10-09-z--unknownrepo'), { recursive: true })
+    writeFileSync(join(specBase, 'local.yaml'), 'repos:' + '\n' + '  crossrepo: ' + (isAbsolute(cross) ? cross.split('\\').join('/') : cross) + '\n')
+    // ① 注册 repoKey + 剥出候选是已知变更 → 剥
+    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-x--crossrepo', 'deep', 'file.js')), '2026-10-09-x', '注册后缀剥除（深路径也命中——推断按目录段不问深度）')
+    // ② 全段命中已知变更（变更真名恰含 --crossrepo）→ 不剥
+    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-y--crossrepo', 'f.js')), '2026-10-09-y--crossrepo', '全段命中已知变更不剥（防真名误拆）')
+    // ③ 后缀未注册 → 不剥（原样透传）
+    assert.equal(await inferChangeFromWorktreeCwd(join(specBase, '.runtime', 'worktrees', '2026-10-09-z--unknownrepo', 'f.js')), '2026-10-09-z--unknownrepo', '未注册后缀不剥（现状透传，调用方自然报错引导显式 --change）')
+  } finally {
+    try { rmSync(main, { recursive: true, force: true }) } catch {}
+    try { rmSync(cross, { recursive: true, force: true }) } catch {}
+  }
+})

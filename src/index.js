@@ -3374,27 +3374,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         else if (wtCommitFlags[i] === '--pathspec-from-file' && wtCommitFlags[i + 1]) wtCommitPathspecFile = wtCommitFlags[++i];
       }
       if (!wtCommitChange) {
-        const inferred = String(dir).match(/[\\/]worktrees[\\/]([^\\/]+)/);
-        let seg = inferred ? inferred[1] : null;
-        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 worktree 名
-        // <change>--<repoKey>——仅当后缀命中 repos 注册表才剥（不猜切分）；二级校验：
-        // 全段命中主仓已知变更目录不剥（防变更真名恰以 --repoKey 结尾），剥出候选也须
-        // 是已知变更。均不中 → 原样透传（现状行为，runWtCommit 自然报错引导显式 --change）。
-        if (seg && seg.includes('--')) {
-          try {
-            const specBaseGuess = join(dir, '..', '..', '..')
-            const knownWhole = existsSync(join(specBaseGuess, 'changes', seg))
-            const dash = seg.lastIndexOf('--')
-            const cand = seg.slice(0, dash)
-            const suffix = seg.slice(dash + 2)
-            if (!knownWhole && cand && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
-              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
-              const reg = parseRepoRegistry(readFileSync(join(specBaseGuess, 'local.yaml'), 'utf8'))
-              if (reg.has(suffix) && existsSync(join(specBaseGuess, 'changes', cand))) seg = cand
-            }
-          } catch { /* 注册表不可读 → 原样透传（fail-safe） */ }
-        }
-        wtCommitChange = seg;
+        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 <change>--<repoKey>
+        // 注册表校验剥后缀——逻辑单点在 wt-commit.js（导出 inferChangeFromWorktreeCwd
+        // 供三态回归直测，index.js dispatch 不留内联逻辑）
+        const { inferChangeFromWorktreeCwd } = await import('./wt-commit.js')
+        wtCommitChange = await inferChangeFromWorktreeCwd(dir)
       }
       try {
         const { runWtCommit } = await import('./wt-commit.js');

@@ -2,6 +2,7 @@
 author: zcode-verify-friction
 created_at: 2026-10-09T15:30:00+08:00
 scale: large
+risk_level: unit-sufficient
 ---
 # 设计记录（Design Record）— 2026-10-09-verify-reuse-friction
 
@@ -24,9 +25,11 @@ scale: large
 | NEW:src/run/code-face-key.js | 新建 | W2 | 单点代码面口径：非代码路径判据（自 green-cache.js 迁入，旧路径 re-export 兼容）+ 代码树内容键 computeCodeTreeKey |
 | src/run/green-cache.js | 修改 | W2 | computeGateFingerprint 的 HEAD 分量替换为代码树内容键；filterCodePorcelain 迁移至 code-face-key.js 并 re-export |
 | src/run/verify-quality-scan.js | 修改 | W1+W2 | passed/failed 两复用闸移到快照创建后按实际口径；快照 catch 静默改 ⚠️ 告警（task-02）；computeQualityScanFingerprint 树键化；store 携 missReason |
+| src/run/gate-snapshot.js | 修改 | W1 | FR-02 reportGateSnapshotFallback（⚠️ 告警+摩擦记账统一 helper） |
 | src/run/gates.js | 修改 | W1+W3 | 快照创建静默 catch 改高可见 ⚠️ + 摩擦记账；verify 段 required-evidence 与 target_files 对账门前移至实测门之前 |
 | src/friction-tally.js | 修改 | W1 | TYPES 封闭枚举扩展 gate_snapshot_fallback |
 | src/verify-postcheck.js | 修改 | W2+W4 | test-result.json 增 fingerprint/reuseDecision additive 字段；trace 悬空判定与残差执行按行 repo 解析（D-005@v1）；跨仓锚点窗口扩展 |
+| src/verify-probes.js | 修改 | W4 | FR-06 探针 7 卡收集携 repo（写侧透传宿主） |
 | src/test-bindings.js | 修改 | W4 | 机器 candidate 行写侧透传 repo 字段（additive，D-005@v1） |
 | src/cross-repo-reconcile.js | 修改 | W4 | B 档锚点 HEAD~1..HEAD → baseline..HEAD（可得时），label 如实标注 |
 | src/index.js | 修改 | W4 | wt-commit cwd 推断剥 --repoKey 后缀（注册表校验，D-006@v1） |
@@ -55,6 +58,7 @@ scale: large
 **W4（FR-06/07/08，D-001@v1 Wave 结构 / D-005@v1 / D-006@v1）跨仓 per-repo**：① trace 行 repo 归属——写侧从 task 卡 repo 切片透传（additive 字段，缺省 main，存量零迁移）；读侧悬空判定/残差执行按行 repo 经 repos 注册表换根解析。② 对账锚点 B 档 `HEAD~1..HEAD` 扩为 baseline..HEAD（apply/worktree baseline 可得时），回退链 A(reviews 锡点) > B'(baseline 窗口) > B(HEAD~1 窗口) > C(未提交) 不回退。③ wt-commit cwd 推断：worktree 名含 `--<repoKey>` 且后缀命中 repos 注册表时剥除得变更名（注册表校验，不猜切分；二级校验：全段本身命中主仓进度库已知变更时不剥——防变更真名恰以 --repoKey 结尾的误剥）。三缺陷执行期先写复现测试（postmortem 证据为外部仓实证，本仓修面前先钉行为）再修。
 
 ## 接口契约
+本变更接口面：0 端点（CLI 内部管线变更——无对外 API 端点增删；模块导出面变化见本节下方 additive 清单）
 
 - `src/run/code-face-key.js` 导出：`filterCodePorcelain(porcelain)`（自 green-cache.js 迁入，语义不变）、`isNonCodePath(p)`、`computeCodeTreeKey({ cwd, specBase })`（git 失败返回 null——调用方 fail-open miss）。
 - `computeGateFingerprint` / `computeQualityScanFingerprint` 签名不变，内部 HEAD 分量换 computeCodeTreeKey；旧缓存记录指纹自然失配一次（安全方向：多跑一轮不误复用）。
@@ -88,6 +92,10 @@ scale: large
 - 死路（否决存档）：①「最近触码提交」作指纹分量——git log 语义（revert/merge/cherry-pick）不可靠，否决；②plannedSnapshot 探测式预判（先探快照可行性再判复用）——探测与真建两套口径会再分叉，不如先建后判的事实口径，否决；③指纹按文件 mtime——非 git 事实且跨平台不可靠，否决。
 - W4 三缺陷的证据来自外部仓 postmortem——本仓执行期先复现（钉行为）再修，防修错面；复现不了的缺陷如实降级记录不硬修。
 - 快照慢性失败的根因（本机为何 createVerifyGateSnapshot 返回 null）不在本变更修复面（无现存复现环境）——本变更保证：失败可见 + 复用不因慢性失败而死循环 + 主仓回退口径的实测结论照实标记口径。
+
+## 变更风险等级
+
+risk_level 由 design frontmatter 显式声明 = unit-sufficient（压仪式档；evidence 要求不受豁免——integration 实证以 8 个端到端测试文件承担：CLI 子进程/真实 git 仓/真实 worktree fixture 形态）。
 
 ## 自审（Self-Review）
 
