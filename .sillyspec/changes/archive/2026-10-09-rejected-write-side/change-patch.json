@@ -1,0 +1,122 @@
+{
+  "change": "2026-10-09-rejected-write-side",
+  "baseline": "344cbf7dc2d970b95facb402859f8caa57344096",
+  "head": "201c1c14d7319d6b00ca9f305d4cf95eeb7d2336",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    ".sillyspec/changes/2026-10-09-rejected-write-side/tasks.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "src/flow.js",
+    "src/stages/brainstorm.js",
+    ".sillyspec/changes/2026-10-09-rejected-write-side/decisions.md",
+    ".sillyspec/changes/2026-10-09-rejected-write-side/design.md",
+    ".sillyspec/changes/2026-10-09-rejected-write-side/proposal.md",
+    ".sillyspec/changes/2026-10-09-rejected-write-side/requirements.md"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 250,
+    "deletions": 124
+  },
+  "savedAt": "2026-10-09T15:18:41.260Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-flow",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "344cbf7dc2d970b95facb402859f8caa57344096",
+    "totals": {
+      "files": 5,
+      "additions": 48,
+      "deletions": 124
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-flow/SKILL.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 42,
+        "deletions": 120,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6638085d9fd9cc9e103cd52a3573f15bde7ba1d0817a2c94775930e6c215af57",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,30 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-09T15:09:26.255Z
+---
+# 提案书（Proposal）— 2026-10-09-rejected-write-side
+
+## 动机
+
+任务原话转写：防复潮机制读侧已建好（decision-distill rejected 通道 + brainstorm {DECISION_HITS} 确定性注入 + archive needsWait 拦字段缺失），但写侧两条道都不供料：厚道 brainstorm 通篇无指令叫 agent 把落选方案记成 rejected 条目（方案选择步只落盘所选方案，落选理由埋进 answer 散文，grep 落选/备选/各记 零命中）；轻量道槽4收割模板（harvestSlot4Decision）只写 类型/状态/答案 三行，无问题字段、死路必埋散文，且收割稿无底稿定性指引——agent 视 flow-machine-draft frontmatter 为机器属地不碰。结果：复潮风险最高的方案取舍死路结构性进不了 rejected 通道，防复潮空转。
+
+成功标准：
+- brainstorm 方案选择步新增指令：用户选定后落选方案各记一条 rejected 条目（question 复用取舍问句、否决理由=当轮劣势与成本、复潮条件=劣势消解/成本反转前提）
+- brainstorm 对账步把放弃方案列入漏网补记之列（未记 rejected 的此时补记）
+- flow 收割提示行（flow.js 槽4 console.log）与 /sillyspec:flow skill 均定性收割稿为底稿：槽4 作答含放弃方案的，收口前拆成 rejected 条目
+- docs/prompt 镜像经 _extract/_sync/_verify 流水线全绿（brainstorm.md fence 与 src 逐字一致）
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. brainstorm 方案选择步新增指令：用户选定后落选方案各记一条 rejected 条目（question 复用取舍问句、否决理由=当轮劣势与成本、复潮条件=劣势消解/成本反转前提）
+2. brainstorm 对账步把放弃方案列入漏网补记之列（未记 rejected 的此时补记）
+3. flow 收割提示行（flow.js 槽4 console.log）与 /sillyspec:flow skill 均定性收割稿为底稿：槽4 作答含放弃方案的，收口前拆成 rejected 条目
+4. docs/prompt 镜像经 _extract/_sync/_verify 流水线全绿（brainstorm.md fence 与 src 逐字一致）
+
+## 成功标准（可验证）
+
+1. brainstorm 方案选择步新增指令：用户选定后落选方案各记一条 rejected 条目（question 复用取舍问句、否决理由=当轮劣势与成本、复潮条件=劣势消解/成本反转前提）
+2. brainstorm 对账步把放弃方案列入漏网补记之列（未记 rejected 的此时补记）
+3. flow 收割提示行（flow.js 槽4 console.log）与 /sillyspec:flow skill 均定性收割稿为底稿：槽4 作答含放弃方案的，收口前拆成 rejected 条目
+4. docs/prompt 镜像经 _extract/_sync/_verify 流水线全绿（brainstorm.md fence 与 src 逐字一致）

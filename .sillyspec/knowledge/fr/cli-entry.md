@@ -7973,3 +7973,31 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-09-close-trace-single-set
   status: active
+
+## FR-cli-entry-422 brainstorm 方案选择步新增指令：用户选定后落选方案各记一条 rejected 条目（question 复用取舍问句、否决理由=当轮劣势与成本、复潮条件=劣势消解/成本反转前提）
+变更：2026-10-09-rejected-write-side
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-rejected-write-side/requirements.md#FR-01
+最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336
+
+## FR-cli-entry-423 brainstorm 对账步把放弃方案列入漏网补记之列（未记 rejected 的此时补记）
+变更：2026-10-09-rejected-write-side
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-rejected-write-side/requirements.md#FR-02
+最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336
+
+## FR-cli-entry-424 flow 收割提示行（flow.js 槽4 console.log）与 /sillyspec:flow skill 均定性收割稿为底稿：槽4 作答含放弃方案的，收口前拆成 rejected 条目
+变更：2026-10-09-rejected-write-side
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-rejected-write-side/requirements.md#FR-03
+最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336
+
+## FR-cli-entry-425 docs/prompt 镜像经 _extract/_sync/_verify 流水线全绿（brainstorm.md fence 与 src 逐字一致）
+变更：2026-10-09-rejected-write-side
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-09-rejected-write-side/requirements.md#FR-04
+最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336

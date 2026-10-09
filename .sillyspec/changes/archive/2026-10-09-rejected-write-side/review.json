@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-09-rejected-write-side",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "201c1c14d7319d6b00ca9f305d4cf95eeb7d2336",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-03「两处均含字段级指引」在 flow.js 提示行仅部分兑现：字段级映射与底稿定位语缺失",
+      "evidence": "requirements FR-03 Then 承诺「两处均含底稿定性与拆 rejected 条目的字段级指引」，但 src/flow.js:1689 的收割提示行仅有「底稿——作答里的放弃方案请拆成 rejected 条目再收口」——无字段级指引（问题=决策专属问句/否决理由=放弃理由/复潮条件=重提前提）、无 author: flow-machine-draft 定位语、无「无实质放弃方案则不动」边界；字段级完整指引仅在 .claude/skills/sillyspec-flow/SKILL.md:43 一处。design.md 接口契约节如实声明 flow.js 只补一句，属 requirements Then 措辞超出 design/实现交付面的一致性缺口；核心承诺（两处均定性底稿+拆条指令）已兑现，提示语为软指引无数据正确性风险，不升 P1。",
+      "location": "src/flow.js:1689"
+    },
+    {
+      "severity": "P3",
+      "title": "design 并发问披露的存量镜像漂移面不全：doctor 静态阶段漂移未点名",
+      "evidence": "design 并发答只披露 verify/archive 两 stage 存量漂移（_verify 报 ❌）属他会话；实测 node docs/prompt/_verify.mjs 另有 doctor 3 处 ❌（md fence=0 vs json 3 步，属校验器自注「静态阶段应为 0」的真空区）及 plan/execute 8 处 ❌（校验器自注动态阶段属预期）。doctor 漂移非本变更引入（change.patch 未触 docs/prompt/doctor 与对应 src），仅披露枚举不全。",
+      "location": "docs/prompt/_verify.mjs 输出（doctor 节）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-09T15:21:54Z"
+}
