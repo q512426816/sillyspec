@@ -2089,3 +2089,31 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：e0a193430426463421f1973427882ae2fe0ebefb
 理由：最大风险：读侧兼容链遗漏某个旧形态消费点导致回放退化（如 --file 切片漏了旧 heavy 形态）——对策：三类存量形态各自钉兼容测试 + 收口全量回归（732 文件全绿）。放弃方案①（scope-audit 命名幸存）：CLI 5 个模块 + 平台 3 处读取 + 约 14 个测试文件全要改名换路径，改动面大一圈，无对应收益。放弃方案②（一次性迁移存量 247 归档）：重写历史冻结记录风险高，且平台镜像服务其他仓的旧归档不受本仓迁移控制，回退链反正删不掉——用户已确认不动存量。放弃方案③（全新命名 close-trace.*）：所有读方（含平台）全部改名，存量归档 100% 走回退链，纯增 churn。
+
+## D-001@v1 方案架构——单变更四 Wave（brainstorm step4 裁决存档）
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+锚点：未记录
+最近确认：84407be4
+理由：单变更 2026-10-09-verify-reuse-friction 分四 Wave（W1 快照口径死循环+可见性 / W2 指纹树键化+观测 / W3 便宜门前移 / W4 跨仓 per-repo）。evidence：multi-agent-platform 2026-10-09 tombstone 取证（.runtime 质量扫描记录 usedSnapshot=false + 13 份 test-result + sqlite 会话命令时间线交叉归因，四机制实证独立可并行修）。放弃方案：A 五变更拆分（流程开销×5，gates.js/verify-quality-scan.js 共触文件串行依赖强）；C 只修两大头（与用户拍板的全清单不符）。
+
+## D-002@v1 复用指纹的代码面分量=代码树内容键（git ls-tree 过滤哈希），非 HEAD、非最近触码提交
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+锚点：未记录
+最近确认：84407be4
+理由：HEAD 换 `git ls-tree -r HEAD` 按既有非代码路径口径过滤后的内容哈希；整树 oid 相同走快路径沿用上次键。纯文档提交不击穿、代码提交必击穿；git 原生对象哈希天然内容寻址，无语言/框架枚举（红线合规）。evidence：本案 13:35-14:10 五笔提交（多为纯文档）每笔击穿两类缓存实证；13:31-13:33 纯文档未提交态秒过对照。放弃方案：最近触码提交（git log 对 revert/merge/cherry-pick 语义不可靠）；mtime（非 git 事实、跨平台不可靠）；整树 oid 直接作键（文档提交也变树 oid，治不了本病——只能当快路径缓存用）。
+
+## D-003@v1 快照口径复用闸比对「实际口径」——先建快照后判复用
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+锚点：未记录
+最近确认：84407be4
+理由：executeVerifyQualityScan 把 shouldReuseLastPassedScan 移到快照创建之后，plannedSnapshot 参数改 actualScope=Boolean(snap)。连续失败（false==false）收敛命中；口径真实切换仍失配。evidence：本案记录 usedSnapshot=false × planned=true 恒失配 → 4 轮 × 3.5min 纯浪费实证。放弃方案：快照可行性探测预判（探测与真建两套口径会再分叉）；删掉口径守卫（主仓/快照口径混用会吞真实代码差异——防作弊语义不能丢）。
+
+## D-004@v1 门序前移的安全边界——只移纯事实门，实测依赖门不动
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+锚点：未记录
+最近确认：84407be4
+理由：仅 required-evidence 与 target_files 对账两门（纯 git/文档事实）前移到实测门前并入 R16 聚合；PASS 封顶/parity/超时降档等消费实测结果的门不动。evidence：本案 13:33 与 14:00-14:10 每轮先付 3.5 分钟实测再被对账门拦实证；两门调用链已核对无实测数据依赖。风险护栏：执行期调用链复核，发现隐藏依赖即回退该门原位记录在案。

@@ -5758,3 +5758,59 @@ author: sillyspec-fr-index
   confirmed_at: null
   source_change: 2026-09-27-watcher-push-endpoint
   status: active
+
+## FR-unmapped-724 快照口径复用闸按「实际口径」收敛——快照创建慢性失败时 passed 幂等复用第二轮起命中（死循环断根）
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：死循环断根
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-01
+最近确认：84407be4
+
+## FR-unmapped-725 快照创建失败/跳过高可见 + 摩擦记账
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：可见性
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-02
+最近确认：84407be4
+
+## FR-unmapped-726 复用指纹代码树内容键化——纯文档提交不击穿、代码提交必击穿；口径单点
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：文档提交存活 / 代码提交击穿
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-03
+最近确认：84407be4
+
+## FR-unmapped-727 复用判定落盘可观测
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：取证直读
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-04
+最近确认：84407be4
+
+## FR-unmapped-728 verify 收口纯事实门前移——声明缺失时零测试执行秒级失败
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：秒级失败
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-05
+最近确认：84407be4
+
+## FR-unmapped-729 trace 行 repo 归属——写侧透传、读侧按行解析
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：跨仓行不再悬空
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-06
+最近确认：84407be4
+
+## FR-unmapped-730 跨仓对账锚点窗口覆盖多笔提交
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：多笔提交对上
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-07
+最近确认：84407be4
+
+## FR-unmapped-731 wt-commit 跨仓 worktree 识别
+变更：2026-10-09-verify-reuse-friction
+状态：active
+摘要：跨仓推断
+全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-08
+最近确认：84407be4
