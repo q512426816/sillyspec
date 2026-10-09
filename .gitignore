@@ -34,4 +34,4 @@ sa-rename-probe/
 .sillyspec/sillyspec.db/
 .sillyspec/sillyspec.db
 # 归档变更目录内嵌套的运行时异物（cwd 漂移事故遗留 db/日志——archive 机械 add 曾夹带入库）
-.sillyspec/changes/archive/*/.sillyspec/
+.sillyspec/changes/archive/**/.sillyspec/

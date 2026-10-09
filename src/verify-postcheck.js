@@ -4108,14 +4108,17 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
         // （不进 union、只救「声明而 missing」），他变更提交的文件不满足消息锚定天然不入窗。
         try {
           const msgWindow = gitQuiet(cwd, ['log', '-n', '30', '--name-only', '--format=%h %s'], { timeout: 30 * 1000, trim: false })
-          if (typeof msgWindow === 'string' && msgWindow.includes(changeName)) {
+          // 边界锚定（审查 P3 修正）：子串 includes 会把同日前缀变更名（A=…-x 是 B=…-x2 的
+          // 前缀）误纳——改为变更名两侧不得紧贴 [\w-]（消息里的括号/空格/行首尾都是自然边界）。
+          const msgAnchorRe = new RegExp('(?<![\\w-])' + String(changeName).replace(/[\\.*+?^${}()|[\\]]/g, '\\$&') + '(?![\\w-])')
+          if (typeof msgWindow === 'string' && msgAnchorRe.test(msgWindow)) {
             const files = []
             let inOwnCommit = false
             for (const l of msgWindow.split(String.fromCharCode(10))) {
               const t = l.trim()
               if (!t) { continue }
               const header = t.match(/^[0-9a-f]{7,40} /)
-              if (header) { inOwnCommit = t.includes(changeName); continue }
+              if (header) { inOwnCommit = msgAnchorRe.test(t); continue }
               if (inOwnCommit && !/^[0-9a-f]{7,40}$/.test(t)) files.push(t)
             }
             if (files.length > 0) {

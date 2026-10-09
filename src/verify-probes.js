@@ -3899,7 +3899,7 @@ function topSectionKey(headingLine) {
     .trim()
 }
 
-const HUMAN_SECTION_KEYS = ['结论', '移交项', '证据账', '集成验证回执', '任务完成度', '设计一致性', '独立复核', '变更风险等级']
+const HUMAN_SECTION_KEYS = ['结论', '移交项', '证据账', '集成验证回执', '任务完成度', '设计一致性', '独立复核', '变更风险等级', '技术债务', 'Runtime Evidence', '代码审查']
 const MATRIX_SECTION_KEYS = ['决策追踪矩阵', '接口验证覆盖矩阵']
 const PROBE_CONTAINER_KEY = '探针结果'
 
@@ -3910,13 +3910,17 @@ function mergeProbeContainer(oldContainerLines, freshContainerLines) {
   const out = [...freshParsed.lines]
   let carriedRows = 0
   const oldByNum = new Map(oldParsed.sections.map(s => [s.num, s]))
-  for (const fs of freshParsed.sections) {
+  for (let idx = freshParsed.sections.length - 1; idx >= 0; idx--) {
+    const fs = freshParsed.sections[idx]
     const os = oldByNum.get(fs.num)
     if (!os) continue
     const merged = mergeProbeSection(
       oldParsed.lines.slice(os.startLine, os.endLine),
       freshParsed.lines.slice(fs.startLine, fs.endLine),
     )
+    // 倒序替换（审查 P2 修正，2026-10-09-verify-papercuts）：mergeProbeSection 对含 stale
+    // 键的段会在段尾追加（行数 > freshSeg），正序 splice 会使后续探针段 startLine 错位——
+    // 从后往前替换则前面行号不受影响，任一段行数膨胀都安全。
     carriedRows += merged.carried
     // 用 merged 文本替换 fresh 容器中该探针段（逐段行数已知，从后往前替换保行号稳定）
     const freshSeg = freshParsed.lines.slice(fs.startLine, fs.endLine)

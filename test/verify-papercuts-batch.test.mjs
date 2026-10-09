@@ -174,3 +174,113 @@ test('④ 归档暂存排除嵌套 .sillyspec/ 异物：正常产物进暂存，
     assert.ok(Array.isArray(r.staged), '返回结构不变（兼容调用方）')
   } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
 })
+
+test('②b 审查 P2 修正：stale 携载行 + 多探针段时输出不损坏（倒序替换）', () => {
+  const oldText = [
+    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
+    '',
+    '#### 探针 7：验收×测试覆盖矩阵',
+    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
+    '|---|---|---|---|',
+    '| 已填项 | `test/a.test.mjs` | covered | 手填 |',
+    '| 已撤下项 | `test/old.test.mjs` | covered | stale 手填 |',
+    '',
+    '#### 探针 8：载荷字段契约对账',
+    '| 字段 | 在场 |',
+    '|---|---|',
+    '| src/x.js | yes |',
+    '',
+  ].join('\n')
+  const skeleton = [
+    '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
+    '',
+    '#### 探针 7：验收×测试覆盖矩阵',
+    '| acceptance 条目 | 归属测试文件 | 判定 | 证据 |',
+    '|---|---|---|---|',
+    '| 已填项 | `test/` | <待填：五选一> | <待填：锚点> |',
+    '',
+    '#### 探针 8：载荷字段契约对账',
+    '| 字段 | 在场 |',
+    '|---|---|',
+    '| src/x.js | <待填> |',
+    '| src/y.js | <待填> |',
+    '',
+  ].join('\n')
+  const r = applySkeletonPreservingHuman(oldText, skeleton)
+  // 探针 7：已填行携载 + stale 追加（不丢）
+  assert.ok(r.text.includes('| 已填项 | `test/a.test.mjs` | covered | 手填 |'), '探针 7 已填行携载')
+  assert.ok(r.text.includes('已撤下项'), 'stale 行携载保留（agent 裁决）')
+  // 探针 8：正序错位会残留探针 7 的表尾/待填——倒序后应干净
+  const p8 = r.text.slice(r.text.indexOf('#### 探针 8'))
+  assert.ok(p8.includes('| src/x.js | yes |'), '探针 8 已填行按首列键携载（错位修复的判别锚）')
+  assert.ok(!p8.includes('|---|---|---|---|'), '探针 8 段无他表（探针 7 的四列分隔行）串入（正序错位的残留信号）')
+  assert.ok(!p8.includes('已撤下项'), '探针 8 段无探针 7 的 stale 行串入')
+  assert.ok(p8.includes('| src/y.js |'), '探针 8 新增行进场')
+  assert.ok(!p8.slice(p8.indexOf('| src/x.js |')).includes('|---|---|---|---|'), '无他表分隔行串入')
+})
+
+test('③b 审查 P3 修正：前缀变更名不误纳（边界锚定）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'papercut3b-'))
+  try {
+    git(dir, ['init', '-q'])
+    git(dir, ['config', 'user.email', 't@t.local'])
+    git(dir, ['config', 'user.name', 't'])
+    writeFileSync(join(dir, 'README.md'), 'init\n')
+    git(dir, ['add', '-A'])
+    git(dir, ['commit', '-qm', 'init'])
+    // 变更 B（名含 A 作前缀）先提交他自己的文件
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'b-only.js'), 'export const b = 1\n')
+    git(dir, ['add', 'src/b-only.js'])
+    git(dir, ['commit', '-m', 'feat: B 交付 (2026-10-09-x2)'])
+    // 变更 A 声明了 B 的文件（跨变更误声明形态）——A 无自己提交
+    const cn = '2026-10-09-x'
+    const specBase = join(dir, '.sillyspec')
+    mkdirSync(join(specBase, 'changes', cn, 'tasks'), { recursive: true })
+    writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-01.md'), [
+      '---', 'id: task-01', 'title: t', 'title_zh: t', 'status: draft', 'depends_on: []',
+      'goal: g', 'implementation: i', 'verify: node a.js', 'constraints: c',
+      'acceptance:', '  - a1',
+      'target_files:', '  - src/b-only.js', '---', '',
+    ].join('\n'))
+    const r = reconcileTargetFiles({ cwd: dir, specBase, changeName: cn, runtimeRoot: join(specBase, '.runtime'), strictMode: false })
+    assert.ok(r.missing.some((m) => String(m.path || m).includes('b-only')), `B 的提交不救 A 的声明（子串误纳已修；实得 missing=${JSON.stringify(r.missing)} sources=${JSON.stringify(r.sources)}）`)
+    assert.ok(!r.sources.some((x) => String(x).includes('log-msg-window')), 'A 的窗口源不应被 B 的提交激活')
+  } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
+})
+
+test('②c 审查 P3 修正：技术债务/Runtime Evidence/代码审查 段同享人工面携载', () => {
+  const oldText = [
+    '## 技术债务 [层：人工判断]',
+    '',
+    '手填债务叙述在场',
+    '',
+    '## Runtime Evidence [层：人工判断]',
+    '',
+    '手填运行时证据在场',
+    '',
+    '## 代码审查 [层：人工判断]',
+    '',
+    '手填审查叙述在场',
+    '',
+  ].join('\n')
+  const skeleton = [
+    '## 技术债务 [层：人工判断]',
+    '',
+    '<!--TODO: 技术债务-->',
+    '',
+    '## Runtime Evidence [层：人工判断]',
+    '',
+    '<!--TODO: 运行时证据-->',
+    '',
+    '## 代码审查 [层：人工判断]',
+    '',
+    '<!--TODO: 代码审查-->',
+    '',
+  ].join('\n')
+  const r = applySkeletonPreservingHuman(oldText, skeleton)
+  for (const marker of ['手填债务叙述在场', '手填运行时证据在场', '手填审查叙述在场']) {
+    assert.ok(r.text.includes(marker), `${marker} 携载`)
+  }
+  assert.ok(!r.text.includes('<!--TODO'), '已填段不再回到占位')
+})
