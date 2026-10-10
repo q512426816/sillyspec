@@ -149,6 +149,7 @@ test('ensureCrossWorktrees placement 落位 + 注册表 + 寻回 + cleanup（FR-
   const expectedPath = join(placementDir, `${CHANGE}--front`);
   assert.equal(wtPath, expectedPath, 'worktree 必须落在配置的 placement 目录');
   assert.ok(existsSync(join(wtPath, 'meta.json')), 'meta.json 在落位目录');
+  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'explicit-legacy', 'legacy 段（crossPlacement）落位 meta.placementMode=explicit-legacy');
   assert.equal(git(fx.cross, ['worktree', 'list', '--porcelain']).includes(expectedPath.replace(/\\/g, '/')), true, 'git worktree 注册在跨仓 .git');
 
   // 注册表写入 + resolve 寻回
@@ -182,7 +183,8 @@ test('缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02�
     '新默认落位=跨仓仓内（同盘，工具链天然可达）',
   );
   assert.ok(existsSync(expected), 'worktree 目录已建');
-  assert.equal(r.created[0].meta?.placementMode ?? 'repo-local', 'repo-local', 'placementMode=repo-local');
+  assert.equal(r.created[0].meta && r.created[0].meta.placementMode, 'repo-local', 'placementMode=repo-local（created 携带 meta 真值，无兜底）');
+  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'repo-local', '落盘 meta.placementMode=repo-local');
 
   // untracked 保障：.git/info/exclude 含 .sillyspec/ 且跨仓 status 干净（不动用户 .gitignore）
   const excludePath = join(fx.cross, '.git', 'info', 'exclude');
@@ -312,6 +314,7 @@ test('repos 条目内联 worktree 落位 + 优先级高于 crossPlacement（repo
   assert.equal(r.created[0].worktreePath, expected, '内联 worktree 落位生效');
   assert.ok(!existsSync(join(legacyDir, `${CHANGE}--front`)), '内联优先——legacy crossPlacement 未生效');
   assert.ok(existsSync(join(expected, 'meta.json')), 'meta 在落位目录');
+  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'explicit-inline', 'repos 内联落位 meta.placementMode=explicit-inline');
   cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
 });
 

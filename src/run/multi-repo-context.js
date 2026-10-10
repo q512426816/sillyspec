@@ -25,7 +25,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { git, gitQuiet } from '../git-helper.js';
-import { resolveCrossWorktreePath } from '../cross-placement.js';
+import { resolveCrossWorktreePathCandidates } from '../cross-placement.js';
 
 /**
  * @typedef {Object} RepoEntry
@@ -160,9 +160,12 @@ export class MultiRepoContext {
     const specBase = (this.platformOpts && this.platformOpts.specRoot) || join(this.cwd, '.sillyspec');
     let crossMeta = null;
     try {
-      // 同步读（构造函数是同步的；resolveCrossWorktreePath 同步读注册表+公式）
-      const metaPath = join(resolveCrossWorktreePath(specBase, this.changeName, repoKey, crossRepoPath), 'meta.json');
-      if (existsSync(metaPath)) crossMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+      // 同步读（构造函数是同步的）；寻址候选逐级探测（注册表 → 仓内新公式 → 主仓 specBase 旧
+      // 公式 legacy 兜底）——无注册表条目的存量 worktree 在本读取面不失联
+      for (const cand of resolveCrossWorktreePathCandidates(specBase, this.changeName, repoKey, crossRepoPath)) {
+        const metaPath = join(cand, 'meta.json');
+        if (existsSync(metaPath)) { crossMeta = JSON.parse(readFileSync(metaPath, 'utf8')); break }
+      }
     } catch { crossMeta = null }
     const inWorktree = !!(crossMeta && crossMeta.isCross && crossMeta.worktreePath && existsSync(crossMeta.worktreePath));
     const workRoot = inWorktree ? crossMeta.worktreePath : crossRepoPath;

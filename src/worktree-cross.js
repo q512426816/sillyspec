@@ -381,7 +381,7 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
       writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
     }
 
-    created.push({ repoKey: key, worktreePath });
+    created.push({ repoKey: key, worktreePath, meta });
   }
   return { created, reused, skippedLegacy };
 }
