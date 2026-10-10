@@ -1,6 +1,8 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -16,8 +18,9 @@ input: >-
   - .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
 
   - 纯文档改动，不触 src/test
-autopilot: false
+autopilot: true
 baseline_commit: 8698c0d4bd1e253acb7de3fb14115b6d3596b84e
-updatedAt: '2026-10-10T00:43:10.578Z'
+updatedAt: '2026-10-10T00:48:00.605Z'
 baseline_sha256: 0a354db9e8f1fb3f86a89e2bd2b11535f06c4148f6c4154fd560f22639cba669
+gate_summary: 'test: —｜lint: —｜门文件 2 个'
 
