@@ -8001,3 +8001,98 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-09-rejected-write-side/requirements.md#FR-04
 最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336
+
+## FR-cli-entry-426 CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
+变更：2026-10-10-cli-uninit-cwd-gate
+状态：active
+摘要：未初始化 git 仓跑 flow；未初始化裸目录跑 task
+全文：.sillyspec/changes/archive/2026-10-10-cli-uninit-cwd-gate/requirements.md#FR-01
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-01
+  tests: test/uninit-cwd-gate.test.mjs「git 仓未初始化 → 文案给出 git root 锚点」 | test/uninit-cwd-gate.test.mjs「未初始化 git 仓 → block + gitRoot 指向仓根」 | test/uninit-cwd-gate.test.mjs「未初始化目录跑 flow → exit 2 + 硬拦文案（含修复三选一指引）」 | test/uninit-cwd-gate.test.mjs「未初始化非 git 目录 → block 且 gitRoot=null」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cli-uninit-cwd-gate
+  status: active
+
+## FR-cli-entry-427 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
+变更：2026-10-10-cli-uninit-cwd-gate
+状态：active
+摘要：status 在未初始化目录
+全文：.sillyspec/changes/archive/2026-10-10-cli-uninit-cwd-gate/requirements.md#FR-02
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-02
+  tests: test/uninit-cwd-gate.test.mjs「豁免命令行为不变：status 在未初始化目录不触拦」 | test/uninit-cwd-gate.test.mjs「豁免命令（init/scan/doctor/status/wt-commit 等）任意目录 → exempt」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cli-uninit-cwd-gate
+  status: active
+
+## FR-cli-entry-428 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
+变更：2026-10-10-cli-uninit-cwd-gate
+状态：active
+摘要：子目录跑非豁免命令
+全文：.sillyspec/changes/archive/2026-10-10-cli-uninit-cwd-gate/requirements.md#FR-03
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-03
+  tests: test/uninit-cwd-gate.test.mjs「已初始化根 / 其任意子目录 → pass + anchor=spec 根父目录」 | test/uninit-cwd-gate.test.mjs「已初始化根的子目录跑非豁免命令 → 放行 + 重锚定到项目根」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cli-uninit-cwd-gate
+  status: active
+
+## FR-cli-entry-429 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
+变更：2026-10-10-cli-uninit-cwd-gate
+状态：active
+摘要：平台 pointer 项目跑非豁免命令；平台模式首扫（无 pointer 新目录）
+全文：.sillyspec/changes/archive/2026-10-10-cli-uninit-cwd-gate/requirements.md#FR-04
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-04
+  tests: test/uninit-cwd-gate.test.mjs「--spec-dir 显式指定 → 不拦」 | test/uninit-cwd-gate.test.mjs「--spec-root 平台首扫 flag → 不拦」 | test/uninit-cwd-gate.test.mjs「linked worktree（兄弟路径）主仓有 .sillyspec → pass 且 anchor=null」 | test/uninit-cwd-gate.test.mjs「平台 pointer / 接管声明在 dir → skip」 | test/uninit-cwd-gate.test.mjs「平台 pointer 在 cwd 的项目 → 不因缺本地 .sillyspec 被拦」 | test/uninit-cwd-gate.test.mjs「显式 --spec-dir / 平台 flag → skip」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cli-uninit-cwd-gate
+  status: active
+
+## FR-cli-entry-430 新增测试覆盖以上各面，相关回归全绿
+变更：2026-10-10-cli-uninit-cwd-gate
+状态：active
+摘要：全量回归
+全文：.sillyspec/changes/archive/2026-10-10-cli-uninit-cwd-gate/requirements.md#FR-05
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-05
+  tests: test/run-tests.mjs | test/uninit-cwd-gate.test.mjs「非豁免命令清单抽样」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cli-uninit-cwd-gate
+  status: active

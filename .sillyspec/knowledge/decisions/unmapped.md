@@ -2179,3 +2179,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：5fb2a6a94a3822711af676ffcfd0fd010ff6464d
 理由：最大风险：测试计数漏改（command-cards.test.mjs 中 8/16/7 等硬编码计数分散在 5 处）——对策：逐处核对并在收口实测跑该文件。放弃方案：①连 src 存量收尾机制一并删除（src/stages/quick.js + run/command.js quick 分支 + doctor/quick-sessions 运行时清理）——升级前在途会话将失去 --done/--cancel 收尾通道，且牵动 docs/prompt 镜像再生成，属 CLI 功能级变更，超出「指引面清除」的用户诉求边界；②保留墓碑卡/注记做存量会话指路——用户明确否决（「仅存量收尾注记也不要，直接去掉」）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-10-cli-uninit-cwd-gate
+锚点：未记录
+最近确认：a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e
+理由：最大风险：豁免清单漏项/多项——漏项误拦合法命令（agent 被 exit 2 打断），多项放走本该拦的命令（回到静默错答）。缓解：清单每项注释豁免依据，测试抽样锁定两侧（豁免面与非豁免面各一组断言），后续增删走清单单一真相源。次风险：重锚定改变个别命令对 cwd 的隐式依赖（相对路径参数按 cwd 解析的命令）——全量套件回归无此类失败，锚定提示行让差异可见。已试并放弃：① 判据用「cwd 本身含 .sillyspec」——拦掉设计支持的子目录运行（ancestorSpecDirs 注释明证），误伤面大；② 拦 init（已初始化目录禁 init）——重跑 init 是模板/skills 升级路径（AGENTS.md「重跑 init 同版本不更新」），拦截打断升级；③ 逐命令补「未初始化」检查——散点维护、报错时机晚且文案不一，正是要治的根因；④ 门内重写祖先遍历——丢 home/tmp/.runtime 守卫会复辟 2026-09-27-spec-sync-413 等已修复坑，改为复用 resolveSpecDir。

@@ -1,0 +1,239 @@
+{
+  "change": "2026-10-10-cli-uninit-cwd-gate",
+  "baseline": "326f985988debbe2cd917d82c182cbb15e4fb23d",
+  "head": "a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e",
+  "files": [
+    ".sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/design.md",
+    ".sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/proposal.md",
+    ".sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/requirements.md",
+    ".sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/index.js",
+    "src/run/shared.js",
+    "test/auto-driver-meta.test.mjs",
+    "test/backlog-batch-d.test.mjs",
+    "test/change-name-date-gate.test.mjs",
+    "test/cli-top-level-aliases.test.mjs",
+    "test/docs-check-cli.test.mjs",
+    "test/docs-check-fix.test.mjs",
+    "test/docs-fix-receipt.test.mjs",
+    "test/flow-draft.test.mjs",
+    "test/flow-status-json.test.mjs",
+    "test/fourpiece-init.test.mjs",
+    "test/platform-managed-declaration.test.mjs",
+    "test/quick-four-flags.test.mjs",
+    "test/quick-linked-change-existence-guard.test.mjs",
+    "test/quick-msys-path-sniff.test.mjs",
+    "test/quick-prompt-path-rule.test.mjs",
+    "test/quick-retired.test.mjs",
+    "test/review-status-command.test.mjs",
+    "test/task-progress-marker.test.mjs",
+    "test/uninit-cwd-gate.test.mjs",
+    "test/watcher-alerts.test.mjs"
+  ],
+  "totals": {
+    "files": 28,
+    "additions": 609,
+    "deletions": 29
+  },
+  "savedAt": "2026-10-10T02:34:58.916Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 20
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "326f985988debbe2cd917d82c182cbb15e4fb23d",
+    "totals": {
+      "files": 23,
+      "additions": 394,
+      "deletions": 29
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 17,
+        "deletions": 17,
+        "kind": "modified"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 31,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 75,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/auto-driver-meta.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/backlog-batch-d.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/change-name-date-gate.test.mjs",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/cli-top-level-aliases.test.mjs",
+        "additions": 12,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "test/docs-check-cli.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/docs-check-fix.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/docs-fix-receipt.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-draft.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-status-json.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/fourpiece-init.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/platform-managed-declaration.test.mjs",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-four-flags.test.mjs",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-linked-change-existence-guard.test.mjs",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-msys-path-sniff.test.mjs",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-prompt-path-rule.test.mjs",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-retired.test.mjs",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/review-status-command.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/task-progress-marker.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/uninit-cwd-gate.test.mjs",
+        "additions": 194,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/watcher-alerts.test.mjs",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "76e3308be57bb48b19cd698a093616c46053037748a61902aced179d38c1ee3c",
+  "patchStatus": "ok"
+}

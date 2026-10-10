@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cli-uninit-cwd-gate",
+  "reviewer": "inline-self（环境无已注册子代理，主会话按检查单代行自审——实现者本人，已尽力以测试实证与基线对照代替干净视角，降级留痕）",
+  "verdict": "PASS",
+  "reviewedAgainst": "a6f775c7fcb4644b32cfe3745d3a3c50ce7b958e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "未知命令在未初始化目录先撞门，「未知命令+didYouMean」typo 反馈被门文案遮蔽",
+      "evidence": "门在 switch default 之前执行（src/index.js uninitGate 块），未知命令名不在豁免清单 → 未初始化目录里打错命令名得到 init 指引而非拼写建议；已初始化目录不受影响",
+      "location": "src/index.js:390-420"
+    },
+    {
+      "severity": "P3",
+      "title": "quick-retired R5 版本锚 3.32.4 同步搭车本提交，语义上属 3.32.4 版本面（af6fd5ac）遗漏的补偿",
+      "evidence": "发布惯例 package.json+R5 锚同动（3d34bf06 先例），af6fd5ac 只动前者；本次补齐使全量套件复绿，提交信息已留痕归属",
+      "location": "test/quick-retired.test.mjs:149"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T02:55:00.000Z",
+  "checklistAnswers": {
+    "FR三方一致": "五条 FR 均有实现锚点与测试：FR-01 拦截+文案（uninit-cwd-gate e2e 两条，实测未初始化目录 flow/task exit 2）；FR-02 豁免清单 16 命令清单抽样+status e2e 不触拦；FR-03 pass+anchor 单测与子目录 e2e（锚定提示+根路径断言）；FR-04 skip 四通道单测+e2e（--spec-dir/--spec-root/pointer）与 linked worktree 兜底单测（anchor=null）；FR-05 全量套件 run-tests.mjs 747 文件 EXIT=0 零失败（本轮实测）。绑定测试文件与用例名均真实存在且断言对应行为",
+    "盲维四问真实性": "design 四问均有具体作答且与代码相符：门为单次调用同步只读判定（existsSync×3+safeGit rev-parse），无跨调用状态（乱序 n/a 面）；无新写点（并发 ok）；无落盘无半态、重锚定仅改进程内变量（切换 ok）；作用域答 monorepo/worktree/平台三面不新增串台——worktree 由先行硬拦与命令层锚定负责、平台整类 skip，均与实现一致",
+    "披露边界裁决": "三条声明边界逐条裁决：① linked worktree 放行不重锚（anchor=null）——可接受：重锚定会打断 endpoints baseline 等命令层自有主仓锚定（endpoint-baseline.test.mjs 实证绿）；② 拦截文案只给锚点不给唯一 cwd——可接受：未初始化目录无 ground truth，三条出路指引已是可判定最优；③ 未知命令先撞门（P3 finding）——可接受：已初始化目录（正常使用形态）typo 反馈不受影响，未初始化目录的指引同样可自纠",
+    "防护声明核实": "声称复用 resolveSpecDir 全套守卫——resolveUninitCwdGate 直接调用 resolveSpecDir（非重写遍历），属实；声称 worktree 硬拦先行——门块位于 worktree 守卫之后，属实；声称 resolveEffectiveDir 退化为无操作——重锚定后 dir 已含 .sillyspec，resolveEffectiveDir 首判命中即返回，属实",
+    "生成物同步": "无类型/契约生成物；文档行号锚（platform-interface-map.md）已随 src 行位移平移并经 doc-ref-check 校验绿"
+  }
+}

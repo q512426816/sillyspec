@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cli-uninit-cwd-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/uninit-cwd-gate.test.mjs「git 仓未初始化 → 文案给出 git root 锚点」",
+        "test/uninit-cwd-gate.test.mjs「未初始化 git 仓 → block + gitRoot 指向仓根」",
+        "test/uninit-cwd-gate.test.mjs「未初始化目录跑 flow → exit 2 + 硬拦文案（含修复三选一指引）」",
+        "test/uninit-cwd-gate.test.mjs「未初始化非 git 目录 → block 且 gitRoot=null」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cli-uninit-cwd-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/uninit-cwd-gate.test.mjs「豁免命令行为不变：status 在未初始化目录不触拦」",
+        "test/uninit-cwd-gate.test.mjs「豁免命令（init/scan/doctor/status/wt-commit 等）任意目录 → exempt」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cli-uninit-cwd-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/uninit-cwd-gate.test.mjs「已初始化根 / 其任意子目录 → pass + anchor=spec 根父目录」",
+        "test/uninit-cwd-gate.test.mjs「已初始化根的子目录跑非豁免命令 → 放行 + 重锚定到项目根」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cli-uninit-cwd-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-04",
+      "tests": [
+        "test/uninit-cwd-gate.test.mjs「--spec-dir 显式指定 → 不拦」",
+        "test/uninit-cwd-gate.test.mjs「--spec-root 平台首扫 flag → 不拦」",
+        "test/uninit-cwd-gate.test.mjs「linked worktree（兄弟路径）主仓有 .sillyspec → pass 且 anchor=null」",
+        "test/uninit-cwd-gate.test.mjs「平台 pointer / 接管声明在 dir → skip」",
+        "test/uninit-cwd-gate.test.mjs「平台 pointer 在 cwd 的项目 → 不因缺本地 .sillyspec 被拦」",
+        "test/uninit-cwd-gate.test.mjs「显式 --spec-dir / 平台 flag → skip」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cli-uninit-cwd-gate"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-cli-uninit-cwd-gate:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs",
+        "test/uninit-cwd-gate.test.mjs「非豁免命令清单抽样」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cli-uninit-cwd-gate"
+    }
+  ]
+}

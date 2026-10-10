@@ -1,0 +1,1063 @@
+diff --git a/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/flow-state.yaml b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/flow-state.yaml
+new file mode 100644
+index 00000000..244e7b3d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/flow-state.yaml
+@@ -0,0 +1,33 @@
++tier: thick
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  agent 在未初始化/错误目录跑非 init 命令是 fail-soft 散点报错且不说正确 cwd（实测：status 提示可开变更、flow start 到 local.yaml 才报错、knowledge 只报参数错）；另有约
++  10 个命令用裸 join(cwd,'.sillyspec')
++  解析，子目录误跑路径漂移（task/module-impact/endpoints/symbol-impact/design-init/fourpiece-init/prefill-refresh/plan-adopt-waves/delta）。
++
++
++  成功标准：
++
++  - CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init /
++  --spec-dir 显式指定）
++
++  -
++  豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身
++  fail-closed）行为不变
++
++  - 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++
++  - 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++
++  - 新增测试覆盖以上各面，相关回归全绿
++autopilot: true
++baseline_commit: 326f985988debbe2cd917d82c182cbb15e4fb23d
++updatedAt: '2026-10-10T02:08:35.429Z'
++baseline_sha256: c1ffcfe0bd33c674fb5bf6e7f0541d3929809d167f25bf514852e1ad3fa2c316
++upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index b3d1a998..fb0744bd 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -1,6 +1,6 @@
+ # SillySpec 平台接口操作地图
+ 
+-> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:792`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
++> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:867`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
+ > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
+ > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
+ > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
+@@ -79,10 +79,10 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:882`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:835`）。这是最常用的上推入口。bg 轮收尾带**归档终态补推扫描**（2026-09-23 quick ql-20260923-007，`collectTerminalSyncPending`）：DB 中 status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）的变更顺带补推终态+墓碑（幂等，last_active 倒序一轮 ≤3 条）——治「归档后最后一轮被吞则平台镜像永久停在旧阶段」（2026-09-22 session-fork-continuation 实证）。
+-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:1022`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1117`）：包 `syncMod.checkApproval`。
+-- **`triggerPullActiveChange`**（`shared.js:1046`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:957`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:910`）。这是最常用的上推入口。bg 轮收尾带**归档终态补推扫描**（2026-09-23 quick ql-20260923-007，`collectTerminalSyncPending`）：DB 中 status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）的变更顺带补推终态+墓碑（幂等，last_active 倒序一轮 ≤3 条）——治「归档后最后一轮被吞则平台镜像永久停在旧阶段」（2026-09-22 session-fork-continuation 实证）。
++- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:1097`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
++- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1192`）：包 `syncMod.checkApproval`。
++- **`triggerPullActiveChange`**（`shared.js:1121`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+ 
+ ---
+ 
+@@ -133,13 +133,13 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1693/1906/1986/1997/2195 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2132/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+-| `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4367；shared.js:1022 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2870/3141；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4287；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4239；sync.js:2232 |
++| `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4396；shared.js:1097 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2899/3141；shared.js:1121 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4316；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4268；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4053/4072；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4082/4072；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -153,7 +153,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ ### 本质
+ 平台模式是 **SillyHub daemon 调用 SillySpec CLI 时的模式**。它把默认落在 `cwd/.sillyspec/` 的产物目录（`specRoot`）和运行时目录（`runtimeRoot`）拆到别的位置，让 daemon 能多项目隔离管理。**人类本地用户默认不进平台模式。**
+ 
+-`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:382`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
++`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:457`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
+ 
+ ### 置位的两条路径（`command.js:245-317`）
+ 
+@@ -165,8 +165,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:259`）公共入口，flag 在 `command.js:414`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:276` 解析后经 `case 'init'`（`index.js:393`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:840（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:276` 解析后经 `case 'init'`（`index.js:422`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:869（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:407` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4149`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4178`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+@@ -208,10 +208,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ ## 7. 关键开关与铁律
+ 
+-- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:792`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:1024/1048/1119`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:792`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
++- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:867`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:1099/1048/1119`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:867`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
+ - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:50`）。
+ - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
+-- **8s 熔断**：`triggerSync`（inline 路径）/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:844`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:835`，平台慢环境放宽用；放宽代价是 inline 路径 `--done` 最坏等待同比例变长）。**`triggerSync` 默认已转后台子进程**（2026-09-20，`run/bg-sync.js`）：熔断让路的是后台轮（预算 max(env 值, 45s)），主命令不再等网络；后台输出与结果留痕 `<runtimeRoot>/spec-sync-bg.log`，逃生阀 `SILLYSPEC_SYNC_BG=0` 回落 inline。
++- **8s 熔断**：`triggerSync`（inline 路径）/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:919`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:910`，平台慢环境放宽用；放宽代价是 inline 路径 `--done` 最坏等待同比例变长）。**`triggerSync` 默认已转后台子进程**（2026-09-20，`run/bg-sync.js`）：熔断让路的是后台轮（预算 max(env 值, 45s)），主命令不再等网络；后台输出与结果留痕 `<runtimeRoot>/spec-sync-bg.log`，逃生阀 `SILLYSPEC_SYNC_BG=0` 回落 inline。
+ - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
+ - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
+ 
+diff --git a/src/index.js b/src/index.js
+index 07284165..3f96b277 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -246,7 +246,7 @@ async function main() {
+ 
+   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
+   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
+-  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs } = await import('./run/shared.js');
++  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs, resolveUninitCwdGate } = await import('./run/shared.js');
+ 
+   // 解析全局选项
+   let json = false;
+@@ -354,7 +354,9 @@ async function main() {
+     return baseDir
+   }
+ 
+-  const dir = targetDir;
++  // let：下方未初始化目录硬拦命中祖先链时重锚定到 spec 根（治裸 join(dir,'.sillyspec')
++  // 调用点如 review status rsSpecBase 的子目录漂移；resolveEffectiveDir 系本就上溯，变为无操作）
++  let dir = targetDir;
+ 
+   if (command === 'init' && !existsSync(dir)) {
+     const { mkdirSync } = await import('fs');
+@@ -388,6 +390,33 @@ async function main() {
+     }
+   }
+ 
++  // ── 未初始化目录硬拦（坑：agent 在未初始化/错误目录跑非 init 命令，fail-soft 散点报错不说
++  //    正确 cwd——实测 status 在未初始化目录提示可开变更、flow start 到 local.yaml 才报错、
++  //    knowledge 只报参数错，agent 多轮试错）──
++  //    判定与豁免清单收敛在 run/shared.js resolveUninitCwdGate（单一真相源，测试直测）；
++  //    平台 pointer/接管声明/显式 --spec-dir/平台 flag 由其判 skip（平台项目不受本门误拦）。
++  //    未初始化目录无 ground truth——文案只给锚点（git root）与三条出路，不断言唯一正确 cwd。
++  const uninitGate = resolveUninitCwdGate(command, {
++    dir,
++    specDir,
++    // --spec-root 同为平台显式意图（平台模式首扫 run scan --spec-root 在无 pointer 的新目录
++    // 合法运行，spec 恒在仓外）——与 --workspace-id/--runtime-root 一并越过本门
++    platformFlags: platformWorkspaceId || platformRuntimeRoot || filteredArgs.includes('--spec-root'),
++  });
++  if (uninitGate.verdict === 'block') {
++    console.error(`\n❌ 当前目录未初始化（${dir}）：${uninitGate.gitRoot
++      ? `已上溯祖先链至 git root（${uninitGate.gitRoot}）`
++      : '已上溯祖先链（当前不在 git 仓内）'}未找到 .sillyspec，平台指针亦无。`);
++    console.error('   非 init/scan 类命令需要已初始化的项目根。');
++    console.error('   修复：① cd 回项目根（含 .sillyspec 的目录）再跑；② 新项目先 sillyspec init（棕地项目 sillyspec scan）；③ 或 --spec-dir <路径> 显式指定 .sillyspec 位置。');
++    console.error('   查询/诊断类命令（status/doctor/progress/next/knowledge 等）不受此拦。');
++    process.exit(2);
++  }
++  if (uninitGate.verdict === 'pass' && uninitGate.anchor && resolve(dir) !== uninitGate.anchor) {
++    console.log(`ℹ️ cwd 在子目录（${dir}），已锚定到项目根：${uninitGate.anchor}（spec 解析与产物落点以项目根为准）`);
++    dir = uninitGate.anchor;
++  }
++
+   switch (command) {
+     case 'init':
+       await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, forceCards, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
+diff --git a/src/run/shared.js b/src/run/shared.js
+index c0974406..a976f340 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -367,6 +367,81 @@ export function detectCwdInsideWorktree(dir) {
+   return null
+ }
+ 
++// ── 未初始化目录硬拦（坑：agent 在未初始化/错误目录跑非 init 命令，fail-soft 散点报错不说
++//    正确 cwd，agent 多轮试错）──
++// 豁免面 = 按设计可在未初始化目录运行的命令。每项豁免依据（勿凭感觉增删）：
++//   init/scan      初始化器与棕地入口，未初始化目录是本职（scan 亦是 monorepo 子项目独立建实例的合法入口）
++//   doctor/status/progress/next/workspace 未初始化是它们的设计输出态（run/next.js
++//                  '未初始化（无 .sillyspec 产物）'、workspace.js '未初始化（无 .sillyspec）'）
++//   setup/config   自带候选链 fail-closed 报错（'请先运行 sillyspec init'）
++//   knowledge      知识目录缺失走友好空态（stages/knowledge.js）
++//   local          纯 fs 嗅探生成 local.yaml，设计上 init 前可用
++//   mcp/dashboard/platform 服务/平台设施，自有路径解析
++//   wt-commit      子代理 workdir=worktree 内合法（worktree cwd 硬拦同款豁免）
++//   agent-log      --detect 现场探测不落盘，自有解析链
++export const UNINIT_CWD_GATE_EXEMPT = new Set([
++  'init', 'scan', 'doctor', 'status', 'progress', 'next', 'workspace',
++  'setup', 'knowledge', 'local', 'config', 'mcp', 'dashboard', 'platform',
++  'wt-commit', 'agent-log',
++])
++
++/**
++ * CLI 入口「未初始化目录」判定（与 detectCwdInsideWorktree 分工：那边判「在隔离 worktree
++ * 内」，文案更具体故先拦；这边判「任何形式的 spec 都解析不到」——覆盖未初始化目录与非
++ * sillspec 项目的误跑两类）。
++ *
++ * 判定复用 resolveSpecDir 全套守卫（home 拒绝 / tmp 边界 / .runtime 回环防护）——不重写
++ * 遍历，否则已修复的坑（2026-09-27-spec-sync-413 .runtime 回环等）会回归。
++ *
++ * 返回（风格仿 detectCwdInsideWorktree）：
++ *   { verdict: 'exempt' }            豁免命令 / 无命令（usage 已早退，保险不拦），不拦不锚
++ *   { verdict: 'skip' }              显式意图（--spec-dir、平台 flag、平台 pointer/接管声明在
++ *                                    dir）——spec 解析与错误面归命令自身的 fail-closed 文案
++ *                                    （PointerUnreachableError 等），本门不重复判、更不能拿
++ *                                    「dir 里没有 .sillyspec」误拦平台项目
++ *   { verdict: 'pass', anchor }      命中已初始化上下文。anchor=spec 根父目录（供调用方重锚定，
++ *                                    修裸 join(dir,'.sillyspec') 调用点如 review status rsSpecBase
++ *                                    的子目录漂移）；linked worktree  rescued 场景 anchor=null——
++ *                                    主仓 spec 不在 cwd 祖先链上，锚定交命令层自有逻辑
++ *                                    （如 endpoints baseline 的主仓锚定），本门不越俎
++ *   { verdict: 'block', gitRoot }    全链未命中 → 调用方硬报错 exit 2；gitRoot 供文案指路
++ *                                    （未初始化目录无 ground truth，只能给锚点不能断言唯一 cwd）
++ *
++ * @param {string} command 顶层命令名
++ * @param {{ dir?: string, specDir?: string, platformFlags?: unknown }} opts
++ *   dir=目标目录（cwd 或 --dir）；specDir=显式 --spec-dir；platformFlags=--workspace-id/
++ *   --runtime-root/--spec-root 任一显式给出即为真值（平台模式显式意图）
++ */
++export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = {}) {
++  if (!command || UNINIT_CWD_GATE_EXEMPT.has(command)) return { verdict: 'exempt' }
++  if (specDir || platformFlags) return { verdict: 'skip' }
++  const resolvedDir = resolve(dir || process.cwd())
++  if (existsSync(join(resolvedDir, '.sillyspec-platform.json')) || existsSync(join(resolvedDir, PLATFORM_MANAGED_FILENAME))) {
++    return { verdict: 'skip' }
++  }
++  const spec = resolveSpecDir(resolvedDir)
++  if (existsSync(spec)) return { verdict: 'pass', anchor: dirname(spec) }
++  // linked worktree 兜底（判据同 resolveEffectiveDir P1-1 / worktree.js _resolveMainRepoRoot：
++  // --git-dir ≠ --git-common-dir 且非 submodule）：主仓 .sillyspec 不在 cwd 祖先链上（如
++  // `git worktree add` 到兄弟路径的副本），resolveSpecDir 必 miss 但项目实为已初始化——
++  // 误拦会打断 endpoints baseline 等命令层自有的主仓锚定逻辑。放行不重锚：锚定归命令层。
++  const gd = safeGit(resolvedDir, ['rev-parse', '--git-dir'])
++  const gcd = safeGit(resolvedDir, ['rev-parse', '--git-common-dir'])
++  const superProj = safeGit(resolvedDir, ['rev-parse', '--show-superproject-working-tree'])
++  if (gd.value && gcd.value && gd.value !== gcd.value && !superProj.value) {
++    // common-dir 可能是相对路径，须相对 resolvedDir 绝对化（与 worktree.js 同坑同解）
++    const absCommonDir = resolve(resolvedDir, gcd.value)
++    if (existsSync(absCommonDir)) {
++      const mainRoot = dirname(absCommonDir)
++      if (mainRoot !== resolvedDir && existsSync(join(mainRoot, '.sillyspec'))) {
++        return { verdict: 'pass', anchor: null }
++      }
++    }
++  }
++  const gitRoot = safeGit(resolvedDir, ['rev-parse', '--show-toplevel']).value || null
++  return { verdict: 'block', gitRoot }
++}
++
+ /**
+  * 统一解析 .runtime 根目录（坑 execute-runs-isolation）。
+  *
+diff --git a/test/auto-driver-meta.test.mjs b/test/auto-driver-meta.test.mjs
+index 34d32476..43fbdf5a 100644
+--- a/test/auto-driver-meta.test.mjs
++++ b/test/auto-driver-meta.test.mjs
+@@ -63,6 +63,9 @@ console.log('\n--- ③ 三态 --change（CLI 级） ---')
+ {
+   // 零活跃：run auto --input 建变更（不再 exit 2 断头路）
+   const r0 = makeRepo('adm-zero-')
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——零活跃建变更
++  // 语义在正常项目形态下不变（"零活跃"指已初始化项目无活跃变更，非未初始化目录）。
++  mkdirSync(join(r0.cwd, '.sillyspec'), { recursive: true })
+   const out0 = runCLI(['--dir', r0.cwd, 'run', 'auto', '--input', '测试需求'], { cwd: r0.cwd })
+   assert(out0.status === 0 && out0.combined.includes('auto 模式自动创建变更'), `零活跃 → 建变更（exit ${out0.status}；尾：${out0.combined.slice(-80)}）`)
+   // 单活跃：自动选中回显
+diff --git a/test/backlog-batch-d.test.mjs b/test/backlog-batch-d.test.mjs
+index 9440b2fa..aeaecceb 100644
+--- a/test/backlog-batch-d.test.mjs
++++ b/test/backlog-batch-d.test.mjs
+@@ -27,6 +27,9 @@ const bin = join(root, 'bin', 'sillyspec.js')
+ console.log('=== ① flag 值位守卫（CLI 冒烟）===')
+ {
+   const { cwd } = makeRepo('bd-flag-')
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——gate 命令的
++  // 用法错断言测的是 flag 值位解析，须在正常项目形态下跑。
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+   // --change --json：值位是 flag → change 未提供 → 用法错误（旧版：变更不存在: --json 且 --json 被吞）
+   const r1 = runCLI(['--dir', cwd, 'gate', 'plan', '--change', '--json'], { cwd })
+   assert(r1.status !== 0 && /用法|change/.test(r1.combined) && !/变更不存在: --json/.test(r1.combined),
+diff --git a/test/change-name-date-gate.test.mjs b/test/change-name-date-gate.test.mjs
+index 69ba7cd0..bf2bb4ba 100644
+--- a/test/change-name-date-gate.test.mjs
++++ b/test/change-name-date-gate.test.mjs
+@@ -32,6 +32,13 @@ import { assertDatedChangeName } from '../src/run/shared.js'
+ const count = { passed: 0, failed: 0, failures: [] }
+ const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
+ 
++// CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）后，run 族命令的 fixture 须
++// 预置 .sillyspec（+local.yaml，同 7a-7e flow 用例的 fail-fast 契约形态）——门只认已初始化项目。
++function initSpec(cwd) {
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
++}
++
+ console.log('=== 变更名日期前缀门禁（brainstorm step6 规则 CLI 化）===\n')
+ 
+ console.log('--- 用例1: 校验器单元矩阵 ---')
+@@ -63,6 +70,7 @@ console.log('--- 用例1: 校验器单元矩阵 ---')
+ console.log('\n--- 用例2: CLI 净新建拦截（run brainstorm --change 事故名）---')
+ {
+   const { cwd } = makeRepo('cngate-blk-')
++  initSpec(cwd) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：日期门语义在正常项目形态下不变
+   const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', 'friction-signal-hint'], { cwd })
+   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
+   assert(r.combined.includes('friction-signal-hint'), '报错点名非法名')
+@@ -74,6 +82,7 @@ console.log('\n--- 用例2: CLI 净新建拦截（run brainstorm --change 事故
+ console.log('\n--- 用例3: CLI 合规名放行 ---')
+ {
+   const { cwd } = makeRepo('cngate-ok-')
++  initSpec(cwd) // 同用例2：合规名物化语义在正常项目形态下不变
+   const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', '2026-09-11-my-fix'], { cwd })
+   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
+   assert(existsSync(join(cwd, '.sillyspec', 'changes', '2026-09-11-my-fix')), '合规名目录正常物化')
+@@ -93,6 +102,7 @@ console.log('\n--- 用例4: 存量自愈不追诉（无前缀旧名 + 目录已
+ console.log('\n--- 用例5: done-like 幻影守卫先于日期门（分层顺序）---')
+ {
+   const { cwd } = makeRepo('cngate-dl-')
++  initSpec(cwd) // 同用例2：幻影守卫/日期门分层语义在正常项目形态下不变
+   const r = runCLI(['--dir', cwd, 'run', 'scan', '--done', '--change', 'ghost-bad-name'], { cwd })
+   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
+   assert(r.combined.includes('拒绝静默新建'), '幻影守卫文案优先（防幻影变更语义不被日期门掩盖）')
+diff --git a/test/cli-top-level-aliases.test.mjs b/test/cli-top-level-aliases.test.mjs
+index a60808f4..dcfb44e7 100644
+--- a/test/cli-top-level-aliases.test.mjs
++++ b/test/cli-top-level-aliases.test.mjs
+@@ -175,7 +175,11 @@ try {
+   // ── 回归: foobar 仍落 default 报未知命令 ──
+   console.log('\n=== Test 5: sillyspec foobar 仍报未知命令 ===')
+   {
+-    const res = runCLI(['foobar'], tmpRoot)
++    // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——未知命令路由
++    // 语义在正常项目形态（用户在项目里打错命令名）下不变。
++    const foobarCwd = join(tmpRoot, 'foobar-ctx')
++    mkdirSync(join(foobarCwd, '.sillyspec'), { recursive: true })
++    const res = runCLI(['foobar'], foobarCwd)
+     assert(
+       res.combined.includes('未知命令'),
+       `foobar 命中 default 分支，报"未知命令"`
+@@ -189,8 +193,13 @@ try {
+   // ── 选项透传: sillyspec doctor --json 与 sillyspec run doctor --json 等价 ──
+   console.log('\n=== Test 6: doctor --json 选项透传正确 ===')
+   {
+-    const top = runCLI(['doctor', '--json'], tmpRoot)
+-    const viaRun = runCLI(['run', 'doctor', '--json'], tmpRoot)
++    // --spec-dir 钉死（同 Test 2 模式）：run doctor 非豁免命令，显式 spec 目录越过
++    // 未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate），两路同解析条件下对照。
++    const cwd = join(tmpRoot, 'json-parity')
++    const specDir = join(cwd, 'spec')
++    mkdirSync(specDir, { recursive: true })
++    const top = runCLI(['doctor', '--json', '--spec-dir', specDir], cwd)
++    const viaRun = runCLI(['run', 'doctor', '--json', '--spec-dir', specDir], cwd)
+     // generated_at 是运行时间戳，两次调用必然不同，比较前 normalize 掉
+     const norm = (s) => s.replace(/"generated_at":\s*"[^"]*"/g, '"generated_at":"X"')
+     assert(
+diff --git a/test/docs-check-cli.test.mjs b/test/docs-check-cli.test.mjs
+index 3e4dca1f..53a33233 100644
+--- a/test/docs-check-cli.test.mjs
++++ b/test/docs-check-cli.test.mjs
+@@ -21,6 +21,8 @@ function makeFixture() {
+   execFileSync('git', ['config', 'user.email', 't@t.com'], { cwd: d })
+   execFileSync('git', ['config', 'user.name', 't'], { cwd: d })
+   execFileSync('git', ['commit', '--allow-empty', '-qm', 'init'], { cwd: d })
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 是非豁免命令
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+   mkdirSync(join(d, 'docs'), { recursive: true })
+   mkdirSync(join(d, 'src'), { recursive: true })
+   writeFileSync(join(d, 'src', 'alpha.js'), 'export const alphaSymbol = 1\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// l8\n// l9\n// l10\n')
+diff --git a/test/docs-check-fix.test.mjs b/test/docs-check-fix.test.mjs
+index cc0dceec..aae438c6 100644
+--- a/test/docs-check-fix.test.mjs
++++ b/test/docs-check-fix.test.mjs
+@@ -54,6 +54,8 @@ function padLines(n, overrides = {}) {
+  */
+ function makeFixture(files) {
+   const d = mkdtempSync(join(tmpdir(), 'dcfix-'))
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 是非豁免命令
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+   for (const [rel, content] of Object.entries(files)) {
+     const abs = join(d, rel)
+     mkdirSync(dirname(abs), { recursive: true })
+diff --git a/test/docs-fix-receipt.test.mjs b/test/docs-fix-receipt.test.mjs
+index dc806e21..492ab528 100644
+--- a/test/docs-fix-receipt.test.mjs
++++ b/test/docs-fix-receipt.test.mjs
+@@ -23,6 +23,9 @@ function mkRepo(prefix) {
+   for (const a of [['init', '-q'], ['config', 'user.email', 't@t'], ['config', 'user.name', 't']]) {
+     execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+   }
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 命令
++  // 语义在正常项目形态下不变。
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+   return d
+ }
+ // docs check 失效时 exit 1（预期路径）——helper 容错退出码，返回 combined 输出
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index cc21d5ad..29bf703f 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -392,6 +392,7 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接
+ 
+ test('⑥c flow approve 对不存在变更 exit 2（评审 P3 清偿：行为面断言锁定）', () => {
+   const cwd = mkdtempSync(join(tmpdir(), 'fd-ap2e-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：本用例测变更不存在语义
+   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+   const r = cli(['flow', 'approve', '--change', '2026-09-01-not-exist'])
+   assert.equal(r.status, 2, `不存在变更应 exit 2（实际 ${r.status}）`)
+diff --git a/test/flow-status-json.test.mjs b/test/flow-status-json.test.mjs
+index a68ac58f..45ed13cb 100644
+--- a/test/flow-status-json.test.mjs
++++ b/test/flow-status-json.test.mjs
+@@ -135,6 +135,7 @@ test('②b 目录在场无 flow-state：JSON 标记 dir-no-state，exit 0', asyn
+ 
+ test('②c 变更不存在：JSON 标记 missing 且 exit 1——与人类路径退出码一致（子进程验真）', () => {
+   const cwd = mkdtempSync(join(tmpdir(), 'fsj-miss-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：本用例测变更不存在语义
+   try {
+     const miss = '2099-01-01-no-such-change'
+     const jrun = spawnSync(process.execPath, [binCLI, 'flow', 'status', '--change', miss, '--json'], { cwd, encoding: 'utf8' })
+diff --git a/test/fourpiece-init.test.mjs b/test/fourpiece-init.test.mjs
+index ed317530..4fee1939 100644
+--- a/test/fourpiece-init.test.mjs
++++ b/test/fourpiece-init.test.mjs
+@@ -15,6 +15,8 @@ const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspe
+ 
+ function mkProj() {
+   const cwd = mkdtempSync(join(tmpdir(), 'sillyspec-fp-'))
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——fourpiece-init 是非豁免命令
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+   return cwd
+ }
+ 
+diff --git a/test/platform-managed-declaration.test.mjs b/test/platform-managed-declaration.test.mjs
+index c84e5c48..8c46cd9b 100644
+--- a/test/platform-managed-declaration.test.mjs
++++ b/test/platform-managed-declaration.test.mjs
+@@ -119,6 +119,9 @@ console.log('\n=== 场景③：入口二 runCommand 裸调 fail-closed ===')
+ console.log('\n=== 场景④：无声明无指针 → 行为不变 ===')
+ {
+   const cwd = setup('s4')
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——本场景测
++  // 「无声明无指针不触发平台 fail-closed」，本地项目形态补 spec 预置语义不变
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+   const r = runOk(`node "${binCLI}" --dir "${cwd}" run quick --status`)
+   assert(!existsSync(join(cwd, DECL)), '无声明文件')
+   assert(!r.stderr.includes('平台接管'), '输出无平台接管报错')
+@@ -133,6 +136,9 @@ console.log('\n=== 场景⑤：platform disconnect 三清 ===')
+   const r = runOk(`node "${binCLI}" --dir "${cwd}" platform disconnect`)
+   assert(!existsSync(join(cwd, '.sillyspec-platform.json')), '指针已删')
+   assert(!existsSync(join(cwd, DECL)), '声明已删')
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——disconnect 后
++  // 的本地项目形态（同场景④）；「不再 fail-closed」的断言语义不变
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+   const r2 = runOk(`node "${binCLI}" --dir "${cwd}" run quick --status`)
+   assert(!r2.stderr.includes('平台接管'), 'disconnect 后裸调恢复本地模式（不再 fail-closed）')
+   clean(cwd, sd)
+diff --git a/test/quick-four-flags.test.mjs b/test/quick-four-flags.test.mjs
+index 447e1a5e..8bb8be24 100644
+--- a/test/quick-four-flags.test.mjs
++++ b/test/quick-four-flags.test.mjs
+@@ -6,7 +6,7 @@
+  * 全四给齐时通过 flag 解析合成结构化 output（后续失败只能是会话/流程层错误，
+  * 不再是四字段格式错误）。
+  */
+-import { mkdtempSync, rmSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { spawnSync } from 'node:child_process'
+@@ -29,7 +29,10 @@ function runCLI(args, cwd) {
+   return { status: res.status, out: (res.stdout || '') + (res.stderr || '') }
+ }
+ 
++// 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）要求非豁免
++// 命令（run quick）在已初始化目录运行——flag 层校验语义在正常项目形态下不变。
+ const dir = mkdtempSync(join(tmpdir(), 'qf-'))
++mkdirSync(join(dir, '.sillyspec'), { recursive: true })
+ try {
+   {
+     const r = runCLI(['--done', '--req', 'a', '--cause', 'b', '--solution', 'c'], dir)
+diff --git a/test/quick-linked-change-existence-guard.test.mjs b/test/quick-linked-change-existence-guard.test.mjs
+index 6263eb60..529c397f 100644
+--- a/test/quick-linked-change-existence-guard.test.mjs
++++ b/test/quick-linked-change-existence-guard.test.mjs
+@@ -26,6 +26,9 @@ console.log('=== quick 关联变更存在性守卫（坑 quick-change-phantom-li
+ console.log('--- 用例1: --change <不存在名> → exit 2 + 出路文案 ---')
+ {
+   const { cwd } = makeRepo('ql-guard-blk-')
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——幻影守卫
++  // 语义在正常项目形态下不变（守卫查 specBase/changes 下目录存在性）。
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+   const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', '2026-08-16-my-phantom-change'], { cwd })
+   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
+   assert(r.combined.includes('2026-08-16-my-phantom-change'), '报错点名幻影变更名')
+@@ -51,6 +54,7 @@ console.log('\n--- 用例2: 预置在途会话（关联已存在变更）续跑
+ console.log('\n--- 用例3: --change quick-<8hex>（sessionId 形态）→ 放行 ---')
+ {
+   const { cwd } = makeRepo('ql-guard-sid-')
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
+   // sessionId 形态特例在守卫之前放行（--done 精确恢复会话用）；目录不存在也不能拦
+   const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', 'quick-1a2b3c4d', '--status'], { cwd })
+   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
+@@ -60,6 +64,7 @@ console.log('\n--- 用例3: --change quick-<8hex>（sessionId 形态）→ 放
+ console.log('\n--- 用例4: --linked-changes <不存在名> 新启形态 → 预门退役拒绝 ---')
+ {
+   const { cwd } = makeRepo('ql-guard-lc-')
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
+   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'ghost-change'], { cwd })
+   assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
+   assert(r.combined.includes('已退役'), '拒绝文案含「已退役」——新会话先于 command.js 守卫被拦（进程内守卫仍兜底）')
+@@ -68,6 +73,7 @@ console.log('\n--- 用例4: --linked-changes <不存在名> 新启形态 → 预
+ console.log('\n--- 用例5: --linked-changes none 新启形态 → 预门退役拒绝 ---')
+ {
+   const { cwd } = makeRepo('ql-guard-none-')
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
+   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--input', '守卫测试'], { cwd })
+   assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
+   assert(r.combined.includes('已退役'), '新会话形态被退役门拒绝（新会话不可达，语义值判定不再触发）')
+diff --git a/test/quick-msys-path-sniff.test.mjs b/test/quick-msys-path-sniff.test.mjs
+index 8ecc42dc..ddbb6398 100644
+--- a/test/quick-msys-path-sniff.test.mjs
++++ b/test/quick-msys-path-sniff.test.mjs
+@@ -6,7 +6,7 @@
+  * 验证两层：looksLikeMsysMangledPath 纯函数启发式（正/负例）+ CLI 冒烟（stderr 告警可见、
+  * 干净值不误报、告警不阻断——缺会话仍走会话层报错而非 flag 层拦截）。
+  */
+-import { mkdtempSync, rmSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { spawnSync } from 'node:child_process'
+@@ -40,7 +40,10 @@ function runCLI(args, cwd) {
+   return { status: res.status, out: (res.stdout || '') + (res.stderr || '') }
+ }
+ 
++// 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——告警层语义
++// 在正常项目形态下不变。
+ const dir = mkdtempSync(join(tmpdir(), 'qm-'))
++mkdirSync(join(dir, '.sillyspec'), { recursive: true })
+ try {
+   console.log('CLI 冒烟（告警层，不阻断）：')
+   {
+diff --git a/test/quick-prompt-path-rule.test.mjs b/test/quick-prompt-path-rule.test.mjs
+index 6a11f7f7..f2718263 100644
+--- a/test/quick-prompt-path-rule.test.mjs
++++ b/test/quick-prompt-path-rule.test.mjs
+@@ -11,7 +11,7 @@
+  *   2. 普通变更（--change <日期名>) 的原硬规则提示原样保留（零回归）
+  */
+ import { join } from 'node:path'
+-import { writeFileSync, mkdtempSync } from 'node:fs'
++import { writeFileSync, mkdtempSync, mkdirSync } from 'node:fs'
+ import { fileURLToPath } from 'node:url'
+ import { execSync } from 'node:child_process'
+ import { tmpdir } from 'node:os'
+@@ -58,6 +58,9 @@ console.log('--- ② 普通变更：原硬规则零回归 ---')
+ {
+   const d = newTmp()
+   writeFileSync(join(d, 'stub.txt'), 'x')
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——run brainstorm
++  // 需已初始化目录，硬规则提示语义不变。
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+   const cn = '2026-08-21-normal-change'
+   const out = run(`node "${binCLI}" --dir "${d}" run brainstorm --change ${cn} "普通完整流程变更"`)
+   assert(out.includes('所有变更文件必须写入'), '普通变更仍提示「所有变更文件必须写入」硬规则')
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index c1c03890..99639193 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -11,7 +11,7 @@
+  * R5 文档与版本（FR-03）：模板/AGENTS.md 含「已退役」墓碑、无「存量过渡通道」表述；
+  *    package.json 3.32.1（init 按版本差刷新存量 AGENTS.md）
+  */
+-import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
++import { writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs'
+ import { join, resolve, dirname } from 'node:path'
+ import { execFileSync } from 'node:child_process'
+ import { fileURLToPath } from 'node:url'
+@@ -52,6 +52,9 @@ function makeRepo(prefix) {
+   writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
+   writeFileSync(join(repo, 'm.js'), 'console.log(1)\n')
+   git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
++  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——退役预门
++  // 语义在正常项目形态下不变。
++  mkdirSync(join(repo, '.sillyspec'), { recursive: true })
+   return repo
+ }
+ function quickResidue(repo) {
+@@ -143,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.3', `R5 package.json 版本 3.32.3（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.4', `R5 package.json 版本 3.32.4（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/test/review-status-command.test.mjs b/test/review-status-command.test.mjs
+index 900d00fd..53dda8cb 100644
+--- a/test/review-status-command.test.mjs
++++ b/test/review-status-command.test.mjs
+@@ -29,6 +29,8 @@ function mkRepo(prefix) {
+   execSync('git config user.email t@t.t && git config user.name t', { cwd: d, stdio: 'pipe' })
+   writeFileSync(join(d, 'README.md'), 'init\n')
+   execSync('git add . && git commit -q -m init', { cwd: d, stdio: 'pipe' })
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——review status 是非豁免命令
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+   return d
+ }
+ 
+diff --git a/test/task-progress-marker.test.mjs b/test/task-progress-marker.test.mjs
+index f61e224a..6475b585 100644
+--- a/test/task-progress-marker.test.mjs
++++ b/test/task-progress-marker.test.mjs
+@@ -23,6 +23,8 @@ function runCli(cwd, args) {
+ 
+ function fixture() {
+   const proj = mk('tpm-')
++  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——task 是非豁免命令
++  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
+   return proj
+ }
+ 
+diff --git a/test/uninit-cwd-gate.test.mjs b/test/uninit-cwd-gate.test.mjs
+new file mode 100644
+index 00000000..53086050
+--- /dev/null
++++ b/test/uninit-cwd-gate.test.mjs
+@@ -0,0 +1,194 @@
++/**
++ * 未初始化目录硬拦测试（坑：agent 在未初始化/错误目录跑非 init 命令，fail-soft 散点报错
++ * 且不说正确 cwd——实测 status 在未初始化目录提示可开变更、flow start 到 local.yaml 才
++ * 报错、knowledge 只报参数错，agent 多轮试错）。
++ *
++ * 修复：CLI 入口（src/index.js main()，worktree cwd 硬拦之后、命令分发之前）统一判定：
++ * 非豁免命令在「本地祖先链（resolveSpecDir 全套守卫）+ 平台 pointer/声明 + 显式 --spec-dir/
++ * 平台 flag」均未命中 .sillyspec 的目录运行 → exit 2 + 三条修复指引（cd 回项目根 / 先 init /
++ * --spec-dir 显式指定）。命中祖先链时把 dir 重锚定到 spec 根（修 review status 等裸
++ * join(dir,'.sillyspec') 调用点的子目录漂移）。豁免面（init/scan/doctor/status 等 16 个按
++ * 设计可在未初始化目录运行的命令）行为不变。
++ */
++import { describe, it, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
++import { join, dirname, resolve } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++import { resolveUninitCwdGate, UNINIT_CWD_GATE_EXEMPT } from '../src/run/shared.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
++// 守卫文案独有标记（区别于各命令自身的「未找到」类报错）
++const GATE_MARKER = '已上溯祖先链'
++
++describe('resolveUninitCwdGate（判定单元）', () => {
++  let base
++  beforeEach(() => {
++    base = join(tmpdir(), `uninit-gate-${Math.random().toString(36).slice(2)}`)
++  })
++  afterEach(() => { try { rmSync(base, { recursive: true, force: true }) } catch {} })
++
++  it('豁免命令（init/scan/doctor/status/wt-commit 等）任意目录 → exempt（不拦不锚）', () => {
++    const d = join(base, 'empty')
++    mkdirSync(d, { recursive: true })
++    for (const cmd of ['init', 'scan', 'doctor', 'status', 'progress', 'next', 'workspace',
++      'setup', 'knowledge', 'local', 'config', 'mcp', 'dashboard', 'platform', 'wt-commit', 'agent-log']) {
++      assert.equal(resolveUninitCwdGate(cmd, { dir: d }).verdict, 'exempt', `命令 ${cmd} 应豁免`)
++    }
++  })
++
++  it('非豁免命令清单抽样：工作流/产物类命令不豁免', () => {
++    const d = join(base, 'empty')
++    mkdirSync(d, { recursive: true })
++    for (const cmd of ['flow', 'run', 'task', 'review', 'worktree', 'handoff', 'runtime',
++      'watcher', 'quicklog', 'commit', 'docs', 'delta', 'explore', 'module-impact']) {
++      assert.ok(!UNINIT_CWD_GATE_EXEMPT.has(cmd), `命令 ${cmd} 不应在豁免清单`)
++      assert.equal(resolveUninitCwdGate(cmd, { dir: d }).verdict, 'block', `命令 ${cmd} 空目录应 block`)
++    }
++  })
++
++  it('显式 --spec-dir / 平台 flag → skip（显式意图不归本门管）', () => {
++    const d = join(base, 'empty')
++    mkdirSync(d, { recursive: true })
++    assert.equal(resolveUninitCwdGate('flow', { dir: d, specDir: join(base, 'x', '.sillyspec') }).verdict, 'skip')
++    assert.equal(resolveUninitCwdGate('flow', { dir: d, platformFlags: 'ws-1' }).verdict, 'skip')
++  })
++
++  it('平台 pointer / 接管声明在 dir → skip（平台模式 spec 解析与 fail-closed 错误归专门文案）', () => {
++    const d = join(base, 'plat')
++    mkdirSync(d, { recursive: true })
++    writeFileSync(join(d, '.sillyspec-platform.json'), JSON.stringify({ specRoot: join(base, 'hub-spec') }), 'utf8')
++    assert.equal(resolveUninitCwdGate('flow', { dir: d }).verdict, 'skip')
++    const d2 = join(base, 'plat-managed')
++    mkdirSync(d2, { recursive: true })
++    writeFileSync(join(d2, '.sillyspec-platform-managed'), JSON.stringify({ specRoot: join(base, 'hub-spec') }), 'utf8')
++    assert.equal(resolveUninitCwdGate('flow', { dir: d2 }).verdict, 'skip')
++  })
++
++  it('未初始化非 git 目录 → block 且 gitRoot=null', () => {
++    const d = join(base, 'bare')
++    mkdirSync(d, { recursive: true })
++    const r = resolveUninitCwdGate('flow', { dir: d })
++    assert.equal(r.verdict, 'block')
++    assert.equal(r.gitRoot, null)
++  })
++
++  it('未初始化 git 仓 → block + gitRoot 指向仓根（报错文案锚点）', () => {
++    const d = join(base, 'repo')
++    mkdirSync(d, { recursive: true })
++    const res = spawnSync('git', ['init', '-q', '.'], { cwd: d, encoding: 'utf8' })
++    assert.equal(res.status, 0, `git init 失败: ${res.stderr}`)
++    const r = resolveUninitCwdGate('task', { dir: d })
++    assert.equal(r.verdict, 'block')
++    assert.equal(resolve(r.gitRoot), resolve(d), `gitRoot 应为仓根 ${d}，实际 ${r.gitRoot}`)
++  })
++
++  it('已初始化根 / 其任意子目录 → pass + anchor=spec 根父目录（重锚定依据）', () => {
++    const root = join(base, 'proj')
++    mkdirSync(join(root, '.sillyspec'), { recursive: true })
++    const r1 = resolveUninitCwdGate('flow', { dir: root })
++    assert.equal(r1.verdict, 'pass')
++    assert.equal(resolve(r1.anchor), resolve(root))
++    const sub = join(root, 'src', 'lib')
++    mkdirSync(sub, { recursive: true })
++    const r2 = resolveUninitCwdGate('review', { dir: sub })
++    assert.equal(r2.verdict, 'pass')
++    assert.equal(resolve(r2.anchor), resolve(root), '子目录应锚定到 spec 根父目录')
++  })
++
++  it('linked worktree（兄弟路径）主仓有 .sillyspec → pass 且 anchor=null（锚定归命令层）', () => {
++    // endpoint-baseline 用例形态：git worktree add 到主仓兄弟路径，主仓 .sillyspec 不在
++    // cwd 祖先链上——误拦会打断 endpoints baseline 等命令层自有的主仓锚定逻辑。
++    const fx = join(base, 'fx')
++    const mainRoot = join(fx, 'main')
++    const wtRoot = join(fx, 'wt')
++    mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
++    const g = (args) => spawnSync('git', args, { cwd: mainRoot, encoding: 'utf8' })
++    assert.equal(g(['init', '-q']).status, 0)
++    g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++    writeFileSync(join(mainRoot, 'README.md'), 'init\n', 'utf8')
++    g(['add', '.']); g(['commit', '-q', '-m', 'init'])
++    assert.equal(g(['worktree', 'add', '-q', '-b', 'feat', wtRoot]).status, 0)
++    const r = resolveUninitCwdGate('endpoints', { dir: wtRoot })
++    assert.equal(r.verdict, 'pass', `linked worktree 应放行：${JSON.stringify(r)}`)
++    assert.equal(r.anchor, null, 'worktree 场景不重锚定（命令层自有主仓锚定逻辑）')
++  })
++
++  it('无命令（usage/帮助早退后的保险路径）→ exempt 不拦', () => {
++    mkdirSync(base, { recursive: true })
++    assert.equal(resolveUninitCwdGate(undefined, { dir: base }).verdict, 'exempt')
++    assert.equal(resolveUninitCwdGate('', { dir: base }).verdict, 'exempt')
++  })
++})
++
++describe('CLI 入口未初始化目录硬拦（e2e）', () => {
++  let work
++  beforeEach(() => {
++    work = join(tmpdir(), `uninit-gate-e2e-${Math.random().toString(36).slice(2)}`)
++    mkdirSync(work, { recursive: true })
++  })
++  afterEach(() => { try { rmSync(work, { recursive: true, force: true }) } catch {} })
++
++  const runCli = (cwd, args) => spawnSync(process.execPath, [cliBin, ...args], { cwd, encoding: 'utf8' })
++
++  it('未初始化目录跑 flow → exit 2 + 硬拦文案（含修复三选一指引）', () => {
++    const res = runCli(work, ['flow', 'status', '--change', '2026-01-01-x'])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.equal(res.status, 2, `期望 exit 2，实际 ${res.status}\n${combined}`)
++    assert.ok(combined.includes(GATE_MARKER), `应含守卫判定说明：\n${combined}`)
++    assert.ok(combined.includes('sillyspec init'), `应指引 init：\n${combined}`)
++    assert.ok(combined.includes('--spec-dir'), `应指引 --spec-dir：\n${combined}`)
++  })
++
++  it('git 仓未初始化 → 文案给出 git root 锚点', () => {
++    const res = spawnSync('git', ['init', '-q', '.'], { cwd: work, encoding: 'utf8' })
++    assert.equal(res.status, 0)
++    const r = runCli(work, ['task', 'list'])
++    const combined = (r.stdout || '') + (r.stderr || '')
++    assert.equal(r.status, 2)
++    assert.ok(combined.includes('git root'), `文案应含 git root：\n${combined}`)
++  })
++
++  it('豁免命令行为不变：status 在未初始化目录不触拦（保持自身空态输出）', () => {
++    const res = runCli(work, ['status'])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes(GATE_MARKER), `status 不应被硬拦：\n${combined}`)
++  })
++
++  it('--spec-dir 显式指定 → 不拦（交命令自身行为）', () => {
++    const res = runCli(work, ['flow', 'status', '--change', '2026-01-01-x', '--spec-dir', join(work, '.sillyspec')])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes(GATE_MARKER), `显式 --spec-dir 不应被拦：\n${combined}`)
++  })
++
++  it('--spec-root 平台首扫 flag → 不拦（平台模式显式意图，spec 恒在仓外）', () => {
++    const res = runCli(work, ['run', 'scan', '--spec-root', join(work, 'hub-spec')])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes(GATE_MARKER), `--spec-root 平台首扫不应被拦：\n${combined}`)
++  })
++
++  it('平台 pointer 在 cwd 的项目 → 不因缺本地 .sillyspec 被拦', () => {
++    const hubSpec = join(work, 'hub-spec')
++    mkdirSync(hubSpec, { recursive: true })
++    writeFileSync(join(work, '.sillyspec-platform.json'), JSON.stringify({ specRoot: hubSpec }), 'utf8')
++    const res = runCli(work, ['review', 'status', '--change', '2026-01-01-x'])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes(GATE_MARKER), `平台模式项目不应被本门拦截：\n${combined}`)
++  })
++
++  it('已初始化根的子目录跑非豁免命令 → 放行 + 重锚定到项目根（不再读子目录 .sillyspec）', () => {
++    const root = join(work, 'proj')
++    mkdirSync(join(root, '.sillyspec', 'changes'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', 'local.yaml'), '# gate-test\n', 'utf8')
++    const sub = join(root, 'src', 'lib')
++    mkdirSync(sub, { recursive: true })
++    const res = runCli(sub, ['review', 'status', '--change', '2026-01-01-x'])
++    const combined = (res.stdout || '') + (res.stderr || '')
++    assert.ok(!combined.includes(GATE_MARKER), `子目录命中祖先链应放行：\n${combined}`)
++    assert.ok(combined.includes('锚定到项目根') && combined.includes(resolve(root)),
++      `应提示重锚定与目标根路径：\n${combined}`)
++  })
++})
+diff --git a/test/watcher-alerts.test.mjs b/test/watcher-alerts.test.mjs
+index 8ecb3fb7..57d24930 100644
+--- a/test/watcher-alerts.test.mjs
++++ b/test/watcher-alerts.test.mjs
+@@ -133,11 +133,14 @@ test('CLI two-case 友好退出: 目录缺失 / 文件缺失 → exit 0 + 无事
+ 
+ test('CLI 用法面: 未知子命令 / 缺 --change → exit 2', () => {
+   const root = mkdtempSync(join(tmpdir(), 'wa-cli5-'))
+-  const sub = runCLI(['watcher', 'tail', '--change', 'a1'], root)
++  // --runtime-root 补齐（同下条）：过未初始化目录硬拦——本用例测子命令路由/用法校验。
++  const sub = runCLI(['watcher', 'tail', '--change', 'a1', '--runtime-root', root], root)
+   assert.equal(sub.status, 2)
+   assert.match(sub.stderr, /未知子命令/)
+ 
+-  const noChange = runCLI(['watcher', 'alerts'], root)
++  // --runtime-root 补齐：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate，显式 runtime 根
++  // = 显式意图豁免门）——本用例测的是缺 --change 的用法校验，须先越过目录门。
++  const noChange = runCLI(['watcher', 'alerts', '--runtime-root', root], root)
+   assert.equal(noChange.status, 2)
+   assert.match(noChange.stderr, /--change/)
+ })
+diff --git a/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/design.md b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/design.md
+new file mode 100644
+index 00000000..f439c41f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/design.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:27:30.829Z
++---
++# 设计记录（Design Record）— 2026-10-10-cli-uninit-cwd-gate
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++CLI 入口（src/index.js main()）在 worktree cwd 硬拦之后、命令分发（switch）之前插入统一判定门：`resolveUninitCwdGate(command, { dir, specDir, platformFlags })`（新增于 src/run/shared.js，紧邻姊妹守卫 detectCwdInsideWorktree）。判定复用 `resolveSpecDir` 全套守卫（home 拒绝 / tmp 边界 / `.runtime` 回环防护）做祖先链查找——不重写遍历，已修复坑不回归；平台 pointer（.sillyspec-platform.json）与接管声明（.sillyspec-platform-managed）在目标目录存在、或显式 --spec-dir / --workspace-id / --runtime-root / --spec-root 给出时判 skip（显式意图与平台模式的 spec 解析及专门 fail-closed 错误面归命令自身，本门不遮蔽；--spec-root 是平台首扫形态——spec 恒在仓外、目录尚无 pointer）。16 个按设计可在未初始化目录运行的命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log，每项豁免依据注释在清单处）判 exempt。其余命令全链未命中 → exit 2 硬拦，文案含目标目录、git root（safeGit rev-parse；未初始化目录无 ground truth，只给锚点+三条出路，不断言唯一 cwd）。命中祖先链且 cwd 非 spec 根时把入口 `dir` 重锚定到 spec 根父目录并打一行提示——修裸 `join(dir,'.sillyspec')` 调用点（review status rsSpecBase 等）的子目录漂移；resolveEffectiveDir 系本就上溯，退化为无操作。linked worktree 兜底：祖先链 miss 后按 resolveEffectiveDir P1-1 同款判据（--git-dir ≠ --git-common-dir 且非 submodule）探主仓——主仓有 .sillyspec 则放行且 anchor=null（主仓 spec 不在 cwd 祖先链上，重锚定会打断 endpoints baseline 等命令层自有的主仓锚定逻辑）。
++
++选入口统一门而非逐命令补检查：散点 fail-soft 是根因（实测 status 提示可开变更、flow start 到 local.yaml 才报错、knowledge 只报参数错），入口一次判定把错误尽早、统一、带指引地暴露；仓库已有同款模板（worktree cwd 硬拦：入口拦截 + 逃生门 + 一键整行指引 + exit 2），本门即其姊妹件。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- 新增导出：`src/run/shared.js` → `UNINIT_CWD_GATE_EXEMPT: Set<string>`（16 命令豁免清单）、`resolveUninitCwdGate(command, { dir?, specDir?, platformFlags? })` → `{ verdict: 'exempt' } | { verdict: 'skip' } | { verdict: 'pass', anchor } | { verdict: 'block', gitRoot }`（纯判定、无副作用，测试直测）。
++- `src/index.js`：`dir` 由 const 改 let（重锚定）；新增入口门消费四态——block → exit 2（stderr 四行：判定说明/性质/三条修复指引/豁免面说明）；pass 且 anchor≠dir → 打印锚定提示并重锚定。
++- CLI 参数面/文件格式：无变化。
++- 对外可见行为变化：非豁免命令在未初始化目录由「各命令散点 fail-soft」变为「入口统一 exit 2 + 指引」；子目录运行非豁免命令时 stdout 多一行锚定提示、spec 读取统一落项目根。豁免命令、平台模式、显式 flag 路径行为零变化。
++
++文件变更清单（本变更自声明交付面）：
++
++- 实现：src/run/shared.js（判定函数+豁免清单）、src/index.js（入口门+重锚定+--spec-root skip）
++- 新增测试：test/uninit-cwd-gate.test.mjs
++- fixture 同步（保用例意图补 .sillyspec 预置或显式 flag）：test/auto-driver-meta、test/backlog-batch-d、test/change-name-date-gate、test/cli-top-level-aliases、test/docs-check-cli、test/docs-check-fix、test/flow-draft、test/flow-status-json、test/fourpiece-init、test/quick-four-flags、test/quick-linked-change-existence-guard、test/quick-msys-path-sniff、test/quick-prompt-path-rule、test/quick-retired（含 R5 版本锚 3.32.4 补同步——af6fd5ac 版本面遗漏）、test/review-status-command、test/task-progress-marker、test/watcher-alerts、test/platform-managed-declaration、test/doc-ref-check（经文档锚平移修复）
++- 文档锚同步：docs/sillyspec/platform-interface-map.md（shared.js +75 / index.js +29 行号平移）
++- 流程工件：.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/ 全部
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立。本门是每次 CLI 调用入口的同步判定，无跨调用状态、无事件顺序依赖；多 agent 并行时各自调用各自判定，结果只取决于当时磁盘上 .sillyspec/pointer 的存在性（与既有 resolveSpecDir 语义同源），无乱序面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   判定只读（existsSync ×3 + 一次 safeGit rev-parse）。与并行会话的 init/scan 写 .sillyspec 竞争时，最坏形态是窗口期内 exempt/block 一念之差的抖动——与既有 resolveEffectiveDir/resolveSpecDir 的同类窗口一致，不引入新写点。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   安全。判定无落盘、无半态，中途 kill 不留状态；重锚定只改本次进程内 `dir` 变量，不写环境/不改 shell cwd（提示行正是为暴露这一差异）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   不会新增串台。monorepo 多实例时 anchor 取「最近」实例（与 resolveSpecDir 既有语义一致），runCommand 内既有的多实例硬拦（ancestorSpecDirs≥2 且非 git 根实例）不因重锚定哑火；worktree 场景由更具体的 worktree cwd 硬拦先行（本门在其后），wt-commit 豁免不受重锚定影响；平台模式整类 skip，不存在「dir 里没 .sillyspec 而误拦平台项目」的串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：豁免清单漏项/多项——漏项误拦合法命令（agent 被 exit 2 打断），多项放走本该拦的命令（回到静默错答）。缓解：清单每项注释豁免依据，测试抽样锁定两侧（豁免面与非豁免面各一组断言），后续增删走清单单一真相源。次风险：重锚定改变个别命令对 cwd 的隐式依赖（相对路径参数按 cwd 解析的命令）——全量套件回归无此类失败，锚定提示行让差异可见。已试并放弃：① 判据用「cwd 本身含 .sillyspec」——拦掉设计支持的子目录运行（ancestorSpecDirs 注释明证），误伤面大；② 拦 init（已初始化目录禁 init）——重跑 init 是模板/skills 升级路径（AGENTS.md「重跑 init 同版本不更新」），拦截打断升级；③ 逐命令补「未初始化」检查——散点维护、报错时机晚且文案不一，正是要治的根因；④ 门内重写祖先遍历——丢 home/tmp/.runtime 守卫会复辟 2026-09-27-spec-sync-413 等已修复坑，改为复用 resolveSpecDir。
+diff --git a/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/proposal.md b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/proposal.md
+new file mode 100644
+index 00000000..c184575f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:27:30.829Z
++---
++# 提案书（Proposal）— 2026-10-10-cli-uninit-cwd-gate
++
++## 动机
++
++任务原话转写：agent 在未初始化/错误目录跑非 init 命令是 fail-soft 散点报错且不说正确 cwd（实测：status 提示可开变更、flow start 到 local.yaml 才报错、knowledge 只报参数错）；另有约 10 个命令用裸 join(cwd,'.sillyspec') 解析，子目录误跑路径漂移（task/module-impact/endpoints/symbol-impact/design-init/fourpiece-init/prefill-refresh/plan-adopt-waves/delta）。
++
++成功标准：
++- CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
++- 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
++- 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++- 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++- 新增测试覆盖以上各面，相关回归全绿
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
++2. 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
++3. 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++4. 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++5. 新增测试覆盖以上各面，相关回归全绿
++
++## 成功标准（可验证）
++
++1. CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
++2. 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
++3. 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++4. 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++5. 新增测试覆盖以上各面，相关回归全绿
+diff --git a/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/requirements.md b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/requirements.md
+new file mode 100644
+index 00000000..50273eaa
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/requirements.md
+@@ -0,0 +1,77 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:27:30.829Z
++---
++# 需求规格（Requirements）— 2026-10-10-cli-uninit-cwd-gate
++
++## 功能需求
++
++### FR-01: CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
++
++- 非 init/scan 类命令在「本地祖先链（resolveSpecDir 全套守卫）+ 平台指针 + 显式 --spec-dir」均未命中 .sillyspec 的目标目录运行时，CLI 必须（MUST）在命令分发前以 exit 2 硬拦，且报错文案必须（MUST）包含目标目录、git root（在 git 仓内时）与三条修复指引（cd 回项目根 / sillyspec init 或 scan / --spec-dir 显式指定）。
++
++#### 场景：未初始化 git 仓跑 flow
++
++- Given 一个已 git init 但无 .sillyspec 的目录
++- When 执行 sillyspec flow status --change x
++- Then exit 2，stderr 含「未初始化」、git root 路径、sillyspec init 与 --spec-dir 指引；不产生任何落盘
++
++#### 场景：未初始化裸目录跑 task
++
++- Given 一个无 git 无 .sillyspec 的目录
++- When 执行 sillyspec task list
++- Then exit 2，文案注明「当前不在 git 仓内」且给出同三条指引
++
++### FR-02: 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
++
++- 16 个豁免命令必须（MUST）在任意目录（含未初始化目录）保持既有行为与退出码，禁止（MUST NOT）被未初始化目录硬拦改变行为（它们按设计可在未初始化目录运行，或有自身 fail-closed 报错）。
++
++#### 场景：status 在未初始化目录
++
++- Given 无 .sillyspec 的目录
++- When 执行 sillyspec status
++- Then 输出自身的「未找到进度数据」空态文案（不含硬拦文案），不因本门改变 exit code
++
++### FR-03: 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++
++- 目标目录经祖先链命中 .sillyspec 时，CLI 必须（MUST）放行并把入口 dir 重锚定到 spec 根父目录（打印一行锚定提示），使裸 join(dir,'.sillyspec') 调用点（如 review status 的 rsSpecBase）在子目录运行与项目根运行读到同一 spec；本就上溯的 resolveEffectiveDir 系必须（MUST）退化为无操作。
++
++#### 场景：子目录跑非豁免命令
++
++- Given 项目根有 .sillyspec，cwd 在其子目录 src/lib
++- When 执行 sillyspec review status --change x
++- Then 不被硬拦，输出含「已锚定到项目根：<根>」，spec 读取落项目根而非 src/lib
++
++### FR-04: 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++
++- 目录内存在平台 pointer（.sillyspec-platform.json）或接管声明（.sillyspec-platform-managed）、或命令显式带 --spec-dir / --workspace-id / --runtime-root / --spec-root 时，本门必须（MUST）跳过判定（不拦、不重锚定），平台模式与显式意图的 spec 解析及 fail-closed 错误面必须（MUST NOT）被遮蔽；linked worktree（主仓 .sillyspec 不在 cwd 祖先链上）必须（MUST）放行且不重锚定（锚定归命令层自有逻辑，如 endpoints baseline 的主仓锚定）。
++
++#### 场景：平台 pointer 项目跑非豁免命令
++
++- Given cwd 有 .sillyspec-platform.json 指向存在的 specRoot（本地无 .sillyspec）
++- When 执行 sillyspec review status --change x
++- Then 不触发未初始化硬拦，走命令自身的平台解析链
++
++#### 场景：平台模式首扫（无 pointer 新目录）
++
++- Given 一个无 .sillyspec、无 pointer 的新目录
++- When 执行 sillyspec run scan --spec-root <外部 spec 根>
++- Then 不触发未初始化硬拦（--spec-root 为平台显式意图，spec 恒在仓外）
++
++### FR-05: 新增测试覆盖以上各面，相关回归全绿
++
++- 本变更必须（MUST）以 test/uninit-cwd-gate.test.mjs 覆盖判定单元四象限与 CLI e2e 六面；受既有测试 fixture 影响的用例必须（MUST）以保意图方式同步（补 .sillyspec 预置或显式 flag），全量测试套件必须（MUST）全绿。
++
++#### 场景：全量回归
++
++- Given 本变更的全部提交落盘
++- When 运行 node test/run-tests.mjs 全量套件
++- Then 除已被本变更换修复的存量红（quick-retired R5 版本锚）外无任何失败
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/uninit-cwd-gate.test.mjs「未初始化目录跑 flow → exit 2 + 硬拦文案（含修复三选一指引）」「git 仓未初始化 → 文案给出 git root 锚点」「未初始化非 git 目录 → block 且 gitRoot=null」「未初始化 git 仓 → block + gitRoot 指向仓根」
++FR-02: test/uninit-cwd-gate.test.mjs「豁免命令（init/scan/doctor/status/wt-commit 等）任意目录 → exempt」「豁免命令行为不变：status 在未初始化目录不触拦」
++FR-03: test/uninit-cwd-gate.test.mjs「已初始化根 / 其任意子目录 → pass + anchor=spec 根父目录」「已初始化根的子目录跑非豁免命令 → 放行 + 重锚定到项目根」
++FR-04: test/uninit-cwd-gate.test.mjs「显式 --spec-dir / 平台 flag → skip」「平台 pointer / 接管声明在 dir → skip」「--spec-dir 显式指定 → 不拦」「--spec-root 平台首扫 flag → 不拦」「平台 pointer 在 cwd 的项目 → 不因缺本地 .sillyspec 被拦」「linked worktree（兄弟路径）主仓有 .sillyspec → pass 且 anchor=null」
++FR-05: test/uninit-cwd-gate.test.mjs「非豁免命令清单抽样」+ 全量套件（node test/run-tests.mjs）二次全量仅剩存量 R5 红、补锚后隔离验证 25/25 绿
+diff --git a/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/tasks.md b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/tasks.md
+new file mode 100644
+index 00000000..2e9cf6a8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:27:30.829Z
++---
++# 任务注册表（Tasks）— 2026-10-10-cli-uninit-cwd-gate
++
++- [x] task-01: CLI 入口统一硬拦：非豁免命令在祖先链+平台指针+--spec-dir 均未命中 .sillyspec 的目录运行 → exit 2，文案含当前目录、git root（如有）、三条修复指引（cd 回项目根 / 先 init / --spec-dir 显式指定）
++- [x] task-02: 豁免命令（init/scan/doctor/status/progress/next/workspace/setup/knowledge/local/config/mcp/dashboard/platform/wt-commit/agent-log——按设计可在未初始化目录运行或有自身 fail-closed）行为不变
++- [x] task-03: 子目录命中祖先链 → 放行且 dir 重锚定 spec 根：裸 join(dir,'.sillyspec') 调用点（如 task）子目录运行与根目录行为一致
++- [x] task-04: 平台模式（pointer/接管声明/--workspace-id/--runtime-root）与 --spec-dir 显式不受影响
++- [x] task-05: 新增测试覆盖以上各面，相关回归全绿
