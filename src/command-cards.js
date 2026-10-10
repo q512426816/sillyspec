@@ -10,7 +10,7 @@ import { writeAtomicSync } from './fs-atomic.js'
 
 export const COMMAND_CARD_TARGETS = { zcode: '.zcode/commands/sillyspec', claude: '.claude/commands/sillyspec' }
 // flow=轻量变更默认道入口卡（2026-09-25-quick-channel-retire 配套：quick 退役后快道首次有卡）
-export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'run-quick', 'status']
+export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'status']
 
 const ANCHOR_TAIL_RE = /\n?<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->\s*$/
 const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
