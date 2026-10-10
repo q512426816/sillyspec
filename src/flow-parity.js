@@ -221,7 +221,7 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
 
 /**
  * patch 冻结面漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：处置重入审计
- * 错位——评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等跳过让 change.patch/
+ * 时点错位——评审发现处置涉及代码修改后重跑 flow done，patch 子步幂等跳过让 change.patch/
  * review.json 停在处置前时点（2026-10-05-review-promise-negation 先例 905397ef；
  * 2026-10-05-flowdone-lintfail-output 收编活体复现：评审 P1 处置提交后不带 --refreeze 重跑，
  * 归档件缺处置面）。
@@ -230,23 +230,41 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
  * 漂移——按提交 message 变更名归属（parseChangeNamesFromSubject，与 filterCommittedFace
  * 同口径的既成事实切分，非声明抢文件）。仅他侧后缀/裸提交不触发（他侧面归属切分另有防线，
  * 裸提交保守不动作）。检测自身失败按无漂移（退现状幂等跳过行为，fail-safe 不新造阻断面）。
+ *
+ * 文件面三字段（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
+ * ownCommits 只答「有没有漂移」，不答「评审结论该不该作废」——调用方（flow.js 漂移分支）
+ * 据文件面区分治理面等价（评审保留）与交付/承诺面（隔离重评）：
+ *   ownFiles            窗口内本变更提交触及的文件集（--name-only 采集，正斜杠归一；merge 提交
+ *                       无 -m 展开不计文件——漏采只可能让 governanceOnly 偏 false，回落隔离
+ *                       重评，fail-safe 宁可多评）
+ *   governanceOnly      own 提交全在 .sillyspec/** 下且文件集非空（治理文件等价漂移）
+ *   touchedPromiseFace  含本变更 requirements.md / design.md（承诺面也是评审对象，破豁免）
  * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
- * @returns {{ drifted: boolean, ownCommits: string[], head: string|null }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
+ * @returns {{ drifted: boolean, ownCommits: string[], head: string|null, ownFiles: string[], governanceOnly: boolean, touchedPromiseFace: boolean }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
  */
 export function detectPatchDrift({ cwd, change, freezeHead }) {
   try {
-    if (!freezeHead) return { drifted: false, ownCommits: [], head: null }
+    if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true }).trim()
-    if (!head || head === freezeHead) return { drifted: false, ownCommits: [], head }
-    const log = execFileSync('git', ['log', '--format=%x00%s', `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    if (!head || head === freezeHead) return { drifted: false, ownCommits: [], head, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
+    const log = execFileSync('git', ['log', '--name-only', '--format=%x00%s', `${freezeHead}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
     const own = []
+    const ownFileSet = new Set()
     for (const block of String(log).split('\x00')) {
-      const subject = block.split('\n').map((l) => l.trim()).filter(Boolean)[0]
+      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+      const subject = lines[0]
       if (!subject) continue
-      if (parseChangeNamesFromSubject(subject).includes(change)) own.push(subject.slice(0, 80))
+      if (parseChangeNamesFromSubject(subject).includes(change)) {
+        own.push(subject.slice(0, 80))
+        for (const f of lines.slice(1)) ownFileSet.add(f.replace(/\\/g, '/'))
+      }
     }
-    return { drifted: own.length > 0, ownCommits: own, head }
-  } catch { return { drifted: false, ownCommits: [], head: null } }
+    const ownFiles = [...ownFileSet]
+    const promiseFace = [`.sillyspec/changes/${change}/requirements.md`, `.sillyspec/changes/${change}/design.md`]
+    const governanceOnly = own.length > 0 && ownFiles.length > 0 && ownFiles.every((f) => f.startsWith('.sillyspec/'))
+    const touchedPromiseFace = ownFiles.some((f) => promiseFace.includes(f))
+    return { drifted: own.length > 0, ownCommits: own, head, ownFiles, governanceOnly, touchedPromiseFace }
+  } catch { return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false } }
 }
 
 /**

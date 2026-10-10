@@ -16,7 +16,7 @@
  * 豁免 ≠ 免责：全信号不命中而豁免的变更按 1/4 定额抽查采样（确定性哈希分桶），采样命中照评
  * 并进遥测——误豁免率可测量可校准（先例：review-dispatch shadow 影子期 N=10 转正判据）。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DESIGN_QUESTIONS as DESIGN_QUESTIONS_FALLBACK } from './flow-draft.js'
 
@@ -203,7 +203,17 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
   // （首评任务书与现状逐字一致）。
   let priorFindingsMd = ''
   try {
-    const prev = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8'))
+    // 前轮产物读取（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop ②）：
+    // review.json 在场优先；漂移隔离后已改名 review.json.superseded-<ts>——缺席时回退字典序最新
+    // 隔离件（时间戳后缀同格式可排序），否则处置重评读不到前轮 findings，「已报项只验修复+
+    // 回归」复审语义丢失，退化为全量首评整轮重报（2026-10-10 用户实证）。changeDir 不存在/
+    // 无隔离件 → readFileSync/readdirSync 抛错走外层 catch，首评形态零注入不变。
+    let prevPath = join(changeDir, 'review.json')
+    if (!existsSync(prevPath)) {
+      const supers = readdirSync(changeDir).filter((f) => /^review\.json\.superseded-/.test(f)).sort()
+      if (supers.length > 0) prevPath = join(changeDir, supers[supers.length - 1])
+    }
+    const prev = JSON.parse(readFileSync(prevPath, 'utf8'))
     if (Array.isArray(prev.findings) && prev.findings.length > 0) {
       priorFindingsMd = [
         ``,

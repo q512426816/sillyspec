@@ -1272,6 +1272,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           } catch { /* 锚定判定失败按未锚定处理 */ }
           if (anchoredToHead) {
             console.log(`   review.json 已锚定当前 HEAD（reviewedAgainst 命中 ${String(drift.head || '').slice(0, 8)}）——评审对象即最新交付面，结论保留不隔离`)
+          } else if (drift.governanceOnly && !drift.touchedPromiseFace) {
+            // 治理面等价保留（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop
+            // 用户实证）：评审结论的对象是交付面——窗口内本变更提交只碰 .sillyspec/** 治理文件且
+            // 未触本变更 requirements/design（承诺面也是评审对象）时，结论对最新交付面逐字节等价，
+            // 保留不隔离不重置标记；change.patch 仍走下方 driftRefreeze 自动重冻结吸收治理面增量
+            // （审计件覆盖最新提交面不变量不破）。此前任何后缀提交一律隔离重评——评审后修一个
+            // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
+            console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结吸收治理面增量`)
           } else {
             const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
             try {
@@ -1598,6 +1606,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       if (others.length > 0) {
         console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
         for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
+        // 处置提示（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
+        // P2/P3 非阻断可留债归档；要修则修复面决定是否重评——只碰治理文件不动本变更
+        // requirements/design 的后缀提交触发治理面等价保留（评审保留+自动重冻结，零重评）；
+        // 触及交付面或承诺面才隔离重评（任务书带前轮 findings，复审只验修复+新增）。
+        console.warn(`   💡 处置参考：P2/P3 非阻断，可留债归档；要修——只碰治理文件（.sillyspec/**，不动本变更 requirements/design）的提交不触发重评；触及交付面或 requirements/design 需重评（复审只验修复+新增，非全量首评）`)
       }
       console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
