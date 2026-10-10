@@ -1,0 +1,33 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-10T04:59:37.307Z
+---
+# 提案书（Proposal）— 2026-10-10-drift-review-governance-keep
+
+## 动机
+
+任务原话转写：审计时点漂移循环（用户实证）：flow done 的 patch 漂移检测（flow.js:1246-1298 + flow-parity.js detectPatchDrift:236）只按「窗口内有无本变更名后缀提交」判定，不分治理面/交付面——评审 PASS 后修一个 P2 文档措辞、提交、重跑收口，review.json 即被隔离重评（reviewedAgainst 锚的是提交前 HEAD，命中不了新 HEAD）；每修一轮付一整轮子代理评审费。且隔离把 review.json 改名走后，重评任务书读不到前轮 findings，「复审只验修复+回归」语义丢失，退化为全量首评。设计依据：漂移检测堵的是真实审计洞（2026-10-05-disposition-refreeze-drift：处置面缺进归档件），不能拆；但评审结论的对象是交付面——治理文件等价漂移不该作废评审。
+
+成功标准：
+- 漂移窗口内本变更提交仅触及 .sillyspec/** 且未触本变更 requirements.md/design.md：change.patch 自动重冻结吸收增量，review.json 保留不隔离、review 标记不重置
+- 触及交付面（非 .sillyspec 文件）或承诺面（本变更 requirements.md/design.md）：维持现状隔离+重评；reviewedAgainst 锚定当前 HEAD 的保留判定不变
+- 隔离后重评：review.json 缺席时任务书从最新 review.json.superseded-* 注入前轮 findings（复审语义不因隔离丢失）
+- 收口输出在评审 PASS 带 P2/P3 findings 时打印处置提示（留债可归档；修复只碰治理面不动承诺面则不触发重评）
+- 新增测试覆盖判定与 fallback；触及 src 的实测全绿
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 漂移窗口内本变更提交仅触及 .sillyspec/** 且未触本变更 requirements.md/design.md：change.patch 自动重冻结吸收增量，review.json 保留不隔离、review 标记不重置
+2. 触及交付面（非 .sillyspec 文件）或承诺面（本变更 requirements.md/design.md）：维持现状隔离+重评；reviewedAgainst 锚定当前 HEAD 的保留判定不变
+3. 隔离后重评：review.json 缺席时任务书从最新 review.json.superseded-* 注入前轮 findings（复审语义不因隔离丢失）
+4. 收口输出在评审 PASS 带 P2/P3 findings 时打印处置提示（留债可归档；修复只碰治理面不动承诺面则不触发重评）
+5. 新增测试覆盖判定与 fallback；触及 src 的实测全绿
+
+## 成功标准（可验证）
+
+1. 漂移窗口内本变更提交仅触及 .sillyspec/** 且未触本变更 requirements.md/design.md：change.patch 自动重冻结吸收增量，review.json 保留不隔离、review 标记不重置
+2. 触及交付面（非 .sillyspec 文件）或承诺面（本变更 requirements.md/design.md）：维持现状隔离+重评；reviewedAgainst 锚定当前 HEAD 的保留判定不变
+3. 隔离后重评：review.json 缺席时任务书从最新 review.json.superseded-* 注入前轮 findings（复审语义不因隔离丢失）
+4. 收口输出在评审 PASS 带 P2/P3 findings 时打印处置提示（留债可归档；修复只碰治理面不动承诺面则不触发重评）
+5. 新增测试覆盖判定与 fallback；触及 src 的实测全绿
