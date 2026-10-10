@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-worktree-toolchain",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「crossPlacement 落位 + 仓根内拒绝 + 缺省零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「注册表寻回 + 悬挂键 sweep + 无 meta 不入列 + 损坏降级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「WSL 分裂警告命中与不误报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-04",
+      "tests": [
+        "test/worktree-deps-provision.test.mjs「maven/gradle 根供给 n/a 零 spawn」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-05",
+      "tests": [
+        "test/worktree-deps-provision.test.mjs「n/a 在放行集断言（depsOk 同源语义）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-06",
+      "tests": [
+        "test/cross-main-copy-bypass.test.mjs「交集命中告警 + 未命中/声明面缺失不告警」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-07",
+      "tests": [
+        "test/cross-main-copy-bypass.test.mjs「git 失败 fail-open 零阻断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-worktree-toolchain"
+    }
+  ]
+}

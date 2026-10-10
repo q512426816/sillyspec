@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-worktree-toolchain",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5d09e0576925c087964b22ed8a3b589193402a92",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-01 测试绑定声称的「仓根内拒绝」用例缺失，fail-closed 分支零回归防护",
+      "evidence": "requirements.md 测试绑定行承诺「crossPlacement 落位 + 仓根内拒绝 + 缺省零回归」，但 test/cross-worktree-placement.test.mjs 全部 7 个用例无任何 assert.throws、无仓根内 placement 场景；拒绝逻辑本身已兑现（ensureCrossWorktrees 在 mkdir 与 worktree add 之前 throw），属承诺测试面缺口而非功能违反。",
+      "location": "test/cross-worktree-placement.test.mjs:1-243; src/worktree-cross.js:206"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-05 放行集断言为手写数组同义反复，非 gates.js 同源",
+      "evidence": "测试本地声明 ['linked','installed','n/a'] 后自断言 includes('n/a')，不 import/读取 run/gates.js，「depsOk 同源语义」名不副实——gates.js 放行集若变化该测试仍绿。功能层面已实证 src/run/gates.js:355 depsOk 与 :368 跨仓过滤均含 n/a，FR-05 本身成立，仅回归防护虚设。",
+      "location": "test/worktree-deps-provision.test.mjs:162-166"
+    },
+    {
+      "severity": "P3",
+      "title": "WSL 分裂警告仅 create 路径发出，design「create/reuse 时」承诺未全兑现；警告出口零测试",
+      "evidence": "ensureCrossWorktrees reuse 分支（getCrossWorktreeMeta 命中即 continue，worktree-cross.js:188-192）先于 isWslSplit/console.warn 块返回，复用既有分裂 worktree 不再警告；绑定测试只测 isWslSplit 谓词，console.warn 接线无断言，且 win32 环境下测试的 linux 分支空转。",
+      "location": "src/worktree-cross.js:188-192,247-251; test/cross-worktree-placement.test.mjs:231-243"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04「零 spawn」为结构性推断而非直接断言",
+      "evidence": "测试只断言 depsStatus==='n/a' 且无 depsError，未挂 child_process 探针计数；「禁止 spawn mvn/gradle 进程」由 install:null + inferInstallCommand typeof 守卫返 null（无命令可跑）间接保证，无直接证据行。",
+      "location": "test/worktree-deps-provision.test.mjs:138-150; src/worktree-deps.js:218"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——R-03 声明面缺失漏报与 D-003 外部删目录/changedFiles 收集抛错不检测：均不误报且漏报面与 apply 既有清单校验治理面重合；注册表损坏半截 JSON 读方 fail-open 降级公式有测试断言）",
+    "并发": "ok（边界已裁决：可接受——R-02 并发丢键：updatePlacementRegistry 实证为读-合并-原子写（先 readPlacementRegistry 再置键再 writeAtomicSync），listCrossWorktreeMetas 双源合并按 repoKey seen 去重不重复入列、无 meta 不合成入列，残窗丢键仅降级公式寻址不丢数据不误删）",
+    "切换": "ok（边界已裁决：可接受——D-002 冷 ~/.m2 推迟构建期由 task 级编译验证兜底；cleanup 中断残留键实证降级安全：getCrossWorktreeMeta 返 null 走 legacy、list 无 meta 不入列、cleanup cleaned/skipped 两分支删键 + 末尾差集 sweep；reuse 分支经 resolve 感知的 getCrossWorktreeMeta 幂等）",
+    "作用域": "ok（边界已裁决：可接受——R-01 WSL 启发式误报为 advisory 一行警告成本、platform==='linux' 门控 + crossPlacement 配置可消音，win32 分支不触碰；注册表按主仓 specBase 归属、worktree 目录名含 <change>--<repoKey> 防跨变更碰撞，多实例天然隔离）"
+  },
+  "reviewedAt": "2026-10-10T10:43:07Z"
+}

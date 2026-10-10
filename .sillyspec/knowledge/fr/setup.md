@@ -1431,3 +1431,136 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-10-init-full-injection
   status: active
+
+## FR-setup-083 跨仓 worktree 按仓落位配置生效
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：主路径；placement 指向跨仓仓根内
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-01
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-01
+  tests: test/cross-worktree-placement.test.mjs「crossPlacement 落位 + 仓根内拒绝 + 缺省零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-084 落位注册表保住全链可发现性
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：注册表寻回挪位 worktree
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-02
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-02
+  tests: test/cross-worktree-placement.test.mjs「注册表寻回 + 悬挂键 sweep + 无 meta 不入列 + 损坏降级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-085 WSL 跨文件系统分裂警告（advisory）
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：WSL 主仓 + Windows 盘跨仓
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-03
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-03
+  tests: test/cross-worktree-placement.test.mjs「WSL 分裂警告命中与不误报」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-086 maven/gradle 缺省供给落 n/a
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：maven 仓 worktree 供给
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-04
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-04
+  tests: test/worktree-deps-provision.test.mjs「maven/gradle 根供给 n/a 零 spawn」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-087 deps 门控对 n/a 放行
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：跨仓 maven deps 门
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-05
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-05
+  tests: test/worktree-deps-provision.test.mjs「n/a 在放行集断言（depsOk 同源语义）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-088 跨仓主副本直写检测告警
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：D-007 签名（空 worktree + 主副本推进命中声明面）
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-06
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-06
+  tests: test/cross-main-copy-bypass.test.mjs「交集命中告警 + 未命中/声明面缺失不告警」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active
+
+## FR-setup-089 直写检测 advisory 不阻断
+变更：2026-10-10-cross-worktree-toolchain
+状态：active
+摘要：检测自身异常
+全文：.sillyspec/changes/archive/2026-10-10-cross-worktree-toolchain/requirements.md#FR-07
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-worktree-toolchain:flow:测试绑定FR-07
+  tests: test/cross-main-copy-bypass.test.mjs「git 失败 fail-open 零阻断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-worktree-toolchain
+  status: active

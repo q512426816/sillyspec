@@ -2221,3 +2221,30 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：58257512ae9f8a51f1ef0636897351b3ea7f8356
 理由：最大风险：预填面收紧的漏检边界——连字形态 `foo_test.js`（无 `.test.` 点锚）不再预填。取向与 isTestFileName 注释一致（宁紧勿松：漏检落 agent 手查是 fail-visible，误判产生脏绑定+假败是 fail-hidden 更糟）；js 生态主流形态是 `.test.`/`.spec.`，连字形态罕见，且执行侧权威口径本就不认它（预填了也进不了执行批）。放弃的方案：a) 在 `collectFrLinkedTests` 读侧直接过滤非测试路径——绑定语义是「FR 覆盖证据」不限测试文件（capability 证据可以是源码/文档），读侧过滤会让合法证据绑定静默失效，改在执行侧拦「当测试跑」这一步；b) node --test 批加 `--experimental-strip-types` 类运行参数迁就 TS 源码——治标且方向反了（源码本就不该进测试执行面，`./config.js` 类 ESM 后缀映射在裸 node 下无解）。
+
+## D-001@v1 跨仓 worktree 落位按仓可配置（worktree.crossPlacement + 落位注册表）
+状态：implemented
+变更：2026-10-10-cross-worktree-toolchain
+锚点：src/worktree-cross.js:crossWorktreePath
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+理由：local.yaml 新增 `worktree.crossPlacement.<repoKey>: <目录>`，落位该目录下 `<change>--<repoKey>`；注册表 cross-placements.json 保 list/cleanup 可发现性；WSL 分裂（repoRoot 在 /mnt/<盘>/ 而 worktree 不在）时 advisory 警告并给配置指引。
+故障面：注册表并发整文件覆盖丢键（读-合并-写缓解，丢失后果=降级旧扫描行为）；placement 目录被外部清理后注册表残留条目（读取方按 meta 不可读不入列降级，重跑 cleanup 删键回收——评审吸收②）
+退役判据：git 原生支持 per-worktree 可达性检测或跨仓 worktree 落位改为仓内默认时，注册表与配置键可简化删除
+
+## D-002@v1 maven/gradle 默认供给命令改 null（根供给 n/a）
+状态：implemented
+变更：2026-10-10-cross-worktree-toolchain
+锚点：src/worktree-deps.js:ECOSYSTEMS
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+理由：两表项 install 改 null；JVM 系依赖在用户级仓库（~/.m2 / ~/.gradle），worktree 内无本地产物可供给，根供给诚实落 n/a（门控放行集含 n/a）；freshness 的 stale/main-drift 仍以 pom.xml/build.gradle hash 为基准（marker=null 语义不变）。
+故障面：冷 ~/.m2 环境下依赖缺失不再于供给期暴露，推迟到构建期（task 级编译验证兜底）
+退役判据：maven/gradle 出现标准化的项目内依赖物（如 mvnd 本地仓库配额）时重估
+
+## D-003@v1 跨仓主副本直写检测走 apply 时点对账（advisory），hook 实时拦截记非目标
+状态：implemented
+变更：2026-10-10-cross-worktree-toolchain
+锚点：src/worktree-apply.js:applyCrossRepoWorktrees
+最近确认：83f2ee5bf60bcaed673e1da3848b46505ee29bcd
+理由：applyCrossRepoWorktrees 对每个有 meta 的跨仓：主副本 baseHash..HEAD 有推进且推进文件集与该仓声明文件面（resolveApplyAllowSet 切片）交集非空 → warning 列证（commit 数/交集文件/核对决策留痕指引），不阻断；跨仓 .git marker + worktree-guard hook 实时拦截记非目标（SillyHub 实证环境无 sillyspec hook，拦截无效且侵入异仓）。
+故障面：声明面不全的变更交集恒空漏报（与 apply 既有清单校验治理面重合，接受）；worktree 目录被外部删除（meta 随目录消失无 baseHash 可锚）与 changedFiles 收集抛错分支不适用检测（评审吸收③）
+退役判据：跨仓 hook 安装面成为现实约束（平台普遍装载 sillyspec hook）时升级为实时拦截
