@@ -1,0 +1,167 @@
+{
+  "change": "2026-10-10-repo-inline-worktree-placement",
+  "baseline": "db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3",
+  "head": "1afcd83db8d1680f0ca8146c043294ca9fdc1549",
+  "files": [
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md",
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/proposal.md",
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/requirements.md",
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/tasks.md",
+    "src/config-schema.js",
+    "src/hooks/worktree-guard.js",
+    "src/stages/plan-postcheck.js",
+    "src/worktree-cross.js",
+    "src/worktree-deps.js",
+    "test/cross-worktree-placement.test.mjs",
+    "test/parse-repo.test.mjs",
+    "test/worktree-deps-sibling-repo.test.mjs",
+    "test/worktree-guard-cross-repo-cd.test.mjs",
+    ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/review.json"
+  ],
+  "totals": {
+    "files": 15,
+    "additions": 575,
+    "deletions": 27
+  },
+  "savedAt": "2026-10-10T11:18:07.835Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 4,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3",
+    "totals": {
+      "files": 9,
+      "additions": 317,
+      "deletions": 27
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 6,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 35,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/plan-postcheck.js",
+        "additions": 67,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree-cross.js",
+        "additions": 19,
+        "deletions": 10,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree-deps.js",
+        "additions": 38,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cross-worktree-placement.test.mjs",
+        "additions": 25,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/parse-repo.test.mjs",
+        "additions": 50,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-deps-sibling-repo.test.mjs",
+        "additions": 38,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/worktree-guard-cross-repo-cd.test.mjs",
+        "additions": 39,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "b65c846e6c2b364409c0e8131fd7a99e168c8d9704a659fbcf266315073f8081",
+  "patchStatus": "ok"
+}

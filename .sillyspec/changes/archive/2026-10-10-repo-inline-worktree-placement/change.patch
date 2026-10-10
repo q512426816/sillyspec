@@ -1,0 +1,802 @@
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml
+new file mode 100644
+index 00000000..899b419e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml
+@@ -0,0 +1,36 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  跨仓 worktree 落位配置 worktree.crossPlacement 独立段形态重（落位与仓注册分居 local.yaml 两处，用户反馈配置复杂）。改为 repos 段条目直接带 worktree
++  参数：repos.<key> 支持 {path: <仓根>, worktree: <落位根>} 对象形态，字符串形态零回归。
++
++
++  成功标准：
++
++  - parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增
++  parseRepoWorktreePlacements 导出读 worktree 子键
++
++  - ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++
++  - hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree
++  子键值）
++
++  - config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++
++  - 测试：双形态解析/优先级/旁路消费方不失效，全绿
++autopilot: true
++baseline_commit: db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3
++updatedAt: '2026-10-10T11:11:49.296Z'
++baseline_sha256: bfd619337db2172d5932f8d19f38362d28f7e5dba0b39d7560c9941f467d122d
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(27)（38.6s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010111107\test-result.json｜lint: failed
++  ← npm run lint（41.4s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010111107\test-result.json｜门文件 11 个
++
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 06fc7e2f..debb8cfb 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -157,7 +157,7 @@ export const LOCAL_YAML_SCHEMA = {
+       note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
+       keys: [
+         { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
+-        { path: 'worktree.crossPlacement.<repoKey>', type: 'string', optional: true, status: 'live', readers: ['readCrossPlacementConfig + resolvePlacementRoot (src/cross-placement.js) → ensureCrossWorktrees 落位 (src/worktree-cross.js)'], desc: '跨仓 worktree 按仓落位根目录（坑 cross-wt-toolchain-split：主仓在 WSL /root、跨仓在 /mnt/<盘>/ Windows 盘时，默认落位与该仓构建工具链分居互不可访文件系统，隔离形同虚设——2026-10-10 fire-equipment D-007 实证）。worktree 落 <目录>/<change>--<repoKey>；相对路径相对主仓根解析；落位根在跨仓仓根内 = 配置错拒绝创建；落位注册表 cross-placements.json 保 meta/list/cleanup/verify 对账全链寻回。缺省 = 默认公式 <specBase>/.runtime/worktrees/（零回归）。', example: '/mnt/e/sillyspec-worktrees' },
++        { path: 'worktree.crossPlacement.<repoKey>', type: 'string', optional: true, status: 'live', readers: ['readCrossPlacementConfig + resolvePlacementRoot (src/cross-placement.js) → ensureCrossWorktrees 落位 (src/worktree-cross.js)'], desc: '跨仓 worktree 按仓落位根目录（坑 cross-wt-toolchain-split：主仓在 WSL /root、跨仓在 /mnt/<盘>/ Windows 盘时，默认落位与该仓构建工具链分居互不可访文件系统，隔离形同虚设——2026-10-10 fire-equipment D-007 实证）。worktree 落 <目录>/<change>--<repoKey>；相对路径相对主仓根解析；落位根在跨仓仓根内 = 配置错拒绝创建；落位注册表 cross-placements.json 保 meta/list/cleanup/verify 对账全链寻回。缺省 = 默认公式 <specBase>/.runtime/worktrees/（零回归）。【推荐迁移】repos 条目内联 worktree 子键（repos.<key>: {path: <仓根>, worktree: <落位根>}，2026-10-10 配置简化）——优先级 repos 内联 > 本键 > 默认；本键兼容保留不废。', example: '/mnt/e/sillyspec-worktrees' },
+         { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
+         { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
+         { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
+@@ -415,6 +415,11 @@ dispatch:
+ #     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
+ #   crossPlacement:          # 跨仓 worktree 按仓落位（坑 cross-wt-toolchain-split：主仓 WSL + 跨仓
+ #     # urgent: /mnt/e/wt    #   Windows 盘时工具链够不着默认落位——配到跨仓工具链可达的目录）
++#                            #   ↑推荐改用 repos 条目内联（一处声明注册+落位）：
++#                            #   repos:
++#                            #     urgent:
++#                            #       path: /mnt/e/Java/crrc/qmdp/urgent
++#                            #       worktree: /mnt/e/sillyspec-worktrees
+ 
+ # ── 测试策略（2026-09-26-dynamic-test-inference 起）──
+ # 缺省=动态子集：本变更测试 ∪ FR 关联回归（active FR 覆盖面∩触碰文件→绑定 tests）∪ import 依赖，
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 2598e858..fae86d62 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -497,6 +497,22 @@ function parseSimpleYaml(content) {
+       if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
+       if (!Array.isArray(result[topKey][childKey])) result[topKey][childKey] = []
+       result[topKey][childKey].push(parseValue(trimmed.slice(2)))
++      continue
++    }
++
++    // indent>=4 的 `<子键>: <值>`（三层嵌套标量，坑 repo-inline-worktree-placement：repos 条目
++    // 对象形态 `repos: → <key>: → path:/worktree:`）——空数组占位（indent2 无值条目）转对象后
++    // 挂键。此前该形态被静默丢弃，analyzeCrossRepoCd 等消费方读不到三层配置。
++    if (indent >= 4 && childKey) {
++      const subMatch = trimmed.match(/^([^:]+):\s*(.*)$/)
++      if (!subMatch) continue
++      if (UNSAFE_KEYS.has(subMatch[1].trim())) continue
++      if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
++      const cur = result[topKey][childKey]
++      if (Array.isArray(cur) && cur.length === 0) result[topKey][childKey] = {}
++      if (result[topKey][childKey] && typeof result[topKey][childKey] === 'object' && !Array.isArray(result[topKey][childKey])) {
++        result[topKey][childKey][subMatch[1].trim()] = parseValue(subMatch[2])
++      }
+     }
+   }
+ 
+@@ -886,8 +902,25 @@ function analyzeCrossRepoCd(command, callerCwd, projectRoot, inWorktree) {
+     const shellResolved = path.isAbsolute(t) ? t : path.resolve(callerCwd, t)
+     const intended = path.isAbsolute(t) ? t : path.resolve(inWorktree ? projectRoot : callerCwd, t)
+     for (const [key, raw] of Object.entries(repos)) {
+-      if (typeof raw !== 'string' || !raw) continue
+-      const repoRoot = path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw)
++      // 条目双形态（坑 repo-inline-worktree-placement）：'path' 字符串（parseSimpleYaml 原样）；
++      // 块式对象 {path, worktree}（parseSimpleYaml 嵌套）；inline '{path: ..}' 字符串
++      // （parseSimpleYaml 不解析 inline flow，原样字符串——手动提取 path 子键）
++      let repoPath = null
++      if (typeof raw === 'string' && raw) {
++        const t = raw.trim()
++        if (t.startsWith('{') && t.endsWith('}')) {
++          for (const part of t.slice(1, -1).split(',')) {
++            const idx = part.indexOf(':')
++            if (idx !== -1 && part.slice(0, idx).trim() === 'path') { repoPath = part.slice(idx + 1).trim().replace(/^['"]|['"]$/g, ''); break }
++          }
++        } else {
++          repoPath = raw
++        }
++      } else if (raw && typeof raw === 'object' && typeof raw.path === 'string' && raw.path) {
++        repoPath = raw.path
++      }
++      if (!repoPath) continue
++      const repoRoot = path.isAbsolute(repoPath) ? repoPath : path.resolve(projectRoot, repoPath)
+       if (intended === repoRoot || isPathInside(intended, repoRoot)) {
+         hits.push({ key, repoRoot, resolved: intended, shellResolved, target: t })
+         break
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index 31491819..36daf257 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -261,6 +261,34 @@ export function detectDuplicateTopKeys(fmText) {
+  * @returns {Map<string, string>} repoKey → absolutePath
+  */
+ export function parseRepoRegistry(yamlText) {
++  return _parseRepoEntries(yamlText, 'path')
++}
++
++/**
++ * repos 段条目的 worktree 子键 → Map<repoKey, 落位根目录>（坑 cross-wt-toolchain-split 配置
++ * 简化，2026-10-10 用户反馈：独立 worktree.crossPlacement 段与仓注册分居两处形态重——落位
++ * 直接内联在注册条目上）。
++ *
++ * 只认对象形态条目的 worktree 子键；字符串条目（值即路径）无落位语义不入 Map。清洗规则
++ * （CRLF/行内注释/引号）与 parseRepoRegistry 同源。
++ * @param {string} yamlText
++ * @returns {Map<string, string>} repoKey → 落位根目录（未配置的仓不在 Map）
++ */
++export function parseRepoWorktreePlacements(yamlText) {
++  return _parseRepoEntries(yamlText, 'worktree')
++}
++
++/**
++ * repos 段统一解析内核：subkey='path' → 注册表（字符串条目值即 path）；subkey='worktree' →
++ * 落位内联（仅对象条目）。条目三形态：
++ *   urgent: /mnt/e/repo                                # 字符串（值即 path，worktree 不适用）
++ *   urgent: {path: /mnt/e/repo, worktree: /mnt/e/wt}   # inline flow 对象
++ *   urgent:                                            # 块式对象
++ *     path: /mnt/e/repo
++ *     worktree: /mnt/e/wt
++ * @returns {Map<string, string>}
++ */
++function _parseRepoEntries(yamlText, subkey) {
+   const reg = new Map()
+   if (!yamlText) return reg
+   // CRLF 归一（坑 register-repo-crlf-idempotent-loop，2026-08-23 实证：Windows 下 agent Write
+@@ -269,6 +297,7 @@ export function parseRepoRegistry(yamlText) {
+   // 幂等跳过不落盘 → 死循环。同文件 parseAllowedPaths/parseDependsOn/parseBaseCommit 均有此
+   // 归一，本函数是唯一缺口）
+   const lines = String(yamlText).replace(/\r\n?/g, '\n').split('\n')
++  const cleanVal = (v) => String(v || '').replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '')
+   let startIdx = -1
+   for (let i = 0; i < lines.length; i++) {
+     if (/^repos:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
+@@ -281,15 +310,44 @@ export function parseRepoRegistry(yamlText) {
+     // 条目格式：  <key>: <value>（key 限 [A-Za-z0-9_.\-]，与 parseLocalYamlModules 对齐）
+     const entry = line.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/)
+     if (!entry) continue
+-    const value = (entry[2] || '').trim()
+-    if (value === '' || value.startsWith('#')) continue
+-    // 去可选行内注释（`value # comment`）—— 注意路径不含 ` #`，注释前必带空格
+-    const cleaned = value.replace(/\s+#.*$/, '').trim()
+-    if (cleaned === '') continue
+-    // 去首尾可选引号（YAML 字符串引用），保留路径内反斜杠原样
+-    const path = cleaned.replace(/^['"]|['"]$/g, '')
+-    if (path === '') continue
+-    reg.set(entry[1], path)
++    const key = entry[1]
++    const indent = line.length - line.trimStart().length
++    const rawValue = (entry[2] || '').trim()
++
++    if (rawValue !== '' && !rawValue.startsWith('#')) {
++      if (rawValue.startsWith('{') && rawValue.endsWith('}')) {
++        // inline flow 对象：拆逗号取目标子键（值内逗号不支持——路径含逗号请用块式）
++        let hit = null
++        for (const part of rawValue.slice(1, -1).split(',')) {
++          const idx = part.indexOf(':')
++          if (idx === -1) continue
++          if (part.slice(0, idx).trim() === subkey) { hit = cleanVal(part.slice(idx + 1)); break }
++        }
++        if (hit) reg.set(key, hit)
++      } else if (subkey === 'path') {
++        // 字符串条目：值即 path（worktree 子键语义不适用于字符串形态）
++        const cleaned = cleanVal(rawValue)
++        if (cleaned !== '') reg.set(key, cleaned)
++      }
++      continue
++    }
++
++    // 块式对象条目（value 空）：消费整个子键块（缩进更深的连续行），取目标子键首个命中——
++    // 整块消费防子键行（path:/worktree:）被外层循环误当条目再匹配（'path'/'worktree' 混进
++    // registry 污染 Map）
++    let j = i + 1
++    for (; j < lines.length; j++) {
++      const l = lines[j]
++      if (l.trim() === '' || l.trim().startsWith('#')) continue
++      const subIndent = l.length - l.trimStart().length
++      if (subIndent <= indent) break // 离开本条目块（下一条目或段结束）
++      const sub = l.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/)
++      if (sub && sub[1] === subkey && !reg.has(key)) {
++        const cleaned = cleanVal(sub[2])
++        if (cleaned !== '' && !cleaned.startsWith('#')) reg.set(key, cleaned)
++      }
++    }
++    i = j - 1 // 整块已消费；外层 ++ 落在块尾后第一行（下一条目或段边界）
+   }
+   return reg
+ }
+diff --git a/src/worktree-cross.js b/src/worktree-cross.js
+index 0d32ab27..c0c8e7e8 100644
+--- a/src/worktree-cross.js
++++ b/src/worktree-cross.js
+@@ -33,7 +33,7 @@ import { writeAtomicSync } from './fs-atomic.js';
+ import { WorktreeManager, unlinkNodeModulesLinks, safeRemoveWorktreeDir } from './worktree.js';
+ import { provisionDeps } from './worktree-deps.js';
+ import { aggregateDeclaredRepos } from './run/shared.js';
+-import { parseRepoRegistry } from './stages/plan-postcheck.js';
++import { parseRepoRegistry, parseRepoWorktreePlacements } from './stages/plan-postcheck.js';
+ import {
+   crossWorktreePath as _placementCrossPath,
+   crossWorktreeDirName,
+@@ -144,17 +144,22 @@ function aggregateCrossRepoKeys(specBase, changeName) {
+   return aggregateDeclaredRepos(planContent).filter(k => k !== 'main');
+ }
+ 
++/**
++ * 读主仓 local.yaml 文本（路径口径与 run/shared.js readLocalYamlRaw 一致：cwd/.sillyspec/local.yaml）。
++ * @returns {string}
++ */
++function readLocalYamlText(cwd) {
++  const p = join(cwd, '.sillyspec', 'local.yaml');
++  if (!existsSync(p)) return '';
++  try { return readFileSync(p, 'utf8') } catch { return '' }
++}
++
+ /**
+  * 读主仓 local.yaml 的 repos: 段（路径口径与 run/shared.js readLocalYamlRaw 一致：cwd/.sillyspec/local.yaml）。
+  * @returns {Map<string,string>}
+  */
+ function readRepoRegistry(cwd) {
+-  const p = join(cwd, '.sillyspec', 'local.yaml');
+-  let text = '';
+-  if (existsSync(p)) {
+-    try { text = readFileSync(p, 'utf8') } catch { text = '' }
+-  }
+-  return parseRepoRegistry(text);
++  return parseRepoRegistry(readLocalYamlText(cwd));
+ }
+ 
+ /**
+@@ -171,7 +176,11 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+   const base = specBase || join(cwd, '.sillyspec');
+   const keys = aggregateCrossRepoKeys(base, changeName);
+   const registry = readRepoRegistry(cwd);
+-  const placementCfg = readCrossPlacementConfig(cwd); // worktree.crossPlacement 按仓落位（坑 cross-wt-toolchain-split）
++  // 落位配置双源（坑 cross-wt-toolchain-split 配置简化，2026-10-10 用户反馈）：推荐 repos 条目
++  // 内联（repos.<key>: {path, worktree}——注册与落位一处声明）；worktree.crossPlacement 段兼容
++  // 保留作 legacy 读面。优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式。
++  const inlinePlacements = parseRepoWorktreePlacements(readLocalYamlText(cwd));
++  const placementCfg = readCrossPlacementConfig(cwd);
+   const created = [];
+   const reused = [];
+   const skippedLegacy = [];
+@@ -196,9 +205,9 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
+     }
+ 
+-    // 落位解析（FR-01）：crossPlacement.<key> 配置 → <落位根>/<change>--<key>；缺省默认公式。
++    // 落位解析（FR-01）：repos.<key>.worktree 内联 > crossPlacement.<key>（legacy）→ <落位根>/<change>--<key>；缺省默认公式。
+     // 拒绝落位根落在跨仓仓根内（worktree 目录会成跨仓仓 untracked 噪音/被误提交——配置错 fail-closed）。
+-    const rawPlacement = placementCfg.get(key) || null;
++    const rawPlacement = inlinePlacements.get(key) || placementCfg.get(key) || null;
+     let placementRoot = null;
+     if (rawPlacement) {
+       placementRoot = resolvePlacementRoot(rawPlacement, cwd);
+diff --git a/src/worktree-deps.js b/src/worktree-deps.js
+index 9d0d1179..2cd6a7b8 100644
+--- a/src/worktree-deps.js
++++ b/src/worktree-deps.js
+@@ -646,10 +646,45 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
+     const lines = String(yamlText || '').replace(/\r\n?/g, '\n').split('\n');
+     const start = lines.findIndex(l => /^repos:\s*(?:#.*)?$/.test(l));
+     if (start === -1) return roots;
++    const cleanVal = (v) => String(v || '').replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '');
+     for (let i = start + 1; i < lines.length; i++) {
+-      if (lines[i].length > 0 && !/\s/.test(lines[i][0]) && lines[i].trim() !== '' && !lines[i].startsWith('#')) break;
+-      const m = lines[i].match(/^\s+([A-Za-z0-9_.\-]+):\s*(\S+)/);
+-      if (m && !m[2].startsWith('#')) roots.push(m[2].replace(/^['"]|['"]$/g, ''));
++      const line = lines[i];
++      if (line.length > 0 && !/\s/.test(line[0]) && line.trim() !== '' && !line.startsWith('#')) break;
++      const m = line.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/);
++      if (!m) continue;
++      const value = (m[2] || '').trim();
++      if (value !== '' && !value.startsWith('#')) {
++        if (value.startsWith('{') && value.endsWith('}')) {
++          // inline 对象条目（repos.<key>: {path: .., worktree: ..}）——只收 path 子键
++          for (const part of value.slice(1, -1).split(',')) {
++            const idx = part.indexOf(':');
++            if (idx !== -1 && part.slice(0, idx).trim() === 'path') {
++              const p = cleanVal(part.slice(idx + 1));
++              if (p) roots.push(p);
++              break;
++            }
++          }
++        } else {
++          roots.push(cleanVal(value));
++        }
++        continue;
++      }
++      // 块式对象条目（value 空）：消费子键块，只收 path 子键值（worktree 落位根不是仓根，
++      // 混入会放宽越界豁免面——坑 repo-inline-worktree-placement 收口）
++      const indent = line.length - line.trimStart().length;
++      let j = i + 1;
++      for (; j < lines.length; j++) {
++        const l = lines[j];
++        if (l.trim() === '' || l.trim().startsWith('#')) continue;
++        const subIndent = l.length - l.trimStart().length;
++        if (subIndent <= indent) break;
++        const sub = l.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/);
++        if (sub && sub[1] === 'path') {
++          const p = cleanVal(sub[2]);
++          if (p && !p.startsWith('#')) roots.push(p);
++        }
++      }
++      i = j - 1;
+     }
+     return roots;
+   })();
+diff --git a/test/cross-worktree-placement.test.mjs b/test/cross-worktree-placement.test.mjs
+index 74c56d1e..2a713848 100644
+--- a/test/cross-worktree-placement.test.mjs
++++ b/test/cross-worktree-placement.test.mjs
+@@ -253,6 +253,31 @@ test('悬挂键 sweep + 无 meta 不入列 + 损坏注册表降级（FR-02）',
+   );
+ });
+ 
++test('repos 条目内联 worktree 落位 + 优先级高于 crossPlacement（repo-inline-worktree-placement）', () => {
++  const placementDir = mkdtempSync(join(tmpdir(), 'cwpl-inline-'));
++  const legacyDir = mkdtempSync(join(tmpdir(), 'cwpl-legacy-'));
++  tempDirs.push(placementDir, legacyDir);
++  const fx = makeFixture();
++  // local.yaml 追加：repos.front 升级为对象条目（内联 worktree）+ legacy crossPlacement 段
++  const yamlPath = join(fx.specBase, 'local.yaml');
++  const baseYaml = readFileSync(yamlPath, 'utf8');
++  writeFileSync(yamlPath, baseYaml
++    + `worktree:\n  crossPlacement:\n    front: ${legacyDir.replace(/\\/g, '/')}\n`);
++  // repos.front 字符串形态 → 对象形态（块式）
++  writeFileSync(yamlPath, baseYaml.replace(
++    `repos:\n  front: ${fx.cross.replace(/\\/g, '/')}\n`,
++    `repos:\n  front:\n    path: ${fx.cross.replace(/\\/g, '/')}\n    worktree: ${placementDir.replace(/\\/g, '/')}\n`,
++  ) + `worktree:\n  crossPlacement:\n    front: ${legacyDir.replace(/\\/g, '/')}\n`);
++
++  const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
++  assert.equal(r.created.length, 1);
++  const expected = join(placementDir, `${CHANGE}--front`);
++  assert.equal(r.created[0].worktreePath, expected, '内联 worktree 落位生效');
++  assert.ok(!existsSync(join(legacyDir, `${CHANGE}--front`)), '内联优先——legacy crossPlacement 未生效');
++  assert.ok(existsSync(join(expected, 'meta.json')), 'meta 在落位目录');
++  cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
++});
++
+ // ── 5. WSL 分裂判定 ──
+ 
+ test('isWslSplit：linux /mnt 命中、非 /mnt 不命中、win32 恒 false（FR-03）', () => {
+diff --git a/test/parse-repo.test.mjs b/test/parse-repo.test.mjs
+index 152df593..dfd0bdd1 100644
+--- a/test/parse-repo.test.mjs
++++ b/test/parse-repo.test.mjs
+@@ -12,7 +12,7 @@
+  *
+  * 解析复用 parseTaskContracts 同源 js-yaml frontmatter 提取模式（见 plan-postcheck.js:114）。
+  */
+-import { parseRepo, parseBaseCommit, parseHeadCommit, parseRepoRegistry } from '../src/stages/plan-postcheck.js'
++import { parseRepo, parseBaseCommit, parseHeadCommit, parseRepoRegistry, parseRepoWorktreePlacements } from '../src/stages/plan-postcheck.js'
+ 
+ let total = 0, failed = 0
+ function assert(cond, msg) {
+@@ -253,6 +253,55 @@ console.log('\n--- 场景 15：Windows 反斜杠路径 + 行内注释 ---')
+   eq(reg.get('sillyspec'), 'C:\\Users\\qinyi\\IdeaProjects\\sillyspec', 'Windows 反斜杠路径保留')
+ }
+ 
++// 16. 对象条目双形态（块式 + inline）——registry 值恒取 path，'path'/'worktree' 键名不污染 Map
++console.log('\n--- 场景 16：对象条目块式 + inline（repo-inline-worktree-placement）---')
++{
++  const yaml = [
++    'repos:',
++    '  plain: /mnt/e/plain',
++    '  block:',
++    '    path: /mnt/e/block-repo',
++    '    worktree: /mnt/e/wt-block',
++    '  inline: {path: /mnt/e/inline-repo, worktree: /mnt/e/wt-inline}',
++    '  quoted:',
++    '    path: "/mnt/e/quoted"   # 尾注释',
++    'other:',
++    '  x: 1',
++  ].join('\n')
++  const reg = parseRepoRegistry(yaml)
++  eq(reg.size, 4, `registry 四条目（无 path/worktree 键名污染）: ${JSON.stringify([...reg])}`)
++  eq(reg.get('plain'), '/mnt/e/plain', '字符串条目零回归')
++  eq(reg.get('block'), '/mnt/e/block-repo', '块式对象取 path')
++  eq(reg.get('inline'), '/mnt/e/inline-repo', 'inline 对象取 path')
++  eq(reg.get('quoted'), '/mnt/e/quoted', '块式带引号+尾注释清洗')
++  eq(reg.get('path'), undefined, "'path' 键名不入 Map")
++  eq(reg.get('worktree'), undefined, "'worktree' 键名不入 Map")
++
++  const pl = parseRepoWorktreePlacements(yaml)
++  eq(pl.size, 2, `placements 只收对象条目: ${JSON.stringify([...pl])}`)
++  eq(pl.get('block'), '/mnt/e/wt-block', '块式 worktree 子键')
++  eq(pl.get('inline'), '/mnt/e/wt-inline', 'inline worktree 子键')
++  eq(pl.get('plain'), undefined, '字符串条目无落位语义')
++}
++
++// 17. 块式对象后随下一条目（子块消费边界）
++console.log('\n--- 场景 17：块式条目后紧跟下一条目 ---')
++{
++  const yaml = [
++    'repos:',
++    '  a:',
++    '    path: /repo-a',
++    '  b: /repo-b',
++    '  c:',
++    '    worktree: /wt-c',
++  ].join('\n')
++  const reg = parseRepoRegistry(yaml)
++  eq(reg.get('a'), '/repo-a', '块式 a 取 path')
++  eq(reg.get('b'), '/repo-b', '块式后的字符串条目 b 正常')
++  eq(reg.get('c'), undefined, '块式 c 无 path 不入 registry')
++  eq(reg.size, 2, `registry 恰两条: ${JSON.stringify([...reg])}`)
++}
++
+ console.log('\n==================================================')
+ console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+ console.log('==================================================')
+diff --git a/test/worktree-deps-sibling-repo.test.mjs b/test/worktree-deps-sibling-repo.test.mjs
+index 73ca3e74..2e3953cd 100644
+--- a/test/worktree-deps-sibling-repo.test.mjs
++++ b/test/worktree-deps-sibling-repo.test.mjs
+@@ -57,3 +57,41 @@ test('注册兄弟仓相对路径 → 分类跳过（准确理由），未注册
+   assert.ok(rogueMod, '未注册越界模块进结果')
+   assert.match(rogueMod.reason, /拒绝 link/, '未注册越界维持 fail-closed 拒绝')
+ })
++
++test('repos 对象条目（块式 {path, worktree}）——roots 只收 path，worktree 落位根不混入豁免面', () => {
++  const mainRoot = mk('wdsobj-main-')
++  const sibling = mk('wdsobj-sibling-')
++  const rogue = mk('wdsobj-rogue-')
++  mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
++  mkdirSync(sibling, { recursive: true })
++  mkdirSync(rogue, { recursive: true })
++
++  const siblingRel = '../' + sibling.split(/[\/]/).pop()
++  const rogueRel = '../' + rogue.split(/[\/]/).pop()
++  // 关键构造：worktree 落位根故意配成 rogue 目录——若 registeredRepoRoots 误收 worktree 值，
++  // rogue 模块会被豁免成「跨仓注册仓」（skipped），正确行为是维持「拒绝 link」
++  writeFileSync(join(mainRoot, '.sillyspec', 'local.yaml'), [
++    'repos:',
++    '  fe-repo:',
++    `    path: ${siblingRel}`,
++    `    worktree: ${rogueRel}`,
++    'modules:',
++    '  fe:',
++    `    path: ${siblingRel}`,
++    '  rogue:',
++    `    path: ${rogueRel}`,
++    '',
++  ].join('\n'))
++
++  const r = provisionDeps(mainRoot, mainRoot, { yamlTextOverride: null })
++  const mods = r.depsModules || []
++  const fe = mods.find(m => m.path === siblingRel)
++  const rogueMod = mods.find(m => (m.path || '').includes(rogue.split(/[\/]/).pop()))
++
++  assert.ok(fe, '对象条目仓根模块进结果')
++  assert.equal(fe.status, 'skipped')
++  assert.match(fe.reason, /跨仓注册仓/, 'path 子键正确进注册根集合（对象形态不失效）')
++
++  assert.ok(rogueMod, '越界模块进结果')
++  assert.match(rogueMod.reason, /拒绝 link/, 'worktree 落位根不混入豁免集合——rogue 维持拒绝')
++})
+diff --git a/test/worktree-guard-cross-repo-cd.test.mjs b/test/worktree-guard-cross-repo-cd.test.mjs
+index 19c7b8ee..3c9ea95c 100644
+--- a/test/worktree-guard-cross-repo-cd.test.mjs
++++ b/test/worktree-guard-cross-repo-cd.test.mjs
+@@ -12,7 +12,7 @@ import {
+ } from '../src/hooks/worktree-guard.js'
+ import { DB } from '../src/db.js'
+ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+-import { join } from 'node:path'
++import { join, resolve as resolvePath } from 'node:path'
+ import { tmpdir } from 'node:os'
+ 
+ let passed = 0, failed = 0
+@@ -117,6 +117,44 @@ console.log('\n=== ③ analyzeCrossRepoCd 单元：双基准/未注册/null 形
+   assert(analyzeCrossRepoCd('cd ../nope && npx eslint .', main, main, false) === null, '未注册目标 → null')
+ }
+ 
++console.log('\n=== ④ repos 对象条目双形态（repo-inline-worktree-placement）===\n')
++{
++  const main = mkProject('xrg5')
++  const sibling = mkProject('xrg5-fe')
++  const sibling2 = mkProject('xrg5-be')
++  mkdirSync(join(main, '.sillyspec'), { recursive: true })
++  const sibAbs = sibling.split('\\').join('/')
++  const sib2Abs = sibling2.split('\\').join('/')
++  writeFileSync(join(main, '.sillyspec', 'local.yaml'), [
++    'repos:',
++    '  fe-repo:',
++    `    path: ${sibAbs}`,
++    '    worktree: /mnt/e/wt-fe',
++    `  be-repo: {path: ${sib2Abs}, worktree: /mnt/e/wt-be}`,
++    '',
++  ].join('\n'))
++  seedDb(main)
++
++  // 块式对象条目：cd 纠偏按 path 子键解析仓根（verify 期测试类放行语义不变）
++  const sibRel = '../' + sibling.split(/[\\/]/).pop()
++  const r = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npx eslint src`, cwd: main })
++  assert(r.blocked === false, '块式对象条目 cd 纠偏命中（path 子键）')
++
++  // inline 对象字符串（parseSimpleYaml 不解析 inline flow，原样字符串手动提取 path）
++  const sib2Rel = '../' + sibling2.split(/[\\/]/).pop()
++  const r2 = shouldBlock({ tool: 'Bash', command: `cd ${sib2Rel} && npm test`, cwd: main })
++  assert(r2.blocked === false, 'inline 对象条目 cd 纠偏命中（inline 提取 path）')
++
++  // 对象形态下 analyzeCrossRepoCd 单元：hits 带 repoKey 与真实仓根
++  const a = analyzeCrossRepoCd(`cd ${sibRel} && npx eslint .`, main, main, false)
++  assert(a && a.hits.length === 1 && a.hits[0].key === 'fe-repo', '块式对象命中 fe-repo')
++  assert(resolvePath(a.hits[0].repoRoot).toLowerCase() === resolvePath(sibling).toLowerCase(), 'repoRoot 解析为 path 子键值')
++
++  // worktree 子键值不是注册仓根：cd 去落位目录不命中放行（维持 stage 门禁拦截）
++  const r3 = shouldBlock({ tool: 'Bash', command: `cd /mnt/e/wt-fe && npx eslint .`, cwd: main })
++  assert(r3.blocked === true, 'worktree 落位根不充当注册仓根（维持拦截）')
++}
++
+ if (failed > 0) {
+   console.error(`\n❌ ${failed} 失败 / ${passed} 通过`)
+   process.exit(1)
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md
+new file mode 100644
+index 00000000..dae80432
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md
+@@ -0,0 +1,63 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:04:18.181Z
++---
++# 设计记录（Design Record）— 2026-10-10-repo-inline-worktree-placement
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++2026-10-10-cross-worktree-toolchain 交付的 `worktree.crossPlacement` 独立段被用户反馈配置形态重：落位与仓注册分居 local.yaml 两处。本变更把落位内联到注册条目上——`repos.<key>` 支持对象形态 `{path: <仓根>, worktree: <落位根>}`（块式/inline flow 双写法），字符串形态零回归。落位解析内核 `_parseRepoEntries` 统一三形态（字符串值即 path / inline 对象取子键 / 块式子键块整块消费防 'path'/'worktree' 键名污染 Map），`parseRepoRegistry` 的 Map 值语义不变（13 个消费文件零改动），新增 `parseRepoWorktreePlacements` 导出读 worktree 子键。落位优先级 repos 内联 > crossPlacement（legacy 兼容保留，config-schema 标注推荐迁移）> 默认公式。两个手写旁路解析（worktree-guard analyzeCrossRepoCd 的 cd 纠偏、worktree-deps registeredRepoRoots 的越界豁免集合）同步升级对象形态——guard 取 path 子键、deps 只收 path 值防 worktree 落位根混入豁免面。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `parseRepoRegistry(yamlText)` 签名与返回类型不变（`Map<repoKey, path>`），行为扩展：对象条目取 path 子键；新增导出 `parseRepoWorktreePlacements(yamlText)` → `Map<repoKey, worktreeDir>`（仅对象条目）。
++- local.yaml 格式扩展：`repos.<key>` 新增对象形态（`{path, worktree}`，块式/inline）——字符串形态语义不变；`worktree.crossPlacement` 键保留（legacy），新增优先级关系 repos 内联 > 该键 > 默认。
++- `ensureCrossWorktrees` 落位源接入内联优先级；`analyzeCrossRepoCd`（src/hooks/worktree-guard.js）与 `registeredRepoRoots`（src/worktree-deps.js，未导出内部 IIFE）行为扩展支持对象形态。CLI 命令面无变化。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `parseRepoRegistry(yamlText)` 签名与返回类型不变（`Map<repoKey, path>`），行为扩展：对象条目取 path 子键；新增导出 `parseRepoWorktreePlacements(yamlText)` → `Map<repoKey, worktreeDir>`（仅对象条目）。
++- local.yaml 格式扩展：`repos.<key>` 新增对象形态（`{path, worktree}`，块式/inline）——字符串形态语义不变；`worktree.crossPlacement` 键保留（legacy），新增优先级关系 repos 内联 > 该键 > 默认。
++- `ensureCrossWorktrees` 落位源接入内联优先级；`analyzeCrossRepoCd`（src/hooks/worktree-guard.js）与 `registeredRepoRoots`（src/worktree-deps.js，未导出内部 IIFE）行为扩展支持对象形态。CLI 命令面无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不涉及运行时事件序：全部输入是 local.yaml 静态文本，解析为纯函数（同输入恒同输出）；配置文件被中途改写时下一次读取取新值，无缓存面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++本变更不引入新写面（落位注册表 cross-placements.json 的读-合并-原子写沿用上一变更设计）；local.yaml 本身由用户/register-repo 命令维护，与既有并发语义一致。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++安全：解析为无状态纯函数；ensureCrossWorktrees 中断重入幂等性不受配置形态影响（meta 在即复用的短路先于落位解析）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不会：repos/落位配置按主仓 `.sillyspec/local.yaml` 归属，平台模式 specRoot 隔离；内联 worktree 值的解析（相对主仓根、仓根内拒绝）与 legacy 源同一套 resolvePlacementRoot，无新作用域面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：三处手写 YAML 解析（plan-postcheck 内核、guard parseSimpleYaml 产物消费、deps 内联 IIFE）对同一对象形态的解析漂移——缓解：内核 `_parseRepoEntries` 单一事实源 + 旁路两处各自的最小升级 + 三处都有形态级测试（场景 16/17、guard-cd 既有回归、sibling-repo 既有回归）。试过但放弃的方案：直接删除 worktree.crossPlacement（未发布、干净迁移）——上一变更刚归档发号 FR-setup-083~089（knowledge/fr 已入库），删除需 supersede 对账且破坏「归档件即事实」原则；保留兼容读面零成本（readCrossPlacementConfig 已存在），优先级内联 > legacy 平滑迁移。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/stages/plan-postcheck.js | parseRepoRegistry 升级三形态内核 _parseRepoEntries + 新导出 parseRepoWorktreePlacements |
++| 修改 | src/worktree-cross.js | ensureCrossWorktrees 落位双源优先级（repos 内联 > crossPlacement legacy）+ readLocalYamlText helper |
++| 修改 | src/hooks/worktree-guard.js | analyzeCrossRepoCd 对象条目取 path（块式对象/inline 字符串） |
++| 修改 | src/worktree-deps.js | registeredRepoRoots 块式/inline 对象形态只收 path 子键 |
++| 修改 | src/config-schema.js | crossPlacement 键标注推荐迁移 + example 注释补 repos 内联样例 |
++| 修改 | test/parse-repo.test.mjs | 场景 16/17：双形态解析 + 键名零污染 + 块式边界 |
++| 修改 | test/cross-worktree-placement.test.mjs | 内联落位 + 优先级用例 |
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/proposal.md b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/proposal.md
+new file mode 100644
+index 00000000..cef024c1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/proposal.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:04:18.180Z
++---
++# 提案书（Proposal）— 2026-10-10-repo-inline-worktree-placement
++
++## 动机
++
++任务原话转写：跨仓 worktree 落位配置 worktree.crossPlacement 独立段形态重（落位与仓注册分居 local.yaml 两处，用户反馈配置复杂）。改为 repos 段条目直接带 worktree 参数：repos.<key> 支持 {path: <仓根>, worktree: <落位根>} 对象形态，字符串形态零回归。
++
++成功标准：
++- parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
++- ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++- hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
++- config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++- 测试：双形态解析/优先级/旁路消费方不失效，全绿
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
++2. ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++3. hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
++4. config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++5. 测试：双形态解析/优先级/旁路消费方不失效，全绿
++
++## 成功标准（可验证）
++
++1. parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
++2. ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++3. hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
++4. config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++5. 测试：双形态解析/优先级/旁路消费方不失效，全绿
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/requirements.md b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/requirements.md
+new file mode 100644
+index 00000000..e9276b3e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/requirements.md
+@@ -0,0 +1,62 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:04:18.181Z
++---
++# 需求规格（Requirements）— 2026-10-10-repo-inline-worktree-placement
++
++## 功能需求
++
++### FR-01: parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
++
++- 必须：repos 条目为字符串形态（`key: <路径>`）时 parseRepoRegistry 返回值与升级前逐字节一致；条目为块式对象或 inline 对象时 Map 值必须取 `path` 子键，且 'path'/'worktree' 键名禁止作为 repoKey 混入 Map。
++- 必须：parseRepoWorktreePlacements 必须只对对象条目返回 `worktree` 子键值（字符串条目无落位语义不入 Map）。
++- 禁止：块式子键行（path:/worktree: 行）被当成条目重复匹配。
++
++#### 场景：主路径
++- Given local.yaml repos 段混排字符串/块式/inline 三形态
++- When parseRepoRegistry 与 parseRepoWorktreePlacements
++- Then registry 值全部为各仓 path（键名无污染）、placements 只含对象条目的 worktree 值
++
++### FR-02: ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++
++- 必须：两配置源同时在场时落位取 repos 内联值；仅 legacy 段在场时取 crossPlacement；均缺席走默认公式（逐字节不变）。
++- 必须：经任一配置源解析出的落位根在跨仓仓根内时必须拒绝创建（fail-closed），注册表写入与 WSL 分裂警告语义与配置源无关。
++
++#### 场景：主路径
++- Given repos.front 配内联 worktree=A 且 crossPlacement.front=B
++- When ensureCrossWorktrees
++- Then worktree 落 A、B 目录无任何产物
++
++### FR-03: hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
++
++- 必须：repos 条目为块式对象时跨仓 cd 纠偏必须按 path 子键解析仓根；inline 对象字符串形态同样取 path。
++- 禁止：worktree 子键值（落位根）混入 registeredRepoRoots 越界豁免集合。
++
++#### 场景：主路径
++- Given repos.urgent 为块式对象条目
++- When verify 阶段从主仓跑 `cd ../urgent && npx eslint`
++- Then 纠偏/放行判定与字符串形态行为一致
++
++### FR-04: config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++
++- 必须：`sillyspec config schema` 输出的 worktree.crossPlacement 条目必须标注推荐迁移 repos 内联与优先级关系；示例注释区必须含 repos 内联形态样例。
++
++#### 场景：主路径
++- When sillyspec config schema
++- Then crossPlacement 条目 desc 含「推荐迁移」与优先级说明，example 注释含 repos 内联样例
++
++### FR-05: 测试：双形态解析/优先级/旁路消费方不失效，全绿
++
++- 必须：本变更触达面的测试（parse-repo / cross-worktree-placement / deps 全家 / guard / cross-repo 系列 / plan-postcheck 系列）在收口时全部通过。
++
++#### 场景：主路径
++- When 跑相关面测试
++- Then 0 fail
++
++## 测试绑定（每条 FR 至少一行）
++
++FR-01: test/parse-repo.test.mjs「场景 16：对象条目块式 + inline」「场景 17：块式条目后紧跟下一条目」
++FR-02: test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」
++FR-03: test/worktree-guard-cross-repo-cd.test.mjs（既有 cd 纠偏回归）+ test/worktree-deps-sibling-repo.test.mjs（roots 豁免回归）
++FR-04: 不适用：纯文档键条目——收口时 `sillyspec config schema` 实测输出含标注（verify 回执留痕）
++FR-05: test/cross-worktree-placement.test.mjs + test/parse-repo.test.mjs 全文件（收口 CLI 实测门复跑）
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/tasks.md b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/tasks.md
+new file mode 100644
+index 00000000..571f90de
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:04:18.181Z
++---
++# 任务注册表（Tasks）— 2026-10-10-repo-inline-worktree-placement
++
++- [x] task-01: parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
++- [x] task-02: ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
++- [x] task-03: hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
++- [x] task-04: config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
++- [x] task-05: 测试：双形态解析/优先级/旁路消费方不失效，全绿
+diff --git a/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/review.json b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/review.json
+@@ -0,0 +1,52 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-10-repo-inline-worktree-placement",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "1afcd83db8d1680f0ca8146c043294ca9fdc1549",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "【首轮 P1 已修复·留痕】FR-01 绑定测试场景 16/17 首轮缺失，1afcd83d 已补齐并核实",
++      "evidence": "首轮 f4f2902 上场景 16/17 不存在（追加脚本锚未匹配静默失败）。增量复核：test/parse-repo.test.mjs:257-285 场景 16 三形态混排（字符串/块式/inline/带引号尾注释），断言 registry.size==4、get('path')/get('worktree') 均 undefined（键名零污染）、各条目取 path 子键、parseRepoWorktreePlacements 只收对象条目 worktree（size==2，字符串条目不入）；场景 17（:288-302）块式条目后紧跟下一条目的子块消费边界（a 取 path、b 字符串正常、c 无 path 不入、size==2）。断言与 FR-01 必须/禁止条款逐条对齐，commit 1afcd83d 实改 +49 行。",
++      "location": "test/parse-repo.test.mjs:257-302 (1afcd83d)"
++    },
++    {
++      "severity": "P3",
++      "title": "【首轮 P2 已修复·留痕】guard/deps 旁路解析对象形态首轮零测试，1afcd83d 已补齐并核实",
++      "evidence": "增量复核：① test/worktree-guard-cross-repo-cd.test.mjs 新场景④（:138-155）——块式对象条目 cd 纠偏命中 path 子键（blocked===false）、analyzeCrossRepoCd 单元断言 hits[0].repoRoot 解析为 path 子键值、worktree 落位根不充当注册仓根维持拦截（blocked===true），另补 :105-117 单元形态（双基准/无 cd→null/未注册→null）；② test/worktree-deps-sibling-repo.test.mjs 新用例（:61-97）——repos 块式对象 fe-repo 的 worktree 值故意配成 rogue 目录，断言 fe skipped 理由含「跨仓注册仓」（path 子键正确进豁免面）且 rogue 维持「拒绝 link」（worktree 落位根不混入豁免集合），与 FR-03 禁止条款精确对齐。附带根因修复 src/hooks/worktree-guard.js parseSimpleYaml 三层嵌套标量挂载（indent>=4），消除 repos→key→path 静默丢弃。",
++      "location": "test/worktree-guard-cross-repo-cd.test.mjs:105-155 (1afcd83d)；test/worktree-deps-sibling-repo.test.mjs:61-97 (1afcd83d)；src/hooks/worktree-guard.js (1afcd83d +16 行)"
++    },
++    {
++      "severity": "P3",
++      "title": "【首轮 P2 降级·归属鉴定】收口 gate 记录 lint failed，归属 HEAD 存量债非本变更",
++      "evidence": "flow-state.yaml gate_summary 记「lint: failed ← npm run lint」。归属鉴定：失败源为 test/check-syntax.mjs（CLI 归属鉴定），与本变更交付文件（解析内核/落位/旁路/schema/测试）零交集，属 HEAD 存量债不拦收口。留痕备忘：存量 lint 债务应另行立变更清偿。",
++      "location": ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml:37"
++    },
++    {
++      "severity": "P3",
++      "title": "design.md「接口契约」整节逐字重复两次（首轮遗留，未修复）",
++      "evidence": "「## 接口契约」及三条契约内容在 design.md 行 13-19 与行 21-27 完全重复（复制粘贴残留），1afcd83d 未触及该文件，仍存在。",
++      "location": ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md:13-27"
++    },
++    {
++      "severity": "P3",
++      "title": "优先级测试死代码：首次 writeFileSync 立即被第二次整写覆盖（首轮遗留，未修复）",
++      "evidence": "test/cross-worktree-placement.test.mjs:264-267 连续两次 writeFileSync，首次写入无观察者，应删除。",
++      "location": "test/cross-worktree-placement.test.mjs:264-267 (1afcd83d)"
++    },
++    {
++      "severity": "P3",
++      "title": "FR-04 标题「repos.<key>.worktree 键条目」未作为独立 schema 条目交付（首轮遗留，口径瑕疵）",
++      "evidence": "config-schema.js 仅改 crossPlacement 条目 desc（【推荐迁移】+优先级）与 example 注释区（repos 内联样例），未新增 repos 段 worktree 子键 schema 条目。FR-04 两条「必须」条款已兑现且与实现优先级（inlinePlacements.get || placementCfg.get || null）一致，仅为标题口径宽于可验证面的文档瑕疵。",
++      "location": "src/config-schema.js:160 (f4f2902)"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-10T13:05:00.000Z"
++}

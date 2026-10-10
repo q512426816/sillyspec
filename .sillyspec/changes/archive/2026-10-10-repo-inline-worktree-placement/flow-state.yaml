@@ -3,6 +3,12 @@ legacy_fallback: false
 substeps:
   artifacts: done
   ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -26,7 +32,7 @@ input: >-
   - 测试：双形态解析/优先级/旁路消费方不失效，全绿
 autopilot: true
 baseline_commit: db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3
-updatedAt: '2026-10-10T11:11:49.296Z'
+updatedAt: '2026-10-10T11:18:09.597Z'
 baseline_sha256: bfd619337db2172d5932f8d19f38362d28f7e5dba0b39d7560c9941f467d122d
 gate_summary: >-
   test: passed ← module[]+deps(js30)+fr(27)（38.6s）

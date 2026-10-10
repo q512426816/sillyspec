@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-repo-inline-worktree-placement",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-01",
+      "tests": [
+        "test/parse-repo.test.mjs「场景 16：对象条目块式 + inline」",
+        "test/parse-repo.test.mjs「场景 17：块式条目后紧跟下一条目」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-repo-inline-worktree-placement"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-repo-inline-worktree-placement"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-deps-sibling-repo.test.mjs",
+        "test/worktree-guard-cross-repo-cd.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-repo-inline-worktree-placement"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-05",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs",
+        "test/parse-repo.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-repo-inline-worktree-placement"
+    }
+  ]
+}

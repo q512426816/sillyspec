@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-repo-inline-worktree-placement",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "1afcd83db8d1680f0ca8146c043294ca9fdc1549",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "【首轮 P1 已修复·留痕】FR-01 绑定测试场景 16/17 首轮缺失，1afcd83d 已补齐并核实",
+      "evidence": "首轮 f4f2902 上场景 16/17 不存在（追加脚本锚未匹配静默失败）。增量复核：test/parse-repo.test.mjs:257-285 场景 16 三形态混排（字符串/块式/inline/带引号尾注释），断言 registry.size==4、get('path')/get('worktree') 均 undefined（键名零污染）、各条目取 path 子键、parseRepoWorktreePlacements 只收对象条目 worktree（size==2，字符串条目不入）；场景 17（:288-302）块式条目后紧跟下一条目的子块消费边界（a 取 path、b 字符串正常、c 无 path 不入、size==2）。断言与 FR-01 必须/禁止条款逐条对齐，commit 1afcd83d 实改 +49 行。",
+      "location": "test/parse-repo.test.mjs:257-302 (1afcd83d)"
+    },
+    {
+      "severity": "P3",
+      "title": "【首轮 P2 已修复·留痕】guard/deps 旁路解析对象形态首轮零测试，1afcd83d 已补齐并核实",
+      "evidence": "增量复核：① test/worktree-guard-cross-repo-cd.test.mjs 新场景④（:138-155）——块式对象条目 cd 纠偏命中 path 子键（blocked===false）、analyzeCrossRepoCd 单元断言 hits[0].repoRoot 解析为 path 子键值、worktree 落位根不充当注册仓根维持拦截（blocked===true），另补 :105-117 单元形态（双基准/无 cd→null/未注册→null）；② test/worktree-deps-sibling-repo.test.mjs 新用例（:61-97）——repos 块式对象 fe-repo 的 worktree 值故意配成 rogue 目录，断言 fe skipped 理由含「跨仓注册仓」（path 子键正确进豁免面）且 rogue 维持「拒绝 link」（worktree 落位根不混入豁免集合），与 FR-03 禁止条款精确对齐。附带根因修复 src/hooks/worktree-guard.js parseSimpleYaml 三层嵌套标量挂载（indent>=4），消除 repos→key→path 静默丢弃。",
+      "location": "test/worktree-guard-cross-repo-cd.test.mjs:105-155 (1afcd83d)；test/worktree-deps-sibling-repo.test.mjs:61-97 (1afcd83d)；src/hooks/worktree-guard.js (1afcd83d +16 行)"
+    },
+    {
+      "severity": "P3",
+      "title": "【首轮 P2 降级·归属鉴定】收口 gate 记录 lint failed，归属 HEAD 存量债非本变更",
+      "evidence": "flow-state.yaml gate_summary 记「lint: failed ← npm run lint」。归属鉴定：失败源为 test/check-syntax.mjs（CLI 归属鉴定），与本变更交付文件（解析内核/落位/旁路/schema/测试）零交集，属 HEAD 存量债不拦收口。留痕备忘：存量 lint 债务应另行立变更清偿。",
+      "location": ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml:37"
+    },
+    {
+      "severity": "P3",
+      "title": "design.md「接口契约」整节逐字重复两次（首轮遗留，未修复）",
+      "evidence": "「## 接口契约」及三条契约内容在 design.md 行 13-19 与行 21-27 完全重复（复制粘贴残留），1afcd83d 未触及该文件，仍存在。",
+      "location": ".sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md:13-27"
+    },
+    {
+      "severity": "P3",
+      "title": "优先级测试死代码：首次 writeFileSync 立即被第二次整写覆盖（首轮遗留，未修复）",
+      "evidence": "test/cross-worktree-placement.test.mjs:264-267 连续两次 writeFileSync，首次写入无观察者，应删除。",
+      "location": "test/cross-worktree-placement.test.mjs:264-267 (1afcd83d)"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04 标题「repos.<key>.worktree 键条目」未作为独立 schema 条目交付（首轮遗留，口径瑕疵）",
+      "evidence": "config-schema.js 仅改 crossPlacement 条目 desc（【推荐迁移】+优先级）与 example 注释区（repos 内联样例），未新增 repos 段 worktree 子键 schema 条目。FR-04 两条「必须」条款已兑现且与实现优先级（inlinePlacements.get || placementCfg.get || null）一致，仅为标题口径宽于可验证面的文档瑕疵。",
+      "location": "src/config-schema.js:160 (f4f2902)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T13:05:00.000Z"
+}

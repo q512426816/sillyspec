@@ -1564,3 +1564,86 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-10-cross-worktree-toolchain
   status: active
+
+## FR-setup-090 parseRepoRegistry 双形态解析：字符串条目行为逐字节不变；对象条目（块式 key: 后缩进子键 / inline {path:.., worktree:..}）Map 值恒取 path（13 个消费文件零改动）；新增 parseRepoWorktreePlacements 导出读 worktree 子键
+变更：2026-10-10-repo-inline-worktree-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-repo-inline-worktree-placement/requirements.md#FR-01
+最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-01
+  tests: test/parse-repo.test.mjs「场景 16：对象条目块式 + inline」 | test/parse-repo.test.mjs「场景 17：块式条目后紧跟下一条目」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-repo-inline-worktree-placement
+  status: active
+
+## FR-setup-091 ensureCrossWorktrees 落位优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式；仓根内拒绝/注册表/WSL 警告语义对两配置源一致
+变更：2026-10-10-repo-inline-worktree-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-repo-inline-worktree-placement/requirements.md#FR-02
+最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-02
+  tests: test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-repo-inline-worktree-placement
+  status: active
+
+## FR-setup-092 hooks/worktree-guard analyzeCrossRepoCd 与 worktree-deps registeredRepoRoots 对对象形态不失效（cd 纠偏取 path；roots 集合不含 worktree 子键值）
+变更：2026-10-10-repo-inline-worktree-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-repo-inline-worktree-placement/requirements.md#FR-03
+最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-03
+  tests: test/worktree-deps-sibling-repo.test.mjs | test/worktree-guard-cross-repo-cd.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-repo-inline-worktree-placement
+  status: active
+
+## FR-setup-093 config-schema 文档：repos.<key>.worktree 键条目 + crossPlacement 标注兼容保留（推荐 repos 内联）
+变更：2026-10-10-repo-inline-worktree-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-repo-inline-worktree-placement/requirements.md#FR-04
+最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
+
+## FR-setup-094 测试：双形态解析/优先级/旁路消费方不失效，全绿
+变更：2026-10-10-repo-inline-worktree-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-repo-inline-worktree-placement/requirements.md#FR-05
+最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-repo-inline-worktree-placement:flow:测试绑定FR-05
+  tests: test/cross-worktree-placement.test.mjs | test/parse-repo.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-repo-inline-worktree-placement
+  status: active
