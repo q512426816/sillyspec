@@ -11,7 +11,7 @@
  * R5 文档与版本（FR-03）：模板/AGENTS.md 含「已退役」墓碑、无「存量过渡通道」表述；
  *    package.json 3.32.1（init 按版本差刷新存量 AGENTS.md）
  */
-import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -52,6 +52,9 @@ function makeRepo(prefix) {
   writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
   writeFileSync(join(repo, 'm.js'), 'console.log(1)\n')
   git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——退役预门
+  // 语义在正常项目形态下不变。
+  mkdirSync(join(repo, '.sillyspec'), { recursive: true })
   return repo
 }
 function quickResidue(repo) {
@@ -143,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
-  assert(pkg.version === '3.32.3', `R5 package.json 版本 3.32.3（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+  assert(pkg.version === '3.32.4', `R5 package.json 版本 3.32.4（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
 }
 
 cleanupTmpDirs()
