@@ -1,0 +1,441 @@
+diff --git a/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/flow-state.yaml b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/flow-state.yaml
+new file mode 100644
+index 00000000..b4cc5366
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/flow-state.yaml
+@@ -0,0 +1,35 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  平台侧（multi-agent-platform，2026-10-10-repo-native-no-platform-markers 收口）实证：动态测试子集把 TS 源码
++  sillyhub-daemon/src/spec-sync.ts 归入 deps(auto-js) 批用 node --test 直跑，ERR_MODULE_NOT_FOUND 假败阻断收口，被迫 known_failures
++  锚定豁免绕过（坑 docs/sillyspec/verify-dynamic-subset-node-test-ts-source.md）。
++
++
++  根因三道防线全破（已重放实证）：① 生产侧 verify-probes isProbe7TestPath 的 /spec/i 裸子串匹配——文件名任何位置含 spec
++  字样即判测试路径，2026-10-09-workspace-init-skill-gate task-01 卡 allowed_paths 里的源码 spec-sync.ts 被误绑进 FR 测试绑定行（discovery:
++  machine）；② FR 关联回归读侧（collectFrLinkedTests→runModuleSubset）对绑定文件无测试形态校验；③ buildDepsBatches 对非测试形态文件无兜底——非 .py、非
++  tsx/jsx、内容不 import vitest/jest 即进 jsNative 批 node --test 直跑（node --test 语义文件即测试，源码必败；pytest 批同理 0 collected exit 5
++  假败）。
++
++
++  成功标准：
++
++  - isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/
++  目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
++
++  - buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
++
++  - 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
++autopilot: false
++baseline_commit: ef5d61a34f90e860b707223e63d4b03fb89e9fa9
++updatedAt: '2026-10-10T07:34:49.867Z'
++baseline_sha256: 79852b3235525dd5377583c8f0225e1a3fc571ef31c00e41ec5809b7b4444efc
++spec_approved: true
++spec_approved_at: '2026-10-10T07:34:49.865Z'
++spec_approved_by: zcode-dyn-subset-nontest-fix
++
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 27b3e1e5..42e10237 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2801,8 +2801,19 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   const SUITE_META_RE = /(^|\/)run-tests\.mjs$/
+   const jsMeta = js.filter(f => SUITE_META_RE.test(norm(f)))
+   const jsList = js.filter(f => !SUITE_META_RE.test(norm(f)))
++  // 非测试形态拆批（坑 verify-dynamic-subset-node-test-ts-source，2026-10-10 平台侧实证，
++  // 用户授权修复）：deps 面（FR 绑定 / 增量账本 / 依赖发现）可携带非测试文件——node --test
++  // 语义「文件即测试」直跑源码必败（TS 源码 import './x.js' 无 resolver 映射
++  // ERR_MODULE_NOT_FOUND）、vitest/jest 点名非测试文件 No test suite found、pytest 点名
++  // 非测试 .py 0 collected exit 5——三执行批统一只收测试形态（isTestFilePath 同口径），
++  // 被拆文件 nontest-skip 批点名披露（不跑不拦，绑定面脏数据可见可治理）。
++  const pyNonTest = py.filter(f => !isTestFilePath(f))
++  const pyTest = py.filter(f => isTestFilePath(f))
++  const jsNonTest = jsList.filter(f => !isTestFilePath(f))
++  const jsTest = jsList.filter(f => isTestFilePath(f))
++  const nonTestFiles = [...pyNonTest, ...jsNonTest]
+   const CAP = 30
+-  const pyCap = py.length === 0 ? 0 : jsList.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + jsList.length))))
++  const pyCap = pyTest.length === 0 ? 0 : jsTest.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * pyTest.length / (pyTest.length + jsTest.length))))
+   const jsCap = CAP - pyCap
+   // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
+   // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
+@@ -2812,8 +2823,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+     const ordinaryRun = ordinary.slice(0, Math.max(0, quota - prioInGroup.length))
+     return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
+   }
+-  const pyQ = quotaFill(py, pyCap)
+-  const jsQ = quotaFill(jsList, jsCap)
++  const pyQ = quotaFill(pyTest, pyCap)
++  const jsQ = quotaFill(jsTest, jsCap)
+   const pyRun = pyQ.run
+   const jsRun = jsQ.run
+   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
+@@ -2883,8 +2894,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
+   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
+   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsList.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
++
++  if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
+   if (jsProjectRun.length > 0) {
+     if (jsxRunner) {
+       const isVitest = /vitest/.test(jsxRunner)
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 27af9144..f41979c1 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1758,15 +1758,22 @@ export function parseTaskAcceptance(content) {
+ }
+ 
+ /**
+- * allowed_paths 条目是否测试形态（结构归属面）：test/ 前缀，或文件名含 .test. / _test. / spec
+- * 惯例（(?:^|[._-])test(?:[._-]|$) 覆盖 foo.test.mjs / foo_test.js / test-foo.js 三形）。
+- * 比探针 3 的存在性面（isTestFileName 文件名形态判定，宽松存在性提示）严格——这是 3/7 口径差异的落点。
+- */
+-function isProbe7TestPath(p) {
++ * allowed_paths 条目是否测试形态（结构归属面）：tests?/ 或 __tests__/ 目录段，或文件名
++ * .test./.spec. js 系后缀锚，或 python test_*.py / *_test.py——与 verify-postcheck 执行侧
++ * isTestFilePath 同口径（坑 verify-dynamic-subset-node-test-ts-source，2026-10-10 平台侧
++ * 实证：旧 /spec/i 裸子串把 spec-sync.ts 等「文件名含 spec 字样」的源码误判为测试路径，
++ * 随 trace 落盘进 FR 机器绑定行，后续变更经 FR 回归面被 node --test 直跑假败）。
++ * 漏检边界（宁紧勿松）：foo_test.js 连字形态不再预填——落 agent 手查是 fail-visible，
++ * 误绑产假败是 fail-hidden 更糟。比探针 3 的存在性面（isTestFileName 宽松提示）严格——
++ * 3/7 口径差异落点。
++ */
++export function isProbe7TestPath(p) {
+   const posix = String(p).split('\\').join('/')
+-  if (/^test\//.test(posix)) return true
++  if (/(^|\/)(tests?|__tests__)\//.test(posix)) return true
+   const name = basename(posix)
+-  return /(?:^|[._-])test(?:[._-]|$)/i.test(name) || /spec/i.test(name)
++  return /\.(test|spec)\.[cm]?(js|jsx|ts|tsx)$/.test(name)
++    || /(^|\/)test_[^\/]+\.py$/.test(posix)
++    || /(^|\/)[^\/]+_test\.py$/.test(posix)
+ }
+ 
+ /**
+diff --git a/test/deps-cwd-prefix.test.mjs b/test/deps-cwd-prefix.test.mjs
+index 18882b11..2b4fad28 100644
+--- a/test/deps-cwd-prefix.test.mjs
++++ b/test/deps-cwd-prefix.test.mjs
+@@ -31,6 +31,8 @@ test('③ 无命中模块兜底 + ④ js 组不受影响', () => {
+   const b = buildDepsBatches({ deps: ['a.test.ts', 'b.test.ts'], changedFiles: [], hits: [] })
+   assert.equal(b.length, 1)
+   assert.match(b[0].command, /^node --test /)
+-  const b2 = buildDepsBatches({ deps: ['x.py'], changedFiles: [], hits: [] })
+-  assert.match(b2[0].command, /^python -m pytest x\.py$/)
++  // x.py 占位换 test_x.py（pytest 收集形态）：非收集形态 py 点名必 0 collected exit 5，
++  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
++  const b2 = buildDepsBatches({ deps: ['test_x.py'], changedFiles: [], hits: [] })
++  assert.match(b2[0].command, /^python -m pytest test_x\.py$/)
+ })
+diff --git a/test/dynamic-test-inference.test.mjs b/test/dynamic-test-inference.test.mjs
+index a94f3a69..c7743ada 100644
+--- a/test/dynamic-test-inference.test.mjs
++++ b/test/dynamic-test-inference.test.mjs
+@@ -102,6 +102,40 @@ test('buildDepsBatches：tsx runner 自最近含 vitest 的 package.json 推断'
+   assert.ok(jsx2 && jsx2.skip, '无可推断运行器 → skip 批披露')
+ })
+ 
++test('buildDepsBatches：非测试形态文件拆 nontest-skip 批不进执行批（坑 verify-dynamic-subset-node-test-ts-source）', () => {
++  const root = mk('ntb-')
++  const batches = buildDepsBatches({
++    cwd: root,
++    deps: ['sillyhub-daemon/src/spec-sync.ts', 'src/lib.ts', 'a.test.ts', 'test_x.py'],
++    changedFiles: [], hits: [],
++  })
++  const skip = batches.find(b => b.short === 'nontest-skip')
++  assert.ok(skip, 'nontest-skip 批在场')
++  assert.equal(skip.skip, true, 'skip 批不跑不拦')
++  assert.equal(skip.command, null)
++  assert.deepEqual([...skip.files].sort(), ['sillyhub-daemon/src/spec-sync.ts', 'src/lib.ts'],
++    '非测试文件点名披露（实得 ' + JSON.stringify(skip.files) + '）')
++  assert.ok(skip.reason.includes('node --test'), 'reason 点名假败成因')
++  const jsNative = batches.find(b => b.short === 'js')
++  assert.ok(jsNative, 'js 批在场')
++  assert.deepEqual(jsNative.files, ['a.test.ts'], 'node --test 批只收测试形态')
++  const py = batches.find(b => b.short === 'py')
++  assert.ok(py, 'py 批在场')
++  assert.deepEqual(py.files, ['test_x.py'], 'pytest 批只收测试形态')
++})
++
++test('buildDepsBatches：纯测试面组卷零漂移（拆批不改变既有批口径）', () => {
++  const root = mk('ntb2-')
++  const batches = buildDepsBatches({
++    cwd: root,
++    deps: ['a.test.ts', 'b.test.ts', 'c.spec.ts', 'test_y.py'],
++    changedFiles: [], hits: [],
++  })
++  assert.equal(batches.find(b => b.short === 'nontest-skip'), undefined, '无非测试文件 → 无 skip 批')
++  const jsNative = batches.find(b => b.short === 'js')
++  assert.deepEqual(jsNative.files, ['a.test.ts', 'b.test.ts', 'c.spec.ts'], 'js 批照旧（字母序）')
++  assert.equal(batches.find(b => b.short === 'py').files.length, 1)
++})
+ // ── 4 FR 覆盖命中查询 + 需求关联回归测试面 ────────────────────────────
+ 
+ function frFixture() {
+diff --git a/test/fr-regress-cap-drop.test.mjs b/test/fr-regress-cap-drop.test.mjs
+index 07436bc0..f4d80a3a 100644
+--- a/test/fr-regress-cap-drop.test.mjs
++++ b/test/fr-regress-cap-drop.test.mjs
+@@ -58,8 +58,10 @@ test('② 优先面未满帽：普通依赖填余，组内序保持「优先前
+ })
+ 
+ test('③ py/js 混组：两组优先面各自豁免本组配额，比例配额计算不变', () => {
+-  const pyPrio = ['test/a1.test.py', 'test/a2.test.py', 'test/a3.test.py']
+-  const pyOrd = ['test/b1.test.py', 'test/b2.test.py', 'test/b3.test.py', 'test/b4.test.py', 'test/b5.test.py']
++  // py 占位换 pytest 收集形态（test_*.py）：.test.py 点名必 0 collected exit 5，
++  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
++  const pyPrio = ['test/test_a1.py', 'test/test_a2.py', 'test/test_a3.py']
++  const pyOrd = ['test/test_b1.py', 'test/test_b2.py', 'test/test_b3.py', 'test/test_b4.py', 'test/test_b5.py']
+   const jsPrio = names(10, 'prio')
+   const jsOrd = names(50, 'ord')
+   const batches = buildDepsBatches({ deps: [...pyPrio, ...pyOrd, ...jsPrio, ...jsOrd], changedFiles: [], priorityFiles: [...pyPrio, ...jsPrio], cwd: null })
+diff --git a/test/probe7-testpath-anchor.test.mjs b/test/probe7-testpath-anchor.test.mjs
+new file mode 100644
+index 00000000..681b1826
+--- /dev/null
++++ b/test/probe7-testpath-anchor.test.mjs
+@@ -0,0 +1,42 @@
++/**
++ * isProbe7TestPath 锚定口径直测（2026-10-10-dyn-subset-nontest-runner-face FR-01）。
++ *
++ * 坑 verify-dynamic-subset-node-test-ts-source（平台侧 multi-agent-platform 实证）：
++ * 旧口径 /spec/i 裸子串把文件名含 spec 字样的源码（sillyhub-daemon/src/spec-sync.ts）
++ * 误判为测试路径 → 探针 7 归属矩阵计入 testFiles → trace 落盘进 FR 机器绑定行 →
++ * 后续变更经 FR 回归面并入实测 → node --test 直跑源码 ERR_MODULE_NOT_FOUND 假败阻断收口。
++ *
++ * 新口径与执行侧 isTestFilePath 同源锚定：后缀（.test./.spec. js 系）∪ 目录
++ * （tests?/、__tests__/）∪ python 形态（test_*.py、*_test.py）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { isProbe7TestPath } from '../src/verify-probes.js'
++
++test('源码文件名含 spec 字样不误判（坑 spec-sync 复现样本）', () => {
++  assert.equal(isProbe7TestPath('sillyhub-daemon/src/spec-sync.ts'), false,
++    'spec-sync.ts=源码（2026-10-10 平台侧 node --test 假败实锤样本）')
++  assert.equal(isProbe7TestPath('src/respec.ts'), false, 'respec 前缀非锚定')
++  assert.equal(isProbe7TestPath('src/spec.ts'), false, '裸 spec.ts 无点锚')
++  assert.equal(isProbe7TestPath('src/spec_sync-utils.ts'), false, '下划线连字非锚定')
++  assert.equal(isProbe7TestPath('src/contest.ts'), false, 'contest 子串不含锚')
++  assert.equal(isProbe7TestPath('sillyhub-daemon/src/config.js'), false, '普通源码')
++  assert.equal(isProbe7TestPath('docs/x.md'), false, '文档')
++})
++
++test('合法测试形态照常命中', () => {
++  assert.equal(isProbe7TestPath('sillyhub-daemon/tests/run-sillyspec-init.test.ts'), true,
++    '坑样本同卡测试文件（tests/ 目录 + .test. 双锚）')
++  assert.equal(isProbe7TestPath('frontend/src/components/card.test.tsx'), true)
++  assert.equal(isProbe7TestPath('pkg/util.spec.mjs'), true)
++  assert.equal(isProbe7TestPath('a.b.test.cjs'), true)
++  assert.equal(isProbe7TestPath('backend/app/tests/test_claim.py'), true)
++  assert.equal(isProbe7TestPath('pkg/x_test.py'), true)
++  assert.equal(isProbe7TestPath('test/root.ts'), true, '根级 test/ 目录（原口径保留）')
++  assert.equal(isProbe7TestPath('deep/__tests__/foo.ts'), true, '__tests__ 惯例目录')
++})
++
++test('Windows 反斜杠路径同口径', () => {
++  assert.equal(isProbe7TestPath('sillyhub-daemon\\src\\spec-sync.ts'), false)
++  assert.equal(isProbe7TestPath('sillyhub-daemon\\tests\\run.test.ts'), true)
++})
+diff --git a/test/residual-runner-parity.test.mjs b/test/residual-runner-parity.test.mjs
+index 36883198..5d2af7d9 100644
+--- a/test/residual-runner-parity.test.mjs
++++ b/test/residual-runner-parity.test.mjs
+@@ -48,8 +48,10 @@ test('③ jest 形态（不加 run）', () => {
+ })
+ 
+ test('④ 混合三批分拣 + .ts 原生不变', () => {
++  // t.py 占位换 test_t.py（pytest 收集形态）：非收集形态点名必 0 collected exit 5，
++  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
+   const b = buildDepsBatches({
+-    deps: ['t.py', 'a.test.ts', 'c.test.tsx'],
++    deps: ['test_t.py', 'a.test.ts', 'c.test.tsx'],
+     changedFiles: [],
+     hits: [{ test: 'cd frontend && pnpm exec vitest run src' }],
+   })
+diff --git a/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/design.md b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/design.md
+new file mode 100644
+index 00000000..79c2302d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T07:28:13.220Z
++---
++# 设计记录（Design Record）— 2026-10-10-dyn-subset-nontest-runner-face
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++故障链（平台侧 2026-10-10-repo-native-no-platform-markers 实证，已重放定位）：探针 7 的 `isProbe7TestPath` 用 `/spec/i.test(name)` 裸子串判定——任务卡 allowed_paths 里的源码 `spec-sync.ts` 被误判为测试路径，随 trace 行落盘、归档提升进 knowledge/fr 机器绑定子块；后续变更触碰该文件时 FR 关联回归把绑定文件并入实测面；`buildDepsBatches` 对非测试形态文件无兜底，分进 jsNative 批 `node --test` 直跑 → ERR_MODULE_NOT_FOUND 假败阻断收口。
++
++修两处、口径单源：① 生产侧收紧——isProbe7TestPath 改锚定口径（`.test./.spec.` 后缀 + `tests?/` 目录前缀 + `test_*.py`/`*_test.py`），与 verify-postcheck 执行侧权威 `isTestFilePath` 对齐，杜绝脏绑定继续产生；② 执行侧兜底——buildDepsBatches 组卷时把非测试形态文件从 node --test / pytest 执行批拆出，单独 skip 批点名披露（复用 run-tests.mjs / jsx-skip 先例：skip 不跑不拦、reason 点名可见），存量脏绑定与新数据面误差都被拦在执行批外。选择修生产+执行两侧而非只修一处：只修生产侧则存量脏绑定（平台仓 knowledge/fr/spec-sync.md 已有 2 行）继续假败；只修执行侧则脏数据继续累积污染绑定面。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `src/verify-probes.js` `isProbe7TestPath(p)`：判定口径从「文件名含 test 边界词或任意位置含 spec」收紧为「路径含 `(^|/)tests?/` 目录段，或文件名 `.test./.spec.` js 系后缀，或 `test_*.py`/`*_test.py`」。函数导出（原模块私有）供直测——导出名与签名不变语义只收紧。消费面仅探针 7 的 testFiles 收集三处（fromAllowed / fromDependents / existingTests 预填），预填面收窄不影响硬门判定。
++- `src/verify-postcheck.js` `buildDepsBatches`：js/py 组卷后新增非测试形态拆批——被拆文件不进 `deps(auto-js)`（node --test）/ `deps(auto-py)`（pytest）执行批，新增 `deps(auto-nontest-skip)` skip 批（command: null、skip: true、files 点名、reason 说明）。批返回形状 additive（新增批型），既有批型与计数口径不变。
++- 无 CLI 命令、文件格式、落盘结构变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++两处修复均为同步纯函数/组卷期判定，无事件序依赖；绑定行迟到写入（归档提升）在下次组卷时才被消费，届时已被执行侧兜底拦截——顺序无关。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++不新增写面。isProbe7TestPath 只影响探针 7 写 trace 的内容（少写误判行）；buildDepsBatches 只读 deps 面组卷。多会话并行时 skip 批披露写入各自 verify-runs 时间线，互不冲突。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++skip 批不落 ledger failedFiles（skip 批 status 非 failed），增量重跑账本不会把非测试文件反复带入修复面；中断重入组卷幂等（纯函数重算）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++两处判定均为仓内相对路径纯函数，无跨仓状态；跨仓绑定行（repo: key）解析后的路径同样过执行侧形态校验——跨仓源码绑定同样被拦（方向正确：跨仓面本就不进内嵌执行）。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：预填面收紧的漏检边界——连字形态 `foo_test.js`（无 `.test.` 点锚）不再预填。取向与 isTestFileName 注释一致（宁紧勿松：漏检落 agent 手查是 fail-visible，误判产生脏绑定+假败是 fail-hidden 更糟）；js 生态主流形态是 `.test.`/`.spec.`，连字形态罕见，且执行侧权威口径本就不认它（预填了也进不了执行批）。放弃的方案：a) 在 `collectFrLinkedTests` 读侧直接过滤非测试路径——绑定语义是「FR 覆盖证据」不限测试文件（capability 证据可以是源码/文档），读侧过滤会让合法证据绑定静默失效，改在执行侧拦「当测试跑」这一步；b) node --test 批加 `--experimental-strip-types` 类运行参数迁就 TS 源码——治标且方向反了（源码本就不该进测试执行面，`./config.js` 类 ESM 后缀映射在裸 node 下无解）。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/verify-probes.js | isProbe7TestPath 收紧为锚定口径并导出（FR-01） |
++| 修改 | src/verify-postcheck.js | buildDepsBatches 非测试形态拆 skip 批（FR-02） |
++| 新增 | test/probe7-testpath-anchor.test.mjs | isProbe7TestPath 锚定口径边界表直测（FR-01/FR-03） |
++| 修改 | test/dynamic-test-inference.test.mjs | buildDepsBatches 非测试拆批用例（FR-02/FR-03） |
++| 修改 | test/deps-cwd-prefix.test.mjs | 既有用例占位文件名换 pytest 收集形态（x.py→test_x.py；点名非收集形态本就 0 collected exit 5 假败——与本次修复同病灶，断言语义原样） |
++| 修改 | test/fr-regress-cap-drop.test.mjs | 同上（a1.test.py→test_a1.py 族） |
++| 修改 | test/residual-runner-parity.test.mjs | 同上（t.py→test_t.py） |
+diff --git a/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/proposal.md b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/proposal.md
+new file mode 100644
+index 00000000..3f1dc32a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/proposal.md
+@@ -0,0 +1,29 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T07:28:13.220Z
++---
++# 提案书（Proposal）— 2026-10-10-dyn-subset-nontest-runner-face
++
++## 动机
++
++任务原话转写：平台侧（multi-agent-platform，2026-10-10-repo-native-no-platform-markers 收口）实证：动态测试子集把 TS 源码 sillyhub-daemon/src/spec-sync.ts 归入 deps(auto-js) 批用 node --test 直跑，ERR_MODULE_NOT_FOUND 假败阻断收口，被迫 known_failures 锚定豁免绕过（坑 docs/sillyspec/verify-dynamic-subset-node-test-ts-source.md）。
++
++根因三道防线全破（已重放实证）：① 生产侧 verify-probes isProbe7TestPath 的 /spec/i 裸子串匹配——文件名任何位置含 spec 字样即判测试路径，2026-10-09-workspace-init-skill-gate task-01 卡 allowed_paths 里的源码 spec-sync.ts 被误绑进 FR 测试绑定行（discovery: machine）；② FR 关联回归读侧（collectFrLinkedTests→runModuleSubset）对绑定文件无测试形态校验；③ buildDepsBatches 对非测试形态文件无兜底——非 .py、非 tsx/jsx、内容不 import vitest/jest 即进 jsNative 批 node --test 直跑（node --test 语义文件即测试，源码必败；pytest 批同理 0 collected exit 5 假败）。
++
++成功标准：
++- isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/ 目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
++- buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
++- 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/ 目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
++2. buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
++3. 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
++
++## 成功标准（可验证）
++
++1. isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/ 目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
++2. buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
++3. 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
+diff --git a/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/requirements.md b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/requirements.md
+new file mode 100644
+index 00000000..5de289c8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/requirements.md
+@@ -0,0 +1,56 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T07:28:13.220Z
++---
++# 需求规格（Requirements）— 2026-10-10-dyn-subset-nontest-runner-face
++
++## 功能需求
++
++### FR-01: isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/ 目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
++
++探针 7 的测试路径判定（isProbe7TestPath）必须使用后缀/目录锚定口径：文件名命中 `\.(test|spec)\.[cm]?(js|jsx|ts|tsx)` 后缀、路径命中 `(^|/)tests?/` 目录前缀、或 Python 侧 `test_*.py` / `*_test.py` 形态才算测试路径；禁止裸子串匹配（旧 `/spec/i.test(name)` 把文件名任何位置含 "spec" 字样的源码——如 `spec-sync.ts`、`respec.ts`——误判为测试路径并写进 FR 机器绑定行）。
++
++#### 场景：源码文件名含 spec 字样不误判
++
++- Given 任务卡 allowed_paths 同时声明源码 `sillyhub-daemon/src/spec-sync.ts` 与测试 `sillyhub-daemon/tests/run-sillyspec-init.test.ts`
++- When verify 探针 7 构建验收×测试归属矩阵
++- Then `spec-sync.ts` 不计入 testFiles（不落 trace 绑定行），`run-sillyspec-init.test.ts` 照常计入
++
++#### 场景：合法测试形态照常命中
++
++- Given 路径 `frontend/src/components/card.test.tsx`、`backend/app/tests/test_claim.py`、`tests/util.spec.mjs`
++- When isProbe7TestPath 判定
++- Then 均判 true（收紧不伤正常预填面）
++
++### FR-02: buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
++
++动态子集组卷（buildDepsBatches）必须对进入执行批的文件做测试形态校验：非测试形态的 js/ts 文件禁止排进 `node --test` 批（node --test 语义「文件即测试」，源码直跑必败），非 `test_*.py`/`*_test.py` 的 py 文件禁止排进 pytest 批（0 collected exit 5 假败）；被拦文件必须以 skip 批点名披露（不静默丢弃、不拦门），让「FR 绑定面混入非测试文件」可见可治理。
++
++#### 场景：FR 绑定面混入源码不进执行批
++
++- Given FR 关联回归把绑定文件 `sillyhub-daemon/src/spec-sync.ts`（源码，存量脏绑定）并入 deps 面
++- When buildDepsBatches 组卷
++- Then jsNative（node --test）批不含该文件；出现非测试形态 skip 批点名披露该文件；实测门不为它失败
++
++#### 场景：正常测试文件组卷不受影响
++
++- Given deps 面为 `a.test.ts`、`test_x.py` 等测试形态文件
++- When buildDepsBatches 组卷
++- Then 批组成与现状一致（jsNative / py 批照旧、计数口径不变）
++
++### FR-03: 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
++
++本变更必须以直测钉住两处新行为：isProbe7TestPath 锚定口径（误判样本 false / 合法样本 true 边界表）与 buildDepsBatches 非测试形态拆批（skip 批在场 + 执行批不含）；且既有测试面（verify-probes / verify-postcheck / dynamic-test-inference / residual-runner-parity 等）必须全绿——修复不得改变其他消费面行为。
++
++#### 场景：收口实测门自证
++
++- Given 本变更触及 src/verify-probes.js 与 src/verify-postcheck.js
++- When flow done 收口实测
++- Then 动态子集实测面（本变更测试 ∪ FR 关联回归 ∪ import 依赖）全绿
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/probe7-testpath-anchor.test.mjs「源码文件名含 spec 字样不误判」
++FR-01: test/probe7-testpath-anchor.test.mjs「合法测试形态照常命中」
++FR-02: test/dynamic-test-inference.test.mjs「buildDepsBatches：非测试形态文件拆 skip 批不进 node --test / pytest 执行批」
++FR-03: test/probe7-testpath-anchor.test.mjs「isProbe7TestPath 边界表全量」
+diff --git a/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/tasks.md b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/tasks.md
+new file mode 100644
+index 00000000..c7ce1da9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T07:28:13.220Z
++---
++# 任务注册表（Tasks）— 2026-10-10-dyn-subset-nontest-runner-face
++
++- [x] task-01: 收紧 isProbe7TestPath（src/verify-probes.js:1765）为锚定口径——`(^|/)tests?/` 目录前缀 ∪ `\.(test|spec)\.[cm]?(js|jsx|ts|tsx)$` 后缀 ∪ `test_*.py`/`*_test.py`；函数导出供直测。验证：node --test test/probe7-testpath-anchor.test.mjs 绿（spec-sync.ts false、run-sillyspec-init.test.ts true）
++- [x] task-02: buildDepsBatches（src/verify-postcheck.js）非测试形态拆批——jsRun/pyRun 过滤非测试形态进 `deps(auto-nontest-skip)` skip 批（command null、files 点名、reason 披露），jsNative/py 执行批不含被拆文件。验证：node --test test/dynamic-test-inference.test.mjs 新增用例绿
++- [x] task-03: 新增 test/probe7-testpath-anchor.test.mjs 边界表（误判样本：spec-sync.ts/respec.ts/spec_sync-utils.ts；合法样本：.test.tsx/test_x.py/tests/ 目录/.spec.mjs）+ dynamic-test-inference 增拆批用例。验证：两文件绿
++- [x] task-04: 既有测试面回归（verify-probes / verify-postcheck / module-subset / residual-runner-parity / thin-done-dirty-gate / fr-regress-cap-drop / deps-cwd-prefix 等 buildDepsBatches 与探针 7 消费面）。验证：全绿，无消费面行为漂移
++- [x] task-05: 显式 pathspec 提交交付文件（src 2 件 + test 2 件 + tasks.md），flow done 收口（实测门自证）

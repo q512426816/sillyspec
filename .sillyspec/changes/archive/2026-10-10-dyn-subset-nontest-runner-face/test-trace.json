@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-dyn-subset-nontest-runner-face",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-01",
+      "tests": [
+        "test/probe7-testpath-anchor.test.mjs「源码文件名含 spec 字样不误判」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-dyn-subset-nontest-runner-face"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-01",
+      "tests": [
+        "test/probe7-testpath-anchor.test.mjs「合法测试形态照常命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-dyn-subset-nontest-runner-face"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-02",
+      "tests": [
+        "test/dynamic-test-inference.test.mjs「buildDepsBatches：非测试形态文件拆 skip 批不进 node --test / pytest 执行批」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-dyn-subset-nontest-runner-face"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-03",
+      "tests": [
+        "test/probe7-testpath-anchor.test.mjs「isProbe7TestPath 边界表全量」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-dyn-subset-nontest-runner-face"
+    }
+  ]
+}

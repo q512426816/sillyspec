@@ -1,0 +1,127 @@
+{
+  "change": "2026-10-10-dyn-subset-nontest-runner-face",
+  "baseline": "ef5d61a34f90e860b707223e63d4b03fb89e9fa9",
+  "head": "58257512ae9f8a51f1ef0636897351b3ea7f8356",
+  "files": [
+    ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/design.md",
+    ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/proposal.md",
+    ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/requirements.md",
+    ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/tasks.md",
+    "src/verify-postcheck.js",
+    "src/verify-probes.js",
+    "test/deps-cwd-prefix.test.mjs",
+    "test/dynamic-test-inference.test.mjs",
+    "test/fr-regress-cap-drop.test.mjs",
+    "test/probe7-testpath-anchor.test.mjs",
+    "test/residual-runner-parity.test.mjs"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 313,
+    "deletions": 16
+  },
+  "savedAt": "2026-10-10T07:49:15.134Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "ef5d61a34f90e860b707223e63d4b03fb89e9fa9",
+    "totals": {
+      "files": 7,
+      "additions": 118,
+      "deletions": 16
+    },
+    "rows": [
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 17,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 14,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/deps-cwd-prefix.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/dynamic-test-inference.test.mjs",
+        "additions": 34,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-regress-cap-drop.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe7-testpath-anchor.test.mjs",
+        "additions": 42,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/residual-runner-parity.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "3ca22cf5a03404bbda8cec327e6d336baa21c9cf8a443568dca9ba43ec3311fc",
+  "patchStatus": "ok"
+}

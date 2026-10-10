@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -27,9 +35,14 @@ input: >-
   - 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
 autopilot: false
 baseline_commit: ef5d61a34f90e860b707223e63d4b03fb89e9fa9
-updatedAt: '2026-10-10T07:34:49.867Z'
+updatedAt: '2026-10-10T07:55:51.264Z'
 baseline_sha256: 79852b3235525dd5377583c8f0225e1a3fc571ef31c00e41ec5809b7b4444efc
 spec_approved: true
 spec_approved_at: '2026-10-10T07:34:49.865Z'
 spec_approved_by: zcode-dyn-subset-nontest-fix
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+nontest-skip1)+fr(12)（11.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010074752\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（37.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010074752\test-result.json｜门文件 9 个
 

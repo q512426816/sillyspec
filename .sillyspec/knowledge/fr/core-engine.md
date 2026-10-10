@@ -2777,3 +2777,60 @@
 摘要：回归面
 全文：.sillyspec/changes/archive/2026-10-09-graph-docrefs-noise/requirements.md#FR-05
 最近确认：524546f45bc4149b101c35a0feda8fcd185bdf04
+
+## FR-core-engine-172 isTestFilePath 锚定口径统一：isProbe7TestPath 不再把 spec-sync.ts / respec.ts 等无测试后缀锚定的源码判为测试路径；.test./.spec. 后缀与 tests?/ 目录、test_*.py/*_test.py 照常命中（run-sillyspec-init.test.ts 仍 true）
+变更：2026-10-10-dyn-subset-nontest-runner-face
+状态：active
+摘要：源码文件名含 spec 字样不误判；合法测试形态照常命中
+全文：.sillyspec/changes/archive/2026-10-10-dyn-subset-nontest-runner-face/requirements.md#FR-01
+最近确认：58257512ae9f8a51f1ef0636897351b3ea7f8356
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-01
+  tests: test/probe7-testpath-anchor.test.mjs「合法测试形态照常命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-dyn-subset-nontest-runner-face
+  status: active
+
+## FR-core-engine-173 buildDepsBatches 执行侧兜底：非测试形态的 js/py 文件不进 node --test / pytest 执行批，改 skip 批 loud 披露（复用 run-tests.mjs skip 先例，不静默丢弃）
+变更：2026-10-10-dyn-subset-nontest-runner-face
+状态：active
+摘要：FR 绑定面混入源码不进执行批；正常测试文件组卷不受影响
+全文：.sillyspec/changes/archive/2026-10-10-dyn-subset-nontest-runner-face/requirements.md#FR-02
+最近确认：58257512ae9f8a51f1ef0636897351b3ea7f8356
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-02
+  tests: test/dynamic-test-inference.test.mjs「buildDepsBatches：非测试形态文件拆 skip 批不进 node --test / pytest 执行批」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-dyn-subset-nontest-runner-face
+  status: active
+
+## FR-core-engine-174 新增钉行为测试 + 既有测试面全绿（收口实测门本变更自证）
+变更：2026-10-10-dyn-subset-nontest-runner-face
+状态：active
+摘要：收口实测门自证
+全文：.sillyspec/changes/archive/2026-10-10-dyn-subset-nontest-runner-face/requirements.md#FR-03
+最近确认：58257512ae9f8a51f1ef0636897351b3ea7f8356
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-dyn-subset-nontest-runner-face:flow:测试绑定FR-03
+  tests: test/probe7-testpath-anchor.test.mjs「isProbe7TestPath 边界表全量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-dyn-subset-nontest-runner-face
+  status: active

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-dyn-subset-nontest-runner-face",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "58257512ae9f8a51f1ef0636897351b3ea7f8356",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "「isTestFilePath 口径统一/同源锚定」声明与两函数实态不符（有界，无数据正确性风险）",
+      "evidence": "FR-01 标题与 design 称 isProbe7TestPath 与执行侧 isTestFilePath「同口径/同源锚定（后缀∪目录∪python）」，但 verify-postcheck.js:763 的 isTestFilePath 无任何目录锚（仅 \\.test./\\.spec. 后缀 ∪ test_*.py/*_test.py），且 isProbe7TestPath 的目录锚实现为 (^|\\/)(tests?|__tests__)\\/ 超出契约文本的 (^|/)tests?/（__tests__ 未在设计契约中声明，测试有钉）。后果：tests/ 目录内无测试后缀的文件（如 tests/foo.ts）探针侧判测试路径（可落绑定行）、执行侧拆入 nontest-skip——假败仍被兜底拦住且 loud 披露，但「统一」承诺过实，测试文件头注释同样复述了不实口径。",
+      "location": "src/verify-probes.js:1770; src/verify-postcheck.js:763"
+    },
+    {
+      "severity": "P3",
+      "title": "测试绑定行用例名非实名（对账落空，内容实质覆盖）",
+      "evidence": "FR-03 绑定「test/probe7-testpath-anchor.test.mjs『isProbe7TestPath 边界表全量』」——该文件无此名用例，实际为「源码文件名含 spec 字样不误判（坑 spec-sync 复现样本）」「合法测试形态照常命中」「Windows 反斜杠路径同口径」三用例；FR-02 绑定名「非测试形态文件拆 skip 批不进 node --test / pytest 执行批」为实际用例名「buildDepsBatches：非测试形态文件拆 nontest-skip 批不进执行批（坑 verify-dynamic-subset-node-test-ts-source）」的转述。按名对账会查无此测；断言内容（skip 批在场+执行批不含+点名披露）真实存在且跑绿。",
+      "location": ".sillyspec/changes/2026-10-10-dyn-subset-nontest-runner-face/requirements.md:56; test/dynamic-test-inference.test.mjs:105"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok（边界已裁决：可接受——skip 批经核实 status='skipped' 不经 runOneModule、不进 failedFiles，重入组卷幂等）",
+    "作用域": "ok（边界已裁决：可接受——跨仓绑定路径过执行侧形态校验同样拦在批外并披露，方向与病灶一致）"
+  },
+  "disclosureAdjudications": [
+    "预填面收紧漏检边界（foo_test.js 连字形态不再预填，宁紧勿松取向）——可接受：漏检是 fail-visible（agent 手查），且执行侧 isTestFilePath 本就不收该形态（verify-postcheck.js:763 核实），预填了也进不了执行批",
+    "被拦文件 skip 不跑不拦门（实测门不为存量脏绑定失败），治理靠 sillyspec tests --unbind——可接受：console.warn + segment/perModule status='skipped' + reason 点名（src/verify-postcheck.js:3033/3168 双消费面核实），非静默丢弃，且生产侧收紧已止住脏绑定增量",
+    "reason 披露只点名前 3 个文件 + 「等」——可接受：count 全量披露且附 unbind 治理入口",
+    "放弃方案 a（读侧过滤绑定）/ b（--experimental-strip-types 迁就 TS）——裁决合理：读侧过滤会静默废掉合法 capability 证据绑定，运行参数迁就方向反转，均与本修复目标冲突"
+  ],
+  "reviewedAt": "2026-10-10T07:55:02Z"
+}
