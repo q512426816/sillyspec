@@ -8096,3 +8096,98 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-10-cli-uninit-cwd-gate
   status: active
+
+## FR-cli-entry-431 治理面等价漂移必须保留评审结论
+变更：2026-10-10-drift-review-governance-keep
+状态：active
+摘要：评审后治理文件修复不再触发重评（用户实证循环的解）
+全文：.sillyspec/changes/archive/2026-10-10-drift-review-governance-keep/requirements.md#FR-01
+最近确认：e59a8adefb2882f670abeca3b7ff088baaf0dcdd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-drift-review-governance-keep:flow:测试绑定FR-01
+  tests: test/flowdone-disposition-drift.test.mjs「③ e2e：治理面等价漂移——评审保留 + 自动重冻结 + 不重评直接归档」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-drift-review-governance-keep
+  status: active
+
+## FR-cli-entry-432 交付面/承诺面漂移必须维持隔离语义
+变更：2026-10-10-drift-review-governance-keep
+状态：active
+摘要：既有回归不破（2026-10-05-disposition-refreeze-drift）
+全文：.sillyspec/changes/archive/2026-10-10-drift-review-governance-keep/requirements.md#FR-02
+最近确认：e59a8adefb2882f670abeca3b7ff088baaf0dcdd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-drift-review-governance-keep:flow:测试绑定FR-02
+  tests: test/flowdone-disposition-drift.test.mjs「① detectPatchDrift 归属三形态（扩展：文件面字段）」 | test/flowdone-disposition-drift.test.mjs「② e2e：处置重入隔离链路（既有回归）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-drift-review-governance-keep
+  status: active
+
+## FR-cli-entry-433 隔离后重评任务书必须保留复审语义
+变更：2026-10-10-drift-review-governance-keep
+状态：active
+摘要：隔离不再丢失复审上下文
+全文：.sillyspec/changes/archive/2026-10-10-drift-review-governance-keep/requirements.md#FR-03
+最近确认：e59a8adefb2882f670abeca3b7ff088baaf0dcdd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-drift-review-governance-keep:flow:测试绑定FR-03
+  tests: test/flow-review.test.mjs「② 评审任务书：superseded 隔离件回退注入前轮 findings」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-drift-review-governance-keep
+  status: active
+
+## FR-cli-entry-434 评审 PASS 带 P2/P3 findings 时收口必须打印处置提示
+变更：2026-10-10-drift-review-governance-keep
+状态：active
+摘要：提示在场
+全文：.sillyspec/changes/archive/2026-10-10-drift-review-governance-keep/requirements.md#FR-04
+最近确认：e59a8adefb2882f670abeca3b7ff088baaf0dcdd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-drift-review-governance-keep:flow:测试绑定FR-04
+  tests: test/flowdone-disposition-drift.test.mjs「③ e2e：治理面等价漂移（断言处置提示在场）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-drift-review-governance-keep
+  status: active
+
+## FR-cli-entry-435 上述判定与 fallback 必须有测试覆盖，触及 src 的实测全绿
+变更：2026-10-10-drift-review-governance-keep
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-10-10-drift-review-governance-keep/requirements.md#FR-05
+最近确认：e59a8adefb2882f670abeca3b7ff088baaf0dcdd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-drift-review-governance-keep:flow:测试绑定FR-05
+  tests: test/flow-review.test.mjs | test/flowdone-disposition-drift.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-drift-review-governance-keep
+  status: active

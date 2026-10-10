@@ -1,0 +1,109 @@
+{
+  "change": "2026-10-10-drift-review-governance-keep",
+  "baseline": "5da6643bb0f0930bbae612093ec1a219f7870049",
+  "head": "e59a8adefb2882f670abeca3b7ff088baaf0dcdd",
+  "files": [
+    ".sillyspec/changes/2026-10-10-drift-review-governance-keep/design.md",
+    ".sillyspec/changes/2026-10-10-drift-review-governance-keep/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-drift-review-governance-keep/proposal.md",
+    ".sillyspec/changes/2026-10-10-drift-review-governance-keep/requirements.md",
+    ".sillyspec/changes/2026-10-10-drift-review-governance-keep/tasks.md",
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "test/flow-review.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 368,
+    "deletions": 11
+  },
+  "savedAt": "2026-10-10T05:17:37.078Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "5da6643bb0f0930bbae612093ec1a219f7870049",
+    "totals": {
+      "files": 5,
+      "additions": 175,
+      "deletions": 11
+    },
+    "rows": [
+      {
+        "path": "src/flow-parity.js",
+        "additions": 27,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 12,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 13,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-review.test.mjs",
+        "additions": 36,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flowdone-disposition-drift.test.mjs",
+        "additions": 87,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1780984fc4a6467bebea277419152b3c4fa1dafb9eb68867a40f66be08a2ab1b",
+  "patchStatus": "ok"
+}

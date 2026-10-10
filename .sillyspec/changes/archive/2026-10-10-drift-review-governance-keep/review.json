@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-drift-review-governance-keep",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e59a8adefb2882f670abeca3b7ff088baaf0dcdd",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "merge 提交漏采的 fail-safe 方向性声明不成立：混合窗口下漏采可让 governanceOnly 偏 true（保留）而非偏 false",
+      "evidence": "src/flow-parity.js:250 用 `git log --name-only`（无 -m/--diff-merges）采集，own 后缀 merge 提交文件面为空集；当窗口=治理提交+携带交付面变更的 own 后缀 merge 提交时，ownFiles 只含治理文件，:264 `ownFiles.every(f=>f.startsWith('.sillyspec/'))` 全称量词仍成立 → governanceOnly=true → flow.js:1275 保留评审，经 merge 潜入的交付面变更免于重评。JSDoc(:238) 与 design 四问三均声明「漏采只可能让 governanceOnly 偏 false，回落隔离 fail-safe」——该方向性仅对纯空文件面窗口成立（:264 有 ownFiles.length>0 守卫），混合窗口不成立。残余敞口为蓄意伪装类（经裸 subject 分支提交再以带后缀 merge 收口），与 design 已裁决接受的「代码伪装进 .sillyspec/**」后门及既有「裸提交不触发漂移」留白同威胁级、非本变更主要新增面，正常路径（非 merge 提交必列文件）均 fail-safe，故 P2 非 P1。建议：--diff-merges=first-parent 采集或将「混合窗口含空文件面 own 提交」也判 governanceOnly=false。",
+      "location": "src/flow-parity.js:238"
+    },
+    {
+      "severity": "P3",
+      "title": "FR 测试绑定作答的用例名与落盘用例名转写不精确",
+      "evidence": "requirements.md:62 绑 FR-02 于「① detectPatchDrift 归属三形态（扩展：文件面字段）」，实际文件面断言落在新用例 ①b（test/flowdone-disposition-drift.test.mjs:66），① 本体未改；:63 绑 FR-03 于「② 评审任务书：superseded 隔离件回退注入前轮 findings」，实际用例名为「②b 任务书前轮 findings 读取：review.json 缺席时回退最新 superseded 隔离件（复审语义不因隔离丢失）」（test/flow-review.test.mjs:196）。测试存在且断言对应行为，仅标签转写不逐字，可定位无歧义。",
+      "location": ".sillyspec/changes/2026-10-10-drift-review-governance-keep/requirements.md:62"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T05:23:13Z"
+}

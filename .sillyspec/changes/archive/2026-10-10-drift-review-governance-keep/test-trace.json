@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-drift-review-governance-keep",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-drift-review-governance-keep:flow:测试绑定FR-01",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「③ e2e：治理面等价漂移——评审保留 + 自动重冻结 + 不重评直接归档」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-drift-review-governance-keep"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-drift-review-governance-keep:flow:测试绑定FR-02",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「① detectPatchDrift 归属三形态（扩展：文件面字段）」",
+        "test/flowdone-disposition-drift.test.mjs「② e2e：处置重入隔离链路（既有回归）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-drift-review-governance-keep"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-drift-review-governance-keep:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review.test.mjs「② 评审任务书：superseded 隔离件回退注入前轮 findings」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-drift-review-governance-keep"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-drift-review-governance-keep:flow:测试绑定FR-04",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「③ e2e：治理面等价漂移（断言处置提示在场）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-drift-review-governance-keep"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-drift-review-governance-keep:flow:测试绑定FR-05",
+      "tests": [
+        "test/flow-review.test.mjs",
+        "test/flowdone-disposition-drift.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-drift-review-governance-keep"
+    }
+  ]
+}
