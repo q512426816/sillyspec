@@ -157,6 +157,7 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
       keys: [
         { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
+        { path: 'worktree.crossPlacement.<repoKey>', type: 'string', optional: true, status: 'live', readers: ['readCrossPlacementConfig + resolvePlacementRoot (src/cross-placement.js) → ensureCrossWorktrees 落位 (src/worktree-cross.js)'], desc: '跨仓 worktree 按仓落位根目录（坑 cross-wt-toolchain-split：主仓在 WSL /root、跨仓在 /mnt/<盘>/ Windows 盘时，默认落位与该仓构建工具链分居互不可访文件系统，隔离形同虚设——2026-10-10 fire-equipment D-007 实证）。worktree 落 <目录>/<change>--<repoKey>；相对路径相对主仓根解析；落位根在跨仓仓根内 = 配置错拒绝创建；落位注册表 cross-placements.json 保 meta/list/cleanup/verify 对账全链寻回。缺省 = 默认公式 <specBase>/.runtime/worktrees/（零回归）。', example: '/mnt/e/sillyspec-worktrees' },
         { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
         { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
         { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
@@ -412,6 +413,8 @@ dispatch:
 #     # adopt_branch: true    # 分支已存在冲突自动收编（等效常备 --adopt-branch）
 #     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
 #     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
+#   crossPlacement:          # 跨仓 worktree 按仓落位（坑 cross-wt-toolchain-split：主仓 WSL + 跨仓
+#     # urgent: /mnt/e/wt    #   Windows 盘时工具链够不着默认落位——配到跨仓工具链可达的目录）
 
 # ── 测试策略（2026-09-26-dynamic-test-inference 起）──
 # 缺省=动态子集：本变更测试 ∪ FR 关联回归（active FR 覆盖面∩触碰文件→绑定 tests）∪ import 依赖，

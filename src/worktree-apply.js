@@ -1047,6 +1047,43 @@ export async function withMainRepoLock(projectRoot, changeName, purpose, fn, opt
 }
 
 /**
+ * 跨仓主副本直写检测（FR-06，D-003@v1——坑 cross-wt-toolchain-split 2026-10-10 用户实证：
+ * agent 绕开 worktree 回主副本直写 master，5 个 fire commit 落主干、空 worktree 被静默清理，
+ * 全程零提示）。
+ *
+ * 判定：主副本 base 锚（meta.baselineCommit||baseHash，与 worktree 交付 diff 同锚）之后有
+ * commit 推进，且推进触及的文件与本变更该仓声明文件面（resolveApplyAllowSet 切片）以
+ * pathMatches 容差相交 → 返回 { commits, files }（交集文件，声明面命中口径与清单校验一致）。
+ * 纯检测不写盘：advisory，调用方（applyCrossRepoWorktrees）负责出 warning。
+ *
+ * fail-open（FR-07）：git 不可达 / baseHash 缺失 / allowSet 空 / 任何异常 → null（调用方静默
+ * 跳过——并行会话无关推进是合法态，误报成本高于漏报面已由 D-003 故障面接受）。
+ *
+ * @param {string} crossRoot 跨仓主副本仓根
+ * @param {string} baseHash base 锚（worktree meta 的 baselineCommit||baseHash）
+ * @param {Set<string>} allowSet 该仓声明文件面（相对跨仓仓根；空 = 声明面缺失不检测）
+ * @returns {{ commits: number, files: string[] }|null} null = 无推进/无交集/检测不可得
+ */
+export function detectCrossMainCopyBypass(crossRoot, baseHash, allowSet) {
+  try {
+    if (!crossRoot || !baseHash || !(allowSet instanceof Set) || allowSet.size === 0) return null;
+    const countRaw = gitQuiet(crossRoot, ['rev-list', '--count', `${baseHash}..HEAD`]);
+    if (countRaw === null) return null; // git 失败（非仓/锚悬空）→ fail-open
+    const commits = Number(String(countRaw).trim());
+    if (!Number.isFinite(commits) || commits <= 0) return null; // 无推进 → 合法态
+    const raw = gitQuiet(crossRoot, ['diff', '--name-only', baseHash, 'HEAD']);
+    if (raw === null) return null;
+    const touched = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    if (touched.length === 0) return null;
+    const files = touched.filter(f => [...allowSet].some(ap => pathMatches(f, ap)));
+    if (files.length === 0) return null; // 推进但与声明面无交集 → 并行会话，不告警
+    return { commits, files };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 跨仓 worktree 真实 apply（坑 cross-repo-no-worktree-isolation，2026-08-27）。
  *
  * 对有 worktree meta 的跨仓仓（worktree-cross.js 创建）执行与主仓 A5 同构的 patch 回落：
@@ -1104,6 +1141,31 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
       continue;
     }
 
+    // 声明面解析（提前到空清理分支前——直写检测需要 allowSet 覆盖「空 worktree 被静默清理」
+    // 的 D-007 签名场景；清单校验段复用同一份，零行为差）。
+    // specBase 显式传（平台模式 changes/ 在 specRoot；本地模式与旧硬编码同值零回归）。
+    // review 声明收紧（D-003@v1，2026-09-14-change-ownership-guards task-03）：声明文件须与
+    // allow 面（design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明 =
+    // resolveApplyAllowSet 现有并集）相交（pathMatches 容差）才计入；不相交的外来声明剔除出
+    // 放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注），admission 增量归零。
+    const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase });
+    const allowSet = allowMap.get(repoKey) || new Set();
+    const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(specBase, '.runtime') }).get(repoKey);
+
+    // 跨仓主副本直写检测（FR-06，D-003@v1 advisory——坑 cross-wt-toolchain-split 2026-10-10
+    // 实证：agent 绕开 worktree 回主副本直写 master，空 worktree 在此被静默清理零提示）：
+    // 主副本 base 锚之后有提交推进且推进文件与声明面相交 = 本变更签名，warning 列证。
+    // 交集空/无推进/声明面缺失不告警（并行会话无关推进合法）；检测异常 fail-open（FR-07）。
+    try {
+      const bypass = detectCrossMainCopyBypass(crossRoot, deliverableBase, allowSet);
+      if (bypass) {
+        out.warnings.push(
+          `跨仓 ${repoKey}：疑似绕过 worktree 直写主干——base ${String(deliverableBase).slice(0, 8)} 之后主副本有 ${bypass.commits} 个 commit，以下文件与本变更声明面相交：\n  ${bypass.files.join('\n  ')}\n` +
+          `（worktree 隔离被绕开：请核对该仓执行期决策留痕；若属误写应把提交摘到分支重走 apply。advisory 警告不阻断 apply。）`
+        );
+      }
+    } catch { /* 直写检测 fail-open，不阻断 apply */ }
+
     if (changedFiles.length === 0) {
       if (!checkOnly) {
         const cr = cleanupCrossWorktrees({ cwd: crossRoot, changeName, specBase, force: true });
@@ -1117,14 +1179,6 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
     }
 
     // 清单校验（per-repo 切片 + review 声明相交过滤，与主仓 Gate1/3b 同语义）。
-    // specBase 显式传（平台模式 changes/ 在 specRoot；本地模式与旧硬编码同值零回归）。
-    // review 声明收紧（D-003@v1，2026-09-14-change-ownership-guards task-03）：声明文件须与
-    // allow 面（design 清单 ∪ 各 task target_files/allowed_paths ∪ linked-change 声明 =
-    // resolveApplyAllowSet 现有并集）相交（pathMatches 容差）才计入；不相交的外来声明剔除出
-    // 放行面、进 violations 报告行（「review 声明了越权文件」嫌疑标注），admission 增量归零。
-    const allowMap = resolveApplyAllowSet(projectRoot, changeName, { specBase });
-    const allowSet = allowMap.get(repoKey) || new Set();
-    const reviewDeclared = collectReviewDeclaredFiles(projectRoot, changeName, { runtimeRoot: join(specBase, '.runtime') }).get(repoKey);
     const reviewForeign = [];
     if (reviewDeclared && allowSet.size > 0) {
       const face = [...allowSet];

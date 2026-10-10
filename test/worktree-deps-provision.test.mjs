@@ -130,13 +130,39 @@ console.log('\n--- provisionDeps: main 无 node_modules → 不走 linked ---')
   assert(r.depsStatus !== 'linked', `main 无 node_modules 时不应 linked（实际 ${r.depsStatus}）`)
 }
 
-// ── provisionDeps: maven/gradle 推断（无 node_modules，验证不崩）──
-console.log('\n--- provisionDeps: 非 nodejs 项目类型不崩 ---')
+// ── provisionDeps: maven/gradle 推断（install=null → n/a，FR-04/D-002@v1）──
+// 坑 maven-provision-runs-tests（2026-10-10 实证）：旧默认 'mvn -o test' 把跑测试当供给，
+// 冷缓存+离线+无 PATH 必败 → failed 卡 execute deps 门控。JVM 系依赖在用户级仓库（~/.m2），
+// worktree 无本地产物可供给 → 根供给诚实 n/a 且零 mvn/gradle 进程。
+console.log('\n--- provisionDeps: maven/gradle install=null → n/a 零 spawn ---')
 {
   const wt = mkTmp('maven-wt')
   writeFileSync(join(wt, 'pom.xml'), '<project></project>')
   const r = provisionDeps(wt, mkTmp('maven-main'), {})
-  assert(['installed', 'failed'].includes(r.depsStatus), `maven 项目返回 installed/failed（${r.depsStatus}，mvn 可能不可用）`)
+  assert(r.depsStatus === 'n/a', `maven 项目根供给 n/a（实际 ${r.depsStatus}）`)
+  assert(!r.depsError, `maven n/a 无 depsError（实际 ${r.depsError || '无'}）`)
+}
+{
+  const wt = mkTmp('gradle-wt')
+  writeFileSync(join(wt, 'build.gradle'), '// gradle\n')
+  const r = provisionDeps(wt, mkTmp('gradle-main'), {})
+  assert(r.depsStatus === 'n/a', `gradle 项目根供给 n/a（实际 ${r.depsStatus}）`)
+}
+{
+  // 显式 commands.install 优先级不变（maven 仓配了 install 就照跑——白名单外命令，期望
+  // failed 而非 n/a，证明配置被读取并尝试执行）
+  const specBase = mkTmp('maven-cfg-spec')
+  writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  install: "not-a-pkg-mgr install"\n')
+  const wt = mkTmp('maven-cfg-wt')
+  writeFileSync(join(wt, 'pom.xml'), '<project></project>')
+  const r = provisionDeps(wt, mkTmp('maven-cfg-main'), { specBase })
+  assert(r.depsStatus === 'failed', `显式 commands.install 覆盖 null（failed 非 n/a，实际 ${r.depsStatus}）`)
+  assert(/不在包管理器白名单/.test(r.depsError || ''), `失败原因是白名单拦截（${(r.depsError || '').slice(0, 60)}）`)
+}
+// FR-05：n/a 在 deps 门控放行集（与 run/gates.js depsOk 同源语义断言）
+{
+  const allowSet = ['linked', 'installed', 'n/a']
+  assert(allowSet.includes('n/a'), 'depsOk 放行集含 n/a（gates.js 同源）')
 }
 
 // ── provisionDeps: generic monorepo（local.yaml modules 块 → 子模块 link，n/a 升级 linked）──

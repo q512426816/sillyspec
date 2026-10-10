@@ -38,21 +38,24 @@ const DEFAULT_TIMEOUT_MS = 300 * 1000;
  */
 const ECOSYSTEMS = [
   {
+    // JVM 系（maven/gradle）install=null（坑 maven-provision-runs-tests，2026-10-10 用户实证）：
+    // 依赖在用户级仓库（~/.m2、~/.gradle），worktree 内无本地产物可供给——根供给诚实落 n/a
+    // （deps 门控放行集含 n/a）。旧默认 'mvn -o test' 把跑测试当供给：冷缓存 + 离线 + 工具链
+    // 不在 PATH 必败 → depsStatus=failed 卡死 execute --done（agent 被迫手改 meta）。构建/测试
+    // 归 task 级验证（mvn compile / gradle build 在任务验收面显式执行）；显式 commands.install
+    // 配置时仍按白名单执行（inferInstallCommand 优先级不变）。
     type: 'maven',
     manifests: ['pom.xml'],
     marker: null,
     detect: (d) => existsSync(join(d, 'pom.xml')),
-    install: () => 'mvn -o test',
+    install: null,
   },
   {
     type: 'gradle',
     manifests: ['build.gradle.kts', 'build.gradle', 'settings.gradle', 'gradle.lockfile'],
     marker: null,
     detect: (d) => existsSync(join(d, 'build.gradle')) || existsSync(join(d, 'build.gradle.kts')),
-    // win32 cmd.exe 跑不了 ./gradlew（体检 BUG-08 同型）：优先 gradlew.bat，否则全局 gradle
-    install: (d) => (process.platform === 'win32'
-      ? (existsSync(join(d, 'gradlew.bat')) ? 'gradlew.bat test' : 'gradle test')
-      : './gradlew test'),
+    install: null,
   },
   {
     type: 'nodejs',
@@ -210,7 +213,10 @@ export function detectProjectType(worktreePath, specBase) {
 export function inferInstallCommand(projectType, worktreePath, userInstall) {
   if (userInstall) return userInstall;
   const eco = ECOSYSTEMS.find(e => e.type === projectType);
-  return eco ? eco.install(worktreePath) : null;
+  // install:null 表项（maven/gradle——依赖在用户级仓库无 worktree 内供给面）与表外类型同归
+  // null → 根供给 n/a（坑 maven-provision-runs-tests）
+  if (!eco || typeof eco.install !== 'function') return null;
+  return eco.install(worktreePath);
 }
 
 /** 在 worktreePath 创建 node_modules 链接到 mainNodeModules；失败回退 */

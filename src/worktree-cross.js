@@ -27,33 +27,50 @@
  */
 
 import { existsSync, readFileSync, readdirSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve as resolvePath, isAbsolute, relative as relativePath } from 'path';
 import { git, gitQuiet } from './git-helper.js';
 import { writeAtomicSync } from './fs-atomic.js';
 import { WorktreeManager, unlinkNodeModulesLinks, safeRemoveWorktreeDir } from './worktree.js';
 import { provisionDeps } from './worktree-deps.js';
 import { aggregateDeclaredRepos } from './run/shared.js';
 import { parseRepoRegistry } from './stages/plan-postcheck.js';
+import {
+  crossWorktreePath as _placementCrossPath,
+  crossWorktreeDirName,
+  resolveCrossWorktreePath,
+  readCrossPlacementConfig,
+  resolvePlacementRoot,
+  readPlacementRegistry,
+  updatePlacementRegistry,
+  removePlacementRegistryEntry,
+  sweepPlacementRegistry,
+  isWslSplit,
+} from './cross-placement.js';
 
 const META_FILE = 'meta.json';
 const BRANCH_PREFIX = 'sillyspec/';
 
 /**
- * 跨仓 worktree 路径（唯一路径公式；multi-repo-context.js 的 meta 只读逻辑与此同步）。
+ * 跨仓 worktree 路径（唯一路径公式；实现已下沉 cross-placement 叶子模块——multi-repo-context.js
+ * 经该叶子模块共用，不再与 worktree-cross 经 run/shared 成环）。
+ * placementRoot 可选（坑 cross-wt-toolchain-split 落位配置）：给定时时 <placementRoot>/<change>--<repoKey>。
  * @param {string} specBase 主仓 spec 根（<主仓>/.sillyspec）
  * @param {string} changeName 变更名
  * @param {string} repoKey 跨仓 repo 键（local.yaml repos: 段的 key）
+ * @param {string|null} [placementRoot] 自定义落位根（null/缺省走默认公式——三参调用零回归）
  */
-export function crossWorktreePath(specBase, changeName, repoKey) {
-  return join(specBase, '.runtime', 'worktrees', `${changeName}--${repoKey}`);
+export function crossWorktreePath(specBase, changeName, repoKey, placementRoot = null) {
+  return _placementCrossPath(specBase, changeName, repoKey, placementRoot);
 }
 
 /**
  * 读跨仓 worktree meta（不存在/损坏返 null = legacy 直写模式）。
+ * 寻址经 resolveCrossWorktreePath（注册表优先、公式兜底）——worktree 挪到 crossPlacement
+ * 自定义落位后 meta 仍可达（坑 cross-wt-toolchain-split）。
  * @returns {object|null}
  */
 export function getCrossWorktreeMeta(specBase, changeName, repoKey) {
-  const metaPath = join(crossWorktreePath(specBase, changeName, repoKey), META_FILE);
+  const metaPath = join(resolveCrossWorktreePath(specBase, changeName, repoKey), META_FILE);
   if (!existsSync(metaPath)) return null;
   try {
     return JSON.parse(readFileSync(metaPath, 'utf8'));
@@ -63,20 +80,42 @@ export function getCrossWorktreeMeta(specBase, changeName, repoKey) {
 }
 
 /**
- * 列出某变更已建的全部跨仓 worktree meta（扫描 worktrees 目录下 `<change>--*` 且 isCross 的 meta）。
+ * 列出某变更已建的全部跨仓 worktree meta（双源：worktrees 目录 `<change>--*` 扫描 ∪ 落位
+ * 注册表条目——坑 cross-wt-toolchain-split：worktree 挪到 crossPlacement 自定义目录后不在
+ * 默认存储目录下，纯目录扫描盲区）。注册表只提供位置：条目指向处须读到可解析且 isCross 的
+ * meta.json 才入列（与目录扫描同判据——不合成无 meta 条目，消费方 gates.js 解引用
+ * cm.depsStatus 零 TypeError 面）。按 repoKey 去重（注册表与目录扫描可能同指一处）。
  * @returns {Array<{repoKey: string, meta: object}>}
  */
 export function listCrossWorktreeMetas(specBase, changeName) {
   const base = join(specBase, '.runtime', 'worktrees');
-  if (!existsSync(base)) return [];
+  const candidates = []; // {dir}
+  if (existsSync(base)) {
+    for (const name of readdirSync(base)) {
+      if (!name.startsWith(`${changeName}--`)) continue;
+      candidates.push(join(base, name));
+    }
+  }
+  // 注册表源（注册表读取 fail-open 返回 {}——损坏降级纯目录扫描）
+  const registry = readPlacementRegistry(specBase);
+  const prefix = `${changeName}--`;
+  for (const [key, entry] of Object.entries(registry)) {
+    if (!key.startsWith(prefix)) continue;
+    if (entry && typeof entry.worktreePath === 'string' && entry.worktreePath) {
+      candidates.push(entry.worktreePath);
+    }
+  }
   const out = [];
-  for (const name of readdirSync(base)) {
-    if (!name.startsWith(`${changeName}--`)) continue;
-    const metaPath = join(base, name, META_FILE);
-    if (!existsSync(metaPath)) continue;
+  const seen = new Set();
+  for (const dir of candidates) {
+    const metaPath = join(dir, META_FILE);
+    if (!existsSync(metaPath)) continue; // 无 meta 不入列（含注册表悬挂键——sweep 前的过渡态）
     try {
       const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
-      if (meta && meta.isCross && meta.repoKey) out.push({ repoKey: meta.repoKey, meta });
+      if (meta && meta.isCross && meta.repoKey && !seen.has(meta.repoKey)) {
+        seen.add(meta.repoKey);
+        out.push({ repoKey: meta.repoKey, meta });
+      }
     } catch { /* 损坏 meta 跳过（cleanup 阶段仍按目录处理） */ }
   }
   return out;
@@ -132,6 +171,7 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
   const base = specBase || join(cwd, '.sillyspec');
   const keys = aggregateCrossRepoKeys(base, changeName);
   const registry = readRepoRegistry(cwd);
+  const placementCfg = readCrossPlacementConfig(cwd); // worktree.crossPlacement 按仓落位（坑 cross-wt-toolchain-split）
   const created = [];
   const reused = [];
   const skippedLegacy = [];
@@ -156,7 +196,21 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
     }
 
-    const worktreePath = crossWorktreePath(base, changeName, key);
+    // 落位解析（FR-01）：crossPlacement.<key> 配置 → <落位根>/<change>--<key>；缺省默认公式。
+    // 拒绝落位根落在跨仓仓根内（worktree 目录会成跨仓仓 untracked 噪音/被误提交——配置错 fail-closed）。
+    const rawPlacement = placementCfg.get(key) || null;
+    let placementRoot = null;
+    if (rawPlacement) {
+      placementRoot = resolvePlacementRoot(rawPlacement, cwd);
+      const rel = relativePath(resolvePath(repoRoot), placementRoot);
+      if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+        throw new Error(
+          `跨仓 repo "${key}" 的 worktree.crossPlacement 落位根（${placementRoot}）落在该仓仓根（${repoRoot}）之内——` +
+          `worktree 会成为跨仓仓的 untracked 噪音。请改到该仓之外的目录后重跑 execute。`
+        );
+      }
+    }
+    const worktreePath = crossWorktreePath(base, changeName, key, placementRoot);
     const branch = BRANCH_PREFIX + changeName;
 
     // base 快照：跨仓仓当前 HEAD（与主仓 create 的默认 base 语义一致）
@@ -175,11 +229,25 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
         `  ③ 换变更名重跑。`
       );
     }
-    mkdirSync(join(base, '.runtime', 'worktrees'), { recursive: true });
+    if (placementRoot) {
+      mkdirSync(placementRoot, { recursive: true });
+    } else {
+      mkdirSync(join(base, '.runtime', 'worktrees'), { recursive: true });
+    }
     try {
       git(repoRoot, ['worktree', 'add', worktreePath, '-b', branch, baseHash], { timeout: 120000 });
     } catch (e) {
       throw new Error(`跨仓仓 ${key} worktree 创建失败（${worktreePath}）：${e.stderr || e.message}`);
+    }
+
+    // WSL 跨文件系统分裂警告（FR-03，advisory 不阻断——坑 cross-wt-toolchain-split：主仓在
+    // WSL /root、跨仓在 /mnt/<盘>/ Windows 盘时，worktree 默认落 WSL 原生 fs，该仓 Windows
+    // 侧工具链（mvn/JDK）够不着，隔离形同虚设——fire-equipment 2026-10-10 实证被迫绕开
+    // worktree 直写主干。配置同侧落位后本警告自然消音）。
+    if (isWslSplit(repoRoot, worktreePath)) {
+      console.warn(`⚠️ 跨仓 ${key}: 工具链分裂风险——仓根在 WSL automount Windows 盘（${repoRoot}）而 worktree 落在 WSL 原生文件系统（${worktreePath}）。`);
+      console.warn(`   该仓若依赖 Windows 侧构建工具链（mvn/JDK/IDE），将无法访问 worktree——2026-10-10 实证此形态下 agent 被迫绕开 worktree 直写主副本。`);
+      console.warn(`   建议：local.yaml 配 worktree.crossPlacement.${key} 到该仓可达的目录（如同盘符路径），重跑 execute 前先 sillyspec worktree cleanup ${changeName} --force。`);
     }
 
     const meta = {
@@ -208,6 +276,12 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
     meta.baselineHash = baseHash;
     console.log(`ℹ️ 跨仓 ${key}: 跳过 dirty baseline checkpoint（跨仓主副本在途改动不进本变更分支——含并行会话外来文件时防污染；锚点 = 跨仓仓 HEAD ${String(baseHash).slice(0, 8)}）`);
     writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+
+    // 落位注册表（FR-02）：自定义落位时记录位置，getCrossWorktreeMeta/listCrossWorktreeMetas/
+    // cleanup/verify 对账经 resolveCrossWorktreePath 寻回；默认落位不写（公式即可寻址，零冗余）。
+    if (placementRoot) {
+      updatePlacementRegistry(base, changeName, key, { worktreePath, placementRoot });
+    }
 
     // deps 供给：specBase 传 null —— sniff worktree 自身（主仓 local.yaml 的 project.type/install
     // 描述的是主仓，跨仓仓类型常不同，如实测 maven 主仓 + nodejs 前端仓，沿用会把 mvn 命令
@@ -255,6 +329,7 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
     const wtPath = meta.worktreePath || crossWorktreePath(base, changeName, repoKey);
     if (!existsSync(wtPath)) {
       try { if (repoRoot) gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
+      removePlacementRegistryEntry(base, changeName, repoKey); // 挪位清理后注册表键回收（FR-02）
       results.push({ repoKey, result: 'skipped', details: ['目录不存在（已清理）'], residual });
       continue;
     }
@@ -282,7 +357,15 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
     }
     details.push(`分支 ${meta.branch} 保留作 review 锚点（确认无需回溯后可 git -C ${repoRoot} branch -D ${meta.branch}）`);
+    if (residual.length === 0) {
+      removePlacementRegistryEntry(base, changeName, repoKey); // cleaned 后注册表键回收（FR-02）
+    }
     results.push({ repoKey, result: residual.length > 0 ? 'partial' : 'cleaned', details, residual });
   }
+  // 差集 sweep（评审 P2 吸收）：cleanup 迭代源=listCrossWorktreeMetas 只列有 meta 条目，
+  // 「worktree remove 连目录带 meta 同亡、仅注册表键存」的悬挂键够不着——末尾对本变更名下
+  // 全部键按「worktreePath 处无 meta.json」差集清（活键不删）。
+  const swept = sweepPlacementRegistry(base, changeName);
+  if (swept.length > 0) results.push({ repoKey: '(registry-sweep)', result: 'cleaned', details: [`悬挂注册表键已清: ${swept.join('、')}`], residual: [] });
   return { results };
 }

@@ -25,6 +25,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { git, gitQuiet } from '../git-helper.js';
+import { resolveCrossWorktreePath } from '../cross-placement.js';
 
 /**
  * @typedef {Object} RepoEntry
@@ -152,13 +153,15 @@ export class MultiRepoContext {
         `请补全路径（约束② fail-closed）。`
       );
     }
-    // worktree 模式检测：meta 在 = worktree-cross.js 已建隔离（路径公式与其 crossWorktreePath
-    // 保持同步；execute 启动时创建，晚于本构造的调用会命中）。
+    // worktree 模式检测：meta 在 = worktree-cross.js 已建隔离（寻址经 cross-placement 叶子模块
+    // resolveCrossWorktreePath——注册表优先、公式兜底；execute 启动时创建，晚于本构造的调用会
+    // 命中。不 import worktree-cross 避免 shared↔multi-repo-context 循环，落位逻辑下沉的
+    // 零依赖叶子模块两侧共用无环——坑 cross-wt-toolchain-split 评审吸收①）。
     const specBase = (this.platformOpts && this.platformOpts.specRoot) || join(this.cwd, '.sillyspec');
     let crossMeta = null;
     try {
-      // 同步读（构造函数是同步的，不 import worktree-cross 避免 shared↔multi-repo-context 循环）
-      const metaPath = join(specBase, '.runtime', 'worktrees', `${this.changeName}--${repoKey}`, 'meta.json');
+      // 同步读（构造函数是同步的；resolveCrossWorktreePath 同步读注册表+公式）
+      const metaPath = join(resolveCrossWorktreePath(specBase, this.changeName, repoKey), 'meta.json');
       if (existsSync(metaPath)) crossMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
     } catch { crossMeta = null }
     const inWorktree = !!(crossMeta && crossMeta.isCross && crossMeta.worktreePath && existsSync(crossMeta.worktreePath));

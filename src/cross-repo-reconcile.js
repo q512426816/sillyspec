@@ -33,7 +33,7 @@ import { join, isAbsolute, resolve } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { parseRepoRegistry } from './stages/plan-postcheck.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
-import { crossWorktreePath } from './worktree-cross.js'
+import { resolveCrossWorktreePath } from './cross-placement.js'
 import { resolveLatestExecuteRunIdWithTasks, readReview } from './task-review.js'
 
 // 与 verify-postcheck normalizeReconcilePath 同口径（本地实现防环）：剥 ./ 前缀、反斜杠归一
@@ -235,7 +235,7 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
     //     提交，对 worktree 多笔交付是假信号（2026-10-09 tombstone 取证：声明 4 实测 0）。
     //     meta 缺失/worktree 不在场/不可读 → 回退 B 档（不回退语义）。
     try {
-      const wtPath = crossWorktreePath(specBase, changeName, repoKey)
+      const wtPath = resolveCrossWorktreePath(specBase, changeName, repoKey)
       const metaPath = join(wtPath, 'meta.json')
       if (existsSync(metaPath)) {
         const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
