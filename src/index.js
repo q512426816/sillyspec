@@ -399,7 +399,9 @@ async function main() {
   const uninitGate = resolveUninitCwdGate(command, {
     dir,
     specDir,
-    platformFlags: platformWorkspaceId || platformRuntimeRoot,
+    // --spec-root 同为平台显式意图（平台模式首扫 run scan --spec-root 在无 pointer 的新目录
+    // 合法运行，spec 恒在仓外）——与 --workspace-id/--runtime-root 一并越过本门
+    platformFlags: platformWorkspaceId || platformRuntimeRoot || filteredArgs.includes('--spec-root'),
   });
   if (uninitGate.verdict === 'block') {
     console.error(`\n❌ 当前目录未初始化（${dir}）：${uninitGate.gitRoot

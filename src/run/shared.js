@@ -399,16 +399,18 @@ export const UNINIT_CWD_GATE_EXEMPT = new Set([
  *                                    dir）——spec 解析与错误面归命令自身的 fail-closed 文案
  *                                    （PointerUnreachableError 等），本门不重复判、更不能拿
  *                                    「dir 里没有 .sillyspec」误拦平台项目
- *   { verdict: 'pass', anchor }      本地祖先链命中 .sillyspec；anchor=spec 根父目录，供调用方
- *                                    重锚定（修裸 join(dir,'.sillyspec') 调用点如 review status
- *                                    rsSpecBase 的子目录漂移）
+ *   { verdict: 'pass', anchor }      命中已初始化上下文。anchor=spec 根父目录（供调用方重锚定，
+ *                                    修裸 join(dir,'.sillyspec') 调用点如 review status rsSpecBase
+ *                                    的子目录漂移）；linked worktree  rescued 场景 anchor=null——
+ *                                    主仓 spec 不在 cwd 祖先链上，锚定交命令层自有逻辑
+ *                                    （如 endpoints baseline 的主仓锚定），本门不越俎
  *   { verdict: 'block', gitRoot }    全链未命中 → 调用方硬报错 exit 2；gitRoot 供文案指路
  *                                    （未初始化目录无 ground truth，只能给锚点不能断言唯一 cwd）
  *
  * @param {string} command 顶层命令名
  * @param {{ dir?: string, specDir?: string, platformFlags?: unknown }} opts
  *   dir=目标目录（cwd 或 --dir）；specDir=显式 --spec-dir；platformFlags=--workspace-id/
- *   --runtime-root 任一显式给出即为真值
+ *   --runtime-root/--spec-root 任一显式给出即为真值（平台模式显式意图）
  */
 export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = {}) {
   if (!command || UNINIT_CWD_GATE_EXEMPT.has(command)) return { verdict: 'exempt' }
@@ -419,6 +421,23 @@ export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = 
   }
   const spec = resolveSpecDir(resolvedDir)
   if (existsSync(spec)) return { verdict: 'pass', anchor: dirname(spec) }
+  // linked worktree 兜底（判据同 resolveEffectiveDir P1-1 / worktree.js _resolveMainRepoRoot：
+  // --git-dir ≠ --git-common-dir 且非 submodule）：主仓 .sillyspec 不在 cwd 祖先链上（如
+  // `git worktree add` 到兄弟路径的副本），resolveSpecDir 必 miss 但项目实为已初始化——
+  // 误拦会打断 endpoints baseline 等命令层自有的主仓锚定逻辑。放行不重锚：锚定归命令层。
+  const gd = safeGit(resolvedDir, ['rev-parse', '--git-dir'])
+  const gcd = safeGit(resolvedDir, ['rev-parse', '--git-common-dir'])
+  const superProj = safeGit(resolvedDir, ['rev-parse', '--show-superproject-working-tree'])
+  if (gd.value && gcd.value && gd.value !== gcd.value && !superProj.value) {
+    // common-dir 可能是相对路径，须相对 resolvedDir 绝对化（与 worktree.js 同坑同解）
+    const absCommonDir = resolve(resolvedDir, gcd.value)
+    if (existsSync(absCommonDir)) {
+      const mainRoot = dirname(absCommonDir)
+      if (mainRoot !== resolvedDir && existsSync(join(mainRoot, '.sillyspec'))) {
+        return { verdict: 'pass', anchor: null }
+      }
+    }
+  }
   const gitRoot = safeGit(resolvedDir, ['rev-parse', '--show-toplevel']).value || null
   return { verdict: 'block', gitRoot }
 }
