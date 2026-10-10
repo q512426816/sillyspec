@@ -106,9 +106,9 @@ updated_at: 2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——sp
 
 `init.js` 在项目根写入的 agent 指引文件采用 AGENTS.md 单源方案：
 
-- `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。codex 老安装的 `## SillySpec` 旧小段在下次 init 时自动迁移为新受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
+- `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。2026-10-10 起（全量方案）：追加态受管段内容也是完整模板全文——用户自有 AGENTS.md 只在文末追加带版本块标记的完整受管段，原文字节保留。老安装的 `## SillySpec` 旧小段（v≤3.32.3 追加态/injectInstructions 产物）在下次 init 时自动迁移为完整受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
 - `CLAUDE.md`：薄指针文件，仅含 `@AGENTS.md` 导入行（Claude Code 记忆导入语法），由 `injectClaudePointer` 维护；用户自有 CLAUDE.md 只在文末追加受管指针块。2026-08-02 方案的旧完整态 CLAUDE.md 不自动覆盖，stderr 提示迁移。
-- `GEMINI.md` / `INSTRUCTIONS.md`：维持小段追加（`injectInstructions`，`## SillySpec` 文本标记幂等），改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
+- `GEMINI.md` / `INSTRUCTIONS.md`：与 AGENTS.md 同源同全文——`injectInstructions` 走同一全量注入器（`injectFullInstructions`），版本标记幂等（同版本跳过、异版本刷新块）；改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
 - 两文件同属「多操作者常改、非交付物」，已加入 worktree 基线 hash / dirty 检测 / `--stash-dirty` 的排除列表（`worktree.js` `computeBaselineHash` 与 `worktree-apply.js` step 4.5，与 `.claude/`、`docs/` 同口径）。
 
 > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：

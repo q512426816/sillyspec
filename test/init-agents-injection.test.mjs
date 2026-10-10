@@ -1,9 +1,9 @@
 /**
- * init 注入 AGENTS.md（完整指引，版本感知幂等三态四分支）+ CLAUDE.md（@AGENTS.md 指针）。
- * 取代 2026-08-02-init-claude-md 的 CLAUDE.md 单文件方案（其 D-004 预留的 marker 迁移即此方案）。
- * 直接单测导出的 injectAgentsInstructions / injectClaudePointer，无需走 cmdInit 重依赖。
+ * init 注入 Agent 指引（全量方案 2026-10-10-init-full-injection：完整模板是唯一注入源，
+ * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
+ * + CLAUDE.md（@AGENTS.md 指针）。直接单测导出的注入器，无需走 cmdInit 重依赖。
  */
-import { injectAgentsInstructions, injectClaudePointer, getVersion } from '../src/init.js'
+import { injectAgentsInstructions, injectClaudePointer, injectInstructions, getVersion } from '../src/init.js'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { join } from 'path'
 import os from 'os'
@@ -18,6 +18,8 @@ function assert(condition, msg) {
 
 const VER = getVersion()
 const OLDV = '0.0.0-test' // 保证异于当前版本
+// v≤3.32.3 旧小段注入产物（AGENTS.md 追加态受管块 / injectInstructions 写入内容）
+const LEGACY_SMALL = `# My Project\n\n自己的规范说明。\n\n## SillySpec — 规范驱动开发\n\n在执行开发任务时，遵循以下规范：\n\n### 代码规范\n- 写代码前先读取 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`（架构）\n- 调用已有方法前，用 grep 确认方法存在，不许编造\n- 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格\n\n### 工作流程\n- 读取 sillyspec.db 确认当前阶段（使用 \`sillyspec progress show\`）\n- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下\n`
 
 function makeTempProject() {
   const root = join(os.tmpdir(), `sillyspec-agents-init-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -56,8 +58,8 @@ console.log('--- Case 1: AGENTS.md 无文件 → 写完整模板 + 顶部版本�
   rmSync(root, { recursive: true, force: true })
 }
 
-// ── Case 2: 已存在无标记 → 追加受管段 ──
-console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加受管段，原文保留 ---')
+// ── Case 2: 已存在无标记 → 追加完整受管段 ──
+console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加完整受管段，原文保留 ---')
 {
   const root = makeTempProject()
   const original = `# My Project\n\n自定义内容。\n`
@@ -68,6 +70,9 @@ console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加受管段，�
   assert(content.includes('自定义内容'), '原文内容字节保留')
   assert(content.includes(`<!-- SillySpec v${VER} START`), '追加态块开始标记')
   assert(content.includes('<!-- SillySpec END -->'), '追加态块结束标记')
+  assert(content.includes('# Agent 指引'), '受管块含完整模板标题（全量注入）')
+  assert(content.includes('改代码前必须先说明依据'), '受管块含核心规则（完整模板全文）')
+  assert(!content.includes('## SillySpec — 规范驱动开发'), '不再注入旧小段标题')
   rmSync(root, { recursive: true, force: true })
 }
 
@@ -103,6 +108,7 @@ console.log('\n--- Case 4a: AGENTS.md 异版本追加态 → 受管块刷新，�
   assert(content.includes(`<!-- SillySpec v${VER} START`), '块升级为新版本标记')
   assert(!content.includes(`v${OLDV}`), '旧版本标记已替换')
   assert(!content.includes('旧规则行'), '旧块内容已被新受管段替换')
+  assert(content.includes('改代码前必须先说明依据'), '升级后受管块为完整模板全文')
   assert(content.includes('<!-- SillySpec END -->'), '块结束标记保留')
   rmSync(root, { recursive: true, force: true })
 }
@@ -137,21 +143,20 @@ console.log('\n--- Case 5: AGENTS.md CRLF 已存在无标记 → 追加受管段
   rmSync(root, { recursive: true, force: true })
 }
 
-// ── Case 6: 旧 ## SillySpec 小段（codex 老安装）→ 迁移为新受管段 ──
+// ── Case 6: 旧 ## SillySpec 小段（v≤3.32.3 老安装）→ 迁移为完整受管段 ──
 console.log('\n--- Case 6: AGENTS.md 含旧 ## SillySpec 段 → 迁移替换，不双段 ---')
 {
   const root = makeTempProject()
-  // 复刻 codex 老方案产物：用户内容 + injectInstructions 在 EOF 追加的小段
-  const legacy = `# My Project\n\n自己的规范说明。\n\n## SillySpec — 规范驱动开发\n\n在执行开发任务时，遵循以下规范：\n\n### 代码规范\n- 写代码前先读取 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`（架构）\n- 调用已有方法前，用 grep 确认方法存在，不许编造\n- 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格\n\n### 工作流程\n- 读取 sillyspec.db 确认当前阶段（使用 \`sillyspec progress show\`）\n- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下\n`
-  writeFileSync(join(root, 'AGENTS.md'), legacy)
+  // 复刻老方案产物：用户内容 + 旧小段（追加在 EOF）
+  writeFileSync(join(root, 'AGENTS.md'), LEGACY_SMALL)
   injectAgentsInstructions(root)
   const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
   assert(content.startsWith('# My Project'), '用户内容保留在前')
   assert(content.includes('自己的规范说明'), '用户内容字节保留')
   assert(content.includes(`<!-- SillySpec v${VER} START`), '新受管段已追加')
   const headingCount = (content.match(/^## SillySpec — 规范驱动开发$/gm) || []).length
-  assert(headingCount === 1, `旧小段标题恰保留 1 份（迁移非叠加，got ${headingCount}）`)
-  assert(content.includes('读取 sillyspec.db'), '受管段内容在（新块内）')
+  assert(headingCount === 0, `旧小段标题已截除、新块不含旧标题（got ${headingCount} 份）`)
+  assert(content.includes('改代码前必须先说明依据'), '新受管段为完整模板全文')
   rmSync(root, { recursive: true, force: true })
 }
 
@@ -166,6 +171,56 @@ console.log('\n--- Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍�
   assert(content.includes('自己的规范说明'), '用户内容保留')
   assert(!content.includes('旧段正文（被编辑过）'), '旧段内容（CRLF 漂移态）已截除')
   assert(content.includes(`<!-- SillySpec v${VER} START`), '新受管段已追加')
+  rmSync(root, { recursive: true, force: true })
+}
+
+// ══ GEMINI.md / INSTRUCTIONS.md（injectInstructions 全量注入，与 AGENTS.md 同源同全文）══
+
+// ── Case 12: 无文件 → 写完整模板 ──
+console.log('\n--- Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）---')
+{
+  const root = makeTempProject()
+  injectInstructions('gemini', root)
+  const p = join(root, 'GEMINI.md')
+  assert(existsSync(p), 'GEMINI.md 已生成')
+  const content = readFileSync(p, 'utf8')
+  assert(content.startsWith(`<!-- SillySpec v${VER} — `), '顶部版本注释')
+  assert(content.includes('# Agent 指引'), '完整模板全文（与 AGENTS.md 同源）')
+  assert(content.includes('改代码前必须先说明依据'), '含核心规则')
+  assert(!content.includes('## SillySpec — 规范驱动开发'), '不含旧小段')
+  rmSync(root, { recursive: true, force: true })
+}
+
+// ── Case 13: 用户自有文件 → 追加完整受管段，同版本幂等 ──
+console.log('\n--- Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等 ---')
+{
+  const root = makeTempProject()
+  writeFileSync(join(root, 'INSTRUCTIONS.md'), `# My Notes\n\n自己的说明。\n`)
+  injectInstructions('opencode', root)
+  const p = join(root, 'INSTRUCTIONS.md')
+  const first = readFileSync(p, 'utf8')
+  assert(first.startsWith('# My Notes'), '原文保留在前')
+  assert(first.includes('自己的说明'), '原文内容字节保留')
+  assert(first.includes(`<!-- SillySpec v${VER} START`), '完整受管块开始标记')
+  assert(first.includes('改代码前必须先说明依据'), '受管块为完整模板全文')
+  const beforeMtime = statSync(p).mtimeMs
+  injectInstructions('opencode', root)
+  assert(readFileSync(p, 'utf8') === first, '同版本重跑内容不变（幂等）')
+  assert(statSync(p).mtimeMs === beforeMtime, '同版本重跑不写文件')
+  rmSync(root, { recursive: true, force: true })
+}
+
+// ── Case 14: 老安装整文件即旧小段（v≤3.32.3 injectInstructions 新建产物）→ 迁移为完整受管块 ──
+console.log('\n--- Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留 ---')
+{
+  const root = makeTempProject()
+  const legacyOnly = LEGACY_SMALL.slice(LEGACY_SMALL.indexOf('## SillySpec'))
+  writeFileSync(join(root, 'GEMINI.md'), legacyOnly)
+  injectInstructions('gemini', root)
+  const content = readFileSync(join(root, 'GEMINI.md'), 'utf8')
+  assert(!content.includes('## SillySpec — 规范驱动开发'), '旧小段标题已迁移清除')
+  assert(content.startsWith(`<!-- SillySpec v${VER} START`), '文件起始即完整受管块（截除后无空壳）')
+  assert(content.includes('改代码前必须先说明依据'), '新内容为完整模板全文')
   rmSync(root, { recursive: true, force: true })
 }
 
