@@ -108,6 +108,7 @@ brainstorm 在 `tier=independent` 规模下除 design.md 等四件套外，还�
 - **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
 - 只做当前步骤 prompt 描述的操作，不跳过、不自行扩展
 - 产物写入 CLI 输出的 `changeDir` 目录（如 `<changeDir>/design.md`），不要自己拼路径
+- **变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字**——CLI 从 proposal.md / design.md 首行 H1 提取简述写入 changes.title（剥「提案书（Proposal）— / 设计文档（Design）—」固定前缀后取段），design.md 固定格式 `# 设计文档（Design）— <简述>` 中的简述即面板标题，按此口径写
 - 完成后立即 `--done`，不跳过
 
 ## 用户指令

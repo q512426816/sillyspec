@@ -1,0 +1,23 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  brainstorm skill 补变更标题指引（≤50 字中文概括）
+
+  flow skill 已有「变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字」，brainstorm skill 未同步——头脑风暴道的面板标题由 CLI 从 proposal/design 首行 H1
+  简述提取，skill 无口径指引，agent 写标题无字数约束。
+
+
+  成功标准：
+
+  - .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
+
+  - 纯文档改动，不触 src/test
+autopilot: false
+baseline_commit: 8698c0d4bd1e253acb7de3fb14115b6d3596b84e
+updatedAt: '2026-10-10T00:43:10.578Z'
+baseline_sha256: 0a354db9e8f1fb3f86a89e2bd2b11535f06c4148f6c4154fd560f22639cba669
+
