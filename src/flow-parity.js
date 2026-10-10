@@ -308,10 +308,16 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
  * stats（collectNumstatByPath 产物 Map）缺档落 null 行数（不出伪数据）；planEntries 空/缺省
  * → 实际侧 only 行（无 verdict，与主链路计划侧降级同语义）。清单条目未命中冻结面 →
  * untouched 0/0 补行（跨仓条目带 crossRepo 保持 ⊘ 形态，主链路补行同语义）。
+ * crossRepoRows（2026-10-10-cross-repo-patch-freeze D-002@v1 可选第 4 参）：scope-audit
+ * reconcileCrossRepoPlan 的跨仓对账行（真实三态或 degraded ⊘，均带 crossRepo 标记）——
+ * 提供时带 repo 的声明条目若已被对账行覆盖（crossRepo+pathMatches 双判）不再落 ⊘ 补行
+ * （跨仓实改不谎报「未动」）；缺省 undefined → 现行为逐字节零回归（单仓变更/对账失败
+ * fail-soft 退路）。
  * @returns {{ rows: Array<object>, totals: { files: number, additions: number, deletions: number } }}
  */
-export function buildThinSnapshotRows({ ownFiles, stats, planEntries }) {
+export function buildThinSnapshotRows({ ownFiles, stats, planEntries, crossRepoRows }) {
   const plan = Array.isArray(planEntries) ? planEntries : []
+  const crossRows = (Array.isArray(crossRepoRows) ? crossRepoRows : []).filter((r) => r && typeof r === 'object')
   const statMap = stats instanceof Map ? stats : new Map()
   const rowFiles = filterDeliverableFiles([...new Set((Array.isArray(ownFiles) ? ownFiles : [])
     .map((f) => String(f).replace(/\\/g, '/')).filter(Boolean))]).sort()
@@ -342,12 +348,19 @@ export function buildThinSnapshotRows({ ownFiles, stats, planEntries }) {
   }
   for (const e of plan) {
     if (!e || matched.has(e.path)) continue
+    // 跨仓对账覆盖判定（D-002@v1）：crossRepoRows 提供且该声明条目已被对账行覆盖（同 repoKey
+    // + pathMatches 双判——对账行是真实三态或 degraded ⊘，覆盖即不再补恒 ⊘ 行）；对账行缺失
+    // （fail-soft 退路/降级仓无行）→ 照旧补 ⊘ 行
+    if (e.repo && crossRows.some((r) => r.crossRepo === e.repo && pathMatches(String(r.path || ''), e.path))) continue
     rows.push({
       path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
       kind: 'modified', verdict: 'untouched',
       ...(e.repo ? { crossRepo: e.repo } : {}),
     })
   }
+  // 跨仓对账行并入总表（D-002@v1，heavy 通道同款语义——「跨仓行并入后自然计入 totals」）：
+  // 主仓行在前、跨仓行按仓追加；真实三态行（实 +/- 行数）替换恒 ⊘ 谎报
+  rows.push(...crossRows)
   let additions = 0
   let deletions = 0
   for (const r of rows) {

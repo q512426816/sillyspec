@@ -1486,10 +1486,34 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           let planEntries = []
           try {
             const { parseFileChangeListDetailed } = await import('./change-list.js')
-            planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true })
+            // repoKeys（2026-10-10-cross-repo-patch-freeze D-002@v1）：注册仓清单传入——跨仓
+            // 子段/cross-repo: 前缀条目才带 repo 标注（不传则跨仓声明全落主仓口径， thin 跨仓
+            // 对账无从谈起）
+            const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+            planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(specBase) })
           } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
+          // 跨仓声明在场 → 共享集成层分仓对账 + patch 冻结（D-001/D-002@v1）：与 heavy 通道
+          // （execute --done）同源 reconcileCrossRepoPlan，repos[]（锚点/计数/patch 正文）
+          // 随 snapObj 进 change-patch.json；任何异常 fail-soft 退 ⊘ 补行现行为（不阻断收口）
+          let crossRepos = []
+          let crossRepoRows = undefined
+          if (planEntries.some((e) => e && e.repo)) {
+            try {
+              const { reconcileCrossRepoPlan } = await import('./scope-audit.js')
+              const recon = reconcileCrossRepoPlan({
+                cwd, specBase,
+                runtimeRoot: resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase),
+                changeName: change,
+                planEntries,
+                collectPatch: true,
+              })
+              crossRepoRows = recon.rows
+              crossRepos = recon.repos
+              for (const n of recon.notes) console.log(`   📎 ${n}`)
+            } catch { /* 跨仓对账失败 → 退 ⊘ 补行（crossRepoRows 保持 undefined） */ }
+          }
           const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
-          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles, stats, planEntries })
+          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles, stats, planEntries, crossRepoRows })
           const closeTrace = writeCloseTraceArtifacts({
             changeDir,
             change,
@@ -1507,6 +1531,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               excluded: { foreignDeclared: [] },
               note: 'flow done 时点冻结（本文件落盘时采集）',
               closedBy: 'flow done',
+              ...(crossRepos.length > 0 ? { repos: crossRepos } : {}),
             },
             meta: {
               note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
@@ -1519,6 +1544,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             },
           })
           console.log(`📦 变更 patch 留档（单套）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}，对账面并入 scopeAudit 子对象）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
+          if (crossRepos.length > 0) {
+            const frozenRepos = crossRepos.filter((r) => r && r.patch).length
+            const degradedRepos = crossRepos.filter((r) => r && r.degraded).length
+            console.log(`   📦 跨仓 patch 冻结：${crossRepos.length} 仓（正文 ${frozenRepos}、降级 ${degradedRepos}）——锚点/计数/diff 正文见 change-patch.json scopeAudit.repos[]`)
+          }
           // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
           // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
           // 阻断——可能是范围裁剪了但 design 没同步更新）

@@ -480,7 +480,7 @@ const QL_ID_RE = /^ql-\d{8}-\d{3}-[0-9a-f]{4}$/
  * @param {string} specBase .sillyspec 根
  * @returns {string[]} repoKey 清单
  */
-function loadRegisteredRepoKeys(specBase) {
+export function loadRegisteredRepoKeys(specBase) {
   try {
     const p = join(specBase || '', 'local.yaml')
     if (!specBase || !existsSync(p)) return []
@@ -1214,90 +1214,14 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   }
 
   // —— 计划侧跨仓段分仓真实对账（2026-09-20 scope-audit-cross-repo task-02，design Wave 2）——
-  // 旧形态「⊘ 行不在本仓对账面（实际侧只采主仓 git）」升级：plannedEntries 按 e.repo 分组，
-  // 每组调 collectRepoActual 共享内核（task-01）在**该仓**取 actual（锚点四级：A reviews-range
-  // > B head~1-window > C head-uncommitted-window > degraded），主仓同款三类差集出真实三态行
-  // + 行数；degraded 仓（未注册/路径不可达/git 双源失败）退 v1 ⊘ 形态（untouched + crossRepo）
-  // + 降级注记进 note，不炸主仓表（D-006 fail-soft）。
-  // 行数由本集成层对内核产物跑 collectNumstatByPath（内核不 import scope-audit 防环，评审
-  // G3——调用方职责）；anchor.base 为 null（B/C 档降级锚）→ numstat 空 Map → degradedStat
-  // 该仓根兜底（行数 null 降级档，不出伪数据）。跨仓行过滤口径与主仓 actual 侧一致
-  // （filterDeliverableFiles：排 .sillyspec 运行时面/平台自装脚手架），unplanned 行的
-  // classifyToolScaffold 软桶与主仓 unplanned 行同款。
-  const crossRepoKeys = [...new Set(plannedEntries.map(e => e.repo).filter(Boolean))]
-  const crossRepoRows = []
-  const crossRepoEntries = []
-  if (crossRepoKeys.length > 0) {
-    const crossCount = plannedEntries.filter(e => e.repo).length
-    notes.push(`计划侧含 ${crossCount} 个跨仓文件（repo：${crossRepoKeys.join('、')}）——已按 local.yaml repos 注册表分仓对账（各仓锚点档见 repos[].anchor）`)
-    for (const repoKey of crossRepoKeys) {
-      const entries = plannedEntries.filter(e => e.repo === repoKey)
-      const repoRows = []
-      let repoActual = null
-      let repoFailure = null
-      try {
-        repoActual = collectRepoActual({ repoKey, specBase: sb, cwd, runtimeRoot, changeName })
-      } catch (e) {
-        repoFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
-      }
-      if (repoFailure || !repoActual || repoActual.degradedReason) {
-        // degraded 仓（内核 fail-soft 产物或调用点异常）：v1 ⊘ 形态回退——该组行恒 untouched，
-        // 降级原因进 note 与 repos[] 条目（平台消费方可感知），主仓表不受影响。
-        const reason = repoFailure
-          ? `内核采集异常: ${repoFailure}`
-          : (repoActual && repoActual.degradedReason) || '跨仓采集不可用'
-        for (const e of entries) {
-          repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
-        }
-        notes.push(`跨仓 ${repoKey} 对账降级: ${reason}`)
-        crossRepoEntries.push({
-          key: repoKey,
-          repoPath: repoActual ? repoActual.repoPath : null,
-          anchor: repoActual ? repoActual.anchor : { source: 'degraded', base: null, head: null, label: 'degraded' },
-          totals: repoTotals(repoRows),
-          degraded: true,
-          degradedReason: reason,
-        })
-        crossRepoRows.push(...repoRows)
-        continue
-      }
-      // 真实三态：该仓 actual（filterDeliverableFiles 过滤，主仓口径）× 该组声明面 pathMatches
-      // 双向容差（glob/目录前缀兼容，design 清单可写 glob）→ planned / unplanned / untouched
-      const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))].map(toPosix).sort()
-      const repoStats = collectNumstatByPath(repoActual.repoPath, repoFiles, { baseRef: repoActual.anchor.base })
-      const repoMatched = new Set()
-      for (const f of repoFiles) {
-        const path = toPosix(f)
-        const st = repoStats.get(path) || degradedStat(repoActual.repoPath, path)
-        const row = { path, planned: null, additions: st.additions, deletions: st.deletions, kind: st.kind, verdict: 'unplanned', crossRepo: repoKey }
-        const entry = entries.find(e => pathMatches(path, e.path))
-        if (entry) {
-          repoMatched.add(entry.path)
-          row.planned = entry.operation || null
-          row.verdict = 'planned'
-        } else {
-          // 工具/平台脚手架软桶（主仓 unplanned 行同款）：CLI/平台自装文件不占「计划外」逐条清单
-          const facility = classifyToolScaffold(path)
-          if (facility) row.facility = facility
-        }
-        repoRows.push(row)
-      }
-      // 声明未动：该仓清单文件无实际改动 → 补行（行数 0/0，主仓补行同款；crossRepo 恒带）
-      for (const e of entries) {
-        if (repoMatched.has(e.path)) continue
-        repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
-      }
-      crossRepoEntries.push({
-        key: repoKey,
-        repoPath: repoActual.repoPath,
-        anchor: repoActual.anchor,
-        totals: repoTotals(repoRows),
-        degraded: false,
-        degradedReason: null,
-      })
-      crossRepoRows.push(...repoRows)
-    }
-  }
+  // 集成逻辑抽共享导出 reconcileCrossRepoPlan（2026-10-10-cross-repo-patch-freeze D-002@v1）：
+  // heavy（本函数）与 thin（flow.js done）同源消费防口径漂移；本处行为等价（rows/repos/notes
+  // 三产物原样并回）+ collectPatch 时 repos[].patch/patchSha256 增量。
+  const crossRecon = reconcileCrossRepoPlan({ cwd, specBase: sb, runtimeRoot, changeName, planEntries: plannedEntries, collectPatch: !!collectPatch })
+  const crossRepoRows = crossRecon.rows
+  const crossRepoEntries = crossRecon.repos
+  for (const n of crossRecon.notes) notes.push(n)
+  const crossRepoKeys = crossRepoEntries.map(e => e.key)
 
   // —— 三态判定 ——
   const rows = []
@@ -1380,6 +1304,127 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     frozenPatch,
     note: notes.length > 0 ? notes.join('；') : null,
   }
+}
+
+/**
+ * 跨仓对账集成层（2026-10-10-cross-repo-patch-freeze D-002@v1，自 computeFullFlowAudit 内联段
+ * 抽出——heavy（computeFullFlowAudit）与 thin（flow.js done）同源消费防两份口径漂移；复用
+ * collectRepoActual 共享内核（2026-09-20「单一真相源」哲学））。
+ *
+ * planEntries 按 e.repo 分组，每组调 collectRepoActual 在**该仓**取 actual（锚点：A
+ * reviews-range > B' worktree-baseline > B head~1-window > C head-uncommitted-window >
+ * degraded），主仓同款三类差集出真实三态行 + 行数；degraded 仓退 ⊘ 形态（untouched +
+ * crossRepo + degradedReason），不炸调用方表（D-006 fail-soft）。行数由本层对内核产物跑
+ * collectNumstatByPath（内核不 import 本模块防环，评审 G3——调用方职责）。
+ *
+ * collectPatch=true 时每仓增 patch 采集（D-001@v1/D-003@v1）：窗口与行数同根同窗——A/B' 档
+ * 锚 hash 为 baseRef；B 档字面 HEAD~1、C 档字面 HEAD（工作树口径含 untracked 自拼 hunk）；
+ * buildFrozenPatch 失败或空窗 → patch=null 不出伪件；sha256 走 sha256PatchNormalized（LF 归一，
+ * autocrlf 跨平台一致）。collectPatch=false 不产 patch 两键（additive 契约，既有读方零感知）。
+ *
+ * @param {{ cwd: string, specBase: string, runtimeRoot?: string|null, changeName?: string|null,
+ *           planEntries: Array<{path, operation?, repo?}>, collectPatch?: boolean }} args
+ * @returns {{ rows: Array<object>, repos: Array<object>, notes: string[] }}
+ *   rows 带 crossRepo 标记（真实三态或 degraded ⊘）；repos 条目
+ *   { key, repoPath, anchor, totals, degraded, degradedReason, patch?, patchSha256? }；
+ *   notes 为调用方 note 链的增量行（跨仓计数行 + 降级行）。
+ */
+export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName, planEntries, collectPatch = false }) {
+  const rows = []
+  const repos = []
+  const notes = []
+  const planned = Array.isArray(planEntries) ? planEntries : []
+  const crossRepoKeys = [...new Set(planned.map(e => e.repo).filter(Boolean))]
+  if (crossRepoKeys.length === 0) return { rows, repos, notes }
+  const crossCount = planned.filter(e => e.repo).length
+  notes.push(`计划侧含 ${crossCount} 个跨仓文件（repo：${crossRepoKeys.join('、')}）——已按 local.yaml repos 注册表分仓对账（各仓锚点档见 repos[].anchor）`)
+  for (const repoKey of crossRepoKeys) {
+    const entries = planned.filter(e => e.repo === repoKey)
+    const repoRows = []
+    let repoActual = null
+    let repoFailure = null
+    try {
+      repoActual = collectRepoActual({ repoKey, specBase, cwd, runtimeRoot, changeName })
+    } catch (e) {
+      repoFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
+    }
+    if (repoFailure || !repoActual || repoActual.degradedReason) {
+      // degraded 仓（内核 fail-soft 产物或调用点异常）：⊘ 形态回退——该组行恒 untouched，
+      // 降级原因进 note 与 repos[] 条目（平台消费方可感知），调用方主表不受影响。
+      const reason = repoFailure
+        ? `内核采集异常: ${repoFailure}`
+        : (repoActual && repoActual.degradedReason) || '跨仓采集不可用'
+      for (const e of entries) {
+        repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
+      }
+      notes.push(`跨仓 ${repoKey} 对账降级: ${reason}`)
+      repos.push({
+        key: repoKey,
+        repoPath: repoActual ? repoActual.repoPath : null,
+        anchor: repoActual ? repoActual.anchor : { source: 'degraded', base: null, head: null, label: 'degraded' },
+        totals: repoTotals(repoRows),
+        degraded: true,
+        degradedReason: reason,
+        ...(collectPatch ? { patch: null, patchSha256: null } : {}),
+      })
+      rows.push(...repoRows)
+      continue
+    }
+    // 真实三态：该仓 actual（filterDeliverableFiles 过滤，主仓口径）× 该组声明面 pathMatches
+    // 双向容差（glob/目录前缀兼容，design 清单可写 glob）→ planned / unplanned / untouched
+    const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))].map(toPosix).sort()
+    const repoStats = collectNumstatByPath(repoActual.repoPath, repoFiles, { baseRef: repoActual.anchor.base })
+    const repoMatched = new Set()
+    for (const f of repoFiles) {
+      const path = toPosix(f)
+      const st = repoStats.get(path) || degradedStat(repoActual.repoPath, path)
+      const row = { path, planned: null, additions: st.additions, deletions: st.deletions, kind: st.kind, verdict: 'unplanned', crossRepo: repoKey }
+      const entry = entries.find(e => pathMatches(path, e.path))
+      if (entry) {
+        repoMatched.add(entry.path)
+        row.planned = entry.operation || null
+        row.verdict = 'planned'
+      } else {
+        // 工具/平台脚手架软桶（主仓 unplanned 行同款）：CLI/平台自装文件不占「计划外」逐条清单
+        const facility = classifyToolScaffold(path)
+        if (facility) row.facility = facility
+      }
+      repoRows.push(row)
+    }
+    // 声明未动：该仓清单文件无实际改动 → 补行（行数 0/0，主仓补行同款；crossRepo 恒带）
+    for (const e of entries) {
+      if (repoMatched.has(e.path)) continue
+      repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
+    }
+    // patch 采集（D-001/D-003）：窗口 = 行数窗口——锚 hash 优先；B/C 档降级锚用字面 ref
+    // （head~1-window → HEAD~1；head-uncommitted-window → HEAD），工作树口径含 untracked。
+    let patch = null
+    let patchSha256 = null
+    if (collectPatch && repoFiles.length > 0) {
+      const patchBase = repoActual.anchor.base
+        || (repoActual.anchor.source === 'head~1-window' ? 'HEAD~1'
+          : repoActual.anchor.source === 'head-uncommitted-window' ? 'HEAD'
+          : null)
+      if (patchBase) {
+        const text = buildFrozenPatch(repoActual.repoPath, repoFiles, { baseRef: patchBase })
+        if (typeof text === 'string' && text.length > 0) {
+          patch = text
+          patchSha256 = sha256PatchNormalized(text)
+        }
+      }
+    }
+    repos.push({
+      key: repoKey,
+      repoPath: repoActual.repoPath,
+      anchor: repoActual.anchor,
+      totals: repoTotals(repoRows),
+      degraded: false,
+      degradedReason: null,
+      ...(collectPatch ? { patch, patchSha256 } : {}),
+    })
+    rows.push(...repoRows)
+  }
+  return { rows, repos, notes }
 }
 
 /**
