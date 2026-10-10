@@ -7,6 +7,10 @@
  *   1. changes/<name>/** 主仓缺失 → copy 回主仓；同名不同内容 → 仅列清单不覆盖
  *   2. docs/** 主仓缺失 → copy 回（模块文档）
  *   3. in-place / native-worktree 跳过；打捞不阻断清理
+ *   4. 归档态三态（坑 archive-resurrect，2026-10-10 下游实证 2026-10-09-attachment-inline-reference
+ *      残留 13 文件：归档把 changes/<name>/ rename 进 changes/archive/ 后，原路径缺失被误判
+ *      worktree 独有，旧快照整批复制回原路径复活已归档目录）：
+ *      archive 副本在 → 跳过不复制不覆盖；原路径与 archive 均缺 → 真独有捞进 archive 副本
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -93,6 +97,51 @@ console.log('--- 2. 无错位产物 → 零打捞零噪音 ---')
   const r = wm.cleanup('clean', { force: true })
   assert(!(r.details || []).some(d => String(d).includes('salvaged')),
     'worktree 无 spec 产物 → 不打捞不告警（details 无 salvage 记录）')
+  rmSync(proj, { recursive: true, force: true })
+}
+
+console.log('--- 3. 归档态清理：archive 副本在 → 跳过不复活原路径 / 真独有产物捞进归档副本 ---')
+{
+  const proj = mkdtempSync(join(tmpdir(), 'salv3-'))
+  tmpRoots.push(proj)
+  const mainSpec = join(proj, '.sillyspec')
+  git(proj, ['init', '-q'])
+  git(proj, ['config', 'user.email', 't@t.local'])
+  git(proj, ['config', 'user.name', 't'])
+  writeFileSync(join(proj, 'a.js'), 'console.log(1)\n')
+  git(proj, ['add', '.'])
+  git(proj, ['commit', '-q', '-m', 'init'])
+  const wt = join(mainSpec, '.runtime', 'worktrees', 'arch')
+  git(proj, ['worktree', 'add', '-q', '-b', 'sillyspec/arch', wt])
+  writeFileSync(join(wt, 'meta.json'), JSON.stringify({
+    branch: 'sillyspec/arch', worktreePath: wt, mode: 'worktree',
+  }))
+
+  // 归档态：主仓原路径 changes/arch/ 整体不存在，archive 副本（归档终版）在场
+  mkdirSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks'), { recursive: true })
+  writeFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'verify-result.md'), '# 验证报告（归档终版）\n')
+  writeFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks', 'task-01.md'), 'task 卡（归档终版——不应被 worktree 旧快照覆盖）\n')
+
+  // worktree 残留：changes/arch/ 旧快照（verify-result.md / tasks/task-01.md）+ 真独有产物 late-note.md
+  mkdirSync(join(wt, '.sillyspec', 'changes', 'arch', 'tasks'), { recursive: true })
+  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'verify-result.md'), '# 验证报告（worktree 旧快照）\n')
+  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'tasks', 'task-01.md'), 'task 卡（worktree 旧快照）\n')
+  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'late-note.md'), '归档前仅写入 worktree 的独有笔记\n')
+
+  const wm = new WorktreeManager({ cwd: proj })
+  const r = wm.cleanup('arch', { force: true })
+
+  assert(!existsSync(join(mainSpec, 'changes', 'arch')),
+    '归档态：changes/<name>/ 原路径不复活（目录不重建）')
+  assert(readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'verify-result.md'), 'utf8').includes('归档终版'),
+    '归档态：archive 副本不被 worktree 旧快照覆盖')
+  assert(readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks', 'task-01.md'), 'utf8').includes('归档终版'),
+    '归档态：archive 副本子目录文件不被覆盖')
+  assert(existsSync(join(mainSpec, 'changes', 'archive', 'arch', 'late-note.md'))
+    && readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'late-note.md'), 'utf8').includes('worktree 的独有笔记'),
+    '归档态真独有产物（原路径与 archive 均缺）→ 捞进归档副本不蒸发')
+  assert((r.details || []).some(d => String(d).includes('archived-moved')),
+    `cleanup details 记录归档搬运跳过（${(r.details || []).filter(d => String(d).includes('archiv')).join(' | ')}）`)
   rmSync(proj, { recursive: true, force: true })
 }
 
