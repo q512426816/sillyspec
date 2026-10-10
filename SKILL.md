@@ -51,7 +51,6 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 | `/sillyspec:continue` | 自动判断并执行下一步 |
 | `/sillyspec:explore` | 自由思考模式 |
 | `/sillyspec:flow` | 轻量变更（默认快道）：flow start → 干活 → flow done |
-| `/sillyspec:quick` | （已退役，重定向到 flow）仅存量在途会话收尾 |
 | `/sillyspec:resume` | 恢复工作 |
 | `/sillyspec:doctor` | 项目自检 |
 | `/sillyspec:commit` | 智能提交 |
@@ -70,7 +69,6 @@ sillyspec run execute         执行开发阶段（子代理并行 + worktree �
 sillyspec run verify          执行验证阶段
 sillyspec run archive         执行归档阶段
 sillyspec flow start/done/status  轻量变更（默认快道，2 次调用收口）
-sillyspec run quick           （已退役，仅存量在途会话 --done/--cancel 收尾）
 sillyspec run explore         自由探索
 sillyspec progress show       显示当前项目状态
 sillyspec setup               安装推荐 MCP 工具
@@ -81,12 +79,12 @@ sillyspec init                初始化（零交互，自动检测工具）
 
 **护城河层（外部状态，模型能力不可替代）**
 - **多 agent 并发控制** — 会话/变更/worktree 三级隔离；文件锁 ql-ID 分配 + 双占用 fail-closed 硬拦；边界声明归属切分（窗口∩声明）；并发写预检告警；平台乐观锁（base_ts + 身份头 + 服务器权威钟）
-- **实测验收门禁** — verify/quick 收尾时 CLI 亲自执行 test/lint 与自报对账，不符即阻断回滚；docHash 重算 + git 证据交叉对账防伪造；门禁跑在隔离快照里不受并行会话脏文件污染
+- **实测验收门禁** — verify 收尾时 CLI 亲自执行 test/lint 与自报对账，不符即阻断回滚；docHash 重算 + git 证据交叉对账防伪造；门禁跑在隔离快照里不受并行会话脏文件污染
 - **持久账本 + 断点恢复** — SQLite 单一进度源，进度/决策/审批答复全落库，跨会话跨天续跑；quicklog 四字段结构化台账
 - **跨仓变更管理** — task 卡声明 `repo:` 字段，跨仓同构 worktree 隔离，base 锚快照，apply 不覆盖用户在途改动
 
 **确定性对账层（机械核验，零模型轮次）**
-- **范围对账** — 计划改动 × 实际改动三态对账（planned/unplanned/untouched），execute/verify/archive/quick 四处收尾注入
+- **范围对账** — 计划改动 × 实际改动三态对账（planned/unplanned/untouched），execute/verify/archive 三处收尾注入
 - **API 契约矩阵** — provider/consumer 识别、endpoint 工件提取、前后端 API parity 对账
 - **文档一致性棘轮** — 源码引用真实性校验（HEAD 模式），失败数只降不升
 - **noAI 下沉 / IR 事实层** — 机械轮次下沉 CLI（骨架预生成、注入、代算对账），判断层留给 agent；同一契约清单事前渲染预览、事后引擎核验

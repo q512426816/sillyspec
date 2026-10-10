@@ -51,4 +51,4 @@ sillyspec run auto --input "<用户需求>" [--mode <模式>]
 ### 边界
 
 - 中断恢复：直接重跑 `sillyspec run auto`（进度已落盘，从断点续）。
-- 分类为 quick 的小变更：CLI 会提示改跑 `sillyspec run quick`，照提示执行。
+- 分类为小变更时 CLI 会提示改走轻量变更 `sillyspec flow start`，照提示执行。

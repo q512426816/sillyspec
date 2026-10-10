@@ -85,7 +85,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 
 **也可以跳过完整流程：**
 
-- 小改动：`/sillyspec:quick "修复 xxx"`
+- 小改动：`/sillyspec:flow "修复 xxx"`
 - 不确定做什么：`/sillyspec:explore`
 - 中断恢复：`/sillyspec:resume`
 - 不知道下一步：`/sillyspec:continue`
@@ -112,7 +112,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 | `/sillyspec:status` · `/sillyspec:state` | 查看进度 / 当前工作状态 |
 | `/sillyspec:continue` | 自动判断并执行下一步 |
 | `/sillyspec:explore` | 自由思考：画图、讨论、调研、HTML 原型 |
-| `/sillyspec:quick` | 快速模式：跳过完整流程 |
+| `/sillyspec:flow` | 轻量变更（默认快道）：需求明确的小改动两步收口 |
 | `/sillyspec:resume` | 恢复工作（支持大模块阶段进度） |
 | `/sillyspec:doctor` | 项目自检与状态修复 |
 | `/sillyspec:commit` | 智能提交 |
@@ -122,7 +122,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 ## CLI 命令
 
 ```bash
-sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/verify/archive/scan/quick/explore）
+sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/verify/archive/scan/explore）
 sillyspec run <stage> --done     完成当前步骤并推进到下一步
 sillyspec run <stage> --status   查看阶段进度
 sillyspec progress show          显示当前项目状态
@@ -140,7 +140,7 @@ sillyspec change-delete <变更名>    删除变更（DB status=deleted 与归�
 **第一层：护城河（外部状态，模型能力不可替代）**
 
 - **多 agent 并发控制** — 会话/变更/worktree 三级隔离；文件锁 ID 分配 + 双占用 fail-closed 硬拦；`--files` 边界声明切分"这是谁改的"；`--done` 前并发写预检告警他者未提交改动；平台同步乐观锁（base_ts + 身份 + 服务器权威钟）+ 冲突血统归属（自回声不误报）
-- **实测验收门禁** — verify / quick 收尾时 CLI **亲自执行** test / lint 与 agent 自报对账，不符即阻断回滚；docHash 重算比对 + git 提交证据交叉对账防伪造；门禁跑在隔离快照，不受并行会话脏文件污染
+- **实测验收门禁** — verify 收尾时 CLI **亲自执行** test / lint 与 agent 自报对账，不符即阻断回滚；docHash 重算比对 + git 提交证据交叉对账防伪造；门禁跑在隔离快照，不受并行会话脏文件污染
 - **持久账本 + 断点恢复** — SQLite（node:sqlite）单一进度源，进度/决策/审批答复全落库，跨会话跨天续跑；quicklog 四字段结构化台账可检索
 - **跨仓变更管理** — task 卡声明 `repo:` 字段即可管理跨仓任务：同构 worktree 隔离、base 锚快照、apply 永不覆盖用户在途改动
 
