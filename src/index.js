@@ -246,7 +246,7 @@ async function main() {
 
   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
-  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs } = await import('./run/shared.js');
+  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs, resolveUninitCwdGate } = await import('./run/shared.js');
 
   // 解析全局选项
   let json = false;
@@ -354,7 +354,9 @@ async function main() {
     return baseDir
   }
 
-  const dir = targetDir;
+  // let：下方未初始化目录硬拦命中祖先链时重锚定到 spec 根（治裸 join(dir,'.sillyspec')
+  // 调用点如 review status rsSpecBase 的子目录漂移；resolveEffectiveDir 系本就上溯，变为无操作）
+  let dir = targetDir;
 
   if (command === 'init' && !existsSync(dir)) {
     const { mkdirSync } = await import('fs');
@@ -386,6 +388,31 @@ async function main() {
       console.error(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
       process.exit(2);
     }
+  }
+
+  // ── 未初始化目录硬拦（坑：agent 在未初始化/错误目录跑非 init 命令，fail-soft 散点报错不说
+  //    正确 cwd——实测 status 在未初始化目录提示可开变更、flow start 到 local.yaml 才报错、
+  //    knowledge 只报参数错，agent 多轮试错）──
+  //    判定与豁免清单收敛在 run/shared.js resolveUninitCwdGate（单一真相源，测试直测）；
+  //    平台 pointer/接管声明/显式 --spec-dir/平台 flag 由其判 skip（平台项目不受本门误拦）。
+  //    未初始化目录无 ground truth——文案只给锚点（git root）与三条出路，不断言唯一正确 cwd。
+  const uninitGate = resolveUninitCwdGate(command, {
+    dir,
+    specDir,
+    platformFlags: platformWorkspaceId || platformRuntimeRoot,
+  });
+  if (uninitGate.verdict === 'block') {
+    console.error(`\n❌ 当前目录未初始化（${dir}）：${uninitGate.gitRoot
+      ? `已上溯祖先链至 git root（${uninitGate.gitRoot}）`
+      : '已上溯祖先链（当前不在 git 仓内）'}未找到 .sillyspec，平台指针亦无。`);
+    console.error('   非 init/scan 类命令需要已初始化的项目根。');
+    console.error('   修复：① cd 回项目根（含 .sillyspec 的目录）再跑；② 新项目先 sillyspec init（棕地项目 sillyspec scan）；③ 或 --spec-dir <路径> 显式指定 .sillyspec 位置。');
+    console.error('   查询/诊断类命令（status/doctor/progress/next/knowledge 等）不受此拦。');
+    process.exit(2);
+  }
+  if (uninitGate.verdict === 'pass' && uninitGate.anchor && resolve(dir) !== uninitGate.anchor) {
+    console.log(`ℹ️ cwd 在子目录（${dir}），已锚定到项目根：${uninitGate.anchor}（spec 解析与产物落点以项目根为准）`);
+    dir = uninitGate.anchor;
   }
 
   switch (command) {

@@ -367,6 +367,62 @@ export function detectCwdInsideWorktree(dir) {
   return null
 }
 
+// ── 未初始化目录硬拦（坑：agent 在未初始化/错误目录跑非 init 命令，fail-soft 散点报错不说
+//    正确 cwd，agent 多轮试错）──
+// 豁免面 = 按设计可在未初始化目录运行的命令。每项豁免依据（勿凭感觉增删）：
+//   init/scan      初始化器与棕地入口，未初始化目录是本职（scan 亦是 monorepo 子项目独立建实例的合法入口）
+//   doctor/status/progress/next/workspace 未初始化是它们的设计输出态（run/next.js
+//                  '未初始化（无 .sillyspec 产物）'、workspace.js '未初始化（无 .sillyspec）'）
+//   setup/config   自带候选链 fail-closed 报错（'请先运行 sillyspec init'）
+//   knowledge      知识目录缺失走友好空态（stages/knowledge.js）
+//   local          纯 fs 嗅探生成 local.yaml，设计上 init 前可用
+//   mcp/dashboard/platform 服务/平台设施，自有路径解析
+//   wt-commit      子代理 workdir=worktree 内合法（worktree cwd 硬拦同款豁免）
+//   agent-log      --detect 现场探测不落盘，自有解析链
+export const UNINIT_CWD_GATE_EXEMPT = new Set([
+  'init', 'scan', 'doctor', 'status', 'progress', 'next', 'workspace',
+  'setup', 'knowledge', 'local', 'config', 'mcp', 'dashboard', 'platform',
+  'wt-commit', 'agent-log',
+])
+
+/**
+ * CLI 入口「未初始化目录」判定（与 detectCwdInsideWorktree 分工：那边判「在隔离 worktree
+ * 内」，文案更具体故先拦；这边判「任何形式的 spec 都解析不到」——覆盖未初始化目录与非
+ * sillspec 项目的误跑两类）。
+ *
+ * 判定复用 resolveSpecDir 全套守卫（home 拒绝 / tmp 边界 / .runtime 回环防护）——不重写
+ * 遍历，否则已修复的坑（2026-09-27-spec-sync-413 .runtime 回环等）会回归。
+ *
+ * 返回（风格仿 detectCwdInsideWorktree）：
+ *   { verdict: 'exempt' }            豁免命令 / 无命令（usage 已早退，保险不拦），不拦不锚
+ *   { verdict: 'skip' }              显式意图（--spec-dir、平台 flag、平台 pointer/接管声明在
+ *                                    dir）——spec 解析与错误面归命令自身的 fail-closed 文案
+ *                                    （PointerUnreachableError 等），本门不重复判、更不能拿
+ *                                    「dir 里没有 .sillyspec」误拦平台项目
+ *   { verdict: 'pass', anchor }      本地祖先链命中 .sillyspec；anchor=spec 根父目录，供调用方
+ *                                    重锚定（修裸 join(dir,'.sillyspec') 调用点如 review status
+ *                                    rsSpecBase 的子目录漂移）
+ *   { verdict: 'block', gitRoot }    全链未命中 → 调用方硬报错 exit 2；gitRoot 供文案指路
+ *                                    （未初始化目录无 ground truth，只能给锚点不能断言唯一 cwd）
+ *
+ * @param {string} command 顶层命令名
+ * @param {{ dir?: string, specDir?: string, platformFlags?: unknown }} opts
+ *   dir=目标目录（cwd 或 --dir）；specDir=显式 --spec-dir；platformFlags=--workspace-id/
+ *   --runtime-root 任一显式给出即为真值
+ */
+export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = {}) {
+  if (!command || UNINIT_CWD_GATE_EXEMPT.has(command)) return { verdict: 'exempt' }
+  if (specDir || platformFlags) return { verdict: 'skip' }
+  const resolvedDir = resolve(dir || process.cwd())
+  if (existsSync(join(resolvedDir, '.sillyspec-platform.json')) || existsSync(join(resolvedDir, PLATFORM_MANAGED_FILENAME))) {
+    return { verdict: 'skip' }
+  }
+  const spec = resolveSpecDir(resolvedDir)
+  if (existsSync(spec)) return { verdict: 'pass', anchor: dirname(spec) }
+  const gitRoot = safeGit(resolvedDir, ['rev-parse', '--show-toplevel']).value || null
+  return { verdict: 'block', gitRoot }
+}
+
 /**
  * 统一解析 .runtime 根目录（坑 execute-runs-isolation）。
  *
