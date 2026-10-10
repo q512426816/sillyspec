@@ -21,6 +21,8 @@ function makeFixture() {
   execFileSync('git', ['config', 'user.email', 't@t.com'], { cwd: d })
   execFileSync('git', ['config', 'user.name', 't'], { cwd: d })
   execFileSync('git', ['commit', '--allow-empty', '-qm', 'init'], { cwd: d })
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 是非豁免命令
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
   mkdirSync(join(d, 'docs'), { recursive: true })
   mkdirSync(join(d, 'src'), { recursive: true })
   writeFileSync(join(d, 'src', 'alpha.js'), 'export const alphaSymbol = 1\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// l8\n// l9\n// l10\n')

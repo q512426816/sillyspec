@@ -99,6 +99,24 @@ describe('resolveUninitCwdGate（判定单元）', () => {
     assert.equal(resolve(r2.anchor), resolve(root), '子目录应锚定到 spec 根父目录')
   })
 
+  it('linked worktree（兄弟路径）主仓有 .sillyspec → pass 且 anchor=null（锚定归命令层）', () => {
+    // endpoint-baseline 用例形态：git worktree add 到主仓兄弟路径，主仓 .sillyspec 不在
+    // cwd 祖先链上——误拦会打断 endpoints baseline 等命令层自有的主仓锚定逻辑。
+    const fx = join(base, 'fx')
+    const mainRoot = join(fx, 'main')
+    const wtRoot = join(fx, 'wt')
+    mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
+    const g = (args) => spawnSync('git', args, { cwd: mainRoot, encoding: 'utf8' })
+    assert.equal(g(['init', '-q']).status, 0)
+    g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
+    writeFileSync(join(mainRoot, 'README.md'), 'init\n', 'utf8')
+    g(['add', '.']); g(['commit', '-q', '-m', 'init'])
+    assert.equal(g(['worktree', 'add', '-q', '-b', 'feat', wtRoot]).status, 0)
+    const r = resolveUninitCwdGate('endpoints', { dir: wtRoot })
+    assert.equal(r.verdict, 'pass', `linked worktree 应放行：${JSON.stringify(r)}`)
+    assert.equal(r.anchor, null, 'worktree 场景不重锚定（命令层自有主仓锚定逻辑）')
+  })
+
   it('无命令（usage/帮助早退后的保险路径）→ exempt 不拦', () => {
     mkdirSync(base, { recursive: true })
     assert.equal(resolveUninitCwdGate(undefined, { dir: base }).verdict, 'exempt')
@@ -144,6 +162,12 @@ describe('CLI 入口未初始化目录硬拦（e2e）', () => {
     const res = runCli(work, ['flow', 'status', '--change', '2026-01-01-x', '--spec-dir', join(work, '.sillyspec')])
     const combined = (res.stdout || '') + (res.stderr || '')
     assert.ok(!combined.includes(GATE_MARKER), `显式 --spec-dir 不应被拦：\n${combined}`)
+  })
+
+  it('--spec-root 平台首扫 flag → 不拦（平台模式显式意图，spec 恒在仓外）', () => {
+    const res = runCli(work, ['run', 'scan', '--spec-root', join(work, 'hub-spec')])
+    const combined = (res.stdout || '') + (res.stderr || '')
+    assert.ok(!combined.includes(GATE_MARKER), `--spec-root 平台首扫不应被拦：\n${combined}`)
   })
 
   it('平台 pointer 在 cwd 的项目 → 不因缺本地 .sillyspec 被拦', () => {

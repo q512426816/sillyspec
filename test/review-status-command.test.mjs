@@ -29,6 +29,8 @@ function mkRepo(prefix) {
   execSync('git config user.email t@t.t && git config user.name t', { cwd: d, stdio: 'pipe' })
   writeFileSync(join(d, 'README.md'), 'init\n')
   execSync('git add . && git commit -q -m init', { cwd: d, stdio: 'pipe' })
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——review status 是非豁免命令
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
   return d
 }
 

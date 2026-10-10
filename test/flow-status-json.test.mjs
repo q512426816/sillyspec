@@ -135,6 +135,7 @@ test('②b 目录在场无 flow-state：JSON 标记 dir-no-state，exit 0', asyn
 
 test('②c 变更不存在：JSON 标记 missing 且 exit 1——与人类路径退出码一致（子进程验真）', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'fsj-miss-'))
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：本用例测变更不存在语义
   try {
     const miss = '2099-01-01-no-such-change'
     const jrun = spawnSync(process.execPath, [binCLI, 'flow', 'status', '--change', miss, '--json'], { cwd, encoding: 'utf8' })

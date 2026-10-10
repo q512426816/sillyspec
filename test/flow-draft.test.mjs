@@ -392,6 +392,7 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接�
 
 test('⑥c flow approve 对不存在变更 exit 2（评审 P3 清偿：行为面断言锁定）', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'fd-ap2e-'))
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：本用例测变更不存在语义
   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
   const r = cli(['flow', 'approve', '--change', '2026-09-01-not-exist'])
   assert.equal(r.status, 2, `不存在变更应 exit 2（实际 ${r.status}）`)

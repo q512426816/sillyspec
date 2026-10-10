@@ -119,6 +119,9 @@ console.log('\n=== 场景③：入口二 runCommand 裸调 fail-closed ===')
 console.log('\n=== 场景④：无声明无指针 → 行为不变 ===')
 {
   const cwd = setup('s4')
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——本场景测
+  // 「无声明无指针不触发平台 fail-closed」，本地项目形态补 spec 预置语义不变
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   const r = runOk(`node "${binCLI}" --dir "${cwd}" run quick --status`)
   assert(!existsSync(join(cwd, DECL)), '无声明文件')
   assert(!r.stderr.includes('平台接管'), '输出无平台接管报错')
@@ -133,6 +136,9 @@ console.log('\n=== 场景⑤：platform disconnect 三清 ===')
   const r = runOk(`node "${binCLI}" --dir "${cwd}" platform disconnect`)
   assert(!existsSync(join(cwd, '.sillyspec-platform.json')), '指针已删')
   assert(!existsSync(join(cwd, DECL)), '声明已删')
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——disconnect 后
+  // 的本地项目形态（同场景④）；「不再 fail-closed」的断言语义不变
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   const r2 = runOk(`node "${binCLI}" --dir "${cwd}" run quick --status`)
   assert(!r2.stderr.includes('平台接管'), 'disconnect 后裸调恢复本地模式（不再 fail-closed）')
   clean(cwd, sd)

@@ -23,6 +23,8 @@ function runCli(cwd, args) {
 
 function fixture() {
   const proj = mk('tpm-')
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——task 是非豁免命令
+  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
   return proj
 }
 

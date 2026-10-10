@@ -54,6 +54,8 @@ function padLines(n, overrides = {}) {
  */
 function makeFixture(files) {
   const d = mkdtempSync(join(tmpdir(), 'dcfix-'))
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 是非豁免命令
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
   for (const [rel, content] of Object.entries(files)) {
     const abs = join(d, rel)
     mkdirSync(dirname(abs), { recursive: true })

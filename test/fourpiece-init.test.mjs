@@ -15,6 +15,8 @@ const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspe
 
 function mkProj() {
   const cwd = mkdtempSync(join(tmpdir(), 'sillyspec-fp-'))
+  // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——fourpiece-init 是非豁免命令
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   return cwd
 }
 
