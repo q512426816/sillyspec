@@ -886,8 +886,25 @@ function analyzeCrossRepoCd(command, callerCwd, projectRoot, inWorktree) {
     const shellResolved = path.isAbsolute(t) ? t : path.resolve(callerCwd, t)
     const intended = path.isAbsolute(t) ? t : path.resolve(inWorktree ? projectRoot : callerCwd, t)
     for (const [key, raw] of Object.entries(repos)) {
-      if (typeof raw !== 'string' || !raw) continue
-      const repoRoot = path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw)
+      // 条目双形态（坑 repo-inline-worktree-placement）：'path' 字符串（parseSimpleYaml 原样）；
+      // 块式对象 {path, worktree}（parseSimpleYaml 嵌套）；inline '{path: ..}' 字符串
+      // （parseSimpleYaml 不解析 inline flow，原样字符串——手动提取 path 子键）
+      let repoPath = null
+      if (typeof raw === 'string' && raw) {
+        const t = raw.trim()
+        if (t.startsWith('{') && t.endsWith('}')) {
+          for (const part of t.slice(1, -1).split(',')) {
+            const idx = part.indexOf(':')
+            if (idx !== -1 && part.slice(0, idx).trim() === 'path') { repoPath = part.slice(idx + 1).trim().replace(/^['"]|['"]$/g, ''); break }
+          }
+        } else {
+          repoPath = raw
+        }
+      } else if (raw && typeof raw === 'object' && typeof raw.path === 'string' && raw.path) {
+        repoPath = raw.path
+      }
+      if (!repoPath) continue
+      const repoRoot = path.isAbsolute(repoPath) ? repoPath : path.resolve(projectRoot, repoPath)
       if (intended === repoRoot || isPathInside(intended, repoRoot)) {
         hits.push({ key, repoRoot, resolved: intended, shellResolved, target: t })
         break

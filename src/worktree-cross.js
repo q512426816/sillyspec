@@ -33,7 +33,7 @@ import { writeAtomicSync } from './fs-atomic.js';
 import { WorktreeManager, unlinkNodeModulesLinks, safeRemoveWorktreeDir } from './worktree.js';
 import { provisionDeps } from './worktree-deps.js';
 import { aggregateDeclaredRepos } from './run/shared.js';
-import { parseRepoRegistry } from './stages/plan-postcheck.js';
+import { parseRepoRegistry, parseRepoWorktreePlacements } from './stages/plan-postcheck.js';
 import {
   crossWorktreePath as _placementCrossPath,
   crossWorktreeDirName,
@@ -145,16 +145,21 @@ function aggregateCrossRepoKeys(specBase, changeName) {
 }
 
 /**
+ * 读主仓 local.yaml 文本（路径口径与 run/shared.js readLocalYamlRaw 一致：cwd/.sillyspec/local.yaml）。
+ * @returns {string}
+ */
+function readLocalYamlText(cwd) {
+  const p = join(cwd, '.sillyspec', 'local.yaml');
+  if (!existsSync(p)) return '';
+  try { return readFileSync(p, 'utf8') } catch { return '' }
+}
+
+/**
  * 读主仓 local.yaml 的 repos: 段（路径口径与 run/shared.js readLocalYamlRaw 一致：cwd/.sillyspec/local.yaml）。
  * @returns {Map<string,string>}
  */
 function readRepoRegistry(cwd) {
-  const p = join(cwd, '.sillyspec', 'local.yaml');
-  let text = '';
-  if (existsSync(p)) {
-    try { text = readFileSync(p, 'utf8') } catch { text = '' }
-  }
-  return parseRepoRegistry(text);
+  return parseRepoRegistry(readLocalYamlText(cwd));
 }
 
 /**
@@ -171,7 +176,11 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
   const base = specBase || join(cwd, '.sillyspec');
   const keys = aggregateCrossRepoKeys(base, changeName);
   const registry = readRepoRegistry(cwd);
-  const placementCfg = readCrossPlacementConfig(cwd); // worktree.crossPlacement 按仓落位（坑 cross-wt-toolchain-split）
+  // 落位配置双源（坑 cross-wt-toolchain-split 配置简化，2026-10-10 用户反馈）：推荐 repos 条目
+  // 内联（repos.<key>: {path, worktree}——注册与落位一处声明）；worktree.crossPlacement 段兼容
+  // 保留作 legacy 读面。优先级：repos.<key>.worktree > worktree.crossPlacement.<key> > 默认公式。
+  const inlinePlacements = parseRepoWorktreePlacements(readLocalYamlText(cwd));
+  const placementCfg = readCrossPlacementConfig(cwd);
   const created = [];
   const reused = [];
   const skippedLegacy = [];
@@ -196,9 +205,9 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
     }
 
-    // 落位解析（FR-01）：crossPlacement.<key> 配置 → <落位根>/<change>--<key>；缺省默认公式。
+    // 落位解析（FR-01）：repos.<key>.worktree 内联 > crossPlacement.<key>（legacy）→ <落位根>/<change>--<key>；缺省默认公式。
     // 拒绝落位根落在跨仓仓根内（worktree 目录会成跨仓仓 untracked 噪音/被误提交——配置错 fail-closed）。
-    const rawPlacement = placementCfg.get(key) || null;
+    const rawPlacement = inlinePlacements.get(key) || placementCfg.get(key) || null;
     let placementRoot = null;
     if (rawPlacement) {
       placementRoot = resolvePlacementRoot(rawPlacement, cwd);

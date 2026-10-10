@@ -12,7 +12,7 @@
  *
  * 解析复用 parseTaskContracts 同源 js-yaml frontmatter 提取模式（见 plan-postcheck.js:114）。
  */
-import { parseRepo, parseBaseCommit, parseHeadCommit, parseRepoRegistry } from '../src/stages/plan-postcheck.js'
+import { parseRepo, parseBaseCommit, parseHeadCommit, parseRepoRegistry, parseRepoWorktreePlacements } from '../src/stages/plan-postcheck.js'
 
 let total = 0, failed = 0
 function assert(cond, msg) {

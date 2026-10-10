@@ -261,6 +261,34 @@ export function detectDuplicateTopKeys(fmText) {
  * @returns {Map<string, string>} repoKey → absolutePath
  */
 export function parseRepoRegistry(yamlText) {
+  return _parseRepoEntries(yamlText, 'path')
+}
+
+/**
+ * repos 段条目的 worktree 子键 → Map<repoKey, 落位根目录>（坑 cross-wt-toolchain-split 配置
+ * 简化，2026-10-10 用户反馈：独立 worktree.crossPlacement 段与仓注册分居两处形态重——落位
+ * 直接内联在注册条目上）。
+ *
+ * 只认对象形态条目的 worktree 子键；字符串条目（值即路径）无落位语义不入 Map。清洗规则
+ * （CRLF/行内注释/引号）与 parseRepoRegistry 同源。
+ * @param {string} yamlText
+ * @returns {Map<string, string>} repoKey → 落位根目录（未配置的仓不在 Map）
+ */
+export function parseRepoWorktreePlacements(yamlText) {
+  return _parseRepoEntries(yamlText, 'worktree')
+}
+
+/**
+ * repos 段统一解析内核：subkey='path' → 注册表（字符串条目值即 path）；subkey='worktree' →
+ * 落位内联（仅对象条目）。条目三形态：
+ *   urgent: /mnt/e/repo                                # 字符串（值即 path，worktree 不适用）
+ *   urgent: {path: /mnt/e/repo, worktree: /mnt/e/wt}   # inline flow 对象
+ *   urgent:                                            # 块式对象
+ *     path: /mnt/e/repo
+ *     worktree: /mnt/e/wt
+ * @returns {Map<string, string>}
+ */
+function _parseRepoEntries(yamlText, subkey) {
   const reg = new Map()
   if (!yamlText) return reg
   // CRLF 归一（坑 register-repo-crlf-idempotent-loop，2026-08-23 实证：Windows 下 agent Write
@@ -269,6 +297,7 @@ export function parseRepoRegistry(yamlText) {
   // 幂等跳过不落盘 → 死循环。同文件 parseAllowedPaths/parseDependsOn/parseBaseCommit 均有此
   // 归一，本函数是唯一缺口）
   const lines = String(yamlText).replace(/\r\n?/g, '\n').split('\n')
+  const cleanVal = (v) => String(v || '').replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '')
   let startIdx = -1
   for (let i = 0; i < lines.length; i++) {
     if (/^repos:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
@@ -281,15 +310,44 @@ export function parseRepoRegistry(yamlText) {
     // 条目格式：  <key>: <value>（key 限 [A-Za-z0-9_.\-]，与 parseLocalYamlModules 对齐）
     const entry = line.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/)
     if (!entry) continue
-    const value = (entry[2] || '').trim()
-    if (value === '' || value.startsWith('#')) continue
-    // 去可选行内注释（`value # comment`）—— 注意路径不含 ` #`，注释前必带空格
-    const cleaned = value.replace(/\s+#.*$/, '').trim()
-    if (cleaned === '') continue
-    // 去首尾可选引号（YAML 字符串引用），保留路径内反斜杠原样
-    const path = cleaned.replace(/^['"]|['"]$/g, '')
-    if (path === '') continue
-    reg.set(entry[1], path)
+    const key = entry[1]
+    const indent = line.length - line.trimStart().length
+    const rawValue = (entry[2] || '').trim()
+
+    if (rawValue !== '' && !rawValue.startsWith('#')) {
+      if (rawValue.startsWith('{') && rawValue.endsWith('}')) {
+        // inline flow 对象：拆逗号取目标子键（值内逗号不支持——路径含逗号请用块式）
+        let hit = null
+        for (const part of rawValue.slice(1, -1).split(',')) {
+          const idx = part.indexOf(':')
+          if (idx === -1) continue
+          if (part.slice(0, idx).trim() === subkey) { hit = cleanVal(part.slice(idx + 1)); break }
+        }
+        if (hit) reg.set(key, hit)
+      } else if (subkey === 'path') {
+        // 字符串条目：值即 path（worktree 子键语义不适用于字符串形态）
+        const cleaned = cleanVal(rawValue)
+        if (cleaned !== '') reg.set(key, cleaned)
+      }
+      continue
+    }
+
+    // 块式对象条目（value 空）：消费整个子键块（缩进更深的连续行），取目标子键首个命中——
+    // 整块消费防子键行（path:/worktree:）被外层循环误当条目再匹配（'path'/'worktree' 混进
+    // registry 污染 Map）
+    let j = i + 1
+    for (; j < lines.length; j++) {
+      const l = lines[j]
+      if (l.trim() === '' || l.trim().startsWith('#')) continue
+      const subIndent = l.length - l.trimStart().length
+      if (subIndent <= indent) break // 离开本条目块（下一条目或段结束）
+      const sub = l.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/)
+      if (sub && sub[1] === subkey && !reg.has(key)) {
+        const cleaned = cleanVal(sub[2])
+        if (cleaned !== '' && !cleaned.startsWith('#')) reg.set(key, cleaned)
+      }
+    }
+    i = j - 1 // 整块已消费；外层 ++ 落在块尾后第一行（下一条目或段边界）
   }
   return reg
 }

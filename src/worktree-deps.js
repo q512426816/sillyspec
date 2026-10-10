@@ -646,10 +646,45 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
     const lines = String(yamlText || '').replace(/\r\n?/g, '\n').split('\n');
     const start = lines.findIndex(l => /^repos:\s*(?:#.*)?$/.test(l));
     if (start === -1) return roots;
+    const cleanVal = (v) => String(v || '').replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '');
     for (let i = start + 1; i < lines.length; i++) {
-      if (lines[i].length > 0 && !/\s/.test(lines[i][0]) && lines[i].trim() !== '' && !lines[i].startsWith('#')) break;
-      const m = lines[i].match(/^\s+([A-Za-z0-9_.\-]+):\s*(\S+)/);
-      if (m && !m[2].startsWith('#')) roots.push(m[2].replace(/^['"]|['"]$/g, ''));
+      const line = lines[i];
+      if (line.length > 0 && !/\s/.test(line[0]) && line.trim() !== '' && !line.startsWith('#')) break;
+      const m = line.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/);
+      if (!m) continue;
+      const value = (m[2] || '').trim();
+      if (value !== '' && !value.startsWith('#')) {
+        if (value.startsWith('{') && value.endsWith('}')) {
+          // inline 对象条目（repos.<key>: {path: .., worktree: ..}）——只收 path 子键
+          for (const part of value.slice(1, -1).split(',')) {
+            const idx = part.indexOf(':');
+            if (idx !== -1 && part.slice(0, idx).trim() === 'path') {
+              const p = cleanVal(part.slice(idx + 1));
+              if (p) roots.push(p);
+              break;
+            }
+          }
+        } else {
+          roots.push(cleanVal(value));
+        }
+        continue;
+      }
+      // 块式对象条目（value 空）：消费子键块，只收 path 子键值（worktree 落位根不是仓根，
+      // 混入会放宽越界豁免面——坑 repo-inline-worktree-placement 收口）
+      const indent = line.length - line.trimStart().length;
+      let j = i + 1;
+      for (; j < lines.length; j++) {
+        const l = lines[j];
+        if (l.trim() === '' || l.trim().startsWith('#')) continue;
+        const subIndent = l.length - l.trimStart().length;
+        if (subIndent <= indent) break;
+        const sub = l.match(/^\s+([A-Za-z0-9_.\-]+):\s*(.*)$/);
+        if (sub && sub[1] === 'path') {
+          const p = cleanVal(sub[2]);
+          if (p && !p.startsWith('#')) roots.push(p);
+        }
+      }
+      i = j - 1;
     }
     return roots;
   })();

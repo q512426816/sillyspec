@@ -253,6 +253,31 @@ test('悬挂键 sweep + 无 meta 不入列 + 损坏注册表降级（FR-02）', 
   );
 });
 
+test('repos 条目内联 worktree 落位 + 优先级高于 crossPlacement（repo-inline-worktree-placement）', () => {
+  const placementDir = mkdtempSync(join(tmpdir(), 'cwpl-inline-'));
+  const legacyDir = mkdtempSync(join(tmpdir(), 'cwpl-legacy-'));
+  tempDirs.push(placementDir, legacyDir);
+  const fx = makeFixture();
+  // local.yaml 追加：repos.front 升级为对象条目（内联 worktree）+ legacy crossPlacement 段
+  const yamlPath = join(fx.specBase, 'local.yaml');
+  const baseYaml = readFileSync(yamlPath, 'utf8');
+  writeFileSync(yamlPath, baseYaml
+    + `worktree:\n  crossPlacement:\n    front: ${legacyDir.replace(/\\/g, '/')}\n`);
+  // repos.front 字符串形态 → 对象形态（块式）
+  writeFileSync(yamlPath, baseYaml.replace(
+    `repos:\n  front: ${fx.cross.replace(/\\/g, '/')}\n`,
+    `repos:\n  front:\n    path: ${fx.cross.replace(/\\/g, '/')}\n    worktree: ${placementDir.replace(/\\/g, '/')}\n`,
+  ) + `worktree:\n  crossPlacement:\n    front: ${legacyDir.replace(/\\/g, '/')}\n`);
+
+  const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
+  assert.equal(r.created.length, 1);
+  const expected = join(placementDir, `${CHANGE}--front`);
+  assert.equal(r.created[0].worktreePath, expected, '内联 worktree 落位生效');
+  assert.ok(!existsSync(join(legacyDir, `${CHANGE}--front`)), '内联优先——legacy crossPlacement 未生效');
+  assert.ok(existsSync(join(expected, 'meta.json')), 'meta 在落位目录');
+  cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
+});
+
 // ── 5. WSL 分裂判定 ──
 
 test('isWslSplit：linux /mnt 命中、非 /mnt 不命中、win32 恒 false（FR-03）', () => {
