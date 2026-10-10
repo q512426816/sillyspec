@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-wt-repo-local-placement",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-wt-repo-local-placement"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-wt-repo-local-placement"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-repo-reconcile-baseline-anchor.test.mjs「B' 档」",
+        "test/cross-worktree-placement.test.mjs「旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-wt-repo-local-placement"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-04",
+      "tests": [
+        "test/cross-worktree-placement.test.mjs「isWslSplit：linux /mnt 命中、非 /mnt 不命中、win32 恒 false」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-wt-repo-local-placement"
+    }
+  ]
+}

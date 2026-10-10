@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-wt-repo-local-placement",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9f14eeef989aca2136cc9e323d7a16bffd2dc66e",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-02 placementMode 测试断言真空：created 条目无 meta 字段，'?? repo-local' 兜底使命题恒真；explicit-inline / explicit-legacy 零断言",
+      "evidence": "ensureCrossWorktrees 只 push { repoKey, worktreePath }（src/worktree-cross.js:384），无 meta 属性；测试断言 assert.equal(r.created[0].meta?.placementMode ?? 'repo-local', 'repo-local') 中 undefined?.placementMode ?? 'repo-local' 恒等于 'repo-local'，meta.json 里是否真写了 placementMode 该断言完全不看。且全测试面无任何用例断言 meta.placementMode==='explicit-inline'（FR-02 场景明文 Then meta.placementMode=explicit-inline）或 'explicit-legacy'。实现本身正确（src/worktree-cross.js:272,275,343 三值写入 meta），但 FR-02『meta 必须记录 placementMode』这条必须项的三方绑定中测试侧失效。",
+      "location": "test/cross-worktree-placement.test.mjs:185（配合 src/worktree-cross.js:384）"
+    },
+    {
+      "severity": "P2",
+      "title": "multi-repo-context 只探 candidates[0]：legacy 位置存量 worktree（无注册表条目）在该读取面失联，inWorktree 误判 false",
+      "evidence": "_buildCrossRepoEntry 用 resolveCrossWorktreePath(..., crossRepoPath)（= candidates[0]，传 repoRoot 时永不为旧公式级），meta.json 不在场即 crossMeta=null → inWorktree=false，命令直打跨仓主副本。变更前该路径 resolve 落旧公式可命中存量 meta。升级前版本创建、无注册表条目的存量 worktree（FR-03 legacy 形态）跨版本续跑时：ensure 复用（getCrossWorktreeMeta 全候选探测，worktree-cross.js:79）与 reconcile B' 档（cross-repo-reconcile.js:240 全候选探测）都能找到它，唯独 MultiRepoContext 读取面单探测漏掉——三个『找真实在场位置』读取方两个全探测、一个单探测，行为不一致。FR-03 必须项只点名 getCrossWorktreeMeta 与 reconcile B' 档，故不算 FR 违约，但 design 盲维1『候选链逐级探测必然命中旧公式级』的口径对该读取面不成立。",
+      "location": "src/run/multi-repo-context.js:164"
+    },
+    {
+      "severity": "P3",
+      "title": "getCrossWorktreeMeta 高优候选 meta 损坏时提前 return null，遮蔽低优候选的有效存量 meta",
+      "evidence": "候选循环中 JSON.parse 抛异常或 meta.isCross 缺失即 return null，不 continue 探下一候选（worktree-cross.js:79-87）。注册表条目/仓内公式处残留损坏 meta.json 时，旧公式处的有效 legacy meta 永不可达——与 R-03 披露的『指向已亡目录』不同，这是『指向活目录但 meta 无效』的相邻残留态，返回契约（null=无/损坏）虽如 design 所述，但遮蔽语义未在 design 披露面内。",
+      "location": "src/worktree-cross.js:79-87"
+    },
+    {
+      "severity": "P3",
+      "title": "exclude 写失败 warn 降级路径（R-01）无测试绑定",
+      "evidence": "ensureRepoLocalExclude 的 catch 仅 console.warn 不阻断（src/worktree-cross.js:248-250），design R-01 以此为最大风险披露并声称『apply 清单校验兜底，不阻断』，但测试面没有只读仓/异常 .git 场景用例验证 warn 降级后 ensureCrossWorktrees 仍成功创建 worktree。行为实现与披露一致（try/catch 包裹全部逻辑），缺的只是降级路径的回归锁。",
+      "location": "src/worktree-cross.js:235-251"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T11:51:15Z"
+}

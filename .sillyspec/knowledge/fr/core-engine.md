@@ -2834,3 +2834,86 @@
   confirmed_at: null
   source_change: 2026-10-10-dyn-subset-nontest-runner-face
   status: active
+
+## FR-core-engine-175 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
+变更：2026-10-10-cross-wt-repo-local-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-01
+最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-01
+  tests: test/cross-worktree-placement.test.mjs「缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-wt-repo-local-placement
+  status: active
+
+## FR-core-engine-176 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
+变更：2026-10-10-cross-wt-repo-local-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-02
+最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-02
+  tests: test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-wt-repo-local-placement
+  status: active
+
+## FR-core-engine-177 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
+变更：2026-10-10-cross-wt-repo-local-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-03
+最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-03
+  tests: test/cross-repo-reconcile-baseline-anchor.test.mjs「B' 档」 | test/cross-worktree-placement.test.mjs「旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-wt-repo-local-placement
+  status: active
+
+## FR-core-engine-178 WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
+变更：2026-10-10-cross-wt-repo-local-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-04
+最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-wt-repo-local-placement:flow:测试绑定FR-04
+  tests: test/cross-worktree-placement.test.mjs「isWslSplit：linux /mnt 命中、非 /mnt 不命中、win32 恒 false」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-wt-repo-local-placement
+  status: active
+
+## FR-core-engine-179 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
+变更：2026-10-10-cross-wt-repo-local-placement
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-05
+最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15

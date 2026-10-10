@@ -1,0 +1,726 @@
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/flow-state.yaml b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/flow-state.yaml
+new file mode 100644
+index 00000000..6bc1076d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/flow-state.yaml
+@@ -0,0 +1,31 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  跨仓 worktree 默认落位改为跨仓仓内 <path>/.sillyspec/.runtime/worktrees/<change>--<repoKey>（用户提议）：天然同盘同文件系统，WSL 主仓+Windows
++  盘跨仓的工具链分裂形态自动消解，零配置。两前提已验证/就位：git worktree 检出目录位于仓内合法且 .git/info/exclude 追加 .sillyspec/ 后 status 干净（不动用户
++  .gitignore、不进版本库）；落位注册表（上一变更）保寻回。
++
++
++  成功标准：
++
++  - 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++
++  - 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++
++  - 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas
++  扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++
++  - meta.placementMode 记录落位形态（repo-local/explicit/legacy-main-specbase）
++
++  - WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++
++  - 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
++autopilot: false
++baseline_commit: e7a50f359b7bbde4ffca7c6a783ea496a51981ce
++updatedAt: '2026-10-10T11:38:11.755Z'
++baseline_sha256: 2e5aa51b0b60bf64837188144d71d2ebe1e02c89a80e3834610615abc97ba14b
++
+diff --git a/src/cross-placement.js b/src/cross-placement.js
+index 2b4c6f0b..c915dde1 100644
+--- a/src/cross-placement.js
++++ b/src/cross-placement.js
+@@ -195,21 +195,39 @@ export function sweepPlacementRegistry(specBase, changeName) {
+ }
+ 
+ /**
+- * 寻址：注册表优先（键 <change>--<repoKey>），无条目回退默认公式。
++ * 寻址候选有序列表（去重）：注册表条目 → 仓内新默认公式（传 repoRoot 时）→ 主仓 specBase
++ * 旧默认公式（legacy 存量兜底）。需要「找真实在场位置」的读取方（meta 读取 / reconcile B' 档）
++ * 逐候选探测；单地址语义（resolve）取首候选。
++ * @returns {string[]}
++ */
++export function resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoRoot = null) {
++  const out = [];
++  const registry = readPlacementRegistry(specBase);
++  const entry = registry[crossWorktreeDirName(changeName, repoKey)];
++  if (entry && typeof entry.worktreePath === 'string' && entry.worktreePath) {
++    out.push(entry.worktreePath);
++  }
++  if (repoRoot) {
++    out.push(crossWorktreePath(specBase, changeName, repoKey, join(repoRoot, '.sillyspec', '.runtime', 'worktrees')));
++  }
++  out.push(crossWorktreePath(specBase, changeName, repoKey));
++  return [...new Set(out.map((p) => resolvePath(p)))];
++}
++
++/**
++ * 寻址：注册表优先（键 <change>--<repoKey>）→ 仓内新默认公式（<repoRoot>/.sillyspec/
++ * .runtime/worktrees/<change>--<repoKey>，传 repoRoot 时）→ 主仓 specBase 旧默认公式（legacy
++ * 兜底——存量 worktree 仍可达）。
+  * 注册表只提供位置——条目指向处是否真有 worktree 由调用方（meta 读取/目录判定）裁决，
+  * 本函数不做存在性校验（create 前调用时目录尚不存在是合法态）。
+  * @param {string} specBase
+  * @param {string} changeName
+  * @param {string} repoKey
++ * @param {string|null} [repoRoot] 跨仓仓根（知道时传——寻址仓内新默认；缺省跳过该级）
+  * @returns {string} worktree 应在/所在路径
+  */
+-export function resolveCrossWorktreePath(specBase, changeName, repoKey) {
+-  const registry = readPlacementRegistry(specBase);
+-  const entry = registry[crossWorktreeDirName(changeName, repoKey)];
+-  if (entry && typeof entry.worktreePath === 'string' && entry.worktreePath) {
+-    return entry.worktreePath;
+-  }
+-  return crossWorktreePath(specBase, changeName, repoKey);
++export function resolveCrossWorktreePath(specBase, changeName, repoKey, repoRoot = null) {
++  return resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoRoot)[0];
+ }
+ 
+ /**
+diff --git a/src/cross-repo-reconcile.js b/src/cross-repo-reconcile.js
+index 3e6df15d..e5baf171 100644
+--- a/src/cross-repo-reconcile.js
++++ b/src/cross-repo-reconcile.js
+@@ -33,7 +33,7 @@ import { join, isAbsolute, resolve } from 'path'
+ import { gitQuiet } from './git-helper.js'
+ import { parseRepoRegistry } from './stages/plan-postcheck.js'
+ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
+-import { resolveCrossWorktreePath } from './cross-placement.js'
++import { resolveCrossWorktreePathCandidates } from './cross-placement.js'
+ import { resolveLatestExecuteRunIdWithTasks, readReview } from './task-review.js'
+ 
+ // 与 verify-postcheck normalizeReconcilePath 同口径（本地实现防环）：剥 ./ 前缀、反斜杠归一
+@@ -235,10 +235,13 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null,
+     //     提交，对 worktree 多笔交付是假信号（2026-10-09 tombstone 取证：声明 4 实测 0）。
+     //     meta 缺失/worktree 不在场/不可读 → 回退 B 档（不回退语义）。
+     try {
+-      const wtPath = resolveCrossWorktreePath(specBase, changeName, repoKey)
+-      const metaPath = join(wtPath, 'meta.json')
+-      if (existsSync(metaPath)) {
+-        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++      // 寻址候选逐级探测（注册表 → 仓内新默认 → 主仓 specBase 旧默认）——任一候选 meta 在场即成窗
++      let wtPath = null
++      for (const cand of resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoPath)) {
++        if (existsSync(join(cand, 'meta.json'))) { wtPath = cand; break }
++      }
++      if (wtPath) {
++        const meta = JSON.parse(readFileSync(join(wtPath, 'meta.json'), 'utf8'))
+         const base = meta && meta.baseHash
+         if (base && typeof base === 'string' && /^[0-9a-f]{7,40}$/i.test(base)) {
+           const union2 = new Set()
+diff --git a/src/run/multi-repo-context.js b/src/run/multi-repo-context.js
+index ef6c20d2..da08c8ce 100644
+--- a/src/run/multi-repo-context.js
++++ b/src/run/multi-repo-context.js
+@@ -25,7 +25,7 @@
+ import { existsSync, readFileSync } from 'fs';
+ import { join } from 'path';
+ import { git, gitQuiet } from '../git-helper.js';
+-import { resolveCrossWorktreePath } from '../cross-placement.js';
++import { resolveCrossWorktreePathCandidates } from '../cross-placement.js';
+ 
+ /**
+  * @typedef {Object} RepoEntry
+@@ -160,9 +160,12 @@ export class MultiRepoContext {
+     const specBase = (this.platformOpts && this.platformOpts.specRoot) || join(this.cwd, '.sillyspec');
+     let crossMeta = null;
+     try {
+-      // 同步读（构造函数是同步的；resolveCrossWorktreePath 同步读注册表+公式）
+-      const metaPath = join(resolveCrossWorktreePath(specBase, this.changeName, repoKey), 'meta.json');
+-      if (existsSync(metaPath)) crossMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
++      // 同步读（构造函数是同步的）；寻址候选逐级探测（注册表 → 仓内新公式 → 主仓 specBase 旧
++      // 公式 legacy 兜底）——无注册表条目的存量 worktree 在本读取面不失联
++      for (const cand of resolveCrossWorktreePathCandidates(specBase, this.changeName, repoKey, crossRepoPath)) {
++        const metaPath = join(cand, 'meta.json');
++        if (existsSync(metaPath)) { crossMeta = JSON.parse(readFileSync(metaPath, 'utf8')); break }
++      }
+     } catch { crossMeta = null }
+     const inWorktree = !!(crossMeta && crossMeta.isCross && crossMeta.worktreePath && existsSync(crossMeta.worktreePath));
+     const workRoot = inWorktree ? crossMeta.worktreePath : crossRepoPath;
+diff --git a/src/worktree-cross.js b/src/worktree-cross.js
+index c0c8e7e8..e5ba15de 100644
+--- a/src/worktree-cross.js
++++ b/src/worktree-cross.js
+@@ -27,7 +27,7 @@
+  */
+ 
+ import { existsSync, readFileSync, readdirSync, mkdirSync } from 'fs';
+-import { join, resolve as resolvePath, isAbsolute, relative as relativePath } from 'path';
++import { join, dirname, resolve as resolvePath, isAbsolute, relative as relativePath } from 'path';
+ import { git, gitQuiet } from './git-helper.js';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { WorktreeManager, unlinkNodeModulesLinks, safeRemoveWorktreeDir } from './worktree.js';
+@@ -38,6 +38,7 @@ import {
+   crossWorktreePath as _placementCrossPath,
+   crossWorktreeDirName,
+   resolveCrossWorktreePath,
++  resolveCrossWorktreePathCandidates,
+   readCrossPlacementConfig,
+   resolvePlacementRoot,
+   readPlacementRegistry,
+@@ -70,13 +71,22 @@ export function crossWorktreePath(specBase, changeName, repoKey, placementRoot =
+  * @returns {object|null}
+  */
+ export function getCrossWorktreeMeta(specBase, changeName, repoKey) {
+-  const metaPath = join(resolveCrossWorktreePath(specBase, changeName, repoKey), META_FILE);
+-  if (!existsSync(metaPath)) return null;
+-  try {
+-    return JSON.parse(readFileSync(metaPath, 'utf8'));
+-  } catch {
+-    return null;
++  // repoRoot 从 repos 注册表解析（无 repoKey 注册/解析失败 → null，候选列表少一级）
++  const mainRoot = dirname(specBase);
++  const repoRoot = parseRepoRegistry(readLocalYamlText(mainRoot)).get(repoKey) || null;
++  const resolvedRoot = repoRoot && !isAbsolute(repoRoot) ? resolvePath(mainRoot, repoRoot) : repoRoot;
++  // 寻址候选逐级探测：注册表 → 仓内新公式 → 主仓 specBase 旧公式（legacy 存量兜底）
++  for (const dir of resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, resolvedRoot)) {
++    const metaPath = join(dir, META_FILE);
++    if (!existsSync(metaPath)) continue; // 未命中 → 下一候选
++    try {
++      const m = JSON.parse(readFileSync(metaPath, 'utf8'));
++      return m && m.isCross ? m : null; // 非跨仓/损坏 = 命中但无效
++    } catch {
++      return null;
++    }
+   }
++  return null;
+ }
+ 
+ /**
+@@ -90,13 +100,25 @@ export function getCrossWorktreeMeta(specBase, changeName, repoKey) {
+ export function listCrossWorktreeMetas(specBase, changeName) {
+   const base = join(specBase, '.runtime', 'worktrees');
+   const candidates = []; // {dir}
+-  if (existsSync(base)) {
+-    for (const name of readdirSync(base)) {
+-      if (!name.startsWith(`${changeName}--`)) continue;
+-      candidates.push(join(base, name));
+-    }
++  const scanDir = (dir) => {
++    if (!existsSync(dir)) return;
++    try {
++      for (const name of readdirSync(dir)) {
++        if (!name.startsWith(`${changeName}--`)) continue;
++        candidates.push(join(dir, name));
++      }
++    } catch { /* 目录不可读跳过 */ }
++  };
++  // 源① 主仓 specBase 旧默认（legacy-main-specbase 存量）
++  scanDir(base);
++  // 源② 仓内新默认（<repoRoot>/.sillyspec/.runtime/worktrees——按 local.yaml repos 注册表枚举各仓）
++  const mainRoot = dirname(specBase);
++  const registryYaml = readLocalYamlText(mainRoot);
++  for (const repoRoot of parseRepoRegistry(registryYaml).values()) {
++    const root = isAbsolute(repoRoot) ? repoRoot : resolvePath(mainRoot, repoRoot);
++    scanDir(join(root, '.sillyspec', '.runtime', 'worktrees'));
+   }
+-  // 注册表源（注册表读取 fail-open 返回 {}——损坏降级纯目录扫描）
++  // 源③ 注册表（注册表读取 fail-open 返回 {}——损坏降级纯目录扫描）
+   const registry = readPlacementRegistry(specBase);
+   const prefix = `${changeName}--`;
+   for (const [key, entry] of Object.entries(registry)) {
+@@ -154,6 +176,39 @@ function readLocalYamlText(cwd) {
+   try { return readFileSync(p, 'utf8') } catch { return '' }
+ }
+ 
++/** worktreePath 是否落在主仓 specBase 旧默认（legacy-main-specbase 形态——该形态不写注册表，公式可寻址） */
++function isLegacyMainSpecbasePlacement(worktreePath, specBase) {
++  try {
++    return resolvePath(dirname(worktreePath)) === resolvePath(join(specBase, '.runtime', 'worktrees'));
++  } catch { return false }
++}
++
++/**
++ * 仓内落位的 untracked 保障（坑 cross-wt-repo-local-placement）：.git/info/exclude 幂等追加
++ * 条目——本仓生效、不进版本库（不碰用户 .gitignore 工作区文件、无 pull 冲突面）。创建 worktree
++ * 前调用，worktree 目录一出现即被 git 忽略。追加失败（只读仓等）仅 warn 不阻断——最坏回落
++ * 「worktree 成 untracked 噪音」，apply 侧清单校验本就过滤。
++ * @param {string} repoRoot 跨仓仓根
++ * @param {string} entry exclude 条目（如 '.sillyspec/'）
++ */
++export function ensureRepoLocalExclude(repoRoot, entry) {
++  try {
++    const excludePath = join(repoRoot, '.git', 'info', 'exclude');
++    let content = '';
++    if (existsSync(excludePath)) {
++      try { content = readFileSync(excludePath, 'utf8') } catch { content = '' }
++    }
++    const entryRe = new RegExp(`^${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm');
++    if (entryRe.test(content)) return; // 幂等：已有条目不动
++    const sep = content && !content.endsWith('\n') ? '\n' : '';
++    const stamp = `${sep}# sillyspec cross-repo worktree placement (auto)\n${entry}\n`;
++    mkdirSync(join(repoRoot, '.git', 'info'), { recursive: true });
++    writeAtomicSync(excludePath, content + stamp);
++  } catch (e) {
++    console.warn(`⚠️ 跨仓仓 .git/info/exclude 追加失败（${e.message}）——worktree 目录可能成 untracked 噪音，apply 清单校验仍会过滤，建议手工补 ignore。`);
++  }
++}
++
+ /**
+  * 读主仓 local.yaml 的 repos: 段（路径口径与 run/shared.js readLocalYamlRaw 一致：cwd/.sillyspec/local.yaml）。
+  * @returns {Map<string,string>}
+@@ -205,23 +260,36 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
+     }
+ 
+-    // 落位解析（FR-01）：repos.<key>.worktree 内联 > crossPlacement.<key>（legacy）→ <落位根>/<change>--<key>；缺省默认公式。
+-    // 拒绝落位根落在跨仓仓根内（worktree 目录会成跨仓仓 untracked 噪音/被误提交——配置错 fail-closed）。
++    // 落位解析（FR-01/FR-02）：显式（repos.<key>.worktree 内联 > crossPlacement.<key> legacy）>
++    // 新默认=仓内 <repoRoot>/.sillyspec/.runtime/worktrees（坑 cross-wt-repo-local-placement：
++    // 天然同盘同文件系统，WSL 主仓+Windows 盘跨仓的工具链分裂自动消解——用户 2026-10-10 提议，
++    // 对齐主仓 worktree 的同构形态）。旧默认（主仓 specBase 下）降 legacy 兜底（resolve/扫描
++    // 仍认，存量 worktree 全链可达）。
++    // 显式配置指向仓根内维持拒绝（手配仓内=误配——untracked 噪音面）；新默认仓内合法，untracked
++    // 面由 ensureRepoLocalExclude 的 .git/info/exclude 保障（不动用户 .gitignore、不进版本库）。
+     const rawPlacement = inlinePlacements.get(key) || placementCfg.get(key) || null;
+     let placementRoot = null;
++    let placementMode = 'repo-local';
+     if (rawPlacement) {
+       placementRoot = resolvePlacementRoot(rawPlacement, cwd);
++      placementMode = inlinePlacements.has(key) ? 'explicit-inline' : 'explicit-legacy';
+       const rel = relativePath(resolvePath(repoRoot), placementRoot);
+       if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+         throw new Error(
+-          `跨仓 repo "${key}" 的 worktree.crossPlacement 落位根（${placementRoot}）落在该仓仓根（${repoRoot}）之内——` +
+-          `worktree 会成为跨仓仓的 untracked 噪音。请改到该仓之外的目录后重跑 execute。`
++          `跨仓 repo "${key}" 的落位配置（${placementRoot}）落在该仓仓根（${repoRoot}）之内——` +
++          `显式落位应选该仓之外的目录（仓内落位请删掉该配置走默认）。重跑 execute 前修正配置。`
+         );
+       }
+     }
+-    const worktreePath = crossWorktreePath(base, changeName, key, placementRoot);
++    const worktreePath = crossWorktreePath(base, changeName, key, placementRoot || join(repoRoot, '.sillyspec', '.runtime', 'worktrees'));
+     const branch = BRANCH_PREFIX + changeName;
+ 
++    // 仓内落位的 untracked 保障：.git/info/exclude 幂等追加 .sillyspec/（本仓生效、不进版本库、
++    // 不碰用户 .gitignore）。创建 worktree 前落盘——worktree 目录一出现即被忽略。
++    if (!rawPlacement) {
++      ensureRepoLocalExclude(repoRoot, '.sillyspec/');
++    }
++
+     // base 快照：跨仓仓当前 HEAD（与主仓 create 的默认 base 语义一致）
+     let baseHash;
+     try {
+@@ -238,10 +306,10 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+         `  ③ 换变更名重跑。`
+       );
+     }
+-    if (placementRoot) {
++    if (rawPlacement) {
+       mkdirSync(placementRoot, { recursive: true });
+     } else {
+-      mkdirSync(join(base, '.runtime', 'worktrees'), { recursive: true });
++      mkdirSync(join(repoRoot, '.sillyspec', '.runtime', 'worktrees'), { recursive: true });
+     }
+     try {
+       git(repoRoot, ['worktree', 'add', worktreePath, '-b', branch, baseHash], { timeout: 120000 });
+@@ -272,6 +340,7 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+       createdAt: new Date().toISOString(),
+       worktreePath,
+       mode: 'worktree',
++      placementMode,
+     };
+     writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+ 
+@@ -286,10 +355,10 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+     console.log(`ℹ️ 跨仓 ${key}: 跳过 dirty baseline checkpoint（跨仓主副本在途改动不进本变更分支——含并行会话外来文件时防污染；锚点 = 跨仓仓 HEAD ${String(baseHash).slice(0, 8)}）`);
+     writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+ 
+-    // 落位注册表（FR-02）：自定义落位时记录位置，getCrossWorktreeMeta/listCrossWorktreeMetas/
+-    // cleanup/verify 对账经 resolveCrossWorktreePath 寻回；默认落位不写（公式即可寻址，零冗余）。
+-    if (placementRoot) {
+-      updatePlacementRegistry(base, changeName, key, { worktreePath, placementRoot });
++    // 落位注册表（FR-02）：仓内新默认与显式落位都记录位置（新默认位置依赖 repoRoot，读取方
++    // 无 repoRoot 上下文时公式兜底不可用——注册表是主寻址）；落主仓 specBase 的旧默认不写。
++    if (placementRoot || !isLegacyMainSpecbasePlacement(worktreePath, base)) {
++      updatePlacementRegistry(base, changeName, key, { worktreePath, placementRoot: placementRoot || join(repoRoot, '.sillyspec', '.runtime', 'worktrees') });
+     }
+ 
+     // deps 供给：specBase 传 null —— sniff worktree 自身（主仓 local.yaml 的 project.type/install
+@@ -312,7 +381,7 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+       writeAtomicSync(join(worktreePath, META_FILE), JSON.stringify(meta, null, 2) + '\n');
+     }
+ 
+-    created.push({ repoKey: key, worktreePath });
++    created.push({ repoKey: key, worktreePath, meta });
+   }
+   return { created, reused, skippedLegacy };
+ }
+diff --git a/test/cross-repo-worktree-isolation.test.mjs b/test/cross-repo-worktree-isolation.test.mjs
+index 1f56a221..6be380db 100644
+--- a/test/cross-repo-worktree-isolation.test.mjs
++++ b/test/cross-repo-worktree-isolation.test.mjs
+@@ -24,6 +24,9 @@ import { getOrCreateMultiRepoContext, _clearMultiRepoCtxCache } from '../src/run
+ import { WorktreeManager } from '../src/worktree.js';
+ import { applyWorktree } from '../src/worktree-apply.js';
+ 
++// 新默认落位（repo-local）：worktree 建在跨仓仓内 .sillyspec/.runtime/worktrees
++const repoLocalWorktrees = (cross) => join(cross, '.sillyspec', '.runtime', 'worktrees');
++
+ const tempDirs = [];
+ function makeRepo(prefix) {
+   const d = mkdtempSync(join(tmpdir(), prefix));
+@@ -73,7 +76,7 @@ test('ensureCrossWorktrees：建 worktree + meta 锚 baseHash + 幂等复用', (
+   const r1 = ensureCrossWorktrees({ cwd: main, changeName, specBase });
+   assert.equal(r1.created.length, 1, '声明 1 个跨仓仓 → 建 1 个 worktree');
+   assert.equal(r1.created[0].repoKey, 'front');
+-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
+   assert.ok(existsSync(wtPath), '跨仓 worktree 目录已建');
+   assert.ok(existsSync(join(wtPath, '.git')), '是 git worktree（含 .git 指针）');
+   const meta = getCrossWorktreeMeta(specBase, changeName, 'front');
+@@ -103,7 +106,7 @@ test('MultiRepoContext worktree 模式：gitDir=worktree、baseCommitHint、HEAD
+   ensureCrossWorktrees({ cwd: main, changeName, specBase });
+   const base = revHead(cross);
+   // 子代理在跨仓 worktree 内 commit（跨仓根 HEAD 不动）
+-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
+   writeFileSync(join(wtPath, 'src-feature.txt'), 'feat\n');
+   git(wtPath, ['add', '.']);
+   git(wtPath, ['commit', '-q', '-m', 'feat']);
+@@ -126,7 +129,7 @@ test('applyWorktree：跨仓交付 patch 回跨仓主工作副本 + 清理 workt
+   const wm = new WorktreeManager({ cwd: main });
+   wm.create(changeName);
+   ensureCrossWorktrees({ cwd: main, changeName, specBase });
+-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
+   // 跨仓 worktree 内交付：改 1 个已有文件 + 新增 1 个文件，commit 到 worktree 分支
+   writeFileSync(join(wtPath, 'README.md'), 'init\nfeat-edit\n');
+   writeFileSync(join(wtPath, 'src-feature.txt'), 'feat\n');
+@@ -155,9 +158,9 @@ test('applyWorktree：跨仓交付 patch 回跨仓主工作副本 + 清理 workt
+ });
+ 
+ test('cleanupCrossWorktrees：未回落交付拒绝清理，force 放行', () => {
+-  const { main, specBase, changeName } = makeFixture();
++  const { main, cross, specBase, changeName } = makeFixture();
+   ensureCrossWorktrees({ cwd: main, changeName, specBase });
+-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
+   writeFileSync(join(wtPath, 'wip.txt'), 'wip\n');
+   const blocked = cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: false });
+   assert.equal(blocked.results[0].result, 'partial', '有未回落交付 → 拒绝清理');
+diff --git a/test/cross-worktree-placement.test.mjs b/test/cross-worktree-placement.test.mjs
+index 2a713848..b3f4f5d4 100644
+--- a/test/cross-worktree-placement.test.mjs
++++ b/test/cross-worktree-placement.test.mjs
+@@ -149,6 +149,7 @@ test('ensureCrossWorktrees placement 落位 + 注册表 + 寻回 + cleanup（FR-
+   const expectedPath = join(placementDir, `${CHANGE}--front`);
+   assert.equal(wtPath, expectedPath, 'worktree 必须落在配置的 placement 目录');
+   assert.ok(existsSync(join(wtPath, 'meta.json')), 'meta.json 在落位目录');
++  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'explicit-legacy', 'legacy 段（crossPlacement）落位 meta.placementMode=explicit-legacy');
+   assert.equal(git(fx.cross, ['worktree', 'list', '--porcelain']).includes(expectedPath.replace(/\\/g, '/')), true, 'git worktree 注册在跨仓 .git');
+ 
+   // 注册表写入 + resolve 寻回
+@@ -171,17 +172,55 @@ test('ensureCrossWorktrees placement 落位 + 注册表 + 寻回 + cleanup（FR-
+   assert.ok(!readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], '注册表键被回收');
+ });
+ 
+-test('缺省 placement 零回归（FR-01）', () => {
++test('缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）', () => {
+   const fx = makeFixture();
+   const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
+   assert.equal(r.created.length, 1);
++  const expected = join(fx.cross, '.sillyspec', '.runtime', 'worktrees', `${CHANGE}--front`);
+   assert.equal(
+     r.created[0].worktreePath,
+-    join(fx.specBase, '.runtime', 'worktrees', `${CHANGE}--front`),
+-    '未配置时走默认公式',
++    expected,
++    '新默认落位=跨仓仓内（同盘，工具链天然可达）',
+   );
+-  assert.equal(readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], undefined, '默认落位不写注册表');
+-  cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
++  assert.ok(existsSync(expected), 'worktree 目录已建');
++  assert.equal(r.created[0].meta && r.created[0].meta.placementMode, 'repo-local', 'placementMode=repo-local（created 携带 meta 真值，无兜底）');
++  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'repo-local', '落盘 meta.placementMode=repo-local');
++
++  // untracked 保障：.git/info/exclude 含 .sillyspec/ 且跨仓 status 干净（不动用户 .gitignore）
++  const excludePath = join(fx.cross, '.git', 'info', 'exclude');
++  assert.ok(existsSync(excludePath), '.git/info/exclude 已写');
++  assert.match(readFileSync(excludePath, 'utf8'), /^\.sillyspec\/$/m, 'exclude 含 .sillyspec/ 条目');
++  const status = git(fx.cross, ['status', '--porcelain']);
++  assert.equal(status.trim(), '', 'worktree 不成跨仓 untracked 噪音（status 干净）');
++
++  // 寻回：注册表写入 + getCrossWorktreeMeta/listCrossWorktreeMetas 可达（无需显式 repoRoot）
++  assert.ok(readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], '仓内默认写注册表');
++  const meta = getCrossWorktreeMeta(fx.specBase, CHANGE, 'front');
++  assert.ok(meta && meta.isCross && meta.worktreePath === expected, 'meta 经注册表寻回');
++  assert.equal(listCrossWorktreeMetas(fx.specBase, CHANGE).length, 1, 'list 仓内扫描源可达');
++
++  // cleanup 回收
++  const cr = cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
++  assert.equal(cr.results[0].result, 'cleaned');
++  assert.ok(!existsSync(expected), '落位目录被删');
++});
++
++test('旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）', () => {
++  const fx = makeFixture();
++  // 手工造一个 legacy 位置 worktree（模拟上一版本创建的存量）
++  const legacyDir = join(fx.specBase, '.runtime', 'worktrees', `${CHANGE}--front`);
++  mkdirSync(legacyDir, { recursive: true });
++  writeFileSync(join(legacyDir, 'meta.json'), JSON.stringify({
++    changeName: CHANGE, repoKey: 'front', isCross: true, worktreePath: legacyDir,
++    baseHash: 'a'.repeat(40), branch: `sillyspec/${CHANGE}`, mode: 'worktree',
++  }));
++  // 无注册表条目（模拟旧版本）——resolve 走旧公式、list 走旧目录扫描
++  const meta = getCrossWorktreeMeta(fx.specBase, CHANGE, 'front');
++  assert.ok(meta && meta.isCross, 'legacy 位置 meta 可读');
++  assert.equal(listCrossWorktreeMetas(fx.specBase, CHANGE).length, 1, 'legacy 目录扫描源可达');
++  const cr = cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
++  assert.equal(cr.results[0].result, 'cleaned', 'legacy worktree 可清理');
++  assert.ok(!existsSync(legacyDir), 'legacy 目录被删');
+ });
+ 
+ test('placement 落位根在跨仓仓根内 → 配置错拒绝创建（FR-01 fail-closed）', () => {
+@@ -275,6 +314,7 @@ test('repos 条目内联 worktree 落位 + 优先级高于 crossPlacement（repo
+   assert.equal(r.created[0].worktreePath, expected, '内联 worktree 落位生效');
+   assert.ok(!existsSync(join(legacyDir, `${CHANGE}--front`)), '内联优先——legacy crossPlacement 未生效');
+   assert.ok(existsSync(join(expected, 'meta.json')), 'meta 在落位目录');
++  assert.equal(getCrossWorktreeMeta(fx.specBase, CHANGE, 'front').placementMode, 'explicit-inline', 'repos 内联落位 meta.placementMode=explicit-inline');
+   cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
+ });
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/design.md b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/design.md
+new file mode 100644
+index 00000000..393d6b85
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/design.md
+@@ -0,0 +1,56 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:38:11.730Z
++---
++# 设计记录（Design Record）— 2026-10-10-cross-wt-repo-local-placement
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++跨仓 worktree 旧默认落主仓 specBase 下，暗含「主仓与跨仓同一文件系统」假设——主仓在 WSL /root、跨仓在 /mnt/<盘>/ Windows 盘时（2026-10-10 fire-equipment D-007 实证形态），隔离副本与该仓唯一构建工具链分居互不可访文件系统。用户提议把默认落位改到跨仓仓内：`<跨仓仓根>/.sillyspec/.runtime/worktrees/<change>--<repoKey>`——天然同盘同文件系统，工具链可达性问题自动消解，且写进的是仓内受控命名空间而非仓外猜测目录，与主仓 worktree 的自家乡形态同构。仓内落位的 untracked 噪音面用 `.git/info/exclude` 幂等追加 `.sillyspec/` 保障（本仓生效、不进版本库、不碰用户 .gitignore 工作区文件；worktree add 前落盘，已实证 status 干净）。寻址链升级为有序候选：注册表条目 → 仓内新公式（知 repoRoot 时）→ 主仓 specBase 旧公式（legacy 存量兜底）——上一版本创建在旧位置的 worktree 全链（meta 读取/list/cleanup/verify 对账）仍可达；显式落位配置（repos.worktree / crossPlacement）优先级仍最高，显式指仓根内维持拒绝。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `resolveCrossWorktreePath(specBase, change, repoKey, repoRoot?)` 第 4 参语义扩展（跨仓仓根，知则寻址仓内新默认）；新增导出 `resolveCrossWorktreePathCandidates`（有序去重候选列表——需要「找真实在场位置」的读取方逐候选探测）。
++- `ensureCrossWorktrees` 默认落位改为仓内（meta 新增 `placementMode`：repo-local / explicit-inline / explicit-legacy）；新增导出 `ensureRepoLocalExclude(repoRoot, entry)`（.git/info/exclude 幂等追加，失败 warn 不阻断）；显式配置指仓根内拒绝语义保留。
++- `listCrossWorktreeMetas` 扫描源扩为三源（主仓 specBase 旧目录 ∪ 各注册仓仓内新默认目录 ∪ 注册表），签名不变；`getCrossWorktreeMeta` 改候选遍历（注册表 → 仓内 → 旧公式），返回契约不变（null=无/损坏）。
++- local.yaml 无新键；worktree.crossPlacement / repos.worktree 语义不变（优先级文档同步见 config-schema——本变更未改 config-schema，legacy 键 desc 已含优先级说明仍准确）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++成立。候选寻址是纯函数（同输入恒同输出）；存量 worktree 在旧位置时候选链逐级探测必然命中旧公式级；注册表条目（上一变更引入）恒优先——新旧版本 CLI 混跑时（旧版只认旧公式、新版候选链含旧公式）双向兼容。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++exclude 追加用 writeAtomicSync（整文件原子写）且幂等（已含条目即跳过）——两个变更并发对同一仓首次建 worktree 时都写同一行，后写覆盖内容一致无差异；worktree 目录键含 changeName 不碰撞；注册表 read-modify-merge 沿用上一变更设计。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++安全。exclude 写失败仅 warn（最坏回落「worktree 成 untracked 噪音」，apply 清单校验本就过滤，不丢数据）；create 中断后 meta/注册表/exclude 的残留均为幂等可重入态（ensure 复用短路、cleanup 幂等删键）；worktree 在仓内多出的 .sillyspec 目录随 cleanup 一并删除（safeRemoveWorktreeDir 只删 worktreePath 自身）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++不会。仓内落位目录在跨仓仓根内、键带 changeName--repoKey 防碰撞；两个主仓实例注册同一跨仓仓时，各自变更的 worktree 同落跨仓 .sillyspec 下但目录名不同变更名隔离；exclude 是跨仓仓级共享（幂等同行），无作用域泄漏。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：R-01 跨仓仓的 .git 目录只读/异常导致 exclude 写失败（warn 降级，worktree 成 untracked 噪音——apply 清单校验兜底，不阻断）；R-02 仓内 .sillyspec 目录会被用户的 IDE 全局搜索/索引扫到重复内容（主仓同形态用户已习惯，execute 期临时存在、cleanup 即删）；R-03 候选寻址的探测顺序依赖注册表权威性——注册表条目指向已亡目录而旧公式处恰有他者残留 meta 时会误命中（注册表写读同链路维护，残留面与 sweep 治理重合）。
++试过但放弃的方案：自动兄弟目录（<path> 旁猜一个 sillyspec-worktrees）——向用户仓外未知位置写目录侵入性大且名字无约定，仓内受控命名空间（.sillyspec/）语义更干净；删除旧公式兜底（注册表已够）——存量 worktree（升级前的变更收口中断态）会失联，兼容成本为零则不做断崖。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/worktree-cross.js | ensure 默认落位仓内 + ensureRepoLocalExclude + placementMode + list/get 候选寻址 |
++| 修改 | src/cross-placement.js | resolveCrossWorktreePath 加 repoRoot 参 + resolveCrossWorktreePathCandidates 新导出 |
++| 修改 | src/run/multi-repo-context.js | resolve 调用传 crossRepoPath |
++| 修改 | src/cross-repo-reconcile.js | B' 档候选遍历探测 |
++| 修改 | test/cross-worktree-placement.test.mjs | 默认断言改仓内 + exclude/status 断言 + legacy 兼容用例 |
++| 修改 | test/cross-repo-worktree-isolation.test.mjs | 路径引用改仓内新公式 |
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/proposal.md b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/proposal.md
+new file mode 100644
+index 00000000..900e8596
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/proposal.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:38:11.730Z
++---
++# 提案书（Proposal）— 2026-10-10-cross-wt-repo-local-placement
++
++## 动机
++
++任务原话转写：跨仓 worktree 默认落位改为跨仓仓内 <path>/.sillyspec/.runtime/worktrees/<change>--<repoKey>（用户提议）：天然同盘同文件系统，WSL 主仓+Windows 盘跨仓的工具链分裂形态自动消解，零配置。两前提已验证/就位：git worktree 检出目录位于仓内合法且 .git/info/exclude 追加 .sillyspec/ 后 status 干净（不动用户 .gitignore、不进版本库）；落位注册表（上一变更）保寻回。
++
++成功标准：
++- 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++- 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++- 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++- meta.placementMode 记录落位形态（repo-local/explicit/legacy-main-specbase）
++- WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++- 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
++
++## 变更范围
++
++按成功标准机械推导，共 6 条验收面：
++1. 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++2. 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++3. 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++4. meta.placementMode 记录落位形态（repo-local/explicit/legacy-main-specbase）
++5. WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++6. 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
++
++## 成功标准（可验证）
++
++1. 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++2. 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++3. 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++4. meta.placementMode 记录落位形态（repo-local/explicit/legacy-main-specbase）
++5. WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++6. 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/requirements.md b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/requirements.md
+new file mode 100644
+index 00000000..3f8b4f5a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/requirements.md
+@@ -0,0 +1,62 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:38:11.730Z
++---
++# 需求规格（Requirements）— 2026-10-10-cross-wt-repo-local-placement
++
++## 功能需求
++
++### FR-01: 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++
++- 必须：跨仓仓未配置显式落位时，ensureCrossWorktrees 创建的 worktree 必须落在 `<跨仓仓根>/.sillyspec/.runtime/worktrees/<change>--<repoKey>`；创建前必须幂等写 `.git/info/exclude` 追加 `.sillyspec/` 条目；创建后跨仓 `git status --porcelain` 必须为空（worktree 不成 untracked 噪音）。
++- 禁止：exclude 保障触碰用户 `.gitignore` 文件（只写 `.git/info/exclude`——本仓生效、不进版本库）。
++
++#### 场景：主路径
++- Given 跨仓仓未配置任何落位
++- When ensureCrossWorktrees
++- Then worktree 建于仓内 .sillyspec/.runtime/worktrees、info/exclude 含 .sillyspec/、跨仓 status 干净
++
++### FR-02: 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++
++- 必须：显式落位配置在场时落位取显式值（优先于仓内新默认）；显式值解析后落在跨仓仓根内必须拒绝创建（fail-closed）。
++- 必须：meta 必须记录 placementMode（repo-local / explicit-inline / explicit-legacy）。
++
++#### 场景：主路径
++- Given repos.front 同时配 worktree=A
++- When ensureCrossWorktrees
++- Then worktree 落 A 而非仓内默认；meta.placementMode=explicit-inline
++
++### FR-03: 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++
++- 必须：resolveCrossWorktreePathCandidates 必须按「注册表条目 → 仓内新公式 → 主仓 specBase 旧公式」有序去重返回；getCrossWorktreeMeta 与 reconcile B' 档必须逐候选探测 meta 在场。
++- 必须：仅存在于旧默认位置（无注册表条目）的存量 worktree 必须仍可被 getCrossWorktreeMeta 读取、listCrossWorktreeMetas 枚举、cleanupCrossWorktrees 清理。
++
++#### 场景：主路径
++- Given 上一版本创建的 worktree 在主仓 specBase 旧位置且无注册表条目
++- When meta 读取/list/cleanup
++- Then 全链可达，行为与新位置一致
++
++### FR-04: WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++
++- 必须：isWslSplit 判定与警告逻辑保留；显式落位配到异文件系统（repoRoot 在 /mnt/<盘>/ 而 worktree 不在）时必须警告；仓内新默认与 repoRoot 同盘，天然不触发。
++
++#### 场景：主路径
++- Given 未配置显式落位（仓内默认）
++- When ensureCrossWorktrees
++- Then 零分裂警告（worktree 与 repoRoot 同盘）
++
++### FR-05: 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
++
++- 必须：本变更触达面测试（placement/isolation/reconcile/apply/verify/task-review/multi-repo-context 系列）收口时全部通过。
++
++#### 场景：主路径
++- When 跑相关面测试
++- Then 0 fail
++
++## 测试绑定（每条 FR 至少一行）
++
++FR-01: test/cross-worktree-placement.test.mjs「缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）」
++FR-02: test/cross-worktree-placement.test.mjs「repos 条目内联 worktree 落位 + 优先级高于 crossPlacement」+「placement 落位根在跨仓仓根内 → 配置错拒绝创建」
++FR-03: test/cross-worktree-placement.test.mjs「旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）」+ test/cross-repo-reconcile-baseline-anchor.test.mjs「B' 档」
++FR-04: test/cross-worktree-placement.test.mjs「isWslSplit：linux /mnt 命中、非 /mnt 不命中、win32 恒 false」（同盘不触发由仓内默认断言隐含覆盖）
++FR-05: 不适用：组合验证——收口 CLI 实测门跑本变更测试面（isolation/placement/reconcile 等 60+ 用例）全绿即证
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/tasks.md b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/tasks.md
+new file mode 100644
+index 00000000..88063e84
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T11:38:11.730Z
++---
++# 任务注册表（Tasks）— 2026-10-10-cross-wt-repo-local-placement
++
++- [x] task-01: 新默认落位=仓内 .sillyspec/.runtime/worktrees，创建前幂等保障 .git/info/exclude 含 .sillyspec/（仓内落位时），创建后跨仓 git status 干净
++- [x] task-02: 显式 placement（repos.worktree / worktree.crossPlacement）优先级仍高于新默认；显式配置指向仓根内维持拒绝（手配仓内=误配）；新默认仓内合法（exclude 由系统保障）
++- [x] task-03: 寻址链 resolveCrossWorktreePath：注册表 > 新公式（仓内，传 repoRoot 时）> 旧公式（主仓 specBase，legacy 兜底）；listCrossWorktreeMetas 扫描注册表∪仓内新默认目录∪旧默认目录，已有老位置 worktree 全链仍可达可清理
++- [x] task-04: meta.placementMode 记录落位形态（repo-local/explicit/legacy-main-specbase）
++- [x] task-05: WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
++- [x] task-06: 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
+diff --git a/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/review.json.superseded-20261010T115347 b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/review.json.superseded-20261010T115347
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/review.json.superseded-20261010T115347
+@@ -0,0 +1,40 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-10-cross-wt-repo-local-placement",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "9f14eeef989aca2136cc9e323d7a16bffd2dc66e",
++  "findings": [
++    {
++      "severity": "P2",
++      "title": "FR-02 placementMode 测试断言真空：created 条目无 meta 字段，'?? repo-local' 兜底使命题恒真；explicit-inline / explicit-legacy 零断言",
++      "evidence": "ensureCrossWorktrees 只 push { repoKey, worktreePath }（src/worktree-cross.js:384），无 meta 属性；测试断言 assert.equal(r.created[0].meta?.placementMode ?? 'repo-local', 'repo-local') 中 undefined?.placementMode ?? 'repo-local' 恒等于 'repo-local'，meta.json 里是否真写了 placementMode 该断言完全不看。且全测试面无任何用例断言 meta.placementMode==='explicit-inline'（FR-02 场景明文 Then meta.placementMode=explicit-inline）或 'explicit-legacy'。实现本身正确（src/worktree-cross.js:272,275,343 三值写入 meta），但 FR-02『meta 必须记录 placementMode』这条必须项的三方绑定中测试侧失效。",
++      "location": "test/cross-worktree-placement.test.mjs:185（配合 src/worktree-cross.js:384）"
++    },
++    {
++      "severity": "P2",
++      "title": "multi-repo-context 只探 candidates[0]：legacy 位置存量 worktree（无注册表条目）在该读取面失联，inWorktree 误判 false",
++      "evidence": "_buildCrossRepoEntry 用 resolveCrossWorktreePath(..., crossRepoPath)（= candidates[0]，传 repoRoot 时永不为旧公式级），meta.json 不在场即 crossMeta=null → inWorktree=false，命令直打跨仓主副本。变更前该路径 resolve 落旧公式可命中存量 meta。升级前版本创建、无注册表条目的存量 worktree（FR-03 legacy 形态）跨版本续跑时：ensure 复用（getCrossWorktreeMeta 全候选探测，worktree-cross.js:79）与 reconcile B' 档（cross-repo-reconcile.js:240 全候选探测）都能找到它，唯独 MultiRepoContext 读取面单探测漏掉——三个『找真实在场位置』读取方两个全探测、一个单探测，行为不一致。FR-03 必须项只点名 getCrossWorktreeMeta 与 reconcile B' 档，故不算 FR 违约，但 design 盲维1『候选链逐级探测必然命中旧公式级』的口径对该读取面不成立。",
++      "location": "src/run/multi-repo-context.js:164"
++    },
++    {
++      "severity": "P3",
++      "title": "getCrossWorktreeMeta 高优候选 meta 损坏时提前 return null，遮蔽低优候选的有效存量 meta",
++      "evidence": "候选循环中 JSON.parse 抛异常或 meta.isCross 缺失即 return null，不 continue 探下一候选（worktree-cross.js:79-87）。注册表条目/仓内公式处残留损坏 meta.json 时，旧公式处的有效 legacy meta 永不可达——与 R-03 披露的『指向已亡目录』不同，这是『指向活目录但 meta 无效』的相邻残留态，返回契约（null=无/损坏）虽如 design 所述，但遮蔽语义未在 design 披露面内。",
++      "location": "src/worktree-cross.js:79-87"
++    },
++    {
++      "severity": "P3",
++      "title": "exclude 写失败 warn 降级路径（R-01）无测试绑定",
++      "evidence": "ensureRepoLocalExclude 的 catch 仅 console.warn 不阻断（src/worktree-cross.js:248-250），design R-01 以此为最大风险披露并声称『apply 清单校验兜底，不阻断』，但测试面没有只读仓/异常 .git 场景用例验证 warn 降级后 ensureCrossWorktrees 仍成功创建 worktree。行为实现与披露一致（try/catch 包裹全部逻辑），缺的只是降级路径的回归锁。",
++      "location": "src/worktree-cross.js:235-251"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "finding",
++    "并发": "ok",
++    "切换": "finding",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-10T11:51:15Z"
++}

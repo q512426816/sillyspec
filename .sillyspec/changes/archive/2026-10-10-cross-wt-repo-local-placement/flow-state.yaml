@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -24,8 +32,13 @@ input: >-
   - WSL 分裂警告保留（显式配置配错盘仍警告；自动同盘天然不触发）
 
   - 测试：placement 测试默认断言更新（含 exclude/status 断言、旧位置兼容读取）+ 既有 isolation 系列全绿
-autopilot: false
+autopilot: true
 baseline_commit: e7a50f359b7bbde4ffca7c6a783ea496a51981ce
-updatedAt: '2026-10-10T11:38:11.755Z'
+updatedAt: '2026-10-10T11:54:37.851Z'
 baseline_sha256: 2e5aa51b0b60bf64837188144d71d2ebe1e02c89a80e3834610615abc97ba14b
+gate_summary: >-
+  test: passed ← module[]+deps(js11)（15.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010114828\test-result.json｜lint: failed
+  ← npm run lint（43.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010114828\test-result.json｜门文件 10 个
 

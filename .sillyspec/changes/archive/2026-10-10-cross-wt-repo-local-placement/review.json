@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-wt-repo-local-placement",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "[原 P2①，cb90e30e 已修复降 P3 留痕] placementMode 测试断言曾恒真（created 无 meta 字段 + '?? repo-local' 兜底）",
+      "evidence": "修复取证：src/worktree-cross.js:384 created.push 携带 meta；test/cross-worktree-placement.test.mjs:186 改真断言 r.created[0].meta && r.created[0].meta.placementMode==='repo-local'（meta 缺失即 fail，无兜底），:187 补 getCrossWorktreeMeta 落盘值断言，:152 legacy 段（crossPlacement）fixture 断言 explicit-legacy，:317 repos 内联 fixture 断言 explicit-inline——三值全绑定且与实现分支（inlinePlacements.has ? explicit-inline : explicit-legacy）一致。FR-02『meta 必须记录 placementMode』测试绑定恢复有效。",
+      "location": "test/cross-worktree-placement.test.mjs:152,186-187,317 + src/worktree-cross.js:384"
+    },
+    {
+      "severity": "P3",
+      "title": "[原 P2②，cb90e30e 已修复降 P3 留痕] multi-repo-context 曾只探 candidates[0]，legacy 存量 worktree 在该读取面失联",
+      "evidence": "修复取证：src/run/multi-repo-context.js:163-168 改用 resolveCrossWorktreePathCandidates 全候选遍历（注册表 → 仓内新公式 → 主仓 specBase 旧公式），任一候选 meta.json 在场即读——与 ensure 复用（getCrossWorktreeMeta）及 reconcile B' 档同款探测口径，无注册表条目的存量 worktree 在本读取面不再失联。三个『找真实在场位置』读取面探测行为现已一致。",
+      "location": "src/run/multi-repo-context.js:163-168"
+    },
+    {
+      "severity": "P3",
+      "title": "getCrossWorktreeMeta 高优候选 meta 损坏时提前 return null，遮蔽低优候选的有效存量 meta",
+      "evidence": "候选循环中 JSON.parse 抛异常或 meta.isCross 缺失即 return null，不 continue 探下一候选（worktree-cross.js:79-87）。注册表条目/仓内公式处残留损坏 meta.json 时，旧公式处的有效 legacy meta 永不可达——与 R-03 披露的『指向已亡目录』不同，这是『指向活目录但 meta 无效』的相邻残留态，返回契约（null=无/损坏）虽如 design 所述，但遮蔽语义未在 design 披露面内。",
+      "location": "src/worktree-cross.js:79-87"
+    },
+    {
+      "severity": "P3",
+      "title": "exclude 写失败 warn 降级路径（R-01）无测试绑定",
+      "evidence": "ensureRepoLocalExclude 的 catch 仅 console.warn 不阻断（src/worktree-cross.js:248-250），design R-01 以此为最大风险披露并声称『apply 清单校验兜底，不阻断』，但测试面没有只读仓/异常 .git 场景用例验证 warn 降级后 ensureCrossWorktrees 仍成功创建 worktree。行为实现与披露一致（try/catch 包裹全部逻辑），缺的只是降级路径的回归锁。",
+      "location": "src/worktree-cross.js:235-251"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T11:54:21Z"
+}
