@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -20,8 +28,13 @@ input: >-
   同步移除 run-quick
 
   - test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
-autopilot: false
+autopilot: true
 baseline_commit: 0c39c477acd89584ca333379f3d0b3153aa5379e
-updatedAt: '2026-10-10T00:59:29.456Z'
+updatedAt: '2026-10-10T01:07:44.161Z'
 baseline_sha256: 48e7dbb1bd327caca2cbbc7ccc429a7111c920482a9e024d14029cca3159f9ee
+gate_summary: >-
+  test: passed ← module[]+deps(js8)+fr(7)（3.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010010614\test-result.json｜lint: passed
+  ← npm run lint（44.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010010614\test-result.json｜门文件 12 个
 

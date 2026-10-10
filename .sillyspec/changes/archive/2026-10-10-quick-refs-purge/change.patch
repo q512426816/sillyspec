@@ -1,0 +1,589 @@
+diff --git a/.claude/CLAUDE.md b/.claude/CLAUDE.md
+index b1cde6c2..cc0ae40f 100644
+--- a/.claude/CLAUDE.md
++++ b/.claude/CLAUDE.md
+@@ -13,18 +13,18 @@
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走 quick**：`sillyspec run quick`。
++4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start --change <名>` → 直接干活 → `sillyspec flow done`。
+ 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+-6. **判规模选档**：≤3 文件、范围明确走 `quick`；多阶段 / 架构级走完整流程。
+-7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
+-8. **实证核验再 `--done`**：`quick --done` 前先 `npm test` + `npm run lint`，以落盘文件与测试结果为准，不信口头"已完成"。
++6. **判规模选档**：≤3 文件、范围明确走 `flow`；多阶段 / 架构级走完整流程。
++7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `flow start --change <YYYY-MM-DD-名> --input "<已做改动＋成功标准>"` → `flow done` 收尾，把已落盘改动如实登记为变更级归档。
++8. **实证核验再收口**：`flow done` 时 CLI 亲自实测（实测失败阻断收口，修好重跑），以落盘文件与测试结果为准，不信口头"已完成"。
+ 9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+ 10. **实现完成后对照文档验收**（design.md / 模块文档），并检查是否影响已有测试。
+ 11. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 12. **hook 拦截提交时禁止跳过**（`.husky/pre-push`），修复问题后再提交。
+ 13. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+ 14. **CLI 一律在主仓库根跑，永不 `cd` worktree**（会写分裂进度库）；读用绝对路径或 `git -C`。
+-15. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
++15. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠。
+ 16. **quicklog 手动精修**：CLI 只写骨架，`--done` 后手动补语义化标题 / 文件多行带括注 / 结果四段。
+ 17. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
+ 18. **发现 SillySpec 自身缺陷或改进点**，记录到 `docs/`（troubleshooting.md / ROADMAP / quicklog），处理好后归档。
+diff --git a/.claude/skills/sillyspec-auto/SKILL.md b/.claude/skills/sillyspec-auto/SKILL.md
+index 6caa5f2d..4e742fde 100644
+--- a/.claude/skills/sillyspec-auto/SKILL.md
++++ b/.claude/skills/sillyspec-auto/SKILL.md
+@@ -51,4 +51,4 @@ sillyspec run auto --input "<用户需求>" [--mode <模式>]
+ ### 边界
+ 
+ - 中断恢复：直接重跑 `sillyspec run auto`（进度已落盘，从断点续）。
+-- 分类为 quick 的小变更：CLI 会提示改跑 `sillyspec run quick`，照提示执行。
++- 分类为小变更时 CLI 会提示改走轻量变更 `sillyspec flow start`，照提示执行。
+diff --git a/.claude/skills/sillyspec-brainstorm/SKILL.md b/.claude/skills/sillyspec-brainstorm/SKILL.md
+index af30f364..1cdacbeb 100644
+--- a/.claude/skills/sillyspec-brainstorm/SKILL.md
++++ b/.claude/skills/sillyspec-brainstorm/SKILL.md
+@@ -67,12 +67,12 @@ sillyspec run brainstorm --done --answer "..." --output "..."    # 一步完成
+ ```
+                 ┌─ scale=large → plan（四件套齐）
+ scan → brainstorm ┤
+-                └─ scale=small → quick --linked-changes（仅 design.md）
++                └─ scale=small → flow start 收编（仅 design.md）
+ ```
+ 
+ brainstorm 完成时按 design.md frontmatter 的 `scale` 分叉：
+ - **large**（多文件/跨模块/有状态机或 schema 变更）：四件套齐 + Design Grill 审查通过（tier=independent 时由独立审查子代理产出 stage review.json）→ `sillyspec run plan --change <变更名>`
+-- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec run quick --linked-changes <变更名>`
++- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec flow start --change <变更名>` 收编续跑（design 以头脑风暴版为准）
+ 
+ > 规模由 AI 在 brainstorm 最后一步评估并写入 design.md frontmatter。判错可手动改 `scale` 后再跑相应阶段。
+ 
+diff --git a/.claude/skills/sillyspec-quick/SKILL.md b/.claude/skills/sillyspec-quick/SKILL.md
+deleted file mode 100644
+index 4a82e633..00000000
+--- a/.claude/skills/sillyspec-quick/SKILL.md
++++ /dev/null
+@@ -1,116 +0,0 @@
+----
+-name: sillyspec:quick
+-description: 用于明确、低风险、范围很小的直接任务。适合用户说"直接改、快速修、顺手调整、改个文案、修个小 bug、更新一个文件、不要完整流程"。跳过 brainstorm/plan，但仍按 sillyspec quick 流程执行。
+----
+-
+-## 何时使用
+-
+-- 明确、低风险、范围小的直接修改：改文案、修小 bug、更新单个文件
+-- 用户说"直接改、快速修、顺手调整、不要完整流程"
+-- brainstorm 判定 `scale=small` 的变更：带 design.md 进 quick（`sillyspec run quick --linked-changes <变更名>`），design 当背景
+-- 跳过 brainstorm/plan，但仍走 quick 的 3 步流程（理解任务 → 实现 → 自检提交）
+-
+-## 多变更说明（quick 特殊，务必注意）
+-
+-quick 阶段的 `--change` 语义是「关联变更」**且会触发步骤重置**，**不要用 `--change` 来指定关联变更**。多活跃变更时改用：
+-
+-- `--linked-changes none`：不关联，仅记 QUICKLOG（CLI 启动时写入）
+-- `--linked-changes a,b`：显式关联到变更 a、b
+-- `--non-interactive`：CI/脚本环境，默认不关联（避免交互 prompt 崩溃）
+-
+-首次 `sillyspec run quick` 选定的关联会持久化到 `.runtime/quick-sessions/<quick-session-id>/guard.json`（每个 quick 会话独立，多会话并发不互覆盖），后续 `--done` 自动复用，**不会重复弹交互 prompt**。
+-
+-## 步骤生命周期（所有阶段通用）
+-
+-> `sillyspec quick` 是 `sillyspec run quick` 的顶层别名，两者等价。
+-
+-```bash
+-sillyspec run quick                            # 输出当前步骤 prompt（首次会记录 baseline）
+-sillyspec run quick --done --output "摘要"     # 完成当前步骤
+-sillyspec run quick --status                   # 查看阶段进度
+-sillyspec run quick --skip                     # 跳过可选步骤
+-sillyspec run quick --reset                    # 重置阶段（从头开始）
+-sillyspec run quick --reopen --from-step N     # 重新打开已完成阶段修订（N=序号或名称）
+-```
+-
+-### 已有进行中会话的恢复（sessionId）
+-
+-`sillyspec run quick` / `run quick --done` / `--status` **不带 `--change` 时，是启动一个新 quick 会话**（CLI 分配新 `quick-<hash>` + 新 ql-ID，QUICKLOG 追加「进行中」条目），不是恢复正在进行的旧会话。多会话并发或中断恢复时，必须带上启动时 CLI 打印的 sessionId：
+-
+-```bash
+-sillyspec run quick --change quick-<hash>        # 恢复查看该会话当前 step prompt
+-sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会话步骤
+-```
+-
+-- 这里的 `--change quick-<hash>` 是「恢复到该 CLI 生成的 session」，与下方 `--linked-changes` 的关联业务变更语义不同：想关联真实业务变更才用 `--linked-changes`。
+-- 误启动的空壳会话：`sillyspec run quick --cancel --change quick-<hash>` 一键取消（QUICKLOG 条目翻「已取消」+ tasks.md 挂载行移除 + 会话目录清理 + db 行注销；已完成/已勾选的拒绝取消）。
+-
+-## 通用参数（所有阶段适用）
+-
+-| 参数 | 说明 |
+-|---|---|
+-| `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
+-| `--input "<一句话任务描述>"` | 通用参数，**quick 启动时强烈建议带**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。不带则落「(quick 任务)」占位标题——平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 `--done` 才回填（关联变更有 proposal/design 标题时可自动提取，免传） |
+-| `--non-interactive` | CI/脚本下禁用交互式 prompt |
+-| `--interactive` | 强制交互（即便 stdin 非 TTY） |
+-| `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
+-
+-## quick 特有参数
+-
+-| 参数 | 说明 |
+-|---|---|
+-| `--linked-changes none\|a,b` | **显式关联变更（取代 `--change`，推荐）**。none=不关联，a,b=关联列表 |
+-| `--files a.js,b.js` | 显式声明本次允许修改的文件（边界保护 + 声明即归属：多 agent 并发仓防他者窗口文件混入 QUICKLOG 文件行，未声明窗口文件进「审计：」行追溯；**他向亦然**——其他 active 会话已声明的文件在你的 `--done` 审计中自动剔除归该会话，不再误拦、无需 `--force-baseline`）。**中途可追加**：发现要改声明外文件（如新写的测试）时，带新增文件恢复会话即并入边界（追加不替换）——`sillyspec run quick --files <新增> --change <sessionId>`；不带 `--files` 恢复则边界原样保留 |
+-| `--file-notes "p::注 \|\| p::注"` | quick `--done` 用：QUICKLOG「文件：」行落盘为多行带括注 bullet（省事后手改文件行）。格式 `path::括注`，`\|\|` 分隔多条；**只随 step3 --done 同命令传**（CLI 短进程，step1/step2 传无效，不带到 step3） |
+-| `--allow-new` | 允许新增文件（默认禁止，防意外创建） |
+-| `--allow-delete` | 允许删除文件（默认 fail-closed，删除是破坏性操作；确认删除带此 flag 显式解锁） |
+-| `--force-baseline` | 允许覆盖 baseline 受保护文件 / 压制 `.sillyspec/` 危险判定（危险，慎用） |
+-| `--confirm` | ⚠️ 仅打印变更概览，**不解锁 blocked**（blocked 仍 exit 1）。真正解锁用 `--force-baseline`/`--allow-new`/`--allow-delete` |
+-
+-## 审计与并发变更（`--done` 边界审计）
+-
+-`--done` 收尾时对比 step1 baseline 与当前 `git status`，拦「危险文件 / 新增文件 / 覆盖 baseline」。要点：
+-
+-- **并发其他会话的 `.sillyspec/changes/<非关联变更>/` 不再被本 quick 拦截**。quick 自己没有 `changes/` 目录，该路径下非关联内容视为并发会话的工作，整体放行（确定性审计无法区分「并发工作」与「本 quick 偷建变更」，后者这类意图软判定留给 sillyhub）。
+-- **其他 active 会话已声明的文件自动豁免（`--files` 的他向语义）**。多 agent 并发时，并行 quick 会话 `--files` 显式声明的文件（如它的 `daemon/router.py`）出现在你的窗口内（它在你启动后改的、不在你的 baseline）——`--done` 审计自动剔除归该会话边界管，不再判危险 BLOCK、无需 `--force-baseline`。放行可见：输出 🔗 软警告逐文件列归属会话；若确系你的改动，恢复会话时 `--files` 追加声明；超 7 天未收尾的僵尸会话声明自动失效（`sillyspec run quick --cancel --change <他者会话ID>` 清理）。豁免只认他者**显式声明**——未声明的他者文件照旧走各门判定（漏声明的补 `--files`，危险文件仍需 `--force-baseline`）。
+-- **关联变更的文件仍走审计**：reverse-sync 改自己关联变更的 `design.md` 会被拦，需 `--force-baseline` 显式确认。
+-- **baseline 折叠目录前缀匹配**：step1 启动时整片 `changes/` 未跟踪会被 git 折叠成 `?? .sillyspec/changes/`（带尾斜杠 token）；审计时若该目录下文件被并发会话跟踪而展开成文件级路径，按尾斜杠 token 前缀放行其下所有文件，不误判。
+-- **同文件并发 warn（advisory，不阻断）**：step1 启动时若你的某个 `allowedFile` 已在他者脏文件列表里（他者也改了这文件），--done 时 CLI 会比对当前内容 hash 与启动时录入的 hash——不一致（你也改了它）即判「同文件并发」并 warn：整文件 pathspec 提交会夹带他者 hunk。warn 给出分离指引（`git add -p <file>` 交互选你自己的 hunk，或 `git diff <file> > mine.patch` 编辑后 `git apply --cached mine.patch` 再 commit）。这**不阻断** --done（你可能有意整文件提交），看 warn 后自行决定是否分离。
+-- **`--confirm` ≠ 解锁**：它只打印概览。blocked 时真正解锁的是 `--force-baseline`（压制 `.sillyspec/` 危险判定 + baseline 覆盖）/`--allow-new`（放行新增）/`--allow-delete`（放行删除，删除是破坏性操作默认 fail-closed，须显式 opt-in），三者可在 step1 或 `--done` 传，都生效。
+-
+-## 典型用法
+-
+-```bash
+-# 推荐启动：带一句话语义标题（QUICKLOG/平台快速修复列表进行中即可见可读）
+-sillyspec run quick --input "修复登录限流 INCR 计数误清" --linked-changes none --files src/auth.ts
+-
+-# 单变更项目，直接开始
+-sillyspec run quick
+-
+-# 多变更项目，显式不关联
+-sillyspec run quick --linked-changes none
+-
+-# 多变更项目，关联到指定变更
+-sillyspec run quick --linked-changes 2026-07-03-add-login
+-
+-# CI/脚本（非交互，避免 prompt 崩溃）
+-sillyspec run quick --non-interactive
+-sillyspec run quick --done --linked-changes none --output "修复手机号校验"
+-
+-# 限定修改文件范围
+-sillyspec run quick --files src/phone.ts,src/phone.test.ts
+-```
+-
+-## 铁律
+-
+-- **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
+-- quick 直接在主工作区改代码（不创建 worktree），范围必须小且明确
+-- 完成后立即 `--done`，不跳过
+-- QUICKLOG 记录的**骨架由 CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），`--done` 时 CLI 自动翻「已完成」+ 勾选 task + 回填文件路径。ql-ID 分配/状态/task 你无需手写，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
+-- **QUICKLOG 落盘已结构化（`--done` 后按需核对，多数无需手改）**：CLI 已落盘结构化条目——标题从 `--output` 的「需求：」自动提取、正文四字段自动分行、文件行用 `--file-notes` 时为多行带括注。`--done` 后只需核对：标题弱才改（禁留 `(quick 任务)` 占位）；没用 `--file-notes` 时文件行是单行、可事后补括注（参照同文件早期丰富条目）；正文 `需求：`/`根因：`/`方案：`/`结果：` 四段按需充实（禁只留一段「结果：」）。一条 quick = 一条独立 ql，不追加到旧条目
+-- **收尾顺序（模块文档在 `--done` 前，QUICKLOG 在 `--done` 后，别记混）**：① 命中模块→改模块文档→`git add`；② `sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文；若 `--linked-changes` 关联的真实变更其 tasks.md 已全部勾选**且该变更未进入完整流程**（进度库阶段停在 brainstorm 及之前），CLI 会自动将其归档到 `changes/archive/`；已走到 plan/execute/verify/archive 的变更不自动归档（tasks.md 全勾不等于流程收尾），须走原流程收尾）；③ 核对 QUICKLOG 标题（CLI 已从「需求：」提取并截断，写成短标题则无需改）→若改了再 `git add`
+-- **最后一步 `--done` 必须给全四字段**（逐项一句话）：🔧 **推荐四参数形式**（CLI 自动合成结构化模板，无格式事故面）：`--done --change <id> --req "一句语义化短标题" --cause "为什么改" --solution "怎么改的" --result "验证结果"`。兼容旧形式 `--output "需求：… 根因：… 方案：… 结果：…"`（手拼须懂截断规则、禁嵌套全角冒号，缺字段被拒 exit 1）。这是 QUICKLOG「结果：」归档的唯一来源。**`--req` 写一句语义化短标题**（写「改了什么」，如「登录限流修复——INCR 计数误清」）——CLI 把它提取为 QUICKLOG 条目标题，截到首个标点、超 80 字截断；写完整需求长句会被截成语义不完整的状语前半段，需求背景放 `--cause`/`--solution`。前两个 step 的 `--output` 是中间摘要，不用此模板
+-- **禁止**在没有运行 CLI 的情况下自行决定流程
+-
+-## 用户指令
+-$ARGUMENTS
+diff --git a/.sillyspec/changes/2026-10-10-quick-refs-purge/flow-state.yaml b/.sillyspec/changes/2026-10-10-quick-refs-purge/flow-state.yaml
+new file mode 100644
+index 00000000..c40a0ce9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-quick-refs-purge/flow-state.yaml
+@@ -0,0 +1,27 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  quick 残留引用清除改指 flow（含退役注记）
++
++  quick 通道已退役，但指引面残留教学式引用与退役墓碑注记：.claude/CLAUDE.md 规则 4/6/7/8 仍教 quick、brainstorm/auto skill 指向 run quick、根
++  SKILL.md/README.md 含 /sillyspec:quick 行与「已退役/存量收尾」注记、quick skill 目录与 run-quick 命令卡仍在。统一清除并改指 flow。
++
++
++  成功标准：
++
++  - 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run
++  quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++
++  - .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES
++  同步移除 run-quick
++
++  - test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
++autopilot: false
++baseline_commit: 0c39c477acd89584ca333379f3d0b3153aa5379e
++updatedAt: '2026-10-10T00:59:29.456Z'
++baseline_sha256: 48e7dbb1bd327caca2cbbc7ccc429a7111c920482a9e024d14029cca3159f9ee
++
+diff --git a/CLAUDE.md b/CLAUDE.md
+index b4cb094c..a4604e73 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -11,7 +11,7 @@
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`（quick 通道已退役 v3.30.0 起，仅存量在途会话可 --done/--cancel 收尾）。`--input` 引号内换行合法，下例可照抄：
++4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`。`--input` 引号内换行合法，下例可照抄：
+ 
+    ```bash
+    sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+@@ -22,7 +22,7 @@
+ 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+ 6. **判规模选档**：≤3 文件、范围明确走轻量变更；多阶段 / 架构级走完整流程。
+ 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `flow start --input "<已做改动＋成功标准>"` → `flow done` 收尾，把已落盘改动如实登记为变更级归档。
+-8. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在 `flow done`（存量 quick 会话为 `--done`）时**亲自实测** `npm test` + `npm run lint`（门禁：实测失败阻断收口，修好重跑即可；纯 doc/配置与未配置命令自动跳过）。agent 侧预跑**可选**——想省「被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动可跳过（lint 不扫 docs/，空转无信息），以落盘文件与测试结果为准，不信口头"已完成"。
++8. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在 `flow done` 时**亲自实测** `npm test` + `npm run lint`（门禁：实测失败阻断收口，修好重跑即可；纯 doc/配置与未配置命令自动跳过）。agent 侧预跑**可选**——想省「被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动可跳过（lint 不扫 docs/，空转无信息），以落盘文件与测试结果为准，不信口头"已完成"。
+ 9. **中途停下不靠额外命令存进度**——进度已由上一次收口自动落盘；恢复时用 `sillyspec progress show` 查看进度（轻量变更重跑 `flow start --change <名>` 看恢复简报），再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+ 10. **实现完成后对照文档验收**（design.md / 模块文档），并检查是否影响已有测试。
+ 11. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+diff --git a/README.md b/README.md
+index cd78982a..34dda5d5 100644
+--- a/README.md
++++ b/README.md
+@@ -85,7 +85,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
+ 
+ **也可以跳过完整流程：**
+ 
+-- 小改动：`/sillyspec:quick "修复 xxx"`
++- 小改动：`/sillyspec:flow "修复 xxx"`
+ - 不确定做什么：`/sillyspec:explore`
+ - 中断恢复：`/sillyspec:resume`
+ - 不知道下一步：`/sillyspec:continue`
+@@ -112,7 +112,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
+ | `/sillyspec:status` · `/sillyspec:state` | 查看进度 / 当前工作状态 |
+ | `/sillyspec:continue` | 自动判断并执行下一步 |
+ | `/sillyspec:explore` | 自由思考：画图、讨论、调研、HTML 原型 |
+-| `/sillyspec:quick` | 快速模式：跳过完整流程 |
++| `/sillyspec:flow` | 轻量变更（默认快道）：需求明确的小改动两步收口 |
+ | `/sillyspec:resume` | 恢复工作（支持大模块阶段进度） |
+ | `/sillyspec:doctor` | 项目自检与状态修复 |
+ | `/sillyspec:commit` | 智能提交 |
+@@ -122,7 +122,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
+ ## CLI 命令
+ 
+ ```bash
+-sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/verify/archive/scan/quick/explore）
++sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/verify/archive/scan/explore）
+ sillyspec run <stage> --done     完成当前步骤并推进到下一步
+ sillyspec run <stage> --status   查看阶段进度
+ sillyspec progress show          显示当前项目状态
+@@ -140,7 +140,7 @@ sillyspec change-delete <变更名>    删除变更（DB status=deleted 与归
+ **第一层：护城河（外部状态，模型能力不可替代）**
+ 
+ - **多 agent 并发控制** — 会话/变更/worktree 三级隔离；文件锁 ID 分配 + 双占用 fail-closed 硬拦；`--files` 边界声明切分"这是谁改的"；`--done` 前并发写预检告警他者未提交改动；平台同步乐观锁（base_ts + 身份 + 服务器权威钟）+ 冲突血统归属（自回声不误报）
+-- **实测验收门禁** — verify / quick 收尾时 CLI **亲自执行** test / lint 与 agent 自报对账，不符即阻断回滚；docHash 重算比对 + git 提交证据交叉对账防伪造；门禁跑在隔离快照，不受并行会话脏文件污染
++- **实测验收门禁** — verify 收尾时 CLI **亲自执行** test / lint 与 agent 自报对账，不符即阻断回滚；docHash 重算比对 + git 提交证据交叉对账防伪造；门禁跑在隔离快照，不受并行会话脏文件污染
+ - **持久账本 + 断点恢复** — SQLite（node:sqlite）单一进度源，进度/决策/审批答复全落库，跨会话跨天续跑；quicklog 四字段结构化台账可检索
+ - **跨仓变更管理** — task 卡声明 `repo:` 字段即可管理跨仓任务：同构 worktree 隔离、base 锚快照、apply 永不覆盖用户在途改动
+ 
+diff --git a/SKILL.md b/SKILL.md
+index d2312682..f7264aaf 100644
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -51,7 +51,6 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
+ | `/sillyspec:continue` | 自动判断并执行下一步 |
+ | `/sillyspec:explore` | 自由思考模式 |
+ | `/sillyspec:flow` | 轻量变更（默认快道）：flow start → 干活 → flow done |
+-| `/sillyspec:quick` | （已退役，重定向到 flow）仅存量在途会话收尾 |
+ | `/sillyspec:resume` | 恢复工作 |
+ | `/sillyspec:doctor` | 项目自检 |
+ | `/sillyspec:commit` | 智能提交 |
+@@ -70,7 +69,6 @@ sillyspec run execute         执行开发阶段（子代理并行 + worktree 
+ sillyspec run verify          执行验证阶段
+ sillyspec run archive         执行归档阶段
+ sillyspec flow start/done/status  轻量变更（默认快道，2 次调用收口）
+-sillyspec run quick           （已退役，仅存量在途会话 --done/--cancel 收尾）
+ sillyspec run explore         自由探索
+ sillyspec progress show       显示当前项目状态
+ sillyspec setup               安装推荐 MCP 工具
+@@ -81,12 +79,12 @@ sillyspec init                初始化（零交互，自动检测工具）
+ 
+ **护城河层（外部状态，模型能力不可替代）**
+ - **多 agent 并发控制** — 会话/变更/worktree 三级隔离；文件锁 ql-ID 分配 + 双占用 fail-closed 硬拦；边界声明归属切分（窗口∩声明）；并发写预检告警；平台乐观锁（base_ts + 身份头 + 服务器权威钟）
+-- **实测验收门禁** — verify/quick 收尾时 CLI 亲自执行 test/lint 与自报对账，不符即阻断回滚；docHash 重算 + git 证据交叉对账防伪造；门禁跑在隔离快照里不受并行会话脏文件污染
++- **实测验收门禁** — verify 收尾时 CLI 亲自执行 test/lint 与自报对账，不符即阻断回滚；docHash 重算 + git 证据交叉对账防伪造；门禁跑在隔离快照里不受并行会话脏文件污染
+ - **持久账本 + 断点恢复** — SQLite 单一进度源，进度/决策/审批答复全落库，跨会话跨天续跑；quicklog 四字段结构化台账
+ - **跨仓变更管理** — task 卡声明 `repo:` 字段，跨仓同构 worktree 隔离，base 锚快照，apply 不覆盖用户在途改动
+ 
+ **确定性对账层（机械核验，零模型轮次）**
+-- **范围对账** — 计划改动 × 实际改动三态对账（planned/unplanned/untouched），execute/verify/archive/quick 四处收尾注入
++- **范围对账** — 计划改动 × 实际改动三态对账（planned/unplanned/untouched），execute/verify/archive 三处收尾注入
+ - **API 契约矩阵** — provider/consumer 识别、endpoint 工件提取、前后端 API parity 对账
+ - **文档一致性棘轮** — 源码引用真实性校验（HEAD 模式），失败数只降不升
+ - **noAI 下沉 / IR 事实层** — 机械轮次下沉 CLI（骨架预生成、注入、代算对账），判断层留给 agent；同一契约清单事前渲染预览、事后引擎核验
+diff --git a/assets/command-cards/run-quick.md b/assets/command-cards/run-quick.md
+deleted file mode 100644
+index dc499cfb..00000000
+--- a/assets/command-cards/run-quick.md
++++ /dev/null
+@@ -1,20 +0,0 @@
+----
+-name: sillyspec:run-quick
+-description: 已退役重定向 — quick 通道已拒绝新会话（v3.31.0 起），小修补请用 /sillyspec:flow
+----
+-# 通道已退役
+-
+-quick 通道已于 v3.31.0 直接退役：`sillyspec run quick` 对新会话一律拒绝（exit 1 并指路 flow start）。本卡只保留触发词重定向，勿执行任何 quick 新会话命令。
+-
+-范围明确的小修补请走**轻量变更**（/sillyspec:flow）：
+-
+-```bash
+-sillyspec flow start --change <变更名> --input "<动机与背景>
+-
+-成功标准：
+-- <可验证标准>"
+-# → 直接干活（改代码写测试，治理工件 CLI 机器起草）
+-sillyspec flow done --change <变更名>
+-```
+-
+-升级前遗留的在途 quick 会话仍可收尾：`sillyspec run quick --change <会话ID>` 续跑 / `--done` 收口 / `--cancel` 取消（以 CLI 拒绝文案里的指引为准）。
+diff --git a/src/command-cards.js b/src/command-cards.js
+index ee589d91..da5b7a87 100644
+--- a/src/command-cards.js
++++ b/src/command-cards.js
+@@ -10,7 +10,7 @@ import { writeAtomicSync } from './fs-atomic.js'
+ 
+ export const COMMAND_CARD_TARGETS = { zcode: '.zcode/commands/sillyspec', claude: '.claude/commands/sillyspec' }
+ // flow=轻量变更默认道入口卡（2026-09-25-quick-channel-retire 配套：quick 退役后快道首次有卡）
+-export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'run-quick', 'status']
++export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'status']
+ 
+ const ANCHOR_TAIL_RE = /\n?<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->\s*$/
+ const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
+diff --git a/test/command-cards.test.mjs b/test/command-cards.test.mjs
+index 50696372..d66609f2 100644
+--- a/test/command-cards.test.mjs
++++ b/test/command-cards.test.mjs
+@@ -13,48 +13,42 @@ const anchorRe = /<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->$/
+ 
+ // ── 1. 资产齐全（发布白屏本地防线）──
+ const assets = readCardAssets()
+-t(assets.size === 8, `包内卡资产 8 张（实得 ${assets.size}）`)
++t(assets.size === 7, `包内卡资产 7 张（实得 ${assets.size}）`)
+ for (const n of COMMAND_CARD_NAMES) t(assets.has(n), `资产在列：${n}.md`)
+ 
+-// ── 2. 四段契约内容锚（FR-04；run-quick 为退役墓碑卡，四段豁免单测）──
++// ── 2. 四段契约内容锚（FR-04）──
+ for (const [name, body] of assets) {
+-  if (name === 'run-quick') continue
+   const stage = name.replace('run-', '')
+   t(body.includes('# 何时用') && body.includes('# 生命周期速查') && body.includes('# 防坑清单') && body.includes('# 边界声明'), `${name} 四段契约齐`)
+   t(name === 'status' || name === 'flow' ? body.includes(`sillyspec ${stage}`) : body.includes(`sillyspec run ${stage}`), `${name} 生命周期含命令`)
+ }
+-// run-quick 卡为退役墓碑重定向（2026-09-25-quick-channel-retire）：不再含启动命令，指路 flow
+-const quick = assets.get('run-quick')
+-t(quick.includes('已退役') && quick.includes('flow start'), 'run-quick 卡为退役墓碑并指路 flow start')
+-t(!quick.includes('sillyspec run quick --input'), 'run-quick 卡不再教新会话启动命令')
+ // flow 卡为默认快道入口：含两步协议与清晰度门格式锚
+ const flowCard = assets.get('flow')
+ t(flowCard.includes('flow start') && flowCard.includes('成功标准：') && flowCard.includes('flow done'), 'flow 卡含两步协议与清晰度门格式')
+ 
+-// ── 3. 注入产生双落点 8 卡（FR-01/03）──
++// ── 3. 注入产生双落点 7 卡（FR-01/03）──
+ const proj = mk('cc-')
+ const r1 = await injectCommandCards(proj, { tools: ['zcode', 'claude'], version: '9.9.9' })
+-t(r1.written.length === 16 && r1.warnings.length === 0, `首轮全写（8×2，实得 ${r1.written.length}；警告 ${r1.warnings.length}）`)
+-t(existsSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md')), 'zcode 落点在')
++t(r1.written.length === 14 && r1.warnings.length === 0, `首轮全写（7×2，实得 ${r1.written.length}；警告 ${r1.warnings.length}）`)
++t(existsSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-plan.md')), 'zcode 落点在')
+ t(existsSync(join(proj, COMMAND_CARD_TARGETS.claude, 'status.md')), 'claude 落点在')
+-const landed = readFileSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md'), 'utf8')
++const landed = readFileSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-plan.md'), 'utf8')
+ t(anchorRe.test(landed.replace(/\n$/, '')) && landed.includes('v9.9.9'), '锚行含版本与 sha')
+ 
+ // ── 4. 同参重跑 no-op（mtime 不动，FR-02 分支 2a）──
+-const f1 = join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md')
++const f1 = join(proj, COMMAND_CARD_TARGETS.zcode, 'run-plan.md')
+ const before = readFileSync(f1).toString()
+ const stat = statSync(f1)
+ await new Promise((r) => setTimeout(r, 1100))
+ const r2 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.9' })
+-t(r2.written.length === 0 && r2.updated.length === 0 && r2.skipped.length === 8, `同参重跑 no-op（skipped=${r2.skipped.length}）`)
++t(r2.written.length === 0 && r2.updated.length === 0 && r2.skipped.length === 7, `同参重跑 no-op（skipped=${r2.skipped.length}）`)
+ t(r2.warnings.length === 0, `no-op 零警告（完好文件勿误判手改——实得 ${JSON.stringify(r2.warnings)}）`)
+ t(statSync(f1).mtimeMs === stat.mtimeMs, 'mtime 不动')
+ t(readFileSync(f1).toString() === before, '内容零变化')
+ 
+ // ── 5. 内容更新覆盖（分支 2b：完好但内容旧——纯版本号变内容同应 no-op，先钉语义）──
+-// 载体用 flow 卡（run-quick 已是退役墓碑卡，无「# 何时用」标题不宜做改写锚）
+ const r3a = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
+-t(r3a.updated.length === 0 && r3a.skipped.length === 8, '纯版本变内容同 → no-op（内容 sha 才是判据）')
++t(r3a.updated.length === 0 && r3a.skipped.length === 7, '纯版本变内容同 → no-op（内容 sha 才是判据）')
+ const fFlow = join(proj, COMMAND_CARD_TARGETS.zcode, 'flow.md')
+ const curLanded = readFileSync(fFlow, 'utf8')
+ const curBody = curLanded.slice(0, curLanded.match(/<!-- sillyspec-card/).index)
+@@ -64,7 +58,7 @@ const oldSha = createHash('sha256').update(oldBody, 'utf8').digest('hex')
+ writeFileSync(fFlow, `${oldBody}<!-- sillyspec-card: v9.9.9 sha256=${oldSha} -->
+ `, 'utf8')
+ const r3 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
+-t(r3.updated.length === 1 && r3.updated.includes('flow') && r3.skipped.length === 7, `内容更新覆盖（仅旧内容那张：updated=${JSON.stringify(r3.updated)} skipped=${r3.skipped.length}）`)
++t(r3.updated.length === 1 && r3.updated.includes('flow') && r3.skipped.length === 6, `内容更新覆盖（仅旧内容那张：updated=${JSON.stringify(r3.updated)} skipped=${r3.skipped.length}）`)
+ t(readFileSync(fFlow, 'utf8').includes('v9.9.10') && !readFileSync(fFlow, 'utf8').includes('旧版内容'), '覆盖后为新内容+新锚')
+ 
+ // ── 6. 手改正文 → 跳过；force → 覆盖（分支 3）──
+diff --git a/test/input-teach-copyable.test.mjs b/test/input-teach-copyable.test.mjs
+index b223af79..d7ac68f3 100644
+--- a/test/input-teach-copyable.test.mjs
++++ b/test/input-teach-copyable.test.mjs
+@@ -76,8 +76,8 @@ test('② 各教学处带可照抄多行实例', () => {
+ })
+ 
+ test('②b 非 src 教学面实例在场与模糊形态清零', () => {
+-  // 逐字三处（CLAUDE.md / flow.md 卡 / run-quick.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
+-  for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'assets/command-cards/run-quick.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
++  // 逐字两处（CLAUDE.md / flow.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
++  for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
+     const src = read(p)
+     assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行`)
+     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)
+diff --git a/.sillyspec/changes/2026-10-10-quick-refs-purge/design.md b/.sillyspec/changes/2026-10-10-quick-refs-purge/design.md
+new file mode 100644
+index 00000000..d98357ca
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-quick-refs-purge/design.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:59:29.412Z
++---
++# 设计记录（Design Record）— 2026-10-10-quick-refs-purge
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++quick 通道 CLI 侧已退役（v3.30.0，src/index.js:223 拒新会话），但指引面残留三类东西：①教学式引用（.claude/CLAUDE.md 规则 4/6/7/8、brainstorm skill small 分叉、auto skill 分类提示仍指 run quick）；②退役墓碑注记（根 SKILL.md/README.md/CLAUDE.md 的「已退役/仅存量收尾」括注——用户明确要求连注记一并去掉）；③实体残留（.claude/skills/sillyspec-quick/ 目录、assets/command-cards/run-quick.md 墓碑卡）。方案：指引面统一改指 flow start/done（CLI 的 auto 分类提示与 flow skill 已是此口径，src/run/command.js:2061-2069 为准）；实体删除并同步 src/command-cards.js 的 COMMAND_CARD_NAMES 枚举（防 init 报资产缺失警告）与两个镜像测试。明确边界：src 存量收尾机制本体（src/stages/quick.js、run/command.js quick 分支、index.js 帮助行）与 docs/prompt/quick.md 机械镜像不动——那是 CLI 机制与代码镜像，非指引面（删镜像须先删 src 阶段，超出本变更）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++代码面仅一处：src/command-cards.js `COMMAND_CARD_NAMES` 移除 'run-quick'（数组元素删除，导出签名不变）——init/命令卡注入不再安装 run-quick 卡到目标项目（zcode/claude 落点 8 卡→7 卡）。行为变化：新 init 的项目不再有 /sillyspec:quick 命令卡；存量项目已装卡不回收（与 skill 目录同边界，init 无卸载通道——既有行为，非本变更引入）。文档面：根 SKILL.md/README.md/CLAUDE.md/.claude/CLAUDE.md/brainstorm/auto skill 的 quick 引用清零。测试面：test/command-cards.test.mjs 计数 8→7 系列同步；test/input-teach-copyable.test.mjs 夹具清单去 run-quick.md 卡。
++
++### 文件变更清单
++
++| 操作 | 文件路径 | 说明 |
++|---|---|---|
++| 修改 | SKILL.md | 删 /sillyspec:quick 行、run quick CLI 行、特性枚举中 quick 两处 |
++| 修改 | README.md | 小改动指引改 /sillyspec:flow、表格行替换、stage 枚举去 quick、特性行去 quick |
++| 修改 | CLAUDE.md | 规则 4/8 去退役注记括注 |
++| 修改 | .claude/CLAUDE.md | 规则 4/6/7/8/15 quick→flow、去 quick 子句 |
++| 修改 | .claude/skills/sillyspec-brainstorm/SKILL.md | small 分叉（图+条目）run quick --linked-changes → flow start 收编 |
++| 修改 | .claude/skills/sillyspec-auto/SKILL.md | 分类提示 run quick → flow start |
++| 删除 | .claude/skills/sillyspec-quick/SKILL.md | quick skill 整目录退役清除 |
++| 删除 | assets/command-cards/run-quick.md | quick 命令卡（墓碑卡一并去） |
++| 修改 | src/command-cards.js | COMMAND_CARD_NAMES 移除 'run-quick' |
++| 修改 | test/command-cards.test.mjs | 计数 8→7 系列、删墓碑断言、载体换 run-plan.md |
++| 修改 | test/input-teach-copyable.test.mjs | 夹具清单去 run-quick.md 卡、注释三处→两处 |
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：静态文档 + 一行枚举数组，无事件序。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++并行会话的 sillyspec-explore 改动不属本变更（--accept-dirty-gap 同款处置留痕）；本变更文件面显式 pathspec 提交；test/command-cards.test.mjs 若被他侧同时改，git 冲突面暴露。command-cards.js 为 CLI 源码，改动会被 import 依赖测试（command-cards/input-teach）实测覆盖。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++文档与枚举改动无中间态；flow done 幂等断点续；卡片删除后 init 重跑不再注入该卡（锚行三态幂等按在场文件判断，缺卡零副作用）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++skill/卡片分发按项目目录隔离；本仓库 .claude/skills 是分发源，删 sillyspec-quick 后新 init 项目不再获得该 skill，存量项目副本不回收（与 quick 退役现状一致）。scan skill 的 --quick 档位与 commit skill 的 QUICKLOG 条目规则是不同特性（扫描深度/日志面），不动。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：测试计数漏改（command-cards.test.mjs 中 8/16/7 等硬编码计数分散在 5 处）——对策：逐处核对并在收口实测跑该文件。放弃方案：①连 src 存量收尾机制一并删除（src/stages/quick.js + run/command.js quick 分支 + doctor/quick-sessions 运行时清理）——升级前在途会话将失去 --done/--cancel 收尾通道，且牵动 docs/prompt 镜像再生成，属 CLI 功能级变更，超出「指引面清除」的用户诉求边界；②保留墓碑卡/注记做存量会话指路——用户明确否决（「仅存量收尾注记也不要，直接去掉」）。
+diff --git a/.sillyspec/changes/2026-10-10-quick-refs-purge/proposal.md b/.sillyspec/changes/2026-10-10-quick-refs-purge/proposal.md
+new file mode 100644
+index 00000000..d7afdd75
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-quick-refs-purge/proposal.md
+@@ -0,0 +1,28 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:59:29.412Z
++---
++# 提案书（Proposal）— 2026-10-10-quick-refs-purge
++
++## 动机
++
++任务原话转写：quick 残留引用清除改指 flow（含退役注记）
++quick 通道已退役，但指引面残留教学式引用与退役墓碑注记：.claude/CLAUDE.md 规则 4/6/7/8 仍教 quick、brainstorm/auto skill 指向 run quick、根 SKILL.md/README.md 含 /sillyspec:quick 行与「已退役/存量收尾」注记、quick skill 目录与 run-quick 命令卡仍在。统一清除并改指 flow。
++
++成功标准：
++- 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++- .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
++- test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++2. .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
++3. test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
++
++## 成功标准（可验证）
++
++1. 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++2. .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
++3. test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
+diff --git a/.sillyspec/changes/2026-10-10-quick-refs-purge/requirements.md b/.sillyspec/changes/2026-10-10-quick-refs-purge/requirements.md
+new file mode 100644
+index 00000000..b0d6529c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-quick-refs-purge/requirements.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:59:29.412Z
++---
++# 需求规格（Requirements）— 2026-10-10-quick-refs-purge
++
++## 功能需求
++
++### FR-01: 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++
++- 指引面六个文件必须不含 `sillyspec run quick`、`/sillyspec:quick`、「已退役」「存量收尾」quick 注记；小改动/轻量路径指引必须指向 `flow start`/`flow done`。边界：scan skill `--quick` 档位、commit skill QUICKLOG 条目规则、src 存量收尾机制与 docs/prompt 镜像不属指引面，禁止顺手改动。
++
++#### 场景：主路径
++
++Given 六个指引文件 / When grep 检索 quick（忽略 quicklog）/ Then 零命中；小改动引导语均含 flow start 或 flow done。
++
++### FR-02: .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
++
++- `.claude/skills/sillyspec-quick/` 与 `assets/command-cards/run-quick.md` 必须从仓库删除；`COMMAND_CARD_NAMES` 必须不再含 `'run-quick'`（init 注入 7 卡，无资产缺失警告）。
++
++#### 场景：主路径
++
++Given 卡资产目录与枚举 / When `node test/command-cards.test.mjs` / When readCardAssets 读取 / Then 资产数 7、逐名在列、注入双落点 14 文件零警告。
++
++### FR-03: test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
++
++- 两个测试必须与 7 卡现实同步（计数 7/14、无 run-quick 墓碑断言、夹具清单无 run-quick.md），且必须实测跑绿（command-cards 40/40、input-teach 7/7）；不得为凑绿删除断言弱化覆盖（墓碑断言随实体删除属同步，非弱化）。
++
++#### 场景：主路径
++
++Given 更新后的两测试 / When `node test/command-cards.test.mjs` 与 `node --test test/input-teach-copyable.test.mjs` / Then 全 PASS exit 0。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: 不适用：纯文档指引面，无代码路径可测；核验面为 grep 检索零命中（本次已验：六文件 quick 检索忽略 quicklog 后零命中）
++FR-02: test/command-cards.test.mjs「资产齐全 + 双落点 7 卡」——readCardAssets 计数与 COMMAND_CARD_NAMES 逐名断言直接覆盖枚举/资产一致性
++FR-03: test/command-cards.test.mjs「40/40 ALL PASS」＋ test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场」——实测全绿
+diff --git a/.sillyspec/changes/2026-10-10-quick-refs-purge/tasks.md b/.sillyspec/changes/2026-10-10-quick-refs-purge/tasks.md
+new file mode 100644
+index 00000000..75858797
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-quick-refs-purge/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:59:29.412Z
++---
++# 任务注册表（Tasks）— 2026-10-10-quick-refs-purge
++
++- [x] task-01: 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
++- [x] task-02: .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
++- [x] task-03: test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿

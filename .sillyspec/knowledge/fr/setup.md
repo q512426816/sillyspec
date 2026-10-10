@@ -1254,3 +1254,54 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-07-wave-auto-adopt-review-dedup
   status: active
+
+## FR-setup-074 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
+变更：2026-10-10-quick-refs-purge
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 六个指引文件 / When grep 检索 quick（忽略 quicklog）/ Then 零命中；小改动引导语均含 flow start 或 flow do
+全文：.sillyspec/changes/archive/2026-10-10-quick-refs-purge/requirements.md#FR-01
+最近确认：5fb2a6a94a3822711af676ffcfd0fd010ff6464d
+
+## FR-setup-075 .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES 同步移除 run-quick
+变更：2026-10-10-quick-refs-purge
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 卡资产目录与枚举 / When `node test/command-cards.test.mjs` / When readCardAssets 读取 / Th
+全文：.sillyspec/changes/archive/2026-10-10-quick-refs-purge/requirements.md#FR-02
+最近确认：5fb2a6a94a3822711af676ffcfd0fd010ff6464d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-quick-refs-purge:flow:测试绑定FR-02
+  tests: test/command-cards.test.mjs「资产齐全 + 双落点 7 卡」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-quick-refs-purge
+  status: active
+
+## FR-setup-076 test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
+变更：2026-10-10-quick-refs-purge
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 更新后的两测试 / When `node test/command-cards.test.mjs` 与 `node --test test/input-teac
+全文：.sillyspec/changes/archive/2026-10-10-quick-refs-purge/requirements.md#FR-03
+最近确认：5fb2a6a94a3822711af676ffcfd0fd010ff6464d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-quick-refs-purge:flow:测试绑定FR-03
+  tests: test/command-cards.test.mjs「40/40 ALL PASS」 | test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-quick-refs-purge
+  status: active

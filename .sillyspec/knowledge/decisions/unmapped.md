@@ -2172,3 +2172,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
 理由：最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-10-quick-refs-purge
+锚点：未记录
+最近确认：5fb2a6a94a3822711af676ffcfd0fd010ff6464d
+理由：最大风险：测试计数漏改（command-cards.test.mjs 中 8/16/7 等硬编码计数分散在 5 处）——对策：逐处核对并在收口实测跑该文件。放弃方案：①连 src 存量收尾机制一并删除（src/stages/quick.js + run/command.js quick 分支 + doctor/quick-sessions 运行时清理）——升级前在途会话将失去 --done/--cancel 收尾通道，且牵动 docs/prompt 镜像再生成，属 CLI 功能级变更，超出「指引面清除」的用户诉求边界；②保留墓碑卡/注记做存量会话指路——用户明确否决（「仅存量收尾注记也不要，直接去掉」）。

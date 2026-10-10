@@ -16,6 +16,22 @@ quick 通道 CLI 侧已退役（v3.30.0，src/index.js:223 拒新会话），但
 
 代码面仅一处：src/command-cards.js `COMMAND_CARD_NAMES` 移除 'run-quick'（数组元素删除，导出签名不变）——init/命令卡注入不再安装 run-quick 卡到目标项目（zcode/claude 落点 8 卡→7 卡）。行为变化：新 init 的项目不再有 /sillyspec:quick 命令卡；存量项目已装卡不回收（与 skill 目录同边界，init 无卸载通道——既有行为，非本变更引入）。文档面：根 SKILL.md/README.md/CLAUDE.md/.claude/CLAUDE.md/brainstorm/auto skill 的 quick 引用清零。测试面：test/command-cards.test.mjs 计数 8→7 系列同步；test/input-teach-copyable.test.mjs 夹具清单去 run-quick.md 卡。
 
+### 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 修改 | SKILL.md | 删 /sillyspec:quick 行、run quick CLI 行、特性枚举中 quick 两处 |
+| 修改 | README.md | 小改动指引改 /sillyspec:flow、表格行替换、stage 枚举去 quick、特性行去 quick |
+| 修改 | CLAUDE.md | 规则 4/8 去退役注记括注 |
+| 修改 | .claude/CLAUDE.md | 规则 4/6/7/8/15 quick→flow、去 quick 子句 |
+| 修改 | .claude/skills/sillyspec-brainstorm/SKILL.md | small 分叉（图+条目）run quick --linked-changes → flow start 收编 |
+| 修改 | .claude/skills/sillyspec-auto/SKILL.md | 分类提示 run quick → flow start |
+| 删除 | .claude/skills/sillyspec-quick/SKILL.md | quick skill 整目录退役清除 |
+| 删除 | assets/command-cards/run-quick.md | quick 命令卡（墓碑卡一并去） |
+| 修改 | src/command-cards.js | COMMAND_CARD_NAMES 移除 'run-quick' |
+| 修改 | test/command-cards.test.mjs | 计数 8→7 系列、删墓碑断言、载体换 run-plan.md |
+| 修改 | test/input-teach-copyable.test.mjs | 夹具清单去 run-quick.md 卡、注释三处→两处 |
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？

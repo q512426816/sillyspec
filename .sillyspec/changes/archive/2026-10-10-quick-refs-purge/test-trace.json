@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-quick-refs-purge",
+  "rows": [
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-quick-refs-purge:flow:测试绑定FR-02",
+      "tests": [
+        "test/command-cards.test.mjs「资产齐全 + 双落点 7 卡」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-quick-refs-purge"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-quick-refs-purge:flow:测试绑定FR-03",
+      "tests": [
+        "test/command-cards.test.mjs「40/40 ALL PASS」",
+        "test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-quick-refs-purge"
+    }
+  ]
+}

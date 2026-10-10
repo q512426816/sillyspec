@@ -1,0 +1,183 @@
+{
+  "change": "2026-10-10-quick-refs-purge",
+  "baseline": "0c39c477acd89584ca333379f3d0b3153aa5379e",
+  "head": "5fb2a6a94a3822711af676ffcfd0fd010ff6464d",
+  "files": [
+    ".claude/CLAUDE.md",
+    ".claude/skills/sillyspec-auto/SKILL.md",
+    ".claude/skills/sillyspec-brainstorm/SKILL.md",
+    ".claude/skills/sillyspec-quick/SKILL.md",
+    ".sillyspec/changes/2026-10-10-quick-refs-purge/design.md",
+    ".sillyspec/changes/2026-10-10-quick-refs-purge/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-quick-refs-purge/proposal.md",
+    ".sillyspec/changes/2026-10-10-quick-refs-purge/requirements.md",
+    ".sillyspec/changes/2026-10-10-quick-refs-purge/tasks.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILL.md",
+    "assets/command-cards/run-quick.md",
+    "src/command-cards.js",
+    "test/command-cards.test.mjs",
+    "test/input-teach-copyable.test.mjs"
+  ],
+  "totals": {
+    "files": 16,
+    "additions": 194,
+    "deletions": 173
+  },
+  "savedAt": "2026-10-10T01:07:42.619Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    },
+    {
+      "dir": ".claude",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-auto",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-brainstorm",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-quick",
+      "files": 1
+    },
+    {
+      "dir": "assets/command-cards",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "0c39c477acd89584ca333379f3d0b3153aa5379e",
+    "totals": {
+      "files": 11,
+      "additions": 29,
+      "deletions": 173
+    },
+    "rows": [
+      {
+        "path": ".claude/CLAUDE.md",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-auto/SKILL.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-brainstorm/SKILL.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-quick/SKILL.md",
+        "additions": 0,
+        "deletions": 116,
+        "kind": "deleted",
+        "planned": "删除",
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "README.md",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "SKILL.md",
+        "additions": 2,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "assets/command-cards/run-quick.md",
+        "additions": 0,
+        "deletions": 20,
+        "kind": "deleted",
+        "planned": "删除",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/command-cards.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/command-cards.test.mjs",
+        "additions": 10,
+        "deletions": 16,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/input-teach-copyable.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "d522c974d90961ec4f96de69db3f3fe3fcbaed212e3d6b2cb4cbeab7b201a6f3",
+  "patchStatus": "ok"
+}
