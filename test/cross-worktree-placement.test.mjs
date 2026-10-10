@@ -184,6 +184,33 @@ test('缺省 placement 零回归（FR-01）', () => {
   cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
 });
 
+test('placement 落位根在跨仓仓根内 → 配置错拒绝创建（FR-01 fail-closed）', () => {
+  const fx = makeFixture();
+  const yamlPath = join(fx.specBase, 'local.yaml');
+  const baseYaml = readFileSync(yamlPath, 'utf8');
+
+  // 形态一：placement = 跨仓仓根本身
+  writeFileSync(yamlPath, baseYaml + `worktree:\n  crossPlacement:\n    front: ${fx.cross.replace(/\\/g, '/')}\n`);
+  assert.throws(
+    () => ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase }),
+    /仓根（.*）之内|落在该仓仓根/,
+    '仓根本身 → 抛配置错',
+  );
+
+  // 形态二：placement = 跨仓仓根的子路径
+  writeFileSync(yamlPath, baseYaml + `worktree:\n  crossPlacement:\n    front: ${(join(fx.cross, 'sub')).replace(/\\/g, '/')}/\n`);
+  assert.throws(
+    () => ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase }),
+    /仓根（.*）之内|落在该仓仓根/,
+    '仓根子路径 → 抛配置错',
+  );
+
+  // 零副作用：没建 worktree 目录、没建分支、没写注册表
+  assert.ok(!existsSync(join(fx.cross, `${CHANGE}--front`)), 'worktree 目录未创建');
+  assert.throws(() => git(fx.cross, ['rev-parse', '--verify', `refs/heads/sillyspec/${CHANGE}`]), '分支未创建');
+  assert.equal(readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], undefined, '注册表无条目');
+});
+
 // ── 4. 注册表健壮性 ──
 
 test('悬挂键 sweep + 无 meta 不入列 + 损坏注册表降级（FR-02）', () => {
