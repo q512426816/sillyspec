@@ -20,7 +20,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join, resolve as resolvePath, isAbsolute, dirname } from 'path';
 import { writeAtomicSync } from './fs-atomic.js';
 
-export const PLACEMENT_REGISTRY_FILE = 'cross-placements.json';
+const PLACEMENT_REGISTRY_FILE = 'cross-placements.json';
 
 /** 跨仓 worktree 目录名（默认落位与自定义落位同形态——isCrossWorktreeDir 的双连字符判定依赖它） */
 export function crossWorktreeDirName(changeName, repoKey) {

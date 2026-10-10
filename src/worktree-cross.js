@@ -191,7 +191,7 @@ function isLegacyMainSpecbasePlacement(worktreePath, specBase) {
  * @param {string} repoRoot 跨仓仓根
  * @param {string} entry exclude 条目（如 '.sillyspec/'）
  */
-export function ensureRepoLocalExclude(repoRoot, entry) {
+function ensureRepoLocalExclude(repoRoot, entry) {
   try {
     const excludePath = join(repoRoot, '.git', 'info', 'exclude');
     let content = '';
