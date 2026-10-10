@@ -497,6 +497,22 @@ function parseSimpleYaml(content) {
       if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
       if (!Array.isArray(result[topKey][childKey])) result[topKey][childKey] = []
       result[topKey][childKey].push(parseValue(trimmed.slice(2)))
+      continue
+    }
+
+    // indent>=4 的 `<子键>: <值>`（三层嵌套标量，坑 repo-inline-worktree-placement：repos 条目
+    // 对象形态 `repos: → <key>: → path:/worktree:`）——空数组占位（indent2 无值条目）转对象后
+    // 挂键。此前该形态被静默丢弃，analyzeCrossRepoCd 等消费方读不到三层配置。
+    if (indent >= 4 && childKey) {
+      const subMatch = trimmed.match(/^([^:]+):\s*(.*)$/)
+      if (!subMatch) continue
+      if (UNSAFE_KEYS.has(subMatch[1].trim())) continue
+      if (typeof result[topKey] !== 'object' || Array.isArray(result[topKey])) result[topKey] = {}
+      const cur = result[topKey][childKey]
+      if (Array.isArray(cur) && cur.length === 0) result[topKey][childKey] = {}
+      if (result[topKey][childKey] && typeof result[topKey][childKey] === 'object' && !Array.isArray(result[topKey][childKey])) {
+        result[topKey][childKey][subMatch[1].trim()] = parseValue(subMatch[2])
+      }
     }
   }
 

@@ -12,7 +12,7 @@ import {
 } from '../src/hooks/worktree-guard.js'
 import { DB } from '../src/db.js'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve as resolvePath } from 'node:path'
 import { tmpdir } from 'node:os'
 
 let passed = 0, failed = 0
@@ -115,6 +115,44 @@ console.log('\n=== ③ analyzeCrossRepoCd 单元：双基准/未注册/null 形�
 
   assert(analyzeCrossRepoCd('ls -la', main, main, false) === null, '无 cd 段 → null')
   assert(analyzeCrossRepoCd('cd ../nope && npx eslint .', main, main, false) === null, '未注册目标 → null')
+}
+
+console.log('\n=== ④ repos 对象条目双形态（repo-inline-worktree-placement）===\n')
+{
+  const main = mkProject('xrg5')
+  const sibling = mkProject('xrg5-fe')
+  const sibling2 = mkProject('xrg5-be')
+  mkdirSync(join(main, '.sillyspec'), { recursive: true })
+  const sibAbs = sibling.split('\\').join('/')
+  const sib2Abs = sibling2.split('\\').join('/')
+  writeFileSync(join(main, '.sillyspec', 'local.yaml'), [
+    'repos:',
+    '  fe-repo:',
+    `    path: ${sibAbs}`,
+    '    worktree: /mnt/e/wt-fe',
+    `  be-repo: {path: ${sib2Abs}, worktree: /mnt/e/wt-be}`,
+    '',
+  ].join('\n'))
+  seedDb(main)
+
+  // 块式对象条目：cd 纠偏按 path 子键解析仓根（verify 期测试类放行语义不变）
+  const sibRel = '../' + sibling.split(/[\\/]/).pop()
+  const r = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npx eslint src`, cwd: main })
+  assert(r.blocked === false, '块式对象条目 cd 纠偏命中（path 子键）')
+
+  // inline 对象字符串（parseSimpleYaml 不解析 inline flow，原样字符串手动提取 path）
+  const sib2Rel = '../' + sibling2.split(/[\\/]/).pop()
+  const r2 = shouldBlock({ tool: 'Bash', command: `cd ${sib2Rel} && npm test`, cwd: main })
+  assert(r2.blocked === false, 'inline 对象条目 cd 纠偏命中（inline 提取 path）')
+
+  // 对象形态下 analyzeCrossRepoCd 单元：hits 带 repoKey 与真实仓根
+  const a = analyzeCrossRepoCd(`cd ${sibRel} && npx eslint .`, main, main, false)
+  assert(a && a.hits.length === 1 && a.hits[0].key === 'fe-repo', '块式对象命中 fe-repo')
+  assert(resolvePath(a.hits[0].repoRoot).toLowerCase() === resolvePath(sibling).toLowerCase(), 'repoRoot 解析为 path 子键值')
+
+  // worktree 子键值不是注册仓根：cd 去落位目录不命中放行（维持 stage 门禁拦截）
+  const r3 = shouldBlock({ tool: 'Bash', command: `cd /mnt/e/wt-fe && npx eslint .`, cwd: main })
+  assert(r3.blocked === true, 'worktree 落位根不充当注册仓根（维持拦截）')
 }
 
 if (failed > 0) {

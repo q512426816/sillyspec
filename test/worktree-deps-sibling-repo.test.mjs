@@ -57,3 +57,41 @@ test('注册兄弟仓相对路径 → 分类跳过（准确理由），未注册
   assert.ok(rogueMod, '未注册越界模块进结果')
   assert.match(rogueMod.reason, /拒绝 link/, '未注册越界维持 fail-closed 拒绝')
 })
+
+test('repos 对象条目（块式 {path, worktree}）——roots 只收 path，worktree 落位根不混入豁免面', () => {
+  const mainRoot = mk('wdsobj-main-')
+  const sibling = mk('wdsobj-sibling-')
+  const rogue = mk('wdsobj-rogue-')
+  mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
+  mkdirSync(sibling, { recursive: true })
+  mkdirSync(rogue, { recursive: true })
+
+  const siblingRel = '../' + sibling.split(/[\/]/).pop()
+  const rogueRel = '../' + rogue.split(/[\/]/).pop()
+  // 关键构造：worktree 落位根故意配成 rogue 目录——若 registeredRepoRoots 误收 worktree 值，
+  // rogue 模块会被豁免成「跨仓注册仓」（skipped），正确行为是维持「拒绝 link」
+  writeFileSync(join(mainRoot, '.sillyspec', 'local.yaml'), [
+    'repos:',
+    '  fe-repo:',
+    `    path: ${siblingRel}`,
+    `    worktree: ${rogueRel}`,
+    'modules:',
+    '  fe:',
+    `    path: ${siblingRel}`,
+    '  rogue:',
+    `    path: ${rogueRel}`,
+    '',
+  ].join('\n'))
+
+  const r = provisionDeps(mainRoot, mainRoot, { yamlTextOverride: null })
+  const mods = r.depsModules || []
+  const fe = mods.find(m => m.path === siblingRel)
+  const rogueMod = mods.find(m => (m.path || '').includes(rogue.split(/[\/]/).pop()))
+
+  assert.ok(fe, '对象条目仓根模块进结果')
+  assert.equal(fe.status, 'skipped')
+  assert.match(fe.reason, /跨仓注册仓/, 'path 子键正确进注册根集合（对象形态不失效）')
+
+  assert.ok(rogueMod, '越界模块进结果')
+  assert.match(rogueMod.reason, /拒绝 link/, 'worktree 落位根不混入豁免集合——rogue 维持拒绝')
+})

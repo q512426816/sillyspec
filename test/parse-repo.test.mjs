@@ -253,6 +253,55 @@ console.log('\n--- 场景 15：Windows 反斜杠路径 + 行内注释 ---')
   eq(reg.get('sillyspec'), 'C:\\Users\\qinyi\\IdeaProjects\\sillyspec', 'Windows 反斜杠路径保留')
 }
 
+// 16. 对象条目双形态（块式 + inline）——registry 值恒取 path，'path'/'worktree' 键名不污染 Map
+console.log('\n--- 场景 16：对象条目块式 + inline（repo-inline-worktree-placement）---')
+{
+  const yaml = [
+    'repos:',
+    '  plain: /mnt/e/plain',
+    '  block:',
+    '    path: /mnt/e/block-repo',
+    '    worktree: /mnt/e/wt-block',
+    '  inline: {path: /mnt/e/inline-repo, worktree: /mnt/e/wt-inline}',
+    '  quoted:',
+    '    path: "/mnt/e/quoted"   # 尾注释',
+    'other:',
+    '  x: 1',
+  ].join('\n')
+  const reg = parseRepoRegistry(yaml)
+  eq(reg.size, 4, `registry 四条目（无 path/worktree 键名污染）: ${JSON.stringify([...reg])}`)
+  eq(reg.get('plain'), '/mnt/e/plain', '字符串条目零回归')
+  eq(reg.get('block'), '/mnt/e/block-repo', '块式对象取 path')
+  eq(reg.get('inline'), '/mnt/e/inline-repo', 'inline 对象取 path')
+  eq(reg.get('quoted'), '/mnt/e/quoted', '块式带引号+尾注释清洗')
+  eq(reg.get('path'), undefined, "'path' 键名不入 Map")
+  eq(reg.get('worktree'), undefined, "'worktree' 键名不入 Map")
+
+  const pl = parseRepoWorktreePlacements(yaml)
+  eq(pl.size, 2, `placements 只收对象条目: ${JSON.stringify([...pl])}`)
+  eq(pl.get('block'), '/mnt/e/wt-block', '块式 worktree 子键')
+  eq(pl.get('inline'), '/mnt/e/wt-inline', 'inline worktree 子键')
+  eq(pl.get('plain'), undefined, '字符串条目无落位语义')
+}
+
+// 17. 块式对象后随下一条目（子块消费边界）
+console.log('\n--- 场景 17：块式条目后紧跟下一条目 ---')
+{
+  const yaml = [
+    'repos:',
+    '  a:',
+    '    path: /repo-a',
+    '  b: /repo-b',
+    '  c:',
+    '    worktree: /wt-c',
+  ].join('\n')
+  const reg = parseRepoRegistry(yaml)
+  eq(reg.get('a'), '/repo-a', '块式 a 取 path')
+  eq(reg.get('b'), '/repo-b', '块式后的字符串条目 b 正常')
+  eq(reg.get('c'), undefined, '块式 c 无 path 不入 registry')
+  eq(reg.size, 2, `registry 恰两条: ${JSON.stringify([...reg])}`)
+}
+
 console.log('\n==================================================')
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 console.log('==================================================')
