@@ -44,4 +44,7 @@ FR-03: 不适用：npm publish 为外部发布操作，无单测面；由钉扎�
 
 ## 核验留痕
 
-（发布后回填：shasum / files 数 / 传播等待 / 绕行注记）
+- FR-01 ✅：node --test test/quick-retired.test.mjs 零失败（R5 断言 pkg.version === '3.32.4'，发布前复跑）。
+- FR-02 ✅：git push origin main 成功（8698c0d4..d33dc4c5，pre-push lint+test+docs gate 放行；docs 基线陈旧 39<80 自动重锚 39→42——棘轮只紧不松）；归档件随后续推送上远端。
+- FR-03 ✅：npm publish 成功（+ sillyspec@3.32.4，shasum a1c7bbaee0140b0e13751633bae58220243dc346，328 files，unpacked 13.3 MB）；传播等待 180s 后钉扎通道双核验通过——npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4。
+- 过程注记：发布环境 DNS 劫持仍在本轮实证——未钉扎 npm view 返回 latest=3.32.2（污染数据，真实为 3.32.3）；腾讯 DoH（1.12.12.12 直连）解析真实 Cloudflare IP 池 104.16.x.34，钉扎 IP 自 3.32.3 用的 104.16.19.35 刷新为 104.16.11.34（.sillyspec/.runtime/dns-pin.cjs，gitignore 面，进程级注入零系统改动，复刻 3.32.2/3.32.3 同款绕行）；发布前钉扎预核验 latest=3.32.3 确认通道可信后发布；github.com 解析不受影响，推送不经钉扎。
