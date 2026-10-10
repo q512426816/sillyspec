@@ -76,8 +76,8 @@ test('② 各教学处带可照抄多行实例', () => {
 })
 
 test('②b 非 src 教学面实例在场与模糊形态清零', () => {
-  // 逐字三处（CLAUDE.md / flow.md 卡 / run-quick.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
-  for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'assets/command-cards/run-quick.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
+  // 逐字两处（CLAUDE.md / flow.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
+  for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
     const src = read(p)
     assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行`)
     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)

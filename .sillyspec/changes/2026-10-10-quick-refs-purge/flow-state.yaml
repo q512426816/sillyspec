@@ -1,0 +1,27 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  quick 残留引用清除改指 flow（含退役注记）
+
+  quick 通道已退役，但指引面残留教学式引用与退役墓碑注记：.claude/CLAUDE.md 规则 4/6/7/8 仍教 quick、brainstorm/auto skill 指向 run quick、根
+  SKILL.md/README.md 含 /sillyspec:quick 行与「已退役/存量收尾」注记、quick skill 目录与 run-quick 命令卡仍在。统一清除并改指 flow。
+
+
+  成功标准：
+
+  - 指引面（根 SKILL.md / README.md / CLAUDE.md / .claude/CLAUDE.md / brainstorm、auto skill）无 sillyspec run
+  quick、/sillyspec:quick 引用及「已退役/存量收尾」注记，小改动指引统一指向 flow start/done
+
+  - .claude/skills/sillyspec-quick/ 目录与 assets/command-cards/run-quick.md 删除，src/command-cards.js 的 COMMAND_CARD_NAMES
+  同步移除 run-quick
+
+  - test/command-cards.test.mjs 与 test/input-teach-copyable.test.mjs 同步更新且跑绿
+autopilot: false
+baseline_commit: 0c39c477acd89584ca333379f3d0b3153aa5379e
+updatedAt: '2026-10-10T00:59:29.456Z'
+baseline_sha256: 48e7dbb1bd327caca2cbbc7ccc429a7111c920482a9e024d14029cca3159f9ee
+
