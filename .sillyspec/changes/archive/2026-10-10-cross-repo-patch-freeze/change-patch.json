@@ -1,0 +1,108 @@
+{
+  "change": "2026-10-10-cross-repo-patch-freeze",
+  "baseline": "db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3",
+  "head": "5b1d08eee85a0f66f8884d704cd83783ca3d5e0f",
+  "files": [
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/decisions.md",
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/design.md",
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/proposal.md",
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/requirements.md",
+    ".sillyspec/changes/2026-10-10-cross-repo-patch-freeze/tasks.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/scope-audit.js",
+    "test/cross-repo-patch-freeze.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 652,
+    "deletions": 88
+  },
+  "savedAt": "2026-10-10T11:14:52.066Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 4,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "db7c5dc9cbfb91ae4ae4f3f343b2191e9a8465a3",
+    "totals": {
+      "files": 4,
+      "additions": 376,
+      "deletions": 88
+    },
+    "rows": [
+      {
+        "path": "src/flow-parity.js",
+        "additions": 14,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 32,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/scope-audit.js",
+        "additions": 130,
+        "deletions": 85,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cross-repo-patch-freeze.test.mjs",
+        "additions": 200,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "61c4e325b39daff29915c73baa23795ed96ab51e0a2d8971544de7ab9bf2fc3b",
+  "patchStatus": "ok"
+}

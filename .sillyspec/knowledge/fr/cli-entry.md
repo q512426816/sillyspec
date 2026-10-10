@@ -8191,3 +8191,105 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-10-drift-review-governance-keep
   status: active
+
+## FR-cli-entry-436 跨仓 diff 正文收口冻结（repos[].patch）
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：跨仓已提交改动冻结；跨仓未提交改动冻结（C 档）
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-01
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-01
+  tests: test/cross-repo-patch-freeze.test.mjs「跨仓已提交/未提交改动 patch 冻结 + sha256 锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-repo-patch-freeze
+  status: active
+
+## FR-cli-entry-437 patch 采集 fail-soft 不阻断
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：跨仓 diff 失败
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-02
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-02
+  tests: test/cross-repo-patch-freeze.test.mjs「diff 失败 fail-soft patch=null 主仓面照常」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-repo-patch-freeze
+  status: active
+
+## FR-cli-entry-438 轻量道跨仓行真实三态
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：跨仓实改不再谎报；降级仓诚实留痕
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-03
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-03
+  tests: test/cross-repo-patch-freeze.test.mjs「实改真实三态 + 降级仓诚实留痕 + 异常退 ⊘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-repo-patch-freeze
+  status: active
+
+## FR-cli-entry-439 heavy/thin 同源单一实现
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：同源消费
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-04
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-04
+  tests: test/cross-repo-patch-freeze.test.mjs「reconcileCrossRepoPlan 结构契约（两通道同源断言同函数）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-repo-patch-freeze
+  status: active
+
+## FR-cli-entry-440 顶级面与单套纪律零回归
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：单仓变更零行为
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-05
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-05
+  tests: test/close-trace-unified.test.mjs | test/cross-repo-patch-freeze.test.mjs「无跨仓声明零行为」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-cross-repo-patch-freeze
+  status: active
+
+## FR-cli-entry-441 读方与平台消费面兼容
+变更：2026-10-10-cross-repo-patch-freeze
+状态：active
+摘要：旧读方面对增量键
+全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-06
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de

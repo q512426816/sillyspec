@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-repo-patch-freeze",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-repo-patch-freeze.test.mjs「跨仓已提交/未提交改动 patch 冻结 + sha256 锚」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-repo-patch-freeze"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-repo-patch-freeze.test.mjs「diff 失败 fail-soft patch=null 主仓面照常」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-repo-patch-freeze"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-repo-patch-freeze.test.mjs「实改真实三态 + 降级仓诚实留痕 + 异常退 ⊘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-repo-patch-freeze"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-04",
+      "tests": [
+        "test/cross-repo-patch-freeze.test.mjs「reconcileCrossRepoPlan 结构契约（两通道同源断言同函数）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-repo-patch-freeze"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-cross-repo-patch-freeze:flow:测试绑定FR-05",
+      "tests": [
+        "test/close-trace-unified.test.mjs",
+        "test/cross-repo-patch-freeze.test.mjs「无跨仓声明零行为」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-cross-repo-patch-freeze"
+    }
+  ]
+}

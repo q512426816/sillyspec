@@ -2255,3 +2255,30 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
 理由：最大风险：三处手写 YAML 解析（plan-postcheck 内核、guard parseSimpleYaml 产物消费、deps 内联 IIFE）对同一对象形态的解析漂移——缓解：内核 `_parseRepoEntries` 单一事实源 + 旁路两处各自的最小升级 + 三处都有形态级测试（场景 16/17、guard-cd 既有回归、sibling-repo 既有回归）。试过但放弃的方案：直接删除 worktree.crossPlacement（未发布、干净迁移）——上一变更刚归档发号 FR-setup-083~089（knowledge/fr 已入库），删除需 supersede 对账且破坏「归档件即事实」原则；保留兼容读面零成本（readCrossPlacementConfig 已存在），优先级内联 > legacy 平滑迁移。
+
+## D-001@v1 跨仓 diff 正文收口冻结内嵌 change-patch.json（scopeAudit.repos[].patch）
+状态：implemented
+变更：2026-10-10-cross-repo-patch-freeze
+锚点：src/scope-audit.js:reconcileCrossRepoPlan
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+理由：收口时点（execute --done 与 flow done 两通道）按 repos[].anchor 窗口对每个已注册跨仓采集 diff 正文，内嵌 change-patch.json `scopeAudit.repos[].patch` + `patchSha256`（\n 归一 sha256）；不落独立文件族（方案 A，破单套两件纪律、读侧动面最大，记非目标）、不混单 change.patch（方案 C，git apply 必失效，否决）。
+故障面：大 patch 使 JSON 体积膨胀（R-01，binary 折叠+文件面过滤缓解，v1 接受）；B/C 档字面 ref 窗口漂移（R-02，采集与窗口判定同步段完成，anchor.label 诚实标注）
+退役判据：平台出现按仓 diff 独立展示/apply 需求时，升级方案 A 独立文件族（接口不锁死）
+
+## D-002@v1 跨仓对账集成段收敛单一导出函数，轻量道接入真实三态
+状态：implemented
+变更：2026-10-10-cross-repo-patch-freeze
+锚点：src/flow-parity.js:buildThinSnapshotRows
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+理由：内联段抽导出 `reconcileCrossRepoPlan`（scope-audit.js），heavy 改调用行为等价、thin（flow.js done 路径）同源接入；复用 collectRepoActual 共享内核（2026-09-20「单一真相源」哲学延续），跨仓行升级真实三态，降级仓诚实 ⊘+degradedReason。
+故障面：轻量道新增跨仓 git 调用拉长 flow done 时延（R-03，仅有跨仓声明触发 + GIT_TIMEOUT 兜底 + fail-soft 不阻断）
+退役判据：跨仓对账内核升级（如 A 档锡点全量覆盖轻量道）时随内核自然演进，本函数仅组装层
+
+## D-003@v1 patch 采集窗口与行数窗口同根同窗；顶级主仓投影面不动
+状态：implemented
+变更：2026-10-10-cross-repo-patch-freeze
+锚点：src/scope-audit.js:computeFullFlowAudit
+最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+理由：patch 窗口 = 行数采集窗口（A/B' 档锚 hash 为 baseRef；B 档 HEAD~1 窗口用字面 HEAD~1、C 档未提交窗口用字面 HEAD，工作树口径含 untracked 自拼 hunk——buildFrozenPatch 既有形态），「与行数同根同锚」契约延续到正文粒度；顶级 files[]/totals 保持主仓实改投影（projectTraceFaceRows 不动，既有单测钉住），全景走 scopeAudit.rows（全三态）+ scopeAudit.repos[]（锚点/计数/正文）——展示面由平台读 scopeAudit 承接，「沉淀资产面 vs 对账面」双层架构（2026-10-07-unify-close-trace）不破。
+故障面：平台不读 scopeAudit.repos[] 时展示面仍只见主仓——本变更供数完整，展示承接是 SillyHub 侧一次读侧适配（跨仓协作边界，显式声明）
+退役判据：顶级面与对账面双层架构被平台统一读法取代时重估

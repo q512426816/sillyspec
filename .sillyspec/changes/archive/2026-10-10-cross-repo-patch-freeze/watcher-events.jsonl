@@ -1,0 +1,35 @@
+{"ts":1791630165992,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1791630182402,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1791630198676,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1791630202076,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791630215135,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1791630293909,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/stages/plan-postcheck.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630330347,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/worktree-cross.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630382327,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/worktree-deps.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630385717,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/hooks/worktree-guard.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630418206,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/config-schema.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630467083,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/parse-repo.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630470465,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/cross-worktree-placement.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630535885,"kind":"commit","stage":null,"detail":"0277c6ee","provisional":true}
+{"ts":1791630556004,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791630555913,"kind":"commit","stage":null,"detail":"bc02fdbf","provisional":true}
+{"ts":1791630559499,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791630559499,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791630582462,"kind":"commit","stage":null,"detail":"db3d7b6b","provisional":true}
+{"ts":1791630611283,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791630611973,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791630611973,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791630619183,"kind":"commit","stage":null,"detail":"0ff23e61","provisional":true}
+{"ts":1791630723764,"kind":"commit","stage":null,"detail":"f4f29021","provisional":true}
+{"ts":1791630750587,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791630750778,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791630753353,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791630753353,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1791630773233,"kind":"commit","stage":null,"detail":"5b1d08ee","provisional":true}
+{"ts":1791630830808,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（49.0s） · 20261010111350","provisional":true}
+{"ts":1791630899473,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/parse-repo.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630932205,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/worktree-guard-cross-repo-cd.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791630951830,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/hooks/worktree-guard.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791631007528,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/worktree-deps-sibling-repo.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791631030196,"kind":"commit","stage":null,"detail":"1afcd83d","provisional":true}
+{"ts":1791631098634,"kind":"commit","stage":null,"detail":"becd7a9c","provisional":true}

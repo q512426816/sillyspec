@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-cross-repo-patch-freeze",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5b1d08eee85a0f66f8884d704cd83783ca3d5e0f",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 绑定测试未直测「对账成功但 patch 阶段 diff 失败」路径",
+      "evidence": "绑定测试走未注册仓降级分支（collectRepoActual 双源失败→degraded→patch:null，已测）；而「仓对账成功但 buildFrozenPatch 内 git diff 报错」仅靠 buildFrozenPatch fail-closed 返 null（scope-audit.js:403）+ 调用点空/非串守卫（scope-audit.js:1410）静默兜住，无直接单测。FR-02 场景 core.bare=true 实际落双源失败降级分支，故绑定成立，残余为未测支路而非缺防护。",
+      "location": "src/scope-audit.js:1408-1413"
+    },
+    {
+      "severity": "P3",
+      "title": "B 档行数与 patch 窗口存在不对称，「同根同窗」措辞精度差",
+      "evidence": "B 档 anchor.base=null → collectNumstatByPath 直接返空 Map（scope-audit.js:117）行数落 null 降级档，而 patch 用字面 HEAD~1 采到正文（scope-audit.js:1405）——同一仓出现 patch 有内容而行数 null。实现与 FR-01 括号内逐档定义（B 档用字面 HEAD~1）一致，且测试注释明示（「B 档 anchor.base 为 null 不出空 patch」），design 非目标（行数不升级）显式接受，非数据正确性风险。",
+      "location": "src/scope-audit.js:1403-1407"
+    },
+    {
+      "severity": "P3",
+      "title": "flow.js done 路径接线段无自动化测试",
+      "evidence": "flow.js:1498-1516 的接线（planEntries repo 门控、resolveRuntimeRoot 传参、snapObj.repos 条件展开、console 摘要行）未被任何测试覆盖（tasks.md task-03 验证仅 node --check + 单测断言）；单测覆盖的是同参纯函数组合链（parse→reconcile→buildThinSnapshotRows）。接线笔误最坏结果是 fail-soft 退旧行为（catch 兜底）而非错数据，风险有界。",
+      "location": "src/flow.js:1498-1516"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T11:18:38Z"
+}
