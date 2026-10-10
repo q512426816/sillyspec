@@ -1,6 +1,7 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -26,6 +27,7 @@ input: >-
   - 新增测试覆盖以上各面，相关回归全绿
 autopilot: true
 baseline_commit: 326f985988debbe2cd917d82c182cbb15e4fb23d
-updatedAt: '2026-10-10T01:27:48.266Z'
+updatedAt: '2026-10-10T02:08:35.429Z'
 baseline_sha256: c1ffcfe0bd33c674fb5bf6e7f0541d3929809d167f25bf514852e1ad3fa2c316
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
 
