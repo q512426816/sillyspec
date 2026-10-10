@@ -1,0 +1,170 @@
+diff --git a/.claude/skills/sillyspec-brainstorm/SKILL.md b/.claude/skills/sillyspec-brainstorm/SKILL.md
+index 42492154..af30f364 100644
+--- a/.claude/skills/sillyspec-brainstorm/SKILL.md
++++ b/.claude/skills/sillyspec-brainstorm/SKILL.md
+@@ -108,6 +108,7 @@ brainstorm 在 `tier=independent` 规模下除 design.md 等四件套外，还
+ - **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
+ - 只做当前步骤 prompt 描述的操作，不跳过、不自行扩展
+ - 产物写入 CLI 输出的 `changeDir` 目录（如 `<changeDir>/design.md`），不要自己拼路径
++- **变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字**——CLI 从 proposal.md / design.md 首行 H1 提取简述写入 changes.title（剥「提案书（Proposal）— / 设计文档（Design）—」固定前缀后取段），design.md 固定格式 `# 设计文档（Design）— <简述>` 中的简述即面板标题，按此口径写
+ - 完成后立即 `--done`，不跳过
+ 
+ ## 用户指令
+diff --git a/.sillyspec/changes/2026-10-10-brainstorm-skill-title/flow-state.yaml b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/flow-state.yaml
+new file mode 100644
+index 00000000..f6399a26
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/flow-state.yaml
+@@ -0,0 +1,26 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  brainstorm skill 补变更标题指引（≤50 字中文概括）
++
++  flow skill 已有「变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字」，brainstorm skill 未同步——头脑风暴道的面板标题由 CLI 从 proposal/design 首行 H1
++  简述提取，skill 无口径指引，agent 写标题无字数约束。
++
++
++  成功标准：
++
++  - .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++
++  - 纯文档改动，不触 src/test
++autopilot: true
++baseline_commit: 8698c0d4bd1e253acb7de3fb14115b6d3596b84e
++updatedAt: '2026-10-10T00:48:00.605Z'
++baseline_sha256: 0a354db9e8f1fb3f86a89e2bd2b11535f06c4148f6c4154fd560f22639cba669
++gate_summary: 'test: —｜lint: —｜门文件 2 个'
++
+diff --git a/.sillyspec/changes/2026-10-10-brainstorm-skill-title/design.md b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/design.md
+new file mode 100644
+index 00000000..c1363a50
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/design.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:43:10.552Z
++---
++# 设计记录（Design Record）— 2026-10-10-brainstorm-skill-title
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++flow skill 已有「变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字」指引（.claude/skills/sillyspec-flow/SKILL.md），brainstorm skill 未同步。头脑风暴道的标题机制与 flow 道不同：CLI（src/quicklog.js `deriveTitleFromLinkedChange`，由 src/run/complete.js 在阶段完成/单步 --done 时调用）从变更产物 proposal.md / design.md 的首个 `#` H1 提取——剥「提案书（Proposal）—」「设计文档（Design）—」固定前缀后取简述写入 changes.title（面板显示）。方案：在 brainstorm skill 铁律段加一条，写明字数口径（≤50 字、建议 ~20 字）与提取来源（proposal/design 首行 H1），agent 写四件套时即按口径组织 H1 简述。纯 skill 文档改动，不触 src/test，不改 CLI 行为。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无代码接口变化。对外可见面仅 `.claude/skills/sillyspec-brainstorm/SKILL.md` 铁律段新增一条指引文案（该目录是 init 的 skills 分发源 src/init.js，新项目 init 后拿到新版；存量项目按既有机制不自动覆盖）。CLI 标题提取逻辑（前缀剥除/破折号取段）不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++不适用：纯静态文档，无事件序。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++skill 文件由 git 管理，与本变更并行修改的会话走 git 冲突面；提交用显式 pathspec（skill 文件 + 本变更目录），不夹带他会话文件（如并行的 sillyspec-explore 改动）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++中断恢复以 tasks.md 勾选为准；文档改动无中间态（要么已改要么未改），flow done 幂等断点续。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++指引只约束 brainstorm skill 的读者（agent）；flow/quick 道各有自己的标题写入点（--input 首行 / --title / quick 需求字段提取），互不串台。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。
+diff --git a/.sillyspec/changes/2026-10-10-brainstorm-skill-title/proposal.md b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/proposal.md
+new file mode 100644
+index 00000000..cb9f89a0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/proposal.md
+@@ -0,0 +1,25 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:43:10.552Z
++---
++# 提案书（Proposal）— 2026-10-10-brainstorm-skill-title
++
++## 动机
++
++任务原话转写：brainstorm skill 补变更标题指引（≤50 字中文概括）
++flow skill 已有「变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字」，brainstorm skill 未同步——头脑风暴道的面板标题由 CLI 从 proposal/design 首行 H1 简述提取，skill 无口径指引，agent 写标题无字数约束。
++
++成功标准：
++- .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++- 纯文档改动，不触 src/test
++
++## 变更范围
++
++按成功标准机械推导，共 2 条验收面：
++1. .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++2. 纯文档改动，不触 src/test
++
++## 成功标准（可验证）
++
++1. .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++2. 纯文档改动，不触 src/test
+diff --git a/.sillyspec/changes/2026-10-10-brainstorm-skill-title/requirements.md b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/requirements.md
+new file mode 100644
+index 00000000..94e82f14
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/requirements.md
+@@ -0,0 +1,28 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:43:10.552Z
++---
++# 需求规格（Requirements）— 2026-10-10-brainstorm-skill-title
++
++## 功能需求
++
++### FR-01: .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++
++- `.claude/skills/sillyspec-brainstorm/SKILL.md` 必须含一条变更标题指引：面板显示用标题为总结一句中文概括、≤50 字、建议 ~20 字，并必须说明该标题由 CLI 从 proposal.md / design.md 首行 H1 提取。
++
++#### 场景：主路径
++
++Given brainstorm skill 存在于 `.claude/skills/sillyspec-brainstorm/SKILL.md` / When agent 读 skill 执行头脑风暴 / Then 铁律段含上述标题口径指引，agent 写四件套 H1 简述时按 ≤50 字中文概括组织。
++
++### FR-02: 纯文档改动，不触 src/test
++
++- 本变更必须仅触及 `.claude/skills/sillyspec-brainstorm/SKILL.md` 与变更目录工件，禁止改动 `src/` 与 `test/` 下任何文件。
++
++#### 场景：主路径
++
++Given 本变更提交面 / When `git show --name-only` 核对 / Then 仅含 skill 文档与变更目录路径，无 src/test 路径。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: 不适用：纯 skill 文档指引增补，无代码路径可测；核验面为文档内容本身（grep 命中「变更标题（面板显示用）」与「≤50 字」口径即达标）
++FR-02: 不适用：纯文档改动声明，无测试逻辑；核验面为提交面路径清单（无 src/test 条目）
+diff --git a/.sillyspec/changes/2026-10-10-brainstorm-skill-title/tasks.md b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/tasks.md
+new file mode 100644
+index 00000000..1c2fed49
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-brainstorm-skill-title/tasks.md
+@@ -0,0 +1,8 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T00:43:10.552Z
++---
++# 任务注册表（Tasks）— 2026-10-10-brainstorm-skill-title
++
++- [x] task-01: .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
++- [x] task-02: 纯文档改动，不触 src/test

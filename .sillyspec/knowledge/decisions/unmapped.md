@@ -2165,3 +2165,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：308772b24b892fe6d8dc028af0bba46b60902a74
 理由：最大风险：npm publish 凭证/2FA 环节失败（本地 npmrc 有 always-auth 告警配置）——失败则重试或转用户处理，版本面提交与推送不受影响可先行落定。放弃方案①：发 3.32.4（用户口头版本号）——线上 latest 实为 3.32.2，跳 3.32.3 违反用户自己给的准绳「最小版本加一」，选 3.32.3 并在交付说明中向用户说明差异。放弃方案②：npm version patch 自动提交——自动提交不走本仓显式 pathspec 纪律，手工两文件编辑+显式清单提交。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-10-brainstorm-skill-title
+锚点：未记录
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+理由：最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。

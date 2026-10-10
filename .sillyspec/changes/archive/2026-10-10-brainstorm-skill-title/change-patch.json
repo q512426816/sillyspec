@@ -1,0 +1,63 @@
+{
+  "change": "2026-10-10-brainstorm-skill-title",
+  "baseline": "8698c0d4bd1e253acb7de3fb14115b6d3596b84e",
+  "head": "730426594a32383ad7ab53f6d4f8e7e7c542f3ca",
+  "files": [
+    ".claude/skills/sillyspec-brainstorm/SKILL.md",
+    ".sillyspec/changes/2026-10-10-brainstorm-skill-title/design.md",
+    ".sillyspec/changes/2026-10-10-brainstorm-skill-title/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-brainstorm-skill-title/proposal.md",
+    ".sillyspec/changes/2026-10-10-brainstorm-skill-title/requirements.md",
+    ".sillyspec/changes/2026-10-10-brainstorm-skill-title/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 129,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-10T00:48:50.966Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-brainstorm",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "8698c0d4bd1e253acb7de3fb14115b6d3596b84e",
+    "totals": {
+      "files": 1,
+      "additions": 1,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-brainstorm/SKILL.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "ee10da1133260dda094740be8eb57e9fc35f9ca1801d168e79872141ff950c3c",
+  "patchStatus": "ok"
+}

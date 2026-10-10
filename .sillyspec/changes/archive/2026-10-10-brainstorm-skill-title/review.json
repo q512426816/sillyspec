@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-brainstorm-skill-title",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "730426594a32383ad7ab53f6d4f8e7e7c542f3ca",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok，边界已裁决：可接受（边界1 只改 skill 层不动 CLI prompt 层——可接受，提交面实证零 src 改动且文案锚定真实 CLI 机制无分叉风险；边界2 .claude/skills 为 init 分发源、存量项目不自动覆盖——可接受，src/init.js:489 实证 skillsSource 即仓库 .claude/skills，不自动覆盖为既有 init 语义非本变更新增风险）"
+  },
+  "reviewedAt": "2026-10-10T00:51:24Z"
+}

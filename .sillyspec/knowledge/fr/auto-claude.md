@@ -87,3 +87,21 @@ created_at: 2026-10-07T14:27:54.389Z
 摘要：关键词命中新落点
 全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-04
 最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-008 .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
+变更：2026-10-10-brainstorm-skill-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given brainstorm skill 存在于 `.claude/skills/sillyspec-brainstorm/SKILL.md` / When agent
+全文：.sillyspec/changes/archive/2026-10-10-brainstorm-skill-title/requirements.md#FR-01
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+
+## FR-auto-claude-009 纯文档改动，不触 src/test
+变更：2026-10-10-brainstorm-skill-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更提交面 / When `git show --name-only` 核对 / Then 仅含 skill 文档与变更目录路径，无 src/test 路径。
+全文：.sillyspec/changes/archive/2026-10-10-brainstorm-skill-title/requirements.md#FR-02
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
