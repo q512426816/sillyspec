@@ -1326,9 +1326,17 @@ export class WorktreeManager {
    * 写进 worktree 内的 .sillyspec——而 apply 的 filterDeliverableFiles 把 .sillyspec/changes/ 排除在
    * 交付外（spec 文档不进代码 patch），cleanup 删除 worktree 这些产物即蒸发、主仓流程看不到。
    * 删除前扫 worktree 内两棵子树做最后打捞：
-   *   changes/<name>/** → 主仓缺失则 copy 回（verify-result.md 等核心场景）；同名不同内容仅列
-   *                      清单 warn 不覆盖（主仓版本可能是更新的，覆盖会倒退）
-   *   docs/**           → 主仓缺失则 copy 回（模块文档卡片；同名差异不提示——tracked checkout 副本常态）
+   *   changes/<name>/** → 三态判定（坑 archive-resurrect，2026-10-10 下游实证
+   *                      2026-10-09-attachment-inline-reference 残留 13 文件：归档把 changes/<name>/
+   *                      整体 rename 进 changes/archive/ 后，原路径缺失被误判 worktree 独有，旧快照
+   *                      整批复制回原路径复活已归档目录）：
+   *                      · 原路径同名存在 → 内容不同仅列清单 warn 不覆盖（主仓版本可能是更新的）
+   *                      · 原路径缺、changes/archive/<name>/ 有副本 → 判归档搬运，跳过不复制
+   *                        （不复活原路径、不覆盖 archive 权威副本）
+   *                      · 原路径与 archive 均缺 → 真 worktree 独有照捞：归档态捞进
+   *                        changes/archive/<name>/（原路径已注销禁止重建），未归档态捞回原路径
+   *   docs/**           → 主仓缺失则 copy 回（模块文档卡片；同名差异不提示——tracked checkout 副本常态；
+   *                      docs 不参与归档搬运，无三态）
    * 只扫本变更子树（其它 change 的副本文件不越权搬运）。异常只 warn 不阻断清理。
    * @private
    */
@@ -1340,7 +1348,11 @@ export class WorktreeManager {
       if (resolve(wtSpec) === resolve(mainSpec)) return; // in-place：同一目录，无需打捞
       const salvaged = [];
       const conflicts = [];
-      const salvageTree = (subDir, reportConflict) => {
+      const archivedSkipped = [];
+      const salvagedIntoArchive = [];
+      const archivedBase = join('changes', 'archive', name);
+      const archivedBaseExists = existsSync(join(mainSpec, archivedBase));
+      const salvageTree = (subDir, reportConflict, trackArchive) => {
         const srcRoot = join(wtSpec, subDir);
         if (!existsSync(srcRoot)) return;
         const walk = (dir) => {
@@ -1349,27 +1361,49 @@ export class WorktreeManager {
             if (entry.isDirectory()) { walk(src); continue; }
             if (!entry.isFile()) continue;
             const rel = relative(wtSpec, src);
+            const rest = relative(srcRoot, src);
             const dst = join(mainSpec, rel);
+            const archivedDst = trackArchive ? join(mainSpec, archivedBase, rest) : null;
             try {
-              if (!existsSync(dst)) {
+              if (existsSync(dst)) {
+                if (reportConflict && readFileSync(src, 'utf8') !== readFileSync(dst, 'utf8')) {
+                  conflicts.push(rel);
+                }
+              } else if (archivedDst && existsSync(archivedDst)) {
+                archivedSkipped.push(rest);
+              } else if (archivedDst && archivedBaseExists) {
+                mkdirSync(dirname(archivedDst), { recursive: true });
+                copyFileSync(src, archivedDst);
+                salvagedIntoArchive.push(rest);
+              } else {
                 mkdirSync(dirname(dst), { recursive: true });
                 copyFileSync(src, dst);
                 salvaged.push(rel);
-              } else if (reportConflict && readFileSync(src, 'utf8') !== readFileSync(dst, 'utf8')) {
-                conflicts.push(rel);
               }
             } catch { /* 单文件失败不拖垮整体打捞 */ }
           }
         };
         walk(srcRoot);
       };
-      salvageTree(join('changes', name), true);
-      salvageTree('docs', false);
+      salvageTree(join('changes', name), true, true);
+      salvageTree('docs', false, false);
       if (salvaged.length > 0) {
         console.warn(`⚠️ worktree 清理前打捞：${salvaged.length} 个 spec 流程产物只存在于 worktree 副本，已复制回主仓（apply 不搬运 .sillyspec/changes，不捞即随清理蒸发）：`);
         for (const f of salvaged.slice(0, 20)) console.warn(`   ${join(mainSpec, f)}`);
         if (salvaged.length > 20) console.warn(`   …等共 ${salvaged.length} 个`);
         details.push(`salvaged ${salvaged.length} spec artifacts to main repo`);
+      }
+      if (salvagedIntoArchive.length > 0) {
+        console.warn(`⚠️ worktree 清理前打捞：${salvagedIntoArchive.length} 个真独有产物（原路径与归档副本均缺）已捞进归档副本（变更已归档，原路径不重建）：`);
+        for (const f of salvagedIntoArchive.slice(0, 20)) console.warn(`   ${join(mainSpec, archivedBase, f)}`);
+        if (salvagedIntoArchive.length > 20) console.warn(`   …等共 ${salvagedIntoArchive.length} 个`);
+        details.push(`salvaged ${salvagedIntoArchive.length} spec artifacts into archive copy`);
+      }
+      if (archivedSkipped.length > 0) {
+        console.warn(`⏭️ worktree 清理前打捞：${archivedSkipped.length} 个流程产物判定为归档搬运（主仓 changes/${name}/ 原路径不存在、changes/archive/${name}/ 已有副本），跳过不复制——防复活已归档目录：`);
+        for (const f of archivedSkipped.slice(0, 20)) console.warn(`   ${join(mainSpec, archivedBase, f)}`);
+        if (archivedSkipped.length > 20) console.warn(`   …等共 ${archivedSkipped.length} 个`);
+        details.push(`skipped ${archivedSkipped.length} archived-moved spec artifacts (resurrect guard: changes/${name}/ not rebuilt)`);
       }
       if (conflicts.length > 0) {
         console.warn(`⚠️ worktree 与主仓存在同名但内容不同的流程产物（不覆盖，请人工确认是否需要合并）：`);
