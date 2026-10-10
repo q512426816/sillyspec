@@ -105,3 +105,36 @@ created_at: 2026-10-07T14:27:54.389Z
 - 场景：主路径 — Given 本变更提交面 / When `git show --name-only` 核对 / Then 仅含 skill 文档与变更目录路径，无 src/test 路径。
 全文：.sillyspec/changes/archive/2026-10-10-brainstorm-skill-title/requirements.md#FR-02
 最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+
+## FR-auto-claude-010 版本面核验——package.json version=3.32.4 且 quick-retired R5 版本锚断言绿
+变更：2026-10-10-release-3-32-4
+状态：active
+摘要：发布前版本面复跑
+全文：.sillyspec/changes/archive/2026-10-10-release-3-32-4/requirements.md#FR-01
+最近确认：060a6f70e810071b6e752609a6257721fb2a0fe6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-release-3-32-4:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-release-3-32-4
+  status: active
+
+## FR-auto-claude-011 git push origin main 成功（含本变更工件与既有未推送提交）
+变更：2026-10-10-release-3-32-4
+状态：active
+摘要：推送
+全文：.sillyspec/changes/archive/2026-10-10-release-3-32-4/requirements.md#FR-02
+最近确认：060a6f70e810071b6e752609a6257721fb2a0fe6
+
+## FR-auto-claude-012 npm publish 成功且钉扎通道双核验 latest=3.32.4
+变更：2026-10-10-release-3-32-4
+状态：active
+摘要：发布与核验
+全文：.sillyspec/changes/archive/2026-10-10-release-3-32-4/requirements.md#FR-03
+最近确认：060a6f70e810071b6e752609a6257721fb2a0fe6

@@ -1,0 +1,51 @@
+{
+  "change": "2026-10-10-release-3-32-4",
+  "baseline": "f1371a7f39a9fda05618c898675fc68ceba4f1be",
+  "head": "060a6f70e810071b6e752609a6257721fb2a0fe6",
+  "files": [
+    ".sillyspec/changes/2026-10-10-release-3-32-4/design.md",
+    ".sillyspec/changes/2026-10-10-release-3-32-4/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-release-3-32-4/proposal.md",
+    ".sillyspec/changes/2026-10-10-release-3-32-4/requirements.md",
+    ".sillyspec/changes/2026-10-10-release-3-32-4/tasks.md",
+    ".sillyspec/changes/2026-10-10-release-3-32-4/review.json"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 192,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-10T05:50:11.599Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "f1371a7f39a9fda05618c898675fc68ceba4f1be",
+    "totals": {
+      "files": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "rows": [],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2decd1197716b83345fee4e4e22cdb638d7dc5e2d3deca7118313dac2ff018b0",
+  "patchStatus": "ok"
+}

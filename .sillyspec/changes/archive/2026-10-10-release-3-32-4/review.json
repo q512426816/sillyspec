@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-release-3-32-4",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "bd892ad97cd621d580731a2383499d485c37fd78",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "docs 棘轮基线重锚（39→42）仍滞留工作区未提交",
+      "evidence": "核验留痕披露 pre-push gate 自动重锚 39→42，但 .sillyspec/docs-check-baseline 工作区为 42、HEAD 提交仍为 39——若终推未携带该文件棘轮回退（下次 push gate 会再自动重锚，自愈，仅留卫生尾巴）",
+      "location": ".sillyspec/docs-check-baseline:1"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T05:49:24Z"
+}

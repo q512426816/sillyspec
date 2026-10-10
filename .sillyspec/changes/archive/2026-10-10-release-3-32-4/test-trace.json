@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-release-3-32-4",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-release-3-32-4:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-retired.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-release-3-32-4"
+    }
+  ]
+}

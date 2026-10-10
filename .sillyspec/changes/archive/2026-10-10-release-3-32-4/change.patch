@@ -1,0 +1,222 @@
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/flow-state.yaml b/.sillyspec/changes/2026-10-10-release-3-32-4/flow-state.yaml
+new file mode 100644
+index 00000000..fa07d930
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/flow-state.yaml
+@@ -0,0 +1,30 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  发布 sillyspec@3.32.4 到 npm（复刻 3.32.2/3.32.3 发布惯例：release change + 版本面 FR + push FR + publish 钉扎通道核验 FR +
++  核验留痕归档）。版本面已就绪：package.json=3.32.4（af6fd5ac）+ quick-retired R5 版本锚=3.32.4（666a90f8，测试已跑绿）。本版载入修复：worktree
++  打捞归档感知（复活防护，2026-10-10-worktree-salvage-archive-aware）+ 漂移治理面等价保留评审（评审后修 P2
++  不再整轮重评，2026-10-10-drift-review-governance-keep）+ cli-uninit-cwd-gate 归档件等。环境注记：registry.npmjs.org 本地 DNS
++  被劫持（前两版实证），publish/核验须经腾讯 DoH（1.12.12.12）解析真实 IP + 进程级钉扎（NODE_OPTIONS --require
++  .sillyspec/.runtime/dns-pin.cjs）；github.com 不受影响推送照常；早前未钉扎 npm view 返回 latest=3.32.2 系污染数据，真实 latest=3.32.3（3.32.3
++  发布留痕 308772b2），发布 3.32.4 版本序合法。
++
++
++  成功标准：
++
++  - 版本面核验：package.json version=3.32.4 且 quick-retired R5 锚断言绿（已达成，发布前复跑确认）
++
++  - git push origin main 成功（含本变更工件与既有 34+ 提交；pre-push hook 拦截则修复不跳过）
++
++  - npm publish 成功，钉扎通道双核验 npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4
++
++  - 核验留痕写入 requirements（发布 shasum/files 数/传播等待/绕行注记），flow done 归档
++autopilot: true
++baseline_commit: f1371a7f39a9fda05618c898675fc68ceba4f1be
++updatedAt: '2026-10-10T05:35:39.267Z'
++baseline_sha256: 6411a1ea5b668d9975815b46dbf9f357b96c5d6a4f7f6797593981547d2a92bb
++
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/design.md b/.sillyspec/changes/2026-10-10-release-3-32-4/design.md
+new file mode 100644
+index 00000000..02a97f7b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/design.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T05:35:39.229Z
++---
++# 设计记录（Design Record）— 2026-10-10-release-3-32-4
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++纯发布变更（复刻 2026-10-09-release-3-32-2/3 惯例），零代码交付：版本面（package.json=3.32.4 + R5 锚）已在此前变更落地（af6fd5ac bump、666a90f8 补 R5 锚），本变更只做发布三件事——推送、钉扎通道发布、双核验留痕。发布环境 DNS 被劫持（registry.npmjs.org 国内解析指向停放 IP，前两版实证），publish 与核验都必须经腾讯 DoH（1.12.12.12 直连 IP 查询，不经本地 DNS）解析真实 Cloudflare IP，再用 NODE_OPTIONS --require 注入 dns-pin.cjs 做进程级 dns.lookup 钉扎（仅本进程、零系统改动）；钉扎 IP 在发布前重新解析刷新（IP 会轮换，3.32.3 用的 104.16.19.35 不保证仍有效）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无代码接口变化。对外可见变化仅一枚 npm 发布：sillyspec@3.32.4（载入 worktree 打捞归档感知复活防护、漂移治理面等价保留评审、cli-uninit-cwd-gate 门修复与 init 全量注入等自 3.32.3 以来的 main 面提交）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立。发布顺序固定：先 push 后 publish——npm 包消费方按 registry 取包，与 git 远端无顺序耦合；核验在 publish 返回成功后进行，传播延迟用轮询等待（前两版约 3 分钟）。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   npm registry 对同名同版本发布原子拒绝（403 EPUBLISHCONFLICT）——重复发布天然被挡；本地 main 为独占工作区，无并行提交竞争面（并行会话的在途文件不进本次推送面）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   中断点幂等：push 可重跑（远端已有则空推）、publish 失败可重试（版本冲突=已成功的证明）、核验可重跑；最坏半态（已发布未留痕）由 requirements 核验留痕补写收口，不产生不可恢复状态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   不会。DNS 钉扎仅注入本发布进程（NODE_OPTIONS 进程级），不影响系统解析与他进程；发布身份 npm whoami=qy0604 唯一；github.com 解析不受劫持影响（前两版实证），推送不经钉扎。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：钉扎 IP 失效或 DoH 通道本身也被劫持（阿里 DoH 已沦陷，腾讯 DoH 是当前唯一可信通道）——IP 直连腾讯 DoH 端点（1.12.12.12）不依赖被劫持的域名解析，通道存活由发布前预核验（钉扎 npm view 返回真实 latest=3.32.3）先行证明：预核验失败即停，不带病发布。试过放弃的方案：① 改 hosts 文件钉扎——动系统配置，污染面大于进程级注入，放弃；② 用未钉扎 npm view 的结果做核验——劫持环境下数据不可信（本次实测返回污染值 3.32.2），放弃；③ 跳过核验直接发布——违背 3.32.2/3.32.3 惯例（latest 双核验是发布 FR），放弃。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | .sillyspec/changes/2026-10-10-release-3-32-4/requirements.md | 发布 FR + 测试绑定（不适用项按惯例声明）+ 核验留痕回填 |
++| 修改 | .sillyspec/.runtime/dns-pin.cjs | （.runtime gitignore 面，不入冻结）钉扎 IP 经腾讯 DoH 刷新后复用 |
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/proposal.md b/.sillyspec/changes/2026-10-10-release-3-32-4/proposal.md
+new file mode 100644
+index 00000000..8ffcc777
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T05:35:39.229Z
++---
++# 提案书（Proposal）— 2026-10-10-release-3-32-4
++
++## 动机
++
++任务原话转写：发布 sillyspec@3.32.4 到 npm（复刻 3.32.2/3.32.3 发布惯例：release change + 版本面 FR + push FR + publish 钉扎通道核验 FR + 核验留痕归档）。版本面已就绪：package.json=3.32.4（af6fd5ac）+ quick-retired R5 版本锚=3.32.4（666a90f8，测试已跑绿）。本版载入修复：worktree 打捞归档感知（复活防护，2026-10-10-worktree-salvage-archive-aware）+ 漂移治理面等价保留评审（评审后修 P2 不再整轮重评，2026-10-10-drift-review-governance-keep）+ cli-uninit-cwd-gate 归档件等。环境注记：registry.npmjs.org 本地 DNS 被劫持（前两版实证），publish/核验须经腾讯 DoH（1.12.12.12）解析真实 IP + 进程级钉扎（NODE_OPTIONS --require .sillyspec/.runtime/dns-pin.cjs）；github.com 不受影响推送照常；早前未钉扎 npm view 返回 latest=3.32.2 系污染数据，真实 latest=3.32.3（3.32.3 发布留痕 308772b2），发布 3.32.4 版本序合法。
++
++成功标准：
++- 版本面核验：package.json version=3.32.4 且 quick-retired R5 锚断言绿（已达成，发布前复跑确认）
++- git push origin main 成功（含本变更工件与既有 34+ 提交；pre-push hook 拦截则修复不跳过）
++- npm publish 成功，钉扎通道双核验 npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4
++- 核验留痕写入 requirements（发布 shasum/files 数/传播等待/绕行注记），flow done 归档
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 版本面核验：package.json version=3.32.4 且 quick-retired R5 锚断言绿（已达成，发布前复跑确认）
++2. git push origin main 成功（含本变更工件与既有 34+ 提交；pre-push hook 拦截则修复不跳过）
++3. npm publish 成功，钉扎通道双核验 npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4
++4. 核验留痕写入 requirements（发布 shasum/files 数/传播等待/绕行注记），flow done 归档
++
++## 成功标准（可验证）
++
++1. 版本面核验：package.json version=3.32.4 且 quick-retired R5 锚断言绿（已达成，发布前复跑确认）
++2. git push origin main 成功（含本变更工件与既有 34+ 提交；pre-push hook 拦截则修复不跳过）
++3. npm publish 成功，钉扎通道双核验 npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4
++4. 核验留痕写入 requirements（发布 shasum/files 数/传播等待/绕行注记），flow done 归档
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/requirements.md b/.sillyspec/changes/2026-10-10-release-3-32-4/requirements.md
+new file mode 100644
+index 00000000..4311db8b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T05:35:39.229Z
++---
++# 需求规格（Requirements）— 2026-10-10-release-3-32-4
++
++## 功能需求
++
++### FR-01: 版本面核验——package.json version=3.32.4 且 quick-retired R5 版本锚断言绿
++
++发布前 package.json version 必须为 3.32.4，且 test/quick-retired.test.mjs 的 R5 版本锚断言（pkg.version === '3.32.4'）必须运行全绿（版本面已在 af6fd5ac/666a90f8 落地，本条为发布前复跑确认）。
++
++#### 场景：发布前版本面复跑
++
++- Given：package.json=3.32.4、R5 锚=3.32.4（均已提交）
++- When：node --test test/quick-retired.test.mjs
++- Then：零失败（R5 断言通过）
++
++### FR-02: git push origin main 成功（含本变更工件与既有未推送提交）
++
++main 上的全部未推送提交（含本 release 变更工件与随版修复归档件）必须以显式 pathspec 提交并成功推送 origin main；pre-push hook 拦截时必须修复问题而非跳过。
++
++#### 场景：推送
++
++- Given：main 领先 origin 34+ 提交（两修复变更归档件 + 版本面 + 本变更）
++- When：git push origin main
++- Then：推送成功，远端 main 与本地一致
++
++### FR-03: npm publish 成功且钉扎通道双核验 latest=3.32.4
++
++npm publish 必须经 DNS 钉扎通道（腾讯 DoH 解析真实 IP + NODE_OPTIONS --require 进程级钉扎，复刻 3.32.2/3.32.3 绕行）成功发布，且发布后经同一钉扎通道双核验 npm view sillyspec version=3.32.4 与 dist-tags.latest=3.32.4（未钉扎查询在劫持环境下不可信——本次发布前实测未钉扎返回 3.32.2 系污染数据）。
++
++#### 场景：发布与核验
++
++- Given：真实 latest=3.32.3（3.32.3 发布留痕 308772b2），本地 package.json=3.32.4，DNS 钉扎脚本就绪
++- When：npm publish（钉扎）→ 等传播 → npm view sillyspec version + dist-tags（钉扎）
++- Then：version=3.32.4 且 latest=3.32.4
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/quick-retired.test.mjs「R5 package.json 版本 3.32.4 版本锚」（发布前复跑零失败）
++FR-02: 不适用：git push 为外部传输操作，无单测面；由推送命令输出与远端状态核验
++FR-03: 不适用：npm publish 为外部发布操作，无单测面；由钉扎通道 npm view version/dist-tags 双核验
++
++## 核验留痕
++
++- FR-01 ✅：node --test test/quick-retired.test.mjs 零失败（R5 断言 pkg.version === '3.32.4'，发布前复跑）。
++- FR-02 ✅：git push origin main 成功（8698c0d4..d33dc4c5，pre-push lint+test+docs gate 放行；docs 基线陈旧 39<80 自动重锚 39→42——棘轮只紧不松）；归档件随后续推送上远端。
++- FR-03 ✅：npm publish 成功（+ sillyspec@3.32.4，shasum a1c7bbaee0140b0e13751633bae58220243dc346，328 files，unpacked 13.3 MB）；传播等待 180s 后钉扎通道双核验通过——npm view sillyspec version=3.32.4 且 dist-tags.latest=3.32.4。
++- 过程注记：发布环境 DNS 劫持仍在本轮实证——未钉扎 npm view 返回 latest=3.32.2（污染数据，真实为 3.32.3）；腾讯 DoH（1.12.12.12 直连）解析真实 Cloudflare IP 池 104.16.x.34，钉扎 IP 自 3.32.3 用的 104.16.19.35 刷新为 104.16.11.34（.sillyspec/.runtime/dns-pin.cjs，gitignore 面，进程级注入零系统改动，复刻 3.32.2/3.32.3 同款绕行）；发布前钉扎预核验 latest=3.32.3 确认通道可信后发布；github.com 解析不受影响，推送不经钉扎。
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/tasks.md b/.sillyspec/changes/2026-10-10-release-3-32-4/tasks.md
+new file mode 100644
+index 00000000..970904df
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/tasks.md
+@@ -0,0 +1,7 @@
++# 任务注册表（Tasks）— 2026-10-10-release-3-32-4
++
++- [x] task-01: 工件起草——发布 FR 三条（版本面复跑/push/钉扎通道发布双核验）+ design 四问 + 绑定不适用项声明；验证：requirements/design 本文件可读且锚齐全
++- [x] task-02: 版本面复跑——node --test test/quick-retired.test.mjs（R5=3.32.4 断言绿）；验证：零失败
++- [x] task-03: git push origin main（含本变更工件与既有 34+ 提交）；验证：推送成功（8698c0d4..d33dc4c5，pre-push lint+test+docs gate 放行，docs 基线自动重锚 39→42）
++- [x] task-04: 钉扎通道发布——腾讯 DoH 刷新真实 IP（104.16.11.34）→ 钉扎 npm view 预核验（latest=3.32.3，确认通道可信）→ npm publish（+ sillyspec@3.32.4，shasum a1c7bbae…，328 files）→ 传播 180s 后钉扎双核验（version=3.32.4 + dist-tags.latest=3.32.4）；验证：双核验通过，核验留痕已回填 requirements
++- [x] task-05: flow done 收口归档 + 归档推送；验证：归档注销（本勾格与收口同环——归档提交后随最终 push 上远端）
+diff --git a/.sillyspec/changes/2026-10-10-release-3-32-4/review.json b/.sillyspec/changes/2026-10-10-release-3-32-4/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-release-3-32-4/review.json
+@@ -0,0 +1,22 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-10-10-release-3-32-4",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "reviewedAgainst": "bd892ad97cd621d580731a2383499d485c37fd78",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "docs 棘轮基线重锚（39→42）仍滞留工作区未提交",
++      "evidence": "核验留痕披露 pre-push gate 自动重锚 39→42，但 .sillyspec/docs-check-baseline 工作区为 42、HEAD 提交仍为 39——若终推未携带该文件棘轮回退（下次 push gate 会再自动重锚，自愈，仅留卫生尾巴）",
++      "location": ".sillyspec/docs-check-baseline:1"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-10-10T05:49:24Z"
++}

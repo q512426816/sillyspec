@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -25,6 +33,8 @@ input: >-
   - 核验留痕写入 requirements（发布 shasum/files 数/传播等待/绕行注记），flow done 归档
 autopilot: true
 baseline_commit: f1371a7f39a9fda05618c898675fc68ceba4f1be
-updatedAt: '2026-10-10T05:35:39.267Z'
+updatedAt: '2026-10-10T05:50:13.040Z'
 baseline_sha256: 6411a1ea5b668d9975815b46dbf9f357b96c5d6a4f7f6797593981547d2a92bb
+autopilot_ticked: 1
+gate_summary: 'test: —｜lint: —｜门文件 2 个'
 
