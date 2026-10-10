@@ -24,6 +24,9 @@ import { getOrCreateMultiRepoContext, _clearMultiRepoCtxCache } from '../src/run
 import { WorktreeManager } from '../src/worktree.js';
 import { applyWorktree } from '../src/worktree-apply.js';
 
+// 新默认落位（repo-local）：worktree 建在跨仓仓内 .sillyspec/.runtime/worktrees
+const repoLocalWorktrees = (cross) => join(cross, '.sillyspec', '.runtime', 'worktrees');
+
 const tempDirs = [];
 function makeRepo(prefix) {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -73,7 +76,7 @@ test('ensureCrossWorktrees：建 worktree + meta 锚 baseHash + 幂等复用', (
   const r1 = ensureCrossWorktrees({ cwd: main, changeName, specBase });
   assert.equal(r1.created.length, 1, '声明 1 个跨仓仓 → 建 1 个 worktree');
   assert.equal(r1.created[0].repoKey, 'front');
-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
+  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
   assert.ok(existsSync(wtPath), '跨仓 worktree 目录已建');
   assert.ok(existsSync(join(wtPath, '.git')), '是 git worktree（含 .git 指针）');
   const meta = getCrossWorktreeMeta(specBase, changeName, 'front');
@@ -103,7 +106,7 @@ test('MultiRepoContext worktree 模式：gitDir=worktree、baseCommitHint、HEAD
   ensureCrossWorktrees({ cwd: main, changeName, specBase });
   const base = revHead(cross);
   // 子代理在跨仓 worktree 内 commit（跨仓根 HEAD 不动）
-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
+  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
   writeFileSync(join(wtPath, 'src-feature.txt'), 'feat\n');
   git(wtPath, ['add', '.']);
   git(wtPath, ['commit', '-q', '-m', 'feat']);
@@ -126,7 +129,7 @@ test('applyWorktree：跨仓交付 patch 回跨仓主工作副本 + 清理 workt
   const wm = new WorktreeManager({ cwd: main });
   wm.create(changeName);
   ensureCrossWorktrees({ cwd: main, changeName, specBase });
-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
+  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
   // 跨仓 worktree 内交付：改 1 个已有文件 + 新增 1 个文件，commit 到 worktree 分支
   writeFileSync(join(wtPath, 'README.md'), 'init\nfeat-edit\n');
   writeFileSync(join(wtPath, 'src-feature.txt'), 'feat\n');
@@ -155,9 +158,9 @@ test('applyWorktree：跨仓交付 patch 回跨仓主工作副本 + 清理 workt
 });
 
 test('cleanupCrossWorktrees：未回落交付拒绝清理，force 放行', () => {
-  const { main, specBase, changeName } = makeFixture();
+  const { main, cross, specBase, changeName } = makeFixture();
   ensureCrossWorktrees({ cwd: main, changeName, specBase });
-  const wtPath = crossWorktreePath(specBase, changeName, 'front');
+  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
   writeFileSync(join(wtPath, 'wip.txt'), 'wip\n');
   const blocked = cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: false });
   assert.equal(blocked.results[0].result, 'partial', '有未回落交付 → 拒绝清理');

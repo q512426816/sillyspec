@@ -33,7 +33,7 @@ import { join, isAbsolute, resolve } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { parseRepoRegistry } from './stages/plan-postcheck.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
-import { resolveCrossWorktreePath } from './cross-placement.js'
+import { resolveCrossWorktreePathCandidates } from './cross-placement.js'
 import { resolveLatestExecuteRunIdWithTasks, readReview } from './task-review.js'
 
 // 与 verify-postcheck normalizeReconcilePath 同口径（本地实现防环）：剥 ./ 前缀、反斜杠归一
@@ -235,10 +235,13 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
     //     提交，对 worktree 多笔交付是假信号（2026-10-09 tombstone 取证：声明 4 实测 0）。
     //     meta 缺失/worktree 不在场/不可读 → 回退 B 档（不回退语义）。
     try {
-      const wtPath = resolveCrossWorktreePath(specBase, changeName, repoKey)
-      const metaPath = join(wtPath, 'meta.json')
-      if (existsSync(metaPath)) {
-        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      // 寻址候选逐级探测（注册表 → 仓内新默认 → 主仓 specBase 旧默认）——任一候选 meta 在场即成窗
+      let wtPath = null
+      for (const cand of resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoPath)) {
+        if (existsSync(join(cand, 'meta.json'))) { wtPath = cand; break }
+      }
+      if (wtPath) {
+        const meta = JSON.parse(readFileSync(join(wtPath, 'meta.json'), 'utf8'))
         const base = meta && meta.baseHash
         if (base && typeof base === 'string' && /^[0-9a-f]{7,40}$/i.test(base)) {
           const union2 = new Set()

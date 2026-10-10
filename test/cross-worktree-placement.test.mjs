@@ -171,17 +171,54 @@ test('ensureCrossWorktrees placement 落位 + 注册表 + 寻回 + cleanup（FR-
   assert.ok(!readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], '注册表键被回收');
 });
 
-test('缺省 placement 零回归（FR-01）', () => {
+test('缺省落位=仓内 .sillyspec/.runtime/worktrees（repo-local，FR-01/02）', () => {
   const fx = makeFixture();
   const r = ensureCrossWorktrees({ cwd: fx.main, changeName: CHANGE, specBase: fx.specBase });
   assert.equal(r.created.length, 1);
+  const expected = join(fx.cross, '.sillyspec', '.runtime', 'worktrees', `${CHANGE}--front`);
   assert.equal(
     r.created[0].worktreePath,
-    join(fx.specBase, '.runtime', 'worktrees', `${CHANGE}--front`),
-    '未配置时走默认公式',
+    expected,
+    '新默认落位=跨仓仓内（同盘，工具链天然可达）',
   );
-  assert.equal(readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], undefined, '默认落位不写注册表');
-  cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
+  assert.ok(existsSync(expected), 'worktree 目录已建');
+  assert.equal(r.created[0].meta?.placementMode ?? 'repo-local', 'repo-local', 'placementMode=repo-local');
+
+  // untracked 保障：.git/info/exclude 含 .sillyspec/ 且跨仓 status 干净（不动用户 .gitignore）
+  const excludePath = join(fx.cross, '.git', 'info', 'exclude');
+  assert.ok(existsSync(excludePath), '.git/info/exclude 已写');
+  assert.match(readFileSync(excludePath, 'utf8'), /^\.sillyspec\/$/m, 'exclude 含 .sillyspec/ 条目');
+  const status = git(fx.cross, ['status', '--porcelain']);
+  assert.equal(status.trim(), '', 'worktree 不成跨仓 untracked 噪音（status 干净）');
+
+  // 寻回：注册表写入 + getCrossWorktreeMeta/listCrossWorktreeMetas 可达（无需显式 repoRoot）
+  assert.ok(readPlacementRegistry(fx.specBase)[`${CHANGE}--front`], '仓内默认写注册表');
+  const meta = getCrossWorktreeMeta(fx.specBase, CHANGE, 'front');
+  assert.ok(meta && meta.isCross && meta.worktreePath === expected, 'meta 经注册表寻回');
+  assert.equal(listCrossWorktreeMetas(fx.specBase, CHANGE).length, 1, 'list 仓内扫描源可达');
+
+  // cleanup 回收
+  const cr = cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
+  assert.equal(cr.results[0].result, 'cleaned');
+  assert.ok(!existsSync(expected), '落位目录被删');
+});
+
+test('旧默认位置（主仓 specBase）存量 worktree 仍可寻址可清理（legacy 兜底）', () => {
+  const fx = makeFixture();
+  // 手工造一个 legacy 位置 worktree（模拟上一版本创建的存量）
+  const legacyDir = join(fx.specBase, '.runtime', 'worktrees', `${CHANGE}--front`);
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(join(legacyDir, 'meta.json'), JSON.stringify({
+    changeName: CHANGE, repoKey: 'front', isCross: true, worktreePath: legacyDir,
+    baseHash: 'a'.repeat(40), branch: `sillyspec/${CHANGE}`, mode: 'worktree',
+  }));
+  // 无注册表条目（模拟旧版本）——resolve 走旧公式、list 走旧目录扫描
+  const meta = getCrossWorktreeMeta(fx.specBase, CHANGE, 'front');
+  assert.ok(meta && meta.isCross, 'legacy 位置 meta 可读');
+  assert.equal(listCrossWorktreeMetas(fx.specBase, CHANGE).length, 1, 'legacy 目录扫描源可达');
+  const cr = cleanupCrossWorktrees({ cwd: fx.cross, changeName: CHANGE, specBase: fx.specBase, force: true });
+  assert.equal(cr.results[0].result, 'cleaned', 'legacy worktree 可清理');
+  assert.ok(!existsSync(legacyDir), 'legacy 目录被删');
 });
 
 test('placement 落位根在跨仓仓根内 → 配置错拒绝创建（FR-01 fail-closed）', () => {

@@ -195,21 +195,39 @@ export function sweepPlacementRegistry(specBase, changeName) {
 }
 
 /**
- * 寻址：注册表优先（键 <change>--<repoKey>），无条目回退默认公式。
+ * 寻址候选有序列表（去重）：注册表条目 → 仓内新默认公式（传 repoRoot 时）→ 主仓 specBase
+ * 旧默认公式（legacy 存量兜底）。需要「找真实在场位置」的读取方（meta 读取 / reconcile B' 档）
+ * 逐候选探测；单地址语义（resolve）取首候选。
+ * @returns {string[]}
+ */
+export function resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoRoot = null) {
+  const out = [];
+  const registry = readPlacementRegistry(specBase);
+  const entry = registry[crossWorktreeDirName(changeName, repoKey)];
+  if (entry && typeof entry.worktreePath === 'string' && entry.worktreePath) {
+    out.push(entry.worktreePath);
+  }
+  if (repoRoot) {
+    out.push(crossWorktreePath(specBase, changeName, repoKey, join(repoRoot, '.sillyspec', '.runtime', 'worktrees')));
+  }
+  out.push(crossWorktreePath(specBase, changeName, repoKey));
+  return [...new Set(out.map((p) => resolvePath(p)))];
+}
+
+/**
+ * 寻址：注册表优先（键 <change>--<repoKey>）→ 仓内新默认公式（<repoRoot>/.sillyspec/
+ * .runtime/worktrees/<change>--<repoKey>，传 repoRoot 时）→ 主仓 specBase 旧默认公式（legacy
+ * 兜底——存量 worktree 仍可达）。
  * 注册表只提供位置——条目指向处是否真有 worktree 由调用方（meta 读取/目录判定）裁决，
  * 本函数不做存在性校验（create 前调用时目录尚不存在是合法态）。
  * @param {string} specBase
  * @param {string} changeName
  * @param {string} repoKey
+ * @param {string|null} [repoRoot] 跨仓仓根（知道时传——寻址仓内新默认；缺省跳过该级）
  * @returns {string} worktree 应在/所在路径
  */
-export function resolveCrossWorktreePath(specBase, changeName, repoKey) {
-  const registry = readPlacementRegistry(specBase);
-  const entry = registry[crossWorktreeDirName(changeName, repoKey)];
-  if (entry && typeof entry.worktreePath === 'string' && entry.worktreePath) {
-    return entry.worktreePath;
-  }
-  return crossWorktreePath(specBase, changeName, repoKey);
+export function resolveCrossWorktreePath(specBase, changeName, repoKey, repoRoot = null) {
+  return resolveCrossWorktreePathCandidates(specBase, changeName, repoKey, repoRoot)[0];
 }
 
 /**

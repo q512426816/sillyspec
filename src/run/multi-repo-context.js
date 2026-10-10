@@ -161,7 +161,7 @@ export class MultiRepoContext {
     let crossMeta = null;
     try {
       // 同步读（构造函数是同步的；resolveCrossWorktreePath 同步读注册表+公式）
-      const metaPath = join(resolveCrossWorktreePath(specBase, this.changeName, repoKey), 'meta.json');
+      const metaPath = join(resolveCrossWorktreePath(specBase, this.changeName, repoKey, crossRepoPath), 'meta.json');
       if (existsSync(metaPath)) crossMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
     } catch { crossMeta = null }
     const inWorktree = !!(crossMeta && crossMeta.isCross && crossMeta.worktreePath && existsSync(crossMeta.worktreePath));
