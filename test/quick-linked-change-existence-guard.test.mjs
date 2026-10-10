@@ -26,6 +26,9 @@ console.log('=== quick 关联变更存在性守卫（坑 quick-change-phantom-li
 console.log('--- 用例1: --change <不存在名> → exit 2 + 出路文案 ---')
 {
   const { cwd } = makeRepo('ql-guard-blk-')
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——幻影守卫
+  // 语义在正常项目形态下不变（守卫查 specBase/changes 下目录存在性）。
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', '2026-08-16-my-phantom-change'], { cwd })
   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
   assert(r.combined.includes('2026-08-16-my-phantom-change'), '报错点名幻影变更名')
@@ -51,6 +54,7 @@ console.log('\n--- 用例2: 预置在途会话（关联已存在变更）续跑�
 console.log('\n--- 用例3: --change quick-<8hex>（sessionId 形态）→ 放行 ---')
 {
   const { cwd } = makeRepo('ql-guard-sid-')
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
   // sessionId 形态特例在守卫之前放行（--done 精确恢复会话用）；目录不存在也不能拦
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', 'quick-1a2b3c4d', '--status'], { cwd })
   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
@@ -60,6 +64,7 @@ console.log('\n--- 用例3: --change quick-<8hex>（sessionId 形态）→ 放�
 console.log('\n--- 用例4: --linked-changes <不存在名> 新启形态 → 预门退役拒绝 ---')
 {
   const { cwd } = makeRepo('ql-guard-lc-')
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'ghost-change'], { cwd })
   assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
   assert(r.combined.includes('已退役'), '拒绝文案含「已退役」——新会话先于 command.js 守卫被拦（进程内守卫仍兜底）')
@@ -68,6 +73,7 @@ console.log('\n--- 用例4: --linked-changes <不存在名> 新启形态 → 预
 console.log('\n--- 用例5: --linked-changes none 新启形态 → 预门退役拒绝 ---')
 {
   const { cwd } = makeRepo('ql-guard-none-')
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true }) // 同用例1：过未初始化目录硬拦
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--input', '守卫测试'], { cwd })
   assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
   assert(r.combined.includes('已退役'), '新会话形态被退役门拒绝（新会话不可达，语义值判定不再触发）')

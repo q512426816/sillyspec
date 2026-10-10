@@ -32,6 +32,13 @@ import { assertDatedChangeName } from '../src/run/shared.js'
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
+// CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）后，run 族命令的 fixture 须
+// 预置 .sillyspec（+local.yaml，同 7a-7e flow 用例的 fail-fast 契约形态）——门只认已初始化项目。
+function initSpec(cwd) {
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
+}
+
 console.log('=== 变更名日期前缀门禁（brainstorm step6 规则 CLI 化）===\n')
 
 console.log('--- 用例1: 校验器单元矩阵 ---')
@@ -63,6 +70,7 @@ console.log('--- 用例1: 校验器单元矩阵 ---')
 console.log('\n--- 用例2: CLI 净新建拦截（run brainstorm --change 事故名）---')
 {
   const { cwd } = makeRepo('cngate-blk-')
+  initSpec(cwd) // 过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）：日期门语义在正常项目形态下不变
   const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', 'friction-signal-hint'], { cwd })
   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
   assert(r.combined.includes('friction-signal-hint'), '报错点名非法名')
@@ -74,6 +82,7 @@ console.log('\n--- 用例2: CLI 净新建拦截（run brainstorm --change 事故
 console.log('\n--- 用例3: CLI 合规名放行 ---')
 {
   const { cwd } = makeRepo('cngate-ok-')
+  initSpec(cwd) // 同用例2：合规名物化语义在正常项目形态下不变
   const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', '2026-09-11-my-fix'], { cwd })
   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
   assert(existsSync(join(cwd, '.sillyspec', 'changes', '2026-09-11-my-fix')), '合规名目录正常物化')
@@ -93,6 +102,7 @@ console.log('\n--- 用例4: 存量自愈不追诉（无前缀旧名 + 目录已�
 console.log('\n--- 用例5: done-like 幻影守卫先于日期门（分层顺序）---')
 {
   const { cwd } = makeRepo('cngate-dl-')
+  initSpec(cwd) // 同用例2：幻影守卫/日期门分层语义在正常项目形态下不变
   const r = runCLI(['--dir', cwd, 'run', 'scan', '--done', '--change', 'ghost-bad-name'], { cwd })
   assert(r.status === 2, `exit 2（实际 ${r.status}）`)
   assert(r.combined.includes('拒绝静默新建'), '幻影守卫文案优先（防幻影变更语义不被日期门掩盖）')

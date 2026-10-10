@@ -63,6 +63,9 @@ console.log('\n--- ③ 三态 --change（CLI 级） ---')
 {
   // 零活跃：run auto --input 建变更（不再 exit 2 断头路）
   const r0 = makeRepo('adm-zero-')
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——零活跃建变更
+  // 语义在正常项目形态下不变（"零活跃"指已初始化项目无活跃变更，非未初始化目录）。
+  mkdirSync(join(r0.cwd, '.sillyspec'), { recursive: true })
   const out0 = runCLI(['--dir', r0.cwd, 'run', 'auto', '--input', '测试需求'], { cwd: r0.cwd })
   assert(out0.status === 0 && out0.combined.includes('auto 模式自动创建变更'), `零活跃 → 建变更（exit ${out0.status}；尾：${out0.combined.slice(-80)}）`)
   // 单活跃：自动选中回显

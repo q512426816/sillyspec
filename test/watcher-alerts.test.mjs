@@ -133,11 +133,14 @@ test('CLI two-case 友好退出: 目录缺失 / 文件缺失 → exit 0 + 无事
 
 test('CLI 用法面: 未知子命令 / 缺 --change → exit 2', () => {
   const root = mkdtempSync(join(tmpdir(), 'wa-cli5-'))
-  const sub = runCLI(['watcher', 'tail', '--change', 'a1'], root)
+  // --runtime-root 补齐（同下条）：过未初始化目录硬拦——本用例测子命令路由/用法校验。
+  const sub = runCLI(['watcher', 'tail', '--change', 'a1', '--runtime-root', root], root)
   assert.equal(sub.status, 2)
   assert.match(sub.stderr, /未知子命令/)
 
-  const noChange = runCLI(['watcher', 'alerts'], root)
+  // --runtime-root 补齐：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate，显式 runtime 根
+  // = 显式意图豁免门）——本用例测的是缺 --change 的用法校验，须先越过目录门。
+  const noChange = runCLI(['watcher', 'alerts', '--runtime-root', root], root)
   assert.equal(noChange.status, 2)
   assert.match(noChange.stderr, /--change/)
 })

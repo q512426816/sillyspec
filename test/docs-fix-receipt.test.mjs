@@ -23,6 +23,9 @@ function mkRepo(prefix) {
   for (const a of [['init', '-q'], ['config', 'user.email', 't@t'], ['config', 'user.name', 't']]) {
     execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   }
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——docs 命令
+  // 语义在正常项目形态下不变。
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
   return d
 }
 // docs check 失效时 exit 1（预期路径）——helper 容错退出码，返回 combined 输出

@@ -11,7 +11,7 @@
  *   2. 普通变更（--change <日期名>) 的原硬规则提示原样保留（零回归）
  */
 import { join } from 'node:path'
-import { writeFileSync, mkdtempSync } from 'node:fs'
+import { writeFileSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -58,6 +58,9 @@ console.log('--- ② 普通变更：原硬规则零回归 ---')
 {
   const d = newTmp()
   writeFileSync(join(d, 'stub.txt'), 'x')
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——run brainstorm
+  // 需已初始化目录，硬规则提示语义不变。
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
   const cn = '2026-08-21-normal-change'
   const out = run(`node "${binCLI}" --dir "${d}" run brainstorm --change ${cn} "普通完整流程变更"`)
   assert(out.includes('所有变更文件必须写入'), '普通变更仍提示「所有变更文件必须写入」硬规则')

@@ -6,7 +6,7 @@
  * 全四给齐时通过 flag 解析合成结构化 output（后续失败只能是会话/流程层错误，
  * 不再是四字段格式错误）。
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -29,7 +29,10 @@ function runCLI(args, cwd) {
   return { status: res.status, out: (res.stdout || '') + (res.stderr || '') }
 }
 
+// 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）要求非豁免
+// 命令（run quick）在已初始化目录运行——flag 层校验语义在正常项目形态下不变。
 const dir = mkdtempSync(join(tmpdir(), 'qf-'))
+mkdirSync(join(dir, '.sillyspec'), { recursive: true })
 try {
   {
     const r = runCLI(['--done', '--req', 'a', '--cause', 'b', '--solution', 'c'], dir)

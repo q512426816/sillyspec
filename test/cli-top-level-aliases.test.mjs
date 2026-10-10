@@ -175,7 +175,11 @@ try {
   // ── 回归: foobar 仍落 default 报未知命令 ──
   console.log('\n=== Test 5: sillyspec foobar 仍报未知命令 ===')
   {
-    const res = runCLI(['foobar'], tmpRoot)
+    // 预置 .sillyspec：过未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——未知命令路由
+    // 语义在正常项目形态（用户在项目里打错命令名）下不变。
+    const foobarCwd = join(tmpRoot, 'foobar-ctx')
+    mkdirSync(join(foobarCwd, '.sillyspec'), { recursive: true })
+    const res = runCLI(['foobar'], foobarCwd)
     assert(
       res.combined.includes('未知命令'),
       `foobar 命中 default 分支，报"未知命令"`
@@ -189,8 +193,13 @@ try {
   // ── 选项透传: sillyspec doctor --json 与 sillyspec run doctor --json 等价 ──
   console.log('\n=== Test 6: doctor --json 选项透传正确 ===')
   {
-    const top = runCLI(['doctor', '--json'], tmpRoot)
-    const viaRun = runCLI(['run', 'doctor', '--json'], tmpRoot)
+    // --spec-dir 钉死（同 Test 2 模式）：run doctor 非豁免命令，显式 spec 目录越过
+    // 未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate），两路同解析条件下对照。
+    const cwd = join(tmpRoot, 'json-parity')
+    const specDir = join(cwd, 'spec')
+    mkdirSync(specDir, { recursive: true })
+    const top = runCLI(['doctor', '--json', '--spec-dir', specDir], cwd)
+    const viaRun = runCLI(['run', 'doctor', '--json', '--spec-dir', specDir], cwd)
     // generated_at 是运行时间戳，两次调用必然不同，比较前 normalize 掉
     const norm = (s) => s.replace(/"generated_at":\s*"[^"]*"/g, '"generated_at":"X"')
     assert(

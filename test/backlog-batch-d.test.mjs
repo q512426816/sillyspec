@@ -27,6 +27,9 @@ const bin = join(root, 'bin', 'sillyspec.js')
 console.log('=== ① flag 值位守卫（CLI 冒烟）===')
 {
   const { cwd } = makeRepo('bd-flag-')
+  // 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——gate 命令的
+  // 用法错断言测的是 flag 值位解析，须在正常项目形态下跑。
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   // --change --json：值位是 flag → change 未提供 → 用法错误（旧版：变更不存在: --json 且 --json 被吞）
   const r1 = runCLI(['--dir', cwd, 'gate', 'plan', '--change', '--json'], { cwd })
   assert(r1.status !== 0 && /用法|change/.test(r1.combined) && !/变更不存在: --json/.test(r1.combined),

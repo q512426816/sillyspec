@@ -6,7 +6,7 @@
  * 验证两层：looksLikeMsysMangledPath 纯函数启发式（正/负例）+ CLI 冒烟（stderr 告警可见、
  * 干净值不误报、告警不阻断——缺会话仍走会话层报错而非 flag 层拦截）。
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -40,7 +40,10 @@ function runCLI(args, cwd) {
   return { status: res.status, out: (res.stdout || '') + (res.stderr || '') }
 }
 
+// 预置 .sillyspec：CLI 入口未初始化目录硬拦（2026-10-10-cli-uninit-cwd-gate）——告警层语义
+// 在正常项目形态下不变。
 const dir = mkdtempSync(join(tmpdir(), 'qm-'))
+mkdirSync(join(dir, '.sillyspec'), { recursive: true })
 try {
   console.log('CLI 冒烟（告警层，不阻断）：')
   {
