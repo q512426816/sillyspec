@@ -1758,15 +1758,22 @@ export function parseTaskAcceptance(content) {
 }
 
 /**
- * allowed_paths 条目是否测试形态（结构归属面）：test/ 前缀，或文件名含 .test. / _test. / spec
- * 惯例（(?:^|[._-])test(?:[._-]|$) 覆盖 foo.test.mjs / foo_test.js / test-foo.js 三形）。
- * 比探针 3 的存在性面（isTestFileName 文件名形态判定，宽松存在性提示）严格——这是 3/7 口径差异的落点。
+ * allowed_paths 条目是否测试形态（结构归属面）：tests?/ 或 __tests__/ 目录段，或文件名
+ * .test./.spec. js 系后缀锚，或 python test_*.py / *_test.py——与 verify-postcheck 执行侧
+ * isTestFilePath 同口径（坑 verify-dynamic-subset-node-test-ts-source，2026-10-10 平台侧
+ * 实证：旧 /spec/i 裸子串把 spec-sync.ts 等「文件名含 spec 字样」的源码误判为测试路径，
+ * 随 trace 落盘进 FR 机器绑定行，后续变更经 FR 回归面被 node --test 直跑假败）。
+ * 漏检边界（宁紧勿松）：foo_test.js 连字形态不再预填——落 agent 手查是 fail-visible，
+ * 误绑产假败是 fail-hidden 更糟。比探针 3 的存在性面（isTestFileName 宽松提示）严格——
+ * 3/7 口径差异落点。
  */
-function isProbe7TestPath(p) {
+export function isProbe7TestPath(p) {
   const posix = String(p).split('\\').join('/')
-  if (/^test\//.test(posix)) return true
+  if (/(^|\/)(tests?|__tests__)\//.test(posix)) return true
   const name = basename(posix)
-  return /(?:^|[._-])test(?:[._-]|$)/i.test(name) || /spec/i.test(name)
+  return /\.(test|spec)\.[cm]?(js|jsx|ts|tsx)$/.test(name)
+    || /(^|\/)test_[^\/]+\.py$/.test(posix)
+    || /(^|\/)[^\/]+_test\.py$/.test(posix)
 }
 
 /**

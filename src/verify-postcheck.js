@@ -2801,8 +2801,19 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const SUITE_META_RE = /(^|\/)run-tests\.mjs$/
   const jsMeta = js.filter(f => SUITE_META_RE.test(norm(f)))
   const jsList = js.filter(f => !SUITE_META_RE.test(norm(f)))
+  // 非测试形态拆批（坑 verify-dynamic-subset-node-test-ts-source，2026-10-10 平台侧实证，
+  // 用户授权修复）：deps 面（FR 绑定 / 增量账本 / 依赖发现）可携带非测试文件——node --test
+  // 语义「文件即测试」直跑源码必败（TS 源码 import './x.js' 无 resolver 映射
+  // ERR_MODULE_NOT_FOUND）、vitest/jest 点名非测试文件 No test suite found、pytest 点名
+  // 非测试 .py 0 collected exit 5——三执行批统一只收测试形态（isTestFilePath 同口径），
+  // 被拆文件 nontest-skip 批点名披露（不跑不拦，绑定面脏数据可见可治理）。
+  const pyNonTest = py.filter(f => !isTestFilePath(f))
+  const pyTest = py.filter(f => isTestFilePath(f))
+  const jsNonTest = jsList.filter(f => !isTestFilePath(f))
+  const jsTest = jsList.filter(f => isTestFilePath(f))
+  const nonTestFiles = [...pyNonTest, ...jsNonTest]
   const CAP = 30
-  const pyCap = py.length === 0 ? 0 : jsList.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + jsList.length))))
+  const pyCap = pyTest.length === 0 ? 0 : jsTest.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * pyTest.length / (pyTest.length + jsTest.length))))
   const jsCap = CAP - pyCap
   // 配额制组卷（2026-10-06-fr-regress-cap-drop）：优先面整跑豁免帽，普通依赖填剩余席位；
   // dropped 只计普通依赖弃置（优先面零弃置是构造保证），组内序保持「优先前缀+字母序」。
@@ -2812,8 +2823,8 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     const ordinaryRun = ordinary.slice(0, Math.max(0, quota - prioInGroup.length))
     return { run: [...prioInGroup, ...ordinaryRun], prioCount: prioInGroup.length, dropped: ordinary.length - ordinaryRun.length, prioDropped: 0 }
   }
-  const pyQ = quotaFill(py, pyCap)
-  const jsQ = quotaFill(jsList, jsCap)
+  const pyQ = quotaFill(pyTest, pyCap)
+  const jsQ = quotaFill(jsTest, jsCap)
   const pyRun = pyQ.run
   const jsRun = jsQ.run
   // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
@@ -2883,8 +2894,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsList.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
+
+  if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
   if (jsProjectRun.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)

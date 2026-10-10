@@ -102,6 +102,40 @@ test('buildDepsBatches：tsx runner 自最近含 vitest 的 package.json 推断'
   assert.ok(jsx2 && jsx2.skip, '无可推断运行器 → skip 批披露')
 })
 
+test('buildDepsBatches：非测试形态文件拆 nontest-skip 批不进执行批（坑 verify-dynamic-subset-node-test-ts-source）', () => {
+  const root = mk('ntb-')
+  const batches = buildDepsBatches({
+    cwd: root,
+    deps: ['sillyhub-daemon/src/spec-sync.ts', 'src/lib.ts', 'a.test.ts', 'test_x.py'],
+    changedFiles: [], hits: [],
+  })
+  const skip = batches.find(b => b.short === 'nontest-skip')
+  assert.ok(skip, 'nontest-skip 批在场')
+  assert.equal(skip.skip, true, 'skip 批不跑不拦')
+  assert.equal(skip.command, null)
+  assert.deepEqual([...skip.files].sort(), ['sillyhub-daemon/src/spec-sync.ts', 'src/lib.ts'],
+    '非测试文件点名披露（实得 ' + JSON.stringify(skip.files) + '）')
+  assert.ok(skip.reason.includes('node --test'), 'reason 点名假败成因')
+  const jsNative = batches.find(b => b.short === 'js')
+  assert.ok(jsNative, 'js 批在场')
+  assert.deepEqual(jsNative.files, ['a.test.ts'], 'node --test 批只收测试形态')
+  const py = batches.find(b => b.short === 'py')
+  assert.ok(py, 'py 批在场')
+  assert.deepEqual(py.files, ['test_x.py'], 'pytest 批只收测试形态')
+})
+
+test('buildDepsBatches：纯测试面组卷零漂移（拆批不改变既有批口径）', () => {
+  const root = mk('ntb2-')
+  const batches = buildDepsBatches({
+    cwd: root,
+    deps: ['a.test.ts', 'b.test.ts', 'c.spec.ts', 'test_y.py'],
+    changedFiles: [], hits: [],
+  })
+  assert.equal(batches.find(b => b.short === 'nontest-skip'), undefined, '无非测试文件 → 无 skip 批')
+  const jsNative = batches.find(b => b.short === 'js')
+  assert.deepEqual(jsNative.files, ['a.test.ts', 'b.test.ts', 'c.spec.ts'], 'js 批照旧（字母序）')
+  assert.equal(batches.find(b => b.short === 'py').files.length, 1)
+})
 // ── 4 FR 覆盖命中查询 + 需求关联回归测试面 ────────────────────────────
 
 function frFixture() {

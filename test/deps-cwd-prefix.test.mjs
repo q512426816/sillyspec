@@ -31,6 +31,8 @@ test('③ 无命中模块兜底 + ④ js 组不受影响', () => {
   const b = buildDepsBatches({ deps: ['a.test.ts', 'b.test.ts'], changedFiles: [], hits: [] })
   assert.equal(b.length, 1)
   assert.match(b[0].command, /^node --test /)
-  const b2 = buildDepsBatches({ deps: ['x.py'], changedFiles: [], hits: [] })
-  assert.match(b2[0].command, /^python -m pytest x\.py$/)
+  // x.py 占位换 test_x.py（pytest 收集形态）：非收集形态 py 点名必 0 collected exit 5，
+  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
+  const b2 = buildDepsBatches({ deps: ['test_x.py'], changedFiles: [], hits: [] })
+  assert.match(b2[0].command, /^python -m pytest test_x\.py$/)
 })

@@ -58,8 +58,10 @@ test('② 优先面未满帽：普通依赖填余，组内序保持「优先前�
 })
 
 test('③ py/js 混组：两组优先面各自豁免本组配额，比例配额计算不变', () => {
-  const pyPrio = ['test/a1.test.py', 'test/a2.test.py', 'test/a3.test.py']
-  const pyOrd = ['test/b1.test.py', 'test/b2.test.py', 'test/b3.test.py', 'test/b4.test.py', 'test/b5.test.py']
+  // py 占位换 pytest 收集形态（test_*.py）：.test.py 点名必 0 collected exit 5，
+  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
+  const pyPrio = ['test/test_a1.py', 'test/test_a2.py', 'test/test_a3.py']
+  const pyOrd = ['test/test_b1.py', 'test/test_b2.py', 'test/test_b3.py', 'test/test_b4.py', 'test/test_b5.py']
   const jsPrio = names(10, 'prio')
   const jsOrd = names(50, 'ord')
   const batches = buildDepsBatches({ deps: [...pyPrio, ...pyOrd, ...jsPrio, ...jsOrd], changedFiles: [], priorityFiles: [...pyPrio, ...jsPrio], cwd: null })

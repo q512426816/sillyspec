@@ -48,8 +48,10 @@ test('③ jest 形态（不加 run）', () => {
 })
 
 test('④ 混合三批分拣 + .ts 原生不变', () => {
+  // t.py 占位换 test_t.py（pytest 收集形态）：非收集形态点名必 0 collected exit 5，
+  // 2026-10-10-dyn-subset-nontest-runner-face 起不进执行批（nontest-skip 拆批）
   const b = buildDepsBatches({
-    deps: ['t.py', 'a.test.ts', 'c.test.tsx'],
+    deps: ['test_t.py', 'a.test.ts', 'c.test.tsx'],
     changedFiles: [],
     hits: [{ test: 'cd frontend && pnpm exec vitest run src' }],
   })
