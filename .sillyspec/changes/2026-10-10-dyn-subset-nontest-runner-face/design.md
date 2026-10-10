@@ -52,4 +52,6 @@ skip 批不落 ledger failedFiles（skip 批 status 非 failed），增量重跑
 | 修改 | src/verify-postcheck.js | buildDepsBatches 非测试形态拆 skip 批（FR-02） |
 | 新增 | test/probe7-testpath-anchor.test.mjs | isProbe7TestPath 锚定口径边界表直测（FR-01/FR-03） |
 | 修改 | test/dynamic-test-inference.test.mjs | buildDepsBatches 非测试拆批用例（FR-02/FR-03） |
-| 修改 | test/deps-cwd-prefix.test.mjs / test/fr-regress-cap-drop.test.mjs / test/residual-runner-parity.test.mjs | 既有用例占位文件名换 pytest 收集形态（x.py→test_x.py 等；点名非收集形态本就 0 collected exit 5 假败——与本次修复同病灶，断言语义原样） |
+| 修改 | test/deps-cwd-prefix.test.mjs | 既有用例占位文件名换 pytest 收集形态（x.py→test_x.py；点名非收集形态本就 0 collected exit 5 假败——与本次修复同病灶，断言语义原样） |
+| 修改 | test/fr-regress-cap-drop.test.mjs | 同上（a1.test.py→test_a1.py 族） |
+| 修改 | test/residual-runner-parity.test.mjs | 同上（t.py→test_t.py） |
