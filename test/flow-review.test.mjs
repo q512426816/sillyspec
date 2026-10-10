@@ -193,6 +193,42 @@ test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
   assert.match(bookNoHead, /reviewedAgainst/, 'head 缺省 schema 仍含 reviewedAgainst 字段')
 })
 
+test('②b 任务书前轮 findings 读取：review.json 缺席时回退最新 superseded 隔离件（复审语义不因隔离丢失）', () => {
+  const mkRev = (verdict, titles) => JSON.stringify({
+    schemaVersion: 1, change: 'c-x', reviewer: 'subagent', verdict,
+    findings: titles.map((t) => ({ severity: 'P2', title: t, evidence: 'x', location: 'a.js:1' })),
+    dimensionNotes: {}, reviewedAt: '2026',
+  })
+  // 隔离件在场（两个，时间戳字典序后者为最新）、review.json 缺席 → 注入最新隔离件的 findings
+  {
+    const { root, changeDir } = makeChangeDir('# d', '# r')
+    writeFileSync(join(changeDir, 'review.json.superseded-20261009T000001'), mkRev('FAIL', ['旧隔离件发现A', '旧隔离件发现B']))
+    writeFileSync(join(changeDir, 'review.json.superseded-20261010T000002'), mkRev('FAIL', ['最新隔离件发现C']))
+    const book = renderReviewerTaskbook({ change: 'c-x', changeDir })
+    assert.match(book, /前轮评审 findings（1 项，前轮 verdict=FAIL）——本轮是复审/, `注入最新隔离件 findings（1 项）：${book.includes('前轮评审') ? book.split('【前轮')[1]?.slice(0, 80) : '无前轮段'}`)
+    assert.ok(book.includes('最新隔离件发现C'), '内容取最新隔离件')
+    assert.ok(!book.includes('旧隔离件发现A'), '不取旧隔离件')
+    assert.match(book, /复审优先级/, '复审指引在场')
+    rmSync(root, { recursive: true, force: true })
+  }
+  // review.json 在场 → 优先于 superseded（既有行为不变）
+  {
+    const { root, changeDir } = makeChangeDir('# d', '# r')
+    writeFileSync(join(changeDir, 'review.json'), mkRev('FAIL', ['在场件发现D']))
+    writeFileSync(join(changeDir, 'review.json.superseded-20261010T000002'), mkRev('FAIL', ['隔离件发现C']))
+    const book = renderReviewerTaskbook({ change: 'c-x', changeDir })
+    assert.ok(book.includes('在场件发现D') && !book.includes('隔离件发现C'), 'review.json 优先于 superseded')
+    rmSync(root, { recursive: true, force: true })
+  }
+  // 两者皆缺席 → 零注入（首评形态）
+  {
+    const { root, changeDir } = makeChangeDir('# d', '# r')
+    const book = renderReviewerTaskbook({ change: 'c-x', changeDir })
+    assert.ok(!book.includes('前轮评审 findings'), '无前轮产物 → 首评形态零注入')
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('③ review.json 校验三态', () => {
   const root = mkdtempSync(join(tmpdir(), 'frv-'))
   const p = join(root, 'review.json')
