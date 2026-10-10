@@ -21,6 +21,14 @@ CLI 入口（src/index.js main()）在 worktree cwd 硬拦之后、命令分发�
 - CLI 参数面/文件格式：无变化。
 - 对外可见行为变化：非豁免命令在未初始化目录由「各命令散点 fail-soft」变为「入口统一 exit 2 + 指引」；子目录运行非豁免命令时 stdout 多一行锚定提示、spec 读取统一落项目根。豁免命令、平台模式、显式 flag 路径行为零变化。
 
+文件变更清单（本变更自声明交付面）：
+
+- 实现：src/run/shared.js（判定函数+豁免清单）、src/index.js（入口门+重锚定+--spec-root skip）
+- 新增测试：test/uninit-cwd-gate.test.mjs
+- fixture 同步（保用例意图补 .sillyspec 预置或显式 flag）：test/auto-driver-meta、test/backlog-batch-d、test/change-name-date-gate、test/cli-top-level-aliases、test/docs-check-cli、test/docs-check-fix、test/flow-draft、test/flow-status-json、test/fourpiece-init、test/quick-four-flags、test/quick-linked-change-existence-guard、test/quick-msys-path-sniff、test/quick-prompt-path-rule、test/quick-retired（含 R5 版本锚 3.32.4 补同步——af6fd5ac 版本面遗漏）、test/review-status-command、test/task-progress-marker、test/watcher-alerts、test/platform-managed-declaration、test/doc-ref-check（经文档锚平移修复）
+- 文档锚同步：docs/sillyspec/platform-interface-map.md（shared.js +75 / index.js +29 行号平移）
+- 流程工件：.sillyspec/changes/2026-10-10-cli-uninit-cwd-gate/ 全部
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
