@@ -1,0 +1,359 @@
+diff --git a/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/flow-state.yaml b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/flow-state.yaml
+new file mode 100644
+index 00000000..e0d0327c
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/flow-state.yaml
+@@ -0,0 +1,29 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  worktree 清理前的 spec 产物打捞（_salvageSpecArtifacts，坑 worktree-spec-artifact-misplace）只对比主仓 changes/<name>/
++  原路径是否存在，不感知归档搬运。归档流程先 runArchiveChain renameSyncRetry 把变更目录移入 changes/archive/ 再调 archiveWorktreeCleanup → cleanup →
++  打捞（src/run/complete-handlers.js:973→1187），此刻原路径整体不存在，worktree 内旧快照被整批判定「主仓缺失」复制回原路径，复活出已归档变更的旧版目录并滞留 git
++  跟踪（下游实证：2026-10-09-attachment-inline-reference 残留 13
++  文件，人工删除收尾）。同类触发面共五条入口：归档正常路径、归档自愈路径（src/run/complete-handlers.js:1158）、doctor 已归档清理（src/worktree.js:1802）、无 meta 孤儿
++  force 兜底（src/run/complete-handlers.js:352）、事后手动 worktree cleanup。打捞逻辑当前零测试覆盖。
++
++
++  成功标准：
++
++  - 归档态清理：主仓 changes/archive/<name>/ 已有对应文件时，打捞逐文件跳过不复制，changes/<name>/ 原路径不复活（目录不重建），结束后一行 warn 说明跳过数与原因
++
++  - 未归档态行为不变：worktree 独有产物（原路径缺）照捞；原路径同名不同内容照旧仅列冲突清单不覆盖
++
++  - 原路径与 archive 均缺的真独有产物仍照捞（坑 worktree-spec-artifact-misplace 不回归）
++
++  - 新增测试覆盖上述三态；触及 src 的实测全绿（本变更测试 ∪ 关联回归）
++autopilot: true
++baseline_commit: 1af50938cf221370f7a7e504fb54ccb7ec0fe63e
++updatedAt: '2026-10-10T03:19:05.060Z'
++baseline_sha256: 24e8012bb5201f668524e4c69571bbc662ae0481c8558db959be1928323cf7cd
++
+diff --git a/src/worktree.js b/src/worktree.js
+index 806b558f..7ce69a8f 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -1326,9 +1326,17 @@ export class WorktreeManager {
+    * 写进 worktree 内的 .sillyspec——而 apply 的 filterDeliverableFiles 把 .sillyspec/changes/ 排除在
+    * 交付外（spec 文档不进代码 patch），cleanup 删除 worktree 这些产物即蒸发、主仓流程看不到。
+    * 删除前扫 worktree 内两棵子树做最后打捞：
+-   *   changes/<name>/** → 主仓缺失则 copy 回（verify-result.md 等核心场景）；同名不同内容仅列
+-   *                      清单 warn 不覆盖（主仓版本可能是更新的，覆盖会倒退）
+-   *   docs/**           → 主仓缺失则 copy 回（模块文档卡片；同名差异不提示——tracked checkout 副本常态）
++   *   changes/<name>/** → 三态判定（坑 archive-resurrect，2026-10-10 下游实证
++   *                      2026-10-09-attachment-inline-reference 残留 13 文件：归档把 changes/<name>/
++   *                      整体 rename 进 changes/archive/ 后，原路径缺失被误判 worktree 独有，旧快照
++   *                      整批复制回原路径复活已归档目录）：
++   *                      · 原路径同名存在 → 内容不同仅列清单 warn 不覆盖（主仓版本可能是更新的）
++   *                      · 原路径缺、changes/archive/<name>/ 有副本 → 判归档搬运，跳过不复制
++   *                        （不复活原路径、不覆盖 archive 权威副本）
++   *                      · 原路径与 archive 均缺 → 真 worktree 独有照捞：归档态捞进
++   *                        changes/archive/<name>/（原路径已注销禁止重建），未归档态捞回原路径
++   *   docs/**           → 主仓缺失则 copy 回（模块文档卡片；同名差异不提示——tracked checkout 副本常态；
++   *                      docs 不参与归档搬运，无三态）
+    * 只扫本变更子树（其它 change 的副本文件不越权搬运）。异常只 warn 不阻断清理。
+    * @private
+    */
+@@ -1340,7 +1348,11 @@ export class WorktreeManager {
+       if (resolve(wtSpec) === resolve(mainSpec)) return; // in-place：同一目录，无需打捞
+       const salvaged = [];
+       const conflicts = [];
+-      const salvageTree = (subDir, reportConflict) => {
++      const archivedSkipped = [];
++      const salvagedIntoArchive = [];
++      const archivedBase = join('changes', 'archive', name);
++      const archivedBaseExists = existsSync(join(mainSpec, archivedBase));
++      const salvageTree = (subDir, reportConflict, trackArchive) => {
+         const srcRoot = join(wtSpec, subDir);
+         if (!existsSync(srcRoot)) return;
+         const walk = (dir) => {
+@@ -1349,28 +1361,50 @@ export class WorktreeManager {
+             if (entry.isDirectory()) { walk(src); continue; }
+             if (!entry.isFile()) continue;
+             const rel = relative(wtSpec, src);
++            const rest = relative(srcRoot, src);
+             const dst = join(mainSpec, rel);
++            const archivedDst = trackArchive ? join(mainSpec, archivedBase, rest) : null;
+             try {
+-              if (!existsSync(dst)) {
++              if (existsSync(dst)) {
++                if (reportConflict && readFileSync(src, 'utf8') !== readFileSync(dst, 'utf8')) {
++                  conflicts.push(rel);
++                }
++              } else if (archivedDst && existsSync(archivedDst)) {
++                archivedSkipped.push(rest);
++              } else if (archivedDst && archivedBaseExists) {
++                mkdirSync(dirname(archivedDst), { recursive: true });
++                copyFileSync(src, archivedDst);
++                salvagedIntoArchive.push(rest);
++              } else {
+                 mkdirSync(dirname(dst), { recursive: true });
+                 copyFileSync(src, dst);
+                 salvaged.push(rel);
+-              } else if (reportConflict && readFileSync(src, 'utf8') !== readFileSync(dst, 'utf8')) {
+-                conflicts.push(rel);
+               }
+             } catch { /* 单文件失败不拖垮整体打捞 */ }
+           }
+         };
+         walk(srcRoot);
+       };
+-      salvageTree(join('changes', name), true);
+-      salvageTree('docs', false);
++      salvageTree(join('changes', name), true, true);
++      salvageTree('docs', false, false);
+       if (salvaged.length > 0) {
+         console.warn(`⚠️ worktree 清理前打捞：${salvaged.length} 个 spec 流程产物只存在于 worktree 副本，已复制回主仓（apply 不搬运 .sillyspec/changes，不捞即随清理蒸发）：`);
+         for (const f of salvaged.slice(0, 20)) console.warn(`   ${join(mainSpec, f)}`);
+         if (salvaged.length > 20) console.warn(`   …等共 ${salvaged.length} 个`);
+         details.push(`salvaged ${salvaged.length} spec artifacts to main repo`);
+       }
++      if (salvagedIntoArchive.length > 0) {
++        console.warn(`⚠️ worktree 清理前打捞：${salvagedIntoArchive.length} 个真独有产物（原路径与归档副本均缺）已捞进归档副本（变更已归档，原路径不重建）：`);
++        for (const f of salvagedIntoArchive.slice(0, 20)) console.warn(`   ${join(mainSpec, archivedBase, f)}`);
++        if (salvagedIntoArchive.length > 20) console.warn(`   …等共 ${salvagedIntoArchive.length} 个`);
++        details.push(`salvaged ${salvagedIntoArchive.length} spec artifacts into archive copy`);
++      }
++      if (archivedSkipped.length > 0) {
++        console.warn(`⏭️ worktree 清理前打捞：${archivedSkipped.length} 个流程产物判定为归档搬运（主仓 changes/${name}/ 原路径不存在、changes/archive/${name}/ 已有副本），跳过不复制——防复活已归档目录：`);
++        for (const f of archivedSkipped.slice(0, 20)) console.warn(`   ${join(mainSpec, archivedBase, f)}`);
++        if (archivedSkipped.length > 20) console.warn(`   …等共 ${archivedSkipped.length} 个`);
++        details.push(`skipped ${archivedSkipped.length} archived-moved spec artifacts (resurrect guard: changes/${name}/ not rebuilt)`);
++      }
+       if (conflicts.length > 0) {
+         console.warn(`⚠️ worktree 与主仓存在同名但内容不同的流程产物（不覆盖，请人工确认是否需要合并）：`);
+         for (const f of conflicts.slice(0, 20)) console.warn(`   ${join(mainSpec, f)}`);
+diff --git a/test/worktree-spec-salvage.test.mjs b/test/worktree-spec-salvage.test.mjs
+index 187892ba..374550d5 100644
+--- a/test/worktree-spec-salvage.test.mjs
++++ b/test/worktree-spec-salvage.test.mjs
+@@ -7,6 +7,10 @@
+  *   1. changes/<name>/** 主仓缺失 → copy 回主仓；同名不同内容 → 仅列清单不覆盖
+  *   2. docs/** 主仓缺失 → copy 回（模块文档）
+  *   3. in-place / native-worktree 跳过；打捞不阻断清理
++ *   4. 归档态三态（坑 archive-resurrect，2026-10-10 下游实证 2026-10-09-attachment-inline-reference
++ *      残留 13 文件：归档把 changes/<name>/ rename 进 changes/archive/ 后，原路径缺失被误判
++ *      worktree 独有，旧快照整批复制回原路径复活已归档目录）：
++ *      archive 副本在 → 跳过不复制不覆盖；原路径与 archive 均缺 → 真独有捞进 archive 副本
+  */
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
+ import { join } from 'node:path'
+@@ -96,5 +100,50 @@ console.log('--- 2. 无错位产物 → 零打捞零噪音 ---')
+   rmSync(proj, { recursive: true, force: true })
+ }
+ 
++console.log('--- 3. 归档态清理：archive 副本在 → 跳过不复活原路径 / 真独有产物捞进归档副本 ---')
++{
++  const proj = mkdtempSync(join(tmpdir(), 'salv3-'))
++  tmpRoots.push(proj)
++  const mainSpec = join(proj, '.sillyspec')
++  git(proj, ['init', '-q'])
++  git(proj, ['config', 'user.email', 't@t.local'])
++  git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, 'a.js'), 'console.log(1)\n')
++  git(proj, ['add', '.'])
++  git(proj, ['commit', '-q', '-m', 'init'])
++  const wt = join(mainSpec, '.runtime', 'worktrees', 'arch')
++  git(proj, ['worktree', 'add', '-q', '-b', 'sillyspec/arch', wt])
++  writeFileSync(join(wt, 'meta.json'), JSON.stringify({
++    branch: 'sillyspec/arch', worktreePath: wt, mode: 'worktree',
++  }))
++
++  // 归档态：主仓原路径 changes/arch/ 整体不存在，archive 副本（归档终版）在场
++  mkdirSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks'), { recursive: true })
++  writeFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'verify-result.md'), '# 验证报告（归档终版）\n')
++  writeFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks', 'task-01.md'), 'task 卡（归档终版——不应被 worktree 旧快照覆盖）\n')
++
++  // worktree 残留：changes/arch/ 旧快照（verify-result.md / tasks/task-01.md）+ 真独有产物 late-note.md
++  mkdirSync(join(wt, '.sillyspec', 'changes', 'arch', 'tasks'), { recursive: true })
++  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'verify-result.md'), '# 验证报告（worktree 旧快照）\n')
++  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'tasks', 'task-01.md'), 'task 卡（worktree 旧快照）\n')
++  writeFileSync(join(wt, '.sillyspec', 'changes', 'arch', 'late-note.md'), '归档前仅写入 worktree 的独有笔记\n')
++
++  const wm = new WorktreeManager({ cwd: proj })
++  const r = wm.cleanup('arch', { force: true })
++
++  assert(!existsSync(join(mainSpec, 'changes', 'arch')),
++    '归档态：changes/<name>/ 原路径不复活（目录不重建）')
++  assert(readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'verify-result.md'), 'utf8').includes('归档终版'),
++    '归档态：archive 副本不被 worktree 旧快照覆盖')
++  assert(readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'tasks', 'task-01.md'), 'utf8').includes('归档终版'),
++    '归档态：archive 副本子目录文件不被覆盖')
++  assert(existsSync(join(mainSpec, 'changes', 'archive', 'arch', 'late-note.md'))
++    && readFileSync(join(mainSpec, 'changes', 'archive', 'arch', 'late-note.md'), 'utf8').includes('worktree 的独有笔记'),
++    '归档态真独有产物（原路径与 archive 均缺）→ 捞进归档副本不蒸发')
++  assert((r.details || []).some(d => String(d).includes('archived-moved')),
++    `cleanup details 记录归档搬运跳过（${(r.details || []).filter(d => String(d).includes('archiv')).join(' | ')}）`)
++  rmSync(proj, { recursive: true, force: true })
++}
++
+ console.log(`\n合计: ${passed} 通过, ${failed} 失败`)
+ process.exit(failed > 0 ? 1 : 0)
+diff --git a/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/design.md b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/design.md
+new file mode 100644
+index 00000000..11dd0b8d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T03:18:39.120Z
++---
++# 设计记录（Design Record）— 2026-10-10-worktree-salvage-archive-aware
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++改 `_salvageSpecArtifacts`（src/worktree.js）：`changes/<name>/**` 树的打捞由「主仓原路径缺失即复制」升级为逐文件三态判定——原路径在 → 现行为不变（同名不同内容走既有冲突清单分支）；原路径缺但 `changes/archive/<name>/<rel>` 在 → 判定归档搬运，跳过不复制（防复活）；原路径与 archive 均缺 → 真 worktree 独有产物照捞，归档态（archive 副本目录存在）捞进 `changes/archive/<name>/<rel>`，未归档态捞回原路径。`.sillyspec/docs/**` 树不涉及归档搬运，行为零变化。
++
++选内建归档感知而非调用方传 flag：五条清理入口（归档正常路径 complete-handlers.js:1187、归档自愈 :1158、doctor 已归档清理 worktree.js:1802、无 meta 孤儿 force 兜底 :352、事后手动 cleanup）全部经 `wm.cleanup()` 汇入本函数，一处收口零签名变更——漏接一条入口即复活的接线方案不可取。判定只看文件系统（archive 副本存在性），不查进度库——手动半归档（目录已搬、DB 未注销）同样正确。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无对外签名/命令/文件格式变化；`cleanup()` 返回的 `details` 数组新增两类记录（`skipped N archived-moved spec artifacts` / `salvaged N spec artifacts into archive copy`），stderr 打捞 warn 新增跳过汇总与归档副本去向两类输出。调用方（complete-handlers / doctor / CLI 展示层）对 details 仅做展示不做匹配，无兼容面。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立。归档移动（renameSyncRetry）先于 cleanup 是既定时序；乱序场景 = cleanup 先跑（此刻未归档，走原行为把独有产物捞回原路径）后归档移动整个目录带走产物，无丢失无复活。cleanup 与归档移动并发（理论上并行会话同 change 操作）由归档侧 withMainRepoLock 所有权护栏挡在前置，非本函数新增风险面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   打捞逐文件 `copyFileSync` 与现状同原子级；本变更新增的写目标在 `changes/archive/<name>/` 内（归档窄化 git add 同侧目录），不新增共享写点；对 archive 副本只读不写（覆盖被 FR-01 显式禁止）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   安全。打捞中途中断（进程被杀）——部分文件已捞部分未捞，重跑 cleanup 幂等重入（existsSync 三态判定重算，已捞文件命中原路径在/副本在分支），无半开状态放大；归档副本目录被并行归档收尾 git add 时，新增捞入文件若在 add 之后落盘则留给用户常规 git status 核对（与既有打捞产物同待遇）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   不会。mainSpec 解析同现状（`_resolveMainRepoRoot()` 锚主仓），archive 判定是主仓 spec 内相对路径，跨仓 worktree / 平台 specRoot 模式不串台；多实例（多会话）对同一 worktree 的重复 cleanup 由 existsSync 幂等性兜底。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：归档副本存在但 worktree 副本更新（归档后子代理又向 worktree 写入的极端时序）——本设计以 archive 副本为权威静默跳过（warn 有计数与路径清单，人工可对账），不自动覆盖，避免把「更旧快照复活」换成「更新内容覆盖归档件」的对称事故。试过放弃的方案：① 调用方传 archived flag——五入口逐一接线，漏一处即复活，且 doctor 入口判定口径（worktree.js:1795）与打捞内判定会形成两套真相；② 归档态整树跳过——「两处均缺」的真独有产物会随清理蒸发，违背打捞初衷（坑 worktree-spec-artifact-misplace）；③ 内容比对 archive 副本差异列入冲突清单——事故场景 13 文件全部内容有差（旧快照 vs 终版），全列纯噪音。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++|---|---|---|
++| 修改 | src/worktree.js | `_salvageSpecArtifacts` 归档感知三态判定 + 跳过/捞入归档副本的 warn 与 details 输出 + JSDoc 更新（新坑：archive 复活，2026-10-09-attachment-inline-reference 下游实证） |
++| 修改 | test/worktree-spec-salvage.test.mjs | 新增场景 3：归档态清理（原路径不复活 + archive 副本不被覆盖 + 独有产物捞进归档副本）；既有场景 1/2 作未归档态回归不动 |
+diff --git a/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/proposal.md b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/proposal.md
+new file mode 100644
+index 00000000..f1077fa2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T03:18:39.119Z
++---
++# 提案书（Proposal）— 2026-10-10-worktree-salvage-archive-aware
++
++## 动机
++
++任务原话转写：worktree 清理前的 spec 产物打捞（_salvageSpecArtifacts，坑 worktree-spec-artifact-misplace）只对比主仓 changes/<name>/ 原路径是否存在，不感知归档搬运。归档流程先 runArchiveChain renameSyncRetry 把变更目录移入 changes/archive/ 再调 archiveWorktreeCleanup → cleanup → 打捞（src/run/complete-handlers.js:973→1187），此刻原路径整体不存在，worktree 内旧快照被整批判定「主仓缺失」复制回原路径，复活出已归档变更的旧版目录并滞留 git 跟踪（下游实证：2026-10-09-attachment-inline-reference 残留 13 文件，人工删除收尾）。同类触发面共五条入口：归档正常路径、归档自愈路径（src/run/complete-handlers.js:1158）、doctor 已归档清理（src/worktree.js:1802）、无 meta 孤儿 force 兜底（src/run/complete-handlers.js:352）、事后手动 worktree cleanup。打捞逻辑当前零测试覆盖。
++
++成功标准：
++- 归档态清理：主仓 changes/archive/<name>/ 已有对应文件时，打捞逐文件跳过不复制，changes/<name>/ 原路径不复活（目录不重建），结束后一行 warn 说明跳过数与原因
++- 未归档态行为不变：worktree 独有产物（原路径缺）照捞；原路径同名不同内容照旧仅列冲突清单不覆盖
++- 原路径与 archive 均缺的真独有产物仍照捞（坑 worktree-spec-artifact-misplace 不回归）
++- 新增测试覆盖上述三态；触及 src 的实测全绿（本变更测试 ∪ 关联回归）
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. 归档态清理：主仓 changes/archive/<name>/ 已有对应文件时，打捞逐文件跳过不复制，changes/<name>/ 原路径不复活（目录不重建），结束后一行 warn 说明跳过数与原因
++2. 未归档态行为不变：worktree 独有产物（原路径缺）照捞；原路径同名不同内容照旧仅列冲突清单不覆盖
++3. 原路径与 archive 均缺的真独有产物仍照捞（坑 worktree-spec-artifact-misplace 不回归）
++4. 新增测试覆盖上述三态；触及 src 的实测全绿（本变更测试 ∪ 关联回归）
++
++## 成功标准（可验证）
++
++1. 归档态清理：主仓 changes/archive/<name>/ 已有对应文件时，打捞逐文件跳过不复制，changes/<name>/ 原路径不复活（目录不重建），结束后一行 warn 说明跳过数与原因
++2. 未归档态行为不变：worktree 独有产物（原路径缺）照捞；原路径同名不同内容照旧仅列冲突清单不覆盖
++3. 原路径与 archive 均缺的真独有产物仍照捞（坑 worktree-spec-artifact-misplace 不回归）
++4. 新增测试覆盖上述三态；触及 src 的实测全绿（本变更测试 ∪ 关联回归）
+diff --git a/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md
+new file mode 100644
+index 00000000..9a3e8377
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T03:18:39.120Z
++---
++# 需求规格（Requirements）— 2026-10-10-worktree-salvage-archive-aware
++
++## 功能需求
++
++### FR-01: 归档态打捞必须逐文件识别归档搬运，禁止复制回原路径复活已归档目录
++
++主仓 `changes/<name>/` 原路径缺失且 `changes/archive/<name>/` 已有对应文件时，打捞必须跳过该文件不复制（判定为归档搬运而非 worktree 独有），禁止因此重建 `changes/<name>/` 原路径目录；archive 副本内容禁止被 worktree 旧快照覆盖；跳过发生时必须在打捞输出中汇总一行 warn（含跳过数与归档搬运原因）。
++
++#### 场景：归档后清理不复活（下游实证：2026-10-09-attachment-inline-reference 残留 13 文件）
++
++- Given：变更已归档（目录在 `changes/archive/<name>/`，原路径 `changes/<name>/` 整体不存在），worktree 残留含 `changes/<name>/` 旧快照
++- When：worktree cleanup（归档正常路径 / 归档自愈路径 / doctor 已归档清理 / 无 meta 孤儿 force 兜底 / 事后手动清理，任一入口）
++- Then：`changes/<name>/` 原路径不被重建（目录不复活），archive 副本逐字节不变，输出含跳过计数的 warn
++
++### FR-02: 未归档态打捞行为必须保持不变（坑 worktree-spec-artifact-misplace 不回归）
++
++变更未归档（主仓无 `changes/archive/<name>/` 归档副本）时，打捞行为与现状完全一致：worktree 独有产物（主仓原路径缺失）必须照常复制回原路径；原路径同名但内容不同的文件必须照旧仅列冲突清单、禁止覆盖主仓版本。
++
++#### 场景：既有打捞语义回归
++
++- Given：未归档变更的 worktree 内有 `changes/<name>/verify-result.md`（主仓缺失）与 `changes/<name>/tasks/task-01.md`（主仓同名不同内容）
++- When：worktree cleanup
++- Then：前者复制回主仓原路径，后者主仓版本保留且列入冲突清单；`.sillyspec/docs/**` 树打捞行为不变
++
++### FR-03: 真独有产物（原路径与 archive 副本均缺）必须仍打捞，归档态目标位置为归档副本
++
++原路径与 `changes/archive/<name>/` 均缺的 worktree 独有产物必须照捞不蒸发：未归档态照旧捞回原路径；归档态（归档副本目录存在）捞进 `changes/archive/<name>/` 对应位置（原路径已注销，禁止重建），并在打捞输出中说明去向。
++
++#### 场景：归档态独有产物进归档副本
++
++- Given：已归档变更的 worktree 内存在 archive 副本没有的文件（如归档前仅写入 worktree 的 late-note.md）
++- When：worktree cleanup
++- Then：文件被复制到 `changes/archive/<name>/` 对应位置，`changes/<name>/` 原路径仍不重建
++
++### FR-04: 上述三态必须有测试覆盖，触及 src 的实测全绿
++
++新增测试必须覆盖 FR-01/02/03 三态判定；收口时本变更测试 ∪ FR 关联回归实测零失败。
++
++#### 场景：收口实测
++
++- Given：`test/worktree-spec-salvage.test.mjs` 含归档态新场景与未归档态既有回归
++- When：收口 CLI 亲测（测试面按变更动态推断）
++- Then：零失败
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`）
++
++FR-01: test/worktree-spec-salvage.test.mjs「3. 归档态清理：archive 副本在 → 跳过不复活原路径、副本不被旧快照覆盖」
++FR-02: test/worktree-spec-salvage.test.mjs「1. cleanup 打捞：缺失 copy 回 / 冲突不覆盖（未归档态既有回归）」
++FR-03: test/worktree-spec-salvage.test.mjs「3. 归档态独有产物 → 捞进 archive 副本、原路径不重建」
++FR-04: test/worktree-spec-salvage.test.mjs 全文件用例 + flow done 收口 CLI 实测
+diff --git a/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/tasks.md b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/tasks.md
+new file mode 100644
+index 00000000..fc15e31e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/tasks.md
+@@ -0,0 +1,6 @@
++# 任务注册表（Tasks）— 2026-10-10-worktree-salvage-archive-aware
++
++- [x] task-01: 工件起草——requirements FR 三态（归档跳过不复活 / 未归档行为不变 / 真独有照捞）+ design 四问作答 + 文件变更清单落盘；验证：本文件与 requirements/design 可读且锚齐全
++- [x] task-02: 测试先行——test/worktree-spec-salvage.test.mjs 新增场景 3（归档态：原路径不复活、archive 副本不被覆盖、独有产物捞进归档副本）；验证：对现实现跑该场景断言失败（红——现实现会复活原路径）
++- [x] task-03: 实现 src/worktree.js `_salvageSpecArtifacts` 归档感知三态 + warn/details 输出 + JSDoc；验证：场景 3 转绿，场景 1/2（未归档态回归）不破坏
++- [x] task-04: 相关面全量回归（salvage 测试全文件 + worktree/cleanup 域测试）+ flow done 收口实测；验证：零失败——worktree 域 58 文件全绿 + lint 928 文件过 + 全量套件 run-tests.mjs exit 0（747 文件）+ 顺带核 FR-runtime-077/078 绑定确认（test/archive-stage-claim.test.mjs 翻 active）

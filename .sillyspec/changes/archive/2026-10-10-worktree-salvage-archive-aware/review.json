@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-worktree-salvage-archive-aware",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e6ac0ef313acd83af9d5626877be05e58fa9b67d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定引用的场景名为意译，与测试文件实际 console 标题措辞不一致",
+      "evidence": "requirements.md 测试绑定引用的场景名（如「3. 归档态独有产物 → 捞进归档副本、原路径不重建」）在 test/worktree-spec-salvage.test.mjs 中无逐字同名条目（实际标题为「--- 3. 归档态清理：archive 副本在 → 跳过不复活原路径 / 真独有产物捞进归档副本 ---」），但场景编号、断言内容与绑定声称的行为逐条对应（原路径不复活/副本不覆盖/独有产物捞进 archive 均有 assert），实质绑定成立，仅标题措辞非逐字引用",
+      "location": ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md:51 vs test/worktree-spec-salvage.test.mjs:103"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok；边界已裁决：可接受——声明边界「archive 副本为权威，归档后 worktree 迟到更新副本跳过不覆盖」已核实：src/worktree.js:1372-1373 跳过分支对 archive 副本零写入，且 1402-1406 warn 输出跳过计数+路径清单可人工对账；反向（worktree 新版覆盖归档件）是更重的数据事故，取舍合理",
+    "并发": "ok；边界已裁决：可接受——声明边界「捞入归档副本的新文件若在归档收尾 git add 之后落盘，留给用户 git status 核对」与既有打捞产物（捞回主仓原路径）同待遇，非新增风险面；逐文件 copyFileSync 原子级与改前一致（src/worktree.js:1368-1382）",
+    "切换": "ok；design 幂等声明经代码核实成立：打捞中断后重跑 cleanup 时 existsSync 三态重判——已捞进 archive 的文件命中 1372 跳过分支、已捞回原路径的文件命中 1368 内容相等无冲突，无半开状态放大",
+    "作用域": "ok；mainSpec 锚定 _resolveMainRepoRoot()（src/worktree.js:1345），archive 判定为主仓 spec 内相对路径；docs 树 trackArchive=false（:1389）archivedDst 恒 null，退化为改前两态逻辑，行为零变化经场景 1/2 回归实测确认"
+  },
+  "extraNotes": {
+    "FR 核验": "FR-01/02/03 实现与承诺一致（src/worktree.js:1368-1382 三态判定：原路径在→冲突清单不覆盖；原路径缺+archive 副本在→跳过；均缺→归档态捞进 archive/未归档态捞回原路径），warn 与 details 两类新输出均在（:1396-1407）；FR-04 实测：node test/worktree-spec-salvage.test.mjs 亲测 11 通过 0 失败 exit 0",
+    "防护声明核实": "「五入口汇入 cleanup」结构性成立：_salvageSpecArtifacts 全仓唯一调用点 src/worktree.js:1525（cleanup 内），cleanup 调用方 complete-handlers.js:352/364/2753、worktree.js:1836/1921 均经此收口；「调用方对 details 仅展示不匹配」经全 src grep 核实：新 details 字符串（archived-moved / into archive copy）无 worktree.js 之外的消费方",
+    "生成物同步": "变更声明无对外契约变化——核实属实：diff 仅触及 src/worktree.js 与测试，无类型/契约文件，details 新记录无字符串匹配依赖",
+    "评审基础": "工作区 src/test 与 HEAD e6ac0ef 无未提交差异（git diff HEAD --stat 为空），补丁主体已入 03dec3f5，冻结面与实态一致，无落后"
+  },
+  "reviewedAt": "2026-10-10T03:40:24Z"
+}

@@ -274,3 +274,79 @@ created_at: 2026-10-05T11:39:44.226Z
   confirmed_at: null
   source_change: 2026-10-09-verify-papercuts
   status: active
+
+## FR-worktree-015 归档态打捞必须逐文件识别归档搬运，禁止复制回原路径复活已归档目录
+变更：2026-10-10-worktree-salvage-archive-aware
+状态：active
+摘要：归档后清理不复活（下游实证：2026-10-09-attachment-inline-reference 残留 13 文件）
+全文：.sillyspec/changes/archive/2026-10-10-worktree-salvage-archive-aware/requirements.md#FR-01
+最近确认：e6ac0ef313acd83af9d5626877be05e58fa9b67d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-01
+  tests: test/worktree-spec-salvage.test.mjs「3. 归档态清理：archive 副本在 → 跳过不复活原路径、副本不被旧快照覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-worktree-salvage-archive-aware
+  status: active
+
+## FR-worktree-016 未归档态打捞行为必须保持不变（坑 worktree-spec-artifact-misplace 不回归）
+变更：2026-10-10-worktree-salvage-archive-aware
+状态：active
+摘要：既有打捞语义回归
+全文：.sillyspec/changes/archive/2026-10-10-worktree-salvage-archive-aware/requirements.md#FR-02
+最近确认：e6ac0ef313acd83af9d5626877be05e58fa9b67d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-02
+  tests: test/worktree-spec-salvage.test.mjs「1. cleanup 打捞：缺失 copy 回 / 冲突不覆盖（未归档态既有回归）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-worktree-salvage-archive-aware
+  status: active
+
+## FR-worktree-017 真独有产物（原路径与 archive 副本均缺）必须仍打捞，归档态目标位置为归档副本
+变更：2026-10-10-worktree-salvage-archive-aware
+状态：active
+摘要：归档态独有产物进归档副本
+全文：.sillyspec/changes/archive/2026-10-10-worktree-salvage-archive-aware/requirements.md#FR-03
+最近确认：e6ac0ef313acd83af9d5626877be05e58fa9b67d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-03
+  tests: test/worktree-spec-salvage.test.mjs「3. 归档态独有产物 → 捞进 archive 副本、原路径不重建」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-worktree-salvage-archive-aware
+  status: active
+
+## FR-worktree-018 上述三态必须有测试覆盖，触及 src 的实测全绿
+变更：2026-10-10-worktree-salvage-archive-aware
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-10-10-worktree-salvage-archive-aware/requirements.md#FR-04
+最近确认：e6ac0ef313acd83af9d5626877be05e58fa9b67d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-04
+  tests: test/worktree-spec-salvage.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-worktree-salvage-archive-aware
+  status: active

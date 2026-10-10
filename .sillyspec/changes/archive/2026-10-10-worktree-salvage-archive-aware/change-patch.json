@@ -1,0 +1,82 @@
+{
+  "change": "2026-10-10-worktree-salvage-archive-aware",
+  "baseline": "1af50938cf221370f7a7e504fb54ccb7ec0fe63e",
+  "head": "e6ac0ef313acd83af9d5626877be05e58fa9b67d",
+  "files": [
+    ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/design.md",
+    ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/proposal.md",
+    ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md",
+    ".sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/tasks.md",
+    "src/worktree.js",
+    "test/worktree-spec-salvage.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 268,
+    "deletions": 9
+  },
+  "savedAt": "2026-10-10T03:37:11.876Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "1af50938cf221370f7a7e504fb54ccb7ec0fe63e",
+    "totals": {
+      "files": 2,
+      "additions": 92,
+      "deletions": 9
+    },
+    "rows": [
+      {
+        "path": "src/worktree.js",
+        "additions": 43,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-spec-salvage.test.mjs",
+        "additions": 49,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "fb8cb6b108d5aa3f9ca9752806890718bccc4115475b9f89f481b3c0103f421a",
+  "patchStatus": "ok"
+}

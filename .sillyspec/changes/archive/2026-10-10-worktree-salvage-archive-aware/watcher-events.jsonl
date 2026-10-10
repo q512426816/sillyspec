@@ -1,0 +1,19 @@
+{"ts":1791602573173,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791602602967,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791602602967,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791602602967,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791602632864,"kind":"commit","stage":null,"detail":"ea9b0242","provisional":true}
+{"ts":1791602730885,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791602730885,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791602747510,"kind":"commit","stage":null,"detail":"06f40afb","provisional":true}
+{"ts":1791602764116,"kind":"commit","stage":null,"detail":"3f0c60d4","provisional":true}
+{"ts":1791602793544,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791602793544,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791602800623,"kind":"commit","stage":null,"detail":"03dec3f5","provisional":true}
+{"ts":1791603275751,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791603275751,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1791603289252,"kind":"commit","stage":null,"detail":"53ba8bac","provisional":true}
+{"ts":1791603331644,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791603338206,"kind":"commit","stage":null,"detail":"e6ac0ef3","provisional":true}
+{"ts":1791603365008,"kind":"gate-run","stage":"verify","detail":"门实测 passed（19.9s） · 20261010033604","provisional":true}
+{"ts":1791603550183,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：salvage-warn.log——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

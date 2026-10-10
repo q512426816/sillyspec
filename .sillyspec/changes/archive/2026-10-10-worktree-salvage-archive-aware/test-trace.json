@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-worktree-salvage-archive-aware",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-spec-salvage.test.mjs「3. 归档态清理：archive 副本在 → 跳过不复活原路径、副本不被旧快照覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-worktree-salvage-archive-aware"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-spec-salvage.test.mjs「1. cleanup 打捞：缺失 copy 回 / 冲突不覆盖（未归档态既有回归）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-worktree-salvage-archive-aware"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-spec-salvage.test.mjs「3. 归档态独有产物 → 捞进 archive 副本、原路径不重建」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-worktree-salvage-archive-aware"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-worktree-salvage-archive-aware:flow:测试绑定FR-04",
+      "tests": [
+        "test/worktree-spec-salvage.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-worktree-salvage-archive-aware"
+    }
+  ]
+}

@@ -1091,10 +1091,10 @@ superseded_by：FR-cli-entry-102
 - row: 2026-10-06-archive-stage-claim:flow:测试绑定FR-01
   tests: test/archive-stage-claim.test.mjs「add 失败告警不打成功提示」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: 03dec3f5369edc9967084be5ace7d83860ed25a7
   source_change: 2026-10-06-archive-stage-claim
   status: active
 
@@ -1110,10 +1110,10 @@ superseded_by：FR-cli-entry-102
 - row: 2026-10-06-archive-stage-claim:flow:测试绑定FR-02
   tests: test/archive-stage-claim.test.mjs「add 成功提示与暂存实态」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: 03dec3f5369edc9967084be5ace7d83860ed25a7
   source_change: 2026-10-06-archive-stage-claim
   status: active
 
