@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-init-full-injection",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-01",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 2: AGENTS.md 已存在无标记 → 追加完整受管段，原文保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-01",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 4a: AGENTS.md 异版本追加态 → 受管块刷新，块外内容保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-02",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-02",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-03",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 6: AGENTS.md 含旧 ## SillySpec 段 → 迁移替换，不双段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-03",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍不双段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-03",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-04",
+      "tests": [
+        "test/check-syntax.mjs「未引用导出/内容规则（lint 面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-05",
+      "tests": [
+        "test/init-agents-injection.test.mjs「Case 4a: 异版本追加态块刷新（版本差触发机制的行为面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-10-init-full-injection:flow:测试绑定FR-06",
+      "tests": [
+        "test/init-agents-injection.test.mjs「全套件 70/70（含新增 Case 12-14）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-10-init-full-injection"
+    }
+  ]
+}

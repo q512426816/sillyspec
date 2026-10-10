@@ -1,0 +1,616 @@
+diff --git a/.sillyspec/changes/2026-10-10-init-full-injection/flow-state.yaml b/.sillyspec/changes/2026-10-10-init-full-injection/flow-state.yaml
+new file mode 100644
+index 00000000..b1f20cd7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-init-full-injection/flow-state.yaml
+@@ -0,0 +1,41 @@
++tier: thick
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  init 注入 Agent 指引时，AGENTS.md 已存在的仓只追加一小段受管块（INJECTION_CONTENT：读 scan 文档/grep 验方法/progress show），agent
++  拿不到流程规则与核心约束，注入形同虚设；且小段内容陈旧（progress show 描述过时、未提 flow/核心规则）。
++
++
++  用户决策：不管什么情况，init 都写入完整指引（templates/agents-instruction.md 全文），INJECTION_CONTENT 小段方案连同代码删除。
++
++
++  成功标准：
++
++  - AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++
++  - gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++
++  - codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++
++  - INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++
++  - package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++
++  - test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
++autopilot: true
++baseline_commit: 326f985988debbe2cd917d82c182cbb15e4fb23d
++updatedAt: '2026-10-10T03:17:37.195Z'
++baseline_sha256: fa7aec673338443030b1577dcab74fc5eeced68e2177cff809b2fddcfab70ff7
++upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
++gate_summary: >-
++  test: skipped ← module[]+deps(js61+js-meta-skip1)+fr(50)（57.1s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010031650\test-result.json —
++  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测（增量重跑：增量重跑面 24 文件（前轮失败批 3 ∪ 基线以来变更 42；基线实测测试集 59
++  文件，未触碰绿面复用不重跑））。｜lint: passed ← npm run lint（46.5s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261010031650\test-result.json｜门文件 5 个
++
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 9405da4f..61fcedd2 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -106,9 +106,9 @@ updated_at: 2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——sp
+ 
+ `init.js` 在项目根写入的 agent 指引文件采用 AGENTS.md 单源方案：
+ 
+-- `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。codex 老安装的 `## SillySpec` 旧小段在下次 init 时自动迁移为新受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
++- `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。2026-10-10 起（全量方案）：追加态受管段内容也是完整模板全文——用户自有 AGENTS.md 只在文末追加带版本块标记的完整受管段，原文字节保留。老安装的 `## SillySpec` 旧小段（v≤3.32.3 追加态/injectInstructions 产物）在下次 init 时自动迁移为完整受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
+ - `CLAUDE.md`：薄指针文件，仅含 `@AGENTS.md` 导入行（Claude Code 记忆导入语法），由 `injectClaudePointer` 维护；用户自有 CLAUDE.md 只在文末追加受管指针块。2026-08-02 方案的旧完整态 CLAUDE.md 不自动覆盖，stderr 提示迁移。
+-- `GEMINI.md` / `INSTRUCTIONS.md`：维持小段追加（`injectInstructions`，`## SillySpec` 文本标记幂等），改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
++- `GEMINI.md` / `INSTRUCTIONS.md`：与 AGENTS.md 同源同全文——`injectInstructions` 走同一全量注入器（`injectFullInstructions`），版本标记幂等（同版本跳过、异版本刷新块）；改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
+ - 两文件同属「多操作者常改、非交付物」，已加入 worktree 基线 hash / dirty 检测 / `--stash-dirty` 的排除列表（`worktree.js` `computeBaselineHash` 与 `worktree-apply.js` step 4.5，与 `.claude/`、`docs/` 同口径）。
+ 
+ > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
+diff --git a/package.json b/package.json
+index 2600d60e..62601328 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.3",
++  "version": "3.32.4",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/src/init.js b/src/init.js
+index 18f1740c..39af3f30 100644
+--- a/src/init.js
++++ b/src/init.js
+@@ -89,9 +89,9 @@ const TOOL_LABELS = {
+   opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
+ };
+ 
+-// 小段追加工具（gemini/opencode）。codex 不在此列——AGENTS.md 是跨工具通用的标准内容源，
+-// codex 与 claude 共用完整模板注入（injectAgentsInstructions）；gemini/opencode 改 @AGENTS.md
+-// 指针需先验证两家对 @ 导入语法的支持，留待后续变更。
++// 指令文件工具（gemini/opencode）。codex/claude/zcode 共用 AGENTS.md（跨工具通用标准内容源）；
++// gemini/opencode 写各自指令文件，内容与 AGENTS.md 同源同全文（改 @AGENTS.md 指针需先验证
++// 两家对 @ 导入语法的支持，留待后续变更）。
+ const INSTRUCTION_TOOLS = ['gemini', 'opencode'];
+ 
+ const INSTRUCTION_FILE_MAP = {
+@@ -99,7 +99,13 @@ const INSTRUCTION_FILE_MAP = {
+   opencode: 'INSTRUCTIONS.md',
+ };
+ 
+-const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
++// ── 注入指令文件（全量方案，2026-10-10-init-full-injection：完整模板是唯一注入源）──
++
++const AGENTS_TEMPLATE_PATH = join(__dirname, '..', 'templates', 'agents-instruction.md');
++
++// 旧版小段（v≤3.32.3：AGENTS.md 追加态受管块与 injectInstructions 的注入源）。仅作老安装
++// 迁移的精确匹配文本，不再是任何注入源——所有状态一律写完整模板。
++const LEGACY_SMALL_BLOCK = `## SillySpec — 规范驱动开发
+ 
+ 在执行开发任务时，遵循以下规范：
+ 
+@@ -113,41 +119,23 @@ const INJECTION_CONTENT = `## SillySpec — 规范驱动开发
+ - 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下
+ `;
+ 
+-// ── 注入指令文件 ──
+-
+-function injectInstructions(tool, projectDir) {
+-  const fileName = INSTRUCTION_FILE_MAP[tool];
+-  if (!fileName) return;
+-  const filePath = join(projectDir, fileName);
+-
+-  // 文件不存在则创建
+-  if (!existsSync(filePath)) {
+-    writeFileSync(filePath, INJECTION_CONTENT);
+-    return;
++function readInstructionTemplate() {
++  try {
++    return readFileSync(AGENTS_TEMPLATE_PATH, 'utf8');
++  } catch {
++    console.error(`❌ [sillyspec] 未找到 Agent 指引模板：${AGENTS_TEMPLATE_PATH}`);
++    return null;
+   }
+-
+-  // 已存在 SillySpec 标记则跳过
+-  const content = readFileSync(filePath, 'utf8');
+-  if (content.includes('## SillySpec')) return;
+-
+-  // 追加到末尾
+-  writeFileSync(filePath, content.trimEnd() + '\n\n' + INJECTION_CONTENT);
+ }
+ 
+-// ── 注入 AGENTS.md / CLAUDE.md（claude + codex，版本感知幂等）──
+-// AGENTS.md 是唯一承载完整指引的内容源（跨工具通用标准）；CLAUDE.md 仅为 @AGENTS.md
+-// 导入指针（Claude Code 记忆导入语法）。取代 design: 2026-08-02-init-claude-md 的
+-// CLAUDE.md 单文件方案——其 D-004 预留的「marker 方案迁移」即本次变更。
+-const AGENTS_TEMPLATE_PATH = join(__dirname, '..', 'templates', 'agents-instruction.md');
+-
+ /**
+- * 移除 codex 老安装的旧版小段（injectInstructions 方案：`## SillySpec` 段，追加在 EOF）。
++ * 移除老安装的旧版小段（v≤3.32.3 方案：`## SillySpec` 段，追加在 EOF 或整文件即小段）。
+  * 优先精确匹配旧文本；用户编辑过 / CRLF 漂移导致匹配失败时回退按标题截到 EOF。
+- * @param {string} content - AGENTS.md 原文
++ * @param {string} content - 指引文件原文
+  * @returns {string} 截除旧段后的内容（已 trimEnd）
+  */
+-function stripLegacyAgentsBlock(content) {
+-  const exact = INJECTION_CONTENT.trimEnd();
++function stripLegacySmallBlock(content) {
++  const exact = LEGACY_SMALL_BLOCK.trimEnd();
+   const idx = content.indexOf(exact);
+   if (idx >= 0) return content.slice(0, idx).trimEnd();
+   const headingIdx = content.indexOf('## SillySpec');
+@@ -156,50 +144,49 @@ function stripLegacyAgentsBlock(content) {
+ }
+ 
+ /**
+- * 为 AGENTS.md 注入完整指引（版本感知幂等，三态四分支 + 旧标记迁移）。
+- * - 不存在：写完整模板（templates/agents-instruction.md）+ 顶部版本注释
+- * - 存在无标记：追加受管段（INJECTION_CONTENT）+ 版本块标记；
+- *   含旧 `## SillySpec` 段（codex 老安装）先截除再追加（marker 迁移，防双段）
++ * 向指引文件注入完整模板（版本感知幂等，三态四分支 + 旧标记迁移）。
++ * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 共用；完整模板（templates/agents-instruction.md）
++ * 是唯一注入源。取代 design: 2026-08-02-init-claude-md 的 CLAUDE.md 单文件方案与
++ * v≤3.32.3 的追加态小段方案（其 D-004 预留的「marker 方案迁移」即彼方案）。
++ * - 不存在：写完整模板 + 顶部版本注释
++ * - 存在无标记：追加受管段（完整模板全文）+ 版本块标记；
++ *   含旧 `## SillySpec` 小段（v≤3.32.3 安装）先截除再追加（marker 迁移，防双段）
+  * - 存在同版本标记：跳过（不写文件）
+  * - 存在异版本标记：追加态刷新块 / 完整态仅 stderr 提示（保留用户改动）
+- * @param {string} projectDir - 源码项目根
++ * @param {string} filePath - 指引文件绝对路径
+  */
+-export function injectAgentsInstructions(projectDir) {
+-  const filePath = join(projectDir, 'AGENTS.md');
++function injectFullInstructions(filePath) {
+   const version = getVersion();
++  const template = readInstructionTemplate();
++  if (template === null) return;
++  const fileName = basename(filePath);
+   // 完整态顶部注释（新文件首行，轻量、不限制后续编辑）
+   const fullHeader = `<!-- SillySpec v${version} — 由 sillyspec init 生成，可自由编辑；重跑 init 同版本不更新 -->`;
+-  // 追加态受管段（包版本块标记，明确"勿手动编辑此段"）
+-  const appendBlock =
++  // 追加态受管段（包版本块标记，明确"勿手动编辑此段"），内容=完整模板全文
++  const managedBlock =
+     `<!-- SillySpec v${version} START — 由 sillyspec init 注入，勿手动编辑此段 -->\n` +
+-    INJECTION_CONTENT.trimEnd() +
++    template.trimEnd() +
+     `\n<!-- SillySpec END -->`;
+ 
+   // 状态 1：文件不存在 → 写完整模板 + 顶部版本注释
+   if (!existsSync(filePath)) {
+-    let template = '';
+-    try {
+-      template = readFileSync(AGENTS_TEMPLATE_PATH, 'utf8');
+-    } catch {
+-      console.error(`❌ [sillyspec] 未找到 Agent 指引模板：${AGENTS_TEMPLATE_PATH}`);
+-      return;
+-    }
+     writeFileSync(filePath, fullHeader + '\n' + template);
+-    console.log(chalk.green(`    ✓ AGENTS.md 已生成（SillySpec v${version}，完整指引）`));
++    console.log(chalk.green(`    ✓ ${fileName} 已生成（SillySpec v${version}，完整指引）`));
+     return;
+   }
+ 
+   let content = readFileSync(filePath, 'utf8');
+ 
+-  // 无任何 `<!-- SillySpec v` 标记 → 状态 2：追加受管段（原文字节保留）
++  // 无任何 `<!-- SillySpec v` 标记 → 状态 2：追加完整受管段（原文字节保留）
+   const markMatch = content.match(/<!-- SillySpec v(\S+)/);
+   if (!markMatch) {
+     if (content.includes('## SillySpec')) {
+-      content = stripLegacyAgentsBlock(content);
+-      console.log(chalk.green('    ✓ AGENTS.md 旧版 SillySpec 小段已迁移为新受管段'));
++      content = stripLegacySmallBlock(content);
++      console.log(chalk.green('    ✓ 旧版 SillySpec 小段已迁移为完整受管段'));
+     }
+-    writeFileSync(filePath, content + '\n\n' + appendBlock + '\n');
+-    console.log(chalk.green(`    ✓ AGENTS.md 已追加 SillySpec 受管段（v${version}）`));
++    const body = content.trimEnd() === '' ? managedBlock : content.trimEnd() + '\n\n' + managedBlock;
++    writeFileSync(filePath, body + '\n');
++    console.log(chalk.green(`    ✓ ${fileName} 已追加 SillySpec 完整指引受管段（v${version}）`));
+     return;
+   }
+ 
+@@ -210,15 +197,25 @@ export function injectAgentsInstructions(projectDir) {
+   // 状态 4：异版本（升级）。区分追加态（有 START...END 块）/ 完整态（仅顶部注释）。
+   const startBlockRe = /<!-- SillySpec v\S+\s+START[\s\S]*?<!-- SillySpec END -->/;
+   if (startBlockRe.test(content)) {
+-    // 4a：追加态 → 用当前版本受管段替换该块（块外用户内容字节保留）
+-    writeFileSync(filePath, content.replace(startBlockRe, appendBlock));
+-    console.log(chalk.green(`    ✓ AGENTS.md 受管段已升级（v${existingVersion} → v${version}）`));
++    // 4a：追加态 → 用当前版本完整受管段替换该块（块外用户内容字节保留）
++    writeFileSync(filePath, content.replace(startBlockRe, managedBlock));
++    console.log(chalk.green(`    ✓ ${fileName} 完整指引受管段已升级（v${existingVersion} → v${version}）`));
+   } else {
+     // 4b：完整态 → 不覆盖（保留用户改动），仅 stderr 打印升级提示
+-    console.error(`⚠️ [sillyspec] SillySpec 升级 v${existingVersion}→v${version}，AGENTS.md 未自动更新（保留你的改动）。如需采用新模板：备份后删除 AGENTS.md 再跑 sillyspec init。`);
++    console.error(`⚠️ [sillyspec] SillySpec 升级 v${existingVersion}→v${version}，${fileName} 未自动更新（保留你的改动）。如需采用新模板：备份后删除 ${fileName} 再跑 sillyspec init。`);
+   }
+ }
+ 
++export function injectAgentsInstructions(projectDir) {
++  injectFullInstructions(join(projectDir, 'AGENTS.md'));
++}
++
++export function injectInstructions(tool, projectDir) {
++  const fileName = INSTRUCTION_FILE_MAP[tool];
++  if (!fileName) return;
++  injectFullInstructions(join(projectDir, fileName));
++}
++
+ /**
+  * 为 Claude Code 写 CLAUDE.md 指针（@AGENTS.md 导入，薄文件）。
+  * - 不存在：写指针文件（版本头注释 + @AGENTS.md）
+@@ -441,7 +438,7 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
+     }
+   }
+ 
+-  // 注入指令文件（gemini/opencode 小段追加，不进 AGENTS.md 注入器）
++  // 注入指令文件（gemini/opencode：与 AGENTS.md 同源同全文，共用全量注入器）
+   for (let i = 0; i < tools.length; i++) {
+     const toolName = tools[i];
+     if (INSTRUCTION_TOOLS.includes(toolName)) {
+@@ -449,7 +446,7 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
+     }
+   }
+ 
+-  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 段迁移；
++  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 小段迁移；
+   // zcode 2026-09-21-flow-command-cards FR-05 入面——AGENTS.md 是跨工具通用标准内容源）
+   if (tools.includes('claude') || tools.includes('codex') || tools.includes('zcode')) {
+     injectAgentsInstructions(projectDir);
+diff --git a/test/init-agents-injection.test.mjs b/test/init-agents-injection.test.mjs
+index eeb2f08e..ce48094f 100644
+--- a/test/init-agents-injection.test.mjs
++++ b/test/init-agents-injection.test.mjs
+@@ -1,9 +1,9 @@
+ /**
+- * init 注入 AGENTS.md（完整指引，版本感知幂等三态四分支）+ CLAUDE.md（@AGENTS.md 指针）。
+- * 取代 2026-08-02-init-claude-md 的 CLAUDE.md 单文件方案（其 D-004 预留的 marker 迁移即此方案）。
+- * 直接单测导出的 injectAgentsInstructions / injectClaudePointer，无需走 cmdInit 重依赖。
++ * init 注入 Agent 指引（全量方案 2026-10-10-init-full-injection：完整模板是唯一注入源，
++ * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
++ * + CLAUDE.md（@AGENTS.md 指针）。直接单测导出的注入器，无需走 cmdInit 重依赖。
+  */
+-import { injectAgentsInstructions, injectClaudePointer, getVersion } from '../src/init.js'
++import { injectAgentsInstructions, injectClaudePointer, injectInstructions, getVersion } from '../src/init.js'
+ import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync } from 'fs'
+ import { join } from 'path'
+ import os from 'os'
+@@ -18,6 +18,8 @@ function assert(condition, msg) {
+ 
+ const VER = getVersion()
+ const OLDV = '0.0.0-test' // 保证异于当前版本
++// v≤3.32.3 旧小段注入产物（AGENTS.md 追加态受管块 / injectInstructions 写入内容）
++const LEGACY_SMALL = `# My Project\n\n自己的规范说明。\n\n## SillySpec — 规范驱动开发\n\n在执行开发任务时，遵循以下规范：\n\n### 代码规范\n- 写代码前先读取 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`（架构）\n- 调用已有方法前，用 grep 确认方法存在，不许编造\n- 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格\n\n### 工作流程\n- 读取 sillyspec.db 确认当前阶段（使用 \`sillyspec progress show\`）\n- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下\n`
+ 
+ function makeTempProject() {
+   const root = join(os.tmpdir(), `sillyspec-agents-init-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+@@ -56,8 +58,8 @@ console.log('--- Case 1: AGENTS.md 无文件 → 写完整模板 + 顶部版本
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
+-// ── Case 2: 已存在无标记 → 追加受管段 ──
+-console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加受管段，原文保留 ---')
++// ── Case 2: 已存在无标记 → 追加完整受管段 ──
++console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加完整受管段，原文保留 ---')
+ {
+   const root = makeTempProject()
+   const original = `# My Project\n\n自定义内容。\n`
+@@ -68,6 +70,9 @@ console.log('\n--- Case 2: AGENTS.md 已存在无标记 → 追加受管段，
+   assert(content.includes('自定义内容'), '原文内容字节保留')
+   assert(content.includes(`<!-- SillySpec v${VER} START`), '追加态块开始标记')
+   assert(content.includes('<!-- SillySpec END -->'), '追加态块结束标记')
++  assert(content.includes('# Agent 指引'), '受管块含完整模板标题（全量注入）')
++  assert(content.includes('改代码前必须先说明依据'), '受管块含核心规则（完整模板全文）')
++  assert(!content.includes('## SillySpec — 规范驱动开发'), '不再注入旧小段标题')
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
+@@ -103,6 +108,7 @@ console.log('\n--- Case 4a: AGENTS.md 异版本追加态 → 受管块刷新，
+   assert(content.includes(`<!-- SillySpec v${VER} START`), '块升级为新版本标记')
+   assert(!content.includes(`v${OLDV}`), '旧版本标记已替换')
+   assert(!content.includes('旧规则行'), '旧块内容已被新受管段替换')
++  assert(content.includes('改代码前必须先说明依据'), '升级后受管块为完整模板全文')
+   assert(content.includes('<!-- SillySpec END -->'), '块结束标记保留')
+   rmSync(root, { recursive: true, force: true })
+ }
+@@ -137,21 +143,20 @@ console.log('\n--- Case 5: AGENTS.md CRLF 已存在无标记 → 追加受管段
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
+-// ── Case 6: 旧 ## SillySpec 小段（codex 老安装）→ 迁移为新受管段 ──
++// ── Case 6: 旧 ## SillySpec 小段（v≤3.32.3 老安装）→ 迁移为完整受管段 ──
+ console.log('\n--- Case 6: AGENTS.md 含旧 ## SillySpec 段 → 迁移替换，不双段 ---')
+ {
+   const root = makeTempProject()
+-  // 复刻 codex 老方案产物：用户内容 + injectInstructions 在 EOF 追加的小段
+-  const legacy = `# My Project\n\n自己的规范说明。\n\n## SillySpec — 规范驱动开发\n\n在执行开发任务时，遵循以下规范：\n\n### 代码规范\n- 写代码前先读取 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\`（代码风格）和 \`.sillyspec/docs/<project>/scan/ARCHITECTURE.md\`（架构）\n- 调用已有方法前，用 grep 确认方法存在，不许编造\n- 遵循 \`.sillyspec/docs/<project>/scan/CONVENTIONS.md\` 中的代码风格\n\n### 工作流程\n- 读取 sillyspec.db 确认当前阶段（使用 \`sillyspec progress show\`）\n- 各阶段产出文件位于 \`.sillyspec/changes/<变更名>/\` 下\n`
+-  writeFileSync(join(root, 'AGENTS.md'), legacy)
++  // 复刻老方案产物：用户内容 + 旧小段（追加在 EOF）
++  writeFileSync(join(root, 'AGENTS.md'), LEGACY_SMALL)
+   injectAgentsInstructions(root)
+   const content = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+   assert(content.startsWith('# My Project'), '用户内容保留在前')
+   assert(content.includes('自己的规范说明'), '用户内容字节保留')
+   assert(content.includes(`<!-- SillySpec v${VER} START`), '新受管段已追加')
+   const headingCount = (content.match(/^## SillySpec — 规范驱动开发$/gm) || []).length
+-  assert(headingCount === 1, `旧小段标题恰保留 1 份（迁移非叠加，got ${headingCount}）`)
+-  assert(content.includes('读取 sillyspec.db'), '受管段内容在（新块内）')
++  assert(headingCount === 0, `旧小段标题已截除、新块不含旧标题（got ${headingCount} 份）`)
++  assert(content.includes('改代码前必须先说明依据'), '新受管段为完整模板全文')
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
+@@ -169,6 +174,56 @@ console.log('\n--- Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
++// ══ GEMINI.md / INSTRUCTIONS.md（injectInstructions 全量注入，与 AGENTS.md 同源同全文）══
++
++// ── Case 12: 无文件 → 写完整模板 ──
++console.log('\n--- Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）---')
++{
++  const root = makeTempProject()
++  injectInstructions('gemini', root)
++  const p = join(root, 'GEMINI.md')
++  assert(existsSync(p), 'GEMINI.md 已生成')
++  const content = readFileSync(p, 'utf8')
++  assert(content.startsWith(`<!-- SillySpec v${VER} — `), '顶部版本注释')
++  assert(content.includes('# Agent 指引'), '完整模板全文（与 AGENTS.md 同源）')
++  assert(content.includes('改代码前必须先说明依据'), '含核心规则')
++  assert(!content.includes('## SillySpec — 规范驱动开发'), '不含旧小段')
++  rmSync(root, { recursive: true, force: true })
++}
++
++// ── Case 13: 用户自有文件 → 追加完整受管段，同版本幂等 ──
++console.log('\n--- Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等 ---')
++{
++  const root = makeTempProject()
++  writeFileSync(join(root, 'INSTRUCTIONS.md'), `# My Notes\n\n自己的说明。\n`)
++  injectInstructions('opencode', root)
++  const p = join(root, 'INSTRUCTIONS.md')
++  const first = readFileSync(p, 'utf8')
++  assert(first.startsWith('# My Notes'), '原文保留在前')
++  assert(first.includes('自己的说明'), '原文内容字节保留')
++  assert(first.includes(`<!-- SillySpec v${VER} START`), '完整受管块开始标记')
++  assert(first.includes('改代码前必须先说明依据'), '受管块为完整模板全文')
++  const beforeMtime = statSync(p).mtimeMs
++  injectInstructions('opencode', root)
++  assert(readFileSync(p, 'utf8') === first, '同版本重跑内容不变（幂等）')
++  assert(statSync(p).mtimeMs === beforeMtime, '同版本重跑不写文件')
++  rmSync(root, { recursive: true, force: true })
++}
++
++// ── Case 14: 老安装整文件即旧小段（v≤3.32.3 injectInstructions 新建产物）→ 迁移为完整受管块 ──
++console.log('\n--- Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留 ---')
++{
++  const root = makeTempProject()
++  const legacyOnly = LEGACY_SMALL.slice(LEGACY_SMALL.indexOf('## SillySpec'))
++  writeFileSync(join(root, 'GEMINI.md'), legacyOnly)
++  injectInstructions('gemini', root)
++  const content = readFileSync(join(root, 'GEMINI.md'), 'utf8')
++  assert(!content.includes('## SillySpec — 规范驱动开发'), '旧小段标题已迁移清除')
++  assert(content.startsWith(`<!-- SillySpec v${VER} START`), '文件起始即完整受管块（截除后无空壳）')
++  assert(content.includes('改代码前必须先说明依据'), '新内容为完整模板全文')
++  rmSync(root, { recursive: true, force: true })
++}
++
+ // ══ CLAUDE.md 指针（injectClaudePointer）══
+ 
+ // ── Case 7: 无文件 → 写指针文件 ──
+diff --git a/.sillyspec/changes/2026-10-10-init-full-injection/design.md b/.sillyspec/changes/2026-10-10-init-full-injection/design.md
+new file mode 100644
+index 00000000..782552ea
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-init-full-injection/design.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:32:29.576Z
++---
++# 设计记录（Design Record）— 2026-10-10-init-full-injection
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++用户决策（2026-10-10）：init 注入 agent 指引时不分状态一律写完整模板（templates/agents-instruction.md 全文），INJECTION_CONTENT 小段方案删除——原追加态只给 6 行小段（读 scan 文档/grep 验方法/progress show），agent 拿不到选道表与核心规则，注入形同虚设，且小段内容陈旧。实现上把 injectAgentsInstructions 的三态四分支状态机泛化为 injectFullInstructions(filePath)（按文件路径注入，AGENTS.md / GEMINI.md / INSTRUCTIONS.md 共用）：追加态受管块内容从 INJECTION_CONTENT 换为完整模板全文（用户原文字节保留在 START/END 块外）；injectInstructions（gemini/opencode）从小段追加改为调同一注入器，幂等标记从 `## SillySpec` 文本升级为 `<!-- SillySpec v` 版本标记（完整模板不含旧标题，用标题判幂等会重复追加）。旧 `## SillySpec` 小段（v≤3.32.3 安装产物）文本仅保留在迁移函数内作精确匹配（标题截除回退不变）。版本 bump 3.32.3→3.32.4：已装仓重跑 init 经版本差触发受管段升级为完整内容。
++
++文件变更清单（本变更自声明交付面）：
++
++- 实现：src/init.js（injectFullInstructions 全量注入器 + stripLegacySmallBlock 旧段迁移，删除 INJECTION_CONTENT 常量与小段方案）
++- 版本：package.json（3.32.3→3.32.4，升级链版本差触发传播）
++- 测试：test/init-agents-injection.test.mjs（追加态/升级态全量断言改写 + 新增 Case 12-14 gemini/opencode 全量注入用例）
++- 文档：docs/sillyspec/file-lifecycle.md（AGENTS.md 追加态与 GEMINI.md/INSTRUCTIONS.md 注入行为描述同步）
++- 流程工件：.sillyspec/changes/2026-10-10-init-full-injection/ 全部
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `INJECTION_CONTENT` 常量：删除（旧文本以 `LEGACY_SMALL_BLOCK` 名义内联于迁移函数，不再作任何注入源）。
++- `injectAgentsInstructions(projectDir)`：签名不变；行为变化=追加态受管块为完整模板全文。
++- `injectInstructions(tool, projectDir)`：签名不变；行为变化=GEMINI.md / INSTRUCTIONS.md 同样注入完整模板 + 版本标记幂等（原为无版本标记小段追加）。改为 export 供测试直测。
++- 新增内部函数 `injectFullInstructions(filePath)`（不导出）与 `readInstructionTemplate()`（模板读取，缺失时 stderr 报错返回 null，不写半截文件）。
++- `injectClaudePointer`（CLAUDE.md @AGENTS.md 指针）：无变化。
++- CLI 命令面：无新增/删减命令。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立。init 重入由标记状态机保证幂等：无标记→追加（含旧段先截除）、同版本→跳过不写、异版本→START/END 正则整块替换；升级后再次重跑命中同版本跳过，不叠加。状态判定只依赖文件当前内容，与到达顺序无关。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   与现状同风险面——writeFileSync 非原子，两个 init 并发写同一指引文件理论上可交错；本变更不改变单写点结构，不新增并发路径（不引入锁，与原方案一致）。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   安全。strip 旧段与追加新块间的崩溃窗口现状已存在（下次 init 无标记→追加补齐）；模板读取失败 fail-fast（stderr + return）；writeFileSync 单次调用，文件要么旧态要么新态，无中间格式。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   不会。注入按传入 projectDir 定位文件，模板从包内 templates/ 读取；GEMINI.md/INSTRUCTIONS.md 与 AGENTS.md 各自独立文件互不影响。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：追加态受管块从 6 行变为全文（~45 行），升级整块替换时用户在块内编辑的改动会丢——标记已注明「勿手动编辑此段」，与原方案 R-04 同性质，只是受管面变大；块外用户内容仍字节保留。放弃方案：①继续小段追加（用户否决——agent 拿不到流程规则，注入形同虚设）；②gemini/opencode 改 @AGENTS.md 指针（两家对 @ 导入语法支持未验证，2026-08-02 变更已留注，不在本变更扩面）。
+diff --git a/.sillyspec/changes/2026-10-10-init-full-injection/proposal.md b/.sillyspec/changes/2026-10-10-init-full-injection/proposal.md
+new file mode 100644
+index 00000000..8bc1be5b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-init-full-injection/proposal.md
+@@ -0,0 +1,38 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:32:29.576Z
++---
++# 提案书（Proposal）— 2026-10-10-init-full-injection
++
++## 动机
++
++任务原话转写：init 注入 Agent 指引时，AGENTS.md 已存在的仓只追加一小段受管块（INJECTION_CONTENT：读 scan 文档/grep 验方法/progress show），agent 拿不到流程规则与核心约束，注入形同虚设；且小段内容陈旧（progress show 描述过时、未提 flow/核心规则）。
++
++用户决策：不管什么情况，init 都写入完整指引（templates/agents-instruction.md 全文），INJECTION_CONTENT 小段方案连同代码删除。
++
++成功标准：
++- AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++- gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++- codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++- INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++- package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++- test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
++
++## 变更范围
++
++按成功标准机械推导，共 6 条验收面：
++1. AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++2. gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++3. codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++4. INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++5. package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++6. test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
++
++## 成功标准（可验证）
++
++1. AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++2. gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++3. codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++4. INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++5. package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++6. test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
+diff --git a/.sillyspec/changes/2026-10-10-init-full-injection/requirements.md b/.sillyspec/changes/2026-10-10-init-full-injection/requirements.md
+new file mode 100644
+index 00000000..d205031a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-init-full-injection/requirements.md
+@@ -0,0 +1,68 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:32:29.576Z
++---
++# 需求规格（Requirements）— 2026-10-10-init-full-injection
++
++## 功能需求
++
++### FR-01: AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++
++- init 注入 AGENTS.md 时**必须**不分状态写入完整指引模板（templates/agents-instruction.md 全文）：文件已存在且无 SillySpec 标记时，只允许在文末追加带版本块标记的完整受管段，**禁止**再注入任何缩水小段，块外用户原文字节必须原样保留。
++
++#### 场景：主路径
++
++Given 项目根已有用户自有 AGENTS.md（无 `<!-- SillySpec v` 标记）/ When 执行 sillyspec init（含 --tool codex/claude/zcode）/ Then 文件末尾追加 `START...END` 受管块且块内容为完整模板全文（含选道表与核心规则），用户原文在前且字节不变；同版本重跑必须跳过不写文件（幂等）。
++
++### FR-02: gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++
++- `injectInstructions`（GEMINI.md / INSTRUCTIONS.md）**必须**与 AGENTS.md 走同一全量注入器注入完整模板全文，幂等检测**必须**使用 `<!-- SillySpec v` 版本标记（同版本跳过、异版本刷新受管块），**禁止**再用 `## SillySpec` 文本标题判幂等（完整模板不含该标题，用标题判会重复追加）。
++
++#### 场景：主路径
++
++Given 用户自有 GEMINI.md / INSTRUCTIONS.md（无标记）/ When init --tool gemini / opencode / Then 文末追加完整受管段、原文保留；同版本重跑内容与 mtime 均不变。
++
++### FR-03: codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++
++- 指引文件含 v≤3.32.3 旧 `## SillySpec` 小段（无论追加在用户内容后还是整文件即小段）时，init **必须**先截除旧段再追加完整受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除），**禁止**出现双 SillySpec 段。
++
++#### 场景：主路径
++
++Given AGENTS.md/GEMINI.md 为 v≤3.32.3 老安装产物（含旧小段）/ When 重跑 init / Then 旧段被截除、恰有一个完整受管段；整文件即旧小段时截除后不得残留空壳（文件起始即受管块）。
++
++### FR-04: INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++
++- `INJECTION_CONTENT` 常量**必须**从 src/init.js 删除，不得再作为任何注入源；旧小段文本**可以**仅以迁移匹配文本的形式保留在旧段截除函数内。
++
++#### 场景：主路径
++
++Given src/init.js / Then 全文无 INJECTION_CONTENT 引用；注入内容唯一来源为 templates/agents-instruction.md。
++
++### FR-05: package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++
++- 本次注入行为变更**必须**伴随 package.json 版本号提升（3.32.3→3.32.4）：已装仓重跑 init 时靠版本差触发追加态受管块整块刷新为完整内容，不升版本则同版本跳过、传播零效果。
++
++#### 场景：主路径
++
++Given 已装仓 AGENTS.md 带 v3.32.3 小段受管块 / When 用 v3.32.4 重跑 init / Then 命中异版本追加态分支，块被替换为完整模板全文，块外内容保留。
++
++### FR-06: test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
++
++- 注入面行为变更**必须**有测试覆盖并全绿：init-agents-injection 全用例通过、lint（check-syntax）通过；**禁止**为过测试改弱断言。
++
++#### 场景：主路径
++
++Given 本变更的 src/test 改动 / When 运行 node test/init-agents-injection.test.mjs 与 npm run lint / Then 全部通过（70/70 + lint 0 错）。
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/init-agents-injection.test.mjs「Case 2: AGENTS.md 已存在无标记 → 追加完整受管段，原文保留」
++FR-01: test/init-agents-injection.test.mjs「Case 4a: AGENTS.md 异版本追加态 → 受管块刷新，块外内容保留」
++FR-02: test/init-agents-injection.test.mjs「Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）」
++FR-02: test/init-agents-injection.test.mjs「Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等」
++FR-03: test/init-agents-injection.test.mjs「Case 6: AGENTS.md 含旧 ## SillySpec 段 → 迁移替换，不双段」
++FR-03: test/init-agents-injection.test.mjs「Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍不双段」
++FR-03: test/init-agents-injection.test.mjs「Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留」
++FR-04: test/check-syntax.mjs「未引用导出/内容规则（lint 面）」+ src/init.js 全文无 INJECTION_CONTENT（Code Review 核验）
++FR-05: test/init-agents-injection.test.mjs「Case 4a: 异版本追加态块刷新（版本差触发机制的行为面）」
++FR-06: test/init-agents-injection.test.mjs「全套件 70/70（含新增 Case 12-14）」+ npm run lint
+diff --git a/.sillyspec/changes/2026-10-10-init-full-injection/tasks.md b/.sillyspec/changes/2026-10-10-init-full-injection/tasks.md
+new file mode 100644
+index 00000000..85418942
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-10-init-full-injection/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-10T01:32:29.576Z
++---
++# 任务注册表（Tasks）— 2026-10-10-init-full-injection
++
++- [x] task-01: AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
++- [x] task-02: gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
++- [x] task-03: codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
++- [x] task-04: INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
++- [x] task-05: package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
++- [x] task-06: test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过

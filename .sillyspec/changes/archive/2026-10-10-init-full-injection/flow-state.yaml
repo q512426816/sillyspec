@@ -3,6 +3,12 @@ legacy_fallback: false
 substeps:
   artifacts: done
   ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -29,7 +35,7 @@ input: >-
   - test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
 autopilot: true
 baseline_commit: 326f985988debbe2cd917d82c182cbb15e4fb23d
-updatedAt: '2026-10-10T03:17:37.195Z'
+updatedAt: '2026-10-10T03:25:39.619Z'
 baseline_sha256: fa7aec673338443030b1577dcab74fc5eeced68e2177cff809b2fddcfab70ff7
 upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
 gate_summary: >-

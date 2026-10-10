@@ -1,0 +1,99 @@
+{
+  "change": "2026-10-10-init-full-injection",
+  "baseline": "326f985988debbe2cd917d82c182cbb15e4fb23d",
+  "head": "1af50938cf221370f7a7e504fb54ccb7ec0fe63e",
+  "files": [
+    ".sillyspec/changes/2026-10-10-init-full-injection/design.md",
+    ".sillyspec/changes/2026-10-10-init-full-injection/flow-state.yaml",
+    ".sillyspec/changes/2026-10-10-init-full-injection/proposal.md",
+    ".sillyspec/changes/2026-10-10-init-full-injection/requirements.md",
+    ".sillyspec/changes/2026-10-10-init-full-injection/tasks.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "package.json",
+    "src/init.js",
+    "test/init-agents-injection.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 341,
+    "deletions": 76
+  },
+  "savedAt": "2026-10-10T03:18:32.816Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "326f985988debbe2cd917d82c182cbb15e4fb23d",
+    "totals": {
+      "files": 4,
+      "additions": 128,
+      "deletions": 76
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "package.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/init.js",
+        "additions": 58,
+        "deletions": 61,
+        "kind": "modified"
+      },
+      {
+        "path": "test/init-agents-injection.test.mjs",
+        "additions": 67,
+        "deletions": 12,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6241532b79a1259786474c5bb68f1d7723ce9e2704d4e324ec147545e7b10188",
+  "patchStatus": "ok"
+}

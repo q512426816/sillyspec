@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-10-init-full-injection",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "1af50938cf221370f7a7e504fb54ccb7ec0fe63e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "盲维切换问答表述与代码不完全相符：strip+追加实为单次落盘（无所述盘面崩溃窗口），且「无中间格式」对撕裂写不成立、撕裂残块同版本跳过后永不自愈",
+      "evidence": "design Q3 称「strip 旧段与追加新块间的崩溃窗口现状已存在」，但 src/init.js:184-188 中 strip 在内存完成、与追加合并为单次 writeFileSync，盘面不存在该窗口（自愈结论本身成立）；「writeFileSync 单次调用→要么旧态要么新态、无中间格式」对撕裂写不成立——若撕裂恰好保留 START 标记而截掉 END，同版本跳过（init.js:195）永不重写，未来版本升级时 4a 正则（init.js:198）因缺 END 无法匹配、落入 4b 仅 stderr 提示，残块无法自动修复。低概率且非本次新增风险面（跳过语义承旧），降 P3 提示。",
+      "location": "src/init.js:195"
+    },
+    {
+      "severity": "P3",
+      "title": "managedBlock 作为 String.replace 的 replacement 字符串参数使用，模板未来引入 $ 特殊序列会静默损坏升级产物",
+      "evidence": "4a 分支 content.replace(startBlockRe, managedBlock)（init.js:201）中 replacement 字符串的 $$/$&/$`/$'/$n 具特殊语义；当前 templates/agents-instruction.md 经 grep 全文无 $ 字符（无活跃缺陷），但模板从 6 行小段扩为 43 行全文后，未来加入 shell 示例含 $$ 或 $& 时将静默产生损坏内容且无任何测试可拦。缓解：改为函数式 replacement (() => managedBlock)。",
+      "location": "src/init.js:201"
+    },
+    {
+      "severity": "P3",
+      "title": "已声明边界裁为可接受但值得提示：无标记文件含用户自写 ## SillySpec 标题段时，回退截除删标题起至 EOF 的全部用户内容",
+      "evidence": "FR-03 已声明「编辑过/CRLF 漂移回退按标题截除」；仿真实证（S3）：从未用过 SillySpec 的用户自写 ## SillySpec 段时，stripLegacySmallBlock 标题回退（init.js:141-142）从标题截到 EOF，标题后用户内容被删且控制台报「旧版小段已迁移」误导。裁决：可接受——仅显式 init 触发、标题前内容保留、与 v≤3.32.3 真实产物形态（小段恒在 EOF）一致；按严重度记 P3 提示。",
+      "location": "src/init.js:141-142"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-10T03:24:50Z"
+}

@@ -1305,3 +1305,129 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-10-quick-refs-purge
   status: active
+
+## FR-setup-077 AGENTS.md 已存在（无标记）时，追加的受管块内容为完整模板全文（用户原文字节保留在块外）
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 项目根已有用户自有 AGENTS.md（无 `<!-- SillySpec v` 标记）/ When 执行 sillyspec init（含 --tool co
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-01
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-01
+  tests: test/init-agents-injection.test.mjs「Case 4a: AGENTS.md 异版本追加态 → 受管块刷新，块外内容保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
+
+## FR-setup-078 gemini/opencode（GEMINI.md / INSTRUCTIONS.md）同样注入完整指引，版本标记幂等（同版本跳过、异版本刷新块）
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 用户自有 GEMINI.md / INSTRUCTIONS.md（无标记）/ When init --tool gemini / opencode / Then
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-02
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-02
+  tests: test/init-agents-injection.test.mjs「Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
+
+## FR-setup-079 codex/gemini/opencode 老安装的旧 ## SillySpec 小段重跑 init 时迁移为完整受管段，不双段
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given AGENTS.md/GEMINI.md 为 v≤3.32.3 老安装产物（含旧小段）/ When 重跑 init / Then 旧段被截除、恰有一个完整受管段；
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-03
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-03
+  tests: test/init-agents-injection.test.mjs「Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
+
+## FR-setup-080 INJECTION_CONTENT 常量删除（旧文本仅保留于旧段迁移函数内作精确匹配用）
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given src/init.js / Then 全文无 INJECTION_CONTENT 引用；注入内容唯一来源为 templates/agents-instructi
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-04
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-04
+  tests: test/check-syntax.mjs「未引用导出/内容规则（lint 面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
+
+## FR-setup-081 package.json 版本 bump：已装仓重跑 init 经版本差触发受管段升级为完整内容（2026-09-25-thin-release-pack 实证教训：只改模板不升版本=传播零效果）
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 已装仓 AGENTS.md 带 v3.32.3 小段受管块 / When 用 v3.32.4 重跑 init / Then 命中异版本追加态分支，块被替换为完整
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-05
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-05
+  tests: test/init-agents-injection.test.mjs「Case 4a: 异版本追加态块刷新（版本差触发机制的行为面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
+
+## FR-setup-082 test/init-agents-injection.test.mjs 及相关测试全绿，lint 通过
+变更：2026-10-10-init-full-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更的 src/test 改动 / When 运行 node test/init-agents-injection.test.mjs 与 npm run li
+全文：.sillyspec/changes/archive/2026-10-10-init-full-injection/requirements.md#FR-06
+最近确认：ea9b0242d28e68b1eb7c5b070ee9b5c29a31326d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-10-init-full-injection:flow:测试绑定FR-06
+  tests: test/init-agents-injection.test.mjs「全套件 70/70（含新增 Case 12-14）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-10-init-full-injection
+  status: active
