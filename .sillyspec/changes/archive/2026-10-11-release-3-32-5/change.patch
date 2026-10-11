@@ -1,0 +1,220 @@
+diff --git a/.sillyspec/changes/2026-10-11-release-3-32-5/flow-state.yaml b/.sillyspec/changes/2026-10-11-release-3-32-5/flow-state.yaml
+new file mode 100644
+index 00000000..bc284186
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-release-3-32-5/flow-state.yaml
+@@ -0,0 +1,26 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  动机：发布 sillyspec@3.32.5。随版内容=2026-10-11-resurrect-guard-verify-hardening（归档幽灵复活双门 + verify 对账基点 merge-base 化 + 超时单位统一 +
++  quick skill 落地 + docs 重锚基线归零，已收口归档）。版本面照 3.32.1~3.32.4 惯例：package.json version + test/quick-retired.test.mjs R5
++  锚同步提升；推送经 pre-push 门（lint+test+docs gate）；发布经腾讯 DoH 钉扎通道（registry.npmjs.org 本地解析不可信，未钉扎数据不可用作核验——3.32.2/3.32.3/3.32.4
++  同款绕行）。
++
++
++  成功标准：
++
++  - package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++
++  - git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++
++  - npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
++autopilot: true
++baseline_commit: 9495da3e50a08a426fc6de415853ca534f1f984a
++updatedAt: '2026-10-11T14:19:07.070Z'
++baseline_sha256: c9b800267ccf56984d83f9b909e5eceaaddbbe650c4128fd2d98e53416e70065
++
+diff --git a/package-lock.json b/package-lock.json
+index 6f2b2c7f..780aea73 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.30.0",
++  "version": "3.32.5",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.30.0",
++      "version": "3.32.5",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index 62601328..c139d11e 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.4",
++  "version": "3.32.5",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index 99639193..021dacbf 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -146,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.4', `R5 package.json 版本 3.32.4（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.5', `R5 package.json 版本 3.32.5（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/.sillyspec/changes/2026-10-11-release-3-32-5/design.md b/.sillyspec/changes/2026-10-11-release-3-32-5/design.md
+new file mode 100644
+index 00000000..1c33a897
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-release-3-32-5/design.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T14:09:32.860Z
++---
++# 设计记录（Design Record）— 2026-10-11-release-3-32-5
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++答：发布变更（照 3.32.1~3.32.4 惯例三步：版本面 → 推送 → 钉扎发布）。版本面只动两处：package.json version 3.32.4→3.32.5（npm version --no-git-tag-version）与 test/quick-retired.test.mjs R5 锚同步——版本锚钉住「仓库自证版本面」，init 按版本差刷新存量 AGENTS.md 依赖它。发布走腾讯 DoH（1.12.12.12 直连 IP，不依赖被劫持域名解析）解析真实 Cloudflare IP 段 + NODE_OPTIONS --require 进程级钉扎（零系统改动），因 registry.npmjs.org 本地解析不可信（本次实测未钉扎解析得 141.193.154.210，非真实 Cloudflare 段）。随版内容为已收口归档的 2026-10-11-resurrect-guard-verify-hardening（归档幽灵复活双门 + verify 对账基点 merge-base 化 + 超时单位统一 + quick skill + docs 重锚）。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++答：源码零改动（无函数/端点/格式变化）。对外可见变化=npm registry 上 sillyspec@3.32.5（latest tag），含 330 files；版本面文件 package.json 与 test/quick-retired.test.mjs 断言值同步 3.32.5。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++答：成立。npm registry 传播有延迟（文档口径数分钟），双核验前显式等待 180s 吸收；若传播未完成核验读旧值，重跑核验即可（幂等只读），不存在状态损坏面。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++答：版本面文件（package.json/R5 锚）由本变更独占编辑，同提交原子落库；npm publish 对同名版本幂等拒绝（EPUBLISHCONFLICT）——同版本重复发布会被 registry 拒绝而非产生双版本，安全。git 推送走显式 pathspec（AGENTS.md 规则 11），不扫他会话暂存面。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++答：安全。三步各有独立留痕（版本面提交 d4ff0584 / 推送回执 61198e87..d4ff0584 / publish 回执 shasum 762bd0f5），中断后重入按已留痕步骤幂等跳过；钉扎脚本为进程级（NODE_OPTIONS 仅当次命令生效），无残留状态。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++答：不会。版本面只触本仓两文件；npm 发布以 package.json name+version 全局唯一键锚定，钉扎仅影响本进程 DNS 解析不改全局；他人仓不受影响。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++答：最大风险：钉扎 IP 失效或 DoH 通道本身被劫持（腾讯 DoH 为当前唯一可信通道，阿里 DoH 已沦陷先例）——缓解：发布前预核验（钉扎 npm view 返回真实 latest=3.32.4）先行证明通道存活，预核验失败即停不带病发布；本次预核验通过、双核验读回 3.32.5 闭环。试过放弃的方案（3.32.4 同款）：①改 hosts 钉扎——动系统配置污染面大，放弃；②用未钉扎 npm view 做核验——劫持环境数据不可信，放弃；③跳过核验直接发布——违背 3.32.2 起的 latest 双核验惯例，放弃。
+diff --git a/.sillyspec/changes/2026-10-11-release-3-32-5/proposal.md b/.sillyspec/changes/2026-10-11-release-3-32-5/proposal.md
+new file mode 100644
+index 00000000..77a96877
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-release-3-32-5/proposal.md
+@@ -0,0 +1,27 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T14:09:32.860Z
++---
++# 提案书（Proposal）— 2026-10-11-release-3-32-5
++
++## 动机
++
++任务原话转写：动机：发布 sillyspec@3.32.5。随版内容=2026-10-11-resurrect-guard-verify-hardening（归档幽灵复活双门 + verify 对账基点 merge-base 化 + 超时单位统一 + quick skill 落地 + docs 重锚基线归零，已收口归档）。版本面照 3.32.1~3.32.4 惯例：package.json version + test/quick-retired.test.mjs R5 锚同步提升；推送经 pre-push 门（lint+test+docs gate）；发布经腾讯 DoH 钉扎通道（registry.npmjs.org 本地解析不可信，未钉扎数据不可用作核验——3.32.2/3.32.3/3.32.4 同款绕行）。
++
++成功标准：
++- package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++- git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++- npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++2. git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++3. npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
++
++## 成功标准（可验证）
++
++1. package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++2. git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++3. npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
+diff --git a/.sillyspec/changes/2026-10-11-release-3-32-5/requirements.md b/.sillyspec/changes/2026-10-11-release-3-32-5/requirements.md
+new file mode 100644
+index 00000000..ced7e933
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-release-3-32-5/requirements.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T14:09:32.860Z
++---
++# 需求规格（Requirements）— 2026-10-11-release-3-32-5
++
++## 功能需求
++
++### FR-01: package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++
++- 发布前 package.json version 必须为 3.32.5，且 test/quick-retired.test.mjs 的 R5 版本锚断言（pkg.version === '3.32.5'）必须运行全绿（版本面与本变更 task-01 同提交落地，发布前复跑确认）。
++
++#### 场景：发布前版本面复跑
++
++- Given：package.json=3.32.5、R5 锚=3.32.5（d4ff0584 已提交）
++- When：node --test test/quick-retired.test.mjs
++- Then：零失败（pass 1，R5 断言通过）
++
++### FR-02: git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++
++- main 上全部未推送提交（本 release 变更工件 + 版本面 + 2026-10-11-resurrect-guard-verify-hardening 交付与归档件 + 平台墓碑收敛）必须以显式 pathspec 提交并成功推送 origin main；pre-push hook（lint+test+docs gate）拦截时必须修复问题而非跳过。
++
++#### 场景：推送
++
++- Given：main 领先 origin 5 提交（墓碑收敛 + 变更 1 交付 + 归档 + 版本面）
++- When：git push origin main
++- Then：pre-push 门放行（lint + test + docs gate 基线 0），推送成功远端与本地一致（61198e87..d4ff0584）
++
++### FR-03: npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
++
++- npm publish 必须经 DNS 钉扎通道（腾讯 DoH 1.12.12.12 直连 IP 解析真实 Cloudflare IP 段 + NODE_OPTIONS --require 进程级钉扎，复刻 3.32.2/3.32.3/3.32.4 绕行）成功发布；发布前必须经同一钉扎通道预核验 latest=3.32.4（通道可信证明，预核验失败即停不带病发布）；发布后传播 ≥180s 必须双核验 npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（未钉扎查询在劫持环境下不可信，禁止用作核验）。
++
++#### 场景：发布与核验
++
++- Given：真实 latest=3.32.4（钉扎预核验已确认），本地 package.json=3.32.5，钉扎脚本 /tmp/dns-pin-registry.cjs 钉 104.16.0.34（DoH 实测段 104.16.x.34 内）
++- When：npm publish（钉扎）→ 传播 180s → npm view sillyspec version + dist-tags（钉扎）
++- Then：publish 成功（+ sillyspec@3.32.5，shasum 762bd0f57a6f58b6283046fe86bf74fe1a1424ea，330 files），双核验 version=3.32.5 且 latest=3.32.5
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/quick-retired.test.mjs「R5 文档与版本（FR-03）」块（pkg.version === '3.32.5' 断言）
++FR-02: 不适用：git push 为发布操作面非代码行为，无测试可绑；证据=本次推送回执（pre-push 门 lint+test+docs gate 全绿放行，61198e87..d4ff0584）
++FR-03: 不适用：npm publish 为外部通道操作非代码行为，无测试可绑；证据=发布回执（shasum 762bd0f5…）与钉扎双核验输出（version=3.32.5、dist-tags.latest=3.32.5）
+diff --git a/.sillyspec/changes/2026-10-11-release-3-32-5/tasks.md b/.sillyspec/changes/2026-10-11-release-3-32-5/tasks.md
+new file mode 100644
+index 00000000..0c2e6574
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-release-3-32-5/tasks.md
+@@ -0,0 +1,9 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T14:09:32.860Z
++---
++# 任务注册表（Tasks）— 2026-10-11-release-3-32-5
++
++- [x] task-01: package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
++- [x] task-02: git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
++- [x] task-03: npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）

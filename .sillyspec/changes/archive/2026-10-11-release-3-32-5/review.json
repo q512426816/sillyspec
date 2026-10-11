@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-11-release-3-32-5",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8836395f8d30e61c71d172f26a849a5cf1801fdc",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design「版本面只动两处」与实际触面不符：package-lock.json 为第三文件且未落在版本面提交 d4ff0584",
+      "evidence": "design.md 做法概述称版本面只动 package.json 与 test/quick-retired.test.mjs 两处；git show d4ff0584 证实该提交含 7 文件（2 版本面文件 + 5 规格工件）但锁文件在该提交仍为 3.30.0（3.32.1~3.32.4 起既有漂移），锁文件 3.30.0→3.32.5 实际落在回执提交 8836395f，其提交信息以「package-lock 随版本面同步」披露。冻结件 change.patch 已如实包含锁 diff，HEAD 处锁=3.32.5 与 package.json 同步。属设计文本低估触面的披露瑕疵，方向为修复既有漂移，非功能缺陷。",
+      "location": ".sillyspec/changes/2026-10-11-release-3-32-5/design.md:11"
+    },
+    {
+      "severity": "P3",
+      "title": "design 切换问「三步各有独立留痕，中断后按留痕幂等跳过」中 push/publish 回执留痕后置于单提交 8836395f",
+      "evidence": "推送区间回执（61198e87..d4ff0584）、publish shasum 762bd0f5… 与双核验值实际在发布动作完成后的 8836395f 一并落库（git show 8836395f：5 文件，含锁与规格工件更新），发布发生时尚无该留痕；该窗口内中断-重入判定依赖会话外记录。npm EPUBLISHCONFLICT 幂等拒绝与 git 远端状态（origin/main=d4ff0584，已核实为 main 祖先）可作兜底判据，风险低。",
+      "location": ".sillyspec/changes/2026-10-11-release-3-32-5/design.md:31"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-10-11T14:22:14Z",
+  "checks": {
+    "FR-01 版本面": "ok — git show d4ff0584：package.json version=3.32.5 与 test/quick-retired.test.mjs:149 assert(pkg.version === '3.32.5') 同提交落地；HEAD/工作树一致；零失败复跑依赖 pre-push 门全绿留痕（评审按静态核验+留痕，未独立重跑测试，符合评审只读纪律）",
+    "FR-02 推送证据": "ok — 61198e87..d4ff0584 恰 5 提交（e0b1ce16 既有修复 / c69d5a6d 墓碑收敛 / 9495da3e resurrect-guard-verify-hardening 交付 / 8b0ab434 归档 / d4ff0584 版本面），与 requirements Given 记载一致；origin/main=d4ff0584 且为 main 祖先",
+    "FR-03 发布证据链": "ok（留痕自洽）— shasum 762bd0f57a6f58b6283046fe86bf74fe1a1424ea、330 files、预核验 latest=3.32.4、双核验 version=3.32.5+latest=3.32.5、180s 传播，在 requirements FR-03/tasks task-03/design（短式 762bd0f5）/提交 8836395f 四处一致；预核验值与版本面前驱 3.32.4 吻合。外部 npm registry 状态本评审无法独立复核（未钉扎查询按变更自身威胁模型亦不可信），按留痕自洽性判定并如实注明",
+    "盲维四问": "ok — EPUBLISHCONFLICT 幂等拒绝为 npm registry 真实行为；进程级钉扎（NODE_OPTIONS --require）确无系统级残留；提交面精确 scope（d4ff0584=7 文件、8836395f=5 文件，无夹带）；两处轻微偏差见 findings（均 P3）",
+    "防护声明": "ok — 「预核验失败即停不带病发布」见于 requirements FR-03 与 design 风险段；「未钉扎查询禁止用作核验」见于 requirements FR-03，均为可判定表述",
+    "生成物同步": "ok — 工作树与 HEAD 处 package.json=3.32.5、package-lock.json 根与 packages[''] 均=3.32.5（node 实读核实）"
+  },
+  "boundaryRulings": [
+    {"boundary": "FR-02/FR-03 测试绑定标「不适用」（外部操作面无测试可绑，证据=回执）", "ruling": "可接受", "reason": "git push/npm publish 为发布操作非代码行为，绑定行按格式给出且指明可核证据物（推送区间、shasum、双核验值），回执均已在 git 留痕中核实"},
+    {"boundary": "design「版本面只动两处」与实际三文件（含 package-lock.json）", "ruling": "可接受（P3 已记录）", "reason": "回执提交 8836395f 明示 lock 同步，冻结件 change.patch 如实含锁 diff，且系修复 3.32.1~3.32.4 起的既有漂移；但 design 文本应更新为三处以保持精确"},
+    {"boundary": "design「三步各有独立留痕，中断后重入按留痕幂等跳过」", "ruling": "可接受（P3 已记录）", "reason": "三步留痕均真实存在且已核实，仅 push/publish 回执留痕后置一提交；npm/git 远端幂等与远端状态查询可兜底重入判定"},
+    {"boundary": "FR-03 外部 registry 状态不可独立复核，按留痕自洽判定", "ruling": "可接受", "reason": "四处留痕零矛盾，预核验值与前驱版本吻合，双核验值与版本面/锁文件三方一致，无任何内部失谐信号"},
+    {"boundary": "钉扎脚本位于 /tmp/dns-pin-registry.cjs（仓外临时目录）", "ruling": "可接受", "reason": "进程级 NODE_OPTIONS 钉扎不改 hosts 等系统配置，与「零系统改动」声称一致，/tmp 文件为惰性残留不构成状态面"},
+    {"boundary": "FR-02 推送范围含他变更既有未推送提交（e0b1ce16 sync-conflict-tri-fix、c69d5a6d 墓碑收敛）", "ruling": "可接受", "reason": "FR-02 标题明示「含既有未推送提交」，Given 记 5 提交与 git log 实况吻合，各提交面干净无夹带"}
+  ]
+}
