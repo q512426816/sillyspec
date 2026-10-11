@@ -8293,3 +8293,79 @@ superseded_by：FR-core-engine-142
 摘要：旧读方面对增量键
 全文：.sillyspec/changes/archive/2026-10-10-cross-repo-patch-freeze/requirements.md#FR-06
 最近确认：becd7a9c24abb735c295a05c467176ddea5241de
+
+## FR-cli-entry-442 flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
+变更：2026-10-11-flow-start-redline-frontload
+状态：active
+摘要：红线块先于书写面细则
+全文：.sillyspec/changes/archive/2026-10-11-flow-start-redline-frontload/requirements.md#FR-01
+最近确认：db203e71fbe2b756cf9e52de7fce4ae25144270e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-01
+  tests: test/flow-redline-frontload.test.mjs「① 新建横幅：红线块先于书写面细则且首条钉死勿改写」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-flow-start-redline-frontload
+  status: active
+
+## FR-cli-entry-443 flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
+变更：2026-10-11-flow-start-redline-frontload
+状态：active
+摘要：重入简报红线行
+全文：.sillyspec/changes/archive/2026-10-11-flow-start-redline-frontload/requirements.md#FR-02
+最近确认：db203e71fbe2b756cf9e52de7fce4ae25144270e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-02
+  tests: test/flow-redline-frontload.test.mjs「② 重入恢复简报：红线重申行在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-flow-start-redline-frontload
+  status: active
+
+## FR-cli-entry-444 flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
+变更：2026-10-11-flow-start-redline-frontload
+状态：active
+摘要：拒收文案自释格式
+全文：.sillyspec/changes/archive/2026-10-11-flow-start-redline-frontload/requirements.md#FR-03
+最近确认：db203e71fbe2b756cf9e52de7fce4ae25144270e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-03
+  tests: test/flow-redline-frontload.test.mjs「③ 哨兵假完成拒收文案：写明 token 合法形态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-flow-start-redline-frontload
+  status: active
+
+## FR-cli-entry-445 新增回归测试钉上述三处文案；全量测试零失败
+变更：2026-10-11-flow-start-redline-frontload
+状态：active
+摘要：文案回归钉住
+全文：.sillyspec/changes/archive/2026-10-11-flow-start-redline-frontload/requirements.md#FR-04
+最近确认：db203e71fbe2b756cf9e52de7fce4ae25144270e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-04
+  tests: test/flow-redline-frontload.test.mjs「④ 三处文案回归同文件钉住」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-flow-start-redline-frontload
+  status: active

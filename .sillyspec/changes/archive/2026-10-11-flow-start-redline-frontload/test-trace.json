@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-11-flow-start-redline-frontload",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-redline-frontload.test.mjs「① 新建横幅：红线块先于书写面细则且首条钉死勿改写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-flow-start-redline-frontload"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-redline-frontload.test.mjs「② 重入恢复简报：红线重申行在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-flow-start-redline-frontload"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-redline-frontload.test.mjs「③ 哨兵假完成拒收文案：写明 token 合法形态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-flow-start-redline-frontload"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-11-flow-start-redline-frontload:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-redline-frontload.test.mjs「④ 三处文案回归同文件钉住」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-flow-start-redline-frontload"
+    }
+  ]
+}

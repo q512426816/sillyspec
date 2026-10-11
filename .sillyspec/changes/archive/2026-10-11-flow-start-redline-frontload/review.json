@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-11-flow-start-redline-frontload",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "db203e71fbe2b756cf9e52de7fce4ae25144270e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "设计自述「横幅净行数不增」与代码事实不符：横幅渲染行净 +2",
+      "evidence": "横幅 hunk 删 7 行渲染文本、加 9 行渲染文本（红线头+①②③ 共 4 行 + 压缩重写 5 行），源码行另含 3 行注释；「净行数不增」在 design 做法概述/风险节与 HEAD 提交消息三处声明，实测不成立。无功能影响，FR 未承诺行数，仅设计对冲陈述失准。",
+      "location": "src/flow.js:759-786（change.patch hunk 1）"
+    },
+    {
+      "severity": "P3",
+      "title": "「区间提交」歧义消歧只改了 flow.js，quick-audit.js 同源旧文案未同步",
+      "evidence": "本变更以「区间提交易与数值区间写法混淆」为由把 flow done 拒收首行改为「baseline..HEAD 提交」；src/run/quick-audit.js:638 自带一份哨兵拒收文案仍是旧表述「区间提交标题与正文均无 token」且无 token 合法形态说明。非 FR 范围（FR-03 只约束 flow done），不阻断，属一致性欠账。",
+      "location": "src/run/quick-audit.js:638"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（design 答「不适用」属实：红线块位置由 lines 数组静态顺序保证，diff 无任何输入时序依赖；test① 以真实 CLI stdout 断言 redlineIdx < writeIdx 实证）",
+    "并发": "ok（边界已裁决：可接受——design 称「零逻辑变化/只打印不写盘」，核实 diff 仅字符串字面量与注释，无新写盘路径，哨兵判据函数 detectFakeCheckCompletion/expandTaskShorthand 未动；既有 flow-state 写盘为变更前行为，非本 diff 引入）",
+    "切换": "ok（边界已裁决：可接受——声明边界「收口判据语义不动，只前置告知」成立：FR-03 本身要求零证据判定语义不变，test③ 独立钉住 '..' 零展开（expandTaskShorthand 分隔符类仅 /、，,；;，代码层证实）+ 判 fake + missing 照旧逐个列出；sentinel-assertions.js 不在 diff；重入生命周期缺口由简报红线重申行补齐，test② 实测）",
+    "作用域": "ok（边界已裁决：可接受——横幅/简报确为 flow CLI 专属 stdout 输出，--json 信封与 watcher 面未触及；「净行数不增」自述失准与 quick-audit 旧文案残留已按 P3 进 findings，不影响跨仓/跨工作区隔离判断；另核实强度词列举收敛为 必须/禁止/SHOULD 与门正则 FR_STRENGTH_RE（src/flow-draft.js:66，不认「可以」）一致，属纠偏非收窄）"
+  },
+  "reviewedAt": "2026-10-11T15:47:15Z"
+}

@@ -1,0 +1,370 @@
+diff --git a/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/flow-state.yaml b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/flow-state.yaml
+new file mode 100644
+index 00000000..0265e1af
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/flow-state.yaml
+@@ -0,0 +1,26 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  实证使用反馈（flow 协议驾驭难点复盘）：flow done 空槽拒收（FR 行为句/测试绑定/design 四节）与「design
++  问题文本钉死不许改写」都是文档先行校验，规则在横幅中埋在中段不加粗，第一次容易漏踩改写掉问题原文；哨兵 task-NN 证据只认逐个 token 与 /、，连写（task-01..task-05
++  区间写法不认）但格式约束收口报错才暴露。修复方向：把拒收红线前置到横幅头部（钉死规则首条加粗），恢复简报补红线重申，哨兵拒收文案写明 token 合法形态。
++
++
++  成功标准：
++
++  - flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++
++  - flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++
++  - flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++
++  - 新增回归测试钉上述三处文案；全量测试零失败
++autopilot: true
++baseline_commit: 5ccc132ef2dbf968854c014cd1d62c33c65690e8
++updatedAt: '2026-10-11T15:29:00.600Z'
++baseline_sha256: edec9781b4de6b4c9b5c2869b071642c94a585a36391515e921e555c2d58958a
++
+diff --git a/src/flow.js b/src/flow.js
+index 859871d8..f9aad0c4 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -759,14 +759,19 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
+     ``,
+     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
++    // 收口拒收红线前置（2026-10-11-flow-start-redline-frontload）：钉死/空槽/绑定三面都是文档
++    // 先行校验，实证第一次最容易踩（四问文本被改写、区间 task-NN 写法零证据被拒）——横幅
++    // 头部先行告知，收口才暴露的规则前置到动笔前。
++    `🚫 收口拒收红线（文档先行校验，动笔前先读——第一次最容易踩的就是这三条）：`,
++    `   ① design 四问文本与 FR 标题锚逐字钉死勿改写——问题原文保持原样、答案写在问题下方，改写/删除即收口拒收（文档↔锚逐字对比）；`,
++    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答）；`,
++    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收。`,
+     `书写面（纯 markdown 起草）：requirements FR 正文/design 四节作答/测试绑定行都直接写正文——`,
+-    `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；`,
+-    `   标题锚（FR 标题、四问文本）勿改写，收口做文档↔锚对比（锚失踪/空答拒收，成功标准漂移出 advisory）。`,
+-    `⚠️ design.md 四节（做法/接口契约/边界并发四问/风险）动码前后顺手作答——答案写在问题下方，`,
+-    `   每节至少一行，写「不适用：<理由>」也算答；flow done 空节拒收（承诺锚点，评审与 FR 对账都对着它）；`,
+-    `   列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）——勿写在「接口契约」节内（收口按节名解析声明面）。`,
+-    `📜 requirements 每条 FR = 标题锚 + 一句带强度词的行为规定（必须/禁止/SHOULD/可以）+ 按需场景块`,
+-    `   （#### 场景：名 + Given/When/Then）；测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`。`,
++    `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；成功标准漂移只出 advisory 不拒收。`,
++    `⚠️ design.md 四节动码前后顺手作答；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
++    `   ——勿写在「接口契约」节内（收口按节名解析声明面）。`,
++    `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
++    `   测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`（无测试面写「不适用：理由」）。`,
+     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
+     `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
+     `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
+@@ -781,7 +786,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
+     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
+     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
+-    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
++    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+@@ -840,6 +845,9 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+     ...(title ? [`- 标题：${title}`] : []),
+     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
+     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
++    // 红线重申（2026-10-11-flow-start-redline-frontload）：重入不出首进横幅——钉死规则与
++    // task-NN token 形态随简报补位，断点续跑生命周期内规则不丢。
++    `- 红线重申：design 四问文本/FR 标题锚逐字钉死勿改写（改写即拒收）；勾选证据提交消息逐个带 task-NN 或 /、，连写（「task-01..task-05」区间写法不认）。`,
+     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
+     `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
+     ...(digestLines.length > 0 ? ['', ...digestLines] : []),
+@@ -1034,8 +1042,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // 机器稿基线做镜像豁免（route-hindsight 基线快照仍供改写比指标，与哨兵解耦）。
+         const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages })
+         if (sent.status === 'fake') {
+-          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
+-          console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（baseline..HEAD 提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
++          // token 合法形态写明（2026-10-11-flow-start-redline-frontload）：实证「task-01..task-05」
++          // 区间写法被判零证据时才知道格式约束——拒收文案自释，减少一轮试错。
++          console.error('   补证据（提交标题或正文带 task-NN——逐个列出或 /、，连写（如 task-01/02/03），「task-01..task-05」区间写法不认；或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
+           reportMidFail('ledger')
+           process.exit(1)
+diff --git a/test/flow-redline-frontload.test.mjs b/test/flow-redline-frontload.test.mjs
+new file mode 100644
+index 00000000..dced77ed
+--- /dev/null
++++ b/test/flow-redline-frontload.test.mjs
+@@ -0,0 +1,110 @@
++/**
++ * flow-redline-frontload.test.mjs — 收口拒收红线前置回归
++ * （2026-10-11-flow-start-redline-frontload / 实证使用反馈复盘）
++ *
++ * 痛点：钉死规则/空槽拒收/task-NN token 形态都是文档先行校验，原横幅只在中段一句带过、
++ * 恢复简报不带、哨兵拒收文案不写 token 合法形态——第一次容易踩（改写问题原文/区间写法
++ * task-01..task-05 零证据被拒）。回归钉三处文案面 + 门语义不放宽：
++ *   ① 新建横幅：🚫 收口拒收红线块先于书写面细则，首条含「钉死」「拒收」，横幅保留「勿改写」；
++ *   ② 重入恢复简报：红线重申行在场（钉死 + task-NN token 形态）；
++ *   ③ 哨兵假完成拒收文案：源码含 token 合法形态说明（逐个/连写，区间写法不认），
++ *      且 '..' 区间写法零展开、判 fake——收口判据语义不放宽（只前置告知，不动门）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { expandTaskShorthand, detectFakeCheckCompletion } from '../src/sentinel-assertions.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const SPEC = '.sillyspec'
++
++/** 造临时 git 仓 + local.yaml（thin 模式）+ 基线提交（同 flow-protocol 造法，test 命令置空转）。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'frf-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, SPEC), { recursive: true })
++  writeFileSync(join(cwd, SPEC, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++const CHANGE = '2026-10-11-redline-frontload-fixture'
++const INPUT_OK = '红线前置夹具\n成功标准：\n- work.txt 生成且 flow done 全绿'
++
++test('① 新建横幅：红线块先于书写面细则且首条钉死勿改写', () => {
++  const { cwd } = makeRepo()
++  const s = cli(cwd, ['flow', 'start', '--change', CHANGE, '--input', INPUT_OK])
++  assert.equal(s.status, 0, `flow start 失败: ${s.stdout}\n${s.stderr}`)
++  const out = s.stdout
++  const redlineIdx = out.indexOf('🚫 收口拒收红线')
++  assert.ok(redlineIdx !== -1, `红线块在场，实际输出头部：${out.slice(0, 300)}`)
++  const writeIdx = out.indexOf('书写面（纯 markdown 起草）')
++  assert.ok(writeIdx !== -1, '书写面细则段在场')
++  assert.ok(redlineIdx < writeIdx, '红线块必须前置（先于书写面细则）——实证痛点：埋中段第一次容易漏')
++  const redlineBlock = out.slice(redlineIdx, writeIdx)
++  assert.match(redlineBlock, /钉死/, '红线首条申明逐字钉死')
++  assert.match(redlineBlock, /拒收/, '红线首条申明改写即拒收')
++  assert.match(redlineBlock, /勿改写/, '横幅保留「勿改写」字样（batch-tick-gate 源码断言兼容面）')
++  assert.match(redlineBlock, /四问文本|四问/, '红线首条点名 design 四问文本')
++  assert.match(out, /区间写法不认/, '横幅勾选证据行写明 task-NN token 形态（区间写法不认）')
++})
++
++test('② 重入恢复简报：红线重申行在场', () => {
++  const { cwd } = makeRepo()
++  const s1 = cli(cwd, ['flow', 'start', '--change', CHANGE, '--input', INPUT_OK])
++  assert.equal(s1.status, 0, `首进失败: ${s1.stdout}\n${s1.stderr}`)
++  const s2 = cli(cwd, ['flow', 'start', '--change', CHANGE])
++  assert.equal(s2.status, 0, `重入失败: ${s2.stdout}\n${s2.stderr}`)
++  const out2 = s2.stdout
++  assert.match(out2, /恢复简报/, '重入走恢复简报路径')
++  const briefIdx = out2.indexOf('红线重申')
++  assert.ok(briefIdx !== -1, `简报含红线重申行，实际：${out2.slice(0, 400)}`)
++  const briefLine = out2.slice(briefIdx, out2.indexOf('\n', briefIdx))
++  assert.match(briefLine, /钉死/, '红线重申含钉死规则')
++  assert.match(briefLine, /task-NN/, '红线重申含 task-NN token 形态')
++})
++
++test('③ 哨兵假完成拒收文案：写明 token 合法形态且门语义不放宽', () => {
++  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.match(flowSrc, /区间写法不认/, '哨兵拒收文案写明区间写法不认')
++  assert.match(flowSrc, /逐个列出或\s*\/、，连写/, '哨兵拒收文案写明逐个/连写合法形态')
++  assert.match(flowSrc, /baseline\.\.HEAD 提交标题与正文均无 token/, '「区间提交」歧义消除（baseline..HEAD 提交）')
++  // 门语义不放宽：'..' 区间写法零展开——端点 token（01/05）本就字面在场，防的是中间任务
++  // （02/03/04）被区间展开成完成证据
++  const [rangedMsg] = expandTaskShorthand(['fix: task-01..task-05 完成'])
++  assert.ok(!/\btask-02\b/.test(rangedMsg) && !/\btask-03\b/.test(rangedMsg) && !/\btask-04\b/.test(rangedMsg), `区间写法不得展开中间任务：${rangedMsg}`)
++  const [slashMsg] = expandTaskShorthand(['fix: task-01/02/03 完成'])
++  assert.match(slashMsg, /task-02/, '连写展开语义保持（对照）')
++  const verdict = detectFakeCheckCompletion({
++    changeDir: null,
++    tasksMd: ['- [x] task-01: a', '- [x] task-02: b', '- [x] task-03: c'].join('\n'),
++    commits: ['fix: task-01..task-05 完成'],
++    opts: { listReviewsImpl: () => [] },
++  })
++  assert.equal(verdict.status, 'fake', '区间写法提交仍判假完成（收口门不放宽）')
++  assert.deepEqual(verdict.missing, ['task-02', 'task-03'], 'missing 照旧逐个列出')
++})
++
++test('④ 三处文案回归同文件钉住（源码锚点防漂移）', () => {
++  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.match(flowSrc, /🚫 收口拒收红线/, '横幅红线块源码锚点')
++  assert.match(flowSrc, /红线重申/, '恢复简报红线重申源码锚点')
++  assert.match(flowSrc, /补证据（提交标题或正文带 task-NN/, '哨兵补证据文案源码锚点')
++})
+diff --git a/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/design.md b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/design.md
+new file mode 100644
+index 00000000..849db595
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/design.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T15:28:47.984Z
++---
++# 设计记录（Design Record）— 2026-10-11-flow-start-redline-frontload
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++三处呈现面文案同改，零逻辑变化：①`src/flow.js` cmdFlowStart 横幅 lines 数组——在「【你要做的】」与「书写面」细则之间插入 3 行编号「🚫 收口拒收红线」块（首条=四问文本/标题锚逐字钉死勿改写、次条=design 四节空节拒收、三条=FR 行为句+测试绑定缺一拒收），并把下方已被红线块覆盖的重复表述（design 四节引导、FR 行为句引导中的拒收半句）压缩，横幅净行数不增；②`printRecoveryBriefing` 增一行「红线重申」；③flow done 哨兵假完成拒收第二行文案写明 token 合法形态，第一行「区间提交」改「baseline..HEAD 提交」消歧（避免与数值区间写法混淆）。为什么只改文案不动门：用户实证哨兵拒收报错清楚、改提交信息即可通过——痛点是规则知晓时点太晚（收口才暴露），前置告知即可，收口判据语义不动。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++无函数签名变化、无文件格式变化、无协议面变化——纯 CLI stdout 文案。受影响断言面已盘点：`test/batch-tick-gate.test.mjs:66` 断言 flow.js 源码含「勿改写」（红线首条保留该词，兼容）；`test/flow-protocol.test.mjs` / `test/change-title-flow.test.mjs` / `test/flow-clarity-probe.test.mjs` / `test/flow-resume-title.test.mjs` 断言的横幅与简报片段（协议调用 1/2、交付纪律、材料路径清单、选道自检、恢复简报、dirty 文件 N 个、活未干完、- 标题）全部不动。--json 信封不含横幅文本，不受影响。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++横幅是静态 lines 数组按序渲染，无输入时序依赖；红线块位置由数组顺序保证——不适用。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++多会话并行各自 flow start 只打印不写盘（触发同步为既有 best-effort 后台面）；源码改动按显式 pathspec 提交隔离——不适用。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++断点续跑重入时首进横幅不重现、只出恢复简报——故简报必须带红线重申行，保证变更生命周期内规则不因重入而丢失（本变更补齐的正是这一环）。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++横幅与简报是 flow 命令专属输出，不进 MCP/平台协议面（watcher 事件只带 checkbox 状态），跨仓/跨工作区不串台——不适用。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险=横幅膨胀稀释注意力（现约 60 行，红线块若展开成段会更没人读）——用 3 行编号红线并同步压缩下方重复表述对冲，净行数不增。死路：曾考虑让 `expandTaskShorthand`（sentinel-assertions.js）直接支持「task-01..task-05」区间展开——放弃：那是放宽反假完成收口门的判据语义，属门设计变更；用户实证报错清楚改起来快，痛点在知晓时点不在判据本身，前置告知即可不动门。
+diff --git a/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/proposal.md b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/proposal.md
+new file mode 100644
+index 00000000..33e5204e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T15:28:47.984Z
++---
++# 提案书（Proposal）— 2026-10-11-flow-start-redline-frontload
++
++## 动机
++
++任务原话转写：实证使用反馈（flow 协议驾驭难点复盘）：flow done 空槽拒收（FR 行为句/测试绑定/design 四节）与「design 问题文本钉死不许改写」都是文档先行校验，规则在横幅中埋在中段不加粗，第一次容易漏踩改写掉问题原文；哨兵 task-NN 证据只认逐个 token 与 /、，连写（task-01..task-05 区间写法不认）但格式约束收口报错才暴露。修复方向：把拒收红线前置到横幅头部（钉死规则首条加粗），恢复简报补红线重申，哨兵拒收文案写明 token 合法形态。
++
++成功标准：
++- flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++- flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++- flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++- 新增回归测试钉上述三处文案；全量测试零失败
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++2. flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++3. flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++4. 新增回归测试钉上述三处文案；全量测试零失败
++
++## 成功标准（可验证）
++
++1. flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++2. flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++3. flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++4. 新增回归测试钉上述三处文案；全量测试零失败
+diff --git a/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/requirements.md b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/requirements.md
+new file mode 100644
+index 00000000..01f9f708
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/requirements.md
+@@ -0,0 +1,54 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T15:28:47.984Z
++---
++# 需求规格（Requirements）— 2026-10-11-flow-start-redline-frontload
++
++## 功能需求
++
++### FR-01: flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++
++- flow start 新建横幅必须在「书写面」细则段之前渲染「🚫 收口拒收红线」块，且该块首条必须申明 design 四问文本与 FR 标题锚逐字钉死、勿改写、改写即收口拒收；横幅输出必须保留「勿改写」字样（源码断言兼容 batch-tick-gate）。
++
++#### 场景：红线块先于书写面细则
++
++- Given 一个新初始化的仓与全新变更
++- When 运行 `flow start --change <名> --input <合格输入>`（非 --json）
++- Then stdout 中「🚫 收口拒收红线」的行号先于「书写面」细则行，红线首条同时含「钉死」与「拒收」，横幅含「勿改写」
++
++### FR-02: flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++
++- flow start 重入渲染的恢复简报必须包含一行红线重申，该行必须同时申明钉死规则（四问文本/FR 标题锚勿改写）与勾选证据 task-NN token 合法形态（逐个列出或 /、，连写，区间写法不认）。
++
++#### 场景：重入简报红线行
++
++- Given 一个已存在的活跃变更（flow-state.yaml 在场）
++- When 重跑 `flow start --change <名>`
++- Then 恢复简报中含「红线重申」行，且该行含「钉死」与「task-NN」
++
++### FR-03: flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++
++- flow done 哨兵假完成（全勾零证据）拒收文案必须写明合法 token 形态——逐个列出或 /、，连写——并必须明示「task-01..task-05」区间写法不认；零证据判定语义必须保持不变（收口门不放宽）。
++
++#### 场景：拒收文案自释格式
++
++- Given tasks.md 全勾且提交消息用「task-01..task-05」区间写法（零合法 token 证据）
++- When 运行 `flow done`
++- Then 收口以假完成拒收，文案含「区间写法不认」与连写分隔符说明，missing 任务清单照旧逐个列出
++
++### FR-04: 新增回归测试钉上述三处文案；全量测试零失败
++
++- 上述三处文案必须各有回归测试钉住（横幅/简报走真实 CLI 输出断言，哨兵文案走源码断言），且仓内全量测试必须零失败。
++
++#### 场景：文案回归钉住
++
++- Given 本变更交付的测试文件
++- When 运行仓内全量测试
++- Then 新增回归用例全绿且既有套件零失败
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-redline-frontload.test.mjs「① 新建横幅：红线块先于书写面细则且首条钉死勿改写」
++FR-02: test/flow-redline-frontload.test.mjs「② 重入恢复简报：红线重申行在场」
++FR-03: test/flow-redline-frontload.test.mjs「③ 哨兵假完成拒收文案：写明 token 合法形态」
++FR-04: test/flow-redline-frontload.test.mjs「④ 三处文案回归同文件钉住」
+diff --git a/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/tasks.md b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/tasks.md
+new file mode 100644
+index 00000000..157d0a2b
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-11-flow-start-redline-frontload/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-11T15:28:47.984Z
++---
++# 任务注册表（Tasks）— 2026-10-11-flow-start-redline-frontload
++
++- [x] task-01: flow start 新建横幅在书写面细则之前渲染「🚫 收口拒收红线」块，首条为 design 四问文本/FR 标题锚逐字钉死不许改写（改写即拒收），源码仍含「勿改写」子串（batch-tick-gate 回归兼容）
++- [x] task-02: flow start 重入恢复简报含一行红线重申（钉死规则 + task-NN token 形态）
++- [x] task-03: flow done 哨兵假完成拒收文案写明合法 token 形态（逐个列出或 /、，连写；task-01..task-05 区间写法不认）
++- [x] task-04: 新增回归测试钉上述三处文案；全量测试零失败
