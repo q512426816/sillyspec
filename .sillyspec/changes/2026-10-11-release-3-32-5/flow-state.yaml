@@ -1,6 +1,7 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -20,6 +21,6 @@ input: >-
   - npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
 autopilot: true
 baseline_commit: 9495da3e50a08a426fc6de415853ca534f1f984a
-updatedAt: '2026-10-11T14:09:32.882Z'
+updatedAt: '2026-10-11T14:19:07.070Z'
 baseline_sha256: c9b800267ccf56984d83f9b909e5eceaaddbbe650c4128fd2d98e53416e70065
 
