@@ -4139,7 +4139,8 @@ SillySpec platform — SillyHub 平台同步
 用法:
   sillyspec platform connect <url> [--token <token>]
   sillyspec platform disconnect
-  sillyspec platform sync [--change <name>]
+  sillyspec platform sync [--change <name>]   带 --change 同步该变更进度六表+spec 树；
+                                             不带 --change 全树 spec 文件同步
   sillyspec platform sync-docs [--change <name>]
   sillyspec platform pull [--change <name>]
   sillyspec platform resolve <change-name> <--keep-local|--take-platform|--abort>
@@ -4254,8 +4255,26 @@ SillySpec platform — SillyHub 平台同步
         case 'sync': {
           const syncChangeIdx = args.indexOf('--change');
           const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
-          // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
-          await syncModule.sync(syncChangeName, dir, { manual: true });
+          if (syncChangeName) {
+            // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
+            await syncModule.sync(syncChangeName, dir, { manual: true });
+          } else {
+            // 全树 spec 文件同步（2026-10-11-sync-conflict-tri-fix FR-03）：不带 --change
+            // 此前报「需要指定变更名称」——归档/历史变更无活跃会话标签时无从下手。现走
+            // syncSpecTreeOnly(null) 全树 diff（以服务器清单为锚）；进度六表仍按变更
+            // 粒度走 --change。未连接明确报错不静默（对齐 platform pull 口径）。
+            const smForCheck = new syncModule.SyncManager(dir);
+            if (!smForCheck._getPlatform()) {
+              console.error('❌ 未连接平台，请先 sillyspec platform connect');
+              process.exit(1);
+            }
+            const r = await syncModule.syncSpecTreeOnly(null, dir, {});
+            if (r && r.conflict) {
+              console.error(`⚠️ 全树同步检测到冲突（${(r.serverVersions && Object.keys(r.serverVersions).length) || 0} 个文件待裁决），处理：sillyspec platform status 查看 / platform resolve <变更名> 处置`);
+              process.exit(1);
+            }
+            console.log(`✅ 全树 spec 同步完成（${r ? r.synced : 0} 个文件差异）`);
+          }
           break;
         }
         case 'sync-docs': {

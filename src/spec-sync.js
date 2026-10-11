@@ -594,11 +594,29 @@ export function isFollowerSetChanged(specRoot, key, list) {
  * @param {string} changeName - 当前变更名
  * @returns {Promise<{synced: number, conflict?: boolean, serverVersions?: object}>}
  */
+/**
+ * 冲突路径 → 变更名归因标签（2026-10-11-sync-conflict-tri-fix FR-03 全树同步入口用）：
+ * changes/(archive/)?<名>/ 前缀提取，全部路径归因到同一变更 → 用该变更名（冲突文件
+ * spec-sync-conflict-<名>.json 与 per-change 流程兼容，resolve/status UX 不变）；
+ * 跨多变更或无可归因路径 → 'full-tree'（单文件合并裁决，resolve 整体 force-push）。
+ */
+function attributeChangeLabel(paths) {
+  const names = new Set()
+  for (const p of paths) {
+    const m = p.match(/^changes\/(?:archive\/)?([^/]+)\//)
+    if (m) names.add(m[1])
+  }
+  return names.size === 1 ? [...names][0] : 'full-tree'
+}
+
 export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   if (!platform || !platform.url || !platform.token) {
     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
     return { synced: 0 };
   }
+  // 全树入口（platform sync 无 --change，2026-10-11-sync-conflict-tri-fix FR-03）
+  // changeName=null：日志用 full-tree 标签，冲突归因见下方 conflictLabel。
+  const logLabel = changeName || 'full-tree';
   // 绑定连接类失败噪音闸（sync-noise.js）：本目录所有 [spec-sync]/[sync] 失败 warn 的
   // 跨进程静默窗口 marker 落这里（与 SyncManager 构造器绑定同目录）。
   try { bindSyncNoiseRoot(join(specRoot, '.runtime')); } catch { /* 直通降级 */ }
@@ -622,7 +640,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // 8 分钟才被后续步骤的同步补上）。失败可见、成功不打扰。
       // 连接类失败（404=端点未就绪 / 5xx）走噪音闸（sync-noise.js）：平台未就绪期每步
       // 自动同步重刷同一行，淹没门禁输出；其余状态码（4xx 业务态）每轮该看见。
-      const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`;
+      const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}`;
       if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
       return { synced: 0 };
@@ -630,7 +648,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
   } catch (err) {
-    const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`;
+    const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
     return { synced: 0 };
   }
@@ -671,7 +689,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   }
 
   if (ops.length === 0) {
-    debugLog(`[spec-sync] 无差异，跳过同步: ${changeName}`);
+    debugLog(`[spec-sync] 无差异，跳过同步: ${logLabel}`);
     clearStaleTombstoneMarkers(specRoot);
     return { synced: 0 };
   }
@@ -688,7 +706,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       signal: withSignal(30000),
     });
     if (!res.ok) {
-      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${changeName}`;
+      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}`;
       if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
       return { synced: 0 };
@@ -719,6 +737,9 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
         ? { followers: [], real: serverVersions }
         : partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs);
       const realPaths = Object.keys(real).filter((p) => !tombSet.has(p));
+      // 全树入口（changeName=null）冲突归因：单一变更 → 该变更名（冲突文件/markers 与
+      // per-change 流程同名兼容）；跨变更 → 'full-tree' 单文件合并裁决。
+      const conflictLabel = changeName || attributeChangeLabel(realPaths);
 
       // 纯墓碑形态：版本冲突面为空、拒收全是墓碑 → 不写/不清通用冲突标记（clear 会把
       // 状态洗成「已消解」误导 status），单独落冲突文件 + 正确恢复指引。
@@ -743,13 +764,13 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // 自愈」连环刷屏。冲突文件在且冲突集未变 = 用户已被告知：重复轮次单行提示（可见但不
       // 吓人），不重写文件（created_at 稳定，status 红标语义不变）；冲突集变化才重写+全幅。
       // forcePush（resolve --keep-local 刚裁决完重推）不参与去重——需真实判定与文件刷新。
-      const pendingSame = !opts.forcePush && realPaths.length > 0 && isSamePendingSpecConflict(specRoot, changeName, realPaths);
+      const pendingSame = !opts.forcePush && realPaths.length > 0 && isSamePendingSpecConflict(specRoot, conflictLabel, realPaths);
       if (pendingSame) {
         if (followers.length > 0) {
           debugLog(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
         }
-        console.warn(`⚠️ [spec-sync] 变更 ${changeName} 存在未决 spec 树冲突（${realPaths.length} 个文件待裁决，本轮非冲突改动已照常同步）。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
-        return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath: join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`), suppressed: true };
+        console.warn(`⚠️ [spec-sync] 变更 ${conflictLabel} 存在未决 spec 树冲突（${realPaths.length} 个文件待裁决，本轮非冲突改动已照常同步）。处理：sillyspec platform resolve ${conflictLabel} --keep-local | --take-platform | --abort`);
+        return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath: join(specRoot, '.runtime', `spec-sync-conflict-${conflictLabel}.json`), suppressed: true };
       }
       if (followers.length > 0) {
         console.warn(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器（正常多端前进，无需人工裁决）: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
@@ -757,18 +778,18 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       if (realPaths.length === 0) {
         writeLastSyncTs(specRoot);
         writeBaseSnapshot(specRoot, localFiles);
-        clearSpecConflictMarker(specRoot, changeName);
+        clearSpecConflictMarker(specRoot, conflictLabel);
         noteSyncSuccess();
-        console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${changeName}`);
+        console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${conflictLabel}`);
         return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
       }
       let conflictPath = null;
       try {
         const runtimeDir = join(specRoot, '.runtime');
         mkdirSync(runtimeDir, { recursive: true });
-        conflictPath = join(runtimeDir, `spec-sync-conflict-${changeName}.json`);
+        conflictPath = join(runtimeDir, `spec-sync-conflict-${conflictLabel}.json`);
         writeFileSync(conflictPath, JSON.stringify({
-          change: changeName,
+          change: conflictLabel,
           kind: 'spec-tree',
           created_at: new Date().toISOString(),
           server_versions: real,
@@ -786,20 +807,28 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       console.warn('');
       console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${realPaths.length} 个文件: ${shownPaths}；逐文件服务器版本见冲突详情文件）`);
       if (tombNote) console.warn(`⚠️ [spec-sync]${tombNote.trim()}`);
-      console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
+      console.warn(`⚠️ 处置：sillyspec platform resolve ${conflictLabel} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
     noteSyncSuccess();
-    console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${changeName}`);
+    console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${logLabel}`);
     // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
-    // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）
-    clearSpecConflictMarker(specRoot, changeName);
+    // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）。全树入口
+    // （changeName=null，2026-10-11-sync-conflict-tri-fix FR-03）按归因清：只清本轮
+    // ops 触及变更的标记——未触及变更的未决冲突不因全树绿而误清。
+    if (changeName) {
+      clearSpecConflictMarker(specRoot, changeName);
+    } else {
+      for (const name of new Set(ops.map((o) => attributeChangeLabel([o.path])))) {
+        if (name !== 'full-tree') clearSpecConflictMarker(specRoot, name);
+      }
+    }
     clearStaleTombstoneMarkers(specRoot);
     writeLastSyncTs(specRoot);
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };
   } catch (err) {
-    const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${changeName}: ${describeSyncError(err)}`;
+    const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
     return { synced: 0 };
   }

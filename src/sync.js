@@ -2333,6 +2333,9 @@ export function listConflictFiles(cwd) {
 // 清单为锚做全树 diff，与变更目录无关——triggerSync 对 quick 会话降级只调本函数，
 // 不走 sync()（后者第二道 existsSync 门会以「变更不存在」提前 return）。
 // 未连接平台 → {synced: 0} 静默（本地合法状态，与 syncSpecTree 内部口径一致）。
+// 2026-10-11-sync-conflict-tri-fix FR-03：changeName=null 是合法形态——CLI 手动
+// 全树同步入口（platform sync 无 --change）经此走全树 diff；冲突归由 syncSpecTree
+// 内部 attributeChangeLabel 按路径归因（单一变更名或 'full-tree'）。
 export async function syncSpecTreeOnly(changeName, cwd, opts = {}) {
   const sm = new SyncManager(cwd);
   const platform = sm._getPlatform();

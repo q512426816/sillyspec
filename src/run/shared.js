@@ -60,7 +60,12 @@ export function didYouMean(input, candidates) {
 // ── 变更名路径穿越消毒（F6）──
 // change 名会被 join 进 .sillyspec/changes/<name>/ 当目录用。若含 ../ 或路径分隔符，
 // 会逃出 changes/ 写到任意位置（如 --change ../../etc/x 把 proposal.md 写到 changes 同级之外）。
-// 在 --change 解析边界统一消毒，比在每个 join 点守卫更集中。合法名：字母/数字/._-，禁分隔符与 ..
+// 在 --change 解析边界统一消毒，比在每个 join 点守卫更集中。合法名：字母/数字/._-/CJK，
+// 禁分隔符与 ..
+// 2026-10-11-sync-conflict-tri-fix FR-03：字符集扩 CJK（一-鿿，与下方 assertDatedChangeName
+// slug 同集）——本守卫的本职是路径穿越消毒，ASCII 限制是历史误伤：磁盘既有中文名变更
+//（实测 2026-10-10-取消LTC宽表校验规则）被拒致 platform sync/resolve 无法操作。
+// 新建变更名仍受 assertDatedChangeName 日期前缀门约束，不因本放宽回归。
 export function assertSafeChangeName(name, label = '变更名') {
   if (name == null) return
   const s = String(name)
@@ -69,8 +74,8 @@ export function assertSafeChangeName(name, label = '变更名') {
   if (/[\\/]/.test(s) || /(^|[/\\])\.\.(?=$|[/\\])/.test(s) || s === '..' || s.includes('..')) {
     throw new Error(`${label}「${s}」含路径分隔符或 ..，禁止路径穿越（变更名只能是 .sillyspec/changes/ 下的一个目录名，不能逃出）`)
   }
-  if (!/^[\w.\-]+$/.test(s)) {
-    throw new Error(`${label}「${s}」含非法字符（仅允许字母、数字、._-）`)
+  if (!/^[\w.\-一-鿿]+$/.test(s)) {
+    throw new Error(`${label}「${s}」含非法字符（仅允许字母、数字、._-、中文）`)
   }
 }
 
@@ -83,7 +88,8 @@ export function assertSafeChangeName(name, label = '变更名') {
 // 日期只校验形状（月 01-12 日 01-31），不校验「当天」——跨天续跑/次日重命名不应被拦。
 // slug 首字符放宽含 CJK（一-鿿，与 flow 族 validateChangeName 同字符集）：flow start 2026-09-28
 // 起复用本校验器，中文名（平台键 2026-09-25-中文名-a1b2c3 形态）是 flow 族既有测试特性；
-// run 族不受影响——其上游 assertSafeChangeName 仅放行 ASCII [\w.\-]，中文在到达本门之前已被拦。
+// 上游 assertSafeChangeName 自 2026-10-11-sync-conflict-tri-fix 起同放行 CJK（此前 ASCII
+// 限宽拦中文名，属历史误伤，见该守卫注释）。
 const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9一-鿿][\w.\-一-鿿]*$/
 export function assertDatedChangeName(name, label = '变更名') {
   if (name == null) return
