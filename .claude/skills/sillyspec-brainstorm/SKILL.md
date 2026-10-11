@@ -67,12 +67,12 @@ sillyspec run brainstorm --done --answer "..." --output "..."    # 一步完成 
 ```
                 ┌─ scale=large → plan（四件套齐）
 scan → brainstorm ┤
-                └─ scale=small → flow start 收编（仅 design.md）
+                └─ scale=small → quick --linked-changes（仅 design.md）
 ```
 
 brainstorm 完成时按 design.md frontmatter 的 `scale` 分叉：
 - **large**（多文件/跨模块/有状态机或 schema 变更）：四件套齐 + Design Grill 审查通过（tier=independent 时由独立审查子代理产出 stage review.json）→ `sillyspec run plan --change <变更名>`
-- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec flow start --change <变更名>` 收编续跑（design 以头脑风暴版为准）
+- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec run quick --linked-changes <变更名>`
 
 > 规模由 AI 在 brainstorm 最后一步评估并写入 design.md frontmatter。判错可手动改 `scale` 后再跑相应阶段。
 
@@ -108,7 +108,6 @@ brainstorm 在 `tier=independent` 规模下除 design.md 等四件套外，还�
 - **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
 - 只做当前步骤 prompt 描述的操作，不跳过、不自行扩展
 - 产物写入 CLI 输出的 `changeDir` 目录（如 `<changeDir>/design.md`），不要自己拼路径
-- **变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字**——CLI 从 proposal.md / design.md 首行 H1 提取简述写入 changes.title（剥「提案书（Proposal）— / 设计文档（Design）—」固定前缀后取段），design.md 固定格式 `# 设计文档（Design）— <简述>` 中的简述即面板标题，按此口径写
 - 完成后立即 `--done`，不跳过
 
 ## 用户指令

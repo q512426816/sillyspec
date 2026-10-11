@@ -60,9 +60,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 **推进不是自动的，分三层**：
 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
 2. **步骤内推进** `completeStep`（`src/run/complete.js:166`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
-3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:469`）按状态机推荐下一阶段命令。
+3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:477`）按状态机推荐下一阶段命令。
 
-**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:619`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:627`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
 
 ### 1.3 校验门与审批点
 
@@ -80,8 +80,8 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:687`，统一收尾管线）顺序：
 1. `runValidators`（客观产物校验，`src/stage-contract.js:1413`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:885`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1402`）。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:958`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1488`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:297`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
@@ -99,12 +99,12 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 表 | 用途 | 关键列 / 依据 |
 |---|---|---|
-| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:255` |
-| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:266` + 8 列迁移 |
-| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:266` |
-| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:295` |
+| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:262` |
+| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:273` + 8 列迁移 |
+| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:278` |
+| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:305` |
 | `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:310` |
-| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:312` |
+| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:319` |
 
 外键级联：`changes` 删 → `stages`/`steps`/`batch_progress`/`approvals` 级联删（`ON DELETE CASCADE`）。
 
@@ -112,7 +112,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 - 当前版本 `DB_SCHEMA_VERSION = 5`（`src/db.js:10`），四处一致性被 `platform-sync-schema.test.mjs` 守卫。
 - **版本戳驱动建表**：侧车 `${dbPath}.schema-version` 内容匹配则跳过 `_createSchema`（高频读路径省 DDL 开销，`db.js:75-85`）。
-- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:341`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
+- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:349`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
 - 版本线（`src/progress/shared.js:29`）：v1/v2 progress.json → v3 迁 SQLite → v4 平台同步 base_ts/脏度 → v5 title/quicklog_id。
 
 ### 2.3 数据治理
@@ -180,7 +180,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:696` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
 
-**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:1044` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:97`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
+**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:1090` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:97`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
 
 **MCP 客户端**（`src/sillyhub-mcp/`）：`config.js` 统一凭据读源（local.yaml mcp 段 > env > null）；`client.js` 封装 `probeDaemon`/`listTools`/`dispatchWorker` 等。
 
@@ -228,14 +228,14 @@ git worktree 隔离多 Agent 并发改动：每个 change 在 `.sillyspec/.runti
 
 - **创建**（方法 `worktree.js:360`，类 `worktree.js:286`）：submodule/native-worktree 检测 → gitignore 守卫 → 幽灵 worktree fail-closed → 解析 base → `git worktree add`（失败降级 in-place-fallback）→ 占位 meta 原子写 → dirty baseline overlay（`git diff --binary | git apply`）→ baseline checkpoint commit → 依赖供给 → 写完整 meta。
 - **三种 mode**：`worktree`（标准）/ `native-worktree`（外部已 linked）/ `in-place-fallback`（沙箱/权限降级）。
-- **cleanup**（`worktree.js:1458`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1458`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
+- **cleanup**（`worktree.js:1507`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1507`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
 - **node_modules provision**（`src/worktree-deps.js`）：junction/symlink 快路径（Windows `mklink /J`，POSIX `ln -s`，lockfile 一致才 link）+ install 兜底（`inferInstallCommand` 推断 node/maven/gradle/python/generic）。
 
 ### 4.4 跨平台（Win/Linux/macOS）
 
 - **原子写**（`src/fs-atomic.js`）：`writeAtomicSync`（同目录 tmp 含 pid → write → `renameSyncRetry` 覆盖）；`renameSyncRetry`（`:33`）对 `EPERM/EBUSY/EACCES/ENOTEMPTY`（Windows 杀毒/索引/IDE 占用）短退避重试。
 - **git 调用统一数组形式**（`src/git-helper.js`）：`execFileSync('git', [...args])` 不经 shell，路径含空格/元字符安全；统一带 `-c safe.directory` + `-C cwd`——跨平台 + 命令注入防御核心。
-- **CRLF/路径**：worktree-guard 的 `toPosixPath`/`isPathInside`（`hooks/worktree-guard.js:122-131`）；`_pathToChangeName` 用 `path.relative` 而非 `startsWith`（自动适配平台分隔符 + 跨盘符）。
+- **CRLF/路径**：worktree-guard 的 `toPosixPath`/`isPathInside`（`hooks/worktree-guard.js:144`）；`_pathToChangeName` 用 `path.relative` 而非 `startsWith`（自动适配平台分隔符 + 跨盘符）。
 - **Windows 长路径** `core.longpaths=true`（`worktree.js:454`）。
 - **不依赖外部命令**：`sleepMs` 用 busy-wait（Windows cmd 无 `sleep`）；hook 查 DB 用 `node -e` 子进程（Windows 默认无 `sqlite3` CLI）。
 
@@ -325,4 +325,4 @@ TA  Node22 ESM · node:sqlite(WAL) · git worktree · 跨平台 fs-atomic · hus
 | 存储引擎 | `docs/sillyspec/file-lifecycle/storage-and-state.md:35` 写"better-sqlite3 原生绑定" | 已迁 `node:sqlite` | `src/db-engine.js:8` |
 | propose 阶段 | `docs/sillyspec/file-lifecycle.md` 阶段表残留 `propose | 7` 行 | 无独立 propose 阶段（已并入 brainstorm） | `src/stages/index.js:15-26`（10 阶段，无 propose） |
 | scan 步骤数 | `stage-artifacts.md` 写 scan 10 步 | scan 11 步 | `src/stages/scan.js` |
-| `.bak` 主动写时机 | `db.js:96`/`progress.js:934` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |
+| `.bak` 主动写时机 | `db.js:104`/`progress.js:934` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |

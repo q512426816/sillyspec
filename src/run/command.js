@@ -1274,6 +1274,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
     if (autoChange) {
+      // 归档同名幽灵复活门（坑 archived-change-resurrect-by-merge，2026-10-10 实证：远端
+      // merge 把已归档变更的旧四件套带回活跃路径，run verify 见活跃目录即自动注册新进度行、
+      // 幽灵态推上平台）。活跃目录与 changes/archive/<同名>/ 并存且库内无该变更活跃行 →
+      // 拒绝注册，指向两出口（认归档：清幽灵目录 / 真要重开：换新名或先恢复归档）。
+      try {
+        const _archiveDup = join(specBase, 'changes', 'archive', autoChange)
+        if (existsSync(_archiveDup) && !progress) {
+          let _activeRows = []
+          try { _activeRows = pm.listChanges(cwd) } catch { /* 列举失败按无活跃行处置 */ }
+          if (!_activeRows.includes(autoChange)) {
+            console.error(`❌ 拒绝注册：${autoChange} 已有归档目录（changes/archive/${autoChange}/），当前活跃目录疑似 merge 带回的幽灵复活（库内无活跃行）。`)
+            console.error('   两个出口：')
+            console.error(`   ① 认归档（多数场景）：git rm -r .sillyspec/changes/${autoChange} 清幽灵目录后提交；归档侧工件在 changes/archive/${autoChange}/`)
+            console.error('   ② 确要重开同名变更：先换新变更名（推荐），或恢复归档（mv 回活跃目录并清理库内 archived 行）后再跑')
+            console.error('   核对：递归 diff 活跃 vs 归档目录确认归档侧为超集零信息损失（坑内处置实录）')
+            process.exit(2)
+          }
+        }
+      } catch { /* 守卫异常不拦正常注册（fail-open）*/ }
       // 创建时即写 title（与 name/KEY 同时落 db）：--input 首行推导 deriveChangeTitle（≤50 字，
       // 用户需求 2026-09-29）优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由

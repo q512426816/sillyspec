@@ -58,7 +58,21 @@ import { runVerifyProbes, readSmokeResultRecord, deriveSmokeSectionState, scanSm
 import { parseEvidenceSlots, classifyVerifiedFile } from './verify-facts-schema.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
-const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
+// 单位统一（坑 active-pitfalls SILLYSPEC_TEST_TIMEOUT_MS 单位二义，2026-10-10 实证）：
+// 此前本常量裸读 env 当毫秒，而 resolveTestTimeoutMs 按文档契约（config-schema
+// test_timeout_sec 同效）当秒×1000——同一变量两读法，按文档传秒值（如 1800）被批执行器
+// 当 1.8s 帽、deps 批瞬时 ETIMEDOUT。统一走 parseTestTimeoutEnvMs：秒契约为准；
+// ≥10000 的值按毫秒兼容解释（实证期的规避口径）并告警促改秒。
+function parseTestTimeoutEnvMs(raw) {
+  const e = Number(raw)
+  if (!Number.isFinite(e) || e <= 0) return null
+  if (e >= 10_000) {
+    console.warn(`⚠️ SILLYSPEC_TEST_TIMEOUT_MS=${e} 按毫秒解释（= ${(e / 1000).toFixed(0)}s）——本变量契约单位是秒（与 test_timeout_sec 同效），建议改传秒值。`)
+    return e
+  }
+  return e * 1000
+}
+const TEST_TIMEOUT_MS = parseTestTimeoutEnvMs(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
 
 /**
  * 测试超时配置链（R9 实证 2026-09-23）：local.yaml commands.test_timeout_sec > env
@@ -69,8 +83,7 @@ const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60
 export function resolveTestTimeoutMs(yamlText, env = process.env) {
   const m = String(yamlText || '').match(/^\s*test_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
   if (m && Number(m[1]) > 0) return Number(m[1]) * 1000
-  const e = Number(env.SILLYSPEC_TEST_TIMEOUT_MS)
-  return Number.isFinite(e) && e > 0 ? e * 1000 : TEST_TIMEOUT_MS
+  return parseTestTimeoutEnvMs(env.SILLYSPEC_TEST_TIMEOUT_MS) || TEST_TIMEOUT_MS
 }
 const OUTPUT_TAIL_CHARS = 4000
 // 判账失败行台账上限（坑 verify-test-reconcile-tail-blindspot）：对账按完整输出判、tail 只存
@@ -1936,7 +1949,29 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
       const diffBase = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash
       if (diffBase) {
         const gitDir = found.gitDir
-        const files = runGitDiffNameOnly(gitDir, `${diffBase}..HEAD`)
+        // 基点 merge-base 化（坑 verify-reconcile-base-stale-parallel-drift，2026-10-10 实证：
+        // 执行期把 main 合入 worktree 分支后，立项 diffBase..HEAD 把主仓并行演进算成本变更
+        // 产出——对账 21 条 undeclared 噪声淹没真实信号。改锚 merge-base(<主分支>, HEAD)：
+        // 只含本分支自身提交；未合 main 时 merge-base == 立项点行为零变化。不放大守卫：
+        // 仅当 mb 是 diffBase 的后代（窗口只收窄）才采用，否则退旧区间。
+        let anchor = String(diffBase)
+        try {
+          const headHash = String(gitQuiet(gitDir, ['rev-parse', 'HEAD'], { timeout: 15000 }) || '').trim()
+          const mainRef = typeof meta?.baseBranch === 'string' && meta.baseBranch.trim() ? meta.baseBranch.trim() : 'main'
+          let mb = gitQuiet(gitDir, ['merge-base', mainRef, 'HEAD'], { timeout: 15000 })
+          if (!(typeof mb === 'string' && mb.trim())) mb = gitQuiet(gitDir, ['merge-base', 'master', 'HEAD'], { timeout: 15000 })
+          // 三重守卫：mb == HEAD（提交落主分支本身/in-place 形态——主分支即本变更线，
+          // 收窄到 HEAD 会清空 diff 面）或 mb == 立项点（零变化）或 mb 非立项点后代
+          // （窗口放大）时一律保持旧锚。仅「严格收窄」形态才采用 merge-base。
+          if (typeof mb === 'string' && mb.trim()) {
+            const mbHash = mb.trim()
+            if (mbHash !== String(diffBase) && mbHash !== headHash && headHash) {
+              const isDesc = gitQuiet(gitDir, ['merge-base', '--is-ancestor', String(diffBase), mbHash], { timeout: 15000 })
+              if (isDesc === '') anchor = mbHash
+            }
+          }
+        } catch { /* 退旧区间（不放大） */ }
+        const files = runGitDiffNameOnly(gitDir, `${anchor}..HEAD`)
         // 坑 verify-evidence-account-diff-misses-committed-changes（2026-09-13 实证）：
         // wt-commit 流程把本变更提交落在**主仓 HEAD**，worktree 分支不前移——仅查 worktree
         // 侧 diffBase..HEAD 时已提交文件全部 miss（7 task diffHit=false 连环假红，verify 两连

@@ -1147,7 +1147,7 @@ export function detectSelfMaintenanceTax(cwd, authoritySpecDir) {
  * 语义：WARNING advisory 不阻断、只读无修复（钩子/门禁挂载是后续独立策略裁决）；
  * 无 archive 目录 / 无 task 行 → pass（无任务视为完备，同 OpenSpec "nothing to complete"）。
  */
-function detectArchiveIntegrity(cwd, authoritySpecDir) {
+export function detectArchiveIntegrity(cwd, authoritySpecDir) {
   const base = { name: 'archive_integrity', label: '归档完整性重扫', safe_actions: [] };
   if (!authoritySpecDir) {
     return { ...base, pass: true, severity: null, findings: ['无权威 specDir，跳过'] };
@@ -1168,6 +1168,26 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
     .sort();
   if (names.length === 0) {
     return { ...base, pass: true, severity: null, findings: ['changes/archive 为空（无已归档变更）'], archive_count: 0, offenders: [] };
+  }
+  // 幽灵复活检测（坑 archived-change-resurrect-by-merge，2026-10-10 实证：远端 merge 把
+  // 已归档变更的旧四件套带回活跃路径，run <stage> 自动注册幽灵行并推上平台）：活跃目录与
+  // 归档同名并存 = 高危形态。doctor 只报不治（勿建议 align——会给幽灵补 execute 戳）。
+  const activeChangesDir = join(authoritySpecDir, 'changes');
+  const resurrected = names.filter((name) => existsSync(join(activeChangesDir, name)));
+  if (resurrected.length > 0) {
+    return {
+      ...base,
+      pass: false,
+      severity: CHECK_SEVERITY.FAILED,
+      findings: [
+        `活跃目录与归档同名并存（${resurrected.length} 个）：${resurrected.join('、')}——疑似 merge 带回的幽灵复活（run 命令已拒绝对其注册）`,
+        '处置（先递归 diff 活跃 vs 归档确认归档侧为超集零信息损失）：认归档则 git rm -r 活跃目录提交；确要重开则换新变更名',
+        '勿用 --align-execute-progress（会给幽灵目录补 execute 戳）',
+      ],
+      archive_count: names.length,
+      resurrected,
+      offenders: [],
+    };
   }
   const offenders = [];
   // FR 索引面（D14 第四检查数据源，循环外一次扫描复用；fr/ 不存在=仓未启用，全跳不误报）

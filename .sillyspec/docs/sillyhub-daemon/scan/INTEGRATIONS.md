@@ -33,7 +33,7 @@ generator: sillyspec-scan
 - sillyhub-daemon/src/spec-sync.ts：pullSpecBundle（含 404 容错 + Tar Slip 防护解包）/ packSpecDir（手动 tar 头打包）/ hasUnsyncedLocalChanges（pull 前回灌检查）。
 
 ### 1.5 spec 增量同步（manifest + 增量 ops）
-- `repo://sillyhub/sillyhub-daemon/src/hub-client.ts:1827`：`postSpecSyncIncremental` → `POST /api/workspaces/{wsId}/spec-workspace/sync-incremental`（spec-file-incremental-sync 变更新的端点；URL 必须 `/api` 前缀，用 REST_PREFIX 恒 404）。
+- `repo://sillyhub/sillyhub-daemon/src/hub-client.ts:1855`：`postSpecSyncIncremental` → `POST /api/workspaces/{wsId}/spec-workspace/sync-incremental`（spec-file-incremental-sync 变更新的端点；URL 必须 `/api` 前缀，用 REST_PREFIX 恒 404）。
 - sillyhub-daemon/src/spec-sync.ts：`syncSpecTreeIfNeeded` 编排、`resolveManifestCachePath` 本地 manifest 缓存（hash/版本对账）、`extractChangeDirs`（ops → change 目录）、`shouldRefreshSpec` / `bumpLocalSpecVersion`（spec_version 保鲜）。
 
 ### 1.6 变更写回 + 同步进度（change-writes）
@@ -74,7 +74,7 @@ generator: sillyspec-scan
 - `@modelcontextprotocol/sdk` `^1.29.0`；sillyhub-daemon/src/mcp-server.ts 用 `McpServer` + `StdioServerTransport` 起 stdio server（import.meta.url 主模块判定后 `runMcpServer()`）。
 - 工具清单（mcp-server.ts registerTool，共 5 个）：`dispatch_worker` / `get_worker_result` / `list_workers` / `converge_mission` / `report_progress`——HubClient 作后端通道（测试可传 mock）。
 - 注入：仅 team 主 agent（`ctx.stage === 'orchestrator'`）经 `repo://sillyhub/sillyhub-daemon/src/cli.ts:982` mainAgentMcpConfigProvider 构造 `command=node + args=[dist/mcp-server.js]`，透传 SDK `options.mcpServers`。
-- 鉴权：`MCP_SERVER_DAEMON_API_KEY`（X-API-Key 优先路径）与 `MCP_SERVER_DAEMON_TOKEN`（Bearer）分开透传（api_key 优先回落 token，repo://sillyhub/sillyhub-daemon/src/cli.ts:978-982）；McpToken 的签发/吊销在平台侧（api-types.ts schema），daemon 内置 server 不消费 McpToken。
+- 鉴权：`MCP_SERVER_DAEMON_API_KEY`（X-API-Key 优先路径）与 `MCP_SERVER_DAEMON_TOKEN`（Bearer）分开透传（api_key 优先回落 token，repo://sillyhub/sillyhub-daemon/src/cli.ts:991）；McpToken 的签发/吊销在平台侧（api-types.ts schema），daemon 内置 server 不消费 McpToken。
 - 配置合并：sillyhub-daemon/src/mcp-config.ts（平台默认 + workspace `.mcp.json`，白名单过滤，仅允许 stdio 类型防 SSRF）；spike 原型 `spikes/06-mcp-server/`。
 
 ## 4. 本地环境
