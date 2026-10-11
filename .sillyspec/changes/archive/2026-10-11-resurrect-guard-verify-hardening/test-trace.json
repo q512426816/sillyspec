@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-11-resurrect-guard-verify-hardening",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-01",
+      "tests": [
+        "test/archived-resurrect-guard.test.mjs「① 幽灵复活：活跃目录 + archive 同名 + 库无活跃行 → run verify 拒绝注册」",
+        "test/archived-resurrect-guard.test.mjs「② 库内有活跃行的同名并存（归档后重开恢复场景）→ 放行」",
+        "test/archived-resurrect-guard.test.mjs「③ doctor：同名并存 → archive_integrity FAILED + resurrected 清单 + 勿 align」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-resurrect-guard-verify-hardening"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-reconcile-merge-base.test.mjs「① merge main 后：diff 面只含本分支自身提交（并行演进不圈入）」",
+        "test/verify-reconcile-merge-base.test.mjs「② 未合 main：merge-base == 立项点，行为零变化」",
+        "test/verify-reconcile-merge-base.test.mjs「③ main ref 不可得 → 退旧区间（守卫：只窄不宽）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-resurrect-guard-verify-hardening"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-reconcile-merge-base.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-resurrect-guard-verify-hardening"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-05",
+      "tests": [
+        "test/doc-ref-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-resurrect-guard-verify-hardening"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-06",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-11-resurrect-guard-verify-hardening"
+    }
+  ]
+}

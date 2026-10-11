@@ -2917,3 +2917,122 @@
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-10-cross-wt-repo-local-placement/requirements.md#FR-05
 最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
+
+## FR-core-engine-180 run <stage> 对「活跃目录与 changes/archive/<同名>/ 并存且库内无活跃行」的变更名拒绝注册 exit 2 并给双出口指引；doctor detectArchiveIntegrity 对同形态 pass=false severity=FAILED 给处置指引（test/archived-resurrect-guard.test.mjs 全绿）
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：幽灵复活拒绝注册；归档后重开放行；doctor 报 FAILED
+场景正文：
+- 场景：幽灵复活拒绝注册 — 
+- 场景：归档后重开放行 — Given 同名并存但库内有该变更活跃行（恢复场景），When 跑 run verify --change <名>，Then 正常注册放行不拦截。
+- 场景：doctor 报 FAILED — Given 同名幽灵并存，When 跑 doctor 归档完整性重扫，Then archive_integrity 检查 pass=false、severity=FAILE
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-01
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-01
+  tests: test/archived-resurrect-guard.test.mjs「① 幽灵复活：活跃目录 + archive 同名 + 库无活跃行 → run verify 拒绝注册」 | test/archived-resurrect-guard.test.mjs「② 库内有活跃行的同名并存（归档后重开恢复场景）→ 放行」 | test/archived-resurrect-guard.test.mjs「③ doctor：同名并存 → archive_integrity FAILED + resurrected 清单 + 勿 align」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-resurrect-guard-verify-hardening
+  status: active
+
+## FR-core-engine-181 verify 对账 diff 面锚点：merge-base(<主分支>,HEAD) 仅为立项点严格后代时采用（窗口只收窄），mb==HEAD、mb==立项点、非后代三形态一律退旧区间（test/verify-reconcile-merge-base.test.mjs 全绿）
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：合 main 后只圈本分支提交；未合 main 零变化；主分支不可得退旧区间
+场景正文：
+- 场景：合 main 后只圈本分支提交 — Given 执行期已把 main 合入本分支（mb 严格晚于立项点），When 解析对账 diff 面，Then 锚采用 mb、diff 面不含主仓并行演进文件。
+- 场景：未合 main 零变化 — Given 未合 main（mb==立项点），When 解析对账 diff 面，Then 锚保持立项点、diff 面与旧口径一致。
+- 场景：主分支不可得退旧区间 — Given main/master ref 均不可得，When 解析对账 diff 面，Then 退旧区间 <diffBase>..HEAD 不抛错。
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-02
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-02
+  tests: test/verify-reconcile-merge-base.test.mjs「① merge main 后：diff 面只含本分支自身提交（并行演进不圈入）」 | test/verify-reconcile-merge-base.test.mjs「② 未合 main：merge-base == 立项点，行为零变化」 | test/verify-reconcile-merge-base.test.mjs「③ main ref 不可得 → 退旧区间（守卫：只窄不宽）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-resurrect-guard-verify-hardening
+  status: active
+
+## FR-core-engine-182 resolveTestTimeoutMs 与 TEST_TIMEOUT_MS 同口径解析 SILLYSPEC_TEST_TIMEOUT_MS：<10000 按秒×1000，≥10000 按毫秒并告警促改秒
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：秒值口径；毫秒兼容告警
+场景正文：
+- 场景：秒值口径 — 
+- 场景：毫秒兼容告警 — 
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-03
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-03
+  tests: test/verify-reconcile-merge-base.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-resurrect-guard-verify-hardening
+  status: active
+
+## FR-core-engine-183 .claude/skills/sillyspec-quick/SKILL.md 存在且描述 run quick 三步生命周期与 --linked-changes 语义；auto/brainstorm SKILL.md 分叉文案指向 quick --linked-changes
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：技能面落盘
+场景正文：
+- 场景：技能面落盘 — Given 仓内 .claude/skills/，When 检查 sillyspec-quick/SKILL.md，Then 含「run quick」「--linked-c
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-04
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+## FR-core-engine-184 node --test test/doc-ref-check.test.mjs 绿（platform-interface-map.md 零失效）；sillyspec docs check 全量 846 处引用零失效；docs gate 基线=0
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：重锚后全绿
+场景正文：
+- 场景：重锚后全绿 — Given docs check --fix 重锚 16 文件 + 手工修正 2 处（core-engine.md 调用点锚 4310、unmapped.md 裸名补全路径
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-05
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-05
+  tests: test/doc-ref-check.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-resurrect-guard-verify-hardening
+  status: active
+
+## FR-core-engine-185 全量 npm test 零失败（749 文件）
+变更：2026-10-11-resurrect-guard-verify-hardening
+状态：active
+摘要：全量回归
+场景正文：
+- 场景：全量回归 — When 跑 npm test，Then 通过 749 文件、失败 0。
+全文：.sillyspec/changes/archive/2026-10-11-resurrect-guard-verify-hardening/requirements.md#FR-06
+最近确认：9495da3e50a08a426fc6de415853ca534f1f984a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-11-resurrect-guard-verify-hardening:flow:测试绑定FR-06
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-11-resurrect-guard-verify-hardening
+  status: active

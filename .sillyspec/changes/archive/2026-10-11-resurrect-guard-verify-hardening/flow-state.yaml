@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -33,6 +41,11 @@ input: >-
   - 全量 npm test 零失败（749 文件）
 autopilot: true
 baseline_commit: c69d5a6d7ba77eb649ec489462415ada78eb4eed
-updatedAt: '2026-10-11T13:55:49.377Z'
+updatedAt: '2026-10-11T14:09:43.761Z'
 baseline_sha256: b61325a6c2848913e516c5f977997bcf5fad1a410f548ece978ad9c19b85f0cd
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+nontest-skip1)+fr(18)（132.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261011140014\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（44.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261011140014\test-result.json｜门文件 17 个
 

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-11-resurrect-guard-verify-hardening",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9495da3e50a08a426fc6de415853ca534f1f984a",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 三退避形态中 mb==HEAD 与「非后代」两形态无测试钉住",
+      "evidence": "FR 标题承诺 mb==HEAD、mb==立项点、非后代三形态一律退旧区间，绑定测试仅覆盖 mb==立项点（用例②）与 mb 不可得（用例③）；实现经检视正确（verify-postcheck.js:1968 mbHash!==headHash 短路、:1969-1970 借 gitQuiet 失败返 null / 成功返 '' 区分 --is-ancestor exit 1/0），但「清空面」「放大面」两守卫分支零断言",
+      "location": "test/verify-reconcile-merge-base.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "守卫触发面宽于 FR-01 表述：无活跃目录也拦，报错文案与出口①失真",
+      "evidence": "FR-01 形态=「活跃目录与归档并存」，代码只查 existsSync(archive/<名>) && !progress（command.js:1283），活跃目录不存在时同样 exit 2，此时「当前活跃目录疑似 merge 带回」文案与出口① git rm 指引失真；方向保守不漏放，但此形态无测试，且用例①仅断言 status!=0 未钉 exit 2",
+      "location": "src/run/command.js:1283-1292"
+    },
+    {
+      "severity": "P3",
+      "title": "（原 P2-1 降级注记）冻结件 change.patch 缺 3 个 .sillyspec 治理面文件——冻结面设计内排除，交付提交可审计",
+      "evidence": "复核属实：src/flow-parity.js:207 filterCommittedFace 按前缀滤除非本变更的 .sillyspec/ 治理面（只留非治理面+本变更前缀+.sillyspec/docs/，knowledge WIP 他侧防线，2026-09-27-tool-debt-cleanup 裁决），经 src/flow.js:1326 接线进冻结面并有 test/filter-committed-face.test.mjs 锁行为；docs-check-baseline 42→0 与 knowledge/decisions/runtime.md、unmapped.md 不入 change.patch 属设计内排除，三文件随交付提交 9495da3e 全量可审计（git show 已验内容正确）——审计链完整，原 P2 撤销降为注记",
+      "location": "src/flow-parity.js:207; src/flow.js:1326"
+    },
+    {
+      "severity": "P3",
+      "title": "（原 P2-2 转注记）守卫列举失败分支 fail-closed——已按修正后披露裁决接受",
+      "evidence": "复核属实：design.md 盲维#1 与风险节修正披露两层语义（外层 try/catch 守卫异常 fail-open；内层 pm.listChanges 列举失败按无活跃行处置=fail-closed 保守向），与 command.js:1285/:1295 注释逐字吻合，两害取其轻（误拦重跑即恢复 vs 漏放幽灵行上平台）——披露与代码一致，裁决可接受，原 P2 撤销转为已披露裁决注记",
+      "location": "src/run/command.js:1285-1295"
+    },
+    {
+      "severity": "P3",
+      "title": "处置注记①：未声明夹带已裁决——.idea/vcs.xml 与 brainstorm SKILL.md 删条可接受",
+      "evidence": ".idea/vcs.xml 为仓内已跟踪 IDE 映射文件，随交付提交属既有惯例（git log 证实 e5d8494f 等历史交付均含 vcs 映射，变更前文件已含 r7-test-env/round5 同款映射行）；brainstorm SKILL.md 删「变更标题（面板显示用）」条与 sillyspec-quick 技能落地为同批技能面对齐（标题提取已下沉 CLI 创建路径 deriveChangeTitle），不再单独记账",
+      "location": ".idea/vcs.xml:5; .claude/skills/sillyspec-brainstorm/SKILL.md:111"
+    },
+    {
+      "severity": "P3",
+      "title": "处置注记②：FR-03 无直接钉子测试已接受——消费面全量回归覆盖，直接单测留后续清理",
+      "evidence": "FR-03 绑定（test/verify-reconcile-merge-base.test.mjs 自述「经全量覆盖」）确非真断言、新口径零直接测试（存量 test-timeout-config.test.mjs:19 新旧语义同值钉不住变更）；实现经检视正确（verify-postcheck.js:66-86 两读点同源 parseTestTimeoutEnvMs），resolveTestTimeoutMs 消费面 run-tests/verify 经全量 749 文件回归实测通过——裁决接受，直接单测登记为后续清理项",
+      "location": "src/verify-postcheck.js:66-86"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——守卫准据「库内无活跃行」（pm.listChanges 实时读）与注册前单点判定成立；内层列举失败 fail-closed 属已修正披露并裁决接受的保守取舍（见 P3 注记，design 与代码一致）",
+    "并发": "ok——守卫（existsSync+库列举）、doctor detectArchiveIntegrity（只报不治）、merge-base 锚解析三面全只读无共享写面，并发跑 doctor 无竞态；并发 DB 锁下列举失败的保守误拦已按修正披露裁决接受",
+    "切换": "ok——守卫在每次 runCommand 注册前重判（幽灵态中途出现被下一次 run 拦截）；对账锚每次实时解析无缓存；中断重入无残留状态",
+    "作用域": "ok——archive 判定锚当前 specBase/authoritySpecDir 各自独立不串台；merge-base 优先 meta.baseBranch 回退 main→master，用例③钉 baseBranch 不可得退旧区间"
+  },
+  "boundaryAdjudications": [
+    "守卫两层 fail-open/fail-closed 语义（design 修正后披露）→ 可接受：披露与 command.js:1285/:1295 实现一致，列举失败 fail-closed 属保守向取舍（误拦重跑即恢复，漏放幽灵上平台），两害取其轻",
+    "doctor 只报不治 + 勿 --align-execute-progress 警示（design 死路裁决）→ 可接受：幽灵归属需人工裁决，align 等于给幽灵补戳背书；警示已被用例③钉住",
+    "merge-base 三重守卫只窄不宽、放弃 HEAD 短路（design 死路裁决）→ 可接受：is-ancestor 经 gitQuiet null/'' 语义正确区分 exit 0/1，放大/清空面全退旧锚，方向保守且 mb==HEAD in-place 形态确有防御",
+    "SILLYSPEC_TEST_TIMEOUT_MS ≥10000 毫秒兼容+告警（FR-03/design）→ 可接受：实证期规避口径保留、告警促改秒、两读点同源单点解析",
+    "FR-04 纯技能文案资产不绑定测试（测试绑定「不适用」）→ 可接受：无代码行为面；run quick/--linked-changes/三步生命周期关键词与 auto/brainstorm 分叉指向已对落盘文件目检核实，FR-06 全量回归兜底",
+    "patch 冻结面按 filterCommittedFace 滤除非本变更 .sillyspec/ 治理面（2026-09-27-tool-debt-cleanup 既有裁决）→ 可接受：knowledge WIP 他侧防线设计内排除，交付提交全量可审计"
+  ],
+  "reviewedAt": "2026-10-11T14:09:04Z",
+  "verificationBasis": "首评：三材料全读 + src/run/command.js、src/doctor-diagnostics.js、src/verify-postcheck.js（含 git-helper.js gitQuiet 失败语义）检视 + 4 个绑定测试实测全绿。复核：design.md 修正稿重读（两层语义披露与 command.js:1285/:1295 注释吻合）；src/flow-parity.js:207 filterCommittedFace 过滤逻辑与 src/flow.js:1326 冻结面接线核实（test/filter-committed-face.test.mjs 在位）；git log .idea/vcs.xml 证实 IDE 映射随交付属既有惯例；三文件内容经 git show 9495da3e 验真。FR-06 全量 749 文件未重跑，采信冻结提交声明与定向测试实证",
+  "reviewHistory": [
+    {
+      "reviewedAt": "2026-10-11T14:05:50Z",
+      "verdict": "PASS",
+      "note": "首评：2×P2（冻结件缺 3 文件、fail-open 披露与代码不符）+ 4×P3"
+    },
+    {
+      "reviewedAt": "2026-10-11T14:09:04Z",
+      "verdict": "PASS",
+      "note": "复核：P2-1 经 filterCommittedFace 设计内排除核实降级 P3 注记；P2-2 经 design 修正披露核实转 P3 已裁决注记；补 2 条处置注记，最终 0×P2 + 6×P3"
+    }
+  ]
+}

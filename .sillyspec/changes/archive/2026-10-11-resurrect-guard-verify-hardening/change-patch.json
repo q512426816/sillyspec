@@ -1,0 +1,262 @@
+{
+  "change": "2026-10-11-resurrect-guard-verify-hardening",
+  "baseline": "c69d5a6d7ba77eb649ec489462415ada78eb4eed",
+  "head": "9495da3e50a08a426fc6de415853ca534f1f984a",
+  "files": [
+    ".claude/skills/sillyspec-auto/SKILL.md",
+    ".claude/skills/sillyspec-brainstorm/SKILL.md",
+    ".claude/skills/sillyspec-quick/SKILL.md",
+    ".idea/vcs.xml",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/design.md",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/flow-state.yaml",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/proposal.md",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/requirements.md",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/tasks.md",
+    ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.md",
+    ".sillyspec/docs/sillyspec/modules/setup.md",
+    ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+    ".sillyspec/docs/sillyspec/scan/TESTING.md",
+    "docs/sillyspec/architecture-4a.md",
+    "docs/sillyspec/design-d7-scan-lifecycle.md",
+    "docs/sillyspec/doc-consistency-debt.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "docs/sillyspec/prompt-control-debt.md",
+    "docs/sillyspec/review-2026-08-20-full-audit.md",
+    "src/doctor-diagnostics.js",
+    "src/run/command.js",
+    "src/verify-postcheck.js",
+    "test/archived-resurrect-guard.test.mjs",
+    "test/verify-reconcile-merge-base.test.mjs",
+    ".sillyspec/changes/2026-10-11-resurrect-guard-verify-hardening/review.json"
+  ],
+  "totals": {
+    "files": 30,
+    "additions": 719,
+    "deletions": 58
+  },
+  "savedAt": "2026-10-11T14:09:41.696Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 7,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": true,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": true,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    },
+    {
+      "dir": ".claude/skills/sillyspec-auto",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-brainstorm",
+      "files": 1
+    },
+    {
+      "dir": ".claude/skills/sillyspec-quick",
+      "files": 1
+    },
+    {
+      "dir": ".idea",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c69d5a6d7ba77eb649ec489462415ada78eb4eed",
+    "totals": {
+      "files": 24,
+      "additions": 422,
+      "deletions": 58
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-auto/SKILL.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".claude/skills/sillyspec-brainstorm/SKILL.md",
+        "additions": 2,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": ".claude/skills/sillyspec-quick/SKILL.md",
+        "additions": 116,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": ".idea/vcs.xml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/setup.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/scan/TESTING.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/architecture-4a.md",
+        "additions": 14,
+        "deletions": 14,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/design-d7-scan-lifecycle.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/doc-consistency-debt.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 9,
+        "deletions": 9,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/prompt-control-debt.md",
+        "additions": 8,
+        "deletions": 8,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/review-2026-08-20-full-audit.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/doctor-diagnostics.js",
+        "additions": 21,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 19,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 39,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "test/archived-resurrect-guard.test.mjs",
+        "additions": 87,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/verify-reconcile-merge-base.test.mjs",
+        "additions": 87,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2261692319d8f59ce1b4935b0b36d64f857f71121ecc443dc0a525008f99d5a1",
+  "patchStatus": "ok"
+}
