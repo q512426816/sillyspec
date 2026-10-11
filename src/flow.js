@@ -759,14 +759,19 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
     ``,
     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
+    // 收口拒收红线前置（2026-10-11-flow-start-redline-frontload）：钉死/空槽/绑定三面都是文档
+    // 先行校验，实证第一次最容易踩（四问文本被改写、区间 task-NN 写法零证据被拒）——横幅
+    // 头部先行告知，收口才暴露的规则前置到动笔前。
+    `🚫 收口拒收红线（文档先行校验，动笔前先读——第一次最容易踩的就是这三条）：`,
+    `   ① design 四问文本与 FR 标题锚逐字钉死勿改写——问题原文保持原样、答案写在问题下方，改写/删除即收口拒收（文档↔锚逐字对比）；`,
+    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答）；`,
+    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收。`,
     `书写面（纯 markdown 起草）：requirements FR 正文/design 四节作答/测试绑定行都直接写正文——`,
-    `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；`,
-    `   标题锚（FR 标题、四问文本）勿改写，收口做文档↔锚对比（锚失踪/空答拒收，成功标准漂移出 advisory）。`,
-    `⚠️ design.md 四节（做法/接口契约/边界并发四问/风险）动码前后顺手作答——答案写在问题下方，`,
-    `   每节至少一行，写「不适用：<理由>」也算答；flow done 空节拒收（承诺锚点，评审与 FR 对账都对着它）；`,
-    `   列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）——勿写在「接口契约」节内（收口按节名解析声明面）。`,
-    `📜 requirements 每条 FR = 标题锚 + 一句带强度词的行为规定（必须/禁止/SHOULD/可以）+ 按需场景块`,
-    `   （#### 场景：名 + Given/When/Then）；测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`。`,
+    `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；成功标准漂移只出 advisory 不拒收。`,
+    `⚠️ design.md 四节动码前后顺手作答；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
+    `   ——勿写在「接口契约」节内（收口按节名解析声明面）。`,
+    `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
+    `   测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`（无测试面写「不适用：理由」）。`,
     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
     `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
     `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
@@ -781,7 +786,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
-    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
@@ -840,6 +845,9 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     ...(title ? [`- 标题：${title}`] : []),
     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
+    // 红线重申（2026-10-11-flow-start-redline-frontload）：重入不出首进横幅——钉死规则与
+    // task-NN token 形态随简报补位，断点续跑生命周期内规则不丢。
+    `- 红线重申：design 四问文本/FR 标题锚逐字钉死勿改写（改写即拒收）；勾选证据提交消息逐个带 task-NN 或 /、，连写（「task-01..task-05」区间写法不认）。`,
     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
     `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
     ...(digestLines.length > 0 ? ['', ...digestLines] : []),
@@ -1034,8 +1042,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 机器稿基线做镜像豁免（route-hindsight 基线快照仍供改写比指标，与哨兵解耦）。
         const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages })
         if (sent.status === 'fake') {
-          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
-          console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（baseline..HEAD 提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
+          // token 合法形态写明（2026-10-11-flow-start-redline-frontload）：实证「task-01..task-05」
+          // 区间写法被判零证据时才知道格式约束——拒收文案自释，减少一轮试错。
+          console.error('   补证据（提交标题或正文带 task-NN——逐个列出或 /、，连写（如 task-01/02/03），「task-01..task-05」区间写法不认；或产 review.json）或取消勾选后重跑——假完成主张不许过门')
           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
           reportMidFail('ledger')
           process.exit(1)
