@@ -1,0 +1,27 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-11T14:09:32.860Z
+---
+# 提案书（Proposal）— 2026-10-11-release-3-32-5
+
+## 动机
+
+任务原话转写：动机：发布 sillyspec@3.32.5。随版内容=2026-10-11-resurrect-guard-verify-hardening（归档幽灵复活双门 + verify 对账基点 merge-base 化 + 超时单位统一 + quick skill 落地 + docs 重锚基线归零，已收口归档）。版本面照 3.32.1~3.32.4 惯例：package.json version + test/quick-retired.test.mjs R5 锚同步提升；推送经 pre-push 门（lint+test+docs gate）；发布经腾讯 DoH 钉扎通道（registry.npmjs.org 本地解析不可信，未钉扎数据不可用作核验——3.32.2/3.32.3/3.32.4 同款绕行）。
+
+成功标准：
+- package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
+- git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
+- npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
+
+## 变更范围
+
+按成功标准机械推导，共 3 条验收面：
+1. package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
+2. git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
+3. npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
+
+## 成功标准（可验证）
+
+1. package.json version=3.32.5 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
+2. git push origin main 成功（含本变更工件、随版修复归档件与既有未推送提交；pre-push 拦截时修复而非跳过）
+3. npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.5 且 dist-tags.latest=3.32.5（发布前预核验 latest=3.32.4 已确认通道可信）
