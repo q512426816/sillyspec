@@ -62,6 +62,17 @@ export function writeFlowState(changeDir, patch) {
   }, { lineWidth: 120 }) + '\n')
 }
 
+/** 批准通道取值（2026-10-12-approve-channel-attest）：flow done 回显与遥测同源——历史变更
+ *  无 channel 字段时归一 unattested-legacy（2026-10-12 之前真批/自批不可区分的留痕形态），
+ *  autopilot 是用户显式豁免通道非批准。三态封闭集（user-confirmed/agent-self/unattested）是
+ *  治理域（谁在主张批准），不承载内容语义——开放内容走 spec_rejected_reason 自由文本。 */
+export function approveChannelOf(st) {
+  const s = st || {}
+  if (s.autopilot) return 'autopilot'
+  if (s.spec_approved_channel) return String(s.spec_approved_channel)
+  return s.spec_approved ? 'unattested-legacy' : 'none'
+}
+
 /** 读 local.yaml 的 flow 配置（缺省 thin——2026-09-25-thin-default-flip 翻转：入口归一，
  * D-010@v2 实验通道定位由轻量变更加固件（设计记录/测试绑定/patch 留档/预段收编）的数据推翻；
  * 显式 mode: legacy 的仓维持旧道。文本级读同既有习惯）。 */
@@ -806,7 +817,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
     `      用户确认后请其运行 sillyspec flow approve --change ${change}（批准留痕）再动手写代码——`,
-    `      方案错了返工最贵；未批准且未声明 --autopilot 时 flow done 拒收（2026-10-04-thin-docs-v2）。`,
+    `      agent 代跑时如实声明通道：--user-confirmed（转述用户已确认）/ --self-approved（agent 自批），`,
+    `      无 flag 按 unattested 留痕（审计面无法区分用户确认与自批）——2026-10-12-approve-channel-attest。`,
+    `      方案错了返工最贵；未批准且未声明 --autopilot 时 flow done 拒收（2026-10-04-thin-docs-v2）；`,
+    `      用户否掉方案 → flow reject --change ${change} --reason <理由>（拒后批准须显式通道再确认）。`,
     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
     `      等用户确认再跑收口。`,
     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
@@ -932,6 +946,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         ts: new Date().toISOString(), change, protocolCalls: 2,
         draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
         routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
+        // 批准通道遥测（2026-10-12-approve-channel-attest）：与收口回显同源取值，校准
+        // unattested/agent-self 占比用（dogfood 实证留痕不可区分 → 通道可聚合）。
+        approveChannel: approveChannelOf(st),
         review,
       }) + '\n', 'utf8')
     } catch { /* 遥测 best-effort */ }
@@ -964,10 +981,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       if (!st.autopilot && !st.spec_approved) {
         console.error(`❌ spec 断点未批准：本变更（v2 起草）收口需要方案确认留痕`)
         console.error(`   修复：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
-        console.error(`     sillyspec flow approve --change ${change}`)
+        console.error(`     sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
         console.error(`   或用户显式豁免（自主跑到底）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
         reportMidFail('artifacts')
         process.exit(1)
+      }
+      // 批准通道回显（2026-10-12-approve-channel-attest）：channel 是审计面第一公民——agent-self
+      // 与 unattested 醒目（dogfood 实证：用户真批转述与 agent 自批在留痕层面曾不可区分）。
+      if (st.autopilot) {
+        console.log('🔑 spec 断点：autopilot 显式豁免（用户授权自主跑到底）')
+      } else {
+        const _ch = approveChannelOf(st)
+        const _warn = _ch === 'agent-self' || _ch.startsWith('unattested')
+        const _rej = st.spec_rejected_reason ? `（曾拒绝：${String(st.spec_rejected_reason).slice(0, 60)}→显式再确认翻越）` : ''
+        console.log(`${_warn ? '⚠️' : '🔑'} spec 断点批准留痕：channel=${_ch}｜by=${st.spec_approved_by || '?'}${_rej}`)
       }
     } else {
       if (r.applicable && r.violations.length > 0) {
@@ -1977,15 +2004,32 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
 /** flow 命令族入口（index.js case 'flow' 接线）：flow start|done|amend-draft。 */
 /**
  * flow approve（2026-10-04-thin-docs-v2 FR-06）：spec 断点用户批准留痕——用户确认 FR+design
- * 方案后由**用户**运行（不是 agent 代跑）；写 flow-state {spec_approved,spec_approved_at,
- * spec_approved_by}。flow done 的 v2 机器门消费该证据（未批准且未声明 autopilot → 拒收）。
- * 诚实边界：同机 agent 理论上也能跑本命令——门的价值是仪式+留痕（谁在何时批的）+评审抽查
- * 兜底，非绝对防伪；--by 显式署名供平台/脚本侧调用。
+ * 方案后运行；写 flow-state {spec_approved,spec_approved_at,spec_approved_by}。flow done 的
+ * v2 机器门消费该证据（未批准且未声明 autopilot → 拒收）。
+ *
+ * 通道 attest（2026-10-12-approve-channel-attest，dogfood 实证驱动：8 次 approve 中 2 次为
+ * agent 自批、其中一次在用户明确拒绝方案后把重复催促反读为授权，且留痕层面用户真批转述与
+ * agent 自批不可区分——spec_approved_by 恒为 agent session id）：
+ *   --user-confirmed  agent 转述「用户已确认方案」（channel=user-confirmed）
+ *   --self-approved   agent 自批如实声明（channel=agent-self）
+ *   无 flag            默认路径行为不变（零破坏），channel=unattested 留痕+警示
+ * 拒后派生授权硬拦：spec_rejected 在场且未被显式翻越（无 spec_rejected_superseded_at）时，
+ * approve 必须带显式通道——「用户拒绝过方案」之后的无通道批准正是实证事故形态。
+ * 诚实边界：同机 agent 仍可谎报 --user-confirmed（与 --by 同界）——通道的价值是必留痕+
+ * 可区分+评审抽查兜底，非防伪；强凭据属平台层课题（CLI 直连用户问询），不在此层伪造。
  */
-async function cmdFlowApprove({ change, cwd, specBase, by = null }) {
+async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = null }) {
   const changeDir = join(specBase, 'changes', change)
   if (!existsSync(changeDir)) {
     console.error(`❌ 变更不存在：${change}（flow approve 在 flow start 之后运行）`)
+    process.exit(2)
+  }
+  const st = readFlowState(changeDir) || {}
+  if (st.spec_rejected && !st.spec_rejected_superseded_at && !channelFlag) {
+    console.error(`❌ 本变更存在未翻越的拒绝记录（spec_rejected，reason=${String(st.spec_rejected_reason || '?').slice(0, 80)}）——拒绝后的批准必须显式声明通道：`)
+    console.error(`   用户重新确认后：sillyspec flow approve --change ${change} --user-confirmed（agent 转述用户确认）`)
+    console.error(`   agent 自批如实声明：sillyspec flow approve --change ${change} --self-approved`)
+    console.error(`   （拒绝后派生授权须显式再确认——2026-10-12-approve-channel-attest）`)
     process.exit(2)
   }
   let approvedBy = by
@@ -1995,11 +2039,63 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null }) {
       approvedBy = (resolveSessionIdentity({ cwd }) || {}).session || 'user'
     } catch { approvedBy = 'user' }
   }
+  const channel = channelFlag === 'user-confirmed' ? 'user-confirmed'
+    : channelFlag === 'self-approved' ? 'agent-self' : 'unattested'
   const at = new Date().toISOString()
-  writeFlowState(changeDir, { spec_approved: true, spec_approved_at: at, spec_approved_by: approvedBy })
+  const patch = {
+    spec_approved: true, spec_approved_at: at, spec_approved_by: approvedBy,
+    spec_approved_channel: channel,
+  }
+  if (channelFlag) patch.spec_attested_by = approvedBy
+  if (st.spec_rejected && !st.spec_rejected_superseded_at) patch.spec_rejected_superseded_at = at
+  writeFlowState(changeDir, patch)
   console.log(`✅ spec 断点已批准（change=${change}）`)
-  console.log(`   批准人：${approvedBy}｜时间：${at}`)
-  console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：编辑 flow-state.yaml 删除 spec_approved 三字段。`)
+  const chLabel = channelFlag === 'user-confirmed' ? 'user-confirmed（agent 转述用户确认）'
+    : channelFlag === 'self-approved' ? 'agent-self（agent 自批如实声明）' : 'unattested（未声明通道）'
+  console.log(`   批准人：${approvedBy}｜时间：${at}｜通道：${chLabel}`)
+  if (!channelFlag) {
+    console.warn(`⚠️ 本次批准未带 attest 通道（--user-confirmed / --self-approved）——按 unattested 留痕，评审/审计无法区分用户确认与 agent 自批。`)
+  }
+  if (channelFlag === 'self-approved') {
+    console.warn(`⚠️ agent 自批留痕：如用户实际未确认，请撤销——sillyspec flow reject --change ${change} --reason <理由>`)
+  }
+  if (patch.spec_rejected_superseded_at) console.log(`   已翻越既有拒绝记录（superseded_at=${patch.spec_rejected_superseded_at}，拒绝理由保留于 spec_rejected_reason）`)
+  console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：sillyspec flow reject --change ${change} --reason <理由>`)
+}
+
+/**
+ * flow reject（2026-10-12-approve-channel-attest）：spec 断点拒绝留痕——撤销既有批准并记录
+ * 拒绝理由（审计可复原「批准→用户否掉→显式再确认」序）；此后 approve 必须带显式 attest 通道
+ * （防「拒绝后派生授权」——dogfood 实证：用户拒绝方案后 agent 把重复催促反读为授权自批）。
+ * spec_approved 撤销为显式 false（非删键）——重入读侧恒见；spec_rejected* 历史字段保留不删。
+ */
+async function cmdFlowReject({ change, cwd, specBase, reason }) {
+  const changeDir = join(specBase, 'changes', change)
+  if (!existsSync(changeDir)) {
+    console.error(`❌ 变更不存在：${change}（flow reject 在 flow start 之后运行）`)
+    process.exit(2)
+  }
+  const reasonText = String(reason || '').trim()
+  if (!reasonText) {
+    console.error('❌ flow reject 需要 --reason <文本>（拒绝理由，留痕供审计）')
+    process.exit(2)
+  }
+  let rejectedBy = 'user'
+  try {
+    const { resolveSessionIdentity } = await import('./progress.js')
+    rejectedBy = (resolveSessionIdentity({ cwd }) || {}).session || 'user'
+  } catch { /* 缺省 user */ }
+  const at = new Date().toISOString()
+  writeFlowState(changeDir, {
+    spec_approved: false,
+    spec_rejected: true, spec_rejected_at: at,
+    spec_rejected_reason: reasonText, spec_rejected_by: rejectedBy,
+    spec_rejected_superseded_at: null, // 再拒绝重置翻越戳（上一轮「拒→显式确认」序已被新拒绝终结）
+  })
+  console.log(`🚫 spec 断点已拒绝留痕（change=${change}）`)
+  console.log(`   理由：${reasonText}｜操作者：${rejectedBy}｜时间：${at}`)
+  console.log(`   既有批准已撤销（spec_approved=false）——flow done 断点机器门将重新拦收。`)
+  console.log(`   用户重新确认后批准须显式通道：flow approve --change ${change} --user-confirmed（agent 自批则 --self-approved 如实声明）`)
 }
 
 export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
@@ -2103,8 +2199,22 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow approve 需 --change <名>'); process.exit(2) }
     validateChangeName(change)
+    // attest 通道（2026-10-12-approve-channel-attest）：互斥二选一，无 flag=unattested（留痕+警示）
+    const userConfirmed = hasFlag('--user-confirmed')
+    const selfApproved = hasFlag('--self-approved')
+    if (userConfirmed && selfApproved) {
+      console.error('❌ --user-confirmed 与 --self-approved 互斥（一次只能声明一个 attest 通道）')
+      process.exit(2)
+    }
     await reportAgentLog(change, sub)
-    return cmdFlowApprove({ change, cwd, specBase, by: getFlag('--by') || null })
+    return cmdFlowApprove({ change, cwd, specBase, by: getFlag('--by') || null, channelFlag: userConfirmed ? 'user-confirmed' : (selfApproved ? 'self-approved' : null) })
+  }
+  if (sub === 'reject') {
+    const change = getFlag('--change')
+    if (!change) { console.error('❌ flow reject 需 --change <名>'); process.exit(2) }
+    validateChangeName(change)
+    await reportAgentLog(change, sub)
+    return cmdFlowReject({ change, cwd, specBase, reason: getFlag('--reason') })
   }
   if (sub === 'status') {
     // 三断点配套（2026-09-25-flow-checkpoints）：随时可查当前变更阶段/槽位/子步进度
