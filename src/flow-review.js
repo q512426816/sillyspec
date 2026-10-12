@@ -27,6 +27,15 @@ const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不�
 /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
 const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
 
+/** 盲维四问「自述不适用」整声明变体（2026-10-12-review-na-variant）：两仓实测 12/228 实质
+ *  作答误升级——整体不适用声明写成「四问全 n/a：」「均不适用」「边界并发四问：不适用：」等
+ *  前缀而非「不适用」开头，被 /^不适用/ 机械判成实质作答（误伤样例：纯 CSS 变更 hover-polish
+ *  起子代理评审）。窄口径只认整声明开头：可选前缀 + 可选冒号 + 可选限定词 + 不适用|n/a；
+ *  逐问编号形态（「1. 乱序：n/a。…」）不聚合——该形态常含逐维实质推理，升级是设计内行为。
+ *  前缀声明语义与旧 /^不适用/ 同型（「不适用，但…」旧版本就按开头豁免），加宽词表不加新
+ *  语义维度；漏报兜底：豁免面 1/4 抽查采样 + 承诺词/diff 原语/edit_ratio 三路独立信号。 */
+const NA_ANSWER_RE = /^(?:盲维四问|边界并发四问|四问)?\s*[:：]?\s*(?:全部|均|皆|都|全)?\s*(?:不适用|n\/a\b)/i
+
 /** design 作答面否定语境消解（2026-10-05-review-promise-negation）：盲维第 4 问作答讨论
  * 作用域风险时，「无串台面」「不会串台」「杜绝串台」等否定短语按字面命中 PROMISE_RE 一票
  * 升级（实测：两行 console.log 的变更被定档高危起子代理评审）。「串台」是名词性风险词——
@@ -151,13 +160,13 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
     if (/<!--\s*AGENT:槽3/.test(dText)) {
       const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
       if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
-      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
+      else if (NA_ANSWER_RE.test(answer)) exemptEvidence.push('盲维四问自述不适用')
       else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
     } else if (/^##\s*边界与并发/m.test(dText)) {
       // v2 纯 markdown（2026-10-04-thin-docs-v2）：边界节正文作答判定（同 v1 三态语义）
       const answer = readV2SectionAnswer(dText, DESIGN_QUESTIONS_FALLBACK.sections[2].heading, DESIGN_QUESTIONS_FALLBACK)
       if (!answer) exemptEvidence.push('盲维四问未作答（将由 v2 工件校验拦收）')
-      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
+      else if (NA_ANSWER_RE.test(answer)) exemptEvidence.push('盲维四问自述不适用')
       else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
     } else if (MECHANISM_RE.test(dText)) {
       reasons.push('头脑风暴设计含并发/时序类机制词（adopted 扫描）')

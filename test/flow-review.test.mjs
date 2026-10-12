@@ -281,3 +281,71 @@ test('⑦ 评审对象锚定：reviewedAgainst 命中 HEAD → 保留判定 true
   assert.equal(reviewAnchoredToHead(p, ''), false, 'head 缺省 false')
   rmSync(root, { recursive: true, force: true })
 })
+
+// ── 盲维不适用变体（2026-10-12-review-na-variant）：整体不适用声明写成「四问全 n/a：」
+// 「均不适用」「边界并发四问：不适用：」等前缀而非「不适用」开头，被 /^不适用/ 机械判成
+// 实质作答升级评审（两仓实测 12/228 误伤，如平台仓 2026-09-27-hover-polish 纯 CSS 变更）。
+// 窄口径放宽：只认整声明开头变体；逐问编号形态不做否定聚合（该形态常含逐维实质推理，
+// 升级是设计内行为）。──
+test('⑧ 盲维不适用变体：整声明开头不误升级（v1 槽3 与 v2 节同口径）', () => {
+  let quietName = 'na-off-bucket'
+  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-off-${i}`
+  assert.equal(sampleBucket(quietName), false)
+
+  const variants = [
+    ['四问全 n/a：', '四问全 n/a：纯 CSS 类，无状态/写路径/作用域引入。'],
+    ['边界并发四问：不适用：', '边界并发四问：不适用：纯文案/默认值改动，无状态无 IO 新面。'],
+    ['均不适用', '均不适用：纯同步字符串变换，无状态无 IO 面。'],
+    ['n/a：', 'n/a：静态配置数据修正，无事件流语义。'],
+    ['N/A（大写）', 'N/A'],
+    ['全部不适用', '全部不适用：纯展示布局，数据序不变。'],
+  ]
+  for (const [label, answer] of variants) {
+    // v2 纯 markdown 节分支
+    let c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
+    let t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+    assert.equal(t.required, false, `v2 ${label}：应豁免（reasons=${t.reasons}）`)
+    assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `v2 ${label}：豁免证据含自述不适用: ${t.exemptEvidence}`)
+    assert.ok(!t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `v2 ${label}：不得判实质作答`)
+    rmSync(c.root, { recursive: true, force: true })
+    // v1 槽3 分支同口径
+    c = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
+    t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+    assert.equal(t.required, false, `v1 ${label}：应豁免（reasons=${t.reasons}）`)
+    assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `v1 ${label}：豁免证据含自述不适用: ${t.exemptEvidence}`)
+    rmSync(c.root, { recursive: true, force: true })
+  }
+})
+
+test('⑨ 盲维不适用变体：逐问混合形态仍升级（窄口径不聚合）', () => {
+  let quietName = 'na-mix-off-bucket'
+  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-mix-off-${i}`
+  assert.equal(sampleBucket(quietName), false)
+
+  for (const [label, answer] of [
+    ['混合：末问实质', '1. 乱序：n/a。2. 并发写：n/a。3. 切换：n/a。4. 作用域：存在跨实例并发写窗口，需要快照读。'],
+    ['逐问全否定（设计内升级）', '1. 乱序：n/a 纯展示。2. 并发：n/a 无新增写路径。3. 切换：n/a 无状态。4. 作用域：n/a 仅本组件。'],
+  ]) {
+    const c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
+    const t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+    assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `${label}：逐问形态不豁免（reasons=${t.reasons}）`)
+    rmSync(c.root, { recursive: true, force: true })
+  }
+})
+
+test('⑩ 盲维不适用变体：既有口径回归（不适用仍豁免、实质仍升级）', () => {
+  let quietName = 'na-reg-off-bucket'
+  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-reg-off-${i}`
+  assert.equal(sampleBucket(quietName), false)
+
+  let c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', '不适用：无风险面。'), '# 需求\n普通需求文本\n')
+  let t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+  assert.equal(t.required, false, '「不适用：」仍豁免')
+  assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `豁免证据不变: ${t.exemptEvidence}`)
+  rmSync(c.root, { recursive: true, force: true })
+
+  c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', 'RPC 结果晚到不影响：收口按候选快照读加非终态守卫。'), '# 需求\n普通需求文本\n')
+  t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
+  assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `实质作答仍升级: ${t.reasons}`)
+  rmSync(c.root, { recursive: true, force: true })
+})
