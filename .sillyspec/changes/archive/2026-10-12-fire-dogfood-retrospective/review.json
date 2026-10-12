@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-fire-dogfood-retrospective",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b863fc2c1f986889e87f0228ea38c0f1041f7db4",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "纯静态时点快照（冻结于 2026-10-12），无事件/输入时序面；design 答 n/a 与纯文档实态相符——skip 登记后源码演进不追锚，报告文末明确标注冻结语义。",
+    "并发": "交付面为文档单写者；local.yaml 编辑在锁语义之外但系 gitignored 单机配置，无并发共享面；design 答 n/a 相符。",
+    "切换": "文件落盘即完整、无状态机；重锚 13 处经本评审实跑 doc-ref-check 复核（93 处引用全通过，68 处带关键词断言），design 答案有实证支撑非口头。",
+    "作用域": "报告只读本仓 commit 锚与 full.json 取证；multi-agent-platform 三课题仅归属指引、未在该仓落文件（design 作用域答与实态一致）；六个引用锚（49c0196e/05a53b8c/c529fcb5/fb722b0c/5b1d08ee/37045b3c）git show 全部解析且主题与对照表描述逐一吻合。",
+    "probe_cli-copy-selfsufficient": "n/a：本变更零 src/test 触及（git stat 实证：05885ce5 仅报告+platform-interface-map 两文档，0c21e4f1/b863fc2c 仅 .sillyspec/changes 文档），无 CLI 输出文案变更面。顺带核对：报告与变更文档引用的命令/脚本（node test/doc-ref-check.test.mjs、npm run lint）本评审实跑成功，commit 锚全部真实存在，无文案漂移。",
+    "probe_config-absent-zero-regression": "n/a：本变更未新增 local.yaml 消费键——docs-check.skip 为既有键追加取值（登记行已核实），review_probes 键系变更② 05a53b8c 引入（其三态断言义务归属该变更评审），本变更无新增消费键的零回归主张面。",
+    "probe_crossrepo-path-compat": "n/a：未触及 worktree/deps/跨仓对账代码；platform-interface-map 重锚为本仓内文档行号锚且 doc-ref-check 全绿实证；报告内跨仓内容仅为 multi-agent-platform 归属指引（经 local.yaml cross_repo_roots 既有映射，非本变更新增）。"
+  },
+  "reviewedAt": "2026-10-12T22:18:36+08:00"
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-fire-dogfood-retrospective",
+  "rows": [
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-fire-dogfood-retrospective:flow:测试绑定FR-03",
+      "tests": [
+        "test/doc-ref-check.test.mjs「93 处引用全通过（含新增 skip 登记与重锚）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-fire-dogfood-retrospective"
+    }
+  ]
+}

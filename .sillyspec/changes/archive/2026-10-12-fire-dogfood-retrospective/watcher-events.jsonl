@@ -1,0 +1,15 @@
+{"ts":1791814054489,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1791814396485,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791814396485,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791814396485,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791814464884,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick","evidence":"@C:/Users/qinyi/IdeaProjects/sillyspec/docs/analysis/fire-equipment-dogfood-复盘-2026-10-12.md\n# fire-equipment 会话 dogfood 复盘（2026-10-12）\n\n> 样本：SillyHub 平台会话「消防设施器材1轮」（claude 供应商，30 轮，2026-10-10 10:51 ~ 2026-10-12 16:42，本地时间）。\n> 取证源：会话导出 full.json（5654 条日志 / 174 任务记录 / 30 run），四个分析子代理独立量化（门禁摩擦 / 跨仓执行机"}
+{"ts":1791814466019,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791814466019,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791814466019,"kind":"commit","stage":null,"detail":"05885ce5","provisional":true}
+{"ts":1791814474980,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick","evidence":"doc-ref-check 93/93 全通过（2026-10-12 14:12 实跑）+ lint 全绿"}
+{"ts":1791814475238,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791814476226,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791814476226,"kind":"task-done","stage":"tasks","detail":"checked 1→3","provisional":true}
+{"ts":1791814476226,"kind":"commit","stage":null,"detail":"0c21e4f1","provisional":true}
+{"ts":1791814487077,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791814510313,"kind":"commit","stage":null,"detail":"b863fc2c","provisional":true}
