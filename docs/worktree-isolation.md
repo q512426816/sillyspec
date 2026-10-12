@@ -226,6 +226,16 @@ git worktree prune
 git branch -D sillyspec/<change-name>
 ```
 
+### 跨仓仓切分支报 "already used by worktree"（幽灵注册）
+
+现象：跨仓仓（local.yaml repos 注册的仓）checkout 报 `'sillyspec/<change>' is already used by worktree at <路径>`，且报错路径已不存在。这是**幽灵 worktree 注册**——目录被清但该仓 `.git/worktrees/` 注册残留（实证：fire-equipment 2026-10-10，目录 16:59 被清、注册残留两天）。三层防线（2026-10-12-cross-wt-ghost-cleanup）：
+
+1. 清理链双清复核：`worktree cleanup` / apply / 归档收口在删目录后以 `git worktree list` 复核注册已消失，prune 失败/复核不过 → partial + residual（不再静默）；归档链还会兜底清理跨仓 worktree。
+2. doctor 扫描：`sillyspec doctor`（跨仓 worktree 注册健康维度）列出各跨仓仓的失效注册。
+3. 一键清理：`sillyspec doctor --prune-cross-worktrees`（默认 dry-run，`--confirm` 执行 prune——git 只清指向不存在路径的注册，不动活 worktree、不碰分支）。
+
+locked 条目（曾执行过 `git worktree lock`）会被 prune 静默跳过，输出会提示先 `git -C <仓根> worktree unlock <路径>` 再重跑。`sillyspec/<change>` 分支是有意保留的 review 锚点，prune 不动它；确认无需回溯后 `git branch -D` 清理。
+
 ### apply 失败：主工作区有未提交的改动
 
 说明主工作区有未 commit 的脏改动**且与本次 apply 的变更文件重叠**（step 4.5/5a 只拦重叠；无关未提交文件已放行并 warning 提示）。处理方式：
