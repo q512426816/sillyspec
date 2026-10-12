@@ -6,3 +6,4 @@
 | 日期 | 变更名 | 摘要 |
 |------|--------|------|
 | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
+| 2026-10-12 | 2026-10-12-tick-evidence-multi-anchor | dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据 |

@@ -1,0 +1,419 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index b404bf6a..47e07daa 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -24,3 +24,4 @@
+ | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
+ | 2026-10-12 | 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模 |
+ | 2026-10-12 | 2026-10-12-approve-channel-attest | dogfood 实证驱动（2026-10-10~12 fire-equipment 会话复盘，子代理取证）：8 次 fl |
++| 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+diff --git a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+index dd8f1983..9e814a16 100644
+--- a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+@@ -5,3 +5,4 @@
+ - 2026-08-07-sillyhub-mcp-dispatch | 新建派发抽象层（probe/strategy/backends×2）+ dispatch CLI 子命令 + execute buildWavePrompt 接入。双后端 fallback，无 MCP 配置零回归。SillyHub 后端为路径A stub。
+ - ql-20260812-006-d70c | execute 测试用例设计引导注入：新增 `templates/prompts/testcase-design.md` 单一源（6 条检查 + FIRST/金字塔/AAA 一行带过），经 `{{include: testcase-design}}` 注入 renderLocalInstruction「子代理 prompt 要点」+ renderSillyHubInstruction worker_prompt 覆写（SillyHub worker 不见 wave prompt，必须自包含）。复用 P2.2.3 include 机制（resolvePromptIncludes 运行时解析）防双写漂移。
+ | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/review-dispatch.js 归属本模块：runReviewDispatch 三链（create/status/kill）+ probe 三层前置消费 + 在途记录状态机（O_EXCL/终态即清）+ artifacts 双通道回收；D-007 显式例外与防泛化护栏落卡定位段。gate 在途区分在 stage-review.js（core-engine）。 |
++| 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index 82324f78..3453a23e 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -19,3 +19,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ - ql-20260912-004-afa2 | registerRepoInLocalYaml async 化+RMW 持 .local.yaml.lock（并发 register 丢条目收口）
+ | 2026-09-16 | 2026-09-16-friction5-hardening | config-schema 登记 gate_snapshot 段（FR-04/D-002@v1）：live 键 gate_snapshot.copy（array of string，optional，reader=createGateSnapshot）——门禁隔离快照的生成物/额外路径 copy 面，HEAD 快照缺 gitignored 生成物致 lint/test 环境性假败的声明式补齐通道；renderExample 示例段同步（含 ⚠️ junction 活链接写穿透警告），防漂耦合测试覆盖。未配置/空清单全段空转零行为变化。 |
+ - ql-20260920-010-7a19 | config-schema test_strategy desc 缺省语义更新（配 modules → 缺省 module，v3.29.3 起；未配 → 全量）；纯 note 无新键
++| 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index d3654ddc..2ca4bb2f 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -135,7 +135,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4479；shared.js:1106 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2899/3141；shared.js:1130 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2905/3147；shared.js:1130 |
+ | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4399；sync.js:1491/1525 |
+ | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4351；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 866661f3..4519a732 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -281,7 +281,14 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+     `{`,
+     `  "schemaVersion": 1, "change": "${change}", "reviewer": "subagent",`,
+     `  "verdict": "PASS" | "FAIL",`,
+-    `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
++    // reviewedAgainst 双形态（2026-10-12-tick-evidence-multi-anchor）：跨仓冻结面在场时对象
++    // 形态优先（各仓 rev-parse HEAD 可机核「对着哪个面评审」）；单仓维持单字符串形态零变化。
++    ...(readCrossRepoKeys(changeDir) ? [
++      `  "reviewedAgainst": { "workspace": "<主仓 HEAD 完整 sha——照抄任务书标注>", "repos": { "<仓键>": "<该仓 git rev-parse HEAD 完整 sha>" } },`,
++      `  （跨仓冻结面在场——对象形态优先；仓键=change-patch.json repos 的 key，各仓 sha 在该仓根 rev-parse 取；字符串单 sha 形态仍兼容）`,
++    ] : [
++      `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
++    ]),
+     `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
+     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
+     `  "reviewedAt": "<ISO 时间>"`,
+@@ -292,10 +299,30 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+   return taskbook
+ }
+ 
++/** 锚 sha 形态（7-40 位 hex）。 */
++const isAnchorSha = (v) => typeof v === 'string' && /^[0-9a-f]{7,40}$/i.test(v.trim())
++
++/**
++ * 变更的跨仓冻结面仓键（无 change-patch.json / 无 repos / 不可读 → null=单仓形态）。
++ * 形状对齐 cross-repo patch 冻结件（repos[] 条目含 key）。
++ */
++function readCrossRepoKeys(changeDir) {
++  try {
++    const cp = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++    if (cp && Array.isArray(cp.repos)) {
++      const keys = cp.repos.map((x) => x && (x.key || x.repoKey)).filter(Boolean)
++      return keys.length > 0 ? keys : null
++    }
++  } catch { /* 单仓/不可读 → null */ }
++  return null
++}
++
+ /**
+  * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
+- * reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选字段——缺省
+- * 容忍（旧产物向后兼容），存在时须为 7-40 位 hex sha。
++ * reviewedAgainst（评审对象锚）：可选字段——缺省容忍（旧产物向后兼容）。双形态
++ * （2026-10-12-tick-evidence-multi-anchor）：字符串（既有，7-40 hex）或对象
++ * {workspace: sha, repos: {<key>: sha}}——跨仓交付的「对着哪个面评审」可机核；
++ * 仓键开放（local.yaml repos 注册表键空间，CLI 不枚举校验键集合）。
+  */
+ export function validateReviewJson(path) {
+   let raw
+@@ -305,9 +332,24 @@ export function validateReviewJson(path) {
+   const errors = []
+   if (r.schemaVersion !== 1) errors.push('schemaVersion 必须为 1')
+   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
+-  if (r.reviewedAgainst !== undefined
+-    && (typeof r.reviewedAgainst !== 'string' || !/^[0-9a-f]{7,40}$/i.test(r.reviewedAgainst.trim()))) {
+-    errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
++  if (r.reviewedAgainst !== undefined) {
++    if (typeof r.reviewedAgainst === 'string') {
++      if (!isAnchorSha(r.reviewedAgainst)) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
++    } else if (r.reviewedAgainst && typeof r.reviewedAgainst === 'object' && !Array.isArray(r.reviewedAgainst)) {
++      if (!isAnchorSha(r.reviewedAgainst.workspace)) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
++      if (r.reviewedAgainst.repos !== undefined) {
++        const repos = r.reviewedAgainst.repos
++        if (!repos || typeof repos !== 'object' || Array.isArray(repos)) {
++          errors.push('reviewedAgainst.repos 须为对象（仓键 → sha；仓键取 local.yaml repos 注册表键）')
++        } else {
++          for (const [k, v] of Object.entries(repos)) {
++            if (!isAnchorSha(v)) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
++          }
++        }
++      }
++    } else {
++      errors.push('reviewedAgainst 须为 7-40 位 hex sha 字符串，或 {workspace: sha, repos: {<仓键>: sha}} 对象')
++    }
+   }
+   if (!Array.isArray(r.findings)) errors.push('findings 必须为数组')
+   else {
+@@ -328,6 +370,9 @@ export function validateReviewJson(path) {
+  * 落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）。reviewedAgainst 缺省/读失败/
+  * 格式非法一律 false（fail-safe：宁可多评一次，不放行无锚证据）。
+  * 匹配口径：双向前缀（reviewedAgainst 允许短 sha 形态，与完整 head 任一方向前缀命中即锚定）。
++ * 对象形态（2026-10-12-tick-evidence-multi-anchor）取 workspace 锚参与判定——主仓漂移
++ * 判定面不变；repos 各仓锚是记录面（跨仓 HEAD 逐机不可靠 rev-parse，不参与判定），
++ * workspace 缺失/非法判 false fail-safe。
+  * @param {string} reviewPath - review.json 路径
+  * @param {string} head - 当前完整 HEAD sha
+  * @returns {boolean}
+@@ -337,7 +382,9 @@ export function reviewAnchoredToHead(reviewPath, head) {
+   if (!h) return false
+   try {
+     const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
+-    const ra = typeof r?.reviewedAgainst === 'string' ? r.reviewedAgainst.trim().toLowerCase() : ''
++    const raRaw = r?.reviewedAgainst
++    const ra = typeof raRaw === 'string' ? raRaw.trim().toLowerCase()
++      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace.trim().toLowerCase() : '')
+     if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
+     return h === ra || h.startsWith(ra) || ra.startsWith(h)
+   } catch { return false }
+diff --git a/src/index.js b/src/index.js
+index f0e2e036..c62d6eca 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -926,6 +926,9 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const tTask = tTaskIdx >= 0 && filteredArgs[tTaskIdx + 1] && !String(filteredArgs[tTaskIdx + 1]).startsWith("--") ? filteredArgs[tTaskIdx + 1] : null;
+       const tNoteIdx = filteredArgs.indexOf('--note');
+       const tNote = tNoteIdx >= 0 && filteredArgs[tNoteIdx + 1] && !String(filteredArgs[tNoteIdx + 1]).startsWith("--") ? filteredArgs[tNoteIdx + 1] : null;
++      // --evidence（2026-10-12-tick-evidence-multi-anchor）：tick 自愿证据补录（自由文本，@路径 读文件）
++      const tEvidenceIdx = filteredArgs.indexOf('--evidence');
++      const tEvidence = tEvidenceIdx >= 0 && filteredArgs[tEvidenceIdx + 1] && !String(filteredArgs[tEvidenceIdx + 1]).startsWith("--") ? filteredArgs[tEvidenceIdx + 1] : null;
+       if (!tChange) { console.error('❌ 缺 --change <变更名>'); process.exit(2); }
+       if (taskSub !== 'list') {
+         if (!tTask || !/^task-\d+$/.test(tTask)) { console.error('❌ --task 格式应为 task-NN'); process.exit(2); }
+@@ -963,7 +966,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+         // ── 轻量勾选动词（2026-10-03-voluntary-task-tick）：翻格+进度回显+下一任务指针——
+         // 纯反馈闭环（watcher task-done 事件自动上平台），自愿使用；幂等，无 review/verdict 仪式。──
+         const { runTaskTick } = await import('./task-tick.js')
+-        await runTaskTick({ changeName: tChange, cwd: dir, taskId: tTask, specBase: tSpecBase })
++        await runTaskTick({ changeName: tChange, cwd: dir, taskId: tTask, specBase: tSpecBase, evidence: tEvidence })
+       } else if (taskSub === 'done') {
+         // ── task done 四合一（r5l-forensic-verdict 方案 1 / 评审护栏#3）：13 任务 × 4 连收尾
+         // 往返（review write+勾选 / finish / wt-commit）合并为单进程串行 + 合并输出——每次省
+diff --git a/src/task-tick.js b/src/task-tick.js
+index af6f38d4..8f6355b7 100644
+--- a/src/task-tick.js
++++ b/src/task-tick.js
+@@ -69,11 +69,36 @@ export function tickTasksMd({ tasksMd, taskId }) {
+   }
+ }
+ 
++/**
++ * 证据解析（2026-10-12-tick-evidence-multi-anchor）：自由文本或 @路径 引用——@file 读文件内容
++ * （帽 8KB，超帽截断留痕）；读取失败 fail-soft 原样登记「@路径」文本并告警（不拒翻格——证据是
++ * 自愿补录面，不进门禁判据）。dogfood 驱动：限流截断场景构建回执（/tmp 日志 exit 0）无法补录，
++ * 恢复后只能重跑构建。
++ */
++export function resolveTickEvidence({ evidence }) {
++  const raw = String(evidence ?? '').trim()
++  if (!raw) return { text: null, warning: null }
++  if (!raw.startsWith('@')) return { text: raw, warning: null }
++  const path = raw.slice(1)
++  try {
++    let content = readFileSync(path, 'utf8')
++    if (Buffer.byteLength(content, 'utf8') > 8192) {
++      content = Buffer.from(content, 'utf8').subarray(0, 8192).toString('utf8') + '…（超 8KB 截断）'
++    }
++    const text = `@${path}\n${content.trim()}`
++    if (!content.trim()) return { text: `@${path}（空文件）`, warning: `⚠️ 证据文件 ${path} 为空——原样登记引用` }
++    return { text, warning: null }
++  } catch (e) {
++    return { text: raw, warning: `⚠️ 证据文件 ${path} 读取失败（${e && e.code ? e.code : '不可读'}）——原样登记引用文本，未拒翻格` }
++  }
++}
++
+ /**
+  * IO 编排（index.js 分派入口）：定位变更目录 → tickTasksMd → 原子写盘 → 回显。
+  * exit 0=翻格/幂等；exit 2=未知 id / 缺 tasks.md / 已归档。
++ * evidence（可选）：自愿证据补录——翻格成功后追加 task-evidence.jsonl（幂等重勾零追加）。
+  */
+-export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
++export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence = null }) {
+   const changesRoot = join(specBase, 'changes')
+   const tasksPath = join(changesRoot, changeName, 'tasks.md')
+   if (!existsSync(tasksPath)) {
+@@ -90,9 +115,24 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
+     console.error(`❌ tasks.md 中无 ${taskId}——可选任务：${ids}`)
+     process.exit(2)
+   }
++  // 证据预解析（翻格前展开 @file——证据不先于事实：翻格失败不产生证据行）
++  const ev = resolveTickEvidence({ evidence })
++  if (ev.warning) console.warn(ev.warning)
+   if (r.kind === 'ticked') {
+     const { writeAtomicSync } = await import('./fs-atomic.js')
+     writeAtomicSync(tasksPath, r.tasksMd)
++    // 证据补录（2026-10-12-tick-evidence-multi-anchor）：翻格成功后追加四键 JSONL——
++    // 幂等重勾零追加（already 分支不进此块）；自愿面不接任何收口门判据。
++    if (ev.text) {
++      try {
++        appendFileSync(join(changesRoot, changeName, 'task-evidence.jsonl'), JSON.stringify({
++          ts: Date.now(), task: normalizeTaskId(taskId) || taskId, evidence: ev.text, source: 'task-tick',
++        }) + '\n', 'utf8')
++        console.log(`📎 证据已登记：${join(changesRoot, changeName, 'task-evidence.jsonl')}（task ${normalizeTaskId(taskId) || taskId}）`)
++      } catch (e) {
++        console.warn(`⚠️ 证据登记失败（${e && e.message ? e.message : e}）——翻格不受影响`)
++      }
++    }
+     // 事件直写（2026-10-07-thin-tasks-v3）：精确单格跳进事件流，节奏门按 source 去重采样合并跳。
+     try {
+       const { resolveRuntimeRoot } = await import('./run/shared.js')
+@@ -102,6 +142,7 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
+       appendFileSync(eventsPath, JSON.stringify({
+         ts: Date.now(), kind: 'task-done', stage: 'tasks',
+         detail: `checked ${from}→${r.checked}`, provisional: true, source: 'task-tick',
++        ...(ev.text ? { evidence: ev.text.slice(0, 300) } : {}), // 事件面截 300 字符（全文在 task-evidence.jsonl）
+       }) + '\n', 'utf8')
+     } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
+     // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
+@@ -118,4 +159,4 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
+   return r
+ }
+ 
+-export default { tickTasksMd, runTaskTick, normalizeTaskId }
++export default { tickTasksMd, runTaskTick, normalizeTaskId, resolveTickEvidence }
+diff --git a/test/tick-evidence-multi-anchor.test.mjs b/test/tick-evidence-multi-anchor.test.mjs
+new file mode 100644
+index 00000000..54fc5ad3
+--- /dev/null
++++ b/test/tick-evidence-multi-anchor.test.mjs
+@@ -0,0 +1,167 @@
++/**
++ * tick-evidence-multi-anchor.test.mjs — tick 证据补录 + reviewedAgainst 跨仓多锚（2026-10-12-tick-evidence-multi-anchor）
++ *
++ * 验收面：
++ *   ① evidence 三态：自由文本 / @file（内容展开+8KB 帽） / @file 读取失败 fail-soft（原样登记+告警，
++ *      不拒翻格）；task-evidence.jsonl 四键行追加；幂等重勾零追加；无 --evidence 零变化（零回归）；
++ *   ② reviewedAgainst 双形态校验矩阵：合法字符串 / 合法对象（workspace+repos）/ 坏对象（缺
++ *      workspace、repos 值非 hex、repos 非对象、数组形态）各拒；
++ *   ③ reviewAnchoredToHead 对象形态取 workspace 锚（命中/不命中/缺 workspace fail-safe）；
++ *   ④ 任务书双态：跨仓冻结面在场（change-patch.json repos[]）印对象形态优先说明；单仓零变化。
++ * dogfood 驱动：限流 429 截断后构建回执（/tmp exit 0 日志）无法补录；跨仓轻量变更评审锚单仓
++ * 单 sha，「对着哪个面评审」不可机核。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { resolveTickEvidence } from '../src/task-tick.js'
++import { validateReviewJson, reviewAnchoredToHead, renderReviewerTaskbook } from '../src/flow-review.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const CHANGE = '2026-10-12-tem-fixture'
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'tem-'))
++  const changeDir = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '# T\n\n- [ ] task-01: 做甲\n- [ ] task-02: 做乙\n')
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++  return { cwd, cli, changeDir }
++}
++
++function writeReview(dir, reviewedAgainst) {
++  const p = join(dir, 'review.json')
++  writeFileSync(p, JSON.stringify({
++    schemaVersion: 1, change: 'x', reviewer: 'subagent', verdict: 'PASS',
++    ...(reviewedAgainst !== undefined ? { reviewedAgainst } : {}),
++    findings: [], dimensionNotes: {}, reviewedAt: new Date().toISOString(),
++  }))
++  return p
++}
++
++test('evidence 三态 + JSONL 追加 + 幂等零追加 + 无 evidence 零回归', () => {
++  const { cwd, cli, changeDir } = makeRepo()
++  try {
++    // ① 自由文本
++    const logFile = join(cwd, 'build.log')
++    writeFileSync(logFile, 'BUILD_EXIT=0\n')
++    let r = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-01', '--evidence', `构建 exit 0，日志 ${logFile}`])
++    assert.equal(r.status, 0, r.stderr)
++    assert.match(r.stdout, /证据已登记/)
++    let lines = readFileSync(join(changeDir, 'task-evidence.jsonl'), 'utf8').trim().split('\n')
++    assert.equal(lines.length, 1)
++    const e1 = JSON.parse(lines[0])
++    assert.equal(e1.task, 'task-01')
++    assert.equal(e1.source, 'task-tick')
++    assert.ok(typeof e1.ts === 'number')
++    assert.match(e1.evidence, /构建 exit 0/)
++    // ② @file 展开
++    r = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-02', '--evidence', `@${logFile}`])
++    assert.equal(r.status, 0, r.stderr)
++    lines = readFileSync(join(changeDir, 'task-evidence.jsonl'), 'utf8').trim().split('\n')
++    const e2 = JSON.parse(lines[1])
++    assert.match(e2.evidence, /@.*build\.log/)
++    assert.match(e2.evidence, /BUILD_EXIT=0/)
++    // ③ 读取失败 fail-soft：原样登记 + 告警 + 翻格不受影响（复用已勾的 task-01 → already 幂等路径不追加；改测未勾态需新任务——直接验证 already 零追加）
++    r = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-01', '--evidence', '@/no/such/file.log'])
++    assert.equal(r.status, 0, r.stderr)
++    assert.match(r.stderr, /读取失败/)
++    assert.match(r.stdout, /幂等/)
++    const after = readFileSync(join(changeDir, 'task-evidence.jsonl'), 'utf8').trim().split('\n')
++    assert.equal(after.length, 2) // 幂等重勾零追加（证据不先于事实）
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('resolveTickEvidence 单元：空/@file 8KB 帽/空文件', () => {
++  assert.deepEqual(resolveTickEvidence({ evidence: null }), { text: null, warning: null })
++  assert.equal(resolveTickEvidence({ evidence: '纯文本' }).text, '纯文本')
++  const big = mkdtempSync(join(tmpdir(), 'big-'))
++  try {
++    writeFileSync(join(big, 'big.log'), 'x'.repeat(9000))
++    const capped = resolveTickEvidence({ evidence: `@${join(big, 'big.log')}` })
++    assert.ok(capped.text.length < 9000 + 100)
++    assert.match(capped.text, /超 8KB 截断/)
++    writeFileSync(join(big, 'empty.log'), '')
++    const empty = resolveTickEvidence({ evidence: `@${join(big, 'empty.log')}` })
++    assert.match(empty.text, /空文件/)
++    assert.match(empty.warning, /为空/)
++  } finally { rmSync(big, { recursive: true, force: true }) }
++})
++
++test('无 --evidence 零回归：无 task-evidence.jsonl 产生', () => {
++  const { cwd, cli, changeDir } = makeRepo()
++  try {
++    const r = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-01'])
++    assert.equal(r.status, 0, r.stderr)
++    assert.doesNotMatch(r.stdout, /证据已登记/)
++    assert.ok(!existsSync(join(changeDir, 'task-evidence.jsonl')))
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('reviewedAgainst 双形态校验矩阵', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'rv-'))
++  try {
++    // 合法字符串（既有零破坏）
++    assert.equal(validateReviewJson(writeReview(dir, 'a'.repeat(40))).ok, true)
++    // 合法对象
++    assert.equal(validateReviewJson(writeReview(dir, { workspace: 'b'.repeat(40), repos: { subgrid: 'c1c1c1c1', spdemo: 'd2d2d2d2' } })).ok, true)
++    // 对象缺 workspace → 拒
++    const noWs = validateReviewJson(writeReview(dir, { repos: { subgrid: 'c1c1c1c1' } }))
++    assert.equal(noWs.ok, false)
++    assert.ok(noWs.errors.some((e) => e.includes('workspace')))
++    // workspace 非 hex → 拒
++    assert.equal(validateReviewJson(writeReview(dir, { workspace: 'not-hex', repos: {} })).ok, false)
++    // repos 值非 hex → 拒（逐键点名）
++    const badRepo = validateReviewJson(writeReview(dir, { workspace: 'b'.repeat(40), repos: { subgrid: 'zzz' } }))
++    assert.equal(badRepo.ok, false)
++    assert.ok(badRepo.errors.some((e) => e.includes('repos.subgrid')))
++    // repos 非对象 → 拒
++    assert.equal(validateReviewJson(writeReview(dir, { workspace: 'b'.repeat(40), repos: ['x'] })).ok, false)
++    // 数组形态 → 拒
++    assert.equal(validateReviewJson(writeReview(dir, ['a'.repeat(40)])).ok, false)
++    // 缺省容忍（既有）
++    assert.equal(validateReviewJson(writeReview(dir, undefined)).ok, true)
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('reviewAnchoredToHead：对象形态取 workspace 锚 / 缺 workspace fail-safe', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'ra-'))
++  try {
++    const head = 'e'.repeat(40)
++    const p1 = writeReview(dir, { workspace: head, repos: { subgrid: 'f'.repeat(40) } })
++    assert.equal(reviewAnchoredToHead(p1, head), true)
++    const p2 = writeReview(dir, { workspace: 'a'.repeat(40), repos: {} })
++    assert.equal(reviewAnchoredToHead(p2, head), false) // workspace 不匹配（跨仓锚不参与判定）
++    const p3 = writeReview(dir, { repos: { subgrid: head } }) // 缺 workspace
++    assert.equal(reviewAnchoredToHead(p3, head), false) // fail-safe 宁可多评
++    const p4 = writeReview(dir, head.slice(0, 10)) // 短 sha 字符串仍双向前缀
++    assert.equal(reviewAnchoredToHead(p4, head), true)
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('任务书双态：跨仓面印对象形态 / 单仓零变化', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'tb-'))
++  try {
++    const changeDir = join(dir, 'changes', 'c1')
++    mkdirSync(changeDir, { recursive: true })
++    // 单仓（无 change-patch.json）：与既有形态一致
++    const single = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'a'.repeat(40) })
++    assert.match(single, /"reviewedAgainst": "<评审对象 HEAD 完整 sha/)
++    assert.ok(!single.includes('对象形态优先'))
++    // 跨仓冻结面在场
++    writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({ repos: [{ key: 'subgrid' }, { key: 'spdemo' }] }))
++    const cross = renderReviewerTaskbook({ change: 'c1', changeDir, head: 'a'.repeat(40) })
++    assert.match(cross, /"reviewedAgainst": \{ "workspace"/)
++    assert.match(cross, /对象形态优先/)
++    assert.match(cross, /仓键=change-patch\.json repos 的 key/)
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})

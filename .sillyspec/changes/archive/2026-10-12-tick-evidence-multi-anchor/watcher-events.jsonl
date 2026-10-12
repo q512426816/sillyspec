@@ -1,0 +1,14 @@
+{"ts":1791811625305,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791811648396,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791811648396,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791811694695,"kind":"commit","stage":null,"detail":"05a53b8c","provisional":true}
+{"ts":1791811972200,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick","evidence":"node --test test/tick-evidence-multi-anchor.test.mjs 6/6 绿（三态+幂等零追加+零回归断言）"}
+{"ts":1791811972383,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791811972565,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791811973677,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791811973677,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1791811973677,"kind":"commit","stage":null,"detail":"61f9f247","provisional":true}
+{"ts":1791811982163,"kind":"commit","stage":null,"detail":"ff502cac","provisional":true}
+{"ts":1791812032649,"kind":"gate-run","stage":"verify","detail":"门实测 failed（49.0s） · 20261012133352","provisional":true}
+{"ts":1791812170633,"kind":"commit","stage":null,"detail":"a419a26b","provisional":true}
+{"ts":1791812222887,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（49.8s） · 20261012133702","provisional":true}

@@ -25,3 +25,4 @@
 | 2026-10-12 | 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模 |
 | 2026-10-12 | 2026-10-12-approve-channel-attest | dogfood 实证驱动（2026-10-10~12 fire-equipment 会话复盘，子代理取证）：8 次 fl |
 | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+| 2026-10-12 | 2026-10-12-tick-evidence-multi-anchor | dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据 |

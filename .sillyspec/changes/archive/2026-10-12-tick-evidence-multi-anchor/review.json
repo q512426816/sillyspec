@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-tick-evidence-multi-anchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a419a26ba02829a7db49aa24a956eec4376cf69d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "评审请求所写代码主体 commit 0927b3cb 在本仓不可解析，实际代码主体为 61f9f247",
+      "evidence": "git show 0927b3cb 报 unknown revision；git log 显示 HEAD~2=61f9f247 为 4 文件代码主体（src/flow-review.js、src/index.js、src/task-tick.js、test/tick-evidence-multi-anchor.test.mjs），文件面与请求所述「4 文件」吻合；本评审改以 git diff 61f9f247^..a419a26ba 全量核对代码实态，结论不受影响",
+      "location": "git history: 61f9f247 / a419a26ba"
+    },
+    {
+      "severity": "P3",
+      "title": "8KB 截断按字节切可能在多字节 UTF-8 字符中间截断产生替换字符",
+      "evidence": "task-tick.js:86 Buffer.from(content,'utf8').subarray(0,8192) 以字节边界截断，切在 CJK 字符中间时 toString('utf8') 产生 U+FFFD；截断已有「…（超 8KB 截断）」留痕且证据为文本非协议数据，无数据正确性风险，仅观感项",
+      "location": "src/task-tick.js:86"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——幂等重勾走 already 分支不进 if(r.kind==='ticked') 块（task-tick.js:121），证据追加在块内零追加；测试断言重勾后 JSONL 行数不增",
+    "并发": "ok——task-evidence.jsonl 每次 appendFileSync 单次调用写单行完整 JSON+换行（task-tick.js:128），≤8KB+路径头，行级原子；并发双 tick 不同任务各写各行",
+    "切换": "ok——证据在 writeAtomicSync 翻格成功之后追加（task-tick.js:123-135），失败翻格无证据行（证据不先于事实）；证据追加自身失败仅告警不阻断（自愿面 fail-soft）；@file 预解析在写盘前，无半态",
+    "作用域": "ok——task-evidence.jsonl 在 changes/<名>/ 变更级隔离；validateReviewJson 对象形态只验各仓 sha 值形态（flow-review.js:345-347 Object.entries 逐值 isAnchorSha），零键集合枚举；reviewAnchoredToHead 对象形态只取 workspace（flow-review.js:387），repos 锚不参与主仓漂移判定",
+    "披露边界裁决": "①8KB 自由文本可含噪声/敏感内容：可接受——与 change.patch 同级暴露于私有仓，体积有硬帽且无门禁激励灌水；②不接哨兵判据：可接受——token/review.json 双源 L0 硬门语义不被自愿补录稀释，假完成拦截强度不变；③锚判定面收敛 workspace：可接受——外仓路径逐机注册不可靠 rev-parse，repos 留作记录面 + workspace 缺失判 false 是「宁可多评」方向的可靠折衷；④@file 失败原样登记不拒翻格：可接受——与自愿面定位一致，stderr 告警留痕、原文本可人工追查，拒翻格反而会把自愿面变门禁",
+    "防护声明": "ok——8KB 帽按 UTF-8 实字节（task-tick.js:85 Buffer.byteLength 判界 + :86 subarray 字节截）；事件面 evidence 字段 slice(0,300) 截 300 字符（task-tick.js:145）",
+    "双零回归": "ok——git diff 61f9f247^..HEAD 对照：task-tick.js 无 evidence 时 ev.text=null，证据块/事件字段/回显三处全 guard 不进，主路径逐字未动；flow-review.js 单仓任务书 else 分支字符串行与旧版逐字相同（含错误文案），reviewAnchoredToHead 字符串路径逻辑等价",
+    "生成物同步": "ok——无类型/契约文件面；schema 说明自洽于 renderReviewerTaskbook 产物内",
+    "测试实证": "ok——node --test 4 文件 30/30 pass（新增 6 用例 + task-tick/flow-review/doc-ref-check 回归全绿）；validateReviewJson 三坏值（缺 workspace/repos 值非 hex/repos 数组）由校验矩阵用例实跑覆盖且代码路径（flow-review.js:339/346/342）逐条核实各拒"
+  },
+  "reviewedAt": "2026-10-12T13:40:31Z"
+}

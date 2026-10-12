@@ -8615,3 +8615,87 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-approve-channel-attest
   status: active
+
+## FR-cli-entry-458 task tick 新增 --evidence <文本>（自由文本，@file 前缀读文件内容，读取帽 8KB/条目数不限语义不变）：翻格同时把证据追加到 changes/<名>/task-evidence.jsonl（ts/task/evidence/source 四键 JSONL，UTF-8 追加写）；watcher task-done 事件附 evidence 字段（best-effort）；回显一行证据登记提示。无 --evidence 行为与现状逐字一致（零回归）；@file 读取失败 fail-soft 转文本原样登记并告警
+变更：2026-10-12-tick-evidence-multi-anchor
+状态：active
+摘要：三态
+场景正文：
+- 场景：三态 — Given 在途变更；When 分别 `task tick --evidence "构建 exit 0，日志 /tmp/x.log"` / `--evidence "@/t
+全文：.sillyspec/changes/archive/2026-10-12-tick-evidence-multi-anchor/requirements.md#FR-01
+最近确认：a419a26ba02829a7db49aa24a956eec4376cf69d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-01
+  tests: test/tick-evidence-multi-anchor.test.mjs「evidence 三态（文本/@file/读取失败 fail-soft）+ 零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-tick-evidence-multi-anchor
+  status: active
+
+## FR-cli-entry-459 review.json 契约 reviewedAgainst 扩展双形态：字符串（既有，7-40 hex，零破坏）或对象 {workspace: sha, repos: {<key>: sha}}——对象形态 workspace 必填 7-40 hex，repos 各值 7-40 hex，仓键开放（local.yaml repos 注册表键空间，不枚举）；validateReviewJson 双形态校验；reviewAnchoredToHead 对象形态取 workspace 锚参与漂移判定（缺 workspace 判 false fail-safe）
+变更：2026-10-12-tick-evidence-multi-anchor
+状态：active
+摘要：校验矩阵
+场景正文：
+- 场景：校验矩阵 — Given review.json reviewedAgainst 分别为：合法字符串 sha / 合法对象（workspace+2 repos）/ 对象缺 workspa
+全文：.sillyspec/changes/archive/2026-10-12-tick-evidence-multi-anchor/requirements.md#FR-02
+最近确认：a419a26ba02829a7db49aa24a956eec4376cf69d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-02
+  tests: test/tick-evidence-multi-anchor.test.mjs「reviewedAgainst 双形态校验矩阵 + 对象锚定判定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-tick-evidence-multi-anchor
+  status: active
+
+## FR-cli-entry-460 renderReviewerTaskbook 在变更带跨仓面（change-patch.json 含 repos 键）时，产物 schema 的 reviewedAgainst 行印双形态说明（对象形态优先，附各仓 rev-parse HEAD 提示）；单仓变更维持现状逐字一致
+变更：2026-10-12-tick-evidence-multi-anchor
+状态：active
+摘要：双态
+场景正文：
+- 场景：双态 — Given change-patch.json 含 repos:{subgrid,spdemo}；When renderReviewerTaskbook；Then sche
+全文：.sillyspec/changes/archive/2026-10-12-tick-evidence-multi-anchor/requirements.md#FR-03
+最近确认：a419a26ba02829a7db49aa24a956eec4376cf69d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-03
+  tests: test/tick-evidence-multi-anchor.test.mjs「任务书跨仓双形态提示在场 / 单仓零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-tick-evidence-multi-anchor
+  status: active
+
+## FR-cli-entry-461 新增单测：evidence 三态（文本/@file/失败 fail-soft）+ 双形态 reviewedAgainst 校验矩阵（合法字符串/合法对象/混合坏值各拒）+ 对象锚定判定 + 任务书跨仓双形态提示在场/单仓零变化 + 既有回归（task-tick/flow-review）
+变更：2026-10-12-tick-evidence-multi-anchor
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/tick-evidence-multi-anchor.test.mjs test/task-tick.test.mjs te
+全文：.sillyspec/changes/archive/2026-10-12-tick-evidence-multi-anchor/requirements.md#FR-04
+最近确认：a419a26ba02829a7db49aa24a956eec4376cf69d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-04
+  tests: test/tick-evidence-multi-anchor.test.mjs「全量用例 + task-tick/flow-review 回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-tick-evidence-multi-anchor
+  status: active

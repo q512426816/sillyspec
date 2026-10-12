@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-tick-evidence-multi-anchor",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-01",
+      "tests": [
+        "test/tick-evidence-multi-anchor.test.mjs「evidence 三态（文本/@file/读取失败 fail-soft）+ 零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-tick-evidence-multi-anchor"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-02",
+      "tests": [
+        "test/tick-evidence-multi-anchor.test.mjs「reviewedAgainst 双形态校验矩阵 + 对象锚定判定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-tick-evidence-multi-anchor"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-03",
+      "tests": [
+        "test/tick-evidence-multi-anchor.test.mjs「任务书跨仓双形态提示在场 / 单仓零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-tick-evidence-multi-anchor"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-tick-evidence-multi-anchor:flow:测试绑定FR-04",
+      "tests": [
+        "test/tick-evidence-multi-anchor.test.mjs「全量用例 + task-tick/flow-review 回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-tick-evidence-multi-anchor"
+    }
+  ]
+}
