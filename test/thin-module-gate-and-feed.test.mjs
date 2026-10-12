@@ -243,6 +243,25 @@ test('FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 /
   } finally { rmSync(cwd2, { recursive: true, force: true, maxRetries: 3 }) }
 })
 
+// ───────────────────────── FR-04：既有面回归 ─────────────────────────
+
+test('FR-04 既有面回归：flow done 收口链在无门触发场景零行为变化', () => {
+  const cwd = fx()
+  const cn = '2026-10-12-mg-regress'
+  // 登记面内交付、无 module_gate_ignore 键——门零触发；断言既有收口行为原样（归档完成 +
+  // 既有模块文档对账 advisory 在场 + 无门标记）
+  const { env } = setupThinModuleChange(cwd, cn, { deliverDir: 'src/core' })
+  try {
+    const s = doneCmd(cwd, cn, env)
+    const out = s.stdout + s.stderr
+    assert.equal(s.status, 0, `无门触发场景收口应完成: ${out.split('\n').slice(-8).join(' | ')}`)
+    assert.ok(!out.includes('❌ 模块图未登记交付目录'), '门零触发（无阻断标记）')
+    assert.ok(!out.includes('--accept-unmapped'), '无签收提示（门未参与）')
+    assert.ok(out.includes('模块文档对账'), '既有对账 advisory 原样在场')
+    assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', 'archive', cn)), '归档完成')
+  } finally { rmSync(cwd, { recursive: true, force: true, maxRetries: 3 }) }
+})
+
 // ───────────────────────── FR-03：注入 e2e ─────────────────────────
 
 test('FR-03 注入：behind>0 出欠账事实行 / 空债零输出', () => {

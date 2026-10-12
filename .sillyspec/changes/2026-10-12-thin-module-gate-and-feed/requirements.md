@@ -49,7 +49,7 @@ Given 实现完成 / When 运行新增测试与 flow/归档相关既有测试 / 
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/thin-module-gate-and-feed.test.mjs「FR-01 门三态：裸跑阻断@patch 不归档 / 登记后重跑通过 / --accept-unmapped 留痕 / ignore 命中不触发 / 绿地无图不触发」
-FR-02: test/thin-module-gate-and-feed.test.mjs「FR-02 变更索引回写：表格节追加 / sidecar 优先不动卡 / 幂等去重 / 无卡跳过 / 归档后已暂存」+ test/thin-module-gate-and-feed.test.mjs「FR-02 单元：appendChangeIndexEntries 目标判定与格式自适应」
-FR-03: test/thin-module-gate-and-feed.test.mjs「FR-03 注入：behind 事实行 / 空债零输出 / fail-open」
-FR-04: test/thin-module-gate-and-feed.test.mjs「FR-04 既有面回归：flow done 收口链在无门触发场景零行为变化」
+FR-01: test/thin-module-gate-and-feed.test.mjs「FR-01 门三态：裸跑阻断@patch / 登记后重跑通过 / --accept-unmapped 留痕 / ignore 命中不触发 / 绿地无图不触发」+ test/thin-module-gate-and-feed.test.mjs「单元 evaluateModuleGate：忽略前缀过滤 / 无图短路 / 空面不拦」
+FR-02: test/thin-module-gate-and-feed.test.mjs「FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 / sidecar 场景不写回卡」+ test/thin-module-gate-and-feed.test.mjs「单元 appendChangeIndexEntries：表格节追加 / sidecar 优先不动卡 / 幂等去重 / 无节跳过」
+FR-03: test/thin-module-gate-and-feed.test.mjs「FR-03 注入：behind>0 出欠账事实行 / 空债零输出」+ test/thin-module-gate-and-feed.test.mjs「单元 renderThinDocsDebt：无图零输出 / 坏路径零输出（fail-open 不抛）」
+FR-04: test/thin-module-gate-and-feed.test.mjs「FR-04 既有面回归：flow done 收口链在无门触发场景零行为变化」（既有面全绿证据=收口实测增量重跑批 83 文件 + 手跑 flow-parity/dirty-gate/archive-chain/archive-cli-git-add/thin-fr-inject-parity/docs-debt/close-trace 套件）

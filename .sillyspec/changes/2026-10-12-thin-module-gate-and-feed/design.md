@@ -29,16 +29,29 @@ created_at: 2026-10-12T07:55:11.956Z
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
-1. 乱序/迟到到达：门与回写都消费 done 时点单次计算的事实（ownFiles 冻结面 × 当刻模块图），乱序迟到的并行提交属下一变更的 done，各自时点口径，不串。
-2. 并发写：门只读（模块图/冻结面），无并发写面。回写目标（卡/sidecar）是本变更独占文件——多并行变更同时命中同模块时，追加是整文件读改写，竞态窗口为毫秒级且行级追加天然可并存；最坏形态是后写者覆盖先写者的行，断点续跑幂等去重（变更名在场即跳过）保证不双写。归档窄化 add 用文件级 pathspec，不扫并行会话文件。
-3. 切换/生命周期：门失败在 mark('patch') 之前——重入 done 从 patch 断点续，模块图登记后重算 moduleScope 门自然通过；--accept-unmapped 只在本轮生效（不留 flow-state，下次 done 若仍有缺口需再带）。回写在 mark('distill') 之前失败→重入重算，幂等去重兜底；distill 已 done 后归档失败→重入跳过 distill，extraDocs 已算出（从 moduleScope/回读 change-patch.json 重算），归档照常入暂存。三档全部 fail-open/best-effort 于注入与回写、fail-closed 于门——门是唯一新增阻断点且有显式逃生口。
-4. 作用域：三档都锚 specBase（多项目经 collectModuleMaps 遍历 docs/<project>/modules/_module-map.yaml），worktree 场景门读主仓模块图（与 reconcileModuleDocs 同源，cwd 传主仓根）；平台模式（specBase 在仓外）computeDocsDebt 的 git 锚失败走既有「从未提交/欠账不可得」降级路径，不出假账。
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+
+成立。门与回写都消费 done 时点单次计算的事实（ownFiles 冻结面 × 当刻模块图），乱序迟到的并行提交属下一变更的 done，各自时点口径，不串。
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+门只读（模块图/冻结面），无并发写面。回写目标（卡/sidecar）是行级追加——多并行变更同时命中同模块时整文件读改写竞态窗口为毫秒级，最坏形态是后写者覆盖先写者的行，断点续跑幂等去重（变更名在场即跳过）保证不双写。归档窄化 add 用文件级 pathspec，不扫并行会话文件。
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+安全。门失败在 mark('patch') 之前——重入 done 从 patch 断点续，模块图登记后重算 moduleScope 门自然通过；--accept-unmapped 只在本轮生效（不留 flow-state，下次 done 若仍有缺口需再带）。回写在 mark('distill') 之前失败→重入重算，幂等去重兜底；distill 已 done 后归档失败→重入跳过 distill，extraDocs 从 change-patch.json 回读重算，归档照常入暂存。三档 fail-open 于注入与回写、fail-closed 于门——门是唯一新增阻断点且有显式逃生口。
+
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+不会。三档都锚 specBase（多项目经 collectModuleMaps 遍历 docs/<project>/modules/_module-map.yaml），worktree 场景门读主仓模块图（与 reconcileModuleDocs 同源，cwd 传主仓根）；平台模式（specBase 在仓外）computeDocsDebt 的 git 锚失败走既有「从未提交/欠账不可得」降级路径，不出假账。
 
 ## 风险与死路
 
 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 最大风险：门的误报面——存量仓里合法未登记目录多（根级脚本、配置目录），首轮 done 会频繁撞门。缓解：module_gate_ignore 一次性配置 + --accept-unmapped 签收不丢数据（缺口数留痕），遥测可见放行频率，可据此再调默认。次风险：回写的格式自适应误判（卡内混合形态）——只动「## 变更索引」节内/ sidecar 尾部，节外逐字保留，与 splitChangelog 同款行级防线。
+
+已知边界（评审 P3 披露）：共享主仓并行会话在基线之后对同文件（src/flow.js）的提交 hunk 会混入 change.patch 冻结面——冻结 diff 是文件级（baseRef..HEAD × 文件清单），无法做 hunk 级归属切分（未提交面的归属收窄已由 quick --files 声明机制处理，提交面共享文件是残留盲区）。审计以显式 pathspec 提交清单为准。断点续跑路径（distill 已 done 后归档失败重入）的 extraDocs 由 deriveRecordedChangeIndexTargets 从卡/sidecar 反查含变更名的目标文件（幂等事实），不依赖目录级回退兜底。
 
 放弃方案①：给 docTouched=false（命中模块但卡未更新）也上门——放弃：源码活跃≠卡错，代理信号不配阈值（docs-gate 既有裁决，误报训练忽略报警），维持 advisory。
 放弃方案②：自动改写模块卡语义段（CLI 生成契约摘要）——放弃：语义解释含 LLM 判断增量，与「CLI 算事实、agent/人写语义」的分工冲突；机械动作只碰变更索引表格。
