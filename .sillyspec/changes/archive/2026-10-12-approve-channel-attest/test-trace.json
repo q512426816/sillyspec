@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-approve-channel-attest",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-approve-channel-attest:flow:测试绑定FR-01",
+      "tests": [
+        "test/approve-channel-attest.test.mjs「三通道留痕与互斥校验」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-approve-channel-attest"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-approve-channel-attest:flow:测试绑定FR-02",
+      "tests": [
+        "test/approve-channel-attest.test.mjs「approveChannelOf 单元——flow done 回显与遥测同源取值（三态/legacy 归一/autopilot）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-approve-channel-attest"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-approve-channel-attest:flow:测试绑定FR-03",
+      "tests": [
+        "test/approve-channel-attest.test.mjs「reject 撤销与拒后派生授权硬拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-approve-channel-attest"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-approve-channel-attest:flow:测试绑定FR-04",
+      "tests": [
+        "test/approve-channel-attest.test.mjs「五态全绿 + 既有族回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-approve-channel-attest"
+    }
+  ]
+}

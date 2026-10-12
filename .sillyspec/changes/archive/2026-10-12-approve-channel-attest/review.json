@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-approve-channel-attest",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b371dd96323c62c61baacd9a24c6e2d0ee6f2906",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved (b371dd96323c62c61baacd9a24c6e2d0ee6f2906)",
+      "title": "spec_attested_by 陈旧残留：显式通道批准后再走无 flag 批准，channel 更新为 unattested 但旧声明者不清除",
+      "evidence": "初判锚点 src/flow.js:2049（原仅 if (channelFlag) 写入、无 else 清除）。修复实证：cmdFlowApprove 增 else patch.spec_attested_by = null，无通道再批准无条件清 null；writeFlowState {...cur,...patch} 合并下 null 显式覆盖旧值（与 spec_rejected_superseded_at:null 同机理），陈旧残留消除。测试断言同步 assert.ok(st.spec_attested_by == null)，6/6 实跑绿",
+      "location": "src/flow.js:2056"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved (b371dd96323c62c61baacd9a24c6e2d0ee6f2906)",
+      "title": "并发窄窗混合态下 flow done 回显文案失真：未翻越的拒绝记录不构成 done 层硬拦且文案恒称已翻越",
+      "evidence": "初判锚点 src/flow.js:996-997（_rej 无条件缀「→显式再确认翻越」）。修复实证：_rej 改三元——仅 spec_rejected_superseded_at 在场时称「显式再确认翻越」，混合态（approved 真+拒绝未翻越）改按「⚠️ 存在未翻越拒绝记录——状态异常，请核查 flow-state」如实告警，不再假陈述；done 门仍只看 spec_approved（原判即未要求 done 层硬拦，FR-03 只承诺 approve 层，非违诺）",
+      "location": "src/flow.js:996-1001"
+    },
+    {
+      "severity": "P3",
+      "status": "open (不阻断)",
+      "title": "FR-02 收口回显场景缺 CLI 集成级断言：仅 approveChannelOf 单元覆盖，done 输出行/遥测行未实跑断言",
+      "evidence": "测试绑定 FR-02 指向「approveChannelOf 单元——flow done 回显与遥测同源取值」，实存测试只测函数四态归一；FR-02 场景「flow done 输出含 ⚠️ 回显行、遥测行含 approveChannel」无 spawnSync 级断言，done 集成路径仅靠代码双消费同源函数（src/flow.js:951、994-997）保证，偏差风险低但覆盖面与场景承诺不完全对齐",
+      "location": "test/approve-channel-attest.test.mjs:127"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok；边界已裁决：可接受（①同机 agent 可谎报 --user-confirmed，非防伪——CLI 层无人机验证通道，价值在必留痕+可区分+评审抽查兜底，与 --by 诚实边界一致；拒→显式再确认序由 superseded_at 保序，writeFlowState {...cur,...patch} 下显式 null 覆盖语义（superseded_at:null 重置 / attested_by:null 清除）经代码实态与测试双重验证）",
+    "并发": "ok（增量复审后改判：混合态 done 回显假陈述已修——翻越语仅 superseded 戳在场时陈述、混合态按状态异常告警；单文件 writeAtomicSync 原子写、写时重读合并无撕裂态，设计「后写者胜」声明与实态一致）",
+    "切换": "ok（approve/reject 单命令原子落盘无中间态；reject 撤销用 spec_approved:false 显式值非删键实证）；边界已裁决：可接受（②无 flag 默认路径零破坏——保平台脚本兼容，unattested 留痕+警示，FR-01 零破坏经三族 33/33 回归验证）",
+    "作用域": "ok；边界已裁决：可接受（③channel 封闭三态为治理域枚举、开放内容走 spec_rejected_reason 自由文本——机器判读/遥测聚合需封闭集；④强凭据属平台层课题——CLI 直连用户问询通道是架构层能力，不与本层耦合）"
+  },
+  "reviewedAt": "2026-10-12T13:04:22Z",
+  "incrementalReview": {
+    "priorReviewAgainst": "aed2c63b39f1944b4e0cf7be9d9f077ba072534d",
+    "scope": "仅复审 P3①（spec_attested_by 清除）与 P3②（混合态回显翻越语）两处修复+无回归",
+    "evidence": "git show b371dd96 两处 diff 与声明一致；工作区代码=b371dd96（git diff 空）；node --test 三族 33/33 全绿（本文件 6/6 含修复后断言）；src/test 无未提交改动"
+  }
+}

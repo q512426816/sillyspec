@@ -1,0 +1,77 @@
+{
+  "change": "2026-10-12-approve-channel-attest",
+  "baseline": "3bc7aceb245e415a3f939c27bbaad99fba796283",
+  "head": "b371dd96323c62c61baacd9a24c6e2d0ee6f2906",
+  "files": [
+    "src/flow.js",
+    "test/approve-channel-attest.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 263,
+    "deletions": 11
+  },
+  "savedAt": "2026-10-12T13:11:36.800Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3bc7aceb245e415a3f939c27bbaad99fba796283",
+    "totals": {
+      "files": 2,
+      "additions": 263,
+      "deletions": 11
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 128,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/approve-channel-attest.test.mjs",
+        "additions": 135,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "45e40513eb0eb09e976a7d9c1b43c7e24c3d17065c979bca7d00f6913ec6586b",
+  "patchStatus": "ok"
+}

@@ -8529,3 +8529,89 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-thin-module-gate-and-feed
   status: active
+
+## FR-cli-entry-454 flow approve 新增两种显式 attest 通道：--user-confirmed（agent 转述用户已确认）/ --self-approved（agent 自批如实声明）；无 flag 默认路径行为不变（零破坏）但按 unattested 留痕并打印警示
+变更：2026-10-12-approve-channel-attest
+状态：active
+摘要：主路径；互斥校验
+场景正文：
+- 场景：主路径 — Given 在途变更存在；When 分别运行 `flow approve`（无 flag）/ `--user-confirmed` / `--self-approved`；
+- 场景：互斥校验 — When 同时给 `--user-confirmed --self-approved`；Then exit 2，flow-state 不变。
+全文：.sillyspec/changes/archive/2026-10-12-approve-channel-attest/requirements.md#FR-01
+最近确认：b371dd96323c62c61baacd9a24c6e2d0ee6f2906
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-approve-channel-attest:flow:测试绑定FR-01
+  tests: test/approve-channel-attest.test.mjs「三通道留痕与互斥校验」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-approve-channel-attest
+  status: active
+
+## FR-cli-entry-455 flow-state 新增 spec_approved_channel / spec_attested_by 字段，flow done 收口输出回显 channel（agent-self 与 unattested 醒目标注）
+变更：2026-10-12-approve-channel-attest
+状态：active
+摘要：收口回显
+场景正文：
+- 场景：收口回显 — Given 变更以 `--self-approved` 批准且其余门全过；When `flow done`；Then 输出含 channel=agent-self 的 ⚠️
+全文：.sillyspec/changes/archive/2026-10-12-approve-channel-attest/requirements.md#FR-02
+最近确认：b371dd96323c62c61baacd9a24c6e2d0ee6f2906
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-approve-channel-attest:flow:测试绑定FR-02
+  tests: test/approve-channel-attest.test.mjs「approveChannelOf 单元——flow done 回显与遥测同源取值（三态/legacy 归一/autopilot）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-approve-channel-attest
+  status: active
+
+## FR-cli-entry-456 新增 flow reject --reason <文本>：写 spec_rejected/spec_rejected_at/spec_rejected_reason 并撤销既有 spec_approved；存在 spec_rejected 记录时，approve 不带显式 attest flag 直接拒绝执行（exit 2，提示拒绝后派生授权须 --user-confirmed 或 --self-approved 显式再确认）
+变更：2026-10-12-approve-channel-attest
+状态：active
+摘要：拒绝撤销；显式再确认
+场景正文：
+- 场景：拒绝撤销 — Given 变更已 approve；When `flow reject --reason 方案不对`；Then exit 0，`spec_approved` 变 false
+- 场景：显式再确认 — Given 上例拒绝态；When `flow approve --user-confirmed`；Then exit 0，`spec_approved: true`、`sp
+全文：.sillyspec/changes/archive/2026-10-12-approve-channel-attest/requirements.md#FR-03
+最近确认：b371dd96323c62c61baacd9a24c6e2d0ee6f2906
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-approve-channel-attest:flow:测试绑定FR-03
+  tests: test/approve-channel-attest.test.mjs「reject 撤销与拒后派生授权硬拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-approve-channel-attest
+  status: active
+
+## FR-cli-entry-457 新增单测覆盖：三通道留痕字段 / reject 撤销 / reject 后无 flag 拒绝 / reject 后显式通道放行 / 既有无 flag 路径回归
+变更：2026-10-12-approve-channel-attest
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/approve-channel-attest.test.mjs test/flow-protocol.test.mjs te
+全文：.sillyspec/changes/archive/2026-10-12-approve-channel-attest/requirements.md#FR-04
+最近确认：b371dd96323c62c61baacd9a24c6e2d0ee6f2906
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-approve-channel-attest:flow:测试绑定FR-04
+  tests: test/approve-channel-attest.test.mjs「五态全绿 + 既有族回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-approve-channel-attest
+  status: active

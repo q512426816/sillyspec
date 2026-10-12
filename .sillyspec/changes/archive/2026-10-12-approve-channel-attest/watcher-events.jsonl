@@ -1,0 +1,20 @@
+{"ts":1791809296598,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：idea/vcs.xml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791809299841,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791809299841,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791809299841,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791809608703,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791809625264,"kind":"commit","stage":null,"detail":"fb924882","provisional":true}
+{"ts":1791809633398,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791809633677,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791809633910,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791809635747,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791809635747,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1791809635747,"kind":"commit","stage":null,"detail":"aed2c63b","provisional":true}
+{"ts":1791809665642,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791809734178,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（57.2s） · 20261012125531","provisional":true}
+{"ts":1791810169807,"kind":"commit","stage":null,"detail":"b371dd96","provisional":true}
+{"ts":1791810364122,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/review-probes.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791810377319,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow-review.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791810393823,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/review-dispatch.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791810439797,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/config-schema.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791810472582,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/review-probes.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

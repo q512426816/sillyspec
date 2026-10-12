@@ -6,11 +6,15 @@ created_at: 2026-10-12T12:45:51.186Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 `cmdFlowApprove`（src/flow.js）增加互斥的 attest 通道参数（`--user-confirmed` / `--self-approved`），批准时把「谁在主张这次批准」作为第一公民字段写进 flow-state（`spec_approved_channel` 三态 + `spec_attested_by`）；无 flag 默认路径行为不变（保平台脚本与既有调用零破坏），按 `unattested` 留痕并打印警示。新增 `cmdFlowReject`（`--reason` 必填）：写 `spec_rejected*` 系字段并把既有 `spec_approved` 撤销为 false（收口机器门随之重新拦收）；`spec_rejected` 在场且未被显式翻越时，approve 无显式通道直接 exit 2——拒绝后派生授权必须有显式再确认（dogfood 实证：用户拒绝方案后 agent 把重复催促反读为授权自批）。flow done 在断点门通过处回显 channel（agent-self/unattested 用 ⚠️），遥测行加 `approveChannel`。
 
 选这个方案而非「防伪」：同机 agent 可伪造任何本地状态（包括 --user-confirmed 主张本身），CLI 层无法验证人机——诚实边界与 `--by` 既有口径一致。价值在于：主张必留痕、通道可区分（用户真批转述 vs agent 自批在审计面不再同形）、拒后有牙。
 
 ## 接口契约
+
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
 - CLI 新 flag：`flow approve --change <名> [--user-confirmed | --self-approved] [--by <署名>]`——两通道互斥，同给 exit 2。
 - CLI 新子命令：`flow reject --change <名> --reason <文本>`（reason 必填，空/缺失 exit 2）。
@@ -37,6 +41,8 @@ created_at: 2026-10-12T12:45:51.186Z
    全部新字段都在 change 目录的 flow-state.yaml 内，变更级隔离，零跨仓/跨工作区面。`spec_approved_channel` 三态是治理域封闭集（谁在主张批准——非开放世界枚举，不承载内容语义）；开放内容（拒绝理由）走自由文本 `spec_rejected_reason`。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 最大风险：留痕仍非防伪——同机 agent 可以谎报 `--user-confirmed`。接受：CLI 无法验证人机，价值在必留痕 + 通道可区分 + 评审抽查兜底（与 --by 诚实边界一致）；强凭据属平台层课题（CLI 直连用户问询通道），不与本变更耦合。
 

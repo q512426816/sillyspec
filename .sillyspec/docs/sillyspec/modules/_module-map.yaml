@@ -57,6 +57,7 @@ modules:
       - src/flow.js
       - src/flow-draft.js
       - src/flow-review.js
+      - src/review-probes.js
       - src/flow-parity.js
 
   progress:

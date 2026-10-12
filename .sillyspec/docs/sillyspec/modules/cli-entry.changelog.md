@@ -23,3 +23,4 @@
 - 2026-10-09-verify-reuse-friction | wt-commit 跨仓 worktree 识别（D-006@v1）——cwd 推断正则捕 <change>--<repoKey> 整段后：仅当后缀命中 repos 注册表（local.yaml）且剥出候选是已知变更目录才剥；全段命中已知变更不剥（防变更真名恰以 --repoKey 结尾误剥）；均不中原样透传（现状行为）。回归 test/wt-commit-crossrepo-infer.test.mjs。
 | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
 | 2026-10-12 | 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模 |
+| 2026-10-12 | 2026-10-12-approve-channel-attest | dogfood 实证驱动（2026-10-10~12 fire-equipment 会话复盘，子代理取证）：8 次 fl |
