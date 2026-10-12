@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-thin-module-gate-and-feed",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "98192cfeaf00d568f693974ecb80fbced370c125",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "deriveRecordedChangeIndexTargets 零直接测试（清偿新增导出无单元覆盖）",
+      "evidence": "grep 全 test/ 目录对该函数名零命中；本变更测试文件 import 面仅 evaluateModuleGate/appendChangeIndexEntries/renderThinDocsDebt 三函数——断点续跑推导路径（patch done + distill done 重入后 extraDocs 恢复）只有代码在位（flow-parity.js:197-216 + flow.js:1910-1915 接线），无任何直接断言其反查/幂等判据/sidecar 优先行为",
+      "location": "src/flow-parity.js:197"
+    },
+    {
+      "severity": "P3",
+      "title": "绑定用例名宣称「无节跳过」但测试体未覆盖该分支",
+      "evidence": "requirements.md FR-02 绑定与测试标题均含「无节跳过」（卡在场但无「## 变更索引」节→跳过，代码分支在 flow-parity.js:158/166），但测试体 r5 实测的是 docMissing 无卡跳过（test:149-150），全文件无『卡在场缺节』夹具——标题承诺的场景未被断言",
+      "location": "test/thin-module-gate-and-feed.test.mjs:122"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-12T10:14:44Z"
+}

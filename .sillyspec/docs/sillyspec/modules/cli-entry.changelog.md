@@ -22,3 +22,4 @@
 | 2026-10-09 | 2026-10-09-close-trace-single-set | 收口留痕单套统一（用户裁决一套留痕）：writeCloseTraceArtifacts 改只写 change.patch + change-patch.json 两件——原 scope-audit.json 对账面（mode/ok/degradedReason/baseAnchor/totals/rows/excluded/closedBy/repos）并入 change-patch.json 的 scopeAudit 子对象，顶级键原位不动（fr-index/knowledge-graph/漂移检测与平台 assets.py 等顶级字段读方零改动）；scope-audit.json/.patch 停写，读侧旧名兼容链兜存量归档（247 个不动）。flow done 留档消息改单套措辞，自嵌入排除清单四名全保留（legacy 防护——旧轮冻结件可能仍含 scope-audit.*）。 |
 - 2026-10-09-verify-reuse-friction | wt-commit 跨仓 worktree 识别（D-006@v1）——cwd 推断正则捕 <change>--<repoKey> 整段后：仅当后缀命中 repos 注册表（local.yaml）且剥出候选是已知变更目录才剥；全段命中已知变更不剥（防变更真名恰以 --repoKey 结尾误剥）；均不中原样透传（现状行为）。回归 test/wt-commit-crossrepo-infer.test.mjs。
 | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
+| 2026-10-12 | 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模 |

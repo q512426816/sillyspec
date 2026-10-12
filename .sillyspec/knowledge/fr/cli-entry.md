@@ -8445,3 +8445,87 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-review-na-variant
   status: active
+
+## FR-cli-entry-450 门三态：未登记目录在场裸跑 flow done 退出码 1 且不归档；登记后重跑通过；--accept-unmapped 放行且 change-patch.json 含 acceptedUnmappedDirs 计数；module_gate_ignore 命中目录不触发门；模块图缺席（绿地无图）不触发门
+变更：2026-10-12-thin-module-gate-and-feed
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 仓内 _module-map.yaml 只登记 src/core，变更交付 src/newdir/a.js / When 裸跑 flow done / Then
+全文：.sillyspec/changes/archive/2026-10-12-thin-module-gate-and-feed/requirements.md#FR-01
+最近确认：ae3188a755843f723f58b21177afb86b4f2c9400
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-01
+  tests: test/thin-module-gate-and-feed.test.mjs「FR-01 门三态：裸跑阻断@patch / 登记后重跑通过 / --accept-unmapped 留痕 / ignore 命中不触发 / 绿地无图不触发」 | test/thin-module-gate-and-feed.test.mjs「单元 evaluateModuleGate：忽略前缀过滤 / 无图短路 / 空面不拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thin-module-gate-and-feed
+  status: active
+
+## FR-cli-entry-451 回写：命中模块的卡/sidecar 追加「| 日期 | 变更名 | 摘要 |」行；已拆卡（sidecar 在场）追加 sidecar 不动卡；重跑同变更名不重复追加；无卡无节跳过不报错；回写文件在归档后处于已暂存态
+变更：2026-10-12-thin-module-gate-and-feed
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — 
+全文：.sillyspec/changes/archive/2026-10-12-thin-module-gate-and-feed/requirements.md#FR-02
+最近确认：ae3188a755843f723f58b21177afb86b4f2c9400
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-02
+  tests: test/thin-module-gate-and-feed.test.mjs「FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 / sidecar 场景不写回卡」 | test/thin-module-gate-and-feed.test.mjs「单元 appendChangeIndexEntries：表格节追加 / sidecar 优先不动卡 / 幂等去重 / 无节跳过」 | test/thin-module-gate-and-feed.test.mjs「单元 deriveRecordedChangeIndexTargets：sidecar 反查优先 / 卡内反查 / 未记录零返回（断点续跑推导——评审 P3 清偿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thin-module-gate-and-feed
+  status: active
+
+## FR-cli-entry-452 注入：触碰命中且卡 behind>0 的模块在 flow start 注入面出现欠账事实行；空债/无图零输出；注入异常不阻断 start
+变更：2026-10-12-thin-module-gate-and-feed
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 模块 m1 卡落后源码 ≥1 提交且 --input 语料含 m1 paths 下文件 / When flow start / Then 注入面出现「模块卡欠账
+全文：.sillyspec/changes/archive/2026-10-12-thin-module-gate-and-feed/requirements.md#FR-03
+最近确认：ae3188a755843f723f58b21177afb86b4f2c9400
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-03
+  tests: test/thin-module-gate-and-feed.test.mjs「FR-03 注入：behind>0 出欠账事实行 / 空债零输出」 | test/thin-module-gate-and-feed.test.mjs「单元 renderThinDocsDebt：无图零输出 / 坏路径零输出（fail-open 不抛）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thin-module-gate-and-feed
+  status: active
+
+## FR-cli-entry-453 既有 flow/归档相关测试全绿，新增测试覆盖上述三档
+变更：2026-10-12-thin-module-gate-and-feed
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 实现完成 / When 运行新增测试与 flow/归档相关既有测试 / Then 全部通过。
+全文：.sillyspec/changes/archive/2026-10-12-thin-module-gate-and-feed/requirements.md#FR-04
+最近确认：ae3188a755843f723f58b21177afb86b4f2c9400
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-04
+  tests: test/thin-module-gate-and-feed.test.mjs「FR-04 既有面回归：flow done 收口链在无门触发场景零行为变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thin-module-gate-and-feed
+  status: active

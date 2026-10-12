@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-thin-module-gate-and-feed",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-module-gate-and-feed.test.mjs「FR-01 门三态：裸跑阻断@patch / 登记后重跑通过 / --accept-unmapped 留痕 / ignore 命中不触发 / 绿地无图不触发」",
+        "test/thin-module-gate-and-feed.test.mjs「单元 evaluateModuleGate：忽略前缀过滤 / 无图短路 / 空面不拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thin-module-gate-and-feed"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-module-gate-and-feed.test.mjs「FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 / sidecar 场景不写回卡」",
+        "test/thin-module-gate-and-feed.test.mjs「单元 appendChangeIndexEntries：表格节追加 / sidecar 优先不动卡 / 幂等去重 / 无节跳过」",
+        "test/thin-module-gate-and-feed.test.mjs「单元 deriveRecordedChangeIndexTargets：sidecar 反查优先 / 卡内反查 / 未记录零返回（断点续跑推导——评审 P3 清偿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thin-module-gate-and-feed"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-module-gate-and-feed.test.mjs「FR-03 注入：behind>0 出欠账事实行 / 空债零输出」",
+        "test/thin-module-gate-and-feed.test.mjs「单元 renderThinDocsDebt：无图零输出 / 坏路径零输出（fail-open 不抛）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thin-module-gate-and-feed"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-thin-module-gate-and-feed:flow:测试绑定FR-04",
+      "tests": [
+        "test/thin-module-gate-and-feed.test.mjs「FR-04 既有面回归：flow done 收口链在无门触发场景零行为变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thin-module-gate-and-feed"
+    }
+  ]
+}
