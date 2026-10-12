@@ -66,10 +66,12 @@ test('H1 默认档：缺 review → stage-review-hint informational + register �
   assert.deepEqual(hint2.warnings || [], [], 'review 在场 → 静默零 warning')
 })
 
-test('H1b 默认档 verify 同款提示', async () => {
+test('H1b 默认档 verify 不产 hint（期望面对齐：Gate 只拦 brainstorm/plan/execute）', async () => {
+  // 坑 stage-review-verify-enum-gap（2026-10-11）：verify 的 hint 给出的修复命令
+  // register-stage-review --stage verify 在枚举校验处必炸，且指称的门禁不存在——期望面收敛。
   const { cwd, specBase, changeName } = await fixture({ withReview: false, stage: 'verify' })
   const v = await runGate('verify', changeName, { cwd, specBase })
-  assert.ok(checkById(v.envelope, 'stage-review-hint'), 'verify 默认档同样有提示')
+  assert.equal(checkById(v.envelope, 'stage-review-hint'), undefined, 'verify 默认档无 stage-review-hint（提示命令不可执行，不再误导）')
 })
 
 test('H2 --full 档 full-stage-review 的 id 与 error 语义不变', async () => {
