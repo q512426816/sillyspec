@@ -353,21 +353,41 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
       if (orphan.result === 'cleaned' || orphan.result === 'force-cleaned' || orphan.result === 'partial') {
         console.log(`🧹 归档清理孤儿 worktree 残留（meta 已注销）: ${archiveChangeName}${orphan.residual?.length ? '（残留: ' + orphan.residual.join('; ') + '）' : ''}`)
       }
-      return
-    }
-    const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
-    if (check.hasChanges) {
-      console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
-      console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
-      return
-    }
-    const cleanResult = wm.cleanup(archiveChangeName)
-    if (cleanResult.residual?.length > 0) {
-      console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
-      console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+    } else {
+      const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
+      if (check.hasChanges) {
+        console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
+        console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+      } else {
+        const cleanResult = wm.cleanup(archiveChangeName)
+        if (cleanResult.residual?.length > 0) {
+          console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
+          console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+        }
+      }
     }
   } catch (e) {
     console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
+  }
+  // ── 跨仓兜底（坑 cross-wt-ghost-metadata 缺口②，fire-equipment 2026-10-10 实证）：此前
+  //    归档链只清主仓，跨仓 worktree 清理只挂在 apply/execute reset/手工 cleanup 四个时机，
+  //    归档作为最后一道收口不补刀——apply 侧任何一次 partial，跨仓注册/目录就永久滞留。
+  //    此处对齐主仓语义收口：force=false（有未 apply 交付的跨仓仓保留并警告），幂等，fail-open
+  //    不阻断归档。目录不在的幽灵注册由 cleanupCrossWorktrees 双清复核兜（缺口①），doctor
+  //    --prune-cross-worktrees 是终网（缺口③）。──
+  try {
+    const { cleanupCrossWorktrees } = await import('../worktree-cross.js')
+    const cross = cleanupCrossWorktrees({ cwd, changeName: archiveChangeName, specBase, force: false })
+    for (const r of cross.results) {
+      if (r.result === 'cleaned') {
+        console.log(`🧹 归档兜底清理跨仓 worktree（${r.repoKey}）: ${(r.details || []).join('; ')}`)
+      } else if (r.result === 'partial') {
+        console.warn(`⚠️  归档跨仓 worktree 清理 partial（${r.repoKey}）: ${(r.details || []).join('; ')}`)
+        console.warn(`   处理: sillyspec worktree cleanup ${archiveChangeName} --force（有交付需 apply）或 sillyspec doctor --prune-cross-worktrees（悬空注册）`)
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️  归档跨仓 worktree 兜底清理失败（不阻断归档）: ${e.message}`)
   }
 }
 

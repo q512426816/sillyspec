@@ -387,12 +387,47 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
 }
 
 /**
+ * 探测跨仓仓 worktree 注册状态（双清契约的复核原语，坑 cross-wt-ghost-metadata 2026-10-10
+ * fire-equipment 实证：目录被清、.git/worktrees/ 注册残留占住分支——prune 静默失败/locked
+ * 条目被 prune 跳过都产出零报错幽灵，必须以 git worktree list 的答复为准）。
+ * 路径归一对齐 gate-snapshot worktreeListContains（反斜杠归正斜杠 + win32 大小写不敏感）。
+ * @param {string} repoRoot 跨仓仓根
+ * @param {string} wtPath worktree 路径
+ * @returns {{registered: boolean, locked: boolean, unknown?: boolean}} 查询失败（git 不可达）
+ *   按 registered:true 返回（fail-safe——复核不过走 partial，绝不静默判清）。
+ */
+export function probeCrossWorktreeEntry(repoRoot, wtPath) {
+  const out = gitQuiet(repoRoot, ['worktree', 'list', '--porcelain'], { timeout: 30000 });
+  if (out == null) return { registered: true, locked: false, unknown: true };
+  const norm = (s) => {
+    const v = String(s).replace(/\\/g, '/');
+    return process.platform === 'win32' ? v.toLowerCase() : v;
+  };
+  const target = norm(wtPath);
+  const lines = String(out).split('\n');
+  const idx = lines.findIndex((l) => l.startsWith('worktree ') && norm(l.slice('worktree '.length)) === target);
+  if (idx === -1) return { registered: false, locked: false };
+  // 该条目属性行：到下一条 worktree 行或空行为止；locked 可带原因尾巴（git ≥2.30 lock 原因）
+  let locked = false;
+  for (let i = idx + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.startsWith('worktree ') || l.trim() === '') break;
+    if (l === 'locked' || l.startsWith('locked ')) { locked = true; break }
+  }
+  return { registered: true, locked };
+}
+
+/**
  * 清理某变更的全部跨仓 worktree（幂等）。
  *
- * 顺序对齐主仓 cleanup 的 Windows 防护：先解 node_modules junction（裸删会穿透删跨仓主工作
- * 副本的 node_modules），再 git worktree remove --force，最后**保留分支** sillyspec/<change>
+ * 顺序对齐主仓 cleanup 的 Windows 防护：先解 node_modules junction（裸删会穿透删跨仓主
+ * 工作副本的 node_modules），再 git worktree remove --force，最后**保留分支** sillyspec/<change>
  * 作 review 锚点（分支删除在主仓侧有 review 锚点 + 双保护，跨仓侧 v1 保守不删，残 branch
  * 可人工清理）。目录残留（remove 失败）走 safeRemoveWorktreeDir 兜底 + residual 上报。
+ *
+ * 双清契约（坑 cross-wt-ghost-metadata 缺口①，对齐 gate-snapshot D-004@v2）：remove 退出码
+ * 为零 / prune 不抛 ≠ 注册已清——两条路径收尾都以 git worktree list 复核注册已消失，复核
+ * 不过 → partial + residual（locked 条目附 unlock 指引），注册表键只在验证通过后回收。
  *
  * @param {{ cwd: string, changeName: string, specBase?: string, force?: boolean }} opts
  * @returns {{ results: Array<{repoKey, result: 'cleaned'|'skipped'|'partial', details: string[], residual: string[]}> }}
@@ -406,18 +441,33 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
     const repoRoot = meta.crossRepoRoot;
     const wtPath = meta.worktreePath || crossWorktreePath(base, changeName, repoKey);
     if (!existsSync(wtPath)) {
-      try { if (repoRoot) gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
-      removePlacementRegistryEntry(base, changeName, repoKey); // 挪位清理后注册表键回收（FR-02）
-      results.push({ repoKey, result: 'skipped', details: ['目录不存在（已清理）'], residual });
+      // 目录不在：prune 悬空注册——但 prune 会静默失败/静默跳过 locked 条目，prune 后必须
+      // 复核（git worktree list 答复为准）才销账；复核不过 → partial + unlock 指引。
+      let entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
+      if (entry.registered) {
+        try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
+        entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
+      }
+      if (!entry.registered) {
+        removePlacementRegistryEntry(base, changeName, repoKey); // 挪位清理后注册表键回收（FR-02）
+        results.push({ repoKey, result: 'skipped', details: ['目录不存在（注册 prune 后复核通过）'], residual });
+      } else {
+        if (entry.locked) details.push(`条目 locked（prune 静默跳过）——git -C ${repoRoot} worktree unlock ${wtPath} 后重试`);
+        residual.push(`幽灵注册残留 ${wtPath}（目录不存在但注册仍在）`);
+        results.push({ repoKey, result: 'partial', details, residual });
+      }
       continue;
     }
     if (!force) {
       // fail-closed：worktree 内还有未落地交付（相对 baseHash 有 diff）时拒绝清理（对齐主仓
-      // hasUnappliedChanges 哲学；跨仓侧以「分支上有交付 diff 且未 apply」近似）
+      // hasUnappliedChanges 哲学；跨仓侧以「分支上有交付 diff 且未 apply」近似）。
+      // 自家 meta.json 不算交付（坑 cross-wt-ghost-metadata 顺带修正：CLI 写的 meta.json 恒为
+      // untracked，此前计入未 apply 面使 force=false 清理对刚建的空 worktree 恒误报 blocked）。
       try {
         const diff = gitQuiet(wtPath, ['diff', '--name-only', meta.baseHash]) || '';
-        const untracked = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard']) || '';
-        if (diff.trim() || untracked.trim()) {
+        const untracked = (gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard']) || '')
+          .split('\n').map((s) => s.trim()).filter((f) => f && f !== META_FILE);
+        if (diff.trim() || untracked.length > 0) {
           results.push({ repoKey, result: 'partial', details: [`blocked: 跨仓 worktree 有未 apply 的交付改动（git diff ${String(meta.baseHash).slice(0, 8)} 非空）——先 apply 或显式 --force`], residual: [wtPath] });
           continue;
         }
@@ -429,10 +479,25 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
     try {
       git(repoRoot, ['worktree', 'remove', '--force', wtPath], { timeout: 60000 });
     } catch {
-      // remove 失败（脏文件/锁）：解链后安全删目录 + prune 注册
+      // remove 失败（脏文件/锁/locked——locked 条目 remove 被拒，解锁需两次 --force，不自动解除
+      // 用户显式保护意图，只提示）：解链后安全删目录 + prune 注册
       // allowCross:true——本函数就是跨仓清理的显式路径（主仓守卫放行；见 safeRemoveWorktreeDir 注释）
+      const probe = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
+      if (probe.locked) details.push(`worktree locked（remove 被拒）——git -C ${repoRoot} worktree unlock ${wtPath} 后重跑`);
       try { safeRemoveWorktreeDir(wtPath, meta, { allowCross: true }) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
+    }
+    // 双清复核：remove 退出码为零 ≠ 注册已清（prune 未生效/竞态/locked 残留时 list 仍含该
+    // root）——以 git worktree list 答复为准（对齐 gate-snapshot D-004@v2）。无 repoRoot 的
+    // legacy 假 meta（测试夹具/手写形态）无从复核，视同未注册不误伤。
+    let entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
+    if (entry.registered) {
+      try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
+      entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
+    }
+    if (entry.registered) {
+      if (entry.locked) details.push(`条目 locked（prune 静默跳过）——git -C ${repoRoot} worktree unlock ${wtPath} 后重跑`);
+      residual.push(`worktree 注册残留（复核 git worktree list 仍含 ${wtPath}）`);
     }
     details.push(`分支 ${meta.branch} 保留作 review 锚点（确认无需回溯后可 git -C ${repoRoot} branch -D ${meta.branch}）`);
     if (residual.length === 0) {
@@ -446,4 +511,88 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
   const swept = sweepPlacementRegistry(base, changeName);
   if (swept.length > 0) results.push({ repoKey: '(registry-sweep)', result: 'cleaned', details: [`悬挂注册表键已清: ${swept.join('、')}`], residual: [] });
   return { results };
+}
+
+/**
+ * 扫描 local.yaml repos 各仓的幽灵 worktree 注册（缺口③，坑 cross-wt-ghost-metadata
+ * 2026-10-10 fire-equipment 实证：目录被清、跨仓仓 .git/worktrees/ 注册残留 → 分支被幽灵
+ * 占用无法 checkout；且 meta.json 随目录同亡，cleanup/归档链对该形态天然隐身——从跨仓仓
+ * 自己的注册面反扫是唯一可见面）。
+ *
+ * 只报「注册指向不存在路径」的条目（与 git prune 同语义面，不动活 worktree、不碰分支）；
+ * locked 条目单独标注（prune 对它们静默跳过，需先 unlock）。只读零副作用。
+ *
+ * @param {string} cwd 主仓根（读 cwd/.sillyspec/local.yaml repos 段）
+ * @returns {{ repos: Array<{repoKey, repoRoot}>, ghosts: Array<{repoKey, repoRoot, worktreePath, locked}>, errors: Array<{repoKey, repoRoot, error}> }}
+ */
+export function scanCrossWorktreeGhosts(cwd) {
+  const repos = [...readRepoRegistry(cwd).entries()].map(([repoKey, repoRoot]) => ({ repoKey, repoRoot }));
+  const ghosts = [];
+  const errors = [];
+  for (const { repoKey, repoRoot } of repos) {
+    let out = null;
+    try { out = gitQuiet(repoRoot, ['worktree', 'list', '--porcelain'], { timeout: 30000 }) } catch { out = null }
+    if (out == null) {
+      errors.push({ repoKey, repoRoot, error: 'git worktree list 不可达（非 git 仓/路径失效）' });
+      continue;
+    }
+    let cur = null;
+    let locked = false;
+    const flush = () => { if (cur && !existsSync(cur)) ghosts.push({ repoKey, repoRoot, worktreePath: cur, locked }) };
+    for (const line of String(out).split('\n')) {
+      if (line.startsWith('worktree ')) {
+        flush();
+        cur = line.slice('worktree '.length).trim();
+        locked = false;
+      } else if (line === 'locked' || line.startsWith('locked ')) {
+        locked = true;
+      } else if (line.trim() === '') {
+        flush();
+        cur = null;
+        locked = false;
+      }
+    }
+    flush();
+  }
+  return { repos, ghosts, errors };
+}
+
+/**
+ * 清理跨仓幽灵 worktree 注册（doctor --prune-cross-worktrees 动作体，对齐 --cleanup-ghosts
+ * 范式：默认 dry-run 只列，confirm=true 才执行）。
+ *
+ * confirm 语义：对每个有非 locked 幽灵的仓跑 `git worktree prune`（git 自身只清指向不存在
+ * 位置的注册，活 worktree 不受影响），随后**复扫断言**（清了什么以复扫为准，不信任 prune
+ * 退出码）；locked 条目一律跳过并列出 unlock 指引（locked 是用户显式保护意图，不自动解除）。
+ *
+ * @param {{ cwd: string, confirm?: boolean }} opts
+ */
+export function pruneCrossWorktreeGhosts({ cwd, confirm = false }) {
+  const before = scanCrossWorktreeGhosts(cwd);
+  if (!confirm) {
+    return { confirm: false, repos_scanned: before.repos.length, count: before.ghosts.length, ghosts: before.ghosts, errors: before.errors };
+  }
+  const skippedLocked = [];
+  const pruneByRepo = new Map();
+  for (const g of before.ghosts) {
+    if (g.locked) { skippedLocked.push(g); continue }
+    if (!pruneByRepo.has(g.repoRoot)) pruneByRepo.set(g.repoRoot, []);
+    pruneByRepo.get(g.repoRoot).push(g);
+  }
+  const errors = [...before.errors];
+  for (const repoRoot of pruneByRepo.keys()) {
+    try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch (e) { errors.push({ repoRoot, error: `prune 失败: ${e.message}` }) }
+  }
+  // 复扫断言：prune 退出码为零 ≠ 注册已清（双清契约同源）
+  const after = scanCrossWorktreeGhosts(cwd);
+  const afterPaths = new Set(after.ghosts.map((g) => g.worktreePath));
+  const pruned = [];
+  for (const g of before.ghosts) {
+    if (g.locked) continue;
+    if (!afterPaths.has(g.worktreePath)) pruned.push(g);
+    else if (!errors.some((e) => e.repoRoot === g.repoRoot && String(e.error).includes('prune 失败'))) {
+      errors.push({ repoKey: g.repoKey, repoRoot: g.repoRoot, error: 'prune 后复扫仍在（疑似 locked 或 git 锁竞态）' });
+    }
+  }
+  return { confirm: true, repos_scanned: before.repos.length, count: before.ghosts.length, pruned, skipped_locked: skippedLocked, remaining: after.ghosts, errors };
 }
