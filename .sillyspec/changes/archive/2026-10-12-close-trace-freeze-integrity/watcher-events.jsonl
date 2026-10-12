@@ -1,0 +1,26 @@
+{"ts":1791790251318,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791790763476,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791790803471,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791791379761,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/filter-committed-face.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791792006998,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791792067822,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-module-gate-and-feed.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791792329683,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/complete-handlers.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791792717055,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flowdone-disposition-drift.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791792955535,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1791793057929,"kind":"commit","stage":null,"detail":"d99dc401","provisional":true}
+{"ts":1791793360661,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/commit-attribution-split.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791793960445,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791794149175,"kind":"commit","stage":null,"detail":"e45a3904","provisional":true}
+{"ts":1791794154476,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791794154764,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791794155032,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791794155305,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791794155822,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791794155822,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1791794201458,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791794275810,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-module-gate-and-feed.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791794350493,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（139.0s） · 20261012083907","provisional":true}
+{"ts":1791795252326,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791799773403,"kind":"commit","stage":null,"detail":"1b0e8f64","provisional":true}
+{"ts":1791799793211,"kind":"commit","stage":null,"detail":"98192cfe","provisional":true}
+{"ts":1791799803378,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-12-thin-module-gate-and-feed/change-patch.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

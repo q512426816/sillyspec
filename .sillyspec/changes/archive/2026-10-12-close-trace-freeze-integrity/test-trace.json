@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-close-trace-freeze-integrity",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-01",
+      "tests": [
+        "test/close-trace-freeze-integrity.test.mjs「flow 冻结面剔除 .sillyspec/changes 子树保留 docs 交付」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-close-trace-freeze-integrity"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-02",
+      "tests": [
+        "test/close-trace-freeze-integrity.test.mjs「孤儿提交触及交付面阻断收口」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-close-trace-freeze-integrity"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-03",
+      "tests": [
+        "test/patch-reanchor.test.mjs「悬空锚按归属提交回写并重冻 patch」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-close-trace-freeze-integrity"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-04",
+      "tests": [
+        "test/close-trace-freeze-integrity.test.mjs",
+        "test/patch-reanchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-close-trace-freeze-integrity"
+    }
+  ]
+}

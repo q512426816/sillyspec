@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-close-trace-freeze-integrity",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行——降级条款如实标注）",
+  "verdict": "PASS",
+  "reviewedAgainst": "1b0e8f6475da2f8c1b0dbe72f765f6fbf32d7ebc",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "doctor 锚点悬空检查的子进程成本：每份带 change-patch.json 的归档至多 2 次 git cat-file",
+      "evidence": "detectArchiveIntegrity 循环内 safeGit(['cat-file','-e',...]) 逐归档逐锚调用——存量约 200 份归档在 Windows 上约数百次 spawn、秒级增量；doctor 为手动命令非热路径，可接受留观",
+      "location": "src/doctor-diagnostics.js:1304-1317"
+    },
+    {
+      "severity": "P3",
+      "title": "reanchorNote 字段为 design 契约清单外的加写字段",
+      "evidence": "代码写 meta.reanchorNote（回写缘由+原锚溯源），design 接口契约节列举字段未含它——加性字段、读方零消费，文档漂移非行为风险",
+      "location": "src/patch-reanchor.js:118"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "边界已裁决：可接受（merge 孤儿自身经 combined diff 空面不判，但侧支成员提交在 HEAD 轨迹上仍捕获——钉行为测试在案；patch-id 在 rebase 解冲突后内容微变漏判等价→误报，代价=一次 --accept-orphan-face 显式确认）",
+    "并发": "ok（change-patch.json 回写 writeAtomicSync 先临时后 rename；apply 尾声与人工 patch-reanchor 并发=幂等 no-op 或同值覆盖；执行期实证并行会话卷 hunks 已用真实收尾提交归属回正）",
+    "切换": "ok（FR-02 阻断停 patch 子步标记前=半态可重入；FR-03 回写失败 apply 侧 fail-soft / patch-reanchor 侧 fail-closed 原文件不动）",
+    "作用域": "边界已裁决：可接受（FR-02 仅 .sillyspec/.runtime/worktrees/<change> 路径判定命中启用、共享主仓禁用——reflog 归属边界；FR-03 按提交主题变更名归属，变更名全仓唯一，区间一致性校验 fail-closed 兜同名异源）"
+  },
+  "reviewedAt": "2026-10-12T08:52:00.000Z",
+  "reviewerNotes": "评审面 15 文件（6 src + 5 test + 4 docs）：①FR-01 filterCommittedFace 去 ownPrefix 保留子句+changeDir walk 删除——工件-only 面空面哨兵实测复跑（ctfi-empty 用例）；②FR-02 scanOrphanFace patch-id 去重+e2e worktree 阻断/放行双路径实测；③FR-03 reAnchorChangePatch 幂等/fail-closed 三态直测+apply 8.5 挂点/doctor 检查/CLI 命令三挂点在案；④全量 754 测试文件两轮全绿+lint 绿；⑤四个存量测试口径同步均带变更名锚注。reviewedAgainst 取 HEAD（收口时 CLI 以基线对账为准）。"
+}

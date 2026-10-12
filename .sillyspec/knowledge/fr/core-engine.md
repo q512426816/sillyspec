@@ -3142,3 +3142,88 @@
   confirmed_at: null
   source_change: 2026-10-12-cross-wt-ghost-cleanup
   status: active
+
+## FR-core-engine-191 轻量道收口冻结面剔除 .sillyspec/changes/ 全子树（对齐 execute --done 沉淀资产面）
+变更：2026-10-12-close-trace-freeze-integrity
+状态：active
+摘要：thin 归档工件不入 patch；.sillyspec/docs 交付文档保留
+场景正文：
+- 场景：thin 归档工件不入 patch — Given 变更目录有 design/requirements/tasks/proposal/review 五工件且无其他交付改动 / When flow done / T
+- 场景：.sillyspec/docs 交付文档保留 — Given baseline..HEAD 提交含 `.sillyspec/docs/x.md` 与本变更目录工件 / When flow done / Then files
+全文：.sillyspec/changes/archive/2026-10-12-close-trace-freeze-integrity/requirements.md#FR-01
+最近确认：98192cfeaf00d568f693974ecb80fbced370c125
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-01
+  tests: test/close-trace-freeze-integrity.test.mjs「flow 冻结面剔除 .sillyspec/changes 子树保留 docs 交付」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-close-trace-freeze-integrity
+  status: active
+
+## FR-core-engine-192 会话专属 worktree 冻结完备性守卫（孤儿提交阻断）
+变更：2026-10-12-close-trace-freeze-integrity
+状态：active
+摘要：孤儿实现提交阻断；amend/rebase 等价重复不误报
+场景正文：
+- 场景：孤儿实现提交阻断 — 
+- 场景：amend/rebase 等价重复不误报 — Given 会话 worktree 内发生过 amend/rebase，reflog 残留旧提交但 patch-id 与 baseline..HEAD 某提交相同 / Wh
+全文：.sillyspec/changes/archive/2026-10-12-close-trace-freeze-integrity/requirements.md#FR-02
+最近确认：98192cfeaf00d568f693974ecb80fbced370c125
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-02
+  tests: test/close-trace-freeze-integrity.test.mjs「孤儿提交触及交付面阻断收口」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-close-trace-freeze-integrity
+  status: active
+
+## FR-core-engine-193 worktree apply 后归档锚点回写（主仓可解析）
+变更：2026-10-12-close-trace-freeze-integrity
+状态：active
+摘要：平台仓 ws-ref 类悬空锚回写；锚点已可解析 no-op
+场景正文：
+- 场景：平台仓 ws-ref 类悬空锚回写 — Given 归档 change-patch.json 记 head=40622e03 在主仓不可解析，主仓存在主题含该变更名的提交链（实现+锚点+归档三笔）/ When p
+- 场景：锚点已可解析 no-op — Given change-patch.json head 在主仓可解析 / When patch-reanchor / Then 零改动返回 noop。
+全文：.sillyspec/changes/archive/2026-10-12-close-trace-freeze-integrity/requirements.md#FR-03
+最近确认：98192cfeaf00d568f693974ecb80fbced370c125
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-03
+  tests: test/patch-reanchor.test.mjs「悬空锚按归属提交回写并重冻 patch」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-close-trace-freeze-integrity
+  status: active
+
+## FR-core-engine-194 既有测试面全绿，新增直测覆盖上述三组行为
+变更：2026-10-12-close-trace-freeze-integrity
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-12-close-trace-freeze-integrity/requirements.md#FR-04
+最近确认：98192cfeaf00d568f693974ecb80fbced370c125
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-close-trace-freeze-integrity:flow:测试绑定FR-04
+  tests: test/close-trace-freeze-integrity.test.mjs | test/patch-reanchor.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-close-trace-freeze-integrity
+  status: active

@@ -2331,3 +2331,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
 理由：最大风险：归档链新增跨仓兜底扩大了归档时的作用面——若 local.yaml 注册了路径失效的仓，归档会多出警告噪音（不阻断）。缓解：兜底对仓不可达/git 失败一律 fail-open 警告；清理对象仅限本变更名下可寻址的跨仓 worktree。 试过但放弃的方案： - 「归档链直接对 repos 各仓无条件 prune」——放弃：会把与 sillyspec 无关的用户自建 worktree 注册也纳入归档动作面，作用域过宽；收敛为只清本变更名下可寻址项 + doctor 提供全仓扫描（doctor 是显式诊断入口，作用面宽可接受，归档是热路径必须窄）。 - 「cleanupCrossWorktrees 里对 locked 条目自动 unlock 后强清」——放弃：locked 是用户显式保护（跨盘挂载场景防误删），自动解除违背保护意图；只提示，用户裁决。 - 「给 listCrossWorktreeMetas 增加无 meta 兜底枚举（目录已删也入列）」——放弃：迭代源三源都靠 meta/注册表键寻址，目录已删且键已回收时无锚可举；该形态只能从跨仓仓注册面反扫（doctor），与其在 cleanup 链加不可能完备的枚举，不如把 doctor 网做实。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-12-close-trace-freeze-integrity
+锚点：未记录
+最近确认：98192cfeaf00d568f693974ecb80fbced370c125
+理由：最大风险：FR-01 是行为口径变更，存量读方若依赖 files[] 里的工件路径会静默变面——已核读方（fr-index/knowledge-graph/平台 assets.py）只消费顶级字段与交付行，scopeAudit.rows 口径本就不含工件；filter-committed-face 等四个测试文件钉旧行为需同步口径（测试对齐依据=本设计接口契约节）。放弃的方案：①thin 侧改为「工件保留但 totals 分列」——冗余不除、哨兵仍哑，弃；②FR-02 用 `rev-list --branches` 扫全分支——linked worktree 共享分支命名空间，主仓 main 分支推进会污染独占树判定（假阳阻断），改用本 worktree HEAD reflog；③FR-03 在 apply 内同步等待 agent 提交后回写——apply 无提交职责（pathspec 交给 agent），时序不可控，改多点幂等回写。
