@@ -22,6 +22,7 @@ import { join, dirname } from 'node:path'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from './fs-atomic.js'
 import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
+import { assembleProbeLinesForScope } from './review-probes.js'
 import { CEREMONY_TIERS } from './ceremony-tier.js'
 import { withFileLock } from './quicklog.js'
 import {
@@ -161,15 +162,20 @@ export function extractReviewFromArtifacts(artifacts) {
  * docblock 规则）②review.json 契约（与 gate 同源）③期望产出方式（read_only worker：
  * 结论经 artifacts 返回，**不写任何文件**——落盘归 CLI）④铁律段（禁改文件/禁 git commit）。
  */
-export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPriority }) {
+export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPriority, probeLines = null }) {
   const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
   const items = (REVIEW_CHECKLISTS[stage] || []).map((t, i) => `${i + 1}. ${t}`).join('\n')
   const contract = renderReviewJsonContract({ stage, changeDir, reviewRunId, tier: 'independent', channelPriority })
+  // 项目评审探针（2026-10-12-review-probe-injection）：local.yaml 数据驱动注入，缺省零变化。
+  const probeSection = Array.isArray(probeLines) && probeLines.length > 0
+    ? ['', '## 项目评审探针（local.yaml 注入——逐条 pass/gap/fail + 证据锚点，未答=未审）', ...probeLines.map((l) => `- ${l}`)]
+    : []
   const workerPrompt = [
     `你是独立审查者（platform 通道派发）。审查对象：${changeDir ? join(changeDir, mainDoc) : mainDoc}`,
     '',
     '## 审查清单（逐条给 pass/gap/fail + 证据锚点）',
     items,
+    ...probeSection,
     '',
     contract,
     '',
@@ -285,7 +291,7 @@ export async function runReviewDispatch(opts = {}) {
         } catch { /* marker 写失败不阻断派发（status 回收时再补） */ }
       }
       const changeDir = join(specBase, 'changes', changeName)
-      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: runId, channelPriority: readReviewChannelPriority(cwd) })
+      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: runId, channelPriority: readReviewChannelPriority(cwd), probeLines: probeLinesForThick(specBase) })
       const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd })
       const missionId = mission && mission.missionId
       if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId', guidance: renderFallbackGuidance(cwd) }
@@ -694,7 +700,7 @@ export async function dispatchShadowReview(opts = {}) {
       // 影子 runId 独立生成（R-06 隔离通道②：绝不读写主线 marker / stageReviewMarkerPath）
       const shadowRunId = generateShadowReviewRunId()
       const changeDir = join(specBase, 'changes', changeName)
-      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: shadowRunId, channelPriority: readReviewChannelPriority(cwd) })
+      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: shadowRunId, channelPriority: readReviewChannelPriority(cwd), probeLines: probeLinesForThick(specBase) })
       const workerPrompt = book.workerPrompt + '\n（影子审查：本结论将由 CLI 回收到 stage-reviews-shadow/ 独立命名空间做轻/重对照记账，不影响主线任何判定。）\n'
       const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd: budget })
       const missionId = mission && mission.missionId
@@ -840,6 +846,15 @@ export async function dispatchShadowReview(opts = {}) {
 
 // task-06 消费契约预留（配置读取在该 task 落地；此处常量为缺省值单一来源）
 const DEFAULT_REVIEW_DISPATCH_CONFIG = { budget_usd: 1.0, stall_ms: 900_000, timeout_ms: 0 }
+/** 厚档任务书探针装配（2026-10-12-review-probe-injection）：失败/未配置返回 null（零注入零阻断）。 */
+function probeLinesForThick(specBase) {
+  try {
+    const { lines, warnings } = assembleProbeLinesForScope(specBase, 'thick')
+    for (const w of warnings) console.warn(`⚠️ review_probes：${w}`)
+    return lines.length > 0 ? lines : null
+  } catch { return null }
+}
+
 export function readReviewDispatchConfig(cwd) {
   try {
     const p = join(cwd || process.cwd(), '.sillyspec', 'local.yaml')

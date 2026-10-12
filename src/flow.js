@@ -1712,7 +1712,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       let taskbookHead = null
       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead }))
+      // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
+      // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
+      let _probeLines = null
+      try {
+        const { assembleProbeLinesForScope } = await import('./review-probes.js')
+        const _assembled = assembleProbeLinesForScope(specBase, 'thin')
+        for (const _w of _assembled.warnings) console.warn(`⚠️ review_probes：${_w}`)
+        if (_assembled.lines.length > 0) _probeLines = _assembled.lines
+      } catch { /* 探针面 fail-soft：装配失败零注入 */ }
+      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines }))
       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
       reportMidFail('review')

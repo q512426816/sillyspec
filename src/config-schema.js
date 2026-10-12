@@ -230,6 +230,17 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'review_probes',
+      title: '项目评审探针',
+      note: '评审任务书的项目特有必查面注入（2026-10-12-review-probe-injection，dogfood 实证：检查单由主代理手写时，主代理没想到的面无人查——三个生产缺陷全靠用户报障发现）。CLI 只做装配与容量治理（条目≤16/每条行≤12/单行≤300 字符/命令超时 10s/输出≤2KB·20 行），内容完全开放：零内容枚举、零语言/框架绑定，清单行与命令由项目自定。未配置=两面任务书（轻量 thin / 厚档 thick）与历史形态逐字一致（零回归）。读键容错：坏条目跳过+告警、命令失败/超时跳过该行源，永不阻断任务书渲染。',
+      keys: [
+        { path: 'review_probes[].id', type: 'string', optional: false, status: 'live', readers: ['parseReviewProbes (src/review-probes.js) → renderReviewerTaskbook (src/flow-review.js, thin) + buildReviewerTaskBook (src/review-dispatch.js, thick)'], desc: '探针标识（自由文本 ≤64 字符，非空）——注入行前缀「<id>｜」，供评审逐条对答。', example: 'startup-smoke' },
+        { path: 'review_probes[].scope', type: 'string', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js)'], desc: '注入哪面任务书：thin（轻量评审任务书）/ thick（厚档 stage 评审）/ all（缺省）。这是 CLI 自有的两个任务书面集合，非内容枚举。', example: 'all' },
+        { path: 'review_probes[].lines', type: 'array', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js)'], desc: '静态清单行（自由文本，内容完全开放——项目自定必查面，如「变更触及启动路径时核对新增注册项与既有注册互斥」）。与 command 至少一非空。', example: '["新增配置键须与既有键冲突扫描核对"]' },
+        { path: 'review_probes[].command', type: 'string', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js) → defaultRunCommand (spawnSync, timeout 10s)'], desc: '可选命令串（任意 shell，stdout 非空行追加为清单行，带 <id>｜ 前缀）——动态行源（如生成当前项目的高危面清单）；输出帽 2KB/20 行，失败/超时 fail-soft 跳过。', example: 'node scripts/list-review-probes.js' },
+      ],
+    },
+    {
       id: 'friction_hint',
       title: '摩擦提示开关',
       note: 'quick/verify 收尾的摩擦信号计数提示配置（friction-signal-hint）。读键按「存在则读、不存在用缺省」容错：读失败与未配置同兜底为默认开。',

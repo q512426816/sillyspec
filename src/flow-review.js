@@ -204,7 +204,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
  * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
  * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
  */
-export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null }) {
   const headFull = String(head || '').trim()
   // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
   // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
@@ -261,6 +261,15 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
     `     没有任何声明边界时写「无声明边界」。未裁决=未审。`,
     `  4. 作答中的防护声明（如有）：声称的防护机制在代码里真实存在且生效？`,
     `  5. 生成物同步（如涉及）：类型/契约文件与实现对齐？`,
+    // 项目评审探针（2026-10-12-review-probe-injection）：local.yaml review_probes 数据驱动注入——
+    // 检查单生产权收归 CLI 的项目特有面（dogfood 实证：主代理手写清单没想到的面无人查）。
+    // 未配置零注入——本段缺省时任务书与历史形态逐字一致（零回归）。
+    ...(Array.isArray(probeLines) && probeLines.length > 0 ? [
+      ``,
+      `【项目评审探针（local.yaml review_probes 注入——CLI 单源生产，项目特有面必查）】`,
+      ...probeLines.map((l) => `  - ${l}`),
+      `  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与上方检查单同口径，未答=未审）`,
+    ] : []),
     ``,
     `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
     // 代行惯例（坑 flow-done-sentinel-token-split ②，2026-10-08 实证）：宿主无已注册子代理
