@@ -1,0 +1,2 @@
+{"ts":1791815699870,"task":"task-01","evidence":"node --test test/thick-taskbook-cli.test.mjs 3/3 绿（渲染双态/门条件双态/CLI 双态）","source":"task-tick"}
+{"ts":1791815700280,"task":"task-03","evidence":"四族回归 28/28 + lint 全绿 + doc-ref-check 93/93（含本变更插行重锚 5 处）——2026-10-12 14:47 实跑","source":"task-tick"}

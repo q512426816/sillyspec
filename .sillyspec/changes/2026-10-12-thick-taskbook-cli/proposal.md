@@ -1,0 +1,33 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-12T14:28:08.645Z
+---
+# 提案书（Proposal）— 2026-10-12-thick-taskbook-cli
+
+## 动机
+
+任务原话转写：dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/plan/execute）在 agent 通道下，检查单与 review.json 契约散落在步骤指引里，没有一份可原样粘贴给子代理的完整派发任务书——主代理被迫自行拼装 2.3~3.5KB 派发 prompt，实证 9 份中 6 份带 leading 措辞（「本变更的修复：…」预设结论/「构建已跑过你无需重跑」外包验证），检查单生产权滞留主代理（三个生产缺陷全漏检的根因）。轻量道已有 CLI 单源任务书（renderReviewerTaskbook），平台通道也有（buildReviewerTaskBook）——本变更补齐 agent 通道。
+
+成功标准：
+- 新渲染函数 renderStageReviewerTaskbook（stage-review.js，避 import 环）：角色（干净上下文独立评审员）+ 评审对象主文档 + REVIEW_CHECKLISTS[stage] 检查单（逐条 pass/gap/fail）+ 项目评审探针（assembleProbeLinesForScope scope=thick，未配置零注入）+ 请求预算硬帽 12 次 + 只读纪律 + 产物路径（含 docHash 占位与 --refresh-hash 代填指引）+ 完成后动作（重跑 run <stage> --done）
+- 接线出口一：printStageReviewResult 失败路径——仅当失败原因是「缺少 stage review.json」（tier=independent 未产）时，在既有提示后打印完整任务书（其他失败原因如 docHash 失配不打印，防噪音）
+- 接线出口二：register-stage-review 生成骨架成功时打印同款任务书（派发前获取点，免撞门）
+- 平台通道（review-dispatch/buildReviewerTaskBook）零变化；步骤指引模板零触碰
+- 新增单测：渲染面（检查单/探针注入与未配置零注入/预算行/产物路径/完成后动作）+ 门失败打印条件性（缺 review.json 打印/docHash 失配不打印）+ register-stage-review 出口打印 + 既有 stage-review 回归族全绿
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 新渲染函数 renderStageReviewerTaskbook（stage-review.js，避 import 环）：角色（干净上下文独立评审员）+ 评审对象主文档 + REVIEW_CHECKLISTS[stage] 检查单（逐条 pass/gap/fail）+ 项目评审探针（assembleProbeLinesForScope scope=thick，未配置零注入）+ 请求预算硬帽 12 次 + 只读纪律 + 产物路径（含 docHash 占位与 --refresh-hash 代填指引）+ 完成后动作（重跑 run <stage> --done）
+2. 接线出口一：printStageReviewResult 失败路径——仅当失败原因是「缺少 stage review.json」（tier=independent 未产）时，在既有提示后打印完整任务书（其他失败原因如 docHash 失配不打印，防噪音）
+3. 接线出口二：register-stage-review 生成骨架成功时打印同款任务书（派发前获取点，免撞门）
+4. 平台通道（review-dispatch/buildReviewerTaskBook）零变化；步骤指引模板零触碰
+5. 新增单测：渲染面（检查单/探针注入与未配置零注入/预算行/产物路径/完成后动作）+ 门失败打印条件性（缺 review.json 打印/docHash 失配不打印）+ register-stage-review 出口打印 + 既有 stage-review 回归族全绿
+
+## 成功标准（可验证）
+
+1. 新渲染函数 renderStageReviewerTaskbook（stage-review.js，避 import 环）：角色（干净上下文独立评审员）+ 评审对象主文档 + REVIEW_CHECKLISTS[stage] 检查单（逐条 pass/gap/fail）+ 项目评审探针（assembleProbeLinesForScope scope=thick，未配置零注入）+ 请求预算硬帽 12 次 + 只读纪律 + 产物路径（含 docHash 占位与 --refresh-hash 代填指引）+ 完成后动作（重跑 run <stage> --done）
+2. 接线出口一：printStageReviewResult 失败路径——仅当失败原因是「缺少 stage review.json」（tier=independent 未产）时，在既有提示后打印完整任务书（其他失败原因如 docHash 失配不打印，防噪音）
+3. 接线出口二：register-stage-review 生成骨架成功时打印同款任务书（派发前获取点，免撞门）
+4. 平台通道（review-dispatch/buildReviewerTaskBook）零变化；步骤指引模板零触碰
+5. 新增单测：渲染面（检查单/探针注入与未配置零注入/预算行/产物路径/完成后动作）+ 门失败打印条件性（缺 review.json 打印/docHash 失配不打印）+ register-stage-review 出口打印 + 既有 stage-review 回归族全绿
