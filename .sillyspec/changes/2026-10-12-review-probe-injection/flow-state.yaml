@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis
+  别名冲突、三级表头未实现）全部由用户报障发现，独立评审零捕获——检查单由主代理手写，主代理没想到的面无人查；且检查单内容绑定具体技术栈无法跨项目复用。要把「项目特有评审面」变成 CLI 单源注入的数据：local.yaml
+  声明探针（纯数据：id/适用面/清单行/可选命令），CLI 在评审任务书（轻量 thin 与厚档 thick 两面）注入为独立段落。
+
+
+  成功标准：
+
+  - local.yaml 新段 review_probes：条目 {id: 自由文本标识, scope: thin|thick|all 缺省 all, lines: 自由文本清单行数组, command: 可选命令串（stdout
+  追加清单行）}——零内容枚举、零语言/框架绑定（内容全开放，命令任意 shell）；缺省/未配置=两面任务书与现状逐字一致（零回归）
+
+  - 新模块 src/review-probes.js：解析+装载+行解析纯函数（校验容错 fail-soft：单条目坏跳过并告警，不拦流程）；容量帽（条目≤16、每条行≤12、单行≤300 字符、命令超时
+  10s、命令输出≤2KB/≤20 行，超帽截断并留痕）
+
+  - 注入面一：flow-review.js renderReviewerTaskbook 增可选 probeLines 参数，在【检查单】后渲染【项目评审探针】段（flow.js 调用点接 local.yaml 装配）
+
+  - 注口面二：review-dispatch.js buildReviewerTaskBook 增可选 probeLines 参数，在审查清单后渲染同款段（两处调用点接装配）
+
+  - config-schema.js 登记 review_probes 段（读键/示例/说明，遵循既有条目格式）
+
+  - 新增单测：解析校验/scope 过滤/容量帽/命令 fail-soft 与超时/thin 任务书注入段在场与未配置零注入/thick 任务书同款
+autopilot: false
+baseline_commit: b371dd96323c62c61baacd9a24c6e2d0ee6f2906
+updatedAt: '2026-10-12T13:05:39.989Z'
+baseline_sha256: f9014279dc1816da62b7be4f1957d1c6d43ce8c48dda6d9f3817bab462b3ea02
+spec_approved: true
+spec_approved_at: '2026-10-12T13:05:39.989Z'
+spec_approved_by: zcode-dogfood-hardening
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-dogfood-hardening
+
