@@ -982,7 +982,7 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
     errors.push(
       `探针 7 验收×测试覆盖矩阵有 ${matrix.missingEvidence} 行证据缺失` +
       `（covered/covered-service/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
-      `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由。`
+      `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由（运行验证移交场景适用：构建回执+移交去向一句话）。`
     )
   }
 
@@ -1300,7 +1300,7 @@ export function judgeApiCoverageMatrix(args) {
         : `声明 ${N} 端点而 covered/covered-service 端点行仅 ${coveredCount}（解析零行降级，无法逐条列端点——按声明行拆出每端点行填判定）`
       errors.push(
         `接口验证覆盖矩阵覆盖不足：有效分母 ${validDenominator}（N=${N} − non-testable ${nonTestableCount}），covered+covered-service 分子 ${coveredCount}——缺覆盖端点：${list}。` +
-        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；端点行为由 service 层测试锁定的改 covered-service 并填测试锚点（\`.test.\` / file:line / 反引号）；不适用端点改 non-testable 并写一句理由；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
+        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；端点行为由 service 层测试锁定的改 covered-service 并填测试锚点（\`.test.\` / file:line / 反引号）；不适用端点改 non-testable 并写一句理由（含运行验证移交场景：构建级验证已过、运行冒烟移交部署后执行——理由写构建回执+移交去向，该行不计入分母，勿硬凑 covered-service）；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
       )
     }
     // covered-service 承接 advisory（D-001/R-01 第一版，只进 warnings 不进 errors）：端点级与
