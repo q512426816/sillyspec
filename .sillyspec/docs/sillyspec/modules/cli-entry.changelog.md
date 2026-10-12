@@ -26,3 +26,4 @@
 | 2026-10-12 | 2026-10-12-approve-channel-attest | dogfood 实证驱动（2026-10-10~12 fire-equipment 会话复盘，子代理取证）：8 次 fl |
 | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
 | 2026-10-12 | 2026-10-12-tick-evidence-multi-anchor | dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据 |
+| 2026-10-12 | 2026-10-12-cli-friction-signal | dogfood 实证驱动（fire-equipment 会话复盘·子代理A/B取证）：a) deps 门控阻断首条只有标 |

@@ -1,0 +1,120 @@
+{
+  "change": "2026-10-12-cli-friction-signal",
+  "baseline": "c529fcb5c27dd32f306079d7192a3b299a749e2f",
+  "head": "e37ff367b5c14bf269bb19ff43059377cf1d0ffd",
+  "files": [
+    "src/flow.js",
+    "src/index.js",
+    "src/local-register.js",
+    "src/run/gates.js",
+    "src/run/shared.js",
+    "test/cli-friction-signal.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 198,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-12T13:50:20.552Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c529fcb5c27dd32f306079d7192a3b299a749e2f",
+    "totals": {
+      "files": 6,
+      "additions": 198,
+      "deletions": 3
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/local-register.js",
+        "additions": 20,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 14,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cli-friction-signal.test.mjs",
+        "additions": 137,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "884307e89e7b39001b906f8fcbb7a88c4fa0e5a9103796f3c62e1151ccd7c894",
+  "patchStatus": "ok"
+}

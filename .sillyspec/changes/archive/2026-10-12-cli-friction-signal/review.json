@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-cli-friction-signal",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e37ff367b5c14bf269bb19ff43059377cf1d0ffd",
+  "findings": [
+    {
+      "id": "F-1",
+      "severity": "P3",
+      "title": "requirements.md FR-04 正文 A 项与测试绑定节口径不同步（子进程 vs 源锚）",
+      "detail": "FR-04 正文 A 仍写『子进程构造 depsStatus=failed 撞门，stderr 断言三要素+逃生口+勿手改（复用 enforce-deps-gate-diagnostic 夹具族模式）』，实际实现为源锚断言（test FR-01 源锚钉死）；测试绑定节 FR-01 行已如实声明源锚判定面并给出理由。绑定行是 flow done 的校验面且如实，属文档内部小撕裂，无行为影响、无承诺被违反。",
+      "evidence": "requirements.md L39（FR-04 正文 A）vs L47（FR-01 绑定行）；test/cli-friction-signal.test.mjs L33-43"
+    },
+    {
+      "id": "F-2",
+      "severity": "P3",
+      "title": "绑定行理由表述过宽：B3 夹具运行时实际会渲染新增文案行",
+      "detail": "绑定行称『既有 e2e 夹具走 worktreeGone 分支够不着该文案行』——对夹具 B 成立（fixture 注释自证：runCommand 启动清理删除 worktree → worktreeGone 分支），但同文件既有夹具 B3（重供给失败阻断）走 else 分支，运行时 stderr 会渲染新增的『状态文件/勿手改』行（未断言）。理由以偏概全不影响结论：源锚仍是该文案面唯一确定性判定面，B3 恰好提供 else 分支的运行时顺带覆盖。",
+      "evidence": "test/enforce-deps-gate-diagnostic.test.mjs L203-207（注释）与 L346（B3 断言 doctor --fix/依赖未就绪）"
+    },
+    {
+      "id": "F-3",
+      "severity": "P3",
+      "title": "主仓分支状态文件行的降级面",
+      "detail": "主仓 fail-loud 块『状态文件：…meta.json（勿手改…）』行仅在 wm 可用且 changeName 非空时打印（try/catch 包裹，路径解析失败省略）；跨仓分支 worktreePath 缺失时 join(cm.worktreePath || '', 'meta.json') 退化为相对路径。两者均为纯信号降级、不影响判定与退出码，符合 best-effort 文案面定位，仅作披露记档。",
+      "evidence": "src/run/gates.js L469-473（主仓分支 try/catch 守卫）、L386（跨仓分支 || '' 兜底）"
+    }
+  ],
+  "dimensionNotes": {
+    "检查单1_FR三方一致": {
+      "FR-01": "兑现。主仓 fail-loud 块与跨仓 crossFailed 循环两分支均输出 depsStatus、depsError 尾部（≤200 字符截断）、meta.json 完整路径三要素 + 勿手改警告；跨仓分支补 doctor --fix 正规逃生口行与 run execute 重供给指引（src/run/gates.js L377-391、L462-474）。测试源锚断言三要素+逃生口+判定行原样（test L33-43）。",
+      "FR-02": "兑现。src/flow.js 在既有 token 形态说明行（L1099 原样在场）后追加证据扫描面声明 + 跨仓指引两行（L1102-1103）；代码提交 diff 仅 +4 行（2 注释 + 2 console.error），其余文案零变化。测试源锚断言扫描面/跨仓指引/既有 token 行（test L45-51）。",
+      "FR-03": "兑现。src/local-register.js tryWriteMarker 写 <仓根>/.git/sillyspec-crossrepo.json（workspace=dirname(dirname(yamlPath)) 正斜杠 / key / registeredAt ISO；.git 非目录跳过；失败仅 stderr 告警）；src/run/shared.js resolveUninitCwdGate block 态读标记，workspace 为非空 string 才返回 crossRepo，损坏 JSON catch 按无标记；src/index.js L416-421 crossRepo 在场时追加精确指路两行（登记事实 + 回工作区或 --dir 指定 + 标记路径）。",
+      "FR-04": "兑现。test/cli-friction-signal.test.mjs 五面用例（FR-01 源锚/FR-02 源锚/标记写入幂等跳过/resolveUninitCwdGate 双态/CLI 级双态）+ 三回归族全绿。",
+      "无标记零变化": "核证成立。index.js 代码提交（76fd528c）diff 为纯追加 if (uninitGate.crossRepo) {…两行}，无标记路径所有输出行均为未触及的上下文行，逐字节同旧；CLI 级实测（临时 git 仓删标记后跑 flow status）输出回落既有四行通用文案。",
+      "判定语义零变化": "核证成立。gates.js 代码提交 diff 仅动 stderr 文案行（两条『上次供给错误』单行改尾部截断版、新增状态文件/逃生口/警告行），放行集合 ['linked','installed','n/a'].includes、crossCheckOrExit 的 !includes 过滤、process.exit(1) 与 index.js process.exit(2) 全部零触及。"
+    },
+    "检查单2_盲维四问": {
+      "乱序": "标记 workspace 是注册时点快照、可过期——index.js 精确指路两行叠加在通用三出路（L413-415 原样保留）之后，并存非替换；registeredAt 落时点可判新旧。过期指路指向不存在路径时用户仍有通用出路兜底。代码核实。",
+      "并发": "标记写走 writeAtomicSync（tmp+rename 原子替换，读者见旧版或新版）；并发注册同仓不同工作区各自持本工作区 local.yaml 锁、标记单文件后写者胜且恒为完整 JSON，无撕裂半态。local.yaml 本体 RMW 仍在 .local.yaml.lock 内（既有）。代码核实。",
+      "切换": "标记写入位于 local.yaml 写成功之后、best-effort；失败仅 console.warn 不抛不影响注册主流程；中断最坏缺标记=uninit 门退化为现状通用文案，无半态。幂等重注册分支补标记提供标记被删后的恢复通道。代码核实。",
+      "作用域": "标记在目标仓 .git/ 内——仓本地、天然不进工作树/不被 git 跟踪、克隆新副本不传播（新副本未注册，符合预期）；workspace 字段为登记时点绝对路径，逐机语义与 local.yaml repos 段同性质，不跨机串台。代码核实。"
+    },
+    "检查单3_披露裁决": {
+      "① workspace 绝对路径快照可过期": "可接受。并存非替换 + registeredAt 双缓解已实际落地在代码（非仅口头承诺）；过期不产生错误放行/拦截，只影响指路精度且有通用出路兜底；doctor 标记体检属 YAGNI（无消费方），不做合理。",
+      "② 多工作区注册同仓最后注册者胜": "可接受。uninit 门指路语义是『回某个能跑 CLI 的工作区』——任一登记工作区均成立，指路不误导；更精细归属判定当前无消费方，不做正确。",
+      "③ deps 阻断不自动 doctor --fix": "可接受。门不副作用自愈的立场与既有设计一致（enforceDepsGate 既有『--done 重供给重试』逻辑先于阻断且本次未改动）；新增面纯指路不代跑，不掩盖环境问题。",
+      "④ FR-01/02 以源锚为判定面": "可接受。纯文案面源锚可防文案被删/漂移的回归（input-format-copy 文案先例）；既有 e2e 夹具 B 确走 worktreeGone 分支够不着新文案行（夹具注释自证），B3 虽运行时经 else 分支但未断言新行——源锚是该文案面唯一确定性判定面，且绑定节已如实声明。附注见 finding F-2（理由表述以偏概全，不改结论）。"
+    },
+    "检查单4_防护声明": {
+      "幂等重注册补标记": "真实在场。src/local-register.js L114 幂等分支（值未变跳过写盘）显式调用 tryWriteMarker()，标记删除后重注册可恢复；write() 包装使新建段/就地改值/段内插入/CRLF 治愈全部写路径均落标记（L78-82）。",
+      "git 非目录跳过": "真实在场。L67 existsSync(gitDir) + statSync(gitDir).isDirectory() 双判，linked worktree 的 .git 文件形态与无 .git 目录均跳过零抛；写失败仅 console.warn（L74）不影响注册返回值。"
+    },
+    "检查单5_生成物同步": "确认无类型/契约文件面。代码主体提交 76fd528c 恰 6 文件（5 src + 1 test），无 .d.ts/契约/schema 变更；新增产物仅运行时 .git/sillyspec-crossrepo.json（仓本地标记文件，非接口契约）。",
+    "额外核对": {
+      "提交面": "git show e37ff367 --stat：恰 6 个文件、全部位于 .sillyspec/changes/2026-10-12-cli-friction-signal/（design/flow-state/proposal/requirements/task-evidence/tasks），未带走 .idea/vcs.xml、AGENTS.md、docs-check-baseline（三者在工作区仍为未提交修改态）。代码主体提交 76fd528c（=e37ff367^）恰 6 文件：src/flow.js(+4)、src/index.js(+6)、src/local-register.js(+21)、src/run/gates.js(+19/-2)、src/run/shared.js(+14)、test/cli-friction-signal.test.mjs(+137)。",
+      "工作区实态": "HEAD=e37ff367；工作区相对 HEAD 仅 .sillyspec 变更内部件与 .idea/AGENTS.md/docs-check-baseline 脏文件，src/test 与 HEAD 一致（评审读到的代码=提交态）。",
+      "测试实跑": "node --test test/cli-friction-signal.test.mjs test/uninit-cwd-gate.test.mjs test/local-register.test.mjs test/enforce-deps-gate-diagnostic.test.mjs → 23 pass / 0 fail / 0 skipped。",
+      "gates 判定行": "diff 确认 ['linked','installed','n/a'].includes(s) 与 cm.depsStatus 过滤行、两处 process.exit(1) 均不在改动行内（仅作上下文出现）。",
+      "CLI 级标记指路实测": "临时 git 仓写 {workspace,key,registeredAt} 标记后跑 node src/index.js flow status --change x：stderr 含『🎯 此仓已登记为 SillySpec 工作区的跨仓「sillyspec」——工作区根：…』与『请回工作区根运行本命令，或 --dir …（标记：….git/sillyspec-crossrepo.json）』精确指路两行，且通用三出路行原样并存；删除标记后输出回落既有四行、无指路段。exit=2 由测试套件 spawnSync 断言覆盖（本实测 shell 管道取到的是 tail 退出码，不采信管道值）。"
+    }
+  },
+  "reviewedAt": "2026-10-12T16:00:00.000Z"
+}

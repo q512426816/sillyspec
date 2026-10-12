@@ -8699,3 +8699,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-tick-evidence-multi-anchor
   status: active
+
+## FR-cli-entry-462 deps 门控阻断输出一次给全（run/gates.js 主仓与跨仓两分支）：depsStatus/depsError 尾部/meta.json 路径三要素齐 + 正规逃生口行（worktree doctor --fix 与 run execute 重供给）+ 明示「勿手改 meta.json（doctor 以实态校正）」——报错即自足，无需二跑定位
+变更：2026-10-12-cli-friction-signal
+状态：active
+摘要：跨仓阻断自足
+场景正文：
+- 场景：跨仓阻断自足 — Given 跨仓 worktree meta depsStatus=failed、depsError='npm ci failed (…)长文本'；When run exe
+全文：.sillyspec/changes/archive/2026-10-12-cli-friction-signal/requirements.md#FR-01
+最近确认：e37ff367b5c14bf269bb19ff43059377cf1d0ffd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cli-friction-signal:flow:测试绑定FR-01
+  tests: test/cli-friction-signal.test.mjs「deps 阻断两分支文案一次给全（源锚钉死——同 input-format-copy 文案先例；既有 e2e 夹具走 worktreeGone 分支够不着本文案行，纯文案面以源锚为判定面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cli-friction-signal
+  status: active
+
+## FR-cli-entry-463 哨兵拒收文案（flow.js detectFakeCheckCompletion 拒收处）声明证据扫描面：工作区仓 git log baseline..HEAD + change 目录内 review.json；跨仓交付指引一行（跨仓提交不在扫描面，须在本仓提交消息带 task-NN 或产 review.json）
+变更：2026-10-12-cli-friction-signal
+状态：active
+摘要：扫描面自释
+场景正文：
+- 场景：扫描面自释 — Given 全勾零证据拒收触发；When 读 stderr；Then 含扫描面声明行与跨仓指引行，且既有 token 形态说明行原样在场。
+全文：.sillyspec/changes/archive/2026-10-12-cli-friction-signal/requirements.md#FR-02
+最近确认：e37ff367b5c14bf269bb19ff43059377cf1d0ffd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cli-friction-signal:flow:测试绑定FR-02
+  tests: test/cli-friction-signal.test.mjs「哨兵拒收扫描面+跨仓指引两行源锚在场（含既有 token 行原样锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cli-friction-signal
+  status: active
+
+## FR-cli-entry-464 register-repo 写跨仓标记：registerRepoInLocalYaml 成功后 best-effort 向 <仓根>/.git/sillyspec-crossrepo.json 写 {workspace,key,registeredAt}（.git 内零工作区污染；写失败仅告警不影响注册）；resolveUninitCwdGate block 态读标记，index.js 未初始化门文案追加精确指路（「此仓已登记为工作区 <路径> 的跨仓「<key>」——请回该工作区运行或 --dir 指定」）；无标记时文案与现状逐字一致
+变更：2026-10-12-cli-friction-signal
+状态：active
+摘要：子仓精确指路；无标记零变化
+场景正文：
+- 场景：子仓精确指路 — Given 仓 R 已 register-repo（标记在场）且 R 内无 .sillyspec；When 在 R 内跑非豁免命令；Then exit 2 且 stderr
+- 场景：无标记零变化 — Given 无标记的未初始化目录；When 同；Then stderr 与改动前逐字一致（仅既有四行文案）。
+全文：.sillyspec/changes/archive/2026-10-12-cli-friction-signal/requirements.md#FR-03
+最近确认：e37ff367b5c14bf269bb19ff43059377cf1d0ffd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cli-friction-signal:flow:测试绑定FR-03
+  tests: test/cli-friction-signal.test.mjs「标记写入幂等 + uninit 门精确指路/无标记零变化（CLI 级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cli-friction-signal
+  status: active
+
+## FR-cli-entry-465 新增单测：deps 阻断输出三要素断言（现有 harness 夹具族）/ 哨兵文案扫描面行 / 标记写入与幂等 / 带标记 uninit 门精确指路 / 无标记零变化
+变更：2026-10-12-cli-friction-signal
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/cli-friction-signal.test.mjs test/uninit-cwd-gate.test.mjs tes
+全文：.sillyspec/changes/archive/2026-10-12-cli-friction-signal/requirements.md#FR-04
+最近确认：e37ff367b5c14bf269bb19ff43059377cf1d0ffd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cli-friction-signal:flow:测试绑定FR-04
+  tests: test/cli-friction-signal.test.mjs「全量用例 + uninit/local-register/deps-diagnostic 回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cli-friction-signal
+  status: active

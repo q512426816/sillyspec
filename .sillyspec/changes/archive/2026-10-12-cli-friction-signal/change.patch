@@ -1,0 +1,288 @@
+diff --git a/src/flow.js b/src/flow.js
+index bbefa3a5..879c4874 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1097,6 +1097,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           // token 合法形态写明（2026-10-11-flow-start-redline-frontload）：实证「task-01..task-05」
+           // 区间写法被判零证据时才知道格式约束——拒收文案自释，减少一轮试错。
+           console.error('   补证据（提交标题或正文带 task-NN——逐个列出或 /、，连写（如 task-01/02/03），「task-01..task-05」区间写法不认；或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++          // 扫描面透明化（2026-10-12-cli-friction-signal，dogfood 实证：跨仓交付的 agent 靠猜
++          // 证据该落在哪）——声明哨兵只扫工作区仓与变更目录，跨仓仓提交天然不在面内。
++          console.error(`   证据扫描面：工作区仓 git log ${st.baseline_commit ? String(st.baseline_commit).slice(0, 10) : 'baseline'}..HEAD 的提交消息（标题+正文）+ 变更目录内 review.json；`)
++          console.error('   跨仓仓（register-repo 登记的外部仓）的提交不在扫描面——交付提交在其他仓时，须在工作区仓的提交消息带 task-NN（如治理工件提交）或产出 review.json 补证。')
+           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
+           reportMidFail('ledger')
+           process.exit(1)
+diff --git a/src/index.js b/src/index.js
+index c62d6eca..7ed543b8 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -413,6 +413,12 @@ async function main() {
+     console.error('   非 init/scan 类命令需要已初始化的项目根。');
+     console.error('   修复：① cd 回项目根（含 .sillyspec 的目录）再跑；② 新项目先 sillyspec init（棕地项目 sillyspec scan）；③ 或 --spec-dir <路径> 显式指定 .sillyspec 位置。');
+     console.error('   查询/诊断类命令（status/doctor/progress/next/knowledge 等）不受此拦。');
++    // 跨仓精确指路（2026-10-12-cli-friction-signal）：register-repo 登记过的子仓跑 CLI——
++    // 通用三出路之上叠加登记事实与工作区路径（dogfood：三连跑错目录靠人工发现）。无标记零变化。
++    if (uninitGate.crossRepo) {
++      console.error(`   🎯 此仓已登记为 SillySpec 工作区的跨仓${uninitGate.crossRepo.key ? `「${uninitGate.crossRepo.key}」` : ''}——工作区根：${uninitGate.crossRepo.workspace}`);
++      console.error(`      请回工作区根运行本命令，或 --dir "${uninitGate.crossRepo.workspace}" 显式指定。（标记：${uninitGate.gitRoot}/.git/sillyspec-crossrepo.json）`);
++    }
+     process.exit(2);
+   }
+   if (uninitGate.verdict === 'pass' && uninitGate.anchor && resolve(dir) !== uninitGate.anchor) {
+diff --git a/src/local-register.js b/src/local-register.js
+index 9df0c66c..ad0bb47e 100644
+--- a/src/local-register.js
++++ b/src/local-register.js
+@@ -15,7 +15,7 @@
+  * `sillyspec local detect` / `platform connect` 各自补齐）。落盘走 writeAtomicSync
+  * （tmp+rename，防多会话并发写半截，与 local detect 写入口径一致）。
+  */
+-import { existsSync, readFileSync, mkdirSync } from 'fs'
++import { existsSync, readFileSync, mkdirSync, statSync } from 'fs'
+ import { dirname, join } from 'path'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { withFileLock } from './quicklog.js'
+@@ -58,9 +58,27 @@ export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+   const posixPath = String(repoPath).replace(/\\/g, '/')
+   const entryLine = `  ${key}: ${posixPath}`
+ 
++  // 跨仓标记（2026-10-12-cli-friction-signal）：注册成功后 best-effort 向目标仓 .git/ 内写
++  // 指路标记——uninit 门据此把「在子仓跑 CLI」精确指回工作区（dogfood：三连跑错目录靠人工
++  // 发现）。.git/ 内零工作区污染；linked worktree 的 .git 是文件则跳过；失败仅告警不拦注册。
++  const tryWriteMarker = () => {
++    try {
++      const gitDir = join(String(repoPath), '.git')
++      if (!existsSync(gitDir) || !statSync(gitDir).isDirectory()) return
++      writeAtomicSync(join(gitDir, 'sillyspec-crossrepo.json'), JSON.stringify({
++        workspace: dirname(dirname(yamlPath)).replace(/\\/g, '/'),
++        key,
++        registeredAt: new Date().toISOString(),
++      }, null, 2) + '\n')
++    } catch (e) {
++      console.warn(`⚠️ 跨仓标记写入失败（${e && e.message ? e.message : e}）——注册仍成功，未初始化门指路退化为通用文案`)
++    }
++  }
++
+   const write = (text) => {
+     mkdirSync(dirname(yamlPath), { recursive: true })
+     writeAtomicSync(yamlPath, text)
++    tryWriteMarker()
+   }
+ 
+   const lines = raw.split('\n')
+@@ -93,6 +111,7 @@ export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
+         // 编辑器写入），内存归一后比对相等直接跳过 → 磁盘永不治愈 + CLI 报 ✅ 假成功 → 解析侧
+         // （修复前）空 Map → MultiRepoContext 报「未注册」→ 死循环。幂等路径也落盘一次治愈。
+         if (hadCr) write(lines.join('\n'))
++        tryWriteMarker() // 幂等重注册也补标记（标记被删后可经重注册恢复——uninit 门指路依赖）
+         return { fileCreated: false, sectionCreated: false, replaced: false } // 值未变，幂等跳过
+       }
+       lines[i] = entryLine
+diff --git a/src/run/gates.js b/src/run/gates.js
+index c0bb4714..764a4f3e 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -377,9 +377,16 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
+     console.error('❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──')
+     for (const { repoKey, meta: cm } of crossFailed) {
+       console.error(`   跨仓 repo ${repoKey} 依赖未就绪（depsStatus=${cm.depsStatus || 'unknown'}）——workdir: ${cm.worktreePath}`)
+-      if (cm.depsError) console.error(`   上次供给错误：${cm.depsError}`)
++      // 报错一次给全（2026-10-12-cli-friction-signal，dogfood 实证：首条阻断只有标题无明细、
++      // agent 二跑定位 + 最终两次手改内部 meta.json 才过门）——三要素 + 逃生口 + 防手改警告。
++      if (cm.depsError) {
++        const tail = String(cm.depsError)
++        console.error(`   上次供给错误（尾部 ≤200 字符）：${tail.length > 200 ? '…' + tail.slice(-200) : tail}`)
++      }
++      console.error(`   状态文件：${join(cm.worktreePath || '', 'meta.json')}（勿手改——doctor 以实态校正，假状态会被下次校验打回）`)
+     }
+     console.error('   修复：进上述跨仓 worktree 手动安装依赖（用该仓的包管理器），或重跑 sillyspec run execute 让 CLI 重试供给后 --done。')
++    console.error('   正规逃生口：sillyspec worktree doctor --fix（按实态重供并回写 meta.json）。')
+     if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
+     process.exit(1)
+   }
+@@ -455,7 +462,15 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
+     console.error(`   原因：依赖未就绪（depsStatus=${depsStatus || 'unknown'}），不得在无构建/测试能力时声称完成。`)
+     console.error(`   修复：sillyspec worktree doctor --fix${changeName ? ` --change ${changeName}` : ''}`)
+     console.error('   或在 worktree 内手动安装依赖后重试。')
+-    if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
++    if (meta?.depsError) {
++      const tail = String(meta.depsError)
++      console.error(`   上次供给错误（尾部 ≤200 字符）：${tail.length > 200 ? '…' + tail.slice(-200) : tail}`)
++    }
++    // 状态文件路径 + 防手改（2026-10-12-cli-friction-signal）：dogfood 实证 agent 被迫手改
++    // meta.json 假状态过门——路径透明 + 明示正规校正通道，堵死「改状态绕门」的路。
++    try {
++      if (wm && changeName) console.error(`   状态文件：${join(wm.getWorktreePath(changeName), 'meta.json')}（勿手改——doctor 以实态校正）`)
++    } catch { /* worktree 路径解析失败省略该行 */ }
+   }
+   if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
+   process.exit(1)
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 838f271f..abe98641 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -445,6 +445,20 @@ export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } =
+     }
+   }
+   const gitRoot = safeGit(resolvedDir, ['rev-parse', '--show-toplevel']).value || null
++  // 跨仓标记指路（2026-10-12-cli-friction-signal）：该仓被 register-repo 登记过（标记在 .git/ 内，
++  // registerRepoInLocalYaml 写入）→ block 态附 crossRepo 事实，index.js 门文案据此精确指回工作区
++  // （dogfood：agent 在跨仓子仓跑 CLI 三连跑错目录靠人工发现）。标记损坏/缺失按无标记零变化。
++  if (gitRoot) {
++    try {
++      const markerPath = join(gitRoot, '.git', 'sillyspec-crossrepo.json')
++      if (existsSync(markerPath)) {
++        const m = JSON.parse(readFileSync(markerPath, 'utf8'))
++        if (m && typeof m.workspace === 'string' && m.workspace) {
++          return { verdict: 'block', gitRoot, crossRepo: { workspace: m.workspace, key: typeof m.key === 'string' ? m.key : null } }
++        }
++      }
++    } catch { /* 标记损坏按无标记 */ }
++  }
+   return { verdict: 'block', gitRoot }
+ }
+ 
+diff --git a/test/cli-friction-signal.test.mjs b/test/cli-friction-signal.test.mjs
+new file mode 100644
+index 00000000..948d6b4d
+--- /dev/null
++++ b/test/cli-friction-signal.test.mjs
+@@ -0,0 +1,137 @@
++/**
++ * cli-friction-signal.test.mjs — 报错自足 + 子仓精确指路（2026-10-12-cli-friction-signal）
++ *
++ * 验收面：
++ *   ① deps 门控阻断文案一次给全（源锚钉死，同 input-format-copy 先例——纯文案面）：
++ *      主仓与跨仓两分支均含 meta.json 路径行 / depsError 尾部 200 截断 / 勿手改警告；
++ *      跨仓分支含 doctor --fix 正规逃生口行；
++ *   ② 哨兵拒收文案扫描面声明 + 跨仓指引两行在场（源锚）；
++ *   ③ registerRepoInLocalYaml 跨仓标记：写入 <仓根>/.git/sillyspec-crossrepo.json
++ *      （workspace 正斜杠/key/registeredAt）+ 幂等重注册补标记 + .git 非目录跳过零抛；
++ *   ④ resolveUninitCwdGate：标记在场 block 态返回 crossRepo；损坏标记按无标记；
++ *   ⑤ CLI 级双态：带标记子仓跑非豁免命令 exit 2 + 精确指路两行；无标记输出与现状一致
++ *      （不含「已登记为 SillySpec 工作区」字样）。
++ * dogfood 驱动（fire-equipment 复盘）：deps 首条阻断无明细+agent 两次手改 meta.json 过门；
++ * 哨兵不声明扫描面；三连「CLI 跑错目录」靠人工发现。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { registerRepoInLocalYaml } from '../src/local-register.js'
++import { resolveUninitCwdGate } from '../src/run/shared.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++
++test('FR-01 源锚：deps 阻断两分支一次给全（meta 路径/尾部截断/勿手改/逃生口）', () => {
++  const src = read('src/run/gates.js')
++  // 两分支共有的三要素 + 防手改
++  assert.ok((src.match(/勿手改——doctor 以实态校正/g) || []).length >= 2, '两分支各有勿手改警告')
++  assert.ok((src.match(/状态文件：\$\{join/g) || []).length >= 2, '两分支各有 meta.json 路径行')
++  assert.match(src, /尾部 ≤200 字符/) // depsError 尾部截断（两分支同款）
++  // 跨仓分支专属：正规逃生口行
++  assert.match(src, /正规逃生口：sillyspec worktree doctor --fix（按实态重供并回写 meta\.json）/)
++  // 判定语义零变化锚：放行集合与 exit(1) 原样
++  assert.match(src, /!\['linked', 'installed', 'n\/a'\]\.includes\(cm\.depsStatus\)/)
++})
++
++test('FR-02 源锚：哨兵拒收声明证据扫描面 + 跨仓指引', () => {
++  const src = read('src/flow.js')
++  assert.match(src, /证据扫描面：工作区仓 git log /)
++  assert.match(src, /跨仓仓（register-repo 登记的外部仓）的提交不在扫描面/)
++  // 既有 token 形态说明行仍在（其后追加非替换）
++  assert.match(src, /「task-01\.\.task-05」区间写法不认；或产 review\.json）或取消勾选后重跑/)
++})
++
++test('FR-03 标记写入：.git/sillyspec-crossrepo.json + 幂等补标记 + 非 git 目录跳过', async () => {
++  const ws = mkdtempSync(join(tmpdir(), 'cfs-ws-'))
++  const repo = mkdtempSync(join(tmpdir(), 'cfs-repo-'))
++  try {
++    mkdirSync(join(ws, '.sillyspec'), { recursive: true })
++    mkdirSync(join(repo, '.git'), { recursive: true }) // 模拟 git 仓（.git 为目录）
++    const yamlPath = join(ws, '.sillyspec', 'local.yaml')
++    await registerRepoInLocalYaml(yamlPath, 'subgrid', repo)
++    const markerPath = join(repo, '.git', 'sillyspec-crossrepo.json')
++    const m = JSON.parse(readFileSync(markerPath, 'utf8'))
++    assert.equal(m.key, 'subgrid')
++    assert.ok(m.workspace.endsWith('.sillyspec/..') === false) // workspace 是工作区根（.sillyspec 父目录）正斜杠
++    assert.ok(!m.workspace.includes('\\'))
++    assert.ok(m.registeredAt)
++    // 幂等重注册补标记（删除标记后重注册可恢复）
++    rmSync(markerPath)
++    await registerRepoInLocalYaml(yamlPath, 'subgrid', repo)
++    assert.ok(readFileSync(markerPath, 'utf8').includes('"subgrid"'))
++    // 非 git 目录（无 .git）：跳过零抛
++    const plain = mkdtempSync(join(tmpdir(), 'cfs-plain-'))
++    try {
++      await registerRepoInLocalYaml(yamlPath, 'plainrepo', plain)
++      assert.ok(!exists(join(plain, '.git')))
++    } finally { rmSync(plain, { recursive: true, force: true }) }
++  } finally { rmSync(ws, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }) }
++})
++
++test('FR-04 resolveUninitCwdGate：标记在场返回 crossRepo；损坏按无标记', () => {
++  const repo = mkdtempSync(join(tmpdir(), 'cfs-gate-'))
++  try {
++    const g = (args) => {
++      const r = spawnSync('git', args, { cwd: repo, encoding: 'utf8' })
++      if (r.status !== 0) throw new Error(r.stderr)
++    }
++    g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++    writeFileSync(join(repo, 'f.txt'), 'x\n'); g(['add', '.']); g(['commit', '-q', '-m', 'i'])
++    const marker = join(repo, '.git', 'sillyspec-crossrepo.json')
++    // 无标记：block 无 crossRepo 字段
++    const plain = resolveUninitCwdGate('flow', { dir: repo })
++    assert.equal(plain.verdict, 'block')
++    assert.equal(plain.crossRepo, undefined)
++    // 标记在场：返回 crossRepo
++    writeFileSync(marker, JSON.stringify({ workspace: 'X:/ws', key: 'urgent', registeredAt: '2026-10-12T00:00:00Z' }))
++    const hit = resolveUninitCwdGate('flow', { dir: repo })
++    assert.equal(hit.verdict, 'block')
++    assert.deepEqual(hit.crossRepo, { workspace: 'X:/ws', key: 'urgent' })
++    // 损坏标记：按无标记
++    writeFileSync(marker, '{broken')
++    const broken = resolveUninitCwdGate('flow', { dir: repo })
++    assert.equal(broken.crossRepo, undefined)
++  } finally { rmSync(repo, { recursive: true, force: true }) }
++})
++
++test('FR-05 CLI 级：带标记子仓精确指路 / 无标记零变化', () => {
++  const mkRepo = () => {
++    const repo = mkdtempSync(join(tmpdir(), 'cfs-cli-'))
++    const g = (args) => {
++      const r = spawnSync('git', args, { cwd: repo, encoding: 'utf8' })
++      if (r.status !== 0) throw new Error(r.stderr)
++    }
++    g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++    writeFileSync(join(repo, 'f.txt'), 'x\n'); g(['add', '.']); g(['commit', '-q', '-m', 'i'])
++    return repo
++  }
++  const run = (cwd) => spawnSync(process.execPath, [CLI, 'flow', 'status', '--change', 'x'], {
++    cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++  const withMarker = mkRepo()
++  const noMarker = mkRepo()
++  try {
++    writeFileSync(join(withMarker, '.git', 'sillyspec-crossrepo.json'), JSON.stringify({ workspace: 'W:/my/workspace', key: 'subgrid', registeredAt: '2026-10-12T00:00:00Z' }))
++    const hit = run(withMarker)
++    assert.equal(hit.status, 2)
++    assert.match(hit.stderr, /已登记为 SillySpec 工作区的跨仓「subgrid」/)
++    assert.match(hit.stderr, /W:\/my\/workspace/)
++    assert.match(hit.stderr, /--dir "W:\/my\/workspace"/)
++    // 无标记：与现状一致（不含指路段）
++    const plain = run(noMarker)
++    assert.equal(plain.status, 2)
++    assert.ok(!plain.stderr.includes('已登记为 SillySpec 工作区'))
++    assert.match(plain.stderr, /当前目录未初始化/)
++  } finally { rmSync(withMarker, { recursive: true, force: true }); rmSync(noMarker, { recursive: true, force: true }) }
++})
++
++function exists(p) { try { readFileSync(p); return true } catch { return false } }

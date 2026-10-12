@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -25,11 +33,17 @@ input: >-
   - 新增单测：deps 阻断输出三要素断言（现有 harness 夹具族）/ 哨兵文案扫描面行 / 标记写入与幂等 / 带标记 uninit 门精确指路 / 无标记零变化
 autopilot: false
 baseline_commit: c529fcb5c27dd32f306079d7192a3b299a749e2f
-updatedAt: '2026-10-12T13:43:33.944Z'
+updatedAt: '2026-10-12T13:57:13.511Z'
 baseline_sha256: 18e5ef07a395c30de8626f84590fb1ae519c7608e340b7a0d850e80cf2b21647
 spec_approved: true
 spec_approved_at: '2026-10-12T13:43:33.943Z'
 spec_approved_by: zcode-dogfood-hardening
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-dogfood-hardening
+gate_summary: >-
+  test: skipped ← module[]+deps(js97+js-meta-skip1+nontest-skip1)+fr(98)（61.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012134932\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（46.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012134932\test-result.json｜门文件 8 个
 

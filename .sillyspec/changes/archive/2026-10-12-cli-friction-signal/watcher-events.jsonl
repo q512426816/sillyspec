@@ -1,0 +1,14 @@
+{"ts":1791812581835,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791812604922,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791812604922,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791812788745,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791812862968,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791812863236,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791812863494,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick","evidence":"5/5 新测试 + 18/18 回归 + lint 全绿（2026-10-12 13:52 实跑）"}
+{"ts":1791812864298,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791812864298,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1791812864298,"kind":"commit","stage":null,"detail":"76fd528c","provisional":true}
+{"ts":1791812874788,"kind":"commit","stage":null,"detail":"e37ff367","provisional":true}
+{"ts":1791812901223,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791812974121,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（61.1s） · 20261012134932","provisional":true}
+{"ts":1791813387189,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}

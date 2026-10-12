@@ -36,7 +36,7 @@ Given 无标记的未初始化目录；When 同；Then stderr 与改动前逐字
 
 ### FR-04: 新增单测：deps 阻断输出三要素断言（现有 harness 夹具族）/ 哨兵文案扫描面行 / 标记写入与幂等 / 带标记 uninit 门精确指路 / 无标记零变化
 
-- **必须**新增 test/cli-friction-signal.test.mjs：A) 子进程构造 depsStatus=failed 撞门，stderr 断言三要素+逃生口+勿手改（复用 enforce-deps-gate-diagnostic 夹具族模式）；B) 哨兵拒收文案含扫描面行（源锚断言拒收点文案常量在场）；C) registerRepoInLocalYaml 写标记与幂等刷新；D) resolveUninitCwdGate 带标记返回 crossRepo；E) CLI 级：带标记子仓跑非豁免命令精确指路 / 无标记零变化。全绿 + 既有 uninit-cwd-gate、local-register、enforce-deps-gate-diagnostic 回归族全绿。
+- **必须**新增 test/cli-friction-signal.test.mjs：A) deps 阻断两分支文案源锚断言（三要素+逃生口+勿手改——纯文案面以源锚为判定面，同 input-format-copy 先例）；B) 哨兵拒收文案扫描面行源锚（含既有 token 行原样锚）；C) registerRepoInLocalYaml 写标记与幂等刷新；D) resolveUninitCwdGate 带标记返回 crossRepo；E) CLI 级：带标记子仓跑非豁免命令精确指路 / 无标记零变化。全绿 + 既有 uninit-cwd-gate、local-register、enforce-deps-gate-diagnostic 回归族全绿。
 
 #### 场景：主路径
 

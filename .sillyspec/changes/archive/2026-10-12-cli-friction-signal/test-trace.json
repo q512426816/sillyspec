@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-cli-friction-signal",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-cli-friction-signal:flow:测试绑定FR-01",
+      "tests": [
+        "test/cli-friction-signal.test.mjs「deps 阻断两分支文案一次给全（源锚钉死——同 input-format-copy 文案先例；既有 e2e 夹具走 worktreeGone 分支够不着本文案行，纯文案面以源锚为判定面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cli-friction-signal"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-cli-friction-signal:flow:测试绑定FR-02",
+      "tests": [
+        "test/cli-friction-signal.test.mjs「哨兵拒收扫描面+跨仓指引两行源锚在场（含既有 token 行原样锚）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cli-friction-signal"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-cli-friction-signal:flow:测试绑定FR-03",
+      "tests": [
+        "test/cli-friction-signal.test.mjs「标记写入幂等 + uninit 门精确指路/无标记零变化（CLI 级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cli-friction-signal"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-cli-friction-signal:flow:测试绑定FR-04",
+      "tests": [
+        "test/cli-friction-signal.test.mjs「全量用例 + uninit/local-register/deps-diagnostic 回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cli-friction-signal"
+    }
+  ]
+}
