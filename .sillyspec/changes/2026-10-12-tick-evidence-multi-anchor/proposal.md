@@ -1,0 +1,30 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-12T13:26:06.198Z
+---
+# 提案书（Proposal）— 2026-10-12-tick-evidence-multi-anchor
+
+## 动机
+
+任务原话转写：dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据（/tmp 日志 exit 0）无法补录，恢复后只能重跑构建——tick 是纯簿记动词无证据参数；且跨仓轻量变更的评审锚 reviewedAgainst 只收单仓单 sha 字符串，多仓交付『对着哪个面评审』不可机核。
+
+成功标准：
+- task tick 新增 --evidence <文本>（自由文本，@file 前缀读文件内容，读取帽 8KB/条目数不限语义不变）：翻格同时把证据追加到 changes/<名>/task-evidence.jsonl（ts/task/evidence/source 四键 JSONL，UTF-8 追加写）；watcher task-done 事件附 evidence 字段（best-effort）；回显一行证据登记提示。无 --evidence 行为与现状逐字一致（零回归）；@file 读取失败 fail-soft 转文本原样登记并告警
+- review.json 契约 reviewedAgainst 扩展双形态：字符串（既有，7-40 hex，零破坏）或对象 {workspace: sha, repos: {<key>: sha}}——对象形态 workspace 必填 7-40 hex，repos 各值 7-40 hex，仓键开放（local.yaml repos 注册表键空间，不枚举）；validateReviewJson 双形态校验；reviewAnchoredToHead 对象形态取 workspace 锚参与漂移判定（缺 workspace 判 false fail-safe）
+- renderReviewerTaskbook 在变更带跨仓面（change-patch.json 含 repos 键）时，产物 schema 的 reviewedAgainst 行印双形态说明（对象形态优先，附各仓 rev-parse HEAD 提示）；单仓变更维持现状逐字一致
+- 新增单测：evidence 三态（文本/@file/失败 fail-soft）+ 双形态 reviewedAgainst 校验矩阵（合法字符串/合法对象/混合坏值各拒）+ 对象锚定判定 + 任务书跨仓双形态提示在场/单仓零变化 + 既有回归（task-tick/flow-review）
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. task tick 新增 --evidence <文本>（自由文本，@file 前缀读文件内容，读取帽 8KB/条目数不限语义不变）：翻格同时把证据追加到 changes/<名>/task-evidence.jsonl（ts/task/evidence/source 四键 JSONL，UTF-8 追加写）；watcher task-done 事件附 evidence 字段（best-effort）；回显一行证据登记提示。无 --evidence 行为与现状逐字一致（零回归）；@file 读取失败 fail-soft 转文本原样登记并告警
+2. review.json 契约 reviewedAgainst 扩展双形态：字符串（既有，7-40 hex，零破坏）或对象 {workspace: sha, repos: {<key>: sha}}——对象形态 workspace 必填 7-40 hex，repos 各值 7-40 hex，仓键开放（local.yaml repos 注册表键空间，不枚举）；validateReviewJson 双形态校验；reviewAnchoredToHead 对象形态取 workspace 锚参与漂移判定（缺 workspace 判 false fail-safe）
+3. renderReviewerTaskbook 在变更带跨仓面（change-patch.json 含 repos 键）时，产物 schema 的 reviewedAgainst 行印双形态说明（对象形态优先，附各仓 rev-parse HEAD 提示）；单仓变更维持现状逐字一致
+4. 新增单测：evidence 三态（文本/@file/失败 fail-soft）+ 双形态 reviewedAgainst 校验矩阵（合法字符串/合法对象/混合坏值各拒）+ 对象锚定判定 + 任务书跨仓双形态提示在场/单仓零变化 + 既有回归（task-tick/flow-review）
+
+## 成功标准（可验证）
+
+1. task tick 新增 --evidence <文本>（自由文本，@file 前缀读文件内容，读取帽 8KB/条目数不限语义不变）：翻格同时把证据追加到 changes/<名>/task-evidence.jsonl（ts/task/evidence/source 四键 JSONL，UTF-8 追加写）；watcher task-done 事件附 evidence 字段（best-effort）；回显一行证据登记提示。无 --evidence 行为与现状逐字一致（零回归）；@file 读取失败 fail-soft 转文本原样登记并告警
+2. review.json 契约 reviewedAgainst 扩展双形态：字符串（既有，7-40 hex，零破坏）或对象 {workspace: sha, repos: {<key>: sha}}——对象形态 workspace 必填 7-40 hex，repos 各值 7-40 hex，仓键开放（local.yaml repos 注册表键空间，不枚举）；validateReviewJson 双形态校验；reviewAnchoredToHead 对象形态取 workspace 锚参与漂移判定（缺 workspace 判 false fail-safe）
+3. renderReviewerTaskbook 在变更带跨仓面（change-patch.json 含 repos 键）时，产物 schema 的 reviewedAgainst 行印双形态说明（对象形态优先，附各仓 rev-parse HEAD 提示）；单仓变更维持现状逐字一致
+4. 新增单测：evidence 三态（文本/@file/失败 fail-soft）+ 双形态 reviewedAgainst 校验矩阵（合法字符串/合法对象/混合坏值各拒）+ 对象锚定判定 + 任务书跨仓双形态提示在场/单仓零变化 + 既有回归（task-tick/flow-review）

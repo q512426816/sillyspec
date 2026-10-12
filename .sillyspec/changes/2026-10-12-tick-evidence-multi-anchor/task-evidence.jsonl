@@ -1,0 +1,1 @@
+{"ts":1791811972198,"task":"task-01","evidence":"node --test test/tick-evidence-multi-anchor.test.mjs 6/6 绿（三态+幂等零追加+零回归断言）","source":"task-tick"}
