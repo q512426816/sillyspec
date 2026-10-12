@@ -68,7 +68,7 @@ async function fixture({ declareMissing = true, deliverFile = false, withReview 
 
 const checkById = (envelope, id) => (envelope.checks || []).find(c => c.id === id)
 
-test('F1+F2 verify --full：声明未交付→reconcile 红；无 review→stage-review 红（同回合双报）', async () => {
+test('F1 verify --full：声明未交付→reconcile 红；无 stage-review 期望（坑 stage-review-verify-enum-gap 对齐）', async () => {
   const { cwd, specBase, changeName } = await fixture({ declareMissing: true, deliverFile: false, withReview: false })
   const { envelope } = await runGate('verify', changeName, { cwd, specBase, full: true })
   const rec = checkById(envelope, 'full-target-files-reconcile')
@@ -76,9 +76,10 @@ test('F1+F2 verify --full：声明未交付→reconcile 红；无 review→stage
   assert.ok(rec, 'F1: full-target-files-reconcile 检查在场')
   assert.equal(rec.ok, false, 'F1: 声明未交付 → reconcile 红（--done 同因将拦，预检同回合暴露）')
   assert.ok((rec.errors || []).some(e => e.includes('src-deliv.js')), 'F1: 错误点名缺交付文件')
-  assert.ok(sr, 'F2: full-stage-review 检查在场')
-  assert.equal(sr.ok, false, 'F2: 无 review → stage-review 红')
-  assert.ok((sr.errors || []).some(e => e.includes('register-stage-review')), 'F2: 错误含生成骨架指引')
+  // 坑 stage-review-verify-enum-gap（2026-10-11 实证）：Stage Review Gate 实际只拦
+  // brainstorm/plan/execute（gates.js），register 枚举无 verify——verify 不产 stage review
+  // 期望（此前红条指称的门禁不存在 + 给出的修复命令不可执行，双重误导）。
+  assert.equal(sr, undefined, 'F2: verify --full 无 full-stage-review 检查（期望面对齐门禁现实）')
 })
 
 test('F3 默认档：无 --full → envelope.checks 无 full-* 条目（零行为变化钉）', async () => {
@@ -91,11 +92,20 @@ test('F4 就绪态：交付在场+review 在场 → 双 full 检查 ok；execute
   const { cwd, specBase, changeName } = await fixture({ declareMissing: true, deliverFile: true, withReview: true })
   const v = await runGate('verify', changeName, { cwd, specBase, full: true })
   const rec = checkById(v.envelope, 'full-target-files-reconcile')
-  const sr = checkById(v.envelope, 'full-stage-review')
   assert.equal(rec && rec.ok, true, 'F4: 交付在场（porcelain 未跟踪文件）→ reconcile ok')
-  assert.equal(sr && sr.ok, true, 'F4: review 在场（marker+review.json）→ stage-review ok')
+  assert.equal(checkById(v.envelope, 'full-stage-review'), undefined, 'F4: verify 无 stage-review 检查（期望面对齐）')
 
   const e = await runGate('execute', changeName, { cwd, specBase, full: true })
   const esr = checkById(e.envelope, 'full-stage-review')
   assert.ok(esr && esr.ok === false || esr, 'F4: execute --full 亦有 stage-review 检查（verify 态 review 不属于 execute——不 ok 属预期，检查在场即钉）')
+})
+
+test('F5 默认档 hint：verify 无 stage-review-hint；execute 有（坑 stage-review-verify-enum-gap）', async () => {
+  const fx = await fixture({ withReview: false })
+  const v = await runGate('verify', fx.changeName, { cwd: fx.cwd, specBase: fx.specBase })
+  assert.equal(checkById(v.envelope, 'stage-review-hint'), undefined, 'verify 默认档无 stage-review-hint（提示命令 --stage verify 不可执行，不再误导）')
+  const e = await runGate('execute', fx.changeName, { cwd: fx.cwd, specBase: fx.specBase })
+  const hint = checkById(e.envelope, 'stage-review-hint')
+  assert.ok(hint, 'execute 默认档 stage-review-hint 在场（真实硬拦面的预告）')
+  assert.ok((hint.warnings || []).some((w) => w.includes('execute --done 的 Stage Review Gate 会拦')), 'hint 文案指称 execute（不再笼统 verify/execute）')
 })

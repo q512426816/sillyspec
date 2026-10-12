@@ -469,8 +469,10 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           });
         }
       }
-      // e2. stage review 在场探测（verify/execute --done 的 Stage Review Gate）
-      try {
+      // e2. stage review 在场探测（execute --done 的 Stage Review Gate——verify 不在其列，
+      // 坑 stage-review-verify-enum-gap 2026-10-11：gate 实际只拦 brainstorm/plan/execute，
+      // register 枚举亦无 verify，verify 阶段不产 stage review 期望；verify 的真实门面是 e1 对账）
+      if (stage === 'execute') try {
         const { getLatestStageReviewRunId } = await import('./stage-review.js');
         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
         const runId = getLatestStageReviewRunId(rrRoot, stage, changeName);
@@ -479,7 +481,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           code: checkCode('full-stage-review') || 'full_stage_review_missing',
           ok: !!runId,
           errors: !runId
-            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——--done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
+            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——execute --done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
             : [],
           data: { runId: runId || null },
         });
@@ -500,7 +502,10 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     //    （同一 getLatestStageReviewRunId 只读 marker 存在性，秒级）：缺 review → warning 带
     //    register 指引；在场 → 静默 ok。独立 check id 不与 --full 的 full-stage-review 碰撞，
     //    error 语义（--done 拦）仍归 --full 档与 --done 本体。
-    if (!full && (stage === 'verify' || stage === 'execute')) {
+    // stage 期望面对齐（坑 stage-review-verify-enum-gap，2026-10-11 实证）：Stage Review Gate
+// 实际只拦 brainstorm/plan/execute（gates.js），register-stage-review 枚举亦无 verify——
+// verify 阶段不产 stage review 提示（提示命令不可执行 + 指称的门禁不存在，双重误导）。
+if (!full && stage === 'execute') {
       try {
         const { getLatestStageReviewRunId } = await import('./stage-review.js');
         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
@@ -511,7 +516,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           ok: true,
           informational: true,
           warnings: runId ? [] : [
-            `缺 ${stage} 阶段的 stage review.json——verify/execute --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
+            `缺 ${stage} 阶段的 stage review.json——execute --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
           ],
           data: { runId: runId || null },
         });
