@@ -1,0 +1,23 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  发布 3.32.6（照 3.32.1~3.32.5 惯例三步：版本面 → 推送 → 钉扎发布）。随版内容=已收口归档的
+  2026-10-12-review-na-variant（盲维四问不适用判定放宽到整声明变体，措辞型误升级清偿）。用户显式指令「提交推送代码 发布新版 npm 3.32.6」——三断点全程 autopilot。
+
+
+  成功标准：
+
+  - package.json version=3.32.6 且 test/quick-retired.test.mjs R5 版本锚断言绿（node --test test/quick-retired.test.mjs 零失败）
+
+  - git push origin main 成功（含本变更工件、随版修复两提交与既有未推送提交；pre-push 拦截时修复而非跳过）
+
+  - npm publish 成功且钉扎通道双核验：npm view sillyspec version=3.32.6 且 dist-tags.latest=3.32.6（发布前预核验 latest=3.32.5 已确认通道可信）
+autopilot: true
+baseline_commit: f42d27265fd994fef0f441ad95ebe6af1e6be716
+updatedAt: '2026-10-12T02:00:34.513Z'
+baseline_sha256: 614ed7e9e948a545c3ed195930222db6a8034e8e1e6c8928ebfd669bbfb1c304
+
