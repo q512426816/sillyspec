@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, PROBE_LIMITS } from '../src/review-probes.js'
+import { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, capCommandOutput, PROBE_LIMITS } from '../src/review-probes.js'
 import { renderReviewerTaskbook } from '../src/flow-review.js'
 import { buildReviewerTaskBook } from '../src/review-dispatch.js'
 
@@ -143,6 +143,27 @@ test('assembleProbeLinesForScope：装配便捷面（含装载告警透出）', 
     assert.deepEqual(thin.lines, ['cross｜跨栈面必查（内容任意）'])
     assert.ok(thin.warnings.some((w) => w.includes('跳过')))
   } finally { rmSync(base, { recursive: true, force: true }) }
+})
+
+test('capCommandOutput：字节帽按 UTF-8 实字节 + 命令行单行 300 帽 + 行帽（评审 P3①② 清偿）', () => {
+  // 字节帽：3000 个「中」= 9000 UTF-8 字节 > 2048B → 截断后实字节 ≤ 2048+BOM 余量
+  const wide = capCommandOutput('中'.repeat(3000))
+  assert.ok(Buffer.byteLength(wide.lines.join('\n'), 'utf8') <= PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES + 8)
+  assert.ok(wide.provenance.some((p) => p.includes('2048B 截断')))
+  // 单行帽：命令输出行同享 300 字符帽
+  const longLine = capCommandOutput('x'.repeat(500))
+  assert.equal(longLine.lines[0].length, PROBE_LIMITS.MAX_LINE_CHARS)
+  assert.ok(longLine.provenance.some((p) => p.includes('单行超 300 字符截断')))
+  // 行帽
+  const many = capCommandOutput(Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n'))
+  assert.equal(many.lines.length, PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES)
+  assert.ok(many.provenance.some((p) => p.includes('20 行截断')))
+  // 集成：真实 spawn 大输出命令走 defaultRunCommand 同帽（node -e 跨平台）
+  const probes = parseReviewProbes([{ id: 'big', command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('y'.repeat(400))"` }]).probes
+  const r = resolveProbeLines({ probes, scope: 'thin' })
+  assert.equal(r.lines.length, 1)
+  assert.equal(r.lines[0].length, 'big｜'.length + PROBE_LIMITS.MAX_LINE_CHARS)
+  assert.ok(r.provenance.some((p) => p.includes('单行超')))
 })
 
 test('config-schema：review_probes 段登记在场（readers 指向 src/review-probes.js）', () => {

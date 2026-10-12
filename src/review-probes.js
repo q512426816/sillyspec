@@ -94,22 +94,39 @@ export function loadReviewProbes(specBase) {
   }
 }
 
-/** 缺省命令执行器：shell 执行 + 超时 + 输出帽（字节/行双帽，超帽截断留痕）。 */
+/**
+ * 命令输出封帽（纯函数，评审 P3①② 清偿）：字节帽按 UTF-8 实字节数（非 UTF-16 字符数——中文
+ * 场景旧口径实际可注入 ~3× 标称值）；行帽 20；命令输出行同享静态行单行 300 字符帽。
+ * 多字节截断可能切在字符中间（Buffer subarray + utf8 解码产生替换符）——留痕已示截断，可接受。
+ */
+export function capCommandOutput(raw) {
+  let out = String(raw ?? '')
+  const provenance = []
+  const bytes = Buffer.byteLength(out, 'utf8')
+  if (bytes > PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES) {
+    out = Buffer.from(out, 'utf8').subarray(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES).toString('utf8')
+    provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES}B 截断`)
+  }
+  let lines = out.split(/\r?\n/).map(cleanLine).filter((l) => l.length > 0)
+  if (lines.some((l) => l.length > PROBE_LIMITS.MAX_LINE_CHARS)) {
+    lines = lines.map((l) => (l.length > PROBE_LIMITS.MAX_LINE_CHARS ? l.slice(0, PROBE_LIMITS.MAX_LINE_CHARS) : l))
+    provenance.push(`命令输出单行超 ${PROBE_LIMITS.MAX_LINE_CHARS} 字符截断`)
+  }
+  if (lines.length > PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES) {
+    lines = lines.slice(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES)
+    provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES} 行截断`)
+  }
+  return { lines, provenance }
+}
+
+/** 缺省命令执行器：shell 执行 + 超时 + 输出帽（字节/行/单行三帽，超帽截断留痕）。 */
 function defaultRunCommand(command) {
   const r = spawnSync(command, { shell: true, timeout: PROBE_LIMITS.COMMAND_TIMEOUT_MS, encoding: 'utf8', windowsHide: true })
   if (r.error || r.status !== 0) {
     const why = r.error && r.error.code === 'ETIMEDOUT' ? `超时 >${PROBE_LIMITS.COMMAND_TIMEOUT_MS}ms` : `退出码 ${r.status ?? '?'}`
     return { ok: false, warning: `命令失败（${why}）`, lines: [] }
   }
-  let out = String(r.stdout || '')
-  const truncatedBytes = out.length > PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES
-  if (truncatedBytes) out = out.slice(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES)
-  let lines = out.split(/\r?\n/).map(cleanLine).filter((l) => l.length > 0)
-  const truncatedLines = lines.length > PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES
-  if (truncatedLines) lines = lines.slice(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES)
-  const provenance = []
-  if (truncatedBytes) provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES}B 截断`)
-  if (truncatedLines) provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES} 行截断`)
+  const { lines, provenance } = capCommandOutput(r.stdout)
   return { ok: true, lines, provenance }
 }
 
@@ -141,4 +158,4 @@ export function assembleProbeLinesForScope(specBase, scope) {
   return { lines, warnings: [...warnings, ...provenance] }
 }
 
-export default { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, PROBE_LIMITS }
+export default { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, capCommandOutput, PROBE_LIMITS }
