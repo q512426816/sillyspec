@@ -1,6 +1,14 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -27,11 +35,18 @@ input: >-
   - 新增单测：解析校验/scope 过滤/容量帽/命令 fail-soft 与超时/thin 任务书注入段在场与未配置零注入/thick 任务书同款
 autopilot: false
 baseline_commit: b371dd96323c62c61baacd9a24c6e2d0ee6f2906
-updatedAt: '2026-10-12T13:05:39.989Z'
+updatedAt: '2026-10-12T13:27:46.057Z'
 baseline_sha256: f9014279dc1816da62b7be4f1957d1c6d43ce8c48dda6d9f3817bab462b3ea02
 spec_approved: true
 spec_approved_at: '2026-10-12T13:05:39.989Z'
 spec_approved_by: zcode-dogfood-hardening
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-dogfood-hardening
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js98+js-meta-skip1+nontest-skip1)+fr(99)（60.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012131937\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（45.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012131937\test-result.json｜门文件 8 个
 

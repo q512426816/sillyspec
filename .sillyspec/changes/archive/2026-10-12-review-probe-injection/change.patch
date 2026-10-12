@@ -1,0 +1,525 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 1ed98c57..7f9826ca 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -57,6 +57,7 @@ modules:
+       - src/flow.js
+       - src/flow-draft.js
+       - src/flow-review.js
++      - src/review-probes.js
+       - src/flow-parity.js
+ 
+   progress:
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index a5905db5..b404bf6a 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -23,3 +23,4 @@
+ - 2026-10-09-verify-reuse-friction | wt-commit 跨仓 worktree 识别（D-006@v1）——cwd 推断正则捕 <change>--<repoKey> 整段后：仅当后缀命中 repos 注册表（local.yaml）且剥出候选是已知变更目录才剥；全段命中已知变更不剥（防变更真名恰以 --repoKey 结尾误剥）；均不中原样透传（现状行为）。回归 test/wt-commit-crossrepo-infer.test.mjs。
+ | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
+ | 2026-10-12 | 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模 |
++| 2026-10-12 | 2026-10-12-approve-channel-attest | dogfood 实证驱动（2026-10-10~12 fire-equipment 会话复盘，子代理取证）：8 次 fl |
+diff --git a/src/config-schema.js b/src/config-schema.js
+index debb8cfb..65ffd470 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -229,6 +229,17 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'decisions.behind_threshold', type: 'integer', optional: true, status: 'live', readers: ['readDecisionRulesConfig (src/docs-check.js)'], desc: '决策 behind 复核阈值（锚定模块源码在「最近确认」commit 后的前进数），缺省 10；超阈报「决策待复核」提示。', example: '10' },
+       ],
+     },
++    {
++      id: 'review_probes',
++      title: '项目评审探针',
++      note: '评审任务书的项目特有必查面注入（2026-10-12-review-probe-injection，dogfood 实证：检查单由主代理手写时，主代理没想到的面无人查——三个生产缺陷全靠用户报障发现）。CLI 只做装配与容量治理（条目≤16/每条行≤12/单行≤300 字符/命令超时 10s/输出≤2KB·20 行），内容完全开放：零内容枚举、零语言/框架绑定，清单行与命令由项目自定。未配置=两面任务书（轻量 thin / 厚档 thick）与历史形态逐字一致（零回归）。读键容错：坏条目跳过+告警、命令失败/超时跳过该行源，永不阻断任务书渲染。',
++      keys: [
++        { path: 'review_probes.id', type: 'string', optional: false, status: 'live', readers: ['parseReviewProbes (src/review-probes.js) → renderReviewerTaskbook (src/flow-review.js, thin) + buildReviewerTaskBook (src/review-dispatch.js, thick)'], desc: '探针标识（自由文本 ≤64 字符，非空）——注入行前缀「<id>｜」，供评审逐条对答。', example: 'startup-smoke' },
++        { path: 'review_probes.scope', type: 'string', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js)'], desc: '注入哪面任务书：thin（轻量评审任务书）/ thick（厚档 stage 评审）/ all（缺省）。这是 CLI 自有的两个任务书面集合，非内容枚举。', example: 'all' },
++        { path: 'review_probes.lines', type: 'array', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js)'], desc: '静态清单行（自由文本，内容完全开放——项目自定必查面，如「变更触及启动路径时核对新增注册项与既有注册互斥」）。与 command 至少一非空。', example: '["新增配置键须与既有键冲突扫描核对"]' },
++        { path: 'review_probes.command', type: 'string', optional: true, status: 'live', readers: ['resolveProbeLines (src/review-probes.js) → defaultRunCommand (spawnSync, timeout 10s)'], desc: '可选命令串（任意 shell，stdout 非空行追加为清单行，带 <id>｜ 前缀）——动态行源（如生成当前项目的高危面清单）；输出帽 2KB/20 行，失败/超时 fail-soft 跳过。', example: 'node scripts/list-review-probes.js' },
++      ],
++    },
+     {
+       id: 'friction_hint',
+       title: '摩擦提示开关',
+@@ -445,6 +456,15 @@ modules:
+ decisions:
+   behind_threshold: 10
+ 
++# ── 项目评审探针（评审任务书的项目特有必查面注入——CLI 只装配不枚举，内容完全开放、语言/框架无关；
++#    thin=轻量评审任务书 / thick=厚档 stage 评审 / all=两面；未配置零注入。命令行源超时 10s、输出帽 2KB/20 行）──
++review_probes:
++  - id: startup-smoke            # 探针标识（自由文本，注入行前缀「<id>｜」）
++    scope: all                   # thin | thick | all（缺省 all）
++    lines:                       # 静态清单行（自由文本——项目自定必查面）
++      - 变更触及启动路径时，核对新增注册项与既有注册互斥
++    # command: node scripts/list-review-probes.js   # 可选动态行源（任意 shell，stdout 非空行追加）
++
+ # ── 摩擦提示开关（quick/verify 收尾的摩擦信号一行 advisory：gate 回滚/验证失败/审查打回计数）──
+ # 默认 true 开启；false 一键全关（计数与提示双停，.runtime 零写入）
+ friction_hint:
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 64e0add8..866661f3 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -204,7 +204,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+  * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
+  * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
+  */
+-export function renderReviewerTaskbook({ change, changeDir, head = null }) {
++export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null }) {
+   const headFull = String(head || '').trim()
+   // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
+   // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
+@@ -261,6 +261,15 @@ export function renderReviewerTaskbook({ change, changeDir, head = null }) {
+     `     没有任何声明边界时写「无声明边界」。未裁决=未审。`,
+     `  4. 作答中的防护声明（如有）：声称的防护机制在代码里真实存在且生效？`,
+     `  5. 生成物同步（如涉及）：类型/契约文件与实现对齐？`,
++    // 项目评审探针（2026-10-12-review-probe-injection）：local.yaml review_probes 数据驱动注入——
++    // 检查单生产权收归 CLI 的项目特有面（dogfood 实证：主代理手写清单没想到的面无人查）。
++    // 未配置零注入——本段缺省时任务书与历史形态逐字一致（零回归）。
++    ...(Array.isArray(probeLines) && probeLines.length > 0 ? [
++      ``,
++      `【项目评审探针（local.yaml review_probes 注入——CLI 单源生产，项目特有面必查）】`,
++      ...probeLines.map((l) => `  - ${l}`),
++      `  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与上方检查单同口径，未答=未审）`,
++    ] : []),
+     ``,
+     `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
+     // 代行惯例（坑 flow-done-sentinel-token-split ②，2026-10-08 实证）：宿主无已注册子代理
+diff --git a/src/flow.js b/src/flow.js
+index 7e8f21dc..bbefa3a5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1712,7 +1712,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       let taskbookHead = null
+       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
+       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
+-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead }))
++      // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
++      // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
++      let _probeLines = null
++      try {
++        const { assembleProbeLinesForScope } = await import('./review-probes.js')
++        const _assembled = assembleProbeLinesForScope(specBase, 'thin')
++        for (const _w of _assembled.warnings) console.warn(`⚠️ review_probes：${_w}`)
++        if (_assembled.lines.length > 0) _probeLines = _assembled.lines
++      } catch { /* 探针面 fail-soft：装配失败零注入 */ }
++      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines }))
+       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+       reportMidFail('review')
+diff --git a/src/review-dispatch.js b/src/review-dispatch.js
+index d6d798af..85f67a8f 100644
+--- a/src/review-dispatch.js
++++ b/src/review-dispatch.js
+@@ -22,6 +22,7 @@ import { join, dirname } from 'node:path'
+ import jsYaml from 'js-yaml'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
++import { assembleProbeLinesForScope } from './review-probes.js'
+ import { CEREMONY_TIERS } from './ceremony-tier.js'
+ import { withFileLock } from './quicklog.js'
+ import {
+@@ -161,15 +162,20 @@ export function extractReviewFromArtifacts(artifacts) {
+  * docblock 规则）②review.json 契约（与 gate 同源）③期望产出方式（read_only worker：
+  * 结论经 artifacts 返回，**不写任何文件**——落盘归 CLI）④铁律段（禁改文件/禁 git commit）。
+  */
+-export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPriority }) {
++export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPriority, probeLines = null }) {
+   const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
+   const items = (REVIEW_CHECKLISTS[stage] || []).map((t, i) => `${i + 1}. ${t}`).join('\n')
+   const contract = renderReviewJsonContract({ stage, changeDir, reviewRunId, tier: 'independent', channelPriority })
++  // 项目评审探针（2026-10-12-review-probe-injection）：local.yaml 数据驱动注入，缺省零变化。
++  const probeSection = Array.isArray(probeLines) && probeLines.length > 0
++    ? ['', '## 项目评审探针（local.yaml 注入——逐条 pass/gap/fail + 证据锚点，未答=未审）', ...probeLines.map((l) => `- ${l}`)]
++    : []
+   const workerPrompt = [
+     `你是独立审查者（platform 通道派发）。审查对象：${changeDir ? join(changeDir, mainDoc) : mainDoc}`,
+     '',
+     '## 审查清单（逐条给 pass/gap/fail + 证据锚点）',
+     items,
++    ...probeSection,
+     '',
+     contract,
+     '',
+@@ -285,7 +291,7 @@ export async function runReviewDispatch(opts = {}) {
+         } catch { /* marker 写失败不阻断派发（status 回收时再补） */ }
+       }
+       const changeDir = join(specBase, 'changes', changeName)
+-      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: runId, channelPriority: readReviewChannelPriority(cwd) })
++      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: runId, channelPriority: readReviewChannelPriority(cwd), probeLines: probeLinesForThick(specBase) })
+       const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd })
+       const missionId = mission && mission.missionId
+       if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId', guidance: renderFallbackGuidance(cwd) }
+@@ -694,7 +700,7 @@ export async function dispatchShadowReview(opts = {}) {
+       // 影子 runId 独立生成（R-06 隔离通道②：绝不读写主线 marker / stageReviewMarkerPath）
+       const shadowRunId = generateShadowReviewRunId()
+       const changeDir = join(specBase, 'changes', changeName)
+-      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: shadowRunId, channelPriority: readReviewChannelPriority(cwd) })
++      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: shadowRunId, channelPriority: readReviewChannelPriority(cwd), probeLines: probeLinesForThick(specBase) })
+       const workerPrompt = book.workerPrompt + '\n（影子审查：本结论将由 CLI 回收到 stage-reviews-shadow/ 独立命名空间做轻/重对照记账，不影响主线任何判定。）\n'
+       const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd: budget })
+       const missionId = mission && mission.missionId
+@@ -840,6 +846,15 @@ export async function dispatchShadowReview(opts = {}) {
+ 
+ // task-06 消费契约预留（配置读取在该 task 落地；此处常量为缺省值单一来源）
+ const DEFAULT_REVIEW_DISPATCH_CONFIG = { budget_usd: 1.0, stall_ms: 900_000, timeout_ms: 0 }
++/** 厚档任务书探针装配（2026-10-12-review-probe-injection）：失败/未配置返回 null（零注入零阻断）。 */
++function probeLinesForThick(specBase) {
++  try {
++    const { lines, warnings } = assembleProbeLinesForScope(specBase, 'thick')
++    for (const w of warnings) console.warn(`⚠️ review_probes：${w}`)
++    return lines.length > 0 ? lines : null
++  } catch { return null }
++}
++
+ export function readReviewDispatchConfig(cwd) {
+   try {
+     const p = join(cwd || process.cwd(), '.sillyspec', 'local.yaml')
+diff --git a/src/review-probes.js b/src/review-probes.js
+new file mode 100644
+index 00000000..b3aa49c3
+--- /dev/null
++++ b/src/review-probes.js
+@@ -0,0 +1,161 @@
++/**
++ * review-probes.js — 项目评审探针（2026-10-12-review-probe-injection）。
++ *
++ * 定位：把「项目特有的评审必查面」从主代理手写检查单收归 CLI 单源注入——dogfood 实证
++ * （2026-10-10~12 fire-equipment 会话）：三个生产缺陷（dva 双注册、MyBatis typeAliases
++ * 撞名、原型表头未实现）全部由用户报障发现，独立评审零捕获，根因是检查单由主代理手写、
++ * 主代理没想到的面无人查。
++ *
++ * 开放世界红线（用户 2026-10-12 定规）：CLI 零内容枚举、零语言/框架绑定——探针是纯数据
++ * （local.yaml `review_probes` 段：id 自由文本 / lines 自由文本清单行 / command 任意 shell
++ * 命令，stdout 非空行追加），CLI 只做装配与容量治理。scope 枚举（thin|thick|all）是 CLI
++ * 自有的两个任务书面（轻量 renderReviewerTaskbook / 厚档 buildReviewerTaskBook），非内容
++ * 枚举。与 ceremony/docs-check 等 local.yaml 段同消费哲学：读键容错、缺省空、未配置零注入。
++ *
++ * 容量帽：防误配把任务书撑爆或命令拖死渲染——条目 ≤16、每条静态行 ≤12、单行 ≤300 字符、
++ * 命令超时 10s、命令输出 ≤2KB 且 ≤20 行；超帽截断并在 provenance 留痕（不静默吞）。
++ * fail-soft：坏条目跳过+告警、命令失败/超时跳过该行源——探针面永不阻断任务书渲染。
++ */
++import { existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { spawnSync } from 'node:child_process'
++import yaml from 'js-yaml'
++
++export const PROBE_LIMITS = {
++  MAX_PROBES: 16,
++  MAX_LINES_PER_PROBE: 12,
++  MAX_LINE_CHARS: 300,
++  COMMAND_TIMEOUT_MS: 10_000,
++  COMMAND_OUTPUT_MAX_BYTES: 2048,
++  COMMAND_OUTPUT_MAX_LINES: 20,
++}
++
++/** scope 合法面（CLI 自有任务书面集合——封闭小集，非内容枚举）。 */
++const SCOPES = new Set(['thin', 'thick', 'all'])
++
++const cleanLine = (s) => String(s ?? '').replace(/\s+$/, '')
++
++/**
++ * 校验+归一探针声明（纯函数，零抛出）。
++ * @param {unknown} raw - local.yaml review_probes 段原值
++ * @returns {{ probes: Array<{id:string, scope:string, lines:string[], command:string|null}>, warnings: string[] }}
++ */
++export function parseReviewProbes(raw) {
++  const warnings = []
++  if (raw == null) return { probes: [], warnings }
++  if (!Array.isArray(raw)) return { probes: [], warnings: ['review_probes 段非数组——整段忽略'] }
++  const probes = []
++  raw.slice(0, PROBE_LIMITS.MAX_PROBES).forEach((entry, i) => {
++    const label = `review_probes[${i}]`
++    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
++      warnings.push(`${label} 非对象——跳过`); return
++    }
++    const id = cleanLine(entry.id)
++    if (!id || id.length > 64) { warnings.push(`${label} id 缺失或超 64 字符——跳过`); return }
++    let scope = entry.scope == null ? 'all' : String(entry.scope)
++    if (!SCOPES.has(scope)) { warnings.push(`${label}(${id}) scope 非法（${scope}，合法 thin|thick|all）——按 all 处理`); scope = 'all' }
++    const lines = Array.isArray(entry.lines)
++      ? entry.lines.map(cleanLine).filter((l) => l.length > 0)
++      : []
++    if (lines.length > PROBE_LIMITS.MAX_LINES_PER_PROBE) {
++      warnings.push(`${label}(${id}) lines ${lines.length} 行超帽 ${PROBE_LIMITS.MAX_LINES_PER_PROBE}——截断`)
++      lines.length = PROBE_LIMITS.MAX_LINES_PER_PROBE
++    }
++    for (const l of lines) {
++      if (l.length > PROBE_LIMITS.MAX_LINE_CHARS) {
++        warnings.push(`${label}(${id}) 单行超 ${PROBE_LIMITS.MAX_LINE_CHARS} 字符——截断`)
++        break
++      }
++    }
++    const linesCapped = lines.map((l) => l.length > PROBE_LIMITS.MAX_LINE_CHARS ? l.slice(0, PROBE_LIMITS.MAX_LINE_CHARS) : l)
++    const command = typeof entry.command === 'string' && entry.command.trim() ? entry.command : null
++    if (linesCapped.length === 0 && !command) { warnings.push(`${label}(${id}) lines 与 command 均空——跳过`); return }
++    probes.push({ id, scope, lines: linesCapped, command })
++  })
++  if (raw.length > PROBE_LIMITS.MAX_PROBES) {
++    warnings.push(`review_probes ${raw.length} 条超帽 ${PROBE_LIMITS.MAX_PROBES}——仅取前 ${PROBE_LIMITS.MAX_PROBES} 条`)
++  }
++  return { probes, warnings }
++}
++
++/**
++ * 装载 local.yaml 的 review_probes 段（IO，容错缺省空——无段/无文件/解析失败均零探针零阻断）。
++ * @returns {{ probes: Array, warnings: string[] }}
++ */
++export function loadReviewProbes(specBase) {
++  try {
++    const p = join(specBase || '', 'local.yaml')
++    if (!existsSync(p)) return { probes: [], warnings: [] }
++    const doc = yaml.load(readFileSync(p, 'utf8'))
++    const section = doc && typeof doc === 'object' ? doc.review_probes : null
++    return parseReviewProbes(section)
++  } catch (e) {
++    return { probes: [], warnings: [`review_probes 装载失败（${e && e.message ? e.message : e}）——按未配置处理`] }
++  }
++}
++
++/**
++ * 命令输出封帽（纯函数，评审 P3①② 清偿）：字节帽按 UTF-8 实字节数（非 UTF-16 字符数——中文
++ * 场景旧口径实际可注入 ~3× 标称值）；行帽 20；命令输出行同享静态行单行 300 字符帽。
++ * 多字节截断可能切在字符中间（Buffer subarray + utf8 解码产生替换符）——留痕已示截断，可接受。
++ */
++export function capCommandOutput(raw) {
++  let out = String(raw ?? '')
++  const provenance = []
++  const bytes = Buffer.byteLength(out, 'utf8')
++  if (bytes > PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES) {
++    out = Buffer.from(out, 'utf8').subarray(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES).toString('utf8')
++    provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES}B 截断`)
++  }
++  let lines = out.split(/\r?\n/).map(cleanLine).filter((l) => l.length > 0)
++  if (lines.some((l) => l.length > PROBE_LIMITS.MAX_LINE_CHARS)) {
++    lines = lines.map((l) => (l.length > PROBE_LIMITS.MAX_LINE_CHARS ? l.slice(0, PROBE_LIMITS.MAX_LINE_CHARS) : l))
++    provenance.push(`命令输出单行超 ${PROBE_LIMITS.MAX_LINE_CHARS} 字符截断`)
++  }
++  if (lines.length > PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES) {
++    lines = lines.slice(0, PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES)
++    provenance.push(`命令输出超 ${PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES} 行截断`)
++  }
++  return { lines, provenance }
++}
++
++/** 缺省命令执行器：shell 执行 + 超时 + 输出帽（字节/行/单行三帽，超帽截断留痕）。 */
++function defaultRunCommand(command) {
++  const r = spawnSync(command, { shell: true, timeout: PROBE_LIMITS.COMMAND_TIMEOUT_MS, encoding: 'utf8', windowsHide: true })
++  if (r.error || r.status !== 0) {
++    const why = r.error && r.error.code === 'ETIMEDOUT' ? `超时 >${PROBE_LIMITS.COMMAND_TIMEOUT_MS}ms` : `退出码 ${r.status ?? '?'}`
++    return { ok: false, warning: `命令失败（${why}）`, lines: [] }
++  }
++  const { lines, provenance } = capCommandOutput(r.stdout)
++  return { ok: true, lines, provenance }
++}
++
++/**
++ * 解析某任务书面的探针清单行（纯函数，runCommand 注入可测）。
++ * @param {{ probes: Array, scope?: 'thin'|'thick', runCommand?: (cmd:string)=>{ok:boolean,lines:string[],warning?:string,provenance?:string[]} }} opts
++ * @returns {{ lines: string[], provenance: string[] }}
++ */
++export function resolveProbeLines({ probes, scope = 'thin', runCommand = defaultRunCommand } = {}) {
++  const lines = []
++  const provenance = []
++  for (const p of probes || []) {
++    if (p.scope !== 'all' && p.scope !== scope) continue
++    for (const l of p.lines) lines.push(`${p.id}｜${l}`)
++    if (p.command) {
++      const r = runCommand(p.command)
++      if (!r.ok) { provenance.push(`探针 ${p.id} ${r.warning || '命令失败'}——命令行源跳过`); continue }
++      for (const l of r.lines) lines.push(`${p.id}｜${l}`)
++      for (const pv of r.provenance || []) provenance.push(`探针 ${p.id}：${pv}`)
++    }
++  }
++  return { lines, provenance }
++}
++
++/** 装配便捷面（调用点单行接线）：装载→scope 过滤→行合并，warnings 汇含装载告警与帽留痕。 */
++export function assembleProbeLinesForScope(specBase, scope) {
++  const { probes, warnings } = loadReviewProbes(specBase)
++  const { lines, provenance } = resolveProbeLines({ probes, scope })
++  return { lines, warnings: [...warnings, ...provenance] }
++}
++
++export default { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, capCommandOutput, PROBE_LIMITS }
+diff --git a/test/review-probes.test.mjs b/test/review-probes.test.mjs
+new file mode 100644
+index 00000000..02858e50
+--- /dev/null
++++ b/test/review-probes.test.mjs
+@@ -0,0 +1,174 @@
++/**
++ * review-probes.test.mjs — 项目评审探针：解析/装载/行解析 + 双面任务书注入（2026-10-12-review-probe-injection）
++ *
++ * 验收面：
++ *   ① parseReviewProbes：null/非数组容错、坏条目跳过+告警（fail-soft 零抛出）、scope 非法归 all、
++ *      容量帽（条目 16/行 12/单行 300）截断留痕；
++ *   ② loadReviewProbes：无 local.yaml/无段/坏 YAML → 空探针零阻断；
++ *   ③ resolveProbeLines：scope 过滤（thin/thick/all）、lines 前缀、命令行源（真实 spawn echo +
++ *      注入式失败/超时/超帽 fail-soft）；
++ *   ④ renderReviewerTaskbook（thin 面）：probeLines 注入【项目评审探针】段在场 / 缺省零注入；
++ *   ⑤ buildReviewerTaskBook（thick 面）：probeLines 注入「## 项目评审探针」段在场 / 缺省零变化；
++ *   ⑥ config-schema 登记 review_probes 段在场。
++ * 开放世界红线：用例内容刻意跨栈（文本行 + node 命令），不预设任何语言/框架。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { parseReviewProbes, loadReviewProbes, resolveProbeLines, assembleProbeLinesForScope, capCommandOutput, PROBE_LIMITS } from '../src/review-probes.js'
++import { renderReviewerTaskbook } from '../src/flow-review.js'
++import { buildReviewerTaskBook } from '../src/review-dispatch.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++test('parseReviewProbes：容错三态 + 坏条目 fail-soft + scope 非法归 all', () => {
++  assert.deepEqual(parseReviewProbes(null), { probes: [], warnings: [] })
++  const na = parseReviewProbes('not-array')
++  assert.equal(na.probes.length, 0)
++  assert.equal(na.warnings.length, 1)
++  const r = parseReviewProbes([
++    { id: 'good', lines: ['必查行'] },
++    { lines: ['缺 id'] },                      // 坏条目：跳过
++    { id: 'both-empty', lines: [], command: '' }, // lines 与 command 均空：跳过
++    'string-entry',                              // 非对象：跳过
++    { id: 'bad-scope', scope: 'whatever', lines: ['x'] }, // scope 非法 → all + 告警
++  ])
++  assert.equal(r.probes.length, 2)
++  assert.equal(r.probes[0].id, 'good')
++  assert.equal(r.probes[1].scope, 'all')
++  assert.equal(r.warnings.filter((w) => w.includes('跳过')).length, 3)
++  assert.ok(r.warnings.some((w) => w.includes('scope 非法')))
++})
++
++test('parseReviewProbes：容量帽截断留痕（条目/行/单行）', () => {
++  const many = Array.from({ length: PROBE_LIMITS.MAX_PROBES + 2 }, (_, i) => ({ id: `p${i}`, lines: ['x'] }))
++  const r1 = parseReviewProbes(many)
++  assert.equal(r1.probes.length, PROBE_LIMITS.MAX_PROBES)
++  assert.ok(r1.warnings.some((w) => w.includes('超帽')))
++  const r2 = parseReviewProbes([{ id: 'p', lines: Array.from({ length: PROBE_LIMITS.MAX_LINES_PER_PROBE + 1 }, () => 'x') }])
++  assert.equal(r2.probes[0].lines.length, PROBE_LIMITS.MAX_LINES_PER_PROBE)
++  assert.ok(r2.warnings.some((w) => w.includes('lines') && w.includes('截断')))
++  const long = 'x'.repeat(PROBE_LIMITS.MAX_LINE_CHARS + 10)
++  const r3 = parseReviewProbes([{ id: 'p', lines: [long] }])
++  assert.equal(r3.probes[0].lines[0].length, PROBE_LIMITS.MAX_LINE_CHARS)
++  assert.ok(r3.warnings.some((w) => w.includes('单行超')))
++})
++
++test('loadReviewProbes：无文件/无段/坏 YAML 均空探针零阻断', () => {
++  const base = mkdtempSync(join(tmpdir(), 'rp-'))
++  try {
++    assert.deepEqual(loadReviewProbes(base), { probes: [], warnings: [] }) // 无 local.yaml
++    mkdirSync(base, { recursive: true })
++    writeFileSync(join(base, 'local.yaml'), 'commands:\n  test: "node -e 0"\n')
++    assert.deepEqual(loadReviewProbes(base), { probes: [], warnings: [] }) // 有文件无段
++    writeFileSync(join(base, 'local.yaml'), 'review_probes: [::::bad yaml\n')
++    const bad = loadReviewProbes(base)
++    assert.equal(bad.probes.length, 0)
++    assert.ok(bad.warnings.length >= 1)
++    writeFileSync(join(base, 'local.yaml'), 'review_probes:\n  - id: smoke\n    lines:\n      - 启动冒烟必查\n')
++    const ok = loadReviewProbes(base)
++    assert.equal(ok.probes.length, 1)
++    assert.equal(ok.probes[0].id, 'smoke')
++  } finally { rmSync(base, { recursive: true, force: true }) }
++})
++
++test('resolveProbeLines：scope 过滤 + id 前缀 + 真实命令行源（跨平台 echo）', () => {
++  const probes = parseReviewProbes([
++    { id: 'thin-only', scope: 'thin', lines: ['A1'] },
++    { id: 'thick-only', scope: 'thick', lines: ['B1'] },
++    { id: 'both', lines: ['C1'], command: 'echo C-cmd' },
++  ]).probes
++  const thin = resolveProbeLines({ probes, scope: 'thin' })
++  assert.deepEqual(thin.lines, ['thin-only｜A1', 'both｜C1', 'both｜C-cmd'])
++  const thick = resolveProbeLines({ probes, scope: 'thick' })
++  assert.deepEqual(thick.lines, ['thick-only｜B1', 'both｜C1', 'both｜C-cmd'])
++  assert.deepEqual(thick.provenance, [])
++})
++
++test('resolveProbeLines：命令失败/超时/超帽 fail-soft（注入式 runCommand）', () => {
++  const probes = parseReviewProbes([{ id: 'p', command: 'boom' }, { id: 'q', command: 'slow' }]).probes
++  const r = resolveProbeLines({
++    probes, scope: 'thin',
++    runCommand: (cmd) => cmd === 'boom'
++      ? { ok: false, warning: '命令失败（退出码 1）', lines: [] }
++      : { ok: true, lines: ['l1', 'l2'], provenance: ['命令输出超 20 行截断'] },
++  })
++  assert.deepEqual(r.lines, ['q｜l1', 'q｜l2'])
++  assert.ok(r.provenance.some((p) => p.includes('p') && p.includes('跳过')))
++  assert.ok(r.provenance.some((p) => p.includes('q') && p.includes('截断')))
++})
++
++test('renderReviewerTaskbook（thin 面）：注入段在场 / 缺省零注入', () => {
++  const args = { change: 'c1', changeDir: '/tmp/c1', head: 'a'.repeat(40) }
++  const withProbe = renderReviewerTaskbook({ ...args, probeLines: ['smoke｜启动冒烟必查'] })
++  assert.match(withProbe, /【项目评审探针（local\.yaml review_probes 注入/);
++  assert.match(withProbe, /smoke｜启动冒烟必查/)
++  assert.match(withProbe, /未答=未审/)
++  const plain = renderReviewerTaskbook(args)
++  assert.ok(!plain.includes('项目评审探针'))
++  assert.ok(!plain.includes('smoke'))
++  // 空数组同样零注入
++  const emptyArr = renderReviewerTaskbook({ ...args, probeLines: [] })
++  assert.ok(!emptyArr.includes('项目评审探针'))
++})
++
++test('buildReviewerTaskBook（thick 面）：注入段在场 / 缺省零变化', () => {
++  const args = { stage: 'brainstorm', changeDir: '/tmp/c1', reviewRunId: 'run-1' }
++  const withProbe = buildReviewerTaskBook({ ...args, probeLines: ['alias｜新增类名与既有别名扫描面冲突核对'] })
++  assert.match(withProbe.workerPrompt, /## 项目评审探针（local\.yaml 注入/)
++  assert.match(withProbe.workerPrompt, /alias｜新增类名与既有别名扫描面冲突核对/)
++  const plain = buildReviewerTaskBook(args)
++  assert.ok(!plain.workerPrompt.includes('项目评审探针'))
++  // 注入不破坏既有结构：审查清单与产出方式段仍在
++  assert.match(plain.workerPrompt, /## 审查清单/)
++  assert.match(plain.workerPrompt, /## 产出方式/)
++})
++
++test('assembleProbeLinesForScope：装配便捷面（含装载告警透出）', () => {
++  const base = mkdtempSync(join(tmpdir(), 'rp2-'))
++  try {
++    mkdirSync(base, { recursive: true })
++    writeFileSync(join(base, 'local.yaml'), [
++      'review_probes:',
++      '  - id: cross',
++      '    lines:',
++      '      - 跨栈面必查（内容任意）',
++      '  - {}',
++    ].join('\n'))
++    const thin = assembleProbeLinesForScope(base, 'thin')
++    assert.deepEqual(thin.lines, ['cross｜跨栈面必查（内容任意）'])
++    assert.ok(thin.warnings.some((w) => w.includes('跳过')))
++  } finally { rmSync(base, { recursive: true, force: true }) }
++})
++
++test('capCommandOutput：字节帽按 UTF-8 实字节 + 命令行单行 300 帽 + 行帽（评审 P3①② 清偿）', () => {
++  // 字节帽：3000 个「中」= 9000 UTF-8 字节 > 2048B → 截断后实字节 ≤ 2048+BOM 余量
++  const wide = capCommandOutput('中'.repeat(3000))
++  assert.ok(Buffer.byteLength(wide.lines.join('\n'), 'utf8') <= PROBE_LIMITS.COMMAND_OUTPUT_MAX_BYTES + 8)
++  assert.ok(wide.provenance.some((p) => p.includes('2048B 截断')))
++  // 单行帽：命令输出行同享 300 字符帽
++  const longLine = capCommandOutput('x'.repeat(500))
++  assert.equal(longLine.lines[0].length, PROBE_LIMITS.MAX_LINE_CHARS)
++  assert.ok(longLine.provenance.some((p) => p.includes('单行超 300 字符截断')))
++  // 行帽
++  const many = capCommandOutput(Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n'))
++  assert.equal(many.lines.length, PROBE_LIMITS.COMMAND_OUTPUT_MAX_LINES)
++  assert.ok(many.provenance.some((p) => p.includes('20 行截断')))
++  // 集成：真实 spawn 大输出命令走 defaultRunCommand 同帽（node -e 跨平台）
++  const probes = parseReviewProbes([{ id: 'big', command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('y'.repeat(400))"` }]).probes
++  const r = resolveProbeLines({ probes, scope: 'thin' })
++  assert.equal(r.lines.length, 1)
++  assert.equal(r.lines[0].length, 'big｜'.length + PROBE_LIMITS.MAX_LINE_CHARS)
++  assert.ok(r.provenance.some((p) => p.includes('单行超')))
++})
++
++test('config-schema：review_probes 段登记在场（readers 指向 src/review-probes.js）', () => {
++  const src = readFileSync(join(ROOT, 'src', 'config-schema.js'), 'utf8')
++  assert.match(src, /id: 'review_probes'/)
++  assert.match(src, /parseReviewProbes \(src\/review-probes\.js\)/)
++  assert.match(src, /零内容枚举、零语言\/框架绑定/)
++})

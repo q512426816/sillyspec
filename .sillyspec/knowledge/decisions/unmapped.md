@@ -2352,3 +2352,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：b371dd96323c62c61baacd9a24c6e2d0ee6f2906
 理由：最大风险：留痕仍非防伪——同机 agent 可以谎报 `--user-confirmed`。接受：CLI 无法验证人机，价值在必留痕 + 通道可区分 + 评审抽查兜底（与 --by 诚实边界一致）；强凭据属平台层课题（CLI 直连用户问询通道），不与本变更耦合。 试过但放弃：① approve 默认拒绝（无 flag 不放行）——破坏全部既有调用方与平台脚本，收益不成比例，且无 flag 路径已按 unattested 醒目警示；② 批准时 inquirer 交互确认——agent 环境恒非 TTY，等价于默认拒绝同款破坏；③ channel 用自由文本——机器判读与遥测聚合需要封闭三态，自由文本留给 reason 才是对的分工。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-12-review-probe-injection
+锚点：未记录
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+理由：最大风险：命令行源（command）在任务书渲染路径同步执行——恶意/误配命令可拖慢渲染或产出注入文本。缓解：超时 10s + 输出帽 2KB/20 行 + fail-soft + provenance 留痕；local.yaml 本就是逐机可信配置面（与 commands.test/lint 同信任级），不新增信任边界。 试过但放弃：① CLI 内置常用探针库（启动冒烟/类名冲突 grep 等）——违反开放世界红线（内置清单永远追不上项目特有面，且天然带语言倾向），只配示例进 config-schema desc 不进运行时；② 探针产物缓存复用——渲染频率低（每评审一次），缓存引入失效复杂度不值；③ 允许探针声明 severity/FR 映射等元数据——YAGNI，第一版只要清单行，元数据等真实需求出现再加。

@@ -1647,3 +1647,129 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-10-repo-inline-worktree-placement
   status: active
+
+## FR-setup-095 local.yaml 新段 review_probes：条目 {id: 自由文本标识, scope: thin|thick|all 缺省 all, lines: 自由文本清单行数组, command: 可选命令串（stdout 追加清单行）}——零内容枚举、零语言/框架绑定（内容全开放，命令任意 shell）；缺省/未配置=两面任务书与现状逐字一致（零回归）
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：未配置零注入
+场景正文：
+- 场景：未配置零注入 — Given local.yaml 无 review_probes 段；When 渲染 thin 任务书与 thick 任务书；Then 输出与改动前逐字一致（无探针段）。
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-01
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-01
+  tests: test/review-probes.test.mjs「未配置零注入（thin/thick 双面与现状逐字一致）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active
+
+## FR-setup-096 新模块 src/review-probes.js：解析+装载+行解析纯函数（校验容错 fail-soft：单条目坏跳过并告警，不拦流程）；容量帽（条目≤16、每条行≤12、单行≤300 字符、命令超时 10s、命令输出≤2KB/≤20 行，超帽截断并留痕）
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：坏条目 fail-soft
+场景正文：
+- 场景：坏条目 fail-soft — Given review_probes 含 1 条坏条目（如缺 id）+ 2 条好条目；When loadReviewProbes；Then 返回 2 条好条目 + 1 条
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-02
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-02
+  tests: test/review-probes.test.mjs「解析校验 fail-soft + 容量帽截断留痕 + 命令超时/失败 fail-soft」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active
+
+## FR-setup-097 注入面一：flow-review.js renderReviewerTaskbook 增可选 probeLines 参数，在【检查单】后渲染【项目评审探针】段（flow.js 调用点接 local.yaml 装配）
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：thin 注入
+场景正文：
+- 场景：thin 注入 — Given local.yaml 配 1 条 scope:thin 探针（2 行）；When flow done 触发评审任务书渲染；Then 任务书含【项目评审探针】段且
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-03
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-03
+  tests: test/review-probes.test.mjs「renderReviewerTaskbook 注入段在场/缺省零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active
+
+## FR-setup-098 注口面二：review-dispatch.js buildReviewerTaskBook 增可选 probeLines 参数，在审查清单后渲染同款段（两处调用点接装配）
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：thick 注入
+场景正文：
+- 场景：thick 注入 — Given 配 1 条 scope:thick 探针；When buildReviewerTaskBook({ stage:'brainstorm', probeLines
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-04
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-04
+  tests: test/review-probes.test.mjs「buildReviewerTaskBook 注入段在场/缺省零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active
+
+## FR-setup-099 config-schema.js 登记 review_probes 段（读键/示例/说明，遵循既有条目格式）
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：登记在场
+场景正文：
+- 场景：登记在场 — When 读 config-schema.js；Then 存在 review_probes 条目且 readers 指向 src/review-probes.js。
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-05
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-05
+  tests: test/review-probes.test.mjs「config-schema 登记在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active
+
+## FR-setup-100 新增单测：解析校验/scope 过滤/容量帽/命令 fail-soft 与超时/thin 任务书注入段在场与未配置零注入/thick 任务书同款
+变更：2026-10-12-review-probe-injection
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/review-probes.test.mjs test/flow-review.test.mjs`；Then 全部 pass
+全文：.sillyspec/changes/archive/2026-10-12-review-probe-injection/requirements.md#FR-06
+最近确认：e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-probe-injection:flow:测试绑定FR-06
+  tests: test/review-probes.test.mjs「全量用例 + flow-review 回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-probe-injection
+  status: active

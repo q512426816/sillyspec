@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-review-probe-injection",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-probes.test.mjs「未配置零注入（thin/thick 双面与现状逐字一致）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-02",
+      "tests": [
+        "test/review-probes.test.mjs「解析校验 fail-soft + 容量帽截断留痕 + 命令超时/失败 fail-soft」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-probes.test.mjs「renderReviewerTaskbook 注入段在场/缺省零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-04",
+      "tests": [
+        "test/review-probes.test.mjs「buildReviewerTaskBook 注入段在场/缺省零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-05",
+      "tests": [
+        "test/review-probes.test.mjs「config-schema 登记在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-12-review-probe-injection:flow:测试绑定FR-06",
+      "tests": [
+        "test/review-probes.test.mjs「全量用例 + flow-review 回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-probe-injection"
+    }
+  ]
+}

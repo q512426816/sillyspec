@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-review-probe-injection",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "命令输出「2KB」帽按 UTF-16 字符计而非字节，多字节内容实际可超 2KB",
+      "status": "resolved",
+      "resolvedIn": "e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb",
+      "evidence": "原报：String.length（UTF-16 code unit）判 2048 上界，中文场景实际可注入 ~6KB。清偿实证（增量复审亲测）：capCommandOutput 改用 Buffer.byteLength(out,'utf8') 判帽 + Buffer.from(out,'utf8').subarray(0,2048) 截断——实测 9000 汉字（27000 UTF-8 字节）真截断至 2048B 界内（再经单行帽成 300 字符=900 字节），provenance 留痕『命令输出超 2048B 截断』；多字节中间切割由 toString('utf8') 容错且 commit 注释已自披露（留痕在场，可接受）。",
+      "location": "src/review-probes.js:100-116（capCommandOutput，原 :105）"
+    },
+    {
+      "severity": "P3",
+      "title": "单行 300 字符帽未应用于命令输出行（仅覆盖静态 lines）",
+      "status": "resolved",
+      "resolvedIn": "e12fa207aec9cc34ae981eb1ffaf02ff3e6aa9eb",
+      "evidence": "原报：defaultRunCommand 产出行只过字节/行数双帽，单行最长可达 2048 字符。清偿实证（增量复审亲测）：capCommandOutput 对命令输出行统一应用 MAX_LINE_CHARS 截断并留痕——实测 5000 字符单行截至 maxLen=300，provenance 含『命令输出单行超 300 字符截断』；字节/单行/行数三帽顺序合理（字节→单行→行数），三态留痕齐全。",
+      "location": "src/review-probes.js:110-113（capCommandOutput 单行帽，原 :104-113）"
+    },
+    {
+      "severity": "P3",
+      "title": "「未配置=逐字一致零回归」的测试覆盖为排除性断言，弱于 FR 字面口径",
+      "status": "open",
+      "evidence": "FR-01/03/04 声称缺省输出与现状逐字一致，测试仅断言 !includes('项目评审探针') 与关键段在场，未做基线快照逐字对照。零回归实际由代码结构保证（注入段整体在条件 spread 内、缺省路径零改动——首轮评审以 git diff 791c5d78^ 亲证）+ 回归测试支撑；属测试口径加固项，无数据正确性风险，维持 open 不阻断。",
+      "location": "test/review-probes.test.mjs:117-122（零注入用例）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "真实成立——两面均渲染时点一次性快照装配：flow.js cmdFlowDone 内 try 块即时调 assembleProbeLinesForScope(specBase,'thin') 后才 console.log；review-dispatch 的 probeLinesForThick(specBase) 在 buildReviewerTaskBook 调用参数处即时求值（真实派发与影子派发两处同款）。装配后 local.yaml 再改不影响已产出任务书；命令每次渲染重跑、无迟到消费方。e12fa207 增量：capCommandOutput 纯函数化不改变装配时点语义。",
+    "并发": "真实成立——local.yaml 只读（js-yaml load 与其他读者同款）；spawnSync 同步串行执行零共享态；capCommandOutput 为无副作用纯函数（Buffer 转换局部态）；任务书是渲染产物（thin 打印 stdout / thick 组 prompt 字符串）非持久文件，无并发写面。",
+    "切换": "真实成立——零持久状态、无半态可留；命令超时 fail-soft 首轮已实测（win32 下 ping 于 400ms 帽超时，返回『命令失败（超时 >400ms）——命令行源跳过』且静态行照常注入），e12fa207 未触及超时路径（defaultRunCommand 失败分支原样），结论保持；flow.js 装配整段 try-catch 兜底零阻断。",
+    "作用域": "真实成立——探针读主工作区 specBase 下 local.yaml（gitignored 逐机配置），无跨仓读取；scope thin|thick|all 是 CLI 自有两个任务书面的封闭小集，内容层（lines/command）零约束零语言绑定，开放世界红线在实现与 config-schema desc 双面一致；e12fa207 增量（实测 10/10 pass，含四态新用例：UTF-8 实字节帽/单行帽/行帽/真实 spawn node -e 集成）不改变作用域面。"
+  },
+  "reviewedAt": "2026-10-12T21:26:28+08:00"
+}
