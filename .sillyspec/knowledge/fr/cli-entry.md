@@ -8369,3 +8369,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-11-flow-start-redline-frontload
   status: active
+
+## FR-cli-entry-446 classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
+变更：2026-10-12-review-na-variant
+状态：active
+摘要：变体整声明豁免
+全文：.sillyspec/changes/archive/2026-10-12-review-na-variant/requirements.md#FR-01
+最近确认：17ad14e17bdc5de869d5269814fe94865783eb3e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-na-variant:flow:测试绑定FR-01
+  tests: test/flow-review.test.mjs「盲维不适用变体：整声明开头不误升级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-na-variant
+  status: active
+
+## FR-cli-entry-447 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
+变更：2026-10-12-review-na-variant
+状态：active
+摘要：逐问形态不豁免
+全文：.sillyspec/changes/archive/2026-10-12-review-na-variant/requirements.md#FR-02
+最近确认：17ad14e17bdc5de869d5269814fe94865783eb3e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-na-variant:flow:测试绑定FR-02
+  tests: test/flow-review.test.mjs「盲维不适用变体：逐问混合形态仍升级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-na-variant
+  status: active
+
+## FR-cli-entry-448 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
+变更：2026-10-12-review-na-variant
+状态：active
+摘要：口径不回归
+全文：.sillyspec/changes/archive/2026-10-12-review-na-variant/requirements.md#FR-03
+最近确认：17ad14e17bdc5de869d5269814fe94865783eb3e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-na-variant:flow:测试绑定FR-03
+  tests: test/flow-review.test.mjs「盲维不适用变体：既有口径回归（v1/v2 同源）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-na-variant
+  status: active
+
+## FR-cli-entry-449 新用例先红后绿；全量测试零失败
+变更：2026-10-12-review-na-variant
+状态：active
+摘要：全量绿
+全文：.sillyspec/changes/archive/2026-10-12-review-na-variant/requirements.md#FR-04
+最近确认：17ad14e17bdc5de869d5269814fe94865783eb3e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-review-na-variant:flow:测试绑定FR-04
+  tests: test/run-tests.mjs「全量零失败」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-review-na-variant
+  status: active

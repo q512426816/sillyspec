@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-review-na-variant",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "17ad14e17bdc5de869d5269814fe94865783eb3e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03 测试绑定名括注与实际用例名不一致",
+      "evidence": "绑定写作「盲维不适用变体：既有口径回归（v1/v2 同源）」，实际用例 ⑩ 名为「盲维不适用变体：既有口径回归（不适用仍豁免、实质仍升级）」；主干可唯一定位、行为覆盖完整（同源由 ⑧ 双分支+单一 NA_ANSWER_RE 证实），纯标注漂移。",
+      "location": ".sillyspec/changes/2026-10-12-review-na-variant/requirements.md:52; test/flow-review.test.mjs:336"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-12T01:52:39Z"
+}

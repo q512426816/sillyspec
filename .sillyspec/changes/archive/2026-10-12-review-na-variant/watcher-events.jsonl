@@ -1,0 +1,16 @@
+{"ts":1791768798049,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791768808101,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791768811504,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791768841414,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/flow-review.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791768854610,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow-review.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791769416688,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791769416938,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791769417145,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791769416842,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791769416842,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791769417342,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1791769421766,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791769421766,"kind":"task-done","stage":"tasks","detail":"checked 1→4","provisional":true}
+{"ts":1791769435284,"kind":"commit","stage":null,"detail":"17ad14e1","provisional":true}
+{"ts":1791769445772,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-12-review-na-variant/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791769496003,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（50.4s） · 20261012014455","provisional":true}

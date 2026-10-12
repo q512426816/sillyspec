@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-review-na-variant",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-review-na-variant:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-review.test.mjs「盲维不适用变体：整声明开头不误升级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-na-variant"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-review-na-variant:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review.test.mjs「盲维不适用变体：逐问混合形态仍升级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-na-variant"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-review-na-variant:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review.test.mjs「盲维不适用变体：既有口径回归（v1/v2 同源）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-na-variant"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-review-na-variant:flow:测试绑定FR-04",
+      "tests": [
+        "test/run-tests.mjs「全量零失败」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-review-na-variant"
+    }
+  ]
+}

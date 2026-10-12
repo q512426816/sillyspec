@@ -1,0 +1,313 @@
+diff --git a/.sillyspec/changes/2026-10-12-review-na-variant/flow-state.yaml b/.sillyspec/changes/2026-10-12-review-na-variant/flow-state.yaml
+new file mode 100644
+index 00000000..fff29dd7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-review-na-variant/flow-state.yaml
+@@ -0,0 +1,26 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  放宽轻量评审盲维四问的「不适用」判定到措辞变体——实证两仓 349 个轻量变更中 12/228 实质作答误升级：整体不适用声明写成「四问全 n/a：」「均不适用」「边界并发四问：不适用：」等前缀而非「不适用」开头，被 /^不适用/
++  机械判成实质作答升级评审（如纯 CSS 变更 hover-polish）。窄口径放宽：只认整声明开头变体（可选四问/盲维四问/边界并发四问前缀+可选全/均/皆/全部+不适用|n/a），逐问混合形态（如「1. 乱序：n/a。2.
++  并发写：有风险…」）仍按实质作答升级。
++
++
++  成功标准：
++
++  - classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
++
++  - 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
++
++  - 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
++
++  - 新用例先红后绿；全量测试零失败
++autopilot: true
++baseline_commit: 2e277a6cc22874de5cc78e8ae07703d59b4bd78f
++updatedAt: '2026-10-12T01:32:36.307Z'
++baseline_sha256: 2bdce1cd26d7c01acbb2761ee5a130a598969e007e5ba63bd25214357ae284e0
++
+diff --git a/src/flow-review.js b/src/flow-review.js
+index dad2943d..64e0add8 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -27,6 +27,15 @@ const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不
+ /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
+ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
+ 
++/** 盲维四问「自述不适用」整声明变体（2026-10-12-review-na-variant）：两仓实测 12/228 实质
++ *  作答误升级——整体不适用声明写成「四问全 n/a：」「均不适用」「边界并发四问：不适用：」等
++ *  前缀而非「不适用」开头，被 /^不适用/ 机械判成实质作答（误伤样例：纯 CSS 变更 hover-polish
++ *  起子代理评审）。窄口径只认整声明开头：可选前缀 + 可选冒号 + 可选限定词 + 不适用|n/a；
++ *  逐问编号形态（「1. 乱序：n/a。…」）不聚合——该形态常含逐维实质推理，升级是设计内行为。
++ *  前缀声明语义与旧 /^不适用/ 同型（「不适用，但…」旧版本就按开头豁免），加宽词表不加新
++ *  语义维度；漏报兜底：豁免面 1/4 抽查采样 + 承诺词/diff 原语/edit_ratio 三路独立信号。 */
++const NA_ANSWER_RE = /^(?:盲维四问|边界并发四问|四问)?\s*[:：]?\s*(?:全部|均|皆|都|全)?\s*(?:不适用|n\/a\b)/i
++
+ /** design 作答面否定语境消解（2026-10-05-review-promise-negation）：盲维第 4 问作答讨论
+  * 作用域风险时，「无串台面」「不会串台」「杜绝串台」等否定短语按字面命中 PROMISE_RE 一票
+  * 升级（实测：两行 console.log 的变更被定档高危起子代理评审）。「串台」是名词性风险词——
+@@ -151,13 +160,13 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+     if (/<!--\s*AGENT:槽3/.test(dText)) {
+       const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
+       if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
+-      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
++      else if (NA_ANSWER_RE.test(answer)) exemptEvidence.push('盲维四问自述不适用')
+       else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
+     } else if (/^##\s*边界与并发/m.test(dText)) {
+       // v2 纯 markdown（2026-10-04-thin-docs-v2）：边界节正文作答判定（同 v1 三态语义）
+       const answer = readV2SectionAnswer(dText, DESIGN_QUESTIONS_FALLBACK.sections[2].heading, DESIGN_QUESTIONS_FALLBACK)
+       if (!answer) exemptEvidence.push('盲维四问未作答（将由 v2 工件校验拦收）')
+-      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
++      else if (NA_ANSWER_RE.test(answer)) exemptEvidence.push('盲维四问自述不适用')
+       else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
+     } else if (MECHANISM_RE.test(dText)) {
+       reasons.push('头脑风暴设计含并发/时序类机制词（adopted 扫描）')
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+index 3330d992..380e05cb 100644
+--- a/test/flow-review.test.mjs
++++ b/test/flow-review.test.mjs
+@@ -281,3 +281,71 @@ test('⑦ 评审对象锚定：reviewedAgainst 命中 HEAD → 保留判定 true
+   assert.equal(reviewAnchoredToHead(p, ''), false, 'head 缺省 false')
+   rmSync(root, { recursive: true, force: true })
+ })
++
++// ── 盲维不适用变体（2026-10-12-review-na-variant）：整体不适用声明写成「四问全 n/a：」
++// 「均不适用」「边界并发四问：不适用：」等前缀而非「不适用」开头，被 /^不适用/ 机械判成
++// 实质作答升级评审（两仓实测 12/228 误伤，如平台仓 2026-09-27-hover-polish 纯 CSS 变更）。
++// 窄口径放宽：只认整声明开头变体；逐问编号形态不做否定聚合（该形态常含逐维实质推理，
++// 升级是设计内行为）。──
++test('⑧ 盲维不适用变体：整声明开头不误升级（v1 槽3 与 v2 节同口径）', () => {
++  let quietName = 'na-off-bucket'
++  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-off-${i}`
++  assert.equal(sampleBucket(quietName), false)
++
++  const variants = [
++    ['四问全 n/a：', '四问全 n/a：纯 CSS 类，无状态/写路径/作用域引入。'],
++    ['边界并发四问：不适用：', '边界并发四问：不适用：纯文案/默认值改动，无状态无 IO 新面。'],
++    ['均不适用', '均不适用：纯同步字符串变换，无状态无 IO 面。'],
++    ['n/a：', 'n/a：静态配置数据修正，无事件流语义。'],
++    ['N/A（大写）', 'N/A'],
++    ['全部不适用', '全部不适用：纯展示布局，数据序不变。'],
++  ]
++  for (const [label, answer] of variants) {
++    // v2 纯 markdown 节分支
++    let c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
++    let t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++    assert.equal(t.required, false, `v2 ${label}：应豁免（reasons=${t.reasons}）`)
++    assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `v2 ${label}：豁免证据含自述不适用: ${t.exemptEvidence}`)
++    assert.ok(!t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `v2 ${label}：不得判实质作答`)
++    rmSync(c.root, { recursive: true, force: true })
++    // v1 槽3 分支同口径
++    c = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
++    t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++    assert.equal(t.required, false, `v1 ${label}：应豁免（reasons=${t.reasons}）`)
++    assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `v1 ${label}：豁免证据含自述不适用: ${t.exemptEvidence}`)
++    rmSync(c.root, { recursive: true, force: true })
++  }
++})
++
++test('⑨ 盲维不适用变体：逐问混合形态仍升级（窄口径不聚合）', () => {
++  let quietName = 'na-mix-off-bucket'
++  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-mix-off-${i}`
++  assert.equal(sampleBucket(quietName), false)
++
++  for (const [label, answer] of [
++    ['混合：末问实质', '1. 乱序：n/a。2. 并发写：n/a。3. 切换：n/a。4. 作用域：存在跨实例并发写窗口，需要快照读。'],
++    ['逐问全否定（设计内升级）', '1. 乱序：n/a 纯展示。2. 并发：n/a 无新增写路径。3. 切换：n/a 无状态。4. 作用域：n/a 仅本组件。'],
++  ]) {
++    const c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', answer), '# 需求\n普通需求文本\n')
++    const t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++    assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `${label}：逐问形态不豁免（reasons=${t.reasons}）`)
++    rmSync(c.root, { recursive: true, force: true })
++  }
++})
++
++test('⑩ 盲维不适用变体：既有口径回归（不适用仍豁免、实质仍升级）', () => {
++  let quietName = 'na-reg-off-bucket'
++  for (let i = 0; sampleBucket(quietName); i++) quietName = `na-reg-off-${i}`
++  assert.equal(sampleBucket(quietName), false)
++
++  let c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', '不适用：无风险面。'), '# 需求\n普通需求文本\n')
++  let t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++  assert.equal(t.required, false, '「不适用：」仍豁免')
++  assert.ok(t.exemptEvidence.some((e) => /自述不适用/.test(e)), `豁免证据不变: ${t.exemptEvidence}`)
++  rmSync(c.root, { recursive: true, force: true })
++
++  c = makeChangeDir(DESIGN_V2_BND.replace('__ANSWER__', 'RPC 结果晚到不影响：收口按候选快照读加非终态守卫。'), '# 需求\n普通需求文本\n')
++  t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
++  assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `实质作答仍升级: ${t.reasons}`)
++  rmSync(c.root, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-10-12-review-na-variant/design.md b/.sillyspec/changes/2026-10-12-review-na-variant/design.md
+new file mode 100644
+index 00000000..3d3cfd86
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-review-na-variant/design.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T01:32:18.864Z
++---
++# 设计记录（Design Record）— 2026-10-12-review-na-variant
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++实证两仓 349 个轻量变更中 12/228 的实质作答误升级：整体不适用声明写成「四问全 n/a：纯 CSS 类…」「均不适用…」「边界并发四问：不适用：纯文案/默认值改动…」等前缀而非「不适用」开头，被 `flow-review.js` 两处 `/^不适用/` 机械判成实质作答、触发信号②升级评审（误伤样例：平台仓 `2026-09-27-hover-polish` 纯 CSS 变更起子代理评审）。修法：改 `src/flow-review.js`——新增单一判定 helper（模块内 `NA_ANSWER_RE` + 判定函数），v1 槽3 分支与 v2 节分支同源调用；窄口径正则只认整声明开头：可选前缀（盲维四问/边界并发四问/四问）+ 可选冒号 + 可选限定词（全部/均/皆/都/全）+ 「不适用」或「n/a」（`\b` 界定、不分大小写）。选此方案因为判定面只动评审定档一处：`DESIGN_QUESTIONS` 锚、draft ledger、剥题逻辑三个消费面零波及，无在途 v2 兼容问题（改问题文案则要付 stripV2QuestionLines 逐字剥题的在途代价）；前缀声明语义与现行 `/^不适用/` 同型——现状「不适用，但…」本就按开头豁免，本变更加宽词表不加新语义维度。逐问否定聚合判定被否：判定复杂化引入新误判面，且该形态作答常含逐维实质推理（如 takeover 系「409 先于写库无半成品」），升级是设计内行为。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `src/flow-review.js`：新增模块级常量 `NA_ANSWER_RE` 与判定 helper（不导出——测试经 `classifyReviewNeed` 黑盒覆盖，不扩公共面）；`classifyReviewNeed` 内两处 `/^不适用/.test(answer)`（v1 槽3 分支、v2 节分支）替换为同源 helper 调用。
++- 豁免证据文案不变（仍为「盲维四问自述不适用」）；无 CLI/文件格式/对外行为变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   无事件序依赖——判定是单次正则匹配的纯函数，输入到达次序不影响结果。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   无共享可变态：`classifyReviewNeed` 是无副作用读函数，正则常量为模块级只读单例，两个并行收口各读各的 design.md。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   flow done 断点续跑重入 review 子步幂等：判定结果由同一 design.md 内容唯一决定，中断重入同判，无状态迁移。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   判定按传入 changeDir 读本变更自己的 design.md，不跨变更/跨工作区；正则常量模块内私有，无串台面。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++- 最大风险：豁免面扩大=漏报面扩大——「n/a，但并发写存在竞态…」这类声明开头后跟实质内容的作答会被豁免。对冲：①该弱点与现行 `/^不适用/` 完全同型（现状「不适用，但…」同样豁免），本变更未引入新弱点类别；②豁免面有 1/4 抽查采样 + 承诺词/diff 原语/edit_ratio 三路独立信号兜底；③抽查评审检查单第 2 问专查「说不适用的维度 diff 真没有该风险面吗」。
++- 死路①：改 `DESIGN_QUESTIONS` 引导文案教 agent 写规范形态——问题文本/引导行在锚定与剥题消费面，改一行付在途 v2 兼容代价（`stripV2QuestionLines` 用当前常量逐字剥题，旧稿漏剥会误扫/误豁免）；判定端宽容词表是零兼容成本的对面。
++- 死路②：逐问否定聚合判定（四问全 n/a 才豁免）——逐问解析引入新误判面（混合形态、否定词形变），窄口径已覆盖实证的全部 12 例误伤，复杂度不值。
++- 死路③：测试绑定「不适用」口径（`flow-draft.js:647/670`）同步放宽——绑定面「不适用」语义是「无测试面」，与评审豁免声明是不同物，混一处放宽让无测试 FR 的语义漂移。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++| --- | --- | --- |
++| 改 | src/flow-review.js | 盲维不适用判定放宽为窄口径变体正则，v1 槽3/v2 节两分支同源 |
++| 改 | test/flow-review.test.mjs | 新增变体豁免/逐问混合仍升级/既有口径回归三组用例 |
+diff --git a/.sillyspec/changes/2026-10-12-review-na-variant/proposal.md b/.sillyspec/changes/2026-10-12-review-na-variant/proposal.md
+new file mode 100644
+index 00000000..973fb7ed
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-review-na-variant/proposal.md
+@@ -0,0 +1,30 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T01:32:18.864Z
++---
++# 提案书（Proposal）— 2026-10-12-review-na-variant
++
++## 动机
++
++任务原话转写：放宽轻量评审盲维四问的「不适用」判定到措辞变体——实证两仓 349 个轻量变更中 12/228 实质作答误升级：整体不适用声明写成「四问全 n/a：」「均不适用」「边界并发四问：不适用：」等前缀而非「不适用」开头，被 /^不适用/ 机械判成实质作答升级评审（如纯 CSS 变更 hover-polish）。窄口径放宽：只认整声明开头变体（可选四问/盲维四问/边界并发四问前缀+可选全/均/皆/全部+不适用|n/a），逐问混合形态（如「1. 乱序：n/a。2. 并发写：有风险…」）仍按实质作答升级。
++
++成功标准：
++- classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
++- 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
++- 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
++- 新用例先红后绿；全量测试零失败
++
++## 变更范围
++
++按成功标准机械推导，共 4 条验收面：
++1. classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
++2. 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
++3. 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
++4. 新用例先红后绿；全量测试零失败
++
++## 成功标准（可验证）
++
++1. classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
++2. 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
++3. 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
++4. 新用例先红后绿；全量测试零失败
+diff --git a/.sillyspec/changes/2026-10-12-review-na-variant/requirements.md b/.sillyspec/changes/2026-10-12-review-na-variant/requirements.md
+new file mode 100644
+index 00000000..f088ae1e
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-review-na-variant/requirements.md
+@@ -0,0 +1,53 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T01:32:18.864Z
++---
++# 需求规格（Requirements）— 2026-10-12-review-na-variant
++
++## 功能需求
++
++### FR-01: classifyReviewNeed 对「四问全 n/a：…」「边界并发四问：不适用…」「均不适用…」「n/a：…」「N/A」开头且其余信号不命中的轻量 design 判豁免（exemptEvidence 含「自述不适用」类证据）
++
++- 盲维四问作答以整声明变体开头时——可选前缀「盲维四问/边界并发四问/四问」+ 可选冒号 + 可选限定词「全部/均/皆/都/全」+ 「不适用」或「n/a」（不分大小写）——classifyReviewNeed MUST 产生「盲维四问自述不适用」豁免证据（不产生「盲维四问有实质作答」reason），其余信号不命中时 MUST 整体判 required=false。
++
++#### 场景：变体整声明豁免
++
++- Given design.md v2 边界节作答为「四问全 n/a：纯 CSS 类，无状态/写路径/作用域引入。」、无承诺词、patch 无危险原语、变更名在采样桶外
++- When classifyReviewNeed 定档
++- Then required=false 且 exemptEvidence 含「自述不适用」
++
++### FR-02: 逐问混合形态（任一问带实质内容，如「1. 乱序：n/a。2. 并发写：存在竞态…」）仍判需评审
++
++- 盲维四问作答以逐问编号行开头（如「1. 乱序：n/a 纯展示。2. 并发写：…」）时，classifyReviewNeed MUST 按实质作答升级（不做逐问否定聚合判定），产生「盲维四问有实质作答」reason。
++
++#### 场景：逐问形态不豁免
++
++- Given design.md v2 边界节作答以「1. 乱序：n/a。」逐问行开头且任一问含实质内容
++- When classifyReviewNeed 定档
++- Then reasons 含「盲维四问有实质作答」
++
++### FR-03: 回归：既有「不适用：…」口径不变仍豁免；实质作答仍升级；v1 槽3 分支与 v2 节分支同口径
++
++- 既有「不适用：…」开头作答 MUST 仍豁免；实质作答（非变体开头）MUST 仍升级；变体判定 MUST 为单一实现（v1 槽3 分支与 v2 节分支同源调用，禁止两处独立正则）。
++
++#### 场景：口径不回归
++
++- Given 「不适用：无风险面」与「用队列缓冲晚到事件」两个既有形态作答
++- When classifyReviewNeed 分别定档
++- Then 前者豁免证据含「自述不适用」、后者 reasons 含「实质作答」，且两分支判定经同一 helper
++
++### FR-04: 新用例先红后绿；全量测试零失败
++
++- 新增用例 MUST 在实现前失败（红）、实现后通过（绿）；全量测试套件（node test/run-tests.mjs）MUST 零失败。
++
++#### 场景：全量绿
++
++- When node test/run-tests.mjs
++- Then 退出码 0、零失败文件
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/flow-review.test.mjs「盲维不适用变体：整声明开头不误升级」
++FR-02: test/flow-review.test.mjs「盲维不适用变体：逐问混合形态仍升级」
++FR-03: test/flow-review.test.mjs「盲维不适用变体：既有口径回归（v1/v2 同源）」
++FR-04: test/run-tests.mjs「全量零失败」
+diff --git a/.sillyspec/changes/2026-10-12-review-na-variant/tasks.md b/.sillyspec/changes/2026-10-12-review-na-variant/tasks.md
+new file mode 100644
+index 00000000..2718fec2
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-review-na-variant/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T01:32:18.864Z
++---
++# 任务注册表（Tasks）— 2026-10-12-review-na-variant
++
++- [x] task-01: test/flow-review.test.mjs 新增「盲维不适用变体」三组用例（变体豁免/逐问混合仍升级/既有口径回归），实现前定向跑确认新用例红
++- [x] task-02: src/flow-review.js 实现 NA_ANSWER_RE 窄口径判定（单一 helper，v1 槽3/v2 节两分支同源），定向用例转绿
++- [x] task-03: 全量测试 node test/run-tests.mjs 零失败
++- [x] task-04: 显式 pathspec 提交交付面（src/flow-review.js + test/flow-review.test.mjs），提交消息带 task-NN 勾选证据
