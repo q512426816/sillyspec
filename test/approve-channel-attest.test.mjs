@@ -50,7 +50,7 @@ test('三通道留痕：unattested 默认（零破坏+警示）与两个显式�
     let st = state()
     assert.equal(st.spec_approved, true)
     assert.equal(st.spec_approved_channel, 'unattested')
-    assert.equal(st.spec_attested_by, undefined)
+    assert.ok(st.spec_attested_by == null) // 无通道=无声明者（显式 null 清除，防陈旧残留——评审 P3①）
     // ② --user-confirmed：转述通道 + attested_by 落盘
     const r2 = cli(['flow', 'approve', '--change', CHANGE, '--user-confirmed'])
     assert.equal(r2.status, 0, r2.stderr)

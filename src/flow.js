@@ -993,7 +993,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       } else {
         const _ch = approveChannelOf(st)
         const _warn = _ch === 'agent-self' || _ch.startsWith('unattested')
-        const _rej = st.spec_rejected_reason ? `（曾拒绝：${String(st.spec_rejected_reason).slice(0, 60)}→显式再确认翻越）` : ''
+        // 评审 P3② 清偿：翻越语只在 superseded 戳在场时陈述——并发窄窗混合态（approved 真 +
+        // 拒绝未翻越）不得假称「已显式再确认」，按状态异常如实告警。
+        const _rej = st.spec_rejected_reason
+          ? (st.spec_rejected_superseded_at
+            ? `（曾拒绝：${String(st.spec_rejected_reason).slice(0, 60)}→显式再确认翻越）`
+            : `（⚠️ 存在未翻越拒绝记录（spec_rejected 未 superseded）——状态异常，请核查 flow-state）`)
+          : ''
         console.log(`${_warn ? '⚠️' : '🔑'} spec 断点批准留痕：channel=${_ch}｜by=${st.spec_approved_by || '?'}${_rej}`)
       }
     } else {
@@ -2047,6 +2053,7 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = 
     spec_approved_channel: channel,
   }
   if (channelFlag) patch.spec_attested_by = approvedBy
+  else patch.spec_attested_by = null // 评审 P3① 清偿：无通道再批准清除旧声明者，防 unattested 态残留陈旧 attest
   if (st.spec_rejected && !st.spec_rejected_superseded_at) patch.spec_rejected_superseded_at = at
   writeFlowState(changeDir, patch)
   console.log(`✅ spec 断点已批准（change=${change}）`)
