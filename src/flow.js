@@ -1304,10 +1304,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             // 治理面等价保留（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop
             // 用户实证）：评审结论的对象是交付面——窗口内本变更提交只碰 .sillyspec/** 治理文件且
             // 未触本变更 requirements/design（承诺面也是评审对象）时，结论对最新交付面逐字节等价，
-            // 保留不隔离不重置标记；change.patch 仍走下方 driftRefreeze 自动重冻结吸收治理面增量
+            // 保留不隔离不重置标记；change.patch 仍走下方 driftRefreeze 自动重冻结（FR-01 后治理
+            // 工件不入冻结面——治理修复的留档真相=归档目录本体文件，重冻结保交付面时点对齐）
             // （审计件覆盖最新提交面不变量不破）。此前任何后缀提交一律隔离重评——评审后修一个
             // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
-            console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结吸收治理面增量`)
+            console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结（治理工件不入冻结面，治理修复随归档目录本体留档）`)
           } else {
             const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
             try {

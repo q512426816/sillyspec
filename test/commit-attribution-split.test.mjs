@@ -109,7 +109,9 @@ test('② 混窗集成：他侧提交文件出 own 面与 patch 冻结面', () =
     assert.equal(fSet.has('src-other.js'), false, 'patch 冻结面剔除他侧根级文件')
     assert.equal(fSet.has('src/mine.js'), true)
     assert.equal(fSet.has('src/bare.js'), true, '裸提交文件不进剔除面（fail-closed）')
-    assert.equal(fSet.has(`.sillyspec/changes/${ME}/design.md`), true, '本变更治理面保留（现状口径）')
+    // FR-01 口径同步（2026-10-12-close-trace-freeze-integrity）：.sillyspec/changes/** 全滤除
+    // （含本变更目录——对齐 execute --done 沉淀资产面，工件随归档目录本体留档）
+    assert.equal(fSet.has(`.sillyspec/changes/${ME}/design.md`), false, '本变更治理面不入冻结面（FR-01）')
     assert.equal(fSet.has('.sillyspec/changes/2026-10-05-stranger/x.md'), false, '他侧治理面滤除（现状口径）')
   } finally {
     try { rmSync(d, { recursive: true, force: true }) } catch {}

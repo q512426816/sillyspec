@@ -1306,6 +1306,25 @@ export function detectArchiveIntegrity(cwd, authoritySpecDir) {
         }
       }
     }
+    // ── ⑤ 收口留痕锚点悬空（2026-10-12-close-trace-freeze-integrity FR-03）：worktree 内收口的
+    // change-patch.json 记 worktree 本地 SHA，apply 重放回主仓后原对象清理——baseline/head 悬空、
+    // git diff 不可解析、归档溯源死链（multi-agent-platform ws-ref 五变更取证）。doctor 只报不治
+    // （safe_actions 指路），修复入口 sillyspec patch-reanchor --change <名>（幂等）。
+    const cpJsonPath = join(dir, 'change-patch.json');
+    if (existsSync(cpJsonPath)) {
+      try {
+        const cpMeta = JSON.parse(readFileSync(cpJsonPath, 'utf8'));
+        const anchorOk = (sha) => {
+          if (!sha || !/^[0-9a-f]{40}$/i.test(String(sha))) return !sha; // 空锚不算悬空（无 git 基线形态）
+          return !safeGit(cwd, ['cat-file', '-e', `${sha}^{commit}`]).error;
+        };
+        const headDangling = !anchorOk(cpMeta.head);
+        const baseDangling = !anchorOk(cpMeta.baseline);
+        if (headDangling || baseDangling) {
+          reasons.push(`change-patch.json 锚点悬空（${[headDangling ? 'head' : null, baseDangling ? 'baseline' : null].filter(Boolean).join('/')} 在主仓不可解析——worktree 收口后未回写；修复：sillyspec patch-reanchor --change ${name}）`);
+        }
+      } catch { /* change-patch.json 不可解析不计锚点欠账（归档核心件检查另有面） */ }
+    }
     if (reasons.length > 0) offenders.push({ name, reasons });
   }
 

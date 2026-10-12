@@ -87,6 +87,8 @@ SillySpec CLI — 规范驱动开发工具包
         --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
         --prune-cross-worktrees [--confirm]  清跨仓仓幽灵 worktree 注册（目录已删注册残留——dry-run 预览，--confirm 执行 prune；locked 条目只提示）
 
+  sillyspec patch-reanchor --change <名>   归档收口留痕锚点回写主仓（worktree 收口后 apply 重放致 baseline/head 悬空的修复；幂等，doctor 检出时指路至此）
+
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
   sillyspec local register-repo <key> <path>  注册跨仓仓到 local.yaml repos: 段（外科手术式写入，其余内容保留）
   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
@@ -4024,6 +4026,40 @@ SillySpec worktree — git worktree 隔离管理
       //（run 命令在 agent 环境内自动登记），--detect 现场探测不落盘。协议见 docs/platform-agent-log-protocol.md。
       const { cmdAgentLog } = await import('./agent-session-log.js');
       await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
+      break;
+    }
+    case 'patch-reanchor': {
+      // 收口留痕锚点回写（2026-10-12-close-trace-freeze-integrity FR-03）：worktree 内收口的
+      // change-patch.json 记 worktree 本地 SHA，apply 重放回主仓后悬空——按提交主题归属推导
+      // 主仓锚点区间回写 + change.patch 重冻结（幂等；doctor 检出悬空时指路本命令）。
+      const prChangeIdx = filteredArgs.indexOf('--change');
+      const prChange = prChangeIdx >= 0 && filteredArgs[prChangeIdx + 1] && !String(filteredArgs[prChangeIdx + 1]).startsWith('--') ? filteredArgs[prChangeIdx + 1] : null;
+      if (!prChange) {
+        console.error('用法: sillyspec patch-reanchor --change <名> [--spec-dir <路径>] [--json]');
+        process.exit(2);
+      }
+      const specRootPr = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const { locateChangeDir, reAnchorChangePatch } = await import('./patch-reanchor.js');
+      const changeDirPr = locateChangeDir(specRootPr, prChange);
+      if (!changeDirPr) {
+        console.error(`❌ 变更目录未找到（活跃区与归档区均无）：${prChange}`);
+        process.exit(1);
+      }
+      const r = reAnchorChangePatch({ projectRoot: dir, changeDir: changeDirPr, changeName: prChange });
+      if (!r.ok) {
+        console.error(`❌ 锚点回写未执行：${r.reason}`);
+        process.exit(1);
+      }
+      if (json) {
+        console.log(JSON.stringify({ schema_version: 1, change: prChange, noop: r.noop === true, baseline: r.baseline || null, head: r.head || null, rewritten: r.rewritten || [] }, null, 2));
+      } else if (r.noop) {
+        console.log(`✅ 锚点已可解析，无需回写（幂等 no-op）：${prChange}`);
+      } else {
+        console.log(`📦 锚点已回写主仓：${prChange}`);
+        console.log(`   baseline → ${r.baseline.slice(0, 10)}（原 worktree 锚留档 worktreeBaseline）`);
+        console.log(`   head     → ${r.head.slice(0, 10)}（原 worktree 锚留档 worktreeHead）`);
+        console.log(`   change.patch 已按主仓区间重冻结，patchSha256 重锚（${(r.rewritten || []).join('、')}）`);
+      }
       break;
     }
     case 'handoff': {

@@ -206,6 +206,10 @@ test('③ e2e：治理面等价漂移——评审保留 + 自动重冻结 + 不�
   assert.ok(existsSync(archivedBase), '变更已归档（目录移入 archive/）')
   assert.ok(!readdirSync(archivedBase).some((f) => f.startsWith('review.json.superseded')), `review.json 未被隔离（归档目录实况：${readdirSync(archivedBase).join(',')}）`)
   assert.ok(existsSync(join(archivedBase, 'review.json')), '保留的 review.json 随归档留档')
+  // FR-01 口径同步（2026-10-12-close-trace-freeze-integrity）：治理工件不入冻结面——重冻结
+  // patch 只含交付面（src/work.js），治理修复的留档真相=归档目录本体的 tasks.md（文件内容含修复）。
   const patch2 = readFileSync(join(archivedBase, 'change.patch'), 'utf8')
-  assert.ok(patch2.includes(`+++ b/.sillyspec/changes/${cn}/tasks.md`), '重冻结面含治理修复（按 diff hunk 头判）')
+  assert.ok(patch2.includes('+++ b/src/work.js'), '重冻结面含交付面（按 diff hunk 头判）')
+  assert.ok(!patch2.includes(`.sillyspec/changes/${cn}/`), '治理工件 hunk 不入冻结面（FR-01：对齐 execute --done 沉淀资产面）')
+  assert.ok(readFileSync(join(archivedBase, 'tasks.md'), 'utf8').includes('夹具：P2 措辞修复'), '治理修复随归档目录本体留档')
 })

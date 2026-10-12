@@ -426,6 +426,10 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
  * HEAD 祖先链、也不在 baseline 祖先链（flow start 前的既有历史不算缺口）的提交；其 patch-id
  * 与 baseline..HEAD 任一提交等价（amend/rebase 残留同内容）视为已覆盖剔除；余者触及交付面
  * 文件（非 .sillyspec/）即入缺口。只读不写，git 全失败返回空面（fail-safe）。
+ * 已知边界（钉行为见 test/close-trace-freeze-integrity.test.mjs「merge 提交自身不判」用例）：
+ * merge 形态的孤儿提交经 `git show`（combined diff 常空）取不到文件面 → 自身不判；但其
+ * 侧支成员提交若发生在 HEAD 轨迹上（checkout 后 commit）reflog 仍可见、照判——盲区不掩盖
+ * 成员工作，留披露不静默。
  *
  * @param cwd 会话专属 worktree 根（调用方保证路径判定命中，本函数不复判）
  * @param opts.baseline flow start 基线提交（不可解析时返回空面——区间无法建立）

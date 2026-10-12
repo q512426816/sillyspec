@@ -16,6 +16,8 @@ CLI 入口域——bin 垫片与 src/index.js 命令分发（子命令懒加载�
 
 > burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：src/flow.js readFlowConfig 缺省 thin→legacy（:66/:76 两处，用户裁定 flow 族保留实验通道——显式 mode: thin 照旧生效）；协议面/命令面零改动，纯缺省值翻转
 
+> freeze-integrity 注记（2026-10-12）：2026-10-12-close-trace-freeze-integrity：①FR-01 flow done 冻结面收敛为交付面单口径——filterCommittedFace 剔除 ownPrefix 保留子句（.sillyspec/ 只留 docs/），changeDir 工作树件 walk 删除（工件随归档目录本体留档，对齐 execute --done 沉淀资产面；空面哨兵恢复有效）；②FR-02 会话专属 worktree 内 flow done 增孤儿提交守卫——flow-parity.scanOrphanFace 扫本 worktree HEAD reflog（patch-id 等价去重），未覆盖交付面增量阻断收口（--accept-orphan-face 放行留痕 acceptedOrphanFace）；③FR-03 新顶层命令 `sillyspec patch-reanchor --change <名> [--spec-dir] [--json]`（index.js case patch-reanchor → src/patch-reanchor.js，归档悬空锚回写，幂等）
+
 > agent-log 注记（2026-09-29）：2026-09-29-flow-agent-log-report：flow 族四子命令（start/status/done/amend-draft）在 change 解析+校验后接入 recordAgentLogInvocation（runCommand 入口同款，src/agent-session-log.js）——agent 会话日志登记 + POST /api/agent-logs 上报；context.change_key=flow change 名、quick_id 恒空；best-effort 失败静默不阻断协议面（协议见 docs/platform-agent-log-protocol.md）
 
 ## 定位

@@ -159,6 +159,7 @@ modules:
     paths:
       - src/worktree.js
       - src/worktree-apply.js
+      - src/patch-reanchor.js
       - src/worktree-deps.js
       - src/worktree-policy.js
       - src/worktree-cross.js

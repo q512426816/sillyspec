@@ -26,6 +26,7 @@ import { collectActiveQuickGuardFiles } from './quicklog.js';
 import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
 import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
 import { readWorktreePolicy } from './worktree-policy.js';
+import { reAnchorChangePatch } from './patch-reanchor.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -2206,6 +2207,27 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       } catch (cleanupErr) {
         result.warnings = result.warnings || [];
         result.warnings.push(`cleanup 失败（不影响应用结果；Windows 手动清理先解 junction 再删，勿 rm -rf）: ${cleanupErr.message}`);
+      }
+
+      // --- 8.5 归档锚点回写（2026-10-12-close-trace-freeze-integrity FR-03）：worktree 内收口的
+      // change-patch.json 记的是 worktree 本地 SHA，apply 重放/清理后主仓侧锚点改写——best-effort
+      // 回写为可解析主仓锚（幂等；merge 路径提交已落主仓即刻生效，patch 路径 agent 提交前的
+      // no-op 留给 doctor/patch-reanchor 补位；失败仅警告不阻断）。
+      try {
+        const reanchorBase = allowSpecBase || join(projectRoot, '.sillyspec');
+        for (const cand of [join(reanchorBase, 'changes', changeName), join(reanchorBase, 'changes', 'archive', changeName)]) {
+          if (!existsSync(join(cand, 'change-patch.json'))) continue
+          const r = reAnchorChangePatch({ projectRoot, changeDir: cand, changeName });
+          if (r.ok && r.noop) break
+          if (r.ok && !r.noop) {
+            console.log(`📦 归档锚点已回写主仓：${changeName} baseline/head → ${String(r.baseline).slice(0, 10)}/${String(r.head).slice(0, 10)}（change.patch 重冻结+sha256 重锚）`);
+            break
+          }
+          result.warnings.push(`归档锚点回写未完成（${cand}）：${r.reason}——收口提交后可跑 sillyspec patch-reanchor --change ${changeName} 补位`);
+          break
+        }
+      } catch (reErr) {
+        result.warnings.push(`归档锚点回写异常（不影响应用结果）: ${reErr.message}`);
       }
 
     } catch (e) {
