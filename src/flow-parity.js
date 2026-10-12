@@ -188,6 +188,34 @@ export function appendChangeIndexEntries({ specBase, modules, change, summary, d
 }
 
 /**
+ * ⑥b deriveRecordedChangeIndexTargets：断点续跑路径反查已回写目标（评审 P3 清偿）。distill
+ * 已 done 的重入轮次上进程内 changelogAppended 不跨轮——用与回写幂等去重同款判据
+ * （目标文本含变更名）从命中模块的卡/sidecar 反推文件集，供 extraDocs 精确入暂存。
+ * sidecar 含变更名优先记 sidecar（split-changelog 契约：已拆卡新条目只可能落 sidecar）。
+ * @returns {string[]} specBase 相对 posix 路径（与 appendChangeIndexEntries.appended 同口径）
+ */
+export function deriveRecordedChangeIndexTargets({ specBase, modules, change } = {}) {
+  const out = []
+  for (const m of (Array.isArray(modules) ? modules : [])) {
+    try {
+      if (!m || !m.id || !m.doc || m.docMissing) continue
+      const docRel = String(m.doc).replace(/^\/+/, '')
+      const cardAbs = join(specBase, docRel)
+      const sidecarAbs = cardAbs.replace(/\.md$/, '.changelog.md')
+      if (existsSync(sidecarAbs)) {
+        if (readFileSync(sidecarAbs, 'utf8').includes(change)) out.push(docRel.replace(/\.md$/, '.changelog.md'))
+        continue
+      }
+      if (existsSync(cardAbs)) {
+        const txt = readFileSync(cardAbs, 'utf8')
+        if (/^##\s*变更索引/m.test(txt) && txt.includes(change)) out.push(docRel)
+      }
+    } catch { /* 单模块推导失败跳过（best-effort） */ }
+  }
+  return out
+}
+
+/**
  * ⑦ renderThinDocsDebt：flow start 触碰命中模块的欠账事实行（三档——提示前移：动手前看到
  * 「你要动的卡已落后」，比收口时警告有效）。computeDocsDebt（厚道 execute {DOCS_DEBT}）同源
  * 复用；只出 behind>0 或卡从未提交的模块（空债零输出）；behind=null 降级注记不出（代理信号

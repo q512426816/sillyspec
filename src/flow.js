@@ -1790,6 +1790,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     mark('probes')
   }
 
+  // 模块对账面断点续跑回读（2026-10-12-thin-module-gate-and-feed 二档）：patch 子步已 done 的
+  // 重入轮次上 moduleScope 为空（进程内变量不跨轮）——从 change-patch.json files[] 回读重算
+  // （distill 回写与 archive 前的 extraDocs 推导共用；files[] 与冻结面同时点口径）。
+  if (!moduleScope) {
+    try {
+      const pm = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+      const filesArr = Array.isArray(pm && pm.files) ? pm.files : []
+      if (filesArr.length > 0) {
+        const { reconcileModuleDocs } = await import('./flow-parity.js')
+        const rec = reconcileModuleDocs({ cwd, specBase, ownFiles: filesArr, committedRaw: [] })
+        moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
+      }
+    } catch { /* 回读失败 → 空面（回写零命中静默） */ }
+  }
   // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）+ FR 索引提炼
   // （2026-09-22-thin-fr-distill-sync：轻量变更此前只蒸馏 decisions 不调 indexRequirements——
   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；轻量变更无 design.md，域路由
@@ -1804,20 +1818,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     } catch { /* 收割 best-effort */ }
     // 模块变更索引机械回写（2026-10-12-thin-module-gate-and-feed 二档）：命中模块的卡/sidecar
     // 追加一行本变更条目——零语义判断（日期/变更名/动机首行全已知），split-changelog 契约 sidecar
-    // 优先、卡内「## 变更索引」节次之、变更名在场即跳过（断点续跑幂等）。patch 子步被跳过
-    // （断点续跑）时从 change-patch.json files[] 回读重算对账面（回写只消费 modules[].doc 够用）。
+    // 优先、卡内「## 变更索引」节次之、变更名在场即跳过（断点续跑幂等）。moduleScope 由上方
+    // 回读块保证在场（patch 本轮算出或 change-patch.json 回读）。
     try {
-      if (!moduleScope) {
-        try {
-          const pm = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
-          const filesArr = Array.isArray(pm && pm.files) ? pm.files : []
-          if (filesArr.length > 0) {
-            const { reconcileModuleDocs } = await import('./flow-parity.js')
-            const rec = reconcileModuleDocs({ cwd, specBase, ownFiles: filesArr, committedRaw: [] })
-            moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
-          }
-        } catch { /* 回读失败 → 空面（回写零命中静默） */ }
-      }
       if (moduleScope && Array.isArray(moduleScope.modules) && moduleScope.modules.length > 0) {
         const { appendChangeIndexEntries } = await import('./flow-parity.js')
         const motive = String(st.input || '').split('\n').map((s) => s.trim()).find(Boolean) || ''
@@ -1900,6 +1903,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
     const { ProgressManager } = await import('./progress.js')
     const { runArchiveChain } = await import('./run/complete-handlers.js')
+    // extraDocs 断点续跑推导（评审 P3 清偿 2026-10-12-thin-module-gate-and-feed）：distill 已
+    // done 的重入轮次上 changelogAppended 为空（进程内变量不跨轮）——从命中模块的卡/sidecar
+    // 反查含本变更名的目标文件（幂等事实，判据与回写去重同款 text.includes(change)），
+    // extraDocs 精确入暂存不靠目录级回退兜底。
+    if (changelogAppended.length === 0 && moduleScope && Array.isArray(moduleScope.modules) && moduleScope.modules.length > 0) {
+      try {
+        const { deriveRecordedChangeIndexTargets } = await import('./flow-parity.js')
+        changelogAppended = deriveRecordedChangeIndexTargets({ specBase, modules: moduleScope.modules, change })
+      } catch { /* 推导失败 → extraDocs 空（目录级回退兜底） */ }
+    }
     // 锚定同 start（平台参数面）
     const { archiveDestDirName } = await import('./stage-contract.js')
     const pm = new ProgressManager()
