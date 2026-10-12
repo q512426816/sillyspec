@@ -172,6 +172,43 @@ test('archiveWorktreeCleanup：跨仓有未 apply 交付→保留+不阻断归�
   cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: true });
 });
 
+test('cleanupCrossWorktrees：目录缺失+meta 可寻址——prune 后复核消失→skipped；locked 复核仍在→partial（评审 P2 直测）', () => {
+  const { main, cross, specBase, changeName } = makeFixture();
+  /** 手写 meta 寄放在主仓扫描源、worktreePath 指向跨仓仓里已删的幽灵路径（meta 随目录同亡的事故形态经公共 API 不可达，用手工 meta 直测该分支） */
+  const plantGhost = (cn, { lock }) => {
+    const ghostPath = join(cross, '.sillyspec', '.runtime', 'worktrees', `${cn}--front`);
+    git(cross, ['worktree', 'add', ghostPath, '-b', `sillyspec/${cn}`]);
+    if (lock) git(cross, ['worktree', 'lock', ghostPath]);
+    rmSync(ghostPath, { recursive: true, force: true });
+    const metaHost = join(specBase, '.runtime', 'worktrees', `${cn}--front`);
+    mkdirSync(metaHost, { recursive: true });
+    writeFileSync(join(metaHost, 'meta.json'), JSON.stringify({
+      changeName: cn, repoKey: 'front', isCross: true, crossRepoRoot: cross,
+      worktreePath: ghostPath, baseHash: revHead(cross), branch: `sillyspec/${cn}`, mode: 'worktree',
+    }));
+    return ghostPath;
+  };
+
+  // 未 locked：prune 后复核消失 → skipped（销账）
+  const ghostA = plantGhost(`${changeName}-a`, { lock: false });
+  const crA = cleanupCrossWorktrees({ cwd: main, changeName: `${changeName}-a`, specBase, force: true });
+  const rA = crA.results.find((x) => x.repoKey === 'front');
+  assert.equal(rA.result, 'skipped', `未 locked 悬空注册 prune 后复核过→skipped（实际 ${rA.result}）`);
+  assert.equal(worktreeListHas(cross, ghostA), false, '悬空注册已被 prune');
+
+  // locked：prune 静默跳过 → 复核仍在 → partial + unlock 提示
+  const ghostB = plantGhost(`${changeName}-b`, { lock: true });
+  const crB = cleanupCrossWorktrees({ cwd: main, changeName: `${changeName}-b`, specBase, force: true });
+  const rB = crB.results.find((x) => x.repoKey === 'front');
+  assert.equal(rB.result, 'partial', `locked 悬空注册复核不过→partial（实际 ${rB.result}）`);
+  assert.ok((rB.details || []).some((d) => d.includes('worktree unlock')), 'details 含 unlock 指引');
+  assert.ok(worktreeListHas(cross, ghostB), 'locked 悬空注册保留（不自动解除）');
+  // 用户裁决后收敛
+  git(cross, ['worktree', 'unlock', ghostB]);
+  git(cross, ['worktree', 'prune']);
+  assert.equal(worktreeListHas(cross, ghostB), false);
+});
+
 test('scanCrossWorktreeGhosts + detectCrossWorktreeHealth：目录已删+注册残留（事故形态）→ghost 列出/finding 判 WARNING', () => {
   const { main, cross, specBase, changeName } = makeFixture();
   ensureCrossWorktrees({ cwd: main, changeName, specBase });

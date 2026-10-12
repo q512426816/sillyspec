@@ -64,7 +64,7 @@ Then 全部用例绿
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：目录已删+注册悬空——prune 后复核消失→cleaned；locked 复核仍在→partial+键保留」
+FR-01: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：目录缺失+meta 可寻址——prune 后复核消失→skipped；locked 复核仍在→partial（评审 P2 直测）」+「正常路径 remove 后 list 复核→cleaned+注册表键回收」
 FR-02: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：locked 幽灵 partial 细节含 git worktree unlock 提示」
 FR-03: test/cross-worktree-ghost-registration.test.mjs「archiveWorktreeCleanup：归档兜底清理跨仓 worktree（无交付→清理；有交付→保留+不阻断）」
 FR-04: test/cross-worktree-ghost-registration.test.mjs「doctor 跨仓注册扫描 + --prune-cross-worktrees dry-run/confirm（locked 跳过列指引）」
