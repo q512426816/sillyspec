@@ -2540,6 +2540,27 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
               console.log(`   docHash 已与当前 ${result.mainDoc} 一致，跳过重写（幂等 no-op，不动文件）`);
             } else {
               console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
+              // 派发前任务书出口（2026-10-12-thick-taskbook-cli）：新生成骨架 = 待派发形态——打印
+              // 可原样粘贴的完整评审任务书（检查单生产权在 CLI，治主代理手写 leading prompt）。
+              // 条件性：--from adopt（评审已产）与 --refresh-hash（刷新既有）不打印；--json 面不混文案。
+              if (!rsrFrom && !wantRefresh) {
+                try {
+                  const { renderStageReviewerTaskbook } = await import('./stage-review.js');
+                  const { assembleProbeLinesForScope } = await import('./review-probes.js');
+                  const rsrSpecBase = rsrPlatformOpts.specRoot || join(dir, '.sillyspec');
+                  const _probeAsm = assembleProbeLinesForScope(rsrSpecBase, 'thick');
+                  for (const _w of _probeAsm.warnings) console.warn(`⚠️ review_probes：${_w}`);
+                  console.log(`\n📋 评审员任务书（原样复制给干净上下文子代理——检查单生产权在 CLI，勿手写改写）：`);
+                  console.log(renderStageReviewerTaskbook({
+                    stage: st,
+                    changeDir: join(rsrSpecBase, 'changes', rsrChange),
+                    changeName: rsrChange,
+                    reviewRunId: result.reviewRunId,
+                    reviewPath: result.reviewPath,
+                    probeLines: _probeAsm.lines.length > 0 ? _probeAsm.lines : null,
+                  }));
+                } catch { /* 任务书打印 best-effort：失败不影响注册主流程 */ }
+              }
             }
           }
         } catch (e) {

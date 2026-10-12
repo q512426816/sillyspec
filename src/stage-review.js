@@ -15,12 +15,14 @@
 
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
 import { writeAtomicSync } from './fs-atomic.js'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { createHash } from 'crypto'
 import jsYaml from 'js-yaml'
 import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
 import { detectSpecDirTypo } from './spec-dir-typo.js'
 import { resolveRuntimeRoot, resolveSpecDir } from './run/shared.js'
+import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
+import { assembleProbeLinesForScope } from './review-probes.js'
 
 // 文档型 stage review 的合法 reviewType
 const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
@@ -739,6 +741,51 @@ export function validateStageReviewWithAutoRefresh(opts) {
 }
 
 /**
+ * 厚档评审员任务书（agent 通道，2026-10-12-thick-taskbook-cli）：可原样粘贴给干净上下文子代理
+ * 的完整派发 prompt——检查单生产权收归 CLI（dogfood 实证 fire-equipment 会话：主代理手写 9 份
+ * 派发 prompt，6 份带 leading 措辞——「本变更的修复：…」预设结论、「构建已跑过你无需重跑」
+ * 外包验证；三个生产缺陷全漏检的根因是检查单由主代理手写）。与 thin 面 renderReviewerTaskbook
+ * （flow-review.js）同哲学；平台通道任务书在 review-dispatch.js buildReviewerTaskBook（不动）。
+ * 契约复用 renderReviewJsonContract 单源渲染——禁止第二套手写 schema 摘要（防契约漂移；
+ * 其通道优先序段面向派发方，评审员读到无害）。
+ * 放本模块而非 review-dispatch：契约渲染器与校验器同模块，且 review-dispatch 静态 import
+ * 本模块（反向成环）。诚实边界：任务书仍由主代理复制转发——CLI 单源降 leading 概率，
+ * 不防恶意篡改（与 thin 同界）。
+ * @param {{ stage: string, changeDir: string, changeName?: string, reviewRunId?: string,
+ *   reviewPath: string, probeLines?: string[]|null }} opts
+ * @returns {string}
+ */
+export function renderStageReviewerTaskbook({ stage, changeDir, changeName, reviewRunId, reviewPath, probeLines = null }) {
+  const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
+  const reviewType = STAGE_REVIEW_TYPE[stage] || 'design'
+  const items = (REVIEW_CHECKLISTS[stage] || []).map((t, i) => `  ${i + 1}. ${t}`)
+  const probeSection = Array.isArray(probeLines) && probeLines.length > 0
+    ? ['', '【项目评审探针（local.yaml review_probes 注入——CLI 单源生产，项目特有面必查）】',
+      ...probeLines.map((l) => `  - ${l}`),
+      '  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与检查单同口径，未答=未审）']
+    : []
+  return [
+    `⚖️ 独立评审任务书 — ${stage} 阶段（agent 通道派发，原样复制给子代理——检查单生产权在 CLI，勿自行改写增删）`,
+    `══════════════════════════════════════`,
+    `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对文档与代码，不信自述，逐条给证据锚点。`,
+    `【评审对象】${join(changeDir || '', mainDoc)}（reviewType=${reviewType}${changeName ? `，change=${changeName}` : ''}）`,
+    ``,
+    `【检查单（逐条 pass / gap / fail + 证据锚点）】`,
+    ...items,
+    ...probeSection,
+    ``,
+    `【请求预算】硬帽 12 次——超帽即止；材料不足以作答的项如实标 cannot_verify 并列缺件，勿猜。`,
+    `【纪律】只读——禁止修改任何文件、禁止 git 写操作。`,
+    `【产物】把 review.json 写到：${reviewPath}`,
+    `   docHash 可占位 "TODO"——写完由主会话跑 sillyspec register-stage-review --change ${changeName || '<名>'} --stage ${stage} --refresh-hash 代填（保留 verdict/checklist）。`,
+    ``,
+    renderReviewJsonContract({ stage, changeDir, reviewRunId, tier: 'independent' }),
+    ``,
+    `【完成后】告知主会话重跑：sillyspec run ${stage} --done --change ${changeName || '<名>'}（断点续，已完成子步幂等跳过）`,
+  ].join('\n')
+}
+
+/**
  * 打印 stage review 校验结果
  * @param {{ ok: boolean, errors: string[], warnings: string[] }} result
  * @param {object} context - { stage, reviewRunId } 用于错误提示路径
@@ -788,6 +835,25 @@ export function printStageReviewResult(result, context = {}) {
     // 一键重算命令带上真实 change 名，agent 可直接照抄执行（--refresh-hash 保 verdict）。
     if (result.errors.some(e => String(e).includes('docHash')) && changeName) {
       console.error(`   docHash 失配修复：sillyspec register-stage-review --change ${changeName} --stage ${stage} --refresh-hash（主文档改版多阶段联动用 --all）`)
+    }
+    // 厚档评审任务书（2026-10-12-thick-taskbook-cli）：缺 review.json = 待派发形态——打印可原样
+    // 粘贴的完整任务书（thin 面同款时机：评审需要而未产）。条件性：仅缺件形态打印，docHash 失配/
+    // schema 错等其他失败不打印（防重复撞门噪音）。探针装配 fail-soft：specBase 由 runtimeRoot
+    // 父目录推导（平台模式 runtimeRoot 在外时 miss → 零注入），打印失败不影响 gate 原错误输出。
+    if (reviewRunId && runtimeRoot && changeName
+      && result.errors.some(e => String(e).includes('缺少') && String(e).includes('review.json'))) {
+      try {
+        const _probeAsm = assembleProbeLinesForScope(dirname(runtimeRoot), 'thick')
+        for (const _w of _probeAsm.warnings) console.error(`   ⚠️ review_probes：${_w}`)
+        console.error(`\n   📋 评审员任务书（原样复制给干净上下文子代理——检查单生产权在 CLI，勿手写改写）：`)
+        console.error(renderStageReviewerTaskbook({
+          stage, reviewRunId,
+          changeDir: join(dirname(runtimeRoot), 'changes', changeName),
+          changeName,
+          reviewPath: join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`, 'review.json'),
+          probeLines: _probeAsm.lines.length > 0 ? _probeAsm.lines : null,
+        }).split('\n').map((l) => `   ${l}`).join('\n'))
+      } catch { /* 任务书打印 best-effort：失败不影响 gate 原有输出与退出码 */ }
     }
   }
 
