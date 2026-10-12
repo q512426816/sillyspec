@@ -1,0 +1,17 @@
+{"ts":1791817860458,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791817860458,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791817860458,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791817874361,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791817903964,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick","evidence":"node --test test/quick-retired.test.mjs 全绿（R5 锚 3.32.7）——2026-10-12 15:12 实跑"}
+{"ts":1791817903956,"kind":"commit","stage":null,"detail":"886cd26d","provisional":true}
+{"ts":1791817907439,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791817907439,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791817917641,"kind":"commit","stage":null,"detail":"a9e8538f","provisional":true}
+{"ts":1791818228270,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick","evidence":"git push origin main 成功：3bc7aceb..a9e8538f（pre-push lint+test+docs gate 全过，基线棘轮自动重锚 5→16）——2026-10-12 15:14 回执"}
+{"ts":1791818229480,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791818229480,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791818616183,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick","evidence":"钉扎通道三段回执：预核验 latest=3.32.6（通道存活）→ publish +sillyspec@3.32.7（sha512-oC948zW52r0LH…，332 files/5.0MB）→ 双核验 version=3.32.7 且 dist-tags.latest=3.32.7（2026-10-12 15:22）"}
+{"ts":1791818616490,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791818616490,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791818766968,"kind":"commit","stage":null,"detail":"7000ac10","provisional":true}
+{"ts":1791818770685,"kind":"gate-run","stage":"verify","detail":"门实测 passed（3.4s） · 20261012152608","provisional":true}
