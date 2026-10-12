@@ -640,7 +640,7 @@ export function renderStageSourceSideMovesMessage(r) {
  * @param {{ cwd: string, specBase: string, destDir: string, destName: string }} opts
  * @returns {{ docsAdded: string[]|null, fallbackDocs: boolean }} docsAdded=null 表示走了目录级回退
  */
-export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs = null }) {
   // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）
   safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
 
@@ -661,6 +661,19 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
     }
   } catch (e) {
     console.warn(`⚠️ knowledge 侧 add 失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
+  }
+
+  // extraDocs（2026-10-12-thin-module-gate-and-feed 二档）：thin 变更索引回写文件精确入暂存
+  // （文件级 pathspec；与下方 module-impact 精确集/目录级回退对本文件集是幂等重复 add——
+  // 本通道不依赖回退路径存活，回退面未来收紧时回写暂存不受影响）。
+  if (Array.isArray(extraDocs) && extraDocs.length > 0) {
+    try {
+      const posixDocs = [...new Set(extraDocs.map((p) => String(p).replace(/\\/g, '/')))]
+      for (const batch of chunkPaths(posixDocs)) safeGit(cwd, ['add', '--', ...batch])
+      console.log(`   📖 模块变更索引回写入暂存：${posixDocs.length} 个文件`)
+    } catch (e) {
+      console.warn(`⚠️ 回写文件入暂存失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
+    }
   }
 
   // docs 侧：module-impact「更新结果」done 行 → 精确文件集。
@@ -900,7 +913,7 @@ export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, he
   return { pathspecs, dropped }
 }
 
-export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null } = {}) {
+export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null, extraDocs = null } = {}) {
   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
   // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
   // flow done/burst 收口不产生模块文档增量（旧流程挂在 execute/verify 步骤）——交付面 ×
@@ -1033,7 +1046,7 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   // porcelain 实证）。basename(destDir) 与调用方 destDir 恒一致（flow.js 与 run archive 同构）。
   const destName = basename(destDir)
   try {
-    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
+    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName, extraDocs })
   } catch (e) {
     console.warn(`⚠️ 归档窄化 git add 异常（不阻断归档，交付面靠下方探测块兜底/agent git status 核对）: ${(e && e.message) || e}`)
   }

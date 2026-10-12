@@ -14,6 +14,9 @@
  *    （2026-10-09-close-trace-single-set）——thin flow done 与 heavy execute --done 共用
  *    一处只写 change.patch + change-patch.json 两件（对账面并入 scopeAudit 子对象；
  *    此前 2026-10-07-unify-close-trace 的四件双轨形态收口为单套，旧名读侧兼容兜存量）。
+ * ⑤⑥⑦ evaluateModuleGate / appendChangeIndexEntries / renderThinDocsDebt
+ *    （2026-10-12-thin-module-gate-and-feed 三档）：未登记目录软门判定（拦但可签收）、
+ *    命中模块变更索引机械回写（sidecar 优先、幂等）、start 注入面欠账事实行（提示前移）。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -21,6 +24,7 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
+import { computeDocsDebt } from './docs-debt.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { readV2SectionAnswer } from './flow-review.js'
 import { DESIGN_QUESTIONS } from './flow-draft.js'
@@ -103,6 +107,114 @@ export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
     out.push(`   建议收口前在模块图（docs/<project>/modules/_module-map.yaml）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
   }
   return { lines: out, hits, modules, uncoveredDirs, moduleMaps: maps.map((m) => `docs/${m.project}/modules/_module-map.yaml`) }
+}
+
+/**
+ * ⑤ evaluateModuleGate：未登记目录软门判定（2026-10-12-thin-module-gate-and-feed 一档）。
+ * 消费 reconcileModuleDocs 结构化面——纯判定零 IO；门语义=拦但可签收（--accept-unmapped 留痕
+ * acceptedUnmappedDirs，镜像 acceptedDirtyGap 先例）：未登记目录是直接信号（文件在、图没认），
+ * 但存量仓有合法未登记面（根级脚本/配置），误报硬拦会训练忽略报警（docs-gate 既有裁决）——
+ * 签收制让每次放行成为审计面可见决策。绿地（无图）不拦：无图时 reconcileModuleDocs 空面短路，
+ * 强制登记等于替 scan 做模块划分。
+ * @param {{moduleScope: {moduleMaps?: string[], uncoveredDirs?: Array<{dir: string, files: number}>}|null,
+ *   ignore?: string[]}} opts ignore=local.yaml module_gate_ignore（目录前缀，posix）
+ * @returns {{block: boolean, dirs: Array<{dir: string, files: number}>, maps: string[]}}
+ */
+export function evaluateModuleGate({ moduleScope, ignore } = {}) {
+  const scope = moduleScope || {}
+  const maps = Array.isArray(scope.moduleMaps) ? scope.moduleMaps : []
+  const ig = (Array.isArray(ignore) ? ignore : [])
+    .map((s) => String(s || '').replace(/\\/g, '/').replace(/\/+$/, '').trim()).filter(Boolean)
+  const dirs = (Array.isArray(scope.uncoveredDirs) ? scope.uncoveredDirs : [])
+    .map((d) => ({ dir: String((d && d.dir) || '').replace(/\\/g, '/').replace(/\/+$/, ''), files: Number(d && d.files) || 0 }))
+    .filter((d) => d.dir)
+    .filter((d) => !ig.some((p) => d.dir === p || d.dir.startsWith(p + '/')))
+  return { block: maps.length > 0 && dirs.length > 0, dirs, maps }
+}
+
+/**
+ * ⑥ appendChangeIndexEntries：命中模块变更索引机械回写（二档）。零语义判断——日期/变更名/
+ * 动机首行全是已知量，与 decision-distill 降 noAI 同性质。目标判定遵守 split-changelog 契约
+ * （modules.js）：sidecar 在场优先追加 sidecar 勿写回卡；否则卡内「## 变更索引」节（存在才动，
+ * 节外逐字保留）；两者皆无跳过。幂等去重=目标文本已含变更名即跳过（断点续跑防双写）。
+ * 行形态按目标既有体自适应（表格「| 日期 | 变更名 | 摘要 |」/ 列表「- 变更名 | 摘要」——
+ * module-changelog.js CHANGE_NAME_RE 两种都解析；空节按节标题「（表格…）」倾向表格）。
+ * @returns {{appended: string[], skipped: Array<{id: string, reason: string}>}} appended=specBase 相对 posix 路径
+ */
+export function appendChangeIndexEntries({ specBase, modules, change, summary, date } = {}) {
+  const appended = []
+  const skipped = []
+  const safeSummary = String(summary || '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim().slice(0, 60) || '轻量变更'
+  for (const m of (Array.isArray(modules) ? modules : [])) {
+    try {
+      if (!m || !m.id) continue
+      if (!m.doc || m.docMissing) { skipped.push({ id: m.id, reason: '无卡（未登记 doc 或卡缺失）' }); continue }
+      const cardAbs = join(specBase, String(m.doc).replace(/^\/+/, ''))
+      const sidecarAbs = cardAbs.replace(/\.md$/, '.changelog.md')
+      const useSidecar = existsSync(sidecarAbs)
+      const targetAbs = useSidecar ? sidecarAbs : (existsSync(cardAbs) ? cardAbs : null)
+      if (!targetAbs) { skipped.push({ id: m.id, reason: '无卡（doc 指向的文件不存在）' }); continue }
+      const text = readFileSync(targetAbs, 'utf8')
+      if (!useSidecar && !/^##\s*变更索引/m.test(text)) { skipped.push({ id: m.id, reason: '卡内无「## 变更索引」节' }); continue }
+      if (text.includes(change)) { skipped.push({ id: m.id, reason: '已记录（幂等跳过）' }); continue }
+      const lines = text.replace(/\r\n/g, '\n').split('\n')
+      // 定位插入点与形态：sidecar=整文件体；卡=节内（下一个 ## 或 EOF 前）
+      let segStart = 0
+      let segEnd = lines.length
+      if (!useSidecar) {
+        segStart = lines.findIndex((l) => /^##\s*变更索引/.test(l))
+        if (segStart < 0) { skipped.push({ id: m.id, reason: '卡内无「## 变更索引」节' }); continue }
+        segStart += 1
+        segEnd = lines.length
+        for (let i = segStart; i < lines.length; i++) {
+          if (/^##\s/.test(lines[i])) { segEnd = i; break }
+        }
+      }
+      const body = lines.slice(segStart, segEnd)
+      const isTable = body.some((l) => /^\s*\|/.test(l)) || /^##\s*变更索引[^\n]*（表格/.test(lines[segStart - 1] || '')
+      const row = isTable ? `| ${date} | ${change} | ${safeSummary} |` : `- ${change} | ${safeSummary}`
+      let insertAt = segEnd
+      while (insertAt > segStart && lines[insertAt - 1].trim() === '') insertAt -= 1
+      // 空节（「（表格，初始为空）」模板）：节标题后空一行再落行
+      if (insertAt === segStart && !useSidecar) insertAt = Math.min(segStart + 1, segEnd)
+      lines.splice(insertAt, 0, row)
+      writeFileSync(targetAbs, lines.join('\n'), 'utf8')
+      appended.push(String(m.doc).replace(/^\/+/, ''))
+    } catch (e) {
+      skipped.push({ id: (m && m.id) || '?', reason: `回写失败（fail-soft）：${(e && e.message) || e}` })
+    }
+  }
+  return { appended, skipped }
+}
+
+/**
+ * ⑦ renderThinDocsDebt：flow start 触碰命中模块的欠账事实行（三档——提示前移：动手前看到
+ * 「你要动的卡已落后」，比收口时警告有效）。computeDocsDebt（厚道 execute {DOCS_DEBT}）同源
+ * 复用；只出 behind>0 或卡从未提交的模块（空债零输出）；behind=null 降级注记不出（代理信号
+ * 不配噪音）。git 锚按 projectRoot；平台模式（specBase 在仓外）走 computeDocsDebt 既有降级。
+ * @returns {string[]} 空数组=无债/无图/全降级
+ */
+export function renderThinDocsDebt({ specBase, projectRoot, changedFiles } = {}) {
+  const out = []
+  let maps = []
+  try { maps = collectModuleMaps({ cwd: projectRoot || specBase, specBase }) } catch { return out }
+  const rows = []
+  for (const map of maps) {
+    let r = null
+    try { r = computeDocsDebt({ projectRoot: projectRoot || specBase, specBase, projectName: map.project, changedFiles }) } catch { continue }
+    if (!r || !r.ok || !Array.isArray(r.entries)) continue
+    for (const e of r.entries) {
+      if (!e || !e.module) continue
+      if (e.neverCommitted === true) rows.push(`  - ${e.module}：模块卡 ${e.doc || '?'} 从未提交（欠账最重）`)
+      else if (Number.isFinite(e.behind) && e.behind > 0) rows.push(`  - ${e.module}：模块卡落后源码 ${e.behind} 个提交${e.doc ? `（${e.doc}）` : ''}`)
+    }
+  }
+  if (rows.length > 0) {
+    out.push(`📚 模块卡欠账（behind 计数，advisory——本次若改行为/接口请顺带补卡，收口对账会再提醒）：`)
+    out.push(...rows.slice(0, 5))
+    if (rows.length > 5) out.push(`   （+${rows.length - 5} 条略）`)
+  }
+  return out
 }
 
 /**
@@ -189,9 +301,11 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
 
 /**
  * patch 冻结面的提交面过滤（2026-09-27-tool-debt-cleanup 抽出为纯函数供单测锁定）：
- * 非 .sillyspec/ 全留 + 本变更目录（治理工件）+ .sillyspec/docs/ 交付文档（dogfood 模块卡
- * 是交付物——2026-09-27-gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
- * 他侧 .sillyspec/changes/**（quicklog/knowledge WIP）仍滤除。反斜杠归一。
+ * 非 .sillyspec/ 全留 + .sillyspec/docs/ 交付文档（dogfood 模块卡是交付物——2026-09-27-
+ * gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
+ * .sillyspec/changes/** 全滤除，含本变更目录（2026-10-12-close-trace-freeze-integrity
+ * FR-01：工件随归档目录本体入库，patch 再冻是冗余且污染 totals、掩盖「可归属面为空」
+ * 哨兵；口径对齐 execute --done 沉淀资产面投影的 filterDeliverableFiles）。反斜杠归一。
  *
  * 提交事实归属补位（2026-10-05-diff-commit-attribution）：现状「已提交即本变更的」前提是
  * 单会话——多会话共享仓 baseline..HEAD 混入他侧交付（评审 P2 实证：他会话 knowledge-stats
@@ -204,7 +318,7 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
 export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
   const base = committedRaw
     .map((f) => String(f).replace(/\\/g, '/'))
-    .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith(ownPrefix) || p.startsWith('.sillyspec/docs/'))
+    .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith('.sillyspec/docs/'))
   try {
     const cwd = opts.cwd || process.cwd()
     const pm = /^\.sillyspec\/changes\/([^/]+)\/$/.exec(String(ownPrefix || ''))
@@ -299,6 +413,71 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
   } catch { /* 归属切分失败：exclusive 保留全量（声明即边界），共享主仓退全量警告 */ }
   if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [] }
   return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+}
+
+/**
+ * 会话专属 worktree 孤儿提交面扫描（2026-10-12-close-trace-freeze-integrity FR-02）。
+ *
+ * 事故形态（multi-agent-platform 2026-10-12-ws-ref-ws-name 取证）：实现提交在会话 worktree
+ * 内完成但不在 flow done 时点 HEAD 的祖先链（reset/detach/平行分支）——baseline..HEAD 提交面
+ * 与 git status 脏面都看不到，冻结面静默缺实现（+38/-10 实现零留痕、归档后 apply 才找回）。
+ *
+ * 扫描面：本 worktree 的 HEAD reflog（linked worktree 独立 reflog，会话独占不污染）。取不在
+ * HEAD 祖先链、也不在 baseline 祖先链（flow start 前的既有历史不算缺口）的提交；其 patch-id
+ * 与 baseline..HEAD 任一提交等价（amend/rebase 残留同内容）视为已覆盖剔除；余者触及交付面
+ * 文件（非 .sillyspec/）即入缺口。只读不写，git 全失败返回空面（fail-safe）。
+ *
+ * @param cwd 会话专属 worktree 根（调用方保证路径判定命中，本函数不复判）
+ * @param opts.baseline flow start 基线提交（不可解析时返回空面——区间无法建立）
+ * @returns {{ commits: string[], files: string[] }} commits 去重提交 SHA、files 并集交付文件（posix）
+ */
+export function scanOrphanFace(cwd, { baseline } = {}) {
+  const empty = { commits: [], files: [] }
+  const git = (args, opts = {}) => {
+    try {
+      return execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 60000, windowsHide: true, ...opts }).trim()
+    } catch { return null }
+  }
+  if (!baseline || !/^[0-9a-f]{4,40}$/i.test(baseline)) return empty
+  if (git(['cat-file', '-e', `${baseline}^{commit}`]) === null) return empty
+  const head = git(['rev-parse', 'HEAD'])
+  if (!head) return empty
+  // baseline..HEAD 提交集 + 各自 patch-id（等价覆盖面）
+  const inRange = String(git(['log', '--no-merges', '--format=%H', `${baseline}..${head}`]) || '')
+    .split('\n').map((s) => s.trim()).filter(Boolean)
+  const covered = new Set(inRange)
+  const patchIdOf = (commit) => {
+    const diff = git(['show', '--no-color', '--pretty=format:', '--patch', '--no-merges', commit])
+    if (!diff) return null
+    const out = git(['patch-id', '--stable'], { input: diff + '\n' })
+    return out ? out.split(/\s+/)[0] : null
+  }
+  const coveredIds = new Set()
+  for (const c of inRange) {
+    const pid = patchIdOf(c)
+    if (pid) coveredIds.add(pid)
+  }
+  // 本 worktree HEAD reflog 全轨迹（linked worktree 独立）
+  const reflogHashes = String(git(['reflog', 'show', '--format=%H', 'HEAD']) || '')
+    .split('\n').map((s) => s.trim()).filter(Boolean)
+  const isAncestor = (sha, of) => git(['merge-base', '--is-ancestor', sha, of], {}) !== null
+  const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+  const orphanCommits = []
+  const orphanFiles = new Set()
+  for (const h of [...new Set(reflogHashes)]) {
+    if (covered.has(h)) continue
+    // exit code 0 = ancestor；execFileSync 抛非零 → 返回 null
+    if (isAncestor(h, head)) continue
+    if (isAncestor(h, baseline)) continue // flow start 前既有历史（worktree 建立期轨迹）
+    const pid = patchIdOf(h)
+    if (pid && coveredIds.has(pid)) continue // amend/rebase 等价残留
+    const files = String(git(['show', '--no-color', '--name-only', '--pretty=format:', '--no-merges', h]) || '')
+      .split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean).filter(deliverable)
+    if (files.length === 0) continue // 只碰治理面的孤儿不入缺口
+    orphanCommits.push(h)
+    for (const f of files) orphanFiles.add(f)
+  }
+  return { commits: orphanCommits, files: [...orphanFiles].sort() }
 }
 
 /**

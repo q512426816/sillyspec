@@ -73,13 +73,17 @@ export function readFlowConfig(specBase) {
     if (/^flow\s*:\s*(thin|legacy)\s*$/m.test(raw)) mode = raw.match(/^flow\s*:\s*(thin|legacy)\s*$/m)[1]
     const th = raw.match(/^\s*edit_ratio_threshold\s*:\s*([0-9.]+)\s*$/m)
     const en = raw.match(/^\s*edit_ratio_enforcement\s*:\s*(advisory|block)\s*$/m)
+    // module_gate_ignore（2026-10-12-thin-module-gate-and-feed）：未登记目录软门的固定忽略清单，
+    // 单行逗号串（目录前缀，posix）——列表块形态不支持，readFlowConfig 同款逐键正则防线
+    const ig = raw.match(/^\s*module_gate_ignore\s*:\s*(.+)$/m)
     return {
       mode,
       editRatioThreshold: th ? Number(th[1]) : 0.5,
       editRatioEnforcement: en ? en[1] : 'advisory',
+      moduleGateIgnore: ig ? ig[1].split(',').map((s) => s.trim()).filter(Boolean) : [],
     }
   } catch {
-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
+    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [] }
   }
 }
 
@@ -309,6 +313,16 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     if (domains.length === 0 && rejected.length === 0 && !km.matched) {
       lines.length = 0
       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)
+    }
+    // 模块卡欠账提示前移（2026-10-12-thin-module-gate-and-feed 三档）：触碰命中模块 behind>0
+    // 才出事实行——动手前看到「你要动的卡已落后」比收口时警告有效；computeDocsDebt（厚道
+    // execute {DOCS_DEBT}）同源，空债/无图零输出，异常走外层 catch fail-open 不阻断 start。
+    if (touched.length > 0) {
+      try {
+        const { renderThinDocsDebt } = await import('./flow-parity.js')
+        const debtLines = renderThinDocsDebt({ specBase, projectRoot: dirname(specBase), changedFiles: touched })
+        if (debtLines.length > 0) lines.push(...debtLines)
+      } catch { /* 欠账计算 fail-open */ }
     }
   } catch (e) {
     lines.length = 0
@@ -872,7 +886,7 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], 
   return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
 }
 
-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, allowBatchTick = false }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, allowBatchTick = false, acceptUnmapped = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -906,6 +920,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   const skip = (k) => { doneList.push(`${k}(skip)`) }
   let reviewOutcome = null
   let gateSummaryText = null
+  // 模块对账面（2026-10-12-thin-module-gate-and-feed）：patch 子步算出后供 distill 回写消费；
+  // 断点续跑 patch 已 done 时从 change-patch.json files[] 回读重算（单一时点口径，不随图回写漂移）
+  let moduleScope = null
+  let changelogAppended = []
   // 遥测单点（2026-09-25-thin-parity-assets 修评审 P2①：失败路径 exit 前也要落账——校准信号
   // 不许在失败面丢失；成功收口走函数末尾同款记录，失败面只多不少）
   const appendTelemetry = (review) => {
@@ -1318,11 +1336,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   }
   if (st.substeps?.patch !== 'done' || driftRefreeze) {
     let patchOk = false
+    let orphanGapCount = 0
     try {
-      // patch 面 = 本变更可归属变化（2026-09-25-thin-patch-scope-fix 收窄：dirty 全扫面会把并行
-      // 会话未声明 WIP 冻结进来——上变更实测 49 文件泄漏）：①baseline..HEAD 提交面（.sillyspec/
-      // 治理面只留本变更目录，他侧 quicklog/knowledge WIP 不入）②本变更目录全部工作树件（未提交
-      // 治理面/槽位作答）——排除 patch 自引用。提交面再过他侧声明切分（他侧同窗口提交的防线）。
+      // patch 面 = 本变更可归属的交付面（2026-10-12-close-trace-freeze-integrity FR-01 收敛）：
+      // ①baseline..HEAD 提交面过滤 .sillyspec/（只留 docs/ 交付文档——治理工件目录不入冻，
+      // 对齐 execute --done 沉淀资产面投影；工件真相随归档目录本体入库，patch 再冻是冗余且
+      // 掩盖「可归属面为空」哨兵——ws-ref-ws-name +137/-0 全工件 0 代码实证）②独占树未提交
+      // 交付面（worktree/--freeze-dirty）。他侧 quicklog/knowledge WIP 不入；提交面再过他侧
+      // 声明切分（他侧同窗口提交的防线）。
       if (!st.baseline_commit) {
         console.log('📦 patch 留档跳过：无 git 基线（无历史仓）')
         patchOk = true
@@ -1383,18 +1404,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (dirtyForeign.length > 0) {
           console.warn(`⚠️ patch 留档：${dirtyForeign.length} 个 dirty 文件被其他活跃变更声明排除（${dirtyForeign.slice(0, 3).map((x) => `${x.file}←${x.owners[0]}`).join(', ')}${dirtyForeign.length > 3 ? ' 等' : ''}）——如有误（陈旧声明），清理该旧变更或用 --refreeze 重冻结`)
         }
-        const changeDirFiles = []
-        const walk = (dir) => {
-          for (const e of readdirSync(dir, { withFileTypes: true })) {
-            // flow-state.yaml 是运行态（机器写、冻结后仍随子步推进变化）——不入审计 patch
-            //（2026-09-27-tool-debt-cleanup：旧口径把它当 new file 冻进 patch，评审 P2）
-            if (e.name === 'flow-state.yaml') continue
-            const p = join(dir, e.name)
-            if (e.isDirectory()) walk(p)
-            else changeDirFiles.push(relative(cwd, p).replace(/\\/g, '/'))
-          }
-        }
-        try { walk(changeDir) } catch { /* 目录异常=空面 */ }
         // 冻结面收集（2026-09-25-thin-r16-patches 修复①）：committed 为主；会话专属 worktree
         // （gate-snapshot 同款路径判定）下未提交 dirty 交付面一并入冻结——独占树内全归属本变更；
         // 共享主仓 dirty 无法归属只警告（他侧声明免警告），审计缺口显式化不再静默。
@@ -1443,26 +1452,49 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // change-patch.json 两件，但旧轮冻结件里可能仍有 scope-audit.json/.patch——
         // legacy 防护保留）：上一轮留痕件作为 untracked 新文件被全文自嵌入即自引用循环
         // （旧 patch 内容混进新 patch，三评 P1 根因）。
-        const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
+        const ownFiles = [...new Set([...freeze.files])]
           .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
             && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
+        // 独占 worktree 冻结完备性守卫（2026-10-12-close-trace-freeze-integrity FR-02）：
+        // 事故形态（multi-agent-platform ws-ref-ws-name 取证）：实现提交在会话 worktree 内完成
+        // 但不在 flow done 时点 HEAD 的祖先链（reset/detach/平行分支）——baseline..HEAD 提交面
+        // 与 git status 脏面都看不到，冻结面静默缺实现。本 worktree 的 HEAD reflog 会话独占
+        // （linked worktree 独立 reflog），扫全部轨迹：不在 HEAD 祖先链且触及交付面的提交，
+        // patch-id 与 baseline..HEAD 提交等价（amend/rebase 残留）视为已覆盖；否则阻断收口
+        // （与 dirty gate 同款断点续语义）。共享主仓路径明确不启用——reflog 混他侧会话操作
+        // 无法归属，--freeze-dirty 手动声明只覆盖脏面不进 reflog 扫描。
+        if (exclusiveFrom === 'worktree') {
+          try {
+            const { scanOrphanFace } = await import('./flow-parity.js')
+            const orphan = scanOrphanFace(cwd, { baseline: st.baseline_commit })
+            if (orphan.files.length > 0 && !acceptOrphanFace) {
+              console.error(`⛔ 会话专属 worktree 存在冻结面外交付改动：${orphan.commits.length} 个提交不在 HEAD 祖先链（patch-id 不等价）触及 ${orphan.files.length} 个交付文件——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
+              console.error(`   提交：${orphan.commits.slice(0, 5).map((c) => c.slice(0, 10)).join('、')}${orphan.commits.length > 5 ? ' 等' : ''}`)
+              console.error(`   文件：${orphan.files.slice(0, 5).join('、')}${orphan.files.length > 5 ? ' 等' : ''}`)
+              console.error(`   ① git rebase/cherry-pick 这些提交到 HEAD（补齐冻结面）后重跑`)
+              console.error(`   ② 确认放弃这些提交：清理对应分支/reflog 源后重跑`)
+              console.error(`   ③ 接受缺口留痕：flow done --change ${change} --accept-orphan-face`)
+              reportMidFail('patch')
+              process.exit(1)
+            }
+            if (orphan.files.length > 0 && acceptOrphanFace) {
+              orphanGapCount = orphan.files.length
+              console.warn(`⚠️ --accept-orphan-face：显式接受 ${orphan.commits.length} 个冻结面外提交的 ${orphan.files.length} 个交付文件不进冻结面（缺口数随 change-patch.json acceptedOrphanFace 留痕）`)
+            }
+          } catch { /* 守卫异常不阻断（fail-safe 不新造阻断面） */ }
+        }
         if (ownFiles.length === 0) {
-          console.log('📦 patch 留档跳过：本变更可归属文件面为空')
+          console.log('📦 patch 留档跳过：本变更可归属文件面为空（无交付面改动——治理工件不入冻结面；若实现代码应在此，先提交后重跑）')
           patchOk = true
         } else {
           const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
           // 双口径冻结（2026-09-28-split-guard-and-gate-report 评审 P2 清偿）：交付面（committed）
           // 用 baseRef..HEAD 提交区间 diff——共享主仓里并行会话对同文件的未提交 hunk 不再漏进
-          // 冻结件；治理工件目录（changeDirFiles，本变更独占无他会话面）保留工作树口径（未提交
-          // 的槽位作答/勾选要进审计件）。重叠文件归提交区间，避免双 hunk。
+          // 冻结件；独占树未提交交付（dirtyAdded）保留工作树口径（FR-01 后治理工件目录不再入冻，
+          // 工作树口径集只剩 dirtyAdded）。重叠文件归提交区间，避免双 hunk。
           const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
           const toPosix = (p) => String(p).replace(/\\/g, '/')
-          // 复审 P2/P3a 清偿：工作树口径集 = 治理工件目录（含已提交后又改的槽位/勾选——工作树
-          // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
-          // 排除项与 ownFiles 同款（四名全排，含 scope-audit.* 旧轮冻结件 legacy 防护）。
-          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')
-            && !f.endsWith('scope-audit.json') && !f.endsWith('scope-audit.patch'))
-          const worktreeSet = new Set([...dirFilesForPatch, ...((freeze.dirtyAdded) || [])].map(toPosix))
+          const worktreeSet = new Set([...((freeze.dirtyAdded) || [])].map(toPosix))
           const committedFace = freeze.files.map(toPosix).filter((f) => !worktreeSet.has(f))
           const frozenCommitted = buildFrozenPatch(cwd, committedFace, { baseRef: st.baseline_commit, headRef: headCommit })
           const frozenDir = buildFrozenPatch(cwd, [...worktreeSet], { baseRef: st.baseline_commit })
@@ -1483,13 +1515,36 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 范围，单一计算喂 console 与落盘两处。ownFiles 传冻结面（与 files[] 同口径——
           // worktree/--freeze-dirty 场景 dirty 交付也计入模块命中；.sillyspec 治理面对账内部
           // 滤除）；三键恒在场（对账异常兜底空数组，评审 P3 清偿）；best-effort 不阻断。
-          let moduleScope = { modules: [], uncoveredDirs: [], moduleMaps: [] }
+          moduleScope = { modules: [], uncoveredDirs: [], moduleMaps: [] }
           try {
             const { reconcileModuleDocs } = await import('./flow-parity.js')
             const rec = reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw })
             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
             moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
           } catch { /* 对账 best-effort（三键空数组兜底） */ }
+          // 未登记目录软门（2026-10-12-thin-module-gate-and-feed 一档）：拦在 distill 之前——
+          // indexRequirements 的域路由发生在 distill，拦在前面 FR 才不落伪域。拦但可签收：登记/
+          // --accept-unmapped（缺口数留痕）/ module_gate_ignore 固定忽略三条出路；绿地无图不拦。
+          // 门消费的是本子步刚算的对账面（与收口留痕同时点口径），失败在 mark('patch') 前——
+          // 重入 done 从 patch 断点续，登记后重算自然通过。
+          let moduleGate = { block: false, dirs: [], maps: [] }
+          try {
+            const { evaluateModuleGate } = await import('./flow-parity.js')
+            moduleGate = evaluateModuleGate({ moduleScope, ignore: readFlowConfig(specBase).moduleGateIgnore })
+          } catch { /* 门判定异常不拦（对账面空 → 无可拦事实，fail-open 同对账口径） */ }
+          if (moduleGate.block && !acceptUnmapped) {
+            const dirList = moduleGate.dirs.slice(0, 5).map((d) => `${d.dir}（${d.files} 文件）`).join('、') + (moduleGate.dirs.length > 5 ? ' 等' : '')
+            console.error(`❌ 模块图未登记交付目录（门）：${dirList}——共 ${moduleGate.dirs.length} 个目录不在任何 _module-map.yaml 的 paths 下`)
+            console.error('   未登记后果是静默的：FR 蒸馏将落伪域 auto-*、知识图谱模块侧边（module-files/describes/changelog-of）断供、模块上下文注入绕开这些目录。')
+            console.error(`   ① 登记后重跑：在 docs/<project>/modules/_module-map.yaml 增补 modules.<id>（paths 指向该目录，可带 doc: modules/<id>.md）后重跑 flow done`)
+            console.error(`   ② 确认无需登记：flow done --change ${change} --accept-unmapped（缺口数随 change-patch.json acceptedUnmappedDirs 留痕）`)
+            console.error('   ③ 固定忽略（合法未登记面：根级脚本/配置等）：.sillyspec/local.yaml 加 module_gate_ignore: <目录>（单行逗号分隔，前缀匹配）')
+            reportMidFail('patch')
+            process.exit(1)
+          }
+          if (moduleGate.block && acceptUnmapped) {
+            console.warn(`⚠️ --accept-unmapped：显式接受 ${moduleGate.dirs.length} 个未登记目录不进模块图（缺口数随 change-patch.json acceptedUnmappedDirs 留痕）`)
+          }
           // 收口留痕单套写（2026-10-09-close-trace-single-set）：共用 writeCloseTraceArtifacts
           // 只写 change.patch + change-patch.json 两件——对账面数据并入 JSON 的 scopeAudit
           // 子对象（thin 通道同样有对账面），旧名 scope-audit.* 停写、读侧兼容兜存量归档。
@@ -1544,13 +1599,18 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               ...(crossRepos.length > 0 ? { repos: crossRepos } : {}),
             },
             meta: {
-              note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
+              note: 'flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）',
               // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径
               // （与 files[] 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响
               ...moduleScope,
               // dirty 缺口显式接受留痕（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：
               // --accept-dirty-gap 放行时缺口数入档（审计面可见，非只 console）
               ...(acceptDirtyGap && freeze.dirtyWarned.length > 0 ? { acceptedDirtyGap: freeze.dirtyWarned.length } : {}),
+              // 未登记目录签收留痕（2026-10-12-thin-module-gate-and-feed 一档）：同款显式接受语义
+              ...(acceptUnmapped && moduleGate.dirs.length > 0 ? { acceptedUnmappedDirs: moduleGate.dirs.length } : {}),
+              // 孤儿面缺口显式接受留痕（2026-10-12-close-trace-freeze-integrity FR-02）：
+              // --accept-orphan-face 放行时缺口数入档
+              ...(acceptOrphanFace && orphanGapCount > 0 ? { acceptedOrphanFace: orphanGapCount } : {}),
             },
           })
           console.log(`📦 变更 patch 留档（单套）：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}，对账面并入 scopeAudit 子对象）${closeTrace.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}`)
@@ -1741,6 +1801,32 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const h = harvestSlot4Decision({ changeDir, change })
       if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（底稿——作答里的放弃方案请拆成 rejected 条目再收口；随蒸馏链进 knowledge）`)
     } catch { /* 收割 best-effort */ }
+    // 模块变更索引机械回写（2026-10-12-thin-module-gate-and-feed 二档）：命中模块的卡/sidecar
+    // 追加一行本变更条目——零语义判断（日期/变更名/动机首行全已知），split-changelog 契约 sidecar
+    // 优先、卡内「## 变更索引」节次之、变更名在场即跳过（断点续跑幂等）。patch 子步被跳过
+    // （断点续跑）时从 change-patch.json files[] 回读重算对账面（回写只消费 modules[].doc 够用）。
+    try {
+      if (!moduleScope) {
+        try {
+          const pm = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+          const filesArr = Array.isArray(pm && pm.files) ? pm.files : []
+          if (filesArr.length > 0) {
+            const { reconcileModuleDocs } = await import('./flow-parity.js')
+            const rec = reconcileModuleDocs({ cwd, specBase, ownFiles: filesArr, committedRaw: [] })
+            moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
+          }
+        } catch { /* 回读失败 → 空面（回写零命中静默） */ }
+      }
+      if (moduleScope && Array.isArray(moduleScope.modules) && moduleScope.modules.length > 0) {
+        const { appendChangeIndexEntries } = await import('./flow-parity.js')
+        const motive = String(st.input || '').split('\n').map((s) => s.trim()).find(Boolean) || ''
+        const wr = appendChangeIndexEntries({ specBase, modules: moduleScope.modules, change, summary: motive, date: new Date().toISOString().slice(0, 10) })
+        changelogAppended = wr.appended
+        if (wr.appended.length > 0) console.log(`📖 模块变更索引回写：${wr.appended.length} 个目标（${wr.appended.join('、')}）——sidecar 优先/卡内节次之，随归档窄化入暂存`)
+        const skippedReal = wr.skipped.filter((s) => !/已记录/.test(s.reason))
+        if (skippedReal.length > 0) console.log(`   ↩️ 跳过 ${skippedReal.length} 个（${skippedReal.slice(0, 3).map((s) => `${s.id}：${s.reason}`).join('；')}${skippedReal.length > 3 ? ' 等' : ''}）`)
+      }
+    } catch (e) { console.warn(`⚠️ 变更索引回写失败（fail-soft 不阻断归档）：${(e && e.message) || e}`) }
     try {
       const { distillIntoKnowledge } = await import('./decision-distill.js')
       const knowledgeRoot = join(specBase, 'knowledge')
@@ -1824,6 +1910,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       srcDir: changeDir,
       destDir,
       skipPlanCheck: (st.born_face ?? st.tier) === 'thin',
+      // 二档回写文件随归档窄化精确入暂存（文件级 pathspec；空数组传 null 走既有零行为）
+      extraDocs: changelogAppended.length > 0 ? changelogAppended.map((p) => join(specBase, p)) : null,
     })
     // 归档后 changeDir 已搬走——后续子步标记随归档目录走（flow-state 随变更包留存审计）
     markDir = destDir
@@ -2148,7 +2236,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
       }
     }
-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), allowBatchTick: hasFlag('--allow-batch-tick') })
+    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), acceptOrphanFace: hasFlag('--accept-orphan-face'), allowBatchTick: hasFlag('--allow-batch-tick'), acceptUnmapped: hasFlag('--accept-unmapped') })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
