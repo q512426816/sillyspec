@@ -1,0 +1,154 @@
+{
+  "change": "2026-10-12-cross-wt-ghost-cleanup",
+  "baseline": "956bee3faad79baeb0b7103a33e76a5fcfe855bb",
+  "head": "7563dbaf52181fc7b1bb15b7b0cf2afcceca5deb",
+  "files": [
+    ".sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/design.md",
+    ".sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/flow-state.yaml",
+    ".sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/proposal.md",
+    ".sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/requirements.md",
+    ".sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/tasks.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "docs/worktree-isolation.md",
+    "src/doctor-diagnostics.js",
+    "src/index.js",
+    "src/run/complete-handlers.js",
+    "src/worktree-cross.js",
+    "test/cross-worktree-ghost-registration.test.mjs"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 752,
+    "deletions": 28
+  },
+  "savedAt": "2026-10-12T06:57:55.359Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "956bee3faad79baeb0b7103a33e76a5fcfe855bb",
+    "totals": {
+      "files": 7,
+      "additions": 514,
+      "deletions": 28
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/worktree-isolation.md",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/doctor-diagnostics.js",
+        "additions": 42,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 27,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete-handlers.js",
+        "additions": 32,
+        "deletions": 12,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree-cross.js",
+        "additions": 158,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cross-worktree-ghost-registration.test.mjs",
+        "additions": 239,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6013e776ec6d06a942bf16a749a6981ee2a5074c3f731afb440638e2c5d6ed5e",
+  "patchStatus": "ok"
+}

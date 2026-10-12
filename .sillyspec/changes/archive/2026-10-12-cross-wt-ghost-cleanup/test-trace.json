@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-cross-wt-ghost-cleanup",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：目录缺失+meta 可寻址——prune 后复核消失→skipped；locked 复核仍在→partial（评审 P2 直测）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cross-wt-ghost-cleanup"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-02",
+      "tests": [
+        "test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：locked 幽灵 partial 细节含 git worktree unlock 提示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cross-wt-ghost-cleanup"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-worktree-ghost-registration.test.mjs「archiveWorktreeCleanup：归档兜底清理跨仓 worktree（无交付→清理；有交付→保留+不阻断）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cross-wt-ghost-cleanup"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-04",
+      "tests": [
+        "test/cross-worktree-ghost-registration.test.mjs「doctor 跨仓注册扫描 + --prune-cross-worktrees dry-run/confirm（locked 跳过列指引）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cross-wt-ghost-cleanup"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-05",
+      "tests": [
+        "test/cross-worktree-ghost-registration.test.mjs「全文件用例（locked 幽灵/归档兜底/doctor 扫描清理）node --test 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-cross-wt-ghost-cleanup"
+    }
+  ]
+}

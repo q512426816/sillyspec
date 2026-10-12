@@ -1,0 +1,963 @@
+diff --git a/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/flow-state.yaml b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/flow-state.yaml
+new file mode 100644
+index 00000000..4b9dcefc
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/flow-state.yaml
+@@ -0,0 +1,40 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++input: >-
++  跨仓 worktree 幽灵注册三缺口修复（依据：multi-agent-platform 仓 docs/sillyspec/cross-worktree-ghost-metadata-archive-blindspot.md 实证 +
++  本仓 v3.32.6 源码逐条核验属实）
++
++
++  fire-equipment 2026-10-10 实证：跨仓 worktree 目录被清但跨仓仓 .git/worktrees/ 注册残留，分支被幽灵 worktree 占用无法 checkout。源码核验确认三个结构性缺口：
++
++  ① cleanupCrossWorktrees 的 prune 静默吞错、无 git worktree list 事后复核（gate-snapshot
++  已有双清契约未对齐）；且落位注册表键在验证前就被回收（worktree-cross.js :410/:439），partial 后无从重试
++
++  ② archiveWorktreeCleanup 只清主仓 worktree，归档链对跨仓全盲区（cleanupCrossWorktrees 全仓 4 处调用均不在归档链）
++
++  ③ doctor 幽灵扫描只锚主仓 meta 目录，跨仓仓 .git/worktrees/ 悬空注册无任何探测器；且 listCrossWorktreeMetas 要求 worktree 内 meta.json
++  存在才入列——目录已删的事故形态对 cleanup 链隐身，doctor 跨仓扫描是唯一能兜住该形态的网
++
++
++  成功标准：
++
++  - cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 →
++  result=partial + 落位注册表键保留可重试，不再静默
++
++  - locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++
++  - archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++
++  - doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 +
++  --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++
++  - 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
++autopilot: true
++baseline_commit: 956bee3faad79baeb0b7103a33e76a5fcfe855bb
++updatedAt: '2026-10-12T06:27:43.583Z'
++baseline_sha256: 538e656b09e3be06ec374ef0b7c5bf7e94357543d7039c82e180f281ed6d005f
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 05d99c6b..5c7c0df5 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2830` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2850` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2151/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4415；shared.js:1106 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4443；shared.js:1106 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2899/3141；shared.js:1130 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4336；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4288；sync.js:2232 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4363；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4315；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4082/4072；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4109/4138；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4178`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4207`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/docs/worktree-isolation.md b/docs/worktree-isolation.md
+index ebb04d1f..028fbf19 100644
+--- a/docs/worktree-isolation.md
++++ b/docs/worktree-isolation.md
+@@ -226,6 +226,16 @@ git worktree prune
+ git branch -D sillyspec/<change-name>
+ ```
+ 
++### 跨仓仓切分支报 "already used by worktree"（幽灵注册）
++
++现象：跨仓仓（local.yaml repos 注册的仓）checkout 报 `'sillyspec/<change>' is already used by worktree at <路径>`，且报错路径已不存在。这是**幽灵 worktree 注册**——目录被清但该仓 `.git/worktrees/` 注册残留（实证：fire-equipment 2026-10-10，目录 16:59 被清、注册残留两天）。三层防线（2026-10-12-cross-wt-ghost-cleanup）：
++
++1. 清理链双清复核：`worktree cleanup` / apply / 归档收口在删目录后以 `git worktree list` 复核注册已消失，prune 失败/复核不过 → partial + residual（不再静默）；归档链还会兜底清理跨仓 worktree。
++2. doctor 扫描：`sillyspec doctor`（跨仓 worktree 注册健康维度）列出各跨仓仓的失效注册。
++3. 一键清理：`sillyspec doctor --prune-cross-worktrees`（默认 dry-run，`--confirm` 执行 prune——git 只清指向不存在路径的注册，不动活 worktree、不碰分支）。
++
++locked 条目（曾执行过 `git worktree lock`）会被 prune 静默跳过，输出会提示先 `git -C <仓根> worktree unlock <路径>` 再重跑。`sillyspec/<change>` 分支是有意保留的 review 锚点，prune 不动它；确认无需回溯后 `git branch -D` 清理。
++
+ ### apply 失败：主工作区有未提交的改动
+ 
+ 说明主工作区有未 commit 的脏改动**且与本次 apply 的变更文件重叠**（step 4.5/5a 只拦重叠；无关未提交文件已放行并 warning 提示）。处理方式：
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index a6156876..6f154598 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -802,6 +802,42 @@ export function detectWorktreeHealth(cwd) {
+   }
+ }
+ 
++/**
++ * 跨仓 worktree 注册健康（坑 cross-wt-ghost-metadata 缺口③，fire-equipment 2026-10-10 实证）：
++ * 跨仓仓 .git/worktrees/ 里「目录已删、注册残留」的幽灵注册对 cleanup/归档链天然隐身
++ * （meta.json 随目录同亡，主仓侧任何清单都寻址不到）——从 local.yaml repos 注册表各仓的
++ * 注册面反扫是唯一可见面。只读 fail-soft：无 local.yaml / 无 repos 段 / git 不可达 →
++ * skipped 注记不判红（可选能力缺失不是病）；发现幽灵 → WARNING + doctor 动作指引。
++ */
++export function detectCrossWorktreeHealth(cwd) {
++  const base = { name: 'cross_worktree_health', label: '跨仓 worktree 注册健康', safe_actions: [] }
++  try {
++    if (!existsSync(join(cwd, '.sillyspec', 'local.yaml'))) {
++      return { ...base, findings: ['无 local.yaml（无跨仓注册表）——skipped'], pass: true, severity: null, skipped: true }
++    }
++    const { scanCrossWorktreeGhosts } = require_wtc()
++    const scan = scanCrossWorktreeGhosts(cwd)
++    if (scan.repos.length === 0) {
++      return { ...base, findings: ['local.yaml 无 repos: 段（无跨仓仓）——skipped'], pass: true, severity: null, skipped: true }
++    }
++    const findings = [`已扫 ${scan.repos.length} 个跨仓仓注册面（worktree list 对照实体目录）`]
++    for (const g of scan.ghosts) {
++      findings.push(
++        `跨仓 ${g.repoKey} 幽灵 worktree 注册：${g.worktreePath}（目录不存在${g.locked ? `；条目 locked——prune 静默跳过，需先 git -C ${g.repoRoot} worktree unlock ${g.worktreePath}` : ''}）`,
++      )
++    }
++    for (const e of scan.errors) findings.push(`跨仓 ${e.repoKey} 注册面不可达：${e.error}`)
++    if (scan.ghosts.length > 0) {
++      base.safe_actions.push({ action: 'sillyspec doctor --prune-cross-worktrees（默认 dry-run 预览，--confirm 执行 prune；locked 条目需先手动 unlock）', risk: 'low' })
++      return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
++    }
++    if (scan.errors.length > 0) return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
++    return { ...base, findings, pass: true, severity: CHECK_SEVERITY.PASSED }
++  } catch (e) {
++    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
++  }
++}
++
+ /**
+  * 构建环境（FR-02）：node 版本 vs package.json engines.node（^/>=/= 前缀简化比较，
+  * 复杂区间 unknown 不判红）+ 包管理器存在性。无 package.json → skipped 注记。
+@@ -1463,6 +1499,10 @@ export function renderDoctorSummary(diagnostics) {
+ import * as _wtm from './worktree.js'
+ function require_wtm() { return _wtm }
+ 
++// worktree-cross.js 延迟引用（防环同上：跨仓 worktree 模块不感知 doctor）
++import * as _wtc from './worktree-cross.js'
++function require_wtc() { return _wtc }
++
+ /**
+  * 门禁快照泄漏探测（task-04，2026-09-24-gate-snapshot-lifecycle / FR-03 / D-007@v1）：
+  * 账本内「守卫通过 ∧ 超 TTL（env/24h 单源）∧ pid 明确死」的条目即失活残留——门禁快照
+@@ -1513,6 +1553,7 @@ export async function runDoctorDiagnostics({ cwd }) {
+   const lifecycleDoc = detectLifecycleDocStaleness(cwd);
+ 
+   const worktreeHealth = detectWorktreeHealth(cwd)
++  const crossWorktreeHealth = detectCrossWorktreeHealth(cwd)
+   const buildEnv = detectBuildEnv(cwd)
+   const mcpEndpoints = detectMcpEndpoints(cwd)
+   // task-03（2026-09-14-apply-conflict-hardening）：apply-manifest 漂移（advisory，
+@@ -1539,7 +1580,7 @@ export async function runDoctorDiagnostics({ cwd }) {
+   } catch { gateLeakRuntimeRoot = null }
+   const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
+   const knowledgeGraphIntegrity = detectKnowledgeGraphIntegrity(cwd, authoritySpecDir || join(cwd, '.sillyspec'))
+-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
++  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
+ 
+   return {
+     dimensions,
+diff --git a/src/index.js b/src/index.js
+index cb4f3ab0..8b3134fd 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -85,6 +85,7 @@ SillySpec CLI — 规范驱动开发工具包
+     cleanup <change> [--force]          清理 worktree
+     doctor [--fix] [--stale-hours N]    健康检查 + 修复
+         --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
++        --prune-cross-worktrees [--confirm]  清跨仓仓幽灵 worktree 注册（目录已删注册残留——dry-run 预览，--confirm 执行 prune；locked 条目只提示）
+ 
+   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
+   sillyspec local register-repo <key> <path>  注册跨仓仓到 local.yaml repos: 段（外科手术式写入，其余内容保留）
+@@ -2911,6 +2912,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       // 执行流：--cleanup-remnant / --cleanup-ghosts / --gc-unstamped-runs / --dump-db（结构化诊断之外的修复/取证动作）
+       const cleanupRemnant = filteredArgs.includes('--cleanup-remnant');
+       const cleanupGhosts = filteredArgs.includes('--cleanup-ghosts');
++      const pruneCrossWts = filteredArgs.includes('--prune-cross-worktrees');
+       const gcUnstampedRuns = filteredArgs.includes('--gc-unstamped-runs');
+       const dumpDbFlag = filteredArgs.includes('--dump-db');
+       const doctorConfirm = filteredArgs.includes('--confirm');
+@@ -3017,6 +3019,31 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         process.exitCode = r.errors.length > 0 ? 1 : 0;
+         break;
+       }
++      if (pruneCrossWts) {
++        // 坑 cross-wt-ghost-metadata 缺口③（fire-equipment 2026-10-10 实证）：跨仓仓 .git/worktrees/
++        // 幽灵注册（目录已删、注册残留占分支）对 cleanup/归档链隐身（meta.json 随目录同亡）——
++        // 本动作从注册面反扫清理。默认 dry-run，--confirm 才 prune；locked 条目只提示 unlock
++        // 不自动解除（用户显式保护意图）。
++        const { pruneCrossWorktreeGhosts } = await import('./worktree-cross.js');
++        const r = pruneCrossWorktreeGhosts({ cwd: doctorEffectiveDir, confirm: doctorConfirm });
++        if (json) {
++          console.log(JSON.stringify(r, null, 2));
++        } else {
++          console.log(
++            doctorConfirm
++              ? `👻 跨仓幽灵 worktree 注册清理（repos: ${r.repos_scanned ?? '—'}）：${(r.pruned || []).length} 已 prune / ${(r.skipped_locked || []).length} locked 跳过 / ${(r.remaining || []).length} 残留`
++              : `👻 跨仓幽灵 worktree 注册扫描（repos: ${r.repos_scanned ?? '—'}）：待清理 ${r.count} 个（dry-run）`,
++          );
++          for (const g of (doctorConfirm ? r.pruned : r.ghosts) || []) console.log(`   ${doctorConfirm ? '✅' : '-'} ${g.repoKey}: ${g.worktreePath}`);
++          for (const g of (r.skipped_locked || [])) console.log(`   🔒 ${g.repoKey}: ${g.worktreePath}（locked——先 git -C ${g.repoRoot} worktree unlock ${g.worktreePath} 后重跑）`);
++          const lockedPaths = new Set((r.skipped_locked || []).map((s) => s.worktreePath));
++          for (const g of (r.remaining || []).filter((x) => !lockedPaths.has(x.worktreePath))) console.log(`   ⚠️  ${g.repoKey}: ${g.worktreePath}（prune 后复扫仍在）`);
++          for (const e of (r.errors || [])) console.log(`   ❌ ${e.repoKey || ''}${e.repoRoot ? `（${e.repoRoot}）` : ''}: ${e.error}`);
++          if (!doctorConfirm && r.count > 0) console.log(`\n加 --confirm 执行 prune（git 只清指向不存在路径的注册，不动活 worktree、不碰分支）。`);
++        }
++        process.exitCode = (r.errors && r.errors.length > 0) ? 1 : 0;
++        break;
++      }
+       if (gcUnstampedRuns) {
+         // ql-20260908-006-5f04：无戳 execute-runs 一次性清扫。默认 dry-run，--confirm 才删。
+         // 不进 archive 热路径（pruneArchivedChangeRuntime 故意不猜无戳 run）。
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index adf3af79..720822b1 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -353,22 +353,42 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
+       if (orphan.result === 'cleaned' || orphan.result === 'force-cleaned' || orphan.result === 'partial') {
+         console.log(`🧹 归档清理孤儿 worktree 残留（meta 已注销）: ${archiveChangeName}${orphan.residual?.length ? '（残留: ' + orphan.residual.join('; ') + '）' : ''}`)
+       }
+-      return
+-    }
+-    const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
+-    if (check.hasChanges) {
+-      console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
+-      console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
+-      return
+-    }
+-    const cleanResult = wm.cleanup(archiveChangeName)
+-    if (cleanResult.residual?.length > 0) {
+-      console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
+-      console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
++    } else {
++      const check = meta.mode !== 'in-place-fallback' ? wm.hasUnappliedChanges(archiveChangeName) : { hasChanges: false }
++      if (check.hasChanges) {
++        console.warn(`⚠️  归档时 worktree 仍有 ${check.changedFiles.length} 个未 apply 变更，保留 worktree`)
++        console.warn(`   确认不需要后手动清理: sillyspec worktree cleanup ${archiveChangeName} --force`)
++      } else {
++        const cleanResult = wm.cleanup(archiveChangeName)
++        if (cleanResult.residual?.length > 0) {
++          console.warn(`⚠️  归档 worktree 清理残留: ${cleanResult.residual.join('; ')}`)
++          console.warn(`   手动处理: sillyspec worktree cleanup ${archiveChangeName} --force`)
++        }
++      }
+     }
+   } catch (e) {
+     console.warn(`⚠️  归档 worktree 清理失败（不阻断归档）: ${e.message}`)
+   }
++  // ── 跨仓兜底（坑 cross-wt-ghost-metadata 缺口②，fire-equipment 2026-10-10 实证）：此前
++  //    归档链只清主仓，跨仓 worktree 清理只挂在 apply/execute reset/手工 cleanup 四个时机，
++  //    归档作为最后一道收口不补刀——apply 侧任何一次 partial，跨仓注册/目录就永久滞留。
++  //    此处对齐主仓语义收口：force=false（有未 apply 交付的跨仓仓保留并警告），幂等，fail-open
++  //    不阻断归档。目录不在的幽灵注册由 cleanupCrossWorktrees 双清复核兜（缺口①），doctor
++  //    --prune-cross-worktrees 是终网（缺口③）。──
++  try {
++    const { cleanupCrossWorktrees } = await import('../worktree-cross.js')
++    const cross = cleanupCrossWorktrees({ cwd, changeName: archiveChangeName, specBase, force: false })
++    for (const r of cross.results) {
++      if (r.result === 'cleaned') {
++        console.log(`🧹 归档兜底清理跨仓 worktree（${r.repoKey}）: ${(r.details || []).join('; ')}`)
++      } else if (r.result === 'partial') {
++        console.warn(`⚠️  归档跨仓 worktree 清理 partial（${r.repoKey}）: ${(r.details || []).join('; ')}`)
++        console.warn(`   处理: sillyspec worktree cleanup ${archiveChangeName} --force（有交付需 apply）或 sillyspec doctor --prune-cross-worktrees（悬空注册）`)
++      }
++    }
++  } catch (e) {
++    console.warn(`⚠️  归档跨仓 worktree 兜底清理失败（不阻断归档）: ${e.message}`)
++  }
+ }
+ 
+ /**
+diff --git a/src/worktree-cross.js b/src/worktree-cross.js
+index 4be1b01b..0b442bf6 100644
+--- a/src/worktree-cross.js
++++ b/src/worktree-cross.js
+@@ -386,14 +386,49 @@ export function ensureCrossWorktrees({ cwd, changeName, specBase }) {
+   return { created, reused, skippedLegacy };
+ }
+ 
++/**
++ * 探测跨仓仓 worktree 注册状态（双清契约的复核原语，坑 cross-wt-ghost-metadata 2026-10-10
++ * fire-equipment 实证：目录被清、.git/worktrees/ 注册残留占住分支——prune 静默失败/locked
++ * 条目被 prune 跳过都产出零报错幽灵，必须以 git worktree list 的答复为准）。
++ * 路径归一对齐 gate-snapshot worktreeListContains（反斜杠归正斜杠 + win32 大小写不敏感）。
++ * @param {string} repoRoot 跨仓仓根
++ * @param {string} wtPath worktree 路径
++ * @returns {{registered: boolean, locked: boolean, unknown?: boolean}} 查询失败（git 不可达）
++ *   按 registered:true 返回（fail-safe——复核不过走 partial，绝不静默判清）。
++ */
++export function probeCrossWorktreeEntry(repoRoot, wtPath) {
++  const out = gitQuiet(repoRoot, ['worktree', 'list', '--porcelain'], { timeout: 30000 });
++  if (out == null) return { registered: true, locked: false, unknown: true };
++  const norm = (s) => {
++    const v = String(s).replace(/\\/g, '/');
++    return process.platform === 'win32' ? v.toLowerCase() : v;
++  };
++  const target = norm(wtPath);
++  const lines = String(out).split('\n');
++  const idx = lines.findIndex((l) => l.startsWith('worktree ') && norm(l.slice('worktree '.length)) === target);
++  if (idx === -1) return { registered: false, locked: false };
++  // 该条目属性行：到下一条 worktree 行或空行为止；locked 可带原因尾巴（git ≥2.30 lock 原因）
++  let locked = false;
++  for (let i = idx + 1; i < lines.length; i++) {
++    const l = lines[i];
++    if (l.startsWith('worktree ') || l.trim() === '') break;
++    if (l === 'locked' || l.startsWith('locked ')) { locked = true; break }
++  }
++  return { registered: true, locked };
++}
++
+ /**
+  * 清理某变更的全部跨仓 worktree（幂等）。
+  *
+- * 顺序对齐主仓 cleanup 的 Windows 防护：先解 node_modules junction（裸删会穿透删跨仓主工作
+- * 副本的 node_modules），再 git worktree remove --force，最后**保留分支** sillyspec/<change>
++ * 顺序对齐主仓 cleanup 的 Windows 防护：先解 node_modules junction（裸删会穿透删跨仓主
++ * 工作副本的 node_modules），再 git worktree remove --force，最后**保留分支** sillyspec/<change>
+  * 作 review 锚点（分支删除在主仓侧有 review 锚点 + 双保护，跨仓侧 v1 保守不删，残 branch
+  * 可人工清理）。目录残留（remove 失败）走 safeRemoveWorktreeDir 兜底 + residual 上报。
+  *
++ * 双清契约（坑 cross-wt-ghost-metadata 缺口①，对齐 gate-snapshot D-004@v2）：remove 退出码
++ * 为零 / prune 不抛 ≠ 注册已清——两条路径收尾都以 git worktree list 复核注册已消失，复核
++ * 不过 → partial + residual（locked 条目附 unlock 指引），注册表键只在验证通过后回收。
++ *
+  * @param {{ cwd: string, changeName: string, specBase?: string, force?: boolean }} opts
+  * @returns {{ results: Array<{repoKey, result: 'cleaned'|'skipped'|'partial', details: string[], residual: string[]}> }}
+  */
+@@ -406,18 +441,33 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
+     const repoRoot = meta.crossRepoRoot;
+     const wtPath = meta.worktreePath || crossWorktreePath(base, changeName, repoKey);
+     if (!existsSync(wtPath)) {
+-      try { if (repoRoot) gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch {}
+-      removePlacementRegistryEntry(base, changeName, repoKey); // 挪位清理后注册表键回收（FR-02）
+-      results.push({ repoKey, result: 'skipped', details: ['目录不存在（已清理）'], residual });
++      // 目录不在：prune 悬空注册——但 prune 会静默失败/静默跳过 locked 条目，prune 后必须
++      // 复核（git worktree list 答复为准）才销账；复核不过 → partial + unlock 指引。
++      let entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
++      if (entry.registered) {
++        try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
++        entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
++      }
++      if (!entry.registered) {
++        removePlacementRegistryEntry(base, changeName, repoKey); // 挪位清理后注册表键回收（FR-02）
++        results.push({ repoKey, result: 'skipped', details: ['目录不存在（注册 prune 后复核通过）'], residual });
++      } else {
++        if (entry.locked) details.push(`条目 locked（prune 静默跳过）——git -C ${repoRoot} worktree unlock ${wtPath} 后重试`);
++        residual.push(`幽灵注册残留 ${wtPath}（目录不存在但注册仍在）`);
++        results.push({ repoKey, result: 'partial', details, residual });
++      }
+       continue;
+     }
+     if (!force) {
+       // fail-closed：worktree 内还有未落地交付（相对 baseHash 有 diff）时拒绝清理（对齐主仓
+-      // hasUnappliedChanges 哲学；跨仓侧以「分支上有交付 diff 且未 apply」近似）
++      // hasUnappliedChanges 哲学；跨仓侧以「分支上有交付 diff 且未 apply」近似）。
++      // 自家 meta.json 不算交付（坑 cross-wt-ghost-metadata 顺带修正：CLI 写的 meta.json 恒为
++      // untracked，此前计入未 apply 面使 force=false 清理对刚建的空 worktree 恒误报 blocked）。
+       try {
+         const diff = gitQuiet(wtPath, ['diff', '--name-only', meta.baseHash]) || '';
+-        const untracked = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard']) || '';
+-        if (diff.trim() || untracked.trim()) {
++        const untracked = (gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard']) || '')
++          .split('\n').map((s) => s.trim()).filter((f) => f && f !== META_FILE);
++        if (diff.trim() || untracked.length > 0) {
+           results.push({ repoKey, result: 'partial', details: [`blocked: 跨仓 worktree 有未 apply 的交付改动（git diff ${String(meta.baseHash).slice(0, 8)} 非空）——先 apply 或显式 --force`], residual: [wtPath] });
+           continue;
+         }
+@@ -429,11 +479,26 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
+     try {
+       git(repoRoot, ['worktree', 'remove', '--force', wtPath], { timeout: 60000 });
+     } catch {
+-      // remove 失败（脏文件/锁）：解链后安全删目录 + prune 注册
++      // remove 失败（脏文件/锁/locked——locked 条目 remove 被拒，解锁需两次 --force，不自动解除
++      // 用户显式保护意图，只提示）：解链后安全删目录 + prune 注册
+       // allowCross:true——本函数就是跨仓清理的显式路径（主仓守卫放行；见 safeRemoveWorktreeDir 注释）
++      const probe = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
++      if (probe.locked) details.push(`worktree locked（remove 被拒）——git -C ${repoRoot} worktree unlock ${wtPath} 后重跑`);
+       try { safeRemoveWorktreeDir(wtPath, meta, { allowCross: true }) } catch (e) { residual.push(`目录残留 ${wtPath}: ${e.message}`) }
+       try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
+     }
++    // 双清复核：remove 退出码为零 ≠ 注册已清（prune 未生效/竞态/locked 残留时 list 仍含该
++    // root）——以 git worktree list 答复为准（对齐 gate-snapshot D-004@v2）。无 repoRoot 的
++    // legacy 假 meta（测试夹具/手写形态）无从复核，视同未注册不误伤。
++    let entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
++    if (entry.registered) {
++      try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch { residual.push(`git worktree prune 失败（${repoRoot}）`) }
++      entry = repoRoot ? probeCrossWorktreeEntry(repoRoot, wtPath) : { registered: false, locked: false };
++    }
++    if (entry.registered) {
++      if (entry.locked) details.push(`条目 locked（prune 静默跳过）——git -C ${repoRoot} worktree unlock ${wtPath} 后重跑`);
++      residual.push(`worktree 注册残留（复核 git worktree list 仍含 ${wtPath}）`);
++    }
+     details.push(`分支 ${meta.branch} 保留作 review 锚点（确认无需回溯后可 git -C ${repoRoot} branch -D ${meta.branch}）`);
+     if (residual.length === 0) {
+       removePlacementRegistryEntry(base, changeName, repoKey); // cleaned 后注册表键回收（FR-02）
+@@ -447,3 +512,87 @@ export function cleanupCrossWorktrees({ cwd, changeName, specBase, force = false
+   if (swept.length > 0) results.push({ repoKey: '(registry-sweep)', result: 'cleaned', details: [`悬挂注册表键已清: ${swept.join('、')}`], residual: [] });
+   return { results };
+ }
++
++/**
++ * 扫描 local.yaml repos 各仓的幽灵 worktree 注册（缺口③，坑 cross-wt-ghost-metadata
++ * 2026-10-10 fire-equipment 实证：目录被清、跨仓仓 .git/worktrees/ 注册残留 → 分支被幽灵
++ * 占用无法 checkout；且 meta.json 随目录同亡，cleanup/归档链对该形态天然隐身——从跨仓仓
++ * 自己的注册面反扫是唯一可见面）。
++ *
++ * 只报「注册指向不存在路径」的条目（与 git prune 同语义面，不动活 worktree、不碰分支）；
++ * locked 条目单独标注（prune 对它们静默跳过，需先 unlock）。只读零副作用。
++ *
++ * @param {string} cwd 主仓根（读 cwd/.sillyspec/local.yaml repos 段）
++ * @returns {{ repos: Array<{repoKey, repoRoot}>, ghosts: Array<{repoKey, repoRoot, worktreePath, locked}>, errors: Array<{repoKey, repoRoot, error}> }}
++ */
++export function scanCrossWorktreeGhosts(cwd) {
++  const repos = [...readRepoRegistry(cwd).entries()].map(([repoKey, repoRoot]) => ({ repoKey, repoRoot }));
++  const ghosts = [];
++  const errors = [];
++  for (const { repoKey, repoRoot } of repos) {
++    let out = null;
++    try { out = gitQuiet(repoRoot, ['worktree', 'list', '--porcelain'], { timeout: 30000 }) } catch { out = null }
++    if (out == null) {
++      errors.push({ repoKey, repoRoot, error: 'git worktree list 不可达（非 git 仓/路径失效）' });
++      continue;
++    }
++    let cur = null;
++    let locked = false;
++    const flush = () => { if (cur && !existsSync(cur)) ghosts.push({ repoKey, repoRoot, worktreePath: cur, locked }) };
++    for (const line of String(out).split('\n')) {
++      if (line.startsWith('worktree ')) {
++        flush();
++        cur = line.slice('worktree '.length).trim();
++        locked = false;
++      } else if (line === 'locked' || line.startsWith('locked ')) {
++        locked = true;
++      } else if (line.trim() === '') {
++        flush();
++        cur = null;
++        locked = false;
++      }
++    }
++    flush();
++  }
++  return { repos, ghosts, errors };
++}
++
++/**
++ * 清理跨仓幽灵 worktree 注册（doctor --prune-cross-worktrees 动作体，对齐 --cleanup-ghosts
++ * 范式：默认 dry-run 只列，confirm=true 才执行）。
++ *
++ * confirm 语义：对每个有非 locked 幽灵的仓跑 `git worktree prune`（git 自身只清指向不存在
++ * 位置的注册，活 worktree 不受影响），随后**复扫断言**（清了什么以复扫为准，不信任 prune
++ * 退出码）；locked 条目一律跳过并列出 unlock 指引（locked 是用户显式保护意图，不自动解除）。
++ *
++ * @param {{ cwd: string, confirm?: boolean }} opts
++ */
++export function pruneCrossWorktreeGhosts({ cwd, confirm = false }) {
++  const before = scanCrossWorktreeGhosts(cwd);
++  if (!confirm) {
++    return { confirm: false, repos_scanned: before.repos.length, count: before.ghosts.length, ghosts: before.ghosts, errors: before.errors };
++  }
++  const skippedLocked = [];
++  const pruneByRepo = new Map();
++  for (const g of before.ghosts) {
++    if (g.locked) { skippedLocked.push(g); continue }
++    if (!pruneByRepo.has(g.repoRoot)) pruneByRepo.set(g.repoRoot, []);
++    pruneByRepo.get(g.repoRoot).push(g);
++  }
++  const errors = [...before.errors];
++  for (const repoRoot of pruneByRepo.keys()) {
++    try { gitQuiet(repoRoot, ['worktree', 'prune'], { timeout: 30000 }) } catch (e) { errors.push({ repoRoot, error: `prune 失败: ${e.message}` }) }
++  }
++  // 复扫断言：prune 退出码为零 ≠ 注册已清（双清契约同源）
++  const after = scanCrossWorktreeGhosts(cwd);
++  const afterPaths = new Set(after.ghosts.map((g) => g.worktreePath));
++  const pruned = [];
++  for (const g of before.ghosts) {
++    if (g.locked) continue;
++    if (!afterPaths.has(g.worktreePath)) pruned.push(g);
++    else if (!errors.some((e) => e.repoRoot === g.repoRoot && String(e.error).includes('prune 失败'))) {
++      errors.push({ repoKey: g.repoKey, repoRoot: g.repoRoot, error: 'prune 后复扫仍在（疑似 locked 或 git 锁竞态）' });
++    }
++  }
++  return { confirm: true, repos_scanned: before.repos.length, count: before.ghosts.length, pruned, skipped_locked: skippedLocked, remaining: after.ghosts, errors };
++}
+diff --git a/test/cross-worktree-ghost-registration.test.mjs b/test/cross-worktree-ghost-registration.test.mjs
+new file mode 100644
+index 00000000..0d4d448c
+--- /dev/null
++++ b/test/cross-worktree-ghost-registration.test.mjs
+@@ -0,0 +1,239 @@
++/**
++ * 跨仓 worktree 幽灵注册三缺口测试（坑 cross-wt-ghost-metadata，fire-equipment 2026-10-10
++ * 实证：目录被清、跨仓仓 .git/worktrees/ 注册残留 → 分支被幽灵占用无法 checkout）。
++ *
++ * 覆盖：
++ *   1. probeCrossWorktreeEntry 三态（未注册 / 注册 / locked）
++ *   2. cleanupCrossWorktrees 双清契约：locked 幽灵 → remove 被拒 → 兜底删目录 → prune 跳过
++ *      locked → list 复核仍注册 → partial + unlock 指引（不再静默）
++ *   3. cleanupCrossWorktrees 正常路径：remove 后 list 复核 → cleaned + 注册表键回收
++ *   4. archiveWorktreeCleanup 归档兜底：无交付 → 跨仓清理（注册消失/分支保留）；
++ *      有未 apply 交付 → 保留 + 警告不阻断
++ *   5. doctor 跨仓注册扫描（scanCrossWorktreeGhosts / detectCrossWorktreeHealth finding）
++ *   6. pruneCrossWorktreeGhosts：dry-run 默认只列、--confirm prune + 复扫断言、
++ *      locked 幽灵跳过并列 unlock 指引
++ *
++ * 风格：node:test + 真实 git fixture（主仓 + 跨仓仓各一），对齐
++ * cross-repo-worktree-isolation.test.mjs 范式。
++ */
++import { test, after } from 'node:test';
++import assert from 'node:assert/strict';
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
++import { join } from 'node:path';
++import { tmpdir } from 'node:os';
++import { execSync, execFileSync } from 'node:child_process';
++import {
++  ensureCrossWorktrees,
++  cleanupCrossWorktrees,
++  crossWorktreePath,
++  probeCrossWorktreeEntry,
++  scanCrossWorktreeGhosts,
++  pruneCrossWorktreeGhosts,
++} from '../src/worktree-cross.js';
++import { readPlacementRegistry } from '../src/cross-placement.js';
++import { detectCrossWorktreeHealth } from '../src/doctor-diagnostics.js';
++import { archiveWorktreeCleanup } from '../src/run/complete-handlers.js';
++
++const repoLocalWorktrees = (cross) => join(cross, '.sillyspec', '.runtime', 'worktrees');
++
++const tempDirs = [];
++function makeRepo(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix));
++  tempDirs.push(d);
++  execSync('git init -q', { cwd: d, stdio: 'pipe' });
++  execSync('git config user.email t@t.com', { cwd: d, stdio: 'pipe' });
++  execSync('git config user.name t', { cwd: d, stdio: 'pipe' });
++  execSync('git config commit.gpgsign false', { cwd: d, stdio: 'pipe' });
++  writeFileSync(join(d, 'README.md'), 'init\n');
++  execSync('git add .', { cwd: d, stdio: 'pipe' });
++  execSync('git commit -q -m init', { cwd: d, stdio: 'pipe' });
++  return d;
++}
++function git(d, args) {
++  return execFileSync('git', args, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
++}
++function revHead(d) { return git(d, ['rev-parse', 'HEAD']) }
++
++/** 注册面是否仍含该 worktree（路径归一对齐实现：反斜杠归正斜杠 + win32 小写） */
++function worktreeListHas(repo, wtPath) {
++  const out = git(repo, ['worktree', 'list', '--porcelain']);
++  const norm = (s) => {
++    const v = String(s).replace(/\\/g, '/');
++    return process.platform === 'win32' ? v.toLowerCase() : v;
++  };
++  const target = norm(wtPath);
++  return out.split('\n').some((l) => l.startsWith('worktree ') && norm(l.slice('worktree '.length)) === target);
++}
++
++/** 主仓 + 跨仓仓 + local.yaml repos 注册 + plan.md 声明跨仓 task */
++function makeFixture(changeName = '2026-10-12-ghost-test') {
++  const main = makeRepo('cxw-ghost-main-');
++  writeFileSync(join(main, '.gitignore'), '.sillyspec/\n');
++  git(main, ['add', '.gitignore']);
++  git(main, ['commit', '-q', '-m', 'ignore spec runtime']);
++  const cross = makeRepo('cxw-ghost-cross-');
++  const specBase = join(main, '.sillyspec');
++  mkdirSync(join(specBase), { recursive: true });
++  writeFileSync(join(specBase, 'local.yaml'), `# local.yaml\nrepos:\n  front: ${cross.replace(/\\/g, '/')}\n`);
++  const changeDir = join(specBase, 'changes', changeName);
++  mkdirSync(changeDir, { recursive: true });
++  writeFileSync(join(changeDir, 'plan.md'),
++    '# Plan\n\n## Wave 1\n\n### task-01\n\n---\nrepo: front\ngoal: cross task\n---\n\n');
++  return { main, cross, specBase, changeName };
++}
++
++after(() => {
++  for (const d of tempDirs) {
++    try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
++  }
++});
++
++test('probeCrossWorktreeEntry：未注册 / 已注册 / locked 三态', () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++
++  assert.deepEqual(
++    { registered: probeCrossWorktreeEntry(cross, wtPath).registered, locked: probeCrossWorktreeEntry(cross, wtPath).locked },
++    { registered: true, locked: false },
++    '活 worktree → 已注册未 locked',
++  );
++  assert.equal(probeCrossWorktreeEntry(cross, join(cross, 'never-a-worktree')).registered, false, '从未注册的路径 → 未注册');
++
++  git(cross, ['worktree', 'lock', wtPath]);
++  const locked = probeCrossWorktreeEntry(cross, wtPath);
++  assert.equal(locked.registered, true);
++  assert.equal(locked.locked, true, 'locked 条目（无原因）→ locked=true');
++
++  cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: true });
++});
++
++test('cleanupCrossWorktrees：locked 幽灵——remove 被拒→兜底删目录→prune 跳过→复核仍注册→partial+unlock 提示', () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++  git(cross, ['worktree', 'lock', wtPath]);
++
++  const cr = cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: true });
++  const r = cr.results.find((x) => x.repoKey === 'front');
++  assert.equal(r.result, 'partial', `locked 幽灵必须 partial（实际 ${r.result}）`);
++  assert.ok(
++    (r.details || []).some((d) => d.includes('worktree unlock')),
++    `details 必须含 git worktree unlock 指引（实际 ${JSON.stringify(r.details)}）`,
++  );
++  assert.ok((r.residual || []).length > 0, 'residual 非空（清理链留痕）');
++  assert.ok(!existsSync(wtPath), '目录本体已被兜底删除');
++  assert.ok(worktreeListHas(cross, wtPath), 'locked 注册仍在（prune 静默跳过——复核断言捕捉）');
++
++  // unlock 后 prune 收敛（用户裁决路径）
++  git(cross, ['worktree', 'unlock', wtPath]);
++  git(cross, ['worktree', 'prune']);
++  assert.equal(worktreeListHas(cross, wtPath), false, 'unlock + prune 后注册消失');
++});
++
++test('cleanupCrossWorktrees：正常路径 remove 后 list 复核→cleaned+注册表键回收', () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++  assert.ok(readPlacementRegistry(specBase)[`${changeName}--front`], '前置：注册表键在');
++
++  const cr = cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: true });
++  const r = cr.results.find((x) => x.repoKey === 'front');
++  assert.equal(r.result, 'cleaned');
++  assert.ok(!existsSync(wtPath), '目录已删');
++  assert.equal(worktreeListHas(cross, wtPath), false, '注册已消失（双清复核通过）');
++  assert.ok(!readPlacementRegistry(specBase)[`${changeName}--front`], '注册表键已回收');
++  assert.ok(git(cross, ['branch', '--list', `sillyspec/${changeName}`]), '分支保留作 review 锚点');
++});
++
++test('archiveWorktreeCleanup：归档兜底清理跨仓（无交付→清理+注册消失+分支保留）', async () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++
++  await archiveWorktreeCleanup(main, changeName, specBase, {});
++  assert.ok(!existsSync(wtPath), '归档兜底已清理跨仓 worktree 目录');
++  assert.equal(worktreeListHas(cross, wtPath), false, '归档兜底后注册消失');
++  assert.ok(git(cross, ['branch', '--list', `sillyspec/${changeName}`]), '分支保留（不误删 review 锚点）');
++});
++
++test('archiveWorktreeCleanup：跨仓有未 apply 交付→保留+不阻断归档', async () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++  writeFileSync(join(wtPath, 'DELIV.md'), 'unapplied delivery\n');
++  git(wtPath, ['add', 'DELIV.md']);
++  git(wtPath, ['commit', '-q', '-m', 'deliver']);
++
++  await archiveWorktreeCleanup(main, changeName, specBase, {});
++  assert.ok(existsSync(wtPath), '有未 apply 交付的跨仓 worktree 必须保留');
++  assert.ok(worktreeListHas(cross, wtPath), '注册保持（未清理）');
++  // 收尾：force 清理掉，避免 fixture 残留影响 after
++  cleanupCrossWorktrees({ cwd: main, changeName, specBase, force: true });
++});
++
++test('scanCrossWorktreeGhosts + detectCrossWorktreeHealth：目录已删+注册残留（事故形态）→ghost 列出/finding 判 WARNING', () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtPath = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++  // 事故形态：外部清目录（meta.json 随目录同亡——cleanup/归档链对该形态隐身，只有注册面反扫可见）
++  rmSync(wtPath, { recursive: true, force: true });
++
++  const scan = scanCrossWorktreeGhosts(main);
++  assert.equal(scan.ghosts.length, 1, `恰一个幽灵注册（实际 ${scan.ghosts.length}）`);
++  const g = scan.ghosts[0];
++  assert.equal(g.repoKey, 'front');
++  assert.equal(g.locked, false, '未 locked');
++  const norm = (p) => p.replace(/\\/g, '/');
++  assert.equal(norm(g.worktreePath), norm(wtPath), '幽灵路径=被删 worktree');
++  assert.equal(scan.errors.length, 0);
++
++  const dim = detectCrossWorktreeHealth(main);
++  assert.equal(dim.name, 'cross_worktree_health');
++  assert.equal(dim.pass, false, '发现幽灵 → 判 WARNING');
++  assert.ok(dim.findings.some((f) => f.includes('幽灵 worktree 注册')), `finding 列出幽灵（实际 ${JSON.stringify(dim.findings)}）`);
++
++  // 无 local.yaml 的仓 → skipped 不判红
++  const bare = makeRepo('cxw-ghost-bare-');
++  const dimBare = detectCrossWorktreeHealth(bare);
++  assert.equal(dimBare.pass, true);
++  assert.ok(dimBare.skipped, '无 local.yaml → skipped 注记');
++});
++
++test('pruneCrossWorktreeGhosts：dry-run 只列不动；confirm prune+复扫断言；locked 跳过列指引', () => {
++  const { main, cross, specBase, changeName } = makeFixture();
++  // 幽灵一：未 locked（可 prune）
++  ensureCrossWorktrees({ cwd: main, changeName, specBase });
++  const wtA = crossWorktreePath(specBase, changeName, 'front', repoLocalWorktrees(cross));
++  rmSync(wtA, { recursive: true, force: true });
++  // 幽灵二：locked（prune 静默跳过形态）
++  const changeName2 = `${changeName}-b`;
++  const changeDir2 = join(specBase, 'changes', changeName2);
++  mkdirSync(changeDir2, { recursive: true });
++  writeFileSync(join(changeDir2, 'plan.md'), '# Plan\n\n## Wave 1\n\n### task-01\n\n---\nrepo: front\ngoal: cross task\n---\n\n');
++  ensureCrossWorktrees({ cwd: main, changeName: changeName2, specBase });
++  const wtB = crossWorktreePath(specBase, changeName2, 'front', repoLocalWorktrees(cross));
++  git(cross, ['worktree', 'lock', wtB]);
++  rmSync(wtB, { recursive: true, force: true });
++
++  // dry-run：只列，不动
++  const dry = pruneCrossWorktreeGhosts({ cwd: main, confirm: false });
++  assert.equal(dry.confirm, false);
++  assert.equal(dry.count, 2, `dry-run 列出两个幽灵（实际 ${dry.count}）`);
++  assert.ok(worktreeListHas(cross, wtA) && worktreeListHas(cross, wtB), 'dry-run 不执行 prune');
++
++  // confirm：非 locked 被 prune；locked 跳过并列指引
++  const conf = pruneCrossWorktreeGhosts({ cwd: main, confirm: true });
++  assert.equal(conf.pruned.length, 1, `恰一个被 prune（实际 ${conf.pruned.length}）`);
++  assert.equal(conf.pruned[0].worktreePath.replace(/\\/g, '/'), wtA.replace(/\\/g, '/'));
++  assert.equal(conf.skipped_locked.length, 1, 'locked 幽灵跳过');
++  assert.equal(conf.skipped_locked[0].locked, true);
++  assert.equal(worktreeListHas(cross, wtA), false, 'wtA 注册已被 prune（复扫断言）');
++  assert.ok(worktreeListHas(cross, wtB), 'locked 幽灵保留（不自动 unlock）');
++
++  // 用户裁决后收敛
++  git(cross, ['worktree', 'unlock', wtB]);
++  const conf2 = pruneCrossWorktreeGhosts({ cwd: main, confirm: true });
++  assert.equal(conf2.pruned.length, 1);
++  assert.equal(worktreeListHas(cross, wtB), false);
++});
+diff --git a/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/design.md b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/design.md
+new file mode 100644
+index 00000000..1dd49ab6
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/design.md
+@@ -0,0 +1,70 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T06:27:23.284Z
++---
++# 设计记录（Design Record）— 2026-10-12-cross-wt-ghost-cleanup
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++
++修复 multi-agent-platform 仓 cross-worktree-ghost-metadata-archive-blindspot.md 实证的三个结构性缺口（跨仓 worktree 目录被清但 `.git/worktrees/` 注册残留 → 分支被幽灵占用无法 checkout）。三处对症：
++
++1. **清理链双清契约**（src/worktree-cross.js `cleanupCrossWorktrees`）：收尾对跨仓仓跑 `git worktree list --porcelain` 断言注册已消失（复用 gate-snapshot `worktreeListContains` 的路径归一语义），断言不过/prune 抛错 → partial + residual，且注册表键只在验证通过后回收（原 :410/:439 验证前回收的洞一并堵上）。locked 条目（prune 静默跳过）在 details 给 `git worktree unlock` 指引，不自动 unlock。
++2. **归档链兜底**（src/run/complete-handlers.js `archiveWorktreeCleanup`）：主仓清理各分支统一收拢后追加 `cleanupCrossWorktrees`（force=false，幂等），归档成为跨仓幽灵的最后一道网；partial 警告 + 指引 doctor/worktree cleanup，fail-open 不阻断归档。
++3. **doctor 跨仓网**（src/worktree-cross.js 新增 `scanCrossWorktreeGhosts`/`pruneCrossWorktreeGhosts` + src/doctor-diagnostics.js 新维度 + src/index.js doctor case 新 flag）：对 local.yaml repos 各仓 `git worktree list --porcelain` 对照实体目录，失效注册列 finding；`doctor --prune-cross-worktrees` 默认 dry-run、`--confirm` 执行 prune 并复扫断言（对齐 `--cleanup-ghosts` 范式）。选 doctor 为最高优先网的原因：`listCrossWorktreeMetas` 要求 worktree 内 meta.json 存在才入列——目录已删的事故形态对 cleanup/归档链天然隐身，只有从跨仓仓注册面（`.git/worktrees/`）反扫的 doctor 能兜住。
++
++顺带修正既有 bug：`cleanupCrossWorktrees` 未交付检测把 CLI 自写的 meta.json（恒 untracked）计成「未 apply 交付」，force=false 清理对刚建的空 worktree 恒误报 blocked——归档兜底（force=false）恰好踩中，自家 meta.json 剔出未交付面。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++
++- `cleanupCrossWorktrees({ cwd, changeName, specBase, force })`：签名不变；返回值 results 内条目新增行为——目录不存在分支从恒 `skipped` 改为「prune 后复核过→skipped 且回收注册表键 / 复核不过→partial + residual」；主清理路径 remove 成功后新增 list 复核，复核不过→partial；未交付检测剔除自家 meta.json（此前 force=false 恒误报 blocked）。details 可能新增 unlock 指引行（消费者：worktree-apply.js 两处、run/command.js、index.js worktree cleanup，均只读 details 渲染，兼容）。
++- `archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)`：签名不变；新增行为——末尾追加跨仓兜底清理（此前只清主仓）。三个调用点（正常归档/自愈归档/change-delete）自动受益。
++- 新增 `probeCrossWorktreeEntry(repoRoot, wtPath)`：注册状态探测（{registered, locked, unknown?}，查询失败按 registered:true fail-safe）。
++- 新增 `scanCrossWorktreeGhosts(cwd)`：读 cwd/.sillyspec/local.yaml repos 段，各仓 `git worktree list --porcelain` 解析，返回 `{ repos, ghosts, errors }`。
++- 新增 `pruneCrossWorktreeGhosts({ cwd, confirm })`：dry-run 返回待清理清单；confirm 后对非 locked 幽灵执行 prune、复扫返回 `{pruned, skipped_locked, remaining, errors}`。
++- 新增 doctor 维度 `cross_worktree_health`（detectCrossWorktreeHealth，fail-soft：无 local.yaml/git 不可达→skipped 注记不判红）。
++- 新增 CLI flag：`sillyspec doctor --prune-cross-worktrees [--confirm]`（默认 dry-run；--json 输出结构化结果；usage 文案同步）。
++- 文件格式变化：无（落位注册表格式不动，只是回收时机后移到验证通过后）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++
++   成立。清理/归档/doctor 三链都是幂等收尾动作，输入是 git 注册面（`.git/worktrees/`）与实体目录的瞬时对照；目录在复核前被外部恢复/再删，复核读的是当下态，最坏多判一次 partial（下次重试收敛），不会误销账——注册表键回收只发生在「复核确认注册消失」之后。
++
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++
++   同时 cleanup 同一变更时，`git worktree list/prune/remove` 由 git 自身串行化（注册文件写有锁）；竞态最坏形态是一方 remove 成功、另一方复核时注册已消失→双方都判 cleaned，或一方 prune 时另一方正 add（本变更不含 add 路径改动）。落位注册表读改写无锁是既有形态（与 updatePlacementRegistry 一致，容忍丢失）。归档链兜底在归档锁内执行（调用点在 withMainRepoLock 锁内），与 apply 侧清理并发时后者有自己的锁语义；跨仓 prune 幂等，重复执行零副作用。
++
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++
++   归档中途中断——主仓归档已落库的部分不受跨仓兜底影响（兜底在归档链后、fail-open 包裹，兜底失败只警告不抛）；下次 doctor --prune-cross-worktrees 或再归档同变更（自愈路径）幂等收敛。doctor --confirm 执行中中断：prune 按 repo 粒度原子（git 注册文件整体写），已 prune 的不回滚，复扫结果如实上报 remaining。
++
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++
++   扫描锚定 local.yaml repos 段的各仓仓根，仓外注册不碰；doctor 只报告与清理「注册指向不存在路径」的条目（git prune 语义本身只清悬空注册，不碰活 worktree、不碰分支）；locked 条目跨任何路径都不自动 unlock，不会把用户跨仓保护意图误解除。平台模式（--spec-dir）下 doctor 用 doctorEffectiveDir 解析 local.yaml（与 --cleanup-ghosts 同口径）；归档链兜底传的 specBase 与 apply 侧跨仓清理同源，寻址口径一致。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++
++最大风险：归档链新增跨仓兜底扩大了归档时的作用面——若 local.yaml 注册了路径失效的仓，归档会多出警告噪音（不阻断）。缓解：兜底对仓不可达/git 失败一律 fail-open 警告；清理对象仅限本变更名下可寻址的跨仓 worktree。
++
++试过但放弃的方案：
++- 「归档链直接对 repos 各仓无条件 prune」——放弃：会把与 sillyspec 无关的用户自建 worktree 注册也纳入归档动作面，作用域过宽；收敛为只清本变更名下可寻址项 + doctor 提供全仓扫描（doctor 是显式诊断入口，作用面宽可接受，归档是热路径必须窄）。
++- 「cleanupCrossWorktrees 里对 locked 条目自动 unlock 后强清」——放弃：locked 是用户显式保护（跨盘挂载场景防误删），自动解除违背保护意图；只提示，用户裁决。
++- 「给 listCrossWorktreeMetas 增加无 meta 兜底枚举（目录已删也入列）」——放弃：迭代源三源都靠 meta/注册表键寻址，目录已删且键已回收时无锚可举；该形态只能从跨仓仓注册面反扫（doctor），与其在 cleanup 链加不可能完备的枚举，不如把 doctor 网做实。
++
++## 文件变更清单
++
++| 操作 | 路径 | 说明 |
++| --- | --- | --- |
++| 修改 | src/worktree-cross.js | cleanupCrossWorktrees 双清契约+locked 提示+未交付检测剔除自家 meta.json；新增 probeCrossWorktreeEntry/scanCrossWorktreeGhosts/pruneCrossWorktreeGhosts |
++| 修改 | src/run/complete-handlers.js | archiveWorktreeCleanup 收拢主仓分支返回点、末尾追加跨仓兜底（fail-open） |
++| 修改 | src/doctor-diagnostics.js | 新增 detectCrossWorktreeHealth 维度并接入 runDoctorDiagnostics 装配 |
++| 修改 | src/index.js | doctor case 新增 --prune-cross-worktrees flag（dry-run/--confirm，对齐 --cleanup-ghosts）+ usage 文案 |
++| 修改 | docs/worktree-isolation.md | 常见问题补「跨仓仓切分支报 already used by worktree（幽灵注册）」三层防线段 |
++| 新增 | test/cross-worktree-ghost-registration.test.mjs | 真实 git 夹具 7 用例：probe 三态/locked 幽灵/归档兜底/doctor 扫描清理 dry-run 与 confirm |
+diff --git a/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/proposal.md b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/proposal.md
+new file mode 100644
+index 00000000..512a18c6
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/proposal.md
+@@ -0,0 +1,38 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T06:27:23.284Z
++---
++# 提案书（Proposal）— 2026-10-12-cross-wt-ghost-cleanup
++
++## 动机
++
++任务原话转写：跨仓 worktree 幽灵注册三缺口修复（依据：multi-agent-platform 仓 docs/sillyspec/cross-worktree-ghost-metadata-archive-blindspot.md 实证 + 本仓 v3.32.6 源码逐条核验属实）
++
++fire-equipment 2026-10-10 实证：跨仓 worktree 目录被清但跨仓仓 .git/worktrees/ 注册残留，分支被幽灵 worktree 占用无法 checkout。源码核验确认三个结构性缺口：
++① cleanupCrossWorktrees 的 prune 静默吞错、无 git worktree list 事后复核（gate-snapshot 已有双清契约未对齐）；且落位注册表键在验证前就被回收（worktree-cross.js :410/:439），partial 后无从重试
++② archiveWorktreeCleanup 只清主仓 worktree，归档链对跨仓全盲区（cleanupCrossWorktrees 全仓 4 处调用均不在归档链）
++③ doctor 幽灵扫描只锚主仓 meta 目录，跨仓仓 .git/worktrees/ 悬空注册无任何探测器；且 listCrossWorktreeMetas 要求 worktree 内 meta.json 存在才入列——目录已删的事故形态对 cleanup 链隐身，doctor 跨仓扫描是唯一能兜住该形态的网
++
++成功标准：
++- cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
++- locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++- archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++- doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++- 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
++
++## 变更范围
++
++按成功标准机械推导，共 5 条验收面：
++1. cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
++2. locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++3. archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++4. doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++5. 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
++
++## 成功标准（可验证）
++
++1. cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
++2. locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++3. archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++4. doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++5. 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
+diff --git a/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/requirements.md b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/requirements.md
+new file mode 100644
+index 00000000..55a6ac93
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/requirements.md
+@@ -0,0 +1,71 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T06:27:23.284Z
++---
++# 需求规格（Requirements）— 2026-10-12-cross-wt-ghost-cleanup
++
++## 功能需求
++
++### FR-01: cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
++
++- 清理路径（目录在走 remove / remove 失败兜底删目录、目录不在走 prune）在收尾时**必须**以 `git worktree list --porcelain` 对照该 worktree 路径复核注册已消失；`git worktree list` 查询异常按未清处理（gate-snapshot D-004@v2 同语义）。复核不过或 prune 抛错时**必须**把该 repo 条目置 `result: 'partial'` 并写入 `residual`，且**禁止**在该状态下回收落位注册表键（键保留供重试/doctor 扫描寻址）。
++
++#### 场景：目录已删 + 注册悬空（事故形态）
++
++Given 跨仓 worktree 目录已被外部删除、跨仓仓 `.git/worktrees/` 注册残留（未 locked）
++When 调用 `cleanupCrossWorktrees`（该变更 meta 可寻址到该 repo）
++Then 对跨仓仓执行 `git worktree prune` 后复核注册消失 → result=skipped/cleaned、注册表键回收；prune 失败或复核仍在 → result=partial + residual 指明幽灵注册、注册表键保留
++
++#### 场景：正常清理路径复核
++
++Given 跨仓 worktree 目录与 meta 健在且无未 apply 交付
++When 调用 `cleanupCrossWorktrees`
++Then remove 成功后仍执行 list 复核；注册已消失才判 cleaned 并回收注册表键
++
++### FR-02: locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++
++- 当注册复核发现残留条目处于 locked 状态（或 `git worktree remove` 因 locked 被拒）时，结果 details **必须**包含可执行的 `git worktree unlock` 提示（带仓根与路径）；清理动作**禁止**自动 unlock（locked 是用户显式保护意图，解除属用户决策）。
++
++#### 场景：locked 幽灵
++
++Given 跨仓 worktree 已 `git worktree lock` 且目录被外部删除
++When 调用 `cleanupCrossWorktrees`
++Then result=partial，details 含 unlock 命令提示；跨仓仓注册仍残留（prune 跳过 locked），注册表键保留
++
++### FR-03: archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++
++- `archiveWorktreeCleanup` **必须**在主仓清理各分支（含 meta 缺失孤儿路径、有未 apply 交付保留路径）之后追加跨仓兜底调用（force=false，幂等，重复调用零副作用）；跨仓清理 partial/有未 apply 交付时**必须**警告并给出修复指引但**禁止**阻断归档流程；跨仓兜底调用抛错时**必须**降级为警告继续归档（fail-open，与既有归档清理语义一致）。
++
++#### 场景：归档兜底清理
++
++Given 变更归档时跨仓 worktree 仍残留（apply 侧清理未走到或 partial）
++When 归档流程调用 `archiveWorktreeCleanup`
++Then 跨仓 worktree 被清理（无未 apply 交付时）或保留+警告（有交付时）；归档流程继续不被阻断
++
++### FR-04: doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++
++- doctor 结构化诊断**必须**新增跨仓 worktree 注册健康维度：对 local.yaml repos 注册表各仓跑 `git worktree list --porcelain`，注册路径不存在实体的列 finding（含 locked 标注与 unlock 提示）；无 local.yaml/无 repos 段时 skipped 注记不判红。`sillyspec doctor --prune-cross-worktrees` **必须**默认 dry-run（只列将清理项），加 `--confirm` 才对非 locked 幽灵执行 `git worktree prune` 并以复扫断言清理结果；locked 条目**必须**跳过并列出 unlock 指引，**禁止**自动 unlock。
++
++#### 场景：扫描发现幽灵
++
++Given 跨仓仓存在指向不存在路径的 worktree 注册（目录已删、注册残留）
++When 运行 doctor 诊断（或 --prune-cross-worktrees 不带 --confirm）
++Then finding 列出该幽灵注册（locked 与否分别标注）；--confirm 后非 locked 幽灵被 prune 清除、复扫为零，locked 幽灵保留并列 unlock 指引
++
++### FR-05: 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
++
++- 上述 FR-01~04 的行为路径**必须**有真实 git 夹具测试覆盖（主仓+跨仓仓各一，真实 `git worktree lock`/删目录构造幽灵形态），全部测试**必须**通过；**禁止**为过测试改弱断言。
++
++#### 场景：主路径
++
++Given 测试夹具构造出各缺口对应形态
++When 运行 `node --test test/cross-worktree-ghost-registration.test.mjs`
++Then 全部用例绿
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：目录已删+注册悬空——prune 后复核消失→cleaned；locked 复核仍在→partial+键保留」
++FR-02: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：locked 幽灵 partial 细节含 git worktree unlock 提示」
++FR-03: test/cross-worktree-ghost-registration.test.mjs「archiveWorktreeCleanup：归档兜底清理跨仓 worktree（无交付→清理；有交付→保留+不阻断）」
++FR-04: test/cross-worktree-ghost-registration.test.mjs「doctor 跨仓注册扫描 + --prune-cross-worktrees dry-run/confirm（locked 跳过列指引）」
++FR-05: test/cross-worktree-ghost-registration.test.mjs「全文件用例（locked 幽灵/归档兜底/doctor 扫描清理）node --test 全绿」
+diff --git a/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/tasks.md b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/tasks.md
+new file mode 100644
+index 00000000..f99d9d79
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-12T06:27:23.284Z
++---
++# 任务注册表（Tasks）— 2026-10-12-cross-wt-ghost-cleanup
++
++- [x] task-01: cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
++- [x] task-02: locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
++- [x] task-03: archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
++- [x] task-04: doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
++- [x] task-05: 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿

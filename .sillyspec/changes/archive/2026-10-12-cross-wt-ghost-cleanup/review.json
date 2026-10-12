@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-cross-wt-ghost-cleanup",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7563dbaf52181fc7b1bb15b7b0cf2afcceca5deb",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-01 测试绑定声称的用例不存在：cleanupCrossWorktrees 目录缺失分支零测试覆盖，且该分支在纯事故形态下经公共 API 不可达（仅竞态防御）",
+      "evidence": "requirements.md FR-01 绑定作答「cleanupCrossWorktrees：目录已删+注册悬空——prune 后复核消失→cleaned；locked 复核仍在→partial+键保留」——test/cross-worktree-ghost-registration.test.mjs 全部 7 用例中无此用例：locked→partial 由「目录在场+remove 被拒」路径覆盖（用例 2），cleaned+键回收由正常路径覆盖（用例 3），而「目录先删再调 cleanupCrossWorktrees」的入口分支（src/worktree-cross.js:443-459：probe→prune→复probe→skipped 回收键/partial 保留键）从未被任何用例驱动——用例 6/7 同样先删目录，但调用的是 scanCrossWorktreeGhosts/pruneCrossWorktreeGhosts（FR-04 面）而非 cleanupCrossWorktrees。更深层：listCrossWorktreeMetas（src/worktree-cross.js:134）要求 meta.json 在场才入列，而事故形态 meta.json 随目录同亡，FR-01 场景一「该变更 meta 可寻址到该 repo」的前置在目录已删时不成立——该分支实际只在竞态窗口可达，design.md 做法概述第 3 点亦自认该形态「对 cleanup/归档链天然隐身，只有 doctor 反扫能兜住」。实现本身经代码检视正确、真实事故形态由 doctor 网兜住且有测试（用例 6/7），无交付正确性风险，故 P2：绑定作答失实 + 声称的覆盖不存在。",
+      "location": "src/worktree-cross.js:443-459 (branch); test/cross-worktree-ghost-registration.test.mjs (missing case); .sillyspec/changes/2026-10-12-cross-wt-ghost-cleanup/requirements.md:67 (binding)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——复核读瞬时态、注册表键只在复核确认注册消失后回收，目录在复核前被外部恢复/再删最坏多判一次 partial 下次收敛，代码与作答一致：removePlacementRegistryEntry 仅在 probe false/residual 空时调用，worktree-cross.js:452/503-505）",
+    "并发": "ok（边界已裁决：可接受——落位注册表读改写无锁为既有形态（与 updatePlacementRegistry 同源，本变更加码的 removePlacementRegistryEntry 回收沿同一形态）；git worktree 命令由 git 自身串行化；归档兜底幂等且 fail-open 包裹，complete-handlers.js:378-391）",
+    "切换": "ok（边界已裁决：可接受——归档中途中断：跨仓兜底在 try/catch fail-open 内、失败只警告不阻断归档（complete-handlers.js:389-391 实测用例 4/5 绿）；doctor --confirm 中断：prune 按 repo 粒度执行、复扫如实上报 remaining（worktree-cross.js:583-597），已 prune 不回滚可接受——prune 只清悬空注册、重跑幂等收敛）",
+    "作用域": "ok（边界已裁决：可接受——扫描锚定 local.yaml repos 各仓（worktree-cross.js:529），只报/只清「注册指向不存在路径」条目（git prune 语义不碰活 worktree/分支）；locked 条目全路径不自动 unlock（cleanup :446-458/:485-486 仅提示、prune :578 跳过、doctor finding :826 提示），与「用户显式保护意图」边界一致；归档链不无条件 prune 各仓、仅清本变更名下可寻址项的窄作用域取舍已裁决可接受，宽扫描收敛到 doctor 显式入口）"
+  },
+  "reviewedAt": "2026-10-12T12:00:00.000Z"
+}

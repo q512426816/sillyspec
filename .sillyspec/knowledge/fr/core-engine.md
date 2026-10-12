@@ -3036,3 +3036,109 @@
   confirmed_at: null
   source_change: 2026-10-11-resurrect-guard-verify-hardening
   status: active
+
+## FR-core-engine-186 cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 → result=partial + 落位注册表键保留可重试，不再静默
+变更：2026-10-12-cross-wt-ghost-cleanup
+状态：active
+摘要：目录已删 + 注册悬空（事故形态）；正常清理路径复核
+场景正文：
+- 场景：目录已删 + 注册悬空（事故形态） — Given 跨仓 worktree 目录已被外部删除、跨仓仓 `.git/worktrees/` 注册残留（未 locked）；When 调用 `cleanupCrossWorktrees`（该变更 meta 可寻址到该 repo）；Then 对跨仓仓执行 `git worktree prune` 后复核注册消失 → result=skipped/cleaned、注册表键回收；prune 失败或复核仍
+- 场景：正常清理路径复核 — Given 跨仓 worktree 目录与 meta 健在且无未 apply 交付；When 调用 `cleanupCrossWorktrees`；Then remove 成功后仍执行 list 复核；注册已消失才判 cleaned 并回收注册表键
+全文：.sillyspec/changes/archive/2026-10-12-cross-wt-ghost-cleanup/requirements.md#FR-01
+最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-01
+  tests: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：目录缺失+meta 可寻址——prune 后复核消失→skipped；locked 复核仍在→partial（评审 P2 直测）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cross-wt-ghost-cleanup
+  status: active
+
+## FR-core-engine-187 locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
+变更：2026-10-12-cross-wt-ghost-cleanup
+状态：active
+摘要：locked 幽灵
+场景正文：
+- 场景：locked 幽灵 — Given 跨仓 worktree 已 `git worktree lock` 且目录被外部删除；When 调用 `cleanupCrossWorktrees`；Then result=partial，details 含 unlock 命令提示；跨仓仓注册仍残留（prune 跳过 locked），注册表键保留
+全文：.sillyspec/changes/archive/2026-10-12-cross-wt-ghost-cleanup/requirements.md#FR-02
+最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-02
+  tests: test/cross-worktree-ghost-registration.test.mjs「cleanupCrossWorktrees：locked 幽灵 partial 细节含 git worktree unlock 提示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cross-wt-ghost-cleanup
+  status: active
+
+## FR-core-engine-188 archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
+变更：2026-10-12-cross-wt-ghost-cleanup
+状态：active
+摘要：归档兜底清理
+场景正文：
+- 场景：归档兜底清理 — Given 变更归档时跨仓 worktree 仍残留（apply 侧清理未走到或 partial）；When 归档流程调用 `archiveWorktreeCleanup`；Then 跨仓 worktree 被清理（无未 apply 交付时）或保留+警告（有交付时）；归档流程继续不被阻断
+全文：.sillyspec/changes/archive/2026-10-12-cross-wt-ghost-cleanup/requirements.md#FR-03
+最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-03
+  tests: test/cross-worktree-ghost-registration.test.mjs「archiveWorktreeCleanup：归档兜底清理跨仓 worktree（无交付→清理；有交付→保留+不阻断）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cross-wt-ghost-cleanup
+  status: active
+
+## FR-core-engine-189 doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 + --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
+变更：2026-10-12-cross-wt-ghost-cleanup
+状态：active
+摘要：扫描发现幽灵
+场景正文：
+- 场景：扫描发现幽灵 — Given 跨仓仓存在指向不存在路径的 worktree 注册（目录已删、注册残留）；When 运行 doctor 诊断（或 --prune-cross-worktrees 不带 --confirm）；Then finding 列出该幽灵注册（locked 与否分别标注）；--confirm 后非 locked 幽灵被 prune 清除、复扫为零，locked 幽灵保留
+全文：.sillyspec/changes/archive/2026-10-12-cross-wt-ghost-cleanup/requirements.md#FR-04
+最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-04
+  tests: test/cross-worktree-ghost-registration.test.mjs「doctor 跨仓注册扫描 + --prune-cross-worktrees dry-run/confirm（locked 跳过列指引）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cross-wt-ghost-cleanup
+  status: active
+
+## FR-core-engine-190 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
+变更：2026-10-12-cross-wt-ghost-cleanup
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 测试夹具构造出各缺口对应形态；When 运行 `node --test test/cross-worktree-ghost-registration.test.mjs`；Then 全部用例绿
+全文：.sillyspec/changes/archive/2026-10-12-cross-wt-ghost-cleanup/requirements.md#FR-05
+最近确认：abb6f86c77aa42200d03f32edb82c31380d869f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-cross-wt-ghost-cleanup:flow:测试绑定FR-05
+  tests: test/cross-worktree-ghost-registration.test.mjs「全文件用例（locked 幽灵/归档兜底/doctor 扫描清理）node --test 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-cross-wt-ghost-cleanup
+  status: active

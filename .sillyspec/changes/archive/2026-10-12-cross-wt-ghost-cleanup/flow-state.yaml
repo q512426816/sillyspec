@@ -1,6 +1,14 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -35,6 +43,12 @@ input: >-
   - 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
 autopilot: true
 baseline_commit: 956bee3faad79baeb0b7103a33e76a5fcfe855bb
-updatedAt: '2026-10-12T06:27:43.583Z'
+updatedAt: '2026-10-12T07:06:29.892Z'
 baseline_sha256: 538e656b09e3be06ec374ef0b7c5bf7e94357543d7039c82e180f281ed6d005f
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js43+js-meta-skip1)+fr(43)（147.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012065706\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（47.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012065706\test-result.json｜门文件 8 个
 
