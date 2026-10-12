@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-thick-taskbook-cli",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-thick-taskbook-cli:flow:测试绑定FR-01",
+      "tests": [
+        "test/thick-taskbook-cli.test.mjs「renderStageReviewerTaskbook 渲染面（检查单/探针双态/预算/产物/完成动作/契约单源）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thick-taskbook-cli"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-thick-taskbook-cli:flow:测试绑定FR-02",
+      "tests": [
+        "test/thick-taskbook-cli.test.mjs「门失败条件性打印（缺件打印/docHash 失配不打印）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thick-taskbook-cli"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-thick-taskbook-cli:flow:测试绑定FR-03",
+      "tests": [
+        "test/thick-taskbook-cli.test.mjs「register-stage-review 骨架打印 / --refresh-hash 不打印（CLI 级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thick-taskbook-cli"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-thick-taskbook-cli:flow:测试绑定FR-04",
+      "tests": [
+        "test/thick-taskbook-cli.test.mjs「review-dispatch 与 stages 模板零变化（git diff 面断言由评审核——测试面以 review-dispatch 回归族全绿替代）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thick-taskbook-cli"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-12-thick-taskbook-cli:flow:测试绑定FR-05",
+      "tests": [
+        "test/thick-taskbook-cli.test.mjs「全量用例 + 四族回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-thick-taskbook-cli"
+    }
+  ]
+}

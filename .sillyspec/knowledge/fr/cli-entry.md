@@ -8784,3 +8784,108 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-cli-friction-signal
   status: active
+
+## FR-cli-entry-466 新渲染函数 renderStageReviewerTaskbook（stage-review.js，避 import 环）：角色（干净上下文独立评审员）+ 评审对象主文档 + REVIEW_CHECKLISTS[stage] 检查单（逐条 pass/gap/fail）+ 项目评审探针（assembleProbeLinesForScope scope=thick，未配置零注入）+ 请求预算硬帽 12 次 + 只读纪律 + 产物路径（含 docHash 占位与 --refresh-hash 代填指引）+ 完成后动作（重跑 run <stage> --done）
+变更：2026-10-12-thick-taskbook-cli
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given stage=brainstorm、probeLines 两条；When renderStageReviewerTaskbook；Then 输出含检查单全部条目（
+全文：.sillyspec/changes/archive/2026-10-12-thick-taskbook-cli/requirements.md#FR-01
+最近确认：374baba5b0cb866d66773b6dbfb2a07900e03478
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thick-taskbook-cli:flow:测试绑定FR-01
+  tests: test/thick-taskbook-cli.test.mjs「renderStageReviewerTaskbook 渲染面（检查单/探针双态/预算/产物/完成动作/契约单源）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thick-taskbook-cli
+  status: active
+
+## FR-cli-entry-467 接线出口一：printStageReviewResult 失败路径——仅当失败原因是「缺少 stage review.json」（tier=independent 未产）时，在既有提示后打印完整任务书（其他失败原因如 docHash 失配不打印，防噪音）
+变更：2026-10-12-thick-taskbook-cli
+状态：active
+摘要：条件性双态
+场景正文：
+- 场景：条件性双态 — When printStageReviewResult 收到「缺少 execute 阶段 stage review.json」错误 + 完整 context；Then s
+全文：.sillyspec/changes/archive/2026-10-12-thick-taskbook-cli/requirements.md#FR-02
+最近确认：374baba5b0cb866d66773b6dbfb2a07900e03478
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thick-taskbook-cli:flow:测试绑定FR-02
+  tests: test/thick-taskbook-cli.test.mjs「门失败条件性打印（缺件打印/docHash 失配不打印）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thick-taskbook-cli
+  status: active
+
+## FR-cli-entry-468 接线出口二：register-stage-review 生成骨架成功时打印同款任务书（派发前获取点，免撞门）
+变更：2026-10-12-thick-taskbook-cli
+状态：active
+摘要：骨架生成打印
+场景正文：
+- 场景：骨架生成打印 — Given 变更含 design.md；When `register-stage-review --change <名> --stage brainstorm`（非 --j
+全文：.sillyspec/changes/archive/2026-10-12-thick-taskbook-cli/requirements.md#FR-03
+最近确认：374baba5b0cb866d66773b6dbfb2a07900e03478
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thick-taskbook-cli:flow:测试绑定FR-03
+  tests: test/thick-taskbook-cli.test.mjs「register-stage-review 骨架打印 / --refresh-hash 不打印（CLI 级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thick-taskbook-cli
+  status: active
+
+## FR-cli-entry-469 平台通道（review-dispatch/buildReviewerTaskBook）零变化；步骤指引模板零触碰
+变更：2026-10-12-thick-taskbook-cli
+状态：active
+摘要：零变化
+场景正文：
+- 场景：零变化 — When 对照 git diff；Then review-dispatch.js 与 src/stages/ 零改动。
+全文：.sillyspec/changes/archive/2026-10-12-thick-taskbook-cli/requirements.md#FR-04
+最近确认：374baba5b0cb866d66773b6dbfb2a07900e03478
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thick-taskbook-cli:flow:测试绑定FR-04
+  tests: test/thick-taskbook-cli.test.mjs「review-dispatch 与 stages 模板零变化（git diff 面断言由评审核——测试面以 review-dispatch 回归族全绿替代）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thick-taskbook-cli
+  status: active
+
+## FR-cli-entry-470 新增单测：渲染面（检查单/探针注入与未配置零注入/预算行/产物路径/完成后动作）+ 门失败打印条件性（缺 review.json 打印/docHash 失配不打印）+ register-stage-review 出口打印（骨架打印/--refresh-hash 不打印）+ 既有 stage-review 回归族全绿
+变更：2026-10-12-thick-taskbook-cli
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/thick-taskbook-cli.test.mjs test/stage-review-gate-echo.test.m
+全文：.sillyspec/changes/archive/2026-10-12-thick-taskbook-cli/requirements.md#FR-05
+最近确认：374baba5b0cb866d66773b6dbfb2a07900e03478
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-thick-taskbook-cli:flow:测试绑定FR-05
+  tests: test/thick-taskbook-cli.test.mjs「全量用例 + 四族回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-thick-taskbook-cli
+  status: active

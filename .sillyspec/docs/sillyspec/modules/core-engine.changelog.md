@@ -47,3 +47,4 @@
 - 2026-10-09-verify-reuse-friction | ①trace 行 repo 归属（D-005@v1）——test-bindings normalizeRow additive repo 字段（缺省不落键=主仓）；verify-probes 探针 7 卡收集携 parseRepo；verify-postcheck 悬空判定/残差执行按行 repo 经 repos 注册表换根（traceRepoRoots；未注册回退主仓且 dangling 带 repo: 前缀可见；残差 runTraceResidual 按 groups 分仓根跑）。②跨仓对账锚点 B' 档（FR-07）——cross-repo-reconcile collectRepoActual 增 worktree-baseline-window（meta.baseHash..工作树 全量窗口，多笔提交+未提交全覆盖；原 HEAD~1..HEAD 对 worktree 多笔交付假信号）；resolveVerifyChangedFiles 跨仓 diff 同款窗口。③runModuleSubset 穿 observability（复用观测）。新测试：test-bindings-crossrepo-row-resolution / cross-repo-reconcile-baseline-anchor。
 | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
 | 2026-10-12 | 2026-10-12-tick-evidence-multi-anchor | dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据 |
+| 2026-10-12 | 2026-10-12-thick-taskbook-cli | dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/pla |

@@ -1,0 +1,11 @@
+{"ts":1791815374839,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791815394719,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791815394719,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791815699872,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick","evidence":"node --test test/thick-taskbook-cli.test.mjs 3/3 绿（渲染双态/门条件双态/CLI 双态）"}
+{"ts":1791815700091,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791815700282,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick","evidence":"四族回归 28/28 + lint 全绿 + doc-ref-check 93/93（含本变更插行重锚 5 处）——2026-10-12 14:47 实跑"}
+{"ts":1791815702888,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791815702888,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1791815702888,"kind":"commit","stage":null,"detail":"993f30d2","provisional":true}
+{"ts":1791815713055,"kind":"commit","stage":null,"detail":"374baba5","provisional":true}
+{"ts":1791815764285,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（50.3s） · 20261012143601","provisional":true}

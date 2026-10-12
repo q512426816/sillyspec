@@ -1,0 +1,286 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 8d98ecd4..d2f6dc8b 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2151/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4487；shared.js:1120 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2911/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4408；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4360；sync.js:2232 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4509；shared.js:1120 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4429；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4381；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4154/4174；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4175/4174；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4252`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4273`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 7ed543b8..bd9042c3 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -2540,6 +2540,27 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+               console.log(`   docHash 已与当前 ${result.mainDoc} 一致，跳过重写（幂等 no-op，不动文件）`);
+             } else {
+               console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
++              // 派发前任务书出口（2026-10-12-thick-taskbook-cli）：新生成骨架 = 待派发形态——打印
++              // 可原样粘贴的完整评审任务书（检查单生产权在 CLI，治主代理手写 leading prompt）。
++              // 条件性：--from adopt（评审已产）与 --refresh-hash（刷新既有）不打印；--json 面不混文案。
++              if (!rsrFrom && !wantRefresh) {
++                try {
++                  const { renderStageReviewerTaskbook } = await import('./stage-review.js');
++                  const { assembleProbeLinesForScope } = await import('./review-probes.js');
++                  const rsrSpecBase = rsrPlatformOpts.specRoot || join(dir, '.sillyspec');
++                  const _probeAsm = assembleProbeLinesForScope(rsrSpecBase, 'thick');
++                  for (const _w of _probeAsm.warnings) console.warn(`⚠️ review_probes：${_w}`);
++                  console.log(`\n📋 评审员任务书（原样复制给干净上下文子代理——检查单生产权在 CLI，勿手写改写）：`);
++                  console.log(renderStageReviewerTaskbook({
++                    stage: st,
++                    changeDir: join(rsrSpecBase, 'changes', rsrChange),
++                    changeName: rsrChange,
++                    reviewRunId: result.reviewRunId,
++                    reviewPath: result.reviewPath,
++                    probeLines: _probeAsm.lines.length > 0 ? _probeAsm.lines : null,
++                  }));
++                } catch { /* 任务书打印 best-effort：失败不影响注册主流程 */ }
++              }
+             }
+           }
+         } catch (e) {
+diff --git a/src/stage-review.js b/src/stage-review.js
+index 1107a9d9..85543e87 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -15,12 +15,14 @@
+ 
+ import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
+ import { writeAtomicSync } from './fs-atomic.js'
+-import { join } from 'path'
++import { join, dirname } from 'path'
+ import { createHash } from 'crypto'
+ import jsYaml from 'js-yaml'
+ import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
+ import { detectSpecDirTypo } from './spec-dir-typo.js'
+ import { resolveRuntimeRoot, resolveSpecDir } from './run/shared.js'
++import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
++import { assembleProbeLinesForScope } from './review-probes.js'
+ 
+ // 文档型 stage review 的合法 reviewType
+ const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
+@@ -738,6 +740,51 @@ export function validateStageReviewWithAutoRefresh(opts) {
+   return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors, refreshOrdinal, hashDrift: `${oldHashShort}→${newHashShort}` }
+ }
+ 
++/**
++ * 厚档评审员任务书（agent 通道，2026-10-12-thick-taskbook-cli）：可原样粘贴给干净上下文子代理
++ * 的完整派发 prompt——检查单生产权收归 CLI（dogfood 实证 fire-equipment 会话：主代理手写 9 份
++ * 派发 prompt，6 份带 leading 措辞——「本变更的修复：…」预设结论、「构建已跑过你无需重跑」
++ * 外包验证；三个生产缺陷全漏检的根因是检查单由主代理手写）。与 thin 面 renderReviewerTaskbook
++ * （flow-review.js）同哲学；平台通道任务书在 review-dispatch.js buildReviewerTaskBook（不动）。
++ * 契约复用 renderReviewJsonContract 单源渲染——禁止第二套手写 schema 摘要（防契约漂移；
++ * 其通道优先序段面向派发方，评审员读到无害）。
++ * 放本模块而非 review-dispatch：契约渲染器与校验器同模块，且 review-dispatch 静态 import
++ * 本模块（反向成环）。诚实边界：任务书仍由主代理复制转发——CLI 单源降 leading 概率，
++ * 不防恶意篡改（与 thin 同界）。
++ * @param {{ stage: string, changeDir: string, changeName?: string, reviewRunId?: string,
++ *   reviewPath: string, probeLines?: string[]|null }} opts
++ * @returns {string}
++ */
++export function renderStageReviewerTaskbook({ stage, changeDir, changeName, reviewRunId, reviewPath, probeLines = null }) {
++  const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
++  const reviewType = STAGE_REVIEW_TYPE[stage] || 'design'
++  const items = (REVIEW_CHECKLISTS[stage] || []).map((t, i) => `  ${i + 1}. ${t}`)
++  const probeSection = Array.isArray(probeLines) && probeLines.length > 0
++    ? ['', '【项目评审探针（local.yaml review_probes 注入——CLI 单源生产，项目特有面必查）】',
++      ...probeLines.map((l) => `  - ${l}`),
++      '  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与检查单同口径，未答=未审）']
++    : []
++  return [
++    `⚖️ 独立评审任务书 — ${stage} 阶段（agent 通道派发，原样复制给子代理——检查单生产权在 CLI，勿自行改写增删）`,
++    `══════════════════════════════════════`,
++    `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对文档与代码，不信自述，逐条给证据锚点。`,
++    `【评审对象】${join(changeDir || '', mainDoc)}（reviewType=${reviewType}${changeName ? `，change=${changeName}` : ''}）`,
++    ``,
++    `【检查单（逐条 pass / gap / fail + 证据锚点）】`,
++    ...items,
++    ...probeSection,
++    ``,
++    `【请求预算】硬帽 12 次——超帽即止；材料不足以作答的项如实标 cannot_verify 并列缺件，勿猜。`,
++    `【纪律】只读——禁止修改任何文件、禁止 git 写操作。`,
++    `【产物】把 review.json 写到：${reviewPath}`,
++    `   docHash 可占位 "TODO"——写完由主会话跑 sillyspec register-stage-review --change ${changeName || '<名>'} --stage ${stage} --refresh-hash 代填（保留 verdict/checklist）。`,
++    ``,
++    renderReviewJsonContract({ stage, changeDir, reviewRunId, tier: 'independent' }),
++    ``,
++    `【完成后】告知主会话重跑：sillyspec run ${stage} --done --change ${changeName || '<名>'}（断点续，已完成子步幂等跳过）`,
++  ].join('\n')
++}
++
+ /**
+  * 打印 stage review 校验结果
+  * @param {{ ok: boolean, errors: string[], warnings: string[] }} result
+@@ -789,6 +836,25 @@ export function printStageReviewResult(result, context = {}) {
+     if (result.errors.some(e => String(e).includes('docHash')) && changeName) {
+       console.error(`   docHash 失配修复：sillyspec register-stage-review --change ${changeName} --stage ${stage} --refresh-hash（主文档改版多阶段联动用 --all）`)
+     }
++    // 厚档评审任务书（2026-10-12-thick-taskbook-cli）：缺 review.json = 待派发形态——打印可原样
++    // 粘贴的完整任务书（thin 面同款时机：评审需要而未产）。条件性：仅缺件形态打印，docHash 失配/
++    // schema 错等其他失败不打印（防重复撞门噪音）。探针装配 fail-soft：specBase 由 runtimeRoot
++    // 父目录推导（平台模式 runtimeRoot 在外时 miss → 零注入），打印失败不影响 gate 原错误输出。
++    if (reviewRunId && runtimeRoot && changeName
++      && result.errors.some(e => String(e).includes('缺少') && String(e).includes('review.json'))) {
++      try {
++        const _probeAsm = assembleProbeLinesForScope(dirname(runtimeRoot), 'thick')
++        for (const _w of _probeAsm.warnings) console.error(`   ⚠️ review_probes：${_w}`)
++        console.error(`\n   📋 评审员任务书（原样复制给干净上下文子代理——检查单生产权在 CLI，勿手写改写）：`)
++        console.error(renderStageReviewerTaskbook({
++          stage, reviewRunId,
++          changeDir: join(dirname(runtimeRoot), 'changes', changeName),
++          changeName,
++          reviewPath: join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`, 'review.json'),
++          probeLines: _probeAsm.lines.length > 0 ? _probeAsm.lines : null,
++        }).split('\n').map((l) => `   ${l}`).join('\n'))
++      } catch { /* 任务书打印 best-effort：失败不影响 gate 原有输出与退出码 */ }
++    }
+   }
+ 
+   if (result.warnings.length > 0) {
+diff --git a/test/thick-taskbook-cli.test.mjs b/test/thick-taskbook-cli.test.mjs
+new file mode 100644
+index 00000000..05d44be6
+--- /dev/null
++++ b/test/thick-taskbook-cli.test.mjs
+@@ -0,0 +1,119 @@
++/**
++ * thick-taskbook-cli.test.mjs — 厚档评审任务书 CLI 单源（2026-10-12-thick-taskbook-cli）
++ *
++ * 验收面：
++ *   ① renderStageReviewerTaskbook 渲染：角色/主文档/检查单全量带序号/探针双态（注入与未配置
++ *      零注入）/预算 12/只读纪律/产物路径+docHash 代填指引/完成后 run <stage> --done/契约单源
++ *      （renderReviewJsonContract 字段在场）；
++ *   ② 门失败条件性：printStageReviewResult 缺 review.json → 打印任务书；docHash 失配 → 不打印；
++ *   ③ register-stage-review CLI 双态：骨架生成打印任务书（含 local.yaml 探针注入）；
++ *      --refresh-hash 刷新不打印；
++ *   ④ 回归：gate-echo / register / contract / review-dispatch 四族全绿（另跑）。
++ * dogfood 驱动（fire-equipment 复盘）：主代理手写 9 份派发 prompt，6 份带 leading——检查单
++ * 生产权收归 CLI。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { renderStageReviewerTaskbook, printStageReviewResult } from '../src/stage-review.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function capture(fn) {
++  const origErr = console.error
++  const origLog = console.log
++  let err = ''
++  let log = ''
++  console.error = (...a) => { err += a.join(' ') + '\n' }
++  console.log = (...a) => { log += a.join(' ') + '\n' }
++  try { fn() } finally { console.error = origErr; console.log = origLog }
++  return err + log
++}
++
++test('渲染面：检查单全量/探针双态/预算/纪律/产物/完成动作/契约单源', () => {
++  const args = {
++    stage: 'brainstorm',
++    changeDir: '/ws/x/.sillyspec/changes/c1',
++    changeName: 'c1',
++    reviewRunId: 'review-20261012-000001',
++    reviewPath: '/ws/x/.sillyspec/.runtime/stage-reviews/brainstorm-review-20261012-000001/review.json',
++  }
++  const tb = renderStageReviewerTaskbook({ ...args, probeLines: ['copy-drift｜报错一次给全必查'] })
++  assert.match(tb, /独立评审员（干净上下文，未参与实现）/)
++  assert.match(tb, /changes[\\/]c1[\\/]design\.md/)
++  assert.match(tb, /reviewType=design/)
++  // 检查单：brainstorm 全量条目带序号（抽查首条交叉审查模型与后段条目）
++  assert.match(tb, /1\. \*\*定义层\*\*/)
++  assert.match(tb, /承诺可兑现性/)
++  // 探针注入段 + 逐条作答口径
++  assert.match(tb, /【项目评审探针（local\.yaml review_probes 注入/)
++  assert.match(tb, /copy-drift｜报错一次给全必查/)
++  // 预算 / 纪律 / 产物 / 代填 / 完成后
++  assert.match(tb, /硬帽 12 次/)
++  assert.match(tb, /只读——禁止修改任何文件、禁止 git 写操作/)
++  assert.match(tb, new RegExp(args.reviewPath.replace(/[\\/]/g, '[\\\\/]')))
++  assert.match(tb, /--refresh-hash 代填/)
++  assert.match(tb, /run brainstorm --done --change c1/)
++  // 契约单源（renderReviewJsonContract 的特征字段）
++  assert.match(tb, /specVerdict/)
++  assert.match(tb, /validateStageReviewSchema/)
++  // 未配置探针 → 零注入
++  const plain = renderStageReviewerTaskbook(args)
++  assert.ok(!plain.includes('项目评审探针'))
++  const emptyArr = renderStageReviewerTaskbook({ ...args, probeLines: [] })
++  assert.ok(!emptyArr.includes('项目评审探针'))
++})
++
++test('门失败条件性：缺 review.json 打印任务书 / docHash 失配不打印', () => {
++  const ctx = { stage: 'execute', reviewRunId: 'review-20261012-000002', runtimeRoot: '/nonexistent/.runtime', changeName: 'c1' }
++  const missing = capture(() => printStageReviewResult(
++    { ok: false, errors: ['缺少 execute 阶段的 stage review.json — tier=independent 要求独立审查子代理产出（期望路径：/nonexistent/.runtime/stage-reviews/execute-review-20261012-000002/review.json）'], warnings: [] },
++    ctx,
++  ))
++  assert.match(missing, /评审员任务书/)
++  assert.match(missing, /【检查单（逐条 pass \/ gap \/ fail \+ 证据锚点）】/)
++  assert.ok(!missing.includes('项目评审探针'), 'specBase 推导 miss（/nonexistent 无 local.yaml）→ 零注入但任务书主体在场')
++  const dh = capture(() => printStageReviewResult(
++    { ok: false, errors: ['docHash 失配：期望 abc123，实际 def456——design.md 已改版'], warnings: [] },
++    ctx,
++  ))
++  assert.ok(!dh.includes('评审员任务书'), 'docHash 失配不打印任务书（防重复撞门噪音）')
++  assert.match(dh, /docHash 失配修复/, '既有 docHash 提示原样在场')
++})
++
++test('register-stage-review CLI 双态：骨架打印（含探针注入）/ --refresh-hash 不打印', () => {
++  const ws = mkdtempSync(join(tmpdir(), 'ttb-'))
++  try {
++    const specBase = join(ws, '.sillyspec')
++    const changeDir = join(specBase, 'changes', 'c1')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'design.md'), '# D\n\n内容。\n')
++    writeFileSync(join(specBase, 'local.yaml'), [
++      'review_probes:',
++      '  - id: copy-drift',
++      '    lines:',
++      '      - 报错一次给全必查（探针 e2e）',
++    ].join('\n'))
++    const cli = (args) => spawnSync(process.execPath, [CLI, ...args], {
++      cwd: ws, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++    })
++    // 骨架生成：打印任务书 + 探针行
++    const r1 = cli(['register-stage-review', '--change', 'c1', '--stage', 'brainstorm'])
++    assert.equal(r1.status, 0, r1.stderr)
++    assert.match(r1.stdout, /已注册 brainstorm stage review/)
++    assert.match(r1.stdout, /评审员任务书/)
++    assert.match(r1.stdout, /copy-drift｜报错一次给全必查（探针 e2e）/)
++    assert.match(r1.stdout, /run brainstorm --done --change c1/)
++    // --refresh-hash：刷新既有，不打印任务书
++    const r2 = cli(['register-stage-review', '--change', 'c1', '--stage', 'brainstorm', '--refresh-hash'])
++    assert.equal(r2.status, 0, r2.stderr)
++    assert.match(r2.stdout, /已注册 brainstorm stage review/)
++    assert.ok(!r2.stdout.includes('评审员任务书'), '--refresh-hash 不打印（评审已在途/已完成）')
++  } finally { rmSync(ws, { recursive: true, force: true }) }
++})

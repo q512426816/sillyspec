@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-thick-taskbook-cli",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "374baba5b0cb866d66773b6dbfb2a07900e03478",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "平台模式下门路径探针 specBase 由 dirname(runtimeRoot) 推导可能 miss → 探针零注入",
+      "detail": "printStageReviewResult（src/stage-review.js:846）用 dirname(runtimeRoot) 推 specBase 定位 local.yaml；平台模式 runtimeRoot 外置时该推导不指向 specRoot，探针零注入。设计盲维 4 已明示为 fail-soft 接受边界（任务书主体不受影响），且 register 分支（src/index.js:2550）用 rsrSpecBase=specRoot||join(dir,'.sillyspec') 精确推导无此问题。测试以 /nonexistent/.runtime 实证零注入时主体在场。非阻断：如平台模式用户报探针未注入，可在 gate 调用链透传 specBase 对齐 register 分支。",
+      "location": "src/stage-review.js:843-857"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 打印条件较需求文本更严格（需 runtimeRoot 与 changeName 同时在场）",
+      "detail": "需求文本为『有 reviewRunId 时打印』，实现额外要求 runtimeRoot 与 changeName（拼 reviewPath/changeDir 的必要输入）。缺任一 → 不打印 fail-soft，与既有提示（reviewRunId 缺失时同样不打印路径 echo）同哲学，无行为回退风险。仅记录口径差异，非缺陷。",
+      "location": "src/stage-review.js:843-844"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "任务书为渲染时点快照（REVIEW_CHECKLISTS 常量 + probeLines 即时装配 + reviewPath 即时拼），评审员拿到即派发时点状态；主文档后续改版由既有 docHash 失配链兜底（renderReviewJsonContract 明写 auto-refresh/refresh-hash 提示，validateStageReviewWithAutoRefresh 承担机械重算 + 刷新序数审计）。核代码属实，无新增乱序面。",
+    "并发": "renderStageReviewerTaskbook 纯字符串拼接零 fs 写；两处接线只 console.error/log；probeLines 装配只读 local.yaml（readFileSync）。纯打印零写盘，无并发写面。",
+    "切换": "两处打印均在 try/catch 内 best-effort（stage-review.js:845-856 / index.js:2547-2562），catch 静默；gate 的 errors 既有打印（800-838 行）先于任务书输出，退出码由调用方 process.exitCode 决定不受打印成败影响。核代码属实。",
+    "作用域": "门路径 specBase=dirname(runtimeRoot) 推导，平台模式 runtimeRoot 外置时 miss → loadReviewProbes existsSync 守卫返回空零注入（测试 /nonexistent 实证），任务书主体在场；register 路径用 specRoot||join(dir,'.sillyspec') 精确推导。检查单 REVIEW_CHECKLISTS 为仓内常量无串台。见 findings P3-1（已披露 fail-soft 边界）。",
+    "probe_cli-copy-selfsufficient": "pass——文案自足：任务书提到的命令逐个验真在场（register-stage-review 子命令 index.js:2482 + --refresh-hash 解析 :2498；run 子命令在 topCommands + --done 解析 :3195；--all 为既有扩展 flag 在用法行 :2501）；docHash 占位 TODO 指引与门兼容（validateStageReviewSchema 仅要求非空字符串过 schema，--refresh-hash 正是门失配修复路径）。文案与门判定一致性：契约复用 renderReviewJsonContract 与 validateStageReviewSchema 同源常量（REVIEW_SCHEMA_VERSION/VALID_VERDICTS/CHECKLIST_RESULTS），事前给的 == 事后查的，无第二套摘要。新增提示面（探针 warnings/任务书）非报错面，无『报错须一次给全』违例。",
+    "probe_config-absent-zero-regression": "pass——本变更是 review_probes 键的新消费调用（scope=thick）而非新键（键系 2026-10-12-review-probe-injection 既有）。三态实证：配置注入（CLI 级用例 local.yaml 探针行断言命中）/ 空数组零注入（渲染单测 emptyArr）/ 无文件零注入（门失败用例 /nonexistent 断言无探针段；loadReviewProbes existsSync + try/catch 守卫，坏段告警跳过）。缺省零回归：无 review_probes 段 → parseReviewProbes(null) 空 probes，既有 thin 消费路径不受影响，四族回归全绿佐证。",
+    "probe_crossrepo-path-compat": "pass——本变更不触及 worktree/deps/跨仓对账（无该面，按路径形态核对面核证）：任务书路径全部 join() 拼接（win32 反斜杠/POSIX 斜杠自适应），测试断言用 [\\\\/] 双形态正则兼容两平台；reviewPath/changeDir 无硬编码分隔符、无跨仓相对基准。"
+  },
+  "reviewedAt": "2026-10-12T14:47:30.000Z"
+}
