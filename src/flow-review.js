@@ -281,7 +281,14 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
     `{`,
     `  "schemaVersion": 1, "change": "${change}", "reviewer": "subagent",`,
     `  "verdict": "PASS" | "FAIL",`,
-    `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
+    // reviewedAgainst 双形态（2026-10-12-tick-evidence-multi-anchor）：跨仓冻结面在场时对象
+    // 形态优先（各仓 rev-parse HEAD 可机核「对着哪个面评审」）；单仓维持单字符串形态零变化。
+    ...(readCrossRepoKeys(changeDir) ? [
+      `  "reviewedAgainst": { "workspace": "<主仓 HEAD 完整 sha——照抄任务书标注>", "repos": { "<仓键>": "<该仓 git rev-parse HEAD 完整 sha>" } },`,
+      `  （跨仓冻结面在场——对象形态优先；仓键=change-patch.json repos 的 key，各仓 sha 在该仓根 rev-parse 取；字符串单 sha 形态仍兼容）`,
+    ] : [
+      `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
+    ]),
     `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
     `  "reviewedAt": "<ISO 时间>"`,
@@ -292,10 +299,30 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
   return taskbook
 }
 
+/** 锚 sha 形态（7-40 位 hex）。 */
+const isAnchorSha = (v) => typeof v === 'string' && /^[0-9a-f]{7,40}$/i.test(v.trim())
+
+/**
+ * 变更的跨仓冻结面仓键（无 change-patch.json / 无 repos / 不可读 → null=单仓形态）。
+ * 形状对齐 cross-repo patch 冻结件（repos[] 条目含 key）。
+ */
+function readCrossRepoKeys(changeDir) {
+  try {
+    const cp = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+    if (cp && Array.isArray(cp.repos)) {
+      const keys = cp.repos.map((x) => x && (x.key || x.repoKey)).filter(Boolean)
+      return keys.length > 0 ? keys : null
+    }
+  } catch { /* 单仓/不可读 → null */ }
+  return null
+}
+
 /**
  * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
- * reviewedAgainst（评审对象锚，2026-10-06-review-anchor-and-negation）：可选字段——缺省
- * 容忍（旧产物向后兼容），存在时须为 7-40 位 hex sha。
+ * reviewedAgainst（评审对象锚）：可选字段——缺省容忍（旧产物向后兼容）。双形态
+ * （2026-10-12-tick-evidence-multi-anchor）：字符串（既有，7-40 hex）或对象
+ * {workspace: sha, repos: {<key>: sha}}——跨仓交付的「对着哪个面评审」可机核；
+ * 仓键开放（local.yaml repos 注册表键空间，CLI 不枚举校验键集合）。
  */
 export function validateReviewJson(path) {
   let raw
@@ -305,9 +332,24 @@ export function validateReviewJson(path) {
   const errors = []
   if (r.schemaVersion !== 1) errors.push('schemaVersion 必须为 1')
   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
-  if (r.reviewedAgainst !== undefined
-    && (typeof r.reviewedAgainst !== 'string' || !/^[0-9a-f]{7,40}$/i.test(r.reviewedAgainst.trim()))) {
-    errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
+  if (r.reviewedAgainst !== undefined) {
+    if (typeof r.reviewedAgainst === 'string') {
+      if (!isAnchorSha(r.reviewedAgainst)) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
+    } else if (r.reviewedAgainst && typeof r.reviewedAgainst === 'object' && !Array.isArray(r.reviewedAgainst)) {
+      if (!isAnchorSha(r.reviewedAgainst.workspace)) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
+      if (r.reviewedAgainst.repos !== undefined) {
+        const repos = r.reviewedAgainst.repos
+        if (!repos || typeof repos !== 'object' || Array.isArray(repos)) {
+          errors.push('reviewedAgainst.repos 须为对象（仓键 → sha；仓键取 local.yaml repos 注册表键）')
+        } else {
+          for (const [k, v] of Object.entries(repos)) {
+            if (!isAnchorSha(v)) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
+          }
+        }
+      }
+    } else {
+      errors.push('reviewedAgainst 须为 7-40 位 hex sha 字符串，或 {workspace: sha, repos: {<仓键>: sha}} 对象')
+    }
   }
   if (!Array.isArray(r.findings)) errors.push('findings 必须为数组')
   else {
@@ -328,6 +370,9 @@ export function validateReviewJson(path) {
  * 落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）。reviewedAgainst 缺省/读失败/
  * 格式非法一律 false（fail-safe：宁可多评一次，不放行无锚证据）。
  * 匹配口径：双向前缀（reviewedAgainst 允许短 sha 形态，与完整 head 任一方向前缀命中即锚定）。
+ * 对象形态（2026-10-12-tick-evidence-multi-anchor）取 workspace 锚参与判定——主仓漂移
+ * 判定面不变；repos 各仓锚是记录面（跨仓 HEAD 逐机不可靠 rev-parse，不参与判定），
+ * workspace 缺失/非法判 false fail-safe。
  * @param {string} reviewPath - review.json 路径
  * @param {string} head - 当前完整 HEAD sha
  * @returns {boolean}
@@ -337,7 +382,9 @@ export function reviewAnchoredToHead(reviewPath, head) {
   if (!h) return false
   try {
     const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
-    const ra = typeof r?.reviewedAgainst === 'string' ? r.reviewedAgainst.trim().toLowerCase() : ''
+    const raRaw = r?.reviewedAgainst
+    const ra = typeof raRaw === 'string' ? raRaw.trim().toLowerCase()
+      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace.trim().toLowerCase() : '')
     if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
     return h === ra || h.startsWith(ra) || ra.startsWith(h)
   } catch { return false }

@@ -70,10 +70,35 @@ export function tickTasksMd({ tasksMd, taskId }) {
 }
 
 /**
+ * 证据解析（2026-10-12-tick-evidence-multi-anchor）：自由文本或 @路径 引用——@file 读文件内容
+ * （帽 8KB，超帽截断留痕）；读取失败 fail-soft 原样登记「@路径」文本并告警（不拒翻格——证据是
+ * 自愿补录面，不进门禁判据）。dogfood 驱动：限流截断场景构建回执（/tmp 日志 exit 0）无法补录，
+ * 恢复后只能重跑构建。
+ */
+export function resolveTickEvidence({ evidence }) {
+  const raw = String(evidence ?? '').trim()
+  if (!raw) return { text: null, warning: null }
+  if (!raw.startsWith('@')) return { text: raw, warning: null }
+  const path = raw.slice(1)
+  try {
+    let content = readFileSync(path, 'utf8')
+    if (Buffer.byteLength(content, 'utf8') > 8192) {
+      content = Buffer.from(content, 'utf8').subarray(0, 8192).toString('utf8') + '…（超 8KB 截断）'
+    }
+    const text = `@${path}\n${content.trim()}`
+    if (!content.trim()) return { text: `@${path}（空文件）`, warning: `⚠️ 证据文件 ${path} 为空——原样登记引用` }
+    return { text, warning: null }
+  } catch (e) {
+    return { text: raw, warning: `⚠️ 证据文件 ${path} 读取失败（${e && e.code ? e.code : '不可读'}）——原样登记引用文本，未拒翻格` }
+  }
+}
+
+/**
  * IO 编排（index.js 分派入口）：定位变更目录 → tickTasksMd → 原子写盘 → 回显。
  * exit 0=翻格/幂等；exit 2=未知 id / 缺 tasks.md / 已归档。
+ * evidence（可选）：自愿证据补录——翻格成功后追加 task-evidence.jsonl（幂等重勾零追加）。
  */
-export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
+export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence = null }) {
   const changesRoot = join(specBase, 'changes')
   const tasksPath = join(changesRoot, changeName, 'tasks.md')
   if (!existsSync(tasksPath)) {
@@ -90,9 +115,24 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
     console.error(`❌ tasks.md 中无 ${taskId}——可选任务：${ids}`)
     process.exit(2)
   }
+  // 证据预解析（翻格前展开 @file——证据不先于事实：翻格失败不产生证据行）
+  const ev = resolveTickEvidence({ evidence })
+  if (ev.warning) console.warn(ev.warning)
   if (r.kind === 'ticked') {
     const { writeAtomicSync } = await import('./fs-atomic.js')
     writeAtomicSync(tasksPath, r.tasksMd)
+    // 证据补录（2026-10-12-tick-evidence-multi-anchor）：翻格成功后追加四键 JSONL——
+    // 幂等重勾零追加（already 分支不进此块）；自愿面不接任何收口门判据。
+    if (ev.text) {
+      try {
+        appendFileSync(join(changesRoot, changeName, 'task-evidence.jsonl'), JSON.stringify({
+          ts: Date.now(), task: normalizeTaskId(taskId) || taskId, evidence: ev.text, source: 'task-tick',
+        }) + '\n', 'utf8')
+        console.log(`📎 证据已登记：${join(changesRoot, changeName, 'task-evidence.jsonl')}（task ${normalizeTaskId(taskId) || taskId}）`)
+      } catch (e) {
+        console.warn(`⚠️ 证据登记失败（${e && e.message ? e.message : e}）——翻格不受影响`)
+      }
+    }
     // 事件直写（2026-10-07-thin-tasks-v3）：精确单格跳进事件流，节奏门按 source 去重采样合并跳。
     try {
       const { resolveRuntimeRoot } = await import('./run/shared.js')
@@ -102,6 +142,7 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
       appendFileSync(eventsPath, JSON.stringify({
         ts: Date.now(), kind: 'task-done', stage: 'tasks',
         detail: `checked ${from}→${r.checked}`, provisional: true, source: 'task-tick',
+        ...(ev.text ? { evidence: ev.text.slice(0, 300) } : {}), // 事件面截 300 字符（全文在 task-evidence.jsonl）
       }) + '\n', 'utf8')
     } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
     // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
@@ -118,4 +159,4 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase }) {
   return r
 }
 
-export default { tickTasksMd, runTaskTick, normalizeTaskId }
+export default { tickTasksMd, runTaskTick, normalizeTaskId, resolveTickEvidence }

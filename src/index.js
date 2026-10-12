@@ -926,6 +926,9 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const tTask = tTaskIdx >= 0 && filteredArgs[tTaskIdx + 1] && !String(filteredArgs[tTaskIdx + 1]).startsWith("--") ? filteredArgs[tTaskIdx + 1] : null;
       const tNoteIdx = filteredArgs.indexOf('--note');
       const tNote = tNoteIdx >= 0 && filteredArgs[tNoteIdx + 1] && !String(filteredArgs[tNoteIdx + 1]).startsWith("--") ? filteredArgs[tNoteIdx + 1] : null;
+      // --evidence（2026-10-12-tick-evidence-multi-anchor）：tick 自愿证据补录（自由文本，@路径 读文件）
+      const tEvidenceIdx = filteredArgs.indexOf('--evidence');
+      const tEvidence = tEvidenceIdx >= 0 && filteredArgs[tEvidenceIdx + 1] && !String(filteredArgs[tEvidenceIdx + 1]).startsWith("--") ? filteredArgs[tEvidenceIdx + 1] : null;
       if (!tChange) { console.error('❌ 缺 --change <变更名>'); process.exit(2); }
       if (taskSub !== 'list') {
         if (!tTask || !/^task-\d+$/.test(tTask)) { console.error('❌ --task 格式应为 task-NN'); process.exit(2); }
@@ -963,7 +966,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
         // ── 轻量勾选动词（2026-10-03-voluntary-task-tick）：翻格+进度回显+下一任务指针——
         // 纯反馈闭环（watcher task-done 事件自动上平台），自愿使用；幂等，无 review/verdict 仪式。──
         const { runTaskTick } = await import('./task-tick.js')
-        await runTaskTick({ changeName: tChange, cwd: dir, taskId: tTask, specBase: tSpecBase })
+        await runTaskTick({ changeName: tChange, cwd: dir, taskId: tTask, specBase: tSpecBase, evidence: tEvidence })
       } else if (taskSub === 'done') {
         // ── task done 四合一（r5l-forensic-verdict 方案 1 / 评审护栏#3）：13 任务 × 4 连收尾
         // 往返（review write+勾选 / finish / wt-commit）合并为单进程串行 + 合并输出——每次省
