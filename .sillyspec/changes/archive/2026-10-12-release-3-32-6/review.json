@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-release-3-32-6",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f1cca12ad5ed7d08385ef4f9538a28c25fe191c6",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "被评 HEAD 未推达 origin/main：本地领先 2 笔留痕提交，origin 侧 package-lock 版本面停在 3.32.5",
+      "evidence": "origin/main=c45601ad，本地领先 2f7b7c95（task-02/03 回执勾选）与 f1cca12a（package-lock 3.32.5→3.32.6），diff stat 仅 tasks.md+package-lock.json；FR-02 场景 Then「origin/main HEAD=本地 HEAD」在推送时刻成立（回执区间 2e277a6c..c45601ad，pre-push 三门过），但被评 HEAD 处不成立，且 origin 上 package-lock(3.32.5)≠package.json(3.32.6)。registry 面与 HEAD 版本面均正确，补推一次即消除；回执类提交必然后于推送属流程固有次序，非数据损坏，故 P2 非 P1。",
+      "location": "git origin/main..HEAD (2f7b7c95, f1cca12a); package-lock.json:3（origin 侧）"
+    },
+    {
+      "severity": "P3",
+      "title": "design 做法概述把 R5 断言锚点误写为 flow-review.js:149，实际位于 test/quick-retired.test.mjs:149",
+      "evidence": "src/flow-review.js 存在但全文无 pkg.version/3.32 引用；断言 `pkg.version === '3.32.6'` 实际在 test/quick-retired.test.mjs:149（实跑 node --test 25/25 绿、exit 0）。文件名笔误，承诺本体（断言同步 3.32.6）已兑现。",
+      "location": ".sillyspec/changes/2026-10-12-release-3-32-6/design.md:11"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——传播延迟以 180s 等待+幂等只读重验吸收，重跑无状态损坏面；与 diff 无乱序风险面相符）",
+    "并发": "ok（边界已裁决：可接受——EPUBLISHCONFLICT 同版本幂等拒绝为 registry 真实语义；patch 证实版本面文件独占编辑、同提交原子落库）",
+    "切换": "finding（声明边界「三步独立留痕/重入幂等跳过」已裁决：可接受；但回执勾选与 package-lock 同步两笔留痕提交后于推送未推达，origin 处于中间态，见 P2）",
+    "作用域": "ok（边界已裁决：可接受——patch 仅触本仓 package.json/package-lock/test 锚+变更工件；钉扎声明为进程级 NODE_OPTIONS，无全局残留；DoH 通道可信性取舍经预核验 latest=3.32.5 锚定，已裁决可接受）"
+  },
+  "reviewedAt": "2026-10-12T02:19:02Z"
+}
