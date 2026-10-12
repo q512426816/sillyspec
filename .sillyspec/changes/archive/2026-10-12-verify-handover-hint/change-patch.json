@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-12-verify-handover-hint",
+  "baseline": "572354121f72b042f2c29ee60d20679dfc6db3f4",
+  "head": "6b494d187421f6c864720d13ff130d44c6afd7e4",
+  "files": [
+    "src/stage-contract.js",
+    "src/verify-probes.js"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 3,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-12T14:57:23.115Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "572354121f72b042f2c29ee60d20679dfc6db3f4",
+    "totals": {
+      "files": 2,
+      "additions": 3,
+      "deletions": 3
+    },
+    "rows": [
+      {
+        "path": "src/stage-contract.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "fdf5d4ab627e552aae20b7430ade150720a31fb3aed03c9747adfe59ef692b0c",
+  "patchStatus": "ok"
+}

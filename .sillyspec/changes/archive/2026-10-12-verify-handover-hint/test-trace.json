@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-verify-handover-hint",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-verify-handover-hint:flow:测试绑定FR-01",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs「覆盖不足报错回归（含新场景句后既有断言全绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-verify-handover-hint"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-verify-handover-hint:flow:测试绑定FR-02",
+      "tests": [
+        "test/acceptance-matrix-gate.test.mjs「证据缺失报错三口径指引回归（钉死子串保留）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-verify-handover-hint"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-12-verify-handover-hint:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-probes.test.mjs「矩阵骨架渲染回归（口径注记在场）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-verify-handover-hint"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-12-verify-handover-hint:flow:测试绑定FR-04",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-verify-handover-hint"
+    }
+  ]
+}

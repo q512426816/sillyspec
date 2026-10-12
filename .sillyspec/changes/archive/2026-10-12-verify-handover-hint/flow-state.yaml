@@ -2,6 +2,13 @@ tier: thin
 legacy_fallback: false
 substeps:
   artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -23,11 +30,16 @@ input: >-
   - 矩阵相关回归族全绿（api-coverage-matrix、acceptance-matrix-gate/probe、verify-probes、contract-matrix、stage-contract）
 autopilot: false
 baseline_commit: 572354121f72b042f2c29ee60d20679dfc6db3f4
-updatedAt: '2026-10-12T14:56:10.357Z'
+updatedAt: '2026-10-12T15:00:45.402Z'
 baseline_sha256: ac0786fe0cc5e83838772e5f540941002e25b610d9a6626e3b1a621f9af845c5
 spec_approved: true
 spec_approved_at: '2026-10-12T14:53:56.686Z'
 spec_approved_by: zcode-dogfood-hardening
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-dogfood-hardening
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(2)（9.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012145635\test-result.json｜lint: passed
+  ← npm run lint（46.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012145635\test-result.json｜门文件 4 个
 

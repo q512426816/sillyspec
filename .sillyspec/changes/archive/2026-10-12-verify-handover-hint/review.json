@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-verify-handover-hint",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "6b494d187421f6c864720d13ff130d44c6afd7e4",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "枚举扩展降级为复发再立案仅有文档化复发信号，无自动探测",
+      "detail": "design 披露②的复发信号（再出现 covered-service 硬凑或 non-testable 语义抱怨）只存在于 design.md 文本，无自动告警面。裁决：可接受——本变更为纯文案，行为级逃生口（non-testable 一句话准入+分母剔除，实测 3d「理由非空从分母扣除」绿）已存在且文案已显性化，加枚举反而稀释防假完成激励；复发信号明确且成本低（人工/评审可见），不构成阻断。"
+    },
+    {
+      "severity": "P3",
+      "title": "新场景句与现行校验的一致性为人工对齐，依赖探针持续兜底",
+      "detail": "披露①的缓解（句内写法与现行校验对齐 + cli-copy-selfsufficient 探针必查）属实且本次已逐项核对：句称「不计入分母」与 judgeApiCoverageMatrix 有效分母算式（N − non-testable）及测试 3d 一致；「勿硬凑 covered-service」与 covered-service 缺测试锚点即 error（8b）一致；non-testable 一句话准入（无锚点要求）与现行行为一致。若未来准入变严（如要求锚点）句会漂移，探针是唯一防线——可接受，文案为静态字符串、漂移风险随门变更评审显性化。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a 相符：纯静态文案（2 个报错字符串常量 + 1 个 HTML 注释常量），无时序面、无输入到达顺序依赖。",
+    "并发": "n/a 相符：模块级字符串常量，无共享可变态；多会话并发读同一 CLI 源单源一致。",
+    "切换": "n/a 相符：常量无生命周期/中断状态面；变更中途切换不影响（字符串原子存在于源文件）。",
+    "作用域": "相符：报错与骨架为 CLI 单源常量全工作区一致；已实证解析面不消费口径注记——verify-probes.js:3051 行提取 `if (!t.startsWith('|')) continue` 只认表行，matrixEvidenceHasAnchor（stage-contract.js:864）只作用于表行证据格，HTML 注释内容不进入判定。",
+    "probe_cli-copy-selfsufficient": "实质通过：①文案提到的枚举值 covered/covered-service/partial/uncovered/non-testable 均真实存在于白名单（测试 3f 五选一、8/8b covered-service 行为实测绿），新句不含命令/flag/路径引用，无拼错面；「## 移交项（结构化）」为既有文本非本变更新增；②与门判定一致性逐项核对：non-testable 一句话准入（3d）、剔除有效分母（报错算式 N − non-testable + 3d 放行）、勿硬凑 covered-service（8b 缺锚 error）全部与现行 validateMatrix/judgeApiCoverageMatrix 行为一致，无漂移；③报错一次给全：覆盖不足修复句单段含全部修复路径（补用例 covered/covered-service/non-testable/移交项四路）。六族实测 28 tests / fail 0。",
+    "probe_config-absent-zero-regression": "n/a 理由：本变更零配置读取/缺省配置分支触及——纯字符串常量追加，无 config 相关代码路径；六族回归绿即行为级证据。",
+    "probe_crossrepo-path-compat": "n/a 理由：无新增路径拼接/文件系统操作；追加文案不含路径分隔符、换行或平台相关内容，三平台输出一致。"
+  },
+  "reviewedAt": "2026-10-12T14:59:52Z"
+}

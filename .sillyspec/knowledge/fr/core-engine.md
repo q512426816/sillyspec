@@ -3227,3 +3227,87 @@
   confirmed_at: null
   source_change: 2026-10-12-close-trace-freeze-integrity
   status: active
+
+## FR-core-engine-195 stage-contract.js 覆盖不足报错（约 1305 行）：「不适用端点改 non-testable 并写一句理由」处扩展点名移交场景（构建回执+移交去向写法、该行不计入分母）
+变更：2026-10-12-verify-handover-hint
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 矩阵覆盖不足报错触发；When 读 errors；Then non-testable 指引句含「移交」场景写法（构建回执/移交去向/不计入分母三要素至少两项）。
+全文：.sillyspec/changes/archive/2026-10-12-verify-handover-hint/requirements.md#FR-01
+最近确认：6b494d187421f6c864720d13ff130d44c6afd7e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-verify-handover-hint:flow:测试绑定FR-01
+  tests: test/api-coverage-matrix.test.mjs「覆盖不足报错回归（含新场景句后既有断言全绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-verify-handover-hint
+  status: active
+
+## FR-core-engine-196 stage-contract.js 证据缺失报错（约 985 行）：修复句的 non-testable 理由处补同一场景括注
+变更：2026-10-12-verify-handover-hint
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When 证据缺失报错触发；Then 修复句含移交场景括注。
+全文：.sillyspec/changes/archive/2026-10-12-verify-handover-hint/requirements.md#FR-02
+最近确认：6b494d187421f6c864720d13ff130d44c6afd7e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-verify-handover-hint:flow:测试绑定FR-02
+  tests: test/acceptance-matrix-gate.test.mjs「证据缺失报错三口径指引回归（钉死子串保留）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-verify-handover-hint
+  status: active
+
+## FR-core-engine-197 verify-probes.js 矩阵骨架口径注记：枚举说明后补 non-testable 移交场景适用句（预填前 agent 可见）
+变更：2026-10-12-verify-handover-hint
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When 矩阵骨架渲染；Then 口径注记含移交场景句。
+全文：.sillyspec/changes/archive/2026-10-12-verify-handover-hint/requirements.md#FR-03
+最近确认：6b494d187421f6c864720d13ff130d44c6afd7e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-verify-handover-hint:flow:测试绑定FR-03
+  tests: test/verify-probes.test.mjs「矩阵骨架渲染回归（口径注记在场）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-verify-handover-hint
+  status: active
+
+## FR-core-engine-198 三处均为纯文案追加：门判定/白名单/算式/锚点校验零变化；既有钉死测试断言的子串全部保留
+变更：2026-10-12-verify-handover-hint
+状态：active
+摘要：零判定变化
+场景正文：
+- 场景：零判定变化 — When 对照 git diff；Then 仅三处字符串追加，无逻辑行改动；六族回归全绿。
+全文：.sillyspec/changes/archive/2026-10-12-verify-handover-hint/requirements.md#FR-04
+最近确认：6b494d187421f6c864720d13ff130d44c6afd7e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-verify-handover-hint:flow:测试绑定FR-04
+  tests: test/api-coverage-matrix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-verify-handover-hint
+  status: active
