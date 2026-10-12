@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-release-3-32-7",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a9e8538fad18df0ea7ccc82a58ba6fcf69c8c966",
+  "findings": [
+    "FR-01 PASS：package.json version 实测=3.32.7（node -p）；test/quick-retired.test.mjs L149 R5 锚断言 '3.32.7'；node --test 实跑 pass 1 / fail 0（25 子断言全绿）；版本面提交 886cd26d --stat 恰 3 文件（package.json / package-lock.json / test/quick-retired.test.mjs，+4/-4），无夹带",
+    "FR-02 PASS：HEAD=origin/main=a9e8538fad18df0ea7ccc82a58ba6fcf69c8c966 完全同步，git log origin/main..HEAD 为空；远端含版本面提交 886cd26d；task-evidence.jsonl 留档 push 回执 3bc7aceb..a9e8538f 成功、pre-push lint+test+docs gate 全过（基线棘轮 5→16）",
+    "FR-03 PASS：钉扎双核验本评审实跑（NODE_OPTIONS --require dns-pin-registry.cjs）npm view sillyspec version=3.32.7 且 dist-tags.latest=3.32.7，两值一致；task-evidence.jsonl 三段证据完整（预核验 latest=3.32.6 通道存活 → publish 回执 sha512-oC948zW52r0LH… 332 files/5.0MB → 双核验两值 3.32.7），与 tasks.md 勾选及 requirements 口径一致",
+    "盲维/披露 PASS：design.md 盲维四问全答（纯操作面变更口径）；源码零改动的 git 事实成立——886cd26d 恰版本面 3 文件，a9e8538f 仅含 .sillyspec/changes/2026-10-12-release-3-32-7/ 下 6 个变更文档（design/flow-state/proposal/requirements/task-evidence/tasks），两提交合计零 src 改动",
+    "探针 n/a：cli-copy / config-absent / crossrepo 对发布操作面变更均不适用（无新 CLI 面、无配置面、无跨仓复制），按 n/a 实判",
+    "非阻断观察：工作区 4 个未提交文件（.idea/vcs.xml、本变更 task-evidence.jsonl / tasks.md、docs-check-baseline）——属收口留痕与 IDE 本地配置，不影响 HEAD 与远端同步判定；npm warn 'always-auth' 为本机用户级 npmrc 配置警告，与发布通道无关"
+  ],
+  "dimensionNotes": {
+    "乱序": "design 答注册表传播延迟以等待+幂等只读重跑吸收；本评审复跑双核验两值均为 3.32.7，无迟到旧值残留。无风险",
+    "并发": "版本面文件独占编辑、单提交原子落库（886cd26d 恰 3 文件无夹带，符合 AGENTS.md 规则 11 pathspec 纪律）；npm 同名版本幂等拒绝（EPUBLISHCONFLICT）；origin/main 与 HEAD 零分叉。无风险",
+    "切换": "三步独立留痕（版本面提交 sha / push 回执 / publish shasum），中断可按留痕幂等续跑；钉扎为进程级 NODE_OPTIONS 仅当次命令生效零残留（本评审复用脚本核验通过证明脚本在位）。无风险",
+    "作用域": "仅触本仓版本面 3 文件 + 变更文档；npm 以 name+version 全局唯一键锚定；钉扎不改系统 DNS（对比 3.32.4 前放弃的 hosts 方案）。无串台"
+  },
+  "reviewedAt": "2026-10-12T15:55:00+08:00"
+}

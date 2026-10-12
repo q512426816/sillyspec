@@ -1,1 +1,3 @@
 {"ts":1791817903961,"task":"task-01","evidence":"node --test test/quick-retired.test.mjs 全绿（R5 锚 3.32.7）——2026-10-12 15:12 实跑","source":"task-tick"}
+{"ts":1791818228268,"task":"task-02","evidence":"git push origin main 成功：3bc7aceb..a9e8538f（pre-push lint+test+docs gate 全过，基线棘轮自动重锚 5→16）——2026-10-12 15:14 回执","source":"task-tick"}
+{"ts":1791818616181,"task":"task-03","evidence":"钉扎通道三段回执：预核验 latest=3.32.6（通道存活）→ publish +sillyspec@3.32.7（sha512-oC948zW52r0LH…，332 files/5.0MB）→ 双核验 version=3.32.7 且 dist-tags.latest=3.32.7（2026-10-12 15:22）","source":"task-tick"}

@@ -1,6 +1,7 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -24,7 +25,7 @@ input: >-
   latest=3.32.6（通道存活证明，失败即重解析 DoH 更新 PIN 或停）；发布后双核验 npm view sillyspec version=3.32.7 且 dist-tags.latest=3.32.7
 autopilot: false
 baseline_commit: 7d279dcf960bf4411dba8bbb5d36cb57198250aa
-updatedAt: '2026-10-12T15:11:10.594Z'
+updatedAt: '2026-10-12T15:25:50.582Z'
 baseline_sha256: 6654eda7a05bc95d4b82d47a698a5fa7fbe156c192009433b170708bc9ed1723
 spec_approved: true
 spec_approved_at: '2026-10-12T15:11:10.593Z'
