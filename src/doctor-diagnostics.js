@@ -803,6 +803,42 @@ export function detectWorktreeHealth(cwd) {
 }
 
 /**
+ * 跨仓 worktree 注册健康（坑 cross-wt-ghost-metadata 缺口③，fire-equipment 2026-10-10 实证）：
+ * 跨仓仓 .git/worktrees/ 里「目录已删、注册残留」的幽灵注册对 cleanup/归档链天然隐身
+ * （meta.json 随目录同亡，主仓侧任何清单都寻址不到）——从 local.yaml repos 注册表各仓的
+ * 注册面反扫是唯一可见面。只读 fail-soft：无 local.yaml / 无 repos 段 / git 不可达 →
+ * skipped 注记不判红（可选能力缺失不是病）；发现幽灵 → WARNING + doctor 动作指引。
+ */
+export function detectCrossWorktreeHealth(cwd) {
+  const base = { name: 'cross_worktree_health', label: '跨仓 worktree 注册健康', safe_actions: [] }
+  try {
+    if (!existsSync(join(cwd, '.sillyspec', 'local.yaml'))) {
+      return { ...base, findings: ['无 local.yaml（无跨仓注册表）——skipped'], pass: true, severity: null, skipped: true }
+    }
+    const { scanCrossWorktreeGhosts } = require_wtc()
+    const scan = scanCrossWorktreeGhosts(cwd)
+    if (scan.repos.length === 0) {
+      return { ...base, findings: ['local.yaml 无 repos: 段（无跨仓仓）——skipped'], pass: true, severity: null, skipped: true }
+    }
+    const findings = [`已扫 ${scan.repos.length} 个跨仓仓注册面（worktree list 对照实体目录）`]
+    for (const g of scan.ghosts) {
+      findings.push(
+        `跨仓 ${g.repoKey} 幽灵 worktree 注册：${g.worktreePath}（目录不存在${g.locked ? `；条目 locked——prune 静默跳过，需先 git -C ${g.repoRoot} worktree unlock ${g.worktreePath}` : ''}）`,
+      )
+    }
+    for (const e of scan.errors) findings.push(`跨仓 ${e.repoKey} 注册面不可达：${e.error}`)
+    if (scan.ghosts.length > 0) {
+      base.safe_actions.push({ action: 'sillyspec doctor --prune-cross-worktrees（默认 dry-run 预览，--confirm 执行 prune；locked 条目需先手动 unlock）', risk: 'low' })
+      return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+    }
+    if (scan.errors.length > 0) return { ...base, findings, pass: false, severity: CHECK_SEVERITY.WARNING }
+    return { ...base, findings, pass: true, severity: CHECK_SEVERITY.PASSED }
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true }
+  }
+}
+
+/**
  * 构建环境（FR-02）：node 版本 vs package.json engines.node（^/>=/= 前缀简化比较，
  * 复杂区间 unknown 不判红）+ 包管理器存在性。无 package.json → skipped 注记。
  */
@@ -1463,6 +1499,10 @@ export function renderDoctorSummary(diagnostics) {
 import * as _wtm from './worktree.js'
 function require_wtm() { return _wtm }
 
+// worktree-cross.js 延迟引用（防环同上：跨仓 worktree 模块不感知 doctor）
+import * as _wtc from './worktree-cross.js'
+function require_wtc() { return _wtc }
+
 /**
  * 门禁快照泄漏探测（task-04，2026-09-24-gate-snapshot-lifecycle / FR-03 / D-007@v1）：
  * 账本内「守卫通过 ∧ 超 TTL（env/24h 单源）∧ pid 明确死」的条目即失活残留——门禁快照
@@ -1513,6 +1553,7 @@ export async function runDoctorDiagnostics({ cwd }) {
   const lifecycleDoc = detectLifecycleDocStaleness(cwd);
 
   const worktreeHealth = detectWorktreeHealth(cwd)
+  const crossWorktreeHealth = detectCrossWorktreeHealth(cwd)
   const buildEnv = detectBuildEnv(cwd)
   const mcpEndpoints = detectMcpEndpoints(cwd)
   // task-03（2026-09-14-apply-conflict-hardening）：apply-manifest 漂移（advisory，
@@ -1539,7 +1580,7 @@ export async function runDoctorDiagnostics({ cwd }) {
   } catch { gateLeakRuntimeRoot = null }
   const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
   const knowledgeGraphIntegrity = detectKnowledgeGraphIntegrity(cwd, authoritySpecDir || join(cwd, '.sillyspec'))
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
 
   return {
     dimensions,

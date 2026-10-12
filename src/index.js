@@ -85,6 +85,7 @@ SillySpec CLI — 规范驱动开发工具包
     cleanup <change> [--force]          清理 worktree
     doctor [--fix] [--stale-hours N]    健康检查 + 修复
         --cleanup-ghosts [--confirm]     归档幽灵 active 记录（db 有行无目录 / 空壳目录 0 文件超 7 天，SS-2/2b）
+        --prune-cross-worktrees [--confirm]  清跨仓仓幽灵 worktree 注册（目录已删注册残留——dry-run 预览，--confirm 执行 prune；locked 条目只提示）
 
   sillyspec local detect [--dir <path>]   生成本地配置 local.yaml（纯 fs 嗅探，零 token、不跑 scan）
   sillyspec local register-repo <key> <path>  注册跨仓仓到 local.yaml repos: 段（外科手术式写入，其余内容保留）
@@ -2911,6 +2912,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // 执行流：--cleanup-remnant / --cleanup-ghosts / --gc-unstamped-runs / --dump-db（结构化诊断之外的修复/取证动作）
       const cleanupRemnant = filteredArgs.includes('--cleanup-remnant');
       const cleanupGhosts = filteredArgs.includes('--cleanup-ghosts');
+      const pruneCrossWts = filteredArgs.includes('--prune-cross-worktrees');
       const gcUnstampedRuns = filteredArgs.includes('--gc-unstamped-runs');
       const dumpDbFlag = filteredArgs.includes('--dump-db');
       const doctorConfirm = filteredArgs.includes('--confirm');
@@ -3015,6 +3017,31 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
           if (r.reason) console.log(`ℹ️ ${r.reason}`);
         }
         process.exitCode = r.errors.length > 0 ? 1 : 0;
+        break;
+      }
+      if (pruneCrossWts) {
+        // 坑 cross-wt-ghost-metadata 缺口③（fire-equipment 2026-10-10 实证）：跨仓仓 .git/worktrees/
+        // 幽灵注册（目录已删、注册残留占分支）对 cleanup/归档链隐身（meta.json 随目录同亡）——
+        // 本动作从注册面反扫清理。默认 dry-run，--confirm 才 prune；locked 条目只提示 unlock
+        // 不自动解除（用户显式保护意图）。
+        const { pruneCrossWorktreeGhosts } = await import('./worktree-cross.js');
+        const r = pruneCrossWorktreeGhosts({ cwd: doctorEffectiveDir, confirm: doctorConfirm });
+        if (json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else {
+          console.log(
+            doctorConfirm
+              ? `👻 跨仓幽灵 worktree 注册清理（repos: ${r.repos_scanned ?? '—'}）：${(r.pruned || []).length} 已 prune / ${(r.skipped_locked || []).length} locked 跳过 / ${(r.remaining || []).length} 残留`
+              : `👻 跨仓幽灵 worktree 注册扫描（repos: ${r.repos_scanned ?? '—'}）：待清理 ${r.count} 个（dry-run）`,
+          );
+          for (const g of (doctorConfirm ? r.pruned : r.ghosts) || []) console.log(`   ${doctorConfirm ? '✅' : '-'} ${g.repoKey}: ${g.worktreePath}`);
+          for (const g of (r.skipped_locked || [])) console.log(`   🔒 ${g.repoKey}: ${g.worktreePath}（locked——先 git -C ${g.repoRoot} worktree unlock ${g.worktreePath} 后重跑）`);
+          const lockedPaths = new Set((r.skipped_locked || []).map((s) => s.worktreePath));
+          for (const g of (r.remaining || []).filter((x) => !lockedPaths.has(x.worktreePath))) console.log(`   ⚠️  ${g.repoKey}: ${g.worktreePath}（prune 后复扫仍在）`);
+          for (const e of (r.errors || [])) console.log(`   ❌ ${e.repoKey || ''}${e.repoRoot ? `（${e.repoRoot}）` : ''}: ${e.error}`);
+          if (!doctorConfirm && r.count > 0) console.log(`\n加 --confirm 执行 prune（git 只清指向不存在路径的注册，不动活 worktree、不碰分支）。`);
+        }
+        process.exitCode = (r.errors && r.errors.length > 0) ? 1 : 0;
         break;
       }
       if (gcUnstampedRuns) {
