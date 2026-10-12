@@ -445,6 +445,20 @@ export function resolveUninitCwdGate(command, { dir, specDir, platformFlags } = 
     }
   }
   const gitRoot = safeGit(resolvedDir, ['rev-parse', '--show-toplevel']).value || null
+  // 跨仓标记指路（2026-10-12-cli-friction-signal）：该仓被 register-repo 登记过（标记在 .git/ 内，
+  // registerRepoInLocalYaml 写入）→ block 态附 crossRepo 事实，index.js 门文案据此精确指回工作区
+  // （dogfood：agent 在跨仓子仓跑 CLI 三连跑错目录靠人工发现）。标记损坏/缺失按无标记零变化。
+  if (gitRoot) {
+    try {
+      const markerPath = join(gitRoot, '.git', 'sillyspec-crossrepo.json')
+      if (existsSync(markerPath)) {
+        const m = JSON.parse(readFileSync(markerPath, 'utf8'))
+        if (m && typeof m.workspace === 'string' && m.workspace) {
+          return { verdict: 'block', gitRoot, crossRepo: { workspace: m.workspace, key: typeof m.key === 'string' ? m.key : null } }
+        }
+      }
+    } catch { /* 标记损坏按无标记 */ }
+  }
   return { verdict: 'block', gitRoot }
 }
 

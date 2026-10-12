@@ -1097,6 +1097,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // token 合法形态写明（2026-10-11-flow-start-redline-frontload）：实证「task-01..task-05」
           // 区间写法被判零证据时才知道格式约束——拒收文案自释，减少一轮试错。
           console.error('   补证据（提交标题或正文带 task-NN——逐个列出或 /、，连写（如 task-01/02/03），「task-01..task-05」区间写法不认；或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+          // 扫描面透明化（2026-10-12-cli-friction-signal，dogfood 实证：跨仓交付的 agent 靠猜
+          // 证据该落在哪）——声明哨兵只扫工作区仓与变更目录，跨仓仓提交天然不在面内。
+          console.error(`   证据扫描面：工作区仓 git log ${st.baseline_commit ? String(st.baseline_commit).slice(0, 10) : 'baseline'}..HEAD 的提交消息（标题+正文）+ 变更目录内 review.json；`)
+          console.error('   跨仓仓（register-repo 登记的外部仓）的提交不在扫描面——交付提交在其他仓时，须在工作区仓的提交消息带 task-NN（如治理工件提交）或产出 review.json 补证。')
           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
           reportMidFail('ledger')
           process.exit(1)

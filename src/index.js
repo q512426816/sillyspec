@@ -413,6 +413,12 @@ async function main() {
     console.error('   非 init/scan 类命令需要已初始化的项目根。');
     console.error('   修复：① cd 回项目根（含 .sillyspec 的目录）再跑；② 新项目先 sillyspec init（棕地项目 sillyspec scan）；③ 或 --spec-dir <路径> 显式指定 .sillyspec 位置。');
     console.error('   查询/诊断类命令（status/doctor/progress/next/knowledge 等）不受此拦。');
+    // 跨仓精确指路（2026-10-12-cli-friction-signal）：register-repo 登记过的子仓跑 CLI——
+    // 通用三出路之上叠加登记事实与工作区路径（dogfood：三连跑错目录靠人工发现）。无标记零变化。
+    if (uninitGate.crossRepo) {
+      console.error(`   🎯 此仓已登记为 SillySpec 工作区的跨仓${uninitGate.crossRepo.key ? `「${uninitGate.crossRepo.key}」` : ''}——工作区根：${uninitGate.crossRepo.workspace}`);
+      console.error(`      请回工作区根运行本命令，或 --dir "${uninitGate.crossRepo.workspace}" 显式指定。（标记：${uninitGate.gitRoot}/.git/sillyspec-crossrepo.json）`);
+    }
     process.exit(2);
   }
   if (uninitGate.verdict === 'pass' && uninitGate.anchor && resolve(dir) !== uninitGate.anchor) {

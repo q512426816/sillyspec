@@ -15,7 +15,7 @@
  * `sillyspec local detect` / `platform connect` 各自补齐）。落盘走 writeAtomicSync
  * （tmp+rename，防多会话并发写半截，与 local detect 写入口径一致）。
  */
-import { existsSync, readFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, mkdirSync, statSync } from 'fs'
 import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { withFileLock } from './quicklog.js'
@@ -58,9 +58,27 @@ export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
   const posixPath = String(repoPath).replace(/\\/g, '/')
   const entryLine = `  ${key}: ${posixPath}`
 
+  // 跨仓标记（2026-10-12-cli-friction-signal）：注册成功后 best-effort 向目标仓 .git/ 内写
+  // 指路标记——uninit 门据此把「在子仓跑 CLI」精确指回工作区（dogfood：三连跑错目录靠人工
+  // 发现）。.git/ 内零工作区污染；linked worktree 的 .git 是文件则跳过；失败仅告警不拦注册。
+  const tryWriteMarker = () => {
+    try {
+      const gitDir = join(String(repoPath), '.git')
+      if (!existsSync(gitDir) || !statSync(gitDir).isDirectory()) return
+      writeAtomicSync(join(gitDir, 'sillyspec-crossrepo.json'), JSON.stringify({
+        workspace: dirname(dirname(yamlPath)).replace(/\\/g, '/'),
+        key,
+        registeredAt: new Date().toISOString(),
+      }, null, 2) + '\n')
+    } catch (e) {
+      console.warn(`⚠️ 跨仓标记写入失败（${e && e.message ? e.message : e}）——注册仍成功，未初始化门指路退化为通用文案`)
+    }
+  }
+
   const write = (text) => {
     mkdirSync(dirname(yamlPath), { recursive: true })
     writeAtomicSync(yamlPath, text)
+    tryWriteMarker()
   }
 
   const lines = raw.split('\n')
@@ -93,6 +111,7 @@ export async function registerRepoInLocalYaml(yamlPath, key, repoPath) {
         // 编辑器写入），内存归一后比对相等直接跳过 → 磁盘永不治愈 + CLI 报 ✅ 假成功 → 解析侧
         // （修复前）空 Map → MultiRepoContext 报「未注册」→ 死循环。幂等路径也落盘一次治愈。
         if (hadCr) write(lines.join('\n'))
+        tryWriteMarker() // 幂等重注册也补标记（标记被删后可经重注册恢复——uninit 门指路依赖）
         return { fileCreated: false, sectionCreated: false, replaced: false } // 值未变，幂等跳过
       }
       lines[i] = entryLine

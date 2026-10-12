@@ -377,9 +377,16 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     console.error('❌ ── deps 门控阻断（本次 --done 未完成，进度未推进）──')
     for (const { repoKey, meta: cm } of crossFailed) {
       console.error(`   跨仓 repo ${repoKey} 依赖未就绪（depsStatus=${cm.depsStatus || 'unknown'}）——workdir: ${cm.worktreePath}`)
-      if (cm.depsError) console.error(`   上次供给错误：${cm.depsError}`)
+      // 报错一次给全（2026-10-12-cli-friction-signal，dogfood 实证：首条阻断只有标题无明细、
+      // agent 二跑定位 + 最终两次手改内部 meta.json 才过门）——三要素 + 逃生口 + 防手改警告。
+      if (cm.depsError) {
+        const tail = String(cm.depsError)
+        console.error(`   上次供给错误（尾部 ≤200 字符）：${tail.length > 200 ? '…' + tail.slice(-200) : tail}`)
+      }
+      console.error(`   状态文件：${join(cm.worktreePath || '', 'meta.json')}（勿手改——doctor 以实态校正，假状态会被下次校验打回）`)
     }
     console.error('   修复：进上述跨仓 worktree 手动安装依赖（用该仓的包管理器），或重跑 sillyspec run execute 让 CLI 重试供给后 --done。')
+    console.error('   正规逃生口：sillyspec worktree doctor --fix（按实态重供并回写 meta.json）。')
     if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
     process.exit(1)
   }
@@ -455,7 +462,15 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     console.error(`   原因：依赖未就绪（depsStatus=${depsStatus || 'unknown'}），不得在无构建/测试能力时声称完成。`)
     console.error(`   修复：sillyspec worktree doctor --fix${changeName ? ` --change ${changeName}` : ''}`)
     console.error('   或在 worktree 内手动安装依赖后重试。')
-    if (meta?.depsError) console.error(`   上次供给错误：${meta.depsError}`)
+    if (meta?.depsError) {
+      const tail = String(meta.depsError)
+      console.error(`   上次供给错误（尾部 ≤200 字符）：${tail.length > 200 ? '…' + tail.slice(-200) : tail}`)
+    }
+    // 状态文件路径 + 防手改（2026-10-12-cli-friction-signal）：dogfood 实证 agent 被迫手改
+    // meta.json 假状态过门——路径透明 + 明示正规校正通道，堵死「改状态绕门」的路。
+    try {
+      if (wm && changeName) console.error(`   状态文件：${join(wm.getWorktreePath(changeName), 'meta.json')}（勿手改——doctor 以实态校正）`)
+    } catch { /* worktree 路径解析失败省略该行 */ }
   }
   if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
   process.exit(1)
