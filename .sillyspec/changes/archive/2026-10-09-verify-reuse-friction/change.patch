@@ -1,30 +1,29 @@
 diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
-index 36fd3942..9d19189b 100644
+index 2858f10b..9d19189b 100644
 --- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
 +++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
-@@ -42,4 +42,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+@@ -42,3 +42,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
  - 2026-09-21-r5-efficiency-batch2 | M1 指令指纹增量（run/prompt.js：静态段 sha256 指纹+落盘 step-guides+复入短输出，动态段永不缓存；v1 SILLYSPEC_STEP_GUIDE=1 显式开，D-001@v1）+ M2 gate 快照分叉态取 worktree 血统（gate-snapshot.js 仅③态翻转+警告对齐指引，①②态逐字节不动；batch1 假红根治，三态钉 gate-snapshot-lineage + verify-gate-snapshot 端到端复刻，D-002@v2）。
  - 2026-09-21-r5-efficiency-batch3 | P2 测试结果记账（test-ledger 三键指纹 fail-closed+verify-test/quick 实测门双消费，账本自排除防自毁键）/ P3 归档就绪度（buildArchiveReadinessReport 纯函数+verify 收尾渲染：面探测+双草拟待确认+老化强提示）/ P4 M1 缺省开（STEP_GUIDE 未设=开，=0 逃生门，测试族迁移）。
  - 2026-09-24-gate-snapshot-lifecycle | 门禁快照生命周期根治：账本（create 登记/双清确认后销账，active-gate-snapshots.json 原子写幂等）+ fail-closed 双守卫（isSafeSnapshotRoot 路径 / isSafeLedgerEntry 结构，账本可篡改故删除前必过）+ TTL(24h/env)×pid 三态保守判定 + 下个 create 前 best-effort 自愈回收（空结果零输出）+ createGateSnapshot 显式 runtimeRoot 形参（quick/verify 透传，禁 cwd 猜）+ doctor gate_snapshot_leak 维度（warning 级，阈值 env/24h 单源、零新增参数面）+ cleanupSnapshot 可注入清理体（rmSync 重试+非法 --quiet flag 修正+remove 失败补 prune）；实证根因：旧 cleanup 的 `git worktree remove --quiet` 非法 flag 致 remove 恒失败+rmSync 无重试+被杀无 cleanup，攒出 41 目录+2 prunable；测试 gate-snapshot-lifecycle（24 例含真实临时仓 create→cleanup/崩溃自愈/活跃零误删）+ gate-snapshot-cleanup（故障注入 4 例），均入 test:core。
--- 2026-10-09-verify-reuse-friction | verify 复用链路四修（multi-agent-platform tombstone 72min/13轮取证驱动）：①快照口径死循环断根（D-003@v1）——executeVerifyQualityScan 两复用闸（passed幂等/failed签名去重）移到快照创建后按实际口径 Boolean(snap) 判定，快照慢性失败 false==false 收敛命中（原计划口径恒失配 4 轮纯浪费）；②快照回退高可见（FR-02）——gate-snapshot 新增 reportGateSnapshotFallback（⚠️ 告警块+gate_snapshot_fallback 摩擦事件，null/异常同覆盖；gates.js 与质量扫描两调用点，测试 mock 缺导出防御）；③指纹代码树内容键化（D-002@v1）——新模块 run/code-face-key.js（filterCodePorcelain 迁入+isNonCodePath 单点+computeCodeTreeKey：git ls-tree -r -z 过滤哈希，整树 oid 快路径），green-cache 与质量扫描两指纹 HEAD 分量替换为树键——纯文档提交不击穿、代码提交必击穿；④复用观测落盘（FR-04）——真跑轮 test-result.json 携 fingerprint/reuse_decision，复用命中轮落 verify-runs/reuse-decisions-<change>.jsonl，质量扫描记录携 miss_reason/scope_decision；⑤纯事实门前移（D-004@v1）——required-evidence 与 target_files 对账门移到实测门前并入 R16 聚合（②类声明缺失秒级失败零测试执行；reconcileRuntimeRoot/isStrictCheck 提升补作用域）。新测试 7 文件：reuse-actual-scope/snapshot-fallback-visibility/code-face-key-doc-commit-survival/verify-test-result-reuse-observability/gates-verify-cheap-gates-first。
 +- 2026-10-09-verify-reuse-friction | verify 复用链路四修（multi-agent-platform tombstone 72min/13轮取证驱动）：①快照口径死循环断根（D-003@v1）——executeVerifyQualityScan 两复用闸（passed幂等/failed签名去重）移到快照创建后按实际口径 Boolean(snap) 判定，快照慢性失败 false==false 收敛命中（原计划口径恒失配 4 轮纯浪费）；②快照回退高可见（FR-02）——gate-snapshot 新增 reportGateSnapshotFallback（⚠️ 告警块+gate_snapshot_fallback 摩擦事件，null/异常同覆盖；gates.js 与质量扫描两调用点，测试 mock 缺导出防御）；③指纹代码树内容键化（D-002@v1）——新模块 run/code-face-key.js（filterCodePorcelain 迁入+isNonCodePath 单点+computeCodeTreeKey：git ls-tree -r -z 过滤哈希，整树 oid 快路径），green-cache 与质量扫描两指纹 HEAD 分量替换为树键——纯文档提交不击穿、代码提交必击穿；④复用观测落盘（FR-04）——真跑轮 test-result.json 携 fingerprint/reuse_decision，复用命中轮落 verify-runs/reuse-decisions-<change>.jsonl，质量扫描记录携 miss_reason/scope_decision；⑤纯事实门前移（D-004@v1）——required-evidence 与 target_files 对账门移到实测门前并入 R16 聚合（②类声明缺失秒级失败零测试执行；reconcileRuntimeRoot/isStrictCheck 提升补作用域）。新测试 5 文件（本模块面）：reuse-actual-scope / snapshot-fallback-visibility / code-face-key-doc-commit-survival / verify-test-result-reuse-observability / gates-verify-cheap-gates-first（全变更新增 8 个，另 3 个见 core-engine/cli-entry 卡）。
 diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
-index c3082838..81b51b2d 100644
+index bf13b9b4..81b51b2d 100644
 --- a/docs/sillyspec/platform-interface-map.md
 +++ b/docs/sillyspec/platform-interface-map.md
 @@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
  | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2132/2130/2210 |
  | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
  | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
--| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4375；shared.js:1022 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4356；shared.js:1022 |
 +| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4359；shared.js:1022 |
  | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2862/3141；shared.js:1046 |
--| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4295；sync.js:1491/1525 |
--| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4247；sync.js:2232 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4276；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4228；sync.js:2232 |
 +| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4279；sync.js:1491/1525 |
 +| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4231；sync.js:2232 |
  | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
--| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4061/4072；probe.js:133 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4042/4072；probe.js:133 |
 +| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4045/4072；probe.js:133 |
  | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
  | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
@@ -33,40 +32,21 @@ index c3082838..81b51b2d 100644
  - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
  - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
  
--> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4157`）。
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4138`）。
 +> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4141`）。
  
  **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
  - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
 diff --git a/src/index.js b/src/index.js
-index cf1fda62..dc29484f 100644
+index 0d4a916f..dc29484f 100644
 --- a/src/index.js
 +++ b/src/index.js
-@@ -3374,27 +3374,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+@@ -3374,8 +3374,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
          else if (wtCommitFlags[i] === '--pathspec-from-file' && wtCommitFlags[i + 1]) wtCommitPathspecFile = wtCommitFlags[++i];
        }
        if (!wtCommitChange) {
 -        const inferred = String(dir).match(/[\\/]worktrees[\\/]([^\\/]+)/);
--        let seg = inferred ? inferred[1] : null;
--        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 worktree 名
--        // <change>--<repoKey>——仅当后缀命中 repos 注册表才剥（不猜切分）；二级校验：
--        // 全段命中主仓已知变更目录不剥（防变更真名恰以 --repoKey 结尾），剥出候选也须
--        // 是已知变更。均不中 → 原样透传（现状行为，runWtCommit 自然报错引导显式 --change）。
--        if (seg && seg.includes('--')) {
--          try {
--            const specBaseGuess = join(dir, '..', '..', '..')
--            const knownWhole = existsSync(join(specBaseGuess, 'changes', seg))
--            const dash = seg.lastIndexOf('--')
--            const cand = seg.slice(0, dash)
--            const suffix = seg.slice(dash + 2)
--            if (!knownWhole && cand && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
--              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
--              const reg = parseRepoRegistry(readFileSync(join(specBaseGuess, 'local.yaml'), 'utf8'))
--              if (reg.has(suffix) && existsSync(join(specBaseGuess, 'changes', cand))) seg = cand
--            }
--          } catch { /* 注册表不可读 → 原样透传（fail-safe） */ }
--        }
--        wtCommitChange = seg;
+-        wtCommitChange = inferred ? inferred[1] : null;
 +        // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：跨仓 <change>--<repoKey>
 +        // 注册表校验剥后缀——逻辑单点在 wt-commit.js（导出 inferChangeFromWorktreeCwd
 +        // 供三态回归直测，index.js dispatch 不留内联逻辑）
@@ -76,24 +56,247 @@ index cf1fda62..dc29484f 100644
        try {
          const { runWtCommit } = await import('./wt-commit.js');
 diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
-index c4984606..c6cbc4f3 100644
+index 8a569e11..c6cbc4f3 100644
 --- a/src/verify-postcheck.js
 +++ b/src/verify-postcheck.js
-@@ -1893,7 +1893,9 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
-           const d1 = gitQuiet(wtPath, ['diff', '--name-only', base])
-           const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'])
-           const mergedWt = [...new Set(String(d1 || '').split(String.fromCharCode(10)).concat(String(d2 || '').split(String.fromCharCode(10))))].map(x => x.trim()).filter(x => x && x !== 'meta.json' && !x.startsWith('.sillyspec/'))
--          files = mergedWt.length > 0 || d1 !== null || d2 !== null ? mergedWt : []
+@@ -27,8 +27,8 @@ import { createHash } from 'crypto'
+ import { IR_STRICT_SINCE } from './constants.js'
+ import { gitQuiet } from './git-helper.js'
+ import { resolveRuntimeRoot } from './run/shared.js'
+-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
+-import { join, resolve } from 'path'
++import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync } from 'fs'
++import { join, resolve, isAbsolute } from 'path'
+ import { readChangeTrace, testAnchorFile } from './test-bindings.js'
+ import { collectFrLinkedTests } from './fr-index.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+@@ -47,7 +47,8 @@ import { discoverModuleIndex } from './decision-distill.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
+ // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
+-import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
++import { parseTargetFiles, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
++import { crossWorktreePath } from './worktree-cross.js'
+ // 探针重跑（P3b task-02 一致性抽查）：依赖方向已核实无环——verify-probes 只依赖
+ // fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
+ // 不反向依赖本模块，此处直连不引入循环。smoke 机器段一致性（2026-09-17-api-coverage-smoke
+@@ -1878,7 +1879,27 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+   let anyAvailable = mainFiles !== null
+   for (const entry of crossEntries) {
+     // 跨仓仓 gitDir = 跨仓仓根（MultiRepoContext._buildCrossRepoEntry 已 fail-closed 保证可达）
+-    const files = runGitDiffNameOnly(entry.gitDir, 'HEAD~1..HEAD')
++    // FR-07（2026-10-09-verify-reuse-friction）：跨仓 worktree 在场（verify 常在 apply 前）时
++    // 交付面在 worktree——meta.baseHash..工作树 窗口（多笔提交+未提交全覆盖）；HEAD~1..HEAD
++    // 只看主副本最近一笔，对多笔交付是假信号。meta 缺失回退现行窗口。
++    let files = null
++    try {
++      const wtPath = crossWorktreePath(opts.specBase || join(cwd, '.sillyspec'), changeName, entry.repoKey)
++      const metaPath = join(wtPath, 'meta.json')
++      if (existsSync(metaPath)) {
++        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++        const base = meta && meta.baseHash
++        if (base && /^[0-9a-f]{7,40}$/i.test(base)) {
++          const d1 = gitQuiet(wtPath, ['diff', '--name-only', base])
++          const d2 = gitQuiet(wtPath, ['ls-files', '--others', '--exclude-standard'])
++          const mergedWt = [...new Set(String(d1 || '').split(String.fromCharCode(10)).concat(String(d2 || '').split(String.fromCharCode(10))))].map(x => x.trim()).filter(x => x && x !== 'meta.json' && !x.startsWith('.sillyspec/'))
 +          // 与 cross-repo-reconcile B' 档同语义：双查皆失败（d1/d2 双 null）→ 不成窗，
 +          // files 保持 null 回退 HEAD~1..HEAD（低报不如口径如实降级）
 +          if (d1 !== null || d2 !== null) files = mergedWt
-         }
++        }
++      }
++    } catch { /* 回退 HEAD~1..HEAD */ }
++    if (files === null) files = runGitDiffNameOnly(entry.gitDir, 'HEAD~1..HEAD')
+     if (files !== null) {
+       anyAvailable = true
+       for (const f of files) {
+@@ -1991,7 +2012,7 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
+  *   resultPath: string|null,
+  * }}
+  */
+-export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null, faceOverride = null }) {
++export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null, faceOverride = null, observability = null }) {
+   // restrictFiles（坑 quick-gate-并行全流程变更脏文件误伤，2026-09-21 实证）：本会话声明
+   // 文件集（quick gate 传 allowedFiles）——提供时 module 子集的变更文件面收窄到
+   // 「实际变更 ∩ restrictFiles」，窗口内未声明的并行全流程变更 WIP 文件不再进模块选择
+@@ -2186,7 +2207,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
        }
-     } catch { /* 回退 HEAD~1..HEAD */ }
+     } else {
+       console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（并集去重后的总数；分量 deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}，重叠只计一次）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+-      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
++      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre, observability })
+     }
+     // ledger 记账（无论增/全）：head=当前 HEAD（git 失败 null → 下轮自动回全子集）；失败批文件
+     // 落账供下轮增量；passed 后 failedFiles 清空 → 下轮自然回全子集基线
+@@ -2924,21 +2945,54 @@ export function resolveVerifyAnchorSet({ specBase, changeName }) {
+   return [...ids]
+ }
+ 
+-/** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling } */
++/**
++ * trace 行 repo 归属解析根（2026-10-09-verify-reuse-friction FR-06 / D-005@v1）：
++ * 行 repo 字段（additive，缺省=主仓）经 local.yaml repos 注册表换根——跨仓 task 卡抄入的
++ * 仓根相对 tests 路径不再按主仓解析恒悬空（2026-10-09 tombstone 取证：3 文件悬空 fail-fast
++ * 连烧 4 轮实测）。注册表缺失/键未注册 → 该行回退主仓根（现状行为），dangling 消息带
++ * repo: 前缀使错配可见。读法同 verify-probes 探针 7 先例（join(specBase,'local.yaml') +
++ * parseRepoRegistry，相对路径按主仓 cwd resolve）。
++ */
++function traceRepoRoots({ specBase, cwd }) {
++  try {
++    const yamlPath = join(specBase, 'local.yaml')
++    if (!existsSync(yamlPath)) return new Map()
++    const reg = parseRepoRegistry(readFileSync(yamlPath, 'utf8'))
++    const m = new Map()
++    for (const [k, v] of reg) m.set(k, isAbsolute(v) ? v : resolve(cwd, v))
++    return m
++  } catch { return new Map() }
++}
++
++/** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling, perFile } */
+ export function resolveTraceResidual({ specBase, changeName, cwd }) {
+   const anchors = resolveVerifyAnchorSet({ specBase, changeName })
+-  if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [] }
++  if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [], perFile: [] }
+   const rows = readChangeTrace(join(specBase, 'changes', changeName))
+     .filter(r => anchors.includes(r.anchor) && r.state === 'active' && r.status !== 'superseded')
+-  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚
+-  const files = [...new Set(rows.flatMap(r => (r.tests || []).map(testAnchorFile)))].sort()
+-  const dangling = files.filter(f => !existsSync(resolve(cwd, f)))
+-  return { anchors, rows, files, dangling }
++  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚。
++  // FR-06（2026-10-09）：文件按行 repo 归属配对（perFile），悬空判定/残差执行按行根解析。
++  const repoRoots = traceRepoRoots({ specBase, cwd })
++  const seen = new Set()
++  const perFile = []
++  for (const r of rows) {
++    const repoKey = r.repo && r.repo !== 'main' ? r.repo : null
++    for (const t of (r.tests || [])) {
++      const f = testAnchorFile(t)
++      const key = (repoKey ? repoKey + ' ' : '') + f
++      if (!seen.has(key)) { seen.add(key); perFile.push({ repo: repoKey, file: f }) }
++    }
++  }
++  const files = [...new Set(perFile.map(x => x.file))].sort()
++  const dangling = perFile
++    .filter(x => !existsSync(resolve((x.repo && repoRoots.get(x.repo)) || cwd, x.file)))
++    .map(x => x.repo ? `${x.repo}:${x.file}` : x.file)
++  return { anchors, rows, files, dangling, perFile }
+ }
+ 
+ /** 残差执行段：按 buildDepsBatches 同口径组卷（扩展名分语言/pytest 前缀自模块命令推断），
+  * 30/块分卷破 deps 面的帽（残差是绑定面钦定必须跑的，不适用发现面防膨胀帽）。 */
+-function runTraceResidual({ cwd, files, hits, knownFailures = [] }) {
++function runTraceResidual({ cwd, files, groups = null, hits, knownFailures = [] }) {
+   // 嵌套 test-runner 防污染：孙代 node --test 会误连外层 reporter（NODE_TEST_* 环境变量，
+   // 单测实测：嵌套下挂测被误判 passed）——spawn 前剥除、跑完还原（同步窗口安全；真实门禁
+   // 进程无此变量，零影响）。
+@@ -2946,12 +3000,17 @@ function runTraceResidual({ cwd, files, hits, knownFailures = [] }) {
+   const strippedKeys = []
+   for (const k of Object.keys(process.env)) { if (k.startsWith('NODE_TEST')) { strippedKeys.push(k); delete process.env[k] } }
+   try {
+-    return runTraceResidualInner({ cwd, files, hits, knownFailures })
++    // FR-06（2026-10-09-verify-reuse-friction）：残差按行 repo 分组执行——跨仓组在其仓根
++    // 跑（组卷 cwd=组根），主仓组现状不变；groups 缺席回退旧 files 单主仓组（零迁移）。
++    const execGroups = Array.isArray(groups) && groups.length > 0
++      ? groups
++      : [{ repo: null, root: cwd, files }]
++    return execGroups.flatMap(g => runTraceResidualInner({ cwd: g.root, repoLabel: g.repo, files: g.files, hits, knownFailures }))
+   } finally {
+     for (const k of strippedKeys) process.env[k] = savedEnv[k]
+   }
+ }
+-function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
++function runTraceResidualInner({ cwd, repoLabel = null, files, hits, knownFailures }) {
+   const norm = (p) => String(p).replace(/\\/g, '/')
+   const segments = []
+   for (let i = 0; i < files.length; i += 30) {
+@@ -2998,6 +3057,19 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
+   const provable = (action === 'deps-auto-subset' || action === 'dynamic-subset')
+     ? new Set((depsAutoFiles || []).map(f => String(f).replace(/\\/g, '/'))) : new Set()
+   const residualFiles = tr.files.filter(f => !provable.has(f))
++  // FR-06（2026-10-09-verify-reuse-friction）：残差执行面按行 repo 分组（provable 差集按
++  // 文件名判，跨仓文件同样成立）；组根=注册表仓根，未注册回退主仓（与悬空判定同口径）。
++  const _repoRoots = traceRepoRoots({ specBase, cwd })
++  const _gmap = new Map()
++  for (const x of (tr.perFile || [])) {
++    if (provable.has(String(x.file).replace(/\\/g, '/'))) continue
++    const _rk = x.repo || null
++    const _root = (_rk && _repoRoots.get(_rk)) || cwd
++    const _gk = _rk + ' ' + _root
++    if (!_gmap.has(_gk)) _gmap.set(_gk, { repo: _rk, root: _root, files: [] })
++    _gmap.get(_gk).files.push(x.file)
++  }
++  const residualGroups = [..._gmap.values()].map(g => ({ ...g, files: [...new Set(g.files)] }))
+   try {
+     writeTraceDisclosure({
+       specBase, changeName,
+@@ -3015,7 +3087,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
+   if (residualFiles.length === 0) return mainResult
+   let segs
+   try {
+-    segs = runTraceResidual({ cwd, files: residualFiles, hits, knownFailures })
++    segs = runTraceResidual({ cwd, files: residualFiles, groups: residualGroups, hits, knownFailures })
+   } catch (e) {
+     return { ...mainResult, status: 'failed', reason: `trace 残差段执行异常（fail-closed）：${e && e.message ? e.message : e}` }
+   }
+@@ -3042,7 +3114,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
+  * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
+  * runVerifyTestCheck 全链只为断言组卷接线）。
+  */
+-export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null }) {
++export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, observability = null }) {
+   const subsetStartedAt = Date.now()
+   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
+   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
+@@ -3158,6 +3230,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+     changeName,
+     result,
+     extra: {
++      // 复用观测（2026-10-09-verify-reuse-friction FR-04）：真跑轮携带指纹与判定原因——
++      // 取证直读 test-result.json，不再依赖 stdout 考古。additive：调用方未传则零字段。
++      ...(observability || {}),
+       modules: perModule.map(r => ({
+         name: r.name,
+         command: r.command,
+@@ -3218,6 +3293,26 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint }
+   }
+ }
+ 
++/**
++ * 复用判定追加日志（2026-10-09-verify-reuse-friction FR-04）：复用命中轮不产生
++ * test-result.json（无真实执行——那是它的语义），判定落
++ * .runtime/verify-runs/reuse-decisions-<change>.jsonl 逐行追加（ts + layer + hit +
++ * reason + fingerprint 摘要），与真跑轮 test-result.json 的 fingerprint/reuse_decision
++ * 互为对照——取证直读文件，不再依赖 stdout。best-effort：追加失败不阻断任何路径。
++ */
++export function appendReuseDecision({ specBase, changeName, decision }) {
++  try {
++    if (!specBase || !changeName || !decision || typeof decision !== 'object') return false
++    const dir = join(specBase, '.runtime', 'verify-runs')
++    mkdirSync(dir, { recursive: true })
++    appendFileSync(join(dir, `reuse-decisions-${changeName}.jsonl`), JSON.stringify({
++      ts: new Date().toISOString(),
++      ...decision,
++    }) + '\n')
++    return true
++  } catch { /* 观测失败不阻断 */ return false }
++}
++
+ /**
+  * 结果落盘到 .runtime/verify-runs/<ts>/test-result.json（供追溯与 SillyHub 消费）。
+  * 多模块时 extra.modules 描述各模块明细。export 供 test 验证台账落盘形状。
 diff --git a/src/wt-commit.js b/src/wt-commit.js
-index d34b4bb8..d0d6d4a4 100644
+index d5b2eacc..d0d6d4a4 100644
 --- a/src/wt-commit.js
 +++ b/src/wt-commit.js
+@@ -17,7 +17,7 @@
+  *
+  * 成功返回 HEAD hash（review.json 的 head 锚点直接可用）；无变更 → ok=true + skipped。
+  */
+-import { join, resolve } from 'node:path'
++import { join, resolve, relative, sep, basename, dirname } from 'node:path'
+ import { existsSync, readFileSync } from 'node:fs'
+ import { withFileLock } from './quicklog.js'
+ import { safeGit } from './git-helper.js'
 @@ -55,6 +55,48 @@ async function gitWithLockRetry(cwd, args, label, { retries = 6, waitMs = 1000 }
   * @returns {Promise<{ok:boolean,skipped:boolean,head:string,shortHead:string,worktreePath:string,changeName:string,files:string[]}>}
   *   ok=false 时抛错（调用方打错误 + exit 1），skipped=无变更可提交（HEAD 不动，不算失败）。
@@ -143,14 +346,142 @@ index d34b4bb8..d0d6d4a4 100644
  export async function runWtCommit({ changeName, message, pathspecs = [], pathspecFile = null, cwd = process.cwd() }) {
    if (!changeName) throw new Error('缺少 --change <变更名>（worktree 名；在 worktree 内运行时可省略，CLI 从 cwd 推断）')
    if (!message || !message.trim()) throw new Error('缺少 -m/--message <提交信息>（建议 "<task-NN 摘要>"）')
+@@ -77,10 +119,47 @@ export async function runWtCommit({ changeName, message, pathspecs = [], pathspe
+   // 隔离模式（worktree 目录存在）→ 提交目标 = worktree 本体；in-place-fallback（meta 声明无
+   // worktree 直改主仓）→ 主仓根（与 MultiRepoContext 主仓 entry 的 worktreePath 兜底口径一致）。
+   // 顺序先看目录再看 meta：worktree 目录存在即隔离态，meta 缺失/损坏不改变目标（fail-safe）。
++  // FR-08（2026-10-09-verify-reuse-friction / D-006@v1）：cwd 已在本变更的 worktree 内 →
++  // 提交目标=该 worktree 本体。跨仓 worktree 名 <change>--<repoKey> 不在 getWorktreePath
++  // 的主仓命名域（原路径必落「worktree 不存在」错）；主仓 worktree 场景与原值同目录零漂移。
++  // 归属校验（不猜）：worktree 根段 === changeName，或 === changeName--<注册repoKey>（repos
++  // 注册表读自 worktreeBase 上两级的 local.yaml；注册表不可读 → 只认精确名，fail-safe）。
+   let target = null
+-  if (existsSync(worktreePath)) {
++  {
++    // 基座发现（目录事实）：优先 wm.worktreeBase（主仓）；cwd 不在其下时向上找名为 worktrees
++    // 的目录作基座（跨仓 worktree 是跨仓仓的 git worktree，WorktreeManager 从其 cwd 算不出
++    // 主仓基座——跨仓 worktree 的父目录本身就是 worktrees 基座）。
++    let base = resolve(wm.worktreeBase)
++    {
++      let d = resolve(cwd)
++      for (;;) {
++        if (dirname(d) === base) break
++        const parent = dirname(d)
++        if (basename(parent) === 'worktrees') { base = parent; break }
++        if (parent === d) break
++        d = parent
++      }
++    }
++    const cwdAbs = resolve(cwd)
++    if (cwdAbs.startsWith(base + sep)) {
++      const wtRoot = relative(base, cwdAbs).split(sep)[0]
++      let own = wtRoot === changeName
++      if (!own && wtRoot.startsWith(changeName + '--')) {
++        const suffix = wtRoot.slice(changeName.length + 2)
++        if (suffix && /^[A-Za-z0-9_.-]+$/.test(suffix)) {
++          try {
++            const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
++            const reg = parseRepoRegistry(readFileSync(join(base, '..', '..', 'local.yaml'), 'utf8'))
++            own = reg.has(suffix)
++          } catch { own = false }
++        }
++      }
++      if (own && existsSync(join(base, wtRoot))) target = join(base, wtRoot)
++    }
++  }
++  if (!target && existsSync(worktreePath)) {
+     target = worktreePath
+-  } else {
++  } else if (!target) {
+     const meta = wm.getMeta(changeName)
+     if (meta && meta.mode === 'in-place-fallback') {
+       target = resolve(wm.worktreeBase, '..', '..', '..') // <main>/.sillyspec/.runtime/worktrees → <main>
 diff --git a/test/wt-commit-crossrepo-infer.test.mjs b/test/wt-commit-crossrepo-infer.test.mjs
-index c746539b..c9c14d88 100644
---- a/test/wt-commit-crossrepo-infer.test.mjs
+new file mode 100644
+index 00000000..c9c14d88
+--- /dev/null
 +++ b/test/wt-commit-crossrepo-infer.test.mjs
-@@ -78,3 +78,28 @@ test('runWtCommit：cwd 不属于本变更的 worktree（他变更目录）→ 
-     try { rmSync(f.cross, { recursive: true, force: true }) } catch {}
-   }
- })
+@@ -0,0 +1,105 @@
++/**
++ * wt-commit 跨仓 worktree 识别回归锁（2026-10-09-verify-reuse-friction FR-08 / D-006@v1）。
++ *
++ * 2026-10-09 取证：cwd 推断正则把跨仓 worktree 名 <change>--<repoKey> 整段当变更名 →
++ * 永远匹配不上；runWtCommit 按名反查主仓 worktree 命名域 → 跨仓目录必落「worktree 不存在」。
++ * 修复：推断经注册表校验剥后缀（不猜切分；全段命中已知变更不剥）；提交目标按「cwd 所在
++ * worktree 目录事实」定向（跨仓 <change>--<repoKey> 通吃）。
++ *
++ * 推断逻辑内嵌 index.js dispatch（重量级 CLI 入口），本测试直测 runWtCommit 目标定向
++ * （真 worktree 提交回环）+ 剥后缀判定的文件系统面（specBaseGuess/changes 存在性语义）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
++import { join, isAbsolute } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import { runWtCommit } from '../src/wt-commit.js'
++
++function git(dir, args) { return execSync(['git', ...args].join(' '), { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) }
++
++function fixture() {
++  const main = mkdtempSync(join(tmpdir(), 'wtci-main-'))
++  const specBase = join(main, '.sillyspec')
++  mkdirSync(join(specBase, 'changes', '2026-10-09-x', 'tasks'), { recursive: true })
++  mkdirSync(join(specBase, '.runtime', 'worktrees'), { recursive: true })
++  git(main, ['init -q'])
++  git(main, ['config user.email t@t.local'])
++  git(main, ['config user.name t'])
++  writeFileSync(join(main, 'README.md'), 'init\n')
++  git(main, ['add -A'])
++  git(main, ['commit -qm init'])
++  // 跨仓仓 + 注册表
++  const cross = mkdtempSync(join(tmpdir(), 'wtci-cross-'))
++  git(cross, ['init -q'])
++  git(cross, ['config user.email t@t.local'])
++  git(cross, ['config user.name t'])
++  writeFileSync(join(cross, 'README.md'), 'init\n')
++  git(cross, ['add -A'])
++  git(cross, ['commit -qm init'])
++  writeFileSync(join(specBase, 'local.yaml'), 'repos:' + '\n' + '  crossrepo: ' + (isAbsolute(cross) ? cross.split('\\').join('/') : cross) + '\n')
++  return { main, cross, specBase }
++}
++
++test('runWtCommit：cwd 在跨仓 worktree（<change>--<注册repoKey>）内 → 目标=该 worktree，提交回环', async () => {
++  const f = fixture()
++  const wt = join(f.specBase, '.runtime', 'worktrees', '2026-10-09-x--crossrepo')
++  try {
++    execSync(['git', 'worktree', 'add', '--detach', JSON.stringify(wt), 'HEAD'].join(' '), { cwd: f.cross, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++    writeFileSync(join(wt, 'src', 'delivered.js'), '') // 占位防误写——下一行先建目录
++  } catch { /* 首写无目录预期失败，走下面正式建 */ }
++  try {
++    mkdirSync(join(wt, 'src'), { recursive: true })
++    writeFileSync(join(wt, 'src', 'delivered.js'), 'export const x = 1\n')
++    const r = await runWtCommit({ changeName: '2026-10-09-x', message: 'task-01 跨仓交付', pathspecs: ['src/delivered.js'], cwd: wt })
++    assert.ok(!r.skipped, '有变更不跳过')
++    const headFiles = execSync('git show --name-only --format= HEAD', { cwd: wt, encoding: 'utf8' }).trim()
++    assert.ok(headFiles.includes('src/delivered.js'), '提交落在跨仓 worktree（目标定向=目录事实）')
++  } finally {
++    try { execSync('git worktree remove --force ' + JSON.stringify(wt), { cwd: f.cross, stdio: 'ignore' }) } catch {}
++    try { rmSync(f.main, { recursive: true, force: true }) } catch {}
++    try { rmSync(f.cross, { recursive: true, force: true }) } catch {}
++  }
++})
++
++test('runWtCommit：cwd 不属于本变更的 worktree（他变更目录）→ 不吞并，走原名路径报错', async () => {
++  const f = fixture()
++  const wt = join(f.specBase, '.runtime', 'worktrees', 'other-change--crossrepo')
++  try {
++    execSync(['git', 'worktree', 'add', '--detach', JSON.stringify(wt), 'HEAD'].join(' '), { cwd: f.cross, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++    await assert.rejects(
++      () => runWtCommit({ changeName: '2026-10-09-x', message: 'm', pathspecs: ['src/a.js'], cwd: wt }),
++      (e) => /worktree 不存在/.test(String(e.message)),
++      'cwd 属他变更 worktree → 拒绝定向并按原名报「worktree 不存在」（不误吞他变更目录）')
++  } finally {
++    try { execSync('git worktree remove --force ' + JSON.stringify(wt), { cwd: f.cross, stdio: 'ignore' }) } catch {}
++    try { rmSync(f.main, { recursive: true, force: true }) } catch {}
++    try { rmSync(f.cross, { recursive: true, force: true }) } catch {}
++  }
++})
 +
 +test('推断三态：注册 repoKey 剥后缀 / 全段命中已知变更不剥 / 未注册不剥（D-006@v1 直测）', async () => {
 +  const { inferChangeFromWorktreeCwd } = await import('../src/wt-commit.js')

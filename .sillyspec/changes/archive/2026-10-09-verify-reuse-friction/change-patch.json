@@ -1,7 +1,7 @@
 {
   "change": "2026-10-09-verify-reuse-friction",
-  "baseline": "head-uncommitted-window",
-  "head": "39600c2940425a04a3d942e010e890f5ef205fad",
+  "baseline": "9a562951bd06e9d19347ccf5901b2d45baf4c8a5",
+  "head": "0591b534de6d11695aeee20adf5663991d7fab7d",
   "files": [
     ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
     "docs/sillyspec/platform-interface-map.md",
@@ -21,7 +21,7 @@
     "mode": "full-flow",
     "ok": true,
     "degradedReason": null,
-    "baseAnchor": "head-uncommitted-window",
+    "baseAnchor": "9a562951bd06e9d19347ccf5901b2d45baf4c8a5",
     "totals": {
       "files": 23,
       "additions": 81,
@@ -219,6 +219,10 @@
     "note": "execute --done 时点冻结（本文件落盘时采集）",
     "closedBy": "execute --done"
   },
-  "patchSha256": "3f59b830752d1cacbebf9a3f74b9db99655cb7dac1188323c1a6757e790061be",
-  "patchStatus": "ok"
+  "patchSha256": "b271ba196f59513d6e9937a46af8207ea4b4db8a5b9b3b7cb23551e8f2d36e11",
+  "patchStatus": "ok",
+  "worktreeBaseline": "head-uncommitted-window",
+  "worktreeHead": "39600c2940425a04a3d942e010e890f5ef205fad",
+  "reanchoredAt": "2026-10-12T11:04:50.216Z",
+  "reanchorNote": "apply/回填后主仓重锚（原 worktree 锚悬空：head-uncom/39600c2940；归属约定=提交主题含变更名）——2026-10-12-close-trace-freeze-integrity FR-03"
 }
