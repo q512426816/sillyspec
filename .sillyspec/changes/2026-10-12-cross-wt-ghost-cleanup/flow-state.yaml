@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  跨仓 worktree 幽灵注册三缺口修复（依据：multi-agent-platform 仓 docs/sillyspec/cross-worktree-ghost-metadata-archive-blindspot.md 实证 +
+  本仓 v3.32.6 源码逐条核验属实）
+
+
+  fire-equipment 2026-10-10 实证：跨仓 worktree 目录被清但跨仓仓 .git/worktrees/ 注册残留，分支被幽灵 worktree 占用无法 checkout。源码核验确认三个结构性缺口：
+
+  ① cleanupCrossWorktrees 的 prune 静默吞错、无 git worktree list 事后复核（gate-snapshot
+  已有双清契约未对齐）；且落位注册表键在验证前就被回收（worktree-cross.js :410/:439），partial 后无从重试
+
+  ② archiveWorktreeCleanup 只清主仓 worktree，归档链对跨仓全盲区（cleanupCrossWorktrees 全仓 4 处调用均不在归档链）
+
+  ③ doctor 幽灵扫描只锚主仓 meta 目录，跨仓仓 .git/worktrees/ 悬空注册无任何探测器；且 listCrossWorktreeMetas 要求 worktree 内 meta.json
+  存在才入列——目录已删的事故形态对 cleanup 链隐身，doctor 跨仓扫描是唯一能兜住该形态的网
+
+
+  成功标准：
+
+  - cleanupCrossWorktrees 清理后以 git worktree list --porcelain 断言注册已消失（对齐 gate-snapshot 双清契约）；prune 失败/断言不过 →
+  result=partial + 落位注册表键保留可重试，不再静默
+
+  - locked 幽灵（prune 对 locked 条目静默跳过形态）在 partial 细节中提示 git worktree unlock
+
+  - archiveWorktreeCleanup 主仓清理完成后调用 cleanupCrossWorktrees 兜底跨仓（幂等；跨仓有未 apply 交付时保留并警告，语义与主仓一致；不阻断归档）
+
+  - doctor 新增跨仓注册扫描（local.yaml repos 各仓 git worktree list --porcelain 对照实体目录，失效注册列 finding）+ 新增清理动作 flag（dry-run 默认 +
+  --confirm 执行 prune，对齐 --cleanup-ghosts 范式；locked 条目只提示不自动 unlock）
+
+  - 新增测试覆盖：locked 幽灵夹具（lock+清目录）、归档兜底调用、doctor 扫描/清理 dry-run 与 confirm；全量相关测试绿
+autopilot: true
+baseline_commit: 956bee3faad79baeb0b7103a33e76a5fcfe855bb
+updatedAt: '2026-10-12T06:27:43.583Z'
+baseline_sha256: 538e656b09e3be06ec374ef0b7c5bf7e94357543d7039c82e180f281ed6d005f
+
