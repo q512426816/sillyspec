@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { evaluateModuleGate, appendChangeIndexEntries, renderThinDocsDebt } from '../src/flow-parity.js'
+import { evaluateModuleGate, appendChangeIndexEntries, deriveRecordedChangeIndexTargets, renderThinDocsDebt } from '../src/flow-parity.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
@@ -148,6 +148,35 @@ test('单元 appendChangeIndexEntries：表格节追加 / sidecar 优先不动�
 
   const r5 = appendChangeIndexEntries({ specBase: sb, modules: [{ id: 'ghost', files: 1, doc: null, docTouched: false, docMissing: true }], change: '2026-10-12-x4', summary: 's', date: '2026-10-12' })
   assert.equal(r5.appended.length, 0, '无卡命中静默跳过')
+
+  // 卡在场但无「## 变更索引」节 → 跳过不报错（绑定标题「无节跳过」场景，评审 P3 清偿）
+  const d4 = fx()
+  const sb4 = unitSpecBase(d4)
+  writeFileSync(join(sb4, 'docs', 'p1', 'modules', 'core.md'), '# 核心域（core）\n\n## 定位\n\n无变更索引节的卡。\n')
+  const r6 = appendChangeIndexEntries({ specBase: sb4, modules, change: '2026-10-12-x5', summary: 's', date: '2026-10-12' })
+  assert.equal(r6.appended.length, 0, '卡无节静默跳过')
+  assert.ok(r6.skipped.some((s) => s.id === 'core' && /无「## 变更索引」节/.test(s.reason)), '跳过理由点名无节')
+})
+
+test('单元 deriveRecordedChangeIndexTargets：sidecar 反查优先 / 卡内反查 / 未记录零返回（断点续跑推导——评审 P3 清偿）', () => {
+  const d = fx()
+  const sb = unitSpecBase(d, { sidecar: true })
+  const modules = [{ id: 'core', files: 1, doc: 'docs/p1/modules/core.md', docTouched: false, docMissing: false }]
+  // 未记录 → 空
+  assert.deepEqual(deriveRecordedChangeIndexTargets({ specBase: sb, modules, change: '2026-10-12-none' }), [])
+  // sidecar 在场且含变更名 → 记 sidecar（split-changelog 契约：已拆卡新条目只落 sidecar）
+  writeFileSync(join(sb, 'docs', 'p1', 'modules', 'core.changelog.md'), `# core 变更索引\n\n| 日期 | 变更名 | 摘要 |\n|---|---|---|\n| 2026-10-12 | 2026-10-12-x1 | 记在 sidecar |\n`)
+  assert.deepEqual(deriveRecordedChangeIndexTargets({ specBase: sb, modules, change: '2026-10-12-x1' }), ['docs/p1/modules/core.changelog.md'])
+  // 无 sidecar、卡内节含变更名 → 记卡
+  const d2 = fx()
+  const sb2 = unitSpecBase(d2)
+  writeFileSync(join(sb2, 'docs', 'p1', 'modules', 'core.md'), `# 核心域（core）\n\n## 变更索引\n\n| 2026-10-12 | 2026-10-12-x2 | 记在卡 |\n`)
+  assert.deepEqual(deriveRecordedChangeIndexTargets({ specBase: sb2, modules, change: '2026-10-12-x2' }), ['docs/p1/modules/core.md'])
+  // 卡含变更名但无节（不可能形态）→ 不记（节存在性同款守卫）
+  const d3 = fx()
+  const sb3 = unitSpecBase(d3)
+  writeFileSync(join(sb3, 'docs', 'p1', 'modules', 'core.md'), `# 核心域（core）\n\n散文提到 2026-10-12-x3 但无节\n`)
+  assert.deepEqual(deriveRecordedChangeIndexTargets({ specBase: sb3, modules, change: '2026-10-12-x3' }), [])
 })
 
 // ───────────────────────── 单元：renderThinDocsDebt ─────────────────────────

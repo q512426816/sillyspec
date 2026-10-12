@@ -35,7 +35,7 @@ input: >-
   - 既有 flow/归档相关测试全绿，新增测试覆盖上述三档
 autopilot: true
 baseline_commit: e4f301fca3def7cf12fa56b6f7685e5c43116801
-updatedAt: '2026-10-12T08:26:54.147Z'
+updatedAt: '2026-10-12T10:10:00.559Z'
 baseline_sha256: ee9e2b37627a26918d9cabb5ea3f714c52f320c325f0e312e52a6abd32b6cfc4
 upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
 gate_summary: >-
