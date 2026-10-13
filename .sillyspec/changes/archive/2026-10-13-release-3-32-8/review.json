@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-release-3-32-8",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a0027cf5a0b3c70c1b9728df1eaf2388f58b7711",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——design Q1 实答非「不适用」：发布序刚性（预核验→publish→双核验）+ registry 单调版本序；diff 仅三处版本号数字推进，无代码级乱序风险面，作答与 diff 相符",
+    "并发": "ok——design Q2 实答：三版本文件单会话顺序改写、本变更独占发版动作；patch 实证 package.json/package-lock（两处）/R5 锚三面同步一致无半态，作答与 diff 相符",
+    "切换": "ok——design Q3 实答：publish 幂等语义（同版本二次发布被拒、改错走 deprecate）如实披露；发布中断不留半态符合 registry 语义，作答与实际发布机制相符",
+    "作用域": "ok——design Q4 实答：钉扎仅 NODE_OPTIONS 进程级生效零系统改动；实读 /tmp/dns-pin-registry.cjs 证实只覆写 registry.npmjs.org 的 dns.lookup、其余 hostname 走原 lookup，不串台其他进程，作答与脚本实态相符"
+  },
+  "reviewedAt": "2026-10-13T05:34:33Z",
+  "probeNotes": {
+    "cli-copy-selfsufficient（文案命令/flag/路径真实性）": "n/a——change.patch 仅 package.json/package-lock.json/test R5 锚三处版本号改动，零 CLI 输出文案变更",
+    "cli-copy-selfsufficient（文案与门判定一致性）": "n/a——同上，无文案可核",
+    "config-absent-zero-regression（local.yaml 新消费键三态）": "n/a——diff 无 src/ 改动，未新增 local.yaml 消费键",
+    "crossrepo-path-compat（worktree/deps/跨仓路径形态）": "n/a——未触及 worktree/deps/跨仓对账任何代码面，纯版本号推进"
+  },
+  "boundaryRulings": "声明边界逐条裁决：(1) PIN 104.16.0.34 不保证仍有效（requirements FR-03/design 风险节）→ 可接受：缓解链成文（DoH 重解析→预核验失败即停不带病发布），且本次评审的 npm view 实测即经该钉扎通道成功返回，PIN 今日仍存活。(2) publish 幂等边界（同版本二次 publish 被 registry 拒、改错需 deprecate 而非重发，design Q3）→ 可接受：npm registry 版本不可变语义的如实披露，非本变更引入。(3) github.com 推送不经钉扎（design Q4，3.32.4 实证）→ 可接受：有历史实证，本次推送成功留有 origin/main=cd0def4e 落点证据；评审环境两次 git ls-remote 均 SSL_ERROR_SYSCALL 属本机网络态，不构成对该实证的反证。(4) tarball 内容=版本面提交时工作区快照（design 接口契约）→ 可接受：实读 .npmignore 第 6 行排除 .sillyspec/（另排 .idea/STATE.md/.zcode 等），publish 时刻工作区的未跟踪 spec 文件（flow-state.yaml/proposal.md/change.patch 等）不进发布面，声明成立且回执 333 files 无夹带迹象。(5) 死路裁决（不改 hosts、不用 npm mirror，design 风险节）→ 可接受：零系统改动纪律与非官方源不作发布通道，取舍合理。附注（非边界非 finding）：HEAD 回执提交 a0027cf5 领先 origin/main 一个提交——回执提交结构性上不可能包含于其所记录的推送中，沿 3.32.1~3.32.7 惯例由下次发布顺带推送，FR-02 承诺的「今日全部交付+归档+版本面」（a5531dae..cd0def4e，含 cli-pit-fix-batch 交付 34560b18 及归档 d1fd979d 等）已全部在远端。"
+}

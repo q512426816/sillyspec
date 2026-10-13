@@ -2450,3 +2450,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：34560b18d3dc5f1fff1a6058a391bb3f245cba35
 理由：最大风险：deps --set 成为常态绕过通道（该验的不验直接 set linked）——缓解为 --reason 强制必填 + 覆写留痕三字段（前值/理由/时间戳），verify/archive 对账以 depsOverrideNote 为审计锚，理由不实属未定义行为（文案明示）。放弃的方案：①让 worktree deps 自动探测 node_modules 可用性免 --reason——离线环境探测本身不可靠（npm ci 超时≠不可用），且弱化留痕动机，弃；②knowledge 帮助做成独立子命令（knowledge help）——探索型调用习惯是 `--help`，拦 --help/-h 才堵得住 refresh 误触发，help 子命令留作未来增强。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-13-release-3-32-8
+锚点：未记录
+最近确认：a0027cf5a0b3c70c1b9728df1eaf2388f58b7711
+理由：最大风险：钉扎 IP 失效（Cloudflare 池轮换，3.32.3 用 104.16.19.35 → 3.32.4 起 104.16.x.34 段）导致预核验假败——缓解为发布前 DoH 直连重解析刷新 PIN，预核验失败不发布。死路：系统级改 hosts 绕劫持——零系统改动纪律排除；npm mirror 镜像发布——非官方源不作发布通道。

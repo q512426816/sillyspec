@@ -74,3 +74,42 @@ created_at: 2026-10-11T14:22:52.965Z
 摘要：钉扎发布闭环
 全文：.sillyspec/changes/archive/2026-10-12-release-3-32-6/requirements.md#FR-03
 最近确认：f1cca12ad5ed7d08385ef4f9538a28c25fe191c6
+
+## FR-auto-sillyspec-021 package.json version=3.32.8 且 test/quick-retired.test.mjs R5 版本锚断言绿
+变更：2026-10-13-release-3-32-8
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 版本面提交；When node --test test/quick-retired.test.mjs；Then 零失败。
+全文：.sillyspec/changes/archive/2026-10-13-release-3-32-8/requirements.md#FR-01
+最近确认：a0027cf5a0b3c70c1b9728df1eaf2388f58b7711
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-release-3-32-8:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs「R5 版本锚 3.32.8」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-release-3-32-8
+  status: active
+
+## FR-auto-sillyspec-022 git push origin main 成功（pre-push 拦截时修复而非跳过）
+变更：2026-10-13-release-3-32-8
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When git push origin main；Then 成功回执（无 rejected）。
+全文：.sillyspec/changes/archive/2026-10-13-release-3-32-8/requirements.md#FR-02
+最近确认：a0027cf5a0b3c70c1b9728df1eaf2388f58b7711
+
+## FR-auto-sillyspec-023 npm publish 钉扎通道：预核验 latest=3.32.7 → publish → 双核验 version=3.32.8 且 dist-tags.latest=3.32.8
+变更：2026-10-13-release-3-32-8
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 预核验 3.32.7 通过；When npm publish（钉扎）；Then 发布回执含 shasum，双核验两值均 3.32.8。
+全文：.sillyspec/changes/archive/2026-10-13-release-3-32-8/requirements.md#FR-03
+最近确认：a0027cf5a0b3c70c1b9728df1eaf2388f58b7711
