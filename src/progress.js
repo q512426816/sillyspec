@@ -23,6 +23,9 @@ import { StepStore } from './progress/step-store.js';
 import { StageMachine } from './progress/stage-machine.js';
 import { stageRegistry } from './stages/index.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './progress/shared.js';
+// 2026-10-13-thin-sync-stage：叶子模块（无内部依赖），同步投影读 thin 出身用——
+// 直接 import './flow.js' 会与其反向依赖链成静态循环。
+import { readFlowState } from './flow-state.js';
 // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
 // 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
@@ -600,6 +603,18 @@ export class ProgressManager {
       // → 上行恒无标题，平台只能落 change_key（「英文 key」病灶的同步链一侧）。
       title: changeRow.title ?? null,
     };
+    // thin 出身上行投影（2026-10-13-thin-sync-stage）：tier=thin 且行 status=active 时
+    // current_stage 上报 'thin'——平台 StageEnum.THIN / 列表「轻量」徽章与筛选 / ingest
+    // 双守卫均按该值消费；本地行出生恒 'brainstorm'（thin 不走阶段机），照抄上行会让
+    // 平台读侧 is_thin 判定三分支全不命中（实证：进行中轻量变更无徽章）。仅覆写载荷，
+    // 本地 DB 行不动；归档（status=archived，行已翻 'archive'）与升厚（tier=thick）不
+    // 覆写；flow-state 缺失/损坏 readFlowState→null 按行值上行（fail-open 现状行为）。
+    if (
+      changeRow.status === 'active' &&
+      readFlowState(this._changePath(cwd, changeName))?.tier === 'thin'
+    ) {
+      changeProj.current_stage = 'thin';
+    }
 
     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，
     //    同步无意义且破坏 round-trip 跨库等值——与 changes 排除 created_at 同理，B2）

@@ -55,6 +55,7 @@ modules:
       - src/local-register.js
       - src/commit-suggest.js
       - src/flow.js
+      - src/flow-state.js
       - src/flow-draft.js
       - src/flow-review.js
       - src/review-probes.js
