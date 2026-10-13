@@ -14,3 +14,4 @@ ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段
 - ql-20260912-003-b696 | db._migrateAddColumn 仅吞 duplicate column（BUSY/磁盘满上抛）+.bak 恢复删伴生 -wal/-shm（防旧 WAL 回放二次损坏）
 - ql-20260912-004-afa2 | renameChange 检查与 UPDATE 收进同一事务+changes!==1 校验（并发重命名 0 行不再搬目录分裂）；_readActiveQuiet 改 readOnly 零副作用
 | 2026-10-13 | 2026-10-13-thin-sync-stage | 平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章：CLI 对 thin 变更上行的 changes[0].curr |
+| 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |

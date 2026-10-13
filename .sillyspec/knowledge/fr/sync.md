@@ -536,3 +536,79 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-10-13-commit-guard-s3
   status: active
+
+## FR-sync-040 change-delete（status=deleted）与归档 unregisterChange（status=archived）在 .sillyspec/.runtime/deleted-changes.jsonl 追加台账（name/status/at），写入 fail-open 不阻断主流程
+变更：2026-10-13-sync-ledger-tombstone
+状态：active
+摘要：deleteChange 落账；unregisterChange 落账；台账写入失败不阻断
+全文：.sillyspec/changes/archive/2026-10-13-sync-ledger-tombstone/requirements.md#FR-01
+最近确认：89f30febe3343e13d7832e540367648c5529eea4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-01
+  tests: test/deleted-ledger.test.mjs「deleteChange/unregisterChange 落台账 + fail-open」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-sync-ledger-tombstone
+  status: active
+
+## FR-sync-041 platform sync --change X 在 DB 无行且台账有终态时，合成最小载荷补推墓碑（deleted→平台 location=deleted、archived→location=archive），返回零 errors
+变更：2026-10-13-sync-ledger-tombstone
+状态：active
+摘要：行被外部清除后补推 deleted 墓碑；台账 archived 终态
+全文：.sillyspec/changes/archive/2026-10-13-sync-ledger-tombstone/requirements.md#FR-02
+最近确认：89f30febe3343e13d7832e540367648c5529eea4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-02
+  tests: test/deleted-ledger.test.mjs「行清除后 sync 补推墓碑（deleted/archived）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-sync-ledger-tombstone
+  status: active
+
+## FR-sync-042 platform sync --change X 失败路径（未连接平台/变更不存在且无台账）退出码非 0，错误信息可见
+变更：2026-10-13-sync-ledger-tombstone
+状态：active
+摘要：变更不存在且无台账
+全文：.sillyspec/changes/archive/2026-10-13-sync-ledger-tombstone/requirements.md#FR-03
+最近确认：89f30febe3343e13d7832e540367648c5529eea4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-03
+  tests: test/deleted-ledger.test.mjs「platform sync --change CLI 退出码」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-sync-ledger-tombstone
+  status: active
+
+## FR-sync-043 台账缺失/损坏行容错读取，quick-* 会话名豁免台账墓碑分支
+变更：2026-10-13-sync-ledger-tombstone
+状态：active
+摘要：损坏行容错；quick 会话豁免
+全文：.sillyspec/changes/archive/2026-10-13-sync-ledger-tombstone/requirements.md#FR-04
+最近确认：89f30febe3343e13d7832e540367648c5529eea4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-04
+  tests: test/deleted-ledger.test.mjs「损坏行容错 + quick 豁免」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-sync-ledger-tombstone
+  status: active

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-sync-ledger-tombstone",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-01",
+      "tests": [
+        "test/deleted-ledger.test.mjs「deleteChange/unregisterChange 落台账 + fail-open」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-sync-ledger-tombstone"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-02",
+      "tests": [
+        "test/deleted-ledger.test.mjs「行清除后 sync 补推墓碑（deleted/archived）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-sync-ledger-tombstone"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-03",
+      "tests": [
+        "test/deleted-ledger.test.mjs「platform sync --change CLI 退出码」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-sync-ledger-tombstone"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-sync-ledger-tombstone:flow:测试绑定FR-04",
+      "tests": [
+        "test/deleted-ledger.test.mjs「损坏行容错 + quick 豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-sync-ledger-tombstone"
+    }
+  ]
+}

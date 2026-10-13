@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-sync-ledger-tombstone",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "89f30febe3343e13d7832e540367648c5529eea4",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "合成墓碑载荷缺 project 键，与 FR-02「六表载荷」承诺及 JSDoc「其余五表空数组」计数不符",
+      "evidence": "serializeForSync（src/progress.js:695-701）返回 project/changes/stages/steps/batch_progress/approvals 六键；_pushLedgerTombstone 合成载荷只有五键（changes+四个空数组，无 project），而注释声称「其余五表空数组」；「字段缺失即空集」的跨仓平台容错契约仅存在于注释、无测试钉死（mock 恒 200 宽容收包），若平台对缺 project 键不容错，墓碑会静默 best-effort 失败退回 reparse 兜底，方向 fail-safe 但修复失效不可见",
+      "location": "src/sync.js:1130"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 best-effort 失败分支（ledgerTombstone='best-effort-failed'、POST 失败仍零 errors）零测试覆盖",
+      "evidence": "requirements FR-02 明文要求「墓碑 POST 失败必须按 best-effort 处理（debug 日志 + 仍返回零 errors）」，但 mock 平台恒返回 200（test/deleted-ledger.test.mjs:75），无任何用例制造 POST 失败（如 500/断连）并断言 ledgerTombstone==='best-effort-failed' 且 errors 为空；测试绑定条款按最低标准（每 FR 一行）已满足，属子行为覆盖缺口非绑定违约",
+      "location": "test/deleted-ledger.test.mjs:75"
+    },
+    {
+      "severity": "P3",
+      "title": "乱序盲维答案「旧台账行成为无害历史」存在窄反例链：同名重建后再遭外部清行会按陈旧终态误推墓碑",
+      "evidence": "deleteChange X 落账(deleted)→同名 X 重建为 active→DB 行再次被外部物理清除→serializeForSync null→台账命中旧 deleted 行→对实际活跃过的重建变更推送 deleted 墓碑；需「删除→同名重建→再次外部清行」双重干预且误判时已无本地真相（台账是仅存凭证、方向 fail-safe），但 design.md 盲维 1 的「无害历史」声明在此链下不成立",
+      "location": "src/sync.js:756"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-13T15:58:14Z"
+}

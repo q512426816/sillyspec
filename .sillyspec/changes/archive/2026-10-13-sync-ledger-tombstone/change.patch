@@ -1,0 +1,557 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 779d4d97..cd6b8d22 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -11,3 +11,4 @@
+ | 2026-10-12 | 2026-10-12-thick-taskbook-cli | dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/pla |
+ | 2026-10-13 | 2026-10-12-closeout-task-guidance | 今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify- |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 53574777..00c1fa8b 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -202,6 +202,7 @@ modules:
+     review_reasons: []
+     paths:
+       - src/sync.js
++      - src/deleted-ledger.js
+       - src/spec-sync.js
+       - src/sync-noise.js
+       - src/write-audit.js
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index e2f6e80e..19d9a8a4 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -37,3 +37,4 @@
+ | 2026-10-13 | 2026-10-13-flow-diff-cmd | 动机：change 粒度的文件统计查询口缺失——数据两态俱在但无展示入口：归档变更有 change-patch.json |
+ | 2026-10-13 | 2026-10-13-declared-paren-strip | 动机：平台仓消费方冒烟实证（multi-agent-platform 仓 docs/sillyspec/flow-dif |
+ | 2026-10-13 | 2026-10-13-extract-head-guard | 动机：本会话自身实证——flow start --input 动机文本里出现未闭合全角左括号字面量时，续行合并的不平衡判 |
++| 2026-10-13 | 2026-10-13-cross-repo-baseline-anchor | 动机：thin 手工交付的跨仓对账无基线锚——collectRepoActual 四级档位里 thin 落 B 档（HE |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index ab1c99fe..cffd7a53 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -50,3 +50,4 @@
+ | 2026-10-12 | 2026-10-12-thick-taskbook-cli | dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/pla |
+ | 2026-10-12 | 2026-10-12-verify-handover-hint | fire-equipment dogfood 复盘的 verify 枚举评估结论落地（低成本替代枚举扩展）：矩阵门已有合 |
+ | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
++| 2026-10-13 | 2026-10-13-cross-repo-baseline-anchor | 动机：thin 手工交付的跨仓对账无基线锚——collectRepoActual 四级档位里 thin 落 B 档（HE |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index b35c650b..9ea4bf9b 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -19,3 +19,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ - ql-20260908-010 | generateModuleImpactSkeleton 增声明来源入口（sourceFiles+origin 参数，plan --done 首版用 design 文件变更清单——代码未写无 diff；diff 来源语义不变）；卡补 module-impact.js 契约行（此前 map 已归属但表格漏登）
+ - 2026-09-11-cross-change-decision-guard | decision-distill 增「文件：」字段契约：applyField/FIELD_LABEL_RE 增「文件|files」标签（parseListValue 切分 + 逐项 POSIX 归一），renderBlockLines 锚点行后条件渲染「文件：」行（仅非空才渲染）——存量决策无该字段零迁移；决策→文件映射经 knowledge-match matchDecisionsByFiles 进 quick 语义护栏反查链。
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 3273efa6..8c437d06 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -52,3 +52,4 @@
+ | 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |
+ | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index 61a4ecea..1c9d1e97 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -4,9 +4,10 @@ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # sync
+-> 最后更新：2026-09-17
+-> 最近变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件（当日 fb5bc11 事故外科拆回 76de238）：husky pre-commit 调 src/commit-guard.js，S1 quick 声明面对账（staged 含 ql patch json 读 rows[].declared，超面即警）+S2 跨变更目录检测，fail-open 只警告 exit 恒 0 + 命中写 write-audit.jsonl（via=commit-guard）复用法证链，钩子侧 true 兜底绝不拦人提交；AGENTS.md 第 18 条同步加厚 add/commit 同 pathspec 纪律）
+-> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
++> 最后更新：2026-10-13
++> 最近变更：2026-10-13-sync-ledger-tombstone（thin，删除台账+台账墓碑——事故 2026-10-13-new-change-e5a27813 幽灵变更：DB 行被外部物理清除后 X1 墓碑链失源、platform sync --change 假成功 exit 0，平台行永挂 active。新增 src/deleted-ledger.js（.runtime/deleted-changes.jsonl 终态追加账本，fail-open/latest-wins/坏行容错）；deleteChange/unregisterChange 事务后落账；sync() 行缺失分支查台账命中终态即 _pushLedgerTombstone 合成最小载荷补推墓碑（deleted→location=deleted、archived→location=archive，base_ts 缺失按平台契约无条件接受，quick-* 豁免）；index.js platform sync --change 失败 exit 1 修假成功。测试锚：test/deleted-ledger.test.mjs（7 例））
++> 前次变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件：husky pre-commit 调 src/commit-guard.js，S1 声明面对账+S2 跨变更目录检测，fail-open exit 恒 0 + write-audit.jsonl 法证链）
++> 模块路径：src/sync.js、src/deleted-ledger.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
+ 
+ ## 职责
+ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index a9dfd57a..868bea4c 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -1,7 +1,7 @@
+ ---
+ author: qinyi
+ created_at: 2026-05-31 11:00:00
+-updated_at: 2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——spec-sync 纯墓碑形态按被删变更名落 spec-sync-conflict-〈被删变更》.json（kind='tombstone'幂等合并）+全绿同步清陈旧纯墓碑记录（conflicting_paths 空+platform_deleted 非空，kind 无关）+stage-machine _listPendingConflicts 优先读 kind 透传 type='tombstone'）；前批次：2026-09-24（2026-09-24 批次：门禁快照生命周期账本登记——`src/run/gate-snapshot-ledger.js` 与账本 `.sillyspec/.runtime/active-gate-snapshots.json`：create 登记 / cleanup 双清确认后销账，进程被杀残留由下个门禁建快照前 TTL×pid 双闸自愈回收，删除前必经 isSafeLedgerEntry 守卫，不入 git 不上平台）；前批次：2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦信号计数文件登记——`.runtime/friction-tally-<changeName>.json` 与 `quick-sessions/<sessionId>/friction-tally.json` 条目：三类摩擦事件时点写入、quick·verify --done 收尾 consume 清零、归档/change-delete prune、放弃变更残留接受（R-06）；不入 git 不上平台（D-002/D-005））；前批次：2026-09-08 批次：doctor `--gc-unstamped-runs` 存量无戳 execute-runs 一次性清扫（默认 dry-run，`--confirm` 才删；tasks.md / 归档目录名交叉核验，不进 archive 热路径）；归档取证回收（`pruneArchivedChangeRuntime`，delta.md 落盘后按 change 精确删 execute-runs/stage-reviews/verify-runs/apply-pathspec，fail-closed 禁 mtime/后缀匹配，接线在 worktree 无 meta 早退之前）；pre-import 快照写入侧滚动裁剪（`ProgressManager._pruneImportBaks`，import 落 bak 后即回收，默认只留最新 1 份 + `SILLYSPEC_PREIMPORT_BAK_KEEP` 可覆盖，按文件名 ISO 时间戳序、被裁份连 `.bak-wal` 成对删、存活份侧车保留、本次 keepPath 永不裁、fail-open 不阻断 import——此前只写不回收，实证单仓 292 份 / 317MB；口径详见 file-lifecycle/storage-and-state.md §pre-import 快照回收）；前批次：2026-09-07 批次：ghost 判定排除 quick 会话行（quick-<8hex> 按设计无 changes/ 实体目录，stage-machine overview/show 与 doctor-diagnostics D4 同源豁免，cleanup-ghosts 保留 quick 行归档兜底）；前批次：2026-09-04 批次：done-like 幻影变更守卫（--done/--skip/--wait/--continue/--reset/--reopen 目标未物化拒绝静默 initCommand 新建，治指针切库后幻影变更事故）/ progress check-repair 双库分裂探测（指针库与 cwd/.sillyspec 残留库并存报告，两库活跃/目标在旧库 issue 级）/ stage review docHash 失配 gate 自动机械重算放行（verdict 保留 + 审计行，主文档缺失/schema/verdict=fail 不自动刷）；前历史：+change-delete 一等删除命令（status='deleted' 与 archived 语义分离 + 移目录/清 worktree/推平台墓碑，两段式）/ progress show 滞留与疑似完成信号（tasks 全勾未收口 + 超 7 天无活跃）；批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
++updated_at: 2026-10-13（2026-10-13 批次：删除台账登记——src/deleted-ledger.js 与 .runtime/deleted-changes.jsonl：终态转换（deleteChange deleted / unregisterChange archived）事务提交后追加 {name,status,at}（追加-only、fail-open、latest-wins、坏行容错）；sync() 行缺失（serializeForSync null）分支查台账命中终态即合成最小六表载荷补推墓碑（quick-* 豁免）；platform sync --change 失败路径 exit 1 修假成功）；前批次：2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——spec-sync 纯墓碑形态按被删变更名落 spec-sync-conflict-〈被删变更》.json（kind='tombstone'幂等合并）+全绿同步清陈旧纯墓碑记录（conflicting_paths 空+platform_deleted 非空，kind 无关）+stage-machine _listPendingConflicts 优先读 kind 透传 type='tombstone'）；前批次：2026-09-24（2026-09-24 批次：门禁快照生命周期账本登记——`src/run/gate-snapshot-ledger.js` 与账本 `.sillyspec/.runtime/active-gate-snapshots.json`：create 登记 / cleanup 双清确认后销账，进程被杀残留由下个门禁建快照前 TTL×pid 双闸自愈回收，删除前必经 isSafeLedgerEntry 守卫，不入 git 不上平台）；前批次：2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦信号计数文件登记——`.runtime/friction-tally-<changeName>.json` 与 `quick-sessions/<sessionId>/friction-tally.json` 条目：三类摩擦事件时点写入、quick·verify --done 收尾 consume 清零、归档/change-delete prune、放弃变更残留接受（R-06）；不入 git 不上平台（D-002/D-005））；前批次：2026-09-08 批次：doctor `--gc-unstamped-runs` 存量无戳 execute-runs 一次性清扫（默认 dry-run，`--confirm` 才删；tasks.md / 归档目录名交叉核验，不进 archive 热路径）；归档取证回收（`pruneArchivedChangeRuntime`，delta.md 落盘后按 change 精确删 execute-runs/stage-reviews/verify-runs/apply-pathspec，fail-closed 禁 mtime/后缀匹配，接线在 worktree 无 meta 早退之前）；pre-import 快照写入侧滚动裁剪（`ProgressManager._pruneImportBaks`，import 落 bak 后即回收，默认只留最新 1 份 + `SILLYSPEC_PREIMPORT_BAK_KEEP` 可覆盖，按文件名 ISO 时间戳序、被裁份连 `.bak-wal` 成对删、存活份侧车保留、本次 keepPath 永不裁、fail-open 不阻断 import——此前只写不回收，实证单仓 292 份 / 317MB；口径详见 file-lifecycle/storage-and-state.md §pre-import 快照回收）；前批次：2026-09-07 批次：ghost 判定排除 quick 会话行（quick-<8hex> 按设计无 changes/ 实体目录，stage-machine overview/show 与 doctor-diagnostics D4 同源豁免，cleanup-ghosts 保留 quick 行归档兜底）；前批次：2026-09-04 批次：done-like 幻影变更守卫（--done/--skip/--wait/--continue/--reset/--reopen 目标未物化拒绝静默 initCommand 新建，治指针切库后幻影变更事故）/ progress check-repair 双库分裂探测（指针库与 cwd/.sillyspec 残留库并存报告，两库活跃/目标在旧库 issue 级）/ stage review docHash 失配 gate 自动机械重算放行（verdict 保留 + 审计行，主文档缺失/schema/verdict=fail 不自动刷）；前历史：+change-delete 一等删除命令（status='deleted' 与 archived 语义分离 + 移目录/清 worktree/推平台墓碑，两段式）/ progress show 滞留与疑似完成信号（tasks 全勾未收口 + 超 7 天无活跃）；批次⑥：等待回答跨会话回放（outputStep 📜 历史用户回答块 collectStageWaitHistory / progress show 历史回答摘要行）/ brainstorm 决策记录增量落盘（step3/4 随答追加 decisions.md、step6 对账整理）；批次⑤：worktree --adopt-branch 收编/同名分支菜单/doctor 分支删除收紧（无库保守+review 锚点+native-worktree force 豁免）/brainstorm-auto design 骨架化+豁免短语示例；批次④：apply --stash-dirty 主仓在途改动一等支持（两级恢复+SHA 兜底）/ review.json changedFiles 声明偏差文件放行（Gate1/Gate2 三源扩展）；批次③：端点提取多行装饰器全文化 / 探针1/3 worktree 路径回退 / FAIL 门控重验成本预告 / baseline checkpoint 夹带清单入提交信息；批次②：taskcard 占位符硬拦 / Wave 依赖方向硬拦 + plan-adopt-waves / decisions.md header 模板根治+自动补齐 / quick 新会话缺 --input 拒绝启动 + 位置参数即任务描述 / --file-notes 格式 fail-fast）
+ ---
+ 
+ # SillySpec 文件生命周期
+@@ -91,7 +91,7 @@ updated_at: 2026-10-09（2026-10-09 批次：纯墓碑冲突归因记账——sp
+ | `.sillyspec/quicklog/` | 是 | `src/quicklog.js`（CLI 接管，O_EXCL 锁 + writeAtomic 原子写） | 每次 quick 任务记录（CLI 启动时写「进行中」条目 + 分配 ql-ID，完成时翻「已完成」+ 追加结构化结果块 需求/根因/方案/结果，step3 --output 缺字段则 --done 被拒；关联变更另由 CLI 在各 change tasks.md 追加/勾选。读-改-写经 writeAtomic 原子覆盖，reader 不读半截） |
+ | `.sillyspec/shared/` | 是 | `init.js` | 共享目录，当前无核心生命周期逻辑 |
+ | `.sillyspec/workspace/` | 是 | `init.js` | 工作区目录，当前无核心生命周期逻辑 |
+-| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json；2026-08-19 起 run 目录含 `change` 归属戳文件——marker 断裂后按戳归属，不再 mtime 最新错配他变更 run；**归档后有戳 run 按 change 精确回收**；**无戳存量不进 archive 热路径，走 `sillyspec doctor --gc-unstamped-runs`**）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json；**归档后按 reviewedFiles 首段精确归属回收**）、verify-runs / apply-pathspec-<change>.txt（**归档写完 delta.md 后按 change 精确回收**，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §归档取证回收）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、spec-sync-conflict-<change>.json（spec 树冲突；2026-10-09 起纯墓碑形态按被删变更归因落盘——从 platform_deleted 路径剥被删变更名（含归档区前缀，剥不出归 __unattributed__）、kind='tombstone'、幂等合并（created_at 首见保持）；全绿同步自动清纯墓碑形态记录（判定式：conflicting_paths 空 + platform_deleted 非空，kind 无关涵盖存量旧格式；混合形态永不清理））、sync-noise-mute.json / spec-sync-follow-reported.json（同步噪音闸与 follower 去重 marker，成功即清/集合变化才重写）、artifacts / workflow-runs / doctor-dumps（**无归属审计类，写入侧滚动保留**最新 100/30/5 份，`SILLYSPEC_RUNTIME_KEEP` 可覆盖——与变更归属类证据的归档精确回收分野，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §无归属审计类产物的写入侧滚动回收）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot；**写入侧滚动裁剪**，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §pre-import 快照回收）、friction-tally-<changeName>.json（摩擦信号计数——gate 失败回滚（gates.js rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件时点写入；quick/verify --done 收尾 consumeFrictionHint 计数非零输出一行 advisory 后即删清零；归档与 change-delete 时 pruneArchivedChangeRuntime 一并回收；放弃变更留本机无害残留，接受不强制回收（R-06）；不入 git（.runtime 在 .gitignore）、不上平台（spec-sync UPLOAD_EXCLUDE_TOP_BASE 顶层排除 .runtime，D-002），跨机聚合被结构性禁止——隐私红线 D-005：字段只含计数/类型/时间戳/结构化标签）、quick-sessions/<sessionId>/friction-tally.json（quick 会话摩擦计数同源，quick --done 成功收尾 session 目录整体删除时随之清零） |
++| `.sillyspec/.runtime/` | 否 | `init.js`、`ProgressManager`、运行时命令 | DB、artifacts、history、workflow-runs、worktrees、knowledge-hit-report.json、postcheck-result.json、execute-runs（execute task review.json；2026-08-19 起 run 目录含 `change` 归属戳文件——marker 断裂后按戳归属，不再 mtime 最新错配他变更 run；**归档后有戳 run 按 change 精确回收**；**无戳存量不进 archive 热路径，走 `sillyspec doctor --gc-unstamped-runs`**）、stage-reviews（brainstorm/plan/propose/execute 独立审查 review.json；**归档后按 reviewedFiles 首段精确归属回收**）、verify-runs / apply-pathspec-<change>.txt（**归档写完 delta.md 后按 change 精确回收**，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §归档取证回收）、sync-conflict-<change>.json（平台同步双向冲突持久化，resolve 三选一后清理）、spec-sync-conflict-<change>.json（spec 树冲突；2026-10-09 起纯墓碑形态按被删变更归因落盘——从 platform_deleted 路径剥被删变更名（含归档区前缀，剥不出归 __unattributed__）、kind='tombstone'、幂等合并（created_at 首见保持）；全绿同步自动清纯墓碑形态记录（判定式：conflicting_paths 空 + platform_deleted 非空，kind 无关涵盖存量旧格式；混合形态永不清理））、sync-noise-mute.json / spec-sync-follow-reported.json（同步噪音闸与 follower 去重 marker，成功即清/集合变化才重写）、artifacts / workflow-runs / doctor-dumps（**无归属审计类，写入侧滚动保留**最新 100/30/5 份，`SILLYSPEC_RUNTIME_KEEP` 可覆盖——与变更归属类证据的归档精确回收分野，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §无归属审计类产物的写入侧滚动回收）、sillyspec.db.pre-import-<ts>.bak（pull/resolve --take-platform 的 import 前 snapshot；**写入侧滚动裁剪**，口径见 [storage-and-state.md](file-lifecycle/storage-and-state.md) §pre-import 快照回收）、friction-tally-<changeName>.json（摩擦信号计数——gate 失败回滚（gates.js rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件时点写入；quick/verify --done 收尾 consumeFrictionHint 计数非零输出一行 advisory 后即删清零；归档与 change-delete 时 pruneArchivedChangeRuntime 一并回收；放弃变更留本机无害残留，接受不强制回收（R-06）；不入 git（.runtime 在 .gitignore）、不上平台（spec-sync UPLOAD_EXCLUDE_TOP_BASE 顶层排除 .runtime，D-002），跨机聚合被结构性禁止——隐私红线 D-005：字段只含计数/类型/时间戳/结构化标签）、quick-sessions/<sessionId>/friction-tally.json（quick 会话摩擦计数同源，quick --done 成功收尾 session 目录整体删除时随之清零）、deleted-changes.jsonl（删除台账——deleteChange/unregisterChange 终态转换事务提交后追加 {name,status,at} 单行 JSON；追加-only 不旋转、写入 fail-open；DB 行被外部物理清除后 sync 台账墓碑分支据此合成最小载荷补推墓碑（2026-10-13-sync-ledger-tombstone，事故 2026-10-13-new-change-e5a27813）；不入 git 不上平台） |
+ 
+ ### 平台模式项目根落盘物（不在 `.sillyspec/` 内，不污染源码结构）
+ 
+diff --git a/src/deleted-ledger.js b/src/deleted-ledger.js
+new file mode 100644
+index 00000000..b7645804
+--- /dev/null
++++ b/src/deleted-ledger.js
+@@ -0,0 +1,75 @@
++/**
++ * 删除台账（deleted-changes.jsonl）——终态转换的追加式账本。
++ *
++ * 背景（2026-10-13-new-change-e5a27813 幽灵变更事故，multi-agent-platform 仓实证）：
++ * X1 墓碑链（sync.js 对 DB status='deleted'/'archived' 行追加墓碑 POST）依赖 DB 行存活；
++ * DB 行被外部手段物理清除后（rm + 裸 SQL，任何 sillyspec 官方路径都不物理删行），后续
++ * platform sync --change 一律「变更无进度数据」空转，平台行永挂 in_progress/active。
++ * 台账让「存在过且已达终态」这一事实脱离 DB 行存活而可查：deleteChange/unregisterChange
++ * 在事务提交后追加一行；sync() 的行缺失分支据此合成墓碑补推（见 sync.js 台账分支）。
++ *
++ * 形态契约：`.sillyspec/.runtime/deleted-changes.jsonl`，每行一个 JSON 对象
++ * { name, status: 'deleted'|'archived', at: ISO }；追加-only（读取侧 latest-wins），
++ * 不旋转不清空——每行百余字节、终态转换频度=归档/删除频度，增长可忽略。
++ * 坏行容错：单行 JSON 解析失败跳过该行（外部编辑/半写截断不拖垮读取）。
++ */
++import { appendFileSync, existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++const LEDGER_FILENAME = 'deleted-changes.jsonl'
++
++function ledgerPath(specDir) {
++  return join(specDir, '.runtime', LEDGER_FILENAME)
++}
++
++/**
++ * 追加一条终态台账。fail-open：任何写入失败只 warn 不抛——台账是 DB 行存活时的
++ * 冗余信息（X1 链已闭环），它的缺失最多让「行被外部清除」这一非官方场景退回平台
++ * 7 天 reparse 兜底，不值得阻断删除/归档主流程。
++ * @param {string} specDir 已解析的 .sillyspec 根（与 sillyspec.db 同根）
++ * @param {string} changeName 变更名
++ * @param {'deleted'|'archived'} status 终态
++ * @param {string} [at] ISO 时间戳（缺省当前时间）
++ */
++export function appendDeletedLedger(specDir, changeName, status, at = new Date().toISOString()) {
++  if (!specDir || !changeName || (status !== 'deleted' && status !== 'archived')) {
++    console.warn(`⚠️  appendDeletedLedger: 参数不完整（name=${changeName} status=${status}），跳过台账追加`)
++    return
++  }
++  try {
++    appendFileSync(ledgerPath(specDir), JSON.stringify({ name: changeName, status, at }) + '\n', 'utf8')
++  } catch (err) {
++    console.warn(`⚠️  删除台账追加失败（fail-open 不阻断主流程）: ${changeName}: ${(err && err.message) || err}`)
++  }
++}
++
++/**
++ * 查询变更的最新终态台账条目（同名多条取最后一条——latest-wins）。
++ * 容错：文件不存在 → null；坏行跳过不抛。
++ * @param {string} specDir 已解析的 .sillyspec 根
++ * @param {string} changeName 变更名
++ * @returns {{name: string, status: string, at: string} | null}
++ */
++export function lookupDeletedLedger(specDir, changeName) {
++  if (!specDir || !changeName) return null
++  const p = ledgerPath(specDir)
++  if (!existsSync(p)) return null
++  let text
++  try {
++    text = readFileSync(p, 'utf8')
++  } catch {
++    return null // 读失败按无台账处理（消费侧退回普通「无进度数据」路径）
++  }
++  let hit = null
++  for (const line of text.split('\n')) {
++    const trimmed = line.trim()
++    if (!trimmed) continue
++    try {
++      const obj = JSON.parse(trimmed)
++      if (obj && obj.name === changeName && (obj.status === 'deleted' || obj.status === 'archived')) {
++        hit = { name: obj.name, status: obj.status, at: obj.at }
++      }
++    } catch { /* 坏行跳过：半写截断/外部编辑不拖垮整本台账 */ }
++  }
++  return hit
++}
+diff --git a/src/index.js b/src/index.js
+index 5276ca4e..c32d28f4 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -4397,7 +4397,15 @@ SillySpec platform — SillyHub 平台同步
+           const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
+           if (syncChangeName) {
+             // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
+-            await syncModule.sync(syncChangeName, dir, { manual: true });
++            // 失败必须 exit 1（2026-10-13-sync-ledger-tombstone，事故 2026-10-13-new-change-e5a27813）：
++            // 此前忽略返回值恒 exit 0——变更不存在/未连接平台都「假成功」，daemon RPC
++            // （sillyspec.sync_change）据退出码回执，假成功掩盖行缺失。成功路径（含
++            // change_deleted 预期回执、台账墓碑补推）errors 为空，exit 0 语义不变。
++            const syncResult = await syncModule.sync(syncChangeName, dir, { manual: true });
++            if (syncResult && Array.isArray(syncResult.errors) && syncResult.errors.length > 0) {
++              console.error(`❌ platform sync 失败（${syncChangeName}）: ${syncResult.errors.join('；')}`);
++              process.exit(1);
++            }
+           } else {
+             // 全树 spec 文件同步（2026-10-11-sync-conflict-tri-fix FR-03）：不带 --change
+             // 此前报「需要指定变更名称」——归档/历史变更无活跃会话标签时无从下手。现走
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 4162431d..2aae2529 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -3,6 +3,7 @@
+ // pm._changePath（persistence-core 留 facade 本体）。无共享常量依赖。
+ import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs';
+ import { join } from 'path';
++import { appendDeletedLedger } from '../deleted-ledger.js';
+ 
+ // 所有权活跃心跳窗缺省（2026-09-14-change-ownership-guards task-02 / FR-01）：owner 非本会话
+ // 且 now-last_active < 窗口 → 拒绝接管；窗口外 → 自动接管。local.yaml change-ownership.
+@@ -601,6 +602,9 @@ export class ChangeRegistry {
+       // 本地脏度（D-013 / task-04）：删除也是本地状态推进（triggerSync 据此推终态/墓碑上行）
+       this.pm._touchLocalModified(cwd, changeName, now);
+     });
++    // 删除台账（2026-10-13-sync-ledger-tombstone）：DB 行被外部物理清除后墓碑链的唯一
++    // 终态凭证。事务提交后追加、fail-open（见 deleted-ledger.js 头注释）。
++    appendDeletedLedger(this.pm._getSpecDir(cwd), changeName, 'deleted');
+   }
+ 
+   /**
+@@ -669,6 +673,9 @@ export class ChangeRegistry {
+       // 本地脏度（D-013 / task-04）：归档也是本地状态推进
+       this.pm._touchLocalModified(cwd, changeName, now);
+     });
++    // 删除台账（2026-10-13-sync-ledger-tombstone）：归档终态同记（archived）——行被外部
++    // 清除后 sync 台账分支据此补推 archived 墓碑（平台 location='archive'）。fail-open。
++    appendDeletedLedger(this.pm._getSpecDir(cwd), changeName, 'archived');
+   }
+ }
+ 
+diff --git a/src/sync.js b/src/sync.js
+index 209b0721..a3069fe0 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -18,6 +18,7 @@ import { safeGit } from './git-helper.js';
+ import { openDatabase } from './db-engine.js';
+ import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
+ import { syncSpecTree } from './spec-sync.js';
++import { lookupDeletedLedger } from './deleted-ledger.js';
+ import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved, syncSelfHealWarn } from './sync-noise.js';
+ 
+ // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
+@@ -747,6 +748,18 @@ export class SyncManager {
+         return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
+       }
+       if (progressData === null) {
++        // 删除台账兜底（2026-10-13-sync-ledger-tombstone，事故 2026-10-13-new-change-e5a27813）：
++        // DB 行被外部物理清除（rm + 裸 SQL）后 serializeForSync 恒 null、X1 墓碑链失源，
++        // 平台行永挂 active。台账里「存在过且已达终态」时合成最小载荷补推墓碑，让平台
++        // _apply_cli_tombstone 收敛 location。台账无此名（从未存在，如 --change 打错字）
++        // 不发——误发会把平台同名真变更软删。quick 会话豁免（与 tombstoneDue 同口径）。
++        if (!QUICK_SID_RE.test(changeName)) {
++          const ledger = lookupDeletedLedger(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), changeName);
++          if (ledger && (ledger.status === 'deleted' || ledger.status === 'archived')) {
++            const pushed = await this._pushLedgerTombstone(changeName, ledger, { signal: opts.signal });
++            return { synced: 0, errors: [], ledgerTombstone: pushed ? 'pushed' : 'best-effort-failed' };
++          }
++        }
+         console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
+         return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
+       }
+@@ -1098,6 +1111,63 @@ export class SyncManager {
+     return { synced: 0 };
+   }
+ 
++  /**
++   * 台账墓碑（2026-10-13-sync-ledger-tombstone）：DB 行已被外部物理清除、终态凭证只剩
++   * 删除台账时的合成墓碑上行。与 _pushTombstone 的差异：不读 DB（无行可读），载荷由
++   * 台账条目合成——changes[0] 携带台账 status（平台 _apply_cli_tombstone 据此收敛
++   * location）+ current_stage='archive'，其余五表空数组（平台端解析容错，字段缺失即空集）。
++   * base_ts 不设：平台契约「base_ts 缺失无条件接受」（platform_sync/service.py 分支 1），
++   * 不与既有 last_pushed_at 比较，无 409 面。best-effort：失败 debugLog 不抛（与 X1 链
++   * 语义一致——平台 7 天 reparse 兜底仍在）。
++   * @param {string} changeName
++   * @param {{name: string, status: string, at: string}} ledger 台账终态条目
++   * @param {{signal?: AbortSignal}} [opts]
++   * @returns {Promise<boolean>} 是否推送成功
++   */
++  async _pushLedgerTombstone(changeName, ledger, opts = {}) {
++    const platform = this._getPlatform();
++    if (!platform) return false; // 未连接平台：台账墓碑无从上行，行缺失也无处可回填，静默
++    const payload = {
++      changes: [{
++        name: changeName,
++        status: ledger.status,
++        current_stage: 'archive',
++        created_at: ledger.at,
++        last_active: ledger.at,
++        title: changeName,
++      }],
++      stages: [],
++      steps: [],
++      approvals: [],
++      batch_progress: [],
++    };
++    const headers = {
++      'Content-Type': 'application/json',
++      Authorization: `Bearer ${platform.token}`,
++      'X-SillySpec-Pushed-At': new Date().toISOString(),
++    };
++    const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
++    if (pushUser) headers['X-SillySpec-User'] = pushUser;
++    const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
++    try {
++      const res = await fetchJsonWithStatus(syncUrl, {
++        method: 'POST',
++        headers,
++        body: JSON.stringify(payload),
++        signal: opts.signal,
++      });
++      if (res.ok) {
++        console.log(`[sync] 已上行台账墓碑（行已清除，status=${ledger.status}）: ${changeName}`);
++        return true;
++      }
++      debugLog(`[sync] 台账墓碑上行未成功: ${changeName} (status=${res.status}，平台 reparse 兜底)`);
++      return false;
++    } catch (err) {
++      debugLog(`[sync] 台账墓碑上行失败: ${changeName}: ${(err && err.message) || err}`);
++      return false;
++    }
++  }
++
+   /**
+    * 自竞态判定辅助：fresh 读本地 DB 的 last_synced_platform_ts（base_ts），判断它是否已覆盖
+    * 平台 409 回执的 last_pushed_at（字符串字典序比较，契约 §4.2——ISO 8601 字典序 == 时间序）。
+diff --git a/test/deleted-ledger.test.mjs b/test/deleted-ledger.test.mjs
+new file mode 100644
+index 00000000..dda573ec
+--- /dev/null
++++ b/test/deleted-ledger.test.mjs
+@@ -0,0 +1,225 @@
++/**
++ * 删除台账 + 台账墓碑测试（2026-10-13-sync-ledger-tombstone）。
++ *
++ * 事故背景：multi-agent-platform 仓 2026-10-13-new-change-e5a27813 幽灵变更——DB 行被
++ * 外部物理清除后 platform sync --change「变更无进度数据」空转且 CLI 假成功（exit 0），
++ * 平台行永挂 in_progress/active。覆盖矩阵：
++ *   FR-01  deleteChange / unregisterChange 落台账；台账路径不可写 fail-open 不阻断
++ *   FR-02  行清除后 deleted / archived 终态补推墓碑；never-existed 不发墓碑
++ *   FR-03  CLI platform sync --change 失败退出码 1
++ *   FR-04  坏行容错、latest-wins、quick-* 豁免
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import http from 'node:http'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
++import { DatabaseSync } from 'node:sqlite'
++
++import { appendDeletedLedger, lookupDeletedLedger } from '../src/deleted-ledger.js'
++import { ProgressManager } from '../src/progress.js'
++import { SyncManager } from '../src/sync.js'
++
++const TEST_ROOT = dirname(fileURLToPath(import.meta.url))
++const REPO_ROOT = join(TEST_ROOT, '..')
++
++// ── fixture（套件级 TEMP/HOME 隔离由 run-tests.mjs 统一提供）──
++
++function createTempProject(sub) {
++  const cwd = mkdtempSync(join(tmpdir(), `sillyspec-ledger-${sub}-`))
++  mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
++  mkdirSync(join(cwd, '.sillyspec', 'changes'), { recursive: true })
++  return cwd
++}
++
++async function cleanupProject(cwd) {
++  try {
++    const key = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
++    const db = ProgressManager._dbPool.get(key)
++    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(key) }
++  } catch { /* 池里无实例则无需处理 */ }
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* Windows 句柄竞态容忍 */ }
++}
++
++function ledgerPathOf(cwd) {
++  return join(cwd, '.sillyspec', '.runtime', 'deleted-changes.jsonl')
++}
++
++function readLedgerLines(cwd) {
++  return readFileSync(ledgerPathOf(cwd), 'utf8').split('\n').filter((l) => l.trim())
++}
++
++// 外部物理清行（事故形态复现：裸 SQL DELETE，行+目录全清）
++function purgeChangeRow(cwd, changeName) {
++  const db = new DatabaseSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'))
++  try {
++    db.prepare('DELETE FROM changes WHERE name = ?').run(changeName)
++  } finally { db.close() }
++  rmSync(join(cwd, '.sillyspec', 'changes', changeName), { recursive: true, force: true })
++}
++
++// ── mock 平台（hub09 同款：本地 http server 记录 progress POST）──
++
++const posts = []
++const server = http.createServer((req, res) => {
++  if (/\/api\/changes\/[^/]+\/progress$/.test(req.url) && req.method === 'POST') {
++    let body = ''
++    req.on('data', (c) => { body += c })
++    req.on('end', () => {
++      let parsed = null
++      try { parsed = JSON.parse(body) } catch { /* 保留 null */ }
++      posts.push({ url: req.url, body: parsed })
++      res.writeHead(200, { 'Content-Type': 'application/json' })
++      res.end(JSON.stringify({ ok: true, last_pushed_at: new Date().toISOString() }))
++    })
++    return
++  }
++  res.writeHead(404); res.end()
++})
++await new Promise((r) => server.listen(0, '127.0.0.1', r))
++const mockUrl = `http://127.0.0.1:${server.address().port}`
++
++function makePlatformCwd(sub) {
++  const cwd = createTempProject(sub)
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n`, 'utf8')
++  return cwd
++}
++
++test('FR-01: deleteChange / unregisterChange 落台账（deleted / archived）', async (t) => {
++  const cwd = createTempProject('fr1')
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, '2026-10-13-x-del')
++  pm.initChange(cwd, '2026-10-13-y-arc')
++  pm.deleteChange(cwd, '2026-10-13-x-del')
++  pm.unregisterChange(cwd, '2026-10-13-y-arc')
++
++  const lines = readLedgerLines(cwd).map((l) => JSON.parse(l))
++  const del = lines.find((l) => l.name === '2026-10-13-x-del')
++  const arc = lines.find((l) => l.name === '2026-10-13-y-arc')
++  assert.equal(del && del.status, 'deleted', 'deleteChange 落 deleted 台账行')
++  assert.equal(arc && arc.status, 'archived', 'unregisterChange 落 archived 台账行')
++  assert.ok(del.at && arc.at, '台账行带 ISO 时间戳')
++
++  // DB 语义不变：行保留、status 即终态
++  const db = new DatabaseSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })
++  try {
++    const rows = db.prepare("SELECT name, status FROM changes WHERE name IN ('2026-10-13-x-del','2026-10-13-y-arc')").all()
++    assert.deepEqual(
++      rows.map((r) => `${r.name}:${r.status}`).sort(),
++      ['2026-10-13-x-del:deleted', '2026-10-13-y-arc:archived'],
++      'DB 行保留且 status 为终态（原语义不变）',
++    )
++  } finally { db.close() }
++})
++
++test('FR-01: 台账路径不可写 fail-open 不阻断删除主流程', async (t) => {
++  const cwd = createTempProject('fr1-fo')
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, '2026-10-13-fo-del')
++  // 用同名目录占住台账路径（三平台一致的确定性写失败；Windows 目录 chmod 不可靠）
++  mkdirSync(ledgerPathOf(cwd))
++  pm.deleteChange(cwd, '2026-10-13-fo-del')
++
++  const db = new DatabaseSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })
++  try {
++    const row = db.prepare('SELECT status FROM changes WHERE name = ?').get('2026-10-13-fo-del')
++    assert.equal(row && row.status, 'deleted', '台账写失败不阻断：DB 状态照常翻 deleted')
++  } finally { db.close() }
++})
++
++test('FR-02: 行被外部清除后 sync 补推 deleted 墓碑（合成载荷）', async (t) => {
++  const cwd = makePlatformCwd('fr2-del')
++  t.after(() => cleanupProject(cwd))
++  const CN = '2026-10-13-ghost-del'
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, CN)
++  pm.deleteChange(cwd, CN) // 台账落 deleted
++  purgeChangeRow(cwd, CN) // 事故形态：外部物理清行
++
++  posts.length = 0
++  const sm = new SyncManager(cwd)
++  const r = await sm.sync(CN, { manual: true })
++  assert.deepEqual(r.errors, [], '台账墓碑分支返回零 errors')
++  assert.equal(r.ledgerTombstone, 'pushed', '墓碑已推送')
++  assert.equal(posts.length, 1, '恰一笔 progress POST')
++  const first = posts[0].body.changes[0]
++  assert.equal(first.status, 'deleted', '载荷携带 deleted 终态')
++  assert.equal(first.current_stage, 'archive', '合成载荷 current_stage=archive')
++})
++
++test('FR-02: archived 终态行清除后补推 archived 墓碑', async (t) => {
++  const cwd = makePlatformCwd('fr2-arc')
++  t.after(() => cleanupProject(cwd))
++  const CN = '2026-10-13-ghost-arc'
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, CN)
++  pm.unregisterChange(cwd, CN)
++  purgeChangeRow(cwd, CN)
++
++  posts.length = 0
++  const sm = new SyncManager(cwd)
++  const r = await sm.sync(CN, { manual: true })
++  assert.deepEqual(r.errors, [])
++  assert.equal(posts[0].body.changes[0].status, 'archived', '载荷携带 archived 终态')
++})
++
++test('FR-02/FR-04: never-existed 无台账不发墓碑；quick-* 豁免', async (t) => {
++  const cwd = makePlatformCwd('fr2-never')
++  t.after(() => cleanupProject(cwd))
++  // 手工造一条 quick 台账行（正常流程不产生——豁免面测试用）
++  appendDeletedLedger(join(cwd, '.sillyspec'), 'quick-12345678', 'deleted')
++
++  posts.length = 0
++  const sm = new SyncManager(cwd)
++  const r1 = await sm.sync('2026-10-13-never-existed', { manual: true })
++  assert.ok(r1.errors.length > 0, '无台账变更返回 errors（非假成功）')
++  assert.match(r1.errors[0], /变更无进度数据/, '错误信息可见')
++
++  const r2 = await sm.sync('quick-12345678', { manual: true })
++  assert.ok(r2.errors.length > 0, 'quick 会话不走台账墓碑分支')
++  assert.equal(posts.length, 0, '两例均未发起墓碑 POST')
++})
++
++test('FR-04: 台账坏行容错 + latest-wins', async (t) => {
++  const cwd = createTempProject('fr4')
++  t.after(() => cleanupProject(cwd))
++  const specDir = join(cwd, '.sillyspec')
++  appendDeletedLedger(specDir, '2026-10-13-a', 'deleted')
++  // 半写截断行 + 外部编辑坏行
++  writeFileSync(ledgerPathOf(cwd), '{"name":"broken-no-close\nnot-json\n', { flag: 'a' })
++  appendDeletedLedger(specDir, '2026-10-13-a', 'archived') // 同名第二条 → latest-wins
++
++  const hit = lookupDeletedLedger(specDir, '2026-10-13-a')
++  assert.equal(hit && hit.status, 'archived', '坏行不拖垮读取且同名取最后一条')
++  assert.equal(lookupDeletedLedger(specDir, '2026-10-13-none'), null, '未命中返回 null')
++  assert.equal(lookupDeletedLedger(specDir, ''), null, '空参数安全返回 null')
++})
++
++test('FR-03: CLI platform sync --change 失败退出码 1（未连接平台）', async (t) => {
++  const cwd = createTempProject('fr3-cli')
++  t.after(() => cleanupProject(cwd))
++  const r = spawnSync(
++    process.execPath,
++    [join(REPO_ROOT, 'bin', 'sillyspec.js'), 'platform', 'sync', '--change', '2026-10-13-nope'],
++    { cwd, encoding: 'utf8', timeout: 60_000 },
++  )
++  assert.notEqual(r.status, 0, '失败路径退出码非 0')
++  const errText = `${r.stderr || ''}${r.stdout || ''}`
++  assert.match(errText, /未连接平台|变更无进度数据/, `stderr 错误信息可见（实得：${errText.slice(-200)}）`)
++})
++
++// mock 平台生命周期挂 after() 钩子（模块尾直接 close 会抢在未跑完的用例前关端口——
++// node:test 顶层 test() 注册即开跑，与模块体后续语句交错）
++after(async () => {
++  server.closeAllConnections?.()
++  await new Promise((r) => server.close(r))
++})
