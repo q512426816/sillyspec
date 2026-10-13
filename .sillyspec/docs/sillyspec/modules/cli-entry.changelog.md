@@ -31,3 +31,4 @@
 | 2026-10-13 | 2026-10-12-closeout-task-guidance | 今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify- |
 | 2026-10-13 | 2026-10-13-design-question-autorepair | 动机：sess_dcb57f25 实证（变更 2026-10-13-multiturn-changeid-misjudg |
 | 2026-10-13 | 2026-10-13-thin-empty-face-crosscheck | 动机：multi-agent-platform 仓 docs/sillyspec/thin-done-empty-fac |
+| 2026-10-13 | 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每  |
