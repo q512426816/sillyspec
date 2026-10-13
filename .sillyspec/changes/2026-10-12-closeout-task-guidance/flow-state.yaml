@@ -1,0 +1,30 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify-handover-hint / release-3-32-7 的 task-03
+  均为收口/操作型任务：其证据=交付提交或 registry 回执，天然在勾选前后才产生，哨兵证据面只读提交 token/review.json 必然拦收）。修正结论（对撞后撤回机制方案）：不给门开自声明豁免（[收口] 标记会被
+  agent 手写内容触发免检，且归档提交在哨兵时点尚不存在——验证时无事实可核），只在任务拟法源头消解——成功标准≠工作分解，收口/推送/发布是协议自身承担的动作不该单列 task。
+
+
+  成功标准：
+
+  - flow start 主横幅（src/flow.js ~809-816 任务面段）与 resume/adopt 横幅（~537-538）各追加一行任务拟法指引：收口/推送/发布类动作不单列 task（协议本身承担，成功标准照写
+  requirements）；若确需单列，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）
+
+  - 既有横幅行零改动（追加新行，钉死测试子串「任务面归你」等不受影响）
+
+  - flow-tick-prototype / thin-workunits 等横幅相关回归族全绿 + lint
+autopilot: false
+baseline_commit: 82627556dbee2f7959284f3435b329c39b8efb9c
+updatedAt: '2026-10-13T00:39:16.686Z'
+baseline_sha256: 49d6d9e6c25cd90d9dd39e827b28023b26bbafcfc1915c4ba74d33216ae98b21
+spec_approved: true
+spec_approved_at: '2026-10-13T00:39:16.685Z'
+spec_approved_by: zcode-dogfood-hardening
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-dogfood-hardening
+
