@@ -39,3 +39,14 @@ change-list.js 新增导出 REPO_SECTION_HEADER_RE（段头正则，原 plan-pos
 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 最大风险：节扫描穿过段头后误延「文件变更清单」节边界——非段头的 ## 章节标题（如「## 接口契约」）仍必须截断。缓解：截断判定=^## 且不匹配 REPO_SECTION_HEADER_RE（精确形态：编号前缀+key+仓变更+括号备注+冒号可缺），普通标题形如「<词> 仓变更」的误写由 plan-postcheck 既有 LOOSE_RE 点名（不在本变更面）；测试钉死「非段头 ## 截断」回归。次风险：h3 段头（### <key> 仓变更）现在有 RE 命中与 detectRepoFromSubsection token 命中两条等价路径——实现上段头分支前置统一处理，### 分支保持原样，两路径不叠加执行。试过放弃的方案：①改四处文案弃段头形态（推荐 ### 子段/cross-repo: 两种）——与生态既定约定（厚道模板/覆盖对账/docs-check 三处解析器）制造第二套约定，agent 在厚薄两道间会拿到互相矛盾的指引；②在 flow.js 收口侧做段头归一化预处理——对账口径分散两处，plan-postcheck/design-facts 不受益。均否。
+
+## 文件变更清单
+
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 修改 | src/change-list.js | 导出 REPO_SECTION_HEADER_RE（单一源）；节扫描穿过段头 h2；段头行 currentRepo 设置器（fail-closed） |
+| 修改 | src/stages/plan-postcheck.js | 删本地 RE 定义改 import（仅此一处——⚠ 提交 055080e4 实际夹带并行会话同文件在途 hunk（taskcard-validate-vs-postcheck-gap 结构校验 +38 行），见下披露） |
+| 修改 | test/change-list-repo-heading.test.mjs | 新建：h2 段头六用例 + FR-04 单一源守卫 |
+| 修改 | test/thin-empty-face-crosscheck.test.mjs | 新增空面 + h2 段头 e2e 用例 |
+
+**夹带披露（评审 P2）**：提交 055080e4 对 src/stages/plan-postcheck.js 采用了「暂存区净版 + git commit -- pathspec」双轨，但 pathspec 形态的 commit 取该路径的**工作树**内容而非暂存区——共享工作树上并行会话的未提交编辑（provides/expects_from 结构校验，坑 taskcard-validate-vs-postcheck-gap）随本变更一并入库。该 hunk 归并行会话所有，本变更不主张其交付、未在其上扩展；工作树不可回退销毁对方在途编辑、其上已有对方后续提交不可 rewrite，故以披露处置。过程教训：共享仓对并行脏文件的「只提交我的 hunk」需求，pathspec-commit 语义做不到，需 commit-guard 类钩子或等对方收口后再提交该文件。

@@ -51,5 +51,5 @@ created_at: 2026-10-13T03:33:33.661Z
 FR-01: test/change-list-repo-heading.test.mjs「h2 段头解析出条目带 repo（含编号前缀/括号备注）+ 段头前主仓条目照常」
 FR-02: test/change-list-repo-heading.test.mjs「未注册 key（含 main）归主仓 + 非段头 ## 章节仍截断节」
 FR-03: test/cross-repo-patch-freeze.test.mjs「既有 ### 子段/cross-repo: 前缀断言全绿（零改动回归锚）」
-FR-04: test/design-coverage.test.mjs + test/design-facts.test.mjs「RE 上移后 plan-postcheck 消费面零改动全绿」＋src 内 grep 断言单一 import
+FR-04: test/design-coverage.test.mjs + test/design-facts.test.mjs「RE 上移后 plan-postcheck 消费面零改动全绿」＋test/change-list-repo-heading.test.mjs「FR-04 单一源守卫：定义唯一在 change-list，plan-postcheck 仅 import」
 FR-05: test/thin-empty-face-crosscheck.test.mjs「空面 + ## libx 仓变更 段头 → 纯跨仓标注 advisory 不阻断」

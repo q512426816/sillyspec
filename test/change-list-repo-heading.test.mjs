@@ -14,10 +14,21 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { parseFileChangeListDetailed } from '../src/change-list.js'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parseFileChangeListDetailed, REPO_SECTION_HEADER_RE } from '../src/change-list.js'
+
+// FR-04 单一源守卫（评审 P3 清偿）：plan-postcheck 不得再有本地 RE 定义、必须 import 同一符号
+test('FR-04 单一源守卫：REPO_SECTION_HEADER_RE 定义唯一在 change-list，plan-postcheck 仅 import', () => {
+  const ppSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'stages', 'plan-postcheck.js'), 'utf8')
+  assert.doesNotMatch(ppSrc, /^const REPO_SECTION_HEADER_RE\s*=/m, 'plan-postcheck 不得有本地 RE 定义（防镜像漂移）')
+  assert.match(ppSrc, /import\s*\{[^}]*REPO_SECTION_HEADER_RE[^}]*\}\s*from\s*'\.\.\/change-list\.js'/, 'plan-postcheck 必须 import change-list 的 RE')
+  // 导出的正则与解析行为同体：段头形态在导出符号上直接命中（消费方 import 的是同一对象）
+  assert.match('## libx 仓变更', REPO_SECTION_HEADER_RE)
+  assert.doesNotMatch('## 接口契约', REPO_SECTION_HEADER_RE)
+})
 
 function fixture(body) {
   const root = mkdtempSync(join(tmpdir(), 'clrh-'))
