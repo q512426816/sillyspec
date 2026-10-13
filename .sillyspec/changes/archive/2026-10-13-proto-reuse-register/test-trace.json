@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-proto-reuse-register",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-proto-reuse-register:flow:测试绑定FR-01",
+      "tests": [
+        "test/proto-reuse-register.test.mjs「分级含登记复用档且命名硬要求在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-reuse-register"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-proto-reuse-register:flow:测试绑定FR-02",
+      "tests": [
+        "test/proto-reuse-register.test.mjs「三选一口径落在操作/铁律/输出三处」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-reuse-register"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-proto-reuse-register:flow:测试绑定FR-03",
+      "tests": [
+        "test/proto-reuse-register.test.mjs「四处周边指引同步复用口径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-reuse-register"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-proto-reuse-register:flow:测试绑定FR-04",
+      "tests": [
+        "test/proto-reuse-register.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-reuse-register"
+    }
+  ]
+}

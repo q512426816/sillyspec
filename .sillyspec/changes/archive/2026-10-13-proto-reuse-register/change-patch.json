@@ -1,0 +1,149 @@
+{
+  "change": "2026-10-13-proto-reuse-register",
+  "baseline": "0b2cd7496678e7c882dd760973484e1e98e9be75",
+  "head": "1e191cfeb5a1d0b75177790172f07ea7386964e2",
+  "files": [
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm-auto.md",
+    "docs/prompt/brainstorm.md",
+    "docs/prompt/explore.md",
+    "src/design-facts.js",
+    "src/run/gates.js",
+    "src/stages/brainstorm-auto.js",
+    "src/stages/brainstorm.js",
+    "src/stages/explore.js",
+    "test/proto-reuse-register.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 110,
+    "deletions": 15
+  },
+  "savedAt": "2026-10-13T07:01:58.237Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 4,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "0b2cd7496678e7c882dd760973484e1e98e9be75",
+    "totals": {
+      "files": 10,
+      "additions": 110,
+      "deletions": 15
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/brainstorm-auto.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/explore.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm-auto.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/explore.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/proto-reuse-register.test.mjs",
+        "additions": 87,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "091442f537a889c8a04453d1d5b6f6d7047a5412f0208932c23e7a25d93d3fa5",
+  "patchStatus": "ok"
+}

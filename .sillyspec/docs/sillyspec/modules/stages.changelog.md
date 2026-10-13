@@ -51,3 +51,4 @@
 - 2026-09-21-r5-efficiency-batch2 | M3 PLAN 粒度派发默认化（plan-postcheck recommendWaveGroups 导出纯函数：三条件贪心+批数护栏预算 n−min(3,n)；buildWavePrompt 推荐分组行注入+偏离披露+按组回收；判定①文案附分组；SillyHub 互斥/无 ≥2 组零注入，D-003@v1）+ M4 execution_mode 通道（plan light/full 模板键+判据话术；execute main 直写渲染分支：执行方式/工作目录/要点/调度纪律四段变体+派发段/互斥行/分组段/并发帽抑制，缺省 dispatch 逐字节零回归=黄金快照 6 形态 diff 实证，D-004@v1）。
 | 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |
 | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
+| 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |

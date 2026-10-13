@@ -834,3 +834,88 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-09-module-card-updated-at-iso
   status: active
+
+## FR-docs-consistency-040 brainstorm「HTML 原型分级」含登记复用档（必须）
+变更：2026-10-13-proto-reuse-register
+状态：active
+摘要：主路径——既有可复跑原型；排除——静态截图
+场景正文：
+- 场景：主路径——既有可复跑原型 — Given 用户在 brainstorm 前提供了终稿 HTML 原型（如 fire-equipment 的 4497 行原型）；When agent 走到「展示设计方案」步做原型分级；Then 走登记复用档：把原型复制为变更目录下 `prototype-<名称>.html`、声明来源与覆盖面，不重画。
+- 场景：排除——静态截图 — Given 用户只提供了截图/静态设计稿；When agent 做原型分级；Then 不适用登记复用档，仍按「必须生成」产出可复跑的 HTML 原型。
+全文：.sillyspec/changes/archive/2026-10-13-proto-reuse-register/requirements.md#FR-01
+最近确认：1e191cfeb5a1d0b75177790172f07ea7386964e2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-reuse-register:flow:测试绑定FR-01
+  tests: test/proto-reuse-register.test.mjs「分级含登记复用档且命名硬要求在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-reuse-register
+  status: active
+
+## FR-docs-consistency-041 分级决策从二选一扩为三选一（必须）
+变更：2026-10-13-proto-reuse-register
+状态：active
+摘要：主路径——三选一落在复用
+场景正文：
+- 场景：主路径——三选一落在复用 — Given 本次 UI 面已有可复跑既有原型；When agent 完成分级决策；Then 输出含复用声明（来源路径+覆盖面）与登记后的 `prototype-*.html` 路径，且暂停前该文件已在变更目录。
+全文：.sillyspec/changes/archive/2026-10-13-proto-reuse-register/requirements.md#FR-02
+最近确认：1e191cfeb5a1d0b75177790172f07ea7386964e2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-reuse-register:flow:测试绑定FR-02
+  tests: test/proto-reuse-register.test.mjs「三选一口径落在操作/铁律/输出三处」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-reuse-register
+  status: active
+
+## FR-docs-consistency-042 周边四处指引同步复用口径（必须）
+变更：2026-10-13-proto-reuse-register
+状态：active
+摘要：主路径——提醒兜底
+场景正文：
+- 场景：主路径——提醒兜底 — Given agent 声明了登记复用但忘了把文件复制进变更目录；When brainstorm「生成规范文件」步 --done 触发软提醒；Then 提醒文案给出登记复用出路（复制为 prototype-<名称>.html），用户可照办或否决。
+全文：.sillyspec/changes/archive/2026-10-13-proto-reuse-register/requirements.md#FR-03
+最近确认：1e191cfeb5a1d0b75177790172f07ea7386964e2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-reuse-register:flow:测试绑定FR-03
+  tests: test/proto-reuse-register.test.mjs「四处周边指引同步复用口径」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-reuse-register
+  status: active
+
+## FR-docs-consistency-043 测试覆盖与全绿（必须）
+变更：2026-10-13-proto-reuse-register
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量测试；Then 新测试断言全过、既有测试零失败、lint 零错误。
+全文：.sillyspec/changes/archive/2026-10-13-proto-reuse-register/requirements.md#FR-04
+最近确认：1e191cfeb5a1d0b75177790172f07ea7386964e2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-reuse-register:flow:测试绑定FR-04
+  tests: test/proto-reuse-register.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-reuse-register
+  status: active

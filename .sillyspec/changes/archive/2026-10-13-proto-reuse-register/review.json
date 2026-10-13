@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-proto-reuse-register",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "1e191cfeb5a1d0b75177790172f07ea7386964e2",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements 测试绑定行的用例名是转述而非实测用例标题原文",
+      "evidence": "绑定槽「FR-01: …「分级含登记复用档且命名硬要求在场」／FR-03: …「四处周边指引同步复用口径」」与实测用例标题（「① 分级含登记复用档：命名硬要求 + 来源/覆盖面声明」「③ brainstorm-auto 原型节同步登记复用口径」等 4 条 ③ 前缀用例）不逐字一致；CLI 绑定门只校验非空/非待填（src/flow-draft.js:563-564），不机检用例名，故非阻断。路径与覆盖面正确。",
+      "location": ".sillyspec/changes/2026-10-13-proto-reuse-register/requirements.md:57"
+    },
+    {
+      "severity": "P3",
+      "title": "gates 软提醒中既有 --reopen 用法不完整（历史遗留，非本变更引入）",
+      "evidence": "警告原文「sillyspec run brainstorm --reopen 回到「分段展示设计」」——不带 --from-step 时 reopen 落在首个 pending/stale/waiting/failed 步（src/progress/stage-machine.js:656-666）；阶段全完成时报错要求 --from-step（:661），不会定位到「分段展示设计」。该措辞自 65a0dd05 起存在，本变更仅追加登记复用子句（追加部分与 execute.js:957 扫描契约一致）。",
+      "location": "src/run/gates.js:227"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-13T07:19:21.647Z"
+}

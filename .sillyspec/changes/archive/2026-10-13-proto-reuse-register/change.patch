@@ -1,0 +1,270 @@
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 6b11cb3b..4fdfa4e8 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -65,7 +65,7 @@
+       {
+         "index": 4,
+         "name": "分段展示设计",
+-        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）\n7. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求\n生成一个独立的 HTML 文件（内联 CSS + JS），保存到：\n`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建）\n- 单文件，浏览器直接打开\n- 高保真：布局/组件/交互流程按真实效果呈现，后续 execute 阶段可直接对照复用\n- 与项目代码风格一致：优先复用项目现有技术栈/组件库/设计 token（先查 scan 文档与现有前端代码），不另起风格\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成或跳过声明必须在暂停**之前**完成——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 跳过原因（二选一必填；跳过时写明分级依据，用户可当场否决要求补）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
++        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）\n7. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：\n  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用\n  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）\n  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求\n生成一个独立的 HTML 文件（内联 CSS + JS），保存到：\n`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建）\n- 单文件，浏览器直接打开\n- 高保真：布局/组件/交互流程按真实效果呈现，后续 execute 阶段可直接对照复用\n- 与项目代码风格一致：优先复用项目现有技术栈/组件库/设计 token（先查 scan 文档与现有前端代码），不另起风格\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
+         "outputHint": "用户确认的设计方案",
+         "optional": false,
+         "requiresWait": true,
+@@ -334,7 +334,7 @@
+       {
+         "index": 0,
+         "name": "自由探索",
+-        "prompt": "围绕用户给出的话题做技术探索，不进入实现。\n\n### 操作\n1. 明确探索边界：这次只讨论、调研、画图和识别风险\n2. 如果需要代码库上下文，可以读取：\n   - `.sillyspec/projects/*.yaml`\n   - `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`\n   - `.sillyspec/docs/<project>/scan/CONVENTIONS.md`\n   - `.sillyspec/changes/<change-name>/design.md`\n3. 调查兵器按话题选（话题→兵器映射，全只读）：\n   - 词面考古（\"这段代码在哪/怎么写的\"）→ `rg` / `ls` / `cat`\n   - 坑史检索（\"这话题以前踩过什么坑\"）→ `sillyspec knowledge search --query \"<关键词>\"`（四层召回）\n   - 关系面（影响面/历史决策/需求谱系）→ `sillyspec knowledge graph impact <文件|模块|变更名>` 多跳闭包与防复潮可达的已否决决策、`neighbors <锚点>` / `path <A> <B>` 推理链、`summary` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 `--json`\n   - 在途面（出方向建议前）→ `sillyspec status` 活跃变更一览——结论别跟在途工作撞车\n4. 输出 2-3 个有价值方向、关键风险和下一步建议\n5. 如果用户要求保存结论，先明确保存位置，再写入对应文档\n6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行\n\n### HTML 原型生成（仅用户明确要求时）\n探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（\"要不要出个原型看效果\"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：\n- 单文件 HTML（内联 CSS + JS），浏览器直接打开\n- 高保真呈现讨论中的布局/组件/交互流程——用户看到的是\"这个方案做出来长什么样\"，不是示意图\n- 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格\n- 保存到 `{SPEC_ROOT}/explore/prototype-<名称>.html`（目录不存在则先创建；用户指定了其他位置则从其指定）\n- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/` 可直接复用为该变更的原型\n\n### 输出\n探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径\n\n### 铁律\n- 不写实现代码\n- 不安装依赖\n- 不修改文件，除非用户明确要求保存探索结论或生成原型\n- 不强行推进到 brainstorm/plan/execute",
++        "prompt": "围绕用户给出的话题做技术探索，不进入实现。\n\n### 操作\n1. 明确探索边界：这次只讨论、调研、画图和识别风险\n2. 如果需要代码库上下文，可以读取：\n   - `.sillyspec/projects/*.yaml`\n   - `.sillyspec/docs/<project>/scan/ARCHITECTURE.md`\n   - `.sillyspec/docs/<project>/scan/CONVENTIONS.md`\n   - `.sillyspec/changes/<change-name>/design.md`\n3. 调查兵器按话题选（话题→兵器映射，全只读）：\n   - 词面考古（\"这段代码在哪/怎么写的\"）→ `rg` / `ls` / `cat`\n   - 坑史检索（\"这话题以前踩过什么坑\"）→ `sillyspec knowledge search --query \"<关键词>\"`（四层召回）\n   - 关系面（影响面/历史决策/需求谱系）→ `sillyspec knowledge graph impact <文件|模块|变更名>` 多跳闭包与防复潮可达的已否决决策、`neighbors <锚点>` / `path <A> <B>` 推理链、`summary` 知识面健康度——比较方案前先看 impact 的 rejected/⚰️死路条目，已否决的路不重新兜售；全部支持 `--json`\n   - 在途面（出方向建议前）→ `sillyspec status` 活跃变更一览——结论别跟在途工作撞车\n4. 输出 2-3 个有价值方向、关键风险和下一步建议\n5. 如果用户要求保存结论，先明确保存位置，再写入对应文档\n6. 讨论 UI/交互方案且用户明确要求原型时，按下方「HTML 原型生成」执行\n\n### HTML 原型生成（仅用户明确要求时）\n探索保持只读姿态：不主动写原型文件；UI 讨论成形时可以提议（\"要不要出个原型看效果\"），用户同意后再生成。生成要求与 brainstorm 阶段的原型对齐：\n- 单文件 HTML（内联 CSS + JS），浏览器直接打开\n- 高保真呈现讨论中的布局/组件/交互流程——用户看到的是\"这个方案做出来长什么样\"，不是示意图\n- 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格\n- 保存到 `{SPEC_ROOT}/explore/prototype-<名称>.html`（目录不存在则先创建；用户指定了其他位置则从其指定）\n- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/`（**保留 `prototype-<名称>.html` 命名**——execute 阶段按此命名注入原型引用，改名＝不注入）可直接复用为该变更的原型\n\n### 输出\n探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径\n\n### 铁律\n- 不写实现代码\n- 不安装依赖\n- 不修改文件，除非用户明确要求保存探索结论或生成原型\n- 不强行推进到 brainstorm/plan/execute",
+         "outputHint": "探索结论",
+         "optional": false
+       }
+@@ -641,7 +641,7 @@
+       {
+         "index": 0,
+         "name": "进度确认与上下文加载",
+-        "prompt": "检查进度、加载项目上下文、匹配模块。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`，确认 currentStage 为 \"brainstorm\"\n2. 如果未初始化，提示先运行 sillyspec init\n3. **检查变更名称**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），直接重命名为有意义名称，然后运行 `sillyspec change-rename <旧名> <新名>`\n\n### 加载上下文\n4. 读取项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）+ 共享规范 + 子项目上下文\n5. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`\n6. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n8. 加载模块索引：读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（如存在）\n9. 查看进行中的变更：`ls .sillyspec/changes/ | grep -v archive`\n10. 检查同名变更或可复用模板\n\n### 模块匹配\n根据用户描述的需求关键词，匹配相关模块（用 _module-map.yaml 的 tags/aliases/paths）。\n\n### 子项目判定\n- 单项目：直接确认\n- 多项目且用户已指定：直接确认\n- 多项目且用户未指定：列出项目列表，需要用户确认\n\n### 如果有用户提供的原型/截图\n分析提取：页面结构、表单字段、交互流程、业务规则。\n\n### 输出\n状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 不要用 mv 命令重命名变更目录，必须用 `sillyspec change-rename`",
++        "prompt": "检查进度、加载项目上下文、匹配模块。用 `sillyspec progress show` 查流程进度，不要用 `sillyspec status`（项目级快照，不推进流程）。\n\n### 操作\n1. 运行 `sillyspec progress show`，确认 currentStage 为 \"brainstorm\"\n2. 如果未初始化，提示先运行 sillyspec init\n3. **检查变更名称**：如果当前变更名是自动生成的（如 `2026-06-02-new-change-a3f2b7c1`），直接重命名为有意义名称，然后运行 `sillyspec change-rename <旧名> <新名>`\n\n### 加载上下文\n4. 读取项目总览 `.sillyspec/docs/<project>/scan/PROJECT.md`（如存在）+ 共享规范 + 子项目上下文\n5. 加载项目信息：`cat .sillyspec/projects/*.yaml 2>/dev/null`\n6. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n7. 棕地项目：读取 scan 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n8. 加载模块索引：读取 `.sillyspec/docs/<project>/modules/_module-map.yaml`（如存在）\n9. 查看进行中的变更：`ls .sillyspec/changes/ | grep -v archive`\n10. 检查同名变更或可复用模板\n\n### 模块匹配\n根据用户描述的需求关键词，匹配相关模块（用 _module-map.yaml 的 tags/aliases/paths）。\n\n### 子项目判定\n- 单项目：直接确认\n- 多项目且用户已指定：直接确认\n- 多项目且用户未指定：列出项目列表，需要用户确认\n\n### 如果有用户提供的原型/截图\n分析提取：页面结构、表单字段、交互流程、业务规则。可复跑的 HTML 原型覆盖本次 UI 面时走「免生成·登记复用」：复制进变更目录并必须命名 `prototype-<名称>.html`（execute 按此命名注入），输出复用声明（来源+覆盖面）；截图/静态稿不可复跑不适用，仍须生成可跑 HTML。\n\n### 输出\n状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）\n\n### 注意\n- 以 CLI 返回为准，不要自行推断阶段\n- 不要用 mv 命令重命名变更目录，必须用 `sillyspec change-rename`",
+         "outputHint": "状态摘要 + 上下文 + 模块匹配",
+         "optional": false,
+         "migratedFrom": [
+diff --git a/docs/prompt/brainstorm-auto.md b/docs/prompt/brainstorm-auto.md
+index 6c65e2e3..93fac662 100644
+--- a/docs/prompt/brainstorm-auto.md
++++ b/docs/prompt/brainstorm-auto.md
+@@ -50,7 +50,7 @@
+ - 多项目且用户未指定：列出项目列表，需要用户确认
+ 
+ ### 如果有用户提供的原型/截图
+-分析提取：页面结构、表单字段、交互流程、业务规则。
++分析提取：页面结构、表单字段、交互流程、业务规则。可复跑的 HTML 原型覆盖本次 UI 面时走「免生成·登记复用」：复制进变更目录并必须命名 `prototype-<名称>.html`（execute 按此命名注入），输出复用声明（来源+覆盖面）；截图/静态稿不可复跑不适用，仍须生成可跑 HTML。
+ 
+ ### 输出
+ 状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index bfa80ad8..0c3e61e3 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -298,11 +298,15 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ 3. 展示完整设计方案（不要逐段停顿，一次性展示）
+ 4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query "<机制词>"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
+ 5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+-6. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
++6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）
+ 7. 暂停等待用户确认或修改意见
+ 
+ ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
+ 判定对象是**改造后的界面相对现状的变化程度**：
++- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：
++  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用
++  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）
++  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML
+ - **必须生成**（布局/结构/流程级变化）：
+   - 新增页面、视图、路由
+   - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）
+@@ -324,10 +328,10 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ 
+ ### 铁律 — 必须等待用户确认设计
+ - 展示完整设计方案后必须暂停等用户确认，**不要自己说"设计已充分确认"然后推进**（命令由 CLI 在下方注入）
+-- 原型生成或跳过声明必须在暂停**之前**完成——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
++- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
+ 
+ ### 输出
+-完整设计方案 + 变更名 + 原型文件路径 或 跳过原因（二选一必填；跳过时写明分级依据，用户可当场否决要求补）
++完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）
+ 
+ ### 注意
+ - 不要一次输出大段文字，按模块/Phase 分段
+diff --git a/docs/prompt/explore.md b/docs/prompt/explore.md
+index 35703f7c..e8761f1b 100644
+--- a/docs/prompt/explore.md
++++ b/docs/prompt/explore.md
+@@ -50,7 +50,7 @@
+ - 高保真呈现讨论中的布局/组件/交互流程——用户看到的是"这个方案做出来长什么样"，不是示意图
+ - 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格
+ - 保存到 `{SPEC_ROOT}/explore/prototype-<名称>.html`（目录不存在则先创建；用户指定了其他位置则从其指定）
+-- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/` 可直接复用为该变更的原型
++- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 `{SPEC_ROOT}/changes/<变更名>/`（**保留 `prototype-<名称>.html` 命名**——execute 阶段按此命名注入原型引用，改名＝不注入）可直接复用为该变更的原型
+ 
+ ### 输出
+ 探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径
+diff --git a/src/design-facts.js b/src/design-facts.js
+index fd285c35..314d236a 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -385,7 +385,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   lines.push('- [ ] frontmatter 字段齐全（author/created_at/scale）')
+   lines.push('- [ ] 引用所有当前版本 D-xxx@vN')
+   lines.push('- [ ] 涉及生命周期关键词时含「生命周期契约表」或紧邻豁免短语')
+-  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html 或跳过原因记入风险登记）')
++  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记）')
+   lines.push('- [ ] 不确定的问题标注「⚠️ 自审存疑」')
+   lines.push('')
+ 
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 764a4f3e..9a0d9358 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -224,7 +224,7 @@ export function warnMissingUiPrototype(stageName, changeName, currentStepName, s
+   const design = readFileSync(designPath, 'utf8')
+   const feExts = [...new Set((design.match(/\.(vue|svelte|astro|tsx|jsx|css|scss|sass|less|styl|html)\b/gi) || []).map(s => s.replace('.', '').toLowerCase()))]
+   if (feExts.length === 0) return
+-  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成）`)
++  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入）`)
+ }
+ 
+ /**
+diff --git a/src/stages/brainstorm-auto.js b/src/stages/brainstorm-auto.js
+index 73c2744b..aafa7fb2 100644
+--- a/src/stages/brainstorm-auto.js
++++ b/src/stages/brainstorm-auto.js
+@@ -44,7 +44,7 @@ export const definition = {
+ - 多项目且用户未指定：列出项目列表，需要用户确认
+ 
+ ### 如果有用户提供的原型/截图
+-分析提取：页面结构、表单字段、交互流程、业务规则。
++分析提取：页面结构、表单字段、交互流程、业务规则。可复跑的 HTML 原型覆盖本次 UI 面时走「免生成·登记复用」：复制进变更目录并必须命名 \`prototype-<名称>.html\`（execute 按此命名注入），输出复用声明（来源+覆盖面）；截图/静态稿不可复跑不适用，仍须生成可跑 HTML。
+ 
+ ### 输出
+ 状态摘要 + 项目现状理解（3-5 句）+ 涉及模块列表 + 子项目 + 原型分析（如有）
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index d94f94de..a744da25 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -248,11 +248,15 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ 3. 展示完整设计方案（不要逐段停顿，一次性展示）
+ 4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
+ 5. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+-6. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
++6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）
+ 7. 暂停等待用户确认或修改意见
+ 
+ ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
+ 判定对象是**改造后的界面相对现状的变化程度**：
++- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：
++  - 不重画。把原型文件**复制**进 \`{SPEC_ROOT}/changes/<change-name>/\` 并**必须命名为 \`prototype-<名称>.html\`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用
++  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）
++  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML
+ - **必须生成**（布局/结构/流程级变化）：
+   - 新增页面、视图、路由
+   - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）
+@@ -274,10 +278,10 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ 
+ ### 铁律 — 必须等待用户确认设计
+ - 展示完整设计方案后必须暂停等用户确认，**不要自己说"设计已充分确认"然后推进**（命令由 CLI 在下方注入）
+-- 原型生成或跳过声明必须在暂停**之前**完成——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
++- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 \`prototype-<名称>.html\` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
+ 
+ ### 输出
+-完整设计方案 + 变更名 + 原型文件路径 或 跳过原因（二选一必填；跳过时写明分级依据，用户可当场否决要求补）
++完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）
+ 
+ ### 注意
+ - 不要一次输出大段文字，按模块/Phase 分段
+diff --git a/src/stages/explore.js b/src/stages/explore.js
+index 7d52d5ef..3dd70011 100644
+--- a/src/stages/explore.js
++++ b/src/stages/explore.js
+@@ -30,7 +30,7 @@ export const definition = {
+ - 高保真呈现讨论中的布局/组件/交互流程——用户看到的是"这个方案做出来长什么样"，不是示意图
+ - 与项目现有界面风格一致：先读 scan 文档与现有前端代码，复用现有组件库/设计 token 的观感，不另起风格
+ - 保存到 \`{SPEC_ROOT}/explore/prototype-<名称>.html\`（目录不存在则先创建；用户指定了其他位置则从其指定）
+-- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 \`{SPEC_ROOT}/changes/<变更名>/\` 可直接复用为该变更的原型
++- 原型是探索讨论工具、不是交付物，也不是实现代码——不要顺手把原型接进项目源码或构建；话题后续进入 brainstorm 时，把原型文件复制到 \`{SPEC_ROOT}/changes/<变更名>/\`（**保留 \`prototype-<名称>.html\` 命名**——execute 阶段按此命名注入原型引用，改名＝不注入）可直接复用为该变更的原型
+ 
+ ### 输出
+ 探索结论、选项对比、风险清单或 ASCII 图；如生成了原型，附原型文件路径
+diff --git a/test/proto-reuse-register.test.mjs b/test/proto-reuse-register.test.mjs
+new file mode 100644
+index 00000000..977186e8
+--- /dev/null
++++ b/test/proto-reuse-register.test.mjs
+@@ -0,0 +1,87 @@
++/**
++ * proto-reuse-register.test.mjs — 原型「免生成·登记复用」档（2026-10-13-proto-reuse-register）
++ *
++ * fire-equipment 实证：用户已提供可复跑 HTML 原型时，分级无复用档 → agent 按精神走「跳过」
++ * 且不登记 → execute 注入（按 prototype-*.html 命名扫描）不生效。本测试锁三层契约：
++ *   ① brainstorm 分级含登记复用档：prototype-<名称>.html 命名硬要求 + 来源/覆盖面声明 + 静态稿排除；
++ *   ② 三选一口径落在分级步操作/铁律/输出三处；
++ *   ③ 周边四处（brainstorm-auto / explore / gates 软提醒 / design-facts 自审清单）同步口径。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { definition as brainstormDef } from '../src/stages/brainstorm.js'
++import { definition as brainstormAutoDef } from '../src/stages/brainstorm-auto.js'
++import { definition as exploreDef } from '../src/stages/explore.js'
++import { warnMissingUiPrototype } from '../src/run/gates.js'
++import { generateDesignSkeleton } from '../src/design-facts.js'
++
++// ── 定位「展示设计方案」步 ──
++const showStep = brainstormDef.steps.find(s => (s.prompt || '').includes('HTML 原型分级'))
++assert.ok(showStep, 'brainstorm 应有含「HTML 原型分级」的展示设计方案步骤')
++const prompt = showStep.prompt || ''
++// 分级表内登记复用档文本（登记复用档排在必须生成档之前）
++const reuseIdx = prompt.indexOf('登记复用')
++const mustGenIdx = prompt.indexOf('必须生成')
++const reuseTier = reuseIdx >= 0 && mustGenIdx > reuseIdx ? prompt.slice(reuseIdx, mustGenIdx) : ''
++
++test('① 分级含登记复用档：命名硬要求 + 来源/覆盖面声明', () => {
++  assert.ok(reuseIdx > 0, '分级表必须含「登记复用」档')
++  assert.ok(reuseTier.includes('prototype-<名称>.html'), '登记复用必须写明 prototype-<名称>.html 命名（execute 注入契约）')
++  assert.ok(/复制/.test(reuseTier), '登记复用是复制落盘，不是口头引用')
++  assert.ok(/来源/.test(reuseTier) && /覆盖面/.test(reuseTier), '复用声明必须含来源与覆盖面')
++  assert.ok(/多个|共存/.test(reuseTier), '部分覆盖时允许多个 prototype-*.html 共存增量生成')
++})
++
++test('① 排除项：截图/静态设计稿不适用复用档', () => {
++  assert.ok(reuseTier.length > 0, '前置：登记复用档文本已提取')
++  assert.ok(/截图|静态/.test(reuseTier), '登记复用档内必须显式排除截图/静态设计稿（不可复跑）')
++})
++
++test('② 三选一口径落在操作/铁律/输出三处', () => {
++  assert.ok(/三选一/.test(prompt), '分级步操作须声明三选一（生成/登记复用/跳过原因）')
++  assert.ok(/跳过原因/.test(prompt) && /必须生成/.test(prompt), '三选项（生成/登记复用/跳过原因）全部在场')
++  const ironIdx = prompt.indexOf('铁律')
++  assert.ok(ironIdx > 0, '铁律段在场')
++  assert.ok(/复用登记|登记复用/.test(prompt.slice(ironIdx)), '铁律的暂停前落定清单须含复用登记')
++  assert.ok(/复用声明/.test(prompt), '输出契约须含复用声明（来源+覆盖面）')
++})
++
++test('③ brainstorm-auto 原型节同步登记复用口径', () => {
++  const step1 = brainstormAutoDef.steps[0]
++  const p = (step1 && step1.prompt) || ''
++  assert.ok(/登记复用/.test(p), 'brainstorm-auto 原型节须含登记复用指引')
++  assert.ok(p.includes('prototype-<名称>.html'), 'brainstorm-auto 须写明 prototype-<名称>.html 命名')
++})
++
++test('③ explore 复制复用行保留命名要求', () => {
++  const p = JSON.stringify(exploreDef)
++  assert.ok(/prototype-<名称>\.html/.test(p) && /保留/.test(p),
++    'explore 复用指引须注明保留 prototype-<名称>.html 命名（execute 按此注入）')
++})
++
++test('③ gates 软提醒文案含登记复用出路（行为锁）', () => {
++  const base = mkdtempSync(join(tmpdir(), 'prr-gates-'))
++  const changeDir = join(base, 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n| 修改 | src/App.tsx | 新增列 |\n')
++  const capture = []
++  const origWarn = console.warn
++  console.warn = (...a) => capture.push(a.join(' '))
++  try {
++    warnMissingUiPrototype('brainstorm', 'c1', '生成规范文件', base)
++  } finally {
++    console.warn = origWarn
++  }
++  assert.equal(capture.length, 1, '命中前端文件且无原型 → warn 一行')
++  assert.ok(/登记复用/.test(capture[0]), '提醒文案须含登记复用出路')
++  assert.ok(/prototype-<名称>\.html/.test(capture[0]), '提醒文案须点名 prototype-<名称>.html 命名')
++})
++
++test('③ design-facts 自审清单项含复用登记与命名要求', () => {
++  const skeleton = generateDesignSkeleton({ changeName: '2026-10-13-x' })
++  assert.ok(/登记复用/.test(skeleton), '自审清单 UI 原型项须含登记复用')
++  assert.ok(/prototype-\*\.html/.test(skeleton), '自审清单须保留 prototype-*.html 命名锚')
++})
