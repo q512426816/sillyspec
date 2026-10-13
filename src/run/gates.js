@@ -224,7 +224,7 @@ export function warnMissingUiPrototype(stageName, changeName, currentStepName, s
   const design = readFileSync(designPath, 'utf8')
   const feExts = [...new Set((design.match(/\.(vue|svelte|astro|tsx|jsx|css|scss|sass|less|styl|html)\b/gi) || []).map(s => s.replace('.', '').toLowerCase()))]
   if (feExts.length === 0) return
-  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成）`)
+  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入）`)
 }
 
 /**
