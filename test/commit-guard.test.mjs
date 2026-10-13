@@ -223,6 +223,26 @@ function gitCommit(root, args) {
   assert(!sh('git show HEAD:a.txt', root).includes('WORKTREE-EXTRA'), '18b 全量提交取索引不取工作树（携带不发生——语义面正确）')
 }
 
+// 19. linked worktree（评审 P1 清偿锚）：干净流转零误报 + 携带形态仍必告警
+{
+  const root = makeHookRepo('cg-19-')
+  const wt = join(root, 'wt')
+  sh(`git worktree add -q "${wt.split('\\').join('/')}" -b wt-branch`, root)
+  // 19a 干净规则 11 流转（worktree 内 pathspec 提交）→ 零告警（P1 误报形态：曾把全文件判偏差）
+  writeFileSync(join(wt, 'b.txt'), 'clean-wt\n')
+  sh('git add b.txt', wt)
+  const r19a = gitCommit(wt, ['-qm', 'x', '--', 'b.txt'])
+  assert(r19a.code === 0 && !r19a.stderr.includes('[commit-guard]'), `19a worktree 干净流转零 S3 误报（实际 stderr：${r19a.stderr.slice(0, 160)}）`)
+  // 19b worktree 内携带形态 → 仍必告警（真索引在 .git/worktrees/<n>/index，resolve 路由）
+  writeFileSync(join(wt, 'a.txt'), 'wt-clean\n')
+  sh('git add a.txt', wt)
+  writeFileSync(join(wt, 'a.txt'), 'wt-clean\nWT-FOREIGN\n')
+  const r19b = gitCommit(wt, ['-qm', 'y', '--', 'a.txt'])
+  assert(r19b.code === 0, '19b worktree pathspec 提交放行')
+  assert(r19b.stderr.includes('[commit-guard]') && r19b.stderr.includes('a.txt'), `19b worktree 携带形态仍告警（实际 stderr：${r19b.stderr.slice(0, 160)}）`)
+  assert(sh('git show HEAD:a.txt', wt).includes('WT-FOREIGN'), '19c worktree 事故形态复现（携带事实在场）')
+}
+
 for (const dir of tmpRoots) {
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
 }

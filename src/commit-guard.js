@@ -145,8 +145,11 @@ function main() {
   }
   let warnings = analyzeStagedFace(staged, qlPatches)
   // S3：pathspec 提交的暂存区旁路检测（fail-open——任何异常静默跳过该信号，绝不拦提交）。
-  // ⚠ 真索引解析必须剥掉 GIT_INDEX_FILE（实证：rev-parse --git-path index 跟随该环境变量，
-  // 钩子内会返回临时索引路径自身——护栏误判全量提交而跳过检测）。未设或等于真索引 → 跳过。
+  // ⚠ 两个实证语义：①rev-parse --git-path index 跟随 GIT_INDEX_FILE（钩子内返回临时索引
+  // 路径自身）——真索引解析必须剥掉该环境变量；②worktree 内该命令返回**绝对路径**
+  // （.git/worktrees/<n>/index）——拼接必须用 resolve（绝对段重置），join(cwd, 绝对) 会拼出
+  // 损坏路径 → ls-files 指向不存在索引 exit 0 输出空 → 全文件误判偏差（评审 P1 实证）。
+  // 未设或等于真索引 → 跳过（普通全量提交零开销）。
   try {
     const envIdx = process.env.GIT_INDEX_FILE || ''
     if (envIdx) {
@@ -154,14 +157,15 @@ function main() {
       const realIdxRaw = execFileSync('git', ['rev-parse', '--git-path', 'index'], {
         cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: envNoIdx,
       }).trim()
+      const realIdx = resolve(cwd, realIdxRaw) // 绝对段重置语义（worktree 形态关键）
       const norm = (p) => {
         try { return resolve(p).replace(/\\/g, '/').toLowerCase() } catch { return String(p).replace(/\\/g, '/').toLowerCase() }
       }
-      if (norm(envIdx) !== norm(join(cwd, realIdxRaw)) && norm(envIdx) !== norm(realIdxRaw)) {
+      if (norm(envIdx) !== norm(realIdx)) {
         const tempLs = execFileSync('git', ['ls-files', '-s'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
         const realLs = execFileSync('git', ['ls-files', '-s'], {
           cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
-          env: { ...process.env, GIT_INDEX_FILE: resolve(join(cwd, realIdxRaw)) },
+          env: { ...process.env, GIT_INDEX_FILE: realIdx },
         })
         warnings = [...warnings, ...analyzeIndexDivergence(parseLsFiles(tempLs), parseLsFiles(realLs))]
       }
