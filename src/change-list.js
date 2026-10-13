@@ -13,6 +13,9 @@ export function normalizePath(raw) {
     .replace(/`/g, '')
     .replace(/\s*（[^）]*）\s*$/, '')
     .replace(/\s*\([^)]*\)\s*$/, '')
+    // 未闭合尾括号残片兜底剥除（2026-10-13-declared-paren-strip：冒号剥等上游截断产生的
+    // 「路径黏连（交付」形态——闭合剥救不回，缺陷档案 flow-diff-declared-face-paren-pollution）
+    .replace(/\s*[（(][^）)]*$/, '')
     .replace(/\\/g, '/')
     .replace(/\/+$/, '')
     .trim()
@@ -330,6 +333,16 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
       const preCross = splitCrossRepoPrefix(normalizePath(listItem[1]), repoKeys)
       let rawItem = listItem[1]
       if (!preCross) {
+        // 括号注记剥除前置于冒号剥（2026-10-13-declared-paren-strip，缺陷档案实证：注记
+        // 「（交付：说明）」的冒号在括号内，冒号剥先跑把行砍成「路径（交付」未闭合残片——
+        // 循环剥行尾完整括号组（嵌套/多组）+ 未闭合残片兜底，路径中段括号不动）。
+        let _prev
+        do {
+          _prev = rawItem
+          rawItem = rawItem
+            .replace(/\s*[（(][^）)]*[）)]\s*$/, '')
+            .replace(/\s*[（(][^）)]*$/, '')
+        } while (rawItem !== _prev)
         // 坑 brainstorm-gate-agent-unavailable-and-list-path-parse 坑2：列表项「路径：描述」
         // 整行当路径 existsSync 假阴性（文件存在却报幻觉路径）——剥首个中/英冒号及之后描述。
         // 仅列表分支剥、且冒号前段须 looksLikePath：normalizePath 全局剥会毁 Windows 绝对路径

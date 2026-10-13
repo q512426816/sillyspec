@@ -26,6 +26,7 @@ import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByComm
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { computeDocsDebt } from './docs-debt.js'
 import { writeAtomicSync } from './fs-atomic.js'
+import { normalizePath } from './change-list.js'
 import { readV2SectionAnswer } from './flow-review.js'
 import { DESIGN_QUESTIONS } from './flow-draft.js'
 import { pathMatches } from './change-list.js'
@@ -563,6 +564,19 @@ export function buildThinSnapshotRows({ ownFiles, stats, planEntries, crossRepoR
     // + pathMatches 双判——对账行是真实三态或 degraded ⊘，覆盖即不再补恒 ⊘ 行）；对账行缺失
     // （fail-soft 退路/降级仓无行）→ 照旧补 ⊘ 行
     if (e.repo && crossRows.some((r) => r.crossRepo === e.repo && pathMatches(String(r.path || ''), e.path))) continue
+    // 兜底合并（2026-10-13-declared-paren-strip）：declared 路径剥括号残片（normalizePath，
+    // 与解析端同源）后与实际行精确等值 → 不补占位行；实际行归因升 planned（取更准一行），
+    // totals 按唯一路径计。防他源污染形态致同文件双行/文件数虚高（缺陷档案实证形态的兜底层）。
+    const clean = normalizePath(String(e.path || ''))
+    const hitRow = clean ? rows.find((r) => r.path === clean && !r.crossRepo) : null
+    if (hitRow) {
+      matched.add(e.path)
+      if (hitRow.verdict !== 'planned') {
+        hitRow.planned = e.operation || null
+        hitRow.verdict = 'planned'
+      }
+      continue
+    }
     rows.push({
       path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
       kind: 'modified', verdict: 'untouched',
