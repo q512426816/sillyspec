@@ -13,6 +13,10 @@
  *      即警告「疑似扫入他者文件」。
  *   S2 跨变更目录：staged 里 .sillyspec/changes/<name>/（含 archive/）命中 ≥2 个不同
  *      name → 警告「正常提交只携带一个变更的面」。
+ *   S3 pathspec 提交暂存区旁路（2026-10-13-commit-guard-s3，055080e4 三十八行夹带实证）：
+ *      `git commit -- <路径>` 取工作树内容构造临时索引（GIT_INDEX_FILE 指给钩子），
+ *      暂存区净版被绕过——两索引同路径 blob 不一致 = 提交将携带未暂存工作树内容
+ *      （共享仓多会话时即并行编辑夹带）。普通全量提交零开销跳过。
  * 命中即 stderr 警告 + appendWriteAudit 留痕（via: 'commit-guard'）。
  *
  * fail-open 硬约束（钩子挂在所有会话共享的 .husky/ 上，守卫自身绝不拦任何人的提交）：
@@ -20,7 +24,7 @@
  */
 import { execFileSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { pathToFileURL } from 'url'
 import { appendWriteAudit } from './write-audit.js'
 
@@ -75,6 +79,43 @@ export function analyzeStagedFace(stagedFiles, qlPatches) {
   return warnings
 }
 
+/**
+ * S3 纯函数①：解析 `git ls-files -s` 输出为条目数组（CRLF/噪声行容错）。
+ * 行形态：`<mode> <sha> <stage>\t<path>`。
+ */
+export function parseLsFiles(output) {
+  const out = []
+  for (const line of String(output || '').split(/\r?\n/)) {
+    const m = line.match(/^(\d+) ([0-9a-f]{40}) (\d+)\t(.+)$/)
+    if (m) out.push({ mode: m[1], sha: m[2], stage: Number(m[3]), path: m[4] })
+  }
+  return out
+}
+
+/**
+ * S3 纯函数②：两索引逐路径比对（2026-10-13-commit-guard-s3）。temp=钩子 GIT_INDEX_FILE
+ * 指向的临时索引（pathspec 提交将入库的内容），real=真实暂存区（用户 add 过的净版）。
+ * 不一致（异 sha / 仅临时在场）= 提交将携带未暂存工作树内容——暂存净版被 pathspec 语义
+ * 绕过（055080e4 实证形态）。仅真实在场（staged 但不在 pathspec）不告：该文件不会被
+ * 本提交带走。冲突态（stage>0）不判。
+ */
+export function analyzeIndexDivergence(tempEntries, realEntries) {
+  const real = new Map()
+  for (const e of realEntries) if (e && e.stage === 0 && e.path) real.set(e.path, e.sha)
+  const files = []
+  for (const e of tempEntries) {
+    if (!e || e.stage !== 0 || !e.path) continue
+    const rs = real.get(e.path)
+    if (rs === undefined || rs !== e.sha) files.push(e.path)
+  }
+  if (files.length === 0) return []
+  return [{
+    signal: 'index_divergence_on_pathspec_commit',
+    files,
+    message: `pathspec 提交将携带未暂存的工作树内容（暂存区净版被绕过——git commit -- <路径> 取工作树内容）：${files.slice(0, 5).join('、')}${files.length > 5 ? ' 等' : ''}——共享仓此形态会夹带并行会话在途编辑；核对 git diff -- <路径> 后 add 最新净版再提交，或等并行会话先提交该文件`,
+  }]
+}
+
 function main() {
   const cwd = process.cwd()
   let staged = []
@@ -102,7 +143,30 @@ function main() {
       qlPatches[f] = JSON.parse(readFileSync(join(cwd, f), 'utf8'))
     } catch { /* 单个 json 损坏 → 跳过该信号源，不连坐 */ }
   }
-  const warnings = analyzeStagedFace(staged, qlPatches)
+  let warnings = analyzeStagedFace(staged, qlPatches)
+  // S3：pathspec 提交的暂存区旁路检测（fail-open——任何异常静默跳过该信号，绝不拦提交）。
+  // ⚠ 真索引解析必须剥掉 GIT_INDEX_FILE（实证：rev-parse --git-path index 跟随该环境变量，
+  // 钩子内会返回临时索引路径自身——护栏误判全量提交而跳过检测）。未设或等于真索引 → 跳过。
+  try {
+    const envIdx = process.env.GIT_INDEX_FILE || ''
+    if (envIdx) {
+      const { GIT_INDEX_FILE: _drop, ...envNoIdx } = process.env
+      const realIdxRaw = execFileSync('git', ['rev-parse', '--git-path', 'index'], {
+        cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: envNoIdx,
+      }).trim()
+      const norm = (p) => {
+        try { return resolve(p).replace(/\\/g, '/').toLowerCase() } catch { return String(p).replace(/\\/g, '/').toLowerCase() }
+      }
+      if (norm(envIdx) !== norm(join(cwd, realIdxRaw)) && norm(envIdx) !== norm(realIdxRaw)) {
+        const tempLs = execFileSync('git', ['ls-files', '-s'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+        const realLs = execFileSync('git', ['ls-files', '-s'], {
+          cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+          env: { ...process.env, GIT_INDEX_FILE: resolve(join(cwd, realIdxRaw)) },
+        })
+        warnings = [...warnings, ...analyzeIndexDivergence(parseLsFiles(tempLs), parseLsFiles(realLs))]
+      }
+    }
+  } catch { /* S3 fail-open：解析/比对异常静默跳过 */ }
   if (warnings.length === 0) return 0
   for (const w of warnings) process.stderr.write(`⚠️ [commit-guard] ${w.message}\n`)
   const specDir = join(cwd, '.sillyspec')
