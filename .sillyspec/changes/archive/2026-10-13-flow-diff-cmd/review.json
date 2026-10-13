@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-flow-diff-cmd",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0f4b572c0526a679ce9e347112ca0ff0f3669b99",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "维持成立（一审已核）。本轮增量：无 src 改动，时点快照语义未受清偿影响。",
+    "并发": "F2 已清偿：design Q2 补披露精度——diff 分支照 flow 族全子命令惯例 best-effort 调 reportAgentLog，agent 环境在场时写 .runtime/agent-session-log.json（既有横切观测面、withFileLock 串行、非本变更新增、不触碰变更数据）。实证核验：reportAgentLog 在 810388d9~1 已在场（src/flow.js 8 处引用，先于本变更），withFileLock 属实（agent-session-log.js:1136），agent 环境探测不到不写——披露与实态相符。变更数据零写面（flow-state/changes/工作树）维持成立。",
+    "切换": "维持成立（一审已核）。本轮增量：无状态机改动，中断无半态、双态切换语义未受清偿影响。",
+    "作用域": "维持成立（一审已核）。本轮增量：无 src 改动，ownPrefix 剔自己治理件、他会话在途文件事实呈现的口径未变。"
+  },
+  "reviewedAt": "2026-10-13T08:18:19Z"
+}

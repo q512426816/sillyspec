@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-flow-diff-cmd",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-flow-diff-cmd:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-diff-cmd.test.mjs「归档态：读 scopeAudit 渲染逐文件 +N/-M 与 totals（含 verdict），--json 同构」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-flow-diff-cmd"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-flow-diff-cmd:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-diff-cmd.test.mjs「活跃态：提交面+dirty 面双段渲染，untracked 计行数，治理件剔除断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-flow-diff-cmd"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-flow-diff-cmd:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-diff-cmd.test.mjs「变更不存在 exit 1 一次给全 + 无基线 exit 0 + 非法名白名单拒收」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-flow-diff-cmd"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-flow-diff-cmd:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-diff-cmd.test.mjs「只读零副作用：调用前后 flow-state/工作树/git status 字节不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-flow-diff-cmd"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-13-flow-diff-cmd:flow:测试绑定FR-05",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-flow-diff-cmd"
+    }
+  ]
+}

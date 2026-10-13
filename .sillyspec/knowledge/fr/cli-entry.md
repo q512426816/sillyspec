@@ -9284,3 +9284,98 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-13-thin-sync-stage
   status: active
+
+## FR-cli-entry-490 flow diff --change <归档名> 渲染归档件逐文件 +N/-M 与 totals（含 verdict 列），--json 输出同构结构
+变更：2026-10-13-flow-diff-cmd
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-flow-diff-cmd/requirements.md#FR-01
+最近确认：0f4b572c0526a679ce9e347112ca0ff0f3669b99
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-flow-diff-cmd:flow:测试绑定FR-01
+  tests: test/flow-diff-cmd.test.mjs「归档态：读 scopeAudit 渲染逐文件 +N/-M 与 totals（含 verdict），--json 同构」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-flow-diff-cmd
+  status: active
+
+## FR-cli-entry-491 flow diff --change <活跃名> 实时计算：已提交交付面（baseline..HEAD 经 filterCommittedFace 冻结面口径）+ 未提交交付面（工作树 vs HEAD，untracked 按行数、二进制 null）+ 合计
+变更：2026-10-13-flow-diff-cmd
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-flow-diff-cmd/requirements.md#FR-02
+最近确认：0f4b572c0526a679ce9e347112ca0ff0f3669b99
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-flow-diff-cmd:flow:测试绑定FR-02
+  tests: test/flow-diff-cmd.test.mjs「活跃态：提交面+dirty 面双段渲染，untracked 计行数，治理件剔除断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-flow-diff-cmd
+  status: active
+
+## FR-cli-entry-492 变更不存在 → exit 1 且修复路径一次给全；无 git 基线 → 显式提示 exit 0；变更名走既有白名单校验
+变更：2026-10-13-flow-diff-cmd
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-flow-diff-cmd/requirements.md#FR-03
+最近确认：0f4b572c0526a679ce9e347112ca0ff0f3669b99
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-flow-diff-cmd:flow:测试绑定FR-03
+  tests: test/flow-diff-cmd.test.mjs「变更不存在 exit 1 一次给全 + 无基线 exit 0 + 非法名白名单拒收」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-flow-diff-cmd
+  status: active
+
+## FR-cli-entry-493 只读零副作用：不 pull/不写盘/不改 flow-state（与 scan diff 同纪律）
+变更：2026-10-13-flow-diff-cmd
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-flow-diff-cmd/requirements.md#FR-04
+最近确认：0f4b572c0526a679ce9e347112ca0ff0f3669b99
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-flow-diff-cmd:flow:测试绑定FR-04
+  tests: test/flow-diff-cmd.test.mjs「只读零副作用：调用前后 flow-state/工作树/git status 字节不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-flow-diff-cmd
+  status: active
+
+## FR-cli-entry-494 既有回归零改动全绿；flow 族 usage 行补 diff
+变更：2026-10-13-flow-diff-cmd
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-flow-diff-cmd/requirements.md#FR-05
+最近确认：0f4b572c0526a679ce9e347112ca0ff0f3669b99
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-flow-diff-cmd:flow:测试绑定FR-05
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-flow-diff-cmd
+  status: active

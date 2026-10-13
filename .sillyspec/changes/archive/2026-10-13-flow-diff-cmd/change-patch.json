@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-13-flow-diff-cmd",
+  "baseline": "d4f90588114ba4b86ba36379228e5f7cd31c0e4a",
+  "head": "0f4b572c0526a679ce9e347112ca0ff0f3669b99",
+  "files": [
+    "src/flow.js",
+    "test/flow-diff-cmd.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 315,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-13T08:19:02.164Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d4f90588114ba4b86ba36379228e5f7cd31c0e4a",
+    "totals": {
+      "files": 2,
+      "additions": 315,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 115,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-diff-cmd.test.mjs",
+        "additions": 200,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7c7927866a481c581d58770490fe3c210c61b5ec232b7787903e5591a876d656",
+  "patchStatus": "ok"
+}
