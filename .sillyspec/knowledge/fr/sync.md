@@ -441,3 +441,98 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-10-08-batch-tick-false-positive
   status: active
+
+## FR-sync-035 pathspec 提交且某路径临时索引与真实暂存区 blob 不一致时，S3 警告点名路径与机理，写 write-audit 留痕，exit 恒 0 不阻断提交
+变更：2026-10-13-commit-guard-s3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-commit-guard-s3/requirements.md#FR-01
+最近确认：3367ea65d8625a1f0db9d78ee53ac004629e5f70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-commit-guard-s3:flow:测试绑定FR-01
+  tests: test/commit-guard.test.mjs「S3 集成：055080e4 形态必告警且放行（真实 git 钩子路径）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-commit-guard-s3
+  status: active
+
+## FR-sync-036 规则 11 正常流转（add 净版后不再改文件+同清单 pathspec 提交）与普通全量提交两形态零 S3 警告（GIT_INDEX_FILE 未设或等于真索引即跳过）
+变更：2026-10-13-commit-guard-s3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-commit-guard-s3/requirements.md#FR-02
+最近确认：3367ea65d8625a1f0db9d78ee53ac004629e5f70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-commit-guard-s3:flow:测试绑定FR-02
+  tests: test/commit-guard.test.mjs「S3 集成：干净 pathspec 流转与全量提交零告警」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-commit-guard-s3
+  status: active
+
+## FR-sync-037 纯函数四态可直测：同 sha 零告、异 sha 点名、仅临时索引（未 add 的新文件随 pathspec 提交）点名、仅真实索引（staged 但不在本次 pathspec）不点名；冲突态 stage 大于 0 条目忽略
+变更：2026-10-13-commit-guard-s3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-commit-guard-s3/requirements.md#FR-03
+最近确认：3367ea65d8625a1f0db9d78ee53ac004629e5f70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-commit-guard-s3:flow:测试绑定FR-03
+  tests: test/commit-guard.test.mjs「analyzeIndexDivergence 四态纯函数用例」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-commit-guard-s3
+  status: active
+
+## FR-sync-038 真仓集成测试：真实 git 钩子复现 055080e4 形态必告警且提交放行；干净流转与全量提交零误报
+变更：2026-10-13-commit-guard-s3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-commit-guard-s3/requirements.md#FR-04
+最近确认：3367ea65d8625a1f0db9d78ee53ac004629e5f70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-commit-guard-s3:flow:测试绑定FR-04
+  tests: test/commit-guard.test.mjs「S3 集成（同 FR-01 场景断言 write-audit 与 exit 0）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-commit-guard-s3
+  status: active
+
+## FR-sync-039 既有 S1/S2 行为零回归（test/commit-guard.test.mjs 既有断言零改动全绿）
+变更：2026-10-13-commit-guard-s3
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-commit-guard-s3/requirements.md#FR-05
+最近确认：3367ea65d8625a1f0db9d78ee53ac004629e5f70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-commit-guard-s3:flow:测试绑定FR-05
+  tests: test/commit-guard.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-commit-guard-s3
+  status: active

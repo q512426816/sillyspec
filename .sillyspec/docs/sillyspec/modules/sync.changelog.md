@@ -2,3 +2,4 @@
 - ql-20260914-007-fcb7 | sync-noise.js 加变更级 change_deleted 回执噪音闸（syncChangeDeletedLog/Warn/noteChangeDeletedResolved，按变更名 marker 窗口）；sync() 三处回执行走闸 + 成功精清 + platform sync manual 旁路
 - 2026-09-28-archive-timeline-bake | 归档链时间线烤制：runArchiveChain rename 后把合成时间线烤为 archive/<变更名>/timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面；fail-open 不阻断归档）——事件流机本位（.runtime gitignore）不随 .runtime 存活消失，归档包进 git 跨机可读；readWatcherEvents 增 path 直读形态（坏行容忍同语义）；watcher timeline CLI 在本机 .runtime 无事件流时回退读归档副本并注记事件来源（副本也缺失保持既有 exit 2）。测试锚 test/archive-timeline-bake.test.mjs
 - 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每 
+- 2026-10-13-commit-guard-s3 | 动机：S3 提案机制已实证（临时仓实验：pathspec 提交时 pre-commit 钩子的 GIT_INDEX_FI
