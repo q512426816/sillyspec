@@ -32,7 +32,7 @@
  *     flow-state substeps 无失败计数面（执行期裁决 D-006：数据源从卡面所述「flow-state
  *     substeps」改读同为既有记录面的 verify-runs 时间线，封闭面语义不变）。
  */
-import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, basename, dirname } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -273,4 +273,36 @@ export function readHindsightHint({ specBase }) {
   }
 }
 
-export default { HINDSIGHT_THRESHOLDS, snapshotBaseline, computeHindsightMetrics, markHindsight, readHindsightHint }
+/**
+ * 标记结构化读取（2026-10-14-prestage-consent-gate）：同意门需要 change/reasons 组文案，
+ * 提示行渲染（resume 路径）仍走 readHindsightHint。无文件/损坏 → null（读不到=无门）。
+ * @returns {{ change: string, marked_at?: string, metrics?: object, reasons?: string[] } | null}
+ */
+export function readHindsightMark({ specBase }) {
+  try {
+    const raw = readFileSync(join(specBase, '.runtime', MARK_FILE), 'utf8')
+    const j = JSON.parse(raw)
+    if (!j || typeof j !== 'object' || !j.change) return null
+    return j
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 消费标记（声明放行 --no-prestage / adopt 头脑风暴收编时由 flow.js 调用）：删除标记文件。
+ * 一次性反馈语义——声明只豁免下一次 start，不豁免之后所有（之后再被标记会重新落盘重新拦）。
+ * @returns {boolean} 是否真删（无标记/删除失败 = false，幂等零副作用）
+ */
+export function clearHindsightMark({ specBase }) {
+  try {
+    const p = join(specBase, '.runtime', MARK_FILE)
+    if (!existsSync(p)) return false
+    rmSync(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export default { HINDSIGHT_THRESHOLDS, snapshotBaseline, computeHindsightMetrics, markHindsight, readHindsightHint, readHindsightMark, clearHindsightMark }

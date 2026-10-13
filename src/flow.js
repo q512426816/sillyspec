@@ -547,7 +547,7 @@ async function cmdFlowDiff({ change, cwd, specBase, json = false }) {
   console.log(`合计：${totals.files} 文件 +${totals.additions ?? '?'} -${totals.deletions ?? '?'}${mode === 'active' ? '（baseline→工作树累计口径，含未提交）' : ''}`)
 }
 
-export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
+export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
@@ -582,6 +582,12 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       // 保留，机器只补缺件与绑定面。无产物 = 真 legacy 既有变更，维持原拒收。
       const hasBsArtifacts = existsSync(join(changeDir, 'proposal.md')) || existsSync(join(changeDir, 'design.md'))
       if (hasBsArtifacts) {
+        // 预段反馈闭环（2026-10-14-prestage-consent-gate）：走了头脑风暴预段=选道正确，
+        // 消费 route-hindsight 标记（同意门的一次性豁免在这里用掉，无声明 flag 也放行）
+        try {
+          const { clearHindsightMark } = await import('./route-hindsight.js')
+          if (clearHindsightMark({ specBase })) console.log('🕰️ 预段同意门：头脑风暴收编即选道正确，route-hindsight 标记已消费')
+        } catch { /* 消费 best-effort */ }
         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
         writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
@@ -768,6 +774,37 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     }
   }
 
+  // 预段选道同意门（2026-10-14-prestage-consent-gate）：route-hindsight 标记从「下次 start 点名
+  // 提示」升级为声明即过的同意门——上个轻量变更被标「疑似该走预段未走」时，本次全新 start 须
+  // 显式选道一次（--no-prestage 声明留痕 / 先走 brainstorm 预段）。边界：门不判本次需求清不清晰
+  // （判定归 agent/用户，D-005 弱信号），只把上次的过程形态信号摆上台面要求一次显式消费——同
+  // --autopilot/--upgrade-thick 的同意门模式（「可无视」升级为「可无视但需留痕声明」）。
+  // 豁免面：resume（上方分支早退）天然不受影响；平台 writer 预建空目录（proceedFreshEmptyDir）
+  // 豁免——平台自动派发无选道对话面，标记留给人工会话消化；adopt（头脑风暴收编）= 选道正确，
+  // 在 adopt 分支消费标记。读取 fail-open（读不到=无门），消费失败不阻断（下次再声明一次）。
+  if (!proceedFreshEmptyDir) {
+    let prestageMark = null
+    try {
+      const { readHindsightMark } = await import('./route-hindsight.js')
+      prestageMark = readHindsightMark({ specBase })
+    } catch { /* 标记读取 fail-open */ }
+    if (prestageMark) {
+      if (!prestageAck) {
+        const _why = Array.isArray(prestageMark.reasons) && prestageMark.reasons.length > 0
+          ? prestageMark.reasons.join('；') : '过程形态超阈'
+        console.error(`❓ 预段选道同意门：上个轻量变更「${prestageMark.change}」被 route-hindsight 标记「疑似该走头脑风暴预段未走」（${_why}）。本次全新 start 须显式选道（声明即过——标记是过程形态信号非定罪）：`)
+        console.error(`   ① 确认需求已含决策（成功标准来自用户原话或既有文档转写，而非你的推断）：sillyspec flow start --change ${change} --input "<原输入>" --no-prestage（声明留痕 flow-state.prestage_ack，标记消费）`)
+        console.error(`   ② 需求不清晰或需方案探索：sillyspec run brainstorm --change ${change}（完成后回来 flow start 收编，标记自动消费）`)
+        process.exit(2)
+      }
+      try {
+        const { clearHindsightMark } = await import('./route-hindsight.js')
+        clearHindsightMark({ specBase })
+        console.log(`🕰️ 预段同意门：已按 --no-prestage 声明放行（本次需求已含决策，留痕 flow-state.prestage_ack；上个标记「${prestageMark.change}」已消费）`)
+      } catch { /* 标记消费 best-effort：失败不阻断（下次 start 再声明一次） */ }
+    }
+  }
+
   // 升厚预判已删除（2026-09-25-thin-precheck-removal）：技术面关键词（数据库/迁移等）测错轴——
   // R16 实证碰迁移的变更轻量变更带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
@@ -813,6 +850,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     // autopilot（2026-10-04-thin-docs-v2 FR-06）：用户显式声明跳过 spec 断点人审（--autopilot）；
     // 缺省 false——flow done 要求 flow approve 批准证据（spec 断点机器化，护栏#2：零 prompt 劝说）
     autopilot: Boolean(autopilot),
+    // 预段同意门声明留痕（2026-10-14-prestage-consent-gate）：hindsight 标记在场时全新 start
+    // 以 --no-prestage 显式声明「本次需求已含决策」放行——审计面可区分「确认过」与「没被问过」
+    prestage_ack: Boolean(prestageAck),
     baseline_commit: baseline,
     substeps: {},
   })
@@ -2469,6 +2509,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
       withTasks: hasFlag('--with-tasks'),
       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
       autopilot: hasFlag('--autopilot'),
+      prestageAck: hasFlag('--no-prestage'),
       cwd, specBase,
       json: hasFlag('--json') || jsonGlobal,
     })
@@ -2680,12 +2721,13 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
   console.error('      --input 可照抄形态（引号内换行合法）：')
   console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
   console.error('')
   console.error('      成功标准：')
   console.error('      - <可验证标准>"')
+  console.error('      预段同意门被拦时（上个轻量变更被 route-hindsight 标记「疑似该走预段未走」）：确认需求已含决策加 --no-prestage；不清晰则先 run brainstorm --change <名>，完成后回来 flow start 收编（标记自动消费）')
   process.exit(2)
 }
 

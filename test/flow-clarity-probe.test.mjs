@@ -6,9 +6,11 @@
  *   ① 新建路径输出含「选道自检」固定段（盘问重述措辞＋brainstorm 指路，纯提示不阻断）；
  *   ② adopt（头脑风暴收编）/resume（重入恢复）路径输出不含自检段（D-002 精神：无重复仪式）；
  *   ③ 清晰度门 exit 2 文案逐字保留（src/flow.js 既有六行不动）；
- *   ④ hindsight 闭环：有标记 → start 点名提示（自检段上方）；无标记 → 输出与现状一致
- *      （确定性头区逐字节等值——纯增量渲染段）；start/adopt 落首版快照；flow done 后
- *      超阈指标 → per-repo 标记落库，下次 start 可见（端到端 FR-02 回路）。
+ *   ④ hindsight 闭环（2026-10-14-prestage-consent-gate 升级为同意门）：有标记 → 全新 start
+ *      exit 2 两选一（--no-prestage 声明留痕 / 预段指路）且标记不消费；声明放行后 ack 行
+ *      纯增量（剥掉后头区与无标记逐字节一致）且标记消费；无标记 → 输出与现状一致；
+ *      start/adopt 落首版快照；flow done 后超阈指标 → per-repo 标记落库，下次 start 被
+ *      同意门拦下点名（端到端 FR-02 回路）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -85,7 +87,7 @@ test('① 新建路径输出含选道自检段＋落首版快照；无 hindsight
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('④ 有 hindsight 标记 → 自检段上方点名提示；无标记 → 头区逐字节一致（纯增量渲染段）', () => {
+test('④ 有 hindsight 标记 → 全新 start 被同意门拦（exit 2）；--no-prestage 声明放行后头区纯增量', () => {
   const { cwd } = makeRepo()
   // 第一变更：无标记环境
   const c1 = '2026-09-01-fcp-clean'
@@ -97,15 +99,20 @@ test('④ 有 hindsight 标记 → 自检段上方点名提示；无标记 → �
   markHindsight({ cwd, specBase: join(cwd, SPEC), change: '2026-09-01-fcp-old', metrics: { designRewriteRatio: 0.8, tasksRewriteRatio: 0.2, blindDims: 0, testFailures: 0 } })
   const c2 = '2026-09-01-fcp-marked'
   const s2 = cli(cwd, ['flow', 'start', '--change', c2, '--input', INPUT_OK])
-  assert.equal(s2.status, 0)
-  assert.match(s2.stdout, /route-hindsight：上个轻量变更「2026-09-01-fcp-old」疑似该走头脑风暴预段未走/, '点名提示含上个变更名')
-  const markedHead = headRegion(s2.stdout).replaceAll(c2, '<CHANGE>')
-  // 提示是纯增量：剥掉 hint 行（含其后注入的空行）后与无标记头区逐字节一致
-  const stripped = markedHead.replace(/🕰️ route-hindsight：[^\n]*\n\n/, '')
-  assert.equal(stripped, cleanHead, 'hindsight 注入=纯增量渲染段，其余输出零变化')
-  const hintIdx = markedHead.indexOf('🕰️ route-hindsight')
-  const probeIdx = markedHead.indexOf('🔎 选道自检')
-  assert.ok(hintIdx !== -1 && probeIdx !== -1 && hintIdx < probeIdx, '提示在自检段上方')
+  // 2026-10-14-prestage-consent-gate：标记在场的全新 start 从「点名提示（可无视）」升级为
+  // 同意门——无声明 → exit 2 两选一（声明留痕 / 预段指路），标记不消费
+  assert.equal(s2.status, 2, '标记在场无声明 → 同意门 exit 2')
+  assert.match(s2.stdout + s2.stderr, /预段选道同意门：上个轻量变更「2026-09-01-fcp-old」/, '门文案点名上个变更')
+  assert.match(s2.stdout + s2.stderr, /--no-prestage/, '两选一含声明通道')
+  assert.ok(existsSync(join(cwd, SPEC, '.runtime', 'route-hindsight.json')), '被拦时标记不消费')
+  // 声明放行：--no-prestage → status 0 + ack 行纯增量（剥掉后头区与无标记逐字节一致）
+  const c3 = '2026-09-01-fcp-acked'
+  const s3 = cli(cwd, ['flow', 'start', '--change', c3, '--input', INPUT_OK, '--no-prestage'])
+  assert.equal(s3.status, 0, `声明放行失败: ${s3.stderr}`)
+  assert.match(s3.stdout, /🕰️ 预段同意门：已按 --no-prestage 声明放行/, '声明放行留痕行在场')
+  assert.ok(!existsSync(join(cwd, SPEC, '.runtime', 'route-hindsight.json')), '声明即消费标记')
+  const stripped = headRegion(s3.stdout).replaceAll(c3, '<CHANGE>').replace(/🕰️ 预段同意门：[^\n]*\n\n?/, '')
+  assert.equal(stripped, cleanHead, 'ack 行=纯增量渲染段，其余输出零变化')
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -196,9 +203,11 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   assert.ok(mark.metrics.tasksRewriteRatio > 0.6, `tasks 改写率超阈: ${mark.metrics.tasksRewriteRatio}`)
   assert.ok((mark.reasons || []).some((r) => r.includes('tasks')), `reasons 含 tasks 路: ${JSON.stringify(mark.reasons)}`)
   assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
-  // 下次 start（新变更）点名提示
+  // 下次 start（新变更）被同意门拦下点名上个变更（2026-10-14-prestage-consent-gate：
+  // 标记在场 → exit 2 要求显式选道，不再是可无视的点名提示）
   const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])
-  assert.equal(s3.status, 0)
-  assert.match(s3.stdout, new RegExp(`route-hindsight：上个轻量变更「${c1}」疑似`), '下次 start 点名上个变更')
+  assert.equal(s3.status, 2, '标记在场 → 同意门 exit 2')
+  assert.match(s3.stdout + s3.stderr, new RegExp(`预段选道同意门：上个轻量变更「${c1}」`), '门文案点名上个变更')
+  assert.match(s3.stdout + s3.stderr, /--no-prestage/, '门文案含声明通道')
   rmSync(cwd, { recursive: true, force: true })
 })

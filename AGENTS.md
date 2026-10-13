@@ -7,8 +7,8 @@
 ## 选道（动手前先对号入座）
 | 需求形态 | 走法 |
 |---|---|
-| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
-| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
+| 需求已含决策（改什么、成功标准说得清——成功标准须来自**用户原话或既有文档转写**；要靠你推断拟出的标准＝需求不清晰） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+| 需求不清晰 / 需要方案探索（含「成功标准要你替用户拟」的形态——自己拟标准再自答是把默认共识伪装成共识） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准）。上个轻量变更被 route-hindsight 标记时全新 start 会被同意门拦下要求显式选道：确认已含决策带 `--no-prestage` 声明留痕，否则先走本行预段 |
 | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
 | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
 
