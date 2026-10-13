@@ -24,7 +24,7 @@ created_at: 2026-10-13T07:49:56.024Z
 
 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
 
-只读命令零写面：不写 flow-state、不写 .runtime、不 git add/commit。读归档件与读 git 索引均为原子读或快照读，并发写者最多造成本次渲染口径落在中间态（下一轮查询自愈），无数据损坏面。
+只读命令零写面：不写 flow-state、不 git add/commit。读归档件与读 git 索引均为原子读或快照读，并发写者最多造成本次渲染口径落在中间态（下一轮查询自愈），无数据损坏面。披露精度（评审 F2）：diff 分支照 flow 族全子命令惯例 best-effort 调 reportAgentLog——agent 环境在场时写 .runtime/agent-session-log.json（既有横切观测面、withFileLock 串行，非本变更新增、不触碰变更数据；探测不到 agent 环境则不写）。
 
 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
 

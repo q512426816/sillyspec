@@ -144,6 +144,7 @@ test('归档态：读 change-patch.json scopeAudit 渲染 totals，--json 同构
     assert.deepEqual({ files: j.totals.files, additions: j.totals.additions }, { files: srcTotals.files, additions: srcTotals.additions }, 'totals 与冻结件一致')
     const row = j.rows.find((r) => r.path === 'work.txt')
     assert.ok(row && row.additions === 1 && row.state === 'archived', `work.txt +1 state=archived: ${JSON.stringify(row)}`)
+    assert.equal(typeof row.verdict, 'string', '归档行带 verdict（scopeAudit 对账列）')
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
