@@ -156,6 +156,11 @@ export function extractSuccessCriteria(input, opts = {}) {
   const lines = []
   for (const l of rawLines) {
     const prev = lines[lines.length - 1]
+    // 节标题合并守卫（2026-10-13-extract-head-guard 实证：动机行尾未闭合左括号 → 续行合并把
+    // 「成功标准：」并入动机、合并行以冒号收尾继续触发合并雪崩吞并全部条目行、提取 0 条。
+    // 节标题是结构边界——即使 prev 残缺也无条件独立成行。守卫只判当前行属性，不改
+    // needsContinuationMerge 本体（其括号判定是 R17 括号跨行并回的承重面）。
+    if (SECTION_HEAD_RE.test(l)) { lines.push(l); continue }
     if (prev != null && needsContinuationMerge(prev)) lines[lines.length - 1] = prev + l
     else lines.push(l)
   }

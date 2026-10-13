@@ -9,10 +9,11 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const { extractSuccessCriteria, clipTaskText } = await import(pathToFileURL(join(ROOT, 'src', 'flow-draft.js')).href)
@@ -61,4 +62,47 @@ test('①c markdown 节标题（## 成功标准：）不被误合并（评审 P2
   const crit = extractSuccessCriteria('## 成功标准：\n- 首条标准内容')
   assert.equal(crit.length, 1, '## 前缀节标题应独立识别（不吞首条）')
   assert.equal(crit[0], '首条标准内容')
+})
+
+test('①d 节标题合并守卫：动机行尾未闭合左括号不再吞「成功标准：」并雪崩（2026-10-13-extract-head-guard 实证形态）', () => {
+  const input = [
+    '动机：引用未闭合括号形态（交付时原文触发',
+    '成功标准：',
+    '- 标准甲内容',
+    '- 标准乙内容',
+  ].join('\n')
+  const crit = extractSuccessCriteria(input)
+  assert.equal(crit.length, 2, `节标题未被吞、两标准正常提取（实际 ${crit.length} 条：${JSON.stringify(crit)}）`)
+  assert.deepEqual(crit, ['标准甲内容', '标准乙内容'])
+})
+
+test('①e 守卫等价面：验收标准 节标题同受守卫；动机未闭合括号下 flow start 门等价路径不再 0 条', () => {
+  const crit = extractSuccessCriteria([
+    '动机：（未闭合',
+    '验收标准：',
+    '- 条目一',
+  ].join('\n'))
+  assert.deepEqual(crit, ['条目一'], '验收标准 等价节标题独立成行')
+})
+
+test('①f e2e：含未闭合括号动机的 --input 通过 flow start 清晰度门（事故原发生面）', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'ehg-'))
+  execFileSync('git', ['-C', cwd, 'init', '-q', '-b', 'main'], { stdio: 'pipe' })
+  execFileSync('git', ['-C', cwd, 'config', 'user.email', 't@t'], { stdio: 'pipe' })
+  execFileSync('git', ['-C', cwd, 'config', 'user.name', 't'], { stdio: 'pipe' })
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  execFileSync('git', ['-C', cwd, 'add', '.'], { stdio: 'pipe' })
+  execFileSync('git', ['-C', cwd, 'commit', '-q', '-m', 'base'], { stdio: 'pipe' })
+  try {
+    const input = '动机：引用未闭合括号形态（交付时原文触发\n成功标准：\n- 标准甲\n- 标准乙'
+    const s = spawnSync(process.execPath, [join(ROOT, 'src', 'index.js'), 'flow', 'start', '--change', '2026-10-13-ehg-e2e', '--input', input, '--autopilot'], {
+      cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
+    })
+    assert.equal(s.status, 0, `清晰度门不再误拒: ${s.stdout}\n${s.stderr}`)
+    assert.match(s.stdout, /协议调用 1\/2/, '立项成功')
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
 })
