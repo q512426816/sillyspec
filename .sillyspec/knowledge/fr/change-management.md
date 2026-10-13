@@ -134,3 +134,98 @@ created_at: 2026-09-27T13:23:17.271Z
   confirmed_at: null
   source_change: 2026-09-27-change-birth-stage-brainstorm
   status: active
+
+## FR-change-management-007 design 清单用段头「## <注册key> 仓变更」（可含编号前缀与括号备注后缀）时 parseFileChangeListDetailed 解析出该段条目且带 repo 标注——节不再被 h2 段头截断，段头前主仓条目照常解析
+变更：2026-10-13-h2-repo-heading-parse
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-h2-repo-heading-parse/requirements.md#FR-01
+最近确认：726c3a45aca84000a79a93cf66a68d4500b7d363
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-h2-repo-heading-parse:flow:测试绑定FR-01
+  tests: test/change-list-repo-heading.test.mjs「h2 段头解析出条目带 repo（含编号前缀/括号备注）+ 段头前主仓条目照常」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-h2-repo-heading-parse
+  status: active
+
+## FR-change-management-008 段头 key 未注册（含 main）时条目归主仓（repo=null，fail-closed 同既有口径）；非段头的 ## 章节标题仍截断「文件变更清单」节（既有行为零回归）
+变更：2026-10-13-h2-repo-heading-parse
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-h2-repo-heading-parse/requirements.md#FR-02
+最近确认：726c3a45aca84000a79a93cf66a68d4500b7d363
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-h2-repo-heading-parse:flow:测试绑定FR-02
+  tests: test/change-list-repo-heading.test.mjs「未注册 key（含 main）归主仓 + 非段头 ## 章节仍截断节」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-h2-repo-heading-parse
+  status: active
+
+## FR-change-management-009 「### <key> 子段」与「cross-repo:<key>: 前缀」两既有形态行为不变（cross-repo-patch-freeze 既有断言全绿）
+变更：2026-10-13-h2-repo-heading-parse
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-h2-repo-heading-parse/requirements.md#FR-03
+最近确认：726c3a45aca84000a79a93cf66a68d4500b7d363
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-h2-repo-heading-parse:flow:测试绑定FR-03
+  tests: test/cross-repo-patch-freeze.test.mjs「既有 ### 子段/cross-repo: 前缀断言全绿（零改动回归锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-h2-repo-heading-parse
+  status: active
+
+## FR-change-management-010 REPO_SECTION_HEADER_RE 单一源：定义上移 change-list.js 导出、plan-postcheck 改 import 同一符号（design-coverage/design-facts 既有断言零改动全绿）
+变更：2026-10-13-h2-repo-heading-parse
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-h2-repo-heading-parse/requirements.md#FR-04
+最近确认：726c3a45aca84000a79a93cf66a68d4500b7d363
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-h2-repo-heading-parse:flow:测试绑定FR-04
+  tests: test/change-list-repo-heading.test.mjs「FR-04 单一源守卫：定义唯一在 change-list，plan-postcheck 仅 import」 | test/design-coverage.test.mjs | test/design-facts.test.mjs「RE 上移后 plan-postcheck 消费面零改动全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-h2-repo-heading-parse
+  status: active
+
+## FR-change-management-011 thin 空面 e2e：空冻结面 + 清单用「## libx 仓变更」段头 → 走纯跨仓规范标注路径（advisory 不阻断），不再误触未标注阻断
+变更：2026-10-13-h2-repo-heading-parse
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-h2-repo-heading-parse/requirements.md#FR-05
+最近确认：726c3a45aca84000a79a93cf66a68d4500b7d363
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-h2-repo-heading-parse:flow:测试绑定FR-05
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + ## libx 仓变更 段头 → 纯跨仓标注 advisory 不阻断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-h2-repo-heading-parse
+  status: active

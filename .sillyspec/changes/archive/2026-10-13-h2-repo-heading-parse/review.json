@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-h2-repo-heading-parse",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "726c3a45aca84000a79a93cf66a68d4500b7d363",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "增量轮无新代码：726c3a45 为纯文档+测试清偿提交（--stat 四文件：design.md/requirements.md/tasks.md/test/change-list-repo-heading.test.mjs，零 src 改动），解析器行为面（change-list.js 节扫描纯函数、行序消费）自 055080e4 起未变，design 盲维四问的乱序论断仍被 7/7 用例+63 回归锚背书。",
+    "并发": "P2 披露逐项对实：git show 055080e4 -- src/stages/plan-postcheck.js 中夹带 hunk（provides/expects_from 结构校验）恰为 +38 行（hunk 头 -1566,6 +1563,44；全文件 + 行 43=1 diff 头+1 import+3 注释+38 夹带），坑名 taskcard-validate-vs-postcheck-gap 与代码注释一致；「其上已有对方后续提交不可 rewrite」属实（f44e05e2/e93f66eb/c0945abe/f307d46d 叠在 055080e4 之上）。归属核对无冲突：055080e4 之后唯一归档变更 batchtick-evidence-domain-hint 的交付面（f44e05e2：flow.js/sentinel-assertions.js/batch-tick-gate）与归档 change.patch 均零 plan-postcheck 内容——无人双重主张夹带 hunk，披露未声称对方已归档该工作，无虚称。主工作区现仍有他会话在途 src 编辑（fr-index/index/stage-review/knowledge + 未跟踪 worktree-deps-override 测试），均不属本变更；本变更两个 src 文件工作树==HEAD，FR-04 守卫实跑即测的 HEAD 态。",
+    "切换": "P3 清偿为真承载：test/change-list-repo-heading.test.mjs:24-31「FR-04 单一源守卫」三断言（plan-postcheck 源码无本地 const RE 定义+import change-list 同符号+导出正则行为断言）实跑绿（该文件 7/7）；requirements.md:54 绑定行从「src 内 grep 断言」空声称改为指向该用例（diff 核对精确）；回归锚 design-coverage/design-facts/cross-repo-patch-freeze/thin-empty-face-crosscheck 63/63 全绿；源态双验（HEAD 与工作树）：RE 定义唯一在 change-list.js:180 导出、plan-postcheck.js:20 import。清偿提交未触碰前轮六用例（纯新增）。tasks.md task-04 勾选描述与实做相符。",
+    "作用域": "评审基线 726c3a45（reviewedAgainst 完整 sha）；交付面=055080e4（代码）+726c3a45（清偿）。本轮零 findings：上轮 P2/P3 清偿均属实且实跑验证；增量检查（清偿提交零 src、措辞无新虚称、夹带归属与归档面无冲突）全过。夹带 hunk 现态为「在库、归他会话所有、无任何归档变更主张」——design.md 披露段对此如实陈述（本变更不主张其交付），处置（披露而非回退/rewrite）与共享仓多会话约束相容。"
+  },
+  "reviewedAt": "2026-10-13T04:16:17Z"
+}

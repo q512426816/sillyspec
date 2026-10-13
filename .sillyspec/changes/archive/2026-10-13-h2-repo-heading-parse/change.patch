@@ -1,0 +1,286 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index d50b4fde..bb84955c 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -31,3 +31,4 @@
+ | 2026-10-13 | 2026-10-12-closeout-task-guidance | 今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify- |
+ | 2026-10-13 | 2026-10-13-design-question-autorepair | 动机：sess_dcb57f25 实证（变更 2026-10-13-multiturn-changeid-misjudg |
+ | 2026-10-13 | 2026-10-13-thin-empty-face-crosscheck | 动机：multi-agent-platform 仓 docs/sillyspec/thin-done-empty-fac |
++| 2026-10-13 | 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每  |
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.changelog.md b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+index 54b0183b..e192711c 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+@@ -1,3 +1,4 @@
+ - ql-20260912-009-06b4 | computeSpecOps rename 检测 O(N×M)→hash 索引；hashFiles buf 随行携带消除变更文件双读
+ - ql-20260914-007-fcb7 | sync-noise.js 加变更级 change_deleted 回执噪音闸（syncChangeDeletedLog/Warn/noteChangeDeletedResolved，按变更名 marker 窗口）；sync() 三处回执行走闸 + 成功精清 + platform sync manual 旁路
+ - 2026-09-28-archive-timeline-bake | 归档链时间线烤制：runArchiveChain rename 后把合成时间线烤为 archive/<变更名>/timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面；fail-open 不阻断归档）——事件流机本位（.runtime gitignore）不随 .runtime 存活消失，归档包进 git 跨机可读；readWatcherEvents 增 path 直读形态（坏行容忍同语义）；watcher timeline CLI 在本机 .runtime 无事件流时回退读归档副本并注记事件来源（副本也缺失保持既有 exit 2）。测试锚 test/archive-timeline-bake.test.mjs
++- 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每 
+diff --git a/src/change-list.js b/src/change-list.js
+index b5e183f3..d32940d7 100644
+--- a/src/change-list.js
++++ b/src/change-list.js
+@@ -168,6 +168,17 @@ function looksLikePath(p) {
+  */
+ const INCIDENTAL_RE = /顺带修复|附带修复|顺带|drive-?by|incidental/i
+ 
++/**
++ * 「<repo-key> 仓变更」段头识别（单一源——2026-10-13-h2-repo-heading-parse 起定义在
++ * change-list.js 并导出；原 stages/plan-postcheck.js 模块内常量上移，plan-postcheck 改
++ * import 同一符号）。段头为 h2/h3：h3 子段形态由本文件消费（currentRepo 设置器），
++ * h2 形态在生态中是既定约定（brainstorm 厚道模板教学、plan-postcheck 覆盖对账
++ * parseDesignCoverageByRepo、design-facts/docs-check 存在性核验、评审清单四处按此解析）。
++ * 容忍可选编号前缀、（…）备注后缀（全/半角括号）与尾随空白/冒号；捕获组 1 = repo-key
++ * （限字母数字._-）；key 是否在注册表由调用方 fail-closed 校验。
++ */
++export const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更(?:\s*[（(][^（）()]*[)）])?\s*[:：]?\s*$/
++
+ /**
+  * 从清单子段标题 / 路径前缀解析跨仓 repoKey（scope-audit-cross-repo-blindness 改进点 2，
+  * 2026-09-15）：多仓变更 design 清单按「main 仓 / sub-xxx / spdemo」分段书写，主仓跑
+@@ -222,14 +233,16 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
+   const sectionMatch = content.match(FILE_LIST_SECTION_RE)
+   if (!sectionMatch) return []
+ 
+-  // 从标题后开始，截取到下一个 ## 标题或文件末尾
++  // 从标题后开始，截取到下一个 ## 标题或文件末尾——「<注册key> 仓变更」段头（h2）是本节
++  // 子分段不截断（2026-10-13-h2-repo-heading-parse：段头是生态既定约定——brainstorm 模板/
++  // plan-postcheck 覆盖对账/design-facts 核验四处消费；此前 h2 段头在此终结「文件变更清单」
++  // 节，其后条目整段静默丢失，agent 照告警①书写即丢对账与冻结）。
+   const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length)
+-  const nextSectionMatch = afterSection.match(/^##\s/m)
+-  const relevantContent = nextSectionMatch
+-    ? afterSection.slice(0, nextSectionMatch.index)
+-    : afterSection
+-
+-  const lines = relevantContent.split('\n')
++  const lines = []
++  for (const line of afterSection.split('\n')) {
++    if (/^##\s/.test(line) && !REPO_SECTION_HEADER_RE.test(line)) break
++    lines.push(line)
++  }
+   let headerSkipped = false
+   let pathColIdx = 1            // 默认第 2 列；解析表头后可重定位
+   let opColIdx = -1             // 操作列下标（表头扫描后定位；-1 = 无操作列 → operation=null）
+@@ -239,6 +252,16 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
+   const entries = new Map()     // path -> { path, operation, incidental, repo }（exclude 子段 delete）
+ 
+   for (const line of lines) {
++    // 「<key> 仓变更」段头（h2/h3，REPO_SECTION_HEADER_RE）：仓分段切换——key 须在注册表内
++    // （fail-closed：未注册含 main → 主仓 repo=null，与 detectRepoFromSubsection 同口径）；
++    // 段头重置分类子段态（新分段从 include 起、操作类别清空）。
++    const repoHdr = line.match(REPO_SECTION_HEADER_RE)
++    if (repoHdr) {
++      listMode = 'include'
++      currentOp = null
++      currentRepo = (Array.isArray(repoKeys) && repoKeys.includes(repoHdr[1])) ? repoHdr[1] : null
++      continue
++    }
+     // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件 / ### sub-grid-security（跨仓段）
+     const subHeader = line.match(/^###\s+(.+?)\s*$/)
+     if (subHeader) {
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index 36daf257..f356d28f 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -17,7 +17,7 @@ const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).r
+ import { join as pJoin, basename } from 'path'
+ import { tmpdir } from 'os'
+ import jsYaml from 'js-yaml'
+-import { parseFileChangeList, pathMatches } from '../change-list.js'
++import { parseFileChangeList, pathMatches, REPO_SECTION_HEADER_RE } from '../change-list.js'
+ import { getRule } from '../stage-contract-spec.js'
+ import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
+ import { validateScriptCommands } from './cmd-existence.js'
+@@ -942,13 +942,10 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null, rep
+ // design 清单解析与 allowed_paths 对账共用同一套匹配语义，避免两处逻辑漂移。
+ 
+ /**
+- * design §6 按仓分段段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
+- * 段头为 h2/h3，repo 名取段头首 token（去空白/编号前缀）。容忍可选编号前缀、（…）备注后缀
+- * （`（跨仓，X1-X4）` 等，全/半角括号均可）与尾随空白/冒号——后缀不容忍时（用户实证
+- * 2026-08-29）`### sillyspec 仓变更（跨仓，X1-X4）` 整段判 main、跨仓文件全量误报未覆盖。
+- * 不命中（非仓变更段头）→ null。
++ * 「<repo> 仓变更」段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
++ * 正则已上移 change-list.js 导出（单一源，2026-10-13-h2-repo-heading-parse——thin 收口
++ * 对账解析器同步消费该段头形态），此处 import 使用；容忍语义见 change-list.js 处注释。
+  */
+-const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更(?:\s*[（(][^（）()]*[)）])?\s*[:：]?\s*$/
+ 
+ /**
+  * 疑似段头宽匹配：标题行含「<token> 仓变更」字样（token 与仓变更间有空白）。
+@@ -1566,6 +1563,44 @@ export function validateTaskcardsCli({ changeDir, projectRoot = null }) {
+             errors.push(`${id}: target_files 形态非法——${bad.map(b => `${b.raw}（${b.invalid}）`).join('；')}`)
+           }
+         }
++        // provides/expects_from 结构校验（坑 taskcard-validate-vs-postcheck-gap，2026-10-10
++        // 实证：散文行 `- contract Foo fields [a, b]` 是合法 YAML 字符串数组，--validate 过、
++        // 契约解析器静默过滤（无 contract 键即丢）→ plan --done 才报「provider 未声明」。
++        // 在填卡自检轮暴露：字符串元素/缺 contract/fields·needs 非数组 = 形态错，给出映射式模板。
++        const id2 = (content.match(/^id:\s*(.+)/m)?.[1] || '').trim() || f
++        const fm = fmParse.fm || {}
++        const _tpl = '映射式：- contract: <名> / fields: [a, b]（expects_from 同构，needs 替 fields）'
++        if (Array.isArray(fm.provides)) {
++          for (const pe of fm.provides) {
++            const bad = typeof pe === 'string'
++              || !pe || typeof pe !== 'object'
++              || typeof pe.contract !== 'string' || !pe.contract.trim()
++              || (pe.fields !== undefined && !Array.isArray(pe.fields))
++            if (bad) {
++              errors.push(`${id2}: provides 条目形态非法（${typeof pe === 'string' ? `散文行「${pe.slice(0, 40)}」` : '缺 contract 键或 fields 非数组'}）——${_tpl}`)
++              break
++            }
++          }
++        }
++        if (fm.expects_from && typeof fm.expects_from === 'object' && !Array.isArray(fm.expects_from)) {
++          for (const [prov, contracts] of Object.entries(fm.expects_from)) {
++            if (!Array.isArray(contracts)) {
++              errors.push(`${id2}: expects_from.${prov} 应为契约数组（映射式：- contract: <名>
++  needs: [a, b]）`)
++              continue
++            }
++            for (const ce of contracts) {
++              const bad = typeof ce === 'string'
++                || !ce || typeof ce !== 'object'
++                || typeof ce.contract !== 'string' || !ce.contract.trim()
++                || (ce.needs !== undefined && !Array.isArray(ce.needs))
++              if (bad) {
++                errors.push(`${id2}: expects_from.${prov} 条目形态非法（${typeof ce === 'string' ? `散文行「${ce.slice(0, 40)}」` : '缺 contract 键或 needs 非数组'}）——${_tpl}`)
++                break
++              }
++            }
++          }
++        }
+       }
+     }
+   } catch {
+diff --git a/test/change-list-repo-heading.test.mjs b/test/change-list-repo-heading.test.mjs
+new file mode 100644
+index 00000000..b33d34ff
+--- /dev/null
++++ b/test/change-list-repo-heading.test.mjs
+@@ -0,0 +1,91 @@
++/**
++ * change-list-repo-heading.test.mjs — 「## <注册key> 仓变更」h2 段头解析
++ * （2026-10-13-h2-repo-heading-parse）
++ *
++ * 坑背景：段头形态是生态既定约定（brainstorm 厚道模板教学、plan-postcheck 覆盖对账
++ * parseDesignCoverageByRepo 穿过段头、design-facts/docs-check 复用同一切分、评审清单口径），
++ * 但 thin 收口对账解析器 change-list.js 的节扫描在 ^## 一刀切——h2 段头终结「文件变更清单」
++ * 节，其后条目整段静默丢失（agent 照模板/告警①书写即丢对账，fire-ledger-form-strict 事故族）。
++ *
++ * 覆盖验收面：
++ *   FR-01 h2 段头（含编号前缀/括号备注）解析出条目且带 repo；段头前主仓条目照常；
++ *   FR-02 fail-closed（未注册 key 含 main 归主仓）+ 非段头 ## 章节仍截断节（零回归）；
++ *   附 h3 段头与既有 ### token 子段/cross-repo: 前缀等价共存。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { parseFileChangeListDetailed, REPO_SECTION_HEADER_RE } from '../src/change-list.js'
++
++// FR-04 单一源守卫（评审 P3 清偿）：plan-postcheck 不得再有本地 RE 定义、必须 import 同一符号
++test('FR-04 单一源守卫：REPO_SECTION_HEADER_RE 定义唯一在 change-list，plan-postcheck 仅 import', () => {
++  const ppSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'stages', 'plan-postcheck.js'), 'utf8')
++  assert.doesNotMatch(ppSrc, /^const REPO_SECTION_HEADER_RE\s*=/m, 'plan-postcheck 不得有本地 RE 定义（防镜像漂移）')
++  assert.match(ppSrc, /import\s*\{[^}]*REPO_SECTION_HEADER_RE[^}]*\}\s*from\s*'\.\.\/change-list\.js'/, 'plan-postcheck 必须 import change-list 的 RE')
++  // 导出的正则与解析行为同体：段头形态在导出符号上直接命中（消费方 import 的是同一对象）
++  assert.match('## libx 仓变更', REPO_SECTION_HEADER_RE)
++  assert.doesNotMatch('## 接口契约', REPO_SECTION_HEADER_RE)
++})
++
++function fixture(body) {
++  const root = mkdtempSync(join(tmpdir(), 'clrh-'))
++  const dp = join(root, 'design.md')
++  writeFileSync(dp, `# 设计记录\n\n## 文件变更清单\n\n${body}\n`)
++  const entries = parseFileChangeListDetailed(dp, { keepSillyspecDocs: true, repoKeys: ['libx'] })
++  return { root, entries }
++}
++
++const TABLE_MAIN = '| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | work.txt | 主仓 |'
++const TABLE_ROW = (p) => `| 修改 | ${p} | 交付 |`
++
++test('FR-01 h2 段头不截断节：段下条目带 repo、段头前主仓条目照常', () => {
++  const { root, entries } = fixture(`${TABLE_MAIN}\n\n## libx 仓变更\n\n${TABLE_ROW('src/routes/X.js')}\n`)
++  assert.deepEqual(entries.map((e) => [e.path, e.repo]), [['work.txt', null], ['src/routes/X.js', 'libx']],
++    `h2 段头条目须带 repo 且主仓条目在场: ${JSON.stringify(entries)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('FR-01 变体：编号前缀/括号备注/冒号后缀的段头同样识别', () => {
++  for (const h of ['## 2. libx 仓变更', '## libx 仓变更（跨仓，X1-X4）', '## libx 仓变更：']) {
++    const { root, entries } = fixture(`${h}\n\n${TABLE_MAIN}\n`)
++    assert.deepEqual(entries.map((e) => [e.path, e.repo]), [['work.txt', 'libx']], `段头「${h}」识别: ${JSON.stringify(entries)}`)
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('FR-01 列表形态在 h2 段头下同样带 repo', () => {
++  const { root, entries } = fixture(`## libx 仓变更\n\n- src/b.js\n`)
++  assert.deepEqual(entries.map((e) => [e.path, e.repo]), [['src/b.js', 'libx']], `列表形态: ${JSON.stringify(entries)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('FR-02 fail-closed：未注册 key（含 main）段头归主仓', () => {
++  for (const h of ['## other 仓变更', '## main 仓变更']) {
++    const { root, entries } = fixture(`${TABLE_MAIN}\n\n${h}\n\n${TABLE_ROW('src/c.js')}\n`)
++    assert.deepEqual(entries.map((e) => [e.path, e.repo]), [['work.txt', null], ['src/c.js', null]], `「${h}」归主仓`)
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('FR-02 零回归：非段头的 ## 章节标题仍截断「文件变更清单」节', () => {
++  const { root, entries } = fixture(`${TABLE_MAIN}\n\n## 接口契约\n\n${TABLE_ROW('evil.js')}\n`)
++  assert.deepEqual(entries.map((e) => e.path), ['work.txt'], `非段头章节截断节: ${JSON.stringify(entries)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('共存：h3 段头（### <key> 仓变更）与既有 ### token 子段 / cross-repo: 前缀行为不变', () => {
++  const { root, entries } = fixture([
++    '### libx 仓变更', '', TABLE_MAIN, '',
++    '### 其他子段（标题不含注册 key——回主仓）', '', TABLE_ROW('src/tok.js'), '',
++  ].join('\n'))
++  // ### libx 仓变更：RE 段头与 token 子段两路径等价 → repo=libx，不叠加不冲突（表格模式 operation 取操作列）
++  assert.deepEqual(entries.find((e) => e.path === 'work.txt'), { path: 'work.txt', operation: '修改', incidental: false, repo: 'libx' }, `h3 段头带 repo: ${JSON.stringify(entries)}`)
++  assert.equal(entries.find((e) => e.path === 'src/tok.js')?.repo ?? null, null, '不含 key 的子段回主仓')
++  rmSync(root, { recursive: true, force: true })
++  const r2 = fixture(`| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | cross-repo:libx:src/pref.js | 交付 |\n`)
++  assert.deepEqual(r2.entries.map((e) => [e.path, e.repo]), [['src/pref.js', 'libx']], `cross-repo: 前缀不变: ${JSON.stringify(r2.entries)}`)
++  rmSync(r2.root, { recursive: true, force: true })
++})
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index 121b34d5..3ec844c4 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -214,6 +214,28 @@ test('纯跨仓规范标注空面：不阻断，出空面跨仓冻结缺口 advi
+   }
+ })
+ 
++// ── h2 段头形态（2026-10-13-h2-repo-heading-parse FR-05）：生态标准写法在 thin 收口
++//    侧同样被识别——空面走纯跨仓标注路径而非被节截断静默丢条目/误触未标注阻断 ──
++test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标注，advisory 不阻断', () => {
++  const cwd = makeRepo({ repos: true })
++  const change = '2026-10-13-tefc-h2hdr'
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态\n成功标准：\n- 段头识别不阻断', '--autopilot'])
++    fillDocs(specBase, change, ['## 文件变更清单', '', '## libx 仓变更', '', '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 修改 | src/routes/X.js | 交付 |'].join('\n'))
++    tickTasks(specBase, cwd, change)
++    writeReviewFixture(specBase, cwd, change)
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `h2 段头不阻断: ${s2.stdout}\n${s2.stderr}`)
++    const out = `${s2.stdout}\n${s2.stderr}`
++    assert.match(out, /跨仓规范标注.*冻结面为空|冻结面为空.*跨仓/, '空面跨仓缺口 advisory（段头被识别）')
++    assert.doesNotMatch(out, /冻结面为空但 design 声明清单有/, '不误触未标注阻断')
++    assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
+ // ── FR-04：flow start 横幅两态 ──
+ test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行', () => {
+   const withRepos = makeRepo({ repos: true })

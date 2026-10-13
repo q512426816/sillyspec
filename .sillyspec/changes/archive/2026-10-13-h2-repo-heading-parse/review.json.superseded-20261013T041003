@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-h2-repo-heading-parse",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f44e05e247c6c8eb4b6ef0b412ed31aa9a1736f8",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "交付 commit 夹带未声明 hunk：plan-postcheck validateTaskcardsCli 新增 provides/expects_from 结构校验，无 FR/design/task/test 任何绑定",
+      "evidence": "该 hunk 在 055080e4 diff 与 HEAD 中真实存在（~40 行，坑名 taskcard-validate-vs-postcheck-gap），但本变更 requirements 5 条 FR、design 接口契约（明确称 plan-postcheck 侧仅「删本地 RE 定义改 import」且「命令/端点/文件格式：无变化」）、tasks 三条任务均无对应条目，且 git grep HEAD:test 对「provides 条目形态非法」/「expects_from 条目形态非法」/坑名零命中即零测试覆盖——疑为并行会话在途编辑经文件级 pathspec 提交扫入；非段头解析修复本身的承诺违例，属交付面披露/可追溯性违例。",
+      "location": "src/stages/plan-postcheck.js:1566-1603"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04 绑定声称「src 内 grep 断言单一 import」，仓内无任何测试承载该断言",
+      "evidence": "git grep REPO_SECTION_HEADER_RE 于 HEAD:test 零命中（含 design-coverage/design-facts 两锚文件），无测试读源码断言单一源/单一 import；单一源属性本身在代码中成立（定义唯一 change-list.js:180 导出、plan-postcheck.js:20 import、本地 const 已删、change-list 仅 import fs 无环），但绑定作答把手工 grep 写成了守卫断言，声称的防回归护栏不存在。",
+      "location": ".sillyspec/changes/2026-10-13-h2-repo-heading-parse/requirements.md:54"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "边界已裁决：可接受——段头重置分类子段态（include/操作类别清空）与代码实态一致（change-list.js:260-261），行扫描顺序消费、段头前归主仓；h3 两路径等价不叠加已核实：repoHdr 分支前置 continue 使 subHeader 对 RE 命中行不可达，classifySubsectionOp 对「<key> 仓变更」形标题两类路径均得 null（OP 词表不含「变更」），仅「### <key> 仓变更（新增文件）」类括号备注含 OP 词的角落形态 operation 从词推导变 null——边缘未测形态，可接受。",
+    "并发": "边界已裁决：可接受——纯读盘解析无写面、幂等；RE 上移为模块级导出 const 无运行时状态，单一源核实：定义唯一 change-list.js:180、plan-postcheck.js:20 改 import、本地定义已删、无 import 环（change-list 仅 import fs）。",
+    "切换": "边界已裁决：可接受——无状态机无落盘中间态，flow done 重入幂等；LOOSE_RE 留守 plan-postcheck 已核实在场且语义不变（宽严分工：宽匹配点名报告归 plan-postcheck，change-list 保持严格 fail-closed）。局限声明：受只读纪律约束未重跑测试套件，「60 项回归锚全绿」按代码等价性核验（### 子段/cross-repo: 前缀代码路径逐行未动、RE 文本与原 plan-postcheck 定义逐字符相同、parseDesignCoverageByRepo 消费点 1005/1012/1034 改用同值 import）而非实跑复核。",
+    "作用域": "边界已裁决：可接受——key 字符类 [A-Za-z0-9_.-]+ 不含中文/路径分隔符；未注册 key（含 main）fail-closed 归主仓（change-list.js:262，测试钉死）；h3 中文 key 形态仍走 detectRepoFromSubsection 兜底不回归，h2 中文 key 截断等于既有行为。探针核实：cli-copy-selfsufficient 属实（commit 未触 flow.js；HEAD flow.js:785/1637/1644 推荐形态①段头「## <注册key> 仓变更」与解析器现行为一致，FR-05 e2e 钉死门文案与判定同口径）；config-absent-zero-regression 记 n/a 属实（repoKeys 为既有调用方传参，未新增 local.yaml 消费键）；crossrepo-path-compat 通过（change-list.js:231 读盘归一化 CRLF 后才行切分，RE 尾部 \\s*[:：]?\\s*$ 容忍尾随空白/冒号，key 非路径无 Windows 路径形态问题）。"
+  },
+  "reviewedAt": "2026-10-13T04:05:54Z"
+}

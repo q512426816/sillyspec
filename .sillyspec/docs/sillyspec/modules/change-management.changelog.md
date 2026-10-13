@@ -18,3 +18,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 - ql-20260912-001-ca16 | 平台推送移出 withFileLock 临界区（allocate/appendWithId/complete 三函数：锁内只留本地写+tasks 挂载，推送+sidecar 锁外 best-effort）——临界区不再可破 30s stale 偷锁阈值，根治双写者并发丢更新复潮面
 - ql-20260912-002-57c4 | withFileLock 偷锁分支补超时/退避（rename 持续失败不再忙等自旋）+释放前校验 myId 持有者（不误删他人新锁）
 - ql-20260914-003-4d6c | ql-ID 分配竞态根治（坑 ql-id-double-occupancy，实证 2026-09-13 007-1351 双占用）：allocateQuicklogEntry 分配查重（maxSeq 并入他者活跃会话 guard 预留——collectGuardReservedQuicklogIds 新导出，7 天僵尸不钉号 + 盘上容错扫描畸形头；全 ID 末检 200 次兜底；sessionsDir 参数经 resolveQuickSessionsDir 传入）；新导出 countQuicklogEntries（--done 占用校验：盘上同 ID ≥2 硬拦）；complete-handlers --done 他者 guard 占用同 ID 换新号完成 + 最终 ID 回写 guard.json + 条目丢失原硬拦改原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quicklog-ql-id-race.test.mjs。
+| 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |

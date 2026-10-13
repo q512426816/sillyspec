@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -28,11 +36,18 @@ input: >-
   - thin 空面 e2e：空冻结面 + 清单用「## libx 仓变更」段头 → 走纯跨仓规范标注路径（advisory 不阻断），不再误触未标注阻断
 autopilot: false
 baseline_commit: d7cac7a4180eee8dddaa3df75fdacf15c11b434e
-updatedAt: '2026-10-13T03:34:52.268Z'
+updatedAt: '2026-10-13T04:17:10.260Z'
 baseline_sha256: 3c7e69adb5f3d953f56e607f15d8942c8db27f7431c06b45e185c51902ee2807
 spec_approved: true
 spec_approved_at: '2026-10-13T03:34:52.267Z'
 spec_approved_by: zcode-h2repo-heading
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-h2repo-heading
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js48+js-meta-skip1+nontest-skip1)+fr(48)（55.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013035832\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（76.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013035832\test-result.json｜门文件 10 个
 
