@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-autocreate-atomic-claim",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-autocreate-atomic-claim:flow:测试绑定FR-01",
+      "tests": [
+        "test/init-change-if-no-active.test.mjs「零活跃抢占/已有活跃拒绝/同名拒绝」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-autocreate-atomic-claim"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-autocreate-atomic-claim:flow:测试绑定FR-02",
+      "tests": [
+        "test/init-change-if-no-active.test.mjs「run brainstorm 裸跑 exit 2 引导」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-autocreate-atomic-claim"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-autocreate-atomic-claim:flow:测试绑定FR-03",
+      "tests": [
+        "test/init-change-if-no-active.test.mjs「败者零残留（目录与 DB 行）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-autocreate-atomic-claim"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-autocreate-atomic-claim:flow:测试绑定FR-04",
+      "tests": [
+        "test/init-change-if-no-active.test.mjs「initChange 显式路径语义不变（重名跳过/目录先建）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-autocreate-atomic-claim"
+    }
+  ]
+}

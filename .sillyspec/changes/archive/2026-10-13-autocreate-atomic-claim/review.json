@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-autocreate-atomic-claim",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "567661aa06918db579ea7e0f2d25e9effa4462f8",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements FR-02 场景文本「DB 已有一行 status='active'」表述失实（前轮 P3-② 留档，本轮未修，非本增量引入）",
+      "evidence": "FR-02 场景 Given 写「DB 已有一行 status='active'」并 Then exit 2。但按 design.md 声明边界（单活跃上游 pm.read 自动定位、不进自动建名分支）与代码实况（command.js L1373-1379 仅 claim.created=false 即多活跃/同名时 exit 2），恰好 1 个活跃时裸 run brainstorm 不走 exit 2。测试 test/init-change-if-no-active.test.mjs FR-02 用例正确地用两个活跃变更（active-one/active-two），代码与测试均正确，仅需求场景文字以单活跃口吻描述多活跃行为，文档级瑕疵。",
+      "location": ".sillyspec/changes/2026-10-13-autocreate-atomic-claim/requirements.md:36"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-13T16:20:06Z"
+}

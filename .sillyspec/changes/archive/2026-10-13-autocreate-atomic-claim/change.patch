@@ -1,0 +1,287 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 6fbd8292..0ec9f124 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,8 +130,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1712/1906/1986/1997/2195 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2151/2130/2210 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:519；command.js:1718/1912/1992/2003/2201 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2157/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4556；shared.js:1120 |
+diff --git a/src/progress.js b/src/progress.js
+index 25533fe3..af3e67d9 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -1217,6 +1217,73 @@ export class ProgressManager {
+     return this.read(cwd, changeName);
+   }
+ 
++  /**
++   * 原子抢占式建变更（2026-10-13-autocreate-atomic-claim，事故 2026-10-13-new-change-e5a27813）。
++   *
++   * 背景：run brainstorm / run auto 无 --change 的自动建名此前是「listChanges 查零活跃 →
++   * initChange 插行」两步——检查与插入非原子，并行进程都能通过检查各建一行（当日
++   * daemon-log-config-view 与 new-change-e5a27813 同秒落地实证）。本方法把「零活跃检查 +
++   * 建行」收敛为单条 INSERT..SELECT（NOT EXISTS active / NOT EXISTS 同名 双守卫）——
++   * SQLite 单语句原子；跨进程 WAL 快照过期（BUSY_SNAPSHOT）由 db.js transaction 的
++   * BUSY 整体重跑收敛：重跑后守卫见到先行者已提交的 active 行即拒绝。
++   *
++   * 与 initChange 的差异（调用方仅 run/command.js 自动建名两处；显式 --change / 平台
++   * 工具 / 测试 fixture 继续用 initChange，语义不动）：
++   *   - 检查+插行原子化（败者零写入）；
++   *   - 目录创建移到抢占成功之后（败者不留 changes/<自动名>/ 空目录）；
++   *   - 失败返回原因而非静默创建。
++   *
++   * @param {string} cwd 项目根
++   * @param {string} changeName 变更名（自动名恒为日期前缀名；quick 会话名与 default 不走本方法）
++   * @param {{title?: string|null, quicklogId?: string|null}} [meta]
++   * @returns {{created: true, progress: object} | {created: false, reason: 'active_exists'|'name_exists', activeChanges?: string[]}}
++   */
++  initChangeIfNoActive(cwd, changeName, meta = {}) {
++    if (!changeName) {
++      console.warn('⚠️  initChangeIfNoActive: changeName 为空，跳过');
++      return { created: false, reason: 'name_exists' };
++    }
++    const db = this._ensureDB(cwd);
++    let claimed = false;
++    db.transaction(() => {
++      const sqlDb = db.getDb();
++      const now = new Date().toISOString();
++      // 单语句原子抢占：守卫与插入同一语句，无跨语句竞态窗口
++      const claim = sqlDb.prepare(
++        `INSERT INTO changes (name, current_stage, status, created_at, last_active, title, quicklog_id)
++         SELECT ?, 'brainstorm', 'active', ?, ?, ?, ?
++         WHERE NOT EXISTS (SELECT 1 FROM changes WHERE status = 'active')
++           AND NOT EXISTS (SELECT 1 FROM changes WHERE name = ?)`
++      ).run(changeName, now, now, meta.title || null, meta.quicklogId || null, changeName);
++      claimed = claim.changes === 1;
++      if (!claimed) return; // 败者：事务内零后续写入，提交为空事务
++      // 抢到后与 initChange 同款收尾（同事务）：种全部合法阶段 + 本地脏度戳
++      const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
++      for (const stage of VALID_STAGES) {
++        sqlDb.prepare(
++          `INSERT OR IGNORE INTO stages (change_id, stage, status)
++           VALUES (?, ?, 'pending')`
++        ).run(changeRow.id, stage);
++      }
++      this._touchLocalModified(cwd, changeName, now);
++    });
++    if (!claimed) {
++      const sqlDb = db.getDb();
++      const activeChanges = sqlDb.prepare("SELECT name FROM changes WHERE status = 'active'").all().map((r) => r.name);
++      const sameName = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
++      // 判序：同名行存在（任意 status）优先报 name_exists（重名与自动名随机碰撞兜底）；
++      // 否则按 active_exists 附清单（调用方走多活跃引导）
++      return sameName && !activeChanges.includes(changeName)
++        ? { created: false, reason: 'name_exists' }
++        : { created: false, reason: 'active_exists', activeChanges };
++    }
++    // 抢占成功后才建目录（败者零残留）；quick/default 豁免与 initChange 同款（防辅助阶段空目录物化）
++    if (!/^quick-[0-9a-f]{8}$/.test(changeName) && changeName !== 'default') {
++      this._ensureChangeDir(cwd, changeName);
++    }
++    return { created: true, progress: this.read(cwd, changeName) };
++  }
++
+   setStage(cwd, stage, changeName = null) { return this._stepStore.setStage(cwd, stage, changeName); }
+ 
+   addStep(cwd, stage, stepName, changeName = null) { return this._stepStore.addStep(cwd, stage, stepName, changeName); }
+diff --git a/src/run/command.js b/src/run/command.js
+index b979336a..8e2f0b21 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1340,39 +1340,45 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+           process.exit(2) // 用法错（--done 找不到变更，未传 --change）→ exit 2
+         }
+         // task-03 (D-006@v1 / FR-05): 无 --change 仅当无已存在活跃变更时 auto-create；
+-        // 多活跃变更仓强制 --change（exit 2 引导），防 B8 幽灵变更。活跃变更数用 pm.listChanges
+-        // （与 progress show 同源，DB changes 表 status='active'）。
+-        const activeChanges = pm.listChanges(cwd)
+-        if (activeChanges.length > 0) {
++        // 多活跃变更仓强制 --change（exit 2 引导），防 B8 幽灵变更。
++        // 2026-10-13-autocreate-atomic-claim：listChanges 检查 + initChange 两步非原子
++        // （并行进程同过检查各建一行，2026-10-13-new-change-e5a27813 事故实证）——改
++        // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
++        const date = new Date().toISOString().slice(0, 10)
++        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
++        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        if (!claim.created) {
++          const activeChanges = claim.activeChanges || []
+           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
+           console.error(`   活跃变更：${activeChanges.join('、')}`)
+           console.error('   请用 --change <变更名> 指定要操作的变更，')
+           console.error('   或先归档/收尾现有活跃变更后重试。')
+           process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
+         }
+-        const date = new Date().toISOString().slice(0, 10)
+-        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+         console.log(`🔄 自动创建变更：${autoName}`)
+         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
+         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
+-        // brainstorm 自动创建变更也写 title（--input 需求描述优先 / 自动名兜底），proposal 落盘后刷新。
+-        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        progress = claim.progress
+         changeName = autoName
+       } else if (stageName === 'auto') {
+         // auto 零活跃建变更（2026-09-08-auto-driver D-003@v1，Grill P1-②）：SKILL 启动命令即
+         // run auto --input——此前此处 exit 2 是断头路。复用 brainstorm 命名（date-new-change-hex）。
+-        // pm.read 对零/多活跃都返 null——先分流：多活跃报错列候选（不隐式选择），零活跃才建。
+-        const activeCount = pm.listChanges(cwd)
+-        if (activeCount.length > 1) {
++        // pm.read 对零/多活跃都返 null——多活跃报错列候选（不隐式选择），零活跃才建。
++        // 2026-10-13-autocreate-atomic-claim：同 brainstorm 改原子抢占；顺带收紧「恰好 1 个
++        // 活跃也建第二个」的旧宽限（旧 >1 检查与其「零活跃才建」注释自相矛盾，且计数宽限
++        // 正是并发双建的温床）——1 活跃现与多活跃同走 exit 2 引导。
++        const date = new Date().toISOString().slice(0, 10)
++        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
++        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        if (!claim.created) {
++          const activeCount = claim.activeChanges || []
+           console.error(`❌ 已存在 ${activeCount.length} 个活跃变更，run auto 无法自动定位目标。`)
+           console.error('   活跃变更：' + activeCount.join('、'))
+           console.error('   请用 --change <变更名> 显式指定，或先归档/收尾现有变更。')
+           process.exit(2)
+         }
+-        const date = new Date().toISOString().slice(0, 10)
+-        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+         console.log(`🔄 auto 模式自动创建变更：${autoName}（可用 --change 指定名称，或事后 change-rename）`)
+-        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
++        progress = claim.progress
+         changeName = autoName
+       } else {
+         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
+diff --git a/test/init-change-if-no-active.test.mjs b/test/init-change-if-no-active.test.mjs
+new file mode 100644
+index 00000000..a6d296bc
+--- /dev/null
++++ b/test/init-change-if-no-active.test.mjs
+@@ -0,0 +1,124 @@
++/**
++ * 原子抢占式建变更测试（2026-10-13-autocreate-atomic-claim）。
++ *
++ * 背景：run brainstorm / run auto 无 --change 的自动建名此前「listChanges 查零活跃 →
++ * initChange 插行」两步非原子，并行进程同过检查各建一行（2026-10-13-new-change-e5a27813
++ * 幽灵变更事故源头）。覆盖矩阵：
++ *   FR-01  零活跃抢占成功（行+stages+目录）/ 已有活跃拒绝附清单 / 同名拒绝不改写
++ *   FR-02  CLI 裸 run brainstorm 于有活跃项目 exit 2 且列名
++ *   FR-03  败者零残留（无目录、无行）
++ *   FR-04  initChange 显式路径语义不变（重名跳过插入、目录先建仍可重入）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, existsSync, writeFileSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
++import { DatabaseSync } from 'node:sqlite'
++
++import { ProgressManager } from '../src/progress.js'
++
++const TEST_ROOT = dirname(fileURLToPath(import.meta.url))
++const REPO_ROOT = join(TEST_ROOT, '..')
++
++function createTempProject() {
++  const cwd = mkdtempSync(join(tmpdir(), 'sillyspec-ifnoactive-'))
++  mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
++  mkdirSync(join(cwd, '.sillyspec', 'changes'), { recursive: true })
++  return cwd
++}
++
++async function cleanupProject(cwd) {
++  try {
++    const key = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
++    const db = ProgressManager._dbPool.get(key)
++    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(key) }
++  } catch { /* 池里无实例则无需处理 */ }
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* Windows 句柄竞态容忍 */ }
++}
++
++function dbRows(cwd, sql, ...params) {
++  const db = new DatabaseSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })
++  try { return db.prepare(sql).all(...params) } finally { db.close() }
++}
++
++test('FR-01: 零活跃抢占成功（行 + stages + 目录 + 返回 progress）', async (t) => {
++  const cwd = createTempProject()
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  const r = pm.initChangeIfNoActive(cwd, '2026-10-13-claim-a', { title: '抢占标题' })
++  assert.equal(r.created, true, '零活跃抢占成功')
++  assert.ok(r.progress, '返回 progress（形态与 initChange 一致）')
++  const row = dbRows(cwd, 'SELECT current_stage, status, title FROM changes WHERE name = ?', '2026-10-13-claim-a')[0]
++  assert.equal(row.status, 'active', 'DB 行 status=active')
++  assert.equal(row.current_stage, 'brainstorm', '出生阶段 brainstorm')
++  assert.equal(row.title, '抢占标题', 'meta.title 透传')
++  const stages = dbRows(cwd, 'SELECT COUNT(*) AS n FROM stages s JOIN changes c ON s.change_id = c.id WHERE c.name = ?', '2026-10-13-claim-a')[0]
++  assert.ok(stages.n > 0, 'stages 已种行')
++  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', '2026-10-13-claim-a')), '抢占成功后目录已建')
++})
++
++test('FR-01/FR-03: 已有活跃拒绝 + 败者零残留', async (t) => {
++  const cwd = createTempProject()
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, '2026-10-13-holder')
++
++  const r = pm.initChangeIfNoActive(cwd, '2026-10-13-loser')
++  assert.equal(r.created, false, '有活跃时拒绝')
++  assert.equal(r.reason, 'active_exists', '拒绝原因带 active_exists')
++  assert.deepEqual(r.activeChanges, ['2026-10-13-holder'], '附活跃变更清单')
++  assert.equal(dbRows(cwd, 'SELECT id FROM changes WHERE name = ?', '2026-10-13-loser').length, 0, '败者零 DB 行')
++  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', '2026-10-13-loser')), '败者零目录残留')
++})
++
++test('FR-01: 同名行已存在（任意 status）拒绝且不改写', async (t) => {
++  const cwd = createTempProject()
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, '2026-10-13-same')
++  pm.unregisterChange(cwd, '2026-10-13-same') // 翻 archived（保持零活跃）
++
++  const r = pm.initChangeIfNoActive(cwd, '2026-10-13-same')
++  assert.equal(r.created, false, '同名拒绝')
++  assert.equal(r.reason, 'name_exists', '拒绝原因 name_exists')
++  const row = dbRows(cwd, 'SELECT status FROM changes WHERE name = ?', '2026-10-13-same')[0]
++  assert.equal(row.status, 'archived', '既有行状态不被改写')
++})
++
++test('FR-02: CLI 裸 run brainstorm 于多活跃项目 exit 2 且列名（单活跃由上游 pm.read 自动定位，不进本分支）', async (t) => {
++  const cwd = createTempProject()
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  pm.initChange(cwd, '2026-10-13-active-one')
++  pm.initChange(cwd, '2026-10-13-active-two')
++
++  const r = spawnSync(
++    process.execPath,
++    [join(REPO_ROOT, 'bin', 'sillyspec.js'), 'run', 'brainstorm', '--input', '动机\n\n成功标准：\n- 标准 A'],
++    { cwd, encoding: 'utf8', timeout: 120_000 },
++  )
++  assert.equal(r.status, 2, `退出码 2（实得 ${r.status}）`)
++  const out = `${r.stderr || ''}${r.stdout || ''}`
++  assert.match(out, /已存在 2 个活跃变更/, '引导文案带活跃计数')
++  assert.match(out, /2026-10-13-active-one/, '引导文案列出活跃变更名')
++  assert.equal(dbRows(cwd, "SELECT id FROM changes WHERE name LIKE '%new-change%'").length, 0, '未产生自动命名变更')
++})
++
++test('FR-04: initChange 显式路径语义不变（重名跳过插入、目录先建可重入）', async (t) => {
++  const cwd = createTempProject()
++  t.after(() => cleanupProject(cwd))
++  const pm = new ProgressManager()
++  await pm.init(cwd)
++  // 重名重入：二次 initChange 同名不报错、不重复插行
++  pm.initChange(cwd, '2026-10-13-explicit')
++  pm.initChange(cwd, '2026-10-13-explicit')
++  assert.equal(dbRows(cwd, 'SELECT id FROM changes WHERE name = ?', '2026-10-13-explicit').length, 1, '重名跳过插入（单行）')
++  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', '2026-10-13-explicit')), '显式路径目录照建')
++})

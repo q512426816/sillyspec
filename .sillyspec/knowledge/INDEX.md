@@ -215,3 +215,4 @@
 - auto-sillyspec|sillyspec|FR|需求|承接 → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)
 - auto-analysis|analysis|FR|需求|承接 → [fr/auto-analysis.md](fr/auto-analysis.md)
 - auto-idea|idea|FR|需求|承接 → [fr/auto-idea.md](fr/auto-idea.md)
+- progress|FR|需求|承接 → [fr/progress.md](fr/progress.md)

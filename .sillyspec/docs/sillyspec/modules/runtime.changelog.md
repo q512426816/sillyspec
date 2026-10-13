@@ -46,3 +46,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模
 - 2026-10-12-cli-friction-signal | dogfood 实证驱动（fire-equipment 会话复盘·子代理A/B取证）：a) deps 门控阻断首条只有标
 - 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复
+- 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm / 

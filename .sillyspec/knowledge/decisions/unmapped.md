@@ -2513,3 +2513,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：89f30febe3343e13d7832e540367648c5529eea4
 理由：最大风险：合成载荷被平台 `_ensure_change_row` 在「从未同步过」的变更上先建占位行再立即被墓碑收敛——产生一行 location='deleted' 的墓碑行；这与平台既有 3 行历史墓碑（2026-08-26/09-10/09-11）形态一致，可接受。次风险：平台行有 last_pushed_at 而合成载荷不带 base_ts——平台契约「base_ts 缺失无条件接受」（platform_sync/service.py 分支 1），无 409 面；若平台后续收紧该契约，fallback 是 best-effort 失败日志（不阻断）。 放弃的方案：①daemon reconcile 对账「平台 active 行 vs 本地全无」主动软删——多机工作区下他机活跃变更会被误删，需要引入行级机器归属，改动面过大；②sync 对 progressData null 一律发墓碑——打错 --change 名（从未存在）会把平台同名真变更误软删，不可接受；台账正是为了区分「从未存在」与「存在过且已终态」。平台侧 7 天占位行保护窗 + 全量 reparse 兜底（已有）继续作为外部裸删（rm -rf + SQL 全清）的最后防线。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-13-autocreate-atomic-claim
+锚点：未记录
+最近确认：567661aa06918db579ea7e0f2d25e9effa4462f8
+理由：最大风险：db.js transaction 的 BUSY 重试若不整体重跑 fn（只重试语句），跨进程快照过期时守卫可能读到旧快照——已核对 db.js 注释「BUSY 重试收敛在 DB 层 transaction 封装」（重跑 fn），且单语句本身在写锁下排队，双重保险；真并发竞争测试（双进程同秒 spawn）确定性不足（胜负调度随机），不作为测试断言面，以单语句原子性+守卫行为单测为契约锚。 放弃的方案：①「先 initChange 再检查删行回滚」——回滚本身又与对方提交竞态，且留下已写 stages/目录的清理面；②「文件锁串行化自动建名」——引入新锁文件与清理生命周期，复杂度不成比例；③只修 command.js 顺序（先算名再 listChanges 再 initChange）——仍是两步，竞态窗口依旧。

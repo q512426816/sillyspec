@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-autocreate-atomic-claim",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "310e98b2c031524ab3e33b721335f6c2347170a5",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "doc-ref-check 新增 2 处 command.js 行号锚失效（净 +6 行未同步文档行号）",
+      "evidence": "本变更 src/run/command.js 净 +6 行（20+/14-，位于 ~L1340-1390），docs/sillyspec/platform-interface-map.md 未同步：L133 锚 command.js:1712 期望 _write/triggerSync/_getPlatform（现位于 1718-1719，窗口 [1710,1717] 差 1 行）、L134 锚 command.js:2151 期望 checkApproval（现位于 2157，窗口 [2149,2156] 差 1 行）——两锚在基线 f363f27f 上均命中，系本变更新引入。实测 npm run test:core：324 pass / 1 fail，唯一失败即 test/doc-ref-check.test.mjs（12/93 锚点失效，其中 10 处为 sync.js/index.js 预存漂移——git diff f363f27f..310e98b2 --stat -- src/sync.js src/index.js docs/ 为空证实与本变更无关；本变更新增 2 处）。注：FR-04 flow done 门跑的是范围化选择（module+deps(js30)+fr(1) 81 例，不含 doc-ref-check），故门记录为绿。机械修复：按 checker 指引更新两处文档行号。",
+      "location": "docs/sillyspec/platform-interface-map.md:133-134 / src/run/command.js:1718,2157"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements FR-02 场景 Given「已有一行 active → exit 2」与实际行为不符（单活跃上游 read 自动定位不进分支，exit 2 需 ≥2 活跃）",
+      "evidence": "command.js:1147 入口 pm.read(cwd, changeName)；progress.js read()（L418-428）对恰好 1 个活跃变更自动定位返回非 null → 裸 run brainstorm 直接在既有变更上继续，不进 !progress 自动建名分支；exit 2 引导仅在 ≥2 活跃（read 返 null）时可达。测试正确用两行活跃 fixture 且标题注明「单活跃由上游 pm.read 自动定位，不进本分支」；需求场景文本的 Given 应为「已有多行活跃」。规范正文（FR-02 条目）与测试绑定无误，仅场景 Given 数字失实。",
+      "location": ".sillyspec/changes/2026-10-13-autocreate-atomic-claim/requirements.md:37 / src/progress.js:418-428"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-13T16:15:10Z"
+}
