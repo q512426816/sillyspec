@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-closeout-task-guidance",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-12-closeout-task-guidance:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-tick-prototype.test.mjs「横幅含任务拟法行（新增断言随本变更加入该族或新用例）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-closeout-task-guidance"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-12-closeout-task-guidance:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-tick-prototype.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-12-closeout-task-guidance"
+    }
+  ]
+}

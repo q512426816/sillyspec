@@ -4,6 +4,11 @@ substeps:
   artifacts: done
   ledger: done
   patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -23,7 +28,7 @@ input: >-
   - flow-tick-prototype / thin-workunits 等横幅相关回归族全绿 + lint
 autopilot: false
 baseline_commit: 82627556dbee2f7959284f3435b329c39b8efb9c
-updatedAt: '2026-10-13T00:51:42.556Z'
+updatedAt: '2026-10-13T01:00:19.001Z'
 baseline_sha256: 49d6d9e6c25cd90d9dd39e827b28023b26bbafcfc1915c4ba74d33216ae98b21
 spec_approved: true
 spec_approved_at: '2026-10-13T00:39:16.685Z'
