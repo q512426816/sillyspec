@@ -17,7 +17,7 @@ const readFileSync = (filePath, encoding) => _readFileSync(filePath, encoding).r
 import { join as pJoin, basename } from 'path'
 import { tmpdir } from 'os'
 import jsYaml from 'js-yaml'
-import { parseFileChangeList, pathMatches } from '../change-list.js'
+import { parseFileChangeList, pathMatches, REPO_SECTION_HEADER_RE } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
 import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
 import { validateScriptCommands } from './cmd-existence.js'
@@ -942,13 +942,10 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null, rep
 // design 清单解析与 allowed_paths 对账共用同一套匹配语义，避免两处逻辑漂移。
 
 /**
- * design §6 按仓分段段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
- * 段头为 h2/h3，repo 名取段头首 token（去空白/编号前缀）。容忍可选编号前缀、（…）备注后缀
- * （`（跨仓，X1-X4）` 等，全/半角括号均可）与尾随空白/冒号——后缀不容忍时（用户实证
- * 2026-08-29）`### sillyspec 仓变更（跨仓，X1-X4）` 整段判 main、跨仓文件全量误报未覆盖。
- * 不命中（非仓变更段头）→ null。
+ * 「<repo> 仓变更」段头识别（D-014）：`## <repo> 仓变更`（如 `## sillyspec 仓变更`）。
+ * 正则已上移 change-list.js 导出（单一源，2026-10-13-h2-repo-heading-parse——thin 收口
+ * 对账解析器同步消费该段头形态），此处 import 使用；容忍语义见 change-list.js 处注释。
  */
-const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更(?:\s*[（(][^（）()]*[)）])?\s*[:：]?\s*$/
 
 /**
  * 疑似段头宽匹配：标题行含「<token> 仓变更」字样（token 与仓变更间有空白）。
@@ -1564,6 +1561,44 @@ export function validateTaskcardsCli({ changeDir, projectRoot = null }) {
           if (bad.length > 0) {
             const id = (content.match(/^id:\s*(.+)/m)?.[1] || '').trim() || f
             errors.push(`${id}: target_files 形态非法——${bad.map(b => `${b.raw}（${b.invalid}）`).join('；')}`)
+          }
+        }
+        // provides/expects_from 结构校验（坑 taskcard-validate-vs-postcheck-gap，2026-10-10
+        // 实证：散文行 `- contract Foo fields [a, b]` 是合法 YAML 字符串数组，--validate 过、
+        // 契约解析器静默过滤（无 contract 键即丢）→ plan --done 才报「provider 未声明」。
+        // 在填卡自检轮暴露：字符串元素/缺 contract/fields·needs 非数组 = 形态错，给出映射式模板。
+        const id2 = (content.match(/^id:\s*(.+)/m)?.[1] || '').trim() || f
+        const fm = fmParse.fm || {}
+        const _tpl = '映射式：- contract: <名> / fields: [a, b]（expects_from 同构，needs 替 fields）'
+        if (Array.isArray(fm.provides)) {
+          for (const pe of fm.provides) {
+            const bad = typeof pe === 'string'
+              || !pe || typeof pe !== 'object'
+              || typeof pe.contract !== 'string' || !pe.contract.trim()
+              || (pe.fields !== undefined && !Array.isArray(pe.fields))
+            if (bad) {
+              errors.push(`${id2}: provides 条目形态非法（${typeof pe === 'string' ? `散文行「${pe.slice(0, 40)}」` : '缺 contract 键或 fields 非数组'}）——${_tpl}`)
+              break
+            }
+          }
+        }
+        if (fm.expects_from && typeof fm.expects_from === 'object' && !Array.isArray(fm.expects_from)) {
+          for (const [prov, contracts] of Object.entries(fm.expects_from)) {
+            if (!Array.isArray(contracts)) {
+              errors.push(`${id2}: expects_from.${prov} 应为契约数组（映射式：- contract: <名>
+  needs: [a, b]）`)
+              continue
+            }
+            for (const ce of contracts) {
+              const bad = typeof ce === 'string'
+                || !ce || typeof ce !== 'object'
+                || typeof ce.contract !== 'string' || !ce.contract.trim()
+                || (ce.needs !== undefined && !Array.isArray(ce.needs))
+              if (bad) {
+                errors.push(`${id2}: expects_from.${prov} 条目形态非法（${typeof ce === 'string' ? `散文行「${ce.slice(0, 40)}」` : '缺 contract 键或 needs 非数组'}）——${_tpl}`)
+                break
+              }
+            }
           }
         }
       }

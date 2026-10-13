@@ -169,6 +169,17 @@ function looksLikePath(p) {
 const INCIDENTAL_RE = /顺带修复|附带修复|顺带|drive-?by|incidental/i
 
 /**
+ * 「<repo-key> 仓变更」段头识别（单一源——2026-10-13-h2-repo-heading-parse 起定义在
+ * change-list.js 并导出；原 stages/plan-postcheck.js 模块内常量上移，plan-postcheck 改
+ * import 同一符号）。段头为 h2/h3：h3 子段形态由本文件消费（currentRepo 设置器），
+ * h2 形态在生态中是既定约定（brainstorm 厚道模板教学、plan-postcheck 覆盖对账
+ * parseDesignCoverageByRepo、design-facts/docs-check 存在性核验、评审清单四处按此解析）。
+ * 容忍可选编号前缀、（…）备注后缀（全/半角括号）与尾随空白/冒号；捕获组 1 = repo-key
+ * （限字母数字._-）；key 是否在注册表由调用方 fail-closed 校验。
+ */
+export const REPO_SECTION_HEADER_RE = /^#{2,3}\s+(?:\d+[.)]\s*)?([A-Za-z0-9_.\-]+)\s*仓变更(?:\s*[（(][^（）()]*[)）])?\s*[:：]?\s*$/
+
+/**
  * 从清单子段标题 / 路径前缀解析跨仓 repoKey（scope-audit-cross-repo-blindness 改进点 2，
  * 2026-09-15）：多仓变更 design 清单按「main 仓 / sub-xxx / spdemo」分段书写，主仓跑
  * scope-audit 时这些条目不是主仓路径，须识别出来标注「跨仓（本表不含）」而非恒「计划未动」。
@@ -222,14 +233,16 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
   const sectionMatch = content.match(FILE_LIST_SECTION_RE)
   if (!sectionMatch) return []
 
-  // 从标题后开始，截取到下一个 ## 标题或文件末尾
+  // 从标题后开始，截取到下一个 ## 标题或文件末尾——「<注册key> 仓变更」段头（h2）是本节
+  // 子分段不截断（2026-10-13-h2-repo-heading-parse：段头是生态既定约定——brainstorm 模板/
+  // plan-postcheck 覆盖对账/design-facts 核验四处消费；此前 h2 段头在此终结「文件变更清单」
+  // 节，其后条目整段静默丢失，agent 照告警①书写即丢对账与冻结）。
   const afterSection = content.slice(sectionMatch.index + sectionMatch[0].length)
-  const nextSectionMatch = afterSection.match(/^##\s/m)
-  const relevantContent = nextSectionMatch
-    ? afterSection.slice(0, nextSectionMatch.index)
-    : afterSection
-
-  const lines = relevantContent.split('\n')
+  const lines = []
+  for (const line of afterSection.split('\n')) {
+    if (/^##\s/.test(line) && !REPO_SECTION_HEADER_RE.test(line)) break
+    lines.push(line)
+  }
   let headerSkipped = false
   let pathColIdx = 1            // 默认第 2 列；解析表头后可重定位
   let opColIdx = -1             // 操作列下标（表头扫描后定位；-1 = 无操作列 → operation=null）
@@ -239,6 +252,16 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
   const entries = new Map()     // path -> { path, operation, incidental, repo }（exclude 子段 delete）
 
   for (const line of lines) {
+    // 「<key> 仓变更」段头（h2/h3，REPO_SECTION_HEADER_RE）：仓分段切换——key 须在注册表内
+    // （fail-closed：未注册含 main → 主仓 repo=null，与 detectRepoFromSubsection 同口径）；
+    // 段头重置分类子段态（新分段从 include 起、操作类别清空）。
+    const repoHdr = line.match(REPO_SECTION_HEADER_RE)
+    if (repoHdr) {
+      listMode = 'include'
+      currentOp = null
+      currentRepo = (Array.isArray(repoKeys) && repoKeys.includes(repoHdr[1])) ? repoHdr[1] : null
+      continue
+    }
     // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件 / ### sub-grid-security（跨仓段）
     const subHeader = line.match(/^###\s+(.+?)\s*$/)
     if (subHeader) {

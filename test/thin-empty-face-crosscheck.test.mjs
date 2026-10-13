@@ -214,6 +214,28 @@ test('纯跨仓规范标注空面：不阻断，出空面跨仓冻结缺口 advi
   }
 })
 
+// ── h2 段头形态（2026-10-13-h2-repo-heading-parse FR-05）：生态标准写法在 thin 收口
+//    侧同样被识别——空面走纯跨仓标注路径而非被节截断静默丢条目/误触未标注阻断 ──
+test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标注，advisory 不阻断', () => {
+  const cwd = makeRepo({ repos: true })
+  const change = '2026-10-13-tefc-h2hdr'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态\n成功标准：\n- 段头识别不阻断', '--autopilot'])
+    fillDocs(specBase, change, ['## 文件变更清单', '', '## libx 仓变更', '', '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 修改 | src/routes/X.js | 交付 |'].join('\n'))
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `h2 段头不阻断: ${s2.stdout}\n${s2.stderr}`)
+    const out = `${s2.stdout}\n${s2.stderr}`
+    assert.match(out, /跨仓规范标注.*冻结面为空|冻结面为空.*跨仓/, '空面跨仓缺口 advisory（段头被识别）')
+    assert.doesNotMatch(out, /冻结面为空但 design 声明清单有/, '不误触未标注阻断')
+    assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
 // ── FR-04：flow start 横幅两态 ──
 test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行', () => {
   const withRepos = makeRepo({ repos: true })
