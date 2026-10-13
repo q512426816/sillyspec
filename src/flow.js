@@ -34,8 +34,9 @@ import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/sh
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
 // 2026-10-13-thin-sync-stage：FLOW_STATE_FILE/readFlowState 单一源上移叶子模块 flow-state.js
-// （progress.js 同步投影也要读，直接 import flow.js 会静态循环依赖）；re-export 保持
-// `import('../flow.js')`（run/command.js 既有动态引用）导出面不变。
+// （progress.js 同步投影也要读；叶子化避免 progress.js 为读一个状态文件拉入本协议整条
+// 依赖链——评审 P3 勘误：非静态循环依赖，本文件 import 闭包实测不达 progress.js）；
+// re-export 保持 `import('../flow.js')`（run/command.js 既有动态引用）导出面不变。
 import { FLOW_STATE_FILE, readFlowState } from './flow-state.js'
 export { FLOW_STATE_FILE, readFlowState }
 

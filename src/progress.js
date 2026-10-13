@@ -24,7 +24,8 @@ import { StageMachine } from './progress/stage-machine.js';
 import { stageRegistry } from './stages/index.js';
 import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './progress/shared.js';
 // 2026-10-13-thin-sync-stage：叶子模块（无内部依赖），同步投影读 thin 出身用——
-// 直接 import './flow.js' 会与其反向依赖链成静态循环。
+// 叶子化避免本文件为读一个状态文件拉入 flow 协议整条依赖链（评审 P3 勘误：
+// flow.js 静态 import 闭包实测不达本文件，非循环依赖问题）。
 import { readFlowState } from './flow-state.js';
 // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
 // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
