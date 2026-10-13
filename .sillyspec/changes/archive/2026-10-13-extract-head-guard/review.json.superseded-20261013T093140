@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-extract-head-guard",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b49596d8d91c116d6d30a799334db3afe2a041ab",
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P3",
+      "type": "traceability-precision",
+      "title": "FR 绑定「用例名」为组描述而非逐字用例名；FR-02「既有四锚」中「分号/斜杠不拆」锚的断言在绑定文件之外",
+      "detail": "requirements.md 三条 FR 均绑定 test/draft-continuation.test.mjs「节标题合并守卫用例组（裸动机未闭合括号/验收标准等价/既有四锚零回归）」——该「用例名」不是该文件中任何 test() 标题的逐字名（实际为 ①d/①e/①f 三条新增用例）；且「分号斜杠不拆」锚的实际断言位于 test/flow-draft.test.mjs:237-238 与 test/fr-compound-split.test.mjs:16-19，不在绑定文件内。绑定语义（测试真实存在、断言覆盖承诺行为、可实跑全绿）成立，属命名/追溯精度问题。",
+      "evidence": "requirements.md:35-37；test/draft-continuation.test.mjs 实际用例标题（①d/①e/①f）；test/flow-draft.test.mjs:237-238；test/fr-compound-split.test.mjs:17-19",
+      "impact": "无功能与数据面影响；机械绑定提取（extractTestAnchors）按书写原形携带锚文本、不校验命中"
+    },
+    {
+      "id": "F-02",
+      "severity": "P3",
+      "type": "design-wording-precision",
+      "title": "design 盲维 Q4「唯一消费方 flow start 清晰度门」表述不精确——extractSuccessCriteria 另有进程内调用点",
+      "detail": "调用点：src/flow.js:758（清晰度门）、src/flow-draft.js:899（draftAll 工件起草）、src/flow-draft.js:1112/:1124（redraftMissingArtifacts proposal 回提）。增量语义面判定（行为变化仅落在「prev 需续行且当前行整行节标题」的病理交集）对全部调用点一致成立，Q4「无跨仓串台、变化仅限病理输入」的实质结论无误。",
+      "evidence": "src/flow.js:758 与 src/flow-draft.js:899/1112/1124（extractSuccessCriteria 调用点全量）",
+      "impact": "无行为风险；仅 design 文档措辞精度提示"
+    }
+  ],
+  "dimensionNotes": {
+    "verdict_basis": "无 P1/P2。实现与三条 FR 承诺逐条对上；防护声明经 diff 与实跑双重核实；e2e 真实钉住事故原发生面。两条 P3 均为文档精度提示，不构成承诺违反或数据正确性风险。",
+    "workspace_vs_head": "src/、test/ 工作区与 HEAD b49596d8 零差异（git diff HEAD 仅 flow-state.yaml 状态机更新与未跟踪 change-patch* 机产物，未触代码面）。",
+    "checklist_1_fr_impl_test_consistency": "FR-01→src/flow-draft.js:163 守卫 + 用例 ①d（断言 length===2 且 deepEqual 两条目）/①f（e2e）；FR-02→既有断言零改动（交付 diff 仅 +5 行守卫与注释、import 行扩展，无既有断言触碰）；FR-03→用例 ①e（验收标准 等价 deepEqual）+ 守卫仅判当前行、needsContinuationMerge 零改动（diff 核验）。实跑：node --test test/draft-continuation.test.mjs → 8/8 绿。",
+    "checklist_2_blind_questions_truth": "四问如实：①纯行属性判定（SECTION_HEAD_RE.test(l)，^…$ 全锚定、无 /g 状态、只读当前行）；②纯函数零写面（extractSuccessCriteria 无 I/O、无共享态，调用方 flow start 单次调用）；③幂等（逐行确定性状态机，同输入同输出）；④作用域（增量=prev 需续行 ∧ 当前行整行节标题的交集，无跨工作区/跨仓串台面；「唯一消费方」措辞不精确见 F-02，实质结论成立）。",
+    "checklist_3_disclosure_boundaries": "逐条裁决：①裸行「需求」类内容行整行形如节标题→独立成行触发节切换：属实且可接受——SECTION_HEAD_RE 全锚定仅整行命中（带 # 前缀/尾冒号的变体亦为显式结构标记），且提取循环对该类行的节切换处理在守卫前「独立成行」场景下本就一致（守卫前 prev 不需续行时行为与守卫后相同），语义自洽；行为差仅落在 prev 需续行的病理交集。②无前缀裸行病理输入的行为微调：属实、有意为之、更符合结构语义，已在 design 风险节与 Q4 显式披露。未发现未披露的实质边界。",
+    "checklist_4_guard_non_regression": "needsContinuationMerge 逐字节未动：git show b49596d8 中 src/flow-draft.js 仅新增注释+守卫 5 行，函数体与 SECTION_HEAD_RE 均零改动（工作区再证零差异）。R17 括号跨行并回（用例 ①）、悬空冒号并回（①b）、## 标题（①c）、分号/斜杠不拆（test/flow-draft.test.mjs:237-238、test/fr-compound-split.test.mjs）四锚零改动且全绿。守卫条件仅 SECTION_HEAD_RE.test(l)（当前行），不触 prev 判定面。",
+    "checklist_5_e2e_generation_sync": "用例 ①f 真实 spawn `node <repo>/src/index.js flow start --change <名> --input <事故形态> --autopilot`（临时 git 仓夹具，含 local.yaml 与基线提交），断言 status===0 与 /协议调用 1/2/；拒收路径 src/flow.js:759-767 为 process.exit(2)——缺陷版必失败，事故原发生面（--input 清晰度门误拒）被真实钉死；实跑 405ms 通过。收口件同步：tasks.md 3/3 已勾、flow-state.yaml input/基线在场。",
+    "probes": {
+      "cli-copy-selfsufficient": "无 CLI 文案新增/修改（交付 diff 仅代码注释、守卫与测试），如实核过。",
+      "config-absent-zero-regression": "n/a——无 local.yaml 新键（e2e 内 local.yaml 为临时测试夹具）。",
+      "crossrepo-path-compat": "n/a——不涉跨仓；e2e 以 path.join 组装路径且在 win32 实跑通过。"
+    },
+    "test_evidence": {
+      "draft_continuation": "node --test test/draft-continuation.test.mjs → tests 8 / pass 8 / fail 0（含 ①f e2e 405.2ms）",
+      "extractor_regression_surface": "node --test test/flow-draft.test.mjs test/fr-compound-split.test.mjs test/input-teach-copyable.test.mjs test/input-format-copy.test.mjs → tests 29 / pass 29 / fail 0"
+    }
+  },
+  "reviewedAt": "2026-10-13T17:28:46+08:00"
+}

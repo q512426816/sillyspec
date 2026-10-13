@@ -36,3 +36,4 @@
 | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
 | 2026-10-13 | 2026-10-13-flow-diff-cmd | 动机：change 粒度的文件统计查询口缺失——数据两态俱在但无展示入口：归档变更有 change-patch.json |
 | 2026-10-13 | 2026-10-13-declared-paren-strip | 动机：平台仓消费方冒烟实证（multi-agent-platform 仓 docs/sillyspec/flow-dif |
+| 2026-10-13 | 2026-10-13-extract-head-guard | 动机：本会话自身实证——flow start --input 动机文本里出现未闭合全角左括号字面量时，续行合并的不平衡判 |

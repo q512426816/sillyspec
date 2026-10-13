@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-extract-head-guard",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e68f8119af1846cf4bff961364c9ef7207d455d5",
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P3",
+      "type": "traceability-precision",
+      "title": "F-01 部分清偿核实：跨文件锚准确；绑定引用文本仍非逐字——①e 本可全量逐字仍截断、①d 裁省括注",
+      "detail": "P3×2 清偿提交仅动变更目录两文件（零 src/test）。跨文件锚「test/flow-draft.test.mjs:237-238、test/fr-compound-split.test.mjs」与落盘逐字核实：flow-draft.test.mjs:237/238 正是「分号不拆」「斜杠不拆」两条断言，fr-compound-split.test.mjs 真实存在且含斜杠/分号整条保留用例。但绑定行两段「用例名」引用均非 test() 标题逐字（程序化核对：全等 0 命中、同文件子串 0 命中）：①d 引用裁去内嵌「成功标准：」引号与括注「（2026-10-13-extract-head-guard 实证形态）」（内嵌「」受 CASE_ANCHOR_RE 首「」截断文法所限、裁引号可理解，括注删省无文法约束）；①e 标题不含「」、本可全量逐字，却裁去「节标题」与后半句「；动机未闭合括号下 flow start 门等价路径不再 0 条」。追溯精度面较前轮收窄（①d/①e 实名标识与主旨短语在场、跨文件锚补齐），但「逐字列用例实名」的清偿声明与落盘不完全一致。",
+      "evidence": ".sillyspec/changes/2026-10-13-extract-head-guard/requirements.md:35-37 引用「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」「①e 守卫等价面：验收标准 同受守卫」；test/draft-continuation.test.mjs:67 实际标题含「成功标准：」与实证形态括注、:79 实际标题为「①e 守卫等价面：验收标准 节标题同受守卫；动机未闭合括号下 flow start 门等价路径不再 0 条」；includes/equal 双向核对 0 命中",
+      "impact": "无功能与数据面影响；绑定提取按书写原形携带锚文本、不校验命中，属非阻断追溯精度残余（随归档留档）",
+      "location": ".sillyspec/changes/2026-10-13-extract-head-guard/requirements.md:35-37"
+    }
+  ],
+  "dimensionNotes": {
+    "verdict_basis": "无 P1/P2；增量仅治理文档两文件、零 src/test 改动。F-02 全额清偿核实；F-01 跨文件锚与实名标识到位、逐字面残留一项 P3（非阻断、可留档），verdict 维持 PASS（与前轮 P3 非阻断口径一致）。",
+    "increment_range": "git log b49596d8..HEAD 唯一提交 e68f8119（P3×2 清偿）；git diff --name-only 仅 design.md+requirements.md；git diff b49596d8..HEAD -- src/ test/ 为空；工作区相对 HEAD 无 src/test 漂移（仅 flow-state.yaml 状态机与未跟踪机产物）。",
+    "F-01_increment": "跨文件锚两处逐字核实准确（test/flow-draft.test.mjs:237-238=分号/斜杠断言行；test/fr-compound-split.test.mjs 在场含等价用例）；引用名逐字性未达成——程序化 substring/equal 双向 0 命中，见 F-01。",
+    "F-02_increment": "design Q4（design.md:35）消费方全列核对：flow.js:757 为清晰度门内 extractSuccessCriteria import 行（调用在 758，同门块）、flow-draft.js:899=draftAll、1112/1124=redraftMissingArtifacts 两处回提——五锚全部真实存在（grep/行读核实）；「唯一消费方」措辞已移除，各消费方增量语义一致判定成立。",
+    "regression_surface": "零 src/test 增量 → 前轮实测证据面（test/draft-continuation.test.mjs 8/8 绿、回归面 29/29 绿）不受本轮影响，无需重跑；本轮只更新治理文档。"
+  },
+  "reviewedAt": "2026-10-13T17:38:11+08:00"
+}

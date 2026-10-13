@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-extract-head-guard",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-extract-head-guard:flow:测试绑定FR-01",
+      "tests": [
+        "test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」",
+        "test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」",
+        "test/flow-draft.test.mjs",
+        "test/fr-compound-split.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-extract-head-guard"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-extract-head-guard:flow:测试绑定FR-02",
+      "tests": [
+        "test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」",
+        "test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」",
+        "test/flow-draft.test.mjs",
+        "test/fr-compound-split.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-extract-head-guard"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-extract-head-guard:flow:测试绑定FR-03",
+      "tests": [
+        "test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」",
+        "test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」",
+        "test/flow-draft.test.mjs",
+        "test/fr-compound-split.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-extract-head-guard"
+    }
+  ]
+}

@@ -9379,3 +9379,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-13-flow-diff-cmd
   status: active
+
+## FR-cli-entry-495 前置行行尾出现未闭合全角左括号时「成功标准：」节标题不被并入，条目正常提取、flow start 清晰度门不再误拒
+变更：2026-10-13-extract-head-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-extract-head-guard/requirements.md#FR-01
+最近确认：e68f8119af1846cf4bff961364c9ef7207d455d5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-extract-head-guard:flow:测试绑定FR-01
+  tests: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」 | test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」 | test/flow-draft.test.mjs | test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-extract-head-guard
+  status: active
+
+## FR-cli-entry-496 续行合并既有语义零回归：括号跨行并回、悬空冒号并回、markdown 标题、分号斜杠不拆四项既有断言零改动全绿
+变更：2026-10-13-extract-head-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-extract-head-guard/requirements.md#FR-02
+最近确认：e68f8119af1846cf4bff961364c9ef7207d455d5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-extract-head-guard:flow:测试绑定FR-02
+  tests: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」 | test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」 | test/flow-draft.test.mjs | test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-extract-head-guard
+  status: active
+
+## FR-cli-entry-497 验收标准 等价节标题同样受守卫；守卫只影响当前行是节标题的合并判定，不改 needsContinuationMerge 本体
+变更：2026-10-13-extract-head-guard
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-extract-head-guard/requirements.md#FR-03
+最近确认：e68f8119af1846cf4bff961364c9ef7207d455d5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-extract-head-guard:flow:测试绑定FR-03
+  tests: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」 | test/draft-continuation.test.mjs「①e 守卫等价面：验收标准 同受守卫」 | test/flow-draft.test.mjs | test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-extract-head-guard
+  status: active
