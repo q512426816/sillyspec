@@ -596,6 +596,28 @@ async function tryImportSubcommandImpl(importPath, moduleName) {
  * @param {object} opts - { specDir }
  */
 export async function cmdKnowledge(args, dir, opts = {}) {
+  // --help/-h 全局拦截（坑：探索型调用 knowledge refresh --help 被当默认参数直接执行
+  // ——cmdRefresh 无参即全量重写 generated/，副作用写 34 文件。帮助请求在任何子命令
+  // 前消化，危险面子命令不再被误触发）。
+  if (args.includes('--help') || args.includes('-h')) {
+    const lines = [
+      '用法: sillyspec knowledge <子命令> [参数]',
+      '',
+      '子命令:',
+      '  search "<关键词>"     检索知识库（命中自动注入 prompt 的同源面）',
+      '  inspect <文件>        查看单个知识文件条目结构',
+      '  validate              校验知识库完整性（INDEX 锚点/注册/幽灵条目——纯读）',
+      '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
+      '  stats                 覆盖率/死条目统计（纯读）',
+      '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
+      '  propose / classify / inbox / graph / stats',
+      '',
+      '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
+    ]
+    for (const l of lines) console.log(l)
+    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats'] })
+    return
+  }
   const subCommand = args[0] || ''
 
   switch (subCommand) {

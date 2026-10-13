@@ -138,6 +138,9 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier, 
     '## review.json 产物契约(CLI Stage Review Gate 将硬校验,以下为精确 schema —— 事前给的 == 事后查的)',
     '',
     '> 路径:`{SPEC_ROOT}/.runtime/stage-reviews/' + stageLbl + '-' + runIdLbl + '/review.json`(本次 reviewType=' + reviewType + ',主审查文档=' + mainDocRel + ')',
+    ...(changeDir
+      ? ['> **本次完整绝对路径（直接复制给审查子代理，勿手拼 runId/漏阶段前缀——坑 stage-review-path-prefix 2026-10-10 实证：marker 只有裸 runId，子代理按 runId 直写漏「<stage>-」前缀即错位）**: `' + join(dirname(dirname(changeDir)), '.runtime', 'stage-reviews', stageLbl + '-' + runIdLbl, 'review.json') + '`']
+      : []),
     '',
     '### 必填字段(validateStageReviewSchema 硬校验,缺任一即 schema 失败阻断)',
     '- `schemaVersion`: ' + REVIEW_SCHEMA_VERSION,

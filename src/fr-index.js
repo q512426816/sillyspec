@@ -594,8 +594,17 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
       // 落域机械改进（2026-09-27-knowledge-digest）：伪域告警附交付路径推导的建议域——
       // 归档时转达人工 1 秒确认（建议器与 digest 信号卡共用 suggestDomainFromFiles 单源）
       const suggested = suggestDomainFromFiles(deliverableFiles || [], { knowledgeRoot })
+      // 坑 fr-redomain-advisory-and-selectivity-gap（2026-10-13）：告警接专用命令 +
+      // --by-change 条目级过滤 + D-001 迁域不换号铁律明示（防手工迁移按序重编号断
+      // supersede 链）。锚定域取告警列出的伪域文件名（auto-x.md → auto-x）。
+      const pseudoDomains = [...new Set(pseudoHits.map((w) => String(w.file || '').replace(/\.md$/, '')))].filter(Boolean)
       console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）${suggested ? `——按交付路径建议域：${suggested}（确认后可迁移；` : '（'}补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准）`)
-      if (suggested) console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
+      if (suggested) {
+        console.warn(`   域级整体迁移：sillyspec tests --redomain --from <伪域> --to ${suggested} --write（干跑去 --write）；只迁本变更条目：加 --by-change <本变更名>`)
+        if (pseudoDomains.length > 0) console.warn(`   例：sillyspec tests --redomain --from ${pseudoDomains[0]} --to ${suggested} --by-change <本变更名> --write`)
+        console.warn(`   ⚠️ 迁域不换号（D-001 铁律）：条目 ID 保持原样（绑定/supersede 链按 ID 寻址）——手工搬移时勿按目标域接续重编号`)
+        console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
+      }
     }
     const unm = all.get('unmapped')
     if (unm && unm.sections.length > 50) {

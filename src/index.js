@@ -4044,6 +4044,53 @@ SillySpec worktree — git worktree 隔离管理
           }
           break;
         }
+        case 'deps': {
+          // deps 状态显式覆写（坑 deps-gate-offline-fragile，2026-10-12 实证：离线环境
+          // npm ci 必败 + lockfile 本地改动致链接快路径失效，agent 被迫手改 meta.json 绕过
+          // ——未定义行为且零留痕。本命令把绕过通道 CLI 化：--set 显式值 + --reason 强制
+          // 留痕（写 depsOverrideNote / depsOverrideAt），审计面可对账。合法值收敛工具
+          // 认知集（n/a/linked/installed/failed）。
+          const setIdx = filteredArgs.indexOf('--set')
+          const setVal = setIdx !== -1 && filteredArgs[setIdx + 1] && !String(filteredArgs[setIdx + 1]).startsWith('--') ? String(filteredArgs[setIdx + 1]).trim() : null
+          const rIdx = filteredArgs.indexOf('--reason')
+          const reason = rIdx !== -1 && filteredArgs[rIdx + 1] ? String(filteredArgs[rIdx + 1]).trim() : null
+          if (!wtName || !setVal || !reason) {
+            console.error('用法: sillyspec worktree deps --change <变更名> --set <n/a|linked|installed|failed> --reason "<事实依据——必填留痕>"')
+            console.error('   离线/内网环境供给链失败时的显式覆写通道（写 meta.json + 覆写留痕）；先确认 node_modules 确实可用再 set linked')
+            process.exit(2)
+          }
+          if (!['n/a', 'linked', 'installed', 'failed'].includes(setVal)) {
+            console.error(`❌ --set 值非法 "${setVal}"（合法：n/a | linked | installed | failed）`)
+            process.exit(2)
+          }
+          try {
+            const specBaseWd = resolvePlatformSpecDir(dir, specDir)
+            const wtBase = join(specBaseWd, '.runtime', 'worktrees')
+            const wtDir = join(wtBase, wtName)
+            const metaPath = join(wtDir, 'meta.json')
+            // 跨仓 worktree：主 specBase 下无实体时扫各注册仓（简化：本命令聚焦主仓 worktree，
+            // 跨仓路径用 --spec-dir 指到对应 specBase；两形态 meta.json 同款）
+            if (!existsSync(metaPath)) {
+              console.error(`❌ 找不到 worktree meta：${metaPath}`)
+              console.error('   跨仓 worktree 用 --spec-dir 指向其 specBase 后重跑；变更名核对 sillyspec worktree list')
+              process.exit(1)
+            }
+            const meta = JSON.parse(String(readFileSync(metaPath, 'utf8')).replace(/^\uFEFF/, ''))
+            const prev = meta.depsStatus
+            meta.depsStatus = setVal
+            meta.depsOverrideNote = `手工覆写: ${reason}（前值 ${prev ?? 'null'}）`
+            meta.depsOverrideAt = new Date().toISOString()
+            const { writeAtomicSync } = await import('./fs-atomic.js')
+            writeAtomicSync(metaPath, JSON.stringify(meta, null, 2) + '\n')
+            console.log(`✅ deps 状态已覆写：${wtName} depsStatus ${prev ?? 'null'} → ${setVal}`)
+            console.log(`   留痕：${meta.depsOverrideNote}`)
+            console.log('   verify/archive 对账时以 depsOverrideNote 为审计锚——事实依据不实属未定义行为')
+          } catch (e) {
+            console.error(`❌ 覆写失败: ${e.message}`)
+            process.exit(1)
+          }
+          break;
+        }
         default:
           console.error(`❌ 未知子命令: worktree ${wtSubCmd}`);
           console.log('   运行 sillyspec worktree --help 查看帮助');

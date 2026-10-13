@@ -2,8 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/gwtest/main" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/r7-test-env/demo-project" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/round5/_gsd" vcs="Git" />
   </component>
 </project>
