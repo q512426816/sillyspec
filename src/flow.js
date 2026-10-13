@@ -33,20 +33,13 @@ import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
+// 2026-10-13-thin-sync-stage：FLOW_STATE_FILE/readFlowState 单一源上移叶子模块 flow-state.js
+// （progress.js 同步投影也要读，直接 import flow.js 会静态循环依赖）；re-export 保持
+// `import('../flow.js')`（run/command.js 既有动态引用）导出面不变。
+import { FLOW_STATE_FILE, readFlowState } from './flow-state.js'
+export { FLOW_STATE_FILE, readFlowState }
 
-const FLOW_STATE_FILE = 'flow-state.yaml'
 const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
-
-/** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
-export function readFlowState(changeDir) {
-  try {
-    const raw = readFileSync(join(changeDir, FLOW_STATE_FILE), 'utf8')
-    const obj = yaml.load(raw)
-    return obj && typeof obj === 'object' ? obj : null
-  } catch {
-    return null
-  }
-}
 
 /** 原子写 flow-state（patch 合并，幂等）。 */
 export function writeFlowState(changeDir, patch) {
