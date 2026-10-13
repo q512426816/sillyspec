@@ -252,7 +252,8 @@ test('FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 /
     const out = s.stdout + s.stderr
     assert.equal(s.status, 0, `收口应完成: ${out.split('\n').slice(-8).join(' | ')}`)
     const card = readFileSync(join(cwd, '.sillyspec', 'docs', 'p1', 'modules', 'core.md'), 'utf8')
-    assert.ok(card.includes(`| 2026-10-12 | ${cn} |`), `卡内追加本变更行：${card}`)
+    // 日期列=回写当天（非变更名日期）——跨零点硬编码必脆断，日期无关断言（坑 test-date-rollover）
+    assert.ok(new RegExp(`\\| \\d{4}-\\d{2}-\\d{2} \\| ${cn} \\|`).test(card), `卡内追加本变更行：${card}`)
     const st = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' })
     const cardLine = st.split('\n').find((l) => l.includes('docs/p1/modules/core.md'))
     assert.ok(cardLine && cardLine[1] === ' ', `归档后回写文件已暂存（porcelain 行「${cardLine}」第二列为空）`)
@@ -268,7 +269,7 @@ test('FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 /
     assert.equal(s.status, 0, `sidecar 场景收口应完成: ${(s.stdout + s.stderr).split('\n').slice(-8).join(' | ')}`)
     assert.equal(readFileSync(join(cwd2, '.sillyspec', 'docs', 'p1', 'modules', 'core.md'), 'utf8'), before, '已拆卡不写回卡（逐字不变）')
     const side = readFileSync(join(cwd2, '.sillyspec', 'docs', 'p1', 'modules', 'core.changelog.md'), 'utf8')
-    assert.ok(side.includes(`| 2026-10-12 | ${cn2} |`), `sidecar 追加本变更行：${side}`)
+    assert.ok(new RegExp(`\\| \\d{4}-\\d{2}-\\d{2} \\| ${cn2} \\|`).test(side), `sidecar 追加本变更行：${side}`)
   } finally { rmSync(cwd2, { recursive: true, force: true, maxRetries: 3 }) }
 })
 
