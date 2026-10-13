@@ -1,0 +1,33 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-13T02:46:21.712Z
+---
+# 提案书（Proposal）— 2026-10-13-thin-empty-face-crosscheck
+
+## 动机
+
+任务原话转写：动机：multi-agent-platform 仓 docs/sillyspec/thin-done-empty-face-no-declared-crosscheck.md（37c7d146b 实证版）记录生产缺陷：2026-10-12-fire-ledger-form-strict 跨仓交付（代码在 sub-grid-security 仓）走 thin 通道归档，主仓冻结面为空（治理件被剔）→ flow.js patch 子步空面分支一行提示即 patchOk=true 短路；design 声明面自证、planEntries 解析、跨仓防呆告警整段挂在非空 else 分支内从未执行——最危险形态（声明了交付文件却空面）是唯一零告警形态，归档件永久缺 patch 留档。design 实际写的「仓目录名/路径」前缀形态本可命中既有告警（首段命中注册仓）。修法：声明清单解析+防呆告警提到 ownFiles 判空之前（空面也要跑，嫌疑判定放宽为主仓不存在即点名）；空面+声明清单非空（剔治理前缀/已规范标注条目）升格为阻断，三处置一次给全（主仓提交/跨仓规范标注/--accept-empty-face 签收留痕）；flow start 横幅在 local.yaml 注册仓非空时补一行跨仓清单写法提示（thin 通道此前零跨仓指引）。
+
+成功标准：
+- 空冻结面 + design 声明清单非空（剔除 .sillyspec/ 前缀与已带 repo 标注条目后仍有未标注条目）时 flow done patch 子步阻断收口（exit 1 不归档），文案一次给全三处置路径；跨仓嫌疑条目点名三种正确写法（段头/子段/cross-repo: 前缀）
+- planEntries 解析与「疑似跨仓声明未按规范标注」告警在空冻结面也执行；嫌疑判定放宽为「路径主仓不存在即点名」（首段命中注册仓的额外标注 key）——非空冻结面分支行为零回归（既有测试全绿）
+- --accept-empty-face 显式签收放行并留痕（flow-state accept_empty_face 持久化，重跑不再阻断）；清单全部规范标注（e.repo）的纯跨仓空面不阻断，出空面跨仓冻结缺口 advisory
+- flow start 横幅在 local.yaml repos 注册非空时输出一行跨仓清单写法提示；注册为空时横幅输出逐字节不变
+- 治理面-only 零声明清单的空面变更行为不变（空面跳过提示照旧，close-trace-freeze-integrity FR-01 ② 既有断言全绿）
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 空冻结面 + design 声明清单非空（剔除 .sillyspec/ 前缀与已带 repo 标注条目后仍有未标注条目）时 flow done patch 子步阻断收口（exit 1 不归档），文案一次给全三处置路径；跨仓嫌疑条目点名三种正确写法（段头/子段/cross-repo: 前缀）
+2. planEntries 解析与「疑似跨仓声明未按规范标注」告警在空冻结面也执行；嫌疑判定放宽为「路径主仓不存在即点名」（首段命中注册仓的额外标注 key）——非空冻结面分支行为零回归（既有测试全绿）
+3. --accept-empty-face 显式签收放行并留痕（flow-state accept_empty_face 持久化，重跑不再阻断）；清单全部规范标注（e.repo）的纯跨仓空面不阻断，出空面跨仓冻结缺口 advisory
+4. flow start 横幅在 local.yaml repos 注册非空时输出一行跨仓清单写法提示；注册为空时横幅输出逐字节不变
+5. 治理面-only 零声明清单的空面变更行为不变（空面跳过提示照旧，close-trace-freeze-integrity FR-01 ② 既有断言全绿）
+
+## 成功标准（可验证）
+
+1. 空冻结面 + design 声明清单非空（剔除 .sillyspec/ 前缀与已带 repo 标注条目后仍有未标注条目）时 flow done patch 子步阻断收口（exit 1 不归档），文案一次给全三处置路径；跨仓嫌疑条目点名三种正确写法（段头/子段/cross-repo: 前缀）
+2. planEntries 解析与「疑似跨仓声明未按规范标注」告警在空冻结面也执行；嫌疑判定放宽为「路径主仓不存在即点名」（首段命中注册仓的额外标注 key）——非空冻结面分支行为零回归（既有测试全绿）
+3. --accept-empty-face 显式签收放行并留痕（flow-state accept_empty_face 持久化，重跑不再阻断）；清单全部规范标注（e.repo）的纯跨仓空面不阻断，出空面跨仓冻结缺口 advisory
+4. flow start 横幅在 local.yaml repos 注册非空时输出一行跨仓清单写法提示；注册为空时横幅输出逐字节不变
+5. 治理面-only 零声明清单的空面变更行为不变（空面跳过提示照旧，close-trace-freeze-integrity FR-01 ② 既有断言全绿）

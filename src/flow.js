@@ -774,6 +774,19 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   try {
     digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: await extractRoutingInputPaths(cwd, specBase, input) })
   } catch { /* 注入 best-effort 不阻断 start */ }
+  // 跨仓清单写法提示（2026-10-13-thin-empty-face-crosscheck）：注册仓非空时提示段头契约——
+  // thin 通道此前零跨仓指引（fire-ledger-form-strict 实证：契约只活在厚流程模板里，裸写仓目录
+  // 前缀撞空面即静默丢对账）。注册为空 → 零新增输出（横幅逐字节不变）。
+  let crossRepoHintLines = []
+  try {
+    const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+    const _repoKeys = loadRegisteredRepoKeys(specBase)
+    if (_repoKeys && _repoKeys.length > 0) crossRepoHintLines = [
+      `🌐 跨仓交付：清单跨仓文件另用段头「## <注册key> 仓变更」段内写仓根相对路径（或子段「### <注册key>」/条目前缀 cross-repo:<注册key>:）——key 以 local.yaml repos 注册为准（本仓注册 ${_repoKeys.length} 个）；`,
+      `   裸写「仓目录名/路径」前缀不触发跨仓对账与冻结（收口空面门将点名阻断）。`,
+      ``,
+    ]
+  } catch { /* 注册仓读取失败 → 零提示（与无注册仓同形态） */ }
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
@@ -796,6 +809,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；成功标准漂移只出 advisory 不拒收。`,
     `⚠️ design.md 四节动码前后顺手作答；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
     `   ——勿写在「接口契约」节内（收口按节名解析声明面）。`,
+    ...crossRepoHintLines,
     `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
     `   测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`（无测试面写「不适用：理由」）。`,
     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
@@ -904,7 +918,7 @@ export function remainingSubstepsAtFail({ snapshotSubsteps = {}, doneList = [], 
   return SUBSTEPS.filter((k) => k !== failed && snapshotSubsteps?.[k] !== 'done' && !doneNow.has(k))
 }
 
-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, allowBatchTick = false, acceptUnmapped = false }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, acceptDirtyGap = false, acceptOrphanFace = false, allowBatchTick = false, acceptUnmapped = false, acceptEmptyFace = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -1528,6 +1542,76 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             }
           } catch { /* 守卫异常不阻断（fail-safe 不新造阻断面） */ }
         }
+        // ── 声明面自证前置（2026-10-13-thin-empty-face-crosscheck）：planEntries 解析与跨仓防呆
+        //    告警提到 ownFiles 判空之前——空面也要跑。fire-ledger-form-strict 实证（multi-agent-platform
+        //    docs/sillyspec/thin-done-empty-face-no-declared-crosscheck.md 37c7d146b）：跨仓交付撞空面时
+        //    本段整挂在非空 else 分支内从未执行，归档件永久缺 patch 且零告警；空面恰是高危形态。
+        let planEntries = []
+        try {
+          const { parseFileChangeListDetailed } = await import('./change-list.js')
+          // repoKeys（2026-10-10-cross-repo-patch-freeze D-002@v1）：注册仓清单传入——跨仓
+          // 子段/cross-repo: 前缀条目才带 repo 标注（不传则跨仓声明全落主仓口径， thin 跨仓
+          // 对账无从谈起）
+          const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+          planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(specBase) })
+        } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
+        // 跨仓声明防呆（坑 design-filelist-crossrepo-prefix-silent-main）：嫌疑判定从「首段命中
+        // 注册仓」放宽为「声明路径主仓不存在即点名」（仓根相对路径形态首段不命中是盲区）；
+        // 首段命中注册仓的条目额外标注 key，点名+三种正确语法指引。
+        const _declared = []
+        for (const e of planEntries) {
+          const pe = String((e && e.path) || '').split('\\').join('/')
+          if (!pe || pe.startsWith('.sillyspec/')) continue
+          if (e.repo) continue
+          _declared.push({ path: pe })
+        }
+        let _repoAliases = null
+        try {
+          const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
+          if (_yamlText) {
+            const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+            const _repos = parseRepoRegistry(_yamlText)
+            if (_repos && _repos.size > 0) {
+              _repoAliases = new Map()
+              for (const [k, v] of _repos) {
+                _repoAliases.set(k, k)
+                const norm = String(v || '').split('\\').join('/')
+                const bn = norm.replace(/\/+$/, '').split('/').pop()
+                if (bn) _repoAliases.set(bn, k)
+              }
+            }
+          }
+        } catch { /* 注册表读取失败 → 别名标注缺席，存在性判定不受影响 */ }
+        const _suspects = []
+        for (const d of _declared) {
+          if (existsSync(join(cwd, d.path))) continue
+          _suspects.push({ path: d.path, key: (_repoAliases && _repoAliases.get(d.path.split('/')[0])) || null })
+        }
+        if (_suspects.length > 0) {
+          console.warn(`⚠️ 疑似跨仓声明未按规范标注（${_suspects.length} 条已按主仓路径对账）：${_suspects.slice(0, 5).map((x) => `${x.path}（主仓不存在${x.key ? `，首段命中注册仓 ${x.key}` : ''}）`).join('、')}${_suspects.length > 5 ? ' 等' : ''}`)
+          console.warn('   主仓无这些路径 → 冻结面将标「计划未动」、跨仓对账与 patch 冻结不触发。正确写法三选一：① 段头「## <注册key> 仓变更」段内写仓根相对路径；② 子段「### <注册key>」；③ 条目前缀 cross-repo:<注册key>:<仓根相对路径>——key 以 local.yaml repos 注册为准')
+        }
+        // ── 空面门：空冻结面 + 声明清单有未标注交付条目 → 阻断（三处置一次给全；fire-ledger-form-strict 形态补位）──
+        if (ownFiles.length === 0 && _declared.length > 0 && !acceptEmptyFace && !st.accept_empty_face) {
+          console.error(`❌ 冻结面为空但 design 声明清单有 ${_declared.length} 条未标注交付条目（实现不在冻结窗口——跨仓交付撞空面的实证形态）——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
+          for (const x of _suspects.slice(0, 5)) console.error(`   - ${x.path}${x.key ? `（首段命中注册仓 ${x.key}）` : '（主仓不存在）'}`)
+          console.error('   ① 实现在主仓：先提交后重跑')
+          console.error('   ② 跨仓交付：清单按规范标注后重跑——正确写法三选一：段头「## <注册key> 仓变更」段内写仓根相对路径；子段「### <注册key>」；条目前缀 cross-repo:<注册key>:<仓根相对路径>（key 以 local.yaml repos 注册为准）')
+          console.error(`   ③ 纯文档变更/清单误列：同步裁剪 design 清单后重跑；或显式签收：flow done --change ${change} --accept-empty-face（留痕 flow-state，重跑免重拦）`)
+          reportMidFail('patch')
+          process.exit(1)
+        }
+        if (ownFiles.length === 0 && _declared.length > 0 && (acceptEmptyFace || st.accept_empty_face)) {
+          if (acceptEmptyFace && !st.accept_empty_face) {
+            writeFlowState(changeDir, { accept_empty_face: { at: new Date().toISOString(), declaredCount: _declared.length, by: process.env.SILLYSPEC_SESSION_ID || null } })
+            st.accept_empty_face = true
+          }
+          console.warn(`⚠️ --accept-empty-face：显式签收空冻结面与声明面矛盾（${_declared.length} 条声明交付不进冻结面，留痕 flow-state accept_empty_face）`)
+        }
+        // 纯跨仓规范标注空面：合规书写不拦，advisory 点名 thin 空面分支不做跨仓冻结的已知缺口
+        if (ownFiles.length === 0 && _declared.length === 0 && planEntries.some((e) => e && e.repo)) {
+          console.warn('⚠️ 声明清单全部为跨仓规范标注且主仓冻结面为空——thin 空面分支不做跨仓冻结与 patch 留档（缺口已知：归档件将无 patch 两件；如需冻结请主仓侧交付或待后续版本支持空面跨仓冻结）')
+        }
         if (ownFiles.length === 0) {
           console.log('📦 patch 留档跳过：本变更可归属文件面为空（无交付面改动——治理工件不入冻结面；若实现代码应在此，先提交后重跑）')
           patchOk = true
@@ -1593,50 +1677,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 收口留痕单套写（2026-10-09-close-trace-single-set）：共用 writeCloseTraceArtifacts
           // 只写 change.patch + change-patch.json 两件——对账面数据并入 JSON 的 scopeAudit
           // 子对象（thin 通道同样有对账面），旧名 scope-audit.* 停写、读侧兼容兜存量归档。
-          let planEntries = []
-          try {
-            const { parseFileChangeListDetailed } = await import('./change-list.js')
-            // repoKeys（2026-10-10-cross-repo-patch-freeze D-002@v1）：注册仓清单传入——跨仓
-            // 子段/cross-repo: 前缀条目才带 repo 标注（不传则跨仓声明全落主仓口径， thin 跨仓
-            // 对账无从谈起）
-            const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
-            planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(specBase) })
-          } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
-          // 跨仓声明防呆 advisory（坑 design-filelist-crossrepo-prefix-silent-main，2026-10-12
-          // 实证：清单写「仓目录名/路径」不带段头/cross-repo: 前缀 → 整条静默归主仓对账成
-          // 「计划未动」，跨仓对账与 patch 冻结全缺席、零告警）。命中形态：声明路径在主仓
-          // 不存在，且首段 token 命中注册仓的 key/路径 basename → 点名 + 三种正确语法指引。
-          try {
-            const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
-            if (_yamlText) {
-              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
-              const { basename } = await import('path')
-              const _repos = parseRepoRegistry(_yamlText)
-              if (_repos && _repos.size > 0) {
-                const _aliases = new Map()
-                for (const [k, v] of _repos) {
-                  _aliases.set(k, k)
-                  const norm = String(v || '').split('\\').join('/')
-                  const bn = norm.replace(/\/+$/, '').split('/').pop()
-                  if (bn) _aliases.set(bn, k)
-                }
-                const _suspects = []
-                for (const e of planEntries) {
-                  const pe = String((e && e.path) || '').split('\\').join('/')
-                  if (!pe || pe.startsWith('.sillyspec/')) continue
-                  if (e.repo) continue // 已带跨仓标注的不查
-                  if (existsSync(join(cwd, pe))) continue
-                  const first = pe.split('/')[0]
-                  const hit = _aliases.get(first)
-                  if (hit) _suspects.push({ path: pe, key: hit })
-                }
-                if (_suspects.length > 0) {
-                  console.warn(`⚠️ 疑似跨仓声明未按规范标注（${_suspects.length} 条已按主仓路径对账）：${_suspects.slice(0, 5).map((x) => `${x.path}（首段命中注册仓 ${x.key}）`).join('、')}${_suspects.length > 5 ? ' 等' : ''}`)
-                  console.warn('   主仓无这些路径 → 冻结面将标「计划未动」、跨仓对账与 patch 冻结不触发。正确写法三选一：① 段头「## <注册key> 仓变更」段内写仓根相对路径；② 子段「### <注册key>」；③ 条目前缀 cross-repo:<注册key>:<仓根相对路径>——key 以 local.yaml repos 注册为准')
-                }
-              }
-            }
-          } catch { /* 防呆 best-effort，不阻断收口 */ }
+          // planEntries 解析与跨仓防呆告警已前移至 ownFiles 判空之前（2026-10-13-thin-empty-face-crosscheck）。
           // 跨仓声明在场 → 共享集成层分仓对账 + patch 冻结（D-001/D-002@v1）：与 heavy 通道
           // （execute --done）同源 reconcileCrossRepoPlan，repos[]（锚点/计数/patch 正文）
           // 随 snapObj 进 change-patch.json；任何异常 fail-soft 退 ⊘ 补行现行为（不阻断收口）
@@ -2422,7 +2463,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
       }
     }
-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), acceptOrphanFace: hasFlag('--accept-orphan-face'), allowBatchTick: hasFlag('--allow-batch-tick'), acceptUnmapped: hasFlag('--accept-unmapped') })
+        return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), acceptDirtyGap: hasFlag('--accept-dirty-gap'), acceptOrphanFace: hasFlag('--accept-orphan-face'), allowBatchTick: hasFlag('--allow-batch-tick'), acceptUnmapped: hasFlag('--accept-unmapped'), acceptEmptyFace: hasFlag('--accept-empty-face') })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
