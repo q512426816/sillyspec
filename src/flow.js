@@ -442,6 +442,111 @@ function changeArtifactPaths(changeDir) {
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
+/**
+ * flow diff —— change 粒度文件统计只读查询（2026-10-13-flow-diff-cmd）。
+ * 双态同构：归档态读 change-patch.json scopeAudit（冻结时点真相，含 verdict）；活跃态实时算
+ * baseline→工作树 累计口径（与 patch 子步冻结面同规则：filterCommittedFace 剔 ownPrefix 治理件
+ * 保 .sillyspec/docs/；行数 git numstat，untracked 按文件行数、二进制 ∅）。只读零副作用：
+ * 不 pull（无 triggerPullActiveChange）、不写盘、不动状态机——scan diff 同纪律。
+ * rows[].state：committed（工作树==HEAD）/ dirty（有未提交改动）/ untracked / archived。
+ */
+async function cmdFlowDiff({ change, cwd, specBase, json = false }) {
+  const toPosix = (p) => String(p).replace(/\\/g, '/')
+  const activeDir = join(specBase, 'changes', change)
+  const archiveJson = join(specBase, 'changes', 'archive', change, 'change-patch.json')
+  const rows = []
+  let mode = null
+  let baseline = null
+  if (existsSync(archiveJson)) {
+    mode = 'archived'
+    try {
+      const meta = JSON.parse(readFileSync(archiveJson, 'utf8'))
+      const sa = meta.scopeAudit || {}
+      for (const r of (sa.rows || [])) {
+        if (!r || !r.path) continue
+        rows.push({ path: toPosix(r.path), additions: Number.isFinite(r.additions) ? r.additions : null, deletions: Number.isFinite(r.deletions) ? r.deletions : null, state: 'archived', verdict: r.verdict || null })
+      }
+      const t = (sa.totals && sa.totals.files != null) ? sa.totals : meta.totals
+      var archivedTotals = (t && typeof t === 'object') ? { files: t.files ?? rows.length, additions: t.additions ?? null, deletions: t.deletions ?? null } : null
+    } catch { /* 损坏件 → 按活跃态兜底（下方 activeDir 分支不命中则报不存在） */
+      mode = null
+    }
+  }
+  if (mode === null && existsSync(join(activeDir, 'flow-state.yaml'))) {
+    mode = 'active'
+    const st = readFlowState(activeDir)
+    baseline = st?.baseline_commit || null
+    if (baseline) {
+      const ownPrefix = `.sillyspec/changes/${change}/`
+      const committedRaw = String(gitQuiet(cwd, ['diff', '--name-only', `${baseline}..HEAD`]) || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+      const { filterCommittedFace } = await import('./flow-parity.js')
+      const committed = filterCommittedFace(committedRaw, ownPrefix)
+      // dirty 面（含 untracked）：porcelain 全列，交付规则同冻结面（.sillyspec/ 剔、.sillyspec/docs/ 保、ownPrefix 剔）
+      // ⚠ 行不可 trim——porcelain 前导状态码含空格（' M x'）；git() 默认整段 trim 会吃掉首行
+      // 前导空格（实测 ' M work.txt' → 'M work.txt' → slice(3) 错位吃路径首字符），须 trim:false
+      const por = String(gitQuiet(cwd, ['status', '--porcelain', '-uall'], { trim: false }) || '').split('\n').filter((s) => s.length >= 4)
+      const dirtyState = new Map() // path -> 'dirty' | 'untracked'
+      for (const line of por) {
+        const xy = line.slice(0, 2)
+        const raw = line.slice(3).trim()
+        const path = toPosix(raw.includes(' -> ') ? raw.split(' -> ').pop() : raw)
+        if (!path || path.startsWith(ownPrefix)) continue
+        if (path.startsWith('.sillyspec/') && !path.startsWith('.sillyspec/docs/')) continue
+        dirtyState.set(path, xy === '??' ? 'untracked' : 'dirty')
+      }
+      const face = [...new Set([...committed, ...dirtyState.keys()])]
+      // 累计口径 numstat：baseline → 工作树（无 HEAD 上限，含未提交；untracked 不入 git diff 单独算）
+      const tracked = face.filter((f) => dirtyState.get(f) !== 'untracked')
+      const nsOut = String(gitQuiet(cwd, ['diff', '--numstat', baseline, '--', ...tracked]) || '')
+      const ns = new Map()
+      for (const l of nsOut.split('\n').filter(Boolean)) {
+        const [a, d, ...rest] = l.split('\t')
+        if (rest.length === 0) continue
+        ns.set(toPosix(rest.join('\t')), { additions: /^\d+$/.test(a) ? Number(a) : null, deletions: /^\d+$/.test(d) ? Number(d) : null })
+      }
+      for (const f of face) {
+        const st3 = dirtyState.get(f)
+        if (st3 === 'untracked') {
+          try {
+            const buf = readFileSync(join(cwd, f))
+            const text = buf.toString('utf8')
+            const lines = text.split('\n')
+            if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+            rows.push({ path: f, additions: buf.includes(0) ? null : lines.length, deletions: null, state: 'untracked' })
+          } catch { rows.push({ path: f, additions: null, deletions: null, state: 'untracked' }) }
+        } else {
+          const s = ns.get(f)
+          rows.push({ path: f, additions: s ? s.additions : null, deletions: s ? s.deletions : null, state: st3 === 'dirty' ? 'dirty' : 'committed' })
+        }
+      }
+    }
+  }
+  if (mode === null) {
+    console.error(`❌ 变更「${change}」不存在（活跃 flow-state 与归档 change-patch.json 均未找到）`)
+    console.error('   修复：sillyspec status 查变更列表核对拼写/日期前缀；归档变更名与归档目录名逐字一致')
+    process.exit(1)
+  }
+  const totals = mode === 'archived' && archivedTotals
+    ? archivedTotals
+    : { files: rows.length, additions: rows.reduce((s, r) => s + (r.additions || 0), 0), deletions: rows.reduce((s, r) => s + (r.deletions || 0), 0) }
+  if (json) {
+    console.log(JSON.stringify({ change, mode, baseline, rows, totals }))
+    return
+  }
+  if (mode === 'active' && !baseline) {
+    console.log(`📦 flow diff — ${change}（active）：无 git 基线（无历史仓）——无可对账面`)
+    return
+  }
+  console.log(`📐 flow diff — ${change}（${mode}${mode === 'active' ? `｜baseline ${String(baseline).slice(0, 8)}→工作树` : '｜flow done 冻结件'}）`)
+  for (const r of rows) {
+    const a = r.additions == null ? '   ∅' : `+${String(r.additions).padStart(4)}`
+    const d = r.deletions == null ? '   ∅' : `-${String(r.deletions).padStart(4)}`
+    const tag = r.state === 'dirty' ? '（未提交）' : r.state === 'untracked' ? '（未跟踪·新文件）' : r.state === 'archived' && r.verdict ? `｜${r.verdict}` : ''
+    console.log(`  ${a} ${d}  ${r.path}${tag}`)
+  }
+  console.log(`合计：${totals.files} 文件 +${totals.additions ?? '?'} -${totals.deletions ?? '?'}${mode === 'active' ? '（baseline→工作树累计口径，含未提交）' : ''}`)
+}
+
 export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
@@ -2358,6 +2463,15 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     await reportAgentLog(change, sub)
     return cmdFlowReject({ change, cwd, specBase, reason: getFlag('--reason') })
   }
+  if (sub === 'diff') {
+    // 只读查询面（2026-10-13-flow-diff-cmd）：change 粒度文件统计双态口——与 status 同级自愿面
+    const change = getFlag('--change')
+    if (!change) { console.error('❌ flow diff 需 --change <名>'); process.exit(2) }
+    validateChangeName(change)
+    await reportAgentLog(change, sub)
+    await cmdFlowDiff({ change, cwd, specBase, json: jsonGlobal || hasFlag('--json') })
+    return
+  }
   if (sub === 'status') {
     // 三断点配套（2026-09-25-flow-checkpoints）：随时可查当前变更阶段/槽位/子步进度
     const change = getFlag('--change')
@@ -2535,7 +2649,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json]')
+  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
   console.error('      --input 可照抄形态（引号内换行合法）：')
   console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
   console.error('')
