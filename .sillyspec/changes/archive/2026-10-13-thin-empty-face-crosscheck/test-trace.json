@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-thin-empty-face-crosscheck",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-thin-empty-face-crosscheck:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「空面+声明清单未标注条目 → 阻断三处置」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-empty-face-crosscheck"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-thin-empty-face-crosscheck:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「仓根相对路径盲区放宽点名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-empty-face-crosscheck"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-thin-empty-face-crosscheck:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「--accept-empty-face 签收留痕免重拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-empty-face-crosscheck"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-thin-empty-face-crosscheck:flow:测试绑定FR-04",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「flow start 横幅两态：注册仓非空出跨仓行/为空逐字节一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-empty-face-crosscheck"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-13-thin-empty-face-crosscheck:flow:测试绑定FR-05",
+      "tests": [
+        "test/close-trace-freeze-integrity.test.mjs「工件-only 面输出空面提示不落 patch」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-empty-face-crosscheck"
+    }
+  ]
+}

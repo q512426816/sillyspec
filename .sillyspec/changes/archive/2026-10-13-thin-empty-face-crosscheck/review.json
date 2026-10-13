@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-thin-empty-face-crosscheck",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e907173ef87e25c230dd64584e709887d8a44437",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "全量测试套件 1 失败（platform-temp-residue-heal 场景③）——归因非本变更，如实披露",
+      "evidence": "node --test 全量 2735 pass / 1 fail：失败为场景③断言 resolvePlatformSpecDir(cwd)===cwd/.sillyspec（降级解析）；其代码面 src/progress.js 与 src/run/shared.js 与 HEAD 逐字一致且不在本变更 diff 内（本变更仅改 src/flow.js 与新测试，工作区 flow.js==HEAD 已核）；场景③直调 progress.js 不经 CLI 入口，并行会话对 src/index.js 的 +47 行（新增 worktree deps 子命令）与其零交集——预存/环境态失败，非本变更所致，不构成 FR-02「既有测试全绿」的违诺（flow/patch/freeze/close-trace 面全部在场测试均绿）。",
+      "location": "test/platform-temp-residue-heal.test.mjs:133"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "design 作答成立：门为纯函数逐条扫描（design 清单 × existsSync × 别名表，src/flow.js:1546-1612），无顺序依赖；done 时点读盘与冻结面同时点口径；别名 key/basename 双注册重复取 Map 后写覆盖，与既有告警实现同口径。代码实证无乱序风险面。",
+    "并发": "design 作答成立：门只读 design.md/local.yaml/文件系统；唯一写面 flow-state.yaml 的 accept_empty_face 键走 writeFlowState 合并写（cur 展开 + substeps 独立合并 + writeAtomicSync 原子落盘，src/flow.js:52-63）——声称的「合并写」防护实证在场且生效，无并发新风险面。",
+    "切换": "design 作答成立：阻断走 reportMidFail('patch')+exit(1) 不标 done，测试实证重跑从 patch 断点续、签收后免重拦（thin-empty-face-crosscheck 测试 4 全绿）；签收留痕持久化 flow-state 且随归档件留存（测试断言归档 flow-state 含 accept_empty_face）。边界已裁决：可接受——①签收留痕走 flow-state 而非 change-patch.json（空面本就不生成 change-patch.json，flow-state 是唯一可持久化载体且随归档留存）；②design 清单缺失/不可解析时门降级关闭（planEntries catch→[]，与主链路降级同语义，fail-soft 不新造阻断面）。",
+    "作用域": "design 作答成立：主仓存在性以 flow done 的 cwd 为根、注册仓表读本仓 .sillyspec/local.yaml（scope-audit.js:483-489 内建 fail-soft），多工作区不串台——代码实证。边界已裁决：可接受——①纯跨仓规范标注空面仅 advisory 不做跨仓冻结（FR-03 显式绑定，守住 close-trace-freeze-integrity「空面不落伪完整 patch」既有承诺，advisory 点名缺口与出路，flow.js:1612-1614）；②嫌疑判定放宽对非空面同样生效（design 裁决为增益：advisory-only 不阻断，路径笔误从快照不可见升级为点名，非空面用例实测绿）；③防呆告警在非空面不升格阻断（非空面有快照「计划未动」可见对账，FR-02 绑定零回归）。"
+  },
+  "reviewedAt": "2026-10-13T03:15:41Z"
+}
