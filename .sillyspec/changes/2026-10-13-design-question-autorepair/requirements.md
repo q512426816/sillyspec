@@ -54,7 +54,7 @@ Then design.md 字节不变，返回值 repairs/advisories 均为空
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写 → 拒收」（改写为回填语义）＋「⑦ 问题行漂移机器回填：boundaries 四问全改述 → 回填过门零拒收」
-FR-02: test/thin-docs-v2.test.mjs「⑦ 高相似原位替换/低相似节首插入双路径断言（答案行保留）」
-FR-03: test/thin-docs-v2.test.mjs「⑦ 节被删文案含问题完整原文（无 30 字截断）断言」
-FR-04: test/thin-docs-v2.test.mjs「⑦ 重跑幂等：二次调用零改写零 repairs/advisories」
+FR-01: test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写 → 机器按锚回填（不再拒收，repairs 留痕）」＋「⑦b 实证形态复现：boundaries 四问全部改述 → 四问全回填、作答保留、过门」
+FR-02: test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：相似定位上方插入/未定位节首插入/重跑幂等（零二次改写零留痕）」＋「⑦c 评审 P1 复现：引用问题原文的作答行（相似度可胜过真改述行）不被销毁——插入式回填零删除」
+FR-03: test/thin-docs-v2.test.mjs「④ 结构破坏拒收面」——节被删文案含问题完整原文（无 30 字截断）断言；未作答/写失败文案由实现侧覆盖（FR-03 三场景）
+FR-04: test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：…重跑幂等」——二次调用零回填零改写（字节不变断言）
