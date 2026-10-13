@@ -1329,7 +1329,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
  *   { key, repoPath, anchor, totals, degraded, degradedReason, patch?, patchSha256? }；
  *   notes 为调用方 note 链的增量行（跨仓计数行 + 降级行）。
  */
-export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName, planEntries, collectPatch = false }) {
+export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName, planEntries, collectPatch = false, crossBaselines = null }) {
   const rows = []
   const repos = []
   const notes = []
@@ -1344,7 +1344,7 @@ export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName,
     let repoActual = null
     let repoFailure = null
     try {
-      repoActual = collectRepoActual({ repoKey, specBase, cwd, runtimeRoot, changeName })
+      repoActual = collectRepoActual({ repoKey, specBase, cwd, runtimeRoot, changeName, crossBaselines })
     } catch (e) {
       repoFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
     }

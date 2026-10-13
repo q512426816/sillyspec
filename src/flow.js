@@ -817,6 +817,34 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     substeps: {},
   })
 
+  // 跨仓基线锚（2026-10-13-cross-repo-baseline-anchor）：thin 手工交付的跨仓对账此前无锚
+  // （B 档 HEAD~1 单笔窗口，多提交交付漏文件+交错时序抓错面——fire-ledger 两笔交付实证）。
+  // start 时点记各注册仓 HEAD（cross_baselines），收口窗口=基线..工作树（与主仓 baseline_commit
+  // 同构）。首写者胜（对齐 baseline_sha256 模式：重入不刷新，防跨仓已有并行提交后重锚漂移窗口）。
+  // 纯读 fail-soft：注册不可达/非 git 仓/rev-parse 失败 → 跳过该仓，绝不阻断 start。
+  try {
+    if (!(readFlowState(changeDir) || {}).cross_baselines) {
+      const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
+      if (_yamlText) {
+        const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+        const { isAbsolute: _isAbs, resolve: _res } = await import('node:path')
+        const _repos = parseRepoRegistry(_yamlText)
+        const _bl = {}
+        for (const [k, rawPath] of _repos || []) {
+          const rp = _isAbs(rawPath) ? rawPath : _res(cwd, rawPath)
+          if (!rp || !existsSync(rp)) continue
+          const sha = gitQuiet(rp, ['rev-parse', 'HEAD'], { timeout: 10_000 })
+          const s = sha === null ? '' : String(sha).trim()
+          if (/^[0-9a-f]{7,40}$/i.test(s)) _bl[k] = s
+        }
+        if (Object.keys(_bl).length > 0) {
+          writeFlowState(changeDir, { cross_baselines: _bl })
+          console.log(`🌐 跨仓基线锚：${Object.keys(_bl).length} 个注册仓 HEAD 已记入 flow-state（cross_baselines 首写者胜）——收口跨仓对账窗口=基线..工作树`)
+        }
+      }
+    }
+  } catch { /* 跨仓基线锚 best-effort：失败不阻断 start（收口回退既有档位） */ }
+
   // 全件机器起草（R7 切片三 / FR-07：工件回填轮=0——治理工件 CLI 写，agent 只裁例外）。
   // 任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡；--thick/--with-tasks 才生成任务卡。
   let drafted = []
@@ -1836,6 +1864,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
                 changeName: change,
                 planEntries,
                 collectPatch: true,
+                // 跨仓基线锚透传（2026-10-13-cross-repo-baseline-anchor）：flow start 记录的
+                // cross_baselines → collectRepoActual 3c 档（基线..工作树窗口，token 归因主面）
+                crossBaselines: (st && st.cross_baselines && typeof st.cross_baselines === 'object') ? st.cross_baselines : null,
               })
               crossRepoRows = recon.rows
               crossRepos = recon.repos

@@ -198,7 +198,7 @@ function collectStatusInto(repoPath, union) {
  *   纯读 fail-soft：任何异常 → degraded 形态返回（degradedReason=`内核采集异常: <msg首行>`），
  *   绝不 throw。
  */
-export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, changeName = null }) {
+export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, changeName = null, crossBaselines = null }) {
   try {
     // 1) 仓注册解析（与 reconcile 旧口径同源：local.yaml repos 段，读失败 → 空注册表落「未注册」）
     let registry = new Map()
@@ -263,6 +263,54 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
         }
       }
     } catch { /* meta 不可读/键缺失 → 回退 B 档 */ }
+
+    // 3c) flow-start-baseline 窗口（2026-10-13-cross-repo-baseline-anchor）：thin 手工交付的
+    //     跨仓基线锚（flow start 首写者胜记录各注册仓 HEAD）——窗口=基线..工作树，根治 B 档
+    //     HEAD~1 单笔窗口的多提交盲区（fire-ledger 两笔交付实证：实现+评审修复，首笔整笔
+    //     漏窗）。主面=token 归因（窗口内提交消息含变更名的提交文件并集——AGENTS 规则 11
+    //     的消息约定跨仓同样适用）∪ 未提交态；零 token 命中回退全窗口（并行工作区噪音
+    //     可见不静默——unplanned 行承载，与主仓夹带嫌疑 advisory 同语义）。基线 sha 在该仓
+    //     不可达（浅克隆/被 gc）→ 回退 B 档（不回退语义）。
+    const _blSha = crossBaselines && /^[0-9a-f]{7,40}$/i.test(String(crossBaselines[repoKey] || '')) ? String(crossBaselines[repoKey]) : null
+    if (_blSha) {
+      const _ok = gitQuiet(repoPath, ['rev-parse', '--verify', '--quiet', `${_blSha}^{commit}`], { timeout: GIT_TIMEOUT })
+      if (_ok !== null && String(_ok).trim()) {
+        const _mine = new Set()
+        let _tokenHit = false
+        const _log = changeName
+          ? gitQuiet(repoPath, ['log', '--format=%H', `--grep=${changeName}`, `${_blSha}..HEAD`], { timeout: GIT_TIMEOUT })
+          : null
+        if (_log !== null) {
+          for (const c of String(_log).split('\n').map((s) => s.trim()).filter(Boolean)) {
+            const dt = gitQuiet(repoPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', c], { timeout: GIT_TIMEOUT })
+            if (dt === null) continue
+            _tokenHit = true
+            for (const f of String(dt).split('\n')) {
+              const n = normalizeRepoPath(f)
+              if (n) _mine.add(n)
+            }
+          }
+        }
+        const union3 = new Set(_mine)
+        if (!_tokenHit) {
+          const d1 = gitQuiet(repoPath, ['diff', '--name-only', _blSha], { timeout: GIT_TIMEOUT })
+          for (const f of String(d1 || '').split('\n')) {
+            const n = normalizeRepoPath(f)
+            if (n) union3.add(n)
+          }
+        }
+        const d2 = gitQuiet(repoPath, ['ls-files', '--others', '--exclude-standard'], { timeout: GIT_TIMEOUT })
+        for (const f of String(d2 || '').split('\n')) {
+          const n = normalizeRepoPath(f)
+          if (n && n !== 'meta.json' && !n.startsWith('.sillyspec/')) union3.add(n)
+        }
+        collectStatusInto(repoPath, union3)
+        return { repo: repoKey, repoPath,
+          anchor: { source: 'flow-start-baseline', base: _blSha, head: null,
+            label: `flow-start 跨仓基线窗口（base=${_blSha.slice(0, 8)}…HEAD+工作树${_tokenHit ? '；token 归因命中（窗口内含变更名提交为主面）' : '；零 token 命中回退全窗口（并行噪音可见）'}）` },
+          files: [...union3].sort(), degradedReason: null }
+      }
+    }
 
     // 4) B/C 档：diff HEAD~1..HEAD（现行 reconcile 口径）∪ status；diff 失败仅 status → C 档
     const union = new Set()
