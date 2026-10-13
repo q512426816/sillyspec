@@ -1340,39 +1340,45 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           process.exit(2) // 用法错（--done 找不到变更，未传 --change）→ exit 2
         }
         // task-03 (D-006@v1 / FR-05): 无 --change 仅当无已存在活跃变更时 auto-create；
-        // 多活跃变更仓强制 --change（exit 2 引导），防 B8 幽灵变更。活跃变更数用 pm.listChanges
-        // （与 progress show 同源，DB changes 表 status='active'）。
-        const activeChanges = pm.listChanges(cwd)
-        if (activeChanges.length > 0) {
+        // 多活跃变更仓强制 --change（exit 2 引导），防 B8 幽灵变更。
+        // 2026-10-13-autocreate-atomic-claim：listChanges 检查 + initChange 两步非原子
+        // （并行进程同过检查各建一行，2026-10-13-new-change-e5a27813 事故实证）——改
+        // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
+        const date = new Date().toISOString().slice(0, 10)
+        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        if (!claim.created) {
+          const activeChanges = claim.activeChanges || []
           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
           console.error(`   活跃变更：${activeChanges.join('、')}`)
           console.error('   请用 --change <变更名> 指定要操作的变更，')
           console.error('   或先归档/收尾现有活跃变更后重试。')
           process.exit(2) // 用法错（多活跃变更未指定 --change）→ exit 2
         }
-        const date = new Date().toISOString().slice(0, 10)
-        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
         console.log(`🔄 自动创建变更：${autoName}`)
         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
-        // brainstorm 自动创建变更也写 title（--input 需求描述优先 / 自动名兜底），proposal 落盘后刷新。
-        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        progress = claim.progress
         changeName = autoName
       } else if (stageName === 'auto') {
         // auto 零活跃建变更（2026-09-08-auto-driver D-003@v1，Grill P1-②）：SKILL 启动命令即
         // run auto --input——此前此处 exit 2 是断头路。复用 brainstorm 命名（date-new-change-hex）。
-        // pm.read 对零/多活跃都返 null——先分流：多活跃报错列候选（不隐式选择），零活跃才建。
-        const activeCount = pm.listChanges(cwd)
-        if (activeCount.length > 1) {
+        // pm.read 对零/多活跃都返 null——多活跃报错列候选（不隐式选择），零活跃才建。
+        // 2026-10-13-autocreate-atomic-claim：同 brainstorm 改原子抢占；顺带收紧「恰好 1 个
+        // 活跃也建第二个」的旧宽限（旧 >1 检查与其「零活跃才建」注释自相矛盾，且计数宽限
+        // 正是并发双建的温床）——1 活跃现与多活跃同走 exit 2 引导。
+        const date = new Date().toISOString().slice(0, 10)
+        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        if (!claim.created) {
+          const activeCount = claim.activeChanges || []
           console.error(`❌ 已存在 ${activeCount.length} 个活跃变更，run auto 无法自动定位目标。`)
           console.error('   活跃变更：' + activeCount.join('、'))
           console.error('   请用 --change <变更名> 显式指定，或先归档/收尾现有变更。')
           process.exit(2)
         }
-        const date = new Date().toISOString().slice(0, 10)
-        const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
         console.log(`🔄 auto 模式自动创建变更：${autoName}（可用 --change 指定名称，或事后 change-rename）`)
-        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        progress = claim.progress
         changeName = autoName
       } else {
         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
