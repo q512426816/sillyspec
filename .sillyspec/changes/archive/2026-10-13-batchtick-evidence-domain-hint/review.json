@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-batchtick-evidence-domain-hint",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e93f66eb01d66c3d1d8539a69180994542a4cf43",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "增量仅 2 行文案/文档措辞替换（design.md Q4、flow.js 提示模板），不触及任何序控/状态推进路径，乱序面无影响。",
+    "并发": "纯行内文本替换，无共享状态、锁、文件格式变更；并发面无新增风险。",
+    "切换": "不触及阶段切换、恢复、tasks.md 语义；flow start 输出仅为信息性提示行，切换面无影响。",
+    "作用域": "本增量即作用域修正：design Q4 措辞已对齐实态——fr-index.js 中 pseudoDomainFromPaths 无 export（模块私有），预判经 export function resolveTouchedDomains（其内部调用 pseudoDomainFromPaths 并透传 knowledgeRoot 词典守卫），两消费面单一实现声明属实；作用域结论成立。"
+  },
+  "reviewedAt": "2026-10-13T04:07:22Z"
+}

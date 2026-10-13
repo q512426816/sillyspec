@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-13-batchtick-evidence-domain-hint",
+  "baseline": "d7cac7a4180eee8dddaa3df75fdacf15c11b434e",
+  "head": "e93f66eb01d66c3d1d8539a69180994542a4cf43",
+  "files": [
+    "src/flow.js",
+    "src/sentinel-assertions.js",
+    "test/batch-tick-gate.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 211,
+    "deletions": 13
+  },
+  "savedAt": "2026-10-13T04:08:07.538Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 6,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d7cac7a4180eee8dddaa3df75fdacf15c11b434e",
+    "totals": {
+      "files": 3,
+      "additions": 211,
+      "deletions": 13
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 50,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sentinel-assertions.js",
+        "additions": 13,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/batch-tick-gate.test.mjs",
+        "additions": 148,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "cd095b902e15da56412e557e280a778f5c8c78b04fa52d31022b2db0a95caaef",
+  "patchStatus": "ok"
+}

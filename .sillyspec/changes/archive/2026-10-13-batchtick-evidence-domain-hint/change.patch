@@ -1,0 +1,313 @@
+diff --git a/src/flow.js b/src/flow.js
+index 0f8d8fec..e09f751b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -787,6 +787,40 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+       ``,
+     ]
+   } catch { /* 注册仓读取失败 → 零提示（与无注册仓同形态） */ }
++  // FR 域预判（2026-10-13-batchtick-evidence-domain-hint）：--input 提及路径 × 模块图（discoverModuleIndex
++  // 读 docs/<project>/modules/_module-map.yaml——与 distill 域路由同一匹配面）。第一次知道「路径未登记」
++  // 不该是收口模块门（最贵时点）。纯提示不设门：input 路径可能不全，路由真相以实际交付文件为准；
++  // 绿地无图/零路径 → 零新增输出（与模块门「绿地无图不拦」语义对齐）。fr-index.js 零编辑——
++  // resolveTouchedDomains（内部即 pseudoDomainFromPaths+词典守卫）复用 distill 同一伪域回退链。
++  let domainHintLines = []
++  try {
++    const _routingFace = await extractRoutingInputPaths(cwd, specBase, input)
++    if (_routingFace.length > 0) {
++      const { discoverModuleIndex } = await import('./decision-distill.js')
++      const { matchedModuleIds, resolveTouchedDomains } = await import('./fr-index.js')
++      const _knowledgeRoot = join(specBase, 'knowledge')
++      const _moduleIndex = discoverModuleIndex(_knowledgeRoot)
++      if (_moduleIndex && Object.keys(_moduleIndex).length > 0) {
++        const _hitRows = []
++        const _missFiles = []
++        for (const f of _routingFace) {
++          const ids = matchedModuleIds(_moduleIndex, f)
++          if (ids.length > 0) _hitRows.push({ f, ids })
++          else _missFiles.push(f)
++        }
++        if (_hitRows.length > 0 || _missFiles.length > 0) {
++          const _lines = ['🗺️ FR 域预判（按 --input 提及路径；最终以收口实际交付文件路由为准）：']
++          for (const r of _hitRows) _lines.push(`   ✓ ${r.f} → fr/${r.ids.join('、')}`)
++          if (_missFiles.length > 0) {
++            const _pseudo = (resolveTouchedDomains(changeDir, _moduleIndex, _missFiles, _knowledgeRoot)[0]) || 'unmapped'
++            _lines.push(`   ⚠️ ${_missFiles.slice(0, 5).join('、')}${_missFiles.length > 5 ? ' 等' : ''} → 未命中知识模块图，FR 蒸馏将落域 ${_pseudo}（按 distill 同一伪域回退链预判——未吸附为 auto-<段>，词典吸附命中既有真域）`)
++            _lines.push('   建议现在登记模块条目（docs/<project>/modules/_module-map.yaml 的 modules.<id>.paths 覆盖该目录）——登记后蒸馏自动落真域（收口模块门仍会兜底拦未登记目录）')
++          }
++          domainHintLines = _lines
++        }
++      }
++    }
++  } catch { /* 域预判 best-effort：图/路径读取失败零输出 */ }
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+     `══════════════════════════════════════`,
+@@ -856,6 +890,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     ...materials.map((p) => `  - ${p}`),
+     ``,
+     ...digest.lines,
++    ...(domainHintLines.length > 0 ? ['', ...domainHintLines] : []),
+   ]
+   if (json) {
+     console.log(JSON.stringify({ change, tier: thick ? 'thick' : 'thin', baseline, materials, knowledgeDigest: digest.summary }))
+@@ -1062,6 +1097,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
+     // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
++    let _sentinelEvidenceComplete = false // 哨兵证据完备（status=complete——每格已勾任务均有 token/review.json）：单拍降级判据（2026-10-13-batchtick-evidence-domain-hint）
+     let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
+     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
+     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
+@@ -1128,6 +1164,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+         _sentinelNonMirrorTasks = sent.claimTotal
+         if (sent.status === 'complete') {
++          _sentinelEvidenceComplete = true
+           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
+           // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
+@@ -1177,16 +1214,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
+         const _persistedAuto = Number(st?.autopilot_ticked) || 0
+         const _autoN = Math.max(_autopilotTicked, _persistedAuto)
+-        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN })
++        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN, evidenceComplete: _sentinelEvidenceComplete })
+         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
+         if (v.action === 'bypass') {
+           try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
+           console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
+         } else if (v.action === 'advisory') {
+-          const why = v.reason === 'autopilot-ticked'
+-            ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
+-            : '哨兵任务面未知（fail-open 防误拒）'
+-          console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
++          // 证据完备降级（2026-10-13-batchtick-evidence-domain-hint）：同形态 git 时点检查（一把勾
++          // 模式）因 token 证据齐放行——事件流门对齐该语义；损害只剩 per-task 时间戳信号面，advisory
++          // + flow-state 留痕与损害对齐。证据缺失形态不走此态（哨兵先拒 / 决策函数维持 reject）。
++          if (v.reason === 'evidence-complete') {
++            try { writeFlowState(changeDir, { batch_ticked: true }) } catch { /* 留痕 best-effort */ }
++            console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——哨兵证据完备（每格已勾任务均有 token 提交/review.json），降级提醒不拒（batch_ticked 已留痕；下次完成单元即勾）`)
++          } else {
++            const why = v.reason === 'autopilot-ticked'
++              ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
++              : '哨兵任务面未知（fail-open 防误拒）'
++            console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
++          }
+         } else if (v.action === 'reject') {
+           console.error(`🚫 单拍勾选拒收：事件流观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），勾选任务 ${_sentinelNonMirrorTasks} 格`)
+           console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 353fc95b..96d858c5 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -168,21 +168,27 @@ export function detectBatchCheckCadence(events) {
+ /**
+  * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
+  * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
+- * 工作分解，无镜像面）。四态（决策顺序即豁免优先序）：
++ * 工作分解，无镜像面）。五态（决策顺序即豁免优先序）：
+  *   'silent'   无单拍跳；
+  *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
+- *   'advisory' 机器代勾可解释整跳（autopilotTicked >= 跳幅——governance-autopilot 代勾是
+- *              单拍多格机械写，非 agent 纪律面；代勾数不可解释最大跳时落到 reject——防「留
+- *              一格给代勾补、自身大跳蹭豁免」的对抗绕过，二轮评审 P3-E）；
+- *   'reject'   非旁路、代勾解释不了整跳——agent 一把勾，拒收。
+- * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
++ *   'advisory' 三路：哨兵面未知（fail-open 防误拒）；哨兵证据完备（status=complete——
++ *              2026-10-13-batchtick-evidence-domain-hint：同形态 git 时点检查「一把勾模式」
++ *              因 token 证据齐放行，事件流门对齐该语义——证据是提交哈希锚定的客观面，
++ *              损害只剩 per-task 时间戳信号面；证据缺失形态不走此态，维持 reject）；机器代勾
++ *              可解释整跳（autopilotTicked >= 跳幅——governance-autopilot 代勾是单拍多格机械写，
++ *              非 agent 纪律面；代勾数不可解释最大跳时落到 reject——防「留一格给代勾补、自身
++ *              大跳蹭豁免」的对抗绕过，二轮评审 P3-E）；
++ *   'reject'   非旁路、证据不完备、代勾解释不了整跳——agent 一把勾，拒收。
++ * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number, evidenceComplete?:boolean}} args
+  *   nonMirrorCount 保留为哨兵面未知信号（null → fail-open advisory）；镜像-only 语义已退役。
++ *   evidenceComplete 缺省 false（additive——既有调用方零感知）。
+  * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
+  */
+-export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0 } = {}) {
++export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0, evidenceComplete = false } = {}) {
+   if (!batchTick) return { action: 'silent', reason: 'no-batch-tick' };
+   if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
+   if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
++  if (evidenceComplete === true) return { action: 'advisory', reason: 'evidence-complete' };
+   if (autopilotTicked >= batchTick.to - batchTick.from) return { action: 'advisory', reason: 'autopilot-ticked' };
+   return { action: 'reject', reason: 'agent-batch-tick' };
+ }
+diff --git a/test/batch-tick-gate.test.mjs b/test/batch-tick-gate.test.mjs
+index 3a23240d..ef548f09 100644
+--- a/test/batch-tick-gate.test.mjs
++++ b/test/batch-tick-gate.test.mjs
+@@ -13,11 +13,55 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { readFileSync } from 'node:fs'
++import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath, pathToFileURL } from 'node:url'
++import { tmpdir } from 'node:os'
++import { execFileSync, spawnSync } from 'node:child_process'
+ 
+ const ROOT = dirname(fileURLToPath(import.meta.url))
++const CLI = join(ROOT, '..', 'src', 'index.js')
++
++function gitE(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { stdio: 'pipe' }).toString().trim()
++}
++
++function cliE(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++function makeRepoE() {
++  const cwd = mkdtempSync(join(tmpdir(), 'btg-'))
++  gitE(cwd, ['init', '-q', '-b', 'main'])
++  gitE(cwd, ['config', 'user.email', 't@t'])
++  gitE(cwd, ['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  gitE(cwd, ['add', '.'])
++  gitE(cwd, ['commit', '-q', '-m', 'base'])
++  return cwd
++}
++
++function fillDocsE(specBase, change) {
++  const base = join(specBase, 'changes', change)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
++}
++
++function writeReviewE(specBase, cwd, change) {
++  const head = gitE(cwd, ['rev-parse', 'HEAD'])
++  writeFileSync(join(specBase, 'changes', change, 'review.json'), JSON.stringify({
++    schemaVersion: 1, change, reviewer: 'test-fixture', verdict: 'PASS', reviewedAgainst: head,
++    findings: [], dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
++  }, null, 2))
++}
+ 
+ test('② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面', () => {
+   const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
+@@ -43,6 +87,25 @@ test('②b 决策纯函数行为级（resolveBatchTickAction 四态 + 豁免优
+   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'reject', '代勾解释不了整跳（1<3）→reject（防留格蹭豁免——二轮 P3-E）')
+   assert.equal(resolveBatchTickAction({ batchTick: { from: 3, to: 4, detail: 'checked 3→4', ts: 1 }, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'advisory', '小跳+代勾解释（1>=1）→advisory')
+   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3 }).action, 'reject', 'agent 一把勾→reject')
++  // evidenceComplete 降级态（2026-10-13-batchtick-evidence-domain-hint FR-01/FR-02）：
++  // 哨兵证据完备（status=complete）的单拍降 advisory——同形态 git 时点检查「一把勾模式」
++  // 因 token 证据齐放行，事件流门对齐该语义；优先序 flag > 哨兵面未知 > evidence > 代勾 > reject
++  const ev = resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: true })
++  assert.equal(ev.action, 'advisory', '证据完备一把勾→advisory（agent dogfood 反馈实证形态）')
++  assert.equal(ev.reason, 'evidence-complete', 'reason 钉（留痕/文案锚）')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: true, allowBatchTick: true }).action, 'bypass', 'flag 优先于 evidence 降级')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null, evidenceComplete: true }).reason, 'sentinel-unknown', '哨兵面未知优先序在前（fail-open 防误拒）')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: false }).action, 'reject', '证据不完备→仍拒（0/12 事故形态不走降级）')
++})
++
++test('②d evidenceComplete 接线钉：哨兵 complete 信号传递 + batch_ticked 留痕 + 降级文案', () => {
++  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.ok(src.includes('_sentinelEvidenceComplete = true'), '哨兵 status=complete 置位信号')
++  assert.ok(src.includes('evidenceComplete: _sentinelEvidenceComplete'), '信号传入 resolveBatchTickAction')
++  assert.ok(src.includes('batch_ticked: true'), '降级留痕写 flow-state（与 allow_batch_tick 同款审计面）')
++  assert.ok(src.includes("reason === 'evidence-complete'"), '降级分支文案锚')
++  const sen = readFileSync(join(ROOT, '..', 'src', 'sentinel-assertions.js'), 'utf8')
++  assert.ok(sen.includes('evidenceComplete = false'), '决策函数新参数缺省 false（既有调用方零感知）')
+ })
+ 
+ test('②c autopilot 交互钉（评审清偿）：代勾计数接线 + 重入持久化 + 解释整跳判据', () => {
+@@ -70,3 +133,87 @@ test('③ A 层文案钉：工作分解契约（fresh/adopt 两路）+ tasks.md
+   assert.ok(!draftSrc.includes('> 边干边勾'), 'tasks.md 模板：纪律指令行退役')
+   assert.ok(!draftSrc.includes('> 机器预填草稿'), 'v1 backfill 模板：指令行退役')
+ })
++
++// ══ 2026-10-13-batchtick-evidence-domain-hint：evidenceComplete 降级 e2e + flow start 域预判 ══
++
++test('②e e2e：证据完备一把勾（反馈实证形态）→ advisory 放行 + batch_ticked 留痕 + 归档完成', () => {
++  const cwd = makeRepoE()
++  const change = '2026-10-13-btg-evd'
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
++    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++    // 三任务各有 token 交付证据（一把提交带全 token——哨兵口径认可）
++    writeFileSync(join(cwd, 'work.txt'), 'done\n')
++    gitE(cwd, ['add', 'work.txt'])
++    gitE(cwd, ['commit', '-q', '-m', `work (${change}) (task-01) (task-02) (task-03)`])
++    // agent 一次 Edit 翻三格（反馈摩擦形态）——watcher 事件流手工落一条单拍跳（测试环境 watcher 关闭）
++    fillDocsE(specBase, change)
++    const tasksPath = join(specBase, 'changes', change, 'tasks.md')
++    writeFileSync(tasksPath, readFileSync(tasksPath, 'utf8').replace(/^- \[ \] (task-\d+):/gm, '- [x] $1:'))
++    gitE(cwd, ['add', tasksPath])
++    gitE(cwd, ['commit', '-q', '-m', 'chore: tick (task-01/02/03)'])
++    mkdirSync(join(specBase, '.runtime'), { recursive: true })
++    writeFileSync(join(specBase, '.runtime', `watcher-events-${change}.jsonl`),
++      `${JSON.stringify({ ts: Date.now() - 60_000, kind: 'task-done', stage: 'tasks', detail: 'checked 0→3', source: 'watcher', provisional: true })}\n`)
++    writeReviewE(specBase, cwd, change)
++    const s2 = cliE(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `证据完备一把勾应放行: ${s2.stdout}\n${s2.stderr}`)
++    const out = `${s2.stdout}\n${s2.stderr}`
++    assert.doesNotMatch(out, /单拍勾选拒收/, '不再硬拒')
++    assert.match(out, /勾选节奏/, '节奏 advisory 在场')
++    assert.match(out, /证据完备|证据齐/, '降级理由点名证据面')
++    const arch = readdirSync(join(specBase, 'changes', 'archive')).find((d) => d.includes(change))
++    assert.ok(arch, '归档完成')
++    assert.match(readFileSync(join(specBase, 'changes', 'archive', arch, 'flow-state.yaml'), 'utf8'), /batch_ticked/, '降级留痕随归档件')
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+登记指引；绿地草案/零路径两态', () => {
++  // A：已登记模块图（单图）——命中/未命中双态
++  const cwdA = makeRepoE()
++  try {
++    const specBase = join(cwdA, '.sillyspec')
++    mkdirSync(join(cwdA, 'src', 'foo'), { recursive: true })
++    mkdirSync(join(cwdA, 'src', 'other'), { recursive: true })
++    writeFileSync(join(cwdA, 'src', 'foo', 'a.js'), 'export {}\n')
++    writeFileSync(join(cwdA, 'src', 'other', 'b.js'), 'export {}\n')
++    gitE(cwdA, ['add', 'src'])
++    gitE(cwdA, ['commit', '-q', '-m', 'src'])
++    mkdirSync(join(specBase, 'docs', 'proj1', 'modules'), { recursive: true })
++    writeFileSync(join(specBase, 'docs', 'proj1', 'modules', '_module-map.yaml'),
++      'modules:\n  mod1:\n    status: active\n    doc: modules/mod1.md\n    paths:\n      - src/foo/\n')
++    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
++    assert.equal(s1.status, 0)
++    assert.match(s1.stdout, /FR 域预判/, '预判段在场')
++    assert.match(s1.stdout, /src\/foo\/a\.js → fr\/mod1/, '命中模块点名（FR 将落 fr/mod1）')
++    assert.match(s1.stdout, /auto-other/, '未命中伪域点名（与 distill 分段投票同源）')
++    assert.match(s1.stdout, /_module-map\.yaml/, '登记指引在场')
++    assert.match(s1.stdout, /以收口实际交付文件路由为准|实际交付文件路由为准/, '预判非路由真相的边界声明')
++    // 有图但 input 无路径：零新增
++    const s2 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-nopath', '--input', '纯文字需求无路径提及\n成功标准：\n- 行为达标', '--autopilot'])
++    assert.equal(s2.status, 0)
++    assert.doesNotMatch(s2.stdout, /FR 域预判/, '零路径零新增行')
++  } finally {
++    rmSync(cwdA, { recursive: true, force: true })
++  }
++  // B：绿地（无图）→ flow start 既有绿地草案自动起草 _module-map.yaml——预判对草案域照常点名
++  const cwdB = makeRepoE()
++  try {
++    const specBase = join(cwdB, '.sillyspec')
++    mkdirSync(join(cwdB, 'src', 'foo'), { recursive: true })
++    mkdirSync(join(cwdB, 'src', 'other'), { recursive: true })
++    writeFileSync(join(cwdB, 'src', 'foo', 'a.js'), 'export {}\n')
++    writeFileSync(join(cwdB, 'src', 'other', 'b.js'), 'export {}\n')
++    gitE(cwdB, ['add', 'src'])
++    gitE(cwdB, ['commit', '-q', '-m', 'src'])
++    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
++    assert.equal(s0.status, 0)
++    assert.match(s0.stdout, /绿地草案/, '绿地草案既有行为在场')
++    assert.match(s0.stdout, /fr\/foo/, '绿地草案域照常预判（零输出判定面=无路径，非无图）')
++  } finally {
++    rmSync(cwdB, { recursive: true, force: true })
++  }
++})

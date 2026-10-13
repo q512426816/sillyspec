@@ -9121,3 +9121,109 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-13-thin-empty-face-crosscheck
   status: active
+
+## FR-cli-entry-482 单拍多格勾选且哨兵证据完备（status=complete，每格已勾任务均有 token 提交/review.json）时 flow done 降级 advisory 放行并留痕 flow-state batch_ticked，无需 --allow-batch-tick
+变更：2026-10-13-batchtick-evidence-domain-hint
+状态：active
+摘要：证据完备一把勾（反馈实证形态）
+场景正文：
+- 场景：证据完备一把勾（反馈实证形态） — Given 三任务各有 token 交付提交，agent 一次 Edit 翻三格（watcher 观测单拍跳 0→3），未带 --allow-batch-tick；When flow done 执行；Then 不拒收（advisory 提示节奏信号面失真），flow-state 含 batch_ticked: true，收口继续走完
+全文：.sillyspec/changes/archive/2026-10-13-batchtick-evidence-domain-hint/requirements.md#FR-01
+最近确认：e93f66eb01d66c3d1d8539a69180994542a4cf43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-01
+  tests: test/batch-tick-gate.test.mjs「②d evidenceComplete 降级态（纯函数+接线钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-batchtick-evidence-domain-hint
+  status: active
+
+## FR-cli-entry-483 证据不完备的单拍保持硬拒；--allow-batch-tick 旁路、哨兵面未知 fail-open、机器代勾解释整跳三态语义与优先序不变
+变更：2026-10-13-batchtick-evidence-domain-hint
+状态：active
+摘要：零证据一把勾
+场景正文：
+- 场景：零证据一把勾 — Given 任务全勾但 baseline..HEAD 提交零 task token 且无 review.json；When flow done 执行；Then 勾选证据哨兵先拒（假完成主张）；事件流门对 status≠complete 仍 reject
+全文：.sillyspec/changes/archive/2026-10-13-batchtick-evidence-domain-hint/requirements.md#FR-02
+最近确认：e93f66eb01d66c3d1d8539a69180994542a4cf43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-02
+  tests: test/batch-tick-gate.test.mjs「②b 决策纯函数行为级」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-batchtick-evidence-domain-hint
+  status: active
+
+## FR-cli-entry-484 flow start 对 --input 提及路径输出模块域预判行：命中已登记模块点名 FR 将落 fr/<域>；未命中点名将落伪域 auto-<段>（与 distill 分段投票同源实现）并给登记指引
+变更：2026-10-13-batchtick-evidence-domain-hint
+状态：active
+摘要：命中与未命中双态
+场景正文：
+- 场景：命中与未命中双态 — Given 模块图登记 mod1 覆盖 src/foo/，input 提及 src/foo/a.js 与 src/other/b.js；When flow start 执行；Then 输出含 fr/mod1 命中点名与 auto-other 未命中点名＋登记指引
+全文：.sillyspec/changes/archive/2026-10-13-batchtick-evidence-domain-hint/requirements.md#FR-03
+最近确认：e93f66eb01d66c3d1d8539a69180994542a4cf43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-03
+  tests: test/batch-tick-gate.test.mjs「④ flow start 域预判：命中点名/未命中伪域+指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-batchtick-evidence-domain-hint
+  status: active
+
+## FR-cli-entry-485 --input 未提及路径时 flow start 输出零新增行（逐字节不变）；绿地路径经 flow start 绿地草案自动建图后预判照常输出（草案域点名）
+变更：2026-10-13-batchtick-evidence-domain-hint
+状态：active
+摘要：零路径；绿地/零路径
+场景正文：
+- 场景：零路径 — Given 模块图在场但 --input 为纯文字无路径提及；When flow start 执行；Then 输出不含域预判段
+- 场景：绿地/零路径 — Given 无 _module-map.yaml 的仓（或 input 无路径提及）；When flow start 执行；Then 输出不含域预判段
+全文：.sillyspec/changes/archive/2026-10-13-batchtick-evidence-domain-hint/requirements.md#FR-04
+最近确认：e93f66eb01d66c3d1d8539a69180994542a4cf43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-04
+  tests: test/batch-tick-gate.test.mjs「④ …绿地与零路径零新增行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-batchtick-evidence-domain-hint
+  status: active
+
+## FR-cli-entry-486 既有回归全绿：batch-tick-gate/sentinel-wiring 既有断言零改动通过；flow done distill 域路由与收口模块门行为零改动
+变更：2026-10-13-batchtick-evidence-domain-hint
+状态：active
+摘要：回归锚
+场景正文：
+- 场景：回归锚 — Given 既有测试套件；When 全量跑；Then batch-tick-gate/sentinel-wiring 相关断言全绿，distill 路由产物与本变更前一致
+全文：.sillyspec/changes/archive/2026-10-13-batchtick-evidence-domain-hint/requirements.md#FR-05
+最近确认：e93f66eb01d66c3d1d8539a69180994542a4cf43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-batchtick-evidence-domain-hint:flow:测试绑定FR-05
+  tests: test/batch-tick-gate.test.mjs/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-batchtick-evidence-domain-hint
+  status: active
