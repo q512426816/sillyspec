@@ -8931,3 +8931,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-closeout-task-guidance
   status: active
+
+## FR-cli-entry-473 design 四问问题行漂移（节标题在场）时 flow done 工件校验不再拒收：机器按 ledger 锚逐字回填问题行并出 advisory 留痕，重跑校验通过
+变更：2026-10-13-design-question-autorepair
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 已作答的 v2 变更 design.md 中某问题行被整文件重写改述（节标题与作答保留）；When flow done 工件校验（verifyThinDocsV2）执行；Then design.md 中该问题行已被锚内原文逐字替换/插入，violations 不含「问题文本被改写」，repairs 含对应留痕条目，重跑校验 violati
+全文：.sillyspec/changes/archive/2026-10-13-design-question-autorepair/requirements.md#FR-01
+最近确认：43290f5cc74d6762f4739c021c16e58b944c640f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-design-question-autorepair:flow:测试绑定FR-01
+  tests: test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写 → 机器按锚回填（不再拒收，repairs 留痕）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-design-question-autorepair
+  status: active
+
+## FR-cli-entry-474 回填零数据丢失：改述行按字符 bigram 相似度定位（阈值以上）插入锚原文于其上方，定位不到时插在节首，绝不删除/改写 agent 书写的任何行
+变更：2026-10-13-design-question-autorepair
+状态：active
+摘要：高相似改述上方插入；低相似/删除改述节首插入
+场景正文：
+- 场景：高相似改述上方插入 — Given 节内问题行被轻度改述（如插入/替换个别词，bigram 相似度 ≥0.5）；When 回填执行；Then 锚原文插入改述行上方（原文与改述相邻），节内所有既有行字节不变（含改述行与答案行）
+- 场景：低相似/删除改述节首插入 — Given 节内问题行被删除或改述到相似度 <0.5；When 回填执行；Then 锚原文插入节标题之后，原节内所有行保留在场，无任何行被删除
+全文：.sillyspec/changes/archive/2026-10-13-design-question-autorepair/requirements.md#FR-02
+最近确认：43290f5cc74d6762f4739c021c16e58b944c640f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-design-question-autorepair:flow:测试绑定FR-02
+  tests: test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：相似定位上方插入/未定位节首插入/重跑幂等（零二次改写零留痕）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-design-question-autorepair
+  status: active
+
+## FR-cli-entry-475 仍拒收的场景（节被删/节未作答/回填后仍缺）文案带锚内问题完整原文，不再 30 字截断
+变更：2026-10-13-design-question-autorepair
+状态：active
+摘要：节被删拒收文案
+场景正文：
+- 场景：节被删拒收文案 — Given design.md 某节整体被删（标题缺失）；When verifyThinDocsV2 执行；Then violations 含该节被删条目且内嵌该节全部问题的完整原文（可整段照抄恢复）
+全文：.sillyspec/changes/archive/2026-10-13-design-question-autorepair/requirements.md#FR-03
+最近确认：43290f5cc74d6762f4739c021c16e58b944c640f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-design-question-autorepair:flow:测试绑定FR-03
+  tests: test/thin-docs-v2.test.mjs「④ 结构破坏拒收面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-design-question-autorepair
+  status: active
+
+## FR-cli-entry-476 回填幂等：对已恢复文件重跑 verifyThinDocsV2 零二次改写、零新增 advisory
+变更：2026-10-13-design-question-autorepair
+状态：active
+摘要：重跑幂等
+场景正文：
+- 场景：重跑幂等 — Given 一次校验已完成回填并通过；When 再次调用 verifyThinDocsV2；Then design.md 字节不变，返回值 repairs/advisories 均为空
+全文：.sillyspec/changes/archive/2026-10-13-design-question-autorepair/requirements.md#FR-04
+最近确认：43290f5cc74d6762f4739c021c16e58b944c640f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-design-question-autorepair:flow:测试绑定FR-04
+  tests: test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：…重跑幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-design-question-autorepair
+  status: active

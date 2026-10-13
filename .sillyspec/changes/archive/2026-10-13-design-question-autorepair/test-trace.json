@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-design-question-autorepair",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-design-question-autorepair:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写 → 机器按锚回填（不再拒收，repairs 留痕）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-design-question-autorepair"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-design-question-autorepair:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：相似定位上方插入/未定位节首插入/重跑幂等（零二次改写零留痕）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-design-question-autorepair"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-design-question-autorepair:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「④ 结构破坏拒收面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-design-question-autorepair"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-design-question-autorepair:flow:测试绑定FR-04",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「⑦ 问题行机器回填：…重跑幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-design-question-autorepair"
+    }
+  ]
+}

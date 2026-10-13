@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-design-question-autorepair",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a68cfd0531babe58eedd9dd413a1a329ae2c341f",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements 测试绑定行残留已退役的「原位替换」措辞并错引用例号（纯文档精度债，无行为风险）",
+      "evidence": "a68cfd05 改写了 FR-02 标题/正文/场景为「上方插入·绝不删除/改写」，但绑定行（requirements.md:58）仍写「⑦ 高相似原位替换/低相似节首插入双路径断言」——与同文件 FR-02 新语义及 test ⑦ 实名（「相似定位上方插入」）自相矛盾，且「原位替换」正是本轮清偿掉的销毁性语义的措辞残留；FR-03 绑定行（requirements.md:59）引「⑦ 节被删文案含问题完整原文断言」，该断言实际在 test ④（thin-docs-v2.test.mjs:98），design.md:49 亦正确写「测试④补节被删文案带全文断言」，两文档间错位；FR-04 绑定称「零改写零 repairs/advisories」而 ⑦ 重跑断言只覆盖 repairs+字节不变（thin-docs-v2.test.mjs:157-159），advisories 未断言（该值与 design 回填无关，恒定）。四条 FR 的行为均已在代码兑现且有在场测试实证，故仅文档精度问题。",
+      "location": ".sillyspec/changes/2026-10-13-design-question-autorepair/requirements.md:58-60"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "真实——逐问循环内重算 hIdx/end（flow-draft.js:351-354，插入位移后索引即时生效）；allQuestionLines 排除集（:345/:358）使已插入原文行与他节锚行不再被定位命中；⑦b 同节四问全漂实证 4 回填/改述与作答全保留（实跑绿）。纯插入下误定位最坏结果=插入位置欠佳，与 design 声明一致，无数据损失面。",
+    "并发": "边界已裁决：可接受——回填写盘走 writeAtomicSync（flow-draft.js:373；fs-atomic.js=临时文件+rename+Windows EPERM/EBUSY 重试，既有设施），读者无半写态；不加锁依赖 change 目录单变更所有权（AGENTS.md 规则 8），为 design 显式取舍，可接受。",
+    "切换": "边界已裁决：可接受——变更只作用于副本 repairedLines、单次落盘（:346/:373），中断前文件原样、落盘后即恢复态；写失败 try/catch 降级为带全文 violations 不抛异常（:372-378）；重跑幂等由在场检查（:350）+测试 ⑦ 字节不变断言钉死。次要噪音：写失败路径每问会重复出两条 violations（:377 降级条+:386 校验环条），均带全文、无正确性风险，可接受。",
+    "作用域": "边界已裁决：可接受——仅 v2 轨消费（flow-draft.js:1042 schemaVersion 门+flow.js:973 r.schema===2），锚缺省回退 DESIGN_QUESTIONS（:341），插入点严格限节体内（bestIdx∈(hIdx,end)/节首 hIdx+1|+2），只写本 changeDir/design.md 不跨节不跨文件；repairs 为 additive 返回（:1044 展开+flow.js:977 空值防护），v1 指纹轨未动。FR-02 标题「原位替换→上方插入」改写经裁决语义保真且系安全增强（把「绝不删除」升为结构不变量），预期产生 1 条门柱漂移 advisory 属已知副作用，非失真。探针：cli-copy-selfsufficient——repairs 文案「agent 作答保留」在纯插入语义下为真（无任何行被删改），violations 引用的 flow start/approve 命令在场；config-absent-zero-regression：n/a（未新增 local.yaml 消费键）；crossrepo-path-compat：n/a（未触及 worktree/deps/跨仓）。实测：thin-docs-v2 9/9、flow-draft 16/16、flow 输出面 3 组全绿。"
+  },
+  "reviewedAt": "2026-10-13T02:29:38Z"
+}
