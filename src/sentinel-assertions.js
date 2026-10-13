@@ -168,21 +168,27 @@ export function detectBatchCheckCadence(events) {
 /**
  * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
  * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
- * 工作分解，无镜像面）。四态（决策顺序即豁免优先序）：
+ * 工作分解，无镜像面）。五态（决策顺序即豁免优先序）：
  *   'silent'   无单拍跳；
  *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
- *   'advisory' 机器代勾可解释整跳（autopilotTicked >= 跳幅——governance-autopilot 代勾是
- *              单拍多格机械写，非 agent 纪律面；代勾数不可解释最大跳时落到 reject——防「留
- *              一格给代勾补、自身大跳蹭豁免」的对抗绕过，二轮评审 P3-E）；
- *   'reject'   非旁路、代勾解释不了整跳——agent 一把勾，拒收。
- * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
+ *   'advisory' 三路：哨兵面未知（fail-open 防误拒）；哨兵证据完备（status=complete——
+ *              2026-10-13-batchtick-evidence-domain-hint：同形态 git 时点检查「一把勾模式」
+ *              因 token 证据齐放行，事件流门对齐该语义——证据是提交哈希锚定的客观面，
+ *              损害只剩 per-task 时间戳信号面；证据缺失形态不走此态，维持 reject）；机器代勾
+ *              可解释整跳（autopilotTicked >= 跳幅——governance-autopilot 代勾是单拍多格机械写，
+ *              非 agent 纪律面；代勾数不可解释最大跳时落到 reject——防「留一格给代勾补、自身
+ *              大跳蹭豁免」的对抗绕过，二轮评审 P3-E）；
+ *   'reject'   非旁路、证据不完备、代勾解释不了整跳——agent 一把勾，拒收。
+ * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number, evidenceComplete?:boolean}} args
  *   nonMirrorCount 保留为哨兵面未知信号（null → fail-open advisory）；镜像-only 语义已退役。
+ *   evidenceComplete 缺省 false（additive——既有调用方零感知）。
  * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
  */
-export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0 } = {}) {
+export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0, evidenceComplete = false } = {}) {
   if (!batchTick) return { action: 'silent', reason: 'no-batch-tick' };
   if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
   if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
+  if (evidenceComplete === true) return { action: 'advisory', reason: 'evidence-complete' };
   if (autopilotTicked >= batchTick.to - batchTick.from) return { action: 'advisory', reason: 'autopilot-ticked' };
   return { action: 'reject', reason: 'agent-batch-tick' };
 }

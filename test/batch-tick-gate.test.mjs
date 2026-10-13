@@ -13,11 +13,55 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
+const CLI = join(ROOT, '..', 'src', 'index.js')
+
+function gitE(cwd, args) {
+  return execFileSync('git', ['-C', cwd, ...args], { stdio: 'pipe' }).toString().trim()
+}
+
+function cliE(cwd, args) {
+  return spawnSync(process.execPath, [CLI, ...args], {
+    cwd, encoding: 'utf8', timeout: 180_000,
+    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
+  })
+}
+
+function makeRepoE() {
+  const cwd = mkdtempSync(join(tmpdir(), 'btg-'))
+  gitE(cwd, ['init', '-q', '-b', 'main'])
+  gitE(cwd, ['config', 'user.email', 't@t'])
+  gitE(cwd, ['config', 'user.name', 't'])
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  gitE(cwd, ['add', '.'])
+  gitE(cwd, ['commit', '-q', '-m', 'base'])
+  return cwd
+}
+
+function fillDocsE(specBase, change) {
+  const base = join(specBase, 'changes', change)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
+}
+
+function writeReviewE(specBase, cwd, change) {
+  const head = gitE(cwd, ['rev-parse', 'HEAD'])
+  writeFileSync(join(specBase, 'changes', change, 'review.json'), JSON.stringify({
+    schemaVersion: 1, change, reviewer: 'test-fixture', verdict: 'PASS', reviewedAgainst: head,
+    findings: [], dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
+  }, null, 2))
+}
 
 test('② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面', () => {
   const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
@@ -43,6 +87,25 @@ test('②b 决策纯函数行为级（resolveBatchTickAction 四态 + 豁免优�
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'reject', '代勾解释不了整跳（1<3）→reject（防留格蹭豁免——二轮 P3-E）')
   assert.equal(resolveBatchTickAction({ batchTick: { from: 3, to: 4, detail: 'checked 3→4', ts: 1 }, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'advisory', '小跳+代勾解释（1>=1）→advisory')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3 }).action, 'reject', 'agent 一把勾→reject')
+  // evidenceComplete 降级态（2026-10-13-batchtick-evidence-domain-hint FR-01/FR-02）：
+  // 哨兵证据完备（status=complete）的单拍降 advisory——同形态 git 时点检查「一把勾模式」
+  // 因 token 证据齐放行，事件流门对齐该语义；优先序 flag > 哨兵面未知 > evidence > 代勾 > reject
+  const ev = resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: true })
+  assert.equal(ev.action, 'advisory', '证据完备一把勾→advisory（agent dogfood 反馈实证形态）')
+  assert.equal(ev.reason, 'evidence-complete', 'reason 钉（留痕/文案锚）')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: true, allowBatchTick: true }).action, 'bypass', 'flag 优先于 evidence 降级')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null, evidenceComplete: true }).reason, 'sentinel-unknown', '哨兵面未知优先序在前（fail-open 防误拒）')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, evidenceComplete: false }).action, 'reject', '证据不完备→仍拒（0/12 事故形态不走降级）')
+})
+
+test('②d evidenceComplete 接线钉：哨兵 complete 信号传递 + batch_ticked 留痕 + 降级文案', () => {
+  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
+  assert.ok(src.includes('_sentinelEvidenceComplete = true'), '哨兵 status=complete 置位信号')
+  assert.ok(src.includes('evidenceComplete: _sentinelEvidenceComplete'), '信号传入 resolveBatchTickAction')
+  assert.ok(src.includes('batch_ticked: true'), '降级留痕写 flow-state（与 allow_batch_tick 同款审计面）')
+  assert.ok(src.includes("reason === 'evidence-complete'"), '降级分支文案锚')
+  const sen = readFileSync(join(ROOT, '..', 'src', 'sentinel-assertions.js'), 'utf8')
+  assert.ok(sen.includes('evidenceComplete = false'), '决策函数新参数缺省 false（既有调用方零感知）')
 })
 
 test('②c autopilot 交互钉（评审清偿）：代勾计数接线 + 重入持久化 + 解释整跳判据', () => {
@@ -69,4 +132,88 @@ test('③ A 层文案钉：工作分解契约（fresh/adopt 两路）+ tasks.md 
   assert.ok(!draftSrc.includes('勿删勿改写'), 'tasks.md 模板：镜像锚话术退役')
   assert.ok(!draftSrc.includes('> 边干边勾'), 'tasks.md 模板：纪律指令行退役')
   assert.ok(!draftSrc.includes('> 机器预填草稿'), 'v1 backfill 模板：指令行退役')
+})
+
+// ══ 2026-10-13-batchtick-evidence-domain-hint：evidenceComplete 降级 e2e + flow start 域预判 ══
+
+test('②e e2e：证据完备一把勾（反馈实证形态）→ advisory 放行 + batch_ticked 留痕 + 归档完成', () => {
+  const cwd = makeRepoE()
+  const change = '2026-10-13-btg-evd'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+    // 三任务各有 token 交付证据（一把提交带全 token——哨兵口径认可）
+    writeFileSync(join(cwd, 'work.txt'), 'done\n')
+    gitE(cwd, ['add', 'work.txt'])
+    gitE(cwd, ['commit', '-q', '-m', `work (${change}) (task-01) (task-02) (task-03)`])
+    // agent 一次 Edit 翻三格（反馈摩擦形态）——watcher 事件流手工落一条单拍跳（测试环境 watcher 关闭）
+    fillDocsE(specBase, change)
+    const tasksPath = join(specBase, 'changes', change, 'tasks.md')
+    writeFileSync(tasksPath, readFileSync(tasksPath, 'utf8').replace(/^- \[ \] (task-\d+):/gm, '- [x] $1:'))
+    gitE(cwd, ['add', tasksPath])
+    gitE(cwd, ['commit', '-q', '-m', 'chore: tick (task-01/02/03)'])
+    mkdirSync(join(specBase, '.runtime'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', `watcher-events-${change}.jsonl`),
+      `${JSON.stringify({ ts: Date.now() - 60_000, kind: 'task-done', stage: 'tasks', detail: 'checked 0→3', source: 'watcher', provisional: true })}\n`)
+    writeReviewE(specBase, cwd, change)
+    const s2 = cliE(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `证据完备一把勾应放行: ${s2.stdout}\n${s2.stderr}`)
+    const out = `${s2.stdout}\n${s2.stderr}`
+    assert.doesNotMatch(out, /单拍勾选拒收/, '不再硬拒')
+    assert.match(out, /勾选节奏/, '节奏 advisory 在场')
+    assert.match(out, /证据完备|证据齐/, '降级理由点名证据面')
+    const arch = readdirSync(join(specBase, 'changes', 'archive')).find((d) => d.includes(change))
+    assert.ok(arch, '归档完成')
+    assert.match(readFileSync(join(specBase, 'changes', 'archive', arch, 'flow-state.yaml'), 'utf8'), /batch_ticked/, '降级留痕随归档件')
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+登记指引；绿地草案/零路径两态', () => {
+  // A：已登记模块图（单图）——命中/未命中双态
+  const cwdA = makeRepoE()
+  try {
+    const specBase = join(cwdA, '.sillyspec')
+    mkdirSync(join(cwdA, 'src', 'foo'), { recursive: true })
+    mkdirSync(join(cwdA, 'src', 'other'), { recursive: true })
+    writeFileSync(join(cwdA, 'src', 'foo', 'a.js'), 'export {}\n')
+    writeFileSync(join(cwdA, 'src', 'other', 'b.js'), 'export {}\n')
+    gitE(cwdA, ['add', 'src'])
+    gitE(cwdA, ['commit', '-q', '-m', 'src'])
+    mkdirSync(join(specBase, 'docs', 'proj1', 'modules'), { recursive: true })
+    writeFileSync(join(specBase, 'docs', 'proj1', 'modules', '_module-map.yaml'),
+      'modules:\n  mod1:\n    status: active\n    doc: modules/mod1.md\n    paths:\n      - src/foo/\n')
+    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+    assert.equal(s1.status, 0)
+    assert.match(s1.stdout, /FR 域预判/, '预判段在场')
+    assert.match(s1.stdout, /src\/foo\/a\.js → fr\/mod1/, '命中模块点名（FR 将落 fr/mod1）')
+    assert.match(s1.stdout, /auto-other/, '未命中伪域点名（与 distill 分段投票同源）')
+    assert.match(s1.stdout, /_module-map\.yaml/, '登记指引在场')
+    assert.match(s1.stdout, /以收口实际交付文件路由为准|实际交付文件路由为准/, '预判非路由真相的边界声明')
+    // 有图但 input 无路径：零新增
+    const s2 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-nopath', '--input', '纯文字需求无路径提及\n成功标准：\n- 行为达标', '--autopilot'])
+    assert.equal(s2.status, 0)
+    assert.doesNotMatch(s2.stdout, /FR 域预判/, '零路径零新增行')
+  } finally {
+    rmSync(cwdA, { recursive: true, force: true })
+  }
+  // B：绿地（无图）→ flow start 既有绿地草案自动起草 _module-map.yaml——预判对草案域照常点名
+  const cwdB = makeRepoE()
+  try {
+    const specBase = join(cwdB, '.sillyspec')
+    mkdirSync(join(cwdB, 'src', 'foo'), { recursive: true })
+    mkdirSync(join(cwdB, 'src', 'other'), { recursive: true })
+    writeFileSync(join(cwdB, 'src', 'foo', 'a.js'), 'export {}\n')
+    writeFileSync(join(cwdB, 'src', 'other', 'b.js'), 'export {}\n')
+    gitE(cwdB, ['add', 'src'])
+    gitE(cwdB, ['commit', '-q', '-m', 'src'])
+    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+    assert.equal(s0.status, 0)
+    assert.match(s0.stdout, /绿地草案/, '绿地草案既有行为在场')
+    assert.match(s0.stdout, /fr\/foo/, '绿地草案域照常预判（零输出判定面=无路径，非无图）')
+  } finally {
+    rmSync(cwdB, { recursive: true, force: true })
+  }
 })

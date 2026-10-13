@@ -787,6 +787,40 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       ``,
     ]
   } catch { /* 注册仓读取失败 → 零提示（与无注册仓同形态） */ }
+  // FR 域预判（2026-10-13-batchtick-evidence-domain-hint）：--input 提及路径 × 模块图（discoverModuleIndex
+  // 读 docs/<project>/modules/_module-map.yaml——与 distill 域路由同一匹配面）。第一次知道「路径未登记」
+  // 不该是收口模块门（最贵时点）。纯提示不设门：input 路径可能不全，路由真相以实际交付文件为准；
+  // 绿地无图/零路径 → 零新增输出（与模块门「绿地无图不拦」语义对齐）。fr-index.js 零编辑——
+  // resolveTouchedDomains（内部即 pseudoDomainFromPaths+词典守卫）复用 distill 同一伪域回退链。
+  let domainHintLines = []
+  try {
+    const _routingFace = await extractRoutingInputPaths(cwd, specBase, input)
+    if (_routingFace.length > 0) {
+      const { discoverModuleIndex } = await import('./decision-distill.js')
+      const { matchedModuleIds, resolveTouchedDomains } = await import('./fr-index.js')
+      const _knowledgeRoot = join(specBase, 'knowledge')
+      const _moduleIndex = discoverModuleIndex(_knowledgeRoot)
+      if (_moduleIndex && Object.keys(_moduleIndex).length > 0) {
+        const _hitRows = []
+        const _missFiles = []
+        for (const f of _routingFace) {
+          const ids = matchedModuleIds(_moduleIndex, f)
+          if (ids.length > 0) _hitRows.push({ f, ids })
+          else _missFiles.push(f)
+        }
+        if (_hitRows.length > 0 || _missFiles.length > 0) {
+          const _lines = ['🗺️ FR 域预判（按 --input 提及路径；最终以收口实际交付文件路由为准）：']
+          for (const r of _hitRows) _lines.push(`   ✓ ${r.f} → fr/${r.ids.join('、')}`)
+          if (_missFiles.length > 0) {
+            const _pseudo = (resolveTouchedDomains(changeDir, _moduleIndex, _missFiles, _knowledgeRoot)[0]) || 'unmapped'
+            _lines.push(`   ⚠️ ${_missFiles.slice(0, 5).join('、')}${_missFiles.length > 5 ? ' 等' : ''} → 未命中知识模块图，FR 蒸馏将落伪域 ${_pseudo}`)
+            _lines.push('   建议现在登记模块条目（docs/<project>/modules/_module-map.yaml 的 modules.<id>.paths 覆盖该目录）——登记后蒸馏自动落真域（收口模块门仍会兜底拦未登记目录）')
+          }
+          domainHintLines = _lines
+        }
+      }
+    }
+  } catch { /* 域预判 best-effort：图/路径读取失败零输出 */ }
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
@@ -856,6 +890,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     ...materials.map((p) => `  - ${p}`),
     ``,
     ...digest.lines,
+    ...(domainHintLines.length > 0 ? ['', ...domainHintLines] : []),
   ]
   if (json) {
     console.log(JSON.stringify({ change, tier: thick ? 'thick' : 'thin', baseline, materials, knowledgeDigest: digest.summary }))
@@ -1062,6 +1097,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
     // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
+    let _sentinelEvidenceComplete = false // 哨兵证据完备（status=complete——每格已勾任务均有 token/review.json）：单拍降级判据（2026-10-13-batchtick-evidence-domain-hint）
     let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
@@ -1128,6 +1164,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
         _sentinelNonMirrorTasks = sent.claimTotal
         if (sent.status === 'complete') {
+          _sentinelEvidenceComplete = true
           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
           // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
@@ -1177,16 +1214,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
         const _persistedAuto = Number(st?.autopilot_ticked) || 0
         const _autoN = Math.max(_autopilotTicked, _persistedAuto)
-        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN })
+        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN, evidenceComplete: _sentinelEvidenceComplete })
         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
         if (v.action === 'bypass') {
           try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
           console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
         } else if (v.action === 'advisory') {
-          const why = v.reason === 'autopilot-ticked'
-            ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
-            : '哨兵任务面未知（fail-open 防误拒）'
-          console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
+          // 证据完备降级（2026-10-13-batchtick-evidence-domain-hint）：同形态 git 时点检查（一把勾
+          // 模式）因 token 证据齐放行——事件流门对齐该语义；损害只剩 per-task 时间戳信号面，advisory
+          // + flow-state 留痕与损害对齐。证据缺失形态不走此态（哨兵先拒 / 决策函数维持 reject）。
+          if (v.reason === 'evidence-complete') {
+            try { writeFlowState(changeDir, { batch_ticked: true }) } catch { /* 留痕 best-effort */ }
+            console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——哨兵证据完备（每格已勾任务均有 token 提交/review.json），降级提醒不拒（batch_ticked 已留痕；下次完成单元即勾）`)
+          } else {
+            const why = v.reason === 'autopilot-ticked'
+              ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
+              : '哨兵任务面未知（fail-open 防误拒）'
+            console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
+          }
         } else if (v.action === 'reject') {
           console.error(`🚫 单拍勾选拒收：事件流观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），勾选任务 ${_sentinelNonMirrorTasks} 格`)
           console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
