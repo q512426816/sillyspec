@@ -1,0 +1,111 @@
+{
+  "change": "2026-10-13-thin-sync-stage",
+  "baseline": "73fa4d656cb8613a186cf0c8a97148586aec45c8",
+  "head": "dff0cbf5a6dbac070f5063f88afa083760a7c241",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "src/flow-state.js",
+    "src/flow.js",
+    "src/progress.js",
+    "test/platform-sync-thin-stage.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 142,
+    "deletions": 12
+  },
+  "savedAt": "2026-10-13T04:52:18.521Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "progress",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 6,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "73fa4d656cb8613a186cf0c8a97148586aec45c8",
+    "totals": {
+      "files": 5,
+      "additions": 142,
+      "deletions": 12
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow-state.js",
+        "additions": 21,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 6,
+        "deletions": 12,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/progress.js",
+        "additions": 16,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-thin-stage.test.mjs",
+        "additions": 98,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "de7963769609fb772fcea047954f0c88e0085fea8c5bb530e3a4eab00c159056",
+  "patchStatus": "ok"
+}

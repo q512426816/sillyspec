@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-thin-sync-stage",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "03fb08e977515447686e3494a67c8734ee66eb9d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "上移依据「静态循环依赖」与事实不符：flow.js 静态 import 闭包（51 文件，含 export-from/副作用导入）不达 progress.js",
+      "evidence": "对 HEAD 的 flow.js 做静态 import 闭包 BFS 无一可达 src/progress.js，循环前提不成立；叶子模块化本身无害且行为零影响，仅 flow.js:36-39 注释与 design.md「大概率反向依赖→避免静态循环依赖」的依据措辞失实，建议改为「避免 progress.js 重依赖协议大模块/保持叶子化」",
+      "location": "src/flow.js:36-39"
+    },
+    {
+      "severity": "P3",
+      "title": "pull 回写 'thin' 到本地行后、升厚变更首次真实 stage 运行前，上行载荷持续报 'thin'（平台 is_thin 误标窗口）",
+      "evidence": "import() 对 current_stage 零校验照写本地行（src/progress.js:789，skipIfLocalDirty 守卫下 pull 自动导入，src/sync.js:1681），升厚仅改 flow-state tier（src/flow.js:1280/2008）不重置行值→覆写条件 tier=thin 不再命中，载荷按行值上行 'thin'；平台侧 is_thin 仅驱动徽章/筛选/图标（frontend changes/page.tsx:478/536、change-step-badge.tsx:56）纯展示，首次 run <stage> 经 _write 重置自愈；import 零校验是既有语义非本 diff 引入，design.md「读侧 round-trip 无害」结论对纯 thin 场景成立，仅升厚时序边角未覆盖",
+      "location": "src/progress.js:612-617"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-13T04:49:29Z"
+}

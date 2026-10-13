@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-thin-sync-stage",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-thin-sync-stage:flow:测试绑定FR-01",
+      "tests": [
+        "test/platform-sync-thin-stage.test.mjs「thin 活跃变更上行 current_stage 投影为 thin；flow-state 缺失不覆写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-sync-stage"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-thin-sync-stage:flow:测试绑定FR-02",
+      "tests": [
+        "test/platform-sync-thin-stage.test.mjs「归档/升厚/无 flow-state 三形态上行 stage 不受影响」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-sync-stage"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-thin-sync-stage:flow:测试绑定FR-03",
+      "tests": [
+        "test/platform-sync-thin-stage.test.mjs「四形态全覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-thin-sync-stage"
+    }
+  ]
+}

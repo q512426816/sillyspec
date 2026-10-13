@@ -9227,3 +9227,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-13-batchtick-evidence-domain-hint
   status: active
+
+## FR-cli-entry-487 serializeForSync 对 tier=thin 且 changes 行 status=active 的变更，上行 current_stage 投影为 thin（readFlowState 单一源上移叶子模块 flow-state.js，flow.js re-export 保持既有引用面）
+变更：2026-10-13-thin-sync-stage
+状态：active
+摘要：thin 活跃变更推送；flow-state 缺失或损坏
+全文：.sillyspec/changes/archive/2026-10-13-thin-sync-stage/requirements.md#FR-01
+最近确认：dff0cbf5a6dbac070f5063f88afa083760a7c241
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-thin-sync-stage:flow:测试绑定FR-01
+  tests: test/platform-sync-thin-stage.test.mjs「thin 活跃变更上行 current_stage 投影为 thin；flow-state 缺失不覆写」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-thin-sync-stage
+  status: active
+
+## FR-cli-entry-488 归档（status=archived）、升厚（tier=thick）、无 flow-state 的变更上行 stage 不受影响（现状回归）
+变更：2026-10-13-thin-sync-stage
+状态：active
+摘要：归档 thin 变更；升厚变更
+全文：.sillyspec/changes/archive/2026-10-13-thin-sync-stage/requirements.md#FR-02
+最近确认：dff0cbf5a6dbac070f5063f88afa083760a7c241
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-thin-sync-stage:flow:测试绑定FR-02
+  tests: test/platform-sync-thin-stage.test.mjs「归档/升厚/无 flow-state 三形态上行 stage 不受影响」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-thin-sync-stage
+  status: active
+
+## FR-cli-entry-489 新增测试覆盖 thin active 覆写、归档不覆写、升厚不覆写、无 flow-state 不覆写四形态；相关既有套件零回归
+变更：2026-10-13-thin-sync-stage
+状态：active
+摘要：四形态断言
+全文：.sillyspec/changes/archive/2026-10-13-thin-sync-stage/requirements.md#FR-03
+最近确认：dff0cbf5a6dbac070f5063f88afa083760a7c241
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-thin-sync-stage:flow:测试绑定FR-03
+  tests: test/platform-sync-thin-stage.test.mjs「四形态全覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-thin-sync-stage
+  status: active

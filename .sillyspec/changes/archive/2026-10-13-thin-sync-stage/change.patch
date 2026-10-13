@@ -1,0 +1,209 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 7f9826ca..53574777 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -55,6 +55,7 @@ modules:
+       - src/local-register.js
+       - src/commit-suggest.js
+       - src/flow.js
++      - src/flow-state.js
+       - src/flow-draft.js
+       - src/flow-review.js
+       - src/review-probes.js
+diff --git a/src/flow-state.js b/src/flow-state.js
+new file mode 100644
+index 00000000..92ba0108
+--- /dev/null
++++ b/src/flow-state.js
+@@ -0,0 +1,21 @@
++// flow-state.yaml 单一源读取（2026-10-13-thin-sync-stage：自 flow.js 上移的叶子模块）。
++// 依赖仅 node:fs / node:path / js-yaml——供 progress.js（同步投影）与 flow.js（协议主
++// 实现，re-export 保持 `import('../flow.js')` 既有引用面）共享；叶子化让 progress.js
++// 不必为读一个状态文件拉入 flow 协议整条依赖链（评审 P3：非循环依赖问题，flow.js 静态
++// import 闭包实测不达 progress.js）。
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import yaml from 'js-yaml'
++
++export const FLOW_STATE_FILE = 'flow-state.yaml'
++
++/** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
++export function readFlowState(changeDir) {
++  try {
++    const raw = readFileSync(join(changeDir, FLOW_STATE_FILE), 'utf8')
++    const obj = yaml.load(raw)
++    return obj && typeof obj === 'object' ? obj : null
++  } catch {
++    return null
++  }
++}
+diff --git a/src/flow.js b/src/flow.js
+index e09f751b..08163df9 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -33,21 +33,15 @@ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+ import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
++// 2026-10-13-thin-sync-stage：FLOW_STATE_FILE/readFlowState 单一源上移叶子模块 flow-state.js
++// （progress.js 同步投影也要读；叶子化避免 progress.js 为读一个状态文件拉入本协议整条
++// 依赖链——评审 P3 勘误：非静态循环依赖，本文件 import 闭包实测不达 progress.js）；
++// re-export 保持 `import('../flow.js')`（run/command.js 既有动态引用）导出面不变。
++import { FLOW_STATE_FILE, readFlowState } from './flow-state.js'
++export { FLOW_STATE_FILE, readFlowState }
+ 
+-const FLOW_STATE_FILE = 'flow-state.yaml'
+ const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
+ 
+-/** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
+-export function readFlowState(changeDir) {
+-  try {
+-    const raw = readFileSync(join(changeDir, FLOW_STATE_FILE), 'utf8')
+-    const obj = yaml.load(raw)
+-    return obj && typeof obj === 'object' ? obj : null
+-  } catch {
+-    return null
+-  }
+-}
+-
+ /** 原子写 flow-state（patch 合并，幂等）。 */
+ export function writeFlowState(changeDir, patch) {
+   const cur = readFlowState(changeDir) || {}
+diff --git a/src/progress.js b/src/progress.js
+index fade7439..25533fe3 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -23,6 +23,10 @@ import { StepStore } from './progress/step-store.js';
+ import { StageMachine } from './progress/stage-machine.js';
+ import { stageRegistry } from './stages/index.js';
+ import { STAGE_ORDER, MAIN_FLOW_ORDER, VALID_STAGES, STAGE_LABELS, SPEC_DIR_NAME, CURRENT_VERSION, emptyStage } from './progress/shared.js';
++// 2026-10-13-thin-sync-stage：叶子模块（无内部依赖），同步投影读 thin 出身用——
++// 叶子化避免本文件为读一个状态文件拉入 flow 协议整条依赖链（评审 P3 勘误：
++// flow.js 静态 import 闭包实测不达本文件，非循环依赖问题）。
++import { readFlowState } from './flow-state.js';
+ // resolveSpecDir 单一真相源在 src/run/shared.js（含 home 拒绝守卫，坑 cwd-correction-home-collision
+ // 根治：home 下 .sillyspec 恒不命中，防 smoke/临时目录污染自我延续）。此处 re-export 保持
+ // 既有 import 路径兼容；run/shared.js 对 progress.js 只有动态 import，无静态循环。
+@@ -600,6 +604,18 @@ export class ProgressManager {
+       // → 上行恒无标题，平台只能落 change_key（「英文 key」病灶的同步链一侧）。
+       title: changeRow.title ?? null,
+     };
++    // thin 出身上行投影（2026-10-13-thin-sync-stage）：tier=thin 且行 status=active 时
++    // current_stage 上报 'thin'——平台 StageEnum.THIN / 列表「轻量」徽章与筛选 / ingest
++    // 双守卫均按该值消费；本地行出生恒 'brainstorm'（thin 不走阶段机），照抄上行会让
++    // 平台读侧 is_thin 判定三分支全不命中（实证：进行中轻量变更无徽章）。仅覆写载荷，
++    // 本地 DB 行不动；归档（status=archived，行已翻 'archive'）与升厚（tier=thick）不
++    // 覆写；flow-state 缺失/损坏 readFlowState→null 按行值上行（fail-open 现状行为）。
++    if (
++      changeRow.status === 'active' &&
++      readFlowState(this._changePath(cwd, changeName))?.tier === 'thin'
++    ) {
++      changeProj.current_stage = 'thin';
++    }
+ 
+     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，
+     //    同步无意义且破坏 round-trip 跨库等值——与 changes 排除 created_at 同理，B2）
+diff --git a/test/platform-sync-thin-stage.test.mjs b/test/platform-sync-thin-stage.test.mjs
+new file mode 100644
+index 00000000..be97493a
+--- /dev/null
++++ b/test/platform-sync-thin-stage.test.mjs
+@@ -0,0 +1,98 @@
++// 2026-10-13-thin-sync-stage：thin 活跃变更上行 current_stage 投影为 'thin'。
++//
++// 背景：平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章——CLI 对 thin 变更上行
++// 恒为出生值 'brainstorm'（thin 不走阶段机），平台读侧 is_thin 三分支全不命中。平台侧
++// StageEnum.THIN / 前端徽章与筛选 / ingest 双守卫均已按 current_stage='thin' 消费，
++// 本测试钉住 CLI 上行这一环的四形态：
++// 1. thin + active → 覆写 'thin'（仅载荷，本地 DB 行不动）
++// 2. thin + archived → 不覆写（终态走既有链）
++// 3. tier=thick（升厚）+ active → 不覆写
++// 4. 无 flow-state（厚流程）→ 不覆写（现状回归）
++// 5. flow-state 损坏 → readFlowState null → 不覆写（fail-open 回退现状）
++//
++// 隔离：cwd 用 os.tmpdir() 临时目录，绝不碰真实 .sillyspec/.runtime（记忆 sillyspec-test-specdir-isolation）。
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
++import { join } from 'path';
++import { tmpdir } from 'os';
++import { ProgressManager } from '../src/progress.js';
++
++let failures = 0;
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg);
++  else { console.error('  ❌ ' + msg); failures++; }
++};
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-thin-stage-${process.pid}-`));
++
++/** 建独立 fixture：本地 DB 一个活跃 change + 可选 flow-state.yaml 内容。 */
++const makeFixture = (name, flowStateYaml) => {
++  const cwd = join(tmpRoot, name);
++  mkdirSync(cwd, { recursive: true });
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') });
++  pm.init(cwd);
++  pm.initChange(cwd, 'chg');
++  if (flowStateYaml !== undefined) {
++    const dir = join(cwd, '.sillyspec', 'changes', 'chg');
++    mkdirSync(dir, { recursive: true });
++    writeFileSync(join(dir, 'flow-state.yaml'), flowStateYaml, 'utf8');
++  }
++  return { cwd, pm };
++};
++
++console.log('\n[platform-sync-thin-stage] thin 活跃变更上行阶段投影');
++
++// ── 1. thin + active → 'thin'（载荷覆写、DB 行不动）──
++console.log('\n--- 1. thin 活跃变更覆写为 thin ---');
++{
++  const { cwd, pm } = makeFixture('thin-active', 'tier: thin\nborn_face: thin\nsubsteps: {}\n');
++  const json = pm.serializeForSync(cwd, 'chg');
++  const ch = json && json.changes[0];
++  assert(ch && ch.current_stage === 'thin', `载荷 current_stage === 'thin'（实际 ${ch && ch.current_stage}）`);
++  const row = pm._ensureDB(cwd).getDb().prepare('SELECT current_stage, status FROM changes WHERE name = ?').get('chg');
++  assert(row.current_stage === 'brainstorm', `本地 DB 行不动仍 'brainstorm'（实际 ${row.current_stage}，仅载荷覆写不落库）`);
++  assert(row.status === 'active' && ch.status === 'active', 'status 双侧均 active');
++}
++
++// ── 2. thin + archived → 不覆写（终态既有链）──
++console.log('\n--- 2. thin 已归档不覆写 ---');
++{
++  const { cwd, pm } = makeFixture('thin-archived', 'tier: thin\nborn_face: thin\n');
++  pm._ensureDB(cwd).getDb().prepare("UPDATE changes SET status = 'archived', current_stage = 'archive' WHERE name = ?").run('chg');
++  const ch = pm.serializeForSync(cwd, 'chg').changes[0];
++  assert(ch.current_stage === 'archive', `归档行上行 'archive'（实际 ${ch.current_stage}）`);
++  assert(ch.status === 'archived', `归档行上行 status 'archived'（实际 ${ch.status}）`);
++}
++
++// ── 3. tier=thick（升厚）+ active → 不覆写 ──
++console.log('\n--- 3. 升厚（tier=thick）不覆写 ---');
++{
++  const { cwd, pm } = makeFixture('thick-upgraded', 'tier: thick\nborn_face: thin\n');
++  const ch = pm.serializeForSync(cwd, 'chg').changes[0];
++  assert(ch.current_stage === 'brainstorm', `升厚行上行 'brainstorm'（实际 ${ch.current_stage}）`);
++}
++
++// ── 4. 无 flow-state（厚流程）→ 不覆写（现状回归）──
++console.log('\n--- 4. 无 flow-state 不覆写 ---');
++{
++  const { cwd, pm } = makeFixture('no-state', undefined);
++  const ch = pm.serializeForSync(cwd, 'chg').changes[0];
++  assert(ch.current_stage === 'brainstorm', `无 flow-state 行上行 'brainstorm'（实际 ${ch.current_stage}）`);
++}
++
++// ── 5. flow-state 损坏 → fail-open 不覆写 ──
++console.log('\n--- 5. flow-state 损坏 fail-open ---');
++{
++  const { cwd, pm } = makeFixture('broken-state', 'tier: [unclosed\n  bad yaml :::\n');
++  const ch = pm.serializeForSync(cwd, 'chg').changes[0];
++  assert(ch.current_stage === 'brainstorm', `损坏 flow-state 行上行 'brainstorm'（实际 ${ch.current_stage}）`);
++}
++
++// 清理（Windows 下偶发 EPERM，吞错不阻断退出码）
++try { rmSync(tmpRoot, { recursive: true, force: true }); }
++catch { /* temp dir 由 OS 清理 */ }
++
++if (failures > 0) {
++  console.error(`\n[platform-sync-thin-stage] ❌ ${failures} 项失败`);
++  process.exit(1);
++}
++console.log('\n[platform-sync-thin-stage] ✅ 全部通过');
