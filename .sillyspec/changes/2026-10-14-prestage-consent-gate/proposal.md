@@ -1,0 +1,33 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-13T16:19:34.884Z
+---
+# 提案书（Proposal）— 2026-10-14-prestage-consent-gate
+
+## 动机
+
+任务原话转写：选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本次会话完成）：机制四件套齐全（清晰度门/前门自检/出口 scale 分叉/adopt 收编/hindsight 闭环），但全部触发器是非阻断弱信号——清晰度门是纯结构校验，agent 代笔成功标准恒过门；前门自检问法对过度自信的 agent 恒答无。本变更两招：route-hindsight 标记从「下次 start 点名提示」升级为「声明即过的同意门」（--no-prestage 显式声明留痕，adopt 路径自动消费标记）；AGENTS.md 选道表判据收紧（成功标准须来自用户原话/文档转写，agent 推断即属不清晰）。不做：--input 自报来源字段（全量变更加摩擦、自报可绕、与 D-003/D-005 机器只产形态信号的裁定冲突）。
+
+成功标准：
+- 标记在场时全新 flow start 无声明 flag → exit 2 给两选一（--no-prestage 声明留痕 / run brainstorm 预段），文案含标记来源与原因
+- --no-prestage 声明后放行，flow-state 落 prestage_ack 留痕，标记文件消费删除
+- adopt（头脑风暴收编）路径自动消费标记；resume 重入与平台 writer 预建空目录路径不受新门影响
+- 选道判据三处同步：本仓 AGENTS.md、templates/agents-instruction.md、assets/command-cards/flow.md
+- 新增测试覆盖门行为（拦/放/消费/adopt 消费/平台豁免/resume 豁免），全量 npm test 零失败
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 标记在场时全新 flow start 无声明 flag → exit 2 给两选一（--no-prestage 声明留痕 / run brainstorm 预段），文案含标记来源与原因
+2. --no-prestage 声明后放行，flow-state 落 prestage_ack 留痕，标记文件消费删除
+3. adopt（头脑风暴收编）路径自动消费标记；resume 重入与平台 writer 预建空目录路径不受新门影响
+4. 选道判据三处同步：本仓 AGENTS.md、templates/agents-instruction.md、assets/command-cards/flow.md
+5. 新增测试覆盖门行为（拦/放/消费/adopt 消费/平台豁免/resume 豁免），全量 npm test 零失败
+
+## 成功标准（可验证）
+
+1. 标记在场时全新 flow start 无声明 flag → exit 2 给两选一（--no-prestage 声明留痕 / run brainstorm 预段），文案含标记来源与原因
+2. --no-prestage 声明后放行，flow-state 落 prestage_ack 留痕，标记文件消费删除
+3. adopt（头脑风暴收编）路径自动消费标记；resume 重入与平台 writer 预建空目录路径不受新门影响
+4. 选道判据三处同步：本仓 AGENTS.md、templates/agents-instruction.md、assets/command-cards/flow.md
+5. 新增测试覆盖门行为（拦/放/消费/adopt 消费/平台豁免/resume 豁免），全量 npm test 零失败
