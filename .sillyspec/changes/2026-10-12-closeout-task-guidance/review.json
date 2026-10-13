@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-12-closeout-task-guidance",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "31324fad695b4ad276d23ebf57818639dfe3726e",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "主提交夹带未披露的 cmdFlowDone 跨仓防呆 advisory 逻辑（~35 行），与 design 接口契约「零逻辑改动」声明相悖",
+      "detail": "git show 254edb45 -- src/flow.js：横幅新增仅 4 行（1+注释2+1），另在 cmdFlowDone（HEAD flow.js ~1599-1639）插入整块跨仓声明防呆逻辑（读 local.yaml→parseRepoRegistry→可疑路径点名 console.warn，fail-soft 全吞）。评审时点 proposal/requirements/design/tasks/task-evidence 及交付简报清单均未披露。运行时实态：parseRepoRegistry 在 HEAD plan-postcheck.js:263 导出为活代码；不改判据/退出码/哨兵（门零改动主张成立）；实跑回归 23/23 绿。属披露纪律缺口而非行为缺陷。",
+      "resolution": "已清偿（2026-10-13 复核）：design.md:28-30 新增「并行在途改动披露（评审 P2 清偿）」节——来源（Edit 时 File-modified 外部修改信号带入）、处置（补记披露不拆出）、理由（fail-soft 纯 advisory+活代码依赖+回归绿+拆出破坏在途会话工作面）三要素齐备，与评审侧 diff 核证事实一致；补记披露正是原建议的处置路径。披露后设计记录与 HEAD 实态一致，finding 关闭。"
+    },
+    {
+      "severity": "P3",
+      "status": "disclosed-open",
+      "title": "FR-01 的 resume/adopt 横幅（flow.js:539）任务拟法行无直接断言覆盖",
+      "detail": "grep test/ 全库仅 flow-tick-prototype.test.mjs:57-58 断言任务拟法，且用例走 fresh flow start（主横幅 flow.js:818）；resume/adopt 面仅靠两处字符串手工同源，日后单删一处测试不拦。FR-01 场景声明含 resume 渲染，测试绑定未覆盖该分支。",
+      "resolution": "随清单补记如实呈现为已知覆盖缺口（design 清单 prototype 行明示『fresh 横幅新断言』，未虚报覆盖面）；测试本身未加，维持 open-accepted，留待后续变更补 resume 路径断言。"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design 文件变更清单与实际交付面不齐",
+      "detail": "原清单仅列 src/flow.js；实际主提交还含 test/flow-tick-prototype.test.mjs、docs/sillyspec/platform-interface-map.md（5 处行号锚重锚）、修复提交含 test/thin-module-gate-and-feed.test.mjs。",
+      "resolution": "已清偿：design.md:19-27 文件变更清单现全列 4 项（含各自说明），与两交付提交 stat 面一致。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "声明面（静态横幅文案+断言）无事件序依赖，n/a 成立。收编的 advisory 为收口时点一次性只读检查亦无乱序面（现已在 design 披露节如实记录）。",
+    "并发": "横幅/断言无共享态，n/a 成立。工作区实态：他侧并行未提交改动（src/fr-index.js、index.js、stage-review.js、stages/knowledge.js、stages/plan-postcheck.js 等）与未跟踪测试在场，但本变更四个交付文件（flow.js/两测试/PIM）git diff HEAD 为空=与 HEAD 逐字一致，评审对象未被污染；两交付提交均显式 pathspec（31324fad 仅带走 thin-module-gate-and-feed.test.mjs，未带走 .idea/vcs.xml、docs-check-baseline——二者仍在工作区未暂存）。advisory 的带入机制（File-modified 信号下整文件暂存）亦属并发实况，已在 design 披露节留痕。",
+    "切换": "文案常量无状态，n/a 成立。advisory 全 try/catch fail-soft，任何中断点安全无残留。",
+    "作用域": "CLI 单源输出全工作区一致；指引语义用流程动词（收口/推送/发布）不预设语言/框架/生态，符合 00 号红线（不枚举开放世界、不绑技术栈）；不涉跨仓/跨实例数据串台。",
+    "披露裁决①软约束风险": "可接受——指引非强制的风险如实声明；复发信号可观测（哨兵再拦 token 缺失型任务），后续方向已定向 P5 收口代执行消解自指而非免检标记，与『机制豁免留给穷尽软手段之后』立场自洽；本变更实测零门改动，源头文案是最低成本最大覆盖的合理落点。",
+    "披露裁决②撤回收口免检标记": "可接受——两条理由均成立：标记是 agent 手写内容，触发免检=证据判定降级为自声明；归档提交在哨兵时点尚不存在，验证时无事实可核。撤回为纯决策（diff 证实未引入任何门改动）。",
+    "披露裁决③顺带清偿测试日期脆断": "可接受——独立症状、同批提交消息+评审简报双披露；改法保语义（正则仍锚『| 日期 | 变更名 |』整行形态与变更名，非弱化为存在即可；thin-module-gate 实测门曾被其阻断属实，修复后 FR-02 用例绿）。日期合法性不校验（\\d{4}-\\d{2}-\\d{2} 过 2026-99-99）经裁决维持 open 可接受——变更名锚定下误报面可忽略；design 清单现已补列该文件。",
+    "probe_cli-copy-selfsufficient": "通过。新增两行未引入新命令/flag/路径——引用的 requirements、tasks.md、flow start→done、task-NN token 均真实存在且与既有行为一致；『勾选前先 token 提交』与哨兵 byCommit/byReview 判定语义同向（missing→fake）。token 形态描述核对：既有行『逐个列出或 /、，连写如 task-01/02/03，区间 task-01..task-05 不认』与 expandTaskShorthand（src/sentinel-assertions.js:34-44，regex /task-(\\d{1,2})((?:\\s*[\\/、，,；;]\\s*\\d{1,2}(?!\\d))+)/gi）一致——文案举例为支持集子集（未穷尽 ,与;），不构成误导；区间确不支持。本变更主提交消息『(task-01、task-02、task-03)』逐个完整列出，自践其教。文案与门判定一致。",
+    "probe_config-absent-zero-regression": "n/a 理由：声明面（横幅字符串+断言正则）零配置读取，无新增配置依赖；实跑五文件在无 .sillyspec/local.yaml 的临时沙箱 23/23 全绿佐证。附注：收编 advisory 读 local.yaml 但有 existsSync 守卫，配置缺席时零行为（其存在与来源已在 design 披露节记录）。",
+    "probe_crossrepo-path-compat": "n/a 理由：声明面无路径拼接/分隔符面——横幅为纯文案、测试改动为纯文本正则，Win/Linux/macOS 无差异。附注：收编 advisory 内路径经 split('\\\\').join('/') 归一 + path.join，跨平台兼容无新风险。"
+  },
+  "verifiedChecks": {
+    "FR-01": "PASS——flow.js:539（resume/adopt）与 :816-818（主横幅）任务拟法行在场，三要素齐（不单列/协议承担、成功标准归 requirements、单列则先 token 提交后勾选）；flow-tick-prototype 新断言 2 条在场且实跑绿（resume 分支无直接断言，见 P3 disclosed-open）",
+    "FR-02": "PASS——git show 254edb45 src/flow.js 零删除行（39+/0-，横幅两 hunk 纯新增）；『任务面归你』既有断言与 thin-workunits 计数实跑绿（追加行不含该词）",
+    "门零改动": "PASS——两交付提交触及文件仅 src/flow.js、test/flow-tick-prototype.test.mjs、docs/sillyspec/platform-interface-map.md、test/thin-module-gate-and-feed.test.mjs；sentinel-assertions.js 等哨兵/门判据/退出码零触及；advisory 为 fail-soft console.warn 不改门",
+    "实跑": "PASS——node --test flow-tick-prototype/thin-workunits/tick-loop-nudge/flow-redline-frontload/thin-module-gate-and-feed：tests 23, pass 23, fail 0",
+    "生成物同步": "确认——无类型/契约面改动；PIM 仅 index.js 行号锚重锚（无接口增删），横幅属 CLI 输出文案非契约字段"
+  },
+  "reviewedAt": "2026-10-13T00:56:10Z",
+  "updatedAt": "2026-10-13T00:58:52Z",
+  "updateReason": "P2 清偿复核：design.md 文件变更清单补齐（4 项全列）+『并行在途改动披露』节在场且事实链与评审 diff 核证一致——P2 标 resolved；P3 清单漏列同刻 resolved；resume 断言缺口与日期合法性维持 open-accepted（已如实披露）。verdict 维持 PASS。"
+}

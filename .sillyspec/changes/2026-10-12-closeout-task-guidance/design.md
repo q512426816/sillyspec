@@ -21,6 +21,13 @@ created_at: 2026-10-13T00:38:15.807Z
 | 操作 | 路径 | 说明 |
 | --- | --- | --- |
 | 改 | src/flow.js | 两处横幅各追加一行任务拟法指引 |
+| 改 | test/flow-tick-prototype.test.mjs | fresh 横幅新断言（任务拟法两要素） |
+| 改 | docs/sillyspec/platform-interface-map.md | 本变更插行致 5 处行号锚重锚 |
+| 改 | test/thin-module-gate-and-feed.test.mjs | 顺带清偿：回写日期列跨零点硬编码脆断两处（独立症状，阻断本变更实测门，日期无关断言） |
+
+## 并行在途改动披露（评审 P2 清偿）
+
+主提交 254edb45 的 src/flow.js 除本变更 4 行横幅外，**顺带收编了一段并行会话的在途代码**（cmdFlowDone 内 ~35 行「跨仓声明未按规范标注」防呆 advisory：读 local.yaml repos 注册表 → console.warn 点名，fail-soft 不改判据/退出码）。来源：本会话 Edit flow.js 时遭遇「File has been modified」外部修改信号（AGENTS.md 规则 9 的多会话并行实况），整文件暂存时被带入。处置选择补记披露而非拆出回滚：该块为纯 advisory、依赖的 parseRepoRegistry 为 HEAD 活代码、五族回归全绿；拆出会破坏在途会话的工作面。本变更的「门零改动」主张经 diff 核证不受影响（哨兵/判据/退出码零触及）。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 

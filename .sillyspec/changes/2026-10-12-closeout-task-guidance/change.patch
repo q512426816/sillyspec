@@ -1,0 +1,130 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index d2f6dc8b..6fbd8292 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2151/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4509；shared.js:1120 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4556；shared.js:1120 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4429；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4381；sync.js:2232 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4476；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4428；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4175/4174；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4222/4174；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4273`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4320`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/flow.js b/src/flow.js
+index 879c4874..11ed53ea 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -536,6 +536,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
+           `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；`,
++          `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
+           `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
+           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+           ``,
+@@ -812,6 +813,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
+     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
+     `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
++    // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
++    // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
++    `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
+     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+@@ -1595,6 +1599,41 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+             planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(specBase) })
+           } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
++          // 跨仓声明防呆 advisory（坑 design-filelist-crossrepo-prefix-silent-main，2026-10-12
++          // 实证：清单写「仓目录名/路径」不带段头/cross-repo: 前缀 → 整条静默归主仓对账成
++          // 「计划未动」，跨仓对账与 patch 冻结全缺席、零告警）。命中形态：声明路径在主仓
++          // 不存在，且首段 token 命中注册仓的 key/路径 basename → 点名 + 三种正确语法指引。
++          try {
++            const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
++            if (_yamlText) {
++              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
++              const { basename } = await import('path')
++              const _repos = parseRepoRegistry(_yamlText)
++              if (_repos && _repos.size > 0) {
++                const _aliases = new Map()
++                for (const [k, v] of _repos) {
++                  _aliases.set(k, k)
++                  const norm = String(v || '').split('\\').join('/')
++                  const bn = norm.replace(/\/+$/, '').split('/').pop()
++                  if (bn) _aliases.set(bn, k)
++                }
++                const _suspects = []
++                for (const e of planEntries) {
++                  const pe = String((e && e.path) || '').split('\\').join('/')
++                  if (!pe || pe.startsWith('.sillyspec/')) continue
++                  if (e.repo) continue // 已带跨仓标注的不查
++                  if (existsSync(join(cwd, pe))) continue
++                  const first = pe.split('/')[0]
++                  const hit = _aliases.get(first)
++                  if (hit) _suspects.push({ path: pe, key: hit })
++                }
++                if (_suspects.length > 0) {
++                  console.warn(`⚠️ 疑似跨仓声明未按规范标注（${_suspects.length} 条已按主仓路径对账）：${_suspects.slice(0, 5).map((x) => `${x.path}（首段命中注册仓 ${x.key}）`).join('、')}${_suspects.length > 5 ? ' 等' : ''}`)
++                  console.warn('   主仓无这些路径 → 冻结面将标「计划未动」、跨仓对账与 patch 冻结不触发。正确写法三选一：① 段头「## <注册key> 仓变更」段内写仓根相对路径；② 子段「### <注册key>」；③ 条目前缀 cross-repo:<注册key>:<仓根相对路径>——key 以 local.yaml repos 注册为准')
++                }
++              }
++            }
++          } catch { /* 防呆 best-effort，不阻断收口 */ }
+           // 跨仓声明在场 → 共享集成层分仓对账 + patch 冻结（D-001/D-002@v1）：与 heavy 通道
+           // （execute --done）同源 reconcileCrossRepoPlan，repos[]（锚点/计数/patch 正文）
+           // 随 snapObj 进 change-patch.json；任何异常 fail-soft 退 ⊘ 补行现行为（不阻断收口）
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+index 98c46d9e..cd09fa74 100644
+--- a/test/flow-tick-prototype.test.mjs
++++ b/test/flow-tick-prototype.test.mjs
+@@ -54,6 +54,9 @@ test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
+   const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
++  // 任务拟法指引（2026-10-12-closeout-task-guidance）：收口/推送/发布不单列 task + 单列则先 token 提交后勾选
++  assert.match(s.stdout, /任务拟法：收口\/推送\/发布类动作不单列 task/, 'fresh 横幅含任务拟法指引')
++  assert.match(s.stdout, /勾选前先做消息预埋 task-NN token 的交付提交/, '单列收口任务的证据先行指引在场')
+   const st = cli(['flow', 'status', '--change', '2026-09-02-ftp-1'])
+   assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
+   rmSync(cwd, { recursive: true, force: true })
+diff --git a/test/thin-module-gate-and-feed.test.mjs b/test/thin-module-gate-and-feed.test.mjs
+index 9204e726..7a1574b3 100644
+--- a/test/thin-module-gate-and-feed.test.mjs
++++ b/test/thin-module-gate-and-feed.test.mjs
+@@ -252,7 +252,8 @@ test('FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 /
+     const out = s.stdout + s.stderr
+     assert.equal(s.status, 0, `收口应完成: ${out.split('\n').slice(-8).join(' | ')}`)
+     const card = readFileSync(join(cwd, '.sillyspec', 'docs', 'p1', 'modules', 'core.md'), 'utf8')
+-    assert.ok(card.includes(`| 2026-10-12 | ${cn} |`), `卡内追加本变更行：${card}`)
++    // 日期列=回写当天（非变更名日期）——跨零点硬编码必脆断，日期无关断言（坑 test-date-rollover）
++    assert.ok(new RegExp(`\\| \\d{4}-\\d{2}-\\d{2} \\| ${cn} \\|`).test(card), `卡内追加本变更行：${card}`)
+     const st = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' })
+     const cardLine = st.split('\n').find((l) => l.includes('docs/p1/modules/core.md'))
+     assert.ok(cardLine && cardLine[1] === ' ', `归档后回写文件已暂存（porcelain 行「${cardLine}」第二列为空）`)
+@@ -268,7 +269,7 @@ test('FR-02 变更索引回写：命中模块卡追加行 + 归档后已暂存 /
+     assert.equal(s.status, 0, `sidecar 场景收口应完成: ${(s.stdout + s.stderr).split('\n').slice(-8).join(' | ')}`)
+     assert.equal(readFileSync(join(cwd2, '.sillyspec', 'docs', 'p1', 'modules', 'core.md'), 'utf8'), before, '已拆卡不写回卡（逐字不变）')
+     const side = readFileSync(join(cwd2, '.sillyspec', 'docs', 'p1', 'modules', 'core.changelog.md'), 'utf8')
+-    assert.ok(side.includes(`| 2026-10-12 | ${cn2} |`), `sidecar 追加本变更行：${side}`)
++    assert.ok(new RegExp(`\\| \\d{4}-\\d{2}-\\d{2} \\| ${cn2} \\|`).test(side), `sidecar 追加本变更行：${side}`)
+   } finally { rmSync(cwd2, { recursive: true, force: true, maxRetries: 3 }) }
+ })
