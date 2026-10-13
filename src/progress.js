@@ -1217,6 +1217,73 @@ export class ProgressManager {
     return this.read(cwd, changeName);
   }
 
+  /**
+   * 原子抢占式建变更（2026-10-13-autocreate-atomic-claim，事故 2026-10-13-new-change-e5a27813）。
+   *
+   * 背景：run brainstorm / run auto 无 --change 的自动建名此前是「listChanges 查零活跃 →
+   * initChange 插行」两步——检查与插入非原子，并行进程都能通过检查各建一行（当日
+   * daemon-log-config-view 与 new-change-e5a27813 同秒落地实证）。本方法把「零活跃检查 +
+   * 建行」收敛为单条 INSERT..SELECT（NOT EXISTS active / NOT EXISTS 同名 双守卫）——
+   * SQLite 单语句原子；跨进程 WAL 快照过期（BUSY_SNAPSHOT）由 db.js transaction 的
+   * BUSY 整体重跑收敛：重跑后守卫见到先行者已提交的 active 行即拒绝。
+   *
+   * 与 initChange 的差异（调用方仅 run/command.js 自动建名两处；显式 --change / 平台
+   * 工具 / 测试 fixture 继续用 initChange，语义不动）：
+   *   - 检查+插行原子化（败者零写入）；
+   *   - 目录创建移到抢占成功之后（败者不留 changes/<自动名>/ 空目录）；
+   *   - 失败返回原因而非静默创建。
+   *
+   * @param {string} cwd 项目根
+   * @param {string} changeName 变更名（自动名恒为日期前缀名；quick 会话名与 default 不走本方法）
+   * @param {{title?: string|null, quicklogId?: string|null}} [meta]
+   * @returns {{created: true, progress: object} | {created: false, reason: 'active_exists'|'name_exists', activeChanges?: string[]}}
+   */
+  initChangeIfNoActive(cwd, changeName, meta = {}) {
+    if (!changeName) {
+      console.warn('⚠️  initChangeIfNoActive: changeName 为空，跳过');
+      return { created: false, reason: 'name_exists' };
+    }
+    const db = this._ensureDB(cwd);
+    let claimed = false;
+    db.transaction(() => {
+      const sqlDb = db.getDb();
+      const now = new Date().toISOString();
+      // 单语句原子抢占：守卫与插入同一语句，无跨语句竞态窗口
+      const claim = sqlDb.prepare(
+        `INSERT INTO changes (name, current_stage, status, created_at, last_active, title, quicklog_id)
+         SELECT ?, 'brainstorm', 'active', ?, ?, ?, ?
+         WHERE NOT EXISTS (SELECT 1 FROM changes WHERE status = 'active')
+           AND NOT EXISTS (SELECT 1 FROM changes WHERE name = ?)`
+      ).run(changeName, now, now, meta.title || null, meta.quicklogId || null, changeName);
+      claimed = claim.changes === 1;
+      if (!claimed) return; // 败者：事务内零后续写入，提交为空事务
+      // 抢到后与 initChange 同款收尾（同事务）：种全部合法阶段 + 本地脏度戳
+      const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+      for (const stage of VALID_STAGES) {
+        sqlDb.prepare(
+          `INSERT OR IGNORE INTO stages (change_id, stage, status)
+           VALUES (?, ?, 'pending')`
+        ).run(changeRow.id, stage);
+      }
+      this._touchLocalModified(cwd, changeName, now);
+    });
+    if (!claimed) {
+      const sqlDb = db.getDb();
+      const activeChanges = sqlDb.prepare("SELECT name FROM changes WHERE status = 'active'").all().map((r) => r.name);
+      const sameName = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+      // 判序：同名行存在（任意 status）优先报 name_exists（重名与自动名随机碰撞兜底）；
+      // 否则按 active_exists 附清单（调用方走多活跃引导）
+      return sameName && !activeChanges.includes(changeName)
+        ? { created: false, reason: 'name_exists' }
+        : { created: false, reason: 'active_exists', activeChanges };
+    }
+    // 抢占成功后才建目录（败者零残留）；quick/default 豁免与 initChange 同款（防辅助阶段空目录物化）
+    if (!/^quick-[0-9a-f]{8}$/.test(changeName) && changeName !== 'default') {
+      this._ensureChangeDir(cwd, changeName);
+    }
+    return { created: true, progress: this.read(cwd, changeName) };
+  }
+
   setStage(cwd, stage, changeName = null) { return this._stepStore.setStage(cwd, stage, changeName); }
 
   addStep(cwd, stage, stepName, changeName = null) { return this._stepStore.addStep(cwd, stage, stepName, changeName); }
