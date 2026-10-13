@@ -4,9 +4,10 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # sync
-> 最后更新：2026-09-17
-> 最近变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件（当日 fb5bc11 事故外科拆回 76de238）：husky pre-commit 调 src/commit-guard.js，S1 quick 声明面对账（staged 含 ql patch json 读 rows[].declared，超面即警）+S2 跨变更目录检测，fail-open 只警告 exit 恒 0 + 命中写 write-audit.jsonl（via=commit-guard）复用法证链，钩子侧 true 兜底绝不拦人提交；AGENTS.md 第 18 条同步加厚 add/commit 同 pathspec 纪律）
-> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
+> 最后更新：2026-10-13
+> 最近变更：2026-10-13-sync-ledger-tombstone（thin，删除台账+台账墓碑——事故 2026-10-13-new-change-e5a27813 幽灵变更：DB 行被外部物理清除后 X1 墓碑链失源、platform sync --change 假成功 exit 0，平台行永挂 active。新增 src/deleted-ledger.js（.runtime/deleted-changes.jsonl 终态追加账本，fail-open/latest-wins/坏行容错）；deleteChange/unregisterChange 事务后落账；sync() 行缺失分支查台账命中终态即 _pushLedgerTombstone 合成最小载荷补推墓碑（deleted→location=deleted、archived→location=archive，base_ts 缺失按平台契约无条件接受，quick-* 豁免）；index.js platform sync --change 失败 exit 1 修假成功。测试锚：test/deleted-ledger.test.mjs（7 例））
+> 前次变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件：husky pre-commit 调 src/commit-guard.js，S1 声明面对账+S2 跨变更目录检测，fail-open exit 恒 0 + write-audit.jsonl 法证链）
+> 模块路径：src/sync.js、src/deleted-ledger.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
 
 ## 职责
 SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
