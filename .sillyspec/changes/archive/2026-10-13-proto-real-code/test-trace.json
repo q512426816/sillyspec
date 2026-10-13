@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-proto-real-code",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-proto-real-code:flow:测试绑定FR-01",
+      "tests": [
+        "test/proto-real-code.test.mjs「生成要求＝真码产物五要素在场且旧手绘指令移除」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-real-code"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-13-proto-real-code:flow:测试绑定FR-02",
+      "tests": [
+        "test/proto-real-code.test.mjs「explore 粗选定位与交接升级在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-real-code"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-proto-real-code:flow:测试绑定FR-03",
+      "tests": [
+        "test/proto-real-code.test.mjs「design-facts 清单真码口径 + 注入契约未动」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-real-code"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-proto-real-code:flow:测试绑定FR-04",
+      "tests": [
+        "test/proto-real-code.test.mjs「brainstorm 与 ui-visual 须知关键词同源锁」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-proto-real-code"
+    }
+  ]
+}

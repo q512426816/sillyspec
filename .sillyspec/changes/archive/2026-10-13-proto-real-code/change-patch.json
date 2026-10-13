@@ -1,0 +1,121 @@
+{
+  "change": "2026-10-13-proto-real-code",
+  "baseline": "4f72da41af8fadc6dbe4e66570682ff3b10eb0e6",
+  "head": "4d8d59ece2a003d00a8d273fef64dfb202eef87b",
+  "files": [
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "docs/prompt/explore.md",
+    "src/design-facts.js",
+    "src/stages/brainstorm.js",
+    "src/stages/explore.js",
+    "test/proto-real-code.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 98,
+    "deletions": 25
+  },
+  "savedAt": "2026-10-13T15:26:46.212Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 3,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "4f72da41af8fadc6dbe4e66570682ff3b10eb0e6",
+    "totals": {
+      "files": 7,
+      "additions": 98,
+      "deletions": 25
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 7,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/explore.md",
+        "additions": 3,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 7,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/explore.js",
+        "additions": 3,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "test/proto-real-code.test.mjs",
+        "additions": 75,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "690d0dfd733f09491fbb6f56906a3d545e051732542bca6e35580a2585e2ebc7",
+  "patchStatus": "ok"
+}

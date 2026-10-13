@@ -919,3 +919,88 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-13-proto-reuse-register
   status: active
+
+## FR-docs-consistency-044 brainstorm「生成要求」升级为真码产物口径（必须）
+变更：2026-10-13-proto-real-code
+状态：active
+摘要：主路径——React 项目出原型；降级——小程序平台无 HTML 面
+场景正文：
+- 场景：主路径——React 项目出原型 — Given 项目前端为 React+antd 且 node_modules 在场；When brainstorm 走到「必须生成」档产出定稿原型；Then 入口为变更目录 `prototype-<名称>.html`，其中挂载真实组件（从项目源码或 node_modules 引入），浏览器打开即真实组件渲染，而非手搓
+- 场景：降级——小程序平台无 HTML 面 — Given 目标平台无 HTML 运行面（如小程序原生）；When 无法同方言真码化；Then 显式声明降级与理由、请用户裁决留痕——不得静默交手绘件充当定稿。
+全文：.sillyspec/changes/archive/2026-10-13-proto-real-code/requirements.md#FR-01
+最近确认：0c335da4c6c120874b3504d7b1cbaf6155067708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-real-code:flow:测试绑定FR-01
+  tests: test/proto-real-code.test.mjs「生成要求＝真码产物五要素在场且旧手绘指令移除」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-real-code
+  status: active
+
+## FR-docs-consistency-045 explore 原型定位为粗选件并注明交接升级（必须）
+变更：2026-10-13-proto-real-code
+状态：active
+摘要：主路径——探索手稿进入 brainstorm
+场景正文：
+- 场景：主路径——探索手稿进入 brainstorm — Given explore 产出了手绘粗选件且话题进入 brainstorm；When brainstorm 做原型分级；Then 该手稿仅作方向输入；定稿必须按 FR-01 生成真码（或登记其他可复跑真码），手稿不得复制充当变更原型登记。
+全文：.sillyspec/changes/archive/2026-10-13-proto-real-code/requirements.md#FR-02
+最近确认：0c335da4c6c120874b3504d7b1cbaf6155067708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-real-code:flow:测试绑定FR-02
+  tests: test/proto-real-code.test.mjs「explore 粗选定位与交接升级在场」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-real-code
+  status: active
+
+## FR-docs-consistency-046 design-facts 自审清单同步真码口径（必须）
+变更：2026-10-13-proto-real-code
+状态：active
+摘要：主路径——自审复核
+场景正文：
+- 场景：主路径——自审复核 — Given agent 在 brainstorm 写 design.md 自审；When 过 UI 原型分级核对清单项；Then 该项提示定稿须真码同方言，手绘仅粗选。
+全文：.sillyspec/changes/archive/2026-10-13-proto-real-code/requirements.md#FR-03
+最近确认：0c335da4c6c120874b3504d7b1cbaf6155067708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-real-code:flow:测试绑定FR-03
+  tests: test/proto-real-code.test.mjs「design-facts 清单真码口径 + 注入契约未动」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-real-code
+  status: active
+
+## FR-docs-consistency-047 测试锁口径防漂移且全绿（必须）
+变更：2026-10-13-proto-real-code
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量测试；Then 断言全过、既有测试零失败、lint 零错误、`_verify` 对 brainstorm/explore 零 miss。
+全文：.sillyspec/changes/archive/2026-10-13-proto-real-code/requirements.md#FR-04
+最近确认：0c335da4c6c120874b3504d7b1cbaf6155067708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-proto-real-code:flow:测试绑定FR-04
+  tests: test/proto-real-code.test.mjs「brainstorm 与 ui-visual 须知关键词同源锁」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-proto-real-code
+  status: active
