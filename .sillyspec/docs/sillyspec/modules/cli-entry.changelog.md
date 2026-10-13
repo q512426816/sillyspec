@@ -35,3 +35,4 @@
 | 2026-10-13 | 2026-10-13-thin-sync-stage | 平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章：CLI 对 thin 变更上行的 changes[0].curr |
 | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
 | 2026-10-13 | 2026-10-13-flow-diff-cmd | 动机：change 粒度的文件统计查询口缺失——数据两态俱在但无展示入口：归档变更有 change-patch.json |
+| 2026-10-13 | 2026-10-13-declared-paren-strip | 动机：平台仓消费方冒烟实证（multi-agent-platform 仓 docs/sillyspec/flow-dif |

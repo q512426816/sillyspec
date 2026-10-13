@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-declared-paren-strip",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d377ce2ee4a71e9061ce38ea88ed926aaff9d712",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P3",
+      "area": "test-coverage",
+      "title": "测试③对第三层（buildThinSnapshotRows 兜底合并）不判别：仅①②的变体跑同一夹具结果相同；第三层实际生效的形态（重复声明：同文件「干净+残片」两条并存时抑制占位行）无测试锚定",
+      "detail": "临时工作区对照实验（/tmp 变体：src-old=父提交双文件、src-mid=仅 change-list.js 修复、src-head=HEAD）：夹具 planEntries=[{path:'src/a.tsx（交付'}] 在 src-mid 与 src-head 均得 rows=1/planned/totals.files=1（首轮 pathMatches 经 normalizePath 修复后已命中，兜底分支不参与）；而重复声明夹具 planEntries=[{path:'src/a.tsx'},{path:'src/a.tsx（交付'}] 在 src-mid 得 2 行（占位行 src/a.tsx（交付/untouched，totals 2）、src-head 得 1 行/planned/totals 1——证明兜底抑制分支真实可达且承重，但无任何测试用例覆盖该形态。",
+      "evidence": "实验输出：src-mid {\"single\":{\"n\":1},\"dup\":{\"n\":2}}；src-head {\"single\":{\"n\":1},\"dup\":{\"n\":1,...\"totals\":{\"files\":1}}}。src-mid 下 test③ 夹具断言全部可过 → 现有测试对第三层零判别力。无正确性影响（HEAD 行为实测正确），属测试面缺口。",
+      "recommendation": "补一条重复声明形态用例（干净行+残片行并存 → 单行），锚定第三层抑制分支；或在 design 中把第三层降为纯防御定位"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "area": "implementation-note",
+      "title": "hitRow 的 verdict 升级子分支（hitRow.verdict !== 'planned' 时置 planned）在唯一调用方路径下不可达；实际生效的是「不补占位行」",
+      "detail": "唯一调用方 src/flow.js:1846，planEntries 由同版本 parseFileChangeListDetailed 产出。hitRow 命中要求 normalizePath(e.path) === 行 path，而 pathMatches 对 (f, e.path) 二者归一后做同序比较：上述条件下首轮循环 plan.find(pathMatches) 必然命中该文件并把行判为 planned（实验：src-head 的 dup 用例中合并行在首轮即为 planned，第三层只减少行数）。仅当行 path 本身非 normalizePath 不动点（现实 git 文件名不以右括号组结尾的常规情形下不成立）时升级子分支才可能触发。对 FR-03 断言的可观测结果（单行 planned/totals 唯一路径）无影响，仅 commit/design「verdict 升 planned」的措辞与实现精度有偏差。",
+      "evidence": "src/flow-parity.js:560-579 首轮 pathMatches 与 549 行 matched.add 语义；对照实验 src-mid 的首轮已产出 planned 行（{\"rows\":[[\"src/a.tsx\",\"planned\"]]} 在仅缺第三层时仍成立）",
+      "recommendation": "无需改动代码（防御性分支无害）；如追求描述精确，可在注释/commit 措辞中写明「第三层兜底的实际生效面=抑制重复占位行」"
+    }
+  ],
+  "dimensionNotes": {
+    "FR-实现-测试三方一致": "5 条 FR 头部承诺逐条有实现与断言：FR-01→test①（列表：内嵌冒号/角色前缀/未闭合残片/嵌套）+ test①（表格 cell）；FR-02→test②（未闭合剥/闭合超集/中段括号不动）+ 既有 change-list 测试零改动全绿（本提交未改任何既有测试文件，实测 change-list-dash-note/operation/repo-heading + flow-parity 共 15 用例 pass）；FR-03→test③（单行/planned/真统计 47 保留/totals=1）+ test③（a.ts/a.tsx 不并）；FR-04→test④（冒号描述/双尾注/incidental 原文嗅探）；FR-05→test⑤ e2e（真跑 flow done + 归档件 change-patch.json scopeAudit 单行/干净路径/planned/additions=1/totals.files=1）。test/change-list-paren-strip.test.mjs 七用例真实存在，实跑 node --test：7 pass / 0 fail。绑定行「括号注记剥除三层用例组（解析/兜底/合并/e2e）」为伞形用例名、非字面 test() 名（七用例各自命名），flow-draft 门仅要求绑定非空（src/flow-draft.js:434），不构成阻碍；建议后续绑定写实际用例名以利检索。",
+    "盲维四问真实性": "①乱序：剥除为行尾后缀正则（完整组优先/未闭合兜底），无顺序依赖——成立；合并层为构建时一次性精确等值判定——成立。②无写面：本提交新增仅纯解析（change-list）与纯函数内合并（buildThinSnapshotRows 只变异自身 rows 数组），无新增落盘/网络/状态机写面——成立。③幂等：同输入同输出（快照重算确定性），剥离后的字符串再剥为 no-op——成立；如实附注：normalizePath 本身对极端输入非严格幂等（如 'src/a.ts (x)/' → 'src/a.ts (x)'，再剥 → 'src/a.ts'，因闭合括号剥先于尾斜杠剥），系父提交既有行为、未被本变更引入、仓内无对自身输出二次调用的链路，故「重入重算幂等」承诺成立。④作用域：declared 面文本（design 列表/表格 cell、allowed_paths、比较面 pathMatches 双侧）经 normalizePath；实际面（git numstat/ownFiles）不过 normalizePath；合并候选行显式排除 r.crossRepo，跨仓行仍走既有覆盖判定——成立。",
+    "披露边界裁决": "①中段括号不动：regex 以 $ 锚定行尾，test② 'src/a(1).js' 不动——可接受；行尾括号组（含真实文件名的病态尾括号）仍会被剥，属父提交既有剥离行为且 design 风险节已披露（病态命名 + 清单书写规范），可接受。②循环剥至稳定：do/while 每轮严格缩短或退出（终止性有保证），嵌套/多组形态 test① 覆盖——可接受；多组尾括号（如 'a (1) (2)'）由父提交单组剥变为全剥，属 design 明示的「多组」扩权，病态命名面，可接受。③合并层精确等值不模糊：r.path === clean 严格等值 + 跨仓排除；test③ a.ts/a.tsx 实测不并——可接受。④存量归档件零回填：diff 无任何归档改写/迁移代码，读取侧（flow diff）仍原样呈现冻结数据——可接受。",
+    "防护声明核实": "①incidental 原文嗅探：src/change-list.js:371 仍用 listItem[1] 原文，剥括号只作用于 rawItem 副本；test④ + 对照实验（'（顺带修复）' 与 '——旁注' 组合形态 incidental=true 且路径干净）——声明属实。②既有「路径：描述」「——尾注」剥除：test④ 断言 + 对照实验三变体（old/mid/head）对 '- src/c.ts: 描述（补充）'、'- src/e.ts（顺带修复） ——旁注' 输出逐字节相同——无回归。③a.ts/a.tsx 不误伤：test③ + 代码 r.path===clean 精确等值——属实。",
+    "生成物同步-消费面核实": "change-list.js 的 normalizePath 外部消费方仅两处：watcher.js（parseCardAllowedPaths/parseDesignListText，同为 declared 面解析——超集剥仅动「未闭合尾括号残片」脏形态，合法路径无右侧未闭合括号，无剥伤面）与 flow-parity.js（本变更新增）；contract-matrix.js 的 normalizePath 来自 endpoint-extractor.js（不同函数，未受影响）；hunk-attribution.js 为本地私有 normalizePath（未受影响）。表格 cell（change-list.js:304）与本文件 pathMatches 双侧共用同一归一器，污染形态修复后对账更稳。实测消费面相关套件：scope-audit 簇 65 用例、watcher/verify-probes/design-ref/validate-metadata/worktree-apply 35 用例，全 pass。",
+    "探针-cli-copy-selfsufficient": "如实核：diff 仅含解析逻辑/注释与新增测试，无任何 CLI 用户可见文案变更——探针不触发，无违反。",
+    "探针-config-absent-zero-regression": "n/a：diff 未新增/读取任何 .sillyspec/local.yaml 配置键。",
+    "探针-crossrepo-path-compat": "对照实验：normalizePath('src\\\\a.ts（交付') → 'src/a.ts'（括号剥在反斜杠归一之前，regex 不含分隔符依赖，Windows 形态无回归）；新 regex 不含 ':'，不影响盘符；列表分支冒号剥仍受 looksLikePath 门限且未改动其序。跨平台兼容性无新风险。",
+    "测试实跑记录": "node --test test/change-list-paren-strip.test.mjs → 7/7 pass；change-list-dash-note + change-list-operation + change-list-repo-heading + flow-parity → 15 pass；scope-audit + scope-audit-cross-repo + scope-audit-thin-patch-replay + thin-empty-face-crosscheck → 65 pass；watcher + verify-probes-refresh-backup + design-ref-suggest + validate-metadata-scope + worktree-apply → 35 pass。合计 122 用例零 fail。",
+    "边界外观察（非本变更缺陷，不计 finding）": "对照实验中 '- NEW: src/new.ts（交付：x）' 在 old/mid/head 三变体均解析为 'NEW'（列表分支冒号剥把 'NEW:' 当描述剥剩头段，三变体逐字一致）——系父提交既有行为、本变更未引入亦未改；'src/a.ts (x)/' 的 normalizePath 非幂等亦同（父提交既有）。均不属本变更承诺面。"
+  },
+  "reviewedAt": "2026-10-13T08:58:01Z"
+}

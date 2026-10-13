@@ -229,3 +229,98 @@ created_at: 2026-09-27T13:23:17.271Z
   confirmed_at: null
   source_change: 2026-10-13-h2-repo-heading-parse
   status: active
+
+## FR-change-management-012 design 清单行「路径加括号注记」全半角形态剥除：列表项与表格 cell 双形态解析出干净路径，含角色前缀与未闭合残片形态
+变更：2026-10-13-declared-paren-strip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-declared-paren-strip/requirements.md#FR-01
+最近确认：badabe76c76ed3ab4005d51310ea8fcc122e952f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-declared-paren-strip:flow:测试绑定FR-01
+  tests: test/change-list-paren-strip.test.mjs「括号注记剥除三层用例组（解析/兜底/合并/e2e）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-declared-paren-strip
+  status: active
+
+## FR-change-management-013 normalizePath 兜底剥未闭合尾括号残片，闭合剥既有行为零回归，既有 change-list 测试零改动全绿
+变更：2026-10-13-declared-paren-strip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-declared-paren-strip/requirements.md#FR-02
+最近确认：badabe76c76ed3ab4005d51310ea8fcc122e952f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-declared-paren-strip:flow:测试绑定FR-02
+  tests: test/change-list-paren-strip.test.mjs「括号注记剥除三层用例组（解析/兜底/合并/e2e）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-declared-paren-strip
+  status: active
+
+## FR-change-management-014 快照对账兜底合并：declared 污染行剥残片后与实际行同路径时合并单行、verdict 为 planned、totals.files 按唯一路径计
+变更：2026-10-13-declared-paren-strip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-declared-paren-strip/requirements.md#FR-03
+最近确认：badabe76c76ed3ab4005d51310ea8fcc122e952f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-declared-paren-strip:flow:测试绑定FR-03
+  tests: test/change-list-paren-strip.test.mjs「括号注记剥除三层用例组（解析/兜底/合并/e2e）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-declared-paren-strip
+  status: active
+
+## FR-change-management-015 incidental 顺带修复嗅探不回归；冒号描述与双尾注两既有剥除形态不回归
+变更：2026-10-13-declared-paren-strip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-declared-paren-strip/requirements.md#FR-04
+最近确认：badabe76c76ed3ab4005d51310ea8fcc122e952f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-declared-paren-strip:flow:测试绑定FR-04
+  tests: test/change-list-paren-strip.test.mjs「括号注记剥除三层用例组（解析/兜底/合并/e2e）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-declared-paren-strip
+  status: active
+
+## FR-change-management-016 存量归档件零回填；e2e：污染写法清单的变更收口后 scopeAudit 出单行干净路径
+变更：2026-10-13-declared-paren-strip
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-declared-paren-strip/requirements.md#FR-05
+最近确认：badabe76c76ed3ab4005d51310ea8fcc122e952f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-declared-paren-strip:flow:测试绑定FR-05
+  tests: test/change-list-paren-strip.test.mjs「括号注记剥除三层用例组（解析/兜底/合并/e2e）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-declared-paren-strip
+  status: active

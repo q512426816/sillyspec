@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-declared-paren-strip",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "badabe76c76ed3ab4005d51310ea8fcc122e952f",
+  "findings": [],
+  "dimensionNotes": {
+    "增量核对-提交范围": "git log ffd87e66..HEAD 唯一提交 badabe76c76ed3ab4005d51310ea8fcc122e952f；git show --stat badabe76 = 单文件 .sillyspec/changes/2026-10-13-declared-paren-strip/design.md（1 insertion / 1 deletion），无其后增量链。二审 FAIL 唯一 finding F2（声称清偿但 design.md 落盘零改动）所指缺口在本笔真实落地。",
+    "F2-清偿核实-落地": "git show badabe76 -- .sillyspec/changes/2026-10-13-declared-paren-strip/design.md 实证：第 11 行做法概述第③层措辞替换为「不补占位行（承重分支=抑制占位行；评审 F2 实证：重复声明『干净行+残片行并存』时残片行并入干净声明、totals 按唯一路径计；『实际行 verdict 升 planned』子分支在真实调用方输入下不可达——首轮 pathMatches 已命中时该行已 planned）」；工作树与 HEAD 逐字一致（git diff HEAD -- design.md 为空，内容与 HEAD blob fc8245e2 一致）。二审 F2 要求的精确措辞（承重分支=抑制占位行；升 planned 子分支在真实调用方输入下不可达）逐项在落盘文件中命中，非仅存于提交信息。",
+    "措辞-实现一致性": "src/flow-parity.js:561-585 复核：兜底合并命中（r.path === normalizePath(e.path)，排除 crossRepo）时 matched.add(e.path) 且 continue 不 push 占位行——「承重分支=抑制占位行」属实；verdict 升 planned 子分支（:574-577, hitRow.verdict !== 'planned' 守卫）仅在行 path 非 normalizePath 不动点（现实仓文件名不以未闭合括号残片结尾，属病态命名面）时才可能触发，常规调用方输入下首轮 plan.find(pathMatches) 必命中并把行判 planned——「真实调用方输入下不可达——首轮 pathMatches 已命中时该行已 planned」与代码结构及一审 F2 实验证据一致，措辞精度达标。",
+    "零src增量核对": "git diff d377ce2e..HEAD -- src/ 输出为空（零 src 增量成立）。d377ce2e..HEAD 全量 name-only 仅 design.md（badabe76 本笔）与 test/change-list-paren-strip.test.mjs（属 ffd87e66，已被二审核实为 F1 清偿用例，非本轮核对面）。一审已 PASS 的 FR/盲维/消费面与 F1 结论不受本笔影响，未重开。",
+    "测试实跑记录": "node --test test/change-list-paren-strip.test.mjs → tests 8 / pass 8 / fail 0（含 F1 承重形态用例与 e2e）。本笔仅动 design.md，不改变任何可执行面，测试状态与二审记录一致。",
+    "本轮范围声明": "只读增量核对：仅核 ffd87e66..HEAD 提交范围、design.md 措辞落盘与实现一致性、src 零增量三项；未全量重开已决维度（含 design 风险节「循环剥至稳定」表述——change-list.js:339-345 do/while 列表分支循环剥除真实存在，属既有披露面、一审已裁决，非本变更新增缺口）。工作树另有 flow-state.yaml 修改与 change-patch.json/change.patch/review.json.superseded 治理工件，属 flow 机制产物，非核对面。唯一产物为本 review.json。"
+  },
+  "reviewedAt": "2026-10-13T09:10:38Z"
+}

@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -26,11 +34,17 @@ input: >-
   - 存量归档件零回填；e2e：污染写法清单的变更收口后 scopeAudit 出单行干净路径
 autopilot: false
 baseline_commit: 4b353eac32b42d4d84799a26d0328721c9c3ebb1
-updatedAt: '2026-10-13T08:38:44.831Z'
+updatedAt: '2026-10-13T09:11:20.556Z'
 baseline_sha256: 936a8e8cf59727d64fbf35af8192d89e9d47343165e3a3e9b95bc5bad2329aae
 spec_approved: true
 spec_approved_at: '2026-10-13T08:38:44.830Z'
 spec_approved_by: zcode-parenstrip
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-parenstrip
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+js-meta-skip1+nontest-skip1)+fr(30)（52.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013084910\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（48.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013084910\test-result.json｜门文件 4 个
 
