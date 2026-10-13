@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-commit-guard-s3",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "3367ea65d8625a1f0db9d78ee53ac004629e5f70",
+  "findings": [],
+  "dimensionNotes": {
+    "incrementScope": "git log 693cd359..HEAD 唯一提交 3367ea65，仅触 src/commit-guard.js（+12/-4）与 test/commit-guard.test.mjs（+20/-1），无越界改动，符合增量清偿面。",
+    "p1Fix": "已核实且正确：src/commit-guard.js L160 realIdx = resolve(cwd, realIdxRaw)（resolve 绝对段重置语义——worktree 内 rev-parse --git-path index 返回绝对路径 .git/worktrees/<n>/index 时正确路由不再拼坏路径；主仓相对路径 .git/index 时等价 join cwd）；L164 norm 比较与 L168 ls-files 真索引读取（GIT_INDEX_FILE: realIdx）同用该 resolve 值，双口径合一。旧代码 norm(realIdxRaw) 冗余第二比较移除，语义严格化无损。resolve 已于 L27 导入。与一审 F1 修复建议逐字吻合。",
+    "worktreeTests": "19 块（test/commit-guard.test.mjs L226-244）真实存在且断言到位：19a 断言 exit 0 且 stderr 不含 [commit-guard]（P1 误报形态零误报）；19b 断言 exit 0 放行且告警含 [commit-guard] 并点名 a.txt（worktree 真索引经 resolve 路由后检测仍有效）；19c 断言 git show HEAD:a.txt 含 WT-FOREIGN（携带事实在场，检测面与事实一致）。实跑 node test/commit-guard.test.mjs：36/36 ALL PASS（一审基线 32 + 增量 4 断言）。",
+    "regression": "主仓三场景 16a-16d（携带形态必告警+write-audit 留痕）/ 17（干净 pathspec 流转零误报）/ 18a-18b（全量提交零误报零携带）与纯函数用例 1-15b 全数通过，零回归；S1/S2 信号面零改动。",
+    "negativeControl": "负向对照实验（系统 tmp 目录，未触仓库）：提取 693cd359 旧版守卫（commit-guard.js + write-audit.js）复现 19a 干净 worktree pathspec 流转——旧代码确实产出 S3 误报告警（stderr 命中 [commit-guard] 与「pathspec 提交将携带未暂存的工作树内容」文案），证明 P1 真实存在、新用例 19a 对旧代码必失败（有效回归锚点，非空转用例），且修复后同场景零告警。",
+    "previousFindings": "一审唯一 P1（F1：linked worktree 下 S3 对 pathspec 提交必误报——join(cwd, 绝对路径) 拼损坏路径 → 空索引全文件判偏差）已按建议方案清偿，无遗留。"
+  },
+  "reviewedAt": "2026-10-13T12:26:08Z"
+}

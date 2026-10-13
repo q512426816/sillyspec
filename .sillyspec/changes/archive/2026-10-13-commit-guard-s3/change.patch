@@ -1,0 +1,227 @@
+diff --git a/src/commit-guard.js b/src/commit-guard.js
+index 2b435bd0..8654bbf5 100644
+--- a/src/commit-guard.js
++++ b/src/commit-guard.js
+@@ -13,6 +13,10 @@
+  *      即警告「疑似扫入他者文件」。
+  *   S2 跨变更目录：staged 里 .sillyspec/changes/<name>/（含 archive/）命中 ≥2 个不同
+  *      name → 警告「正常提交只携带一个变更的面」。
++ *   S3 pathspec 提交暂存区旁路（2026-10-13-commit-guard-s3，055080e4 三十八行夹带实证）：
++ *      `git commit -- <路径>` 取工作树内容构造临时索引（GIT_INDEX_FILE 指给钩子），
++ *      暂存区净版被绕过——两索引同路径 blob 不一致 = 提交将携带未暂存工作树内容
++ *      （共享仓多会话时即并行编辑夹带）。普通全量提交零开销跳过。
+  * 命中即 stderr 警告 + appendWriteAudit 留痕（via: 'commit-guard'）。
+  *
+  * fail-open 硬约束（钩子挂在所有会话共享的 .husky/ 上，守卫自身绝不拦任何人的提交）：
+@@ -20,7 +24,7 @@
+  */
+ import { execFileSync } from 'child_process'
+ import { readFileSync, existsSync } from 'fs'
+-import { join } from 'path'
++import { join, resolve } from 'path'
+ import { pathToFileURL } from 'url'
+ import { appendWriteAudit } from './write-audit.js'
+ 
+@@ -75,6 +79,43 @@ export function analyzeStagedFace(stagedFiles, qlPatches) {
+   return warnings
+ }
+ 
++/**
++ * S3 纯函数①：解析 `git ls-files -s` 输出为条目数组（CRLF/噪声行容错）。
++ * 行形态：`<mode> <sha> <stage>\t<path>`。
++ */
++export function parseLsFiles(output) {
++  const out = []
++  for (const line of String(output || '').split(/\r?\n/)) {
++    const m = line.match(/^(\d+) ([0-9a-f]{40}) (\d+)\t(.+)$/)
++    if (m) out.push({ mode: m[1], sha: m[2], stage: Number(m[3]), path: m[4] })
++  }
++  return out
++}
++
++/**
++ * S3 纯函数②：两索引逐路径比对（2026-10-13-commit-guard-s3）。temp=钩子 GIT_INDEX_FILE
++ * 指向的临时索引（pathspec 提交将入库的内容），real=真实暂存区（用户 add 过的净版）。
++ * 不一致（异 sha / 仅临时在场）= 提交将携带未暂存工作树内容——暂存净版被 pathspec 语义
++ * 绕过（055080e4 实证形态）。仅真实在场（staged 但不在 pathspec）不告：该文件不会被
++ * 本提交带走。冲突态（stage>0）不判。
++ */
++export function analyzeIndexDivergence(tempEntries, realEntries) {
++  const real = new Map()
++  for (const e of realEntries) if (e && e.stage === 0 && e.path) real.set(e.path, e.sha)
++  const files = []
++  for (const e of tempEntries) {
++    if (!e || e.stage !== 0 || !e.path) continue
++    const rs = real.get(e.path)
++    if (rs === undefined || rs !== e.sha) files.push(e.path)
++  }
++  if (files.length === 0) return []
++  return [{
++    signal: 'index_divergence_on_pathspec_commit',
++    files,
++    message: `pathspec 提交将携带未暂存的工作树内容（暂存区净版被绕过——git commit -- <路径> 取工作树内容）：${files.slice(0, 5).join('、')}${files.length > 5 ? ' 等' : ''}——共享仓此形态会夹带并行会话在途编辑；核对 git diff -- <路径> 后 add 最新净版再提交，或等并行会话先提交该文件`,
++  }]
++}
++
+ function main() {
+   const cwd = process.cwd()
+   let staged = []
+@@ -102,7 +143,34 @@ function main() {
+       qlPatches[f] = JSON.parse(readFileSync(join(cwd, f), 'utf8'))
+     } catch { /* 单个 json 损坏 → 跳过该信号源，不连坐 */ }
+   }
+-  const warnings = analyzeStagedFace(staged, qlPatches)
++  let warnings = analyzeStagedFace(staged, qlPatches)
++  // S3：pathspec 提交的暂存区旁路检测（fail-open——任何异常静默跳过该信号，绝不拦提交）。
++  // ⚠ 两个实证语义：①rev-parse --git-path index 跟随 GIT_INDEX_FILE（钩子内返回临时索引
++  // 路径自身）——真索引解析必须剥掉该环境变量；②worktree 内该命令返回**绝对路径**
++  // （.git/worktrees/<n>/index）——拼接必须用 resolve（绝对段重置），join(cwd, 绝对) 会拼出
++  // 损坏路径 → ls-files 指向不存在索引 exit 0 输出空 → 全文件误判偏差（评审 P1 实证）。
++  // 未设或等于真索引 → 跳过（普通全量提交零开销）。
++  try {
++    const envIdx = process.env.GIT_INDEX_FILE || ''
++    if (envIdx) {
++      const { GIT_INDEX_FILE: _drop, ...envNoIdx } = process.env
++      const realIdxRaw = execFileSync('git', ['rev-parse', '--git-path', 'index'], {
++        cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: envNoIdx,
++      }).trim()
++      const realIdx = resolve(cwd, realIdxRaw) // 绝对段重置语义（worktree 形态关键）
++      const norm = (p) => {
++        try { return resolve(p).replace(/\\/g, '/').toLowerCase() } catch { return String(p).replace(/\\/g, '/').toLowerCase() }
++      }
++      if (norm(envIdx) !== norm(realIdx)) {
++        const tempLs = execFileSync('git', ['ls-files', '-s'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
++        const realLs = execFileSync('git', ['ls-files', '-s'], {
++          cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
++          env: { ...process.env, GIT_INDEX_FILE: realIdx },
++        })
++        warnings = [...warnings, ...analyzeIndexDivergence(parseLsFiles(tempLs), parseLsFiles(realLs))]
++      }
++    }
++  } catch { /* S3 fail-open：解析/比对异常静默跳过 */ }
+   if (warnings.length === 0) return 0
+   for (const w of warnings) process.stderr.write(`⚠️ [commit-guard] ${w.message}\n`)
+   const specDir = join(cwd, '.sillyspec')
+diff --git a/test/commit-guard.test.mjs b/test/commit-guard.test.mjs
+index 898514f9..ba216649 100644
+--- a/test/commit-guard.test.mjs
++++ b/test/commit-guard.test.mjs
+@@ -17,13 +17,13 @@
+  *
+  * 风格：自研 assert + tmp git 仓 fixture（同 doctor-archive-integrity.test.mjs）。
+  */
+-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync } from 'fs'
+ import { join, dirname } from 'path'
+ import { tmpdir } from 'os'
+ import { spawnSync, execFileSync } from 'child_process'
+ import { fileURLToPath } from 'url'
+ 
+-import { analyzeStagedFace } from '../src/commit-guard.js'
++import { analyzeStagedFace, parseLsFiles, analyzeIndexDivergence } from '../src/commit-guard.js'
+ 
+ let failed = 0
+ let total = 0
+@@ -147,6 +147,102 @@ assert(analyzeStagedFace(['.sillyspec/quicklog/patches/ql-1.json', 'src/a.js'],
+   assert(hook.includes('commit-guard.js') && hook.includes('|| true'), '10 .husky/pre-commit 调 commit-guard 且 || true 兜底')
+ }
+ 
++// ── S3（2026-10-13-commit-guard-s3）：pathspec 提交的暂存区旁路检测 ──
++// 机理实证：pathspec 提交时钩子的 GIT_INDEX_FILE 指向 next-index 临时索引（HEAD+路径工作树
++// 内容）；真实暂存区在 .git/index。两索引同路径 blob 不一致 = 提交将携带未暂存工作树内容。
++
++// ── 11-15. analyzeIndexDivergence 纯函数四态 ──
++{
++  const e = (path, sha, stage = 0) => ({ mode: '100644', sha, stage, path })
++  assert(analyzeIndexDivergence([e('a.txt', 'X')], [e('a.txt', 'X')]).length === 0, '11 同 sha → 零告')
++  const w12 = analyzeIndexDivergence([e('a.txt', 'X')], [e('a.txt', 'Y')])
++  assert(w12.length === 1 && w12[0].signal === 'index_divergence_on_pathspec_commit' && w12[0].files.join() === 'a.txt', '12 异 sha → S3 信号点名路径')
++  const w13 = analyzeIndexDivergence([e('new.txt', 'X')], [])
++  assert(w13.length === 1 && w13[0].files.join() === 'new.txt', '13 仅临时索引（未 add 的新文件随 pathspec 提交）→ 点名')
++  assert(analyzeIndexDivergence([], [e('staged-only.txt', 'Y')]).length === 0, '14 仅真实索引（staged 但不在本次 pathspec）→ 不点名')
++  assert(analyzeIndexDivergence([e('c.txt', 'X', 1)], [e('c.txt', 'Y')]).length === 0, '15 冲突态（stage>0）条目忽略')
++  const parsed = parseLsFiles('100644 abcdef1234567890abcdef1234567890abcdef12 0\tp.txt\r\n100644 fedcba1234567890fedcba1234567890fedcba12 1\tq.txt\nnoise')
++  assert(parsed.length === 2 && parsed[0].path === 'p.txt' && parsed[0].stage === 0 && parsed[1].stage === 1, '15b parseLsFiles 解析 ls-files -s（CRLF/噪声行容错）')
++}
++
++// ── 16-18. 真实 git 钩子集成三场景 ──
++function makeHookRepo(prefix) {
++  const root = makeTmpDir(prefix)
++  sh('git init -q -b main', root)
++  sh('git config user.email t@t', root)
++  sh('git config user.name t', root)
++  mkdirSync(join(root, '.sillyspec'), { recursive: true }) // write-audit 留痕需要
++  writeFileSync(join(root, 'a.txt'), 'base\n')
++  writeFileSync(join(root, 'b.txt'), 'base\n')
++  sh('git add -A', root)
++  sh('git commit -qm base', root)
++  const guardAbs = join(cliRoot, 'src', 'commit-guard.js').split('\\').join('/')
++  const hookPath = join(root, '.git', 'hooks', 'pre-commit')
++  writeFileSync(hookPath, `#!/bin/sh\nnode "${guardAbs}" || true\n`)
++  chmodSync(hookPath, 0o755)
++  return root
++}
++
++function gitCommit(root, args) {
++  // spawnSync：成功路径也要拿 stderr（execFileSync 成功时不暴露子进程 stderr——钩子警告会丢）
++  const r = spawnSync('git', ['commit', ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  return { code: r.status, stderr: String(r.stderr || '') }
++}
++
++// 16. 055080e4 形态：staged 净版 + 工作树外来行 + pathspec 提交 → S3 必告警且放行
++{
++  const root = makeHookRepo('cg-16-')
++  writeFileSync(join(root, 'a.txt'), 'mine-clean\n')
++  sh('git add a.txt', root)
++  writeFileSync(join(root, 'a.txt'), 'mine-clean\nFOREIGN-HUNK\n') // 模拟并行会话在途编辑
++  const r = gitCommit(root, ['-qm', 'x', '--', 'a.txt'])
++  assert(r.code === 0, '16a pathspec 提交放行（fail-open 恒 exit 0）')
++  assert(r.stderr.includes('[commit-guard]') && r.stderr.includes('a.txt') && /未暂存/.test(r.stderr), `16b S3 警告点名路径与机理（实际 stderr：${r.stderr.slice(0, 200)}）`)
++  assert(sh('git show HEAD:a.txt', root).includes('FOREIGN-HUNK'), '16c 事故形态复现：外来行确被携带（检测面与事实一致）')
++  const auditPath = join(root, '.sillyspec', '.runtime', 'write-audit.jsonl')
++  assert(existsSync(auditPath) && readFileSync(auditPath, 'utf8').includes('index_divergence'), '16d write-audit 留痕 signal=index_divergence')
++}
++
++// 17. 干净规则 11 流转：add 净版后不再改 + 同清单 pathspec 提交 → 零告警
++{
++  const root = makeHookRepo('cg-17-')
++  writeFileSync(join(root, 'b.txt'), 'clean\n')
++  sh('git add b.txt', root)
++  const r = gitCommit(root, ['-qm', 'x', '--', 'b.txt'])
++  assert(r.code === 0 && !r.stderr.includes('[commit-guard]'), `17 干净 pathspec 流转零 S3 误报（实际 stderr：${r.stderr.slice(0, 120)}）`)
++}
++
++// 18. 普通全量提交：staged 净版 + 工作树多余行（无 pathspec）→ 提交取索引、零告警零携带
++{
++  const root = makeHookRepo('cg-18-')
++  writeFileSync(join(root, 'a.txt'), 'staged\n')
++  sh('git add a.txt', root)
++  writeFileSync(join(root, 'a.txt'), 'staged\nWORKTREE-EXTRA\n') // 全量提交不携带此行
++  const r = gitCommit(root, ['-qm', 'x'])
++  assert(r.code === 0 && !r.stderr.includes('[commit-guard]'), '18a 全量提交零 S3 误报')
++  assert(!sh('git show HEAD:a.txt', root).includes('WORKTREE-EXTRA'), '18b 全量提交取索引不取工作树（携带不发生——语义面正确）')
++}
++
++// 19. linked worktree（评审 P1 清偿锚）：干净流转零误报 + 携带形态仍必告警
++{
++  const root = makeHookRepo('cg-19-')
++  const wt = join(root, 'wt')
++  sh(`git worktree add -q "${wt.split('\\').join('/')}" -b wt-branch`, root)
++  // 19a 干净规则 11 流转（worktree 内 pathspec 提交）→ 零告警（P1 误报形态：曾把全文件判偏差）
++  writeFileSync(join(wt, 'b.txt'), 'clean-wt\n')
++  sh('git add b.txt', wt)
++  const r19a = gitCommit(wt, ['-qm', 'x', '--', 'b.txt'])
++  assert(r19a.code === 0 && !r19a.stderr.includes('[commit-guard]'), `19a worktree 干净流转零 S3 误报（实际 stderr：${r19a.stderr.slice(0, 160)}）`)
++  // 19b worktree 内携带形态 → 仍必告警（真索引在 .git/worktrees/<n>/index，resolve 路由）
++  writeFileSync(join(wt, 'a.txt'), 'wt-clean\n')
++  sh('git add a.txt', wt)
++  writeFileSync(join(wt, 'a.txt'), 'wt-clean\nWT-FOREIGN\n')
++  const r19b = gitCommit(wt, ['-qm', 'y', '--', 'a.txt'])
++  assert(r19b.code === 0, '19b worktree pathspec 提交放行')
++  assert(r19b.stderr.includes('[commit-guard]') && r19b.stderr.includes('a.txt'), `19b worktree 携带形态仍告警（实际 stderr：${r19b.stderr.slice(0, 160)}）`)
++  assert(sh('git show HEAD:a.txt', wt).includes('WT-FOREIGN'), '19c worktree 事故形态复现（携带事实在场）')
++}
++
+ for (const dir of tmpRoots) {
+   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
+ }

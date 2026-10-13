@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-13-commit-guard-s3",
+  "baseline": "8c3a9672bd441d0b813042db1cd0dc2a5576fa27",
+  "head": "3367ea65d8625a1f0db9d78ee53ac004629e5f70",
+  "files": [
+    "src/commit-guard.js",
+    "test/commit-guard.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 168,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-13T12:26:51.596Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "8c3a9672bd441d0b813042db1cd0dc2a5576fa27",
+    "totals": {
+      "files": 2,
+      "additions": 168,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": "src/commit-guard.js",
+        "additions": 70,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/commit-guard.test.mjs",
+        "additions": 98,
+        "deletions": 2,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "ed8059c4ac786fcf74d5b1ec5b49d88eaecca29333f7032ffc5c911ef34f8626",
+  "patchStatus": "ok"
+}
