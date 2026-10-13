@@ -18,6 +18,7 @@ import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
+import { lookupDeletedLedger } from './deleted-ledger.js';
 import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved, syncSelfHealWarn } from './sync-noise.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
@@ -747,6 +748,18 @@ export class SyncManager {
         return { synced: 0, errors: [`读取 progress 失败: ${err.message}`] };
       }
       if (progressData === null) {
+        // 删除台账兜底（2026-10-13-sync-ledger-tombstone，事故 2026-10-13-new-change-e5a27813）：
+        // DB 行被外部物理清除（rm + 裸 SQL）后 serializeForSync 恒 null、X1 墓碑链失源，
+        // 平台行永挂 active。台账里「存在过且已达终态」时合成最小载荷补推墓碑，让平台
+        // _apply_cli_tombstone 收敛 location。台账无此名（从未存在，如 --change 打错字）
+        // 不发——误发会把平台同名真变更软删。quick 会话豁免（与 tombstoneDue 同口径）。
+        if (!QUICK_SID_RE.test(changeName)) {
+          const ledger = lookupDeletedLedger(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), changeName);
+          if (ledger && (ledger.status === 'deleted' || ledger.status === 'archived')) {
+            const pushed = await this._pushLedgerTombstone(changeName, ledger, { signal: opts.signal });
+            return { synced: 0, errors: [], ledgerTombstone: pushed ? 'pushed' : 'best-effort-failed' };
+          }
+        }
         console.warn(`[sync] 变更无进度数据 (无活跃进度): ${changeName}`);
         return { synced: 0, errors: [`变更无进度数据: ${changeName}`] };
       }
@@ -1096,6 +1109,63 @@ export class SyncManager {
     }
     debugLog(`[sync] 墓碑上行未成功: ${changeName} (status=${res.status}，平台方案 A 兜底)`);
     return { synced: 0 };
+  }
+
+  /**
+   * 台账墓碑（2026-10-13-sync-ledger-tombstone）：DB 行已被外部物理清除、终态凭证只剩
+   * 删除台账时的合成墓碑上行。与 _pushTombstone 的差异：不读 DB（无行可读），载荷由
+   * 台账条目合成——changes[0] 携带台账 status（平台 _apply_cli_tombstone 据此收敛
+   * location）+ current_stage='archive'，其余五表空数组（平台端解析容错，字段缺失即空集）。
+   * base_ts 不设：平台契约「base_ts 缺失无条件接受」（platform_sync/service.py 分支 1），
+   * 不与既有 last_pushed_at 比较，无 409 面。best-effort：失败 debugLog 不抛（与 X1 链
+   * 语义一致——平台 7 天 reparse 兜底仍在）。
+   * @param {string} changeName
+   * @param {{name: string, status: string, at: string}} ledger 台账终态条目
+   * @param {{signal?: AbortSignal}} [opts]
+   * @returns {Promise<boolean>} 是否推送成功
+   */
+  async _pushLedgerTombstone(changeName, ledger, opts = {}) {
+    const platform = this._getPlatform();
+    if (!platform) return false; // 未连接平台：台账墓碑无从上行，行缺失也无处可回填，静默
+    const payload = {
+      changes: [{
+        name: changeName,
+        status: ledger.status,
+        current_stage: 'archive',
+        created_at: ledger.at,
+        last_active: ledger.at,
+        title: changeName,
+      }],
+      stages: [],
+      steps: [],
+      approvals: [],
+      batch_progress: [],
+    };
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${platform.token}`,
+      'X-SillySpec-Pushed-At': new Date().toISOString(),
+    };
+    const pushUser = platform.user || resolvePlatformUser(this.cwd) || null;
+    if (pushUser) headers['X-SillySpec-User'] = pushUser;
+    const syncUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/progress`;
+    try {
+      const res = await fetchJsonWithStatus(syncUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: opts.signal,
+      });
+      if (res.ok) {
+        console.log(`[sync] 已上行台账墓碑（行已清除，status=${ledger.status}）: ${changeName}`);
+        return true;
+      }
+      debugLog(`[sync] 台账墓碑上行未成功: ${changeName} (status=${res.status}，平台 reparse 兜底)`);
+      return false;
+    } catch (err) {
+      debugLog(`[sync] 台账墓碑上行失败: ${changeName}: ${(err && err.message) || err}`);
+      return false;
+    }
   }
 
   /**
