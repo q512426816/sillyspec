@@ -4397,7 +4397,15 @@ SillySpec platform — SillyHub 平台同步
           const syncChangeName = syncChangeIdx >= 0 && args[syncChangeIdx + 1] && !String(args[syncChangeIdx + 1]).startsWith("--") ? args[syncChangeIdx + 1] : null;
           if (syncChangeName) {
             // manual：用户显式同步，change_deleted 回执噪音闸旁路（显式动作的回执必须可见）
-            await syncModule.sync(syncChangeName, dir, { manual: true });
+            // 失败必须 exit 1（2026-10-13-sync-ledger-tombstone，事故 2026-10-13-new-change-e5a27813）：
+            // 此前忽略返回值恒 exit 0——变更不存在/未连接平台都「假成功」，daemon RPC
+            // （sillyspec.sync_change）据退出码回执，假成功掩盖行缺失。成功路径（含
+            // change_deleted 预期回执、台账墓碑补推）errors 为空，exit 0 语义不变。
+            const syncResult = await syncModule.sync(syncChangeName, dir, { manual: true });
+            if (syncResult && Array.isArray(syncResult.errors) && syncResult.errors.length > 0) {
+              console.error(`❌ platform sync 失败（${syncChangeName}）: ${syncResult.errors.join('；')}`);
+              process.exit(1);
+            }
           } else {
             // 全树 spec 文件同步（2026-10-11-sync-conflict-tri-fix FR-03）：不带 --change
             // 此前报「需要指定变更名称」——归档/历史变更无活跃会话标签时无从下手。现走
