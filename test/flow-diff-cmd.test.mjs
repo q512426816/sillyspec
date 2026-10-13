@@ -128,6 +128,9 @@ test('归档态：读 change-patch.json scopeAudit 渲染 totals，--json 同构
     git(cwd, ['add', 'work.txt'])
     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
     fillDocs(specBase, change)
+    // 声明 work.txt → 归档 scopeAudit verdict=planned（F1 断言锚）
+    writeFileSync(join(specBase, 'changes', change, 'design.md'), readFileSync(join(specBase, 'changes', change, 'design.md'), 'utf8')
+      + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | work.txt | 交付 |\n')
     tickTasks(specBase, cwd, change)
     writeReviewFixture(specBase, cwd, change)
     const done = cli(cwd, ['flow', 'done', '--change', change])
@@ -144,7 +147,7 @@ test('归档态：读 change-patch.json scopeAudit 渲染 totals，--json 同构
     assert.deepEqual({ files: j.totals.files, additions: j.totals.additions }, { files: srcTotals.files, additions: srcTotals.additions }, 'totals 与冻结件一致')
     const row = j.rows.find((r) => r.path === 'work.txt')
     assert.ok(row && row.additions === 1 && row.state === 'archived', `work.txt +1 state=archived: ${JSON.stringify(row)}`)
-    assert.equal(typeof row.verdict, 'string', '归档行带 verdict（scopeAudit 对账列）')
+    assert.equal(row.verdict, 'planned', '归档行带 verdict（声明面命中 → planned）')
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
