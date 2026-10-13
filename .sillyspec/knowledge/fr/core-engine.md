@@ -3311,3 +3311,77 @@
   confirmed_at: null
   source_change: 2026-10-12-verify-handover-hint
   status: active
+
+## FR-core-engine-199 node --test test/worktree-deps-override.test.mjs 3/3 绿（合法覆写双留痕/缺 reason exit 2/非法值 exit 2/meta 缺失 exit 1）
+变更：2026-10-13-cli-pit-fix-batch
+状态：active
+摘要：主路径；用法门；meta 缺失
+场景正文：
+- 场景：主路径 — Given seed 的 worktree meta.json（depsStatus=failed）；When `worktree deps --set linked --
+- 场景：用法门 — Given 同上；When 缺 `--reason` 或 `--set magic`；Then exit 2，stderr 含用法行/「非法」文案，meta.json 保持
+- 场景：meta 缺失 — 
+全文：.sillyspec/changes/archive/2026-10-13-cli-pit-fix-batch/requirements.md#FR-01
+最近确认：34560b18d3dc5f1fff1a6058a391bb3f245cba35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-01
+  tests: test/worktree-deps-override.test.mjs「④ meta 缺失：exit 1 + 跨仓 --spec-dir 指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cli-pit-fix-batch
+  status: active
+
+## FR-core-engine-200 sillyspec knowledge --help 输出帮助且零写盘副作用
+变更：2026-10-13-cli-pit-fix-batch
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given knowledge/generated/ 目录现状任意；When `node src/index.js knowledge --help`；Then stdou
+全文：.sillyspec/changes/archive/2026-10-13-cli-pit-fix-batch/requirements.md#FR-02
+最近确认：34560b18d3dc5f1fff1a6058a391bb3f245cba35
+
+## FR-core-engine-201 sillyspec tests --redomain 用法门在位（--from/--to/--by-change/--write），fr-index 降级告警引用该命令
+变更：2026-10-13-cli-pit-fix-batch
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `node --test test/fr-domain-guard-and-redomain-bychange.test.mjs`；Then ④⑥ 用例零失败（
+全文：.sillyspec/changes/archive/2026-10-13-cli-pit-fix-batch/requirements.md#FR-03
+最近确认：34560b18d3dc5f1fff1a6058a391bb3f245cba35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-03
+  tests: test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集（坑 redomain-plan-preview-by-change-ignored）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cli-pit-fix-batch
+  status: active
+
+## FR-core-engine-202 lint 全绿 + flow done 实测门零失败
+变更：2026-10-13-cli-pit-fix-batch
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When `npm run lint`；Then 953 文件检查通过、未引用导出 0 项。When `flow done`；Then 实测门零失败放行收口。
+全文：.sillyspec/changes/archive/2026-10-13-cli-pit-fix-batch/requirements.md#FR-04
+最近确认：34560b18d3dc5f1fff1a6058a391bb3f245cba35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-04
+  tests: test/worktree-deps-override.test.mjs「① 合法覆写：状态翻转 + 双留痕（note 含前值与理由）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cli-pit-fix-batch
+  status: active

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-cli-pit-fix-batch",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-deps-override.test.mjs「① 合法覆写：状态翻转 + 双留痕（note 含前值与理由）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-deps-override.test.mjs「②③ 用法门：缺 reason / 非法 set 值 → exit 2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-deps-override.test.mjs「④ meta 缺失：exit 1 + 跨仓 --spec-dir 指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs「④ redomain --by-change：混合池按「变更：」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-domain-guard-and-redomain-bychange.test.mjs「⑥ CLI 预览与落盘同口径：--by-change 干跑只列分批子集（坑 redomain-plan-preview-by-change-ignored）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-cli-pit-fix-batch:flow:测试绑定FR-04",
+      "tests": [
+        "test/worktree-deps-override.test.mjs「① 合法覆写：状态翻转 + 双留痕（note 含前值与理由）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cli-pit-fix-batch"
+    }
+  ]
+}

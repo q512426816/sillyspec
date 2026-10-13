@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-cli-pit-fix-batch",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "34560b18d3dc5f1fff1a6058a391bb3f245cba35",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "depsOverrideNote 声称为 verify/archive 审计锚，但全 src 无任何代码消费方",
+      "evidence": "grep 全 src 仅 index.js 写入方（4081/4086/4087），verify/archive/gates 对账只读 depsStatus（src/run/gates.js:368,394）；成功文案「verify/archive 对账时以 depsOverrideNote 为审计锚」与 design「对账以 depsOverrideNote 为审计锚」目前只是 meta.json 里的静默数据，留痕可人工读但无机器对账锚点",
+      "location": "src/index.js:4087"
+    },
+    {
+      "severity": "P3",
+      "title": "worktree deps 子命令缺 assertSafeChangeName 消毒（create 等兄弟子命令有）",
+      "evidence": "deps case 直接 join(specBaseWd,'.runtime','worktrees',wtName,'meta.json')，仅 existsSync 门控；`--change ../..` 类输入可指向 worktrees 目录外的既有 JSON 文件并重写——自伤面（操作者本人输入、写前必有 existsSync），无跨用户威胁，但与 3625 行 create case 的消毒面不一致",
+      "location": "src/index.js:4047"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 用法门场景「meta.json 保持原值」无测试断言",
+      "evidence": "test ②③ 只断言 exit 2 与文案含 --reason/非法，未回读 meta.json 断言未落盘；代码事实成立（两道 exit 2 门均在任何写之前），纯测试覆盖缺口非行为缺陷",
+      "location": "test/worktree-deps-override.test.mjs:33"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——design 作答与代码一致：existsSync 门在一切写之前（无 meta 即 exit 1 指引，不产出新 meta）；--help/-h 拦截是 cmdKnowledge 首语句，`knowledge refresh --help` 乱序组合也先消化（实测 exit 0、knowledge/ 指纹零变化）",
+    "并发": "ok——writeAtomicSync 真实存在（src/fs-atomic.js:65 export function writeAtomicSync），meta 三字段同一次 JSON 原子写无撕裂窗；--help 纯读零写盘",
+    "切换": "ok——覆写只动 depsStatus+depsOverrideNote/At 三字段，不改 worktree 生命周期状态机；gates.js 对账照旧只判 depsStatus（该面同时是 P3-1：留痕字段暂无机器消费方，但 design 将其定位为人工审计面且文案明示）",
+    "作用域": "边界已裁决：可接受——命令只查主 specBase、显式不做跨仓自动扫描，缺 meta fail-closed（exit 1 不写盘）指引 --spec-dir，结构上不可能误写他仓 worktree"
+  },
+  "reviewedAt": "2026-10-13T12:05:00.000Z",
+  "probeNotes": {
+    "cli-copy-selfsufficient": "pass——用法门一次给全（用法行+通道说明+exit 2，index.js:4058-4060）；meta 缺失给绝对 metaPath+--spec-dir+worktree list 三要素（index.js:4075-4077）；help 子命令清单 10/10 与 knowledge.js switch case 一一对应（624-678）；fr-index 新告警引用的 tests --redomain --from/--to/--by-change/--write 真实存在（index.js:3390、redomain.js:50）。唯一瑕疵：帮助文本 stats 行重复出现（纯装饰不误导）",
+    "cli-copy-gate-consistency": "pass（附 P3-1）——放行/阻断判定面未被文案改述：deps 门仍只判 depsStatus∈{linked,installed,n/a}（gates.js:368），成功文案未声称门会看留痕；唯「以 depsOverrideNote 为审计锚」为数据面承诺、无机器消费方（见 P3-1）",
+    "config-absent-zero-regression": "n/a→pass——diff 未新增任何 local.yaml 消费键（无 local.yaml 读取面变更），三态断言要求不触发；缺省路径输出零改动",
+    "crossrepo-path-compat": "pass——路径全部经 resolvePlatformSpecDir+join 平台感知拼接；meta 读取剥 BOM（replace(/^\\uFEFF/,'')）；写走 writeAtomicSync；不假设构建链在 PATH；跨仓不自动扫描、显式 --spec-dir 与注册语义一致；绑定测试以 spawnSync 真进程在本 Windows 机实测 3/3 绿"
+  },
+  "boundaryRulings": "逐条裁决（检查单第3条）：(1) design 风险节「理由不实属未定义行为（文案明示）」——可接受：机器无法校验 --reason 事实性，强制必填+前值/理由/时间戳三字段已把绕过通道从零痕迹变为可审计，界限文案明示（index.js:4087）。(2) design 作用域节「显式不做自动跨仓扫描」——可接受：fail-closed exit 1 指引优于猜仓误写，误写他仓路径被结构排除。(3) FR-02 测试绑定「不适用：CLI 交互横切面——以命令回执为证据」——可接受：纯读帮助面零数据风险，且本次评审已独立实测回执（exit 0+帮助块+help:true+knowledge/ 指纹零变化）；代价是该面无自动回归锁，建议后续补 spawnSync 冒烟用例。(4) FR-03「fr-index 告警行由 lint 渲染面覆盖、无专项断言」——可接受：纯提示文案；引用的命令/flags 已逐个核对真实存在，文案与实现一致。(5) design 接口契约「stage-review 契约 schema 本体零变化、只加渲染行」——可接受：diff 仅 changeDir 非空时多渲染一行，REVIEW_SCHEMA_VERSION 未动；join/dirname 已导入（stage-review.js:18），绝对路径构造 <specRoot>/.runtime/stage-reviews/<stage>-<runId>/review.json 与既有目录布局（.sillyspec/.runtime/stage-reviews/ 实存）及头部 {SPEC_ROOT}/.runtime/stage-reviews/ 模板一致。无未裁决声明边界。",
+  "verificationNotes": "冻结面核对：git HEAD=34560b18 提交恰含 change.patch 全部 5 个 src/test 文件，触达文件 git status 干净（工作区实态==HEAD==patch）。FR-01：绑定 3 用例真存在且逐条断言承诺行为，本机实测 3/3 绿（exit 0 双留痕/缺 reason exit 2/非法值 exit 2/meta 缺失 exit 1+--spec-dir）。FR-02：实测 exit 0+「用法: sillyspec knowledge <子命令>」帮助块+JSON help:true+knowledge/ 目录 mtime 指纹前后一致（零写盘）；实现为 cmdKnowledge 首语句拦截、任何子命令分发前 return。FR-03：绑定 ④⑥ 用例真存在（test/fr-domain-guard-and-redomain-bychange.test.mjs:60,102），本机实测 6/6 绿；告警文案锚定域取自本变更 pseudoHits（不跨变更串台）。FR-04：触及面部分复验——4 个 src 文件 node --check 全过、两条绑定测试实测绿；全量 lint 953 文件与 flow done 实测门以收口回执为准（流程侧 fail-closed），本次评审未重跑全量 lint（预算与只读纪律）。"
+}

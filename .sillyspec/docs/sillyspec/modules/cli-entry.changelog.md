@@ -33,3 +33,4 @@
 | 2026-10-13 | 2026-10-13-thin-empty-face-crosscheck | 动机：multi-agent-platform 仓 docs/sillyspec/thin-done-empty-fac |
 | 2026-10-13 | 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每  |
 | 2026-10-13 | 2026-10-13-thin-sync-stage | 平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章：CLI 对 thin 变更上行的 changes[0].curr |
+| 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |

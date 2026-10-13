@@ -1,0 +1,130 @@
+{
+  "change": "2026-10-13-cli-pit-fix-batch",
+  "baseline": "f62880c40287bf0eda80907ac31c9c14e095307e",
+  "head": "34560b18d3dc5f1fff1a6058a391bb3f245cba35",
+  "files": [
+    ".idea/vcs.xml",
+    "src/fr-index.js",
+    "src/index.js",
+    "src/stage-review.js",
+    "src/stages/knowledge.js",
+    "test/worktree-deps-override.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 147,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-13T05:16:23.012Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": ".idea",
+      "files": 1
+    },
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "f62880c40287bf0eda80907ac31c9c14e095307e",
+    "totals": {
+      "files": 6,
+      "additions": 147,
+      "deletions": 3
+    },
+    "rows": [
+      {
+        "path": ".idea/vcs.xml",
+        "additions": 0,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/fr-index.js",
+        "additions": 10,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 47,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stage-review.js",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 22,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-deps-override.test.mjs",
+        "additions": 65,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "58272d14ae8f547a5fa3a49a03b268594c0301704dcfcbea980acb028d257603",
+  "patchStatus": "ok"
+}

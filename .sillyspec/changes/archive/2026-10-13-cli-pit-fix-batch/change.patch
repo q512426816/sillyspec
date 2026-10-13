@@ -1,0 +1,213 @@
+diff --git a/.idea/vcs.xml b/.idea/vcs.xml
+index 83865d0a..4365781e 100644
+--- a/.idea/vcs.xml
++++ b/.idea/vcs.xml
+@@ -2,8 +2,6 @@
+ <project version="4">
+   <component name="VcsDirectoryMappings">
+     <mapping directory="" vcs="Git" />
+-    <mapping directory="$PROJECT_DIR$/gwtest/main" vcs="Git" />
+     <mapping directory="$PROJECT_DIR$/r7-test-env/demo-project" vcs="Git" />
+-    <mapping directory="$PROJECT_DIR$/round5/_gsd" vcs="Git" />
+   </component>
+ </project>
+\ No newline at end of file
+diff --git a/src/fr-index.js b/src/fr-index.js
+index f9a45738..3d66d032 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -594,8 +594,17 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+       // 落域机械改进（2026-09-27-knowledge-digest）：伪域告警附交付路径推导的建议域——
+       // 归档时转达人工 1 秒确认（建议器与 digest 信号卡共用 suggestDomainFromFiles 单源）
+       const suggested = suggestDomainFromFiles(deliverableFiles || [], { knowledgeRoot })
++      // 坑 fr-redomain-advisory-and-selectivity-gap（2026-10-13）：告警接专用命令 +
++      // --by-change 条目级过滤 + D-001 迁域不换号铁律明示（防手工迁移按序重编号断
++      // supersede 链）。锚定域取告警列出的伪域文件名（auto-x.md → auto-x）。
++      const pseudoDomains = [...new Set(pseudoHits.map((w) => String(w.file || '').replace(/\.md$/, '')))].filter(Boolean)
+       console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）${suggested ? `——按交付路径建议域：${suggested}（确认后可迁移；` : '（'}补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准）`)
+-      if (suggested) console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
++      if (suggested) {
++        console.warn(`   域级整体迁移：sillyspec tests --redomain --from <伪域> --to ${suggested} --write（干跑去 --write）；只迁本变更条目：加 --by-change <本变更名>`)
++        if (pseudoDomains.length > 0) console.warn(`   例：sillyspec tests --redomain --from ${pseudoDomains[0]} --to ${suggested} --by-change <本变更名> --write`)
++        console.warn(`   ⚠️ 迁域不换号（D-001 铁律）：条目 ID 保持原样（绑定/supersede 链按 ID 寻址）——手工搬移时勿按目标域接续重编号`)
++        console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
++      }
+     }
+     const unm = all.get('unmapped')
+     if (unm && unm.sections.length > 50) {
+diff --git a/src/index.js b/src/index.js
+index bd9042c3..5276ca4e 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -4044,6 +4044,53 @@ SillySpec worktree — git worktree 隔离管理
+           }
+           break;
+         }
++        case 'deps': {
++          // deps 状态显式覆写（坑 deps-gate-offline-fragile，2026-10-12 实证：离线环境
++          // npm ci 必败 + lockfile 本地改动致链接快路径失效，agent 被迫手改 meta.json 绕过
++          // ——未定义行为且零留痕。本命令把绕过通道 CLI 化：--set 显式值 + --reason 强制
++          // 留痕（写 depsOverrideNote / depsOverrideAt），审计面可对账。合法值收敛工具
++          // 认知集（n/a/linked/installed/failed）。
++          const setIdx = filteredArgs.indexOf('--set')
++          const setVal = setIdx !== -1 && filteredArgs[setIdx + 1] && !String(filteredArgs[setIdx + 1]).startsWith('--') ? String(filteredArgs[setIdx + 1]).trim() : null
++          const rIdx = filteredArgs.indexOf('--reason')
++          const reason = rIdx !== -1 && filteredArgs[rIdx + 1] ? String(filteredArgs[rIdx + 1]).trim() : null
++          if (!wtName || !setVal || !reason) {
++            console.error('用法: sillyspec worktree deps --change <变更名> --set <n/a|linked|installed|failed> --reason "<事实依据——必填留痕>"')
++            console.error('   离线/内网环境供给链失败时的显式覆写通道（写 meta.json + 覆写留痕）；先确认 node_modules 确实可用再 set linked')
++            process.exit(2)
++          }
++          if (!['n/a', 'linked', 'installed', 'failed'].includes(setVal)) {
++            console.error(`❌ --set 值非法 "${setVal}"（合法：n/a | linked | installed | failed）`)
++            process.exit(2)
++          }
++          try {
++            const specBaseWd = resolvePlatformSpecDir(dir, specDir)
++            const wtBase = join(specBaseWd, '.runtime', 'worktrees')
++            const wtDir = join(wtBase, wtName)
++            const metaPath = join(wtDir, 'meta.json')
++            // 跨仓 worktree：主 specBase 下无实体时扫各注册仓（简化：本命令聚焦主仓 worktree，
++            // 跨仓路径用 --spec-dir 指到对应 specBase；两形态 meta.json 同款）
++            if (!existsSync(metaPath)) {
++              console.error(`❌ 找不到 worktree meta：${metaPath}`)
++              console.error('   跨仓 worktree 用 --spec-dir 指向其 specBase 后重跑；变更名核对 sillyspec worktree list')
++              process.exit(1)
++            }
++            const meta = JSON.parse(String(readFileSync(metaPath, 'utf8')).replace(/^\uFEFF/, ''))
++            const prev = meta.depsStatus
++            meta.depsStatus = setVal
++            meta.depsOverrideNote = `手工覆写: ${reason}（前值 ${prev ?? 'null'}）`
++            meta.depsOverrideAt = new Date().toISOString()
++            const { writeAtomicSync } = await import('./fs-atomic.js')
++            writeAtomicSync(metaPath, JSON.stringify(meta, null, 2) + '\n')
++            console.log(`✅ deps 状态已覆写：${wtName} depsStatus ${prev ?? 'null'} → ${setVal}`)
++            console.log(`   留痕：${meta.depsOverrideNote}`)
++            console.log('   verify/archive 对账时以 depsOverrideNote 为审计锚——事实依据不实属未定义行为')
++          } catch (e) {
++            console.error(`❌ 覆写失败: ${e.message}`)
++            process.exit(1)
++          }
++          break;
++        }
+         default:
+           console.error(`❌ 未知子命令: worktree ${wtSubCmd}`);
+           console.log('   运行 sillyspec worktree --help 查看帮助');
+diff --git a/src/stage-review.js b/src/stage-review.js
+index 85543e87..34d2f359 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -138,6 +138,9 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier,
+     '## review.json 产物契约(CLI Stage Review Gate 将硬校验,以下为精确 schema —— 事前给的 == 事后查的)',
+     '',
+     '> 路径:`{SPEC_ROOT}/.runtime/stage-reviews/' + stageLbl + '-' + runIdLbl + '/review.json`(本次 reviewType=' + reviewType + ',主审查文档=' + mainDocRel + ')',
++    ...(changeDir
++      ? ['> **本次完整绝对路径（直接复制给审查子代理，勿手拼 runId/漏阶段前缀——坑 stage-review-path-prefix 2026-10-10 实证：marker 只有裸 runId，子代理按 runId 直写漏「<stage>-」前缀即错位）**: `' + join(dirname(dirname(changeDir)), '.runtime', 'stage-reviews', stageLbl + '-' + runIdLbl, 'review.json') + '`']
++      : []),
+     '',
+     '### 必填字段(validateStageReviewSchema 硬校验,缺任一即 schema 失败阻断)',
+     '- `schemaVersion`: ' + REVIEW_SCHEMA_VERSION,
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index bc72931c..876c0705 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -596,6 +596,28 @@ async function tryImportSubcommandImpl(importPath, moduleName) {
+  * @param {object} opts - { specDir }
+  */
+ export async function cmdKnowledge(args, dir, opts = {}) {
++  // --help/-h 全局拦截（坑：探索型调用 knowledge refresh --help 被当默认参数直接执行
++  // ——cmdRefresh 无参即全量重写 generated/，副作用写 34 文件。帮助请求在任何子命令
++  // 前消化，危险面子命令不再被误触发）。
++  if (args.includes('--help') || args.includes('-h')) {
++    const lines = [
++      '用法: sillyspec knowledge <子命令> [参数]',
++      '',
++      '子命令:',
++      '  search "<关键词>"     检索知识库（命中自动注入 prompt 的同源面）',
++      '  inspect <文件>        查看单个知识文件条目结构',
++      '  validate              校验知识库完整性（INDEX 锚点/注册/幽灵条目——纯读）',
++      '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
++      '  stats                 覆盖率/死条目统计（纯读）',
++      '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
++      '  propose / classify / inbox / graph / stats',
++      '',
++      '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
++    ]
++    for (const l of lines) console.log(l)
++    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats'] })
++    return
++  }
+   const subCommand = args[0] || ''
+ 
+   switch (subCommand) {
+diff --git a/test/worktree-deps-override.test.mjs b/test/worktree-deps-override.test.mjs
+new file mode 100644
+index 00000000..1989c8a8
+--- /dev/null
++++ b/test/worktree-deps-override.test.mjs
+@@ -0,0 +1,65 @@
++/**
++ * 坑 deps-gate-offline-fragile ②：worktree deps --set 显式覆写通道
++ *
++ * 实证（2026-10-12 会话 47e2ff1a）：离线环境 npm ci 必败 + 主仓 lockfile 本地改动致
++ * 链接快路径失效 → agent 被迫手改 meta.json 的 depsStatus——未定义行为且零留痕。
++ * CLI 化：--set 显式值 + --reason 强制留痕（depsOverrideNote/At 审计锚）。
++ *
++ * 锁定：①合法值覆写成功并双留痕；②缺 reason 用法错 exit 2；③非法值 exit 2；
++ *      ④meta 不存在（变更名错）exit 1 且指引 --spec-dir 跨仓路径。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'index.js')
++const tmpRoots = []
++function fx() { const d = mkdtempSync(join(tmpdir(), 'depset-')); tmpRoots.push(d); return d }
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++function seedWorktree(specBase, name) {
++  const wtDir = join(specBase, '.runtime', 'worktrees', name)
++  mkdirSync(wtDir, { recursive: true })
++  const meta = { changeName: name, mode: 'worktree', worktreePath: wtDir, depsStatus: 'failed', depsError: 'npm ci ETIMEDOUT' }
++  writeFileSync(join(wtDir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n')
++  return { wtDir, metaPath: join(wtDir, 'meta.json') }
++}
++
++test('① 合法覆写：状态翻转 + 双留痕（note 含前值与理由）', () => {
++  const cwd = fx()
++  const specBase = join(cwd, '.sillyspec')
++  const { metaPath } = seedWorktree(specBase, '2026-10-12-dep-x')
++  const r = cli(cwd, ['worktree', 'deps', '--change', '2026-10-12-dep-x', '--set', 'linked', '--reason', '离线环境，主仓 node_modules 已手工 junction 并实测可用'])
++  assert.equal(r.status, 0, `应成功: ${r.stdout}\n${r.stderr}`)
++  const m = JSON.parse(readFileSync(metaPath, 'utf8'))
++  assert.equal(m.depsStatus, 'linked')
++  assert.ok(m.depsOverrideNote && m.depsOverrideNote.includes('前值 failed') && m.depsOverrideNote.includes('离线环境'), `留痕内容: ${m.depsOverrideNote}`)
++  assert.ok(m.depsOverrideAt, '时间戳留痕')
++})
++
++test('②③ 用法门：缺 reason / 非法 set 值 → exit 2', () => {
++  const cwd = fx()
++  const specBase = join(cwd, '.sillyspec')
++  seedWorktree(specBase, '2026-10-12-dep-y')
++  const r2 = cli(cwd, ['worktree', 'deps', '--change', '2026-10-12-dep-y', '--set', 'linked'])
++  assert.equal(r2.status, 2, '缺 reason 拒')
++  assert.ok((r2.stderr + r2.stdout).includes('--reason'), '用法行含 reason 必填')
++  const r3 = cli(cwd, ['worktree', 'deps', '--change', '2026-10-12-dep-y', '--set', 'magic', '--reason', 'x'])
++  assert.equal(r3.status, 2, '非法值拒')
++  assert.ok((r3.stderr + r3.stdout).includes('非法'), '非法值文案')
++})
++
++test('④ meta 缺失：exit 1 + 跨仓 --spec-dir 指引', () => {
++  const cwd = fx()
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  const r = cli(cwd, ['worktree', 'deps', '--change', 'no-such-wt', '--set', 'linked', '--reason', 'x'])
++  assert.equal(r.status, 1)
++  assert.ok((r.stderr + r.stdout).includes('--spec-dir'), '跨仓指引在场')
++})

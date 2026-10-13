@@ -1,0 +1,42 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomain（--from/--to/--by-change/--write 用法行 + D-001 迁域不换号铁律明示，坑
+  fr-redomain-advisory-and-selectivity-gap）；②worktree deps --set 显式覆写通道 + --reason 强制留痕写 meta.json（坑
+  deps-gate-offline-fragile 离线实证的绕过通道 CLI 化）；③stage-review 契约渲染附 review.json 完整绝对路径防子代理手拼漏阶段前缀（坑
+  stage-review-path-prefix）；④knowledge 子命令 --help/-h 全局拦截防 refresh 无参副作用写盘。
+
+
+  成功标准：
+
+  - node --test test/worktree-deps-override.test.mjs 3/3 绿（合法覆写双留痕/缺 reason exit 2/非法值 exit 2/meta 缺失 exit 1）
+
+  - sillyspec knowledge --help 输出帮助且零写盘副作用
+
+  - sillyspec tests --redomain 用法门在位（--from/--to/--by-change/--write），fr-index 降级告警引用该命令
+
+  - lint 全绿 + flow done 实测门零失败
+autopilot: true
+baseline_commit: f62880c40287bf0eda80907ac31c9c14e095307e
+updatedAt: '2026-10-13T05:19:34.621Z'
+baseline_sha256: 333485071c038416f9586e8372d0de1a669e7c70e1c13d082ab73854c036778d
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js42+js-meta-skip1+nontest-skip1)+fr(43)（48.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013051456\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（50.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013051456\test-result.json｜门文件 6 个
+

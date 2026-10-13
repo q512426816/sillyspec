@@ -50,3 +50,4 @@
 - 2026-09-21-r5-efficiency-batch1 | R5 效率第 1 批三行为入 stages 域：plan 并批默认（prompt 话术+postcheck 纯增量 advisory，N≥4 阈值防 nag 环）/ execute 材料包行（assembleExecuteTaskMaterials 稳定段先行只摘不译，无映射零注入）/ 派发契约（B-⑥ 轮数纪律三行 + C-1 B1 返回契约 ≤25 行 + B2 回收瘦身，编号单调硬约束恒 9）——对账真相源零触碰；文本钉 test/dispatch-contract.test.mjs + test/execute-materials.test.mjs + test/plan-batch-advisory.test.mjs
 - 2026-09-21-r5-efficiency-batch2 | M3 PLAN 粒度派发默认化（plan-postcheck recommendWaveGroups 导出纯函数：三条件贪心+批数护栏预算 n−min(3,n)；buildWavePrompt 推荐分组行注入+偏离披露+按组回收；判定①文案附分组；SillyHub 互斥/无 ≥2 组零注入，D-003@v1）+ M4 execution_mode 通道（plan light/full 模板键+判据话术；execute main 直写渲染分支：执行方式/工作目录/要点/调度纪律四段变体+派发段/互斥行/分组段/并发帽抑制，缺省 dispatch 逐字节零回归=黄金快照 6 形态 diff 实证，D-004@v1）。
 | 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |
+| 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
