@@ -48,8 +48,8 @@ created_at: 2026-10-13T15:09:24.834Z
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/cross-repo-baseline-anchor.test.mjs「start 记 cross_baselines（首写者胜+fail-soft）」
-FR-02: test/cross-repo-baseline-anchor.test.mjs「两笔交付全进对账面+anchor=flow-start-baseline」
-FR-03: test/cross-repo-baseline-anchor.test.mjs「外来提交 token 剔除/零命中回退全窗口 unplanned 可见」
-FR-04: test/cross-repo-baseline-anchor.test.mjs「既有档位零回归（cross-repo 既有测试零改动全绿）」
-FR-05: test/cross-repo-baseline-anchor.test.mjs「e2e 注册跨仓两笔+untracked 收口 scopeAudit 全覆盖」
+FR-01: test/cross-repo-baseline-anchor.test.mjs「e2e：start 记基线（首写者胜）…anchor=flow-start-baseline」（首写者胜断言在场；fail-soft=fixture 注册 deadkey 不可达路径，start 成功且「跨仓基线锚：1 个注册仓」即部分记录语义）
+FR-02: 同上用例（impl.txt/fix.txt/brand-new.txt 全进 scopeAudit rows 断言）
+FR-03: test/cross-repo-baseline-anchor.test.mjs「回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 不可达 → 回退 B 档」（foreign.txt unplanned 断言；head~1-window 断言）
+FR-04: 既有回归锚外置——test/cross-repo-patch-freeze.test.mjs 等 cross-repo 族零改动全绿（git show 交付 diff 可证零改）
+FR-05: 同 FR-01/02 用例（archive change-patch.json 实读断言）

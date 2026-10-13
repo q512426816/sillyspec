@@ -282,13 +282,18 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
           : null
         if (_log !== null) {
           for (const c of String(_log).split('\n').map((s) => s.trim()).filter(Boolean)) {
-            const dt = gitQuiet(repoPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', c], { timeout: GIT_TIMEOUT })
+            // -m --first-parent（评审 P2 清偿）：merge 提交不带 -m 时 diff-tree 输出**空**——消息
+            // 带变更名的 merge 会假命中 token 却收零文件、并抑制全窗口回退（窄形态劣于 B 档）。
+            // --first-parent 取 merge 带入本线的文件面（非 merge 提交单亲，-m 为 no-op）。
+            const dt = gitQuiet(repoPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', '-m', '--first-parent', c], { timeout: GIT_TIMEOUT })
             if (dt === null) continue
-            _tokenHit = true
+            let got = false
             for (const f of String(dt).split('\n')) {
               const n = normalizeRepoPath(f)
-              if (n) _mine.add(n)
+              if (n) { _mine.add(n); got = true }
             }
+            // 空文件列表不计 tokenHit（belt：全空命中回退全窗口而非静默漏面）
+            if (got) _tokenHit = true
           }
         }
         const union3 = new Set(_mine)

@@ -37,8 +37,9 @@ function fixture(change) {
     git(r, ['config', 'user.name', 't'])
   }
   mkdirSync(join(main, '.sillyspec'), { recursive: true })
+  // deadkey 注册不可达路径（fail-soft 锚：start 跳过该仓不阻断、cross_baselines 只记可达仓）
   writeFileSync(join(main, '.sillyspec', 'local.yaml'),
-    `project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\nrepos:\n  libx: ${cross.split('\\').join('/')}\n`)
+    `project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\nrepos:\n  libx: ${cross.split('\\').join('/')}\n  deadkey: C:/nonexistent-repo-path-xyz\n`)
   writeFileSync(join(cross, 'base.txt'), 'base\n')
   git(cross, ['add', '.'])
   git(cross, ['commit', '-qm', 'base'])
