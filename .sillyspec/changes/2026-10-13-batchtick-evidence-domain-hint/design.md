@@ -32,7 +32,7 @@ resolveBatchTickAction({ batchTick, nonMirrorCount, allowBatchTick, autopilotTic
 
 4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
 
-不会。evidenceComplete 只读本变更 changeDir 与工作区仓 git log（哨兵既有扫描面，跨仓提交不在面内——降级不会因跨仓证据误开）；域预判读本仓模块图与本仓 input，多工作区各自读各自 .sillyspec。pseudoDomainFromPaths 导出后单一实现两消费面（distill 路由/flow start 预判），词典守卫参数 knowledgeRoot 两处同源传入，不产生第二套伪域铸造口径。
+不会。evidenceComplete 只读本变更 changeDir 与工作区仓 git log（哨兵既有扫描面，跨仓提交不在面内——降级不会因跨仓证据误开）；域预判读本仓模块图与本仓 input，多工作区各自读各自 .sillyspec。pseudoDomainFromPaths 保持模块私有（评审 P3 清偿：终版未做导出），预判经已导出的 resolveTouchedDomains（内部即同一伪域回退链+词典守卫）——单一实现两消费面，不产生第二套伪域铸造口径。
 
 ## 风险与死路
 

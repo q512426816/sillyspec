@@ -813,7 +813,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           for (const r of _hitRows) _lines.push(`   ✓ ${r.f} → fr/${r.ids.join('、')}`)
           if (_missFiles.length > 0) {
             const _pseudo = (resolveTouchedDomains(changeDir, _moduleIndex, _missFiles, _knowledgeRoot)[0]) || 'unmapped'
-            _lines.push(`   ⚠️ ${_missFiles.slice(0, 5).join('、')}${_missFiles.length > 5 ? ' 等' : ''} → 未命中知识模块图，FR 蒸馏将落伪域 ${_pseudo}`)
+            _lines.push(`   ⚠️ ${_missFiles.slice(0, 5).join('、')}${_missFiles.length > 5 ? ' 等' : ''} → 未命中知识模块图，FR 蒸馏将落域 ${_pseudo}（按 distill 同一伪域回退链预判——未吸附为 auto-<段>，词典吸附命中既有真域）`)
             _lines.push('   建议现在登记模块条目（docs/<project>/modules/_module-map.yaml 的 modules.<id>.paths 覆盖该目录）——登记后蒸馏自动落真域（收口模块门仍会兜底拦未登记目录）')
           }
           domainHintLines = _lines
