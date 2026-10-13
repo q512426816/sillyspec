@@ -3385,3 +3385,74 @@
   confirmed_at: null
   source_change: 2026-10-13-cli-pit-fix-batch
   status: active
+
+## FR-core-engine-203 flow start 在注册仓可达时把各仓 HEAD 记入 flow-state cross_baselines（首写者胜：重入不刷新；仓不可达/非 git fail-soft 跳过该仓不阻断 start）
+变更：2026-10-13-cross-repo-baseline-anchor
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-01
+最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-01
+  tests: test/cross-repo-baseline-anchor.test.mjs「e2e：start 记基线（首写者胜）…anchor=flow-start-baseline」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cross-repo-baseline-anchor
+  status: active
+
+## FR-core-engine-204 收口对账 3c 档生效：跨仓多笔交付（两笔提交）全部进对账面（多提交盲区消除）；anchor.source 为 flow-start-baseline
+变更：2026-10-13-cross-repo-baseline-anchor
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-02
+最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2
+
+## FR-core-engine-205 token 归因：窗口内不含变更名的外来提交被剔除（不出现在 rows）；零 token 命中回退全窗口（外来文件可见为 unplanned）
+变更：2026-10-13-cross-repo-baseline-anchor
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-03
+最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-03
+  tests: test/cross-repo-baseline-anchor.test.mjs「回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 不可达 → 回退 B 档」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cross-repo-baseline-anchor
+  status: active
+
+## FR-core-engine-206 基线 sha 在跨仓不可达（rev-parse --verify 失败）回退既有 B 档；既有 A/B'/B/C 档行为零回归（cross-repo 既有测试零改动全绿）
+变更：2026-10-13-cross-repo-baseline-anchor
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-04
+最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-04
+  tests: test/cross-repo-patch-freeze.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-13-cross-repo-baseline-anchor
+  status: active
+
+## FR-core-engine-207 e2e：注册跨仓的变更两笔交付+untracked 收口，scopeAudit 跨仓行覆盖全部交付文件、repos[] 锚点为 flow-start-baseline
+变更：2026-10-13-cross-repo-baseline-anchor
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-05
+最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2

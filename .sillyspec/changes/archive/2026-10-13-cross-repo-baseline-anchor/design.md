@@ -6,9 +6,13 @@ created_at: 2026-10-13T15:09:24.834Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 三处改动：①src/flow.js cmdFlowStart 主 writeFlowState 后加跨仓基线锚 best-effort 块——读 local.yaml 注册表（parseRepoRegistry），逐仓解析路径（isAbsolute/resolve，与 collectRepoActual 同口径）rev-parse HEAD，写 cross_baselines 进 flow-state（首写者胜：已有即不刷新，对齐 baseline_sha256 模式防重入后并行提交漂移窗口；仓不可达/非 git/rev-parse 失败跳过该仓，绝不阻断 start）；②src/cross-repo-reconcile.js collectRepoActual 加 3c 档（B' 与 B 之间）：crossBaselines[repoKey] 为合法 sha 且该仓 rev-parse --verify 可达时——token 归因主面（git log --grep=changeName 基线..HEAD 命中提交的 diff-tree 文件并集）∪ untracked ∪ status；零 token 命中回退全窗口 diff 基线；sha 不可达回退 B 档；③透传链：reconcileCrossRepoPlan 加 crossBaselines 参数（缺省 null），flow.js thin 收口调用点传 st.cross_baselines。为什么 token 归因做主面：实验实证基线全窗口会包含并行工作区的外来提交（进冻结面污染审计），token 过滤（AGENTS 规则 11 消息约定）可精确剔除；零命中回退保「可见不静默」。流程说明：实现先于立项落码（会话顺序失误），收口门照常把关工件与实测。
 
 ## 接口契约
+
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
 collectRepoActual/reconcileCrossRepoPlan 签名加 crossBaselines 参数（缺省 null 向后兼容，厚道/旧调用零感知）；flow-state 新增可选键 cross_baselines（map：注册 key→sha，随归档留档）；anchor.source 新增枚举值 flow-start-baseline（additive，平台读侧按 string）。行为变化：thin 跨仓对账窗口从 B 档单笔启发式变基线..工作树（多提交全覆盖+外来提交 token 剔除）；flow start 多一行基线锚提示（注册仓可达时）。命令/端点/文件格式：无变化。
 

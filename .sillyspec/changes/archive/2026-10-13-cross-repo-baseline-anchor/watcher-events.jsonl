@@ -1,0 +1,10 @@
+{"ts":1791904168460,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1791904168460,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1791904168460,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1791904168460,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791904202515,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791904202515,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791904202515,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791905067478,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791905067846,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791905068188,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}

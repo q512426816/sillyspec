@@ -1,0 +1,362 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 779d4d97..cd6b8d22 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -11,3 +11,4 @@
+ | 2026-10-12 | 2026-10-12-thick-taskbook-cli | dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/pla |
+ | 2026-10-13 | 2026-10-12-closeout-task-guidance | 今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify- |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index b35c650b..9ea4bf9b 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -19,3 +19,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ - ql-20260908-010 | generateModuleImpactSkeleton 增声明来源入口（sourceFiles+origin 参数，plan --done 首版用 design 文件变更清单——代码未写无 diff；diff 来源语义不变）；卡补 module-impact.js 契约行（此前 map 已归属但表格漏登）
+ - 2026-09-11-cross-change-decision-guard | decision-distill 增「文件：」字段契约：applyField/FIELD_LABEL_RE 增「文件|files」标签（parseListValue 切分 + 逐项 POSIX 归一），renderBlockLines 锚点行后条件渲染「文件：」行（仅非空才渲染）——存量决策无该字段零迁移；决策→文件映射经 knowledge-match matchDecisionsByFiles 进 quick 语义护栏反查链。
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 3273efa6..8c437d06 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -52,3 +52,4 @@
+ | 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |
+ | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
++| 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+diff --git a/src/cross-repo-reconcile.js b/src/cross-repo-reconcile.js
+index e5baf171..5b188fac 100644
+--- a/src/cross-repo-reconcile.js
++++ b/src/cross-repo-reconcile.js
+@@ -198,7 +198,7 @@ function collectStatusInto(repoPath, union) {
+  *   纯读 fail-soft：任何异常 → degraded 形态返回（degradedReason=`内核采集异常: <msg首行>`），
+  *   绝不 throw。
+  */
+-export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, changeName = null }) {
++export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, changeName = null, crossBaselines = null }) {
+   try {
+     // 1) 仓注册解析（与 reconcile 旧口径同源：local.yaml repos 段，读失败 → 空注册表落「未注册」）
+     let registry = new Map()
+@@ -264,6 +264,59 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null,
+       }
+     } catch { /* meta 不可读/键缺失 → 回退 B 档 */ }
+ 
++    // 3c) flow-start-baseline 窗口（2026-10-13-cross-repo-baseline-anchor）：thin 手工交付的
++    //     跨仓基线锚（flow start 首写者胜记录各注册仓 HEAD）——窗口=基线..工作树，根治 B 档
++    //     HEAD~1 单笔窗口的多提交盲区（fire-ledger 两笔交付实证：实现+评审修复，首笔整笔
++    //     漏窗）。主面=token 归因（窗口内提交消息含变更名的提交文件并集——AGENTS 规则 11
++    //     的消息约定跨仓同样适用）∪ 未提交态；零 token 命中回退全窗口（并行工作区噪音
++    //     可见不静默——unplanned 行承载，与主仓夹带嫌疑 advisory 同语义）。基线 sha 在该仓
++    //     不可达（浅克隆/被 gc）→ 回退 B 档（不回退语义）。
++    const _blSha = crossBaselines && /^[0-9a-f]{7,40}$/i.test(String(crossBaselines[repoKey] || '')) ? String(crossBaselines[repoKey]) : null
++    if (_blSha) {
++      const _ok = gitQuiet(repoPath, ['rev-parse', '--verify', '--quiet', `${_blSha}^{commit}`], { timeout: GIT_TIMEOUT })
++      if (_ok !== null && String(_ok).trim()) {
++        const _mine = new Set()
++        let _tokenHit = false
++        const _log = changeName
++          ? gitQuiet(repoPath, ['log', '--format=%H', `--grep=${changeName}`, `${_blSha}..HEAD`], { timeout: GIT_TIMEOUT })
++          : null
++        if (_log !== null) {
++          for (const c of String(_log).split('\n').map((s) => s.trim()).filter(Boolean)) {
++            // -m --first-parent（评审 P2 清偿）：merge 提交不带 -m 时 diff-tree 输出**空**——消息
++            // 带变更名的 merge 会假命中 token 却收零文件、并抑制全窗口回退（窄形态劣于 B 档）。
++            // --first-parent 取 merge 带入本线的文件面（非 merge 提交单亲，-m 为 no-op）。
++            const dt = gitQuiet(repoPath, ['diff-tree', '--no-commit-id', '--name-only', '-r', '-m', '--first-parent', c], { timeout: GIT_TIMEOUT })
++            if (dt === null) continue
++            let got = false
++            for (const f of String(dt).split('\n')) {
++              const n = normalizeRepoPath(f)
++              if (n) { _mine.add(n); got = true }
++            }
++            // 空文件列表不计 tokenHit（belt：全空命中回退全窗口而非静默漏面）
++            if (got) _tokenHit = true
++          }
++        }
++        const union3 = new Set(_mine)
++        if (!_tokenHit) {
++          const d1 = gitQuiet(repoPath, ['diff', '--name-only', _blSha], { timeout: GIT_TIMEOUT })
++          for (const f of String(d1 || '').split('\n')) {
++            const n = normalizeRepoPath(f)
++            if (n) union3.add(n)
++          }
++        }
++        const d2 = gitQuiet(repoPath, ['ls-files', '--others', '--exclude-standard'], { timeout: GIT_TIMEOUT })
++        for (const f of String(d2 || '').split('\n')) {
++          const n = normalizeRepoPath(f)
++          if (n && n !== 'meta.json' && !n.startsWith('.sillyspec/')) union3.add(n)
++        }
++        collectStatusInto(repoPath, union3)
++        return { repo: repoKey, repoPath,
++          anchor: { source: 'flow-start-baseline', base: _blSha, head: null,
++            label: `flow-start 跨仓基线窗口（base=${_blSha.slice(0, 8)}…HEAD+工作树${_tokenHit ? '；token 归因命中（窗口内含变更名提交为主面）' : '；零 token 命中回退全窗口（并行噪音可见）'}）` },
++          files: [...union3].sort(), degradedReason: null }
++      }
++    }
++
+     // 4) B/C 档：diff HEAD~1..HEAD（现行 reconcile 口径）∪ status；diff 失败仅 status → C 档
+     const union = new Set()
+     const diffOut = gitQuiet(repoPath, ['diff', '--name-only', 'HEAD~1..HEAD'], { timeout: GIT_TIMEOUT })
+diff --git a/src/flow.js b/src/flow.js
+index cf24e373..c06438b5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -817,6 +817,34 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     substeps: {},
+   })
+ 
++  // 跨仓基线锚（2026-10-13-cross-repo-baseline-anchor）：thin 手工交付的跨仓对账此前无锚
++  // （B 档 HEAD~1 单笔窗口，多提交交付漏文件+交错时序抓错面——fire-ledger 两笔交付实证）。
++  // start 时点记各注册仓 HEAD（cross_baselines），收口窗口=基线..工作树（与主仓 baseline_commit
++  // 同构）。首写者胜（对齐 baseline_sha256 模式：重入不刷新，防跨仓已有并行提交后重锚漂移窗口）。
++  // 纯读 fail-soft：注册不可达/非 git 仓/rev-parse 失败 → 跳过该仓，绝不阻断 start。
++  try {
++    if (!(readFlowState(changeDir) || {}).cross_baselines) {
++      const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
++      if (_yamlText) {
++        const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
++        const { isAbsolute: _isAbs, resolve: _res } = await import('node:path')
++        const _repos = parseRepoRegistry(_yamlText)
++        const _bl = {}
++        for (const [k, rawPath] of _repos || []) {
++          const rp = _isAbs(rawPath) ? rawPath : _res(cwd, rawPath)
++          if (!rp || !existsSync(rp)) continue
++          const sha = gitQuiet(rp, ['rev-parse', 'HEAD'], { timeout: 10_000 })
++          const s = sha === null ? '' : String(sha).trim()
++          if (/^[0-9a-f]{7,40}$/i.test(s)) _bl[k] = s
++        }
++        if (Object.keys(_bl).length > 0) {
++          writeFlowState(changeDir, { cross_baselines: _bl })
++          console.log(`🌐 跨仓基线锚：${Object.keys(_bl).length} 个注册仓 HEAD 已记入 flow-state（cross_baselines 首写者胜）——收口跨仓对账窗口=基线..工作树`)
++        }
++      }
++    }
++  } catch { /* 跨仓基线锚 best-effort：失败不阻断 start（收口回退既有档位） */ }
++
+   // 全件机器起草（R7 切片三 / FR-07：工件回填轮=0——治理工件 CLI 写，agent 只裁例外）。
+   // 任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡；--thick/--with-tasks 才生成任务卡。
+   let drafted = []
+@@ -1836,6 +1864,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+                 changeName: change,
+                 planEntries,
+                 collectPatch: true,
++                // 跨仓基线锚透传（2026-10-13-cross-repo-baseline-anchor）：flow start 记录的
++                // cross_baselines → collectRepoActual 3c 档（基线..工作树窗口，token 归因主面）
++                crossBaselines: (st && st.cross_baselines && typeof st.cross_baselines === 'object') ? st.cross_baselines : null,
+               })
+               crossRepoRows = recon.rows
+               crossRepos = recon.repos
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 723776a6..6a70e7fe 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -1329,7 +1329,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
+  *   { key, repoPath, anchor, totals, degraded, degradedReason, patch?, patchSha256? }；
+  *   notes 为调用方 note 链的增量行（跨仓计数行 + 降级行）。
+  */
+-export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName, planEntries, collectPatch = false }) {
++export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName, planEntries, collectPatch = false, crossBaselines = null }) {
+   const rows = []
+   const repos = []
+   const notes = []
+@@ -1344,7 +1344,7 @@ export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName,
+     let repoActual = null
+     let repoFailure = null
+     try {
+-      repoActual = collectRepoActual({ repoKey, specBase, cwd, runtimeRoot, changeName })
++      repoActual = collectRepoActual({ repoKey, specBase, cwd, runtimeRoot, changeName, crossBaselines })
+     } catch (e) {
+       repoFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
+     }
+diff --git a/test/cross-repo-baseline-anchor.test.mjs b/test/cross-repo-baseline-anchor.test.mjs
+new file mode 100644
+index 00000000..b93ffdb2
+--- /dev/null
++++ b/test/cross-repo-baseline-anchor.test.mjs
+@@ -0,0 +1,185 @@
++/**
++ * cross-repo-baseline-anchor.test.mjs — 跨仓基线锚（2026-10-13-cross-repo-baseline-anchor）
++ *
++ * 背景（实验实证）：thin 手工跨仓交付此前落 B 档（HEAD~1..HEAD 单笔窗口）——多笔交付漏首笔
++ * （fire-ledger 两笔形态）、交错时序抓错面。修复：flow start 记 cross_baselines（首写者胜）；
++ * collectRepoActual 3c 档 flow-start-baseline：窗口=基线..工作树，token 归因主面（窗口内
++ * 提交消息含变更名的并集）剔除外来提交；零命中回退全窗口（噪音可见）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import yaml from 'js-yaml'
++
++const REPO = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++function git(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { stdio: 'pipe' }).toString().trim()
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [join(REPO, 'src', 'index.js'), ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++/** 主仓 + 注册跨仓 libx；返回 { main, cross, change }。 */
++function fixture(change) {
++  const main = mkdtempSync(join(tmpdir(), 'crba-m-'))
++  const cross = mkdtempSync(join(tmpdir(), 'crba-x-'))
++  for (const r of [main, cross]) {
++    git(r, ['init', '-q', '-b', 'main'])
++    git(r, ['config', 'user.email', 't@t'])
++    git(r, ['config', 'user.name', 't'])
++  }
++  mkdirSync(join(main, '.sillyspec'), { recursive: true })
++  // deadkey 注册不可达路径（fail-soft 锚：start 跳过该仓不阻断、cross_baselines 只记可达仓）
++  writeFileSync(join(main, '.sillyspec', 'local.yaml'),
++    `project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\nrepos:\n  libx: ${cross.split('\\').join('/')}\n  deadkey: C:/nonexistent-repo-path-xyz\n`)
++  writeFileSync(join(cross, 'base.txt'), 'base\n')
++  git(cross, ['add', '.'])
++  git(cross, ['commit', '-qm', 'base'])
++  writeFileSync(join(main, 'base.txt'), 'base\n')
++  git(main, ['add', '.'])
++  git(main, ['commit', '-qm', 'base'])
++  return { main, cross, change }
++}
++
++function fillDocs(specBase, change) {
++  const base = join(specBase, 'changes', change)
++  const fill = (f, fn) => writeFileSync(join(base, f), fn(readFileSync(join(base, f), 'utf8')))
++  fill('design.md', (t) => t
++    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规')
++    // 主仓面（保证非空冻结面——纯跨仓空面不落 patch 两件，scopeAudit 无载体）+ 跨仓段头声明
++    + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | work.txt | 主仓交付 |\n\n## libx 仓变更\n\n- impl.txt（交付：主文件）\n- fix.txt\n')
++  fill('requirements.md', (t) => t
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
++}
++
++/** 主仓一笔带变更名交付（保证冻结面非空 → change-patch.json 落盘）。 */
++function deliverMain(cwd, change) {
++  writeFileSync(join(cwd, 'work.txt'), 'main\n')
++  git(cwd, ['add', 'work.txt'])
++  git(cwd, ['commit', '-qm', `work (${change}) (task-01)`])
++}
++
++function finish(cwd, specBase, change) {
++  const tasksPath = join(specBase, 'changes', change, 'tasks.md')
++  writeFileSync(tasksPath, readFileSync(tasksPath, 'utf8').replace(/^- \[ \] (task-\d+):/gm, '- [x] $1:'))
++  git(cwd, ['add', tasksPath])
++  git(cwd, ['commit', '-qm', 'chore: tick (task-01)'])
++  writeFileSync(join(specBase, 'changes', change, 'review.json'), JSON.stringify({
++    schemaVersion: 1, change, reviewer: 'test-fixture', verdict: 'PASS', reviewedAgainst: git(cwd, ['rev-parse', 'HEAD']),
++    findings: [], dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
++  }, null, 2))
++}
++
++function readState(specBase, change) {
++  return yaml.load(readFileSync(join(specBase, 'changes', change, 'flow-state.yaml'), 'utf8'))
++}
++
++// ── 主场景：基线记录 + 两笔交付全覆盖 + token 剔除外来 + anchor 档位 ──
++test('e2e：start 记基线（首写者胜）；两笔跨仓交付+untracked 全进对账面；外来提交被 token 剔除；anchor=flow-start-baseline', () => {
++  const change = '2026-10-13-crba-e2e'
++  const { main, cross } = fixture(change)
++  const specBase = join(main, '.sillyspec')
++  try {
++    const s1 = cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    assert.equal(s1.status, 0, `start: ${s1.stderr}`)
++    assert.match(s1.stdout, /跨仓基线锚：1 个注册仓/, 'start 提示基线锚')
++    const baseSha = readState(specBase, change).cross_baselines?.libx
++    assert.match(baseSha || '', /^[0-9a-f]{40}$/, 'cross_baselines.libx 已记录')
++    // 我方两笔交付（带变更名 token）+ untracked + 外来提交（无 token）
++    writeFileSync(join(cross, 'impl.txt'), 'impl\n')
++    git(cross, ['add', '.'])
++    git(cross, ['commit', '-qm', `feat: 实现 (${change})`])
++    writeFileSync(join(cross, 'fix.txt'), 'fix\n')
++    git(cross, ['add', '.'])
++    git(cross, ['commit', '-qm', `fix: 评审修复 (${change})`])
++    writeFileSync(join(cross, 'brand-new.txt'), 'new\n')
++    writeFileSync(join(cross, 'foreign.txt'), 'foreign\n')
++    git(cross, ['add', 'foreign.txt'])
++    git(cross, ['commit', '-qm', 'chore: 另一工作区的活儿'])
++    deliverMain(main, change)
++    // 首写者胜：重入 start 后基线不刷新
++    cli(main, ['flow', 'start', '--change', change])
++    assert.equal(readState(specBase, change).cross_baselines?.libx, baseSha, '重入不刷新（首写者胜）')
++    fillDocs(specBase, change)
++    finish(main, specBase, change)
++    const done = cli(main, ['flow', 'done', '--change', change])
++    assert.equal(done.status, 0, `done: ${done.stdout}\n${done.stderr}`)
++    const arch = join(specBase, 'changes', 'archive', change)
++    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    const rows = (meta.scopeAudit || {}).rows || []
++    const paths = rows.map((r) => r.path)
++    assert.ok(paths.includes('impl.txt') && paths.includes('fix.txt'), `两笔交付全进面: ${JSON.stringify(paths)}`)
++    assert.ok(rows.find((r) => r.path === 'impl.txt')?.verdict === 'planned', 'impl.txt 声明命中 planned')
++    assert.ok(paths.includes('brand-new.txt'), 'untracked 进面')
++    assert.ok(!paths.includes('foreign.txt'), `外来提交被 token 剔除: ${JSON.stringify(paths)}`)
++    const libxRepo = ((meta.scopeAudit || {}).repos || meta.repos || []).find((r) => r.key === 'libx')
++    assert.equal(libxRepo?.anchor?.source, 'flow-start-baseline', `anchor 档位: ${JSON.stringify(libxRepo?.anchor)}`)
++  } finally {
++    rmSync(main, { recursive: true, force: true })
++    rmSync(cross, { recursive: true, force: true })
++  }
++})
++
++// ── 零 token 命中回退全窗口（外来可见 unplanned）+ 基线不可达回退 B 档 ──
++test('回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 不可达 → 回退 B 档', () => {
++  const change = '2026-10-13-crba-fb'
++  const { main, cross } = fixture(change)
++  const specBase = join(main, '.sillyspec')
++  try {
++    cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    // 提交均不带变更名（零 token 命中形态）
++    writeFileSync(join(cross, 'mine.txt'), 'm\n')
++    git(cross, ['add', '.'])
++    git(cross, ['commit', '-qm', 'feat: 我的交付'])
++    writeFileSync(join(cross, 'theirs.txt'), 't\n')
++    git(cross, ['add', '.'])
++    git(cross, ['commit', '-qm', 'chore: 外来提交'])
++    deliverMain(main, change)
++    fillDocs(specBase, change)
++    finish(main, specBase, change)
++    let done = cli(main, ['flow', 'done', '--change', change])
++    assert.equal(done.status, 0, `done: ${done.stdout}\n${done.stderr}`)
++    let arch = join(specBase, 'changes', 'archive', change)
++    let rows = (JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8')).scopeAudit || {}).rows || []
++    let paths = rows.map((r) => r.path)
++    assert.ok(paths.includes('theirs.txt'), `零命中回退全窗口（外来可见）: ${JSON.stringify(paths)}`)
++    assert.equal(rows.find((r) => r.path === 'theirs.txt')?.verdict, 'unplanned', '外来行 unplanned 可见')
++  } finally {
++    rmSync(main, { recursive: true, force: true })
++    rmSync(cross, { recursive: true, force: true })
++  }
++  // 基线不可达 → B 档（手工伪造 cross_baselines 为不存在 sha）
++  const change2 = '2026-10-13-crba-deg'
++  const f2 = fixture(change2)
++  try {
++    cli(f2.main, ['flow', 'start', '--change', change2, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    const stPath = join(f2.main, '.sillyspec', 'changes', change2, 'flow-state.yaml')
++    const st = yaml.load(readFileSync(stPath, 'utf8'))
++    st.cross_baselines.libx = '0'.repeat(40)
++    writeFileSync(stPath, yaml.dump(st))
++    writeFileSync(join(f2.cross, 'late.txt'), 'l\n')
++    git(f2.cross, ['add', '.'])
++    git(f2.cross, ['commit', '-qm', `feat: 交付 (${change2})`])
++    deliverMain(f2.main, change2)
++    fillDocs(join(f2.main, '.sillyspec'), change2)
++    finish(f2.main, join(f2.main, '.sillyspec'), change2)
++    const done = cli(f2.main, ['flow', 'done', '--change', change2])
++    assert.equal(done.status, 0, `done: ${done.stdout}\n${done.stderr}`)
++    const arch = join(f2.main, '.sillyspec', 'changes', 'archive', change2)
++    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    const libxRepo = ((meta.scopeAudit || {}).repos || meta.repos || []).find((r) => r.key === 'libx')
++    assert.equal(libxRepo?.anchor?.source, 'head~1-window', `基线不可达回退 B 档: ${JSON.stringify(libxRepo?.anchor)}`)
++  } finally {
++    rmSync(f2.main, { recursive: true, force: true })
++    rmSync(f2.cross, { recursive: true, force: true })
++  }
++})

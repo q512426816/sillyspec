@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-cross-repo-baseline-anchor",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-01",
+      "tests": [
+        "test/cross-repo-baseline-anchor.test.mjs「e2e：start 记基线（首写者胜）…anchor=flow-start-baseline」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cross-repo-baseline-anchor"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-repo-baseline-anchor.test.mjs「回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 不可达 → 回退 B 档」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cross-repo-baseline-anchor"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-13-cross-repo-baseline-anchor:flow:测试绑定FR-04",
+      "tests": [
+        "test/cross-repo-patch-freeze.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-13-cross-repo-baseline-anchor"
+    }
+  ]
+}

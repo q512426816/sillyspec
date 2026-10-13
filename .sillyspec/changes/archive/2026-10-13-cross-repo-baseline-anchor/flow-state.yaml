@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -26,11 +34,17 @@ input: >-
   - e2e：注册跨仓的变更两笔交付+untracked 收口，scopeAudit 跨仓行覆盖全部交付文件、repos[] 锚点为 flow-start-baseline
 autopilot: false
 baseline_commit: 4f72da41af8fadc6dbe4e66570682ff3b10eb0e6
-updatedAt: '2026-10-13T15:10:02.572Z'
+updatedAt: '2026-10-13T15:44:00.129Z'
 baseline_sha256: 82ee971ae54d01cbdc39ab744a4f493f6e060d657400b77fe5c7f42181c6fc0c
 spec_approved: true
 spec_approved_at: '2026-10-13T15:10:02.571Z'
 spec_approved_by: zcode-crba
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-crba
+gate_summary: >-
+  test: skipped ← module[]+deps(js93+js-meta-skip1+nontest-skip1)+fr(93)（60.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013152540\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（53.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013152540\test-result.json｜门文件 12 个
 

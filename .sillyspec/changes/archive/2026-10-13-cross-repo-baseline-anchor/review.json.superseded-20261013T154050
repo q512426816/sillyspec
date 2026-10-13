@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-cross-repo-baseline-anchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0c335da4c6c120874b3504d7b1cbaf6155067708",
+  "findings": [],
+  "dimensionNotes": {
+    "增量范围": "第二轮增量核验（一审 reviewedAgainst=4d8d59ec，R-01=P2/R-02=P3 已清偿）。7b0d3edd..HEAD 含两提交：清偿提交 0c335da4 仅触 .sillyspec/changes/2026-10-13-cross-repo-baseline-anchor/requirements.md + src/cross-repo-reconcile.js + test/cross-repo-baseline-anchor.test.mjs（零其他文件）；另一提交 4d8d59ec 属并行变更 2026-10-13-proto-real-code（docs/prompt/brainstorm.md、explore.md、_extracted.json、src/design-facts.js、src/stages/brainstorm.js、src/stages/explore.js、test/proto-real-code.test.mjs），与本变更面零重叠。HEAD=0c335da4 与预期基线一致（其上零 src 增量）。",
+    "P2清偿核验": "两处修复均在 HEAD 源码在场（src/cross-repo-reconcile.js 3c 档）：diff-tree 参数现为 ['diff-tree','--no-commit-id','--name-only','-r','-m','--first-parent',c]；belt 为 got 旗标——normalizeRepoPath 命中至少一文件才置 _tokenHit（if (got) _tokenHit = true），空文件列表落回全窗口回退而非静默漏面。临时仓实证 merge 语义：带变更名消息的 --no-ff merge 提交，不带 -m 时 diff-tree 输出空（原 R-01 假命中形态复现）；带 -m --first-parent 输出 merge 带入文件（side-brought.txt/mainfile.txt 均列）；非 merge 提交两种参数输出逐字一致（-m 对单亲提交 no-op，无回归）。R-01 建议的两条修法方向同时采纳（主修+belt）。",
+    "P3清偿核验": "fail-soft 承载：fixture local.yaml 注册 deadkey=C:/nonexistent-repo-path-xyz（与可达 libx 并存）；flow.js _bl 记录闸为 existsSync+rev-parse HEAD 双条件（不可达仓跳过、外层 try/catch 不阻断），故「跨仓基线锚：1 个注册仓」断言在 2 注册/1 可达形态下真实承载『跳过不可达仓且 start exit 0』的部分记录语义（test:93-94，start status 0 + 计数为 1）。绑定行：FR-01 前后缀逐字匹配（『e2e：start 记基线（首写者胜）…anchor=flow-start-baseline』，省略号显式标记，与 test:87 用例名首尾逐字一致）；FR-03 为用例名逐字全名匹配（与 test:133 字符级一致）；FR-02/05 承载断言（impl.txt/fix.txt/brand-new.txt 进 rows、change-patch.json 实读、anchor.source 断言）在绑定用例内逐条在场；FR-04 外置锚 test/cross-repo-patch-freeze.test.mjs 存在且增量区间零改动（git show 0c335da4 --name-status 可证）。",
+    "测试实跑": "node --test test/cross-repo-baseline-anchor.test.mjs → 2/2 pass（e2e 3752ms；回退面 6259ms），零 fail 零 skip。",
+    "非发现观察": "FR-03 绑定行括注「foreign.txt unplanned 断言」为双承载压缩表述：foreign.txt 的剔除断言在 e2e 用例（!paths.includes('foreign.txt')，test:123），unplanned verdict 断言落在回退用例的外来文件 theirs.txt（test:155）。两断言均在绑定文件内且 FR-03 两半语义（剔除/planned 可见）全覆盖，追溯性不受影响，按零误报标准不记 finding。"
+  },
+  "reviewedAt": "2026-10-13T23:40:00+08:00"
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-13-cross-repo-baseline-anchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2",
+  "findings": [],
+  "dimensionNotes": {
+    "increment-scope": "HEAD=ed443421（0c335da4 之上一笔）。0c335da4..HEAD 仅 ed443421（proto-real-code 归档留档），其文件面限 .sillyspec/archive/2026-10-13-proto-real-code/* + watcher-events.jsonl + docs changelog + knowledge，与本变更 src/test 及变更目录零重叠。本变更四文件（src/cross-repo-reconcile.js、src/flow.js、src/scope-audit.js、test/cross-repo-baseline-anchor.test.mjs）在 0c335da4..HEAD 与 工作树~HEAD 两个 diff 均为空（含指定的 src/cross-repo-reconcile.js + test/cross-repo-baseline-anchor.test.mjs 定向核对）。",
+    "p2-settlement-persistence": "HEAD 场：diff-tree 带 '-m --first-parent' 在场（src/cross-repo-reconcile.js:288，含 P2 清偿注释 :285-287）；空文件列表不计 tokenHit belt 在场（:295-296 'if (got) _tokenHit = true'）。",
+    "p3-settlement-persistence": "HEAD 场：deadkey 不可达路径 fixture 在场（test/cross-repo-baseline-anchor.test.mjs:40-42，fail-soft 锚）；绑定行 FR-01..FR-05 对实际用例名与承载面——FR-01 端点锚 test:87「e2e：start 记基线（首写者胜）…anchor=flow-start-baseline」在场，FR-03 与 test:133 逐字一致，FR-02/05 同上用例引用，FR-04 零改可证（本变更两提交 7b0d3edd/0c335da4 --stat 面不含 cross-repo 族他测）。",
+    "parallel-session-hygiene": "工作树存在并行进行中变更 sync-ledger-tombstone 的增量（src/index.js、src/sync.js、src/progress/change-registry.js、src/deleted-ledger.js）及本变更目录内 design.md/flow-state.yaml 状态漂移（清偿提交时点所致）——均非本变更 src/test 评审对象，按只读纪律未触碰、不计 finding。"
+  },
+  "reviewedAt": "2026-10-13T15:43:28Z"
+}
