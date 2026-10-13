@@ -3,6 +3,7 @@
 // pm._changePath（persistence-core 留 facade 本体）。无共享常量依赖。
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs';
 import { join } from 'path';
+import { appendDeletedLedger } from '../deleted-ledger.js';
 
 // 所有权活跃心跳窗缺省（2026-09-14-change-ownership-guards task-02 / FR-01）：owner 非本会话
 // 且 now-last_active < 窗口 → 拒绝接管；窗口外 → 自动接管。local.yaml change-ownership.
@@ -601,6 +602,9 @@ export class ChangeRegistry {
       // 本地脏度（D-013 / task-04）：删除也是本地状态推进（triggerSync 据此推终态/墓碑上行）
       this.pm._touchLocalModified(cwd, changeName, now);
     });
+    // 删除台账（2026-10-13-sync-ledger-tombstone）：DB 行被外部物理清除后墓碑链的唯一
+    // 终态凭证。事务提交后追加、fail-open（见 deleted-ledger.js 头注释）。
+    appendDeletedLedger(this.pm._getSpecDir(cwd), changeName, 'deleted');
   }
 
   /**
@@ -669,6 +673,9 @@ export class ChangeRegistry {
       // 本地脏度（D-013 / task-04）：归档也是本地状态推进
       this.pm._touchLocalModified(cwd, changeName, now);
     });
+    // 删除台账（2026-10-13-sync-ledger-tombstone）：归档终态同记（archived）——行被外部
+    // 清除后 sync 台账分支据此补推 archived 墓碑（平台 location='archive'）。fail-open。
+    appendDeletedLedger(this.pm._getSpecDir(cwd), changeName, 'archived');
   }
 }
 
