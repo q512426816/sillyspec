@@ -32,6 +32,6 @@ created_at: 2026-10-13T09:15:39.251Z
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: test/draft-continuation.test.mjs「节标题合并守卫用例组（裸动机未闭合括号/验收标准等价/既有四锚零回归）」
-FR-02: test/draft-continuation.test.mjs「节标题合并守卫用例组（裸动机未闭合括号/验收标准等价/既有四锚零回归）」
-FR-03: test/draft-continuation.test.mjs「节标题合并守卫用例组（裸动机未闭合括号/验收标准等价/既有四锚零回归）」
+FR-01: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」「①e 守卫等价面：验收标准 同受守卫」（分号/斜杠锚在 test/flow-draft.test.mjs:237-238、test/fr-compound-split.test.mjs）
+FR-02: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」「①e 守卫等价面：验收标准 同受守卫」（分号/斜杠锚在 test/flow-draft.test.mjs:237-238、test/fr-compound-split.test.mjs）
+FR-03: test/draft-continuation.test.mjs「①d 节标题合并守卫：动机行尾未闭合左括号不再吞成功标准并雪崩」「①e 守卫等价面：验收标准 同受守卫」（分号/斜杠锚在 test/flow-draft.test.mjs:237-238、test/fr-compound-split.test.mjs）
