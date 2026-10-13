@@ -536,6 +536,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
           `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；`,
+          `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
           `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
@@ -812,6 +813,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
     `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+    // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
+    // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
+    `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
@@ -1595,6 +1599,41 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
             planEntries = parseFileChangeListDetailed(join(changeDir, 'design.md'), { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(specBase) })
           } catch { /* 清单缺失/不可解析 → 实际侧 only 快照行（无 verdict，与主链路降级同语义） */ }
+          // 跨仓声明防呆 advisory（坑 design-filelist-crossrepo-prefix-silent-main，2026-10-12
+          // 实证：清单写「仓目录名/路径」不带段头/cross-repo: 前缀 → 整条静默归主仓对账成
+          // 「计划未动」，跨仓对账与 patch 冻结全缺席、零告警）。命中形态：声明路径在主仓
+          // 不存在，且首段 token 命中注册仓的 key/路径 basename → 点名 + 三种正确语法指引。
+          try {
+            const _yamlText = existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : ''
+            if (_yamlText) {
+              const { parseRepoRegistry } = await import('./stages/plan-postcheck.js')
+              const { basename } = await import('path')
+              const _repos = parseRepoRegistry(_yamlText)
+              if (_repos && _repos.size > 0) {
+                const _aliases = new Map()
+                for (const [k, v] of _repos) {
+                  _aliases.set(k, k)
+                  const norm = String(v || '').split('\\').join('/')
+                  const bn = norm.replace(/\/+$/, '').split('/').pop()
+                  if (bn) _aliases.set(bn, k)
+                }
+                const _suspects = []
+                for (const e of planEntries) {
+                  const pe = String((e && e.path) || '').split('\\').join('/')
+                  if (!pe || pe.startsWith('.sillyspec/')) continue
+                  if (e.repo) continue // 已带跨仓标注的不查
+                  if (existsSync(join(cwd, pe))) continue
+                  const first = pe.split('/')[0]
+                  const hit = _aliases.get(first)
+                  if (hit) _suspects.push({ path: pe, key: hit })
+                }
+                if (_suspects.length > 0) {
+                  console.warn(`⚠️ 疑似跨仓声明未按规范标注（${_suspects.length} 条已按主仓路径对账）：${_suspects.slice(0, 5).map((x) => `${x.path}（首段命中注册仓 ${x.key}）`).join('、')}${_suspects.length > 5 ? ' 等' : ''}`)
+                  console.warn('   主仓无这些路径 → 冻结面将标「计划未动」、跨仓对账与 patch 冻结不触发。正确写法三选一：① 段头「## <注册key> 仓变更」段内写仓根相对路径；② 子段「### <注册key>」；③ 条目前缀 cross-repo:<注册key>:<仓根相对路径>——key 以 local.yaml repos 注册为准')
+                }
+              }
+            }
+          } catch { /* 防呆 best-effort，不阻断收口 */ }
           // 跨仓声明在场 → 共享集成层分仓对账 + patch 冻结（D-001/D-002@v1）：与 heavy 通道
           // （execute --done）同源 reconcileCrossRepoPlan，repos[]（锚点/计数/patch 正文）
           // 随 snapObj 进 change-patch.json；任何异常 fail-soft 退 ⊘ 补行现行为（不阻断收口）

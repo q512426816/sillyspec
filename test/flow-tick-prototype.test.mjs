@@ -54,6 +54,9 @@ test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
   const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0)
   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
+  // 任务拟法指引（2026-10-12-closeout-task-guidance）：收口/推送/发布不单列 task + 单列则先 token 提交后勾选
+  assert.match(s.stdout, /任务拟法：收口\/推送\/发布类动作不单列 task/, 'fresh 横幅含任务拟法指引')
+  assert.match(s.stdout, /勾选前先做消息预埋 task-NN token 的交付提交/, '单列收口任务的证据先行指引在场')
   const st = cli(['flow', 'status', '--change', '2026-09-02-ftp-1'])
   assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
   rmSync(cwd, { recursive: true, force: true })
