@@ -8889,3 +8889,45 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-12-thick-taskbook-cli
   status: active
+
+## FR-cli-entry-471 flow start 主横幅（src/flow.js ~809-816 任务面段）与 resume/adopt 横幅（~537-538）各追加一行任务拟法指引：收口/推送/发布类动作不单列 task（协议本身承担，成功标准照写 requirements）；若确需单列，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）
+变更：2026-10-12-closeout-task-guidance
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given flow start / resume 渲染；When 读任务面段；Then 含「任务拟法」行且语义含三要素（不单列/协议承担、成功标准归 requiremen
+全文：.sillyspec/changes/archive/2026-10-12-closeout-task-guidance/requirements.md#FR-01
+最近确认：f522dc81a26584861ee3432671c4c0cf272fac3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-closeout-task-guidance:flow:测试绑定FR-01
+  tests: test/flow-tick-prototype.test.mjs「横幅含任务拟法行（新增断言随本变更加入该族或新用例）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-closeout-task-guidance
+  status: active
+
+## FR-cli-entry-472 既有横幅行零改动（追加新行，钉死测试子串「任务面归你」等不受影响）
+变更：2026-10-12-closeout-task-guidance
+状态：active
+摘要：零回归
+场景正文：
+- 场景：零回归 — When node --test test/flow-tick-prototype.test.mjs test/thin-workunits.test.mjs test/
+全文：.sillyspec/changes/archive/2026-10-12-closeout-task-guidance/requirements.md#FR-02
+最近确认：f522dc81a26584861ee3432671c4c0cf272fac3b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-closeout-task-guidance:flow:测试绑定FR-02
+  tests: test/flow-tick-prototype.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-closeout-task-guidance
+  status: active

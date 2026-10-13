@@ -28,3 +28,4 @@
 | 2026-10-12 | 2026-10-12-tick-evidence-multi-anchor | dogfood 实证驱动（fire-equipment 会话复盘）：限流 429 截断会话时 task-02 的构建证据 |
 | 2026-10-12 | 2026-10-12-cli-friction-signal | dogfood 实证驱动（fire-equipment 会话复盘·子代理A/B取证）：a) deps 门控阻断首条只有标 |
 | 2026-10-12 | 2026-10-12-thick-taskbook-cli | dogfood 实证驱动（fire-equipment 复盘·子代理C取证）：厚档阶段评审（brainstorm/pla |
+| 2026-10-13 | 2026-10-12-closeout-task-guidance | 今日三次「哨兵抓收口型任务零证据」复盘结论落地（fire-dogfood-retrospective / verify- |
