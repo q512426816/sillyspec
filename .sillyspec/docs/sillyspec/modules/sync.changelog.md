@@ -4,3 +4,4 @@
 - 2026-10-13-batchtick-evidence-domain-hint | 动机：agent dogfood 反馈两条摩擦（同会话正面评价断点续跑/评审链路）。①单拍勾选硬门证据盲：活真干完、每 
 - 2026-10-13-commit-guard-s3 | 动机：S3 提案机制已实证（临时仓实验：pathspec 提交时 pre-commit 钩子的 GIT_INDEX_FI
 - 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓
+- 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本

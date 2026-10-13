@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-prestage-consent-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-prestage-consent-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/prestage-consent-gate.test.mjs「① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一，标记不消费」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-prestage-consent-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-prestage-consent-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/prestage-consent-gate.test.mjs「② 放：--no-prestage 声明 → status 0 + prestage_ack 留痕 + 标记消费」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-prestage-consent-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-prestage-consent-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/prestage-consent-gate.test.mjs「③ adopt 消费 / ④ 平台 writer 豁免 / ⑤ resume 豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-prestage-consent-gate"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-14-prestage-consent-gate:flow:测试绑定FR-05",
+      "tests": [
+        "test/prestage-consent-gate.test.mjs「⑥ 无标记零影响 / ⑦ 单元面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-prestage-consent-gate"
+    }
+  ]
+}

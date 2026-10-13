@@ -241,6 +241,8 @@ modules:
       - src/setup.js
       - src/config-schema.js
       - src/local-detect.js
+      - templates/
+      - assets/command-cards/
 
   change-management:
     status: active

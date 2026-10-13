@@ -20,3 +20,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-09-16 | 2026-09-16-friction5-hardening | config-schema 登记 gate_snapshot 段（FR-04/D-002@v1）：live 键 gate_snapshot.copy（array of string，optional，reader=createGateSnapshot）——门禁隔离快照的生成物/额外路径 copy 面，HEAD 快照缺 gitignored 生成物致 lint/test 环境性假败的声明式补齐通道；renderExample 示例段同步（含 ⚠️ junction 活链接写穿透警告），防漂耦合测试覆盖。未配置/空清单全段空转零行为变化。 |
 - ql-20260920-010-7a19 | config-schema test_strategy desc 缺省语义更新（配 modules → 缺省 module，v3.29.3 起；未配 → 全量）；纯 note 无新键
 | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+| 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |

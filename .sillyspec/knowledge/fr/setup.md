@@ -1773,3 +1773,96 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-12-review-probe-injection
   status: active
+
+## FR-setup-101 标记在场时全新 flow start 无声明 flag → exit 2 给两选一（--no-prestage 声明留痕 / run brainstorm 预段），文案含标记来源与原因
+变更：2026-10-14-prestage-consent-gate
+状态：active
+摘要：标记在场全新 start 无声明
+场景正文：
+- 场景：标记在场全新 start 无声明 — Given 临时仓已有 route-hindsight 标记（tasks 改写率 0.9 超阈）；When `flow start --change <新名> --input <含成功标准的合法输入>`（无 --no-prestage）；Then exit 2，输出含「预段选道同意门」/来源变更名/原因/两选一；标记文件仍在；变更目录未创建
+全文：.sillyspec/changes/archive/2026-10-14-prestage-consent-gate/requirements.md#FR-01
+最近确认：fd7047230ffd838b14315d8be221575da00673af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-prestage-consent-gate:flow:测试绑定FR-01
+  tests: test/prestage-consent-gate.test.mjs「① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一，标记不消费」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-prestage-consent-gate
+  status: active
+
+## FR-setup-102 --no-prestage 声明后放行，flow-state 落 prestage_ack 留痕，标记文件消费删除
+变更：2026-10-14-prestage-consent-gate
+状态：active
+摘要：声明放行与留痕
+场景正文：
+- 场景：声明放行与留痕 — Given 临时仓已有 route-hindsight 标记；When `flow start --change <新名> --input <合法输入> --no-prestage`；Then exit 0，flow-state.yaml 含 `prestage_ack: true`，标记文件已删除，输出含声明放行留痕行
+全文：.sillyspec/changes/archive/2026-10-14-prestage-consent-gate/requirements.md#FR-02
+最近确认：fd7047230ffd838b14315d8be221575da00673af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-prestage-consent-gate:flow:测试绑定FR-02
+  tests: test/prestage-consent-gate.test.mjs「② 放：--no-prestage 声明 → status 0 + prestage_ack 留痕 + 标记消费」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-prestage-consent-gate
+  status: active
+
+## FR-setup-103 adopt（头脑风暴收编）路径自动消费标记；resume 重入与平台 writer 预建空目录路径不受新门影响
+变更：2026-10-14-prestage-consent-gate
+状态：active
+摘要：三豁免面
+场景正文：
+- 场景：三豁免面 — Given 三仓分别处于：①头脑风暴产物在场+标记 ②在途变更已起跑后落标记 ③预建空变更目录+标记；When 各自跑 `flow start`；Then ① adopt 收编成功且标记删除；② 恢复简报 exit 0 标记不动；③ 正常起跑 exit 0 标记不动
+全文：.sillyspec/changes/archive/2026-10-14-prestage-consent-gate/requirements.md#FR-03
+最近确认：fd7047230ffd838b14315d8be221575da00673af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-prestage-consent-gate:flow:测试绑定FR-03
+  tests: test/prestage-consent-gate.test.mjs「③ adopt 消费 / ④ 平台 writer 豁免 / ⑤ resume 豁免」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-prestage-consent-gate
+  status: active
+
+## FR-setup-104 选道判据三处同步：本仓 AGENTS.md、templates/agents-instruction.md、assets/command-cards/flow.md
+变更：2026-10-14-prestage-consent-gate
+状态：active
+摘要：三处文案落盘
+场景正文：
+- 场景：三处文案落盘 — Given 本变更已实现；Then AGENTS.md 与 templates/agents-instruction.md 选道表第 1/2 行含来源判据与同意门指路且逐字一致；assets/co
+全文：.sillyspec/changes/archive/2026-10-14-prestage-consent-gate/requirements.md#FR-04
+最近确认：fd7047230ffd838b14315d8be221575da00673af
+
+## FR-setup-105 新增测试覆盖门行为（拦/放/消费/adopt 消费/平台豁免/resume 豁免），全量 npm test 零失败
+变更：2026-10-14-prestage-consent-gate
+状态：active
+摘要：测试面与回归
+场景正文：
+- 场景：测试面与回归 — Given 实现与测试落盘；When `node --test test/prestage-consent-gate.test.mjs` 与全量 `npm test`；Then 7/7 通过且全量零失败
+全文：.sillyspec/changes/archive/2026-10-14-prestage-consent-gate/requirements.md#FR-05
+最近确认：fd7047230ffd838b14315d8be221575da00673af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-prestage-consent-gate:flow:测试绑定FR-05
+  tests: test/prestage-consent-gate.test.mjs「⑥ 无标记零影响 / ⑦ 单元面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-prestage-consent-gate
+  status: active

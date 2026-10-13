@@ -39,3 +39,4 @@
 | 2026-10-13 | 2026-10-13-extract-head-guard | 动机：本会话自身实证——flow start --input 动机文本里出现未闭合全角左括号字面量时，续行合并的不平衡判 |
 | 2026-10-13 | 2026-10-13-cross-repo-baseline-anchor | 动机：thin 手工交付的跨仓对账无基线锚——collectRepoActual 四级档位里 thin 落 B 档（HE |
 | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
+| 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |

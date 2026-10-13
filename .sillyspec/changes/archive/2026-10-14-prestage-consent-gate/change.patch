@@ -1,0 +1,489 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 1c80a434..fad63351 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -13,3 +13,4 @@
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+ | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
++| 2026-10-13 | 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm /  |
+diff --git a/.sillyspec/docs/sillyspec/modules/progress.changelog.md b/.sillyspec/docs/sillyspec/modules/progress.changelog.md
+index e72a0bed..1ac20833 100644
+--- a/.sillyspec/docs/sillyspec/modules/progress.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/progress.changelog.md
+@@ -15,3 +15,4 @@ ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段
+ - ql-20260912-004-afa2 | renameChange 检查与 UPDATE 收进同一事务+changes!==1 校验（并发重命名 0 行不再搬目录分裂）；_readActiveQuiet 改 readOnly 零副作用
+ | 2026-10-13 | 2026-10-13-thin-sync-stage | 平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章：CLI 对 thin 变更上行的 changes[0].curr |
+ | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
++| 2026-10-13 | 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm /  |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 3aae758e..48ef89b0 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -46,3 +46,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-12-thin-module-gate-and-feed | 轻量变更（默认主流程）收口不产模块文档增量：未登记模块图的交付目录致 FR 蒸馏落伪域 auto-*（静默）、知识图谱模
+ - 2026-10-12-cli-friction-signal | dogfood 实证驱动（fire-equipment 会话复盘·子代理A/B取证）：a) deps 门控阻断首条只有标
+ - 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复
++- 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm / 
+diff --git a/AGENTS.md b/AGENTS.md
+index aedaa702..bc6aeace 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -7,8 +7,8 @@
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+-| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+-| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
++| 需求已含决策（改什么、成功标准说得清——成功标准须来自**用户原话或既有文档转写**；要靠你推断拟出的标准＝需求不清晰） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 需求不清晰 / 需要方案探索（含「成功标准要你替用户拟」的形态——自己拟标准再自答是把默认共识伪装成共识） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准）。上个轻量变更被 route-hindsight 标记时全新 start 会被同意门拦下要求显式选道：确认已含决策带 `--no-prestage` 声明留痕，否则先走本行预段 |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+ | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
+ 
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index 7c230c56..b46e2cf1 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -4,7 +4,7 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
+ ---
+ # 何时用
+ 
+-需求已含决策的改动：改什么、成功标准说得清（能列 1-3 条可验证标准）。需求不清晰先走 brainstorm（完成后 flow start 收编续跑）；跨模块取舍/Wave 编排/设计期人机对抗走完整五阶段（run-brainstorm 等卡）。
++需求已含决策的改动：改什么、成功标准说得清（能列 1-3 条可验证标准），且成功标准来自用户原话/既有文档转写——要靠你替用户拟标准＝需求不清晰，先走 brainstorm（完成后 flow start 收编续跑）；跨模块取舍/Wave 编排/设计期人机对抗走完整五阶段（run-brainstorm 等卡）。
+ 
+ # 生命周期速查
+ 
+@@ -29,6 +29,7 @@ sillyspec flow status --change <变更名>
+ # 防坑清单
+ 
+ - --input 的「成功标准：」必须独立成行，其后每行一条 `- <可验证标准>`——格式不对 CLI 会拦下给两选一（头脑风暴预段 / 确认输入已含决策），照提示走即可。
++- 预段同意门：上个轻量变更被 route-hindsight 标记「疑似该走预段未走」时，全新 start 会被拦下要求显式选道——确认需求已含决策（成功标准来自用户原话/文档转写）加 `--no-prestage` 声明留痕；要靠你拟标准就走 brainstorm 预段，完成后收编（标记自动消费）。
+ - 触及 src/test 的改动 flow done 会亲自实测 local.yaml 的 test/lint（实测失败阻断收口，修好重跑即可）——想省一轮就先自跑。
+ - 轻量→完整转道是用户决策：征得同意带 `--upgrade-thick` 重启；实测失败自动升厚。
+ - 显式 pathspec 提交（`git commit -m "..." -- 文件…`），禁 git add -A。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 0ec9f124..96cb0d51 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -67,12 +67,12 @@ mcp:
+ |---|---|---|---|---|
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+ | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:516` |
+-| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:779` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:2290` |
++| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:792` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1202` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1491` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1561` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2368` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2368` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2441` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2441` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -134,10 +134,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2157/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:942（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4556；shared.js:1120 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4563；shared.js:1120 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4476；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4428；sync.js:2232 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4484；sync.js:1561/1595 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4436；sync.js:2302 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4222/4174；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+diff --git a/src/flow.js b/src/flow.js
+index c06438b5..88caff5c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -547,7 +547,7 @@ async function cmdFlowDiff({ change, cwd, specBase, json = false }) {
+   console.log(`合计：${totals.files} 文件 +${totals.additions ?? '?'} -${totals.deletions ?? '?'}${mode === 'active' ? '（baseline→工作树累计口径，含未提交）' : ''}`)
+ }
+ 
+-export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
++export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
+   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
+   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
+   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
+@@ -582,6 +582,12 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+       // 保留，机器只补缺件与绑定面。无产物 = 真 legacy 既有变更，维持原拒收。
+       const hasBsArtifacts = existsSync(join(changeDir, 'proposal.md')) || existsSync(join(changeDir, 'design.md'))
+       if (hasBsArtifacts) {
++        // 预段反馈闭环（2026-10-14-prestage-consent-gate）：走了头脑风暴预段=选道正确，
++        // 消费 route-hindsight 标记（同意门的一次性豁免在这里用掉，无声明 flag 也放行）
++        try {
++          const { clearHindsightMark } = await import('./route-hindsight.js')
++          if (clearHindsightMark({ specBase })) console.log('🕰️ 预段同意门：头脑风暴收编即选道正确，route-hindsight 标记已消费')
++        } catch { /* 消费 best-effort */ }
+         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
+         writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
+@@ -768,6 +774,37 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     }
+   }
+ 
++  // 预段选道同意门（2026-10-14-prestage-consent-gate）：route-hindsight 标记从「下次 start 点名
++  // 提示」升级为声明即过的同意门——上个轻量变更被标「疑似该走预段未走」时，本次全新 start 须
++  // 显式选道一次（--no-prestage 声明留痕 / 先走 brainstorm 预段）。边界：门不判本次需求清不清晰
++  // （判定归 agent/用户，D-005 弱信号），只把上次的过程形态信号摆上台面要求一次显式消费——同
++  // --autopilot/--upgrade-thick 的同意门模式（「可无视」升级为「可无视但需留痕声明」）。
++  // 豁免面：resume（上方分支早退）天然不受影响；平台 writer 预建空目录（proceedFreshEmptyDir）
++  // 豁免——平台自动派发无选道对话面，标记留给人工会话消化；adopt（头脑风暴收编）= 选道正确，
++  // 在 adopt 分支消费标记。读取 fail-open（读不到=无门），消费失败不阻断（下次再声明一次）。
++  if (!proceedFreshEmptyDir) {
++    let prestageMark = null
++    try {
++      const { readHindsightMark } = await import('./route-hindsight.js')
++      prestageMark = readHindsightMark({ specBase })
++    } catch { /* 标记读取 fail-open */ }
++    if (prestageMark) {
++      if (!prestageAck) {
++        const _why = Array.isArray(prestageMark.reasons) && prestageMark.reasons.length > 0
++          ? prestageMark.reasons.join('；') : '过程形态超阈'
++        console.error(`❓ 预段选道同意门：上个轻量变更「${prestageMark.change}」被 route-hindsight 标记「疑似该走头脑风暴预段未走」（${_why}）。本次全新 start 须显式选道（声明即过——标记是过程形态信号非定罪）：`)
++        console.error(`   ① 确认需求已含决策（成功标准来自用户原话或既有文档转写，而非你的推断）：sillyspec flow start --change ${change} --input "<原输入>" --no-prestage（声明留痕 flow-state.prestage_ack，标记消费）`)
++        console.error(`   ② 需求不清晰或需方案探索：sillyspec run brainstorm --change ${change}（完成后回来 flow start 收编，标记自动消费）`)
++        process.exit(2)
++      }
++      try {
++        const { clearHindsightMark } = await import('./route-hindsight.js')
++        clearHindsightMark({ specBase })
++        console.log(`🕰️ 预段同意门：已按 --no-prestage 声明放行（本次需求已含决策，留痕 flow-state.prestage_ack；上个标记「${prestageMark.change}」已消费）`)
++      } catch { /* 标记消费 best-effort：失败不阻断（下次 start 再声明一次） */ }
++    }
++  }
++
+   // 升厚预判已删除（2026-09-25-thin-precheck-removal）：技术面关键词（数据库/迁移等）测错轴——
+   // R16 实证碰迁移的变更轻量变更带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
+   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
+@@ -813,6 +850,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     // autopilot（2026-10-04-thin-docs-v2 FR-06）：用户显式声明跳过 spec 断点人审（--autopilot）；
+     // 缺省 false——flow done 要求 flow approve 批准证据（spec 断点机器化，护栏#2：零 prompt 劝说）
+     autopilot: Boolean(autopilot),
++    // 预段同意门声明留痕（2026-10-14-prestage-consent-gate）：hindsight 标记在场时全新 start
++    // 以 --no-prestage 显式声明「本次需求已含决策」放行——审计面可区分「确认过」与「没被问过」
++    prestage_ack: Boolean(prestageAck),
+     baseline_commit: baseline,
+     substeps: {},
+   })
+@@ -2469,6 +2509,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+       withTasks: hasFlag('--with-tasks'),
+       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+       autopilot: hasFlag('--autopilot'),
++      prestageAck: hasFlag('--no-prestage'),
+       cwd, specBase,
+       json: hasFlag('--json') || jsonGlobal,
+     })
+@@ -2680,12 +2721,13 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
+     return r
+   }
+-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
++  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+   console.error('      --input 可照抄形态（引号内换行合法）：')
+   console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
+   console.error('')
+   console.error('      成功标准：')
+   console.error('      - <可验证标准>"')
++  console.error('      预段同意门被拦时（上个轻量变更被 route-hindsight 标记「疑似该走预段未走」）：确认需求已含决策加 --no-prestage；不清晰则先 run brainstorm --change <名>，完成后回来 flow start 收编（标记自动消费）')
+   process.exit(2)
+ }
+ 
+diff --git a/src/route-hindsight.js b/src/route-hindsight.js
+index b29fa4b0..7dbee95b 100644
+--- a/src/route-hindsight.js
++++ b/src/route-hindsight.js
+@@ -32,7 +32,7 @@
+  *     flow-state substeps 无失败计数面（执行期裁决 D-006：数据源从卡面所述「flow-state
+  *     substeps」改读同为既有记录面的 verify-runs 时间线，封闭面语义不变）。
+  */
+-import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
++import { existsSync, readFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import { join, basename, dirname } from 'node:path'
+ import { writeAtomicSync } from './fs-atomic.js'
+@@ -273,4 +273,36 @@ export function readHindsightHint({ specBase }) {
+   }
+ }
+ 
+-export default { HINDSIGHT_THRESHOLDS, snapshotBaseline, computeHindsightMetrics, markHindsight, readHindsightHint }
++/**
++ * 标记结构化读取（2026-10-14-prestage-consent-gate）：同意门需要 change/reasons 组文案，
++ * 提示行渲染（resume 路径）仍走 readHindsightHint。无文件/损坏 → null（读不到=无门）。
++ * @returns {{ change: string, marked_at?: string, metrics?: object, reasons?: string[] } | null}
++ */
++export function readHindsightMark({ specBase }) {
++  try {
++    const raw = readFileSync(join(specBase, '.runtime', MARK_FILE), 'utf8')
++    const j = JSON.parse(raw)
++    if (!j || typeof j !== 'object' || !j.change) return null
++    return j
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 消费标记（声明放行 --no-prestage / adopt 头脑风暴收编时由 flow.js 调用）：删除标记文件。
++ * 一次性反馈语义——声明只豁免下一次 start，不豁免之后所有（之后再被标记会重新落盘重新拦）。
++ * @returns {boolean} 是否真删（无标记/删除失败 = false，幂等零副作用）
++ */
++export function clearHindsightMark({ specBase }) {
++  try {
++    const p = join(specBase, '.runtime', MARK_FILE)
++    if (!existsSync(p)) return false
++    rmSync(p)
++    return true
++  } catch {
++    return false
++  }
++}
++
++export default { HINDSIGHT_THRESHOLDS, snapshotBaseline, computeHindsightMetrics, markHindsight, readHindsightHint, readHindsightMark, clearHindsightMark }
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 806d1e1d..8b576f8e 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -6,8 +6,8 @@
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+-| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+-| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
++| 需求已含决策（改什么、成功标准说得清——成功标准须来自**用户原话或既有文档转写**；要靠你推断拟出的标准＝需求不清晰） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 需求不清晰 / 需要方案探索（含「成功标准要你替用户拟」的形态——自己拟标准再自答是把默认共识伪装成共识） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准）。上个轻量变更被 route-hindsight 标记时全新 start 会被同意门拦下要求显式选道：确认已含决策带 `--no-prestage` 声明留痕，否则先走本行预段 |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+ | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
+ 
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+index 5e2a6e1b..07f1db7f 100644
+--- a/test/flow-clarity-probe.test.mjs
++++ b/test/flow-clarity-probe.test.mjs
+@@ -6,9 +6,11 @@
+  *   ① 新建路径输出含「选道自检」固定段（盘问重述措辞＋brainstorm 指路，纯提示不阻断）；
+  *   ② adopt（头脑风暴收编）/resume（重入恢复）路径输出不含自检段（D-002 精神：无重复仪式）；
+  *   ③ 清晰度门 exit 2 文案逐字保留（src/flow.js 既有六行不动）；
+- *   ④ hindsight 闭环：有标记 → start 点名提示（自检段上方）；无标记 → 输出与现状一致
+- *      （确定性头区逐字节等值——纯增量渲染段）；start/adopt 落首版快照；flow done 后
+- *      超阈指标 → per-repo 标记落库，下次 start 可见（端到端 FR-02 回路）。
++ *   ④ hindsight 闭环（2026-10-14-prestage-consent-gate 升级为同意门）：有标记 → 全新 start
++ *      exit 2 两选一（--no-prestage 声明留痕 / 预段指路）且标记不消费；声明放行后 ack 行
++ *      纯增量（剥掉后头区与无标记逐字节一致）且标记消费；无标记 → 输出与现状一致；
++ *      start/adopt 落首版快照；flow done 后超阈指标 → per-repo 标记落库，下次 start 被
++ *      同意门拦下点名（端到端 FR-02 回路）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -85,7 +87,7 @@ test('① 新建路径输出含选道自检段＋落首版快照；无 hindsight
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+-test('④ 有 hindsight 标记 → 自检段上方点名提示；无标记 → 头区逐字节一致（纯增量渲染段）', () => {
++test('④ 有 hindsight 标记 → 全新 start 被同意门拦（exit 2）；--no-prestage 声明放行后头区纯增量', () => {
+   const { cwd } = makeRepo()
+   // 第一变更：无标记环境
+   const c1 = '2026-09-01-fcp-clean'
+@@ -97,15 +99,20 @@ test('④ 有 hindsight 标记 → 自检段上方点名提示；无标记 → 
+   markHindsight({ cwd, specBase: join(cwd, SPEC), change: '2026-09-01-fcp-old', metrics: { designRewriteRatio: 0.8, tasksRewriteRatio: 0.2, blindDims: 0, testFailures: 0 } })
+   const c2 = '2026-09-01-fcp-marked'
+   const s2 = cli(cwd, ['flow', 'start', '--change', c2, '--input', INPUT_OK])
+-  assert.equal(s2.status, 0)
+-  assert.match(s2.stdout, /route-hindsight：上个轻量变更「2026-09-01-fcp-old」疑似该走头脑风暴预段未走/, '点名提示含上个变更名')
+-  const markedHead = headRegion(s2.stdout).replaceAll(c2, '<CHANGE>')
+-  // 提示是纯增量：剥掉 hint 行（含其后注入的空行）后与无标记头区逐字节一致
+-  const stripped = markedHead.replace(/🕰️ route-hindsight：[^\n]*\n\n/, '')
+-  assert.equal(stripped, cleanHead, 'hindsight 注入=纯增量渲染段，其余输出零变化')
+-  const hintIdx = markedHead.indexOf('🕰️ route-hindsight')
+-  const probeIdx = markedHead.indexOf('🔎 选道自检')
+-  assert.ok(hintIdx !== -1 && probeIdx !== -1 && hintIdx < probeIdx, '提示在自检段上方')
++  // 2026-10-14-prestage-consent-gate：标记在场的全新 start 从「点名提示（可无视）」升级为
++  // 同意门——无声明 → exit 2 两选一（声明留痕 / 预段指路），标记不消费
++  assert.equal(s2.status, 2, '标记在场无声明 → 同意门 exit 2')
++  assert.match(s2.stdout + s2.stderr, /预段选道同意门：上个轻量变更「2026-09-01-fcp-old」/, '门文案点名上个变更')
++  assert.match(s2.stdout + s2.stderr, /--no-prestage/, '两选一含声明通道')
++  assert.ok(existsSync(join(cwd, SPEC, '.runtime', 'route-hindsight.json')), '被拦时标记不消费')
++  // 声明放行：--no-prestage → status 0 + ack 行纯增量（剥掉后头区与无标记逐字节一致）
++  const c3 = '2026-09-01-fcp-acked'
++  const s3 = cli(cwd, ['flow', 'start', '--change', c3, '--input', INPUT_OK, '--no-prestage'])
++  assert.equal(s3.status, 0, `声明放行失败: ${s3.stderr}`)
++  assert.match(s3.stdout, /🕰️ 预段同意门：已按 --no-prestage 声明放行/, '声明放行留痕行在场')
++  assert.ok(!existsSync(join(cwd, SPEC, '.runtime', 'route-hindsight.json')), '声明即消费标记')
++  const stripped = headRegion(s3.stdout).replaceAll(c3, '<CHANGE>').replace(/🕰️ 预段同意门：[^\n]*\n\n?/, '')
++  assert.equal(stripped, cleanHead, 'ack 行=纯增量渲染段，其余输出零变化')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+@@ -196,9 +203,11 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
+   assert.ok(mark.metrics.tasksRewriteRatio > 0.6, `tasks 改写率超阈: ${mark.metrics.tasksRewriteRatio}`)
+   assert.ok((mark.reasons || []).some((r) => r.includes('tasks')), `reasons 含 tasks 路: ${JSON.stringify(mark.reasons)}`)
+   assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
+-  // 下次 start（新变更）点名提示
++  // 下次 start（新变更）被同意门拦下点名上个变更（2026-10-14-prestage-consent-gate：
++  // 标记在场 → exit 2 要求显式选道，不再是可无视的点名提示）
+   const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])
+-  assert.equal(s3.status, 0)
+-  assert.match(s3.stdout, new RegExp(`route-hindsight：上个轻量变更「${c1}」疑似`), '下次 start 点名上个变更')
++  assert.equal(s3.status, 2, '标记在场 → 同意门 exit 2')
++  assert.match(s3.stdout + s3.stderr, new RegExp(`预段选道同意门：上个轻量变更「${c1}」`), '门文案点名上个变更')
++  assert.match(s3.stdout + s3.stderr, /--no-prestage/, '门文案含声明通道')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/test/prestage-consent-gate.test.mjs b/test/prestage-consent-gate.test.mjs
+new file mode 100644
+index 00000000..29738add
+--- /dev/null
++++ b/test/prestage-consent-gate.test.mjs
+@@ -0,0 +1,149 @@
++/**
++ * prestage-consent-gate.test.mjs — 预段选道同意门（route-hindsight 标记升级为声明即过的门）
++ * （2026-10-14-prestage-consent-gate FR-01~03 / FR-05）
++ *
++ * 覆盖验收面：
++ *   ① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一（--no-prestage / run brainstorm），
++ *      文案含标记来源变更名与原因；被拦时标记不消费（文件仍在）；
++ *   ② 放：--no-prestage 声明 → status 0、flow-state 落 prestage_ack 留痕、标记文件消费删除；
++ *   ③ adopt 消费：头脑风暴产物（proposal.md 在场、无 flow-state）收编路径自动清标记，
++ *      无声明 flag 也放行（走了预段=选道正确，反馈闭环用掉）；
++ *   ④ 平台 writer 豁免：预建空变更目录（proceedFreshEmptyDir 形态）+ 标记 → 不拦，正常起跑；
++ *   ⑤ resume 豁免：在途变更重入 + 标记 → 恢复简报（status 0），不被新门拦；
++ *   ⑥ 无标记零影响：全新 start 输出不含同意门文案（新装/无信号仓零变化）；
++ *   ⑦ 单元面：readHindsightMark 结构化读取 / clearHindsightMark 幂等消费。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { markHindsight, readHindsightMark, clearHindsightMark } from '../src/route-hindsight.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const SPEC = '.sillyspec'
++
++/** 造临时 git 仓 + local.yaml（thin 模式）+ 基线提交（同 flow-clarity-probe 造法）。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'pcg-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, SPEC), { recursive: true })
++  writeFileSync(join(cwd, SPEC, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++const MARK_PATH = (cwd) => join(cwd, SPEC, '.runtime', 'route-hindsight.json')
++
++/** 种一条「该走预段未走」标记（tasks 改写率超阈形态）。 */
++function plantMark(cwd, change = '2026-09-01-prior-misroute') {
++  markHindsight({ cwd, specBase: join(cwd, SPEC), change, metrics: { tasksRewriteRatio: 0.9 } })
++  assert.ok(existsSync(MARK_PATH(cwd)), '夹具：标记应已落盘')
++}
++
++test('① 拦：标记在场 + 全新 start 无声明 → exit 2 两选一，标记不消费', () => {
++  const { cwd } = makeRepo()
++  plantMark(cwd)
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-10-01-pcg-blocked', '--input', INPUT_OK])
++  assert.equal(s.status, 2, `应 exit 2，实得 ${s.status}: ${s.stdout}\n${s.stderr}`)
++  const out = s.stdout + s.stderr
++  assert.ok(out.includes('预段选道同意门'), '文案应含门名')
++  assert.ok(out.includes('2026-09-01-prior-misroute'), '文案应含标记来源变更名')
++  assert.ok(out.includes('tasks 机器预填稿改写率'), '文案应含超阈原因')
++  assert.ok(out.includes('--no-prestage'), '两选一应含声明通道')
++  assert.ok(out.includes('run brainstorm'), '两选一应含预段指路')
++  assert.ok(existsSync(MARK_PATH(cwd)), '被拦时标记不应被消费')
++  assert.ok(!existsSync(join(cwd, SPEC, 'changes', '2026-10-01-pcg-blocked')), '被拦时不应建变更目录')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 放：--no-prestage 声明 → status 0 + prestage_ack 留痕 + 标记消费', () => {
++  const { cwd } = makeRepo()
++  plantMark(cwd)
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-10-01-pcg-acked', '--input', INPUT_OK, '--no-prestage'])
++  assert.equal(s.status, 0, `start 失败: ${s.stderr}`)
++  assert.ok(s.stdout.includes('--no-prestage 声明放行'), '应渲染声明放行留痕行')
++  const fsText = readFileSync(join(cwd, SPEC, 'changes', '2026-10-01-pcg-acked', 'flow-state.yaml'), 'utf8')
++  assert.ok(/prestage_ack:\s*true/.test(fsText), 'flow-state 应落 prestage_ack 留痕')
++  assert.ok(!existsSync(MARK_PATH(cwd)), '标记应被消费删除')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ adopt 消费：头脑风暴产物收编自动清标记（无声明 flag 也放行）', () => {
++  const { cwd } = makeRepo()
++  plantMark(cwd)
++  const change = '2026-10-01-pcg-adopt'
++  const changeDir = join(cwd, SPEC, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), '---\nauthor: t\ncreated_at: 2026-10-01T00:00:00Z\n---\n# 提案\n头脑风暴产物\n\n成功标准：\n- x\n')
++  const s = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, `adopt 失败: ${s.stderr}`)
++  assert.ok(s.stdout.includes('头脑风暴产物已收编'), '应走 adopt 收编路径')
++  assert.ok(!existsSync(MARK_PATH(cwd)), '收编即消费标记')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 平台 writer 豁免：预建空变更目录 + 标记 → 不拦，正常起跑', () => {
++  const { cwd } = makeRepo()
++  plantMark(cwd)
++  const change = '2026-10-01-pcg-platform'
++  mkdirSync(join(cwd, SPEC, 'changes', change), { recursive: true }) // 平台 writer 形态：预建空目录
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK])
++  assert.equal(s.status, 0, `平台形态不应被新门拦: ${s.stderr}`)
++  assert.ok(s.stdout.includes('【你要做的】'), '应正常输出起跑横幅')
++  assert.ok(existsSync(MARK_PATH(cwd)), '豁免路径不消费标记（留给人工会话消化）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑤ resume 豁免：在途变更重入 + 标记 → 恢复简报不拦', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-10-01-pcg-resume'
++  const s0 = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK])
++  assert.equal(s0.status, 0, `首次 start 失败: ${s0.stderr}`)
++  plantMark(cwd) // 起跑后才出现标记（模拟并行会话收口落标）
++  const s = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, `resume 不应被新门拦: ${s.stderr}`)
++  assert.ok(s.stdout.includes('恢复简报') || s.stdout.includes('恢复'), '应输出恢复简报')
++  assert.ok(!s.stdout.includes('exit'), '不应是门拦截输出')
++  assert.ok(existsSync(MARK_PATH(cwd)), 'resume 路径不动标记')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑥ 无标记零影响：全新 start 输出不含同意门文案', () => {
++  const { cwd } = makeRepo()
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-10-01-pcg-clean', '--input', INPUT_OK])
++  assert.equal(s.status, 0, `start 失败: ${s.stderr}`)
++  assert.ok(!s.stdout.includes('预段选道同意门'), '无标记不应出现门文案')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑦ 单元面：readHindsightMark 结构化读取 / clearHindsightMark 幂等消费', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'pcg-unit-'))
++  const specBase = join(cwd, SPEC)
++  assert.equal(readHindsightMark({ specBase }), null, '无文件 → null')
++  assert.equal(clearHindsightMark({ specBase }), false, '无文件清除 → false 零副作用')
++  markHindsight({ cwd, specBase, change: '2026-09-01-x', metrics: { tasksRewriteRatio: 0.9 } })
++  const m = readHindsightMark({ specBase })
++  assert.ok(m && m.change === '2026-09-01-x', '结构化读回应含 change')
++  assert.ok(Array.isArray(m.reasons) && m.reasons.length > 0, '结构化读回应含 reasons')
++  assert.equal(clearHindsightMark({ specBase }), true, '有标记清除 → true')
++  assert.equal(readHindsightMark({ specBase }), null, '清除后读回 null')
++  assert.equal(clearHindsightMark({ specBase }), false, '重复清除 → false 幂等')
++  rmSync(cwd, { recursive: true, force: true })
++})

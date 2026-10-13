@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-prestage-consent-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "fd7047230ffd838b14315d8be221575da00673af",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "评审记录：FR-01~05 三方一致均实证通过",
+      "evidence": "代码锚点：同意门在清晰度门之后、任何状态写入之前（src/flow.js:785-806，早于 initChange:821 与 writeFlowState:840）；prestage_ack 落盘（flow.js:855）；adopt 消费标记（flow.js:587-590）；resume 早退在门之前（flow.js:754-755）；平台豁免经 proceedFreshEmptyDir（flow.js:664/785）；flag 接线 hasFlag('--no-prestage')（flow.js:2512）。测试实证：新增 test/prestage-consent-gate.test.mjs 7/7 通过（本评审亲自运行）；test/flow-clarity-probe.test.mjs 6/6 通过；全量 npm test EXIT=0 且 349 个套件摘要全部 fail:0。绑定作答与实际测试名逐条对上（FR-01→①、FR-02→②、FR-03→③④⑤、FR-05→⑥⑦+全量）；FR-04 答不适用（文案面），本评审独立 diff 验证 AGENTS.md 与 templates/agents-instruction.md 选道表前两行逐字一致（IDENTICAL），assets/command-cards/flow.md L7/L32 同口径在场。",
+      "location": "src/flow.js:785-806,855,2512; test/prestage-consent-gate.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "评审记录：盲维四问真实性核验——design 作答与代码实态一致",
+      "evidence": "乱序：标记由收口时 markHindsight 落盘、start 时单点读取，时序单向无乱序面。并发：clearHindsightMark existsSync→rmSync 间隙被并发删除时 rmSync 抛 ENOENT 被 catch 返 false，幂等零副作用；标记写入走既有 writeAtomicSync。切换：exit 2 路径在 pm.initChange/writeFlowState/change 目录创建之前，零状态零残留（测试①断言目录未建+标记未消费）。作用域：标记路径 join(specBase,'.runtime',MARK_FILE) per-repo 隔离。四问均实证成立。",
+      "location": "src/route-hindsight.js:276-306; src/flow.js:785-806"
+    },
+    {
+      "severity": "P3",
+      "title": "评审记录：披露边界逐条显式裁决——均可接受",
+      "evidence": "①边界「门不判本次需求清不清晰（D-005 弱信号）」：可接受——代码只读标记 reasons 渲染（flow.js:793-794）确无语义判定，与既有裁定一致。②边界「读取 fail-open、消费 best-effort 失败不阻断」：可接受——失败方向是少拦非多拦，无数据损坏面。③边界「平台 writer 豁免且不消费标记」：可接受——平台自动派发无选道对话面，标记保留不丢失（测试④断言标记仍在）。④边界「误拦摩擦（阈值敏感、agent 可能机械 --no-prestage）」：可接受——prestage_ack 留痕使「确认过/没被问过」可审计，design 明示为自校准回路已知权衡。⑤FR-04 绑定「不适用」：可接受——文档面无脆弱字符串锁的裁定合理，逐字一致性已由评审独立验证。四盲维对应边界均已裁决：可接受。",
+      "location": ".sillyspec/changes/2026-10-14-prestage-consent-gate/design.md:31-40"
+    },
+    {
+      "severity": "P3",
+      "title": "评审记录：项目探针结论",
+      "evidence": "cli-copy-selfsufficient（命令/flag 真实性）：门文案提及的 --no-prestage（flow.js:2512 接线）、run brainstorm（src/index.js:2518 真实 stage 分发）、flow-state.prestage_ack（flow.js:855 真实字段）均存在；报错一次给全（来源变更名+超阈原因+两选一修复路径），无二跑依赖——pass。cli-copy-selfsufficient（文案与判定一致性）：文案称「全新 start 被拦」与代码门位一致（resume/adopt/平台三豁免面文案均有对应代码分支；「声明留痕+标记消费」「收编自动消费」均与实现对齐）——pass。config-absent-zero-regression：本变更未新增 local.yaml 消费键——n/a；无标记零影响有测试锚（测试⑥+clarity-probe④头区逐字节比对）非口头。crossrepo-path-compat：未触及 worktree/deps/跨仓对账（platform-interface-map.md 仅行号锚机械修）——n/a；路径均 join() 构造，Windows 兼容。",
+      "location": "src/flow.js:792-798,2512; src/index.js:2518"
+    },
+    {
+      "severity": "P3",
+      "title": "clarity-probe 端到端用例标题仍写「下次 start 点名提示」，断言已升级为同意门 exit 2",
+      "evidence": "测试名文案滞后于本变更的契约演进（断言已改查 exit 2+门文案），纯命名漂移，无行为影响、不违诺。",
+      "location": "test/flow-clarity-probe.test.mjs:205"
+    },
+    {
+      "severity": "P3",
+      "title": "change.patch 冻结件含 3 条并行变更（autocreate-atomic-claim）changelog 尾行，不在本变更文件清单内",
+      "evidence": "多 agent 共享仓已知惯例（design 自述同 567661aa 惯例的并行提交漂移），非本变更行为面；对应 _module-map.yaml 登记在工作区实态在场（L244-245 补登 templates/ 与 assets/command-cards/），交付完整。",
+      "location": ".sillyspec/changes/2026-10-14-prestage-consent-gate/change.patch:1-27; .sillyspec/docs/sillyspec/modules/_module-map.yaml:244-245"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T09:30:00Z"
+}
