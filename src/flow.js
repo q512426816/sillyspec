@@ -979,6 +979,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         process.exit(1)
       }
       for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}`)
+      // 问题行机器回填留痕（2026-10-13-design-question-autorepair）：回填已落盘过门——此行是
+      // 审计面（评审/用户可见「曾被改写、已按锚恢复」），非拒收。
+      for (const p of r.repairs || []) console.log(`🔧 [design 问题行机器回填] ${p}`)
       if (adoptedDesign) console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
       // spec 断点机器门（FR-06/FR-07，护栏#2 零 prompt 劝说——advisory 断点在 0/12 勾选类事故
       // 实证下无牙；v2 起批准是收口硬前提，autopilot 是用户显式豁免通道）

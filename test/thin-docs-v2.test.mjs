@@ -3,7 +3,9 @@
  *
  * 聚焦面（与 flow-draft.test.mjs 的分工：那边管起草形态/摘录/绑定/v1 轨回归/e2e 断点门，
  * 本文件管锚对比的边界行为）：
- *   ① 四问单一源：起草文本含 DESIGN_QUESTIONS 常量逐字；问题被改写 → 拒收（FR-04）；
+ *   ① 四问单一源：起草文本含 DESIGN_QUESTIONS 常量逐字；问题被改写 → 机器按锚回填
+ *      （2026-10-13-design-question-autorepair：硬拒收变原位修复+repairs 留痕——sess_dcb57f25
+ *      实证 Write 整文件重写滑误无法靠事前提示根除）；
  *   ② 门柱漂移 advisory：锚内成功标准从 requirements 消失 → advisory 不拒收（FR-05）；
  *      tasks 镜像行被删 → advisory；agent 合法改写 FR 标题时 advisory 交人核；
  *   ③ tasks 镜像+细化行：追加 task-NN 细化行不违规；镜像行全删 → advisory（FR-08）；
@@ -39,15 +41,20 @@ function fixture(input) {
 
 const INPUT = '动机：x\n成功标准：\n- 标准甲\n- 标准乙'
 
-test('① 四问单一源：起草含常量逐字；问题被改写 → 拒收', () => {
+test('① 四问单一源：起草含常量逐字；问题被改写 → 机器按锚回填（不再拒收，repairs 留痕）', () => {
   const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
   fillAll()
   const design = readFileSync(join(changeDir, 'design.md'), 'utf8')
   for (const sec of DESIGN_QUESTIONS.sections) for (const q of sec.lines) assert.ok(design.includes(q), `起草含问题原文：${q.slice(0, 12)}…`)
-  // 软化四问之一（agent 抄近路形态）→ 拒收
+  // 软化四问之一（agent 抄近路形态）→ 回填过门 + 留痕（sess_dcb57f25 实证形态）
   fill('design.md', (t) => t.replace('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？', '2. 并发写：无并发场景。'))
   const v = verifyThinDocsV2({ changeDir, ledger })
-  assert.ok(v.violations.some((x) => /问题文本被改写/.test(x)), `改写问题应拒: ${JSON.stringify(v.violations)}`)
+  assert.ok(!v.violations.some((x) => /问题文本被改写/.test(x)), `改写问题不再拒收: ${JSON.stringify(v.violations)}`)
+  assert.ok(v.repairs.some((x) => x.includes('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？')), `回填留痕: ${JSON.stringify(v.repairs)}`)
+  const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
+  assert.ok(after.includes('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？'), '原文已回填在场')
+  assert.ok(after.includes('2. 并发写：无并发场景。'), '改述行保留在场（零数据丢失）')
+  assert.ok(after.includes('答：一行作答'), 'agent 作答行保留')
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -88,6 +95,7 @@ test('④ 结构破坏拒收面：design 节整删 / requirements 整删 / 绑�
   fill('design.md', (t) => t.replace(/## 边界与并发（盲维四问——每问必答，答不了即设计缺口）[\s\S]*?(?=## 风险与死路)/, ''))
   let v = verifyThinDocsV2({ changeDir, ledger })
   assert.ok(v.violations.some((x) => /边界与并发.*被删/.test(x)), `节整删应拒: ${JSON.stringify(v.violations)}`)
+  assert.ok(v.violations.some((x) => x.includes('3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？')), `节被删文案带问题完整原文（不再 30 字截断）: ${JSON.stringify(v.violations)}`)
   // 还原后删 requirements（文件级缺失）
   fill('design.md', (t) => t.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&'))
   rmSync(join(changeDir, 'requirements.md'))
@@ -128,5 +136,44 @@ test('⑤ adopted 豁免：skipDesign=true 时 design 缺失/未作答不拒收'
   assert.ok(plain.violations.some((x) => /design\.md 缺失/.test(x)), '非 adopted：design 缺失拒收')
   const adopted = verifyThinDocsV2({ changeDir, ledger, skipDesign: true })
   assert.ok(!adopted.violations.some((x) => /design/.test(x)), `adopted 豁免 design 门: ${JSON.stringify(adopted.violations)}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑦ 问题行机器回填：高相似原位替换/低相似节首插入/重跑幂等（零二次改写零留痕）', () => {
+  const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
+  fillAll()
+  // 高相似改述（个别词差异，bigram ≥0.5）→ 原位替换
+  fill('design.md', (t) => t.replace('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？', '2. 并发写：两个执行体同时操作同一数据/文件会发生什么情况？'))
+  // 低相似改述（<0.5）→ 节首插入，改述行保留
+  fill('design.md', (t) => t.replace('4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？', '4. 作用域：不涉及。'))
+  let v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `漂移回填后零拒收: ${JSON.stringify(v.violations)}`)
+  assert.equal(v.repairs.length, 2, `两条回填留痕: ${JSON.stringify(v.repairs)}`)
+  const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
+  assert.ok(after.includes('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？\n答：'), '高相似改述被原位替换（原文落位于作答之上）')
+  assert.ok(!after.includes('会发生什么情况？'), '高相似改述行不在场（被原位替换）')
+  assert.ok(after.includes('4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？'), '低相似原文插入在场')
+  assert.ok(after.includes('4. 作用域：不涉及。'), '低相似改述行保留（零数据丢失）')
+  // 幂等：重跑零二次改写零留痕
+  const v2 = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v2.repairs.length, 0, `重跑零回填: ${JSON.stringify(v2.repairs)}`)
+  assert.equal(readFileSync(join(changeDir, 'design.md'), 'utf8'), after, '重跑零改写（字节不变）')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑦b 实证形态复现：boundaries 四问全部改述（Write 整文件重写形态）→ 四问全回填、作答保留、过门', () => {
+  const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
+  fillAll()
+  fill('design.md', (t) => t
+    .replace('1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？', '1. 乱序到达：输入乱序时假设是否仍成立？')
+    .replace('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？', '2. 并发写：两个执行体同时操作同一数据会怎样？')
+    .replace('3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？', '3. 生命周期：会话中途中断状态安全吗？')
+    .replace('4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？', '4. 作用域：跨仓会不会串数据？'))
+  const v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `四问全改述回填后零拒收: ${JSON.stringify(v.violations)}`)
+  assert.equal(v.repairs.length, 4, `四条回填留痕: ${JSON.stringify(v.repairs)}`)
+  const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
+  for (const sec of DESIGN_QUESTIONS.sections) for (const q of sec.lines) assert.ok(after.includes(q), `原文回填在场：${q.slice(0, 12)}…`)
+  assert.equal((after.match(/^答：一行作答$/gm) || []).length, 7, '七处作答全保留（零数据丢失）')
   rmSync(root, { recursive: true, force: true })
 })

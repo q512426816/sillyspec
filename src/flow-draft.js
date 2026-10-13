@@ -65,6 +65,25 @@ export const DESIGN_QUESTIONS = {
  *  占位句自带词表字样的误放行由 pending 检查（（待撰写 前缀）独立拦截，不依赖本判据）。 */
 const FR_STRENGTH_RE = /\b(SHALL|MUST|SHOULD)\b|必须|禁止/
 
+/** 去 whitespace 字符 bigram Jaccard 相似度（design 问题行回填定位——2026-10-13-design-question-autorepair）。
+ *  改述行由锚问题衍生、共享绝大多数字符对，天然高于任何答案行；≥0.5 视为可原位替换。 */
+function charBigramSimilarity(a, b) {
+  const grams = (s) => {
+    const t = String(s || '').replace(/\s+/g, '')
+    const set = new Set()
+    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2))
+    return set
+  }
+  const A = grams(a), B = grams(b)
+  let inter = 0
+  for (const g of A) if (B.has(g)) inter++
+  const union = A.size + B.size - inter
+  return union === 0 ? 0 : inter / union
+}
+
+/** design 问题行回填阈值：bigram 相似度 ≥ 此值原位替换改述行，低于则节首插入（永不删除 agent 行）。 */
+const QUESTION_REPAIR_SIM_THRESHOLD = 0.5
+
 /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
 export function draftLedgerPath(runtimeRoot, changeName) {
   return join(runtimeRoot, `draft-ledger-${changeName}.json`)
@@ -303,25 +322,62 @@ function draftTasksV2({ change, criteria, withTasks }) {
 export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
   const violations = []
   const advisories = []
+  const repairs = []
   const anchorCriteria = Array.isArray(ledger?.anchor?.criteria) ? ledger.anchor.criteria : []
   const read = (f) => {
     try { return readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n') } catch { return null }
   }
 
-  // design 四节：问题在场（对锚逐字）+ 实质作答
+  // design 四节：问题在场（对锚逐字）+ 实质作答。问题行漂移（节标题在场）→ 机器按锚回填
+  // （2026-10-13-design-question-autorepair：sess_dcb57f25 实证 Write 整文件重写滑误——原文
+  // 3 秒前刚 Read 过仍被整段改述，事前提示是概率性防护；确定防线=锚对比，修被拦后的恢复面：
+  // 高相似改述原位替换、低相似/删除节首插入，agent 作答零丢失，repairs 留痕交 flow.js 渲染）。
   if (!skipDesign) {
     const dText = read('design.md')
     if (dText === null) violations.push('design.md 缺失（v2 起草件在案）——删除后重入 flow start 补生成')
     else {
       const anchorSections = ledger?.anchor?.designQuestions?.sections || DESIGN_QUESTIONS.sections
-      const dLines = dText.split('\n')
+      let dLines = dText.split('\n')
+      // 回填通道：改写先到不了归档（回填后进归档的就是锚文本，与人工恢复等价），写盘失败降级
+      // 回带全文的拒收文案（不抛异常阻断 CLI）。
+      const allQuestionLines = new Set(anchorSections.flatMap((s) => s.lines))
+      const repairedLines = [...dLines]
+      const repairEntries = []
+      for (const sec of anchorSections) {
+        for (const q of sec.lines) {
+          if (repairedLines.some((l) => l.trim() === q)) continue
+          const hIdx = repairedLines.findIndex((l) => l.trim() === `## ${sec.heading}`)
+          if (hIdx === -1) continue // 节整删 → 下方校验环拒收（文案带全文）
+          let end = repairedLines.findIndex((l, i) => i > hIdx && /^##\s/.test(l))
+          if (end === -1) end = repairedLines.length
+          let bestIdx = -1, bestSim = 0
+          for (let i = hIdx + 1; i < end; i++) {
+            const t = repairedLines[i].trim()
+            if (!t || allQuestionLines.has(t)) continue
+            const sim = charBigramSimilarity(t, q)
+            if (sim > bestSim) { bestSim = sim; bestIdx = i }
+          }
+          if (bestIdx >= 0 && bestSim >= QUESTION_REPAIR_SIM_THRESHOLD) repairedLines[bestIdx] = q
+          else repairedLines.splice(repairedLines[hIdx + 1] === '' ? hIdx + 2 : hIdx + 1, 0, q, '')
+          repairEntries.push({ heading: sec.heading, q })
+        }
+      }
+      if (repairEntries.length > 0) {
+        try {
+          writeAtomicSync(join(changeDir, 'design.md'), repairedLines.join('\n'))
+          dLines = repairedLines
+          for (const e of repairEntries) repairs.push(`design「${e.heading}」问题行曾被改写——已按锚回填原文（agent 作答保留）：${e.q}`)
+        } catch {
+          for (const e of repairEntries) violations.push(`design「${e.heading}」问题文本被改写——原文：${e.q}（机器回填写盘失败，请手工恢复此行，答案写在下方）`)
+        }
+      }
       for (const sec of anchorSections) {
         if (!dLines.some((l) => l.trim() === `## ${sec.heading}`)) {
-          violations.push(`design「${sec.heading}」节被删（标题缺失）——恢复小节与四问原文后作答`)
+          violations.push(`design「${sec.heading}」节被删（标题缺失）——恢复小节与四问原文后作答；问题原文：${sec.lines.join('／')}`)
           continue
         }
         for (const q of sec.lines) {
-          if (!dLines.some((l) => l.trim() === q)) violations.push(`design「${sec.heading}」问题文本被改写：「${q.slice(0, 30)}…」——恢复原文（问题钉死，答案写在下方）`)
+          if (!dLines.some((l) => l.trim() === q)) violations.push(`design「${sec.heading}」问题文本被改写——原文：${q}（问题钉死，答案写在下方）`)
         }
         // 实质作答：节内非空行 - 标题行 - 问题行 - 引导行（> 开头）≥1
         const start = dLines.findIndex((l) => l.trim() === `## ${sec.heading}`)
@@ -397,9 +453,9 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
     const c = String(anchorCriteria[i] || '').trim()
     if (!c) continue
     const inFr = rText !== null && rText.includes(c)
-    if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
+      if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
   }
-  return { violations, advisories }
+  return { violations, advisories, repairs }
 }
 
 
