@@ -100,6 +100,23 @@ test('③ 兜底合并不误伤：同名前缀不同文件（a.ts 与 a.tsx）�
   assert.equal(r.rows.find((x) => x.path === 'src/a.ts').verdict, 'unplanned')
 })
 
+test('③ 兜底合并承重形态（评审 F1 实证）：重复声明——干净行+残片行并存 → 不补占位行，单行', () => {
+  const stats = new Map([['src/a.tsx', { additions: 47, deletions: 0, kind: 'modified' }]])
+  const r = buildThinSnapshotRows({
+    ownFiles: ['src/a.tsx'],
+    stats,
+    planEntries: [
+      { path: 'src/a.tsx', operation: '修改', incidental: false, repo: null },
+      { path: 'src/a.tsx（交付', operation: null, incidental: false, repo: null },
+    ],
+    crossRepoRows: [],
+  })
+  assert.equal(r.rows.length, 1, `残片重复声明不补占位行: ${JSON.stringify(r.rows)}`)
+  assert.equal(r.rows[0].path, 'src/a.tsx')
+  assert.equal(r.rows[0].verdict, 'planned')
+  assert.equal(r.totals.files, 1)
+})
+
 // ── ⑤ e2e：污染写法清单收口 → scopeAudit 单行干净路径 ──
 function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { stdio: 'pipe' }).toString().trim()
