@@ -139,10 +139,10 @@ test('⑤ adopted 豁免：skipDesign=true 时 design 缺失/未作答不拒收'
   rmSync(root, { recursive: true, force: true })
 })
 
-test('⑦ 问题行机器回填：高相似原位替换/低相似节首插入/重跑幂等（零二次改写零留痕）', () => {
+test('⑦ 问题行机器回填：相似定位上方插入/未定位节首插入/重跑幂等（零二次改写零留痕）', () => {
   const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
   fillAll()
-  // 高相似改述（个别词差异，bigram ≥0.5）→ 原位替换
+  // 高相似改述（个别词差异，bigram ≥0.5）→ 锚原文插在改述行上方（评审 P1 清偿：只插入不替换）
   fill('design.md', (t) => t.replace('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？', '2. 并发写：两个执行体同时操作同一数据/文件会发生什么情况？'))
   // 低相似改述（<0.5）→ 节首插入，改述行保留
   fill('design.md', (t) => t.replace('4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？', '4. 作用域：不涉及。'))
@@ -150,8 +150,7 @@ test('⑦ 问题行机器回填：高相似原位替换/低相似节首插入/�
   assert.equal(v.violations.length, 0, `漂移回填后零拒收: ${JSON.stringify(v.violations)}`)
   assert.equal(v.repairs.length, 2, `两条回填留痕: ${JSON.stringify(v.repairs)}`)
   const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
-  assert.ok(after.includes('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？\n答：'), '高相似改述被原位替换（原文落位于作答之上）')
-  assert.ok(!after.includes('会发生什么情况？'), '高相似改述行不在场（被原位替换）')
+  assert.ok(after.includes('2. 并发写：两个执行体同时操作同一数据/文件会发生什么？\n\n2. 并发写：两个执行体同时操作同一数据/文件会发生什么情况？'), '高相似定位：锚原文插在改述行上方')
   assert.ok(after.includes('4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？'), '低相似原文插入在场')
   assert.ok(after.includes('4. 作用域：不涉及。'), '低相似改述行保留（零数据丢失）')
   // 幂等：重跑零二次改写零留痕
@@ -174,6 +173,24 @@ test('⑦b 实证形态复现：boundaries 四问全部改述（Write 整文件�
   assert.equal(v.repairs.length, 4, `四条回填留痕: ${JSON.stringify(v.repairs)}`)
   const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
   for (const sec of DESIGN_QUESTIONS.sections) for (const q of sec.lines) assert.ok(after.includes(q), `原文回填在场：${q.slice(0, 12)}…`)
+  // 只插入不替换（评审 P1 清偿）：四条改述行全部保留在场
+  for (const paraphrase of ['1. 乱序到达：输入乱序时假设是否仍成立？', '2. 并发写：两个执行体同时操作同一数据会怎样？', '3. 生命周期：会话中途中断状态安全吗？', '4. 作用域：跨仓会不会串数据？']) {
+    assert.ok(after.includes(paraphrase), `改述行保留（零数据丢失）：${paraphrase.slice(0, 10)}…`)
+  }
   assert.equal((after.match(/^答：一行作答$/gm) || []).length, 7, '七处作答全保留（零数据丢失）')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑦c 评审 P1 复现：引用问题原文的作答行（相似度可胜过真改述行）不被销毁——插入式回填零删除', () => {
+  const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
+  fillAll()
+  // P1 场景：approach 问题行被删；节内有一行「逐字引用问题原文＋作答」的答案行（含全文 → bigram 1.0）
+  fill('design.md', (t) => t.replace('本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。\n答：一行作答', '本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。——通过修改校验逻辑解决，答：一行作答'))
+  const quote = '本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。——通过修改校验逻辑解决，答：一行作答'
+  const v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `引用行场景回填后零拒收: ${JSON.stringify(v.violations)}`)
+  const after = readFileSync(join(changeDir, 'design.md'), 'utf8')
+  assert.ok(after.includes(quote), '引用问题原文的作答行原样保留（不被替换销毁）')
+  assert.ok(after.includes('本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。\n\n' + quote), '锚原文插在引用行上方（相似度 1.0 定位）')
   rmSync(root, { recursive: true, force: true })
 })

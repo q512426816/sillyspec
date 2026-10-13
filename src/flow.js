@@ -972,6 +972,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign })
     if (r.applicable && r.schema === 2) {
       // v2 纯 markdown 轨（2026-10-04-thin-docs-v2）：violations 拒收 → 漂移 advisory → spec 断点机器门
+      // 问题行机器回填留痕（2026-10-13-design-question-autorepair）：先于拒收渲染（评审 P3 清偿：
+      // 混合拒收场景回填已落盘，若渲染在 exit(1) 之后则留痕不可达且幂等重跑后永久丢失）。
+      for (const p of r.repairs || []) console.log(`🔧 [design 问题行机器回填] ${p}`)
       if (r.violations.length > 0) {
         console.error(`❌ 工件校验拒收（v2 文档↔锚对比）：`)
         for (const v of r.violations) console.error(`   - ${v}`)
@@ -979,9 +982,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         process.exit(1)
       }
       for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}`)
-      // 问题行机器回填留痕（2026-10-13-design-question-autorepair）：回填已落盘过门——此行是
-      // 审计面（评审/用户可见「曾被改写、已按锚恢复」），非拒收。
-      for (const p of r.repairs || []) console.log(`🔧 [design 问题行机器回填] ${p}`)
       if (adoptedDesign) console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
       // spec 断点机器门（FR-06/FR-07，护栏#2 零 prompt 劝说——advisory 断点在 0/12 勾选类事故
       // 实证下无牙；v2 起批准是收口硬前提，autopilot 是用户显式豁免通道）

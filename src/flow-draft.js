@@ -81,7 +81,9 @@ function charBigramSimilarity(a, b) {
   return union === 0 ? 0 : inter / union
 }
 
-/** design 问题行回填阈值：bigram 相似度 ≥ 此值原位替换改述行，低于则节首插入（永不删除 agent 行）。 */
+/** design 问题行回填阈值：bigram 相似度 ≥ 此值定位到改述行（插入点=其上方），低于则节首插入。
+ *  回填只插入永不删除（评审 P1 清偿：引用问题原文的作答行相似度可胜过真改述行，任何替换式
+ *  回填都有静默销毁 agent 内容的面——插入式把「绝不删除」做成结构不变量，不再依赖阈值甄别）。 */
 const QUESTION_REPAIR_SIM_THRESHOLD = 0.5
 
 /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
@@ -357,8 +359,12 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
             const sim = charBigramSimilarity(t, q)
             if (sim > bestSim) { bestSim = sim; bestIdx = i }
           }
-          if (bestIdx >= 0 && bestSim >= QUESTION_REPAIR_SIM_THRESHOLD) repairedLines[bestIdx] = q
-          else repairedLines.splice(repairedLines[hIdx + 1] === '' ? hIdx + 2 : hIdx + 1, 0, q, '')
+          // 只插入不替换（评审 P1 清偿）：高相似定位 → 插在改述行上方（原文与改述相邻、可读性
+          // 最好）；未定位 → 节首。任何路径都不改动既有行——误定位的最坏结果是插入位置欠佳。
+          const insertAt = bestIdx >= 0 && bestSim >= QUESTION_REPAIR_SIM_THRESHOLD
+            ? bestIdx
+            : (repairedLines[hIdx + 1] === '' ? hIdx + 2 : hIdx + 1)
+          repairedLines.splice(insertAt, 0, q, '')
           repairEntries.push({ heading: sec.heading, q })
         }
       }
@@ -388,7 +394,7 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
           const t = l.trim()
           return t && !qSet.has(t) && !t.startsWith('>') && !t.startsWith('##')
         })
-        if (!answered) violations.push(`design「${sec.heading}」未作答——每节至少一行（小改动可写「不适用：<理由>」）`)
+        if (!answered) violations.push(`design「${sec.heading}」未作答——每节至少一行（小改动可写「不适用：<理由>」）；问题原文：${sec.lines.join('／')}`)
       }
     }
   }
@@ -453,7 +459,7 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
     const c = String(anchorCriteria[i] || '').trim()
     if (!c) continue
     const inFr = rText !== null && rText.includes(c)
-      if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
+    if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
   }
   return { violations, advisories, repairs }
 }
