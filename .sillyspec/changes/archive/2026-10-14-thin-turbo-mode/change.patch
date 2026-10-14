@@ -1,0 +1,586 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index bc6aeace..e4de12a9 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -8,6 +8,7 @@
+ | 需求形态 | 走法 |
+ |---|---|
+ | 需求已含决策（改什么、成功标准说得清——成功标准须来自**用户原话或既有文档转写**；要靠你推断拟出的标准＝需求不清晰） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 用户显式要求极速（「极速/别验证/只要 spec 和代码」类原话）且需求已含决策 | **轻量变更极速版**：同上行加 `--turbo`（`flow start --change <名> --input "<...>" --turbo`）——**仅用户显式触发，禁止你自行启用**；收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），spec 结构校验/tasks 全勾/ledger/patch 冻结/distill/归档照常（跳的是验证不是证据）；升厚即失效恢复全量仪式；收口输出显式标注「不含测试客观核验」。预段组合极速：头脑风暴预段走轻量跑判定+单轮合并问询+burst 一次 --done，收编时按用户要求带 --turbo |
+ | 需求不清晰 / 需要方案探索（含「成功标准要你替用户拟」的形态——自己拟标准再自答是把默认共识伪装成共识） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准）。上个轻量变更被 route-hindsight 标记时全新 start 会被同意门拦下要求显式选道：确认已含决策带 `--no-prestage` 声明留痕，否则先走本行预段 |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+ | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index b46e2cf1..36d2c98f 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -15,12 +15,15 @@ sillyspec flow start --change <变更名> --input "<动机与背景>
+ 
+ 成功标准：
+ - <可验证标准>"
++#    极速变体：用户显式说「极速/别验证/只要 spec 和代码」类原话时才加 --turbo（仅用户显式触发，
++#    禁止你自行启用）——flow-state 留痕，收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），
++#    spec 结构校验、tasks 全勾、ledger、patch 冻结、distill、归档照常；升厚即失效恢复全量仪式。
+ # ② 直接干活：改代码写测试；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
+ #    tasks.md 是你的工作队列——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态），
+ #    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN
+ #    即时回显进度与下一任务）→ 下一行；每格勾选要有对应提交（消息带 task-NN），一把勾收口被拒。
+ #    交付代码显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交不进审计件）
+-# ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档）：
++# ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档；--turbo 变更自动跳过实测与重仪式门）：
+ sillyspec flow done --change <变更名>
+ # 断点恢复 / 随时查进度：
+ sillyspec flow status --change <变更名>
+@@ -32,6 +35,7 @@ sillyspec flow status --change <变更名>
+ - 预段同意门：上个轻量变更被 route-hindsight 标记「疑似该走预段未走」时，全新 start 会被拦下要求显式选道——确认需求已含决策（成功标准来自用户原话/文档转写）加 `--no-prestage` 声明留痕；要靠你拟标准就走 brainstorm 预段，完成后收编（标记自动消费）。
+ - 触及 src/test 的改动 flow done 会亲自实测 local.yaml 的 test/lint（实测失败阻断收口，修好重跑即可）——想省一轮就先自跑。
+ - 轻量→完整转道是用户决策：征得同意带 `--upgrade-thick` 重启；实测失败自动升厚。
++- 极速模式（--turbo）触发判据：仅用户显式极速原话（「极速/别验证/只要 spec 和代码」类）才携带——你不得自行启用（实证核验是默认价值，fast 是用户让渡的例外）；跳过面只覆盖验证仪式，spec 面与证据面（patch/distill）全保留；收口输出会显式标注「本次收口不含测试客观核验」。预段组合极速：头脑风暴预段走轻量跑判定（需求已收敛直书结论）+ 单轮合并问询 + burst 一次 --done，收编时若用户要求极速则 start 带 --turbo。
+ - 显式 pathspec 提交（`git commit -m "..." -- 文件…`），禁 git add -A。
+ 
+ # 边界声明
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index fdf4b6d8..e07d60d6 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -354,7 +354,12 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
+       const questionPresent = (lines, q) => lines.some((raw) => {
+         const t = String(raw || '').trim()
+         if (!t || t === q) return t === q
+-        // 只剥一层编号/列表前缀（锚问句自带「N.」编号，多层剥会把锚的编号也吃掉致包含
++        // 包含判定只对自带编号的锚生效（四问节「N. 问句」形态——回答行「N. 问句：答」折叠
++        // 是惯例书写面，注入即倒序重复块，坑 flow-done-design-question-line-injection）。
++        // 无编号锚（做法/契约/风险节单行问句）不做包含判定：⑦c 契约要求引用原文的作答行
++        // 仍注入锚在引用行上方（锚独立成行是审计面）——包含跳过会吃掉该注入。
++        if (!/^\d+[.、)]\s/.test(q)) return false
++        // 只剥一层编号/列表前缀（锚自带「N.」编号，多层剥会把锚的编号也吃掉致包含
+         // 判定假阴性——① 用例实证）
+         const stripped = t.replace(/^(?:\d+[.、)]\s*|[-*•]\s*)/, '')
+         return stripped.includes(q)
+diff --git a/src/flow.js b/src/flow.js
+index c314b3c7..3ab31d2a 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -572,7 +572,7 @@ function resetThinStageRowOnUpgrade(cwd, change, specBase = null) {
+   } catch { /* 行值重置 best-effort，不阻断升厚 */ }
+ }
+ 
+-export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
++export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, turbo = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
+   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
+   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
+   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
+@@ -615,7 +615,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+         } catch { /* 消费 best-effort */ }
+         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
+-        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
++        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {},
++          // 极速模式留痕（2026-10-14-thin-turbo-mode D-005）：--turbo 用户显式触发声明性落盘；
++          // flow done 读态以 turbo && tier!=='thick' 判定（D-007 升厚即失效）
++          ...(turbo ? { turbo: true, turbo_since: new Date().toISOString() } : {}) })
+         try {
+           const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
+           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
+@@ -655,6 +658,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+         try { digestLines = (await flowKnowledgeDigest({ specBase, change, changeDir, input: null })).lines } catch { /* 注入 best-effort */ }
+         console.log([
+           `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
++          // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
++          ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
+           `══════════════════════════════════════`,
+           `📖 必读（头脑风暴产出——方案的承诺锚，先读完再动手）：`,
+           ...artifacts.map((p) => `   - ${p}`),
+@@ -878,6 +883,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     // 预段同意门声明留痕（2026-10-14-prestage-consent-gate）：hindsight 标记在场时全新 start
+     // 以 --no-prestage 显式声明「本次需求已含决策」放行——审计面可区分「确认过」与「没被问过」
+     prestage_ack: Boolean(prestageAck),
++    // 极速模式留痕（2026-10-14-thin-turbo-mode D-005）：--turbo 用户显式触发声明性落盘；
++    // flow done 读态以 turbo && tier!=='thick' 判定（D-007 升厚即失效）
++    ...(turbo ? { turbo: true, turbo_since: new Date().toISOString() } : {}),
+     baseline_commit: baseline,
+     substeps: {},
+   })
+@@ -1016,6 +1024,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+     `══════════════════════════════════════`,
++    // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
++    ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
+     ...(hindsightHint ? [hindsightHint, ''] : []),
+     `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
+     `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
+@@ -1156,6 +1166,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     console.error('❌ 本 change 已混跑回退 legacy（跑过 run <stage>）——剩余流程按厚档走 run <stage>，flow done 不再裁决')
+     process.exit(2)
+   }
++  // 极速模式读态（2026-10-14-thin-turbo-mode FR-02/D-007）：turbo && tier!=='thick' 双条件——
++  // 升厚（distill 异态/verify 失败/--thick 起步）后 turbo 残留不短路厚档仪式，重入即恢复全量校验
++  const turbo = st.turbo === true && st.tier !== 'thick'
+   const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
+   // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
+   // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
+@@ -1433,7 +1446,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+       }
+     } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
+-    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧哨兵带 baseline 区间，quick 侧区间不可靠——单判不双判 */ })
++    // 极速模式实测门跳过（2026-10-14-thin-turbo-mode FR-02/D-002）：turbo 在场不调
++    // runQuickTestLintGate，合成 gate 同形状 skipped 对象（带 status:'skipped' 完整形态——
++    // 下方 fmt 对 null 显示 '—'，带形态才输出「skipped — 跳过原因」，审计可见；
++    // 对齐 quick-audit env 逃生门 skip 形态先例 src/run/quick-audit.js:482）。
++    // 失败升厚分支（下方 action==='fail'）turbo 下天然不触达——升厚语义不变。
++    const gate = turbo
++      ? { action: 'skip', failed: [], reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——test+lint 实测跳过（审计留痕；本次收口不含测试客观核验）`, test: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——本次收口不含测试客观核验（审计留痕）`, resultPath: null }, lint: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: '⚡ 极速模式——lint 实测跳过（审计留痕）', resultPath: null } }
++      : await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧哨兵带 baseline 区间，quick 侧区间不可靠——单判不双判 */ })
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
+@@ -1489,7 +1509,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const fmt = (r) => r
+       ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}${r.status === 'skipped' && r.reason ? ` — 跳过原因：${String(r.reason).split('。')[0]}。` : ''}`
+       : '—'
+-    gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
++    gateSummaryText = `${turbo ? '⚡极速模式｜' : ''}test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
+     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
+     try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
+     // FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道（quick 退役后
+@@ -1731,7 +1751,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
+           // 缺口在场且未显式处置 → 停在 patch 子步标记之前（半态可重入，与 review 中断同款
+           // exit 语义）：处置后重跑，patch 全量重建自动并入已提交 src。
+-          if (!freezeDirty && !acceptDirtyGap) {
++          // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：缺口三选一阻断降 advisory——
++          // 警告+缺口数留痕后放行，不 exit；非 turbo 路径逐字不变。
++          if (turbo && !freezeDirty && !acceptDirtyGap) {
++            console.warn(`⚡ 极速模式：未提交交付缺口未显式处置——降 advisory 放行（缺口数 ${freeze.dirtyWarned.length} 随收口输出留痕，审计自负）`)
++          }
++          if (!freezeDirty && !acceptDirtyGap && !turbo) {
+             console.error('⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：')
+             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
+             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
+@@ -2024,6 +2049,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
+       }
+     } catch { reviewOutcome = { required: null, verdict: 'done', backfilled: true } }
++  } else if (turbo) {
++    // 极速模式评审豁免（2026-10-14-thin-turbo-mode FR-02/D-001/D-002）：用户显式极速声明=
++    // 风险自担留痕，跳过 classifyReviewNeed 强制豁免（telemetry src/flow.js 整对象 JSON
++    // 序列化，turboExempt 字段无破坏——Grill X-003 探针已核）。
++    console.log('⚡ 极速模式：评审子步豁免（用户显式极速声明=风险自担留痕）')
++    reviewOutcome = { required: false, sampled: false, verdict: 'exempt', turboExempt: true }
++    mark('review')
+   } else {
+     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
+     let patchText = null
+@@ -2114,6 +2146,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦；
+     // 默认 warn 档只警告不拦。与 run/gates.js verify 收尾同一检测单点，不二算）。
+     try {
++      if (turbo) {
++        // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：ui 视觉探针跳过留痕
++        console.log('⚡ 极速模式：UI 视觉证据探针跳过（审计留痕）')
++      } else {
+       const uiProbe = runUiVisualProbe({ changeDir, gate: readUiVisualGate(specBase) })
+       if (uiProbe.level === 'error') {
+         console.error('\n❌ UI 视觉证据门（探针 12 error 档）阻断收口：')
+@@ -2124,6 +2160,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       } else if (uiProbe.level === 'warn') {
+         console.warn(`⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
+       }
++      }
+     } catch (e) {
+       console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
+     }
+@@ -2132,7 +2169,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 竞争、在途残留；hunk_gate warn 默认（警告）/error（阻断）/off。与「提交面夹带嫌疑
+     // advisory」互补：advisory 在冻结面采集处看文件名，本门在 probes 执法看 hunk 与竞争面。
+     try {
+-      const gate = readHunkGate(specBase)
++      // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：hunk 门强制降 warn 档——
++      // 判定链路照跑（三类信号照常渲染），仅 error 阻断档解除（降 advisory 留痕不阻断）。
++      const gate = turbo ? 'warn' : readHunkGate(specBase)
+       let committedForGate = []
+       try {
+         committedForGate = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
+@@ -2537,6 +2576,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+       autopilot: hasFlag('--autopilot'),
+       prestageAck: hasFlag('--no-prestage'),
++      turbo: hasFlag('--turbo'),
+       cwd, specBase,
+       json: hasFlag('--json') || jsonGlobal,
+     })
+diff --git a/test/turbo-mode-done-keep.test.mjs b/test/turbo-mode-done-keep.test.mjs
+new file mode 100644
+index 00000000..eeade3a2
+--- /dev/null
++++ b/test/turbo-mode-done-keep.test.mjs
+@@ -0,0 +1,98 @@
++/**
++ * turbo-mode-done-keep.test.mjs — 极速模式必留面照常（FR-03，2026-10-14-thin-turbo-mode）
++ *
++ * 覆盖验收面：
++ *   ① tasks 全勾门不放松：turbo 变更存在未勾任务 → flow done 照常拒收（exit≠0）；
++ *   ② design 空槽拒收不放松：turbo 变更 design 四节未作答 → artifacts 子步照常拒收；
++ *   ③ 非 turbo done 输出无极速面痕迹（缺省零回归）。
++ * 夹具配方对齐 flow-protocol.test.mjs。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'turbo-keep-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return cwd
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++function startTurbo(cwd, change) {
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
++  return s1
++}
++
++test('① tasks 全勾门不放松：turbo 变更未勾任务 → done 照常拒收', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-keep-t1'
++  startTurbo(cwd, change)
++  // 追加一个不勾的任务——全勾硬门（必留面）在 turbo 下必须照常拦截
++  const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
++  writeFileSync(tp, readFileSync(tp, 'utf8').replace(/\n$/, '') + '\n- [ ] task-02: 夹具附加任务（故意不勾）\n')
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.notEqual(s2.status, 0, `未勾任务应拒收（exit=${s2.status}）: ${s2.stdout}\n${s2.stderr}`)
++  assert.doesNotMatch(s2.stdout, /flow done 完成/, '未完成收口')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② design 空槽拒收不放松：turbo 变更四节未作答 → artifacts 子步照常拒收', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-keep-t2'
++  startTurbo(cwd, change)
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  // 故意不作答 design 四节/FR 槽——文档先行校验（必留面）在 turbo 下必须照常拦截
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.notEqual(s2.status, 0, `design 空槽应拒收（exit=${s2.status}）: ${s2.stdout}\n${s2.stderr}`)
++  assert.doesNotMatch(s2.stdout, /flow done 完成/, '未完成收口')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ 非 turbo done：输出无极速面痕迹（缺省零回归）', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-keep-t3'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'])
++  assert.equal(s1.status, 0)
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  const dp = join(cwd, '.sillyspec', 'changes', change, 'design.md')
++  const rp = join(cwd, '.sillyspec', 'changes', change, 'requirements.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：夹具——一行作答即合规'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：夹具——无独立测试面'))
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.doesNotMatch(s2.stdout, /⚡极速模式/, '无极速标注')
++  assert.doesNotMatch(s2.stdout, /评审子步豁免（用户显式极速声明/, '无 turbo 豁免行')
++  assert.match(s2.stdout, /test: —｜lint: —/, '实测门照常真跑（纯文档面走 gate 既有 skip 形态，非 turbo 合成对象）')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/turbo-mode-done-skip.test.mjs b/test/turbo-mode-done-skip.test.mjs
+new file mode 100644
+index 00000000..6b2e60ca
+--- /dev/null
++++ b/test/turbo-mode-done-skip.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * turbo-mode-done-skip.test.mjs — 极速模式 flow done 跳过面（FR-02/D-007，2026-10-14-thin-turbo-mode）
++ *
++ * 覆盖验收面：
++ *   ① turbo 变更 flow done：实测门合成 skipped（gateSummary 带 ⚡极速模式 前缀 + test: skipped
++ *      带跳过原因）、评审子步豁免（turboExempt 留痕）、收口 exit 0 归档成功；
++ *   ② 升厚即失效（D-007）：tier 改 thick 后重入 done——实测门照跑（无 ⚡ 前缀）、评审不走 turbo 豁免。
++ * 夹具配方对齐 flow-protocol.test.mjs。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'turbo-done-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++/** v2 槽作答（对齐 flow-protocol fillDesignSlots v2 分支：四问行下补答 + FR 行为句 + 绑定行）。 */
++function fillDesignSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  const rp = join(base, 'requirements.md')
++  const dText = readFileSync(dp, 'utf8')
++  writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：极速夹具——一行作答即合规'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（极速夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：极速夹具——无独立测试面'))
++}
++
++function deliverAndClose({ turbo }) {
++  const { cwd } = makeRepo()
++  const change = '2026-10-14-turbo-done-x'
++  const startArgs = ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot']
++  if (turbo) startArgs.push('--turbo')
++  const s1 = cli(cwd, startArgs)
++  assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  return { cwd, change }
++}
++
++test('① turbo done：实测门合成 skipped + ⚡极速标注 + 评审豁免，收口归档成功', () => {
++  const { cwd, change } = deliverAndClose({ turbo: true })
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.match(s2.stdout, /⚡极速模式｜test: skipped — 跳过原因：⚡ 极速模式/, 'gateSummary 极速前缀 + test skipped 带跳过原因')
++  assert.match(s2.stdout, /本次收口不含测试客观核验/, '无测试客观核验显式标注（R-03）')
++  assert.match(s2.stdout, /⚡ 极速模式：评审子步豁免/, '评审 turboExempt 留痕')
++  assert.match(s2.stdout, /flow done 完成（2\/2 协议调用收口）/, '收口成功')
++  const arch = join(cwd, '.sillyspec', 'changes', 'archive', change)
++  assert.ok(existsSync(join(arch, 'change.patch')) && existsSync(join(arch, 'change-patch.json')), 'patch 冻结件照常留档（D-006 证据非验证）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 升厚即失效（D-007）：tier=thick 后 turbo 残留不短路——全量仪式恢复（评审照常要求）', () => {
++  const { cwd, change } = deliverAndClose({ turbo: true })
++  const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
++  writeFileSync(stPath, readFileSync(stPath, 'utf8').replace(/^tier: thin$/m, 'tier: thick'))
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.doesNotMatch(s2.stdout, /⚡极速模式｜/, '无极速前缀——实测门恢复全量')
++  assert.match(s2.stdout, /test: —｜lint: —/, '实测门真跑（纯文档面走 gate 既有 skip，非 turbo 合成对象）')
++  assert.doesNotMatch(s2.stdout, /评审子步豁免（用户显式极速声明/, '评审不走 turbo 豁免分支')
++  assert.match(s2.stdout, /本变更需要独立评审/, '厚档评审仪式照常要求（turbo 不豁免）——D-007 生效')
++  assert.notEqual(s2.status, 0, '独立评审缺位按厚档语义阻断（turbo 残留不短路）')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/turbo-mode-scope.test.mjs b/test/turbo-mode-scope.test.mjs
+new file mode 100644
+index 00000000..ed217008
+--- /dev/null
++++ b/test/turbo-mode-scope.test.mjs
+@@ -0,0 +1,94 @@
++/**
++ * turbo-mode-scope.test.mjs — 作用域隔离（FR-05/D-007，2026-10-14-thin-turbo-mode）
++ *
++ * 覆盖验收面：
++ *   ① 无环境变量旁路：非 turbo 仓设 SILLYSPEC_TURBO=1 → done 行为照旧（无极速面）——
++ *      跳过面仅由 flow-state turbo 字段激活；
++ *   ② --turbo --thick 同给：留痕落盘但 tier=thick → done 全量仪式（turbo 不生效，D-007 起步变体）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'turbo-scope-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return cwd
++}
++
++function cli(cwd, args, extraEnv = {}) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0', ...extraEnv },
++  })
++}
++
++function fillDesignSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  const rp = join(base, 'requirements.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：夹具——一行作答即合规'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（夹具行为句）')
++    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：夹具——无独立测试面'))
++}
++
++test('① 无环境变量旁路：SILLYSPEC_TURBO=1 对非 turbo 仓零作用', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-scope-t1'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'], { SILLYSPEC_TURBO: '1' })
++  assert.equal(s1.status, 0)
++  assert.doesNotMatch(s1.stdout, /极速模式/, 'env 不触发极速面（仅 flow-state 字段激活）')
++  const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.doesNotMatch(st, /^turbo:/m, 'env 不落 turbo 留痕')
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  const s2 = cli(cwd, ['flow', 'done', '--change', change], { SILLYSPEC_TURBO: '1' })
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.doesNotMatch(s2.stdout, /⚡极速模式/, 'done 侧 env 同样零作用')
++  assert.match(s2.stdout, /test: —｜lint: —/, '实测门照常真跑（纯文档面走 gate 既有 skip 形态，非 turbo 合成对象）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（D-007 起步变体）', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-scope-t2'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
++  assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
++  const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.match(st, /^tier: thick$/m, 'thick 起步')
++  assert.match(st, /^turbo: true$/m, 'turbo 字段留痕（声明性）')
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.doesNotMatch(s2.stdout || '', /⚡极速模式｜/, '厚档 done 无极速跳过面')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ 提示词面三处在场（FR-04 文案锚——防漂移）：AGENTS.md 极速行 + flow 卡 --turbo 文档', () => {
++  const agents = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8')
++  assert.match(agents, /--turbo/, 'AGENTS.md 选道表极速行带 --turbo')
++  assert.match(agents, /禁止你自行启用/, '禁 agent 自启判据在场（D-001）')
++  const card = readFileSync(join(ROOT, 'assets', 'command-cards', 'flow.md'), 'utf8')
++  assert.match(card, /--turbo/, 'flow 命令卡 --turbo 文档在场')
++  assert.match(card, /仅用户显式触发/, '卡内触发判据在场')
++})
+diff --git a/test/turbo-mode-start.test.mjs b/test/turbo-mode-start.test.mjs
+new file mode 100644
+index 00000000..1bc590fa
+--- /dev/null
++++ b/test/turbo-mode-start.test.mjs
+@@ -0,0 +1,65 @@
++/**
++ * turbo-mode-start.test.mjs — 极速模式触发与留痕（FR-01，2026-10-14-thin-turbo-mode）
++ *
++ * 覆盖验收面：
++ *   ① flow start --turbo：flow-state.yaml 落 turbo/turbo_since 留痕 + start 输出极速指引行；
++ *   ② 无 --turbo：flow-state 无 turbo 字段、输出无极速行（缺省零回归——缺省路径不进新分支）。
++ * 夹具配方对齐 flow-protocol.test.mjs（CLI 子进程 e2e + 临时 git 仓）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'turbo-start-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++test('① flow start --turbo：flow-state 落 turbo/turbo_since 留痕 + 输出极速指引行', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-10-14-turbo-start-t1'
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
++  assert.match(r.stdout, /⚡ 极速模式（用户显式触发）/, '极速指引行在场')
++  const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
++  assert.ok(existsSync(stPath), 'flow-state 落盘')
++  const st = readFileSync(stPath, 'utf8')
++  assert.match(st, /^turbo: true$/m, 'turbo 留痕字段')
++  assert.match(st, /^turbo_since: '?\d{4}-\d{2}-\d{2}T/m, 'turbo_since ISO 时间戳留痕')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 无 --turbo：flow-state 无 turbo 字段、输出无极速行（缺省零回归）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-10-14-turbo-start-t2'
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'])
++  assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
++  assert.doesNotMatch(r.stdout, /极速模式/, '无极速指引行')
++  const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.doesNotMatch(st, /^turbo:/m, '无 turbo 字段')
++  assert.doesNotMatch(st, /^turbo_since:/m, '无 turbo_since 字段')
++  rmSync(cwd, { recursive: true, force: true })
++})

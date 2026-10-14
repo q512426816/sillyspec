@@ -1,0 +1,137 @@
+{
+  "change": "2026-10-14-thin-turbo-mode",
+  "baseline": "5f7d2668e4bcc2352bc7b82222ba71904d6cffc7",
+  "head": "d49dd2b2cb7f870dcba1943e8e1309da49a3c714",
+  "files": [
+    "AGENTS.md",
+    "assets/command-cards/flow.md",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "test/turbo-mode-done-keep.test.mjs",
+    "test/turbo-mode-done-skip.test.mjs",
+    "test/turbo-mode-scope.test.mjs",
+    "test/turbo-mode-start.test.mjs"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 407,
+    "deletions": 8
+  },
+  "savedAt": "2026-10-14T00:55:39.318Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "5f7d2668e4bcc2352bc7b82222ba71904d6cffc7",
+    "totals": {
+      "files": 8,
+      "additions": 407,
+      "deletions": 8
+    },
+    "rows": [
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "assets/command-cards/flow.md",
+        "additions": 5,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow-draft.js",
+        "additions": 6,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 46,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-done-keep.test.mjs",
+        "additions": 98,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-done-skip.test.mjs",
+        "additions": 92,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-scope.test.mjs",
+        "additions": 94,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-start.test.mjs",
+        "additions": 65,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "8805def7c212d8c393351534589babf0440be3e2568ddbda6ea67f51674651db",
+  "patchStatus": "ok"
+}

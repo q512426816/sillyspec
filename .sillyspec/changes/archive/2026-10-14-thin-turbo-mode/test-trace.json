@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-thin-turbo-mode",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-thin-turbo-mode:flow:测试绑定FR-01",
+      "tests": [
+        "test/turbo-mode-start.test.mjs「flow start --turbo 留痕与指引行；无 flag 零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-thin-turbo-mode"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-thin-turbo-mode:flow:测试绑定FR-02",
+      "tests": [
+        "test/turbo-mode-done-skip.test.mjs「turbo done 跳过面逐项留痕；升厚失效 D-007」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-thin-turbo-mode"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-thin-turbo-mode:flow:测试绑定FR-03",
+      "tests": [
+        "test/turbo-mode-done-keep.test.mjs「全勾门/design 空槽拒收不放松；非 turbo 零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-thin-turbo-mode"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-thin-turbo-mode:flow:测试绑定FR-04",
+      "tests": [
+        "test/turbo-mode-scope.test.mjs「提示词面三处文案锚（用例③）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-thin-turbo-mode"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-14-thin-turbo-mode:flow:测试绑定FR-05",
+      "tests": [
+        "test/turbo-mode-scope.test.mjs「无 env 旁路；--turbo --thick 同给不生效」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-thin-turbo-mode"
+    }
+  ]
+}

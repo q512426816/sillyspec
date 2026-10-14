@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-thin-turbo-mode",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d49dd2b2cb7f870dcba1943e8e1309da49a3c714",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02 绑定声称「跳过面逐项留痕」，测试仅覆盖实测门+评审豁免两项——dirty 降档/ui 探针跳过/hunk 降档三处行为零断言",
+      "evidence": "turbo-mode-done-skip.test.mjs 用例①只断言 gateSummary ⚡前缀+test skipped+评审豁免行+归档成功；flow.js:1756（dirty 降 advisory 警告行）、flow.js:2149（ui 探针跳过留痕行）、flow.js:2174（hunk 门强制 warn）三处跳过/降档行为在四件测试中无任何断言",
+      "location": "test/turbo-mode-done-skip.test.mjs:31-82"
+    },
+    {
+      "severity": "P3",
+      "title": "NFR「缺省零回归三态各有测试锚」不实——非法/重复 flag 态与 flow-state 读取失败/字段缺失态均无测试",
+      "evidence": "四件测试仅覆盖①无 flag 态（start②/keep③/scope①）；②flag 值非法/重复（--turbo=x 类）语义、③readFlowState 失败→null 与 turbo_since 字段缺失（代码 fail-soft：flow.js:1455 `st.turbo_since || '时点未记'`、flow.js:1161 null 守卫）两态零断言——config-absent-zero-regression 探针判 gap",
+      "location": ".sillyspec/changes/2026-10-14-thin-turbo-mode/requirements.md:50"
+    },
+    {
+      "severity": "P3",
+      "title": "change.patch 冻结面混入并行会话提交 90ad45f2（src/flow-draft.js verifyThinDocsV2 收窄）——design 文件变更清单未列，随带留痕声明只覆盖 flow.js",
+      "evidence": "fdd37e3a 提交消息仅声明 thin-upgrade-stale-stage-window 的 flow.js 随带 hunks；flow-draft.js hunk 来自无本变更名 tag 的独立提交 90ad45f2（design-回填，代码注释指向 flow-done-design-question-line-injection），落在 baseline..HEAD 窗口被冻结构入；该 hunk 对 turbo/缺省两路径同施、非 turbo 门控，不构成 FR-03 的 turbo 放松，定性为冻结窗口台账缺口",
+      "location": ".sillyspec/changes/2026-10-14-thin-turbo-mode/change.patch:42-59"
+    },
+    {
+      "severity": "P3",
+      "title": "--turbo --thick 同给时 start 仍输出「收口自动跳过实测与重仪式门」指引——该 combo 下 done 实际不跳过，指引条件未随档位收窄",
+      "evidence": "flow.js:662/:1028 极速指引行仅以 turbo flag 为条件、不查 tier，而 D-007 判定（flow.js:1171）使 tier=thick 时 done 无任何跳过（scope 测试②实证）——cli-copy-selfsufficient② 在该边缘 combo 上文案条件与门判定漂移（下游行为正确，仅指引行误导）",
+      "location": "src/flow.js:1028"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——turbo 读态 done 入口单次读取（src/flow.js:1171），无新增乱序敏感状态；升厚竞态以重入判定收口（done-skip 测试②锚）。边界已裁决：可接受——升厚不删 turbo 残留字段、以 tier!=='thick' 判定失效（留痕可审计优先于状态清理）",
+    "并发": "ok——turbo 仅 start 单写/done 单读两枚声明字段，复用既有 writeFlowState 部分合并链路（src/flow-state.js），无新并发写面；多会话所有权沿用既有规则。边界已裁决：可接受",
+    "切换": "ok——无 flow-state 守卫（exit 2, flow.js:1161）与 legacy_fallback 混跑守卫（exit 2, flow.js:1165）均先于 turbo 读态，切换/回退厚档不受 turbo 短路。边界已裁决：可接受——turbo 变更重跑 start 不带 --turbo 不清除留痕（变更级属性，唯一失效开关=升厚/thick，与卡面「--turbo 变更」表述一致）",
+    "作用域": "ok——全 src 无 SILLYSPEC_TURBO env 触点（grep 实证，FR-05/无旁路兑现）；serializeForSync 六表投影（src/progress.js:573）零 turbo 字段（R-04 兑现）；厚道 run <stage> 族零 hunk（patch 事实）。边界已裁决：可接受——hunk 门强制 warn 含配置 off 时被拉为 warn 噪音（advisory-only，design Phase 2 明文「强制 warn」）；评审「强制豁免」不豁免 review_force（FR-02 无例外条款，文案与判定一致）"
+  },
+  "reviewedAt": "2026-10-14T00:58:27Z"
+}

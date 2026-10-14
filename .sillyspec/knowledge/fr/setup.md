@@ -1866,3 +1866,113 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-14-prestage-consent-gate
   status: active
+
+## FR-setup-106 极速触发与留痕
+变更：2026-10-14-thin-turbo-mode
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-003@v1、D-005@v1
+场景正文：
+- 场景：默认场景 — Given 用户显式表达极速意图，agent 执行 `sillyspec flow start --change <名> --input "..." --turbo`；When flow start 处理该 flag
+全文：.sillyspec/changes/archive/2026-10-14-thin-turbo-mode/requirements.md#FR-01
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-thin-turbo-mode:flow:测试绑定FR-01
+  tests: test/turbo-mode-start.test.mjs「flow start --turbo 留痕与指引行；无 flag 零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-thin-turbo-mode
+  status: active
+
+## FR-setup-107 flow done 跳过面（读态生效）
+变更：2026-10-14-thin-turbo-mode
+状态：active
+摘要：默认场景
+依据决策：D-002@v1、D-003@v1、D-005@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given 变更 flow-state 含 `turbo: true` 且 `tier !== 'thick'`（升厚即失效，D-007），执行 `flow done`；Then 以下各项跳过/降档且逐项在收口输出留痕：
+全文：.sillyspec/changes/archive/2026-10-14-thin-turbo-mode/requirements.md#FR-02
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-thin-turbo-mode:flow:测试绑定FR-02
+  tests: test/turbo-mode-done-skip.test.mjs「turbo done 跳过面逐项留痕；升厚失效 D-007」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-thin-turbo-mode
+  status: active
+
+## FR-setup-108 必留面语义不变
+变更：2026-10-14-thin-turbo-mode
+状态：active
+摘要：默认场景
+依据决策：D-002@v1、D-006@v1
+场景正文：
+- 场景：默认场景 — Given turbo 变更 flow done；Then spec 结构校验（verifyThinDocsV2）、tasks 全勾门、ledger 门、patch 冻结（change.patch/change-patc
+全文：.sillyspec/changes/archive/2026-10-14-thin-turbo-mode/requirements.md#FR-03
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-thin-turbo-mode:flow:测试绑定FR-03
+  tests: test/turbo-mode-done-keep.test.mjs「全勾门/design 空槽拒收不放松；非 turbo 零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-thin-turbo-mode
+  status: active
+
+## FR-setup-109 提示词面三处同步
+变更：2026-10-14-thin-turbo-mode
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-003@v1、D-004@v1
+场景正文：
+- 场景：默认场景 — Given 极速模式落地；Then ① AGENTS.md 选道表新增极速行：触发判据=用户显式极速原话，携带 `--turbo`，禁 agent 自启；② flow 命令卡（assets/com
+全文：.sillyspec/changes/archive/2026-10-14-thin-turbo-mode/requirements.md#FR-04
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-thin-turbo-mode:flow:测试绑定FR-04
+  tests: test/turbo-mode-scope.test.mjs「提示词面三处文案锚（用例③）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-thin-turbo-mode
+  status: active
+
+## FR-setup-110 作用域隔离
+变更：2026-10-14-thin-turbo-mode
+状态：active
+摘要：默认场景
+依据决策：D-004@v1、D-007@v1
+场景正文：
+- 场景：默认场景 — Given 任意厚道命令 `run <stage>` 或未带 turbo 的薄道变更；Then 行为与改动前逐字一致：厚道全族代码路径零改动；跳过面仅由 flow-state turbo 字段激活，无环境变量/全局态旁路
+全文：.sillyspec/changes/archive/2026-10-14-thin-turbo-mode/requirements.md#FR-05
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-thin-turbo-mode:flow:测试绑定FR-05
+  tests: test/turbo-mode-scope.test.mjs「无 env 旁路；--turbo --thick 同给不生效」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-thin-turbo-mode
+  status: active

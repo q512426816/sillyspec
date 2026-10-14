@@ -2527,3 +2527,56 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：fd7047230ffd838b14315d8be221575da00673af
 理由：最大风险：误拦摩擦——tasks 改写率阈值 0.6 偏敏感（agent 按真实实现路径改写机器种子是 tasks 契约鼓励的行为），可能频繁触发门，agent 为省事机械带 `--no-prestage` 让门退化为提示。缓解：声明有留痕（prestage_ack 可审计「确认过」vs「没被问过」），且这是自校准回路的第一环——后续可按误拦率调阈值。放弃的方案：① `--input` 自报来源字段（用户原话/agent 拟定）——100% 变更加摩擦、自报可绕（过度自信的 agent 恒报「用户原话」）、与 D-003/D-005「机器只产封闭面形态信号、语义判定归 agent/用户」的既有裁定冲突；② 把前门自检升级为硬门——盘问对象是本次需求（语义面），机器无判据，违背同一条裁定。同意门只消费上次的过程形态信号（封闭面：diff 比例/记录计数），不判本次需求，边界成立。
+
+## D-001@v1 极速模式触发权=仅用户显式触发
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：不能。仅用户显式表达极速意图（「极速/别验证/只要 spec 和代码」类原话）时 agent 才触发；agent 不得自行启用。
+
+## D-002@v1 极速跳过面=实测面+重仪式门，spec 面与 distill 必留
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：跳过=test+lint 实测（runQuickTestLintGate）、hunk 归属门、dirty 收口阻断门（降 advisory 留痕）、ui 视觉探针门、评审子步（凭用户声明豁免留痕）。必留=spec 文档结构校验（verifyThinDocsV2）、tasks 全勾门、ledger 门、distill（决策+FR 索引+模块回写）、archive。distill 判为核心：纯机械文件操作毫秒级、非验证而是知识复利进料口（knowledge search 自动注入未来 prompt + FR 索引支撑动态测试面推断）。
+
+## D-003@v1 双层承载——提示词面触发语义，CLI 侧 flag 硬承载
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：提示词与 CLI 分层：提示词面（AGENTS.md 选道表/flow 命令卡）负责让 agent 理解何时、如何请求极速并转达用户意图；CLI 侧 `flow start --turbo` flag 落 flow-state 留痕（声明即过），`flow done` 读态生效跳过面。纯提示词无法跳过 CLI 硬门，纯 CLI flag 无触发语义——两层缺一不可。
+故障面：用户口头说极速但 agent 忘带 --turbo → 门照拦（fail-closed 可接受，提示语指路 flag）
+退役判据：若实测极速模式使用率趋零或频繁误触发（遥测面），收回 flag 改纯提示词约定
+
+## D-004@v1 作用域=薄道+头脑风暴预段，厚道零改动
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：仅薄道（flow start/done）与头脑风暴预段（brainstorm 轻量跑通道+单轮合并问询+一次收口）；完整五阶段厚道明确不做极速版。
+
+## D-005@v1 方案取舍——选 A（--turbo flag + flow-state 留痕）
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：方案 A。flow start --turbo 落 flow-state 留痕（声明即过）+ flow done 读态按 D-002 跳过面早退逐项 skipped 留痕 + 提示词面（AGENTS.md 选道行/命令卡）同步教触发判据（禁 agent 自启）。理由：唯一同时满足提示词触发语义、跳过验证仪式、仅薄道、预段也极速四条原始需求且留痕可审计的形态。
+故障面：用户口头说极速但 agent 忘带 --turbo → 门照拦（fail-closed 可接受，提示语指路 flag）
+退役判据：实测极速使用率趋零或频繁误触发（遥测面），收回 flag 改纯提示词约定
+
+## D-006@v1 审计冻结件（change.patch/change-patch.json）极速模式保留
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：保留。生成是纯 git 机械操作（毫秒-秒级，无 agent 往返）；它们是 distill 模块对账回写（change-patch.json files[] 喂模块卡回写/extraDocs 推导）的单一时点数据源 + 归档审计件。极速跳的是「验证」不是「证据」。
+
+## D-007@v1 turbo 跳过面以 tier!=='thick' 为前提（升厚即失效）
+状态：implemented
+变更：2026-10-14-thin-turbo-mode
+锚点：未记录
+最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
+理由：不生效。turbo 读态判定为 `turbo === true && st.tier !== 'thick'`——升厚即恢复全量仪式，turbo 残留不短路厚档；`--turbo --thick` 同给同理（留痕但不生效）。
