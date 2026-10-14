@@ -553,7 +553,7 @@ test('9b. 注入优先于过期 facts.apiFace（预检过=必过）；不注入�
   assert.deepEqual(fresh.errors, [], `注入后命中新端点（实际 errors=${JSON.stringify(fresh.errors)}）`)
 })
 
-test('9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源；design.md 缺失 → 空面 fail-soft 不抛（FR-03）', () => {
+test('9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源（FR-03）', () => {
   const { changeDir } = mkPreflightChange({ facts: { schemaVersion: 1, probes: {}, conclusion: null } })
   const capWarn = console.warn; console.warn = () => {}
   try {
@@ -563,7 +563,20 @@ test('9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源；desig
   const onDisk = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
   assert.deepEqual(computeApiFaceFromDesign(join(changeDir, 'design.md')), onDisk.apiFace,
     'helper 产物与 backfill 落盘的 facts.apiFace deepEqual（同形同源单一产物源）')
-  assert.deepEqual(computeApiFaceFromDesign(join(changeDir, 'no-such-design.md')),
-    { endpoints: [], declared: null, writeEndpoints: [] },
-    'design.md 缺失 → 空面（与 backfill 的 design 缺失口径一致）不抛')
+})
+
+test('9d. design.md 缺失 → helper 返 null 不注入，facts 口径继续（评审 P1 回归锚）（FR-03）', () => {
+  const { root, changeDir } = mkPreflightChange({ facts: { schemaVersion: 1, probes: {}, conclusion: null } })
+  // facts 先按现有 design 回填（有效 apiFace 在场），随后 design.md 消失（并发改写/瞬时不可读态）
+  const capWarn = console.warn; console.warn = () => {}
+  try {
+    backfillFactsFromMdAndTests(join(changeDir, 'verify-facts.json'),
+      { verifyMd: '# 验证报告\n', conclusion: null })
+  } finally { console.warn = capWarn }
+  rmSync(join(changeDir, 'design.md'))
+  assert.equal(computeApiFaceFromDesign(join(changeDir, 'design.md')), null,
+    '缺失/不可读 → null=不注入信号（空面注入会覆写有效 facts.apiFace 反致误阻断——2026-10-14 评审 P1）')
+  // machine-interface 侧 null 不注入（apiFaceLive falsy 不入 context）→ validator 走 facts 口径
+  const r = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root })
+  assert.deepEqual(r.errors, [], `facts.apiFace 在场且命中锚点 → 按 facts 口径放行（实际 errors=${JSON.stringify(r.errors)}）`)
 })

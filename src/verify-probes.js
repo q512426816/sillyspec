@@ -2670,16 +2670,19 @@ const API_MATRIX_WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
  * 是 run verify --done 收尾前置 backfill（run/gates.js），gate 路径不回填且 --init 刻意不落键 →
  * 预检 parseSet 空/旧 → design接口表# 锚点恒空指（平台 6 轮 gate 实证）。gate 侧经本 helper
  * 实况解析后经 context.apiFaceLive 注入 validator（stage-contract 零 import 纪律：注入不做
- * 函数调用），「预检过=必过」对锚点核对成立；解析异常由调用方 fail-soft 承接（不注入退回 facts）。
- * @param {string} designPath changeDir/design.md 路径（缺失 → 空面，与 backfill 的 design 缺失口径一致）
- * @returns {{ endpoints: Array<{method: string, path: string, rowIdx: number}>, declared: number|null, writeEndpoints: Array }}
+ * 函数调用），「预检过=必过」对锚点核对成立；design.md 缺失/不可读返回 null（调用方不注入，
+ * 退回 facts 口径——2026-10-14 评审 P1：空面注入会覆写有效 facts.apiFace 反致误阻断）、解析
+ * 异常由调用方 fail-soft 承接（不注入退回 facts）。
+ * @param {string} designPath changeDir/design.md 路径（缺失/不可读 → null=不注入信号）
+ * @returns {{ endpoints: Array<{method: string, path: string, rowIdx: number}>, declared: number|null, writeEndpoints: Array }|null}
  */
 export function computeApiFaceFromDesign(designPath) {
   let designText = null
   if (existsSync(designPath)) {
     try { designText = readFileSync(designPath, 'utf8') } catch { designText = null }
   }
-  const face = parseDesignApiTable(designText || '')
+  if (designText === null) return null
+  const face = parseDesignApiTable(designText)
   return {
     endpoints: face.endpoints,
     declared: face.declared,
