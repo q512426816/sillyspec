@@ -1,0 +1,34 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多仓不是 large 依据；判 large 须在 design.md 写明 Wave
+  证据（哪些任务可真并行、单上下文为何吃不下）」，并要求方案缩水后重判而非沿用早期筛查印象。背景实证：2026-10-14-deploy-release-notes（multi-agent-platform
+  仓）头脑风暴定稿方案已缩水为零建表零迁移（只读模块 2 GET+1 页面+skill 一步），Step 8 仍沿用早期「跨三端含建表」印象判 scale=large 走了完整五阶段，而 plan 阶段自判
+  execution_mode=main（单会话执行）反证 Wave 并非真需求——顺序依赖（W2 等 W1 契约）是 thin 任务循环天然形态。这是 2026-10-14-prestage-consent-gate
+  的镜像面：该变更治「该走预段未走」，本变更治「该收编轻量却误判厚」。
+
+
+  成功标准：
+
+  - brainstorm Step 8 规模评估的 large 判据含反判据：跨多端/多仓/多文件不是 large 依据（thin 支持多文件与跨仓交付）；任务间顺序依赖不是 Wave 证据（Wave
+  证据=可真并行且单会话吃不下的任务簇）
+
+  - 判 large 时要求在 design.md 写明 Wave 证据（哪些任务可真并行/单上下文为何吃不下），写不出即 small
+
+  - Step 8 明确要求按定稿方案实质重判，不沿用 Step 2 早期筛查印象（方案缩水是常态）
+
+  - design-init 骨架的 scale TODO 提示行同步反判据口径
+
+  - docs/prompt 提取产物与源逐字一致（_extract/_sync/_verify 链路）
+
+  - 全量 npm test 零失败
+autopilot: false
+prestage_ack: false
+baseline_commit: 5699371bc2ee90f129258772f13b0f10ec8be2f3
+updatedAt: '2026-10-14T02:07:28.848Z'
+baseline_sha256: 5af0ff0b5cbcab3adc7dbaa6c6d55c27d2ac73fb6faccce2a47f2957a8ea4e87
+
