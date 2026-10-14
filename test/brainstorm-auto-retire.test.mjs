@@ -102,6 +102,8 @@ test('③ 现行文件零悬挂引用（src/test/docs/prompt）', () => {
   for (const f of tracked) {
     if (!/^(src|test|docs\/prompt)\//.test(f)) continue
     if (f === 'docs/prompt/_extracted.json' || f.endsWith('.superseded')) continue
+    // 自身豁免：本文件头注释记载退役历史（未跟踪时不在扫描面、提交后自扫命中——快照重放实证）
+    if (f === 'test/brainstorm-auto-retire.test.mjs') continue
     let text
     try { text = readFileSync(join(ROOT, f), 'utf8') } catch { continue }
     for (const line of text.split('\n')) {
