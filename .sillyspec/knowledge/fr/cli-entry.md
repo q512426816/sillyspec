@@ -9586,3 +9586,67 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-14-guide-anchor-adopt-proto
   status: active
+
+## FR-cli-entry-505 冻结件存在性复查优先于子步状态
+变更：2026-10-14-patch-refreeze-missing-artifact
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-patch-refreeze-missing-artifact/requirements.md#FR-01
+最近确认：fddef8885d69c6d7ab2bcc209d84de66ac4c56e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-01
+  tests: test/flowdone-disposition-drift.test.mjs「④ e2e：冻结件缺失重入——存在性复查触发自动重冻结 + anchored 评审保留 + 直接归档」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-patch-refreeze-missing-artifact
+  status: active
+
+## FR-cli-entry-506 缺件重冻结的 review 处置规则
+变更：2026-10-14-patch-refreeze-missing-artifact
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-patch-refreeze-missing-artifact/requirements.md#FR-02
+最近确认：fddef8885d69c6d7ab2bcc209d84de66ac4c56e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-02
+  tests: test/flowdone-disposition-drift.test.mjs「④ …」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-patch-refreeze-missing-artifact
+  status: active
+
+## FR-cli-entry-507 e2e 回归用例
+变更：2026-10-14-patch-refreeze-missing-artifact
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-patch-refreeze-missing-artifact/requirements.md#FR-03
+最近确认：fddef8885d69c6d7ab2bcc209d84de66ac4c56e5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-03
+  tests: test/flowdone-disposition-drift.test.mjs「④/⑤」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-patch-refreeze-missing-artifact
+  status: active
+
+## FR-cli-entry-508 全量门禁
+变更：2026-10-14-patch-refreeze-missing-artifact
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-patch-refreeze-missing-artifact/requirements.md#FR-04
+最近确认：fddef8885d69c6d7ab2bcc209d84de66ac4c56e5

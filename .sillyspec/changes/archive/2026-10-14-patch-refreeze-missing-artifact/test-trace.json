@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-patch-refreeze-missing-artifact",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-01",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「④ e2e：冻结件缺失重入——存在性复查触发自动重冻结 + anchored 评审保留 + 直接归档」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-patch-refreeze-missing-artifact"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-02",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「④ …」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-patch-refreeze-missing-artifact"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-patch-refreeze-missing-artifact:flow:测试绑定FR-03",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「④/⑤」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-patch-refreeze-missing-artifact"
+    }
+  ]
+}

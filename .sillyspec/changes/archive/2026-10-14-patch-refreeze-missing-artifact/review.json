@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-patch-refreeze-missing-artifact",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "514615cd66b5e5c1cfeb88a7d30e070faaadb158",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "design 盲维 Q2「重冻结走既有 writeAtomicSync 原子写」与代码不符——实际冻结写盘为非原子 writeFileSync",
+      "evidence": "writeCloseTraceArtifacts 对 change.patch/change-patch.json 均用 node:fs writeFileSync（src/flow-parity.js:642-643），无原子替换；FR 未承诺原子写、数据正确性实际由「任一缺席即触发重冻覆盖」承担（flow.js:1621-1627），且该写路径与既有漂移面完全同源（无回归），但「写盘中断可产 json 在场但截断→落 catch 吞掉披露边界」的原子性保证不存在，设计披露失实应更正。",
+      "location": ".sillyspec/changes/2026-10-14-patch-refreeze-missing-artifact/design.md:31（对照 src/flow-parity.js:642-643、src/flow.js:2013）"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02「隔离 rename 失败必须回退现状幂等跳过」分句无用例直接断言",
+      "evidence": "测试绑定行称 ⑤ 覆盖「隔离/回退」，但 ⑤（test/flowdone-disposition-drift.test.mjs:273-311）只实测隔离成功路径，rename 失败回退（flow.js:1675-1678 quarantineOk=false→skip）无故障注入用例；该回退与漂移面共享同一代码块（行为一致性由构造保证，两代变更均未测），仅覆盖声明过宽。",
+      "location": ".sillyspec/changes/2026-10-14-patch-refreeze-missing-artifact/requirements.md:19（对照 test/flowdone-disposition-drift.test.mjs:305-310）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T03:44:33Z"
+}
