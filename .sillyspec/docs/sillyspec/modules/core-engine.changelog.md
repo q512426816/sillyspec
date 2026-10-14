@@ -55,3 +55,4 @@
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | 指引声明 TDD 但未限定适用范围——规则 3 执行顺序与 execute/dispatch 提示词都无差别要求先写测试 |
 | 2026-10-14 | 2026-10-14-redomain-domain-arg-normalize | flow done 收口提示的 FR 域迁移命令照抄必败：提示语给 --from fr/auto-backend 形态（ |
 | 2026-10-14 | 2026-10-14-gate-verify-apiface-preflight | gate verify 预检的接口锚点核对消费 facts.apiFace，但其唯一生产者是 run verify -- |
+| 2026-10-14 | 2026-10-14-timeline-ticktime-anchor-scope | runTaskTick 翻格成功追加 task-ticks.jsonl 侧车留痕（{ts,task,source:'task-tick'}；幂等 already 零追加；写失败仅告警不阻断翻格）——勾选时刻事实源落 change 目录随归档进 git 跨机可读，观测盲窗（watcher 后拉起）内的 CLI tick 不再丢时刻。测试锚 test/task-tick.test.mjs |

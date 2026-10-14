@@ -5,3 +5,4 @@
 - 2026-10-13-commit-guard-s3 | 动机：S3 提案机制已实证（临时仓实验：pathspec 提交时 pre-commit 钩子的 GIT_INDEX_FI
 - 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓
 - 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本
+- 2026-10-14-timeline-ticktime-anchor-scope | 时间线两处数据缺陷清偿（2026-10-14-deploy-release-notes 实证）：①勾选时刻侧车留痕——timeline.js loadChangeTasks 读 change 目录 task-ticks.jsonl（坏行跳过/同任务取最早/活跃+归档双路径），renderTimeline 任务行时刻三级降级（侧车精确无≈ > 事件流推断≈ > ?），推断断裂注按需打（侧车全覆盖即不打，watcher 重复采样撞断不误报）；②提交锚按变更名收敛——resolveCommitAnchors 增 change 参算 sameChange（提交全消息含变更名，缺省恒 true 兼容），锚定只取同变更，litellm-retire 跨变更 task token 撞车误锚清偿（实测三处假锚收敛为诚实无锚）；事件时间轴 commit 行展示面不变。测试锚 test/watcher-timeline.test.mjs + test/archive-timeline-bake.test.mjs

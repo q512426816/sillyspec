@@ -49,3 +49,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm / 
 - 2026-10-14-guide-anchor-adopt-proto | sess_fb51d988 实证：CLI 已把含原型分级/真码五要素的完整步骤指引落盘 step-guides（5294
 - 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原
+- 2026-10-14-timeline-ticktime-anchor-scope | 归档时间线烤制透传：bakeArchiveTimeline 读 destDir 侧车 task-ticks.jsonl（parseTickLog）+ resolveCommitAnchors 带 changeName——精确勾选时刻与锚收敛随归档烤制面进 timeline.md |
