@@ -679,12 +679,12 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           ``,
           `材料路径清单（按需 Read）：`,
           ...materials.map((p) => `  - ${p}`),
-          ...(prototypePaths.length > 0 ? [
-            `  变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的尾部重列，防长输出截断丢指针）：`,
-            ...prototypePaths.map((p) => `  - ${p}`),
-          ] : []),
           ``,
           ...digestLines,
+          ...(prototypePaths.length > 0 ? [
+            `变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的绝对尾部重列，防长输出截断丢指针）：`,
+            ...prototypePaths.map((p) => `  - ${p}`),
+          ] : []),
         ].filter(Boolean).join('\n'))
         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
         return { adopted: true, change, baseline }
@@ -1140,15 +1140,16 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     `- 红线重申：design 四问文本/FR 标题锚逐字钉死勿改写（改写即拒收）；勾选证据提交消息逐个带 task-NN 或 /、，连写（「task-01..task-05」区间写法不认）。`,
     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
     `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
+    ...(digestLines.length > 0 ? ['', ...digestLines] : []),
     // 尾部原型锚（2026-10-14-guide-anchor-adopt-proto）：收编/含原型变更重入时原型指针不隐身
-    //（首进 adopt 输出的 🖼️ 行在会话切换后已丢，简报尾部补可发现面；无原型零输出）。
+    //（首进 adopt 输出的 🖼️ 行在会话切换后已丢，简报尾部补可发现面；置于 digestLines 后＝绝对
+    // 尾部，长知识注入段也顶不掉——评审 P3-2 清偿）。无原型零输出。
     ...(() => {
       const protos = changeArtifactPaths(changeDir).filter((p) => /\.html$/i.test(p))
       return protos.length > 0
         ? [`- 变更原型在场（UI 实现前必看，界面/交互/流程按原型对齐）：`, ...protos.map((p) => `  - ${p}`)]
         : []
     })(),
-    ...(digestLines.length > 0 ? ['', ...digestLines] : []),
   ].join('\n'))
 }
 

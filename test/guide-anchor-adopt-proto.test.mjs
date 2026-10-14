@@ -61,6 +61,40 @@ test('① 回归：SILLYSPEC_STEP_GUIDE=0 时零锚行（确定性测试面不�
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('① 复入短输出分支同样带尾部锚行（评审 P3-1 清偿）', () => {
+  const { cwd, cli } = makeRepo()
+  const args = ['run', 'brainstorm', '--change', '2026-10-14-gap-1b', '--input', '需求 X\n成功标准：\n- 行为 A']
+  assert.equal(cli(args).status, 0)
+  const s = cli(args) // 第二次渲染同指纹 → 复入短输出分支
+  assert.equal(s.status, 0, s.stderr)
+  assert.match(s.stdout, /📄 步骤指引未变/, '走复入短输出分支')
+  assert.match(s.stdout, /📄 指引全文锚：.*step-guides[\\/].*\.md/, '复入分支尾部锚行同样在场')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('① --json 劫持态不打印锚行（单测复现 withJsonOutput 劫持形态；评审 P3-1 清偿）', async () => {
+  const { outputStep } = await import('../src/run/prompt.js')
+  const root = mkdtempSync(join(tmpdir(), 'gap-json-'))
+  const specBase = join(root, '.sillyspec')
+  mkdirSync(specBase, { recursive: true })
+  const origLog = console.log
+  const origErr = process.stderr.write.bind(process.stderr)
+  let captured = ''
+  // 与 src/index.js withJsonOutput 同款劫持形态（outputStep 以 String(console.log).includes('stderr.write') 探测）
+  console.log = (...a) => process.stderr.write(a.map(String).join(' ') + '\n')
+  process.stderr.write = (chunk) => { captured += String(chunk); return true }
+  try {
+    const steps = [{ name: '确认执行范围', prompt: '解析任务。\n' }]
+    await outputStep('execute', 0, steps, root, 'gap-json-1', null, { specRoot: specBase })
+  } finally {
+    console.log = origLog
+    process.stderr.write = origErr
+  }
+  assert.ok(!captured.includes('📄 指引全文锚'), '--json 劫持态不得打印锚行')
+  assert.ok(captured.includes('解析任务'), '劫持态输出本体照常（探测形态正确复现）')
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('② adopt 尾部材料清单重列变更原型（截断保险）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-14-gap-3'
@@ -72,11 +106,14 @@ test('② adopt 尾部材料清单重列变更原型（截断保险）', () => {
   writeFileSync(join(cd, 'prototypes', 'ui-mock.html'), '<html>mock</html>\n')
   const s = cli(['flow', 'start', '--change', change])
   assert.equal(s.status, 0, s.stderr)
-  assert.match(s.stdout, /变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的尾部重列，防长输出截断丢指针）/, '尾部重列表头在场')
+  assert.match(s.stdout, /变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的绝对尾部重列，防长输出截断丢指针）/, '尾部重列表头在场')
   const occurrences = s.stdout.split('ui-mock.html').length - 1
   assert.ok(occurrences >= 2, `原型路径至少出现两次（中部必读 + 尾部重列），实际 ${occurrences}`)
-  // 尾部重列须在材料路径清单之后（截断幸存位）
-  assert.ok(s.stdout.lastIndexOf('ui-mock.html') > s.stdout.indexOf('材料路径清单'), '尾部重列位于材料清单段内')
+  // 绝对尾部契约（评审 P3-2 清偿）：重列是最后一个非空内容行——任何截断保尾都幸存
+  const contentLines = s.stdout.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '' && !/^\[.*sync/i.test(l))
+  const lastRelevant = contentLines[contentLines.length - 1]
+  assert.ok(/ui-mock\.html/.test(lastRelevant) || contentLines.slice(-3).some((l) => /ui-mock\.html/.test(l)),
+    `重列须在输出绝对尾部（最后内容行：${lastRelevant}）`)
   rmSync(cwd, { recursive: true, force: true })
 })
 
