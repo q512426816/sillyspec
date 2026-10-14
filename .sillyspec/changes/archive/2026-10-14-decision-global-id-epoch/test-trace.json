@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-decision-global-id-epoch",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-decision-global-id-epoch:flow:测试绑定FR-01",
+      "tests": [
+        "test/decision-global-id-epoch.test.mjs「① 发号与形态：全局号标题+原编号字段+域前缀 max+1 只增不复用」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-global-id-epoch"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-decision-global-id-epoch:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-global-id-epoch.test.mjs「② 幂等与单一身份：重蒸馏复用号、v2 在位承接、多域扇出同号、跨文件清理」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-global-id-epoch"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-decision-global-id-epoch:flow:测试绑定FR-03",
+      "tests": [
+        "test/decision-global-id-epoch.test.mjs「③ 存量零触碰：无关蒸馏后 legacy 节段逐字节不变（真实库副本演练）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-global-id-epoch"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-decision-global-id-epoch:flow:测试绑定FR-04",
+      "tests": [
+        "test/decision-global-id-epoch.test.mjs「④ 读面双形态：三解析器+doctor 计数双形态 + graph supersedes 经原编号匹配」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-global-id-epoch"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-14-decision-global-id-epoch:flow:测试绑定FR-05",
+      "tests": [
+        "test/decision-global-id-epoch.test.mjs「⑤ 向量契约锚：等值匹配语义不变 + 平台窗口降级注记在场」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-global-id-epoch"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-decision-global-id-epoch",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "79c831d3e1fe990145066757e8c0b0850191f1c1",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "已清偿（79c831d3）：sanitizeDomain 允许 CJK 而 epoch 正则 ASCII-only 的潜伏边角——八处正则域字符集已统一扩为 [A-Za-z0-9_-\\u4e00-\\u9fff]",
+      "evidence": "增量复审核验（git show 79c831d3 逐 hunk + 实跑）：八处 D-号正则域字符类全部与 sanitizeDomain 保留字符集对齐——decision-distill.js 四处（splitKnowledgeSections sectionRegex、s.origin 的 originNumber 解析、applyEntryToSections 的 originNumber 解析、mintFor 全域扫描正则）、knowledge-match DECISION_HEADER_RE、knowledge-graph supIds 过滤、docs-check 节头、doctor 计数；test/decision-global-id-epoch.test.mjs ④ 新增 CJK 域往返用例（zh.md 落 ## D-中文域-001@v1 + 原编号，经 knowledge-match 断言 id/originId 读回、splitKnowledgeSections 断言节头解析，doctor 源码钉同步为 ASCII+CJK charset）；requirements.md FR-04 行为句字符集口径同步（「域字符集 ASCII 与 CJK——sanitizeDomain 同口径」）。11 个测试文件（4 绑定/更新 + 7 其余 distill 消费）实跑 71/71 绿，与「全量 780/780 + lint 绿」自述方向一致。往返闭坏成立：CJK 域铸号→写盘→读回→复用扫描均可解析，原潜伏面消除。",
+      "location": "src/decision-distill.js:58-61（sanitizeDomain 不变，读侧对齐）; src/decision-distill.js sectionRegex/originNumber×2/mintFor、src/knowledge-match.js DECISION_HEADER_RE、src/knowledge-graph.js supIds、src/docs-check.js 节头、src/doctor-diagnostics.js 计数（八处，79c831d3）; test/decision-global-id-epoch.test.mjs test ④ CJK 用例"
+    },
+    {
+      "severity": "P3",
+      "title": "留档（历史文案不可改写，无未了动作）：提交 a6ff907f 信息宣称「4 个既有测试文件断言同步」，实证为 3 个既有文件修改 + 1 个新增",
+      "evidence": "git show a6ff907f --name-only 显示测试面仅 4 文件：decision-distill-cross-change / decision-file-field / decisions-lifecycle（3 个既有，修改）+ decision-global-id-epoch（新增）。「4 个既有」计数不精确。处置裁决：git 提交信息属不可改写历史，留档本条作为审计注记——不再构成待办；代码/测试行为无影响（绑定测试与全部 distill 消费测试 71/71 实跑绿）。清偿提交 79c831d3 亦以此处置留痕。",
+      "location": "git commit a6ff907f (message，不可改写历史)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "与代码相符（首轮结论维持，79c831d3 未触及该面）。迟到低版本不降级（applyEntryToSections 高版本已落库→null）；迟到/重放条目经 sameDecisionNumber（变更一致 且 号或原编号一致）全域复用已发号；两变更并发蒸馏同域撞号窗口真实存在（mintFor 扫描→写盘无锁）——design 已显式声明接受（FR 侧发号同病先例），撞号不损数据、doctor 可见，披露诚实。",
+    "并发": "与代码相符（首轮结论维持）。写面仍为 decision-distill 单写者（归档链调用）；mintFor 初值扫描纯读盘，批内 mintMax 会话计数防同批撞号真实生效（test ① 两同域条目得相异号）；无新增并发面。",
+    "切换": "与代码相符（首轮结论维持）。号仅在内存（mintMax），writeFileSync 前中断→盘上无占用号，重跑重扫 max+1 无孤儿；落盘后中断→重放经原编号匹配复用。legacy 零触碰由「仅新条目发号 + 谓词含 legacy 形态（reuse 且无 origin→originId=null 保持局部形态）」双机制保证，test ③ 真实库副本演练（29 文件逐字节对账）实跑绿。",
+    "作用域": "与代码相符，且首轮 P3-2（CJK 域潜伏边角）已由 79c831d3 清偿——八处正则与 sanitizeDomain 字符集同口径，CJK 域全局号（D-中文域-001@v1）铸号/读回/复用扫描往返闭合，test ④ 用例锁在场。号域=本仓 knowledge/decisions 命名空间，跨仓互不相干。补记：① test ④ 的 doctor 计数断言仍为源码锚（非行为断言），强度偏弱但 FR-04 测试绑定满足、正则本身已经代码推理核验；② doctor 恒零 bug 修复使真实库 doctor 计数输出由 0 变为实际条数——行为变化已在模块卡与提交信息披露。"
+  },
+  "reviewedAt": "2026-10-14T15:06:25Z"
+}
