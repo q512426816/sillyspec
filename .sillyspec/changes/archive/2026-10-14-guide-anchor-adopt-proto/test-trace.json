@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-guide-anchor-adopt-proto",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-01",
+      "tests": [
+        "test/guide-anchor-adopt-proto.test.mjs「outputStep 首见/复入尾部锚行 + guide 关闭零输出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-guide-anchor-adopt-proto"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-02",
+      "tests": [
+        "test/guide-anchor-adopt-proto.test.mjs「adopt/resume 尾部重列原型 + 无原型零新增」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-guide-anchor-adopt-proto"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-03",
+      "tests": [
+        "test/guide-anchor-adopt-proto.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-guide-anchor-adopt-proto"
+    }
+  ]
+}

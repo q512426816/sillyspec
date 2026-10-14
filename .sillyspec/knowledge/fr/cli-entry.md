@@ -9520,3 +9520,69 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-14-turbo-guide-tier-copy
   status: active
+
+## FR-cli-entry-502 outputStep 尾部指引全文锚行（必须）
+变更：2026-10-14-guide-anchor-adopt-proto
+状态：active
+摘要：主路径——长输出被截断；回归——guide 关闭
+场景正文：
+- 场景：主路径——长输出被截断 — Given 某步渲染含长动态注入段（模块欠账/知识命中等），CLI stdout 超出 harness 工具结果上限被尾部截断；When agent 只收到末尾若干行；Then 末尾含「指引全文落盘：<step-guides 文件绝对路径>」锚行，agent Read 该文件即拿回完整步骤规则（分级/生成要求等决策关键节）。
+- 场景：回归——guide 关闭 — Given `SILLYSPEC_STEP_GUIDE=0`；When outputStep 渲染；Then 输出与改动前逐字一致（无锚行）。
+全文：.sillyspec/changes/archive/2026-10-14-guide-anchor-adopt-proto/requirements.md#FR-01
+最近确认：324af7c235bd27534ba9d47004c45f332c8228a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-01
+  tests: test/guide-anchor-adopt-proto.test.mjs「outputStep 首见/复入尾部锚行 + guide 关闭零输出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-guide-anchor-adopt-proto
+  status: active
+
+## FR-cli-entry-503 flow adopt 与 resume 尾部重列变更原型（必须）
+变更：2026-10-14-guide-anchor-adopt-proto
+状态：active
+摘要：主路径——收编输出被截断；主路径——会话恢复；回归——无原型变更
+场景正文：
+- 场景：主路径——收编输出被截断 — Given 头脑风暴产出 prototype-x.html 后 `flow start --change <名>` 收编，输出被截断只剩尾部；Then 尾部材料清单含原型路径与「实现前必看」提示，agent 不丢对照基准。
+- 场景：主路径——会话恢复 — Given 收编变更含原型，会话切换后重跑 `flow start --change <名>`（恢复简报）；Then 恢复简报尾部同样列出原型路径。
+- 场景：回归——无原型变更 — Given 变更目录无 prototype HTML；When adopt/resume 渲染；Then 输出与改动前一致（零新增行）。
+全文：.sillyspec/changes/archive/2026-10-14-guide-anchor-adopt-proto/requirements.md#FR-02
+最近确认：324af7c235bd27534ba9d47004c45f332c8228a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-02
+  tests: test/guide-anchor-adopt-proto.test.mjs「adopt/resume 尾部重列原型 + 无原型零新增」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-guide-anchor-adopt-proto
+  status: active
+
+## FR-cli-entry-504 测试锁三处锚行且全绿（必须）
+变更：2026-10-14-guide-anchor-adopt-proto
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量测试；Then 断言全过、既有测试零失败、lint 零错误。
+全文：.sillyspec/changes/archive/2026-10-14-guide-anchor-adopt-proto/requirements.md#FR-03
+最近确认：324af7c235bd27534ba9d47004c45f332c8228a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-guide-anchor-adopt-proto:flow:测试绑定FR-03
+  tests: test/guide-anchor-adopt-proto.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-guide-anchor-adopt-proto
+  status: active

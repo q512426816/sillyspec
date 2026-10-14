@@ -1,0 +1,45 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  sess_fb51d988 实证：CLI 已把含原型分级/真码五要素的完整步骤指引落盘 step-guides（5294B 全文在场），但 agent 收到的工具结果被尾部截断（1896 字符、从 ### 铁律
+  起）——操作/分级/生成要求整段丢失，agent 临场发明「复用既有设计系统」跳过原型、补的手绘件。repo 自知此坑（complete.js task-08 注释「长 prompt 易被 tail
+  截断」）但锚定行只报位置不带全文路径。另查证：头脑风暴转轻量变更（adopt）时原型会被采用（flow.js 枚举产物+🖼️ 原型在场必看行）但该行在输出中部，尾部材料清单只列 scan 面——截断同样丢指针，resume 简报同病。
+
+
+  成功标准：
+
+  - outputStep 渲染（首见与复入两分支）输出末尾带「指引全文落盘路径」锚行——输出被截断时 agent 从末几行即可拿到 step-guides 全文路径 Read 回完整规则；SILLYSPEC_STEP_GUIDE=0
+  时零新增输出（确定性测试面不变）；--json 劫持态不打印
+
+  - flow adopt 尾部材料清单重列变更原型 HTML（截断不丢「原型在场」指针）；resume 简报对变更目录含 prototype-*.html 的变更同样补尾部原型必看行——头脑风暴收编的原型在轻量道全程可发现
+
+  - 新增测试锁三处锚行（含 guide 关闭零输出回归）；npm test 全绿、lint 绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 5699371bc2ee90f129258772f13b0f10ec8be2f3
+updatedAt: '2026-10-14T02:57:30.014Z'
+baseline_sha256: 46d277eceacaf2aea9b32236d9c2fb48e88764731a054aa771fb6c5893f85b63
+spec_approved: true
+spec_approved_at: '2026-10-14T01:43:55.119Z'
+spec_approved_by: zcode-guide-anchor
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-guide-anchor
+gate_summary: >-
+  test: skipped ← module[]+deps(js107+js-meta-skip1+nontest-skip1)+fr(107)（71.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014023620\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（49.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014023620\test-result.json｜门文件 6 个
+

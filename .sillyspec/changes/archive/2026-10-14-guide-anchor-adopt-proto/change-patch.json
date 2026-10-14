@@ -1,0 +1,115 @@
+{
+  "change": "2026-10-14-guide-anchor-adopt-proto",
+  "baseline": "5699371bc2ee90f129258772f13b0f10ec8be2f3",
+  "head": "324af7c235bd27534ba9d47004c45f332c8228a0",
+  "files": [
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "src/flow.js",
+    "src/run/prompt.js",
+    "test/guide-anchor-adopt-proto.test.mjs",
+    "test/knowledge-inject.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 172,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-14T02:54:30.820Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "5699371bc2ee90f129258772f13b0f10ec8be2f3",
+    "totals": {
+      "files": 7,
+      "additions": 172,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 13,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/guide-anchor-adopt-proto.test.mjs",
+        "additions": 136,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/knowledge-inject.test.mjs",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "12b2aa89b61359022b47c15f04fb0e24b223cca6aa7358f0ff287e7e65d62118",
+  "patchStatus": "ok"
+}

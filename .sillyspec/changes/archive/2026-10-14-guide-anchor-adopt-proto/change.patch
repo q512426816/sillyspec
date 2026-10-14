@@ -1,0 +1,248 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index d03d64e8..8ca721c5 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -16,3 +16,4 @@
+ | 2026-10-13 | 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm /  |
+ | 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |
+ | 2026-10-14 | 2026-10-14-tdd-scope-guidance | 指引声明 TDD 但未限定适用范围——规则 3 执行顺序与 execute/dispatch 提示词都无差别要求先写测试 |
++| 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index 9ea4bf9b..690653ba 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -20,3 +20,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ - 2026-09-11-cross-change-decision-guard | decision-distill 增「文件：」字段契约：applyField/FIELD_LABEL_RE 增「文件|files」标签（parseListValue 切分 + 逐项 POSIX 归一），renderBlockLines 锚点行后条件渲染「文件：」行（仅非空才渲染）——存量决策无该字段零迁移；决策→文件映射经 knowledge-match matchDecisionsByFiles 进 quick 语义护栏反查链。
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
++| 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index f51a29d9..69d08045 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -54,3 +54,4 @@
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+ | 2026-10-14 | 2026-10-14-tdd-scope-guidance | execute.js 主代理直写（execution_mode: main）任务闭环行 TDD 措辞改「按层适用」（纯逻辑先写测试再实现/行为契约断用户可见行为/样式与纯配置不写——判据见「测试用例设计」）；docs/prompt/_extracted.json 重提取。 |
++| 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
+diff --git a/src/flow.js b/src/flow.js
+index 10a161b6..98535626 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -681,6 +681,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           ...materials.map((p) => `  - ${p}`),
+           ``,
+           ...digestLines,
++          ...(prototypePaths.length > 0 ? [
++            `变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的绝对尾部重列，防长输出截断丢指针）：`,
++            ...prototypePaths.map((p) => `  - ${p}`),
++          ] : []),
+         ].filter(Boolean).join('\n'))
+         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+         return { adopted: true, change, baseline }
+@@ -1137,6 +1141,15 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
+     `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
+     ...(digestLines.length > 0 ? ['', ...digestLines] : []),
++    // 尾部原型锚（2026-10-14-guide-anchor-adopt-proto）：收编/含原型变更重入时原型指针不隐身
++    //（首进 adopt 输出的 🖼️ 行在会话切换后已丢，简报尾部补可发现面；置于 digestLines 后＝绝对
++    // 尾部，长知识注入段也顶不掉——评审 P3-2 清偿）。无原型零输出。
++    ...(() => {
++      const protos = changeArtifactPaths(changeDir).filter((p) => /\.html$/i.test(p))
++      return protos.length > 0
++        ? [`- 变更原型在场（UI 实现前必看，界面/交互/流程按原型对齐）：`, ...protos.map((p) => `  - ${p}`)]
++        : []
++    })(),
+   ].join('\n'))
+ }
+ 
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 530c9487..ed2293d0 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -2247,6 +2247,16 @@ ${maskVolatileForGuide(guideTemplate)}
+     }
+     console.log('<!--SS-META:' + JSON.stringify(meta) + '-->')
+   }
++
++  // 尾部全文锚（2026-10-14-guide-anchor-adopt-proto，sess_fb51d988 实证）：首见全量渲染可能被
++  // harness 工具结果截断保尾——长动态注入段（模块欠账/知识命中等）把决策关键节（原型分级/生成
++  // 要求等）顶出可见窗口，agent 只见铁律半句就临场发挥。末尾一行带 step-guides 全文路径，截断后
++  // 仍能 Read 回完整规则（complete.js task-08 锚定行的补全：带路径，不只报位置）。复入分支顶部
++  // 已有 📄 行，但其动态附录同样可能很长把顶部顶掉——尾部统一再锚一次。guide 关闭/--json 劫持/
++  // 文件不在场时零输出（stdout 确定性测试面不变）。
++  if (guideEnabled && !jsonHijacked && existsSync(guideFile)) {
++    console.log(`📄 指引全文锚：${guideFile}（本输出被截断或上下文丢失时 Read 此文件拿回完整步骤规则——决策关键节都在内）`)
++  }
+ }
+ /**
+  * 替换 prompt 文本中的路径根占位符 {SPEC_ROOT}/{DOCS_ROOT}/{PROJECTS_ROOT}/
+diff --git a/test/guide-anchor-adopt-proto.test.mjs b/test/guide-anchor-adopt-proto.test.mjs
+new file mode 100644
+index 00000000..b7aadedb
+--- /dev/null
++++ b/test/guide-anchor-adopt-proto.test.mjs
+@@ -0,0 +1,136 @@
++/**
++ * guide-anchor-adopt-proto.test.mjs — 截断丢规则面的三处尾部锚（2026-10-14-guide-anchor-adopt-proto）
++ *
++ * sess_fb51d988 实证：CLI 已把含原型分级/真码五要素的步骤指引落盘 step-guides（全文在场），
++ * 但工具结果被 harness 尾部截断（agent 只收到 1896 字符、从 ### 铁律 起）——决策关键节整段
++ * 丢失，agent 临场发明跳过理由并手绘原型。本测试锁三处尾部锚：
++ *   ① outputStep 渲染末尾带 step-guides 全文路径锚行（guide 关闭零输出回归）；
++ *   ② flow adopt 尾部材料清单重列变更原型（中部 🖼️ 行的截断保险）；
++ *   ③ 恢复简报对含原型变更补尾部必看行（无原型零输出）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'gap-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args, extraEnv = {}) => spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 120_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0', ...extraEnv },
++  })
++  return { cwd, cli }
++}
++
++test('① outputStep 首见渲染末尾带 step-guides 全文锚行', () => {
++  const { cwd, cli } = makeRepo()
++  const s = cli(['run', 'brainstorm', '--change', '2026-10-14-gap-1', '--input', '需求 X\n成功标准：\n- 行为 A'])
++  assert.equal(s.status, 0, s.stderr)
++  assert.match(s.stdout, /📄 指引全文锚：.*step-guides[\\/].*\.md（本输出被截断或上下文丢失时 Read 此文件拿回完整步骤规则——决策关键节都在内）/,
++    '锚行在场且带 step-guides 文件路径与恢复指引')
++  // 位置契约：锚行在 SS-META/完成命令块之后（outputStep 打印序列末尾——尾部截断幸存位）
++  const anchorIdx = s.stdout.lastIndexOf('📄 指引全文锚')
++  const tailIdx = Math.max(s.stdout.lastIndexOf('--output'), s.stdout.lastIndexOf('SS-META'))
++  assert.ok(anchorIdx > tailIdx, `锚行须在输出尾部（anchor=${anchorIdx}, tail=${tailIdx}）`)
++  // 锚行路径真实存在（agent 照路径真能 Read 回全文）
++  const m = s.stdout.match(/📄 指引全文锚：(.+?)（本输出被截断/)
++  assert.ok(m, '锚行可提取路径')
++  assert.ok(spawnSync(process.execPath, ['-e', `require('fs').accessSync(${JSON.stringify(m[1].trim())})`]).status === 0,
++    `guide 文件真实在场：${m[1].trim()}`)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('① 回归：SILLYSPEC_STEP_GUIDE=0 时零锚行（确定性测试面不变）', () => {
++  const { cwd, cli } = makeRepo()
++  const s = cli(['run', 'brainstorm', '--change', '2026-10-14-gap-2', '--input', '需求 X\n成功标准：\n- 行为 A'], { SILLYSPEC_STEP_GUIDE: '0' })
++  assert.equal(s.status, 0, s.stderr)
++  assert.ok(!s.stdout.includes('📄 指引全文锚'), 'guide 关闭时不得出现锚行')
++  assert.ok(!s.stdout.includes('步骤指引未变'), 'guide 关闭时复入短输出也不出现（首见即无 guide 面）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('① 复入短输出分支同样带尾部锚行（评审 P3-1 清偿）', () => {
++  const { cwd, cli } = makeRepo()
++  const args = ['run', 'brainstorm', '--change', '2026-10-14-gap-1b', '--input', '需求 X\n成功标准：\n- 行为 A']
++  assert.equal(cli(args).status, 0)
++  const s = cli(args) // 第二次渲染同指纹 → 复入短输出分支
++  assert.equal(s.status, 0, s.stderr)
++  assert.match(s.stdout, /📄 步骤指引未变/, '走复入短输出分支')
++  assert.match(s.stdout, /📄 指引全文锚：.*step-guides[\\/].*\.md/, '复入分支尾部锚行同样在场')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('① --json 劫持态不打印锚行（单测复现 withJsonOutput 劫持形态；评审 P3-1 清偿）', async () => {
++  const { outputStep } = await import('../src/run/prompt.js')
++  const root = mkdtempSync(join(tmpdir(), 'gap-json-'))
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  const origLog = console.log
++  const origErr = process.stderr.write.bind(process.stderr)
++  let captured = ''
++  // 与 src/index.js withJsonOutput 同款劫持形态（outputStep 以 String(console.log).includes('stderr.write') 探测）
++  console.log = (...a) => process.stderr.write(a.map(String).join(' ') + '\n')
++  process.stderr.write = (chunk) => { captured += String(chunk); return true }
++  try {
++    const steps = [{ name: '确认执行范围', prompt: '解析任务。\n' }]
++    await outputStep('execute', 0, steps, root, 'gap-json-1', null, { specRoot: specBase })
++  } finally {
++    console.log = origLog
++    process.stderr.write = origErr
++  }
++  assert.ok(!captured.includes('📄 指引全文锚'), '--json 劫持态不得打印锚行')
++  assert.ok(captured.includes('解析任务'), '劫持态输出本体照常（探测形态正确复现）')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('② adopt 尾部材料清单重列变更原型（截断保险）', () => {
++  const { cwd, cli } = makeRepo()
++  const change = '2026-10-14-gap-3'
++  const cd = join(cwd, '.sillyspec', 'changes', change)
++  mkdirSync(join(cd, 'prototypes'), { recursive: true })
++  writeFileSync(join(cd, 'proposal.md'), '# 提案\n## 成功标准\n- 行为甲\n')
++  writeFileSync(join(cd, 'design.md'), '# 设计\n交互流程：见原型\n')
++  writeFileSync(join(cd, 'decisions.md'), '# 决策\n## D-001@v1: 取舍\n- 决策：甲\n')
++  writeFileSync(join(cd, 'prototypes', 'ui-mock.html'), '<html>mock</html>\n')
++  const s = cli(['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, s.stderr)
++  assert.match(s.stdout, /变更原型（头脑风暴产出，UI 实现前必看——中部 🖼️ 行的绝对尾部重列，防长输出截断丢指针）/, '尾部重列表头在场')
++  const occurrences = s.stdout.split('ui-mock.html').length - 1
++  assert.ok(occurrences >= 2, `原型路径至少出现两次（中部必读 + 尾部重列），实际 ${occurrences}`)
++  // 绝对尾部契约（评审 P3-2 清偿）：重列是最后一个非空内容行——任何截断保尾都幸存
++  const contentLines = s.stdout.replace(/\r/g, '').split('\n').filter((l) => l.trim() !== '' && !/^\[.*sync/i.test(l))
++  const lastRelevant = contentLines[contentLines.length - 1]
++  assert.ok(/ui-mock\.html/.test(lastRelevant) || contentLines.slice(-3).some((l) => /ui-mock\.html/.test(l)),
++    `重列须在输出绝对尾部（最后内容行：${lastRelevant}）`)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ 恢复简报对含原型变更补尾部必看行（无原型零输出）', () => {
++  const { cwd, cli } = makeRepo()
++  const change = '2026-10-14-gap-4'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '需求 X\n成功标准：\n- 行为 A']).status, 0)
++  // 首进无原型：恢复简报零新增
++  const r0 = cli(['flow', 'start', '--change', change])
++  assert.equal(r0.status, 0, r0.stderr)
++  assert.match(r0.stdout, /恢复简报/, '走恢复简报路径')
++  assert.ok(!r0.stdout.includes('变更原型在场'), '无原型变更恢复简报零新增行')
++  // 落一个原型（模拟头脑风暴产物被收编后重入）：尾部必看行在场
++  writeFileSync(join(cwd, '.sillyspec', 'changes', change, 'prototype-ui.html'), '<html>p</html>\n')
++  const r1 = cli(['flow', 'start', '--change', change])
++  assert.equal(r1.status, 0, r1.stderr)
++  assert.match(r1.stdout, /- 变更原型在场（UI 实现前必看，界面\/交互\/流程按原型对齐）/,'恢复简报尾部原型行在场')
++  assert.match(r1.stdout, /prototype-ui\.html/, '原型路径列出')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/knowledge-inject.test.mjs b/test/knowledge-inject.test.mjs
+index 3a1e1b30..c6ee03eb 100644
+--- a/test/knowledge-inject.test.mjs
++++ b/test/knowledge-inject.test.mjs
+@@ -213,6 +213,12 @@ console.log('\n--- 6. outputStep execute 未命中零变化（字节对比） --
+   try {
+     writeFiveFileFixture(fx.knowledgeDir)
+     const changeName = '2026-09-14-ki-nomatch' // 查询词不命中任何 keyword
++    // guide 面关闭（stdout 确定性测试族既有逃生门）：A/B 用不同 prompt 文本模拟升级前后，
++    // step-guide 指纹随之不同 → 尾部「📄 指引全文锚」的 guide 文件名逐侧不同——那是 guide
++    // 机制的面，与本测试的断言对象（知识注入面字节稳定）无关（2026-10-14-guide-anchor-adopt-proto）。
++    const prevGuide = process.env.SILLYSPEC_STEP_GUIDE
++    process.env.SILLYSPEC_STEP_GUIDE = '0'
++    try {
+     // A：升级后真实路径——占位符经未命中分支替换
+     const stepsA = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
+     const outA = await captureOutput(() => outputStep('execute', 0, stepsA, fx.root, changeName, 'ki-proj', { specRoot: fx.specBase }))
+@@ -224,6 +230,10 @@ console.log('\n--- 6. outputStep execute 未命中零变化（字节对比） --
+     const reportJson = JSON.parse(readFileSync(join(fx.runtimeDir, 'knowledge-hit-report.json'), 'utf8'))
+     assertTrue(reportJson.matched === false && reportJson.entry_count === 0, '未命中 report.json 仍落盘 matched:false（既有行为不变）')
+     assertTrue(readKnowledgeHits(fx.runtimeDir).length === 0, '未命中零遥测')
++    } finally {
++      if (prevGuide === undefined) delete process.env.SILLYSPEC_STEP_GUIDE
++      else process.env.SILLYSPEC_STEP_GUIDE = prevGuide
++    }
+   } finally { cleanup(fx) }
+ }

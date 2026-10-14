@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-guide-anchor-adopt-proto",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "02ae6e74a5df614444d3310fbb41cbf9e06fdebf",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03① 承诺「首见与复入渲染末尾均含锚行」但测试仅锁定首见；FR-01④ --json 抑制（!jsonHijacked）无任何测试断言",
+      "evidence": "实现侧两分支由单点汇合结构覆盖（src/run/prompt.js:2257 锚行位于 reentryHit if/else（2100-2134）汇合之后，复入必经），行为当前正确；但 4 用例中无复入态锚行在场断言（既有 step-guide-default-on/fingerprint 只做 fingerprint= 包含式断言，test ② 仅断言 guide 关闭时『步骤指引未变』缺席为负向断言），--json 路径零断言——回归若把锚行移回 else 分支或破坏 jsonHijacked 门，测试面不报警",
+      "location": "test/guide-anchor-adopt-proto.test.mjs:37-61"
+    },
+    {
+      "severity": "P3",
+      "title": "无声明边界：adopt 重列与 resume 原型行之后仍拼接 digestLines，重列非绝对输出末尾",
+      "evidence": "src/flow.js:687（adopt：原型重列 682-685 之后 `...digestLines`）与 flow.js:1151（printRecoveryBriefing 同构）——超长知识注入段仍可能把原型重列顶出尾部截断窗口；design 风险节仅论证了 prompt.js 锚行与 complete.js 🚀 行同幸存（风险2），未声明 flow 侧此残余面。现实风险低（digest 通常短，重列距绝对尾仅数行，远优于原 🖼️ 中部位），属披露缺角非机制失效",
+      "location": "src/flow.js:687"
+    }
+  ],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-14T02:44:39Z"
+}
