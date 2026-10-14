@@ -166,6 +166,48 @@ export function detectBatchCheckCadence(events) {
 }
 
 /**
+ * 侧车勾选突发检测（2026-10-14-tick-burst-sidecar-gate，纯函数）：task-ticks.jsonl 的毫秒级
+ * 时戳按相邻间隔窗口分簇——CLI 逐格快连点（收口一把点的官方路径形态）在事件流里是单格精确跳，
+ * 10-07 采样去重后对 detectBatchCheckCadence 不可见（近期实证：6 格 2 秒内/4 格 1 秒内零检出）；
+ * 侧车是 CLI tick 的事实源（随归档进 git、不受观测盲窗影响），收口节奏门回退消费本函数——
+ * CLI 与直接 Edit 两条路径同判。
+ * 语义：tickLog 同任务取最早（幂等重勾防御）+ 坏行跳过（task 形态/时戳有限性）+ 排序后按
+ * gap<=windowMs（缺省 60s，opts.windowMs 覆写）分簇；最大簇 size>=2 → 返回与事件流同形的
+ * batchTick 记录。from/to 是 CLI 勾序计数（Edit 翻格不记侧车，与事件流 checked N→M 计数空间
+ * 不同源）——resolveBatchTickAction 只消费跳幅（to-from）与 ts，语义等价；detail 带「侧车突发」
+ * 标注防口径混淆。fail-open：不足两格/空输入/全坏行 → null。
+ */
+export function detectTickBurst(tickLog, opts = {}) {
+  const windowMs = Number.isFinite(opts.windowMs) ? opts.windowMs : 60_000;
+  const byTask = new Map();
+  for (const r of Array.isArray(tickLog) ? tickLog : []) {
+    const task = String((r && r.task) || '').trim();
+    const ts = Number(r && r.ts);
+    if (!/^task-\d+$/.test(task) || !Number.isFinite(ts)) continue;
+    const prev = byTask.get(task);
+    if (prev === undefined || ts < prev) byTask.set(task, ts);
+  }
+  const ticks = [...byTask.values()].sort((a, b) => a - b);
+  if (ticks.length < 2) return null;
+  let worst = null;
+  let start = 0;
+  for (let i = 1; i <= ticks.length; i++) {
+    if (i < ticks.length && ticks[i] - ticks[i - 1] <= windowMs) continue;
+    const size = i - start;
+    if (size >= 2 && (!worst || size > worst.size)) {
+      worst = { size, from: start, to: i, ts: ticks[start], spanMs: ticks[i - 1] - ticks[start] };
+    }
+    start = i;
+  }
+  if (!worst) return null;
+  return {
+    from: worst.from, to: worst.to, size: worst.size, spanMs: worst.spanMs, ts: worst.ts,
+    source: 'tick-burst',
+    detail: `checked ${worst.from}→${worst.to}（task tick 侧车突发 ${worst.size} 格）`,
+  };
+}
+
+/**
  * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
  * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
  * 工作分解，无镜像面）。五态（决策顺序即豁免优先序）：
@@ -193,4 +235,4 @@ export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allow
   return { action: 'reject', reason: 'agent-batch-tick' };
 }
 
-export default { detectFakeCheckCompletion, detectBatchCheckCadence };
+export default { detectFakeCheckCompletion, detectBatchCheckCadence, detectTickBurst };

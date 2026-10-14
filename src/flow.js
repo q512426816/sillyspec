@@ -1425,11 +1425,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 采样去重（2026-10-07-thin-tasks-v3）：task tick 直写的精确事件（source:'task-tick'）为
     // 权威口径，watcher 3s 采样合并跳被去重——CLI 快速连续 tick 不再误伤；观测旁路缺席
     // （无流/读失败）→ 跳过（fail-open，watcher 非真相源）；--allow-batch-tick 显式旁路留痕。
+    // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：CLI 收口端快连点对事件流不可见（单格
+    // 精确跳），空结果时回退 task-ticks.jsonl 毫秒时戳判突发——CLI 与直接 Edit 两条路径同判。
     try {
       const { readWatcherEvents } = await import('./watcher.js')
-      const { detectBatchCheckCadence, resolveBatchTickAction } = await import('./sentinel-assertions.js')
+      const { detectBatchCheckCadence, detectTickBurst, resolveBatchTickAction } = await import('./sentinel-assertions.js')
       const stream = readWatcherEvents({ runtimeRoot, change })
-      const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+      let batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+      if (!batch) {
+        // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：事件流空结果时读 change 目录
+        // task-ticks.jsonl（CLI tick 毫秒时戳事实源，随归档进 git、不受观测盲窗影响）判快连点；
+        // 事件流结果优先不双重报告；侧车缺失/坏文件按无证据静默（fail-open）。
+        try {
+          const { parseTickLog } = await import('./timeline.js')
+          batch = detectTickBurst(parseTickLog(readFileSync(join(changeDir, 'task-ticks.jsonl'), 'utf8')))
+        } catch { /* 侧车缺失/不可读 → 无侧车证据（fail-open） */ }
+      }
       if (batch) {
         // 代勾计数取「本拍实时代勾 ∨ 持久化代勾」较大者（二轮 P2-B：重入漂移防护）；决策纯函数
         // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
@@ -1454,7 +1465,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
           }
         } else if (v.action === 'reject') {
-          console.error(`🚫 单拍勾选拒收：事件流观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），勾选任务 ${_sentinelNonMirrorTasks} 格`)
+          const _via = batch.source === 'tick-burst' ? '侧车时戳观测到' : '事件流观测到'
+          console.error(`🚫 单拍勾选拒收：${_via}一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），勾选任务 ${_sentinelNonMirrorTasks} 格`)
           console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
           appendTelemetry({ sentinel: 'batch-tick', jump: batch.detail })
           reportMidFail('ledger')

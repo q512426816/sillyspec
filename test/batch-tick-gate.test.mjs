@@ -217,3 +217,126 @@ test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+�
     rmSync(cwdB, { recursive: true, force: true })
   }
 })
+
+// ══ 2026-10-14-tick-burst-sidecar-gate：侧车突发检测（CLI 快连点补盲——事件流两级盲区清偿） ══
+
+test('②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务取最早/窗口覆写', async () => {
+  const { detectTickBurst } = await import(pathToFileURL(join(ROOT, '..', 'src', 'sentinel-assertions.js')).href)
+  const base = 1_700_000_000_000
+  // 快连点：5 格 10 秒内 → 突发 0→5（detail 标注侧车突发）
+  const r1 = detectTickBurst(['task-01', 'task-02', 'task-03', 'task-04', 'task-05'].map((task, i) => ({ task, ts: base + i * 2_500 })))
+  assert.ok(r1, '快连点检出')
+  assert.equal(r1.from, 0); assert.equal(r1.to, 5); assert.equal(r1.source, 'tick-burst'); assert.equal(r1.size, 5)
+  assert.match(r1.detail, /^checked 0→5（task tick 侧车突发 5 格）$/)
+  // 渐进：相邻间隔 > 60s → 零误报
+  assert.equal(detectTickBurst(['task-01', 'task-02', 'task-03'].map((task, i) => ({ task, ts: base + i * 120_000 }))), null, '渐进间隔超窗不检出')
+  // 混合：2 格渐进 + 3 格快连收尾 → 最大簇 2→5
+  const mix = [
+    { task: 'task-01', ts: base },
+    { task: 'task-02', ts: base + 120_000 },
+    { task: 'task-03', ts: base + 600_000 },
+    { task: 'task-04', ts: base + 604_000 },
+    { task: 'task-05', ts: base + 609_000 },
+  ]
+  const r2 = detectTickBurst(mix)
+  assert.ok(r2 && r2.from === 2 && r2.to === 5, `混合形态取最大簇（实际 ${JSON.stringify(r2)}）`)
+  // 窗口覆写：同数据 600s 窗全并一簇 0→5
+  const r3 = detectTickBurst(mix, { windowMs: 600_000 })
+  assert.ok(r3 && r3.from === 0 && r3.to === 5, `窗口覆写生效（实际 ${JSON.stringify(r3)}）`)
+  // 空输入/单格
+  assert.equal(detectTickBurst([]), null); assert.equal(detectTickBurst(null), null)
+  assert.equal(detectTickBurst([{ task: 'task-01', ts: base }]), null, '单格不检出')
+  // 坏行：非法 task 形态 / NaN 时戳跳过
+  const r4 = detectTickBurst([
+    { task: 'task-01', ts: base },
+    { task: 'bad-name', ts: base + 1 },
+    { task: 'task-02', ts: Number.NaN },
+    { task: 'task-03', ts: base + 2_000 },
+  ])
+  assert.ok(r4 && r4.from === 0 && r4.to === 2, `坏行跳过（非法 task/NaN ts 不计，实际 ${JSON.stringify(r4)}）`)
+  // 同任务重复取最早
+  const r5 = detectTickBurst([
+    { task: 'task-01', ts: base },
+    { task: 'task-01', ts: base + 5_000 },
+    { task: 'task-02', ts: base + 3_000 },
+  ])
+  assert.ok(r5 && r5.to === 2 && r5.ts === base, '同任务取最早去重')
+})
+
+test('②h 接线钉：节奏门回退侧车（flow.js 源码锚）', () => {
+  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
+  assert.ok(src.includes('detectTickBurst(parseTickLog('), '事件流空结果回退侧车突发检测')
+  assert.ok(src.includes('task-ticks.jsonl'), '侧车文件面在场（节奏门消费）')
+  assert.ok(src.includes("batch.source === 'tick-burst'"), '拒收文案来源感知（侧车时戳 vs 事件流）')
+})
+
+test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行 + batch_ticked 留痕 + 归档完成；渐进侧车零告警', () => {
+  // A：快连点突发（3 格 ~2 秒内）——事件流只有 CLI 单格精确跳（10-07 去重语义不可见），侧车回退检出
+  {
+    const cwd = makeRepoE()
+    const change = '2026-10-14-btg-burst'
+    const specBase = join(cwd, '.sillyspec')
+    try {
+      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '侧车突发\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+      assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+      writeFileSync(join(cwd, 'work.txt'), 'done\n')
+      gitE(cwd, ['add', 'work.txt'])
+      gitE(cwd, ['commit', '-q', '-m', `work (${change}) (task-01) (task-02) (task-03)`])
+      fillDocsE(specBase, change)
+      const tasksPath = join(specBase, 'changes', change, 'tasks.md')
+      writeFileSync(tasksPath, readFileSync(tasksPath, 'utf8').replace(/^- \[ \] (task-\d+):/gm, '- [x] $1:'))
+      gitE(cwd, ['add', tasksPath])
+      gitE(cwd, ['commit', '-q', '-m', 'chore: tick (task-01/02/03)'])
+      // CLI 快连点形态：事件流三条单格精确跳 + 侧车 3 行毫秒级相邻
+      const now = Date.now()
+      mkdirSync(join(specBase, '.runtime'), { recursive: true })
+      writeFileSync(join(specBase, '.runtime', `watcher-events-${change}.jsonl`),
+        ['checked 0→1', 'checked 1→2', 'checked 2→3'].map((d, i) =>
+          JSON.stringify({ ts: now - 60_000 + i * 900, kind: 'task-done', stage: 'tasks', detail: d, provisional: true, source: 'task-tick' })).join('\n') + '\n')
+      writeFileSync(join(specBase, 'changes', change, 'task-ticks.jsonl'),
+        ['task-01', 'task-02', 'task-03'].map((t, i) => JSON.stringify({ ts: now - 60_000 + i * 900, task: t, source: 'task-tick' })).join('\n') + '\n')
+      writeReviewE(specBase, cwd, change)
+      const s2 = cliE(cwd, ['flow', 'done', '--change', change])
+      assert.equal(s2.status, 0, `证据完备快连点应放行: ${s2.stdout}\n${s2.stderr}`)
+      const out = `${s2.stdout}\n${s2.stderr}`
+      assert.doesNotMatch(out, /单拍勾选拒收/, '不硬拒')
+      assert.match(out, /勾选节奏/, '节奏 advisory 在场')
+      assert.match(out, /侧车突发/, '检出来源标注（侧车）')
+      const arch = readdirSync(join(specBase, 'changes', 'archive')).find((d) => d.includes(change))
+      assert.ok(arch, '归档完成')
+      assert.match(readFileSync(join(specBase, 'changes', 'archive', arch, 'flow-state.yaml'), 'utf8'), /batch_ticked/, '降级留痕随归档件')
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  }
+  // B：渐进侧车（相邻间隔 5 分钟）——零节奏告警（不误伤渐进勾选）
+  {
+    const cwd = makeRepoE()
+    const change = '2026-10-14-btg-spaced'
+    const specBase = join(cwd, '.sillyspec')
+    try {
+      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '渐进勾选\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+      assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+      writeFileSync(join(cwd, 'work.txt'), 'done\n')
+      gitE(cwd, ['add', 'work.txt'])
+      gitE(cwd, ['commit', '-q', '-m', `work (${change}) (task-01) (task-02) (task-03)`])
+      fillDocsE(specBase, change)
+      const tasksPath = join(specBase, 'changes', change, 'tasks.md')
+      writeFileSync(tasksPath, readFileSync(tasksPath, 'utf8').replace(/^- \[ \] (task-\d+):/gm, '- [x] $1:'))
+      gitE(cwd, ['add', tasksPath])
+      gitE(cwd, ['commit', '-q', '-m', 'chore: tick (task-01/02/03)'])
+      const now = Date.now()
+      writeFileSync(join(specBase, 'changes', change, 'task-ticks.jsonl'),
+        ['task-01', 'task-02', 'task-03'].map((t, i) => JSON.stringify({ ts: now - (3 - i) * 300_000, task: t, source: 'task-tick' })).join('\n') + '\n')
+      writeReviewE(specBase, cwd, change)
+      const s2 = cliE(cwd, ['flow', 'done', '--change', change])
+      assert.equal(s2.status, 0, `渐进勾选应放行: ${s2.stdout}\n${s2.stderr}`)
+      const out = `${s2.stdout}\n${s2.stderr}`
+      assert.doesNotMatch(out, /勾选节奏|单拍勾选/, '渐进零节奏告警（不误伤）')
+      const arch = readdirSync(join(specBase, 'changes', 'archive')).find((d) => d.includes(change))
+      assert.ok(arch, '归档完成')
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  }
+})
