@@ -129,7 +129,7 @@ export function buildKnowledgeGraph(specRoot) {
     // v2 蒸馏落地时同变更 v1 段已被就地替换，此时无目标即不建边（2026-10-14-supersedes-mislink-and-change-display：
     // 旧「再退同文件首个」回退几乎必然连到他变更同号条目，实测 33 条误连，回退已除）。epoch 形态段
     // （2026-10-14-decision-global-id-epoch）id 为全局号——局部号引用经「原编号」字段匹配（originId）。
-    const supIds = String(h.supersedesText || '').split(/[,，、\s]+/).filter((s) => /^D-(?:[A-Za-z0-9_\-]+-)?\d+@v\d+$/.test(s))
+    const supIds = String(h.supersedesText || '').split(/[,，、\s]+/).filter((s) => /^D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+$/.test(s))
     for (const sid of supIds) {
       const target = decisionHits.find((x) => (x.id === sid || x.originId === sid) && x.file === h.file && (x.change || '') === (h.change || ''))
       if (target) supersedesRefs.push([id, `decision:${target.file}#${target.id}${target.change ? `@${target.change}` : ''}`])

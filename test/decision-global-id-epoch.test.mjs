@@ -155,9 +155,17 @@ test('④ 读面双形态：三解析器+doctor 计数双形态 + graph supersed
     const sups = g.byEdgeType.get('supersedes') || []
     assert.ok(sups.some(e => e.s.includes('#D-core-042@v2') && e.t.includes('#D-core-042@v1')),
       `supersedes 经原编号匹配（实际 ${JSON.stringify(sups)}）`)
-    // doctor 计数正则双形态（源码锚）
+    // CJK 域字符集（评审 P3-2 清偿）：sanitizeDomain 允许 CJK——发号（mintFor）与读面
+    // （split/匹配/计数）正则同 charset，CJK 域全局号往返可解析
+    const zhMd = '# 决策知识 — zh\n\n## D-中文域-001@v1 CJK 域形态\n状态：implemented\n变更：2026-99-99-z\n原编号：D-001@v1\n'
+    writeFileSync(join(k, 'decisions', 'zh.md'), zhMd)
+    writeFileSync(join(k, 'INDEX.md'), ['# Knowledge Index', '', '## Decisions', '- core|decision|决策 → [decisions/core.md](decisions/core.md)', '- zh|decision|决策 → [decisions/zh.md](decisions/zh.md)', ''].join('\n'))
+    const zhHits = parseDecisionEntries(k)
+    assert.ok(zhHits.some(h => h.id === 'D-中文域-001@v1' && h.originId === 'D-001@v1'), 'CJK 域全局号往返解析（knowledge-match）')
+    assert.equal(splitKnowledgeSections(zhMd).sections.filter(s => s.id === 'D-中文域-001@v1').length, 1, 'splitKnowledgeSections CJK 域节头')
+    // doctor 计数正则双形态（源码锚；字符集含 CJK——评审 P3-2 清偿）
     const doc = readFileSync(join(ROOT, 'src', 'doctor-diagnostics.js'), 'utf8')
-    assert.ok(doc.includes('D-(?:[A-Za-z0-9_\\-]+-)?\\d+@v\\d+'), 'doctor 计数双形态正则在场')
+    assert.ok(doc.includes('D-(?:[A-Za-z0-9_\\-\\u4e00-\\u9fff]+-)?\\d+@v\\d+'), 'doctor 计数双形态正则在场（ASCII+CJK 域）')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

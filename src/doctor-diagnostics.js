@@ -948,7 +948,7 @@ function detectDecisionDrift(cwd) {
       if (!f.endsWith('.md')) continue
       // 双形态计数（2026-10-14-decision-global-id-epoch）：局部 D-011@v1 与全局 D-<域>-042@v1；
       // 旧正则 @\d+ 漏 @v 前缀恒零——随本单修正
-      count += (readFileSync(join(decDir, f), 'utf8').match(/^## D-(?:[A-Za-z0-9_\-]+-)?\d+@v\d+/gm) || []).length
+      count += (readFileSync(join(decDir, f), 'utf8').match(/^## D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+/gm) || []).length
     }
     return { ...base, findings: [`decisions 库 ${count} 条（behind 精确复核在 verify evidence-auto 与 docs-check 决策规则族）`], pass: true, severity: CHECK_SEVERITY.PASSED }
   } catch (e) {

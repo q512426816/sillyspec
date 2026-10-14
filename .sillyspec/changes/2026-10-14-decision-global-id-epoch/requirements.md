@@ -44,7 +44,7 @@ Then 除新落段外全部节段与快照逐字节一致
 
 ### FR-04: 读面双形态：splitKnowledgeSections/knowledge-match（含 graph 消费）/docs-check parseDecisionEntries/doctor 计数正则 MUST 同时解析局部形态（D-011@v1）与全局形态（D-<域>-042@v1）；graph supersedes 同变更解析 MUST 支持经原编号匹配全局形态目标
 
-- 四处读面 MUST 双形态解析：局部 `D-\d+@v\d+` 与全局 `D-<域>-\d+@v\d+`（域字符集 [A-Za-z0-9_-]+）；knowledge-match 条目 MUST 读入「原编号：」字段；graph supersedes 同变更目标解析 MUST 支持 段.id==引用号 或 段.原编号==引用号（同变更限定语义不变——2026-10-14-supersedes-mislink-and-change-display 判据延续）。
+- 四处读面 MUST 双形态解析：局部 `D-\d+@v\d+` 与全局 `D-<域>-\d+@v\d+`（域字符集 ASCII 与 CJK——sanitizeDomain 同口径，评审 P3 清偿）；knowledge-match 条目 MUST 读入「原编号：」字段；graph supersedes 同变更目标解析 MUST 支持 段.id==引用号 或 段.原编号==引用号（同变更限定语义不变——2026-10-14-supersedes-mislink-and-change-display 判据延续）。
 
 #### 场景：双形态同库解析
 

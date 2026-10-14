@@ -346,7 +346,7 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName, sectionNu
  * 正则与恒等 id），decisions 调用点零改动。 */
 export function splitKnowledgeSections(content, opts = {}) {
   // 节头号双形态（2026-10-14-decision-global-id-epoch）：局部 D-011@v1 与全局 D-<域>-042@v1 并存
-  const sectionRegex = opts.sectionRegex || /^## (D-(?:[A-Za-z0-9_\-]+-)?\d+)@v(\d+)\s*(.*)$/
+  const sectionRegex = opts.sectionRegex || /^## (D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)@v(\d+)\s*(.*)$/
   const buildId = opts.buildId || ((n, v) => `${n}@v${v}`)
   const sections = []
   const preamble = []
@@ -371,7 +371,7 @@ export function splitKnowledgeSections(content, opts = {}) {
     // legacy 段无该行 → null（幂等匹配谓词按号兜底）
     const oi = s.lines.find(l => /^原编号[：:]/.test(l))
     s.origin = oi ? oi.replace(/^原编号[：:]\s*/, '').trim() || null : null
-    const on = s.origin ? /^(D-(?:[A-Za-z0-9_\-]+-)?\d+)@v?\d+/.exec(s.origin) : null
+    const on = s.origin ? /^(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)@v?\d+/.exec(s.origin) : null
     s.originNumber = on ? on[1] : null
   }
   return { preamble, sections }
@@ -411,7 +411,7 @@ function applyEntryToSections(sections, entry, headHash, sectionNumber, originId
   let action
   let supersedesNote = oneLine(entry.supersedes) || null
   const sectionId = `${sectionNumber}@v${entry.version}`
-  const originNumber = originId ? (/^(D-(?:[A-Za-z0-9_\-]+-)?\d+)/.exec(originId) || [])[1] || null : null
+  const originNumber = originId ? (/^(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)/.exec(originId) || [])[1] || null : null
   if (sameNumber.length === 0) {
     sections.push({ number: sectionNumber, version: entry.version, id: sectionId, title: entry.title, change, origin: originId, originNumber, lines: renderBlockLines(entry, headHash, supersedesNote, change || undefined, sectionNumber, originId) })
     action = 'append'
@@ -614,7 +614,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
       let max = 0
       for (const f of onDisk) {
         let c; try { c = readFileSync(join(decisionsDir, f.endsWith('.md') ? f : `${f}.md`), 'utf8') } catch { continue }
-        const re = /^## D-([A-Za-z0-9_\-]+?)-(\d+)@v\d+/gm
+        const re = /^## D-([A-Za-z0-9_\-\u4e00-\u9fff]+?)-(\d+)@v\d+/gm
         let m
         while ((m = re.exec(c)) !== null) if (m[1] === domain) max = Math.max(max, parseInt(m[2], 10))
       }

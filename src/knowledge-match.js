@@ -61,7 +61,7 @@ function isDecisionRoute(entry) {
   return /^decisions\//.test(String(entry.file || '').replace(/\\/g, '/'))
 }
 
-const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-]+-)?\d+@v\d+)\s*(.*)$/
+const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+)\s*(.*)$/
 const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
 // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
