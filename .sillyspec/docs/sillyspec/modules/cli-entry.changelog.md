@@ -44,3 +44,4 @@
 | 2026-10-14 | 2026-10-14-turbo-guide-tier-copy | 评审 P3 清偿：--turbo --thick 同给时 start 极速指引行只查 flag 不查 tier（flow |
 | 2026-10-14 | 2026-10-14-guide-anchor-adopt-proto | sess_fb51d988 实证：CLI 已把含原型分级/真码五要素的完整步骤指引落盘 step-guides（5294 |
 | 2026-10-14 | 2026-10-14-patch-refreeze-missing-artifact | flow done 重入幂等跳过只认子步状态不认产物存在性：patch 子步标记 done 后若 change.patc |
+| 2026-10-14 | 2026-10-14-redomain-domain-arg-normalize | flow done 收口提示的 FR 域迁移命令照抄必败：提示语给 --from fr/auto-backend 形态（ |

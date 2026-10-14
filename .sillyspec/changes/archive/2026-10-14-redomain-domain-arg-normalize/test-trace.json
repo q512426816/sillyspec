@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-redomain-domain-arg-normalize",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-01",
+      "tests": [
+        "test/redomain.test.mjs「⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-redomain-domain-arg-normalize"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-02",
+      "tests": [
+        "test/redomain.test.mjs「⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-redomain-domain-arg-normalize"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-03",
+      "tests": [
+        "test/redomain.test.mjs「⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-redomain-domain-arg-normalize"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-04",
+      "tests": [
+        "test/redomain.test.mjs「⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-redomain-domain-arg-normalize"
+    }
+  ]
+}

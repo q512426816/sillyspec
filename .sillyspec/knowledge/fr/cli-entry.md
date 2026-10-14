@@ -9650,3 +9650,86 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-14-patch-refreeze-missing-artifact/requirements.md#FR-04
 最近确认：fddef8885d69c6d7ab2bcc209d84de66ac4c56e5
+
+## FR-cli-entry-509 库层入参归一化
+变更：2026-10-14-redomain-domain-arg-normalize
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-redomain-domain-arg-normalize/requirements.md#FR-01
+最近确认：970b33d44a67cb667d6335f9a96c81af5daeae45
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-01
+  tests: test/redomain.test.mjs「⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-redomain-domain-arg-normalize
+  status: active
+
+## FR-cli-entry-510 CLI 口径统一
+变更：2026-10-14-redomain-domain-arg-normalize
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-redomain-domain-arg-normalize/requirements.md#FR-02
+最近确认：970b33d44a67cb667d6335f9a96c81af5daeae45
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-02
+  tests: test/redomain.test.mjs「⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-redomain-domain-arg-normalize
+  status: active
+
+## FR-cli-entry-511 两种形态等价
+变更：2026-10-14-redomain-domain-arg-normalize
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-redomain-domain-arg-normalize/requirements.md#FR-03
+最近确认：970b33d44a67cb667d6335f9a96c81af5daeae45
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-03
+  tests: test/redomain.test.mjs「⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-redomain-domain-arg-normalize
+  status: active
+
+## FR-cli-entry-512 测试覆盖
+变更：2026-10-14-redomain-domain-arg-normalize
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-redomain-domain-arg-normalize/requirements.md#FR-04
+最近确认：970b33d44a67cb667d6335f9a96c81af5daeae45
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-redomain-domain-arg-normalize:flow:测试绑定FR-04
+  tests: test/redomain.test.mjs「⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-redomain-domain-arg-normalize
+  status: active
+
+## FR-cli-entry-513 全量门禁
+变更：2026-10-14-redomain-domain-arg-normalize
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-14-redomain-domain-arg-normalize/requirements.md#FR-05
+最近确认：970b33d44a67cb667d6335f9a96c81af5daeae45

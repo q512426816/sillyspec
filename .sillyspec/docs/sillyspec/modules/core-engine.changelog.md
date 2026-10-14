@@ -53,3 +53,4 @@
 | 2026-10-13 | 2026-10-13-cross-repo-baseline-anchor | 动机：thin 手工交付的跨仓对账无基线锚——collectRepoActual 四级档位里 thin 落 B 档（HE |
 | 2026-10-14 | 2026-10-14-turbo-guide-tier-copy | 评审 P3 清偿：--turbo --thick 同给时 start 极速指引行只查 flag 不查 tier（flow |
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | 指引声明 TDD 但未限定适用范围——规则 3 执行顺序与 execute/dispatch 提示词都无差别要求先写测试 |
+| 2026-10-14 | 2026-10-14-redomain-domain-arg-normalize | flow done 收口提示的 FR 域迁移命令照抄必败：提示语给 --from fr/auto-backend 形态（ |

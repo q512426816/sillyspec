@@ -1,0 +1,167 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 0baf3920..da2a556a 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -43,3 +43,4 @@
+ | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
+ | 2026-10-14 | 2026-10-14-turbo-guide-tier-copy | 评审 P3 清偿：--turbo --thick 同给时 start 极速指引行只查 flag 不查 tier（flow |
+ | 2026-10-14 | 2026-10-14-guide-anchor-adopt-proto | sess_fb51d988 实证：CLI 已把含原型分级/真码五要素的完整步骤指引落盘 step-guides（5294 |
++| 2026-10-14 | 2026-10-14-patch-refreeze-missing-artifact | flow done 重入幂等跳过只认子步状态不认产物存在性：patch 子步标记 done 后若 change.patc |
+diff --git a/src/index.js b/src/index.js
+index c32d28f4..183191ab 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3382,17 +3382,19 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       // --from <域> --to <域> [--anchor <FR-id> 可重复]；干跑缺省列条目，--write 落盘。
+       // 身份铁律：迁域不换号（绑定/supersede 链靠 ID 寻址）；平台伪域卡「一键迁移」的 CLI 端。
+       if (has('--redomain')) {
+-        const fromD = flag('--from')
+-        const toD = flag('--to')
++        const { planRedomain, redomainFrEntries, normalizeDomainArg } = await import('./redomain.js')
++        // 入参归一化（2026-10-14-redomain-domain-arg-normalize）：--from/--to 容忍
++        // flow done 提示语原样形态（fr/auto-backend、auto-backend.md），回显/报错统一裸域名。
++        const fromD = normalizeDomainArg(flag('--from'))
++        const toD = normalizeDomainArg(flag('--to'))
+         // --by-change（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷2）：unmapped 等
+         // 混合池按「变更：<名>」字段分批迁移——整域迁移会错置大部分条目，来源变更才是分批键。
+         const byChangeD = flag('--by-change')
+-        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]'); break }
++        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]\n  域名可带 fr/ 前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）'); break }
+         // 多 --anchor 收集
+         const anchorList = []
+         for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])
+         try {
+-          const { planRedomain, redomainFrEntries } = await import('./redomain.js')
+           if (!has('--write')) {
+             // 预览与落盘同口径透传 byChange（坑 redomain-plan-preview-by-change-ignored，
+             // 2026-10-02 实证：76338b4d 收编在途工作时此行漏透传——预览列整域、落盘只迁
+diff --git a/src/redomain.js b/src/redomain.js
+index 76ac3286..ae953b49 100644
+--- a/src/redomain.js
++++ b/src/redomain.js
+@@ -21,6 +21,27 @@ import { writeAtomicSync } from './fs-atomic.js'
+ /** 条目段头（## FR-xxx-NNN / ## FR-NNN）判定与 ID 提取 */
+ const FR_HEADER_RE = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/
+ 
++/**
++ * 域名入参归一化（2026-10-14-redomain-domain-arg-normalize）。
++ *
++ * flow done 伪域告警提示语（fr-index.js）给出的是 `fr/auto-backend` 形态、手工
++ * 输入还可能带 `.md` 后缀，而本模块按裸域名拼 `fr/${from}.md`——两种口径曾打架
++ * 产生 `fr/fr/` 双前缀报错。本函数把入参统一收敛为裸域名：trim → 剥前导 `fr/`
++ * （不区分大小写）→ 剥尾随 `.md`；裸名原样返回，幂等。可能返回空串（如只传
++ * `fr/`）——空值拒绝由调用方负责（报错文案需含「fr/ 前缀」用法提示）。
++ * 域文件物理上都在 fr/ 目录内、裸名不含 `/`，`fr/xxx` 只可能是前缀形态，无歧义。
++ */
++export function normalizeDomainArg(v) {
++  return String(v ?? '').trim().replace(/^fr\//i, '').replace(/\.md$/i, '').trim()
++}
++
++/** 归一化后空值拒绝（统一文案，调用方在一切 fs IO 之前调用） */
++function assertDomainArgs({ from, to }) {
++  if (!from || !to) {
++    throw new Error('源域/目标域为空：域名可带 fr/ 前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）')
++  }
++}
++
+ function frEntryId(headerLine) {
+   const m = FR_HEADER_RE.exec(headerLine)
+   return m ? m[1] : null
+@@ -64,6 +85,9 @@ function entrySourceChange(sectionLines) {
+  * @throws 源域缺席 / 无匹配条目 / anchor 未命中
+  */
+ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
++  from = normalizeDomainArg(from)
++  to = normalizeDomainArg(to)
++  assertDomainArgs({ from, to })
+   const frDir = join(knowledgeRoot, 'fr')
+   const fromPath = join(frDir, `${from}.md`)
+   const toPath = join(frDir, `${to}.md`)
+@@ -134,6 +158,9 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byC
+ 
+ /** 干跑预览：列出将迁移条目，不落盘（byChange 同执行侧过滤） */
+ export function planRedomain({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
++  from = normalizeDomainArg(from)
++  to = normalizeDomainArg(to)
++  assertDomainArgs({ from, to })
+   const frDir = join(knowledgeRoot, 'fr')
+   const fromPath = join(frDir, `${from}.md`)
+   if (!existsSync(fromPath)) throw new Error(`源域文件不存在：fr/${from}.md`)
+diff --git a/test/redomain.test.mjs b/test/redomain.test.mjs
+index 88a51e62..4848804e 100644
+--- a/test/redomain.test.mjs
++++ b/test/redomain.test.mjs
+@@ -5,6 +5,8 @@
+  * ③ 全域迁移：源空壳删除/目标文件新建/INDEX 路由行补
+  * ④ 防线：目标域同 ID 冲突拒/anchor 未命中拒/干跑不落盘
+  * ⑤ CLI tests --redomain 端到端（干跑+--write）
++ * ⑥⑦ 2026-10-14-redomain-domain-arg-normalize：--from/--to 容忍 fr/ 前缀与 .md
++ *    后缀形态（flow done 提示语原样照抄形态）——库层归一 + CLI 端到端等价且回显裸域名
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -13,7 +15,7 @@ import { join, dirname } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { execFileSync } from 'node:child_process'
+ import { fileURLToPath } from 'node:url'
+-import { planRedomain, redomainFrEntries } from '../src/redomain.js'
++import { planRedomain, redomainFrEntries, normalizeDomainArg } from '../src/redomain.js'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const NL = String.fromCharCode(10)
+@@ -111,3 +113,55 @@ test('⑤ CLI tests --redomain 端到端（干跑+--write）', () => {
+   assert.match(wr, /域迁移完成：2 条/)
+   assert.match(wr, /源域空壳已删/)
+ })
++
++test('⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等', () => {
++  // 纯函数契约：前缀/后缀剥离 + 裸名原样 + 幂等 + 大小写不敏感
++  assert.equal(normalizeDomainArg('auto-backend'), 'auto-backend', '裸名原样')
++  assert.equal(normalizeDomainArg('fr/auto-backend'), 'auto-backend', 'fr/ 前缀剥离')
++  assert.equal(normalizeDomainArg('auto-backend.md'), 'auto-backend', '.md 后缀剥离')
++  assert.equal(normalizeDomainArg('fr/auto-backend.md'), 'auto-backend', '前缀+后缀同剥')
++  assert.equal(normalizeDomainArg('fr/Auto-Backend.md'), 'Auto-Backend', '剥离大小写不敏感')
++  assert.equal(normalizeDomainArg(normalizeDomainArg('fr/auto-backend.md')), normalizeDomainArg('fr/auto-backend.md'), '幂等')
++  assert.equal(normalizeDomainArg(' fr/ x '), 'x', '空白 trim')
++
++  // 库层：前缀/后缀形态与裸名干跑同结果
++  const f = fixture()
++  const bare = planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] })
++  assert.deepEqual(
++    planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'fr/auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] }),
++    bare,
++    'fr/ 前缀形态干跑与裸名一致',
++  )
++  assert.deepEqual(
++    planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'auto-backend.md', to: 'platform-sync', anchors: ['FR-auto-backend-019'] }),
++    bare,
++    '.md 后缀形态干跑与裸名一致',
++  )
++
++  // 库层写入同样容忍前缀形态
++  const f2 = fixture()
++  const r = redomainFrEntries({ knowledgeRoot: f2.knowledgeRoot, from: 'fr/auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] })
++  assert.equal(r.moved.length, 1)
++  assert.equal(r.moved[0].id, 'FR-auto-backend-019', 'ID 不变')
++  assert.ok(existsSync(join(f2.knowledgeRoot, 'fr', 'platform-sync.md')))
++
++  // 剥空拒绝（只传 fr/ / 空串）——报错含 fr/ 前缀用法提示，且不落盘
++  const f3 = fixture()
++  assert.throws(() => planRedomain({ knowledgeRoot: f3.knowledgeRoot, from: 'fr/', to: 'platform-sync' }), /fr\/ 前缀/)
++  assert.throws(() => redomainFrEntries({ knowledgeRoot: f3.knowledgeRoot, from: '', to: 'platform-sync' }), /fr\/ 前缀/)
++  assert.ok(existsSync(join(f3.knowledgeRoot, 'fr', 'auto-backend.md')), '拒绝路径无半态写盘')
++})
++
++test('⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名', () => {
++  const f = fixture()
++  const bin = join(ROOT, 'bin', 'sillyspec.js')
++  const dry = execFileSync('node', [bin, 'tests', '--redomain', '--from', 'fr/auto-backend', '--to', 'platform-sync'], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  assert.match(dry, /域迁移预览（--write 落盘）：fr\/auto-backend\.md → fr\/platform-sync\.md/, '预览回显裸域名路径')
++  assert.ok(!dry.includes('fr/fr/'), '回显无 fr/fr/ 双前缀')
++  assert.ok(existsSync(join(f.knowledgeRoot, 'fr', 'auto-backend.md')), '干跑不落盘')
++
++  const wr = execFileSync('node', [bin, 'tests', '--redomain', '--from', 'fr/auto-backend', '--to', 'platform-sync', '--write'], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  assert.match(wr, /域迁移完成：2 条/)
++  assert.ok(!wr.includes('fr/fr/'), '完成回显无 fr/fr/ 双前缀')
++  assert.ok(!existsSync(join(f.knowledgeRoot, 'fr', 'auto-backend.md')), '源空壳已删')
++})

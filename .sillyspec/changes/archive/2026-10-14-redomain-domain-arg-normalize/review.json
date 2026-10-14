@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-redomain-domain-arg-normalize",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "970b33d44a67cb667d6335f9a96c81af5daeae45",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03/FR-04 的「--write 与裸名逐字节一致」无直接断言",
+      "evidence": "⑥ 仅对 planRedomain 干跑做双形态 deepEqual 对照，⑦ 的 --write 只断言前缀形态自身结果特征（完成 2 条/壳删/无 fr/fr/），未跑裸名 --write 对照文件逐字节一致；等价性靠「归一化收敛同一裸名进同一代码路径」机理 + 既有 ⑤ 裸名用例同断言集间接支撑，无数据正确性风险",
+      "location": "test/redomain.test.mjs:130-146,155-167"
+    },
+    {
+      "severity": "P3",
+      "title": "cli-entry.changelog.md 冻结面追加的是他变更行，本变更行缺席",
+      "evidence": "change.patch 首段向 cli-entry.changelog.md 追加的行记录 2026-10-14-patch-refreeze-missing-artifact（正是该变更自述的 flow done 重入 changelog 错挂缺陷），本变更修改了 src/index.js（cli-entry 模块面）却无对应行；生成物流水线副产品，不影响三交付文件代码正确性，归档流水线可补录",
+      "location": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md:49"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T03:52:16Z"
+}

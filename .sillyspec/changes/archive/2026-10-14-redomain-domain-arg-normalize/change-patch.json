@@ -1,0 +1,94 @@
+{
+  "change": "2026-10-14-redomain-domain-arg-normalize",
+  "baseline": "00e61cb1e0160d5f6b990524b4e7838965c2ff17",
+  "head": "970b33d44a67cb667d6335f9a96c81af5daeae45",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    "src/index.js",
+    "src/redomain.js",
+    "test/redomain.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 89,
+    "deletions": 5
+  },
+  "savedAt": "2026-10-14T03:48:31.626Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "00e61cb1e0160d5f6b990524b4e7838965c2ff17",
+    "totals": {
+      "files": 4,
+      "additions": 89,
+      "deletions": 5
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 6,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/redomain.js",
+        "additions": 27,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/redomain.test.mjs",
+        "additions": 55,
+        "deletions": 1,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1ebeca095ea2c5729d35344a7586a7756491399b9b89f4702c01e1731f6d975b",
+  "patchStatus": "ok"
+}
