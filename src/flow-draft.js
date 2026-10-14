@@ -354,7 +354,12 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
       const questionPresent = (lines, q) => lines.some((raw) => {
         const t = String(raw || '').trim()
         if (!t || t === q) return t === q
-        // 只剥一层编号/列表前缀（锚问句自带「N.」编号，多层剥会把锚的编号也吃掉致包含
+        // 包含判定只对自带编号的锚生效（四问节「N. 问句」形态——回答行「N. 问句：答」折叠
+        // 是惯例书写面，注入即倒序重复块，坑 flow-done-design-question-line-injection）。
+        // 无编号锚（做法/契约/风险节单行问句）不做包含判定：⑦c 契约要求引用原文的作答行
+        // 仍注入锚在引用行上方（锚独立成行是审计面）——包含跳过会吃掉该注入。
+        if (!/^\d+[.、)]\s/.test(q)) return false
+        // 只剥一层编号/列表前缀（锚自带「N.」编号，多层剥会把锚的编号也吃掉致包含
         // 判定假阴性——① 用例实证）
         const stripped = t.replace(/^(?:\d+[.、)]\s*|[-*•]\s*)/, '')
         return stripped.includes(q)
