@@ -24,7 +24,7 @@ Then 种入主模式 8 步表（首步名「进度确认」），不再存在 4 
 
 Given 变更进度库 stages.brainstorm.steps 为 4 步 auto 形态
 When run brainstorm --done / run auto 触达
-Then exit 非零 + 退役报错文案（含已删除说明与 reopen/doctor 指引），进度未被重种。
+Then exit 非零 + 退役报错文案（含已删除说明与 reset/doctor 指引），进度未被重种。
 
 ### FR-03: 引用面清理（必须）
 
