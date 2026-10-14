@@ -2,9 +2,10 @@
 
 > decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。
 
-## D-003@v1 技术方案 A——判定链单点收紧 + 三触点对齐
+## D-NEW-notification-001@v1 技术方案 A——判定链单点收紧 + 三触点对齐
 状态：implemented
 变更：2026-09-20-workspace-member-visibility
+原编号：D-003@v1
 锚点：未记录
 最近确认：3642c3d0
 理由：选方案 A。改 rbac.has_permission 单点（workspace_id≠None 时平台段仅 platform:admin 放行）+ 列表端点平台分支收窄 + 通知收件人段 2 收窄，三处口径联动。否决 B：mcp:read 等双用途权限（既开菜单又开工作区内容）无法从平台角色剥离，否则菜单消失，且手授即可重开暗道；否决 C：权限数量/种子/前端矩阵/存量数据全要动，过度设计。
