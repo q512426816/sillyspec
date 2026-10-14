@@ -57,6 +57,7 @@ Then tasks.md 照常翻格、exit 0，仅输出写失败告警
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/task-tick.test.mjs「tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）；幂等重勾零追加」
-FR-01: test/watcher-timeline.test.mjs「renderTimeline：侧车精确时刻优先（无 ≈），缺行回退推断 ≈，链断回退 ?」
-FR-02: test/watcher-timeline.test.mjs「提交锚按变更名收敛：他变更提交含同 token 不误锚（litellm-retire 案例回归），本变更提交正常锚定」
-FR-03: test/task-tick.test.mjs「侧车写失败仅告警不阻断翻格」
+FR-01: test/watcher-timeline.test.mjs「renderTimeline：侧车精确时刻优先（无 ≈），缺行回退推断 ≈，双盲回退 ?」
+FR-02: test/watcher-timeline.test.mjs「resolveCommitAnchors：change 参算 sameChange（全消息含正文）；缺省恒 true 向后兼容」
+FR-02: test/watcher-timeline.test.mjs「renderTimeline：跨变更误锚回归——他变更提交含同 token 不锚定（litellm-retire 案例形态）」
+FR-03: test/task-tick.test.mjs「侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）」
