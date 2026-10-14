@@ -20,21 +20,24 @@
  *      计分子放行（等式满足 ok=true）/ 缺测试锚点 error（matrixEvidenceHasAnchor 三形态口径）/
  *      advisory 承接计数（N 与 fixture 行数对照）/ probe7 验收矩阵联动不误报 + backfill 后
  *      facts.matrixPartialRows=0（封顶条件④不触发的结构性证据）
+ *   9. gate 预检注入（2026-10-14-gate-verify-apiface-preflight / FR-01~FR-03）：facts 无 apiFace
+ *      （--init 后形态）锚点恒空指复现 → computeApiFaceFromDesign 实况面注入命中；注入优先于
+ *      过期 facts.apiFace（预检过=必过）；helper 与 backfill 落盘产物同形同源 + 缺文件 fail-soft
  *
  * 确定性纪律：mkdtempSync 临时目录 + test.after 清理；纯函数直测（零 IO 面全部经参数传入），
  * 矩阵面一律经 extractApiCoverageMatrixSlots 真实解析构造（钉 X-05 防篡改锚点口径）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import {
   parseDesignApiTable, classifyConsumerHints, ensureApiCoverageMatrixSection,
-  backfillFactsFromMdAndTests,
+  backfillFactsFromMdAndTests, computeApiFaceFromDesign,
 } from '../src/verify-probes.js'
-import { extractApiCoverageMatrixSlots, extractAcceptanceMatrixSlots, judgeApiCoverageMatrix } from '../src/stage-contract.js'
+import { extractApiCoverageMatrixSlots, extractAcceptanceMatrixSlots, judgeApiCoverageMatrix, validateApiCoverageMatrix } from '../src/stage-contract.js'
 
 const tmpRoots = []
 function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
@@ -472,4 +475,95 @@ test('parseDesignApiTable 段头词边界：OpenAPI 标题不进 sectionHint，�
   assert.ok(!r.sectionHint.some(h => /OpenAPI/i.test(h)), `OpenAPI 标题不应误收（实际 ${JSON.stringify(r.sectionHint)}）——/api/i 无词边界时 OpenAPI 含 api 子串命中`)
   assert.ok(r.sectionHint.some(h => /API 契约/.test(h)), '独立 API 标题照常命中')
   assert.equal(r.endpoints.length, 1, '端点行仍从 API 契约段解析')
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// 9. gate 预检注入（2026-10-14-gate-verify-apiface-preflight FR-01~FR-03）
+//    实证背景：multi-agent-platform 2026-10-14-deploy-release-notes 会话 6 轮 gate（每轮测试
+//    重跑 266-336s 全绿）全败在同一条锚点空指——facts.apiFace 唯一生产者是 run verify --done
+//    收尾前置 backfill（run/gates.js），gate 路径（machine-interface runGate）不回填且 --init
+//    刻意不落键 → parseSet 空 → design接口表# 锚点恒空指，怎么改 design.md 格式都不可能过。
+// ═══════════════════════════════════════════════════════════════════
+
+/** gate 预检夹具 design.md：真实平台形态（两列表格 + 模板路径 + 写端点） */
+const DESIGN_MD_PREFLIGHT = [
+  '---', 'author: t', 'created_at: 2026-10-14 10:00:00', '---',
+  '# 宠物管理设计', '',
+  '## 接口定义', '',
+  '| 端点 | 说明 |',
+  '|---|---|',
+  '| GET /api/pets | 宠物列表 |',
+  '| GET /api/pets/{pet_id} | 宠物详情（模板路径） |',
+  '| POST /api/pets | 创建宠物（写端点） |',
+].join('\n')
+
+/** 壳层夹具：tasks/ 目录（TaskCard 在场门）+ design.md + verify-result.md + verify-facts.json */
+function mkPreflightChange({ designMd = DESIGN_MD_PREFLIGHT, facts } = {}) {
+  const root = mk('acm-preflight-')
+  const changeDir = join(root, 'changes', 'pf-x')
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+  writeFileSync(join(changeDir, 'design.md'), designMd)
+  writeFileSync(join(changeDir, 'verify-result.md'), matrixMd([
+    ['GET /api/pets', 'covered', 't1', 'pass', 'design接口表#GET /api/pets'],
+    ['GET /api/pets/{pet_id}', 'covered', 't2', 'pass', 'design接口表#GET /api/pets/{pet_id}'],
+    ['POST /api/pets', 'covered', 't3', 'pass', 'design接口表#POST /api/pets'],
+  ]))
+  if (facts !== undefined) writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify(facts))
+  return { root, changeDir }
+}
+
+test('9. gate 预检注入：facts 无 apiFace（--init 后形态）→ 实况面命中锚点不再恒空指（FR-01）', () => {
+  // --init 后形态：facts 无 apiFace 键（writeVerifyFacts「不落键」口径）
+  const { root, changeDir } = mkPreflightChange({ facts: { schemaVersion: 1, probes: {}, conclusion: null } })
+  // 现状口径（不注入）复现：锚点恒空指——bug 面
+  const before = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root })
+  assert.ok(before.errors.some(e => e.includes('空指')),
+    `现状复现：facts 无 apiFace → design接口表# 锚点恒空指（实际 errors=${JSON.stringify(before.errors)}）`)
+  // 注入实况面（machine-interface 同款 helper 产物）：命中放行
+  const live = computeApiFaceFromDesign(join(changeDir, 'design.md'))
+  assert.equal(live.endpoints.length, 3, '实况面解析出设计表 3 端点')
+  assert.ok(live.writeEndpoints.some(e => e.method === 'POST' && e.path === '/api/pets'), '写端点子集与 backfill 同过滤口径')
+  const after = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root, apiFaceLive: live })
+  assert.deepEqual(after.errors, [], `注入后零空指（实际 errors=${JSON.stringify(after.errors)}）`)
+  assert.equal(after.ok, true, '注入后判定 ok')
+})
+
+test('9b. 注入优先于过期 facts.apiFace（预检过=必过）；不注入保持现状空指对照（FR-02）', () => {
+  const { root } = mkPreflightChange({
+    designMd: ['---', 'author: t', 'created_at: 2026-10-14 10:00:00', '---', '# 设计', '', '## 接口定义', '',
+      '| 端点 | 说明 |', '|---|---|', '| GET /api/old | 旧端点 |'].join('\n'),
+    facts: { schemaVersion: 1, probes: {}, conclusion: null },
+  })
+  // 先按旧 design backfill（模拟上一轮 --done 落盘），再改 design.md 新增端点——facts 过期态
+  const capWarn = console.warn; console.warn = () => {}
+  try {
+    backfillFactsFromMdAndTests(join(root, 'changes', 'pf-x', 'verify-facts.json'),
+      { verifyMd: '# 验证报告\n', conclusion: null })
+  } finally { console.warn = capWarn }
+  writeFileSync(join(root, 'changes', 'pf-x', 'design.md'), DESIGN_MD_PREFLIGHT)
+  const onDisk = JSON.parse(readFileSync(join(root, 'changes', 'pf-x', 'verify-facts.json'), 'utf8'))
+  assert.ok(onDisk.apiFace && onDisk.apiFace.endpoints.length === 1, '前置：facts.apiFace 为旧端点集（过期）')
+  // 不注入（现状）：过期 parseSet 无新端点 → 空指
+  const stale = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root })
+  assert.ok(stale.errors.some(e => e.includes('空指') && e.includes('/api/pets')),
+    `现状对照：过期 facts → 新端点锚点空指（实际 errors=${JSON.stringify(stale.errors)}）`)
+  // 注入：实况面优先 → 命中放行（与 --done backfill 后判定同因一致）
+  const live = computeApiFaceFromDesign(join(root, 'changes', 'pf-x', 'design.md'))
+  const fresh = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root, apiFaceLive: live })
+  assert.deepEqual(fresh.errors, [], `注入后命中新端点（实际 errors=${JSON.stringify(fresh.errors)}）`)
+})
+
+test('9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源；design.md 缺失 → 空面 fail-soft 不抛（FR-03）', () => {
+  const { changeDir } = mkPreflightChange({ facts: { schemaVersion: 1, probes: {}, conclusion: null } })
+  const capWarn = console.warn; console.warn = () => {}
+  try {
+    backfillFactsFromMdAndTests(join(changeDir, 'verify-facts.json'),
+      { verifyMd: '# 验证报告\n', conclusion: null })
+  } finally { console.warn = capWarn }
+  const onDisk = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
+  assert.deepEqual(computeApiFaceFromDesign(join(changeDir, 'design.md')), onDisk.apiFace,
+    'helper 产物与 backfill 落盘的 facts.apiFace deepEqual（同形同源单一产物源）')
+  assert.deepEqual(computeApiFaceFromDesign(join(changeDir, 'no-such-design.md')),
+    { endpoints: [], declared: null, writeEndpoints: [] },
+    'design.md 缺失 → 空面（与 backfill 的 design 缺失口径一致）不抛')
 })

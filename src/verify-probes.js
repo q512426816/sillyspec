@@ -2664,6 +2664,30 @@ const API_MATRIX_HEADING = '## 接口验证覆盖矩阵'
 const API_MATRIX_WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
 
 /**
+ * design.md 接口段实况解析面（gate/derive 预检注入用，2026-10-14-gate-verify-apiface-preflight）：
+ * 与 backfillFactsFromMdAndTests 落盘的 facts.apiFace 同形同源（同一 parseDesignApiTable、同一
+ * writeEndpoints 过滤——单一产物源，禁第二套解析文法），零落盘。背景：facts.apiFace 唯一生产者
+ * 是 run verify --done 收尾前置 backfill（run/gates.js），gate 路径不回填且 --init 刻意不落键 →
+ * 预检 parseSet 空/旧 → design接口表# 锚点恒空指（平台 6 轮 gate 实证）。gate 侧经本 helper
+ * 实况解析后经 context.apiFaceLive 注入 validator（stage-contract 零 import 纪律：注入不做
+ * 函数调用），「预检过=必过」对锚点核对成立；解析异常由调用方 fail-soft 承接（不注入退回 facts）。
+ * @param {string} designPath changeDir/design.md 路径（缺失 → 空面，与 backfill 的 design 缺失口径一致）
+ * @returns {{ endpoints: Array<{method: string, path: string, rowIdx: number}>, declared: number|null, writeEndpoints: Array }}
+ */
+export function computeApiFaceFromDesign(designPath) {
+  let designText = null
+  if (existsSync(designPath)) {
+    try { designText = readFileSync(designPath, 'utf8') } catch { designText = null }
+  }
+  const face = parseDesignApiTable(designText || '')
+  return {
+    endpoints: face.endpoints,
+    declared: face.declared,
+    writeEndpoints: face.endpoints.filter(e => e && API_MATRIX_WRITE_METHODS.has(e.method)),
+  }
+}
+
+/**
  * 渲染「## 接口验证覆盖矩阵」段（task-04）。
  * 三态：解析有端点 → 逐端点预填行（判定列 `<待填：五选一>` 占位，同 probe7 预填口径供 agent
  * 复核）；解析零行有声明 → 声明占位行「本变更接口面：<N> 端点（agent 声明）」（D-005 零解析
@@ -3140,20 +3164,10 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   // validator 判 N=0 走零行为注记）；与 runVerifyProbes 同一解析器（单一产物源）。
   {
     const changeDir = dirname(factsPath)
-    const designPath = join(changeDir, 'design.md')
-    let designText = null
-    if (existsSync(designPath)) {
-      try { designText = readFileSync(designPath, 'utf8') } catch { designText = null }
-    }
-    const face = parseDesignApiTable(designText || '')
-    facts.apiFace = {
-      endpoints: face.endpoints,
-      declared: face.declared,
-      writeEndpoints: face.endpoints.filter(e => e && API_MATRIX_WRITE_METHODS.has(e.method)),
-    }
+    facts.apiFace = computeApiFaceFromDesign(join(changeDir, 'design.md'))
     let designPaths = []
-    if (designText !== null) {
-      try { designPaths = parseFileChangeListDetailed(designPath).map(e => String(e.path)) } catch { designPaths = [] }
+    if (existsSync(join(changeDir, 'design.md'))) {
+      try { designPaths = parseFileChangeListDetailed(join(changeDir, 'design.md')).map(e => String(e.path)) } catch { designPaths = [] }
     }
     facts.consumerHints = classifyConsumerHints(designPaths)
   }

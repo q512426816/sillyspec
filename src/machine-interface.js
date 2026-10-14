@@ -187,10 +187,24 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     // 各 spawn 2 个 git 进程（gate execute 一次省 ≈ 60-200ms on Windows）。
     const sharedEvidence = stage === 'execute' ? checkExecuteCodeEvidence(cwd, changeName) : undefined;
 
+    // ── gate 预检实况注入（2026-10-14-gate-verify-apiface-preflight FR-01~FR-03）：facts.apiFace
+    // 唯一生产者是 run verify --done 收尾前置 backfill（run/gates.js），gate 路径不回填且 --init
+    // 刻意不落键 → 锚点核对 parseSet 空/旧 → design接口表# 锚点恒空指（平台 6 轮 gate 实证）。
+    // 此处以同一解析器实况解析 design.md 经 context 注入 validator（与 --done backfill 产物同形
+    // 同源，零落盘守 D-002 只读契约）；解析异常 fail-soft 不注入，退回 facts 口径（现状行为）。──
+    let apiFaceLive = null;
+    if (stage === 'verify') {
+      try {
+        const { computeApiFaceFromDesign } = await import('./verify-probes.js');
+        apiFaceLive = computeApiFaceFromDesign(join(specRoot, 'changes', changeName, 'design.md'));
+      } catch { /* fail-soft：不注入退回 facts 口径 */ }
+    }
+
     // ── a. artifacts：阶段产物校验（全部阶段）──
     const r = runValidators(stage, cwd, changeName, {
       projectName: progress.project,
       specRoot,
+      ...(apiFaceLive ? { apiFaceLive } : {}),
       ...(sharedEvidence ? { evidence: sharedEvidence } : {}),
     });
     checks.push({
@@ -752,10 +766,21 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
 
       // ── d. artifacts：当前阶段产物校验 ──
       // runValidators 需要 stage：用 progress.currentStage（若为空串则校验器内部处理）。
+      // verify 阶段同款实况注入（2026-10-14-gate-verify-apiface-preflight）：与 runGate 同因——
+      // facts.apiFace 唯一生产者是 --done backfill，derive 不回填 → 锚点核对恒空指；零落盘 +
+      // fail-soft（异常不注入退回 facts 口径），守 D-002 只读契约。
       case 'artifacts': {
+        let apiFaceLive = null;
+        if (currentStage === 'verify') {
+          try {
+            const { computeApiFaceFromDesign } = await import('./verify-probes.js');
+            apiFaceLive = computeApiFaceFromDesign(join(specRoot, 'changes', changeName, 'design.md'));
+          } catch { /* fail-soft：不注入退回 facts 口径 */ }
+        }
         const r = runValidators(currentStage, cwd, changeName, {
           projectName: progress.project,
           specRoot,
+          ...(apiFaceLive ? { apiFaceLive } : {}),
         });
         data = { ok: r.ok, errors: r.errors, warnings: r.warnings };
         ok = r.ok;

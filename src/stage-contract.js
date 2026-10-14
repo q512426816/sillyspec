@@ -1419,6 +1419,9 @@ function extractPermissionMatrixText(designMd) {
  *   - tasks/ 不存在（quick 会话/旧变更）或 verify-result.md 未落盘（中间步骤）→ no-op
  *   - factsExpected=false（存量未跑管线，resolveFactsExpected 同源口径）→ no-op 零行为
  *   - verify-facts.json（apiFace/consumerHints/handover，缺失容 null——fail-closed 归纯函数）
+ *   - context.apiFaceLive（可选，2026-10-14-gate-verify-apiface-preflight）：gate/derive 预检侧
+ *     以同一解析器实况解析 design.md 注入（与 --done backfill 产物同形同源，零落盘）——在场时
+ *     覆写 facts.apiFace 作解析产出集（过期 facts 不得赢），未注入行为与现状完全一致
  *   - 矩阵段 MD 槽解析（X-05 防篡改锚点：锚定当前文档实态）
  *   - resolveChangeRisk 声明面判级（design 文件清单 × blast 声明 + explicit，task-03）
  *   - design.md 权限矩阵段提取（fs 只读，壳非纯函数）
@@ -1441,9 +1444,18 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
   // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（design 文件清单 × blast 声明 +
   // explicit；level 为五级词兼容字段——evidenceRequired → integration-critical）
   const riskProfile = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
+  // gate/derive 预检注入（2026-10-14-gate-verify-apiface-preflight FR-01/FR-02）：facts.apiFace
+  // 唯一生产者是 run verify --done 收尾前置 backfill（run/gates.js），gate 路径不回填且 --init
+  // 刻意不落键 → 预检 parseSet 空/旧 → design接口表# 锚点恒空指（平台 6 轮 gate 实证）。调用方
+  // （machine-interface runGate/derive）以同一解析器实况解析 design.md 经 context.apiFaceLive
+  // 传入（本模块零 import verify-probes 纪律：注入不做函数调用）——与 --done backfill 产物同形
+  // 同源，在场时必须覆写 facts（过期 facts 不得赢），未注入时行为与现状完全一致。
+  const apiFace = context.apiFaceLive && typeof context.apiFaceLive === 'object'
+    ? context.apiFaceLive
+    : (facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null)
   return judgeApiCoverageMatrix({
     matrix: extractApiCoverageMatrixSlots(readFileSync(verifyResultPath, 'utf8')),
-    apiFace: facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null,
+    apiFace,
     consumerHints: facts && facts.consumerHints && typeof facts.consumerHints === 'object' ? facts.consumerHints : null,
     facts,
     factsExpected: true,
