@@ -2027,3 +2027,42 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-14-tdd-scope-guidance
   status: active
+
+## FR-setup-114 package.json version=3.32.9 且 test/quick-retired.test.mjs R5 版本锚断言绿
+变更：2026-10-14-release-3-32-9
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本地 3.32.8、npm 线上 latest=3.32.8；When `npm version 3.32.9 --no-git-tag-version` 连带
+全文：.sillyspec/changes/archive/2026-10-14-release-3-32-9/requirements.md#FR-01
+最近确认：a6c227079ac2cc676c58f48413f925764547187a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-release-3-32-9:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs「R5 版本锚 3.32.9」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-release-3-32-9
+  status: active
+
+## FR-setup-115 git push origin main 成功（pre-push 三门放行）
+变更：2026-10-14-release-3-32-9
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 版本面三文件与 templates/agents-instruction.md 已显式 pathspec 提交；When `git push origin ma
+全文：.sillyspec/changes/archive/2026-10-14-release-3-32-9/requirements.md#FR-02
+最近确认：a6c227079ac2cc676c58f48413f925764547187a
+
+## FR-setup-116 npm publish 钉扎通道：预核验 latest=3.32.8 → publish → 双核验 version=3.32.9 且 dist-tags.latest=3.32.9
+变更：2026-10-14-release-3-32-9
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 预核验 latest=3.32.8 通过证通道存活；When npm publish（钉扎）；Then 发布回执含 sillyspec@3.32.9 与 sha
+全文：.sillyspec/changes/archive/2026-10-14-release-3-32-9/requirements.md#FR-03
+最近确认：a6c227079ac2cc676c58f48413f925764547187a

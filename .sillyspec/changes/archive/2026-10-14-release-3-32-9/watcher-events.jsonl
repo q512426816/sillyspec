@@ -1,0 +1,13 @@
+{"ts":1791952641648,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1791952641648,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791952674821,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791952681532,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791952685272,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：ackage-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791952728521,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791952728521,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791952752789,"kind":"commit","stage":null,"detail":"198dbe46","provisional":true}
+{"ts":1791953040220,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs-check-baseline——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791953350566,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791953350566,"kind":"task-done","stage":"tasks","detail":"checked 1→3","provisional":true}
+{"ts":1791953357400,"kind":"commit","stage":null,"detail":"a6c22707","provisional":true}
+{"ts":1791953410201,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（42.4s） · 20261014045007","provisional":true}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-release-3-32-9",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a6c227079ac2cc676c58f48413f925764547187a",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "n/a",
+    "作用域": "n/a"
+  },
+  "reviewedAt": "2026-10-14T04:53:13Z"
+}

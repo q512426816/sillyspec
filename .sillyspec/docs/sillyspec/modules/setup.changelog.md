@@ -23,3 +23,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |
 | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | agents-instruction 模板规则 3 加「测试按层适用」尾注（AGENTS.md/CLAUDE.md 仓实例同步）；assets/command-cards/flow.md「直接干活」行加按层限定。 |
+| 2026-10-14 | 2026-10-14-release-3-32-9 | 发布 sillyspec@3.32.9：收编上一归档变更留痕的并行会话在途件 templates/agents-inst |

@@ -1,0 +1,33 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  发布 sillyspec@3.32.9：收编上一归档变更留痕的并行会话在途件 templates/agents-instruction.md（选道表 --turbo 极速档一行），版本面 3.32.8→3.32.9，推送并钉扎通道发布。
+
+  成功标准：
+  - package.json version=3.32.9 且 test/quick-retired.test.mjs R5 版本锚断言绿
+  - git push origin main 成功（pre-push 三门放行）
+  - npm publish 钉扎通道：预核验 latest=3.32.8 → publish → 双核验 version=3.32.9 且 dist-tags.latest=3.32.9
+autopilot: true
+prestage_ack: false
+baseline_commit: 9af000165506247a332ef0417ad76f313888df91
+updatedAt: '2026-10-14T04:53:38.653Z'
+baseline_sha256: 97e2a5a4fd2e91e21a9ea9326488562dd7784560f5cca9128495eedac16c6101
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js24+nontest-skip1)+fr(25)（42.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014045007\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（73.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014045007\test-result.json｜门文件 5 个
+

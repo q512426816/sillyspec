@@ -1,0 +1,56 @@
+diff --git a/package-lock.json b/package-lock.json
+index 8ee333db..927e665b 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.8",
++  "version": "3.32.9",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.32.8",
++      "version": "3.32.9",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index 8ad9fd80..7324a24f 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.8",
++  "version": "3.32.9",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 64ae837d..59afee20 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -7,6 +7,7 @@
+ | 需求形态 | 走法 |
+ |---|---|
+ | 需求已含决策（改什么、成功标准说得清——成功标准须来自**用户原话或既有文档转写**；要靠你推断拟出的标准＝需求不清晰） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 用户显式要求极速（「极速/别验证/只要 spec 和代码」类原话）且需求已含决策 | **轻量变更极速版**：同上行加 `--turbo`（`flow start --change <名> --input "<...>" --turbo`）——**仅用户显式触发，禁止你自行启用**；收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），spec 结构校验/tasks 全勾/ledger/patch 冻结/distill/归档照常（跳的是验证不是证据）；升厚即失效恢复全量仪式；收口输出显式标注「不含测试客观核验」。预段组合极速：头脑风暴预段走轻量跑判定+单轮合并问询+burst 一次 --done，收编时按用户要求带 --turbo |
+ | 需求不清晰 / 需要方案探索（含「成功标准要你替用户拟」的形态——自己拟标准再自答是把默认共识伪装成共识） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准）。上个轻量变更被 route-hindsight 标记时全新 start 会被同意门拦下要求显式选道：确认已含决策带 `--no-prestage` 声明留痕，否则先走本行预段 |
+ | 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+ | 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input` 按下方过门格式写（动机=已做改动的描述，成功标准=已验证达标的行为）→ `flow done` 一步收口 |
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index 8b917e30..43a47d54 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -146,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.8', `R5 package.json 版本 3.32.8（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.9', `R5 package.json 版本 3.32.9（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
