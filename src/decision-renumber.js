@@ -43,7 +43,7 @@ function scanDomainFiles(knowledgeRoot) {
  * 纯函数（只读扫描）：产出迁移计划。
  * @param {string} knowledgeRoot knowledge 目录
  * @returns {{ files: Array<{file, domain, content, ops: Array<{secIdx, fromId, toNumber}>}>,
- *   stats: { legacySections, fanoutGroups, fanoutCopies, mintedNumbers, untouchedEpoch, perDomainStart: object } }}
+ *   stats: { legacySections, fanoutGroups, fanoutCopies, mintedNumbers, noChangeEntries, untouchedEpoch, perDomainStart: object } }}
  *   perDomainStart = 各发号域的起始号（既有 epoch max+1）；ops 为空的文件也保留（content 供 CLI 指纹校验）
  */
 export function planRenumber(knowledgeRoot) {
@@ -86,11 +86,13 @@ export function planRenumber(knowledgeRoot) {
   const perFileOps = new Map()
   let legacySections = 0
   let mintedNumbers = 0
+  let noChangeEntries = 0
   for (const f of files) {
     const ops = []
     f.sections.forEach((s, si) => {
       if (!isLegacy(s)) return
       legacySections++
+      if (!s.change) noChangeEntries++
       const fromId = `${s.number}@v${s.version}`
       let toNumber
       if (s.change && groups.get(groupKeyOf(s))?.members.length >= 2) {
@@ -110,7 +112,7 @@ export function planRenumber(knowledgeRoot) {
   }
   return {
     files: files.map((f) => ({ file: f.file, domain: f.domain, content: f.content, ops: perFileOps.get(f.file) || [] })),
-    stats: { legacySections, fanoutGroups: fanoutGroups.length, fanoutCopies, mintedNumbers, untouchedEpoch, perDomainStart },
+    stats: { legacySections, fanoutGroups: fanoutGroups.length, fanoutCopies, mintedNumbers, noChangeEntries, untouchedEpoch, perDomainStart },
   }
 }
 

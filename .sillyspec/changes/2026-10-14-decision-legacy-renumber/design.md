@@ -8,7 +8,7 @@ created_at: 2026-10-14T15:33:12.787Z
 
 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
 
-存量决策号一次性迁移（用户裁决，翻「存量不回填」旧案——fr-index D-007 先例是设计取舍非技术禁忌，翻案理由随本变更蒸馏留痕）。新增 src/decision-renumber.js：纯函数 planRenumber（扫描全部域文件 → 迁移计划：legacy 节段发号、fanout 组收敛单一身份、无变更条目独立发号）+ applyRenumberPlan（按计划重写节段：标题换全局号、插原编号行、其余行逐字节保留、节段次序不变，joinKnowledgeFile 复用既有归一落盘形态）；CLI 接线 `sillyspec knowledge renumber --dry-run/--apply`（index.js）。epoch 机制（原编号字段/双形态解析/originId 匹配）已在 2026-10-14-decision-global-id-epoch 就位——迁移产物所有读面零改动即认识。兼容面：docs-check 解析器读原编号 + isDecisionExempt 认原编号（消费仓旧裸键不失效）。平台侧：apply 后 platform sync 推 spec 树；向量检索验证探针（等值匹配契约已备，重建窗口降级如实注记）。
+存量决策号一次性迁移（用户裁决，翻「存量不回填」旧案——fr-index D-007 先例是设计取舍非技术禁忌，翻案理由随本变更蒸馏留痕）。新增 src/decision-renumber.js：纯函数 planRenumber（扫描全部域文件 → 迁移计划：legacy 节段发号、fanout 组收敛单一身份、无变更条目独立发号）+ applyRenumberPlan（按计划重写节段：标题换全局号、插原编号行、其余行逐字节保留、节段次序不变，joinKnowledgeFile 复用既有归一落盘形态）；CLI 接线 `sillyspec knowledge renumber --dry-run/--apply`（index.js）。epoch 机制（原编号字段/双形态解析/originId 匹配）已在 2026-10-14-decision-global-id-epoch 就位——迁移产物所有读面零改动即认识。兼容面：docs-check 解析器读原编号 + isDecisionExempt 认原编号（消费仓旧裸键不失效）。平台侧执行回执：迁移提交后 platform sync 全树 0 差异（后台自动 spec-sync 已随迁移提交推送）；向量探针 POST /api/spec/knowledge/vector-search 返回 404——该平台实例未部署向量层，本仓检索一直在本地词面回退路径运行（fail-open 设计），anchor 迁移对平台无中断面（FR-04 降级分支如实注记）。
 
 ## 接口契约
 
@@ -49,4 +49,4 @@ created_at: 2026-10-14T15:33:12.787Z
 | 修改 | src/docs-check.js | parseDecisionEntries 读原编号 + isDecisionExempt 认原编号 |
 | 新增 | test/decision-legacy-renumber.test.mjs | ①~④ 用例族 |
 | 修改 | .sillyspec/knowledge/decisions/*.md | 真实库迁移产物（apply 执行，随变更提交） |
-| 修改 | .sillyspec/docs/sillyspec/modules/{docs-consistency,core-engine}.changelog.md | 模块卡索引增量 |
+| 修改 | .sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md | 模块卡索引增量 |

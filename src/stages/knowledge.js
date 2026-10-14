@@ -704,7 +704,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
         const { planRenumber, applyRenumberPlan } = await import('../decision-renumber.js')
         const plan = planRenumber(join(specBase, 'knowledge'))
         const st = plan.stats
-        console.log(`🗺️ 决策号迁移计划：legacy ${st.legacySections} 节段｜fanout ${st.fanoutGroups} 组（${st.fanoutCopies} 副本→单一身份）｜发号 ${st.mintedNumbers}｜epoch 零触碰 ${st.untouchedEpoch}`)
+        console.log(`🗺️ 决策号迁移计划：legacy ${st.legacySections} 节段｜fanout ${st.fanoutGroups} 组（${st.fanoutCopies} 副本→单一身份）｜发号 ${st.mintedNumbers}｜无变更条目 ${st.noChangeEntries}（逐节独立发号）｜epoch 零触碰 ${st.untouchedEpoch}`)
         for (const [dom, n] of Object.entries(st.perDomainStart)) console.log(`   域 ${dom}：号段自 ${String(n).padStart(3, '0')} 起`)
         if (!apply) {
           console.log('（--dry-run 形态——加 --apply 执行重写；git 可回退）')

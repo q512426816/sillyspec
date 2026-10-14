@@ -52,6 +52,7 @@ test('① 计划与重写：fanout 同号/无变更独立发号/原编号插行/
     assert.equal(st.untouchedEpoch, 1, 'epoch 1 节段零触碰')
     assert.equal(st.fanoutGroups, 1, 'fanout 1 组（chg-x D-002@v1 双副本）')
     assert.equal(st.mintedNumbers, 4, `发号 4（1 组号 + 3 独立：无变更甲/乙 + chg-y；实际 ${st.mintedNumbers}）`)
+    assert.equal(st.noChangeEntries, 2, `无变更条目计数 2（甲/乙；实际 ${st.noChangeEntries}）`)
     assert.equal(st.perDomainStart.alpha, 1, 'alpha 域起点 1（无既有 epoch 号）')
     assert.equal(st.perDomainStart.core, 4, 'core 域起点 4（既有 D-core-003 → max+1）')
     // fanout 组号域=alpha（字母序首文件）；两副本同号
@@ -98,7 +99,7 @@ test('② 幂等与纯函数：重跑零变化、真实库 dry-run 不变量对�
   } finally { rmSync(root2, { recursive: true, force: true }) }
 })
 
-test('③ 兼容：isDecisionExempt 认原编号、迁移后全节段可见/图构建/doctor 计数', () => {
+test('③ 兼容：isDecisionExempt 认原编号、迁移后全节段可见/图构建', () => {
   // 豁免键双匹配：旧号裸键/域限定键在条目迁移后（originId）继续命中
   assert.ok(isDecisionExempt(['decisions.D-002@v1.anchor'], 'D-core-014@v1', 'anchor', 'core', 'D-002@v1'), '旧号裸键经原编号命中')
   assert.ok(isDecisionExempt(['decisions.core/D-002@v1'], 'D-core-014@v1', 'behind', 'core', 'D-002@v1'), '旧号域限定键经原编号命中')

@@ -66,6 +66,6 @@ Then 全量测试零失败且 lint 零 hard fail
 
 FR-01: test/decision-legacy-renumber.test.mjs「① 计划与重写：fanout 同号/无变更独立发号/原编号插行/其余字节保留/epoch 零触碰/域起点 max+1」
 FR-02: test/decision-legacy-renumber.test.mjs「② 幂等与纯函数：重跑零变化、真实库副本 dry-run 对账 701→597」
-FR-03: test/decision-legacy-renumber.test.mjs「③ 兼容：isDecisionExempt 认原编号、迁移后全节段可见/图构建/doctor 计数」
+FR-03: test/decision-legacy-renumber.test.mjs「③ 兼容：isDecisionExempt 认原编号、迁移后全节段可见/图构建」
 FR-04: test/decision-legacy-renumber.test.mjs「④ CLI 接线钉：knowledge renumber 两档 + 真实库演练由提交流程承担」
 FR-05: 不适用：收口实测门承担（CLI 亲测全量测试与 lint 零失败，不在测试绑定面重复）
