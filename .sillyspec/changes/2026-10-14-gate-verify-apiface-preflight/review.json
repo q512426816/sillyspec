@@ -2,21 +2,14 @@
   "schemaVersion": 1,
   "change": "2026-10-14-gate-verify-apiface-preflight",
   "reviewer": "subagent",
-  "verdict": "FAIL",
-  "reviewedAgainst": "d10c63380ba8b2b0da7d20f4d6f4db8cc6bbceb6",
-  "findings": [
-    {
-      "severity": "P1",
-      "title": "FR-03 违诺：design.md 缺失分支注入空面覆写有效 facts.apiFace，未「不注入退回 facts 口径」",
-      "evidence": "computeApiFaceFromDesign 对缺失 design.md 返回空面对象而非 null/抛错（existsSync 假 → parseDesignApiTable('') → {endpoints:[],declared:null,writeEndpoints:[]}）；空对象为真值，runGate/derive 的 `...(apiFaceLive ? { apiFaceLive } : {})` 照常注入，stage-contract 覆写式 `context.apiFaceLive && typeof==='object' ? apiFaceLive : facts.apiFace` 让空面赢过已落盘的 facts.apiFace——锚点按空 parseSet 全报空指误阻断，而现状口径（facts 命中）本可放行。requirements FR-03 明文「design.md 缺失…必须 fail-soft 不注入…退回 facts 口径（现状行为）」、FR-02「不回归既有判定」在该分支被违反（解析抛异常分支的 fail-soft 已正确实现，仅缺失分支违诺）。触发窗：facts.apiFace 在场（历史 --done backfill 过）且 gate 时点 design.md 缺失/瞬时不可读（并发改写、specRoot 漂移）——零数据损坏、下轮自愈，但属承诺分支违诺；绑定测试 9c 只断言 helper 返回空面不抛，未断言「facts.apiFace 在场时校验按 facts 口径继续」，承诺退路无测试锚。修法方向：endpoints 为空且 facts.apiFace 在场时不注入（或 helper 缺失时返 null）。",
-      "location": "src/verify-probes.js:2679-2686（空面返回）；src/machine-interface.js:195-207（truthy 注入 spread，derive 同款 :772-786）；src/stage-contract.js:1455-1457（覆写式）；test/api-coverage-matrix.test.mjs 测试 9c（缺 facts 回退断言）"
-    }
-  ],
+  "verdict": "PASS",
+  "reviewedAgainst": "cd73e222",
+  "findings": [],
   "dimensionNotes": {
     "乱序": "ok",
     "并发": "ok",
-    "切换": "finding",
+    "切换": "ok",
     "作用域": "ok"
   },
-  "reviewedAt": "2026-10-14T06:07:33Z"
+  "reviewedAt": "2026-10-14T06:32:48Z"
 }
