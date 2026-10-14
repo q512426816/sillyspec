@@ -27,6 +27,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -545,6 +546,30 @@ async function cmdFlowDiff({ change, cwd, specBase, json = false }) {
     console.log(`  ${a} ${d}  ${r.path}${tag}`)
   }
   console.log(`合计：${totals.files} 文件 +${totals.additions ?? '?'} -${totals.deletions ?? '?'}${mode === 'active' ? '（baseline→工作树累计口径，含未提交）' : ''}`)
+}
+
+/**
+ * 升厚行值重置（坑 thin-upgrade-stale-stage-window，2026-10-13）：升厚只写 flow-state
+ * 不碰 DB 行——行值残留 'thin'（平台 pull 往返透传形态）时，serializeForSync 的 thin 投影
+ * 在首次 run <stage> 前持续误标平台「轻量」出身（短窗展示面失真）。升厚三写点统一调本
+ * helper：行 current_stage 'thin' → 'brainstorm'（厚档起点，与 run 阶段机首写同值），
+ * 仅 thin 值才动（其余行值不越权重置）。best-effort 不阻断升厚链。
+ */
+function resetThinStageRowOnUpgrade(cwd, change, specBase = null) {
+  try {
+    // cmdFlowDone 作用域无共享 ProgressManager——helper 直走底层数据库文件（node:sqlite）
+    // 零依赖；specBase 优先（与 flow 侧锚定同口径，平台模式 specRoot 异位不迷路）
+    const db = new DatabaseSync(join(specBase || join(cwd, '.sillyspec'), '.runtime', 'sillyspec.db'))
+    try {
+      const row = db.prepare('SELECT current_stage FROM changes WHERE name = ?').get(change)
+      if (row && row.current_stage === 'thin') {
+        db.prepare('UPDATE changes SET current_stage = ? WHERE name = ?').run('brainstorm', change)
+        console.log('   ↺ 升厚重置 DB 行 current_stage: thin → brainstorm（防平台短窗误标轻量出身）')
+      }
+    } finally {
+      try { db.close() } catch { /* 关闭失败不放大 */ }
+    }
+  } catch { /* 行值重置 best-effort，不阻断升厚 */ }
 }
 
 export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
@@ -1452,6 +1477,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       } catch { /* lint 件套 best-effort */ }
       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
+      resetThinStageRowOnUpgrade(cwd, change, specBase)
       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')
       reportMidFail('ledger')
       process.exit(1)
@@ -2183,6 +2209,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const abnormal = res && (res.rejected > 0 || res.needsWait > 0)
       if (abnormal) {
         writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `distill 异态（rejected=${res.rejected} needsWait=${res.needsWait}）——升厚留人工裁决` })
+        resetThinStageRowOnUpgrade(cwd, change, specBase)
         console.warn(`⚠️ distill 异态 → 已升厚档（tier=thick）。剩余流程按厚档走 run <stage> 完整仪式；归档子步仍将执行（厚档语义不跳过 plan.md 校验）。`)
       }
     } catch (e) {

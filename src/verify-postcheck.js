@@ -2867,17 +2867,34 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
   // pyproject.toml → uv 解析到无 dev extras 的错环境 → aiobotocore 假红（两轮 known_failures 顶着）。
   // 前缀在则批次文件路径按该 dir 重定基（模块命令的文件参即 dir 相对口径，如 app/modules/...）。
+  // py 按包根分组（坑 flow-dynamic-subset-root-scripts-path，2026-10-13 实证：主仓根
+  // scripts/test_x.py 被拼进 backend 的 cd 批——相对路径在 backend cwd 下必然 not found，
+  // 整批 exit 2 假败）。每个 .py 文件按最近 pyproject/uv.lock 祖先归组（与 runner 推断
+  // 同款就近原则——monorepo 子项目各自独立环境）；组内共用该包根的 runner 命令与重定基。
+  // 显式命中命令串（hits）优先且整批共用（用户显式配置语义优先，不拆组）。
   let pyRunner = null
   for (const h of hits || []) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
     if (m) { pyRunner = m[1].trim(); break }
   }
-  if (!pyRunner && cwd && pyRun.length > 0) {
-    const inferred = inferPyRunner(cwd, pyRun[0])
-    pyRunner = inferred.command
+  // pyGroups: Map<dirKey, { files, command }>；dirKey null = 主仓根（无 cd 前缀）
+  const pyGroups = new Map()
+  const pyGroupOf = (f) => {
+    if (pyRunner) return null // 显式命中命令：整批一组（既有语义）
+    if (!cwd) return null
+    const inferred = inferPyRunner(cwd, f)
+    return inferred.dir || null
   }
-  if (!pyRunner) pyRunner = 'python -m pytest'
+  for (const f of pyRun) {
+    const key = pyGroupOf(f)
+    if (!pyGroups.has(key)) {
+      const command = pyRunner || (cwd ? inferPyRunner(cwd, f).command : 'python -m pytest')
+      pyGroups.set(key, { files: [], command })
+    }
+    pyGroups.get(key).files.push(f)
+  }
+  if (!pyRunner && pyGroups.size > 0) pyRunner = pyGroups.values().next().value.command
   // JSX 运行器推断（2026-09-26-residual-runner-parity 起 + 结构推断源）：.tsx/.jsx 是 node
   // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），
   // ① 命中命令串提取 vitest/jest（旧路径）② 无命中命令时最近含 vitest/jest 的 package.json；
@@ -2928,7 +2945,16 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // 批计数分列（2026-10-06-fr-regress-cap-drop）：count=实跑总数、prioCount=实跑中优先面数、
   // dropped 只计普通依赖弃置、prioDropped=防御路径计数（构造上恒 0——quotaFill 保证优先面零弃置，
   // >0 即组卷逻辑被破坏，消费面 loud 披露）。js 批经 jsNative/jsProject 内容分流后计数随分流面。
-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, prioCount: pyQ.prioCount, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, files: pyRun })
+  // py 多批（坑 flow-dynamic-subset-root-scripts-path）：按包根分组逐批 push——每组
+  // 重定基按本组 dir（跨组文件不再共享单一 cdDir）；组序稳定（Map 插入序=pyRun 排序序）。
+  {
+    let gi = 0
+    for (const [dirKey, grp] of pyGroups) {
+      const rebasePy = (f) => (dirKey && f.startsWith(dirKey + '/')) ? f.slice(dirKey.length + 1) : f
+      batches.push({ name: pyGroups.size > 1 ? `deps(auto-py:${dirKey || 'root'})` : 'deps(auto-py)', short: 'py', command: `${grp.command} ${grp.files.map(rebasePy).join(' ')}`, count: grp.files.length, prioCount: grp.files.filter(f => prio(f) === 0).length, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, tap: true, files: grp.files, pyRoot: dirKey || null })
+      gi++
+    }
+  }
   if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
 

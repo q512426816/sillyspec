@@ -347,12 +347,24 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
       let dLines = dText.split('\n')
       // 回填通道：改写先到不了归档（回填后进归档的就是锚文本，与人工恢复等价），写盘失败降级
       // 回带全文的拒收文案（不抛异常阻断 CLI）。
+      // 问句在场判定（坑 flow-done-design-question-line-injection，2026-10-13 实证）：回答行
+      // 前缀形态「N. <问句>：<答>」/「- <问句>：…」——问句锚保留在行内时视为在场，不注入
+      // 不拒收。此前只认整行相等：锚折进回答行 → 相似度低于阈值 → 四条全走节首兜底插入，
+      // 同位反复 splice 产出倒序重复问句块。改写形态（行内无锚原文）仍走既有回填/拒收链。
+      const questionPresent = (lines, q) => lines.some((raw) => {
+        const t = String(raw || '').trim()
+        if (!t || t === q) return t === q
+        // 只剥一层编号/列表前缀（锚问句自带「N.」编号，多层剥会把锚的编号也吃掉致包含
+        // 判定假阴性——① 用例实证）
+        const stripped = t.replace(/^(?:\d+[.、)]\s*|[-*•]\s*)/, '')
+        return stripped.includes(q)
+      })
       const allQuestionLines = new Set(anchorSections.flatMap((s) => s.lines))
       const repairedLines = [...dLines]
       const repairEntries = []
       for (const sec of anchorSections) {
         for (const q of sec.lines) {
-          if (repairedLines.some((l) => l.trim() === q)) continue
+          if (questionPresent(repairedLines, q)) continue
           const hIdx = repairedLines.findIndex((l) => l.trim() === `## ${sec.heading}`)
           if (hIdx === -1) continue // 节整删 → 下方校验环拒收（文案带全文）
           let end = repairedLines.findIndex((l, i) => i > hIdx && /^##\s/.test(l))
@@ -388,7 +400,7 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
           continue
         }
         for (const q of sec.lines) {
-          if (!dLines.some((l) => l.trim() === q)) violations.push(`design「${sec.heading}」问题文本被改写——原文：${q}（问题钉死，答案写在下方）`)
+          if (!questionPresent(dLines, q)) violations.push(`design「${sec.heading}」问题文本被改写——原文：${q}（问题钉死，答案写在下方；折进回答行前缀亦算在场）`)
         }
         // 实质作答：节内非空行 - 标题行 - 问题行 - 引导行（> 开头）≥1
         const start = dLines.findIndex((l) => l.trim() === `## ${sec.heading}`)
