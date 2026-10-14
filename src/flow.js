@@ -1609,62 +1609,87 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
     // 2026-10-05-flowdone-lintfail-output 收编活体复现）。漂移 → 自动重冻结（等价 --refreeze）
     // + review 已有结论则隔离旧 review.json（结论对着旧冻结面不作数）并重置标记强制重评。
-    try {
-      const patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
-      const { detectPatchDrift } = await import('./flow-parity.js')
-      const drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
-      if (drift.drifted) {
-        console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
-        // 隔离先行（评审处置 P3：时间戳槽位防跨代覆盖——单槽 .superseded 在 Windows renameSync
-        // 同名碰撞会抛错；隔离失败则整体退回现状幂等跳过（fail-safe：漂移处理要么完整交付要么
-        // 不动，不留半套状态），指引人工处置后重跑）
-        const reviewPath = join(changeDir, 'review.json')
-        let quarantineOk = true
-        if (existsSync(reviewPath)) {
-          // 锚定保留判定（2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD
-          // 做的 PASS 结论落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）：reviewedAgainst
-          // 命中当前 HEAD = 评审对象即最新交付面，结论有效——保留不隔离、review 标记不重置。
-          // 缺省/读失败/格式非法按未锚定处理，隔离行为不变（fail-safe 宁可多评）。
-          let anchoredToHead = false
-          try {
-            const { reviewAnchoredToHead } = await import('./flow-review.js')
-            anchoredToHead = reviewAnchoredToHead(reviewPath, drift.head)
-          } catch { /* 锚定判定失败按未锚定处理 */ }
-          if (anchoredToHead) {
-            console.log(`   review.json 已锚定当前 HEAD（reviewedAgainst 命中 ${String(drift.head || '').slice(0, 8)}）——评审对象即最新交付面，结论保留不隔离`)
-          } else if (drift.governanceOnly && !drift.touchedPromiseFace) {
-            // 治理面等价保留（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop
-            // 用户实证）：评审结论的对象是交付面——窗口内本变更提交只碰 .sillyspec/** 治理文件且
-            // 未触本变更 requirements/design（承诺面也是评审对象）时，结论对最新交付面逐字节等价，
-            // 保留不隔离不重置标记；change.patch 仍走下方 driftRefreeze 自动重冻结（FR-01 后治理
-            // 工件不入冻结面——治理修复的留档真相=归档目录本体文件，重冻结保交付面时点对齐）
-            // （审计件覆盖最新提交面不变量不破）。此前任何后缀提交一律隔离重评——评审后修一个
-            // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
-            console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结（治理工件不入冻结面，治理修复随归档目录本体留档）`)
-          } else {
-            const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
-            try {
-              renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
-              console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
-            } catch (e) {
-              quarantineOk = false
-              console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
-            }
-          }
+    //
+    // 冻结件存在性复查（2026-10-14-patch-refreeze-missing-artifact）：子步标记 done 而冻结件
+    // 缺席（手工误删/上次写盘中断）时，旧逻辑 readFileSync 抛错被下方 catch 吞掉 → 幂等跳过
+    // → 归档无审计冻结件（multi-agent-platform 2026-10-14 实证：verify-result 记「无冻结件」，
+    // 只能按 git 手工重建）。存在性复查优先于子步状态：缺件按漂移同款自动重冻结（重冻面=
+    // 当前 HEAD）；review 处置沿用漂移面同一隔离规则——缺基面无法判 governance-only，
+    // 未锚定一律隔离（fail-safe 宁可多评）。
+    const patchJsonPath = join(changeDir, 'change-patch.json')
+    const patchTextPath = join(changeDir, 'change.patch')
+    const missingFreeze = [
+      !existsSync(patchJsonPath) ? 'change-patch.json' : null,
+      !existsSync(patchTextPath) ? 'change.patch' : null,
+    ].filter(Boolean)
+    let drifted = false
+    let drift = null
+    if (missingFreeze.length > 0) {
+      drifted = true
+      console.warn(`⚠️ 冻结件缺失：patch 子步标记 done 但 ${missingFreeze.join('、')} 不在——存在性复查优先于子步状态，按漂移同款自动重冻结（2026-10-14-patch-refreeze-missing-artifact）`)
+    } else {
+      try {
+        const patchMeta = JSON.parse(readFileSync(patchJsonPath, 'utf8'))
+        const { detectPatchDrift } = await import('./flow-parity.js')
+        drift = detectPatchDrift({ cwd, change, freezeHead: patchMeta.head })
+        if (drift.drifted) {
+          drifted = true
+          console.warn(`⚠️ 审计时点漂移：patch 冻结（${String(patchMeta.head || '').slice(0, 8)}）后另有 ${drift.ownCommits.length} 个本变更交付提交（${drift.ownCommits.slice(0, 3).join('；')}${drift.ownCommits.length > 3 ? ' 等' : ''}）——幂等跳过会把审计件停在处置前时点`)
         }
-        if (quarantineOk) {
-          driftRefreeze = true
-          if (st.substeps?.review === 'done' && !existsSync(reviewPath)) {
-            // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
-            // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
-            // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
-            try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 见上边界注释 */ }
-            if (st.substeps) st.substeps.review = null
-            if (!existsSync(reviewPath)) console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
+      } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
+    }
+    if (drifted) {
+      // 隔离先行（评审处置 P3：时间戳槽位防跨代覆盖——单槽 .superseded 在 Windows renameSync
+      // 同名碰撞会抛错；隔离失败则整体退回现状幂等跳过（fail-safe：漂移处理要么完整交付要么
+      // 不动，不留半套状态），指引人工处置后重跑）
+      const reviewPath = join(changeDir, 'review.json')
+      let quarantineOk = true
+      if (existsSync(reviewPath)) {
+        // 重冻结目标 HEAD：漂移面取 detectPatchDrift.head；缺件重冻面取当前 HEAD（重冻结将锚定该面）。
+        // 锚定保留判定（2026-10-06-review-anchor-and-negation 实测竞态：复审对着当前 HEAD
+        // 做的 PASS 结论落盘 26 秒后被「重冻结时刻在场=过期」口径误隔离）：reviewedAgainst
+        // 命中重冻结目标 HEAD = 评审对象即最新交付面，结论有效——保留不隔离、review 标记不重置。
+        // 缺省/读失败/格式非法按未锚定处理，隔离行为不变（fail-safe 宁可多评）。
+        const refreezeHead = drift ? drift.head : String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim()
+        let anchoredToHead = false
+        try {
+          const { reviewAnchoredToHead } = await import('./flow-review.js')
+          anchoredToHead = reviewAnchoredToHead(reviewPath, refreezeHead)
+        } catch { /* 锚定判定失败按未锚定处理 */ }
+        if (anchoredToHead) {
+          console.log(`   review.json 已锚定当前 HEAD（reviewedAgainst 命中 ${String(refreezeHead || '').slice(0, 8)}）——评审对象即最新交付面，结论保留不隔离`)
+        } else if (drift && drift.governanceOnly && !drift.touchedPromiseFace) {
+          // 治理面等价保留（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop
+          // 用户实证）：评审结论的对象是交付面——窗口内本变更提交只碰 .sillyspec/** 治理文件且
+          // 未触本变更 requirements/design（承诺面也是评审对象）时，结论对最新交付面逐字节等价，
+          // 保留不隔离不重置标记；change.patch 仍走下方 driftRefreeze 自动重冻结（FR-01 后治理
+          // 工件不入冻结面——治理修复的留档真相=归档目录本体文件，重冻结保交付面时点对齐）
+          // （审计件覆盖最新提交面不变量不破）。此前任何后缀提交一律隔离重评——评审后修一个
+          // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
+          console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结（治理工件不入冻结面，治理修复随归档目录本体留档）`)
+        } else {
+          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+          try {
+            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+          } catch (e) {
+            quarantineOk = false
+            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
           }
         }
       }
-    } catch { /* 漂移检测失败按现状幂等跳过（fail-safe 不新造阻断面） */ }
+      if (quarantineOk) {
+        driftRefreeze = true
+        if (st.substeps?.review === 'done' && !existsSync(reviewPath)) {
+          // 双故障边界（评审 P3 处置披露）：writeFlowState 盘写失败时内存重置保本运行正确；
+          // 极端双故障（隔离成功+盘写失败）下轮残留 done 且 review.json 缺席 → review 子步
+          // backfill 按 exempt 误读——该窄路径未测（需 I/O 故障注入，design 边界披露）
+          try { writeFlowState(changeDir, { substeps: { review: null } }) } catch { /* 见上边界注释 */ }
+          if (st.substeps) st.substeps.review = null
+          if (!existsSync(reviewPath)) console.warn('   review 豁免口径对着旧冻结面——review 子步标记已重置，本次重新定档')
+        }
+      }
+    }
     if (!driftRefreeze) skip('patch')
   }
   if (st.substeps?.patch !== 'done' || driftRefreeze) {

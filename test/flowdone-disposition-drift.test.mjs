@@ -10,6 +10,9 @@
  *   ① detectPatchDrift 归属三形态：本变更后缀触发 / 他侧后缀不触发 / 裸提交不触发
  *   ② e2e 处置重入链路：漂移警告 + 自动重冻结（patch 含处置提交）+ review.json 隔离
  *      （.superseded）+ 重评任务书再现（exit 1 @ review）
+ *   ④⑤ 2026-10-14-patch-refreeze-missing-artifact：冻结件存在性复查——子步 done 而冻结件
+ *      缺席（手工误删/写盘中断）时按漂移同款自动重冻结，不再静默跳过；anchored 评审保留、
+ *      未锚定隔离重评
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -212,4 +215,97 @@ test('③ e2e：治理面等价漂移——评审保留 + 自动重冻结 + 不�
   assert.ok(patch2.includes('+++ b/src/work.js'), '重冻结面含交付面（按 diff hunk 头判）')
   assert.ok(!patch2.includes(`.sillyspec/changes/${cn}/`), '治理工件 hunk 不入冻结面（FR-01：对齐 execute --done 沉淀资产面）')
   assert.ok(readFileSync(join(archivedBase, 'tasks.md'), 'utf8').includes('夹具：P2 措辞修复'), '治理修复随归档目录本体留档')
+})
+
+test('④ e2e：冻结件缺失重入——存在性复查触发自动重冻结 + anchored 评审保留 + 直接归档', () => {
+  const cwd = fx()
+  const run = gitRepo(cwd)
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const cn = '2026-10-14-freeze-missing-e2e'
+  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '冻结件缺失重入 e2e\n\n成功标准：\n- 冻结件被删后重入自动重冻结且评审保留'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const base = join(cwd, '.sillyspec', 'changes', cn)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：冻结件存在性复查链路验证，存在时序窗口（冻结与冻结件误删之间）。'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 在冻结件缺失重入时自动重冻结（夹具行为句）')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「④ e2e 冻结件缺失重入」'))
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n')
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
+  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
+  // 首轮 done：patch 冻结 → 评审任务书（exit 1）
+  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out2 = s2.stdout + s2.stderr
+  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
+  assert.ok(existsSync(join(base, 'change-patch.json')), '首轮已冻结 patch')
+  // 评审 PASS 锚定当前 HEAD（= 冻结时 HEAD，无后缀提交）
+  const headAtReview = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
+  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: headAtReview, findings: [{ severity: 'P2', title: '夹具 P2', evidence: 'e2e', location: `${base}/tasks.md:1` }], dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
+  // 模拟冻结件缺席（手工误删/写盘中断）——子步状态仍全 done
+  rmSync(join(base, 'change.patch'), { force: true })
+  rmSync(join(base, 'change-patch.json'), { force: true })
+  // 重入：存在性复查应触发「冻结件缺失」+ 自动重冻结 + anchored 评审保留 → 直接归档
+  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out3 = s3.stdout + s3.stderr
+  assert.ok(out3.includes('冻结件缺失'), `存在性复查告警在场（尾部：${out3.split('\n').slice(-6).join(' | ')}）`)
+  assert.ok(!out3.includes('审计时点漂移'), '无漂移警告（缺件 ≠ 漂移，不误报处置漂移）')
+  assert.equal(s3.status, 0, `缺件重冻结后直接归档成功（exit 0；尾部：${out3.split('\n').slice(-5).join(' | ')}）`)
+  assert.ok(out3.includes('flow done 完成'), '收口完成（归档注销）')
+  // 归档目录断言（flow done 成功后变更目录已搬 archive/）：anchored 评审保留不隔离、随归档
+  // 留档；两冻结件已重生且含交付面（存在性复查的真实产物，非「无冻结件」空档）。
+  const archivedBase = join(cwd, '.sillyspec', 'changes', 'archive', cn)
+  assert.ok(existsSync(archivedBase), '变更已归档（目录移入 archive/）')
+  assert.ok(!readdirSync(archivedBase).some((f) => f.startsWith('review.json.superseded')), `anchored 评审保留不隔离（归档目录实况：${readdirSync(archivedBase).join(',')}）`)
+  assert.ok(existsSync(join(archivedBase, 'review.json')), '保留的评审随归档留档')
+  assert.ok(existsSync(join(archivedBase, 'change.patch')), '归档含重生成的 change.patch')
+  assert.ok(existsSync(join(archivedBase, 'change-patch.json')), '归档含重生成的 change-patch.json')
+  const patch2 = readFileSync(join(archivedBase, 'change.patch'), 'utf8')
+  assert.ok(patch2.includes('+++ b/src/work.js'), '重冻结面含交付面（按 diff hunk 头判）')
+  const meta2 = JSON.parse(readFileSync(join(archivedBase, 'change-patch.json'), 'utf8'))
+  assert.equal(meta2.head, headAtReview, '缺件重冻锚定当前 HEAD')
+})
+
+test('⑤ e2e：冻结件缺失 + 评审未锚定——隔离重评（fail-safe 宁可多评）', () => {
+  const cwd = fx()
+  const run = gitRepo(cwd)
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()
+  const cn = '2026-10-14-freeze-missing-stale-e2e'
+  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '冻结件缺失+未锚定评审 e2e\n\n成功标准：\n- 缺基面时未锚定评审隔离重评'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const base = join(cwd, '.sillyspec', 'changes', cn)
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\ne2e 夹具实质作答：缺基面 review 处置链路验证，存在时序窗口（冻结与冻结件误删之间）。'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 在冻结件缺失且评审未锚定时隔离重评（夹具行为句）')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': test/flowdone-disposition-drift.test.mjs「⑤ e2e 缺件+未锚定隔离重评」'))
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8') + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 修改 | src/work.js | 交付 |\n')
+  mkdirSync(join(cwd, 'src'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'work.js'), 'export const a = 1\n')
+  run(['add', 'src/work.js']); run(['commit', '-q', '-m', `work (${cn}) (task-01)`])
+  const s2 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out2 = s2.stdout + s2.stderr
+  assert.ok(out2.includes('独立评审任务书'), `首轮应停在评审任务书（实际尾部：${out2.split('\n').slice(-5).join(' | ')}）`)
+  // 评审 PASS 但 reviewedAgainst 锚在 base 提交（未锚定当前 HEAD——缺基面时无法证明对象一致）
+  writeFileSync(join(base, 'review.json'), JSON.stringify({ schemaVersion: 1, change: cn, reviewer: 'subagent', verdict: 'PASS', reviewedAgainst: baseSha, findings: [], dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' }, reviewedAt: new Date().toISOString() }, null, 2))
+  rmSync(join(base, 'change.patch'), { force: true })
+  rmSync(join(base, 'change-patch.json'), { force: true })
+  const s3 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
+  const out3 = s3.stdout + s3.stderr
+  assert.ok(out3.includes('冻结件缺失'), `存在性复查告警在场（尾部：${out3.split('\n').slice(-6).join(' | ')}）`)
+  const quarantined = readdirSync(base).find((f) => f.startsWith('review.json.superseded'))
+  assert.ok(!!quarantined, `未锚定评审已隔离（目录实况：${readdirSync(base).join(',')}）`)
+  assert.ok(!existsSync(join(base, 'review.json')), '隔离后 review.json 不在场（重评入口开）')
+  assert.ok(existsSync(join(base, 'change.patch')), 'patch 子步已重新冻结（先于 review 重评）')
+  assert.ok(out3.includes('独立评审任务书'), '重评任务书再现')
+  assert.ok(s3.status !== 0, '重评入口 exit ≠ 0')
 })
