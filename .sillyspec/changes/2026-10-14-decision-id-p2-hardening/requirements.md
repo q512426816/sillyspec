@@ -94,6 +94,6 @@ Then 全量测试零失败且 lint 零 hard fail
 FR-01: test/decision-id-p2-hardening.test.mjs「① 来源兜底：三解析器读出来源行、变更优先、distill 在位更新收敛」
 FR-02: test/decision-id-p2-hardening.test.mjs「② 折叠修复：双 legacy 同号共存 + 路由行重复单解析」
 FR-03: test/decision-id-p2-hardening.test.mjs「③ 豁免键域限定：decisions.<域>/<id>[.<kind>] 命中、裸键兼容、他域同号不豁免」
-FR-04: test/knowledge-gate-denoise.test.mjs「④ 已回应判据行级收紧：文件级共现不再吞、同行回应仍识别」
+FR-04: test/knowledge-gate-denoise.test.mjs「③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回显；未回应照常回显」
 FR-05: test/decision-id-p2-hardening.test.mjs「⑤ 引用契约接线钉：两处段头含 变更名#D-xxx@vN」
 FR-06: 不适用：收口实测门承担（CLI 亲测全量测试与 lint 零失败，不在测试绑定面重复）
