@@ -2580,3 +2580,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：d49dd2b2cb7f870dcba1943e8e1309da49a3c714
 理由：不生效。turbo 读态判定为 `turbo === true && st.tier !== 'thick'`——升厚即恢复全量仪式，turbo 残留不短路厚档；`--turbo --thick` 同给同理（留痕但不生效）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-14-turbo-guide-tier-copy
+锚点：未记录
+最近确认：2b2273b809fa7f86479547fc6c4d8001cb1f2cfc
+理由：文案分支写错致 thin 承诺行漂移——scope 测试②双断言锚定（无承诺+如实行在场）。

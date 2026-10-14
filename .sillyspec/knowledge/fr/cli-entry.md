@@ -9436,3 +9436,87 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-13-extract-head-guard
   status: active
+
+## FR-cli-entry-498 --turbo --thick 同给时 start 不再输出「收口自动跳过实测与重仪式门」承诺，改输出档位如实文案（thick 起步走全量仪式）；--turbo 且 thin 时承诺文案照旧
+变更：2026-10-14-turbo-guide-tier-copy
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 用户以 `--turbo --thick` 起变更；When flow start 渲染极速指引行；Then 输出档位如实文案（全量仪式），无跳过承诺
+全文：.sillyspec/changes/archive/2026-10-14-turbo-guide-tier-copy/requirements.md#FR-01
+最近确认：2b2273b809fa7f86479547fc6c4d8001cb1f2cfc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-01
+  tests: test/turbo-mode-scope.test.mjs「② --turbo --thick 同给：指引文案随档位收窄」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-turbo-guide-tier-copy
+  status: active
+
+## FR-cli-entry-499 turbo done 输出含 ui 探针跳过留痕行；带未提交交付缺口时 turbo 降 advisory 放行（exit 0）而非 turbo 同场景阻断（exit≠0 三选一）
+变更：2026-10-14-turbo-guide-tier-copy
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given turbo 变更交付面留有未提交文件；When flow done 执行 patch 冻结；Then 降 advisory 放行留痕并完成收口；非 turbo 对照组同场景阻断
+全文：.sillyspec/changes/archive/2026-10-14-turbo-guide-tier-copy/requirements.md#FR-02
+最近确认：2b2273b809fa7f86479547fc6c4d8001cb1f2cfc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-02
+  tests: test/turbo-mode-done-skip.test.mjs「① ui 探针跳过留痕行／③ dirty 降 advisory 行为对照」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-turbo-guide-tier-copy
+  status: active
+
+## FR-cli-entry-500 flow-state turbo 值损坏（非布尔 true）时 done 走非 turbo 全量路径；flow-state.yaml 整体损坏时 done exit 2 报「无 flow-state」并指路
+变更：2026-10-14-turbo-guide-tier-copy
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given flow-state 被外部篡改（turbo 值损坏 / 文件损坏）；When flow done 读态；Then 值损坏走全量路径完成收口；文件损坏拒绝并指路
+全文：.sillyspec/changes/archive/2026-10-14-turbo-guide-tier-copy/requirements.md#FR-03
+最近确认：2b2273b809fa7f86479547fc6c4d8001cb1f2cfc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-03
+  tests: test/turbo-mode-scope.test.mjs「④ turbo 值损坏 fail-soft／⑤ flow-state.yaml 整体损坏 fail-loud」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-turbo-guide-tier-copy
+  status: active
+
+## FR-cli-entry-501 新增断言全绿 + 全量测试核心套回归零失败
+变更：2026-10-14-turbo-guide-tier-copy
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更交付面（src/flow.js 指引行 + 四件测试）；When 跑 node --test 四件与 npm run test:core；Then 全绿
+全文：.sillyspec/changes/archive/2026-10-14-turbo-guide-tier-copy/requirements.md#FR-04
+最近确认：2b2273b809fa7f86479547fc6c4d8001cb1f2cfc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-04
+  tests: test/turbo-mode-scope.test.mjs「全文件 5 用例 + npm run test:core 325/325（收口实测对账承载）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-turbo-guide-tier-copy
+  status: active

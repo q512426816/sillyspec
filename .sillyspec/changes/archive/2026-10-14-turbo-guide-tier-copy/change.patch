@@ -1,0 +1,159 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+index 9e814a16..159bc119 100644
+--- a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+@@ -6,3 +6,4 @@
+ - ql-20260812-006-d70c | execute 测试用例设计引导注入：新增 `templates/prompts/testcase-design.md` 单一源（6 条检查 + FIRST/金字塔/AAA 一行带过），经 `{{include: testcase-design}}` 注入 renderLocalInstruction「子代理 prompt 要点」+ renderSillyHubInstruction worker_prompt 覆写（SillyHub worker 不见 wave prompt，必须自包含）。复用 P2.2.3 include 机制（resolvePromptIncludes 运行时解析）防双写漂移。
+ | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/review-dispatch.js 归属本模块：runReviewDispatch 三链（create/status/kill）+ probe 三层前置消费 + 在途记录状态机（O_EXCL/终态即清）+ artifacts 双通道回收；D-007 显式例外与防泛化护栏落卡定位段。gate 在途区分在 stage-review.js（core-engine）。 |
+ | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | TDD 分层适用引导：templates/prompts/testcase-design.md 单一源头部加「按层适用」块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写，一句话判据「当 X 发生时用户应看到/发生 Y」）——经既有 include 机制自动流入三派发路径；local-agent.js 写模式行 TDD 措辞带按层限定；机器门零改动；新增 test/tdd-scope-guidance.test.mjs。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index a5e97f34..5b2d0a37 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -22,3 +22,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+ | 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |
+ | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | agents-instruction 模板规则 3 加「测试按层适用」尾注（AGENTS.md/CLAUDE.md 仓实例同步）；assets/command-cards/flow.md「直接干活」行加按层限定。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+index e8db6d15..de2610af 100644
+--- a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+@@ -10,3 +10,4 @@
+ - ql-20260912-002-57c4 | runCli 子进程超时兜底（默认 300s env 可调）+kill+isError envelope+输出 8MB 封顶；清 callTool 死代码
+ - ql-20260912-009-06b4 | exit 2（EXIT_UNKNOWN 合法 envelope）不再标 isError（诊断 text 不被 host 吞）
+ | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | worker_prompt 铁律第 1 条 TDD 措辞带按层限定（纯逻辑严格先行/行为契约断用户所见/样式与纯配置不写，判据见「测试用例设计」）。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 8c437d06..f51a29d9 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -53,3 +53,4 @@
+ | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | execute.js 主代理直写（execution_mode: main）任务闭环行 TDD 措辞改「按层适用」（纯逻辑先写测试再实现/行为契约断用户可见行为/样式与纯配置不写——判据见「测试用例设计」）；docs/prompt/_extracted.json 重提取。 |
+diff --git a/src/flow.js b/src/flow.js
+index 3ab31d2a..10a161b6 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1024,8 +1024,11 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+     `══════════════════════════════════════`,
+-    // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
+-    ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
++    // 极速指引行（2026-10-14-thin-turbo-mode FR-01；2026-10-14-turbo-guide-tier-copy 评审 P3
++    // 清偿）：承诺文案随档位收窄——thick 起步时 done 读态 turbo 不生效（D-007），文案如实告知
++    // 全量仪式，防「提示说 A 实现是 B」漂移（cli-copy-selfsufficient②）。缺省路径逐字不变。
++    ...(turbo && !thick ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`]
++      : turbo && thick ? [`⚡ 极速留痕已记（--turbo），但 --thick 厚档起步——收口走全量仪式，实测与仪式门照跑不跳过（升厚即失效）`] : []),
+     ...(hindsightHint ? [hindsightHint, ''] : []),
+     `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
+     `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 3512055e..52ca5e53 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2950,7 +2950,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   {
+     let gi = 0
+     for (const [dirKey, grp] of pyGroups) {
+-      const rebasePy = (f) => (dirKey && f.startsWith(dirKey + '/')) ? f.slice(dirKey.length + 1) : f
++      // hits 命中形态 dirKey=null——从本组命令的 cd 前缀提取重定基目录（坑 deps-cwd-prefix
++      // ① 用例：显式配置 'cd backend && uv run pytest …' 时路径须按 backend/ 重定基）
++      const cmdDir = dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(grp.command)?.[1] || null
++      const rebasePy = (f) => (cmdDir && f.startsWith(cmdDir + '/')) ? f.slice(cmdDir.length + 1) : f
+       batches.push({ name: pyGroups.size > 1 ? `deps(auto-py:${dirKey || 'root'})` : 'deps(auto-py)', short: 'py', command: `${grp.command} ${grp.files.map(rebasePy).join(' ')}`, count: grp.files.length, prioCount: grp.files.filter(f => prio(f) === 0).length, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, tap: true, files: grp.files, pyRoot: dirKey || null })
+       gi++
+     }
+diff --git a/test/turbo-mode-done-skip.test.mjs b/test/turbo-mode-done-skip.test.mjs
+index 6b2e60ca..0b4dd44f 100644
+--- a/test/turbo-mode-done-skip.test.mjs
++++ b/test/turbo-mode-done-skip.test.mjs
+@@ -72,6 +72,7 @@ test('① turbo done：实测门合成 skipped + ⚡极速标注 + 评审豁免
+   assert.match(s2.stdout, /⚡极速模式｜test: skipped — 跳过原因：⚡ 极速模式/, 'gateSummary 极速前缀 + test skipped 带跳过原因')
+   assert.match(s2.stdout, /本次收口不含测试客观核验/, '无测试客观核验显式标注（R-03）')
+   assert.match(s2.stdout, /⚡ 极速模式：评审子步豁免/, '评审 turboExempt 留痕')
++  assert.match(s2.stdout, /⚡ 极速模式：UI 视觉证据探针跳过/, 'ui 探针跳过留痕行（2026-10-14-turbo-guide-tier-copy 评审 P3① 补断言）')
+   assert.match(s2.stdout, /flow done 完成（2\/2 协议调用收口）/, '收口成功')
+   const arch = join(cwd, '.sillyspec', 'changes', 'archive', change)
+   assert.ok(existsSync(join(arch, 'change.patch')) && existsSync(join(arch, 'change-patch.json')), 'patch 冻结件照常留档（D-006 证据非验证）')
+@@ -90,3 +91,24 @@ test('② 升厚即失效（D-007）：tier=thick 后 turbo 残留不短路—
+   assert.notEqual(s2.status, 0, '独立评审缺位按厚档语义阻断（turbo 残留不短路）')
+   rmSync(cwd, { recursive: true, force: true })
+ })
++
++test('③ dirty 降 advisory 行为对照（评审 P3① 补断言）：turbo 放行 exit 0，非 turbo 阻断 exit≠0', () => {
++  // turbo 侧：未提交交付缺口在场 → 降 advisory 放行（缺口数随收口输出留痕）
++  {
++    const { cwd, change } = deliverAndClose({ turbo: true })
++    writeFileSync(join(cwd, 'dirty.txt'), 'uncommitted\n')
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `turbo dirty 应放行: ${s2.stdout}\n${s2.stderr}`)
++    assert.match(s2.stdout + s2.stderr, /⚡ 极速模式：未提交交付缺口未显式处置——降 advisory 放行/, '降档留痕行在场（console.warn 走 stderr——断言面含 stderr）')
++    rmSync(cwd, { recursive: true, force: true })
++  }
++  // 非 turbo 侧：同场景收口阻断三选一（既有语义零回归）
++  {
++    const { cwd, change } = deliverAndClose({ turbo: false })
++    writeFileSync(join(cwd, 'dirty.txt'), 'uncommitted\n')
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.notEqual(s2.status, 0, '非 turbo dirty 照常阻断')
++    assert.match(s2.stdout + s2.stderr, /未提交交付缺口未显式处置——收口阻断/, '三选一阻断语义不变')
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
+diff --git a/test/turbo-mode-scope.test.mjs b/test/turbo-mode-scope.test.mjs
+index ed217008..704ffe27 100644
+--- a/test/turbo-mode-scope.test.mjs
++++ b/test/turbo-mode-scope.test.mjs
+@@ -72,6 +72,9 @@ test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（
+   const change = '2026-10-14-turbo-scope-t2'
+   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
++  // 指引文案随档位收窄（2026-10-14-turbo-guide-tier-copy 评审 P3 清偿）：thick 起步不承诺自动跳过
++  assert.doesNotMatch(s1.stdout, /收口自动跳过实测与重仪式门/, 'thick 起步不出现跳过承诺（防文案与门判定漂移）')
++  assert.match(s1.stdout, /⚡ 极速留痕已记（--turbo），但 --thick 厚档起步/, '档位如实文案在场（D-007）')
+   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
+   assert.match(st, /^tier: thick$/m, 'thick 起步')
+   assert.match(st, /^turbo: true$/m, 'turbo 字段留痕（声明性）')
+@@ -84,6 +87,37 @@ test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++test('④ turbo 值损坏（非布尔 true）fail-soft：done 走非 turbo 全量路径', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-scope-t4'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo', '--no-review'])
++  assert.equal(s1.status, 0)
++  // 篡改 turbo 值为字符串（读态 st.turbo === true 严格判等 → 非布尔真值不激活跳过面）；--no-review 定案评审豁免（非 turbo 路径采样不确定）
++  const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
++  writeFileSync(stPath, readFileSync(stPath, 'utf8').replace(/^turbo: true$/m, "turbo: 'yes'"))
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.doesNotMatch(s2.stdout, /⚡极速模式｜/, '损坏 turbo 值不激活跳过面（fail-soft 回退全量）')
++  assert.match(s2.stdout, /test: —｜lint: —/, '实测门照常真跑')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑤ flow-state.yaml 整体损坏 fail-loud：done exit 2 报「无 flow-state」并指路', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-14-turbo-scope-t5'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  assert.equal(s1.status, 0)
++  writeFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), '::: not yaml ::: [')
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.notEqual(s2.status, 0, '损坏 flow-state 必须拒绝（不可静默按非 turbo 收口）')
++  assert.match(s2.stdout + s2.stderr, /无 flow-state\.yaml/, '报缺失并指路（readFlowState null 既有 fail-loud 语义）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ test('③ 提示词面三处在场（FR-04 文案锚——防漂移）：AGENTS.md 极速行 + flow 卡 --turbo 文档', () => {
+   const agents = readFileSync(join(ROOT, 'AGENTS.md'), 'utf8')
+   assert.match(agents, /--turbo/, 'AGENTS.md 选道表极速行带 --turbo')

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-turbo-guide-tier-copy",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-01",
+      "tests": [
+        "test/turbo-mode-scope.test.mjs「② --turbo --thick 同给：指引文案随档位收窄」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-turbo-guide-tier-copy"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-02",
+      "tests": [
+        "test/turbo-mode-done-skip.test.mjs「① ui 探针跳过留痕行／③ dirty 降 advisory 行为对照」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-turbo-guide-tier-copy"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-03",
+      "tests": [
+        "test/turbo-mode-scope.test.mjs「④ turbo 值损坏 fail-soft／⑤ flow-state.yaml 整体损坏 fail-loud」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-turbo-guide-tier-copy"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-turbo-guide-tier-copy:flow:测试绑定FR-04",
+      "tests": [
+        "test/turbo-mode-scope.test.mjs「全文件 5 用例 + npm run test:core 325/325（收口实测对账承载）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-turbo-guide-tier-copy"
+    }
+  ]
+}

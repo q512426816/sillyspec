@@ -41,3 +41,4 @@
 | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
 | 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |
 | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
+| 2026-10-14 | 2026-10-14-turbo-guide-tier-copy | 评审 P3 清偿：--turbo --thick 同给时 start 极速指引行只查 flag 不查 tier（flow |
