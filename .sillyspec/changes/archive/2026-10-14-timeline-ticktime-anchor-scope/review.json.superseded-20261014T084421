@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-timeline-ticktime-anchor-scope",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d263f172d41bd452c7e4062948a4a32b28909700",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试绑定行引用的用例名与实际测试名不符（4 条绑定中 2 条，watcher-timeline 面）",
+      "evidence": "requirements.md:60 声称「…缺行回退推断 ≈，链断回退 ?」，实际用例名为「…缺行回退推断 ≈，双盲回退 ?」（test/watcher-timeline.test.mjs:162）；requirements.md:61 声称单用例「提交锚按变更名收敛：他变更提交含同 token 不误锚（litellm-retire 案例回归），本变更提交正常锚定」，实际为「renderTimeline：跨变更误锚回归——他变更提交含同 token 不锚定（litellm-retire 案例形态）」（:203）+「resolveCommitAnchors：change 参算 sameChange（全消息含正文）；缺省恒 true 向后兼容」（:193）两用例。声称的行为均有真实测试断言（实跑 43/43 绿），仅名称字符串漂移——flow done 绑定校验只查空槽不查用例名（flow.js:1594），故未被拦。",
+      "location": ".sillyspec/changes/2026-10-14-timeline-ticktime-anchor-scope/requirements.md:60-61"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受）——parseTickLog 同任务取最早 ts（时钟回拨/重复留痕被忽略，语义=首次翻格时刻，timeline.js:47-48 与测试 loadChangeTasks 用例断言）；事件流推断路径 inferFlipTimes 逐字未动",
+    "并发": "ok（边界已裁决：可接受）——appendFileSync('a') 单行 JSON 一次写、O_APPEND 行级原子；幂等 already 分支结构上零追加（侧车 append 仅在 r.kind==='ticked' 块内，task-tick.js:121-159）；同任务多行留痕取最早语义稳定",
+    "切换": "ok（边界已裁决：可接受）——已归档变更 exit 2 拒收先于任何写（task-tick.js:104-111）；归档 rename（complete-handlers.js:1011 renameSyncRetry）先于 bake 读 destDir/task-ticks.jsonl（:1028）；loadChangeTasks 归档路径同读侧车（timeline.js:236-244）",
+    "作用域": "ok（边界已裁决：可接受）——侧车按 changes/<名>/ 目录物理隔离，跨仓/worktree 与 tasks.md 同隔离粒度；锚收敛 sameChange=提交全消息 includes(变更名)（timeline.js:108，规则为 FR-02 明文），不含名/失联提交诚实降级「无提交锚⚠️」（不编造锚）；按 diff 路径补强显式放弃（design 风险节，后续独立变更）"
+  },
+  "reviewedAt": "2026-10-14T08:43:14.947Z"
+}

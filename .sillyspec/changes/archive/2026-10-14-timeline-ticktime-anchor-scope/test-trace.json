@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-timeline-ticktime-anchor-scope",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-timeline-ticktime-anchor-scope:flow:测试绑定FR-01",
+      "tests": [
+        "test/task-tick.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-timeline-ticktime-anchor-scope"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-timeline-ticktime-anchor-scope:flow:测试绑定FR-01",
+      "tests": [
+        "test/watcher-timeline.test.mjs「renderTimeline：侧车精确时刻优先（无 ≈），缺行回退推断 ≈，双盲回退 ?」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-timeline-ticktime-anchor-scope"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-timeline-ticktime-anchor-scope:flow:测试绑定FR-02",
+      "tests": [
+        "test/watcher-timeline.test.mjs「resolveCommitAnchors：change 参算 sameChange（全消息含正文）；缺省恒 true 向后兼容」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-timeline-ticktime-anchor-scope"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-timeline-ticktime-anchor-scope:flow:测试绑定FR-02",
+      "tests": [
+        "test/watcher-timeline.test.mjs「renderTimeline：跨变更误锚回归——他变更提交含同 token 不锚定（litellm-retire 案例形态）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-timeline-ticktime-anchor-scope"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-timeline-ticktime-anchor-scope:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick.test.mjs「侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-timeline-ticktime-anchor-scope"
+    }
+  ]
+}

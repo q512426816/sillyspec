@@ -1,0 +1,24 @@
+{"ts":1791965232472,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791965249461,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791965252867,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791965285984,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/task-tick.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965305888,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/task-tick.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965339558,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791965341857,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791965341857,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791965348775,"kind":"commit","stage":null,"detail":"e6e2275e","provisional":true}
+{"ts":1791965424672,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/watcher-timeline.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965441148,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/archive-timeline-bake.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965474021,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/timeline.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965509959,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/index.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965634539,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791965634819,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791965635051,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791965635051,"kind":"task-done","stage":"tasks","detail":"checked 1→3","provisional":true}
+{"ts":1791965635296,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-14-timeline-ticktime-anchor-scope/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791965645825,"kind":"commit","stage":null,"detail":"50164256","provisional":true}
+{"ts":1791966453961,"kind":"commit","stage":null,"detail":"d263f172","provisional":true}
+{"ts":1791966507672,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（45.5s） · 20261014082825","provisional":true}
+{"ts":1791967410470,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791967453190,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791967463290,"kind":"commit","stage":null,"detail":"2d20d34c","provisional":true}
