@@ -1051,7 +1051,7 @@ function isDecisionExempt(knownFailures, entryId, kind) {
  * 的写入契约对偶：producer=decision-distill → consumer=本规则族；字段行非列表项，顶层
  * 「状态：/锚点：/最近确认：」标签精确匹配，防误吞正文）。旧格式字段缺失容错为 null。
  * @param {string} md 域文件全文
- * @returns {Array<{ id: string, title: string, status: string|null, anchor: string|null, lastConfirmed: string|null }>}
+ * @returns {Array<{ id: string, title: string, status: string|null, anchor: string|null, lastConfirmed: string|null, change: string|null }>}
  */
 export function parseDecisionEntries(md) {
   const entries = []
@@ -1062,14 +1062,17 @@ export function parseDecisionEntries(md) {
     if (h) {
       flush()
       const version = h[2] ? parseInt(h[2], 10) : 1
-      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null }
+      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null, change: null }
       continue
     }
     if (!cur) continue
-    const f = line.match(/^(状态|锚点|最近确认)\s*[：:]\s*(.*)$/)
+    // 变更：标签读入（2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt 触碰事实行
+    // 渲染变更名限定词消歧需读入；旧条目缺行容错 null）
+    const f = line.match(/^(状态|锚点|最近确认|变更)\s*[：:]\s*(.*)$/)
     if (!f) continue
     if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
     else if (f[1] === '锚点') cur.anchor = f[2].trim()
+    else if (f[1] === '变更') cur.change = f[2].trim() || null
     else cur.lastConfirmed = f[2].trim()
   }
   flush()

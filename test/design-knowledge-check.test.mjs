@@ -76,6 +76,7 @@ test('① 命中场景：--output 含机制词 → warn 回显 rejected 条目�
   assert.match(r.stdout, /status=rejected/, 'rejected 优先展示')
   assert.match(r.stdout, /否决理由：不要用枚举定义这个开放世界/, '回显一句话理由')
   assert.match(r.stdout, /evidence 回应或说明不复潮/, 'evidence 回应提示')
+  assert.match(r.stdout, /变更未记录/, '缺「变更：」条目渲染降级形态「变更未记录」（同号消歧限定词）')
   const after = await pm.read(cwd, CN)
   assert.equal(after.stages.brainstorm.steps[3].status, 'completed', '步骤正常标完成（warn 不阻断）')
   rmQuiet(cwd)

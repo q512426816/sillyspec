@@ -130,9 +130,15 @@ test('①解析全形态：节点边数与本体落位（含同号跨变更不�
     assert.equal(s.byNodeType.decision, 3)
     assert.ok(g.nodes.has('decision:decisions/core-engine.md#D-001@v1@2026-01-01-alpha'))
     assert.ok(g.nodes.has('decision:decisions/core-engine.md#D-001@v1@2026-01-03-gamma'))
-    // FR 3 节点；supersedes：取代链 1（002→001）+ superseded_by 反向补链 1（002→003）+ 决策 1（D-002→D-001alpha）
+    // FR 3 节点；supersedes：取代链 1（002→001）+ superseded_by 反向补链 1（002→003）；决策面 0——
+    // D-002@v1(beta) 的「supersedes：D-001@v1」同变更无目标（局部号跨变更不建边，
+    // 2026-10-14-supersedes-mislink-and-change-display；旧「退同文件首个」回退已除）
     assert.equal(s.byNodeType.fr, 3)
-    assert.equal(s.byEdgeType.supersedes, 3)
+    assert.equal(s.byEdgeType.supersedes, 2)
+    assert.ok(!(g.byEdgeType.get('supersedes') || []).some((e) => e.s.includes('#D-002@v1@2026-01-02-beta')),
+      '跨变更同号 supersedes 不建边（误连回退已除）')
+    assert.ok(!(g.byEdgeType.get('supersedes') || []).some((e) => e.t === 'decision:decisions/core-engine.md#D-001@v1@2026-01-01-alpha'),
+      '他变更 D-001@v1(alpha) 不被误连为取代目标')
     // anchors：两条锚点边命中 src/foo.js（「文件：」字段面为空）
     assert.equal(s.byEdgeType.anchors, 2)
     // 手册条目 1 + route 1（decisions/fr 路由行不建条目节点）
@@ -153,6 +159,37 @@ test('①解析全形态：节点边数与本体落位（含同号跨变更不�
     const rej = g.nodes.get('decision:decisions/core-engine.md#D-001@v1@2026-01-01-alpha')
     assert.equal(rej.attrs.status, 'rejected')
     assert.match(rej.attrs.hit.reason, /死路/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('①解析：supersedes 只认同变更——同变更（含双 legacy）建边、跨变更同号不建边', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kg-sup-'))
+  try {
+    const K = (p) => join(root, '.sillyspec', p)
+    mkdirSync(K('knowledge/decisions'), { recursive: true })
+    writeFileSync(K('knowledge/INDEX.md'), [
+      '# Knowledge Index', '',
+      '## Decisions',
+      '- core|decision|决策 → [decisions/core.md](decisions/core.md)', '',
+    ].join('\n'))
+    writeFileSync(K('knowledge/decisions/core.md'), [
+      '# 决策知识 — core', '',
+      '## D-001@v2 同变更新版', '状态：implemented', '变更：2026-01-05-keep', 'supersedes：D-001@v1', '',
+      '## D-001@v1 同变更旧版', '状态：superseded', '变更：2026-01-05-keep', '',
+      '## D-002@v2 legacy 新版', '状态：implemented', 'supersedes：D-002@v1', '',
+      '## D-002@v1 legacy 旧版', '状态：superseded', '',
+      '## D-003@v1 他变更条目', '状态：implemented', '变更：2026-01-06-other', '',
+      '## D-004@v1 跨变更引用者', '状态：implemented', '变更：2026-01-07-x', 'supersedes：D-003@v1', '',
+    ].join('\n'))
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const sups = g.byEdgeType.get('supersedes') || []
+    assert.ok(sups.some((e) => e.s === 'decision:decisions/core.md#D-001@v2@2026-01-05-keep'
+      && e.t === 'decision:decisions/core.md#D-001@v1@2026-01-05-keep'), '同变更（变更行一致）建边')
+    assert.ok(sups.some((e) => e.s === 'decision:decisions/core.md#D-002@v2'
+      && e.t === 'decision:decisions/core.md#D-002@v1'), '双 legacy（双方无变更行）同源建边')
+    assert.ok(!sups.some((e) => e.s === 'decision:decisions/core.md#D-004@v1@2026-01-07-x'),
+      '跨变更同号（D-004@v1(x) 引 D-003@v1(other)）不建边')
+    assert.equal(sups.length, 2, `supersedes 边数=2（实际 ${sups.length}）`)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

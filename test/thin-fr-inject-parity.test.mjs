@@ -113,6 +113,7 @@ test('① flowKnowledgeDigest：域路由命中 active FR（索引序、无 ⚠�
     const frLines = r.lines.filter((l) => /- FR-cli-\d+/.test(l))
     assert.ok(frLines.length >= 2 && !frLines.some((l) => l.includes('⚠️') || l.includes('待复核')), 'FR 条目行不得再渲染 ⚠️待复核（标记层已拆）')
     assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('否决理由')), '应含否决决策命中及理由')
+    assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('变更 hist-c')), '否决行含变更名限定（同号消歧，2026-10-14-supersedes-mislink-and-change-display）')
     assert.equal(r.summary.frCount, 3)
     assert.equal(r.summary.rejectedDecisions, 1)
     const firstIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))

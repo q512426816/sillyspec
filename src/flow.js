@@ -295,7 +295,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       }
     }
     const { matchKnowledgeHybrid } = await import('./knowledge-vector.js')
-    const { deathPathNote } = await import('./knowledge-match.js')
+    const { deathPathNote, decisionChangeQualifier } = await import('./knowledge-match.js')
     // scope 遍历召回（2026-10-08-knowledge-graph，FR-04）：touched=机器算的图查询键
     // （filesOverride ∪ design 交付表——上方既有变量），词面三层零命中时沿强边保底防复潮
     const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase), scopeFiles: touched })
@@ -309,7 +309,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
       for (const h of rejected.slice(0, 5)) {
         const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
-        lines.push(`   - ${h.id} ${h.title}（${h.file}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
+        lines.push(`   - ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
       }
     }
     if (km.matched && (km.entries || []).length > 0) {

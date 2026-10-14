@@ -15,6 +15,7 @@ import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
 import { parseModuleMapSimple } from './modules.js'
 import { runDocsCheck, readDocsCheckConfig, parseDecisionEntries, anchorFilePath } from './docs-check.js'
+import { decisionChangeQualifier } from './knowledge-match.js'
 
 /** safeGit 超时（大仓 git log 慢时降级该模块，不挂起 Wave 渲染） */
 const GIT_TIMEOUT_MS = 5000
@@ -323,7 +324,7 @@ export function computeDecisionTouches(changedFiles, knowledgeRoot) {
       for (const c of changed) {
         // 前缀匹配粒度 = 文件或其子路径（R-03：锚点是文件级非目录级，防同前缀不同文件误报）
         if (c === anchorPath || c.startsWith(anchorPath + '/')) {
-          touches.push({ id: e.id, title: e.title, anchorFile: anchorPath, touchedFile: c, file })
+          touches.push({ id: e.id, title: e.title, anchorFile: anchorPath, touchedFile: c, file, change: e.change || '' })
         }
       }
     }
@@ -344,7 +345,7 @@ export function renderDecisionTouchFacts(touches) {
   const shown = touches.slice(0, DECISION_TOUCH_RENDER_LIMIT)
   const lines = [`[decision-touch] 本次变更触碰 ${touches.length} 条决策锚点（改动可能使该决策需复核）：`]
   for (const t of shown) {
-    lines.push(`  - ${t.id}（${t.title || '无标题'}，锚点 ${t.anchorFile}）← 触碰文件 ${t.touchedFile}（${t.file}）`)
+    lines.push(`  - ${t.id}（${t.title || '无标题'}，锚点 ${t.anchorFile}）← 触碰文件 ${t.touchedFile}（${t.file}｜${decisionChangeQualifier(t.change)}）`)
   }
   if (touches.length > DECISION_TOUCH_RENDER_LIMIT) {
     lines.push(`  …另有 ${touches.length - DECISION_TOUCH_RENDER_LIMIT} 条`)

@@ -186,13 +186,22 @@ describe('renderDecisionTouchFacts（事实行渲染）', () => {
   })
 
   it('单条：含 [decision-touch] 头/决策 id/标题/锚点文件/触碰文件/需复核提示', () => {
-    const out = renderDecisionTouchFacts([{ id: 'D-905@v1', title: 'quicklog 标签切段', anchorFile: 'src/quicklog.js', touchedFile: 'src/quicklog.js', file: 'knowledge/decisions/core-engine.md' }])
+    const out = renderDecisionTouchFacts([{ id: 'D-905@v1', title: 'quicklog 标签切段', anchorFile: 'src/quicklog.js', touchedFile: 'src/quicklog.js', file: 'knowledge/decisions/core-engine.md', change: '2026-01-05-demo' }])
     assert.ok(out.startsWith('[decision-touch] 本次变更触碰 1 条决策锚点'), out)
     assert.ok(out.includes('需复核'), out)
     assert.ok(out.includes('D-905@v1'), out)
     assert.ok(out.includes('quicklog 标签切段'), out)
     assert.ok(out.includes('锚点 src/quicklog.js'), out)
     assert.ok(out.includes('触碰文件 src/quicklog.js'), out)
+    assert.ok(out.includes('变更 2026-01-05-demo'), out)
+  })
+
+  it('变更名限定：change 在场渲染「变更 <名>」，缺失渲染「变更未记录」', () => {
+    const base = { id: 'D-905@v1', title: 't', anchorFile: 'src/a.js', touchedFile: 'src/a.js', file: 'knowledge/decisions/core-engine.md' }
+    const withChange = renderDecisionTouchFacts([{ ...base, change: '2026-01-05-demo' }])
+    assert.ok(withChange.includes('（knowledge/decisions/core-engine.md｜变更 2026-01-05-demo）'), withChange)
+    const noChange = renderDecisionTouchFacts([{ ...base }])
+    assert.ok(noChange.includes('（knowledge/decisions/core-engine.md｜变更未记录）'), noChange)
   })
 
   it(`≤${DECISION_TOUCH_RENDER_LIMIT} 条截断 + 「…另有 N 条」（R-05）`, () => {
@@ -270,6 +279,7 @@ describe('渲染点①execute.js buildWavePrompt（主渲染点，Wave 步 promp
     assert.ok(prompt.includes('[decision-touch]'), '事实行存在')
     assert.ok(prompt.includes('本次变更触碰 1 条决策锚点'), prompt.slice(prompt.indexOf('[decision-touch]'), prompt.indexOf('[decision-touch]') + 200))
     assert.ok(prompt.includes('D-901@v1') && prompt.includes('锚点 src/exact.js') && prompt.includes('触碰文件 src/exact.js'), 'id/锚点/触碰文件齐全')
+    assert.ok(prompt.includes('变更未记录'), '缺「变更：」条目渲染降级形态「变更未记录」')
     assert.ok(prompt.includes('需复核'), '需复核提示')
   })
 
@@ -307,6 +317,7 @@ describe('渲染点②run/prompt.js {DOCS_DEBT} 注入（次渲染点，重入/r
     const out = await renderOutputStep(setup)
     assert.ok(out.includes('[decision-touch]'), '触碰事实行存在')
     assert.ok(out.includes('D-901@v1') && out.includes('触碰文件 src/exact.js'), '事实行内容')
+    assert.ok(out.includes('变更未记录'), '缺「变更：」条目降级形态在场（次渲染点同源）')
     assert.ok(out.includes('[docs-debt]'), '既有欠账 facts 注入不变（无 map → ok:false 单行）')
     assert.ok(!out.includes('{DOCS_DEBT}'), '占位符无残留')
   })

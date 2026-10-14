@@ -221,6 +221,16 @@ export function matchDecisionsByFiles(indexDir, files) {
   return result
 }
 
+/** 决策展示行变更名限定词（2026-10-14-supersedes-mislink-and-change-display）：D-xxx 是变更内
+ *  局部序号，跨变更同号条目常见（知识库 D-001@v1 ×296、其中 192 条同题）——四处展示面
+ *  （{DECISION_HITS}/轻量道防复潮/knowledge-gate/decision-touch）经本函数统一渲染限定词消歧；
+ *  change 缺失（legacy 无「变更：」行）固定降级「变更未记录」——不编造、不省略。
+ *  单一源防四处文案漂移（与 deathPathNote 同址同规约）。 */
+export function decisionChangeQualifier(change) {
+  const c = String(change || '').trim()
+  return c ? `变更 ${c}` : '变更未记录'
+}
+
 /** 死路注记短句提取（消费方渲染用）：理由里「死路：…」到首个句读为止；无标记时截前 60 字。
  *  单一源供 flow 知识注入段与 complete.js knowledge-gate 回显共用（2026-09-28-knowledge-inject-ranking）。 */
 export function deathPathNote(reason) {
