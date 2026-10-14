@@ -133,6 +133,44 @@ test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，
   rmSync(cwd, { recursive: true, force: true })
 })
 
+// ── ⑦ 侧车勾选留痕（2026-10-14-timeline-ticktime-anchor-scope）──
+// task-ticks.jsonl 落 change 目录内（随归档进 git 跨机可读，区别于 .runtime 机本位事件流）——
+// timeline 任务面精确时刻的事实源，观测盲窗（watcher 未拉起）里的 CLI tick 不再丢勾选时刻。
+
+test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）；幂等重勾零追加', () => {
+  const { cwd, cli } = makeRepo()
+  const change = '2026-10-01-vtt-7'
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  const sidePath = join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl')
+  const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+  assert.equal(t1.status, 0, t1.stderr)
+  const lines1 = readFileSync(sidePath, 'utf8').trim().split('\n')
+  assert.equal(lines1.length, 1, '翻格一次恰好一行留痕')
+  const row = JSON.parse(lines1[0])
+  assert.equal(row.task, 'task-01')
+  assert.equal(row.source, 'task-tick')
+  assert.equal(typeof row.ts, 'number', '毫秒时间戳在场')
+  assert.ok(row.ts <= Date.now() + 5000, '时间戳不超当前时钟')
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
+  assert.equal(readFileSync(sidePath, 'utf8').trim().split('\n').length, 2, '第二格再追加一行')
+  assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0, '幂等重勾')
+  assert.equal(readFileSync(sidePath, 'utf8').trim().split('\n').length, 2, 'already 分支零追加')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑦b 侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）', () => {
+  const { cwd, cli } = makeRepo()
+  const change = '2026-10-01-vtt-8'
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  mkdirSync(join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl'), { recursive: true })
+  const t = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+  assert.equal(t.status, 0, '翻格主流程不受影响')
+  const md = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'tasks.md'), 'utf8')
+  assert.match(md, /^- \[x\] task-01:/m, 'tasks.md 照常翻格')
+  assert.match(t.stderr, /勾选留痕写失败|task-ticks/, '仅告警留痕')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 // ── ④ 节奏门去重（纯函数）──
 
 test('④a CLI 连续 tick 的采样合并跳被去重 → 无单拍多格判定', () => {

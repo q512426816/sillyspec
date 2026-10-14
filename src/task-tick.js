@@ -145,6 +145,18 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
         ...(ev.text ? { evidence: ev.text.slice(0, 300) } : {}), // 事件面截 300 字符（全文在 task-evidence.jsonl）
       }) + '\n', 'utf8')
     } catch { /* 事件 best-effort：写失败翻格不受影响（节奏门退回采样判） */ }
+    // 侧车勾选留痕（2026-10-14-timeline-ticktime-anchor-scope）：{ts,task,source} 追加进 change 目录
+    // 的 task-ticks.jsonl——勾选时刻的事实源（timeline 任务面精确时刻），落 change 目录随归档进 git
+    // 跨机可读，不随 .runtime 机本位/观测盲窗蒸发（2026-10-14-deploy-release-notes 实证：盲窗内
+    // 勾选两个记录面全空）。事件面不带任务 id（节奏门只读 checked N→M），id 口径以本侧车为权威。
+    // best-effort：写失败仅告警，翻格不受影响（timeline 退事件流推断）。
+    try {
+      appendFileSync(join(changesRoot, changeName, 'task-ticks.jsonl'), JSON.stringify({
+        ts: Date.now(), task: normalizeTaskId(taskId) || taskId, source: 'task-tick',
+      }) + '\n', 'utf8')
+    } catch (e) {
+      console.warn(`⚠️ 勾选留痕写失败（task-ticks.jsonl：${e && e.code ? e.code : e}）——翻格不受影响，timeline 勾选时刻退事件流推断`)
+    }
     // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
     // spec-sync，平台不再停留 start 时点快照（真实会话实证：改写后平台恒显初稿）。best-effort。
     try {
