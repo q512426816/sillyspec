@@ -1,0 +1,34 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  flow done 收口提示的 FR 域迁移命令照抄必败：提示语给 --from fr/auto-backend 形态（fr-index.js 伪域告警块），而 redomain 实现按裸域名拼 fr/${from}.md，产生
+  fr/fr/auto-backend.md 双前缀报错；缺陷实录见 multi-agent-platform
+  docs/sillyspec/tests-redomain-from-prefix-doubling.md。修法：入参归一化单源（剥前导 fr/ 与尾随 .md），CLI 与库函数双侧幂等，让两种形态等价而不是改提示语掐一头。
+
+
+  成功标准：
+
+  - redomain.js 新增导出归一化函数（trim + 剥前导 fr/ + 剥尾随 .md），redomainFrEntries 与 planRedomain 入参防御性归一
+
+  - CLI --from/--to 经同一归一化后透传，回显与报错统一显示裸域名
+
+  - --from fr/auto-backend 与 --from auto-backend 干跑预览、--write 迁移结果完全一致；剥完为空（如只传 fr/）按既有用法错误拒绝且无半态写盘
+
+  - test 覆盖：fr/ 前缀形态、.md 后缀形态、裸名原样、fr/ 剥空拒绝、归一化幂等
+
+  - npm test 与 npm run lint 全绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 00e61cb1e0160d5f6b990524b4e7838965c2ff17
+updatedAt: '2026-10-14T03:01:20.669Z'
+baseline_sha256: 1db6c4647fb2faca12447b15a11b18ec7026014b49eb851eb742562a7571245e
+spec_approved: true
+spec_approved_at: '2026-10-14T03:01:20.669Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

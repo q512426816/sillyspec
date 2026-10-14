@@ -1,0 +1,27 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-14T02:59:54.447Z
+---
+# 设计记录（Design Record）— 2026-10-14-redomain-domain-arg-normalize
+
+## 做法概述
+
+单一归一化函数 `normalizeDomainArg` 放 `src/redomain.js`（与迁移语义同域、可独立单测），`redomainFrEntries`/`planRedomain` 入参防御性归一（库层兜底任何调用方），CLI `tests --redomain` 分支用同一函数处理 `--from`/`--to`（顺带修好回显与用法校验的显示口径，消灭 `fr/fr/`）。`fr-index.js` 伪域告警提示语**不改**——修复后它给出的 `fr/` 前缀形态即为合法输入，历史提示语与未来输入两种口径从此等价（容错输入端比掐死输入端稳）。
+
+## 接口契约
+
+- 新增导出 `redomain.js:normalizeDomainArg(v: unknown) -> string`：幂等纯函数，trim → 剥前导 `fr/`（不区分大小写）→ 剥尾随 `.md`；可能返回空串（空值拒绝交给调用方）。
+- `redomainFrEntries` / `planRedomain`：`from`/`to` 归一化后为空抛 `Error`（文案含「fr/ 前缀」用法提示），抛点在一切 fs IO 之前。
+- CLI `tests --redomain` 用法行补形态说明（`fr/auto-backend ≍ auto-backend.md ≍ auto-backend`）。
+- 无既有签名/行为收敛：纯放宽输入形态，裸名调用方（既有测试、dashboard）零感知。
+
+## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+
+1. 乱序/迟到到达：纯函数入参归一化，无时序面，n/a。
+2. 并发写：归一化不触碰写路径；迁移落盘仍走 `writeAtomicSync` 原子写语义不变。
+3. 切换/生命周期：空值校验置于一切 fs 操作之前（现状是先 `existsSync(from)` 后 `from===to`——归一化插最前，保证剥空值不会以 `fr/.md` 路径产生误导性「源域文件不存在」报错）。
+4. 作用域：域文件物理上都在 `<knowledgeRoot>/fr/` 目录内、裸名不含 `/`，`fr/xxx` 只可能是前缀形态，跨仓/跨域无歧义。
+
+## 风险与死路
+
+最大风险：真实域名以 `fr/` 开头被误剥——由作用域分析排除（裸名不含 `/`）。放弃方案 A（只改 `fr-index.js` 提示语为裸域名）：手工输入仍会带前缀（记忆惯性 + 历史文档/提示语已发出的前缀形态），且修的是提示不是根因；放弃方案 B（只在 CLI 端做字符串处理不进库）：平台「一键迁移」等未来调用方绕过 CLI 直接调库时缺口复现，库层防御缺失。
