@@ -1976,3 +1976,54 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-14-thin-turbo-mode
   status: active
+
+## FR-setup-111 TDD 声明面全部带分层适用：纯逻辑严格先写测试、行为契约断言用户可见行为、视觉样式与纯配置不写测试（记「不适用：理由」）——覆盖 testcase-design 单一源、规则 3 三实例（agents-instruction 模板/AGENTS.md/CLAUDE.md）、execute 阶段提示词、dispatch 双后端、flow 命令卡
+变更：2026-10-14-tdd-scope-guidance
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — 
+全文：.sillyspec/changes/archive/2026-10-14-tdd-scope-guidance/requirements.md#FR-01
+最近确认：87c99da612c0fb3a7299c1e7e3e0be5820972fe1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-tdd-scope-guidance:flow:测试绑定FR-01
+  tests: test/tdd-scope-guidance.test.mjs「单一源含按层适用块＋标题与7条检查不破＋规则3三实例尾注＋execute·dispatch·flow卡限定＋提取副本同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-tdd-scope-guidance
+  status: active
+
+## FR-setup-112 机器门零改动（只动引导措辞，不动 src/flow.js 门逻辑）
+变更：2026-10-14-tdd-scope-guidance
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更两笔提交（99eaf0a7 起）→ When 审计其提交面 → Then pathspec 不含 src/flow.js（工作树中 src/flow.js
+全文：.sillyspec/changes/archive/2026-10-14-tdd-scope-guidance/requirements.md#FR-02
+最近确认：87c99da612c0fb3a7299c1e7e3e0be5820972fe1
+
+## FR-setup-113 新增范围断言测试与既有注入测试（execute/quick-testcase-design-include 等）全绿
+变更：2026-10-14-tdd-scope-guidance
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 上述措辞面落盘 → When 逐文件断言 → When 跑既有注入测试 → Then 新增 23 断言全过且既有测试全绿。
+全文：.sillyspec/changes/archive/2026-10-14-tdd-scope-guidance/requirements.md#FR-03
+最近确认：87c99da612c0fb3a7299c1e7e3e0be5820972fe1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-tdd-scope-guidance:flow:测试绑定FR-03
+  tests: test/execute-testcase-design-include.test.mjs | test/input-teach-copyable.test.mjs | test/quick-retired.test.mjs | test/quick-testcase-design-include.test.mjs | test/tdd-scope-guidance.test.mjs「全部通过（23 断言）」 | test/verify-probes-assertion-quality.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-tdd-scope-guidance
+  status: active

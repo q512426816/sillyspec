@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-tdd-scope-guidance",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-tdd-scope-guidance:flow:测试绑定FR-01",
+      "tests": [
+        "test/tdd-scope-guidance.test.mjs「单一源含按层适用块＋标题与7条检查不破＋规则3三实例尾注＋execute·dispatch·flow卡限定＋提取副本同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tdd-scope-guidance"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-tdd-scope-guidance:flow:测试绑定FR-03",
+      "tests": [
+        "test/execute-testcase-design-include.test.mjs",
+        "test/input-teach-copyable.test.mjs",
+        "test/quick-retired.test.mjs",
+        "test/quick-testcase-design-include.test.mjs",
+        "test/tdd-scope-guidance.test.mjs「全部通过（23 断言）」",
+        "test/verify-probes-assertion-quality.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tdd-scope-guidance"
+    }
+  ]
+}

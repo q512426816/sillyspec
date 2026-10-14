@@ -1,0 +1,32 @@
+{"ts":1791939755583,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791939875180,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791939903602,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791939907021,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/turbo-mode-scope.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791939916951,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/turbo-mode-done-skip.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791939986710,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/verify-postcheck.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940013002,"kind":"commit","stage":null,"detail":"1421a12f","provisional":true}
+{"ts":1791940089050,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791940089854,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791940089559,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791940089559,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1791940093942,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791940093942,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1791940166688,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940169893,"kind":"commit","stage":null,"detail":"99eaf0a7","provisional":true}
+{"ts":1791940181931,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791940184878,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791940184878,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791940219515,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940234125,"kind":"commit","stage":null,"detail":"a6cb2927","provisional":true}
+{"ts":1791940234700,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940253486,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791940254181,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940286863,"kind":"commit","stage":null,"detail":"6ac943bf","provisional":true}
+{"ts":1791940290796,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791940327555,"kind":"commit","stage":null,"detail":"2b2273b8","provisional":true}
+{"ts":1791940328097,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-14-turbo-guide-tier-copy/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940445411,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（68.1s） · 20261014011403","provisional":true}
+{"ts":1791940505883,"kind":"commit","stage":null,"detail":"8213818f","provisional":true}
+{"ts":1791940506101,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs-check-baseline——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791940526277,"kind":"commit","stage":null,"detail":"87c99da6","provisional":true}
+{"ts":1791940796244,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

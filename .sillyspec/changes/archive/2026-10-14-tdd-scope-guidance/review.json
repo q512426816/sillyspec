@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-tdd-scope-guidance",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "87c99da612c0fb3a7299c1e7e3e0be5820972fe1",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "change.patch 冻结面卷入非本变更提交的 src/verify-postcheck.js 功能改动（冻结件污染）",
+      "evidence": "change.patch 第 185-200 行含 buildDepsBatches 新增 cmdDir 提取与 rebasePy 重定基改动，该 hunk 实属独立提交 1421a12f「fix(deps): hits 命中形态恢复 cd 前缀重定基」（系 99eaf0a7 之父提交，非本变更 99eaf0a7/a6cb2927/2b2273b8 三笔之一，也不在 design.md 文件变更清单）——冻结基线落在 1421a12f 之前致共享仓交错提交被扫入冻结件；本变更实际提交面干净（三笔 pathspec 均不含 verify-postcheck.js 与 flow.js），属证据件与「纯引导措辞、机器门零改动」交付自述不符，非交付代码污染",
+      "location": ".sillyspec/changes/2026-10-14-tdd-scope-guidance/change.patch:185"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements FR-02「两笔提交」计数与实际三笔 tdd-scope 提交漂移；design 文件清单未列四笔模块 sidecar",
+      "evidence": "git log 实有 99eaf0a7/a6cb2927/2b2273b8 三笔带 (2026-10-14-tdd-scope-guidance) 尾标，第三笔 2b2273b8 修订 requirements 时未更新「两笔」计数；99eaf0a7 pathspec 含四个 .sillyspec/docs/sillyspec/modules/*.changelog.md 而 design.md 文件变更清单未列（提交流稿已披露「四模块 sidecar」）；实质主张（各笔 pathspec 均不含 src/flow.js）经逐笔 show --name-only 核验成立",
+      "location": ".sillyspec/changes/2026-10-14-tdd-scope-guidance/requirements.md:23"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T09:19:18+08:00"
+}

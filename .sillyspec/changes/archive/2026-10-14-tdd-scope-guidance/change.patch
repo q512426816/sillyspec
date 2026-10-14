@@ -1,0 +1,299 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+index 9e814a16..159bc119 100644
+--- a/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/dispatch.changelog.md
+@@ -6,3 +6,4 @@
+ - ql-20260812-006-d70c | execute 测试用例设计引导注入：新增 `templates/prompts/testcase-design.md` 单一源（6 条检查 + FIRST/金字塔/AAA 一行带过），经 `{{include: testcase-design}}` 注入 renderLocalInstruction「子代理 prompt 要点」+ renderSillyHubInstruction worker_prompt 覆写（SillyHub worker 不见 wave prompt，必须自包含）。复用 P2.2.3 include 机制（resolvePromptIncludes 运行时解析）防双写漂移。
+ | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/review-dispatch.js 归属本模块：runReviewDispatch 三链（create/status/kill）+ probe 三层前置消费 + 在途记录状态机（O_EXCL/终态即清）+ artifacts 双通道回收；D-007 显式例外与防泛化护栏落卡定位段。gate 在途区分在 stage-review.js（core-engine）。 |
+ | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | TDD 分层适用引导：templates/prompts/testcase-design.md 单一源头部加「按层适用」块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写，一句话判据「当 X 发生时用户应看到/发生 Y」）——经既有 include 机制自动流入三派发路径；local-agent.js 写模式行 TDD 措辞带按层限定；机器门零改动；新增 test/tdd-scope-guidance.test.mjs。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index a5e97f34..5b2d0a37 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -22,3 +22,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
+ | 2026-10-13 | 2026-10-14-prestage-consent-gate | 选道双峰问题：659 个归档变更中「头脑风暴预段+轻量收编」中道仅 3 例（1.4%），其余全轻量或完整五阶段。诊断（本 |
+ | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | agents-instruction 模板规则 3 加「测试按层适用」尾注（AGENTS.md/CLAUDE.md 仓实例同步）；assets/command-cards/flow.md「直接干活」行加按层限定。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+index e8db6d15..de2610af 100644
+--- a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+@@ -10,3 +10,4 @@
+ - ql-20260912-002-57c4 | runCli 子进程超时兜底（默认 300s env 可调）+kill+isError envelope+输出 8MB 封顶；清 callTool 死代码
+ - ql-20260912-009-06b4 | exit 2（EXIT_UNKNOWN 合法 envelope）不再标 isError（诊断 text 不被 host 吞）
+ | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | worker_prompt 铁律第 1 条 TDD 措辞带按层限定（纯逻辑严格先行/行为契约断用户所见/样式与纯配置不写，判据见「测试用例设计」）。 |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 8c437d06..f51a29d9 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -53,3 +53,4 @@
+ | 2026-10-13 | 2026-10-13-cli-pit-fix-batch | 四例 CLI 摩擦坑修复（前会话已实证写好，倒推收尾）：①FR 域路由降级告警接专用命令 tests --redomai |
+ | 2026-10-13 | 2026-10-13-proto-reuse-register | fire-equipment 实证暴露规则缝隙：用户已提供可复跑 HTML 原型时，brainstorm 原型分级无「复 |
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
++| 2026-10-14 | 2026-10-14-tdd-scope-guidance | execute.js 主代理直写（execution_mode: main）任务闭环行 TDD 措辞改「按层适用」（纯逻辑先写测试再实现/行为契约断用户可见行为/样式与纯配置不写——判据见「测试用例设计」）；docs/prompt/_extracted.json 重提取。 |
+diff --git a/AGENTS.md b/AGENTS.md
+index e4de12a9..782af149 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -32,7 +32,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+-3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
++3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+ 4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+diff --git a/CLAUDE.md b/CLAUDE.md
+index a4604e73..860ca94f 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -19,7 +19,7 @@
+    成功标准：
+    - <可验证标准>"
+    ```
+-5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
++5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+ 6. **判规模选档**：≤3 文件、范围明确走轻量变更；多阶段 / 架构级走完整流程。
+ 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `flow start --input "<已做改动＋成功标准>"` → `flow done` 收尾，把已落盘改动如实登记为变更级归档。
+ 8. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在 `flow done` 时**亲自实测** `npm test` + `npm run lint`（门禁：实测失败阻断收口，修好重跑即可；纯 doc/配置与未配置命令自动跳过）。agent 侧预跑**可选**——想省「被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动可跳过（lint 不扫 docs/，空转无信息），以落盘文件与测试结果为准，不信口头"已完成"。
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index 36d2c98f..72c32e38 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -18,7 +18,7 @@ sillyspec flow start --change <变更名> --input "<动机与背景>
+ #    极速变体：用户显式说「极速/别验证/只要 spec 和代码」类原话时才加 --turbo（仅用户显式触发，
+ #    禁止你自行启用）——flow-state 留痕，收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），
+ #    spec 结构校验、tasks 全勾、ledger、patch 冻结、distill、归档照常；升厚即失效恢复全量仪式。
+-# ② 直接干活：改代码写测试；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
++# ② 直接干活：改代码写测试（按层适用——纯逻辑先写、行为契约断用户所见、样式/纯配置不写）；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
+ #    tasks.md 是你的工作队列——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态），
+ #    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN
+ #    即时回显进度与下一任务）→ 下一行；每格勾选要有对应提交（消息带 task-NN），一把勾收口被拒。
+diff --git a/docs/prompt/README.md b/docs/prompt/README.md
+index d8702eee..e2b405e1 100644
+--- a/docs/prompt/README.md
++++ b/docs/prompt/README.md
+@@ -164,7 +164,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表
+ 
+ | 形式 | 行为 |
+ |---|---|
+-| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）；**execute 阶段「Wave 执行」step 使用了 `{{include: testcase-design}}`**（测试用例设计 7 条检查，任务含测试代码时调度者整段复制进子代理 prompt）。 |
++| `{{include: <name>}}` | `resolvePromptIncludes`（`src/run/shared.js`）在所有占位符替换**之前**，把仓库根 `templates/prompts/<name>.md` 文件内容拉进 prompt 正文（代码自动补 `.md` 后缀）。**verify 阶段「对照设计检查」step 使用了 `{{include: verify-probes}}`**（自动探针片段）；**plan 阶段「生成 TaskCard」step 使用了 `{{include: taskcard-rules}}`**（TaskCard 公共格式规则 + 保存前自检，每个子代理 prompt 展开后相同）；**execute 阶段「Wave 执行」step 使用了 `{{include: testcase-design}}`**（测试用例设计按层适用块＋7 条检查——纯逻辑先行/行为契约断用户所见/样式与纯配置不写，任务含测试代码时调度者整段复制进子代理 prompt）。 |
+ 
+ > ⚠️ **重要**：本目录各 `<stage>.md` 与 `_extracted.json` 展示的是 `resolvePromptIncludes` **替换前**的 prompt 原文，即保留 `{{include: verify-probes}}` / `{{include: taskcard-rules}}` / `{{include: testcase-design}}` 字面。agent 实际收到的是替换后的片段内容（运行时从 `templates/prompts/` 读取注入）。要查看展开后的片段全文，读 `templates/prompts/verify-probes.md`、`templates/prompts/taskcard-rules.md` 或 `templates/prompts/testcase-design.md` 文件。
+ 
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index fc5186e8..3ea65851 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -566,7 +566,7 @@
+         "index": 4,
+         "name": "Wave 1 执行",
+         "mode": "implementation",
+-        "prompt": "## Wave 1: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 1 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 1 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
++        "prompt": "## Wave 1: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 1 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 1 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
+         "outputHint": "Wave 1 执行结果",
+         "optional": false
+       },
+@@ -574,7 +574,7 @@
+         "index": 5,
+         "name": "Wave 2 执行",
+         "mode": "implementation",
+-        "prompt": "## Wave 2: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 2 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 2 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
++        "prompt": "## Wave 2: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 2 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 2 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
+         "outputHint": "Wave 2 执行结果",
+         "optional": false
+       },
+@@ -582,7 +582,7 @@
+         "index": 6,
+         "name": "Wave 3 执行",
+         "mode": "implementation",
+-        "prompt": "## Wave 3: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 3 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 3 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
++        "prompt": "## Wave 3: 执行以下任务\n\n## 执行方式\n\n**主代理直写（execution_mode: main）——你直接实现，不派子代理。**\n\n逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → `sillyspec wt-commit --change <change-name> -- <task-files>` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。\n\nworktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。\n\n**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。\n\n\n### 工作目录（主代理直写）\n\n本变更在隔离 worktree 内实现：`/tmp/worktrees/demo-change`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（`sillyspec wt-commit --change <change-name> -- <task-files>`），不经子代理派发。\n\n### 注意\n蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。\n\n⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。\n\n⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。\n\n\n\n### 任务摘要（按需读取完整蓝图）\n逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：\n\ntask-01: 默认任务 3 (TBD) → task-01.md\n\n实现要点：\n1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths\n2. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本\n3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例\n4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作\n   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**\n   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1`，CLI 已替换为绝对路径）后 `tail -n 50` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）\n5. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界\n\n9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑\n10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read\n{{include: testcase-design}}\n\n\n### Wave 开始前\n1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑\n2. 读取 plan.md 了解全局任务划分和依赖关系\n3. 确认本 Wave 的输入/输出契约（前置 Wave 产出了什么，本 Wave 需要消费什么）\n4. 检查前置 Wave 的产出是否完整（文件是否存在、测试是否通过）\n5. **上下文分层加载**：\n   - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）\n   - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）\n   - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）\n\n### 歧义裁决（撞到 plan/design 歧义或冲突时）\n非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 `{SPEC_ROOT}/changes/<变更名>/decisions.md` 新条目（`## D-xxx@v1: <短标题>` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ `sillyspec run execute --wait` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。\n\n### 中断续跑（如曾中断恢复）\nexecute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：\n- tasks.md 中**已勾选 `- [x]` 的 task 已完成，跳过不重跑**（子代理也可能在完成前中断，重跑前先确认该 task 产出文件是否完整）\n- 用 `sillyspec status` 查当前进度，重新 `sillyspec run execute` 会回到当前 Wave step 继续，**不要从零重置或重跑已完成 Wave**\n- 本 Wave 已完成但不完整（产出缺文件）的 task 补做，不牵连其他 task\n\n\n### 本 Wave 任务\n- [ ] 默认任务 3 (TBD)\n\n### 调度要求\n1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。\n2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏\n3. **不要频繁编译！** 编译很慢，只在以下情况运行：\n   - 写了大量代码后需要验证语法正确性\n   - 最后一个 Wave 完成后做一次全量编译验证\n   - 用户明确要求编译时\n4. 每个任务完成后：\n   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 \"does not exist in index\"）\n   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）\n   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）\n   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态\n   - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）\n   - 记录改动文件和测试结果\n5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止\n\n### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）\n本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：\n- 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照\n- 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）\n- **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次\n- 无 _module-map.yaml 时跳过模块匹配，仅按文件清单更新 unmapped 部分\n这是可选更新（不阻断 execute 完成），但保持 module-impact 与实际变更一致利于 verify 核对与 archive 终审。\n\n### 知识沉淀（主代理在本 Wave 收尾，与 module-impact.md 同批）\n本 Wave 各 task 子代理报告里若提到**真正的项目特有坑**（跨变更可复用、未来 agent 可能再次踩到、且不是本任务专属细节），由你在 Wave 收尾统一追加到 `{SPEC_ROOT}/knowledge/uncategorized.md`：\n- 条目格式：`## <一句话标题>` + 一段说明（坑的来龙去脉 + 规避/解法），末尾标注来源（task-XX）\n- 不由各 task 子代理分别写（并行改同一文件会互相覆盖），只由主代理在 Wave 收尾统一追加——与 module-impact.md 同一收尾节奏\n- 不要为了完成任务而硬凑条目；纯新增/纯样式/单点 bug 修复/临时绕过不写；拿不准时不写，宁缺毋滥\n- execute 末步「知识库审阅」会检查待确认条目并提示用户归类\n\n### 完成后\n1. 为每个后端 router task 生成 API 端点 artifact——**用 CLI 命令，勿手扫装饰器手写（易漏 endpoint）**：\n   - 聚合一次跑全：sillyspec endpoints extract --change <change> --all-tasks（逐 task 卡 allowed_paths 各自提取落盘，<change> = 当前变更名；与 verify 探针 5 聚合对账口径一致）\n   - CLI 静态扫描变更文件（FastAPI @router.* / Express router.* / Spring @*Mapping）生成\n     {SPEC_ROOT}/.runtime/contract-artifacts/<task-name>/endpoints.json\n   - 格式: { \"task\": \"task-XX\", \"type\": \"backend_endpoints\", \"endpoints\": [{ \"method\": \"GET\", \"path\": \"/api/ppm/xxx\" }] }（CLI 已按此格式写好，verify 探针 5 直接消费）\n   - 只提单 task（--task task-NN）会让探针 5 用局部端点集对账放大假 missing——多 task 变更必用 --all-tasks\n",
+         "outputHint": "Wave 3 执行结果",
+         "optional": false
+       },
+diff --git a/docs/prompt/execute.md b/docs/prompt/execute.md
+index 23080a2b..7977aaa0 100644
+--- a/docs/prompt/execute.md
++++ b/docs/prompt/execute.md
+@@ -176,7 +176,7 @@ worktree 路径 + 分支名 + 模式
+ - `<change>`、`<module>` → 字面文案（路径/模块名模板，非标量占位符）
+ 
+ **本步出现的 include 指令**
+-- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言有效、测行为不测实现、契约与回归、时间敏感分支、隔离确定性）拉进「子代理 prompt 要点」第 5 项后，供调度者整段复制进子代理 prompt（任务含测试代码时）
++- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」头部按层适用块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写）＋7 条检查（边界/异常、断言有效、测行为不测实现、契约与回归、时间敏感分支、隔离确定性、覆盖对账）拉进「子代理 prompt 要点」第 5 项后，供调度者整段复制进子代理 prompt（任务含测试代码时）
+ 
+ **本步的模式条件注入（M3/M4，2026-09-21-r5-efficiency-batch2）**
+ - **推荐分组行**（M3）：CLI 按三条件（allowed_paths 正交 / 无 provides-expects_from 契约链 / 组 ≤3，另内建批数护栏 ≥ min(3, N)）预计算本 Wave 推荐分组注入 batch 条件段后（agent 可偏离须在 Wave 摘要披露）——仅本地 Agent tool 派发路径渲染（SillyHub 一 Wave 一 mission 互斥）；无可并批（无 ≥2 组）零注入，输出与无该行时逐字节一致
+diff --git a/docs/prompt/quick.md b/docs/prompt/quick.md
+index 48bce340..88baab6f 100644
+--- a/docs/prompt/quick.md
++++ b/docs/prompt/quick.md
+@@ -83,7 +83,7 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等
+ - 等待配置：无（可直接 --done）
+ 
+ **本步出现的 include 指令**
+-- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言、行为 vs 实现、契约与回归、时间敏感分支、隔离确定性 + 基础习惯一行）拉进操作 3 后，任务含测试代码时按此写测试（与 execute/verify 同闭环）
++- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」头部按层适用块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写）＋7 条检查（边界/异常、断言、行为 vs 实现、契约与回归、时间敏感分支、隔离确定性、覆盖对账 + 基础习惯一行）拉进操作 3 后，任务含测试代码时按此写测试（与 execute/verify 同闭环）
+ 
+ **提示词原文**
+ 
+diff --git a/src/dispatch/backends/local-agent.js b/src/dispatch/backends/local-agent.js
+index 0313edde..8cc29c3d 100644
+--- a/src/dispatch/backends/local-agent.js
++++ b/src/dispatch/backends/local-agent.js
+@@ -95,7 +95,7 @@ export function renderLocalInstruction(contract) {
+ 
+   const modeLine = readOnly
+     ? '5. **只读模式（readOnly=true）**：本子代理只读 / 审查 / 写 review.json，**不改源码**'
+-    : '5. **写模式（readOnly=false）**：按蓝图实现源码（TDD：先读后写 → 写测试 → 写实现）'
++    : '5. **写模式（readOnly=false）**：按蓝图实现源码（TDD：先读后写 → 写测试 → 写实现，按层适用——纯逻辑严格先行、行为契约断用户所见、样式/纯配置不写，判据见「测试用例设计」）'
+ 
+   return `### 派发后端：Local（本机 Agent tool）— 默认与降级路径
+ 
+diff --git a/src/dispatch/backends/sillyhub-mcp.js b/src/dispatch/backends/sillyhub-mcp.js
+index 87508ba2..694d257a 100644
+--- a/src/dispatch/backends/sillyhub-mcp.js
++++ b/src/dispatch/backends/sillyhub-mcp.js
+@@ -218,7 +218,7 @@ dispatch_worker 的 \`worker_prompt\` 参数必须传以下覆写文本（路径
+ 
+ \`\`\`
+ 你是 SillySpec execute 的 worker，在指定 worktree 干活。铁律：
+-1. 按 objective + 蓝图（tasks/task-XX.md / design.md）实现任务（TDD：先读后写 → 写测试 → 写实现）
++1. 按 objective + 蓝图（tasks/task-XX.md / design.md）实现任务（TDD：先读后写 → 写测试 → 写实现，按层适用——纯逻辑严格先行、行为契约断用户所见、样式/纯配置不写，判据见「测试用例设计」）
+ 2. **绝不执行 git add / git commit / git push**：改动留在工作区（staged 或 unstaged 都行），
+    交 SillySpec 主体 git diff 回收（D-004）
+ 3. 不超出 allowedPaths，不碰其他 task 的文件
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 1e57fbca..e209a7ee 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -1425,7 +1425,7 @@ ${worktreeNoticeSingle}
+ 
+ **主代理直写（execution_mode: main）——你直接实现，不派子代理。**
+ 
+-逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
++逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
+ 
+ worktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。
+ 
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 3512055e..52ca5e53 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2950,7 +2950,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   {
+     let gi = 0
+     for (const [dirKey, grp] of pyGroups) {
+-      const rebasePy = (f) => (dirKey && f.startsWith(dirKey + '/')) ? f.slice(dirKey.length + 1) : f
++      // hits 命中形态 dirKey=null——从本组命令的 cd 前缀提取重定基目录（坑 deps-cwd-prefix
++      // ① 用例：显式配置 'cd backend && uv run pytest …' 时路径须按 backend/ 重定基）
++      const cmdDir = dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(grp.command)?.[1] || null
++      const rebasePy = (f) => (cmdDir && f.startsWith(cmdDir + '/')) ? f.slice(cmdDir.length + 1) : f
+       batches.push({ name: pyGroups.size > 1 ? `deps(auto-py:${dirKey || 'root'})` : 'deps(auto-py)', short: 'py', command: `${grp.command} ${grp.files.map(rebasePy).join(' ')}`, count: grp.files.length, prioCount: grp.files.filter(f => prio(f) === 0).length, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, tap: true, files: grp.files, pyRoot: dirKey || null })
+       gi++
+     }
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 8b576f8e..64ae837d 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -30,7 +30,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+-3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
++3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+ 4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+diff --git a/templates/prompts/testcase-design.md b/templates/prompts/testcase-design.md
+index c753ff0c..84fb92ad 100644
+--- a/templates/prompts/testcase-design.md
++++ b/templates/prompts/testcase-design.md
+@@ -3,6 +3,11 @@
+ 写测试是为了拦住回归，不是"有测试文件"。
+ **基础习惯照做、不展开**：FIRST（快/独立/可重复/自校验/及时）、金字塔分层（单元为主/集成少量/E2E 只冒烟）、AAA 结构、测试名描述场景、测试数据轻量构造（Object Mother/Builder）、覆盖率不追数字。
+ 
++**先判该不该写：按层适用**（一句话判据——能写成「当 X 发生时，用户应看到/发生 Y」→ 写测试；只能描述成「看起来更精致/更美观」→ 不写，靠规范与人工验收）：
++- **纯逻辑**（校验规则/数据变换/状态规则/重试策略）→ 严格 test-first：先写测试再实现。
++- **行为契约**（用户做 X 后应看到/发生 Y 的关键交互，组件/API 皆然）→ 断言用户可见行为；主干断言可先行，mock 细节允许实现后补；不为样式类/className 写断言。
++- **视觉样式与纯配置**（颜色/布局/间距/动效；配置/文档/CI）→ 不写测试——断言样式是负资产，改一次样式碎一片；测试绑定记「不适用：<理由>」。
++
+ 逐条对照检查：
+ 1. **覆盖**：正常路径 + 边界 + 异常/非法输入，不只写业务正例；单测全绿 ≠ 集成正确。
+ 2. **断言**：断言真实输出/副作用，禁止只"不抛错"的空断言；不 mock 被测方法自身。
+diff --git a/test/tdd-scope-guidance.test.mjs b/test/tdd-scope-guidance.test.mjs
+new file mode 100644
+index 00000000..5a32839f
+--- /dev/null
++++ b/test/tdd-scope-guidance.test.mjs
+@@ -0,0 +1,64 @@
++/**
++ * TDD 分层适用引导（2026-10-14-tdd-scope-guidance）
++ *
++ * 背景：TDD 声明面（规则 3 执行顺序 / execute / dispatch 提示词）无差别要求先写测试，
++ * agent 会把 test-first 执行到视觉样式层与纯配置面，产出断言 className 式负资产测试。
++ * 用户原话：「前端 TDD 很多地方做测试是多余的，TDD 范围我们还得再引导下」。
++ * 修法：templates/prompts/testcase-design.md 单一源头部加「按层适用」块（{{include: testcase-design}}
++ * 机制自动流进 execute 三条派发路径与 dispatch 双后端），规则 3 三实例（模板/AGENTS.md/CLAUDE.md）
++ * 加分层尾注，execute.js / dispatch 双后端 / flow 命令卡措辞带「按层适用」限定。
++ * 本测试钉各面措辞在场 + 既有断言面（标题/7 条检查）不被破坏 + docs/prompt 提取副本同步。
++ */
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const root = join(__dirname, '..')
++const read = (p) => readFileSync(join(root, p), 'utf8')
++
++let failed = 0
++const failures = []
++function assertTrue(cond, msg) {
++  if (cond) console.log(`  ✅ PASS: ${msg}`)
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++console.log('=== TDD 分层适用引导（2026-10-14-tdd-scope-guidance）===\n')
++
++// ① 单一源：按层适用块在场，标题与 7 条检查不被破坏
++const tcd = read('templates/prompts/testcase-design.md')
++assertTrue(tcd.startsWith('### 测试用例设计（写测试时按此检查）'),
++  '单一源标题逐字保留（既有注入测试断言面）')
++assertTrue(tcd.includes('按层适用'), '单一源含「按层适用」块')
++assertTrue(tcd.includes('先写测试再实现'), '纯逻辑层：严格 test-first 措辞在场')
++assertTrue(tcd.includes('用户可见行为'), '行为契约层：断言用户可见行为措辞在场')
++assertTrue(tcd.includes('视觉样式') && tcd.includes('不写测试'), '视觉样式与纯配置层：不写测试措辞在场')
++assertTrue(tcd.includes('当 X 发生时，用户应看到/发生 Y'), '一句话判据在场')
++assertTrue(tcd.includes('不适用：'), '与 FR 测试绑定「不适用：理由」口径衔接')
++for (const n of ['1. **覆盖**', '2. **断言**', '3. **行为 vs 实现**', '4. **契约与回归**',
++  '5. **时间敏感分支**', '6. **隔离确定性**', '7. **覆盖对账**']) {
++  assertTrue(tcd.includes(n), `既有检查逐字保留：${n}`)
++}
++
++// ② 规则 3 三实例：分层尾注
++for (const p of ['templates/agents-instruction.md', 'AGENTS.md', 'CLAUDE.md']) {
++  assertTrue(read(p).includes('测试按层适用'), `${p} 规则含「测试按层适用」尾注`)
++}
++
++// ③ 提示词与命令卡：TDD 措辞带按层限定
++assertTrue(read('src/stages/execute.js').includes('TDD 按层适用'), 'execute.js 任务闭环行带按层限定')
++assertTrue(read('src/dispatch/backends/local-agent.js').includes('按层适用'), 'local-agent.js 写模式行带按层限定')
++assertTrue(read('src/dispatch/backends/sillyhub-mcp.js').includes('按层适用'), 'sillyhub-mcp.js 实现行带按层限定')
++assertTrue(read('assets/command-cards/flow.md').includes('按层适用'), 'flow 命令卡「直接干活」行带按层限定')
++
++// ④ docs/prompt 提取副本同步（_extract.mjs 重提取后 execute/quick 正文含按层适用块）
++assertTrue(read('docs/prompt/execute.md').includes('按层适用'), 'docs/prompt/execute.md 提取副本同步')
++assertTrue(read('docs/prompt/quick.md').includes('按层适用'), 'docs/prompt/quick.md 提取副本同步')
++
++console.log('')
++if (failed > 0) {
++  console.error(`❌ ${failed} 项失败：${failures.join('；')}`)
++  process.exit(1)
++}
++console.log('✅ 全部通过')
