@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-decision-legacy-renumber",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "1cb2fc91c7a752bac7172540c9892efedc0b476b",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "前轮 F4 残余（非阻断）：design 接口契约字段名与实现仍不一致；模块卡资产表仍缺 decision-renumber.js 行",
+      "evidence": "清偿提交 1cb2fc91 处理了 F4 主体（文件清单行改为仅 docs-consistency.changelog.md，与 git diff f603c9f0..HEAD 实际交付一致）。残余两点仍然成立且未在本轮处理：design.md:17 接口契约写 planRenumber→{perFile:[{ops:[{at,fromId,toId,originId}]}]}，实现实为 {files:[{ops:[{secIdx,fromId,toNumber}]}]}（src/decision-renumber.js:111-115）；模块卡 docs-consistency.md 资产表无 src/decision-renumber.js 行（同模块 decision-distill.js 有行先例；_module-map.yaml paths 与 changelog 行均已在位）。记录性漂移，不影响行为与数据，建议随下次触碰本域时顺手清偿。",
+      "location": ".sillyspec/changes/2026-10-14-decision-legacy-renumber/design.md:17"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "与上轮同判（迁移代码行为未变，1cb2fc91 仅增量只读计数/打印/文档）：单次扫描快照+apply 同进程+逐文件内容指纹校验中止（src/stages/knowledge.js:723-727），组号按组键排序确定性预分配——无乱序面。",
+    "并发": "与上轮同判：指纹校验+writeAtomicSync 逐文件原子写收窄窗口、冲突中止不覆盖；设计措辞「收窄」诚实无夸大。noChangeEntries 为纯只读计划计数，不新增并发面。",
+    "切换": "与上轮同判并本轮复测证实：中断成新旧混合态两形态读面合法（docs-check 双形态正则/doctor 双形态计数 src/doctor-diagnostics.js:949），重跑幂等收敛——HEAD 实跑 planRenumber：legacy=0/noChangeEntries=0/epoch=702，真实库零触碰、幂等形态不变；测试 4/4 亲跑绿（含 noChangeEntries===2 新断言）。",
+    "作用域": "与上轮同判：specBase=opts.specDir||<dir>/.sillyspec，发号域 max 只扫本仓 decisions/，号域=本仓命名空间；1cb2fc91 未触及 worktree/跨仓面（5 文件：src×2/test×1/变更文档×2）。",
+    "清偿核验": "P1 已清偿：noChangeEntries 于 legacy 判定分支内计数（src/decision-renumber.js:93-95，口径=legacy 且无变更行）、CLI 打印行（src/stages/knowledge.js:707）、JSDoc（:46）、test ① 断言 ===2 全在位，FR-01 六项输出补齐。P2 已清偿：design.md 做法概述落平台执行回执——platform sync 全树 0 差异（后台自动 spec-sync 已随迁移提交推送）+ 向量探针 POST /api/spec/knowledge/vector-search 404 实证+本地词面 fail-open 注记，已随 1cb2fc91 提交入库（FR-04「如实记录降级」分支履行）。P3-1 已清偿：requirements.md FR-03 绑定行与 test ③ 标题同步删「/doctor 计数」，名实一致（doctor 双形态计数由先前变更源码钉覆盖属实）。P3-2 主体已清偿（清单行对齐实际交付），残余两点见 findings。"
+  },
+  "reviewedAt": "2026-10-14T16:16:02Z"
+}

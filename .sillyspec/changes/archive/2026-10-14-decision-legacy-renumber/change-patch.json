@@ -1,0 +1,145 @@
+{
+  "change": "2026-10-14-decision-legacy-renumber",
+  "baseline": "f603c9f04fcbcbc3fec69ff9222a46983a66ba98",
+  "head": "1cb2fc91c7a752bac7172540c9892efedc0b476b",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+    "src/decision-renumber.js",
+    "src/docs-check.js",
+    "src/stages/knowledge.js",
+    "test/decision-legacy-renumber.test.mjs",
+    "test/knowledge-gate-denoise.test.mjs",
+    "test/knowledge-vector-recall.test.mjs"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 370,
+    "deletions": 24
+  },
+  "savedAt": "2026-10-14T16:16:49.229Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "f603c9f04fcbcbc3fec69ff9222a46983a66ba98",
+    "totals": {
+      "files": 9,
+      "additions": 370,
+      "deletions": 24
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/decision-renumber.js",
+        "additions": 157,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/docs-check.js",
+        "additions": 22,
+        "deletions": 18,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 46,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/decision-legacy-renumber.test.mjs",
+        "additions": 133,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-gate-denoise.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-vector-recall.test.mjs",
+        "additions": 7,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/index.js",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "ac6d86cdcd602e52c82c87bad61e5a73191dba879bdab891c540fa5d87931df4",
+  "patchStatus": "ok"
+}

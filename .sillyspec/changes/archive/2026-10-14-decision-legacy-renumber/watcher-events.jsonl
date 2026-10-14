@@ -1,0 +1,23 @@
+{"ts":1791991996049,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1791991996049,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791992025731,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791992055081,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791992055081,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791992224976,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/docs-check.js、src/stages/knowledge.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791992570173,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs/sillyspec/modules/_module-map.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791992892865,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-gate-denoise.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791992942091,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-vector-recall.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791993255762,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791993467481,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791993467658,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791993469857,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791993469857,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1791993483201,"kind":"commit","stage":null,"detail":"7edfb093","provisional":true}
+{"ts":1791993506835,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791993509644,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791993509644,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791993509644,"kind":"commit","stage":null,"detail":"8f5b2e19","provisional":true}
+{"ts":1791993568944,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（5.9s） · 20261014155927","provisional":true}
+{"ts":1791994341370,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791994341370,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791994426474,"kind":"commit","stage":null,"detail":"1cb2fc91","provisional":true}

@@ -1,0 +1,54 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  动机与背景：
+
+  决策号 epoch 全局化（2026-10-14-decision-global-id-epoch）落地后，存量 701 条 legacy 局部号节段将长期共存（决策条目无跨变更承接机制、不会自然退役——D-001@v1 ×296
+  形态永续）。用户裁决：存量一次性迁移为全局号，平台侧（spec 树/向量索引）一起迁移。实测底数：701 legacy 节段（另有 1 条 epoch 形态 D-unmapped-001）、其中 75 组跨文件 fanout（179
+  节，同变更同号副本）、迁移后 ≈597 全局号；平台已连接（crrcdt.ppdmq.top）。
+
+
+  成功标准：
+
+  - 迁移 CLI（sillyspec knowledge renumber）：--dry-run 输出迁移计划（总号数/fanout 收敛组数/无变更条目数/各域号段起点），--apply 执行重写——legacy 节段标题改
+  D-<域>-NNN@vN（域=所在文件名；fanout
+  组=同变更同号跨文件副本取字母序首文件域、全组同号；无变更行条目逐节独立发号不分组）、「原编号：<旧号>」插入变更行后（无变更行则状态行后）、其余行逐字节保留、节段次序不变；epoch 形态节段零触碰；各域发号从全域既有 epoch 号
+  max+1 起
+
+  - 幂等与安全：--apply 重跑零变化（原编号在场的节段不再迁移）；计划与重写分离为纯函数；真实库执行走 dry-run 先行（计划数与实测底数对账 701→≈597）
+
+  - 兼容：docs-check isDecisionExempt 认原编号（消费仓旧裸键 decisions.D-002@vN 迁移后仍命中）；迁移后 parseDecisionEntries 全节段可见、graph
+  构建正常、doctor 计数=节段总数
+
+  - 平台迁移：真实库 apply 后 platform sync 推送 spec 树；向量检索验证（查询探针核对锚点形态或如实记录重建窗口降级）
+
+  - 新增/更新测试跑绿；全量测试 + lint 绿
+autopilot: false
+prestage_ack: true
+baseline_commit: f603c9f04fcbcbc3fec69ff9222a46983a66ba98
+updatedAt: '2026-10-14T16:16:50.779Z'
+baseline_sha256: 09f2ebfcee16a8f9bc6c203ae2f8b13c4f32d6c53a6d310d81243db7fec8a81f
+spec_approved: true
+spec_approved_at: '2026-10-14T15:34:23.716Z'
+spec_approved_by: zcode-renum
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-renum
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js24+js-meta-skip1)+fr(9)（5.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014155927\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（44.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014155927\test-result.json｜门文件 6 个
+

@@ -1,0 +1,525 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2d69bef5..abc88137 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -143,6 +143,7 @@ modules:
+       - src/docs-debt.js
+       - src/scan-staleness.js
+       - src/decision-distill.js
++      - src/decision-renumber.js
+       - src/decisions-io.js
+       - src/scan-facts.js
+       - src/module-changelog.js
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index 8db3835b..09c11dfc 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -24,3 +24,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | docs-check parseDecisionEntries 加法字段 change（「变更：」行读入）+ docs-debt 触碰事实行渲染变更名限定（decisionChangeQualifier）——触碰条目同号可区分 |
+ | 2026-10-14 | 2026-10-14-decision-id-p2-hardening | docs-check：parseDecisionEntries 增「来源：」兜底 + isDecisionExempt 域限定键 decisions.<域>/<id>[.<kind>]（裸键兼容、导出、emit 传域——一条裸键豁免全库同号的潜伏面收窄）；decision-distill：splitKnowledgeSections 来源回退（带来源 legacy 段参与同变更匹配，重蒸馏在位更新收敛） |
+ | 2026-10-14 | 2026-10-14-decision-global-id-epoch | 决策号 epoch 全局化（写面）：decision-distill 新蒸馏条目发全局号 D-<域>-NNN@vN（域前缀全域 max+1 只增不复用、批内递增防撞号）+「原编号：」溯源字段（变更后/锚点前）；幂等谓词扩展（号或原编号）、多域扇出单一身份（迁域不换号）、跨文件清理同谓词；存量 legacy 零触碰（真实库副本演练 700+ 节段逐字节不变）；docs-check 标题双形态 |
++| 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移（用户裁决翻「不回填」旧案）：src/decision-renumber.js 迁移工具（planRenumber/applyRenumberPlan 纯函数 + knowledge renumber --dry-run/--apply CLI）；真实库执行 701 legacy 节段→597 全局号（fanout 75 组单一身份、epoch 零触碰 1）；docs-check 读原编号 + isDecisionExempt 认原编号（消费仓旧裸键兼容） |
+diff --git a/src/decision-renumber.js b/src/decision-renumber.js
+new file mode 100644
+index 00000000..a97c47f6
+--- /dev/null
++++ b/src/decision-renumber.js
+@@ -0,0 +1,157 @@
++/**
++ * decision-renumber.js — 存量决策号一次性迁移（2026-10-14-decision-legacy-renumber）。
++ *
++ * 背景：epoch 全局化（2026-10-14-decision-global-id-epoch）落地后新蒸馏条目自动发全局号，但存量
++ * 701 条 legacy 局部号节段无跨变更承接机制、不会自然退役。用户裁决一次性迁移（翻「存量不回填」
++ * 旧案——fr-index D-007 是设计取舍非技术禁忌，翻案理由随本变更蒸馏留痕）。epoch 读面（双形态解析/
++ * 原编号字段/originId 匹配）已就位——迁移产物所有消费方零改动即认识。
++ *
++ * 纯函数两段（CLI 层 src/stages/knowledge.js case 'renumber' 负责 fs 与原子写）：
++ *   planRenumber(knowledgeRoot)——扫描全部域文件产出迁移计划：
++ *     · legacy 节段（局部号标题 D-\d+ 且无原编号字段）按「文件字母序 × 节段序」发号
++ *       D-<域>-NNN（域=所在文件名去 .md；NNN=该域全域既有 epoch 号 max+1 起批内递增）；
++ *     · fanout 组（同变更同号同版本跨文件副本）单一身份——全组共用一号，号域=字母序首文件域；
++ *     · 无变更行条目不分组（同号无变更 ≠ 同一决策——backend.md 双 D-001@v1 无变更行实证是
++ *       两条不同决策），逐节独立发号；
++ *     · epoch 形态节段（全局号标题或原编号在场）零触碰——幂等判定面。
++ *   applyRenumberPlan(contentByFile, plan)——按计划重写：标题行旧 id → 新全局号、
++ *   「原编号：<旧号>」插入变更行后（无变更行则状态行后，再退标题行后）、其余行逐字节保留、
++ *   节段次序不变；joinKnowledgeFile 复用既有归一落盘形态。
++ */
++import { readFileSync, readdirSync, existsSync } from 'node:fs'
++import { join } from 'node:path'
++import { splitKnowledgeSections, joinKnowledgeFile } from './decision-distill.js'
++
++const EPOCH_NUMBER_RE = /^D-[A-Za-z0-9_\-\u4e00-\u9fff]+-\d+$/
++const LOCAL_NUMBER_RE = /^D-\d+$/
++
++/** 扫描 decisions 域文件集（files 元素含 splitKnowledgeSections 产物，零写盘） */
++function scanDomainFiles(knowledgeRoot) {
++  const decisionsDir = join(knowledgeRoot, 'decisions')
++  const files = []
++  if (!existsSync(decisionsDir)) return files
++  for (const f of readdirSync(decisionsDir).sort()) {
++    if (!f.endsWith('.md')) continue
++    const content = readFileSync(join(decisionsDir, f), 'utf8')
++    const { preamble, sections } = splitKnowledgeSections(content)
++    files.push({ file: `decisions/${f}`, domain: f.replace(/\.md$/, ''), content, preamble, sections })
++  }
++  return files
++}
++
++/**
++ * 纯函数（只读扫描）：产出迁移计划。
++ * @param {string} knowledgeRoot knowledge 目录
++ * @returns {{ files: Array<{file, domain, content, ops: Array<{secIdx, fromId, toNumber}>}>,
++ *   stats: { legacySections, fanoutGroups, fanoutCopies, mintedNumbers, noChangeEntries, untouchedEpoch, perDomainStart: object } }}
++ *   perDomainStart = 各发号域的起始号（既有 epoch max+1）；ops 为空的文件也保留（content 供 CLI 指纹校验）
++ */
++export function planRenumber(knowledgeRoot) {
++  const files = scanDomainFiles(knowledgeRoot)
++  // 各域既有 epoch 号 max（发号起点——不与已发号冲突）
++  const domainMax = new Map()
++  let untouchedEpoch = 0
++  for (const { sections } of files) {
++    for (const s of sections) {
++      const m = /^D-([A-Za-z0-9_\-\u4e00-\u9fff]+)-(\d+)$/.exec(s.number)
++      if (m) domainMax.set(m[1], Math.max(domainMax.get(m[1]) || 0, parseInt(m[2], 10)))
++    }
++  }
++  const isLegacy = (s) => LOCAL_NUMBER_RE.test(s.number) && !s.origin && !EPOCH_NUMBER_RE.test(s.number)
++  for (const { sections } of files) for (const s of sections) if (!isLegacy(s)) untouchedEpoch++
++  // fanout 分组：同变更（非空）同号同版本跨文件 → 单一身份（组号=字母序首文件域——files 已按文件名排序）
++  const groupKeyOf = (s) => `${s.change}#${s.number}@v${s.version}`
++  const groups = new Map()
++  files.forEach((f) => f.sections.forEach((s) => {
++    if (!isLegacy(s) || !s.change) return
++    const k = groupKeyOf(s)
++    if (!groups.has(k)) groups.set(k, { domain: f.domain, members: [] })
++    groups.get(k).members.push({ file: f.file, secIdx: f.sections.indexOf(s) })
++  }))
++  const fanoutGroups = [...groups.values()].filter((g) => g.members.length >= 2)
++  const fanoutCopies = fanoutGroups.reduce((a, g) => a + g.members.length, 0)
++  // 组号预分配（确定性：组键排序）
++  const minted = new Map()
++  const nextFor = (domain) => {
++    const cur = Math.max(domainMax.get(domain) || 0, minted.get(domain) || 0) + 1
++    minted.set(domain, cur)
++    return `D-${domain}-${String(cur).padStart(3, '0')}`
++  }
++  const groupNumber = new Map()
++  for (const k of [...groups.keys()].sort()) {
++    const g = groups.get(k)
++    if (g.members.length >= 2) groupNumber.set(k, nextFor(g.domain))
++  }
++  // 逐文件逐节段：组员复用组号，其余 legacy 独立发号（域=所在文件域）
++  const perFileOps = new Map()
++  let legacySections = 0
++  let mintedNumbers = 0
++  let noChangeEntries = 0
++  for (const f of files) {
++    const ops = []
++    f.sections.forEach((s, si) => {
++      if (!isLegacy(s)) return
++      legacySections++
++      if (!s.change) noChangeEntries++
++      const fromId = `${s.number}@v${s.version}`
++      let toNumber
++      if (s.change && groups.get(groupKeyOf(s))?.members.length >= 2) {
++        toNumber = groupNumber.get(groupKeyOf(s))
++      } else {
++        toNumber = nextFor(f.domain)
++        mintedNumbers++
++      }
++      ops.push({ secIdx: si, fromId, toNumber })
++    })
++    perFileOps.set(f.file, ops)
++  }
++  mintedNumbers += groupNumber.size
++  const perDomainStart = {}
++  for (const d of new Set([...files.map((f) => f.domain), ...domainMax.keys(), ...minted.keys()])) {
++    perDomainStart[d] = (domainMax.get(d) || 0) + 1
++  }
++  return {
++    files: files.map((f) => ({ file: f.file, domain: f.domain, content: f.content, ops: perFileOps.get(f.file) || [] })),
++    stats: { legacySections, fanoutGroups: fanoutGroups.length, fanoutCopies, mintedNumbers, noChangeEntries, untouchedEpoch, perDomainStart },
++  }
++}
++
++/**
++ * 纯函数（零 fs）：按计划重写。contentByFile 为计划时点内容（CLI 层先做指纹校验防他侧写入被覆盖）。
++ * @param {Map<string,string>} contentByFile file → 全文
++ * @param {object} plan planRenumber 产物
++ * @returns {Map<string,string>} 仅有 op 的 file → 重写后全文
++ */
++export function applyRenumberPlan(contentByFile, plan) {
++  const out = new Map()
++  for (const fe of plan.files) {
++    if (!fe.ops || fe.ops.length === 0) continue
++    const content = contentByFile.get(fe.file)
++    if (content == null) continue
++    const { preamble, sections } = splitKnowledgeSections(content)
++    const byIdx = new Map(fe.ops.map((o) => [o.secIdx, o]))
++    for (let i = 0; i < sections.length; i++) {
++      const op = byIdx.get(i)
++      if (!op) continue
++      const s = sections[i]
++      // 标题行：首个旧 id 出现即节头 id（其余行不动）
++      s.lines[0] = s.lines[0].replace(op.fromId, `${op.toNumber}@v${s.version}`)
++      // 原编号行：变更行后 > 状态行后 > 标题行后（不破「文件：紧跟锚点」行序红线）
++      let at = 1
++      const vi = s.lines.findIndex((l) => /^变更[：:]/.test(l))
++      if (vi > -1) at = vi + 1
++      else {
++        const si = s.lines.findIndex((l) => /^状态[：:]/.test(l))
++        if (si > -1) at = si + 1
++      }
++      s.lines.splice(at, 0, `原编号：${op.fromId}`)
++      s.id = `${op.toNumber}@v${s.version}`
++      s.number = op.toNumber
++      s.origin = op.fromId
++    }
++    out.set(fe.file, joinKnowledgeFile(preamble, sections))
++  }
++  return out
++}
++
++export default { planRenumber, applyRenumberPlan }
+diff --git a/src/docs-check.js b/src/docs-check.js
+index 907b81d3..29c3d5e7 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -1041,14 +1041,16 @@ export function readDecisionRulesConfig(projectRoot) {
+ /** 豁免键匹配（键匹配非子串）：域限定键 `decisions.<域>/<id>.<kind>`（规则级精确）与
+  *  `decisions.<域>/<id>`（条目级伞形）——2026-10-14-decision-id-p2-hardening：裸键无域限定，
+  *  一条 decisions.<id> 可静默豁免全库同号条目（D-001@v1 ×296 潜伏面），域限定键收窄命中面；
+- *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。无 decisions. 前缀的键不参与。
+- *  导出（测试面先例 anchorFilePath）。 */
+-export function isDecisionExempt(knownFailures, entryId, kind, domain = null) {
+-  const keys = [
+-    `decisions.${entryId}.${kind}`,
+-    `decisions.${entryId}`,
+-    ...(domain ? [`decisions.${domain}/${entryId}.${kind}`, `decisions.${domain}/${entryId}`] : []),
+-  ]
++ *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。id 与 originId（原编号，
++ *  2026-10-14-decision-legacy-renumber）双匹配——存量迁移后旧号键继续命中。
++ *  无 decisions. 前缀的键不参与。导出（测试面先例 anchorFilePath）。 */
++export function isDecisionExempt(knownFailures, entryId, kind, domain = null, originId = null) {
++  const ids = originId ? [entryId, originId] : [entryId]
++  const keys = []
++  for (const id of ids) {
++    keys.push(`decisions.${id}.${kind}`, `decisions.${id}`)
++    if (domain) keys.push(`decisions.${domain}/${id}.${kind}`, `decisions.${domain}/${id}`)
++  }
+   return knownFailures.some(k => keys.includes(k))
+ }
+ 
+@@ -1068,19 +1070,21 @@ export function parseDecisionEntries(md) {
+     if (h) {
+       flush()
+       const version = h[2] ? parseInt(h[2], 10) : 1
+-      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null, change: null }
++      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null, change: null, originId: null }
+       continue
+     }
+     if (!cur) continue
+-    // 变更/来源：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt
+-    // 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy 兜底——
+-    // 变更行无条件覆盖在前、来源仅补缺；旧条目缺行容错 null）
+-    const f = line.match(/^(状态|锚点|最近确认|变更|来源)\s*[：:]\s*(.*)$/)
++    // 变更/来源/原编号：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——
++    // docs-debt 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy
++    // 兜底——变更行无条件覆盖在前、来源仅补缺；原编号：2026-10-14-decision-legacy-renumber——存量迁移
++    // 后条目 id 为全局号，消费仓旧豁免键（decisions.D-002@vN）经原编号继续命中；旧条目缺行容错 null）
++    const f = line.match(/^(状态|锚点|最近确认|变更|来源|原编号)\s*[：:]\s*(.*)$/)
+     if (!f) continue
+     if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
+     else if (f[1] === '锚点') cur.anchor = f[2].trim()
+     else if (f[1] === '变更') cur.change = f[2].trim() || null
+     else if (f[1] === '来源') cur.change = cur.change || (f[2].trim() || null)
++    else if (f[1] === '原编号') cur.originId = f[2].trim() || null
+     else cur.lastConfirmed = f[2].trim()
+   }
+   flush()
+@@ -1159,8 +1163,8 @@ export async function runDecisionRules(opts) {
+   let implementedTotal = 0
+   const treeCache = new Map() // resolveCandidates 全树扫描复用（同 docs check 主链路口径）
+ 
+-  const emit = (id, domain, file, kind, extra, message) => {
+-    if (isDecisionExempt(failures, id, kind, domain)) {
++  const emit = (id, domain, file, kind, extra, message, originId = null) => {
++    if (isDecisionExempt(failures, id, kind, domain, originId)) {
+       exempted.push({ key: `decisions.${id}.${kind}`, id, kind })
+       return
+     }
+@@ -1180,10 +1184,10 @@ export async function runDecisionRules(opts) {
+       // 规则 1：锚点存在性（未记录 → 补录提示；路径不存在 → 失效提示）
+       if (!anchorPath) {
+         emit(e.id, domain, rel, 'anchor', { anchor: e.anchor || null },
+-          `「${e.id}」锚点未记录（${rel}）——旧格式条目，补「锚点：src/…」后可机械校验（advisory）`)
++          `「${e.id}」锚点未记录（${rel}）——旧格式条目，补「锚点：src/…」后可机械校验（advisory）`, e.originId)
+       } else if (resolveCandidates(projectRoot, anchorPath, treeCache).length === 0) {
+         emit(e.id, domain, rel, 'anchor', { anchor: e.anchor },
+-          `「${e.id}」锚点文件不存在：${anchorPath}（${rel}）——决策落点已漂移，人工复核（advisory）`)
++          `「${e.id}」锚点文件不存在：${anchorPath}（${rel}）——决策落点已漂移，人工复核（advisory）`, e.originId)
+       }
+       // 规则 2：behind 复核（「最近确认」后锚定模块源码前进数超阈值 → 决策待复核；
+       // 「最近确认」未记录/域无源码集（无 map 无锚点）→ 无法计算，静默跳过——advisory 不产噪声）
+@@ -1196,7 +1200,7 @@ export async function runDecisionRules(opts) {
+       const { behind } = computeModuleBehind(domain, e.lastConfirmed, { projectRoot, srcPaths })
+       if (behind !== null && behind > threshold) {
+         emit(e.id, domain, rel, 'behind', { behind, threshold },
+-          `「${e.id}」决策待复核：锚定模块 ${domain} 在最近确认 ${e.lastConfirmed} 后源码已前进 ${behind} commit，超阈值 ${threshold}（${rel}）——复核后更新「最近确认」`)
++          `「${e.id}」决策待复核：锚定模块 ${domain} 在最近确认 ${e.lastConfirmed} 后源码已前进 ${behind} commit，超阈值 ${threshold}（${rel}）——复核后更新「最近确认」`, e.originId)
+       }
+     }
+   }
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 876c0705..d2427176 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -610,7 +610,8 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
+       '  stats                 覆盖率/死条目统计（纯读）',
+       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
+-      '  propose / classify / inbox / graph / stats',
++      '  propose / classify / inbox / graph / stats / renumber',
++      '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
+       '',
+       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
+     ]
+@@ -693,11 +694,53 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       }
+       return
+     }
++    case 'renumber': {
++      // 存量决策号一次性迁移（2026-10-14-decision-legacy-renumber）：--dry-run 打印计划，
++      // --apply 执行重写（快照指纹校验 + 原子写；重跑幂等——原编号在场节段零触碰）。
++      const specBase = opts.specDir || join(dir, '.sillyspec')
++      const rest = args.slice(1)
++      const apply = rest.includes('--apply')
++      try {
++        const { planRenumber, applyRenumberPlan } = await import('../decision-renumber.js')
++        const plan = planRenumber(join(specBase, 'knowledge'))
++        const st = plan.stats
++        console.log(`🗺️ 决策号迁移计划：legacy ${st.legacySections} 节段｜fanout ${st.fanoutGroups} 组（${st.fanoutCopies} 副本→单一身份）｜发号 ${st.mintedNumbers}｜无变更条目 ${st.noChangeEntries}（逐节独立发号）｜epoch 零触碰 ${st.untouchedEpoch}`)
++        for (const [dom, n] of Object.entries(st.perDomainStart)) console.log(`   域 ${dom}：号段自 ${String(n).padStart(3, '0')} 起`)
++        if (!apply) {
++          console.log('（--dry-run 形态——加 --apply 执行重写；git 可回退）')
++          output(true, { subcommand: 'renumber', dryRun: true, ...st })
++          return
++        }
++        if (plan.files.every((f) => !f.ops || f.ops.length === 0)) {
++          console.log('✅ 无可迁移节段（幂等重跑——零变化）')
++          output(true, { subcommand: 'renumber', filesWritten: 0, ...st })
++          return
++        }
++        let filesWritten = 0
++        for (const fe of plan.files) {
++          if (!fe.ops || !fe.ops.length) continue
++          const p = join(specBase, 'knowledge', fe.file)
++          const cur = readFileSync(p, 'utf8')
++          if (cur !== fe.content) {
++            console.error(`❌ 快照漂移：${fe.file} 在计划后被并行修改——中止不覆盖（重跑重新计划）`)
++            process.exitCode = 1
++            return
++          }
++          writeAtomicSync(p, applyRenumberPlan(new Map([[fe.file, cur]]), plan).get(fe.file))
++          filesWritten++
++        }
++        console.log(`✅ 迁移完成：${filesWritten} 文件重写、${st.mintedNumbers} 号铸出（epoch 形态）——重跑 --apply 验证零变化；平台侧随后 platform sync 推送`)
++        output(true, { subcommand: 'renumber', filesWritten, ...st })
++      } catch (e) {
++        output(false, {}, { code: 'renumber_failed', message: String((e && e.message) || e) })
++      }
++      return
++    }
+     default:
+       output(false, {}, {
+         code: 'unknown_subcommand',
+-        subcommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
++        subCommand: subCommand,
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
+       })
+   }
+ }
+diff --git a/test/decision-legacy-renumber.test.mjs b/test/decision-legacy-renumber.test.mjs
+new file mode 100644
+index 00000000..9fbaab01
+--- /dev/null
++++ b/test/decision-legacy-renumber.test.mjs
+@@ -0,0 +1,133 @@
++/**
++ * decision-legacy-renumber.test.mjs — 存量决策号一次性迁移（2026-10-14-decision-legacy-renumber）
++ *
++ * 覆盖：① 计划与重写（fanout 单一身份/无变更独立发号/原编号插行/其余字节保留/epoch 零触碰/域起点 max+1）
++ *      ② 幂等与纯函数（重跑零变化；真实库 dry-run 不变量对账——绝对底数随迁移漂移，断内部一致性）
++ *      ③ 兼容（isDecisionExempt 认原编号双键形；迁移后全节段可见/图构建）
++ *      ④ CLI 接线钉（knowledge renumber 两档 + 帮助面）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, cpSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { planRenumber, applyRenumberPlan } = await import(pathToFileURL(join(ROOT, 'src', 'decision-renumber.js')).href)
++const { parseDecisionEntries } = await import(pathToFileURL(join(ROOT, 'src', 'knowledge-match.js')).href)
++const { parseDecisionEntries: parseDocsCheck, isDecisionExempt } = await import(pathToFileURL(join(ROOT, 'src', 'docs-check.js')).href)
++const { buildKnowledgeGraph } = await import(pathToFileURL(join(ROOT, 'src', 'knowledge-graph.js')).href)
++
++function mkKnowledge(root, files) {
++  const k = join(root, 'knowledge')
++  mkdirSync(join(k, 'decisions'), { recursive: true })
++  for (const [f, c] of Object.entries(files)) writeFileSync(join(k, 'decisions', f), c)
++  return k
++}
++/** 帮助构造器：段 = 标题行 + 字段行 */
++const sec = (id, title, fields) => [`## ${id}${title ? ' ' + title : ''}`, ...fields, ''].join('\n')
++
++test('① 计划与重写：fanout 同号/无变更独立发号/原编号插行/其余字节保留/epoch 零触碰/域起点 max+1', () => {
++  const root = mkdtempSync(join(tmpdir(), 'dlr1-'))
++  try {
++    const k = mkKnowledge(root, {
++      // 字母序：alpha.md 在 beta.md 前 → fanout 组号域=alpha；无变更同号两条同文件（独立发号真考验）
++      'alpha.md': [
++        '# 决策知识 — alpha', '',
++        sec('D-002@v1', '扇出决策', ['状态：implemented', '变更：chg-x', '锚点：src/a.js', '最近确认：h1', '理由：甲']),
++        sec('D-007@v1', '无变更条目甲', ['状态：implemented', '锚点：未记录', '理由：丙']),
++        sec('D-007@v1', '无变更条目乙（同号不同决策）', ['状态：implemented', '锚点：未记录', '理由：丁']),
++        sec('D-core-003@v1', '既有 epoch 条目', ['状态：implemented', '变更：chg-e', '原编号：D-009@v1', '锚点：未记录']),
++      ].join('\n'),
++      'beta.md': [
++        '# 决策知识 — beta', '',
++        sec('D-002@v1', '扇出决策', ['状态：implemented', '变更：chg-x', '锚点：src/a.js', '最近确认：h1', '理由：甲']),
++        sec('D-003@v1', '跨变更同号', ['状态：implemented', '变更：chg-y', '锚点：未记录', '理由：戊']),
++      ].join('\n'),
++    })
++    const plan = planRenumber(k)
++    const st = plan.stats
++    assert.equal(st.legacySections, 5, `legacy 5 节段（实际 ${st.legacySections}）`)
++    assert.equal(st.untouchedEpoch, 1, 'epoch 1 节段零触碰')
++    assert.equal(st.fanoutGroups, 1, 'fanout 1 组（chg-x D-002@v1 双副本）')
++    assert.equal(st.mintedNumbers, 4, `发号 4（1 组号 + 3 独立：无变更甲/乙 + chg-y；实际 ${st.mintedNumbers}）`)
++    assert.equal(st.noChangeEntries, 2, `无变更条目计数 2（甲/乙；实际 ${st.noChangeEntries}）`)
++    assert.equal(st.perDomainStart.alpha, 1, 'alpha 域起点 1（无既有 epoch 号）')
++    assert.equal(st.perDomainStart.core, 4, 'core 域起点 4（既有 D-core-003 → max+1）')
++    // fanout 组号域=alpha（字母序首文件）；两副本同号
++    const out = applyRenumberPlan(new Map(plan.files.map(f => [f.file, f.content])), plan)
++    const alpha = out.get('decisions/alpha.md')
++    const beta = out.get('decisions/beta.md')
++    const fanNum = (alpha.match(/^## D-alpha-\d{3}@v1 扇出决策$/m) || [''])[0].split(' ')[1]
++    assert.ok(fanNum, 'alpha 副本发全局号')
++    assert.ok(beta.includes(`## ${fanNum} 扇出决策`), `beta 副本同号（单一身份，实际 ${fanNum}）`)
++    // 无变更同号两条（同文件）= 独立号（不同决策——backend.md 双 D-001@v1 无变更行先例）
++    const aNum = (alpha.match(/^## D-alpha-\d{3}@v1 无变更条目甲$/m) || [''])[0].split(' ')[1]
++    const bNum = (alpha.match(/^## D-alpha-\d{3}@v1 无变更条目乙（同号不同决策）$/m) || [''])[0].split(' ')[1]
++    assert.ok(aNum && bNum && aNum !== bNum, `无变更同号同文件独立发号（${aNum} vs ${bNum}）`)
++    // 原编号插行：变更行后（fanout 副本）/状态行后（无变更条目）；其余行保留
++    assert.match(alpha, new RegExp(`^## ${fanNum}[^\\n]*\\n状态：implemented\\n变更：chg-x\\n原编号：D-002@v1\\n锚点：src/a\\.js`, 'm'), '原编号插在变更行后（其余行序不变）')
++    assert.match(alpha, new RegExp(`^## ${aNum}[^\\n]*\\n状态：implemented\\n原编号：D-007@v1\\n锚点：未记录`, 'm'), '无变更条目原编号插在状态行后')
++    // epoch 零触碰
++    assert.ok(alpha.includes('## D-core-003@v1 既有 epoch 条目') && !/原编号：D-009@v1[\s\S]*原编号：/.test(alpha.split('## D-alpha-')[0]), 'epoch 节段原样保留')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('② 幂等与纯函数：重跑零变化、真实库 dry-run 不变量对账', () => {
++  // 合成夹具：迁移 → 重计划 0 ops → 再 apply 零字节变化
++  const root = mkdtempSync(join(tmpdir(), 'dlr2-'))
++  try {
++    const k = mkKnowledge(root, { 'core.md': ['# 决策知识 — core', '', sec('D-001@v1', '甲', ['状态：implemented', '变更：c1', '锚点：未记录', '理由：x']), sec('D-002@v1', '乙', ['状态：implemented', '锚点：未记录', '理由：y'])].join('\n') })
++    const p1 = planRenumber(k)
++    const out1 = applyRenumberPlan(new Map(p1.files.map(f => [f.file, f.content])), p1)
++    for (const [f, c] of out1) writeFileSync(join(k, f), c)
++    const p2 = planRenumber(k)
++    assert.equal(p2.stats.legacySections, 0, '迁移后重计划零 legacy')
++    assert.ok(p2.files.every(f => !f.ops || f.ops.length === 0), '零 ops（幂等判定面=原编号/全局号在场）')
++    const out2 = applyRenumberPlan(new Map(p2.files.map(f => [f.file, f.content])), p2)
++    assert.equal(out2.size, 0, '重跑零输出（零字节变化）')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++  // 真实库 dry-run 不变量（绝对底数随本变更执行漂移——断内部一致性而非绝对数）
++  const root2 = mkdtempSync(join(tmpdir(), 'dlr2r-'))
++  try {
++    cpSync(join(ROOT, '.sillyspec', 'knowledge'), join(root2, 'knowledge'), { recursive: true })
++    const plan = planRenumber(join(root2, 'knowledge'))
++    const st = plan.stats
++    assert.equal(st.mintedNumbers, st.legacySections - st.fanoutCopies + st.fanoutGroups, `发号数=legacy−fanout副本+fanout组（实际 ${JSON.stringify(st)}）`)
++    assert.ok(st.untouchedEpoch >= 1, '既有 epoch 节段零触碰计数在场')
++  } finally { rmSync(root2, { recursive: true, force: true }) }
++})
++
++test('③ 兼容：isDecisionExempt 认原编号、迁移后全节段可见/图构建', () => {
++  // 豁免键双匹配：旧号裸键/域限定键在条目迁移后（originId）继续命中
++  assert.ok(isDecisionExempt(['decisions.D-002@v1.anchor'], 'D-core-014@v1', 'anchor', 'core', 'D-002@v1'), '旧号裸键经原编号命中')
++  assert.ok(isDecisionExempt(['decisions.core/D-002@v1'], 'D-core-014@v1', 'behind', 'core', 'D-002@v1'), '旧号域限定键经原编号命中')
++  assert.ok(!isDecisionExempt(['decisions.D-002@v1.anchor'], 'D-core-014@v1', 'anchor', 'core', 'D-003@v1'), '原编号不匹配不豁免')
++  // docs-check 解析器读原编号
++  const dc = parseDocsCheck(['## D-core-014@v1 t', '状态：implemented', '原编号：D-002@v1', ''].join('\n'))
++  assert.equal(dc[0].originId, 'D-002@v1', 'docs-check parseDecisionEntries 原编号读入')
++  // 迁移后可见性/图构建
++  const root = mkdtempSync(join(tmpdir(), 'dlr3-'))
++  try {
++    const k = mkKnowledge(root, { 'core.md': ['# 决策知识 — core', '', sec('D-001@v1', '甲', ['状态：implemented', '变更：c1', '锚点：src/a.js', '理由：x']), sec('D-002@v1', '乙', ['状态：implemented', '锚点：未记录', '理由：y'])].join('\n') })
++    writeFileSync(join(k, 'INDEX.md'), ['# Knowledge Index', '', '## Decisions', '- core|decision|决策 → [decisions/core.md](decisions/core.md)', ''].join('\n'))
++    const plan = planRenumber(k)
++    for (const [f, c] of applyRenumberPlan(new Map(plan.files.map(x => [x.file, x.content])), plan)) writeFileSync(join(k, f), c)
++    const hits = parseDecisionEntries(k)
++    assert.equal(hits.length, 2, '迁移后全节段可见')
++    assert.ok(hits.every(h => /^D-core-\d{3}@v1$/.test(h.id)), `id 均为全局号（实际 ${hits.map(h => h.id)}）`)
++    assert.ok(hits.every(h => h.originId), '原编号字段读入（knowledge-match）')
++    const g = buildKnowledgeGraph(root)
++    assert.equal(g.stats.byNodeType.decision, 2, '图节点构建正常')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('④ CLI 接线钉：knowledge renumber 两档 + 帮助面', () => {
++  const src = readFileSync(join(ROOT, 'src', 'stages', 'knowledge.js'), 'utf8')
++  assert.ok(src.includes("case 'renumber'"), '子命令分派在场')
++  assert.ok(src.includes("'--apply'"), '--apply 写盘档')
++  assert.ok(src.includes('--dry-run 形态'), '--dry-run 计划档')
++  assert.ok(src.includes('快照漂移'), '指纹校验防他侧写入被覆盖')
++  assert.ok(src.includes('renumber [--dry-run|--apply]'), '帮助面登记')
++})
+diff --git a/test/knowledge-gate-denoise.test.mjs b/test/knowledge-gate-denoise.test.mjs
+index 0510b8bc..0caa576d 100644
+--- a/test/knowledge-gate-denoise.test.mjs
++++ b/test/knowledge-gate-denoise.test.mjs
+@@ -66,7 +66,8 @@ test('① 真实库：score 字段在场；D-001 置顶可弹，空标题零分
+   assert.ok(typeof km.decisionHits[0].score === 'number', 'score 字段在场（加法）')
+   assert.match(km.decisionHits[0].title, /枚举开放世界/, 'D-001 置顶')
+   const echoable = (h) => h.deathPath || (h.status === 'rejected' && h.score > 0)
+-  const noise = km.decisionHits.filter((h) => h.id === 'D-009@v1' || h.id === 'D-010@v1' || h.id === 'D-011@v1')
++  // 原编号感知（2026-10-14-decision-legacy-renumber 后旧号成为 originId）——同一条目两形态都可定位
++  const noise = km.decisionHits.filter((h) => ['D-009@v1', 'D-010@v1', 'D-011@v1'].some((x) => h.id === x || h.originId === x))
+   assert.ok(noise.length > 0, '空标题噪音条目仍在 API 列表（过滤在消费方）')
+   for (const h of noise) assert.ok(!echoable(h), `${h.id} 零分非死路 → 无回显资格`)
+ })
+@@ -79,7 +80,7 @@ test('② 真实库 digest：D-001 在场、空标题噪音三件套消失', asy
+     input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
+   })
+   const text = r.lines.join('\n')
+-  assert.match(text, /D-001@v1 枚举开放世界/, 'D-001 死路注记注入')
++  assert.match(text, /枚举开放世界是错误方向/, 'D-001 死路注记注入（标题锚——迁移稳定，2026-10-14-decision-legacy-renumber 后 id 为全局号形态）')
+   assert.ok(!/D-009@v1/.test(text) && !/D-010@v1/.test(text) && !/D-011@v1/.test(text),
+     `空标题噪音三件套不应注入（实际：${r.lines.filter(l => /D-0\d+@v1/.test(l)).join(' | ')}）`)
+   rmQuiet(cd)
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+index 8039dea3..ddd19a39 100644
+--- a/test/knowledge-vector-recall.test.mjs
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -141,8 +141,14 @@ test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台'
+ })
+ 
+ test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
++  // 锚迁移稳定（2026-10-14-decision-legacy-renumber 后条目 id 为全局号、旧号在 originId）——
++  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）
++  const { pathToFileURL } = await import('node:url')
++  const { parseDecisionEntries } = await import(pathToFileURL(join(REPO_ROOT, 'src', 'knowledge-match.js')).href)
++  const entry = parseDecisionEntries(join(REAL_SPEC, 'knowledge')).find((h) => /枚举开放世界/.test(h.title || ''))
++  assert.ok(entry, '真实库枚举开放世界条目在场')
+   await withMock('ok', [
+-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', change: '2026-09-26-thin-agent-tasks', score: 0.88 },
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: entry.id, change: entry.change || '2026-09-26-thin-agent-tasks', score: 0.88 },
+   ], async (m) => {
+     const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
+     process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
