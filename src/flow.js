@@ -572,7 +572,7 @@ function resetThinStageRowOnUpgrade(cwd, change, specBase = null) {
   } catch { /* 行值重置 best-effort，不阻断升厚 */ }
 }
 
-export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
+export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, prestageAck = false, turbo = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
@@ -615,7 +615,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
         } catch { /* 消费 best-effort */ }
         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
-        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
+        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {},
+          // 极速模式留痕（2026-10-14-thin-turbo-mode D-005）：--turbo 用户显式触发声明性落盘；
+          // flow done 读态以 turbo && tier!=='thick' 判定（D-007 升厚即失效）
+          ...(turbo ? { turbo: true, turbo_since: new Date().toISOString() } : {}) })
         try {
           const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
@@ -655,6 +658,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
         try { digestLines = (await flowKnowledgeDigest({ specBase, change, changeDir, input: null })).lines } catch { /* 注入 best-effort */ }
         console.log([
           `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
+          // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
+          ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
           `══════════════════════════════════════`,
           `📖 必读（头脑风暴产出——方案的承诺锚，先读完再动手）：`,
           ...artifacts.map((p) => `   - ${p}`),
@@ -878,6 +883,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     // 预段同意门声明留痕（2026-10-14-prestage-consent-gate）：hindsight 标记在场时全新 start
     // 以 --no-prestage 显式声明「本次需求已含决策」放行——审计面可区分「确认过」与「没被问过」
     prestage_ack: Boolean(prestageAck),
+    // 极速模式留痕（2026-10-14-thin-turbo-mode D-005）：--turbo 用户显式触发声明性落盘；
+    // flow done 读态以 turbo && tier!=='thick' 判定（D-007 升厚即失效）
+    ...(turbo ? { turbo: true, turbo_since: new Date().toISOString() } : {}),
     baseline_commit: baseline,
     substeps: {},
   })
@@ -1016,6 +1024,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
+    // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
+    ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
     ...(hindsightHint ? [hindsightHint, ''] : []),
     `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
     `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
@@ -1156,6 +1166,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     console.error('❌ 本 change 已混跑回退 legacy（跑过 run <stage>）——剩余流程按厚档走 run <stage>，flow done 不再裁决')
     process.exit(2)
   }
+  // 极速模式读态（2026-10-14-thin-turbo-mode FR-02/D-007）：turbo && tier!=='thick' 双条件——
+  // 升厚（distill 异态/verify 失败/--thick 起步）后 turbo 残留不短路厚档仪式，重入即恢复全量校验
+  const turbo = st.turbo === true && st.tier !== 'thick'
   const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
   // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
   // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
@@ -1433,7 +1446,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
-    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧哨兵带 baseline 区间，quick 侧区间不可靠——单判不双判 */ })
+    // 极速模式实测门跳过（2026-10-14-thin-turbo-mode FR-02/D-002）：turbo 在场不调
+    // runQuickTestLintGate，合成 gate 同形状 skipped 对象（带 status:'skipped' 完整形态——
+    // 下方 fmt 对 null 显示 '—'，带形态才输出「skipped — 跳过原因」，审计可见；
+    // 对齐 quick-audit env 逃生门 skip 形态先例 src/run/quick-audit.js:482）。
+    // 失败升厚分支（下方 action==='fail'）turbo 下天然不触达——升厚语义不变。
+    const gate = turbo
+      ? { action: 'skip', failed: [], reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——test+lint 实测跳过（审计留痕；本次收口不含测试客观核验）`, test: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——本次收口不含测试客观核验（审计留痕）`, resultPath: null }, lint: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: '⚡ 极速模式——lint 实测跳过（审计留痕）', resultPath: null } }
+      : await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧哨兵带 baseline 区间，quick 侧区间不可靠——单判不双判 */ })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
@@ -1489,7 +1509,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const fmt = (r) => r
       ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}${r.status === 'skipped' && r.reason ? ` — 跳过原因：${String(r.reason).split('。')[0]}。` : ''}`
       : '—'
-    gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
+    gateSummaryText = `${turbo ? '⚡极速模式｜' : ''}test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
     try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
     // FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道（quick 退役后
@@ -1731,7 +1751,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // ——旧行为警告后继续归档，autopilot 单跑到底把三选一变成不可达选项（归档即拒收重入）。
           // 缺口在场且未显式处置 → 停在 patch 子步标记之前（半态可重入，与 review 中断同款
           // exit 语义）：处置后重跑，patch 全量重建自动并入已提交 src。
-          if (!freezeDirty && !acceptDirtyGap) {
+          // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：缺口三选一阻断降 advisory——
+          // 警告+缺口数留痕后放行，不 exit；非 turbo 路径逐字不变。
+          if (turbo && !freezeDirty && !acceptDirtyGap) {
+            console.warn(`⚡ 极速模式：未提交交付缺口未显式处置——降 advisory 放行（缺口数 ${freeze.dirtyWarned.length} 随收口输出留痕，审计自负）`)
+          }
+          if (!freezeDirty && !acceptDirtyGap && !turbo) {
             console.error('⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：')
             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
@@ -2024,6 +2049,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
       }
     } catch { reviewOutcome = { required: null, verdict: 'done', backfilled: true } }
+  } else if (turbo) {
+    // 极速模式评审豁免（2026-10-14-thin-turbo-mode FR-02/D-001/D-002）：用户显式极速声明=
+    // 风险自担留痕，跳过 classifyReviewNeed 强制豁免（telemetry src/flow.js 整对象 JSON
+    // 序列化，turboExempt 字段无破坏——Grill X-003 探针已核）。
+    console.log('⚡ 极速模式：评审子步豁免（用户显式极速声明=风险自担留痕）')
+    reviewOutcome = { required: false, sampled: false, verdict: 'exempt', turboExempt: true }
+    mark('review')
   } else {
     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
     let patchText = null
@@ -2114,6 +2146,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦；
     // 默认 warn 档只警告不拦。与 run/gates.js verify 收尾同一检测单点，不二算）。
     try {
+      if (turbo) {
+        // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：ui 视觉探针跳过留痕
+        console.log('⚡ 极速模式：UI 视觉证据探针跳过（审计留痕）')
+      } else {
       const uiProbe = runUiVisualProbe({ changeDir, gate: readUiVisualGate(specBase) })
       if (uiProbe.level === 'error') {
         console.error('\n❌ UI 视觉证据门（探针 12 error 档）阻断收口：')
@@ -2124,6 +2160,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       } else if (uiProbe.level === 'warn') {
         console.warn(`⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
       }
+      }
     } catch (e) {
       console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
     }
@@ -2132,7 +2169,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 竞争、在途残留；hunk_gate warn 默认（警告）/error（阻断）/off。与「提交面夹带嫌疑
     // advisory」互补：advisory 在冻结面采集处看文件名，本门在 probes 执法看 hunk 与竞争面。
     try {
-      const gate = readHunkGate(specBase)
+      // 极速模式（2026-10-14-thin-turbo-mode FR-02/D-002）：hunk 门强制降 warn 档——
+      // 判定链路照跑（三类信号照常渲染），仅 error 阻断档解除（降 advisory 留痕不阻断）。
+      const gate = turbo ? 'warn' : readHunkGate(specBase)
       let committedForGate = []
       try {
         committedForGate = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
@@ -2537,6 +2576,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
       autopilot: hasFlag('--autopilot'),
       prestageAck: hasFlag('--no-prestage'),
+      turbo: hasFlag('--turbo'),
       cwd, specBase,
       json: hasFlag('--json') || jsonGlobal,
     })
