@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-tick-burst-sidecar-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7f2643b1db53b8dd28fee111c372f517f7698931",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "边界裁决": "边界已裁决：可接受。①「误报合法近距勾选（<60s 双任务连点）止于 advisory+留痕」——代码核实后果确止于 advisory+flow-state batch_ticked（flow.js:1458-1460），不阻断收口，档位系 requirements/design 明示用户确认（维持 10-13 语义），60s 窗相对实证快连点 span（279ms-29s）与渐进分钟级两侧留余量，可接受；②「from/to 是 CLI 勾序计数、与事件流 checked N→M 计数空间不同源、裁决只消费跳幅与 ts」——resolveBatchTickAction 仅消费 to-from（sentinel-assertions.js:234）与 flow.js 展示面仅用 batch.ts/batch.detail（flow.js:1450,1469），evidenceComplete/autopilot 输入与 from/to 无关，跳幅语义（簇内格数 vs 跳格数）等价成立，可接受；③「档位维持 10-13 证据完备降级、零证据维持硬拒」——resolveBatchTickAction:233（evidenceComplete→advisory）/235（reject）与 flow.js 接线一致，可接受。"
+  },
+  "reviewedAt": "2026-10-14T13:43:22Z"
+}

@@ -9799,3 +9799,78 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-14-timeline-ticktime-anchor-scope
   status: active
+
+## FR-cli-entry-517 新增纯函数 detectTickBurst（src/sentinel-assertions.js）：tickLog（{ts,task} 集）同任务取最早、坏行跳过、按时戳排序后按相邻间隔窗口（缺省 60s，参数可覆写）分簇，最大簇 size>=2 即产出与事件流同形的 batchTick 记录（from/to=CLI 勾序计数，detail 标注「侧车突发」）；不足两格/空输入返回 null（fail-open）
+变更：2026-10-14-tick-burst-sidecar-gate
+状态：active
+摘要：快连点检出；渐进零误报；混合形态取最大簇
+场景正文：
+- 场景：快连点检出 — Given 5 条 tickLog 行时戳全部落在 10 秒内；When detectTickBurst 执行（缺省窗口）；Then 返回 {from:0,to:5,source:'tick-burst'}，detail 含「侧车突发 5 格」
+- 场景：渐进零误报 — Given 3 条 tickLog 行相邻间隔均大于窗口；When detectTickBurst 执行；Then 返回 null
+- 场景：混合形态取最大簇 — Given 2 格渐进勾选后又 3 格快连收尾；When detectTickBurst 执行；Then 返回最大簇 {from:2,to:5}
+全文：.sillyspec/changes/archive/2026-10-14-tick-burst-sidecar-gate/requirements.md#FR-01
+最近确认：7f2643b1db53b8dd28fee111c372f517f7698931
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-01
+  tests: test/batch-tick-gate.test.mjs「②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务取最早/窗口覆写」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-tick-burst-sidecar-gate
+  status: active
+
+## FR-cli-entry-518 flow done 节奏门接线：事件流检测为空时回退读侧车（changeDir/task-ticks.jsonl 经 parseTickLog）做突发检测；事件流结果优先、不双重报告；检出走既有 resolveBatchTickAction 裁决（证据完备 advisory+flow-state batch_ticked 留痕；零证据维持硬拒）；侧车缺失/不可读按无证据静默
+变更：2026-10-14-tick-burst-sidecar-gate
+状态：active
+摘要：CLI 快连点（证据完备）检出；侧车缺失静默
+场景正文：
+- 场景：CLI 快连点（证据完备）检出 — Given 变更任务全勾、每格有 token 提交证据、事件流无多格跳（CLI 单格精确跳被去重）、侧车 3 行时戳 5 秒内；When flow done 收口；Then 节奏 advisory 提示（含「侧车突发」）+ flow-state batch_ticked 留痕 + 收口继续（放行）
+- 场景：侧车缺失静默 — Given 变更目录无 task-ticks.jsonl 且事件流无可检出跳；When flow done 收口；Then 节奏门零输出（行为与改动前一致）
+全文：.sillyspec/changes/archive/2026-10-14-tick-burst-sidecar-gate/requirements.md#FR-02
+最近确认：7f2643b1db53b8dd28fee111c372f517f7698931
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-02
+  tests: test/batch-tick-gate.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-tick-burst-sidecar-gate
+  status: active
+
+## FR-cli-entry-519 渐进勾选（相邻间隔超窗）零误报；用归档 watcher 事件流的 CLI task-done 时戳回测：近期 CLI 快连点形态变更可被检出
+变更：2026-10-14-tick-burst-sidecar-gate
+状态：active
+摘要：渐进 e2e 零告警
+场景正文：
+- 场景：渐进 e2e 零告警 — Given 变更侧车 3 行时戳相邻间隔均超窗、证据完备；When flow done 收口；Then 无勾选节奏告警（不误伤渐进勾选）
+全文：.sillyspec/changes/archive/2026-10-14-tick-burst-sidecar-gate/requirements.md#FR-03
+最近确认：7f2643b1db53b8dd28fee111c372f517f7698931
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-03
+  tests: test/batch-tick-gate.test.mjs「②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务取最早/窗口覆写」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-tick-burst-sidecar-gate
+  status: active
+
+## FR-cli-entry-520 新增/更新测试跑绿；全量测试 + lint 绿
+变更：2026-10-14-tick-burst-sidecar-gate
+状态：active
+摘要：收口实测
+场景正文：
+- 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail，否则整单 FAIL
+全文：.sillyspec/changes/archive/2026-10-14-tick-burst-sidecar-gate/requirements.md#FR-04
+最近确认：7f2643b1db53b8dd28fee111c372f517f7698931

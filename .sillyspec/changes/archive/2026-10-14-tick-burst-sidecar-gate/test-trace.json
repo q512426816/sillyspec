@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-tick-burst-sidecar-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务取最早/窗口覆写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tick-burst-sidecar-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行 + batch_ticked 留痕 + 归档完成；渐进侧车零告警」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tick-burst-sidecar-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/batch-tick-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tick-burst-sidecar-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-tick-burst-sidecar-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务取最早/窗口覆写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-tick-burst-sidecar-gate"
+    }
+  ]
+}
