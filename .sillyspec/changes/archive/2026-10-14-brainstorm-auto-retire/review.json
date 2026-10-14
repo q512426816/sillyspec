@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-brainstorm-auto-retire",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "b9b72ee1e85b0c5000a535974b2dc688013bebe3",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "remediated",
+      "remediationCommit": "55182755c03a54f7c86966c69f2f6be44f85e91b",
+      "title": "冻结治理文档（requirements/design/tasks）退役指引写 --reopen，实现单一真相源给 --reset——文档未随实现中发现的实事更新",
+      "evidence": "初审（970b33d4）记录：requirements.md FR-02 正文、design.md 做法概述/盲维3/风险1、tasks.md task-02 把 `--reopen --from-step 1` 写成指引，而实现 printRetiredAutoBrainstormRefusal（shared.js:2325）给 `--reset`+`doctor`（代码实证 reopen 对非空表按名保留旧表不重种，resetStage 内联重种才是出路）。55182755 更正 FR-02 正文与 design 三处、tasks task-02（均带实测依据注记）；残留场景 Then 行由 b9b72ee1 单行更正（见下一笔）。FR-01~04 标题锚与测试绑定未动；55182755 为 3 个未跟踪规格文件首次入库（+108/-0），非改写已冻结锚。清偿完整成立。",
+      "location": "初审：src/run/shared.js:2325；requirements.md:21；design.md:11,34,41；tasks.md:9（均已更正）"
+    },
+    {
+      "severity": "P3",
+      "status": "remediated",
+      "remediationCommit": "b9b72ee1e85b0c5000a535974b2dc688013bebe3",
+      "title": "P2 清偿残留：requirements.md FR-02 场景 Then 行仍写「含已删除说明与 reopen/doctor 指引」——与已更正的正文及实现文案不一致",
+      "evidence": "55182755 更正了 FR-02 正文但场景断言行（requirements.md:27）未同步，复审降级 P3 留档。b9b72ee1 单行更正（+1/-1，rev-parse 核对为 HEAD）后该行读作「Then exit 非零 + 退役报错文案（含已删除说明与 reset/doctor 指引），进度未被重种。」与实现文案一致；三份规格文件中剩余 reopen 字样各 1 处均为更正依据注记（「实现期实测 --reopen 对非空表按名保留旧表不重种」），属有意保留的实事记载非指引。清偿完整成立。",
+      "location": ".sillyspec/changes/2026-10-14-brainstorm-auto-retire/requirements.md:27（已更正）"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "冻结 change.patch 含 1 笔并行变更外源 hunk（cli-entry.changelog.md +1 行），patch 面与交付提交面存在 +1 差额",
+      "evidence": "冻结件 20 文件 +186/-891 vs 交付两笔（fddef888 +970b33d4）合计 19 文件 +185/-891，差额恰为 `.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md` +1 行——内容为并行变更 2026-10-14-patch-refreeze-missing-artifact 的台账行（由锚窗 baseline..HEAD 内的 9e42ee3a 归档提交带入）。change-patch.json files/scopeAudit 如实登记该行，note 记载既定冻结规则「baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档」；属共享台账在锚窗内的规则性后果，非本变更交付面。55182755/b9b72ee1（规格文档修正）不影响本笔认定。",
+      "location": ".sillyspec/changes/2026-10-14-brainstorm-auto-retire/change.patch:1-9；change-patch.json:6"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T04:07:19Z"
+}

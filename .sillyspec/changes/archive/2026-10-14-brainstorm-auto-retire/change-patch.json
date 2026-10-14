@@ -1,0 +1,220 @@
+{
+  "change": "2026-10-14-brainstorm-auto-retire",
+  "baseline": "00e61cb1e0160d5f6b990524b4e7838965c2ff17",
+  "head": "b9b72ee1e85b0c5000a535974b2dc688013bebe3",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    "docs/prompt/README.md",
+    "docs/prompt/_TEMPLATE.md",
+    "docs/prompt/_build-site.mjs",
+    "docs/prompt/_extract.mjs",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm-auto.md",
+    "docs/prompt/index.html",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/run/command.js",
+    "src/run/complete.js",
+    "src/run/shared.js",
+    "src/stages/brainstorm-auto.js",
+    "test/archive-sync-module-docs-wait.test.mjs",
+    "test/auto-dualtrack-brainstorm.test.mjs",
+    "test/brainstorm-auto-retire.test.mjs",
+    "test/brainstorm-auto-skeleton.test.mjs",
+    "test/brainstorm-auto-step2-conditional-wait.test.mjs",
+    "test/decisions-header-backfill.test.mjs",
+    "test/proto-reuse-register.test.mjs"
+  ],
+  "totals": {
+    "files": 21,
+    "additions": 188,
+    "deletions": 891
+  },
+  "savedAt": "2026-10-14T04:08:07.788Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 8,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 7
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "00e61cb1e0160d5f6b990524b4e7838965c2ff17",
+    "totals": {
+      "files": 21,
+      "additions": 188,
+      "deletions": 891
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/README.md",
+        "additions": 1,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/_TEMPLATE.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/_build-site.mjs",
+        "additions": 0,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/_extract.mjs",
+        "additions": 0,
+        "deletions": 11,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 0,
+        "deletions": 59,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/brainstorm-auto.md",
+        "additions": 0,
+        "deletions": 305,
+        "kind": "deleted"
+      },
+      {
+        "path": "docs/prompt/index.html",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 17,
+        "deletions": 27,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 16,
+        "deletions": 19,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 19,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm-auto.js",
+        "additions": 0,
+        "deletions": 286,
+        "kind": "deleted"
+      },
+      {
+        "path": "test/archive-sync-module-docs-wait.test.mjs",
+        "additions": 1,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/auto-dualtrack-brainstorm.test.mjs",
+        "additions": 0,
+        "deletions": 38,
+        "kind": "deleted"
+      },
+      {
+        "path": "test/brainstorm-auto-retire.test.mjs",
+        "additions": 118,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/brainstorm-auto-skeleton.test.mjs",
+        "additions": 0,
+        "deletions": 66,
+        "kind": "deleted"
+      },
+      {
+        "path": "test/brainstorm-auto-step2-conditional-wait.test.mjs",
+        "additions": 0,
+        "deletions": 46,
+        "kind": "deleted"
+      },
+      {
+        "path": "test/decisions-header-backfill.test.mjs",
+        "additions": 4,
+        "deletions": 12,
+        "kind": "modified"
+      },
+      {
+        "path": "test/proto-reuse-register.test.mjs",
+        "additions": 2,
+        "deletions": 9,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "f9f0da969257c3555087dfb52d806cbae6112a2d68a4b80fa01b19d650f0c700",
+  "patchStatus": "ok"
+}

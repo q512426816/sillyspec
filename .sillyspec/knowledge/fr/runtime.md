@@ -1135,3 +1135,87 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-06-archive-stage-claim
   status: active
+
+## FR-runtime-080 删除 brainstorm-auto 自动道并让 run auto 回退主模式表（必须）
+变更：2026-10-14-brainstorm-auto-retire
+状态：active
+摘要：主路径——run auto 新变更
+场景正文：
+- 场景：主路径——run auto 新变更 — Given 全新变更以 `run auto` 进入 brainstorm；When runAutoMode 种步骤表；Then 种入主模式 8 步表（首步名「进度确认」），不再存在 4 步 auto 表形态。
+全文：.sillyspec/changes/archive/2026-10-14-brainstorm-auto-retire/requirements.md#FR-01
+最近确认：b9b72ee1e85b0c5000a535974b2dc688013bebe3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-01
+  tests: test/brainstorm-auto-retire.test.mjs「run auto 新变更种主模式 8 步表」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-brainstorm-auto-retire
+  status: active
+
+## FR-runtime-081 存量 auto 表退役指引（必须）
+变更：2026-10-14-brainstorm-auto-retire
+状态：active
+摘要：主路径——存量 auto 表
+场景正文：
+- 场景：主路径——存量 auto 表 — Given 变更进度库 stages.brainstorm.steps 为 4 步 auto 形态；When run brainstorm --done / run auto 触达；Then exit 非零 + 退役报错文案（含已删除说明与 reset/doctor 指引），进度未被重种。
+全文：.sillyspec/changes/archive/2026-10-14-brainstorm-auto-retire/requirements.md#FR-02
+最近确认：b9b72ee1e85b0c5000a535974b2dc688013bebe3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-02
+  tests: test/brainstorm-auto-retire.test.mjs「存量 auto 表触达报错且进度未重种」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-brainstorm-auto-retire
+  status: active
+
+## FR-runtime-082 引用面清理（必须）
+变更：2026-10-14-brainstorm-auto-retire
+状态：active
+摘要：主路径——全仓零悬挂引用
+场景正文：
+- 场景：主路径——全仓零悬挂引用 — Given 改动落盘；When 全仓 grep brainstorm-auto（排除 .sillyspec 归档与 docs/sillyspec 历史评审件）；Then src/test/docs/prompt 现行文件零引用。
+全文：.sillyspec/changes/archive/2026-10-14-brainstorm-auto-retire/requirements.md#FR-03
+最近确认：b9b72ee1e85b0c5000a535974b2dc688013bebe3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-03
+  tests: test/brainstorm-auto-retire.test.mjs「现行文件零悬挂引用（grep 面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-brainstorm-auto-retire
+  status: active
+
+## FR-runtime-083 测试覆盖与全绿（必须）
+变更：2026-10-14-brainstorm-auto-retire
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量；Then 断言全过、既有测试零失败、lint 零错误、docs gate 通过。
+全文：.sillyspec/changes/archive/2026-10-14-brainstorm-auto-retire/requirements.md#FR-04
+最近确认：b9b72ee1e85b0c5000a535974b2dc688013bebe3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-04
+  tests: test/brainstorm-auto-retire.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-brainstorm-auto-retire
+  status: active

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-brainstorm-auto-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs「run auto 新变更种主模式 8 步表」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-brainstorm-auto-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs「存量 auto 表触达报错且进度未重种」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-brainstorm-auto-retire"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-03",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs「现行文件零悬挂引用（grep 面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-brainstorm-auto-retire"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-brainstorm-auto-retire:flow:测试绑定FR-04",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-brainstorm-auto-retire"
+    }
+  ]
+}

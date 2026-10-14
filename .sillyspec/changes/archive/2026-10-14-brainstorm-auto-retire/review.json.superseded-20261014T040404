@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-brainstorm-auto-retire",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "970b33d44a67cb667d6335f9a96c81af5daeae45",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "冻结治理文档（requirements/design/tasks）退役指引写 --reopen，实现单一真相源给 --reset——文档未随实现中发现的实事更新",
+      "evidence": "requirements.md FR-02 要求指引「`--reopen --from-step 1` 重走主模式或 `doctor`」且场景句断言文案「含已删除说明与 reopen/doctor 指引」；design.md 做法概述（reopen/doctor 指引）、盲维3（用户按指引 --reopen 重走）、风险1（--reopen --from-step 1 / doctor 两条出路）与 tasks.md task-02 同款表述。实现 printRetiredAutoBrainstormRefusal（shared.js:2325）给的是 `--reset（重种主模式 8 步表…）` + `doctor`，无 reopen。代码实证支持实现而非文档：reopen 处理器（command.js:1554-1574）仅当表为空或 execute 才重取定义，非空 4 步 auto 表按名保留旧表——--reopen 不构成恢复出路；--reset 走 resetStage 内联 getStageSteps（command.js:1982，不经检测）实测重种 8 步表成功（test ② r3 断言 status=0 + 8 步 + 首步「进度确认」，本次评审独立复跑 4/4 绿）。FR-02 的规范内核（明确报错、给出可用出路、禁止静默重种、进度不动）已达成并有测试；缺陷仅在冻结文档把一条实测无效的路径写成了指引——按本仓先例（design 表述失实记 P2）定级，非阻断。",
+      "location": "src/run/shared.js:2325（实现）；.sillyspec/changes/2026-10-14-brainstorm-auto-retire/requirements.md:21（FR-02）；design.md:11,34,41；tasks.md:9（task-02）"
+    },
+    {
+      "severity": "P3",
+      "title": "冻结 change.patch 含 1 笔并行变更外源 hunk（cli-entry.changelog.md +1 行），patch 面与交付提交面存在 +1 差额",
+      "evidence": "冻结件 20 文件 +186/-891 vs 交付两笔（fddef888 +970b33d4）合计 19 文件 +185/-891，差额恰为 `.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md` +1 行——内容为并行变更 2026-10-14-patch-refreeze-missing-artifact 的台账行（由锚窗 baseline..HEAD 内的 9e42ee3a 归档提交带入）。change-patch.json files/scopeAudit 如实登记该行，note 记载既定冻结规则「baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档」；属共享台账在锚窗内的规则性后果，非本变更交付面，留档知悉。",
+      "location": ".sillyspec/changes/2026-10-14-brainstorm-auto-retire/change.patch:1-9；change-patch.json:6"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T04:02:27Z"
+}
