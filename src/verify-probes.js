@@ -3167,7 +3167,11 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   // validator 判 N=0 走零行为注记）；与 runVerifyProbes 同一解析器（单一产物源）。
   {
     const changeDir = dirname(factsPath)
+    // backfill 契约=恒落对象面（缺失/不可读 → 空面，基线口径不变）：helper 的 null 是 gate
+    // 注入通道的「不注入」信号，非 backfill 落盘形态（2026-10-14 评审 P3——null 落盘会让
+    // 「design 蒸发×矩阵段缺失×严格档」窄角从基线 error 降 warning，重构不得夹带行为变化）。
     facts.apiFace = computeApiFaceFromDesign(join(changeDir, 'design.md'))
+      || { endpoints: [], declared: null, writeEndpoints: [] }
     let designPaths = []
     if (existsSync(join(changeDir, 'design.md'))) {
       try { designPaths = parseFileChangeListDetailed(join(changeDir, 'design.md')).map(e => String(e.path)) } catch { designPaths = [] }

@@ -52,5 +52,5 @@ Then 零失败零新增告警
 
 FR-01: test/api-coverage-matrix.test.mjs「9. gate 预检注入：facts 无 apiFace（--init 后形态）→ 实况面命中锚点不再恒空指」
 FR-02: test/api-coverage-matrix.test.mjs「9b. 注入优先于过期 facts.apiFace（预检过=必过）；不注入保持现状空指对照」
-FR-03: test/api-coverage-matrix.test.mjs「9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源；design.md 缺失 → 空面 fail-soft 不抛」
+FR-03: test/api-coverage-matrix.test.mjs「9d. design.md 缺失 → helper 返 null 不注入，facts 口径继续（含 backfill 基线空面锁）」+「9c. computeApiFaceFromDesign 与 backfill 落盘产物同形同源」
 FR-04: test/api-coverage-matrix.test.mjs「既有 1~8 组全量重跑零失败（含 8d backfill 复用同源 helper 的结构性证据）」

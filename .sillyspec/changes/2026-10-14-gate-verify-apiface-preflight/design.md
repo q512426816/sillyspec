@@ -45,7 +45,7 @@ gate verify 预检的锚点解析级核对消费 `facts.apiFace`（stage-contrac
 - verify-probes --init 侧落 apiFace——制造双生产者且改 writeVerifyFacts 分段合并语义；且救不了存量 facts（本次平台变更正卡在 --init 后形态），把修复责任推给使用方逐变更重跑 --init，放弃。
 - stage-contract 内直接 live 解析——违反消费路径铁律（本模块零 import verify-probes，verify-probes TLA 动态 import 回指 stage-contract，静态依赖成环死锁），放弃；改由壳层调用方（machine-interface，与 gates.js 同款动态 import 时点）注入。
 
-独立评审修正（2026-10-14 review P1 清偿）：design.md 缺失/不可读态 helper 返 null（不注入、facts 口径继续），不返空面——初版空面注入会覆写有效 facts.apiFace 反致误阻断，违 FR-03。披露边界并裁决：该态下 gate（facts 口径）与 --done（backfill 会把空面落盘）判定可能分叉——可接受：design.md 在 verify 中途消失属病态（design 不应蒸发），gate 预检按最后已知解析面放行不误导，--done 侧该态本就该拦（design 缺失是更大口径的问题），分叉方向安全（预检宽、收口严，不产生假绿）。
+独立评审修正（2026-10-14 review P1 清偿 + P3 清偿）：design.md 缺失/不可读态 helper 返 null（gate 注入通道不注入、facts 口径继续），不返空面——初版空面注入会覆写有效 facts.apiFace 反致误阻断，违 FR-03。P3 同步清偿：backfill 侧恒落对象面（缺失/不可读 → 空面对象，基线口径不变，`|| { endpoints: [], declared: null, writeEndpoints: [] }` 兜底）——null 只是 gate 注入通道的「不注入」信号，不得改变 backfill 落盘形态（否则「design 蒸发×矩阵段缺失×严格档/critical」窄角会从基线 error 降 warning，重构夹带行为变化）；9d 内含基线回归锚。gate/--done 在该病态窄角判定重新一致（backfill 空面 parseSet 空 → 锚点空指拦、矩阵段缺失 error 分层不变），无分叉。
 
 ## 文件变更清单
 

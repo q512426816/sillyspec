@@ -579,4 +579,14 @@ test('9d. design.md 缺失 → helper 返 null 不注入，facts 口径继续（
   // machine-interface 侧 null 不注入（apiFaceLive falsy 不入 context）→ validator 走 facts 口径
   const r = validateApiCoverageMatrix(root, 'pf-x', { specRoot: root })
   assert.deepEqual(r.errors, [], `facts.apiFace 在场且命中锚点 → 按 facts 口径放行（实际 errors=${JSON.stringify(r.errors)}）`)
+  // backfill 契约回归锚（2026-10-14 评审 P3）：design.md 缺失时 backfill 恒落对象空面（基线口径，
+  // 非 null）——「design 蒸发×矩阵段缺失×严格档」窄角强度不因重构从 error 降 warning（5c 口径不回退）
+  const capWarn2 = console.warn; console.warn = () => {}
+  try {
+    backfillFactsFromMdAndTests(join(changeDir, 'verify-facts.json'),
+      { verifyMd: '# 验证报告\n', conclusion: null })
+  } finally { console.warn = capWarn2 }
+  const onDiskAfterGone = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
+  assert.deepEqual(onDiskAfterGone.apiFace, { endpoints: [], declared: null, writeEndpoints: [] },
+    `design.md 缺失时 backfill 落对象空面保基线（实际 ${JSON.stringify(onDiskAfterGone.apiFace)}）`)
 })
