@@ -1041,14 +1041,16 @@ export function readDecisionRulesConfig(projectRoot) {
 /** 豁免键匹配（键匹配非子串）：域限定键 `decisions.<域>/<id>.<kind>`（规则级精确）与
  *  `decisions.<域>/<id>`（条目级伞形）——2026-10-14-decision-id-p2-hardening：裸键无域限定，
  *  一条 decisions.<id> 可静默豁免全库同号条目（D-001@v1 ×296 潜伏面），域限定键收窄命中面；
- *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。无 decisions. 前缀的键不参与。
- *  导出（测试面先例 anchorFilePath）。 */
-export function isDecisionExempt(knownFailures, entryId, kind, domain = null) {
-  const keys = [
-    `decisions.${entryId}.${kind}`,
-    `decisions.${entryId}`,
-    ...(domain ? [`decisions.${domain}/${entryId}.${kind}`, `decisions.${domain}/${entryId}`] : []),
-  ]
+ *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。id 与 originId（原编号，
+ *  2026-10-14-decision-legacy-renumber）双匹配——存量迁移后旧号键继续命中。
+ *  无 decisions. 前缀的键不参与。导出（测试面先例 anchorFilePath）。 */
+export function isDecisionExempt(knownFailures, entryId, kind, domain = null, originId = null) {
+  const ids = originId ? [entryId, originId] : [entryId]
+  const keys = []
+  for (const id of ids) {
+    keys.push(`decisions.${id}.${kind}`, `decisions.${id}`)
+    if (domain) keys.push(`decisions.${domain}/${id}.${kind}`, `decisions.${domain}/${id}`)
+  }
   return knownFailures.some(k => keys.includes(k))
 }
 
@@ -1068,19 +1070,21 @@ export function parseDecisionEntries(md) {
     if (h) {
       flush()
       const version = h[2] ? parseInt(h[2], 10) : 1
-      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null, change: null }
+      cur = { id: `${h[1]}@v${version}`, title: h[3].trim(), status: null, anchor: null, lastConfirmed: null, change: null, originId: null }
       continue
     }
     if (!cur) continue
-    // 变更/来源：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt
-    // 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy 兜底——
-    // 变更行无条件覆盖在前、来源仅补缺；旧条目缺行容错 null）
-    const f = line.match(/^(状态|锚点|最近确认|变更|来源)\s*[：:]\s*(.*)$/)
+    // 变更/来源/原编号：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——
+    // docs-debt 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy
+    // 兜底——变更行无条件覆盖在前、来源仅补缺；原编号：2026-10-14-decision-legacy-renumber——存量迁移
+    // 后条目 id 为全局号，消费仓旧豁免键（decisions.D-002@vN）经原编号继续命中；旧条目缺行容错 null）
+    const f = line.match(/^(状态|锚点|最近确认|变更|来源|原编号)\s*[：:]\s*(.*)$/)
     if (!f) continue
     if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
     else if (f[1] === '锚点') cur.anchor = f[2].trim()
     else if (f[1] === '变更') cur.change = f[2].trim() || null
     else if (f[1] === '来源') cur.change = cur.change || (f[2].trim() || null)
+    else if (f[1] === '原编号') cur.originId = f[2].trim() || null
     else cur.lastConfirmed = f[2].trim()
   }
   flush()
@@ -1159,8 +1163,8 @@ export async function runDecisionRules(opts) {
   let implementedTotal = 0
   const treeCache = new Map() // resolveCandidates 全树扫描复用（同 docs check 主链路口径）
 
-  const emit = (id, domain, file, kind, extra, message) => {
-    if (isDecisionExempt(failures, id, kind, domain)) {
+  const emit = (id, domain, file, kind, extra, message, originId = null) => {
+    if (isDecisionExempt(failures, id, kind, domain, originId)) {
       exempted.push({ key: `decisions.${id}.${kind}`, id, kind })
       return
     }
@@ -1180,10 +1184,10 @@ export async function runDecisionRules(opts) {
       // 规则 1：锚点存在性（未记录 → 补录提示；路径不存在 → 失效提示）
       if (!anchorPath) {
         emit(e.id, domain, rel, 'anchor', { anchor: e.anchor || null },
-          `「${e.id}」锚点未记录（${rel}）——旧格式条目，补「锚点：src/…」后可机械校验（advisory）`)
+          `「${e.id}」锚点未记录（${rel}）——旧格式条目，补「锚点：src/…」后可机械校验（advisory）`, e.originId)
       } else if (resolveCandidates(projectRoot, anchorPath, treeCache).length === 0) {
         emit(e.id, domain, rel, 'anchor', { anchor: e.anchor },
-          `「${e.id}」锚点文件不存在：${anchorPath}（${rel}）——决策落点已漂移，人工复核（advisory）`)
+          `「${e.id}」锚点文件不存在：${anchorPath}（${rel}）——决策落点已漂移，人工复核（advisory）`, e.originId)
       }
       // 规则 2：behind 复核（「最近确认」后锚定模块源码前进数超阈值 → 决策待复核；
       // 「最近确认」未记录/域无源码集（无 map 无锚点）→ 无法计算，静默跳过——advisory 不产噪声）
@@ -1196,7 +1200,7 @@ export async function runDecisionRules(opts) {
       const { behind } = computeModuleBehind(domain, e.lastConfirmed, { projectRoot, srcPaths })
       if (behind !== null && behind > threshold) {
         emit(e.id, domain, rel, 'behind', { behind, threshold },
-          `「${e.id}」决策待复核：锚定模块 ${domain} 在最近确认 ${e.lastConfirmed} 后源码已前进 ${behind} commit，超阈值 ${threshold}（${rel}）——复核后更新「最近确认」`)
+          `「${e.id}」决策待复核：锚定模块 ${domain} 在最近确认 ${e.lastConfirmed} 后源码已前进 ${behind} commit，超阈值 ${threshold}（${rel}）——复核后更新「最近确认」`, e.originId)
       }
     }
   }

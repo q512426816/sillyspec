@@ -610,7 +610,8 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
       '  stats                 覆盖率/死条目统计（纯读）',
       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
-      '  propose / classify / inbox / graph / stats',
+      '  propose / classify / inbox / graph / stats / renumber',
+      '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
       '',
       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
     ]
@@ -693,11 +694,53 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       }
       return
     }
+    case 'renumber': {
+      // 存量决策号一次性迁移（2026-10-14-decision-legacy-renumber）：--dry-run 打印计划，
+      // --apply 执行重写（快照指纹校验 + 原子写；重跑幂等——原编号在场节段零触碰）。
+      const specBase = opts.specDir || join(dir, '.sillyspec')
+      const rest = args.slice(1)
+      const apply = rest.includes('--apply')
+      try {
+        const { planRenumber, applyRenumberPlan } = await import('../decision-renumber.js')
+        const plan = planRenumber(join(specBase, 'knowledge'))
+        const st = plan.stats
+        console.log(`🗺️ 决策号迁移计划：legacy ${st.legacySections} 节段｜fanout ${st.fanoutGroups} 组（${st.fanoutCopies} 副本→单一身份）｜发号 ${st.mintedNumbers}｜epoch 零触碰 ${st.untouchedEpoch}`)
+        for (const [dom, n] of Object.entries(st.perDomainStart)) console.log(`   域 ${dom}：号段自 ${String(n).padStart(3, '0')} 起`)
+        if (!apply) {
+          console.log('（--dry-run 形态——加 --apply 执行重写；git 可回退）')
+          output(true, { subcommand: 'renumber', dryRun: true, ...st })
+          return
+        }
+        if (plan.files.every((f) => !f.ops || f.ops.length === 0)) {
+          console.log('✅ 无可迁移节段（幂等重跑——零变化）')
+          output(true, { subcommand: 'renumber', filesWritten: 0, ...st })
+          return
+        }
+        let filesWritten = 0
+        for (const fe of plan.files) {
+          if (!fe.ops || !fe.ops.length) continue
+          const p = join(specBase, 'knowledge', fe.file)
+          const cur = readFileSync(p, 'utf8')
+          if (cur !== fe.content) {
+            console.error(`❌ 快照漂移：${fe.file} 在计划后被并行修改——中止不覆盖（重跑重新计划）`)
+            process.exitCode = 1
+            return
+          }
+          writeAtomicSync(p, applyRenumberPlan(new Map([[fe.file, cur]]), plan).get(fe.file))
+          filesWritten++
+        }
+        console.log(`✅ 迁移完成：${filesWritten} 文件重写、${st.mintedNumbers} 号铸出（epoch 形态）——重跑 --apply 验证零变化；平台侧随后 platform sync 推送`)
+        output(true, { subcommand: 'renumber', filesWritten, ...st })
+      } catch (e) {
+        output(false, {}, { code: 'renumber_failed', message: String((e && e.message) || e) })
+      }
+      return
+    }
     default:
       output(false, {}, {
         code: 'unknown_subcommand',
-        subcommand: subCommand,
-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
+        subCommand: subCommand,
+        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
       })
   }
 }

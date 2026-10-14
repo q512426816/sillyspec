@@ -66,7 +66,8 @@ test('① 真实库：score 字段在场；D-001 置顶可弹，空标题零分 
   assert.ok(typeof km.decisionHits[0].score === 'number', 'score 字段在场（加法）')
   assert.match(km.decisionHits[0].title, /枚举开放世界/, 'D-001 置顶')
   const echoable = (h) => h.deathPath || (h.status === 'rejected' && h.score > 0)
-  const noise = km.decisionHits.filter((h) => h.id === 'D-009@v1' || h.id === 'D-010@v1' || h.id === 'D-011@v1')
+  // 原编号感知（2026-10-14-decision-legacy-renumber 后旧号成为 originId）——同一条目两形态都可定位
+  const noise = km.decisionHits.filter((h) => ['D-009@v1', 'D-010@v1', 'D-011@v1'].some((x) => h.id === x || h.originId === x))
   assert.ok(noise.length > 0, '空标题噪音条目仍在 API 列表（过滤在消费方）')
   for (const h of noise) assert.ok(!echoable(h), `${h.id} 零分非死路 → 无回显资格`)
 })
@@ -79,7 +80,7 @@ test('② 真实库 digest：D-001 在场、空标题噪音三件套消失', asy
     input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
   })
   const text = r.lines.join('\n')
-  assert.match(text, /D-001@v1 枚举开放世界/, 'D-001 死路注记注入')
+  assert.match(text, /枚举开放世界是错误方向/, 'D-001 死路注记注入（标题锚——迁移稳定，2026-10-14-decision-legacy-renumber 后 id 为全局号形态）')
   assert.ok(!/D-009@v1/.test(text) && !/D-010@v1/.test(text) && !/D-011@v1/.test(text),
     `空标题噪音三件套不应注入（实际：${r.lines.filter(l => /D-0\d+@v1/.test(l)).join(' | ')}）`)
   rmQuiet(cd)

@@ -143,6 +143,7 @@ modules:
       - src/docs-debt.js
       - src/scan-staleness.js
       - src/decision-distill.js
+      - src/decision-renumber.js
       - src/decisions-io.js
       - src/scan-facts.js
       - src/module-changelog.js

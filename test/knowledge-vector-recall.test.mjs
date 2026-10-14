@@ -141,8 +141,14 @@ test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台'
 })
 
 test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
+  // 锚迁移稳定（2026-10-14-decision-legacy-renumber 后条目 id 为全局号、旧号在 originId）——
+  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）
+  const { pathToFileURL } = await import('node:url')
+  const { parseDecisionEntries } = await import(pathToFileURL(join(REPO_ROOT, 'src', 'knowledge-match.js')).href)
+  const entry = parseDecisionEntries(join(REAL_SPEC, 'knowledge')).find((h) => /枚举开放世界/.test(h.title || ''))
+  assert.ok(entry, '真实库枚举开放世界条目在场')
   await withMock('ok', [
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', change: '2026-09-26-thin-agent-tasks', score: 0.88 },
+    { spec_path: 'knowledge/decisions/unmapped.md', anchor: entry.id, change: entry.change || '2026-09-26-thin-agent-tasks', score: 0.88 },
   ], async (m) => {
     const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
     process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
