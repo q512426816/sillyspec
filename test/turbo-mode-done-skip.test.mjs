@@ -72,6 +72,7 @@ test('① turbo done：实测门合成 skipped + ⚡极速标注 + 评审豁免�
   assert.match(s2.stdout, /⚡极速模式｜test: skipped — 跳过原因：⚡ 极速模式/, 'gateSummary 极速前缀 + test skipped 带跳过原因')
   assert.match(s2.stdout, /本次收口不含测试客观核验/, '无测试客观核验显式标注（R-03）')
   assert.match(s2.stdout, /⚡ 极速模式：评审子步豁免/, '评审 turboExempt 留痕')
+  assert.match(s2.stdout, /⚡ 极速模式：UI 视觉证据探针跳过/, 'ui 探针跳过留痕行（2026-10-14-turbo-guide-tier-copy 评审 P3① 补断言）')
   assert.match(s2.stdout, /flow done 完成（2\/2 协议调用收口）/, '收口成功')
   const arch = join(cwd, '.sillyspec', 'changes', 'archive', change)
   assert.ok(existsSync(join(arch, 'change.patch')) && existsSync(join(arch, 'change-patch.json')), 'patch 冻结件照常留档（D-006 证据非验证）')
@@ -89,4 +90,25 @@ test('② 升厚即失效（D-007）：tier=thick 后 turbo 残留不短路—�
   assert.match(s2.stdout, /本变更需要独立评审/, '厚档评审仪式照常要求（turbo 不豁免）——D-007 生效')
   assert.notEqual(s2.status, 0, '独立评审缺位按厚档语义阻断（turbo 残留不短路）')
   rmSync(cwd, { recursive: true, force: true })
+})
+
+test('③ dirty 降 advisory 行为对照（评审 P3① 补断言）：turbo 放行 exit 0，非 turbo 阻断 exit≠0', () => {
+  // turbo 侧：未提交交付缺口在场 → 降 advisory 放行（缺口数随收口输出留痕）
+  {
+    const { cwd, change } = deliverAndClose({ turbo: true })
+    writeFileSync(join(cwd, 'dirty.txt'), 'uncommitted\n')
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `turbo dirty 应放行: ${s2.stdout}\n${s2.stderr}`)
+    assert.match(s2.stdout + s2.stderr, /⚡ 极速模式：未提交交付缺口未显式处置——降 advisory 放行/, '降档留痕行在场（console.warn 走 stderr——断言面含 stderr）')
+    rmSync(cwd, { recursive: true, force: true })
+  }
+  // 非 turbo 侧：同场景收口阻断三选一（既有语义零回归）
+  {
+    const { cwd, change } = deliverAndClose({ turbo: false })
+    writeFileSync(join(cwd, 'dirty.txt'), 'uncommitted\n')
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.notEqual(s2.status, 0, '非 turbo dirty 照常阻断')
+    assert.match(s2.stdout + s2.stderr, /未提交交付缺口未显式处置——收口阻断/, '三选一阻断语义不变')
+    rmSync(cwd, { recursive: true, force: true })
+  }
 })

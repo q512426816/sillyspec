@@ -1024,8 +1024,11 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
-    // 极速指引行（2026-10-14-thin-turbo-mode FR-01）：--turbo 在场才输出，缺省路径逐字不变
-    ...(turbo ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`] : []),
+    // 极速指引行（2026-10-14-thin-turbo-mode FR-01；2026-10-14-turbo-guide-tier-copy 评审 P3
+    // 清偿）：承诺文案随档位收窄——thick 起步时 done 读态 turbo 不生效（D-007），文案如实告知
+    // 全量仪式，防「提示说 A 实现是 B」漂移（cli-copy-selfsufficient②）。缺省路径逐字不变。
+    ...(turbo && !thick ? [`⚡ 极速模式（用户显式触发）：只产 spec+代码，收口自动跳过实测与重仪式门（必留面照常）；本次收口不含测试客观核验`]
+      : turbo && thick ? [`⚡ 极速留痕已记（--turbo），但 --thick 厚档起步——收口走全量仪式，实测与仪式门照跑不跳过（升厚即失效）`] : []),
     ...(hindsightHint ? [hindsightHint, ''] : []),
     `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
     `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
