@@ -5499,7 +5499,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
           console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
           process.exit(2);
         }
-        const { changeDir, tasksMd } = loadChangeTasks(tSpecBase, tChange);
+        const { changeDir, tasksMd, tickLog } = loadChangeTasks(tSpecBase, tChange);
         const tasks = tasksMd ? parseTaskLines(tasksMd) : null;
         let tier = null;
         if (changeDir) {
@@ -5509,6 +5509,8 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
           } catch { /* 缺 flow-state（头脑风暴预段等）按未知 */ }
         }
         const { gitQuiet } = await import('./git-helper.js');
+        // 锚收敛（2026-10-14-timeline-ticktime-anchor-scope）：change 参进锚解析——消息不含本变更
+        // 名的提交不参与任务行锚定（跨变更 token 撞车防线）；事件时间轴不受影响。
         const anchors = resolveCommitAnchors(tRes.events, (hash) => {
           const out = gitQuiet(dir, ['log', '-1', '--format=%h%x1f%aI%x1f%B', hash]);
           if (typeof out !== 'string' || !out.trim()) return null;
@@ -5516,8 +5518,8 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
           const rest = out.slice(sep + 1);
           const sep2 = rest.indexOf('\x1f');
           return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) };
-        });
-        console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier }));
+        }, tChange);
+        console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier, tickLog }));
         if (tSourceNote) console.log(tSourceNote);
         break;
       }

@@ -46,6 +46,7 @@ function makeFixture() {
     '- [x] task-02: 乙单元',
     '',
   ].join('\n'))
+  writeFileSync(join(destDir, 'task-ticks.jsonl'), JSON.stringify({ ts: 1695800005000, task: 'task-01', source: 'task-tick' }) + '\n')
   writeFileSync(join(destDir, 'flow-state.yaml'), 'tier: thin\n')
   return { root, specBase, runtimeRoot, destDir, eventsJsonl }
 }
@@ -53,7 +54,7 @@ function makeFixture() {
 const fakeGitLook = (hash) => ({
   hash,
   dateISO: '2026-09-28T10:00:00+08:00',
-  message: 'fix: 甲单元落地（task-01）',
+  message: `fix: 甲单元落地（${CHANGE}）(task-01)`,
 })
 
 const fakeEvents = [
@@ -95,6 +96,19 @@ test('renderBakedTimeline：eventsCopySkipped=true 头注记改「尺寸超帽�
   assert.ok(md.includes('（无事件——watcher 未观测到活动）'))
 })
 
+// ── 侧车精确时刻透传（2026-10-14-timeline-ticktime-anchor-scope）──
+
+test('renderBakedTimeline：tickLog 透传——侧车时刻无 ≈，头注记更新为双源口径', () => {
+  const md = renderBakedTimeline({
+    change: CHANGE, events: [], tasks: [{ id: 'task-01', checked: true, desc: '甲单元' }], anchors: [],
+    birthTs: null, tier: 'thin', bakedAtIso: '2026-09-28T12:00:00.000Z',
+    tickLog: [{ ts: new Date('2026-09-28T12:00:05').getTime(), task: 'task-01' }],
+  })
+  assert.match(md, /task-01\s+12:00:05\s/, '侧车精确时刻无 ≈ 前缀')
+  assert.ok(md.includes('精确=task tick 侧车留痕'))
+  assert.ok(!md.includes('勾选时刻为顺序推断（≈）'), '旧单源口径注记退役')
+})
+
 // ───────────────────── ② bakeArchiveTimeline 端到端 ─────────────────────
 
 test('bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一致', async () => {
@@ -111,6 +125,10 @@ test('bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一�
     assert.ok(md.includes(`# 合成时间线快照 — ${CHANGE}`))
     assert.ok(md.includes('task-01'))
     assert.ok(md.includes('abc1234'))
+    assert.match(md, /task-01\s+\d{2}:\d{2}:\d{2}\s/, '侧车精确时刻进烤制面（无 ≈ 前缀）')
+    assert.doesNotMatch(md, /task-01\s+≈/, '侧车优先于事件流推断')
+    assert.match(md, /task-02\s+≈/, '侧车缺行任务回退推断（task-02 无侧车行）')
+    assert.match(md, /task-01\s+.*abc1234/, '消息含变更名的提交正常锚定')
     assert.equal(readFileSync(join(fx.destDir, 'watcher-events.jsonl'), 'utf8'), fx.eventsJsonl)
   } finally {
     rmSync(fx.root, { recursive: true, force: true })

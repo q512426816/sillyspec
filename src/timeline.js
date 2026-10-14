@@ -24,6 +24,33 @@ export function parseTaskLines(tasksMd) {
   return out;
 }
 
+/** task id 归一：task-2 → task-02（与 task-tick normalizeTaskId 同口径，非 task-N 形态返 null）。 */
+function normTaskId(s) {
+  const m = /^task-(\d+)$/.exec(String(s || '').trim());
+  return m ? `task-${String(Number(m[1])).padStart(2, '0')}` : null;
+}
+
+/**
+ * 侧车勾选留痕解析（2026-10-14-timeline-ticktime-anchor-scope）：task-ticks.jsonl 行集
+ * （{ts,task,source}）→ Array<{ts,task}>。坏行跳过；id 归一；同任务取最早（时钟回拨/重复
+ * 留痕容错——勾选时刻语义=首次翻格时刻）。文件缺失/不可读由调用方 catch 成空数组。
+ */
+export function parseTickLog(raw) {
+  const byTask = new Map();
+  for (const line of String(raw || '').split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const o = JSON.parse(line);
+      const id = normTaskId(o && o.task);
+      const ts = Number(o && o.ts);
+      if (!id || !Number.isFinite(ts)) continue;
+      const p = byTask.get(id);
+      if (!p || ts < p.ts) byTask.set(id, { ts, task: id });
+    } catch { /* 坏行跳过 */ }
+  }
+  return [...byTask.values()];
+}
+
 /**
  * 翻格顺序推断（FR-04）：task-done（stage='tasks'）事件序列 → 每任务序号的勾选时刻。
  * 计数链衔接（from === 游标）才赋值；**中段**断裂（from ≠ 游标）标 broken 并停止赋值。
@@ -60,9 +87,12 @@ function tokensOf(text) {
 /**
  * 提交锚解析：事件流 kind=commit 的短 hash → gitLook 解析出主题/时间/token。
  * @param {Function} gitLook (hash) => null | {hash, dateISO, message}（注入面，接线层包 gitQuiet）
- * @returns {Array<{hash, ts, subject, tokens, resolvable}>} ts 取事件观测时刻（git 日期仅存证）。
+ * @param {string|null} change 变更名（2026-10-14-timeline-ticktime-anchor-scope）：在场时逐 anchor
+ *   算 sameChange=提交全消息（%B 含正文）includes(change)——锚定面据此收敛，杀跨变更 token 撞车
+ *   （litellm-retire 实证：他变更提交消息含 task-01/04/05 被误锚）；缺省恒 true 向后兼容。
+ * @returns {Array<{hash, ts, subject, tokens, resolvable, sameChange}>} ts 取事件观测时刻（git 日期仅存证）。
  */
-export function resolveCommitAnchors(events, gitLook) {
+export function resolveCommitAnchors(events, gitLook, change = null) {
   const out = [];
   for (const e of events || []) {
     if (!e || e.kind !== 'commit' || !e.detail) continue;
@@ -75,6 +105,7 @@ export function resolveCommitAnchors(events, gitLook) {
       subject: info ? String(info.message || '').split(/\r?\n/)[0] : null,
       tokens: info ? tokensOf(info.message) : [],
       resolvable: Boolean(info),
+      sameChange: !change || (info ? String(info.message || '').includes(change) : false),
     });
   }
   return out;
@@ -125,11 +156,13 @@ function fmtDur(ms) {
  * @param {string} args.change 变更名
  * @param {Array} args.events 事件流（readWatcherEvents.events）
  * @param {Array|null} args.tasks parseTaskLines 产物（null=任务面缺失）
- * @param {Array} args.anchors resolveCommitAnchors 产物
+ * @param {Array} args.anchors resolveCommitAnchors 产物（锚定只取 sameChange!==false 的行）
  * @param {number|null} args.birthTs 诞生锚（工件 frontmatter created_at 毫秒；null=缺）
  * @param {string|null} args.tier flow-state tier（null=缺/未知）
+ * @param {Array|null} args.tickLog parseTickLog 产物（2026-10-14-timeline-ticktime-anchor-scope：
+ *   侧车勾选留痕——任务行时刻三级降级：侧车精确（无 ≈）> 事件流推断（≈）> ?）
  */
-export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }) {
+export function renderTimeline({ change, events, tasks, anchors, birthTs, tier, tickLog = null }) {
   const L = [];
   L.push(`📅 ${change} — 合成时间线（${tier || 'tier 未知'}｜事件流 × tasks.md × git 提交锚）`);
   L.push('');
@@ -140,16 +173,22 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
 
   if (tasks) {
     L.push('');
-    L.push('── 任务面（勾选时刻 ≈ 顺序推断｜tasks.md 描述行 × 提交锚）──');
+    L.push('── 任务面（勾选时刻：精确=task tick 侧车留痕｜≈=事件流顺序推断｜tasks.md 描述行 × 提交锚）──');
     const { times, broken } = inferFlipTimes(events, tasks.length);
-    if (broken) L.push('（计数链中段断裂——断裂点后勾选时刻推断不可用，标 ?）');
-    if (tasks.some((t, i) => t.checked && times[i] == null)) L.push('（已勾任务缺推断时刻——观测盲窗/水位丢失，标 ?）');
+    const tickMap = new Map((tickLog || []).map((r) => [String(r && r.task), Number(r && r.ts)]));
+    // 断裂注按需打（2026-10-14-timeline-ticktime-anchor-scope）：侧车已覆盖全部已勾位时推断层
+    // 与展示无关——watcher 重复采样（0→1 双拍）也会撞断游标，此时打断裂注是误导噪音。
+    const inferenceMatters = tasks.some((t) => t.checked && !tickMap.has(t.id));
+    if (broken && inferenceMatters) L.push('（计数链中段断裂——断裂点后勾选时刻推断不可用，标 ?）');
+    if (tasks.some((t, i) => t.checked && times[i] == null && !tickMap.has(t.id))) L.push('（已勾任务缺推断时刻——观测盲窗/水位丢失，标 ?）');
     for (let i = 0; i < tasks.length; i++) {
       const t = tasks[i];
-      const when = t.checked
-        ? (times[i] != null ? `≈${fmtHMS(times[i])}` : '?')
-        : '未勾';
-      const anchor = anchors.filter((a) => a.tokens.includes(t.id)).sort((a, b) => a.ts - b.ts)[0];
+      const when = !t.checked
+        ? '未勾'
+        : tickMap.has(t.id) ? fmtHMS(tickMap.get(t.id))
+          : times[i] != null ? `≈${fmtHMS(times[i])}`
+            : '?';
+      const anchor = anchors.filter((a) => a && a.sameChange !== false && a.tokens.includes(t.id)).sort((a, b) => a.ts - b.ts)[0];
       const ev = anchor ? anchor.hash : (t.checked ? '无提交锚⚠️' : '—');
       L.push(`${t.id}  ${when.padEnd(10)}  ${clip(t.desc, 44).padEnd(46)}${ev}`);
     }
@@ -169,7 +208,7 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
   if (stages.length > 0) {
     L.push(`阶段墙钟：${stages.map((s) => `${s.stage} ${fmtDur(s.durationMs)}`).join('｜')}`);
   }
-  L.push('注：观测起点≠诞生时刻（watcher 后拉起/单飞锁盲窗）；勾选时刻为顺序推断（事件不记任务 id）；描述行含机器稿截断。');
+  L.push('注：观测起点≠诞生时刻（watcher 后拉起/单飞锁盲窗）；勾选时刻精确值=task tick 侧车留痕（task-ticks.jsonl），≈=事件流顺序推断（事件不记任务 id）；描述行含机器稿截断。');
   return L.join('\n');
 }
 
@@ -179,27 +218,29 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
  * 烤制落盘——诚实注记而非数据错误。eventsCopySkipped=副本未随包形态（尺寸超帽或读源失败，
  * 评审 P3-1：注记必须与实际产出一致，不虚报副本在场）。
  */
-export function renderBakedTimeline({ change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped = false }) {
+export function renderBakedTimeline({ change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped = false, tickLog = null }) {
   const head = [
     `# 合成时间线快照 — ${change}`,
     '',
     `> 烤制于归档链（${bakedAtIso}）：事件流机本位（.runtime gitignore），本快照随归档包进 git 跨机可读。`,
-    '> 末尾事件（含「目录已移入 archive」终拍）可能晚于烤制未入快照；勾选时刻为顺序推断（≈）。',
+    '> 末尾事件（含「目录已移入 archive」终拍）可能晚于烤制未入快照；勾选时刻：精确=task tick 侧车留痕，≈=事件流顺序推断。',
     eventsCopySkipped
       ? '> 原始事件副本未随包（尺寸超帽或读源失败）——细粒度复核回本机 .runtime 或平台 observation 事件面。'
       : '> 原始事件副本：本目录 watcher-events.jsonl（时点快照）。',
     '',
   ]
-  return head.join('\n') + renderTimeline({ change, events, tasks, anchors, birthTs, tier })
+  return head.join('\n') + renderTimeline({ change, events, tasks, anchors, birthTs, tier, tickLog })
 }
 
-/** change 目录双路径探测（活跃 > 归档）+ tasks.md 读取 → {changeDir, tasksMd}（缺 tasksMd=null）。 */
+/** change 目录双路径探测（活跃 > 归档）+ tasks.md / task-ticks.jsonl 读取 → {changeDir, tasksMd, tickLog}（缺 tasksMd=null、tickLog=空数组）。 */
 export function loadChangeTasks(specBase, change) {
   const active = join(specBase, 'changes', change);
   const archived = join(specBase, 'changes', 'archive', change);
   const dir = [active, archived].find((d) => { try { return readFileSync(join(d, 'tasks.md'), 'utf8') != null } catch { return false } });
-  if (!dir) return { changeDir: null, tasksMd: null };
-  return { changeDir: dir, tasksMd: readFileSync(join(dir, 'tasks.md'), 'utf8') };
+  if (!dir) return { changeDir: null, tasksMd: null, tickLog: [] };
+  let tickLog = [];
+  try { tickLog = parseTickLog(readFileSync(join(dir, 'task-ticks.jsonl'), 'utf8')); } catch { /* 侧车缺失/不可读按空 */ }
+  return { changeDir: dir, tasksMd: readFileSync(join(dir, 'tasks.md'), 'utf8'), tickLog };
 }
 
 /** 诞生锚：change 目录工件 frontmatter created_at（requirements > proposal > design > tasks）。 */
@@ -215,4 +256,4 @@ export function readBirthTs(changeDir) {
   return null;
 }
 
-export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, renderBakedTimeline, loadChangeTasks, readBirthTs };
+export default { parseTaskLines, parseTickLog, inferFlipTimes, resolveCommitAnchors, renderTimeline, renderBakedTimeline, loadChangeTasks, readBirthTs };

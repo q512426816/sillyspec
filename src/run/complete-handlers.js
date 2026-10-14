@@ -816,9 +816,14 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
     const { readWatcherEvents, watcherEventsPath } = await import('../watcher.js')
     const res = readWatcherEvents({ runtimeRoot, change: changeName })
     if (!res.exists) return { ok: true, skipped: true, reason: `无事件流（${watcherEventsPath(runtimeRoot, changeName)}）` }
-    const { parseTaskLines, renderBakedTimeline, resolveCommitAnchors, readBirthTs } = await import('../timeline.js')
+    // 侧车透传（2026-10-14-timeline-ticktime-anchor-scope）：destDir 内 task-ticks.jsonl 已随归档包
+    // ——烤制面读包内侧车（与 tasks.md 同源同路径形态），精确勾选时刻跨机可读；锚收敛 changeName
+    // 进解析（消息不含变更名的提交不锚任务行）。
+    const { parseTaskLines, renderBakedTimeline, resolveCommitAnchors, parseTickLog, readBirthTs } = await import('../timeline.js')
     let tasks = null
     try { tasks = parseTaskLines(readRawImpl(join(destDir, 'tasks.md'), 'utf8')) } catch { /* 任务面缺失照烤（渲染层有降级段） */ }
+    let tickLog = []
+    try { tickLog = parseTickLog(readRawImpl(join(destDir, 'task-ticks.jsonl'), 'utf8')) } catch { /* 侧车缺失照烤（时刻退推断面） */ }
     let tier = null
     try { const m = /^tier:\s*(\S+)/m.exec(readRawImpl(join(destDir, 'flow-state.yaml'), 'utf8')); if (m) tier = m[1] } catch { /* 头脑风暴预段等无 flow-state 按未知 */ }
     const look = gitLook || ((hash) => {
@@ -829,12 +834,12 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
       const sep2 = rest.indexOf('\x1f')
       return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) }
     })
-    const anchors = resolveCommitAnchors(res.events, look)
+    const anchors = resolveCommitAnchors(res.events, look, changeName)
     let eventsRaw = null
     try { eventsRaw = readRawImpl(watcherEventsPath(runtimeRoot, changeName), 'utf8') } catch { /* 副本缺源只烤渲染面 */ }
     const oversize = eventsRaw != null && Buffer.byteLength(eventsRaw, 'utf8') > eventsCopyMaxBytes
     // 评审 P3-1 清偿：副本未落盘（读源失败或超帽）时头注记必须显式「未随包」，不虚报在场
-    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: eventsRaw == null || oversize })
+    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: eventsRaw == null || oversize, tickLog })
     writeImpl(join(destDir, 'timeline.md'), timelineMd)
     const files = ['timeline.md']
     if (eventsRaw != null && !oversize) {

@@ -121,7 +121,8 @@ test('renderTimeline：三段齐备——诞生/时间轴/任务面/墙钟/诚�
   assert.match(out, /📦 change 目录已移入 archive/);
   assert.match(out, /task-01\s+≈23:33.*甲单元.*aaa1111/);
   assert.match(out, /task-03\s+≈23:33.*丙单元无锚.*无提交锚⚠️/);
-  assert.match(out, /勾选时刻为顺序推断/);
+  assert.match(out, /勾选时刻精确值=task tick 侧车留痕/);
+  assert.match(out, /≈=事件流顺序推断/);
   assert.match(out, /事件 5 条｜提交 1｜任务 3\/3/);
   assert.match(out, /阶段墙钟：.*requirements.*tasks.*archive/, '逐阶段墙钟（aggregateStageTiming 复用）');
   assert.match(out, /墙钟：38min/, '总墙钟 fmtDur 格式（取整分）');
@@ -154,6 +155,106 @@ test('renderTimeline：无事件流空态不抛', () => {
   const out = renderTimeline({ change: 'demo', events: [], tasks: [{ id: 'task-01', checked: false, desc: 'x' }], anchors: [], birthTs: null, tier: 'thin' })
   assert.match(out, /无事件——watcher 未观测到活动/);
   assert.match(out, /task-01\s+未勾/);
+})
+
+// ───────────────────── 侧车精确时刻 + 锚收敛（2026-10-14-timeline-ticktime-anchor-scope） ─────────────────────
+
+test('renderTimeline：侧车精确时刻优先（无 ≈），缺行回退推断 ≈，双盲回退 ?', () => {
+  const t1 = new Date('2026-09-25T23:30:05').getTime() // 无时区后缀=本地时刻，断言与 TZ 无关
+  const events = [td(0, 1, new Date('2026-09-25T23:31:00').getTime()), td(1, 2, new Date('2026-09-25T23:33:51').getTime())]
+  const tasks = [
+    { id: 'task-01', checked: true, desc: '甲' },
+    { id: 'task-02', checked: true, desc: '乙' },
+    { id: 'task-03', checked: true, desc: '丙——双盲' },
+  ]
+  const out = renderTimeline({ change: 'demo', events, tasks, anchors: [], birthTs: null, tier: 'thin', tickLog: [{ ts: t1, task: 'task-01' }] })
+  assert.match(out, /task-01\s+23:30:05\s/, '侧车精确时刻无 ≈ 前缀')
+  assert.doesNotMatch(out, /task-01\s+≈/)
+  assert.match(out, /task-02\s+≈23:33:51\s/, '侧车缺行回退事件流推断（≈ 保留）')
+  assert.match(out, /task-03\s+\?/, '侧车与推断双盲回退 ?')
+  assert.match(out, /精确=task tick 侧车留痕/, '任务面表头诚实注同步')
+  assert.match(out, /已勾任务缺推断时刻/, '双盲位仍是 ?——缺时刻注保留（注解释的是 ? 位）')
+  // 全覆盖形态：侧车+推断补齐全部已勾位 → 无 ? 也无缺时刻注
+  const outAll = renderTimeline({ change: 'demo', events, tasks, anchors: [], birthTs: null, tier: 'thin', tickLog: [{ ts: t1, task: 'task-01' }, { ts: t1, task: 'task-03' }] })
+  assert.doesNotMatch(outAll, /已勾任务缺推断时刻/, '侧车补齐双盲位后注随 ? 一起消失')
+  assert.match(outAll, /task-03\s+23:30:05\s/)
+  // 断裂注按需打：watcher 重复采样（0→1 双拍）撞断游标，但侧车覆盖全部已勾位时不打断裂注
+  const dupEvents = [td(0, 1, new Date('2026-09-25T23:31:00').getTime()), td(0, 1, new Date('2026-09-25T23:31:03').getTime())]
+  const outDupCovered = renderTimeline({ change: 'demo', events: dupEvents, tasks: [{ id: 'task-01', checked: true, desc: '甲' }], anchors: [], birthTs: null, tier: 'thin', tickLog: [{ ts: t1, task: 'task-01' }] })
+  assert.doesNotMatch(outDupCovered, /计数链中段断裂/, '侧车全覆盖时推断断裂是展示噪音')
+  const outDupPartial = renderTimeline({ change: 'demo', events: dupEvents, tasks: [{ id: 'task-01', checked: true, desc: '甲' }, { id: 'task-02', checked: true, desc: '乙' }], anchors: [], birthTs: null, tier: 'thin', tickLog: [{ ts: t1, task: 'task-01' }] })
+  assert.match(outDupPartial, /计数链中段断裂/, '还有无侧车的已勾位时断裂注保留')
+  // 优先级钉：同任务侧车与推断齐备时显侧车
+  const out2 = renderTimeline({ change: 'demo', events, tasks, anchors: [], birthTs: null, tier: 'thin', tickLog: [{ ts: t1, task: 'task-01' }, { ts: new Date('2026-09-25T23:59:00').getTime(), task: 'task-02' }] })
+  assert.match(out2, /task-02\s+23:59:00\s/, '侧车优先于推断')
+  assert.doesNotMatch(out2, /task-02\s+≈/)
+})
+
+test('resolveCommitAnchors：change 参算 sameChange（全消息含正文）；缺省恒 true 向后兼容', () => {
+  const events = [{ ts: 1, kind: 'commit', stage: null, detail: 'aaa1111', provisional: true }]
+  const look = () => ({ hash: 'aaa1111', dateISO: '', message: 'build: 他变更标题 task-01\n\n正文补记提及 other-note' })
+  assert.equal(resolveCommitAnchors(events, look)[0].sameChange, true, '缺省不过滤（既有调用面零破坏）')
+  assert.equal(resolveCommitAnchors(events, look, 'other-change')[0].sameChange, false, '消息不含变更名 → false')
+  const look2 = () => ({ hash: 'aaa1111', dateISO: '', message: 'build: 标题\n\n正文（2026-09-25-demo-change）补记 task-01' })
+  assert.equal(resolveCommitAnchors(events, look2, '2026-09-25-demo-change')[0].sameChange, true, '正文含变更名也算同变更')
+  assert.equal(resolveCommitAnchors(events, () => null, 'x')[0].sameChange, false, '失联提交无从验证 → 不锚')
+})
+
+test('renderTimeline：跨变更误锚回归——他变更提交含同 token 不锚定（litellm-retire 案例形态）', () => {
+  const events = [
+    { ts: new Date('2026-09-25T23:10:00').getTime(), kind: 'commit', stage: null, detail: '6c49032', provisional: true },
+    { ts: new Date('2026-09-25T23:12:00').getTime(), kind: 'commit', stage: null, detail: 'ab87d6a', provisional: true },
+  ]
+  const look = (h) => ({
+    '6c49032': { hash: h, dateISO: '', message: 'build(deploy): litellm 技术栈整体退役——…（task-01）（task-04）' },
+    'ab87d6a': { hash: h, dateISO: '', message: 'docs(spec): litellm 坑记录退役闭坑（2026-09-25-litellm-retire，证据见上一笔）(task-05)' },
+  })[h]
+  const anchors = resolveCommitAnchors(events, look, '2026-09-25-deploy-release-notes')
+  const tasks = [
+    { id: 'task-01', checked: true, desc: '甲单元' },
+    { id: 'task-05', checked: true, desc: '乙单元' },
+  ]
+  const out = renderTimeline({ change: '2026-09-25-deploy-release-notes', events, tasks, anchors, birthTs: null, tier: 'thin' })
+  assert.match(out, /task-01\s+\?\s*.*甲单元.*无提交锚⚠️/, '他变更提交含 task-01 token 不得锚定')
+  assert.match(out, /task-05\s+\?\s*.*乙单元.*无提交锚⚠️/, '他变更提交含 task-05 token 不得锚定')
+  assert.match(out, /6c49032  build\(deploy\): litellm 技术栈整体退役/, '事件时间轴 commit 行展示面不变（锚收敛不缩事件轴）')
+  // 本变更提交正常锚定（消息含变更名 + token）
+  const look2 = (h) => h === 'ok00001'
+    ? { hash: h, dateISO: '', message: 'feat: 版本发布记录功能 (2026-09-25-deploy-release-notes) (task-01) (task-05)' }
+    : look(h)
+  const events2 = [...events, { ts: new Date('2026-09-25T23:16:00').getTime(), kind: 'commit', stage: null, detail: 'ok00001', provisional: true }]
+  const anchors2 = resolveCommitAnchors(events2, look2, '2026-09-25-deploy-release-notes')
+  const out2 = renderTimeline({ change: '2026-09-25-deploy-release-notes', events: events2, tasks, anchors: anchors2, birthTs: null, tier: 'thin' })
+  assert.match(out2, /task-01\s+.*甲单元.*ok00001/, '本变更提交按 token 正常锚定')
+  assert.match(out2, /task-05\s+.*乙单元.*ok00001/)
+})
+
+test('loadChangeTasks：侧车 tickLog 解析（坏行跳过/id 归一/同任务取最早/归档路径同读）', () => {
+  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
+  try {
+    const dir = join(root, 'changes', 'demo')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'tasks.md'), '- [x] task-01: 甲\n', 'utf8')
+    writeFileSync(join(dir, 'task-ticks.jsonl'), [
+      JSON.stringify({ ts: 200, task: 'task-01', source: 'task-tick' }),
+      'not-json 坏行',
+      JSON.stringify({ ts: 100, task: 'task-01', source: 'task-tick' }),
+      JSON.stringify({ ts: 300, task: 'task-2', source: 'task-tick' }),
+      JSON.stringify({ ts: 'bad', task: 'task-03' }),
+      '',
+    ].join('\n'), 'utf8')
+    const r = loadChangeTasks(root, 'demo')
+    const m = Object.fromEntries(r.tickLog.map((x) => [x.task, x.ts]))
+    assert.equal(m['task-01'], 100, '同任务取最早留痕（时钟回拨/重复容错）')
+    assert.equal(m['task-02'], 300, 'id 归一 task-2→task-02')
+    assert.equal(m['task-03'], undefined, '非法 ts 行跳过')
+    rmSync(dir, { recursive: true, force: true })
+    const adir = join(root, 'changes', 'archive', 'demo')
+    mkdirSync(adir, { recursive: true })
+    writeFileSync(join(adir, 'tasks.md'), '- [x] task-01: 甲\n', 'utf8')
+    writeFileSync(join(adir, 'task-ticks.jsonl'), JSON.stringify({ ts: 42, task: 'task-01', source: 'task-tick' }) + '\n', 'utf8')
+    assert.deepEqual(loadChangeTasks(root, 'demo').tickLog, [{ ts: 42, task: 'task-01' }], '归档路径同读侧车')
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
 // ───────────────────── loadChangeTasks（tmpdir 双路径探测） ─────────────────────
