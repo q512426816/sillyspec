@@ -22,3 +22,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
 | 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
 | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | docs-check parseDecisionEntries 加法字段 change（「变更：」行读入）+ docs-debt 触碰事实行渲染变更名限定（decisionChangeQualifier）——触碰条目同号可区分 |
+| 2026-10-14 | 2026-10-14-decision-id-p2-hardening | docs-check：parseDecisionEntries 增「来源：」兜底 + isDecisionExempt 域限定键 decisions.<域>/<id>[.<kind>]（裸键兼容、导出、emit 传域——一条裸键豁免全库同号的潜伏面收窄）；decision-distill：splitKnowledgeSections 来源回退（带来源 legacy 段参与同变更匹配，重蒸馏在位更新收敛） |

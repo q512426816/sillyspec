@@ -57,3 +57,4 @@
 | 2026-10-14 | 2026-10-14-gate-verify-apiface-preflight | gate verify 预检的接口锚点核对消费 facts.apiFace，但其唯一生产者是 run verify -- |
 | 2026-10-14 | 2026-10-14-timeline-ticktime-anchor-scope | runTaskTick 翻格成功追加 task-ticks.jsonl 侧车留痕（{ts,task,source:'task-tick'}；幂等 already 零追加；写失败仅告警不阻断翻格）——勾选时刻事实源落 change 目录随归档进 git 跨机可读，观测盲窗（watcher 后拉起）内的 CLI tick 不再丢时刻。测试锚 test/task-tick.test.mjs |
 | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | 决策 supersedes 边同变更限定（跨变更同号不再建边，旧「退同文件首个」回退已除）+ 边改节点建齐后补挂（清偿目标晚于引用者定义时静默丢边的既有顺序依赖）；knowledge-match 新增 decisionChangeQualifier（四处决策展示行变更名限定单一实现）。实测：真实知识库老代码 27 条决策 supersedes 边全为跨变更误连 → 修复后 0 |
+| 2026-10-14 | 2026-10-14-decision-id-p2-hardening | knowledge-match：parseDecisionFile 增「来源：」legacy 兜底读入（变更优先兜缺）；parseDecisionEntries 路由行按文件单解析 + 同号 legacy 条目不再互折叠（真实库对账 700 节段=700 可见，2 条 implemented 隐身条目复现） |
