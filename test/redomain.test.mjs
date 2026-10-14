@@ -5,6 +5,8 @@
  * ③ 全域迁移：源空壳删除/目标文件新建/INDEX 路由行补
  * ④ 防线：目标域同 ID 冲突拒/anchor 未命中拒/干跑不落盘
  * ⑤ CLI tests --redomain 端到端（干跑+--write）
+ * ⑥⑦ 2026-10-14-redomain-domain-arg-normalize：--from/--to 容忍 fr/ 前缀与 .md
+ *    后缀形态（flow done 提示语原样照抄形态）——库层归一 + CLI 端到端等价且回显裸域名
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,7 +15,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { planRedomain, redomainFrEntries } from '../src/redomain.js'
+import { planRedomain, redomainFrEntries, normalizeDomainArg } from '../src/redomain.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const NL = String.fromCharCode(10)
@@ -110,4 +112,56 @@ test('⑤ CLI tests --redomain 端到端（干跑+--write）', () => {
   const wr = execFileSync('node', [bin, 'tests', '--redomain', '--from', 'auto-backend', '--to', 'platform-sync', '--write'], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   assert.match(wr, /域迁移完成：2 条/)
   assert.match(wr, /源域空壳已删/)
+})
+
+test('⑥ 入参归一化：fr/ 前缀与 .md 后缀形态与裸名等价；剥空拒绝；幂等', () => {
+  // 纯函数契约：前缀/后缀剥离 + 裸名原样 + 幂等 + 大小写不敏感
+  assert.equal(normalizeDomainArg('auto-backend'), 'auto-backend', '裸名原样')
+  assert.equal(normalizeDomainArg('fr/auto-backend'), 'auto-backend', 'fr/ 前缀剥离')
+  assert.equal(normalizeDomainArg('auto-backend.md'), 'auto-backend', '.md 后缀剥离')
+  assert.equal(normalizeDomainArg('fr/auto-backend.md'), 'auto-backend', '前缀+后缀同剥')
+  assert.equal(normalizeDomainArg('fr/Auto-Backend.md'), 'Auto-Backend', '剥离大小写不敏感')
+  assert.equal(normalizeDomainArg(normalizeDomainArg('fr/auto-backend.md')), normalizeDomainArg('fr/auto-backend.md'), '幂等')
+  assert.equal(normalizeDomainArg(' fr/ x '), 'x', '空白 trim')
+
+  // 库层：前缀/后缀形态与裸名干跑同结果
+  const f = fixture()
+  const bare = planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] })
+  assert.deepEqual(
+    planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'fr/auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] }),
+    bare,
+    'fr/ 前缀形态干跑与裸名一致',
+  )
+  assert.deepEqual(
+    planRedomain({ knowledgeRoot: f.knowledgeRoot, from: 'auto-backend.md', to: 'platform-sync', anchors: ['FR-auto-backend-019'] }),
+    bare,
+    '.md 后缀形态干跑与裸名一致',
+  )
+
+  // 库层写入同样容忍前缀形态
+  const f2 = fixture()
+  const r = redomainFrEntries({ knowledgeRoot: f2.knowledgeRoot, from: 'fr/auto-backend', to: 'platform-sync', anchors: ['FR-auto-backend-019'] })
+  assert.equal(r.moved.length, 1)
+  assert.equal(r.moved[0].id, 'FR-auto-backend-019', 'ID 不变')
+  assert.ok(existsSync(join(f2.knowledgeRoot, 'fr', 'platform-sync.md')))
+
+  // 剥空拒绝（只传 fr/ / 空串）——报错含 fr/ 前缀用法提示，且不落盘
+  const f3 = fixture()
+  assert.throws(() => planRedomain({ knowledgeRoot: f3.knowledgeRoot, from: 'fr/', to: 'platform-sync' }), /fr\/ 前缀/)
+  assert.throws(() => redomainFrEntries({ knowledgeRoot: f3.knowledgeRoot, from: '', to: 'platform-sync' }), /fr\/ 前缀/)
+  assert.ok(existsSync(join(f3.knowledgeRoot, 'fr', 'auto-backend.md')), '拒绝路径无半态写盘')
+})
+
+test('⑦ CLI --from fr/ 前缀端到端：干跑/--write 与裸名等价且回显裸域名', () => {
+  const f = fixture()
+  const bin = join(ROOT, 'bin', 'sillyspec.js')
+  const dry = execFileSync('node', [bin, 'tests', '--redomain', '--from', 'fr/auto-backend', '--to', 'platform-sync'], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  assert.match(dry, /域迁移预览（--write 落盘）：fr\/auto-backend\.md → fr\/platform-sync\.md/, '预览回显裸域名路径')
+  assert.ok(!dry.includes('fr/fr/'), '回显无 fr/fr/ 双前缀')
+  assert.ok(existsSync(join(f.knowledgeRoot, 'fr', 'auto-backend.md')), '干跑不落盘')
+
+  const wr = execFileSync('node', [bin, 'tests', '--redomain', '--from', 'fr/auto-backend', '--to', 'platform-sync', '--write'], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  assert.match(wr, /域迁移完成：2 条/)
+  assert.ok(!wr.includes('fr/fr/'), '完成回显无 fr/fr/ 双前缀')
+  assert.ok(!existsSync(join(f.knowledgeRoot, 'fr', 'auto-backend.md')), '源空壳已删')
 })

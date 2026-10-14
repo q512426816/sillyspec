@@ -3382,17 +3382,19 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // --from <域> --to <域> [--anchor <FR-id> 可重复]；干跑缺省列条目，--write 落盘。
       // 身份铁律：迁域不换号（绑定/supersede 链靠 ID 寻址）；平台伪域卡「一键迁移」的 CLI 端。
       if (has('--redomain')) {
-        const fromD = flag('--from')
-        const toD = flag('--to')
+        const { planRedomain, redomainFrEntries, normalizeDomainArg } = await import('./redomain.js')
+        // 入参归一化（2026-10-14-redomain-domain-arg-normalize）：--from/--to 容忍
+        // flow done 提示语原样形态（fr/auto-backend、auto-backend.md），回显/报错统一裸域名。
+        const fromD = normalizeDomainArg(flag('--from'))
+        const toD = normalizeDomainArg(flag('--to'))
         // --by-change（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷2）：unmapped 等
         // 混合池按「变更：<名>」字段分批迁移——整域迁移会错置大部分条目，来源变更才是分批键。
         const byChangeD = flag('--by-change')
-        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]'); break }
+        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]\n  域名可带 fr/ 前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）'); break }
         // 多 --anchor 收集
         const anchorList = []
         for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])
         try {
-          const { planRedomain, redomainFrEntries } = await import('./redomain.js')
           if (!has('--write')) {
             // 预览与落盘同口径透传 byChange（坑 redomain-plan-preview-by-change-ignored，
             // 2026-10-02 实证：76338b4d 收编在途工作时此行漏透传——预览列整域、落盘只迁

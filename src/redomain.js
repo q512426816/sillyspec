@@ -21,6 +21,27 @@ import { writeAtomicSync } from './fs-atomic.js'
 /** 条目段头（## FR-xxx-NNN / ## FR-NNN）判定与 ID 提取 */
 const FR_HEADER_RE = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/
 
+/**
+ * 域名入参归一化（2026-10-14-redomain-domain-arg-normalize）。
+ *
+ * flow done 伪域告警提示语（fr-index.js）给出的是 `fr/auto-backend` 形态、手工
+ * 输入还可能带 `.md` 后缀，而本模块按裸域名拼 `fr/${from}.md`——两种口径曾打架
+ * 产生 `fr/fr/` 双前缀报错。本函数把入参统一收敛为裸域名：trim → 剥前导 `fr/`
+ * （不区分大小写）→ 剥尾随 `.md`；裸名原样返回，幂等。可能返回空串（如只传
+ * `fr/`）——空值拒绝由调用方负责（报错文案需含「fr/ 前缀」用法提示）。
+ * 域文件物理上都在 fr/ 目录内、裸名不含 `/`，`fr/xxx` 只可能是前缀形态，无歧义。
+ */
+export function normalizeDomainArg(v) {
+  return String(v ?? '').trim().replace(/^fr\//i, '').replace(/\.md$/i, '').trim()
+}
+
+/** 归一化后空值拒绝（统一文案，调用方在一切 fs IO 之前调用） */
+function assertDomainArgs({ from, to }) {
+  if (!from || !to) {
+    throw new Error('源域/目标域为空：域名可带 fr/ 前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）')
+  }
+}
+
 function frEntryId(headerLine) {
   const m = FR_HEADER_RE.exec(headerLine)
   return m ? m[1] : null
@@ -64,6 +85,9 @@ function entrySourceChange(sectionLines) {
  * @throws 源域缺席 / 无匹配条目 / anchor 未命中
  */
 export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
+  from = normalizeDomainArg(from)
+  to = normalizeDomainArg(to)
+  assertDomainArgs({ from, to })
   const frDir = join(knowledgeRoot, 'fr')
   const fromPath = join(frDir, `${from}.md`)
   const toPath = join(frDir, `${to}.md`)
@@ -134,6 +158,9 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byC
 
 /** 干跑预览：列出将迁移条目，不落盘（byChange 同执行侧过滤） */
 export function planRedomain({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
+  from = normalizeDomainArg(from)
+  to = normalizeDomainArg(to)
+  assertDomainArgs({ from, to })
   const frDir = join(knowledgeRoot, 'fr')
   const fromPath = join(frDir, `${from}.md`)
   if (!existsSync(fromPath)) throw new Error(`源域文件不存在：fr/${from}.md`)
