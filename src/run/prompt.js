@@ -2247,6 +2247,16 @@ ${maskVolatileForGuide(guideTemplate)}
     }
     console.log('<!--SS-META:' + JSON.stringify(meta) + '-->')
   }
+
+  // 尾部全文锚（2026-10-14-guide-anchor-adopt-proto，sess_fb51d988 实证）：首见全量渲染可能被
+  // harness 工具结果截断保尾——长动态注入段（模块欠账/知识命中等）把决策关键节（原型分级/生成
+  // 要求等）顶出可见窗口，agent 只见铁律半句就临场发挥。末尾一行带 step-guides 全文路径，截断后
+  // 仍能 Read 回完整规则（complete.js task-08 锚定行的补全：带路径，不只报位置）。复入分支顶部
+  // 已有 📄 行，但其动态附录同样可能很长把顶部顶掉——尾部统一再锚一次。guide 关闭/--json 劫持/
+  // 文件不在场时零输出（stdout 确定性测试面不变）。
+  if (guideEnabled && !jsonHijacked && existsSync(guideFile)) {
+    console.log(`📄 指引全文锚：${guideFile}（本输出被截断或上下文丢失时 Read 此文件拿回完整步骤规则——决策关键节都在内）`)
+  }
 }
 /**
  * 替换 prompt 文本中的路径根占位符 {SPEC_ROOT}/{DOCS_ROOT}/{PROJECTS_ROOT}/

@@ -213,6 +213,12 @@ console.log('\n--- 6. outputStep execute 未命中零变化（字节对比） --
   try {
     writeFiveFileFixture(fx.knowledgeDir)
     const changeName = '2026-09-14-ki-nomatch' // 查询词不命中任何 keyword
+    // guide 面关闭（stdout 确定性测试族既有逃生门）：A/B 用不同 prompt 文本模拟升级前后，
+    // step-guide 指纹随之不同 → 尾部「📄 指引全文锚」的 guide 文件名逐侧不同——那是 guide
+    // 机制的面，与本测试的断言对象（知识注入面字节稳定）无关（2026-10-14-guide-anchor-adopt-proto）。
+    const prevGuide = process.env.SILLYSPEC_STEP_GUIDE
+    process.env.SILLYSPEC_STEP_GUIDE = '0'
+    try {
     // A：升级后真实路径——占位符经未命中分支替换
     const stepsA = [{ name: '确认执行范围', prompt: '解析任务，确认执行范围。\n\n### 知识命中报告\n{KNOWLEDGE_HIT_REPORT}\n' }]
     const outA = await captureOutput(() => outputStep('execute', 0, stepsA, fx.root, changeName, 'ki-proj', { specRoot: fx.specBase }))
@@ -224,6 +230,10 @@ console.log('\n--- 6. outputStep execute 未命中零变化（字节对比） --
     const reportJson = JSON.parse(readFileSync(join(fx.runtimeDir, 'knowledge-hit-report.json'), 'utf8'))
     assertTrue(reportJson.matched === false && reportJson.entry_count === 0, '未命中 report.json 仍落盘 matched:false（既有行为不变）')
     assertTrue(readKnowledgeHits(fx.runtimeDir).length === 0, '未命中零遥测')
+    } finally {
+      if (prevGuide === undefined) delete process.env.SILLYSPEC_STEP_GUIDE
+      else process.env.SILLYSPEC_STEP_GUIDE = prevGuide
+    }
   } finally { cleanup(fx) }
 }
 
