@@ -1038,12 +1038,18 @@ export function readDecisionRulesConfig(projectRoot) {
   }
 }
 
-/** 豁免键匹配（本变更范围先支持键匹配，非子串）：规则级 `decisions.<id>.<kind>` 精确命中，
- *  或条目级 `decisions.<id>` 伞形命中（一条豁免该决策全部规则）。无 decisions. 前缀的键不参与。 */
-function isDecisionExempt(knownFailures, entryId, kind) {
-  const ruleKey = `decisions.${entryId}.${kind}`
-  const entryKey = `decisions.${entryId}`
-  return knownFailures.some(k => k === ruleKey || k === entryKey)
+/** 豁免键匹配（键匹配非子串）：域限定键 `decisions.<域>/<id>.<kind>`（规则级精确）与
+ *  `decisions.<域>/<id>`（条目级伞形）——2026-10-14-decision-id-p2-hardening：裸键无域限定，
+ *  一条 decisions.<id> 可静默豁免全库同号条目（D-001@v1 ×296 潜伏面），域限定键收窄命中面；
+ *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。无 decisions. 前缀的键不参与。
+ *  导出（测试面先例 anchorFilePath）。 */
+export function isDecisionExempt(knownFailures, entryId, kind, domain = null) {
+  const keys = [
+    `decisions.${entryId}.${kind}`,
+    `decisions.${entryId}`,
+    ...(domain ? [`decisions.${domain}/${entryId}.${kind}`, `decisions.${domain}/${entryId}`] : []),
+  ]
+  return knownFailures.some(k => keys.includes(k))
 }
 
 /**
@@ -1066,13 +1072,15 @@ export function parseDecisionEntries(md) {
       continue
     }
     if (!cur) continue
-    // 变更：标签读入（2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt 触碰事实行
-    // 渲染变更名限定词消歧需读入；旧条目缺行容错 null）
-    const f = line.match(/^(状态|锚点|最近确认|变更)\s*[：:]\s*(.*)$/)
+    // 变更/来源：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt
+    // 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy 兜底——
+    // 变更行无条件覆盖在前、来源仅补缺；旧条目缺行容错 null）
+    const f = line.match(/^(状态|锚点|最近确认|变更|来源)\s*[：:]\s*(.*)$/)
     if (!f) continue
     if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
     else if (f[1] === '锚点') cur.anchor = f[2].trim()
     else if (f[1] === '变更') cur.change = f[2].trim() || null
+    else if (f[1] === '来源') cur.change = cur.change || (f[2].trim() || null)
     else cur.lastConfirmed = f[2].trim()
   }
   flush()
@@ -1152,7 +1160,7 @@ export async function runDecisionRules(opts) {
   const treeCache = new Map() // resolveCandidates 全树扫描复用（同 docs check 主链路口径）
 
   const emit = (id, domain, file, kind, extra, message) => {
-    if (isDecisionExempt(failures, id, kind)) {
+    if (isDecisionExempt(failures, id, kind, domain)) {
       exempted.push({ key: `decisions.${id}.${kind}`, id, kind })
       return
     }

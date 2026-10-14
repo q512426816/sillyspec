@@ -69,6 +69,9 @@ const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supe
 const DECISION_ANCHOR_RE = /^锚点\s*[：:]\s*(.*)$/
 // 变更：单独标签（变更名限定——D-xxx 是变更内局部序号，跨变更同号互不相干，去重键依赖它）
 const DECISION_CHANGE_RE = /^变更\s*[：:]\s*(.*)$/
+// 来源：兜底标签（2026-10-14-decision-id-p2-hardening）：2026-08-24 首修形态残留（后被「变更：」
+// 取代，现存 20 行）——变更行无条件覆盖在前，来源仅补缺（任意行序下变更优先）
+const DECISION_ORIGIN_RE = /^来源\s*[：:]\s*(.*)$/
 
 /** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
  *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
@@ -144,6 +147,8 @@ function parseDecisionFile(filePath, file) {
     // 域文件跨变更同号条目常见（D-xxx 是变更内局部序号），去重键须含变更名否则先到条目遮蔽后来者）
     const c = line.match(DECISION_CHANGE_RE)
     if (c) { cur.change = c[1].trim(); continue }
+    const o = line.match(DECISION_ORIGIN_RE)
+    if (o) { if (!cur.change) cur.change = o[1].trim(); continue }
     const f = line.match(DECISION_FIELD_RE)
     if (!f) continue
     const value = f[2].trim()
@@ -170,20 +175,25 @@ function parseDecisionFile(filePath, file) {
 export function parseDecisionEntries(indexDir, indexEntries = null) {
   const routes = (indexEntries || parseKnowledgeIndex(indexDir)).filter(isDecisionRoute)
   const hits = []
+  // 路由行按文件去重单解析（2026-10-14-decision-id-p2-hardening）：多条路由行指向同一域文件只解析
+  // 一次——此前靠条目级折叠兜完全重复，legacy 不折叠后从源头消除重复
+  const parsed = new Set()
   for (const route of routes) {
+    const fileKey = String(route.file || '').replace(/\\/g, '/')
+    if (parsed.has(fileKey)) continue
+    parsed.add(fileKey)
     const filePath = join(indexDir, route.file)
     if (!existsSync(filePath)) continue // 路由行失效（域文件已删）→ 跳过不阻断
     hits.push(...parseDecisionFile(filePath, route.file))
   }
-  // 多条路由行指向同一域文件时按 file+id+变更 去重（完全重复折叠）；键含变更名——
-  // 跨变更同号条目（D-xxx 是变更内局部序号，域文件内同 id 不同变更常见）不再被先到者
-  // 遮蔽（坑 decision-cross-change-id-shadow，2026-09-11 dogfood 实证：runtime.md 七个
-  // D-001@v1 分属七变更，旧键只放行首个——同号 rejected 决策在 {DECISION_HITS} 防复潮
-  // 注入同样被遮蔽）。无「变更：」行的 legacy 条目 change='' 与同号 legacy 条目互折叠
-  // （维持旧行为，不放大历史条目数）。
+  // 带 change 条目按 file+id+change 去重（坑 decision-cross-change-id-shadow，2026-09-11 dogfood 实证：
+  // 域文件跨变更同号条目常见，键须含变更名否则先到遮蔽——runtime.md 七个 D-001@v1 分属七变更）。
+  // 无「变更：/来源：」行的 legacy 条目不再互折叠（2026-10-14-decision-id-p2-hardening：旧互折叠致
+  // 同号 legacy 互相遮蔽——实测 2 条 implemented 条目永久隐身；路由单解析后完全重复已从源头消除）。
   const seen = new Set()
   return hits.filter(h => {
-    const key = `${h.file}#${h.id}#${h.change || ''}`
+    if (!h.change) return true
+    const key = `${h.file}#${h.id}#${h.change}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

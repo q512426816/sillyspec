@@ -323,7 +323,7 @@ test('双路由完全重复仍折叠：同一域文件两条路由行 → 同变
   assert.equal(same.length, 1, '同变更同号完全重复折叠为一份（去重原语义保持）')
 })
 
-test('legacy 无变更行条目维持旧行为：同号 legacy 条目互折叠', () => {
+test('legacy 无变更行条目不再互折叠：同号 legacy 各自可见（2026-10-14-decision-id-p2-hardening 反转——旧互折叠致 2 条 implemented 条目永久隐身）', () => {
   const lib = mkDecisionLib([
     '# 决策知识 — change-management', '',
     '## D-001@v1 legacy 甲',
@@ -333,8 +333,8 @@ test('legacy 无变更行条目维持旧行为：同号 legacy 条目互折叠',
     '## D-001@v1 legacy 乙',
     '状态：implemented',
     '锚点：未记录',
-    '理由：同样无变更行——与甲互折叠（不放大历史条目数）', '',
+    '理由：同样无变更行——不再互折叠（各自可见）', '',
   ].join('\n') + '\n')
   const entries = parseDecisionEntries(lib)
-  assert.equal(entries.filter(e => e.id === 'D-001@v1').length, 1, 'change="" 的同号 legacy 条目折叠')
+  assert.equal(entries.filter(e => e.id === 'D-001@v1').length, 2, '同号 legacy 共存（不折叠）')
 })

@@ -493,12 +493,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
               .filter((h) => !_hits.some((x) => x.file === h.file && x.id === h.id && (x.change || '') === (h.change || '')))
             _hits.push(..._viaImpact)
           } catch { /* 图构建/键解析 fail-soft——词面命中面不受影响 */ }
-          // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
-          // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
+          // 已回应不重弹：decisions.md 某行同时含「命中 id＋域文件名（或命中条目变更名）」（小白鼠
+          // 回应形态「unmapped.md D-001@v1」）→ 视为已甄别过，静默。行级共现（2026-10-14-decision-id-p2-hardening
+          // 收紧：文件级共现时本变更自身同号 id + 正文常见词 backend/unmapped 撞车会静默吞掉他变更命中）。
           const _answered = _dm
             ? (h) => {
                 const _dom = String(h.file || '').replace(/^decisions\//, '').replace(/\.md$/, '')
-                return _dm.includes(h.id) && _dm.includes(_dom)
+                return _dm.split(/\r?\n/).some((line) => line.includes(h.id) && (line.includes(_dom) || (h.change && line.includes(h.change))))
               }
             : () => false
           const _echoHits = _hits.filter((h) => !_answered(h))

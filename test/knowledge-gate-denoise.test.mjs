@@ -121,6 +121,24 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回�
     assert.ok(!r.stdout.includes('D-001@v1 枚举开放世界'), `已回应 → 静默（实际：${r.stdout.slice(-300)}）`)
     rmQuiet(cwd)
   }
+  // 文件级共现不再吞（2026-10-14-decision-id-p2-hardening 行级收紧）：自身同号 id 与域名词分行
+  // ——旧文件级判定会静默吞掉命中，行级共现后照常回显
+  {
+    const { cwd, specBase } = makeRepo('kgd-line-')
+    seedKnowledge(specBase)
+    const { pm, progress } = await seedPlanStep(cwd, specBase)
+    writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
+      '# 决策记录（Decisions）', '',
+      '## D-001@v1: 方案引入枚举词表机制',
+      '- question: 归 unmapped 域的旧机制怎么处理？', '',
+    ].join('\n'))
+    const r = await runCapturing(() =>
+      completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
+        changeName: CN, doneAnswer: '代答', printNext: false,
+      }))
+    assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '文件级共现（id 与域名词分行）→ 照常回显（误吞清偿）')
+    rmQuiet(cwd)
+  }
 })
 
 process.on('exit', cleanup)

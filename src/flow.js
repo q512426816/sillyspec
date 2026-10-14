@@ -306,7 +306,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     summary.rejectedDecisions = rejected.length
     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
     if (rejected.length > 0) {
-      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
+      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本；跨变更引用带变更名 变更名#D-xxx@vN）：`)
       for (const h of rejected.slice(0, 5)) {
         const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
         lines.push(`   - ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)

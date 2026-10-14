@@ -1402,7 +1402,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       let decInjected = ''
       if (rejectedHits.length > 0) {
         const lines = [
-          '⚠️ 否决决策/死路注记提示（历史已否决或已记死路，防复潮）——下列决策此前已被否决或已记死路。看到理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据：'
+          '⚠️ 否决决策/死路注记提示（历史已否决或已记死路，防复潮）——下列决策此前已被否决或已记死路。看到理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据；跨变更引用他条目须带变更名限定（变更名#D-xxx@vN——同号不同变更互不相干）：'
         ]
         for (const h of rejectedHits.slice(0, 5)) {
           lines.push(`- ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}）${h.status === 'rejected' ? '' : ' ⚰️死路注记'}`)

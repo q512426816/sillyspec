@@ -336,8 +336,9 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
 }
 
 /** 知识文件切段：preamble 行 + 条目段（段边界 = 下一节头）。
- * 段的变更归属取段内 `变更：<name>` 行；无该行的历史条目 → change=null（legacy：
- * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。
+ * 段的变更归属取段内 `变更：<name>` 行，「来源：<name>` 兜底（2026-10-14-decision-id-p2-hardening：
+ * 08-24 首修形态残留——读出后带来源的 legacy 段参与同变更同号匹配/supersede，重蒸馏在位更新收敛）；
+ * 无任何限定行的历史条目 → change=null（legacy：升级前落库的条目，不参与新条目的同号匹配——只共存不误删）。
  * 2026-09-18-fr-index-l1 参数化：sectionRegex/buildId 经参（decisions 缺省不变；fr 侧传 FR 节头
  * 正则与恒等 id），decisions 调用点零改动。 */
 export function splitKnowledgeSections(content, opts = {}) {
@@ -359,8 +360,9 @@ export function splitKnowledgeSections(content, opts = {}) {
   if (cur) sections.push(cur)
   for (const s of sections) {
     s.id = buildId(s.number, s.version)
-    const cm = s.lines.find(l => /^变更[：:]/.test(l))
-    s.change = cm ? cm.replace(/^变更[：:]\s*/, '').trim() || null : null
+    // 「变更：」优先、「来源：」兜底（行内前缀按命中行剥除；无任何限定行 → null 不互认）
+    const cm = s.lines.find(l => /^变更[：:]/.test(l)) || s.lines.find(l => /^来源[：:]/.test(l))
+    s.change = cm ? cm.replace(/^(变更|来源)[：:]\s*/, '').trim() || null : null
   }
   return { preamble, sections }
 }
