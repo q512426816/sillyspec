@@ -95,7 +95,7 @@ export function renderLocalInstruction(contract) {
 
   const modeLine = readOnly
     ? '5. **只读模式（readOnly=true）**：本子代理只读 / 审查 / 写 review.json，**不改源码**'
-    : '5. **写模式（readOnly=false）**：按蓝图实现源码（TDD：先读后写 → 写测试 → 写实现）'
+    : '5. **写模式（readOnly=false）**：按蓝图实现源码（TDD：先读后写 → 写测试 → 写实现，按层适用——纯逻辑严格先行、行为契约断用户所见、样式/纯配置不写，判据见「测试用例设计」）'
 
   return `### 派发后端：Local（本机 Agent tool）— 默认与降级路径
 

@@ -18,7 +18,7 @@ sillyspec flow start --change <变更名> --input "<动机与背景>
 #    极速变体：用户显式说「极速/别验证/只要 spec 和代码」类原话时才加 --turbo（仅用户显式触发，
 #    禁止你自行启用）——flow-state 留痕，收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），
 #    spec 结构校验、tasks 全勾、ledger、patch 冻结、distill、归档照常；升厚即失效恢复全量仪式。
-# ② 直接干活：改代码写测试；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
+# ② 直接干活：改代码写测试（按层适用——纯逻辑先写、行为契约断用户所见、样式/纯配置不写）；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
 #    tasks.md 是你的工作队列——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态），
 #    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN
 #    即时回显进度与下一任务）→ 下一行；每格勾选要有对应提交（消息带 task-NN），一把勾收口被拒。

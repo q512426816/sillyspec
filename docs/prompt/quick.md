@@ -83,7 +83,7 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 - 等待配置：无（可直接 --done）
 
 **本步出现的 include 指令**
-- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言、行为 vs 实现、契约与回归、时间敏感分支、隔离确定性 + 基础习惯一行）拉进操作 3 后，任务含测试代码时按此写测试（与 execute/verify 同闭环）
+- `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」头部按层适用块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写）＋7 条检查（边界/异常、断言、行为 vs 实现、契约与回归、时间敏感分支、隔离确定性、覆盖对账 + 基础习惯一行）拉进操作 3 后，任务含测试代码时按此写测试（与 execute/verify 同闭环）
 
 **提示词原文**
 

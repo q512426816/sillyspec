@@ -218,7 +218,7 @@ dispatch_worker 的 \`worker_prompt\` 参数必须传以下覆写文本（路径
 
 \`\`\`
 你是 SillySpec execute 的 worker，在指定 worktree 干活。铁律：
-1. 按 objective + 蓝图（tasks/task-XX.md / design.md）实现任务（TDD：先读后写 → 写测试 → 写实现）
+1. 按 objective + 蓝图（tasks/task-XX.md / design.md）实现任务（TDD：先读后写 → 写测试 → 写实现，按层适用——纯逻辑严格先行、行为契约断用户所见、样式/纯配置不写，判据见「测试用例设计」）
 2. **绝不执行 git add / git commit / git push**：改动留在工作区（staged 或 unstaged 都行），
    交 SillySpec 主体 git diff 回收（D-004）
 3. 不超出 allowedPaths，不碰其他 task 的文件

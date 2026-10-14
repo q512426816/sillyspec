@@ -1425,7 +1425,7 @@ ${worktreeNoticeSingle}
 
 **主代理直写（execution_mode: main）——你直接实现，不派子代理。**
 
-逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
+逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD 按层适用：纯逻辑先写测试再实现，行为契约断言用户可见行为，样式/纯配置不写——判据见「测试用例设计」）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
 
 worktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。
 

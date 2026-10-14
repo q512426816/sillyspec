@@ -10,3 +10,4 @@
 - ql-20260912-002-57c4 | runCli 子进程超时兜底（默认 300s env 可调）+kill+isError envelope+输出 8MB 封顶；清 callTool 死代码
 - ql-20260912-009-06b4 | exit 2（EXIT_UNKNOWN 合法 envelope）不再标 isError（诊断 text 不被 host 吞）
 | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
+| 2026-10-14 | 2026-10-14-tdd-scope-guidance | worker_prompt 铁律第 1 条 TDD 措辞带按层限定（纯逻辑严格先行/行为契约断用户所见/样式与纯配置不写，判据见「测试用例设计」）。 |
