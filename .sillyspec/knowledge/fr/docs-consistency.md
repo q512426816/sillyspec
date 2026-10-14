@@ -1118,3 +1118,56 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-14-scale-large-evidence
   status: active
+
+## FR-docs-consistency-054 supersedes 边只在同变更内解析（含双 legacy 无「变更：」行的同源匹配）；同变更无目标时不建边，不再回退他变更同号条目；用与审计同口径脚本复核，33 条误连归零
+变更：2026-10-14-supersedes-mislink-and-change-display
+状态：active
+摘要：同变更（含双 legacy）建边；跨变更同号不建边
+场景正文：
+- 场景：同变更（含双 legacy）建边 — Given 同域文件含同变更的 D-005@v2 与 D-005@v1 两条，且另有一对双方均无「变更：」行的 legacy 同号新旧条目；When 构建知识图谱；Then 两条 supersedes 边均建立（v2 → v1，同变更限定）
+- 场景：跨变更同号不建边 — Given 同域文件含 D-001@v2（变更 A，supersedes：D-001@v1）与 D-001@v1（变更 B，与 A 无关）；When 构建知识图谱；Then 不建任何指向 D-001@v1（变更 B）的 supersedes 边（旧「同变更优先、再退同文件首个」回退已除）
+全文：.sillyspec/changes/archive/2026-10-14-supersedes-mislink-and-change-display/requirements.md#FR-01
+最近确认：beeb1ebae01f15018240be37e474b9114d7119ca
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「①解析：supersedes 只认同变更——同变更（含双 legacy）建边、跨变更同号不建边」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-supersedes-mislink-and-change-display
+  status: active
+
+## FR-docs-consistency-055 四处决策展示行渲染变更名限定（change 在场显示变更名；缺失时稳定降级形态「变更未记录」不编造）；同号条目在展示面即可区分
+变更：2026-10-14-supersedes-mislink-and-change-display
+状态：active
+摘要：同号条目在场区分；legacy 缺变更行降级
+场景正文：
+- 场景：同号条目在场区分 — Given 两个 D-001@v1 分属不同变更且同被命中；When 渲染任一展示面；Then 两条展示行各含自己的「变更 <名>」限定，可直接区分
+- 场景：legacy 缺变更行降级 — Given 命中条目无「变更：」行；When 渲染展示面；Then 该行渲染「变更未记录」（不编造、不省略）
+全文：.sillyspec/changes/archive/2026-10-14-supersedes-mislink-and-change-display/requirements.md#FR-02
+最近确认：beeb1ebae01f15018240be37e474b9114d7119ca
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-02
+  tests: test/decision-change-qualifier.test.mjs「接线钉：{DECISION_HITS} 渲染使用 decisionChangeQualifier」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-supersedes-mislink-and-change-display
+  status: active
+
+## FR-docs-consistency-056 新增/更新测试跑绿；全量测试 + lint 绿
+变更：2026-10-14-supersedes-mislink-and-change-display
+状态：active
+摘要：收口实测
+场景正文：
+- 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail，否则整单 FAIL
+全文：.sillyspec/changes/archive/2026-10-14-supersedes-mislink-and-change-display/requirements.md#FR-03
+最近确认：beeb1ebae01f15018240be37e474b9114d7119ca

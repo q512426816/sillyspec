@@ -1,0 +1,22 @@
+{"ts":1791974215529,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1791974215529,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791974665414,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791974685117,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791974695028,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791974896524,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/docs-check.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791975224284,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/.tmp-kg-old.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791975296098,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791975344340,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1791975344503,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1791975344885,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791975344885,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1791975384838,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/docs-check.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791975427187,"kind":"commit","stage":null,"detail":"29935484","provisional":true}
+{"ts":1791975704806,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1791975707415,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791975707415,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1791975730795,"kind":"commit","stage":null,"detail":"439316f6","provisional":true}
+{"ts":1791975760125,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791975822611,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（60.9s） · 20261014110342","provisional":true}
+{"ts":1791975984976,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791976001555,"kind":"commit","stage":null,"detail":"beeb1eba","provisional":true}

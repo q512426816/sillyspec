@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-supersedes-mislink-and-change-display",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "beeb1ebae01f15018240be37e474b9114d7119ca",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "边界已裁决：可接受（去回退致 33 条误连边消失系 FR-01 有意清偿，误连危害大于缺边且取代关系文本仍在；边改节点建齐后补挂清偿「目标晚于引用者定义则静默丢边」的既有顺序依赖——新测试双序锁定：真库仿真老代码 27 边全跨变更→修复后 0，旧序丢边 5 例差额与审计口径自洽）",
+    "并发": "ok（buildKnowledgeGraph 纯只读现算零缓存落盘，addEdge 节点齐备后补挂无共享可变态；decisionChangeQualifier 纯函数；四处渲染面新增逻辑均为只读拼接）",
+    "切换": "边界已裁决：可接受（legacy 双无「变更：」行同源仍建边（测试锁定）；命中行缺 change 稳定降级「变更未记录」不编造不省略；旧「来源：」标签不识别属既有行为——knowledge-match 的「变更：」正则本单未动（src/knowledge-match.js:71），不在本单范围）",
+    "作用域": "边界已裁决：可接受（展示面全局号 D-<域>-NNN 属 P3 增量方案、不在本单范围，本单以最小改动变更名限定词消歧成交；图谱按 specBase 物理隔离构建，跨仓/多实例无共享数据面，无串台）"
+  },
+  "reviewedAt": "2026-10-14T11:12:33Z"
+}

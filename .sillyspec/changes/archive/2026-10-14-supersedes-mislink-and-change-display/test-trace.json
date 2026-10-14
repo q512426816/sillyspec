@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-supersedes-mislink-and-change-display",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「①解析全形态：节点边数与本体落位（含同号跨变更不折叠/不落盘）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「①解析：supersedes 只认同变更——同变更（含双 legacy）建边、跨变更同号不建边」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-touch.test.mjs「变更名限定：change 在场渲染「变更 <名>」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-fr-inject-parity.test.mjs「① flowKnowledgeDigest：域路由命中 active FR（索引序、无 ⚠️）+ 否决决策命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-02",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「① 命中场景：--output 含机制词 → warn 回显 rejected 条目＋evidence 提示，不阻断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-supersedes-mislink-and-change-display:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-change-qualifier.test.mjs「接线钉：{DECISION_HITS} 渲染使用 decisionChangeQualifier」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-supersedes-mislink-and-change-display"
+    }
+  ]
+}
