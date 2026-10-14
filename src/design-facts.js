@@ -296,8 +296,10 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   //「骨架优先，仅手写补文档才手填元数据」的依据（validateMetadata 未来可据此只认 CLI 戳）
   lines.push(`generated_by: sillyspec-design-init`)
   // scale 不预填（2026-09-29-brainstorm-exit-thin-default）：此前预填 large 是静默厚默认——
-  // 不主动改就是五阶段；现由 brainstorm Step 8 规模评估按复杂度/上下文轴落值，拿不准默认 small
-  lines.push('scale: ""  # TODO：Step 8 规模评估落值——单上下文可吞吐=small（flow start 收编）；需 Wave 编排/上下文分片/多阶段治理=large（run plan）；拿不准 small')
+  // 不主动改就是五阶段；现由 brainstorm Step 8 规模评估按复杂度/上下文轴落值，拿不准默认 small。
+  // 反判据口径（2026-10-14-scale-large-evidence）：跨端/多仓/顺序依赖不算 Wave 证据，判 large
+  // 须写明「可真并行任务簇+单上下文吃不下」两条同时成立——deploy-release-notes 镜像误判实证
+  lines.push('scale: ""  # TODO：Step 8 规模评估落值——单上下文可吞吐=small（flow start 收编）；需 Wave 真并行编排/上下文分片/多阶段治理=large（run plan，须写明 Wave 证据：可真并行任务簇+单上下文吃不下；跨端/多仓/顺序依赖不算）；拿不准 small')
   lines.push('---')
   lines.push('')
   lines.push(`# 设计文档（Design）— ${change}`)
