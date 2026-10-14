@@ -61,7 +61,7 @@ function isDecisionRoute(entry) {
   return /^decisions\//.test(String(entry.file || '').replace(/\\/g, '/'))
 }
 
-const DECISION_HEADER_RE = /^##\s+(D-\d+@v\d+)\s*(.*)$/
+const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-]+-)?\d+@v\d+)\s*(.*)$/
 const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
 // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
@@ -72,6 +72,9 @@ const DECISION_CHANGE_RE = /^变更\s*[：:]\s*(.*)$/
 // 来源：兜底标签（2026-10-14-decision-id-p2-hardening）：2026-08-24 首修形态残留（后被「变更：」
 // 取代，现存 20 行）——变更行无条件覆盖在前，来源仅补缺（任意行序下变更优先）
 const DECISION_ORIGIN_RE = /^来源\s*[：:]\s*(.*)$/
+// 原编号：溯源标签（2026-10-14-decision-global-id-epoch）：epoch 形态条目的局部号——graph
+// supersedes 经它把「supersedes：D-011@v1」解析到同变更全局号段
+const DECISION_ORIGINID_RE = /^原编号\s*[：:]\s*(.*)$/
 
 /** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
  *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
@@ -136,7 +139,7 @@ function parseDecisionFile(filePath, file) {
     const h = line.match(DECISION_HEADER_RE)
     if (h) {
       flush()
-      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '', change: '', supersedesText: '' }
+      cur = { file, id: h[1], title: h[2].trim(), status: '', reason: '', revisitWhen: '', files: [], anchor: '', change: '', supersedesText: '', originId: '' }
       continue
     }
     if (!cur) continue
@@ -149,6 +152,8 @@ function parseDecisionFile(filePath, file) {
     if (c) { cur.change = c[1].trim(); continue }
     const o = line.match(DECISION_ORIGIN_RE)
     if (o) { if (!cur.change) cur.change = o[1].trim(); continue }
+    const oi = line.match(DECISION_ORIGINID_RE)
+    if (oi) { cur.originId = oi[1].trim(); continue }
     const f = line.match(DECISION_FIELD_RE)
     if (!f) continue
     const value = f[2].trim()

@@ -45,7 +45,8 @@ const countSections = (knowledgeRoot, domain, fn) => {
   const p = join(knowledgeRoot, 'decisions', `${domain}.md`)
   if (!existsSync(p)) return []
   const content = readFileSync(p, 'utf8')
-  const heads = content.split('\n').filter(l => /^## D-\d+@v\d+/.test(l))
+  // 节头双形态（2026-10-14-decision-global-id-epoch）：局部 D-002@v1 与全局 D-<域>-NNN@vN
+  const heads = content.split('\n').filter(l => /^## D-(?:[A-Za-z0-9_\-]+-)?\d+@v\d+/.test(l))
   if (fn) return fn(content, heads)
   return heads
 }
@@ -62,8 +63,9 @@ console.log('=== 决策提炼：跨变更同号共存（变更名限定）===\n'
   const r1 = distillIntoKnowledge(changeA, knowledgeRoot, 'hash-a1', null)
   assert(r1.written.some(w => w.action === 'append'), 'A 的 D-002@v1 首次 append')
   let heads = countSections(knowledgeRoot, 'unmapped')
-  assert(heads.length === 1 && heads[0].includes('D-002@v1'), 'A 落库一个 D-002@v1 段')
+  assert(heads.length === 1 && /^## D-unmapped-001@v1/.test(heads[0]), 'A 落库一个段（epoch 全局号 D-unmapped-001，原编号 D-002@v1）')
   let content = readFileSync(join(knowledgeRoot, 'decisions', 'unmapped.md'), 'utf8')
+  assert(content.includes('原编号：D-002@v1'), '原编号溯源字段在场（局部号）')
   assert(content.includes('变更：2026-08-28-alpha'), '条目带变更限定行（变更：2026-08-28-alpha）')
 
   // 2. 变更 B 同号 D-002@v1 → 共存不 supersede（坑现场）

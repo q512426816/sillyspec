@@ -83,15 +83,16 @@ test('验收2：无文件字段条目渲染输出与改动前字节级一致（�
     '',
     '> decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。',
     '',
-    '## D-002@v1 存量条目',
+    '## D-unmapped-001@v1 存量条目',
     '状态：implemented',
     '变更：legacy-no-files',
+    '原编号：D-002@v1',
     '锚点：未记录',
     '最近确认：cafe1234',
     '理由：无文件字段',
     '',
   ].join('\n')
-  assert.equal(content, expected, '无文件字段条目渲染字节级一致（不出现空「文件：」行）')
+  assert.equal(content, expected, '无文件字段条目渲染字节级一致（不出现空「文件：」行；epoch 全局号+原编号形态，2026-10-14-decision-global-id-epoch）')
 })
 
 test('验收3+4：files 反斜杠归一 POSIX；全角分隔符切分', () => {

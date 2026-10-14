@@ -1064,7 +1064,7 @@ export function parseDecisionEntries(md) {
   let cur = null
   const flush = () => { if (cur) entries.push(cur) }
   for (const line of String(md || '').replace(/\r\n?/g, '\n').split('\n')) {
-    const h = line.match(/^##\s+(D-\d+)(?:@v(\d+))?\s*(.*)$/)
+    const h = line.match(/^##\s+(D-(?:[A-Za-z0-9_\-]+-)?\d+)(?:@v(\d+))?\s*(.*)$/)
     if (h) {
       flush()
       const version = h[2] ? parseInt(h[2], 10) : 1

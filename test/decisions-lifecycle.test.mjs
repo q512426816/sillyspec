@@ -140,7 +140,7 @@ describe('FR-03 提炼幂等与版本前进', () => {
     const changeDir = makeChange(v1Md)
     const knowledgeRoot = join(root, 'knowledge')
     const r1 = distillIntoKnowledge(changeDir, knowledgeRoot, HEAD)
-    assert.deepEqual(r1.written, [{ file: 'decisions/core.md', id: 'D-007@v1', action: 'append' }], JSON.stringify(r1.written))
+    assert.deepEqual(r1.written, [{ file: 'decisions/core.md', id: 'D-core-001@v1', action: 'append' }], JSON.stringify(r1.written))
     const snap1 = snapshot(knowledgeRoot)
     assert.ok(snap1.has('INDEX.md'), 'INDEX 路由行随首次写入创建')
     assert.ok(snap1.get('INDEX.md').includes('- core|decision|决策 → [decisions/core.md](decisions/core.md)'), '路由行格式契约')
@@ -156,7 +156,8 @@ describe('FR-03 提炼幂等与版本前进', () => {
     const knowledgeRoot = join(root, 'knowledge')
     distillIntoKnowledge(makeChange(v1Md), knowledgeRoot, HEAD)
     const content = readFileSync(join(knowledgeRoot, 'decisions', 'core.md'), 'utf8')
-    assert.ok(content.includes('## D-007@v1 决策提炼步骤插在 sync-module-docs 后'), '条目头')
+    assert.ok(content.includes('## D-core-001@v1 决策提炼步骤插在 sync-module-docs 后'), '条目头（epoch 全局号形态，2026-10-14-decision-global-id-epoch）')
+    assert.ok(content.includes('原编号：D-007@v1'), '原编号溯源字段')
     assert.ok(content.includes('状态：implemented'))
     assert.ok(content.includes('锚点：src/stages/archive.js:45'))
     assert.ok(content.includes('最近确认：a1b2c3d'))
@@ -175,12 +176,12 @@ describe('FR-03 提炼幂等与版本前进', () => {
       '模块域：core',
     ])
     const r2 = distillIntoKnowledge(makeChange(v2Md), knowledgeRoot, HEAD)
-    assert.ok(r2.written.some(w => w.id === 'D-007@v2' && w.action === 'supersede'), JSON.stringify(r2.written))
+    assert.ok(r2.written.some(w => w.id === 'D-core-001@v2' && w.action === 'supersede'), JSON.stringify(r2.written))
     const content = readFileSync(join(knowledgeRoot, 'decisions', 'core.md'), 'utf8')
-    assert.ok(content.includes('## D-007@v2'), '新版本段落存在')
-    assert.ok(!content.includes('## D-007@v1'), '旧版本段整段替换（不残留旧头）')
-    assert.ok(content.includes('supersedes：D-007@v1'), '自动 supersedes 注记')
-    assert.equal(content.match(/^## D-007/gm).length, 1, '同号全局只留一个段')
+    assert.ok(content.includes('## D-core-001@v2'), '新版本段落存在（同全局号承接）')
+    assert.ok(!content.includes('## D-core-001@v1'), '旧版本段整段替换（不残留旧头）')
+    assert.ok(content.includes('supersedes：D-core-001@v1'), '自动 supersedes 注记（epoch 号形态）')
+    assert.equal(content.match(/^## D-core-001/gm).length, 1, '同段全局只留一个段')
   })
 
   it('@v2 跨域迁移 → 旧域文件旧版段同步移除（written 记 supersede）', () => {
@@ -197,13 +198,13 @@ describe('FR-03 提炼幂等与版本前进', () => {
     const r2 = distillIntoKnowledge(makeChange(v2Md), knowledgeRoot, HEAD)
     const actions = r2.written.map(w => `${w.file}:${w.id}:${w.action}`).sort()
     assert.deepEqual(actions, [
-      'decisions/core.md:D-007@v1:supersede', // 旧域文件旧段移除
-      'decisions/util.md:D-007@v2:append',    // 新域文件新段
+      'decisions/core.md:D-core-001@v1:supersede', // 旧域文件旧段移除
+      'decisions/util.md:D-core-001@v2:append',    // 新域文件新段（迁域不换号——号内域为历史痕迹）
     ], JSON.stringify(r2.written))
     const core = readFileSync(join(knowledgeRoot, 'decisions', 'core.md'), 'utf8')
     const util = readFileSync(join(knowledgeRoot, 'decisions', 'util.md'), 'utf8')
-    assert.ok(!core.includes('## D-007'), 'core 域旧段已清')
-    assert.ok(util.includes('## D-007@v2') && util.includes('supersedes：D-007@v1'), 'util 域新段 + 显式注记')
+    assert.ok(!core.includes('## D-core-001'), 'core 域旧段已清')
+    assert.ok(util.includes('## D-core-001@v2') && util.includes('supersedes：D-007@v1'), 'util 域新段 + 显式注记（局部号原文保留）')
   })
 })
 
@@ -247,9 +248,11 @@ describe('FR-03 rejected 留痕与 needsWait', () => {
     const knowledgeRoot = join(root, 'knowledge')
     const r = distillIntoKnowledge(makeChange(md), knowledgeRoot, HEAD)
     assert.ok(r.needsWait.includes('D-051@v1') && r.needsWait.includes('复潮条件'))
-    assert.deepEqual(r.written.map(w => w.id), ['D-050@v1'], '其余条目照常提炼')
+    assert.deepEqual(r.written.map(w => w.action), ['append'], '其余条目照常提炼')
+    assert.match(r.written[0].id, /^D-core-\d{3}@v1$/, 'written.id 为 epoch 全局号形态')
     const content = readFileSync(join(knowledgeRoot, 'decisions', 'core.md'), 'utf8')
-    assert.ok(content.includes('## D-050@v1'))
+    assert.match(content, /^## D-core-\d{3}@v1 正常决策$/m, 'epoch 条目头 + 原编号溯源')
+    assert.ok(content.includes('原编号：D-050@v1'))
     assert.ok(!content.includes('D-051'), '被拦条目不入库')
   })
 })

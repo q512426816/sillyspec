@@ -313,10 +313,13 @@ function newDomainPreamble(domain) {
  * 变更：行（2026-08-28，坑 distill-cross-change-supersede）：D-xxx 编号是变更内局部序号，
  * 跨变更同号（两个 D-002）互不相干——条目必须携带变更名限定，消费方（knowledge-match/
  * docs-check 的字段行解析）只认各自标签，新增字段行是增量安全。 */
-function renderBlockLines(entry, headHash, supersedesNote, changeName) {
-  const lines = [`## ${entry.id} ${oneLine(entry.title)}`.replace(/\s+$/, '')]
+function renderBlockLines(entry, headHash, supersedesNote, changeName, sectionNumber, originId) {
+  const lines = [`## ${sectionNumber}@v${entry.version} ${oneLine(entry.title)}`.replace(/\s+$/, '')]
   lines.push(`状态：${entry.selected}`)
   if (changeName) lines.push(`变更：${oneLine(changeName)}`)
+  // 原编号（2026-10-14-decision-global-id-epoch）：epoch 形态溯源字段——变更行后/锚点行前
+  // （不破「文件：紧跟锚点」行序红线）；legacy 复用段（originId=null）不渲染，形态零变化
+  if (originId) lines.push(`原编号：${oneLine(originId)}`)
   lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
   // 文件行（FR-01/D-001@v1）：仅非空渲染——存量条目零迁移，幂等重归档不添空行
   if (entry.files && entry.files.length > 0) lines.push(`文件：${entry.files.join(', ')}`)
@@ -342,7 +345,8 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
  * 2026-09-18-fr-index-l1 参数化：sectionRegex/buildId 经参（decisions 缺省不变；fr 侧传 FR 节头
  * 正则与恒等 id），decisions 调用点零改动。 */
 export function splitKnowledgeSections(content, opts = {}) {
-  const sectionRegex = opts.sectionRegex || /^## (D-\d+)@v(\d+)\s*(.*)$/
+  // 节头号双形态（2026-10-14-decision-global-id-epoch）：局部 D-011@v1 与全局 D-<域>-042@v1 并存
+  const sectionRegex = opts.sectionRegex || /^## (D-(?:[A-Za-z0-9_\-]+-)?\d+)@v(\d+)\s*(.*)$/
   const buildId = opts.buildId || ((n, v) => `${n}@v${v}`)
   const sections = []
   const preamble = []
@@ -363,6 +367,12 @@ export function splitKnowledgeSections(content, opts = {}) {
     // 「变更：」优先、「来源：」兜底（行内前缀按命中行剥除；无任何限定行 → null 不互认）
     const cm = s.lines.find(l => /^变更[：:]/.test(l)) || s.lines.find(l => /^来源[：:]/.test(l))
     s.change = cm ? cm.replace(/^(变更|来源)[：:]\s*/, '').trim() || null : null
+    // 原编号（2026-10-14-decision-global-id-epoch 溯源字段）：「原编号：D-011@v1」→ origin/originNumber；
+    // legacy 段无该行 → null（幂等匹配谓词按号兜底）
+    const oi = s.lines.find(l => /^原编号[：:]/.test(l))
+    s.origin = oi ? oi.replace(/^原编号[：:]\s*/, '').trim() || null : null
+    const on = s.origin ? /^(D-(?:[A-Za-z0-9_\-]+-)?\d+)@v?\d+/.exec(s.origin) : null
+    s.originNumber = on ? on[1] : null
   }
   return { preamble, sections }
 }
@@ -387,14 +397,23 @@ export function joinKnowledgeFile(preamble, sections) {
  * 升级前落库）不与任何新条目互认，只共存不误删。
  * @returns {{ action: 'append'|'update'|'supersede' }|null} null = 同变更同号高版本已落库，迟到低版本不降级。
  */
-function applyEntryToSections(sections, entry, headHash) {
+/** 同变更同段匹配谓词（2026-10-14-decision-global-id-epoch 扩展）：变更一致 且
+ *  （段号==条目局部号 或 段.原编号号段==条目局部号）——legacy 段按号匹配、epoch 段按原编号匹配。
+ * @returns {{action: 'append'|'update'|'supersede'}|null} null = 同变更同段高版本已落库，迟到低版本不降级。 */
+function sameDecisionNumber(s, entry) {
+  return (s.change || null) === (entry.change || null) && (s.number === entry.number || s.originNumber === entry.number)
+}
+
+function applyEntryToSections(sections, entry, headHash, sectionNumber, originId) {
   const change = entry.change || null
-  const sameNumber = sections.filter(s => s.number === entry.number && (s.change || null) === change)
+  const sameNumber = sections.filter(s => sameDecisionNumber(s, entry))
   if (sameNumber.some(s => s.version > entry.version)) return null
   let action
   let supersedesNote = oneLine(entry.supersedes) || null
+  const sectionId = `${sectionNumber}@v${entry.version}`
+  const originNumber = originId ? (/^(D-(?:[A-Za-z0-9_\-]+-)?\d+)/.exec(originId) || [])[1] || null : null
   if (sameNumber.length === 0) {
-    sections.push({ number: entry.number, version: entry.version, id: entry.id, title: entry.title, change, lines: renderBlockLines(entry, headHash, supersedesNote, change || undefined) })
+    sections.push({ number: sectionNumber, version: entry.version, id: sectionId, title: entry.title, change, origin: originId, originNumber, lines: renderBlockLines(entry, headHash, supersedesNote, change || undefined, sectionNumber, originId) })
     action = 'append'
   } else {
     const same = sameNumber.find(s => s.version === entry.version)
@@ -402,10 +421,14 @@ function applyEntryToSections(sections, entry, headHash) {
     if (!same && !supersedesNote) supersedesNote = `${slot.number}@v${slot.version}`
     slot.version = entry.version
     slot.title = entry.title
-    slot.lines = renderBlockLines(entry, headHash, supersedesNote, change || undefined)
-    // 同变更同号旧版本段（< 新版本）就地清除——同文件内同变更同号只留一个段
+    slot.number = sectionNumber
+    slot.id = sectionId
+    slot.origin = originId
+    slot.originNumber = originNumber
+    slot.lines = renderBlockLines(entry, headHash, supersedesNote, change || undefined, sectionNumber, originId)
+    // 同变更同段（号或原编号匹配）旧版本就地清除——同文件内同变更同段只留一个段
     for (let i = sections.length - 1; i >= 0; i--) {
-      if (sections[i].number === entry.number && (sections[i].change || null) === change && sections[i] !== slot) sections.splice(i, 1)
+      if (sameDecisionNumber(sections[i], entry) && sections[i] !== slot) sections.splice(i, 1)
     }
     action = same ? 'update' : 'supersede'
   }
@@ -579,31 +602,62 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   }
 
   const written = []
+  // 域全集（跨文件清理与复用扫描共用；磁盘 ∪ 本批已加载）
+  let onDisk = []
+  try { onDisk = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, '')) } catch { /* 刚创建，走 store */ }
+  let allDomains = [...new Set([...onDisk, ...store.keys()])]
+  // 发号器（2026-10-14-decision-global-id-epoch）：域前缀全域 max+1 只增不复用；mintMax 批内会话
+  // 计数防同批撞号（磁盘扫描只做初值）；并发蒸馏撞号窗口与 FR 侧发号同病（接受，doctor 可见）。
+  const mintMax = new Map()
+  const mintFor = (domain) => {
+    if (!mintMax.has(domain)) {
+      let max = 0
+      for (const f of onDisk) {
+        let c; try { c = readFileSync(join(decisionsDir, f.endsWith('.md') ? f : `${f}.md`), 'utf8') } catch { continue }
+        const re = /^## D-([A-Za-z0-9_\-]+?)-(\d+)@v\d+/gm
+        let m
+        while ((m = re.exec(c)) !== null) if (m[1] === domain) max = Math.max(max, parseInt(m[2], 10))
+      }
+      mintMax.set(domain, max)
+    }
+    const next = mintMax.get(domain) + 1
+    mintMax.set(domain, next)
+    return `D-${domain}-${String(next).padStart(3, '0')}`
+  }
   const targetSets = new Map() // entry → Set(域)（跨文件清理时排除目标文件）
   for (const entry of batch) {
     const domains = resolveDomains(entry, idx)
     targetSets.set(entry, new Set(domains))
+    // 号决策（2026-10-14-decision-global-id-epoch）：同变更同段存量（全域文件扫描，号或原编号匹配）
+    // 复用其号——legacy 段保持局部形态（不补原编号不改前缀，存量零触碰）；epoch 段原编号随版本更新；
+    // 无匹配 → 发号域=首域（resolveDomains 已 sanitize）批内 max+1，扇出多文件同一号（单一身份）。
+    let reuse = null
+    for (const d of allDomains) {
+      const st = loadDomain(d)
+      reuse = st.sections.find(s => sameDecisionNumber(s, entry)) || null
+      if (reuse) break
+    }
+    const sectionNumber = reuse ? reuse.number : mintFor(domains[0])
+    const originId = reuse && !reuse.origin ? null : `${entry.number}@v${entry.version}`
     for (const d of domains) {
       const st = loadDomain(d)
-      const res = applyEntryToSections(st.sections, entry, headHash)
+      const res = applyEntryToSections(st.sections, entry, headHash, sectionNumber, originId)
       if (res) {
         st.dirty = true
-        written.push({ file: `decisions/${d}.md`, id: entry.id, action: res.action })
+        written.push({ file: `decisions/${d}.md`, id: `${sectionNumber}@v${entry.version}`, action: res.action })
       }
     }
+    allDomains = [...new Set([...allDomains, ...domains])]
   }
 
-  // 跨文件清理：同变更同号 ≤ 新版本的旧段散落其他域文件时移除（同变更同号全局只留最高
-  // 版本/目标文件）；他者变更的同号段不参与（共存，坑 distill-cross-change-supersede）
-  let onDisk = []
-  try { onDisk = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, '')) } catch { /* 刚创建，走 store */ }
-  const allDomains = [...new Set([...onDisk, ...store.keys()])]
+  // 跨文件清理：同变更同段（号或原编号匹配）≤ 新版本的旧段散落其他域文件时移除（同变更同段
+  // 全局只留最高版本/目标文件）；他者变更的同号段不参与（共存，坑 distill-cross-change-supersede）
   for (const entry of batch) {
     const targets = targetSets.get(entry)
     for (const d of allDomains) {
       if (targets.has(d)) continue
       const st = loadDomain(d)
-      const removed = st.sections.filter(s => s.number === entry.number && s.version <= entry.version && (s.change || null) === (entry.change || null))
+      const removed = st.sections.filter(s => s.version <= entry.version && sameDecisionNumber(s, entry))
       if (removed.length === 0) continue
       st.sections = st.sections.filter(s => !removed.includes(s))
       st.dirty = true
