@@ -2950,7 +2950,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   {
     let gi = 0
     for (const [dirKey, grp] of pyGroups) {
-      const rebasePy = (f) => (dirKey && f.startsWith(dirKey + '/')) ? f.slice(dirKey.length + 1) : f
+      // hits 命中形态 dirKey=null——从本组命令的 cd 前缀提取重定基目录（坑 deps-cwd-prefix
+      // ① 用例：显式配置 'cd backend && uv run pytest …' 时路径须按 backend/ 重定基）
+      const cmdDir = dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(grp.command)?.[1] || null
+      const rebasePy = (f) => (cmdDir && f.startsWith(cmdDir + '/')) ? f.slice(cmdDir.length + 1) : f
       batches.push({ name: pyGroups.size > 1 ? `deps(auto-py:${dirKey || 'root'})` : 'deps(auto-py)', short: 'py', command: `${grp.command} ${grp.files.map(rebasePy).join(' ')}`, count: grp.files.length, prioCount: grp.files.filter(f => prio(f) === 0).length, dropped: pyQ.dropped, prioDropped: pyQ.prioDropped, tap: true, files: grp.files, pyRoot: dirKey || null })
       gi++
     }
