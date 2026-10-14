@@ -47,3 +47,4 @@
 | 2026-10-14 | 2026-10-14-redomain-domain-arg-normalize | flow done 收口提示的 FR 域迁移命令照抄必败：提示语给 --from fr/auto-backend 形态（ |
 | 2026-10-14 | 2026-10-14-timeline-ticktime-anchor-scope | watcher timeline 接线：loadChangeTasks 侧车 tickLog 透传 + resolveCommitAnchors 带变更名收敛锚——跨变更 task token 撞车误锚清偿，勾选时刻侧车精确值直显 |
 | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | 轻量道防复潮注入行加变更名限定（flow.js 经 decisionChangeQualifier 渲染「变更 <名>」/「变更未记录」）——同号决策条目脱离上下文可定位 |
+| 2026-10-14 | 2026-10-14-tick-burst-sidecar-gate | flow done 节奏门接线：事件流检测为空时回退读 task-ticks.jsonl 侧车判突发（detectTickBurst），检出走既有 resolveBatchTickAction（证据完备=advisory+batch_ticked，零证据维持硬拒）；拒收文案来源感知（侧车时戳 vs 事件流） |
