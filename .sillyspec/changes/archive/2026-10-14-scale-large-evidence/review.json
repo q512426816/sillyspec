@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-scale-large-evidence",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "29364c3bedd608464137dd2234f609fb916e0745",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "④ 措辞锁正则带无条件回退分支，极性反转不触发红",
+      "evidence": "test/brainstorm-exit-thin-default.test.mjs:78 的 /跨多端\\/多仓[^\\n]*不是[^\\n]*large[^\\n]*依据|跨多端\\/多仓/ 第二分支仅匹配短语本身——若 src/stages/brainstorm.js:539 措辞反转为「跨多端/多仓就是 large 依据」，第一分支失败但回退分支仍命中，测试照绿；当前实文经第一分支锚定（非空转锁，属变异抵抗力弱化，非违诺）",
+      "location": "test/brainstorm-exit-thin-default.test.mjs:78"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 的 Step 2 重判指路落点无回归锁（④ 取 step2 仅断言存在性）",
+      "evidence": "④ 用例 defs.find 取了 step2 但全文无 step2 措辞断言；Step 2「缩水后按定稿重判，本步印象不作数」仅实现面在场（brainstorm.js:70 与 brainstorm.md:85 已核实逐字一致）。绑定作答已如实标注（实现面），非承诺违反，属测试面留白",
+      "location": "test/brainstorm-exit-thin-default.test.mjs:75"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "边界已裁决：可接受",
+    "并发": "边界已裁决：可接受",
+    "切换": "边界已裁决：可接受",
+    "作用域": "边界已裁决：可接受"
+  },
+  "reviewedAt": "2026-10-14T12:00:00Z"
+}

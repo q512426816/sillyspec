@@ -1,0 +1,118 @@
+{
+  "change": "2026-10-14-scale-large-evidence",
+  "baseline": "5699371bc2ee90f129258772f13b0f10ec8be2f3",
+  "head": "29364c3bedd608464137dd2234f609fb916e0745",
+  "files": [
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "src/design-facts.js",
+    "src/stages/brainstorm.js",
+    "test/brainstorm-exit-thin-default.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 40,
+    "deletions": 8
+  },
+  "savedAt": "2026-10-14T02:30:56.979Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 5,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "5699371bc2ee90f129258772f13b0f10ec8be2f3",
+    "totals": {
+      "files": 5,
+      "additions": 40,
+      "deletions": 8
+    },
+    "rows": [
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/brainstorm-exit-thin-default.test.mjs",
+        "additions": 24,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "27625e535d03eb13ab59ba32c0a28520d83fe124b5b977b5e023d7604bb9f785",
+  "patchStatus": "ok"
+}

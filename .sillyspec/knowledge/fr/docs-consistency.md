@@ -1004,3 +1004,117 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-13-proto-real-code
   status: active
+
+## FR-docs-consistency-048 brainstorm Step 8 规模评估的 large 判据含反判据：跨多端/多仓/多文件不是 large 依据（thin 支持多文件与跨仓交付）；任务间顺序依赖不是 Wave 证据（Wave 证据=可真并行且单会话吃不下的任务簇）
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：措辞锁（getStageSteps 渲染面）
+场景正文：
+- 场景：措辞锁（getStageSteps 渲染面） — Given 已初始化仓；When 读取 brainstorm Step 8「生成规范文件」渲染 prompt；Then 含「跨多端/多仓」反判据、「顺序依赖不是 Wave 证据」、「真并行」措辞（test/brainstorm-exit-thin-default.test.mjs
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-01
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-scale-large-evidence:flow:测试绑定FR-01
+  tests: test/brainstorm-exit-thin-default.test.mjs「④ large 反判据：跨端/多仓/顺序依赖不算 Wave 证据；判 large 须落 Wave 证据；按定稿重判」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-scale-large-evidence
+  status: active
+
+## FR-docs-consistency-049 判 large 时要求在 design.md 写明 Wave 证据（哪些任务可真并行/单上下文为何吃不下），写不出即 small
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：Wave 证据落盘要求措辞
+场景正文：
+- 场景：Wave 证据落盘要求措辞 — Given 已初始化仓；When 读取 Step 8 渲染 prompt；Then 含「Wave 证据」×「design.md」关联要求与「写不出…small」兜底措辞（④）
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-02
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-scale-large-evidence:flow:测试绑定FR-02
+  tests: test/brainstorm-exit-thin-default.test.mjs「④ large 反判据（Wave 证据落 design.md/写不出 small 断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-scale-large-evidence
+  status: active
+
+## FR-docs-consistency-050 Step 8 明确要求按定稿方案实质重判，不沿用 Step 2 早期筛查印象（方案缩水是常态）
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：定稿重判措辞双落点
+场景正文：
+- 场景：定稿重判措辞双落点 — Given 已初始化仓；When 读取 Step 8 与 Step 2 渲染 prompt；Then Step 8 含「定稿…重判」与「早期筛查印象/早期印象」措辞（④）；Step 2 含「缩水后按定稿重判，本步印象不作数」（实现面）
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-03
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-scale-large-evidence:flow:测试绑定FR-03
+  tests: test/brainstorm-exit-thin-default.test.mjs「④ large 反判据（定稿重判/早期印象断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-scale-large-evidence
+  status: active
+
+## FR-docs-consistency-051 design-init 骨架的 scale TODO 提示行同步反判据口径
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：TODO 口径与语义不变
+场景正文：
+- 场景：TODO 口径与语义不变 — Given design-init 骨架生成；Then TODO 注释含「跨端/多仓…不算」口径（①）；`scale: ""` 仍读作 null（未标→收编默认，② 既有用例回归）
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-04
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-scale-large-evidence:flow:测试绑定FR-04
+  tests: test/brainstorm-exit-thin-default.test.mjs「① design-init 骨架不预填 large（TODO 反判据口径断言）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-scale-large-evidence
+  status: active
+
+## FR-docs-consistency-052 docs/prompt 提取产物与源逐字一致（_extract/_sync/_verify 链路）
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：流水线一致性
+场景正文：
+- 场景：流水线一致性 — Given brainstorm.js 已改；When node _extract.mjs && node _sync.mjs brainstorm && node _verify.mjs；Then Step 8 fence 已替换且校验通过（实现面执行记录）；brainstorm 阶段零 miss
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-05
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+## FR-docs-consistency-053 全量 npm test 零失败
+变更：2026-10-14-scale-large-evidence
+状态：active
+摘要：归因验证
+场景正文：
+- 场景：归因验证 — Given 全量 npm test 存在 1 失败；When 仅回退本变更文件（git stash -- 本变更 5 文件）重跑该测试；Then 失败依旧（归因并行在途变更，非本变更引入）；恢复后目标用例 4/4 绿
+全文：.sillyspec/changes/archive/2026-10-14-scale-large-evidence/requirements.md#FR-06
+最近确认：ae0d37e13659260fa6d9e906a82d03bc6363d3e6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-scale-large-evidence:flow:测试绑定FR-06
+  tests: test/brainstorm-exit-thin-default.test.mjs「①~④ 全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-scale-large-evidence
+  status: active

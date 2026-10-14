@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-scale-large-evidence",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-scale-large-evidence:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「④ large 反判据：跨端/多仓/顺序依赖不算 Wave 证据；判 large 须落 Wave 证据；按定稿重判」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-scale-large-evidence"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-scale-large-evidence:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「④ large 反判据（Wave 证据落 design.md/写不出 small 断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-scale-large-evidence"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-scale-large-evidence:flow:测试绑定FR-03",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「④ large 反判据（定稿重判/早期印象断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-scale-large-evidence"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-scale-large-evidence:flow:测试绑定FR-04",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「① design-init 骨架不预填 large（TODO 反判据口径断言）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-scale-large-evidence"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-14-scale-large-evidence:flow:测试绑定FR-06",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①~④ 全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-scale-large-evidence"
+    }
+  ]
+}
