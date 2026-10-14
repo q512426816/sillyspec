@@ -2309,6 +2309,25 @@ export function _clearMultiRepoCtxCache(cwd, changeName) {
 
 
 /**
+ * 退役自动道步骤表形态判定（2026-10-14-brainstorm-auto-retire）：brainstorm 4 步 auto 表
+ *（首名「进度确认与上下文加载」——与主模式首步「进度确认」字面可区分）。检测到时调用方必须
+ * 报退役指引并退出：防止 ensureStageSteps 把 auto 表判「漂移」静默重种清零存量进度。
+ * --reset/--reopen 走 resetStage 内联重种（不经此判定）——即指引中的恢复出路。
+ */
+export function isRetiredAutoBrainstormTable(steps) {
+  return Array.isArray(steps) && steps.length === 4
+    && steps[0]?.name === '进度确认与上下文加载'
+}
+
+/** 退役拒绝文案（单一真相源：ensureStageSteps / getStageStepsAutoAware / ensureAutoStage 三入口共用）。 */
+export function printRetiredAutoBrainstormRefusal(changeName) {
+  console.error(`⛔ 该变更的 brainstorm 步骤表来自已退役的自动道（4 步 auto 表，brainstorm-auto 已于 2026-10-14 删除——其设计产物流程无原型分级/真码口径，且双轨步骤表机制易互踩）。`)
+  console.error(`   处置：① sillyspec run brainstorm --change ${changeName || '<变更名>'} --reset（重种主模式 8 步表从头开始——brainstorm 尚未收口时适用）② sillyspec doctor（诊断后处置）。`)
+  console.error(`   进度未被修改（拒绝不写盘，不静默重种）。`)
+}
+
+
+/**
  * 获取阶段的步骤定义（execute 需要动态构建）
  */
 export async function getStageSteps(stageName, cwd, progress, specDir = null) {

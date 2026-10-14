@@ -4,7 +4,7 @@
 
 ## 数据来源（保真铁律）
 
-- **静态阶段**（brainstorm / propose / verify / scan / quick / explore / archive / status / doctor / brainstorm-auto）：直接读源码 `src/stages/<stage>.js` 中 `definition.steps[].prompt` 的**模板字符串原文**（真实换行，逐字复制）。
+- **静态阶段**（brainstorm / propose / verify / scan / quick / explore / archive / status / doctor）：直接读源码 `src/stages/<stage>.js` 中 `definition.steps[].prompt` 的**模板字符串原文**（真实换行，逐字复制）。
 - **动态阶段**（plan / execute）：prompt 在源码里是函数运行时生成的（`buildPlanSteps` / `buildExecuteSteps`），**必须读 `docs/prompt/_extracted.json`** 里对应阶段的 `steps[].prompt`（脚本已用示例输入跑出真实 prompt）。JSON 字符串里的 `\n` 要**还原为真实换行**再写入 md。
 - **交叉验证**：所有阶段写完后，prompt 必须与 `_extracted.json` 逐字一致（可用 `diff` 抽查）。
 

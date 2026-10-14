@@ -4,7 +4,7 @@
  * 拖到平台同步等后续环节才提示）。
  *
  * 覆盖：
- * 1. brainstorm/brainstorm-auto 模板含 frontmatter（根治侧，防回归）
+ * 1. brainstorm 模板含 frontmatter（根治侧，防回归；brainstorm-auto 断言随自动道删除退役 2026-10-14）
  * 2. backfillFrontmatter 纯函数：无 frontmatter 补整块 / 有 --- 只补缺失键 / 已齐不变 / CRLF 归一
  * 3. ensureDecisionDocHeader：无 header 补（author=git user）/ 已齐幂等 false / 无文件 false
  * 4. fixScanDocHeaders 回归（重构后共用 backfillFrontmatter，行为不变）
@@ -17,7 +17,6 @@ import { spawnSync } from 'node:child_process'
 import { backfillFrontmatter, fixScanDocHeaders } from '../src/scan-postcheck.js'
 import { ensureDecisionDocHeader } from '../src/stage-contract.js'
 import { definition as brainstormDef } from '../src/stages/brainstorm.js'
-import { definition as brainstormAutoDef } from '../src/stages/brainstorm-auto.js'
 import { BRAINSTORM_ARTIFACT_TEMPLATES_MD } from '../src/stage-templates.js'
 
 let passed = 0
@@ -35,16 +34,9 @@ function git(dir, args) {
 console.log('--- 1. 模板含 frontmatter（根治侧）---')
 {
   // R16 减负批次（2026-09-24）：brainstorm step8 四件套模板出上下文（prompt 只留指针，模板
-  // 单一源迁 src/stage-templates.js → 幂等落盘 .runtime/templates/）——brainstorm 的根治侧
-  // 断言改钉模板源 + prompt 指针；brainstorm-auto 仍内嵌（#### decisions.md 形态）照旧钉。
-  const prompts = [
-    ['brainstorm-auto', brainstormAutoDef.steps.map(s => s.prompt || '').join('\n')],
-  ]
-  for (const [name, text] of prompts) {
-    const decisionsBlock = text.slice(text.indexOf('decisions.md 格式要求') >= 0 ? text.indexOf('decisions.md 格式要求') : text.indexOf('#### decisions.md'))
-    assert(decisionsBlock.includes('author: <git-user>') && decisionsBlock.includes('created_at: <now-datetime>'),
-      `${name} decisions 模板含 author/created_at frontmatter`)
-  }
+  // 单一源迁 src/stage-templates.js → 幂等落盘 .runtime/templates/）——根治侧断言钉模板源 +
+  // prompt 指针。brainstorm-auto 内嵌断言随自动道删除退役（2026-10-14-brainstorm-auto-retire：
+  // 内嵌 decisions 模板形态只存在于已删的自动道，主模式由模板源断言承载）。
   assert(BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('author: <git-user>')
     && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('created_at: <now-datetime>')
     && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('# 决策记录（Decisions）'),

@@ -20,11 +20,9 @@
 | [archive](./archive.md) | 归档 | 辅助 | 6 | — | `src/stages/archive.js` |
 | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
 | [doctor](./doctor.md) | 自检 | 辅助 | 6 | — | `src/stages/doctor.js` |
-| [brainstorm-auto](./brainstorm-auto.md) | 自动模式头脑风暴 | 变体 | 4 | — | `src/stages/brainstorm-auto.js` |
 
 > 主流程阶段（brainstorm → plan → execute → verify）通过 `sillyspec run <stage>` 推进，有进度状态机。
 > 辅助阶段（scan/quick/explore/archive/status/doctor）在 `stages/index.js` 标记 `auxiliary: true`，无活跃变更时也可执行。
-> `brainstorm-auto` 是 auto/full 模式的 brainstorm 变体，不在 `stages/index.js` 的 `stageRegistry` 中。
 
 ---
 
@@ -189,7 +187,7 @@ prompt 正文中出现的占位符，运行时由 `outputStep` 替换。下表�
 ## 边缘阶段
 
 - **propose**：`@deprecated`（入口移除 2026-06-14）。不在 `stageRegistry`，但 `stage-review.js` 仍有 propose 的 reviewType/proposal.md 残留逻辑。prompt 仅作历史参考。
-- **brainstorm-auto**：auto/full 模式使用的 brainstorm 步骤定义（4 步，合并了交互式 brainstorm 的多步为自动推进）。不在 `stageRegistry`。
+- **brainstorm-auto**：已删除（2026-10-14-brainstorm-auto-retire——原型分级/真码口径盲区+双轨步骤表互踩面）。`run auto` 在 brainstorm 阶段用主模式 8 步表。
 - **knowledge**（`src/stages/knowledge.js`）：知识库子命令（search/inspect/validate/refresh/propose），是独立 CLI 命令而非 run stage，结构为子命令式而非 `definition.steps`，故未纳入本目录。通过 `sillyspec-knowledge` skill 调用。
 
 ---

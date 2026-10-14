@@ -24,7 +24,6 @@ const META = {
   archive:          { title: '归档',           type: '辅助',   persona: null,           order: 8 },
   status:           { title: '状态',           type: '辅助',   persona: null,           order: 9 },
   doctor:           { title: '自检',           type: '辅助',   persona: null,           order: 10 },
-  'brainstorm-auto':{ title: '自动模式头脑风暴', type: '变体', persona: null,           order: 11 },
   propose:          { title: 'propose · 已废弃', type: '已废弃', persona: null,         order: 12, deprecated: true }
 }
 

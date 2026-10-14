@@ -5,7 +5,8 @@
  * 且不登记 → execute 注入（按 prototype-*.html 命名扫描）不生效。本测试锁三层契约：
  *   ① brainstorm 分级含登记复用档：prototype-<名称>.html 命名硬要求 + 来源/覆盖面声明 + 静态稿排除；
  *   ② 三选一口径落在分级步操作/铁律/输出三处；
- *   ③ 周边四处（brainstorm-auto / explore / gates 软提醒 / design-facts 自审清单）同步口径。
+ *   ③ 周边指引（explore / gates 软提醒 / design-facts 自审清单）同步口径。
+ *     brainstorm-auto 断言随自动道删除退役（2026-10-14-brainstorm-auto-retire）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,7 +14,6 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { definition as brainstormDef } from '../src/stages/brainstorm.js'
-import { definition as brainstormAutoDef } from '../src/stages/brainstorm-auto.js'
 import { definition as exploreDef } from '../src/stages/explore.js'
 import { warnMissingUiPrototype } from '../src/run/gates.js'
 import { generateDesignSkeleton } from '../src/design-facts.js'
@@ -47,13 +47,6 @@ test('② 三选一口径落在操作/铁律/输出三处', () => {
   assert.ok(ironIdx > 0, '铁律段在场')
   assert.ok(/复用登记|登记复用/.test(prompt.slice(ironIdx)), '铁律的暂停前落定清单须含复用登记')
   assert.ok(/复用声明/.test(prompt), '输出契约须含复用声明（来源+覆盖面）')
-})
-
-test('③ brainstorm-auto 原型节同步登记复用口径', () => {
-  const step1 = brainstormAutoDef.steps[0]
-  const p = (step1 && step1.prompt) || ''
-  assert.ok(/登记复用/.test(p), 'brainstorm-auto 原型节须含登记复用指引')
-  assert.ok(p.includes('prototype-<名称>.html'), 'brainstorm-auto 须写明 prototype-<名称>.html 命名')
 })
 
 test('③ explore 复制复用行保留命名要求', () => {

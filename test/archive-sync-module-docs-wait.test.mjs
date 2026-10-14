@@ -5,8 +5,7 @@
  * 坑4（历史）：步骤无 wait 机制时 --continue 直接标 completed，agent 无机会写模块卡片——曾用
  * requiresWait:true 硬门修（三段式 --wait → --continue --answer → --done）。
  * 坑 archive-subconfirm-redundant（2026-08-23 实证）：硬门与 verify 文档同步阻断门、归档移动前
- * 死信校验、「确认归档 --confirm」四层确认重复，交互碎——降级 conditionalWait（brainstorm-auto
- * 先例）：常规同步 agent 直接写入 + --done（写入动作在 --done 前，坑4 不回归）；仅异常
+ * 死信校验、「确认归档 --confirm」四层确认重复，交互碎——降级 conditionalWait（brainstorm-auto 先例，该道已删除 2026-10-14-brainstorm-auto-retire；先例语义仍成立）：常规同步 agent 直接写入 + --done（写入动作在 --done 前，坑4 不回归）；仅异常
  * （needs_review/未映射/标记缺失）才 --wait 请用户裁决。
  *
  * 本测试锁三个不变量：

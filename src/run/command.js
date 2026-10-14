@@ -24,7 +24,7 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce, readStageBurst, STAGE_BURST_STAGES, isRetiredAutoBrainstormTable, printRetiredAutoBrainstormRefusal } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
@@ -34,7 +34,7 @@ import { ProgressManager, resolveSessionIdentity } from '../progress.js'
 import { validateChangeExists, checkTransition } from '../stage-contract.js'
 import { READONLY_AUXILIARY_STAGES } from '../constants.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
-import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
+
 import { setQuickFileNotes } from '../quicklog.js'
 import { checkQuickSessionOwner, writeQuickSessionOwner } from '../quick-session-owner.js'
 import { hasDecisionId } from '../decisions-io.js'
@@ -170,6 +170,14 @@ function resolveChangeName(cwd, progress, specDir = null) {
  */
 export async function ensureStageSteps(progress, stageName, cwd, specDir = null) {
   if (!progress.stages) progress.stages = {}
+
+  // 退役自动道守门（2026-10-14-brainstorm-auto-retire）：存量 brainstorm 4 步 auto 表在此明确
+  // 拒绝——否则下方「步骤表与当前定义漂移」分支会把 auto 表静默重种为主模式 8 步表并清零进度。
+  // --reset/--reopen 走 resetStage 内联重种（不经此函数）= 指引中的恢复出路。
+  if (stageName === 'brainstorm' && isRetiredAutoBrainstormTable(progress.stages.brainstorm?.steps)) {
+    printRetiredAutoBrainstormRefusal(progress?.change || null)
+    process.exit(2)
+  }
 
   const steps = await getStageSteps(stageName, cwd, progress, specDir)
   if (!steps) return false
@@ -2027,11 +2035,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     }
   }
 
-  // Helper: 在 auto 模式下获取步骤定义
+  // Helper: 在 auto 模式下获取步骤定义（brainstorm-auto 已删除 2026-10-14-brainstorm-auto-retire：
+  // brainstorm 一律主模式定义，wait 步由 auto 驱动方按 SS-META requiresUser 自行推进）
   const getAutoSteps = async (stage) => {
-    if (stage === 'brainstorm') {
-      return brainstormAutoDef.steps
-    }
     return getStageSteps(stage, cwd, progress, platformOpts?.specRoot || null)
   }
 
@@ -2043,27 +2049,11 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   const ensureAutoStage = async (stage) => {
     const stageChanged = progress.currentStage !== stage
     progress.currentStage = stage
-    // Auto 模式下 brainstorm 使用 artifact-first 步骤
-    if (stage === 'brainstorm') {
-      const existingSteps = progress.stages?.brainstorm?.steps
-      const isAutoModeSteps = existingSteps?.length === 4 && existingSteps?.[0]?.name === '进度确认与上下文加载'
-      // auto 表在位即早退（2026-09-08 E2E 实证 bug：此前仅 !isAutoModeSteps 重种后 return，
-      // auto 表存在时掉进下方通用 ensureStageSteps——主模式 8 步定义判 4 步 auto 表「漂移」
-      // 重种主模式表，与 getAutoSteps 渲染双轨互踩，进度永远回 step1）
-      if (isAutoModeSteps) return progress
-      if (!isAutoModeSteps) {
-        if (!progress.stages) progress.stages = {}
-        progress.stages.brainstorm = {
-          status: 'in-progress',
-          startedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
-          completedAt: null,
-          steps: brainstormAutoDef.steps.map(s => ({ name: s.name, status: 'pending' }))
-        }
-        pm._write(cwd, progress, changeName)
-        triggerSync(cwd, changeName, platformOpts)
-        progress = pm.read(cwd, changeName)
-        return progress
-      }
+    // 退役自动道守门（2026-10-14-brainstorm-auto-retire）：存量 4 步 auto 表明确拒绝（下方通用
+    // ensureStageSteps 同款拒绝兜底，此处先行给带变更名的文案）
+    if (stage === 'brainstorm' && isRetiredAutoBrainstormTable(progress.stages?.brainstorm?.steps)) {
+      printRetiredAutoBrainstormRefusal(changeName)
+      process.exit(2)
     }
     // specRoot 必传（坑 auto-mode-specroot-miss）：平台模式 specRoot 是外部目录，漏传时
     // getStageSteps 从 cwd 推导 miss 掉 plan/execute 动态步骤（buildPlanSteps(null) 只剩

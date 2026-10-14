@@ -98,17 +98,6 @@ out.execute = extractDef(execMod.definition, false, {
   steps: execSteps.map((s, i) => extractStep(s, i))
 })
 
-// ── brainstorm-auto（变体：不在 stageRegistry，自动模式用）──
-try {
-  const autoMod = await import(stageUrl('brainstorm-auto'))
-  out['brainstorm-auto'] = extractDef(autoMod.definition, false, {
-    sourceFile: 'src/stages/brainstorm-auto.js',
-    inStageRegistry: false,
-    note: '自动模式（auto）变体，不在 stages/index.js 的 stageRegistry；与 brainstorm 同名阶段的不同执行策略'
-  })
-} catch (e) {
-  out['brainstorm-auto'] = { error: String(e) }
-}
 
 writeFileSync(join(__dirname, '_extracted.json'), JSON.stringify(out, null, 2) + '\n', 'utf8')
 console.log('✅ extracted -> docs/prompt/_extracted.json')
