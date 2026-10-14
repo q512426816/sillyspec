@@ -1,0 +1,24 @@
+{"ts":1791956123730,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1791956212525,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791956222508,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791956232472,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791956249069,"kind":"commit","stage":null,"detail":"31b0b2a6","provisional":true}
+{"ts":1791956292352,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/api-coverage-matrix.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791956347716,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/verify-probes.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791956361010,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/stage-contract.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791956377822,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/machine-interface.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791956439963,"kind":"commit","stage":null,"detail":"00b04d91","provisional":true}
+{"ts":1791957266146,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791957266146,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1791957273005,"kind":"commit","stage":null,"detail":"d10c6338","provisional":true}
+{"ts":1791957283149,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791957293870,"kind":"gate-run","stage":"verify","detail":"门实测 passed（10.3s） · 20261014055452","provisional":true}
+{"ts":1791958127323,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791958134132,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791958213583,"kind":"commit","stage":null,"detail":"eca9a88e","provisional":true}
+{"ts":1791958223993,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-14-gate-verify-apiface-preflight/review.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791958653999,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791958670684,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791958967159,"kind":"commit","stage":null,"detail":"cd73e222","provisional":true}
+{"ts":1791958967399,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-14-gate-verify-apiface-preflight/review.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1791959617830,"kind":"commit","stage":null,"detail":"30cdee45","provisional":true}

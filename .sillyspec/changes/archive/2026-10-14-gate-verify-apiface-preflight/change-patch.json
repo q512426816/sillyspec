@@ -1,0 +1,101 @@
+{
+  "change": "2026-10-14-gate-verify-apiface-preflight",
+  "baseline": "895c2d5c74351fedaec8461653447f98e6374000",
+  "head": "30cdee45ba5f3c1a0ebc4c2d4672108a31282057",
+  "files": [
+    "src/machine-interface.js",
+    "src/stage-contract.js",
+    "src/verify-probes.js",
+    "test/api-coverage-matrix.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 193,
+    "deletions": 17
+  },
+  "savedAt": "2026-10-14T06:33:51.891Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "machine-interface",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/machine-interface.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "895c2d5c74351fedaec8461653447f98e6374000",
+    "totals": {
+      "files": 4,
+      "additions": 193,
+      "deletions": 17
+    },
+    "rows": [
+      {
+        "path": "src/machine-interface.js",
+        "additions": 26,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stage-contract.js",
+        "additions": 13,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 34,
+        "deletions": 13,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/api-coverage-matrix.test.mjs",
+        "additions": 120,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "e97061421154e181e02d55281de3eb80d699c48a8121d5d3bb9dfc049461d1b5",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-gate-verify-apiface-preflight",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-gate-verify-apiface-preflight:flow:测试绑定FR-01",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs「9. gate 预检注入：facts 无 apiFace（--init 后形态）→ 实况面命中锚点不再恒空指」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-gate-verify-apiface-preflight"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-gate-verify-apiface-preflight:flow:测试绑定FR-02",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs「9b. 注入优先于过期 facts.apiFace（预检过=必过）；不注入保持现状空指对照」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-gate-verify-apiface-preflight"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-gate-verify-apiface-preflight:flow:测试绑定FR-03",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs「9d. design.md 缺失 → helper 返 null 不注入，facts 口径继续（含 backfill 基线空面锁）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-gate-verify-apiface-preflight"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-gate-verify-apiface-preflight:flow:测试绑定FR-04",
+      "tests": [
+        "test/api-coverage-matrix.test.mjs「既有 1~8 组全量重跑零失败（含 8d backfill 复用同源 helper 的结构性证据）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-gate-verify-apiface-preflight"
+    }
+  ]
+}

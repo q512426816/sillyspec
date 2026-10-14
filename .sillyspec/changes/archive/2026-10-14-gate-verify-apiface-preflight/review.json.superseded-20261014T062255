@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-gate-verify-apiface-preflight",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "eca9a88e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "清偿文档同步债：design 裁决段与 requirements 绑定行未跟上 null 语义",
+      "evidence": "design.md:48 裁决文字称「--done（backfill 会把空面落盘）」，代码事实是 design.md 缺失态 backfill 现落 null（src/verify-probes.js:3170 facts.apiFace = computeApiFaceFromDesign(...) → null）非空面——由此「design.md 蒸发 × 矩阵段缺失 × 严格档/critical」病态窄角从基线 error（空面在场口径，test 5c）降为 warning（缺席口径），裁决「收口严」的机理文字与代码不符；但裁决的方向性结论（不产生假绿）在主锚点路径仍成立：null → parseSet 空 → design接口表# 锚点空指 error 照拦（9 的 before 面已证）。另 requirements.md:55 FR-03 绑定行仍引旧测试名「9c…design.md 缺失 → 空面 fail-soft 不抛」，实际 9c 已更名去掉缺失断言、缺失面移至 9d 且语义为 null 非空面。两处均为文档失真，行为承诺本身已由 9d 正确承载并实测绿（28/28、全量 exit=0、lint 通过）。",
+      "location": "design.md:48（裁决段「空面落盘」措辞）；src/verify-probes.js:3170（backfill 复用段落 null）；requirements.md:55（FR-03 绑定行旧测试名）；test/api-coverage-matrix.test.mjs 9c/9d（实际承载）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-14T06:16:41Z"
+}
