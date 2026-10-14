@@ -1,0 +1,413 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 5b8502e5..66655263 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -48,3 +48,4 @@
+ | 2026-10-14 | 2026-10-14-timeline-ticktime-anchor-scope | watcher timeline 接线：loadChangeTasks 侧车 tickLog 透传 + resolveCommitAnchors 带变更名收敛锚——跨变更 task token 撞车误锚清偿，勾选时刻侧车精确值直显 |
+ | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | 轻量道防复潮注入行加变更名限定（flow.js 经 decisionChangeQualifier 渲染「变更 <名>」/「变更未记录」）——同号决策条目脱离上下文可定位 |
+ | 2026-10-14 | 2026-10-14-tick-burst-sidecar-gate | flow done 节奏门接线：事件流检测为空时回退读 task-ticks.jsonl 侧车判突发（detectTickBurst），检出走既有 resolveBatchTickAction（证据完备=advisory+batch_ticked，零证据维持硬拒）；拒收文案来源感知（侧车时戳 vs 事件流） |
++| 2026-10-14 | 2026-10-14-decision-id-p2-hardening | 轻量道防复潮段头补跨变更引用形态指引（变更名#D-xxx@vN——同号不同变更互不相干） |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index b5358b1a..1023b14b 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -57,3 +57,4 @@
+ | 2026-10-14 | 2026-10-14-gate-verify-apiface-preflight | gate verify 预检的接口锚点核对消费 facts.apiFace，但其唯一生产者是 run verify -- |
+ | 2026-10-14 | 2026-10-14-timeline-ticktime-anchor-scope | runTaskTick 翻格成功追加 task-ticks.jsonl 侧车留痕（{ts,task,source:'task-tick'}；幂等 already 零追加；写失败仅告警不阻断翻格）——勾选时刻事实源落 change 目录随归档进 git 跨机可读，观测盲窗（watcher 后拉起）内的 CLI tick 不再丢时刻。测试锚 test/task-tick.test.mjs |
+ | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | 决策 supersedes 边同变更限定（跨变更同号不再建边，旧「退同文件首个」回退已除）+ 边改节点建齐后补挂（清偿目标晚于引用者定义时静默丢边的既有顺序依赖）；knowledge-match 新增 decisionChangeQualifier（四处决策展示行变更名限定单一实现）。实测：真实知识库老代码 27 条决策 supersedes 边全为跨变更误连 → 修复后 0 |
++| 2026-10-14 | 2026-10-14-decision-id-p2-hardening | knowledge-match：parseDecisionFile 增「来源：」legacy 兜底读入（变更优先兜缺）；parseDecisionEntries 路由行按文件单解析 + 同号 legacy 条目不再互折叠（真实库对账 700 节段=700 可见，2 条 implemented 隐身条目复现） |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index 14e5a8d5..8137541d 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -22,3 +22,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-13 | 2026-10-13-proto-real-code | 用户实证：brainstorm 生成的原型是手绘假 HTML，与实际前端代码栈不搭。根因是规则自相矛盾：ui-visua |
+ | 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
+ | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | docs-check parseDecisionEntries 加法字段 change（「变更：」行读入）+ docs-debt 触碰事实行渲染变更名限定（decisionChangeQualifier）——触碰条目同号可区分 |
++| 2026-10-14 | 2026-10-14-decision-id-p2-hardening | docs-check：parseDecisionEntries 增「来源：」兜底 + isDecisionExempt 域限定键 decisions.<域>/<id>[.<kind>]（裸键兼容、导出、emit 传域——一条裸键豁免全库同号的潜伏面收窄）；decision-distill：splitKnowledgeSections 来源回退（带来源 legacy 段参与同变更匹配，重蒸馏在位更新收敛） |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 587915a8..f41c854e 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -51,3 +51,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原
+ - 2026-10-14-timeline-ticktime-anchor-scope | 归档时间线烤制透传：bakeArchiveTimeline 读 destDir 侧车 task-ticks.jsonl（parseTickLog）+ resolveCommitAnchors 带 changeName——精确勾选时刻与锚收敛随归档烤制面进 timeline.md |
+ - 2026-10-14-supersedes-mislink-and-change-display | 决策展示面变更名限定接入两处：{DECISION_HITS}（run/prompt.js）与 knowledge-gate 回显（run/complete.js）经 decisionChangeQualifier 渲染「变更 <名>」/「变更未记录」——同号条目（D-001@v1 ×296）展示面即可区分 |
++- 2026-10-14-decision-id-p2-hardening | complete.js knowledge-gate「已回应不重弹」收紧行级共现（命中 id 与域名/变更名同行——文件级共现时自身同号 id+常见词撞车会静默吞他变更命中）；{DECISION_HITS} 段头补跨变更引用形态指引（变更名#D-xxx@vN） |
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index cbc8f4d2..e6f7663b 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -336,8 +336,9 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
+ }
+ 
+ /** 知识文件切段：preamble 行 + 条目段（段边界 = 下一节头）。
+- * 段的变更归属取段内 `变更：<name>` 行；无该行的历史条目 → change=null（legacy：
+- * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。
++ * 段的变更归属取段内 `变更：<name>` 行，「来源：<name>` 兜底（2026-10-14-decision-id-p2-hardening：
++ * 08-24 首修形态残留——读出后带来源的 legacy 段参与同变更同号匹配/supersede，重蒸馏在位更新收敛）；
++ * 无任何限定行的历史条目 → change=null（legacy：升级前落库的条目，不参与新条目的同号匹配——只共存不误删）。
+  * 2026-09-18-fr-index-l1 参数化：sectionRegex/buildId 经参（decisions 缺省不变；fr 侧传 FR 节头
+  * 正则与恒等 id），decisions 调用点零改动。 */
+ export function splitKnowledgeSections(content, opts = {}) {
+@@ -359,8 +360,9 @@ export function splitKnowledgeSections(content, opts = {}) {
+   if (cur) sections.push(cur)
+   for (const s of sections) {
+     s.id = buildId(s.number, s.version)
+-    const cm = s.lines.find(l => /^变更[：:]/.test(l))
+-    s.change = cm ? cm.replace(/^变更[：:]\s*/, '').trim() || null : null
++    // 「变更：」优先、「来源：」兜底（行内前缀按命中行剥除；无任何限定行 → null 不互认）
++    const cm = s.lines.find(l => /^变更[：:]/.test(l)) || s.lines.find(l => /^来源[：:]/.test(l))
++    s.change = cm ? cm.replace(/^(变更|来源)[：:]\s*/, '').trim() || null : null
+   }
+   return { preamble, sections }
+ }
+diff --git a/src/docs-check.js b/src/docs-check.js
+index 712e8da7..37c06e77 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -1038,12 +1038,18 @@ export function readDecisionRulesConfig(projectRoot) {
+   }
+ }
+ 
+-/** 豁免键匹配（本变更范围先支持键匹配，非子串）：规则级 `decisions.<id>.<kind>` 精确命中，
+- *  或条目级 `decisions.<id>` 伞形命中（一条豁免该决策全部规则）。无 decisions. 前缀的键不参与。 */
+-function isDecisionExempt(knownFailures, entryId, kind) {
+-  const ruleKey = `decisions.${entryId}.${kind}`
+-  const entryKey = `decisions.${entryId}`
+-  return knownFailures.some(k => k === ruleKey || k === entryKey)
++/** 豁免键匹配（键匹配非子串）：域限定键 `decisions.<域>/<id>.<kind>`（规则级精确）与
++ *  `decisions.<域>/<id>`（条目级伞形）——2026-10-14-decision-id-p2-hardening：裸键无域限定，
++ *  一条 decisions.<id> 可静默豁免全库同号条目（D-001@v1 ×296 潜伏面），域限定键收窄命中面；
++ *  裸键 `decisions.<id>[.<kind>]` 保留兼容（消费仓既有配置不失效）。无 decisions. 前缀的键不参与。
++ *  导出（测试面先例 anchorFilePath）。 */
++export function isDecisionExempt(knownFailures, entryId, kind, domain = null) {
++  const keys = [
++    `decisions.${entryId}.${kind}`,
++    `decisions.${entryId}`,
++    ...(domain ? [`decisions.${domain}/${entryId}.${kind}`, `decisions.${domain}/${entryId}`] : []),
++  ]
++  return knownFailures.some(k => keys.includes(k))
+ }
+ 
+ /**
+@@ -1066,13 +1072,15 @@ export function parseDecisionEntries(md) {
+       continue
+     }
+     if (!cur) continue
+-    // 变更：标签读入（2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt 触碰事实行
+-    // 渲染变更名限定词消歧需读入；旧条目缺行容错 null）
+-    const f = line.match(/^(状态|锚点|最近确认|变更)\s*[：:]\s*(.*)$/)
++    // 变更/来源：标签读入（变更：2026-10-14-supersedes-mislink-and-change-display 加法字段——docs-debt
++    // 触碰事实行渲染变更名限定词消歧需读入；来源：2026-10-14-decision-id-p2-hardening legacy 兜底——
++    // 变更行无条件覆盖在前、来源仅补缺；旧条目缺行容错 null）
++    const f = line.match(/^(状态|锚点|最近确认|变更|来源)\s*[：:]\s*(.*)$/)
+     if (!f) continue
+     if (f[1] === '状态') cur.status = f[2].trim().split(/[\s（(]/)[0] || null
+     else if (f[1] === '锚点') cur.anchor = f[2].trim()
+     else if (f[1] === '变更') cur.change = f[2].trim() || null
++    else if (f[1] === '来源') cur.change = cur.change || (f[2].trim() || null)
+     else cur.lastConfirmed = f[2].trim()
+   }
+   flush()
+@@ -1152,7 +1160,7 @@ export async function runDecisionRules(opts) {
+   const treeCache = new Map() // resolveCandidates 全树扫描复用（同 docs check 主链路口径）
+ 
+   const emit = (id, domain, file, kind, extra, message) => {
+-    if (isDecisionExempt(failures, id, kind)) {
++    if (isDecisionExempt(failures, id, kind, domain)) {
+       exempted.push({ key: `decisions.${id}.${kind}`, id, kind })
+       return
+     }
+diff --git a/src/flow.js b/src/flow.js
+index 4708bbf8..c3d35045 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -306,7 +306,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     summary.rejectedDecisions = rejected.length
+     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
+     if (rejected.length > 0) {
+-      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
++      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本；跨变更引用带变更名 变更名#D-xxx@vN）：`)
+       for (const h of rejected.slice(0, 5)) {
+         const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
+         lines.push(`   - ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 377427f6..d0c77895 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -69,6 +69,9 @@ const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supe
+ const DECISION_ANCHOR_RE = /^锚点\s*[：:]\s*(.*)$/
+ // 变更：单独标签（变更名限定——D-xxx 是变更内局部序号，跨变更同号互不相干，去重键依赖它）
+ const DECISION_CHANGE_RE = /^变更\s*[：:]\s*(.*)$/
++// 来源：兜底标签（2026-10-14-decision-id-p2-hardening）：2026-08-24 首修形态残留（后被「变更：」
++// 取代，现存 20 行）——变更行无条件覆盖在前，来源仅补缺（任意行序下变更优先）
++const DECISION_ORIGIN_RE = /^来源\s*[：:]\s*(.*)$/
+ 
+ /** 「文件：」值切分 + 逐项反斜杠归一 POSIX（与 decision-distill 的 entry.files 契约对齐：
+  *  split /[,，、\s]+/ + replace(/\\/g,'/')）。 */
+@@ -144,6 +147,8 @@ function parseDecisionFile(filePath, file) {
+     // 域文件跨变更同号条目常见（D-xxx 是变更内局部序号），去重键须含变更名否则先到条目遮蔽后来者）
+     const c = line.match(DECISION_CHANGE_RE)
+     if (c) { cur.change = c[1].trim(); continue }
++    const o = line.match(DECISION_ORIGIN_RE)
++    if (o) { if (!cur.change) cur.change = o[1].trim(); continue }
+     const f = line.match(DECISION_FIELD_RE)
+     if (!f) continue
+     const value = f[2].trim()
+@@ -170,20 +175,25 @@ function parseDecisionFile(filePath, file) {
+ export function parseDecisionEntries(indexDir, indexEntries = null) {
+   const routes = (indexEntries || parseKnowledgeIndex(indexDir)).filter(isDecisionRoute)
+   const hits = []
++  // 路由行按文件去重单解析（2026-10-14-decision-id-p2-hardening）：多条路由行指向同一域文件只解析
++  // 一次——此前靠条目级折叠兜完全重复，legacy 不折叠后从源头消除重复
++  const parsed = new Set()
+   for (const route of routes) {
++    const fileKey = String(route.file || '').replace(/\\/g, '/')
++    if (parsed.has(fileKey)) continue
++    parsed.add(fileKey)
+     const filePath = join(indexDir, route.file)
+     if (!existsSync(filePath)) continue // 路由行失效（域文件已删）→ 跳过不阻断
+     hits.push(...parseDecisionFile(filePath, route.file))
+   }
+-  // 多条路由行指向同一域文件时按 file+id+变更 去重（完全重复折叠）；键含变更名——
+-  // 跨变更同号条目（D-xxx 是变更内局部序号，域文件内同 id 不同变更常见）不再被先到者
+-  // 遮蔽（坑 decision-cross-change-id-shadow，2026-09-11 dogfood 实证：runtime.md 七个
+-  // D-001@v1 分属七变更，旧键只放行首个——同号 rejected 决策在 {DECISION_HITS} 防复潮
+-  // 注入同样被遮蔽）。无「变更：」行的 legacy 条目 change='' 与同号 legacy 条目互折叠
+-  // （维持旧行为，不放大历史条目数）。
++  // 带 change 条目按 file+id+change 去重（坑 decision-cross-change-id-shadow，2026-09-11 dogfood 实证：
++  // 域文件跨变更同号条目常见，键须含变更名否则先到遮蔽——runtime.md 七个 D-001@v1 分属七变更）。
++  // 无「变更：/来源：」行的 legacy 条目不再互折叠（2026-10-14-decision-id-p2-hardening：旧互折叠致
++  // 同号 legacy 互相遮蔽——实测 2 条 implemented 条目永久隐身；路由单解析后完全重复已从源头消除）。
+   const seen = new Set()
+   return hits.filter(h => {
+-    const key = `${h.file}#${h.id}#${h.change || ''}`
++    if (!h.change) return true
++    const key = `${h.file}#${h.id}#${h.change}`
+     if (seen.has(key)) return false
+     seen.add(key)
+     return true
+diff --git a/src/run/complete.js b/src/run/complete.js
+index de64fb2e..a7844a5d 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -493,12 +493,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+               .filter((h) => !_hits.some((x) => x.file === h.file && x.id === h.id && (x.change || '') === (h.change || '')))
+             _hits.push(..._viaImpact)
+           } catch { /* 图构建/键解析 fail-soft——词面命中面不受影响 */ }
+-          // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
+-          // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
++          // 已回应不重弹：decisions.md 某行同时含「命中 id＋域文件名（或命中条目变更名）」（小白鼠
++          // 回应形态「unmapped.md D-001@v1」）→ 视为已甄别过，静默。行级共现（2026-10-14-decision-id-p2-hardening
++          // 收紧：文件级共现时本变更自身同号 id + 正文常见词 backend/unmapped 撞车会静默吞掉他变更命中）。
+           const _answered = _dm
+             ? (h) => {
+                 const _dom = String(h.file || '').replace(/^decisions\//, '').replace(/\.md$/, '')
+-                return _dm.includes(h.id) && _dm.includes(_dom)
++                return _dm.split(/\r?\n/).some((line) => line.includes(h.id) && (line.includes(_dom) || (h.change && line.includes(h.change))))
+               }
+             : () => false
+           const _echoHits = _hits.filter((h) => !_answered(h))
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 8443f0f7..f9c19bf1 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1402,7 +1402,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       let decInjected = ''
+       if (rejectedHits.length > 0) {
+         const lines = [
+-          '⚠️ 否决决策/死路注记提示（历史已否决或已记死路，防复潮）——下列决策此前已被否决或已记死路。看到理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据：'
++          '⚠️ 否决决策/死路注记提示（历史已否决或已记死路，防复潮）——下列决策此前已被否决或已记死路。看到理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据；跨变更引用他条目须带变更名限定（变更名#D-xxx@vN——同号不同变更互不相干）：'
+         ]
+         for (const h of rejectedHits.slice(0, 5)) {
+           lines.push(`- ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}）${h.status === 'rejected' ? '' : ' ⚰️死路注记'}`)
+diff --git a/test/decision-file-field.test.mjs b/test/decision-file-field.test.mjs
+index 87b2bffd..3ca464db 100644
+--- a/test/decision-file-field.test.mjs
++++ b/test/decision-file-field.test.mjs
+@@ -323,7 +323,7 @@ test('双路由完全重复仍折叠：同一域文件两条路由行 → 同变
+   assert.equal(same.length, 1, '同变更同号完全重复折叠为一份（去重原语义保持）')
+ })
+ 
+-test('legacy 无变更行条目维持旧行为：同号 legacy 条目互折叠', () => {
++test('legacy 无变更行条目不再互折叠：同号 legacy 各自可见（2026-10-14-decision-id-p2-hardening 反转——旧互折叠致 2 条 implemented 条目永久隐身）', () => {
+   const lib = mkDecisionLib([
+     '# 决策知识 — change-management', '',
+     '## D-001@v1 legacy 甲',
+@@ -333,8 +333,8 @@ test('legacy 无变更行条目维持旧行为：同号 legacy 条目互折叠',
+     '## D-001@v1 legacy 乙',
+     '状态：implemented',
+     '锚点：未记录',
+-    '理由：同样无变更行——与甲互折叠（不放大历史条目数）', '',
++    '理由：同样无变更行——不再互折叠（各自可见）', '',
+   ].join('\n') + '\n')
+   const entries = parseDecisionEntries(lib)
+-  assert.equal(entries.filter(e => e.id === 'D-001@v1').length, 1, 'change="" 的同号 legacy 条目折叠')
++  assert.equal(entries.filter(e => e.id === 'D-001@v1').length, 2, '同号 legacy 共存（不折叠）')
+ })
+diff --git a/test/decision-id-p2-hardening.test.mjs b/test/decision-id-p2-hardening.test.mjs
+new file mode 100644
+index 00000000..218fce3e
+--- /dev/null
++++ b/test/decision-id-p2-hardening.test.mjs
+@@ -0,0 +1,130 @@
++/**
++ * decision-id-p2-hardening.test.mjs — 决策 ID 体系 P2 收尾（2026-10-14-decision-id-p2-hardening）
++ *
++ * 覆盖：① 「来源：」legacy 兜底读（knowledge-match/docs-check 两解析器 + decision-distill
++ *          splitKnowledgeSections 来源回退与重蒸馏在位更新收敛 + 变更优先）
++ *      ② 折叠修复（双 legacy 同号共存 + 路由行重复单解析）
++ *      ③ 豁免键域限定（decisions.<域>/<id>[.<kind>] 命中 / 裸键兼容 / 他域同号不豁免）
++ *      ⑤ 引用契约接线钉（两处防复潮段头含 变更名#D-xxx@vN）
++ * ④（已回应行级收紧）在 test/knowledge-gate-denoise.test.mjs。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { parseDecisionEntries } = await import(pathToFileURL(join(ROOT, 'src', 'knowledge-match.js')).href)
++const { parseDecisionEntries: parseDocsCheck, isDecisionExempt } = await import(pathToFileURL(join(ROOT, 'src', 'docs-check.js')).href)
++const { splitKnowledgeSections, distillIntoKnowledge } = await import(pathToFileURL(join(ROOT, 'src', 'decision-distill.js')).href)
++
++/** 最小知识库夹具：INDEX 路由行（可多条）+ decisions/core.md */
++function mkKnowledge(entries, { routes = 1 } = {}) {
++  const dir = mkdtempSync(join(tmpdir(), 'dip2-'))
++  const k = join(dir, 'knowledge')
++  mkdirSync(join(k, 'decisions'), { recursive: true })
++  const route = '- core|decision|决策 → [decisions/core.md](decisions/core.md)'
++  writeFileSync(join(k, 'INDEX.md'), ['# Knowledge Index', '', '## Decisions', ...(Array.from({ length: routes }, () => route)), ''].join('\n'))
++  writeFileSync(join(k, 'decisions', 'core.md'), ['# 决策知识 — core', '', ...entries].join('\n'))
++  return { dir, k }
++}
++
++test('① 来源兜底：三解析器读出来源行、变更优先、distill 在位更新收敛', () => {
++  // knowledge-match：仅来源行 → change 可见；变更行在前仍覆盖来源
++  {
++    const { dir, k } = mkKnowledge([
++      '## D-001@v1 只有来源', '状态：implemented', '来源：2026-01-01-alpha', '',
++      '## D-002@v1 双行', '状态：implemented', '来源：2026-01-02-beta', '变更：2026-01-03-gamma', '',
++    ])
++    try {
++      const hits = parseDecisionEntries(k)
++      assert.equal(hits.find(h => h.id === 'D-001@v1').change, '2026-01-01-alpha', '来源兜底读入（机器可见）')
++      assert.equal(hits.find(h => h.id === 'D-002@v1').change, '2026-01-03-gamma', '变更优先（来源行在前仍被变更覆盖）')
++    } finally { rmSync(dir, { recursive: true, force: true }) }
++  }
++  // docs-check 解析器同口径兜底
++  {
++    const entries = parseDocsCheck(['## D-001@v1 t', '状态：implemented', '来源：2026-01-01-alpha', ''].join('\n'))
++    assert.equal(entries[0].change, '2026-01-01-alpha', 'docs-check parseDecisionEntries 来源兜底')
++  }
++  // decision-distill：splitKnowledgeSections 来源回退 + 重蒸馏在位更新（同号只留一段、收敛为「变更：」形态）
++  {
++    const dir = mkdtempSync(join(tmpdir(), 'dip2d-'))
++    try {
++      const knowledgeRoot = join(dir, 'knowledge')
++      const decisionsDir = join(knowledgeRoot, 'decisions')
++      mkdirSync(decisionsDir, { recursive: true })
++      // legacy 段落 unmapped 域（无模块图 fixture 的域路由终点）
++      writeFileSync(join(decisionsDir, 'unmapped.md'), [
++        '# 决策知识 — unmapped', '',
++        '## D-001@v1 legacy 带来源', '状态：implemented', '来源：2026-01-01-alpha', '锚点：src/a.js', '',
++      ].join('\n'))
++      const { sections } = splitKnowledgeSections(readFileSync(join(decisionsDir, 'unmapped.md'), 'utf8'))
++      assert.equal(sections[0].change, '2026-01-01-alpha', 'splitKnowledgeSections 来源回退（legacy 参与同变更匹配）')
++      const changeDir = join(dir, 'changes', '2026-01-01-alpha')
++      mkdirSync(changeDir, { recursive: true })
++      writeFileSync(join(changeDir, 'decisions.md'), [
++        '# 决策记录', '',
++        '## D-001@v2 升级版', '- 类型：architecture', '- 状态：accepted', '',
++      ].join('\n'))
++      const r = distillIntoKnowledge(changeDir, knowledgeRoot, 'deadbeef')
++      assert.ok(r.written.some(w => w.action === 'update' || w.action === 'supersede'), `在位更新（非 append 重复）：${JSON.stringify(r.written)}`)
++      const after = readFileSync(join(decisionsDir, 'unmapped.md'), 'utf8')
++      assert.equal((after.match(/^## D-001@v\d+/gm) || []).length, 1, '同号只留一段')
++      assert.match(after, /变更：2026-01-01-alpha/, '更新段写「变更：」形态')
++      assert.doesNotMatch(after, /来源：2026-01-01-alpha/, 'legacy 来源行被收敛替换')
++    } finally { rmSync(dir, { recursive: true, force: true }) }
++  }
++})
++
++test('② 折叠修复：双 legacy 同号共存 + 路由行重复单解析', () => {
++  // 双 legacy 同号（无任何限定行）不再互折叠
++  {
++    const { dir, k } = mkKnowledge([
++      '## D-001@v1 甲', '状态：implemented', '',
++      '## D-001@v1 乙', '状态：rejected', '否决理由：x', '复潮条件：y', '',
++    ])
++    try {
++      const hits = parseDecisionEntries(k)
++      assert.equal(hits.filter(h => h.id === 'D-001@v1').length, 2, '双 legacy 同号共存（不再先到遮蔽）')
++    } finally { rmSync(dir, { recursive: true, force: true }) }
++  }
++  // 路由行重复（两条）+ 双 legacy：单解析 + 不折叠 → 2 条（旧形态会折叠为 1）
++  {
++    const { dir, k } = mkKnowledge([
++      '## D-001@v1 甲', '状态：implemented', '',
++      '## D-001@v1 乙', '状态：implemented', '',
++    ], { routes: 2 })
++    try {
++      const hits = parseDecisionEntries(k)
++      assert.equal(hits.length, 2, `路由重复单解析 + legacy 不折叠（实际 ${hits.length}）`)
++    } finally { rmSync(dir, { recursive: true, force: true }) }
++  }
++  // 带 change 条目跨路由重复仍折叠（file+id+change 键）
++  {
++    const { dir, k } = mkKnowledge([
++      '## D-001@v1 甲', '状态：implemented', '变更：c1', '',
++    ], { routes: 3 })
++    try {
++      assert.equal(parseDecisionEntries(k).length, 1, '带 change 条目沿用键去重（路由重复不放大）')
++    } finally { rmSync(dir, { recursive: true, force: true }) }
++  }
++})
++
++test('③ 豁免键域限定：decisions.<域>/<id>[.<kind>] 命中、裸键兼容、他域同号不豁免', () => {
++  assert.ok(isDecisionExempt(['decisions.core-engine/D-001@v1.anchor'], 'D-001@v1', 'anchor', 'core-engine'), '域限定规则级命中')
++  assert.ok(isDecisionExempt(['decisions.core-engine/D-001@v1'], 'D-001@v1', 'behind', 'core-engine'), '域限定条目级伞形')
++  assert.ok(!isDecisionExempt(['decisions.core-engine/D-001@v1.anchor'], 'D-001@v1', 'anchor', 'backend'), '他域同号不豁免（收窄命中面）')
++  assert.ok(!isDecisionExempt(['decisions.core-engine/D-001@v1.anchor'], 'D-001@v1', 'behind', 'core-engine'), '域限定规则级 kind 不匹配不豁免')
++  assert.ok(isDecisionExempt(['decisions.D-001@v1.anchor'], 'D-001@v1', 'anchor', 'backend'), '裸键兼容（规则级）')
++  assert.ok(isDecisionExempt(['decisions.D-001@v1'], 'D-001@v1', 'behind', 'backend'), '裸键兼容（条目级）')
++})
++
++test('⑤ 引用契约接线钉：两处段头含 变更名#D-xxx@vN', () => {
++  const prompt = readFileSync(join(ROOT, 'src', 'run', 'prompt.js'), 'utf8')
++  const flow = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.ok(prompt.includes('变更名#D-xxx@vN'), '{DECISION_HITS} 段头引用契约指引')
++  assert.ok(flow.includes('变更名#D-xxx@vN'), '轻量道防复潮段头引用契约指引')
++})
+diff --git a/test/knowledge-gate-denoise.test.mjs b/test/knowledge-gate-denoise.test.mjs
+index 6940d4e6..0510b8bc 100644
+--- a/test/knowledge-gate-denoise.test.mjs
++++ b/test/knowledge-gate-denoise.test.mjs
+@@ -121,6 +121,24 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回
+     assert.ok(!r.stdout.includes('D-001@v1 枚举开放世界'), `已回应 → 静默（实际：${r.stdout.slice(-300)}）`)
+     rmQuiet(cwd)
+   }
++  // 文件级共现不再吞（2026-10-14-decision-id-p2-hardening 行级收紧）：自身同号 id 与域名词分行
++  // ——旧文件级判定会静默吞掉命中，行级共现后照常回显
++  {
++    const { cwd, specBase } = makeRepo('kgd-line-')
++    seedKnowledge(specBase)
++    const { pm, progress } = await seedPlanStep(cwd, specBase)
++    writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
++      '# 决策记录（Decisions）', '',
++      '## D-001@v1: 方案引入枚举词表机制',
++      '- question: 归 unmapped 域的旧机制怎么处理？', '',
++    ].join('\n'))
++    const r = await runCapturing(() =>
++      completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
++        changeName: CN, doneAnswer: '代答', printNext: false,
++      }))
++    assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '文件级共现（id 与域名词分行）→ 照常回显（误吞清偿）')
++    rmQuiet(cwd)
++  }
+ })
+ 
+ process.on('exit', cleanup)

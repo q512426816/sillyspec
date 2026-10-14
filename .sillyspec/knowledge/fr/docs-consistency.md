@@ -1171,3 +1171,121 @@ created_at: 2026-09-28T17:07:05.883Z
 - 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail，否则整单 FAIL
 全文：.sillyspec/changes/archive/2026-10-14-supersedes-mislink-and-change-display/requirements.md#FR-03
 最近确认：beeb1ebae01f15018240be37e474b9114d7119ca
+
+## FR-docs-consistency-057 「来源：」legacy 兼容读：knowledge-match（parseDecisionFile）、decision-distill（splitKnowledgeSections）、docs-check（parseDecisionEntries）三解析器 MUST 支持来源行兜底——「变更：」优先、「来源：」仅在变更行缺失时生效；decision-distill 侧 legacy 段（带来源行）从此参与同变更匹配（重蒸馏收敛为在位更新而非重复追加），无任何限定行的纯 legacy 段仍不互认
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：来源兜底解析；distill 在位更新收敛；变更优先
+场景正文：
+- 场景：来源兜底解析 — Given 域文件条目仅含「来源：2026-01-01-alpha」行；When 任一解析器读取；Then change=2026-01-01-alpha（机器可见）
+- 场景：distill 在位更新收敛 — Given 知识域文件存在带「来源：2026-01-01-alpha」的 legacy D-001@v1 段；When 重蒸馏 change 2026-01-01-alpha 的 D-001@v2；Then legacy 段被在位更新为「变更：」形态，不产生重复段
+- 场景：变更优先 — Given 条目同时含「变更：」与「来源：」行（理论形态）；When 解析；Then change 取「变更：」值
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-01
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-01
+  tests: test/decision-id-p2-hardening.test.mjs「① 来源兜底：三解析器读出来源行、变更优先、distill 在位更新收敛」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-decision-id-p2-hardening
+  status: active
+
+## FR-docs-consistency-058 折叠修复：同文件同号双 legacy（无任何限定行）MUST 不再互折叠（2 条隐身条目复现）；多条路由行指向同一域文件仍不产生重复解析
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：双 legacy 同号共存；路由行重复不放大
+场景正文：
+- 场景：双 legacy 同号共存 — Given 同域文件两个 D-001@v1 条目均无变更/来源行；When parseDecisionEntries；Then 两条均返回（不再先到遮蔽）
+- 场景：路由行重复不放大 — Given INDEX 两条路由行指向同一域文件；When parseDecisionEntries；Then 条目数与单路由一致
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-02
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-02
+  tests: test/decision-id-p2-hardening.test.mjs「② 折叠修复：双 legacy 同号共存 + 路由行重复单解析」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-decision-id-p2-hardening
+  status: active
+
+## FR-docs-consistency-059 docs-check 豁免键域限定：新键形态 decisions.<域>/<id>[.<kind>]（规则级精确/条目级伞形）MUST 生效；裸键形态保留兼容
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：域限定键命中与他域不豁免
+场景正文：
+- 场景：域限定键命中与他域不豁免 — Given known_failures 含 decisions/core-engine/D-001@v1.anchor；When 豁免匹配 core-engine 域 D-001@v1 的 anchor 规则与他域同号条目；Then 前者豁免、后者不豁免
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-03
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-03
+  tests: test/decision-id-p2-hardening.test.mjs「③ 豁免键域限定：decisions.<域>/<id>[.<kind>] 命中、裸键兼容、他域同号不豁免」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-decision-id-p2-hardening
+  status: active
+
+## FR-docs-consistency-060 已回应判据收紧：complete.js 防复潮「已回应」判定 MUST 从文件级共现收紧为行级共现（命中 id 与域名词或变更名出现在同一行）——自身同号+常见词不再静默吞他变更命中；真实回应形态（unmapped.md D-001@v1 同行）仍被识别
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：误吞清偿；真实回应仍识别
+场景正文：
+- 场景：误吞清偿 — Given 本变更 decisions.md 含自身 D-001@v1 行、他处另一行含「unmapped」词、命中为他变更 unmapped 域 D-001@v1；When knowledge-gate 判定；Then 命中照常回显（不再被吞）
+- 场景：真实回应仍识别 — Given decisions.md 某行同时含「unmapped.md」与「D-001@v1」（小白鼠回应形态）；When 判定；Then 抑制（不重弹）
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-04
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-04
+  tests: test/knowledge-gate-denoise.test.mjs「③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回显；未回应照常回显」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-decision-id-p2-hardening
+  status: active
+
+## FR-docs-consistency-061 注入文案引用契约：{DECISION_HITS} 与轻量道防复潮段头 MUST 含跨变更引用形态指引（变更名#D-xxx@vN，同号不同变更互不相干）
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：指引在场
+场景正文：
+- 场景：指引在场 — Given 两处段头渲染文本；Then 均含「变更名#D-xxx@vN」字样
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-05
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-05
+  tests: test/decision-id-p2-hardening.test.mjs「⑤ 引用契约接线钉：两处段头含 变更名#D-xxx@vN」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-14-decision-id-p2-hardening
+  status: active
+
+## FR-docs-consistency-062 新增/更新测试跑绿；全量测试 + lint 绿
+变更：2026-10-14-decision-id-p2-hardening
+状态：active
+摘要：收口实测
+场景正文：
+- 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail
+全文：.sillyspec/changes/archive/2026-10-14-decision-id-p2-hardening/requirements.md#FR-06
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e

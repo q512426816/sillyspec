@@ -1,0 +1,65 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  动机与背景：
+
+  决策 ID 体系四路审计的 P2 清单（用户「继续」确认执行）。四组残余静默面：
+
+  ① legacy「来源：」行不被任何解析器读取（现存 20 行，2026-08-24 首修形态的残留）——这些条目在检索去重键/图谱节点/decision-touch 层 change=''，机器不可见；
+
+  ② 同文件同号双 legacy（无变更/来源行）在 knowledge-match 去重时互折叠——实测 2 条 implemented 条目（backend.md:158、unmapped.md:584）对检索/注入/图永久隐身；
+
+  ③ docs-check 豁免键 decisions.<id>[.<kind>] 无域限定——一条裸键可静默豁免全库同号条目（D-001@v1 ×296，潜伏面）；
+
+  ④ complete.js 防复潮「已回应」判据是文件级 id+域名词共现——本变更自身同号 id + 正文常见词（backend/unmapped）撞车即静默吞掉他变更的历史否决/死路提示；
+
+  ⑤ 跨变更引用 D 号无契约形态（审计实证 3 处省略被引用变更名）。
+
+
+  成功标准：
+
+  - 「来源：」legacy
+  兼容读：knowledge-match（parseDecisionFile）、decision-distill（splitKnowledgeSections）、docs-check（parseDecisionEntries）三解析器
+  MUST 支持来源行兜底——「变更：」优先、「来源：」仅在变更行缺失时生效；decision-distill 侧 legacy 段（带来源行）从此参与同变更匹配（重蒸馏收敛为在位更新而非重复追加），无任何限定行的纯 legacy
+  段仍不互认
+
+  - 折叠修复：同文件同号双 legacy（无任何限定行）MUST 不再互折叠（2 条隐身条目复现）；多条路由行指向同一域文件仍不产生重复解析
+
+  - docs-check 豁免键域限定：新键形态 decisions.<域>/<id>[.<kind>]（规则级精确/条目级伞形）MUST 生效；裸键形态保留兼容
+
+  - 已回应判据收紧：complete.js 防复潮「已回应」判定 MUST 从文件级共现收紧为行级共现（命中 id 与域名词或变更名出现在同一行）——自身同号+常见词不再静默吞他变更命中；真实回应形态（unmapped.md
+  D-001@v1 同行）仍被识别
+
+  - 注入文案引用契约：{DECISION_HITS} 与轻量道防复潮段头 MUST 含跨变更引用形态指引（变更名#D-xxx@vN，同号不同变更互不相干）
+
+  - 新增/更新测试跑绿；全量测试 + lint 绿
+autopilot: false
+prestage_ack: true
+baseline_commit: 993c966dcd64aac7c26c8c7986209eecf3319b63
+updatedAt: '2026-10-14T14:23:15.542Z'
+baseline_sha256: 6509363ff8091974a85c82eab1dfd1c8823ab1246cbeb14fd007af196ef787d3
+spec_approved: true
+spec_approved_at: '2026-10-14T14:02:14.059Z'
+spec_approved_by: zcode-didp2
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-didp2
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js115+js-meta-skip1+nontest-skip1)+fr(115)（61.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014141342\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（41.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261014141342\test-result.json｜门文件 9 个
+

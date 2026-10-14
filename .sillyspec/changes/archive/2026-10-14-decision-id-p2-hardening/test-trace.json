@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-14-decision-id-p2-hardening",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-01",
+      "tests": [
+        "test/decision-id-p2-hardening.test.mjs「① 来源兜底：三解析器读出来源行、变更优先、distill 在位更新收敛」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-id-p2-hardening"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-id-p2-hardening.test.mjs「② 折叠修复：双 legacy 同号共存 + 路由行重复单解析」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-id-p2-hardening"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-03",
+      "tests": [
+        "test/decision-id-p2-hardening.test.mjs「③ 豁免键域限定：decisions.<域>/<id>[.<kind>] 命中、裸键兼容、他域同号不豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-id-p2-hardening"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-gate-denoise.test.mjs「③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回显；未回应照常回显」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-id-p2-hardening"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-14-decision-id-p2-hardening:flow:测试绑定FR-05",
+      "tests": [
+        "test/decision-id-p2-hardening.test.mjs「⑤ 引用契约接线钉：两处段头含 变更名#D-xxx@vN」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-14-decision-id-p2-hardening"
+    }
+  ]
+}
