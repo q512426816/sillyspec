@@ -1,0 +1,184 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 54511cfa..ab2d3c72 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -20,3 +20,4 @@
+ | 2026-10-14 | 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原 |
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
++| 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index da6b7941..45b545a6 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -60,3 +60,4 @@
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+ | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
++| 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 1fb59ec5..5efa4e60 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2821,6 +2821,31 @@ function inferFullTestCommand(projectRoot) {
+  * 相关回归）。组卷改配额制：每组优先面整跑，普通 import 依赖只填剩余席位（可为 0）——帽
+  * 只界普通依赖尾。批尺寸上界护栏由 TEST_TIMEOUT_MS 兜底（超时=失败 fail-closed 不变）。
+  */
++/**
++ * 批命令长度分块（2026-10-15 平台侧实证，跨仓事故驱动最小修复）：Windows cmd 执行器
++ * 命令行上限 ~8191 字符——大依赖面（广被引用的前端文件变更 → 依赖测试 100+ 个）拼单条
++ * vitest/node --test 命令必炸「命令行太长」exit 1，且失败批进增量账本自我循环恒败
++ * （实测：137 文件批反复重跑复败，verify 门禁无法收口）。按「命令前缀+文件参数拼接
++ * 总长」分块：单块保持原名（零回归），多块命名 <base>:N（N 从 1 起）；每块独立计账。
++ */
++function chunkByCommandLength(prefix, files, maxLen = 6000) {
++  const chunks = []
++  let cur = []
++  let curLen = prefix.length
++  for (const f of files) {
++    const add = f.length + 1
++    if (cur.length > 0 && curLen + add > maxLen) {
++      chunks.push(cur)
++      cur = []
++      curLen = prefix.length
++    }
++    cur.push(f)
++    curLen += add
++  }
++  if (cur.length > 0) chunks.push(cur)
++  return chunks
++}
++
+ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
+   const norm = (p2) => String(p2).replace(/\\/g, '/')
+   const changedSet = new Set((changedFiles || []).map(norm))
+@@ -2958,7 +2983,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       gi++
+     }
+   }
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++  if (jsNative.length > 0) {
++    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout '
++    const jsChunks = chunkByCommandLength(jsPrefix, jsNative)
++    jsChunks.forEach((chunk, i) => {
++      const isMulti = jsChunks.length > 1
++      batches.push({ name: isMulti ? `deps(auto-js:${i + 1}/${jsChunks.length})` : 'deps(auto-js)', short: 'js', command: jsPrefix + chunk.join(' '), count: chunk.length, prioCount: chunk.filter(f => prio(f) === 0).length, dropped: i === 0 ? (jsTest.length - jsRun.length) : 0, prioDropped: i === 0 ? jsQ.prioDropped : 0, tap: true, files: chunk })
++    })
++  }
+   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
+ 
+   if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
+@@ -2973,7 +3005,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
+       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
+       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
+-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
++      const jsxPrefix = `${jsxRunner} ${isVitest ? 'run ' : ''}`
++      const jsxArgs = jsProjectRun.map(rebaseJsx).map(quoteWinPath)
++      const jsxChunks = chunkByCommandLength(jsxPrefix, jsxArgs)
++      // 单块保持原名零回归；多块 <base>:N 独立计账（files 取该块参数原样回映射由调用方按需）。
++      jsxChunks.forEach((chunk, i) => {
++        const isMulti = jsxChunks.length > 1
++        batches.push({ name: isMulti ? `deps(auto-jsx:${i + 1}/${jsxChunks.length})` : 'deps(auto-jsx)', short: 'jsx', command: jsxPrefix + chunk.join(' '), count: chunk.length, dropped: 0, files: chunk })
++      })
+     } else {
+       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+     }
+diff --git a/test/dynamic-batch-chunk.test.mjs b/test/dynamic-batch-chunk.test.mjs
+new file mode 100644
+index 00000000..4d831a92
+--- /dev/null
++++ b/test/dynamic-batch-chunk.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * 批命令长度分块（chunkByCommandLength，经 buildDepsBatches 行为面直测）单测。
++ * 2026-10-15-jsx-batch-cmd-chunk FR-01：Windows cmd ~8191 上限下大依赖面单命令
++ * 「命令行太长」恒败（消费仓双会话实证 137 / 138→159 文件批）——分块后单块 ≤
++ * 前缀+6000，单块保原批名零回归，多块 :N/M 独立计账。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { buildDepsBatches } from '../src/verify-postcheck.js'
++
++function mkRoot(prefix) {
++  const root = mkdtempSync(join(tmpdir(), prefix))
++  mkdirSync(join(root, 'frontend', 'src', '__tests__'), { recursive: true })
++  writeFileSync(join(root, 'frontend', 'package.json'), JSON.stringify({ name: 'fe', devDependencies: { vitest: '^1.0.0' } }))
++  writeFileSync(join(root, 'frontend', 'pnpm-lock.yaml'), '')
++  return root
++}
++
++function mkJsxFiles(root, count, nameLen) {
++  const deps = []
++  for (let i = 0; i < count; i++) {
++    const name = `t${String(i).padStart(3, '0')}${'x'.repeat(nameLen)}.test.tsx`
++    const rel = `frontend/src/__tests__/${name}`
++    writeFileSync(join(root, rel), '')
++    deps.push(rel)
++  }
++  return deps
++}
++
++test('单块零回归：拼接总长 < maxLen 时恰一个 deps(auto-jsx) 批，命令与旧拼接逐字一致', () => {
++  const root = mkRoot('chunk-single-')
++  const deps = mkJsxFiles(root, 3, 10)
++  const t = (f) => `frontend/src/__tests__/${f}`
++  try {
++    const batches = buildDepsBatches({ deps, changedFiles: [], hits: [], cwd: root })
++    const jsx = batches.filter((b) => b.short === 'jsx')
++    assert.equal(jsx.length, 1, `恰一个 jsx 批（实得 ${jsx.length}）`)
++    assert.equal(jsx[0].name, 'deps(auto-jsx)', '单块保持原批名')
++    assert.equal(jsx[0].count, 3, 'count 守恒')
++    const expected = `cd frontend && pnpm exec vitest run ${deps.map((d) => d.replace('frontend/', '')).join(' ')}`
++    assert.equal(jsx[0].command, expected, `命令与旧拼接一致（实得 ${jsx[0].command}）`)
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('多块分块：拼接总长超 maxLen → deps(auto-jsx:1/N..N/N)，count 守恒且每块命令不超上限', () => {
++  const root = mkRoot('chunk-multi-')
++  // 200 文件 × 名长 ~60 → 参数总长 ~12k，前缀 ~33 → 预期 3 块（6000/块）。
++  const deps = mkJsxFiles(root, 200, 50)
++  try {
++    // deps 全量同时作变更面（优先面整跑）——普通依赖有配额帽，帽下不触发分块
++    const batches = buildDepsBatches({ deps, changedFiles: deps, hits: [], cwd: root })
++    const jsx = batches.filter((b) => b.short === 'jsx')
++    assert.ok(jsx.length >= 2, `应分多块（实得 ${jsx.length} 块）`)
++    const total = jsx.length
++    jsx.forEach((b, i) => {
++      // 命名钉 HEAD 冻结面语义：jsx 多块后缀在括号内 deps(auto-jsx:N/M)（与 js 原生批同式）。
++      // 注：工作区并行会话在途「多项目分组」演化拟改后缀到括号外（base:N/M）——其落地
++      // 提交须同步本断言（实现与断言一起换版，保持三方一致）。
++      assert.equal(b.name, `deps(auto-jsx:${i + 1}/${total})`, `第 ${i + 1} 块命名 :N/M（实得 ${b.name}）`)
++      // 单块命令长度：前缀 + 本块参数 ≤ 前缀 + 6000 + 单参数富余（分块判据本身）
++      assert.ok(b.command.length <= 6033 + 120, `第 ${i + 1} 块命令长度 ${b.command.length} 应贴近 6000 上限`)
++    })
++    assert.equal(jsx.reduce((s, b) => s + b.count, 0), 200, 'count 跨块守恒')
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('js 原生批同款分块：deps(auto-js:1/N) 且 tap 标记保留', () => {
++  const root = mkdtempSync(join(tmpdir(), 'chunk-jsnative-'))
++  try {
++    const deps = []
++    for (let i = 0; i < 150; i++) {
++      const name = `n${String(i).padStart(3, '0')}${'y'.repeat(50)}.test.mjs`
++      writeFileSync(join(root, name), '')
++      deps.push(name)
++    }
++    const batches = buildDepsBatches({ deps, changedFiles: deps, hits: [], cwd: root })
++    const js = batches.filter((b) => b.short === 'js')
++    assert.ok(js.length >= 2, `node --test 批应分多块（实得 ${js.length}）`)
++    js.forEach((b) => assert.equal(b.tap, true, 'tap 标记保留'))
++    assert.equal(js.reduce((s, b) => s + b.count, 0), 150, 'count 跨块守恒')
++    assert.match(js[0].name, /^deps\(auto-js:1\/\d+\)$/, '首块命名 auto-js:1/N')
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})

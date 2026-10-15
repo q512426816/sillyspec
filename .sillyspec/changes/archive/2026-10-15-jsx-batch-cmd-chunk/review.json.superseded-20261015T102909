@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-jsx-batch-cmd-chunk",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "83b303db044688e7a75f4de35f8e9a2c85106cb7",
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "HEAD 冻结面自红：jsx 多块命名断言（后缀挂括号外）与 HEAD 实现（括号内）恒不等，FR-03 实测门在 HEAD 不成立——全绿依赖并行会话未提交 WIP",
+      "evidence": "HEAD src/verify-postcheck.js:3013 多块命名模板为 `deps(auto-jsx:${i+1}/${jsxChunks.length})`（括号内），而 HEAD test/dynamic-batch-chunk.test.mjs:64 断言 `deps(auto-jsx):${i+1}/${total}`（括号外）——两串对任意 N>1 恒不等，在 83b303db 干净检出跑该用例必败；本地实跑 28/28 绿系借工作区并行会话分组 WIP（src 未提交改动），83b303db 提交信息自认『活树实测并行会话分组 WIP 自洽（三件套 25/25 绿）』——仅列三件套、未含本用例。FR-01 测试绑定行与 FR-03『npm test 全绿放行』（task-03 已勾）在 reviewedAgainst 冻结面均不成立；js 原生腿三方一致（deps(auto-js:1/N) 括号内，实现/测试/FR 文本吻合），仅 jsx 腿断言漂移。【resolved-in 6b03b554：断言钉回 HEAD 括号内语义，临时 worktree 3/3+25/25 实证】",
+      "location": "src/verify-postcheck.js:3013; test/dynamic-batch-chunk.test.mjs:64"
+    },
+    {
+      "severity": "P2",
+      "title": "jsx 批 files 字段语义漂移未披露：由原始路径变为 rebaseJsx+quoteWinPath 后参数（含双引号），『单块零回归』在 files 维度不成立",
+      "evidence": "HEAD src/verify-postcheck.js:3013 `files: chunk`，chunk 元素是 jsxArgs（经 rebaseJsx 重定基 + 特殊字符双引号包装，:3009-3010），旧实现为 `files: jsProjectRun` 原始路径；HEAD 注释自认『files 取该块参数原样回映射由调用方按需』——若消费面（增量账本/失败归因）以 files 匹配真实路径，含引号/重定基条目将失配。jsNative 批无此问题（jsNative 未做 quote 包装，chunk 元素即原始路径）。",
+      "location": "src/verify-postcheck.js:3009"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01/design 命名表述 `deps(auto-js|jsx:N/M)` 与测试定稿约定（jsx 后缀挂括号外 base:N/M）漂移",
+      "evidence": "requirements.md FR-01 与 design.md 均表述多块命名 deps(auto-js|jsx:N/M)（字面为括号内），与 HEAD 实现一致但与测试（jsx 括号外，测试注释声明『随 2026-10-15 并行分组演化定稿』）不一致——三文本需在 WIP 落地时统一收敛，否则下一个会话按 FR 文本断言会再红。",
+      "location": ".sillyspec/changes/2026-10-15-jsx-batch-cmd-chunk/requirements.md:9"
+    },
+    {
+      "severity": "P3",
+      "title": "提交面：ef3d312d 混入并行变更 2026-10-15-decision-redomain 的 7 个 .sillyspec 文件删除（共享暂存区竞态），无数据损失",
+      "evidence": "git show --stat ef3d312d 列 decision-redomain 的 design.md/flow-state.yaml/proposal.md/requirements.md/review.json/task-ticks.jsonl/tasks.md 共 ~173 删除行混入本变更首提交；内容已由归档提交 e8399a9b『chore(archive): 2026-10-15-decision-redomain 归档留档』完整留档——提交卫生问题，非数据正确性问题。",
+      "location": "commit ef3d312d89844e900fcfc621df8cd0220d23b5e4"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T18:28:49+08:00"
+}

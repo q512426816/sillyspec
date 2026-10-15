@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-jsx-batch-cmd-chunk",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-01",
+      "tests": [
+        "test/dynamic-batch-chunk.test.mjs「单块零回归：拼接总长 < maxLen 时恰一个 deps(auto-jsx) 批，命令与旧拼接逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-01",
+      "tests": [
+        "test/dynamic-batch-chunk.test.mjs「多块分块：拼接总长超 maxLen → deps(auto-jsx:1/N..N/N)，count 守恒且每块命令不超上限」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-01",
+      "tests": [
+        "test/dynamic-batch-chunk.test.mjs「js 原生批同款分块：deps(auto-js:1/N) 且 tap 标记保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-02",
+      "tests": [
+        "test/dynamic-test-inference.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-02",
+      "tests": [
+        "test/dynamic-deps-comment-edge.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-02",
+      "tests": [
+        "test/residual-runner-parity.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-jsx-batch-cmd-chunk"
+    }
+  ]
+}

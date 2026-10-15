@@ -4027,3 +4027,26 @@
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-15-decision-redomain/requirements.md#FR-04
 最近确认：d1015183e1d971efd8413546dec61e009ffe953f
+
+## FR-core-engine-239 chunkByCommandLength 按「前缀+参数拼接总长」分块，maxLen 缺省 6000，单块保持原批名（零回归），多块命名 deps(auto-js|jsx:N/M)
+变更：2026-10-15-jsx-batch-cmd-chunk
+状态：active
+摘要：主路径；主路径；主路径
+场景正文：
+- 场景：主路径 — Given 优先面含 200 个 tsx 依赖测试（参数总长 ~12k）；When buildDepsBatches 组卷；Then ≥2 个 deps(auto-jsx:
+- 场景：主路径 — Given 分块补丁在场；When 运行三件套；Then 25/25 通过、零失败。: flow done 实测门（npm test + npm run lint）通过
+- 场景：主路径 — Given 本变更触及 src/verify-postcheck.js 与 test/；When flow done；Then npm test 与 npm run lin
+全文：.sillyspec/changes/archive/2026-10-15-jsx-batch-cmd-chunk/requirements.md#FR-01
+最近确认：893ae3bcde0054969180971e02536ffd67dd4802
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-jsx-batch-cmd-chunk:flow:测试绑定FR-01
+  tests: test/dynamic-batch-chunk.test.mjs「js 原生批同款分块：deps(auto-js:1/N) 且 tap 标记保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-jsx-batch-cmd-chunk
+  status: active

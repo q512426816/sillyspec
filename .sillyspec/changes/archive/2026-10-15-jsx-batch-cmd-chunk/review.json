@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-jsx-batch-cmd-chunk",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "893ae3bcde0054969180971e02536ffd67dd4802",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "【已清偿·记录性】首轮 P1：jsx 多块命名断言括号外漂移（HEAD 自红）——resolved-in 6b03b554，893ae3bc 复核维持清偿",
+      "evidence": "首轮（reviewedAgainst 83b303db 之前）发现 test 断言 deps(auto-jsx):N/M（括号外）与 src 实现 deps(auto-jsx:N/M)（括号内）恒不等。本轮在 893ae3bc 复验已清偿：git show 893ae3bc:test/dynamic-batch-chunk.test.mjs :61-64 断言 `deps(auto-jsx:${i+1}/${total})`（括号内）并留痕注释『工作区并行会话在途多项目分组演化拟改后缀到括号外（base:N/M）——其落地提交须同步本断言』；git show 893ae3bc:src/verify-postcheck.js:3014 实现模板 `deps(auto-jsx:${i+1}/${jsxChunks.length})`（括号内，与 :2991 js 原生批同式）；requirements.md:9 FR-01 文本 deps(auto-js|jsx:N/M) 同为括号内——实现/测试/FR 三方一致，用例名与 FR-01 绑定行逐字吻合。js 原生腿断言 /^deps\\(auto-js:1\\/\\d+\\)$/ 同步一致。前轮临时 worktree 实跑 3/3+25/25。【resolved-in 6b03b554：断言钉回括号内语义并实证；893ae3bc 复核维持清偿】",
+      "location": "test/dynamic-batch-chunk.test.mjs:61; src/verify-postcheck.js:3014"
+    },
+    {
+      "severity": "P2",
+      "title": "jsx 批 files 字段语义漂移未披露：由原始路径变为 rebaseJsx+quoteWinPath 后参数（含双引号），『单块零回归』在 files 维度不成立",
+      "evidence": "893ae3bc src/verify-postcheck.js:3009 `const jsxArgs = jsProjectRun.map(rebaseJsx).map(quoteWinPath)`，:3010-3014 分块后 `files: chunk` 携带重定基+特殊字符双引号包装后的参数，旧实现为原始路径；:3011 注释自认『files 取该块参数原样回映射由调用方按需』。维持留档：系并行会话在途分组演化的落点，其落地提交须一并收敛（若消费面以 files 匹配真实路径将失配）。jsNative 批无此问题（未做 quote 包装）。",
+      "location": "src/verify-postcheck.js:3009"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01/design 命名表述 deps(auto-js|jsx:N/M) 的『|jsx』写法与测试/实现定稿字面（auto-js 与 auto-jsx 各自独立批名）存在表意粗糙",
+      "evidence": "requirements.md:9 与 design.md 以 deps(auto-js|jsx:N/M) 合写两种批型，与 HEAD 实现括号内语义一致但为缩写表述——三方含义已收敛一致，仅文字面偏松，留档提示后续文档措辞精确化。首轮同条维持。",
+      "location": ".sillyspec/changes/2026-10-15-jsx-batch-cmd-chunk/requirements.md:9"
+    },
+    {
+      "severity": "P3",
+      "title": "提交面：ef3d312d 混入并行变更 2026-10-15-decision-redomain 的 7 个 .sillyspec 文件删除（共享暂存区竞态），无数据损失",
+      "evidence": "git show --stat ef3d312d 列 decision-redomain 的 design.md/flow-state.yaml/proposal.md/requirements.md/review.json/task-ticks.jsonl/tasks.md 共 ~173 删除行混入本变更首提交；内容已由归档提交 e8399a9b『chore(archive): 2026-10-15-decision-redomain 归档留档』完整留档——提交卫生问题，非数据正确性问题。首轮同条维持。",
+      "location": "commit ef3d312d89844e900fcfc621df8cd0220d23b5e4"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T18:29:30+08:00",
+  "reviewerNotes": "P1 已清偿故降为 P3 记录性条目（门禁按 severity 解析，处置注记在 evidence 与 title）；P2 留档为并行会话在途分组演化的收敛落点。"
+}
