@@ -24,16 +24,19 @@ const DEFAULTS = {
     B: {
       label: 'SillySpec',
       setup: ['npx sillyspec init --dir {workdir} --tool {tool}'],
-      promptTemplate: '当前项目已安装 SillySpec 工作流。请按 SillySpec 流程完成以下需求（小任务走 quick 模式），完成后确保代码可运行：\n\n{instruction}',
+      // 话术对齐现行协议（quick 通道 v3.30.0 退役）；与 eval.config.json arms.B 保持同义
+      promptTemplate: '当前项目已安装 SillySpec 工作流。请按 SillySpec 轻量流程完成以下需求（sillyspec flow start 立项 → 直接干活 → sillyspec flow done 收口），完成后确保代码可运行：\n\n{instruction}',
     },
   },
   adapter: {
     type: 'cli',
     tool: 'claude',
-    command: ['claude', '-p', '--output-format', 'json', '--max-turns', '{maxTurns}'],
+    // --dangerously-skip-permissions：headless 无交互授批通道，无旗标则 Write/Bash 全被自动拒绝
+    // （permission_denials 实证）；作用面=一次性 gitignored 草稿 workdir。与 eval.config.json 同步。
+    command: ['claude', '-p', '--output-format', 'json', '--max-turns', '{maxTurns}', '--dangerously-skip-permissions'],
     stdin: 'prompt',
     timeoutMs: 900_000,
-    maxTurns: 60,
+    maxTurns: 120,
     parseStdoutJson: true,
   },
 };
