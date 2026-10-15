@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-decision-redomain",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-decision-redomain:flow:测试绑定FR-01",
+      "tests": [
+        "test/decision-redomain.test.mjs「①②③ apply：迁两段真域、段字节保真、路由行补、源留余条」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-redomain"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-decision-redomain:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-redomain.test.mjs「④⑤ 跨变更同号共存；目标同 id 同变更冲突跳过不覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-redomain"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-decision-redomain:flow:测试绑定FR-03",
+      "tests": [
+        "test/decision-redomain.test.mjs「⑥⑦⑧ 幂等/空壳删除/机器行保真」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-redomain"
+    }
+  ]
+}

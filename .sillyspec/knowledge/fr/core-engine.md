@@ -3963,3 +3963,67 @@
   confirmed_at: null
   source_change: 2026-10-15-module-path-glob-match
   status: active
+
+## FR-core-engine-235 plan/apply 双态：段字节保真（标题/字段行/原编号/最近确认随段）、id 不变、路由行补
+变更：2026-10-15-decision-redomain
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-redomain/requirements.md#FR-01
+最近确认：d1015183e1d971efd8413546dec61e009ffe953f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-redomain:flow:测试绑定FR-01
+  tests: test/decision-redomain.test.mjs「①②③ apply：迁两段真域、段字节保真、路由行补、源留余条」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-redomain
+  status: active
+
+## FR-core-engine-236 冲突双键：跨变更同号共存不误判、同 id 同变更批内/目标域冲突跳过不覆盖
+变更：2026-10-15-decision-redomain
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-redomain/requirements.md#FR-02
+最近确认：d1015183e1d971efd8413546dec61e009ffe953f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-redomain:flow:测试绑定FR-02
+  tests: test/decision-redomain.test.mjs「④⑤ 跨变更同号共存；目标同 id 同变更冲突跳过不覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-redomain
+  status: active
+
+## FR-core-engine-237 幂等：重跑零命中拒（源空壳删除后源不存在）；空壳删除与 INDEX 失效行清理
+变更：2026-10-15-decision-redomain
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-redomain/requirements.md#FR-03
+最近确认：d1015183e1d971efd8413546dec61e009ffe953f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-redomain:flow:测试绑定FR-03
+  tests: test/decision-redomain.test.mjs「⑥⑦⑧ 幂等/空壳删除/机器行保真」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-redomain
+  status: active
+
+## FR-core-engine-238 平台仓真实库全量迁移实测：436 条迁出+validate ok+digest 伪域 0 留档
+变更：2026-10-15-decision-redomain
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-redomain/requirements.md#FR-04
+最近确认：d1015183e1d971efd8413546dec61e009ffe953f

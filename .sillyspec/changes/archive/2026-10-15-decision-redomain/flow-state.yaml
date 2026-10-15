@@ -1,0 +1,44 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-module-path-glob-match 已修复止增量）导致平台仓 decisions/unmapped.md 积 442
+  条历史决策。redomain.js 只管 fr/ 面，决策面缺机器通道——本变更新增 decision-redomain.js 孪生实现（复用 decision-distill 参数化底座
+  splitKnowledgeSections/joinKnowledgeFile/syncIndexRoutingLines）：--decisions flag 切 decisions
+  面（--from/--to/--anchor/--by-change/--write 同族）；段字节整体搬运（id/机器行零改写）；冲突双键（id+变更——跨变更同号合法共存，完全重复批内跳过报告）；空壳删除+INDEX
+  路由同步（失效行自动删）。消费侧：平台仓 442 条存量迁移（另一变更）已全量执行，迁出 436 条、残留 0（含 3 重复段/1 粘连残迹的数据修复）。
+
+
+  成功标准：
+
+  - plan/apply 双态：段字节保真（标题/字段行/原编号/最近确认随段）、id 不变、路由行补
+
+  - 冲突双键：跨变更同号共存不误判、同 id 同变更批内/目标域冲突跳过不覆盖
+
+  - 幂等：重跑零命中拒（源空壳删除后源不存在）；空壳删除与 INDEX 失效行清理
+
+  - 平台仓真实库全量迁移实测：436 条迁出+validate ok+digest 伪域 0 留档
+autopilot: true
+prestage_ack: true
+baseline_commit: a8ff935178fdffb241a64c0397475c643c6ded84
+updatedAt: '2026-10-15T08:30:11.627Z'
+baseline_sha256: e2127dc77cebbc6d0acf934eef5ea9c69ed2739ec1511affc1cecbe391ece191
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：lint（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+js-meta-skip1)+fr(28)（46.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015082857\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（56.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015082857\test-result.json｜门文件 4 个
+
