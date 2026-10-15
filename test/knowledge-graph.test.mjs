@@ -432,6 +432,14 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/�
     assert.ok(sFilesGone.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
     // 跨仓口径：全假存在性下 doc 引用全按跨仓豁免 → 中桶归零（裸名+跨仓双豁免钉）
     assert.equal(sFalse.dangling_refs_breakdown.medium_doc_refs, 0, '顶级全不在场=跨仓形态，文档引用不计本仓悬空')
+    // 跨仓口径分流（2026-10-15-graph-dangling-crossrepo-split）：breakdown.cross_repo=跨仓注记数、
+    // dangling_refs_local=本仓可行动数，三者守恒（local + cross_repo = total）；本仓在场态（默认
+    // existsFn）跨仓为 0
+    assert.equal(sFalse.dangling_refs_breakdown.cross_repo, sFalse.dangling_refs, '全假存在性下悬空全为跨仓注记形态')
+    assert.equal(sFalse.dangling_refs_local, 0, '全假存在性下本仓可行动悬空归零')
+    assert.equal(sFalse.dangling_refs_local + sFalse.dangling_refs_breakdown.cross_repo, sFalse.dangling_refs, 'local + cross_repo = total 守恒')
+    assert.ok(sFilesGone.dangling_refs_breakdown.cross_repo >= 1, '顶级 src 在场但目标文件不在=本仓悬空之外仍有跨仓注记面（fixture 锚点目标）')
+    assert.equal(sFilesGone.dangling_refs_local + sFilesGone.dangling_refs_breakdown.cross_repo, sFilesGone.dangling_refs, '混合态守恒同样成立')
     // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
     const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
     try {

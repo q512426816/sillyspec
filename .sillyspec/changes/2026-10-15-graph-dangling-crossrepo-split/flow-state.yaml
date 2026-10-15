@@ -1,0 +1,26 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  效果评估实证：knowledge graph dangling 主计数 2537 条中 2472 为跨仓强边注记（backend/frontend/sillyhub
+  等顶级目录本仓不存在——知识库集中管理仓、代码分仓存放是本体系常态拓扑），本仓可行动悬空仅 90 条被噪音淹没；doctor 文案已有跨仓分流但 summary/CLI
+  数字面未分流，健康数字长期失真。修法为口径分流而非删数据：graphSummary 增 breakdown.cross_repo 与 dangling_refs_local 附加字段（主计数与守恒口径不动，平台 RPC 消费
+  additive 兼容），dangling 子命令增 --local 过滤与〔跨仓注记〕标注。
+
+
+  成功标准：
+
+  - graph summary 输出 dangling_refs_local 与 breakdown.cross_repo，local + cross_repo = total 守恒（真图 2537 = 90 + 2447）
+
+  - knowledge graph dangling --local 只列本仓悬空，输出附 cross_repo 分流计数；跨仓条目带〔跨仓注记〕标注
+
+  - 既有守恒测试（dangling_refs = strong + medium）零回归，新增分流守恒断言全绿
+autopilot: true
+prestage_ack: false
+baseline_commit: 6d3981aa600bb7c3e8491f9bf28c934230174c5f
+updatedAt: '2026-10-15T01:48:23.584Z'
+baseline_sha256: 66cc7284c1f579e1de341a873c8b088cade1ff5e99676354470ba3f8adca205c
+
