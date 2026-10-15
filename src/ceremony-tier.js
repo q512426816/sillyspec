@@ -37,6 +37,7 @@
  * （R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
  */
 import { RISK_TO_TIER } from './change-risk-profile.js'
+import { modulePathMatches } from './modules.js'
 import { matchSpanRiskPatterns } from './span-risk-surface.js'
 
 /** 仪式档位序（只升不降的偏序基准，index 即高低：S0=0 … S3=3） */
@@ -124,7 +125,7 @@ function matchModuleForFile(posix, modulesObj) {
     for (const raw of prefixes) {
       const p = String(raw).replace(/\\/g, '/').replace(/\/+$/, '')
       if (!p) continue
-      if (posix === p || posix.startsWith(p + '/')) return id
+      if (modulePathMatches(posix, p)) return id
     }
   }
   return null

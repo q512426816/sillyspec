@@ -26,7 +26,7 @@ import { join, relative } from 'node:path'
 import { parseDecisions } from './decision-distill.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDesignCoverageByRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
-import { parseModuleMapSimple } from './modules.js'
+import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 
 // ---------------------------------------------------------------------------
 // 条目解析（distill parseDecisions 的同源镜像，R-01）
@@ -173,7 +173,7 @@ export function deriveActualModules(filePaths, prefixPairs) {
     const t = String(f || '').replace(/\\/g, '/').replace(/\/+$/, '')
     if (!t) continue
     for (const { id, path: p } of prefixPairs) {
-      if (t === p || t.startsWith(p + '/')) { actual.add(id); break }
+      if (modulePathMatches(t, p)) { actual.add(id); break }
     }
   }
   return actual

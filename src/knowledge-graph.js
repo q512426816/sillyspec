@@ -21,7 +21,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
-import { parseModuleMapSimple } from './modules.js'
+import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 
 // ── 本体常量（design.md 总体方案 §1 的代码化） ──
 
@@ -273,9 +273,8 @@ export function buildKnowledgeGraph(specRoot) {
         const moduleOf = (p) => {
           const v = posix(p)
           for (const [mid, mp] of modulePathIndex) {
-            // 模块 paths 是目录/glob 语义：剥尾斜杠后按「相等 或 path/ 前缀」匹配
-            const stem = posix(mp).replace(/\/+$/, '')
-            if (v === stem || v.startsWith(stem + '/')) return mid
+            // 模块 paths 目录/glob 语义——modulePathMatches 统一入口（**/*.tsx 等扫描卡形态可命中）
+            if (modulePathMatches(v, mp)) return mid
           }
           return null
         }

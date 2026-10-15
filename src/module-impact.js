@@ -14,6 +14,7 @@
  * 归属分类同一套 module-map 前缀匹配，仅输入来源不同。
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { modulePathMatches } from './modules.js'
 import { join } from 'path'
 import { resolveVerifyChangedFiles } from './verify-postcheck.js'
 import { resolveSpecDir } from './run/shared.js'
@@ -87,11 +88,7 @@ function classifyFile(posixPath, modulePaths) {
   for (const [moduleId, paths] of modulePaths) {
     for (const p of paths) {
       // 目录条目以 / 结尾 → 前缀匹配；文件条目 → 精确或子路径（与模块上下文索引读侧口径一致）
-      if (p.endsWith('/')) {
-        if (posixPath.startsWith(p)) return moduleId
-      } else if (posixPath === p || posixPath.startsWith(p + '/')) {
-        return moduleId
-      }
+      if (modulePathMatches(posixPath, p)) return moduleId
     }
   }
   return null

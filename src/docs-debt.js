@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeGit } from './git-helper.js'
-import { parseModuleMapSimple } from './modules.js'
+import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 import { runDocsCheck, readDocsCheckConfig, parseDecisionEntries, anchorFilePath } from './docs-check.js'
 import { decisionChangeQualifier } from './knowledge-match.js'
 
@@ -55,9 +55,9 @@ export function matchFilesToModules(changedFiles, moduleIndex, opts = {}) {
 
   for (const f of changedFiles) {
     let matched = null
-    // 一级：paths/core_files 前缀或字面量命中
+    // 一级：paths/core_files 前缀或字面量命中（含 glob 形态——modulePathMatches 统一入口）
     for (const [id, ps] of modulePaths) {
-      if (ps.some(p => p === f || f.startsWith(p.replace(/\/$/, '') + '/') || p.startsWith(f.split('/')[0] + '/') && p === f)) {
+      if (ps.some((p) => modulePathMatches(f, p))) {
         matched = id; break
       }
     }

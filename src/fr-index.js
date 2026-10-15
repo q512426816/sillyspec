@@ -18,6 +18,7 @@
  */
 
 import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
+import { modulePathMatches } from './modules.js'
 import { suggestDomainFromFiles, snapDomainToDictionary } from './knowledge-digest.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
@@ -250,7 +251,7 @@ export function matchedModuleIds(moduleIndex, filePath) {
   const hits = [];
   for (const [modId, mod] of Object.entries(moduleIndex)) {
     const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
-    if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
+    if (paths.some((pp) => modulePathMatches(filePath, pp))) {
       hits.push(modId);
     }
   }

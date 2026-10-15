@@ -19,6 +19,7 @@
  *    命中模块变更索引机械回写（sidecar 优先、幂等）、start 注入面欠账事实行（提示前移）。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { modulePathMatches } from './modules.js'
 import { join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -72,7 +73,7 @@ export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
         .map((pp) => (map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
         .filter(Boolean)
       if (effs.length === 0) continue
-      const hitFiles = deliverables.filter((f) => effs.some((e) => f === e || f.startsWith(e + '/')))
+      const hitFiles = deliverables.filter((f) => effs.some((e) => modulePathMatches(f, e)))
       if (hitFiles.length === 0) continue
       hits++
       const docRel = entry.doc ? `docs/${map.project}/${String(entry.doc).replace(/^\/+/, '')}` : null
@@ -93,7 +94,7 @@ export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
       for (const pp of entry.paths || []) allPaths.push((map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
     }
   }
-  const isCovered = (f) => allPaths.some((pp) => pp && (f === pp || f.startsWith(pp + '/')))
+  const isCovered = (f) => allPaths.some((pp) => pp && modulePathMatches(f, pp))
   const uncoveredMap = new Map()
   for (const f of deliverables) {
     if (isCovered(f)) continue

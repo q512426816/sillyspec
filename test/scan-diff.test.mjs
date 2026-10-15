@@ -217,7 +217,10 @@ describe('unmapped / outOfScope', () => {
     assert.equal(r.driftCount, 0)
   })
 
-  it('Windows 反斜杠路径：范围归一命中（src/core）但模块原始路径失配 → in-scope 且 unmapped', (t) => {
+  it('Windows 反斜杠模块路径：两侧归一命中 → 归 core（2026-10-15-module-path-glob-match 归一化）', (t) => {
+    // 语义变化留痕：原契约「模块原始路径失配 → unmapped」是「两侧都不归一」时代的失配行为固化；
+    // modulePathMatches 统一入口做反斜杠归一（与 collectScope 的范围归一对称）——脏卡数据被机械
+    // 归一消费而非掉 unmapped（域路由失效根因修复的同精神）。拼错路径仍失配 → 暴露通道不堵。
     const f = mkRepo({ map: BSLASH_MAP })
     t.after(() => cleanup(f.root))
     writeFileSync(join(f.root, 'src/core/new.js'), 'n\n')
@@ -228,7 +231,8 @@ describe('unmapped / outOfScope', () => {
     assert.equal(r.ok, true)
     assert.deepEqual(r.scope, ['src/core']) // collectScope 归一反斜杠
     assert.deepEqual(r.added, ['src/core/new.js'])
-    assert.deepEqual(r.unmapped, ['src/core/new.js']) // 已入范围但未匹配模块 → 显式标注
+    assert.deepEqual(r.unmapped, []) // 归一后命中模块 → 不再落 unmapped
+    assert.equal(r.byModule.core.added, 1)
     assert.equal(r.driftCount, 1)
   })
 })

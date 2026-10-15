@@ -22,6 +22,7 @@
  * 零输出：无 decisions.md 或无入选条目 → skipped 带原因，不写任何文件、不动 INDEX。
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { modulePathMatches } from './modules.js'
 import { basename, dirname, join } from 'node:path'
 
 /** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
@@ -274,7 +275,7 @@ function matchImpactsToModules(impacts, moduleIndex) {
   const hits = []
   for (const t of tokens) {
     for (const { id, p } of modPaths) {
-      if (t === p || t.startsWith(p + '/')) { if (!hits.includes(id)) hits.push(id); break }
+      if (modulePathMatches(t, p)) { if (!hits.includes(id)) hits.push(id); break }
     }
   }
   if (hits.length === 0) {

@@ -2,6 +2,37 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { gitQuiet } from './git-helper.js';
 import { nowWallClock } from './datetime.js';
+import { globMatch } from './change-list.js';
+
+/**
+ * 模块 paths 条目 × 文件路径 的统一归属判定（2026-10-15-module-path-glob-match）。
+ *
+ * 背景：sillyspec-scan 生成的 module-map（消费仓）大量使用 glob 形态 paths——
+ * `app/modules/daemon/**`、`frontend/src/components/daemon/*.tsx`、多段通配与文件通配的
+ * 组合（`**` 与 `*.tsx` 同串）、括号路径等（平台仓实测 146 条）——而历史各消费点只做朴素
+ * `file === p || startsWith(p + '/')`，glob 条目恒不命中（恰好只有精确文件路径能命中），
+ * 导致消费仓全链路域路由失效：交付文件匹配不上模块 → 三级兜底全灭 → FR 铸伪域
+ * （auto-backend 等）、决策落 unmapped。
+ *
+ * 语义（本仓无 glob map 时与旧各点逐字等价——零回归）：
+ *   - 尾部 `/` 的目录条目：startsWith（旧 module-impact 目录分支语义）
+ *   - 其余条目：相等 或 `p/` 前缀（旧 fr-index/ceremony-tier 等语义）
+ *   - 含 `*`/`?` 的 glob 条目：追加 globMatch（双星跨零或多段、单星段内、单问号单字符；
+ *     change-list.js 既有完备实现单一源复用）
+ * @param {string} filePath 仓根相对文件路径（含反斜杠容忍）
+ * @param {string} rawPattern module-map 的 paths/core_files 条目
+ * @returns {boolean}
+ */
+export function modulePathMatches(filePath, rawPattern) {
+  const f = String(filePath || '').replace(/\\/g, '/');
+  const raw = String(rawPattern || '').replace(/\\/g, '/');
+  if (!f || !raw) return false;
+  if (raw.endsWith('/')) return f.startsWith(raw);
+  const p = raw.replace(/\/+$/, '');
+  if (!p) return false;
+  if (f === p || f.startsWith(p + '/')) return true;
+  return globMatch(f, p);
+}
 
 
 /**
