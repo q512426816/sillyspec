@@ -55,6 +55,17 @@ test('① deriveChangeTitle：首行推导 + 标签剥离 + 成功标准止 + �
   assert.ok(long.endsWith('…'))
 })
 
+test('⑤ 段头行跳过与复合词剥离（动机与背景形态免疫）', () => {
+  assert.equal(deriveChangeTitle('动机与背景：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '复合段头独立行 → 跳过取次行')
+  assert.equal(deriveChangeTitle('动机与背景：修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '复合标签同行 → 剥标签取余部')
+  assert.equal(deriveChangeTitle('背景与动机：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '反序复合段头同样跳过')
+  assert.equal(deriveChangeTitle('变更背景：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '未登记段头行（通用形态）→ 跳过取次行')
+  assert.equal(deriveChangeTitle('详细说明：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '任意短段头行 → 跳过')
+  assert.equal(deriveChangeTitle('动机：\n背景：xxx 复杂\n修复登录超时'), 'xxx 复杂', '独立白名单段头行跳过，次行带内容标签行剥标签入选')
+  assert.equal(deriveChangeTitle('动机与背景：'), '', '仅段头行无后文 → 空（调用方兜底变更名）')
+  assert.equal(deriveChangeTitle('修复登录超时（完整句不带冒号结尾）'), '修复登录超时（完整句不带冒号结尾）', '普通首行概括不受影响')
+})
+
 test('② flow start fresh：--title 优先，否则 input 首行，横幅在场', () => {
   const { cwd } = makeRepo()
   const cn = '2026-09-29-title-a'

@@ -124,13 +124,18 @@ export function sanitizeDesc(description) {
  * 「需求：/动机：」类标签前缀，空白折叠单行，超长截断加 …；空输入返回 ''（调用方兜底
  * change 名）。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅有指引），
  * --title 显式覆盖一切推导。
+ * 段头行防御（2026-10-15-title-label-skip）：过门格式示例曾被读成段头形态——agent 把
+ * 「动机与背景：」独立成行照抄，白名单无复合词致整行成标题（进度库 6 变更实证）。两道
+ * 防御：白名单补复合词（动机与背景/背景与动机）；任意短段头行（≤12 字非冒号内容+行尾
+ * 冒号，如「变更背景：」「详细说明：」）整行跳过取次非空行——冒号后无内容不成标题。
  */
 export function deriveChangeTitle(input, max = 50) {
   for (const l of String(input || '').replace(/\r\n/g, '\n').split('\n')) {
     const t = l.trim()
     if (!t) continue
     if (/^成功标准\s*[:：]/.test(t)) break
-    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题)\s*[:：]\s*/, '').trim()
+    if (/^[^:：]{1,12}[:：]$/.test(t)) continue
+    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题|动机与背景|背景与动机)\s*[:：]\s*/, '').trim()
     if (!stripped) continue
     const one = stripped.replace(/\s+/g, ' ')
     return one.length > max ? one.slice(0, max) + '…' : one
