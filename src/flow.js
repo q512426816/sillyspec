@@ -1138,7 +1138,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   ②③断点 agent 自主跳过。`,
     `   随时可查进度：sillyspec flow status --change ${change}`,
     ...(detectUiTouch(input)
-      ? [...buildUiGuidanceLines(), '']
+      ? [...buildUiGuidanceLines(specBase), '']
       : []),
     ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,

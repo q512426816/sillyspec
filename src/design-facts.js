@@ -387,7 +387,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   lines.push('- [ ] frontmatter 字段齐全（author/created_at/scale）')
   lines.push('- [ ] 引用所有当前版本 D-xxx@vN')
   lines.push('- [ ] 涉及生命周期关键词时含「生命周期契约表」或紧邻豁免短语')
-  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记）')
+  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选，输出须带素材来源声明：token 源/组件来源/入口位置）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记）')
   lines.push('- [ ] 不确定的问题标注「⚠️ 自审存疑」')
   lines.push('')
 

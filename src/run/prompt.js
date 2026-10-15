@@ -1427,7 +1427,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // 替换空串零输出；fail-soft 异常单行说明，不留残留占位符。
   if (stageName === 'brainstorm' && promptText.includes('{UI_VISUAL_GUIDANCE}')) {
     try {
-      const { detectUiTouch, buildUiGuidanceLines } = await import('../ui-visual.js')
+      const { detectUiTouch, buildUiGuidanceLines, extractQuotedPaths } = await import('../ui-visual.js')
       const uiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       let corpus = changeName || ''
       for (const name of ['proposal.md', 'requirements.md']) {
@@ -1435,7 +1435,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           corpus += '\n' + readFileSync(join(uiSpecBase, 'changes', changeName, name), 'utf8')
         } catch { /* 缺席跳过 */ }
       }
-      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines().join('\n') + '\n' : '')
+      // ui_prototype 形态注入（2026-10-15-ui-proto-form-config）：语料路径参与子仓 override
+      // 匹配（proposal/requirements 反引号路径粗提）；无路径=仓级兜底。
+      const guidancePaths = extractQuotedPaths(corpus)
+      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines(uiSpecBase, guidancePaths).join('\n') + '\n' : '')
     } catch (e) {
       substitute(/\{UI_VISUAL_GUIDANCE\}/g, `[ui-guidance] UI 须知注入异常（${e.message}），跳过`)
     }

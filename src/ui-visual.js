@@ -17,6 +17,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import jsYaml from 'js-yaml'
 
 export const UI_VISUAL_PROBE_HEADING = '#### 探针 12：UI 视觉证据（分级门）'
 export const UI_EVIDENCE_FILENAME = 'visual-evidence.md'
@@ -48,8 +49,106 @@ export function detectUiTouchInPaths(paths) {
 
 /* ── flow start 须知（仓中立；证据约定与探针同源）── */
 
-export function buildUiGuidanceLines() {
-  return [
+/**
+ * local.yaml ui_prototype 段解析（2026-10-15-ui-proto-form-config，FR-01）。
+ * 每仓原型形态契约：form: real-code | single-html；豁免（single-html）须带 ruling{by,at,reason}
+ * 全三字段（用户裁决留痕——缺任一=登记不完整，消费方须警告）；repos.<子仓键> 同构 override。
+ * fail-soft：段缺席/文件不可读/YAML 坏/值非法 → registered:false 零抛出（与 readUiVisualGate
+ * 同根同哲学）。诚实边界：工具只消费登记与注入指引，不校验原型质量。
+ */
+export function readUiPrototypeForm(specBase) {
+  const empty = { registered: false, form: null, ruling: null, rulingComplete: false, repos: {} }
+  if (!specBase) return empty
+  let raw
+  try {
+    raw = jsYaml.load(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+  } catch { return empty }
+  const section = raw && typeof raw === 'object' ? raw.ui_prototype : null
+  if (!section || typeof section !== 'object') return empty
+  const parseEntry = (e) => {
+    if (!e || typeof e !== 'object') return null
+    const form = e.form === 'real-code' || e.form === 'single-html' ? e.form : null
+    if (!form) return null
+    const r = e.ruling && typeof e.ruling === 'object' ? e.ruling : null
+    const rulingComplete = !!(r && r.by && r.at && r.reason)
+    return { form, ruling: r, rulingComplete }
+  }
+  const top = parseEntry(section)
+  const repos = {}
+  if (section.repos && typeof section.repos === 'object') {
+    for (const [key, val] of Object.entries(section.repos)) {
+      const entry = parseEntry(val)
+      if (entry) repos[key] = entry
+    }
+  }
+  if (!top) return { registered: false, form: null, ruling: null, rulingComplete: false, repos }
+  return { registered: true, ...top, repos }
+}
+
+/**
+ * 多仓 override 解析（FR-02）：触达路径与 local.yaml repos 注册路径（key→path 映射，与
+ * plan-postcheck parseRepoRegistry 同源语义）前缀匹配——命中的注册子仓若在 ui_prototype.repos
+ * 有 override 则该形态优先；未命中/无 override 走仓级兜底。返回形态条目数组（去重）：
+ * 每项 { scope: '仓级'|'<子仓键>', form, ruling, rulingComplete, registered }。
+ */
+export function resolveUiPrototypeFor(specBase, paths = []) {
+  const proto = readUiPrototypeForm(specBase)
+  const out = []
+  const seen = new Set()
+  const push = (entry) => {
+    const key = `${entry.form}|${entry.rulingComplete}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(entry)
+  }
+  if (paths.length > 0) {
+    let repoPaths = {}
+    try {
+      const raw = jsYaml.load(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+      if (raw && raw.repos && typeof raw.repos === 'object') repoPaths = raw.repos
+    } catch { /* 路径归一失败=零子仓命中，仓级兜底 */ }
+    const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+    for (const [key, registeredPath] of Object.entries(repoPaths)) {
+      if (typeof registeredPath !== 'string') continue
+      const hit = paths.some((p) => {
+        const np = norm(p)
+        return np.startsWith(norm(registeredPath) + '/') || np === norm(registeredPath)
+      })
+      const override = proto.repos[key]
+      if (hit && override) push({ scope: key, registered: true, ...override })
+    }
+  }
+  push(proto.registered
+    ? { scope: '仓级', registered: true, form: proto.form, ruling: proto.ruling, rulingComplete: proto.rulingComplete }
+    : { scope: '仓级', registered: false, form: null, ruling: null, rulingComplete: false })
+  return out
+}
+
+/** 须知第 5 节：按形态条目组合「本仓原型形态」行（FR-03 四态；生态命令词禁入——neutrality 契约）。 */
+function uiPrototypeFormLines(entries) {
+  const lines = [`📐 本仓原型形态（local.yaml ui_prototype 登记；工具只查声明在场不验质量）：`]
+  let anyContent = false
+  for (const e of entries) {
+    const scope = e.scope === '仓级' ? '' : `【子仓 ${e.scope}】`
+    if (!e.registered) {
+      anyContent = true
+      lines.push(`   ⚠️ ${scope}未登记原型形态——本次按阶梯执行：有真实前端工具链→定稿原型必须真码；查无真码管线→先单开一个轻量变更搭最小入口（管线建设与业务变更分离），或登记豁免（form: single-html + ruling 用户裁决留痕）。收口前把 local.yaml ui_prototype 登记补上（强提醒，不阻断）。`)
+    } else if (e.form === 'single-html' && !e.rulingComplete) {
+      anyContent = true
+      lines.push(`   ⚠️ ${scope}豁免登记不完整（single-html 缺 ruling{by,at,reason} 某字段）——这是静默漂移入口：补齐用户裁决留痕（by/at/reason）后再依赖豁免；本次仍按阶梯执行。`)
+    } else if (e.form === 'single-html') {
+      anyContent = true
+      lines.push(`   📋 ${scope}豁免生效（single-html；裁决 by=${e.ruling.by} at=${e.ruling.at}）：定稿原型＝自包含 HTML + 真值 token（来源须声明：token 源文件/组件参照），反向翻译税为已裁决接受项。`)
+    } else {
+      anyContent = true
+      lines.push(`   🔒 ${scope}真码契约（real-code）：定稿原型必须与实现同方言真码；查无管线先单开轻量变更搭最小入口（bootstrap 与业务变更分离）。`)
+    }
+  }
+  return anyContent ? lines : []
+}
+
+export function buildUiGuidanceLines(specBase = null, paths = []) {
+  const lines = [
     `🎨 UI 变更执行须知（本变更触及前端页面或 UI——advisory 引导非门禁）：`,
     `   1. 定稿原型必须是可复跑的真码产物（与实现同方言、能被本项目工具链构建）——手绘单文件`,
     `      仅限一次性粗选对比，不作为交付原型（2026-09-28 frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；`,
@@ -62,6 +161,13 @@ export function buildUiGuidanceLines() {
     `      必须停下找用户签字，裁决记录写进 ${UI_EVIDENCE_FILENAME}（含「用户裁决」字样段）——`,
     `      静默降级会在收口被「UI 视觉证据」探针硬拦（error 门）。`,
   ]
+  if (specBase) {
+    try {
+      const entries = resolveUiPrototypeFor(specBase, paths)
+      lines.push('', ...uiPrototypeFormLines(entries))
+    } catch { /* 登记解析失败零打扰（fail-soft 同 readUiVisualGate） */ }
+  }
+  return lines
 }
 
 /* ── 分级探针 ── */
@@ -173,8 +279,8 @@ export function uiEvidenceExecuteAdvisory({ changeDir, specBase = null }) {
   }
 }
 
-/** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解）。 */
-function extractQuotedPaths(designText) {
+/** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解；导出供 prompt.js 组子仓 override 匹配路径用）。 */
+export function extractQuotedPaths(designText) {
   if (!designText) return []
   const paths = []
   for (const m of designText.matchAll(/`([^`]+)`/g)) {
