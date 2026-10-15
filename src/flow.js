@@ -316,6 +316,27 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       const src = km.entries.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
       lines.push(`   📚 知识命中（INDEX 关键词，按需 Read）：${src}`)
     }
+    // 遥测导线（2026-10-15-thin-inject-telemetry）：轻量道注入此前不落 hits.jsonl——thin 常态化后
+    // inject 事件流断流（本仓 10-09 后归零实证），knowledge stats 从未命中判定被盲区污染。
+    // 分级字段（A2-lite）：injectedFiles=正文实际注入（thin 面恒空——只出按需 Read 行）、
+    // mentionedFiles=显式展示给 agent 的锚点（📚 行 top-3）。既有 matchedFiles 口径不变
+    // （knowledge-stats 消费面零回归）。仅命中面非空才落盘；fail-soft（R-04）不阻断注入。
+    const thinMatchedFiles = km.matched ? (km.entries || []).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : []
+    if (thinMatchedFiles.length > 0 || rejected.length > 0) {
+      try {
+        const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+        appendKnowledgeHit(join(specBase, '.runtime'), {
+          type: 'inject',
+          change,
+          query: `${change}\n${input || ''}`,
+          matchedFiles: thinMatchedFiles,
+          injectedFiles: [],
+          mentionedFiles: thinMatchedFiles.slice(0, 3),
+          rejectedCount: rejected.length,
+          source: 'thin-start',
+        })
+      } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不影响注入本体 */ }
+    }
     if (domains.length === 0 && rejected.length === 0 && !km.matched) {
       lines.length = 0
       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)

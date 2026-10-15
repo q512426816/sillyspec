@@ -1,0 +1,28 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  效果评估实证：轻量道 flow start 知识注入路径（src/flow.js renderThinKnowledgeSection）不落遥测，.runtime/knowledge-hits.jsonl 的 inject 事件
+  10-09 后归零，knowledge stats 的从未命中（30 文件疑似死重）判定被盲区污染——效果无法度量。消费仓实证同款注入面 8145 次高频使用，证明面本身有效，唯本仓 thin 路径缺遥测导线。同变更落
+  A2-lite：遥测事件按注入分级拆字段（body 注入正文 vs source 仅清单提及），为后续采纳率度量打地基。
+
+
+  成功标准：
+
+  - 轻量道 flow start 知识命中时 .runtime/knowledge-hits.jsonl 落 type:inject 事件，change/query 字段与既有事件同形，快道/thick 路径行为零变化
+
+  - 遥测事件带分级字段：injectedFiles（正文实际注入的文件）与 mentionedFiles（仅 Sources 行提及的文件）分离，knowledge stats 命中矩阵口径不回归
+
+  - 未命中（matched:false 且零 quicklog）不落盘（与既有口径一致）；遥测写失败不阻断注入本体（fail-soft 既有契约）
+
+  - 新增测试覆盖 thin 命中落盘/未命中零落盘/fail-soft 三态，全量测试与 lint 绿
+autopilot: true
+prestage_ack: false
+baseline_commit: 9b0519c3047a86512bb0000ba5b4c65aa890ace6
+updatedAt: '2026-10-15T01:19:51.691Z'
+baseline_sha256: b3a1be5b304d49aef34a56e9fbf82f4ebafe5b4b18a1819a5cfd263629161bb2
+
