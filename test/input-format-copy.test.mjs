@@ -26,11 +26,11 @@ test('① 紧凑内联旧形态零残留', () => {
   }
 })
 
-test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式）', () => {
+test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式；2026-10-15-title-label-skip 首行改概括句）', () => {
   for (const p of ['src/run/command.js', 'src/flow.js', 'src/stages/brainstorm.js']) {
-    assert.ok(read(p).includes('--input "<动机与背景>'), `${p} 教学带实例起行`)
+    assert.ok(read(p).includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 教学带实例起行`)
   }
-  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
+  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
   const guard = read('src/hooks/worktree-guard.js')
   assert.ok(!guard.includes('--input "<描述+成功标准>"'), 'worktree-guard 无模糊形态残留')
   assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')

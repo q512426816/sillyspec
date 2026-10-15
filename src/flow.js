@@ -2653,7 +2653,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         console.error(`❌ ${e.message}`)
         // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
         console.error('   重试（--input 引号内换行合法，可照抄）：')
-        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句中文概括（首行即变更标题）；随后动机与背景>')
+        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
         console.error('')
         console.error('   成功标准：')
         console.error('   - <可验证标准>"')
@@ -2884,7 +2884,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
   }
   console.error('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
   console.error('      --input 可照抄形态（引号内换行合法）：')
-  console.error('      sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>')
+  console.error('      sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
   console.error('')
   console.error('      成功标准：')
   console.error('      - <可验证标准>"')

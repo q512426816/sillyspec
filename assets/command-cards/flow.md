@@ -11,7 +11,7 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
 ```bash
 export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
 # ① 立项 + 锁基线（--input 引号内换行合法，可照抄；缺「成功标准」条目会被清晰度门拦下）：
-sillyspec flow start --change <变更名> --input "<动机与背景>
+sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
 
 成功标准：
 - <可验证标准>"

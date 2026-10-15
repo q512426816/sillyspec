@@ -73,7 +73,7 @@
 - **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
 
 ```
-sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
 
 成功标准：
 - <可验证标准>"

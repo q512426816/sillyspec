@@ -58,6 +58,8 @@ created_at: 2026-10-15T03:34:08.898Z
 | 修改 | AGENTS.md | --input 过门格式示例首行改概括句 |
 | 修改 | templates/agents-instruction.md | 同 AGENTS.md（随包模板） |
 | 修改 | .claude/skills/sillyspec-flow/SKILL.md | 同 AGENTS.md |
+| 修改 | CLAUDE.md / assets/command-cards/flow.md / docs/prompt/brainstorm.md | 同款占位文档面三处（grep 零残留判定式覆盖） |
 | 修改 | test/change-title-flow.test.mjs | 新增标签行跳过/复合词剥离用例（先红） |
 | 新增 | test/motive-from-input.test.mjs | motiveFromInput 单测（段头免疫/回退变更名/同源性） |
+| 修改 | test/input-format-copy.test.mjs / test/input-teach-copyable.test.mjs / test/flow-help-status.test.mjs | 文案钉住测试期望同步新形态（全量跑出 3 失败的清偿面） |
 | 修改 | .sillyspec/docs/sillyspec/modules/stages.changelog.md | 存量清偿：legacy-renumber 行摘要修复 |
