@@ -239,6 +239,15 @@ modules:
     paths:
       - .claude/skills/
 
+  release:
+    status: active
+    doc: modules/release.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - package.json
+      - test/quick-retired.test.mjs
+
   setup:
     status: active
     doc: modules/setup.md

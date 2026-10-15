@@ -1,0 +1,30 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-15T01:30:43.941Z
+---
+# 提案书（Proposal）— 2026-10-15-pseudo-domain-clearance
+
+## 动机
+
+任务原话转写：治理信号卡超阈实证：knowledge digest 报伪域在库 36 条（auto-analysis 4、auto-assets 4、auto-claude 12、auto-idea 3、auto-round5 4、auto-sillyspec 9）——auto-* 伪域由文件路径段投票派生、无模块卡，brainstorm 触达路由与 FR 注入按域聚合全部失真。按 fr-index 文件头自述的正 remedy 清偿：为高频复发的 release 类条目补真模块卡，其余按内容语义 redomain 迁真域（迁域不换号，身份铁律）。分组裁决：release chores 18 条（3.32.0/1/4/5/6/7/8 七个发布变更）→ 新建 release 模块卡（paths=package.json+test/quick-retired.test.mjs）；教学/SKILL 类 6 条 → skills-docs；报告/收件箱/入库类 10 条 → docs-consistency；fr-index 引擎修复 2 条 → core-engine。
+
+成功标准：
+- knowledge digest 伪域信号归零（pseudo=0，36 条全部迁入真域，ID 不变）
+- 六个 auto-* 域文件删空壳，INDEX 路由行无 auto-* 残留、新域路由行在场
+- release 模块卡与 _module-map 注册在场，未来 release 变更触达 package.json 可路由真域
+- 迁移后 knowledge validate 全绿（锚点/注册/幽灵条目零新增问题）
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. knowledge digest 伪域信号归零（pseudo=0，36 条全部迁入真域，ID 不变）
+2. 六个 auto-* 域文件删空壳，INDEX 路由行无 auto-* 残留、新域路由行在场
+3. release 模块卡与 _module-map 注册在场，未来 release 变更触达 package.json 可路由真域
+4. 迁移后 knowledge validate 全绿（锚点/注册/幽灵条目零新增问题）
+
+## 成功标准（可验证）
+
+1. knowledge digest 伪域信号归零（pseudo=0，36 条全部迁入真域，ID 不变）
+2. 六个 auto-* 域文件删空壳，INDEX 路由行无 auto-* 残留、新域路由行在场
+3. release 模块卡与 _module-map 注册在场，未来 release 变更触达 package.json 可路由真域
+4. 迁移后 knowledge validate 全绿（锚点/注册/幽灵条目零新增问题）

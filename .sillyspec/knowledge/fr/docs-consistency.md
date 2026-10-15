@@ -1498,3 +1498,97 @@ created_at: 2026-09-28T17:07:05.883Z
 - 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail
 全文：.sillyspec/changes/archive/2026-10-14-decision-legacy-renumber/requirements.md#FR-05
 最近确认：1cb2fc91c7a752bac7172540c9892efedc0b476b
+
+## FR-auto-claude-004 uncategorized.md 收件箱必须清空且仅留头部与清账留痕
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：清账后收件箱为空
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-01
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-005 全部内容块必须按语义无损迁入五个分类文件
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：逐块对号入座
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-02
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-006 已修复条目必须按 known-issues 惯例标注且不得虚标
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：修复凭据分级标注
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-03
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-claude-007 INDEX.md 必须补齐迁入条目索引且不动他会话未提交 hunks
+变更：2026-10-08-knowledge-inbox-triage
+状态：active
+摘要：关键词命中新落点
+全文：.sillyspec/changes/archive/2026-10-08-knowledge-inbox-triage/requirements.md#FR-04
+最近确认：bda98076636049009a2f2e032aade374999ea969
+
+## FR-auto-analysis-001 报告落盘 docs/analysis/fire-equipment-dogfood-复盘-2026-10-12.md，含五节：样本概况 / 调用量化（子命令分布、重试密度、读源码猜格式次数）/ 门禁有效性正面清单（评审真拦截的缺陷实录）/ 问题-处置对照表（P1~P11 与本批四变更 commit 锚）/ 校准基线与遗留项
+变更：2026-10-12-fire-dogfood-retrospective
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 四子代理分析回执在场；When 报告落盘；Then 五节标题齐全且每节有实数据（表/时间戳/commit 锚），无空节。
+全文：.sillyspec/changes/archive/2026-10-12-fire-dogfood-retrospective/requirements.md#FR-01
+最近确认：b863fc2c1f986889e87f0228ea38c0f1041f7db4
+
+## FR-auto-analysis-002 报告内数据全部来自四子代理取证（时间戳/计数可回溯 full.json），不做无据推断
+变更：2026-10-12-fire-dogfood-retrospective
+状态：active
+摘要：可回溯
+场景正文：
+- 场景：可回溯 — When 抽查报告内任一数字；Then 能在子代理回执或 full.json 取证命令中找到同值出处。
+全文：.sillyspec/changes/archive/2026-10-12-fire-dogfood-retrospective/requirements.md#FR-02
+最近确认：b863fc2c1f986889e87f0228ea38c0f1041f7db4
+
+## FR-auto-analysis-003 docs-check skip 登记（R16 同级：带日期快照行号冻结），doc-ref-check 与 lint 复绿
+变更：2026-10-12-fire-dogfood-retrospective
+状态：active
+摘要：校验绿
+场景正文：
+- 场景：校验绿 — When `node test/doc-ref-check.test.mjs` 与 `npm run lint`；Then 分别输出全部通过。
+全文：.sillyspec/changes/archive/2026-10-12-fire-dogfood-retrospective/requirements.md#FR-03
+最近确认：b863fc2c1f986889e87f0228ea38c0f1041f7db4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-12-fire-dogfood-retrospective:flow:测试绑定FR-03
+  tests: test/doc-ref-check.test.mjs「93 处引用全通过（含新增 skip 登记与重锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-12-fire-dogfood-retrospective
+  status: active
+
+## FR-auto-analysis-004 纯文档变更：实测面按仓规自动跳过（docs gate 判定）
+变更：2026-10-12-fire-dogfood-retrospective
+状态：active
+摘要：收口
+场景正文：
+- 场景：收口 — When flow done；Then docs gate 判定纯文档跳过实测，归档完成。
+全文：.sillyspec/changes/archive/2026-10-12-fire-dogfood-retrospective/requirements.md#FR-04
+最近确认：b863fc2c1f986889e87f0228ea38c0f1041f7db4
+
+## FR-auto-round5-003 R17 报告入库
+变更：2026-09-25-r17-assets-intake
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given R17 三臂实验报告在临时目录；When 按 R16 先例格式（引言含目的/口径/判据）入 docs/analysis/；Then docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场且含总表/四结论/成本细分/资产对比
+全文：.sillyspec/changes/archive/2026-09-25-r17-assets-intake/requirements.md#FR-01
+最近确认：d3342a85bb06e43dab876a12b30c62ad7c6905dd
+
+## FR-auto-round5-004 实验知识入 known-issues
+变更：2026-09-25-r17-assets-intake
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 4 条实验知识有跨会话复利价值（flag 死路类/摘录碎片化/verify 互锁/绿地伪域断流）；When 追加为 known-issues.md 条目；Then 每条含现象/证据锚点/修复状态；INDEX.md 补可区分关键词路由行（知识命中面可及）
+全文：.sillyspec/changes/archive/2026-09-25-r17-assets-intake/requirements.md#FR-02
+最近确认：d3342a85bb06e43dab876a12b30c62ad7c6905dd

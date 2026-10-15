@@ -274,3 +274,97 @@ created_at: 2026-10-15T01:21:44.811Z
 - 场景：收口实测 — Given 全部实现落地 When 跑 `npm test` 与 lint Then 全绿退出码 0。
 全文：.sillyspec/changes/archive/2026-10-15-pitfall-batch-clearance/requirements.md#FR-13
 最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+
+## FR-auto-claude-008 .claude/skills/sillyspec-brainstorm/SKILL.md 含变更标题指引：一句中文概括、≤50 字、建议 ~20 字，并说明标题提取自 proposal/design 首行 H1
+变更：2026-10-10-brainstorm-skill-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given brainstorm skill 存在于 `.claude/skills/sillyspec-brainstorm/SKILL.md` / When agent
+全文：.sillyspec/changes/archive/2026-10-10-brainstorm-skill-title/requirements.md#FR-01
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+
+## FR-auto-claude-009 纯文档改动，不触 src/test
+变更：2026-10-10-brainstorm-skill-title
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更提交面 / When `git show --name-only` 核对 / Then 仅含 skill 文档与变更目录路径，无 src/test 路径。
+全文：.sillyspec/changes/archive/2026-10-10-brainstorm-skill-title/requirements.md#FR-02
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+
+## FR-auto-assets-001 CLAUDE.md、assets/command-cards/flow.md、run-quick.md 三处逐字可照抄分号形态清零，给出含「成功标准：」独立行与「- <可验证标准>」条目行的多行实例
+变更：2026-10-05-input-teach-non-src
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-non-src/requirements.md#FR-01
+最近确认：c38dacd49ea5676df369b24cc1078a477cfa5f25
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-non-src:flow:测试绑定FR-01
+  tests: test/input-teach-copyable.test.mjs「①b 非 src 教学面分号形态零残留（逐字三处）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-non-src
+  status: active
+
+## FR-auto-assets-002 AGENTS.md 与 SKILL.md 两处描述式教学升级为可照抄实例；AGENTS.md 与模板源倒推行引号内联模糊形态改为引用过门格式的表述
+变更：2026-10-05-input-teach-non-src
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-non-src/requirements.md#FR-02
+最近确认：c38dacd49ea5676df369b24cc1078a477cfa5f25
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-non-src:flow:测试绑定FR-02
+  tests: test/input-teach-copyable.test.mjs「②b 非 src 教学面实例在场与模糊形态清零」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-non-src
+  status: active
+
+## FR-auto-assets-003 零残留断言升级为 src 目录递归遍历，新增非 src 教学面零残留与实例在场断言
+变更：2026-10-05-input-teach-non-src
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-non-src/requirements.md#FR-03
+最近确认：c38dacd49ea5676df369b24cc1078a477cfa5f25
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-non-src:flow:测试绑定FR-03
+  tests: test/input-teach-copyable.test.mjs「① 分号内联教学形态零残留（src 递归遍历升级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-non-src
+  status: active
+
+## FR-auto-assets-004 相关测试全部通过
+变更：2026-10-05-input-teach-non-src
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-05-input-teach-non-src/requirements.md#FR-04
+最近确认：c38dacd49ea5676df369b24cc1078a477cfa5f25
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-05-input-teach-non-src:flow:测试绑定FR-04
+  tests: test/input-format-copy.test.mjs「② 教学点均带可照抄多行实例」 | test/input-teach-copyable.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-05-input-teach-non-src
+  status: active

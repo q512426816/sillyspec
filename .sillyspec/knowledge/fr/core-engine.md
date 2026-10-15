@@ -3456,3 +3456,45 @@
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-13-cross-repo-baseline-anchor/requirements.md#FR-05
 最近确认：ed4434217925b4aea7c8fe1bb6a43a0cd0fcc8b2
+
+## FR-auto-round5-001 幽灵条目补节头修复
+变更：2026-09-25-fr-unmapped-repair
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given unmapped.md 有 7 条缺 FR 节头的孤立字段块（外部合回切割损伤）；When 按全文锚点从在场归档恢复标题并补 FR-unmapped-714~720 节头 修复后 readActiveFrDigest 读到全部 7 条（标题非佚失）
+全文：.sillyspec/changes/archive/2026-09-25-fr-unmapped-repair/requirements.md#FR-01
+最近确认：546685bb9cca3e4b0397f93d9e2bd67da002b5a7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-unmapped-repair:flow:FR-01
+  tests: test/fr-unmapped-repair.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-unmapped-repair
+  status: active
+
+## FR-auto-round5-002 写入路径健壮性钉
+变更：2026-09-25-fr-unmapped-repair
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 幽灵损伤不可能来自本仓写入路径的论断；When indexRequirements 产出经 splitKnowledgeSections 解析；Then preamble 零孤立字段行（变更：/状态：开头）且条目全数成 section
+全文：.sillyspec/changes/archive/2026-09-25-fr-unmapped-repair/requirements.md#FR-02
+最近确认：546685bb9cca3e4b0397f93d9e2bd67da002b5a7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-unmapped-repair:flow:FR-02
+  tests: test/fr-unmapped-repair.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-unmapped-repair
+  status: active
