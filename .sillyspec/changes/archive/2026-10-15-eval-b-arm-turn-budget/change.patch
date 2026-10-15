@@ -1,0 +1,64 @@
+diff --git a/eval/eval.config.json b/eval/eval.config.json
+index 6ec0dd0a..b5fb3e69 100644
+--- a/eval/eval.config.json
++++ b/eval/eval.config.json
+@@ -13,7 +13,7 @@
+     "B": {
+       "label": "SillySpec",
+       "setup": ["npx sillyspec init --dir {workdir} --tool {tool}"],
+-      "promptTemplate": "当前项目已安装 SillySpec 工作流。请按 SillySpec 流程完成以下需求（小任务走 quick 模式），完成后确保代码可运行：\n\n{instruction}"
++      "promptTemplate": "当前项目已安装 SillySpec 工作流。请按 SillySpec 轻量流程完成以下需求（sillyspec flow start 立项 → 直接干活 → sillyspec flow done 收口），完成后确保代码可运行：\n\n{instruction}"
+     }
+   },
+   "adapter": {
+@@ -22,7 +22,7 @@
+     "command": ["claude", "-p", "--output-format", "json", "--max-turns", "{maxTurns}", "--dangerously-skip-permissions"],
+     "stdin": "prompt",
+     "timeoutMs": 900000,
+-    "maxTurns": 60,
++    "maxTurns": 120,
+     "parseStdoutJson": true
+   }
+ }
+diff --git a/eval/lib/config.mjs b/eval/lib/config.mjs
+index 0c3c3dac..cb99dbb3 100644
+--- a/eval/lib/config.mjs
++++ b/eval/lib/config.mjs
+@@ -24,16 +24,19 @@ const DEFAULTS = {
+     B: {
+       label: 'SillySpec',
+       setup: ['npx sillyspec init --dir {workdir} --tool {tool}'],
+-      promptTemplate: '当前项目已安装 SillySpec 工作流。请按 SillySpec 流程完成以下需求（小任务走 quick 模式），完成后确保代码可运行：\n\n{instruction}',
++      // 话术对齐现行协议（quick 通道 v3.30.0 退役）；与 eval.config.json arms.B 保持同义
++      promptTemplate: '当前项目已安装 SillySpec 工作流。请按 SillySpec 轻量流程完成以下需求（sillyspec flow start 立项 → 直接干活 → sillyspec flow done 收口），完成后确保代码可运行：\n\n{instruction}',
+     },
+   },
+   adapter: {
+     type: 'cli',
+     tool: 'claude',
+-    command: ['claude', '-p', '--output-format', 'json', '--max-turns', '{maxTurns}'],
++    // --dangerously-skip-permissions：headless 无交互授批通道，无旗标则 Write/Bash 全被自动拒绝
++    // （permission_denials 实证）；作用面=一次性 gitignored 草稿 workdir。与 eval.config.json 同步。
++    command: ['claude', '-p', '--output-format', 'json', '--max-turns', '{maxTurns}', '--dangerously-skip-permissions'],
+     stdin: 'prompt',
+     timeoutMs: 900_000,
+-    maxTurns: 60,
++    maxTurns: 120,
+     parseStdoutJson: true,
+   },
+ };
+diff --git a/test/eval-adapter-config.test.mjs b/test/eval-adapter-config.test.mjs
+index 058f27dc..c17202e9 100644
+--- a/test/eval-adapter-config.test.mjs
++++ b/test/eval-adapter-config.test.mjs
+@@ -30,3 +30,10 @@ test('两臂 setup/promptTemplate 语义不变（B 臂 sillyspec init 在场、{
+   assert.match(config.arms.A.promptTemplate, /\{instruction\}/)
+   assert.match(config.arms.B.promptTemplate, /\{instruction\}/)
+ })
++
++test('maxTurns 轮数帽与 B 臂话术（2026-10-15-eval-b-arm-turn-budget）', () => {
++  assert.equal(config.adapter.maxTurns, 120, 'B 臂流程完成空间：60 轮实测掐断时产物已正确（帽测的是帽不是方法）')
++  assert.ok(!config.arms.B.promptTemplate.includes('quick'), 'B 臂 prompt 不含退役通道话术（quick 通道 v3.30.0 已退役）')
++  assert.match(config.arms.B.promptTemplate, /flow start/, 'B 臂话术对齐现行协议（flow start 立项）')
++  assert.match(config.arms.B.promptTemplate, /flow done/, 'B 臂话术对齐现行协议（flow done 收口）')
++})

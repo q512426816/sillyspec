@@ -186,3 +186,60 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-adapter-permissions
   status: active
+
+## FR-eval-011 adapter.maxTurns 60 → 120，B 臂流程获得完成空间
+变更：2026-10-15-eval-b-arm-turn-budget
+状态：active
+摘要：轮数帽修正
+全文：.sillyspec/changes/archive/2026-10-15-eval-b-arm-turn-budget/requirements.md#FR-01
+最近确认：cd61cae0088f013ce491b99f0e0c88a1c29fce41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-b-arm-turn-budget:flow:测试绑定FR-01
+  tests: test/eval-adapter-config.test.mjs「maxTurns 轮数帽与 B 臂话术」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-b-arm-turn-budget
+  status: active
+
+## FR-eval-012 B 臂 promptTemplate 去除退役通道话术
+变更：2026-10-15-eval-b-arm-turn-budget
+状态：active
+摘要：话术修正
+全文：.sillyspec/changes/archive/2026-10-15-eval-b-arm-turn-budget/requirements.md#FR-02
+最近确认：cd61cae0088f013ce491b99f0e0c88a1c29fce41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-b-arm-turn-budget:flow:测试绑定FR-02
+  tests: test/eval-adapter-config.test.mjs「maxTurns 轮数帽与 B 臂话术」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-b-arm-turn-budget
+  status: active
+
+## FR-eval-013 配置测试扩展 + lint
+变更：2026-10-15-eval-b-arm-turn-budget
+状态：active
+摘要：测试扩展
+全文：.sillyspec/changes/archive/2026-10-15-eval-b-arm-turn-budget/requirements.md#FR-03
+最近确认：cd61cae0088f013ce491b99f0e0c88a1c29fce41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-b-arm-turn-budget:flow:测试绑定FR-03
+  tests: test/eval-adapter-config.test.mjs「maxTurns 轮数帽与 B 臂话术」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-b-arm-turn-budget
+  status: active

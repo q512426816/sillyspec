@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-b-arm-turn-budget",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "cd61cae0088f013ce491b99f0e0c88a1c29fce41",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——静态配置，无事件/输入时序面（design 同答）",
+    "并发": "ok——评测两臂串行执行，maxTurns 是 claude CLI 单子进程轮帽，本变更未引入并发面",
+    "切换": "ok——120 轮 × 每轮最坏耗时撞 900s 墙的风险已量化披露并显式裁决接受（接受理由见 notes.声明边界裁决①）；重跑实测 486.6s/40 轮未触墙，timeoutMs 与 maxTurns 解耦、上调路径明确",
+    "作用域": "ok——仅 eval 子进程生效；A 臂轮帽随 adapter 全局放宽但实测 16 轮完成无实际影响；不触 src 生产代码；跨平台零新增路径（纯数值 + 散文，unicode 箭头 JSON UTF-8 安全）"
+  },
+  "notes": {
+    "承诺对照": "FR-01 达标：eval/eval.config.json adapter.maxTurns=120（node 实读），timeoutMs 900000 原样（patch 中为上下文行未动）。FR-02 达标：arms.B.promptTemplate 大小写不敏感检索零 quick、含 flow start/flow done/{instruction}、「当前项目已安装 SillySpec 工作流」头逐字保留。FR-03 达标：test/eval-adapter-config.test.mjs 含 maxTurns=120 断言与 !includes('quick') 断言（另加 flow start/flow done 两条）。change.patch 新侧 blob（b5fb3e69/c17202e9）与 HEAD 工作树逐字节一致，patch 忠实。",
+    "声明边界裁决": "①『120 轮可能撞 900s 墙——接受风险、实测信号驱动再调』＝可接受：两帽解耦且重跑 486.6s 距墙有余量，预防性上调属为未发生的墙扩预算，风险量化披露+上调路径明确即为负责任裁决；②『B 臂重跑无论 pass/fail/error 都是有效测量』＝可接受：两个已知环境缺陷（permission_denials、轮帽掐断）修复后 pass/fail 反映方法本身；timeout 触发的 error 属显式配置参数被击穿的有效信号（design 自带上调路径），config hash 分组防新旧条件混报。无未裁决边界。",
+    "探针": {
+      "cli-copy-selfsufficient": "pass——B 臂新话术提及 sillyspec flow start / sillyspec flow done，实测 CLI（node bin/sillyspec.js flow --help 用法行）与 src/flow.js 均在册（flow start 建卡下发 / flow done 收口裁决）",
+      "config-absent-zero-regression": "pass（P2 清偿后复核）——loadConfig 以不存在路径实调验证：缺配置兜底输出 maxTurns=120、--dangerously-skip-permissions 在场、B 臂话术零 quick 且含 flow start/flow done，与 eval.config.json 同义对齐",
+      "crossrepo-path-compat": "pass——本变更零引入路径字面量；diff 面为数值与中文散文，{workdir}/{tool}/{instruction} 占位符机制未动，跨平台/跨仓无新风险面"
+    },
+    "P2清偿复核": "commit cd61cae0 零夹带：git show 确认单文件 eval/lib/config.mjs（+6/-3，全部位于 DEFAULTS 块内），三处对齐逐条落实——①adapter.command 追加 --dangerously-skip-permissions（带 headless 无授批通道根因注释）；②maxTurns 60→120；③arms.B.promptTemplate 去 quick 话术改 flow start/flow done 表述（与 eval.config.json 逐字同义）。清偿后三支 eval 测试（eval-adapter-config / eval-planted-defect-probe / eval-workdir-naming）实测 8/8 绿。",
+    "遗留观察（非阻断，不计 findings）": "漂移保护测试面仍只 readFileSync eval.config.json，未锁定 config.mjs DEFAULTS——本次双源漂移无测试拦截、靠评审发现；当前双源已对齐且经程序化验证，无在险数据正确性，后续如再动 eval 配置建议把 DEFAULTS 纳入断言或收敛单源。lint 承诺由收口亲测覆盖（本次只读复核未重跑 npm run lint）。"
+  },
+  "reviewedAt": "2026-10-15T13:48:43.000Z"
+}
