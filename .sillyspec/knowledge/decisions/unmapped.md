@@ -3166,3 +3166,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：74f5700a6f509a7e7400a1a00d645415c97d309e
 理由：最大风险：幽灵合成放宽跨变更同号引用=2026-10-14-supersedes-mislink 误连复活（换皮）——首版实现确实踩了此坑（无条件合成），被既有测试②「跨变更同号不建边」拦下后收紧为自身版本链口径；该防护测试零回归是本变更验收项。次风险：幽灵节点混入 nodes --search 结果被 agent 当真实条目消费——label 带「（已被 X 取代）」+status=superseded 双标识；幽灵无 anchors/FR 边不进 impact 的决策锚定面，只经 supersedes 传递边可达。放弃方案：①蒸馏保留旧版本段为 superseded 形态（改文件契约，全消费面重审——量级不成比例）；②只在 impact 查询时动态解析 supersedesText（闭包/summary/orphans 各消费点重复解析，不如建图时一次合成）；③把 supersedesText 引用当悬空注记显示（不建边则传递闭包/防复潮可达集全部受益为零，问题实质未解）。
+
+## D-unmapped-386@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-rot-coverage-git-source
+原编号：D-001@v1
+锚点：未记录
+最近确认：963fc06134acde9b492fd4f007e0671f57bd288e
+理由：最大风险：--grep 子串误吸——变更名 A 是变更名 B 子串时 B 的文件被吸进 A 覆盖面。评估：变更名格式 `YYYY-MM-DD-主题`，互为前缀子串的场景是同日同名变体（罕见且语义相近），宁可宽勿漏；如需收紧可改 --grep "^<名>$" 正则锚定（regex 语义）留作后续。次风险：大仓 git log 全历史遍历的性能成本（每 unknown 变更一次、covCache 摊薄、64MB maxBuffer 上限）——本仓实测毫秒级，量级无忧。放弃方案：①往归档变更补写 change-patch.json（冻结件 sha256 锚定，篡改审计真相=红线）；②unknown 来源持久化豁免清单（补丁摞补丁，git 源把根因解了豁免无必要）；③只对 unknownSources 计数不列名（丢定位信息，收口 advisory 失去可操作性）。

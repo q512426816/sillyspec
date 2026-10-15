@@ -63,3 +63,4 @@
 | 2026-10-15 | 2026-10-15-graph-dangling-crossrepo-split | 效果评估实证：knowledge graph dangling 主计数 2537 条中 2472 为跨仓强边注记（bac |
 | 2026-10-15 | 2026-10-15-vector-gate-tighten | 效果评估实证：CLI 向量召回层 2026-09-29 发布时缺省 auto（有平台配置即试），但平台端 /api/sp |
 | 2026-10-15 | 2026-10-15-supersedes-ghost-nodes | 效果评估实证：全图 703 决策节点 supersedes 边仅 1 条（边体系实质闲置）。根因：同号版本取代是蒸馏就地 |
+| 2026-10-15 | 2026-10-15-rot-coverage-git-source | 效果评估实证：fr-rot-suspect 遥测的 unknown 面长期卡死 6 个归档变更（2026-09-22-t |

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-rot-coverage-git-source",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "9e009fe4e4d96b0383c53416408681dd1b833d9e",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——覆盖面为 git 历史确定态只读",
+    "并发": "ok——零写盘，git log 只读并发安全；covCache 单调用链生命周期无跨运行残留",
+    "切换": "ok——fail-soft 三态有测试④锁定；git 历史追加只增不改幂等",
+    "作用域": "ok——--all 跨分支并集风险已在 design 显式裁决可接受（变更名日期前缀重名趋零，宁宽勿漏）"
+  },
+  "notes": {
+    "承诺对照": "FR-01 测试①②③（恢复/剔除/不编造）；FR-02 测试④⑤（fail-soft/unknownSources 收敛）；FR-03 fr-index 四文件 15/15 零回归+新增 3/3 绿；真实库六来源 4 恢复 2 诚实保持 unknown 的分布实测留档",
+    "声明边界裁决": "①--grep 子串误吸=可接受（宁宽勿漏，正则锚定留后续）；②只触 .sillyspec 面的 2 来源保持 unknown=正确语义（既有过滤契约一致）。无未裁决边界",
+    "防护声明核实": "fail-soft try/catch 真实存在且有测试④锁定；.sillyspec 过滤走既有统一出口（return 行）未新增旁路",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 文案零变化",
+      "config-absent-zero-regression": "n/a——零配置键",
+      "crossrepo-path-compat": "pass——execFileSync cwd=archiveRoot 仓内相对定位，Windows 路径经 replace(/\/g,'/') 归一与源1/2 同口径"
+    }
+  },
+  "reviewedAt": "2026-10-15T02:22:00.000Z"
+}

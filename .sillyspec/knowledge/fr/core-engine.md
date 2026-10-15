@@ -3695,3 +3695,60 @@
   confirmed_at: null
   source_change: 2026-10-15-supersedes-ghost-nodes
   status: active
+
+## FR-core-engine-219 git 可恢复变更的覆盖面经源3 恢复（name-only 文件集、.sillyspec/ 剔除、无匹配为空不编造）
+变更：2026-10-15-rot-coverage-git-source
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-rot-coverage-git-source/requirements.md#FR-01
+最近确认：963fc06134acde9b492fd4f007e0671f57bd288e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-rot-coverage-git-source:flow:测试绑定FR-01
+  tests: test/rot-coverage-git-source.test.mjs「①②③ 覆盖面 git 源：恢复文件、剔 .sillyspec、无匹配为空」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-rot-coverage-git-source
+  status: active
+
+## FR-core-engine-220 非 git 目录 fail-soft 不抛；partitionActiveByCoverage 消费后 unknownSources 收敛
+变更：2026-10-15-rot-coverage-git-source
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-rot-coverage-git-source/requirements.md#FR-02
+最近确认：963fc06134acde9b492fd4f007e0671f57bd288e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-rot-coverage-git-source:flow:测试绑定FR-02
+  tests: test/rot-coverage-git-source.test.mjs「④ 非 git 目录 fail-soft」 | test/rot-coverage-git-source.test.mjs「⑤ partition 消费：原 unknown 来源恢复后转 skip/强命中，unknownSources 收敛」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-rot-coverage-git-source
+  status: active
+
+## FR-core-engine-221 fr-index 既有 4 测试文件零回归；新增测试 3 组全绿
+变更：2026-10-15-rot-coverage-git-source
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-rot-coverage-git-source/requirements.md#FR-03
+最近确认：963fc06134acde9b492fd4f007e0671f57bd288e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-rot-coverage-git-source:flow:测试绑定FR-03
+  tests: test/fr-index-l2.test.mjs | test/fr-index.test.mjs | test/fr-inject-cap.test.mjs | test/fr-rot-precision.test.mjs | test/rot-coverage-git-source.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-rot-coverage-git-source
+  status: active

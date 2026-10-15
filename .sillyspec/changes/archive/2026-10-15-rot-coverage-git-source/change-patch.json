@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-15-rot-coverage-git-source",
+  "baseline": "ace2fe2c3b5228523a26d7df19f085508ad94d20",
+  "head": "963fc06134acde9b492fd4f007e0671f57bd288e",
+  "files": [
+    "src/fr-index.js",
+    "test/rot-coverage-git-source.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 93,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-15T02:21:30.915Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "ace2fe2c3b5228523a26d7df19f085508ad94d20",
+    "totals": {
+      "files": 2,
+      "additions": 93,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "src/fr-index.js",
+        "additions": 15,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/rot-coverage-git-source.test.mjs",
+        "additions": 78,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "22f63f96c3bb82b2e10f8879bb89c00c3e5ff45fa8ced760708064561bce2485",
+  "patchStatus": "ok"
+}

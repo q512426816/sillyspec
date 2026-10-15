@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-rot-coverage-git-source",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-rot-coverage-git-source:flow:测试绑定FR-01",
+      "tests": [
+        "test/rot-coverage-git-source.test.mjs「①②③ 覆盖面 git 源：恢复文件、剔 .sillyspec、无匹配为空」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-rot-coverage-git-source"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-rot-coverage-git-source:flow:测试绑定FR-02",
+      "tests": [
+        "test/rot-coverage-git-source.test.mjs「④ 非 git 目录 fail-soft」",
+        "test/rot-coverage-git-source.test.mjs「⑤ partition 消费：原 unknown 来源恢复后转 skip/强命中，unknownSources 收敛」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-rot-coverage-git-source"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-rot-coverage-git-source:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-index-l2.test.mjs",
+        "test/fr-index.test.mjs",
+        "test/fr-inject-cap.test.mjs",
+        "test/fr-rot-precision.test.mjs",
+        "test/rot-coverage-git-source.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-rot-coverage-git-source"
+    }
+  ]
+}
