@@ -55,3 +55,4 @@
 | 2026-10-15 | 2026-10-15-harvest-title-clarify | 收割条目标题自解释：机制词（槽4/收割）退出 D-001 标题，出处归 frontmatter
 | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
 | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
+| 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |

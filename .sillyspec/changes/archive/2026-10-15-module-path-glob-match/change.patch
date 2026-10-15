@@ -1,0 +1,373 @@
+diff --git a/src/ceremony-tier.js b/src/ceremony-tier.js
+index 3d5b12e8..0f0108aa 100644
+--- a/src/ceremony-tier.js
++++ b/src/ceremony-tier.js
+@@ -37,6 +37,7 @@
+  * （R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
+  */
+ import { RISK_TO_TIER } from './change-risk-profile.js'
++import { modulePathMatches } from './modules.js'
+ import { matchSpanRiskPatterns } from './span-risk-surface.js'
+ 
+ /** 仪式档位序（只升不降的偏序基准，index 即高低：S0=0 … S3=3） */
+@@ -124,7 +125,7 @@ function matchModuleForFile(posix, modulesObj) {
+     for (const raw of prefixes) {
+       const p = String(raw).replace(/\\/g, '/').replace(/\/+$/, '')
+       if (!p) continue
+-      if (posix === p || posix.startsWith(p + '/')) return id
++      if (modulePathMatches(posix, p)) return id
+     }
+   }
+   return null
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index f09df328..a75dd9fe 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -22,6 +22,7 @@
+  * 零输出：无 decisions.md 或无入选条目 → skipped 带原因，不写任何文件、不动 INDEX。
+  */
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
++import { modulePathMatches } from './modules.js'
+ import { basename, dirname, join } from 'node:path'
+ 
+ /** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
+@@ -274,7 +275,7 @@ function matchImpactsToModules(impacts, moduleIndex) {
+   const hits = []
+   for (const t of tokens) {
+     for (const { id, p } of modPaths) {
+-      if (t === p || t.startsWith(p + '/')) { if (!hits.includes(id)) hits.push(id); break }
++      if (modulePathMatches(t, p)) { if (!hits.includes(id)) hits.push(id); break }
+     }
+   }
+   if (hits.length === 0) {
+diff --git a/src/design-facts.js b/src/design-facts.js
+index f36e7c9d..cc1c08c3 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -26,7 +26,7 @@ import { join, relative } from 'node:path'
+ import { parseDecisions } from './decision-distill.js'
+ import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseDesignCoverageByRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
+-import { parseModuleMapSimple } from './modules.js'
++import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ 
+ // ---------------------------------------------------------------------------
+ // 条目解析（distill parseDecisions 的同源镜像，R-01）
+@@ -173,7 +173,7 @@ export function deriveActualModules(filePaths, prefixPairs) {
+     const t = String(f || '').replace(/\\/g, '/').replace(/\/+$/, '')
+     if (!t) continue
+     for (const { id, path: p } of prefixPairs) {
+-      if (t === p || t.startsWith(p + '/')) { actual.add(id); break }
++      if (modulePathMatches(t, p)) { actual.add(id); break }
+     }
+   }
+   return actual
+diff --git a/src/docs-debt.js b/src/docs-debt.js
+index 380e1296..93c02c3e 100644
+--- a/src/docs-debt.js
++++ b/src/docs-debt.js
+@@ -13,7 +13,7 @@
+ import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
+ import { join, relative } from 'node:path'
+ import { safeGit } from './git-helper.js'
+-import { parseModuleMapSimple } from './modules.js'
++import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ import { runDocsCheck, readDocsCheckConfig, parseDecisionEntries, anchorFilePath } from './docs-check.js'
+ import { decisionChangeQualifier } from './knowledge-match.js'
+ 
+@@ -55,9 +55,9 @@ export function matchFilesToModules(changedFiles, moduleIndex, opts = {}) {
+ 
+   for (const f of changedFiles) {
+     let matched = null
+-    // 一级：paths/core_files 前缀或字面量命中
++    // 一级：paths/core_files 前缀或字面量命中（含 glob 形态——modulePathMatches 统一入口）
+     for (const [id, ps] of modulePaths) {
+-      if (ps.some(p => p === f || f.startsWith(p.replace(/\/$/, '') + '/') || p.startsWith(f.split('/')[0] + '/') && p === f)) {
++      if (ps.some((p) => modulePathMatches(f, p))) {
+         matched = id; break
+       }
+     }
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 96d96136..025efe95 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -19,6 +19,7 @@
+  *    命中模块变更索引机械回写（sidecar 优先、幂等）、start 注入面欠账事实行（提示前移）。
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
++import { modulePathMatches } from './modules.js'
+ import { join, relative } from 'node:path'
+ import { createHash } from 'node:crypto'
+ import { execFileSync } from 'node:child_process'
+@@ -72,7 +73,7 @@ export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
+         .map((pp) => (map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
+         .filter(Boolean)
+       if (effs.length === 0) continue
+-      const hitFiles = deliverables.filter((f) => effs.some((e) => f === e || f.startsWith(e + '/')))
++      const hitFiles = deliverables.filter((f) => effs.some((e) => modulePathMatches(f, e)))
+       if (hitFiles.length === 0) continue
+       hits++
+       const docRel = entry.doc ? `docs/${map.project}/${String(entry.doc).replace(/^\/+/, '')}` : null
+@@ -93,7 +94,7 @@ export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
+       for (const pp of entry.paths || []) allPaths.push((map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
+     }
+   }
+-  const isCovered = (f) => allPaths.some((pp) => pp && (f === pp || f.startsWith(pp + '/')))
++  const isCovered = (f) => allPaths.some((pp) => pp && modulePathMatches(f, pp))
+   const uncoveredMap = new Map()
+   for (const f of deliverables) {
+     if (isCovered(f)) continue
+diff --git a/src/fr-index.js b/src/fr-index.js
+index 076f138d..ea720acd 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -18,6 +18,7 @@
+  */
+ 
+ import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
++import { modulePathMatches } from './modules.js'
+ import { suggestDomainFromFiles, snapDomainToDictionary } from './knowledge-digest.js'
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+ import { basename, dirname, join } from 'path';
+@@ -250,7 +251,7 @@ export function matchedModuleIds(moduleIndex, filePath) {
+   const hits = [];
+   for (const [modId, mod] of Object.entries(moduleIndex)) {
+     const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
+-    if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
++    if (paths.some((pp) => modulePathMatches(filePath, pp))) {
+       hits.push(modId);
+     }
+   }
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 0359dad7..3055226e 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -21,7 +21,7 @@
+ import { existsSync, readFileSync, readdirSync } from 'fs'
+ import { join } from 'path'
+ import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
+-import { parseModuleMapSimple } from './modules.js'
++import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ 
+ // ── 本体常量（design.md 总体方案 §1 的代码化） ──
+ 
+@@ -273,9 +273,8 @@ export function buildKnowledgeGraph(specRoot) {
+         const moduleOf = (p) => {
+           const v = posix(p)
+           for (const [mid, mp] of modulePathIndex) {
+-            // 模块 paths 是目录/glob 语义：剥尾斜杠后按「相等 或 path/ 前缀」匹配
+-            const stem = posix(mp).replace(/\/+$/, '')
+-            if (v === stem || v.startsWith(stem + '/')) return mid
++            // 模块 paths 目录/glob 语义——modulePathMatches 统一入口（**/*.tsx 等扫描卡形态可命中）
++            if (modulePathMatches(v, mp)) return mid
+           }
+           return null
+         }
+diff --git a/src/module-impact.js b/src/module-impact.js
+index 1cd7c6c0..07563723 100644
+--- a/src/module-impact.js
++++ b/src/module-impact.js
+@@ -14,6 +14,7 @@
+  * 归属分类同一套 module-map 前缀匹配，仅输入来源不同。
+  */
+ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
++import { modulePathMatches } from './modules.js'
+ import { join } from 'path'
+ import { resolveVerifyChangedFiles } from './verify-postcheck.js'
+ import { resolveSpecDir } from './run/shared.js'
+@@ -87,11 +88,7 @@ function classifyFile(posixPath, modulePaths) {
+   for (const [moduleId, paths] of modulePaths) {
+     for (const p of paths) {
+       // 目录条目以 / 结尾 → 前缀匹配；文件条目 → 精确或子路径（与模块上下文索引读侧口径一致）
+-      if (p.endsWith('/')) {
+-        if (posixPath.startsWith(p)) return moduleId
+-      } else if (posixPath === p || posixPath.startsWith(p + '/')) {
+-        return moduleId
+-      }
++      if (modulePathMatches(posixPath, p)) return moduleId
+     }
+   }
+   return null
+diff --git a/src/modules.js b/src/modules.js
+index caa50f79..4748c9e7 100644
+--- a/src/modules.js
++++ b/src/modules.js
+@@ -2,6 +2,37 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+ import { join } from 'path';
+ import { gitQuiet } from './git-helper.js';
+ import { nowWallClock } from './datetime.js';
++import { globMatch } from './change-list.js';
++
++/**
++ * 模块 paths 条目 × 文件路径 的统一归属判定（2026-10-15-module-path-glob-match）。
++ *
++ * 背景：sillyspec-scan 生成的 module-map（消费仓）大量使用 glob 形态 paths——
++ * `app/modules/daemon/**`、`frontend/src/components/daemon/*.tsx`、多段通配与文件通配的
++ * 组合（`**` 与 `*.tsx` 同串）、括号路径等（平台仓实测 146 条）——而历史各消费点只做朴素
++ * `file === p || startsWith(p + '/')`，glob 条目恒不命中（恰好只有精确文件路径能命中），
++ * 导致消费仓全链路域路由失效：交付文件匹配不上模块 → 三级兜底全灭 → FR 铸伪域
++ * （auto-backend 等）、决策落 unmapped。
++ *
++ * 语义（本仓无 glob map 时与旧各点逐字等价——零回归）：
++ *   - 尾部 `/` 的目录条目：startsWith（旧 module-impact 目录分支语义）
++ *   - 其余条目：相等 或 `p/` 前缀（旧 fr-index/ceremony-tier 等语义）
++ *   - 含 `*`/`?` 的 glob 条目：追加 globMatch（双星跨零或多段、单星段内、单问号单字符；
++ *     change-list.js 既有完备实现单一源复用）
++ * @param {string} filePath 仓根相对文件路径（含反斜杠容忍）
++ * @param {string} rawPattern module-map 的 paths/core_files 条目
++ * @returns {boolean}
++ */
++export function modulePathMatches(filePath, rawPattern) {
++  const f = String(filePath || '').replace(/\\/g, '/');
++  const raw = String(rawPattern || '').replace(/\\/g, '/');
++  if (!f || !raw) return false;
++  if (raw.endsWith('/')) return f.startsWith(raw);
++  const p = raw.replace(/\/+$/, '');
++  if (!p) return false;
++  if (f === p || f.startsWith(p + '/')) return true;
++  return globMatch(f, p);
++}
+ 
+ 
+ /**
+diff --git a/test/module-path-glob-match.test.mjs b/test/module-path-glob-match.test.mjs
+new file mode 100644
+index 00000000..f0956548
+--- /dev/null
++++ b/test/module-path-glob-match.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * 模块路径 glob 匹配统一入口（2026-10-15-module-path-glob-match）
++ *
++ * 背景：sillyspec-scan 生成的 module-map（消费仓）大量 glob 形态 paths，历史各消费点
++ * 朴素前缀匹配致 glob 条目恒不命中——消费仓 FR 铸伪域/决策落 unmapped 的根因。
++ * 本文件锁三面：
++ *   ① modulePathMatches 全形态（无 glob 旧语义逐字 / 双星 / 目录尾 / / 单星 / 问号 /
++ *      双星与文件通配组合 / 括号路径 / 反斜杠归一 / 空输入）
++ *   ② 端到端：glob 形态 module-map 下 resolveTouchedDomains 命真域不投伪域（修前行为对照）
++ *   ③ decision-distill matchImpactsToModules 对 glob map 命中真域
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { modulePathMatches } from '../src/modules.js'
++import { resolveTouchedDomains } from '../src/fr-index.js'
++import { discoverModuleIndex } from '../src/decision-distill.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++// ── ① 全形态 ─────────────────────────────────────────────────────────────────
++
++test('① modulePathMatches 全形态：旧语义逐字 + glob 补充', () => {
++  const cases = [
++    // 无 glob：与旧各消费点逐字等价
++    ['src/flow.js', 'src/flow.js', true, '文件条目精确'],
++    ['src/flow.js', 'src/', true, '目录条目（尾 /）前缀'],
++    ['src/run/x.js', 'src/', true, '目录深子路径'],
++    ['other/x.js', 'src/', false, '目录外不命中'],
++    ['src/flow.js', 'src/flow.ts', false, '不同扩展名不命中'],
++    ['src/flow.js', 'src/flow.js.bak', false, '后缀文件不命中'],
++    // glob：扫描卡形态
++    ['backend/app/modules/daemon/router.py', 'backend/app/modules/daemon/**', true, '** 尾巴'],
++    ['backend/app/modules/daemon/x/y/z.py', 'backend/app/modules/daemon/**', true, '** 深子路径'],
++    ['backend/app/modules/daemonx/a.py', 'backend/app/modules/daemon/**', false, '** 不跨段内前缀'],
++    ['frontend/src/components/daemon/foo.tsx', 'frontend/src/components/daemon/*.tsx', true, '* 段内'],
++    ['frontend/src/components/daemon/sub/foo.tsx', 'frontend/src/components/daemon/*.tsx', false, '* 不跨斜杠'],
++    ['frontend/src/components/x.tsx', 'frontend/src/components/x*.tsx', true, '* 段内前缀'],
++    ['frontend/src/app/(dashboard)/sessions/page.tsx', 'frontend/src/app/(dashboard)/sessions/**/*.tsx', true, '括号路径 + **/*.tsx 组合'],
++    ['frontend/src/app/(dashboard)/x/y/p.tsx', 'frontend/src/app/(dashboard)/**/*.tsx', true, '** 中间段'],
++    ['sillyhub-daemon/src/daemon.ts', 'sillyhub-daemon/src/**', true, '项目前缀 **'],
++    // 归一与空输入
++    ['src\\flow.js', 'src/flow.js', true, '反斜杠文件路径归一'],
++    ['src/flow.js', 'src\\', true, '反斜杠目录条目归一'],
++    ['', 'src/', false, '空文件路径'],
++    ['src/x.js', '', false, '空 pattern'],
++  ]
++  for (const [f, p, exp, label] of cases) {
++    assert.equal(modulePathMatches(f, p), exp, `${label}: ${f} ~ ${p}`)
++  }
++})
++
++// ── ② 端到端：glob map 域路由 ────────────────────────────────────────────────
++
++function seedGlobMapRepo() {
++  const root = mkdtempSync(join(tmpdir(), 'globmap-'))
++  const spec = join(root, '.sillyspec')
++  mkdirSync(join(spec, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(spec, 'changes', 'x'), { recursive: true })
++  // 扫描卡形态：glob paths（对照平台仓 docs/backend/modules 实态）
++  mkdirSync(join(spec, 'docs', 'sillyspec', 'modules'), { recursive: true })
++  writeFileSync(join(spec, 'docs', 'sillyspec', 'modules', '_module-map.yaml'), [
++    'modules:',
++    '  core-engine:',
++    '    status: active',
++    '    doc: modules/core-engine.md',
++    '    paths:',
++    '      - src/knowledge-*.js',
++    '      - src/flow.js',
++    '  cli-entry:',
++    '    status: active',
++    '    doc: modules/cli-entry.md',
++    '    paths:',
++    '      - src/index.js',
++    '',
++  ].join('\n'))
++  return { root, spec }
++}
++
++test('② 端到端：glob 形态 map → 域路由命真域（修前投伪域）', () => {
++  const { root, spec } = seedGlobMapRepo()
++  try {
++    const mi = discoverModuleIndex(join(spec, 'knowledge'))
++    assert.ok(mi, 'map 发现')
++    const d1 = resolveTouchedDomains(join(spec, 'changes', 'x'), mi, ['src/knowledge-vector.js'], join(spec, 'knowledge'))
++    assert.deepEqual(d1, ['core-engine'], 'glob 条目 src/knowledge-*.js 命中（修前必然投伪域/unmapped）')
++    const d2 = resolveTouchedDomains(join(spec, 'changes', 'x'), mi, ['src/flow.js'], join(spec, 'knowledge'))
++    assert.deepEqual(d2, ['core-engine'], '精确条目照常')
++    const d3 = resolveTouchedDomains(join(spec, 'changes', 'x'), mi, ['src/unknown/deep/file.js'], join(spec, 'knowledge'))
++    assert.ok(d3.every((x) => String(x).startsWith('auto-')), '真无覆盖 → 伪域投票照旧（未过宽兜底）')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++// ── ③ 决策 impacts 对 glob map ───────────────────────────────────────────────
++
++test('③ 决策 impacts 路径对 glob map 命中真域', async () => {
++  const { discoverModuleIndex: dmi } = await import('../src/decision-distill.js')
++  const { root, spec } = seedGlobMapRepo()
++  try {
++    const mi = dmi(join(spec, 'knowledge'))
++    // matchImpactsToModules 是 decision-distill 模块私有——经 dist 的域决议消费路径间接测：
++    // 用 discoverModuleIndex 结果对 impacts 文本 token 做同口径断言（modulePathMatches 单一源）
++    const impacts = '改动 src/knowledge-graph.js 与 src/flow.js'
++    const token = 'src/knowledge-graph.js'
++    const hit = Object.entries(mi).some(([id, m]) =>
++      (m.paths || []).some((p) => modulePathMatches(token, p)) && id === 'core-engine')
++    assert.ok(hit, 'impacts token 对 glob 条目命中 core-engine')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/test/scan-diff.test.mjs b/test/scan-diff.test.mjs
+index 6ce29746..3ed38720 100644
+--- a/test/scan-diff.test.mjs
++++ b/test/scan-diff.test.mjs
+@@ -217,7 +217,10 @@ describe('unmapped / outOfScope', () => {
+     assert.equal(r.driftCount, 0)
+   })
+ 
+-  it('Windows 反斜杠路径：范围归一命中（src/core）但模块原始路径失配 → in-scope 且 unmapped', (t) => {
++  it('Windows 反斜杠模块路径：两侧归一命中 → 归 core（2026-10-15-module-path-glob-match 归一化）', (t) => {
++    // 语义变化留痕：原契约「模块原始路径失配 → unmapped」是「两侧都不归一」时代的失配行为固化；
++    // modulePathMatches 统一入口做反斜杠归一（与 collectScope 的范围归一对称）——脏卡数据被机械
++    // 归一消费而非掉 unmapped（域路由失效根因修复的同精神）。拼错路径仍失配 → 暴露通道不堵。
+     const f = mkRepo({ map: BSLASH_MAP })
+     t.after(() => cleanup(f.root))
+     writeFileSync(join(f.root, 'src/core/new.js'), 'n\n')
+@@ -228,7 +231,8 @@ describe('unmapped / outOfScope', () => {
+     assert.equal(r.ok, true)
+     assert.deepEqual(r.scope, ['src/core']) // collectScope 归一反斜杠
+     assert.deepEqual(r.added, ['src/core/new.js'])
+-    assert.deepEqual(r.unmapped, ['src/core/new.js']) // 已入范围但未匹配模块 → 显式标注
++    assert.deepEqual(r.unmapped, []) // 归一后命中模块 → 不再落 unmapped
++    assert.equal(r.byModule.core.added, 1)
+     assert.equal(r.driftCount, 1)
+   })
+ })

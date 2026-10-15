@@ -5,3 +5,4 @@
 - 2026-06-03 | 初始文档
 - ql-20260819-012-66fc | 清理 modules.js 死 import DB
 - ql-20260819-015-65fa | modules.js rebuild 的 git rev-parse 改 execFileSync（去 shell 注入面）
+- 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、…

@@ -69,3 +69,4 @@
 | 2026-10-15 | 2026-10-15-graph-registry-domain-split | 效果评估实证：图簇 _unmapped 大簇 2183 个文件节点是伪信号——本 spec 树管理多仓（projects |
 | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
 | 2026-10-15 | 2026-10-15-vector-capability-autodetect | 用户设计裁决：向量开关放每仓 local.yaml 不是终态——端点部署本身就是开关，客户端应自动探… |
+| 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |

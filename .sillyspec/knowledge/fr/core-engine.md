@@ -3899,3 +3899,67 @@
   confirmed_at: null
   source_change: 2026-10-15-graph-registry-domain-split
   status: active
+
+## FR-core-engine-231 modulePathMatches 全形态单测：无 glob 旧语义逐字（===/前缀/目录尾/）、**、/**、*、?、**/*.tsx 组合、括号路径
+变更：2026-10-15-module-path-glob-match
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-module-path-glob-match/requirements.md#FR-01
+最近确认：13193a27324463c1d173b3a69645c7d73611a5de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-module-path-glob-match:flow:测试绑定FR-01
+  tests: test/module-path-glob-match.test.mjs「① modulePathMatches 全形态：旧语义逐字 + glob 补充」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-module-path-glob-match
+  status: active
+
+## FR-core-engine-232 平台仓实测转正：resolveTouchedDomains('backend/app/modules/daemon/router.py') → daemon 真域（修前 auto-backend）；frontend 组件路径命真域
+变更：2026-10-15-module-path-glob-match
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-module-path-glob-match/requirements.md#FR-02
+最近确认：13193a27324463c1d173b3a69645c7d73611a5de
+
+## FR-core-engine-233 9 消费点接入且既有测试面零回归（fr-index/docs-debt/ceremony-tier/flow-parity/module-impact/design-facts 各面）
+变更：2026-10-15-module-path-glob-match
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-module-path-glob-match/requirements.md#FR-03
+最近确认：13193a27324463c1d173b3a69645c7d73611a5de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-module-path-glob-match:flow:测试绑定FR-03
+  tests: test/ceremony-tier.test.mjs | test/docs-debt.test.mjs | test/flow-parity.test.mjs | test/fr-index-l2.test.mjs | test/fr-index.test.mjs | test/knowledge-graph.test.mjs | test/scan-diff.test.mjs「Windows 反斜杠模块路径：两侧归一命中 → 归 core」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-module-path-glob-match
+  status: active
+
+## FR-core-engine-234 新增端到端测试：glob 形态 map + resolveTouchedDomains 不投伪域、decision impacts 命真域
+变更：2026-10-15-module-path-glob-match
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-module-path-glob-match/requirements.md#FR-04
+最近确认：13193a27324463c1d173b3a69645c7d73611a5de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-module-path-glob-match:flow:测试绑定FR-04
+  tests: test/module-path-glob-match.test.mjs「② 端到端：glob 形态 map → 域路由命真域（修前投伪域）」 | test/module-path-glob-match.test.mjs「③ 决策 impacts 路径对 glob map 命中真域」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-module-path-glob-match
+  status: active

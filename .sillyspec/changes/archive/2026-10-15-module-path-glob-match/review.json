@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-module-path-glob-match",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "13193a27324463c1d173b3a69645c7d73611a5de",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——纯函数匹配无时序面",
+    "并发": "ok——零写盘只读 module-map",
+    "切换": "ok——无状态纯函数；存量数据不回溯（止增量）已在 design 显式裁决",
+    "作用域": "ok——map 本仓自治；旧 CLI 版本消费仓需版本分发到位（design 留痕）"
+  },
+  "notes": {
+    "承诺对照": "FR-01 ① 组 19 形态断言全过；FR-02 平台仓实测回执（daemon/router.py→daemon、frontend 组件→components-daemon 等 6 路径，修前 auto-backend/无命中对照）；FR-03 9 消费点全部替换（提交 9 src 文件实证）+相关面 94 用例零回归+scan-diff 语义变化测试留痕更新+全量 800/800；FR-04 ②③ 组全过",
+    "声明边界裁决": "①命中面变宽吸脏卡=可接受（pattern 质量属卡作者责任，精确条目语义逐字未变）；②存量 92 伪域+444 unmapped 决策不回溯=显式裁决（止增量，存量清偿属消费仓数据治理——伪域可 redomain、决策迁移与本仓 C5 同裁决缓办）；③注释 */ 序列坑两次实测=已改措辞留训。无未裁决边界",
+    "防护声明核实": "无 glob 输入逐字旧语义由 ① 组 6 条对照断言锁定；未过宽兜底由 ② 组「真无覆盖仍投伪域」断言锁定；反斜杠归一有 ① 组 2 条断言",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 文案零变化",
+      "config-absent-zero-regression": "n/a——零配置键",
+      "crossrepo-path-compat": "pass——本变更为全局路径匹配口径修复（反斜杠归一/盘符路径经两侧归一处理），平台仓 Windows 真实数据实测通过"
+    }
+  },
+  "reviewedAt": "2026-10-15T08:05:00.000Z"
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-module-path-glob-match",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-module-path-glob-match:flow:测试绑定FR-01",
+      "tests": [
+        "test/module-path-glob-match.test.mjs「① modulePathMatches 全形态：旧语义逐字 + glob 补充」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-module-path-glob-match"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-module-path-glob-match:flow:测试绑定FR-03",
+      "tests": [
+        "test/ceremony-tier.test.mjs",
+        "test/docs-debt.test.mjs",
+        "test/flow-parity.test.mjs",
+        "test/fr-index-l2.test.mjs",
+        "test/fr-index.test.mjs",
+        "test/knowledge-graph.test.mjs",
+        "test/scan-diff.test.mjs「Windows 反斜杠模块路径：两侧归一命中 → 归 core」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-module-path-glob-match"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-module-path-glob-match:flow:测试绑定FR-04",
+      "tests": [
+        "test/module-path-glob-match.test.mjs「② 端到端：glob 形态 map → 域路由命真域（修前投伪域）」",
+        "test/module-path-glob-match.test.mjs「③ 决策 impacts 路径对 glob map 命中真域」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-module-path-glob-match"
+    }
+  ]
+}

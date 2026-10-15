@@ -1,0 +1,156 @@
+{
+  "change": "2026-10-15-module-path-glob-match",
+  "baseline": "059c8ccfbee0578220365b1686c4602891c55e64",
+  "head": "13193a27324463c1d173b3a69645c7d73611a5de",
+  "files": [
+    "src/ceremony-tier.js",
+    "src/decision-distill.js",
+    "src/design-facts.js",
+    "src/docs-debt.js",
+    "src/flow-parity.js",
+    "src/fr-index.js",
+    "src/knowledge-graph.js",
+    "src/module-impact.js",
+    "src/modules.js",
+    "test/module-path-glob-match.test.mjs",
+    "test/scan-diff.test.mjs"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 165,
+    "deletions": 21
+  },
+  "savedAt": "2026-10-15T08:00:54.333Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "migration",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/migration.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "059c8ccfbee0578220365b1686c4602891c55e64",
+    "totals": {
+      "files": 11,
+      "additions": 165,
+      "deletions": 21
+    },
+    "rows": [
+      {
+        "path": "src/ceremony-tier.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/decision-distill.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/docs-debt.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-parity.js",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/fr-index.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 3,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/module-impact.js",
+        "additions": 2,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/modules.js",
+        "additions": 31,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/module-path-glob-match.test.mjs",
+        "additions": 109,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/scan-diff.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "f5edd39f31bbea2fc5a501e22915e1013f39795f192e42089da3c6b0f2c58e35",
+  "patchStatus": "ok"
+}
