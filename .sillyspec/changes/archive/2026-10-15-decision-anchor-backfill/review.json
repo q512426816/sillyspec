@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-decision-anchor-backfill",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "f03d9dea094c566ce9947cc1ef8c86e961ea6381",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——回填为即时判定/文件手术无时序面",
+    "并发": "ok——writeFileSync 直写知识数据属既有面；并行归档提交顺带扫走回填行的共享仓竞态实证一次（内容正确入库，归档件 sha256 锚定为准）",
+    "切换": "ok——回填只发生在新蒸馏/手动手术，存量段其余字节零触碰（diff -U0 实证仅锚点行）",
+    "作用域": "ok——两仓知识库各自手术；黑名单含知识自引用/归档工件防跨面错锚"
+  },
+  "notes": {
+    "承诺对照": "FR-01 单元 9 形态断言（:行号原生/多路径 null/裸名 null/自引用排除/反斜杠归一）；FR-02 收割端端到端两态（恰一写锚点行/无路径不编造）；FR-03 蒸馏端三态（回填/多候选未记录/既有锚不覆盖）；FR-04 存量手术 sillyspec 46 行（graph anchors 边 126→155 实测）+平台 18 好锚保留 7 坏锚还原（人工裁决全清单留痕）",
+    "声明边界裁决": "①恰一路径置信策略=可接受（正文明确只谈一个文件；坏锚类黑名单实证收紧 59→46）；②40% 无 token 条目诚实残留=可接受；③3e lint-ownership 测试红=并行会话 verify-postcheck.js 在途改动所致非本变更（git status M 证据+串移位事实）。无未裁决边界",
+    "防护声明核实": "多候选保持未记录有测试③锁定；既有锚点不覆盖有测试③第三段锁定；黑名单在单一源函数真实存在且测试①覆盖",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 文案零变化",
+      "config-absent-zero-regression": "n/a——零配置键",
+      "crossrepo-path-compat": "pass——反斜杠归一+CRLF 行级手术（平台仓/本仓混合 EOL 文件实测，diff 仅锚点行）"
+    }
+  },
+  "reviewedAt": "2026-10-15T10:20:00.000Z"
+}

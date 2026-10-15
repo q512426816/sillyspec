@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-decision-anchor-backfill",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-decision-anchor-backfill:flow:测试绑定FR-01",
+      "tests": [
+        "test/decision-anchor-backfill.test.mjs「① anchorBackfillCandidate 全形态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-anchor-backfill"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-decision-anchor-backfill:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-anchor-backfill.test.mjs「② 收割端：恰一路径 → - 锚点：行；无路径 → 无该行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-anchor-backfill"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-decision-anchor-backfill:flow:测试绑定FR-03",
+      "tests": [
+        "test/decision-anchor-backfill.test.mjs「③ 蒸馏端：无锚点正文单一路径 → 回填；多路径 → 未记录；既有锚点不覆盖」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-decision-anchor-backfill"
+    }
+  ]
+}
