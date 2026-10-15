@@ -396,3 +396,12 @@ blast:
       - src/run/gates.js
       - src/run/complete.js
     tier: S2
+
+  eval:
+    status: active
+    doc: modules/eval.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - eval/
+    tier: S1

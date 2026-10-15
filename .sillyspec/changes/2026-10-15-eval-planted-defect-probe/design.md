@@ -31,6 +31,8 @@ created_at: 2026-10-15T11:52:30.994Z
 | 新增 | NEW:eval/tasks/004-phase-stats/verify.mjs | 判分脚本（期望硬编码、逐断言可定位隐含面） |
 | 新增 | NEW:eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs | 参考解（dry-run pass 路径；不进 agent 工作副本与指纹） |
 | 新增 | NEW:test/eval-planted-defect-probe.test.mjs | 判别力三用例（参考解过 / 无实现拒 / naive 拒） |
+| 修改 | .sillyspec/docs/sillyspec/modules/_module-map.yaml | 登记 eval 模块（paths: eval/——收口模块图门的正路清偿；FR 蒸馏落真域不再落伪域 auto-*） |
+| 新增 | NEW:.sillyspec/docs/sillyspec/modules/eval.md | eval 模块卡（职责/定位/契约摘要，含种植缺陷探针公平性红线锚） |
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
