@@ -30,3 +30,10 @@ test('两臂 setup/promptTemplate 语义不变（B 臂 sillyspec init 在场、{
   assert.match(config.arms.A.promptTemplate, /\{instruction\}/)
   assert.match(config.arms.B.promptTemplate, /\{instruction\}/)
 })
+
+test('maxTurns 轮数帽与 B 臂话术（2026-10-15-eval-b-arm-turn-budget）', () => {
+  assert.equal(config.adapter.maxTurns, 120, 'B 臂流程完成空间：60 轮实测掐断时产物已正确（帽测的是帽不是方法）')
+  assert.ok(!config.arms.B.promptTemplate.includes('quick'), 'B 臂 prompt 不含退役通道话术（quick 通道 v3.30.0 已退役）')
+  assert.match(config.arms.B.promptTemplate, /flow start/, 'B 臂话术对齐现行协议（flow start 立项）')
+  assert.match(config.arms.B.promptTemplate, /flow done/, 'B 臂话术对齐现行协议（flow done 收口）')
+})

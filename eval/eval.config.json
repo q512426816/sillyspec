@@ -13,7 +13,7 @@
     "B": {
       "label": "SillySpec",
       "setup": ["npx sillyspec init --dir {workdir} --tool {tool}"],
-      "promptTemplate": "当前项目已安装 SillySpec 工作流。请按 SillySpec 流程完成以下需求（小任务走 quick 模式），完成后确保代码可运行：\n\n{instruction}"
+      "promptTemplate": "当前项目已安装 SillySpec 工作流。请按 SillySpec 轻量流程完成以下需求（sillyspec flow start 立项 → 直接干活 → sillyspec flow done 收口），完成后确保代码可运行：\n\n{instruction}"
     }
   },
   "adapter": {
@@ -22,7 +22,7 @@
     "command": ["claude", "-p", "--output-format", "json", "--max-turns", "{maxTurns}", "--dangerously-skip-permissions"],
     "stdin": "prompt",
     "timeoutMs": 900000,
-    "maxTurns": 60,
+    "maxTurns": 120,
     "parseStdoutJson": true
   }
 }

@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  eval B 臂轮次预算与 prompt 话术修正——B 臂走完整 SillySpec 流程，60 轮上限低于流程仪式开销（实测 60 轮掐断时产物已正确），B 臂 prompt 仍带退役通道话术
+
+
+  动机：004 探针实测（权限修复后）：臂 A pass（93 秒，五类隐含面全对）；臂 B terminal_reason=max_turns（60 轮掐断，.46），但其 workdir 产物经本机实跑判定期望一致（download
+  r1/10s、login r4/22s、upload r1/17s 逐字对）——B 臂不是做不出来，是被轮次帽掐在流程收尾前。B
+  臂的处理效果（treatment）本来就含流程仪式轮次开销，轮次帽必须给流程留够完成空间，否则测的是帽不是方法。另：arms.B.promptTemplate 仍写「小任务走 quick 模式」（quick 通道 v3.30.0
+  已退役）——陈旧话术会诱发 agent 对账空转。
+
+
+  成功标准：
+
+  - eval.config.json adapter.maxTurns 60 → 120（B 臂流程完成空间；A 臂不受影响——裸跑实测 16 轮内完成）
+
+  - arms.B.promptTemplate 去除「小任务走 quick 模式」陈旧话术，改为与现行协议一致的表述（走 SillySpec 轻量流程 flow start→flow done）
+
+  - test/eval-adapter-config.test.mjs 扩展：maxTurns=120 断言 + B 臂 prompt 不含 quick 字样断言
+
+  - 变更自身测试面跑绿，lint 通过
+autopilot: false
+prestage_ack: false
+baseline_commit: 8b2abe294613829464eab45179432ca50b6e35b4
+updatedAt: '2026-10-15T13:23:20.019Z'
+baseline_sha256: 61d700968479593461651110d91eea92dc6661ed27f46d041144a0282602afa2
+spec_approved: true
+spec_approved_at: '2026-10-15T13:23:20.019Z'
+spec_approved_by: zcode-eval-turns
+spec_approved_channel: agent-self
+spec_attested_by: zcode-eval-turns
+
