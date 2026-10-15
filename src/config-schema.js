@@ -78,6 +78,14 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'knowledge',
+      title: '知识检索（平台向量语义召回）',
+      note: '可选段——未写整段=关（缺省不空转探测）。开启前置：平台已部署 /api/spec/knowledge/vector-search 端点（fastembed 本地小模型，2026-10-15-platform-vector-search）；未部署时开启亦安全（404 进程级死信短路，静默降级本地词面层）。发现性提示双触点：knowledge search 输出 hint 键、flow start 注入零命中行（vectorSwitchHint 单源）。',
+      keys: [
+        { path: 'knowledge.vector_search', type: 'string', optional: true, status: 'live', readers: ['vectorSwitchFromLocalYaml (src/knowledge-vector.js)'], desc: '【2026-10-15-vector-gate-tighten 收紧缺省关】平台向量语义召回开关——on|auto 显式开启（四层检索第二层：路由 tag 零命中后平台向量召回，语料=knowledge/decisions 条目，词面不相交条目可语义召回）；off/未写键=关。env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto 强制开、off 强制关。', example: 'on' },
+      ],
+    },
+    {
       id: 'mcp',
       title: 'SillyHub MCP 客户端凭据（派发用）',
       note: 'agent 手填，或 sillyspec platform connect 在 mcp 段缺失时同源自动填（§7.4）。两键齐全才生效，否则回退 env SILLYHUB_MCP_URL/TOKEN。',
@@ -386,6 +394,12 @@ commands:
   # test_timeout_sec: 2400   # commands.test 超时秒数（慢仓提帽；缺省 600，env SILLYSPEC_TEST_TIMEOUT_MS 同效）
   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
+
+# ── 知识检索（平台向量语义召回）──
+# 可选段——未写整段=关（缺省不空转探测）。开启前置：平台已部署 vector-search 端点
+# （fastembed 本地小模型）；未部署时开启亦安全（404 死信短路，静默降级本地词面层）。
+# knowledge:
+#   vector_search: on
 
 # ── SillyHub MCP 客户端凭据（派发到 worker 用）──
 # agent 手填，或 sillyspec platform connect 在 mcp 段缺失时同源自动填。

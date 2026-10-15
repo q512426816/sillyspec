@@ -359,6 +359,16 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       lines.length = 0
       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)
     }
+    // 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：零命中=正需要语义召回
+    // 而未获得的时刻——平台已连接但开关未开（缺省关）时给一行可执行提示；有命中/未连接/
+    // 已开启零新增（vectorSwitchHint 单源，同款提示也挂 knowledge search hint 键）。
+    if (!km.matched && rejected.length === 0) {
+      try {
+        const { vectorSwitchHint } = await import('./knowledge-vector.js')
+        const hint = vectorSwitchHint(dirname(specBase))
+        if (hint) lines.push(`   ${hint}`)
+      } catch { /* 提示 fail-open */ }
+    }
     // 模块卡欠账提示前移（2026-10-12-thin-module-gate-and-feed 三档）：触碰命中模块 behind>0
     // 才出事实行——动手前看到「你要动的卡已落后」比收口时警告有效；computeDocsDebt（厚道
     // execute {DOCS_DEBT}）同源，空债/无图零输出，异常走外层 catch fail-open 不阻断 start。

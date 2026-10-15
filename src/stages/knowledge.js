@@ -110,8 +110,16 @@ export async function cmdSearch(dir, args, opts = {}) {
   // 复用 knowledge-match 引擎（三层 hybrid：路由→平台向量→本地词片，2026-09-29-knowledge-vector-recall）
   const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir })
 
+  // 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：平台已连接+开关未开
+  // （缺省关）→ hint 键（vectorSwitchHint 单源，flow 注入零命中行同款文案）；其余空串零输出。
+  let vectorHint = ''
+  try {
+    const { vectorSwitchHint } = await import('../knowledge-vector.js')
+    vectorHint = vectorSwitchHint(dir)
+  } catch { /* 提示 fail-open */ }
+
   if (!result.matched) {
-    output(true, { query, matches: [] })
+    output(true, { query, matches: [], ...(vectorHint ? { hint: vectorHint } : {}) })
     return
   }
 
@@ -139,7 +147,7 @@ export async function cmdSearch(dir, args, opts = {}) {
     }
   })
 
-  output(true, { query, matches })
+  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}) })
 }
 
 // ── inspect ──

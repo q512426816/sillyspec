@@ -74,6 +74,18 @@ function vectorEnabled(cwd) {
   return sw === 'on' || sw === 'auto'
 }
 
+/**
+ * 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：平台已连接但开关未开
+ * （缺省关）时返回一行可执行提示——消费面：knowledge search 输出 hint 键、flow start
+ * 注入零命中行（两个「正需要语义召回而未获得」的时刻）。平台未连接/已开启 → ''（零噪音：
+ * 没平台没得开、开了不用说）。单源供双消费面，文案漂移由测试钉。
+ */
+export function vectorSwitchHint(cwd) {
+  if (!readPlatformConfig(cwd)) return ''
+  if (vectorEnabled(cwd)) return ''
+  return '💡 平台向量语义召回未开启（缺省关）——.sillyspec/local.yaml 加 knowledge 段 vector_search: on 可启用（需平台已部署 vector-search 端点；键语义见 sillyspec config schema）'
+}
+
 /** 404 死信端点（进程级，按平台 URL 记）：端点未实现=今天真实平台状态，标记后本进程不再
  *  对同 URL 空转探测（CLI 短进程生命周期天然重置；测试各用独立端口互不污染）。 */
 const vectorDeadEndpoints = new Set()
