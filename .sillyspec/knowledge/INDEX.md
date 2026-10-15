@@ -126,7 +126,7 @@
 **2026-10-08 已清账**（变更 2026-10-08-knowledge-inbox-triage）：历史 39 条 + 1 个掉标题孤儿块全部迁出——known-issues 22 块（🟢 已修复 15 / 🟡 在案 7）、patterns 8、conventions 2、testing-gotchas 4、sillyspec-gotchas 4，本 INDEX 已补全索引。新暂存条目仍先落 `uncategorized.md`，直接读该文件浏览。
 
 ## Decisions
-- unmapped|decision|决策|三波交付|打包 → [decisions/unmapped.md](decisions/unmapped.md)
+- unmapped|decision|决策|三波交付|打包|知识图谱|图谱|影响面|impact → [decisions/unmapped.md](decisions/unmapped.md)
 - backend|decision|决策|变更删除|软删|location=deleted|防复活|platform_deleted|镜像驱动收敛|墓碑 → [decisions/backend.md](decisions/backend.md)
 - frontend|decision|决策|活动徽标|last_pushed_at|进行中可见性 → [decisions/frontend.md](decisions/frontend.md)
 - frontend_components|decision|决策|轮次刻度轨|会话导航|飞出卡|runs 补全 → [decisions/frontend_components.md](decisions/frontend_components.md)
