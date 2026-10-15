@@ -217,3 +217,4 @@
 - auto-idea|idea|FR|需求|承接 → [fr/auto-idea.md](fr/auto-idea.md)
 - progress|FR|需求|承接 → [fr/progress.md](fr/progress.md)
 - machine-interface|FR|需求|承接 → [fr/machine-interface.md](fr/machine-interface.md)
+- skills-docs|FR|需求|承接 → [fr/skills-docs.md](fr/skills-docs.md)

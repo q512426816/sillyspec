@@ -231,6 +231,14 @@ modules:
       - src/migrate.js
       - src/modules.js
 
+  skills-docs:
+    status: active
+    doc: modules/skills-docs.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - .claude/skills/
+
   setup:
     status: active
     doc: modules/setup.md

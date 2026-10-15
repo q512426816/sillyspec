@@ -1,0 +1,520 @@
+{
+  "change": "2026-10-15-pitfall-batch-clearance",
+  "baseline": "2dcbda201fddb31fd5458847c7f205577381bed8",
+  "head": "9b0519c3047a86512bb0000ba5b4c65aa890ace6",
+  "files": [
+    ".claude/skills/sillyspec-brainstorm/SKILL.md",
+    ".claude/skills/sillyspec-execute/SKILL.md",
+    ".claude/skills/sillyspec-plan/SKILL.md",
+    ".sillyspec/docs/SillyHub/scan/CONCERNS.md",
+    ".sillyspec/docs/backend/scan/CONVENTIONS.md",
+    ".sillyspec/docs/frontend/scan/CONVENTIONS.md",
+    ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.md",
+    ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+    "docs/sillyspec/architecture-4a.md",
+    "docs/sillyspec/doc-consistency-debt.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "docs/sillyspec/prompt-control-debt.md",
+    "src/commit-suggest.js",
+    "src/run/archive-distill.js",
+    "src/run/complete.js",
+    "src/run/gates.js",
+    "src/stage-contract.js",
+    "src/stage-review.js",
+    "src/stage-templates.js",
+    "src/stages/brainstorm.js",
+    "src/sync.js",
+    "src/verify-postcheck.js",
+    "src/verify-probes.js",
+    "test/execute-batch-endtoend-checkbox.test.mjs",
+    "test/execute-batch-zero-diff.test.mjs",
+    "test/pitfall-anchor-paren.test.mjs",
+    "test/pitfall-autotick-anchor.test.mjs",
+    "test/pitfall-batch-review-backfill.test.mjs",
+    "test/pitfall-commit-suggest.test.mjs",
+    "test/pitfall-facts-apiface.test.mjs",
+    "test/pitfall-gate-collect.test.mjs",
+    "test/pitfall-probe7-noise.test.mjs",
+    "test/pitfall-reconcile-eol.test.mjs",
+    "test/pitfall-rejected-fields.test.mjs",
+    "test/pitfall-stage-review-dir.test.mjs",
+    "test/pitfall-sync-409.test.mjs",
+    "test/task-review-retire.test.mjs"
+  ],
+  "totals": {
+    "files": 42,
+    "additions": 1252,
+    "deletions": 212
+  },
+  "savedAt": "2026-10-15T00:25:23.449Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 5,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": true,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 5,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": true,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sillyhub-mcp",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sillyhub-mcp.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "skills-docs",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/skills-docs.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 14
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "2dcbda201fddb31fd5458847c7f205577381bed8",
+    "totals": {
+      "files": 46,
+      "additions": 1252,
+      "deletions": 212
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-brainstorm/SKILL.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned",
+        "facility": "tool"
+      },
+      {
+        "path": ".claude/skills/sillyspec-execute/SKILL.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned",
+        "facility": "tool"
+      },
+      {
+        "path": ".claude/skills/sillyspec-plan/SKILL.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned",
+        "facility": "tool"
+      },
+      {
+        "path": ".sillyspec/docs/SillyHub/scan/CONCERNS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/backend/scan/CONVENTIONS.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/frontend/scan/CONVENTIONS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/architecture-4a.md",
+        "additions": 9,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/doc-consistency-debt.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 9,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/prompt-control-debt.md",
+        "additions": 9,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/commit-suggest.js",
+        "additions": 45,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/archive-distill.js",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 107,
+        "deletions": 39,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 93,
+        "deletions": 89,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stage-contract.js",
+        "additions": 13,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stage-review.js",
+        "additions": 44,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stage-templates.js",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/sync.js",
+        "additions": 28,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 49,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 27,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/execute-batch-endtoend-checkbox.test.mjs",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/execute-batch-zero-diff.test.mjs",
+        "additions": 6,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-anchor-paren.test.mjs",
+        "additions": 84,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-autotick-anchor.test.mjs",
+        "additions": 78,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-batch-review-backfill.test.mjs",
+        "additions": 83,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-commit-suggest.test.mjs",
+        "additions": 81,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-facts-apiface.test.mjs",
+        "additions": 58,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-gate-collect.test.mjs",
+        "additions": 68,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-probe7-noise.test.mjs",
+        "additions": 47,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-reconcile-eol.test.mjs",
+        "additions": 72,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-rejected-fields.test.mjs",
+        "additions": 68,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-stage-review-dir.test.mjs",
+        "additions": 82,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/pitfall-sync-409.test.mjs",
+        "additions": 41,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/task-review-retire.test.mjs",
+        "additions": 12,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src 实现：src/stage-contract.js、src/run/gates.js、src/verify-probes.js、src/verify-postcheck.js、",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "skill 文档：.claude/skills/sillyspec-brainstorm/SKILL.md、sillyspec-plan/SKILL.md、",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "测试：test/pitfall-*.test.mjs 新增 11 份 + 3 份既有契约钉随新契约更新",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "模块图登记：.sillyspec/docs/sillyspec/modules/_module-map.yaml（skills-docs 新条目）+",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "53f943f73ea2b72087ef2983830a38ace0aceb897a5eab13e866491f288a975a",
+  "patchStatus": "ok"
+}

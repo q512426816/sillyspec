@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-pitfall-batch-clearance",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-01",
+      "tests": [
+        "test/pitfall-anchor-paren.test.mjs「中文左括号注记不再吞字空指／既有分隔形态不回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-02",
+      "tests": [
+        "test/pitfall-anchor-paren.test.mjs「空指报错附解析面端点集」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-03",
+      "tests": [
+        "test/pitfall-gate-collect.test.mjs「三门同轮收集一次性全列」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-04",
+      "tests": [
+        "test/pitfall-facts-apiface.test.mjs「init 落 apiFace 键／re-init 保留回填键」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-05",
+      "tests": [
+        "test/pitfall-reconcile-eol.test.mjs「纯行尾差异文件剔出对账面并留痕」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-06",
+      "tests": [
+        "test/pitfall-stage-review-dir.test.mjs「错位目录容错命中／refresh-hash 对错位文件可用」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-07",
+      "tests": [
+        "test/pitfall-batch-review-backfill.test.mjs「批量完成前自动补 per-task 草稿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-08",
+      "tests": [
+        "test/pitfall-autotick-anchor.test.mjs「正文提及不勾／subject+allowed_paths 交叠才勾」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-09",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-09",
+      "tests": [
+        "test/pitfall-rejected-fields.test.mjs「模板骨架含两字段行／distill 报错附补丁样例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-10",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-10",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「82 文件截断为 5+计数」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-11",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-11",
+      "tests": [
+        "test/pitfall-commit-suggest.test.mjs「QUICKLOG 不在变更集不计入／归档 task 面 feat／body 去重」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    },
+    {
+      "anchor": "FR-12",
+      "row_id": "2026-10-15-pitfall-batch-clearance:flow:测试绑定FR-12",
+      "tests": [
+        "test/pitfall-sync-409.test.mjs「409 冲突折叠单行摘要」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-pitfall-batch-clearance"
+    }
+  ]
+}

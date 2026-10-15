@@ -59,3 +59,4 @@
 | 2026-10-14 | 2026-10-14-supersedes-mislink-and-change-display | 决策 supersedes 边同变更限定（跨变更同号不再建边，旧「退同文件首个」回退已除）+ 边改节点建齐后补挂（清偿目标晚于引用者定义时静默丢边的既有顺序依赖）；knowledge-match 新增 decisionChangeQualifier（四处决策展示行变更名限定单一实现）。实测：真实知识库老代码 27 条决策 supersedes 边全为跨变更误连 → 修复后 0 |
 | 2026-10-14 | 2026-10-14-decision-id-p2-hardening | knowledge-match：parseDecisionFile 增「来源：」legacy 兜底读入（变更优先兜缺）；parseDecisionEntries 路由行按文件单解析 + 同号 legacy 条目不再互折叠（真实库对账 700 节段=700 可见，2 条 implemented 隐身条目复现） |
 | 2026-10-14 | 2026-10-14-decision-global-id-epoch | 决策号 epoch 全局化（读面）：knowledge-match 标题双形态+原编号字段读入；knowledge-graph supersedes 经原编号解析同变更全局段；doctor 计数双形态（顺带修正旧正则 @\d+ 漏 @v 恒零潜伏 bug）；knowledge-vector anchor 契约注记（等值语义不变、平台重建索引窗口降级边界） |
+| 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |

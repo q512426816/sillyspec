@@ -1,0 +1,2222 @@
+diff --git a/.claude/skills/sillyspec-brainstorm/SKILL.md b/.claude/skills/sillyspec-brainstorm/SKILL.md
+index 42492154..73047ec1 100644
+--- a/.claude/skills/sillyspec-brainstorm/SKILL.md
++++ b/.claude/skills/sillyspec-brainstorm/SKILL.md
+@@ -80,8 +80,8 @@ brainstorm 完成时按 design.md frontmatter 的 `scale` 分叉：
+ 
+ brainstorm 在 `tier=independent` 规模下除 design.md 等四件套外，还需产出一个 stage 级 `review.json`，CLI `Stage Review Gate` 硬校验其 schema 与 `docHash` 真实性。
+ 
+-- 路径：`.sillyspec/.runtime/stage-reviews/brainstorm-review-<stage-review-run-id>/review.json`（目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定）。marker 文件 `.runtime/current-stage-review-run-id-brainstorm-<变更名>`。
+-- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id（必须 `review-` 前缀）、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage brainstorm` 一步生成。
++- 路径：`.sillyspec/.runtime/stage-reviews/brainstorm-<run-id>/review.json`——**目录名 = `brainstorm-` + marker 值原样**（run-id 本身已带 `review-` 前缀：marker 值 `review-2026-10-15-001431` → 目录 `brainstorm-review-2026-10-15-001431`。勿再拼一层 review-，也勿拿 marker 值当完整目录名）。目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定；marker 文件 `.runtime/current-stage-review-run-id-brainstorm-<变更名>`。
++- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage brainstorm` 一步生成。
+ - 字段（`schemaVersion:1`，`reviewType=design` —— 区别于 execute 的 `acceptance`）：
+ 
+   ```json
+diff --git a/.claude/skills/sillyspec-execute/SKILL.md b/.claude/skills/sillyspec-execute/SKILL.md
+index 74571bb3..68b2c352 100644
+--- a/.claude/skills/sillyspec-execute/SKILL.md
++++ b/.claude/skills/sillyspec-execute/SKILL.md
+@@ -106,8 +106,8 @@ execute 完成时，每个 task 必须有 `review.json` 且 verdict 通过，否
+ 
+ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json 外，整个 execute 阶段完成还需一个 stage 级 `review.json`（在 "完成确认"/acceptance 步骤产出）。CLI `Stage Review Gate` 硬校验其 schema 与 `docHash` 真实性。
+ 
+-- 路径：`.sillyspec/.runtime/stage-reviews/execute-review-<stage-review-run-id>/review.json`（目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定）。marker 文件 `.runtime/current-stage-review-run-id-execute-<变更名>`。
+-- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id（必须 `review-` 前缀）、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage execute` 一步生成。
++- 路径：`.sillyspec/.runtime/stage-reviews/execute-<run-id>/review.json`——**目录名 = `execute-` + marker 值原样**（run-id 本身已带 `review-` 前缀：marker 值 `review-2026-10-15-001431` → 目录 `execute-review-2026-10-15-001431`。勿再拼一层 review-，也勿拿 marker 值当完整目录名）。目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定；marker 文件 `.runtime/current-stage-review-run-id-execute-<变更名>`。
++- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage execute` 一步生成。
+ - 字段（`schemaVersion:1`，`reviewType=acceptance` —— 区别于 brainstorm/plan 的 `"design"`）：
+ 
+   ```json
+diff --git a/.claude/skills/sillyspec-plan/SKILL.md b/.claude/skills/sillyspec-plan/SKILL.md
+index e149341a..8b38540a 100644
+--- a/.claude/skills/sillyspec-plan/SKILL.md
++++ b/.claude/skills/sillyspec-plan/SKILL.md
+@@ -49,8 +49,8 @@ plan 的步骤是动态的：`generate_plan`（生成分级计划）→ `review_
+ 
+ `review_plan` 步骤在 `tier=independent` 时产出一个 stage 级 `review.json`，CLI `Stage Review Gate` 硬校验其 schema 与 `docHash` 真实性。
+ 
+-- 路径：`.sillyspec/.runtime/stage-reviews/plan-review-<stage-review-run-id>/review.json`（目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定）。marker 文件 `.runtime/current-stage-review-run-id-plan-<变更名>`。
+-- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id（必须 `review-` 前缀）、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage plan` 一步生成。
++- 路径：`.sillyspec/.runtime/stage-reviews/plan-<run-id>/review.json`——**目录名 = `plan-` + marker 值原样**（run-id 本身已带 `review-` 前缀：marker 值 `review-2026-10-15-001431` → 目录 `plan-review-2026-10-15-001431`。勿再拼一层 review-，也勿拿 marker 值当完整目录名）。目录可能不存在需手建；run-id 由该步 `--done` prompt 输出指定；marker 文件 `.runtime/current-stage-review-run-id-plan-<变更名>`。
++- **run-id / marker 由 CLI 自动生成注入**（review step prompt 渲染时 echo 完整目录路径 + 写 marker；撞 gate 报缺 review.json 时 gate 也 echo 完整路径 + 写 marker）。直接用 CLI 给的路径写 review.json，**勿手算 run-id、勿手写 marker**。卡住时用 `sillyspec register-stage-review --change <名> --stage plan` 一步生成。
+ - 字段（`schemaVersion:1`，`reviewType=plan` —— plan 阶段主审查文档是 `plan.md`；execute 阶段才是 `acceptance`）：
+ 
+   ```json
+diff --git a/.sillyspec/docs/SillyHub/scan/CONCERNS.md b/.sillyspec/docs/SillyHub/scan/CONCERNS.md
+index a91a1ff5..cf292000 100644
+--- a/.sillyspec/docs/SillyHub/scan/CONCERNS.md
++++ b/.sillyspec/docs/SillyHub/scan/CONCERNS.md
+@@ -28,7 +28,7 @@ generator: sillyspec-scan
+ 
+ ### 🟢 低
+ 
+-- **变更删除闭环四处收尾尾巴（2026-08-29-change-delete-closure-and-spec-pull 已知裁量/遗留，随 worktree 分支交付）**：① spec-sync 的 service 层结果已含 `platform_deleted` 诊断键（apply_ops 返回 dict），但 `POST /changes/-/spec-sync` HTTP 响应模型暂不透出——CLI 感知「被平台删除拒绝」待后续接线（`spec_workspace/service.py` apply_ops 返回处注释明示契约先行）；② `ChangeRead` 无 `last_pushed_at`（仅列表 ChangeSummary 投影），详情页「最后信号」由 steps 明细派生（`changes/[cid]/page.tsx` `lastSignalFromSteps`，禁新增网络请求）；③ X3 步骤开始上报的渲染侧一行接线（sillyspec 仓 `run/stage.js`/`run/prompt.js` 调 `triggerStepStartSync`）受跨仓 taskcard allowed_paths 约束留后续变更（活跃坑见 `docs/sillyspec/2026-08-29-sillyspec-x1-x4-cli-receipts.md`）；④ `_compute_reparse_scope` docstring 仍写「scoped 零删除」，与 task-03 后「scope∩磁盘确认消失可删」的收窄语义漂移（`repo://sillyhub/backend/app/modules/spec_workspace/service.py:2077` 一带，规则 18 待修）。
++- **变更删除闭环四处收尾尾巴（2026-08-29-change-delete-closure-and-spec-pull 已知裁量/遗留，随 worktree 分支交付）**：① spec-sync 的 service 层结果已含 `platform_deleted` 诊断键（apply_ops 返回 dict），但 `POST /changes/-/spec-sync` HTTP 响应模型暂不透出——CLI 感知「被平台删除拒绝」待后续接线（`spec_workspace/service.py` apply_ops 返回处注释明示契约先行）；② `ChangeRead` 无 `last_pushed_at`（仅列表 ChangeSummary 投影），详情页「最后信号」由 steps 明细派生（`changes/[cid]/page.tsx` `lastSignalFromSteps`，禁新增网络请求）；③ X3 步骤开始上报的渲染侧一行接线（sillyspec 仓 `run/stage.js`/`run/prompt.js` 调 `triggerStepStartSync`）受跨仓 taskcard allowed_paths 约束留后续变更（活跃坑见 `docs/sillyspec/2026-08-29-sillyspec-x1-x4-cli-receipts.md`）；④ `_compute_reparse_scope` docstring 仍写「scoped 零删除」，与 task-03 后「scope∩磁盘确认消失可删」的收窄语义漂移（`repo://sillyhub/backend/app/modules/spec_workspace/service.py:2086` 一带，规则 18 待修）。
+ - **daemon interactive 兼容入口 @deprecated 未清**：`repo://sillyhub/sillyhub-daemon/src/interactive/types.ts:369`、`repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:226`、`:246` 三处（grep 实测），确认无外部引用后应清理。
+ - **daemon god 文件未拆分**：`sillyhub-daemon/src/daemon.ts` / `sillyhub-daemon/src/task-runner.ts` 高耦合、lease payload 鸭子类型几十处，无低风险切片（旧 scan 记录，未复核）。
+ - **scan 漂移门 warn-only**：scan 文档过期只告警 + PR 评论，不阻塞 merge，修复仍需人工重跑（`.github/workflows/scan-drift.yml` 头部注释）。
+diff --git a/.sillyspec/docs/backend/scan/CONVENTIONS.md b/.sillyspec/docs/backend/scan/CONVENTIONS.md
+index 021774f3..be48ae2d 100644
+--- a/.sillyspec/docs/backend/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/backend/scan/CONVENTIONS.md
+@@ -45,7 +45,7 @@ generator: sillyspec-scan
+ 
+ ### 3. Service 是「持有 session 的有状态类」，查询走 `session.execute + scalars`
+ 
+-- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:140`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
++- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:151`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
+ - 查询统一 SQLAlchemy 2.x 形态：`(await self._session.execute(stmt)).scalar() or 0`、`.scalars().all()`、`.scalars().first()`（`repo://sillyhub/backend/app/modules/change/service.py:184,192,204,224,241`）。
+ - Service 间组合**复用同一 session**（不要各自开新事务）：`repo://sillyhub/backend/app/modules/change/service.py:163` `SpecWorkspaceService(self._session).get(...)`。
+ - router 之外（后台任务/启动钩子）手动开 session 用 `async with get_session_factory()() as session:`，不要 `Depends(get_session)`（`backend/app/core/db.py` 的 `get_session_factory` 懒加载单例 + conftest `_redirect_session_factory` 印证）。
+@@ -63,7 +63,7 @@ generator: sillyspec-scan
+ 
+ ### 6. 日志：`structlog` + 模块级 `get_logger(__name__)`，事件名点分蛇形
+ 
+-不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:13-46`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:104` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
++不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:13-46`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:112` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
+ 
+ ### 7. 权限/归属校验放 service 层（PPM 范式）
+ 
+diff --git a/.sillyspec/docs/frontend/scan/CONVENTIONS.md b/.sillyspec/docs/frontend/scan/CONVENTIONS.md
+index 225a4652..38997c7c 100644
+--- a/.sillyspec/docs/frontend/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/frontend/scan/CONVENTIONS.md
+@@ -45,7 +45,7 @@ generator: sillyspec-scan
+ ## 代码风格
+ 
+ 1. **服务端状态全部走 react-query，queryKey 必须经集中工厂 `queryKeys` 构造，不能就地拼字符串。**
+-   工厂在 `repo://sillyhub/frontend/src/lib/query-keys.ts:120`，文件头注释明确规则"凡影响查询结果的变量都进 key"（分页/过滤 params 整体进 key）。mutation 失效缓存复用同一 key 做 `invalidateQueries`，key 拼错会静默去重到不存在的缓存条目，是已踩过的坑。
++   工厂在 `repo://sillyhub/frontend/src/lib/query-keys.ts:128`，文件头注释明确规则"凡影响查询结果的变量都进 key"（分页/过滤 params 整体进 key）。mutation 失效缓存复用同一 key 做 `invalidateQueries`，key 拼错会静默去重到不存在的缓存条目，是已踩过的坑。
+ 
+ 2. **数据 hook 统一 `useXxx` 命名，集中在 `src/lib/`，返回 react-query 结果对象（含 `data/isLoading/error`），不拆散。**
+    典型文件：`frontend/src/lib/use-daemon-runtimes.ts`（风格基准）、`frontend/src/lib/use-daemon-machines.ts`、`frontend/src/lib/use-agent-runs.ts`、`frontend/src/lib/use-workspace-context.ts`；业务模块 hook 如 `frontend/src/lib/daemon-audit.ts`、`frontend/src/lib/mcp-settings.ts` 内的 `useMcpConfig / useUpdateMcpConfig`。
+diff --git a/.sillyspec/docs/multi-agent-platform/scan/CONCERNS.md b/.sillyspec/docs/multi-agent-platform/scan/CONCERNS.md
+index 89abc62d..f44026a7 100644
+--- a/.sillyspec/docs/multi-agent-platform/scan/CONCERNS.md
++++ b/.sillyspec/docs/multi-agent-platform/scan/CONCERNS.md
+@@ -90,7 +90,7 @@ backend 的 5 处 `TODO` 具体位置：
+ - **Claude END/fail 接通 SDK kill 链（task-01，D-003 / D-004）**：`ClaudeDriverHandle` 新增 `close = () => query.close()`（`repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:405`），触发 SDK 内部 `stdin EOF → 2s 宽限 → SIGTERM → 5s → SIGKILL`（`sdk.mjs` close / `vB=2000`），~7s 内强杀卡死 turn 的 claude 子进程。`sillyhub-daemon/src/interactive/session-manager.ts` 新增私有 `_terminateSession(state, reason)` 统一收口 `end()` / `fail()`，按 provider 分流取 target（**claude → `state.query`、codex → `state.driverHandle`**，repo://sillyhub/sillyhub-daemon/src/interactive/session-manager/lifecycle.ts:184），`terminateTarget?.close?.()` 包 try/catch 兜底（R-01）。`interrupt()` 不动（守"打断本轮"软语义，D-001@v2）。
+ - **interactive cancel_lease 改发 SESSION_END 硬杀（task-02，D-001@v2）**：原对 interactive 发 `SESSION_INTERRUPT`（软，daemon 只 `q.interrupt()` 不杀进程，卡死 turn 仍僵尸）；改发 `SESSION_END` → 走 `_terminateSession` 硬杀链。`SESSION_INTERRUPT` 此后**仅**对应"打断本轮"按钮（interruptSession 端点）。
+ - **batch cancel_lease 走 LEASE_CANCEL WS 即时通道（task-04 / task-05，FR-03 / R-06）**：新增 WS 消息 `daemon:lease_cancel`（双端 `backend/app/modules/daemon/protocol.py` `DAEMON_MSG_LEASE_CANCEL` + `sillyhub-daemon/src/protocol.ts` `MSG.LEASE_CANCEL`）。backend 标记 cancelled 后经 `ws_hub.send_to_runtime` best-effort 推送，daemon 收到调 `taskRunner.cancel(leaseId)` 复用现有 `AbortController → _killChild` 即时杀 batch 子进程，不再等心跳周期；发送失败靠现有心跳轮询兜底（sillyhub-daemon/src/task-runner.ts 不变）。双触发幂等由 `taskRunner.cancel` 内部保证。
+-- **budget_tokens 运行期软切断检查点（task-08，D-006 / D-009）**：backend 把 `AgentMission.budget_tokens`（`repo://sillyhub/backend/app/modules/agent/model.py:1021`）经 claim payload 开放 dict（`LeaseClaimResponse.payload`，`additionalProperties:true`）下发（`backend/app/modules/daemon/lease/context.py` task-07 双写 `budget_tokens` / `budgetTokens`，非 OpenAPI 命名 schema 字段）；daemon `LeaseCtx.budget_tokens?: number`（`repo://sillyhub/sillyhub-daemon/src/types.ts:596`）接收，执行循环累计 `input_tokens + output_tokens`（per AgentRun，不含 cache）≥ 阈值 → 设 `overBudget` → 当前 turn / step 跑完后不续（软切断，D-006，不丢当前 turn 工作）+ 经 `notifyRunResult` / `submit_lease_messages` 回传 `budget_exceeded` reason + usage。
++- **budget_tokens 运行期软切断检查点（task-08，D-006 / D-009）**：backend 把 `AgentMission.budget_tokens`（`repo://sillyhub/backend/app/modules/agent/model.py:1035`）经 claim payload 开放 dict（`LeaseClaimResponse.payload`，`additionalProperties:true`）下发（`backend/app/modules/daemon/lease/context.py` task-07 双写 `budget_tokens` / `budgetTokens`，非 OpenAPI 命名 schema 字段）；daemon `LeaseCtx.budget_tokens?: number`（`repo://sillyhub/sillyhub-daemon/src/types.ts:596`）接收，执行循环累计 `input_tokens + output_tokens`（per AgentRun，不含 cache）≥ 阈值 → 设 `overBudget` → 当前 turn / step 跑完后不续（软切断，D-006，不丢当前 turn 工作）+ 经 `notifyRunResult` / `submit_lease_messages` 回传 `budget_exceeded` reason + usage。
+ - **terminating_at 执行端可见性 + 30s sweeper（task-10 / task-11，D-007）**：`DaemonTaskLease.terminating_at: datetime | None`（`backend/app/modules/daemon/model.py` + Alembic migration `20260805_lease_terminating_at`）。写入点：仅 `cancel_lease`（`repo://sillyhub/backend/app/modules/daemon/lease_service.py:443`）写——`end_session` 同事务即把 lease 置 `completed` 无观测窗口（XC-03），session 维度不另设字段（XC-04，cancel_lease 已同步 session.status='ended'）。清空点：daemon 回传 `complete_lease`（`backend/app/modules/lease/service.py`）/ `end_session` 收敛（`backend/app/modules/daemon/session/service/__init__.py`）时清。独立 sweeper `alert_stuck_terminating_leases`（`repo://sillyhub/backend/app/modules/daemon/lease_service.py:315`，`TERMINATING_TIMEOUT_SECONDS=30`）查 `terminating_at IS NOT NULL AND terminating_at < now-30s` 告警 + 返回 lease_id 列表（不并入 `expire_overdue_leases`——后者只扫 `status='claimed'`，XC-08；不改 lease.status、不重试、不引入 outbox，D-007）。
+ 
+ > 双端 WS 消息变化（LEASE_CANCEL 新增 / SESSION_END 扩大 / SESSION_INTERRUPT 收窄）见 `INTEGRATIONS.md` §2.1。
+diff --git a/.sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md b/.sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md
+index 5354f9cd..3b942cdd 100644
+--- a/.sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md
+@@ -43,7 +43,7 @@ generator: sillyspec-scan
+ 5. **结构化日志：事件名蛇形 + key=value 上下文**。Logger 接口 `debug/info/warn/error(event, kv?)`（`repo://sillyhub/sillyhub-daemon/src/daemon.ts:454`），工厂 `createLogger` 输出 `[daemon.<event>] k=v`（`repo://sillyhub/sillyhub-daemon/src/daemon.ts:454`）；事件名一律小写蛇形（`credentials_loaded` `repo://sillyhub/sillyhub-daemon/src/credential.ts:96`、`audit_batch_failed` `repo://sillyhub/sillyhub-daemon/src/cli.ts:222`）；cli 层无 daemon logger，构造轻量 logger 走 stderr 不污染 stdout（`repo://sillyhub/sillyhub-daemon/src/cli.ts:220`）。业务点用注入的 `this._logger`，不临时新建。
+ 6. **zod schema 集中在 MCP 边界**：全仓 17 处 z.object/z.string/z.enum 全部落在 `sillyhub-daemon/src/mcp-server.ts`——工具入参 schema 每字段 `.describe()` 兼顾校验与对外文档（如 dispatch_worker 的 `worktree_path`，`repo://sillyhub/sillyhub-daemon/src/mcp-server.ts:60`）；schema 对齐 backend 请求模型（注释标 `mcp_tools.py` 来源）。MCP 工具用 `server.registerTool(name, { title, description, inputSchema }, handler)` 注册，共 5 个工具，构造与连接分离便于无 stdio 测试（`repo://sillyhub/sillyhub-daemon/src/mcp-server.ts:60`）。
+ 7. **Windows 兼容是显式工程**：npm `.cmd` 包装由专用解析器处理（git-bash 下 spawn .cmd 会 ENOENT，直接读 .cmd 提取真实 exe + prependArgs，`sillyhub-daemon/src/cmd-shim.ts`）；路径规范化收口 `normalizePath`（strip 引号 + git bash `/x/`→`X:/` + resolve 折叠 `..`，UNC 路径单独标记，`repo://sillyhub/sillyhub-daemon/src/policy/path-utils.ts:17-45`）；YAML 段替换 CRLF 原样保留（`sillyhub-daemon/src/local-yaml-writer.ts`）。
+-8. **命名约定**：类/接口/类型 PascalCase（`Daemon`/`SessionManager`/`ClassifyModelInput`）；函数/变量 camelCase（`loadConfigFn`/`createProgram`）；常量 UPPER_SNAKE_CASE（`RETRYABLE_STATUS`/`UNC_PREFIX`/`UNC_REJECTED`）；私有成员 `_` 前缀（`this._logger`，`repo://sillyhub/sillyhub-daemon/src/daemon.ts:1841`）。
++8. **命名约定**：类/接口/类型 PascalCase（`Daemon`/`SessionManager`/`ClassifyModelInput`）；函数/变量 camelCase（`loadConfigFn`/`createProgram`）；常量 UPPER_SNAKE_CASE（`RETRYABLE_STATUS`/`UNC_PREFIX`/`UNC_REJECTED`）；私有成员 `_` 前缀（`this._logger`，`repo://sillyhub/sillyhub-daemon/src/daemon.ts:1835`）。
+ 9. **测试放独立 `sillyhub-daemon/tests/` 目录镜像 src 结构**：不 colocate（src 下 0 个 .test.ts），143 个测试文件按 `sillyhub-daemon/tests/adapters/` `sillyhub-daemon/tests/interactive/` `sillyhub-daemon/tests/policy/` `sillyhub-daemon/tests/resilience/` `sillyhub-daemon/tests/model-error/` 镜像 src 子目录（如 `sillyhub-daemon/tests/model-error/classifier.test.ts` 对应 `sillyhub-daemon/src/model-error/classifier.ts`）；共享夹具在 `sillyhub-daemon/tests/helpers.ts` 与 `sillyhub-daemon/tests/helpers/fake-child.ts`；vitest 跑法 `vitest run --passWithNoTests`（`sillyhub-daemon/package.json:15`）。
+ 
+ ## 典型模式（可直接套用）
+diff --git a/.sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md b/.sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md
+index e3da936c..8f34dce4 100644
+--- a/.sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md
++++ b/.sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md
+@@ -73,7 +73,7 @@ generator: sillyspec-scan
+ 
+ - `@modelcontextprotocol/sdk` `^1.29.0`；sillyhub-daemon/src/mcp-server.ts 用 `McpServer` + `StdioServerTransport` 起 stdio server（import.meta.url 主模块判定后 `runMcpServer()`）。
+ - 工具清单（mcp-server.ts registerTool，共 5 个）：`dispatch_worker` / `get_worker_result` / `list_workers` / `converge_mission` / `report_progress`——HubClient 作后端通道（测试可传 mock）。
+-- 注入：仅 team 主 agent（`ctx.stage === 'orchestrator'`）经 `repo://sillyhub/sillyhub-daemon/src/cli.ts:982` mainAgentMcpConfigProvider 构造 `command=node + args=[dist/mcp-server.js]`，透传 SDK `options.mcpServers`。
++- 注入：仅 team 主 agent（`ctx.stage === 'orchestrator'`）经 `repo://sillyhub/sillyhub-daemon/src/cli.ts:978` mainAgentMcpConfigProvider 构造 `command=node + args=[dist/mcp-server.js]`，透传 SDK `options.mcpServers`。
+ - 鉴权：`MCP_SERVER_DAEMON_API_KEY`（X-API-Key 优先路径）与 `MCP_SERVER_DAEMON_TOKEN`（Bearer）分开透传（api_key 优先回落 token，repo://sillyhub/sillyhub-daemon/src/cli.ts:991）；McpToken 的签发/吊销在平台侧（api-types.ts schema），daemon 内置 server 不消费 McpToken。
+ - 配置合并：sillyhub-daemon/src/mcp-config.ts（平台默认 + workspace `.mcp.json`，白名单过滤，仅允许 stdio 类型防 SSRF）；spike 原型 `spikes/06-mcp-server/`。
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index d5e40e43..ff2dadb4 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -36,14 +36,14 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - `src/verify-probes.js` — verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）+ verify-result.md 骨架与 verify-facts.json 底稿（写入细节见下方 verify-facts v2 节）；探针 3 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②：模块目录主仓在而新测试 untracked 在 worktree 时旧「主仓缺失才回退」不触发 → 假阴「未找到测试文件」；改主仓 ∪ worktree 无条件并集，与探针 5 三根并集同族）。平台模式回显注记（2026-09-10 驾驭小结②）：`formatPlatformPathNote`（pointer 存在时产物回显行尾补「物理写盘在 hub 镜像根 / 主仓同步位置 .sillyspec/changes/<change>/<file>」，本地模式返回空串零变化）+ `writeVerifyFacts` 增 opts.platformNote（纯回显层不进落盘），消「回显镜像路径 / 核对主仓路径」的显示混乱。探针 7 坏 YAML 区分（2026-09-20-taskcard-yaml-hardgate）：parseTaskAcceptance 三态契约 {status: no-frontmatter | invalid-yaml | ok, acceptance, error}（解析归一 src/taskcard-frontmatter.js 单一源），坏卡条目挂 fmError、renderProbe7Lines 优先渲染「frontmatter 非法 YAML（file:行:列 message）」行与真无 acceptance 防御行区分——假防御文案缺陷收口
+ - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
+-- `src/cross-repo-reconcile.js` — 跨仓 per-repo 对账 + 共享采集内核（坑 cross-repo-reconcile-blindness 2026-09-15 分期兑现；2026-09-20-scope-audit-cross-repo 抽内核）：`collectRepoActual`（`src/cross-repo-reconcile.js:200`，D-001@v1）per-repo actual 采集单一真相源（scope-audit 与 verify 侧 reconcile 双侧消费防口径漂移）——仓注册解析（local.yaml repos 段）→仓根→**锚点四级**：A reviews-range（execute task review base..head 区间并集∪status 未提交尾巴；锚点=多区间最早 base/最晚 head，rev-list 判序+merge-base 兜底；diffPaths 有则收窄）> B head~1-window（HEAD~1..HEAD∪status，现行 reconcile 口径）> C head-uncommitted-window（仅 status）> degraded（未注册/路径不可达/git 双源失败合并判定——G4 不拆「非 git 仓」，diff/status 形态不可区分）；**行数采集不进内核**（评审 G3 防循环 import：内核绝不 import scope-audit），stats 由调用方对返回 files 跑 collectNumstatByPath；返回 `{repo, repoPath, anchor{source,base,head,label}, files, degradedReason}`——files 为原始集不做 filterDeliverableFiles 过滤（过滤归调用方），纯读 fail-soft 任何异常 → degraded 形态（`内核采集异常: <msg首行>`）绝不 throw。`reconcileCrossRepoDeclarations`（`src/cross-repo-reconcile.js:312`）消费内核出主仓同款三类差集（matched/missing/undeclared+脚手架软桶，声明差集逻辑不动）——签名增量可选 `{runtimeRoot, changeName}`（任一缺省跳 A 档走 B 档向后兼容；verify 侧 `src/verify-postcheck.js:4310` 调用点传参贯通，锚点升级为 A 档锡点区间收窄②类假信号面），返回条目增量带 `anchor{source,base,head,label}`（内核透传；verify notes 与 run/gates 渲染锚点档动态文案，旧形态无 anchor 防御性回退原文案）
++- `src/cross-repo-reconcile.js` — 跨仓 per-repo 对账 + 共享采集内核（坑 cross-repo-reconcile-blindness 2026-09-15 分期兑现；2026-09-20-scope-audit-cross-repo 抽内核）：`collectRepoActual`（`src/cross-repo-reconcile.js:200`，D-001@v1）per-repo actual 采集单一真相源（scope-audit 与 verify 侧 reconcile 双侧消费防口径漂移）——仓注册解析（local.yaml repos 段）→仓根→**锚点四级**：A reviews-range（execute task review base..head 区间并集∪status 未提交尾巴；锚点=多区间最早 base/最晚 head，rev-list 判序+merge-base 兜底；diffPaths 有则收窄）> B head~1-window（HEAD~1..HEAD∪status，现行 reconcile 口径）> C head-uncommitted-window（仅 status）> degraded（未注册/路径不可达/git 双源失败合并判定——G4 不拆「非 git 仓」，diff/status 形态不可区分）；**行数采集不进内核**（评审 G3 防循环 import：内核绝不 import scope-audit），stats 由调用方对返回 files 跑 collectNumstatByPath；返回 `{repo, repoPath, anchor{source,base,head,label}, files, degradedReason}`——files 为原始集不做 filterDeliverableFiles 过滤（过滤归调用方），纯读 fail-soft 任何异常 → degraded 形态（`内核采集异常: <msg首行>`）绝不 throw。`reconcileCrossRepoDeclarations`（`src/cross-repo-reconcile.js:365`）消费内核出主仓同款三类差集（matched/missing/undeclared+脚手架软桶，声明差集逻辑不动）——签名增量可选 `{runtimeRoot, changeName}`（任一缺省跳 A 档走 B 档向后兼容；verify 侧 `src/verify-postcheck.js:4384` 调用点传参贯通，锚点升级为 A 档锡点区间收窄②类假信号面），返回条目增量带 `anchor{source,base,head,label}`（内核透传；verify notes 与 run/gates 渲染锚点档动态文案，旧形态无 anchor 防御性回退原文案）
+ - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
+ - `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）；`QUICK_RISK_PATH_PATTERNS`（2026-09-14-quick-exit-tiered-gates 引入的 auth/permission/billing/migration/lock/scheduling 六域硬编码路径模式表）已随 2026-09-19-span-risk-pattern-migration 退役删除（D-003 硬退役不留 legacy 别名）——span 轴路径模式唯一输入源迁项目声明 `_module-map.yaml` 顶层 `span_risk` 段（装载 src/span-risk-surface.js），其余导出零改动
+ - `src/span-risk-surface.js` — span 轴路径模式声明面装载层（2026-09-19-span-risk-pattern-migration，与 blast-surface.js 同栈同容错立场）：四导出 `compileSpanRiskPatterns`（token 纯字面量编译为边界锚定正则 `(?:^|[/_-])<token>(?=[/._-]|$)` /i，非字符串/空白/重复逐条跳过去重——零新文法防 YAML 写正则）/ `matchSpanRiskPatterns`（files×patterns → `[{pattern, file}]` 扁平命中数组，反斜杠归一 POSIX，两消费面共享的单一命中语义）/ `loadSpanRiskPatterns`（project 域读 `docs/<project>/modules/_module-map.yaml` 顶层 `span_risk` 段）/ `loadSpanRiskPatternsAllProjects`（多项目并集，事实面用）；口径真相源 knowledge/conventions.md「判级/定价/门禁输入必须项目声明」——未配置/坏声明项目 → 空表禁回退内置表（与 blast 未配置禁回退同款取舍）
+ - `src/quick-gate-profile.js` — quick 出口分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02，纯函数零 IO 零子进程，D-007）：`computeGateProfile`（CLI 审计链 git 事实 changedFiles × _module-map.yaml paths/core_files 前缀聚类 → L0/L1/L2 画像 + 检查项）+ `resolveGateThresholds`（local.yaml quick-gate 段覆写合并，D-009）+ `THRESHOLDS` 阈值单点；风险表自 2026-09-19-span-risk-pattern-migration 起为声明面口径——`opts.riskTable` 参数形态不变、默认改空表（=风险维度关闭），项目声明表（span_risk 段，loadSpanRiskPatterns 产物）由调用方注入；与 change-risk-profile/span-risk-surface/scope-audit 同卡，三导出明细见下方对外接口小节，全部 advisory 不阻断（D-003）
+ - `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
+ - `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
+-- `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:165`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
++- `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:180`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
+ - `src/doctor-diagnostics.js` — 结构化项目自检（平台模式状态分裂检测 D1-D5 + safe_actions 只描述建议动作绝不自动执行，`sillyspec doctor --json`）
+ - `src/fs-atomic.js` — 原子文件写 + Windows 友好 rename 重试（writeAtomicSync，用于 .runtime/*.json/pointer 等跨进程读文件；sillyspec.db 不走此路）
+ - `src/constants.js` — 平台状态枚举（manifest/pointer/postcheck/workflow-runs 共享，SillyHub 侧直接用常量值）
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index d38e363a..4104dd6f 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -93,7 +93,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - **stage review gate marker 缺失自生**（坑1，`run/gates.js:298`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+-- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:823`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
++- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:861`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+ - **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十三批③：gate-snapshot 环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction，dev 依赖同源；链接失败/全缺 ⚠️ 可见——坑 gate-snapshot-env-mismatch）。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
+diff --git a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+index bb12bc96..b06edcc7 100644
+--- a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
++++ b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+@@ -101,14 +101,14 @@ generator: sillyspec-scan
+ scan-profile.js 扫描档位 / concurrent-detect.js 并发检测 / multi-repo-context.js
+ 多仓上下文 / shared.js 共享工具）。grep 定位到的关键导出与函数：
+ 
+-- `runCommand(args, cwd, specDir)`（`src/run/command.js:259`）：参数解析总入口，识别
++- `runCommand(args, cwd, specDir)`（`src/run/command.js:267`）：参数解析总入口，识别
+   `--done / --skip / --reset / --reopen / --status / --auto / --skip-approval /
+   --from-step / --confirm / --wait / --answer` 等生命周期 flag；含祖先链多实例
+   `.sillyspec` 检测与 worktree 副本漂移自动锚定守卫（坑 worktree-execute-spec-drift，
+   D-03@v1）。
+ - `runStage(...)`（`src/run/stage.js:31`）：单阶段执行器，做状态转换校验（调用
+   `stage-contract.js` 的 `checkTransition`），逐 step 推进，处理审批门控。
+-- `runAutoMode(...)`（`src/run/command.js:1984`）：自动模式，连续跑
++- `runAutoMode(...)`（`src/run/command.js:1998`）：自动模式，连续跑
+   `['brainstorm','plan','execute','verify']` 主流程直到 `--done`。
+ 
+ 阶段流转语义（grep 自 run/ 模块）：
+@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
+   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
+   - 同步完更新 `changes.platform_last_sync`。
+ - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
+-  入口（`sync.js:2368`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
++  入口（`sync.js:2467`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+ - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
+ - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
+   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index cfa75518..eb145111 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI 
+ 
+ ### 1.2 流程状态机
+ 
+-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1995`），契约转换图（`src/stage-contract.js:1995`）：
++**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2021`），契约转换图（`src/stage-contract.js:2021`）：
+ 
+ ```
+ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+@@ -59,7 +59,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ **推进不是自动的，分三层**：
+ 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
+-2. **步骤内推进** `completeStep`（`src/run/complete.js:166`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
++2. **步骤内推进** `completeStep`（`src/run/complete.js:163`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+ 3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:477`）按状态机推荐下一阶段命令。
+ 
+ **重开与级联**：`reopenStage`（`src/progress/stage-machine.js:627`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ | 门 | 触发 | 阻断 | 依据 |
+ |---|---|---|---|
+-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1995` |
++| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2021` |
+ | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:203` |
+ | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
+ | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
+@@ -78,10 +78,10 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
+ | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
+ 
+-**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:687`，统一收尾管线）顺序：
+-1. `runValidators`（客观产物校验，`src/stage-contract.js:1413`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:958`）。
+-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1488`）。
++**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:703`，统一收尾管线）顺序：
++1. `runValidators`（客观产物校验，`src/stage-contract.js:1427`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
++2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:1066`）。
++3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1507`）。
+ 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:297`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+ 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
+ 
+@@ -161,7 +161,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | **L7 机器接口** | `src/machine-interface.js` | `gate`/`derive` 无状态只读子命令，输出 envelope JSON 供外部 daemon |
+ | **L8 工具层** | `fs-atomic.js`、`git-helper.js`、`db.js`、`constants.js` | 跨切面底层原语 |
+ 
+-> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1069`）。
++> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1085`）。
+ 
+ ### 3.2 调度内核（run/）职责
+ 
+@@ -325,4 +325,4 @@ TA  Node22 ESM · node:sqlite(WAL) · git worktree · 跨平台 fs-atomic · hus
+ | 存储引擎 | `docs/sillyspec/file-lifecycle/storage-and-state.md:35` 写"better-sqlite3 原生绑定" | 已迁 `node:sqlite` | `src/db-engine.js:8` |
+ | propose 阶段 | `docs/sillyspec/file-lifecycle.md` 阶段表残留 `propose | 7` 行 | 无独立 propose 阶段（已并入 brainstorm） | `src/stages/index.js:15-26`（10 阶段，无 propose） |
+ | scan 步骤数 | `stage-artifacts.md` 写 scan 10 步 | scan 11 步 | `src/stages/scan.js` |
+-| `.bak` 主动写时机 | `db.js:104`/`progress.js:934` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |
++| `.bak` 主动写时机 | `db.js:104`/`progress.js:950` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |
+diff --git a/docs/sillyspec/doc-consistency-debt.md b/docs/sillyspec/doc-consistency-debt.md
+index c31847cd..7ba13071 100644
+--- a/docs/sillyspec/doc-consistency-debt.md
++++ b/docs/sillyspec/doc-consistency-debt.md
+@@ -20,7 +20,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
+ | 阶段 | 强度 | 关键证据 |
+ |---|---|---|
+ | brainstorm | persuasion-only | 完成校验只查四件套文件存在（stage-contract.js + gates.js:195-219）；docHash 只防伪造 review，不校验 design↔代码 |
+-| plan | hybrid（有硬门但**把文档路径排除在外**） | TaskCard allowed_paths / design §6 覆盖对账是 enforced（plan-postcheck.js:807-1211, 910-1211），但 `parseDesignCoverageByRepo`（plan-postcheck.js:986）调 `parseFileChangeList` **不传 keepSillyspecDocs**，change-list.js:351/238 默认跳过所有 `.sillyspec/` 路径——design 里声明的模块文档更新**不参与覆盖对账**，没有 task 被强制认领。对比 apply 阶段 resolveApplyAllowSet（worktree-apply.js:587）反而传了 keepSillyspecDocs: true——plan 放、apply 收，口径不一致 |
++| plan | hybrid（有硬门但**把文档路径排除在外**） | TaskCard allowed_paths / design §6 覆盖对账是 enforced（plan-postcheck.js:807-1211, 910-1211），但 `parseDesignCoverageByRepo`（plan-postcheck.js:983）调 `parseFileChangeList` **不传 keepSillyspecDocs**，change-list.js:387/238 默认跳过所有 `.sillyspec/` 路径——design 里声明的模块文档更新**不参与覆盖对账**，没有 task 被强制认领。对比 apply 阶段 resolveApplyAllowSet（worktree-apply.js:587）反而传了 keepSillyspecDocs: true——plan 放、apply 收，口径不一致 |
+ | execute | 无覆盖 + 倒退 | 仓库根 `docs/` 在 worktree baseline/dirty 排除清单里（worktree.js:1324、worktree-apply.js:405），文档目录被定性为"非代码交付物 churn"，多 agent 场景下文档改动对流程不可见；module-impact 更新 prompt 自认"可选不阻断"（execute.js:920-926） |
+ | verify | **明示不阻断** | verify.js:137 原文"不符合时标记 ⚠️（不阻断，模块文档可能未及时更新）"——工具自己把文档滞后合法化为常态；测试对账 enforced、文档一致性 advisory（verify-postcheck.js:995-1177 四探针全 advisory） |
+ | archive | 名义同步主场，实为 persuasion-only + 用户确认 | sync-module-docs step 写入由 agent 做、CLI 不校验写入结果；归档后无条件 `git add .sillyspec/docs/`（complete-handlers.js:237-244），add 空集也静默通过；module-impact.exists 仅 warning（stage-contract-spec.js:416-420） |
+@@ -59,7 +59,7 @@ sillyhub 的文档烂不是执行失误，是机制性的。
+ | # | 缺口 | 可选修法方向 | 规模 |
+ |---|---|---|---|
+ | D-1 | verify.js:137 明示"文档不一致不阻断"——制度根源 | ✅ 已修（2026-08-15 ql-20260815-011-66ac）：① verify --done 加 module-impact 死信探针（**blocking**，gates.js 复用 extractPendingDocSyncRows，pending 行阻断 verify 完成并回滚——死信号从 archive 提前到 verify）；② verify.js 探针段第 6 条措辞从"不符合时标记 ⚠️（不阻断）"改为"当场同步模块文档 + CLI 硬校验无死信"（prompt 镜像已重跑 _extract.mjs）。模块文档**内容**与代码的语义一致性仍属软判定（推 sillyhub/人类），本条只闭合确定性的死信/时序漏洞 | 中（已完成） |
+-| D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:986 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
++| D-2 | plan 覆盖对账跳过 `.sillyspec/` 文档路径（plan-postcheck.js:983 不传 keepSillyspecDocs，与 apply 阶段口径不一致） | ✅ 已修（2026-08-15 ql-20260815-006-a51d）：`parseDesignCoverageByRepo` 两处 `parseFileChangeList` 补传 `keepSillyspecDocs: true`，`.sillyspec/docs/` 模块文档须被 task `allowed_paths` 认领；`.sillyspec/` 非 docs 子路径仍排除（与 apply 口径一致）；新增 4 测试（test/design-coverage.test.mjs），删 1 个固化旧豁免契约的测试 | 小（quick 已完成） |
+ | D-2b | 后置 task（T-13~T-17 类"文档同步"任务）无 task 卡即不受审计 | ✅ 已修（2026-08-15 ql-20260815-007-9ced）：`validateBlueprintConsistency` 加 plan.md 声明任务 ↔ tasks/ 卡片双向对账（rule `plan.task-plan-reconciliation`，缺卡/孤儿卡均阻断）；plan-postcheck-cross-repo 场景 8-11 四测试 + rollback 测试 fixture 迁移（不连续→重复 id 触发 Contract） | 中（已完成） |
+ | D-3 | 仓库根 `docs/` 在 worktree 排除清单（worktree.js 与 worktree-apply.js 的 dirty 探针 pathspec 排除段） | ⊘ 2026-08-15 逐行复核后**评估保留，不改码**：排除清单只影响 coarse dirty 判定（防多 agent 下别人改文档误阻断 apply，高频踩坑的合理权衡）；worktree 里改 `docs/` 实际会进 changedFiles（`filterDeliverableFiles` 不排 docs/，worktree-apply.js:97），apply 能带回主仓；重叠场景由 step5a「未提交∩changedFiles 精确点名」兜底（该口径保留 docs/）。初版"文档改动对流程完全不可见"表述过重，据此修正 | 不修（合理权衡） |
+ | D-4 | archive sync-module-docs 无结果校验（git add 无条件、空集静默通过） | ✅ 部分已修（2026-08-15 ql-20260815-010-7466，窄口径）：归档后 `extractDoneDocTargets` 提取「更新结果」done 行声明的目标文档路径，全路径声明但文件不存在 → warning（假申报嫌疑）。**剩余推语义审查**：「声明 done 但内容实际没改」的 diff 对账是语义判定（apply 期间文档可能已提交，git diff 为空≠没同步），且相对写法 modules/<id>.md 的 project 归属需读 module-map——按定位推 sillyhub/人类，本仓不做 | 窄口径已完成；语义对账不做（定位边界） |
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 868bea4c..6ba05aa8 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -291,7 +291,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1488（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1507（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+@@ -321,7 +321,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - **工具驾驭复盘 4 坑确定性修复**（2026-08-06，change `2026-08-06-sillyspec-self-tooling-fixes`）：
+   - **stage review gate marker 缺失自生**（坑1，`run/gates.js:298`）：tier=independent 且 `getLatestStageReviewRunId` 返回空（execute 批量完成跳过 prompt 渲染、prompt 未落 marker 等场景）时，gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`，让 gate 读到确定 ID——错误路径从 `execute-null`（不可执行）变为 `execute-review-<review-前缀 id>`（可执行）。补充 gap 6（prompt 渲染时落 marker）的兜底：prompt 路径未走到时 gate 路径自生，两条落 marker 路径互不依赖。marker 文件名 / 位置不变（`current-stage-review-run-id-<stage>(-<change>)`）。
+   - **worktree apply 交付物过滤精细化**（坑3，`worktree-apply.js#filterDeliverableFiles`）：apply 时排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档改动滞留 worktree 分支（exec-g defer 项落地）。`verify-postcheck.js` 改 import `filterDeliverableFiles` 去双写；`index.js` apply / assess 自动 apply 的用户面消息同步为「changes/.runtime/quicklog 不自动 apply，模块文档 docs/ 会自动 apply」。
+-  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:823`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
++  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:861`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
+   - **归档清理 runId marker**（2026-08-10，`run/complete-handlers.js#archiveWorktreeCleanup`）：归档时除 worktree cleanup 外，顺带清理该 change 的 execute / stage-review runId marker（`current-execute-run-id-<change>` + `current-stage-review-run-id-<stage>-<change>`，normal + 自愈分支共用）。marker 只服务 execute→verify→archive 期间，归档后无读者；只写不删会让 `.runtime/` 随变更数无限累积（单仓库几十个）。runtimeRoot 解析同写入侧 `resolveRuntimeRoot(platformOpts, specBase)`（锚主仓，平台模式不误清理）。失败仅 warn 不阻断归档。
+   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。
+ - **跨仓 task 支持**（2026-08-12，change `2026-08-11-cross-repo-task-support`）：单个 change 的 task 可分散到主仓 + 多个跨仓仓实现（dogfood 自指、monorepo 多包仓等场景）。**单仓 change 零回归**（所有 task 无 `repo:` → MultiRepoContext 退化为 `{main:{...}}` 单值 map，7 个调用点全走原路径）。跨仓机制要点：
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 2f1b3c2b..6a804485 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -49,10 +49,10 @@ mcp:
+ 
+ ### connect 写入规则（`sync.js:299-312`）
+ `platform connect <url> <token>` 同时写两段（若 mcp 段已存在则保留不覆盖，R-09）。**两段共享 url，但 token 不同**：
+-- **platform 段** token = 换发的 `shpsync_` workspace-scoped token（`effectiveToken`，`sync.js:511`）——用于 REST 进度同步（最小权限）；
++- **platform 段** token = 换发的 `shpsync_` workspace-scoped token（`effectiveToken`，`sync.js:538`）——用于 REST 进度同步（最小权限）；
+ - **mcp 段** token = 原始 user 级 token（`token`，`sync.js:311`）——用于 MCP 派发（create_mission/dispatch_worker 需 user 级权限）。
+ 
+-换发失败（404/403/断网）则 `effectiveToken` 回退原 token，两段此时相同。⚠️ 源码注释 `sync.js:511` 称"复用 platform 的 url/token"，与 token 实际双写不一致（注释过时/误导，已在本文修正）。
++换发失败（404/403/断网）则 `effectiveToken` 回退原 token，两段此时相同。⚠️ 源码注释 `sync.js:538` 称"复用 platform 的 url/token"，与 token 实际双写不一致（注释过时/误导，已在本文修正）。
+ 
+ ---
+ 
+@@ -66,13 +66,13 @@ mcp:
+ | 方法 | HTTP | 端点 | 做什么 | 源码 |
+ |---|---|---|---|---|
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+-| `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:516` |
+-| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:792` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1202` |
++| `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:543` |
++| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:818` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1228` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1561` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1587` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2441` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2441` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2467` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2467` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -136,8 +136,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4563；shared.js:1120 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4484；sync.js:1561/1595 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4436；sync.js:2302 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4484；sync.js:1587/1595 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4436；sync.js:2328 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4222/4174；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 2c9ffe6f..420450df 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -101,7 +101,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：一次 plan 阶段 + quick 阶段使用复盘的 7 条改进点，逐条对源码核实后裁决（先查本债单 + 实证，不重复提议已决策项）。
+ 
+ - ⏭ **plan-b TaskCard 行数逼字段丢失**：plan.js prompt 要求「总长度 20~40 行」（plan.js:508/388/491，2026-08-18 行号校准），但 plan-postcheck.js **无 max-line 校验**（grep 无 `>40`/maxLine）→ 20-40 是纯 persuasion；且 postcheck **不校验 title_zh 等字段完整性**（grep 无 title_zh）→ 子代理为压行数丢字段是**静默丢失**（实证：task-05 合并 title/title_zh 只留中文 title）。**裁决 defer**：修法二选一——① 放宽 prompt 行数上限（如 20~50，复杂 task 可到 60，frontmatter 字段不可缺）；② plan-postcheck 加 frontmatter 字段完整性硬校验（title_zh 等）。均改源码超 doc-only，留 follow-up；倾向②（enforcement 优于放宽劝说，符合债单原则）。
+-- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`src/run/complete.js:1001` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:1001/490），plan/execute/verify 仍走通用 else（complete.js:1001）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
++- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`src/run/complete.js:968` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:968/490），plan/execute/verify 仍走通用 else（complete.js:968）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
+ - ⏭ **quick-① QUICKLOG 四段 `--output` 落盘格式粗糙**：quick step3 `--done --output` 的四段（需求/根因/方案/结果）被 CLI 原样塞进单行 `结果：需求：…结果：…`（双层「结果：」前缀），强制 agent 手工精修拆行。属 P6「仪式负担下沉 CLI」主题——CLI 应解析四段分行落盘，不该让 agent 补排版。**裁决 defer**：改 quicklog.js 落盘逻辑（按「需求：/根因：/方案：/结果：」split 成 4 行），留 follow-up。
+   - **2026-08-04 follow-up 已修 + 再补一坑**：首修用 `split(/(?=需求：|根因：|方案：|结果：)/)` 任意位置切，实证发现**正文引用字段标签字样会被误切**（根因里写「双层「结果：」前缀」→ 根因行被断成两行）——正是本次登记 quick 的 QUICKLOG 精修现场踩到。**二修改双级扫描 `splitSingleLineFields`**：先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过），严格失败退回顺序扫描兜底，缺标签落单行兜底。补回归 test 2e/2f（改前红改后绿），quicklog 82/0。残余边界：正文引用标签且**前导恰为空白/句末标点**时仍可能错位（如「按 方案： 处理」），属无标记文本固有歧义，写正文避免给标签字样加空白前缀。
+ - ⏭ **quick-② lint 对 doc-only 改动空转**：CLAUDE.md 规则 8 要求 `--done` 前 npm test + lint，但 lint 只扫 JS 不碰 docs/（实证「Checked 66 JavaScript files」对 doc 改动零信息）。**裁决 defer**：修法二选一——① quick 按 `--files` 文件类型跳过 lint（全非 .js 时跳过）；② CLAUDE.md 规则 8 细化为「仅当触及 src/test 时必跑 lint/test」。倾向①（CLI 自动判定优于改人类指令）。
+@@ -115,7 +115,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：execute 阶段使用复盘的 3 个负面点，逐条对源码核实后裁决，均确认真新债（债单此前无相关条目）。
+ 
+ - ✅ **exec-a Task Review base..head 对账坑**：子代理不 commit 时 `git diff base..head` 为空，`verifyReviewGitEvidence`（task-review.js:632）的 changedFiles 交叉比对拿**空 diffFiles** 对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit + 改 7 个 review head。此前已有 working-tree 回退（避开「零改动伪造」假阳性），但 diffFiles 只算 commit diff、**未并入 working-tree 文件**。**修法**：新增 `parsePorcelainFiles` 解析 `git status --porcelain`，working-tree 改动并入 diffFiles 后再做交叉比对（对齐 `checkExecuteCodeEvidence` 同时查 working-tree 语义）；回归 agent-gate-hardening 加未 commit 对账用例。
+-- ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:377）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
++- ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:407）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
+ - ✅ **exec-c apply 校验 vs design §6 清单**：apply（worktree-apply.js:572）只认 design §6 清单硬卡「变更文件 ⊆ 清单」，而 assess（:565）用 task allowed_paths——**两 gate 口径不一致**——design §6 漏测试/产物文件时（task allowed_paths 已含）apply 卡住。**修法**：抽出 `resolveApplyAllowSet` = design 清单 ∪ 所有 task allowed_paths，applyWorktree 改用它；plan 已过 validateDesignFileCoverage 单向校验（design ⊆ plan），union 不放开 design/plan 之外的越界文件（仍拦）；回归 worktree-allow-list 加 union 用例（越界仍违规）。
+ 
+ ### 2026-08-04 verify 复盘增补（关键词判级 / 测试重复跑 / 后台无进度）
+@@ -125,7 +125,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ - ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:24，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
+ - ✅ **vrf-b 测试重复跑（step6 手动跑 + CLI 对账又跑，198s×2）**。**修法（纯减法）**：CLI 对账是防谎报 enforcement（verify.js:176 明说「谎报测试结果没有意义」）不可删；复用 step6 结果 = 信任 agent 报告，破坏核心信任边界不可做。改为 verify.js「运行测试和质量扫描」step prompt **不重复手动跑全量测试**（测试实测统一由 CLI --done 对账执行一次，按变更命中模块子集），step 只做 lint/静态检查 + 可选针对性冒烟（非必需）；同步首段「进度确认」💡 说明 + docs/prompt 重提取（verify.md 两处）+ file-lifecycle.md 补一句。
+-- ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:341/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
++- ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:356/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
+ 
+ ### 2026-08-04 全流程复盘（集成层盲区 / Task Review 对账 / 中断续跑）
+ 状态：`①③ persuasion 补强已修复；②已修复（= exec-a）`
+@@ -143,7 +143,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：sillyhub 项目工具驾驭复盘第二批 5 个负面点，逐条对源码核实后裁决（先查本债单 + 源码实证，不重复提议已决策项）。
+ 
+-- ✅ **exec-d Stage Review marker 死锁无注册入口（已落地 b5844c9 + 本次补 gate 报错指向闭环）**：marker（`current-stage-review-run-id-<stage>-<change>`）只在 prompt 渲染 `{REVIEW_TIER}` 时写（`prompt.js:897?`），调度者手动派独立子代理写 review.json 不走该渲染 → `getLatestStageReviewRunId` fallback 扫描，目录名/reviewedFiles 稍不符即 null → Stage Review Gate 报缺 review.json 硬阻断（`gates.js:298`），**`--skip-approval` 不绕产物 gate**（三段链证实：command.js 不传 → complete.js 不传 → runStageCompletionGates（gates.js 的 runStageCompletionGates 定义段）签名不收）。**落地**：`sillyspec register-stage-review --change <名> --stage <brainstorm|plan|execute> [--from <已有review.json>]` 已由 commit b5844c9 合入 main（registerStageReview（stage-review.js 的 registerStageReview 段） + index.js 的 register-stage-review caseregister-stage-review case + `stage-review-register.test.mjs` 11 测试）——生成 `review-<ts>` runId + 建 `stage-reviews/<stage>-<runId>/`（--from 校验 schema 后落入 / 无则 cannot_verify 草稿填对 reviewType/reviewedFiles[0]=changes/<change>/<mainDoc>/docHash）+ 写 marker + `validateStageReview` 自检。**本次补闭环**（2026-08-12 quick ql-20260812-002）：`printStageReviewResult`（stage-review.js:377）errors 分支补一行指引「可用 sillyspec register-stage-review --change <名> --stage <当前stage> [--from] 一步生成 run目录+review.json骨架+写marker+自检」，controller 阻断后即知有此命令（原报错只写「补全后重新 --done」不引导）。加 Case 12 测报错文案含命令名。否决给 gate 加 --skip-approval 旁路保 fail-closed 语义。
++- ✅ **exec-d Stage Review marker 死锁无注册入口（已落地 b5844c9 + 本次补 gate 报错指向闭环）**：marker（`current-stage-review-run-id-<stage>-<change>`）只在 prompt 渲染 `{REVIEW_TIER}` 时写（`prompt.js:897?`），调度者手动派独立子代理写 review.json 不走该渲染 → `getLatestStageReviewRunId` fallback 扫描，目录名/reviewedFiles 稍不符即 null → Stage Review Gate 报缺 review.json 硬阻断（`gates.js:298`），**`--skip-approval` 不绕产物 gate**（三段链证实：command.js 不传 → complete.js 不传 → runStageCompletionGates（gates.js 的 runStageCompletionGates 定义段）签名不收）。**落地**：`sillyspec register-stage-review --change <名> --stage <brainstorm|plan|execute> [--from <已有review.json>]` 已由 commit b5844c9 合入 main（registerStageReview（stage-review.js 的 registerStageReview 段） + index.js 的 register-stage-review caseregister-stage-review case + `stage-review-register.test.mjs` 11 测试）——生成 `review-<ts>` runId + 建 `stage-reviews/<stage>-<runId>/`（--from 校验 schema 后落入 / 无则 cannot_verify 草稿填对 reviewType/reviewedFiles[0]=changes/<change>/<mainDoc>/docHash）+ 写 marker + `validateStageReview` 自检。**本次补闭环**（2026-08-12 quick ql-20260812-002）：`printStageReviewResult`（stage-review.js:407）errors 分支补一行指引「可用 sillyspec register-stage-review --change <名> --stage <当前stage> [--from] 一步生成 run目录+review.json骨架+写marker+自检」，controller 阻断后即知有此命令（原报错只写「补全后重新 --done」不引导）。加 Case 12 测报错文案含命令名。否决给 gate 加 --skip-approval 旁路保 fail-closed 语义。
+ - ✅ **exec-e Wave 子代理只跑 lint check 没 format**：`execute.js` buildWavePrompt + acceptanceSteps 通篇无 format 引导（只"不要频繁编译"），子代理只跑 check 到 commit 才被 consumer pre-commit hook 拦（ruff format/prettier）。**修法（prompt 引导）**：buildWavePrompt 调度要求 item 4 + acceptanceSteps「运行测试」step operation 3 加"既跑 lint check 也跑 formatter（ruff format/prettier --write/black），不要只 check"。
+ - ✅ **exec-f worktree 内 python 工具链不供给**：`worktree-deps.js` detectProjectType/inferInstallCommand 原无 python 分支（只 maven/gradle/nodejs/generic），python 项目根误判 generic → n/a → ruff/pre-commit 二进制不供给。**修法（源码）**：detectProjectType 加 python（pyproject.toml/requirements.txt）+ inferInstallCommand 加 `uv sync`（pyproject/uv.lock）/`pip install -r requirements.txt`（纯 requirements）；execute「确认 worktree 路径」步加工具链预告（先 --version 确认，缺则 uv tool install/uv sync）。detectProjectType/inferInstallCommand 导出做纯单元测（7 断言，不真跑 uv）。注：modules 块的 python 子模块供给未做（类比 nodejs modules link 是更大工程），env 预告覆盖发现侧。
+ - ⏭ **exec-g worktree 与主仓 .sillyspec 文档分叉（登记 defer，超 quick 范围）**：`task-review.js:558` filterDeliverableFiles 一刀切排除 `.sillyspec/`，无 worktree→main 反向同步；Reverse Sync 触发的 design.md/模块文档改动留在 worktree 分支，apply 时被挡，只能手动 `git show` 捞（历史已踩）。**裁决 defer**：修法需设计决策（apply 分级放开 `.sillyspec/changes/<change>/` 保留 `.sillyspec/docs/<project>/modules/` 排除 / 或 apply 完给文件级分叉清单警告 / 或 prompt 硬要求手动 git show 恢复），有越界风险，留单独完整流程排。
+@@ -175,7 +175,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ ### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
+ 状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
+ 
+-来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1248`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
++来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1262`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+ 
+ **钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
+ 
+@@ -206,7 +206,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+ 
+-- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:151 / prompt.js:1435 / gates.js:545 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:184，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:304）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:304）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
++- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:151 / prompt.js:1435 / gates.js:561 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:184，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:304）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:304）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+ 
+ ---
+ 
+@@ -216,7 +216,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
+ 
+ **brainstorm 复盘**
+-- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1789）= advisory 打印不阻断（gates.js:1789 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1789）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
++- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1808）= advisory 打印不阻断（gates.js:1808 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1808）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+ - ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
+ - ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
+ 
+@@ -318,8 +318,8 @@ P2 遗留（按优先级登记）：
+ 
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:832?` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:263）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:1995 `AUXILIARY_STAGES` 一律放行）。
+-- **B7** status/doctor 自称只读实则写库：`src/run/command.js:1217` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
++- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:832?` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:263）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:2021 `AUXILIARY_STAGES` 一律放行）。
++- **B7** status/doctor 自称只读实则写库：`src/run/command.js:1223` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+ 
+diff --git a/src/commit-suggest.js b/src/commit-suggest.js
+index 501a2524..9f49e139 100644
+--- a/src/commit-suggest.js
++++ b/src/commit-suggest.js
+@@ -17,7 +17,7 @@
+  *   C. 阶段产出：changed paths 按路径模式归 scan/brainstorm/plan/execute/archive/knowledge
+  */
+ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
+-import { join } from 'path'
++import { join, relative } from 'path'
+ import { DatabaseSync } from 'node:sqlite'
+ import { gitQuiet, safeGit, stageArchiveArtifacts } from './git-helper.js'
+ import { resolveSpecDir } from './run/shared.js'
+@@ -117,6 +117,12 @@ export function collectCommitContext({ cwd, specDir = null }) {
+   const stat = gitQuiet(cwd, ['diff', 'HEAD', '--stat']) || (changedPaths.length > 0 ? `（${changedPaths.length} 个文件待首提交）` : '')
+ 
+   // ── 来源 A：QUICKLOG（主 quicklog + 各活跃变更归属 quicklog）──
++  // 并行会话噪声锚定（坑 probe-noise-and-commit-suggest-quality 坑B，2026-10-15 消费仓实证：
++  // 归档提交时他并行 quick 会话的 QUICKLOG 新条目（时间窗过滤粗筛通过）把 feat 建议劫持成
++  // 「fix: quick 修复 + 阶段产出」——type 误判 + 凭空 quick 字样。quick 来源现加锚「quicklog
++  // 文件属于本次提交变更集」（porcelain 含 staged/unstaged/untracked）：不在变更集的 quicklog
++  // 条目不参与建议（时间窗保留作首道粗筛，零条目时无建议行为不变）。
++  const changedSet = new Set(changedPaths.map(p => String(p).replace(/\\/g, '/')))
+   const quickFiles = []
+   try {
+     for (const f of readdirSync(join(specBase, 'quicklog'))) {
+@@ -133,6 +139,7 @@ export function collectCommitContext({ cwd, specDir = null }) {
+   const quickEntries = quickFiles
+     .flatMap(file => parseQuicklogEntries(file).map(e => ({ ...e, file })))
+     .filter(e => !lastCommitKey || e.time > lastCommitKey)
++    .filter(e => changedSet.has(relative(cwd, e.file).replace(/\\/g, '/')))
+     .sort((a, b) => (a.time < b.time ? -1 : 1))
+   const doneQuick = quickEntries.filter(e => e.status === '已完成')
+ 
+@@ -155,6 +162,27 @@ export function collectCommitContext({ cwd, specDir = null }) {
+     }
+   }
+ 
++  // ── 来源 B2：归档产物任务面（坑 probe-noise-and-commit-suggest-quality 坑B 连带）──
++  // apply 后 tasks.md 移到 changes/archive/<变更>/——来源 B 的 mtime 锚对已提交面恒失效
++  // （任务勾选随 execute 提交走，mtime 早于上次 commit → hasTasks 恒 false → 归档提交被判
++  // fix）。归档目录下 tasks.md 在本次变更集时解析其 [x] 行进 task 面（归档提交的 feat 语义正源）。
++  try {
++    const archDir = join(specBase, 'changes', 'archive')
++    if (existsSync(archDir)) {
++      for (const c of readdirSync(archDir)) {
++        const tp = join(archDir, c, 'tasks.md')
++        try {
++          if (!statSync(tp).isFile()) continue
++        } catch { continue }
++        if (!changedSet.has(relative(cwd, tp).replace(/\\/g, '/'))) continue
++        for (const line of readFileSync(tp, 'utf8').split('\n')) {
++          const m = line.match(/^[-*]\s*\[[xX]\]\s*(task-\d+)\s*[:：]?\s*(.*)/)
++          if (m) checkedTasks.push({ change: c, item: `${m[1]}: ${m[2].trim()}` })
++        }
++      }
++    }
++  } catch { /* 归档扫描失败静默（来源面缺省，行为回退修复前） */ }
++
+   // ── 来源 C：阶段产出（changed paths 按模式归类去重）──
+   const stageSet = new Set()
+   for (const p of changedPaths) {
+@@ -195,11 +223,24 @@ export function collectCommitContext({ cwd, specDir = null }) {
+       type = 'feat'
+       subject = `feat: 变更交付 + quick 修复 ${doneQuick.length} 项`
+     } else {
+-      type = 'fix'
+-      subject = `fix: quick 修复 + 阶段产出`
++      // 纯阶段产出（坑 probe-noise-and-commit-suggest-quality 坑B，2026-10-15 实证：原
++      // 「fix: quick 修复 + 阶段产出」在无任何 quick 证据时凭空捏造 quick 语义且误判 fix——
++      // 无 task 无 quick 的归档/知识面提交按 chore 归档语义建议）
++      type = 'chore'
++      subject = `chore: 阶段产出归档（${stageArtifacts.join('、')}）`
+     }
+     if (doneQuick.length >= 2 || hasTasks || hasStages) {
+-      for (const q of doneQuick) bodyLines.push(`- quick ${q.qlId}: ${q.title}`)
++      // body 与 subject 去重（坑同上：quick ≤2 条时标题已全列 subject，body 原样重复无信息量）
++      const subjectListed = doneQuick.length <= 2 ? new Set(doneQuick.map(q => q.title)) : null
++      for (const q of doneQuick) {
++        // 标题已列 subject 时 body 仍保留 qlId 行（去重不丢审计锚——标题可省，qlId 是
++        // QUICKLOG 对账锚点，既有测试契约钉住 body 含 qlId）
++        if (subjectListed && subjectListed.has(q.title)) {
++          bodyLines.push(`- quick ${q.qlId}（标题见上）`)
++          continue
++        }
++        bodyLines.push(`- quick ${q.qlId}: ${q.title}`)
++      }
+     }
+     for (const t of checkedTasks) bodyLines.push(`- ${t.change} ${t.item}`)
+     for (const s of stageArtifacts) bodyLines.push(`- 阶段产出: ${s}`)
+diff --git a/src/run/archive-distill.js b/src/run/archive-distill.js
+index d6acff3b..327be87b 100644
+--- a/src/run/archive-distill.js
++++ b/src/run/archive-distill.js
+@@ -39,6 +39,9 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
+       console.warn(`\n⚠️  rejected 决策缺否决理由/复潮条件（needsWait）——这些条目未写盘，其余条目照常提炼。`)
+       console.warn(`   裁决指引（确认归档 --confirm 前处理）：`)
+       console.warn(`   ① 补录：把缺失字段补进 ${join(changeDir, 'decisions.md')} 后重跑提炼（幂等）——`)
++      console.warn(`      可复制补丁样例（在对应 D-xxx@vN 条目末尾追加两行，字段名与值之间用冒号+空格）：`)
++      console.warn(`      - 否决理由: <一句话核心劣势>`)
++      console.warn(`      - 复潮条件: <何种信号下可重议本方案>`)
+       console.warn(`      node --input-type=module -e "import { distillIntoKnowledge } from '<sillyspec 源码路径>/src/decision-distill.js'; console.log(JSON.stringify(distillIntoKnowledge(${JSON.stringify(changeDir)}, ${JSON.stringify(knowledgeRoot)}, ${JSON.stringify(headHash)}), null, 2))"`)
+       console.warn(`   ② 跳过：经用户裁决不入库该条，并在「确认归档」--output 注记跳过原因。`)
+     }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index a7844a5d..af6fc42b 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -674,40 +674,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+   // 勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义），假勾防线由
+   // detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账承担。
+   if (stageName === 'execute' && changeName) {
+-    // 自动勾选（full-autopilot-parity，R21 thin 实证迁移）：execute --done 时解析 run 内提交的
+-    // task-NN token，自动勾选 tasks.md 未勾条目——agent 手动勾选是 R19/R20 的行为惯性（tick-loop-nudge
+-    // 提示词无效），机器代勾与 thin 的 flow done 同逻辑。fail-soft。
+-    try {
+-      const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
+-      if (existsSync(_tasksMdPath)) {
+-        const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
+-        let _tickCommits = ''
+-        try {
+-          if (existsSync(_runIdFile)) {
+-            _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', 'HEAD~20..HEAD']) || ''
+-          }
+-        } catch {}
+-        if (!_tickCommits) _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', '-20']) || ''
+-        if (_tickCommits) {
+-          const _texts = String(_tickCommits).split('\x1e').map(x => x.trim()).filter(Boolean).join('\n')
+-          const _evidenced = new Set()
+-          for (const m of _texts.matchAll(/task-(\d{1,2})/gi)) _evidenced.add(String(Number(m[1])).padStart(2, '0'))
+-          if (_evidenced.size > 0) {
+-            let _md = readFileSync(_tasksMdPath, 'utf8')
+-            let _ticked = 0
+-            for (const nn of _evidenced) {
+-              const re = new RegExp(`^- \\[ \\](.*task-${nn}[:\\s])`, 'm')
+-              if (re.test(_md)) { _md = _md.replace(re, `- [x]$1`); _ticked++ }
+-            }
+-            if (_ticked > 0) {
+-              const { writeAtomicSync } = await import('../fs-atomic.js')
+-              writeAtomicSync(_tasksMdPath, _md)
+-              console.log(`✅ [自动勾选] ${_ticked} 个任务有提交证据但未勾——已机器代勾（full-autopilot-parity）`)
+-            }
+-          }
+-        }
+-      }
+-    } catch { /* auto-tick fail-soft */ }
++    // 自动勾选（full-autopilot-parity，R21 thin 实证迁移）：代勾判据/实现见
++    // autoTickTasksFromCommitSubjects（subject token × allowed_paths 实现事实锚）。
++    await autoTickTasksFromCommitSubjects({ changeName, cwd, specBase, platformOpts })
+     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
+     if (_bf.batched && _bf.aligned > 0) {
+       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
+@@ -1533,8 +1502,10 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
+   if (isExplicitReviewWrite(r.review)) return true
+ 
+   // W2 task-04 草稿零 diff 守卫（FR-03）
+-  // ctx 给定且 review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空
+-  if (ctx && r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
++  // review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空。ctx 缺席（直写/主仓形态
++  // buildDraftContext 返 null）同样保守不勾——原「ctx=null 直接放行」使 cannot_verify 草稿
++  // 无任何实现核验即被代勾（坑 wt-commit-auto-tick-unimplemented-tasks 连带，2026-10-15）。
++  if (r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
+     const taskId = r.review.task || 'task-NN'
+     const unlockCmd = `sillyspec review write${changeName ? ` --change ${changeName}` : ' --change <变更名>'} --task ${taskId} --spec pass --quality pass --force --changed-files <文件>`
+     const changedFiles = r.review.changedFiles || []
+@@ -1542,8 +1513,8 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
+       console.warn(`⚠️ 草稿 review changedFiles 为空，跳过自动勾选（task=${taskId}）——解锁：${unlockCmd}（纯验证任务用 --changed-files "" + --evidence "<验证说明>"）`)
+       return false
+     }
+-    if (!ctx.gitDir || !ctx.base || !ctx.head) {
+-      console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾（task=${taskId}）——解锁：${unlockCmd}`)
++    if (!ctx || !ctx.gitDir || !ctx.base || !ctx.head) {
++      console.warn(`⚠️ ctx 缺席或不完整（gitDir=${ctx && ctx.gitDir}, base=${ctx && ctx.base}, head=${ctx && ctx.head}），跳过草稿 diff 校验，保守不勾（task=${taskId}）——解锁：${unlockCmd}`)
+       return false
+     }
+     // 预取路径：一次全量 diff 文件集内存归属（autoCheckPlanFromReviews/批量路径已 prefetch）
+@@ -1573,6 +1544,86 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
+ 
+   return true
+ }
++/**
++ * execute --done 的 full-autopilot 代勾（独立函数供测试直驱；completeStep execute 分支调用）。
++ *
++ * 实现事实锚（坑 wt-commit-auto-tick-unimplemented-tasks，2026-10-15 消费仓两次实证：原按
++ * %B 提交全文提 token——task-01 提交正文提及 task-02/03/04 即全被误勾，批量完成判定与续跑
++ * 跳过双失真）：证据源收敛为提交 subject 行（%s）的 task-NN token，且任务卡 allowed_paths
++ * 在场时要求「提及该 task 的提交触及面 × allowed_paths」交叠（parseAllowedPaths +
++ * pathMatches，与草稿归属同口径）；无卡面/无 allowed_paths 退化为仅 subject token。无锚不勾。
++ * fail-soft（异常零行为）。
++ * @param {{ changeName: string, cwd: string, specBase: string, platformOpts?: object }} opts
++ */
++export async function autoTickTasksFromCommitSubjects({ changeName, cwd, specBase, platformOpts = {} }) {
++  try {
++    const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
++    if (!existsSync(_tasksMdPath)) return { ticked: 0, skippedNoAnchor: 0 }
++    const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
++    let _tickLog = ''
++    try {
++      if (existsSync(_runIdFile)) {
++        _tickLog = gitQuiet(cwd, ['log', '--name-only', '--format=%x1e%s', 'HEAD~20..HEAD'], { trim: false }) || ''
++      }
++    } catch {}
++    if (!_tickLog) _tickLog = gitQuiet(cwd, ['log', '--name-only', '--format=%x1e%s', '-20'], { trim: false }) || ''
++    if (_tickLog) {
++      // 逐提交解析：首行 = subject（token 证据面——正文散文提及不是实现证据），其余行 = 该提交触及文件
++      const _evidenced = new Map()
++      for (const _chunk of String(_tickLog).split('\x1e')) {
++        const _lines = String(_chunk || '').split('\n').map(x => x.trim()).filter(Boolean)
++        if (_lines.length === 0) continue
++        for (const m of _lines[0].matchAll(/task-(\d{1,2})/gi)) {
++          const nn = String(Number(m[1])).padStart(2, '0')
++          if (!_evidenced.has(nn)) _evidenced.set(nn, new Set())
++          for (const f of _lines.slice(1)) _evidenced.get(nn).add(f)
++        }
++      }
++      if (_evidenced.size > 0) {
++        // 任务卡 allowed_paths 索引（卡面读取失败 → 无卡面口径：仅 subject token）
++        const _allowedByTask = new Map()
++        let _pathMatches = null
++        try {
++          const { parseAllowedPaths } = await import('../stages/plan-postcheck.js')
++          ;({ pathMatches: _pathMatches } = await import('../change-list.js'))
++          const _tasksDir = join(specBase, 'changes', changeName, 'tasks')
++          for (const nn of _evidenced.keys()) {
++            const _cardPath = join(_tasksDir, `task-${nn}.md`)
++            if (existsSync(_cardPath)) {
++              const _paths = parseAllowedPaths(readFileSync(_cardPath, 'utf8'))
++                .map(p => String(p).replace(/^NEW:\s*/, '').trim()).filter(Boolean)
++              if (_paths.length > 0) _allowedByTask.set(nn, _paths)
++            }
++          }
++        } catch { /* 卡面读取失败 → 无锚退化为仅 subject token（与无卡面同口径） */ }
++        let _md = readFileSync(_tasksMdPath, 'utf8')
++        let _ticked = 0
++        let _skippedNoAnchor = 0
++        for (const [nn, _files] of _evidenced) {
++          const _allowed = _allowedByTask.get(nn)
++          if (_allowed && _pathMatches && ![..._files].some(f => _allowed.some(p => _pathMatches(f, p)))) {
++            _skippedNoAnchor++
++            continue // subject 提及但触及面与声明面零交叠——无实现事实锚不勾
++          }
++          const re = new RegExp(`^- \\[ \\](.*task-${nn}[:\\s])`, 'm')
++          if (re.test(_md)) { _md = _md.replace(re, `- [x]$1`); _ticked++ }
++        }
++        if (_ticked > 0) {
++          const { writeAtomicSync } = await import('../fs-atomic.js')
++          writeAtomicSync(_tasksMdPath, _md)
++          console.log(`✅ [自动勾选] ${_ticked} 个任务有实现证据（提交 subject token${_allowedByTask.size > 0 ? ' × allowed_paths 交叠' : ''}）但未勾——已机器代勾（full-autopilot-parity）`)
++        }
++        if (_skippedNoAnchor > 0) {
++          console.log(`ℹ️ [自动勾选] ${_skippedNoAnchor} 个 task 号有 subject token 但触及面与 allowed_paths 零交叠——不代勾（无实现事实锚），完成时请人工核对勾选`)
++        }
++        return { ticked: _ticked, skippedNoAnchor: _skippedNoAnchor }
++      }
++    }
++    return { ticked: 0, skippedNoAnchor: 0 }
++  } catch { /* auto-tick fail-soft */ }
++  return { ticked: 0, skippedNoAnchor: 0 }
++}
++
+ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
+   if (stageName !== 'execute' || !changeName) {
+     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
+@@ -1714,7 +1765,7 @@ export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
+   }
+ }
+ 
+-async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
++export async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
+   try {
+     const changeDir = join(specBase, 'changes', changeName)
+     const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)
+@@ -1748,6 +1799,23 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
+     // → 每个 task 进 blockedTasks → 批量完成静默失效
+     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
++    // ── 缺席草稿自动补齐（坑 task-review-retired-archive-mismatch，2026-10-15 归档门口实证）──
++    // Task Review 层退役（2026-09-26）后 execute 批量完成不再产 per-task review.json，但本函数
++    // 下方复核循环与 archive step2 完成度判定（真相源=review.json verdict）仍以它在场为前提——
++    // 正常走完五阶段的变更到归档门口必然全量「review.json 缺失」。退役时 generateTaskReviewDrafts
++    // 只摘了调用点（函数本体与 backfill-reviews 手动通道都在）：此处对缺失面重新接线——机械
++    // 幂等（已存在不覆盖人工/子代理 verdict），失败 fail-open 不阻断批量（最坏退回修复前形态，
++    // 下方复核循环照旧拦）。挂在 runId marker 读取之前：run 缺失时生成器建 run + 写 marker，
++    // 下方循环一次读盘即见。
++    try {
++      const { generateTaskReviewDrafts } = await import('../task-review.js')
++      const draftOut = await generateTaskReviewDrafts({ changeName, cwd, platformOpts })
++      if (draftOut && draftOut.generated > 0) {
++        console.log(`📝 [批量完成前置] 自动补 ${draftOut.generated} 份 per-task review 草稿（机械幂等；archive 完成度真相源在场——草稿 verdict=cannot_verify 仍由 verify 兑证/人工复核升级，summarizeTaskCompletion 单列可见）`)
++      }
++    } catch (e) {
++      console.warn(`⚠️ per-task 草稿自动补齐异常（fail-open，批量完成继续走既有复核循环）: ${(e && e.message) || e}`)
++    }
+     const blockedTasks = []
+     const { readReview, isValidExecuteRunId } = await import('../task-review.js')
+     // runId marker 对全部 task 恒定：循环外一次读盘（原实现逐 task 重复 readFileSync 同一文件）
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 9a0d9358..ece36069 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -958,6 +958,99 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'target_files ②类（missing_declared）阻断' })
+       docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'target_files 对账阻断（②类「声明未做」——计划落空，明细见上）' })
+     }
++    // ── 探针一致性 / draft 篡改门禁 / ceremony 双跑三门（坑 verify-close-gate-staggered-exposure，
++    //    2026-10-15 消费仓四轮 --done 实证：三门原在实测门之后逐个 fail-fast——每轮先付 195s
++    //    实测再见一个新文档问题，四轮纯往返约 20 分钟。三门数据面（facts 已于 runValidators 前
++    //    backfill、verify-result.md 正文/sidecar、ceremony tier 文件、git diff）与实测结果零数据
++    //    依赖——照 required-evidence/reconcile 先例前移并入 docGateFailures 收集（R16 聚合一次
++    //    全列），失败统一在检查点 A 回滚（进度不丢，修复后重跑 --done）。──
++    // 探针一致性（task-03 / ir-stage-p3b D-002@v1 方案A）：「#### 探针 N」机械预填段长在 agent
++    // 可编辑的正文里，其防篡改基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。
++    // checkProbeConsistency 重跑只读探针与正文锚点对账，分级（D-003）：probe1/probe6 不符 =
++    // ERROR → 收集阻断（正文预填段疑似被篡改）；probe3/probe5 环境敏感维度 + R-06 HEAD 前进
++    // 降级 = WARNING → 放行告警（drift）；skipped/degraded → 放行提示。
++    // 接线形态照 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
++    // supportedFixes）+ verify-runs 落盘 + docGateFailures。
++    const { checkProbeConsistency } = await import('../verify-postcheck.js')  // isStrictChange 复用本块 reconcile 段既有 import
++    const probeCheck = checkProbeConsistency({
++      // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
++      // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency
++      // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
++      cwd, specBase, changeName,
++      runtimeRoot: reconcileRuntimeRoot,
++      // IR 严格档（2026-09-07-ir-hardening D-002@v1）：created_at ≥ IR_STRICT_SINCE 的变更
++      // 探针子节全缺 = ERROR（存量 skip 语义零变化）；fail-open（读不到 → false 落豁免）
++      strictMode: isStrictChange({ pm, cwd, changeName }),
++    })
++    const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
++    const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
++    // 探针7 covered 证据锚点 advisory（坑 probe7-covered-anchor-missing，2026-09-15 复盘：7 行
++    // covered 证据缺 file:line 被审查打回——预填说明已载明口径，机器在 --done 时点再拦一道，
++    // 省一轮人工往返）。advisory 不阻断；独立模块零环（verify-probes 是多会话冲突面，不碰）。
++    try {
++      const { checkProbe7AnchorCoverage } = await import('../probe7-anchor-check.js')
++      const p7ReportPath = join(specBase, 'changes', changeName, 'verify-result.md')
++      if (existsSync(p7ReportPath)) {
++        const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
++        if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
++          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
++          for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
++            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
++          }
++          if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
++        }
++      }
++    } catch { /* 锚点校验异常 fail-soft 不影响 gate */ }
++    // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
++    // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
++    // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
++    // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
++    writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
++    if (probeBlocked) {
++      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
++      docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: '探针一致性抽查 error 阻断（明细见上）' })
++    }
++    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
++    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
++    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 收集阻断
++    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
++    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
++    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
++    try {
++      const { checkDraftIntegrity } = await import('../verify-draft.js')
++      const draftCheck = checkDraftIntegrity({
++        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
++        changeName, runtimeRoot: reconcileRuntimeRoot,
++      })
++      if (draftCheck.applicable && !draftCheck.ok) {
++        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
++        for (const v of draftCheck.violations) console.error(`   - ${v}`)
++        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
++        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
++        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'verify-result.md 机器预填段篡改门禁（明细见上）' })
++      }
++    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
++    // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
++    //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
++    //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入收集
++    //    硬 flag 面（照 reconcile/probe 先例检查点 A 统一回滚，修复后重跑 --done 进度不丢）。
++    //    检查/记账/种子收敛在 runCeremonyDualRunCheck 单点（archive 出口 complete-handlers.js
++    //    runArchiveCeremonyDualRunExit 同款消费）；skipped（档位文件缺失=存量变更零红门禁）/
++    //    degraded（git 不可用降级）零噪音放行；整体 fail-soft——检查自身异常降级放行（异常
++    //    不是低报，对齐 archive 出口同款处置）。specBase/runtimeRoot 与四邻检查同源。──
++    try {
++      const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
++      const ceremonyCheck = await runCeremonyDualRunCheck({
++        cwd, specBase, changeName,
++        runtimeRoot: reconcileRuntimeRoot,
++      })
++      printCeremonyDualRunCheck(ceremonyCheck)
++      if (ceremonyCheck.status === 'mismatch' && ceremonyCheck.severity === 'error') {
++        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'ceremony 双跑 mismatch（声明档低报，明细见上）' })
++      }
++    } catch (e) {
++      console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断 verify，fail-soft）: ${(e && e.message) || e}`)
++    }
+   }
+   // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
+   //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
+@@ -1351,95 +1444,6 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
+     const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
+     printVerifyDeletionCheck(deletionCheck)
+-    // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
+-    // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
+-    // 基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。checkProbeConsistency 重跑只读
+-    // 探针与正文锚点对账，分级（D-003）：probe1/probe6 不符 = ERROR → 阻断回滚（正文预填段疑似
+-    // 被篡改）；probe3/probe5 环境敏感维度 + R-06 HEAD 前进降级 = WARNING → 放行告警（drift）；
+-    // skipped（存量旧格式报告/无 changeName）/degraded（重跑异常 fail-soft）→ 放行提示。
+-    // 接线形态照上方 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
+-    // supportedFixes）+ verify-runs 落盘 + rollbackCompletionAndReturn。
+-    const { checkProbeConsistency, isStrictChange } = await import('../verify-postcheck.js')
+-    const probeCheck = checkProbeConsistency({
+-      // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
+-      // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency
+-      // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
+-      cwd, specBase, changeName,
+-      runtimeRoot: reconcileRuntimeRoot,
+-      // IR 严格档（2026-09-07-ir-hardening D-002@v1）：created_at ≥ IR_STRICT_SINCE 的变更
+-      // 探针子节全缺 = ERROR（存量 skip 语义零变化）；fail-open（读不到 → false 落豁免）
+-      strictMode: isStrictChange({ pm, cwd, changeName }),
+-    })
+-    const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
+-    const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
+-    // 探针7 covered 证据锚点 advisory（坑 probe7-covered-anchor-missing，2026-09-15 复盘：7 行
+-    // covered 证据缺 file:line 被审查打回——预填说明已载明口径，机器在 --done 时点再拦一道，
+-    // 省一轮人工往返）。advisory 不阻断；独立模块零环（verify-probes 是多会话冲突面，不碰）。
+-    try {
+-      const { checkProbe7AnchorCoverage } = await import('../probe7-anchor-check.js')
+-      const p7ReportPath = join(specBase, 'changes', changeName, 'verify-result.md')
+-      if (existsSync(p7ReportPath)) {
+-        const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
+-        if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
+-          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
+-          for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
+-            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
+-          }
+-          if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
+-        }
+-      }
+-    } catch { /* 锚点校验异常 fail-soft 不影响 gate */ }
+-    // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
+-    // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
+-    // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
+-    // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
+-    writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
+-    if (probeBlocked) {
+-      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+-    }
+-    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
+-    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
+-    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 阻断回滚
+-    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
+-    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
+-    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
+-    try {
+-      const { checkDraftIntegrity } = await import('../verify-draft.js')
+-      const draftCheck = checkDraftIntegrity({
+-        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
+-        changeName, runtimeRoot: reconcileRuntimeRoot,
+-      })
+-      if (draftCheck.applicable && !draftCheck.ok) {
+-        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
+-        for (const v of draftCheck.violations) console.error(`   - ${v}`)
+-        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
+-        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+-      }
+-    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
+-    // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
+-    //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
+-    //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入 verify
+-    //    errors 硬 flag 面——阻断回滚（照 reconcile/probe 先例 rollbackCompletionAndReturn，修复后
+-    //    重跑 --done 进度不丢）。检查/记账/种子收敛在 runCeremonyDualRunCheck 单点（archive 出口
+-    //    complete-handlers.js runArchiveCeremonyDualRunExit 同款消费）；skipped（档位文件缺失=存量
+-    //    变更零红门禁）/degraded（git 不可用降级）零噪音放行；整体 fail-soft——检查自身异常降级
+-    //    放行（异常不是低报，对齐 archive 出口同款处置）。specBase/runtimeRoot 与四邻检查同源
+-    //    （reconcileRuntimeRoot=resolveRuntimeRoot(platformOpts, specBase)，口径一处定义不二算）。──
+-    try {
+-      const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
+-      const ceremonyCheck = await runCeremonyDualRunCheck({
+-        cwd, specBase, changeName,
+-        runtimeRoot: reconcileRuntimeRoot,
+-      })
+-      printCeremonyDualRunCheck(ceremonyCheck)
+-      if (ceremonyCheck.status === 'mismatch' && ceremonyCheck.severity === 'error') {
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+-      }
+-    } catch (e) {
+-      console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断 verify，fail-soft）: ${(e && e.message) || e}`)
+-    }
+     // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
+     // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
+     // 同口径回执），消灭「src 改动平移行号 → 下次 docs gate 拦」的人工往返。挂 verify 收尾即
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index bab259c2..0e07dfd0 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -1059,8 +1059,12 @@ const API_COVERAGE_HEADING_RE = /^## 接口验证覆盖矩阵/m
+ const API_ENDPOINT_CELL_RE = /(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|]+)/
+ /** 声明占位行（D-005 零解析降级侧，骨架「本变更接口面：N 端点（agent 声明）」字面同源） */
+ const API_DECLARED_ROW_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+-/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态） */
+-const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;）)]+)/g
++/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态）。
++ *  字符类左右括号对称排除（坑 verify-close-gate-staggered-exposure，2026-10-15 消费仓 node 直调
++ *  实证：原只排右括号）不排左括号（——`GET /api/x（注记）` 的路径吞成 `/api/x（注记`，与解析面
++ *  永不匹配 → 恒空指，报错文案却指向「design.md 未命中」误导排查方向）。中文（英文、全/半角
++ *  四形与既有分隔符一并终止捕获。 */
++const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;（）()]+)/g
+ /** 探索行标记（骨架文法注释字面同源：证据列含 [探索]） */
+ const API_EXPLORATION_MARK_RE = /\[探索\]/
+ 
+@@ -1261,9 +1265,16 @@ export function judgeApiCoverageMatrix(args) {
+     }
+   }
+   if (anchorViolations.length > 0) {
++    // 空指诊断（坑 verify-close-gate-staggered-exposure 建议③，2026-10-15 实证：报错只说「未命中
++    // 解析面」不展示解析面实际内容——「锚点吞字」与「design 缺表」分不清，agent 被引去改 design
++    // 文档白做功。附上 parseSet 实际端点集一眼对齐）。
++    const parseFaceDesc = parseSet.size > 0
++      ? [...parseSet].join('；')
++      : '（解析面为空——design.md 接口段未解析到端点，先表格化接口段再跑 verify-probes --init）'
+     errors.push(
+       `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
+       `（covered/partial 证据须含锚点五形态之一，可复制样例：design接口表#POST /api/xx（# 后必须 METHOD /path 且命中 design 接口段解析面，仅表名/行号不计）/ 权限矩阵[admin×读] / 契约表@任务卡字段清单 / DDL@users.id / 载荷@e2e_body.json；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
++      `design 接口段实际解析面端点集：${parseFaceDesc}——design接口表# 锚点路径须与之逐字一致。` +
+       `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
+     )
+   }
+diff --git a/src/stage-review.js b/src/stage-review.js
+index 34d2f359..e2ba4a5c 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -366,6 +366,31 @@ export function stageReviewMarkerPath(runtimeRoot, stage, changeName) {
+   return join(runtimeRoot, `current-stage-review-run-id-${suffix}`)
+ }
+ 
++/**
++ * stage review 目录读侧归一（坑 stage-review-dir-naming-mismatch，2026-10-15 消费仓三阶段
++ * 连环实证）：规范目录 = `<stage>-<runId>`（runId 自带 review- 前缀，拼出来恰一次 review 字样）。
++ * skill 文档字面 `<stage>-review-<run-id>` + 「run-id 必须 review- 前缀」诱导出两类错位目录：
++ *   ① 裸 runId 目录（agent 拿 marker 值当目录名）：<runId>/
++ *   ② 双前缀目录（字面拼装）：<stage>-review-<runId>/
++ * 本助手按 规范 → ②双前缀 → ①裸 runId 顺序探测 review.json 在场性，返回首个命中目录；全不在
++ * 则返回规范目录（保持既有「期望路径」报错文案语义）。只读不搬文件——写入侧恒规范路径，读侧
++ * 容错让 gate / refresh-hash / autoRefresh 对错位文件天然可用。
++ * @param {string} runtimeRoot - .runtime 绝对路径
++ * @param {string} stage - brainstorm|plan|execute
++ * @param {string} reviewRunId - run id（review-<ts>）
++ * @returns {string} review 目录绝对路径（容错命中或规范缺省）
++ */
++export function resolveStageReviewDir(runtimeRoot, stage, reviewRunId) {
++  const base = join(runtimeRoot, 'stage-reviews')
++  const canonical = join(base, `${stage}-${reviewRunId}`)
++  const doublePrefix = join(base, `${stage}-review-${reviewRunId}`)
++  const bare = join(base, reviewRunId)
++  for (const dir of [canonical, doublePrefix, bare]) {
++    if (existsSync(join(dir, 'review.json'))) return dir
++  }
++  return canonical
++}
++
+ /**
+  * 获取最新的 stage review run id
+  *
+@@ -395,33 +420,37 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
+     }
+   } catch {}
+ 
+-  // fallback：扫描 stage-reviews/<stage>-review-* 目录取字典序最新（向后兼容无 marker 旧数据）
++  // fallback：扫描 stage-reviews/ 目录取字典序最新（向后兼容无 marker 旧数据）。候选两形：
++  // 规范/双前缀 `<stage>-review-*` + 裸 runId `review-*`（坑 stage-review-dir-naming-mismatch
++  // 错位目录——裸目录不编码 stage，须 reviewType 归属校验防跨段误认）
+   const dir = join(runtimeRoot, 'stage-reviews')
+   if (!existsSync(dir)) return null
+   try {
+     const entries = readdirSync(dir, { withFileTypes: true })
+-      .filter(e => e.isDirectory() && e.name.startsWith(`${stage}-review-`))
+-      .map(e => e.name)
+-      .sort()
++      .filter(e => e.isDirectory() && (e.name.startsWith(`${stage}-review-`) || e.name.startsWith('review-')))
++      .map(e => ({ name: e.name, runId: e.name.startsWith(`${stage}-`) ? e.name.slice(stage.length + 1) : e.name }))
++      .sort((a, b) => (a.name < b.name ? -1 : 1))
+       .reverse()
+     if (!entries[0]) return null
+     // cross-change 防护（execute 复盘 b1）：changeName 提供时按 review.json 的 reviewedFiles[0] 归属过滤。
+     // 契约 reviewedFiles[0] = `changes/<change>/<mainDoc>`（renderReviewJsonContract），据此排除他变更的 review，
+     // 否则批量完成 marker 缺失时可能读到 proxy 等其他变更的 acceptance review 报错误导。
++    // 裸目录另加 reviewType 校验（STAGE_REVIEW_TYPE 段专属，防他 stage 的错位文件串台）。
+     if (changeName) {
+       const matching = entries.find(e => {
+         try {
+-          const rj = JSON.parse(readFileSync(join(dir, e, 'review.json'), 'utf8'))
++          const rj = JSON.parse(readFileSync(join(dir, e.name, 'review.json'), 'utf8'))
++          if (!e.name.startsWith(`${stage}-`) && rj.reviewType && rj.reviewType !== STAGE_REVIEW_TYPE[stage]) return false
+           const r0 = Array.isArray(rj.reviewedFiles) ? String(rj.reviewedFiles[0]) : ''
+           return r0.includes(`changes/${changeName}/`)
+         } catch { return false }
+       })
+-      if (matching) return matching.slice(stage.length + 1)
++      if (matching) return matching.runId
+       console.warn(`⚠️ 无 ${stage} 的 review marker，且 stage-reviews/ 下无归属变更 ${changeName} 的 review（reviewedFiles 应含 changes/${changeName}/）；为避免跨变更串台不再取最新，返回 null（fail-closed，由调用方报缺 review.json）`)
+       return null
+     }
+-    // entries[0] = "plan-review-2026-..."，剥掉 `${stage}-` 前缀得到 runId "review-2026-..."
+-    return entries[0].slice(stage.length + 1)
++    // 规范形 "plan-review-2026-..." 剥 `${stage}-` 前缀得 runId；裸形目录名即 runId
++    return entries[0].runId
+   } catch {
+     return null
+   }
+@@ -613,7 +642,8 @@ export function validateStageReview(opts) {
+   const errors = []
+   const warnings = []
+ 
+-  const reviewDir = join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`)
++  // 读侧目录归一（坑 stage-review-dir-naming-mismatch）：容错命中裸 runId / 双前缀错位目录
++  const reviewDir = resolveStageReviewDir(runtimeRoot, stage, reviewRunId)
+   const reviewPath = join(reviewDir, 'review.json')
+ 
+   if (!reviewRunId || !existsSync(reviewPath)) {
+@@ -705,7 +735,7 @@ export function validateStageReviewWithAutoRefresh(opts) {
+     && result.errors.every(e => String(e).includes('docHash 与主审查文档'))
+   if (!mismatchOnly) return { result, autoRefreshed: false }
+ 
+-  const reviewDir = join(opts.runtimeRoot, 'stage-reviews', `${opts.stage}-${opts.reviewRunId}`)
++  const reviewDir = resolveStageReviewDir(opts.runtimeRoot, opts.stage, opts.reviewRunId)
+   const reviewPath = join(reviewDir, 'review.json')
+   // 定位主文档并重算 hash（与 verifyStageReviewDocHash 同法：reviewedFiles[0] × searchDirs）
+   const primaryRel = Array.isArray(result.review.reviewedFiles) ? result.review.reviewedFiles[0] : null
+@@ -922,8 +952,11 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
+   if (refreshHash) {
+     if (fromFile) throw new Error('register-stage-review: --refresh-hash 与 --from 互斥（refresh 就地更新既有 review，adopt 引入新文件）')
+     const existingRunId = getLatestStageReviewRunId(runtimeRoot, stage, changeName)
++    // 读侧目录归一（坑 stage-review-dir-naming-mismatch）：--refresh-hash 按 marker 取 runId 后
++    // 经 resolveStageReviewDir 容错定位——review.json 落在裸 runId / 双前缀错位目录也能刷新，
++    // 不再恒报「无对应 run」。
+     const existingPath = existingRunId
+-      ? join(runtimeRoot, 'stage-reviews', `${stage}-${existingRunId}`, 'review.json')
++      ? join(resolveStageReviewDir(runtimeRoot, stage, existingRunId), 'review.json')
+       : null
+     if (!existingPath || !existsSync(existingPath)) {
+       throw new Error(`register-stage-review: --refresh-hash 找不到 ${stage} 的既有 review.json（marker ${existingRunId || '无'} 无对应 run）——先去掉 --refresh-hash 生成骨架，或派审查子代理产出 review`)
+diff --git a/src/stage-templates.js b/src/stage-templates.js
+index 9e99258f..c16fe6d7 100644
+--- a/src/stage-templates.js
++++ b/src/stage-templates.js
+@@ -120,6 +120,8 @@ created_at: <now-datetime>
+ - normalized_requirement: 可测试的约束
+ - impacts: [FR-01, task-01, verify-01]
+ - evidence: 用户回答轮次或代码/文档路径
++- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
++- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
+ \`\`\`
+ 
+ > 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。「生成规范文件」步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 094e6042..52753231 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -188,6 +188,8 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
+ - evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）
+ - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+ - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
++- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
++- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
+ \`\`\`
+ 
+ - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
+@@ -491,6 +493,8 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
+ - evidence: design.md §3/§7, src/cache/...
+ - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+ - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
++- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
++- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
+ \`\`\`
+ 
+ ### 输出格式
+diff --git a/src/sync.js b/src/sync.js
+index a3069fe0..7c7f39b2 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -273,6 +273,32 @@ function combineSignals(external, timeoutMs = REQUEST_TIMEOUT_MS) {
+   return external ? AbortSignal.any([timeoutSignal, external]) : timeoutSignal;
+ }
+ 
++/**
++ * 非 2xx 回显折叠（坑 probe-noise-and-commit-suggest-quality 坑C，2026-10-15 消费仓实证：
++ * 409 冲突响应体含整段 platform_progress 大对象，text.slice(0,200) 密排回显挂在每条 CLI 命令
++ * 尾部刷屏）。结构化冲突体折叠为一行摘要（conflict 标识 + 关键时间戳/变更字段，不回显大
++ * 对象）；其他 JSON 体打键名摘要；非 JSON/解析失败退回截断原文（既有形态零回归）。
++ */
++export function formatSyncHttpErrorLine(method, url, status, text) {
++  const raw = String(text || '');
++  let body = null;
++  try { body = JSON.parse(raw); } catch { body = null; }
++  const m = method || 'GET';
++  if (body && typeof body === 'object') {
++    if (body.conflict === true) {
++      const parts = ['conflict'];
++      if (body.change) parts.push(`change=${body.change}`);
++      if (typeof body.last_pushed_at === 'string') parts.push(`last_pushed_at=${body.last_pushed_at}`);
++      if (body.base_ts !== undefined) parts.push(`base_ts=${body.base_ts}`);
++      if (body.reason) parts.push(`reason=${String(body.reason).slice(0, 80)}`);
++      return `[sync] ${m} ${url} → ${status} ${parts.join(' ')}（冲突响应体已折叠为一行）`;
++    }
++    const keys = Object.keys(body).slice(0, 6).join(',');
++    return `[sync] ${m} ${url} → ${status} ${keys ? `json(${keys})` : '(空响应体)'}`;
++  }
++  return `[sync] ${m} ${url} → ${status} ${raw.slice(0, 200)}`;
++}
++
+ async function fetchJson(url, options = {}) {
+   const signal = combineSignals(options.signal);
+   // noMute 是本模块的闸门开关不是 fetch 参数，先剥掉再透传
+@@ -281,7 +307,7 @@ async function fetchJson(url, options = {}) {
+     const res = await fetch(url, { ...init, signal });
+     if (!res.ok) {
+       const text = await res.text().catch(() => '');
+-      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
++      const line = formatSyncHttpErrorLine(options.method, url, res.status, text);
+       // 连接类失败（404=端点未就绪 / 5xx）走跨进程噪音闸：平台未就绪期每条命令的自动
+       // 同步都撞同一批失败，重复刷屏淹没门禁输出（见 sync-noise.js 模块头）。409 冲突与
+       // 其余 4xx 业务态每轮都该看见，不走闸。用户显式命令（connect health ping）传 noMute。
+@@ -320,7 +346,7 @@ async function fetchJsonWithStatus(url, options = {}) {
+       try { body = JSON.parse(text); } catch { body = null; }
+     }
+     if (!res.ok) {
+-      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
++      const line = formatSyncHttpErrorLine(options.method, url, res.status, text);
+       if (!noMute && isConnectionClassStatus(res.status)) syncConnectionWarn(line);
+       else console.warn(line);
+     }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 52ca5e53..1fb59ec5 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -4223,6 +4223,51 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+     }
+   }
+ 
++  // —— EOL-only 噪声过滤（坑 verify-close-gate-staggered-exposure 建议④，2026-10-15 消费仓实证：
++  //    gen:types 幂等重生成纯行尾 diff 进 actual 面 → ③类 undeclared 假红，agent 被迫为零内容
++  //    改动补声明或回退）。手法与 run/shared.js quick 审计的 eolOnly 先例同源：同一 git 范围
++  //    跑 plain 名单与 --ignore-cr-at-eol 名单，差集 = 纯行尾差异 → 剔出对账面，eolOnlyFiles
++  //    软留痕。两条硬边界：① 必须正向出现在 plain diff 且内容零变更才剔——absence-based
++  //    （「不在真实集即剔」）会误伤 B3 pathspec/救援窗口来源的已交付文件（它们不在任何
++  //    git diff 里）；② --name-only 不吃 --ignore-cr-at-eol（git 实测怪癖），内容过滤必须走
++  //    --numstat。探测失败 fail-open 不过滤；untracked 天然不在 plain diff 不受影响；删除/
++  //    重命名是内容变更（numstat 在场）不受影响。——
++  const eolOnlyFiles = []
++  try {
++    const eolOnlySet = new Set()
++    const probePair = (dir, refs) => {
++      const plainOut = gitQuiet(dir, ['diff', '--name-only', ...refs], { timeout: 30 * 1000, trim: false })
++      if (plainOut === null) return
++      const realOut = gitQuiet(dir, ['diff', '--numstat', '--ignore-cr-at-eol', ...refs], { timeout: 30 * 1000, trim: false })
++      if (realOut === null) return
++      const real = new Set()
++      for (const l of realOut.split('\n')) {
++        const i = l.lastIndexOf('\t')
++        if (i > 0) real.add(normalizeReconcilePath(l.slice(i + 1)))
++      }
++      for (const f of plainOut.split('\n').map(x => x.trim()).filter(Boolean)) {
++        const n = normalizeReconcilePath(f)
++        if (!real.has(n)) eolOnlySet.add(n)
++      }
++    }
++    // 工作树（HEAD 对照）：主仓 + worktree（form A 双仓各自 HEAD）
++    const probeDirs = [cwd]
++    if (form === 'worktree' && wtMeta && wtMeta.gitDir && wtMeta.gitDir !== cwd) probeDirs.push(wtMeta.gitDir)
++    for (const dir of probeDirs) probePair(dir, ['HEAD'])
++    // 已提交侧：form B B1 同基点（mergeBase 对照工作树）；form A worktree 已提交段（meta 锚点..HEAD）
++    if (form === 'post-apply' && baseAnchor) {
++      probePair(cwd, [baseAnchor])
++    } else if (form === 'worktree' && wtMeta) {
++      const mb = wtMeta.meta && (wtMeta.meta.baselineCommit || wtMeta.meta.actualBaseHash || wtMeta.meta.baseHash)
++      if (mb) probePair(wtMeta.gitDir, [mb, 'HEAD'])
++    }
++    for (const f of eolOnlySet) {
++      if (union.has(f)) {
++        union.delete(f)
++        eolOnlyFiles.push(f)
++      }
++    }
++  } catch { /* EOL 探测异常 → 不过滤（fail-open，行为与修复前一致） */ }
+   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
+   // 多会话推进死锁诊断（reconcile-source-isolation，R18-SF-full 实证）：post-apply 形态下
+   // 实际面全空（B1 无 ref + porcelain 无未提交面 + 无 apply-pathspec 兜底）= 典型「主仓被
+@@ -4232,7 +4277,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+   const parallelAdvanceHint = (form === 'post-apply' && files.length === 0 && union.size === 0 && !sources.some((s) => s.startsWith('main:diff-merge-base') || s.startsWith('apply-pathspec')))
+     ? '⚠️ actual 源全空（无分支锚点 diff + 主仓无未提交面 + 无 apply-pathspec 兜底）——典型「主仓被并行会话推进」形态（本变更的提交/暂存可能已被他侧裸提交扫走）。切勿用「暂存物化」自救（touch 文件进共享暂存区——会被再次扫走且污染他侧，R18-SF-full 实证 matched=0 死循环）；出路：① 恢复/登记本变更分支（worktree meta.json 的 branch 字段）让锚定 diff 生效后重跑 ② 确属全量已在他侧提交：与该会话按 AGENTS 规则 18 对账后以该提交为锚核销'
+     : null
+-  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint }
++  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint, eolOnlyFiles }
+ }
+ 
+ /**
+@@ -4462,6 +4507,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null,
+     notes.push(`③类另有 ${scaffoldTotal} 个工具/平台脚手架文件（platform ${scaffoldBuckets.platform} / tool ${scaffoldBuckets.tool}，如 ${scaffoldSamples.join('、')}${scaffoldTotal > scaffoldSamples.length ? ' 等' : ''}）已聚合不逐条列——非交付物（scope-audit 设施桶同口径）`)
+   }
+ 
++  if (Array.isArray(actual.eolOnlyFiles) && actual.eolOnlyFiles.length > 0) {
++    notes.push(`EOL-only 剔除：${actual.eolOnlyFiles.length} 个文件仅行尾差异（--ignore-cr-at-eol 对照零内容变更，如 gen 脚本幂等重生成）已剔出对账面——${actual.eolOnlyFiles.slice(0, 5).join('、')}${actual.eolOnlyFiles.length > 5 ? ' 等' : ''}（.gitattributes 统一行尾可根治）`)
++  }
+   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
+   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
+   return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources, crossRepo }
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 899af505..e722af7e 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1952,7 +1952,7 @@ function prefillMatrixCells(item, testFiles, hint) {
+  * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}>}> }} p7
+  * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
+  */
+-function renderProbe7Lines(p7) {
++export function renderProbe7Lines(p7) {
+   const L = [PROBE7_HEADING]
+   if (!p7 || !p7.applicable) {
+     L.push('- 不适用（无 TaskCard）')
+@@ -1986,8 +1986,12 @@ function renderProbe7Lines(p7) {
+     L.push('| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |')
+     L.push('|---|---|---|---|---|')
+     t.acceptance.forEach((item, i) => {
++      // 展示帽（坑 probe-noise-and-commit-suggest-quality 坑A，2026-10-15 消费仓实证：宽目录
++      // allowed_paths 递归把 82 个测试文件全量塞进单格（单行数千字符 ×3 行），信号全淹——照
++      // 探针 3 既有 slice 截断先例收敛为前 5 + 「共 N 个」折叠；路径经 mdEscapeCell 防竖线破表）
+       const attribCell = (t.testFiles && t.testFiles.length > 0)
+-        ? t.testFiles.map(f => `\`${f}\``).join('<br>')
++        ? t.testFiles.slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('<br>')
++          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（目录级候选全量在 facts/trace，归属按关键词命中与证据锚点收窄）` : '')
+         : '无归属测试——判定大概率 uncovered'
+       const h = (t.hints && t.hints[i]) || null
+       const hintCell = h
+@@ -2251,7 +2255,9 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+             if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
+           }
+         }
+-        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
++        // 收集帽（坑 probe-noise-and-commit-suggest-quality 坑A）：目录级 allowed_paths 递归可卷
++        // 入整仓测试树（实证 82 个）——去重后截前 20（展示层另有 5 个硬帽；hints/trace 消费同集）
++        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])].slice(0, 20)
+         // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
+         const existingTests = []
+         if (frLinkedExisting && testFiles.length === 0) {
+@@ -2259,7 +2265,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+             if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
+           }
+         }
+-        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])] : testFiles
++        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])].slice(0, 20) : testFiles
+         probe7.tasks.push({
+           task: card.task,
+           acceptance: card.acceptance,
+@@ -2758,7 +2764,12 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
+   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
+   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
+   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
+-  return {
++  // apiFace 例外（坑 verify-close-gate-staggered-exposure 建议③连带，2026-10-15 消费仓实证）：
++  // --init 即落键——runVerifyProbes 的 apiFace 与 --done backfill 同源同形（computeApiFaceFromDesign），
++  // 原「刻意不落」使「重跑 --init 刷新 facts」救不了空指预检（报错文案也没提这一点），且空指
++  // 诊断方向被误导去改 design 文档。键只在值在场时出现（undefined 值键会在 writeVerifyFacts
++  // 合并 spread 时覆盖 prev 固化段）。
++  const factsSkeleton = {
+     schemaVersion: 2,
+     change: changeName,
+     generatedAt: now || new Date().toISOString(),
+@@ -2823,6 +2834,8 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
+       },
+     },
+   }
++  if (result && result.apiFace && typeof result.apiFace === 'object') factsSkeleton.apiFace = result.apiFace
++  return factsSkeleton
+ }
+ 
+ /**
+@@ -2859,7 +2872,16 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
+   try {
+     const prev = JSON.parse(readFileSync(factsPath, 'utf8'))
+     if (prev && prev.schemaVersion === FACTS_SCHEMA_VERSION) {
++      // backfill 固化段保留（坑 verify-close-gate-staggered-exposure，2026-10-15）：旧白名单只保
++      // 五段，re-init 会把 --done 回填的 apiFace/consumerHints/handover/dbScriptDeclarations 等
++      // 整个抹掉（--init 后预检又空指）。此处先铺 prev 固化段再被 fresh 覆盖：apiFace 由 fresh
++      // 侧重算（同源 computeApiFaceFromDesign，值应等价），fresh 未带的键原样保留。
++      const preservedBackfill = {}
++      for (const k of ['apiFace', 'consumerHints', 'handover', 'dbScriptDeclarations', 'matrixPartialRows', 'smokeRan']) {
++        if (prev[k] !== undefined) preservedBackfill[k] = prev[k]
++      }
+       facts = {
++        ...preservedBackfill,
+         ...fresh,
+         conclusion: prev.conclusion,
+         tests: prev.tests,
+diff --git a/test/execute-batch-endtoend-checkbox.test.mjs b/test/execute-batch-endtoend-checkbox.test.mjs
+index 14d0726f..2abfdaeb 100644
+--- a/test/execute-batch-endtoend-checkbox.test.mjs
++++ b/test/execute-batch-endtoend-checkbox.test.mjs
+@@ -90,9 +90,13 @@ const draftWithFiles = { ok: true, review: { specVerdict: 'cannot_verify', quali
+ const draftNoFiles = { ok: true, review: { specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify', reviewerNotes: 'auto-generated draft: test', changedFiles: [] } }
+ const realPass = { ok: true, review: { specVerdict: 'pass', qualityVerdict: 'pass' } }
+ 
+-console.log('--- ctx 缺省：现行行为不受影响（向后兼容）---')
+-eq(shouldAutoCheckTask(draftWithFiles, false), true, 'ctx 缺省 + 草稿有文件 → 现行勾（向后兼容）')
+-eq(shouldAutoCheckTask(draftNoFiles, false), true, 'ctx 缺省 + 草稿无文件 → 现行勾（向后兼容）')
++console.log('--- ctx 缺省：草稿保守不勾（2026-10-15-pitfall-batch-clearance FR-08 契约更新）---')
++// 坑 wt-commit-auto-tick-unimplemented-tasks 连带（2026-10-15 消费仓实证）：原「ctx=null 直接
++// 放行」使 cannot_verify 草稿无任何实现核验即被代勾——批量完成判定与续跑跳过双失真。新契约：
++// 自动草稿在 ctx 缺席（直写/主仓形态 buildDraftContext 返 null）时同样保守不勾（解锁走
++// review write 显式通道）；真实 pass（非草稿）不受影响。
++eq(shouldAutoCheckTask(draftWithFiles, false), false, 'ctx 缺省 + 草稿有文件 → 保守不勾（无实现核验不代勾）')
++eq(shouldAutoCheckTask(draftNoFiles, false), false, 'ctx 缺省 + 草稿无文件 → 保守不勾')
+ eq(shouldAutoCheckTask(realPass, false), true, 'ctx 缺省 + 真实 pass → 勾')
+ 
+ console.log('\n--- ctx 给定 + 草稿：零 diff 守卫生效（模拟测试）---')
+diff --git a/test/execute-batch-zero-diff.test.mjs b/test/execute-batch-zero-diff.test.mjs
+index 2b13f01a..adec8e2b 100644
+--- a/test/execute-batch-zero-diff.test.mjs
++++ b/test/execute-batch-zero-diff.test.mjs
+@@ -80,10 +80,12 @@ const realFail = {
+ const ctxValid = { gitDir: '/fake/repo', base: 'a'.repeat(40), head: 'b'.repeat(40) }
+ const ctxIncomplete = { gitDir: '/fake/repo', base: null, head: 'b'.repeat(40) }
+ 
+-// ── ctx 缺省（向后兼容）：草稿不管 changedFiles 都勾（现行判定）──
+-console.log('--- ctx 缺省：现行判定不受影响（向后兼容）---')
+-eq(shouldAutoCheckTask(draftEmptyFiles, false, null), true, 'ctx 缺省 + 草稿空 changedFiles → 勾（现行）')
+-eq(shouldAutoCheckTask(draftWithFiles, false, null), true, 'ctx 缺省 + 草稿有文件 → 勾（现行）')
++// ── ctx 缺省：草稿保守不勾（2026-10-15-pitfall-batch-clearance FR-08 契约更新——坑
++//    wt-commit-auto-tick-unimplemented-tasks 连带：ctx=null 直接放行使 cannot_verify 草稿
++//    无实现核验即被代勾。新契约同 endtoend 用例：草稿无锚不勾，真实 pass/fail 判定不变）──
++console.log('--- ctx 缺省：草稿保守不勾（无实现核验不代勾）---')
++eq(shouldAutoCheckTask(draftEmptyFiles, false, null), false, 'ctx 缺省 + 草稿空 changedFiles → 保守不勾')
++eq(shouldAutoCheckTask(draftWithFiles, false, null), false, 'ctx 缺省 + 草稿有文件 → 保守不勾')
+ eq(shouldAutoCheckTask(realPass, false, null), true, 'ctx 缺省 + 真实 pass → 勾')
+ eq(shouldAutoCheckTask(realFail, false, null), false, 'ctx 缺省 + fail → 不勾')
+ 
+diff --git a/test/pitfall-anchor-paren.test.mjs b/test/pitfall-anchor-paren.test.mjs
+new file mode 100644
+index 00000000..a2105c18
+--- /dev/null
++++ b/test/pitfall-anchor-paren.test.mjs
+@@ -0,0 +1,84 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-01/FR-02 — 矩阵锚点正则括号对称 + 空指报错附解析面
++ *
++ * 坑 verify-close-gate-staggered-exposure（消费仓 2026-10-14-admin-server-status 四轮 --done 实证）：
++ *   ① API_ANCHOR_DESIGN_API_RE 路径字符类排除了中文右括号）没排除左括号（——
++ *      `design接口表#GET /api/system-status（design.md 接口定义节端点一致）` 路径被吞成
++ *      `/api/system-status（design.md` 与解析集永不匹配 → 恒空指；
++ *   ② 空指报错不附 facts 实际解析到的端点集，「吞字」与「design 缺表」不可辨。
++ * 锁死契约：四形括号（（（）)）对称终止捕获；空指报错含解析面端点集（空集显式标注）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { extractApiCoverageMatrixSlots, judgeApiCoverageMatrix } from '../src/stage-contract.js'
++
++const EP = (method, path, rowIdx = 1) => ({ method, path, rowIdx })
++
++function matrixMd(rows) {
++  const lines = ['## 接口验证覆盖矩阵 [层：人工判断——CLI 预填复核]', '',
++    '| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |', '|---|---|---|---|---|']
++  for (const r of rows) lines.push(`| ${r[0]} | ${r[1]} | ${r[2] || ''} | ${r[3] || ''} | ${r[4] || ''} |`)
++  lines.push('', '## 后续章节', '')
++  return lines.join('\n')
++}
++
++function judgeWith({ rows, endpoints }) {
++  return judgeApiCoverageMatrix({
++    matrix: extractApiCoverageMatrixSlots(matrixMd(rows || [])),
++    apiFace: { endpoints, declared: null, writeEndpoints: [] },
++    facts: { handover: { count: 0, items: [] } },
++    factsExpected: true,
++    riskLevel: 'unit-sufficient',
++    changeName: 'pitfall-x',
++  })
++}
++
++test('FR-01：锚点后紧跟中文左括号注记不再吞字空指', () => {
++  const r = judgeWith({
++    rows: [['GET /api/system-status', 'covered', '', '', 'design接口表#GET /api/system-status（design.md 接口定义节端点一致）']],
++    endpoints: [EP('GET', '/api/system-status')],
++  })
++  assert.equal(r.ok, true, `左括号注记形态应命中（errors=${JSON.stringify(r.errors)}）`)
++  assert.equal(r.errors.filter(e => e.includes('空指')).length, 0, '无空指违规')
++})
++
++test('FR-01：半角左括号注记同样终止捕获；既有分隔形态（右括号/逗号/空格）不回归', () => {
++  const half = judgeWith({
++    rows: [['GET /api/status', 'covered', '', '', 'design接口表#GET /api/status(note)']],
++    endpoints: [EP('GET', '/api/status')],
++  })
++  assert.equal(half.ok, true, `半角括号注记应命中（errors=${JSON.stringify(half.errors)}）`)
++
++  const legacy = judgeWith({
++    rows: [
++      ['GET /api/a', 'covered', '', '', 'design接口表#GET /api/a）注记'],
++      ['GET /api/b', 'covered', '', '', 'design接口表#GET /api/b，注记'],
++      ['GET /api/c', 'covered', '', '', 'design接口表#GET /api/c 注记'],
++    ],
++    endpoints: [EP('GET', '/api/a'), EP('GET', '/api/b'), EP('GET', '/api/c')],
++  })
++  assert.equal(legacy.ok, true, `既有分隔形态不回归（errors=${JSON.stringify(legacy.errors)}）`)
++})
++
++test('FR-02：空指报错附 facts 实际解析面端点集', () => {
++  // 用一个真实吞不掉的错锚点触发空指（路径后紧跟中文句号截断出的假端点）
++  const r = judgeWith({
++    rows: [['GET /api/ghost', 'covered', '', '', 'design接口表#GET /api/ghost。注记']],
++    endpoints: [EP('GET', '/api/real-one'), EP('POST', '/api/real-two')],
++  })
++  assert.equal(r.ok, false, '错端点应空指拦截')
++  const err = r.errors.find(e => e.includes('空指'))
++  assert.ok(err, '存在空指 error')
++  assert.ok(err.includes('GET /api/real-one'), `报错含解析面端点1（got: ${err}）`)
++  assert.ok(err.includes('POST /api/real-two'), '报错含解析面端点2')
++})
++
++test('FR-02：解析面为空时空指报错显式标注', () => {
++  const r = judgeWith({
++    rows: [['GET /api/ghost', 'covered', '', '', 'design接口表#GET /api/ghost。注记']],
++    endpoints: [],
++  })
++  const err = r.errors.find(e => e.includes('空指'))
++  assert.ok(err, '空指 error 在场')
++  assert.ok(err.includes('解析面为空'), `空解析面显式标注（got: ${err}）`)
++})
+diff --git a/test/pitfall-autotick-anchor.test.mjs b/test/pitfall-autotick-anchor.test.mjs
+new file mode 100644
+index 00000000..f5a3bed2
+--- /dev/null
++++ b/test/pitfall-autotick-anchor.test.mjs
+@@ -0,0 +1,78 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-08 — full-autopilot 代勾实现事实锚
++ *
++ * 坑 wt-commit-auto-tick-unimplemented-tasks（消费仓 Wave1/2 两次实证）：task-01 的 wt-commit
++ * 正文提及 task-02/03/04 → 全被机器代勾 [x]，批量完成判定与续跑跳过双失真。
++ * 锁死契约：代勾证据 = 提交 subject 行的 task-NN token ×（卡面在场时）提交触及面与
++ * allowed_paths 交叠；正文散文提及不勾；subject 在场但触及面零交叠不勾（无锚不勾）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { autoTickTasksFromCommitSubjects } from '../src/run/complete.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args, opts = {}) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', ...opts })
++
++async function fixture(prefix, changeName) {
++  const proj = mk('atk-')
++  git(proj, ['init', '-q', '-b', 'main'])
++  git(proj, ['config', 'core.autocrlf', 'false'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'base.txt'), 'base\n')
++  git(proj, ['add', '.'])
++  git(proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'])
++  const specBase = join(proj, '.sillyspec')
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: a\n- [ ] task-02: b\n- [ ] task-03: c\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), '---\ntask: task-01\nallowed_paths:\n  - src/a.js\n---\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'), '---\ntask: task-02\nallowed_paths:\n  - src/b.js\n---\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-03.md'), '---\ntask: task-03\nallowed_paths:\n  - src/c.js\n---\n')
++  return { proj, specBase, changeName }
++}
++
++test('FR-08：正文散文提及不勾；subject × allowed_paths 交叠才勾；零交叠不勾', async () => {
++  const f = await fixture('atk-main-', 'atk-x')
++  // c1：subject 含 task-01 且触及 src/a.js（卡面声明面）→ 应勾
++  mkdirSync(join(f.proj, 'src'), { recursive: true })
++  writeFileSync(join(f.proj, 'src', 'a.js'), 'a\n')
++  git(f.proj, ['add', '.'])
++  git(f.proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', '(task-01) impl a'])
++  // c2：subject 不含 task 号，正文提及 task-02/03 —— 修复前 %B 全文提 token 会误勾
++  writeFileSync(join(f.proj, 'docs.md'), 'doc\n')
++  git(f.proj, ['add', '.'])
++  git(f.proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'chore: docs', '-m', '说明：后续 (task-02)(task-03) 待实现'])
++  // c3：subject 含 task-03 但触及面与 task-03 卡 allowed_paths（src/c.js）零交叠 → 无锚不勾
++  writeFileSync(join(f.proj, 'docs2.md'), 'doc2\n')
++  git(f.proj, ['add', '.'])
++  git(f.proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', '(task-03) stray touch'])
++
++  const out = await autoTickTasksFromCommitSubjects({ changeName: f.changeName, cwd: f.proj, specBase: f.specBase, platformOpts: {} })
++  const md = readFileSync(join(f.specBase, 'changes', f.changeName, 'tasks.md'), 'utf8')
++  assert.ok(/^- \[x\] task-01/m.test(md), `task-01 被代勾（subject × allowed_paths 交叠）\n${md}`)
++  assert.ok(/^- \[ \] task-02/m.test(md), `task-02 不被代勾（正文散文提及非证据）\n${md}`)
++  assert.ok(/^- \[ \] task-03/m.test(md), `task-03 不被代勾（触及面与声明面零交叠）\n${md}`)
++  assert.equal(out.ticked, 1, 'ticked=1')
++  assert.equal(out.skippedNoAnchor, 1, 'skippedNoAnchor=1（task-03 零交叠留痕）')
++})
++
++test('FR-08：无卡面时退化为仅 subject token（合法兜底不误伤）', async () => {
++  const f = await fixture('atk-nocard-', 'atk-y')
++  mkdirSync(join(f.proj, 'src'), { recursive: true })
++  writeFileSync(join(f.proj, 'src', 'b.js'), 'b\n')
++  git(f.proj, ['add', '.'])
++  git(f.proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', '(task-02) impl b'])
++  // 移除卡面（无 allowed_paths 可依）→ subject token 即锚
++  rmSync(join(f.specBase, 'changes', f.changeName, 'tasks'), { recursive: true, force: true })
++  const out = await autoTickTasksFromCommitSubjects({ changeName: f.changeName, cwd: f.proj, specBase: f.specBase, platformOpts: {} })
++  const md = readFileSync(join(f.specBase, 'changes', f.changeName, 'tasks.md'), 'utf8')
++  assert.ok(/^- \[x\] task-02/m.test(md), '无卡面：subject token 退化锚生效')
++  assert.ok(/^- \[ \] task-01/m.test(md), '无提交证据的 task 不动')
++  assert.equal(out.ticked, 1, 'ticked=1')
++})
+diff --git a/test/pitfall-batch-review-backfill.test.mjs b/test/pitfall-batch-review-backfill.test.mjs
+new file mode 100644
+index 00000000..760abcf2
+--- /dev/null
++++ b/test/pitfall-batch-review-backfill.test.mjs
+@@ -0,0 +1,83 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-07 — execute 批量完成自动补 per-task review 草稿
++ *
++ * 坑 task-review-retired-archive-mismatch（消费仓 archive step2 实证）：Task Review 层退役后
++ * execute 不再产 per-task review.json，archive 完成度判定（真相源=review.json）全量
++ * 「4/4 缺失」卡归档门口，被迫 review write 手工誊写。
++ * 锁死契约：detectExecuteBatchFinish 在复核循环前对缺失面调 generateTaskReviewDrafts（幂等），
++ * 草稿落 execute-runs/<runId>/tasks/task-NN/review.json——批量复核与 archive 真相源天然在场。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { detectExecuteBatchFinish } from '../src/run/complete.js'
++import { initChange, cleanup } from './_complete-step-harness.mjs'
++
++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++
++async function fixture(prefix, changeName) {
++  const { mkdtempSync: mk } = await import('node:fs')
++  const proj = mk(join(tmpdir(), prefix))
++  git(proj, ['init', '-q', '-b', 'main'])
++  git(proj, ['config', 'core.autocrlf', 'false'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'base.txt'), 'base\n')
++  git(proj, ['add', '.'])
++  git(proj, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'])
++  const specBase = join(proj, '.sillyspec')
++  const pm = await initChange(proj, specBase, changeName)
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks.md'), `- [x] task-01: a\n- [x] task-02: b\n`)
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'),
++    '---\ntask: task-01\nallowed_paths:\n  - src/a.js\nacceptance:\n  - a 行为\n---\n# task-01\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-02.md'),
++    '---\ntask: task-02\nallowed_paths:\n  - src/b.js\nacceptance:\n  - b 行为\n---\n# task-02\n')
++  // 代码证据：worktree 形态（wt-commit 真实路径）——分支建在独立 worktree，meta 登记锚点
++  const initHash = git(proj, ['rev-parse', 'HEAD']).trim()
++  const wtPath = join(proj, 'wt')
++  git(proj, ['worktree', 'add', '-q', '-b', `sillyspec/${changeName}`, wtPath])
++  mkdirSync(join(wtPath, 'src'), { recursive: true })
++  writeFileSync(join(wtPath, 'src', 'a.js'), 'export const a = 1\n')
++  writeFileSync(join(wtPath, 'src', 'b.js'), 'export const b = 2\n')
++  git(wtPath, ['add', '.'])
++  git(wtPath, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', `(task-01) (task-02) feat`])
++  mkdirSync(join(specBase, '.runtime', 'worktrees', changeName), { recursive: true })
++  writeFileSync(join(specBase, '.runtime', 'worktrees', changeName, 'meta.json'),
++    JSON.stringify({ worktreePath: wtPath, branch: `sillyspec/${changeName}`, baselineCommit: initHash, baseHash: initHash, mode: 'worktree' }))
++  const steps = [{ name: 's1', status: 'pending' }, { name: 's2', status: 'pending' }]
++  return { proj, specBase, pm, changeDir, changeName, steps }
++}
++
++test.after(() => { cleanup() })
++
++test('FR-07：批量完成前自动补 per-task 草稿（marker/run 一并建立，幂等）', async () => {
++  const f = await fixture('pbr-', 'pbr-x')
++  const runtimeRoot = join(f.specBase, '.runtime')
++
++  const r1 = await detectExecuteBatchFinish({ pm: f.pm, stageName: 'execute', changeName: f.changeName, cwd: f.proj, specBase: f.specBase, platformOpts: {}, steps: f.steps.map(s => ({ ...s })) })
++  // 草稿已产（run 目录 + marker）
++  const runsDir = join(runtimeRoot, 'execute-runs')
++  const runs = existsSync(runsDir) ? readdirSync(runsDir) : []
++  assert.ok(runs.length > 0, `execute-runs 已建立（got ${JSON.stringify(runs)}；batched=${r1.batched} reason=${r1.reason}）`)
++  const runId = runs[0]
++  for (const t of ['task-01', 'task-02']) {
++    const p = join(runsDir, runId, 'tasks', t, 'review.json')
++    assert.ok(existsSync(p), `${t} review.json 草稿在场`)
++    const rv = JSON.parse(readFileSync(p, 'utf8'))
++    assert.equal(rv.specVerdict, 'cannot_verify', `${t} 草稿 verdict=cannot_verify（待复核升级，不冒充 pass）`)
++  }
++  assert.ok(existsSync(join(runtimeRoot, `current-execute-run-id-${f.changeName}`)), 'runId marker 建立')
++  if (r1.batched) assert.equal(r1.aligned, 2, '批量对齐剩余 step')
++  else assert.ok(!String(r1.reason || '').includes('review 缺失') || String(r1.reason).includes('草稿零 diff'),
++    `若阻断须为草稿零 diff 而非 review 缺失（reason=${r1.reason}）`)
++
++  // 幂等：再次触发不覆盖、不重复生成
++  const before = JSON.parse(readFileSync(join(runsDir, runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
++  await detectExecuteBatchFinish({ pm: f.pm, stageName: 'execute', changeName: f.changeName, cwd: f.proj, specBase: f.specBase, platformOpts: {}, steps: f.steps.map(s => ({ ...s })) })
++  const after = JSON.parse(readFileSync(join(runsDir, runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
++  assert.deepEqual(after, before, '已存在 review 不被覆盖（幂等）')
++})
+diff --git a/test/pitfall-commit-suggest.test.mjs b/test/pitfall-commit-suggest.test.mjs
+new file mode 100644
+index 00000000..ba067967
+--- /dev/null
++++ b/test/pitfall-commit-suggest.test.mjs
+@@ -0,0 +1,81 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-11 — commit 建议 type 加权修复
++ *
++ * 坑 probe-noise-and-commit-suggest-quality 坑B（消费仓实证）：归档提交（已勾 task×4 + archive
++ * 产物 + 模块卡 + knowledge）被建议成 `fix: quick 修复 + 阶段产出`——type 误判 + 「quick」凭空
++ * 出现（并行会话 QUICKLOG 噪声）+ body 四行重复。
++ * 锁死契约：quick 来源锚定「quicklog 文件 ∈ 本次变更集」；归档 tasks.md 在变更集时 task 面在
++ * 场（feat 优先）；纯阶段产出建议 chore（不再捏造 quick）；subject 已列标题不进 body。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { collectCommitContext } from '../src/commit-suggest.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++
++function baseRepo(prefix) {
++  const cwd = mk('pcs-')
++  git(cwd, ['init', '-q', '-b', 'main'])
++  writeFileSync(join(cwd, 'readme.md'), 'r\n')
++  git(cwd, ['add', '.'])
++  git(cwd, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'])
++  return { cwd, specBase: join(cwd, '.sillyspec') }
++}
++
++const QUICK_MD = (time, titles) => [
++  `# QUICKLOG`, '',
++  ...titles.flatMap((t, i) => [`## ql-2026${i} | ${time} | ${t}`, '', '状态：已完成', '']),
++].join('\n')
++
++test('FR-11：并行会话 QUICKLOG 不在变更集 → 不劫持归档提交（task 面 feat）', () => {
++  const f = baseRepo('pcs-arch-')
++  // 归档产物在变更集（untracked）
++  mkdirSync(join(f.specBase, 'changes', 'archive', 'mychange'), { recursive: true })
++  writeFileSync(join(f.specBase, 'changes', 'archive', 'mychange', 'tasks.md'), '- [x] task-01: a\n- [x] task-02: b\n')
++  mkdirSync(join(f.specBase, 'knowledge'), { recursive: true })
++  writeFileSync(join(f.specBase, 'knowledge', 'INDEX.md'), 'idx\n')
++  // 并行会话 quick 噪声：QUICKLOG 文件不在本次变更集（在别处，不 add 不动）——但时间窗内
++  const noiseDir = mk('pcs-noise-')
++  mkdirSync(join(noiseDir, '.sillyspec', 'quicklog'), { recursive: true })
++  writeFileSync(join(noiseDir, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-15 23:00:00', ['他侧 quick 修复']))
++  // 本仓 specBase 下也有一个不在变更集的 quicklog（未修改 → 不出现在 porcelain）
++  mkdirSync(join(f.specBase, 'quicklog'), { recursive: true })
++  writeFileSync(join(f.specBase, 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-14 00:00:00', ['旧条目']))
++
++  const cc = collectCommitContext({ cwd: f.cwd })
++  assert.ok(cc.suggestion, '有建议')
++  assert.equal(cc.suggestion.type, 'feat', `归档 task 面在场 → feat（got ${JSON.stringify(cc.suggestion)}）`)
++  assert.ok(cc.suggestion.subject.includes('mychange'), 'subject 指向变更')
++  assert.ok(!cc.suggestion.subject.includes('quick') && !cc.suggestion.body.includes('quick'), '无凭空 quick 字样')
++})
++
++test('FR-11：quicklog 文件在变更集 → fix 语义保留；subject 已列标题不进 body 重复', () => {
++  const f = baseRepo('pcs-quick-')
++  mkdirSync(join(f.specBase, 'quicklog'), { recursive: true })
++  writeFileSync(join(f.specBase, 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-15 23:00:00', ['修一处', '再修一处']))
++  const cc = collectCommitContext({ cwd: f.cwd })
++  assert.equal(cc.suggestion.type, 'fix', 'quick 文件在变更集 → fix')
++  assert.ok(cc.suggestion.subject.includes('修一处') && cc.suggestion.subject.includes('再修一处'), 'subject 全列标题')
++  // 去重契约：标题不重复进 body（body 保留 qlId 审计锚行——QUICKLOG 对账锚点）
++  assert.ok(!cc.suggestion.body.includes('修一处') && !cc.suggestion.body.includes('再修一处'),
++    `body 不重复标题（got body: ${JSON.stringify(cc.suggestion.body)}）`)
++  const bodyQuick = cc.suggestion.body.split('\n').filter(l => l.startsWith('- quick '))
++  assert.equal(bodyQuick.length, 2, 'body 保留 2 条 qlId 锚行')
++})
++
++test('FR-11：纯阶段产出（无 task 无 quick）→ chore 归档语义（不再捏造 quick 修复）', () => {
++  const f = baseRepo('pcs-chore-')
++  mkdirSync(join(f.specBase, 'knowledge'), { recursive: true })
++  writeFileSync(join(f.specBase, 'knowledge', 'INDEX.md'), 'idx\n')
++  const cc = collectCommitContext({ cwd: f.cwd })
++  assert.equal(cc.suggestion.type, 'chore', `纯阶段产出 → chore（got ${JSON.stringify(cc.suggestion)}）`)
++  assert.ok(cc.suggestion.subject.includes('knowledge'), 'subject 列阶段产出')
++  assert.ok(!cc.suggestion.subject.includes('quick'), '不出现 quick 字样')
++})
+diff --git a/test/pitfall-facts-apiface.test.mjs b/test/pitfall-facts-apiface.test.mjs
+new file mode 100644
+index 00000000..d1b80ee0
+--- /dev/null
++++ b/test/pitfall-facts-apiface.test.mjs
+@@ -0,0 +1,58 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-04 — verify-probes --init 落 apiFace 键 + re-init 保固化键
++ *
++ * 坑 verify-close-gate-staggered-exposure 第 3 轮实证：facts 由 --init 落盘且刻意不落 apiFace 键
++ * （源码注释自认，只有 --done 收口 backfill 才写）——重跑 --init 刷新 facts 后空指依旧，报错
++ * 完全没提这一点；且 writeVerifyFacts 合并白名单缺 apiFace，re-init 会把 --done 回填的键抹掉。
++ * 锁死契约：buildVerifyFacts 透传 result.apiFace；writeVerifyFacts re-init 保留 backfill 固化键
++ * （apiFace fresh 侧重算，consumerHints/handover 等 fresh 未带的键原样保留）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { buildVerifyFacts, writeVerifyFacts } from '../src/verify-probes.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const FACE = () => ({ endpoints: [{ method: 'GET', path: '/api/status', rowIdx: 1 }], declared: 1, writeEndpoints: [], sectionHint: ['接口设计'] })
++
++test('FR-04：buildVerifyFacts 透传 result.apiFace（--init 即落键，undefined 自然丢）', () => {
++  const withFace = buildVerifyFacts({ apiFace: FACE() }, { changeName: 'pf-x' })
++  assert.deepEqual(withFace.apiFace, FACE(), 'facts.apiFace = result.apiFace 同形透传')
++  const withoutFace = buildVerifyFacts({}, { changeName: 'pf-x' })
++  assert.ok(!('apiFace' in withoutFace) || withoutFace.apiFace === undefined, '无 apiFace 调用面不造键')
++})
++
++test('FR-04：writeVerifyFacts re-init 保留 backfill 固化键（fresh 未带者原样、apiFace 随 fresh 刷新）', () => {
++  const changeDir = mk('pff-')
++  mkdirSync(changeDir, { recursive: true })
++  const factsPath = join(changeDir, 'verify-facts.json')
++  // 既有 --done 回填形态：v2 机器段 + 五段固化 + backfill 键
++  writeFileSync(factsPath, JSON.stringify({
++    schemaVersion: 2, change: 'pf-x', generatedAt: '2026-10-14T00:00:00.000Z',
++    apiFace: FACE(),
++    consumerHints: { 'GET /api/status': ['前端 x.ts'] },
++    handover: { count: 1, items: [{ type: 'env-blocked', item: 'i', condition: 'c', severity: 'advisory' }] },
++    conclusion: 'PASS', tests: { ran: true }, requiredEvidence: [], runtimeEvidence: {}, factsConsistency: { checked: true },
++    probes: {},
++  }, null, 2))
++
++  // re-init：fresh 结果无 apiFace（旧调用面形态）→ prev 固化键保留
++  const r1 = writeVerifyFacts(changeDir, { probe1: {} }, 'pf-x')
++  assert.deepEqual(r1.facts.apiFace, FACE(), 'fresh 无 apiFace → prev.apiFace 保留（不再被抹）')
++  assert.deepEqual(r1.facts.consumerHints, { 'GET /api/status': ['前端 x.ts'] }, 'consumerHints 保留')
++  assert.equal(r1.facts.handover.count, 1, 'handover 保留')
++  assert.equal(r1.facts.conclusion, 'PASS', '五段固化键照旧保留')
++  assert.ok(r1.facts.probes && r1.facts.probes.probe1, '机器段被 fresh 刷新')
++
++  // re-init：fresh 带 apiFace（新调用面）→ 值随 fresh 刷新
++  const NEW_FACE = { endpoints: [{ method: 'POST', path: '/api/new', rowIdx: 1 }], declared: 1, writeEndpoints: [] }
++  const r2 = writeVerifyFacts(changeDir, { apiFace: NEW_FACE }, 'pf-x')
++  assert.deepEqual(r2.facts.apiFace, NEW_FACE, 'fresh 有 apiFace → 以 fresh 为准（同源重算语义）')
++  const onDisk = JSON.parse(readFileSync(factsPath, 'utf8'))
++  assert.equal(onDisk.apiFace.endpoints[0].path, '/api/new', '落盘与返回一致')
++})
+diff --git a/test/pitfall-gate-collect.test.mjs b/test/pitfall-gate-collect.test.mjs
+new file mode 100644
+index 00000000..4b70ec13
+--- /dev/null
++++ b/test/pitfall-gate-collect.test.mjs
+@@ -0,0 +1,68 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-03 — verify 收口三门并入 docGateFailures 一次性全列
++ *
++ * 坑 verify-close-gate-staggered-exposure（消费仓四轮 --done 实证）：探针一致性/draft 篡改/
++ * ceremony 双跑三门原排在实测门之后逐个 fail-fast——每轮先付 195s 实测再见一个新文档问题。
++ * 锁死契约：三门与既有文档校验器同轮收集，检查点 A 聚合输出（`N 道纯文档门拦截` + label 清单）
++ * 后统一回滚；多门不满足时一轮全部列出。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { completeStageGates } from '../src/run/gates.js'
++import { runCapturing, makeRepo, initChange, seedStage, cleanup } from './_complete-step-harness.mjs'
++
++const VERIFY_STEPS = ['加载规范并锚定', '对照设计检查', '测试与质量扫描', '验证结果记录', '风险标记与收尾建议', '交叉验证（独立视角）', '汇总验证结论']
++
++async function verifyFixture(prefix, changeName, { deadLetter, dropProbeSections, strict = true }) {
++  const { cwd, specBase } = makeRepo(prefix)
++  const pm = await initChange(cwd, specBase, changeName)
++  // 严格档显式构造（harness 默认回填 2026-01-01 存量豁免档，照 ir-strict-mode 用例先例覆写）
++  if (strict) {
++    try {
++      pm._ensureDB(cwd).getDb()
++        .prepare("UPDATE changes SET created_at = '2026-10-15T00:00:00.000Z' WHERE name = ?")
++        .run(changeName)
++    } catch { /* 覆写失败 → 存量档（isStrictChange fail-open 同向） */ }
++  }
++  const changeDir = join(specBase, 'changes', changeName)
++  writeFileSync(join(changeDir, 'design.md'), '# Design\n\n## 目标\n\n测试\n')
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
++  // 严格档变更（created_at=now ≥ IR_STRICT_SINCE）+ 无 #### 探针 子节 → probe error
++  const probeSection = dropProbeSections ? '' : '\n#### 探针 1 未实现标记\n\n（预填子节在场占位）\n'
++  writeFileSync(join(changeDir, 'verify-result.md'),
++    `---\nauthor: test\ncreated_at: 2026-08-15 00:00:00\n---\n# 验证报告\n\n## 结论\n\nPASS\n\n全部通过。${probeSection}`)
++  const impactStatus = deadLetter ? '| （execute 完成后由 archive 阶段同步） | 待办 | pending |' : '| modules/x.md | 契约更新 | done |'
++  writeFileSync(join(changeDir, 'module-impact.md'),
++    `---\nauthor: test\ncreated_at: 2026-08-15 00:00:00\n---\n\n# 模块影响分析（Module Impact）— ${changeName}\n\n## 更新结果\n\n| 模块文档 | 操作 | 状态 |\n|----------|------|------|\n${impactStatus}\n`)
++  const steps = VERIFY_STEPS.map(name => ({ name, status: 'completed' }))
++  const progress = await seedStage(pm, cwd, changeName, 'verify', steps, 'completed')
++  return { cwd, specBase, pm, progress, steps, changeName }
++}
++
++test.after(() => { cleanup() })
++
++test('FR-03：死信 + 探针一致性两门同轮全列后统一回滚（不再逐门连撞）', async () => {
++  const f = await verifyFixture('pgc-collect-', 'pgc-collect-x', { deadLetter: true, dropProbeSections: true })
++  const r = await runCapturing(() =>
++    completeStageGates({ stageName: 'verify', cwd: f.cwd, changeName: f.changeName, platformOpts: {}, specBase: f.specBase, progress: f.progress, pm: f.pm, stageData: f.progress.stages.verify, steps: f.steps, currentIdx: 6, outputText: null }))
++
++  assert.equal(r.result && r.result.stageCompleted, false, `stageCompleted:false（文档门回滚），result: ${JSON.stringify(r.result)}`)
++  // 聚合签名：检查点 A 的「N 道纯文档门拦截」一次列出两门 label
++  assert.ok(r.stdout.includes('纯文档门拦截'), `stdout 含检查点 A 聚合头（尾 500：${r.stdout.slice(-500)}）`)
++  assert.ok(r.stdout.includes('pending/待办死信'), '死信门 label 在列')
++  assert.ok(r.stdout.includes('探针一致性抽查 error 阻断'), '探针门 label 在列（前移收集生效）')
++  const m = r.stdout.match(/被 (\d+) 道纯文档门拦截/)
++  assert.ok(m && Number(m[1]) >= 2, `至少 2 道门同轮列出（got ${m && m[1]}）`)
++  const after = await f.pm.read(f.cwd, f.changeName)
++  assert.notEqual(after.stages.verify.status, 'completed', 'DB: verify 状态已回滚')
++})
++
++test('FR-03：三门全清时零新增噪音（存量档无 facts → 探针 skipped 不拦）', async () => {
++  const f = await verifyFixture('pgc-clean-', 'pgc-clean-x', { deadLetter: false, dropProbeSections: true, strict: false })
++  const r = await runCapturing(() =>
++    completeStageGates({ stageName: 'verify', cwd: f.cwd, changeName: f.changeName, platformOpts: {}, specBase: f.specBase, progress: f.progress, pm: f.pm, stageData: f.progress.stages.verify, steps: f.steps, currentIdx: 6, outputText: null }))
++  assert.ok(!r.stdout.includes('探针一致性抽查 error 阻断'), '探针门不误拦（子节在场）')
++  assert.ok(!r.stdout.includes('纯文档门拦截'), '文档面全清不出现聚合头')
++})
+diff --git a/test/pitfall-probe7-noise.test.mjs b/test/pitfall-probe7-noise.test.mjs
+new file mode 100644
+index 00000000..4a182d36
+--- /dev/null
++++ b/test/pitfall-probe7-noise.test.mjs
+@@ -0,0 +1,47 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-10 — probe7 矩阵「归属测试文件」列预填降噪
++ *
++ * 坑 probe-noise-and-commit-suggest-quality 坑A（消费仓实证）：task-03 的 allowed_paths 含宽
++ * 目录 backend → 预填表格归属列塞进 82 个测试文件名（单行数千字符 ×3 行），信号全淹。
++ * 锁死契约：归属列最多展示 5 个（mdEscapeCell 转义），超出折叠「共 N 个」；收集面同步设帽 20。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { renderProbe7Lines } from '../src/verify-probes.js'
++
++const P7 = (testFiles) => ({
++  applicable: true,
++  tasks: [{
++    task: 'task-03',
++    acceptance: ['列表接口返回过滤后的数据'],
++    testFiles,
++    existingTests: [],
++    hints: [null],
++  }],
++})
++
++test('FR-10：82 文件截断为 5 + 「共 82 个」折叠，路径转义不破表', () => {
++  const files = Array.from({ length: 82 }, (_, i) => `backend/test/case-${String(i).padStart(2, '0')}.test.js`)
++  const lines = renderProbe7Lines(P7(files))
++  const row = lines.find(l => l.startsWith('| 列表接口返回过滤后的数据'))
++  assert.ok(row, '矩阵行在场')
++  const attribCell = row.split(' | ')[1] // 第 2 列 = 归属测试文件
++  const shown = (attribCell.match(/`backend\/test\/case-/g) || []).length
++  assert.equal(shown, 5, `归属列展示 5 个（got ${shown}；cell=${attribCell.slice(0, 200)}）`)
++  assert.ok(attribCell.includes('…共 82 个'), '折叠计数在场')
++  assert.ok(!attribCell.includes('case-05.'), '第 6 个及以后不展示')
++  assert.ok(attribCell.length < 500, `单元格长度收敛（got ${attribCell.length}）`)
++})
++
++test('FR-10：≤5 个时不折叠、无计数尾巴', () => {
++  const lines = renderProbe7Lines(P7(['a.test.js', 'b.test.js']))
++  const row = lines.find(l => l.startsWith('| 列表接口返回过滤后的数据'))
++  assert.ok(row.includes('`a.test.js`') && row.includes('`b.test.js`'), '全部展示')
++  assert.ok(!row.includes('共 '), '无折叠计数')
++})
++
++test('FR-10：路径含竖线时转义不破表结构', () => {
++  const lines = renderProbe7Lines(P7(['weird|path.test.js', 'b.test.js', 'c.test.js', 'd.test.js', 'e.test.js', 'f.test.js']))
++  const row = lines.find(l => l.startsWith('| 列表接口返回过滤后的数据'))
++  assert.ok(!row.includes('weird|path'), `竖线路径被转义（got ${row}）`)
++})
+diff --git a/test/pitfall-reconcile-eol.test.mjs b/test/pitfall-reconcile-eol.test.mjs
+new file mode 100644
+index 00000000..20985d19
+--- /dev/null
++++ b/test/pitfall-reconcile-eol.test.mjs
+@@ -0,0 +1,72 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-05 — 对账 actual 面剔除纯行尾差异（EOL-only）
++ *
++ * 坑 verify-close-gate-staggered-exposure 建议④（消费仓实证）：gen:types 幂等重生成产生零内容
++ * diff（纯行尾标记）进 actual 面 → target_files ③类 undeclared 假红，要求为零内容改动补声明。
++ * 锁死契约：tracked 文件仅行尾差异（--ignore-cr-at-eol 对照零内容变更）→ 剔出对账面并
++ * eolOnlyFiles 软留痕；真实内容变更/未跟踪新文件不受影响。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { resolveReconcileActualFiles } from '../src/verify-postcheck.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args, input) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', input })
++
++function baseRepo(prefix, changeName) {
++  const cwd = mk('eol-')
++  git(cwd, ['init', '-q', '-b', 'main'])
++  git(cwd, ['config', 'core.autocrlf', 'false'])
++  writeFileSync(join(cwd, 'real.js'), 'const a = 1\n')
++  writeFileSync(join(cwd, 'eol.js'), 'const b = 2\n')
++  writeFileSync(join(cwd, '.gitignore'), '.sillyspec/\n')
++  git(cwd, ['add', '.'])
++  git(cwd, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init'])
++  const specBase = join(cwd, '.sillyspec')
++  mkdirSync(join(specBase, '.runtime'), { recursive: true })
++  return { cwd, specBase, runtimeRoot: join(specBase, '.runtime'), changeName }
++}
++
++test('FR-05：工作树纯行尾重写剔出 actual 面（eolOnlyFiles 留痕），真实变更/未跟踪不受影响', () => {
++  const f = baseRepo('eol-wt-', 'eol-x')
++  // 真实内容变更 + 纯行尾重写（CRLF）+ 未跟踪新文件
++  writeFileSync(join(f.cwd, 'real.js'), 'const a = 2\n')
++  writeFileSync(join(f.cwd, 'eol.js'), 'const b = 2\r\n')
++  writeFileSync(join(f.cwd, 'brand-new.js'), 'const n = 0\n')
++
++  const r = resolveReconcileActualFiles({ cwd: f.cwd, specBase: f.specBase, runtimeRoot: f.runtimeRoot, changeName: f.changeName })
++  assert.equal(r.ok, true, `actual 解析 ok（got ${JSON.stringify(r)}）`)
++  assert.ok(r.files.includes('real.js'), '真实内容变更在 actual 面')
++  assert.ok(r.files.includes('brand-new.js'), '未跟踪新文件不受 EOL 过滤影响（豁免面）')
++  assert.ok(!r.files.includes('eol.js'), '纯行尾重写文件被剔出 actual 面')
++  assert.deepEqual(r.eolOnlyFiles, ['eol.js'], 'eolOnlyFiles 软留痕')
++})
++
++test('FR-05：worktree 分支已提交的纯行尾重写剔出（form A 已提交段配对探测）', () => {
++  const f = baseRepo('eol-wta-', 'eol-w')
++  const branch = `sillyspec/${f.changeName}`
++  const initHash = git(f.cwd, ['rev-parse', 'HEAD']).trim()
++  const wtPath = join(f.cwd, 'wt')
++  // -b：worktree add 直接在新目录建分支并检出（主仓停留 main，避免同分支双检出拒绝）
++  git(f.cwd, ['worktree', 'add', '-q', '-b', branch, wtPath])
++  // worktree 内已提交：纯行尾重写 + 真实内容变更
++  writeFileSync(join(wtPath, 'eol.js'), 'const b = 2\r\n')
++  writeFileSync(join(wtPath, 'real.js'), 'const a = 5\n')
++  git(wtPath, ['add', '.'])
++  git(wtPath, ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'c1'])
++  // form A：worktree meta 在场（resolveReconcileActualFiles/resolveVerifyChangedFiles 同源判定）
++  mkdirSync(join(f.specBase, '.runtime', 'worktrees', f.changeName), { recursive: true })
++  writeFileSync(join(f.specBase, '.runtime', 'worktrees', f.changeName, 'meta.json'),
++    JSON.stringify({ worktreePath: wtPath, branch, baselineCommit: initHash, mode: 'worktree' }))
++  const r = resolveReconcileActualFiles({ cwd: f.cwd, specBase: f.specBase, runtimeRoot: f.runtimeRoot, changeName: f.changeName })
++  assert.equal(r.ok, true, `actual 解析 ok（got ${JSON.stringify({ f: r.files, eol: r.eolOnlyFiles })}）`)
++  assert.ok(r.files.includes('real.js'), '真实内容变更保留')
++  assert.ok(!r.files.includes('eol.js'), '已提交的纯行尾重写剔出 actual 面')
++  assert.ok((r.eolOnlyFiles || []).includes('eol.js'), 'eolOnlyFiles 留痕')
++})
+diff --git a/test/pitfall-rejected-fields.test.mjs b/test/pitfall-rejected-fields.test.mjs
+new file mode 100644
+index 00000000..249e0784
+--- /dev/null
++++ b/test/pitfall-rejected-fields.test.mjs
+@@ -0,0 +1,68 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-09 — rejected 决策两字段前置到模板 + distill 补丁样例
++ *
++ * 坑 distill-rejected-field-late-hint（消费仓 archive step1 实证）：brainstorm 注入的决策模板
++ * 九字段不含 否决理由/复潮条件——rejected 条目把否决理由写 answer 散文完全合规，到 distill
++ * 才 needsWait；没留意直接 --confirm 则该条目静默不入库（防复潮通道漏一条）。
++ * 锁死契约：注入模板与四件套模板骨架含两字段行（标注 status=rejected 时必填）；distill
++ * needsWait 报错附可复制补丁样例。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { BRAINSTORM_ARTIFACT_TEMPLATES_MD } from '../src/stage-templates.js'
++import { definition as brainstormDefinition } from '../src/stages/brainstorm.js'
++import { executeArchiveDistill } from '../src/run/archive-distill.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('FR-09：两处模板骨架含 否决理由/复潮条件 字段行（rejected 必填标注）', () => {
++  for (const name of ['- 否决理由:', '- 复潮条件:']) {
++    assert.ok(BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes(name), `四件套模板骨架含 ${name} 字段行`)
++  }
++  assert.ok(BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('status=rejected 时必填'), '四件套模板带 rejected 必填标注')
++  const steps = brainstormDefinition.steps || []
++  const withFieldLines = steps.filter(s => String(s.prompt || '').includes('- 否决理由:') && String(s.prompt || '').includes('- 复潮条件:'))
++  assert.ok(withFieldLines.length >= 1, `brainstorm 注入模板（对话式探索步等）骨架含两字段行（got ${withFieldLines.length} 步）`)
++  assert.ok(String(withFieldLines[0].prompt).includes('status=rejected 时必填'), '注入模板带 rejected 必填标注')
++})
++
++test('FR-09：distill needsWait 报错附可复制补丁样例', async () => {
++  const proj = mk('prf-')
++  const specBase = join(proj, '.sillyspec')
++  const changeName = 'prf-x'
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  // rejected 条目：answer 散文写了否决理由但缺独立字段行（坑的原始形态）
++  writeFileSync(join(changeDir, 'decisions.md'), [
++    '---', 'author: t', 'created_at: 2026-10-15 00:00:00', '---', '',
++    '# 决策记录（Decisions）', '',
++    '## D-001@v1: 放弃方案B',
++    '- type: architecture',
++    '- priority: P1',
++    '- status: rejected',
++    '- source: user',
++    '- question: 用方案B吗',
++    '- answer: 不用，太重',
++    '- normalized_requirement: 不引入方案B',
++    '- impacts: []',
++    '- evidence: 用户回答轮次1',
++    '',
++  ].join('\n'))
++  const warns = []
++  const origWarn = console.warn
++  console.warn = (...a) => { warns.push(a.join(' ')) }
++  try {
++    await executeArchiveDistill({ cwd: proj, specBase, changeName })
++  } finally {
++    console.warn = origWarn
++  }
++  const text = warns.join('\n')
++  assert.ok(text.includes('needsWait'), 'needsWait 提示在场')
++  assert.ok(text.includes('- 否决理由:'), `报错附 否决理由 补丁样例行（got: ${text.slice(0, 400)}）`)
++  assert.ok(text.includes('- 复潮条件:'), '报错附 复潮条件 补丁样例行')
++})
+diff --git a/test/pitfall-stage-review-dir.test.mjs b/test/pitfall-stage-review-dir.test.mjs
+new file mode 100644
+index 00000000..2005a966
+--- /dev/null
++++ b/test/pitfall-stage-review-dir.test.mjs
+@@ -0,0 +1,82 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-06 — stage-review 目录读侧归一（错位目录容错）
++ *
++ * 坑 stage-review-dir-naming-mismatch（消费仓 brainstorm/plan 两阶段连环实证）：skill 文档
++ * 字面口径诱导 review.json 落进裸 runId 目录（marker 值当目录名）或双前缀目录，gate 与
++ * --refresh-hash 按规范目录找 → 恒「无对应 run」，只能人工搬 JSON。
++ * 锁死契约：resolveStageReviewDir 按 规范 → 双前缀 → 裸 runId 探测命中；validateStageReview
++ * 对错位文件正常校验；--refresh-hash 对错位文件可用（不报「无对应 run」）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import {
++  resolveStageReviewDir, validateStageReview, registerStageReview,
++  stageReviewMarkerPath, computeDocHash,
++} from '../src/stage-review.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const RUN_ID = 'review-2026-10-15-000708'
++
++function fixture(bareDir, { mainDoc = 'design.md', reviewType = 'design', stage = 'brainstorm' } = {}) {
++  const proj = mk('srd-')
++  const specBase = join(proj, '.sillyspec')
++  const runtimeRoot = join(specBase, '.runtime')
++  const changeName = 'srd-x'
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, mainDoc), '# 设计\n\n## 目标\n\n内容\n')
++  const dir = bareDir === 'bare' ? RUN_ID
++    : bareDir === 'double' ? `${stage}-review-${RUN_ID}`
++    : `${stage}-${RUN_ID}`
++  const reviewDir = join(runtimeRoot, 'stage-reviews', dir)
++  mkdirSync(reviewDir, { recursive: true })
++  writeFileSync(join(reviewDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, reviewType,
++    specVerdict: 'pass', qualityVerdict: 'pass',
++    reviewedFiles: [`changes/${changeName}/${mainDoc}`],
++    docHash: computeDocHash(join(changeDir, mainDoc)),
++    requiredEvidence: [],
++    reviewer: { channel: 'main-agent-self-review' },
++    reviewerNotes: 'fixture',
++  }, null, 2))
++  mkdirSync(runtimeRoot, { recursive: true })
++  writeFileSync(stageReviewMarkerPath(runtimeRoot, stage, changeName), RUN_ID + '\n')
++  return { proj, specBase, runtimeRoot, changeName, changeDir, reviewDir, stage, reviewType, mainDoc }
++}
++
++test('FR-06：裸 runId / 双前缀错位目录均被 resolveStageReviewDir 容错命中', () => {
++  const f1 = fixture('bare')
++  assert.equal(resolveStageReviewDir(f1.runtimeRoot, 'brainstorm', RUN_ID), join(f1.runtimeRoot, 'stage-reviews', RUN_ID), '裸 runId 目录命中')
++  const f2 = fixture('double')
++  assert.equal(resolveStageReviewDir(f2.runtimeRoot, 'brainstorm', RUN_ID), join(f2.runtimeRoot, 'stage-reviews', `brainstorm-review-${RUN_ID}`), '双前缀目录命中')
++  const f3 = fixture('canonical')
++  assert.equal(resolveStageReviewDir(f3.runtimeRoot, 'brainstorm', RUN_ID), join(f3.runtimeRoot, 'stage-reviews', `brainstorm-${RUN_ID}`), '规范目录命中')
++})
++
++test('FR-06：validateStageReview 对错位（裸 runId）文件正常校验通过', () => {
++  const f = fixture('bare')
++  const r = validateStageReview({
++    stage: 'brainstorm', reviewType: 'design', runtimeRoot: f.runtimeRoot,
++    reviewRunId: RUN_ID, searchDirs: [f.specBase, f.changeDir],
++  })
++  assert.equal(r.ok, true, `错位目录文件按正常流程校验（errors=${JSON.stringify(r.errors)}）`)
++  assert.equal(r.review && r.review.specVerdict, 'pass', 'review 内容可读')
++})
++
++test('FR-06：--refresh-hash 对错位（裸 runId）文件可用（不再报「无对应 run」）', () => {
++  const f = fixture('bare')
++  // 主文档改版（docHash 漂移）→ refresh 场景
++  writeFileSync(join(f.changeDir, 'design.md'), '# 设计\n\n## 目标\n\n内容 v2\n')
++  const out = registerStageReview({ changeName: f.changeName, stage: 'brainstorm', cwd: f.proj, platformOpts: { specRoot: f.specBase }, refreshHash: true })
++  assert.equal(out.ok, true, `refresh 成功（out=${JSON.stringify(out)}）`)
++  assert.equal(out.mode, 'refreshed', '就地刷新（非 noop）')
++  const refreshed = JSON.parse(readFileSync(out.reviewPath, 'utf8'))
++  assert.equal(refreshed.docHash, computeDocHash(join(f.changeDir, 'design.md')), 'hash 已按新版重算')
++  assert.equal(refreshed.specVerdict, 'pass', 'verdict 保留')
++})
+diff --git a/test/pitfall-sync-409.test.mjs b/test/pitfall-sync-409.test.mjs
+new file mode 100644
+index 00000000..612ef590
+--- /dev/null
++++ b/test/pitfall-sync-409.test.mjs
+@@ -0,0 +1,41 @@
++/**
++ * 2026-10-15-pitfall-batch-clearance FR-12 — 平台 409 回显折叠单行
++ *
++ * 坑 probe-noise-and-commit-suggest-quality 坑C（消费仓实证）：spec-sync 对平台 POST 多次 409，
++ * 响应体含整段 platform_progress 大对象，本地 text.slice(0,200) 密排回显挂在每条 CLI 命令尾部
++ * 刷屏。锁死契约：409 冲突体折叠为一行摘要（conflict 标识 + 关键字段，不回显大对象）；
++ * 非 JSON 退回截断原文（零回归）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { formatSyncHttpErrorLine } from '../src/sync.js'
++
++const CONFLICT_BODY = JSON.stringify({
++  conflict: true,
++  change: 'mychange',
++  last_pushed_at: '2026-10-15T06:51:30Z',
++  platform_progress: { stages: { execute: { status: 'completed', steps: Array.from({ length: 40 }, (_, i) => ({ name: `s${i}`, status: 'completed' })) } }, timeline: Array.from({ length: 30 }, (_, i) => ({ t: i })) },
++})
++
++test('FR-12：409 冲突体折叠单行摘要（不回显 platform_progress）', () => {
++  const line = formatSyncHttpErrorLine('POST', 'https://crrcdt.ppdmq.top/api/progress', 409, CONFLICT_BODY)
++  assert.ok(!line.includes('\n'), '单行')
++  assert.ok(line.includes('→ 409'), '状态码在场')
++  assert.ok(line.includes('conflict'), 'conflict 标识在场')
++  assert.ok(line.includes('change=mychange'), '变更标识在场')
++  assert.ok(line.includes('last_pushed_at=2026-10-15T06:51:30Z'), '时间戳在场')
++  assert.ok(!line.includes('platform_progress') || !line.includes('stages'), '不回显大对象内容')
++  assert.ok(line.length < 200, `行长远小于响应体（got ${line.length}）`)
++})
++
++test('FR-12：非 JSON 错误体退回截断原文（零回归）', () => {
++  const line = formatSyncHttpErrorLine('GET', 'https://x/y', 502, 'Bad Gateway'.repeat(50))
++  assert.ok(line.includes('→ 502'), '状态码在场')
++  assert.ok(line.length <= '[sync] GET https://x/y → 502 '.length + 200, '截断 200 语义保留')
++})
++
++test('FR-12：其他 JSON 错误体打键名摘要', () => {
++  const line = formatSyncHttpErrorLine('POST', 'https://x/y', 400, JSON.stringify({ error: 'bad', detail: { a: 1 } }))
++  assert.ok(line.includes('json(error,detail)'), `键名摘要（got ${line}）`)
++  assert.ok(!line.includes('{"a":1}'), '不回显对象内容')
++})
+diff --git a/test/task-review-retire.test.mjs b/test/task-review-retire.test.mjs
+index cbc10b6c..0cb350e7 100644
+--- a/test/task-review-retire.test.mjs
++++ b/test/task-review-retire.test.mjs
+@@ -41,11 +41,21 @@ test('① gates.js 三处消费门退役', () => {
+   assert.ok(src.includes('readReviewUnsupervisedWaiver'), 'review-unsupervised 豁免凭据保留（Stage Review/align 消费）')
+ })
+ 
+-test('② complete.js 生成侧停写（批量完成与代码证据核验保留）', () => {
++test('② complete.js 生成侧停写（批量完成与代码证据核验保留；批量路径草稿重接线 2026-10-15）', () => {
+   const src = read('src/run/complete.js')
+   assert.ok(!src.includes('await autoCheckPlanFromReviews('), '无 autoCheckPlanFromReviews 调用（--done/完成提示两处均删）')
+-  assert.ok(!src.includes("await import('../task-review.js')") || !/import\('\.\.\/task-review\.js'\)[\s\S]{0,120}generateTaskReviewDrafts/.test(src), '无 per-task review 草稿兜底')
+   assert.ok(src.includes('detectExecuteBatchFinish'), 'detectExecuteBatchFinish 保留（批量完成）')
++  // 2026-10-15-pitfall-batch-clearance FR-07（坑 task-review-retired-archive-mismatch）：退役时
++  // 「生成侧停写」钉已过时——archive step2 真相源仍要 review.json，正常五阶段变更到归档门口
++  // 全量缺失。新契约：generateTaskReviewDrafts 只允许在 detectExecuteBatchFinish 函数体内
++  // （批量完成路径幂等补缺失草稿）；completeStep 主体/单步完成提示仍零草稿兜底。
++  const fnStart = src.indexOf('export async function detectExecuteBatchFinish')
++  assert.ok(fnStart >= 0, 'detectExecuteBatchFinish 函数体定位')
++  const callIdx = src.indexOf('generateTaskReviewDrafts({ changeName, cwd, platformOpts })')
++  assert.ok(callIdx > fnStart, '草稿生成调用在 detectExecuteBatchFinish 函数体内（批量路径限定）')
++  // completeStep 主体（detectExecuteBatchFinish 定义之前的区域）不得出现草稿兜底调用
++  // （注释里的「与 generateTaskReviewDrafts 同源」提及不算调用——只匹配调用形态）
++  assert.ok(!/generateTaskReviewDrafts\(/.test(src.slice(0, fnStart)), 'completeStep/单步路径无草稿兜底调用')
+   // 模块内 autoCheckPlanFromReviews 定义保留（兼容读侧：index.js review-write 钩子 / task-done 消费）
+   assert.ok(src.includes('export async function autoCheckPlanFromReviews'), 'autoCheckPlanFromReviews 定义保留（兼容导出）')
+ })

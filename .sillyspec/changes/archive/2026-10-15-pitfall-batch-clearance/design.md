@@ -6,6 +6,8 @@ created_at: 2026-10-14T23:31:43.981Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 六坑十一条修复线，全部是 sillyspec CLI 既有机制的最小校正，不新增模块：
 
 1. **坑1**（stage-contract.js / run/gates.js / verify-probes.js / verify-postcheck.js）：
@@ -18,7 +20,8 @@ created_at: 2026-10-14T23:31:43.981Z
    - `buildVerifyFacts` 透传 result.apiFace 落键 + `writeVerifyFacts` 合并段保留 apiFace（修
      re-init 抹除回填键）；
    - `resolveReconcileActualFiles` 尾段加 EOL-only 过滤：对每个贡献 actual 面的 git 源配一次
-     `--ignore-cr-at-eol` 同基点对照（手法照搬 run/shared.js eolOnly 先例，2026-09-12 生产验证），
+     `--ignore-cr-at-eol` 同基点对照（思路源自 run/shared.js eolOnly 先例；实现期实测发现其
+     `--name-only` 形态在 git≥2.45 不吃该 flag——本变更改走 `--numstat` 配对探测，见偏离记录①），
      未跟踪文件豁免，剔出文件归 eolOnlyFiles 软留痕并从 union 移除。
 2. **坑2**（stage-review.js + 三份 SKILL.md）：新增读侧助手 `resolveStageReviewDir`（规范
    `<stage>-<runId>` → 双前缀 `<stage>-review-<runId>` → 裸 `<runId>` 三级探测，全不在则返回规范
@@ -42,6 +45,8 @@ created_at: 2026-10-14T23:31:43.981Z
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - CLI 行为变化（无函数签名删除/改名）：verify --done 文档门报错聚合面扩大（三门并入）；
   verify-probes --init 产物新增 apiFace 键、re-init 保留固化键；verify 对账结果新增 eolOnlyFiles
   字段与 note；stage-review 读侧容错错位目录；register-stage-review --refresh-hash 对错位文件可用；
@@ -52,7 +57,29 @@ created_at: 2026-10-14T23:31:43.981Z
   独立函数，subject token × allowed_paths 事实锚）；verify-probes.js `renderProbe7Lines`（转导出
   供测试）；commit-suggest.js 无新签名（行为修正）。
 
+## 文件变更清单
+
+- src 实现：src/stage-contract.js、src/run/gates.js、src/verify-probes.js、src/verify-postcheck.js、
+  src/stage-review.js、src/run/complete.js、src/stages/brainstorm.js、src/stage-templates.js、
+  src/run/archive-distill.js、src/commit-suggest.js、src/sync.js
+- skill 文档：.claude/skills/sillyspec-brainstorm/SKILL.md、sillyspec-plan/SKILL.md、
+  sillyspec-execute/SKILL.md（FR-06 口径统一）
+- 测试：test/pitfall-*.test.mjs 新增 11 份 + 3 份既有契约钉随新契约更新
+  （task-review-retire / execute-batch-endtoend-checkbox / execute-batch-zero-diff）
+- 文档机械重锚（docs check --fix 行号漂移回执，sync.js 插入致漂移）：docs/sillyspec/*.md 5 份、
+  .sillyspec/docs/** 模块卡与 scan 9 份、.sillyspec/knowledge/** 蒸馏件引用重锚 4 份
+- 模块图登记：.sillyspec/docs/sillyspec/modules/_module-map.yaml（skills-docs 新条目）+
+  modules/skills-docs.md（新卡片，.claude/skills 目录入图）
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
 
 1. **乱序/迟到**：代勾按 subject token + diff 交叠判据，晚到的实现提交在下次 --done 重新评估
    （HEAD~20 窗口）；补草稿幂等（review 已在不写），重复 --done 无副作用；EOL 过滤在每次对账
@@ -68,6 +95,8 @@ created_at: 2026-10-14T23:31:43.981Z
    不污染；SKILL.md 为随包分发文档，改的是本仓三份源文件。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 最大风险：①三门并入收集后单轮报错列表变长（可接受——本就是 CLI 承诺形态）；②代勾判据收紧可能
 漏勾（保守方向正确：漏勾人工补，误勾破坏真相源——坑 4 两次实证）；③EOL 过滤对「声明了但只改了

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-pitfall-batch-clearance",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9b0519c3047a86512bb0000ba5b4c65aa890ace6",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03『三门同时不满足同轮全列』场景仅同轮驱动两门（死信+探针一致性），draft 篡改门与 ceremony 双跑门的并入只有代码锚点、无组合场景断言（记录性留档，不修）",
+      "evidence": "gates.js:1009/1030/1049 三处 push 与检查点 A（1057-1063）前移结构均已在代码面核实（实测门在 1068 之后），但 pitfall-gate-collect.test.mjs 用例一仅构造死信+探针一致性两门同轮（断言『被 (\\d+) 道纯文档门拦截』≥2），三门齐撞的 FR 场景无端到端锁定——组合场景断言缺口的改进项留档",
+      "location": "test/pitfall-gate-collect.test.mjs:46"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T01:21:14Z"
+}

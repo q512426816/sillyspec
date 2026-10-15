@@ -3058,3 +3058,63 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：1cb2fc91c7a752bac7172540c9892efedc0b476b
 理由：- 最大风险：真实库一次性重写 29 文件 701 节段——回退靠 git（迁移前状态已提交）；dry-run 对账先行（计划数=底数实测）；节段其余行逐字节保留 + 次序不变把改写面压到标题行与插入行两处。 - 平台向量索引：旧 anchor（局部号）在平台索引重建前不再命中——等值匹配下这些条目向量召回降级（本地词面检索不受影响），重建随平台 ingest 恢复；探针验证结果如实留档。 - 死路（放弃）：不做迁移只靠「自然收敛」——决策条目无跨变更承接机制，legacy 号永续共存（用户不接受永久双形态，裁决翻案）。 - 死路（放弃）：fanout 副本逐文件各自发号——违背单一身份铁律（FR 侧 R1 裁决同源），组内同号才保豁免键/引用/图节点一致性。
+
+## D-unmapped-374@v1 stage-review 错位目录读侧容错（不搬文件不改 marker 形态）
+状态：implemented
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-001@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：读侧三级探测容错（规范 → 双前缀 → 裸 runId），写入侧恒规范路径，SKILL.md 口径统一为「目录名 = <stage>- + marker 值原样」
+故障面：容错探测每读点三次 existsSync（可忽略）；错位文件永不迁移可能在 stage-reviews/ 长期共存（审计面可见 docHash 刷新留痕）
+退役判据：存量错位目录自然消亡且 skill 文档新口径运行一个季度无新错位报告时可收敛为单形态探测
+
+## D-unmapped-375@v1 错位目录归一否决「marker 值改为完整目录名」
+状态：rejected
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-002@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：否决，选读侧容错
+否决理由：改 marker 写入形态破坏全部存量 marker 读取兼容（getLatestStageReviewRunId 校验 review- 前缀、prompt {STAGE_REVIEW_RUN_ID} 注入、fallback 扫描三处按裸 runId 契约），迁移成本与风险远高于读侧 existsSync 容错
+复潮条件：出现 marker 值与目录名形态再次分叉的系统性新需求（如 per-change 多 review 并存需目录名携带更多语义）时重议
+
+## D-unmapped-376@v1 archive 完成度缺口走「批量完成自动补草稿」而非「复合真相源」
+状态：implemented
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-003@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：detectExecuteBatchFinish 复核循环前调既有 generateTaskReviewDrafts 幂等补缺失草稿（挂在 runId marker 读取前，run 缺失一并建立）；archive 真相源语义不变
+故障面：cannot_verify 草稿计数为 completed（summarize 单列 cannotVerifyCount 可见）——草稿≠真验过，verify 兑证/人工复核仍是升级通道
+退役判据：archive 完成度判定改为 tasks.md+acceptance 复合真相源时本钩子可退化为 advisory
+
+## D-unmapped-377@v1 archive 复合真相源方案否决
+状态：rejected
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-004@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：否决，选 D-003 自动补草稿
+否决理由：复合真相源改动语义面大（summarize 三消费方连锁）且与 backfill-reviews 手动通道先例冲突；自动补草稿复用既有幂等生成器，改动收敛在批量完成单点
+复潮条件：草稿补齐路径在生产再出现「草稿冒充完成」误判（cannot_verify 被当 pass 消费）时重议复合真相源
+
+## D-unmapped-378@v1 对账 EOL-only 过滤用配对探测（正向信号才剔）
+状态：implemented
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-005@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：每个 plain diff 源配一次同范围 --ignore-cr-at-eol --numstat 对照，差集=纯行尾差异才剔（absence-based 不可用）；未跟踪豁免；探测失败 fail-open
+故障面：post-apply 全量并入 main 后 B1 基点=分支 tip，已提交行尾重写不进 plain diff 不过滤（保守保留，软 note 无）——仅工作树与 form A 已提交段两探测面覆盖
+退役判据：仓统一定 .gitattributes 行尾策略后 gen 类脚本不再产纯行尾 diff 时可退役
+
+## D-unmapped-379@v1 代勾证据源收敛为 subject token × allowed_paths 交叠
+状态：implemented
+变更：2026-10-15-pitfall-batch-clearance
+原编号：D-006@v1
+锚点：未记录
+最近确认：8340ef2f5ad081dc5f209a0295901da123ad60d7
+理由：提交 subject 行（%s）的 task-NN token 为证据，卡面 allowed_paths 在场时要求提及该 task 的提交触及面与声明面交叠（parseAllowedPaths+pathMatches 与草稿归属同口径）；无卡面退化仅 subject；shouldAutoCheckTask 草稿守卫 ctx 缺席同样保守不勾
+故障面：漏勾方向保守（卡面 allowed_paths 声明面与实际改动不符时退化人工勾选）；execute-batch 两用例的「ctx 缺省草稿照勾」向后兼容钉随本决策更新为保守不勾
+退役判据：task 完成事实锚出现更权威信号（如 review verdict 全链在场）时可退化为纯 review 锚
