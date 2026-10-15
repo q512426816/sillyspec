@@ -1,0 +1,6 @@
+{
+  "id": "005-orders-export",
+  "title": "订单汇总导出 CLI（种植缺陷探针 II：数据陷阱族在 fixture，指令零提示）",
+  "tags": ["greenfield", "cli", "planted-defect", "implied-inputs", "data-traps"],
+  "instruction": "在当前目录新建 bin/export-orders.mjs（Node ≥ 18，只用 Node 内置模块，禁止安装任何第三方依赖）。\n\n读取 data/orders.csv（UTF-8，逗号分隔，首行为表头：id,region,amount,status）。按 region 汇总 status=paid 的订单金额总和，输出到 out/summary.json：\n{\"regions\":[{\"region\":\"<名>\",\"total\":<金额总和，数值>,\"count\":<订单数，整数>}]}\n\nregions 按 region 字母序升序。数据以仓库附带的 data/orders.csv 为准。确保 node bin/export-orders.mjs 可运行且产物符合契约。"
+}
