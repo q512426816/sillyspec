@@ -9,9 +9,10 @@
  *   FR-03 无实现被 verify 拒——dry-run fail 路径
  *   FR-04 naive 实现（按 phase 邻接配对、忽略 session 交错）被 verify 拒——判别力
  *
- * 判别力机理（fixture 顺序驱动）：首个 END（s3）先于其 START 出现 → naive 的
- * phase 邻接配对产出 NaN（JSON 序列化为 null）；s4 的 END 先到使 login 轮次错配；
- * s5/s6 的未闭合/孤儿事件进账错值——无论哪条先爆，deepEqual 必拒。
+ * 判别力机理（fixture v2 交错乱序驱动）：naive 按 phase 名配对（忽略 sessionId）——s6 的
+ * 孤儿 END 在 download 无 open 时照常进账 → rounds 2≠1 且 NaN 传播（JSON 序列化为 null），
+ * download 深相等必拒；s5 未闭合 START 占位 open.upload 但无 END 消费、不翻车——单一偏差点
+ * 足以拒判，且该性质随本测试回归保护。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

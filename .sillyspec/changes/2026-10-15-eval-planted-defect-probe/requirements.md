@@ -54,7 +54,7 @@ created_at: 2026-10-15T11:52:30.994Z
 
 ### FR-04: 判别力：naive 实现（按文件邻接配对、不跳空行）verify 必拒
 
-- 必须：新增 test/eval-planted-defect-probe.test.mjs，内嵌一个「只实现了命名表层」的 naive 实现（逐文件行序邻接配对、不 trim/不跳空行），对其运行 verify.mjs 退出码非 0——证明该任务能区分「只做表面」与「覆盖隐含面」的实现，这是本探针的成立前提。
+- 必须：新增 test/eval-planted-defect-probe.test.mjs，内嵌一个「只实现了命名表层」的 naive 实现（按 phase 名配对、忽略 sessionId——s6 孤儿 END 照常进账致 download rounds 2≠1 且 NaN 传播为 null；空白行按常见习惯过滤），对其运行 verify.mjs 退出码非 0——证明该任务能区分「只做表面」与「覆盖隐含面」的实现，这是本探针的成立前提。
 
 #### 场景：naive 被拒
 
