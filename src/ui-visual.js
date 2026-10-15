@@ -18,6 +18,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
+import { parseRepoRegistry } from './stages/plan-postcheck.js'
 
 export const UI_VISUAL_PROBE_HEADING = '#### 探针 12：UI 视觉证据（分级门）'
 export const UI_EVIDENCE_FILENAME = 'visual-evidence.md'
@@ -86,10 +87,13 @@ export function readUiPrototypeForm(specBase) {
 }
 
 /**
- * 多仓 override 解析（FR-02）：触达路径与 local.yaml repos 注册路径（key→path 映射，与
- * plan-postcheck parseRepoRegistry 同源语义）前缀匹配——命中的注册子仓若在 ui_prototype.repos
- * 有 override 则该形态优先；未命中/无 override 走仓级兜底。返回形态条目数组（去重）：
+ * 多仓 override 解析（FR-02）：触达路径与 local.yaml repos 注册匹配——子仓若在
+ * ui_prototype.repos 有 override 则该形态优先；未命中走仓级兜底。返回形态条目数组（去重）：
  * 每项 { scope: '仓级'|'<子仓键>', form, ruling, rulingComplete, registered }。
+ * 匹配三通道（评审 P2 清偿：注入语料常为相对路径，纯绝对前缀会让 override 静默失效）：
+ *   ① 绝对前缀：归一（反斜杠→斜杠/去尾斜杠/大小写不敏感）后 startsWith 注册路径；
+ *   ② 相对键前缀：路径以 `<repoKey>/` 开头（语料常见 `spdemo/src/...` 形态）；
+ *   ③ 相对基名前缀：路径以注册路径 basename + `/` 开头（键与目录名不同名时兜底）。
  */
 export function resolveUiPrototypeFor(specBase, paths = []) {
   const proto = readUiPrototypeForm(specBase)
@@ -104,15 +108,20 @@ export function resolveUiPrototypeFor(specBase, paths = []) {
   if (paths.length > 0) {
     let repoPaths = {}
     try {
-      const raw = jsYaml.load(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
-      if (raw && raw.repos && typeof raw.repos === 'object') repoPaths = raw.repos
-    } catch { /* 路径归一失败=零子仓命中，仓级兜底 */ }
+      // 复用既有注册解析（plan-postcheck _parseRepoEntries 同语义出口：字符串条目=路径、
+      // 对象条目取 path 子键）——不走 js-yaml 裸读，防对象形态静默漏配。
+      repoPaths = Object.fromEntries(parseRepoRegistry(readFileSync(join(specBase, 'local.yaml'), 'utf8')))
+    } catch { /* 解析失败=零子仓命中，仓级兜底 */ }
     const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
     for (const [key, registeredPath] of Object.entries(repoPaths)) {
-      if (typeof registeredPath !== 'string') continue
+      if (typeof registeredPath !== 'string' || !registeredPath) continue
+      const reg = norm(registeredPath)
+      const regBase = reg.split('/').pop()
       const hit = paths.some((p) => {
         const np = norm(p)
-        return np.startsWith(norm(registeredPath) + '/') || np === norm(registeredPath)
+        return np.startsWith(reg + '/') || np === reg
+          || np.startsWith(key.toLowerCase() + '/')
+          || np.startsWith(regBase + '/')
       })
       const override = proto.repos[key]
       if (hit && override) push({ scope: key, registered: true, ...override })

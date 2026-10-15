@@ -42,10 +42,14 @@ test('① readUiPrototypeForm 五态', () => {
   // 态3：完整豁免
   const c = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n    at: 2026-10-15\n    reason: 本仓暂无真码原型管线，接受复刻形态\n')
   const rc = readUiPrototypeForm(c.specBase)
-  assert.equal(rc.form, 'single-html') && assert.equal(rc.rulingComplete, true, '豁免 ruling 全三字段 → complete')
+  assert.equal(rc.form, 'single-html', '豁免 form')
+  assert.equal(rc.rulingComplete, true, '豁免 ruling 全三字段 → complete')
   // 态4：豁免缺字段
   const d = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n')
   assert.equal(readUiPrototypeForm(d.specBase).rulingComplete, false, 'ruling 缺 at/reason → incomplete')
+  // 态4b：form 非法值 → registered:false（白名单外同缺席）
+  const d2 = makeSpecRoot('ui_prototype:\n  form: figma\n')
+  assert.equal(readUiPrototypeForm(d2.specBase).registered, false, '非法 form 值 → registered=false')
   // 态5：repos override 同构
   const e = makeSpecRoot('ui_prototype:\n  form: real-code\n  repos:\n    spdemo:\n      form: single-html\n      ruling:\n        by: qinyi\n        at: 2026-10-15\n        reason: 小程序无 HTML 面\n')
   const re = readUiPrototypeForm(e.specBase)
@@ -54,7 +58,7 @@ test('① readUiPrototypeForm 五态', () => {
   // 坏 YAML fail-soft
   const f = makeSpecRoot('ui_prototype: [broken\n')
   assert.equal(readUiPrototypeForm(f.specBase).registered, false, '坏 YAML 零抛出 → registered=false')
-  for (const r of [a, b, c, d, e, f]) rmSync(r.root, { recursive: true, force: true })
+  for (const r of [a, b, c, d, d2, e, f]) rmSync(r.root, { recursive: true, force: true })
 })
 
 test('② resolveUiPrototypeFor 子仓优先、仓级兜底', () => {
@@ -66,7 +70,8 @@ test('② resolveUiPrototypeFor 子仓优先、仓级兜底', () => {
   writeFileSync(join(specBase, 'local.yaml'), [
     'repos:',
     `  suba: ${subA.replace(/\\/g, '/')}`,
-    `  subb: ${subB.replace(/\\/g, '/')}`,
+    `  subb:`,
+    `    path: ${subB.replace(/\\/g, '/')}`,
     'ui_prototype:',
     '  form: real-code',
     '  repos:',
@@ -74,13 +79,17 @@ test('② resolveUiPrototypeFor 子仓优先、仓级兜底', () => {
     '      form: single-html',
     '      ruling: { by: qinyi, at: 2026-10-15, reason: 无 HTML 面 }',
   ].join('\n'))
-  // 触达 subA → override 生效 + 仓级兜底不重复
+  // 绝对路径触达 subA → override 生效
   const r1 = resolveUiPrototypeFor(specBase, [join(subA, 'src', 'page.tsx')])
   assert.equal(r1[0].scope, 'suba', '子仓 override 优先排首')
   assert.equal(r1[0].form, 'single-html')
-  // 触达 subB（无 override）→ 仓级兜底
+  // 相对键前缀触达（评审 P2：注入语料常见 `suba/src/...` 相对形态）→ 同样命中
+  const r1b = resolveUiPrototypeFor(specBase, ['suba/src/page.tsx'])
+  assert.equal(r1b[0].scope, 'suba', '相对键前缀命中子仓 override')
+  // 对象形态 repos 条目（{path:...}）不被静默跳过——触达 subB 走仓级（无 override 但可解析）
   const r2 = resolveUiPrototypeFor(specBase, [join(subB, 'index.js')])
-  assert.equal(r2.length, 1) && assert.equal(r2[0].scope, '仓级', '无 override 子仓 → 仓级兜底')
+  assert.equal(r2.length, 1)
+  assert.equal(r2[0].scope, '仓级', '对象形态条目可解析，无 override → 仓级兜底')
   // 无路径 → 仓级
   const r3 = resolveUiPrototypeFor(specBase, [])
   assert.equal(r3[0].scope, '仓级')
