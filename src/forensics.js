@@ -92,10 +92,17 @@ export function assembleForensicsPack({ specBase, runtimeRoot, changeName, verif
   const friction = readFrictionLedger(runtimeRoot).filter((e) => e.change === changeName)
 
   // ④ verify-runs（mtime 近序，同 mtime 路径字典序破平；截断前 N）
+  //    fail-soft：runsRoot 为普通文件/权限损坏形态时 readdirSync 抛 ENOTDIR——捕获降级，不阻断取证。
   const runsRoot = join(runtimeRoot, 'verify-runs')
   const verifyRuns = []
   if (existsSync(runsRoot)) {
-    const dirs = readdirSync(runsRoot, { withFileTypes: true })
+    let runEntries = []
+    try {
+      runEntries = readdirSync(runsRoot, { withFileTypes: true })
+    } catch {
+      warnings.push(`verify-runs 不可读（非目录或损坏形态，${runsRoot}）——降级为空`)
+    }
+    const dirs = runEntries
       .filter((d) => d.isDirectory())
       .map((d) => join(runsRoot, d.name))
     const withTime = dirs
@@ -120,11 +127,16 @@ export function assembleForensicsPack({ specBase, runtimeRoot, changeName, verif
     warnings.push(`无 verify-runs 目录（${runsRoot}）——本变更未跑过收口实测或 runtime 已清理`)
   }
 
-  // ⑤ 评审轮次（review.json + superseded-*，mtime 近序）
+  // ⑤ 评审轮次（review.json + superseded-*，mtime 近序；目录损坏形态同上降级）
   const reviews = []
   if (identity.changeDir && existsSync(identity.changeDir)) {
-    const files = readdirSync(identity.changeDir).filter((f) => /^review\.json(\.superseded-.+)?$/.test(f))
-    for (const f of files) {
+    let reviewFiles = []
+    try {
+      reviewFiles = readdirSync(identity.changeDir).filter((f) => /^review\.json(\.superseded-.+)?$/.test(f))
+    } catch {
+      warnings.push(`变更目录不可读（${identity.changeDir}）——评审轮次面降级为空`)
+    }
+    for (const f of reviewFiles) {
       const p = join(identity.changeDir, f)
       let mtimeIso = null
       try {

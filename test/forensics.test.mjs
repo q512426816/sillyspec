@@ -139,6 +139,22 @@ test('FR-01 归档变更：status=archived + 归档注记', () => {
   } finally { rmQuiet(tmp) }
 })
 
+test('FR-01 损坏形态降级：verify-runs/变更目录被文件占位时不抛错、空清单+注记（评审 P1 回归锚）', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'ss-fx9-'))
+  try {
+    const specBase = join(tmp, '.sillyspec')
+    const runtimeRoot = join(specBase, '.runtime')
+    write(join(runtimeRoot, 'verify-runs'), '不是目录，是文件')       // ENOTDIR 形态
+    write(join(specBase, 'changes', 'c3'), '变更目录被文件占位')      // 同类形态
+    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c3' })
+    assert.deepEqual(pack.verifyRuns, [], '损坏 verify-runs 降级为空')
+    assert.deepEqual(pack.reviews, [], '损坏变更目录评审轮次降级为空')
+    assert.ok(pack.warnings.some((w) => w.includes('verify-runs 不可读')), 'ENOTDIR 注记在场')
+    assert.ok(pack.warnings.some((w) => w.includes('变更目录不可读')), '变更目录注记在场')
+    assert.doesNotThrow(() => renderForensicsTaskbook(pack))
+  } finally { rmQuiet(tmp) }
+})
+
 test('FR-02 任务书：六维度骨架 + 四纪律关键短语 + 证据包路径回填', () => {
   const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx6-')
   try {
