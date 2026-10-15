@@ -61,3 +61,4 @@
 | 2026-10-14 | 2026-10-14-decision-global-id-epoch | 决策号 epoch 全局化（读面）：knowledge-match 标题双形态+原编号字段读入；knowledge-graph supersedes 经原编号解析同变更全局段；doctor 计数双形态（顺带修正旧正则 @\d+ 漏 @v 恒零潜伏 bug）；knowledge-vector anchor 契约注记（等值语义不变、平台重建索引窗口降级边界） |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
 | 2026-10-15 | 2026-10-15-graph-dangling-crossrepo-split | 效果评估实证：knowledge graph dangling 主计数 2537 条中 2472 为跨仓强边注记（bac |
+| 2026-10-15 | 2026-10-15-vector-gate-tighten | 效果评估实证：CLI 向量召回层 2026-09-29 发布时缺省 auto（有平台配置即试），但平台端 /api/sp |

@@ -1,0 +1,151 @@
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+index a3f0bd3f..d69f004c 100644
+--- a/src/knowledge-vector.js
++++ b/src/knowledge-vector.js
+@@ -25,6 +25,12 @@
+  * 降级纪律：任何失败（未连接/开关关闭/网络/404/5xx/超时/响应形态不符）静默降级本地层
+  * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
+  * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
++ *
++ * 开关契约（2026-10-15-vector-gate-tighten 收紧）：平台端点 404 实证（发布半个月后端从未
++ * 实现，10-14 评审探针实证），缺省从「有平台配置即试」改为「显式开启才试」——
++ * local.yaml knowledge.vector_search: on|auto 或 env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto
++ * 才启用；未写键=关。404 另按平台 URL 进程级短路（端点死信不再空转探测）。
++ * 平台侧实现本端点后：建索引 + 打开开关即恢复语义召回，CLI 零改动。
+  */
+ import { readFileSync } from 'fs'
+ import { join, dirname } from 'path'
+@@ -34,7 +40,8 @@ import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from '.
+ const VECTOR_TIMEOUT_MS = 3000
+ const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
+ 
+-/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search: off）。 */
++/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search 值；
++ *  未写键/无 yaml → null=未表态——2026-10-15-vector-gate-tighten 起缺省关，显式落盘才启用）。 */
+ function vectorSwitchFromLocalYaml(cwd) {
+   try {
+     const lines = readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf-8').split(/\r?\n/)
+@@ -46,16 +53,31 @@ function vectorSwitchFromLocalYaml(cwd) {
+       const kv = line.match(/^\s+vector_search\s*:\s*(\S+)/)
+       if (kv) return kv[1].toLowerCase()
+     }
+-  } catch { /* 无 local.yaml = 缺省 auto */ }
+-  return 'auto'
++  } catch { /* 无 local.yaml = 未表态 */ }
++  return null
+ }
+ 
++/**
++ * 向量层开关（2026-10-15-vector-gate-tighten 契约收紧）：平台端点 404 实证（2026-09-29 发布
++ * 起半个月对着不存在的后端空转探测，10-14 评审探针才实证），缺省从「有平台配置即试」收紧为
++ * 「显式开启才试」——
++ *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用（平台未配置自然 null 降级）；
++ *   env off（或其他值保守视为 off）→ 强制关；
++ *   local.yaml knowledge.vector_search: on|auto → 启用；off/未写键 → 关（缺省关）。
++ * 启用后失败静默降级本地契约不变。
++ */
+ function vectorEnabled(cwd) {
+   const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
+-  if (env === 'off' || env === 'auto') return env === 'auto'
+-  return vectorSwitchFromLocalYaml(cwd) !== 'off'
++  if (env === 'on' || env === 'auto') return true
++  if (env) return false
++  const sw = vectorSwitchFromLocalYaml(cwd)
++  return sw === 'on' || sw === 'auto'
+ }
+ 
++/** 404 死信端点（进程级，按平台 URL 记）：端点未实现=今天真实平台状态，标记后本进程不再
++ *  对同 URL 空转探测（CLI 短进程生命周期天然重置；测试各用独立端口互不污染）。 */
++const vectorDeadEndpoints = new Set()
++
+ /**
+  * 平台向量召回（纯 HTTP 层）。未连接/失败/形态不符 → null（调用方降级）。
+  * @returns {Promise<{results: Array<{spec_path: string, anchor: string, score: number}>}|null>}
+@@ -63,16 +85,19 @@ function vectorEnabled(cwd) {
+ export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = VECTOR_TIMEOUT_MS }) {
+   const cfg = readPlatformConfig(cwd)
+   if (!cfg || !cfg.url || !cfg.token) return null
++  const base = String(cfg.url).replace(/\/+$/, '')
++  if (vectorDeadEndpoints.has(base)) return null
+   const q = String(query || '').trim().slice(0, 4000)
+   if (!q) return null
+   try {
+-    const res = await fetch(`${String(cfg.url).replace(/\/+$/, '')}${ENDPOINT_PATH}`, {
++    const res = await fetch(`${base}${ENDPOINT_PATH}`, {
+       method: 'POST',
+       headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+       body: JSON.stringify({ query: q, limit }),
+       signal: AbortSignal.timeout(timeoutMs),
+     })
+     if (!res.ok) {
++      if (res.status === 404) vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
+       if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
+       return null
+     }
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+index ddd19a39..27359c45 100644
+--- a/test/knowledge-vector-recall.test.mjs
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -63,7 +63,7 @@ function seedRepo(mockUrl) {
+     '理由：谓词词表漏词——不拆优于误拆。', '',
+   ].join('\n'))
+   writeFileSync(join(root, '.sillyspec', 'local.yaml'),
+-    `project:\n  type: generic\nplatform:\n  url: ${mockUrl}\n  token: test-token\n`)
++    `project:\n  type: generic\nplatform:\n  url: ${mockUrl}\n  token: test-token\nknowledge:\n  vector_search: on\n`)
+   return root
+ }
+ 
+@@ -153,6 +153,7 @@ test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 
+     const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
+     process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
+     process.env.SILLYHUB_PLATFORM_TOKEN = env.SILLYHUB_PLATFORM_TOKEN
++    process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'on' // 真实库 local.yaml 无 vector_search 键——2026-10-15 缺省关后显式开启
+     try {
+       // 真实库路由命中面广（枚举词表查询走路由），用路由零命中查询触发 vector 层：
+       const km = await matchKnowledgeHybrid(join(REAL_SPEC, 'knowledge'), '帮我把行内顿号并列的标准切开', { cwd: REPO_ROOT })
+@@ -162,6 +163,45 @@ test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 
+     } finally {
+       delete process.env.SILLYHUB_PLATFORM_URL
+       delete process.env.SILLYHUB_PLATFORM_TOKEN
++      delete process.env.SILLYSPEC_KNOWLEDGE_VECTOR
+     }
+   })
+ })
++
++test('⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退', async () => {
++  await withMock('ok', [
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
++  ], async (m) => {
++    const root = mkdtempSync(join(tmpdir(), 'ss-vec-default-'))
++    mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
++    // platform 段在场、knowledge.vector_search 键未写 = 旧缺省 auto（会调）、新缺省关（零调用）
++    writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++      `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
++    try {
++      const kb = join(root, '.sillyspec', 'knowledge')
++      const km = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
++      assert.equal(m.requests.length, 0, `平台零调用（实际 ${m.requests.length} 次）`)
++      assert.notEqual(km.json && km.json.vector, true, '无 vector 标记（本地回退）')
++    } finally { rmQuiet(root) }
++  })
++})
++
++test('⑨ 404 进程级短路：同平台 URL 首次 404 标记死信，第二次调用零网络请求', async () => {
++  await withMock('404', [], async (m) => {
++    const root = mkdtempSync(join(tmpdir(), 'ss-vec-dead-'))
++    mkdirSync(join(root, '.sillyspec', 'knowledge'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
++    writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++      `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\nknowledge:\n  vector_search: on\n`)
++    try {
++      const kb = join(root, '.sillyspec', 'knowledge')
++      const q = '完全不在路由词表的查询串'
++      await matchKnowledgeHybrid(kb, q + ' 第一轮', { cwd: root })
++      assert.equal(m.requests.length, 1, '首轮真实请求 1 次')
++      await matchKnowledgeHybrid(kb, q + ' 第二轮', { cwd: root })
++      assert.equal(m.requests.length, 1, '死信短路：第二轮零新增请求')
++    } finally { rmQuiet(root) }
++  })
++})

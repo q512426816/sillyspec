@@ -3543,3 +3543,79 @@
   confirmed_at: null
   source_change: 2026-10-15-graph-dangling-crossrepo-split
   status: active
+
+## FR-core-engine-211 平台已配置但未显式开启时 matchKnowledgeHybrid 对平台零网络调用、本地回退无 vector 标记
+变更：2026-10-15-vector-gate-tighten
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-gate-tighten/requirements.md#FR-01
+最近确认：93fd54a4ca19ba10e9e3edd4ff04d7187f41a1f8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-01
+  tests: test/knowledge-vector-recall.test.mjs「⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-gate-tighten
+  status: active
+
+## FR-core-engine-212 显式 on 时既有命中/降级/超时行为逐字段不变（测试 ①~⑦ 零回归）
+变更：2026-10-15-vector-gate-tighten
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-gate-tighten/requirements.md#FR-02
+最近确认：93fd54a4ca19ba10e9e3edd4ff04d7187f41a1f8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-02
+  tests: test/knowledge-vector-recall.test.mjs「① 命中面」 | test/knowledge-vector-recall.test.mjs「②③④ 降级三面」 | test/knowledge-vector-recall.test.mjs「⑤⑥ 触发纪律」 | test/knowledge-vector-recall.test.mjs「⑦ 真实库锚点映射」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-gate-tighten
+  status: active
+
+## FR-core-engine-213 404 后同平台 URL 本进程后续调用零网络请求（死信短路）
+变更：2026-10-15-vector-gate-tighten
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-gate-tighten/requirements.md#FR-03
+最近确认：93fd54a4ca19ba10e9e3edd4ff04d7187f41a1f8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-03
+  tests: test/knowledge-vector-recall.test.mjs「⑨ 404 进程级短路：同平台 URL 首次 404 标记死信，第二次调用零网络请求」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-gate-tighten
+  status: active
+
+## FR-core-engine-214 scope 遍历层不受开关门影响（第三层照常工作）
+变更：2026-10-15-vector-gate-tighten
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-gate-tighten/requirements.md#FR-04
+最近确认：93fd54a4ca19ba10e9e3edd4ff04d7187f41a1f8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-gate-tighten:flow:测试绑定FR-04
+  tests: test/knowledge-graph.test.mjs | test/knowledge-inject.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-gate-tighten
+  status: active

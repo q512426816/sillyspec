@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-gate-tighten",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "93fd54a4ca19ba10e9e3edd4ff04d7187f41a1f8",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——开关谓词每次调用现读配置无时序面",
+    "并发": "ok——vectorDeadEndpoints 进程内单线程 Set 读写无竞争；无盘面写",
+    "切换": "ok——死信进程生命周期，CLI 短进程天然重置；长驻进程需重启恢复已在 design 显式裁决可接受（daemon 不直接调本层）",
+    "作用域": "ok——死信按平台 URL 键隔离，同实例多 workspace 共享死信为正确语义（端点是实例级能力）"
+  },
+  "notes": {
+    "承诺对照": "FR-01 测试⑧（mock 请求计数 0+无 vector 标记）；FR-02 测试①~⑦零回归（6 文件 6/6 绿，⑦ 补显式开启照常过）；FR-03 测试⑨（请求计数恒 1）；FR-04 scope 层在开关门外（代码位次实证：vectorEnabled 门仅包平台层）+ knowledge-graph/knowledge-inject 回归 15/15 绿",
+    "声明边界裁决": "①env 未知值保守视为 off=可接受（显式值集覆盖语义空间）；②死信进程生命周期=可接受（CLI 短进程；长驻重启恢复已声明）。无未裁决边界",
+    "防护声明核实": "缺省关由 vectorEnabled 谓词真实实现（键未写返回 null→false）且有测试⑧锁定；死信短路真实存在（404 分支 Set.add）且有测试⑨锁定",
+    "生成物同步": "无类型/契约文件——n/a；文件头契约注记与实现同步",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 输出文案零变化（debug stderr 行为不变）",
+      "config-absent-zero-regression": "pass——键未写/无 yaml/读取失败三态：键未写=关（测试⑧）、无 yaml=关（null 哨兵 catch 分支）、坏 yaml catch 降 null=关；缺省路径行为变化为本变更目的本身且有测试锚",
+      "crossrepo-path-compat": "n/a——未触跨仓面"
+    }
+  },
+  "reviewedAt": "2026-10-15T02:02:00.000Z"
+}

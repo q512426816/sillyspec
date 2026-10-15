@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-gate-tighten",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-vector-gate-tighten:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-gate-tighten"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-vector-gate-tighten:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「① 命中面」",
+        "test/knowledge-vector-recall.test.mjs「②③④ 降级三面」",
+        "test/knowledge-vector-recall.test.mjs「⑤⑥ 触发纪律」",
+        "test/knowledge-vector-recall.test.mjs「⑦ 真实库锚点映射」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-gate-tighten"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-vector-gate-tighten:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「⑨ 404 进程级短路：同平台 URL 首次 404 标记死信，第二次调用零网络请求」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-gate-tighten"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-vector-gate-tighten:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-graph.test.mjs",
+        "test/knowledge-inject.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-gate-tighten"
+    }
+  ]
+}
