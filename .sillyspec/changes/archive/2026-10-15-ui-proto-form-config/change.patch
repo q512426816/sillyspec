@@ -1,0 +1,822 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index 54511cfa..ab2d3c72 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -20,3 +20,4 @@
+ | 2026-10-14 | 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原 |
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
++| 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index da6b7941..45b545a6 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -60,3 +60,4 @@
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+ | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
++| 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index f65522f4..7bde7371 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -22,14 +22,14 @@
+       {
+         "index": 1,
+         "name": "加载项目上下文",
+-        "prompt": "加载项目现有上下文，理解代码结构和约定；并做一次早期规模筛查，判断小变更是否该直接走 quick。\n\n### 操作\n1. 读取项目总览 `{SPEC_ROOT}/docs/<project>/scan/PROJECT.md` + 共享规范 + 子项目上下文\n   - 漂移事实（CLI 算）：{SCAN_STALENESS}\n   - 机械事实底稿（CLI 注入，无 scan 底稿则为空）：{SCAN_FACTS}\n2. 加载项目信息：`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null`\n3. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n5. **加载模块索引**：读取 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`（如存在）\n   - 这一步是高频操作，_module-map.yaml 回答\"哪个文件属于哪个模块、模块之间怎么依赖\"\n   - 用 tags/aliases 字段做需求关键词→模块的粗匹配\n   - 用 entrypoints 字段快速了解模块对外能力\n6. 查看进行中的变更：`ls {SPEC_ROOT}/changes/ | grep -v archive`\n   - 有相关同名变更 → 提示用户，避免重复\n7. 检查全局模板：`ls ~/.sillyspec/templates/`\n   - 有匹配模板 → 询问是否基于模板\n   - 无相关内容 → 跳过，不输出\n8. 查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`（无索引则跳过）——按需求关键词命中条目时读取对应知识文件；known-issues/已知坑要在方案期就规避，不要等 execute 的命中报告才发现\n   - decisions 库路由：INDEX.md `## Decisions` 段的路由行（`decisions/<域>.md`，由归档时决策提炼幂等维护）命中时，读取对应决策文件——rejected 条目须看到否决理由：除非复潮条件明确满足，否则不重新提出该方案（防复潮）；确要复潮时在本变更 decisions.md 记新版本条目（D-xxx@vN+1）说明依据。CLI 预注入的否决决策提示（无命中则为空）：{DECISION_HITS}\n\n### 模块匹配方法\n读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：\n- 需求中提到\"登录\"\"认证\"\"token\" → 匹配 tags/aliases 中含这些词的模块\n- 需求中提到特定文件路径 → 匹配 paths 字段\n- 匹配结果用于后续 design.md 的文件变更清单\n\n### 子项目判定\n- 单项目：直接确认，不需要等待\n- 多项目且用户已指定：直接确认，不需要等待\n- 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目\n\n### 早期规模筛查（判断是否该走轻量变更）\n加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模（判据同 Step 8 复杂度/上下文轴——2026-09-29-brainstorm-exit-thin-default）：\n- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：\n\n```\nsillyspec flow start --change <YYYY-MM-DD-名> --input \"<动机与背景>\n\n成功标准：\n- <可验证标准>\"\n```\n\n（2 调用协议收口）。用户同意则本阶段可在此收尾（`--done` 并提示转轻量变更），不必继续走完整设计流程。\n- **明显 large**（需要 Wave 并行编排/上下文分片/多阶段治理，或用户显式要求完整流程）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。\n- **拿不准 → 继续探索**（这正是头脑风暴的职责；澄清完成后 Step 8 按同轴精判——注意：经过头脑风暴澄清的需求通常已可单上下文吞吐，出口默认收编轻量道）。\n- 这是**粗判**，只为让明显的纯执行小变更免走设计流程；后续「生成规范文件」步骤做精判兜底（方案在澄清中缩水后按定稿重判，本步印象不作数）。\n\n### 输出\n项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议\n\n### 注意\n- 棕地项目必须读取数据模型章节\n- 模块匹配只是粗筛，后续步骤会细化",
++        "prompt": "加载项目现有上下文，理解代码结构和约定；并做一次早期规模筛查，判断小变更是否该直接走 quick。\n\n### 操作\n1. 读取项目总览 `{SPEC_ROOT}/docs/<project>/scan/PROJECT.md` + 共享规范 + 子项目上下文\n   - 漂移事实（CLI 算）：{SCAN_STALENESS}\n   - 机械事实底稿（CLI 注入，无 scan 底稿则为空）：{SCAN_FACTS}\n2. 加载项目信息：`cat {SPEC_ROOT}/projects/*.yaml 2>/dev/null`\n3. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：\n{LOCAL_COMMANDS}\n4. 棕地项目：读取 {SPEC_ROOT}/docs/<project>/scan/ 下的 STRUCTURE.md、CONVENTIONS.md、ARCHITECTURE.md\n5. **加载模块索引**：读取 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`（如存在）\n   - 这一步是高频操作，_module-map.yaml 回答\"哪个文件属于哪个模块、模块之间怎么依赖\"\n   - 用 tags/aliases 字段做需求关键词→模块的粗匹配\n   - 用 entrypoints 字段快速了解模块对外能力\n6. 查看进行中的变更：`ls {SPEC_ROOT}/changes/ | grep -v archive`\n   - 有相关同名变更 → 提示用户，避免重复\n7. 检查全局模板：`ls ~/.sillyspec/templates/`\n   - 有匹配模板 → 询问是否基于模板\n   - 无相关内容 → 跳过，不输出\n8. 查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`（无索引则跳过）——按需求关键词命中条目时读取对应知识文件；known-issues/已知坑要在方案期就规避，不要等 execute 的命中报告才发现\n   - decisions 库路由：INDEX.md `## Decisions` 段的路由行（`decisions/<域>.md`，由归档时决策提炼幂等维护）命中时，读取对应决策文件——rejected 条目须看到否决理由：除非复潮条件明确满足，否则不重新提出该方案（防复潮）；确要复潮时在本变更 decisions.md 记新版本条目（D-xxx@vN+1）说明依据。CLI 预注入的否决决策提示（无命中则为空）：{DECISION_HITS}\n\n### 模块匹配方法\n读取 _module-map.yaml 后，根据用户描述的需求关键词，匹配相关模块：\n- 需求中提到\"登录\"\"认证\"\"token\" → 匹配 tags/aliases 中含这些词的模块\n- 需求中提到特定文件路径 → 匹配 paths 字段\n- 匹配结果用于后续 design.md 的文件变更清单\n\n### 子项目判定\n- 单项目：直接确认，不需要等待\n- 多项目且用户已指定：直接确认，不需要等待\n- 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目\n\n### 早期规模筛查（判断是否该走轻量变更）\n加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模（判据同 Step 8 复杂度/上下文轴——2026-09-29-brainstorm-exit-thin-default）：\n- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：\n\n```\nsillyspec flow start --change <YYYY-MM-DD-名> --input \"<一句中文概括（首行即变更标题）；随后动机与背景\n\n成功标准：\n- <可验证标准>\"\n```\n\n（2 调用协议收口）。用户同意则本阶段可在此收尾（`--done` 并提示转轻量变更），不必继续走完整设计流程。\n- **明显 large**（需要 Wave 并行编排/上下文分片/多阶段治理，或用户显式要求完整流程）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。\n- **拿不准 → 继续探索**（这正是头脑风暴的职责；澄清完成后 Step 8 按同轴精判——注意：经过头脑风暴澄清的需求通常已可单上下文吞吐，出口默认收编轻量道）。\n- 这是**粗判**，只为让明显的纯执行小变更免走设计流程；后续「生成规范文件」步骤做精判兜底（方案在澄清中缩水后按定稿重判，本步印象不作数）。\n\n### 输出\n项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议\n\n### 注意\n- 棕地项目必须读取数据模型章节\n- 模块匹配只是粗筛，后续步骤会细化",
+         "outputHint": "上下文摘要",
+         "optional": false
+       },
+       {
+         "index": 2,
+         "name": "对话式探索与需求澄清",
+-        "prompt": "### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）\n**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。\n\n通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. 多选题优于开放式问题\n6. YAGNI — 砍掉不需要的功能\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：按优先级逐个澄清\n- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时）：\n1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义\n2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n4. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出",
++        "prompt": "### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）\n**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。\n\n通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略——分层口径：P0 逐轮逐问、P1/P2 能自定的自定并标注、只有会改变产物的攒收尾一轮）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n**规模重估（对话中如发现该升级，当场说）**：若对话或方案讨论中发现本次变更实际需要 Wave 并行编排、上下文分片或多阶段治理——超出当前档位（例：早期粗判的轻量面变成跨模块改造）——必须**当场向用户说明并给出升级建议**（如改走完整五阶段 / 带 `--upgrade-thick`），不静默按原档继续。档位仍由 CLI 客观定价（三轴）落值，你只能建议、不能自行升降档。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. **先挖为什么**：不只问「要什么」，要问出「为什么现在做、不做会怎样」（动机是后续替你补全没提的那一百个决定的依据）；到本步出口仍说不清动机 → 不许进入「提出 2-3 种方案」，先把动机问出来\n6. **实现方式的选择权归谁**：技术栈/平台/语言/库/存储介质这类「怎么做」的选择，问清哪些是用户有强意见要谈的、哪些是交给你选的；你选的按决策记录规则落盘并把 answer 标注「我的判断」（不是用户同意过的）\n7. 多选题优于开放式问题；被问「你觉得呢/先猜一个」时给一个具体方案并标「我的判断」，不要空转追问\n8. YAGNI — 砍掉不需要的功能\n\n### B2. 分块回放（Playback——边理解边复述，与追问交替）\n每理解到一块就先回放一块，别把回放攒到最后：\n- 回放块 200-300 字，复述「我听到的是」——**凡是猜测都标为猜测，只有用户说过的才写成用户说的**\n- 回放块结尾固定问一句：「哪里不对或漏了什么？」\n- 回放与追问交替进行直到对话结束：回放 → 用户纠正 → 下一块追问 → 下一块回放；最后一块覆盖剩余部分\n- 再次进入本步（`--continue --answer` 后）时，回放只复述新增/被纠正的理解，已确认且未被纠正的部分不重复回放（防上下文膨胀）\n- 回放块放「**回放：**」分节、追问放「**追问：**」分节——两者分节标注，用户可分别纠正（回答的是上一轮追问时不影响回放块的语义）\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则（分层——2026-10-15-brainstorm-interaction-refine FR-03）**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：不逐个问——agent 能自行决定的**自行决定**（写进 decisions.md，answer 标注「我的判断」），剩下的攒成收尾一轮；只有「只有用户能答且答案会改变产物」的才问\n- 任意 P0 歧义：必须澄清；逐轮逐问（一次只问一个），深度优先\n- **收尾一轮（一次性问完）**：把「只有用户能答且答案会改变产物」的 P1/P2 项（含 Design Grill 回收的同类项）汇总成**一轮**问题，一次问完；问完即进入「提出 2-3 种方案」，不再追问、不做第二轮\n- 可判定出口：进入「提出 2-3 种方案」前，P1/P2 未决项必须为 0，或已记录为「我的判断」落 decisions.md\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时，分层口径同上）：\n1. **P0 逐轮逐问**：P0 一次只问一个，深度优先\n2. **P1/P2 能自定就自定**：能由源码/scan 文档/模块文档/既有决策确定，或能凭工程判断定且不改变产物的，直接定；按决策记录规则落 decisions.md 并在 answer 标注「我的判断」；只有真正需要用户判断/取舍的才等用户\n3. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n4. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n5. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n6. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n7. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）\n- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n- **agent 自行决定的 P1/P2**（见执行规则分层）：source 用 code（查证得来）或 docs（文档依据），answer 标注「我的判断：…」——不写成用户同意过的，用户事后可否决\n- **「只有用户能答且改变产物」的项**：不落 pending 占位条目；先在收尾一轮问出答案，再按 source: user 落盘\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- **确认清单逐条带来源标记（两态）**：每条需求点标 `[用户]`（用户原话/回答得来）或 `[推断]`（agent 推断）——`[推断]` 即待用户点头项；未与用户确认过的推断点**不得混入已确认清单**（要么在收尾一轮问掉转 `[用户]`，要么显式留在「待确认」区）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 自欺逃逸口对照表\n要输出「本步完成」「可以直接进方案讨论」之前，先对表自检一遍：\n\n| 念头 | 现实 |\n|---|---|\n| \"我觉得已经够清晰了\" | 清晰不等于用户确认过——没确认过的点进清单必须标 `[推断]`，并留待收尾一轮问掉 |\n| \"这步这么简单，跳过吧\" | 简单变复杂的路只有一条：跳过的步骤 |\n| \"用户说『听起来不错』\" | 认可的是你展示过的东西——你没写出来的描述与你的推断，都不算批准 |\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n确认清单每条带来源标记 `[用户]` / `[推断]`；`[推断]` 项在收尾一轮问掉或显式留在「待确认」区——两者都不带 `[用户]` 标记时不得计入「已确认」。\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（**新回放块 + 新追问 + 新落盘决策**），已确认且未被纠正的内容不重复回放、已落盘内容不重复输出",
+         "outputHint": "需求理解与决策落盘清单",
+         "optional": false,
+         "conditionalWait": true,
+@@ -65,7 +65,7 @@
+       {
+         "index": 4,
+         "name": "分段展示设计",
+-        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）\n7. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：\n  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用\n  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）\n  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求（定稿原型＝真码产物，不是手绘图）\n入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。真码五要素：\n- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式\n- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用，没有则搭最小入口并留在项目惯例位置\n- **高保真＝组件即实现原料**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过\"看图重新翻译\"\n- **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口\n- **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
++        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）\n7. 展示时附一节「**我替你做的决定**」（2026-10-15-brainstorm-interaction-refine FR-04）：从 `decisions.md` 摘出 `source` 非 user 的条目（代码/文档查证得来的 + agent 自行决定的 P1/P2），逐条列 D-xxx@vN + 一句话决定 + 一句依据——让用户边读方案边核这些点，不要埋在决策文件里让他自己去翻；无此类条目时写「无（全部决定均来自你的选择）」\n8. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：\n  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用\n  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）\n  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求（定稿原型＝真码产物，不是手绘图）\n入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：\n- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）\n- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行\n- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过\"看图重新翻译\"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）\n- **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口\n- **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补） + **「我替你做的决定」节**（source≠user 的 D-xxx@vN 逐条；无则写明）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
+         "outputHint": "用户确认的设计方案",
+         "optional": false,
+         "requiresWait": true,
+@@ -90,7 +90,7 @@
+       {
+         "index": 6,
+         "name": "Design Grill 交叉审查",
+-        "prompt": "默认执行 Design Grill，对已经写出的 design.md 做交叉审查。\n\n### 定位\n这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。\n\n### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省\n> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。\n- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方\"交叉审查模型\"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:\n{PRIOR_REVIEW_FACTS}\n{REVIEW_JSON_CONTRACT}\n  子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。\n  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：\n  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。\n  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n\n  **审查经济学三律（2026-09-20 对撞实验实测驱动——前置阶段 23 分钟审查等待的结构性收口）**：\n  - **请求预算硬钳（时间盒的数字化形态）**：子代理审查是「按清单作答」不是「自由调研」——请求预算硬上限 **12 次**（设计审查 ≤8 次必读+≤4 次定向补证）；到达即基于已读材料出 verdict，禁止「再确认一下」式续读（2026-09-20 实证：48 请求审一份 287 行 design = 17 分钟纯等待，根因是审查者陷入自由调研）。派发 prompt 必须明示此预算。\n  - **FAIL 后增量复审（禁全文重审）**：首轮 verdict=fail → 你修复阻断项后，**resume 同一审查子代理**（SendMessage 回原 agent）只发修复说明与 diff，要求它仅验证「首轮阻断项是否解决」——不重开全文审（2026-09-20 实证：resume 增量复审 64s/8 调用 vs 新子代理全文审 322s/26 调用 = 5 倍差距）。复审 review.json 的 checklist 追加增量复核行（item 含「增量复审：首轮阻断项 N 条」），verdict 按增量结果改判。原 agent 已不可 resume（会话过期等）才允许新开子代理（此时 prompt 里附首轮 review.json 阻断项，仍只验阻断项）。\n  - **Grill 并行化（fire-and-forget）**：tier=independent 时派发审查子代理用 **run_in_background: true**，然后**立即进入 Step 8 生成规范文件**——不阻塞等待审查结果（Grill 平均可省 15 分钟墙钟）。Step 8 产出完成、即将 `--done` 本步骤前，回收子代理结果：verdict=pass → 直接完成；verdict=fail → 走上条增量复审流程；子代理仍在跑 → 轮询等待（它有 12 请求预算不会发散太久）。Stage Review Gate 在 `--done` 时仍硬校验 review.json 在场——并行化省的是墙钟不是门。\n  - **审查只读纪律（审查员是法医不是外科医生——并行化的前置安全条件）**：审查子代理的工具面**只读**（Read/Grep/只读 Bash 如 cat/ls/git log/git diff）；**禁止 Edit/Write 任何被审产物**（design.md/四件套/源码），唯一可写文件是 review.json。发现问题 → 写进 review.json 的 checklist/blockers 由主代理修复（2026-09-20 实证：Grill 审查员在审查窗口直接 Edit design.md 15 处——主会话零请求窗口铁证——三重危害：独立性破坏〔自己审自己改，pass 有效性打折〕、责任链断裂〔修改未经主代理复核即生效〕、回合数爆炸〔边审边改 48 回合 vs 正常 12~15〕）。与上条并行化叠加时本纪律是硬前提：审查员后台改文件的同时主链在前台写后续产物 = 同文件双写竞态。\n\n### 仪式档位菜单（ceremony_tier 按 risk 客观定价——注入的 tier 行已标注当前档）\n- S0：CLI 清单核验——按下方交叉审查模型/交叉点清单机械逐项核对（零 token 发散），结论逐条附证据锚点，无需独立子代理\n- S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理\n- S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json\n- S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）\n当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）；S0/S1 的 self 是档位定价的正常形态，不是降级。\n\n### 默认行为\n1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定\"要不要 Grill\"。\n2. 只有以下情况可以轻量跳过，并必须记录原因：\n   - 用户明确要求 no-grill / 显式跳过\n   - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更\n   - ceremony 档为 S0（客观定价已是最低仪式档）且只改 1-2 个文件——S0 的 CLI 清单核验仍要执行，跳过的只是发散深查\n3. 即使跳过，也要输出\"Design Grill skipped\"和原因，不能静默跳过。\n\n### 输入材料（材料包基准面——CLI 注入素材半边＋主代理补点名半边，2026-09-19-review-material-cli-wiring）\n1. **评审材料包（基准面——checklist 逐条只对本包作答）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('grill-first')：design 要点 digest＋文件清单）；「五个交叉点」节留位——派发前由你补齐五点（每点 title＋file:line 锚，如需源码片段按同文件 extractSnippets 口径附），留空则评审者按 cannot_verify 列缺件。tier=independent 时把补完的整包贴进子代理派发 prompt：\n{REVIEW_MATERIALS}\n2. 包外文件可按需定向查证（列明查过的文件），**禁止全量扫读仓**——矛盾经常藏在交叉处，定向读那一处，不读整个仓。\n3. **自检首项（先于一切审查项）**：材料包是否足以逐条作答下方审查清单；不足以作答→cannot_verify＋在 requiredEvidence 列缺件（缺什么列什么——这是包质量问题不是你的问题），不要靠全量扫读自救。\n4. decisions.md 全文可读（决策条目是审查对象本体，不属于扫读面）。\n\n### 交叉审查模型\n按三层检查并输出 cross-check matrix：\n1. **定义层**：模糊概念是否有可测试定义。例如\"高可用\"\"异常数据\"\"本地缓存\"\"重试\"。\n2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。\n3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。\n\n### 交叉点抽取\n重点找这些交叉点：\n- 模块 A 依赖模块 B 的实体/状态/接口\n- requirements.md 的 FR 与 design.md 的数据模型/API/状态机\n- design.md 的容错策略与数据流、缓存、重试、回滚\n- tasks.md 的执行范围与 design.md 的非目标\n- decisions.md 的 D-xxx@vN 与 design.md 当前说法\n- scan/module docs 或源码中的真实约束与 design.md 假设\n- 涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过\n- 涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）\n- **承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）\n- **三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许\"实现跟 design、spec 跟 design\"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）\n后两条为命中条件注入项：变更涉及角色/权限/字典类数据或新页面/前端路由时必查。\n\n### 问答处理\n1. 先自动交叉审查，不要一上来问用户。\n2. 没有结构性问题：正常完成，输出\"Design Grill passed\"，附 cross-check matrix。\n3. 发现问题：\n   - 对能从代码/文档确定的问题，直接给出推荐修正。\n   - 对需要业务判断的问题，每次只问一个最关键问题，然后等待用户。\n   - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。\n4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。\n\n### decisions.md 版本规则\n```markdown\n## D-001@v2: 缓存异常时的 fallback 语义\n- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes: D-001@v1\n- source: design-grill\n- question: §3 数据流与 §7 容错策略冲突时以哪个为准？\n- answer: 采用 §7 的重试语义，缓存只作为只读 fallback。\n- normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。\n- impacts: [FR-02, task-03, verify-02]\n- evidence: design.md §3/§7, src/cache/...\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n### 输出格式\n```markdown\n## Design Grill Result\nstatus: passed | needs-user-input | blocked | skipped\n\n## Cross-Check Matrix\n| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |\n|---|---|---|---|---|---|---|\n| X-001 | consistency | 数据流 vs 容错 | design §3 | design §7 | conflict | D-001@v2 |\n\n## Question Distribution\n| 分类 | 数量 | 含义 |\n|---|---|---|\n| immediately_answered | N | 心里清楚但文档缺失 |\n| needs_thinking | N | 需要用户判断 |\n| unresolved | N | 真正设计漏洞 |\n\n## Unresolved Blockers\n| ID | priority | 问题 | 阻塞原因 | 下一步 |\n|---|---|---|---|---|\n```\n\n### 铁律 — 等待用户\n- 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）\n- 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers\n- 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。",
++        "prompt": "默认执行 Design Grill，对已经写出的 design.md 做交叉审查。\n\n### 定位\n这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。\n\n### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省\n> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。\n- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方\"交叉审查模型\"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:\n{PRIOR_REVIEW_FACTS}\n{REVIEW_JSON_CONTRACT}\n  子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。\n  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：\n  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。\n  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n\n  **审查经济学三律（2026-09-20 对撞实验实测驱动——前置阶段 23 分钟审查等待的结构性收口）**：\n  - **请求预算硬钳（时间盒的数字化形态）**：子代理审查是「按清单作答」不是「自由调研」——请求预算硬上限 **12 次**（设计审查 ≤8 次必读+≤4 次定向补证）；到达即基于已读材料出 verdict，禁止「再确认一下」式续读（2026-09-20 实证：48 请求审一份 287 行 design = 17 分钟纯等待，根因是审查者陷入自由调研）。派发 prompt 必须明示此预算。\n  - **FAIL 后增量复审（禁全文重审）**：首轮 verdict=fail → 你修复阻断项后，**resume 同一审查子代理**（SendMessage 回原 agent）只发修复说明与 diff，要求它仅验证「首轮阻断项是否解决」——不重开全文审（2026-09-20 实证：resume 增量复审 64s/8 调用 vs 新子代理全文审 322s/26 调用 = 5 倍差距）。复审 review.json 的 checklist 追加增量复核行（item 含「增量复审：首轮阻断项 N 条」），verdict 按增量结果改判。原 agent 已不可 resume（会话过期等）才允许新开子代理（此时 prompt 里附首轮 review.json 阻断项，仍只验阻断项）。\n  - **Grill 并行化（fire-and-forget）**：tier=independent 时派发审查子代理用 **run_in_background: true**，然后**立即进入 Step 8 生成规范文件**——不阻塞等待审查结果（Grill 平均可省 15 分钟墙钟）。Step 8 产出完成、即将 `--done` 本步骤前，回收子代理结果：verdict=pass → 直接完成；verdict=fail → 走上条增量复审流程；子代理仍在跑 → 轮询等待（它有 12 请求预算不会发散太久）。Stage Review Gate 在 `--done` 时仍硬校验 review.json 在场——并行化省的是墙钟不是门。\n  - **审查只读纪律（审查员是法医不是外科医生——并行化的前置安全条件）**：审查子代理的工具面**只读**（Read/Grep/只读 Bash 如 cat/ls/git log/git diff）；**禁止 Edit/Write 任何被审产物**（design.md/四件套/源码），唯一可写文件是 review.json。发现问题 → 写进 review.json 的 checklist/blockers 由主代理修复（2026-09-20 实证：Grill 审查员在审查窗口直接 Edit design.md 15 处——主会话零请求窗口铁证——三重危害：独立性破坏〔自己审自己改，pass 有效性打折〕、责任链断裂〔修改未经主代理复核即生效〕、回合数爆炸〔边审边改 48 回合 vs 正常 12~15〕）。与上条并行化叠加时本纪律是硬前提：审查员后台改文件的同时主链在前台写后续产物 = 同文件双写竞态。\n\n### 仪式档位菜单（ceremony_tier 按 risk 客观定价——注入的 tier 行已标注当前档）\n- S0：CLI 清单核验——按下方交叉审查模型/交叉点清单机械逐项核对（零 token 发散），结论逐条附证据锚点，无需独立子代理\n- S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理\n- S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json\n- S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）\n当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）；S0/S1 的 self 是档位定价的正常形态，不是降级。\n\n### 默认行为\n1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定\"要不要 Grill\"。\n2. 只有以下情况可以轻量跳过，并必须记录原因：\n   - 用户明确要求 no-grill / 显式跳过\n   - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更\n   - ceremony 档为 S0（客观定价已是最低仪式档）且只改 1-2 个文件——S0 的 CLI 清单核验仍要执行，跳过的只是发散深查\n3. 即使跳过，也要输出\"Design Grill skipped\"和原因，不能静默跳过。\n\n### 输入材料（材料包基准面——CLI 注入素材半边＋主代理补点名半边，2026-09-19-review-material-cli-wiring）\n1. **评审材料包（基准面——checklist 逐条只对本包作答）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('grill-first')：design 要点 digest＋文件清单）；「五个交叉点」节留位——派发前由你补齐五点（每点 title＋file:line 锚，如需源码片段按同文件 extractSnippets 口径附），留空则评审者按 cannot_verify 列缺件。tier=independent 时把补完的整包贴进子代理派发 prompt：\n{REVIEW_MATERIALS}\n2. 包外文件可按需定向查证（列明查过的文件），**禁止全量扫读仓**——矛盾经常藏在交叉处，定向读那一处，不读整个仓。\n3. **自检首项（先于一切审查项）**：材料包是否足以逐条作答下方审查清单；不足以作答→cannot_verify＋在 requiredEvidence 列缺件（缺什么列什么——这是包质量问题不是你的问题），不要靠全量扫读自救。\n4. decisions.md 全文可读（决策条目是审查对象本体，不属于扫读面）。\n\n### 交叉审查模型\n按三层检查并输出 cross-check matrix：\n1. **定义层**：模糊概念是否有可测试定义。例如\"高可用\"\"异常数据\"\"本地缓存\"\"重试\"。\n2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。\n3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。\n\n### 交叉点抽取\n重点找这些交叉点：\n- 模块 A 依赖模块 B 的实体/状态/接口\n- requirements.md 的 FR 与 design.md 的数据模型/API/状态机\n- design.md 的容错策略与数据流、缓存、重试、回滚\n- tasks.md 的执行范围与 design.md 的非目标\n- decisions.md 的 D-xxx@vN 与 design.md 当前说法\n- scan/module docs 或源码中的真实约束与 design.md 假设\n- 涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过\n- 涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）\n- **承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）\n- **三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许\"实现跟 design、spec 跟 design\"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）\n后两条为命中条件注入项：变更涉及角色/权限/字典类数据或新页面/前端路由时必查。\n\n### 问答处理\n1. 先自动交叉审查，不要一上来问用户。\n2. 没有结构性问题：正常完成，输出\"Design Grill passed\"，附 cross-check matrix。\n3. 发现问题：\n   - 对能从代码/文档确定的问题，直接给出推荐修正。\n   - 对需要业务判断的问题，每次只问一个最关键问题，然后等待用户。\n   - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。\n4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。\n\n### 实现者视角追问（builder check——与上方交叉审查并行执行，不替代它）\n交叉审查问「文档自身矛盾吗」；本节问「照这份文档，我能建出它吗」。两问正交，都要做（tier=self 时你依次自问两遍并分节输出）：\n- **tier=independent（S2/S3）**：把下列四要素追加进审查子代理的派发 prompt（作为同一子代理的第二项任务，不额外计请求预算）：\n  - 你是一位有才华的 [领域] 工程师，被交予本设计文档，要据此制定实现计划，**你联系不到写文档的人**\n  - 只报告你「必须被回答、否则得靠猜、而猜错会出事」的问题；每条附「为什么答案会改变产物」，按重要性排序\n  - 跳过：文档已显式留给实现者的部分、你自己能合理决定的、措辞挑刺\n  - 没有重要问题 → 回答 `nothing important left`\n  - 写成 review.json 的 `reviewerNotes` 一节：`## 实现者视角追问` + 逐条问题与理由（**不新增 schema 字段**——去向钉在现有 reviewerNotes，Stage Review Gate 照常读）\n- **tier=self（S0/S1）**：以实现者身份快读一遍 design.md，同样三个跳过条件，输出「实现者视角追问」小节（可空 = nothing important left）\n- **回收分三堆**（两档都适用）：\n  1. **文档/对话已答** → 把答案补进 design.md 对应章节，不改决策\n  2. **minor（不改变产物的猜测点）** → 你自己定，按决策记录格式落 decisions.md 并标注「我的判断」\n  3. **只有用户能答且会改变产物** → 进「对话式探索」的收尾一轮（一次性问完，不做第二轮）；无法回退到前一步时挂 Unresolved Blockers\n\n### decisions.md 版本规则\n```markdown\n## D-001@v2: 缓存异常时的 fallback 语义\n- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes: D-001@v1\n- source: design-grill\n- question: §3 数据流与 §7 容错策略冲突时以哪个为准？\n- answer: 采用 §7 的重试语义，缓存只作为只读 fallback。\n- normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。\n- impacts: [FR-02, task-03, verify-02]\n- evidence: design.md §3/§7, src/cache/...\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）\n- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）\n```\n\n### 输出格式\n```markdown\n## Design Grill Result\nstatus: passed | needs-user-input | blocked | skipped\n\n## Cross-Check Matrix\n| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |\n|---|---|---|---|---|---|---|\n| X-001 | consistency | 数据流 vs 容错 | design §3 | design §7 | conflict | D-001@v2 |\n\n## Question Distribution\n| 分类 | 数量 | 含义 |\n|---|---|---|\n| immediately_answered | N | 心里清楚但文档缺失 |\n| needs_thinking | N | 需要用户判断 |\n| unresolved | N | 真正设计漏洞 |\n\n## 实现者视角追问\n（四要素口径；无重要问题写 \"nothing important left\"）\n| ID | 问题 | 为什么答案会改变产物 | 分堆（已答/我的判断/需用户） |\n|---|---|---|---|\n| B-001 | ... | ... | ... |\n\n## Unresolved Blockers\n| ID | priority | 问题 | 阻塞原因 | 下一步 |\n|---|---|---|---|---|\n```\n\n### 铁律 — 等待用户\n- 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）\n- 「只有用户能答且会改变产物」的问题（本步交叉审查 + 实现者视角追问合计）攒成**一轮**问完即止，不做第二轮\n- 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers\n- 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。",
+         "outputHint": "Design Grill 交叉审查结果",
+         "optional": false,
+         "conditionalWait": true,
+@@ -479,7 +479,7 @@
+         "index": 1,
+         "id": "generate_plan",
+         "name": "生成分级计划",
+-        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n> **拆分粒度纪律（D-006@v1 / FR-11，R7 实证：18 卡细拆给反仪式变更预付协议税）**：\n> - **默认「实现+单测同卡」**——测试与实现放同一任务卡（TDD 同任务），不单独开「测试卡」「验收 Wave」；纯验收类动作（跑全量回归）并入相关实现卡的 acceptance/verify。\n> - **禁止仪式卡**：「纯接线」「纯 module-map 录入」「纯全量回归绿」不独立成卡——此类收尾动作写进相关实现卡的 implementation 与 acceptance（几行接线并入实现，module-map 录入并入该片最后一张实现卡）。\n> - **「同 Wave 文件不相交」语义澄清**：该约束防并行子代理同文件互写（调度约束），**不要求**把测试/接线/录入拆成独立任务——同一张卡携带多个文件（实现+测试+module-map）完全合法，约束只作用于 Wave 内**多任务之间**的 allowed_paths 交集。\n> - 拆分对齐「可独立验收的能力边界」而非「工序步骤」——一个能力（实现+接线+单测+登记）通常=一张卡；协议成本与任务卡数线性挂钩，卡片数是税。\n\n> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：\n> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）\n> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退\n> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）\n\n> **执行模式声明（execution_mode，M4——2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）**：\n> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）\n> - 仅当满足判据才显式声明 `execution_mode: dispatch`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）\n> - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）\n> - 直写只免「实现」派发（2026-09-23 R9 教训）：Stage Review（tier=independent）仍派独立子代理——降级自审损失审查实效（R8 基线实证审查抓过真缺口）；测试跑批输出落文件只取摘要——长输出全文进上下文是单会话 token 累积大头（R9 verify 段 13.8M 输入的大头来源）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\nexecution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：\n\n```markdown\n---\nplan_level: full\nexecution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）\n- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
++        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n> **拆分粒度纪律（D-006@v1 / FR-11，R7 实证：18 卡细拆给反仪式变更预付协议税）**：\n> - **默认「实现+单测同卡」**——测试与实现放同一任务卡（TDD 同任务），不单独开「测试卡」「验收 Wave」；纯验收类动作（跑全量回归）并入相关实现卡的 acceptance/verify。\n> - **禁止仪式卡**：「纯接线」「纯 module-map 录入」「纯全量回归绿」不独立成卡——此类收尾动作写进相关实现卡的 implementation 与 acceptance（几行接线并入实现，module-map 录入并入该片最后一张实现卡）。\n> - **「同 Wave 文件不相交」语义澄清**：该约束防并行子代理同文件互写（调度约束），**不要求**把测试/接线/录入拆成独立任务——同一张卡携带多个文件（实现+测试+module-map）完全合法，约束只作用于 Wave 内**多任务之间**的 allowed_paths 交集。\n> - 拆分对齐「可独立验收的能力边界」而非「工序步骤」——一个能力（实现+接线+单测+登记）通常=一张卡；协议成本与任务卡数线性挂钩，卡片数是税。\n\n> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：\n> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）\n> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退\n> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）\n\n> **执行模式声明（execution_mode，M4——2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）**：\n> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）\n> - 仅当满足判据才显式声明 `execution_mode: dispatch`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）\n> - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）\n> - 直写只免「实现」派发（2026-09-23 R9 教训）：Stage Review（tier=independent）仍派独立子代理——降级自审损失审查实效（R8 基线实证审查抓过真缺口）；测试跑批输出落文件只取摘要——长输出全文进上下文是单会话 token 累积大头（R9 verify 段 13.8M 输入的大头来源）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\nexecution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## Review Focus 盲区清单（隐含面）\n- （≤5 条——上限不是配额，写不出就停；按最可能坑到人排序。每条 = 规格隐含但没有任何任务测试覆盖的输入/条件 + 合理人预期行为 + 承接落点 task-XX；写不出显式写「已检查，无」——不留空、不编造；泛泛风险（\"并发需注意\"类）不算行）\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n- **比例自检**（2026-10-15-plan-review-focus）：计划产物与 spec/design 相称——整段可粘贴代码体=转录不是计划；用签名、测试断言与规格精确值承载决策，为实现者保留判断空间\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：\n\n```markdown\n---\nplan_level: full\nexecution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）\n- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## Review Focus 盲区清单（隐含面）\n规格/设计隐含、但没有任何任务测试覆盖的输入/失效模式（≤5 条——上限不是配额，写不出第 4 条就停；按最可能坑到人排序；每行 = 具体输入或条件 + 可判定预期行为 + 承接落点；泛泛风险分析不算行）：\n\n| # | 输入/条件 | 合理人预期行为 | 承接落点 |\n|---|---|---|---|\n| 1 | ... | ... | task-XX（acceptance/测试） |\n\n（写不出 → 写「已检查，无」一行——不留空、不编造。）\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- **比例自检**（2026-10-15-plan-review-focus）：计划产物（plan.md + TaskCard implementation）与 spec/design 相称——整段可粘贴代码体=转录不是计划；用签名、测试断言与规格精确值承载决策，为实现者保留判断空间\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
+         "outputHint": "plan_level + 计划内容",
+         "optional": false
+       },
+@@ -487,7 +487,7 @@
+         "index": 2,
+         "id": "review_plan",
+         "name": "审查计划",
+-        "prompt": "对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。\n\n### 执行前确认门（plan_level=full 时）\nplan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：\n- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）\n- 调用：`sillyspec run plan --wait --reason \"等待用户确认计划\" --options \"确认，进入执行,需要调整\" --output \"计划摘要\"`\n- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可\n\n### 当前审查分级（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省\n- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）\n- 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价\n\n### 审查清单（读取 plan.md 的 plan_level，逐条核对）\n- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务\n- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）\n- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）\n- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）\n- [ ] 不存在 P0/P1 unresolved blocker 残留\n- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）\n- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）\n- [ ] Wave 分组说明：依赖方向违规（depends_on 同 Wave / 后置 Wave）在 --done 时会按拓扑**自动修复**（提案经一致性+文件面验证后落盘）；共享文件的手工分 Wave 串行是合法安全模式，不会被自动改写\n- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）\n- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）\n\n### tier=independent 时：启动 plan-review 子代理\n{PRIOR_REVIEW_FACTS}\n用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-cli-wiring）**——CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('plan-review')：design 硬约束，缺「全局硬约束」节时 decisions.md P0/P1 accepted 决策兜底）；「plan 差量」节留位——派发前由你逐约束判定补齐（一致/偏离/未覆盖＋注），留空则评审者按 cannot_verify 列缺件。把补完的整包贴进派发 prompt：\n{REVIEW_MATERIALS}\nprompt 要点：\n1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。\n2. 执行上方审查清单，每条给 pass/gap/fail + 证据\n> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。\n3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):\n{REVIEW_JSON_CONTRACT}\n4. verdict=fail 时在 reviewerNotes 写明阻断项\n5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。\n6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n7. **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm Grill 步）**：①请求预算硬钳——子代理请求上限 **10 次**（材料包基准面 + plan.md + ≤3 次定向补证），到达即出 verdict 禁「再确认一下」续读，派发 prompt 明示此预算；②FAIL 后增量复审——修复阻断项后 **resume 同一子代理**只发修复说明+diff 验证「阻断项解决否」，不重开全文审（64s vs 322s = 5 倍差实证），review.json checklist 追加增量复核行；原 agent 不可 resume 才新开（prompt 附首轮阻断项仍只验阻断项）；③**并行化**——派发用 run_in_background: true，主代理立即继续 Step 4（生成 TaskCard），回收在即将 --done 本步骤前（pass → 完成 / fail → 增量复审 / 在跑 → 等待），Stage Review Gate 照常硬校验；④**审查只读纪律**——子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（design/plan/四件套/源码），唯一可写 review.json，发现问题写 checklist/blockers 由主代理修（2026-09-20 实证 Grill 越权改 design 15 处；③并行化下同文件双写竞态的前置防线，详见 brainstorm Grill 步全文）。\n\n### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）\nmodule-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。\n仅当 --done 报 module-impact 缺失时（如无 module-map 的绿地项目生成降级失败），按 gate 报错提示手写兜底：两章节标题逐字用「## 模块影响矩阵」「## 未匹配文件」（未命中的文件归「未匹配文件」章节），并含「## 更新结果」表骨架（行：`modules/<id>.md`、`_module-map.yaml`，状态列 pending/skipped，末列是状态列，勿追加其他列）。\n\nexecute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。\n\n### 输出\n- tier=self：审查清单结果（每条状态 + 偏差说明）\n- tier=independent：子代理产出的 review.json 路径 + verdict 摘要",
++        "prompt": "对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。\n\n### 执行前确认门（plan_level=full 时）\nplan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：\n- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）\n- 调用：`sillyspec run plan --wait --reason \"等待用户确认计划\" --options \"确认，进入执行,需要调整\" --output \"计划摘要\"`\n- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可\n\n### 当前审查分级（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省\n- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）\n- 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价\n\n### 审查清单（读取 plan.md 的 plan_level，逐条核对）\n- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务\n- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）\n- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）\n- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）\n- [ ] 不存在 P0/P1 unresolved blocker 残留\n- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）\n- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）\n- [ ] Wave 分组说明：依赖方向违规（depends_on 同 Wave / 后置 Wave）在 --done 时会按拓扑**自动修复**（提案经一致性+文件面验证后落盘）；共享文件的手工分 Wave 串行是合法安全模式，不会被自动改写\n- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）\n- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）\n\n### tier=independent 时：启动 plan-review 子代理\n{PRIOR_REVIEW_FACTS}\n用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-cli-wiring）**——CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('plan-review')：design 硬约束，缺「全局硬约束」节时 decisions.md P0/P1 accepted 决策兜底）；「plan 差量」节留位——派发前由你逐约束判定补齐（一致/偏离/未覆盖＋注），留空则评审者按 cannot_verify 列缺件。把补完的整包贴进派发 prompt：\n{REVIEW_MATERIALS}\nprompt 要点：\n1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。\n2. 执行上方审查清单，每条给 pass/gap/fail + 证据\n> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。\n3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):\n{REVIEW_JSON_CONTRACT}\n4. verdict=fail 时在 reviewerNotes 写明阻断项\n5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。\n6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n7. **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm Grill 步）**：①请求预算硬钳——子代理请求上限 **10 次**（材料包基准面 + plan.md + ≤3 次定向补证），到达即出 verdict 禁「再确认一下」续读，派发 prompt 明示此预算；②FAIL 后增量复审——修复阻断项后 **resume 同一子代理**只发修复说明+diff 验证「阻断项解决否」，不重开全文审（64s vs 322s = 5 倍差实证），review.json checklist 追加增量复核行；原 agent 不可 resume 才新开（prompt 附首轮阻断项仍只验阻断项）；③**并行化**——派发用 run_in_background: true，主代理立即继续 Step 4（生成 TaskCard），回收在即将 --done 本步骤前（pass → 完成 / fail → 增量复审 / 在跑 → 等待），Stage Review Gate 照常硬校验；④**审查只读纪律**——子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（design/plan/四件套/源码），唯一可写 review.json，发现问题写 checklist/blockers 由主代理修（2026-09-20 实证 Grill 越权改 design 15 处；③并行化下同文件双写竞态的前置防线，详见 brainstorm Grill 步全文）。\n\n### 补充复查（2026-10-15-plan-review-focus）\n1. **Review Focus 承接复查**：plan.md「Review Focus 盲区清单（隐含面）」每行是否落到拥有该代码的 task 的 acceptance/测试；空节必须是显式「已检查，无」而非跳过或编造低价值行凑数（≤5 条是上限不是配额）。\n2. **比例自检复核**：plan.md 与 TaskCard implementation 与 spec/design 相称——整段可粘贴代码体=转录不是计划；签名+测试断言+规格精确值承载决策足够。\n3. **共享面预扫留表**：每对共享 target_files / provides-expects_from 契约链 / 依赖边的任务逐对核「产出 vs 消费」一致、每张卡自洽（测试所指=代码所指、创建文件=后文触碰文件），核验结果以**表格**写进审查输出（共享对两任务一行、单卡自洽一行）——\"scan is clean\" 而无表格行 = 没扫过；plan-postcheck 硬校验的是字段对齐，此处核语义矛盾。\n\n### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）\nmodule-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。\n仅当 --done 报 module-impact 缺失时（如无 module-map 的绿地项目生成降级失败），按 gate 报错提示手写兜底：两章节标题逐字用「## 模块影响矩阵」「## 未匹配文件」（未命中的文件归「未匹配文件」章节），并含「## 更新结果」表骨架（行：`modules/<id>.md`、`_module-map.yaml`，状态列 pending/skipped，末列是状态列，勿追加其他列）。\n\nexecute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。\n\n### 输出\n- tier=self：审查清单结果（每条状态 + 偏差说明）\n- tier=independent：子代理产出的 review.json 路径 + verdict 摘要",
+         "outputHint": "plan 审查结果（self=清单 / independent=review.json 路径+verdict）",
+         "optional": false,
+         "conditionalWait": true,
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index b13a5b52..a7e49136 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -117,7 +117,9 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ ### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
+ **需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。
+ 
+-通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
++通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略——分层口径：P0 逐轮逐问、P1/P2 能自定的自定并标注、只有会改变产物的攒收尾一轮）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
++
++**规模重估（对话中如发现该升级，当场说）**：若对话或方案讨论中发现本次变更实际需要 Wave 并行编排、上下文分片或多阶段治理——超出当前档位（例：早期粗判的轻量面变成跨模块改造）——必须**当场向用户说明并给出升级建议**（如改走完整五阶段 / 带 `--upgrade-thick`），不静默按原档继续。档位仍由 CLI 客观定价（三轴）落值，你只能建议、不能自行升降档。
+ 
+ ### A. 原型/设计图分析（如用户提供）
+ 如果用户提供了截图、图片或 HTML 原型，先分析提取：
+@@ -134,8 +136,18 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ 2. **提出问题后必须暂停等待用户回答**，不要替用户回答
+ 3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答
+ 4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准
+-5. 多选题优于开放式问题
+-6. YAGNI — 砍掉不需要的功能
++5. **先挖为什么**：不只问「要什么」，要问出「为什么现在做、不做会怎样」（动机是后续替你补全没提的那一百个决定的依据）；到本步出口仍说不清动机 → 不许进入「提出 2-3 种方案」，先把动机问出来
++6. **实现方式的选择权归谁**：技术栈/平台/语言/库/存储介质这类「怎么做」的选择，问清哪些是用户有强意见要谈的、哪些是交给你选的；你选的按决策记录规则落盘并把 answer 标注「我的判断」（不是用户同意过的）
++7. 多选题优于开放式问题；被问「你觉得呢/先猜一个」时给一个具体方案并标「我的判断」，不要空转追问
++8. YAGNI — 砍掉不需要的功能
++
++### B2. 分块回放（Playback——边理解边复述，与追问交替）
++每理解到一块就先回放一块，别把回放攒到最后：
++- 回放块 200-300 字，复述「我听到的是」——**凡是猜测都标为猜测，只有用户说过的才写成用户说的**
++- 回放块结尾固定问一句：「哪里不对或漏了什么？」
++- 回放与追问交替进行直到对话结束：回放 → 用户纠正 → 下一块追问 → 下一块回放；最后一块覆盖剩余部分
++- 再次进入本步（`--continue --answer` 后）时，回放只复述新增/被纠正的理解，已确认且未被纠正的部分不重复回放（防上下文膨胀）
++- 回放块放「**回放：**」分节、追问放「**追问：**」分节——两者分节标注，用户可分别纠正（回答的是上一轮追问时不影响回放块的语义）
+ 
+ ### C. 需求范围评估（拆分/批量判断）
+ 1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：
+@@ -183,19 +195,22 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ - P1：影响用户场景、验收标准、错误处理、默认值
+ - P2：文案、展示细节、低风险交互偏好
+ 
+-**执行规则**：
++**执行规则（分层——2026-10-15-brainstorm-interaction-refine FR-03）**：
+ - P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据
+-- P1/P2 歧义 >= 3 个：按优先级逐个澄清
+-- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题
++- P1/P2 歧义 >= 3 个：不逐个问——agent 能自行决定的**自行决定**（写进 decisions.md，answer 标注「我的判断」），剩下的攒成收尾一轮；只有「只有用户能答且答案会改变产物」的才问
++- 任意 P0 歧义：必须澄清；逐轮逐问（一次只问一个），深度优先
++- **收尾一轮（一次性问完）**：把「只有用户能答且答案会改变产物」的 P1/P2 项（含 Design Grill 回收的同类项）汇总成**一轮**问题，一次问完；问完即进入「提出 2-3 种方案」，不再追问、不做第二轮
++- 可判定出口：进入「提出 2-3 种方案」前，P1/P2 未决项必须为 0，或已记录为「我的判断」落 decisions.md
+ - 不要问用户"要不要 Grill"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答
+ 
+-**追问策略**（进入澄清时）：
+-1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义
+-2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论
+-3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term
+-4. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态
+-5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
+-6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
++**追问策略**（进入澄清时，分层口径同上）：
++1. **P0 逐轮逐问**：P0 一次只问一个，深度优先
++2. **P1/P2 能自定就自定**：能由源码/scan 文档/模块文档/既有决策确定，或能凭工程判断定且不改变产物的，直接定；按决策记录规则落 decisions.md 并在 answer 标注「我的判断」；只有真正需要用户判断/取舍的才等用户
++3. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论
++4. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term
++5. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态
++6. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
++7. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
+ 
+ **决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：
+ 
+@@ -216,22 +231,38 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ - evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）
+ - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+ - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
++- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
++- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
+ ```
+ 
+ - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
++- **agent 自行决定的 P1/P2**（见执行规则分层）：source 用 code（查证得来）或 docs（文档依据），answer 标注「我的判断：…」——不写成用户同意过的，用户事后可否决
++- **「只有用户能答且改变产物」的项**：不落 pending 占位条目；先在收尾一轮问出答案，再按 source: user 落盘
+ 
+ ### 铁律 — 不要自问自答 / 等待用户
+ - 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说"需求已明确"**（命令由 CLI 在下方注入）
+ - 需要拆分或批量模式时：列出方案并暂停等用户确认
+ - 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）
++- **确认清单逐条带来源标记（两态）**：每条需求点标 `[用户]`（用户原话/回答得来）或 `[推断]`（agent 推断）——`[推断]` 即待用户点头项；未与用户确认过的推断点**不得混入已确认清单**（要么在收尾一轮问掉转 `[用户]`，要么显式留在「待确认」区）
+ - 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问
+ 
++### 自欺逃逸口对照表
++要输出「本步完成」「可以直接进方案讨论」之前，先对表自检一遍：
++
++| 念头 | 现实 |
++|---|---|
++| "我觉得已经够清晰了" | 清晰不等于用户确认过——没确认过的点进清单必须标 `[推断]`，并留待收尾一轮问掉 |
++| "这步这么简单，跳过吧" | 简单变复杂的路只有一条：跳过的步骤 |
++| "用户说『听起来不错』" | 认可的是你展示过的东西——你没写出来的描述与你的推断，都不算批准 |
++
+ ### 输出
+ 需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）
+ 
++确认清单每条带来源标记 `[用户]` / `[推断]`；`[推断]` 项在收尾一轮问掉或显式留在「待确认」区——两者都不带 `[用户]` 标记时不得计入「已确认」。
++
+ ### 注意
+ - 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清
+-- 用户通过 `--continue --answer "回答"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出
++- 用户通过 `--continue --answer "回答"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（**新回放块 + 新追问 + 新落盘决策**），已确认且未被纠正的内容不重复回放、已落盘内容不重复输出
+ ````
+ 
+ ---
+@@ -299,7 +330,8 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ 4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query "<机制词>"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
+ 5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+ 6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）
+-7. 暂停等待用户确认或修改意见
++7. 展示时附一节「**我替你做的决定**」（2026-10-15-brainstorm-interaction-refine FR-04）：从 `decisions.md` 摘出 `source` 非 user 的条目（代码/文档查证得来的 + agent 自行决定的 P1/P2），逐条列 D-xxx@vN + 一句话决定 + 一句依据——让用户边读方案边核这些点，不要埋在决策文件里让他自己去翻；无此类条目时写「无（全部决定均来自你的选择）」
++8. 暂停等待用户确认或修改意见
+ 
+ ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
+ 判定对象是**改造后的界面相对现状的变化程度**：
+@@ -320,10 +352,10 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+   - 纯后端逻辑/CLI/配置/文档，无任何界面变化
+ 
+ ### 生成要求（定稿原型＝真码产物，不是手绘图）
+-入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。真码五要素：
+-- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式
+-- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用，没有则搭最小入口并留在项目惯例位置
+-- **高保真＝组件即实现原料**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"
++入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：
++- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）
++- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行
++- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）
+ - **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口
+ - **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下
+ 
+@@ -332,7 +364,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ - 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
+ 
+ ### 输出
+-完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）
++完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补） + **「我替你做的决定」节**（source≠user 的 D-xxx@vN 逐条；无则写明）
+ 
+ ### 注意
+ - 不要一次输出大段文字，按模块/Phase 分段
+@@ -566,6 +598,20 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+    - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。
+ 4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。
+ 
++### 实现者视角追问（builder check——与上方交叉审查并行执行，不替代它）
++交叉审查问「文档自身矛盾吗」；本节问「照这份文档，我能建出它吗」。两问正交，都要做（tier=self 时你依次自问两遍并分节输出）：
++- **tier=independent（S2/S3）**：把下列四要素追加进审查子代理的派发 prompt（作为同一子代理的第二项任务，不额外计请求预算）：
++  - 你是一位有才华的 [领域] 工程师，被交予本设计文档，要据此制定实现计划，**你联系不到写文档的人**
++  - 只报告你「必须被回答、否则得靠猜、而猜错会出事」的问题；每条附「为什么答案会改变产物」，按重要性排序
++  - 跳过：文档已显式留给实现者的部分、你自己能合理决定的、措辞挑刺
++  - 没有重要问题 → 回答 `nothing important left`
++  - 写成 review.json 的 `reviewerNotes` 一节：`## 实现者视角追问` + 逐条问题与理由（**不新增 schema 字段**——去向钉在现有 reviewerNotes，Stage Review Gate 照常读）
++- **tier=self（S0/S1）**：以实现者身份快读一遍 design.md，同样三个跳过条件，输出「实现者视角追问」小节（可空 = nothing important left）
++- **回收分三堆**（两档都适用）：
++  1. **文档/对话已答** → 把答案补进 design.md 对应章节，不改决策
++  2. **minor（不改变产物的猜测点）** → 你自己定，按决策记录格式落 decisions.md 并标注「我的判断」
++  3. **只有用户能答且会改变产物** → 进「对话式探索」的收尾一轮（一次性问完，不做第二轮）；无法回退到前一步时挂 Unresolved Blockers
++
+ ### decisions.md 版本规则
+ ```markdown
+ ## D-001@v2: 缓存异常时的 fallback 语义
+@@ -581,6 +627,8 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - evidence: design.md §3/§7, src/cache/...
+ - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+ - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
++- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
++- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
+ ```
+ 
+ ### 输出格式
+@@ -600,6 +648,12 @@ status: passed | needs-user-input | blocked | skipped
+ | needs_thinking | N | 需要用户判断 |
+ | unresolved | N | 真正设计漏洞 |
+ 
++## 实现者视角追问
++（四要素口径；无重要问题写 "nothing important left"）
++| ID | 问题 | 为什么答案会改变产物 | 分堆（已答/我的判断/需用户） |
++|---|---|---|---|
++| B-001 | ... | ... | ... |
++
+ ## Unresolved Blockers
+ | ID | priority | 问题 | 阻塞原因 | 下一步 |
+ |---|---|---|---|---|
+@@ -607,6 +661,7 @@ status: passed | needs-user-input | blocked | skipped
+ 
+ ### 铁律 — 等待用户
+ - 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）
++- 「只有用户能答且会改变产物」的问题（本步交叉审查 + 实现者视角追问合计）攒成**一轮**问完即止，不做第二轮
+ - 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers
+ - 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。
+ ````
+diff --git a/src/design-facts.js b/src/design-facts.js
+index cc1c08c3..611c3164 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -387,7 +387,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   lines.push('- [ ] frontmatter 字段齐全（author/created_at/scale）')
+   lines.push('- [ ] 引用所有当前版本 D-xxx@vN')
+   lines.push('- [ ] 涉及生命周期关键词时含「生命周期契约表」或紧邻豁免短语')
+-  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记）')
++  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选，输出须带素材来源声明：token 源/组件来源/入口位置）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记）')
+   lines.push('- [ ] 不确定的问题标注「⚠️ 自审存疑」')
+   lines.push('')
+ 
+diff --git a/src/flow.js b/src/flow.js
+index af3fb875..551be560 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1138,7 +1138,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   ②③断点 agent 自主跳过。`,
+     `   随时可查进度：sillyspec flow status --change ${change}`,
+     ...(detectUiTouch(input)
+-      ? [...buildUiGuidanceLines(), '']
++      ? [...buildUiGuidanceLines(specBase), '']
+       : []),
+     ``,
+     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+diff --git a/src/run/gates.js b/src/run/gates.js
+index ece36069..281c548c 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -224,7 +224,7 @@ export function warnMissingUiPrototype(stageName, changeName, currentStepName, s
+   const design = readFileSync(designPath, 'utf8')
+   const feExts = [...new Set((design.match(/\.(vue|svelte|astro|tsx|jsx|css|scss|sass|less|styl|html)\b/gi) || []).map(s => s.replace('.', '').toLowerCase()))]
+   if (feExts.length === 0) return
+-  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入）`)
++  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记——form: real-code 或 single-html+豁免 ruling）`)
+ }
+ 
+ /**
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index f9c19bf1..d54a7994 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1427,7 +1427,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // 替换空串零输出；fail-soft 异常单行说明，不留残留占位符。
+   if (stageName === 'brainstorm' && promptText.includes('{UI_VISUAL_GUIDANCE}')) {
+     try {
+-      const { detectUiTouch, buildUiGuidanceLines } = await import('../ui-visual.js')
++      const { detectUiTouch, buildUiGuidanceLines, extractQuotedPaths } = await import('../ui-visual.js')
+       const uiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       let corpus = changeName || ''
+       for (const name of ['proposal.md', 'requirements.md']) {
+@@ -1435,7 +1435,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+           corpus += '\n' + readFileSync(join(uiSpecBase, 'changes', changeName, name), 'utf8')
+         } catch { /* 缺席跳过 */ }
+       }
+-      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines().join('\n') + '\n' : '')
++      // ui_prototype 形态注入（2026-10-15-ui-proto-form-config）：语料路径参与子仓 override
++      // 匹配（proposal/requirements 反引号路径粗提）；无路径=仓级兜底。
++      const guidancePaths = extractQuotedPaths(corpus)
++      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines(uiSpecBase, guidancePaths).join('\n') + '\n' : '')
+     } catch (e) {
+       substitute(/\{UI_VISUAL_GUIDANCE\}/g, `[ui-guidance] UI 须知注入异常（${e.message}），跳过`)
+     }
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 7f6b796a..74d2718a 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -302,10 +302,10 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+   - 纯后端逻辑/CLI/配置/文档，无任何界面变化
+ 
+ ### 生成要求（定稿原型＝真码产物，不是手绘图）
+-入口文件保存到 \`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html\`（目录不存在则先创建；该命名是 execute 注入契约，不改）。真码五要素：
+-- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式
+-- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用，没有则搭最小入口并留在项目惯例位置
+-- **高保真＝组件即实现原料**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"
++入口文件保存到 \`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html\`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：
++- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）
++- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行
++- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）
+ - **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口
+ - **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下
+ 
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+index ba983119..1f497618 100644
+--- a/src/ui-visual.js
++++ b/src/ui-visual.js
+@@ -17,6 +17,8 @@
+  */
+ import { existsSync, readFileSync } from 'node:fs'
+ import { join } from 'node:path'
++import jsYaml from 'js-yaml'
++import { parseRepoRegistry } from './stages/plan-postcheck.js'
+ 
+ export const UI_VISUAL_PROBE_HEADING = '#### 探针 12：UI 视觉证据（分级门）'
+ export const UI_EVIDENCE_FILENAME = 'visual-evidence.md'
+@@ -48,8 +50,114 @@ export function detectUiTouchInPaths(paths) {
+ 
+ /* ── flow start 须知（仓中立；证据约定与探针同源）── */
+ 
+-export function buildUiGuidanceLines() {
+-  return [
++/**
++ * local.yaml ui_prototype 段解析（2026-10-15-ui-proto-form-config，FR-01）。
++ * 每仓原型形态契约：form: real-code | single-html；豁免（single-html）须带 ruling{by,at,reason}
++ * 全三字段（用户裁决留痕——缺任一=登记不完整，消费方须警告）；repos.<子仓键> 同构 override。
++ * fail-soft：段缺席/文件不可读/YAML 坏/值非法 → registered:false 零抛出（与 readUiVisualGate
++ * 同根同哲学）。诚实边界：工具只消费登记与注入指引，不校验原型质量。
++ */
++export function readUiPrototypeForm(specBase) {
++  const empty = { registered: false, form: null, ruling: null, rulingComplete: false, repos: {} }
++  if (!specBase) return empty
++  let raw
++  try {
++    raw = jsYaml.load(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
++  } catch { return empty }
++  const section = raw && typeof raw === 'object' ? raw.ui_prototype : null
++  if (!section || typeof section !== 'object') return empty
++  const parseEntry = (e) => {
++    if (!e || typeof e !== 'object') return null
++    const form = e.form === 'real-code' || e.form === 'single-html' ? e.form : null
++    if (!form) return null
++    const r = e.ruling && typeof e.ruling === 'object' ? e.ruling : null
++    const rulingComplete = !!(r && r.by && r.at && r.reason)
++    return { form, ruling: r, rulingComplete }
++  }
++  const top = parseEntry(section)
++  const repos = {}
++  if (section.repos && typeof section.repos === 'object') {
++    for (const [key, val] of Object.entries(section.repos)) {
++      const entry = parseEntry(val)
++      if (entry) repos[key] = entry
++    }
++  }
++  if (!top) return { registered: false, form: null, ruling: null, rulingComplete: false, repos }
++  return { registered: true, ...top, repos }
++}
++
++/**
++ * 多仓 override 解析（FR-02）：触达路径与 local.yaml repos 注册匹配——子仓若在
++ * ui_prototype.repos 有 override 则该形态优先；未命中走仓级兜底。返回形态条目数组（去重）：
++ * 每项 { scope: '仓级'|'<子仓键>', form, ruling, rulingComplete, registered }。
++ * 匹配三通道（评审 P2 清偿：注入语料常为相对路径，纯绝对前缀会让 override 静默失效）：
++ *   ① 绝对前缀：归一（反斜杠→斜杠/去尾斜杠/大小写不敏感）后 startsWith 注册路径；
++ *   ② 相对键前缀：路径以 `<repoKey>/` 开头（语料常见 `spdemo/src/...` 形态）；
++ *   ③ 相对基名前缀：路径以注册路径 basename + `/` 开头（键与目录名不同名时兜底）。
++ */
++export function resolveUiPrototypeFor(specBase, paths = []) {
++  const proto = readUiPrototypeForm(specBase)
++  const out = []
++  const seen = new Set()
++  const push = (entry) => {
++    const key = `${entry.form}|${entry.rulingComplete}`
++    if (seen.has(key)) return
++    seen.add(key)
++    out.push(entry)
++  }
++  if (paths.length > 0) {
++    let repoPaths = {}
++    try {
++      // 复用既有注册解析（plan-postcheck _parseRepoEntries 同语义出口：字符串条目=路径、
++      // 对象条目取 path 子键）——不走 js-yaml 裸读，防对象形态静默漏配。
++      repoPaths = Object.fromEntries(parseRepoRegistry(readFileSync(join(specBase, 'local.yaml'), 'utf8')))
++    } catch { /* 解析失败=零子仓命中，仓级兜底 */ }
++    const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
++    for (const [key, registeredPath] of Object.entries(repoPaths)) {
++      if (typeof registeredPath !== 'string' || !registeredPath) continue
++      const reg = norm(registeredPath)
++      const regBase = reg.split('/').pop()
++      const hit = paths.some((p) => {
++        const np = norm(p)
++        return np.startsWith(reg + '/') || np === reg
++          || np.startsWith(key.toLowerCase() + '/')
++          || np.startsWith(regBase + '/')
++      })
++      const override = proto.repos[key]
++      if (hit && override) push({ scope: key, registered: true, ...override })
++    }
++  }
++  push(proto.registered
++    ? { scope: '仓级', registered: true, form: proto.form, ruling: proto.ruling, rulingComplete: proto.rulingComplete }
++    : { scope: '仓级', registered: false, form: null, ruling: null, rulingComplete: false })
++  return out
++}
++
++/** 须知第 5 节：按形态条目组合「本仓原型形态」行（FR-03 四态；生态命令词禁入——neutrality 契约）。 */
++function uiPrototypeFormLines(entries) {
++  const lines = [`📐 本仓原型形态（local.yaml ui_prototype 登记；工具只查声明在场不验质量）：`]
++  let anyContent = false
++  for (const e of entries) {
++    const scope = e.scope === '仓级' ? '' : `【子仓 ${e.scope}】`
++    if (!e.registered) {
++      anyContent = true
++      lines.push(`   ⚠️ ${scope}未登记原型形态——本次按阶梯执行：有真实前端工具链→定稿原型必须真码；查无真码管线→先单开一个轻量变更搭最小入口（管线建设与业务变更分离），或登记豁免（form: single-html + ruling 用户裁决留痕）。收口前把 local.yaml ui_prototype 登记补上（强提醒，不阻断）。`)
++    } else if (e.form === 'single-html' && !e.rulingComplete) {
++      anyContent = true
++      lines.push(`   ⚠️ ${scope}豁免登记不完整（single-html 缺 ruling{by,at,reason} 某字段）——这是静默漂移入口：补齐用户裁决留痕（by/at/reason）后再依赖豁免；本次仍按阶梯执行。`)
++    } else if (e.form === 'single-html') {
++      anyContent = true
++      lines.push(`   📋 ${scope}豁免生效（single-html；裁决 by=${e.ruling.by} at=${e.ruling.at}）：定稿原型＝自包含 HTML + 真值 token（来源须声明：token 源文件/组件参照），反向翻译税为已裁决接受项。`)
++    } else {
++      anyContent = true
++      lines.push(`   🔒 ${scope}真码契约（real-code）：定稿原型必须与实现同方言真码；查无管线先单开轻量变更搭最小入口（bootstrap 与业务变更分离）。`)
++    }
++  }
++  return anyContent ? lines : []
++}
++
++export function buildUiGuidanceLines(specBase = null, paths = []) {
++  const lines = [
+     `🎨 UI 变更执行须知（本变更触及前端页面或 UI——advisory 引导非门禁）：`,
+     `   1. 定稿原型必须是可复跑的真码产物（与实现同方言、能被本项目工具链构建）——手绘单文件`,
+     `      仅限一次性粗选对比，不作为交付原型（2026-09-28 frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；`,
+@@ -62,6 +170,13 @@ export function buildUiGuidanceLines() {
+     `      必须停下找用户签字，裁决记录写进 ${UI_EVIDENCE_FILENAME}（含「用户裁决」字样段）——`,
+     `      静默降级会在收口被「UI 视觉证据」探针硬拦（error 门）。`,
+   ]
++  if (specBase) {
++    try {
++      const entries = resolveUiPrototypeFor(specBase, paths)
++      lines.push('', ...uiPrototypeFormLines(entries))
++    } catch { /* 登记解析失败零打扰（fail-soft 同 readUiVisualGate） */ }
++  }
++  return lines
+ }
+ 
+ /* ── 分级探针 ── */
+@@ -173,8 +288,8 @@ export function uiEvidenceExecuteAdvisory({ changeDir, specBase = null }) {
+   }
+ }
+ 
+-/** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解）。 */
+-function extractQuotedPaths(designText) {
++/** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解；导出供 prompt.js 组子仓 override 匹配路径用）。 */
++export function extractQuotedPaths(designText) {
+   if (!designText) return []
+   const paths = []
+   for (const m of designText.matchAll(/`([^`]+)`/g)) {
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 1fb59ec5..5efa4e60 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2821,6 +2821,31 @@ function inferFullTestCommand(projectRoot) {
+  * 相关回归）。组卷改配额制：每组优先面整跑，普通 import 依赖只填剩余席位（可为 0）——帽
+  * 只界普通依赖尾。批尺寸上界护栏由 TEST_TIMEOUT_MS 兜底（超时=失败 fail-closed 不变）。
+  */
++/**
++ * 批命令长度分块（2026-10-15 平台侧实证，跨仓事故驱动最小修复）：Windows cmd 执行器
++ * 命令行上限 ~8191 字符——大依赖面（广被引用的前端文件变更 → 依赖测试 100+ 个）拼单条
++ * vitest/node --test 命令必炸「命令行太长」exit 1，且失败批进增量账本自我循环恒败
++ * （实测：137 文件批反复重跑复败，verify 门禁无法收口）。按「命令前缀+文件参数拼接
++ * 总长」分块：单块保持原名（零回归），多块命名 <base>:N（N 从 1 起）；每块独立计账。
++ */
++function chunkByCommandLength(prefix, files, maxLen = 6000) {
++  const chunks = []
++  let cur = []
++  let curLen = prefix.length
++  for (const f of files) {
++    const add = f.length + 1
++    if (cur.length > 0 && curLen + add > maxLen) {
++      chunks.push(cur)
++      cur = []
++      curLen = prefix.length
++    }
++    cur.push(f)
++    curLen += add
++  }
++  if (cur.length > 0) chunks.push(cur)
++  return chunks
++}
++
+ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
+   const norm = (p2) => String(p2).replace(/\\/g, '/')
+   const changedSet = new Set((changedFiles || []).map(norm))
+@@ -2958,7 +2983,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       gi++
+     }
+   }
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
++  if (jsNative.length > 0) {
++    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout '
++    const jsChunks = chunkByCommandLength(jsPrefix, jsNative)
++    jsChunks.forEach((chunk, i) => {
++      const isMulti = jsChunks.length > 1
++      batches.push({ name: isMulti ? `deps(auto-js:${i + 1}/${jsChunks.length})` : 'deps(auto-js)', short: 'js', command: jsPrefix + chunk.join(' '), count: chunk.length, prioCount: chunk.filter(f => prio(f) === 0).length, dropped: i === 0 ? (jsTest.length - jsRun.length) : 0, prioDropped: i === 0 ? jsQ.prioDropped : 0, tap: true, files: chunk })
++    })
++  }
+   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
+ 
+   if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
+@@ -2973,7 +3005,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
+       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
+       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
+-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
++      const jsxPrefix = `${jsxRunner} ${isVitest ? 'run ' : ''}`
++      const jsxArgs = jsProjectRun.map(rebaseJsx).map(quoteWinPath)
++      const jsxChunks = chunkByCommandLength(jsxPrefix, jsxArgs)
++      // 单块保持原名零回归；多块 <base>:N 独立计账（files 取该块参数原样回映射由调用方按需）。
++      jsxChunks.forEach((chunk, i) => {
++        const isMulti = jsxChunks.length > 1
++        batches.push({ name: isMulti ? `deps(auto-jsx:${i + 1}/${jsxChunks.length})` : 'deps(auto-jsx)', short: 'jsx', command: jsxPrefix + chunk.join(' '), count: chunk.length, dropped: 0, files: chunk })
++      })
+     } else {
+       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+     }
+diff --git a/test/dynamic-batch-chunk.test.mjs b/test/dynamic-batch-chunk.test.mjs
+new file mode 100644
+index 00000000..4d831a92
+--- /dev/null
++++ b/test/dynamic-batch-chunk.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * 批命令长度分块（chunkByCommandLength，经 buildDepsBatches 行为面直测）单测。
++ * 2026-10-15-jsx-batch-cmd-chunk FR-01：Windows cmd ~8191 上限下大依赖面单命令
++ * 「命令行太长」恒败（消费仓双会话实证 137 / 138→159 文件批）——分块后单块 ≤
++ * 前缀+6000，单块保原批名零回归，多块 :N/M 独立计账。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { buildDepsBatches } from '../src/verify-postcheck.js'
++
++function mkRoot(prefix) {
++  const root = mkdtempSync(join(tmpdir(), prefix))
++  mkdirSync(join(root, 'frontend', 'src', '__tests__'), { recursive: true })
++  writeFileSync(join(root, 'frontend', 'package.json'), JSON.stringify({ name: 'fe', devDependencies: { vitest: '^1.0.0' } }))
++  writeFileSync(join(root, 'frontend', 'pnpm-lock.yaml'), '')
++  return root
++}
++
++function mkJsxFiles(root, count, nameLen) {
++  const deps = []
++  for (let i = 0; i < count; i++) {
++    const name = `t${String(i).padStart(3, '0')}${'x'.repeat(nameLen)}.test.tsx`
++    const rel = `frontend/src/__tests__/${name}`
++    writeFileSync(join(root, rel), '')
++    deps.push(rel)
++  }
++  return deps
++}
++
++test('单块零回归：拼接总长 < maxLen 时恰一个 deps(auto-jsx) 批，命令与旧拼接逐字一致', () => {
++  const root = mkRoot('chunk-single-')
++  const deps = mkJsxFiles(root, 3, 10)
++  const t = (f) => `frontend/src/__tests__/${f}`
++  try {
++    const batches = buildDepsBatches({ deps, changedFiles: [], hits: [], cwd: root })
++    const jsx = batches.filter((b) => b.short === 'jsx')
++    assert.equal(jsx.length, 1, `恰一个 jsx 批（实得 ${jsx.length}）`)
++    assert.equal(jsx[0].name, 'deps(auto-jsx)', '单块保持原批名')
++    assert.equal(jsx[0].count, 3, 'count 守恒')
++    const expected = `cd frontend && pnpm exec vitest run ${deps.map((d) => d.replace('frontend/', '')).join(' ')}`
++    assert.equal(jsx[0].command, expected, `命令与旧拼接一致（实得 ${jsx[0].command}）`)
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('多块分块：拼接总长超 maxLen → deps(auto-jsx:1/N..N/N)，count 守恒且每块命令不超上限', () => {
++  const root = mkRoot('chunk-multi-')
++  // 200 文件 × 名长 ~60 → 参数总长 ~12k，前缀 ~33 → 预期 3 块（6000/块）。
++  const deps = mkJsxFiles(root, 200, 50)
++  try {
++    // deps 全量同时作变更面（优先面整跑）——普通依赖有配额帽，帽下不触发分块
++    const batches = buildDepsBatches({ deps, changedFiles: deps, hits: [], cwd: root })
++    const jsx = batches.filter((b) => b.short === 'jsx')
++    assert.ok(jsx.length >= 2, `应分多块（实得 ${jsx.length} 块）`)
++    const total = jsx.length
++    jsx.forEach((b, i) => {
++      // 命名钉 HEAD 冻结面语义：jsx 多块后缀在括号内 deps(auto-jsx:N/M)（与 js 原生批同式）。
++      // 注：工作区并行会话在途「多项目分组」演化拟改后缀到括号外（base:N/M）——其落地
++      // 提交须同步本断言（实现与断言一起换版，保持三方一致）。
++      assert.equal(b.name, `deps(auto-jsx:${i + 1}/${total})`, `第 ${i + 1} 块命名 :N/M（实得 ${b.name}）`)
++      // 单块命令长度：前缀 + 本块参数 ≤ 前缀 + 6000 + 单参数富余（分块判据本身）
++      assert.ok(b.command.length <= 6033 + 120, `第 ${i + 1} 块命令长度 ${b.command.length} 应贴近 6000 上限`)
++    })
++    assert.equal(jsx.reduce((s, b) => s + b.count, 0), 200, 'count 跨块守恒')
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('js 原生批同款分块：deps(auto-js:1/N) 且 tap 标记保留', () => {
++  const root = mkdtempSync(join(tmpdir(), 'chunk-jsnative-'))
++  try {
++    const deps = []
++    for (let i = 0; i < 150; i++) {
++      const name = `n${String(i).padStart(3, '0')}${'y'.repeat(50)}.test.mjs`
++      writeFileSync(join(root, name), '')
++      deps.push(name)
++    }
++    const batches = buildDepsBatches({ deps, changedFiles: deps, hits: [], cwd: root })
++    const js = batches.filter((b) => b.short === 'js')
++    assert.ok(js.length >= 2, `node --test 批应分多块（实得 ${js.length}）`)
++    js.forEach((b) => assert.equal(b.tap, true, 'tap 标记保留'))
++    assert.equal(js.reduce((s, b) => s + b.count, 0), 150, 'count 跨块守恒')
++    assert.match(js[0].name, /^deps\(auto-js:1\/\d+\)$/, '首块命名 auto-js:1/N')
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
+diff --git a/test/ui-prototype-form.test.mjs b/test/ui-prototype-form.test.mjs
+new file mode 100644
+index 00000000..1a51a9a5
+--- /dev/null
++++ b/test/ui-prototype-form.test.mjs
+@@ -0,0 +1,143 @@
++/**
++ * ui-prototype-form.test.mjs — 每仓原型形态契约（2026-10-15-ui-proto-form-config）
++ *
++ * 四例原型形态偏档（fire-equipment/deploy-release-notes/knowledge-search/server-logs-panel）
++ * 后用户四点裁决落地：local.yaml ui_prototype 每仓登记 + 工具三层引导。锁：
++ *   ① readUiPrototypeForm 五态解析（缺席/真码/完整豁免/缺字段豁免/repos override）；
++ *   ② resolveUiPrototypeFor 子仓 override 按触达路径优先、仓级兜底；
++ *   ③ buildUiGuidanceLines 四态注入 + 无参兼容（specBase=null 零新增）+ 生态命令词禁入；
++ *   ④ brainstorm 生成要求四句锚（抄值≠引入/历史先例不构成管线/单开轻量变更/来源声明必填）
++ *      + design-facts/gates 同步锚。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { readUiPrototypeForm, resolveUiPrototypeFor, buildUiGuidanceLines } from '../src/ui-visual.js'
++import { definition as brainstormDef } from '../src/stages/brainstorm.js'
++import { generateDesignSkeleton } from '../src/design-facts.js'
++
++function makeSpecRoot(yaml = '') {
++  const root = mkdtempSync(join(tmpdir(), 'uipf-'))
++  mkdirSync(join(root, '.sillyspec'), { recursive: true })
++  if (yaml) writeFileSync(join(root, '.sillyspec', 'local.yaml'), yaml)
++  return { root, specBase: join(root, '.sillyspec') }
++}
++
++const showStep = brainstormDef.steps.find(s => (s.prompt || '').includes('HTML 原型分级'))
++assert.ok(showStep, 'brainstorm 原型分级步在场')
++const prompt = showStep.prompt || ''
++const genIdx = prompt.indexOf('### 生成要求')
++const genTier = prompt.slice(genIdx, prompt.indexOf('### 铁律', genIdx))
++
++test('① readUiPrototypeForm 五态', () => {
++  // 态1：段缺席
++  const a = makeSpecRoot('project:\n  type: generic\n')
++  assert.equal(readUiPrototypeForm(a.specBase).registered, false, '段缺席 → registered=false')
++  // 态2：真码登记
++  const b = makeSpecRoot('ui_prototype:\n  form: real-code\n')
++  const rb = readUiPrototypeForm(b.specBase)
++  assert.equal(rb.registered && rb.form, 'real-code', 'form=real-code 登记')
++  // 态3：完整豁免
++  const c = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n    at: 2026-10-15\n    reason: 本仓暂无真码原型管线，接受复刻形态\n')
++  const rc = readUiPrototypeForm(c.specBase)
++  assert.equal(rc.form, 'single-html', '豁免 form')
++  assert.equal(rc.rulingComplete, true, '豁免 ruling 全三字段 → complete')
++  // 态4：豁免缺字段
++  const d = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n')
++  assert.equal(readUiPrototypeForm(d.specBase).rulingComplete, false, 'ruling 缺 at/reason → incomplete')
++  // 态4b：form 非法值 → registered:false（白名单外同缺席）
++  const d2 = makeSpecRoot('ui_prototype:\n  form: figma\n')
++  assert.equal(readUiPrototypeForm(d2.specBase).registered, false, '非法 form 值 → registered=false')
++  // 态5：repos override 同构
++  const e = makeSpecRoot('ui_prototype:\n  form: real-code\n  repos:\n    spdemo:\n      form: single-html\n      ruling:\n        by: qinyi\n        at: 2026-10-15\n        reason: 小程序无 HTML 面\n')
++  const re = readUiPrototypeForm(e.specBase)
++  assert.equal(re.repos.spdemo.form, 'single-html', '子仓 override 解析')
++  assert.equal(re.repos.spdemo.rulingComplete, true, '子仓 ruling 同构校验')
++  // 坏 YAML fail-soft
++  const f = makeSpecRoot('ui_prototype: [broken\n')
++  assert.equal(readUiPrototypeForm(f.specBase).registered, false, '坏 YAML 零抛出 → registered=false')
++  for (const r of [a, b, c, d, d2, e, f]) rmSync(r.root, { recursive: true, force: true })
++})
++
++test('② resolveUiPrototypeFor 子仓优先、仓级兜底', () => {
++  const root = mkdtempSync(join(tmpdir(), 'uipf-r-'))
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  const subA = join(root, 'subA'); const subB = join(root, 'subB')
++  mkdirSync(subA); mkdirSync(subB)
++  writeFileSync(join(specBase, 'local.yaml'), [
++    'repos:',
++    `  suba: ${subA.replace(/\\/g, '/')}`,
++    `  subb:`,
++    `    path: ${subB.replace(/\\/g, '/')}`,
++    'ui_prototype:',
++    '  form: real-code',
++    '  repos:',
++    '    suba:',
++    '      form: single-html',
++    '      ruling: { by: qinyi, at: 2026-10-15, reason: 无 HTML 面 }',
++  ].join('\n'))
++  // 绝对路径触达 subA → override 生效
++  const r1 = resolveUiPrototypeFor(specBase, [join(subA, 'src', 'page.tsx')])
++  assert.equal(r1[0].scope, 'suba', '子仓 override 优先排首')
++  assert.equal(r1[0].form, 'single-html')
++  // 相对键前缀触达（评审 P2：注入语料常见 `suba/src/...` 相对形态）→ 同样命中
++  const r1b = resolveUiPrototypeFor(specBase, ['suba/src/page.tsx'])
++  assert.equal(r1b[0].scope, 'suba', '相对键前缀命中子仓 override')
++  // 对象形态 repos 条目（{path:...}）不被静默跳过——触达 subB 走仓级（无 override 但可解析）
++  const r2 = resolveUiPrototypeFor(specBase, [join(subB, 'index.js')])
++  assert.equal(r2.length, 1)
++  assert.equal(r2[0].scope, '仓级', '对象形态条目可解析，无 override → 仓级兜底')
++  // 无路径 → 仓级
++  const r3 = resolveUiPrototypeFor(specBase, [])
++  assert.equal(r3[0].scope, '仓级')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('③ buildUiGuidanceLines 四态注入 + 无参兼容', () => {
++  // 无参：零形态节（与原版逐字等价——前 11 行不含 📐）
++  const noArg = buildUiGuidanceLines()
++  assert.equal(noArg.filter(l => l.includes('📐')).length, 0, 'specBase=null 零新增形态行')
++  assert.ok(noArg[0].includes('UI 变更执行须知'), '既有四条须知保留')
++  // 态：real-code
++  const rc = makeSpecRoot('ui_prototype:\n  form: real-code\n')
++  const lrc = buildUiGuidanceLines(rc.specBase).join('\n')
++  assert.ok(lrc.includes('真码契约（real-code）') && lrc.includes('单开轻量变更搭最小入口'), '真码契约行+bootstrap 指引')
++  // 态：完整豁免
++  const ex = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n    at: 2026-10-15\n    reason: r\n')
++  const lex = buildUiGuidanceLines(ex.specBase).join('\n')
++  assert.ok(lex.includes('豁免生效') && lex.includes('by=qinyi') && lex.includes('真值 token'), '豁免生效行含裁决摘要与来源声明要求')
++  // 态：豁免缺 ruling
++  const bad = makeSpecRoot('ui_prototype:\n  form: single-html\n  ruling:\n    by: qinyi\n')
++  const lbad = buildUiGuidanceLines(bad.specBase).join('\n')
++  assert.ok(lbad.includes('豁免登记不完整') && lbad.includes('静默漂移'), '缺 ruling 警告')
++  // 态：未登记强提醒
++  const un = makeSpecRoot('project:\n  type: generic\n')
++  const lun = buildUiGuidanceLines(un.specBase).join('\n')
++  assert.ok(lun.includes('未登记原型形态') && lun.includes('阶梯') && lun.includes('收口前') && lun.includes('强提醒'), '未登记强提醒四关键词')
++  // 生态命令词禁入（guidance-output-neutrality 契约面）
++  const ECOSYSTEM_RE = /(pnpm|yarn|npx|npm\s+run|gradle|mvn|maven|pip\s+install|cargo\s+(build|run)|go\s+run|dotnet\s+build)\b/i
++  for (const l of [lrc, lex, lbad, lun]) {
++    assert.equal(ECOSYSTEM_RE.test(l), false, `形态行含生态命令词：${l.match(ECOSYSTEM_RE)?.[0]}`)
++  }
++  for (const r of [rc, ex, bad, un]) rmSync(r.root, { recursive: true, force: true })
++})
++
++test('④ brainstorm 生成要求四句锚 + 声明面同步', () => {
++  assert.ok(/复刻≠引入，仍属手搓仿制/.test(genTier), '锚1：token 抄值=复刻≠引入')
++  assert.ok(/历史原型先例同为单文件不构成管线存在/.test(genTier), '锚2：历史先例不构成管线')
++  assert.ok(/单开一个轻量变更搭最小入口/.test(genTier), '锚3：bootstrap 单开轻量变更')
++  assert.ok(/素材来源声明/.test(genTier) && /token 源文件路径/.test(genTier), '锚4：来源声明必填')
++  assert.ok(/ui_prototype/.test(genTier) && /repos override 优先/.test(genTier), '登记优先于默认阶梯')
++  assert.ok(/不是「看起来像」/.test(genTier), '高保真措辞防滑移')
++  const skeleton = generateDesignSkeleton({ changeName: '2026-10-15-x' })
++  assert.ok(/素材来源声明/.test(skeleton) && /ui_prototype 登记的，收口前补登记/.test(skeleton), 'design-facts 清单同步')
++})
++
++test('④ gates 软提醒文案含登记指引（源锚）', async () => {
++  const { readFileSync } = await import('node:fs')
++  const src = readFileSync(join(import.meta.dirname, '..', 'src', 'run', 'gates.js'), 'utf8')
++  assert.ok(/ui_prototype 登记的，收口前补登记/.test(src), 'gates 软提醒含补登记指引')
++})

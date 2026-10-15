@@ -26,3 +26,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-14 | 2026-10-14-decision-global-id-epoch | 决策号 epoch 全局化（写面）：decision-distill 新蒸馏条目发全局号 D-<域>-NNN@vN（域前缀全域 max+1 只增不复用、批内递增防撞号）+「原编号：」溯源字段（变更后/锚点前）；幂等谓词扩展（号或原编号）、多域扇出单一身份（迁域不换号）、跨文件清理同谓词；存量 legacy 零触碰（真实库副本演练 700+ 节段逐字节不变）；docs-check 标题双形态 |
 | 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移（用户裁决翻「不回填」旧案）：src/decision-renumber.js 迁移工具（planRenumber/applyRenumberPlan 纯函数 + knowledge renumber --dry-run/--apply CLI）；真实库执行 701 legacy 节段→597 全局号（fanout 75 组单一身份、epoch 零触碰 1）；docs-check 读原编号 + isDecisionExempt 认原编号（消费仓旧裸键兼容） |
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
+| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |

@@ -57,3 +57,4 @@
 | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
 | 2026-10-15 | 2026-10-15-decision-redomain | 用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-modul… |
+| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |

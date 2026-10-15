@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-ui-proto-form-config",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）+增量复审（独立子代理，只验三条 finding 清偿，不重审全文）",
+  "verdict": "PASS",
+  "reviewedAgainst": "c7ae81bae0da59fb9a265580f688ff39b7571a96（git rev-parse HEAD 实测一致；清偿提交面 --stat 核对仅 src/ui-visual.js + test/ui-prototype-form.test.mjs 两文件 +32/-14，工作树两文件与该提交逐字一致（git diff c7ae81ba 空））",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "crossrepo 探针 fail：repos 注册条目对象形态与语料相对路径形态均不命中子仓 override，静默退仓级，超出 design risk-2 声明的降级范围",
+      "evidence": "①resolveUiPrototypeFor 只认字符串条目（src/ui-visual.js:112 `if (typeof registeredPath !== 'string') continue`），而其注释声称『与 plan-postcheck parseRepoRegistry 同源语义』（src/ui-visual.js:90）；parseRepoRegistry 实际支持三形态：字符串 / inline flow 对象 `{path:…, worktree:…}` / 块式对象（src/stages/plan-postcheck.js:282-289，worktree 落位自 2026-10-10 起内联在注册条目上，对象形态是正式支持面）。实测：`repos: { suba: {path: <abs>, worktree: /tmp/wt} }` + ui_prototype.repos.suba override + 触达该子仓绝对路径 → 返回仅 [仓级]，override 静默失效。②路径归一只做注册绝对路径全前缀（`np.startsWith(norm(registeredPath)+'/')`，src/ui-visual.js:115），无本仓既有消费方的 basename 回退——design-facts.js:528-537 对 registry 同数据显式做『注册值/basename 双前缀命中』（注释：design 清单常为 basename 前缀相对路径）；prompt.js 接线的语料路径来自 extractQuotedPaths（src/ui-visual.js:284-293，裸路径正则只产 `src|web|app|…` 开头的相对路径），实测 `spdemo/src/pages/index.vue` 对绝对注册路径 → 仅 [仓级]。③norm() 额外 toLowerCase（src/ui-visual.js:110），design-facts 归一不小写——大小写敏感文件系统上两消费方语义分叉。后果：brainstorm {UI_VISUAL_GUIDANCE} 注入主路径上子仓 override 大概率不生效；design risk-2 的『可接受降级』声明只覆盖『触达路径未落 repos 注册』，未覆盖『注册在场但形态不受支持』。FR-02 字面（key→path 前缀匹配）与测试（绝对路径用例）自洽，故不构成 FR 违约，定为 P2 兼容性缺口",
+      "location": "src/ui-visual.js:107-119（注释 89-91）",
+      "status": "remediated",
+      "remediatedIn": "c7ae81bae0da59fb9a265580f688ff39b7571a96",
+      "remediationVerified": "三通道匹配在位且逻辑正确（src/ui-visual.js:120-125）：①归一绝对前缀 `np.startsWith(reg+'/') || np === reg`；②相对键前缀 `np.startsWith(key.toLowerCase()+'/')`（norm 已统一小写，键侧 toLowerCase 对齐）；③注册路径 basename 前缀 `np.startsWith(regBase+'/')`（regBase=reg.split('/').pop()，键与目录不同名时兜底，与 design-facts.js:528-537 双前缀语义对齐）。对象条目清偿：弃 js-yaml 裸读，改 `Object.fromEntries(parseRepoRegistry(readFileSync(local.yaml)))`（src/ui-visual.js:113）——parseRepoRegistry 导出于 src/stages/plan-postcheck.js:263，返回 Map<string,string>，_parseRepoEntries 支持字符串/inline 对象/块式对象三形态，Object.fromEntries(Map) 合法；循环依赖排查：plan-postcheck.js 全量 import 面（fs/path/os/js-yaml + change-list/stage-contract-spec/taskcard-placeholders/cmd-existence/taskcard-frontmatter，均无回边 import ui-visual），ui-visual.js 仅 flow.js 与 verify-probes.js 两处被引，均不在 plan-postcheck 依赖闭包内——无环。测试断言在位：test/ui-prototype-form.test.mjs:87-88 相对路径 r1b（'suba/src/page.tsx'→scope suba）、:73-74 subb 块式对象 {path:} 条目（r2 验证可解析不静默跳过）。实测 node --test 5/5 绿。残留边界（接受）：③通道在注册 basename 与主仓目录名撞车时可能过匹配（仅当该子仓有 override 才生效，错向为多注入 override 而非静默丢失，与清偿意图同风险向，不构成新 finding）"
+    },
+    {
+      "severity": "P3",
+      "title": "交付提交夹带并行变更（2026-10-15-brainstorm-interaction-refine）的 docs/prompt 生成物内容，归属面混合未在 commit message 点明",
+      "evidence": "git show a8b8eba -- docs/prompt/brainstorm.md 的 +/- 行含 11 处 interaction-refine 专属内容（B2 分块回放/执行规则分层 FR-03/自欺逃逸口对照表/我替你做的决定 FR-04/实现者视角追问等），冻结 change.patch 同样包含；成因：b289dcfd（interaction-refine）只提交 src/stages/brainstorm.js 未同步 docs/prompt，本变更收口 docs 同步（零 miss 机制）把两变更文案一并生成。机制上无害——生成物与 src 逐字一致已实测（生成要求段与 B2 段 literal-equal 均 true），patch 如实冻结；但本提交的交付面混入他变更文案，commit message 只写『docs/prompt brainstorm 同步零 miss』未披露夹带",
+      "location": "docs/prompt/brainstorm.md:117-233（a8b8eba diff 段）；对照 b289dcfd 提交面（仅 src+test 7 文件，无 docs/prompt）",
+      "status": "remediated",
+      "remediatedIn": "c7ae81bae0da59fb9a265580f688ff39b7571a96",
+      "remediationVerified": "清偿口径为机制性留档+提交面收敛：机制成因已在上文 evidence 与初审记录留档；清偿提交 c7ae81ba 经 git show --stat 核对提交面仅 src/ui-visual.js（+25/-8）与 test/ui-prototype-form.test.mjs（+21/-6）两文件，合计 +32/-14，无 docs/prompt 或任何 interaction-refine 生成物夹带——符合声明"
+    },
+    {
+      "severity": "P3",
+      "title": "测试面两处弱点：`&&` 链接断言削弱失败诊断；FR-01『form 非法值』态无直接用例",
+      "evidence": "test/ui-prototype-form.test.mjs:43（态3 `assert.equal(rc.form,'single-html') && assert.equal(rc.rulingComplete,true,…)`——第一断言失败时第二断言不执行、无消息）；同类：:40（`rb.registered && rb.form` 复合表达式）、:81/:83（r1/r2 的 `assert.equal(r1.length,1) && assert.equal(r1[0].scope,…)`）。FR-01 文本列『非法值 → registered:false』，测试只覆盖坏 YAML（态6），form: bogus 非法值走同一 parseEntry null 路径未直测（风险极低）。另 FR-02 场景『两子仓各有 override、未触达不并列』未按原场景直测（测试为单 override+无 override 组合，语义等价覆盖）",
+      "location": "test/ui-prototype-form.test.mjs:40-43,81-83",
+      "status": "remediated",
+      "remediatedIn": "c7ae81bae0da59fb9a265580f688ff39b7571a96",
+      "remediationVerified": "①②中断言链形态（`assert.equal(a,x) && assert.equal(b,y)`）已全拆为独立带消息 assert：初审引用三处分别落位 test/ui-prototype-form.test.mjs:45-46（态3 form/rulingComplete）、:84-85（r1 scope/form）、:91-92（r2 length/scope），grep 全文确认零残留链式断言。FR-01 非法值直测补齐：态4b（:51-52）`form: figma` → registered=false。注记（不构成残留 finding）：文中尚存 8 处单断言内复合参数形态（如 :41 `rb.registered && rb.form`、③④⑤ `assert.ok(a && b)`）——属单次 assert 调用，失败时仍打印 actual/expected/消息，初审所指『第二断言不执行、无消息』弱点不适用，且均在清偿声明限定范围（①②断言链形态）之外"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding（初审）；增量复审=P2/P3×3 清偿核验通过"
+  },
+  "reviewedAt": "2026-10-15T10:29:48Z"
+}

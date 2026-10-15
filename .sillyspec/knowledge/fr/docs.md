@@ -160,3 +160,109 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-15-brainstorm-interaction-refine
   status: active
+
+## FR-docs-009 local.yaml ui_prototype 段解析（必须）
+变更：2026-10-15-ui-proto-form-config
+状态：active
+摘要：主路径——豁免登记；边界——豁免缺裁决字段
+场景正文：
+- 场景：主路径——豁免登记 — Given local.yaml 含 `ui_prototype: { form: single-html, ruling: { by, at, reason } }`；When readUiPrototypeForm(specBase)；Then registered=true、form='single-html'、rulingComplete=true。
+- 场景：边界——豁免缺裁决字段 — Given form=single-html 而 ruling 缺 reason；Then rulingComplete=false（消费方须响警告——静默漂移禁止）。
+全文：.sillyspec/changes/archive/2026-10-15-ui-proto-form-config/requirements.md#FR-01
+最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-ui-proto-form-config:flow:测试绑定FR-01
+  tests: test/ui-prototype-form.test.mjs「readUiPrototypeForm 五态解析」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-ui-proto-form-config
+  status: active
+
+## FR-docs-010 多仓 override 按触达路径优先（必须）
+变更：2026-10-15-ui-proto-form-config
+状态：active
+摘要：主路径——三仓变更
+场景正文：
+- 场景：主路径——三仓变更 — Given repos 注册 subgrid/spdemo 两子仓且各有 override，触达路径落在 spdemo 下；Then spdemo 的 override 生效，未触达 subgrid 不并列。
+全文：.sillyspec/changes/archive/2026-10-15-ui-proto-form-config/requirements.md#FR-02
+最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-ui-proto-form-config:flow:测试绑定FR-02
+  tests: test/ui-prototype-form.test.mjs「多仓 override 按触达路径优先」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-ui-proto-form-config
+  status: active
+
+## FR-docs-011 buildUiGuidanceLines 四态注入（必须）
+变更：2026-10-15-ui-proto-form-config
+状态：active
+摘要：主路径——未登记仓
+场景正文：
+- 场景：主路径——未登记仓 — Given local.yaml 无 ui_prototype 段且 flow start 检测 UI 触达；When 须知注入；Then 含「未登记」「阶梯」「收口前补登记」关键词的强提醒块。
+全文：.sillyspec/changes/archive/2026-10-15-ui-proto-form-config/requirements.md#FR-03
+最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-ui-proto-form-config:flow:测试绑定FR-03
+  tests: test/ui-prototype-form.test.mjs「四态注入 + 无参兼容零新增」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-ui-proto-form-config
+  status: active
+
+## FR-docs-012 生成要求四句修正与声明面同步（必须）
+变更：2026-10-15-ui-proto-form-config
+状态：active
+摘要：主路径——文本锚
+场景正文：
+- 场景：主路径——文本锚 — Given 改动落盘；When grep brainstorm 生成要求；Then 四句锚与 ui_prototype 引用在场；design-facts/gates 同步。
+全文：.sillyspec/changes/archive/2026-10-15-ui-proto-form-config/requirements.md#FR-04
+最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-ui-proto-form-config:flow:测试绑定FR-04
+  tests: test/ui-prototype-form.test.mjs「生成要求四句锚 + 声明面同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-ui-proto-form-config
+  status: active
+
+## FR-docs-013 测试覆盖与全绿（必须）
+变更：2026-10-15-ui-proto-form-config
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量；Then 全过、零回归、lint 零错误。
+全文：.sillyspec/changes/archive/2026-10-15-ui-proto-form-config/requirements.md#FR-05
+最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-ui-proto-form-config:flow:测试绑定FR-05
+  tests: test/ui-prototype-form.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-ui-proto-form-config
+  status: active

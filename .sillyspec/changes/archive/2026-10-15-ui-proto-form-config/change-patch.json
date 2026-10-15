@@ -1,0 +1,185 @@
+{
+  "change": "2026-10-15-ui-proto-form-config",
+  "baseline": "b289dcfd9b0b69b2b0770663eb4f29fb58aa46f4",
+  "head": "893ae3bcde0054969180971e02536ffd67dd4802",
+  "files": [
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "src/design-facts.js",
+    "src/flow.js",
+    "src/run/gates.js",
+    "src/run/prompt.js",
+    "src/stages/brainstorm.js",
+    "src/ui-visual.js",
+    "src/verify-postcheck.js",
+    "test/dynamic-batch-chunk.test.mjs",
+    "test/ui-prototype-form.test.mjs"
+  ],
+  "totals": {
+    "files": 13,
+    "additions": 554,
+    "deletions": 56
+  },
+  "savedAt": "2026-10-15T10:30:58.221Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "b289dcfd9b0b69b2b0770663eb4f29fb58aa46f4",
+    "totals": {
+      "files": 13,
+      "additions": 554,
+      "deletions": 56
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 75,
+        "deletions": 20,
+        "kind": "modified"
+      },
+      {
+        "path": "src/design-facts.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/ui-visual.js",
+        "additions": 119,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 105,
+        "deletions": 17,
+        "kind": "modified"
+      },
+      {
+        "path": "test/dynamic-batch-chunk.test.mjs",
+        "additions": 92,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/ui-prototype-form.test.mjs",
+        "additions": 143,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9d451074ab39559b5f89cd782c07a3d2799501d98dfc27a3fa246a6c92e922bf",
+  "patchStatus": "ok"
+}

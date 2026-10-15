@@ -72,3 +72,4 @@
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
 | 2026-10-15 | 2026-10-15-decision-redomain | 用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-modul… |
 | 2026-10-15 | 2026-10-15-jsx-batch-cmd-chunk | verify 动态子集 js/jsx 批按命令长度分块——修 Windows「命令行太长」恒败死锁（… |
+| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |

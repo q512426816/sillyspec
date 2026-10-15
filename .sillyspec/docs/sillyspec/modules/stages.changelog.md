@@ -61,3 +61,4 @@
 | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
 | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
 | 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
+| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
