@@ -79,7 +79,7 @@ created_at: 2026-10-15T08:31:00.324Z
 ### FR-05: Design Grill 子代理派发 prompt 含实现者视角四要素（真身份/联系不到作者/只报猜错会出事的必须被回答项/显式跳过项与 nothing important left 出口），主代理回收后分三堆处理
 
 - 必须：Design Grill 步的子代理派发 prompt 含实现者视角四要素：①你是一位有才华的 [领域] 工程师，被交予本设计文档去制定实现计划；②你联系不到文档作者；③只报告「必须被回答、否则得靠猜、猜错会出事」的问题，每条附「为什么答案会改变产物」并按重要性排序；④显式跳过文档已留给实现者的部分、自己能决定的、措辞挑刺，没有重要问题就回答 `nothing important left`。
-- 必须：主代理回收后把 builder 问题分三堆处理——文档/对话已答（补进 design.md）、minor（自行决定并在 design.md 标注为「我的判断」）、只有用户能答且改变产物（攒一轮问完）。
+- 必须：主代理回收后把 builder 问题分三堆处理——文档/对话已答（补进 design.md）、minor（自行决定并按决策记录格式落 decisions.md 并在 answer 标注为「我的判断」）、只有用户能答且改变产物（攒一轮问完）。
 - 必须：该实现者视角问题清单的去向有明确契约：写进 `review.json` 的 `reviewerNotes`（现有契约字段，不新增 schema 字段）。
 - 禁止：不因本次改动修改 Stage Review Gate 的 review.json 校验逻辑与既有清单项。
 
@@ -145,7 +145,7 @@ created_at: 2026-10-15T08:31:00.324Z
 
 - Given：当前仓库测试套件
 - When：收口 CLI 亲测
-- Then：无新增失败（`test/known-failures.yaml` 既有失败不计入）
+- Then：无新增失败（`.sillyspec/known-failures.yaml` 既有失败不计入，该清单自 local.yaml 迁移入库）
 
 ## 测试绑定（每条 FR 至少一行）
 
