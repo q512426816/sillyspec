@@ -1,0 +1,52 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index d8ff3f36..83ca6355 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -63,3 +63,5 @@
+ | 2026-10-15 | 2026-10-15-graph-dangling-crossrepo-split | 效果评估实证：knowledge graph dangling 主计数 2537 条中 2472 为跨仓强边注记（bac |
+ | 2026-10-15 | 2026-10-15-vector-gate-tighten | 效果评估实证：CLI 向量召回层 2026-09-29 发布时缺省 auto（有平台配置即试），但平台端 /api/sp |
+ | 2026-10-15 | 2026-10-15-supersedes-ghost-nodes | 效果评估实证：全图 703 决策节点 supersedes 边仅 1 条（边体系实质闲置）。根因：同号版本取代是蒸馏就地 |
++| 2026-10-15 | 2026-10-15-rot-coverage-git-source | 效果评估实证：fr-rot-suspect 遥测的 unknown 面长期卡死 6 个归档变更（2026-09-22-t |
++| 2026-10-15 | 2026-10-15-classify-surface | 效果评估实证：knowledge classify 工具在位（uncategorized 条目归类迁移四步动作+审计遥测 |
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 96b10568..dac830be 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -309,7 +309,9 @@ export function harvestSlot4Decision({ changeDir, change }) {
+     '---',
+     `# 决策记录（Decisions）— ${change}`,
+     '',
+-    `## D-001@v1: 风险与死路（design 槽4 收割）`,
++    // 标题自解释（2026-10-15-harvest-title-clarify）：读者面是 decisions 文档与 knowledge，
++    // 机制出处（槽4 收割）由 frontmatter author: flow-machine-draft 承载，标题只说内容与性质。
++    `## D-001@v1: 设计期风险与放弃方案（底稿）`,
+     `- 类型：process`,
+     `- 状态：confirmed`,
+     // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
+diff --git a/test/slot4-distill-fix.test.mjs b/test/slot4-distill-fix.test.mjs
+index d2f4fb34..cc5e273f 100644
+--- a/test/slot4-distill-fix.test.mjs
++++ b/test/slot4-distill-fix.test.mjs
+@@ -65,3 +65,22 @@ test('② 无状态旧格式不入选（蒸馏既有行为回归）', () => {
+     assert.ok(!existsSync(join(kr, 'decisions')), '零输出不落盘')
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
++
++test('③ 收割条目标题自解释（无机制词+frontmatter 出处保留）', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 's4f3-'))
++  try {
++    const changeDir = mkChangeDir(tmp, '最大风险：真实库一次性重写——回退靠 git。\n死路（放弃）：不做迁移只靠自然收敛——用户不接受永久双形态。')
++    const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
++    assert.ok(h.harvested, `应收割（${h.reason}）`)
++    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
++    const titleLine = decText.split('\n').find((l) => l.startsWith('## D-001@v1:'))
++    assert.ok(titleLine, 'D-001 标题行在场')
++    assert.equal(
++      titleLine,
++      '## D-001@v1: 设计期风险与放弃方案（底稿）',
++      '标题自解释：内容（设计期风险与放弃方案）+ 性质（底稿）',
++    )
++    assert.ok(!/槽4|收割/.test(titleLine), '标题不含流程机制词（槽4/收割）')
++    assert.ok(/^author: flow-machine-draft$/m.test(decText), '机器合成出处由 frontmatter 承载')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})

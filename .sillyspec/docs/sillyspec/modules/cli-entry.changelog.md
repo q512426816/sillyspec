@@ -52,3 +52,4 @@
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
 | 2026-10-15 | 2026-10-15-thin-inject-telemetry | 效果评估实证：轻量道 flow start 知识注入路径（src/flow.js renderThinKnowledge |
 | 2026-10-15 | 2026-10-15-thin-query-slim | 效果评估实证两处：①thin 道 flow start 知识匹配查询用整段 --input（含成功标准段的文件路径/测试 |
+| 2026-10-15 | 2026-10-15-harvest-title-clarify | 收割条目标题自解释：机制词（槽4/收割）退出 D-001 标题，出处归 frontmatter

@@ -1,0 +1,46 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  动机与背景：
+
+  decisions.md 中机器收割的 D-001 条目标题为「风险与死路（design 槽4 收割）」——标题全是流程内部术语（槽4=design
+  四槽编号、收割=机器合成动作），不读流程实现的人无法从标题看出条目装的是什么；该标题还随蒸馏链进 knowledge 长期可见。改为自解释命名。
+
+
+  成功标准：
+
+  - 收割生成的 D-001 标题不含「槽4/收割」等机制词，直接说明内容（设计期风险与放弃方案）与底稿性质
+
+  - 机器合成出处仍可追溯（frontmatter author: flow-machine-draft 保留）
+
+  - 测试补新标题断言并跑绿；历史归档件与存量 knowledge 不回改
+autopilot: false
+prestage_ack: false
+baseline_commit: ace2fe2c3b5228523a26d7df19f085508ad94d20
+updatedAt: '2026-10-15T02:50:21.837Z'
+baseline_sha256: 54a12fe2b70f478daf6cf5fec685ab79bfcf29030a06e9d5ea41f7df163b9133
+spec_approved: true
+spec_approved_at: '2026-10-15T02:14:00.473Z'
+spec_approved_by: zcode-harvest-title-1015
+spec_approved_channel: agent-self
+spec_attested_by: zcode-harvest-title-1015
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js20+js-meta-skip1+nontest-skip1)+fr(20)（50.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015023214\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（48.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015023214\test-result.json｜门文件 2 个
+

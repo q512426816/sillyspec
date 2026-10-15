@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-harvest-title-clarify",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7822ce1f4c740fe61bce18e110247608bb68a82d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design 证据声明「全仓扫描旧标题字面仅生成端一处+测试头注释一处」表述不精确",
+      "evidence": "git grep 全形旧标题字面在 baseline(ace2fe2) 的 src/test 实为生成端仅 1 处（flow-parity.js:312），测试头注释（slot4-distill-fix.test.mjs:2）只含机制词「槽4 收割」而非完整旧标题字面；且「全仓」字面不成立——.sillyspec/knowledge/decisions/unmapped.md 含数百条旧标题条目（正是 FR-03 声明不回改的存量数据面）。核心结论（无读侧按标题匹配）经 decision-distill.js:132 按 D-xxx@vN 锚解析、decisions-io.js/knowledge-graph.js 同按 id@v 键证实；HEAD 的 src/test 范围内旧标题字面 0 处，claim 实质成立，无功能影响。",
+      "location": ".sillyspec/changes/2026-10-15-harvest-title-clarify/design.md:17"
+    },
+    {
+      "severity": "P3",
+      "title": "边界裁决记录（记录性）：三条声明边界均裁决可接受",
+      "evidence": "① 「历史归档件与存量 knowledge 不回改、新旧标题自然共存」——可接受：归档是冻结审计面，存量旧标题在 knowledge/decisions/unmapped.md 原样保留，读侧按 D-xxx@vN 锚定位无歧义，本变更 3 个提交（0f87c1a5/9b0a91be/7822ce1f）diff 面实证未触及 archive/knowledge。② 「标题出处归 frontmatter author 承载」——可接受：生成端 frontmatter 含 author: flow-machine-draft（flow-parity.js:301）且测试③断言在场，标题不再重复机制信息。③ 「design 模板「风险与死路」节标题（DESIGN_QUESTIONS 问句锚）保留不动」——可接受：diff 面确实未触及模板单一源，按节名检索习惯不受影响。",
+      "location": ".sillyspec/changes/2026-10-15-harvest-title-clarify/design.md:35-43"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T02:49:12Z"
+}

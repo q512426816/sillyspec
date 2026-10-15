@@ -9995,3 +9995,48 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-15-thin-query-slim/requirements.md#FR-03
 最近确认：1246ce8ffac6e88d42319c01d5d3ac7de0c6d754
+
+## FR-cli-entry-528 收割生成的 D-001 标题不含「槽4/收割」等机制词，直接说明内容（设计期风险与放弃方案）与底稿性质
+变更：2026-10-15-harvest-title-clarify
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-harvest-title-clarify/requirements.md#FR-01
+最近确认：ca4632b278f118f62ed0717db6659a2128493e55
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-harvest-title-clarify:flow:测试绑定FR-01
+  tests: test/slot4-distill-fix.test.mjs「③ 收割条目标题自解释（无机制词+frontmatter 出处保留）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-harvest-title-clarify
+  status: active
+
+## FR-cli-entry-529 机器合成出处仍可追溯（frontmatter author: flow-machine-draft 保留）
+变更：2026-10-15-harvest-title-clarify
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-harvest-title-clarify/requirements.md#FR-02
+最近确认：ca4632b278f118f62ed0717db6659a2128493e55
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-harvest-title-clarify:flow:测试绑定FR-02
+  tests: test/slot4-distill-fix.test.mjs「③ 收割条目标题自解释（无机制词+frontmatter 出处保留）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-harvest-title-clarify
+  status: active
+
+## FR-cli-entry-530 测试补新标题断言并跑绿；历史归档件与存量 knowledge 不回改
+变更：2026-10-15-harvest-title-clarify
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-harvest-title-clarify/requirements.md#FR-03
+最近确认：ca4632b278f118f62ed0717db6659a2128493e55
