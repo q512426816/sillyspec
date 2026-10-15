@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-timeout-enforcement",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "bb08a72037849455c8313190af062749daed5e5a",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——design 作答『不适用』与实况相符：本变更无输入/事件顺序面；仅有的时序面是『超时触发/宽限到期/close 后到』三者先后，由 settle 幂等守卫吸收（util.mjs:79-85），不存在乱序输入可破坏的假设",
+    "并发": "ok——宽限计时与 close 竞态：settle 首行 settled 守卫幂等（util.mjs:80），timer/graceTimer 双 clearTimeout（util.mjs:82-83），任一先到即结算、迟到方 no-op，无重复 resolve 面。实跑孤儿用例 1707ms 经 close 正常收敛未触宽限；强制结算路径经代码核对：resolve 形状不变（timedOut=true、code=-1、truncated 按当期状态、durationMs=结算时刻）",
+    "切换": "ok——强制 settle 后迟到 close/error 均为 no-op；极端（taskkill 失败且 child.kill 未杀到孙进程）不再阻塞评测流程，绑定上界由宽限计时无条件保证（不依赖杀树结果）。措辞从宽处：『残留由 OS 回收』不精确（OS 不主动终止运行中的孤儿、孤儿仍会运行/烧 token）——属已披露残余风险，承诺面（不阻塞、上界绑定）不因此破",
+    "作用域": "ok——纯单进程闭包状态，每次 spawnCapture 调用独立；模块级仅新增常量 TIMEOUT_GRACE_MS（util.mjs:6），无跨仓/跨工作区/多实例共享写面",
+    "披露①强制settle后stdout尾部可能缺失按失败处理": "边界已裁决：可接受——timeout 语义下输出本不完整（truncated 既有语义承接）；消费方 runner.mjs:132 先判 res.timedOut → row.status='timeout'（非 pass），部分输出不参与判分；cli.mjs:34 透传 timedOut，usage 提取失败按缺测（null）非 0",
+    "披露②taskkill失败时双保险": "边界已裁决：可接受——双保险实际三层：child.kill 兜底（util.mjs:66）+ 宽限强制 settle（util.mjs:68-71，无条件、不依赖 kill 结果），绑定承诺（墙钟上界）成立；本机实测 taskkill 生效（孤儿用例 1707ms 收敛=树被杀、孙进程句柄释放）。残余：极端下孤儿仅不再阻塞评测流程、仍会运行（已知风险自认，非承诺面）；理论极端 spawnSync 自身挂起会阻塞事件循环顶穿上界——非现实路径，不入 finding",
+    "探针cli-copy-selfsufficient": "不触发（零 CLI 输出文案改动）——交付面仅 eval 内部进程管理（eval/lib/util.mjs）与测试文件；无报错/指引/门禁提示文案新增或修改，『文案与门判定一致』面无涉及",
+    "探针config-absent-zero-regression": "不触发（零 local.yaml 新消费键）——TIMEOUT_GRACE_MS 为代码常量（util.mjs:6）非配置项，requirements 明确禁止改 verifyTimeoutMs/quick setup 等其他 timeoutMs 值与调用方式（diff 未触 runner.mjs/配置）；spawnCapture 缺省签名（timeoutMs=0）与缺省输出逐字未动，正常路径用例（code=0、timedOut=false、stdout 完整）实跑钉死零回归",
+    "探针crossrepo-path-compat": "不触发（未触及 worktree*/deps/跨仓对账/local-register.js，零路径构造改动）——taskkill 参数为 pid 形态（['/pid', String(child.pid), '/T', '/F']，util.mjs:64）不涉路径；win32 分支有 process.platform 守卫，POSIX 路径行为未动（child.kill+宽限同样成立，用例在 POSIX 亦绿）；测试路径全 join()/tmpdir() 组装",
+    "核查快照": "HEAD=bb08a720（修复面 fea5b760，其后仅 design 回填提交 bb08a720；工作区 eval/lib/util.mjs 与 test/eval-timeout-enforcement.test.mjs 与 HEAD 逐字节一致，git diff HEAD -- eval test 为空）。git diff e632fa1a..fea5b760 代码面仅 eval/lib/util.mjs（16+/3-）+ 新增 test/eval-timeout-enforcement.test.mjs（48+），与 change.patch 逐 hunk 一致、零夹带（其余为治理工件）。非超时路径逐项对照父版本：import/常量/graceTimer 声明/超时 handler 体/settle 两 clearTimeout/timer.unref 为全部差异——唯一行为面变化全在超时分支内；timer.unref 在超时分支且正常完成时 settle 已 clearTimeout，无可观测差异；spawn/input/error/close/resolve 形状逐字未动。node --test test/eval-timeout-enforcement.test.mjs 实跑 2/2 绿（孤儿用例 1707ms、正常用例 70ms）。旧实现红性实证：以 e632fa1a 版超时路径原文复制为临时代码（仅写 %TEMP%，零仓内写入）实跑同一孤儿场景 → resolve 竟在 60105ms（fire-and-forget taskkill 输给同 tick 的 child.kill：cmd 根先死、taskkill 找不到树根不杀树；孙进程持 stdout 至 60s 自然退出），60105 > 上界 36500ms → 该用例在旧实现下必红，断言有效。lint：flow-state gate_summary 机录 lint passed（npm run lint 47.7s）+ design task-03 回填 1007 文件绿，本轮未重跑。附注（不影响承诺面）：proposal/input 转写的调用点引用『eval/lib/util.mjs:105/139』实为 eval/lib/runner.mjs:105/139（setup/verify 两调用点）；design.md 接口契约对调用点描述正确"
+  },
+  "reviewedAt": "2026-10-15T23:36:59+08:00"
+}

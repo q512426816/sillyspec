@@ -1,0 +1,104 @@
+diff --git a/eval/lib/util.mjs b/eval/lib/util.mjs
+index 5c3057fa..4976a7a6 100644
+--- a/eval/lib/util.mjs
++++ b/eval/lib/util.mjs
+@@ -1,7 +1,10 @@
+ // eval 通用工具：稳定哈希、跨平台 shell 执行、统计区间。
+-import { spawn } from 'node:child_process';
++import { spawn, spawnSync } from 'node:child_process';
+ import { createHash } from 'node:crypto';
+ 
++/** 超时宽限：杀树后等待 close 的上界；到期强制 settle（保证墙钟绑定——2026-10-15-eval-timeout-enforcement） */
++export const TIMEOUT_GRACE_MS = 20_000;
++
+ export function sha256(text) {
+   return createHash('sha256').update(text).digest('hex');
+ }
+@@ -51,14 +54,23 @@ export function spawnCapture({ args, cwd, timeoutMs = 0, input = null, maxOutput
+     child.stdout?.on('data', onChunk('stdout'));
+     child.stderr?.on('data', onChunk('stderr'));
+     let timer = null;
++    let graceTimer = null;
+     if (timeoutMs > 0) {
+       timer = setTimeout(() => {
+         timedOut = true;
++        // 杀进程树：win32 同步 taskkill（等结果、可失败感知——fire-and-forget 版本实测树存活
++        // 10 分钟，2026-10-15-eval-timeout-enforcement）；child.kill 兜底保留。
+         if (process.platform === 'win32' && child.pid) {
+-          try { spawn('taskkill /pid ' + child.pid + ' /T /F', { shell: true, windowsHide: true }); } catch { /* 尽力杀 */ }
++          try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch { /* 尽力杀 */ }
+         }
+-        child.kill('SIGKILL');
++        try { child.kill('SIGKILL'); } catch { /* 已死 */ }
++        // 宽限：杀树后 close 仍不来（孤儿持有 stdout 等）→ 强制 settle，墙钟上界绑定。
++        graceTimer = setTimeout(() => {
++          settle({ code: -1 });
++        }, TIMEOUT_GRACE_MS);
++        graceTimer.unref?.();
+       }, timeoutMs);
++      timer.unref?.();
+     }
+     if (input != null) {
+       child.stdin?.on('error', () => { /* stdin 中途关闭（进程先退出）不视为致命 */ });
+@@ -68,6 +80,7 @@ export function spawnCapture({ args, cwd, timeoutMs = 0, input = null, maxOutput
+       if (settled) return;
+       settled = true;
+       if (timer) clearTimeout(timer);
++      if (graceTimer) clearTimeout(graceTimer);
+       resolve({ durationMs: Date.now() - started, truncated, timedOut, ...state, ...patch });
+     };
+     child.on('error', (err) => settle({ code: -1, stderr: state.stderr + String(err) }));
+diff --git a/test/eval-timeout-enforcement.test.mjs b/test/eval-timeout-enforcement.test.mjs
+new file mode 100644
+index 00000000..0d116b70
+--- /dev/null
++++ b/test/eval-timeout-enforcement.test.mjs
+@@ -0,0 +1,48 @@
++/**
++ * eval-timeout-enforcement.test.mjs — spawnCapture 超时墙钟绑定（2026-10-15-eval-timeout-enforcement）
++ *
++ * 根因：005 探针 B 臂实测记录 timeout 1501240ms vs 配置 900000ms——超时路径 fire-and-forget
++ * taskkill 未杀死 claude 树，孤儿持有 stdout 继续烧 token 约 10 分钟才 close。本文件钉死：
++ * ①孤儿树形态下 resolve 上界 = timeoutMs + 宽限（旧实现等待孤儿自然退出必红）；
++ * ②正常快进程路径零回归（timedOut=false、code=0、输出完整）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { spawnCapture, TIMEOUT_GRACE_MS } from '../eval/lib/util.mjs'
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++test('孤儿树超时强制收敛：resolve 上界 = timeoutMs + 宽限（旧实现在此必红——孤儿持 stdout 60s）', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'ss-tto-'))
++  try {
++    // 子进程派生「持有 stdout 的孙进程」后自身也长睡——模拟 claude 被孤儿化的形态
++    const script = join(dir, 'orphan-tree.mjs')
++    writeFileSync(script, [
++      "import { spawn } from 'node:child_process'",
++      "spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'inherit' })",
++      'setTimeout(() => {}, 60000)',
++    ].join('\n'))
++    const timeoutMs = 1500
++    const t0 = Date.now()
++    const res = await spawnCapture({ args: [process.execPath, script], cwd: dir, timeoutMs })
++    const elapsed = Date.now() - t0
++    assert.equal(res.timedOut, true, 'timedOut 标记')
++    // 上界：timeoutMs + 宽限 + 余量（进程创建/杀树开销）。旧实现会等到 60s 孙进程自然退出。
++    assert.ok(elapsed < timeoutMs + TIMEOUT_GRACE_MS + 15_000, `resolve 上界绑定：实测 ${elapsed}ms`)
++  } finally { rmQuiet(dir) }
++})
++
++test('正常路径零回归：快进程 timedOut=false、code=0、输出完整', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'ss-tto2-'))
++  try {
++    const res = await spawnCapture({ args: [process.execPath, '-e', "process.stdout.write('hello-ok')"], cwd: dir, timeoutMs: 10_000 })
++    assert.equal(res.timedOut, false)
++    assert.equal(res.code, 0)
++    assert.ok(res.stdout.includes('hello-ok'), 'stdout 完整')
++  } finally { rmQuiet(dir) }
++})

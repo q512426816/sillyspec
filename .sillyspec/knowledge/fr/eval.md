@@ -307,3 +307,41 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-probe2-orders-export
   status: active
+
+## FR-eval-018 spawnCapture 超时收敛绑定化——杀树同步化 + 宽限强制 settle
+变更：2026-10-15-eval-timeout-enforcement
+状态：active
+摘要：超时上界
+全文：.sillyspec/changes/archive/2026-10-15-eval-timeout-enforcement/requirements.md#FR-01
+最近确认：bb08a72037849455c8313190af062749daed5e5a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-timeout-enforcement:flow:测试绑定FR-01
+  tests: test/eval-timeout-enforcement.test.mjs「孤儿树超时强制收敛」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-timeout-enforcement
+  status: active
+
+## FR-eval-019 回归测试 + lint
+变更：2026-10-15-eval-timeout-enforcement
+状态：active
+摘要：测试锁定
+全文：.sillyspec/changes/archive/2026-10-15-eval-timeout-enforcement/requirements.md#FR-02
+最近确认：bb08a72037849455c8313190af062749daed5e5a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-timeout-enforcement:flow:测试绑定FR-02
+  tests: test/eval-timeout-enforcement.test.mjs「正常路径零回归 / 孤儿树超时强制收敛」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-timeout-enforcement
+  status: active

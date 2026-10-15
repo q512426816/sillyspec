@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-timeout-enforcement",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-eval-timeout-enforcement:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-timeout-enforcement.test.mjs「孤儿树超时强制收敛」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-timeout-enforcement"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-eval-timeout-enforcement:flow:测试绑定FR-02",
+      "tests": [
+        "test/eval-timeout-enforcement.test.mjs「正常路径零回归 / 孤儿树超时强制收敛」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-timeout-enforcement"
+    }
+  ]
+}
