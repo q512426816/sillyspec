@@ -2821,6 +2821,31 @@ function inferFullTestCommand(projectRoot) {
  * 相关回归）。组卷改配额制：每组优先面整跑，普通 import 依赖只填剩余席位（可为 0）——帽
  * 只界普通依赖尾。批尺寸上界护栏由 TEST_TIMEOUT_MS 兜底（超时=失败 fail-closed 不变）。
  */
+/**
+ * 批命令长度分块（2026-10-15 平台侧实证，跨仓事故驱动最小修复）：Windows cmd 执行器
+ * 命令行上限 ~8191 字符——大依赖面（广被引用的前端文件变更 → 依赖测试 100+ 个）拼单条
+ * vitest/node --test 命令必炸「命令行太长」exit 1，且失败批进增量账本自我循环恒败
+ * （实测：137 文件批反复重跑复败，verify 门禁无法收口）。按「命令前缀+文件参数拼接
+ * 总长」分块：单块保持原名（零回归），多块命名 <base>:N（N 从 1 起）；每块独立计账。
+ */
+function chunkByCommandLength(prefix, files, maxLen = 6000) {
+  const chunks = []
+  let cur = []
+  let curLen = prefix.length
+  for (const f of files) {
+    const add = f.length + 1
+    if (cur.length > 0 && curLen + add > maxLen) {
+      chunks.push(cur)
+      cur = []
+      curLen = prefix.length
+    }
+    cur.push(f)
+    curLen += add
+  }
+  if (cur.length > 0) chunks.push(cur)
+  return chunks
+}
+
 function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
   const norm = (p2) => String(p2).replace(/\\/g, '/')
   const changedSet = new Set((changedFiles || []).map(norm))
@@ -2958,7 +2983,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
       gi++
     }
   }
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, prioCount: jsNative.filter(f => prio(f) === 0).length, dropped: jsTest.length - jsRun.length, prioDropped: jsQ.prioDropped, tap: true, files: jsNative })
+  if (jsNative.length > 0) {
+    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout '
+    const jsChunks = chunkByCommandLength(jsPrefix, jsNative)
+    jsChunks.forEach((chunk, i) => {
+      const isMulti = jsChunks.length > 1
+      batches.push({ name: isMulti ? `deps(auto-js:${i + 1}/${jsChunks.length})` : 'deps(auto-js)', short: 'js', command: jsPrefix + chunk.join(' '), count: chunk.length, prioCount: chunk.filter(f => prio(f) === 0).length, dropped: i === 0 ? (jsTest.length - jsRun.length) : 0, prioDropped: i === 0 ? jsQ.prioDropped : 0, tap: true, files: chunk })
+    })
+  }
   if (jsMeta.length > 0) batches.push({ name: 'deps(auto-js-meta-skip)', short: 'js-meta-skip', command: null, count: jsMeta.length, dropped: 0, skip: true, files: jsMeta, reason: '套件编排器（run-tests.mjs=npm test 组卷入口）非单测文件——内嵌执行=递归全量套件（嵌套 runner 污染假败）；全量门由收口实测/CI 的 npm test 承担' })
 
   if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
@@ -2973,7 +3005,14 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0, files: jsProjectRun })
+      const jsxPrefix = `${jsxRunner} ${isVitest ? 'run ' : ''}`
+      const jsxArgs = jsProjectRun.map(rebaseJsx).map(quoteWinPath)
+      const jsxChunks = chunkByCommandLength(jsxPrefix, jsxArgs)
+      // 单块保持原名零回归；多块 <base>:N 独立计账（files 取该块参数原样回映射由调用方按需）。
+      jsxChunks.forEach((chunk, i) => {
+        const isMulti = jsxChunks.length > 1
+        batches.push({ name: isMulti ? `deps(auto-jsx:${i + 1}/${jsxChunks.length})` : 'deps(auto-jsx)', short: 'jsx', command: jsxPrefix + chunk.join(' '), count: chunk.length, dropped: 0, files: chunk })
+      })
     } else {
       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }
