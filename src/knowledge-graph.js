@@ -132,7 +132,32 @@ export function buildKnowledgeGraph(specRoot) {
     const supIds = String(h.supersedesText || '').split(/[,，、\s]+/).filter((s) => /^D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+$/.test(s))
     for (const sid of supIds) {
       const target = decisionHits.find((x) => (x.id === sid || x.originId === sid) && x.file === h.file && (x.change || '') === (h.change || ''))
-      if (target) supersedesRefs.push([id, `decision:${target.file}#${target.id}${target.change ? `@${target.change}` : ''}`])
+      if (target) {
+        supersedesRefs.push([id, `decision:${target.file}#${target.id}${target.change ? `@${target.change}` : ''}`])
+        continue
+      }
+      // 幽灵版本节点（2026-10-15-supersedes-ghost-nodes）：同号版本取代是蒸馏就地替换（旧段被删，
+      // 跨文件同谓词同删），自身旧版本引用的目标从不在场——真实库实证 39 条引用 0 条可解析、
+      // 703 决策节点全图仅 1 条 supersedes 边（边体系闲置根因）。合成口径**只限自身版本链**：
+      // sid 基号 === 本条目 id 基号（legacy 同号自链）或 === originId 基号（epoch 原编号自链，
+      // 迁移后真实库 36/36 全为此形态）；跨号/跨变更缺失引用不合成（2026-10-14-supersedes-mislink
+      // 的跨变更误连防护不因幽灵形态复活：为他号凭空铸造节点=误连换皮）。ghost 只带 supersedes
+      // 入边（非孤儿）、不参与 anchors/dangling 面（supersedes 不在悬空检测边型集），impact 闭包
+      // 经传递边自然延伸。
+      const ghostBase = (s) => (/^D-((?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)@v\d+$/.exec(String(s || '')) || [])[1]
+      const selfBase = ghostBase(h.id)
+      const originBase = h.originId ? ghostBase(h.originId) : null
+      const sidBase = ghostBase(sid)
+      if ((selfBase && sidBase === selfBase) || (originBase && sidBase === originBase)) {
+        const gid = `decision:${h.file}#${sid}${h.change ? `@${h.change}` : ''}`
+        if (!nodes.has(gid)) {
+          addNode(gid, 'decision', `${sid}（已被 ${h.id} 取代）`, {
+            ghost: true, status: 'superseded', supersededBy: h.id,
+            domain: String(h.file || '').replace(/^decisions\//, '').replace(/\.md$/, ''),
+          })
+        }
+        supersedesRefs.push([id, gid])
+      }
     }
   }
   // 目标节点可能晚于引用者定义（同文件行序）——addEdge 要求两端节点在场，引用者先行遍历会静默丢边；
