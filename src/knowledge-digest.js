@@ -152,6 +152,14 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
     mk('inbox', 'warn', `知识收件箱积压（${totals.inbox} 条 > 20）`, totals.inbox,
       inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
       'sillyspec knowledge inbox 逐条 classify 清账')
+  } else if (totals.inbox > 0) {
+    // 低量收件箱可见性（2026-10-15-classify-surface）：>20 才报警导致 1~20 条常态化静默——
+    // classify 遥测零消费实证（工具在、入口隐身）。info 级提示给可执行命令（classify 零使用
+    // 的接入点）；不进 healthy 判定否决——info 信号 healthy 语义见下（healthy=signals 全空，
+    // info 在场仍算 healthy=false？否——info 级降噪：healthy 只看 warn 级）。
+    mk('inbox', 'info', `知识收件箱 ${totals.inbox} 条待归类`, totals.inbox,
+      inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
+      'sillyspec knowledge inbox 看清单 → knowledge classify --ql <id> --file <known-issues.md|patterns.md|conventions.md> [--dry-run] 逐条归类')
   }
   if (totals.pseudo > 0) {
     mk('pseudo-domain', 'warn', `伪域在库（auto-*/unmapped 共 ${totals.pseudo} 条）`, totals.pseudo,
@@ -166,7 +174,9 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
 
   return {
     generated_at: new Date().toISOString(),
-    healthy: signals.length === 0,
+    // healthy 只看 warn 级（2026-10-15-classify-surface）：info 是提示不是超阈——
+    // 低量收件箱提示不该把治理卡打成人人自危的告警面；平台 governance 消费同语义。
+    healthy: !signals.some((s) => s.level === 'warn'),
     signals,
     totals,
   }
@@ -176,15 +186,22 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
 export function renderKnowledgeDigestText(d) {
   const lines = []
   lines.push(`📬 知识资产治理摘要（${d.generated_at.slice(0, 16).replace('T', ' ')}）`)
-  if (d.healthy) {
-    lines.push('✅ 三类信号全部在阈内（inbox/伪域/坏绑定）——安静即健康态，无需动作')
-  } else {
-    lines.push(`⚠️ ${d.signals.length} 类信号超阈：`)
-    for (const s of d.signals) {
+  const warns = d.signals.filter((s) => s.level === 'warn')
+  const infos = d.signals.filter((s) => s.level === 'info')
+  if (warns.length > 0) {
+    lines.push(`⚠️ ${warns.length} 类信号超阈：`)
+    for (const s of warns) {
       lines.push(`  [${s.kind}] ${s.title}`)
       if (s.detail) lines.push(`     明细：${s.detail}`)
       if (s.suggestion) lines.push(`     处置：${s.suggestion}`)
     }
+  } else {
+    lines.push('✅ 超阈信号零（inbox/伪域/坏绑定）——健康态')
+  }
+  for (const s of infos) {
+    lines.push(`ℹ️ [${s.kind}] ${s.title}`)
+    if (s.detail) lines.push(`   明细：${s.detail}`)
+    if (s.suggestion) lines.push(`   处置：${s.suggestion}`)
   }
   lines.push(`底数：收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
   return lines.join('\n')

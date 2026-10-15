@@ -57,8 +57,26 @@ test('① 三信号阈值：全在阈内 healthy；各类超阈逐项进摘要�
   const d = collectKnowledgeDigest({ specBase: q.specBase, projectRoot: q.root })
   assert.equal(d.healthy, true, '空库healthy')
   assert.equal(d.signals.length, 0)
-  assert.ok(renderKnowledgeDigestText(d).includes('安静即健康态'), 'healthy 文案')
+  assert.ok(renderKnowledgeDigestText(d).includes('健康态'), 'healthy 文案')
   assert.ok(!('rot' in d.totals), 'totals 不再含 rot 键（信号臂已拆）')
+
+  // info 级收件箱提示（2026-10-15-classify-surface）：1~20 条给 info 信号+classify 可执行建议，
+  // healthy 不翻红（healthy 只看 warn 级）
+  const qInfo = fixture({ inboxCount: 3 })
+  const dInfo = collectKnowledgeDigest({ specBase: qInfo.specBase, projectRoot: qInfo.root })
+  const inboxInfo = dInfo.signals.find((s) => s.kind === 'inbox')
+  assert.ok(inboxInfo, 'info 收件箱信号在场')
+  assert.equal(inboxInfo.level, 'info', '低量收件箱=info 级')
+  assert.equal(dInfo.healthy, true, 'info 信号不打翻 healthy')
+  const infoText = renderKnowledgeDigestText(dInfo)
+  assert.ok(infoText.includes('ℹ️ [inbox]'), 'info 渲染段在场')
+  assert.ok(infoText.includes('knowledge classify --ql'), 'classify 可执行命令在场')
+  // >20 仍是 warn 且 healthy 翻红
+  const qWarn = fixture({ inboxCount: 25 })
+  const dWarn = collectKnowledgeDigest({ specBase: qWarn.specBase, projectRoot: qWarn.root })
+  const inboxWarn = dWarn.signals.find((s) => s.kind === 'inbox')
+  assert.equal(inboxWarn.level, 'warn', '积压收件箱=warn 级')
+  assert.equal(dWarn.healthy, false, 'warn 打翻 healthy')
 
   const i = fixture({ inboxCount: 21 })
   const di = collectKnowledgeDigest({ specBase: i.specBase, projectRoot: i.root })
