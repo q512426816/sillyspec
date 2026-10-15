@@ -1,0 +1,30 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-15T10:29:03.371Z
+---
+# 提案书（Proposal）— 2026-10-15-decision-anchor-backfill
+
+## 动机
+
+任务原话转写：效果评估实证（用户问「新变更图谱为何不关联代码」）：决策↔代码的图谱边唯一来源是条目「锚点：」字段，而锚点覆盖率两仓一致塌方（8 月 25%→9 月 9-13%→10 月 2-4%；存量平台 543/632、本仓 616/726 未记录）——链条：模板标可选（implemented 不强制）→ 槽4 收割机器起草不填 → 蒸馏渲染「锚点：未记录」占位（decision-distill.js:324 NOT_RECORDED 容错）→ anchorFilePaths 对未记录返回空边（knowledge-match.js:100）。docs-check 有 advisory 无闭环。收益率探针定稿：条目正文路径 token「恰一个唯一」口径可救 28%（本仓 174/平台 150 条）；域过滤口径收益崩至 1-3% 弃用；40% 散文无 token 救不了（诚实残留）。修法双端：①收割端 harvestSlot4Decision 起草时从风险段作答提取（恰一路径→写 - 锚点：行，0/多不写）；②蒸馏端 distillIntoKnowledge batch 循环 entry.anchor 空→同款提取回填（agent 手写条目兜底）；统一入口 anchorBackfillCandidate 导出单源（decision-distill），排除知识自引用/归档路径，恰一置信度防错锚。
+
+成功标准：
+- anchorBackfillCandidate 单元：恰一路径（含 :行号形态）→token、多路径→null、仅裸名→null、.sillyspec/knowledge 自引用排除、空→null
+- 收割端端到端：fixture design 风险段含单一路径 → 产出 decisions.md 含 - 锚点：行；无路径 → 无该行
+- 蒸馏端端到端：条目无锚点正文含单一路径 → 蒸馏段锚点=该路径；多路径 → 未记录；既有锚点不覆盖
+- 既有测试零回归（decision-file-field 行序红线/knowledge-inject/distill 系列）+ 全量绿
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. anchorBackfillCandidate 单元：恰一路径（含 :行号形态）→token、多路径→null、仅裸名→null、.sillyspec/knowledge 自引用排除、空→null
+2. 收割端端到端：fixture design 风险段含单一路径 → 产出 decisions.md 含 - 锚点：行；无路径 → 无该行
+3. 蒸馏端端到端：条目无锚点正文含单一路径 → 蒸馏段锚点=该路径；多路径 → 未记录；既有锚点不覆盖
+4. 既有测试零回归（decision-file-field 行序红线/knowledge-inject/distill 系列）+ 全量绿
+
+## 成功标准（可验证）
+
+1. anchorBackfillCandidate 单元：恰一路径（含 :行号形态）→token、多路径→null、仅裸名→null、.sillyspec/knowledge 自引用排除、空→null
+2. 收割端端到端：fixture design 风险段含单一路径 → 产出 decisions.md 含 - 锚点：行；无路径 → 无该行
+3. 蒸馏端端到端：条目无锚点正文含单一路径 → 蒸馏段锚点=该路径；多路径 → 未记录；既有锚点不覆盖
+4. 既有测试零回归（decision-file-field 行序红线/knowledge-inject/distill 系列）+ 全量绿

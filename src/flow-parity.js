@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process'
 import { splitOwnVsForeignDiffFiles, commitAttributionForChange, isForeignByCommit, parseChangeNamesFromSubject } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { computeDocsDebt } from './docs-debt.js'
+import { anchorBackfillCandidate } from './decision-distill.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { normalizePath } from './change-list.js'
 import { readV2SectionAnswer } from './flow-review.js'
@@ -317,6 +318,11 @@ export function harvestSlot4Decision({ changeDir, change }) {
     answer = readV2SectionAnswer(dText, risksSec.heading, DESIGN_QUESTIONS)
   }
   if (!answer || /^不适用/.test(answer)) return { harvested: false, reason: '槽4 空/不适用' }
+  // 锚点自动回填（2026-10-15-decision-anchor-backfill 收割端）：风险段作答文本恰含一个
+  // 路径 token → 写入 - 锚点：行（源 decisions.md 是真相源，蒸馏自然带上、人可改）；
+  // 0/多候选不写（蒸馏端渲染时还会再兜底一次同款判定）。单一源 anchorBackfillCandidate。
+  const anchorCand = anchorBackfillCandidate(answer)
+  const anchorLine = anchorCand ? [`- 锚点：${anchorCand}`] : []
   const text = [
     '---',
     `author: flow-machine-draft`,
@@ -329,6 +335,7 @@ export function harvestSlot4Decision({ changeDir, change }) {
     `## D-001@v1: 设计期风险与放弃方案（底稿）`,
     `- 类型：process`,
     `- 状态：confirmed`,
+    ...anchorLine,
     // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
     // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
     // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。

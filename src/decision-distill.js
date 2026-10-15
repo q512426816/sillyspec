@@ -37,7 +37,29 @@ const UNMAPPED_DOMAIN = 'unmapped'
 /** 旧格式容错占位值（FR-01：缺锚点/缺 headHash 不阻断） */
 const NOT_RECORDED = '未记录'
 
-/** 多行/带空白值压成单行字段值（条目行是单行契约） */
+/**
+ * 锚点自动回填候选（2026-10-15-decision-anchor-backfill 单一源；收割端 flow-parity 与
+ * 蒸馏渲染端共用）。条目正文（答案/理由散文）中的路径形态 token——「恰一个唯一」即高置信
+ * 落点，返回该 token；多候选/无 token 返回 null（保守：错锚比无锚更误导 impact 查询与
+ * 悬空检查）。收益率探针（2026-10-15）：恰一路径口径救 28%（本仓 174/616、平台 150/543）。
+ * 过滤黑名单（存量干跑实测坏锚类）：知识治理面（.sillyspec/）、运行时面（.runtime/）、
+ * 归档与变更工件（changes/、allowed_paths 段）、知识互引（knowledge/、decisions/、fr/）、
+ * 消费仓坑文档目录（docs/sillyspec/）、前导 / 路径碎片、遥测日志扩展（.jsonl/.log）、
+ * repo:// 跨仓协议前缀剥除。token 须带扩展名收尾（:行号 形态锚点契约原生支持）。
+ * @param {string} text 条目正文拼接（答案/理由/question 等）
+ * @returns {string|null}
+ */
+export function anchorBackfillCandidate(text) {
+  const raw = String(text || '').match(/[A-Za-z0-9_\-.\\/:]+/g) || []
+  const pathed = [...new Set(raw
+    .map((t) => t.replace(/\\/g, '/').replace(/^repo:\/\//, '').replace(/\/+$/, '').replace(/:$/, ''))
+    .filter((t) => t.includes('/')
+      && /\.[A-Za-z0-9]{1,10}(:\d+)?$/.test(t)
+      && !/^(\.sillyspec|\.runtime|changes|knowledge|decisions|fr|docs\/sillyspec|allowed_paths)(\/|$)/.test(t)
+      && !t.startsWith('/')
+      && !/\.(jsonl|log)$/i.test(t)))]
+  return pathed.length === 1 ? pathed[0] : null
+}/** 多行/带空白值压成单行字段值（条目行是单行契约） */
 function oneLine(s) {
   return String(s ?? '').replace(/\s*\r?\n\s*/g, ' ').trim()
 }
@@ -321,7 +343,10 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName, sectionNu
   // 原编号（2026-10-14-decision-global-id-epoch）：epoch 形态溯源字段——变更行后/锚点行前
   // （不破「文件：紧跟锚点」行序红线）；legacy 复用段（originId=null）不渲染，形态零变化
   if (originId) lines.push(`原编号：${oneLine(originId)}`)
-  lines.push(`锚点：${oneLine(entry.anchor) || NOT_RECORDED}`)
+  // 锚点自动回填（2026-10-15-decision-anchor-backfill）：源条目未填锚点时，从条目正文
+  // （答案/理由）提取路径形态 token——「恰一个唯一」即高置信落点（正文明确只谈一个文件），
+  // 多候选/无 token 保持未记录（保守：错锚比无锚更误导 impact 查询与悬空检查）。
+  lines.push(`锚点：${oneLine(entry.anchor) || anchorBackfillCandidate([entry.answer, entry.reason, entry.normalizedRequirement, entry.question].join('\n')) || NOT_RECORDED}`)
   // 文件行（FR-01/D-001@v1）：仅非空渲染——存量条目零迁移，幂等重归档不添空行
   if (entry.files && entry.files.length > 0) lines.push(`文件：${entry.files.join(', ')}`)
   lines.push(`最近确认：${oneLine(headHash) || NOT_RECORDED}`)
