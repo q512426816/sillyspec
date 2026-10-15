@@ -3390,11 +3390,34 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         // --by-change（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷2）：unmapped 等
         // 混合池按「变更：<名>」字段分批迁移——整域迁移会错置大部分条目，来源变更才是分批键。
         const byChangeD = flag('--by-change')
-        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]\n  域名可带 fr/ 前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）'); break }
+        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--decisions] [--write]\n  --decisions 切 decisions/ 面（默认 fr/ 面）；域名可带前缀与 .md 后缀（fr/auto-backend ≍ auto-backend.md ≍ auto-backend）'); break }
         // 多 --anchor 收集
         const anchorList = []
         for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])
+        // --decisions（2026-10-15-decision-redomain）：切 decisions/ 面的孪生迁移实现——
+        // 同 flag 族（--from/--to/--anchor/--by-change/--write），段字节整体搬运、迁域不换号、
+        // 跨变更同号不冲突（双键防）；平台仓 unmapped 442 条存量清偿的机器通道。
+        const useDecisions = has('--decisions')
         try {
+          if (useDecisions) {
+            const { planDecisionRedomain, redomainDecisionEntries } = await import('./decision-redomain.js')
+            if (!has('--write')) {
+              const plan = planDecisionRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null, byChange: byChangeD || null })
+              console.log(`🔧 决策域迁移预览（--write 落盘）：decisions/${fromD}.md → decisions/${toD}.md，${plan.entries.length} 条${byChangeD ? `（仅「变更：${byChangeD}」）` : ''}`)
+              for (const e of plan.entries.slice(0, 10)) console.log(`   ${e.id} ${e.title}`)
+              if (plan.entries.length > 10) console.log(`   … 共 ${plan.entries.length} 条`)
+              console.log(`   目标域文件${plan.targetExists ? '在场' : '将新建'}；源域${plan.sourceWillDelete ? '将删空壳' : '保留余条'}；ID 不变（身份保持）`)
+              break
+            }
+            const r = redomainDecisionEntries({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null, byChange: byChangeD || null })
+            console.log(`✅ 决策域迁移完成：${r.moved.length} 条 decisions/${fromD}.md → decisions/${toD}.md（ID 不变${byChangeD ? `，仅「变更：${byChangeD}」` : ''}）`)
+            for (const m of r.moved.slice(0, 10)) console.log(`   ${m.id} ${m.title}`)
+            if (r.skippedConflicts.length > 0) console.log(`   ⚠️ 目标域同 id 同变更段冲突跳过 ${r.skippedConflicts.length} 条（${r.skippedConflicts.slice(0, 5).join('、')}）`)
+            if (r.sourceDeleted) console.log(`   源域空壳已删：decisions/${fromD}.md`)
+            if (r.targetCreated) console.log(`   目标域文件新建：decisions/${toD}.md`)
+            if (r.indexLineAdded) console.log(`   INDEX 路由行已补：${toD}`)
+            break
+          }
           if (!has('--write')) {
             // 预览与落盘同口径透传 byChange（坑 redomain-plan-preview-by-change-ignored，
             // 2026-10-02 实证：76338b4d 收编在途工作时此行漏透传——预览列整域、落盘只迁
