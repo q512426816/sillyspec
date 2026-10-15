@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-lint-triage-path-unify",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0a916a84b0c0132c85eced89d8c487010ff1a006",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "helper 模块装载本身不在保守 catch 面内——gates 路径部署破损边角丢 rollback 语义（design 盲维第三问措辞略过宽）",
+      "evidence": "gates.js:1402 与 verify-quality-scan.js:807 的 await import('./lint-ownership.js') 均无 try/catch 包裹；design 盲维第三问称『中途异常被 catch 吞掉转 false（保守硬拦），不会留下半态』，但 helper 内部 catch（lint-ownership.js:23-28）只覆盖鉴定链（verify-postcheck 动态 import / resolveVerifyChangedFiles / triageLintOwnership）。若 lint-ownership.js 自身装载失败（安装破损类场景）：quality-scan 路径表现为 throw，与硬拦同观感，保守成立；gates --done 路径则异常逃逸，不走 rollbackCompletionAndReturn。真实风险面（鉴定链）已保守覆盖，仅部署破损边角受影响，且新模块无顶层依赖、装载失败面极小——记 P3。",
+      "location": "src/run/gates.js:1402; src/run/verify-quality-scan.js:807; src/run/lint-ownership.js:23-28"
+    },
+    {
+      "severity": "P3",
+      "title": "quick-audit.js 仍直连 triageLintOwnership——第三消费方未收敛（FR-02 声明两路径范围外，记录性）",
+      "evidence": "FR-02/design 承诺的 gates.js 与 verify-quality-scan.js 双路径同源均已满足且由测试钉死；但历史提交 83d91cd4 表明 quick-audit.js quick 门同样接了 triageLintOwnership 语义，HEAD 上 src/run/quick-audit.js:660-661 仍直接 import 并自行判定，未走共享 helper——『判定与文案收敛为单一来源』目标下残留一个潜在分叉面（quick 门文案/口径未来漂移无源级断言防护）。无违诺（不在本变更声明范围，design 放弃方案节亦未提及），建议后续变更纳入收敛。",
+      "location": "src/run/quick-audit.js:660-661"
+    },
+    {
+      "severity": "P3",
+      "title": "降档 warning 文案两处微调判定为语义等价（记录性）",
+      "evidence": "对照 35b7cc0e^ 原内联块（gates.js:1408/1410）与 helper 现文案（lint-ownership.js:31-33）：①『不阻断 verify 完成』→『不阻断 verify 推进』——同义，且更适配双路径（quality-scan 语义是步进推进而非完成）；②『单独 quick 机械清偿（顺手清债解锁全仓 lint 门）』→『单独清偿（顺手清债解锁全仓 lint 门）』——丢失 quick 门机制指针，但处置建议、清偿解锁语义与逃生口完整保留。逃生口真实性已验证：SILLYSPEC_VERIFY_LINT_GATE=advisory 在 src/verify-postcheck.js:353（shouldBlockVerifyLint 返回 env.SILLYSPEC_VERIFY_LINT_GATE !== 'advisory'）真实存在且与文案判定一致（cli-copy-selfsufficient 探针 PASS）。判定：两处微调均语义等价，可接受。",
+      "location": "src/run/lint-ownership.js:31-33"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T10:51:16Z"
+}

@@ -1219,3 +1219,75 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-14-brainstorm-auto-retire
   status: active
+
+## FR-runtime-084 lintOwnershipDowngrade 语义：pre-existing→true+降档 warning；owned/unattributable/鉴定链异常→false（保守硬拦）
+变更：2026-10-15-lint-triage-path-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given lint 失败文件全部在本变更文件集外；When lintOwnershipDowngrade；Then 返回 true + warning 列出存量债文件。G
+全文：.sillyspec/changes/archive/2026-10-15-lint-triage-path-unify/requirements.md#FR-01
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-lint-triage-path-unify:flow:测试绑定FR-01
+  tests: test/lint-ownership-path.test.mjs「鉴定链异常（importer 抛错）→ 返回 false 保守硬拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-lint-triage-path-unify
+  status: active
+
+## FR-runtime-085 gates.js 与 verify-quality-scan.js 两路径同源接线（无复制粘贴分叉）
+变更：2026-10-15-lint-triage-path-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 两源文件；When 源级断言；Then gates.js/verify-quality-scan.js 均含 helper 调用、gates 无 `let li
+全文：.sillyspec/changes/archive/2026-10-15-lint-triage-path-unify/requirements.md#FR-02
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-lint-triage-path-unify:flow:测试绑定FR-02
+  tests: test/lint-ownership-path.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-lint-triage-path-unify
+  status: active
+
+## FR-runtime-086 新增 test/lint-ownership-path.test.mjs 覆盖 helper 四态 + 两路径源级接线断言，全绿
+变更：2026-10-15-lint-triage-path-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 注入式 importer 四态与两源文件；When node --test test/lint-ownership-path.test.mjs；Then 5/5
+全文：.sillyspec/changes/archive/2026-10-15-lint-triage-path-unify/requirements.md#FR-03
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-lint-triage-path-unify:flow:测试绑定FR-03
+  tests: test/lint-ownership-path.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-lint-triage-path-unify
+  status: active
+
+## FR-runtime-087 flow done 实测门（npm test + npm run lint）通过
+变更：2026-10-15-lint-triage-path-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更触及 src/run 与 test/；When flow done；Then npm test 与 npm run lint 全绿放行。
+全文：.sillyspec/changes/archive/2026-10-15-lint-triage-path-unify/requirements.md#FR-04
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006

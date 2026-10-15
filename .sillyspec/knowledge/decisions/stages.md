@@ -104,7 +104,7 @@ supersedes：无（修订 design 初稿注入时机）
 状态：implemented
 变更：2026-09-11-cross-change-decision-guard
 原编号：D-002@v1
-锚点：未记录
+锚点：stages/quick.js
 文件：src/run/complete-handlers.js
 最近确认：358af35
 理由：**任务行追加是设计内行为**（quick 启动契约：对每个关联变更 tasks.md 追加 `- [ ] <ql-id> <任务描述>`，stages/quick.js step1；关联本身是协作声明——两变更共享 decision-distill.js，ql-020 allowedFiles 含该文件），保留该行不覆盖，本变更任务追加其下。**真缺陷（quick-done-autoarchive-misfire 缺陷②，ql-20260819-010 只修了缺陷①）**：closeQuickLinkedChanges 阶段闸允许集含 brainstorm，stage_status=completed 闸只堵「brainstorm 完成→plan 开始」空窗——**brainstorm 进行中 + tasks.md 仅含 ql 行**（完整流程 plan 前无自有任务行，「isChangeTasksComplete 全勾」恒真空洞）时，关联 quick --done 勾掉 ql 行即触发在途变更被轻量归档注销。防护（本变更已落地）：写入自有未勾选 task-01..07 行——isChangeTasksComplete 恒 false 直至 execute/verify，彼时阶段不在允许集，竞态窗口关闭。
@@ -171,7 +171,7 @@ supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）
 状态：implemented
 变更：2026-09-19-review-material-pack
 原编号：D-005@v1
-锚点：未记录
+锚点：docs/prompt/_extract.mjs
 最近确认：7438d34
 理由：非目标：不改评审轮次（S2/S3 菜单不动）、不改填卡步骤（plan.js:500 的 batch 子代理另立变更或明示非目标）、不动事实面计量（⑥ 另走 quick）、不吞 verify 级联死锁两轮（已有 postmortem ql-013）。**合规项（本变更触 src/stages/*.js prompt，CLAUDE.md 规则 19）**：改完必须重跑 `node docs/prompt/_extract.mjs` 并同步 docs/prompt/*.md——列入文件清单，防 doc-ref-check 层面返工。**自指纪律**：本变更在评审域，brainstorm 完成门按当时 design 定档且只升不降——risk_level 必须在该 --done 前写入 frontmatter（否则关键词定顶格、把要省的钱先花掉）。
 故障面：无。

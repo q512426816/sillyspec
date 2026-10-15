@@ -176,7 +176,7 @@
 状态：implemented
 变更：2026-09-20-agent-reply-no-bubble
 原编号：D-002@v1
-锚点：未记录
+锚点：sillyhub/frontend/src/components/daemon/turn-timeline.tsx:671
 最近确认：fbbf02f4b
 理由：同步改。旧路径（segments undefined 的孤儿 turn/旧数据）与 v2 路径若形态不一致，同一会话里新旧消息长相分叉，违背"回退不崩不空且行为等价"的既有约定（repo://sillyhub/frontend/src/components/daemon/turn-timeline.tsx:671 注释）。代价仅是多改一处类名。
 
@@ -219,7 +219,7 @@ supersedes：D-001@v1
 状态：implemented
 变更：2026-09-08-session-list-liveness-dot
 原编号：D-002@v1
-锚点：未记录
+锚点：sillyhub/frontend/src/components/sessions/session-list-panel.tsx:2640
 最近确认：35f3d6528
 理由：行尾**只加 ~18px 状态小灯**（复用 `liveness-badge.tsx` 的 LivenessDot 与 LIVENESS_META，不重写五态视觉）；**不新增列、不改列表布局**；完整信息只出现在悬停卡；无关联日志的会话不显示灯；色值只用语义阶。悬停卡用 **antd Popover（trigger=hover，默认 portal 渲染）**包住 18px 小灯实现——SessionRow 根节点 `overflow-hidden` 会裁剪 absolute 定位卡片（repo://sillyhub/frontend/src/components/sessions/session-list-panel.tsx:2640，Grill BL-02），portal 渲染是唯一不破行布局的落法；悬停卡内容为**组合渲染**（LIVENESS_META 状态名 + 静默时长相对时间（last_event_at）+ 证据摘要（state_evidence 截断）+ 推导时间（state_derived_at）），不直接用 livenessTitle 单行字符串（其为原生 tooltip 拼接形态）；「关联」行删除（AgentLogListItem 无 change_key/quick_id 数据源，Grill CC-04）。
 

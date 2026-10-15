@@ -1,0 +1,136 @@
+{
+  "change": "2026-10-15-lint-triage-path-unify",
+  "baseline": "e5c97358455a9a91d268be95d4d7c48ef4c75e52",
+  "head": "0a916a84b0c0132c85eced89d8c487010ff1a006",
+  "files": [
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "src/run/gates.js",
+    "src/run/lint-ownership.js",
+    "src/run/verify-quality-scan.js",
+    "test/dynamic-batch-chunk.test.mjs",
+    "test/lint-ownership-path.test.mjs"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 172,
+    "deletions": 18
+  },
+  "savedAt": "2026-10-15T10:47:51.284Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 4,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "e5c97358455a9a91d268be95d4d7c48ef4c75e52",
+    "totals": {
+      "files": 11,
+      "additions": 172,
+      "deletions": 18
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 6,
+        "deletions": 13,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/lint-ownership.js",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 10,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/dynamic-batch-chunk.test.mjs",
+        "additions": 7,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "test/lint-ownership-path.test.mjs",
+        "additions": 106,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7bea054ca9cc61e68525fdef360a6aff9ce3ad89f5fce15f4c3f6b10122abcbb",
+  "patchStatus": "ok"
+}

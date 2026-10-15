@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-lint-triage-path-unify",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-01",
+      "tests": [
+        "test/lint-ownership-path.test.mjs「pre-existing（零交集存量债）→ 返回 true 放行 + 打印降档 warning（含存量债文件名）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-01",
+      "tests": [
+        "test/lint-ownership-path.test.mjs「owned（失败文件与本变更有交集）→ 返回 false 维持硬拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-01",
+      "tests": [
+        "test/lint-ownership-path.test.mjs「unattributable（无可识别失败文件）→ 返回 false 保守硬拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-01",
+      "tests": [
+        "test/lint-ownership-path.test.mjs「鉴定链异常（importer 抛错）→ 返回 false 保守硬拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-02",
+      "tests": [
+        "test/lint-ownership-path.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-lint-triage-path-unify:flow:测试绑定FR-03",
+      "tests": [
+        "test/lint-ownership-path.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-lint-triage-path-unify"
+    }
+  ]
+}

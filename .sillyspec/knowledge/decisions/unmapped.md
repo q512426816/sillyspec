@@ -690,7 +690,7 @@ supersedes：D-003@v1
 状态：implemented
 变更：2026-09-03-agent-provider-abstraction
 原编号：D-003@v1
-锚点：未记录
+锚点：sillyhub/backend/app/modules/daemon/run_sync/service/submit_steps.py:350
 最近确认：c6c74aa49
 理由：对齐现行为：任意携带 usage 的 AgentEvent（含 partial text/thinking flush 事件）→ daemon lift → backend 更新 agent_runs token 统计 + SSE summary 实时透传（现链路锚点 repo://sillyhub/sillyhub-daemon/src/daemon.ts:3564-3586、repo://sillyhub/backend/app/modules/daemon/run_sync/service/submit_steps.py:350）
 
@@ -722,7 +722,7 @@ supersedes：D-003@v1
 状态：implemented
 变更：2026-09-04-conflict-resolve-entry
 原编号：D-001@v1
-锚点：未记录
+锚点：sillyhub/backend/app/modules/daemon/router/machines.py:197
 最近确认：0d7e66502
 理由：方案 A。复用机器级 fire-and-forget WS 指令先例（self_update/cleanup/sillyspec_update 同款，`POST /machines/{id}/sillyspec-update` repo://sillyhub/backend/app/modules/daemon/router/machines.py:197）：backend 校验权限后经 DaemonWsHub 即时下发，daemon 侧 handler 本地 execFile 执行 sillyspec CLI（sillyspec-manager 30s 超时模式），执行结果缓存于 daemon 内存并随下次心跳 sillyspec_status 通道上报（≤60s 页面自动回绿）。B 的离线补拉增益对本场景为负（sillyspec 操作必须机器在线，离线排队上线时现场可能已变）且六处协议扩展过重；C 的 host_fs RPC 挂会话上下文无页面载体、字符级白名单对变长 change 名脆弱，不适配
 
@@ -762,7 +762,7 @@ supersedes：D-003@v1
 状态：implemented
 变更：2026-09-08-cursor-interactive-session
 原编号：D-004@v1
-锚点：未记录
+锚点：sillyhub/backend/app/modules/agent/tests/test_provider_caps_alignment.py:52
 最近确认：35f3d6528
 理由：否。`repo://sillyhub/backend/app/modules/agent/tests/test_provider_caps_alignment.py:52` EXPECTED_PROVIDERS 为硬编码 `{"claude","codex","pi"}`，test_provider_sets_identical 对三端表断言集合相等——三端表加 cursor 后守护测试必失败。必须同 commit 同步 EXPECTED_PROVIDERS 加 'cursor'（pi 接入 commit 7c4dd4efd 同款先例）。设计文件清单已补该文件
 
@@ -914,7 +914,7 @@ supersedes：D-006@v2
 状态：implemented
 变更：2026-09-11-provider-adapter-registry
 原编号：D-003@v2
-锚点：未记录
+锚点：sillyhub/sillyhub-daemon/src/interactive/providers.ts:262
 最近确认：f0211bbcf
 理由：Grill 复审发现 @v1 表述「新建 provider-adapter.ts」与实际最优落点不符——ProviderDescriptor（repo://sillyhub/sillyhub-daemon/src/interactive/providers.ts:262）已承载五要素，原地扩展 INTERACTIVE_PROVIDERS 为 ProviderAdapter 聚合表改动面最小。@v2 修订：落点=providers.ts 内扩展，不另立契约文件。
 supersedes：D-003@v1
@@ -923,7 +923,7 @@ supersedes：D-003@v1
 状态：implemented
 变更：2026-09-13-session-group-ux-fixes
 原编号：D-001@v1
-锚点：未记录
+锚点：sillyhub/frontend/src/components/daemon/session-panel/turn-state.ts:304
 最近确认：39d3d8c5c
 理由：代码查证：真会话草稿按 sessionId 隔离（sillyhub.sessions.draft.<sid>）且所有 7 个 SessionPanel 宿主均有 key={sessionId} 强制重挂载，rAF 门闩（draftHydratedRef）时序推演在重挂载/非重挂载两路径均正确；唯预会话（sessionId=null）草稿用固定键 __pre__（repo://sillyhub/frontend/src/components/daemon/session-panel/turn-state.ts:304），跨工作区/跨机器入口共享——用户在不同入口开新会话时上一入口未发送内容必然带入，与用户「a 会话内容带到 b 会话」实测吻合。修复：预会话草稿键按 workspaceId+runtimeId 细分（__pre__:<ws>:<runtime>），真会话逻辑不动仅补测试覆盖。
 
@@ -1523,7 +1523,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-09-28-unclear-req-to-brainstorm
 原编号：D-002@v1
-锚点：未记录
+锚点：src/db.js:266
 最近确认：cb6fc0a0
 理由：不需要。run 族（完整流程）本来就从 brainstorm 阶段起步（.sillyspec 状态机 stage 序列 brainstorm→…→archive，src/db.js:266 current_stage 默认 'brainstorm'），不存在「跳过头脑风暴」问题；失效面只在 thin 道 flow start 直通
 
@@ -1865,7 +1865,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-05-dogfood-audit-fixes
 原编号：D-001@v1
-锚点：未记录
+锚点：stages/knowledge.js
 最近确认：cb8fddc71b66e78c840ed6120653136904a3df0f
 理由：最大风险：行为修复让「原先静默降级为人类可读」的调用方（若依赖旧错误行为的脚本）突然收到 JSON——属暴露既有契约而非破坏；排查过 index.js 全局解析后 filteredArgs 不含 --json，无其他调用方向实现文件传 json 的路径，影响面封闭在三个子命令。 试过放弃：改 stages/knowledge.js 调度层把 opts.json 注入 args（--json 塞回 args 数组）——污染 args 语义（args 反映用户输入而非程序状态），且 digest 已确立 opts.json 直读惯例，放弃。
 
@@ -2025,7 +2025,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-05-flow-tail-polish
 原编号：D-001@v1
-锚点：未记录
+锚点：test/machine-interface.test.mjs:420
 最近确认：3f99da145cefec337e3ab86afb72f13f17a7314e
 理由：风险：exit 0→1 是行为变化，依赖旧语义（用 exit 0 判断"查询完成"）的脚本会翻——接受，脚本按惯例以非零为异态，旧行为无法区分不存在才是隐患；test/machine-interface.test.mjs:420 的 exit 2 断言属 gate execute 域（用法错）不受影响。归档窄化 add 修复后 knowledge 自动入暂存恢复——既有设计已裁决该权衡（文件级 status 窄化非目录级，追加型共享面整文件提交与惯例一致）；兜底层（narrowed add 失败时）才降级为提示不自动暂存。试过但放弃：knowledge 兜底层也自动补暂存——放弃理由：降级场景下无法确认 narrowed add 失败原因，人核后提交更稳（AGENTS.md 规则 11 同因）；再试过：flow-state 不加字段、纯 proposal 回退——放弃理由：proposal 转写含「（未提供 --input）」占位与人工改写风险，state 直存是更可靠的原始面。
 
@@ -2105,7 +2105,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-06-flow-status-title
 原编号：D-001@v1
-锚点：未记录
+锚点：test/flow-status-json.test.mjs
 最近确认：0d7576c8d969d19ca20b4c561ad9c5e815c8f305
 理由：最大风险：JSON 消费方对新增字段的兼容性——单对象加字段对 JSON.parse 消费方是非破坏性变更，风险低；人类渲染变更可能影响既有文本匹配测试（test/flow-status-json.test.mjs ③ 人类路径回归已覆盖关键行，本变更加 fixture 断言钉住新旧两态）。放弃的方案：① 在 flow-state.yaml 里冗余存 title（写两处状态有漂移风险，DB 已是权威源）；② status 输出全量改由 DB 驱动（超出本变更范围，且 flow-state/盘面事实才是 status 主源）。
 
@@ -2471,7 +2471,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-10-brainstorm-skill-title
 原编号：D-001@v1
-锚点：未记录
+锚点：src/stages/brainstorm.js
 最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
 理由：最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。
 
@@ -2527,7 +2527,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-10-dyn-subset-nontest-runner-face
 原编号：D-001@v1
-锚点：未记录
+锚点：./config.js
 最近确认：58257512ae9f8a51f1ef0636897351b3ea7f8356
 理由：最大风险：预填面收紧的漏检边界——连字形态 `foo_test.js`（无 `.test.` 点锚）不再预填。取向与 isTestFileName 注释一致（宁紧勿松：漏检落 agent 手查是 fail-visible，误判产生脏绑定+假败是 fail-hidden 更糟）；js 生态主流形态是 `.test.`/`.spec.`，连字形态罕见，且执行侧权威口径本就不认它（预填了也进不了执行批）。放弃的方案：a) 在 `collectFrLinkedTests` 读侧直接过滤非测试路径——绑定语义是「FR 覆盖证据」不限测试文件（capability 证据可以是源码/文档），读侧过滤会让合法证据绑定静默失效，改在执行侧拦「当测试跑」这一步；b) node --test 批加 `--experimental-strip-types` 类运行参数迁就 TS 源码——治标且方向反了（源码本就不该进测试执行面，`./config.js` 类 ESM 后缀映射在裸 node 下无解）。
 
@@ -2667,7 +2667,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-12-thin-module-gate-and-feed
 原编号：D-001@v1
-锚点：未记录
+锚点：src/flow.js
 最近确认：ae3188a755843f723f58b21177afb86b4f2c9400
 理由：最大风险：门的误报面——存量仓里合法未登记目录多（根级脚本、配置目录），首轮 done 会频繁撞门。缓解：module_gate_ignore 一次性配置 + --accept-unmapped 签收不丢数据（缺口数留痕），遥测可见放行频率，可据此再调默认。次风险：回写的格式自适应误判（卡内混合形态）——只动「## 变更索引」节内/ sidecar 尾部，节外逐字保留，与 splitChangelog 同款行级防线。 已知边界（评审 P3 披露）：共享主仓并行会话在基线之后对同文件（src/flow.js）的提交 hunk 会混入 change.patch 冻结面——冻结 diff 是文件级（baseRef..HEAD × 文件清单），无法做 hunk 级归属切分（未提交面的归属收窄已由 quick --files 声明机制处理，提交面共享文件是残留盲区）。审计以显式 pathspec 提交清单为准。断点续跑路径（distill 已 done 后归档失败重入）的 extraDocs 由 deriveRecordedChangeIndexTargets 从卡/sidecar 反查含变更名的目标文件（幂等事实），不依赖目录级回退兜底。 放弃方案①：给 docTouched=false（命中模块但卡未更新）也上门——放弃：源码活跃≠卡错，代理信号不配阈值（docs-gate 既有裁决，误报训练忽略报警），维持 advisory。 放弃方案②：自动改写模块卡语义段（CLI 生成契约摘要）——放弃：语义解释含 LLM 判断增量，与「CLI 算事实、agent/人写语义」的分工冲突；机械动作只碰变更索引表格。 放弃方案③：module-map 登记也走棘轮基线（docs gate 同款）——放弃：棘轮适合「存量治理、拦增量」的计数面；登记是逐变更直接信号（文件在、图没认），无需基线间接层。
 
@@ -2691,7 +2691,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-12-tick-evidence-multi-anchor
 原编号：D-001@v1
-锚点：未记录
+锚点：token/review.json
 最近确认：a419a26ba02829a7db49aa24a956eec4376cf69d
 理由：最大风险：证据文本自由（≤8KB）可能被塞入超长噪声或敏感内容进归档件。缓解：8KB 帽 + 自愿面定位（不进门禁，无激励灌水）；敏感面与 change.patch 同级暴露（仓库本身私有）。 试过但放弃：① evidence 接入收口哨兵作为替代证据源——改变哨兵判据语义（token/review.json 双源是 L0 硬门），混入自愿补录会稀释假完成拦截强度，明确不做（留待真实需求再立项）；② 锚对象做全仓逐键锚定判定（任一仓漂移即隔离评审）——跨仓 HEAD 由评审环境决定，主仓 CLI 无法可靠 rev-parse 外仓（路径注册逐机不同），判定面收敛在 workspace 锚 fail-safe；③ evidence 强制格式（URL/sha/路径枚举）——开放世界红线，自由文本+@file 引用已够。
 
@@ -2859,7 +2859,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-13-sync-ledger-tombstone
 原编号：D-001@v1
-锚点：未记录
+锚点：platform_sync/service.py
 最近确认：89f30febe3343e13d7832e540367648c5529eea4
 理由：最大风险：合成载荷被平台 `_ensure_change_row` 在「从未同步过」的变更上先建占位行再立即被墓碑收敛——产生一行 location='deleted' 的墓碑行；这与平台既有 3 行历史墓碑（2026-08-26/09-10/09-11）形态一致，可接受。次风险：平台行有 last_pushed_at 而合成载荷不带 base_ts——平台契约「base_ts 缺失无条件接受」（platform_sync/service.py 分支 1），无 409 面；若平台后续收紧该契约，fallback 是 best-effort 失败日志（不阻断）。 放弃的方案：①daemon reconcile 对账「平台 active 行 vs 本地全无」主动软删——多机工作区下他机活跃变更会被误删，需要引入行级机器归属，改动面过大；②sync 对 progressData null 一律发墓碑——打错 --change 名（从未存在）会把平台同名真变更误软删，不可接受；台账正是为了区分「从未存在」与「存在过且已终态」。平台侧 7 天占位行保护窗 + 全量 reparse 兜底（已有）继续作为外部裸删（rm -rf + SQL 全清）的最后防线。
 
@@ -2951,7 +2951,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-10-14-tdd-scope-guidance
 原编号：D-001@v1
-锚点：未记录
+锚点：src/flow.js
 最近确认：87c99da612c0fb3a7299c1e7e3e0be5820972fe1
 理由：最大风险：措辞过宽导致 agent 把「样式不写」误推到「前端不写」——用一句话判据收口判断，行为契约层明示组件/API 皆然。试过放弃：改 src/flow.js 测试门逻辑（按层机器豁免测试面）——放弃，层归属需人判，机器判会误伤（quick-audit 既有「0 测试改动」advisory 已覆盖提示职责）；本变更只动引导不动门。
 
@@ -3270,3 +3270,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：e5c97358455a9a91d268be95d4d7c48ef4c75e52
 理由：- 风险1：local.yaml 手写 YAML 嵌套缩进错 → 解析失败被当未登记。对策：js-yaml fail-soft + 缺席与解析失败同态（registered:false）+ 强提醒文案会持续出现倒逼修复；不做 YAML 校验器（越界）。 - 风险2：repos override 匹配不到（触达路径未落 local.yaml repos 注册）→ 静默退仓级。对策：可接受降级（仓级兜底即用户登记的默认态），guidance 不额外告警（噪音大于收益）。 - 风险3：新行破坏字节级既有断言。对策：无参路径逐字不变已由 guidance-output-neutrality/ui-visual-guidance 既有测试锁定；新四态行禁生态命令词。 - 死路：考虑过把 form 校验做硬门（登记非法即拒收口）——放弃：local.yaml 是用户配置面不是变更产物，硬门会把配置笔误升级成流程阻断；警告+强提醒足够。
+
+## D-unmapped-399@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-lint-triage-path-unify
+原编号：D-001@v1
+锚点：未记录
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+理由：最大风险：降档被滥用掩盖真失败——unattributable（输出无可识别路径）与鉴定链异常都保守返回 false 硬拦，且降档仅在「lint 单独失败」时生效（testFailed 优先 throw），配合降档 warning 三行提示（含存量债文件清单与清偿建议），滥用面可控。试过放弃：①只在 quality-scan 复制一份 triage 代码——制造第二实现即复发原缺陷（两路径分叉），放弃；②把降档判定塞进 verify-postcheck.js——该文件正被并行会话在途迭代（active WIP），编辑即 interleaved 提交风险，放独立新模块避开。

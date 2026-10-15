@@ -18,7 +18,7 @@ created_at: 2026-08-23T22:40:00+08:00
 ## D-core-engine-001@v2 test_strategy 实为两值，skip 接线兑现声明语义 + 增 evidence-auto
 状态：implemented
 原编号：D-005@v2
-锚点：未记录
+锚点：src/verify-postcheck.js
 最近确认：test123
 理由：修正认知前提：`full/module` 语义不变；`skip` 从「声明未接线（配置后实际全量）」接线为「真跳过」；新增 `evidence-auto`（按 module-impact.md 推荐检查组合，缺失降级 module）；消费端 extractTestStrategy 在 src/verify-postcheck.js 接线（v1 遗漏的真实 reader）
 来源：2026-08-23-adopt-harness-practices
@@ -117,7 +117,7 @@ supersedes：D-005@v1
 状态：implemented
 变更：2026-09-14-quick-exit-tiered-gates
 原编号：D-007@v1
-锚点：未记录
+锚点：src/quick-gate-profile.js
 最近确认：e84bc89
 理由：用户选方案 B（2026-09-14 对话轮，单字确认"b"）：新建纯函数信号模块（暂名 src/quick-gate-profile.js，命名 design 期可调），输入 changedFiles + _module-map.yaml + 风险特征表 → 输出画像 {模块跨度, 模块清单, 文件数, 风险命中, 门禁级别}；scope-audit.js 的 auditQuickCompletion 只调用不内联。拒绝 A（信号计算锁死 quick 链路、verify 侧将来无法复用、难单测）；拒绝 C（单消费场景 YAGNI、新配置面=新误判面、违背纯减法原则）。
 

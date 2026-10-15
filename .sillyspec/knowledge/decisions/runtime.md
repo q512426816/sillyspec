@@ -341,7 +341,7 @@ supersedes：D-002@v1
 状态：implemented
 变更：2026-09-22-stage-burst-fold
 原编号：D-003@v2
-锚点：未记录
+锚点：src/run/complete.js:165
 最近确认：9f9450d0
 理由：Grill P1-1：runStage 只拉回 currentIdx（首个非 completed/skipped）的 stale/blocked（src/run/stage.js:264-269），completeStep 谓词不含 stale（src/run/complete.js:165）——尾随 stale 步会被 burst 渲染打印说明书但 done 循环永不完成，退化为单步阶梯，破等价性目标。修正：completeStepBurst 每轮调 completeStep 前对首个非 completed/skipped 步做同语义 stale→pending 拉回（burst 新代码内，不触 completeStep 本体）。附带：auto 路径 burst 分支跳过 command.js:2064-2070 的 --output 预合成（防横幅重复）。v1 核心面（循环+printNext:false+completeStep 零 diff+50 轮上限+幂等断点）不变。
 supersedes：D-003@v1
@@ -363,7 +363,7 @@ supersedes：D-004@v1
 状态：implemented
 变更：2026-09-22-stage-burst-fold
 原编号：D-012@v1
-锚点：未记录
+锚点：src/run/shared.js
 最近确认：9f9450d0
 理由：放 src/run/shared.js export（readStageBurst 旁）：渲染门（stage.js renderStageBurst）与完成门（command.js 两处 --done 分发）共用同一常量，防两处字面量漂移。执行期越界披露：该裁决使 task-03 提交含 stage.js import 行切换与 shared.js 常量 export（两文件原属 task-01/02 的 allowed_paths）——非破坏性、可逆、不推翻任何 D，属主代理直写模式歧义裁决条款范围。
 故障面：无（常量单一源）。

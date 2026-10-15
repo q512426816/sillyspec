@@ -1,0 +1,296 @@
+diff --git a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+index ab2d3c72..04e6f568 100644
+--- a/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
++++ b/.sillyspec/docs/multi-agent-platform/modules/docs.changelog.md
+@@ -21,3 +21,4 @@
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+ | 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
++| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 1f628d51..3541571c 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -57,3 +57,4 @@
+ | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
+ | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
+ | 2026-10-15 | 2026-10-15-decision-redomain | 用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-modul… |
++| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index e00b5017..d5e1e003 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -72,3 +72,4 @@
+ | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
+ | 2026-10-15 | 2026-10-15-decision-redomain | 用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-modul… |
+ | 2026-10-15 | 2026-10-15-jsx-batch-cmd-chunk | verify 动态子集 js/jsx 批按命令长度分块——修 Windows「命令行太长」恒败死锁（… |
++| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+index f98dded4..2dbde256 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md
+@@ -26,3 +26,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-14 | 2026-10-14-decision-global-id-epoch | 决策号 epoch 全局化（写面）：decision-distill 新蒸馏条目发全局号 D-<域>-NNN@vN（域前缀全域 max+1 只增不复用、批内递增防撞号）+「原编号：」溯源字段（变更后/锚点前）；幂等谓词扩展（号或原编号）、多域扇出单一身份（迁域不换号）、跨文件清理同谓词；存量 legacy 零触碰（真实库副本演练 700+ 节段逐字节不变）；docs-check 标题双形态 |
+ | 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移（用户裁决翻「不回填」旧案）：src/decision-renumber.js 迁移工具（planRenumber/applyRenumberPlan 纯函数 + knowledge renumber --dry-run/--apply CLI）；真实库执行 701 legacy 节段→597 全局号（fanout 75 组单一身份、epoch 零触碰 1）；docs-check 读原编号 + isDecisionExempt 认原编号（消费仓旧裸键兼容） |
+ | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
++| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 7f1a8e0b..0c6d7392 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -54,3 +54,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-14-decision-id-p2-hardening | complete.js knowledge-gate「已回应不重弹」收紧行级共现（命中 id 与域名/变更名同行——文件级共现时自身同号 id+常见词撞车会静默吞他变更命中）；{DECISION_HITS} 段头补跨变更引用形态指引（变更名#D-xxx@vN） |
+ - 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全
+ - 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量…
++- 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl…
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 45b545a6..b6bed8ac 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -61,3 +61,4 @@
+ | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+ | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
+ | 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
++| 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 281c548c..707ce85a 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1397,18 +1397,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       //    快照含基线债文件时恒败，agent 被逼范围外清偿或逃生口）。失败输出提及文件 × 本变更
+       //    文件集零交集 → 存量债 advisory 降档放行（债非本变更引入，硬拦只是制造范围外功）；
+       //    有交集 / 输出无可识别路径（unattributable，纯配置错误类）→ 维持硬拦（保守）。──
+-      let lintOwnership = null
+-      try {
+-        const { triageLintOwnership, resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+-        const lintScopeFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
+-          .map(f => String(f).replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/'))
+-        lintOwnership = triageLintOwnership({ failureFiles: lintCheck.failureFiles || [], changeFiles: lintScopeFiles })
+-      } catch { /* 鉴定链异常维持硬拦（保守） */ }
+-      if (lintOwnership && lintOwnership.verdict === 'pre-existing') {
+-        console.warn('\n⚠️ Verify lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本变更文件集零交集）——降档 advisory 不阻断 verify 完成：')
+-        console.warn(`   存量债文件：${(lintCheck.failureFiles || []).join('、') || '（见上方输出）'}`)
+-        console.warn('   处置建议：单独 quick 机械清偿（顺手清债解锁全仓 lint 门），或本变更确认无关时设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。债随基线存在，与本变更交付无关。')
+-      } else {
++      // 2026-10-15-lint-triage-path-unify：判定与文案收敛到 ./lint-ownership.js（与 noAI 质量
++      // 扫描路径同源——原两路径分叉见消费仓坑档案 verify-lint-triage-path-divergence.md）。
++      const { lintOwnershipDowngrade } = await import('./lint-ownership.js')
++      const lintAdvisoryDowngraded = await lintOwnershipDowngrade({ lintCheck, cwd, changeName, specBase })
++      if (!lintAdvisoryDowngraded) {
+       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
+       if (usedSnapInfo) {
+         try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+@@ -1432,7 +1425,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       }
+       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
+       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
+-      } // else（pre-existing 降档分支）结束——维持硬拦分支的 rollback 语义不变
++      } // 硬拦分支结束（降档放行时直接落到后续 parity/删除探针——rollback 语义不变）
+     }
+     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
+     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
+diff --git a/src/run/lint-ownership.js b/src/run/lint-ownership.js
+new file mode 100644
+index 00000000..53000d89
+--- /dev/null
++++ b/src/run/lint-ownership.js
+@@ -0,0 +1,37 @@
++/**
++ * lint 归属鉴定降档（共享 helper）——2026-10-15-lint-triage-path-unify。
++ *
++ * 背景（消费仓坑档案 docs/sillyspec/verify-lint-triage-path-divergence.md，2026-10-15
++ * -dsh-engine-acp verify 实证）：降档判定原先只实现在 gates.js 的 verify --done 拦截面；
++ * verify step6「noAI 质量扫描」（verify-quality-scan.js）只做 shouldBlockVerifyLint 二值
++ * 判定直接 throw——同一失败两路径行为分叉（step6 throw / --done 降档）。本模块把判定与
++ * 提示文案收敛为单一来源，两路径同接线。
++ *
++ * 语义（R4-S-F 实证口径，与 gates.js 原内联实现等价）：
++ * - pre-existing（失败提及文件 × 本变更文件集零交集）→ 打印降档 warning，返回 true（放行）；
++ * - owned（有交集）/ unattributable（输出无可识别路径）/ 鉴定链异常 → 返回 false
++ *   （维持硬拦，保守——无法排除本变更责任时宁可拦不可漏）。
++ *
++ * @param {{lintCheck?: {failureFiles?: string[]}, cwd: string, changeName: string, specBase: string, importer?: () => Promise<any>}} input
++ *   importer 可注入（测试用）；缺省动态加载 ../verify-postcheck.js（triageLintOwnership +
++ *   resolveVerifyChangedFiles——运行时 import 避免模块加载环）。
++ * @returns {Promise<boolean>} true=降档放行（advisory），false=维持硬拦。
++ */
++export async function lintOwnershipDowngrade({ lintCheck, cwd, changeName, specBase, importer }) {
++  const load = importer || (async () => import('../verify-postcheck.js'))
++  let lintOwnership = null
++  try {
++    const { triageLintOwnership, resolveVerifyChangedFiles } = await load()
++    const lintScopeFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
++      .map((f) => String(f).replace(/\\/g, '/')).filter((f) => !f.startsWith('.sillyspec/'))
++    lintOwnership = triageLintOwnership({ failureFiles: (lintCheck && lintCheck.failureFiles) || [], changeFiles: lintScopeFiles })
++  } catch { /* 鉴定链异常维持硬拦（保守） */ }
++  if (lintOwnership && lintOwnership.verdict === 'pre-existing') {
++    const failureFiles = (lintCheck && lintCheck.failureFiles) || []
++    console.warn('\n⚠️ Verify lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本变更文件集零交集）——降档 advisory 不阻断 verify 推进：')
++    console.warn(`   存量债文件：${failureFiles.join('、') || '（见上方输出）'}`)
++    console.warn('   处置建议：单独清偿（顺手清债解锁全仓 lint 门），或本变更确认无关时设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。债随基线存在，与本变更交付无关。')
++    return true
++  }
++  return false
++}
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index dd5fd7ed..5bc2db14 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -798,13 +798,22 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
++  // 2026-10-15-lint-triage-path-unify：lint 归属鉴定降档接线（与 gates --done 路径同源共享
++  // helper）——零交集存量债降档 advisory 不 throw；owned/unattributable/鉴定异常维持硬拦
++  // （保守）。仅在「lint 单独失败」时降档（testFailed 优先 throw——测试失败不作 lint 降档
++  // 陪葬判断）。原两路径分叉实证见消费仓坑档案 verify-lint-triage-path-divergence.md。
++  let lintAdvisoryDowngraded = false
++  if (lintBlocked && !testFailed) {
++    const { lintOwnershipDowngrade } = await import('./lint-ownership.js')
++    lintAdvisoryDowngraded = await lintOwnershipDowngrade({ lintCheck, cwd, changeName, specBase })
++  }
+   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
+   // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
+   // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
+   if (testFailed || lintCheck.status === 'failed') {
+     await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
+   }
+-  if (testFailed || lintBlocked) {
++  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded)) {
+     if (snap) {
+       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+         printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
+diff --git a/test/dynamic-batch-chunk.test.mjs b/test/dynamic-batch-chunk.test.mjs
+index 4d831a92..e4e2c526 100644
+--- a/test/dynamic-batch-chunk.test.mjs
++++ b/test/dynamic-batch-chunk.test.mjs
+@@ -58,10 +58,13 @@ test('多块分块：拼接总长超 maxLen → deps(auto-jsx:1/N..N/N)，count
+     assert.ok(jsx.length >= 2, `应分多块（实得 ${jsx.length} 块）`)
+     const total = jsx.length
+     jsx.forEach((b, i) => {
+-      // 命名钉 HEAD 冻结面语义：jsx 多块后缀在括号内 deps(auto-jsx:N/M)（与 js 原生批同式）。
+-      // 注：工作区并行会话在途「多项目分组」演化拟改后缀到括号外（base:N/M）——其落地
+-      // 提交须同步本断言（实现与断言一起换版，保持三方一致）。
+-      assert.equal(b.name, `deps(auto-jsx:${i + 1}/${total})`, `第 ${i + 1} 块命名 :N/M（实得 ${b.name}）`)
++      // 命名断言钉「分块后缀契约」而非括号位置：第 k 块名必须带 :k/N 后缀（括号内
++      // deps(auto-jsx:k/N 旧式 或 括号外 base:k/N 新式——base 可含并行「多项目分组」的
++      // :dirKey）。钉死括号位置会在分组变更落地时再碎一次（2026-10-15 双实证：
++      // 83b303db 对齐 WIP 致 HEAD 自红；反向同理）。
++      const insideParens = new RegExp(`^deps\\(auto-jsx:${i + 1}/${total}\\)$`)
++      const outsideParens = new RegExp(`^deps\\(auto-jsx[^)]*\\):${i + 1}/${total}$`)
++      assert.ok(insideParens.test(b.name) || outsideParens.test(b.name), `第 ${i + 1} 块命名须为两形态之一（实得 ${b.name}）`)
+       // 单块命令长度：前缀 + 本块参数 ≤ 前缀 + 6000 + 单参数富余（分块判据本身）
+       assert.ok(b.command.length <= 6033 + 120, `第 ${i + 1} 块命令长度 ${b.command.length} 应贴近 6000 上限`)
+     })
+diff --git a/test/lint-ownership-path.test.mjs b/test/lint-ownership-path.test.mjs
+new file mode 100644
+index 00000000..ccdc1228
+--- /dev/null
++++ b/test/lint-ownership-path.test.mjs
+@@ -0,0 +1,106 @@
++/**
++ * lint 归属降档共享 helper（lintOwnershipDowngrade）+ 双路径接线 —— 单测。
++ * 2026-10-15-lint-triage-path-unify：消费仓坑档案 verify-lint-triage-path-divergence.md
++ * 的修复承载——helper 四态语义（pre-existing 放行 / owned / unattributable / 鉴定链异常
++ * 保守硬拦）+ gates.js 与 verify-quality-scan.js 两路径源级接线断言（防分叉复发）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { lintOwnershipDowngrade } from '../src/run/lint-ownership.js'
++
++const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++/** 捕获 console.warn 输出（恢复原句柄）。 */
++function captureWarn() {
++  const lines = []
++  const orig = console.warn
++  console.warn = (...args) => lines.push(args.join(' '))
++  return { lines, restore: () => { console.warn = orig } }
++}
++
++/** 造注入式 importer：返回可控的 resolveVerifyChangedFiles / triageLintOwnership。 */
++function mkImporter({ files = [], verdict = 'pre-existing', throwOnLoad = false } = {}) {
++  return async () => {
++    if (throwOnLoad) throw new Error('loader boom')
++    return {
++      resolveVerifyChangedFiles: () => files,
++      triageLintOwnership: ({ failureFiles = [], changeFiles = [] }) => {
++        if (verdict === 'unattributable') return { verdict: 'unattributable', overlap: [] }
++        // 与真实现同口径的最小模拟：零交集=pre-existing，有交集=owned
++        const overlap = failureFiles.filter((f) => changeFiles.includes(f))
++        return overlap.length > 0
++          ? { verdict: 'owned', overlap }
++          : { verdict: 'pre-existing', overlap: [] }
++      },
++    }
++  }
++}
++
++const base = { cwd: '/repo', changeName: 'demo-change', specBase: '/repo/.sillyspec' }
++const lintCheck = { status: 'failed', failureFiles: ['other/module/legacy.py'] }
++
++test('pre-existing（零交集存量债）→ 返回 true 放行 + 打印降档 warning（含存量债文件名）', async () => {
++  const cap = captureWarn()
++  try {
++    const ok = await lintOwnershipDowngrade({
++      ...base,
++      lintCheck,
++      importer: mkImporter({ files: ['src/mine.js'], verdict: 'pre-existing' }),
++    })
++    assert.equal(ok, true, '零交集应降档放行')
++    const text = cap.lines.join('\n')
++    assert.match(text, /归属鉴定为 HEAD 存量债/, 'warning 含降档说明')
++    assert.match(text, /other\/module\/legacy\.py/, 'warning 列出存量债文件')
++  } finally {
++    cap.restore()
++  }
++})
++
++test('owned（失败文件与本变更有交集）→ 返回 false 维持硬拦', async () => {
++  const cap = captureWarn()
++  try {
++    const ok = await lintOwnershipDowngrade({
++      ...base,
++      lintCheck: { status: 'failed', failureFiles: ['src/mine.js'] },
++      importer: mkImporter({ files: ['src/mine.js'], verdict: 'owned' }),
++    })
++    assert.equal(ok, false, '有交集应硬拦')
++    assert.equal(cap.lines.length, 0, '硬拦路径不打印降档 warning')
++  } finally {
++    cap.restore()
++  }
++})
++
++test('unattributable（无可识别失败文件）→ 返回 false 保守硬拦', async () => {
++  const ok = await lintOwnershipDowngrade({
++    ...base,
++    lintCheck: { status: 'failed', failureFiles: [] },
++    importer: mkImporter({ verdict: 'unattributable' }),
++  })
++  assert.equal(ok, false, 'unattributable 应保守硬拦')
++})
++
++test('鉴定链异常（importer 抛错）→ 返回 false 保守硬拦', async () => {
++  const ok = await lintOwnershipDowngrade({
++    ...base,
++    lintCheck,
++    importer: mkImporter({ throwOnLoad: true }),
++  })
++  assert.equal(ok, false, '鉴定链异常应保守硬拦')
++})
++
++test('源级接线：gates.js 与 verify-quality-scan.js 两路径均走 lintOwnershipDowngrade（防分叉复发）', () => {
++  const gates = readFileSync(join(repoRoot, 'src/run/gates.js'), 'utf8')
++  const scan = readFileSync(join(repoRoot, 'src/run/verify-quality-scan.js'), 'utf8')
++  // gates --done 路径：helper 调用替换原内联块
++  assert.match(gates, /lintOwnershipDowngrade/, 'gates.js 应调用共享 helper')
++  assert.ok(!gates.includes('let lintOwnership = null'), 'gates.js 原内联判定应已移除（单一来源）')
++  // noAI 质量扫描路径：throw 条件须带降档豁免（lintBlocked && !lintAdvisoryDowngraded）
++  assert.match(scan, /lintOwnershipDowngrade/, 'verify-quality-scan.js 应调用共享 helper')
++  assert.match(scan, /lintBlocked && !lintAdvisoryDowngraded/, 'throw 条件应带降档豁免')
++  // 降档仅在 lint 单独失败时判定（testFailed 优先 throw）
++  assert.match(scan, /if \(lintBlocked && !testFailed\)/, '降档判定应限定 lint 单独失败场景')
++})
