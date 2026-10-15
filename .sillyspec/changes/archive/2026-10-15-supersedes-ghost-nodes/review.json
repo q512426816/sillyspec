@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-supersedes-ghost-nodes",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "74f5700a6f509a7e7400a1a00d645415c97d309e",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——幽灵与真实目标同走建齐后统一补挂机制，无时序缺口",
+    "并发": "ok——纯读构建零写盘",
+    "切换": "ok——幽灵随构建生灭不持久化，重算自动收敛",
+    "作用域": "ok——幽灵 id 含 file+change 双限定与真实节点同键空间；口径限自身版本链天然隔离跨变更"
+  },
+  "notes": {
+    "承诺对照": "FR-01 测试①②⑤（合成/防护）；FR-02 既有 supersedes 全形态组零回归（knowledge-graph 13/13）；FR-03 真图 supersedes=37 实测回执+knowledge 零 diff（提交只含 src/test/变更目录实证）；FR-04 新增 3 组+全图零回归（15/15）",
+    "声明边界裁决": "①幽灵节点进 nodes 搜索被误当真实条目=可接受（label+status 双标识、无锚定边不进 impact 决策面）；②同号自链引用者错误引用他变更同号的极端数据错误=可接受（2026-10-14 修复后真实库 0 条跨变更引用实证）。无未裁决边界",
+    "防护声明核实": "口径限定真实存在（ghostBase 同链判定）且被测试②/⑤双面锁定；首版无条件合成被既有测试拦下的事实留痕 design——防护有效性的活证据",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 文案零变化",
+      "config-absent-zero-regression": "n/a——零配置键",
+      "crossrepo-path-compat": "n/a——未触跨仓面"
+    }
+  },
+  "reviewedAt": "2026-10-15T02:15:00.000Z"
+}

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-supersedes-ghost-nodes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-01",
+      "tests": [
+        "test/supersedes-ghost-nodes.test.mjs「①② 幽灵节点+supersedes 边：同号自链缺失合成、在场真边、跨号缺失不合成」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-supersedes-ghost-nodes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「①解析：supersedes 只认同变更——同变更（含双 legacy）建边、跨变更同号不建边」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-supersedes-ghost-nodes"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-03",
+      "tests": [
+        "test/supersedes-ghost-nodes.test.mjs「③ summary 计数与孤儿面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-supersedes-ghost-nodes"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-graph.test.mjs",
+        "test/supersedes-ghost-nodes.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-supersedes-ghost-nodes"
+    }
+  ]
+}

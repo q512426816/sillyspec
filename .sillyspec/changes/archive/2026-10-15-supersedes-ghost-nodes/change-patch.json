@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-15-supersedes-ghost-nodes",
+  "baseline": "4618bdd79a38d6f32c2920dd515f9081a8cac7ec",
+  "head": "74f5700a6f509a7e7400a1a00d645415c97d309e",
+  "files": [
+    "src/knowledge-graph.js",
+    "test/supersedes-ghost-nodes.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 119,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-15T02:10:35.508Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "4618bdd79a38d6f32c2920dd515f9081a8cac7ec",
+    "totals": {
+      "files": 2,
+      "additions": 119,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 26,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/supersedes-ghost-nodes.test.mjs",
+        "additions": 93,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "bbe4cfeaccb456f1ed310fd025d1138228bf4103c2cee694619dde794f426549",
+  "patchStatus": "ok"
+}

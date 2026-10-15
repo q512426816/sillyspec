@@ -62,3 +62,4 @@
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
 | 2026-10-15 | 2026-10-15-graph-dangling-crossrepo-split | 效果评估实证：knowledge graph dangling 主计数 2537 条中 2472 为跨仓强边注记（bac |
 | 2026-10-15 | 2026-10-15-vector-gate-tighten | 效果评估实证：CLI 向量召回层 2026-09-29 发布时缺省 auto（有平台配置即试），但平台端 /api/sp |
+| 2026-10-15 | 2026-10-15-supersedes-ghost-nodes | 效果评估实证：全图 703 决策节点 supersedes 边仅 1 条（边体系实质闲置）。根因：同号版本取代是蒸馏就地 |

@@ -1,0 +1,42 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  效果评估实证：全图 703 决策节点 supersedes 边仅 1 条（边体系实质闲置）。根因：同号版本取代是蒸馏就地替换（applyEntryToSections 同变更同段旧版清除、跨文件同谓词同删），supersedes
+  引用的目标版本从不在场——真实库 39 条 supersedes 引用 0 条可解析。修法：图构建时为「自身版本链」的缺失目标合成 superseded 幽灵节点承接边（口径严格限定 sid 基号===条目 id 基号或
+  originId 基号，即自己引用自己的旧版本；跨号/跨变更缺失引用不合成——2026-10-14-supersedes-mislink 跨变更误连防护不因幽灵形态复活，首版实现踩过此坑被既有测试②拦下后收紧）。真图
+  supersedes 1→37（36 幽灵全为自身版本链，零跨号铸造），知识文件零触碰。
+
+
+  成功标准：
+
+  - 同号自链缺失目标合成幽灵节点（ghost/status=superseded/supersededBy 回指），supersedes 边在场
+
+  - 在场目标走真实边零变化；跨号缺失引用零铸造（误连防护测试②既有断言零回归）
+
+  - 幽灵有入边非孤儿；真图 supersedes 1→37 且 nodes 只增幽灵（知识文件零 diff）
+
+  - 全图测试 13 文件零回归 + 新增 ghost 测试 3 组全绿
+autopilot: true
+prestage_ack: false
+baseline_commit: 4618bdd79a38d6f32c2920dd515f9081a8cac7ec
+updatedAt: '2026-10-15T02:10:37.040Z'
+baseline_sha256: 325f09d31338ea358505727966420d6942ae900583c99affbd048e80663e8e62
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js3+nontest-skip1)+fr(3)（1.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015020947\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（46.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015020947\test-result.json｜门文件 3 个
+

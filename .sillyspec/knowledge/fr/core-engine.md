@@ -3619,3 +3619,79 @@
   confirmed_at: null
   source_change: 2026-10-15-vector-gate-tighten
   status: active
+
+## FR-core-engine-215 同号自链缺失目标合成幽灵节点（ghost/status=superseded/supersededBy 回指），supersedes 边在场
+变更：2026-10-15-supersedes-ghost-nodes
+状态：active
+摘要：主路径；跨号防护
+全文：.sillyspec/changes/archive/2026-10-15-supersedes-ghost-nodes/requirements.md#FR-01
+最近确认：74f5700a6f509a7e7400a1a00d645415c97d309e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-01
+  tests: test/supersedes-ghost-nodes.test.mjs「①② 幽灵节点+supersedes 边：同号自链缺失合成、在场真边、跨号缺失不合成」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-supersedes-ghost-nodes
+  status: active
+
+## FR-core-engine-216 在场目标走真实边零变化；跨号缺失引用零铸造（误连防护既有断言零回归）
+变更：2026-10-15-supersedes-ghost-nodes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-supersedes-ghost-nodes/requirements.md#FR-02
+最近确认：74f5700a6f509a7e7400a1a00d645415c97d309e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「①解析：supersedes 只认同变更——同变更（含双 legacy）建边、跨变更同号不建边」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-supersedes-ghost-nodes
+  status: active
+
+## FR-core-engine-217 幽灵有入边非孤儿；真图 supersedes 1→37 且知识文件零 diff
+变更：2026-10-15-supersedes-ghost-nodes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-supersedes-ghost-nodes/requirements.md#FR-03
+最近确认：74f5700a6f509a7e7400a1a00d645415c97d309e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-03
+  tests: test/supersedes-ghost-nodes.test.mjs「③ summary 计数与孤儿面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-supersedes-ghost-nodes
+  status: active
+
+## FR-core-engine-218 全图测试零回归 + 新增 ghost 测试全绿
+变更：2026-10-15-supersedes-ghost-nodes
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-supersedes-ghost-nodes/requirements.md#FR-04
+最近确认：74f5700a6f509a7e7400a1a00d645415c97d309e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-supersedes-ghost-nodes:flow:测试绑定FR-04
+  tests: test/knowledge-graph.test.mjs | test/supersedes-ghost-nodes.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-supersedes-ghost-nodes
+  status: active
