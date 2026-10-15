@@ -58,10 +58,10 @@ test('多块分块：拼接总长超 maxLen → deps(auto-jsx:1/N..N/N)，count 
     assert.ok(jsx.length >= 2, `应分多块（实得 ${jsx.length} 块）`)
     const total = jsx.length
     jsx.forEach((b, i) => {
-      // 命名约定（随 2026-10-15 并行分组演化定稿）：jsx 批分块后缀组合式挂在括号外
-      // （baseName 可为 deps(auto-jsx) 或 deps(auto-jsx:<dirKey>) 多项目组）；js 原生批保留
-      // 旧式括号内 deps(auto-js:N/M)（见下方 js 用例）——两种形态均为有意约定。
-      assert.equal(b.name, `deps(auto-jsx):${i + 1}/${total}`, `第 ${i + 1} 块命名 base:N/M（实得 ${b.name}）`)
+      // 命名钉 HEAD 冻结面语义：jsx 多块后缀在括号内 deps(auto-jsx:N/M)（与 js 原生批同式）。
+      // 注：工作区并行会话在途「多项目分组」演化拟改后缀到括号外（base:N/M）——其落地
+      // 提交须同步本断言（实现与断言一起换版，保持三方一致）。
+      assert.equal(b.name, `deps(auto-jsx:${i + 1}/${total})`, `第 ${i + 1} 块命名 :N/M（实得 ${b.name}）`)
       // 单块命令长度：前缀 + 本块参数 ≤ 前缀 + 6000 + 单参数富余（分块判据本身）
       assert.ok(b.command.length <= 6033 + 120, `第 ${i + 1} 块命令长度 ${b.command.length} 应贴近 6000 上限`)
     })
