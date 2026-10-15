@@ -25,6 +25,12 @@
  * 降级纪律：任何失败（未连接/开关关闭/网络/404/5xx/超时/响应形态不符）静默降级本地层
  * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
  * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
+ *
+ * 开关契约（2026-10-15-vector-gate-tighten 收紧）：平台端点 404 实证（发布半个月后端从未
+ * 实现，10-14 评审探针实证），缺省从「有平台配置即试」改为「显式开启才试」——
+ * local.yaml knowledge.vector_search: on|auto 或 env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto
+ * 才启用；未写键=关。404 另按平台 URL 进程级短路（端点死信不再空转探测）。
+ * 平台侧实现本端点后：建索引 + 打开开关即恢复语义召回，CLI 零改动。
  */
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -34,7 +40,8 @@ import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from '.
 const VECTOR_TIMEOUT_MS = 3000
 const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
 
-/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search: off）。 */
+/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search 值；
+ *  未写键/无 yaml → null=未表态——2026-10-15-vector-gate-tighten 起缺省关，显式落盘才启用）。 */
 function vectorSwitchFromLocalYaml(cwd) {
   try {
     const lines = readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf-8').split(/\r?\n/)
@@ -46,15 +53,30 @@ function vectorSwitchFromLocalYaml(cwd) {
       const kv = line.match(/^\s+vector_search\s*:\s*(\S+)/)
       if (kv) return kv[1].toLowerCase()
     }
-  } catch { /* 无 local.yaml = 缺省 auto */ }
-  return 'auto'
+  } catch { /* 无 local.yaml = 未表态 */ }
+  return null
 }
 
+/**
+ * 向量层开关（2026-10-15-vector-gate-tighten 契约收紧）：平台端点 404 实证（2026-09-29 发布
+ * 起半个月对着不存在的后端空转探测，10-14 评审探针才实证），缺省从「有平台配置即试」收紧为
+ * 「显式开启才试」——
+ *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用（平台未配置自然 null 降级）；
+ *   env off（或其他值保守视为 off）→ 强制关；
+ *   local.yaml knowledge.vector_search: on|auto → 启用；off/未写键 → 关（缺省关）。
+ * 启用后失败静默降级本地契约不变。
+ */
 function vectorEnabled(cwd) {
   const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
-  if (env === 'off' || env === 'auto') return env === 'auto'
-  return vectorSwitchFromLocalYaml(cwd) !== 'off'
+  if (env === 'on' || env === 'auto') return true
+  if (env) return false
+  const sw = vectorSwitchFromLocalYaml(cwd)
+  return sw === 'on' || sw === 'auto'
 }
+
+/** 404 死信端点（进程级，按平台 URL 记）：端点未实现=今天真实平台状态，标记后本进程不再
+ *  对同 URL 空转探测（CLI 短进程生命周期天然重置；测试各用独立端口互不污染）。 */
+const vectorDeadEndpoints = new Set()
 
 /**
  * 平台向量召回（纯 HTTP 层）。未连接/失败/形态不符 → null（调用方降级）。
@@ -63,16 +85,19 @@ function vectorEnabled(cwd) {
 export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = VECTOR_TIMEOUT_MS }) {
   const cfg = readPlatformConfig(cwd)
   if (!cfg || !cfg.url || !cfg.token) return null
+  const base = String(cfg.url).replace(/\/+$/, '')
+  if (vectorDeadEndpoints.has(base)) return null
   const q = String(query || '').trim().slice(0, 4000)
   if (!q) return null
   try {
-    const res = await fetch(`${String(cfg.url).replace(/\/+$/, '')}${ENDPOINT_PATH}`, {
+    const res = await fetch(`${base}${ENDPOINT_PATH}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: q, limit }),
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) {
+      if (res.status === 404) vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
       if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
       return null
     }
