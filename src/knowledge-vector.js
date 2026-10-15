@@ -26,19 +26,54 @@
  * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
  * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
  *
- * 开关契约（2026-10-15-vector-gate-tighten 收紧）：平台端点 404 实证（发布半个月后端从未
- * 实现，10-14 评审探针实证），缺省从「有平台配置即试」改为「显式开启才试」——
- * local.yaml knowledge.vector_search: on|auto 或 env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto
- * 才启用；未写键=关。404 另按平台 URL 进程级短路（端点死信不再空转探测）。
- * 平台侧实现本端点后：建索引 + 打开开关即恢复语义召回，CLI 零改动。
+ * 开关契约（2026-10-15-vector-capability-autodetect 终态；前身 vector-gate-tighten 缺省关是
+ * 「端点不存在+无发现机制」时代的正确补丁，平台端点落地后 auto 成为诚实缺省）：
+ * 缺省（未写键/auto）跟随平台能力自动探测——能力缓存 .runtime/vector-capability.json
+ * （404→unavailable 重试窗 1h 内跳过；成功→available；按平台 URL 匹配；跨进程持久），
+ * 平台部署端点后最迟 1h 全仓自动启用，消费仓零配置。local.yaml on=强制开跳过探测、
+ * off=强制关（用户逃生阀）；env SILLYSPEC_KNOWLEDGE_VECTOR 同语义强制。
+ * 404 另有进程级死信短路（端点死信不再空转探测）。
  */
-import { readFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { readPlatformConfig } from './sync.js'
 import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
 
 const VECTOR_TIMEOUT_MS = 3000
 const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
+/** 能力缓存重试窗：unavailable 记录 1h 内不再探测（平台部署后最迟 1h 自动启用）。 */
+const CAPABILITY_RETRY_MS = 60 * 60 * 1000
+
+// ── 平台能力探测缓存（2026-10-15-vector-capability-autodetect）────────────────
+// .runtime/ 已 gitignored 且被 daemon spec 上传排除（UPLOAD_EXCLUDE_TOP_BASE），是仓内
+// 机器态的标准落点（knowledge-hits 同款）。写盘全 fail-soft；按平台 URL 匹配（换平台即失效）。
+
+function capabilityCachePath(cwd) {
+  return join(cwd, '.sillyspec', '.runtime', 'vector-capability.json')
+}
+
+function readCapabilityCache(cwd) {
+  try {
+    const obj = JSON.parse(readFileSync(capabilityCachePath(cwd), 'utf-8'))
+    const cfg = readPlatformConfig(cwd)
+    if (!cfg || !cfg.url) return null
+    if (obj.url !== String(cfg.url).replace(/\/+$/, '')) return null // 换平台 → 缓存失效
+    if (typeof obj.available !== 'boolean' || typeof obj.probedAt !== 'number') return null
+    return { available: obj.available, probedAt: obj.probedAt }
+  } catch { /* 无缓存/坏 JSON = 未探测 */ }
+  return null
+}
+
+function writeCapabilityCache(cwd, platformUrl, available) {
+  try {
+    const p = capabilityCachePath(cwd)
+    const cur = readCapabilityCache(cwd)
+    if (cur && cur.available === available && Date.now() - cur.probedAt < CAPABILITY_RETRY_MS) return // 值未变且未过期：零写盘
+    const dir = join(p, '..')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSync(p, JSON.stringify({ url: platformUrl, available, probedAt: Date.now() }), 'utf-8')
+  } catch { /* 缓存写失败不影响检索本体（fail-soft） */ }
+}
 
 /** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search 值；
  *  未写键/无 yaml → null=未表态——2026-10-15-vector-gate-tighten 起缺省关，显式落盘才启用）。 */
@@ -58,32 +93,44 @@ function vectorSwitchFromLocalYaml(cwd) {
 }
 
 /**
- * 向量层开关（2026-10-15-vector-gate-tighten 契约收紧）：平台端点 404 实证（2026-09-29 发布
- * 起半个月对着不存在的后端空转探测，10-14 评审探针才实证），缺省从「有平台配置即试」收紧为
- * 「显式开启才试」——
- *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用（平台未配置自然 null 降级）；
- *   env off（或其他值保守视为 off）→ 强制关；
- *   local.yaml knowledge.vector_search: on|auto → 启用；off/未写键 → 关（缺省关）。
- * 启用后失败静默降级本地契约不变。
+ * 向量层开关（2026-10-15-vector-capability-autodetect 终态契约；前身 2026-10-15-vector-gate-tighten
+ * 缺省关是「端点不存在+无发现机制」时代的正确补丁，端点落地后 auto 成为诚实缺省）：
+ *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用；off（其他值保守视为 off）→ 强制关；
+ *   local.yaml knowledge.vector_search: on → 强制启用；off → 强制关（用户显式逃生阀）；
+ *   auto/未写键 → **跟随平台能力自动探测**：读能力缓存（.runtime/vector-capability.json，
+ *   {url,available,probedAt}）——unavailable 未过重试窗（1h）=关，否则乐观试（探测结果由
+ *   platformVectorRecall 落缓存，404→unavailable / 成功→available；跨进程持久）。
+ * 「端点部署本身就是开关」——平台部署后最迟 1h 内全仓自动启用，消费仓零配置。
  */
 function vectorEnabled(cwd) {
   const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
   if (env === 'on' || env === 'auto') return true
   if (env) return false
   const sw = vectorSwitchFromLocalYaml(cwd)
-  return sw === 'on' || sw === 'auto'
+  if (sw === 'off') return false
+  if (sw === 'on') return true
+  // absent/auto → 能力缓存判定（无平台配置=没得探测=关）
+  if (!readPlatformConfig(cwd)) return false
+  const cap = readCapabilityCache(cwd)
+  if (cap && !cap.available && Date.now() - cap.probedAt < CAPABILITY_RETRY_MS) return false
+  return true
 }
 
 /**
- * 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：平台已连接但开关未开
- * （缺省关）时返回一行可执行提示——消费面：knowledge search 输出 hint 键、flow start
- * 注入零命中行（两个「正需要语义召回而未获得」的时刻）。平台未连接/已开启 → ''（零噪音：
- * 没平台没得开、开了不用说）。单源供双消费面，文案漂移由测试钉。
+ * 向量能力提示（2026-10-15-vector-capability-autodetect 语义随迁；前身 vector-switch-discoverability
+ * 的「未开请配置」提示随缺省 auto 退役——auto 模式下没有可执行配置，提示转为信息性）：
+ * 仅当 auto 模式（无显式键/键=auto）且能力缓存记 unavailable 时给一行信息——「平台部署后
+ * 自动启用，无需本仓配置」。强制关（yaml off/env off=用户显式选择）与已启用 → ''（零噪音）。
+ * 平台未连接 → ''。
  */
 export function vectorSwitchHint(cwd) {
   if (!readPlatformConfig(cwd)) return ''
   if (vectorEnabled(cwd)) return ''
-  return '💡 平台向量语义召回未开启（缺省关）——.sillyspec/local.yaml 加 knowledge 段 vector_search: on 可启用（需平台已部署 vector-search 端点；键语义见 sillyspec config schema）'
+  const cap = readCapabilityCache(cwd)
+  if (cap && !cap.available) {
+    return `ℹ️ 平台向量语义检索未就绪（自动探测缓存生效中）——平台部署 vector-search 端点后最迟 1 小时内本仓自动启用，无需配置`
+  }
+  return ''
 }
 
 /** 404 死信端点（进程级，按平台 URL 记）：端点未实现=今天真实平台状态，标记后本进程不再
@@ -109,10 +156,14 @@ export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs =
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) {
-      if (res.status === 404) vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
+      if (res.status === 404) {
+        vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
+        writeCapabilityCache(cwd, base, false) // 跨进程持久：重试窗内不再探测（平台部署后自动启用）
+      }
       if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
       return null
     }
+    writeCapabilityCache(cwd, base, true) // 端点在场——缓存 available（后续进程零探测直用）
     const body = await res.json().catch(() => null)
     const results = body && Array.isArray(body.results)
       ? body.results.filter((r) => r && typeof r.spec_path === 'string' && typeof r.anchor === 'string')

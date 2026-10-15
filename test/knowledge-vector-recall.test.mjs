@@ -14,7 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -168,22 +168,60 @@ test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 �
   })
 })
 
-test('⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退', async () => {
-  await withMock('ok', [
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
-  ], async (m) => {
+test('⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 → 首查探测落缓存，重试窗内零再探测', async () => {
+  await withMock('404', [], async (m) => {
     const root = mkdtempSync(join(tmpdir(), 'ss-vec-default-'))
     mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
     writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
     writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
-    // platform 段在场、knowledge.vector_search 键未写 = 旧缺省 auto（会调）、新缺省关（零调用）
+    // platform 段在场、knowledge.vector_search 键未写 = auto（跟随平台能力）
     writeFileSync(join(root, '.sillyspec', 'local.yaml'),
       `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
     try {
       const kb = join(root, '.sillyspec', 'knowledge')
+      const km1 = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
+      assert.equal(m.requests.length, 1, `首查真实探测 1 次（实际 ${m.requests.length}）`)
+      assert.notEqual(km1.json && km1.json.vector, true, '404 → 本地回退无 vector 标记')
+      const capPath = join(root, '.sillyspec', '.runtime', 'vector-capability.json')
+      const cap = JSON.parse(readFileSync(capPath, 'utf-8'))
+      assert.equal(cap.available, false, '404 → 能力缓存 unavailable 落盘（跨进程持久）')
+      assert.equal(cap.url, m.url, '缓存按平台 URL 键')
+      // 同仓第二次检索：缓存重试窗内 → 零新增请求
+      await matchKnowledgeHybrid(kb, '另一个不在词表的查询串', { cwd: root })
+      assert.equal(m.requests.length, 1, '重试窗内缓存判定 → 零探测')
+      // yaml off 逃生阀：强制关（即使缓存过期也零调用）
+      writeFileSync(join(root, '.sillyspec', 'local.yaml'),
+        `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\nknowledge:\n  vector_search: off\n`)
+      await matchKnowledgeHybrid(kb, '第三个查询串', { cwd: root })
+      assert.equal(m.requests.length, 1, 'yaml off 强制关零调用')
+    } finally { rmQuiet(root) }
+  })
+})
+
+test('⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）', async () => {
+  await withMock('ok', [
+    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
+  ], async (m) => {
+    const root = mkdtempSync(join(tmpdir(), 'ss-vec-stale-'))
+    mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
+      '# Knowledge Index', '', '## Decisions',
+      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
+    ].join('\n'))
+    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
+    writeFileSync(join(root, '.sillyspec', 'local.yaml'),
+      `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
+    // 预置过期 unavailable 缓存（probedAt = 2h 前）
+    mkdirSync(join(root, '.sillyspec', '.runtime'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'),
+      JSON.stringify({ url: m.url, available: false, probedAt: Date.now() - 2 * 60 * 60 * 1000 }))
+    try {
+      const kb = join(root, '.sillyspec', 'knowledge')
       const km = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
-      assert.equal(m.requests.length, 0, `平台零调用（实际 ${m.requests.length} 次）`)
-      assert.notEqual(km.json && km.json.vector, true, '无 vector 标记（本地回退）')
+      assert.equal(m.requests.length, 1, '过期缓存 → 重新探测 1 次')
+      assert.equal(km.json.vector, true, '平台已实现端点 → vector 结果（部署后自动启用实证）')
+      const cap = JSON.parse(readFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'), 'utf-8'))
+      assert.equal(cap.available, true, '成功 → 缓存翻 available')
     } finally { rmQuiet(root) }
   })
 })
