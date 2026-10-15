@@ -3498,3 +3498,48 @@
   confirmed_at: null
   source_change: 2026-09-25-fr-unmapped-repair
   status: active
+
+## FR-core-engine-208 graph summary 输出 dangling_refs_local 与 breakdown.cross_repo，local + cross_repo = total 守恒（真图 2537 = 90 + 2447）
+变更：2026-10-15-graph-dangling-crossrepo-split
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-graph-dangling-crossrepo-split/requirements.md#FR-01
+最近确认：6226a98eafd4a1ed652bef83b026ca71131e095a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-graph-dangling-crossrepo-split:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「summary 守恒/分流」组
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-graph-dangling-crossrepo-split
+  status: active
+
+## FR-core-engine-209 knowledge graph dangling --local 只列本仓悬空，输出附 cross_repo 分流计数；跨仓条目带〔跨仓注记〕标注
+变更：2026-10-15-graph-dangling-crossrepo-split
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-graph-dangling-crossrepo-split/requirements.md#FR-02
+最近确认：6226a98eafd4a1ed652bef83b026ca71131e095a
+
+## FR-core-engine-210 既有守恒测试（dangling_refs = strong + medium）零回归，新增分流守恒断言全绿
+变更：2026-10-15-graph-dangling-crossrepo-split
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-graph-dangling-crossrepo-split/requirements.md#FR-03
+最近确认：6226a98eafd4a1ed652bef83b026ca71131e095a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-graph-dangling-crossrepo-split:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-graph-dangling-crossrepo-split
+  status: active

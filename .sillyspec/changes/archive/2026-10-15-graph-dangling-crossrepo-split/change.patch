@@ -1,0 +1,95 @@
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 0b854877..9ea80dfd 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -577,12 +577,18 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
+   const orphans = graphOrphans(graph).length
+   const dangling = graphDangling(graph, { existsFn })
+   const danglingRefs = dangling.length
++  // 跨仓口径分流（2026-10-15-graph-dangling-crossrepo-split）：知识库集中管理仓、代码分仓存放
++  // 是本体系常态拓扑——跨仓强边锚点（顶级目录本仓不存在）永不可在本仓解析却全数计入 dangling_refs，
++  // 健康数字长期失真（本仓实证 2537 中 2472 为跨仓注记）。主计数与守恒口径不动（消费方零回归），
++  // 增加分流字段：breakdown.cross_repo=跨仓注记数、dangling_refs_local=本仓可行动悬空数。
++  const danglingCrossRepo = dangling.filter((d) => d.crossRepo).length
+   // 分强度计数（附加字段——dangling_refs 是两类之和，消费方对账 doctor 时按 breakdown 拆）
+   const danglingBreakdown = dangling.reduce((a, d) => {
+     if (EDGE_STRENGTH[d.edge.type] === 'strong') a.strong_anchors++
+     else if (EDGE_STRENGTH[d.edge.type] === 'medium') a.medium_doc_refs++
+     return a
+   }, { strong_anchors: 0, medium_doc_refs: 0 })
++  danglingBreakdown.cross_repo = danglingCrossRepo
+   const moduleDocGaps = graphModuleDocGaps(graph).length
+   const changelogDanglings = graphChangelogDanglings(graph, { existsFn }).length
+   // clusters：type×domain 聚簇，representatives 度数 top-5（同度按 id 字典序稳序）
+@@ -616,7 +622,10 @@ export function graphSummary(graph, { existsFn = existsSync, clustersLimit = 0 }
+     module_doc_gaps: moduleDocGaps,
+     changelog_danglings: changelogDanglings,
+     dangling_refs: danglingRefs,
+-    // dangling_refs 构成（附加字段，向后兼容）：doctor graph-dangling-anchor（强）+ graph-doc-dangling-ref（中）之和
++    // 本仓可行动悬空（附加字段，跨仓口径分流）：dangling_refs − 跨仓注记——治理动作只看这个数
++    dangling_refs_local: danglingRefs - danglingCrossRepo,
++    // dangling_refs 构成（附加字段，向后兼容）：doctor graph-dangling-anchor（强）+ graph-doc-dangling-ref（中）之和；
++    // cross_repo=跨仓注记数（顶级目录本仓不存在——目标活在独立仓，单列不对账）
+     dangling_refs_breakdown: danglingBreakdown,
+     clusters,
+   }
+@@ -795,7 +804,7 @@ export function impactFromDecisionsMd(graph, text) {
+ // 输出沿知识命令族全 JSON 约定（{ok,...data}）；人类可读摘要行内嵌 summary 字段。
+ // ═══════════════════════════════════════════════════════════════
+ 
+-const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|dump|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N]；dump 需 --layout'
++const GRAPH_USAGE = '用法：sillyspec knowledge graph <summary|nodes|dump|neighbors|path|impact|orphans|dangling> [锚点...] [--search <模糊>] [--limit N] [--edges <边型>] [--depth N] [--local]；dump 需 --layout；dangling --local 只列本仓悬空（跨仓注记单列不对账）'
+ 
+ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+   const out = (ok, data, error) => console.log(JSON.stringify({ ok, ...(data || {}) , ...(error ? { error } : {}) }, null, 2))
+@@ -826,7 +835,7 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+       stats: s,
+       summary: [
+         `节点 ${s.nodes} · 边 ${s.edges}`,
+-        `孤儿 ${s.orphans} · 模块文档缺口 ${s.module_doc_gaps} · changelog 悬空 ${s.changelog_danglings} · 悬空引用 ${s.dangling_refs}`,
++        `孤儿 ${s.orphans} · 模块文档缺口 ${s.module_doc_gaps} · changelog 悬空 ${s.changelog_danglings} · 悬空引用 ${s.dangling_refs}（本仓 ${s.dangling_refs_local} · 跨仓注记 ${s.dangling_refs_breakdown.cross_repo}——目标仓不在本仓，单列不对账）`,
+         `簇 ${s.clusters.length} 个（最大 ${s.clusters[0]?.key ?? '—'} × ${s.clusters[0]?.count ?? 0}）`,
+       ],
+     })
+@@ -911,12 +920,18 @@ export async function cmdKnowledgeGraph(dir, args, opts = {}) {
+       orphans: list.map((f) => ({ id: f.node.id, type: f.node.type, kind: f.kind })),
+     })
+   }
+-  // dangling
+-  const list = graphDangling(graph)
++  // dangling（--local 过滤跨仓注记：治理动作只看本仓可解析面——跨仓目标活在独立仓）
++  const localOnly = args.includes('--local')
++  const allDangling = graphDangling(graph)
++  const crossRepoCount = allDangling.filter((d) => d.crossRepo).length
++  const list = localOnly ? allDangling.filter((d) => !d.crossRepo) : allDangling
+   return out(true, {
+-    query: { sub },
++    query: { sub, local: localOnly || undefined },
+     count: list.length,
+-    summary: list.map((d) => `⚠️ ${d.edge.type}（${d.strength}） ${d.edge.s} → ${d.missing}`),
++    summary: list.map((d) => `⚠️ ${d.edge.type}（${d.strength}） ${d.edge.s} → ${d.missing}${d.crossRepo ? ' 〔跨仓注记〕' : ''}`),
+     dangling: list.map((d) => ({ edge: d.edge, missing: d.missing, strength: d.strength })),
++    // 口径分流（附加字段）：本仓可行动数 + 跨仓注记数单列不对账；--local 时 count 即本仓数
++    dangling_refs_local: allDangling.length - crossRepoCount,
++    cross_repo: crossRepoCount,
+   })
+ }
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index d7f69919..0ffbcbb9 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -432,6 +432,14 @@ test('⑧summary 聚合：规模/分布/doctor 同源计数/clusters 域映射/
+     assert.ok(sFilesGone.dangling_refs_breakdown.medium_doc_refs >= 2, 'fixture doc-refs/scan-refs 悬空计入中边桶')
+     // 跨仓口径：全假存在性下 doc 引用全按跨仓豁免 → 中桶归零（裸名+跨仓双豁免钉）
+     assert.equal(sFalse.dangling_refs_breakdown.medium_doc_refs, 0, '顶级全不在场=跨仓形态，文档引用不计本仓悬空')
++    // 跨仓口径分流（2026-10-15-graph-dangling-crossrepo-split）：breakdown.cross_repo=跨仓注记数、
++    // dangling_refs_local=本仓可行动数，三者守恒（local + cross_repo = total）；本仓在场态（默认
++    // existsFn）跨仓为 0
++    assert.equal(sFalse.dangling_refs_breakdown.cross_repo, sFalse.dangling_refs, '全假存在性下悬空全为跨仓注记形态')
++    assert.equal(sFalse.dangling_refs_local, 0, '全假存在性下本仓可行动悬空归零')
++    assert.equal(sFalse.dangling_refs_local + sFalse.dangling_refs_breakdown.cross_repo, sFalse.dangling_refs, 'local + cross_repo = total 守恒')
++    assert.ok(sFilesGone.dangling_refs_breakdown.cross_repo >= 1, '顶级 src 在场但目标文件不在=本仓悬空之外仍有跨仓注记面（fixture 锚点目标）')
++    assert.equal(sFilesGone.dangling_refs_local + sFilesGone.dangling_refs_breakdown.cross_repo, sFilesGone.dangling_refs, '混合态守恒同样成立')
+     // module_doc_gaps 正值面（mini-fixture：有 map 无卡无 changelog 的模块 → 1）
+     const gapRoot = mkdtempSync(join(tmpdir(), 'kggap-'))
+     try {

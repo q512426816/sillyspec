@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-graph-dangling-crossrepo-split",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "6226a98eafd4a1ed652bef83b026ca71131e095a",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——纯函数对图求值无时序面",
+    "并发": "ok——无写盘只读求值；graphDangling crossRepo 判定单一源复用零新并发面",
+    "切换": "ok——existsFn 注入态由参数显式传入无残留；真图实测与 fixture 双态断言双覆盖",
+    "作用域": "ok——分流键按图 root 判顶级目录存在性单树自洽；平台 RPC 附加键透传（graph.py _as_int 忽略未知键实证）无串台"
+  },
+  "notes": {
+    "承诺对照": "FR-01 summary 附加字段+守恒（真图 2537=90+2447 实测回执 + fixture 断言 local+cross=total 四条）；FR-02 --local 真图实测 count=90/cross_repo=2447、跨仓条目带〔跨仓注记〕标注；FR-03 test/knowledge-graph.test.mjs 13/13 全绿（既有守恒组零回归）",
+    "声明边界裁决": "①跨仓口径≠可不管（跨仓锚点在各自仓内有对账价值，仅不污染本仓健康数字）=可接受，文案与字段注释双处声明；②平台 DTO 未知键兼容=已实证安全。无未裁决边界",
+    "防护声明核实": "守恒断言在测试真实存在（knowledge-graph.test.mjs 431-441 行区）；主计数逐字未动",
+    "生成物同步": "无类型/契约文件——n/a；GRAPH_USAGE 用法行与 --local 行为同步更新",
+    "项目探针": {
+      "cli-copy-selfsufficient": "pass——summary 分流文案含状态/原因/口径三要素（「跨仓注记 N——目标仓不在本仓，单列不对账」），GRAPH_USAGE 同步补 --local 说明，文案与实现判定一致（--local 过滤 crossRepo=true 与标注同键）",
+      "config-absent-zero-regression": "n/a——零 local.yaml 消费键",
+      "crossrepo-path-compat": "pass——topExists join(rootDir, top) 沿用既有实现未触碰；Windows 盘符路径 top 段取法行为零变化（测试双态覆盖）"
+    }
+  },
+  "reviewedAt": "2026-10-15T01:55:00.000Z"
+}

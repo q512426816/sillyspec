@@ -3134,3 +3134,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
 理由：最大风险：release 模块卡的 doc-debt 机器把任何 package.json 触达（含依赖升级）计为卡欠账 behind——接受：这正是发布面应有的可见性，欠账是 advisory 不阻断。次风险：docs-consistency 承接 10 条语义混杂（报告/收件箱/入库）——接受并留痕：一次性文档工作不值逐条建卡，未来同类工作若复发再立专域。放弃方案：①全部迁 unmapped（伪域计数归零但把 holding pen 灌爆，unmapped 基线消音机制会被打穿）；②为每个 auto-* 补卡转正（伪域即「无模块卡」的病本身，转正等于把噪音域固化进路由词典）；③按 suggestDomainFromFiles 机械迁移（实测对纯文档变更 5/8 组无法判定、2/8 组误建议——正是伪域成因机制本身，不可作为裁决依据）。
+
+## D-unmapped-382@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-15-graph-dangling-crossrepo-split
+原编号：D-001@v1
+锚点：未记录
+最近确认：6226a98eafd4a1ed652bef83b026ca71131e095a
+理由：最大风险：跨仓口径被误读为「2447 条可以不管」——跨仓锚点在各自仓内有对账价值（决策↔交付文件机器锚），本变更只是不让它们污染本仓健康数字；口径已在 summary 文案与字段注释双处声明「单列不对账」。次风险：平台 GraphDanglingData DTO 若严格校验未知键会拒收——实证安全：平台侧 _norm_dangling 按 _as_int 取已知键、多余键忽略（graph.py:231-240 实证），且 --local 未传时 query.local 键为 undefined 不序列化。放弃方案：①把跨仓强边从 dangling 主计数剔除（破坏 doctor 对账守恒与既有测试钉，且丢对账价值）；②按目标仓建多图（buildKnowledgeGraph 单根假设，重构量大收益小）；③只在 doctor 文案分流（10-09 已做，数字面失真问题依旧）。
