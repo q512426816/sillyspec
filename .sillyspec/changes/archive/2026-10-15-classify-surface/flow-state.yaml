@@ -1,0 +1,39 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  效果评估实证：knowledge classify 工具在位（uncategorized 条目归类迁移四步动作+审计遥测齐全）但遥测零消费——入口隐身是根因：digest 收件箱信号只在 >20 积压时报警，1~20
+  条常态化静默，classify 永不出现在治理视野。修法：digest 增 info 级收件箱提示（1~20 条给 inbox 信号+classify 可执行命令行 inbox 看清单→classify --ql --file
+  逐条归类），healthy 语义同步收窄为只看 warn 级（info 是提示不是超阈，低量收件箱不该把治理卡打成告警面）；渲染面 warn/info 分区。
+
+
+  成功标准：
+
+  - 收件箱 1~20 条时 digest 出 info 级 inbox 信号且带 classify 命令建议，healthy 保持 true
+
+  - 收件箱 >20 时仍 warn 级且 healthy=false（既有阈值语义不变）；空收件箱零信号
+
+  - 渲染面 warn/info 分区，既有 digest 测试零回归+新增断言全绿
+autopilot: true
+prestage_ack: false
+baseline_commit: b7b79c1e73d5b0b9ba219e7707e27528e23a9d9d
+updatedAt: '2026-10-15T02:29:42.136Z'
+baseline_sha256: 70ff6f6a1fcbb8868f102f9a14fd919696e41e2d639c2e3eb798f5432056e997
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js2)（1.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015022740\test-result.json｜lint: passed
+  ← npm run lint（109.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015022740\test-result.json｜门文件 3 个
+

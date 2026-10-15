@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-classify-surface",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-classify-surface:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-digest.test.mjs「① 三信号阈值」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-classify-surface"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-classify-surface:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-digest.test.mjs「① 三信号阈值」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-classify-surface"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-classify-surface:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-digest.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-classify-surface"
+    }
+  ]
+}

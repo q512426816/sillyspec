@@ -3752,3 +3752,60 @@
   confirmed_at: null
   source_change: 2026-10-15-rot-coverage-git-source
   status: active
+
+## FR-core-engine-222 收件箱 1~20 条时 digest 出 info 级 inbox 信号且带 classify 命令建议，healthy 保持 true
+变更：2026-10-15-classify-surface
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-classify-surface/requirements.md#FR-01
+最近确认：af483d02f69a8e600ccdcb2ae9df4ebe14d03bc2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-classify-surface:flow:测试绑定FR-01
+  tests: test/knowledge-digest.test.mjs「① 三信号阈值」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-classify-surface
+  status: active
+
+## FR-core-engine-223 收件箱 >20 时仍 warn 级且 healthy=false（既有阈值语义不变）；空收件箱零信号
+变更：2026-10-15-classify-surface
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-classify-surface/requirements.md#FR-02
+最近确认：af483d02f69a8e600ccdcb2ae9df4ebe14d03bc2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-classify-surface:flow:测试绑定FR-02
+  tests: test/knowledge-digest.test.mjs「① 三信号阈值」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-classify-surface
+  status: active
+
+## FR-core-engine-224 渲染面 warn/info 分区，既有 digest 测试零回归+新增断言全绿
+变更：2026-10-15-classify-surface
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-classify-surface/requirements.md#FR-03
+最近确认：af483d02f69a8e600ccdcb2ae9df4ebe14d03bc2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-classify-surface:flow:测试绑定FR-03
+  tests: test/knowledge-digest.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-classify-surface
+  status: active
