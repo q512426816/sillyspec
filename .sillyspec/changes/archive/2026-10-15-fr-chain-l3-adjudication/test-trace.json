@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-fr-chain-l3-adjudication",
+  "rows": [
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-fr-chain-l3-adjudication:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs",
+        "test/fr-governance-telemetry.test.mjs",
+        "test/knowledge-fr-stats.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-fr-chain-l3-adjudication"
+    }
+  ]
+}

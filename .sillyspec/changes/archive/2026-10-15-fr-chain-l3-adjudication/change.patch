@@ -1,0 +1,69 @@
+diff --git a/src/knowledge-stats.js b/src/knowledge-stats.js
+index c10c75de..e09f90e2 100644
+--- a/src/knowledge-stats.js
++++ b/src/knowledge-stats.js
+@@ -99,6 +99,10 @@ export function buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays = 30 } = {}
+ }
+ 
+ // ── FR 索引实验聚合（2026-09-18-fr-index-l1 后续钩子·L3 裁决仪表盘）──
++// L3 已裁决冻结（2026-10-15-fr-chain-l3-adjudication D-001@v1）：证伪三条件全中（承接引用率
++// 1/452≈0% / fr-supersede 窗口 2 次 / fr-duplicate-warning 24 次零候选），条款明文合法结局——
++// 活规格树不建，fr 索引降级保留检索/注入面；本区指标转历史观察，候选视图退役为冻结注记。
++const FR_L3_ADJUDICATED_NOTE = '已裁决（2026-10-15 D-001@v1）：L3 冻结不建，fr 索引保留检索/注入面——本区指标转历史观察（复潮条件见裁决条目）'
+ 
+ /**
+  * 聚合 L1 四类 fr-* 遥测事件 + knowledge/fr/ 索引面统计——L3 裁决（design 实验证伪条款）
+@@ -314,7 +318,7 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+     if (frIndex.present) {
+       const e = frIndex.events
+       const i = frIndex.index
+-      lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）`)
++      lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）｜${FR_L3_ADJUDICATED_NOTE}`)
+       lines.push(`  注入 fr-inject ${e.frInject} 次（${e.frInjectChanges} 变更） | 取代链 fr-supersede ${e.frSupersede} 次（${e.frSupersedeChanges} 变更） | 重复拦截 fr-duplicate-warning ${e.frDuplicateWarning} 次（${e.frDuplicateWarningCandidates || e.frDuplicateCandidates || 0} 候选）`)
+       lines.push(`  腐烂 suspect fr-rot-suspect ${e.frRotSuspect || 0} 次（${e.frRotSuspectChanges || 0} 变更${e.frRotSuspectByDomain && e.frRotSuspectByDomain.length > 0 ? `，按域 ${e.frRotSuspectByDomain.map(d => `${d.domain}×${d.count}`).join('，')}` : ''}）`)
+       if (e.frUnreferenced.length > 0) {
+@@ -325,10 +329,8 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+       lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
+       const cand = frIndex.adjudicationCandidates || []
+       if (cand.length > 0) {
+-        lines.push('  裁决候选 Top-10（suspect×unref 条目级聚合——候选非裁决，确认无人承接→承接翻链或人工退休）：')
+-        for (const c of cand.slice(0, 10)) {
+-          lines.push(`    - ${c.id} suspect×${c.suspect} unref×${c.unreferenced}${c.change ? `（来源 ${c.change}）` : ''}`)
+-        }
++        // L3 冻结后候选视图退役（数据面 adjudicationCandidates 保留 JSON 可查）——显示冻结注记
++        lines.push(`  裁决候选视图已退役｜${FR_L3_ADJUDICATED_NOTE}`)
+       }
+     } else {
+       lines.push('（FR 索引面不存在——knowledge/fr/ 目录缺失或无条目；归档完整流程变更后此处可查）')
+@@ -375,12 +377,12 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+ 
+   lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次${lastEventAt ? ` | 数据截至 ${lastEventAt.slice(0, 10)}` : ''}`)
+ 
+-  // FR 索引实验（L3 裁决仪表盘——证伪条款出数面；裁决时建议 --since-days 大窗口读全口径）
++  // FR 索引实验（L3 裁决仪表盘——证伪条款出数面；L3 已裁决冻结 2026-10-15，指标转历史观察）
+   if (frIndex.present) {
+     const e = frIndex.events
+     const i = frIndex.index
+     lines.push('')
+-    lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）`)
++    lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）｜${FR_L3_ADJUDICATED_NOTE}`)
+     lines.push(`  注入 fr-inject ${e.frInject} 次（${e.frInjectChanges} 变更） | 取代链 fr-supersede ${e.frSupersede} 次（${e.frSupersedeChanges} 变更） | 重复拦截 fr-duplicate-warning ${e.frDuplicateWarning} 次（${e.frDuplicateCandidates} 候选）`)
+     if (e.frUnreferenced.length > 0) {
+       const top = e.frUnreferenced.slice(0, 5).map((u) => `${u.domain}×${u.count}`).join('，')
+@@ -388,14 +390,11 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+     }
+     lines.push(`  索引面：${i.entries} 条（active ${i.active} / superseded ${i.superseded}）| 来源变更 ${i.sourceChanges} 个 | 域 ${i.domains.join(', ') || '—'}`)
+     lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
+-    // 裁决候选视图（2026-10-03-fr-governance-telemetry）：条目级 id 聚合（事件 frIds/ids，帽 20 抽样
+-    // 为下界）。候选非裁决——高 suspect 天然来自热文件；处置出口：确认无人承接 → 承接翻链或人工退休。
++    // 裁决候选视图退役（L3 冻结，2026-10-15-fr-chain-l3-adjudication D-001@v1）——数据面
++    // adjudicationCandidates 保留 JSON 可查，显示面只留冻结注记。
+     const cand = frIndex.adjudicationCandidates || []
+     if (cand.length > 0) {
+-      lines.push('  裁决候选 Top-10（suspect×unref 条目级聚合——候选非裁决，确认无人承接→承接翻链或人工退休）：')
+-      for (const c of cand.slice(0, 10)) {
+-        lines.push(`    - ${c.id} suspect×${c.suspect} unref×${c.unreferenced}${c.change ? `（来源 ${c.change}）` : ''}`)
+-      }
++      lines.push(`  裁决候选视图已退役｜${FR_L3_ADJUDICATED_NOTE}`)
+     }
+   }

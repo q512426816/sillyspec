@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-fr-chain-l3-adjudication",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "5b6ae428b681159044f74f3ff17c3d685b778149",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——一次性裁决文档+显示注记",
+    "并发": "ok——渲染常量只读；decisions 蒸馏走既有幂等管线",
+    "切换": "ok——裁决终态持久于决策条目，复潮条件内嵌（重启评估须引用届时遥测）",
+    "作用域": "ok——降级语义 CLI 与平台同生效；frIndex JSON 结构未动零破坏"
+  },
+  "notes": {
+    "承诺对照": "FR-01 decisions.md D-001@v1 全字段（四类计数/条款依据/复潮条件）在场随蒸馏；FR-02 两渲染位头行注记+候选退役注记实测留档（--fr-only 输出含「已裁决（2026-10-15」）；FR-03 fr 检索/注入面零 diff（提交只含 stats 渲染+变更目录）+ stats 三测试文件 8/8 零回归",
+    "声明边界裁决": "①误杀风险=可接受（条款预设合法结局+复潮条件内嵌+检索面全保留可逆成本≈零）；②候选视图退役=可接受（JSON 保留可查）。无未裁决边界",
+    "防护声明核实": "裁决依据的遥测计数与 knowledge stats 实测输出一致（fr-inject 22/fr-supersede 2/duplicate 24/unreferenced 分布）；条款原文引用在 design/decisions 双处",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "pass——注记文案含裁决日期/决策号/语义三要素，与 decisions 条目可互查",
+      "config-absent-zero-regression": "n/a——零配置键",
+      "crossrepo-path-compat": "n/a——未触跨仓面"
+    }
+  },
+  "reviewedAt": "2026-10-15T02:38:00.000Z"
+}
