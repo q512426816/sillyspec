@@ -21,6 +21,7 @@ import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnc
 import { suggestDomainFromFiles, snapDomainToDictionary } from './knowledge-digest.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
+import { execFileSync } from 'node:child_process';
 import { writeAtomicSync } from './fs-atomic.js';
 import {
   splitKnowledgeSections,
@@ -73,6 +74,19 @@ export function frCoverageFiles({ archiveRoot, changeName }) {
       }
     }
   } catch { /* 源2 fail-soft */ }
+  try {
+    // 源3（2026-10-15-rot-coverage-git-source）：thin 归档常无交付表无 patch 文件清单——覆盖面
+    // 从 git 历史恢复：提交主题含变更名的提交的 name-only 文件集（--grep 子串匹配，变更名含
+    // 日期前缀足够特异；剔除 .sillyspec/ 自身工件面）。只读确定性；调用侧 covCache 每运行缓存，
+    // 非 git 仓/无记录 fail-soft=源缺（六顽固化 unknown 来源实测全部可恢复 1~23 文件）。
+    const gitOut = execFileSync('git', ['log', '--all', '--name-only', '--pretty=format:COMMIT', '--grep', String(changeName || '')],
+      { cwd: archiveRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    for (const f of String(gitOut).split(/\r?\n/)) {
+      const v = f.trim().replace(/\\/g, '/');
+      if (!v || v.startsWith('COMMIT') || v.startsWith('.sillyspec/')) continue;
+      out.add(v);
+    }
+  } catch { /* 源3 fail-soft（非 git 仓/无记录） */ }
   return [...out].filter((p) => !p.startsWith('.sillyspec/'));
 }
 
@@ -873,7 +887,7 @@ export function markSkeletonThin(knowledgeRoot) {
  *  active FR × 触碰文件 → hits（覆盖相交）/ skip（覆盖可判无交集）/ unknown（覆盖源缺失）。
  *  判据逐字不变——三消费方（rot/测试门/注入排序）共用同一实现，防口径漂移。
  *  covCache 供调用方跨查询复用归档读取。 */
-function partitionActiveByCoverage({ archiveRoot, frs, changed, covCache = new Map() }) {
+export function partitionActiveByCoverage({ archiveRoot, frs, changed, covCache = new Map() }) {
   const hits = []
   const unknownSources = new Set()
   let skip = 0

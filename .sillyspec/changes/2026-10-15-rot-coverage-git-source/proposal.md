@@ -1,0 +1,27 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-15T02:13:55.145Z
+---
+# 提案书（Proposal）— 2026-10-15-rot-coverage-git-source
+
+## 动机
+
+任务原话转写：效果评估实证：fr-rot-suspect 遥测的 unknown 面长期卡死 6 个归档变更（2026-09-22-thin-fr-distill-sync/2026-09-24-thin-design-record/2026-09-25-thin-dogfood-fixes/roadmap-copy-purge/2026-09-30-verify-done-green-reuse/2026-09-30-quality-scan-passed-idempotent）——thin 归档无 design 交付表、无 change-patch.json 文件清单，frCoverageFiles 两源皆空→覆盖不可判定→每次 flow done 反复进 unknownSources 噪音。修法：frCoverageFiles 增源3——git log --all --grep 变更名取 name-only 文件集（剔 .sillyspec/ 自身工件面，与源1/2 同一过滤契约；调用侧 covCache 每运行缓存；非 git 仓 fail-soft）。实测 6 来源 4 个恢复 1~23 文件转强命中/skip，另 2 个只触 .sillyspec 面按既有契约保持 unknown 诚实态。顺带导出 partitionActiveByCoverage（测试与外部消费）。
+
+成功标准：
+- git 可恢复变更的覆盖面经源3 恢复（name-only 文件集、.sillyspec/ 剔除、无匹配为空不编造）
+- 非 git 目录 fail-soft 不抛；partitionActiveByCoverage 消费后 unknownSources 收敛（原 unknown 转 skip/强命中）
+- fr-index 既有 4 测试文件零回归；新增测试 3 组全绿
+
+## 变更范围
+
+按成功标准机械推导，共 3 条验收面：
+1. git 可恢复变更的覆盖面经源3 恢复（name-only 文件集、.sillyspec/ 剔除、无匹配为空不编造）
+2. 非 git 目录 fail-soft 不抛；partitionActiveByCoverage 消费后 unknownSources 收敛（原 unknown 转 skip/强命中）
+3. fr-index 既有 4 测试文件零回归；新增测试 3 组全绿
+
+## 成功标准（可验证）
+
+1. git 可恢复变更的覆盖面经源3 恢复（name-only 文件集、.sillyspec/ 剔除、无匹配为空不编造）
+2. 非 git 目录 fail-soft 不抛；partitionActiveByCoverage 消费后 unknownSources 收敛（原 unknown 转 skip/强命中）
+3. fr-index 既有 4 测试文件零回归；新增测试 3 组全绿
