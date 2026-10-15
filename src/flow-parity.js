@@ -31,6 +31,7 @@ import { readV2SectionAnswer } from './flow-review.js'
 import { DESIGN_QUESTIONS } from './flow-draft.js'
 import { pathMatches } from './change-list.js'
 import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
+import { deriveChangeTitle } from './quicklog.js'
 
 /**
  * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
@@ -131,6 +132,19 @@ export function evaluateModuleGate({ moduleScope, ignore } = {}) {
     .filter((d) => d.dir)
     .filter((d) => !ig.some((p) => d.dir === p || d.dir.startsWith(p + '/')))
   return { block: maps.length > 0 && dirs.length > 0, dirs, maps }
+}
+
+/**
+ * ⑥-0 motiveFromInput：模块变更索引摘要提取（2026-10-15-title-label-skip）。与变更标题
+ * 同源走 deriveChangeTitle——此前 flow.js 裸取 --input 首行，「动机与背景：」段头行整行
+ * 入摘要（stages.changelog 实证）。段头行跳过/标签剥离随 deriveChangeTitle 单源；提取为
+ * 空回退变更名（可辨识不达意优于空串；appendChangeIndexEntries 侧另有 '轻量变更' 二级兜底）。
+ * @returns {string} 摘要（≤50 字）
+ */
+export function motiveFromInput(input, change = '') {
+  let derived = ''
+  try { derived = deriveChangeTitle(input) } catch { derived = '' }
+  return derived || String(change || '')
 }
 
 /**
@@ -328,7 +342,7 @@ export function harvestSlot4Decision({ changeDir, change }) {
   return { harvested: true }
 }
 
-export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary }
+export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary, motiveFromInput }
 
 /**
  * patch 冻结面的提交面过滤（2026-09-27-tool-debt-cleanup 抽出为纯函数供单测锁定）：

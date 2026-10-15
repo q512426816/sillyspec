@@ -2323,8 +2323,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 回读块保证在场（patch 本轮算出或 change-patch.json 回读）。
     try {
       if (moduleScope && Array.isArray(moduleScope.modules) && moduleScope.modules.length > 0) {
-        const { appendChangeIndexEntries } = await import('./flow-parity.js')
-        const motive = String(st.input || '').split('\n').map((s) => s.trim()).find(Boolean) || ''
+        const { appendChangeIndexEntries, motiveFromInput } = await import('./flow-parity.js')
+        // 摘要与变更标题同源（2026-10-15-title-label-skip）：段头行（动机与背景：等）跳过取次行，
+        // 空提取回退变更名——此前裸取首行致「动机与背景：」整行入摘要（stages.changelog 实证）。
+        const motive = motiveFromInput(st.input, change)
         const wr = appendChangeIndexEntries({ specBase, modules: moduleScope.modules, change, summary: motive, date: new Date().toISOString().slice(0, 10) })
         changelogAppended = wr.appended
         if (wr.appended.length > 0) console.log(`📖 模块变更索引回写：${wr.appended.length} 个目标（${wr.appended.join('、')}）——sidecar 优先/卡内节次之，随归档窄化入暂存`)
