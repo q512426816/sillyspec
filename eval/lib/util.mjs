@@ -1,6 +1,9 @@
 // eval 通用工具：稳定哈希、跨平台 shell 执行、统计区间。
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+
+/** 超时宽限：杀树后等待 close 的上界；到期强制 settle（保证墙钟绑定——2026-10-15-eval-timeout-enforcement） */
+export const TIMEOUT_GRACE_MS = 20_000;
 
 export function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -51,14 +54,23 @@ export function spawnCapture({ args, cwd, timeoutMs = 0, input = null, maxOutput
     child.stdout?.on('data', onChunk('stdout'));
     child.stderr?.on('data', onChunk('stderr'));
     let timer = null;
+    let graceTimer = null;
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
+        // 杀进程树：win32 同步 taskkill（等结果、可失败感知——fire-and-forget 版本实测树存活
+        // 10 分钟，2026-10-15-eval-timeout-enforcement）；child.kill 兜底保留。
         if (process.platform === 'win32' && child.pid) {
-          try { spawn('taskkill /pid ' + child.pid + ' /T /F', { shell: true, windowsHide: true }); } catch { /* 尽力杀 */ }
+          try { spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }); } catch { /* 尽力杀 */ }
         }
-        child.kill('SIGKILL');
+        try { child.kill('SIGKILL'); } catch { /* 已死 */ }
+        // 宽限：杀树后 close 仍不来（孤儿持有 stdout 等）→ 强制 settle，墙钟上界绑定。
+        graceTimer = setTimeout(() => {
+          settle({ code: -1 });
+        }, TIMEOUT_GRACE_MS);
+        graceTimer.unref?.();
       }, timeoutMs);
+      timer.unref?.();
     }
     if (input != null) {
       child.stdin?.on('error', () => { /* stdin 中途关闭（进程先退出）不视为致命 */ });
@@ -68,6 +80,7 @@ export function spawnCapture({ args, cwd, timeoutMs = 0, input = null, maxOutput
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (graceTimer) clearTimeout(graceTimer);
       resolve({ durationMs: Date.now() - started, truncated, timedOut, ...state, ...patch });
     };
     child.on('error', (err) => settle({ code: -1, stderr: state.stderr + String(err) }));
