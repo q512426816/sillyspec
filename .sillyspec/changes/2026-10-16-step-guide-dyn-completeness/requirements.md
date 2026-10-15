@@ -47,7 +47,7 @@ created_at: 2026-10-15T16:21:49.378Z
 
 ### FR-04: 测试钉死 + 既有面零回归 + lint
 
-- 必须：新增 `test/step-guide-dyn-completeness.test.mjs`：FR-01 两场景（首见真值 / 复入附录含六值）断言——修复前必红（可对照验证）。
+- 必须：新增 `test/step-guide-dyn-completeness.test.mjs`：FR-01 两场景断言——D1（首见真值）为回归锚（旧代码亦过，收编不改首见语义）；D2（复入附录含六值）为修复面判别器（旧代码必红，已对照验证 1 过 3 红）。
 - 必须：step-guide 族既有测试（default-on / fingerprint / prune / guidance-output-neutrality）全绿；`npm run lint` 通过。
 
 #### 场景：新测试与既有面
