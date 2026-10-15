@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-thin-inject-telemetry",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "8340ef2f5ad081dc5f209a0295901da123ad60d7",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——遥测为本地 append-only，at 由 appendKnowledgeHit 统一生成；resume 重复 start 重复落事件已在 design 显式裁决为可接受（语义=agent 再次看到注入，与厚道每 Wave 落盘同口径）",
+    "并发": "ok——单次 appendFile 行级原子性依赖 OS append 语义，与既有三个注入点同款并发面，无新风险；消费端 readKnowledgeHits 跳坏行容忍。边界已裁决：可接受",
+    "切换": "ok——fail-soft（R-04）try/catch 真实存在于 src/flow.js 遥测块；③ 用例以 .runtime 为普通文件实证 ENOTDIR 不上抛、注入本体照常",
+    "作用域": "ok——事件落本 spec 树 .runtime，daemon 上报链 workspace 隔离透传新字段，无跨仓串台面"
+  },
+  "notes": {
+    "承诺对照": "FR-01~04 逐条有实现锚（src/flow.js flowKnowledgeDigest 遥测块）与测试锚（test/thin-inject-telemetry.test.mjs 三组 12 断言全绿）；knowledge-inject.test.mjs 与 flow 相关 4 文件 28 用例零回归",
+    "声明边界裁决": "①resume 重复落事件=可接受（事实记录语义）；②append 行级原子性=可接受（既有同款）；③fail-soft 吞异常=可接受（R-04 既有契约）。无未裁决边界",
+    "防护声明核实": "design 声称的 fail-soft 在代码真实存在（try { appendKnowledgeHit(...) } catch {}）且有测试锁定",
+    "生成物同步": "无类型/契约文件变更——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 输出文案零变化（遥测纯副作用，flow start 输出字节不变）",
+      "config-absent-zero-regression": "n/a——零新增 local.yaml 消费键",
+      "crossrepo-path-compat": "n/a——未触 worktree/cross-repo/local-register 面"
+    }
+  },
+  "reviewedAt": "2026-10-15T01:35:00.000Z"
+}

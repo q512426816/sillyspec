@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-thin-inject-telemetry",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-thin-inject-telemetry:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-inject-telemetry.test.mjs「① thin 命中落盘：事件同形 + 分级字段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-inject-telemetry"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-thin-inject-telemetry:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-inject-telemetry.test.mjs「① thin 命中落盘：事件同形 + 分级字段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-inject-telemetry"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-thin-inject-telemetry:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-inject-telemetry.test.mjs「② 未命中零落盘」",
+        "test/thin-inject-telemetry.test.mjs「③ 遥测写失败 fail-soft：注入本体不受阻」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-inject-telemetry"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-thin-inject-telemetry:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-inject.test.mjs",
+        "test/thin-inject-telemetry.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-inject-telemetry"
+    }
+  ]
+}

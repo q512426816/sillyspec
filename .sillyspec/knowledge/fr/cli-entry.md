@@ -9874,3 +9874,79 @@ superseded_by：FR-core-engine-142
 - 场景：收口实测 — Given 交付提交完成；When flow done 实测门运行；Then 全量测试零失败且 lint 零 hard fail，否则整单 FAIL
 全文：.sillyspec/changes/archive/2026-10-14-tick-burst-sidecar-gate/requirements.md#FR-04
 最近确认：7f2643b1db53b8dd28fee111c372f517f7698931
+
+## FR-cli-entry-521 轻量道 flow start 知识命中时 .runtime/knowledge-hits.jsonl 落 type:inject 事件，change/query 字段与既有事件同形，快道/thick 路径行为零变化
+变更：2026-10-15-thin-inject-telemetry
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-inject-telemetry/requirements.md#FR-01
+最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-inject-telemetry:flow:测试绑定FR-01
+  tests: test/thin-inject-telemetry.test.mjs「① thin 命中落盘：事件同形 + 分级字段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-inject-telemetry
+  status: active
+
+## FR-cli-entry-522 遥测事件带分级字段：injectedFiles（正文实际注入的文件）与 mentionedFiles（仅 Sources 行提及的文件）分离，knowledge stats 命中矩阵口径不回归
+变更：2026-10-15-thin-inject-telemetry
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-inject-telemetry/requirements.md#FR-02
+最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-inject-telemetry:flow:测试绑定FR-02
+  tests: test/thin-inject-telemetry.test.mjs「① thin 命中落盘：事件同形 + 分级字段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-inject-telemetry
+  status: active
+
+## FR-cli-entry-523 未命中（matched:false 且零 quicklog）不落盘（与既有口径一致）；遥测写失败不阻断注入本体（fail-soft 既有契约）
+变更：2026-10-15-thin-inject-telemetry
+状态：active
+摘要：主路径（未命中零落盘）；fail-soft
+全文：.sillyspec/changes/archive/2026-10-15-thin-inject-telemetry/requirements.md#FR-03
+最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-inject-telemetry:flow:测试绑定FR-03
+  tests: test/thin-inject-telemetry.test.mjs「② 未命中零落盘」 | test/thin-inject-telemetry.test.mjs「③ 遥测写失败 fail-soft：注入本体不受阻」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-inject-telemetry
+  status: active
+
+## FR-cli-entry-524 新增测试覆盖 thin 命中落盘/未命中零落盘/fail-soft 三态，全量测试与 lint 绿
+变更：2026-10-15-thin-inject-telemetry
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-inject-telemetry/requirements.md#FR-04
+最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-inject-telemetry:flow:测试绑定FR-04
+  tests: test/knowledge-inject.test.mjs | test/thin-inject-telemetry.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-inject-telemetry
+  status: active

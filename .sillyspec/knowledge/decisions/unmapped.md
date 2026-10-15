@@ -3118,3 +3118,11 @@ supersedes：D-004@v1
 理由：提交 subject 行（%s）的 task-NN token 为证据，卡面 allowed_paths 在场时要求提及该 task 的提交触及面与声明面交叠（parseAllowedPaths+pathMatches 与草稿归属同口径）；无卡面退化仅 subject；shouldAutoCheckTask 草稿守卫 ctx 缺席同样保守不勾
 故障面：漏勾方向保守（卡面 allowed_paths 声明面与实际改动不符时退化人工勾选）；execute-batch 两用例的「ctx 缺省草稿照勾」向后兼容钉随本决策更新为保守不勾
 退役判据：task 完成事实锚出现更权威信号（如 review verdict 全链在场）时可退化为纯 review 锚
+
+## D-unmapped-380@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-15-thin-inject-telemetry
+原编号：D-001@v1
+锚点：未记录
+最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
+理由：最大风险：遥测双写膨胀——thin start 高频重入（每次 start/resume 都落一条）可能推高事件量。评估：单条 <2KB、既有 8698 行量级下不构成问题，且「注入发生了」本就是事实记录；若未来需要去重，消费端按 (change,query,at窗口) 聚合即可，不在本变更范围。放弃的方案：①在 knowledge-stats 读数时反推 thin 命中（无法还原、纯猜测）；②给 thin 面也注入正文再记 injectedFiles（改变注入形态，超出遥测导线范围——thin 面按需 Read 是 2026-09-28-knowledge-inject-ranking 定下的口径）；③同步写 hits 改异步队列（引入落盘时序复杂度，违背 R-04 简单 fail-soft 先例）。
