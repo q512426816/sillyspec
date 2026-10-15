@@ -80,10 +80,12 @@ const realFail = {
 const ctxValid = { gitDir: '/fake/repo', base: 'a'.repeat(40), head: 'b'.repeat(40) }
 const ctxIncomplete = { gitDir: '/fake/repo', base: null, head: 'b'.repeat(40) }
 
-// ── ctx 缺省（向后兼容）：草稿不管 changedFiles 都勾（现行判定）──
-console.log('--- ctx 缺省：现行判定不受影响（向后兼容）---')
-eq(shouldAutoCheckTask(draftEmptyFiles, false, null), true, 'ctx 缺省 + 草稿空 changedFiles → 勾（现行）')
-eq(shouldAutoCheckTask(draftWithFiles, false, null), true, 'ctx 缺省 + 草稿有文件 → 勾（现行）')
+// ── ctx 缺省：草稿保守不勾（2026-10-15-pitfall-batch-clearance FR-08 契约更新——坑
+//    wt-commit-auto-tick-unimplemented-tasks 连带：ctx=null 直接放行使 cannot_verify 草稿
+//    无实现核验即被代勾。新契约同 endtoend 用例：草稿无锚不勾，真实 pass/fail 判定不变）──
+console.log('--- ctx 缺省：草稿保守不勾（无实现核验不代勾）---')
+eq(shouldAutoCheckTask(draftEmptyFiles, false, null), false, 'ctx 缺省 + 草稿空 changedFiles → 保守不勾')
+eq(shouldAutoCheckTask(draftWithFiles, false, null), false, 'ctx 缺省 + 草稿有文件 → 保守不勾')
 eq(shouldAutoCheckTask(realPass, false, null), true, 'ctx 缺省 + 真实 pass → 勾')
 eq(shouldAutoCheckTask(realFail, false, null), false, 'ctx 缺省 + fail → 不勾')
 

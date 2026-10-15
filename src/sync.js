@@ -273,6 +273,32 @@ function combineSignals(external, timeoutMs = REQUEST_TIMEOUT_MS) {
   return external ? AbortSignal.any([timeoutSignal, external]) : timeoutSignal;
 }
 
+/**
+ * 非 2xx 回显折叠（坑 probe-noise-and-commit-suggest-quality 坑C，2026-10-15 消费仓实证：
+ * 409 冲突响应体含整段 platform_progress 大对象，text.slice(0,200) 密排回显挂在每条 CLI 命令
+ * 尾部刷屏）。结构化冲突体折叠为一行摘要（conflict 标识 + 关键时间戳/变更字段，不回显大
+ * 对象）；其他 JSON 体打键名摘要；非 JSON/解析失败退回截断原文（既有形态零回归）。
+ */
+export function formatSyncHttpErrorLine(method, url, status, text) {
+  const raw = String(text || '');
+  let body = null;
+  try { body = JSON.parse(raw); } catch { body = null; }
+  const m = method || 'GET';
+  if (body && typeof body === 'object') {
+    if (body.conflict === true) {
+      const parts = ['conflict'];
+      if (body.change) parts.push(`change=${body.change}`);
+      if (typeof body.last_pushed_at === 'string') parts.push(`last_pushed_at=${body.last_pushed_at}`);
+      if (body.base_ts !== undefined) parts.push(`base_ts=${body.base_ts}`);
+      if (body.reason) parts.push(`reason=${String(body.reason).slice(0, 80)}`);
+      return `[sync] ${m} ${url} → ${status} ${parts.join(' ')}（冲突响应体已折叠为一行）`;
+    }
+    const keys = Object.keys(body).slice(0, 6).join(',');
+    return `[sync] ${m} ${url} → ${status} ${keys ? `json(${keys})` : '(空响应体)'}`;
+  }
+  return `[sync] ${m} ${url} → ${status} ${raw.slice(0, 200)}`;
+}
+
 async function fetchJson(url, options = {}) {
   const signal = combineSignals(options.signal);
   // noMute 是本模块的闸门开关不是 fetch 参数，先剥掉再透传
@@ -281,7 +307,7 @@ async function fetchJson(url, options = {}) {
     const res = await fetch(url, { ...init, signal });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
+      const line = formatSyncHttpErrorLine(options.method, url, res.status, text);
       // 连接类失败（404=端点未就绪 / 5xx）走跨进程噪音闸：平台未就绪期每条命令的自动
       // 同步都撞同一批失败，重复刷屏淹没门禁输出（见 sync-noise.js 模块头）。409 冲突与
       // 其余 4xx 业务态每轮都该看见，不走闸。用户显式命令（connect health ping）传 noMute。
@@ -320,7 +346,7 @@ async function fetchJsonWithStatus(url, options = {}) {
       try { body = JSON.parse(text); } catch { body = null; }
     }
     if (!res.ok) {
-      const line = `[sync] ${options.method || 'GET'} ${url} → ${res.status} ${text.slice(0, 200)}`;
+      const line = formatSyncHttpErrorLine(options.method, url, res.status, text);
       if (!noMute && isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
     }

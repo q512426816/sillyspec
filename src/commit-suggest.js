@@ -17,7 +17,7 @@
  *   C. 阶段产出：changed paths 按路径模式归 scan/brainstorm/plan/execute/archive/knowledge
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, relative } from 'path'
 import { DatabaseSync } from 'node:sqlite'
 import { gitQuiet, safeGit, stageArchiveArtifacts } from './git-helper.js'
 import { resolveSpecDir } from './run/shared.js'
@@ -117,6 +117,12 @@ export function collectCommitContext({ cwd, specDir = null }) {
   const stat = gitQuiet(cwd, ['diff', 'HEAD', '--stat']) || (changedPaths.length > 0 ? `（${changedPaths.length} 个文件待首提交）` : '')
 
   // ── 来源 A：QUICKLOG（主 quicklog + 各活跃变更归属 quicklog）──
+  // 并行会话噪声锚定（坑 probe-noise-and-commit-suggest-quality 坑B，2026-10-15 消费仓实证：
+  // 归档提交时他并行 quick 会话的 QUICKLOG 新条目（时间窗过滤粗筛通过）把 feat 建议劫持成
+  // 「fix: quick 修复 + 阶段产出」——type 误判 + 凭空 quick 字样。quick 来源现加锚「quicklog
+  // 文件属于本次提交变更集」（porcelain 含 staged/unstaged/untracked）：不在变更集的 quicklog
+  // 条目不参与建议（时间窗保留作首道粗筛，零条目时无建议行为不变）。
+  const changedSet = new Set(changedPaths.map(p => String(p).replace(/\\/g, '/')))
   const quickFiles = []
   try {
     for (const f of readdirSync(join(specBase, 'quicklog'))) {
@@ -133,6 +139,7 @@ export function collectCommitContext({ cwd, specDir = null }) {
   const quickEntries = quickFiles
     .flatMap(file => parseQuicklogEntries(file).map(e => ({ ...e, file })))
     .filter(e => !lastCommitKey || e.time > lastCommitKey)
+    .filter(e => changedSet.has(relative(cwd, e.file).replace(/\\/g, '/')))
     .sort((a, b) => (a.time < b.time ? -1 : 1))
   const doneQuick = quickEntries.filter(e => e.status === '已完成')
 
@@ -154,6 +161,27 @@ export function collectCommitContext({ cwd, specDir = null }) {
       if (m) checkedTasks.push({ change: c, item: `${m[1]}: ${m[2].trim()}` })
     }
   }
+
+  // ── 来源 B2：归档产物任务面（坑 probe-noise-and-commit-suggest-quality 坑B 连带）──
+  // apply 后 tasks.md 移到 changes/archive/<变更>/——来源 B 的 mtime 锚对已提交面恒失效
+  // （任务勾选随 execute 提交走，mtime 早于上次 commit → hasTasks 恒 false → 归档提交被判
+  // fix）。归档目录下 tasks.md 在本次变更集时解析其 [x] 行进 task 面（归档提交的 feat 语义正源）。
+  try {
+    const archDir = join(specBase, 'changes', 'archive')
+    if (existsSync(archDir)) {
+      for (const c of readdirSync(archDir)) {
+        const tp = join(archDir, c, 'tasks.md')
+        try {
+          if (!statSync(tp).isFile()) continue
+        } catch { continue }
+        if (!changedSet.has(relative(cwd, tp).replace(/\\/g, '/'))) continue
+        for (const line of readFileSync(tp, 'utf8').split('\n')) {
+          const m = line.match(/^[-*]\s*\[[xX]\]\s*(task-\d+)\s*[:：]?\s*(.*)/)
+          if (m) checkedTasks.push({ change: c, item: `${m[1]}: ${m[2].trim()}` })
+        }
+      }
+    }
+  } catch { /* 归档扫描失败静默（来源面缺省，行为回退修复前） */ }
 
   // ── 来源 C：阶段产出（changed paths 按模式归类去重）──
   const stageSet = new Set()
@@ -195,11 +223,24 @@ export function collectCommitContext({ cwd, specDir = null }) {
       type = 'feat'
       subject = `feat: 变更交付 + quick 修复 ${doneQuick.length} 项`
     } else {
-      type = 'fix'
-      subject = `fix: quick 修复 + 阶段产出`
+      // 纯阶段产出（坑 probe-noise-and-commit-suggest-quality 坑B，2026-10-15 实证：原
+      // 「fix: quick 修复 + 阶段产出」在无任何 quick 证据时凭空捏造 quick 语义且误判 fix——
+      // 无 task 无 quick 的归档/知识面提交按 chore 归档语义建议）
+      type = 'chore'
+      subject = `chore: 阶段产出归档（${stageArtifacts.join('、')}）`
     }
     if (doneQuick.length >= 2 || hasTasks || hasStages) {
-      for (const q of doneQuick) bodyLines.push(`- quick ${q.qlId}: ${q.title}`)
+      // body 与 subject 去重（坑同上：quick ≤2 条时标题已全列 subject，body 原样重复无信息量）
+      const subjectListed = doneQuick.length <= 2 ? new Set(doneQuick.map(q => q.title)) : null
+      for (const q of doneQuick) {
+        // 标题已列 subject 时 body 仍保留 qlId 行（去重不丢审计锚——标题可省，qlId 是
+        // QUICKLOG 对账锚点，既有测试契约钉住 body 含 qlId）
+        if (subjectListed && subjectListed.has(q.title)) {
+          bodyLines.push(`- quick ${q.qlId}（标题见上）`)
+          continue
+        }
+        bodyLines.push(`- quick ${q.qlId}: ${q.title}`)
+      }
     }
     for (const t of checkedTasks) bodyLines.push(`- ${t.change} ${t.item}`)
     for (const s of stageArtifacts) bodyLines.push(`- 阶段产出: ${s}`)

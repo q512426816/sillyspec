@@ -674,40 +674,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // 勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义），假勾防线由
   // detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账承担。
   if (stageName === 'execute' && changeName) {
-    // 自动勾选（full-autopilot-parity，R21 thin 实证迁移）：execute --done 时解析 run 内提交的
-    // task-NN token，自动勾选 tasks.md 未勾条目——agent 手动勾选是 R19/R20 的行为惯性（tick-loop-nudge
-    // 提示词无效），机器代勾与 thin 的 flow done 同逻辑。fail-soft。
-    try {
-      const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
-      if (existsSync(_tasksMdPath)) {
-        const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
-        let _tickCommits = ''
-        try {
-          if (existsSync(_runIdFile)) {
-            _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', 'HEAD~20..HEAD']) || ''
-          }
-        } catch {}
-        if (!_tickCommits) _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', '-20']) || ''
-        if (_tickCommits) {
-          const _texts = String(_tickCommits).split('\x1e').map(x => x.trim()).filter(Boolean).join('\n')
-          const _evidenced = new Set()
-          for (const m of _texts.matchAll(/task-(\d{1,2})/gi)) _evidenced.add(String(Number(m[1])).padStart(2, '0'))
-          if (_evidenced.size > 0) {
-            let _md = readFileSync(_tasksMdPath, 'utf8')
-            let _ticked = 0
-            for (const nn of _evidenced) {
-              const re = new RegExp(`^- \\[ \\](.*task-${nn}[:\\s])`, 'm')
-              if (re.test(_md)) { _md = _md.replace(re, `- [x]$1`); _ticked++ }
-            }
-            if (_ticked > 0) {
-              const { writeAtomicSync } = await import('../fs-atomic.js')
-              writeAtomicSync(_tasksMdPath, _md)
-              console.log(`✅ [自动勾选] ${_ticked} 个任务有提交证据但未勾——已机器代勾（full-autopilot-parity）`)
-            }
-          }
-        }
-      }
-    } catch { /* auto-tick fail-soft */ }
+    // 自动勾选（full-autopilot-parity，R21 thin 实证迁移）：代勾判据/实现见
+    // autoTickTasksFromCommitSubjects（subject token × allowed_paths 实现事实锚）。
+    await autoTickTasksFromCommitSubjects({ changeName, cwd, specBase, platformOpts })
     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
@@ -1533,8 +1502,10 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
   if (isExplicitReviewWrite(r.review)) return true
 
   // W2 task-04 草稿零 diff 守卫（FR-03）
-  // ctx 给定且 review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空
-  if (ctx && r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
+  // review 为自动草稿时，要求 changedFiles 非空且实测 diff 非空。ctx 缺席（直写/主仓形态
+  // buildDraftContext 返 null）同样保守不勾——原「ctx=null 直接放行」使 cannot_verify 草稿
+  // 无任何实现核验即被代勾（坑 wt-commit-auto-tick-unimplemented-tasks 连带，2026-10-15）。
+  if (r.review?.reviewerNotes && r.review.reviewerNotes.includes('auto-generated draft')) {
     const taskId = r.review.task || 'task-NN'
     const unlockCmd = `sillyspec review write${changeName ? ` --change ${changeName}` : ' --change <变更名>'} --task ${taskId} --spec pass --quality pass --force --changed-files <文件>`
     const changedFiles = r.review.changedFiles || []
@@ -1542,8 +1513,8 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
       console.warn(`⚠️ 草稿 review changedFiles 为空，跳过自动勾选（task=${taskId}）——解锁：${unlockCmd}（纯验证任务用 --changed-files "" + --evidence "<验证说明>"）`)
       return false
     }
-    if (!ctx.gitDir || !ctx.base || !ctx.head) {
-      console.warn(`⚠️ ctx 信息不完整（gitDir=${ctx.gitDir}, base=${ctx.base}, head=${ctx.head}），跳过草稿 diff 校验，保守不勾（task=${taskId}）——解锁：${unlockCmd}`)
+    if (!ctx || !ctx.gitDir || !ctx.base || !ctx.head) {
+      console.warn(`⚠️ ctx 缺席或不完整（gitDir=${ctx && ctx.gitDir}, base=${ctx && ctx.base}, head=${ctx && ctx.head}），跳过草稿 diff 校验，保守不勾（task=${taskId}）——解锁：${unlockCmd}`)
       return false
     }
     // 预取路径：一次全量 diff 文件集内存归属（autoCheckPlanFromReviews/批量路径已 prefetch）
@@ -1573,6 +1544,86 @@ export function shouldAutoCheckTask(r, endToEnd, ctx = null, changeName = '') {
 
   return true
 }
+/**
+ * execute --done 的 full-autopilot 代勾（独立函数供测试直驱；completeStep execute 分支调用）。
+ *
+ * 实现事实锚（坑 wt-commit-auto-tick-unimplemented-tasks，2026-10-15 消费仓两次实证：原按
+ * %B 提交全文提 token——task-01 提交正文提及 task-02/03/04 即全被误勾，批量完成判定与续跑
+ * 跳过双失真）：证据源收敛为提交 subject 行（%s）的 task-NN token，且任务卡 allowed_paths
+ * 在场时要求「提及该 task 的提交触及面 × allowed_paths」交叠（parseAllowedPaths +
+ * pathMatches，与草稿归属同口径）；无卡面/无 allowed_paths 退化为仅 subject token。无锚不勾。
+ * fail-soft（异常零行为）。
+ * @param {{ changeName: string, cwd: string, specBase: string, platformOpts?: object }} opts
+ */
+export async function autoTickTasksFromCommitSubjects({ changeName, cwd, specBase, platformOpts = {} }) {
+  try {
+    const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
+    if (!existsSync(_tasksMdPath)) return { ticked: 0, skippedNoAnchor: 0 }
+    const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
+    let _tickLog = ''
+    try {
+      if (existsSync(_runIdFile)) {
+        _tickLog = gitQuiet(cwd, ['log', '--name-only', '--format=%x1e%s', 'HEAD~20..HEAD'], { trim: false }) || ''
+      }
+    } catch {}
+    if (!_tickLog) _tickLog = gitQuiet(cwd, ['log', '--name-only', '--format=%x1e%s', '-20'], { trim: false }) || ''
+    if (_tickLog) {
+      // 逐提交解析：首行 = subject（token 证据面——正文散文提及不是实现证据），其余行 = 该提交触及文件
+      const _evidenced = new Map()
+      for (const _chunk of String(_tickLog).split('\x1e')) {
+        const _lines = String(_chunk || '').split('\n').map(x => x.trim()).filter(Boolean)
+        if (_lines.length === 0) continue
+        for (const m of _lines[0].matchAll(/task-(\d{1,2})/gi)) {
+          const nn = String(Number(m[1])).padStart(2, '0')
+          if (!_evidenced.has(nn)) _evidenced.set(nn, new Set())
+          for (const f of _lines.slice(1)) _evidenced.get(nn).add(f)
+        }
+      }
+      if (_evidenced.size > 0) {
+        // 任务卡 allowed_paths 索引（卡面读取失败 → 无卡面口径：仅 subject token）
+        const _allowedByTask = new Map()
+        let _pathMatches = null
+        try {
+          const { parseAllowedPaths } = await import('../stages/plan-postcheck.js')
+          ;({ pathMatches: _pathMatches } = await import('../change-list.js'))
+          const _tasksDir = join(specBase, 'changes', changeName, 'tasks')
+          for (const nn of _evidenced.keys()) {
+            const _cardPath = join(_tasksDir, `task-${nn}.md`)
+            if (existsSync(_cardPath)) {
+              const _paths = parseAllowedPaths(readFileSync(_cardPath, 'utf8'))
+                .map(p => String(p).replace(/^NEW:\s*/, '').trim()).filter(Boolean)
+              if (_paths.length > 0) _allowedByTask.set(nn, _paths)
+            }
+          }
+        } catch { /* 卡面读取失败 → 无锚退化为仅 subject token（与无卡面同口径） */ }
+        let _md = readFileSync(_tasksMdPath, 'utf8')
+        let _ticked = 0
+        let _skippedNoAnchor = 0
+        for (const [nn, _files] of _evidenced) {
+          const _allowed = _allowedByTask.get(nn)
+          if (_allowed && _pathMatches && ![..._files].some(f => _allowed.some(p => _pathMatches(f, p)))) {
+            _skippedNoAnchor++
+            continue // subject 提及但触及面与声明面零交叠——无实现事实锚不勾
+          }
+          const re = new RegExp(`^- \\[ \\](.*task-${nn}[:\\s])`, 'm')
+          if (re.test(_md)) { _md = _md.replace(re, `- [x]$1`); _ticked++ }
+        }
+        if (_ticked > 0) {
+          const { writeAtomicSync } = await import('../fs-atomic.js')
+          writeAtomicSync(_tasksMdPath, _md)
+          console.log(`✅ [自动勾选] ${_ticked} 个任务有实现证据（提交 subject token${_allowedByTask.size > 0 ? ' × allowed_paths 交叠' : ''}）但未勾——已机器代勾（full-autopilot-parity）`)
+        }
+        if (_skippedNoAnchor > 0) {
+          console.log(`ℹ️ [自动勾选] ${_skippedNoAnchor} 个 task 号有 subject token 但触及面与 allowed_paths 零交叠——不代勾（无实现事实锚），完成时请人工核对勾选`)
+        }
+        return { ticked: _ticked, skippedNoAnchor: _skippedNoAnchor }
+      }
+    }
+    return { ticked: 0, skippedNoAnchor: 0 }
+  } catch { /* auto-tick fail-soft */ }
+  return { ticked: 0, skippedNoAnchor: 0 }
+}
+
 export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts }) {
   if (stageName !== 'execute' || !changeName) {
     return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
@@ -1714,7 +1765,7 @@ export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
   }
 }
 
-async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
+export async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
   try {
     const changeDir = join(specBase, 'changes', changeName)
     const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)
@@ -1748,6 +1799,23 @@ async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBa
     // → 每个 task 进 blockedTasks → 批量完成静默失效
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    // ── 缺席草稿自动补齐（坑 task-review-retired-archive-mismatch，2026-10-15 归档门口实证）──
+    // Task Review 层退役（2026-09-26）后 execute 批量完成不再产 per-task review.json，但本函数
+    // 下方复核循环与 archive step2 完成度判定（真相源=review.json verdict）仍以它在场为前提——
+    // 正常走完五阶段的变更到归档门口必然全量「review.json 缺失」。退役时 generateTaskReviewDrafts
+    // 只摘了调用点（函数本体与 backfill-reviews 手动通道都在）：此处对缺失面重新接线——机械
+    // 幂等（已存在不覆盖人工/子代理 verdict），失败 fail-open 不阻断批量（最坏退回修复前形态，
+    // 下方复核循环照旧拦）。挂在 runId marker 读取之前：run 缺失时生成器建 run + 写 marker，
+    // 下方循环一次读盘即见。
+    try {
+      const { generateTaskReviewDrafts } = await import('../task-review.js')
+      const draftOut = await generateTaskReviewDrafts({ changeName, cwd, platformOpts })
+      if (draftOut && draftOut.generated > 0) {
+        console.log(`📝 [批量完成前置] 自动补 ${draftOut.generated} 份 per-task review 草稿（机械幂等；archive 完成度真相源在场——草稿 verdict=cannot_verify 仍由 verify 兑证/人工复核升级，summarizeTaskCompletion 单列可见）`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ per-task 草稿自动补齐异常（fail-open，批量完成继续走既有复核循环）: ${(e && e.message) || e}`)
+    }
     const blockedTasks = []
     const { readReview, isValidExecuteRunId } = await import('../task-review.js')
     // runId marker 对全部 task 恒定：循环外一次读盘（原实现逐 task 重复 readFileSync 同一文件）

@@ -4223,6 +4223,51 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
     }
   }
 
+  // —— EOL-only 噪声过滤（坑 verify-close-gate-staggered-exposure 建议④，2026-10-15 消费仓实证：
+  //    gen:types 幂等重生成纯行尾 diff 进 actual 面 → ③类 undeclared 假红，agent 被迫为零内容
+  //    改动补声明或回退）。手法与 run/shared.js quick 审计的 eolOnly 先例同源：同一 git 范围
+  //    跑 plain 名单与 --ignore-cr-at-eol 名单，差集 = 纯行尾差异 → 剔出对账面，eolOnlyFiles
+  //    软留痕。两条硬边界：① 必须正向出现在 plain diff 且内容零变更才剔——absence-based
+  //    （「不在真实集即剔」）会误伤 B3 pathspec/救援窗口来源的已交付文件（它们不在任何
+  //    git diff 里）；② --name-only 不吃 --ignore-cr-at-eol（git 实测怪癖），内容过滤必须走
+  //    --numstat。探测失败 fail-open 不过滤；untracked 天然不在 plain diff 不受影响；删除/
+  //    重命名是内容变更（numstat 在场）不受影响。——
+  const eolOnlyFiles = []
+  try {
+    const eolOnlySet = new Set()
+    const probePair = (dir, refs) => {
+      const plainOut = gitQuiet(dir, ['diff', '--name-only', ...refs], { timeout: 30 * 1000, trim: false })
+      if (plainOut === null) return
+      const realOut = gitQuiet(dir, ['diff', '--numstat', '--ignore-cr-at-eol', ...refs], { timeout: 30 * 1000, trim: false })
+      if (realOut === null) return
+      const real = new Set()
+      for (const l of realOut.split('\n')) {
+        const i = l.lastIndexOf('\t')
+        if (i > 0) real.add(normalizeReconcilePath(l.slice(i + 1)))
+      }
+      for (const f of plainOut.split('\n').map(x => x.trim()).filter(Boolean)) {
+        const n = normalizeReconcilePath(f)
+        if (!real.has(n)) eolOnlySet.add(n)
+      }
+    }
+    // 工作树（HEAD 对照）：主仓 + worktree（form A 双仓各自 HEAD）
+    const probeDirs = [cwd]
+    if (form === 'worktree' && wtMeta && wtMeta.gitDir && wtMeta.gitDir !== cwd) probeDirs.push(wtMeta.gitDir)
+    for (const dir of probeDirs) probePair(dir, ['HEAD'])
+    // 已提交侧：form B B1 同基点（mergeBase 对照工作树）；form A worktree 已提交段（meta 锚点..HEAD）
+    if (form === 'post-apply' && baseAnchor) {
+      probePair(cwd, [baseAnchor])
+    } else if (form === 'worktree' && wtMeta) {
+      const mb = wtMeta.meta && (wtMeta.meta.baselineCommit || wtMeta.meta.actualBaseHash || wtMeta.meta.baseHash)
+      if (mb) probePair(wtMeta.gitDir, [mb, 'HEAD'])
+    }
+    for (const f of eolOnlySet) {
+      if (union.has(f)) {
+        union.delete(f)
+        eolOnlyFiles.push(f)
+      }
+    }
+  } catch { /* EOL 探测异常 → 不过滤（fail-open，行为与修复前一致） */ }
   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
   // 多会话推进死锁诊断（reconcile-source-isolation，R18-SF-full 实证）：post-apply 形态下
   // 实际面全空（B1 无 ref + porcelain 无未提交面 + 无 apply-pathspec 兜底）= 典型「主仓被
@@ -4232,7 +4277,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
   const parallelAdvanceHint = (form === 'post-apply' && files.length === 0 && union.size === 0 && !sources.some((s) => s.startsWith('main:diff-merge-base') || s.startsWith('apply-pathspec')))
     ? '⚠️ actual 源全空（无分支锚点 diff + 主仓无未提交面 + 无 apply-pathspec 兜底）——典型「主仓被并行会话推进」形态（本变更的提交/暂存可能已被他侧裸提交扫走）。切勿用「暂存物化」自救（touch 文件进共享暂存区——会被再次扫走且污染他侧，R18-SF-full 实证 matched=0 死循环）；出路：① 恢复/登记本变更分支（worktree meta.json 的 branch 字段）让锚定 diff 生效后重跑 ② 确属全量已在他侧提交：与该会话按 AGENTS 规则 18 对账后以该提交为锚核销'
     : null
-  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint }
+  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint, eolOnlyFiles }
 }
 
 /**
@@ -4462,6 +4507,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
     notes.push(`③类另有 ${scaffoldTotal} 个工具/平台脚手架文件（platform ${scaffoldBuckets.platform} / tool ${scaffoldBuckets.tool}，如 ${scaffoldSamples.join('、')}${scaffoldTotal > scaffoldSamples.length ? ' 等' : ''}）已聚合不逐条列——非交付物（scope-audit 设施桶同口径）`)
   }
 
+  if (Array.isArray(actual.eolOnlyFiles) && actual.eolOnlyFiles.length > 0) {
+    notes.push(`EOL-only 剔除：${actual.eolOnlyFiles.length} 个文件仅行尾差异（--ignore-cr-at-eol 对照零内容变更，如 gen 脚本幂等重生成）已剔出对账面——${actual.eolOnlyFiles.slice(0, 5).join('、')}${actual.eolOnlyFiles.length > 5 ? ' 等' : ''}（.gitattributes 统一行尾可根治）`)
+  }
   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
   return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources, crossRepo }

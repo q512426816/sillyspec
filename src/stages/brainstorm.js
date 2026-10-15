@@ -188,6 +188,8 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
 - evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）
 - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
 - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
+- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
+- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
 \`\`\`
 
 - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
@@ -491,6 +493,8 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
 - evidence: design.md §3/§7, src/cache/...
 - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
 - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
+- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
+- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
 \`\`\`
 
 ### 输出格式

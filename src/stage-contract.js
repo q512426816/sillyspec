@@ -1059,8 +1059,12 @@ const API_COVERAGE_HEADING_RE = /^## 接口验证覆盖矩阵/m
 const API_ENDPOINT_CELL_RE = /(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|]+)/
 /** 声明占位行（D-005 零解析降级侧，骨架「本变更接口面：N 端点（agent 声明）」字面同源） */
 const API_DECLARED_ROW_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
-/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态） */
-const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;）)]+)/g
+/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态）。
+ *  字符类左右括号对称排除（坑 verify-close-gate-staggered-exposure，2026-10-15 消费仓 node 直调
+ *  实证：原只排右括号）不排左括号（——`GET /api/x（注记）` 的路径吞成 `/api/x（注记`，与解析面
+ *  永不匹配 → 恒空指，报错文案却指向「design.md 未命中」误导排查方向）。中文（英文、全/半角
+ *  四形与既有分隔符一并终止捕获。 */
+const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;（）()]+)/g
 /** 探索行标记（骨架文法注释字面同源：证据列含 [探索]） */
 const API_EXPLORATION_MARK_RE = /\[探索\]/
 
@@ -1261,9 +1265,16 @@ export function judgeApiCoverageMatrix(args) {
     }
   }
   if (anchorViolations.length > 0) {
+    // 空指诊断（坑 verify-close-gate-staggered-exposure 建议③，2026-10-15 实证：报错只说「未命中
+    // 解析面」不展示解析面实际内容——「锚点吞字」与「design 缺表」分不清，agent 被引去改 design
+    // 文档白做功。附上 parseSet 实际端点集一眼对齐）。
+    const parseFaceDesc = parseSet.size > 0
+      ? [...parseSet].join('；')
+      : '（解析面为空——design.md 接口段未解析到端点，先表格化接口段再跑 verify-probes --init）'
     errors.push(
       `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
       `（covered/partial 证据须含锚点五形态之一，可复制样例：design接口表#POST /api/xx（# 后必须 METHOD /path 且命中 design 接口段解析面，仅表名/行号不计）/ 权限矩阵[admin×读] / 契约表@任务卡字段清单 / DDL@users.id / 载荷@e2e_body.json；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
+      `design 接口段实际解析面端点集：${parseFaceDesc}——design接口表# 锚点路径须与之逐字一致。` +
       `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
     )
   }

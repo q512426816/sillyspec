@@ -120,6 +120,8 @@ created_at: <now-datetime>
 - normalized_requirement: 可测试的约束
 - impacts: [FR-01, task-01, verify-01]
 - evidence: 用户回答轮次或代码/文档路径
+- 否决理由: <一句话核心劣势>（status=rejected 时必填——distill 入库前置要求，缺失则该条目不进知识库防复潮通道）
+- 复潮条件: <何种信号下可重议本方案>（status=rejected 时必填）
 \`\`\`
 
 > 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。「生成规范文件」步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。

@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1995`），契约转换图（`src/stage-contract.js:1995`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2021`），契约转换图（`src/stage-contract.js:2021`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -59,7 +59,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **推进不是自动的，分三层**：
 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
-2. **步骤内推进** `completeStep`（`src/run/complete.js:166`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+2. **步骤内推进** `completeStep`（`src/run/complete.js:163`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
 3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:477`）按状态机推荐下一阶段命令。
 
 **重开与级联**：`reopenStage`（`src/progress/stage-machine.js:627`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1995` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2021` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:203` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
@@ -78,10 +78,10 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
-**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:687`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:1413`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:958`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1488`）。
+**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:703`，统一收尾管线）顺序：
+1. `runValidators`（客观产物校验，`src/stage-contract.js:1427`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:1066`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1507`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:297`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
@@ -161,7 +161,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | **L7 机器接口** | `src/machine-interface.js` | `gate`/`derive` 无状态只读子命令，输出 envelope JSON 供外部 daemon |
 | **L8 工具层** | `fs-atomic.js`、`git-helper.js`、`db.js`、`constants.js` | 跨切面底层原语 |
 
-> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1069`）。
+> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1085`）。
 
 ### 3.2 调度内核（run/）职责
 
@@ -325,4 +325,4 @@ TA  Node22 ESM · node:sqlite(WAL) · git worktree · 跨平台 fs-atomic · hus
 | 存储引擎 | `docs/sillyspec/file-lifecycle/storage-and-state.md:35` 写"better-sqlite3 原生绑定" | 已迁 `node:sqlite` | `src/db-engine.js:8` |
 | propose 阶段 | `docs/sillyspec/file-lifecycle.md` 阶段表残留 `propose | 7` 行 | 无独立 propose 阶段（已并入 brainstorm） | `src/stages/index.js:15-26`（10 阶段，无 propose） |
 | scan 步骤数 | `stage-artifacts.md` 写 scan 10 步 | scan 11 步 | `src/stages/scan.js` |
-| `.bak` 主动写时机 | `db.js:104`/`progress.js:934` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |
+| `.bak` 主动写时机 | `db.js:104`/`progress.js:950` 注释称"写前自动备份为 .bak" | `_write`/`transaction` 路径未见主动 copy 到主 `.bak`（主 `.bak` 实际由 `_openWithFallback` 恢复时使用 + import 的 `.pre-import-*.bak` 产生） | 已订正（见 ql-20260814-003）：4 处描述统一为「node:sqlite 提交即持久化、`.bak` 恢复是向后兼容兜底」 |

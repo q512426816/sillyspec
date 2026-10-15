@@ -958,6 +958,99 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'target_files ②类（missing_declared）阻断' })
       docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'target_files 对账阻断（②类「声明未做」——计划落空，明细见上）' })
     }
+    // ── 探针一致性 / draft 篡改门禁 / ceremony 双跑三门（坑 verify-close-gate-staggered-exposure，
+    //    2026-10-15 消费仓四轮 --done 实证：三门原在实测门之后逐个 fail-fast——每轮先付 195s
+    //    实测再见一个新文档问题，四轮纯往返约 20 分钟。三门数据面（facts 已于 runValidators 前
+    //    backfill、verify-result.md 正文/sidecar、ceremony tier 文件、git diff）与实测结果零数据
+    //    依赖——照 required-evidence/reconcile 先例前移并入 docGateFailures 收集（R16 聚合一次
+    //    全列），失败统一在检查点 A 回滚（进度不丢，修复后重跑 --done）。──
+    // 探针一致性（task-03 / ir-stage-p3b D-002@v1 方案A）：「#### 探针 N」机械预填段长在 agent
+    // 可编辑的正文里，其防篡改基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。
+    // checkProbeConsistency 重跑只读探针与正文锚点对账，分级（D-003）：probe1/probe6 不符 =
+    // ERROR → 收集阻断（正文预填段疑似被篡改）；probe3/probe5 环境敏感维度 + R-06 HEAD 前进
+    // 降级 = WARNING → 放行告警（drift）；skipped/degraded → 放行提示。
+    // 接线形态照 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
+    // supportedFixes）+ verify-runs 落盘 + docGateFailures。
+    const { checkProbeConsistency } = await import('../verify-postcheck.js')  // isStrictChange 复用本块 reconcile 段既有 import
+    const probeCheck = checkProbeConsistency({
+      // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
+      // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency
+      // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
+      cwd, specBase, changeName,
+      runtimeRoot: reconcileRuntimeRoot,
+      // IR 严格档（2026-09-07-ir-hardening D-002@v1）：created_at ≥ IR_STRICT_SINCE 的变更
+      // 探针子节全缺 = ERROR（存量 skip 语义零变化）；fail-open（读不到 → false 落豁免）
+      strictMode: isStrictChange({ pm, cwd, changeName }),
+    })
+    const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
+    const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
+    // 探针7 covered 证据锚点 advisory（坑 probe7-covered-anchor-missing，2026-09-15 复盘：7 行
+    // covered 证据缺 file:line 被审查打回——预填说明已载明口径，机器在 --done 时点再拦一道，
+    // 省一轮人工往返）。advisory 不阻断；独立模块零环（verify-probes 是多会话冲突面，不碰）。
+    try {
+      const { checkProbe7AnchorCoverage } = await import('../probe7-anchor-check.js')
+      const p7ReportPath = join(specBase, 'changes', changeName, 'verify-result.md')
+      if (existsSync(p7ReportPath)) {
+        const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
+        if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
+          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
+          for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
+            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
+          }
+          if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
+        }
+      }
+    } catch { /* 锚点校验异常 fail-soft 不影响 gate */ }
+    // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
+    // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
+    // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
+    // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
+    writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
+    if (probeBlocked) {
+      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
+      docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: '探针一致性抽查 error 阻断（明细见上）' })
+    }
+    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
+    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
+    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 收集阻断
+    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
+    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
+    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
+    try {
+      const { checkDraftIntegrity } = await import('../verify-draft.js')
+      const draftCheck = checkDraftIntegrity({
+        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
+        changeName, runtimeRoot: reconcileRuntimeRoot,
+      })
+      if (draftCheck.applicable && !draftCheck.ok) {
+        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
+        for (const v of draftCheck.violations) console.error(`   - ${v}`)
+        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
+        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
+        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'verify-result.md 机器预填段篡改门禁（明细见上）' })
+      }
+    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
+    // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
+    //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
+    //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入收集
+    //    硬 flag 面（照 reconcile/probe 先例检查点 A 统一回滚，修复后重跑 --done 进度不丢）。
+    //    检查/记账/种子收敛在 runCeremonyDualRunCheck 单点（archive 出口 complete-handlers.js
+    //    runArchiveCeremonyDualRunExit 同款消费）；skipped（档位文件缺失=存量变更零红门禁）/
+    //    degraded（git 不可用降级）零噪音放行；整体 fail-soft——检查自身异常降级放行（异常
+    //    不是低报，对齐 archive 出口同款处置）。specBase/runtimeRoot 与四邻检查同源。──
+    try {
+      const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
+      const ceremonyCheck = await runCeremonyDualRunCheck({
+        cwd, specBase, changeName,
+        runtimeRoot: reconcileRuntimeRoot,
+      })
+      printCeremonyDualRunCheck(ceremonyCheck)
+      if (ceremonyCheck.status === 'mismatch' && ceremonyCheck.severity === 'error') {
+        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'ceremony 双跑 mismatch（声明档低报，明细见上）' })
+      }
+    } catch (e) {
+      console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断 verify，fail-soft）: ${(e && e.message) || e}`)
+    }
   }
   // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
   //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
@@ -1351,95 +1444,6 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyDeletionCheck, printVerifyDeletionCheck } = await import('../verify-postcheck.js')
     const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
     printVerifyDeletionCheck(deletionCheck)
-    // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
-    // 「#### 探针 N」机械预填段（verify-probes --init 生成）长在 agent 可编辑的正文里，其防篡改
-    // 基准是正文锚点而非 verify-facts.json（删底稿绕不过防护）。checkProbeConsistency 重跑只读
-    // 探针与正文锚点对账，分级（D-003）：probe1/probe6 不符 = ERROR → 阻断回滚（正文预填段疑似
-    // 被篡改）；probe3/probe5 环境敏感维度 + R-06 HEAD 前进降级 = WARNING → 放行告警（drift）；
-    // skipped（存量旧格式报告/无 changeName）/degraded（重跑异常 fail-soft）→ 放行提示。
-    // 接线形态照上方 P3a reconcile 先例：envelope + print（ERROR 时 console.error 逐条 mismatch +
-    // supportedFixes）+ verify-runs 落盘 + rollbackCompletionAndReturn。
-    const { checkProbeConsistency, isStrictChange } = await import('../verify-postcheck.js')
-    const probeCheck = checkProbeConsistency({
-      // 四参与 reconcile 同源取值：cwd/specBase/changeName 原样透传；runtimeRoot 复用上方
-      // reconcileRuntimeRoot（resolveRuntimeRoot(platformOpts, specBase)）——checkProbeConsistency
-      // 的锚点产物实际都在 changeDir，此参为统一传参签名对齐预留，口径一处定义不二算
-      cwd, specBase, changeName,
-      runtimeRoot: reconcileRuntimeRoot,
-      // IR 严格档（2026-09-07-ir-hardening D-002@v1）：created_at ≥ IR_STRICT_SINCE 的变更
-      // 探针子节全缺 = ERROR（存量 skip 语义零变化）；fail-open（读不到 → false 落豁免）
-      strictMode: isStrictChange({ pm, cwd, changeName }),
-    })
-    const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
-    const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
-    // 探针7 covered 证据锚点 advisory（坑 probe7-covered-anchor-missing，2026-09-15 复盘：7 行
-    // covered 证据缺 file:line 被审查打回——预填说明已载明口径，机器在 --done 时点再拦一道，
-    // 省一轮人工往返）。advisory 不阻断；独立模块零环（verify-probes 是多会话冲突面，不碰）。
-    try {
-      const { checkProbe7AnchorCoverage } = await import('../probe7-anchor-check.js')
-      const p7ReportPath = join(specBase, 'changes', changeName, 'verify-result.md')
-      if (existsSync(p7ReportPath)) {
-        const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
-        if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
-          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
-          for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
-            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
-          }
-          if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
-        }
-      }
-    } catch { /* 锚点校验异常 fail-soft 不影响 gate */ }
-    // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
-    // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
-    // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
-    // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
-    writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
-    if (probeBlocked) {
-      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-    }
-    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
-    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
-    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 阻断回滚
-    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
-    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
-    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
-    try {
-      const { checkDraftIntegrity } = await import('../verify-draft.js')
-      const draftCheck = checkDraftIntegrity({
-        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
-        changeName, runtimeRoot: reconcileRuntimeRoot,
-      })
-      if (draftCheck.applicable && !draftCheck.ok) {
-        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
-        for (const v of draftCheck.violations) console.error(`   - ${v}`)
-        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
-        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-      }
-    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
-    // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
-    //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
-    //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入 verify
-    //    errors 硬 flag 面——阻断回滚（照 reconcile/probe 先例 rollbackCompletionAndReturn，修复后
-    //    重跑 --done 进度不丢）。检查/记账/种子收敛在 runCeremonyDualRunCheck 单点（archive 出口
-    //    complete-handlers.js runArchiveCeremonyDualRunExit 同款消费）；skipped（档位文件缺失=存量
-    //    变更零红门禁）/degraded（git 不可用降级）零噪音放行；整体 fail-soft——检查自身异常降级
-    //    放行（异常不是低报，对齐 archive 出口同款处置）。specBase/runtimeRoot 与四邻检查同源
-    //    （reconcileRuntimeRoot=resolveRuntimeRoot(platformOpts, specBase)，口径一处定义不二算）。──
-    try {
-      const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
-      const ceremonyCheck = await runCeremonyDualRunCheck({
-        cwd, specBase, changeName,
-        runtimeRoot: reconcileRuntimeRoot,
-      })
-      printCeremonyDualRunCheck(ceremonyCheck)
-      if (ceremonyCheck.status === 'mismatch' && ceremonyCheck.severity === 'error') {
-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-      }
-    } catch (e) {
-      console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断 verify，fail-soft）: ${(e && e.message) || e}`)
-    }
     // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
     // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
     // 同口径回执），消灭「src 改动平移行号 → 下次 docs gate 拦」的人工往返。挂 verify 收尾即

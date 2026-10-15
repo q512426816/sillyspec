@@ -41,11 +41,21 @@ test('① gates.js 三处消费门退役', () => {
   assert.ok(src.includes('readReviewUnsupervisedWaiver'), 'review-unsupervised 豁免凭据保留（Stage Review/align 消费）')
 })
 
-test('② complete.js 生成侧停写（批量完成与代码证据核验保留）', () => {
+test('② complete.js 生成侧停写（批量完成与代码证据核验保留；批量路径草稿重接线 2026-10-15）', () => {
   const src = read('src/run/complete.js')
   assert.ok(!src.includes('await autoCheckPlanFromReviews('), '无 autoCheckPlanFromReviews 调用（--done/完成提示两处均删）')
-  assert.ok(!src.includes("await import('../task-review.js')") || !/import\('\.\.\/task-review\.js'\)[\s\S]{0,120}generateTaskReviewDrafts/.test(src), '无 per-task review 草稿兜底')
   assert.ok(src.includes('detectExecuteBatchFinish'), 'detectExecuteBatchFinish 保留（批量完成）')
+  // 2026-10-15-pitfall-batch-clearance FR-07（坑 task-review-retired-archive-mismatch）：退役时
+  // 「生成侧停写」钉已过时——archive step2 真相源仍要 review.json，正常五阶段变更到归档门口
+  // 全量缺失。新契约：generateTaskReviewDrafts 只允许在 detectExecuteBatchFinish 函数体内
+  // （批量完成路径幂等补缺失草稿）；completeStep 主体/单步完成提示仍零草稿兜底。
+  const fnStart = src.indexOf('export async function detectExecuteBatchFinish')
+  assert.ok(fnStart >= 0, 'detectExecuteBatchFinish 函数体定位')
+  const callIdx = src.indexOf('generateTaskReviewDrafts({ changeName, cwd, platformOpts })')
+  assert.ok(callIdx > fnStart, '草稿生成调用在 detectExecuteBatchFinish 函数体内（批量路径限定）')
+  // completeStep 主体（detectExecuteBatchFinish 定义之前的区域）不得出现草稿兜底调用
+  // （注释里的「与 generateTaskReviewDrafts 同源」提及不算调用——只匹配调用形态）
+  assert.ok(!/generateTaskReviewDrafts\(/.test(src.slice(0, fnStart)), 'completeStep/单步路径无草稿兜底调用')
   // 模块内 autoCheckPlanFromReviews 定义保留（兼容读侧：index.js review-write 钩子 / task-done 消费）
   assert.ok(src.includes('export async function autoCheckPlanFromReviews'), 'autoCheckPlanFromReviews 定义保留（兼容导出）')
 })

@@ -207,7 +207,7 @@
 原编号：D-003@v1
 锚点：sillyhub-daemon/src/interactive/session-manager.ts:_reloadSessionNow
 最近确认：225dd771d
-理由：用户裁决方案 A：把 applyProviderFileSettings（+ codex null 切换宿主凭证镜像扩展）从 task-runner.ts 抽到独立共享模块（provider-file-settings.ts），session-manager `_reloadSessionNow` 构造 newEnv 时对 codex/pi kind 调用并把 CODEX_HOME / PI_CODING_AGENT_DIR 并入新 env（文件层 env 最后合并盖过下层，与 repo://sillyhub/sillyhub-daemon/src/daemon.ts:8706? spawn 路径同模式）；顺带删 reloadWithProvider 的 claude-only 守卫（repo://sillyhub/sillyhub-daemon/src/interactive/session-manager.ts:1617）使 PROVIDER_CONFIG_CHANGED 默认供应商热切换对 codex/pi 也走确定性 reload。否决 B（payload 携带实现细节字段污染消息契约 + 热切换路径享受不到）、C（破坏 driver provider-neutral 契约）。
+理由：用户裁决方案 A：把 applyProviderFileSettings（+ codex null 切换宿主凭证镜像扩展）从 task-runner.ts 抽到独立共享模块（provider-file-settings.ts），session-manager `_reloadSessionNow` 构造 newEnv 时对 codex/pi kind 调用并把 CODEX_HOME / PI_CODING_AGENT_DIR 并入新 env（文件层 env 最后合并盖过下层，与 repo://sillyhub/sillyhub-daemon/src/daemon.ts:8706? spawn 路径同模式）；顺带删 reloadWithProvider 的 claude-only 守卫（repo://sillyhub/sillyhub-daemon/src/interactive/session-manager.ts:1593）使 PROVIDER_CONFIG_CHANGED 默认供应商热切换对 codex/pi 也走确定性 reload。否决 B（payload 携带实现细节字段污染消息契约 + 热切换路径享受不到）、C（破坏 driver provider-neutral 契约）。
 
 ## D-frontend-001@v1 触发时机=仅 turn 空闲可压（轮中禁用）
 状态：implemented

@@ -367,6 +367,31 @@ export function stageReviewMarkerPath(runtimeRoot, stage, changeName) {
 }
 
 /**
+ * stage review 目录读侧归一（坑 stage-review-dir-naming-mismatch，2026-10-15 消费仓三阶段
+ * 连环实证）：规范目录 = `<stage>-<runId>`（runId 自带 review- 前缀，拼出来恰一次 review 字样）。
+ * skill 文档字面 `<stage>-review-<run-id>` + 「run-id 必须 review- 前缀」诱导出两类错位目录：
+ *   ① 裸 runId 目录（agent 拿 marker 值当目录名）：<runId>/
+ *   ② 双前缀目录（字面拼装）：<stage>-review-<runId>/
+ * 本助手按 规范 → ②双前缀 → ①裸 runId 顺序探测 review.json 在场性，返回首个命中目录；全不在
+ * 则返回规范目录（保持既有「期望路径」报错文案语义）。只读不搬文件——写入侧恒规范路径，读侧
+ * 容错让 gate / refresh-hash / autoRefresh 对错位文件天然可用。
+ * @param {string} runtimeRoot - .runtime 绝对路径
+ * @param {string} stage - brainstorm|plan|execute
+ * @param {string} reviewRunId - run id（review-<ts>）
+ * @returns {string} review 目录绝对路径（容错命中或规范缺省）
+ */
+export function resolveStageReviewDir(runtimeRoot, stage, reviewRunId) {
+  const base = join(runtimeRoot, 'stage-reviews')
+  const canonical = join(base, `${stage}-${reviewRunId}`)
+  const doublePrefix = join(base, `${stage}-review-${reviewRunId}`)
+  const bare = join(base, reviewRunId)
+  for (const dir of [canonical, doublePrefix, bare]) {
+    if (existsSync(join(dir, 'review.json'))) return dir
+  }
+  return canonical
+}
+
+/**
  * 获取最新的 stage review run id
  *
  * 优先读 marker 文件（prompt 渲染 {REVIEW_TIER} 时写入，保证 gate 取的 ID == 注入给 agent
@@ -395,33 +420,37 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
     }
   } catch {}
 
-  // fallback：扫描 stage-reviews/<stage>-review-* 目录取字典序最新（向后兼容无 marker 旧数据）
+  // fallback：扫描 stage-reviews/ 目录取字典序最新（向后兼容无 marker 旧数据）。候选两形：
+  // 规范/双前缀 `<stage>-review-*` + 裸 runId `review-*`（坑 stage-review-dir-naming-mismatch
+  // 错位目录——裸目录不编码 stage，须 reviewType 归属校验防跨段误认）
   const dir = join(runtimeRoot, 'stage-reviews')
   if (!existsSync(dir)) return null
   try {
     const entries = readdirSync(dir, { withFileTypes: true })
-      .filter(e => e.isDirectory() && e.name.startsWith(`${stage}-review-`))
-      .map(e => e.name)
-      .sort()
+      .filter(e => e.isDirectory() && (e.name.startsWith(`${stage}-review-`) || e.name.startsWith('review-')))
+      .map(e => ({ name: e.name, runId: e.name.startsWith(`${stage}-`) ? e.name.slice(stage.length + 1) : e.name }))
+      .sort((a, b) => (a.name < b.name ? -1 : 1))
       .reverse()
     if (!entries[0]) return null
     // cross-change 防护（execute 复盘 b1）：changeName 提供时按 review.json 的 reviewedFiles[0] 归属过滤。
     // 契约 reviewedFiles[0] = `changes/<change>/<mainDoc>`（renderReviewJsonContract），据此排除他变更的 review，
     // 否则批量完成 marker 缺失时可能读到 proxy 等其他变更的 acceptance review 报错误导。
+    // 裸目录另加 reviewType 校验（STAGE_REVIEW_TYPE 段专属，防他 stage 的错位文件串台）。
     if (changeName) {
       const matching = entries.find(e => {
         try {
-          const rj = JSON.parse(readFileSync(join(dir, e, 'review.json'), 'utf8'))
+          const rj = JSON.parse(readFileSync(join(dir, e.name, 'review.json'), 'utf8'))
+          if (!e.name.startsWith(`${stage}-`) && rj.reviewType && rj.reviewType !== STAGE_REVIEW_TYPE[stage]) return false
           const r0 = Array.isArray(rj.reviewedFiles) ? String(rj.reviewedFiles[0]) : ''
           return r0.includes(`changes/${changeName}/`)
         } catch { return false }
       })
-      if (matching) return matching.slice(stage.length + 1)
+      if (matching) return matching.runId
       console.warn(`⚠️ 无 ${stage} 的 review marker，且 stage-reviews/ 下无归属变更 ${changeName} 的 review（reviewedFiles 应含 changes/${changeName}/）；为避免跨变更串台不再取最新，返回 null（fail-closed，由调用方报缺 review.json）`)
       return null
     }
-    // entries[0] = "plan-review-2026-..."，剥掉 `${stage}-` 前缀得到 runId "review-2026-..."
-    return entries[0].slice(stage.length + 1)
+    // 规范形 "plan-review-2026-..." 剥 `${stage}-` 前缀得 runId；裸形目录名即 runId
+    return entries[0].runId
   } catch {
     return null
   }
@@ -613,7 +642,8 @@ export function validateStageReview(opts) {
   const errors = []
   const warnings = []
 
-  const reviewDir = join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`)
+  // 读侧目录归一（坑 stage-review-dir-naming-mismatch）：容错命中裸 runId / 双前缀错位目录
+  const reviewDir = resolveStageReviewDir(runtimeRoot, stage, reviewRunId)
   const reviewPath = join(reviewDir, 'review.json')
 
   if (!reviewRunId || !existsSync(reviewPath)) {
@@ -705,7 +735,7 @@ export function validateStageReviewWithAutoRefresh(opts) {
     && result.errors.every(e => String(e).includes('docHash 与主审查文档'))
   if (!mismatchOnly) return { result, autoRefreshed: false }
 
-  const reviewDir = join(opts.runtimeRoot, 'stage-reviews', `${opts.stage}-${opts.reviewRunId}`)
+  const reviewDir = resolveStageReviewDir(opts.runtimeRoot, opts.stage, opts.reviewRunId)
   const reviewPath = join(reviewDir, 'review.json')
   // 定位主文档并重算 hash（与 verifyStageReviewDocHash 同法：reviewedFiles[0] × searchDirs）
   const primaryRel = Array.isArray(result.review.reviewedFiles) ? result.review.reviewedFiles[0] : null
@@ -922,8 +952,11 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
   if (refreshHash) {
     if (fromFile) throw new Error('register-stage-review: --refresh-hash 与 --from 互斥（refresh 就地更新既有 review，adopt 引入新文件）')
     const existingRunId = getLatestStageReviewRunId(runtimeRoot, stage, changeName)
+    // 读侧目录归一（坑 stage-review-dir-naming-mismatch）：--refresh-hash 按 marker 取 runId 后
+    // 经 resolveStageReviewDir 容错定位——review.json 落在裸 runId / 双前缀错位目录也能刷新，
+    // 不再恒报「无对应 run」。
     const existingPath = existingRunId
-      ? join(runtimeRoot, 'stage-reviews', `${stage}-${existingRunId}`, 'review.json')
+      ? join(resolveStageReviewDir(runtimeRoot, stage, existingRunId), 'review.json')
       : null
     if (!existingPath || !existsSync(existingPath)) {
       throw new Error(`register-stage-review: --refresh-hash 找不到 ${stage} 的既有 review.json（marker ${existingRunId || '无'} 无对应 run）——先去掉 --refresh-hash 生成骨架，或派审查子代理产出 review`)

@@ -39,6 +39,9 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
       console.warn(`\n⚠️  rejected 决策缺否决理由/复潮条件（needsWait）——这些条目未写盘，其余条目照常提炼。`)
       console.warn(`   裁决指引（确认归档 --confirm 前处理）：`)
       console.warn(`   ① 补录：把缺失字段补进 ${join(changeDir, 'decisions.md')} 后重跑提炼（幂等）——`)
+      console.warn(`      可复制补丁样例（在对应 D-xxx@vN 条目末尾追加两行，字段名与值之间用冒号+空格）：`)
+      console.warn(`      - 否决理由: <一句话核心劣势>`)
+      console.warn(`      - 复潮条件: <何种信号下可重议本方案>`)
       console.warn(`      node --input-type=module -e "import { distillIntoKnowledge } from '<sillyspec 源码路径>/src/decision-distill.js'; console.log(JSON.stringify(distillIntoKnowledge(${JSON.stringify(changeDir)}, ${JSON.stringify(knowledgeRoot)}, ${JSON.stringify(headHash)}), null, 2))"`)
       console.warn(`   ② 跳过：经用户裁决不入库该条，并在「确认归档」--output 注记跳过原因。`)
     }

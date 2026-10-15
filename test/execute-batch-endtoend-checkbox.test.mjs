@@ -90,9 +90,13 @@ const draftWithFiles = { ok: true, review: { specVerdict: 'cannot_verify', quali
 const draftNoFiles = { ok: true, review: { specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify', reviewerNotes: 'auto-generated draft: test', changedFiles: [] } }
 const realPass = { ok: true, review: { specVerdict: 'pass', qualityVerdict: 'pass' } }
 
-console.log('--- ctx 缺省：现行行为不受影响（向后兼容）---')
-eq(shouldAutoCheckTask(draftWithFiles, false), true, 'ctx 缺省 + 草稿有文件 → 现行勾（向后兼容）')
-eq(shouldAutoCheckTask(draftNoFiles, false), true, 'ctx 缺省 + 草稿无文件 → 现行勾（向后兼容）')
+console.log('--- ctx 缺省：草稿保守不勾（2026-10-15-pitfall-batch-clearance FR-08 契约更新）---')
+// 坑 wt-commit-auto-tick-unimplemented-tasks 连带（2026-10-15 消费仓实证）：原「ctx=null 直接
+// 放行」使 cannot_verify 草稿无任何实现核验即被代勾——批量完成判定与续跑跳过双失真。新契约：
+// 自动草稿在 ctx 缺席（直写/主仓形态 buildDraftContext 返 null）时同样保守不勾（解锁走
+// review write 显式通道）；真实 pass（非草稿）不受影响。
+eq(shouldAutoCheckTask(draftWithFiles, false), false, 'ctx 缺省 + 草稿有文件 → 保守不勾（无实现核验不代勾）')
+eq(shouldAutoCheckTask(draftNoFiles, false), false, 'ctx 缺省 + 草稿无文件 → 保守不勾')
 eq(shouldAutoCheckTask(realPass, false), true, 'ctx 缺省 + 真实 pass → 勾')
 
 console.log('\n--- ctx 给定 + 草稿：零 diff 守卫生效（模拟测试）---')

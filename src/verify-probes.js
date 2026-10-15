@@ -1952,7 +1952,7 @@ function prefillMatrixCells(item, testFiles, hint) {
  * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}>}> }} p7
  * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
  */
-function renderProbe7Lines(p7) {
+export function renderProbe7Lines(p7) {
   const L = [PROBE7_HEADING]
   if (!p7 || !p7.applicable) {
     L.push('- 不适用（无 TaskCard）')
@@ -1986,8 +1986,12 @@ function renderProbe7Lines(p7) {
     L.push('| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |')
     L.push('|---|---|---|---|---|')
     t.acceptance.forEach((item, i) => {
+      // 展示帽（坑 probe-noise-and-commit-suggest-quality 坑A，2026-10-15 消费仓实证：宽目录
+      // allowed_paths 递归把 82 个测试文件全量塞进单格（单行数千字符 ×3 行），信号全淹——照
+      // 探针 3 既有 slice 截断先例收敛为前 5 + 「共 N 个」折叠；路径经 mdEscapeCell 防竖线破表）
       const attribCell = (t.testFiles && t.testFiles.length > 0)
-        ? t.testFiles.map(f => `\`${f}\``).join('<br>')
+        ? t.testFiles.slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('<br>')
+          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（目录级候选全量在 facts/trace，归属按关键词命中与证据锚点收窄）` : '')
         : '无归属测试——判定大概率 uncovered'
       const h = (t.hints && t.hints[i]) || null
       const hintCell = h
@@ -2251,7 +2255,9 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
             if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
           }
         }
-        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
+        // 收集帽（坑 probe-noise-and-commit-suggest-quality 坑A）：目录级 allowed_paths 递归可卷
+        // 入整仓测试树（实证 82 个）——去重后截前 20（展示层另有 5 个硬帽；hints/trace 消费同集）
+        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])].slice(0, 20)
         // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
         const existingTests = []
         if (frLinkedExisting && testFiles.length === 0) {
@@ -2259,7 +2265,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
             if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
           }
         }
-        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])] : testFiles
+        const finalTestFiles = existingTests.length > 0 ? [...new Set([...testFiles, ...existingTests])].slice(0, 20) : testFiles
         probe7.tasks.push({
           task: card.task,
           acceptance: card.acceptance,
@@ -2758,7 +2764,12 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
-  return {
+  // apiFace 例外（坑 verify-close-gate-staggered-exposure 建议③连带，2026-10-15 消费仓实证）：
+  // --init 即落键——runVerifyProbes 的 apiFace 与 --done backfill 同源同形（computeApiFaceFromDesign），
+  // 原「刻意不落」使「重跑 --init 刷新 facts」救不了空指预检（报错文案也没提这一点），且空指
+  // 诊断方向被误导去改 design 文档。键只在值在场时出现（undefined 值键会在 writeVerifyFacts
+  // 合并 spread 时覆盖 prev 固化段）。
+  const factsSkeleton = {
     schemaVersion: 2,
     change: changeName,
     generatedAt: now || new Date().toISOString(),
@@ -2823,6 +2834,8 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
       },
     },
   }
+  if (result && result.apiFace && typeof result.apiFace === 'object') factsSkeleton.apiFace = result.apiFace
+  return factsSkeleton
 }
 
 /**
@@ -2859,7 +2872,16 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
   try {
     const prev = JSON.parse(readFileSync(factsPath, 'utf8'))
     if (prev && prev.schemaVersion === FACTS_SCHEMA_VERSION) {
+      // backfill 固化段保留（坑 verify-close-gate-staggered-exposure，2026-10-15）：旧白名单只保
+      // 五段，re-init 会把 --done 回填的 apiFace/consumerHints/handover/dbScriptDeclarations 等
+      // 整个抹掉（--init 后预检又空指）。此处先铺 prev 固化段再被 fresh 覆盖：apiFace 由 fresh
+      // 侧重算（同源 computeApiFaceFromDesign，值应等价），fresh 未带的键原样保留。
+      const preservedBackfill = {}
+      for (const k of ['apiFace', 'consumerHints', 'handover', 'dbScriptDeclarations', 'matrixPartialRows', 'smokeRan']) {
+        if (prev[k] !== undefined) preservedBackfill[k] = prev[k]
+      }
       facts = {
+        ...preservedBackfill,
         ...fresh,
         conclusion: prev.conclusion,
         tests: prev.tests,

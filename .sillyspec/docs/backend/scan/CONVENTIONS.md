@@ -45,7 +45,7 @@ generator: sillyspec-scan
 
 ### 3. Service 是「持有 session 的有状态类」，查询走 `session.execute + scalars`
 
-- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:140`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
+- 构造期接收 `AsyncSession`，字段命名 `self._session`：`repo://sillyhub/backend/app/modules/change/service.py:151`。需要操作者身份时多带一个 actor 参数（`backend/app/modules/admin/users_service.py` 的 `def __init__(self, session, actor_id)` 同款）。
 - 查询统一 SQLAlchemy 2.x 形态：`(await self._session.execute(stmt)).scalar() or 0`、`.scalars().all()`、`.scalars().first()`（`repo://sillyhub/backend/app/modules/change/service.py:184,192,204,224,241`）。
 - Service 间组合**复用同一 session**（不要各自开新事务）：`repo://sillyhub/backend/app/modules/change/service.py:163` `SpecWorkspaceService(self._session).get(...)`。
 - router 之外（后台任务/启动钩子）手动开 session 用 `async with get_session_factory()() as session:`，不要 `Depends(get_session)`（`backend/app/core/db.py` 的 `get_session_factory` 懒加载单例 + conftest `_redirect_session_factory` 印证）。
@@ -63,7 +63,7 @@ generator: sillyspec-scan
 
 ### 6. 日志：`structlog` + 模块级 `get_logger(__name__)`，事件名点分蛇形
 
-不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:13-46`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:104` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
+不在业务代码用 `print` 或裸 `logging`。配置见 `repo://sillyhub/backend/app/core/logging.py:13-46`（`merge_contextvars`、ISO UTC 时间戳、`format_exc_info`、JSONRenderer、`configure_logging` 在 `repo://sillyhub/backend/app/main.py:112` 启动时调用）。各 service/router 顶部 `log = get_logger(__name__)`（如 `repo://sillyhub/backend/app/core/errors.py:443`）。异常统一 `log.exception("<event>", ...)`，事件名点分蛇形（`app.start` 类风格）。
 
 ### 7. 权限/归属校验放 service 层（PPM 范式）
 
