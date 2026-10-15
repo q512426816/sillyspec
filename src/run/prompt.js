@@ -68,6 +68,7 @@ const VOLATILE_PLACEHOLDER_RES = [
   /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
   /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g, /{UI_VISUAL_GUIDANCE}/g,
   /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
+  /{REVIEW_TIER}/g, /{REVIEW_TIER_REASON}/g, /{REVIEW_JSON_CONTRACT}/g,
   /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
   /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
   /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{HANDOVER_SUMMARY}/g, /{PREFLIGHT_FAILURES}/g,
@@ -1044,6 +1045,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split(token).join(v)
     return promptText
   }
+  // 裸 split/join 注入点的收集通道（2026-10-16-step-guide-dyn-completeness）：语义与
+  // substituteSplitJoin 相同，供不以占位符正则批量替换的站点使用。
+  // ⚠️ 纪律：凡向 promptText 注入运行期值的站点必须走本组三个助手之一——裸 `.split().join()`
+  // 会让值漏进复入短输出的「动态注入段」附录（值不落盘、guide 掩码后无回读通道）。
+  // 2026-10-15 消费仓实证：评审六值（tier/材料包/契约等）漏收，主代理被迫读引擎源码逆推档位、
+  // 手建材料包、手拼 review.json 路径写错一层前缀再纠正——收集器注释「漏收才是坑」的兑现。
+  const substituteRaw = (token, value) => {
+    const v = String(value)
+    dynSegments.push(v)
+    promptText = promptText.split(token).join(v)
+    return promptText
+  }
   // 替换 prompt 中的占位符
   if (projectName && promptText.includes('<project>')) {
     substitute(/<project>/g, projectName, true)
@@ -1679,22 +1692,21 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           reviewMaterialsMd = await assembleStageReviewMaterials({ stage: matStage, cwd, changeName, specBase: tierSpecBase })
         } catch { /* 组装 best-effort：失败零注入 */ }
       }
-      promptText = promptText
-        .split('{REVIEW_TIER}').join(ceremonyInjection.tierValue + ceremonyInjection.menuMd)
-        .split('{REVIEW_TIER_REASON}').join(tier.reason)
-        .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
-        .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
-        .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
-        .split('{REVIEW_MATERIALS}').join(reviewMaterialsMd) // 三阶段材料包槽（CLI 组装注入，Gap 1 收口——此前恒空串靠主代理手组，机械保证断一半；主代理点名半边由模板补位指引接手）
+      // 全部走 substituteRaw（收集进 dynSegments——复入附录含评审六值；2026-10-16-step-guide-dyn-completeness）
+      substituteRaw('{REVIEW_TIER}', ceremonyInjection.tierValue + ceremonyInjection.menuMd)
+      substituteRaw('{REVIEW_TIER_REASON}', tier.reason)
+      substituteRaw('{STAGE_REVIEW_RUN_ID}', reviewRunId)
+      substituteRaw('{REVIEW_JSON_CONTRACT}', reviewContractMd)
+      substituteRaw('{PRIOR_REVIEW_FACTS}', priorFactsMd)
+      substituteRaw('{REVIEW_MATERIALS}', reviewMaterialsMd) // 三阶段材料包槽（CLI 组装注入，Gap 1 收口——此前恒空串靠主代理手组，机械保证断一半；主代理点名半边由模板补位指引接手）
     } catch (e) {
-      // 降级 self，避免 prompt 残留占位符
-      promptText = promptText
-        .split('{REVIEW_TIER}').join('self')
-        .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
-        .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
-        .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
-        .split('{PRIOR_REVIEW_FACTS}').join('')
-        .split('{REVIEW_MATERIALS}').join('') // 降级分支同步 join（plan 审查提示：防占位符字面量残留）
+      // 降级 self，避免 prompt 残留占位符（降级值同样收编进 dynSegments——附录如实呈现降级态）
+      substituteRaw('{REVIEW_TIER}', 'self')
+      substituteRaw('{REVIEW_TIER_REASON}', '分级异常降级 self: ' + e.message)
+      substituteRaw('{STAGE_REVIEW_RUN_ID}', 'review-unknown')
+      substituteRaw('{REVIEW_JSON_CONTRACT}', '(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
+      substituteRaw('{PRIOR_REVIEW_FACTS}', '')
+      substituteRaw('{REVIEW_MATERIALS}', '') // 降级分支同步 join（plan 审查提示：防占位符字面量残留）
     }
   }
 
@@ -1724,7 +1736,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       metaInfo = '（注入失败：' + e.message + '——运行 sillyspec worktree meta 自查，meta.json 不存在则停止并报错）'
     }
-    promptText = promptText.split('{WORKTREE_META}').join(metaInfo)
+    substituteRaw('{WORKTREE_META}', metaInfo)
   }
 
   // archive Step1「任务完成度检查」客观真相源注入：以 review.json verdict 算完成度，
@@ -1741,9 +1753,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const summary = tcrChangeDir
         ? summarizeTaskCompletion({ changeDir: tcrChangeDir, runtimeRoot: tcrRuntimeRoot, changeName })
         : null
-      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join(summary ? summary.report : '（无法计算完成度：变更目录缺失）')
+      substituteRaw('{TASK_COMPLETION_REPORT}', summary ? summary.report : '（无法计算完成度：变更目录缺失）')
     } catch (e) {
-      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join('（完成度计算异常：' + e.message + '，请手动核对 plan.md 与 .runtime/execute-runs/*/tasks/task-NN/review.json）')
+      substituteRaw('{TASK_COMPLETION_REPORT}', '（完成度计算异常：' + e.message + '，请手动核对 plan.md 与 .runtime/execute-runs/*/tasks/task-NN/review.json）')
     }
   }
 
@@ -1784,7 +1796,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       baselineInfo = '（worktree 基线注入失败：' + e.message + '——diff 对账前先 git branch -a 查 sillyspec/<change> 分支并用 git merge-base <main> <branch> 自查基点，勿用主仓 HEAD 当基点）'
     }
-    promptText = promptText.split('{WORKTREE_BASELINE_INFO}').join(baselineInfo)
+    substituteRaw('{WORKTREE_BASELINE_INFO}', baselineInfo)
   }
 
   // verify「运行测试和质量扫描」evidence-auto 推荐注入（task-12，FR-11 / D-005@v2）：
@@ -1825,7 +1837,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
     }
-    promptText = promptText.split('{EVIDENCE_AUTO_RECOMMENDATION}').join(eaInjected)
+    substituteRaw('{EVIDENCE_AUTO_RECOMMENDATION}', eaInjected)
   }
 
   // {ARCHIVE_IMPACT_AUDIT}（2026-09-09 ql-20260909-004）：archive extract-module-impact 步的
@@ -1845,7 +1857,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       auditBlock = '（三重核对机械预填失败：' + (e && e.message ? e.message : e) + '——回退手跑 git diff --name-only 比对）'
     }
-    promptText = promptText.split('{ARCHIVE_IMPACT_AUDIT}').join(auditBlock)
+    substituteRaw('{ARCHIVE_IMPACT_AUDIT}', auditBlock)
   }
 
   // {SCOPE_AUDIT_TABLE}（2026-09-10-change-scope-audit task-05，FR-03）：archive「确认归档」步的
@@ -1868,7 +1880,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       scopeTable = '（变更范围对账表注入失败：' + (e && e.message ? e.message : e) + '——回退手跑 sillyspec scope-audit --change <name> 查看后再确认归档，注入失败不阻断归档）'
     }
-    promptText = promptText.split('{SCOPE_AUDIT_TABLE}').join(scopeTable)
+    substituteRaw('{SCOPE_AUDIT_TABLE}', scopeTable)
   }
 
   // {HANDOVER_SUMMARY}（2026-09-17-pass-cap-semantics task-04，FR-06 注入态）：archive「确认
@@ -1904,7 +1916,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       handoverBlock = '（移交项清单注入失败：' + (e && e.message ? e.message : e) + '——回退读 changes/<变更名>/verify-facts.json 的 handover 段核对后再确认归档，注入失败不阻断归档）'
     }
-    promptText = promptText.split('{HANDOVER_SUMMARY}').join(handoverBlock)
+    substituteRaw('{HANDOVER_SUMMARY}', handoverBlock)
   }
 
   // 注入模块上下文（brainstorm/plan/execute 阶段 + quick 首步「理解任务」——刀①：quick
