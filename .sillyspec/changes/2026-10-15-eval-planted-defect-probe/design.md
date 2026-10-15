@@ -6,6 +6,8 @@ created_at: 2026-10-15T11:52:30.994Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 新增 eval 第 4 个任务 `eval/tasks/004-phase-stats/`——**种植缺陷探针**：与既有 001-003（instruction 把边界逐条写明）相反，本任务指令只命名日志解析格式、配对语义与输出契约；五类隐含输入（①行序与时间序交错、②中段空行、③纯空白行/行尾空格、④未闭合 START、⑤孤儿 END）全部由固定 fixture 承载，每类有唯一合理解。verify.mjs 期望硬编码（download r1/10s、login r4/22s、upload r1/17s——未闭合与孤儿零贡献）。配套 test/eval-planted-defect-probe.test.mjs 三用例（参考解过 / naive 拒 / 无实现拒）把判别力钉进仓库测试套件。
 
 方法对照：obra/superpowers 用种植缺陷探针量化技能行为（writing-plans v6.4.2 的 planted-defect probes 9/9 实证）。选「日志会话配对统计」题材的理由：①合理解唯一性强——乱序配对/跳空白/退化事件零贡献是唯一不荒谬的读法，不像 glob 语义（`*` 是否跨目录）存在正当分歧；②五类隐含输入可由一份固定 fixture 全部承载，判分确定；③naive 实现形态清晰（按文件邻接配对），判别力可被测试钉死。
@@ -14,11 +16,31 @@ created_at: 2026-10-15T11:52:30.994Z
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - **不改动任何既有函数/命令/文件格式**。纯新增：`eval/tasks/004-phase-stats/{task.json, verify.mjs, files/data/events.log, solution/bin/phase-stats.mjs}` + `test/eval-planted-defect-probe.test.mjs`。
 - eval 工具链零改动：loadTasks 按目录自动发现新任务（id 排序 004 在 003 后）；tasksFingerprint 自动纳入（指纹变化=评测分组正常演进，`--set-baseline` 语义照旧）；dry-run mixed 模式按任务号奇偶分臂（004 偶数 → A 过 B 挂）。
 - 交付文件面自声明：上述 5 个新增文件，无修改面、无删除面。
 
+## 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 新增 | NEW:eval/tasks/004-phase-stats/task.json | 任务元数据 + instruction（命名表层，五类隐含面零泄露） |
+| 新增 | NEW:eval/tasks/004-phase-stats/files/data/events.log | 固定 fixture（交错乱序 v2；14 事件行 + 空行 + 纯空白行） |
+| 新增 | NEW:eval/tasks/004-phase-stats/verify.mjs | 判分脚本（期望硬编码、逐断言可定位隐含面） |
+| 新增 | NEW:eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs | 参考解（dry-run pass 路径；不进 agent 工作副本与指纹） |
+| 新增 | NEW:test/eval-planted-defect-probe.test.mjs | 判别力三用例（参考解过 / 无实现拒 / naive 拒） |
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
 
 1. **乱序/迟到到达**：本变更无运行时输入面。fixture 的乱序行是被测对象的设计内输入（探针本体），不是本设计的风险面；verify 只读工作副本的固定产物。
 2. **并发写**：verify.mjs 以子进程跑被测 CLI、只读 stdout，不写任何文件；test 用例各自在独立 mkdtemp 目录构建工作副本，无共享写面。eval 并发跑任务时每 (task,arm) 独立 workdir（workdir.mjs 既有隔离），本任务不引入新共享态。
@@ -26,6 +48,8 @@ created_at: 2026-10-15T11:52:30.994Z
 4. **作用域**：单仓单目录资产。CRLF 说明：Windows 检出下 events.log 可能带 CRLF——这是**有意的隐含面之一**（合理解=按行 trim 后解析；solution 与 naive 都在同机同 fixture 上判分，两臂公平）。verify 只比对最终 JSON，跨平台期望值一致。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 - **最大风险：隐含面的「合理解」被认为不够唯一**（判分公平性）。若 B 臂实现选择另一种可辩护读法（如把未闭合 START 按「到文件末尾」计时长）会误判为失败。缓解：①五类输入全部选了唯一合理解——「未闭合不计时长」是统计语义下唯一不捏造数据的读法（捏造结束时刻无依据）；②instruction 明确「rounds=完成轮数、totalSeconds=完成轮次时长之和」，未完成轮次不属于"完成"是字面推论；③真跑前由人工抽看 A/B 失败 workdir 的 stderr 定位（verify 逐断言可定位）。
   - **设计迭代留痕（fixture v1 → v2，判分公平性红线的自我纠察）**：初版 fixture 做了**全行序打乱**——部分 END 行在文件序上先于自己 session 的 START 出现，这使「单遍扫描按 (sessionId,phase) 配对」这一最合理解必然漏配（solution 参考解自己就挂了，测试当场暴露）。全乱序下"先按时间戳排序再配对"与"单遍文件序配对"两种读法都有可辩护性，违反本条唯一性红线——已修正为**交错乱序**：跨 session 事件交错 + 行时间戳非单调（保住"行序≠时间序"的隐含面），但各 session 自身的 START 恒先于自己的 END（保住单遍配对解的唯一性）；未闭合/孤儿/多轮/空行/空白行五类隐含面全部保留，naive 判别力经测试复核不变。
