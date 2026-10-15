@@ -1,0 +1,122 @@
+{
+  "change": "2026-10-15-eval-planted-defect-probe",
+  "baseline": "c73cf4f35812b727021c7b04844eda531720e404",
+  "head": "c4b4f1f02b47ee2b5b2411f345d3ead12bf2f198",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/eval.md",
+    "eval/tasks/004-phase-stats/files/data/events.log",
+    "eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs",
+    "eval/tasks/004-phase-stats/task.json",
+    "eval/tasks/004-phase-stats/verify.mjs",
+    "test/eval-planted-defect-probe.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 226,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-15T12:08:05.025Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "eval",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": true,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c73cf4f35812b727021c7b04844eda531720e404",
+    "totals": {
+      "files": 7,
+      "additions": 226,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/eval.md",
+        "additions": 24,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/004-phase-stats/files/data/events.log",
+        "additions": 16,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/004-phase-stats/task.json",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/004-phase-stats/verify.mjs",
+        "additions": 38,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-planted-defect-probe.test.mjs",
+        "additions": 95,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7f619a4746e8831922a64151c03f6dd2113e684f7e721058ace4e6a2abaaf143",
+  "patchStatus": "ok"
+}

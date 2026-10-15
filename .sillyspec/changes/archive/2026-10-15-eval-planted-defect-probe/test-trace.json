@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-planted-defect-probe",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-eval-planted-defect-probe:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-planted-defect-probe.test.mjs「FR-03 参考解过 verify」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-planted-defect-probe"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-eval-planted-defect-probe:flow:测试绑定FR-02",
+      "tests": [
+        "test/eval-planted-defect-probe.test.mjs「FR-03 参考解过 verify」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-planted-defect-probe"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-eval-planted-defect-probe:flow:测试绑定FR-03",
+      "tests": [
+        "test/eval-planted-defect-probe.test.mjs「FR-03 参考解过 verify / 无实现被 verify 拒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-planted-defect-probe"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-eval-planted-defect-probe:flow:测试绑定FR-04",
+      "tests": [
+        "test/eval-planted-defect-probe.test.mjs「FR-04 naive 实现被 verify 拒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-planted-defect-probe"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-15-eval-planted-defect-probe:flow:测试绑定FR-06",
+      "tests": [
+        "test/eval-planted-defect-probe.test.mjs「FR-03/04 全部用例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-planted-defect-probe"
+    }
+  ]
+}

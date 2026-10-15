@@ -1,0 +1,277 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 6785ef86..cf4de185 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -343,6 +343,15 @@ modules:
+     paths:
+       - bin/sillyspec.js
+ 
++  eval:
++    status: active
++    doc: modules/eval.md
++    needs_review: false
++    review_reasons: []
++    paths:
++      - eval/
++    tier: S1
++
+ span_risk:
+   # span 轴风险路径声明（token 扁平列表，进 git 手工维护；modules rebuild --force 按未知顶层段原样回插）
+   - migrate
+@@ -396,3 +405,4 @@ blast:
+       - src/run/gates.js
+       - src/run/complete.js
+     tier: S2
++
+diff --git a/.sillyspec/docs/sillyspec/modules/eval.md b/.sillyspec/docs/sillyspec/modules/eval.md
+new file mode 100644
+index 00000000..7f4330e0
+--- /dev/null
++++ b/.sillyspec/docs/sillyspec/modules/eval.md
+@@ -0,0 +1,24 @@
++---
++schema_version: 1
++doc_type: module-card
++module_id: eval
++author: qinyi
++created_at: 2026-10-15T20:05:00+08:00
++updated_at: 2026-10-15T20:05:00+08:00
++---
++# eval
++
++## 职责
++
++A/B 评测域——客观量化「同一个 agent，走 SillySpec 流程（B 臂）比裸跑（A 臂）好多少」：同任务、同模型、同判分脚本（每任务一个 verify.mjs，退出码 0=通过），唯一变量是有没有 SillySpec。产出分臂通过率 + Wilson 95% 置信区间、Δ(B−A) 区间、token/费用/耗时，全部落 SQLite（eval/results/eval.db，gitignored）。
++
++## 定位
++
++评测基础设施，不是被测产品代码：`eval/run.mjs`（入口：--dry-run 零 token 验管道 / --preflight 探活 / --pilot 真跑 / --report / --set-baseline）+ `eval/lib/`（adapters=dry-run 假 agent 与 headless CLI 适配、tasks=任务加载与内容指纹、workdir=每 (task,arm) 独立工作副本、runner/reader/db）。任务库 `eval/tasks/<id>/` 四件套：task.json（id/instruction）· verify.mjs（cwd=被测工作目录）· files/（工作副本脚手架，进指纹）· solution/（dry-run 参考解，不进 agent 副本、不进指纹）。
++
++## 契约摘要
++
++- **任务判分契约**：verify.mjs 以被测工作目录为 cwd、退出码 0=通过；期望值硬编码独立于实现；新增任务放目录即被 loadTasks 自动发现（id 字典序、重复 id 拒载）。
++- **种植缺陷探针**（2026-10-15-eval-planted-defect-probe 引入，004-phase-stats）：instruction 只命名表层契约，隐含输入由固定 fixture 承载（每类唯一合理解）——判别力=「只做表面」必拒、「覆盖隐含面」必过，由 test/eval-planted-defect-probe.test.mjs 钉死。公平性红线：隐含面不得破坏单遍扫描类合理解的唯一性（见该变更 design 风险节 fixture v1→v2 迭代留痕）。
++- **指纹分组**：tasksFingerprint 覆盖 task.json+verify.mjs+files/（solution/ 排除）——指纹变化=评测分组正常演进，--set-baseline 语义照旧。
++- **零 token 验证链**：--dry-run 假 agent 走整条管道（workdir→verify→落库→报告），mixed 模式按任务号奇偶确定性制造两臂差异。
+diff --git a/eval/tasks/004-phase-stats/files/data/events.log b/eval/tasks/004-phase-stats/files/data/events.log
+new file mode 100644
+index 00000000..3e4ea29b
+--- /dev/null
++++ b/eval/tasks/004-phase-stats/files/data/events.log
+@@ -0,0 +1,16 @@
++2026-10-15T09:00:00Z START s1 login
++2026-10-15T09:00:03Z START s2 upload
++2026-10-15T09:00:04Z END s1 login
++2026-10-15T09:00:05Z START s3 download
++2026-10-15T09:00:20Z END s2 upload
++2026-10-15T09:00:15Z END s3 download
++
++2026-10-15T09:05:00Z START s4 login
++2026-10-15T09:05:09Z END s4 login
++2026-10-15T09:06:00Z START s5 upload
++2026-10-15T09:07:00Z END s6 download
++2026-10-15T09:08:00Z START s7 login
++2026-10-15T09:08:03Z END s7 login
++2026-10-15T09:08:30Z START s7 login
++2026-10-15T09:08:36Z END s7 login
++   
+diff --git a/eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs b/eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs
+new file mode 100644
+index 00000000..9e6de49d
+--- /dev/null
++++ b/eval/tasks/004-phase-stats/solution/bin/phase-stats.mjs
+@@ -0,0 +1,37 @@
++#!/usr/bin/env node
++// 参考解（eval dry-run 参考与判别力测试用；不进 agent 工作副本、不进任务指纹）。
++// 覆盖全部隐含面：乱序交错行按 (sessionId, phase) 配对；空行/纯空白行跳过；行字段 trim
++// （兼容 CRLF）；未闭合 START 与孤儿 END 零贡献；同 (sessionId, phase) 多轮累加。
++import { readFileSync } from 'node:fs';
++
++const raw = readFileSync('data/events.log', 'utf8');
++const open = new Map(); // "session|phase" -> start ms
++const agg = new Map();  // phase -> { rounds, totalSeconds }
++
++for (const line of raw.split(/\r?\n/)) {
++  const t = line.trim();
++  if (!t) continue; // 空行 / 纯空白行
++  const parts = t.split(/\s+/);
++  if (parts.length < 4) continue;
++  const [ts, kind, session, phase] = parts;
++  const ms = Date.parse(ts);
++  if (!Number.isFinite(ms)) continue;
++  const key = `${session}|${phase}`;
++  if (kind === 'START') {
++    if (!open.has(key)) open.set(key, ms); // 重复 START 以首者计，防覆盖丢轮
++  } else if (kind === 'END') {
++    const start = open.get(key);
++    if (start === undefined) continue; // 孤儿 END 零贡献
++    open.delete(key);
++    const a = agg.get(phase) ?? { rounds: 0, totalSeconds: 0 };
++    a.rounds += 1;
++    a.totalSeconds += Math.round((ms - start) / 1000);
++    agg.set(phase, a);
++  }
++  // 未闭合 START：循环结束自然零贡献
++}
++
++const phases = [...agg.entries()]
++  .map(([phase, a]) => ({ phase, rounds: a.rounds, totalSeconds: a.totalSeconds }))
++  .sort((x, y) => (x.phase < y.phase ? -1 : x.phase > y.phase ? 1 : 0));
++process.stdout.write(JSON.stringify({ phases }) + '\n');
+diff --git a/eval/tasks/004-phase-stats/task.json b/eval/tasks/004-phase-stats/task.json
+new file mode 100644
+index 00000000..49f70fd9
+--- /dev/null
++++ b/eval/tasks/004-phase-stats/task.json
+@@ -0,0 +1,6 @@
++{
++  "id": "004-phase-stats",
++  "title": "日志会话耗时统计 CLI（种植缺陷探针：隐含面在 fixture，不在指令）",
++  "tags": ["greenfield", "cli", "planted-defect", "implied-inputs"],
++  "instruction": "在当前目录新建 bin/phase-stats.mjs（Node ≥ 18，只用 Node 内置模块，禁止安装任何第三方依赖）。\n\n读取 data/events.log：每行一条事件，格式为「<ISO-8601 UTC 时间戳> <START|END> <sessionId> <phase>」（单个空格分隔，UTF-8）。同一 sessionId 的同名 phase 从 START 到 END 为一轮。\n\n输出一行 JSON 到 stdout（除此之外无任何输出）：\n{\"phases\":[{\"phase\":\"<名>\",\"rounds\":<完成轮数>,\"totalSeconds\":<所有完成轮次时长之和，整数秒>}]}\n\nphases 按 phase 字典序升序排列。数据以仓库附带的 data/events.log 为准。确保 node bin/phase-stats.mjs 可运行。"
++}
+diff --git a/eval/tasks/004-phase-stats/verify.mjs b/eval/tasks/004-phase-stats/verify.mjs
+new file mode 100644
+index 00000000..df9f5e74
+--- /dev/null
++++ b/eval/tasks/004-phase-stats/verify.mjs
+@@ -0,0 +1,38 @@
++// 判分脚本：cwd=被测工作目录，退出码 0 = 通过。
++// 期望值基于 data/events.log 固定内容硬编码（download r1/10s、login r4/22s、upload r1/17s），
++// 保证判分独立于被测实现。种植缺陷探针（2026-10-15-eval-planted-defect-probe）：
++// 指令只命名解析格式与输出契约；五类隐含面（乱序交错/空行/纯空白行/未闭合 START/孤儿 END）
++// 全部由 fixture 承载——失败时下方断言消息逐项定位是哪条隐含面挂了。
++import assert from 'node:assert/strict';
++import { spawnSync } from 'node:child_process';
++import { join } from 'node:path';
++import { cwd } from 'node:process';
++
++const run = spawnSync('node', [join('bin', 'phase-stats.mjs')], { encoding: 'utf8' });
++assert.equal(run.status, 0, `CLI 应成功运行（exit=${run.status}）: ${String(run.stderr).slice(0, 300)}`);
++
++const out = String(run.stdout).trim();
++assert.equal(out.split('\n').length, 1, 'stdout 只允许一行 JSON');
++let parsed;
++assert.doesNotThrow(() => { parsed = JSON.parse(out); }, 'stdout 应为合法 JSON');
++assert.ok(Array.isArray(parsed.phases), 'phases 应为数组');
++assert.deepEqual(
++  parsed.phases.map((p) => p.phase),
++  ['download', 'login', 'upload'],
++  'phases 应按字典序升序且恰好三个域（隐含面：乱序/空行/空白行的容错解析）'
++);
++assert.deepEqual(
++  parsed.phases[0],
++  { phase: 'download', rounds: 1, totalSeconds: 10 },
++  'download: s3 一轮 10s（隐含面：孤儿 END s6 零贡献，不得计轮不得崩）'
++);
++assert.deepEqual(
++  parsed.phases[1],
++  { phase: 'login', rounds: 4, totalSeconds: 22 },
++  'login: s1(4s)+s4(9s)+s7 两轮(3s+6s)=22s（隐含面：跨 session 交错乱序按 (sessionId,phase) 配对、同 session 多轮累加）'
++);
++assert.deepEqual(
++  parsed.phases[2],
++  { phase: 'upload', rounds: 1, totalSeconds: 17 },
++  'upload: s2 一轮 17s（隐含面：未闭合 START s5 零贡献，不得计入轮数或时长）'
++);
+diff --git a/test/eval-planted-defect-probe.test.mjs b/test/eval-planted-defect-probe.test.mjs
+new file mode 100644
+index 00000000..9e684f46
+--- /dev/null
++++ b/test/eval-planted-defect-probe.test.mjs
+@@ -0,0 +1,95 @@
++/**
++ * eval-planted-defect-probe.test.mjs — 004-phase-stats 种植缺陷探针判别力
++ * （2026-10-15-eval-planted-defect-probe）
++ *
++ * 探针成立前提 = 判别力：只实现「指令命名表层」的实现必须被 verify 拒，覆盖
++ * 「fixture 隐含面」的实现必须过。本文件把该性质钉进仓库测试套件（eval/ 目录本身
++ * 不在 node --test 套件内）：
++ *   FR-03 参考解（solution/）过 verify——dry-run pass 路径
++ *   FR-03 无实现被 verify 拒——dry-run fail 路径
++ *   FR-04 naive 实现（按 phase 邻接配对、忽略 session 交错）被 verify 拒——判别力
++ *
++ * 判别力机理（fixture v2 交错乱序驱动）：naive 按 phase 名配对（忽略 sessionId）——s6 的
++ * 孤儿 END 在 download 无 open 时照常进账 → rounds 2≠1 且 NaN 传播（JSON 序列化为 null），
++ * download 深相等必拒；s5 未闭合 START 占位 open.upload 但无 END 消费、不翻车——单一偏差点
++ * 足以拒判，且该性质随本测试回归保护。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const TASK_DIR = join(REPO_ROOT, 'eval', 'tasks', '004-phase-stats')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++/** 工作副本 = files/ 脚手架（与 eval/lib/workdir.mjs 的 prepareWorkdir 同口径）。 */
++function makeWorkdir(prefix) {
++  const wd = mkdtempSync(join(tmpdir(), prefix))
++  cpSync(join(TASK_DIR, 'files'), wd, { recursive: true })
++  return wd
++}
++
++function runVerify(wd) {
++  return spawnSync(process.execPath, [join(TASK_DIR, 'verify.mjs')], { cwd: wd, encoding: 'utf8' })
++}
++
++test('FR-03 参考解过 verify（dry-run pass 路径：solution 复制进工作副本后判定为过）', () => {
++  const wd = makeWorkdir('ss-probe-sol-')
++  try {
++    cpSync(join(TASK_DIR, 'solution'), wd, { recursive: true })
++    const r = runVerify(wd)
++    assert.equal(r.status, 0, `参考解应通过 verify: ${String(r.stderr).slice(0, 400)}`)
++  } finally { rmQuiet(wd) }
++})
++
++test('FR-03 无实现被 verify 拒（dry-run fail 路径：仅脚手架的工作副本不得放行）', () => {
++  const wd = makeWorkdir('ss-probe-empty-')
++  try {
++    const r = runVerify(wd)
++    assert.notEqual(r.status, 0, '无实现时 verify 必须非零退出')
++  } finally { rmQuiet(wd) }
++})
++
++test('FR-04 naive 实现（只做命名表层）被 verify 拒——探针判别力', () => {
++  const wd = makeWorkdir('ss-probe-naive-')
++  try {
++    mkdirSync(join(wd, 'bin'), { recursive: true })
++    writeFileSync(join(wd, 'bin', 'phase-stats.mjs'), NAIVE_SRC)
++    const r = runVerify(wd)
++    assert.notEqual(r.status, 0, 'naive 实现（phase 邻接配对、忽略 session 交错/退化事件）必须被拒')
++  } finally { rmQuiet(wd) }
++})
++
++// naive 实现：一个「认真读了指令但没多想」的实现——按 phase 邻接配对（忽略 sessionId）、
++// 空白行会过滤（常见习惯）、未闭合/孤儿事件照常进账（NaN 传播）。这不是稻草人：
++// 它逐字满足 instruction 的命名面，只在 fixture 隐含面上翻车——正是探针要抓的形态。
++const NAIVE_SRC = `\
++import { readFileSync } from 'node:fs';
++const lines = readFileSync('data/events.log', 'utf8').split('\\n').filter((l) => l.trim() !== '');
++const open = {};
++const agg = {};
++for (const line of lines) {
++  const [ts, kind, sid, phase] = line.trim().split(/\\s+/);
++  if (kind === 'START') {
++    open[phase] = Date.parse(ts);
++  } else {
++    const start = open[phase];
++    const a = agg[phase] ?? { rounds: 0, totalSeconds: 0 };
++    a.rounds += 1;
++    a.totalSeconds += Math.round((Date.parse(ts) - start) / 1000);
++    agg[phase] = a;
++    delete open[phase];
++  }
++}
++const phases = Object.entries(agg)
++  .map(([phase, x]) => ({ phase, rounds: x.rounds, totalSeconds: x.totalSeconds }))
++  .sort((x, y) => x.phase.localeCompare(y.phase));
++console.log(JSON.stringify({ phases }));
++`

@@ -214,3 +214,4 @@
 - skills-docs|FR|需求|承接 → [fr/skills-docs.md](fr/skills-docs.md)
 - release|FR|需求|承接 → [fr/release.md](fr/release.md)
 - docs|FR|需求|承接 → [fr/docs.md](fr/docs.md)
+- eval|FR|需求|承接 → [fr/eval.md](fr/eval.md)

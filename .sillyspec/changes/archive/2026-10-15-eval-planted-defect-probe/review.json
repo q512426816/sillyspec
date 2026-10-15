@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-planted-defect-probe",
+  "reviewer": "subagent-recheck",
+  "verdict": "PASS",
+  "reviewedAgainst": "c4b4f1f02b47ee2b5b2411f345d3ead12bf2f198",
+  "findings": [],
+  "dimensionNotes": {
+    "round2-P3-title-wording-resolved": "已清偿实证：git show c4b4f1f0 全 diff 恰两行——①requirements.md FR-04 标题（:55）「naive 实现（按文件邻接配对、不跳空行）」→「naive 实现（按 phase 名配对、忽略 sessionId）」，与同节已修正正文（:57）及 NAIVE_SRC 实际行为（open[phase] 按 phase 名配对、忽略 sessionId）一致；②tasks.md task-02 行同措辞对齐（注：委托方口径写「task-04 行」，实际携带陈旧措辞的是 task-02 行——task-04 为测试面/lint 行从未含该措辞，修复命中行正确）。两处与 fixture v2 机理零矛盾，R2-P3-1 关闭。",
+    "remediation-commit-scope": "git rev-parse HEAD == c4b4f1f02b47ee2b5b2411f345d3ead12bf2f198（清偿提交即 HEAD，其后无提交）；c4b4f1f0..HEAD 对 requirements.md/tasks.md 触碰记录为空。--stat 恰 2 文件各 1+/1-，与声称「此外零改动」一致，无夹带。",
+    "no-regression": "纯文档改动（.sillyspec 变更文档两行，src/test/eval 交付面零触及），无行为面可回归；round-2 已实证的 node --test 3/3 绿结论继续有效。",
+    "residual-mentions-accepted": "全仓 grep「邻接配对/不跳空行」残余命中逐一定性，均不构成 finding：①design.md:13/:58——历史设计记录中的 v1 期措辞（:58 为「naive 若按行序邻接配对」假设性风险论证，紧邻 ：57 已完整留痕 v1→v2 迭代且判定「naive 判别力经测试复核不变」，首轮 3-disclosure-rulings ② 已裁可接受），非规范面、非现行实现描述；②flow-state.yaml:26——CLI 簿记在 flow start 时点对 tasks.md 标题的投影快照，随流程机管理不手工改写，非规范面；③proposal.md:15/23/30 与 change.patch——立项原话/冻结补丁的历史工件，按冻结语义不应回写；④test 文件 ：10/:66/:70 的「按 phase 邻接配对（忽略 sessionId）」为 round-2 已核实的 v2 正确措辞简写，非 v1 残留（v1 特征短语「按文件邻接配对、不跳空行」在规范面与代码面已零残留）。",
+    "prior-rounds": "首轮 P1/P2 与二轮 P3 的清偿证据链完整（round-2 note 保留：js-yaml 26 模块含 eval、eval 块原样移位、25 原键零改写；FR-04 正文/头注与 NAIVE_SRC × fixture 手工模拟一致；download 单一偏差点 rounds 2≠1 + NaN→null）。"
+  },
+  "reviewedAt": "2026-10-15T12:45:00Z"
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-planted-defect-probe",
+  "reviewer": "subagent-recheck",
+  "verdict": "PASS",
+  "reviewedAgainst": "2e4ea65e28cf99fdaa88f2c9acd1ed3294179f20",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements.md FR-04 标题行残留 fixture v1 措辞，与已修正正文及 naive 实现自相矛盾",
+      "evidence": "FR-04 标题（requirements.md:55）仍为「naive 实现（按文件邻接配对、不跳空行）」——「不跳空行」与同节已修正正文（:57「空白行按常见习惯过滤」）直接矛盾，也与 NAIVE_SRC 实际行为矛盾（test/eval-planted-defect-probe.test.mjs:75 对空行/纯空白行 trim 过滤）；「按文件邻接配对」与实际「按 phase 名配对、忽略 sessionId」不符。清偿提交 2e4ea65e 对 requirements.md 仅改正文一行（1+/1-，git show 实证），标题行系修复未覆盖的 v1 残留、非修复引入。正文为规范面且已正确、标题为摘要行，降级 P3 不阻断。",
+      "location": ".sillyspec/changes/2026-10-15-eval-planted-defect-probe/requirements.md:55"
+    }
+  ],
+  "dimensionNotes": {
+    "round1-P1-module-map-yaml-resolved": "已清偿实证：js-yaml（仓内依赖）load 当前 _module-map.yaml 成功——26 模块、modules.eval 在场、paths [\"eval/\"]、顶层 span_risk 段完好（按首轮同款命令复跑）。父版本 2e4ea65e~1 同文件 load 恰在文件尾 eval 块处抛 'bad indentation of a mapping entry (400:3)'——反证首轮诊断无误（父态即缺陷态）。git show 2e4ea65e diff 仅两个 hunk：eval 块（status/doc/needs_review/review_reasons/paths/- eval//tier: S1 共 8 行 + 1 空行分隔）自文件尾原样移入 modules: 段 bin 之后——25 个原有模块键零增减零改写（除移动外无任何行级改动），span_risk/blast 段零改动。",
+    "round1-P2-fr04-naive-mechanism-resolved": "已清偿实证：requirements FR-04 正文（:57）与 test 头注（test/eval-planted-defect-probe.test.mjs:12-15）均已改写为 v2 机理，与 NAIVE_SRC × fixture 实际行为逐点核对一致——naive 以 open[phase] 单槽按 phase 名配对、忽略 sessionId，空白行/纯空白行 trim 过滤（:75）。本评审对 events.log 全 16 行手工模拟：s6 孤儿 END（download，彼时 open.download 已于 L6 消费清空）照常进账 → download rounds 2≠期望 1 且 totalSeconds=10+NaN=NaN→JSON 序列化为 null，恰为深相等拒判点；login（s1 4s + s4 9s + s7 3s+6s = 4 轮 22s）与 upload（s2 = 1 轮 17s）与期望恰好一致，s5 未闭合 START（upload）仅占位 open.upload 无 END 消费、不翻车——头注「download 单一偏差点」声称成立，首轮指出的「v1 陈旧机理注释」已清除。node --test test/eval-planted-defect-probe.test.mjs 复跑 3/3 绿（pass 3 / fail 0）。",
+    "remediation-commit-scope": "git rev-parse HEAD == 2e4ea65e28cf99fdaa88f2c9acd1ed3294179f20（清偿提交即 HEAD，其后无提交）；2e4ea65e..HEAD 对 _module-map.yaml / test 文件 / requirements.md 三文件的触碰记录为空。git show 2e4ea65e --stat 恰 3 文件：requirements.md 1+/1-、_module-map.yaml 9+/8-、test/eval-planted-defect-probe.test.mjs 4+/3-——与声称的修复面完全一致，无夹带。",
+    "no-regression": "三处修复均未波及首轮已核实面（fixture 期望值手工重数、CRLF 两臂公平、solution 不进指纹/工作副本、判别力 3/3 绿）的结论基础：module-map 改动仅为块移动（span_risk/blast 段与 25 原模块键逐字节未动），test 改动仅头注 4+/3-（NAIVE_SRC 逻辑行未动，判别力行为不变、测试复跑绿），requirements 改动仅 FR-04 正文一行。无回归引入。",
+    "乱序并发切换作用域": "首轮 dimensionNotes 四维裁决（乱序/并发/切换/作用域均 pass）本轮不重验——清偿提交未触及对应证据面（workdir.mjs/tasks.mjs/verify.mjs/fixture 内容零改动，git show 2e4ea65e 证实）。"
+  },
+  "reviewedAt": "2026-10-15T12:30:00Z"
+}
