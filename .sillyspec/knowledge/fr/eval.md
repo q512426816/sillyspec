@@ -110,3 +110,41 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-planted-defect-probe
   status: active
+
+## FR-eval-007 prepareWorkdir 产出目录名不以数字字符开头（路径分隔符后首段非 [0-9]），且仍含 taskId 与 arm 标识
+变更：2026-10-15-eval-workdir-naming
+状态：active
+摘要：命名安全
+全文：.sillyspec/changes/archive/2026-10-15-eval-workdir-naming/requirements.md#FR-01
+最近确认：6e5c15277fae5b77214ab18c12e2a4648215f616
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-workdir-naming:flow:测试绑定FR-01
+  tests: test/eval-workdir-naming.test.mjs「workdir 命名不以数字开头」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-workdir-naming
+  status: active
+
+## FR-eval-008 命名断言进仓库测试套件，lint 通过
+变更：2026-10-15-eval-workdir-naming
+状态：active
+摘要：断言双形态
+全文：.sillyspec/changes/archive/2026-10-15-eval-workdir-naming/requirements.md#FR-02
+最近确认：6e5c15277fae5b77214ab18c12e2a4648215f616
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-workdir-naming:flow:测试绑定FR-02
+  tests: test/eval-workdir-naming.test.mjs「workdir 命名不以数字开头」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-workdir-naming
+  status: active

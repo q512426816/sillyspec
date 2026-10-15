@@ -3310,3 +3310,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：8862c672f137a6875d1d62af263a65ba8ededbb6
 理由：- **最大风险：证据包与「真相」之间隔着 transcript 本体**——agent-session-log 只登记路径，真正的模型 I/O 在各 harness 的日志文件里，格式因 harness 而异（claude jsonl/codex rollout/zcode model-io）。CLI 不解析 transcript 内容（解析器是三套格式 × 持续演化的维护泥潭，且 agent-session-log 注释已实证 fail-closed 立场），解读交给任务书里的 agent——这是设计意图不是缺陷，但意味着 diagnose 的价值上限取决于执行任务书的 agent 是否真读文件。缓解：任务书首条纪律即「先读证据包列出的文件本体再下结论」+ path:line 铁律使空谈结论无处遁形（报告评审时一眼可见）。 - **次风险：六维度骨架被当成完备清单**——真因可能不在六个维度里（如需求本身就是错的）。缓解：任务书明示「维度是常见失事面骨架不是封闭清单，证据指向维度外时照报，报告章节允许增设」。 - **第三风险：登记文件的 schema 演化**（agent-session-log.json 由平台协议文档约束，`change_key` 是既有键；若未来登记面废弃该键，过滤面静默变空）。缓解：空清单与「零命中」在输出里显式区分于「源缺失」，doctor/协议演进时会经过登记面自身的测试面；残余风险可接受（取证命令 fail-soft 不阻断任何主流程）。 - **放弃的方案**： - *CLI 解析 transcript 自动出报告*：三 harness 格式 × 演化维护泥潭 + 语义判断错位（见上）；diagnosing-superpowers 本体也是 agent 读 transcript、不是工具解析。 - *进 run 状态机成为 diagnose 阶段*：取证是随时可调用的查询动作不是流程节点，进状态机会引入步骤态/门禁/进度上报面——收益为零成本为正。 - *报告写到 .runtime*：取证报告是要给人读、随变更归档留档的产物——落变更目录（归档时随 change.patch 一起冻结）。
+
+## D-unmapped-404@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-eval-workdir-naming
+原编号：D-001@v1
+锚点：未记录
+最近确认：6e5c15277fae5b77214ab18c12e2a4648215f616
+理由：- 风险：`\0NN` 转义根因理论来自臂 A agent 的自证分析 + 两臂写入全拦实证，非 claude 源码级确认——若修复后重跑仍被拦则另有根因（届时按新证据再修；本修复至少排除已实证的歧义形态）。重跑验证在收口后进行（真 token 消耗），不计入本变更门。 - 放弃的方案：改 claude 侧（不可控、非本仓面）；workdir 换盘符路径（taskId 数字语义仍在，命名前缀是唯一干净修复点）；重命名 taskId 本体（破坏任务 id 稳定性与指纹语义）。

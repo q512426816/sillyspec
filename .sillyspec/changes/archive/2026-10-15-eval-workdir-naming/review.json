@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-workdir-naming",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "6e5c15277fae5b77214ab18c12e2a4648215f616",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试以 filesDir=null 调 prepareWorkdir，触发 workdir.mjs 既有 existsSync(null) 的 DEP0187 弃用警告（非本变更引入，仅显形）",
+      "evidence": "node --test 输出可见 (node:1260) [DEP0187] Passing invalid argument types to fs.existsSync is deprecated；workdir.mjs:27 的 if (existsSync(filesDir)) 对 null 入参即触发，runner.mjs:81 传 task.filesDir 同样可能为 undefined，属既有代码形态。测试 2/2 仍全绿，不构成正确性风险。",
+      "location": "eval/lib/workdir.mjs:27"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "不适用——纯命名变更，无输入/事件序面；prepareWorkdir 对 (taskId,arm) 确定性映射，无迟到到达语义。",
+    "并发": "removeDir 语义未动（重试删→.stale 改名隔离原样，workdir.mjs:8-18）；同 (task,arm) 并发重跑的风险面与本变更前完全相同，不同任务/臂目录名不相交。",
+    "切换": "workdirs 在 gitignore（.gitignore:22 eval/results/ 规则覆盖，git check-ignore 实证），每次重跑清空重建；旧命名目录为一次性孤儿（实测 001-004 共 8 个残留），prepareWorkdir 只清重建自己的 run-* 目标，不触碰旧目录。",
+    "作用域": "单根 eval/results/workdirs，名字全量保留 taskId+arm，跨任务隔离不变；无跨仓面（join 拼接 + ASCII 安全名）；无 local.yaml 键引入。"
+  },
+  "consumptionAudit": {
+    "__armReferences": "全仓 grep：代码引用仅 eval/lib/workdir.mjs:24（构造点）与 test/eval-workdir-naming.test.mjs:29（断言点）；runner.mjs 仅将返回路径作 cwd/命令模板参数（:104,105,122,124,139），不落库为键；reader.mjs 全文零 workdir 引用。声明『runner/db 以 task+arm 列为键不依赖目录名』与实作一致。",
+    "legacyRemnants": "eval/results/workdirs/ 下 001-004 旧命名 8 目录与新命名并存：verify 以新 workdir 为 cwd（runner.mjs:139）、判分读 DB、reader 不扫目录——对判分零影响，清理面无依赖（目录本就保留不删供排查）。"
+  },
+  "disclosureRuling": "可接受——本变更承诺并门控的是命名安全（首字符非数字/标识保留/脚手架不回退），全部可在仓内实证；沙箱解锁效果被如实标注为『agent 自证分析+双臂行为实证、非源码确认』，且留有重跑仍拦则按新证据再修的退路，重跑验证后置不属伪装共识。",
+  "probes": {
+    "cli-copy-selfsufficient": "无异常——workdir.mjs 头注释（每次重跑清空重建/目录保留不删排查用/在 .gitignore）与代码及 .gitignore:22 规则三方一致；patch 无任何 CLI 文案变更面。",
+    "config-absent-zero-regression": "无异常——patch 未引入任何 local.yaml 键，命名硬编码于 workdir.mjs:24。",
+    "crossrepo-path-compat": "无异常——join(workdirRoot, 'run-...') 拼接、ASCII 字母开头安全名，Windows/Linux/macOS 均合法，无跨仓面。"
+  },
+  "verification": {
+    "fr01": "workdir.mjs:24 为 `run-${taskId}__arm${arm}`，basename 首字符 'r' 非数字，taskId/arm 字面全保留；change.patch 证实仅一行+注释改动，removeDir/copyInto 未动。",
+    "fr02": "test/eval-workdir-naming.test.mjs 双形态断言真实（004-phase-stats 与 abc-tool × A/B，断言 /^[^\\d]/、含 taskId、含 __arm${arm}、目录已建、脚手架 marker 复制）；node --test 实测 2/2 pass；npm run lint 实测绿（1004 文件，0 hard fail）。"
+  },
+  "reviewedAt": "2026-10-15T12:54:20Z"
+}
