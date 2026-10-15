@@ -1,0 +1,44 @@
+diff --git a/package-lock.json b/package-lock.json
+index 927e665b..e8c40ea3 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.9",
++  "version": "3.32.10",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.32.9",
++      "version": "3.32.10",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index 7324a24f..60309832 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.9",
++  "version": "3.32.10",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index 43a47d54..aa3064df 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -146,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.9', `R5 package.json 版本 3.32.9（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.32.10', `R5 package.json 版本 3.32.10（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()

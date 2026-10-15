@@ -236,3 +236,42 @@ created_at: 2026-10-15T01:33:02.911Z
 - 场景：主路径 — Given 预核验 3.32.7 通过；When npm publish（钉扎）；Then 发布回执含 shasum，双核验两值均 3.32.8。
 全文：.sillyspec/changes/archive/2026-10-13-release-3-32-8/requirements.md#FR-03
 最近确认：a0027cf5a0b3c70c1b9728df1eaf2388f58b7711
+
+## FR-release-001 package.json 与 package-lock.json version=3.32.10 且 test/quick-retired.test.mjs R5 版本锚断言同步并跑绿
+变更：2026-10-15-release-3-32-10
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本地 3.32.9、npm 线上 latest=3.32.9；When `npm version 3.32.10 --no-git-tag-version` 连
+全文：.sillyspec/changes/archive/2026-10-15-release-3-32-10/requirements.md#FR-01
+最近确认：e95c309f71e68238ce5865a64200469ec0ae551e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-release-3-32-10:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs「R5 版本锚 3.32.10」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-release-3-32-10
+  status: active
+
+## FR-release-002 git push origin main 成功（pre-push 三门放行），origin/main 与本地一致
+变更：2026-10-15-release-3-32-10
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 版本面三文件与积压提交在本地 main；When `git push origin main`；Then pre-push 三门全绿放行，推送回执含远端哈希区间
+全文：.sillyspec/changes/archive/2026-10-15-release-3-32-10/requirements.md#FR-02
+最近确认：e95c309f71e68238ce5865a64200469ec0ae551e
+
+## FR-release-003 npm publish 回执含 sillyspec@3.32.10 与 shasum，传播后双核验 version=3.32.10 且 dist-tags.latest=3.32.10
+变更：2026-10-15-release-3-32-10
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 预核验 latest=3.32.9 通过证通道存活；When npm publish；Then 发布回执含 sillyspec@3.32.10 与 shasum
+全文：.sillyspec/changes/archive/2026-10-15-release-3-32-10/requirements.md#FR-03
+最近确认：e95c309f71e68238ce5865a64200469ec0ae551e

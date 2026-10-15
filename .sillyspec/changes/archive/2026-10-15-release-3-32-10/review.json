@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-release-3-32-10",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e95c309f71e68238ce5865a64200469ec0ae551e",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "notes": {
+    "检查单作答": {
+      "FR一致性": "FR-01 兑现：HEAD 与工作区 package.json version=3.32.10、package-lock.json 顶层与 packages[\"\"] 两处均 3.32.10、R5 断言 pkg.version === '3.32.10' 且文案同步（test/quick-retired.test.mjs:149，与 change.patch 冻结面一致）；绑定测试真实存在，断言行为即版本锚，跑绿以提交 4c8971ee 消息留痕（node --test 1/1 绿）佐证（只读纪律未复跑）。FR-02/FR-03 不适用留痕型绑定理由成立：push/publish 属外部动作无本地测试面，回执（push 区间 895c2d5c..4c8971ee、publish shasum c7fa51d6…、双核验 version 与 dist-tags.latest 均 3.32.10）均写进交付提交 e95c309f 消息留痕，origin/main 实际值=4c8971ee 实证推送成功。",
+      "盲维四问真实性": "四问作答与 diff 相符：乱序—diff 仅版本号面无事件序风险面，发布序刚性+CDN 延迟重试兜底声明成立；并发—三文件单会话顺序改写，diff 证实仅三文件版本字段改动无并发写面；切换—publish 幂等拒为 registry 语义，diff 无中途切换状态面；作用域—本 diff 未触及钉扎代码，发布动作 NODE_OPTIONS 进程级不串台。",
+      "披露边界裁决": "①发布序刚性（预核验→publish→双核验，预核验失败不发布）：可接受——单向依赖序 fail-fast 正确。②同版本重发幂等拒、误发布需 deprecate 而非重发：可接受——npm registry 语义决定同版本不可重发，deprecate 是标准补救。③钉扎通道降级条件（仅预核验失败才降级 DoH 重解析；github.com 推送不经钉扎）：可接受——延续 3.32.4~3.32.9 惯例，触发条件明确且有历史实证，本次回执显示直连成功未启用降级。④CDN 传播延迟期核验读旧值以传播后重试兜底：可接受——回执留痕约 5min 传播后双核验通过。FR-02/FR-03 不适用绑定理由亦裁决为成立（见 FR一致性）。",
+      "防护声明": "R5 锚断言真实存在且生效（test/quick-retired.test.mjs:149，改版本必同步改测试的强制锚）；pre-push 三门真实存在且 fail-closed（.husky/pre-push：lint/test/docs gate 各步非零退出即 abort，docs gate 为 ratchet 棘轮且基线缺失 fail-closed exit 2，--against HEAD 按提交树校验）；双核验为流程声明非代码机制，回执留痕于 e95c309f 提交消息。",
+      "生成物同步": "package.json / package-lock.json（两处）/ R5 断言值与文案三处版本一致为 3.32.10，HEAD 与工作区实态无漂移。"
+    },
+    "探针作答": {
+      "cli-copy-selfsufficient（两条）": "n/a——change.patch 仅版本字段与测试断言消息，未触及任何 CLI 输出文案。",
+      "config-absent-zero-regression": "n/a——未新增 local.yaml 消费键。",
+      "crossrepo-path-compat": "n/a——未触及 worktree/deps/跨仓对账代码。"
+    },
+    "观察（非缺陷）": "HEAD e95c309f（发布回执留痕提交）滞留本地未推 origin/main（origin/main=4c8971ee）——回执提交必然产生于 push 之后，属发布流程固有时序，将由下一次发版的 push 携带，与 3.32.1~3.32.9 惯例一致，不构成 FR-02 违诺。"
+  },
+  "reviewedAt": "2026-10-15T06:05:32Z"
+}
