@@ -1291,3 +1291,79 @@ superseded_by：FR-cli-entry-102
 - 场景：主路径 — Given 本变更触及 src/run 与 test/；When flow done；Then npm test 与 npm run lint 全绿放行。
 全文：.sillyspec/changes/archive/2026-10-15-lint-triage-path-unify/requirements.md#FR-04
 最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+
+## FR-runtime-088 全部裸 split/join 注入点收编进 dynSegments（新增 substituteRaw 助手），复入附录不再漏块
+变更：2026-10-16-step-guide-dyn-completeness
+状态：active
+摘要：复入附录含评审六值；首见渲染出真值
+全文：.sillyspec/changes/archive/2026-10-16-step-guide-dyn-completeness/requirements.md#FR-01
+最近确认：d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-step-guide-dyn-completeness:flow:测试绑定FR-01
+  tests: test/step-guide-dyn-completeness.test.mjs「复入附录含评审六值」 | test/step-guide-dyn-completeness.test.mjs「首见渲染出真值」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-step-guide-dyn-completeness
+  status: active
+
+## FR-runtime-089 VOLATILE_PLACEHOLDER_RES 补 3 个漏登 token
+变更：2026-10-16-step-guide-dyn-completeness
+状态：active
+摘要：掩码表覆盖
+全文：.sillyspec/changes/archive/2026-10-16-step-guide-dyn-completeness/requirements.md#FR-02
+最近确认：d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-step-guide-dyn-completeness:flow:测试绑定FR-02
+  tests: test/step-guide-dyn-completeness.test.mjs「掩码表覆盖三 token」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-step-guide-dyn-completeness
+  status: active
+
+## FR-runtime-090 stage-review 路径警告措辞覆盖双向错法
+变更：2026-10-16-step-guide-dyn-completeness
+状态：active
+摘要：措辞覆盖
+全文：.sillyspec/changes/archive/2026-10-16-step-guide-dyn-completeness/requirements.md#FR-03
+最近确认：d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-step-guide-dyn-completeness:flow:测试绑定FR-03
+  tests: test/step-guide-dyn-completeness.test.mjs「路径警告双向覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-step-guide-dyn-completeness
+  status: active
+
+## FR-runtime-091 测试钉死 + 既有面零回归 + lint
+变更：2026-10-16-step-guide-dyn-completeness
+状态：active
+摘要：新测试与既有面
+全文：.sillyspec/changes/archive/2026-10-16-step-guide-dyn-completeness/requirements.md#FR-04
+最近确认：d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-step-guide-dyn-completeness:flow:测试绑定FR-04
+  tests: test/step-guide-dyn-completeness.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-step-guide-dyn-completeness
+  status: active

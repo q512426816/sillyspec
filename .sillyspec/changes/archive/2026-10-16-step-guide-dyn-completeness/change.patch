@@ -1,0 +1,262 @@
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index d54a7994..20552e81 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -68,6 +68,7 @@ const VOLATILE_PLACEHOLDER_RES = [
+   /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
+   /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g, /{UI_VISUAL_GUIDANCE}/g,
+   /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
++  /{REVIEW_TIER}/g, /{REVIEW_TIER_REASON}/g, /{REVIEW_JSON_CONTRACT}/g,
+   /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
+   /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
+   /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{HANDOVER_SUMMARY}/g, /{PREFLIGHT_FAILURES}/g,
+@@ -1044,6 +1045,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     promptText = promptText.split(token).join(v)
+     return promptText
+   }
++  // 裸 split/join 注入点的收集通道（2026-10-16-step-guide-dyn-completeness）：语义与
++  // substituteSplitJoin 相同，供不以占位符正则批量替换的站点使用。
++  // ⚠️ 纪律：凡向 promptText 注入运行期值的站点必须走本组三个助手之一——裸 `.split().join()`
++  // 会让值漏进复入短输出的「动态注入段」附录（值不落盘、guide 掩码后无回读通道）。
++  // 2026-10-15 消费仓实证：评审六值（tier/材料包/契约等）漏收，主代理被迫读引擎源码逆推档位、
++  // 手建材料包、手拼 review.json 路径写错一层前缀再纠正——收集器注释「漏收才是坑」的兑现。
++  const substituteRaw = (token, value) => {
++    const v = String(value)
++    dynSegments.push(v)
++    promptText = promptText.split(token).join(v)
++    return promptText
++  }
+   // 替换 prompt 中的占位符
+   if (projectName && promptText.includes('<project>')) {
+     substitute(/<project>/g, projectName, true)
+@@ -1679,22 +1692,21 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+           reviewMaterialsMd = await assembleStageReviewMaterials({ stage: matStage, cwd, changeName, specBase: tierSpecBase })
+         } catch { /* 组装 best-effort：失败零注入 */ }
+       }
+-      promptText = promptText
+-        .split('{REVIEW_TIER}').join(ceremonyInjection.tierValue + ceremonyInjection.menuMd)
+-        .split('{REVIEW_TIER_REASON}').join(tier.reason)
+-        .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
+-        .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
+-        .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
+-        .split('{REVIEW_MATERIALS}').join(reviewMaterialsMd) // 三阶段材料包槽（CLI 组装注入，Gap 1 收口——此前恒空串靠主代理手组，机械保证断一半；主代理点名半边由模板补位指引接手）
++      // 全部走 substituteRaw（收集进 dynSegments——复入附录含评审六值；2026-10-16-step-guide-dyn-completeness）
++      substituteRaw('{REVIEW_TIER}', ceremonyInjection.tierValue + ceremonyInjection.menuMd)
++      substituteRaw('{REVIEW_TIER_REASON}', tier.reason)
++      substituteRaw('{STAGE_REVIEW_RUN_ID}', reviewRunId)
++      substituteRaw('{REVIEW_JSON_CONTRACT}', reviewContractMd)
++      substituteRaw('{PRIOR_REVIEW_FACTS}', priorFactsMd)
++      substituteRaw('{REVIEW_MATERIALS}', reviewMaterialsMd) // 三阶段材料包槽（CLI 组装注入，Gap 1 收口——此前恒空串靠主代理手组，机械保证断一半；主代理点名半边由模板补位指引接手）
+     } catch (e) {
+-      // 降级 self，避免 prompt 残留占位符
+-      promptText = promptText
+-        .split('{REVIEW_TIER}').join('self')
+-        .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
+-        .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
+-        .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
+-        .split('{PRIOR_REVIEW_FACTS}').join('')
+-        .split('{REVIEW_MATERIALS}').join('') // 降级分支同步 join（plan 审查提示：防占位符字面量残留）
++      // 降级 self，避免 prompt 残留占位符（降级值同样收编进 dynSegments——附录如实呈现降级态）
++      substituteRaw('{REVIEW_TIER}', 'self')
++      substituteRaw('{REVIEW_TIER_REASON}', '分级异常降级 self: ' + e.message)
++      substituteRaw('{STAGE_REVIEW_RUN_ID}', 'review-unknown')
++      substituteRaw('{REVIEW_JSON_CONTRACT}', '(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
++      substituteRaw('{PRIOR_REVIEW_FACTS}', '')
++      substituteRaw('{REVIEW_MATERIALS}', '') // 降级分支同步 join（plan 审查提示：防占位符字面量残留）
+     }
+   }
+ 
+@@ -1724,7 +1736,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       metaInfo = '（注入失败：' + e.message + '——运行 sillyspec worktree meta 自查，meta.json 不存在则停止并报错）'
+     }
+-    promptText = promptText.split('{WORKTREE_META}').join(metaInfo)
++    substituteRaw('{WORKTREE_META}', metaInfo)
+   }
+ 
+   // archive Step1「任务完成度检查」客观真相源注入：以 review.json verdict 算完成度，
+@@ -1741,9 +1753,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       const summary = tcrChangeDir
+         ? summarizeTaskCompletion({ changeDir: tcrChangeDir, runtimeRoot: tcrRuntimeRoot, changeName })
+         : null
+-      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join(summary ? summary.report : '（无法计算完成度：变更目录缺失）')
++      substituteRaw('{TASK_COMPLETION_REPORT}', summary ? summary.report : '（无法计算完成度：变更目录缺失）')
+     } catch (e) {
+-      promptText = promptText.split('{TASK_COMPLETION_REPORT}').join('（完成度计算异常：' + e.message + '，请手动核对 plan.md 与 .runtime/execute-runs/*/tasks/task-NN/review.json）')
++      substituteRaw('{TASK_COMPLETION_REPORT}', '（完成度计算异常：' + e.message + '，请手动核对 plan.md 与 .runtime/execute-runs/*/tasks/task-NN/review.json）')
+     }
+   }
+ 
+@@ -1784,7 +1796,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       baselineInfo = '（worktree 基线注入失败：' + e.message + '——diff 对账前先 git branch -a 查 sillyspec/<change> 分支并用 git merge-base <main> <branch> 自查基点，勿用主仓 HEAD 当基点）'
+     }
+-    promptText = promptText.split('{WORKTREE_BASELINE_INFO}').join(baselineInfo)
++    substituteRaw('{WORKTREE_BASELINE_INFO}', baselineInfo)
+   }
+ 
+   // verify「运行测试和质量扫描」evidence-auto 推荐注入（task-12，FR-11 / D-005@v2）：
+@@ -1825,7 +1837,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
+     }
+-    promptText = promptText.split('{EVIDENCE_AUTO_RECOMMENDATION}').join(eaInjected)
++    substituteRaw('{EVIDENCE_AUTO_RECOMMENDATION}', eaInjected)
+   }
+ 
+   // {ARCHIVE_IMPACT_AUDIT}（2026-09-09 ql-20260909-004）：archive extract-module-impact 步的
+@@ -1845,7 +1857,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       auditBlock = '（三重核对机械预填失败：' + (e && e.message ? e.message : e) + '——回退手跑 git diff --name-only 比对）'
+     }
+-    promptText = promptText.split('{ARCHIVE_IMPACT_AUDIT}').join(auditBlock)
++    substituteRaw('{ARCHIVE_IMPACT_AUDIT}', auditBlock)
+   }
+ 
+   // {SCOPE_AUDIT_TABLE}（2026-09-10-change-scope-audit task-05，FR-03）：archive「确认归档」步的
+@@ -1868,7 +1880,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       scopeTable = '（变更范围对账表注入失败：' + (e && e.message ? e.message : e) + '——回退手跑 sillyspec scope-audit --change <name> 查看后再确认归档，注入失败不阻断归档）'
+     }
+-    promptText = promptText.split('{SCOPE_AUDIT_TABLE}').join(scopeTable)
++    substituteRaw('{SCOPE_AUDIT_TABLE}', scopeTable)
+   }
+ 
+   // {HANDOVER_SUMMARY}（2026-09-17-pass-cap-semantics task-04，FR-06 注入态）：archive「确认
+@@ -1904,7 +1916,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       handoverBlock = '（移交项清单注入失败：' + (e && e.message ? e.message : e) + '——回退读 changes/<变更名>/verify-facts.json 的 handover 段核对后再确认归档，注入失败不阻断归档）'
+     }
+-    promptText = promptText.split('{HANDOVER_SUMMARY}').join(handoverBlock)
++    substituteRaw('{HANDOVER_SUMMARY}', handoverBlock)
+   }
+ 
+   // 注入模块上下文（brainstorm/plan/execute 阶段 + quick 首步「理解任务」——刀①：quick
+diff --git a/src/stage-review.js b/src/stage-review.js
+index e2ba4a5c..7301e824 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -139,7 +139,8 @@ export function renderReviewJsonContract({ stage, changeDir, reviewRunId, tier,
+     '',
+     '> 路径:`{SPEC_ROOT}/.runtime/stage-reviews/' + stageLbl + '-' + runIdLbl + '/review.json`(本次 reviewType=' + reviewType + ',主审查文档=' + mainDocRel + ')',
+     ...(changeDir
+-      ? ['> **本次完整绝对路径（直接复制给审查子代理，勿手拼 runId/漏阶段前缀——坑 stage-review-path-prefix 2026-10-10 实证：marker 只有裸 runId，子代理按 runId 直写漏「<stage>-」前缀即错位）**: `' + join(dirname(dirname(changeDir)), '.runtime', 'stage-reviews', stageLbl + '-' + runIdLbl, 'review.json') + '`']
++      ? ['> **本次完整绝对路径（直接复制给审查子代理——勿手拼、勿增删任何前缀）**: `' + join(dirname(dirname(changeDir)), '.runtime', 'stage-reviews', stageLbl + '-' + runIdLbl, 'review.json') + '`',
++         '> ⚠️ 坑 stage-review-path-prefix 双向实测：漏「<stage>-」前缀即错位（2026-10-10：marker 只有裸 runId，子代理按 runId 直写）；**多加一层「review-」前缀同样错位**（2026-10-15 复发：手拼成 `<stage>-review-review-…`，空目录残渣+一轮纠正）。唯一可靠做法：整条路径直接粘贴。']
+       : []),
+     '',
+     '### 必填字段(validateStageReviewSchema 硬校验,缺任一即 schema 失败阻断)',
+diff --git a/test/step-guide-dyn-completeness.test.mjs b/test/step-guide-dyn-completeness.test.mjs
+new file mode 100644
+index 00000000..a8b71649
+--- /dev/null
++++ b/test/step-guide-dyn-completeness.test.mjs
+@@ -0,0 +1,108 @@
++/**
++ * step-guide-dyn-completeness.test.mjs — 复入附录漏收面根治（2026-10-16-step-guide-dyn-completeness）
++ *
++ * 背景（消费仓 2026-10-15 实证）：复入短输出的「动态注入段」附录只收集走
++ * substitute()/substituteSplitJoin() 的值；评审六值等 9 站点曾用裸 split/join——
++ * 值不进附录、guide 掩码后无回读通道，主代理被迫读引擎源码逆推档位/手建材料包。
++ *
++ * 本文件钉死修复后的契约：
++ *   D1 首见渲染：评审六值全部替换为真值（无裸占位符残留）
++ *   D2 复入短输出的动态附录必须包含 tier 行原文 + review run id 值 + JSON 契约值（修复前必红）
++ *   D3 guide 静态文件：三个补登 token 已被掩码（不再残留裸占位符）
++ *   D4 stage-review 路径警告双向覆盖（漏前缀/多前缀）+ 直接复制指引
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { outputStep } from '../src/run/prompt.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch {} } })
++
++const NL = String.fromCharCode(10)
++// 评审六值全量在模板：tier/菜单、reason、run-id、JSON 契约、前序事实、材料包
++const STEP = {
++  name: 'Grill',
++  prompt: '交叉审查步骤。' + NL +
++    'tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）' + NL +
++    '材料包：' + NL + '{REVIEW_MATERIALS}' + NL +
++    '契约：' + NL + '{REVIEW_JSON_CONTRACT}' + NL +
++    'runid: {STAGE_REVIEW_RUN_ID}' + NL +
++    '前序：' + NL + '{PRIOR_REVIEW_FACTS}' + NL +
++    '静态尾句。',
++}
++const run = (cwd) => outputStep('brainstorm', 0, [STEP], cwd, null, null, {}, null, null, null)
++
++async function capture(fn) {
++  const lines = []
++  const orig = console.log
++  console.log = (...a) => lines.push(a.map(String).join(' '))
++  try { await fn() } finally { console.log = orig }
++  return lines
++}
++
++function withGuideEnv(val, fn) {
++  const prev = process.env.SILLYSPEC_STEP_GUIDE
++  if (val === undefined) delete process.env.SILLYSPEC_STEP_GUIDE
++  else process.env.SILLYSPEC_STEP_GUIDE = val
++  return fn().finally(() => {
++    if (prev === undefined) delete process.env.SILLYSPEC_STEP_GUIDE
++    else process.env.SILLYSPEC_STEP_GUIDE = prev
++  })
++}
++
++/** 一次渲染对：首见 s1（全量）+ 复入 s2（短输出+附录）。 */
++async function renderPair() {
++  const cwd = mk('sg-dyn-')
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  return withGuideEnv(undefined, async () => {
++    const s1 = await capture(() => run(cwd))
++    const s2 = await capture(() => run(cwd))
++    return { cwd, s1, s1text: s1.join(NL), s2text: s2.join(NL) }
++  })
++}
++
++test('D1 首见渲染：评审六值全部替换为真值，无裸占位符残留', async () => {
++  const { s1text } = await renderPair()
++  for (const token of ['{REVIEW_TIER}', '{REVIEW_TIER_REASON}', '{STAGE_REVIEW_RUN_ID}', '{REVIEW_JSON_CONTRACT}', '{PRIOR_REVIEW_FACTS}', '{REVIEW_MATERIALS}']) {
++    assert.ok(!s1text.includes(token), `首见输出无裸占位符 ${token}`)
++  }
++  const tierLine = s1text.split(NL).find((l) => l.startsWith('tier:'))
++  assert.ok(tierLine && tierLine.trim().length > 'tier:'.length, `首见 tier 行含真值：${tierLine}`)
++})
++
++test('D2 复入短输出的动态附录含评审六值（tier 菜单值 / run-id / JSON 契约——修复前必红）', async () => {
++  const { s2text } = await renderPair()
++  assert.ok(s2text.includes('动态注入段'), '复入含动态附录标题')
++  // 附录打印的是「注入值」本身（静态前缀如 'tier: ' 不在值内）——按值形态断言：
++  // tier 值 = tierValue + 档位菜单（首行 = independent/self 档位词，含 ceremony_tier 菜单行）
++  assert.ok(s2text.split(NL).some((l) => l.startsWith('independent')), '附录含 tier 注入值（含档位菜单块）')
++  assert.ok(s2text.includes('ceremony_tier: S2'), '附录含档位菜单的 ceremony_tier 行')
++  assert.ok(/review-\d{4}-\d{2}-\d{2}-\d{6}/.test(s2text), '附录含 STAGE_REVIEW_RUN_ID 值')
++  assert.ok(s2text.includes('schemaVersion'), '附录含 REVIEW_JSON_CONTRACT 值（契约文本特征词）')
++})
++
++test('D3 guide 静态文件：三个补登 token 已掩码（⟦dyn⟧），静态面无裸占位符', async () => {
++  const { s2text } = await renderPair()
++  const candidates = s2text.split(NL)
++    .map((l) => l.trim())
++    .filter((l) => l.includes('step-guides') && l.endsWith('.md'))
++  assert.ok(candidates.length > 0, `复入输出含 guide 路径：${s2text.slice(0, 300)}`)
++  const guide = readFileSync(candidates[0], 'utf8')
++  assert.ok(guide.includes('tier: ⟦dyn⟧'), `guide 中 tier 行已掩码：${guide.split(NL).slice(0, 8).join(' | ')}`)
++  for (const token of ['{REVIEW_TIER}', '{REVIEW_TIER_REASON}', '{REVIEW_JSON_CONTRACT}']) {
++    assert.ok(!guide.includes(token), `guide 无裸占位符 ${token}`)
++  }
++})
++
++test('D4 stage-review 路径警告双向覆盖 + 直接复制指引', () => {
++  const src = readFileSync(join(REPO_ROOT, 'src', 'stage-review.js'), 'utf8')
++  assert.ok(src.includes('漏「<stage>-」前缀即错位'), '覆盖漏前缀错法（2026-10-10 实证）')
++  assert.ok(src.includes('多加一层「review-」前缀同样错位'), '覆盖多前缀错法（2026-10-15 复发实证）')
++  assert.ok(src.includes('勿手拼、勿增删任何前缀'), '直接复制指引在场')
++})

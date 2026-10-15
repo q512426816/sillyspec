@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-step-guide-dyn-completeness",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——dynSegments 为 outputStep 内局部数组，收集顺序=渲染顺序（单进程单次渲染内），无迟到输入/队列面；diff 未新增持久化或时序假设",
+    "并发": "ok——无新增共享态：substituteRaw 只写函数内局部 dynSegments/promptText；guide/state 落盘为既有 best-effort 路径且未改动",
+    "切换": "ok（边界已裁决：可接受）——①复入附录体积接受增长（复入=上下文丢失恢复场景，多出的正是事故缺失的评审块/材料包；--json 与 SILLYSPEC_STEP_GUIDE=0 逃生门不受影响）；③掩码表 +3 token 令含 token 步骤指纹变化、存量变更下次渲染全量重印一次（一次性良性，多印不产生错误指引，掩码表注释同口径）；state 文件按变更名隔离，无跨变更影响",
+    "作用域": "ok（边界已裁决：可接受）——纯本地渲染逻辑，dynSegments 不落盘不进 guide，作用域=本次进程 console 输出；②quick 专用追加式注入（ki.section/semanticGuardBlock）不收编：追加式无占位符 token（收编需另定语义），quick 为辅助/存量通道（src/stages/index.js:21 仍注册为 auxiliary，非主五阶段流程），影响仅限该通道复入附录少两块，无数据正确性风险"
+  },
+  "notes": {
+    "轮次": "复审（第二轮）——前轮唯一 P3（FR-04「两场景修复前必红」措辞不精确）已清偿：requirements.md FR-04 改为「D1（首见真值）为回归锚（旧代码亦过）；D2（复入附录含六值）为修复面判别器（旧代码必红，已对照验证 1 过 3 红）」，与实测判别力一致，findings 清空。清偿 commit d3d36152 零夹带：git show --stat 仅 requirements.md 1 文件 1 行；代码面与首轮锚 fbf0ada4 逐字节一致（git diff fbf0ada4 d3d36152 -- src test 为空），首轮全部核查结论（下列各项）沿用。",
+    "承诺对照": "FR-01：substituteRaw 在场（src/run/prompt.js:1054-1059，push+split/join 与 substituteSplitJoin:1042-1047 逐句同构）；9 站点 20 处调用全部收编（1696-1701 / 1704-1709 / 1739 / 1756+1758 / 1799 / 1840 / 1860 / 1883 / 1919）；残留 grep：src/ 无其它裸 split/join 注入点（仅 1045/1057 两个助手定义体内部），且不改 substitute/substituteSplitJoin 语义、不改复入附录打印逻辑；quick 追加式注入（2013 ki.section / 2028 semanticGuardBlock）确未收编，与 design「未收编面」声明逐字一致。FR-02：掩码表（68-75 行）三 token 在场且均带 /g；推演+实测确认 /{REVIEW_TIER}/g 不会吃掉 {REVIEW_TIER_REASON}（正则要求 REVIEW_TIER 后紧跟 }，实际为 _），顺序掩码两 token 各自命中。FR-03：src/stage-review.js:142-143 直接复制指引 + 双向错法（漏 <stage>- 前缀 2026-10-10 / 多加一层 review- 前缀 2026-10-15）齐备。FR-04：新测试实测 4/4 绿；step-guide 族既有 4 文件（default-on/fingerprint/prune/guidance-output-neutrality）14/14 绿；npm run lint（check-syntax）1008 文件通过；措辞澄清后 FR-04 的「1 过 3 红」主张与首轮推理一致。冻结件：change.patch 与 git diff HEAD~1 HEAD 三文件 diff 逐字节一致（3 个 diff --git 块，锚 fbf0ada4 时核验；d3d36152 未触代码面不影响该结论）。",
+    "旧代码判别力": "D2/D3 在旧代码下确为红（推理）：旧代码评审六值不走 dynSegments（只收 substitute/substituteSplitJoin），复入附录无 tier 菜单/run-id/契约值→D2 断言全落空；HEAD~1 掩码表无三 token，guide 静态面残留 tier: {REVIEW_TIER} 且无 tier: ⟦dyn⟧→D3 红。D1（首见真值）旧代码即绿（裸 split/join 照样替换）——本轮 requirements.md 已按此精确标注（D1 回归锚 / D2 判别器）。",
+    "防护声明核实": "「split/join 语义逐字保留、promptText 字节不变」核实：六连替换在旧（链式表达式）新（顺序赋值）两形态下对含后续 token 的注入值产出逐字节一致（内存对照实测 identical=true）；单站点改写成同构单表达式；20 站点取值在全部可达分支均为字符串（metaInfo 三分支 / tier.reason 三个 return / summary.report 各分支均为字符串拼接），旧 join(v) 与新 String(v) 对 string 零差异（仅 undefined/null 有差异，不可达）。首见渲染输出零变化与 design 一致。",
+    "探针": {
+      "cli-copy-selfsufficient": "pass——新文案与代码事实一致：目录名=<stage>-<runId>（stage-review.js:142-143），runId=review-YYYY-MM-DD-hhmmss（stage-review.js:348-352），故手拼多加一层 review- 确实得到 <stage>-review-review-…；完整路径 join(dirname(dirname(changeDir)),'.runtime','stage-reviews',…) 与 {SPEC_ROOT} 行同源；「直接复制」指引与 1633 行既有提示口径一致",
+      "config-absent-zero-regression": "n/a——diff 未新增 local.yaml 消费键（仅 prompt.js/stage-review.js/新测试三文件）",
+      "crossrepo-path-compat": "n/a——未触 worktree*/cross-repo*/local-register 面（{WORKTREE_META}/{WORKTREE_BASELINE_INFO} 仅是 prompt.js 内既有注入点收编，不涉路径形态与 repos 注册语义）"
+    }
+  },
+  "reviewedAt": "2026-10-16T00:43:24+08:00"
+}

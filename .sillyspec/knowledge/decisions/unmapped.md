@@ -3350,3 +3350,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：bb08a72037849455c8313190af062749daed5e5a
 理由：- 风险：强制 settle 后 stdout 尾部内容可能缺失（孤儿还在写）——接受：timeout 语义下输出本就不完整，timedOut=true 让消费方按失败处理。 - 次风险：spawnSync taskkill 在极少数权限形态下失败——child.kill 兜底 + 宽限强制 settle 双保险保证绑定上界。 - 死路：仅靠 fire-and-forget taskkill（现行实现）——实测树存活 10 分钟，证伪。 - **收口前零回归实测回填（task-03 证据）**：dry-run 管道 --force 全量重跑 10 臂全绿（5 任务 × 2 臂，含 runner verify 走 spawnCapture 的修复面）：A 臂 5/5、B 臂 3/5（mixed 形态与 004/005 奇偶规则一致）、hash=d400e749d374 不变；npm run lint 1007 文件绿；变更自身测试 2/2。
+
+## D-unmapped-409@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-16-step-guide-dyn-completeness
+原编号：D-001@v1
+锚点：未记录
+最近确认：d3d36152b1e6dda1e66a50640d0c1d85c9f7b2c5
+理由：- 风险：复入附录体积增长（评审步骤重入时打印 tier/菜单/契约/材料包全文）。评估：这正是 2026-10-15 事故缺失的救命信息，且复入本就为「上下文丢失后恢复」场景；JSON 消费面（jsonHijacked）与 SILLYSPEC_STEP_GUIDE=0 逃生门不受影响。接受。 - 次风险：降级分支（catch 内）也 push 占位值（'self'/异常文案）——无害（附录如实呈现降级态），且帮助事后诊断。 - 死路：只修评审六处而不收编其余 7 站点——同类漏收仍在（WORKTREE_META 等），下次同类事故换一个 token 复现；类级修复才治本。 - 死路：把复入附录做成「读取时惰性重建」——重建需重跑全部注入逻辑（副作用/耗时），与「渲染时收集」的既有单向结构冲突；push 是零成本路径。
