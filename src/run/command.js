@@ -232,7 +232,7 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
 function emitReadonlyEmptyGuide() {
   console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
   console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
-  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>')
   console.log('')
   console.log('     成功标准：')
   console.log('     - <可验证标准>"')
@@ -858,7 +858,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
             quickFallbackUsed = true
           } else {
             console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更（--input 引号内换行合法，可照抄）：')
-            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>')
             console.log('')
             console.log('   成功标准：')
             console.log('   - <可验证标准>"')
@@ -2076,7 +2076,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     if (classification.mode === 'quick') {
       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
       console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话；--input 引号内换行合法，可照抄）：`)
-      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
+      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>')
       console.log('')
       console.log('   成功标准：')
       console.log('   - <可验证标准>"')

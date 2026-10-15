@@ -61,7 +61,7 @@ const STAGE_HINTS = {
     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
     '',
     '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）——--input 引号内换行合法，下例可照抄：',
-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
+    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>',
     '',
     '  成功标准：',
     '  - <可验证标准>"',
@@ -80,7 +80,7 @@ const STAGE_HINTS = {
   'verify': [
     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
     '如需修改，请先回到 execute 阶段，或收口后开轻量变更（--input 引号内换行合法，可照抄）：',
-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
+    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>',
     '',
     '  成功标准：',
     '  - <可验证标准>"',
@@ -88,7 +88,7 @@ const STAGE_HINTS = {
   'archive': [
     '当前在 archive（归档）阶段，不修改源码。',
     '如需修改，请开启新变更（--input 引号内换行合法，可照抄）：',
-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
+    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景>',
     '',
     '  成功标准：',
     '  - <可验证标准>"',

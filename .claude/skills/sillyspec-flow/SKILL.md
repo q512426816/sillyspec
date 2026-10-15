@@ -16,7 +16,7 @@ description: 轻量变更（默认快道）——需求明确的小/中改动两
 ### ① flow start（立项 + 锁基线）
 
 ```bash
-sillyspec flow start --change <变更名> --input "<动机与背景>
+sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
 
 成功标准：
 - <可验证标准>"
