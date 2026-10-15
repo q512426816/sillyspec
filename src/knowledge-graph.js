@@ -571,6 +571,27 @@ export function graphChangelogDanglings(graph, { existsFn = existsSync } = {}) {
   return out
 }
 
+/** 登记仓前缀（graph 惰性缓存）：<specRoot>/projects/*.yaml 的 name: 字段——本 spec 树管理
+ *  多仓时（register-repo 机制），跨仓交付路径（backend/**、frontend/**…）按前缀归到登记仓名下，
+ *  不再落 _unmapped 大簇（2026-10-15-graph-registry-domain-split：真图 2183 未挂模块文件节点
+ *  实测 1220 为跨仓前缀、421 为本仓 test 面）。无 projects 目录/解析失败 = 空集（fail-soft）。 */
+function registryProjectPrefixes(graph) {
+  if (graph._projPrefixes) return graph._projPrefixes
+  const out = []
+  try {
+    const dir = join(String(graph.root || ''), 'projects')
+    if (existsSync(dir)) {
+      for (const f of readdirSync(dir)) {
+        if (!f.endsWith('.yaml')) continue
+        const m = /^name:\s*([\w-]+)\s*$/m.exec(readFileSync(join(dir, f), 'utf8'))
+        if (m) out.push(m[1])
+      }
+    }
+  } catch { /* projects 缺席/不可读 = 无登记前缀 */ }
+  graph._projPrefixes = out
+  return out
+}
+
 /** 节点 → 簇域（lite 总览聚类键 type×domain；缺省占位防散簇）。 */
 function graphNodeDomain(graph, n) {
   switch (n.type) {
@@ -579,7 +600,20 @@ function graphNodeDomain(graph, n) {
     case 'file': {
       // module-files 精确挂接反查（多挂取最长模块 id——窄域优先）
       const mods = graph.edges.filter((e) => e.type === 'module-files' && e.t === n.id).map((e) => e.s.replace(/^module:/, ''))
-      return mods.sort((a, b) => b.length - a.length)[0] || '_unmapped'
+      if (mods.length > 0) return mods.sort((a, b) => b.length - a.length)[0]
+      // 登记仓前缀归属（2026-10-15-graph-registry-domain-split）：跨仓交付路径按 projects 登记
+      // 名归簇（最长前缀优先、大小写不敏感——登记名 SillyHub vs 路径 sillyhub/ 实证）；本仓
+      // 测试面归 _tests——残余 _unmapped 只剩真无归属面（module-map 覆盖缺口，可行动）
+      const id = String(n.id)
+      const idLower = id.toLowerCase()
+      let best = ''
+      for (const p of registryProjectPrefixes(graph)) {
+        const pl = p.toLowerCase()
+        if (idLower.startsWith(`${pl}/`) && pl.length > best.length) best = p
+      }
+      if (best) return best
+      if (/^(test|tests)\//.test(id)) return '_tests'
+      return '_unmapped'
     }
     case 'module':
       return n.id.replace(/^module:/, '')

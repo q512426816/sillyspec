@@ -393,3 +393,11 @@ session_id 列 NOT NULL + default_factory=uuid4（为兼容 ~50 处存量构造�
 - 现象：`GET /api/daemon/sessions/events` 带鉴权请求返回 422 uuid_parsing——"events" 被两段式参数路由 `GET /sessions/{session_id}`（get_session_detail）当作 {session_id} 吞掉，端点在真实路由下不可达；task-04 注释只要求先于三段式 `/sessions/{id}/...`，漏了两段式详情路由。
 - 盲区三连：① 审查 grep 用单行模式 `@router.get("` 漏掉多行装饰器（路径在下一行）；② 端点测试直接调路由函数（`await stream_sessions_events(user=...)`）绕过路由表，路由顺序永不进入测试；③ 唯一路由级测试只断言未登录 401——FastAPI auth 依赖先于路径参数校验触发，遮蔽路由下同样 401，红不了。
 - 规避：新增字面量路径且同前缀存在参数路由时——审查用多行感知 grep（`grep -A1 '@router\.get($'`）；测试补路由表级断言（按注册序找首个方法+regex 匹配，断言 endpoint 是预期函数，不消费 body）；SSE/无限流端点测试勿走 httpx client 消费 body（ASGITransport 收全量 body 才返回，`client.stream()` 也挂死），路由可达性用路由表断言替代。真实运行时冒烟（真 uvicorn + curl）是最后防线——本缺陷单测 5186 全绿仍存在。与 [[ppm export-excel 路由必须前置 item_id]] 同构（该条 422、路由顺序），互为印证。
+
+## 🟡 decisions/unmapped.md 285KB 存量池与 fr-unmapped 存量（拆分/退休缓办——冻结池裁决）
+
+> 来源：2026-10-15-graph-registry-domain-split 效果评估清偿批（C1/C5/D3 处置留痕）。
+
+- 现状：knowledge/decisions/unmapped.md 单文件 285KB（~700 条 legacy 决策，epoch 迁移后只读稳定）；fr/unmapped.md 存量池 fr-unreferenced unmapped×625 等。归属清偿已完成可动部分：伪域 36 条迁真域、图簇登记仓分流（_unmapped 2183→761 真缺口）、新增决策经 module-map 路由落真域。
+- 缓办裁决：①decisions/unmapped.md 拆分=决策条目跨文件迁移，id 寻址键（file+id+change）全体漂移——引用面（变更名#D-xxx@vN 引用/幽灵节点 id/平台 spec_path/INDEX 路由）需整体对账，风险体量对等 legacy-renumber 级变更，而池只读稳定无增长噪音，维护收益不抵迁移风险；②fr-unmapped 存量退休——L3 已裁决冻结（2026-10-15-fr-chain-l3-adjudication D-001@v1），fr-unreferenced 信号已无门禁消费方，625 条存量池有基线消音不刷信号，退休动作失去紧迫性。
+- 重启条件：decisions/unmapped.md 恢复增长（新增落 unmapped 说明路由缺口回归）或需要跨文件决策查询时，用一次性迁移工具（对齐 renumber 先例：dry-run 对账+原子写+幂等）做拆分。
