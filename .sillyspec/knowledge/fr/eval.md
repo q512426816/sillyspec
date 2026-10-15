@@ -148,3 +148,41 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-workdir-naming
   status: active
+
+## FR-eval-009 adapter command 追加 --dangerously-skip-permissions（两臂同旗标），headless 被测 agent 可写 workdir
+变更：2026-10-15-eval-adapter-permissions
+状态：active
+摘要：旗标在场
+全文：.sillyspec/changes/archive/2026-10-15-eval-adapter-permissions/requirements.md#FR-01
+最近确认：cd059201772ee8e9f819019452c770f2cd04af70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-adapter-permissions:flow:测试绑定FR-01
+  tests: test/eval-adapter-config.test.mjs「adapter command 含 skip-permissions 旗标」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-adapter-permissions
+  status: active
+
+## FR-eval-010 配置漂移保护测试 + 根因修正留痕 + lint
+变更：2026-10-15-eval-adapter-permissions
+状态：active
+摘要：漂移保护与留痕
+全文：.sillyspec/changes/archive/2026-10-15-eval-adapter-permissions/requirements.md#FR-02
+最近确认：cd059201772ee8e9f819019452c770f2cd04af70
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-adapter-permissions:flow:测试绑定FR-02
+  tests: test/eval-adapter-config.test.mjs「adapter command 含 skip-permissions 旗标」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-adapter-permissions
+  status: active

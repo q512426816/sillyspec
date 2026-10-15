@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-adapter-permissions",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-eval-adapter-permissions:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-adapter-config.test.mjs「adapter command 含 skip-permissions 旗标」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-adapter-permissions"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-eval-adapter-permissions:flow:测试绑定FR-02",
+      "tests": [
+        "test/eval-adapter-config.test.mjs「adapter command 含 skip-permissions 旗标」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-adapter-permissions"
+    }
+  ]
+}

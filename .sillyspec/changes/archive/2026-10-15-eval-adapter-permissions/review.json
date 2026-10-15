@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-adapter-permissions",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "cd059201772ee8e9f819019452c770f2cd04af70",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "title": "change.patch 为跨变更累积面，含兄弟变更未声明编辑",
+      "detail": "change.patch 除本变更声明的两文件编辑外，还含 2026-10-15-eval-b-arm-turn-budget 的编辑（arms.B.promptTemplate 重写、adapter.maxTurns 60→120、测试文件第 3 用例）。git 归因证明本变更自身提交 8b2abe29 仅动 eval/eval.config.json（追加旗标）+ test/eval-adapter-config.test.mjs + 本变更 .sillyspec 文档，FR-01 禁止条款（不改 promptTemplate/其余 adapter 配置）对本变更成立；design.md 接口契约「promptTemplate 零改动」按提交粒度属实。属证据工件范围卫生问题（读者单看 patch 会误判越界），非承诺违反。"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "title": "测试文件实测 3 用例而非检查单基线的 2 用例",
+      "detail": "test/eval-adapter-config.test.mjs 含第 3 个 test（maxTurns 帽与 B 臂话术，头部注释归属兄弟变更 2026-10-15-eval-b-arm-turn-budget）。FR-02 要求的两断言（旗标在场 + B 臂 setup）真实且独立成立；node --test 实测 3/3 绿（非 2/2）。无正确性风险，记录基线差异。"
+    }
+  ],
+  "dimensionNotes": {
+    "disclosureAdjudication": {
+      "skipPermissionsBlastRadius": "可接受——workdir 实测位于 eval/results/workdirs/ 下，.gitignore L21-22 已忽略 eval/results/（一次性草稿、每轮清空重建）；旗标仅作用于 runner spawn 的 claude 子进程（cwd=workdir），不落持久配置、不触碰用户本机其他 claude 会话。headless 评测标准取舍（不 skip 则测的是撞权限墙的能力——两轮日志实证）。",
+      "flagNamePrivateSurface": "可接受——config 层漂移保护测试防人误删旗标（本层可测即测）；旗标被 CLI 改名/拒识属运行时失败路径，会以 claude 非零退出显形，design 风险节已显式披露该保护边界，取舍诚实且缓解路径明确。",
+      "escapeTheoryDeprecated": "可接受——证伪链完整：stdout.txt 实测 permission_denials 数组直列被拒的 Write/Bash 调用（deny 理由为权限未授，非路径解析损坏），且 run- 前缀命名受控重跑仍被拦，\\0NN 转义理论废弃、命名前缀降级为无害加固的留痕完整落在 design 做法概述+风险节（含「证伪」与 permission_denials 关键词，FR-02 留痕要求满足）。"
+    },
+    "fourDimensions": {
+      "orderingLateArrival": "不适用——静态配置，无事件时序面（与 design 一致）。",
+      "concurrentWrites": "两臂串行（runner 顺序执行），workdir 每 run 清空隔离；skip-permissions 不改变并发面，arms 语义未动（实测 config 与 FR-01 场景一致）。",
+      "switchLifecycle": "config 每次 run 读取，回滚=删旗标一行；测试文件钉死旗标在场防静默回退；中断安全面不变。",
+      "scope": "旗标仅作用于 eval 子进程 spawn 的 claude 实例（cwd=gitignored 草稿 workdir）；src/ 无任何对 eval.config 的引用（grep 实证），产品面零波及。"
+    },
+    "probes": {
+      "cliCopySelfsufficient": "PASS——本变更零 CLI/runner 代码改动，交付物（config 一行 + 测试文件）自含于仓；B 臂 npx sillyspec init 依赖既有已发布 CLI，非本变更引入的新依赖。",
+      "configAbsentZeroRegression": "PASS——grep 实证 src/ 零引用 eval.config.json；仅 eval runner 与新测试读取该文件，缺省时主产品零影响（测试会红属漂移保护预期行为）。",
+      "crossrepoPathCompat": "PASS——测试用 import.meta.url + fileURLToPath + node:path join 定位仓根，无硬编码分隔符；adapter.command 为参数数组（spawn 非 shell 串），{workdir} 占位由 runner 填充，跨 Windows/Linux/macOS 安全。"
+    },
+    "frChecks": {
+      "FR-01": "PASS——eval.config.json adapter.command 实测为 [claude, -p, --output-format, json, --max-turns, {maxTurns}, --dangerously-skip-permissions]，旗标在场且原形态保留；本变更提交未动 arms 语义。",
+      "FR-02": "PASS——两断言真实（旗标在场/原形态 + A 臂零 setup、B 臂 sillyspec init、双臂 {instruction}）；design 含「证伪」与 permission_denials 关键词；node --test 3/3 绿。"
+    }
+  },
+  "reviewedAt": "2026-10-15T13:42:03.000Z"
+}
