@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  lint 归属降档共享 helper——接通 noAI 质量扫描路径，消同一失败两路径行为分叉
+
+
+  动机与背景：消费仓坑档案 docs/sillyspec/verify-lint-triage-path-divergence.md（2026-10-15-dsh-engine-acp verify 实证）：lint 硬门的「零交集存量债
+  → advisory 降档」只实现在 gates.js 的 --done 拦截面；verify step6「noAI 质量扫描」（verify-quality-scan.js :800/:820）只做
+  shouldBlockVerifyLint 二值判定直接 throw——mypy 3 处并行变更存量债（零交集）在 step6 硬拦，被迫 SILLYSPEC_VERIFY_LINT_GATE=advisory 逃生口收口，而同失败在
+  --done 路径会自动降档。
+
+
+  做法：新建 src/run/lint-ownership.js（lintOwnershipDowngrade 共享 helper，判定+文案单一来源，importer 可注入便测）；gates.js 原内联块换 helper
+  调用（行为/文案等价）；verify-quality-scan.js throw 前接线（仅 lint 单独失败时降档，testFailed 优先 throw）。
+
+
+  成功标准：
+
+  - lintOwnershipDowngrade 语义：pre-existing→true+降档 warning；owned/unattributable/鉴定链异常→false（保守硬拦）
+
+  - gates.js 与 verify-quality-scan.js 两路径同源接线（无复制粘贴分叉）
+
+  - 新增 test/lint-ownership-path.test.mjs 覆盖 helper 四态 + 两路径源级接线断言，全绿
+
+  - flow done 实测门（npm test + npm run lint）通过
+autopilot: true
+prestage_ack: false
+baseline_commit: e5c97358455a9a91d268be95d4d7c48ef4c75e52
+updatedAt: '2026-10-15T10:38:25.343Z'
+baseline_sha256: d75ca584471608aabd167a10cc728e26358382fe95a06b69c700ac70edf29486
+autopilot_ticked: 3
+
