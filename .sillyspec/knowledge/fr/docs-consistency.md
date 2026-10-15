@@ -1592,3 +1592,31 @@ created_at: 2026-09-28T17:07:05.883Z
 - 场景：默认场景 — Given 4 条实验知识有跨会话复利价值（flag 死路类/摘录碎片化/verify 互锁/绿地伪域断流）；When 追加为 known-issues.md 条目；Then 每条含现象/证据锚点/修复状态；INDEX.md 补可区分关键词路由行（知识命中面可及）
 全文：.sillyspec/changes/archive/2026-09-25-r17-assets-intake/requirements.md#FR-02
 最近确认：d3342a85bb06e43dab876a12b30c62ad7c6905dd
+
+## FR-auto-sillyspec-024 knowledge digest 伪域信号归零（pseudo=0，36 条全部迁入真域，ID 不变）
+变更：2026-10-15-pseudo-domain-clearance
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-pseudo-domain-clearance/requirements.md#FR-01
+最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
+
+## FR-auto-sillyspec-025 六个 auto-* 域文件删空壳，INDEX 路由行无 auto-* 残留、新域路由行在场
+变更：2026-10-15-pseudo-domain-clearance
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-pseudo-domain-clearance/requirements.md#FR-02
+最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
+
+## FR-auto-sillyspec-026 release 模块卡与 _module-map 注册在场，未来 release 变更触达 package.json 可路由真域
+变更：2026-10-15-pseudo-domain-clearance
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-pseudo-domain-clearance/requirements.md#FR-03
+最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
+
+## FR-auto-sillyspec-027 迁移后 knowledge validate 全绿（锚点/注册/幽灵条目零新增问题）
+变更：2026-10-15-pseudo-domain-clearance
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-pseudo-domain-clearance/requirements.md#FR-04
+最近确认：5570285d46e6b499799c7a903903ea11bdd970e0

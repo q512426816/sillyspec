@@ -140,6 +140,7 @@ modules:
       - src/docs-check.js
       - src/docs-migrate.js
       - src/docs-gate.js
+      - .sillyspec/knowledge/
       - src/docs-debt.js
       - src/scan-staleness.js
       - src/decision-distill.js
