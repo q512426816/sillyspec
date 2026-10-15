@@ -68,3 +68,4 @@
 | 2026-10-15 | 2026-10-15-fr-chain-l3-adjudication | 按 2026-09-18-fr-index-l1 design 实验裁决条款（护栏①·证伪出口）执行正式裁决。观察期：e |
 | 2026-10-15 | 2026-10-15-graph-registry-domain-split | 效果评估实证：图簇 _unmapped 大簇 2183 个文件节点是伪信号——本 spec 树管理多仓（projects |
 | 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
+| 2026-10-15 | 2026-10-15-vector-capability-autodetect | 用户设计裁决：向量开关放每仓 local.yaml 不是终态——端点部署本身就是开关，客户端应自动探… |

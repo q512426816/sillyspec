@@ -2142,3 +2142,98 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-15-vector-switch-discoverability
   status: active
+
+## FR-setup-121 缺省（无键）+平台已连接：首查探测一次并落缓存，缓存 1h 内后续检索零探测（跨进程持久）
+变更：2026-10-15-vector-capability-autodetect
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-capability-autodetect/requirements.md#FR-01
+最近确认：6748ef4f39fdcff94ef171db460944ded0ff3557
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-capability-autodetect:flow:测试绑定FR-01
+  tests: test/knowledge-vector-recall.test.mjs「⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 → 首查探测落缓存，重试窗内零再探测」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-capability-autodetect
+  status: active
+
+## FR-setup-122 local.yaml off 强制关/on 强制开跳过探测；env 三态不变
+变更：2026-10-15-vector-capability-autodetect
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-capability-autodetect/requirements.md#FR-02
+最近确认：6748ef4f39fdcff94ef171db460944ded0ff3557
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-capability-autodetect:flow:测试绑定FR-02
+  tests: test/knowledge-vector-recall.test.mjs「⑧」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-capability-autodetect
+  status: active
+
+## FR-setup-123 能力缓存按 URL 匹配（换平台失效）；写盘 fail-soft；过期缓存重新探测且部署后自动启用
+变更：2026-10-15-vector-capability-autodetect
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-capability-autodetect/requirements.md#FR-03
+最近确认：6748ef4f39fdcff94ef171db460944ded0ff3557
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-capability-autodetect:flow:测试绑定FR-03
+  tests: test/knowledge-vector-recall.test.mjs「⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-capability-autodetect
+  status: active
+
+## FR-setup-124 hint 语义随迁：auto+unavailable 信息性提示/强制关零提示/开零提示/未连接空/auto 未探测空
+变更：2026-10-15-vector-capability-autodetect
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-capability-autodetect/requirements.md#FR-04
+最近确认：6748ef4f39fdcff94ef171db460944ded0ff3557
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-capability-autodetect:flow:测试绑定FR-04
+  tests: test/vector-switch-hint.test.mjs「① 五态」 | test/vector-switch-hint.test.mjs「② search：auto+unavailable 输出信息性 hint 键」 | test/vector-switch-hint.test.mjs「③ flow 注入零命中：auto+unavailable 追加信息性提示行；已开零新增」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-capability-autodetect
+  status: active
+
+## FR-setup-125 既有 vector 测试面随契约更新全绿，schema/example 同步
+变更：2026-10-15-vector-capability-autodetect
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-capability-autodetect/requirements.md#FR-05
+最近确认：6748ef4f39fdcff94ef171db460944ded0ff3557
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-capability-autodetect:flow:测试绑定FR-05
+  tests: test/config-schema.test.mjs | test/knowledge-inject.test.mjs | test/knowledge-vector-recall.test.mjs | test/thin-inject-telemetry.test.mjs | test/thin-query-slim.test.mjs | test/vector-switch-hint.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-capability-autodetect
+  status: active

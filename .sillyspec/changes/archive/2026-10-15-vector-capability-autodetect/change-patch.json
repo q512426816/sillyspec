@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-15-vector-capability-autodetect",
+  "baseline": "6a7c9aaa9f26187cda7352bb72011aef26bb9d6a",
+  "head": "6748ef4f39fdcff94ef171db460944ded0ff3557",
+  "files": [
+    "src/config-schema.js",
+    "src/knowledge-vector.js",
+    "test/knowledge-vector-recall.test.mjs",
+    "test/vector-switch-hint.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 167,
+    "deletions": 68
+  },
+  "savedAt": "2026-10-15T05:25:36.267Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "6a7c9aaa9f26187cda7352bb72011aef26bb9d6a",
+    "totals": {
+      "files": 4,
+      "additions": 167,
+      "deletions": 68
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 71,
+        "deletions": 20,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-vector-recall.test.mjs",
+        "additions": 45,
+        "deletions": 7,
+        "kind": "modified"
+      },
+      {
+        "path": "test/vector-switch-hint.test.mjs",
+        "additions": 46,
+        "deletions": 36,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2158831cc16b7bd182ec29f292263d838c5e93126187578e6e0aaecdcda663e0",
+  "patchStatus": "ok"
+}

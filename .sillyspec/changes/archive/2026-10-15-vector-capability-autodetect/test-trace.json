@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-capability-autodetect",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-vector-capability-autodetect:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 → 首查探测落缓存，重试窗内零再探测」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-capability-autodetect"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-vector-capability-autodetect:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「⑧」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-capability-autodetect"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-vector-capability-autodetect:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-vector-recall.test.mjs「⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-capability-autodetect"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-vector-capability-autodetect:flow:测试绑定FR-04",
+      "tests": [
+        "test/vector-switch-hint.test.mjs「① 五态」",
+        "test/vector-switch-hint.test.mjs「② search：auto+unavailable 输出信息性 hint 键」",
+        "test/vector-switch-hint.test.mjs「③ flow 注入零命中：auto+unavailable 追加信息性提示行；已开零新增」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-capability-autodetect"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-15-vector-capability-autodetect:flow:测试绑定FR-05",
+      "tests": [
+        "test/config-schema.test.mjs",
+        "test/knowledge-inject.test.mjs",
+        "test/knowledge-vector-recall.test.mjs",
+        "test/thin-inject-telemetry.test.mjs",
+        "test/thin-query-slim.test.mjs",
+        "test/vector-switch-hint.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-capability-autodetect"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-capability-autodetect",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "6748ef4f39fdcff94ef171db460944ded0ff3557",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——探测 last-write-wins，语义最终一致经 1h 重试窗收敛",
+    "并发": "ok——writeFileSync 单次小文件写，撕裂读由 JSON.parse catch 兜底视同无缓存；最坏并发双探测无腐化",
+    "切换": "ok——缓存跨进程持久于 .runtime 仓内机器态；换平台 URL 自动失效重探",
+    "作用域": "ok——缓存键含平台 URL，多平台各自缓存；仓内路径无跨仓串台"
+  },
+  "notes": {
+    "承诺对照": "FR-01 测试⑧（首查 1 探测+缓存落盘+URL 键+重试窗零再探测）；FR-02 测试⑧ yaml off 段+⑤⑥（逃生阀优先级）；FR-03 测试⑩（过期重探+vector 结果+缓存翻 available——「部署后自动启用」闭环实证）；FR-04 五态测试①+②③（信息性提示无配置指路/强制关零说教）；FR-05 六文件合跑零失败（14 用例组）+ schema desc/example auto 语义在场（防漂耦合绿）",
+    "声明边界裁决": "①重试窗内部署感知延迟 1h=可接受（advisory 面，on 可即时验证）；②不可达期每窗一次 3s 超时=可接受（超时也写 unavailable 同窗跳过，成本从每检索降为每窗）；③过程事故留痕：文件头注释闭合写坏（缺 *）曾吞 import 块致合跑 11 失败——合跑回归拦下后修复，单文件跑曾绿的假绿教训印证合并回归价值。无未裁决边界",
+    "防护声明核实": "fail-soft（缓存写失败不影响检索）try/catch 真实存在；URL 匹配校验真实存在（readCapabilityCache obj.url 比对）；逃生阀优先级（yaml off 先于缓存判定）代码序实证",
+    "生成物同步": "schema desc/example 与实现语义同步（防漂耦合测试 542 断言零失败）",
+    "项目探针": {
+      "cli-copy-selfsufficient": "pass——hint 文案含状态/语义/时限三要素（未就绪/自动启用/最迟 1 小时），不再误导用户配置已非必要的键",
+      "config-absent-zero-regression": "pass——键未写=auto 新缺省（本变更目的本身），无 local.yaml/坏 yaml 走既有容错；yaml off/on 两态有测试",
+      "crossrepo-path-compat": "pass——.runtime 路径 join 平台无关；writeFileSync utf-8 无 BOM；Windows 句柄由 fail-soft 兜底"
+    }
+  },
+  "reviewedAt": "2026-10-15T05:25:00.000Z"
+}

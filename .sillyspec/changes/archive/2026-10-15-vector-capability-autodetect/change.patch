@@ -1,0 +1,414 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 25109e17..d9d9a3f0 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -80,9 +80,9 @@ export const LOCAL_YAML_SCHEMA = {
+     {
+       id: 'knowledge',
+       title: '知识检索（平台向量语义召回）',
+-      note: '可选段——未写整段=关（缺省不空转探测）。开启前置：平台已部署 /api/spec/knowledge/vector-search 端点（fastembed 本地小模型，2026-10-15-platform-vector-search）；未部署时开启亦安全（404 进程级死信短路，静默降级本地词面层）。发现性提示双触点：knowledge search 输出 hint 键、flow start 注入零命中行（vectorSwitchHint 单源）。',
++      note: '可选段——缺省（未写整段/auto）跟随平台能力自动探测：端点在场自动启用、未部署缓存 1h 内跳过（部署后自动启用，零配置；2026-10-15-platform-vector-search）。off=显式逃生阀强制关，on=强制开跳过探测。能力缓存落 .runtime/vector-capability.json（gitignored）；提示触点：knowledge search hint 键、flow 注入零命中行（auto 未就绪时信息性提示）。',
+       keys: [
+-        { path: 'knowledge.vector_search', type: 'string', optional: true, status: 'live', readers: ['vectorSwitchFromLocalYaml (src/knowledge-vector.js)'], desc: '【2026-10-15-vector-gate-tighten 收紧缺省关】平台向量语义召回开关——on|auto 显式开启（四层检索第二层：路由 tag 零命中后平台向量召回，语料=knowledge/decisions 条目，词面不相交条目可语义召回）；off/未写键=关。env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto 强制开、off 强制关。', example: 'on' },
++        { path: 'knowledge.vector_search', type: 'string', optional: true, status: 'live', readers: ['vectorSwitchFromLocalYaml (src/knowledge-vector.js)'], desc: '【2026-10-15-vector-capability-autodetect 终态】平台向量语义召回开关——缺省（未写键/auto）跟随平台能力自动探测：端点在场自动启用、未部署缓存 1h 内跳过（部署后自动启用，零配置）；off=显式逃生阀强制关、on=强制开跳过探测。env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto/off 同语义强制。四层检索第二层：路由 tag 零命中后平台向量召回（语料=knowledge/decisions 条目，词面不相交条目可语义召回）。', example: 'off' },
+       ],
+     },
+     {
+@@ -396,10 +396,10 @@ commands:
+   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
+ 
+ # ── 知识检索（平台向量语义召回）──
+-# 可选段——未写整段=关（缺省不空转探测）。开启前置：平台已部署 vector-search 端点
+-# （fastembed 本地小模型）；未部署时开启亦安全（404 死信短路，静默降级本地词面层）。
++# 缺省（未写整段）跟随平台能力自动探测：端点在场自动启用、未部署自动跳过（部署后自动
++# 启用，零配置）。仅显式逃生阀时才需要写：
+ # knowledge:
+-#   vector_search: on
++#   vector_search: off   # 强制关（on=强制开跳过探测）
+ 
+ # ── SillyHub MCP 客户端凭据（派发到 worker 用）──
+ # agent 手填，或 sillyspec platform connect 在 mcp 段缺失时同源自动填。
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+index df05c7c3..fe4aa73b 100644
+--- a/src/knowledge-vector.js
++++ b/src/knowledge-vector.js
+@@ -26,19 +26,54 @@
+  * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
+  * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
+  *
+- * 开关契约（2026-10-15-vector-gate-tighten 收紧）：平台端点 404 实证（发布半个月后端从未
+- * 实现，10-14 评审探针实证），缺省从「有平台配置即试」改为「显式开启才试」——
+- * local.yaml knowledge.vector_search: on|auto 或 env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto
+- * 才启用；未写键=关。404 另按平台 URL 进程级短路（端点死信不再空转探测）。
+- * 平台侧实现本端点后：建索引 + 打开开关即恢复语义召回，CLI 零改动。
++ * 开关契约（2026-10-15-vector-capability-autodetect 终态；前身 vector-gate-tighten 缺省关是
++ * 「端点不存在+无发现机制」时代的正确补丁，平台端点落地后 auto 成为诚实缺省）：
++ * 缺省（未写键/auto）跟随平台能力自动探测——能力缓存 .runtime/vector-capability.json
++ * （404→unavailable 重试窗 1h 内跳过；成功→available；按平台 URL 匹配；跨进程持久），
++ * 平台部署端点后最迟 1h 全仓自动启用，消费仓零配置。local.yaml on=强制开跳过探测、
++ * off=强制关（用户逃生阀）；env SILLYSPEC_KNOWLEDGE_VECTOR 同语义强制。
++ * 404 另有进程级死信短路（端点死信不再空转探测）。
+  */
+-import { readFileSync } from 'fs'
++import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+ import { join, dirname } from 'path'
+ import { readPlatformConfig } from './sync.js'
+ import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
+ 
+ const VECTOR_TIMEOUT_MS = 3000
+ const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
++/** 能力缓存重试窗：unavailable 记录 1h 内不再探测（平台部署后最迟 1h 自动启用）。 */
++const CAPABILITY_RETRY_MS = 60 * 60 * 1000
++
++// ── 平台能力探测缓存（2026-10-15-vector-capability-autodetect）────────────────
++// .runtime/ 已 gitignored 且被 daemon spec 上传排除（UPLOAD_EXCLUDE_TOP_BASE），是仓内
++// 机器态的标准落点（knowledge-hits 同款）。写盘全 fail-soft；按平台 URL 匹配（换平台即失效）。
++
++function capabilityCachePath(cwd) {
++  return join(cwd, '.sillyspec', '.runtime', 'vector-capability.json')
++}
++
++function readCapabilityCache(cwd) {
++  try {
++    const obj = JSON.parse(readFileSync(capabilityCachePath(cwd), 'utf-8'))
++    const cfg = readPlatformConfig(cwd)
++    if (!cfg || !cfg.url) return null
++    if (obj.url !== String(cfg.url).replace(/\/+$/, '')) return null // 换平台 → 缓存失效
++    if (typeof obj.available !== 'boolean' || typeof obj.probedAt !== 'number') return null
++    return { available: obj.available, probedAt: obj.probedAt }
++  } catch { /* 无缓存/坏 JSON = 未探测 */ }
++  return null
++}
++
++function writeCapabilityCache(cwd, platformUrl, available) {
++  try {
++    const p = capabilityCachePath(cwd)
++    const cur = readCapabilityCache(cwd)
++    if (cur && cur.available === available && Date.now() - cur.probedAt < CAPABILITY_RETRY_MS) return // 值未变且未过期：零写盘
++    const dir = join(p, '..')
++    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
++    writeFileSync(p, JSON.stringify({ url: platformUrl, available, probedAt: Date.now() }), 'utf-8')
++  } catch { /* 缓存写失败不影响检索本体（fail-soft） */ }
++}
+ 
+ /** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search 值；
+  *  未写键/无 yaml → null=未表态——2026-10-15-vector-gate-tighten 起缺省关，显式落盘才启用）。 */
+@@ -58,32 +93,44 @@ function vectorSwitchFromLocalYaml(cwd) {
+ }
+ 
+ /**
+- * 向量层开关（2026-10-15-vector-gate-tighten 契约收紧）：平台端点 404 实证（2026-09-29 发布
+- * 起半个月对着不存在的后端空转探测，10-14 评审探针才实证），缺省从「有平台配置即试」收紧为
+- * 「显式开启才试」——
+- *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用（平台未配置自然 null 降级）；
+- *   env off（或其他值保守视为 off）→ 强制关；
+- *   local.yaml knowledge.vector_search: on|auto → 启用；off/未写键 → 关（缺省关）。
+- * 启用后失败静默降级本地契约不变。
++ * 向量层开关（2026-10-15-vector-capability-autodetect 终态契约；前身 2026-10-15-vector-gate-tighten
++ * 缺省关是「端点不存在+无发现机制」时代的正确补丁，端点落地后 auto 成为诚实缺省）：
++ *   env SILLYSPEC_KNOWLEDGE_VECTOR=on|auto → 强制启用；off（其他值保守视为 off）→ 强制关；
++ *   local.yaml knowledge.vector_search: on → 强制启用；off → 强制关（用户显式逃生阀）；
++ *   auto/未写键 → **跟随平台能力自动探测**：读能力缓存（.runtime/vector-capability.json，
++ *   {url,available,probedAt}）——unavailable 未过重试窗（1h）=关，否则乐观试（探测结果由
++ *   platformVectorRecall 落缓存，404→unavailable / 成功→available；跨进程持久）。
++ * 「端点部署本身就是开关」——平台部署后最迟 1h 内全仓自动启用，消费仓零配置。
+  */
+ function vectorEnabled(cwd) {
+   const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
+   if (env === 'on' || env === 'auto') return true
+   if (env) return false
+   const sw = vectorSwitchFromLocalYaml(cwd)
+-  return sw === 'on' || sw === 'auto'
++  if (sw === 'off') return false
++  if (sw === 'on') return true
++  // absent/auto → 能力缓存判定（无平台配置=没得探测=关）
++  if (!readPlatformConfig(cwd)) return false
++  const cap = readCapabilityCache(cwd)
++  if (cap && !cap.available && Date.now() - cap.probedAt < CAPABILITY_RETRY_MS) return false
++  return true
+ }
+ 
+ /**
+- * 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：平台已连接但开关未开
+- * （缺省关）时返回一行可执行提示——消费面：knowledge search 输出 hint 键、flow start
+- * 注入零命中行（两个「正需要语义召回而未获得」的时刻）。平台未连接/已开启 → ''（零噪音：
+- * 没平台没得开、开了不用说）。单源供双消费面，文案漂移由测试钉。
++ * 向量能力提示（2026-10-15-vector-capability-autodetect 语义随迁；前身 vector-switch-discoverability
++ * 的「未开请配置」提示随缺省 auto 退役——auto 模式下没有可执行配置，提示转为信息性）：
++ * 仅当 auto 模式（无显式键/键=auto）且能力缓存记 unavailable 时给一行信息——「平台部署后
++ * 自动启用，无需本仓配置」。强制关（yaml off/env off=用户显式选择）与已启用 → ''（零噪音）。
++ * 平台未连接 → ''。
+  */
+ export function vectorSwitchHint(cwd) {
+   if (!readPlatformConfig(cwd)) return ''
+   if (vectorEnabled(cwd)) return ''
+-  return '💡 平台向量语义召回未开启（缺省关）——.sillyspec/local.yaml 加 knowledge 段 vector_search: on 可启用（需平台已部署 vector-search 端点；键语义见 sillyspec config schema）'
++  const cap = readCapabilityCache(cwd)
++  if (cap && !cap.available) {
++    return `ℹ️ 平台向量语义检索未就绪（自动探测缓存生效中）——平台部署 vector-search 端点后最迟 1 小时内本仓自动启用，无需配置`
++  }
++  return ''
+ }
+ 
+ /** 404 死信端点（进程级，按平台 URL 记）：端点未实现=今天真实平台状态，标记后本进程不再
+@@ -109,10 +156,14 @@ export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs =
+       signal: AbortSignal.timeout(timeoutMs),
+     })
+     if (!res.ok) {
+-      if (res.status === 404) vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
++      if (res.status === 404) {
++        vectorDeadEndpoints.add(base) // 端点未实现——本进程短路后续探测
++        writeCapabilityCache(cwd, base, false) // 跨进程持久：重试窗内不再探测（平台部署后自动启用）
++      }
+       if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
+       return null
+     }
++    writeCapabilityCache(cwd, base, true) // 端点在场——缓存 available（后续进程零探测直用）
+     const body = await res.json().catch(() => null)
+     const results = body && Array.isArray(body.results)
+       ? body.results.filter((r) => r && typeof r.spec_path === 'string' && typeof r.anchor === 'string')
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+index 27359c45..59a378c6 100644
+--- a/test/knowledge-vector-recall.test.mjs
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -14,7 +14,7 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ import { createServer } from 'node:http'
+-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
++import { mkdirSync, writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+@@ -168,22 +168,60 @@ test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 
+   })
+ })
+ 
+-test('⑧ 缺省关（2026-10-15-vector-gate-tighten）：平台已配置但未显式开启 → 平台零调用本地回退', async () => {
++test('⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 → 首查探测落缓存，重试窗内零再探测', async () => {
++  await withMock('404', [], async (m) => {
++    const root = mkdtempSync(join(tmpdir(), 'ss-vec-default-'))
++    mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
++    // platform 段在场、knowledge.vector_search 键未写 = auto（跟随平台能力）
++    writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++      `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
++    try {
++      const kb = join(root, '.sillyspec', 'knowledge')
++      const km1 = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
++      assert.equal(m.requests.length, 1, `首查真实探测 1 次（实际 ${m.requests.length}）`)
++      assert.notEqual(km1.json && km1.json.vector, true, '404 → 本地回退无 vector 标记')
++      const capPath = join(root, '.sillyspec', '.runtime', 'vector-capability.json')
++      const cap = JSON.parse(readFileSync(capPath, 'utf-8'))
++      assert.equal(cap.available, false, '404 → 能力缓存 unavailable 落盘（跨进程持久）')
++      assert.equal(cap.url, m.url, '缓存按平台 URL 键')
++      // 同仓第二次检索：缓存重试窗内 → 零新增请求
++      await matchKnowledgeHybrid(kb, '另一个不在词表的查询串', { cwd: root })
++      assert.equal(m.requests.length, 1, '重试窗内缓存判定 → 零探测')
++      // yaml off 逃生阀：强制关（即使缓存过期也零调用）
++      writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++        `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\nknowledge:\n  vector_search: off\n`)
++      await matchKnowledgeHybrid(kb, '第三个查询串', { cwd: root })
++      assert.equal(m.requests.length, 1, 'yaml off 强制关零调用')
++    } finally { rmQuiet(root) }
++  })
++})
++
++test('⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）', async () => {
+   await withMock('ok', [
+     { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
+   ], async (m) => {
+-    const root = mkdtempSync(join(tmpdir(), 'ss-vec-default-'))
++    const root = mkdtempSync(join(tmpdir(), 'ss-vec-stale-'))
+     mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+-    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
++      '# Knowledge Index', '', '## Decisions',
++      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
++    ].join('\n'))
+     writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
+-    // platform 段在场、knowledge.vector_search 键未写 = 旧缺省 auto（会调）、新缺省关（零调用）
+     writeFileSync(join(root, '.sillyspec', 'local.yaml'),
+       `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
++    // 预置过期 unavailable 缓存（probedAt = 2h 前）
++    mkdirSync(join(root, '.sillyspec', '.runtime'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'),
++      JSON.stringify({ url: m.url, available: false, probedAt: Date.now() - 2 * 60 * 60 * 1000 }))
+     try {
+       const kb = join(root, '.sillyspec', 'knowledge')
+       const km = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
+-      assert.equal(m.requests.length, 0, `平台零调用（实际 ${m.requests.length} 次）`)
+-      assert.notEqual(km.json && km.json.vector, true, '无 vector 标记（本地回退）')
++      assert.equal(m.requests.length, 1, '过期缓存 → 重新探测 1 次')
++      assert.equal(km.json.vector, true, '平台已实现端点 → vector 结果（部署后自动启用实证）')
++      const cap = JSON.parse(readFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'), 'utf-8'))
++      assert.equal(cap.available, true, '成功 → 缓存翻 available')
+     } finally { rmQuiet(root) }
+   })
+ })
+diff --git a/test/vector-switch-hint.test.mjs b/test/vector-switch-hint.test.mjs
+index 8900787b..8171d755 100644
+--- a/test/vector-switch-hint.test.mjs
++++ b/test/vector-switch-hint.test.mjs
+@@ -1,11 +1,12 @@
+ /**
+- * 向量开关发现性提示（2026-10-15-vector-switch-discoverability）
++ * 向量能力提示（2026-10-15-vector-capability-autodetect 语义；前身 vector-switch-discoverability）
+  *
+- * 背景：knowledge.vector_search 收紧缺省关（2026-10-15-vector-gate-tighten）后，新项目
+- * agent 无从知晓开关存在。三触点补发现性：
+- *   ① config-schema 注册 live 键 + renderExample knowledge 段（init 自文档，防漂耦合测试钉）
+- *   ② vectorSwitchHint(cwd) 单源提示（本文件 ①组：三态锁定）
+- *   ③ 双消费面：knowledge search 输出 hint 键（②组）、flow 注入零命中行（③组）
++ * 缺省 auto（跟随平台能力）后提示语义随迁：auto 模式没有可执行配置——提示转为**信息性**
++ * （探测缓存 unavailable → 「部署后自动启用」）；强制关（用户显式选择）与已启用零说教。
++ * 三组锁定：
++ *   ① vectorSwitchHint 五态：未连接空/auto 未探测空/auto unavailable 信息性/强制关空/已开空
++ *   ② search hint 键：auto+unavailable 在场；未连接缺席
++ *   ③ flow 注入零命中行：auto+unavailable 在场；已开零新增
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -22,24 +23,24 @@ function rmQuiet(p) {
+   try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows 句柄迟滞容忍 */ }
+ }
+ 
+-/** 造仓：local.yaml 可选 platform 段（mock URL）+ knowledge 段可选 vector_search。 */
+-function seedRepo({ withPlatform, vectorSearch } = {}) {
++let MOCK_URL = 'http://127.0.0.1:9' // 默认闭端口（未用 mock server 的用例快速连接拒绝）
++
++function seedRepo({ withPlatform, vectorSearch, capability } = {}) {
+   const root = mkdtempSync(join(tmpdir(), 'vec-hint-'))
+   mkdirSync(join(root, '.sillyspec', 'knowledge'), { recursive: true })
+   writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), '# x\n')
+   let yaml = ''
+-  if (withPlatform) {
+-    yaml += `platform:\n  url: ${MOCK_URL}\n  token: test-token\n`
+-  }
+-  if (vectorSearch) {
+-    yaml += `knowledge:\n  vector_search: ${vectorSearch}\n`
+-  }
++  if (withPlatform) yaml += `platform:\n  url: ${MOCK_URL}\n  token: test-token\n`
++  if (vectorSearch) yaml += `knowledge:\n  vector_search: ${vectorSearch}\n`
+   if (yaml) writeFileSync(join(root, '.sillyspec', 'local.yaml'), yaml)
++  if (capability === 'unavailable') {
++    mkdirSync(join(root, '.sillyspec', '.runtime'), { recursive: true })
++    writeFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'),
++      JSON.stringify({ url: MOCK_URL, available: false, probedAt: Date.now() }))
++  }
+   return root
+ }
+ 
+-let MOCK_URL = 'http://127.0.0.1:9' // 默认闭端口（未用 mock server 的用例快速连接拒绝）
+-
+ async function withMock404(fn) {
+   const server = createServer((req, res) => { res.writeHead(404).end('not found') })
+   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+@@ -52,21 +53,31 @@ async function withMock404(fn) {
+   }
+ }
+ 
+-// ── ① vectorSwitchHint 三态 ───────────────────────────────────────────────────
++// ── ① vectorSwitchHint 五态 ───────────────────────────────────────────────────
+ 
+-test('① vectorSwitchHint 三态：未连接空串/已连接未开提示/已开空串', async () => {
++test('① 五态：未连接空/auto 未探测空/auto unavailable 信息性/强制关空/已开空', async () => {
+   await withMock404(async () => {
+     const none = seedRepo({ withPlatform: false })
+     try {
+       assert.equal(vectorSwitchHint(none), '', '平台未连接 → 空串（没平台没得开）')
+     } finally { rmQuiet(none) }
+ 
+-    const off = seedRepo({ withPlatform: true })
++    const autoFresh = seedRepo({ withPlatform: true })
++    try {
++      assert.equal(vectorSwitchHint(autoFresh), '', 'auto+未探测 → 空串（乐观试，无需配置）')
++    } finally { rmQuiet(autoFresh) }
++
++    const autoDead = seedRepo({ withPlatform: true, capability: 'unavailable' })
++    try {
++      const hint = vectorSwitchHint(autoDead)
++      assert.ok(hint.includes('自动启用'), 'auto+unavailable → 信息性提示（部署后自动启用）')
++      assert.ok(!hint.includes('vector_search'), 'auto 模式无可执行配置（不再指路 local.yaml）')
++    } finally { rmQuiet(autoDead) }
++
++    const forcedOff = seedRepo({ withPlatform: true, vectorSearch: 'off' })
+     try {
+-      const hint = vectorSwitchHint(off)
+-      assert.ok(hint.includes('vector_search: on'), '已连接未开 → 提示含可执行配置形态')
+-      assert.ok(hint.includes('缺省关'), '提示注明缺省关语义')
+-    } finally { rmQuiet(off) }
++      assert.equal(vectorSwitchHint(forcedOff), '', '强制关（用户显式选择）→ 空串零说教')
++    } finally { rmQuiet(forcedOff) }
+ 
+     const on = seedRepo({ withPlatform: true, vectorSearch: 'on' })
+     try {
+@@ -77,7 +88,7 @@ test('① vectorSwitchHint 三态：未连接空串/已连接未开提示/已开
+ 
+ // ── ② search hint 键 ─────────────────────────────────────────────────────────
+ 
+-test('② knowledge search：未开+已连接输出 hint 键；未连接无 hint 键', async () => {
++test('② search：auto+unavailable 输出信息性 hint 键；未连接无 hint 键', async () => {
+   await withMock404(async () => {
+     const capture = (fn) => {
+       const parts = []
+@@ -86,13 +97,12 @@ test('② knowledge search：未开+已连接输出 hint 键；未连接无 hint
+       return fn().finally(() => { console.log = orig }).then(() => parts.join('\n'))
+     }
+ 
+-    const off = seedRepo({ withPlatform: true })
+-    mkdirSync(join(off, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
++    const dead = seedRepo({ withPlatform: true, capability: 'unavailable' })
+     try {
+-      const out1 = await capture(() => cmdSearch(off, ['--query', '完全不相关查询词'], {}))
++      const out1 = await capture(() => cmdSearch(dead, ['--query', '完全不相关查询词'], {}))
+       const json1 = JSON.parse(out1)
+-      assert.ok(typeof json1.hint === 'string' && json1.hint.includes('vector_search: on'), `未开+已连接 → hint 键在场（实际 ${out1.slice(0, 200)}）`)
+-    } finally { rmQuiet(off) }
++      assert.ok(typeof json1.hint === 'string' && json1.hint.includes('自动启用'), `auto+unavailable → hint 键在场（实际 ${out1.slice(0, 200)}）`)
++    } finally { rmQuiet(dead) }
+ 
+     const none = seedRepo({ withPlatform: false })
+     try {
+@@ -105,7 +115,7 @@ test('② knowledge search：未开+已连接输出 hint 键；未连接无 hint
+ 
+ // ── ③ flow 注入零命中行 ───────────────────────────────────────────────────────
+ 
+-test('③ flow 注入零命中：已连接未开追加提示行；已开零新增', async () => {
++test('③ flow 注入零命中：auto+unavailable 追加信息性提示行；已开零新增', async () => {
+   await withMock404(async () => {
+     const mkChange = (root) => {
+       const changeDir = join(root, '.sillyspec', 'changes', '2026-10-15-hint-fixture')
+@@ -113,17 +123,17 @@ test('③ flow 注入零命中：已连接未开追加提示行；已开零新
+       return changeDir
+     }
+ 
+-    const off = seedRepo({ withPlatform: true })
++    const dead = seedRepo({ withPlatform: true, capability: 'unavailable' })
+     try {
+       const { lines } = await flowKnowledgeDigest({
+-        specBase: join(off, '.sillyspec'),
++        specBase: join(dead, '.sillyspec'),
+         change: '2026-10-15-hint-fixture',
+-        changeDir: mkChange(off),
++        changeDir: mkChange(dead),
+         input: '完全不相关语料 zero-hit-probe',
+         filesOverride: ['src/unrelated.js'],
+       })
+-      assert.ok(lines.join('\n').includes('vector_search: on'), '零命中+未开 → 提示行在场')
+-    } finally { rmQuiet(off) }
++      assert.ok(lines.join('\n').includes('自动启用'), '零命中+unavailable → 信息性提示行在场')
++    } finally { rmQuiet(dead) }
+ 
+     const on = seedRepo({ withPlatform: true, vectorSearch: 'on' })
+     try {
+@@ -134,7 +144,7 @@ test('③ flow 注入零命中：已连接未开追加提示行；已开零新
+         input: '完全不相关语料 zero-hit-probe',
+         filesOverride: ['src/unrelated.js'],
+       })
+-      assert.ok(!lines.join('\n').includes('vector_search: on'), '已开启 → 零提示（vector 层静默降级后不重复提示）')
++      assert.ok(!lines.join('\n').includes('自动启用'), '已开启 → 零提示（vector 层静默降级后不重复提示）')
+     } finally { rmQuiet(on) }
+   })
+ })
