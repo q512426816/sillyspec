@@ -78,6 +78,8 @@
 ````markdown
 加载规范文件并确认。
 
+> 💡 **长会话税提示（2026-09-26-verify-gate-restrictfiles，R18 实证）**：若本会话已跨 brainstorm/plan/execute 多阶段（上下文已重），建议**新开会话跑 verify**（sillyspec run verify --change <名> 续跑，上下文重置）——verify 段轮均成本是 brainstorm 段的 3-4 倍，主因是每轮重读全历史；新会话只带工件进场，同动作成本立降。
+
 ### 操作
 1. 读取 proposal.md、design.md、tasks.md、requirements.md、plan.md
 2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
@@ -92,7 +94,7 @@
 6. 标注每个文件的存在/不存在状态
 
 ### Execute Evidence 传递检查
-7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
+7. 检查 verify-required-evidence.json 是否存在（历史兼容读：该文件由退役前的 execute Task Review Gate 写入，2026-09-26-task-review-retire 起停写——在场则消费，缺席=无 cannot_verify 任务）
    - 路径：变更目录下的 verify-required-evidence.json
    - 文件 schema：`{ items: [{ task, verdict, evidence: string[] }] }`——顶层是 `items`，每项的 `evidence` 是字符串数组（不是 `requiredEvidence` 键）
    - 如果存在 → 逐项读取 `items`，对每个 cannot_verify 任务逐条核对其 `evidence` 数组是否已满足
@@ -128,7 +130,7 @@
 **提示词原文**
 
 ````markdown
-对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
+对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入（2026-09-26 Task Review 退役起，同 thin 工作单元语义），本阶段只读对照、不改勾。
 
 ### 勾选状态（CLI 注入，勿手数）
 {TASKS_CHECKBOX}
@@ -211,7 +213,8 @@
 2. 如果存在：
    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
-   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/covered-service/partial/uncovered/non-testable 五选一——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点）与证据——covered/covered-service/partial 附测试锚点（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）
+   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/covered-service/partial/uncovered/non-testable 五选一——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点）与证据——covered/covered-service/partial 附测试锚点（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）；矩阵里带「既有用例候选（FR 关联回归面）」注记的测试是本变更未改动的既有回归用例——复核其覆盖性后如实填判定，命中≠结论
+   - **收口前预检（免逐轮撞门）**：verify-result.md 各节填完后、跑 `--done` 前，先跑 `sillyspec gate verify --change <change-name> --docs-only`——秒级只读预检纯文档契约缺项（visual-evidence/结论槽/移交项结构化等一次列清，不执行测试）；缺项清零后再走 `--done` 的完整实测门
 3. 如果不存在：跳过此步骤
 
 ### 输出

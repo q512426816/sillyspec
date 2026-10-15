@@ -132,6 +132,12 @@ needs_human_review: true | false
 > tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）
 > plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）
 
+> **拆分粒度纪律（D-006@v1 / FR-11，R7 实证：18 卡细拆给反仪式变更预付协议税）**：
+> - **默认「实现+单测同卡」**——测试与实现放同一任务卡（TDD 同任务），不单独开「测试卡」「验收 Wave」；纯验收类动作（跑全量回归）并入相关实现卡的 acceptance/verify。
+> - **禁止仪式卡**：「纯接线」「纯 module-map 录入」「纯全量回归绿」不独立成卡——此类收尾动作写进相关实现卡的 implementation 与 acceptance（几行接线并入实现，module-map 录入并入该片最后一张实现卡）。
+> - **「同 Wave 文件不相交」语义澄清**：该约束防并行子代理同文件互写（调度约束），**不要求**把测试/接线/录入拆成独立任务——同一张卡携带多个文件（实现+测试+module-map）完全合法，约束只作用于 Wave 内**多任务之间**的 allowed_paths 交集。
+> - 拆分对齐「可独立验收的能力边界」而非「工序步骤」——一个能力（实现+接线+单测+登记）通常=一张卡；协议成本与任务卡数线性挂钩，卡片数是税。
+
 > **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：
 > - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）
 > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
@@ -141,6 +147,7 @@ needs_human_review: true | false
 > - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）
 > - 仅当满足判据才显式声明 `execution_mode: dispatch`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）
 > - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
+> - 直写只免「实现」派发（2026-09-23 R9 教训）：Stage Review（tier=independent）仍派独立子代理——降级自审损失审查实效（R8 基线实证审查抓过真缺口）；测试跑批输出落文件只取摘要——长输出全文进上下文是单会话 token 累积大头（R9 verify 段 13.8M 输入的大头来源）
 
 ---
 
@@ -189,6 +196,9 @@ execution_mode: main  # dispatch=子代理派发（判据见「执行模式声�
 ## 验收
 - 具体可验证的验收条目
 
+## Review Focus 盲区清单（隐含面）
+- （≤5 条——上限不是配额，写不出就停；按最可能坑到人排序。每条 = 规格隐含但没有任何任务测试覆盖的输入/条件 + 合理人预期行为 + 承接落点 task-XX；写不出显式写「已检查，无」——不留空、不编造；泛泛风险（"并发需注意"类）不算行）
+
 ## 覆盖矩阵（如存在 decisions.md）
 | ID | 覆盖任务 | 验收证据 |
 |---|---|---|
@@ -206,6 +216,7 @@ light 计划的约束：
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md
 - 任务清单（tasks.md）控制在 10 条以内
 - 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行
+- **比例自检**（2026-10-15-plan-review-focus）：计划产物与 spec/design 相称——整段可粘贴代码体=转录不是计划；用签名、测试断言与规格精确值承载决策，为实现者保留判断空间
 
 ---
 
@@ -255,6 +266,15 @@ task-01 → task-03（最长路径，决定最短交付周期）
 
 > 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。
 
+## Review Focus 盲区清单（隐含面）
+规格/设计隐含、但没有任何任务测试覆盖的输入/失效模式（≤5 条——上限不是配额，写不出第 4 条就停；按最可能坑到人排序；每行 = 具体输入或条件 + 可判定预期行为 + 承接落点；泛泛风险分析不算行）：
+
+| # | 输入/条件 | 合理人预期行为 | 承接落点 |
+|---|---|---|---|
+| 1 | ... | ... | task-XX（acceptance/测试） |
+
+（写不出 → 写「已检查，无」一行——不留空、不编造。）
+
 ## 覆盖矩阵（如存在 decisions.md）
 | ID | 覆盖任务 | 验收证据 |
 |---|---|---|
@@ -264,6 +284,7 @@ task-01 → task-03（最长路径，决定最短交付周期）
 full 计划的约束：
 - **禁止**估时（任务总表不含估时列）
 - **禁止**泛泛风险分析（"需要充分测试"类废话转为具体验收条目）
+- **比例自检**（2026-10-15-plan-review-focus）：计划产物（plan.md + TaskCard implementation）与 spec/design 相称——整段可粘贴代码体=转录不是计划；用签名、测试断言与规格精确值承载决策，为实现者保留判断空间
 - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
 - **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）
 - plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**
@@ -344,7 +365,6 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/�
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省
 - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 - 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价
 
 ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
@@ -361,14 +381,23 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 
 ### tier=independent 时：启动 plan-review 子代理
 {PRIOR_REVIEW_FACTS}
-用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
-1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
+用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-cli-wiring）**——CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('plan-review')：design 硬约束，缺「全局硬约束」节时 decisions.md P0/P1 accepted 决策兜底）；「plan 差量」节留位——派发前由你逐约束判定补齐（一致/偏离/未覆盖＋注），留空则评审者按 cannot_verify 列缺件。把补完的整包贴进派发 prompt：
+{REVIEW_MATERIALS}
+prompt 要点：
+1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
 5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。
 6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+7. **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm Grill 步）**：①请求预算硬钳——子代理请求上限 **10 次**（材料包基准面 + plan.md + ≤3 次定向补证），到达即出 verdict 禁「再确认一下」续读，派发 prompt 明示此预算；②FAIL 后增量复审——修复阻断项后 **resume 同一子代理**只发修复说明+diff 验证「阻断项解决否」，不重开全文审（64s vs 322s = 5 倍差实证），review.json checklist 追加增量复核行；原 agent 不可 resume 才新开（prompt 附首轮阻断项仍只验阻断项）；③**并行化**——派发用 run_in_background: true，主代理立即继续 Step 4（生成 TaskCard），回收在即将 --done 本步骤前（pass → 完成 / fail → 增量复审 / 在跑 → 等待），Stage Review Gate 照常硬校验；④**审查只读纪律**——子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（design/plan/四件套/源码），唯一可写 review.json，发现问题写 checklist/blockers 由主代理修（2026-09-20 实证 Grill 越权改 design 15 处；③并行化下同文件双写竞态的前置防线，详见 brainstorm Grill 步全文）。
+
+### 补充复查（2026-10-15-plan-review-focus）
+1. **Review Focus 承接复查**：plan.md「Review Focus 盲区清单（隐含面）」每行是否落到拥有该代码的 task 的 acceptance/测试；空节必须是显式「已检查，无」而非跳过或编造低价值行凑数（≤5 条是上限不是配额）。
+2. **比例自检复核**：plan.md 与 TaskCard implementation 与 spec/design 相称——整段可粘贴代码体=转录不是计划；签名+测试断言+规格精确值承载决策足够。
+3. **共享面预扫留表**：每对共享 target_files / provides-expects_from 契约链 / 依赖边的任务逐对核「产出 vs 消费」一致、每张卡自洽（测试所指=代码所指、创建文件=后文触碰文件），核验结果以**表格**写进审查输出（共享对两任务一行、单卡自洽一行）——"scan is clean" 而无表格行 = 没扫过；plan-postcheck 硬校验的是字段对齐，此处核语义矛盾。
 
 ### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）
 module-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。
@@ -383,7 +412,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 
 ---
 
-## Step 4/5：生成 TaskCard（子代理按 batch 并行）
+## Step 4/5：生成 TaskCard（默认主代理直填，大规模才派 batch）
 
 **元数据**
 - id：`generate_blueprints`
@@ -408,8 +437,11 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 
 ⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：
 - **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）
+  （注意：该约束只限制 Wave 内**多任务之间**的文件交集——同一张卡携带实现+测试+module-map 多文件合法，勿为规避此约束把测试/接线拆成独立卡，见步骤 2 拆分粒度纪律）
 - **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
+
+卡片粒度对齐 plan.md/tasks.md 的任务数——plan 未拆出的收尾动作不为仪式另立卡。
 
 ⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
 
@@ -433,7 +465,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
    sillyspec taskcard 2026-05-13-demo-change --all
    ```
    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
-1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
+1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
 2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
    - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
    - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
@@ -447,6 +479,11 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
 6. 等待所有 batch 子代理完成
 7. 验证每个 task-N.md 文件已生成且非空
+8. **全部卡片填充完成后，主 agent 跑一次零成本自检（plan 门禁同源规则前置暴露，免 Step 4 门禁批量报错返工）**：
+   ```
+   sillyspec taskcard 2026-05-13-demo-change --validate
+   ```
+   报错即门禁报错（frontmatter YAML/占位符/必要字段/target_files 形态，YAML 错误带中文分诊动作）；修复后重跑至通过再进下一步。
 
 > 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
 
@@ -458,16 +495,16 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。
 
 ## 输入
-- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change
+- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change
 - 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
 - 当前用户：<git-user>（frontmatter 的 author 使用此值）
 - 本 batch 任务列表：
   <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
 
 ## 操作
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
+1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
-3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
+3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
 4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 
@@ -525,7 +562,7 @@ related_tests:                           # 可选。当本 task 改动会导致�
 - 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
 
 ## 完成标志
-- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/
+- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/
 - 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）
 ```
 
