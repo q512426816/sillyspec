@@ -121,6 +121,7 @@ modules:
       - src/fr-index.js
       - src/knowledge-digest.js
       - src/redomain.js
+      - src/decision-redomain.js
       - src/doctor-diagnostics.js
       - src/fr-index.js
       - src/fs-atomic.js
