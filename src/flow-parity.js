@@ -309,7 +309,9 @@ export function harvestSlot4Decision({ changeDir, change }) {
     '---',
     `# 决策记录（Decisions）— ${change}`,
     '',
-    `## D-001@v1: 风险与死路（design 槽4 收割）`,
+    // 标题自解释（2026-10-15-harvest-title-clarify）：读者面是 decisions 文档与 knowledge，
+    // 机制出处（槽4 收割）由 frontmatter author: flow-machine-draft 承载，标题只说内容与性质。
+    `## D-001@v1: 设计期风险与放弃方案（底稿）`,
     `- 类型：process`,
     `- 状态：confirmed`,
     // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
