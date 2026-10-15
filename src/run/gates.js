@@ -1397,18 +1397,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       //    快照含基线债文件时恒败，agent 被逼范围外清偿或逃生口）。失败输出提及文件 × 本变更
       //    文件集零交集 → 存量债 advisory 降档放行（债非本变更引入，硬拦只是制造范围外功）；
       //    有交集 / 输出无可识别路径（unattributable，纯配置错误类）→ 维持硬拦（保守）。──
-      let lintOwnership = null
-      try {
-        const { triageLintOwnership, resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
-        const lintScopeFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
-          .map(f => String(f).replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/'))
-        lintOwnership = triageLintOwnership({ failureFiles: lintCheck.failureFiles || [], changeFiles: lintScopeFiles })
-      } catch { /* 鉴定链异常维持硬拦（保守） */ }
-      if (lintOwnership && lintOwnership.verdict === 'pre-existing') {
-        console.warn('\n⚠️ Verify lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本变更文件集零交集）——降档 advisory 不阻断 verify 完成：')
-        console.warn(`   存量债文件：${(lintCheck.failureFiles || []).join('、') || '（见上方输出）'}`)
-        console.warn('   处置建议：单独 quick 机械清偿（顺手清债解锁全仓 lint 门），或本变更确认无关时设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。债随基线存在，与本变更交付无关。')
-      } else {
+      // 2026-10-15-lint-triage-path-unify：判定与文案收敛到 ./lint-ownership.js（与 noAI 质量
+      // 扫描路径同源——原两路径分叉见消费仓坑档案 verify-lint-triage-path-divergence.md）。
+      const { lintOwnershipDowngrade } = await import('./lint-ownership.js')
+      const lintAdvisoryDowngraded = await lintOwnershipDowngrade({ lintCheck, cwd, changeName, specBase })
+      if (!lintAdvisoryDowngraded) {
       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
       if (usedSnapInfo) {
         try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
@@ -1432,7 +1425,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
-      } // else（pre-existing 降档分支）结束——维持硬拦分支的 rollback 语义不变
+      } // 硬拦分支结束（降档放行时直接落到后续 parity/删除探针——rollback 语义不变）
     }
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。

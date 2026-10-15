@@ -798,13 +798,22 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
   const testFailed = testCheck.status === 'failed'
   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+  // 2026-10-15-lint-triage-path-unify：lint 归属鉴定降档接线（与 gates --done 路径同源共享
+  // helper）——零交集存量债降档 advisory 不 throw；owned/unattributable/鉴定异常维持硬拦
+  // （保守）。仅在「lint 单独失败」时降档（testFailed 优先 throw——测试失败不作 lint 降档
+  // 陪葬判断）。原两路径分叉实证见消费仓坑档案 verify-lint-triage-path-divergence.md。
+  let lintAdvisoryDowngraded = false
+  if (lintBlocked && !testFailed) {
+    const { lintOwnershipDowngrade } = await import('./lint-ownership.js')
+    lintAdvisoryDowngraded = await lintOwnershipDowngrade({ lintCheck, cwd, changeName, specBase })
+  }
   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
   // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
   // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
   if (testFailed || lintCheck.status === 'failed') {
     await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : 'lint' })
   }
-  if (testFailed || lintBlocked) {
+  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded)) {
     if (snap) {
       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
         printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
