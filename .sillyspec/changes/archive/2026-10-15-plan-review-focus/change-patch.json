@@ -1,0 +1,217 @@
+{
+  "change": "2026-10-15-plan-review-focus",
+  "baseline": "83b303db044688e7a75f4de35f8e9a2c85106cb7",
+  "head": "0a916a84b0c0132c85eced89d8c487010ff1a006",
+  "files": [
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/plan.md",
+    "docs/prompt/verify.md",
+    "src/run/gates.js",
+    "src/run/lint-ownership.js",
+    "src/run/verify-quality-scan.js",
+    "src/stages/plan.js",
+    "test/dynamic-batch-chunk.test.mjs",
+    "test/lint-ownership-path.test.mjs",
+    "test/plan-review-focus.test.mjs"
+  ],
+  "totals": {
+    "files": 16,
+    "additions": 352,
+    "deletions": 32
+  },
+  "savedAt": "2026-10-15T10:47:48.603Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 3,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 4,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "83b303db044688e7a75f4de35f8e9a2c85106cb7",
+    "totals": {
+      "files": 16,
+      "additions": 352,
+      "deletions": 32
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/plan.md",
+        "additions": 46,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/prompt/verify.md",
+        "additions": 6,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 6,
+        "deletions": 13,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/lint-ownership.js",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 10,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stages/plan.js",
+        "additions": 19,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/dynamic-batch-chunk.test.mjs",
+        "additions": 7,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/lint-ownership-path.test.mjs",
+        "additions": 106,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/plan-review-focus.test.mjs",
+        "additions": 106,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2c52f7fe5f00f6c30f948ee4312a4ed4de5d7ce684e241f2729da508d2f87685",
+  "patchStatus": "ok"
+}

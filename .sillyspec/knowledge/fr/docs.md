@@ -266,3 +266,98 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-15-ui-proto-form-config
   status: active
+
+## FR-docs-014 plan_level=light 与 full 的 plan.md 模板均含「Review Focus 盲区清单」节要求（≤5 条、按最可能坑到人排序、每条=输入/条件+合理人预期行为+承接 task 的 acceptance/测试落点；写不出显式写「已检查，无」而非留空）；plan_level=none 不含（轻量占位不加厚）
+变更：2026-10-15-plan-review-focus
+状态：active
+摘要：light/full 模板含盲区清单节；none 模板不加厚
+全文：.sillyspec/changes/archive/2026-10-15-plan-review-focus/requirements.md#FR-01
+最近确认：043fd74722d930016ae6bba68062bcb16f8b940c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-plan-review-focus:flow:测试绑定FR-01
+  tests: test/plan-review-focus.test.mjs「FR-01 盲区清单节」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-plan-review-focus
+  status: active
+
+## FR-docs-015 生成分级计划步的约束含比例自检（计划产物与 spec/design 相称；implementation 塞整段可粘贴代码=转录不是计划，签名+测试断言+规格精确值承载决策）
+变更：2026-10-15-plan-review-focus
+状态：active
+摘要：比例自检条在场；既有约束不冲销
+全文：.sillyspec/changes/archive/2026-10-15-plan-review-focus/requirements.md#FR-02
+最近确认：043fd74722d930016ae6bba68062bcb16f8b940c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-plan-review-focus:flow:测试绑定FR-02
+  tests: test/plan-review-focus.test.mjs「FR-02 比例自检」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-plan-review-focus
+  status: active
+
+## FR-docs-016 审查计划步 prompt 含补充复查三项：Review Focus 每行有承接测试、比例自检、共享面预扫留表（每对共享文件/契约链/依赖边的任务逐对核产出vs消费、每卡自洽；核验表进审查输出，无行的 clean 不算扫过）
+变更：2026-10-15-plan-review-focus
+状态：active
+摘要：补充复查三项在场；清单单一来源不被触碰
+全文：.sillyspec/changes/archive/2026-10-15-plan-review-focus/requirements.md#FR-03
+最近确认：043fd74722d930016ae6bba68062bcb16f8b940c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-plan-review-focus:flow:测试绑定FR-03
+  tests: test/plan-review-focus.test.mjs「FR-03 补充复查三项」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-plan-review-focus
+  status: active
+
+## FR-docs-017 docs/prompt/plan.md 派生件经提取管线同步（_extract→_sync→_verify 无新增 miss）
+变更：2026-10-15-plan-review-focus
+状态：active
+摘要：派生件一致
+全文：.sillyspec/changes/archive/2026-10-15-plan-review-focus/requirements.md#FR-04
+最近确认：043fd74722d930016ae6bba68062bcb16f8b940c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-plan-review-focus:flow:测试绑定FR-04
+  tests: test/plan-review-focus.test.mjs「FR-04 派生件一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-plan-review-focus
+  status: active
+
+## FR-docs-018 变更自身测试面跑绿，lint 通过
+变更：2026-10-15-plan-review-focus
+状态：active
+摘要：新测试覆盖四条 FR；既有面零回归
+全文：.sillyspec/changes/archive/2026-10-15-plan-review-focus/requirements.md#FR-05
+最近确认：043fd74722d930016ae6bba68062bcb16f8b940c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-plan-review-focus:flow:测试绑定FR-05
+  tests: test/plan-review-focus.test.mjs「FR-01~04 全部用例 + 既有 plan 测试绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-plan-review-focus
+  status: active

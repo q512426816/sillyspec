@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-plan-review-focus",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0a916a84b0c0132c85eced89d8c487010ff1a006",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "无风险声明成立：change.patch 中 plan.js 五处 hunk（@@219/236/285/294/390）全为静态模板/约束文本，无时序或输入逻辑改动；plan_level 落盘锚定机制未触碰（patch 无相关 hunk）。冻结件 blob 哈希（plan.js=a466f2be、plan.md=f4a33b31、_extracted.json=7bde7371、verify.md=38d1c84d、test=900f0155）与 git ls-files HEAD 逐一吻合且工作区 status 干净——冻结件=HEAD=工作区实态。边界③（docs/prompt/verify.md 为既有源 verify.js 的派生件滞后同步随本变更提交）已裁决：可接受——纯机械同步零语义，_verify 实跑 verify 段零 miss，避免派生件长期脏挂共享树。",
+    "并发": "无风险声明成立：生成步单写/审查步只读的既有分离未动（patch 无门禁/状态机代码）；本变更自身文件无同文件双写残留。change.patch 快照混入他会话交付（gates.js/lint-ownership.js/verify-quality-scan.js/test/lint-ownership-path.test.mjs/test/dynamic-batch-chunk.test.mjs/changelog）属共享树快照现象，与本变更文件面（plan.js/plan.md）零语义冲突，按评审口径不计入。边界①（三项复查走 prompt 侧独立小节不进 stage-review-checklist.js）已裁决：可接受——FR-03 禁止条款本身要求绕开快照+字面引用面，FR-05 测试自证清单未夹带（82/82 绿含 checklist 快照测试）。",
+    "切换": "无风险声明成立：重入（run plan 续跑）重渲染静态文本即见新内容；存量在途变更的 plan.md 不走重生成路径（生成步仅首次/重做执行），不回填不破坏。边界②（不做 plan-postcheck 在场性硬门）已裁决：可接受——FR-01 禁止条款明示本变更只落 prompt 与模板文本，向后兼容理由成立（存量 plan.md 无新节会新增告警噪声），留作后续机械化决策与承诺一致；边界④（存量在途变更 plan.md 不强制回填）已裁决：可接受——plan.md 是他变更已交付产物，强制回填反而制造跨变更写冲突。",
+    "作用域": "无风险声明成立：纯 prompt 文本与派生文档无数据层；提取管线本仓自有（node docs/prompt/_verify.mjs 实跑：plan 段 json步骤=4 fence块=4 逐字一致零 miss，与 design 自声明 4/4 吻合；13 处未匹配全在 archive/doctor/execute 存量段，plan 段不在其中）。本变更未触及 worktree/跨仓路径逻辑（plan.js hunk 无路径处理代码）；未新增 local.yaml 消费键（新增文本 222-223/242/292-299/310/407-410 行均为 prompt 措辞，无 env/config 键）。"
+  },
+  "reviewedAt": "2026-10-15T12:00:00+08:00",
+  "checklistEvidence": {
+    "FR-01": "pass——src/stages/plan.js light 段(202-245)含 Review Focus 节 L222-223（≤5条/按最可能坑到人排序/承接落点 task-XX/「已检查，无」/不留空不编造）；full 段(246-320)含同节 L292-299（表格列=输入/条件|合理人预期行为|承接落点，出口 L299）；none 段(177-201)零命中（首个 Review Focus 在 L222，patch 无 none 区 hunk）",
+    "FR-02": "pass——light 约束 L242、full 约束 L310 各含比例自检（转录不是计划+签名、测试断言与规格精确值）；既有三条禁止不冲销：light L234-236（估时/泛泛风险分析/放实现细节）、full L308-309+L313（估时/泛泛风险分析/不放实现细节）",
+    "FR-03": "pass——审查计划步(L368-606)内 L407-410 补充复查三项（Review Focus 承接复查/比例自检复核/共享面预扫留表），L410 含「'scan is clean' 而无表格行 = 没扫过」；stage-review-checklist.js 不在 patch 改动面，git log 末次触碰（832430bc 等）均他会话，测试 FR-05 断言零夹带",
+    "FR-04": "pass——_verify.mjs 实跑 plan 段 4/4 逐字一致零未匹配（13 处存量 miss 均在 archive/doctor/execute，非 plan 段，FR-04 口径为存量不计入）；冻结件 blob 与 HEAD 吻合即派生件已同步",
+    "FR-05": "pass——test/plan-review-focus.test.mjs 6 用例实跑 6/6 绿（FR-01×2/FR-02/FR-03/FR-04/FR-05 各有真实断言，按模板段切段 + 文本 match + 派生件 includes）；既有 test/plan-*.test.mjs + stage-review-checklist.test.mjs 实跑 82/82 绿；npm run lint 绿（1000 文件，hard fail 0）",
+    "防护声明": "pass——「不改 stage-review-checklist.js」：patch 无该文件 hunk+FR-05 测试断言无本变更标记；「步骤名与顺序不变」：L57/137/368/607/626 顺序=复杂度分类→生成分级计划→审查计划→生成 TaskCard→Wave 重排，patch 无步骤名 hunk（design 枚举「生成 TaskCard」为实际名「生成 TaskCard（默认主代理直填，大规模才派 batch）」的前缀简写，改名系他会话先例非本变更）；「none 模板零加厚」：none 段无任何 patch hunk 且无 Review Focus 命中",
+    "探针-cli-copy-selfsufficient": "pass——机制词真实存在且口径一致：plan-postcheck（src/stages/plan-postcheck.js validateCrossTaskContracts，L743-749 注释与实现=consumer.expects_from↔provider.provides 字段对齐，errors→plan 阶段阻断=硬校验；可选字段未声明不校验向后兼容）→新文案「plan-postcheck 硬校验的是字段对齐，此处核语义矛盾」与实际行为一致；provides-expects_from（TaskCard 可选 frontmatter 字段，parseTaskContracts）；Stage Review Gate（src/run/gates.js 字面）；TaskCard implementation/acceptance（必备字段清单）",
+    "探针-config-absent-zero-regression": "pass——未新增 local.yaml 消费键（如实作答：新增文本无任何配置键）",
+    "探针-crossrepo-path-compat": "pass——未触及 worktree/跨仓路径逻辑（如实作答：plan.js 五处 hunk 全为模板文本）"
+  }
+}

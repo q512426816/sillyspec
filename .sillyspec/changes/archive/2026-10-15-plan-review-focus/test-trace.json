@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-plan-review-focus",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-plan-review-focus:flow:测试绑定FR-01",
+      "tests": [
+        "test/plan-review-focus.test.mjs「FR-01 盲区清单节」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-plan-review-focus"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-plan-review-focus:flow:测试绑定FR-02",
+      "tests": [
+        "test/plan-review-focus.test.mjs「FR-02 比例自检」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-plan-review-focus"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-plan-review-focus:flow:测试绑定FR-03",
+      "tests": [
+        "test/plan-review-focus.test.mjs「FR-03 补充复查三项」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-plan-review-focus"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-plan-review-focus:flow:测试绑定FR-04",
+      "tests": [
+        "test/plan-review-focus.test.mjs「FR-04 派生件一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-plan-review-focus"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-15-plan-review-focus:flow:测试绑定FR-05",
+      "tests": [
+        "test/plan-review-focus.test.mjs「FR-01~04 全部用例 + 既有 plan 测试绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-plan-review-focus"
+    }
+  ]
+}
