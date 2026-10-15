@@ -100,6 +100,8 @@ SillySpec CLI — 规范驱动开发工具包
                                       变更合成时间线（事件流 × tasks.md × git 提交锚三源真实留痕渲染；活跃/归档变更均可）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
+  sillyspec diagnose --change <名> [--detect] [--json]
+                                      会话取证：只读装配证据包（flow 态/会话日志/摩擦账本/verify-runs/评审轮次）+ 取证任务书（path:line 铁律；报告由执行任务书的 agent 产出）
 
   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json] [--save]
                                       全局 workflow 校验（--save 归档到 .sillyspec/.runtime/workflow-runs/）
@@ -4128,6 +4130,14 @@ SillySpec worktree — git worktree 隔离管理
       //（run 命令在 agent 环境内自动登记），--detect 现场探测不落盘。协议见 docs/platform-agent-log-protocol.md。
       const { cmdAgentLog } = await import('./agent-session-log.js');
       await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
+      break;
+    }
+    case 'diagnose': {
+      // 会话取证（2026-10-15-session-forensics）：只读装配证据包六面（flow 态/会话日志/摩擦账本/
+      // verify-runs/评审轮次/任务书）+ 取证任务书（path:line 铁律，唯一可写产物 diagnosis-report.md
+      // 由执行任务书的 agent 产出）。零状态写入，不进 run 状态机——诊断是随时可调用的查询动作。
+      const { cmdForensics } = await import('./forensics.js');
+      await cmdForensics(filteredArgs.slice(1), { json, cwd: dir, specDir });
       break;
     }
     case 'patch-reanchor': {

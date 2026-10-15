@@ -24,6 +24,7 @@ modules:
     review_reasons: []
     paths:
       - src/agent-session-log.js
+      - src/forensics.js
       - src/friction-tally.js
       - src/friction-ledger.js
       - src/semantic-guard.js
