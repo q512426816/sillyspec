@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-switch-discoverability",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "992f1b2b689815094d437e49b50887fa69cfac19",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——提示即时谓词求值无时序面",
+    "并发": "ok——只读无写盘；local.yaml 读取侧既有容错",
+    "切换": "ok——提示随开关状态即时翻转自消失，env 覆盖同样即时抑制",
+    "作用域": "ok——提示只在 platform 段在场的仓出现（per-repo 配置），文案单源双消费由测试钉"
+  },
+  "notes": {
+    "承诺对照": "FR-01 config schema 键行+example knowledge 段（config schema CLI 实测回执+renderExample 断言+耦合组 542 断言零失败）；FR-02 三态测试①；FR-03 hint 键/提示行双态测试②③；FR-04 新增 3/3+既有 vector/inject/schema/slim 五文件零回归",
+    "声明边界裁决": "①提示疲劳=可接受（自消失性：开启后永久消失，且只挂在未获得语义召回的上下文）；②未部署端点仓开开关白打一轮 404=可忽略（进程级死信短路既有）。无未裁决边界",
+    "防护声明核实": "提示为空时 hint 键不出现（条件展开 '...(hint ? {hint} : {})'）有测试②未连接态断言 'hint' in json 为 false 锁定",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "pass——提示文案含配置形态（knowledge 段+vector_search: on）/缺省关语义/config schema 指路三要素，与 schema desc 同口径",
+      "config-absent-zero-regression": "pass——knowledge 段未写=关（测试①未连接态+既有缺省关测试零回归）；无 local.yaml/坏 yaml 走既有 catch 容错",
+      "crossrepo-path-compat": "n/a——未触跨仓面"
+    }
+  },
+  "reviewedAt": "2026-10-15T04:40:00.000Z"
+}

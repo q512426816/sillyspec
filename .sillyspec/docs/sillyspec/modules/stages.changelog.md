@@ -59,3 +59,4 @@
 | 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移：701 legacy 节段→597 全局号+dry-run/apply 工具 |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
 | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+| 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |

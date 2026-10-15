@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-vector-switch-discoverability",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-vector-switch-discoverability:flow:测试绑定FR-01",
+      "tests": [
+        "test/config-schema.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-switch-discoverability"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-vector-switch-discoverability:flow:测试绑定FR-02",
+      "tests": [
+        "test/vector-switch-hint.test.mjs「① vectorSwitchHint 三态：未连接空串/已连接未开提示/已开空串」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-switch-discoverability"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-vector-switch-discoverability:flow:测试绑定FR-03",
+      "tests": [
+        "test/vector-switch-hint.test.mjs「② knowledge search：未开+已连接输出 hint 键；未连接无 hint 键」",
+        "test/vector-switch-hint.test.mjs「③ flow 注入零命中：已连接未开追加提示行；已开零新增」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-switch-discoverability"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-vector-switch-discoverability:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-inject.test.mjs",
+        "test/knowledge-vector-recall.test.mjs",
+        "test/thin-inject-telemetry.test.mjs",
+        "test/thin-query-slim.test.mjs",
+        "test/vector-switch-hint.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-vector-switch-discoverability"
+    }
+  ]
+}

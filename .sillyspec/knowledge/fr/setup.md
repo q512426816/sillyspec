@@ -2066,3 +2066,79 @@ created_at: 2026-09-20T18:20:21.442Z
 - 场景：主路径 — Given 预核验 latest=3.32.8 通过证通道存活；When npm publish（钉扎）；Then 发布回执含 sillyspec@3.32.9 与 sha
 全文：.sillyspec/changes/archive/2026-10-14-release-3-32-9/requirements.md#FR-03
 最近确认：a6c227079ac2cc676c58f48413f925764547187a
+
+## FR-setup-117 config schema 注册 knowledge.vector_search 且 renderExample 含 knowledge 段（防漂耦合测试绿）
+变更：2026-10-15-vector-switch-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-switch-discoverability/requirements.md#FR-01
+最近确认：992f1b2b689815094d437e49b50887fa69cfac19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-switch-discoverability:flow:测试绑定FR-01
+  tests: test/config-schema.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-switch-discoverability
+  status: active
+
+## FR-setup-118 vectorSwitchHint 三态：平台未连接空串/已连接未开提示/已开空串
+变更：2026-10-15-vector-switch-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-switch-discoverability/requirements.md#FR-02
+最近确认：992f1b2b689815094d437e49b50887fa69cfac19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-switch-discoverability:flow:测试绑定FR-02
+  tests: test/vector-switch-hint.test.mjs「① vectorSwitchHint 三态：未连接空串/已连接未开提示/已开空串」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-switch-discoverability
+  status: active
+
+## FR-setup-119 search 输出 hint 键（未开+已连接时）；flow 注入零命中时追加提示行（已开或未连接零新增）
+变更：2026-10-15-vector-switch-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-switch-discoverability/requirements.md#FR-03
+最近确认：992f1b2b689815094d437e49b50887fa69cfac19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-switch-discoverability:flow:测试绑定FR-03
+  tests: test/vector-switch-hint.test.mjs「② knowledge search：未开+已连接输出 hint 键；未连接无 hint 键」 | test/vector-switch-hint.test.mjs「③ flow 注入零命中：已连接未开追加提示行；已开零新增」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-switch-discoverability
+  status: active
+
+## FR-setup-120 新增测试全绿+既有 vector/schema 测试零回归
+变更：2026-10-15-vector-switch-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-vector-switch-discoverability/requirements.md#FR-04
+最近确认：992f1b2b689815094d437e49b50887fa69cfac19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-vector-switch-discoverability:flow:测试绑定FR-04
+  tests: test/knowledge-inject.test.mjs | test/knowledge-vector-recall.test.mjs | test/thin-inject-telemetry.test.mjs | test/thin-query-slim.test.mjs | test/vector-switch-hint.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-vector-switch-discoverability
+  status: active

@@ -54,3 +54,4 @@
 | 2026-10-15 | 2026-10-15-thin-query-slim | 效果评估实证两处：①thin 道 flow start 知识匹配查询用整段 --input（含成功标准段的文件路径/测试 |
 | 2026-10-15 | 2026-10-15-harvest-title-clarify | 收割条目标题自解释：机制词（槽4/收割）退出 D-001 标题，出处归 frontmatter
 | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
+| 2026-10-15 | 2026-10-15-vector-switch-discoverability | 效果评估清偿批 B1 收尾缺口（用户问出）：向量开关 knowledge.vector_search… |
