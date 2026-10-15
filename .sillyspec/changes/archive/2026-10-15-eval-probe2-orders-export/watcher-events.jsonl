@@ -1,0 +1,14 @@
+{"ts":1792074474342,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792074527003,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792074575955,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792074612075,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792074627256,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/tasks/005-orders-export/——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792074784464,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792074784464,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1792074850681,"kind":"commit","stage":null,"detail":"8ac8c006","provisional":true}
+{"ts":1792074873850,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792074917512,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（37.2s） · 20261015143516","provisional":true}
+{"ts":1792075610566,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792075610566,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792075610566,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792075624069,"kind":"commit","stage":null,"detail":"ece303d0","provisional":true}

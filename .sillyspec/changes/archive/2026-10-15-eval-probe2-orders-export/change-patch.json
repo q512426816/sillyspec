@@ -1,0 +1,113 @@
+{
+  "change": "2026-10-15-eval-probe2-orders-export",
+  "baseline": "2900b7f668e970e2a651aa46298a086725299a18",
+  "head": "ece303d0f2e84b1fefffff3427e826c919d71151",
+  "files": [
+    "eval/tasks/005-orders-export/files/data/.gitattributes",
+    "eval/tasks/005-orders-export/files/data/orders.csv",
+    "eval/tasks/005-orders-export/solution/bin/export-orders.mjs",
+    "eval/tasks/005-orders-export/task.json",
+    "eval/tasks/005-orders-export/verify.mjs",
+    "test/eval-probe2-orders.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 191,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-15T14:47:05.035Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "eval",
+      "files": 5,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 5,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "2900b7f668e970e2a651aa46298a086725299a18",
+    "totals": {
+      "files": 6,
+      "additions": 191,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": "eval/tasks/005-orders-export/files/data/.gitattributes",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/005-orders-export/files/data/orders.csv",
+        "additions": 9,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/005-orders-export/solution/bin/export-orders.mjs",
+        "additions": 57,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/005-orders-export/task.json",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/tasks/005-orders-export/verify.mjs",
+        "additions": 28,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-probe2-orders.test.mjs",
+        "additions": 90,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "db40ccaed753d8421133023ddd033f2213adc373cabec6afbbd509cf341ec968",
+  "patchStatus": "ok"
+}

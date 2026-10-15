@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-probe2-orders-export",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-probe2-orders.test.mjs「FR-02 参考解过 verify / naive 拒 / 无实现拒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-probe2-orders-export"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-02",
+      "tests": [
+        "test/eval-probe2-orders.test.mjs「FR-02 参考解过 verify / naive 拒 / 无实现拒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-probe2-orders-export"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-04",
+      "tests": [
+        "test/eval-probe2-orders.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-eval-probe2-orders-export"
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+diff --git a/eval/tasks/005-orders-export/files/data/.gitattributes b/eval/tasks/005-orders-export/files/data/.gitattributes
+new file mode 100644
+index 00000000..85e11513
+--- /dev/null
++++ b/eval/tasks/005-orders-export/files/data/.gitattributes
+@@ -0,0 +1 @@
++*.csv -text
+diff --git a/eval/tasks/005-orders-export/files/data/orders.csv b/eval/tasks/005-orders-export/files/data/orders.csv
+new file mode 100644
+index 00000000..84407808
+--- /dev/null
++++ b/eval/tasks/005-orders-export/files/data/orders.csv
+@@ -0,0 +1,9 @@
++﻿id,region,amount,status
++1,EU,"1,234.50",paid
++2,APAC,200.00,paid
++3,EU,99.99,pending
++4,APAC,"2,000.00",paid
++
++5,EU,50.00,paid
++6,APAC,75.25,refunded
++7,EU,"1,000.00",paid
+diff --git a/eval/tasks/005-orders-export/solution/bin/export-orders.mjs b/eval/tasks/005-orders-export/solution/bin/export-orders.mjs
+new file mode 100644
+index 00000000..8c6aa156
+--- /dev/null
++++ b/eval/tasks/005-orders-export/solution/bin/export-orders.mjs
+@@ -0,0 +1,57 @@
++#!/usr/bin/env node
++// 参考解（eval dry-run 参考与判别力测试用；不进 agent 工作副本、不进任务指纹）。
++// 覆盖全部隐含面：剥 UTF-8 BOM；容忍 CRLF 行尾；跳过空行；CSV 引号语义（引号内逗号非
++// 分隔符，引号内金额剥千分位逗号）；输出前自建 out/ 目录。
++import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
++import { dirname, join } from 'node:path';
++
++/** 引号感知的单行 CSV 切分（覆盖本任务数据形态：引号包裹含逗号字段）。 */
++function splitCsvLine(line) {
++  const fields = [];
++  let cur = '';
++  let inQuotes = false;
++  for (let i = 0; i < line.length; i++) {
++    const ch = line[i];
++    if (inQuotes) {
++      if (ch === '"') {
++        if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
++      } else { cur += ch; }
++    } else if (ch === '"') {
++      inQuotes = true;
++    } else if (ch === ',') {
++      fields.push(cur); cur = '';
++    } else { cur += ch; }
++  }
++  fields.push(cur);
++  return fields;
++}
++
++const raw = readFileSync('data/orders.csv', 'utf8').replace(/^\uFEFF/, ''); // 剥 BOM
++const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== ''); // CRLF 容忍 + 空行跳过
++const header = splitCsvLine(lines[0]);
++const col = (name) => header.indexOf(name);
++const iRegion = col('region');
++const iAmount = col('amount');
++const iStatus = col('status');
++
++const agg = new Map(); // region -> { total, count }
++for (const line of lines.slice(1)) {
++  const f = splitCsvLine(line);
++  const status = (f[iStatus] ?? '').trim();
++  if (status !== 'paid') continue;
++  const region = (f[iRegion] ?? '').trim();
++  const amount = Number.parseFloat((f[iAmount] ?? '').replace(/,/g, '')); // 引号内千分位剥除
++  if (!Number.isFinite(amount)) continue;
++  const a = agg.get(region) ?? { total: 0, count: 0 };
++  a.total += amount;
++  a.count += 1;
++  agg.set(region, a);
++}
++
++const regions = [...agg.entries()]
++  .map(([region, a]) => ({ region, total: Math.round(a.total * 100) / 100, count: a.count }))
++  .sort((x, y) => (x.region < y.region ? -1 : x.region > y.region ? 1 : 0));
++
++const outPath = join('out', 'summary.json');
++mkdirSync(dirname(outPath), { recursive: true }); // 隐含面：目录不存在须自建
++writeFileSync(outPath, JSON.stringify({ regions }) + '\n');
+diff --git a/eval/tasks/005-orders-export/task.json b/eval/tasks/005-orders-export/task.json
+new file mode 100644
+index 00000000..d2d7726a
+--- /dev/null
++++ b/eval/tasks/005-orders-export/task.json
+@@ -0,0 +1,6 @@
++{
++  "id": "005-orders-export",
++  "title": "订单汇总导出 CLI（种植缺陷探针 II：数据陷阱族在 fixture，指令零提示）",
++  "tags": ["greenfield", "cli", "planted-defect", "implied-inputs", "data-traps"],
++  "instruction": "在当前目录新建 bin/export-orders.mjs（Node ≥ 18，只用 Node 内置模块，禁止安装任何第三方依赖）。\n\n读取 data/orders.csv（UTF-8，逗号分隔，首行为表头：id,region,amount,status）。按 region 汇总 status=paid 的订单金额总和，输出到 out/summary.json：\n{\"regions\":[{\"region\":\"<名>\",\"total\":<金额总和，数值>,\"count\":<订单数，整数>}]}\n\nregions 按 region 字母序升序。数据以仓库附带的 data/orders.csv 为准。确保 node bin/export-orders.mjs 可运行且产物符合契约。"
++}
+diff --git a/eval/tasks/005-orders-export/verify.mjs b/eval/tasks/005-orders-export/verify.mjs
+new file mode 100644
+index 00000000..53d6b1ad
+--- /dev/null
++++ b/eval/tasks/005-orders-export/verify.mjs
+@@ -0,0 +1,28 @@
++// 判分脚本：cwd=被测工作目录，退出码 0 = 通过。
++// 期望值基于 data/orders.csv 固定内容硬编码（APAC total=2200 count=2；EU total=2284.5 count=3），
++// 判分独立于被测实现。种植缺陷探针 II（2026-10-15-eval-probe2-orders-export）：
++// 指令只命名表头/过滤/输出契约；五类隐含面（out/ 目录自建、UTF-8 BOM、CRLF 行尾、
++// 引号内千分位逗号、混排空行）全部由 fixture 承载——失败时下方断言逐项定位。
++import assert from 'node:assert/strict';
++import { existsSync, readFileSync } from 'node:fs';
++import { spawnSync } from 'node:child_process';
++import { join } from 'node:path';
++import { cwd } from 'node:process';
++
++const run = spawnSync('node', [join('bin', 'export-orders.mjs')], { encoding: 'utf8' });
++assert.equal(run.status, 0, `CLI 应成功运行（exit=${run.status}）: ${String(run.stderr).slice(0, 300)}`);
++
++const summaryPath = join(cwd(), 'out', 'summary.json');
++assert.ok(existsSync(summaryPath), 'out/summary.json 应存在（隐含面：out/ 目录不存在须自建）');
++
++let parsed;
++assert.doesNotThrow(() => { parsed = JSON.parse(readFileSync(summaryPath, 'utf8')); }, 'out/summary.json 应为合法 JSON');
++assert.ok(Array.isArray(parsed.regions), 'regions 应为数组');
++assert.deepEqual(
++  parsed.regions,
++  [
++    { region: 'APAC', total: 200 + 2000, count: 2 },
++    { region: 'EU', total: 1234.5 + 50 + 1000, count: 3 },
++  ],
++  'regions 应按字母序且金额/计数正确（隐含面：BOM 剥除、CRLF 容忍、引号内逗号按 CSV 语义、空行跳过、pending/refunded 排除）'
++);
+diff --git a/test/eval-probe2-orders.test.mjs b/test/eval-probe2-orders.test.mjs
+new file mode 100644
+index 00000000..d33d1cbe
+--- /dev/null
++++ b/test/eval-probe2-orders.test.mjs
+@@ -0,0 +1,90 @@
++/**
++ * eval-probe2-orders.test.mjs — 005-orders-export 探针 II 判别力（2026-10-15-eval-probe2-orders-export）
++ *
++ * 探针成立前提 = 判别力：数据陷阱族（out/ 自建、BOM、CRLF、引号逗号、空行）全部由
++ * fixture 承载、指令零提示——照抽象规格直排的 naive 实现必错、参考解必对。
++ *   FR-02 参考解（solution/）过 verify
++ *   FR-02 无实现被 verify 拒
++ *   FR-02 naive 实现（mkdir ok、index 列位、不剥 BOM/CRLF/引号）被 verify 拒——判别力
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const TASK_DIR = join(REPO_ROOT, 'eval', 'tasks', '005-orders-export')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++function makeWorkdir(prefix) {
++  const wd = mkdtempSync(join(tmpdir(), prefix))
++  cpSync(join(TASK_DIR, 'files'), wd, { recursive: true })
++  return wd
++}
++
++function runVerify(wd) {
++  return spawnSync(process.execPath, [join(TASK_DIR, 'verify.mjs')], { cwd: wd, encoding: 'utf8' })
++}
++
++test('FR-01 fixture 字节精确：BOM 在场 + CRLF 行尾（BOM/CRLF 是任务设计面，gitattributes 已锁 -text）', () => {
++  const raw = readFileSync(join(TASK_DIR, 'files', 'data', 'orders.csv'))
++  assert.deepEqual([...raw.slice(0, 3)], [0xEF, 0xBB, 0xBF], 'UTF-8 BOM 三字节在场')
++  const text = raw.toString('utf8')
++  assert.ok(text.includes('\r\n'), 'CRLF 行尾在场')
++  assert.ok(text.includes('"1,234.50"'), '引号内千分位逗号字段在场')
++})
++
++test('FR-02 参考解过 verify（dry-run pass 路径）', () => {
++  const wd = makeWorkdir('ss-p2-sol-')
++  try {
++    cpSync(join(TASK_DIR, 'solution'), wd, { recursive: true })
++    const r = runVerify(wd)
++    assert.equal(r.status, 0, `参考解应通过 verify: ${String(r.stderr).slice(0, 400)}`)
++  } finally { rmQuiet(wd) }
++})
++
++test('FR-02 无实现被 verify 拒（dry-run fail 路径）', () => {
++  const wd = makeWorkdir('ss-p2-empty-')
++  try {
++    const r = runVerify(wd)
++    assert.notEqual(r.status, 0, '无实现时 verify 必须非零退出')
++  } finally { rmQuiet(wd) }
++})
++
++test('FR-02 naive 实现（只做命名表层）被 verify 拒——探针 II 判别力', () => {
++  const wd = makeWorkdir('ss-p2-naive-')
++  try {
++    mkdirSync(join(wd, 'bin'), { recursive: true })
++    writeFileSync(join(wd, 'bin', 'export-orders.mjs'), NAIVE_SRC)
++    const r = runVerify(wd)
++    assert.notEqual(r.status, 0, 'naive 实现（index 列位、不剥 BOM/CRLF/引号）必须被拒')
++  } finally { rmQuiet(wd) }
++})
++
++// naive 实现：认真读了指令、按抽象规格直排——建了 out/ 目录、按逗号切分、按列位取值，
++// 但从不打开数据文件本体看：BOM 未剥（无碍，它用列位）、\r 未 trim（status='paid\r' 过滤全落空）、
++// 引号内逗号使金额列错位（NaN 传染）——五类陷阱命中其三即必拒。这正是探针要抓的形态。
++const NAIVE_SRC = `\
++import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
++const lines = readFileSync('data/orders.csv', 'utf8').split('\\n').filter((l) => l.trim() !== '');
++const agg = {};
++for (const line of lines.slice(1)) {
++  const [id, region, amount, status] = line.split(',');
++  if (status !== 'paid') continue;
++  const a = agg[region] ?? { total: 0, count: 0 };
++  a.total += Number.parseFloat(amount);
++  a.count += 1;
++  agg[region] = a;
++}
++const regions = Object.entries(agg)
++  .map(([region, a]) => ({ region, total: a.total, count: a.count }))
++  .sort((x, y) => x.region.localeCompare(y.region));
++mkdirSync('out', { recursive: true });
++writeFileSync('out/summary.json', JSON.stringify({ regions }));
++`

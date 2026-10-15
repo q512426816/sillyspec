@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-probe2-orders-export",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8ac8c006fbf353377ea99723ac0e94218f72b0be",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-03/design/tasks 的 dry-run 分臂描述与实现相反：005（奇数）B 臂实际走 solution pass 路径，非「占位 fail 路径」",
+      "evidence": "eval/lib/adapters/dryrun.mjs:12 mixed 规则 pass = arm === 'A' ? true : Number.isInteger(numeric) && numeric % 2 === 1（B 臂奇数即过）；实测 node eval/run.mjs --dry-run --force 输出 [✓] 005-orders-export 臂B pass，B 通过率 3/5（001/003/005 过）。FR-03 场景面（退出码 0、报告含 005）成立，零功能/数据影响；对照 archive/2026-10-15-eval-planted-defect-probe（004 偶数→B 挂 为正确描述），本条属奇偶方向写反的事实陈述，非纯标题措辞。",
+      "location": ".sillyspec/changes/2026-10-15-eval-probe2-orders-export/requirements.md:40；同 design.md:23（HEAD 版）、tasks.md:9"
+    },
+    {
+      "severity": "P3",
+      "title": "design 交付文件面自声明「上述 5 个新增文件」与实际 6 件交付矛盾（同文件风险节又自称「第 6 项」）",
+      "evidence": "design.md:25（HEAD 版）称「上述 5 个新增文件」；同文件文件变更清单第 6 行含 eval/tasks/005-orders-export/files/data/.gitattributes，风险节（:47）自称「新增为交付文件第 6 项」；change.patch 与 git ls-tree HEAD 均为 6 个新文件。库存自声明陈旧，无功能影响。",
+      "location": ".sillyspec/changes/2026-10-15-eval-probe2-orders-export/design.md:25（HEAD 版）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a——静态任务资产无事件流；fixture 行序即被测输入设计（design『不适用』作答与实况相符）",
+    "并发": "ok——verify 与测试各在独立临时工作副本（mkdtemp+cpSync）判定，无共享写面；dry-run 亦逐 (task,arm) 独立工作副本实测通过",
+    "切换": "ok——任务目录静态；solution/ 不进工作副本（测试与 dry-run 均显式注入）；workdir 每轮清空重建（prepareWorkdir）",
+    "作用域": "ok——单仓目录资产；files/data/.gitattributes 的 *.csv -text 实测生效（git check-attr text: unset；git ls-files --eol: i/crlf w/crlf attr/-text）压过根 * text=auto eol=lf，HEAD blob 与工作区字节一致（BOM EF BB BF + 全行 CRLF）；该文件随 files/ 复制进 agent 工作副本（惰性、不泄露五类隐含面）",
+    "披露①CRLF/BOM为设计面必须锁字节": "可接受——字节锁实测生效且被测试钉死（BOM/CRLF/引号字段三重字节断言）；CRLF 是本任务隐含面、非环境容忍面",
+    "披露②真实A/B实测后置不进本门": "可接受——本变更门=任务本体+零 token 管道+判别力测试，三项均亲测（4/4 绿；dry-run 10 跑含 005 全通；lint 1006 文件通过）；真实 token A/B 属评测活动，同 004 先例",
+    "披露③n=1无区分度解读预案": "可接受——预案预先声明且可证伪（双臂全过→该陷阱族裸能力覆盖，探针按需再升级）；eval 报告自带样本<30 区间告示",
+    "探针cli-copy-selfsufficient": "不触发（零 CLI 文案改动）；相关文案面自足：instruction 的路径/命令与实况一致（data/orders.csv 在场、out/summary.json 契约、bin/export-orders.mjs 待建），verify 断言消息一次给全状态+原因+隐含面定位",
+    "探针config-absent-zero-regression": "不触发（patch 零配置改动、未新增 local.yaml 消费键）；零配置集成为实测锚：loadTasks 按目录自动发现 005，dry-run 5 任务全跑通；tasksFingerprint 纳入新任务致 config_hash 变化属设计内语义（004 同）",
+    "探针crossrepo-path-compat": "不触发（未动 worktree*/cross-repo*/local-register.js）；跨平台面经核：全 join() 组路径、mkdtemp(tmpdir()) 工作副本、Windows EPERM 重试、CRLF/BOM 字节经 .gitattributes 跨平台检出不失真；verify 以 'node' 调起为工具链既有口径（runner.mjs:139 同）",
+    "核查快照": "HEAD 8ac8c006 = 工作区实态（eval/、test/ 交付面零未提交差异；design.md/flow-state.yaml 工作区差异仅流程模板占位行）；手工从 fixture 数：paid 5 行 = EU 3 行（1234.50+50.00+1000.00=2284.50）+ APAC 2 行（200.00+2000.00=2200.00），与 verify 硬编码唯一合解一致；naive 手工复现：运行 exit 0、产物 summary 为 regions 空数组、verify exit 1（deepEqual 断言命中非崩溃）——判别力为真；四件套+gitattributes 六件与 change.patch/HEAD 一致；参考解经测试与 dry-run A 臂双证通过"
+  },
+  "reviewedAt": "2026-10-15T22:52:00+08:00"
+}

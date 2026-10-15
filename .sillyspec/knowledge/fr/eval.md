@@ -243,3 +243,67 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-b-arm-turn-budget
   status: active
+
+## FR-eval-014 eval/tasks/005-orders-export/ 四件套在场：task.json（instruction 只命名表层契约）、files/data/orders.csv（五类隐含面的固定 fixture，字节精确）、verify.mjs（期望硬编码）、solution/bin/export-orders.mjs（参考解全对）
+变更：2026-10-15-eval-probe2-orders-export
+状态：active
+摘要：四件套齐全且指令不泄露；fixture 字节精确
+全文：.sillyspec/changes/archive/2026-10-15-eval-probe2-orders-export/requirements.md#FR-01
+最近确认：ece303d0f2e84b1fefffff3427e826c919d71151
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-01
+  tests: test/eval-probe2-orders.test.mjs「FR-02 参考解过 verify / naive 拒 / 无实现拒」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-probe2-orders-export
+  status: active
+
+## FR-eval-015 判别力：naive 实现（index 列位、不剥 BOM/CRLF/引号）verify 必拒；参考解必过
+变更：2026-10-15-eval-probe2-orders-export
+状态：active
+摘要：三用例判别
+全文：.sillyspec/changes/archive/2026-10-15-eval-probe2-orders-export/requirements.md#FR-02
+最近确认：ece303d0f2e84b1fefffff3427e826c919d71151
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-02
+  tests: test/eval-probe2-orders.test.mjs「FR-02 参考解过 verify / naive 拒 / 无实现拒」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-probe2-orders-export
+  status: active
+
+## FR-eval-016 eval 管道集成：node eval/run.mjs --dry-run 含 005 零报错跑通
+变更：2026-10-15-eval-probe2-orders-export
+状态：active
+摘要：dry-run 全管道
+全文：.sillyspec/changes/archive/2026-10-15-eval-probe2-orders-export/requirements.md#FR-03
+最近确认：ece303d0f2e84b1fefffff3427e826c919d71151
+
+## FR-eval-017 变更自身测试面与 lint
+变更：2026-10-15-eval-probe2-orders-export
+状态：active
+摘要：测试与 lint
+全文：.sillyspec/changes/archive/2026-10-15-eval-probe2-orders-export/requirements.md#FR-04
+最近确认：ece303d0f2e84b1fefffff3427e826c919d71151
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-eval-probe2-orders-export:flow:测试绑定FR-04
+  tests: test/eval-probe2-orders.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-eval-probe2-orders-export
+  status: active

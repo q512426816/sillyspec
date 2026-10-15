@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-eval-probe2-orders-export",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ece303d0f2e84b1fefffff3427e826c919d71151",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——静态任务资产无事件流；fixture 行序即被测输入设计（design『不适用』作答与实况相符）",
+    "并发": "ok——verify 与测试各在独立临时工作副本（mkdtemp+cpSync）判定，无共享写面；dry-run 亦逐 (task,arm) 独立工作副本实测通过",
+    "切换": "ok——任务目录静态；solution/ 不进工作副本（测试与 dry-run 均显式注入）；workdir 每轮清空重建（prepareWorkdir）",
+    "作用域": "ok——单仓目录资产；files/data/.gitattributes 的 *.csv -text 实测生效（git check-attr text: unset；git ls-files --eol: i/crlf w/crlf attr/-text）压过根 * text=auto eol=lf，HEAD blob 与工作区字节一致（BOM EF BB BF + 全行 CRLF）；该文件随 files/ 复制进 agent 工作副本（惰性、不泄露五类隐含面）",
+    "披露①CRLF/BOM为设计面必须锁字节": "可接受——字节锁实测生效且被测试钉死（BOM/CRLF/引号字段三重字节断言）；CRLF 是本任务隐含面、非环境容忍面",
+    "披露②真实A/B实测后置不进本门": "可接受——本变更门=任务本体+零 token 管道+判别力测试，三项均亲测（4/4 绿；dry-run 10 跑含 005 全通；lint 1006 文件通过）；真实 token A/B 属评测活动，同 004 先例",
+    "披露③n=1无区分度解读预案": "可接受——预案预先声明且可证伪（双臂全过→该陷阱族裸能力覆盖，探针按需再升级）；eval 报告自带样本<30 区间告示",
+    "探针cli-copy-selfsufficient": "不触发（零 CLI 文案改动）；相关文案面自足：instruction 的路径/命令与实况一致（data/orders.csv 在场、out/summary.json 契约、bin/export-orders.mjs 待建），verify 断言消息一次给全状态+原因+隐含面定位",
+    "探针config-absent-zero-regression": "不触发（patch 零配置改动、未新增 local.yaml 消费键）；零配置集成为实测锚：loadTasks 按目录自动发现 005，dry-run 5 任务全跑通；tasksFingerprint 纳入新任务致 config_hash 变化属设计内语义（004 同）",
+    "探针crossrepo-path-compat": "不触发（未动 worktree*/cross-repo*/local-register.js）；跨平台面经核：全 join() 组路径、mkdtemp(tmpdir()) 工作副本、Windows EPERM 重试、CRLF/BOM 字节经 .gitattributes 跨平台检出不失真；verify 以 'node' 调起为工具链既有口径（runner.mjs:139 同）",
+    "round2-清偿复核": "HEAD=ece303d0（即清偿提交，其后无提交）；git diff 8ac8c006..ece303d0 name-status 仅 3 份变更文档（design.md 18+/4-、requirements.md、tasks.md 各 1+/1-），receipt git show ece303d0 --stat 零夹带（eval/、test/ 交付面零触及）。三处分臂文本新措辞与 dryrun.mjs:12 语义一致：requirements.md:40「005 为奇数号 → A 臂与 B 臂均走 solution pass 路径（B 臂占位 fail 路径对应偶数号任务，如 004）——mixed 规则：A 恒 pass；B 奇 pass 偶 fail」、design.md:27「005 奇数 → dry-run mixed 下 A/B 双臂均 pass（B 臂 fail 路径对应偶数号任务）」、tasks.md:9「005 奇数 → A/B 均 pass（B 挂路径归偶数号）形态」——P2 关闭。design.md:29「上述 6 个新增文件（含 data/.gitattributes 字节锁），无修改面」与 change.patch/git ls-tree 6 件一致——P3 关闭。清偿提交同批带入 design.md 工作区既有的流程模板占位行（『本变更怎么解决问题？』等标题句，惰性文本）——无实质影响。",
+    "核查快照": "交付面（eval/tasks/005-orders-export 四件套+data/.gitattributes、test/eval-probe2-orders.test.mjs）在 8ac8c006→ece303d0 间零字节变化（name-status 实证），首轮功能证据对当前 HEAD 继续有效：手工从 fixture 数 paid 5 行 = EU 3 行（1234.50+50.00+1000.00=2284.50）+ APAC 2 行（200.00+2000.00=2200.00）与 verify 硬编码唯一合解一致；node --test 4/4 绿；node eval/run.mjs --dry-run --force 退出 0 且 005 双 pass（B 奇 pass 实况）；naive 手工复现：运行 exit 0、产物 summary 为 regions 空数组、verify exit 1（deepEqual 断言命中非崩溃）——判别力为真；lint 通过"
+  },
+  "reviewedAt": "2026-10-15T22:54:00+08:00"
+}
