@@ -3842,3 +3842,60 @@
   confirmed_at: null
   source_change: 2026-10-15-fr-chain-l3-adjudication
   status: active
+
+## FR-core-engine-228 projects/ 登记仓名前缀（含大小写异形）归属登记仓簇；test 面归 _tests；无登记目录 fail-soft 原行为
+变更：2026-10-15-graph-registry-domain-split
+状态：active
+摘要：主路径；fail-soft
+全文：.sillyspec/changes/archive/2026-10-15-graph-registry-domain-split/requirements.md#FR-01
+最近确认：dc3354f9a381b7883dfc3a973ab5e2a74bb2c4e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-graph-registry-domain-split:flow:测试绑定FR-01
+  tests: test/graph-registry-domain.test.mjs「无 projects 目录 fail-soft：全落 _unmapped 行为不变」 | test/graph-registry-domain.test.mjs「登记仓前缀/大小写不敏感/_tests/真无归属 四态归簇」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-graph-registry-domain-split
+  status: active
+
+## FR-core-engine-229 真图 _unmapped 2183→761（frontend/backend/sillyhub-daemon/SillyHub 簇浮出），图谱既有 13 测试零回归
+变更：2026-10-15-graph-registry-domain-split
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-graph-registry-domain-split/requirements.md#FR-02
+最近确认：dc3354f9a381b7883dfc3a973ab5e2a74bb2c4e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-graph-registry-domain-split:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-graph-registry-domain-split
+  status: active
+
+## FR-core-engine-230 新增四态归簇测试全绿；C5/D3 缓办裁决入 known-issues 且 validate 绿
+变更：2026-10-15-graph-registry-domain-split
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-graph-registry-domain-split/requirements.md#FR-03
+最近确认：dc3354f9a381b7883dfc3a973ab5e2a74bb2c4e3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-graph-registry-domain-split:flow:测试绑定FR-03
+  tests: test/graph-registry-domain.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-graph-registry-domain-split
+  status: active

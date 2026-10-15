@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-graph-registry-domain-split",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-graph-registry-domain-split:flow:测试绑定FR-01",
+      "tests": [
+        "test/graph-registry-domain.test.mjs「无 projects 目录 fail-soft：全落 _unmapped 行为不变」",
+        "test/graph-registry-domain.test.mjs「登记仓前缀/大小写不敏感/_tests/真无归属 四态归簇」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-graph-registry-domain-split"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-graph-registry-domain-split:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-graph-registry-domain-split"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-graph-registry-domain-split:flow:测试绑定FR-03",
+      "tests": [
+        "test/graph-registry-domain.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-graph-registry-domain-split"
+    }
+  ]
+}

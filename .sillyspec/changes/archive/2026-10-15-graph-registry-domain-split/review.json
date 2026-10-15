@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-graph-registry-domain-split",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "dc3354f9a381b7883dfc3a973ab5e2a74bb2c4e3",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——聚簇为构建后纯函数求值",
+    "并发": "ok——projects/*.yaml 只读；_projPrefixes 单图对象缓存无跨运行态",
+    "切换": "ok——登记集变化下次构建自然生效",
+    "作用域": "ok——登记名本树自治；大小写不敏感仅影响簇键不影响节点 id，平台消费面零变化"
+  },
+  "notes": {
+    "承诺对照": "FR-01 四态+fail-soft 测试（frontend/sillyhub-daemon/SillyHub/_tests/_unmapped 各 1+无登记原行为）；FR-02 真图 _unmapped 2183→761 实测回执+登记簇浮出+图谱 13/13 零回归；FR-03 新测试 3/3 绿+known-issues 留痕（含重启条件）+validate ok:true",
+    "声明边界裁决": "①登记名与模块卡名撞车=无歧义路径（module-files 优先）；②大小写不敏感仅展示键=安全；③C5 拆分/D3 退休缓办=显式裁决留痕 known-issues（id 寻址漂移风险 vs 只读池、L3 冻结后无消费方，重启条件在案）。无未裁决边界",
+    "防护声明核实": "fail-soft（projects 缺席=空集）有测试②锁定；_unmapped 不消音（真缺口可见）有测试④锁定",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——CLI 文案零变化（簇键数据面）",
+      "config-absent-zero-regression": "n/a——projects/*.yaml 为既有登记机制非新消费键",
+      "crossrepo-path-compat": "pass——前缀匹配走 POSIX 归一路径（节点 id 构建侧既有归一），Windows 反斜杠形态不影响 startsWith 判定"
+    }
+  },
+  "reviewedAt": "2026-10-15T02:48:00.000Z"
+}
