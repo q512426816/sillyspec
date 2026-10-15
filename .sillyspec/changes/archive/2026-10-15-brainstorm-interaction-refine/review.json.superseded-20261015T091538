@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-brainstorm-interaction-refine",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d6e8cface27acdc8b8c84712ca57baaee74788d4",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "docs/prompt 派生副本未随本变更同步（HEAD 面滞后；工作区实态已含重提取）",
+      "evidence": "docs/prompt/README.md:5 声明 docs/prompt/*.md 与 _extracted.json 由 _extract.mjs 机械提取自 src/stages/*.js 且逐字一致；git show HEAD:docs/prompt/_extracted.json 与 HEAD:docs/prompt/brainstorm.md 对新文本（分块回放/自欺逃逸口/我替你做的决定/实现者视角追问/规模重估）命中均为 0，而本变更冻结面（change.patch 三文件）与其两笔提交（b289dcfd/d6e8cfac）均不含 docs/prompt 重新提取；工作区实态已含同步（brainstorm.md 五个新标记全命中）。无测试读 docs/prompt/brainstorm.md、docs/prompt/_verify.mjs 不被任何 test 调用 → 无机械门禁兜底，属派生副本滞后而非用户可见不一致。",
+      "location": "docs/prompt/brainstorm.md（HEAD d6e8cfac 副本）；对照 docs/prompt/README.md:5"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-05 minor 堆落盘位置与需求字面不一致（decisions.md vs design.md）",
+      "evidence": "requirements.md:82 要求 minor 堆「自行决定并在 design.md 标注为『我的判断』」；实现 src/stages/brainstorm.js:522 写「按决策记录格式落 decisions.md 并标注『我的判断』」。字面落点偏差（design.md→decisions.md）；实质被 FR-04「我替你做的决定」节覆盖（source≠user 条目在设计展示逐条可见），用户可见性不降，故不升 P 级。",
+      "location": "src/stages/brainstorm.js:522"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements FR-08 引用的豁免清单路径 test/known-failures.yaml 不存在",
+      "evidence": "requirements.md:148 写「test/known-failures.yaml 既有失败不计入」；全仓 find 唯一命中 .sillyspec/known-failures.yaml（文件头注明自 local.yaml 迁移入库），test/ 下无此文件。runner 行为面不受影响，属需求文本路径笔误。",
+      "location": ".sillyspec/changes/2026-10-15-brainstorm-interaction-refine/requirements.md:148"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok；边界已裁决：可接受（测试只断言 prompt 产物面——prompt 遵循度无机械面可测，design 风险节已声明取舍，字面锁防漂移 + 既有机械面兜底；B2 节要求回放/追问分节标注，正是对『回答上一轮追问 vs 本轮回放推块』错位的显式处置，change.patch:71 在场）。探针 cli-copy-selfsufficient：pass——`--upgrade-thick` 实存（src/run/command.js:749 标志注册、:1452 无 flag 拒跑，与文案『只能建议、不能自行升降档』一致）；`sillyspec knowledge search --query` 实存（src/index.js:148 用法、src/stages/knowledge.js:92 解析、:101 缺参报错）；tier=self（S0/S1）/independent（S2/S3）与 src/review-tier.js 档位映射注释一致；`--continue --answer` 实存（src/run/command.js:421）。本变更未新增报错文案，无『须一次给全』面。",
+    "并发": "ok；边界已裁决：可接受（builder 问题清单写 review.json 既有 reviewerNotes 而不新增 schema 字段——reviewerNotes 为既有自由文本字段且被 gate 读取 src/stage-review.js:154/181/523；防护声明『不修改 src/stage-review.js / review.json schema 不变』经 git diff e8399a9b..HEAD -- src/stage-review.js 空输出核实）。写者面核实：review.json 仍由审查子代理单通道产出（stage-review.js:650 既有约定），本变更只追加派发 prompt 文本，无第二写者、无新文件写面、无双写竞态。",
+    "切换": "ok；边界已裁决：可接受（步骤名与顺序不变——8 个步骤名在 HEAD 逐字保留，存量进度库匹配键不受影响；repeatableWait:true/maxWaitRounds:8/waitOptions 位于 src/stages/brainstorm.js:85-88，diff 未触碰）。重入面核实：『再次执行时输出只需增量汇报（新回放块 + 新追问 + 新落盘决策）』已替换旧口径（change.patch:138-139），每次重入 prompt 完整重渲染、不依赖内存；新测试断言 repeatableWait:true 在探索步段内（test/brainstorm-interaction-refine.test.mjs:78）且 8/8 绿。",
+    "作用域": "ok；边界已裁决：可接受（规模重估只建议不落值——档位仍由 CLI 三轴定价 computeCeremonyTier 落值，agent 无写档位的代码路径，升厚唯一通道是带 --upgrade-thick 的用户同意门 src/run/command.js:1452）。防护声明『子代理写通道面未扩大/材料包作用域不变』核实：变更面仅 3 文件（git diff --stat e8399a9b..HEAD），review-material-pack.js 零改动。探针 config-absent-zero-regression：pass（本变更未新增 local.yaml 消费键）。探针 crossrepo-path-compat：pass（未触及 worktree/跨仓路径逻辑）。"
+  },
+  "reviewedAt": "2026-10-15T09:12:13.515Z"
+}

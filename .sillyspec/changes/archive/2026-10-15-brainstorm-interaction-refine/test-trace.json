@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-brainstorm-interaction-refine",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-01",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-01 来源标记两态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-02 分块回放」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-03",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-03 Grill 出口三分」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-04",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-04 我替你做的决定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-05",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-05 实现者视角四要素与三堆分拣」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-06",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-06 自欺逃逸口表」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-07",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-07 规模超档说明」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-10-15-brainstorm-interaction-refine:flow:测试绑定FR-08",
+      "tests": [
+        "test/brainstorm-interaction-refine.test.mjs「FR-01~07 全部用例 + 既有 brainstorm 测试绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-brainstorm-interaction-refine"
+    }
+  ]
+}

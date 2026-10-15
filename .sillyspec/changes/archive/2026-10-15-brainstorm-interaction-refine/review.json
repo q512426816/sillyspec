@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-brainstorm-interaction-refine",
+  "reviewer": "subagent-recheck",
+  "verdict": "PASS",
+  "reviewedAgainst": "5626cf950778d8dd24a8ac52678377b6e8925029",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "本变更只改 brainstorm prompt 文本（src/stages/brainstorm.js:116-122 B2 分块回放、170-176 D 节三分、221-228 逃逸口表、283 FR-04 节、511-523 实现者视角、94 FR-07），无新输入面；CLI 步骤态串行，用户回答仍走 --continue --answer 单通道。设计.md 第 1 问已声明真实风险（用户回答的是上一轮追问、本轮回放块可能已推进）并以「回放/追问」分节标注缓解（brainstorm.js:122），重入路径 repeatableWait 语义未动（85-88 行），增量汇报改写为「新回放块 + 新追问 + 新落盘决策」（237 行），无乱序缺口。",
+    "并发": "无新增写入者：新文案统一要求按既有决策记录格式落 decisions.md（CLI src/decisions-io.js 单一写入者），builder 问题清单钉 review.json 既有 reviewerNotes 字段（brainstorm.js:518，显式不新增 schema 字段），子代理写通道未扩大。与并行会话 2026-10-15-ui-proto-form-config（a8b8eba4，同文件 UI 原型段）无真实冲突：其落点在「提出 2-3 种方案」{UI_VISUAL_GUIDANCE}（247 行）与「分段展示设计」原型分级/生成要求（286-310 行），与本变更落点无重叠条款、无重复或矛盾语义（prototype 管线 bootstrap 轻量变更建议 vs FR-07 档位重估属正交面）。",
+    "切换": "中断重入时 prompt 全量重渲染，新增要求不依赖内存自动可见；P3 修复提交 5626cf95 只改 requirements.md 2 行字面（git show --stat：1 file changed, 2 insertions(+), 2 deletions(-)），不触及该不变量。回归实测：node --test test/brainstorm-interaction-refine.test.mjs 8/8 绿（含 FR-08 步骤名与探索段结构顺序契约）。",
+    "作用域": "纯 prompt 文本，无数据层，无跨仓/多实例串台面；本变更未触及 worktree/跨仓路径逻辑。三提交文件面：b289dcfd=变更目录文档 + src/stages/brainstorm.js + 新测试；d6e8cfac=design.md + docs/sillyspec/platform-interface-map.md 行号锚；5626cf95=requirements.md。旁注（非本变更引入）：node docs/prompt/_verify.mjs 对 archive/doctor/plan/execute 段报 16 处 md↔_extracted.json 失配（静态段 archive 2、doctor 3），但相关文件（docs/prompt/_extracted.json、brainstorm.md 及其他阶段 md）最近触碰均为他会话提交（a8b8eba4 等），本变更三提交未触碰它们；brainstorm 段 7/7 逐字一致。",
+    "cli-copy-selfsufficient": "通过。①--upgrade-thick：实存——src/run/command.js:749 注册布尔 flag（无 flag 拒跑的用户同意门，consume 见 src/flow.js:864/893），brainstorm.js:94 新文案「当场说明并给升级建议（如改走完整五阶段 / 带 --upgrade-thick）…你只能建议、不能自行升降档」与门判定一致。②sillyspec knowledge search --query：实存——src/index.js:148 用法行、src/stages/knowledge.js:92 解析 --query；该两处文案（brainstorm.js:251/280）为既有文本（git show b289dcfd 对 knowledge search 零新增行）。无命令/flag 拼写错误。",
+    "config-absent-zero-regression": "如实：本变更未新增 local.yaml 消费键。三提交无任何 local.yaml 解析/读取改动（brainstorm.js 内 local.yaml ui_prototype 提及属并行变更 a8b8eba4 文本，不构成本变更消费面）。",
+    "crossrepo-path-compat": "如实：本变更未触及 worktree/跨仓路径逻辑（文件面=prompt 文本、测试、变更文档、文档行号锚，无路径解析/文件系统逻辑）。"
+  },
+  "reviewedAt": "2026-10-15T17:20:32+08:00"
+}

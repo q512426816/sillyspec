@@ -1,0 +1,87 @@
+{
+  "change": "2026-10-15-brainstorm-interaction-refine",
+  "baseline": "e8399a9b3ebf97fec61905b44fb9e081bb9eb2b8",
+  "head": "5626cf950778d8dd24a8ac52678377b6e8925029",
+  "files": [
+    "docs/sillyspec/platform-interface-map.md",
+    "src/stages/brainstorm.js",
+    "test/brainstorm-interaction-refine.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 199,
+    "deletions": 26
+  },
+  "savedAt": "2026-10-15T09:15:39.505Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "e8399a9b3ebf97fec61905b44fb9e081bb9eb2b8",
+    "totals": {
+      "files": 3,
+      "additions": 199,
+      "deletions": 26
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 71,
+        "deletions": 20,
+        "kind": "modified"
+      },
+      {
+        "path": "test/brainstorm-interaction-refine.test.mjs",
+        "additions": 122,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "bf3391bcc182f529ef4a9afcbab3235851fe6a8e15327edac9a5a2cf9618fa3f",
+  "patchStatus": "ok"
+}

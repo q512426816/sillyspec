@@ -1,0 +1,346 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 6a804485..5d972664 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -1,6 +1,6 @@
+ # SillySpec 平台接口操作地图
+ 
+-> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:890`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
++> updated_at: 2026-10-15（§5 触发点矩阵 5 处 `index.js` 行号锚同步漂移清偿——收口实测门 doc-ref-check 5/93 失效，锚随源码演进更新；无接口行为变更。上一次：2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:890`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md））
+ > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
+ > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
+ > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2147/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:950（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4563；shared.js:1120 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3166；shared.js:1118 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4484；sync.js:1587/1595 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4436；sync.js:2328 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4509；sync.js:1587/1595 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4461；sync.js:2328 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4222/4174；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4247/4276/4282；probe.js:137 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4320`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4345`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 6d324a1f..74d2718a 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -89,7 +89,9 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+       prompt: `### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
+ **需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。
+ 
+-通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
++通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略——分层口径：P0 逐轮逐问、P1/P2 能自定的自定并标注、只有会改变产物的攒收尾一轮）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
++
++**规模重估（对话中如发现该升级，当场说）**：若对话或方案讨论中发现本次变更实际需要 Wave 并行编排、上下文分片或多阶段治理——超出当前档位（例：早期粗判的轻量面变成跨模块改造）——必须**当场向用户说明并给出升级建议**（如改走完整五阶段 / 带 \`--upgrade-thick\`），不静默按原档继续。档位仍由 CLI 客观定价（三轴）落值，你只能建议、不能自行升降档。
+ 
+ ### A. 原型/设计图分析（如用户提供）
+ 如果用户提供了截图、图片或 HTML 原型，先分析提取：
+@@ -106,8 +108,18 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ 2. **提出问题后必须暂停等待用户回答**，不要替用户回答
+ 3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答
+ 4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准
+-5. 多选题优于开放式问题
+-6. YAGNI — 砍掉不需要的功能
++5. **先挖为什么**：不只问「要什么」，要问出「为什么现在做、不做会怎样」（动机是后续替你补全没提的那一百个决定的依据）；到本步出口仍说不清动机 → 不许进入「提出 2-3 种方案」，先把动机问出来
++6. **实现方式的选择权归谁**：技术栈/平台/语言/库/存储介质这类「怎么做」的选择，问清哪些是用户有强意见要谈的、哪些是交给你选的；你选的按决策记录规则落盘并把 answer 标注「我的判断」（不是用户同意过的）
++7. 多选题优于开放式问题；被问「你觉得呢/先猜一个」时给一个具体方案并标「我的判断」，不要空转追问
++8. YAGNI — 砍掉不需要的功能
++
++### B2. 分块回放（Playback——边理解边复述，与追问交替）
++每理解到一块就先回放一块，别把回放攒到最后：
++- 回放块 200-300 字，复述「我听到的是」——**凡是猜测都标为猜测，只有用户说过的才写成用户说的**
++- 回放块结尾固定问一句：「哪里不对或漏了什么？」
++- 回放与追问交替进行直到对话结束：回放 → 用户纠正 → 下一块追问 → 下一块回放；最后一块覆盖剩余部分
++- 再次进入本步（\`--continue --answer\` 后）时，回放只复述新增/被纠正的理解，已确认且未被纠正的部分不重复回放（防上下文膨胀）
++- 回放块放「**回放：**」分节、追问放「**追问：**」分节——两者分节标注，用户可分别纠正（回答的是上一轮追问时不影响回放块的语义）
+ 
+ ### C. 需求范围评估（拆分/批量判断）
+ 1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：
+@@ -155,19 +167,22 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ - P1：影响用户场景、验收标准、错误处理、默认值
+ - P2：文案、展示细节、低风险交互偏好
+ 
+-**执行规则**：
++**执行规则（分层——2026-10-15-brainstorm-interaction-refine FR-03）**：
+ - P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据
+-- P1/P2 歧义 >= 3 个：按优先级逐个澄清
+-- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题
++- P1/P2 歧义 >= 3 个：不逐个问——agent 能自行决定的**自行决定**（写进 decisions.md，answer 标注「我的判断」），剩下的攒成收尾一轮；只有「只有用户能答且答案会改变产物」的才问
++- 任意 P0 歧义：必须澄清；逐轮逐问（一次只问一个），深度优先
++- **收尾一轮（一次性问完）**：把「只有用户能答且答案会改变产物」的 P1/P2 项（含 Design Grill 回收的同类项）汇总成**一轮**问题，一次问完；问完即进入「提出 2-3 种方案」，不再追问、不做第二轮
++- 可判定出口：进入「提出 2-3 种方案」前，P1/P2 未决项必须为 0，或已记录为「我的判断」落 decisions.md
+ - 不要问用户"要不要 Grill"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答
+ 
+-**追问策略**（进入澄清时）：
+-1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义
+-2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论
+-3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term
+-4. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态
+-5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
+-6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
++**追问策略**（进入澄清时，分层口径同上）：
++1. **P0 逐轮逐问**：P0 一次只问一个，深度优先
++2. **P1/P2 能自定就自定**：能由源码/scan 文档/模块文档/既有决策确定，或能凭工程判断定且不改变产物的，直接定；按决策记录规则落 decisions.md 并在 answer 标注「我的判断」；只有真正需要用户判断/取舍的才等用户
++3. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论
++4. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term
++5. **模糊词精化**：把"账户/任务/状态/会话/执行"这类多义词拆成明确实体或状态
++6. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）
++7. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明"可能不该新增"
+ 
+ **决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：
+ 
+@@ -193,19 +208,33 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ \`\`\`
+ 
+ - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
++- **agent 自行决定的 P1/P2**（见执行规则分层）：source 用 code（查证得来）或 docs（文档依据），answer 标注「我的判断：…」——不写成用户同意过的，用户事后可否决
++- **「只有用户能答且改变产物」的项**：不落 pending 占位条目；先在收尾一轮问出答案，再按 source: user 落盘
+ 
+ ### 铁律 — 不要自问自答 / 等待用户
+ - 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说"需求已明确"**（命令由 CLI 在下方注入）
+ - 需要拆分或批量模式时：列出方案并暂停等用户确认
+ - 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）
++- **确认清单逐条带来源标记（两态）**：每条需求点标 \`[用户]\`（用户原话/回答得来）或 \`[推断]\`（agent 推断）——\`[推断]\` 即待用户点头项；未与用户确认过的推断点**不得混入已确认清单**（要么在收尾一轮问掉转 \`[用户]\`，要么显式留在「待确认」区）
+ - 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问
+ 
++### 自欺逃逸口对照表
++要输出「本步完成」「可以直接进方案讨论」之前，先对表自检一遍：
++
++| 念头 | 现实 |
++|---|---|
++| "我觉得已经够清晰了" | 清晰不等于用户确认过——没确认过的点进清单必须标 \`[推断]\`，并留待收尾一轮问掉 |
++| "这步这么简单，跳过吧" | 简单变复杂的路只有一条：跳过的步骤 |
++| "用户说『听起来不错』" | 认可的是你展示过的东西——你没写出来的描述与你的推断，都不算批准 |
++
+ ### 输出
+ 需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）
+ 
++确认清单每条带来源标记 \`[用户]\` / \`[推断]\`；\`[推断]\` 项在收尾一轮问掉或显式留在「待确认」区——两者都不带 \`[用户]\` 标记时不得计入「已确认」。
++
+ ### 注意
+ - 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清
+-- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出`,
++- 用户通过 \`--continue --answer "回答"\` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（**新回放块 + 新追问 + 新落盘决策**），已确认且未被纠正的内容不重复回放、已落盘内容不重复输出`,
+       outputHint: '需求理解与决策落盘清单',
+       optional: false
+     },
+@@ -251,7 +280,8 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ 4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
+ 5. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+ 6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）
+-7. 暂停等待用户确认或修改意见
++7. 展示时附一节「**我替你做的决定**」（2026-10-15-brainstorm-interaction-refine FR-04）：从 \`decisions.md\` 摘出 \`source\` 非 user 的条目（代码/文档查证得来的 + agent 自行决定的 P1/P2），逐条列 D-xxx@vN + 一句话决定 + 一句依据——让用户边读方案边核这些点，不要埋在决策文件里让他自己去翻；无此类条目时写「无（全部决定均来自你的选择）」
++8. 暂停等待用户确认或修改意见
+ 
+ ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
+ 判定对象是**改造后的界面相对现状的变化程度**：
+@@ -272,10 +302,10 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+   - 纯后端逻辑/CLI/配置/文档，无任何界面变化
+ 
+ ### 生成要求（定稿原型＝真码产物，不是手绘图）
+-入口文件保存到 \`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html\`（目录不存在则先创建；该命名是 execute 注入契约，不改）。真码五要素：
+-- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式
+-- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用，没有则搭最小入口并留在项目惯例位置
+-- **高保真＝组件即实现原料**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"
++入口文件保存到 \`{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html\`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：
++- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）
++- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行
++- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）
+ - **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口
+ - **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下
+ 
+@@ -284,7 +314,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（
+ - 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 \`prototype-<名称>.html\` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补
+ 
+ ### 输出
+-完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补）
++完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补） + **「我替你做的决定」节**（source≠user 的 D-xxx@vN 逐条；无则写明）
+ 
+ ### 注意
+ - 不要一次输出大段文字，按模块/Phase 分段
+@@ -478,6 +508,20 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
+    - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。
+ 4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。
+ 
++### 实现者视角追问（builder check——与上方交叉审查并行执行，不替代它）
++交叉审查问「文档自身矛盾吗」；本节问「照这份文档，我能建出它吗」。两问正交，都要做（tier=self 时你依次自问两遍并分节输出）：
++- **tier=independent（S2/S3）**：把下列四要素追加进审查子代理的派发 prompt（作为同一子代理的第二项任务，不额外计请求预算）：
++  - 你是一位有才华的 [领域] 工程师，被交予本设计文档，要据此制定实现计划，**你联系不到写文档的人**
++  - 只报告你「必须被回答、否则得靠猜、而猜错会出事」的问题；每条附「为什么答案会改变产物」，按重要性排序
++  - 跳过：文档已显式留给实现者的部分、你自己能合理决定的、措辞挑刺
++  - 没有重要问题 → 回答 \`nothing important left\`
++  - 写成 review.json 的 \`reviewerNotes\` 一节：\`## 实现者视角追问\` + 逐条问题与理由（**不新增 schema 字段**——去向钉在现有 reviewerNotes，Stage Review Gate 照常读）
++- **tier=self（S0/S1）**：以实现者身份快读一遍 design.md，同样三个跳过条件，输出「实现者视角追问」小节（可空 = nothing important left）
++- **回收分三堆**（两档都适用）：
++  1. **文档/对话已答** → 把答案补进 design.md 对应章节，不改决策
++  2. **minor（不改变产物的猜测点）** → 你自己定，按决策记录格式落 decisions.md 并标注「我的判断」
++  3. **只有用户能答且会改变产物** → 进「对话式探索」的收尾一轮（一次性问完，不做第二轮）；无法回退到前一步时挂 Unresolved Blockers
++
+ ### decisions.md 版本规则
+ \`\`\`markdown
+ ## D-001@v2: 缓存异常时的 fallback 语义
+@@ -514,6 +558,12 @@ status: passed | needs-user-input | blocked | skipped
+ | needs_thinking | N | 需要用户判断 |
+ | unresolved | N | 真正设计漏洞 |
+ 
++## 实现者视角追问
++（四要素口径；无重要问题写 "nothing important left"）
++| ID | 问题 | 为什么答案会改变产物 | 分堆（已答/我的判断/需用户） |
++|---|---|---|---|
++| B-001 | ... | ... | ... |
++
+ ## Unresolved Blockers
+ | ID | priority | 问题 | 阻塞原因 | 下一步 |
+ |---|---|---|---|---|
+@@ -521,6 +571,7 @@ status: passed | needs-user-input | blocked | skipped
+ 
+ ### 铁律 — 等待用户
+ - 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）
++- 「只有用户能答且会改变产物」的问题（本步交叉审查 + 实现者视角追问合计）攒成**一轮**问完即止，不做第二轮
+ - 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers
+ - 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。`,
+       outputHint: 'Design Grill 交叉审查结果',
+diff --git a/test/brainstorm-interaction-refine.test.mjs b/test/brainstorm-interaction-refine.test.mjs
+new file mode 100644
+index 00000000..b48d4db7
+--- /dev/null
++++ b/test/brainstorm-interaction-refine.test.mjs
+@@ -0,0 +1,122 @@
++/**
++ * brainstorm-interaction-refine.test.mjs — 头脑风暴交互精化（2026-10-15-brainstorm-interaction-refine）
++ *
++ * 对照 obra/superpowers v7.0.0 brainstorming 的四处缺口（Playback / builder check /
++ * Red Flags / 出口分层）落进 brainstorm 阶段 prompt 后，锁住产出面与交互约束：
++ *   FR-01 需求确认清单两态来源标记（用户/推断）＋未确认推断点不得混入已确认清单
++ *   FR-02 分块回放（回放块 200-300 字 + 猜测标为猜测 + 「哪里不对或漏了什么」收尾问句）
++ *   FR-03 Grill 出口三分（P0 逐轮 / P1/P2 自定并标注 / 只有会改变产物的攒收尾一轮）
++ *   FR-04 分段展示设计的「我替你做的决定」节（source≠user）
++ *   FR-05 Design Grill 实现者视角四要素（联系不到作者 / 猜错会出事 / 跳过项 / nothing important left）
++ *   FR-06 自欺逃逸口对照表三条
++ *   FR-07 规模超出当前档位当场说明（不改客观定价）
++ *   FR-08 本变更不含 stage-review.js 改动等契约不变面
++ *
++ * 读法：直接读源文件文本按步骤定义切段断言——**不 import stages/index.js**（其顶层
++ * stageRegistry 对本文件 definition 求值，测试入口直 import 触发路径无关的初始化面；
++ * FR-05 的 `src/stage-review.js` 断言同属「契约不变」面，读文本即可）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const SRC = readFileSync(join(REPO_ROOT, 'src', 'stages', 'brainstorm.js'), 'utf8')
++
++/**
++ * 按步骤定义起点（`name: 'X',`）切段：seg('X') 返回从该步定义到下一步定义前的文本。
++ * 无侧效应——纯文本读，绕开 stageRegistry 初始化面。
++ */
++function seg(stepName) {
++  const start = SRC.indexOf(`name: '${stepName}',`)
++  assert.ok(start >= 0, `步骤「${stepName}」定义在场`)
++  const nextIdx = SRC.indexOf("\n      name: '", start + 1)
++  return SRC.slice(start, nextIdx === -1 ? SRC.length : nextIdx)
++}
++
++/** 段内顺序断言：needles 依序出现（防错步注入与结构漂移）。 */
++function assertOrdered(text, needles, label) {
++  let cursor = -1
++  for (const n of needles) {
++    const at = text.indexOf(n)
++    assert.ok(at >= 0, `${label}：含「${n}」`)
++    assert.ok(at > cursor, `${label}：「${n}」出现在前一项之后`)
++    cursor = at
++  }
++}
++
++const EXPLORE = seg('对话式探索与需求澄清')
++const PRESENT = seg('分段展示设计')
++const GRILL = seg('Design Grill 交叉审查')
++
++test('FR-01 来源标记两态：确认清单逐条标 [用户]/[推断]，未确认推断点不得混入已确认清单', () => {
++  assert.match(EXPLORE, /逐条带来源标记/, '清单要求逐条带来源标记')
++  assert.match(EXPLORE, /\[用户\]/, '两态之一：用户原话标记')
++  assert.match(EXPLORE, /\[推断\]/, '两态之二：agent 推断标记')
++  assert.match(EXPLORE, /不得混入已确认清单/, '未确认推断点不得混入已确认清单')
++  assert.match(EXPLORE, /把默认共识伪装成共识/, '既有逃逸口口径保留（不冲销）')
++})
++
++test('FR-02 分块回放：200-300 字回放块 + 猜测标为猜测 + 收尾问句 + 剩余输入面不重复回放', () => {
++  assert.match(EXPLORE, /分块回放/, 'B2 分块回放节在场')
++  assert.match(EXPLORE, /200-300 字/, '回放块量级在场')
++  assert.match(EXPLORE, /猜测都标为猜测/, '猜测须标为猜测')
++  assert.match(EXPLORE, /哪里不对或漏了什么/, '固定收尾问句在场')
++  assert.match(EXPLORE, /不重复回放/, '重入时不重复回放已确认内容（防膨胀）')
++  // repeatableWait 语义不变（definition 面）
++  assert.match(EXPLORE, /repeatableWait: true/, 'repeatableWait 语义未移除')
++})
++
++test('FR-03 Grill 出口三分：P0 逐轮 + P1/P2 自定标注「我的判断」+ 只有会改变产物的攒收尾一轮', () => {
++  assert.match(EXPLORE, /P0 逐轮逐问/, 'P0 分层口径在场')
++  assert.match(EXPLORE, /只有用户能答且答案会改变产物/, '收尾一轮的准入条件在场')
++  assert.match(EXPLORE, /我的判断/, '可自定项标注「我的判断」')
++  assert.match(EXPLORE, /一轮\*\*?问题，一次问完/, '一次性问完的口径在场')
++  assert.match(EXPLORE, /不再追问、不做第二轮/, '收尾后不再追问（可判定出口）')
++})
++
++test('FR-04 我替你做的决定：source≠user 条目逐条展示，且不冲销既有必填项', () => {
++  assert.match(PRESENT, /我替你做的决定/, '决策节标题在场')
++  assert.match(PRESENT, /source`? 非 user|source≠user/, '取材口径 source≠user 在场')
++  assert.match(PRESENT, /Txxx|D-xxx@vN/, '条目引用决策编号')
++  // 既有必填项不冲销
++  assert.match(PRESENT, /HTML 原型分级/, '原型分级仍在场')
++  assert.match(PRESENT, /三选一必填/, '三选一必填仍在场')
++})
++
++test('FR-05 实现者视角四要素与三堆分拣：联系不到作者 / 猜错会出事 / 跳过项 / nothing important left', () => {
++  assert.match(GRILL, /实现者视角追问/, '实现者视角段在场')
++  assert.match(GRILL, /联系不到写文档的人/, '要素①：联系不到文档作者')
++  assert.match(GRILL, /猜错会出事/, '要素②：只报猜错会出事的问题')
++  assert.match(GRILL, /为什么答案会改变产物/, '要素③：附「为什么答案会改变产物」')
++  assert.match(GRILL, /nothing important left/, '要素④：空集出口字面在场')
++  assert.match(GRILL, /跳过：文档已显式留给实现者的部分/, '显式跳过项三种在场')
++  assert.match(GRILL, /回收分三堆/, '主代理回收后分三堆处理在场')
++  assert.match(GRILL, /review\.json 的 \\`reviewerNotes\\` 一节/, '问题清单去向钉在 reviewerNotes')
++  assert.match(GRILL, /不新增 schema 字段/, '不新增 review.json schema 字段')
++  assert.ok(!SRC.includes("from '../stage-review.js'"), 'brainstorm 不新增 stage-review 依赖（gate 契约不变）')
++})
++
++test('FR-06 自欺逃逸口对照表：三条对照逐条在场', () => {
++  assert.match(EXPLORE, /自欺逃逸口对照表/, '对照表在场')
++  assert.match(EXPLORE, /够清晰了/, '对照一：我觉得已经够清晰了')
++  assert.match(EXPLORE, /跳过吧/, '对照二：这步这么简单，跳过吧')
++  assert.match(EXPLORE, /听起来不错/, '对照三：用户说听起来不错')
++  assert.match(EXPLORE, /不算批准/, '对照三的现实面：没写出来的描述不算批准')
++})
++
++test('FR-07 规模重估：超出当前档位当场说明并给升级建议，且不改客观定价', () => {
++  assert.match(EXPLORE, /规模重估/, '规模重估约束在场')
++  assert.match(EXPLORE, /超出当前档位/, '触发条件：超出当前档位')
++  assert.match(EXPLORE, /当场向用户说明并给出升级建议/, '动作：当场说明 + 升级建议')
++  assert.match(EXPLORE, /不能自行升降档/, '客观定价不可被 agent 绕过')
++})
++
++test('FR-08 契约不变：步骤序列与既有步骤名未改、变更自身零删除面', () => {
++  for (const name of ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']) {
++    assert.ok(SRC.includes(`name: '${name}',`), `步骤名「${name}」保留`)
++  }
++  assertOrdered(EXPLORE, ['### B2. 分块回放', '### C. 需求范围评估', '### D. 需求澄清 Grill', '### 自欺逃逸口对照表', '### 输出'], '探索段结构顺序')
++})
