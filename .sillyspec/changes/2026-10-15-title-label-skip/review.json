@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-title-label-skip",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "72ac0b6427a183bfb30266e57fef8e26e76ae9f6",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-04 修复后 1 行 title 超出「≤50 字」约束（59 字）",
+      "evidence": "SQLite LENGTH(title)=59 字符（DB 只读实测），FR-04 正文要求「真实概括（≤50 字）」；余 5 行 39–50 字达标。展示面噪音级偏差，不影响可辨识性。",
+      "location": ".sillyspec/changes/2026-10-15-title-label-skip/repair-receipt.md:8（2026-10-14-decision-legacy-renumber 行）"
+    },
+    {
+      "severity": "P3",
+      "title": "docs/prompt/index.html 生成产物未随 brainstorm.md 源修复再生成，仍内嵌旧段头占位一处",
+      "evidence": "index.html 由 docs/prompt/_build-site.mjs 生成，stages-data JSON 内残留 --input \\\"<动机与背景> 形态 1 处（grep 实测）；源文件 brainstorm.md 已修，下次 docs 重建自愈；不在 FR-03 六处文件判定式范围内。",
+      "location": "docs/prompt/index.html:187"
+    },
+    {
+      "severity": "P3",
+      "title": "段头跳过正则的形态边界（记录性）：双冒号行与 >12 字冒号尾行不跳过",
+      "evidence": "node 实测：「A:B:」含中缀冒号不匹配 ^[^:：]{1,12}[:：]$，整行成标题；13 字「…：」段头超长上限同样不跳过，尾冒号漏入标题。≤12 上限与误伤取舍 design 已声明，此两形态为相邻残留变体，真实出现率低。",
+      "location": "src/quicklog.js:137"
+    },
+    {
+      "severity": "P3",
+      "title": "test 零残留断言针 SEMICOLON_FORM 自身含旧形态字符串（记录性，非教学面）",
+      "evidence": "常量为零残留断言的搜索针，删除即破坏断言；位于 test 文件不属 FR-03 六处教学面，对 agent 无诱导暴露路径。仓内 grep 唯一命中即此。",
+      "location": "test/input-teach-copyable.test.mjs:31"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-15T04:20:04Z"
+}

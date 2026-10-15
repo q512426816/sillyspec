@@ -11,3 +11,8 @@
 
 复查残留（title='动机与背景：'）：0（预期 0）
 修复成功：6/6
+
+## 评审清偿补正（独立评审 P3：原修复行 59 字超 ≤50 上限）
+
+- 2026-10-14-decision-legacy-renumber title 二次修复：「存量决策号一次性迁移：701 legacy 节段→597 全局号（用户裁决翻案）+迁移工具 dry-run/apply」（59 字）→「存量决策号一次性迁移：701 legacy 节段→597 全局号+dry-run/apply 工具」（49 字）✅
+- stages.changelog.md 同行摘要同步缩短

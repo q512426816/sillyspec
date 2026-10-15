@@ -56,5 +56,5 @@
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | execute.js 主代理直写（execution_mode: main）任务闭环行 TDD 措辞改「按层适用」（纯逻辑先写测试再实现/行为契约断用户可见行为/样式与纯配置不写——判据见「测试用例设计」）；docs/prompt/_extracted.json 重提取。 |
 | 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
 | 2026-10-14 | 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原 |
-| 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移：701 legacy 节段→597 全局号（用户裁决翻案）+迁移工具 dry-run/apply |
+| 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移：701 legacy 节段→597 全局号+dry-run/apply 工具 |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
