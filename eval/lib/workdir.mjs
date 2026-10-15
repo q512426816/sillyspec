@@ -18,7 +18,10 @@ function removeDir(p) {
 }
 
 export function prepareWorkdir(workdirRoot, taskId, arm, filesDir) {
-  const workdir = join(workdirRoot, `${taskId}__arm${arm}`);
+  // run- 前缀：目录段禁以数字开头——claude CLI 沙箱把允许目录路径里的 \004 形态（taskId 数字
+  // 开头）当八进制转义序列处理，前缀比对恒失败 → workdir 内一切写入被硬拦（2026-10-15 首次
+  // 真实 A/B 双臂实证，判分 fail 与 agent 能力无关）。run- 使路径段以字母开头，歧义消失。
+  const workdir = join(workdirRoot, `run-${taskId}__arm${arm}`);
   removeDir(workdir);
   mkdirSync(workdir, { recursive: true });
   if (existsSync(filesDir)) cpSync(filesDir, workdir, { recursive: true });
