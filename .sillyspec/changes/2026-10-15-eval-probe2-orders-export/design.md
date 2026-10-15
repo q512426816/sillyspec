@@ -6,6 +6,8 @@ created_at: 2026-10-15T14:27:50.944Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 新增 eval 第 5 个任务 `eval/tasks/005-orders-export/`——探针序列第二枚，隐含面从 004 的「健壮性卫生」（空行/孤儿/交错，实测 n=1 双臂 100%，区分度不足）升级为「数据里看得见、指令里没写」的五类解析陷阱：
 
 1. **out/ 目录自建**：输出契约指定 `out/summary.json`，仓库不给 out/ 目录——合理人预期：命令跑通（自建目录）。
@@ -20,9 +22,11 @@ B 臂处理效果（treatment）假设：SillySpec 流程强制的「成功标�
 
 ## 接口契约
 
-- **纯新增**：`eval/tasks/005-orders-export/{task.json, verify.mjs, files/data/orders.csv, solution/bin/export-orders.mjs}` + `test/eval-probe2-orders.test.mjs`。eval 工具链零改动（loadTasks 自动发现；005 奇数 → dry-run mixed 下 A 过 B 挂）。
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
+- **纯新增**：`eval/tasks/005-orders-export/{task.json, verify.mjs, files/data/orders.csv, solution/bin/export-orders.mjs}` + `test/eval-probe2-orders.test.mjs`。eval 工具链零改动（loadTasks 自动发现；005 奇数 → dry-run mixed 下 A/B 双臂均 pass（B 臂 fail 路径对应偶数号任务））。
 - verify 判分口径：运行 `node bin/export-orders.mjs`（cwd=工作副本）→ 读 `out/summary.json` → deepEqual 期望 `[{region:'APAC',total:2200,count:2},{region:'EU',total:2284.5,count:3}]`；金额为数值（2284.5 与 2200 均为二进制精确值，无浮点噪声）。
-- 交付文件面自声明：上述 5 个新增文件，无修改面。
+- 交付文件面自声明：上述 6 个新增文件（含 data/.gitattributes 字节锁），无修改面。
 
 ## 文件变更清单
 
@@ -37,12 +41,22 @@ B 臂处理效果（treatment）假设：SillySpec 流程强制的「成功标�
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+
 1. 乱序/迟到到达：不适用（静态任务资产；fixture 行序即被测输入设计）。
 2. 并发写：verify 与测试各自在独立临时目录构建工作副本，无共享写面。
 3. 切换/生命周期：任务目录静态；solution/ 不进 agent 工作副本与任务指纹（工具链既有口径）。
 4. 作用域：单仓目录资产。CRLF 说明：fixture 的 CRLF 是**有意字节**（Windows 导出形态的隐含面），但 git 检出配置（core.autocrlf）可能改写行尾——**必须用 .gitattributes 锁死**（`eval/tasks/005-orders-export/files/data/*.csv -text` 禁用换行归一化），否则 Linux/macOS 检出后 CRLF 面消失、Windows 检出若 autocrlf 归一化亦可能翻 LF。BOM 同理属字节面（不被 autocrlf 触碰）。这是与 004 的关键工程差异（004 的 CRLF 是环境容忍面，005 的 CRLF 是任务设计面，必须锁字节）。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 - **最大风险：CRLF/BOM 字节被 git 检出改写**（见盲维 4）。缓解：.gitattributes 锁 `-text`（新增为交付文件第 6 项），测试断言 fixture 字节（EF BB BF 与 \r\n 在场）钉死。
 - **次风险：隐含面「合理解唯一性」复议**：①out/ 自建——唯一合理（契约写死路径，不存在则建是常规）；②BOM 剥离——唯一合理（`\uFEFF` 是编码标记不是数据）；③CRLF 容忍——唯一合理（跨平台文本常识）；④引号语义——唯一合理（CSV 标准；指令写「逗号分隔」即 CSV 语境）；⑤空行跳过——唯一合理。均无二义。

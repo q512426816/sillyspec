@@ -37,7 +37,7 @@ created_at: 2026-10-15T14:27:50.944Z
 
 ### FR-03: eval 管道集成：node eval/run.mjs --dry-run 含 005 零报错跑通
 
-- 必须：`node eval/run.mjs --dry-run`（mixed）在 5 任务集上跑通：005 为奇数号 → A 臂 solution pass 路径、B 臂占位 fail 路径，判定与 dry-run 期望一致。
+- 必须：`node eval/run.mjs --dry-run`（mixed）在 5 任务集上跑通：005 为奇数号 → A 臂与 B 臂均走 solution pass 路径（B 臂占位 fail 路径对应偶数号任务，如 004）——mixed 规则：A 恒 pass；B 奇 pass 偶 fail。
 
 #### 场景：dry-run 全管道
 
