@@ -1,0 +1,104 @@
+diff --git a/src/flow.js b/src/flow.js
+index e073ac9e..192c7fa9 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -224,6 +224,23 @@ export async function extractRoutingInputPaths(cwd, specBase, input) {
+   })
+ }
+ 
++/**
++ * 轻量道知识注入查询串瘦身（2026-10-15-thin-query-slim）：--input 的「成功标准：」段是验收
++ * 判据语料（文件路径/测试名/断言词——对知识匹配是纯噪音，且路径词会过触路由关键词把命中面
++ * 撑爆：本仓实证整段 input 匹配出 76 条目、58 个 fr 域文件全命中）。查询只取动机段——
++ * 「成功标准：」标记前正文；标记缺席=无标准段，全文照旧（兼容旧形态）；标记前为空白则退全 input。
++ * @param {string} change 变更名（查询首行，既有口径）
++ * @param {string} input --input 全文
++ * @returns {string} 瘦身后的查询串
++ */
++export function thinKnowledgeQuery(change, input) {
++  const raw = String(input || '')
++  const markerIdx = raw.search(/成功标准[:：]/)
++  const motivation = markerIdx >= 0 ? raw.slice(0, markerIdx) : raw
++  const body = motivation.trim() || raw.trim()
++  return `${change || ''}\n${body}`
++}
++
+ /**
+  * 轻量道知识注入段（2026-09-25-thin-fr-inject-parity）：默认快道读取面对齐——
+  * {FR_INDEX_DIGEST}/{DECISION_HITS}/execute 知识命中报告此前只在 run 族装配，轻量道 fresh
+@@ -298,7 +315,8 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     const { deathPathNote, decisionChangeQualifier } = await import('./knowledge-match.js')
+     // scope 遍历召回（2026-10-08-knowledge-graph，FR-04）：touched=机器算的图查询键
+     // （filesOverride ∪ design 交付表——上方既有变量），词面三层零命中时沿强边保底防复潮
+-    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase), scopeFiles: touched })
++    const kmQuery = thinKnowledgeQuery(change, input)
++    const km = await matchKnowledgeHybrid(knowledgeRoot, kmQuery, { cwd: dirname(specBase), scopeFiles: touched })
+     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
+     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
+     // 蹭进回显是行为实测三例的噪音源，不再注入）
+@@ -328,7 +346,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         appendKnowledgeHit(join(specBase, '.runtime'), {
+           type: 'inject',
+           change,
+-          query: `${change}\n${input || ''}`,
++          query: kmQuery,
+           matchedFiles: thinMatchedFiles,
+           injectedFiles: [],
+           mentionedFiles: thinMatchedFiles.slice(0, 3),
+diff --git a/test/thin-query-slim.test.mjs b/test/thin-query-slim.test.mjs
+new file mode 100644
+index 00000000..ace76a48
+--- /dev/null
++++ b/test/thin-query-slim.test.mjs
+@@ -0,0 +1,51 @@
++/**
++ * 轻量道知识注入查询瘦身（2026-10-15-thin-query-slim）
++ *
++ * --input 的「成功标准：」段是验收判据语料（文件路径/测试名/断言词），对知识匹配是纯噪音
++ * 且路径词会过触路由关键词撑爆命中面（本仓实证整段 input 匹配出 76 条目、58 个 fr 域文件
++ * 全命中）。thinKnowledgeQuery 只取动机段，四态锁定：
++ *   ① 有「成功标准：」标记 → 只留标记前动机
++ *   ② 中文冒号「成功标准：」同判
++ *   ③ 无标记 → 全文照旧（兼容旧形态）
++ *   ④ 动机段空白（标记开头）→ 退全 input
++ */
++import { thinKnowledgeQuery } from '../src/flow.js'
++
++let failed = 0
++const failures = []
++function assertTrue(cond, msg) {
++  if (cond) console.log(`  ✅ PASS: ${msg}`)
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++
++const CHANGE = '2026-10-15-demo'
++
++// ① 半角冒号标记
++{
++  const q = thinKnowledgeQuery(CHANGE, '修注入遥测盲区\n\n成功标准：\n- src/flow.js 落盘事件\n- test/foo.test.mjs 全绿')
++  assertTrue(q === `${CHANGE}\n修注入遥测盲区`, '① 半角冒号：只留动机段（成功标准及其后全部剔除）')
++  assertTrue(!q.includes('test/foo.test.mjs'), '① 测试路径噪音不进查询')
++}
++
++// ② 中文冒号标记
++{
++  const q = thinKnowledgeQuery(CHANGE, '对账假红清偿\n\n成功标准：\n- 零残留')
++  assertTrue(q === `${CHANGE}\n对账假红清偿`, '② 中文冒号同判')
++}
++
++// ③ 无标记 → 全文
++{
++  const raw = '自由形态动机，没有标准段'
++  const q = thinKnowledgeQuery(CHANGE, raw)
++  assertTrue(q === `${CHANGE}\n${raw}`, '③ 无标记全文照旧')
++}
++
++// ④ 标记开头（动机空白）→ 退全 input
++{
++  const raw = '成功标准：\n- 只有标准'
++  const q = thinKnowledgeQuery(CHANGE, raw)
++  assertTrue(q === `${CHANGE}\n${raw.trim()}`, '④ 动机空白退全 input（不为空查询）')
++}
++
++console.log(failed === 0 ? `\n全部通过（4 组）` : `\n${failed} 项失败：\n${failures.map((f) => `  - ${f}`).join('\n')}`)
++process.exit(failed === 0 ? 0 : 1)

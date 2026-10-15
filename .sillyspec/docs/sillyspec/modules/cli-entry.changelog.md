@@ -51,3 +51,4 @@
 | 2026-10-14 | 2026-10-14-decision-id-p2-hardening | 轻量道防复潮段头补跨变更引用形态指引（变更名#D-xxx@vN——同号不同变更互不相干） |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
 | 2026-10-15 | 2026-10-15-thin-inject-telemetry | 效果评估实证：轻量道 flow start 知识注入路径（src/flow.js renderThinKnowledge |
+| 2026-10-15 | 2026-10-15-thin-query-slim | 效果评估实证两处：①thin 道 flow start 知识匹配查询用整段 --input（含成功标准段的文件路径/测试 |

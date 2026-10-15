@@ -9950,3 +9950,48 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-15-thin-inject-telemetry
   status: active
+
+## FR-cli-entry-525 thinKnowledgeQuery 四态单测绿（有标记留动机/中文冒号同判/无标记全文/动机空白退全 input）
+变更：2026-10-15-thin-query-slim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-query-slim/requirements.md#FR-01
+最近确认：1246ce8ffac6e88d42319c01d5d3ac7de0c6d754
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-query-slim:flow:测试绑定FR-01
+  tests: test/thin-query-slim.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-query-slim
+  status: active
+
+## FR-cli-entry-526 flow start 遥测 query 字段=瘦身串；既有注入面测试零回归
+变更：2026-10-15-thin-query-slim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-query-slim/requirements.md#FR-02
+最近确认：1246ce8ffac6e88d42319c01d5d3ac7de0c6d754
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-thin-query-slim:flow:测试绑定FR-02
+  tests: test/knowledge-inject.test.mjs | test/thin-inject-telemetry.test.mjs「① thin 命中落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-thin-query-slim
+  status: active
+
+## FR-cli-entry-527 INDEX 词表补齐后 knowledge validate ok:true，检索 score 提升留档回执
+变更：2026-10-15-thin-query-slim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-thin-query-slim/requirements.md#FR-03
+最近确认：1246ce8ffac6e88d42319c01d5d3ac7de0c6d754

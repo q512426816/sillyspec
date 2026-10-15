@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-thin-query-slim",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-thin-query-slim:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-query-slim.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-query-slim"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-thin-query-slim:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-inject.test.mjs",
+        "test/thin-inject-telemetry.test.mjs「① thin 命中落盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-thin-query-slim"
+    }
+  ]
+}
