@@ -65,3 +65,22 @@ test('② 无状态旧格式不入选（蒸馏既有行为回归）', () => {
     assert.ok(!existsSync(join(kr, 'decisions')), '零输出不落盘')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
+
+test('③ 收割条目标题自解释（无机制词+frontmatter 出处保留）', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 's4f3-'))
+  try {
+    const changeDir = mkChangeDir(tmp, '最大风险：真实库一次性重写——回退靠 git。\n死路（放弃）：不做迁移只靠自然收敛——用户不接受永久双形态。')
+    const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
+    assert.ok(h.harvested, `应收割（${h.reason}）`)
+    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
+    const titleLine = decText.split('\n').find((l) => l.startsWith('## D-001@v1:'))
+    assert.ok(titleLine, 'D-001 标题行在场')
+    assert.equal(
+      titleLine,
+      '## D-001@v1: 设计期风险与放弃方案（底稿）',
+      '标题自解释：内容（设计期风险与放弃方案）+ 性质（底稿）',
+    )
+    assert.ok(!/槽4|收割/.test(titleLine), '标题不含流程机制词（槽4/收割）')
+    assert.ok(/^author: flow-machine-draft$/m.test(decText), '机器合成出处由 frontmatter 承载')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
