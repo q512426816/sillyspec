@@ -1,0 +1,6 @@
+{
+  "id": "004-phase-stats",
+  "title": "日志会话耗时统计 CLI（种植缺陷探针：隐含面在 fixture，不在指令）",
+  "tags": ["greenfield", "cli", "planted-defect", "implied-inputs"],
+  "instruction": "在当前目录新建 bin/phase-stats.mjs（Node ≥ 18，只用 Node 内置模块，禁止安装任何第三方依赖）。\n\n读取 data/events.log：每行一条事件，格式为「<ISO-8601 UTC 时间戳> <START|END> <sessionId> <phase>」（单个空格分隔，UTF-8）。同一 sessionId 的同名 phase 从 START 到 END 为一轮。\n\n输出一行 JSON 到 stdout（除此之外无任何输出）：\n{\"phases\":[{\"phase\":\"<名>\",\"rounds\":<完成轮数>,\"totalSeconds\":<所有完成轮次时长之和，整数秒>}]}\n\nphases 按 phase 字典序升序排列。数据以仓库附带的 data/events.log 为准。确保 node bin/phase-stats.mjs 可运行。"
+}
