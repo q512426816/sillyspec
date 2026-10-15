@@ -19,7 +19,7 @@
   "adapter": {
     "type": "cli",
     "tool": "claude",
-    "command": ["claude", "-p", "--output-format", "json", "--max-turns", "{maxTurns}"],
+    "command": ["claude", "-p", "--output-format", "json", "--max-turns", "{maxTurns}", "--dangerously-skip-permissions"],
     "stdin": "prompt",
     "timeoutMs": 900000,
     "maxTurns": 60,
