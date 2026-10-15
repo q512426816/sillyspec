@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: |-
+  标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量6行title与1行摘要清偿
+
+  成功标准：
+  - deriveChangeTitle 对「动机与背景：」独立段头行返回次行内容；「动机与背景：xxx」同行形态剥标签取 xxx；既有白名单剥离与成功标准截断行为不变
+  - flow done 模块变更索引回写摘要与标题同源（复用 deriveChangeTitle 提取链），段头行不再入摘要
+  - AGENTS.md/templates/SKILL/CLI 用法串的 --input 示例首行改为一句概括（消除段头诱导）
+  - 进度库 6 个「动机与背景：」title 与 stages.changelog.md 1 行摘要修复为真实概括
+  - 测试全绿 + lint 绿
+autopilot: false
+prestage_ack: true
+baseline_commit: c72ac21404f8804bf3d9f84ef7033a952e8a63a6
+updatedAt: '2026-10-15T04:21:25.062Z'
+baseline_sha256: acd1b14205f61a031d28074469dbe8507733bc7535ef6e626a38dbc7ccc3d988
+spec_approved: true
+spec_approved_at: '2026-10-15T03:36:51.248Z'
+spec_approved_by: zcode-title-skip-1015
+spec_approved_channel: agent-self
+spec_attested_by: zcode-title-skip-1015
+gate_summary: >-
+  test: skipped ← module[]+deps(js159+js-meta-skip1+nontest-skip1)+fr(160)（90.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015040706\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（73.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015040706\test-result.json｜门文件 19 个
+

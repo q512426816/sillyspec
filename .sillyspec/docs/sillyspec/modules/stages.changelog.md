@@ -58,3 +58,4 @@
 | 2026-10-14 | 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原 |
 | 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移：701 legacy 节段→597 全局号+dry-run/apply 工具 |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+| 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |

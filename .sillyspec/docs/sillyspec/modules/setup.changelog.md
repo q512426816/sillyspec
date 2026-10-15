@@ -24,3 +24,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-14 | 2026-10-14-thin-turbo-mode | 轻量变更 |
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | agents-instruction 模板规则 3 加「测试按层适用」尾注（AGENTS.md/CLAUDE.md 仓实例同步）；assets/command-cards/flow.md「直接干活」行加按层限定。 |
 | 2026-10-14 | 2026-10-14-release-3-32-9 | 发布 sillyspec@3.32.9：收编上一归档变更留痕的并行会话在途件 templates/agents-inst |
+| 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |

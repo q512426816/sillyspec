@@ -20,3 +20,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 - ql-20260914-003-4d6c | ql-ID 分配竞态根治（坑 ql-id-double-occupancy，实证 2026-09-13 007-1351 双占用）：allocateQuicklogEntry 分配查重（maxSeq 并入他者活跃会话 guard 预留——collectGuardReservedQuicklogIds 新导出，7 天僵尸不钉号 + 盘上容错扫描畸形头；全 ID 末检 200 次兜底；sessionsDir 参数经 resolveQuickSessionsDir 传入）；新导出 countQuicklogEntries（--done 占用校验：盘上同 ID ≥2 硬拦）；complete-handlers --done 他者 guard 占用同 ID 换新号完成 + 最终 ID 回写 guard.json + 条目丢失原硬拦改原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quicklog-ql-id-race.test.mjs。
 | 2026-10-13 | 2026-10-13-h2-repo-heading-parse | 动机：上一变更（2026-10-13-thin-empty-face-crosscheck）收尾探针实证：跨仓告警文案推 |
 | 2026-10-13 | 2026-10-13-declared-paren-strip | 动机：平台仓消费方冒烟实证（multi-agent-platform 仓 docs/sillyspec/flow-dif |
+| 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |

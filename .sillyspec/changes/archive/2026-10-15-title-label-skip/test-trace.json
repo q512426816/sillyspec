@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-title-label-skip",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-15-title-label-skip:flow:测试绑定FR-01",
+      "tests": [
+        "test/change-title-flow.test.mjs「⑤ 段头行跳过与复合词剥离（动机与背景形态免疫）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-title-label-skip"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-15-title-label-skip:flow:测试绑定FR-02",
+      "tests": [
+        "test/motive-from-input.test.mjs「motiveFromInput：段头行免疫取次行/空提取回退变更名/与 deriveChangeTitle 同源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-15-title-label-skip"
+    }
+  ]
+}

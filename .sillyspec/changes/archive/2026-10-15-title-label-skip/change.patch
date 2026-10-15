@@ -1,0 +1,429 @@
+diff --git a/.claude/skills/sillyspec-flow/SKILL.md b/.claude/skills/sillyspec-flow/SKILL.md
+index a436b6fd..9583f453 100644
+--- a/.claude/skills/sillyspec-flow/SKILL.md
++++ b/.claude/skills/sillyspec-flow/SKILL.md
+@@ -16,7 +16,7 @@ description: 轻量变更（默认快道）——需求明确的小/中改动两
+ ### ① flow start（立项 + 锁基线）
+ 
+ ```bash
+-sillyspec flow start --change <变更名> --input "<动机与背景>
++sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 6cc55cfd..60cf3292 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -56,5 +56,5 @@
+ | 2026-10-14 | 2026-10-14-tdd-scope-guidance | execute.js 主代理直写（execution_mode: main）任务闭环行 TDD 措辞改「按层适用」（纯逻辑先写测试再实现/行为契约断用户可见行为/样式与纯配置不写——判据见「测试用例设计」）；docs/prompt/_extracted.json 重提取。 |
+ | 2026-10-14 | 2026-10-14-scale-large-evidence | 镜像误判根治（用户批准的方案原文）：给 brainstorm Step 8 的 large 判据加反判据——「跨多端/多 |
+ | 2026-10-14 | 2026-10-14-brainstorm-auto-retire | 用户裁决：删除 brainstorm-auto 自动道。排查实证：自动道 Step2 设计产物骨架自审为自由格式（不含原 |
+-| 2026-10-14 | 2026-10-14-decision-legacy-renumber | 动机与背景： |
++| 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移：701 legacy 节段→597 全局号+dry-run/apply 工具 |
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+diff --git a/AGENTS.md b/AGENTS.md
+index 782af149..89aff92a 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -16,7 +16,7 @@
+ `--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
+ 
+ ```bash
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 860ca94f..1a696d80 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -14,7 +14,7 @@
+ 4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`。`--input` 引号内换行合法，下例可照抄：
+ 
+    ```bash
+-   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+    成功标准：
+    - <可验证标准>"
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index 72c32e38..9fe399df 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -11,7 +11,7 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
+ ```bash
+ export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
+ # ① 立项 + 锁基线（--input 引号内换行合法，可照抄；缺「成功标准」条目会被清晰度门拦下）：
+-sillyspec flow start --change <变更名> --input "<动机与背景>
++sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index 74a84816..b13a5b52 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -73,7 +73,7 @@
+ - **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
+ 
+ ```
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index dac830be..96d96136 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -31,6 +31,7 @@ import { readV2SectionAnswer } from './flow-review.js'
+ import { DESIGN_QUESTIONS } from './flow-draft.js'
+ import { pathMatches } from './change-list.js'
+ import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
++import { deriveChangeTitle } from './quicklog.js'
+ 
+ /**
+  * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
+@@ -133,6 +134,19 @@ export function evaluateModuleGate({ moduleScope, ignore } = {}) {
+   return { block: maps.length > 0 && dirs.length > 0, dirs, maps }
+ }
+ 
++/**
++ * ⑥-0 motiveFromInput：模块变更索引摘要提取（2026-10-15-title-label-skip）。与变更标题
++ * 同源走 deriveChangeTitle——此前 flow.js 裸取 --input 首行，「动机与背景：」段头行整行
++ * 入摘要（stages.changelog 实证）。段头行跳过/标签剥离随 deriveChangeTitle 单源；提取为
++ * 空回退变更名（可辨识不达意优于空串；appendChangeIndexEntries 侧另有 '轻量变更' 二级兜底）。
++ * @returns {string} 摘要（≤50 字）
++ */
++export function motiveFromInput(input, change = '') {
++  let derived = ''
++  try { derived = deriveChangeTitle(input) } catch { derived = '' }
++  return derived || String(change || '')
++}
++
+ /**
+  * ⑥ appendChangeIndexEntries：命中模块变更索引机械回写（二档）。零语义判断——日期/变更名/
+  * 动机首行全是已知量，与 decision-distill 降 noAI 同性质。目标判定遵守 split-changelog 契约
+@@ -328,7 +342,7 @@ export function harvestSlot4Decision({ changeDir, change }) {
+   return { harvested: true }
+ }
+ 
+-export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary }
++export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary, motiveFromInput }
+ 
+ /**
+  * patch 冻结面的提交面过滤（2026-09-27-tool-debt-cleanup 抽出为纯函数供单测锁定）：
+diff --git a/src/flow.js b/src/flow.js
+index 192c7fa9..538c3392 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2323,8 +2323,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 回读块保证在场（patch 本轮算出或 change-patch.json 回读）。
+     try {
+       if (moduleScope && Array.isArray(moduleScope.modules) && moduleScope.modules.length > 0) {
+-        const { appendChangeIndexEntries } = await import('./flow-parity.js')
+-        const motive = String(st.input || '').split('\n').map((s) => s.trim()).find(Boolean) || ''
++        const { appendChangeIndexEntries, motiveFromInput } = await import('./flow-parity.js')
++        // 摘要与变更标题同源（2026-10-15-title-label-skip）：段头行（动机与背景：等）跳过取次行，
++        // 空提取回退变更名——此前裸取首行致「动机与背景：」整行入摘要（stages.changelog 实证）。
++        const motive = motiveFromInput(st.input, change)
+         const wr = appendChangeIndexEntries({ specBase, modules: moduleScope.modules, change, summary: motive, date: new Date().toISOString().slice(0, 10) })
+         changelogAppended = wr.appended
+         if (wr.appended.length > 0) console.log(`📖 模块变更索引回写：${wr.appended.length} 个目标（${wr.appended.join('、')}）——sidecar 优先/卡内节次之，随归档窄化入暂存`)
+@@ -2651,7 +2653,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+         console.error(`❌ ${e.message}`)
+         // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+         console.error('   重试（--input 引号内换行合法，可照抄）：')
+-        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<动机与背景>')
++        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+         console.error('')
+         console.error('   成功标准：')
+         console.error('   - <可验证标准>"')
+@@ -2880,9 +2882,9 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
+     return r
+   }
+-  console.error('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
++  console.error('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+   console.error('      --input 可照抄形态（引号内换行合法）：')
+-  console.error('      sillyspec flow start --change <名> --input "<动机与背景>')
++  console.error('      sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+   console.error('')
+   console.error('      成功标准：')
+   console.error('      - <可验证标准>"')
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index fae86d62..d5a253e7 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -61,7 +61,7 @@ const STAGE_HINTS = {
+     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
+     '',
+     '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）——--input 引号内换行合法，下例可照抄：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+@@ -80,7 +80,7 @@ const STAGE_HINTS = {
+   'verify': [
+     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+     '如需修改，请先回到 execute 阶段，或收口后开轻量变更（--input 引号内换行合法，可照抄）：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+@@ -88,7 +88,7 @@ const STAGE_HINTS = {
+   'archive': [
+     '当前在 archive（归档）阶段，不修改源码。',
+     '如需修改，请开启新变更（--input 引号内换行合法，可照抄）：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+diff --git a/src/index.js b/src/index.js
+index c2464dbf..095f5cda 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -171,7 +171,7 @@ SillySpec CLI — 规范驱动开发工具包
+ 示例:
+   sillyspec init
+   sillyspec run brainstorm --change 2026-07-03-add-login
+-  sillyspec flow start --change 2026-07-03-my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
++  sillyspec flow start --change 2026-07-03-my-fix --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
+   sillyspec run verify --done --output "验证通过，测试全绿"
+   sillyspec run archive --done --confirm --output "归档完成"
+   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
+@@ -226,7 +226,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
+   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
+   // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+   console.error('   新工作请走轻量变更（--input 引号内换行合法，下例可照抄）：')
+-  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+   console.error('')
+   console.error('   成功标准：')
+   console.error('   - <可验证标准>"')
+diff --git a/src/quicklog.js b/src/quicklog.js
+index a630c97b..209fc9cb 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -124,13 +124,18 @@ export function sanitizeDesc(description) {
+  * 「需求：/动机：」类标签前缀，空白折叠单行，超长截断加 …；空输入返回 ''（调用方兜底
+  * change 名）。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅有指引），
+  * --title 显式覆盖一切推导。
++ * 段头行防御（2026-10-15-title-label-skip）：过门格式示例曾被读成段头形态——agent 把
++ * 「动机与背景：」独立成行照抄，白名单无复合词致整行成标题（进度库 6 变更实证）。两道
++ * 防御：白名单补复合词（动机与背景/背景与动机）；任意短段头行（≤12 字非冒号内容+行尾
++ * 冒号，如「变更背景：」「详细说明：」）整行跳过取次非空行——冒号后无内容不成标题。
+  */
+ export function deriveChangeTitle(input, max = 50) {
+   for (const l of String(input || '').replace(/\r\n/g, '\n').split('\n')) {
+     const t = l.trim()
+     if (!t) continue
+     if (/^成功标准\s*[:：]/.test(t)) break
+-    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题)\s*[:：]\s*/, '').trim()
++    if (/^[^:：]{1,12}[:：]$/.test(t)) continue
++    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题|动机与背景|背景与动机)\s*[:：]\s*/, '').trim()
+     if (!stripped) continue
+     const one = stripped.replace(/\s+/g, ' ')
+     return one.length > max ? one.slice(0, max) + '…' : one
+diff --git a/src/run/command.js b/src/run/command.js
+index a42cf0ca..f9e29d63 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -232,7 +232,7 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
+ function emitReadonlyEmptyGuide() {
+   console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+   console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
+-  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+   console.log('')
+   console.log('     成功标准：')
+   console.log('     - <可验证标准>"')
+@@ -858,7 +858,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+             quickFallbackUsed = true
+           } else {
+             console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更（--input 引号内换行合法，可照抄）：')
+-            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+             console.log('')
+             console.log('   成功标准：')
+             console.log('   - <可验证标准>"')
+@@ -2076,7 +2076,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     if (classification.mode === 'quick') {
+       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
+       console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话；--input 引号内换行合法，可照抄）：`)
+-      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+       console.log('')
+       console.log('   成功标准：')
+       console.log('   - <可验证标准>"')
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 6c7135a7..db39f72b 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -417,7 +417,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+       // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
+       console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
+       console.error(`   新工作请走轻量变更（--input 引号内换行合法，可照抄）：`)
+-      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>')
++      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+       console.error('')
+       console.error('   成功标准：')
+       console.error('   - <可验证标准>"')
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 52753231..6d324a1f 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -58,7 +58,7 @@ export const definition = {
+ - **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
+ 
+ \`\`\`
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 59afee20..7045850b 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -15,7 +15,7 @@
+ `--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
+ 
+ ```bash
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景>
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/test/change-title-flow.test.mjs b/test/change-title-flow.test.mjs
+index 0244350e..a8d5c556 100644
+--- a/test/change-title-flow.test.mjs
++++ b/test/change-title-flow.test.mjs
+@@ -55,6 +55,17 @@ test('① deriveChangeTitle：首行推导 + 标签剥离 + 成功标准止 + 
+   assert.ok(long.endsWith('…'))
+ })
+ 
++test('⑤ 段头行跳过与复合词剥离（动机与背景形态免疫）', () => {
++  assert.equal(deriveChangeTitle('动机与背景：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '复合段头独立行 → 跳过取次行')
++  assert.equal(deriveChangeTitle('动机与背景：修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '复合标签同行 → 剥标签取余部')
++  assert.equal(deriveChangeTitle('背景与动机：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '反序复合段头同样跳过')
++  assert.equal(deriveChangeTitle('变更背景：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '未登记段头行（通用形态）→ 跳过取次行')
++  assert.equal(deriveChangeTitle('详细说明：\n修复登录超时\n\n成功标准：\n- x'), '修复登录超时', '任意短段头行 → 跳过')
++  assert.equal(deriveChangeTitle('动机：\n背景：xxx 复杂\n修复登录超时'), 'xxx 复杂', '独立白名单段头行跳过，次行带内容标签行剥标签入选')
++  assert.equal(deriveChangeTitle('动机与背景：'), '', '仅段头行无后文 → 空（调用方兜底变更名）')
++  assert.equal(deriveChangeTitle('修复登录超时（完整句不带冒号结尾）'), '修复登录超时（完整句不带冒号结尾）', '普通首行概括不受影响')
++})
++
+ test('② flow start fresh：--title 优先，否则 input 首行，横幅在场', () => {
+   const { cwd } = makeRepo()
+   const cn = '2026-09-29-title-a'
+diff --git a/test/flow-help-status.test.mjs b/test/flow-help-status.test.mjs
+index 7a384e6a..e546cdb7 100644
+--- a/test/flow-help-status.test.mjs
++++ b/test/flow-help-status.test.mjs
+@@ -25,5 +25,5 @@ test('用法行保留 start/done 与 --input 格式教学', () => {
+   const line = flowSrc.split('\n').find((l) => l.includes(USAGE_LINE))
+   assert.ok(line, '用法行在场')
+   assert.ok(line.includes('sillyspec flow done --change <名>'), '用法行保留 done 子命令')
+-  assert.ok(line.includes('--input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学')
++  assert.ok(line.includes('--input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学（首行概括句）')
+ })
+diff --git a/test/input-format-copy.test.mjs b/test/input-format-copy.test.mjs
+index d09030b6..3eb5cf5f 100644
+--- a/test/input-format-copy.test.mjs
++++ b/test/input-format-copy.test.mjs
+@@ -26,11 +26,11 @@ test('① 紧凑内联旧形态零残留', () => {
+   }
+ })
+ 
+-test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式）', () => {
++test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式；2026-10-15-title-label-skip 首行改概括句）', () => {
+   for (const p of ['src/run/command.js', 'src/flow.js', 'src/stages/brainstorm.js']) {
+-    assert.ok(read(p).includes('--input "<动机与背景>'), `${p} 教学带实例起行`)
++    assert.ok(read(p).includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 教学带实例起行`)
+   }
+-  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
++  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
+   const guard = read('src/hooks/worktree-guard.js')
+   assert.ok(!guard.includes('--input "<描述+成功标准>"'), 'worktree-guard 无模糊形态残留')
+   assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')
+diff --git a/test/input-teach-copyable.test.mjs b/test/input-teach-copyable.test.mjs
+index d7ac68f3..1d78de3e 100644
+--- a/test/input-teach-copyable.test.mjs
++++ b/test/input-teach-copyable.test.mjs
+@@ -7,7 +7,7 @@
+  *
+  * 锁定：
+  *   ① 分号内联旧教学形态零残留（7 处教学所在文件）
+- *   ② 各教学处带可照抄多行实例（--input "<动机与背景> 起行 + - <可验证标准>" 收行）
++ *   ② 各教学处带可照抄多行实例（--input "<一句中文概括（首行即变更标题）；随后动机与背景 起行 + - <可验证标准>" 收行）
+  *   ③ 实例核心形态（顶格/缩进两版）喂 extractSuccessCriteria 提取 ≥ 1 条；
+  *      分号内联形态提取 0 条（零残留断言的语义依据）
+  *   ④ design 模板锚教学含「问题行勿删勿改勿替换 + 答案另起一行」措辞
+@@ -67,7 +67,7 @@ test('①b 非 src 教学面分号形态零残留（逐字三处清零）', () =
+ test('② 各教学处带可照抄多行实例', () => {
+   for (const p of TEACH_FILES) {
+     const src = read(p)
+-    assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行（--input "<动机与背景>）`)
++    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行（首行概括句——段头诱导已断）`)
+     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行（- <可验证标准>）`)
+   }
+   // worktree-guard 三处 stage 提示各带一份实例
+@@ -79,7 +79,7 @@ test('②b 非 src 教学面实例在场与模糊形态清零', () => {
+   // 逐字两处（CLAUDE.md / flow.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
+   for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
+     const src = read(p)
+-    assert.ok(src.includes('--input "<动机与背景>'), `${p} 实例起行`)
++    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行`)
+     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)
+   }
+   // 倒推行引号内联模糊形态清零（AGENTS.md 与模板源）
+diff --git a/test/motive-from-input.test.mjs b/test/motive-from-input.test.mjs
+new file mode 100644
+index 00000000..16e8ee56
+--- /dev/null
++++ b/test/motive-from-input.test.mjs
+@@ -0,0 +1,38 @@
++/**
++ * motive-from-input.test.mjs — 模块变更索引摘要同源化（2026-10-15-title-label-skip）
++ *
++ * 病根：flow done 模块索引回写摘要裸取 --input 首行，「动机与背景：」段头行整行入摘要
++ * （stages.changelog legacy-renumber 行实证）——与变更标题提取链（deriveChangeTitle，含
++ * 段头行跳过/标签剥离）脱源。
++ *
++ * 锁定语义：motiveFromInput 段头免疫取次行、空提取回退变更名、与 deriveChangeTitle 同源。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { motiveFromInput } = await import(pathToFileURL(join(ROOT, 'src', 'flow-parity.js')).href)
++const { deriveChangeTitle } = await import(pathToFileURL(join(ROOT, 'src', 'quicklog.js')).href)
++
++test('motiveFromInput：段头行免疫取次行（动机与背景形态）', () => {
++  const input = '动机与背景：\ndecisions.md 中机器收割的 D-001 条目标题为流程内部术语\n\n成功标准：\n- x'
++  assert.equal(motiveFromInput(input, 'c-x'), 'decisions.md 中机器收割的 D-001 条目标题为流程内部术语')
++})
++
++test('motiveFromInput：首行概括句直通（无段头）', () => {
++  assert.equal(motiveFromInput('修复登录超时\n\n成功标准：\n- x', 'c-y'), '修复登录超时')
++})
++
++test('motiveFromInput：空提取回退变更名（空 input/纯段头无后文/成功标准引导行）', () => {
++  assert.equal(motiveFromInput('', 'c-empty'), 'c-empty')
++  assert.equal(motiveFromInput('动机与背景：', 'c-only-header'), 'c-only-header')
++  assert.equal(motiveFromInput('成功标准：\n- x', 'c-criteria-only'), 'c-criteria-only')
++  assert.equal(motiveFromInput(null, 'c-null'), 'c-null')
++})
++
++test('motiveFromInput：与 deriveChangeTitle 同源（含截断口径 ≤50）', () => {
++  const long = '一'.repeat(80)
++  assert.equal(motiveFromInput(long, 'c-long'), deriveChangeTitle(long), '截断行为与标题提取一致（50+…）')
++})

@@ -1,0 +1,36 @@
+{"ts":1792035252240,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792035354155,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792035390309,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792035406834,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792035446523,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：est/change-title-flow.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792035489396,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/quicklog.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792035535965,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792035538408,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792035538408,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792035538408,"kind":"commit","stage":null,"detail":"0faa308a","provisional":true}
+{"ts":1792035578392,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow-parity.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792035641310,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792035644341,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792035644341,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792035644341,"kind":"commit","stage":null,"detail":"03d732f1","provisional":true}
+{"ts":1792035776486,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/hooks/worktree-guard.js、src/run/command.js、src/run/stage.js、src/stages/brainstorm.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792035789705,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792035803240,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792035806274,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792035806274,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792035806274,"kind":"commit","stage":null,"detail":"d9ea306e","provisional":true}
+{"ts":1792035925698,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792035927820,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792035927820,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1792035927820,"kind":"commit","stage":null,"detail":"0917b303","provisional":true}
+{"ts":1792036577086,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/input-teach-copyable.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792036610423,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/input-format-copy.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792036630553,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-help-status.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792036779011,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792036789181,"kind":"commit","stage":null,"detail":"860be06c","provisional":true}
+{"ts":1792037106174,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1792037108763,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792037108763,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1792037108763,"kind":"commit","stage":null,"detail":"72ac0b64","provisional":true}
+{"ts":1792037226927,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（90.5s） · 20261015040706","provisional":true}
+{"ts":1792038076116,"kind":"commit","stage":null,"detail":"e182ccdb","provisional":true}

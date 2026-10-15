@@ -368,3 +368,55 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-10-05-input-teach-non-src
   status: active
+
+## FR-skills-docs-014 deriveChangeTitle 对「动机与背景：」独立段头行返回次行内容；「动机与背景：xxx」同行形态剥标签取 xxx；既有白名单剥离与成功标准截断行为不变
+变更：2026-10-15-title-label-skip
+状态：active
+摘要：段头行跳过；既有行为回归
+全文：.sillyspec/changes/archive/2026-10-15-title-label-skip/requirements.md#FR-01
+最近确认：e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-title-label-skip:flow:测试绑定FR-01
+  tests: test/change-title-flow.test.mjs「⑤ 段头行跳过与复合词剥离（动机与背景形态免疫）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-title-label-skip
+  status: active
+
+## FR-skills-docs-015 flow done 模块变更索引回写摘要与标题同源（复用 deriveChangeTitle 提取链），段头行不再入摘要
+变更：2026-10-15-title-label-skip
+状态：active
+摘要：段头免疫回写
+全文：.sillyspec/changes/archive/2026-10-15-title-label-skip/requirements.md#FR-02
+最近确认：e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-title-label-skip:flow:测试绑定FR-02
+  tests: test/motive-from-input.test.mjs「motiveFromInput：段头行免疫取次行/空提取回退变更名/与 deriveChangeTitle 同源」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-title-label-skip
+  status: active
+
+## FR-skills-docs-016 AGENTS.md/templates/SKILL/CLI 用法串的 --input 示例首行改为一句概括（消除段头诱导）
+变更：2026-10-15-title-label-skip
+状态：active
+摘要：模板对齐
+全文：.sillyspec/changes/archive/2026-10-15-title-label-skip/requirements.md#FR-03
+最近确认：e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1
+
+## FR-skills-docs-017 进度库 6 个「动机与背景：」title 与 stages.changelog.md 1 行摘要修复为真实概括
+变更：2026-10-15-title-label-skip
+状态：active
+摘要：存量清偿
+全文：.sillyspec/changes/archive/2026-10-15-title-label-skip/requirements.md#FR-04
+最近确认：e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1

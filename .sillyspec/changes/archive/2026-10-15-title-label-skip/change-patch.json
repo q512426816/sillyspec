@@ -1,0 +1,304 @@
+{
+  "change": "2026-10-15-title-label-skip",
+  "baseline": "c72ac21404f8804bf3d9f84ef7033a952e8a63a6",
+  "head": "e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "assets/command-cards/flow.md",
+    "docs/prompt/brainstorm.md",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/hooks/worktree-guard.js",
+    "src/index.js",
+    "src/quicklog.js",
+    "src/run/command.js",
+    "src/run/stage.js",
+    "src/stages/brainstorm.js",
+    "templates/agents-instruction.md",
+    "test/change-title-flow.test.mjs",
+    "test/flow-help-status.test.mjs",
+    "test/input-format-copy.test.mjs",
+    "test/input-teach-copyable.test.mjs",
+    "test/motive-from-input.test.mjs"
+  ],
+  "totals": {
+    "files": 20,
+    "additions": 101,
+    "deletions": 31
+  },
+  "savedAt": "2026-10-15T04:21:22.862Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "skills-docs",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/skills-docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "change-management",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/change-management.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c72ac21404f8804bf3d9f84ef7033a952e8a63a6",
+    "totals": {
+      "files": 22,
+      "additions": 101,
+      "deletions": 31
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-flow/SKILL.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned",
+        "facility": "tool"
+      },
+      {
+        "path": "assets/command-cards/flow.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow-parity.js",
+        "additions": 15,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 7,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/quicklog.js",
+        "additions": 6,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-title-flow.test.mjs",
+        "additions": 11,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-help-status.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/input-format-copy.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/input-teach-copyable.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/motive-from-input.test.mjs",
+        "additions": 38,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md / assets/command-cards/flow.md / docs/prompt/brainstorm.md",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "test/input-format-copy.test.mjs / test/input-teach-copyable.test.mjs / test/flow-help-status.test.mjs",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "03211ce2274d9b0054cdd65b187d648dfa447991e84f4dad99d39161b352dff2",
+  "patchStatus": "ok"
+}
