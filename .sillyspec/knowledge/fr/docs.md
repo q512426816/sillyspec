@@ -361,3 +361,79 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-15-plan-review-focus
   status: active
+
+## FR-docs-019 新命令 sillyspec diagnose --change <名>（只读零状态写入）：装配并输出证据包——变更身份（flow-state/tier）、按变更名过滤的 agent 会话日志路径、摩擦账本条目、verify-runs 测试结果文件、评审轮次文件（含 superseded）、取证据任务书
+变更：2026-10-15-session-forensics
+状态：active
+摘要：六面证据包；零写入；缺数据源降级
+全文：.sillyspec/changes/archive/2026-10-15-session-forensics/requirements.md#FR-01
+最近确认：8862c672f137a6875d1d62af263a65ba8ededbb6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-session-forensics:flow:测试绑定FR-01
+  tests: test/forensics.test.mjs「六面证据包」 | test/forensics.test.mjs「缺数据源降级」 | test/forensics.test.mjs「零写入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-session-forensics
+  status: active
+
+## FR-docs-020 取证任务书含结构维度骨架与取证纪律（path:line 铁律、报告唯一可写产物、维度数据驱动）
+变更：2026-10-15-session-forensics
+状态：active
+摘要：任务书必需节
+全文：.sillyspec/changes/archive/2026-10-15-session-forensics/requirements.md#FR-02
+最近确认：8862c672f137a6875d1d62af263a65ba8ededbb6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-session-forensics:flow:测试绑定FR-02
+  tests: test/forensics.test.mjs「任务书维度与纪律」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-session-forensics
+  status: active
+
+## FR-docs-021 命令装配面在 index.js 接线（case 'diagnose'，动态 import，--help 帮助行更新）
+变更：2026-10-15-session-forensics
+状态：active
+摘要：命令可达
+全文：.sillyspec/changes/archive/2026-10-15-session-forensics/requirements.md#FR-03
+最近确认：8862c672f137a6875d1d62af263a65ba8ededbb6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-session-forensics:flow:测试绑定FR-03
+  tests: test/forensics.test.mjs「任务书维度与纪律」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-session-forensics
+  status: active
+
+## FR-docs-022 变更自身测试面与 lint
+变更：2026-10-15-session-forensics
+状态：active
+摘要：新测试全绿
+全文：.sillyspec/changes/archive/2026-10-15-session-forensics/requirements.md#FR-04
+最近确认：8862c672f137a6875d1d62af263a65ba8ededbb6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-session-forensics:flow:测试绑定FR-04
+  tests: test/forensics.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-session-forensics
+  status: active

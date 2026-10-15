@@ -1,0 +1,531 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index cf4de185..9be93c29 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -24,6 +24,7 @@ modules:
+     review_reasons: []
+     paths:
+       - src/agent-session-log.js
++      - src/forensics.js
+       - src/friction-tally.js
+       - src/friction-ledger.js
+       - src/semantic-guard.js
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 5d972664..f21dbc54 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -1,6 +1,6 @@
+ # SillySpec 平台接口操作地图
+ 
+-> updated_at: 2026-10-15（§5 触发点矩阵 5 处 `index.js` 行号锚同步漂移清偿——收口实测门 doc-ref-check 5/93 失效，锚随源码演进更新；无接口行为变更。上一次：2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:890`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md））
++> updated_at: 2026-10-15（第二次锚同步：diagnose 命令接线致 index.js 整体下移，6 处行号锚随源更新（pullList/collectStatus/dispatch 组/init specDir/case init/POINTER_STATUS），doc-ref-check 93/93；同日早前：§5 触发点矩阵 5 处 `index.js` 行号锚同步漂移清偿——收口实测门 doc-ref-check 5/93 失效，锚随源码演进更新；无接口行为变更。上一次：2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:890`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md））
+ > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
+ > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
+ > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
+@@ -136,10 +136,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3166；shared.js:1118 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4509；sync.js:1587/1595 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4461；sync.js:2328 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4519；sync.js:1587/1595 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4471；sync.js:2328 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4247/4276/4282；probe.js:137 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4257/4286/4270；probe.js:137 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -165,7 +165,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:267`）公共入口，flag 在 `command.js:422`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:276` 解析后经 `case 'init'`（`index.js:431`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:282` 解析后经 `case 'init'`（`index.js:432`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+ - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:876（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4345`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4355`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/forensics.js b/src/forensics.js
+new file mode 100644
+index 00000000..93548780
+--- /dev/null
++++ b/src/forensics.js
+@@ -0,0 +1,236 @@
++/**
++ * forensics.js — 会话取证证据包装配 + 取证任务书渲染（2026-10-15-session-forensics）
++ *
++ * 定位：`sillyspec diagnose --change <名>` 的只读装配面。对照 obra/superpowers
++ * diagnosing-superpowers 的取证形态做 SillySpec 原生版——分工沿本仓哲学：
++ * CLI 装配机械事实（证据包六面），agent 做语义判断（按任务书读 transcript、出
++ * path:line 证据报告）。全程零写入：证据源全是事后读取的静态文件，单源缺失/
++ * 损坏 fail-soft 空清单+注记，不抛错不阻断（取证要容忍现场变动）。
++ *
++ * 数据源（全部既有，零新格式）：
++ *   - 变更目录 / 归档目录（flow-state.yaml 身份面、review 轮次文件）
++ *   - <runtimeRoot>/agent-session-log.json（run 命令登记的会话日志路径，
++ *     按 change_key 精确相等过滤——登记面唯一键，无子串误命中面）
++ *   - <runtimeRoot>/friction-ledger.json（readFrictionLedger 既有 API）
++ *   - <runtimeRoot>/verify-runs/<时间戳目录>/test-result.json（mtime 近序取前 N）
++ *
++ * 红线：零内容枚举——任务书六维度是结构骨架（CLI 自有任务书面集合，同
++ * review_probes scope 判例），不是内容词表；CLI 不解析 transcript 本体
++ * （三 harness 格式 × 演化泥潭，解读交给 agent）。
++ */
++import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
++import { join } from 'node:path'
++import yaml from 'js-yaml'
++import { readFrictionLedger } from './friction-ledger.js'
++
++/** verify-runs 证据默认截断数（近序 N 条，防大仓 runtime 灌爆输出；模块内常量——导出即死码债） */
++const VERIFY_RUNS_LIMIT = 3
++
++/** 读 JSON 文件，失败/不存在返回 null（fail-soft 取证立场）。 */
++function readJsonSafe(path) {
++  try {
++    return JSON.parse(readFileSync(path, 'utf8'))
++  } catch {
++    return null
++  }
++}
++
++/** 读 YAML 文件，失败/不存在返回 null。 */
++function readYamlSafe(path) {
++  try {
++    return yaml.load(readFileSync(path, 'utf8'))
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 装配证据包六面。纯读函数，零写入。
++ * @param {{ specBase: string, runtimeRoot: string, changeName: string, verifyRunsLimit?: number }} p
++ * @returns {{ identity: object, agentLogs: object[], friction: object[], verifyRuns: object[], reviews: object[], warnings: string[] }}
++ */
++export function assembleForensicsPack({ specBase, runtimeRoot, changeName, verifyRunsLimit = VERIFY_RUNS_LIMIT }) {
++  const warnings = []
++  const changeDir = join(specBase, 'changes', changeName)
++  const archivedDir = join(specBase, 'changes', 'archive', changeName)
++
++  // ① 变更身份（active / archived / missing + flow-state 态）
++  const identity = { changeName, status: 'missing', changeDir: null, archivedDir: null, tier: null, substeps: null }
++  if (existsSync(changeDir)) {
++    identity.status = 'active'
++    identity.changeDir = changeDir
++  } else if (existsSync(archivedDir)) {
++    identity.status = 'archived'
++    identity.changeDir = archivedDir
++    identity.archivedDir = archivedDir
++    warnings.push('变更已归档——证据包从归档目录读取，transcript 仍按登记路径取')
++  }
++  const flowStatePath = identity.changeDir ? join(identity.changeDir, 'flow-state.yaml') : null
++  if (flowStatePath && existsSync(flowStatePath)) {
++    const fs_ = readYamlSafe(flowStatePath)
++    if (fs_ && typeof fs_ === 'object') {
++      identity.tier = fs_.tier ?? null
++      identity.substeps = fs_.substeps && typeof fs_.substeps === 'object' ? fs_.substeps : null
++    } else {
++      warnings.push(`flow-state.yaml 解析失败（${flowStatePath}）——身份面降级`)
++    }
++  } else {
++    warnings.push('无 flow 态（archive 件或无 flow-state.yaml）')
++  }
++
++  // ② agent 会话日志（change_key 精确相等——登记面唯一键）
++  const registryPath = join(runtimeRoot, 'agent-session-log.json')
++  const registry = readJsonSafe(registryPath)
++  let agentLogs = []
++  if (registry && Array.isArray(registry.entries)) {
++    agentLogs = registry.entries.filter((e) => e && typeof e === 'object' && e.change_key === changeName)
++  } else {
++    warnings.push(`会话日志登记缺失或不可解析（${registryPath}）——本机未跑过 run 命令或登记面损坏`)
++  }
++
++  // ③ 摩擦账本（readFrictionLedger 容错：缺文件/坏 JSON → []）
++  const friction = readFrictionLedger(runtimeRoot).filter((e) => e.change === changeName)
++
++  // ④ verify-runs（mtime 近序，同 mtime 路径字典序破平；截断前 N）
++  //    fail-soft：runsRoot 为普通文件/权限损坏形态时 readdirSync 抛 ENOTDIR——捕获降级，不阻断取证。
++  const runsRoot = join(runtimeRoot, 'verify-runs')
++  const verifyRuns = []
++  if (existsSync(runsRoot)) {
++    let runEntries = []
++    try {
++      runEntries = readdirSync(runsRoot, { withFileTypes: true })
++    } catch {
++      warnings.push(`verify-runs 不可读（非目录或损坏形态，${runsRoot}）——降级为空`)
++    }
++    const dirs = runEntries
++      .filter((d) => d.isDirectory())
++      .map((d) => join(runsRoot, d.name))
++    const withTime = dirs
++      .map((dir) => {
++        try {
++          return { dir, mtimeMs: statSync(dir).mtimeMs }
++        } catch {
++          return null
++        }
++      })
++      .filter(Boolean)
++      .sort((a, b) => (b.mtimeMs - a.mtimeMs) || (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0))
++    for (const { dir, mtimeMs } of withTime.slice(0, Math.max(1, verifyRunsLimit))) {
++      const resultPath = join(dir, 'test-result.json')
++      verifyRuns.push({
++        dir,
++        resultPath: existsSync(resultPath) ? resultPath : null,
++        mtimeIso: new Date(mtimeMs).toISOString(),
++      })
++    }
++  } else {
++    warnings.push(`无 verify-runs 目录（${runsRoot}）——本变更未跑过收口实测或 runtime 已清理`)
++  }
++
++  // ⑤ 评审轮次（review.json + superseded-*，mtime 近序；目录损坏形态同上降级）
++  const reviews = []
++  if (identity.changeDir && existsSync(identity.changeDir)) {
++    let reviewFiles = []
++    try {
++      reviewFiles = readdirSync(identity.changeDir).filter((f) => /^review\.json(\.superseded-.+)?$/.test(f))
++    } catch {
++      warnings.push(`变更目录不可读（${identity.changeDir}）——评审轮次面降级为空`)
++    }
++    for (const f of reviewFiles) {
++      const p = join(identity.changeDir, f)
++      let mtimeIso = null
++      try {
++        mtimeIso = new Date(statSync(p).mtimeMs).toISOString()
++      } catch { /* 文件刚被删——列名不留 mtime */ }
++      reviews.push({ file: p, superseded: f !== 'review.json', mtimeIso })
++    }
++    reviews.sort((a, b) => (b.mtimeIso || '').localeCompare(a.mtimeIso || ''))
++  } else {
++    warnings.push('变更目录不存在——评审轮次面为空')
++  }
++
++  return { identity, agentLogs, friction, verifyRuns, reviews, warnings }
++}
++
++/**
++ * 渲染取证任务书（markdown）。六维度是结构骨架不是封闭清单；四纪律钉死
++ * diagnosing-superpowers 的核心铁律（path:line 锚、唯一可写产物、先读本体、时间盒）。
++ * @param {{ identity: object, agentLogs: object[], friction: object[], verifyRuns: object[], reviews: object[], warnings: string[] }} pack
++ * @returns {string}
++ */
++export function renderForensicsTaskbook(pack) {
++  const { identity, agentLogs, friction, verifyRuns, reviews, warnings } = pack
++  const lines = []
++  lines.push(`# 会话取证任务书 — ${identity.changeName}`)
++  lines.push('')
++  lines.push(`【角色】你是取证分析员（干净上下文）——还原这个会话里实际发生了什么，拿证据说话，不替流程辩护也不替人辩护。报告读者是「要决定下一步怎么办的人」。`)
++  lines.push('')
++  lines.push('## 证据包（CLI 装配的机械事实——先读这些文件本体，再下结论）')
++  lines.push('')
++  lines.push(`- 变更身份：status=${identity.status}｜tier=${identity.tier ?? '无'}｜目录=${identity.changeDir ?? '（不存在）'}`)
++  lines.push(`- agent 会话日志（${agentLogs.length} 条，change_key=${identity.changeName} 精确过滤）：`)
++  for (const e of agentLogs) {
++    lines.push(`  - [${e.harness}/${e.format ?? '?'}] ${e.log_path}（session=${e.session_id ?? '?'}${e.exists === false ? '，⚠️ 文件不在场' : ''}）`)
++  }
++  if (agentLogs.length === 0) lines.push('  - （零命中——本机未登记过本变更的会话日志）')
++  lines.push(`- 摩擦账本（${friction.length} 条）：${friction.map((e) => JSON.stringify(e.counts ?? {})).join(' / ') || '（无）'}`)
++  lines.push(`- verify-runs（近 ${verifyRuns.length} 次）：`)
++  for (const r of verifyRuns) lines.push(`  - ${r.resultPath ?? r.dir + '（无 test-result.json）'} @ ${r.mtimeIso}`)
++  lines.push(`- 评审轮次（${reviews.length} 份，含 superseded）：`)
++  for (const r of reviews) lines.push(`  - ${r.file}${r.superseded ? '（superseded——前轮评审结论，对比两轮可还原修复轨迹）' : ''}`)
++  if (warnings.length) {
++    lines.push(`- 降级注记：${warnings.join('；')}`)
++  }
++  lines.push('')
++  lines.push('## 分析维度（结构骨架——常见失事面，不是封闭清单：证据指向维度外时照报，报告允许增设章节）')
++  lines.push('')
++  lines.push('1. **时间线重建**：这个会话按时间实际做了什么（步骤推进/等待/回滚/中断点）。')
++  lines.push('2. **计划遵从**：做的是计划内的事吗？偏离处有没有留痕（决策/账本/提交消息）？')
++  lines.push('3. **重复工作**：有没有同一件事做两遍（重派/重审/重跑）？根因是什么？')
++  lines.push('4. **停等与重试**：哪里停等了用户/子代理？重试了几次？是否有可避免的空转？')
++  lines.push('5. **成本与轮次**：轮次/token 花在哪了（读文件长尾？全量重验？）？')
++  lines.push('6. **门禁摩擦**：gate 回滚/评审打回/实测失败的完整链条与最终清偿方式。')
++  lines.push('')
++  lines.push('## 取证纪律')
++  lines.push('')
++  lines.push('1. **每条 finding 必须带 `path:line` 锚，无锚不成立**——锚指向证据包列出的文件或其内容（行号取自你实际读到的文件）。')
++  lines.push('2. **唯一可写产物是 `diagnosis-report.md`**（写在变更目录）——禁止修改任何其他文件、禁止 git 操作。固定章节：`## 问题陈述` / `## 时间线` / `## Findings`（分维度）/ `## 无法证实面`（证据不足的疑点如实列，不脑补）。')
++  lines.push('3. **先读证据包列出的文件本体再下结论，禁止全量扫读仓**——矛盾经常藏在交叉处，定向读那一处。')
++  lines.push('4. **时间盒收敛**：结论存疑时定向补证；连续扩面仍零结论 = 基于已读材料收敛，把疑点写进「无法证实面」。')
++  lines.push('')
++  lines.push('【无子代理通道时】主会话按本任务书自行分析即可，如实标注执行方式；有子代理通道时按维度分派并行分析、汇总时逐条核对锚点。')
++  lines.push('')
++  return lines.join('\n')
++}
++
++/**
++ * 命令入口：sillyspec diagnose --change <名> [--detect] [--json]
++ * 只读零写入；--detect 先透传 agent-session-log 现场探测（不落盘语义随既有 cmdAgentLog）。
++ * @param {string[]} args - filteredArgs.slice(1)（'diagnose' 之后）
++ * @param {{ json?: boolean, cwd?: string, specDir?: string|null }} opts
++ */
++export async function cmdForensics(args, { json = false, cwd = process.cwd(), specDir = null } = {}) {
++  const changeIdx = args.indexOf('--change')
++  const changeName = changeIdx >= 0 && args[changeIdx + 1] && !String(args[changeIdx + 1]).startsWith('--') ? args[changeIdx + 1] : null
++  if (!changeName) {
++    console.error('用法: sillyspec diagnose --change <名> [--detect] [--json] [--spec-dir <路径>]')
++    console.error('  只读装配会话取证证据包 + 取证任务书（path:line 铁律；唯一可写产物是变更目录的 diagnosis-report.md，由执行任务书的 agent 产出）')
++    process.exit(2)
++  }
++  const specBase = specDir || join(cwd, '.sillyspec')
++  const runtimeRoot = join(specBase, '.runtime')
++
++  if (args.includes('--detect')) {
++    const { cmdAgentLog } = await import('./agent-session-log.js')
++    await cmdAgentLog(['--detect'], { json: false, cwd, specDir })
++  }
++
++  const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName })
++  const taskbook = renderForensicsTaskbook(pack)
++
++  if (json || args.includes('--json')) {
++    console.log(JSON.stringify({ ...pack, taskbook }))
++    return
++  }
++  console.log(taskbook.trimEnd())
++}
+diff --git a/src/index.js b/src/index.js
+index 59a145c3..9a30572d 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -100,6 +100,8 @@ SillySpec CLI — 规范驱动开发工具包
+                                       变更合成时间线（事件流 × tasks.md × git 提交锚三源真实留痕渲染；活跃/归档变更均可）
+   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
+   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
++  sillyspec diagnose --change <名> [--detect] [--json]
++                                      会话取证：只读装配证据包（flow 态/会话日志/摩擦账本/verify-runs/评审轮次）+ 取证任务书（path:line 铁律；报告由执行任务书的 agent 产出）
+ 
+   sillyspec workflow check <name> [--project <p>] [--change <c>] [--json] [--save]
+                                       全局 workflow 校验（--save 归档到 .sillyspec/.runtime/workflow-runs/）
+@@ -4130,6 +4132,14 @@ SillySpec worktree — git worktree 隔离管理
+       await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
+       break;
+     }
++    case 'diagnose': {
++      // 会话取证（2026-10-15-session-forensics）：只读装配证据包六面（flow 态/会话日志/摩擦账本/
++      // verify-runs/评审轮次/任务书）+ 取证任务书（path:line 铁律，唯一可写产物 diagnosis-report.md
++      // 由执行任务书的 agent 产出）。零状态写入，不进 run 状态机——诊断是随时可调用的查询动作。
++      const { cmdForensics } = await import('./forensics.js');
++      await cmdForensics(filteredArgs.slice(1), { json, cwd: dir, specDir });
++      break;
++    }
+     case 'patch-reanchor': {
+       // 收口留痕锚点回写（2026-10-12-close-trace-freeze-integrity FR-03）：worktree 内收口的
+       // change-patch.json 记 worktree 本地 SHA，apply 重放回主仓后悬空——按提交主题归属推导
+diff --git a/test/forensics.test.mjs b/test/forensics.test.mjs
+new file mode 100644
+index 00000000..60168696
+--- /dev/null
++++ b/test/forensics.test.mjs
+@@ -0,0 +1,199 @@
++/**
++ * forensics.test.mjs — 会话取证证据包装配（2026-10-15-session-forensics）
++ *
++ * 覆盖面：
++ *   FR-01 六面证据包（change_key 精确过滤 / verify-runs mtime 近序+截断+同 mtime 字典序破平 /
++ *         评审轮次 superseded 标注 / flow 态身份）+ 零写入 + 缺数据源降级 + 归档变更标注
++ *   FR-02 取证任务书（六维度骨架 + 四纪律关键短语 + 证据包路径回填）
++ *   FR-03 命令入口 --json 形态（runCapturing 捕 stdout，六面字段结构化在场）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { createHash } from 'node:crypto'
++import { assembleForensicsPack, renderForensicsTaskbook, cmdForensics } from '../src/forensics.js'
++import { runCapturing } from './_complete-step-harness.mjs'
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++function write(p, content) {
++  mkdirSync(join(p, '..'), { recursive: true })
++  writeFileSync(p, content)
++}
++
++/** 建 fixture：c1 活跃（flow 态+评审两轮）/ c2 归档 / 登记两变更 / 摩擦两变更 / verify-runs 两轮 */
++function makeFixture(prefix) {
++  const tmp = mkdtempSync(join(tmpdir(), prefix))
++  const specBase = join(tmp, '.sillyspec')
++  const runtimeRoot = join(specBase, '.runtime')
++  write(join(specBase, 'changes', 'c1', 'flow-state.yaml'), 'tier: thin\nsubsteps:\n  patch: { status: done }\n')
++  write(join(specBase, 'changes', 'c1', 'review.json'), '{"verdict":"PASS"}')
++  write(join(specBase, 'changes', 'c1', 'review.json.superseded-20261015T000000'), '{"verdict":"FAIL"}')
++  mkdirSync(join(specBase, 'changes', 'archive', 'c2'), { recursive: true })
++  write(join(runtimeRoot, 'agent-session-log.json'), JSON.stringify({
++    schema_version: 1,
++    entries: [
++      { change_key: 'c1', harness: 'zcode', log_path: '/logs/c1.jsonl', format: 'zcode-model-io-jsonl', session_id: 's1', exists: true },
++      { change_key: 'c9', harness: 'zcode', log_path: '/logs/c9.jsonl', format: 'zcode-model-io-jsonl', session_id: 's9', exists: true },
++    ],
++  }))
++  write(join(runtimeRoot, 'friction-ledger.json'), JSON.stringify([
++    { change: 'c1', counts: { gate_rollback: 1 }, total: 1 },
++    { change: 'c9', counts: {}, total: 0 },
++  ]))
++  const r1 = join(runtimeRoot, 'verify-runs', '20260101T0001')
++  const r2 = join(runtimeRoot, 'verify-runs', '20260101T0002')
++  write(join(r1, 'test-result.json'), '{"ok":true}')
++  write(join(r2, 'test-result.json'), '{"ok":false}')
++  // r2 更新（近序第一）；r1 更旧
++  utimesSync(r1, new Date(1000000), new Date(1000000))
++  utimesSync(r2, new Date(2000000), new Date(2000000))
++  return { tmp, specBase, runtimeRoot }
++}
++
++/** 目录树指纹（相对路径 + 内容 sha）——零写入断言用。 */
++function treeFingerprint(root) {
++  const h = createHash('sha256')
++  const walk = (dir, rel) => {
++    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
++      const r = rel ? `${rel}/${e.name}` : e.name
++      if (e.isDirectory()) walk(join(dir, e.name), r)
++      else h.update(r + '\0' + createHash('sha256').update(readFileSync(join(dir, e.name))).digest('hex') + '\0')
++    }
++  }
++  walk(root, '')
++  return h.digest('hex')
++}
++
++test('FR-01 六面证据包：change_key 精确过滤 / friction 过滤 / verify-runs 近序+截断 / 评审轮次 superseded 标注 / flow 态身份', () => {
++  const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx-')
++  try {
++    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1' })
++    assert.equal(pack.identity.status, 'active')
++    assert.equal(pack.identity.tier, 'thin')
++    assert.ok(pack.identity.substeps && pack.identity.substeps.patch, 'flow-state substeps 透传')
++    assert.equal(pack.agentLogs.length, 1, 'change_key=c9 被精确过滤剔除')
++    assert.equal(pack.agentLogs[0].session_id, 's1')
++    assert.equal(pack.friction.length, 1)
++    assert.equal(pack.friction[0].counts.gate_rollback, 1)
++    assert.equal(pack.verifyRuns.length, 2)
++    assert.ok(pack.verifyRuns[0].dir.endsWith('20260101T0002'), 'mtime 近序：新者在前')
++    assert.ok(pack.verifyRuns[0].resultPath && existsSync(pack.verifyRuns[0].resultPath))
++    const one = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1', verifyRunsLimit: 1 })
++    assert.equal(one.verifyRuns.length, 1, 'verifyRunsLimit 截断')
++    assert.equal(pack.reviews.length, 2)
++    const sup = pack.reviews.find((r) => r.superseded)
++    assert.ok(sup && /superseded/.test(sup.file), 'superseded 轮标注在场')
++    assert.ok(!pack.warnings.some((w) => w.includes('归档')), '活跃变更无归档注记')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-01 verify-runs 同 mtime 按路径字典序破平（排序确定性）', () => {
++  const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx2-')
++  try {
++    const r1 = join(runtimeRoot, 'verify-runs', '20260101T0001')
++    const r2 = join(runtimeRoot, 'verify-runs', '20260101T0002')
++    utimesSync(r1, new Date(5000000), new Date(5000000))
++    utimesSync(r2, new Date(5000000), new Date(5000000))
++    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1' })
++    assert.ok(pack.verifyRuns[0].dir < pack.verifyRuns[1].dir, '同 mtime → 字典序')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-01 零写入：装配前后目录树指纹逐字节一致', () => {
++  const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx3-')
++  try {
++    const before = treeFingerprint(tmp)
++    assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1' })
++    assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1' })
++    assert.equal(treeFingerprint(tmp), before, '只读命令不得留下任何文件痕迹')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-01 缺数据源降级：空 spec/runtime 六面为空清单+注记，不抛错', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'ss-fx4-'))
++  try {
++    const specBase = join(tmp, '.sillyspec')
++    const pack = assembleForensicsPack({ specBase, runtimeRoot: join(specBase, '.runtime'), changeName: 'nope' })
++    assert.equal(pack.identity.status, 'missing')
++    assert.deepEqual(pack.agentLogs, [])
++    assert.deepEqual(pack.friction, [])
++    assert.deepEqual(pack.verifyRuns, [])
++    assert.deepEqual(pack.reviews, [])
++    assert.ok(pack.warnings.length > 0, '降级注记在场')
++    const tb = renderForensicsTaskbook(pack)
++    assert.match(tb, /会话取证任务书 — nope/, '降级面任务书仍可渲染')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-01 归档变更：status=archived + 归档注记', () => {
++  const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx5-')
++  try {
++    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c2' })
++    assert.equal(pack.identity.status, 'archived')
++    assert.ok(pack.warnings.some((w) => w.includes('归档')), '归档注记在场')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-01 损坏形态降级：verify-runs/变更目录被文件占位时不抛错、空清单+注记（评审 P1 回归锚）', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'ss-fx9-'))
++  try {
++    const specBase = join(tmp, '.sillyspec')
++    const runtimeRoot = join(specBase, '.runtime')
++    write(join(runtimeRoot, 'verify-runs'), '不是目录，是文件')       // ENOTDIR 形态
++    write(join(specBase, 'changes', 'c3'), '变更目录被文件占位')      // 同类形态
++    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c3' })
++    assert.deepEqual(pack.verifyRuns, [], '损坏 verify-runs 降级为空')
++    assert.deepEqual(pack.reviews, [], '损坏变更目录评审轮次降级为空')
++    assert.ok(pack.warnings.some((w) => w.includes('verify-runs 不可读')), 'ENOTDIR 注记在场')
++    assert.ok(pack.warnings.some((w) => w.includes('变更目录不可读')), '变更目录注记在场')
++    assert.doesNotThrow(() => renderForensicsTaskbook(pack))
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-02 任务书：六维度骨架 + 四纪律关键短语 + 证据包路径回填', () => {
++  const { tmp, specBase, runtimeRoot } = makeFixture('ss-fx6-')
++  try {
++    const pack = assembleForensicsPack({ specBase, runtimeRoot, changeName: 'c1' })
++    const tb = renderForensicsTaskbook(pack)
++    for (const dim of ['时间线重建', '计划遵从', '重复工作', '停等与重试', '成本与轮次', '门禁摩擦']) {
++      assert.ok(tb.includes(dim), `六维度之一在场：${dim}`)
++    }
++    assert.match(tb, /path:line/, '锚点铁律字面在场')
++    assert.match(tb, /diagnosis-report\.md/, '唯一可写产物在场')
++    assert.match(tb, /无法证实面/, '报告固定章节（不脑补出口）在场')
++    assert.match(tb, /禁止全量扫读仓|先读证据包/, '先读本体纪律在场')
++    assert.match(tb, /时间盒/, '时间盒收敛纪律在场')
++    assert.match(tb, /不是封闭清单/, '维度开放性声明在场（零内容枚举红线）')
++    assert.match(tb, /\/logs\/c1\.jsonl/, '证据包路径回填（会话日志）')
++    assert.match(tb, /review\.json\.superseded/, '评审轮次路径回填')
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-03 cmdForensics --json：stdout 结构化六面字段 + taskbook 随附', async () => {
++  const { tmp, specBase } = makeFixture('ss-fx7-')
++  try {
++    const { stdout, error } = await runCapturing(() => cmdForensics(['--change', 'c1', '--json'], { cwd: tmp, specDir: specBase }))
++    assert.ok(!error, `命令不应抛错: ${error && error.message}`)
++    const out = JSON.parse(stdout.trim())
++    assert.equal(out.identity.changeName, 'c1')
++    assert.equal(out.agentLogs.length, 1)
++    assert.equal(out.friction.length, 1)
++    assert.equal(out.verifyRuns.length, 2)
++    assert.equal(out.reviews.length, 2)
++    assert.match(out.taskbook, /会话取证任务书 — c1/)
++  } finally { rmQuiet(tmp) }
++})
++
++test('FR-03 cmdForensics 缺 --change：exit 2 + 用法文案', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'ss-fx8-'))
++  try {
++    const { exitCode, stdout } = await runCapturing(() => cmdForensics([], { cwd: tmp }))
++    assert.equal(exitCode, 2)
++    assert.match(stdout, /用法: sillyspec diagnose --change/, '用法文案一次给全（cli-copy-selfsufficient）')
++  } finally { rmQuiet(tmp) }
++})

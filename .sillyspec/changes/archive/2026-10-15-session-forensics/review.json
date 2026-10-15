@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-session-forensics",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8862c672f137a6875d1d62af263a65ba8ededbb6",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "第二轮复核通过：verify-runs mtime 近序+同 mtime 字典序破平（src/forensics.js:108-118）与 change_key 精确相等过滤（src/forensics.js:86）维持原判；首轮 P1 已清偿——runsRoot 为普通文件时 readdirSync 抛 ENOTDIR 已被 try/catch 捕获降级为空清单+注记（src/forensics.js:99-104），变更目录同类形态同样护住（src/forensics.js:133-138），回归测试「FR-01 损坏形态降级」以 verify-runs 与 changes/c3 双文件占位形态钉死不抛错+空清单+双注记+任务书仍渲染（test/forensics.test.mjs:142-156，实测 9/9 绿）。边界已裁决：可接受（六维度是结构骨架非封闭清单——src/forensics.js:173「不是封闭清单……允许增设章节」，测试钉死 /不是封闭清单/，零内容枚举红线未破）。",
+    "并发": "零写入面维持原判：装配函数仅 existsSync/readdirSync/readFileSync/statSync，目录树 sha256 指纹零写入测试通过（test:107-115）；读中损坏面六处数据源现已全部容错——agent-session-log.json（readJsonSafe→null→注记 forensics.js:88）、flow-state.yaml（readYamlSafe→注记 :75）、friction（readFrictionLedger 内部 try/catch→[]）、verify-runs 目录损坏（:99-104 注记）、verify-runs 内 statSync（:110-113）、变更目录损坏（:133-138 注记）。边界已裁决：可接受（--detect 透传 cmdAgentLog 现场探测不落盘——forensics.js:211-214，签名与 agent-session-log.js:1314 契约匹配）。",
+    "切换": "identity 三态 active/archived/missing 如实标注（归档注记 forensics.js:62-67，归档测试 test:133-140 通过）；缺数据源与损坏形态双降级面下任务书照常渲染（test:117-131、142-156 通过）。边界已裁决：可接受（只读命令不进 run 状态机——零写零门禁已实证，与 runtime list/agent-log 查询类同款）。",
+    "作用域": "--spec-dir 全局解析（index.js:260,282）经 case 'diagnose'（index.js:4140）传入并被 cmdForensics 消费（forensics.js:208）；帮助行与 case 'agent-log' 同款形态；runtimeRoot=join(specBase,'.runtime') 与 resolveRuntimeRoot 默认分支（run/shared.js:480-484）功能等价。边界已裁决：可接受（①CLI 不解析 transcript 解读归 agent——D-unmapped-153 死路+path:line 铁律；⑤报告落变更目录随归档冻结——diagnose 自身零写，diagnosis-report.md 由执行 agent 产出）。防护声明复核：commit 8862c672 仅触 design.md/src/forensics.js/test/forensics.test.mjs 三文件（git show --stat 零夹带），protected 三模块两轮提交均未触及；P3 清偿核过——design.md:22 契约签名已改为 { ..., reviews, warnings } 并注明「taskbook 不入 pack 返回值，由 cmdForensics 输出层合并」+「损坏形态（含目录被文件占位）」入 fail-soft 承诺，与实现一致。探针补录：cli-copy-selfsufficient（帮助行/--detect/--json/--spec-dir 消费、缺 --change exit 2 用法）两轮均 pass；config-absent-zero-regression 如实作答——零新增 local.yaml 消费键；crossrepo-path-compat 如实作答——未触及 worktree/跨仓路径逻辑。",
+    "清偿核验": "P1：src/forensics.js:99-104（verify-runs）与 :133-138（变更目录）两处 readdirSync 均 try/catch→空清单+注记，机制与 design 承诺一致，回归测试在场且 9/9 绿、npm run lint 绿（check-syntax 1003 文件+module-map 覆盖全）。P3：design.md:22 签名行已对齐实现（warnings 面+taskbook 输出层合并口径）。commit 8862c672 stat 确认 3 文件 47+/5-，零夹带、protected 模块零触碰。"
+  },
+  "reviewedAt": "2026-10-15T12:40:00Z"
+}
