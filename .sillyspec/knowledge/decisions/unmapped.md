@@ -3126,3 +3126,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a493aef1a10075cf8a5c882afca8ab84b5d464bd
 理由：最大风险：遥测双写膨胀——thin start 高频重入（每次 start/resume 都落一条）可能推高事件量。评估：单条 <2KB、既有 8698 行量级下不构成问题，且「注入发生了」本就是事实记录；若未来需要去重，消费端按 (change,query,at窗口) 聚合即可，不在本变更范围。放弃的方案：①在 knowledge-stats 读数时反推 thin 命中（无法还原、纯猜测）；②给 thin 面也注入正文再记 injectedFiles（改变注入形态，超出遥测导线范围——thin 面按需 Read 是 2026-09-28-knowledge-inject-ranking 定下的口径）；③同步写 hits 改异步队列（引入落盘时序复杂度，违背 R-04 简单 fail-soft 先例）。
+
+## D-unmapped-381@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-15-pseudo-domain-clearance
+原编号：D-001@v1
+锚点：未记录
+最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
+理由：最大风险：release 模块卡的 doc-debt 机器把任何 package.json 触达（含依赖升级）计为卡欠账 behind——接受：这正是发布面应有的可见性，欠账是 advisory 不阻断。次风险：docs-consistency 承接 10 条语义混杂（报告/收件箱/入库）——接受并留痕：一次性文档工作不值逐条建卡，未来同类工作若复发再立专域。放弃方案：①全部迁 unmapped（伪域计数归零但把 holding pen 灌爆，unmapped 基线消音机制会被打穿）；②为每个 auto-* 补卡转正（伪域即「无模块卡」的病本身，转正等于把噪音域固化进路由词典）；③按 suggestDomainFromFiles 机械迁移（实测对纯文档变更 5/8 组无法判定、2/8 组误建议——正是伪域成因机制本身，不可作为裁决依据）。

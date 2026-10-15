@@ -1,0 +1,59 @@
+{
+  "change": "2026-10-15-pseudo-domain-clearance",
+  "baseline": "bbbfa6da4bda546d9b58df2b9eca28e42a9ee58c",
+  "head": "5570285d46e6b499799c7a903903ea11bdd970e0",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/release.md"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 35,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-15T01:37:24.794Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "bbbfa6da4bda546d9b58df2b9eca28e42a9ee58c",
+    "totals": {
+      "files": 2,
+      "additions": 35,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 9,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/release.md",
+        "additions": 26,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "4c0a640bca5e25ca60d4c3a817a6ada3cc805f607b418e7f315a198815ea3b73",
+  "patchStatus": "ok"
+}

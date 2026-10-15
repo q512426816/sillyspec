@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-15-pseudo-domain-clearance",
+  "reviewer": "inline-self（环境无已注册子代理，主会话代行）",
+  "verdict": "PASS",
+  "reviewedAgainst": "5570285d46e6b499799c7a903903ea11bdd970e0",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a——一次性数据迁移，13 批 redomain 顺序执行无时序依赖",
+    "并发": "ok——redomain 单命令原子写单文件；提交面核对恰好 19 文件零夹带（git show --stat 实证）；design 已裁决迁移窗口并发写风险可接受",
+    "切换": "ok——redomain --write 幂等，中断重跑安全（已迁条目不在源域）",
+    "作用域": "ok——知识库随 spec-sync 上行，域词典 fr/*.md 文件名全局生效，无串台"
+  },
+  "notes": {
+    "承诺对照": "FR-01 digest 伪域 36→0 实测回执（✅ 三类信号全部在阈内）；FR-02 fr/ 无 auto-* 文件、INDEX 无 auto-* 路由行、release 路由行在场（grep 实证）；FR-03 modules/release.md + _module-map release 注册在场；FR-04 validate ok:true 且 flag_like advisory 前后 1=1 零新增",
+    "声明边界裁决": "①release 卡 doc-debt 把依赖升级计 behind=可接受（发布面应有可见性，advisory 不阻断）；②docs-consistency 承接 10 条语义混杂=可接受（一次性文档工作不值逐条建卡，复发再立专域）。无未裁决边界",
+    "防护声明核实": "迁域不换号由 redomain 既有实现保证（输出「ID 不变」13/13 批回执）；纯读校验 knowledge validate 回执留档",
+    "生成物同步": "无类型/契约文件——n/a",
+    "项目探针": {
+      "cli-copy-selfsufficient": "n/a——未触 CLI 输出文案",
+      "config-absent-zero-regression": "n/a——_module-map 增模块属注册数据非 local.yaml 消费键",
+      "crossrepo-path-compat": "n/a——未触跨仓面"
+    }
+  },
+  "reviewedAt": "2026-10-15T01:40:00.000Z"
+}

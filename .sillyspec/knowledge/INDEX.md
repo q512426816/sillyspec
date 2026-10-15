@@ -213,3 +213,4 @@
 - machine-interface|FR|需求|承接 → [fr/machine-interface.md](fr/machine-interface.md)
 - skills-docs|FR|需求|承接 → [fr/skills-docs.md](fr/skills-docs.md)
 - release|FR|需求|承接 → [fr/release.md](fr/release.md)
+- auto-sillyspec|sillyspec|FR|需求|承接 → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)
