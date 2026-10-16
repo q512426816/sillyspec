@@ -1,6 +1,7 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -32,6 +33,11 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: 8f1528e5ea6a2a5bf40adbf23bdc84a5b6bcb4e2
-updatedAt: '2026-10-16T08:28:38.165Z'
+updatedAt: '2026-10-16T09:23:50.193Z'
 baseline_sha256: 009ece00e44b4345fd841e3fda60d8dd3e4caf31ec9932d0ccf8a4cdcbc1773d
+spec_approved: true
+spec_approved_at: '2026-10-16T09:23:39.537Z'
+spec_approved_by: zcode@ci-linux-residual-fix-20261016
+spec_approved_channel: agent-self
+spec_attested_by: zcode@ci-linux-residual-fix-20261016
 

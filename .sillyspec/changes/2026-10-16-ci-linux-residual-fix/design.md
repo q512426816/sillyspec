@@ -6,6 +6,8 @@ created_at: 2026-10-16T08:28:38.146Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 三处改动，全部落在「测试/源码卫生」面，产品逻辑零改：
 
 1. **`test/backlog-batch-a.test.mjs`③b**：`fsExports` 建好后追加 `delete fsExports.constants`。
@@ -46,6 +48,8 @@ created_at: 2026-10-16T08:28:38.146Z
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - 产品侧接口零变化：无 CLI 命令/配置/文件格式/导出签名改动。
 - `src/quicklog.js`：零改动（其 fs 使用面 openSync/closeSync/unlinkSync/statSync/mkdirSync/
   existsSync/readFileSync/writeFileSync/writeSync/readdirSync/renameSync/appendFileSync/rmSync
@@ -63,7 +67,12 @@ created_at: 2026-10-16T08:28:38.146Z
   口径相同），仅在 git ≤2.43 环境把「静默全列」修回「正确过滤」；失败路径仍 fail-open
   （safeGit 错误 → null → 不过滤，与改前一致）。
 
-## 边界与并发（盲维四问——每问必答）
+## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
 
 1. **乱序/迟到到达**：不涉及时序——三处均为确定性静态判定（mock 键集合、平台常量、字节形态）。
    CI 与容器的 node 小版本差（24.21/24.22）不影响：`constants` 描述符形态由平台分支决定
@@ -79,6 +88,8 @@ created_at: 2026-10-16T08:28:38.146Z
    无跨机串台面。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 - **最大风险：删 `constants` 键后 quicklog 图内若有代码读 `fs.constants`** → 运行期取到
   `undefined` 而静默错行为。核验：`grep -n constants src/quicklog.js src/git-helper.js` 零命中，
