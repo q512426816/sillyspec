@@ -13,10 +13,11 @@
  *      （集成断言：第 4 轮 mock 改 200，该 label 从计数文件消失）；label 间互不干扰。
  */
 import http from 'node:http'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { syncSpecTree, describeErrorBody, readFailStreak } from '../src/spec-sync.js'
+import { syncSpecTree, describeErrorBody, readFailStreak, bumpFailStreak, clearFailStreak } from '../src/spec-sync.js'
 
 let failures = 0
 const assert = (cond, msg) => {
@@ -56,10 +57,11 @@ const FAIL_BODY = JSON.stringify({
   details: { path: 'changes/x/change.patch' },
 })
 let postStatus = 422
+let manifestBody = '{}' // 空 manifest → 本地 x.md 恒为 add op；B4 改为含同内容文件触发无差异早退
 const server = http.createServer((req, res) => {
   if (req.url.includes('/api/changes/-/spec-manifest')) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end('{}') // 空 manifest → 本地 x.md 恒为 add op
+    res.end(manifestBody)
     return
   }
   if (req.url.includes('/api/changes/-/spec-sync')) {
@@ -108,6 +110,20 @@ console.log('--- B3. label 隔离（不同变更互不干扰）---')
   await syncSpecTree(specRoot, { url: mockUrl, token: 'tok' }, 'other-chg')
   const all = readFailStreak(specRoot)
   assert(all['other-chg'] && all['other-chg'].count === 1, 'other-chg 独立计 1')
+}
+
+console.log('--- B4. 无差异早退同样清零（覆盖 bump/clear 直接引用 + 无差异路径）---')
+{
+  const fileHash = createHash('sha256').update(Buffer.from('# x\n', 'utf8')).digest('hex')
+  manifestBody = JSON.stringify({ files: { 'knowledge/x.md': { hash: fileHash, version: 3, exists: true } } })
+  bumpFailStreak(specRoot, 'nodiff-chg', '预置失败一')
+  bumpFailStreak(specRoot, 'nodiff-chg', '预置失败二')
+  assert(readFailStreak(specRoot)['nodiff-chg']?.count === 2, 'bump 直接引用生效（预置计数=2）')
+  const r = await syncSpecTree(specRoot, { url: mockUrl, token: 'tok' }, 'nodiff-chg')
+  assert(r.synced === 0 && !r.conflict, '无差异早退（synced=0）')
+  assert(!readFailStreak(specRoot)['nodiff-chg'], '无差异早退清零该 label')
+  clearFailStreak(specRoot, 'nodiff-chg') // 幂等：再清一次不抛
+  assert(!readFailStreak(specRoot)['nodiff-chg'], 'clear 对已清 label 幂等')
 }
 
 console.warn = realWarn

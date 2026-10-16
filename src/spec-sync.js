@@ -19,6 +19,7 @@ import { createHash } from 'crypto';
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, relative, sep } from 'path';
 import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
+import { writeAtomicSync } from './fs-atomic.js';
 
 // 与 sillyhub-daemon/src/spec-sync.ts 共用排除口径（task-07 / FR-06 / D-008@v2）：
 // .runtime（有点）/ runtime（无点）/ projects（本地环境文件）在顶层排除；
@@ -100,7 +101,7 @@ export function bumpFailStreak(specRoot, label, detail) {
   all[label] = cur;
   try {
     mkdirSync(join(specRoot, '.runtime'), { recursive: true });
-    writeFileSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n', 'utf8');
+    writeAtomicSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n');
   } catch {
     // fail-soft：计数落盘失败只影响告警升级，不阻断同步主流程
   }
@@ -112,7 +113,7 @@ export function clearFailStreak(specRoot, label) {
   if (!all[label]) return;
   delete all[label];
   try {
-    writeFileSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n', 'utf8');
+    writeAtomicSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n');
   } catch {
     // fail-soft：残留计数只是少清一次，下次成功再清
   }
@@ -709,8 +710,12 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
   } catch (err) {
+    const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
     const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
+    if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+      console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+    }
     return { synced: 0 };
   }
 
