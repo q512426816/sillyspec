@@ -3374,3 +3374,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：5848cf3c432ff63fb38da7cd21d5881c654da14d
 理由：最大风险：registry 通道不稳定（历史 DNS 劫持，3.32.4~3.32.9 走钉扎、3.32.10 直连恢复）导致预核验假败或 publish 失败——缓解为发布前 npm view 预核验，失败即降级钉扎通道（腾讯 DoH 重解析刷新 PIN），预核验失败不发布。次风险：CI Linux test job 修复 install 后首跑真实暴露 ~16 例存量平台债（resolvePlacementRoot 的 `D:/quoted` Windows 盘符 fixture、stderr 字节一致内嵌非确定时长等，跨 ~10 套件，本地 Windows 全绿）——定性为 121a33ee CI 引入首次揭示的存量测试面平台债，非本版回归（本版触碰面仅测试断言锚/版本面/CI install，零产品代码），另案清偿不阻断本版，publish 全量口径与既往十版同（本地 Windows 全量绿）。死路：系统级改 hosts 绕劫持——零系统改动纪律排除；npm mirror 镜像发布——非官方源不作发布通道；跳过漂移修复直接推——HEAD 全量红欠账带病上线，bisect 与后续全量门全被污染，排除；把 16 例 Linux 平台债塞进本版清偿——范围失控（平台移植非发布），排除。
+
+## D-unmapped-412@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-16-probe7-prefill-noise-fix
+原编号：D-001@v1
+锚点：未记录
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+理由：- **最大风险：提升信号（第⑥级）方向从「宁 partial」翻向「宁 covered」**——若 review changedFiles 噪声大（如 rebase/工具重写导致无关测试入 changedFiles），会出现新的假 covered。缓解：lift 仅覆盖「零字面命中」格（有正文命中仍封顶 partial）；≥5 候选不触发 lift（第④级在前）；证据显式带「待人工复核」注记供复核者降级；review.json 缺失时不升格。若实测仍噪，回退开关即删除第⑥级（单点）。 - 试过但放弃：a) 只做「正文命中→partial」不引入测试名判定——不能解决锚点空心，covered 仍来自 docstring 行号；b) 用「测试文件被 diff 触碰」全量提升——会连未归属的改动测试一起升格，过宽；c) FR 池按 acceptance 词过滤收窄——池本身与卡粒度错配（130 文件来自整变更面），过滤后仍可能残留无关文件，不如「代码任务 + >5 交人工」两刀干净；d) 保留 anchors 仅改证据文案——词法层未变，hints.files 仍会把 docstring 命中当承接提示，治标不治本。 - 兼容风险：acceptance-matrix-probe / testpath-anchor 既有断言按旧契约（注释级命中→covered）钉死——属本记录显式判定的缺陷面，测试按新契约改写（非「改测试绕逻辑」，是契约修订）。

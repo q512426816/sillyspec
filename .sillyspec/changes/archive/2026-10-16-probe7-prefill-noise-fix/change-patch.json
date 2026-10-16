@@ -1,0 +1,135 @@
+{
+  "change": "2026-10-16-probe7-prefill-noise-fix",
+  "baseline": "7f4892ce1d41c5fc03e0f8f590455506584e8fc9",
+  "head": "32955910e7d5396cc6b9dd5252dbe85adbf5ba60",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    "src/verify-probes.js",
+    "test/acceptance-matrix-probe.test.mjs",
+    "test/pitfall-probe7-noise.test.mjs",
+    "test/probe7-anchor-testfile.test.mjs",
+    "test/probe7-fr-prefill.test.mjs",
+    "test/probe7-prefill-noise.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 381,
+    "deletions": 65
+  },
+  "savedAt": "2026-10-16T08:30:59.892Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 6,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": true,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7f4892ce1d41c5fc03e0f8f590455506584e8fc9",
+    "totals": {
+      "files": 9,
+      "additions": 381,
+      "deletions": 65
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 5,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 131,
+        "deletions": 42,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/acceptance-matrix-probe.test.mjs",
+        "additions": 29,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pitfall-probe7-noise.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe7-anchor-testfile.test.mjs",
+        "additions": 11,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe7-fr-prefill.test.mjs",
+        "additions": 17,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe7-prefill-noise.test.mjs",
+        "additions": 182,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "f99e626932b2848649d3406729e41b7fc8d2b99b05ccbf2357f25d6797e56d50",
+  "patchStatus": "ok"
+}

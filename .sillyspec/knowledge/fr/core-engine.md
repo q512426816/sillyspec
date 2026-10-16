@@ -4050,3 +4050,117 @@
   confirmed_at: null
   source_change: 2026-10-15-jsx-batch-cmd-chunk
   status: active
+
+## FR-core-engine-240 部署/文档类条目直接 non-testable，FR 候选池不再灌水
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：compose 配额验收卡（backend-mem-polling task-09 复现形态）
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-01
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-01
+  tests: test/probe7-fr-prefill.test.mjs「P4 全部署类条目卡不注入 FR 候选池」 | test/probe7-prefill-noise.test.mjs「FR-01 部署类条目 non-testable 且全条目命中卡不注入 FR 池」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active
+
+## FR-core-engine-241 covered 仅测试函数名/用例名级命中，正文命中封顶 partial
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：docstring 里的 config 字样（假 covered 复现形态）；测试名级命中
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-02
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-02
+  tests: test/probe7-prefill-noise.test.mjs「FR-02 正文命中封顶 partial 且锚点禁关键词行」 | test/probe7-prefill-noise.test.mjs「FR-02 测试名级命中 covered 且锚点指向测试函数行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active
+
+## FR-core-engine-242 同波次新增/修改测试文件零字面命中时 covered+待人工复核
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：真 covered 误标 partial 复现形态
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-03
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-03
+  tests: test/probe7-prefill-noise.test.mjs「FR-03 同波次新增测试零命中预填 covered+待人工复核」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active
+
+## FR-core-engine-243 候选 >5 交人工，单元格禁止长清单
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：宽目录候选
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-04
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-04
+  tests: test/pitfall-probe7-noise.test.mjs「FR-10：82 文件截断为 5 + 「共 82 个」 | test/probe7-prefill-noise.test.mjs「FR-04 候选>5 交人工且 hints 跳过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active
+
+## FR-core-engine-244 判定优先级链固定（新契约单一来源）
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：门禁 round-trip
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-05
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-05
+  tests: test/acceptance-matrix-probe.test.mjs「门禁 round-trip：预填渲染直过 extractAcceptanceMatrixSlots」 | test/probe7-prefill-noise.test.mjs「FR-05 优先级链固定（七级）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active
+
+## FR-core-engine-245 既有行为零回归
+变更：2026-10-16-probe7-prefill-noise-fix
+状态：active
+摘要：既有探针 7 测试面
+全文：.sillyspec/changes/archive/2026-10-16-probe7-prefill-noise-fix/requirements.md#FR-06
+最近确认：32955910e7d5396cc6b9dd5252dbe85adbf5ba60
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-06
+  tests: test/acceptance-matrix-probe.test.mjs | test/cross-repo-probe7-anchor.test.mjs | test/probe7-anchor-testfile.test.mjs | test/probe7-fr-prefill.test.mjs「P1/P2/P3」 | test/probe7-testpath-anchor.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-probe7-prefill-noise-fix
+  status: active

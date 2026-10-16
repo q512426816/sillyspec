@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-probe7-prefill-noise-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/probe7-fr-prefill.test.mjs「P4 全部署类条目卡不注入 FR 候选池」",
+        "test/probe7-prefill-noise.test.mjs「FR-01 部署类条目 non-testable 且全条目命中卡不注入 FR 池」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/probe7-prefill-noise.test.mjs「FR-02 正文命中封顶 partial 且锚点禁关键词行」",
+        "test/probe7-prefill-noise.test.mjs「FR-02 测试名级命中 covered 且锚点指向测试函数行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/probe7-prefill-noise.test.mjs「FR-03 同波次新增测试零命中预填 covered+待人工复核」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-04",
+      "tests": [
+        "test/pitfall-probe7-noise.test.mjs「FR-10：82 文件截断为 5 + 「共 82 个」",
+        "test/probe7-prefill-noise.test.mjs「FR-04 候选>5 交人工且 hints 跳过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-05",
+      "tests": [
+        "test/acceptance-matrix-probe.test.mjs「门禁 round-trip：预填渲染直过 extractAcceptanceMatrixSlots」",
+        "test/probe7-prefill-noise.test.mjs「FR-05 优先级链固定（七级）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-16-probe7-prefill-noise-fix:flow:测试绑定FR-06",
+      "tests": [
+        "test/acceptance-matrix-probe.test.mjs",
+        "test/cross-repo-probe7-anchor.test.mjs",
+        "test/probe7-anchor-testfile.test.mjs",
+        "test/probe7-fr-prefill.test.mjs「P1/P2/P3」",
+        "test/probe7-testpath-anchor.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-probe7-prefill-noise-fix"
+    }
+  ]
+}

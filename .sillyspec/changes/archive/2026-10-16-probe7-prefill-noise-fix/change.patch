@@ -1,0 +1,719 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 9be93c29..755faf15 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -107,6 +107,11 @@ modules:
+       - src/endpoint-extractor.js
+       - src/verify-probes.js
+       - src/test-bindings.js
++      - test/probe7-prefill-noise.test.mjs
++      - test/probe7-fr-prefill.test.mjs
++      - test/probe7-anchor-testfile.test.mjs
++      - test/pitfall-probe7-noise.test.mjs
++      - test/acceptance-matrix-probe.test.mjs
+       - src/verify-facts-schema.js
+       - src/foreign-declared.js
+       - src/cross-repo-reconcile.js
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 897169be..1ca60fbb 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -74,3 +74,4 @@
+ | 2026-10-15 | 2026-10-15-jsx-batch-cmd-chunk | verify 动态子集 js/jsx 批按命令长度分块——修 Windows「命令行太长」恒败死锁（… |
+ | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+ | 2026-10-15 | 2026-10-16-step-guide-dyn-completeness | 复入附录漏收面根治——凡裸 split/join 注入点收编进 dynSegments，评审六值缺失… |
++| 2026-10-16 | 2026-10-16-probe7-prefill-noise-fix | 探针 7 矩阵预填四缺陷修复（消费仓 backend-mem-polling verify 收口实证转写）：①部署/文档类条目直判 non-testable + 全条目命中卡跳过 FR 候选池注入（单格 130+ 不相干文件灌水根除）；②covered 仅测试名级命中（def test_*/it(/test(/describe( 名行），正文关键词命中封顶 partial——docstring 里 config 字样冒充验收证据的空心锚点废除；③同波次新增/修改归属测试（review changedFiles wide 口径）零字面命中→covered+待人工复核（真 covered 误标 partial 修复）；④候选>5 交人工（uncovered），归属列/提示列 5 帽折叠禁长清单。新测试 test/probe7-prefill-noise.test.mjs 6 用例；acceptance-matrix-probe/testpath-anchor 断言按新契约改写 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index ff2dadb4..9bd25e04 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -6,7 +6,7 @@ created_at: 2026-06-01T09:05:00
+ 
+ # core-engine
+ > 最后更新：2026-09-220
+-> 最近变更：2026-09-20-scope-audit-cross-repo（scope-audit 跨仓分仓真实对账——cross-repo-reconcile 抽 collectRepoActual 共享采集内核[锚点四级：A reviews-range execute task 锡点区间并集∪status > B head~1-window > C head-uncommitted-window > degraded 未注册/不可达/git 双源失败；行数采集不进内核防循环 import]；reconcileCrossRepoDeclarations 消费内核[签名增量可选 {runtimeRoot,changeName}，verify-postcheck:2918 传参贯通，返回条目带 anchor{source,base,head,label}]；scope-audit 跨仓行真实三态+行数+crossRepo 字段不再恒 untouched；--json 契约 v2 信封 repos[]（main 首位+锚点+三态计数，仅多仓非预执行输出，单仓逐字节等价）；settled 快照 repos 透传+needsStats 补采跳 crossRepo 行；--file 跨仓仓路由[A 档 base..head 区间 diff 优先]；渲染 per-repo 汇总段；test/scope-audit-cross-repo.test.mjs）/ ql-20260920-010-7a19（verify-postcheck 两面——①伪影分诊 classifyTestFailureArtifact：失败结果四类已知沙箱伪影签名纯函数分类[env 缺件/条目H pytest-xdist 族、overlay 缺模块、CRLF 字节差、判账假阳性=全失败行实为通过/汇总形态]，消费侧 run/verify-quality-scan.js 编排主树对照复跑，本模块只出分类；②test_strategy 缺省收窄：modules: 已配未显式声明 → 缺省 module 子集[未配仓零打扰、显式 full 不受影响]，0 命中/全量兜底 reason 带缺省注记；test/verify-artifact-triage.test.mjs 13/13）/ 2026-09-19-span-risk-pattern-migration（span 轴路径模式迁项目声明——新 src/span-risk-surface.js 装载层四导出[compile/match/load×2，与 blast-surface.js 同构]；change-risk-profile 的 QUICK_RISK_PATH_PATTERNS 六域硬编码表硬退役删除不留 legacy；ceremony-tier spanRiskPatterns / quick-gate-profile riskTable 参数化接声明表[默认 []=维度关闭禁回退内置表]；接线五点 run/gates·review-tier·verify-postcheck·run/shared·scope-audit）/ ql-20260918-005-435a（knowledge-stats 接入 L1 仪表盘——buildFrIndexStats：四类 fr-* 事件聚合[inject/supersede/duplicate/unreferenced 按域]+索引面扫描[条目/active/superseded/来源变更/域]+承接引用率[分子窗口内事件/分母索引全量，裁决用大窗口]；CLI --json 增 frIndex 键+人类模式「FR 索引实验」段；present 三态+未知 fr- 前缀前向兼容；test/knowledge-fr-stats.test.mjs 15 断言；L1 后续钩子 D-006 落地——观察期满直接出数裁决 L3）/ 2026-09-18-fr-index-l1（FR 稳定索引 L1——**L3 证据发生器**：src/fr-index.js 五导出[发号 FR-<域>-NNN 连字符域/幂等键=全局 id/承接翻链就地补丁保摘要/unreferenced 探针/digest active-only/bigram overlap]+decision-distill 四函数参数化复用（decisions 零回归钉死）+archive noAI 步挂载（fr-supersede/fr-unreferenced 遥测——后者显式标注「不算 L3 门禁」）+brainstorm step8 {FR_INDEX_DIGEST} 注入与软门（fr-inject/fr-duplicate-warning，advisory 永不阻断）+D14 第四检查（epoch=2026-09-18 分界：索引在场+取代完整）+verify-probes facts.handover 恒落盘死锁修复（verify 期 Reverse Sync：原「有行才写」使零移交+PASS 被 eligibility fail-closed 拦死）；知识面新增 knowledge/fr/<域>.md；**自举验证**：本变更归档即真实仓首批索引 FR-core-engine-001..004，D14 复扫绿；独立验收审查两轮[三阻断：连字符域字符集/跨域翻链不落盘/doc 锚点位移]；35+40+132 断言）/ ql-20260917-009-2ec3（D14 archive_integrity 收尾三件套——①豁免账本：.sillyspec/archive-integrity-exempt.yaml 逐份记理由压红 16 份远古归档（早于 plan.md 流程，照 docs-check skip 先例不伪造历史），账本外继续亮红/stale 提示清理/解析失败 fail-safe 红灯保持，+4 测试组；②两份近期归档测试任务簿记补勾（ir-hardening task-09 / auto-driver task-06，对应测试文件俱在且直跑绿——D14 首扫发现的真实簿记漂移，补勾留 ql 审计痕；③pre-push 挂 advisory 零阻断露出（ratchet 门待欠账稳定后另裁）；④DB 漂移核实：listChanges 排除 archive，手工重激活归档行由 D4 ghostRows 覆盖，无缺口不加；真实仓维度转绿 93 完整+16 豁免）/ ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
++> 最近变更：2026-10-16-probe7-prefill-noise-fix（探针 7 预填四缺陷修复——七级判定链/测试名级 covered/正文命中封顶 partial/同波次提升/候选>5交人工/FR 候选池收窄；详见 verify-probes 条目）/ 2026-09-20-scope-audit-cross-repo（scope-audit 跨仓分仓真实对账——cross-repo-reconcile 抽 collectRepoActual 共享采集内核[锚点四级：A reviews-range execute task 锡点区间并集∪status > B head~1-window > C head-uncommitted-window > degraded 未注册/不可达/git 双源失败；行数采集不进内核防循环 import]；reconcileCrossRepoDeclarations 消费内核[签名增量可选 {runtimeRoot,changeName}，verify-postcheck:2918 传参贯通，返回条目带 anchor{source,base,head,label}]；scope-audit 跨仓行真实三态+行数+crossRepo 字段不再恒 untouched；--json 契约 v2 信封 repos[]（main 首位+锚点+三态计数，仅多仓非预执行输出，单仓逐字节等价）；settled 快照 repos 透传+needsStats 补采跳 crossRepo 行；--file 跨仓仓路由[A 档 base..head 区间 diff 优先]；渲染 per-repo 汇总段；test/scope-audit-cross-repo.test.mjs）/ ql-20260920-010-7a19（verify-postcheck 两面——①伪影分诊 classifyTestFailureArtifact：失败结果四类已知沙箱伪影签名纯函数分类[env 缺件/条目H pytest-xdist 族、overlay 缺模块、CRLF 字节差、判账假阳性=全失败行实为通过/汇总形态]，消费侧 run/verify-quality-scan.js 编排主树对照复跑，本模块只出分类；②test_strategy 缺省收窄：modules: 已配未显式声明 → 缺省 module 子集[未配仓零打扰、显式 full 不受影响]，0 命中/全量兜底 reason 带缺省注记；test/verify-artifact-triage.test.mjs 13/13）/ 2026-09-19-span-risk-pattern-migration（span 轴路径模式迁项目声明——新 src/span-risk-surface.js 装载层四导出[compile/match/load×2，与 blast-surface.js 同构]；change-risk-profile 的 QUICK_RISK_PATH_PATTERNS 六域硬编码表硬退役删除不留 legacy；ceremony-tier spanRiskPatterns / quick-gate-profile riskTable 参数化接声明表[默认 []=维度关闭禁回退内置表]；接线五点 run/gates·review-tier·verify-postcheck·run/shared·scope-audit）/ ql-20260918-005-435a（knowledge-stats 接入 L1 仪表盘——buildFrIndexStats：四类 fr-* 事件聚合[inject/supersede/duplicate/unreferenced 按域]+索引面扫描[条目/active/superseded/来源变更/域]+承接引用率[分子窗口内事件/分母索引全量，裁决用大窗口]；CLI --json 增 frIndex 键+人类模式「FR 索引实验」段；present 三态+未知 fr- 前缀前向兼容；test/knowledge-fr-stats.test.mjs 15 断言；L1 后续钩子 D-006 落地——观察期满直接出数裁决 L3）/ 2026-09-18-fr-index-l1（FR 稳定索引 L1——**L3 证据发生器**：src/fr-index.js 五导出[发号 FR-<域>-NNN 连字符域/幂等键=全局 id/承接翻链就地补丁保摘要/unreferenced 探针/digest active-only/bigram overlap]+decision-distill 四函数参数化复用（decisions 零回归钉死）+archive noAI 步挂载（fr-supersede/fr-unreferenced 遥测——后者显式标注「不算 L3 门禁」）+brainstorm step8 {FR_INDEX_DIGEST} 注入与软门（fr-inject/fr-duplicate-warning，advisory 永不阻断）+D14 第四检查（epoch=2026-09-18 分界：索引在场+取代完整）+verify-probes facts.handover 恒落盘死锁修复（verify 期 Reverse Sync：原「有行才写」使零移交+PASS 被 eligibility fail-closed 拦死）；知识面新增 knowledge/fr/<域>.md；**自举验证**：本变更归档即真实仓首批索引 FR-core-engine-001..004，D14 复扫绿；独立验收审查两轮[三阻断：连字符域字符集/跨域翻链不落盘/doc 锚点位移]；35+40+132 断言）/ ql-20260917-009-2ec3（D14 archive_integrity 收尾三件套——①豁免账本：.sillyspec/archive-integrity-exempt.yaml 逐份记理由压红 16 份远古归档（早于 plan.md 流程，照 docs-check skip 先例不伪造历史），账本外继续亮红/stale 提示清理/解析失败 fail-safe 红灯保持，+4 测试组；②两份近期归档测试任务簿记补勾（ir-hardening task-09 / auto-driver task-06，对应测试文件俱在且直跑绿——D14 首扫发现的真实簿记漂移，补勾留 ql 审计痕；③pre-push 挂 advisory 零阻断露出（ratchet 门待欠账稳定后另裁）；④DB 漂移核实：listChanges 排除 archive，手工重激活归档行由 D4 ghostRows 覆盖，无缺口不加；真实仓维度转绿 93 完整+16 豁免）/ ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+ > R7 注记：2026-09-22-r7-protocol-surgery（新增 src/machine-draft.js 三件套原语泛化——wrapSection/verifyMarkers/reanchorText，AMEND_CMD 参数化；verify-draft.js 消费方化六导出零回归）
+ > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+ 
+@@ -33,7 +33,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - `src/stage-review-checklist.js`——三 stage 审查清单单一来源 `REVIEW_CHECKLISTS`（2026-09-10-review-dispatch task-01/FR-05）：条目自 stages prompt 逐字迁移（下游可能字面引用），渲染前缀规则见模块 docblock；一致性由 test/stage-review-checklist.test.mjs 内嵌快照钉死；prompt 渲染与 review-dispatch worker_prompt 同源消费。stage-review.js 同批增：printStageReviewResult 平台在途区分（内联读 .runtime/review-dispatch-<change>.json 防静态环 fail-open）+ 契约 platform 描述改指 review-dispatch 命令。
+ - `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）；runId 并行碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：`claimExecuteRunId`（非递归 mkdir 排他认领 run 目录，EEXIST=同秒碰撞 → 随机短后缀重试；认领即含 tasks/，真实 fs 障碍原样上抛由写入点分层 fail 接管）接入四处 generate 写入点（run/stage.js 主点 + run/gates.js/run/prompt.js/本文件 drafts 与 writeTaskReview 补写点）；`isValidExecuteRunId` 双形态兼容（存量 `exec-YYYY-MM-DD-HHMMSS` + 碰撞后缀 `…-<a-z0-9≤8>`，注入/穿越仍拒）——并行会话同秒启动 execute 不再共享 run 目录互相覆盖 per-task review.json。串台残余收口（同日第二批②）：`resolveLatestExecuteRunId` / `resolveLatestExecuteRunIdWithTasks` 的 mtime fallback 排除「戳属他变更」的有主 run（戳存在且不等值 = 有主，与 resolveExecuteRunForChange 同语义；全部有主 → null 宁缺毋错）——writeTaskReview 在 marker 缺失场景经它们定位 run，不再把本变更 review.json 写进他变更 run 的 tasks/。runId 结构化隔离（同日第三批①，用户建议「run 目录取 change 名哈希隔离」）：generateExecuteRunId(changeName) 附 change 名 FNV-1a 6 位 hex 段（两变更同秒必不同 runId，run 目录天然分家；同变更 regenerate 幂等；无参调用裸秒级向后兼容），isValidExecuteRunId 放宽至 0-2 段后缀（哈希段 + claim 碰撞随机段），与 claimExecuteRunId 排他认领互补——认领治「同 ID 两主」、哈希治「不同变更天生同 ID」
+ - `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；reconcileTargetFiles 跨仓段自 2026-09-20-scope-audit-cross-repo 起经 reconcileCrossRepoDeclarations 消费 collectRepoActual 内核（runtimeRoot/changeName 传参贯通喂 A 档 reviews 锡点 + notes 锚点档按 anchor.label 动态文案）；
+-- `src/verify-probes.js` — verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）+ verify-result.md 骨架与 verify-facts.json 底稿（写入细节见下方 verify-facts v2 节）；探针 3 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②：模块目录主仓在而新测试 untracked 在 worktree 时旧「主仓缺失才回退」不触发 → 假阴「未找到测试文件」；改主仓 ∪ worktree 无条件并集，与探针 5 三根并集同族）。平台模式回显注记（2026-09-10 驾驭小结②）：`formatPlatformPathNote`（pointer 存在时产物回显行尾补「物理写盘在 hub 镜像根 / 主仓同步位置 .sillyspec/changes/<change>/<file>」，本地模式返回空串零变化）+ `writeVerifyFacts` 增 opts.platformNote（纯回显层不进落盘），消「回显镜像路径 / 核对主仓路径」的显示混乱。探针 7 坏 YAML 区分（2026-09-20-taskcard-yaml-hardgate）：parseTaskAcceptance 三态契约 {status: no-frontmatter | invalid-yaml | ok, acceptance, error}（解析归一 src/taskcard-frontmatter.js 单一源），坏卡条目挂 fmError、renderProbe7Lines 优先渲染「frontmatter 非法 YAML（file:行:列 message）」行与真无 acceptance 防御行区分——假防御文案缺陷收口
++- `src/verify-probes.js` — verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）+ verify-result.md 骨架与 verify-facts.json 底稿（写入细节见下方 verify-facts v2 节）；探针 3 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②：模块目录主仓在而新测试 untracked 在 worktree 时旧「主仓缺失才回退」不触发 → 假阴「未找到测试文件」；改主仓 ∪ worktree 无条件并集，与探针 5 三根并集同族）。平台模式回显注记（2026-09-10 驾驭小结②）：`formatPlatformPathNote`（pointer 存在时产物回显行尾补「物理写盘在 hub 镜像根 / 主仓同步位置 .sillyspec/changes/<change>/<file>」，本地模式返回空串零变化）+ `writeVerifyFacts` 增 opts.platformNote（纯回显层不进落盘），消「回显镜像路径 / 核对主仓路径」的显示混乱。探针 7 坏 YAML 区分（2026-09-20-taskcard-yaml-hardgate）：parseTaskAcceptance 三态契约 {status: no-frontmatter | invalid-yaml | ok, acceptance, error}（解析归一 src/taskcard-frontmatter.js 单一源），坏卡条目挂 fmError、renderProbe7Lines 优先渲染「frontmatter 非法 YAML（file:行:列 message）」行与真无 acceptance 防御行区分——假防御文案缺陷收口。探针 7 预填判定链重写（2026-10-16-probe7-prefill-noise-fix，消费仓 backend-mem-polling verify 收口四缺陷实证转写——工具缺陷记录见 multi-agent-platform docs/sillyspec/verify-probe7-matrix-prefill-four-defects.md）：七级优先链（①测试名级命中→covered，锚点=测试函数名行[def test_*/class Test*/it(/test(/describe( 行]并引用测试名；②部署/文档类词条目直判 non-testable[条目级，归属在场与否不影响]；③无归属→uncovered；④候选>PROBE7_CANDIDATE_CAP(5) 且无①收窄→uncovered 交人工；⑤正文级命中→partial 封顶[关键词首现行号锚点废除——docstring 里的 config 字样冒充 docker 配额验收证据的空心锚根除]；⑥同波次新增/修改归属测试[review changedFiles wide 口径，嵌套 tests/ 覆盖]零字面命中→covered+待人工复核[真 covered 误标 partial 修复]；⑦零命中→partial）；归属源收窄：全条目命中 NONTESTABLE 正则的卡跳过 FR 关联回归候选池注入（compose/Dockerfile 卡经回退池整池 join 单格 130+ 文件清单根除）；命中提示列 5 帽+归属列折叠文案改交人工；readReviewChangedTestFiles 增 wide 选项（缺省 test/ 前缀零变化）；新测试 test/probe7-prefill-noise.test.mjs（6 用例）
+ - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
+ - `src/cross-repo-reconcile.js` — 跨仓 per-repo 对账 + 共享采集内核（坑 cross-repo-reconcile-blindness 2026-09-15 分期兑现；2026-09-20-scope-audit-cross-repo 抽内核）：`collectRepoActual`（`src/cross-repo-reconcile.js:200`，D-001@v1）per-repo actual 采集单一真相源（scope-audit 与 verify 侧 reconcile 双侧消费防口径漂移）——仓注册解析（local.yaml repos 段）→仓根→**锚点四级**：A reviews-range（execute task review base..head 区间并集∪status 未提交尾巴；锚点=多区间最早 base/最晚 head，rev-list 判序+merge-base 兜底；diffPaths 有则收窄）> B head~1-window（HEAD~1..HEAD∪status，现行 reconcile 口径）> C head-uncommitted-window（仅 status）> degraded（未注册/路径不可达/git 双源失败合并判定——G4 不拆「非 git 仓」，diff/status 形态不可区分）；**行数采集不进内核**（评审 G3 防循环 import：内核绝不 import scope-audit），stats 由调用方对返回 files 跑 collectNumstatByPath；返回 `{repo, repoPath, anchor{source,base,head,label}, files, degradedReason}`——files 为原始集不做 filterDeliverableFiles 过滤（过滤归调用方），纯读 fail-soft 任何异常 → degraded 形态（`内核采集异常: <msg首行>`）绝不 throw。`reconcileCrossRepoDeclarations`（`src/cross-repo-reconcile.js:365`）消费内核出主仓同款三类差集（matched/missing/undeclared+脚手架软桶，声明差集逻辑不动）——签名增量可选 `{runtimeRoot, changeName}`（任一缺省跳 A 档走 B 档向后兼容；verify 侧 `src/verify-postcheck.js:4384` 调用点传参贯通，锚点升级为 A 档锡点区间收窄②类假信号面），返回条目增量带 `anchor{source,base,head,label}`（内核透传；verify notes 与 run/gates 渲染锚点档动态文案，旧形态无 anchor 防御性回退原文案）
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index e722af7e..6b008c6c 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1721,9 +1721,33 @@ const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0
+ // 关键词提取：≥3 字符标识符（[A-Za-z_][A-Za-z0-9_]{2,}）∪ ≥2 字连续 CJK 片段，按出现顺序交错
+ const PROBE7_TERM_RE = /[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g
+ const PROBE7_TERM_CAP = 5
++// 候选帽（2026-10-16-probe7-prefill-noise-fix FR-04 / 缺陷四）：归属候选 >5 且无测试名级
++// 收窄命中 → 判定交人工（uncovered），禁止目录级候选长清单进单元格
++const PROBE7_CANDIDATE_CAP = 5
+ // 坑 probe7-prefill-evidence（ql-20260915-004）：无归属时的 non-testable 判别词（机械保守：
+-// acceptance 文本命中即预填 non-testable，agent 复核可改写）
++// acceptance 文本命中即预填 non-testable，agent 复核可改写）。
++// 2026-10-16-probe7-prefill-noise-fix FR-01：升级为「条目级直判」——命中即 non-testable
++// （无论归属在场与否），且卡内全部 acceptance 命中时跳过 FR 关联回归候选池注入
++// （缺陷一实证：compose/Dockerfile 卡经 FR 池灌单格 130+ 不相干测试文件）。
+ const PROBE7_NONTESTABLE_RE = /文档|部署|doc|deploy|manual|config/i
++// 测试名行形态（FR-02 name 级命中判定）：Python def test_* / class Test*；JS 系 test|it|describe
++// （含 .each/.only/.skip 等链式变体）调用行。命中行含验收词 → 名级命中；证据锚点取该行行号。
++const PROBE7_PY_TESTNAME_RE = /^\s*(?:async\s+)?def\s+(test_\w+)|^\s*class\s+(Test\w+)/
++const PROBE7_JS_TESTNAME_RE = /^\s*(?:test|it|describe)(?:\.[A-Za-z]+)*\s*\(/
++
++/**
++ * 行级测试名判定：返回测试名（Python def/class 名；JS 系取首个引号串，取不到以空串标记
++ * 「名行但名不可提取」由调用方以 term 兜底）；非测试名行返回 null。
++ */
++function probe7TestNameOfLine(line) {
++  const m = String(line).match(PROBE7_PY_TESTNAME_RE)
++  if (m) return m[1] || m[2]
++  if (PROBE7_JS_TESTNAME_RE.test(line)) {
++    const q = String(line).match(/(['"`])([^'"`]{1,80})\1/)
++    return q ? q[2] : ''
++  }
++  return null
++}
+ 
+ /**
+  * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
+@@ -1810,17 +1834,22 @@ function resolveExecuteRunIdInline(runtimeRoot, changeName) {
+ }
+ 
+ /**
+- * 读当前 runId 下某 task 的 review.json changedFiles 中 test/ 前缀路径（归属第二源）。
++ * 读当前 runId 下某 task 的 review.json changedFiles 中测试文件路径（归属第二源）。
+  * review.json 读不到 / JSON 非法 / changedFiles 非数组 → 空集不报错（提示面，宁缺毋噪）。
++ * opts.wide（2026-10-16-probe7-prefill-noise-fix FR-03 / 同波次提升信号）：过滤口径从
++ * `test/` 前缀换为 isProbe7TestPath——覆盖嵌套 tests/ 目录形态（平台侧实证
++ * sillyhub-daemon/tests/、agent/tests/ 前缀不交，窄口径漏)。缺省窄口径不变（结构归属面
++ * 零行为变化；宽口径仅供 waveFiles 提升信号消费）。
+  */
+-function readReviewChangedTestFiles(runtimeRoot, runId, taskId) {
++function readReviewChangedTestFiles(runtimeRoot, runId, taskId, opts = {}) {
+   try {
+     const review = JSON.parse(readFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json'), 'utf8'))
+     if (!review || !Array.isArray(review.changedFiles)) return []
++    const wide = !!(opts && opts.wide)
+     return review.changedFiles
+       .filter(f => typeof f === 'string')
+       .map(f => f.split('\\').join('/'))
+-      .filter(f => f.startsWith('test/'))
++      .filter(f => wide ? isProbe7TestPath(f) : f.startsWith('test/'))
+   } catch {
+     return []
+   }
+@@ -1850,11 +1879,16 @@ function extractAcceptanceTerms(text) {
+  * 坑 probe7-prefill-evidence（ql-20260915-004）：anchors 逐词记录首命中 file:line（grep -n
+  * 语义——首个包含该词的测试文件内的首行号），供证据列机械预填；terms/files 键维持旧形态
+  * （既有消费方/测试零回归）。
++ * 2026-10-16-probe7-prefill-noise-fix FR-02（缺陷二/三，supersedes 上述 anchors 契约）：
++ * 关键词首现行号锚点废除（实证指向 docstring 里的 config 字样 = 空心证据）——改为
++ * nameAnchors：逐行判定测试名行（probe7TestNameOfLine），行含该词且为 def/it/test/describe
++ * 名行才记 {term, file, line, name}（name 不可提取时以 term 兜底）。covered 只认名级命中；
++ * terms/files 语义不变（正文级命中仍在场，判定侧封顶 partial）。
+  * @param {Array<string>} testFiles 归属测试文件（仓根相对路径）
+  * @param {string} cwd 主仓 cwd
+  * @param {string|null} wtRoot worktree 根
+  * @param {string[]} [crossRoots] 跨仓仓根（local.yaml repos 注册根，绝对路径）
+- * @returns {Record<number, {terms: string[], files: string[], anchors: Array<{term: string, file: string, line: number}>}>}
++ * @returns {Record<number, {terms: string[], files: string[], nameAnchors: Array<{term: string, file: string, line: number, name: string}>}>}
+  *   普通对象，可 JSON 序列化
+  */
+ function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot, crossRoots = []) {
+@@ -1871,27 +1905,32 @@ function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot, crossRoot
+     cache.set(rel, content)
+     return content
+   }
+-  // 首命中行号（1-based）：indexOf 前缀行计数，CRLF 不影响（按 \n 切）
+-  const firstHitLine = (content, term) => {
+-    const idx = content.indexOf(term)
+-    return idx === -1 ? null : content.slice(0, idx).split('\n').length
+-  }
+   acceptanceItems.forEach((item, idx) => {
+     const hitTerms = []
+     const hitFiles = new Set()
+-    const anchors = []
++    const nameAnchors = []
+     for (const term of extractAcceptanceTerms(item)) {
+-      const hits = testFiles.filter(f => { const c = readTest(f); return !!c && c.includes(term) })
+-      if (hits.length > 0) {
+-        hitTerms.push(term)
+-        for (const f of hits) hitFiles.add(f)
+-        // 首命中文件内的首命中行（单文件 grep -n 首命中即可，机械保守）
+-        const firstFile = hits[0]
+-        const line = firstHitLine(readTest(firstFile) || '', term)
+-        if (line !== null) anchors.push({ term, file: firstFile, line })
++      let hit = false
++      for (const f of testFiles) {
++        const content = readTest(f)
++        if (!content || !content.includes(term)) continue
++        hit = true
++        hitFiles.add(f)
++        if (nameAnchors.some(a => a.file === f && a.term === term)) continue
++        // 名级判定：首个「含该词且为测试名行」的行（行号 1 基；CRLF 不影响——按 \n 切）
++        const lines = content.split('\n')
++        for (let i = 0; i < lines.length; i++) {
++          if (!lines[i].includes(term)) continue
++          const name = probe7TestNameOfLine(lines[i])
++          if (name !== null) {
++            nameAnchors.push({ term, file: f, line: i + 1, name: name || term })
++            break
++          }
++        }
+       }
++      if (hit) hitTerms.push(term)
+     }
+-    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles], anchors }
++    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles], nameAnchors }
+   })
+   return hints
+ }
+@@ -1904,14 +1943,22 @@ function mdEscapeCell(text, cap = 200) {
+ }
+ 
+ /**
+- * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004）。
++ * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004；
++ * 2026-10-16-probe7-prefill-noise-fix 判定链重写）。
+  *
+  * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量 probe1-noqa
+- * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）：
+- *   - 无归属 → uncovered；acceptance 文本含 文档/部署/doc/deploy/manual/config 类词且无归属
+- *     → non-testable
+- *   - 有归属且命中 ≥1 → covered，证据 = 首命中 `file:line`（term）锚点（≤3 条防膨胀）
+- *   - 有归属零命中 → partial，证据 = 无机械命中提示 + 反引号归属文件（满足门禁测试锚点口径）
++ * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）。
++ * 四缺陷实证（消费仓 backend-mem-polling verify 收口）后固定为七级优先链（FR-05）：
++ *   ① 测试名级命中（nameAnchors）→ covered，锚点 = 测试函数名行（file:def行 行号）并引用
++ *      测试名（缺陷二：正文关键词命中即 covered、锚点取 docstring 行号 = 空心证据，根除）；
++ *   ② 条目命中部署/文档类词（PROBE7_NONTESTABLE_RE）→ non-testable（缺陷一：compose 卡
++ *      不该经关键词链冒充承接）；
++ *   ③ 无归属 → uncovered；
++ *   ④ 候选 > PROBE7_CANDIDATE_CAP（且无①收窄）→ uncovered「交人工」（缺陷四：长清单灌格）；
++ *   ⑤ 正文级命中（terms 非空无 nameAnchors）→ partial + 待人工注记（FR-02 封顶）；
++ *   ⑥ 同波次新增/修改归属测试（waveFiles）零字面命中 → covered + 待人工复核（缺陷三：
++ *      真 covered 因同义改写字面不交被误标 partial——本波次 diff 面提升信号）；
++ *   ⑦ 其余有归属零命中 → partial（现状文案）。
+  *
+  * 门禁兼容（stage-contract.js extractAcceptanceMatrixSlots / MATRIX_VERDICT_WHITELIST）：判定列
+  * 须为纯枚举（精确 trim 匹配白名单）——行内尾注「（预填，复核后可改）」会破坏枚举解析，故
+@@ -1919,24 +1966,47 @@ function mdEscapeCell(text, cap = 200) {
+  * non-testable 证据须非空——预填值均按此口径构造（预填即可过门，复核责任在段头注记明示）。
+  * @param {string} item acceptance 条目文本
+  * @param {string[]|undefined} testFiles 归属测试文件
+- * @param {{terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}|null} hint
++ * @param {{terms: string[], files: string[], nameAnchors?: Array<{term: string, file: string, line: number, name: string}>}|null} hint
++ * @param {{waveFiles?: string[]}} [opts] waveFiles = 同波次新增/修改归属测试（提升信号）
+  * @returns {{verdict: string, evidence: string}}
+  */
+-function prefillMatrixCells(item, testFiles, hint) {
++function prefillMatrixCells(item, testFiles, hint, opts = {}) {
++  const waveFiles = Array.isArray(opts && opts.waveFiles) ? opts.waveFiles : []
+   const hasAttribution = Array.isArray(testFiles) && testFiles.length > 0
+-  if (!hasAttribution) {
+-    return {
+-      verdict: PROBE7_NONTESTABLE_RE.test(String(item || '')) ? 'non-testable' : 'uncovered',
+-      evidence: '（无归属测试）',
+-    }
++  const nameAnchors = (hint && Array.isArray(hint.nameAnchors)) ? hint.nameAnchors : []
++  // ① 测试名级命中 → covered（锚点=测试函数名行 + 测试名引用）
++  if (nameAnchors.length > 0) {
++    const evidence = nameAnchors.slice(0, 3)
++      .map(a => `\`${mdEscapeCell(a.file, 120)}:${a.line}\`（${mdEscapeCell(a.name, 60)}）`)
++      .join('、')
++    return { verdict: 'covered', evidence }
+   }
+-  const anchors = (hint && Array.isArray(hint.anchors)) ? hint.anchors : []
+-  if (anchors.length > 0) {
+-    const evidence = anchors.slice(0, 3)
+-      .map(a => `\`${mdEscapeCell(a.file, 120)}:${a.line}\`（${mdEscapeCell(a.term, 40)}）`)
++  // ② 部署/文档类词 → non-testable（条目级直判，归属在场与否不影响）
++  if (PROBE7_NONTESTABLE_RE.test(String(item || ''))) {
++    return { verdict: 'non-testable', evidence: '（部署/文档类条目——如实际有测试承接请改写）' }
++  }
++  // ③ 无归属
++  if (!hasAttribution) {
++    return { verdict: 'uncovered', evidence: '（无归属测试）' }
++  }
++  // ④ 候选超帽（无测试名级收窄）→ 交人工
++  if (testFiles.length > PROBE7_CANDIDATE_CAP) {
++    return { verdict: 'uncovered', evidence: `（候选 ${testFiles.length} 个——归属不可判定，交人工核验）` }
++  }
++  // ⑤ 正文级命中 → partial（封顶；不再冒充 covered，锚点不含关键词行号）
++  if (hint && Array.isArray(hint.terms) && hint.terms.length > 0) {
++    const first = (Array.isArray(hint.files) && hint.files.length > 0) ? hint.files[0] : testFiles[0]
++    return { verdict: 'partial', evidence: `（正文级命中——待人工核验 \`${mdEscapeCell(first, 120)}\`）` }
++  }
++  // ⑥ 同波次新增/修改归属测试（零字面命中）→ covered + 待人工复核注记
++  const wave = testFiles.filter(f => waveFiles.includes(f))
++  if (wave.length > 0) {
++    const evidence = wave.slice(0, 3)
++      .map(f => `\`${mdEscapeCell(f, 120)}\`（同波次新增/修改——待人工复核）`)
+       .join('、')
+     return { verdict: 'covered', evidence }
+   }
++  // ⑦ 有归属零命中
+   return {
+     verdict: 'partial',
+     evidence: `（无机械命中——人工核验 \`${mdEscapeCell(testFiles[0], 120)}\`）`,
+@@ -1959,7 +2029,7 @@ export function renderProbe7Lines(p7) {
+     return L
+   }
+   L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（五选一）：covered / covered-service / partial / uncovered / non-testable（covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点；non-testable 是文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+-  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。covered/covered-service/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/covered-service/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
++  L.push('<!-- 预填说明（ql-20260915-004；2026-10-16-probe7-prefill-noise-fix 判定链修订）：判定列为 CLI 机械预填，agent 逐格复核改写——规则优先级：①测试名级命中（def test_* / it(/test(/describe( 名行含验收词）→covered（锚点=测试函数名行+测试名）；②部署/文档/doc/deploy/manual/config 类词条目→non-testable；③无归属→uncovered；④候选>5 且无测试名级收窄→uncovered（归属不可判定交人工）；⑤正文级命中→partial（待人工核验）；⑥同波次新增/修改的归属测试零命中→covered（待人工复核）；⑦其余有归属零命中→partial。covered/covered-service/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/covered-service/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
+   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
+   // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
+@@ -1991,13 +2061,15 @@ export function renderProbe7Lines(p7) {
+       // 探针 3 既有 slice 截断先例收敛为前 5 + 「共 N 个」折叠；路径经 mdEscapeCell 防竖线破表）
+       const attribCell = (t.testFiles && t.testFiles.length > 0)
+         ? t.testFiles.slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('<br>')
+-          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（目录级候选全量在 facts/trace，归属按关键词命中与证据锚点收窄）` : '')
++          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（归属不可判定——候选全量在 facts/trace，交人工）` : '')
+         : '无归属测试——判定大概率 uncovered'
+       const h = (t.hints && t.hints[i]) || null
++      // 提示列展示帽（2026-10-16-probe7-prefill-noise-fix FR-04）：正文级命中可跨多文件，
++      // 命中文件同样收敛前 5 + 「共 N 个」折叠——长清单只进 facts/trace，不进单元格
+       const hintCell = h
+-        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
++        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('、')}${(h.files || []).length > 5 ? `…共 ${h.files.length} 个` : ''}）`
+         : '—'
+-      const pre = prefillMatrixCells(item, t.testFiles, h)
++      const pre = prefillMatrixCells(item, t.testFiles, h, { waveFiles: t.waveFiles || [] })
+       if (pre.verdict === 'uncovered' || pre.verdict === 'partial') zeroCoverage++
+       L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | ${pre.verdict} | ${pre.evidence} |`)
+     })
+@@ -2244,8 +2316,13 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+           .map(p => String(p).replace(/^NEW:\s*/, '').trim())
+           .filter(p => p && isProbe7TestPath(p))
+         const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
++        // 同波次提升信号（2026-10-16-probe7-prefill-noise-fix FR-03 / 缺陷三）：review changedFiles
++        // 的测试形态路径（wide 口径覆盖嵌套 tests/）——与结构归属分离保存，仅作「零字面命中 →
++        // covered+待人工复核」的提升信号（prefillMatrixCells 第⑥级），不改变归属集本身。
++        const fromReviewWave = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task, { wide: true }) : []
+         // 直接下游卡的归属测试并入（provider acceptance 由消费卡测试承接）
+         const fromDependents = []
++        const fromDependentsWave = []
+         for (const other of cards) {
+           if (other.task === card.task) continue
+           const deps = dependsOnOf.get(other.task) || []
+@@ -2254,13 +2331,24 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+             const t = String(p).replace(/^NEW:\s*/, '').trim()
+             if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
+           }
++          // 下游卡同波次测试并入提升信号（provider acceptance 由消费卡本波次测试承接，同跨卡口径）
++          if (runId) {
++            for (const f of readReviewChangedTestFiles(runtimeRoot, runId, other.task, { wide: true })) {
++              if (!fromDependentsWave.includes(f)) fromDependentsWave.push(f)
++            }
++          }
+         }
+         // 收集帽（坑 probe-noise-and-commit-suggest-quality 坑A）：目录级 allowed_paths 递归可卷
+         // 入整仓测试树（实证 82 个）——去重后截前 20（展示层另有 5 个硬帽；hints/trace 消费同集）
+         const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])].slice(0, 20)
++        // 全条目命中部署/文档类词的卡（docs/deploy 卡）不注入 FR 候选池（2026-10-16-probe7-prefill-noise-fix
++        // FR-01 / 缺陷一：compose/Dockerfile 卡经 FR 回退池整池 join，单格灌 130+ 不相干测试文件）。
++        // 代码卡（含至少一条非部署/文档类条目）注入行为不变。
++        const allNonTestableEntries = card.acceptance.length > 0
++          && card.acceptance.every(a => PROBE7_NONTESTABLE_RE.test(String(a || '')))
+         // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
+         const existingTests = []
+-        if (frLinkedExisting && testFiles.length === 0) {
++        if (frLinkedExisting && testFiles.length === 0 && !allNonTestableEntries) {
+           for (const f of frLinkedExisting.files) {
+             if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
+           }
+@@ -2272,6 +2360,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+           fmError: card.fmError || null,
+           testFiles: finalTestFiles,
+           existingTests,
++          waveFiles: [...new Set([...fromReviewWave, ...fromDependentsWave])],
+           hints: buildAcceptanceHints(card.acceptance, finalTestFiles, cwd, wtRoot, probe7CrossRoots),
+         })
+       }
+diff --git a/test/acceptance-matrix-probe.test.mjs b/test/acceptance-matrix-probe.test.mjs
+index 163484c5..27cd5359 100644
+--- a/test/acceptance-matrix-probe.test.mjs
++++ b/test/acceptance-matrix-probe.test.mjs
+@@ -7,9 +7,12 @@
+  * 2. 双源结构归属：allowed_paths 测试模式命中（test/ 前缀 + .test. 文件名 + NEW: 前缀剥离）
+  *    ∪ marker 解析的 runId 下 review.json changedFiles test/ 前缀；marker 读不到 → execute-runs
+  *    目录扫描兜底；review.json 读不到 → 该源空集不报错
+- * 3. 关键词提示：标识符 + CJK 片段命中、上限 5 词、命中≠判定（hints 只含命中的条目）
++ * 3. 关键词提示：标识符 + CJK 片段命中、上限 5 词、命中≠判定（hints 只含命中的条目）；
++ *    2026-10-16-probe7-prefill-noise-fix：正文级命中封顶 partial（covered 仅测试名级命中）、
++ *    部署/文档类条目直判 non-testable、候选>5 交人工——本 fixture 的命中均为注释级，断言
++ *    按新契约（旧「注释命中→covered+关键词行号锚点」即被修复的缺陷面）
+  * 4. 无 tasks/ 目录 → applicable=false，渲染「不适用（无 TaskCard）」
+- * 5. 骨架渲染：探针 7 段位于探针 3 后、四枚举判定槽 + 证据槽、防御行、无归属提示、管道符转义
++ * 5. 骨架渲染：探针 7 段位于探针 3 后、枚举判定槽 + 证据槽全预填、防御行、无归属提示、管道符转义
+  * 6. ensureAcceptanceMatrixSection 幂等补段：插探针 3 段后 / 文末追加两形态、二跑零改动、
+  *    applicable=false no-op
+  * 7. 禁 task-review 静态 import（三步环）源码级断言
+@@ -103,6 +106,16 @@ function makeFixtureA() {
+     '---',
+     '# task-05', '',
+   ].join('\n'))
++  // task-06：有 acceptance、无归属、无部署/文档类词 → uncovered（（无归属测试）证据形态）
++  writeFileSync(join(changeDir, 'tasks', 'task-06.md'), [
++    '---',
++    'id: task-06',
++    'allowed_paths: [docs/plain.md]',
++    'acceptance:',
++    '  - 结果表格标记为 uncovered 待人工',
++    '---',
++    '# task-06', '',
++  ].join('\n'))
+ 
+   // 源文件与归属测试文件（关键词 grep 的真实内容面）
+   mkdirSync(join(proj, 'src'), { recursive: true })
+@@ -201,14 +214,17 @@ try {
+   const i4 = report.indexOf('#### 探针 4：')
+   assert(i3 !== -1 && i7 !== -1 && i4 !== -1 && i3 < i7 && i7 < i4, '探针 7 段位于探针 3 后、探针 4 前')
+   // ql-20260915-004 probe7-prefill-evidence：判定/证据两列机械预填——占位槽淘汰，四形态断言
++  // 2026-10-16-probe7-prefill-noise-fix：本 fixture 的关键词命中全在注释行（正文级）——
++  // 新契约下 covered 仅测试名级命中，故机械预填全为 partial/non-testable/uncovered（无 covered）
+   assert((report.match(/<待填：四选一>/g) || []).length === 0, '判定槽占位淘汰（全预填）')
+   assert((report.match(/<TODO>/g) || []).length === 0, '证据槽占位淘汰（全预填）')
+-  assert((report.match(/\| covered \|/g) || []).length === 3, `命中≥1 → covered ×3（t1×2 + t2）（实际 ${(report.match(/\| covered \|/g) || []).length}）`)
+-  assert((report.match(/\| partial \|/g) || []).length === 1, '有归属零命中 → partial ×1（task-05）')
+-  assert((report.match(/\| non-testable \|/g) || []).length === 1, '无归属 + 文档类词 → non-testable ×1（task-04）')
+-  assert((report.match(/\| uncovered \|/g) || []).length === 0, '本 fixture 无「无归属非文档类」条目 → uncovered ×0')
+-  assert(report.includes('`test/unit-foo.test.mjs:1`（probe7）'), 'covered 证据含首命中 file:line + 关键词锚点')
+-  assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), 'partial 证据 = 人工核验提示 + 反引号归属文件')
++  assert((report.match(/\| covered \|/g) || []).length === 0, `注释级命中不再假 covered（实际 ${(report.match(/\| covered \|/g) || []).length}）`)
++  assert((report.match(/\| partial \|/g) || []).length === 4, `正文级/零命中 → partial ×4（t1×2 + t2 + t5）（实际 ${(report.match(/\| partial \|/g) || []).length}）`)
++  assert((report.match(/\| non-testable \|/g) || []).length === 1, '部署/文档类词条目 → non-testable ×1（task-04）')
++  assert((report.match(/\| uncovered \|/g) || []).length === 1, '无归属非文档类条目 → uncovered ×1（task-06）')
++  assert(report.includes('（正文级命中——待人工核验 `test/unit-foo.test.mjs`）'), '正文级命中证据 = 待人工注记 + 反引号归属文件')
++  assert(!report.includes('`test/unit-foo.test.mjs:1`'), '证据不再含关键词首现行号锚点（空心锚根除）')
++  assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), '零命中 partial 证据 = 人工核验提示 + 反引号归属文件')
+   assert(report.includes('（无归属测试）'), '无归属证据 = （无归属测试）')
+   assert(report.includes('判定列为 CLI 机械预填，agent 逐格复核改写'), '段头预填注记在场（枚举纯值的复核责任声明）')
+   assert(report.includes('covered / covered-service / partial / uncovered / non-testable'), '五枚举图例在场')
+@@ -228,7 +244,7 @@ try {
+   const slots = extractAcceptanceMatrixSlots(sk)
+   assert(slots.present && slots.unfilled === 0, `预填判定全为合法枚举（unfilled=0，实际 ${slots.unfilled}）`)
+   assert(slots.missingEvidence === 0, `预填证据全过锚点口径（missingEvidence=0，实际 ${slots.missingEvidence}）`)
+-  assert(slots.rows.length === 5, `五行数据行（实际 ${slots.rows.length}）`)
++  assert(slots.rows.length === 6, `六行数据行（实际 ${slots.rows.length}）`)
+ 
+   console.log('--- 6. 无 tasks 目录不适用 ---')
+   const fxB = makeFixtureB()
+@@ -311,10 +327,12 @@ try {
+     assert(t1 && t1.testFiles.includes('test/consumer-pivot.test.mjs'),
+       `task-01 归属含下游 task-03 的测试文件（实际：${JSON.stringify(t1 && t1.testFiles)}）`)
+     assert(t3 && t3.testFiles.includes('test/consumer-pivot.test.mjs'), 'task-03 自身归属不变')
+-    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 covered（anchor 在下游测试内）
++    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 partial（下游命中为注释级
++    // 正文命中——新契约封顶 partial；归属并入与命中非空即该测试的修复意图所在）
+     const md = renderVerifyProbesReport(r)
+     const seg = md.split('**task-01**')[1] ? md.split('**task-01**')[1].split('**task-03**')[0] : ''
+-    assert(seg.includes('covered'), `task-01 acceptance 预填 covered（不再假 uncovered；seg=${seg.slice(0, 120)}）`)
++    assert(seg.includes('partial') && seg.includes('正文级命中——待人工核验 `test/consumer-pivot.test.mjs`'),
++      `task-01 acceptance 预填 partial（不再假 uncovered，正文级命中封顶；seg=${seg.slice(0, 200)}）`)
+     // 无依赖关系的卡不并入（task-03 不反向承接无关卡——用 fixture 内只两卡，反向断言：t3 归属不含 src-feature.js 类）
+     assert(!(t3.testFiles || []).some(f => f.includes('src-feature')), '依赖方向单向：下游不反向并入')
+   }
+diff --git a/test/pitfall-probe7-noise.test.mjs b/test/pitfall-probe7-noise.test.mjs
+index 4a182d36..6eea6fb4 100644
+--- a/test/pitfall-probe7-noise.test.mjs
++++ b/test/pitfall-probe7-noise.test.mjs
+@@ -31,6 +31,9 @@ test('FR-10：82 文件截断为 5 + 「共 82 个」折叠，路径转义不破
+   assert.ok(attribCell.includes('…共 82 个'), '折叠计数在场')
+   assert.ok(!attribCell.includes('case-05.'), '第 6 个及以后不展示')
+   assert.ok(attribCell.length < 500, `单元格长度收敛（got ${attribCell.length}）`)
++  // 2026-10-16-probe7-prefill-noise-fix FR-04：>5 候选无测试名级收窄 → 判定交人工
++  assert.ok(row.includes('| uncovered |'), '>5 候选 → uncovered（长清单不冒充承接结论）')
++  assert.ok(row.includes('候选 82 个——归属不可判定，交人工核验'), '证据注明候选数与去向')
+ })
+ 
+ test('FR-10：≤5 个时不折叠、无计数尾巴', () => {
+diff --git a/test/probe7-anchor-testfile.test.mjs b/test/probe7-anchor-testfile.test.mjs
+index 5307afa6..82ab5876 100644
+--- a/test/probe7-anchor-testfile.test.mjs
++++ b/test/probe7-anchor-testfile.test.mjs
+@@ -86,8 +86,10 @@ test('uncovered/partial 行证据无锚零影响（只查 covered）', () => {
+ 
+ // ── FR-09 多根（2026-09-17-pass-cap-semantics task-07 / task-05 实现）：buildAcceptanceHints
+ // 双根扩多根——并入 local.yaml repos 注册的跨仓仓根后，跨仓仓根下的测试文件内容可读、
+-// 命中不再恒空（矩阵不因跨仓恒预填 partial）。
+-test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空，矩阵预填 covered（不恒 partial）', () => {
++// 命中不再恒空（矩阵不再恒「无机械命中」预填）。
++// 2026-10-16-probe7-prefill-noise-fix：命中分级后注释级命中（`// kwCrossRoot7 case`）封顶
++// partial——本用例锁定「内容可读 → 命中非空 → 正文级命中证据」，non-空命中即修复意图。
++test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空，矩阵预填正文级命中证据（不恒零命中）', () => {
+   const proj = mkdtempSync(join(tmpdir(), 'p7-crossroot-'))
+   tmpRoots.push(proj)
+   const crossRoot = mkdtempSync(join(tmpdir(), 'p7-crossrepo-'))
+@@ -104,14 +106,15 @@ test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空
+   mkdirSync(join(crossRoot, 'test'), { recursive: true })
+   writeFileSync(join(crossRoot, 'test', 'crossroot-attrib.test.mjs'), '// kwCrossRoot7 case\nexport {}\n')
+ 
+-  // 对照态：未注册跨仓（单仓双根）→ 读不到内容 → 零命中 → partial 预填
++  // 对照态：未注册跨仓（单仓双根）→ 读不到内容 → 零命中 → partial 预填（无机械命中形态）
+   const before = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
+   const t1b = before.probe7.tasks.find(t => t.task === 'task-01')
+   assert.ok(t1b && (!t1b.hints || !t1b.hints[0]),
+     `未注册跨仓根 → 关键词命中恒空（实际 hints=${JSON.stringify(t1b && t1b.hints)}）`)
+-  assert.ok(renderVerifyProbesReport(before).includes('| partial |'), '对照态：矩阵预填 partial（跨仓内容不可读）')
++  assert.ok(renderVerifyProbesReport(before).includes('（无机械命中——人工核验 `test/crossroot-attrib.test.mjs`）'),
++    '对照态：矩阵预填零命中 partial（跨仓内容不可读）')
+ 
+-  // 注册跨仓根（local.yaml repos，相对路径按 cwd resolve）→ 多根读取 → 命中 + covered 预填
++  // 注册跨仓根（local.yaml repos，相对路径按 cwd resolve）→ 多根读取 → 命中 + 正文级证据预填
+   mkdirSync(specBase, { recursive: true })
+   writeFileSync(join(specBase, 'local.yaml'), `repos:\n  crossrepo: ${crossRoot.split('\\').join('/')}\n`)
+   const after = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
+@@ -119,6 +122,7 @@ test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空
+   assert.ok(t1a && t1a.hints && t1a.hints[0] && t1a.hints[0].terms.includes('kwCrossRoot7'),
+     `注册跨仓根后命中非空（实际 hints=${JSON.stringify(t1a && t1a.hints)}）`)
+   const report = renderVerifyProbesReport(after)
+-  assert.ok(report.includes('| covered |') && !report.includes('| partial |'),
+-    '多根读取后矩阵预填 covered（不再因跨仓恒预填 partial）')
++  assert.ok(report.includes('正文级命中——待人工核验 `test/crossroot-attrib.test.mjs`')
++    && !report.includes('（无机械命中——人工核验 `test/crossroot-attrib.test.mjs`）'),
++    '多根读取后命中非空 → 正文级命中证据（注释级命中封顶 partial，不再恒零命中）')
+ })
+diff --git a/test/probe7-fr-prefill.test.mjs b/test/probe7-fr-prefill.test.mjs
+index 47717be2..e461629d 100644
+--- a/test/probe7-fr-prefill.test.mjs
++++ b/test/probe7-fr-prefill.test.mjs
+@@ -33,19 +33,20 @@ function fixture({ withFr }) {
+     '---', 'change: demo', '---', '# 设计', '',
+     '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/lib.js | 改动 |', '',
+   ].join('\n'))
+-  writeFileSync(join(changeDir, 'tasks.md'), '---\nauthor: t\n---\n\n# 任务注册表\n\n- [ ] task-01: 无归属任务\n- [ ] task-02: 自带测试任务\n')
+-  const card = (id, allowed) => [
++  writeFileSync(join(changeDir, 'tasks.md'), '---\nauthor: t\n---\n\n# 任务注册表\n\n- [ ] task-01: 无归属任务\n- [ ] task-02: 自带测试任务\n- [ ] task-03: 部署文档任务\n')
++  const card = (id, allowed, acceptance = ['返回值 a 恒为 1']) => [
+     '---', `id: ${id}`, `title: t-${id}`, `title_zh: 任务${id}`, 'author: t',
+     'created_at: 2026-10-06 00:00:00', 'priority: P0', 'depends_on: []', 'blocks: []',
+     'requirement_ids: []', 'decision_ids: []',
+     'allowed_paths:', ...allowed.map(p => `  - ${p}`),
+     'goal: >', '  g', 'implementation:', '  - i',
+-    'acceptance:', '  - 返回值 a 恒为 1',
++    'acceptance:', ...acceptance.map(a => `  - ${a}`),
+     'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
+   ].join('\n')
+   mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+   writeFileSync(join(changeDir, 'tasks', 'task-01.md'), card('task-01', ['src/lib.js']))
+   writeFileSync(join(changeDir, 'tasks', 'task-02.md'), card('task-02', ['src/lib.js', 'test/own.test.mjs']))
++  writeFileSync(join(changeDir, 'tasks', 'task-03.md'), card('task-03', ['docs/x.md'], ['部署文档更新 config 说明']))
+   if (withFr) {
+     mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
+     mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
+@@ -90,3 +91,16 @@ test('P3 无 FR 知识：行为与现状一致（无注入、无注记）', () =
+   const md = renderVerifyProbesReport(r)
+   assert.ok(!md.includes('既有用例候选'), '无注记行')
+ })
++
++test('P4 全部署类条目卡不注入 FR 候选池（2026-10-16-probe7-prefill-noise-fix FR-01 / 缺陷一）', () => {
++  const { root, specBase } = fixture({ withFr: true })
++  const r = runVerifyProbes({ cwd: root, changeName: 'demo', specDir: specBase })
++  const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
++  assert.ok(t3, 'task-03 在矩阵')
++  assert.deepEqual(t3.existingTests || [], [], 'docs 卡不注入 FR 候选池（同一变更 FR 知识在场）')
++  assert.deepEqual(t3.testFiles || [], [], 'docs 卡归属空')
++  const md = renderVerifyProbesReport(r)
++  const sec = md.slice(md.indexOf('**task-03**'))
++  assert.ok(!sec.includes('既有用例候选'), 'task-03 段无既有用例注记行')
++  assert.ok(sec.includes('| non-testable |'), '部署/文档类条目行判定 non-testable')
++})
+diff --git a/test/probe7-prefill-noise.test.mjs b/test/probe7-prefill-noise.test.mjs
+new file mode 100644
+index 00000000..6ffb7be2
+--- /dev/null
++++ b/test/probe7-prefill-noise.test.mjs
+@@ -0,0 +1,182 @@
++/**
++ * 探针 7 预填噪音四缺陷修复契约锁定（2026-10-16-probe7-prefill-noise-fix）。
++ *
++ * 依据：multi-agent-platform docs/sillyspec/verify-probe7-matrix-prefill-four-defects.md
++ * （backend-mem-polling verify 收口实测）：
++ *   FR-01 部署/文档类条目直接 non-testable + 全条目命中卡不注入 FR 候选池（缺陷一）；
++ *   FR-02 covered 仅测试名级命中（锚点=测试函数名行），正文命中封顶 partial（缺陷二）；
++ *   FR-03 同波次新增/修改测试零字面命中 → covered + 待人工复核（缺陷三）；
++ *   FR-04 候选 >5 → uncovered 交人工，单元格禁长清单（缺陷四）；
++ *   FR-05 七级判定链固定且全证据形态过 stage-contract 门禁。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton } from '../src/verify-probes.js'
++import { extractAcceptanceMatrixSlots } from '../src/stage-contract.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function card(id, allowed, acceptance) {
++  return [
++    '---', `id: ${id}`, 'allowed_paths:', ...allowed.map(p => `  - ${p}`),
++    'acceptance:', ...acceptance.map(a => `  - ${a}`), '---', `# ${id}`, '',
++  ].join('\n')
++}
++
++function buildFixture() {
++  const root = mk('p7noise-')
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'pn')
++  const tasksDir = join(changeDir, 'tasks')
++  mkdirSync(tasksDir, { recursive: true })
++  mkdirSync(join(root, 'src'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  mkdirSync(join(root, 'agent', 'tests'), { recursive: true })
++  mkdirSync(join(root, 'docs'), { recursive: true })
++  writeFileSync(join(root, 'src', 'lib.js'), 'export const a = 1\n')
++  writeFileSync(join(root, 'src', 'only.js'), 'export const o = 1\n')
++  writeFileSync(join(root, 'docs', 'x.md'), '# 文档\n')
++  // 测试名级命中源：kwNameHit 在注释行与 test() 名行双现（锚点须取名行行号 3）
++  writeFileSync(join(root, 'test', 'name-hit.test.mjs'), [
++    'export const x = 1',
++    '// kwNameHit 场景说明（正文级行——不应作为锚点）',
++    "test('kwNameHit 场景名', () => {})", '',
++  ].join('\n'))
++  // Python def 名级命中
++  writeFileSync(join(root, 'test', 'beta_def.py'), 'def test_beta_kw_check():\n    assert True\n')
++  // 正文级命中源：仅注释含关键词（无测试名行）
++  writeFileSync(join(root, 'test', 'body-hit.test.mjs'), '// kwBodyHit 仅注释命中\nexport {}\n')
++  // FR 关联回归候选源（existing-regress 两卡对照：docs 卡跳过 / 代码卡注入）
++  writeFileSync(join(root, 'test', 'existing-regress.test.mjs'), "import { test } from 'node:test'\nimport { a } from '../src/lib.js'\ntest('regress', () => { if (a !== 1) throw new Error('x') })\n")
++  // 同波次新增测试（零字面命中——kwWave 不出现在内容里）
++  writeFileSync(join(root, 'agent', 'tests', 'new_wave.test.mjs'), 'export const w = 1\n')
++  // >5 候选源（6 个测试文件，内容零命中）
++  for (let i = 1; i <= 6; i++) writeFileSync(join(root, 'test', `cand-${i}.test.mjs`), 'export {}\n')
++
++  writeFileSync(join(changeDir, 'design.md'), [
++    '---', 'change: pn', '---', '# 设计', '',
++    '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/lib.js | 改动 |', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01\n- [ ] task-06\n')
++  writeFileSync(join(tasksDir, 'task-01.md'), card('task-01', ['test/name-hit.test.mjs', 'test/beta_def.py'], [
++    'kwNameHit 场景由测试函数承接',
++    'beta_kw 回归校验',
++    '部署 kwNameHit 回滚校验',
++  ]))
++  writeFileSync(join(tasksDir, 'task-02.md'), card('task-02', ['test/body-hit.test.mjs'], [
++    'kwBodyHit 生效',
++  ]))
++  writeFileSync(join(tasksDir, 'task-03.md'), card('task-03', ['docs/x.md'], [
++    '部署文档更新 config 说明',
++  ]))
++  writeFileSync(join(tasksDir, 'task-04.md'), card('task-04', ['src/lib.js'], [
++    '返回值 a 恒为 1',
++  ]))
++  writeFileSync(join(tasksDir, 'task-05.md'), card('task-05',
++    Array.from({ length: 6 }, (_, i) => `test/cand-${i + 1}.test.mjs`), ['kwCand 场景生效']))
++  writeFileSync(join(tasksDir, 'task-06.md'), card('task-06', ['src/only.js', 'agent/tests/new_wave.test.mjs'], [
++    'kwWave 新链路生效',
++  ]))
++
++  // FR 知识面（复制 probe7-fr-prefill 夹具形态：FR-core-001 绑定 test/existing-regress.test.mjs）
++  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  mkdirSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  core:\n    paths:\n      - src/\n')
++  writeFileSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change', 'change-patch.json'), '{"files": ["src/lib.js"]}\n')
++  writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [
++    '## FR-core-001 库行为', '变更：2026-09-20-old-change', '状态：active', '摘要：返回值恒定', '',
++    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: 2026-09-20-old-change:task-01:FR-01', '  tests: test/existing-regress.test.mjs',
++    '  reason: spec', '  state: candidate', '  discovery: machine',
++    '  confirmed_by: null', '  confirmed_at: null', '',
++  ].join('\n'))
++
++  // execute run：marker + task-06 review.json（同波次 changedFiles——嵌套 tests/ 形态）
++  const runtimeRoot = join(specBase, '.runtime')
++  const runId = 'exec-2026-10-16-120000'
++  mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-06'), { recursive: true })
++  writeFileSync(join(runtimeRoot, 'current-execute-run-id-pn'), runId + '\n')
++  writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-06', 'review.json'), JSON.stringify({
++    schemaVersion: 1, task: 'task-06',
++    changedFiles: ['src/only.js', 'agent/tests/new_wave.test.mjs'],
++  }, null, 2))
++  return { root, specBase }
++}
++
++const fx = buildFixture()
++const r = runVerifyProbes({ cwd: fx.root, changeName: 'pn', specDir: fx.specBase })
++const md = renderVerifyProbesReport(r)
++const task = (id) => r.probe7.tasks.find(t => t.task === id)
++const section = (id, nextId) => md.split(`**${id}**`)[1].split(`**${nextId}**`)[0]
++
++test('FR-01 部署/文档类条目 non-testable 且全条目命中卡不注入 FR 池', () => {
++  const t3 = task('task-03')
++  assert.deepEqual(t3.existingTests || [], [], 'docs 卡不注入 FR 候选池（缺陷一收窄）')
++  assert.deepEqual(t3.testFiles || [], [], 'docs 卡归属空')
++  const sec = section('task-03', 'task-04')
++  assert.ok(!sec.includes('既有用例候选'), 'docs 卡无既有用例注记行')
++  assert.ok(sec.includes('| non-testable |'), `行判定 non-testable（sec=${sec.slice(0, 300)}）`)
++  assert.ok(sec.includes('部署/文档类条目'), '证据注记=部署/文档类条目')
++  const t4 = task('task-04')
++  assert.ok((t4.existingTests || []).includes('test/existing-regress.test.mjs'),
++    `代码卡 FR 注入不受影响（对照；实际 ${JSON.stringify(t4.existingTests)}）`)
++})
++
++test('FR-02 测试名级命中 covered 且锚点指向测试函数行', () => {
++  const t1 = task('task-01')
++  const sec = section('task-01', 'task-02')
++  assert.equal((sec.match(/\| covered \|/g) || []).length, 3, `三条均 covered（实际 ${(sec.match(/\| covered \|/g) || []).length}）`)
++  assert.equal((sec.match(/\| partial \|/g) || []).length, 0, '无 partial 误标')
++  assert.ok(sec.includes('`test/name-hit.test.mjs:3`（kwNameHit 场景名）'),
++    '锚点=测试函数名行（第 3 行 test() 名行，非第 2 行注释）且引用测试名')
++  assert.ok(sec.includes('`test/beta_def.py:1`（test_beta_kw_check）'), 'Python def 名级命中锚点')
++  const e3 = sec.split('\n').find(l => l.includes('部署 kwNameHit 回滚校验'))
++  assert.ok(e3 && e3.includes('| covered |'), '①优先于②：含部署词但测试名级命中 → covered（非 non-testable）')
++  const na = t1.hints[0] && t1.hints[0].nameAnchors
++  assert.ok(Array.isArray(na) && na[0] && na[0].line === 3 && na[0].name === 'kwNameHit 场景名',
++    `nameAnchors 数据面（实际 ${JSON.stringify(na)}）`)
++})
++
++test('FR-02 正文命中封顶 partial 且锚点禁关键词行', () => {
++  const sec = section('task-02', 'task-03')
++  assert.ok(sec.includes('| partial |'), '正文级命中 → partial（不再假 covered）')
++  assert.ok(sec.includes('正文级命中——待人工核验 `test/body-hit.test.mjs`'), '证据=正文级命中注记')
++  assert.ok(!/test\/body-hit\.test\.mjs:\d+/.test(sec), '证据不含关键词行号锚点（空心锚根除）')
++})
++
++test('FR-03 同波次新增测试零命中预填 covered+待人工复核', () => {
++  const t6 = task('task-06')
++  assert.ok((t6.waveFiles || []).includes('agent/tests/new_wave.test.mjs'),
++    `waveFiles 采集（嵌套 tests/ 形态；实际 ${JSON.stringify(t6.waveFiles)}）`)
++  const sec = section('task-06', '')
++  assert.ok(sec.includes('| covered |'), '零字面命中 + 同波次 → covered（不再误标 partial）')
++  assert.ok(sec.includes('同波次新增/修改——待人工复核'), '带待人工复核注记')
++  assert.ok(sec.includes('`agent/tests/new_wave.test.mjs`'), '证据引用归属文件')
++})
++
++test('FR-04 候选>5 交人工且长清单不进单元格', () => {
++  const t5 = task('task-05')
++  assert.equal(t5.testFiles.length, 6, '候选 6 个')
++  const sec = section('task-05', 'task-06')
++  assert.ok(sec.includes('| uncovered |'), '>5 → uncovered 交人工')
++  assert.ok(sec.includes('候选 6 个——归属不可判定，交人工核验'), '证据注明候选数与去向')
++  assert.ok(sec.includes('…共 6 个（归属不可判定——候选全量在 facts/trace，交人工）'), '归属列折叠文案更新')
++  assert.ok(!sec.includes('cand-6.test.mjs'), '第 6 个候选不进单元格')
++})
++
++test('FR-05 七级链走查 + 门禁 round-trip', () => {
++  const sk = generateVerifyResultSkeleton(r)
++  const slots = extractAcceptanceMatrixSlots(sk)
++  assert.ok(slots.present && slots.unfilled === 0, `判定全为合法枚举（unfilled=${slots.unfilled}）`)
++  assert.equal(slots.missingEvidence, 0, '全部新证据形态过锚点口径')
++  assert.equal(slots.rows.length, 8, `八行数据行（实际 ${slots.rows.length}）`)
++  const verdicts = slots.rows.map(x => `${x.acceptance.slice(0, 10)}=${x.verdict}`)
++  assert.ok(verdicts.every(v => /=(covered|covered-service|partial|uncovered|non-testable)$/.test(v)),
++    `枚举纯值（${JSON.stringify(verdicts)}）`)
++})

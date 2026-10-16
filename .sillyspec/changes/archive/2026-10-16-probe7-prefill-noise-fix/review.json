@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-probe7-prefill-noise-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "32955910e7d5396cc6b9dd5252dbe85adbf5ba60",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements FR-02 场景（条目含 config→partial）与 FR-01/FR-05 判定链（config 类词条目→non-testable）自相矛盾；实现与绑定测试按链执行，场景原文「= partial」未兑现",
+      "evidence": "FR-02 场景：验收条目含 config、docstring 仅正文命中 → Then 判定=partial（requirements.md:28-32）。但判定链级②（src/verify-probes.js:1985 条目级 NONTESTABLE 命中→non-testable）先于级⑤（:1997 正文级→partial），该输入实际输出 non-testable；FR-01（requirements.md:13）与 FR-05（:64）显式要求 config 类词条目直判 non-testable 且被声明为「新契约单一来源」，同文档内承诺冲突时实现取链为准。绑定测试（test/probe7-prefill-noise.test.mjs:146-151）实际用非 NONTESTABLE 关键词 kwBodyHit 验证 partial，未覆盖该场景。属需求文本内部矛盾+场景级测试缺位；非假 covered、无数据正确性风险（机械预填，agent 复核可改写）",
+      "location": "src/verify-probes.js:1985 / .sillyspec/changes/2026-10-16-probe7-prefill-noise-fix/requirements.md:28-32"
+    },
+    {
+      "severity": "P3",
+      "title": "renderProbe7Lines 的 JSDoc 仍声明旧 hint 形态 anchors?，与实现 nameAnchors 不符（类型文档漂移）",
+      "evidence": "src/verify-probes.js:2022 的 @param 写 hints: {terms, files, anchors?: Array<{term,file,line}>}，而 buildAcceptanceHints 自本变更起只返回 nameAnchors（:1891 返回类型、:1933 构造），prefillMatrixCells 消费 hint.nameAnchors（:1976）；design 接口契约已声明 anchors 字段删除（design.md:25）。纯文档漂移，无行为影响",
+      "location": "src/verify-probes.js:2022"
+    },
+    {
+      "severity": "P3",
+      "title": "waveFiles 提升匹配对 allowed_paths 反斜杠形态不设防：fromAllowed 未归一化分隔符，与归一化后的 waveFiles 字符串不等 → 该形态卡的 FR-03 lift 静默不触发",
+      "evidence": "readReviewChangedTestFiles 对 review 路径做反斜杠归一（src/verify-probes.js:1851），fromAllowed 仅剥 NEW: 前缀与 trim（:2315-2317，parseAllowedPaths 不归一化分隔符，src/stages/plan-postcheck.js:74-96）；prefillMatrixCells 级⑥用 waveFiles.includes(f) 精确串匹配（:2002）。若卡 allowed_paths 以反斜杠书写，同波次提升不触发，该格回落级⑦ partial——安全方向（不假升格）但 FR-03 在 Windows 形态卡上静默失效",
+      "location": "src/verify-probes.js:2002"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——review.json 缺失/迟到 → waveFiles 空 → 落 partial 不假升格；fail-safe 在 :1844-1855 catch 返回空集，runId 双路解析沿用既有实现）",
+    "并发": "ok（本变更纯读 review.json/测试文件，无新增写面；骨架写盘沿用既有 ensureAcceptanceMatrixSection 幂等路径，diff 未触及该函数）",
+    "切换": "ok（边界已裁决：可接受——预填仅骨架生成/缺段补齐两条新写路径生效，agent 已填不覆盖；有正文命中的格封顶 partial 不触发 lift，级⑤先于级⑥（:1997-2008））",
+    "作用域": "ok（边界已裁决：可接受——waveFiles 为仓根相对且与归属列同源串匹配不混根；≥5 候选不触发 lift（级④在 :1993）；(b) verify 命令点名测试不引入为已声明裁量）"
+  },
+  "reviewedAt": "2026-10-16T08:40:47Z"
+}
