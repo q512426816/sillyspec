@@ -16,16 +16,18 @@ created_at: 2026-10-16T08:28:38.146Z
 - 本地 Linux 容器内全量 npm test 零失败（818 文件）
 - 推送后 CI test job 转绿（lint/docs-gate 维持绿）
 - 零回归：两文件其余断言、src 实现（quicklog.js/verify-postcheck.js）行为不改
+- quick 审计 EOL 假 M 探测在 git ≤2.43（Debian 12 / Ubuntu 24.04 默认 git）不得静默失效——改走 diff --numstat + 源码钉锁形态（容器 git 2.39.5 实证过滤失效，CI runner git 2.55 看不出来）
 
 ## 变更范围
 
-按成功标准机械推导，共 6 条验收面：
+按成功标准机械推导，共 7 条验收面：
 1. test/backlog-batch-a.test.mjs 在 linux 与 windows 双端退出码 0（12/12 通过）
 2. test/feedback-batch2-hardening.test.mjs 双端退出码 0；⑥ 段 linux 钉「大小写不符如实落②类不放水」、win32/darwin 钉「折叠命中」，./ 前缀+尾部注记与 NEW 未建两项跨平台钉死
 3. 本地 Linux 容器内全量 npm test 零失败（818 文件）
 4. 推送后 CI test job 转绿（lint/docs-gate 维持绿）
 5. 零回归：两文件其余断言、src 实现（quicklog.js/verify-postcheck.js）行为不改
 6. src/verify-postcheck.js 不含裸 NUL 字节（复合键分隔符以 `\u0000` 转义书写），grep/rg 检索不再被二进制判定吞掉命中
+7. quick 审计 EOL 假 M 探测在 git ≤2.43 上不得静默失效（改走 diff --numstat + 源码钉锁形态）
 
 ## 成功标准（可验证）
 
@@ -35,3 +37,4 @@ created_at: 2026-10-16T08:28:38.146Z
 4. 推送后 CI test job 转绿（lint/docs-gate 维持绿）
 5. 零回归：两文件其余断言、src 实现（quicklog.js/verify-postcheck.js）行为不改
 6. src/verify-postcheck.js 不含裸 NUL 字节（复合键分隔符以 `\u0000` 转义书写），grep/rg 检索不再被二进制判定吞掉命中——排查本轮⑥段口径时的真实致盲点，随本次一并清偿（源码卫生面，运行时字符串值逐字节不变）
+7. quick 审计 EOL 假 M 探测在 git ≤2.43 上不得静默失效——改走 diff --numstat + 源码钉锁形态；容器 git 2.39.5 实证过滤失效、WSL git 2.43.0 同怪癖，CI runner git 2.55 看不出该版本差故必须钉形态

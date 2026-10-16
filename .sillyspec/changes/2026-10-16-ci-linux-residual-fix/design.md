@@ -28,6 +28,16 @@ created_at: 2026-10-16T08:28:38.146Z
    `grep -n foldCase src/verify-postcheck.js` 零输出，是排查该⑥段口径时的真实致盲点）。
    字节级替换为 6 字节转义序列，运行时字符串值逐字节相等（`'\0' === '\u0000'`）。
 
+4. **`src/run/shared.js` quick 审计 EOL 假 M 探测改 `--numstat`**（FR-07，容器门捞出的真实缺陷）：
+   原探测用 `git diff --name-only --ignore-cr-at-eol HEAD`，而 `--name-only` **不吃**
+   `--ignore-cr-at-eol`——git ≤2.43 仍把纯行尾重写文件列进名单（Debian 12 git 2.39.5 与
+   Ubuntu 24.04 git 2.43.0 实测；git ≥2.54 才听话，CI runner 是 2.55 所以全绿看不出来），
+   即「gen:types 行尾重写制造假 M」坑（2026-09-12 修复）在这些主流环境静默复活。改走
+   `--numstat`（同 `src/verify-postcheck.js` reconcileActualFiles 的 eolOnlyFiles 既定口径，
+   该处注释早已记载此怪癖）+ numstat 行解析取新路径（rename 两形态 `old => new` /
+   `pre{old => new}post` 落到新名，避免重命名被误判 EOL-only 剔出）。配一条**源码钉**：
+   行为测试在 CI 的新 git 上抓不到该版本差，钉住 `--numstat` 形态才有 CI 可见的回归锁。
+
 **本地 Linux 复现能力**（本变更的方法论交付）：`docker run -d --name ssx-ci -v <仓>:/work
 -w /work node:24-alpine sleep infinity` + `apk add git`，仓直接挂载（工作树全 LF，
 `.gitattributes` `* text=auto eol=lf`，与 CI checkout 同字节）。失败面先容器内复现（首轮即
@@ -45,7 +55,13 @@ created_at: 2026-10-16T08:28:38.146Z
   （裸 NUL → `\u0000`）变化。
 - 测试侧：`test/backlog-batch-a.test.mjs`③b 的 mock exports 由「全量 spread」变为
   「全量 spread \ constants」；`test/feedback-batch2-hardening.test.mjs`⑥ 段断言按平台分叉
-  （新增 `writeTask01` 辅助与 `caseInsensitiveFs` 判定），其余段零改动。
+  （新增 `writeTask01` 辅助与 `caseInsensitiveFs` 判定），其余段零改动；
+  `test/quick-audit-foreign-residue.test.mjs` 新增源码钉一条（`--numstat` 形态）。
+- `src/run/shared.js`：`auditQuickCompletion` 的 EOL 探测命令由
+  `diff --name-only --ignore-cr-at-eol HEAD` 改为 `diff --numstat --ignore-cr-at-eol HEAD`
+  + numstat 行解析（`numstatNewPath` 局部函数）。对外结果语义不变（eolOnlyFiles/changedFiles
+  口径相同），仅在 git ≤2.43 环境把「静默全列」修回「正确过滤」；失败路径仍 fail-open
+  （safeGit 错误 → null → 不过滤，与改前一致）。
 
 ## 边界与并发（盲维四问——每问必答）
 
@@ -72,6 +88,14 @@ created_at: 2026-10-16T08:28:38.146Z
   断言（`./` 前缀 + 注记命中）在双端恒真——linux 侧若归一/匹配链真坏，第一段先红。
 - **NUL 字节替换风险：把内容改坏**（文件 337KB，含中文注释）。缓解：字节级替换只动 2 个
   0x00 → 12 字节 `\u0000`，改前改后以 node 对比两处字符串值与 `node --check`、全量池零失败。
+- **EOL 探测改 numstat 的风险：rename 形态被误判 EOL-only 剔出**（numstat 的
+  `old => new` / `pre{old => new}post` 形态若不解析新名，`real` 集对不上 porcelain 路径 →
+  重命名被当纯行尾踢出 changedFiles，审计静默放宽）。缓解：`numstatNewPath` 显式解析两形态，
+  并以容器内实测（staged `a.js → b.js` 叠加行尾重写 → changedFiles 含 b.js、eolOnlyFiles 空）
+  核验；另注意 `git diff --numstat` 在纯 EOL 变更上整行不输出（容器 git 2.39.5 实证）。
+- **版本差在 CI 上不可见**（CI runner git 2.55 会过滤，行为测试恒绿）：故 FR-07 配源码钉而非
+  仅行为断言——源码钉是唯一在 CI 可见的回归锁；行为面另由容器 git 2.39.5 / WSL git 2.43.0 /
+  Windows 三端各跑一次兜住。
 - 试过但放弃：
   a) **改实现让 linux 也折叠大小写**——会在敏感文件系统上替写错路径放水（②类假阴性），实现
      口径明确写着「Linux 保持敏感」，属设计意图而非缺陷；
@@ -80,4 +104,8 @@ created_at: 2026-10-16T08:28:38.146Z
   c) **`Object.defineProperty(fsExports, 'constants', {configurable:true})` 后再 spread**——
      多此一举且语义含糊，`delete` 与兄弟文件同款、一眼可审；
   d) **仅靠 CI 迭代（继续盲推）**——本轮每轮往返 3-4 分钟且失败面要等跑完才知，容器本地门把
-     往返压到秒级且可反复复现（已实证一字不差复现）。
+     往返压到秒级且可反复复现（已实证一字不差复现）；
+  e) **EOL 探测逐文件 `git diff --quiet --ignore-cr-at-eol HEAD -- <path>`**——版本无关但 N 次
+     调用（脏仓几十文件即几十次进程 spawn），且偏离 verify-postcheck 的既有单次 numstat 口径；
+  f) **只报不改 EOL 缺陷**（CI 绿、非本轮原范围）——主流用户环境（Debian 12 / Ubuntu 24.04
+     默认 git）下坑是活的，且修法与同仓既定口径一致、改动单函数局部，故随本变更一并清偿。

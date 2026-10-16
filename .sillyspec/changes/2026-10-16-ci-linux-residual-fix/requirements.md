@@ -94,11 +94,32 @@ Given 裸 NUL 已替换为 6 字节转义序列
 When `grep -n "foldCase" src/verify-postcheck.js`
 Then 正常输出命中行（不再被当二进制）；`node --check` 通过且全量套件零失败
 
+### FR-07: quick 审计 EOL 假 M 过滤在 git ≤2.43 上不得静默失效（探测走 --numstat）
+
+- 必须：`src/run/shared.js` 的 EOL-only 探测必须走 `git diff --numstat --ignore-cr-at-eol HEAD`——
+  `--name-only` 组合在 git ≤2.43 上仍列出纯行尾重写文件（Debian 12 git 2.39.5 / Ubuntu 24.04
+  git 2.43.0 实测），会让「gen:types 行尾重写制造假 M」坑（2026-09-12 修复）在这些环境静默复活；
+  且须有源码钉锁定该形态（行为测试在 CI 的 git ≥2.54 上抓不到此版本差）。rename 两形态
+  （`old => new` / `pre{old => new}post`）必须落新名，不得把重命名误判为 EOL-only 剔出。
+
+#### 场景：老 git 假 M 剔除
+
+Given git 2.39.5 容器 / 2.43 WSL 下 tracked 文件仅行尾 LF→CRLF
+When auditQuickCompletion 审计
+Then 该文件归 eolOnlyFiles 且不进 changedFiles（EOL 用例红→绿，修复前容器实证）
+
+#### 场景：rename 不误剔
+
+Given 已暂存重命名 `a.js → b.js` 叠加行尾重写
+When 同一审计
+Then b.js 留在 changedFiles、eolOnlyFiles 为空（numstat 的 `old => new` 形态取新名）
+
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/backlog-batch-a.test.mjs「③b 偷锁 rename 持续失败 → 按超时抛错（不忙等自旋）」
 FR-02: test/feedback-batch2-hardening.test.mjs「⑥ target_files 对账路径键归一」
-FR-03: test/run-tests.mjs（容器内全量池——818 文件逐件退出码）
+FR-03: test/run-tests.mjs（容器内全量池——819 文件逐件退出码）
 FR-04: 不适用：CI 结果面（GitHub Actions run 回执）非仓内测试可断言，以 gh run view 三 job 回执核验
 FR-05: test/backlog-batch-a.test.mjs「①②③a 各段」+ test/feedback-batch2-hardening.test.mjs「①②③④⑤段」+ test/run-tests.mjs（全量池）
 FR-06: test/run-tests.mjs（全量池回归 src/verify-postcheck.js 引用面）
+FR-07: test/quick-audit-foreign-residue.test.mjs「EOL-only 假 M 剔出审计；真实修改保留」+「源码钉：EOL 假 M 探测走 diff --numstat」
