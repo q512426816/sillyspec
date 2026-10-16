@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-16-spec-sync-fail-alarm",
+  "baseline": "619f3e1dccdd598991c98f4fab6565164bf01108",
+  "head": "6a8f46c3c0cd092f129013b467e8ec1b9477e86a",
+  "files": [
+    "docs/sillyspec/file-lifecycle.md",
+    "src/spec-sync.js",
+    "test/spec-sync-fail-streak.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 195,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-16T00:32:39.469Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 7,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "619f3e1dccdd598991c98f4fab6565164bf01108",
+    "totals": {
+      "files": 3,
+      "additions": 195,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 76,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-fail-streak.test.mjs",
+        "additions": 117,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7ff6e64f28799c541ce494513c0a52b48d1df628a078e251706b5de0360bdead",
+  "patchStatus": "ok"
+}

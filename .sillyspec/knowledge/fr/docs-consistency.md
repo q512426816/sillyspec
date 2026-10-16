@@ -1620,3 +1620,67 @@ created_at: 2026-09-28T17:07:05.883Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-15-pseudo-domain-clearance/requirements.md#FR-04
 最近确认：5570285d46e6b499799c7a903903ea11bdd970e0
+
+## FR-docs-consistency-074 anchorBackfillCandidate 单元：恰一路径（含 :行号形态）→token、多路径→null、仅裸名→null、.sillyspec/knowledge 自引用排除、空→null
+变更：2026-10-15-decision-anchor-backfill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-anchor-backfill/requirements.md#FR-01
+最近确认：2d8d863e368470f4c81b5502763a84de31741701
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-anchor-backfill:flow:测试绑定FR-01
+  tests: test/decision-anchor-backfill.test.mjs「① anchorBackfillCandidate 全形态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-anchor-backfill
+  status: active
+
+## FR-docs-consistency-075 收割端端到端：风险段恰一路径 → 产出 - 锚点：行；无路径 → 无该行（不编造）
+变更：2026-10-15-decision-anchor-backfill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-anchor-backfill/requirements.md#FR-02
+最近确认：2d8d863e368470f4c81b5502763a84de31741701
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-anchor-backfill:flow:测试绑定FR-02
+  tests: test/decision-anchor-backfill.test.mjs「② 收割端：恰一路径 → - 锚点：行；无路径 → 无该行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-anchor-backfill
+  status: active
+
+## FR-docs-consistency-076 蒸馏端端到端：条目无锚点正文含单一路径 → 蒸馏段锚点=该路径；多路径 → 未记录；既有锚点不覆盖
+变更：2026-10-15-decision-anchor-backfill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-anchor-backfill/requirements.md#FR-03
+最近确认：2d8d863e368470f4c81b5502763a84de31741701
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-15-decision-anchor-backfill:flow:测试绑定FR-03
+  tests: test/decision-anchor-backfill.test.mjs「③ 蒸馏端：无锚点正文单一路径 → 回填；多路径 → 未记录；既有锚点不覆盖」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-15-decision-anchor-backfill
+  status: active
+
+## FR-docs-consistency-077 存量手术回填实测：graph anchors 边显著增长，坏锚裁决还原留痕
+变更：2026-10-15-decision-anchor-backfill
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-15-decision-anchor-backfill/requirements.md#FR-04
+最近确认：2d8d863e368470f4c81b5502763a84de31741701

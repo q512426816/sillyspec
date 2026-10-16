@@ -23,3 +23,5 @@
 | 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
 | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
 | 2026-10-15 | 2026-10-15-plan-review-focus | 计划盲区清单与比例自检——对照 Superpowers writing-plans 的 Review… |
+| 2026-10-15 | 2026-10-15-session-forensics | 会话取证命令 sillyspec diagnose——对照 Superpowers diagnosi… |
+| 2026-10-16 | 2026-10-16-spec-sync-fail-alarm | spec-sync 失败告警升级——响应体落日志+连续失败计数升级（生产索引损坏事故后的可观测性加固… |

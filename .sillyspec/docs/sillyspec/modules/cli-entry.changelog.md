@@ -58,3 +58,5 @@
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
 | 2026-10-15 | 2026-10-15-decision-redomain | 用户指令：平台仓存量决策迁真域。背景：模块路径 glob 匹配失效（2026-10-15-modul… |
 | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+| 2026-10-15 | 2026-10-15-decision-anchor-backfill | 效果评估实证（用户问「新变更图谱为何不关联代码」）：决策↔代码的图谱边唯一来源是条目「锚点：」字段，… |
+| 2026-10-15 | 2026-10-15-session-forensics | 会话取证命令 sillyspec diagnose——对照 Superpowers diagnosi… |

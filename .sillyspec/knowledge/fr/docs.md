@@ -437,3 +437,60 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-15-session-forensics
   status: active
+
+## FR-docs-023 spec-sync POST/GET 清单失败时告警行含平台响应体的 code/message（有则带 details.path），不再只有状态码
+变更：2026-10-16-spec-sync-fail-alarm
+状态：active
+摘要：主路径；非 JSON 响应体
+全文：.sillyspec/changes/archive/2026-10-16-spec-sync-fail-alarm/requirements.md#FR-01
+最近确认：fe09540bcda6e0ea2282ab7603293e2fd4b51e38
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-01
+  tests: test/spec-sync-fail-streak.test.mjs「A. describeErrorBody 响应体摘要」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-spec-sync-fail-alarm
+  status: active
+
+## FR-docs-024 同一 label 连续失败 ≥3 次后告警行升级为显式 🚨 提示；任一次成功后计数清零
+变更：2026-10-16-spec-sync-fail-alarm
+状态：active
+摘要：主路径；成功清零
+全文：.sillyspec/changes/archive/2026-10-16-spec-sync-fail-alarm/requirements.md#FR-02
+最近确认：fe09540bcda6e0ea2282ab7603293e2fd4b51e38
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-02
+  tests: test/spec-sync-fail-streak.test.mjs「B1. 连续 422 三轮：第 3 轮升级 🚨」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-spec-sync-fail-alarm
+  status: active
+
+## FR-docs-025 npm test + npm run lint 实测通过（flow done 门禁）
+变更：2026-10-16-spec-sync-fail-alarm
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-16-spec-sync-fail-alarm/requirements.md#FR-03
+最近确认：fe09540bcda6e0ea2282ab7603293e2fd4b51e38
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-03
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-spec-sync-fail-alarm
+  status: active

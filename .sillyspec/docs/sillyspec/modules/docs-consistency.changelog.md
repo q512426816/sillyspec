@@ -27,3 +27,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-14 | 2026-10-14-decision-legacy-renumber | 存量决策号一次性迁移（用户裁决翻「不回填」旧案）：src/decision-renumber.js 迁移工具（planRenumber/applyRenumberPlan 纯函数 + knowledge renumber --dry-run/--apply CLI）；真实库执行 701 legacy 节段→597 全局号（fanout 75 组单一身份、epoch 零触碰 1）；docs-check 读原编号 + isDecisionExempt 认原编号（消费仓旧裸键兼容） |
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
 | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
+| 2026-10-15 | 2026-10-15-decision-anchor-backfill | 效果评估实证（用户问「新变更图谱为何不关联代码」）：决策↔代码的图谱边唯一来源是条目「锚点：」字段，… |

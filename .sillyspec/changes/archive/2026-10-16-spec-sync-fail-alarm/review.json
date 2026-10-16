@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-spec-sync-fail-alarm",
+  "reviewer": "independent-subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "fe09540bcda6e0ea2282ab7603293e2fd4b51e38",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "readFailStreak 无形状校验：合法 JSON 标量损坏形态下 bump/clear 会抛 TypeError 且 bump 赋值点在 try 之外",
+      "evidence": "readFailStreak 对「解析成功但为原始值（数字/字符串/布尔）」的文件原样返回（null 才回 {}），bumpFailStreak 的 all[label]=cur 在 try 块之前（spec-sync.js:103），严格模式下对原始值赋属性抛 TypeError：GET 非 2xx 分支内抛出会被同函数 catch 再次 bump 再抛，逃逸 syncSpecTree 把已处理失败反转成未处理异常；clearFailStreak 的 delete 同理且在成功路径裸调。自写文件恒为对象故仅外部篡改可触发，与 design.md「文件损坏回空对象重新计」承诺在此形态有偏差，建议 readFailStreak 加 typeof 校验。",
+      "location": "src/spec-sync.js:87-93,96-103,111-118"
+    },
+    {
+      "severity": "P3",
+      "title": "四个失败出口仅 POST 非 2xx 有集成断言，GET 非 2xx / GET 异常（上轮 P1 清偿点）/ POST 异常无回归钉",
+      "evidence": "B1-B4 的 mock 平台 GET 清单恒 200，只驱动 POST 非 2xx 出口（spec-sync.js:775-785）；GET 非 2xx（692-708）、GET catch（712-719，恰为 fe09540b 清偿的 P1 修复点）、末尾 catch（905-912）三出口的 bump+升级接线删掉后现有套件不会变红。建议 mock 增加 manifest 500/拒连各一轮断言计数递增与 🚨。",
+      "location": "test/spec-sync-fail-streak.test.mjs:84-127"
+    },
+    {
+      "severity": "P3",
+      "title": "非 JSON 截断「前 200 字」上界未被钉住：现用例原文 22 字符，slice(0,200) 退化为恒等",
+      "evidence": "A 组用例 describeErrorBody(502, '<html>Bad Gateway</html>') 断言全等（test:43），上界分支未覆盖——实现若回归为 slice(0,500) 仍全绿，FR-01「截断原文前 200 字」的 200 无断言约束。建议补一条 >200 字符原文断言长度恰为 200。",
+      "location": "test/spec-sync-fail-streak.test.mjs:42-43"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  }
+}

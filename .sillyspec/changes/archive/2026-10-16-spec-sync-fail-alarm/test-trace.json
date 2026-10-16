@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-spec-sync-fail-alarm",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-01",
+      "tests": [
+        "test/spec-sync-fail-streak.test.mjs「A. describeErrorBody 响应体摘要」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-spec-sync-fail-alarm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-02",
+      "tests": [
+        "test/spec-sync-fail-streak.test.mjs「B1. 连续 422 三轮：第 3 轮升级 🚨」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-spec-sync-fail-alarm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-spec-sync-fail-alarm:flow:测试绑定FR-03",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-spec-sync-fail-alarm"
+    }
+  ]
+}
