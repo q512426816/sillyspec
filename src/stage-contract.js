@@ -897,7 +897,7 @@ function matrixEvidenceMissing(verdict, evidence) {
  */
 export function extractAcceptanceMatrixSlots(verifyMd) {
   const md = String(verifyMd || '')
-  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0 }
+  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0, strayRows: [] }
   const hm = md.match(/^#### 探针 7[：:]/m)
   if (!hm) return out
   out.present = true
@@ -905,15 +905,27 @@ export function extractAcceptanceMatrixSlots(verifyMd) {
   const endMatch = rest.match(/^#{1,4}(?:[ \t]|$)/m)
   const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
 
+  // 表头武装（坑 carry-orphan-rows，2026-10-16 下游实证）：五列表行只在探针 7 段已被表头行
+  // 武装时才计数；refresh 携载注释块解除武装——其后残行（旧模板占位行/键漂移携载行）是无
+  // 表头归属的孤行，不栽给最近 **task-NN** 锚误报「判定未填」，进独立 strayRows 桶由
+  // validateAcceptanceMatrix 报错要求裁决。武装是段级粘性（首表头武装整段，锚行不重置——
+  // 锚下不重复表头的既有手写/历史形态照旧按锚归属）；只有携载注释块与其后无新表头重新
+  // 武装的窗口内，行才进孤行桶。正常渲染文法（锚行→表头→分隔→数据行）行为与既有口径一致。
   let currentTask = ''
+  let tableArmed = false
   for (const rawLine of sectionText.split(/\r?\n/)) {
     const anchor = rawLine.match(/^\*\*\s*(task-[A-Za-z0-9._-]+)\s*\*\*/)
     if (anchor) { currentTask = anchor[1]; continue }
+    if (/<!--\s*refresh 携载/.test(rawLine)) { tableArmed = false; continue } // 携载注释块：其后表行是孤行（直至新表头重新武装）
     const cells = splitMatrixRowCells(rawLine)
     if (!cells || cells.length !== 5) continue // 列表防御行/不适用行/非五列表行不计槽
     const c = cells.map(x => x.trim())
     if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行 |---|---|…|
-    if (c[3] === '判定' && c[4] === '证据') continue // 表头行
+    if (c[3] === '判定' && c[4] === '证据') { tableArmed = true; continue } // 表头行（武装本段）
+    if (!tableArmed) {
+      out.strayRows.push({ task: currentTask, acceptance: c[0], verdict: c[3], evidence: c[4] })
+      continue
+    }
     const verdict = c[3]
     const evidence = c[4]
     const row = { task: currentTask, acceptance: c[0], verdict, evidence }
@@ -983,6 +995,16 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
       `探针 7 验收×测试覆盖矩阵有 ${matrix.missingEvidence} 行证据缺失` +
       `（covered/covered-service/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
       `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由（运行验证移交场景适用：构建回执+移交去向一句话）。`
+    )
+  }
+  // 孤行报错（坑 carry-orphan-rows，2026-10-16 下游实证）：无表头归属的五列残行（refresh
+  // 携载块后的旧模板占位行/键漂移携载行/手误行）不归属任何 task 锚——不栽给最近锚计
+  // unfilled（旧路径误报「文档同步任务判定未填」），独立报错要求裁决：删或补归属。
+  if ((matrix.strayRows || []).length > 0) {
+    const list = matrix.strayRows.map((r) => `${r.task || '（无 task 锚）'}｜${clip(r.acceptance)}`).join('；')
+    errors.push(
+      `探针 7 验收×测试覆盖矩阵存在 ${matrix.strayRows.length} 行无表头归属的孤行（携载残行/旧模板占位行/手误——不属于任何 task 锚下的有效表，不计入任务矩阵）：${list}。` +
+      `修复：删除这些残行，或补全 **task-NN** 锚行与表头后按五列格式填判定与证据。`
     )
   }
 

@@ -1100,17 +1100,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 变更文档随快照（test_strategy 消费）。并行会话在途文件物理不进快照、不参与本门判定。
     // 快照基建失败 → 回退主仓现行为（失败路径沿用 renderVerifyTestAttribution 归因提示）。
     let verifyGateSnap = null
+    let snapshotFailRef = null // createVerifyGateSnapshot 出参：结构化失败原因（FR-04，替代硬编码笼统文案）
     if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
       try {
         const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
-        verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+        snapshotFailRef = {}
+        verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
         if (verifyGateSnap) {
           console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
         } else {
-          // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账
+          // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
+          // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因
+          // （pnpm 布局拒建 / 文件集为空三分成因 / junction 失败 / 基建异常详情），不再笼统
           try {
             const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
-            if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' })
+            const fbReason = snapshotFailRef && snapshotFailRef.reason
+              ? `createVerifyGateSnapshot 返回 null：${snapshotFailRef.reason}`
+              : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
+            if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: fbReason })
           } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
         }
       } catch (e) {
@@ -1118,6 +1125,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
           if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: e && e.message ? e.message : String(e) })
         } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
+      }
+    }
+    // FR-04 降级事实落盘：used_snapshot 与失败原因随 test-result.json extra 持久化（快照在场
+    // 时记录随快照销毁；回退主仓时恰好落在主仓 .runtime——降级证据存活面与用途一致）
+    let snapObsFields = { used_snapshot: Boolean(verifyGateSnap) }
+    if (!verifyGateSnap) {
+      try {
+        const { snapshotObservability } = await import('./gate-snapshot.js')
+        snapObsFields = snapshotObservability(false, snapshotFailRef)
+      } catch {
+        snapObsFields = { used_snapshot: false, snapshot_fallback_reason: snapshotFailRef && snapshotFailRef.reason ? String(snapshotFailRef.reason) : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' }
       }
     }
     const gateCwd = verifyGateSnap ? verifyGateSnap.snapshotRoot : cwd
@@ -1220,7 +1238,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         `质量扫描: ${reusableScan ? '命中（上层未消费）' : '指纹失配/无记录'}`,
         `green-cache: ${greenHit ? '命中（上层未消费）' : '指纹失配/过期/无记录'}`,
       ].join('；')
-      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, observability: { fingerprint: _obsFingerprint, reuse_decision: { layer: 'real-run', hit: false, reason: _missReason } }, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
+      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, observability: { fingerprint: _obsFingerprint, reuse_decision: { layer: 'real-run', hit: false, reason: _missReason }, ...snapObsFields }, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
       printVerifyTestCheck(testCheck)
       // 自动绑定补全（full-autopilot-parity，R21 thin 迁移）：测试已跑、test-result.json 已落盘，
       // verify --done 收口时从测试结果自动补全 requirements.md 的空绑定槽——与 thin 同逻辑（逐行扫描）。

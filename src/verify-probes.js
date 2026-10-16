@@ -3897,12 +3897,26 @@ function mergeProbeSection(oldLines, freshLines) {
     const cell = l.split('|')[1]
     return cell ? cell.trim() : null
   }
+  // 占位/分隔单元格（坑 carry-orphan-rows，2026-10-16 下游实证）：全占位行（所有单元格均为
+  // 横线族/占位词/空）被当「已填行」携载，成为夹在报告中部、被门禁栽给最近 task 锚的孤儿
+  // 残行。横线族含 em/en-dash 等全角形态；占位词不区分大小写。部分占位的真实行（有任一
+  // 非占位格）不受影响，照常携载。
+  const isPlaceholderCell = (c) => {
+    const t = String(c ?? '').trim()
+    if (t === '') return true
+    if (/^[-–—―−\s]*$/.test(t)) return true
+    return /^(?:待填|tbd|todo)$/i.test(t)
+  }
   const oldFilled = new Map()
   for (const l of oldLines) {
     if (!/^\s*\|/.test(l)) continue
     if (/<待填|<TODO/.test(l)) continue
     const key = firstCell(l)
-    if (!key || /^-{3,}$/.test(key)) continue // 分隔行/空键不携载
+    if (!key) continue // 空键不携载
+    if (/^:?-{3,}:?$/.test(key)) continue // 分隔行（含 :--- / :---: 冒号对齐形态，与门禁 splitMatrixRowCells 文法同源）
+    const cells = l.split('|').slice(1).map((c) => c.trim())
+    if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop() // 行尾管道的收尾空段
+    if (cells.length > 0 && cells.every(isPlaceholderCell)) continue // 全占位行（旧模板残形）不携载
     oldFilled.set(key, l)
   }
   if (oldFilled.size === 0) return { text: freshLines.join('\n'), carried: 0 }

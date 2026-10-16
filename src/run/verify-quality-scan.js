@@ -655,14 +655,19 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
     } else {
     try {
       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
-      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+      const snapshotFailRef = {} // FR-04：结构化失败原因（pnpm 布局拒建/文件集三分成因/junction/基建异常）
+      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
       if (snap) {
         console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
       } else {
-        // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账
+        // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
+        // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因，不再笼统
         try {
           const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
-          if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'noAI 质量扫描步', reason: 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' })
+          const fbReason = snapshotFailRef && snapshotFailRef.reason
+            ? `createVerifyGateSnapshot 返回 null：${snapshotFailRef.reason}`
+            : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
+          if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'noAI 质量扫描步', reason: fbReason })
         } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
       }
     } catch (e) {

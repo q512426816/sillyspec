@@ -494,7 +494,12 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null }) {
+export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
+  // failRef 可选出参（坑 snapshot-fallback-reason-blind，2026-10-16 下游实证）：所有失败分支
+  // 把结构化原因写进 failRef.reason——调用方（verify --done 实测门 / noAI 质量扫描）消费它
+  // 替换硬编码笼统文案，降级原因可直读（pnpm 布局拒建 ≠ 文件集为空 ≠ junction 失败）。
+  // 返回契约不变（失败恒 null）；不传 failRef 行为与既有逐字节一致。
+  const setFail = (reason) => { if (failRef && typeof failRef === 'object') failRef.reason = reason }
   let snapshotRoot = null
   try {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
@@ -519,6 +524,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // 与其让沙箱报无关错误逼 advisory，不如布局命中即作废快照回退主仓（宁可主仓口径）。
     const layoutHit = detectSymlinkStoreLayout(cwd)
     if (layoutHit) {
+      setFail(`symlink-store 布局拒建（${layoutHit}）：node_modules 符号链接 store 经 junction 跨根失效，实测必假败——设计性回退主仓实测`)
       console.warn(`⚠️ 门禁快照对 ${layoutHit} 布局不可靠（node_modules 符号链接 store 经 junction 跨根失效，实测必假败）——跳过快照回退主仓实测；主仓失败再做污染归属鉴定`)
       return null
     }
@@ -625,6 +631,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // 回退主仓现行为（主仓口径可能被并行脏文件污染，但环境真实；两害取轻 + 回退原因可见）。
     const envMissing = envDirsLinked(cwd, snapshotRoot)
     if (envMissing.length > 0) {
+      setFail(`环境目录链接不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测`)
       console.warn(`⚠️ 门禁快照环境不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测（宁可主仓口径不可假沙箱硬挂；回退后失败先做污染归属鉴定）`)
       // 与正常 cleanup/失败 catch 同一清理体：双清确认才销账（该早退曾残留旧式 --quiet
       // 清理与无重试 rmSync——独立审查 P1-1 根因未除尽的漏网面）
@@ -723,7 +730,10 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
   } catch (e) {
     // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓；销账同走双清确认
-    // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）
+    // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）。
+    // 异常细节不再静默（坑 snapshot-fallback-reason-blind）：failRef 带原因 + warn 落日志。
+    setFail(`快照基建异常: ${e && e.message ? e.message : e}`)
+    try { console.warn(`⚠️ 门禁快照基建失败（回退主仓实测）: ${e && e.message ? e.message : e}`) } catch { /* 输出失败不影响回退 */ }
     if (snapshotRoot) {
       try {
         const { dirRemoved, worktreeCleaned } = cleanupSnapshot({ snapshotRoot, cwd })
@@ -870,7 +880,8 @@ export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_
  * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
  * @returns {Promise<{snapshotRoot: string, cleanup: () => void, overlaid: number, changeFileCount: number}|null>}
  */
-export async function createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts = {} }) {
+export async function createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts = {}, failRef = null }) {
+  const setFail = (reason) => { if (failRef && typeof failRef === 'object') failRef.reason = reason }
   try {
     const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
     const { resolveRuntimeRoot } = await import('./shared.js')
@@ -879,10 +890,19 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
     let verifyRuntimeRoot = null
     try { verifyRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase) } catch { verifyRuntimeRoot = null }
     const { splitOwnVsForeignDiffFiles } = await import('../foreign-declared.js')
-    let changeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
+    // 变更文件集为空三分成因区分（坑 snapshot-fallback-reason-blind）：null=git 不可用/解析
+    // 失败；[]=HEAD 无 diff；他者声明过滤清空在下方单独计——三者处置同为回退主仓，但排查
+    // 出路完全不同，笼统「变更文件集为空」曾把 pnpm 布局拒建也误标成它。
+    const rawChangeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
       specBase, includeWorkingTree: true,
-    }) || []
-    if (changeFiles.length === 0) return null // 无变更文件集 → 无从定向，回退主仓
+    })
+    let changeFiles = rawChangeFiles || []
+    if (changeFiles.length === 0) {
+      setFail(rawChangeFiles === null
+        ? '变更文件集为空（git 不可用/解析失败——非 git 仓或 git 异常，无从定向 overlay）'
+        : '变更文件集为空（HEAD 无 diff——改动可能已全部提交，无可隔离面）')
+      return null // 无变更文件集 → 无从定向，回退主仓
+    }
     // 他者声明归属过滤（坑 verify-reconcile-foreign-wip 同款）：in-place 模式 working-tree
     // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
     // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
@@ -891,7 +911,10 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
       if (foreign.length > 0) {
         const foreignSet = new Set(foreign.map(x => x.file))
         changeFiles = changeFiles.filter(f => !foreignSet.has(f))
-        if (changeFiles.length === 0) return null
+        if (changeFiles.length === 0) {
+          setFail(`变更文件集为空（${foreign.length} 个 diff 文件全部被他者声明过滤——并行会话声明面覆盖了本变更全部在途文件）`)
+          return null
+        }
       }
     } catch { /* 过滤失败退全量（fail-closed：宁可多 overlay 不漏本变更文件） */ }
 
@@ -920,8 +943,12 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
       }
     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
 
-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot })
-    if (!snap) return null
+    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
+    if (!snap) {
+      // createGateSnapshot 已把具体原因写进同一 failRef；无 reason（旧形态兜底）补笼统口径
+      if (failRef && typeof failRef === 'object' && !failRef.reason) setFail('快照基建不可用（createGateSnapshot 返回 null，无更细原因）')
+      return null
+    }
 
     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
     // 在 .sillyspec（gitignore）不进 HEAD，从主仓 specBase 复制 changes/<name>/**
@@ -940,7 +967,26 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
     } catch { /* 文档复制失败不连坐快照（test_strategy 降级 module 集仍可跑） */ }
 
     return { ...snap, changeFileCount: changeFiles.length, sourceRoot }
-  } catch {
-    return null // 任一链路异常 → 回退主仓现行为
+  } catch (e) {
+    // 任一链路异常 → 回退主仓现行为。异常细节不再静默（坑 snapshot-fallback-reason-blind）：
+    // failRef 带原因 + warn 落日志，排查不再靠 stdout 考古。
+    setFail(`快照链路异常: ${e && e.message ? e.message : e}`)
+    try { console.warn(`⚠️ 门禁快照链路异常（回退主仓实测）: ${e && e.stack ? e.stack.split('\n')[0] : e}`) } catch { /* 输出失败不影响回退 */ }
+    return null
   }
+}
+
+/**
+ * 快照口径观测字段（坑 snapshot-fallback-reason-blind，FR-04 落盘面）：--done 实测门把
+ * used_snapshot 与降级原因经 runVerifyTestCheck 的 observability 通道带进 test-result.json
+ * extra（对齐 2026-10-09 复用观测先例）。快照在场时记录随快照销毁（无可降级事实）；
+ * 回退主仓时记录恰好落在主仓 .runtime——降级证据存活在主仓，与用途一致。
+ * @param {boolean} used 快照是否真实在场
+ * @param {{ reason?: string }|null} failRef createVerifyGateSnapshot 的出参（可 null）
+ * @returns {{ used_snapshot: boolean, snapshot_fallback_reason?: string }}
+ */
+export function snapshotObservability(used, failRef) {
+  if (used) return { used_snapshot: true }
+  const reason = failRef && failRef.reason ? String(failRef.reason) : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
+  return { used_snapshot: false, snapshot_fallback_reason: reason }
 }

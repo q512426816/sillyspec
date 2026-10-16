@@ -718,7 +718,19 @@ export class SyncManager {
           console.warn(`⚠️ [sync] 变更 ${changeName} 的未决冲突已过期（base_ts ≥ 平台 ts=${stalePlatTs}），自动清除并恢复推送`);
         } else {
           console.warn(`⚠️ [sync] 变更 ${changeName} 存在未决平台冲突，跳过自动推送。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
-          return { synced: 0, errors: [`conflict pending: ${changeName}`], conflict: true, suppressed: true };
+          // spec 树与 progress 六表是独立通道（独立端点/独立冲突文件）：progress 冲突抑制
+          // 只应封锁六表上行，不应连带封锁 spec 树——否则删除 op 的唯一上行通道被冲突文件
+          // 长期封锁（2026-10-16 下游实证：409 窗口内本地删除的任务卡在服务器留存，后续整树
+          // 快照拉取把它们写回本地=复活，FR-01 上游成因）。补跑 best-effort：失败不改本分支
+          // 既有的 conflict/suppressed 返回语义（spec 树自身有失败可见性与下轮重试）。
+          let specTreeErrors = [];
+          try {
+            await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
+          } catch (err) {
+            specTreeErrors = [`spec 树补跑失败（不影响抑制语义）: ${err.message}`];
+            debugLog(`[sync] 冲突抑制期间 spec 树同步异常: ${changeName}: ${err.message}`);
+          }
+          return { synced: 0, errors: [`conflict pending: ${changeName}`, ...specTreeErrors], conflict: true, suppressed: true, specTreeAttempted: true };
         }
       }
     }
@@ -1881,6 +1893,30 @@ export class SyncManager {
     // ①rm 前先把内容原子写到树外 `<specDir 根名>.local.yaml.bak`（树内会被 rm 一并删掉，
     //   故放父目录）；②恢复主路径不变，失败时从 .bak 再兜底复制一次；③成功路径末尾
     //   清理 .bak（明文 token 不留第二份；顺带清历史失败残留）。
+    // 防复活抑制（坑 spec-tree-file-resurrect，2026-10-16 下游实证）：progress 冲突/熔断
+    // 窗口内本地删除的文件（删除 op 未上行成功，服务器清单仍含它）会在整树快照回放时被
+    // 服务器旧内容写回=复活（幽灵任务卡 + 验证误报「文件未清理」）。抑制判据无状态现算：
+    // 基线快照（.runtime/spec-sync-base.json = 上次成功同步时刻的本地文件全集，语义见
+    // spec-sync.js BASE_SNAPSHOT）有、当前盘面无 = 本地删除，回放时跳过这些条目；删除 op
+    // 后续上行成功 → 服务器清单不再含该路径 → bundle 不再携带 → 抑制面自然衰减。
+    // 基线在下方 rm 时会被连带删除（bundle 恒不含 .runtime），故必须在 rm 前读取。
+    // restoreDeleted: true = 用户显式意志优先，跳过抑制（恢复纯快照回放语义）。
+    const suppressResurrect = new Set();
+    const resurrectSkipped = []; // 被防复活抑制挡下的条目（suppressResurrect 命中面；try 外可见供返回值携带）
+    if (!opts.restoreDeleted) {
+      try {
+        const baseRaw = JSON.parse(readFileSync(join(specDir, '.runtime', 'spec-sync-base.json'), 'utf8'));
+        const baseHashes = baseRaw && typeof baseRaw.hashes === 'object' ? baseRaw.hashes : null;
+        if (baseHashes) {
+          for (const p of Object.keys(baseHashes)) {
+            const rel = String(p).replace(/\\/g, '/').replace(/^\.\//, '');
+            if (!rel || rel === 'local.yaml' || rel.startsWith('.runtime/')) continue;
+            if (!existsSync(join(specDir, rel))) suppressResurrect.add(rel);
+          }
+        }
+      } catch { /* 基线缺失/损坏 = 无抑制面（全新空环境全量回放，既有行为不变） */ }
+    }
+
     const localYamlPath = join(specDir, 'local.yaml');
     const localYamlBakPath = join(dirname(specDir), `${basename(specDir)}.local.yaml.bak`);
     let localYamlSaved = null; // null = 本无此文件，无需恢复
@@ -1916,6 +1952,11 @@ export class SyncManager {
       const crlfEntries = [];
       for (const e of entries) {
         _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
+        const relName = e.name.replace(/^\.\//, '').replace(/\\/g, '/');
+        if (!e.isDir && suppressResurrect.has(relName)) {
+          resurrectSkipped.push(relName); // 基线有、盘面无=本地删除：不从快照复活
+          continue;
+        }
         const fullPath = join(specDir, e.name);
         if (e.isDir) {
           mkdirSync(fullPath, { recursive: true });
@@ -1925,6 +1966,10 @@ export class SyncManager {
           pulledFiles++;
           if (e.data && e.data.length < 4 * 1024 * 1024) crlfEntries.push([e.name, e.data]); // CRLF 画像采样（超 4MB 大文件跳过采样，写入不受影响）
         }
+      }
+      // 防复活抑制可见（宁可吵不可静默复活）：被挡路径点名（截断防刷屏），出路指 --restore-deleted
+      if (resurrectSkipped.length > 0) {
+        console.warn(`⚠️ [sync] 防复活抑制：${resurrectSkipped.length} 个本地已删除文件未从快照恢复（对应删除 op 尚未上行成功，恢复会被下轮同步重新删除；确要恢复用 --restore-deleted）: ${resurrectSkipped.slice(0, 5).join(', ')}${resurrectSkipped.length > 5 ? ' 等' : ''}`);
       }
       // 批量写入留痕（2026-09-17 反馈⑥②法证收口）：整树解包=逐字节回放，他机 CRLF 内容
       // 原样落盘——审计行记 时间/触发面/文件数/CRLF 命中数（fail-open）。
@@ -1937,6 +1982,7 @@ export class SyncManager {
           crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
           crlfCount: crlfPaths.length,
           force: opts.force === true,
+          resurrectSkippedCount: resurrectSkipped.length,
         });
       } catch { /* 审计 fail-open */ }
       if (localYamlSaved !== null) {
@@ -1962,7 +2008,7 @@ export class SyncManager {
       return { ok: false, pulled: false, specDir, reason: `解压 spec bundle 失败: ${err.message}` };
     }
     console.log(`[sync] 已拉取 spec 快照并解压到 ${specDir}${specVersion ? `（平台 spec_version: ${specVersion}，打包时刻快照非实时）` : ''}`);
-    return { ok: true, pulled: true, specDir, specVersion };
+    return { ok: true, pulled: true, specDir, specVersion, ...(resurrectSkipped.length > 0 ? { resurrectSkipped } : {}) };
   }
 
   /**

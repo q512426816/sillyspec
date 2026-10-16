@@ -5429,7 +5429,7 @@ SillySpec config — local.yaml 配置键速查
 SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
 
 用法:
-  sillyspec pull --spec [--force]
+  sillyspec pull --spec [--force] [--restore-deleted]
 
 说明:
   从 SillyHub 平台拉取当前工作区的 .sillyspec 整树快照（tar 解压到 specDir，
@@ -5444,6 +5444,10 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
      本命令不自动同步、不在会话中自动刷新；拉取后本地的改动仍需正常推送。
      daemon 模式下任务/会话开始时会按 spec_version 自动取新，无需手动跑本命令。
 
+  防复活抑制（默认开启）：本地已删除、但删除尚未同步到服务器的文件（基线快照有、
+     盘面无），不会从快照写回本地（防「同步失败窗口内删除的任务卡被服务器旧文件复活」）；
+     确要从快照恢复这类文件用 --restore-deleted（纯快照回放语义）。
+
   拉取进度六表（多机进度同步）请用：sillyspec platform pull [--change <name>]
 `);
       if (pullWantsHelp || !pullWantsSpec) {
@@ -5456,6 +5460,10 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       }
 
       const pullSpecForce = pullSpecArgs.includes('--force');
+      // 防复活抑制（坑 spec-tree-file-resurrect）的显式恢复通道：默认把「基线有、盘面无」的
+      // 本地已删文件挡在快照回放外（删除 op 未上行成功时不被服务器旧文件复活）；
+      // --restore-deleted = 用户显式意志优先，恢复纯快照回放语义。
+      const pullSpecRestoreDeleted = pullSpecArgs.includes('--restore-deleted');
       const syncModule = await import('./sync.js');
       // 未连接明确提示不崩（对齐 platform pull :2289 先例）
       const smForSpecPull = new syncModule.SyncManager(dir);
@@ -5463,10 +5471,13 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         console.error('❌ 未连接平台，请先 sillyspec platform connect');
         process.exit(1);
       }
-      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir });
+      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir, restoreDeleted: pullSpecRestoreDeleted });
       if (specR.ok && specR.pulled) {
         console.log(`✅ 已拉取 spec 快照 → ${specR.specDir}${specR.specVersion ? `（平台 spec_version: ${specR.specVersion}）` : ''}`);
         console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
+        if (Array.isArray(specR.resurrectSkipped) && specR.resurrectSkipped.length > 0) {
+          console.log('   防复活抑制已生效：本地已删除文件未从快照恢复（删除 op 上行成功前，快照恢复会被下轮同步重新删除）；确要恢复用 --restore-deleted。');
+        }
       } else if (/非空/.test(specR.reason || '')) {
         console.error(`❌ ${specR.reason}`);
         console.error('   确认整树替换请加 --force（先删除本地 .sillyspec 整树再解包，进度 DB 等本地文件一并丢失；连接凭据 local.yaml 保留，无需重新 connect）');
