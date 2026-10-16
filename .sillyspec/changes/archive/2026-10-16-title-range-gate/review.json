@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-title-range-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "8889da0f7a38a5a133b103592fb6cb29f9acb99f",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "盲维问3作答与代码不完全一致：adopt/resume 的显式 --title 拒绝非「仅 console 输出」",
+      "evidence": "design 盲维问3称「adopt/resume 仅新增 console 输出不改写路径」，但 flow.js adopt/resume 均新增 --title 超界 exit(2)（快照行 72-75/100-103）；adopt 路径该拒绝发生在 writeFlowState(667/684)与 spawnWatcher(688) 之后。非数据正确性风险：被拒前写入均为可重入续跑的常规恢复态，首写者胜键不被覆盖，FR-01 零半态承诺仅 scope 到 fresh 且经 e2e 证实（fresh 门 917 在 initChange 925/watcher 942/writeFlowState 949 之前）。",
+      "location": "src/flow.js:688-702"
+    },
+    {
+      "severity": "P3",
+      "title": "FR 绑定用例名漂移 + adopt/resume ⚠️ 接线与 resume --title 拒绝无 flow 级测试",
+      "evidence": "requirements 绑定写「isTitleInRange 区间判定」「adopt/resume 超界强提示判定面」，实际测试名为 isValidChangeTitle/shortTitleRangeWarnLine 系列（13 例全存在且实跑全绿）；但 adopt 的 warn 接线（flow.js:705 附近 if(!isValidChangeTitle(adoptTitle))）与 resume 补写 warn 接线（flow.js:801 附近）及 resume --title exit 2 路径仅有文案契约/单元覆盖，无 e2e 断言该 flow 行为。",
+      "location": "test/title-range-gate.test.mjs:1-163"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 场景「平台 writer 豁免且无 --input → exit 0」未按字面验证",
+      "evidence": "e2e 用短首行 --input 变体验证豁免（测试注释披露：平台契约必带 --input，无 --input 在更早的清晰度门被拦，轮不到标题门）；代码路径本身完备（resolveStartTitle enforce=false 时 input:null 兜底 ok=true + ⚠️，单测覆盖 input:null 形态），FR-02 核心承诺（豁免硬门照启+⚠️ 留痕）成立，仅字面场景不可达。",
+      "location": "test/title-range-gate.test.mjs:1472-1482"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——门为启动时点入参纯判定无跨事件状态；resume 首写者胜条件 (titleFlag || !_cur) 原样保留（首写者胜不覆盖声明属实）；边界已裁决：可接受",
+    "并发": "ok——fresh 被拒路径零写入经 e2e DB 行断言证实（gate@917 先于 initChange@925），放行路径写入语义与改动前一致；边界已裁决：可接受",
+    "切换": "finding——fresh 零半态成立（P3-1：adopt/resume --title 拒绝时点晚于 watcher/flow-state 写入，与问3「仅 console 输出」表述不符，无数据损坏面）；边界已裁决：可接受",
+    "作用域": "ok——门只读本进程入参（titleFlag/input/proceedFreshEmptyDir），落库仅写本 cwd 进度库，跨仓基线锚/平台推送零触及；边界已裁决：可接受"
+  },
+  "reviewedAt": "2026-10-16T14:20:46.902Z"
+}

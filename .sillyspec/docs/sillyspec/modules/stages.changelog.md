@@ -63,3 +63,4 @@
 | 2026-10-15 | 2026-10-15-brainstorm-interaction-refine | 头脑风暴交互精化：对照 Superpowers v7.0.0 brainstorming 重写，补齐… |
 | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
 | 2026-10-15 | 2026-10-15-plan-review-focus | 计划盲区清单与比例自检——对照 Superpowers writing-plans 的 Review… |
+| 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |

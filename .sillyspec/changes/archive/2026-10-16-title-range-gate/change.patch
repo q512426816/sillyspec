@@ -1,0 +1,1579 @@
+diff --git a/.claude/skills/sillyspec-flow/SKILL.md b/.claude/skills/sillyspec-flow/SKILL.md
+index 9583f453..42f0bad9 100644
+--- a/.claude/skills/sillyspec-flow/SKILL.md
++++ b/.claude/skills/sillyspec-flow/SKILL.md
+@@ -16,7 +16,7 @@ description: 轻量变更（默认快道）——需求明确的小/中改动两
+ ### ① flow start（立项 + 锁基线）
+ 
+ ```bash
+-sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++sillyspec flow start --change <变更名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/AGENTS.md b/AGENTS.md
+index 89aff92a..9e5e4256 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -16,7 +16,7 @@
+ `--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
+ 
+ ```bash
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，必须落在 10-30 字硬区间、建议 ~20 字——不合区间 flow start 拒启）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 1a696d80..2c55d1d4 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -14,7 +14,7 @@
+ 4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`。`--input` 引号内换行合法，下例可照抄：
+ 
+    ```bash
+-   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
+ 
+    成功标准：
+    - <可验证标准>"
+diff --git a/assets/command-cards/flow.md b/assets/command-cards/flow.md
+index 9fe399df..84b7eda4 100644
+--- a/assets/command-cards/flow.md
++++ b/assets/command-cards/flow.md
+@@ -11,7 +11,7 @@ description: 轻量变更（默认快道）：需求明确的小/中改动两步
+ ```bash
+ export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
+ # ① 立项 + 锁基线（--input 引号内换行合法，可照抄；缺「成功标准」条目会被清晰度门拦下）：
+-sillyspec flow start --change <变更名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++sillyspec flow start --change <变更名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/src/flow.js b/src/flow.js
+index 777d4d55..466262fe 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -688,17 +688,22 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           const w = await spawnWatcher(cwd, change, { specBase })
+           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+         } catch { /* 观测旁路 best-effort */ }
+-        // adopt 标题（用户需求 2026-09-29）：头脑风暴 proposal 的 H1 是人写语义标题，
+-        // deriveTitleFromLinkedChange 提取（纯模板 H1 回退动机首句，2026-10-16-short-change-title）；
+-        // --title 优先；再退 --input 首行提炼（≤30 字）；兜底变更名。adopt 路径此前完全不
+-        // 注册 changes 行——initChange 补插（幂等），既有行 title 空时回填。
++        // adopt 标题（2026-09-29；2026-10-16-short-change-title 提炼；2026-10-16-title-range-gate
++        // 硬区间 10-30）：头脑风暴 proposal H1 人写语义标题（纯模板 H1 回退动机首句）→ --title
++        // 优先（合区间校验，超界 exit 2）→ --input 首行提炼 → 兜底变更名。收编是既成事实的
++        // 延续面，非 flag 的超界不硬断（收编半态不可恢复）打 ⚠️ 强提示。
+         try {
+-          const { deriveTitleFromLinkedChange, deriveShortChangeTitle } = await import('./quicklog.js')
++          const { deriveTitleFromLinkedChange, deriveShortChangeTitle, isValidChangeTitle, shortTitleRejectMessage, shortTitleRangeWarnLine } = await import('./quicklog.js')
++          if (titleFlag && !isValidChangeTitle(titleFlag)) {
++            console.error(shortTitleRejectMessage(titleFlag))
++            process.exit(2)
++          }
+           const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveShortChangeTitle(input) || change
+           pm.initChange(cwd, change, { title: adoptTitle })
+           const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
+           if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
+           console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
++          if (!isValidChangeTitle(adoptTitle)) console.log(shortTitleRangeWarnLine(adoptTitle))
+         } catch { /* adopt 标题 best-effort */ }
+         const materials = materialPaths(specBase, change, changeDir)
+         const artifacts = changeArtifactPaths(changeDir)
+@@ -781,19 +786,24 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+       writeFlowState(changeDir, { autopilot: true })
+       console.log(`🤖 已声明 autopilot：spec 断点人审豁免（用户显式声明留痕）`)
+     }
+-    // 变更标题补写（用户需求 2026-09-29：title=中文概括；2026-10-16-short-change-title 起
+-    // 提炼口径 ≤30 字）——存量在途变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入
+-    // 改标题）；否则从 --input 首行提炼、仅当库内 title 为空才写（不覆盖已有语义标题）。
+-    // best-effort 不阻断恢复简报。
++    // 变更标题补写（2026-09-29 title=中文概括；2026-10-16-short-change-title 提炼 ≤30；
++    // 2026-10-16-title-range-gate 硬区间 10-30）——存量在途变更 title 空/缺失时的回填通道：
++    // 显式 --title 恒生效（重入改标题）且必须合区间（超界 exit 2，参数面最易修正）；提炼补写
++    // 仅当库内 title 为空才写（首写者胜），超界不阻断（resume 不可断）打 ⚠️ 强提示。
+     try {
+-      const { deriveShortChangeTitleEx } = await import('./quicklog.js')
++      const { deriveShortChangeTitleEx, isValidChangeTitle, shortTitleRejectMessage, shortTitleRangeWarnLine, SHORT_TITLE_HARDCUT_HINT } = await import('./quicklog.js')
++      if (titleFlag && !isValidChangeTitle(titleFlag)) {
++        console.error(shortTitleRejectMessage(titleFlag))
++        process.exit(2)
++      }
+       const _row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
+       const _cur = _row ? (_row.title || '') : ''
+       const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
+       if (_derived && _derived.title && (titleFlag || !_cur)) {
+         pm.updateChangeMeta(cwd, change, { title: _derived.title })
+-        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived.title}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
+-        if (_derived.hardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
++        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived.title}（面板显示用；须 10-30 字、建议 ~20 字，重入 --title 可改）`)
++        if (_derived.hardCut) console.log(SHORT_TITLE_HARDCUT_HINT)
++        if (!titleFlag && !isValidChangeTitle(_derived.title)) console.log(shortTitleRangeWarnLine(_derived.title))
+       }
+     } catch { /* 标题补写 best-effort */ }
+     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
+@@ -896,21 +906,29 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
+   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
+ 
+-  // 变更标题（用户需求 2026-09-29：title=中文概括、建议 ~20 字，agent 总结；2026-10-16-
+-  // short-change-title 起提炼口径 ≤30 字）：--title 显式指定优先；否则 --input 首行过提炼
+-  // （自然标点截断、无截点硬切+软提示）；两者皆缺用变更名兜底（可辨识但不达意——横幅提示
+-  // 下次带 --title）。
+-  let changeTitle = null
+-  let _titleHardCut = false
++  // 变更标题硬区间门（2026-10-16-title-range-gate：10-30 字必须、建议 ~20、强制 agent 命名；
++  // 提炼口径见 2026-10-16-short-change-title）：--title 显式 > --input 首行提炼 > 变更名兜底。
++  // agent 命名时刻强制：不在区间/无 --input 兜底 → 拒绝启动（exit 2，在任何状态写入前——
++  // 零半态）；平台 writer 预建空目录（自动派发，无 agent 对话面）豁免硬门仅 ⚠️ 留痕。
++  let _st = null
++  let _rejectMsg = null
+   try {
+-    const { deriveShortChangeTitleEx } = await import('./quicklog.js')
+-    const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
+-    changeTitle = (_derived && _derived.title) || change
+-    _titleHardCut = Boolean(_derived && _derived.hardCut)
+-  } catch { changeTitle = titleFlag || change }
++    const _q = await import('./quicklog.js')
++    _st = _q.resolveStartTitle({ titleFlag, input, change, enforce: !proceedFreshEmptyDir })
++    if (!_st.ok) _rejectMsg = _q.shortTitleRejectMessage(_st.kind === 'fallback' ? _st.rejectedTitle : _st.title)
++  } catch { /* quicklog 不可用（实践不可达）：降级保持旧行为兜底 */ _st = { title: titleFlag || change, ok: true, kind: titleFlag ? 'flag' : 'fallback', hardCut: false } }
++  if (_rejectMsg) {
++    console.error(_rejectMsg)
++    process.exit(2)
++  }
++  const changeTitle = _st.title
+   pm.initChange(cwd, change, { title: changeTitle })
+-  console.log(`🏷️ 变更标题：${changeTitle}${changeTitle === change ? '（变更名兜底——下次带 --title "<≤20 字中文概括>" 更达意）' : '（面板显示用；建议 ~20 字中文概括，重入 flow start --title 可改）'}`)
+-  if (_titleHardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
++  console.log(`🏷️ 变更标题：${changeTitle}（面板显示用；须 10-30 字、建议 ~20 字，重入 flow start --title 可改）`)
++  try {
++    const { isValidChangeTitle, shortTitleRangeWarnLine, SHORT_TITLE_HARDCUT_HINT } = await import('./quicklog.js')
++    if (_st.hardCut) console.log(SHORT_TITLE_HARDCUT_HINT)
++    if (proceedFreshEmptyDir && !isValidChangeTitle(changeTitle)) console.log(shortTitleRangeWarnLine(changeTitle))
++  } catch { /* 提示行 best-effort */ }
+   try {
+     const { resolveSessionIdentity } = await import('./progress.js')
+     const { session } = resolveSessionIdentity({ flagSession: null, cwd })
+@@ -2671,7 +2689,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+         console.error(`❌ ${e.message}`)
+         // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+         console.error('   重试（--input 引号内换行合法，可照抄）：')
+-        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+         console.error('')
+         console.error('   成功标准：')
+         console.error('   - <可验证标准>"')
+@@ -2900,9 +2918,9 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
+     return r
+   }
+-  console.error('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
++  console.error('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+   console.error('      --input 可照抄形态（引号内换行合法）：')
+-  console.error('      sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++  console.error('      sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+   console.error('')
+   console.error('      成功标准：')
+   console.error('      - <可验证标准>"')
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index d5a253e7..d3412b36 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -61,7 +61,7 @@ const STAGE_HINTS = {
+     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
+     '',
+     '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）——--input 引号内换行合法，下例可照抄：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+@@ -80,7 +80,7 @@ const STAGE_HINTS = {
+   'verify': [
+     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+     '如需修改，请先回到 execute 阶段，或收口后开轻量变更（--input 引号内换行合法，可照抄）：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+@@ -88,7 +88,7 @@ const STAGE_HINTS = {
+   'archive': [
+     '当前在 archive（归档）阶段，不修改源码。',
+     '如需修改，请开启新变更（--input 引号内换行合法，可照抄）：',
+-    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景',
+     '',
+     '  成功标准：',
+     '  - <可验证标准>"',
+diff --git a/src/index.js b/src/index.js
+index 1cbc6af8..2f47bc22 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -173,7 +173,7 @@ SillySpec CLI — 规范驱动开发工具包
+ 示例:
+   sillyspec init
+   sillyspec run brainstorm --change 2026-07-03-add-login
+-  sillyspec flow start --change 2026-07-03-my-fix --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
++  sillyspec flow start --change 2026-07-03-my-fix --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
+   sillyspec run verify --done --output "验证通过，测试全绿"
+   sillyspec run archive --done --confirm --output "归档完成"
+   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
+@@ -228,7 +228,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
+   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
+   // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
+   console.error('   新工作请走轻量变更（--input 引号内换行合法，下例可照抄）：')
+-  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+   console.error('')
+   console.error('   成功标准：')
+   console.error('   - <可验证标准>"')
+diff --git a/src/quicklog.js b/src/quicklog.js
+index e1b13ab4..a1d8cfa0 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -227,6 +227,71 @@ export function deriveShortChangeTitle(input, opts) {
+   return deriveShortChangeTitleEx(input, opts).title
+ }
+ 
++// ── 标题硬区间门（2026-10-16-title-range-gate，用户硬性要求：10-30 字必须、建议 ~20、可强制命名）──
++
++/** 标题是否落在硬区间（去首尾空白后按字符数计 10..30）。变更名兜底/短句/超长均 false。 */
++export function isValidChangeTitle(title) {
++  const n = [...String(title || '').trim()].length
++  return n >= 10 && n <= 30
++}
++
++/**
++ * fresh 启动标题解析：--title 显式 > --input 首行提炼 > 变更名兜底。
++ * enforce=true（agent 命名时刻，flow start fresh 非平台 writer）：不在区间/兜底 → ok=false，
++ * 调用方必须在任何状态写入前拒绝启动（强制 agent 命名）。
++ * enforce=false（平台 writer 预建空目录自动派发，无 agent 对话面可强制）：恒 ok=true，
++ * 超界/兜底由调用方 ⚠️ 留痕（best-effort 标题优于阻断派发）。
++ */
++export function resolveStartTitle({ titleFlag, input, change, enforce = true }) {
++  if (titleFlag) {
++    return { title: titleFlag, ok: !enforce || isValidChangeTitle(titleFlag), kind: 'flag', hardCut: false }
++  }
++  const derived = deriveShortChangeTitleEx(input)
++  // enforce 下 hardCut（30 字+… 残句）与超区间同样拒绝：残句正是「让人认不出变更做什么」
++  // 的形态，CLI 提炼救不了就让 agent 自己命名（补标点/写短句/--title 三选一）。
++  // enforce=false（平台豁免）任何非空提炼值照用，超界/残句由调用方 ⚠️ 留痕。
++  if (derived.title && (!enforce || (!derived.hardCut && isValidChangeTitle(derived.title)))) {
++    return { title: derived.title, ok: true, kind: 'derived', hardCut: false }
++  }
++  return {
++    title: change,
++    ok: !enforce,
++    kind: 'fallback',
++    hardCut: Boolean(derived && derived.hardCut),
++    rejectedTitle: (derived && derived.title) || null,
++  }
++}
++
++/** hardCut 软提示（fresh/resume 共用单源）。文案口径=「6..30 字内无可用截点」——hardCut 判定
++ * 是候选截点经 [floor,max] 过滤后为空（标点存在但全在区间外也硬切），禁用「无自然断点」旧
++ * 措辞（2026-10-16-short-change-title 评审 P3 清偿）。 */
++export const SHORT_TITLE_HARDCUT_HINT = '💡 标题超 30 字且 6..30 字内无可用自然标点截点，已硬切——重入 flow start --title "<10-30 字中文概括>" 可给更短标题（不阻断）'
++
++/** 超界不阻断面的强提示行（adopt 收编/resume 补写/平台 writer 豁免共用单源）。 */
++export function shortTitleRangeWarnLine(title) {
++  const n = [...String(title || '').trim()].length
++  return `⚠️ 标题「${title}」${n} 字不在 10-30 硬区间（建议 ~20 字）——重入 flow start --title "<10-30 字中文概括>" 可改（不阻断）`
++}
++
++/** 硬门拒绝报错（flow start fresh exit 2 用）。状态/原因/修复一次给全（cli-copy-selfsufficient）。 */
++export function shortTitleRejectMessage(title) {
++  const fix = [
++    '   ① 重跑时把 --input 首行写成一句 10-30 字中文概括（首行即变更标题）',
++    '   ② 或追加参数 --title "<10-30 字中文概括>"',
++  ]
++  if (title == null || title === '') {
++    return [
++      '❌ 变更标题未命名——flow start 全新启动必须带 10-30 字标题（必须，建议 ~20 字）：标题是变更中心展示面，须让人一眼认出本变更做什么。两条修复：',
++      ...fix,
++    ].join('\n')
++  }
++  const n = [...String(title).trim()].length
++  return [
++    `❌ 变更标题必须为 10-30 字（当前：${JSON.stringify(title)}，${n} 字；必须，建议 ~20 字）——标题是变更中心展示面，须让人一眼认出本变更做什么。两条修复：`,
++    ...fix,
++  ].join('\n')
++}
++
+ 
+ // ── 平台推送（best-effort，2026-08-16-change-center-quick-tab task-06 / D-003）──
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index 3c0182a6..22e5a27f 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -232,7 +232,7 @@ export async function ensureStageSteps(progress, stageName, cwd, specDir = null)
+ function emitReadonlyEmptyGuide() {
+   console.log('ℹ️ 未找到进度数据（只读查询不建变更）')
+   console.log('   → 可开始轻量变更（--input 引号内换行合法，下例可照抄）：')
+-  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++  console.log('     sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+   console.log('')
+   console.log('     成功标准：')
+   console.log('     - <可验证标准>"')
+@@ -858,7 +858,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+             quickFallbackUsed = true
+           } else {
+             console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更（--input 引号内换行合法，可照抄）：')
+-            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++            console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+             console.log('')
+             console.log('   成功标准：')
+             console.log('   - <可验证标准>"')
+@@ -2077,7 +2077,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     if (classification.mode === 'quick') {
+       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
+       console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话；--input 引号内换行合法，可照抄）：`)
+-      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++      console.log('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+       console.log('')
+       console.log('   成功标准：')
+       console.log('   - <可验证标准>"')
+diff --git a/src/run/stage.js b/src/run/stage.js
+index db39f72b..3ef29cbb 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -417,7 +417,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+       // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
+       console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
+       console.error(`   新工作请走轻量变更（--input 引号内换行合法，可照抄）：`)
+-      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
++      console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
+       console.error('')
+       console.error('   成功标准：')
+       console.error('   - <可验证标准>"')
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 74d2718a..f245867e 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -58,7 +58,7 @@ export const definition = {
+ - **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
+ 
+ \`\`\`
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 7045850b..aee05cee 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -15,7 +15,7 @@
+ `--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
+ 
+ ```bash
+-sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
++sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，必须落在 10-30 字硬区间、建议 ~20 字——不合区间 flow start 拒启）；随后动机与背景
+ 
+ 成功标准：
+ - <可验证标准>"
+diff --git a/test/batch-tick-gate.test.mjs b/test/batch-tick-gate.test.mjs
+index b4d00641..48c2e42e 100644
+--- a/test/batch-tick-gate.test.mjs
++++ b/test/batch-tick-gate.test.mjs
+@@ -141,7 +141,7 @@ test('②e e2e：证据完备一把勾（反馈实证形态）→ advisory 放
+   const change = '2026-10-13-btg-evd'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
++    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾一次性放行\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     // 三任务各有 token 交付证据（一把提交带全 token——哨兵口径认可）
+     writeFileSync(join(cwd, 'work.txt'), 'done\n')
+@@ -185,7 +185,7 @@ test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+
+     mkdirSync(join(specBase, 'docs', 'proj1', 'modules'), { recursive: true })
+     writeFileSync(join(specBase, 'docs', 'proj1', 'modules', '_module-map.yaml'),
+       'modules:\n  mod1:\n    status: active\n    doc: modules/mod1.md\n    paths:\n      - src/foo/\n')
+-    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
++    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判扫描命中模块卡\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+     assert.equal(s1.status, 0)
+     assert.match(s1.stdout, /FR 域预判/, '预判段在场')
+     assert.match(s1.stdout, /src\/foo\/a\.js → fr\/mod1/, '命中模块点名（FR 将落 fr/mod1）')
+@@ -209,7 +209,7 @@ test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+
+     writeFileSync(join(cwdB, 'src', 'other', 'b.js'), 'export {}\n')
+     gitE(cwdB, ['add', 'src'])
+     gitE(cwdB, ['commit', '-q', '-m', 'src'])
+-    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
++    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判无历史模块命中\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+     assert.equal(s0.status, 0)
+     assert.match(s0.stdout, /绿地草案/, '绿地草案既有行为在场')
+     assert.match(s0.stdout, /fr\/foo/, '绿地草案域照常预判（零输出判定面=无路径，非无图）')
+@@ -277,7 +277,7 @@ test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行
+     const change = '2026-10-14-btg-burst'
+     const specBase = join(cwd, '.sillyspec')
+     try {
+-      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '侧车突发\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
++      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '侧车突发多格勾选一次过\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+       assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+       writeFileSync(join(cwd, 'work.txt'), 'done\n')
+       gitE(cwd, ['add', 'work.txt'])
+@@ -315,7 +315,7 @@ test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行
+     const change = '2026-10-14-btg-spaced'
+     const specBase = join(cwd, '.sillyspec')
+     try {
+-      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '渐进勾选\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
++      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '渐进勾选逐格推进合规范\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+       assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+       writeFileSync(join(cwd, 'work.txt'), 'done\n')
+       gitE(cwd, ['add', 'work.txt'])
+diff --git a/test/change-list-paren-strip.test.mjs b/test/change-list-paren-strip.test.mjs
+index 5da5c341..18f3bdc4 100644
+--- a/test/change-list-paren-strip.test.mjs
++++ b/test/change-list-paren-strip.test.mjs
+@@ -138,7 +138,7 @@ test('⑤ e2e：清单写「work.txt（交付：单文件）」→ 收口 scopeA
+     cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
+   })
+   try {
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot']).status, 0)
+     writeFileSync(join(cwd, 'work.txt'), 'hello\n')
+     git(cwd, ['add', 'work.txt'])
+     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
+diff --git a/test/change-name-date-gate.test.mjs b/test/change-name-date-gate.test.mjs
+index bf2bb4ba..b35f7a8b 100644
+--- a/test/change-name-date-gate.test.mjs
++++ b/test/change-name-date-gate.test.mjs
+@@ -131,7 +131,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
+   const a = makeRepo('cngate-flw-')
+   mkdirSync(join(a.cwd, '.sillyspec'), { recursive: true })
+   writeFileSync(join(a.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n') // flow start fail-fast 契约
+-  const r = runCLI(['--dir', a.cwd, 'flow', 'start', '--change', 'roadmap-copy-purge', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: a.cwd })
++  const r = runCLI(['--dir', a.cwd, 'flow', 'start', '--change', 'roadmap-copy-purge', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: a.cwd })
+   assert(r.status === 2, `7a exit 2（实际 ${r.status}）`)
+   assert(r.combined.includes('YYYY-MM-DD'), '7a 报错给出格式模板')
+   assert(r.combined.includes('flow start'), '7a 报错给出 flow start 重试出路')
+@@ -141,7 +141,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
+   const b = makeRepo('cngate-flw2-')
+   mkdirSync(join(b.cwd, '.sillyspec'), { recursive: true })
+   writeFileSync(join(b.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
+-  const ok = runCLI(['--dir', b.cwd, 'flow', 'start', '--change', '2026-09-28-my-fix', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: b.cwd })
++  const ok = runCLI(['--dir', b.cwd, 'flow', 'start', '--change', '2026-09-28-my-fix', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: b.cwd })
+   assert(ok.status === 0, `7b exit 0（实际 ${ok.status}，尾：${ok.combined.slice(-150)}）`)
+   assert(existsSync(join(b.cwd, '.sillyspec', 'changes', '2026-09-28-my-fix', 'flow-state.yaml')), '7b 合规名轻量变更正常物化')
+ 
+@@ -162,7 +162,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
+   mkdirSync(join(d.cwd, '.sillyspec'), { recursive: true })
+   writeFileSync(join(d.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
+   mkdirSync(join(d.cwd, '.sillyspec', 'changes', 'archive', 'archived-bare-name'), { recursive: true })
+-  const arch = runCLI(['--dir', d.cwd, 'flow', 'start', '--change', 'archived-bare-name', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: d.cwd })
++  const arch = runCLI(['--dir', d.cwd, 'flow', 'start', '--change', 'archived-bare-name', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: d.cwd })
+   assert(!arch.combined.includes('日期前缀'), '7d 归档在场不触发日期门')
+   assert(arch.status === 0, `7d 放行（实际 ${arch.status}，尾：${arch.combined.slice(-150)}）`)
+ 
+@@ -170,7 +170,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
+   const e = makeRepo('cngate-flw5-')
+   mkdirSync(join(e.cwd, '.sillyspec'), { recursive: true })
+   writeFileSync(join(e.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
+-  const def = runCLI(['--dir', e.cwd, 'flow', 'start', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: e.cwd })
++  const def = runCLI(['--dir', e.cwd, 'flow', 'start', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: e.cwd })
+   assert(def.status === 0, `7e exit 0（实际 ${def.status}，尾：${def.combined.slice(-150)}）`)
+   const created = readdirSync(join(e.cwd, '.sillyspec', 'changes')).filter((n) => n !== 'archive')
+   assert(created.length === 1 && /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-flow-[0-9a-f]+$/.test(created[0]),
+diff --git a/test/change-title-flow.test.mjs b/test/change-title-flow.test.mjs
+index 7b120622..800914b9 100644
+--- a/test/change-title-flow.test.mjs
++++ b/test/change-title-flow.test.mjs
+@@ -75,47 +75,47 @@ test('② flow start fresh：--title 优先，否则 input 首行，横幅在场
+   assert.equal(readTitle(cwd, cn), '知识页伪域池一键归位交互', 'db changes.title = input 首行')
+ 
+   const cn2 = '2026-09-29-title-b'
+-  const r2 = cli(cwd, ['flow', 'start', '--change', cn2, '--input', '随便什么输入\n\n成功标准：\n- x', '--title', '变更标题显式指定', '--no-review'])
++  const r2 = cli(cwd, ['flow', 'start', '--change', cn2, '--input', '随便什么输入\n\n成功标准：\n- x', '--title', '变更标题显式指定为合规格式', '--no-review'])
+   assert.equal(r2.status, 0)
+-  assert.equal(readTitle(cwd, cn2), '变更标题显式指定', '--title 显式覆盖')
++  assert.equal(readTitle(cwd, cn2), '变更标题显式指定为合规格式', '--title 显式覆盖（须合 10-30 硬区间，2026-10-16-title-range-gate）')
+   tmpRoots.push(cwd)
+ })
+ 
+ test('③ flow start resume：--title 改标题；空 title 时 input 补写；上行携带 title', async () => {
+   const { cwd } = makeRepo()
+   const cn = '2026-09-29-title-c'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '首行就是标题素材\n\n成功标准：\n- x', '--no-review']).status, 0)
+-  assert.equal(readTitle(cwd, cn), '首行就是标题素材')
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '首行就是标题素材之合规概括\n\n成功标准：\n- x', '--no-review']).status, 0)
++  assert.equal(readTitle(cwd, cn), '首行就是标题素材之合规概括')
+ 
+-  // resume 带 --title → 更新
+-  const r2 = cli(cwd, ['flow', 'start', '--change', cn, '--title', '改后的中文标题'])
++  // resume 带 --title → 更新（须合 10-30 硬区间）
++  const r2 = cli(cwd, ['flow', 'start', '--change', cn, '--title', '改后的中文标题合乎硬区间'])
+   assert.equal(r2.status, 0)
+-  assert.match(r2.stdout, /🏷️ 变更标题已更新：改后的中文标题/)
+-  assert.equal(readTitle(cwd, cn), '改后的中文标题')
++  assert.match(r2.stdout, /🏷️ 变更标题已更新：改后的中文标题合乎硬区间/)
++  assert.equal(readTitle(cwd, cn), '改后的中文标题合乎硬区间')
+ 
+   // resume 不带 --title → 不覆盖既有标题
+   const r3 = cli(cwd, ['flow', 'start', '--change', cn, '--input', '另一个输入首行\n\n成功标准：\n- y'])
+   assert.equal(r3.status, 0)
+-  assert.equal(readTitle(cwd, cn), '改后的中文标题', '无 --title 时不覆盖语义标题')
++  assert.equal(readTitle(cwd, cn), '改后的中文标题合乎硬区间', '无 --title 时不覆盖语义标题')
+ 
+   // serializeForSync 上行携带（同步链缺口修复锚：此前 SELECT 漏列恒 null）
+   const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
+   const body = pm.serializeForSync(cwd, cn)
+-  assert.equal(body?.changes?.[0]?.title, '改后的中文标题', 'changes[].title 上行在场')
++  assert.equal(body?.changes?.[0]?.title, '改后的中文标题合乎硬区间', 'changes[].title 上行在场')
+   tmpRoots.push(cwd)
+ })
+ 
+ test('④ 存量空 title 回填：resume 时 input 首行补写（不覆盖已有）', () => {
+   const { cwd } = makeRepo()
+   const cn = '2026-09-29-title-d'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行合规概括版\n\n成功标准：\n- x', '--no-review']).status, 0)
+   // 模拟存量空 title 行（旧版本创建的变更）
+   const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
+   pm.updateChangeMeta(cwd, cn, { title: null })
+   assert.equal(readTitle(cwd, cn), null)
+-  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x'])
++  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行合规概括版\n\n成功标准：\n- x'])
+   assert.equal(r.status, 0)
+-  assert.match(r.stdout, /🏷️ 变更标题已补写：原始输入首行/, '空 title 补写横幅')
+-  assert.equal(readTitle(cwd, cn), '原始输入首行', '空 title 被 input 首行回填')
++  assert.match(r.stdout, /🏷️ 变更标题已补写：原始输入首行合规概括版/, '空 title 补写横幅')
++  assert.equal(readTitle(cwd, cn), '原始输入首行合规概括版', '空 title 被 input 首行回填')
+   tmpRoots.push(cwd)
+ })
+diff --git a/test/close-trace-freeze-integrity.test.mjs b/test/close-trace-freeze-integrity.test.mjs
+index ed548575..a9a6a9e3 100644
+--- a/test/close-trace-freeze-integrity.test.mjs
++++ b/test/close-trace-freeze-integrity.test.mjs
+@@ -75,7 +75,7 @@ test('flow 冻结面剔除 .sillyspec/changes 子树保留 docs 交付', () => {
+   const change = '2026-10-12-ctfi-face'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '交付面冻结口径\n成功标准：\n- work.txt 与 docs 模块卡入冻结面，治理工件不入', '--autopilot'])
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '交付面冻结口径含跨仓标注\n成功标准：\n- work.txt 与 docs 模块卡入冻结面，治理工件不入', '--autopilot'])
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     // 交付提交：代码 + .sillyspec/docs 交付文档（均入冻结面）
+     writeFileSync(join(cwd, 'work.txt'), 'done\n')
+@@ -112,7 +112,7 @@ test('工件-only 面输出空面提示不落 patch', () => {
+   const change = '2026-10-12-ctfi-empty'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '无交付面场景\n成功标准：\n- 空面提示且归档完成', '--autopilot'])
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '无交付面场景空面提示归档\n成功标准：\n- 空面提示且归档完成', '--autopilot'])
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     fillDesignSlots(specBase, change) // 只写工件（未提交、无交付改动）
+     // 任务勾选走工件提交（ledger 门要 task token 提交）——工件提交存在但 FR-01 后不入冻结面
+@@ -225,7 +225,7 @@ test('孤儿提交触及交付面阻断收口（worktree e2e）+ --accept-orphan
+   const specBase = join(cwd, '.sillyspec')
+   const wtPath = join(specBase, '.runtime', 'worktrees', change)
+   try {
+-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '孤儿守卫\n成功标准：\n- 冻结面外实现提交阻断收口', '--autopilot'])
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '孤儿守卫冻结面外提交阻断\n成功标准：\n- 冻结面外实现提交阻断收口', '--autopilot'])
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     // 会话专属 worktree（linked，路径命中 gate-snapshot 判定）
+     mkdirSync(join(specBase, '.runtime', 'worktrees'), { recursive: true })
+diff --git a/test/close-trace-unified.test.mjs b/test/close-trace-unified.test.mjs
+index 779b5600..b6ca3c99 100644
+--- a/test/close-trace-unified.test.mjs
++++ b/test/close-trace-unified.test.mjs
+@@ -218,7 +218,7 @@ test('FR-01/02 thin CLI e2e：flow done 落盘恰好两件 + 查询走快照态'
+     sh(cwd, ['add', '.']); sh(cwd, ['commit', '-q', '-m', 'base'])
+     const cn = '2026-10-09-ct-thin-a1' // 抽查桶外名（sampleBucket 1/4 定额——e2e 夹具不进评审采样）
+     const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+-    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '单套留档 e2e\n\n成功标准：\n- flow done 后恰好两件'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '单套留档口径对账 e2e\n\n成功标准：\n- flow done 后恰好两件'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     const base = join(cwd, '.sillyspec', 'changes', cn)
+     // design 四问一行作答（plain，不触发评审定档）+ 文件变更清单声明交付文件
+diff --git a/test/cross-repo-baseline-anchor.test.mjs b/test/cross-repo-baseline-anchor.test.mjs
+index b0089b72..7f5a2273 100644
+--- a/test/cross-repo-baseline-anchor.test.mjs
++++ b/test/cross-repo-baseline-anchor.test.mjs
+@@ -89,7 +89,7 @@ test('e2e：start 记基线（首写者胜）；两笔跨仓交付+untracked 全
+   const { main, cross } = fixture(change)
+   const specBase = join(main, '.sillyspec')
+   try {
+-    const s1 = cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    const s1 = cli(main, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
+     assert.equal(s1.status, 0, `start: ${s1.stderr}`)
+     assert.match(s1.stdout, /跨仓基线锚：1 个注册仓/, 'start 提示基线锚')
+     const baseSha = readState(specBase, change).cross_baselines?.libx
+@@ -135,7 +135,7 @@ test('回退面：零 token 命中 → 全窗口（外来可见）；基线 sha
+   const { main, cross } = fixture(change)
+   const specBase = join(main, '.sillyspec')
+   try {
+-    cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    cli(main, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
+     // 提交均不带变更名（零 token 命中形态）
+     writeFileSync(join(cross, 'mine.txt'), 'm\n')
+     git(cross, ['add', '.'])
+@@ -161,7 +161,7 @@ test('回退面：零 token 命中 → 全窗口（外来可见）；基线 sha
+   const change2 = '2026-10-13-crba-deg'
+   const f2 = fixture(change2)
+   try {
+-    cli(f2.main, ['flow', 'start', '--change', change2, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    cli(f2.main, ['flow', 'start', '--change', change2, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
+     const stPath = join(f2.main, '.sillyspec', 'changes', change2, 'flow-state.yaml')
+     const st = yaml.load(readFileSync(stPath, 'utf8'))
+     st.cross_baselines.libx = '0'.repeat(40)
+diff --git a/test/flow-agent-log-report.test.mjs b/test/flow-agent-log-report.test.mjs
+index 9192db30..a300a3af 100644
+--- a/test/flow-agent-log-report.test.mjs
++++ b/test/flow-agent-log-report.test.mjs
+@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const CLI = join(ROOT, 'src', 'index.js')
+-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
+ 
+ /** 造临时 git 仓 + local.yaml（thin 模式 + 快测试命令）+ 基线提交。 */
+ function makeRepo() {
+diff --git a/test/flow-checkpoints.test.mjs b/test/flow-checkpoints.test.mjs
+index f13b9df0..66925990 100644
+--- a/test/flow-checkpoints.test.mjs
++++ b/test/flow-checkpoints.test.mjs
+@@ -30,7 +30,7 @@ function makeRepo() {
+ 
+ test('① 简报含三断点纪律', () => {
+   const { cwd, cli } = makeRepo()
+-  const s = cli(['flow', 'start', '--change', '2026-09-01-fc-1', '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(['flow', 'start', '--change', '2026-09-01-fc-1', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+   assert.match(s.stdout, /三断点纪律/, '三断点标题')
+   assert.match(s.stdout, /spec 断点/, '① spec 断点')
+@@ -47,7 +47,7 @@ test('② flow status 三态：不存在/进行中/已归档', () => {
+   assert.equal(none.status, 1)
+   assert.match(none.stdout, /不存在/)
+   // 进行中
+-  assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
+   const active = cli(['flow', 'status', '--change', '2026-09-01-fc-2'])
+   assert.equal(active.status, 0)
+   assert.match(active.stdout, /📋/, '标题')
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+index 8caf1182..bb1e0f4a 100644
+--- a/test/flow-clarity-probe.test.mjs
++++ b/test/flow-clarity-probe.test.mjs
+@@ -47,7 +47,7 @@ function cli(cwd, args) {
+   })
+ }
+ 
+-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
+ 
+ /** 槽位作答（双代格式正文作答）+ spec 断点批准。 */
+ function fillSlots(cwd, change) {
+@@ -168,7 +168,7 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
+   const { cwd } = makeRepo()
+   const c1 = '2026-09-01-fcp-loop'
+   // 三条成功标准（多行镜像面——tasks 改写率的分母是正文行，单行会被标题稀释到阈下）
+-  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件并分别补齐测试\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+diff --git a/test/flow-diff-cmd.test.mjs b/test/flow-diff-cmd.test.mjs
+index deabe2ac..f365c56c 100644
+--- a/test/flow-diff-cmd.test.mjs
++++ b/test/flow-diff-cmd.test.mjs
+@@ -72,7 +72,7 @@ test('活跃态：提交面+dirty 面渲染，untracked 计行数，治理件剔
+   const change = '2026-10-13-fdiff-live'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
+     assert.equal(s1.status, 0, `start: ${s1.stderr}`)
+     // 已提交交付 + 治理件提交（tick）
+     writeFileSync(join(cwd, 'work.txt'), 'a\nb\n')
+@@ -123,7 +123,7 @@ test('归档态：读 change-patch.json scopeAudit 渲染 totals，--json 同构
+   const change = '2026-10-13-fdiff-arch'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
+     writeFileSync(join(cwd, 'work.txt'), 'hello\n')
+     git(cwd, ['add', 'work.txt'])
+     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
+diff --git a/test/flow-done-carry-suspect-advisory.test.mjs b/test/flow-done-carry-suspect-advisory.test.mjs
+index b8f6f829..133f0653 100644
+--- a/test/flow-done-carry-suspect-advisory.test.mjs
++++ b/test/flow-done-carry-suspect-advisory.test.mjs
+@@ -63,7 +63,7 @@ function fillSlots(cwd, change) {
+ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；声明文件不点名；不阻断收口', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-carry-suspect-a'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿', '--no-review']).status, 0)
+   fillSlots(cwd, change)
+   // design §6 自声明 work.txt（声明面锚点——坑 thin-flow-freeze-foreign-declared-hijack 绕过同款）
+   const dp = join(cwd, '.sillyspec', 'changes', change, 'design.md')
+@@ -88,7 +88,7 @@ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；
+ test('② 声明面全空：不指认夹带，降为「无声明面」软提示', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-02-carry-suspect-b'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--no-review']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+diff --git a/test/flow-help-status.test.mjs b/test/flow-help-status.test.mjs
+index e546cdb7..7c9110e5 100644
+--- a/test/flow-help-status.test.mjs
++++ b/test/flow-help-status.test.mjs
+@@ -25,5 +25,5 @@ test('用法行保留 start/done 与 --input 格式教学', () => {
+   const line = flowSrc.split('\n').find((l) => l.includes(USAGE_LINE))
+   assert.ok(line, '用法行在场')
+   assert.ok(line.includes('sillyspec flow done --change <名>'), '用法行保留 done 子命令')
+-  assert.ok(line.includes('--input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学（首行概括句）')
++  assert.ok(line.includes('--input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学（首行概括句）')
+ })
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 66000dcb..7141daa9 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -85,7 +85,7 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，
+ 
+   // 协议调用 1/2：flow start（--autopilot：本用例钉「2 次协议调用」身份——显式豁免 spec 断点
+   // 人审；默认路径是 start→approve→done 三步，见 flow-draft.test ⑥）
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿', '--autopilot'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿', '--autopilot'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   assert.match(s1.stdout, /协议调用 1\/2/)
+   assert.match(s1.stdout, /交付纪律/, '先提交后 done 纪律行')
+@@ -115,9 +115,9 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，
+ test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t2'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
+-  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）'])
+   assert.equal(r.status, 0)
+   assert.match(r.stdout, /恢复简报/)
+   assert.match(r.stdout, /dirty 文件 1 个/)
+@@ -134,7 +134,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
+   const change = '2026-09-01-flow-h2-t3'
+   // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
+   // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
+   // 动态子集实测它（pass.flag 缺席→红）；原 fixtures 经 commands.test=node check.js 全量触达
+   writeFileSync(join(cwd, 'work.test.mjs'), "import { test } from 'node:test'\nimport { existsSync } from 'node:fs'\nimport assert from 'node:assert/strict'\ntest('flip', () => { assert.ok(existsSync('pass.flag'), 'pass.flag 缺席=失败') })\n")
+@@ -182,7 +182,7 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
+ test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒跑；带 flag 落 legacy_fallback 留痕；flow done 拒裁 exit 2', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t5'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   // 同意门（2026-09-25-thin-upgrade-consent）：agent 不得自行升厚
+   const blocked = cli(cwd, ['run', 'brainstorm', '--change', change])
+   assert.equal(blocked.status, 2, '无同意 flag 应拒跑')
+@@ -234,7 +234,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
+ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t6b'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+@@ -283,7 +283,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落盘并随发号提升', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t9'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 行为甲发生']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+@@ -310,9 +310,9 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
+ test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t6c'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
+-  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '标题素材缺位用例改合规首行\n成功标准：\n- 夹具标准 A（清晰度门契约）'])
+   assert.equal(r.status, 0)
+   assert.match(r.stdout, /重入补生成缺失机器稿 1 件：design\.md/, '补生成提示点名')
+   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'design.md')), '骨架已补回')
+@@ -384,7 +384,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   writeFileSync(join(cwd, 'base.txt'), 'b\n')
+   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+   const change = '2026-09-01-flow-h2-t14'
+-  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护行为对齐\n成功标准：\n- 迁移后数据完整'])
+   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
+   assert.match(s.stdout, /冻结面在 flow done 时点采集/, '冻结面规则简报在场')
+@@ -394,7 +394,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
+   assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
+   // 无复杂特征输入同款零打扰（负例归并）
+-  const s2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
++  const s2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t14b', '--input', '小修补行为对齐既有契约面\n成功标准：\n- 文案改正'])
+   assert.equal(s2.status, 0)
+   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
+   rmSync(cwd, { recursive: true, force: true })
+@@ -403,7 +403,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t15'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务重复写入不丢失不重复\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+@@ -444,7 +444,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 
+ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复后删件重评', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t16'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--review']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+@@ -469,7 +469,7 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复
+ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-02-flow-h2-t17'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--review']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+@@ -487,7 +487,7 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落
+   mkdirSync(plat, { recursive: true })
+   writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast 契约）
+   const change = '2026-09-25-obs-events-ab12cd'
+-  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--spec-dir', plat])
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--spec-dir', plat])
+   assert.equal(s.status, 0, `外置根 start 应通过（旧实现 ENOENT 崩溃）: ${s.stdout}\n${s.stderr}`)
+   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), 'flow-state 落外置根（含嵌套目录自动创建）')
+   assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', change)), '本地 changes 零残留（PM 锚定修复）')
+@@ -517,7 +517,7 @@ test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spaw
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t19'
+   mkdirSync(join(cwd, '.sillyspec', 'changes', change), { recursive: true })
+-  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `空目录应放行: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /预建空变更目录放行/)
+   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')))
+@@ -525,7 +525,7 @@ test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spaw
+   const change2 = '2026-09-01-flow-h2-t19b'
+   mkdirSync(join(cwd, '.sillyspec', 'changes', change2), { recursive: true })
+   writeFileSync(join(cwd, '.sillyspec', 'changes', change2, 'plan.md'), '# legacy 残留\n')
+-  const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '任务\n成功标准：\n- 行为 X'])
++  const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(s2.status, 2, '非空无产物仍拒')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+@@ -533,11 +533,11 @@ test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spaw
+ test('⑳ 变更名白名单：穿越/分隔符/default/quick-hex 拒收，合法名放行', () => {
+   const { cwd } = makeRepo()
+   for (const bad of ['../evil', 'a/b', 'a\\b', 'default', 'quick-ab12cd34', '..']) {
+-    const r = cli(cwd, ['flow', 'start', '--change', bad, '--input', '任务\n成功标准：\n- 行为 X'])
++    const r = cli(cwd, ['flow', 'start', '--change', bad, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+     assert.equal(r.status, 2, `非法名「${bad}」应拒`)
+     assert.match(r.stderr, /非法变更名/)
+   }
+-  const ok = cli(cwd, ['flow', 'start', '--change', '2026-09-25-中文名-a1b2c3', '--input', '任务\n成功标准：\n- 行为 X'])
++  const ok = cli(cwd, ['flow', 'start', '--change', '2026-09-25-中文名-a1b2c3', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(ok.status, 0, '中文与平台键形态合法')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+@@ -549,7 +549,7 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
+   writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast）
+   writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
+   const change = '2026-09-01-flow-h2-t21'
+-  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `指针恢复应落外置根: ${s.stdout}\n${s.stderr}`)
+   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
+   rmSync(cwd, { recursive: true, force: true })
+@@ -572,7 +572,7 @@ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次
+ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-09-01-flow-h2-t19'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work (task-01)'], { cwd, stdio: 'pipe' })
+diff --git a/test/flow-redline-frontload.test.mjs b/test/flow-redline-frontload.test.mjs
+index 48c8846c..819cffd2 100644
+--- a/test/flow-redline-frontload.test.mjs
++++ b/test/flow-redline-frontload.test.mjs
+@@ -46,7 +46,7 @@ function cli(cwd, args) {
+ }
+ 
+ const CHANGE = '2026-10-11-redline-frontload-fixture'
+-const INPUT_OK = '红线前置夹具\n成功标准：\n- work.txt 生成且 flow done 全绿'
++const INPUT_OK = '红线前置夹具行为对齐校验\n成功标准：\n- work.txt 生成且 flow done 全绿'
+ 
+ test('① 新建横幅：红线块先于书写面细则且首条钉死勿改写', () => {
+   const { cwd } = makeRepo()
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index a79c1e33..4dc45fbc 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -86,7 +86,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
+   const change = '2026-09-01-fr-r1'
+   // --no-review：本用例测 route 面——大改 amend 的 editRatio 会触发评审必评抢先拦截，声明豁免
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '路由判定条件A行为对齐\n成功标准：\n- 条件A', '--no-review']).status, 0)
+   // 大改（≥0.75 行）→ route_hint
+   const big = amendWithRatio(cwd, change, 0.75)
+   assert.equal(big.status, 0)
+@@ -113,7 +113,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+
+   // 小改（≤0.25）→ 无 route_hint
+   const s2 = makeRepo('flow:\n  mode: thin\n')
+   const change2 = '2026-09-01-fr-r2'
+-  assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '成功标准：\n- 条件A']).status, 0)
++  assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '路由判定条件A行为对齐\n成功标准：\n- 条件A']).status, 0)
+   const small = amendWithRatio(s2.cwd, change2, 0.25)
+   assert.equal(small.status, 0)
+   const st2 = readFileSync(join(s2.cwd, '.sillyspec', 'changes', change2, 'flow-state.yaml'), 'utf8')
+@@ -125,7 +125,7 @@ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
+   const change = '2026-09-01-fr-b1'
+   // --no-review：本用例测 route block 面——editRatio 0.75 会触发评审必评抢先拦截，声明豁免
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '路由判定条件A行为对齐\n成功标准：\n- 条件A', '--no-review']).status, 0)
+   const big = amendWithRatio(cwd, change, 0.75)
+   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+diff --git a/test/flow-tail-polish.test.mjs b/test/flow-tail-polish.test.mjs
+index 76ce14ae..06e73158 100644
+--- a/test/flow-tail-polish.test.mjs
++++ b/test/flow-tail-polish.test.mjs
+@@ -58,7 +58,7 @@ test('FR-02 实测面对账文案含并集去重语义（源码级）', () => {
+ 
+ test('FR-03 flow-state 落 input 字段 + 重入回填逻辑（行为级 + 源码级）', () => {
+   const { cwd } = makeRepo()
+-  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-i', '--input', '任务动机\n成功标准：\n- 行为 X'])
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-i', '--input', '任务动机转写回填链路\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
+   const state = readFileSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-ftp-i', 'flow-state.yaml'), 'utf8')
+   assert.ok(/input:/.test(state), 'flow-state.yaml 落 input 字段')
+@@ -74,7 +74,7 @@ test('FR-04 flow status 不存在 exit 1 / 在场 exit 0（行为级）', () =>
+   const miss = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-none'])
+   assert.equal(miss.status, 1, `不存在应 exit 1（实际 ${miss.status}）`)
+   assert.ok((miss.stdout + miss.stderr).includes('变更不存在'), '保留「变更不存在」文案')
+-  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-ok', '--input', '任务动机\n成功标准：\n- 行为 X'])
++  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-ok', '--input', '任务动机转写回填链路\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
+   const hit = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-ok'])
+   assert.equal(hit.status, 0, `在场应 exit 0（实际 ${hit.status}）`)
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+index 6eddbda0..16e51efb 100644
+--- a/test/flow-tick-prototype.test.mjs
++++ b/test/flow-tick-prototype.test.mjs
+@@ -51,7 +51,7 @@ function fillSlots(cwd, change) {
+ 
+ test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
+   const { cwd, cli } = makeRepo()
+-  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
+   // 任务拟法指引（2026-10-12-closeout-task-guidance）：收口/推送/发布不单列 task + 单列则先 token 提交后勾选
+@@ -85,7 +85,7 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
+ test('④ 全勾硬门：有提交未勾任务 → 拒收（2026-10-07-allticked-gate，openspec all_done 对齐）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-09-01-ftp-3'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
+   fillSlots(cwd, change)
+   // 认领面（agent 覆写过任务行）一条未勾 → 拒收（旧 advisory 放行退役——tasks.md 是完成状态机）
+   const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+index 899131e7..600d8a8d 100644
+--- a/test/flowdone-disposition-drift.test.mjs
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -110,7 +110,7 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json 
+   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+   const cn = '2026-10-05-drift-e2e'
+   const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+-  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '漂移检测 e2e\n\n成功标准：\n- 处置重入后审计件含处置面'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '处置漂移检测口径 e2e\n\n成功标准：\n- 处置重入后审计件含处置面'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   // v2 纯 markdown 填法：design 四问作实质作答（触发评审定档）+ FR 正文成形
+   const base = join(cwd, '.sillyspec', 'changes', cn)
+diff --git a/test/fr-governance-sweep.test.mjs b/test/fr-governance-sweep.test.mjs
+index b9dceb57..f4077143 100644
+--- a/test/fr-governance-sweep.test.mjs
++++ b/test/fr-governance-sweep.test.mjs
+@@ -62,7 +62,7 @@ test('② resume 声明通道：--review 对在途变更重入落盘 review_forc
+     writeFileSync(join(cwd, 'base.txt'), 'b\n')
+     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+     const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+-    const INPUT = '动机：夹具\n成功标准：\n- 夹具行为'
++    const INPUT = '动机：夹具行为验证全面覆盖\n成功标准：\n- 夹具行为'
+     const r1 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--input', INPUT])
+     assert.equal(r1.status, 0, `首次 start 应成功: ${r1.stderr}`)
+     // 在途变更 resume 带 --review → review_force 落盘
+diff --git a/test/guide-anchor-adopt-proto.test.mjs b/test/guide-anchor-adopt-proto.test.mjs
+index 6cca123b..4b65c0aa 100644
+--- a/test/guide-anchor-adopt-proto.test.mjs
++++ b/test/guide-anchor-adopt-proto.test.mjs
+@@ -120,7 +120,7 @@ test('② adopt 尾部材料清单重列变更原型（截断保险）', () => {
+ test('③ 恢复简报对含原型变更补尾部必看行（无原型零输出）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-14-gap-4'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '需求 X\n成功标准：\n- 行为 A']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '需求 X 的行为对齐校验\n成功标准：\n- 行为 A']).status, 0)
+   // 首进无原型：恢复简报零新增
+   const r0 = cli(['flow', 'start', '--change', change])
+   assert.equal(r0.status, 0, r0.stderr)
+diff --git a/test/input-format-copy.test.mjs b/test/input-format-copy.test.mjs
+index 3eb5cf5f..91d22af0 100644
+--- a/test/input-format-copy.test.mjs
++++ b/test/input-format-copy.test.mjs
+@@ -28,9 +28,9 @@ test('① 紧凑内联旧形态零残留', () => {
+ 
+ test('② 教学点均带可照抄多行实例（2026-10-05-input-teach-copyable 形态升级：描述式→实例式；2026-10-15-title-label-skip 首行改概括句）', () => {
+   for (const p of ['src/run/command.js', 'src/flow.js', 'src/stages/brainstorm.js']) {
+-    assert.ok(read(p).includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 教学带实例起行`)
++    assert.ok(read(p).includes('--input "<一句 10-30 字中文概括（首行即变更标题'), `${p} 教学带实例起行`)
+   }
+-  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
++  assert.ok(read('src/flow.js').includes('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), 'flow 用法行带格式')
+   const guard = read('src/hooks/worktree-guard.js')
+   assert.ok(!guard.includes('--input "<描述+成功标准>"'), 'worktree-guard 无模糊形态残留')
+   assert.ok((guard.match(/- <可验证标准>/g) || []).length >= 3, 'worktree-guard 三处 stage 提示各带实例')
+diff --git a/test/input-teach-copyable.test.mjs b/test/input-teach-copyable.test.mjs
+index 1d78de3e..d5965771 100644
+--- a/test/input-teach-copyable.test.mjs
++++ b/test/input-teach-copyable.test.mjs
+@@ -7,7 +7,7 @@
+  *
+  * 锁定：
+  *   ① 分号内联旧教学形态零残留（7 处教学所在文件）
+- *   ② 各教学处带可照抄多行实例（--input "<一句中文概括（首行即变更标题）；随后动机与背景 起行 + - <可验证标准>" 收行）
++ *   ② 各教学处带可照抄多行实例（--input "<一句 10-30 字中文概括（首行即变更标题） 起行 + - <可验证标准>" 收行）
+  *   ③ 实例核心形态（顶格/缩进两版）喂 extractSuccessCriteria 提取 ≥ 1 条；
+  *      分号内联形态提取 0 条（零残留断言的语义依据）
+  *   ④ design 模板锚教学含「问题行勿删勿改勿替换 + 答案另起一行」措辞
+@@ -67,7 +67,7 @@ test('①b 非 src 教学面分号形态零残留（逐字三处清零）', () =
+ test('② 各教学处带可照抄多行实例', () => {
+   for (const p of TEACH_FILES) {
+     const src = read(p)
+-    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行（首行概括句——段头诱导已断）`)
++    assert.ok(src.includes('--input "<一句 10-30 字中文概括（首行即变更标题'), `${p} 实例起行（首行概括句——段头诱导已断）`)
+     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行（- <可验证标准>）`)
+   }
+   // worktree-guard 三处 stage 提示各带一份实例
+@@ -79,7 +79,7 @@ test('②b 非 src 教学面实例在场与模糊形态清零', () => {
+   // 逐字两处（CLAUDE.md / flow.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
+   for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
+     const src = read(p)
+-    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行`)
++    assert.ok(src.includes('--input "<一句 10-30 字中文概括（首行即变更标题'), `${p} 实例起行`)
+     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)
+   }
+   // 倒推行引号内联模糊形态清零（AGENTS.md 与模板源）
+diff --git a/test/prestage-consent-gate.test.mjs b/test/prestage-consent-gate.test.mjs
+index 373ddc7b..dedae756 100644
+--- a/test/prestage-consent-gate.test.mjs
++++ b/test/prestage-consent-gate.test.mjs
+@@ -48,7 +48,7 @@ function cli(cwd, args) {
+   })
+ }
+ 
+-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
+ const MARK_PATH = (cwd) => join(cwd, SPEC, '.runtime', 'route-hindsight.json')
+ 
+ /** 种一条「该走预段未走」标记（tasks 改写率超阈形态）。 */
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+index 7ba2360d..bd37d443 100644
+--- a/test/sentinel-wiring.test.mjs
++++ b/test/sentinel-wiring.test.mjs
+@@ -54,7 +54,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+   {
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-02-sw-fake'
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+     // 覆写任务面（真实实现路径形态）再全勾
+@@ -73,7 +73,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+   {
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-02-sw-mirror'
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+@@ -90,7 +90,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-01-sw-real'
+     // --no-review：聚焦哨兵不测评审（勾选直改后无 edit_ratio，评审定档与本用例无关）
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+@@ -107,7 +107,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+   {
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-01-sw-body-token'
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+@@ -124,7 +124,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
+   {
+     const { cwd, cli } = makeRepo()
+     const change = '2026-09-02-sw-partial'
+-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
+     fillSlots(cwd, change)
+     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+diff --git a/test/task-tick.test.mjs b/test/task-tick.test.mjs
+index a2d46029..c9c1977c 100644
+--- a/test/task-tick.test.mjs
++++ b/test/task-tick.test.mjs
+@@ -96,7 +96,7 @@ test('①c 未知 id：列可选 id；末格勾完 next=null', () => {
+ test('②a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-1'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+   const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+   assert.equal(t1.status, 0, t1.stderr)
+   assert.match(t1.stdout, /已勾（1\/3）/, '进度回显')
+@@ -118,7 +118,7 @@ test('②a task tick：翻格+进度回显+下一任务指针；幂等 exit 0',
+ test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，单格跳）；幂等重勾零新事件', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-4'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+   const evPath = join(cwd, '.sillyspec', '.runtime', `watcher-events-${change}.jsonl`)
+   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0)
+   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
+@@ -140,7 +140,7 @@ test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，
+ test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）；幂等重勾零追加', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-7'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+   const sidePath = join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl')
+   const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+   assert.equal(t1.status, 0, t1.stderr)
+@@ -161,7 +161,7 @@ test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）
+ test('⑦b 侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-8'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+   mkdirSync(join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl'), { recursive: true })
+   const t = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+   assert.equal(t.status, 0, '翻格主流程不受影响')
+@@ -207,7 +207,7 @@ test('④c 混合面：CLI 勾 1 格 + Edit 一把翻 2 格 → 跳幅按 CLI 
+ test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-2'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+@@ -223,7 +223,7 @@ test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机
+ test('⑤b 部分勾选（认领面勾一半）→ 同样拒收；补齐 token 提交后放行', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-3'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
++  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index bd00250d..d8b9c061 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -96,7 +96,7 @@ test('空面+声明清单裸写仓目录前缀 → 阻断：三处置+三种正
+   const change = '2026-10-13-tefc-prefix'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '跨仓前缀形态\n成功标准：\n- 空面门阻断并点名', '--autopilot'])
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '跨仓前缀形态命中注册仓\n成功标准：\n- 空面门阻断并点名', '--autopilot'])
+     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+     fillDocs(specBase, change, FLIST_TABLE(['libx/src/routes/X.js']))
+     tickTasks(specBase, cwd, change)
+@@ -123,7 +123,7 @@ test('空面+仓根相对路径（首段不命中注册仓）→ 仍点名阻断
+   const change = '2026-10-13-tefc-blind'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', '盲区形态\n成功标准：\n- 主仓不存在即点名', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', '盲区形态主仓缺文件点名\n成功标准：\n- 主仓不存在即点名', '--autopilot'])
+     fillDocs(specBase, change, FLIST_TABLE(['src/routes/X.js']))
+     tickTasks(specBase, cwd, change)
+     const s2 = cli(cwd, ['flow', 'done', '--change', change])
+@@ -142,7 +142,7 @@ test('非空面：未标注跨仓声明仍出防呆告警且不阻断（零回
+   const change = '2026-10-13-tefc-nonempty'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', '非空面回归\n成功标准：\n- 告警在场收口通过', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', '非空面回归不触发跨仓门\n成功标准：\n- 告警在场收口通过', '--autopilot'])
+     writeFileSync(join(cwd, 'work.txt'), 'done\n')
+     git(cwd, ['add', 'work.txt'])
+     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
+@@ -166,7 +166,7 @@ test('--accept-empty-face：签收放行 + flow-state 持久化 + 无 flag 重
+   const change = '2026-10-13-tefc-signoff'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', '签收形态\n成功标准：\n- 签收留痕免重拦', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', '签收形态放行持久化留痕\n成功标准：\n- 签收留痕免重拦', '--autopilot'])
+     fillDocs(specBase, change, FLIST_TABLE(['libx/src/routes/X.js']))
+     tickTasks(specBase, cwd, change)
+     // 首跑无 flag：阻断在 patch
+@@ -201,7 +201,7 @@ test('纯跨仓规范标注空面：不阻断，出空面跨仓冻结缺口 advi
+   const change = '2026-10-13-tefc-marked'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', '纯跨仓标注\n成功标准：\n- advisory 不阻断', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', '纯跨仓规范标注不阻断面\n成功标准：\n- advisory 不阻断', '--autopilot'])
+     fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- src/routes/X.js'].join('\n'))
+     tickTasks(specBase, cwd, change)
+     writeReviewFixture(specBase, cwd, change)
+@@ -221,7 +221,7 @@ test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标
+   const change = '2026-10-13-tefc-h2hdr'
+   const specBase = join(cwd, '.sillyspec')
+   try {
+-    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态\n成功标准：\n- 段头识别不阻断', '--autopilot'])
++    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态识别为规范标注\n成功标准：\n- 段头识别不阻断', '--autopilot'])
+     fillDocs(specBase, change, ['## 文件变更清单', '', '## libx 仓变更', '', '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 修改 | src/routes/X.js | 交付 |'].join('\n'))
+     tickTasks(specBase, cwd, change)
+     writeReviewFixture(specBase, cwd, change)
+@@ -241,12 +241,12 @@ test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行',
+   const withRepos = makeRepo({ repos: true })
+   const noRepos = makeRepo()
+   try {
+-    const s1 = cli(withRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner1', '--input', '横幅两态\n成功标准：\n- 跨仓行在场', '--autopilot'])
++    const s1 = cli(withRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner1', '--input', '横幅两态跨仓写法行对齐\n成功标准：\n- 跨仓行在场', '--autopilot'])
+     assert.equal(s1.status, 0)
+     assert.match(s1.stdout, /跨仓交付/, '跨仓写法行在场')
+     assert.match(s1.stdout, /## <注册key> 仓变更/, '段头写法在场')
+     assert.match(s1.stdout, /local\.yaml repos/, 'key 来源指明')
+-    const s2 = cli(noRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner2', '--input', '横幅两态\n成功标准：\n- 无跨仓行', '--autopilot'])
++    const s2 = cli(noRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner2', '--input', '横幅两态跨仓写法行对齐\n成功标准：\n- 无跨仓行', '--autopilot'])
+     assert.equal(s2.status, 0)
+     assert.doesNotMatch(s2.stdout, /跨仓交付/, '无注册仓时零跨仓行')
+   } finally {
+diff --git a/test/thin-module-gate-and-feed.test.mjs b/test/thin-module-gate-and-feed.test.mjs
+index 9853e88f..fc56cb2f 100644
+--- a/test/thin-module-gate-and-feed.test.mjs
++++ b/test/thin-module-gate-and-feed.test.mjs
+@@ -66,7 +66,7 @@ function setupThinModuleChange(cwd, cn, { deliverDir = 'src/newdir', sidecar = f
+   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+   const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
+-  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', '模块门 e2e\n\n成功标准：\n- 收口门行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', '模块门三态收口链 e2e\n\n成功标准：\n- 收口门行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   const base = join(cwd, '.sillyspec', 'changes', cn)
+   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
+diff --git a/test/thin-upgrade-stage-reset.test.mjs b/test/thin-upgrade-stage-reset.test.mjs
+index 1494ebd6..39b317fd 100644
+--- a/test/thin-upgrade-stage-reset.test.mjs
++++ b/test/thin-upgrade-stage-reset.test.mjs
+@@ -41,7 +41,7 @@ test('① gate FAIL 自动升厚：行值 thin → brainstorm（e2e）', async (
+   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+   const cn = '2026-10-13-upthk-x'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', 'x\n\n成功标准：\n- y', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '合规格概括标题十个字\n\n成功标准：\n- y', '--no-review']).status, 0)
+   const base = join(cwd, '.sillyspec', 'changes', cn)
+   // 填槽（v2 纯 markdown 骨架，零 AGENT 槽）——同 flowdone-lint-fail-output 夹具形态填法
+   {
+@@ -81,7 +81,7 @@ test('② resume 路径行值非 thin 不越权改动（单元态）', () => {
+   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+   run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
+   const cn = '2026-10-13-upthk-y'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', 'x\n\n成功标准：\n- y', '--no-review']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '合规格概括标题十个字\n\n成功标准：\n- y', '--no-review']).status, 0)
+   // 正常 start 后行值是 brainstorm（initChange 出生值），升厚 helper 对它应为 no-op
+   const before = readStage(cwd, cn)
+   assert.equal(before, 'brainstorm')
+diff --git a/test/title-range-gate.test.mjs b/test/title-range-gate.test.mjs
+new file mode 100644
+index 00000000..f7715fdc
+--- /dev/null
++++ b/test/title-range-gate.test.mjs
+@@ -0,0 +1,163 @@
++/**
++ * 变更标题硬区间门测试 —— 2026-10-16-title-range-gate（用户硬性要求：10-30 字必须、建议 ~20，
++ * 可强制 agent 命名）。变更①（short-change-title）落了 ≤30 提炼上限后，下限与强制命名缺位：
++ * fresh 无 --input 仍可退变更名兜底、短首行原样过。本文件锁定判定面：
++ * isValidChangeTitle（10..30 区间）+ resolveStartTitle（flag>提炼>兜底策略 × enforce 门户）+
++ * 拒绝报错/超界提示/hardCut 软提示三块文案的单源契约（cli-copy-selfsufficient：状态/原因/修复一次给全）。
++ *
++ * flow.js 的接线（exit 2 / ⚠️ 打印时机）以 e2e 夹具 + 既有标题族回归覆盖：硬门拦截信息
++ * 「❌ 变更标题必须为 10-30 字」在全量回归中作为夹具是否合契的失败信号。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { pathToFileURL } from 'node:url'
++import { join } from 'node:path'
++
++const ROOT = join(import.meta.dirname, '..')
++const { isValidChangeTitle, resolveStartTitle, shortTitleRejectMessage, shortTitleRangeWarnLine, SHORT_TITLE_HARDCUT_HINT } =
++  await import(pathToFileURL(join(ROOT, 'src', 'quicklog.js')).href)
++const { ProgressManager } = await import(pathToFileURL(join(ROOT, 'src', 'progress.js')).href)
++
++// ── FR-01/FR-02：isValidChangeTitle 区间判定 ──
++
++test('isValidChangeTitle：9 拒 / 10 过 / 30 过 / 31 拒（去首尾空白后计数）', () => {
++  assert.equal(isValidChangeTitle('一二三四五六七八九'), false, '9 字拒')
++  assert.equal(isValidChangeTitle('一二三四五六七八九十'), true, '10 字过（下限含）')
++  assert.equal(isValidChangeTitle('一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十'), true, '30 字过（上限含）')
++  assert.equal(isValidChangeTitle('一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十又'), false, '31 字拒')
++  assert.equal(isValidChangeTitle('  一二三四五六七八九十  '), true, '去首尾空白后计数')
++  assert.equal(isValidChangeTitle(''), false)
++  assert.equal(isValidChangeTitle(null), false)
++  assert.equal(isValidChangeTitle('2026-10-16-abc'), true, 'ASCII 变更名按字符数计（语义不可机械判定，长度合规即过）')
++})
++
++// ── FR-01：resolveStartTitle 策略（flag > 提炼 > 兜底）× enforce 门户 ──
++
++test('resolveStartTitle：--title 显式优先，区间内 ok（enforce）', () => {
++  const got = resolveStartTitle({ titleFlag: '登录会话随机失效全面修复', input: '随便什么', change: '2026-10-16-x', enforce: true })
++  assert.deepEqual([got.ok, got.kind, got.title], [true, 'flag', '登录会话随机失效全面修复'])
++})
++
++test('resolveStartTitle：--title 超区间 → ok=false（enforce），平台豁免 ok=true', () => {
++  const bad = resolveStartTitle({ titleFlag: '一二三四五六七八九', input: '', change: 'c', enforce: true })
++  assert.equal(bad.ok, false, '9 字显式标题被拒')
++  const exempt = resolveStartTitle({ titleFlag: '一二三四五六七八九', input: '', change: 'c', enforce: false })
++  assert.equal(exempt.ok, true, '平台 writer 豁免')
++})
++
++test('resolveStartTitle：提炼首行合区间 → derived；过短首行 enforce 拒 / 豁免放行', () => {
++  const good = resolveStartTitle({ titleFlag: null, input: '修复登录会话随机失效并补齐回归\n\n成功标准：\n- x', change: 'c', enforce: true })
++  assert.equal(good.ok, true)
++  assert.equal(good.kind, 'derived')
++  const short = resolveStartTitle({ titleFlag: null, input: '任务\n\n成功标准：\n- x', change: 'c', enforce: true })
++  assert.equal(short.ok, false, '2 字首行 enforce 拒绝')
++  assert.equal(short.kind, 'fallback', '拒绝面归兜底形态（无合规标题）')
++  const shortExempt = resolveStartTitle({ titleFlag: null, input: '任务\n\n成功标准：\n- x', change: 'c', enforce: false })
++  assert.deepEqual([shortExempt.ok, shortExempt.title], [true, '任务'], '平台豁免放行短标题（调用方 ⚠️ 留痕）')
++})
++
++test('resolveStartTitle：无 --input → 兜底，enforce 拒（强制命名）、豁免放行', () => {
++  const gated = resolveStartTitle({ titleFlag: null, input: null, change: '2026-10-16-x', enforce: true })
++  assert.deepEqual([gated.ok, gated.kind], [false, 'fallback'])
++  const exempt = resolveStartTitle({ titleFlag: null, input: null, change: '2026-10-16-x', enforce: false })
++  assert.deepEqual([exempt.ok, exempt.kind], [true, 'fallback'])
++})
++
++test('resolveStartTitle：硬切 30+… 残句 enforce 拒（残句=认不出变更做什么）、豁免放行+警告面', () => {
++  const long = '多标签页并发操作同一会话存储键时后写者覆盖先写者的活动状态导致随机登出需要重新设计'
++  const gated = resolveStartTitle({ titleFlag: null, input: long, change: 'c', enforce: true })
++  assert.equal(gated.ok, false, 'hardCut 残句拒绝——CLI 提炼救不了就让 agent 命名')
++  assert.equal(gated.kind, 'fallback')
++  assert.equal(gated.rejectedTitle, long.slice(0, 30) + '…', '被拒候选透传（报错展示面）')
++  assert.equal(gated.hardCut, true)
++  const exempt = resolveStartTitle({ titleFlag: null, input: long, change: 'c', enforce: false })
++  assert.deepEqual([exempt.ok, exempt.title, exempt.kind], [true, long.slice(0, 30) + '…', 'derived'], '平台豁免照用提炼值（isValidChangeTitle=false → 调用方 ⚠️）')
++})
++
++// ── FR-02/FR-04：拒绝报错与提示文案单源契约 ──
++
++test('shortTitleRejectMessage：状态/原因/修复一次给全（有值/兜底两形态）', () => {
++  const withVal = shortTitleRejectMessage('任务')
++  assert.ok(withVal.includes('10-30 字'), '硬区间要求')
++  assert.ok(withVal.includes('2 字'), '当前字数')
++  assert.ok(withVal.includes('"任务"'), '当前值')
++  assert.ok(withVal.includes('--input 首行') && withVal.includes('--title'), '两条修复路径')
++  const fallback = shortTitleRejectMessage(null)
++  assert.ok(fallback.includes('未命名'), '兜底形态报「未命名」')
++  assert.ok(fallback.includes('--title'), '修复路径仍在')
++})
++
++test('shortTitleRangeWarnLine：不阻断强提示含当前值/字数/修复命令', () => {
++  const line = shortTitleRangeWarnLine('滑块验证码')
++  assert.ok(line.includes('滑块验证码') && line.includes('5 字'))
++  assert.ok(line.includes('--title') && line.includes('不阻断'))
++})
++
++test('SHORT_TITLE_HARDCUT_HINT：文案口径=6..30 内无可用截点（评审 P3 清偿）', () => {
++  assert.ok(SHORT_TITLE_HARDCUT_HINT.includes('6..30'), '体现区间过滤口径，禁用「无自然断点」旧措辞')
++  assert.ok(!SHORT_TITLE_HARDCUT_HINT.includes('无自然断点'))
++  assert.ok(SHORT_TITLE_HARDCUT_HINT.includes('--title') && SHORT_TITLE_HARDCUT_HINT.includes('不阻断'))
++})
++
++// ── FR-01/FR-02 e2e：flow start 真实子进程（makeRepo 对齐 change-title-flow 的 local.yaml 形态）──
++
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++
++const e2eRoots = []
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'titlegate-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  e2eRoots.push(cwd)
++  return cwd
++}
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [join(ROOT, 'src', 'index.js'), ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++}
++test.onFinish?.(() => { for (const t of e2eRoots) rmSync(t, { recursive: true, force: true }) })
++
++test('e2e fresh：首行过短 → exit 2 报错一次给全，changes 零半态', () => {
++  const cwd = makeRepo()
++  const r = cli(cwd, ['flow', 'start', '--change', '2026-10-16-gate-a', '--input', '任务\n\n成功标准：\n- x', '--no-review'])
++  assert.equal(r.status, 2, `应被硬门拒绝: ${r.stdout}`)
++  assert.ok(r.stderr.includes('10-30 字') && r.stderr.includes('2 字') && r.stderr.includes('--title'), '状态/原因/修复一次给全')
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  const row = pm._ensureDB(cwd).getDb().prepare("SELECT name FROM changes WHERE name = '2026-10-16-gate-a'").get()
++  assert.equal(row, undefined, '被拒启动不得落 changes 行（写入前拒绝）')
++})
++
++test('e2e fresh：合区间标题正常启动落库', () => {
++  const cwd = makeRepo()
++  const r = cli(cwd, ['flow', 'start', '--change', '2026-10-16-gate-b', '--input', '登录会话随机失效问题修复\n\n成功标准：\n- x', '--no-review'])
++  assert.equal(r.status, 0, `合规启动失败: ${r.stderr}`)
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  assert.equal(pm._ensureDB(cwd).getDb().prepare("SELECT title FROM changes WHERE name = '2026-10-16-gate-b'").get()?.title, '登录会话随机失效问题修复')
++})
++
++test('e2e fresh：--title 31 字 → exit 2', () => {
++  const cwd = makeRepo()
++  const r = cli(cwd, ['flow', 'start', '--change', '2026-10-16-gate-c', '--input', '登录会话随机失效问题修复\n\n成功标准：\n- x', '--title', '一二三四五六七八九十'.repeat(3) + '一', '--no-review'])
++  assert.equal(r.status, 2)
++  assert.ok(r.stderr.includes('31 字'))
++})
++
++test('e2e 平台 writer 预建空目录：过短 input 豁免硬门，exit 0 + ⚠️ + 提炼值照用', () => {
++  // 平台派发契约必带 --input（无 --input 在更早的「需求不够清晰」门被拦，轮不到标题门）；
++  // 豁免面=预建空目录 + 提炼值超区间 → 照常启动 + ⚠️ 留痕
++  const cwd = makeRepo()
++  mkdirSync(join(cwd, '.sillyspec', 'changes', '2026-10-16-gate-d'), { recursive: true })
++  const r = cli(cwd, ['flow', 'start', '--change', '2026-10-16-gate-d', '--input', '任务\n\n成功标准：\n- x', '--no-review'])
++  assert.equal(r.status, 0, `平台 writer 形态应豁免放行: ${r.stderr}`)
++  assert.match(r.stdout, /⚠️/, '豁免面打超界警告')
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  assert.equal(pm._ensureDB(cwd).getDb().prepare("SELECT title FROM changes WHERE name = '2026-10-16-gate-d'").get()?.title, '任务')
++})
+diff --git a/test/turbo-mode-done-keep.test.mjs b/test/turbo-mode-done-keep.test.mjs
+index cdee34a2..00f68c8d 100644
+--- a/test/turbo-mode-done-keep.test.mjs
++++ b/test/turbo-mode-done-keep.test.mjs
+@@ -40,7 +40,7 @@ function cli(cwd, args) {
+ }
+ 
+ function startTurbo(cwd, change) {
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
+   return s1
+ }
+@@ -78,7 +78,7 @@ test('② design 空槽拒收不放松：turbo 变更四节未作答 → artifac
+ test('③ 非 turbo done：输出无极速面痕迹（缺省零回归）', () => {
+   const cwd = makeRepo()
+   const change = '2026-10-14-turbo-keep-t3'
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot'])
+   assert.equal(s1.status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+diff --git a/test/turbo-mode-done-skip.test.mjs b/test/turbo-mode-done-skip.test.mjs
+index b7c9413a..a7e25973 100644
+--- a/test/turbo-mode-done-skip.test.mjs
++++ b/test/turbo-mode-done-skip.test.mjs
+@@ -54,7 +54,7 @@ function fillDesignSlots(cwd, change) {
+ function deliverAndClose({ turbo }) {
+   const { cwd } = makeRepo()
+   const change = '2026-10-14-turbo-done-x'
+-  const startArgs = ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot']
++  const startArgs = ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot']
+   if (turbo) startArgs.push('--turbo')
+   const s1 = cli(cwd, startArgs)
+   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
+diff --git a/test/turbo-mode-scope.test.mjs b/test/turbo-mode-scope.test.mjs
+index a58344eb..97ccd9ee 100644
+--- a/test/turbo-mode-scope.test.mjs
++++ b/test/turbo-mode-scope.test.mjs
+@@ -51,7 +51,7 @@ function fillDesignSlots(cwd, change) {
+ test('① 无环境变量旁路：SILLYSPEC_TURBO=1 对非 turbo 仓零作用', () => {
+   const cwd = makeRepo()
+   const change = '2026-10-14-turbo-scope-t1'
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'], { SILLYSPEC_TURBO: '1' })
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot'], { SILLYSPEC_TURBO: '1' })
+   assert.equal(s1.status, 0)
+   assert.doesNotMatch(s1.stdout, /极速模式/, 'env 不触发极速面（仅 flow-state 字段激活）')
+   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
+@@ -70,7 +70,7 @@ test('① 无环境变量旁路：SILLYSPEC_TURBO=1 对非 turbo 仓零作用',
+ test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（D-007 起步变体）', () => {
+   const cwd = makeRepo()
+   const change = '2026-10-14-turbo-scope-t2'
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
+   // 指引文案随档位收窄（2026-10-14-turbo-guide-tier-copy 评审 P3 清偿）：thick 起步不承诺自动跳过
+   assert.doesNotMatch(s1.stdout, /收口自动跳过实测与重仪式门/, 'thick 起步不出现跳过承诺（防文案与门判定漂移）')
+@@ -90,7 +90,7 @@ test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（
+ test('④ turbo 值损坏（非布尔 true）fail-soft：done 走非 turbo 全量路径', () => {
+   const cwd = makeRepo()
+   const change = '2026-10-14-turbo-scope-t4'
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo', '--no-review'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo', '--no-review'])
+   assert.equal(s1.status, 0)
+   // 篡改 turbo 值为字符串（读态 st.turbo === true 严格判等 → 非布尔真值不激活跳过面）；--no-review 定案评审豁免（非 turbo 路径采样不确定）
+   const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
+@@ -109,7 +109,7 @@ test('④ turbo 值损坏（非布尔 true）fail-soft：done 走非 turbo 全
+ test('⑤ flow-state.yaml 整体损坏 fail-loud：done exit 2 报「无 flow-state」并指路', () => {
+   const cwd = makeRepo()
+   const change = '2026-10-14-turbo-scope-t5'
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
+   assert.equal(s1.status, 0)
+   writeFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), '::: not yaml ::: [')
+   const s2 = cli(cwd, ['flow', 'done', '--change', change])
+diff --git a/test/turbo-mode-start.test.mjs b/test/turbo-mode-start.test.mjs
+index cb000455..0795869d 100644
+--- a/test/turbo-mode-start.test.mjs
++++ b/test/turbo-mode-start.test.mjs
+@@ -41,7 +41,7 @@ function cli(cwd, args) {
+ test('① flow start --turbo：flow-state 落 turbo/turbo_since 留痕 + 输出极速指引行', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-10-14-turbo-start-t1'
+-  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
+   assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
+   assert.match(r.stdout, /⚡ 极速模式（用户显式触发）/, '极速指引行在场')
+   const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
+@@ -55,7 +55,7 @@ test('① flow start --turbo：flow-state 落 turbo/turbo_since 留痕 + 输出
+ test('② 无 --turbo：flow-state 无 turbo 字段、输出无极速行（缺省零回归）', () => {
+   const { cwd } = makeRepo()
+   const change = '2026-10-14-turbo-start-t2'
+-  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot'])
+   assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
+   assert.doesNotMatch(r.stdout, /极速模式/, '无极速指引行')
+   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')

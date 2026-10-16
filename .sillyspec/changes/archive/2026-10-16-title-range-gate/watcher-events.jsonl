@@ -1,0 +1,25 @@
+{"ts":1792158289848,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792158289848,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792158466976,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/change-title-flow.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792158595964,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792158596320,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792158596730,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792158597100,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792158598140,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792158598140,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1792159017816,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/batch-tick-gate.test.mjs、test/change-list-paren-strip.test.mjs、test/change-name-date-gate.test.mjs、test/close-trace-freeze-integrity.test.mjs、test/close-trace-unified.test.mjs、test/cross-repo-baseline-anchor.test.mjs、test/flow-agent-log-report.test.mjs、test/flow-checkpoints.test.mjs、test/flow-clarity-probe.test.mjs、test/flow-diff-cmd.test.mjs、test/flow-done-carry-suspect-advisory.test.mjs、test/flow-protocol.test.mjs、test/flow-tick-prototype.test.mjs、test/flowdone-disposition-drift.test.mjs、test/prestage-consent-gate.test.mjs、test/sentinel-wiring.test.mjs、test/task-tick.test.mjs、test/thin-empty-face-crosscheck.test.mjs、test/turbo-mode-done-keep.test.mjs、test/turbo-mode-done-skip.test.mjs、test/turbo-mode-scope.test.mjs、test/turbo-mode-start.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159100225,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/input-teach-copyable.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159113614,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-redline-frontload.test.mjs、test/flow-route.test.mjs、test/flow-tail-polish.test.mjs、test/fr-governance-sweep.test.mjs、test/guide-anchor-adopt-proto.test.mjs、test/thin-upgrade-stage-reset.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159166568,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/hooks/worktree-guard.js、src/index.js、src/run/command.js、src/run/stage.js、src/stages/brainstorm.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159254051,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-module-gate-and-feed.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159375558,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792159668064,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-help-status.test.mjs、test/input-format-copy.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792159694435,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792160044075,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1792160044168,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792160044168,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1792160047887,"kind":"commit","stage":null,"detail":"b1ab65b2","provisional":true}
+{"ts":1792160054654,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792160165685,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（95.2s） · 20261016141603","provisional":true}
+{"ts":1792160248936,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792160255874,"kind":"commit","stage":null,"detail":"8889da0f","provisional":true}

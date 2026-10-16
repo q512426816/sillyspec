@@ -1,0 +1,515 @@
+{
+  "change": "2026-10-16-title-range-gate",
+  "baseline": "8aff11936fe4be118f83181566f36ebafd91af7e",
+  "head": "8889da0f7a38a5a133b103592fb6cb29f9acb99f",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "assets/command-cards/flow.md",
+    "src/flow.js",
+    "src/hooks/worktree-guard.js",
+    "src/index.js",
+    "src/quicklog.js",
+    "src/run/command.js",
+    "src/run/stage.js",
+    "src/stages/brainstorm.js",
+    "templates/agents-instruction.md",
+    "test/batch-tick-gate.test.mjs",
+    "test/change-list-paren-strip.test.mjs",
+    "test/change-name-date-gate.test.mjs",
+    "test/change-title-flow.test.mjs",
+    "test/close-trace-freeze-integrity.test.mjs",
+    "test/close-trace-unified.test.mjs",
+    "test/cross-repo-baseline-anchor.test.mjs",
+    "test/flow-agent-log-report.test.mjs",
+    "test/flow-checkpoints.test.mjs",
+    "test/flow-clarity-probe.test.mjs",
+    "test/flow-diff-cmd.test.mjs",
+    "test/flow-done-carry-suspect-advisory.test.mjs",
+    "test/flow-help-status.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-redline-frontload.test.mjs",
+    "test/flow-route.test.mjs",
+    "test/flow-tail-polish.test.mjs",
+    "test/flow-tick-prototype.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs",
+    "test/fr-governance-sweep.test.mjs",
+    "test/guide-anchor-adopt-proto.test.mjs",
+    "test/input-format-copy.test.mjs",
+    "test/input-teach-copyable.test.mjs",
+    "test/prestage-consent-gate.test.mjs",
+    "test/sentinel-wiring.test.mjs",
+    "test/task-tick.test.mjs",
+    "test/thin-empty-face-crosscheck.test.mjs",
+    "test/thin-module-gate-and-feed.test.mjs",
+    "test/thin-upgrade-stage-reset.test.mjs",
+    "test/title-range-gate.test.mjs",
+    "test/turbo-mode-done-keep.test.mjs",
+    "test/turbo-mode-done-skip.test.mjs",
+    "test/turbo-mode-scope.test.mjs",
+    "test/turbo-mode-start.test.mjs"
+  ],
+  "totals": {
+    "files": 46,
+    "additions": 399,
+    "deletions": 153
+  },
+  "savedAt": "2026-10-16T14:17:36.693Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "skills-docs",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/skills-docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "change-management",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/change-management.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 34
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "8aff11936fe4be118f83181566f36ebafd91af7e",
+    "totals": {
+      "files": 46,
+      "additions": 399,
+      "deletions": 153
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-flow/SKILL.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "assets/command-cards/flow.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 46,
+        "deletions": 28,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/quicklog.js",
+        "additions": 65,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/batch-tick-gate.test.mjs",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-list-paren-strip.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-name-date-gate.test.mjs",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-title-flow.test.mjs",
+        "additions": 14,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/close-trace-freeze-integrity.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/close-trace-unified.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cross-repo-baseline-anchor.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-agent-log-report.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-checkpoints.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-clarity-probe.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-diff-cmd.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-done-carry-suspect-advisory.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-help-status.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-protocol.test.mjs",
+        "additions": 21,
+        "deletions": 21,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-redline-frontload.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-route.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-tail-polish.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-tick-prototype.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flowdone-disposition-drift.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-governance-sweep.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/guide-anchor-adopt-proto.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/input-format-copy.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/input-teach-copyable.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/prestage-consent-gate.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sentinel-wiring.test.mjs",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-tick.test.mjs",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-empty-face-crosscheck.test.mjs",
+        "additions": 8,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-module-gate-and-feed.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-upgrade-stage-reset.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/title-range-gate.test.mjs",
+        "additions": 163,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-done-keep.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-done-skip.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-scope.test.mjs",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/turbo-mode-start.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1286999dd372412e9dcd46fe10e9867640752a211294016c1b792b432f0c82b3",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-title-range-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-title-range-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/title-range-gate.test.mjs「isTitleInRange 区间判定 + fresh 拒绝判定面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-title-range-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-title-range-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/title-range-gate.test.mjs「显式 --title 校验与平台 writer 豁免判定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-title-range-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-title-range-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/title-range-gate.test.mjs「adopt/resume 超界强提示判定面（不阻断）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-title-range-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-16-title-range-gate:flow:测试绑定FR-04",
+      "tests": [
+        "test/title-range-gate.test.mjs「hardCut 软提示文案口径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-title-range-gate"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-16-title-range-gate:flow:测试绑定FR-05",
+      "tests": [
+        "test/title-range-gate.test.mjs「夹具契约回归（标题族测试全绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-title-range-gate"
+    }
+  ]
+}

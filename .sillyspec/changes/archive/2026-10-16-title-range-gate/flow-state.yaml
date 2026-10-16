@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -27,11 +35,18 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: 8aff11936fe4be118f83181566f36ebafd91af7e
-updatedAt: '2026-10-16T13:44:49.809Z'
+updatedAt: '2026-10-16T14:21:17.344Z'
 baseline_sha256: 0ca6e718e956a9c31e71dc54afa18b03d3606300864e781e6e24159bd3f44be1
 spec_approved: true
 spec_approved_at: '2026-10-16T13:44:49.809Z'
 spec_approved_by: zcode-title-gate
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-title-gate
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js170+js1+js-meta-skip1+nontest-skip1)+fr(169)（95.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261016141603\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（55.2s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261016141603\test-result.json｜门文件 48 个
 

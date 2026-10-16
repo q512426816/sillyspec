@@ -22,3 +22,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-13 | 2026-10-13-declared-paren-strip | 动机：平台仓消费方冒烟实证（multi-agent-platform 仓 docs/sillyspec/flow-dif |
 | 2026-10-15 | 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量… |
 | 2026-10-16 | 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句 |
+| 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |

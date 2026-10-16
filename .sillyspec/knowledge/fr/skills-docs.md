@@ -420,3 +420,110 @@ created_at: 2026-10-15T01:21:44.811Z
 摘要：存量清偿
 全文：.sillyspec/changes/archive/2026-10-15-title-label-skip/requirements.md#FR-04
 最近确认：e182ccdba1e2b6a1ac4dbc45d3ead159e63a25f1
+
+## FR-skills-docs-018 flow start 全新启动（非平台 writer 空目录）标题不在 10-30 字或变更名兜底时必须拒绝启动并给修复指引（--title 或首行 10-30 字概括）
+变更：2026-10-16-title-range-gate
+状态：active
+摘要：首行过短被拒；合规则原样放行
+场景正文：
+- 场景：首行过短被拒 — Given --input 首行「任务」（2 字）；When flow start 全新启动；Then 必须 exit 2 且报错含当前值、字数、10-30 要求与 --title/首行两条修复路径；changes 表不得新增该变更行
+- 场景：合规则原样放行 — Given --input 首行 10-30 字（如 18 字概括）；When flow start 全新启动；Then 必须正常启动，标题=提炼值，行为与改动前逐字一致（除标题行措辞更新外）
+全文：.sillyspec/changes/archive/2026-10-16-title-range-gate/requirements.md#FR-01
+最近确认：8889da0f7a38a5a133b103592fb6cb29f9acb99f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-title-range-gate:flow:测试绑定FR-01
+  tests: test/title-range-gate.test.mjs「isTitleInRange 区间判定 + fresh 拒绝判定面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-title-range-gate
+  status: active
+
+## FR-skills-docs-019 显式 --title 在 fresh/resume 超出 10-30 必须拒绝；平台 writer 豁免硬门仅警告
+变更：2026-10-16-title-range-gate
+状态：active
+摘要：--title 超长被拒；平台 writer 豁免
+场景正文：
+- 场景：--title 超长被拒 — Given --title 31 字；When flow start / resume；Then 必须 exit 2 且报错含字数与修复路径
+- 场景：平台 writer 豁免 — Given 预建空变更目录（平台派发形态）且无 --input；When flow start；Then 必须照旧启动（exit 0），标题=变更名兜底且打 ⚠️ 警告行
+全文：.sillyspec/changes/archive/2026-10-16-title-range-gate/requirements.md#FR-02
+最近确认：8889da0f7a38a5a133b103592fb6cb29f9acb99f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-title-range-gate:flow:测试绑定FR-02
+  tests: test/title-range-gate.test.mjs「显式 --title 校验与平台 writer 豁免判定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-title-range-gate
+  status: active
+
+## FR-skills-docs-020 adopt 收编与 resume 补写不阻断但超界必须打强提示
+变更：2026-10-16-title-range-gate
+状态：active
+摘要：adopt 超界强提示
+场景正文：
+- 场景：adopt 超界强提示 — Given 头脑风暴 proposal 语义标题 5 字；When flow start 收编；Then 必须正常收编（exit 0）且输出含 ⚠️ 与 --title 修复指引的提示行
+全文：.sillyspec/changes/archive/2026-10-16-title-range-gate/requirements.md#FR-03
+最近确认：8889da0f7a38a5a133b103592fb6cb29f9acb99f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-title-range-gate:flow:测试绑定FR-03
+  tests: test/title-range-gate.test.mjs「adopt/resume 超界强提示判定面（不阻断）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-title-range-gate
+  status: active
+
+## FR-skills-docs-021 hardCut 软提示文案精度修正（评审 P3：判定是 6..30 内无可用截点）
+变更：2026-10-16-title-range-gate
+状态：active
+摘要：文案与判定一致
+场景正文：
+- 场景：文案与判定一致 — Given hardCut=true（标点存在但全落在 6..30 区间外）；When flow start 落标题；Then 提示行措辞必须体现「6..30 字内无可用截点」口径
+全文：.sillyspec/changes/archive/2026-10-16-title-range-gate/requirements.md#FR-04
+最近确认：8889da0f7a38a5a133b103592fb6cb29f9acb99f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-title-range-gate:flow:测试绑定FR-04
+  tests: test/title-range-gate.test.mjs「hardCut 软提示文案口径」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-title-range-gate
+  status: active
+
+## FR-skills-docs-022 过门格式指引（AGENTS.md/templates）同步 10-30 要求；受影响 e2e 夹具按新契约修输入（断言不动）
+变更：2026-10-16-title-range-gate
+状态：active
+摘要：夹具契约同步
+场景正文：
+- 场景：夹具契约同步 — Given 硬门落地后全量测试；When 全量跑毕；Then 零失败（夹具首行 <10 字的用例已延长至合区间，断言未弱化）
+全文：.sillyspec/changes/archive/2026-10-16-title-range-gate/requirements.md#FR-05
+最近确认：8889da0f7a38a5a133b103592fb6cb29f9acb99f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-title-range-gate:flow:测试绑定FR-05
+  tests: test/title-range-gate.test.mjs「夹具契约回归（标题族测试全绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-title-range-gate
+  status: active
