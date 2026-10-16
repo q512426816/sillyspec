@@ -9,19 +9,21 @@ created_at: 2026-10-16T08:28:38.146Z
 ### FR-01: test/backlog-batch-a.test.mjs 在 linux 与 windows 双端退出码 0（12/12 通过）
 
 - 必须：该文件的 `mock.module('fs', { exports })` 导出对象不得含 `node:fs` 上不可重定义的键
-  （`constants` 在 linux 为 writable:false/configurable:false 数据属性，cjsMockModuleLoad 逐键
-  ObjectDefineProperty 必抛 `Cannot redefine property: constants` 并炸掉整文件；windows 同属性
-  writable:true 侥幸不炸——本地绿/CI 红的分叉点）。剔除后双端整文件退出码 0、断言 12/12 通过。
+  （`constants` 在 CJS 导出上为 writable:false/configurable:false 数据属性；mock exports 含
+  `default`（spread 命名空间必带）时 cjsMockModuleLoad 把键逐条 defineProperty 到真实 CJS 导出上，
+  必抛 `Cannot redefine property: constants` 并炸掉整文件）。**分叉轴是 node 版本不是平台**：
+  node 24.22/24.21（容器/CI）与 22.23 实测炸、node 24.15（win/linux 四象限实测）不炸——本地
+  24.15 绿不构成豁免。剔除后双端整文件退出码 0、断言 12/12 通过。
 
-#### 场景：linux 装载 CJS 内置模块
+#### 场景：mock 装载 CJS 内置模块（新 node）
 
-Given 容器（node:24-alpine，linux）下 `fs.constants` 不可重定义、`F_OK/R_OK/W_OK/X_OK` 为 enumerable:false 只读 getter
+Given 容器 node 24.22（linux；CI 为 24.21）下 mock exports 含 `default` 与 `constants`
 When 测试注册 mock 后动态 import `../src/quicklog.js?spin-test=…` 触发 CJS `'fs'` 装载
 Then 不再抛 `Cannot redefine property: constants`，偷锁分支断言（attempts≥2、按 timeoutMs 抛错）全绿、退出码 0
 
-#### 场景：windows 行为零回退
+#### 场景：老 node / windows 行为零回退
 
-Given windows（node 24.15）下 `fs.constants` 为 writable:true（删键前后都不炸）
+Given node 24.15（win 或 linux 四象限任一）——该版本 mock 装载不炸（与平台无关）
 When 本地跑同一文件
 Then 仍 12/12 通过——quicklog 的 fs 使用面（openSync/renameSync/appendFileSync 等）不含 `constants`，删键无副作用
 
@@ -94,13 +96,15 @@ Given 裸 NUL 已替换为 6 字节转义序列
 When `grep -n "foldCase" src/verify-postcheck.js`
 Then 正常输出命中行（不再被当二进制）；`node --check` 通过且全量套件零失败
 
-### FR-07: quick 审计 EOL 假 M 过滤在 git ≤2.43 上不得静默失效（探测走 --numstat）
+### FR-07: quick 审计 EOL 假 M 过滤在 git ≤2.43 上不得静默失效（探测走 --numstat -z）
 
-- 必须：`src/run/shared.js` 的 EOL-only 探测必须走 `git diff --numstat --ignore-cr-at-eol HEAD`——
+- 必须：`src/run/shared.js` 的 EOL-only 探测必须走 `git diff --numstat -z --ignore-cr-at-eol HEAD`——
   `--name-only` 组合在 git ≤2.43 上仍列出纯行尾重写文件（Debian 12 git 2.39.5 / Ubuntu 24.04
   git 2.43.0 实测），会让「gen:types 行尾重写制造假 M」坑（2026-09-12 修复）在这些环境静默复活；
-  且须有源码钉锁定该形态（行为测试在 CI 的 git ≥2.54 上抓不到此版本差）。rename 两形态
-  （`old => new` / `pre{old => new}post`）必须落新名，不得把重命名误判为 EOL-only 剔出。
+  且须有源码钉锁定该形态（行为测试在 CI 的 git ≥2.54 上抓不到此版本差）。`-z` 必带：非 -z 的
+  `old => new` 文本形态与「文件名里字面含 ` => `」不可区分，实测会把真实内容变更误判 rename 而
+  剔出 changedFiles（审计放宽，评审 P2 实证）；`-z` 按位置区分（rename 为计数后空路径 + 旧名 +
+  新名字段），并取新名，字面 ` => ` 名原样保留、不做引号转义。
 
 #### 场景：老 git 假 M 剔除
 
@@ -112,7 +116,13 @@ Then 该文件归 eolOnlyFiles 且不进 changedFiles（EOL 用例红→绿，�
 
 Given 已暂存重命名 `a.js → b.js` 叠加行尾重写
 When 同一审计
-Then b.js 留在 changedFiles、eolOnlyFiles 为空（numstat 的 `old => new` 形态取新名）
+Then b.js 留在 changedFiles、eolOnlyFiles 为空（-z 流取新名字段）
+
+#### 场景：字面 ` => ` 文件名不误剔（非 windows）
+
+Given POSIX 仓内 tracked 文件 `src/sub/a => b.js` 发生真实内容修改
+When 同一审计
+Then 该文件留在 changedFiles、不被误归 eolOnlyFiles（非 -z 解析下曾误剔，已锁回归用例；windows 文件名禁用 `>` 故跳过）
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
@@ -122,4 +132,4 @@ FR-03: test/run-tests.mjs（容器内全量池——819 文件逐件退出码）
 FR-04: 不适用：CI 结果面（GitHub Actions run 回执）非仓内测试可断言，以 gh run view 三 job 回执核验
 FR-05: test/backlog-batch-a.test.mjs「①②③a 各段」+ test/feedback-batch2-hardening.test.mjs「①②③④⑤段」+ test/run-tests.mjs（全量池）
 FR-06: test/run-tests.mjs（全量池回归 src/verify-postcheck.js 引用面）
-FR-07: test/quick-audit-foreign-residue.test.mjs「EOL-only 假 M 剔出审计；真实修改保留」+「源码钉：EOL 假 M 探测走 diff --numstat」
+FR-07: test/quick-audit-foreign-residue.test.mjs「EOL-only 假 M 剔出审计；真实修改保留」+「源码钉：EOL 假 M 探测走 diff --numstat -z」+「字面 => 文件名的真实修改不被误判 EOL-only（rename 歧义）」

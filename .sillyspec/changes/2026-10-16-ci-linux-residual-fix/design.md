@@ -30,21 +30,41 @@ created_at: 2026-10-16T08:28:38.146Z
    `grep -n foldCase src/verify-postcheck.js` 零输出，是排查该⑥段口径时的真实致盲点）。
    字节级替换为 6 字节转义序列，运行时字符串值逐字节相等（`'\0' === '\u0000'`）。
 
-4. **`src/run/shared.js` quick 审计 EOL 假 M 探测改 `--numstat`**（FR-07，容器门捞出的真实缺陷）：
-   原探测用 `git diff --name-only --ignore-cr-at-eol HEAD`，而 `--name-only` **不吃**
-   `--ignore-cr-at-eol`——git ≤2.43 仍把纯行尾重写文件列进名单（Debian 12 git 2.39.5 与
-   Ubuntu 24.04 git 2.43.0 实测；git ≥2.54 才听话，CI runner 是 2.55 所以全绿看不出来），
-   即「gen:types 行尾重写制造假 M」坑（2026-09-12 修复）在这些主流环境静默复活。改走
-   `--numstat`（同 `src/verify-postcheck.js` reconcileActualFiles 的 eolOnlyFiles 既定口径，
-   该处注释早已记载此怪癖）+ numstat 行解析取新路径（rename 两形态 `old => new` /
-   `pre{old => new}post` 落到新名，避免重命名被误判 EOL-only 剔出）。配一条**源码钉**：
-   行为测试在 CI 的新 git 上抓不到该版本差，钉住 `--numstat` 形态才有 CI 可见的回归锁。
+4. **`src/run/shared.js` quick 审计 EOL 假 M 探测改 `--numstat -z`**（FR-07，容器门捞出的真实
+   缺陷 + 收口评审 P2 整改）：原探测用 `git diff --name-only --ignore-cr-at-eol HEAD`，而
+   `--name-only` **不吃** `--ignore-cr-at-eol`——git ≤2.43 仍把纯行尾重写文件列进名单（Debian 12
+   git 2.39.5 与 Ubuntu 24.04 git 2.43.0 实测；git ≥2.54 才听话，CI runner 是 2.55 所以全绿看不
+   出来），即「gen:types 行尾重写制造假 M」坑（2026-09-12 修复）在这些主流环境静默复活。改走
+   `--numstat`（同 `src/verify-postcheck.js` reconcileActualFiles 的 eolOnlyFiles 既定口径，该处
+   注释早已记载此怪癖）。**再进一步带 `-z`**：非 -z 的 `old => new` 文本形态与「文件名里字面含
+   ` => `」不可区分——评审实测 `sub/a => b.js` 的真实内容变更被误判 rename、取错新名而剔出
+   changedFiles（审计放宽）。`-z` 记录文法（od 实测 git 2.39.5/2.54 同形）为普通条目
+   `<A>\t<D>\t<path>\0`、rename `<A>\t<D>\t\0<old>\0<new>\0`，按位置取新名且不做引号/C 转义。
+   配一条**源码钉**（行为测试在 CI 的新 git 上抓不到该版本差，钉住 `--numstat -z` 形态才有 CI
+   可见的回归锁）+ 一条非 windows 行为用例（字面 ` => ` 文件名真实修改不许被剔）。
 
-**本地 Linux 复现能力**（本变更的方法论交付）：`docker run -d --name ssx-ci -v <仓>:/work
--w /work node:24-alpine sleep infinity` + `apk add git`，仓直接挂载（工作树全 LF，
-`.gitattributes` `* text=auto eol=lf`，与 CI checkout 同字节）。失败面先容器内复现（首轮即
-一字不差复现 CI 的 TypeError 与 ⑥段 missing），修完在容器里跑全量池——把「盲推等 CI」换成
-「本地 Linux 门」。
+5. **`test/backlog-batch-a.test.mjs` 根因叙述更正 + `test/worktree-junction-fail-loud.test.mjs`
+   同款注释更正**（收口评审 P2-1 整改）：原叙述称「windows 上 `fs.constants` 为 writable:true
+   所以不炸」——**实测该叙述不成立**：`Object.getOwnPropertyDescriptor(require('node:fs'),
+   'constants')` 在 windows(24.15) 与 linux(24.22) 同形 `{writable:false, configurable:false}`
+   （早前的「writable:true」读的是 **ESM 命名空间**的合成描述符，不是 CJS 导出）。真机制：
+   `cjsMockModuleLoad` 在 mock exports 含 `default`（spread 命名空间必带）时把键 define 到
+   `moduleExports.default`（真实 CJS 导出对象）上，descriptor 取自我们给的 plain 对象
+   （configurable:true）→ 目标属性不可重定义则抛。四象限最小复现实测：node 24.15（win/linux）
+   不炸、node 24.22（linux）炸——**分叉轴是 node 版本不是平台**（22.23 亦炸）。修法（剔键）
+   与承诺不变，仅把注释/文档改成本实证口径，避免后人按错误轴排查。
+
+**本地 Linux 复现能力**（本变更的方法论交付，含三条踩坑修正）：
+`docker run -d --init --name ssx-run -v <仓>:/work:ro -w /work node:24-slim sleep infinity`
++ `apt-get install -y git procps`，随后**容器内克隆到原生 FS 再跑**（`git clone /work /run &&
+npm ci && npm test`）——① `--init`（tini 回收）必带：否则容器 PID 1 是不回收孤儿的
+`sleep infinity`，被杀子进程留僵尸让 `kill(pid,0)` 恒真，进程树回收类用例假红（本项目
+`verify-concurrency-fixes` ①b 实测）；② 用 Debian 系（dash + procps）而非 alpine：BusyBox
+的 `ps` 不支持 `-x`、`ps -axo` 与 ash 的 command-not-found 文案都与 ubuntu runner 不同
+（alpine 上 `verify-concurrency-fixes`/`verify-gate-command-missing` 假红，Debian 上自然绿）；
+③ 挂载卷直跑 I/O 慢（全量 713s vs 原生 FS 75s，并诱发 120s 超时假红）——克隆进容器原生 FS。
+失败面先容器内复现（一字不差复现 CI 的 TypeError 与 ⑥段 missing），修完在容器里跑全量池——
+把「盲推等 CI」换成「本地 Linux 门」（本变更最终以容器全量 817 文件 0 失败收口）。
 
 ## 接口契约
 
@@ -71,12 +91,13 @@ created_at: 2026-10-16T08:28:38.146Z
 
 | 文件 | 变更 |
 |---|---|
-| `test/backlog-batch-a.test.mjs` | ③b mock exports 剔 `constants`（linux 不可重定义炸整文件） |
+| `test/backlog-batch-a.test.mjs` | ③b mock exports 剔 `constants`（node ≥24.21/22.23 上不可重定义炸整文件）+ 根因叙述更正（评审 P2-1） |
+| `test/worktree-junction-fail-loud.test.mjs` | 同款 `constants` 注释根因更正（原写「Node ≥26」，实为版本分叉的 mock 装载路径） |
 | `test/feedback-batch2-hardening.test.mjs` | ⑥ 段大小写断言随平台分叉 + task-01 声明写法辅助 |
-| `test/quick-audit-foreign-residue.test.mjs` | EOL 用例保留 + 新增源码钉（`--numstat` 形态） |
+| `test/quick-audit-foreign-residue.test.mjs` | EOL 用例保留 + 新增源码钉（`--numstat -z` 形态）+ 字面 ` => ` 名回归用例（非 windows） |
 | `src/verify-postcheck.js` | 裸 NUL → `\u0000` 转义（诊断面卫生，行为零变） |
-| `src/run/shared.js` | EOL 假 M 探测 `--name-only` → `--numstat` + `numstatNewPath` 解析 |
-| `.sillyspec/changes/2026-10-16-ci-linux-residual-fix/*` | 四件套（proposal/requirements/design/tasks）+ 勾选台账 |
+| `src/run/shared.js` | EOL 假 M 探测 `--name-only` → `--numstat -z` + `numstatZPaths` 流解析（评审 P2-2） |
+| `.sillyspec/changes/2026-10-16-ci-linux-residual-fix/*` | 四件套（proposal/requirements/design/tasks）+ 勾选台账 + change.patch/review.json |
 
 未纳入本变更的仓内未提交文件：`quicklog/tmp-fix-review.mjs`（他者在途产物，非本变更交付；
 按 `--accept-dirty-gap` 如实留审计缺口，不冒领）。
@@ -113,11 +134,11 @@ created_at: 2026-10-16T08:28:38.146Z
   断言（`./` 前缀 + 注记命中）在双端恒真——linux 侧若归一/匹配链真坏，第一段先红。
 - **NUL 字节替换风险：把内容改坏**（文件 337KB，含中文注释）。缓解：字节级替换只动 2 个
   0x00 → 12 字节 `\u0000`，改前改后以 node 对比两处字符串值与 `node --check`、全量池零失败。
-- **EOL 探测改 numstat 的风险：rename 形态被误判 EOL-only 剔出**（numstat 的
-  `old => new` / `pre{old => new}post` 形态若不解析新名，`real` 集对不上 porcelain 路径 →
-  重命名被当纯行尾踢出 changedFiles，审计静默放宽）。缓解：`numstatNewPath` 显式解析两形态，
-  并以容器内实测（staged `a.js → b.js` 叠加行尾重写 → changedFiles 含 b.js、eolOnlyFiles 空）
-  核验；另注意 `git diff --numstat` 在纯 EOL 变更上整行不输出（容器 git 2.39.5 实证）。
+- **EOL 探测改 numstat 的风险：rename 形态被误判 EOL-only 剔出**（numstat 文本形态
+  `old => new` / `pre{old => new}post` 若不解析新名，`real` 集对不上 porcelain 路径 →
+  重命名被当纯行尾踢出 changedFiles，审计静默放宽）。缓解：改走 `-z` 流（按位置取新名，
+  与文本形态无关）——评审实测的字面 ` => ` 文件名误剔路径随之消失，并锁非 windows 回归用例；
+  另注意 `git diff --numstat` 在纯 EOL 变更上整条不输出（容器 git 2.39.5 实证）。
 - **版本差在 CI 上不可见**（CI runner git 2.55 会过滤，行为测试恒绿）：故 FR-07 配源码钉而非
   仅行为断言——源码钉是唯一在 CI 可见的回归锁；行为面另由容器 git 2.39.5 / WSL git 2.43.0 /
   Windows 三端各跑一次兜住。
@@ -134,3 +155,20 @@ created_at: 2026-10-16T08:28:38.146Z
      调用（脏仓几十文件即几十次进程 spawn），且偏离 verify-postcheck 的既有单次 numstat 口径；
   f) **只报不改 EOL 缺陷**（CI 绿、非本轮原范围）——主流用户环境（Debian 12 / Ubuntu 24.04
      默认 git）下坑是活的，且修法与同仓既定口径一致、改动单函数局部，故随本变更一并清偿。
+
+## 收口评审整改（findings 逐条处置）
+
+评审 verdict=PASS（无 P1），两条 P2 均当场整改、三条 P3 两条接受一条随推送消解：
+
+- **P2-1 根因叙述失实 → 已整改**：`test/backlog-batch-a.test.mjs` /
+  `test/worktree-junction-fail-loud.test.mjs` 注释 + requirements FR-01 + 本记录第 5 条改为
+  四象限实测口径（分叉轴 = node 版本：24.15 双端不炸、24.22/24.21/22.23 炸；ESM 命名空间
+  合成描述符 writable:true 不是 CJS 导出形态）。
+- **P2-2 字面 ` => ` 文件名误剔（审计放宽）→ 已整改**：EOL 探测改 `--numstat -z` 流解析
+  （`numstatZPaths`：普通 `A\tD\t<path>\0`、rename `A\tD\t\0<old>\0<new>\0` 按位置取新名），
+  字面 ` => ` 名原样保留；补非 windows 回归用例 + 源码钉断言 `-z` 在场。
+- **P3-1 change.patch 含他变更 hunk（probe7 的 _module-map 登记）→ 接受**：基线..HEAD 区间
+  一并冻结的共享仓事实，scopeAudit 已标 unplanned，非本变更交付面。
+- **P3-2 最后两提交未推 → 已整改**：随本次整改一并推送，CI 复跑覆盖。
+- **P3-3 change.patch 自身含 2 个裸 NUL 判二进制 → 接受**：删除 NUL 的诚实 diff 必然（旧行
+  删除侧），冻结件不可直接检索但可转义读取。

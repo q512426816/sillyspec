@@ -11,3 +11,4 @@ created_at: 2026-10-16T08:28:38.146Z
 - [x] task-05: 零回归：两文件其余断言、src 实现（quicklog.js/verify-postcheck.js）行为不改
 - [x] task-06: src/verify-postcheck.js 裸 NUL 字节替换为 \u0000 转义（grep/rg 不再判二进制）且运行时字符串值逐字节不变
 - [x] task-07: src/run/shared.js EOL 假 M 探测改 --numstat（git ≤2.43 静默失效修复）+ 源码钉（quick-audit-foreign-residue 5/5 三端绿）
+- [x] task-08: 收口评审 P2 整改——根因叙述改四象限实测口径（分叉轴=node 版本）+ EOL 探测改 --numstat -z（字面 ` => ` 名回归用例非 windows；三端 6/6）
