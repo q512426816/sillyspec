@@ -131,7 +131,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
   const a = makeRepo('cngate-flw-')
   mkdirSync(join(a.cwd, '.sillyspec'), { recursive: true })
   writeFileSync(join(a.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n') // flow start fail-fast 契约
-  const r = runCLI(['--dir', a.cwd, 'flow', 'start', '--change', 'roadmap-copy-purge', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: a.cwd })
+  const r = runCLI(['--dir', a.cwd, 'flow', 'start', '--change', 'roadmap-copy-purge', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: a.cwd })
   assert(r.status === 2, `7a exit 2（实际 ${r.status}）`)
   assert(r.combined.includes('YYYY-MM-DD'), '7a 报错给出格式模板')
   assert(r.combined.includes('flow start'), '7a 报错给出 flow start 重试出路')
@@ -141,7 +141,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
   const b = makeRepo('cngate-flw2-')
   mkdirSync(join(b.cwd, '.sillyspec'), { recursive: true })
   writeFileSync(join(b.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
-  const ok = runCLI(['--dir', b.cwd, 'flow', 'start', '--change', '2026-09-28-my-fix', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: b.cwd })
+  const ok = runCLI(['--dir', b.cwd, 'flow', 'start', '--change', '2026-09-28-my-fix', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: b.cwd })
   assert(ok.status === 0, `7b exit 0（实际 ${ok.status}，尾：${ok.combined.slice(-150)}）`)
   assert(existsSync(join(b.cwd, '.sillyspec', 'changes', '2026-09-28-my-fix', 'flow-state.yaml')), '7b 合规名轻量变更正常物化')
 
@@ -162,7 +162,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
   mkdirSync(join(d.cwd, '.sillyspec'), { recursive: true })
   writeFileSync(join(d.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
   mkdirSync(join(d.cwd, '.sillyspec', 'changes', 'archive', 'archived-bare-name'), { recursive: true })
-  const arch = runCLI(['--dir', d.cwd, 'flow', 'start', '--change', 'archived-bare-name', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: d.cwd })
+  const arch = runCLI(['--dir', d.cwd, 'flow', 'start', '--change', 'archived-bare-name', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: d.cwd })
   assert(!arch.combined.includes('日期前缀'), '7d 归档在场不触发日期门')
   assert(arch.status === 0, `7d 放行（实际 ${arch.status}，尾：${arch.combined.slice(-150)}）`)
 
@@ -170,7 +170,7 @@ console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purg
   const e = makeRepo('cngate-flw5-')
   mkdirSync(join(e.cwd, '.sillyspec'), { recursive: true })
   writeFileSync(join(e.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
-  const def = runCLI(['--dir', e.cwd, 'flow', 'start', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: e.cwd })
+  const def = runCLI(['--dir', e.cwd, 'flow', 'start', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'], { cwd: e.cwd })
   assert(def.status === 0, `7e exit 0（实际 ${def.status}，尾：${def.combined.slice(-150)}）`)
   const created = readdirSync(join(e.cwd, '.sillyspec', 'changes')).filter((n) => n !== 'archive')
   assert(created.length === 1 && /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-flow-[0-9a-f]+$/.test(created[0]),

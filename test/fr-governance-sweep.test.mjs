@@ -62,7 +62,7 @@ test('② resume 声明通道：--review 对在途变更重入落盘 review_forc
     writeFileSync(join(cwd, 'base.txt'), 'b\n')
     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
     const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
-    const INPUT = '动机：夹具\n成功标准：\n- 夹具行为'
+    const INPUT = '动机：夹具行为验证全面覆盖\n成功标准：\n- 夹具行为'
     const r1 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--input', INPUT])
     assert.equal(r1.status, 0, `首次 start 应成功: ${r1.stderr}`)
     // 在途变更 resume 带 --review → review_force 落盘

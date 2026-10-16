@@ -96,7 +96,7 @@ test('①c 未知 id：列可选 id；末格勾完 next=null', () => {
 test('②a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-1'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
   const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
   assert.equal(t1.status, 0, t1.stderr)
   assert.match(t1.stdout, /已勾（1\/3）/, '进度回显')
@@ -118,7 +118,7 @@ test('②a task tick：翻格+进度回显+下一任务指针；幂等 exit 0', 
 test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，单格跳）；幂等重勾零新事件', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-4'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
   const evPath = join(cwd, '.sillyspec', '.runtime', `watcher-events-${change}.jsonl`)
   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0)
   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
@@ -140,7 +140,7 @@ test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，
 test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）；幂等重勾零追加', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-7'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
   const sidePath = join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl')
   const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
   assert.equal(t1.status, 0, t1.stderr)
@@ -161,7 +161,7 @@ test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）
 test('⑦b 侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-8'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
   mkdirSync(join(cwd, '.sillyspec', 'changes', change, 'task-ticks.jsonl'), { recursive: true })
   const t = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
   assert.equal(t.status, 0, '翻格主流程不受影响')
@@ -207,7 +207,7 @@ test('④c 混合面：CLI 勾 1 格 + Edit 一把翻 2 格 → 跳幅按 CLI �
 test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-2'
-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
@@ -223,7 +223,7 @@ test('⑤a 不勾+有交付 → 拒收（未全勾不放行——完成状态机
 test('⑤b 部分勾选（认领面勾一半）→ 同样拒收；补齐 token 提交后放行', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-3'
-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙']).status, 0)
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })

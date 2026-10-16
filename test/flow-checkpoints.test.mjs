@@ -30,7 +30,7 @@ function makeRepo() {
 
 test('① 简报含三断点纪律', () => {
   const { cwd, cli } = makeRepo()
-  const s = cli(['flow', 'start', '--change', '2026-09-01-fc-1', '--input', '任务\n成功标准：\n- 行为 X'])
+  const s = cli(['flow', 'start', '--change', '2026-09-01-fc-1', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0)
   assert.match(s.stdout, /三断点纪律/, '三断点标题')
   assert.match(s.stdout, /spec 断点/, '① spec 断点')
@@ -47,7 +47,7 @@ test('② flow status 三态：不存在/进行中/已归档', () => {
   assert.equal(none.status, 1)
   assert.match(none.stdout, /不存在/)
   // 进行中
-  assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
   const active = cli(['flow', 'status', '--change', '2026-09-01-fc-2'])
   assert.equal(active.status, 0)
   assert.match(active.stdout, /📋/, '标题')

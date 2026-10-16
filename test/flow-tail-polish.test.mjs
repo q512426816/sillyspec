@@ -58,7 +58,7 @@ test('FR-02 实测面对账文案含并集去重语义（源码级）', () => {
 
 test('FR-03 flow-state 落 input 字段 + 重入回填逻辑（行为级 + 源码级）', () => {
   const { cwd } = makeRepo()
-  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-i', '--input', '任务动机\n成功标准：\n- 行为 X'])
+  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-i', '--input', '任务动机转写回填链路\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
   const state = readFileSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-ftp-i', 'flow-state.yaml'), 'utf8')
   assert.ok(/input:/.test(state), 'flow-state.yaml 落 input 字段')
@@ -74,7 +74,7 @@ test('FR-04 flow status 不存在 exit 1 / 在场 exit 0（行为级）', () => 
   const miss = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-none'])
   assert.equal(miss.status, 1, `不存在应 exit 1（实际 ${miss.status}）`)
   assert.ok((miss.stdout + miss.stderr).includes('变更不存在'), '保留「变更不存在」文案')
-  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-ok', '--input', '任务动机\n成功标准：\n- 行为 X'])
+  const s = cli(cwd, ['flow', 'start', '--change', '2026-09-01-ftp-ok', '--input', '任务动机转写回填链路\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0, `start 应成功: ${s.stderr}`)
   const hit = cli(cwd, ['flow', 'status', '--change', '2026-09-01-ftp-ok'])
   assert.equal(hit.status, 0, `在场应 exit 0（实际 ${hit.status}）`)

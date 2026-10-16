@@ -51,7 +51,7 @@ function fillDesignSlots(cwd, change) {
 test('① 无环境变量旁路：SILLYSPEC_TURBO=1 对非 turbo 仓零作用', () => {
   const cwd = makeRepo()
   const change = '2026-10-14-turbo-scope-t1'
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'], { SILLYSPEC_TURBO: '1' })
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot'], { SILLYSPEC_TURBO: '1' })
   assert.equal(s1.status, 0)
   assert.doesNotMatch(s1.stdout, /极速模式/, 'env 不触发极速面（仅 flow-state 字段激活）')
   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
@@ -70,7 +70,7 @@ test('① 无环境变量旁路：SILLYSPEC_TURBO=1 对非 turbo 仓零作用', 
 test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（D-007 起步变体）', () => {
   const cwd = makeRepo()
   const change = '2026-10-14-turbo-scope-t2'
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--turbo', '--thick'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
   // 指引文案随档位收窄（2026-10-14-turbo-guide-tier-copy 评审 P3 清偿）：thick 起步不承诺自动跳过
   assert.doesNotMatch(s1.stdout, /收口自动跳过实测与重仪式门/, 'thick 起步不出现跳过承诺（防文案与门判定漂移）')
@@ -90,7 +90,7 @@ test('② --turbo --thick 同给：留痕但 tier=thick → done 全量仪式（
 test('④ turbo 值损坏（非布尔 true）fail-soft：done 走非 turbo 全量路径', () => {
   const cwd = makeRepo()
   const change = '2026-10-14-turbo-scope-t4'
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo', '--no-review'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo', '--no-review'])
   assert.equal(s1.status, 0)
   // 篡改 turbo 值为字符串（读态 st.turbo === true 严格判等 → 非布尔真值不激活跳过面）；--no-review 定案评审豁免（非 turbo 路径采样不确定）
   const stPath = join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')
@@ -109,7 +109,7 @@ test('④ turbo 值损坏（非布尔 true）fail-soft：done 走非 turbo 全�
 test('⑤ flow-state.yaml 整体损坏 fail-loud：done exit 2 报「无 flow-state」并指路', () => {
   const cwd = makeRepo()
   const change = '2026-10-14-turbo-scope-t5'
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
   assert.equal(s1.status, 0)
   writeFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), '::: not yaml ::: [')
   const s2 = cli(cwd, ['flow', 'done', '--change', change])

@@ -141,7 +141,7 @@ test('②e e2e：证据完备一把勾（反馈实证形态）→ advisory 放�
   const change = '2026-10-13-btg-evd'
   const specBase = join(cwd, '.sillyspec')
   try {
-    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+    const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '证据完备一把勾一次性放行\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     // 三任务各有 token 交付证据（一把提交带全 token——哨兵口径认可）
     writeFileSync(join(cwd, 'work.txt'), 'done\n')
@@ -185,7 +185,7 @@ test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+�
     mkdirSync(join(specBase, 'docs', 'proj1', 'modules'), { recursive: true })
     writeFileSync(join(specBase, 'docs', 'proj1', 'modules', '_module-map.yaml'),
       'modules:\n  mod1:\n    status: active\n    doc: modules/mod1.md\n    paths:\n      - src/foo/\n')
-    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+    const s1 = cliE(cwdA, ['flow', 'start', '--change', '2026-10-13-btg-hint', '--input', '域预判扫描命中模块卡\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
     assert.equal(s1.status, 0)
     assert.match(s1.stdout, /FR 域预判/, '预判段在场')
     assert.match(s1.stdout, /src\/foo\/a\.js → fr\/mod1/, '命中模块点名（FR 将落 fr/mod1）')
@@ -209,7 +209,7 @@ test('④ flow start 域预判：命中点名 fr/<域>；未命中点名伪域+�
     writeFileSync(join(cwdB, 'src', 'other', 'b.js'), 'export {}\n')
     gitE(cwdB, ['add', 'src'])
     gitE(cwdB, ['commit', '-q', '-m', 'src'])
-    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
+    const s0 = cliE(cwdB, ['flow', 'start', '--change', '2026-10-13-btg-green', '--input', '绿地预判无历史模块命中\n成功标准：\n- 改 src/foo/a.js 与 src/other/b.js', '--autopilot'])
     assert.equal(s0.status, 0)
     assert.match(s0.stdout, /绿地草案/, '绿地草案既有行为在场')
     assert.match(s0.stdout, /fr\/foo/, '绿地草案域照常预判（零输出判定面=无路径，非无图）')
@@ -277,7 +277,7 @@ test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行 
     const change = '2026-10-14-btg-burst'
     const specBase = join(cwd, '.sillyspec')
     try {
-      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '侧车突发\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '侧车突发多格勾选一次过\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
       assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
       writeFileSync(join(cwd, 'work.txt'), 'done\n')
       gitE(cwd, ['add', 'work.txt'])
@@ -315,7 +315,7 @@ test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行 
     const change = '2026-10-14-btg-spaced'
     const specBase = join(cwd, '.sillyspec')
     try {
-      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '渐进勾选\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
+      const s1 = cliE(cwd, ['flow', 'start', '--change', change, '--input', '渐进勾选逐格推进合规范\n成功标准：\n- 标准甲\n- 标准乙\n- 标准丙', '--autopilot'])
       assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
       writeFileSync(join(cwd, 'work.txt'), 'done\n')
       gitE(cwd, ['add', 'work.txt'])

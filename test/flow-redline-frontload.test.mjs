@@ -46,7 +46,7 @@ function cli(cwd, args) {
 }
 
 const CHANGE = '2026-10-11-redline-frontload-fixture'
-const INPUT_OK = '红线前置夹具\n成功标准：\n- work.txt 生成且 flow done 全绿'
+const INPUT_OK = '红线前置夹具行为对齐校验\n成功标准：\n- work.txt 生成且 flow done 全绿'
 
 test('① 新建横幅：红线块先于书写面细则且首条钉死勿改写', () => {
   const { cwd } = makeRepo()

@@ -54,7 +54,7 @@ function fillDesignSlots(cwd, change) {
 function deliverAndClose({ turbo }) {
   const { cwd } = makeRepo()
   const change = '2026-10-14-turbo-done-x'
-  const startArgs = ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot']
+  const startArgs = ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot']
   if (turbo) startArgs.push('--turbo')
   const s1 = cli(cwd, startArgs)
   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)

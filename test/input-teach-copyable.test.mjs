@@ -7,7 +7,7 @@
  *
  * 锁定：
  *   ① 分号内联旧教学形态零残留（7 处教学所在文件）
- *   ② 各教学处带可照抄多行实例（--input "<一句中文概括（首行即变更标题）；随后动机与背景 起行 + - <可验证标准>" 收行）
+ *   ② 各教学处带可照抄多行实例（--input "<一句 10-30 字中文概括（首行即变更标题） 起行 + - <可验证标准>" 收行）
  *   ③ 实例核心形态（顶格/缩进两版）喂 extractSuccessCriteria 提取 ≥ 1 条；
  *      分号内联形态提取 0 条（零残留断言的语义依据）
  *   ④ design 模板锚教学含「问题行勿删勿改勿替换 + 答案另起一行」措辞
@@ -67,7 +67,7 @@ test('①b 非 src 教学面分号形态零残留（逐字三处清零）', () =
 test('② 各教学处带可照抄多行实例', () => {
   for (const p of TEACH_FILES) {
     const src = read(p)
-    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行（首行概括句——段头诱导已断）`)
+    assert.ok(src.includes('--input "<一句 10-30 字中文概括（首行即变更标题'), `${p} 实例起行（首行概括句——段头诱导已断）`)
     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行（- <可验证标准>）`)
   }
   // worktree-guard 三处 stage 提示各带一份实例
@@ -79,7 +79,7 @@ test('②b 非 src 教学面实例在场与模糊形态清零', () => {
   // 逐字两处（CLAUDE.md / flow.md 卡）与描述式两处（AGENTS.md / SKILL.md）均带实例
   for (const p of ['CLAUDE.md', 'assets/command-cards/flow.md', 'AGENTS.md', '.claude/skills/sillyspec-flow/SKILL.md']) {
     const src = read(p)
-    assert.ok(src.includes('--input "<一句中文概括（首行即变更标题）；随后动机与背景'), `${p} 实例起行`)
+    assert.ok(src.includes('--input "<一句 10-30 字中文概括（首行即变更标题'), `${p} 实例起行`)
     assert.ok(src.includes('- <可验证标准>'), `${p} 实例条目行`)
   }
   // 倒推行引号内联模糊形态清零（AGENTS.md 与模板源）

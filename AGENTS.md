@@ -16,7 +16,7 @@
 `--input` 过门格式（轻量道首次调用即过，勿靠报错学；引号内换行合法，下例可照抄）：
 
 ```bash
-sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，必须落在 10-30 字硬区间、建议 ~20 字——不合区间 flow start 拒启）；随后动机与背景
 
 成功标准：
 - <可验证标准>"

@@ -173,7 +173,7 @@ SillySpec CLI — 规范驱动开发工具包
 示例:
   sillyspec init
   sillyspec run brainstorm --change 2026-07-03-add-login
-  sillyspec flow start --change 2026-07-03-my-fix --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
+  sillyspec flow start --change 2026-07-03-my-fix --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
   sillyspec run verify --done --output "验证通过，测试全绿"
   sillyspec run archive --done --confirm --output "归档完成"
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
@@ -228,7 +228,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
   // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
   console.error('   新工作请走轻量变更（--input 引号内换行合法，下例可照抄）：')
-  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+  console.error('   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
   console.error('')
   console.error('   成功标准：')
   console.error('   - <可验证标准>"')

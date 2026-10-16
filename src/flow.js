@@ -688,17 +688,22 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           const w = await spawnWatcher(cwd, change, { specBase })
           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
         } catch { /* 观测旁路 best-effort */ }
-        // adopt 标题（用户需求 2026-09-29）：头脑风暴 proposal 的 H1 是人写语义标题，
-        // deriveTitleFromLinkedChange 提取（纯模板 H1 回退动机首句，2026-10-16-short-change-title）；
-        // --title 优先；再退 --input 首行提炼（≤30 字）；兜底变更名。adopt 路径此前完全不
-        // 注册 changes 行——initChange 补插（幂等），既有行 title 空时回填。
+        // adopt 标题（2026-09-29；2026-10-16-short-change-title 提炼；2026-10-16-title-range-gate
+        // 硬区间 10-30）：头脑风暴 proposal H1 人写语义标题（纯模板 H1 回退动机首句）→ --title
+        // 优先（合区间校验，超界 exit 2）→ --input 首行提炼 → 兜底变更名。收编是既成事实的
+        // 延续面，非 flag 的超界不硬断（收编半态不可恢复）打 ⚠️ 强提示。
         try {
-          const { deriveTitleFromLinkedChange, deriveShortChangeTitle } = await import('./quicklog.js')
+          const { deriveTitleFromLinkedChange, deriveShortChangeTitle, isValidChangeTitle, shortTitleRejectMessage, shortTitleRangeWarnLine } = await import('./quicklog.js')
+          if (titleFlag && !isValidChangeTitle(titleFlag)) {
+            console.error(shortTitleRejectMessage(titleFlag))
+            process.exit(2)
+          }
           const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveShortChangeTitle(input) || change
           pm.initChange(cwd, change, { title: adoptTitle })
           const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
           if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
           console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
+          if (!isValidChangeTitle(adoptTitle)) console.log(shortTitleRangeWarnLine(adoptTitle))
         } catch { /* adopt 标题 best-effort */ }
         const materials = materialPaths(specBase, change, changeDir)
         const artifacts = changeArtifactPaths(changeDir)
@@ -781,19 +786,24 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       writeFlowState(changeDir, { autopilot: true })
       console.log(`🤖 已声明 autopilot：spec 断点人审豁免（用户显式声明留痕）`)
     }
-    // 变更标题补写（用户需求 2026-09-29：title=中文概括；2026-10-16-short-change-title 起
-    // 提炼口径 ≤30 字）——存量在途变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入
-    // 改标题）；否则从 --input 首行提炼、仅当库内 title 为空才写（不覆盖已有语义标题）。
-    // best-effort 不阻断恢复简报。
+    // 变更标题补写（2026-09-29 title=中文概括；2026-10-16-short-change-title 提炼 ≤30；
+    // 2026-10-16-title-range-gate 硬区间 10-30）——存量在途变更 title 空/缺失时的回填通道：
+    // 显式 --title 恒生效（重入改标题）且必须合区间（超界 exit 2，参数面最易修正）；提炼补写
+    // 仅当库内 title 为空才写（首写者胜），超界不阻断（resume 不可断）打 ⚠️ 强提示。
     try {
-      const { deriveShortChangeTitleEx } = await import('./quicklog.js')
+      const { deriveShortChangeTitleEx, isValidChangeTitle, shortTitleRejectMessage, shortTitleRangeWarnLine, SHORT_TITLE_HARDCUT_HINT } = await import('./quicklog.js')
+      if (titleFlag && !isValidChangeTitle(titleFlag)) {
+        console.error(shortTitleRejectMessage(titleFlag))
+        process.exit(2)
+      }
       const _row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
       const _cur = _row ? (_row.title || '') : ''
       const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
       if (_derived && _derived.title && (titleFlag || !_cur)) {
         pm.updateChangeMeta(cwd, change, { title: _derived.title })
-        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived.title}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
-        if (_derived.hardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
+        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived.title}（面板显示用；须 10-30 字、建议 ~20 字，重入 --title 可改）`)
+        if (_derived.hardCut) console.log(SHORT_TITLE_HARDCUT_HINT)
+        if (!titleFlag && !isValidChangeTitle(_derived.title)) console.log(shortTitleRangeWarnLine(_derived.title))
       }
     } catch { /* 标题补写 best-effort */ }
     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
@@ -896,21 +906,29 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
 
-  // 变更标题（用户需求 2026-09-29：title=中文概括、建议 ~20 字，agent 总结；2026-10-16-
-  // short-change-title 起提炼口径 ≤30 字）：--title 显式指定优先；否则 --input 首行过提炼
-  // （自然标点截断、无截点硬切+软提示）；两者皆缺用变更名兜底（可辨识但不达意——横幅提示
-  // 下次带 --title）。
-  let changeTitle = null
-  let _titleHardCut = false
+  // 变更标题硬区间门（2026-10-16-title-range-gate：10-30 字必须、建议 ~20、强制 agent 命名；
+  // 提炼口径见 2026-10-16-short-change-title）：--title 显式 > --input 首行提炼 > 变更名兜底。
+  // agent 命名时刻强制：不在区间/无 --input 兜底 → 拒绝启动（exit 2，在任何状态写入前——
+  // 零半态）；平台 writer 预建空目录（自动派发，无 agent 对话面）豁免硬门仅 ⚠️ 留痕。
+  let _st = null
+  let _rejectMsg = null
   try {
-    const { deriveShortChangeTitleEx } = await import('./quicklog.js')
-    const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
-    changeTitle = (_derived && _derived.title) || change
-    _titleHardCut = Boolean(_derived && _derived.hardCut)
-  } catch { changeTitle = titleFlag || change }
+    const _q = await import('./quicklog.js')
+    _st = _q.resolveStartTitle({ titleFlag, input, change, enforce: !proceedFreshEmptyDir })
+    if (!_st.ok) _rejectMsg = _q.shortTitleRejectMessage(_st.kind === 'fallback' ? _st.rejectedTitle : _st.title)
+  } catch { /* quicklog 不可用（实践不可达）：降级保持旧行为兜底 */ _st = { title: titleFlag || change, ok: true, kind: titleFlag ? 'flag' : 'fallback', hardCut: false } }
+  if (_rejectMsg) {
+    console.error(_rejectMsg)
+    process.exit(2)
+  }
+  const changeTitle = _st.title
   pm.initChange(cwd, change, { title: changeTitle })
-  console.log(`🏷️ 变更标题：${changeTitle}${changeTitle === change ? '（变更名兜底——下次带 --title "<≤20 字中文概括>" 更达意）' : '（面板显示用；建议 ~20 字中文概括，重入 flow start --title 可改）'}`)
-  if (_titleHardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
+  console.log(`🏷️ 变更标题：${changeTitle}（面板显示用；须 10-30 字、建议 ~20 字，重入 flow start --title 可改）`)
+  try {
+    const { isValidChangeTitle, shortTitleRangeWarnLine, SHORT_TITLE_HARDCUT_HINT } = await import('./quicklog.js')
+    if (_st.hardCut) console.log(SHORT_TITLE_HARDCUT_HINT)
+    if (proceedFreshEmptyDir && !isValidChangeTitle(changeTitle)) console.log(shortTitleRangeWarnLine(changeTitle))
+  } catch { /* 提示行 best-effort */ }
   try {
     const { resolveSessionIdentity } = await import('./progress.js')
     const { session } = resolveSessionIdentity({ flagSession: null, cwd })
@@ -2671,7 +2689,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         console.error(`❌ ${e.message}`)
         // 可照抄实例（2026-10-05-input-teach-copyable）：引号内换行合法，行级 trim 容忍缩进
         console.error('   重试（--input 引号内换行合法，可照抄）：')
-        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+        console.error('   sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
         console.error('')
         console.error('   成功标准：')
         console.error('   - <可验证标准>"')
@@ -2900,9 +2918,9 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+  console.error('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
   console.error('      --input 可照抄形态（引号内换行合法）：')
-  console.error('      sillyspec flow start --change <名> --input "<一句中文概括（首行即变更标题）；随后动机与背景')
+  console.error('      sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
   console.error('')
   console.error('      成功标准：')
   console.error('      - <可验证标准>"')

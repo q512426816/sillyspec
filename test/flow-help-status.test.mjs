@@ -25,5 +25,5 @@ test('用法行保留 start/done 与 --input 格式教学', () => {
   const line = flowSrc.split('\n').find((l) => l.includes(USAGE_LINE))
   assert.ok(line, '用法行在场')
   assert.ok(line.includes('sillyspec flow done --change <名>'), '用法行保留 done 子命令')
-  assert.ok(line.includes('--input "<一句中文概括（首行即变更标题）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学（首行概括句）')
+  assert.ok(line.includes('--input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"'), '用法行保留 --input 过门格式教学（首行概括句）')
 })

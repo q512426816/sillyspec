@@ -72,7 +72,7 @@ test('活跃态：提交面+dirty 面渲染，untracked 计行数，治理件剔
   const change = '2026-10-13-fdiff-live'
   const specBase = join(cwd, '.sillyspec')
   try {
-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
     assert.equal(s1.status, 0, `start: ${s1.stderr}`)
     // 已提交交付 + 治理件提交（tick）
     writeFileSync(join(cwd, 'work.txt'), 'a\nb\n')
@@ -123,7 +123,7 @@ test('归档态：读 change-patch.json scopeAudit 渲染 totals，--json 同构
   const change = '2026-10-13-fdiff-arch'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
     writeFileSync(join(cwd, 'work.txt'), 'hello\n')
     git(cwd, ['add', 'work.txt'])
     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])

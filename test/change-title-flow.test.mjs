@@ -75,47 +75,47 @@ test('② flow start fresh：--title 优先，否则 input 首行，横幅在场
   assert.equal(readTitle(cwd, cn), '知识页伪域池一键归位交互', 'db changes.title = input 首行')
 
   const cn2 = '2026-09-29-title-b'
-  const r2 = cli(cwd, ['flow', 'start', '--change', cn2, '--input', '随便什么输入\n\n成功标准：\n- x', '--title', '变更标题显式指定', '--no-review'])
+  const r2 = cli(cwd, ['flow', 'start', '--change', cn2, '--input', '随便什么输入\n\n成功标准：\n- x', '--title', '变更标题显式指定为合规格式', '--no-review'])
   assert.equal(r2.status, 0)
-  assert.equal(readTitle(cwd, cn2), '变更标题显式指定', '--title 显式覆盖')
+  assert.equal(readTitle(cwd, cn2), '变更标题显式指定为合规格式', '--title 显式覆盖（须合 10-30 硬区间，2026-10-16-title-range-gate）')
   tmpRoots.push(cwd)
 })
 
 test('③ flow start resume：--title 改标题；空 title 时 input 补写；上行携带 title', async () => {
   const { cwd } = makeRepo()
   const cn = '2026-09-29-title-c'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '首行就是标题素材\n\n成功标准：\n- x', '--no-review']).status, 0)
-  assert.equal(readTitle(cwd, cn), '首行就是标题素材')
+  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '首行就是标题素材之合规概括\n\n成功标准：\n- x', '--no-review']).status, 0)
+  assert.equal(readTitle(cwd, cn), '首行就是标题素材之合规概括')
 
-  // resume 带 --title → 更新
-  const r2 = cli(cwd, ['flow', 'start', '--change', cn, '--title', '改后的中文标题'])
+  // resume 带 --title → 更新（须合 10-30 硬区间）
+  const r2 = cli(cwd, ['flow', 'start', '--change', cn, '--title', '改后的中文标题合乎硬区间'])
   assert.equal(r2.status, 0)
-  assert.match(r2.stdout, /🏷️ 变更标题已更新：改后的中文标题/)
-  assert.equal(readTitle(cwd, cn), '改后的中文标题')
+  assert.match(r2.stdout, /🏷️ 变更标题已更新：改后的中文标题合乎硬区间/)
+  assert.equal(readTitle(cwd, cn), '改后的中文标题合乎硬区间')
 
   // resume 不带 --title → 不覆盖既有标题
   const r3 = cli(cwd, ['flow', 'start', '--change', cn, '--input', '另一个输入首行\n\n成功标准：\n- y'])
   assert.equal(r3.status, 0)
-  assert.equal(readTitle(cwd, cn), '改后的中文标题', '无 --title 时不覆盖语义标题')
+  assert.equal(readTitle(cwd, cn), '改后的中文标题合乎硬区间', '无 --title 时不覆盖语义标题')
 
   // serializeForSync 上行携带（同步链缺口修复锚：此前 SELECT 漏列恒 null）
   const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
   const body = pm.serializeForSync(cwd, cn)
-  assert.equal(body?.changes?.[0]?.title, '改后的中文标题', 'changes[].title 上行在场')
+  assert.equal(body?.changes?.[0]?.title, '改后的中文标题合乎硬区间', 'changes[].title 上行在场')
   tmpRoots.push(cwd)
 })
 
 test('④ 存量空 title 回填：resume 时 input 首行补写（不覆盖已有）', () => {
   const { cwd } = makeRepo()
   const cn = '2026-09-29-title-d'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x', '--no-review']).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行合规概括版\n\n成功标准：\n- x', '--no-review']).status, 0)
   // 模拟存量空 title 行（旧版本创建的变更）
   const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
   pm.updateChangeMeta(cwd, cn, { title: null })
   assert.equal(readTitle(cwd, cn), null)
-  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x'])
+  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行合规概括版\n\n成功标准：\n- x'])
   assert.equal(r.status, 0)
-  assert.match(r.stdout, /🏷️ 变更标题已补写：原始输入首行/, '空 title 补写横幅')
-  assert.equal(readTitle(cwd, cn), '原始输入首行', '空 title 被 input 首行回填')
+  assert.match(r.stdout, /🏷️ 变更标题已补写：原始输入首行合规概括版/, '空 title 补写横幅')
+  assert.equal(readTitle(cwd, cn), '原始输入首行合规概括版', '空 title 被 input 首行回填')
   tmpRoots.push(cwd)
 })

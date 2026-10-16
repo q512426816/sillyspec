@@ -138,7 +138,7 @@ test('⑤ e2e：清单写「work.txt（交付：单文件）」→ 收口 scopeA
     cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
   })
   try {
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot']).status, 0)
     writeFileSync(join(cwd, 'work.txt'), 'hello\n')
     git(cwd, ['add', 'work.txt'])
     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])

@@ -218,7 +218,7 @@ test('FR-01/02 thin CLI e2e：flow done 落盘恰好两件 + 查询走快照态'
     sh(cwd, ['add', '.']); sh(cwd, ['commit', '-q', '-m', 'base'])
     const cn = '2026-10-09-ct-thin-a1' // 抽查桶外名（sampleBucket 1/4 定额——e2e 夹具不进评审采样）
     const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
-    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '单套留档 e2e\n\n成功标准：\n- flow done 后恰好两件'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '单套留档口径对账 e2e\n\n成功标准：\n- flow done 后恰好两件'], { cwd, encoding: 'utf8', timeout: 120_000, env })
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     const base = join(cwd, '.sillyspec', 'changes', cn)
     // design 四问一行作答（plain，不触发评审定档）+ 文件变更清单声明交付文件

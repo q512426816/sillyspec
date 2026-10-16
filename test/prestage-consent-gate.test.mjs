@@ -48,7 +48,7 @@ function cli(cwd, args) {
   })
 }
 
-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
+const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
 const MARK_PATH = (cwd) => join(cwd, SPEC, '.runtime', 'route-hindsight.json')
 
 /** 种一条「该走预段未走」标记（tasks 改写率超阈形态）。 */

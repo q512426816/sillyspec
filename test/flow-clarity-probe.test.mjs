@@ -47,7 +47,7 @@ function cli(cwd, args) {
   })
 }
 
-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
+const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
 
 /** 槽位作答（双代格式正文作答）+ spec 断点批准。 */
 function fillSlots(cwd, change) {
@@ -168,7 +168,7 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   const { cwd } = makeRepo()
   const c1 = '2026-09-01-fcp-loop'
   // 三条成功标准（多行镜像面——tasks 改写率的分母是正文行，单行会被标题稀释到阈下）
-  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件并分别补齐测试\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
   writeFileSync(join(cwd, 'work.txt'), 'done\n')

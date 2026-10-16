@@ -54,7 +54,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-fake'
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
     // 覆写任务面（真实实现路径形态）再全勾
@@ -73,7 +73,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-mirror'
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
@@ -90,7 +90,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
     const { cwd, cli } = makeRepo()
     const change = '2026-09-01-sw-real'
     // --no-review：聚焦哨兵不测评审（勾选直改后无 edit_ratio，评审定档与本用例无关）
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
@@ -107,7 +107,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-01-sw-body-token'
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X', '--no-review']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
@@ -124,7 +124,7 @@ test('① flow done 哨兵：全勾零证据拒收（种子/覆写同判）/ 全
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-partial'
-    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
     fillSlots(cwd, change)
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })

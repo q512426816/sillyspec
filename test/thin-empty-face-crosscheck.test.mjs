@@ -96,7 +96,7 @@ test('空面+声明清单裸写仓目录前缀 → 阻断：三处置+三种正�
   const change = '2026-10-13-tefc-prefix'
   const specBase = join(cwd, '.sillyspec')
   try {
-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '跨仓前缀形态\n成功标准：\n- 空面门阻断并点名', '--autopilot'])
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '跨仓前缀形态命中注册仓\n成功标准：\n- 空面门阻断并点名', '--autopilot'])
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     fillDocs(specBase, change, FLIST_TABLE(['libx/src/routes/X.js']))
     tickTasks(specBase, cwd, change)
@@ -123,7 +123,7 @@ test('空面+仓根相对路径（首段不命中注册仓）→ 仍点名阻断
   const change = '2026-10-13-tefc-blind'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', '盲区形态\n成功标准：\n- 主仓不存在即点名', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', '盲区形态主仓缺文件点名\n成功标准：\n- 主仓不存在即点名', '--autopilot'])
     fillDocs(specBase, change, FLIST_TABLE(['src/routes/X.js']))
     tickTasks(specBase, cwd, change)
     const s2 = cli(cwd, ['flow', 'done', '--change', change])
@@ -142,7 +142,7 @@ test('非空面：未标注跨仓声明仍出防呆告警且不阻断（零回�
   const change = '2026-10-13-tefc-nonempty'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', '非空面回归\n成功标准：\n- 告警在场收口通过', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', '非空面回归不触发跨仓门\n成功标准：\n- 告警在场收口通过', '--autopilot'])
     writeFileSync(join(cwd, 'work.txt'), 'done\n')
     git(cwd, ['add', 'work.txt'])
     git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
@@ -166,7 +166,7 @@ test('--accept-empty-face：签收放行 + flow-state 持久化 + 无 flag 重�
   const change = '2026-10-13-tefc-signoff'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', '签收形态\n成功标准：\n- 签收留痕免重拦', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', '签收形态放行持久化留痕\n成功标准：\n- 签收留痕免重拦', '--autopilot'])
     fillDocs(specBase, change, FLIST_TABLE(['libx/src/routes/X.js']))
     tickTasks(specBase, cwd, change)
     // 首跑无 flag：阻断在 patch
@@ -201,7 +201,7 @@ test('纯跨仓规范标注空面：不阻断，出空面跨仓冻结缺口 advi
   const change = '2026-10-13-tefc-marked'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', '纯跨仓标注\n成功标准：\n- advisory 不阻断', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', '纯跨仓规范标注不阻断面\n成功标准：\n- advisory 不阻断', '--autopilot'])
     fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- src/routes/X.js'].join('\n'))
     tickTasks(specBase, cwd, change)
     writeReviewFixture(specBase, cwd, change)
@@ -221,7 +221,7 @@ test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标�
   const change = '2026-10-13-tefc-h2hdr'
   const specBase = join(cwd, '.sillyspec')
   try {
-    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态\n成功标准：\n- 段头识别不阻断', '--autopilot'])
+    cli(cwd, ['flow', 'start', '--change', change, '--input', 'h2 段头形态识别为规范标注\n成功标准：\n- 段头识别不阻断', '--autopilot'])
     fillDocs(specBase, change, ['## 文件变更清单', '', '## libx 仓变更', '', '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 修改 | src/routes/X.js | 交付 |'].join('\n'))
     tickTasks(specBase, cwd, change)
     writeReviewFixture(specBase, cwd, change)
@@ -241,12 +241,12 @@ test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行', 
   const withRepos = makeRepo({ repos: true })
   const noRepos = makeRepo()
   try {
-    const s1 = cli(withRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner1', '--input', '横幅两态\n成功标准：\n- 跨仓行在场', '--autopilot'])
+    const s1 = cli(withRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner1', '--input', '横幅两态跨仓写法行对齐\n成功标准：\n- 跨仓行在场', '--autopilot'])
     assert.equal(s1.status, 0)
     assert.match(s1.stdout, /跨仓交付/, '跨仓写法行在场')
     assert.match(s1.stdout, /## <注册key> 仓变更/, '段头写法在场')
     assert.match(s1.stdout, /local\.yaml repos/, 'key 来源指明')
-    const s2 = cli(noRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner2', '--input', '横幅两态\n成功标准：\n- 无跨仓行', '--autopilot'])
+    const s2 = cli(noRepos, ['flow', 'start', '--change', '2026-10-13-tefc-banner2', '--input', '横幅两态跨仓写法行对齐\n成功标准：\n- 无跨仓行', '--autopilot'])
     assert.equal(s2.status, 0)
     assert.doesNotMatch(s2.stdout, /跨仓交付/, '无注册仓时零跨仓行')
   } finally {

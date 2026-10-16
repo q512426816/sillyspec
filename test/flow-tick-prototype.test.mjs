@@ -51,7 +51,7 @@ function fillSlots(cwd, change) {
 
 test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
   const { cwd, cli } = makeRepo()
-  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
+  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0)
   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
   // 任务拟法指引（2026-10-12-closeout-task-guidance）：收口/推送/发布不单列 task + 单列则先 token 提交后勾选
@@ -85,7 +85,7 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
 test('④ 全勾硬门：有提交未勾任务 → 拒收（2026-10-07-allticked-gate，openspec all_done 对齐）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-09-01-ftp-3'
-  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '补齐任务行为验证的面\n成功标准：\n- 行为 X']).status, 0)
   fillSlots(cwd, change)
   // 认领面（agent 覆写过任务行）一条未勾 → 拒收（旧 advisory 放行退役——tasks.md 是完成状态机）
   const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')

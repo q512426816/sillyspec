@@ -110,7 +110,7 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json �
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-05-drift-e2e'
   const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
-  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '漂移检测 e2e\n\n成功标准：\n- 处置重入后审计件含处置面'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', '处置漂移检测口径 e2e\n\n成功标准：\n- 处置重入后审计件含处置面'], { cwd, encoding: 'utf8', timeout: 120_000, env })
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   // v2 纯 markdown 填法：design 四问作实质作答（触发评审定档）+ FR 正文成形
   const base = join(cwd, '.sillyspec', 'changes', cn)

@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  变更标题强制 10 到 30 字命名
+
+  动机与背景
+
+  用户在变更①收口中追加硬性要求：title 必须简洁达意，让人明确认识变更大概做什么，建议 20 字左右、10-30 字之内（必须），甚至可以强制 agent 命名。提炼口径（变更①）只保了 ≤30
+  上限，下限与强制命名缺位：变更名兜底仍可发生（fresh 无 --input 时），短首行原样过。本变更落硬门。
+
+
+  成功标准：
+
+  - flow start 全新启动（非平台 writer 空目录）标题不在 10-30 字或变更名兜底时必须拒绝启动并给修复指引（--title 或首行 10-30 字概括）
+
+  - 显式 --title 在 fresh/resume 超出 10-30 必须拒绝；平台 writer 豁免硬门仅警告
+
+  - adopt 收编与 resume 补写不阻断但超界必须打强提示
+
+  - hardCut 软提示文案精度修正（评审 P3：判定是 6..30 内无可用截点）
+
+  - 过门格式指引（AGENTS.md/templates）同步 10-30 要求；受影响 e2e 夹具按新契约修输入（断言不动）
+autopilot: false
+prestage_ack: false
+baseline_commit: 8aff11936fe4be118f83181566f36ebafd91af7e
+updatedAt: '2026-10-16T13:44:49.809Z'
+baseline_sha256: 0ca6e718e956a9c31e71dc54afa18b03d3606300864e781e6e24159bd3f44be1
+spec_approved: true
+spec_approved_at: '2026-10-16T13:44:49.809Z'
+spec_approved_by: zcode-title-gate
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-title-gate
+

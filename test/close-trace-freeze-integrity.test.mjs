@@ -75,7 +75,7 @@ test('flow 冻结面剔除 .sillyspec/changes 子树保留 docs 交付', () => {
   const change = '2026-10-12-ctfi-face'
   const specBase = join(cwd, '.sillyspec')
   try {
-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '交付面冻结口径\n成功标准：\n- work.txt 与 docs 模块卡入冻结面，治理工件不入', '--autopilot'])
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '交付面冻结口径含跨仓标注\n成功标准：\n- work.txt 与 docs 模块卡入冻结面，治理工件不入', '--autopilot'])
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     // 交付提交：代码 + .sillyspec/docs 交付文档（均入冻结面）
     writeFileSync(join(cwd, 'work.txt'), 'done\n')
@@ -112,7 +112,7 @@ test('工件-only 面输出空面提示不落 patch', () => {
   const change = '2026-10-12-ctfi-empty'
   const specBase = join(cwd, '.sillyspec')
   try {
-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '无交付面场景\n成功标准：\n- 空面提示且归档完成', '--autopilot'])
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '无交付面场景空面提示归档\n成功标准：\n- 空面提示且归档完成', '--autopilot'])
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     fillDesignSlots(specBase, change) // 只写工件（未提交、无交付改动）
     // 任务勾选走工件提交（ledger 门要 task token 提交）——工件提交存在但 FR-01 后不入冻结面
@@ -225,7 +225,7 @@ test('孤儿提交触及交付面阻断收口（worktree e2e）+ --accept-orphan
   const specBase = join(cwd, '.sillyspec')
   const wtPath = join(specBase, '.runtime', 'worktrees', change)
   try {
-    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '孤儿守卫\n成功标准：\n- 冻结面外实现提交阻断收口', '--autopilot'])
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '孤儿守卫冻结面外提交阻断\n成功标准：\n- 冻结面外实现提交阻断收口', '--autopilot'])
     assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
     // 会话专属 worktree（linked，路径命中 gate-snapshot 判定）
     mkdirSync(join(specBase, '.runtime', 'worktrees'), { recursive: true })

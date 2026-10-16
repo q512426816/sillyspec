@@ -66,7 +66,7 @@ function setupThinModuleChange(cwd, cn, { deliverDir = 'src/newdir', sidecar = f
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
-  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', '模块门 e2e\n\n成功标准：\n- 收口门行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
+  const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--no-review', '--input', '模块门三态收口链 e2e\n\n成功标准：\n- 收口门行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   const base = join(cwd, '.sillyspec', 'changes', cn)
   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')

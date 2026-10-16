@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
-const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
+const INPUT_OK = '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成且 flow done 全绿'
 
 /** 造临时 git 仓 + local.yaml（thin 模式 + 快测试命令）+ 基线提交。 */
 function makeRepo() {

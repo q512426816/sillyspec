@@ -120,7 +120,7 @@ test('② adopt 尾部材料清单重列变更原型（截断保险）', () => {
 test('③ 恢复简报对含原型变更补尾部必看行（无原型零输出）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-14-gap-4'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '需求 X\n成功标准：\n- 行为 A']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '需求 X 的行为对齐校验\n成功标准：\n- 行为 A']).status, 0)
   // 首进无原型：恢复简报零新增
   const r0 = cli(['flow', 'start', '--change', change])
   assert.equal(r0.status, 0, r0.stderr)

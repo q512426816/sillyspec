@@ -41,7 +41,7 @@ test('① gate FAIL 自动升厚：行值 thin → brainstorm（e2e）', async (
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-13-upthk-x'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', 'x\n\n成功标准：\n- y', '--no-review']).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '合规格概括标题十个字\n\n成功标准：\n- y', '--no-review']).status, 0)
   const base = join(cwd, '.sillyspec', 'changes', cn)
   // 填槽（v2 纯 markdown 骨架，零 AGENT 槽）——同 flowdone-lint-fail-output 夹具形态填法
   {
@@ -81,7 +81,7 @@ test('② resume 路径行值非 thin 不越权改动（单元态）', () => {
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-13-upthk-y'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', 'x\n\n成功标准：\n- y', '--no-review']).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '合规格概括标题十个字\n\n成功标准：\n- y', '--no-review']).status, 0)
   // 正常 start 后行值是 brainstorm（initChange 出生值），升厚 helper 对它应为 no-op
   const before = readStage(cwd, cn)
   assert.equal(before, 'brainstorm')

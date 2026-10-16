@@ -89,7 +89,7 @@ test('e2e：start 记基线（首写者胜）；两笔跨仓交付+untracked 全
   const { main, cross } = fixture(change)
   const specBase = join(main, '.sillyspec')
   try {
-    const s1 = cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
+    const s1 = cli(main, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
     assert.equal(s1.status, 0, `start: ${s1.stderr}`)
     assert.match(s1.stdout, /跨仓基线锚：1 个注册仓/, 'start 提示基线锚')
     const baseSha = readState(specBase, change).cross_baselines?.libx
@@ -135,7 +135,7 @@ test('回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 
   const { main, cross } = fixture(change)
   const specBase = join(main, '.sillyspec')
   try {
-    cli(main, ['flow', 'start', '--change', change, '--input', 'x\n成功标准：\n- y', '--autopilot'])
+    cli(main, ['flow', 'start', '--change', change, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
     // 提交均不带变更名（零 token 命中形态）
     writeFileSync(join(cross, 'mine.txt'), 'm\n')
     git(cross, ['add', '.'])
@@ -161,7 +161,7 @@ test('回退面：零 token 命中 → 全窗口（外来可见）；基线 sha 
   const change2 = '2026-10-13-crba-deg'
   const f2 = fixture(change2)
   try {
-    cli(f2.main, ['flow', 'start', '--change', change2, '--input', 'x\n成功标准：\n- y', '--autopilot'])
+    cli(f2.main, ['flow', 'start', '--change', change2, '--input', '合规格概括标题十个字\n成功标准：\n- y', '--autopilot'])
     const stPath = join(f2.main, '.sillyspec', 'changes', change2, 'flow-state.yaml')
     const st = yaml.load(readFileSync(stPath, 'utf8'))
     st.cross_baselines.libx = '0'.repeat(40)

@@ -14,7 +14,7 @@
 4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start` → 直接干活 → `sillyspec flow done --change <名>`。`--input` 引号内换行合法，下例可照抄：
 
    ```bash
-   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+   sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
 
    成功标准：
    - <可验证标准>"

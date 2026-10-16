@@ -227,6 +227,71 @@ export function deriveShortChangeTitle(input, opts) {
   return deriveShortChangeTitleEx(input, opts).title
 }
 
+// ── 标题硬区间门（2026-10-16-title-range-gate，用户硬性要求：10-30 字必须、建议 ~20、可强制命名）──
+
+/** 标题是否落在硬区间（去首尾空白后按字符数计 10..30）。变更名兜底/短句/超长均 false。 */
+export function isValidChangeTitle(title) {
+  const n = [...String(title || '').trim()].length
+  return n >= 10 && n <= 30
+}
+
+/**
+ * fresh 启动标题解析：--title 显式 > --input 首行提炼 > 变更名兜底。
+ * enforce=true（agent 命名时刻，flow start fresh 非平台 writer）：不在区间/兜底 → ok=false，
+ * 调用方必须在任何状态写入前拒绝启动（强制 agent 命名）。
+ * enforce=false（平台 writer 预建空目录自动派发，无 agent 对话面可强制）：恒 ok=true，
+ * 超界/兜底由调用方 ⚠️ 留痕（best-effort 标题优于阻断派发）。
+ */
+export function resolveStartTitle({ titleFlag, input, change, enforce = true }) {
+  if (titleFlag) {
+    return { title: titleFlag, ok: !enforce || isValidChangeTitle(titleFlag), kind: 'flag', hardCut: false }
+  }
+  const derived = deriveShortChangeTitleEx(input)
+  // enforce 下 hardCut（30 字+… 残句）与超区间同样拒绝：残句正是「让人认不出变更做什么」
+  // 的形态，CLI 提炼救不了就让 agent 自己命名（补标点/写短句/--title 三选一）。
+  // enforce=false（平台豁免）任何非空提炼值照用，超界/残句由调用方 ⚠️ 留痕。
+  if (derived.title && (!enforce || (!derived.hardCut && isValidChangeTitle(derived.title)))) {
+    return { title: derived.title, ok: true, kind: 'derived', hardCut: false }
+  }
+  return {
+    title: change,
+    ok: !enforce,
+    kind: 'fallback',
+    hardCut: Boolean(derived && derived.hardCut),
+    rejectedTitle: (derived && derived.title) || null,
+  }
+}
+
+/** hardCut 软提示（fresh/resume 共用单源）。文案口径=「6..30 字内无可用截点」——hardCut 判定
+ * 是候选截点经 [floor,max] 过滤后为空（标点存在但全在区间外也硬切），禁用「无自然断点」旧
+ * 措辞（2026-10-16-short-change-title 评审 P3 清偿）。 */
+export const SHORT_TITLE_HARDCUT_HINT = '💡 标题超 30 字且 6..30 字内无可用自然标点截点，已硬切——重入 flow start --title "<10-30 字中文概括>" 可给更短标题（不阻断）'
+
+/** 超界不阻断面的强提示行（adopt 收编/resume 补写/平台 writer 豁免共用单源）。 */
+export function shortTitleRangeWarnLine(title) {
+  const n = [...String(title || '').trim()].length
+  return `⚠️ 标题「${title}」${n} 字不在 10-30 硬区间（建议 ~20 字）——重入 flow start --title "<10-30 字中文概括>" 可改（不阻断）`
+}
+
+/** 硬门拒绝报错（flow start fresh exit 2 用）。状态/原因/修复一次给全（cli-copy-selfsufficient）。 */
+export function shortTitleRejectMessage(title) {
+  const fix = [
+    '   ① 重跑时把 --input 首行写成一句 10-30 字中文概括（首行即变更标题）',
+    '   ② 或追加参数 --title "<10-30 字中文概括>"',
+  ]
+  if (title == null || title === '') {
+    return [
+      '❌ 变更标题未命名——flow start 全新启动必须带 10-30 字标题（必须，建议 ~20 字）：标题是变更中心展示面，须让人一眼认出本变更做什么。两条修复：',
+      ...fix,
+    ].join('\n')
+  }
+  const n = [...String(title).trim()].length
+  return [
+    `❌ 变更标题必须为 10-30 字（当前：${JSON.stringify(title)}，${n} 字；必须，建议 ~20 字）——标题是变更中心展示面，须让人一眼认出本变更做什么。两条修复：`,
+    ...fix,
+  ].join('\n')
+}
+
 
 // ── 平台推送（best-effort，2026-08-16-change-center-quick-tab task-06 / D-003）──
 

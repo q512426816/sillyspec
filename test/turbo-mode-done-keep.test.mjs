@@ -40,7 +40,7 @@ function cli(cwd, args) {
 }
 
 function startTurbo(cwd, change) {
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot', '--turbo'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stdout}\n${s1.stderr}`)
   return s1
 }
@@ -78,7 +78,7 @@ test('② design 空槽拒收不放松：turbo 变更四节未作答 → artifac
 test('③ 非 turbo done：输出无极速面痕迹（缺省零回归）', () => {
   const cwd = makeRepo()
   const change = '2026-10-14-turbo-keep-t3'
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--autopilot'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件并补齐对应测试\n成功标准：\n- work.txt 生成', '--autopilot'])
   assert.equal(s1.status, 0)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
