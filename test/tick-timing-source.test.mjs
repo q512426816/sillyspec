@@ -162,11 +162,11 @@ test('flow done 换源：侧车集中短窗且存活比足 → 末尾集中勾�
     const ap = cli(['flow', 'approve', '--change', change, '--self-approved'])
     assert.equal(ap.status, 0, `approve 失败: ${ap.stdout}\n${ap.stderr}`)
     const base = join(cwd, '.sillyspec', 'changes', change)
-    // 侧车时戳全落在现在-10s..现在的短窗（跨度 10s ≤ 120s 簇窗）；baseline 提交 2h 前
-    // （makeRepo 注入）→ 存活 ≈2h ≥ 10×10s → 末尾集中形态
+    // 侧车时戳跨度 90s（>60s 突发窗——节奏门不截走；≤120s 簇窗）；baseline 提交 2h 前
+    // （makeRepo 注入）→ 存活 ≈2h ≥ 10×90s → 末尾集中形态
     const now = Date.now()
     writeFileSync(join(base, 'task-ticks.jsonl'), [
-      JSON.stringify({ ts: now - 10_000, task: 'task-01', source: 'task-tick' }),
+      JSON.stringify({ ts: now - 90_000, task: 'task-01', source: 'task-tick' }),
       JSON.stringify({ ts: now, task: 'task-02', source: 'task-tick' }),
       '',
     ].join('\n'))

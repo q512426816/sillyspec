@@ -265,7 +265,9 @@ test('②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务�
 
 test('②h 接线钉：节奏门回退侧车（flow.js 源码锚）', () => {
   const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
-  assert.ok(src.includes('detectTickBurst(parseTickLog('), '事件流空结果回退侧车突发检测')
+  // 2026-10-17-tick-timing-source：观测采集前移为 _tickObs 共享（时点判定与节奏门一份数据），
+  // 锚从内联调用形状改为采集点形状——行为等价（②g e2e 钉真行为）。
+  assert.ok(src.includes('batch = detectTickBurst(ticks)'), '事件流空结果回退侧车突发检测（_tickObs 共享采集）')
   assert.ok(src.includes('task-ticks.jsonl'), '侧车文件面在场（节奏门消费）')
   assert.ok(src.includes("batch.source === 'tick-burst'"), '拒收文案来源感知（侧车时戳 vs 事件流）')
 })

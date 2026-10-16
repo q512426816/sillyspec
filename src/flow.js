@@ -1395,6 +1395,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
     let _sentinelEvidenceComplete = false // 哨兵证据完备（status=complete——每格已勾任务均有 token/review.json）：单拍降级判据（2026-10-13-batchtick-evidence-domain-hint）
     let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
+    // 勾选观测共享采集（2026-10-17-tick-timing-source）：watcher 事件流 + task-ticks.jsonl 侧车
+    // 一次读取——时点判定与勾选节奏门同源消费（此前节奏门单独读，现两门一份数据；检测逻辑
+    // 与优先序不变：事件流先判、空结果回退侧车突发）。侧车=CLI tick 逐格毫秒时戳事实源（随
+    // 归档进 git、不受观测盲窗影响）。任一源缺失按空（fail-open），绝不阻断收口。
+    const _tickObs = await (async () => {
+      try {
+        const { readWatcherEvents } = await import('./watcher.js')
+        const { detectBatchCheckCadence, detectTickBurst } = await import('./sentinel-assertions.js')
+        const stream = readWatcherEvents({ runtimeRoot, change })
+        let ticks = []
+        try { ticks = (await import('./timeline.js')).parseTickLog(readFileSync(join(changeDir, 'task-ticks.jsonl'), 'utf8')) } catch { /* 侧车缺失/不可读按空（fail-open） */ }
+        let batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+        if (!batch) batch = detectTickBurst(ticks)
+        return { stream, ticks, batch }
+      } catch { return { stream: { exists: false, events: [] }, ticks: [], batch: null } }
+    })()
     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
     // 提交计数不因多行正文失真。
@@ -1462,20 +1478,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (sent.status === 'complete') {
           _sentinelEvidenceComplete = true
           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
-          // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
-          // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
-          // 这是提醒边干边勾纪律，非假勾）。tasks.md 全程 untracked（未随交付提交）时同款提醒。
-          // 首提锚定（2026-10-07-tick-timing-first-commit）：--reverse 全 history 首行=首次提交——
-          // 旧实现 -n 1 取最近一次提交，每任务随交付提交 tasks.md 的渐进形态（首提早于 HEAD）
-          // 被误报一把勾（完整实测实证：历史 0→1→2 渐进勾选仍出警告）。
+          // 勾选时点判定（2026-10-17-tick-timing-source 换源）：判据从「tasks.md git 首次提交
+          // == 收口最后提交」整体退役——git 历史形态被官方允许的 reset --soft 压扁无声摧毁
+          // （tick-timing-squash-blindspot 坑：并行会话压扁归档把边干边勾的渐进历史抹平，警告
+          // 照出，结构性误报；且 tasks.md 不进交付 pathspec 的纪律下「untracked 直至归档」恒
+          // 复现）。换源=task-ticks.jsonl 侧车墙钟时戳（detectTickTiming 纯函数：跨度超 120s
+          // =边干边勾确认；挤 ≤120s 短窗且变更存活 ≥10×跨度=末尾集中勾选）——墙钟时戳是文件
+          // 事实，压扁/rebase 不可改写，与「审计真相锚 change.patch sha256、不依赖 git 形态」
+          // 口径对齐。节奏门已检出单拍跳/突发时让位（防双重警告——其判定覆盖同一批格子）；
+          // 无侧车观测输出一行 task tick 教学（不再作结构性警告）；advisory 不阻断语义不变。
           try {
-            const _firstRaw = gitQuiet(cwd, ['log', '--reverse', '--format=%h', '--', tasksPath])
-            const tasksIn = _firstRaw ? (String(_firstRaw).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null) : null
-            const lastIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1'])
-            if (!tasksIn) {
-              console.warn(`⚠️ 勾选时点：tasks.md 未随交付提交（untracked 直至归档）——勾选证据链靠归档兜底，git 历史不可回溯；下次收口前 tasks.md 一并显式 pathspec 提交`)
-            } else if (String(tasksIn).trim() === String(lastIn).trim()) {
-              console.warn(`⚠️ 勾选时点：tasks.md 的首次 git 提交 == 收口最后提交（一把勾模式）——token 证据齐放行，但边干边勾是进度锚（OS Guardrails 同款纪律），下次完成单元即勾`)
+            if (_tickObs.batch) {
+              /* 节奏门将报单拍多格/突发——时点判定让位 */
+            } else {
+              const _baseRaw = st && st.baseline_commit ? gitQuiet(cwd, ['show', '-s', '--format=%ct', String(st.baseline_commit)]) : null
+              const _baseTs = Number(String(_baseRaw ?? '').trim())
+              const { detectTickTiming } = await import('./sentinel-assertions.js')
+              const t = detectTickTiming({ ticks: _tickObs.ticks, lifespanMs: Number.isFinite(_baseTs) && _baseTs > 0 ? Date.now() - _baseTs * 1000 : NaN })
+              if (t.status === 'concentrated') {
+                console.warn(`⚠️ 勾选时点：${t.count} 格勾选时戳集中在收口前 ${Math.max(1, Math.round(t.spanMs / 1000))}s 内（末尾集中勾选）——token 证据齐放行，但边干边勾是进度锚，下次完成单元即勾（task tick 回显含现成提交命令）`)
+              } else if (t.status === 'spread') {
+                console.log(`✅ 勾选时点：${t.count} 格勾选时戳跨度 ${Math.max(1, Math.round(t.spanMs / 60000))} 分钟——边干边勾确认（判据=task-ticks 侧车墙钟时戳，不受 git 压扁影响）`)
+              } else if (t.status === 'no-ticks') {
+                console.log(`ℹ️ 勾选时点：无 tick 时戳观测（未走 task tick）——下次勾选建议 sillyspec task tick --change ${change} --task task-NN（即时回显进度与现成提交命令）`)
+              }
+              /* 'single'/'no-anchor' 静默：单格无节奏可言；缺存活锚 fail-open 不判 */
             }
           } catch { /* 时点判定 fail-soft */ }
         }
@@ -1503,19 +1530,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：CLI 收口端快连点对事件流不可见（单格
     // 精确跳），空结果时回退 task-ticks.jsonl 毫秒时戳判突发——CLI 与直接 Edit 两条路径同判。
     try {
-      const { readWatcherEvents } = await import('./watcher.js')
-      const { detectBatchCheckCadence, detectTickBurst, resolveBatchTickAction } = await import('./sentinel-assertions.js')
-      const stream = readWatcherEvents({ runtimeRoot, change })
-      let batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
-      if (!batch) {
-        // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：事件流空结果时读 change 目录
-        // task-ticks.jsonl（CLI tick 毫秒时戳事实源，随归档进 git、不受观测盲窗影响）判快连点；
-        // 事件流结果优先不双重报告；侧车缺失/坏文件按无证据静默（fail-open）。
-        try {
-          const { parseTickLog } = await import('./timeline.js')
-          batch = detectTickBurst(parseTickLog(readFileSync(join(changeDir, 'task-ticks.jsonl'), 'utf8')))
-        } catch { /* 侧车缺失/不可读 → 无侧车证据（fail-open） */ }
-      }
+      const { resolveBatchTickAction } = await import('./sentinel-assertions.js')
+      // 观测消费共享采集（2026-10-17-tick-timing-source）：事件流/侧车/突发判定已在前文哨兵段
+      // 前置采集为 _tickObs（时点判定与节奏门同源一份数据；读取仅前移，检测逻辑与优先序不变
+      // ——事件流先判、空结果回退侧车突发，侧车缺失按空 fail-open）。
+      const stream = _tickObs.stream
+      const batch = _tickObs.batch
       if (batch) {
         // 代勾计数取「本拍实时代勾 ∨ 持久化代勾」较大者（二轮 P2-B：重入漂移防护）；决策纯函数
         // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
