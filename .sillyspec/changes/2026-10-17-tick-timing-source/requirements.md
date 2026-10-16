@@ -14,7 +14,7 @@ created_at: 2026-10-16T16:30:30.520Z
 
 Given 侧车时戳清单与变更存活时长
 When 调用 detectTickTiming
-Then 按 no-ticks → single → no-anchor → spread（跨度超窗）→ concentrated（挤窗且存活比足）→ spread（挤窗但存活比不足）的判定序返回，阈值可用 opts 覆写
+Then 按 no-ticks → single → spread（跨度超窗——超窗即铁证无需存活锚）→ no-anchor（缺锚 fail-open）→ concentrated（挤窗且存活比足）→ spread（挤窗但存活比不足）的判定序返回，阈值可用 opts 覆写
 
 ### FR-02: 压扁形态回归：侧车时戳分散的变更在 git 历史被压扁后 flow done 不再出一把勾警告（结构性误报消除）
 
@@ -30,7 +30,7 @@ Then 无「一把勾」警告，输出「边干边勾确认（判据=task-ticks 
 
 Given 变更侧车时戳集中在 ≤120s 窗内且变更存活 ≥10×跨度
 When flow done
-Then 输出「勾选时点：N 格勾选时戳集中在收口前 …s 内（末尾集中勾选）」advisory，流程放行不被阻断
+Then 输出「勾选时点：N 格勾选时戳集中在 …s 短窗内（末尾集中勾选形态）」advisory，流程放行不被阻断
 
 ### FR-03: task tick 翻格成功回显含可抄提交命令（消息模板带 task-NN、pathspec 含 tasks.md 与 task-ticks.jsonl）
 

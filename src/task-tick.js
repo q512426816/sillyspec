@@ -178,12 +178,14 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
       const { relative } = await import('node:path')
       const rel = (p) => relative(cwd, p).split('\\').join('/')
       const sidecar = join(changesRoot, changeName, 'task-ticks.jsonl')
-      console.log(`📦 勾选随交付入库（同一提交 pathspec）：`)
-      console.log(`   git commit -m "<本任务交付概括> (${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${rel(tasksPath)}${existsSync(sidecar) ? ` ${rel(sidecar)}` : ''}`)
+      const paths = `${rel(tasksPath)}${existsSync(sidecar) ? ` ${rel(sidecar)}` : ''}`
+      console.log(`📦 勾选随交付入库（add 与 commit 同一清单——勾选修改随任务交付同一提交）：`)
+      console.log(`   git add -- <交付文件…> ${paths}`)
+      console.log(`   git commit -m "<本任务交付概括> (${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${paths}`)
       const { gitQuiet } = await import('./git-helper.js')
       const touched = gitQuiet(cwd, ['log', '-n', '1', '--format=%h', '--', tasksPath])
       if (r.checked >= 2 && touched === '') {
-        console.log(`ℹ️ tasks.md 尚无任何提交（此前勾选未随交付入库）——上面的命令已把它带进 pathspec，照抄即闭环`)
+        console.log(`ℹ️ tasks.md 尚无任何提交（此前勾选未随交付入库）——上面两行命令已把它带进清单，照抄即闭环`)
       }
     } catch { /* 教学面 best-effort：失败不影响翻格 */ }
   }

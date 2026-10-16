@@ -1496,7 +1496,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               const { detectTickTiming } = await import('./sentinel-assertions.js')
               const t = detectTickTiming({ ticks: _tickObs.ticks, lifespanMs: Number.isFinite(_baseTs) && _baseTs > 0 ? Date.now() - _baseTs * 1000 : NaN })
               if (t.status === 'concentrated') {
-                console.warn(`⚠️ 勾选时点：${t.count} 格勾选时戳集中在收口前 ${Math.max(1, Math.round(t.spanMs / 1000))}s 内（末尾集中勾选）——token 证据齐放行，但边干边勾是进度锚，下次完成单元即勾（task tick 回显含现成提交命令）`)
+                console.warn(`⚠️ 勾选时点：${t.count} 格勾选时戳集中在 ${Math.max(1, Math.round(t.spanMs / 1000))}s 短窗内（末尾集中勾选形态）——token 证据齐放行，但边干边勾是进度锚，下次完成单元即勾（task tick 回显含现成提交命令）`)
               } else if (t.status === 'spread') {
                 console.log(`✅ 勾选时点：${t.count} 格勾选时戳跨度 ${Math.max(1, Math.round(t.spanMs / 60000))} 分钟——边干边勾确认（判据=task-ticks 侧车墙钟时戳，不受 git 压扁影响）`)
               } else if (t.status === 'no-ticks') {
