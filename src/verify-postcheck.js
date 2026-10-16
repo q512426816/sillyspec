@@ -2955,10 +2955,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const jsProjectRun = jsProject.filter(f => !E2E_DIR_RE.test(_norm(f)))
   const e2eDroppedFiles = jsProject.filter(f => E2E_DIR_RE.test(_norm(f)))
   let jsxRunner = null
+  let jsxRunnerFromHits = false
   for (const h of hits || []) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?(?:vitest|jest))(?=\s|$)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*(?:vitest|jest)(?:\s|$))/.exec(cmd)
-    if (m) { jsxRunner = m[1].trim(); break }
+    if (m) { jsxRunner = m[1].trim(); jsxRunnerFromHits = true; break }
   }
   if (!jsxRunner && cwd && jsProjectRun.length > 0) {
     const inferred = inferJsxRunner(cwd, jsProjectRun[0])
@@ -2995,26 +2996,47 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
 
   if (nonTestFiles.length > 0) batches.push({ name: 'deps(auto-nontest-skip)', short: 'nontest-skip', command: null, count: nonTestFiles.length, dropped: 0, skip: true, files: nonTestFiles, reason: `非测试形态文件 ${nonTestFiles.length} 个不进单测执行批（node --test 语义「文件即测试」/ vitest No test suite found / pytest 0 collected exit 5——直跑必假败；坑 verify-dynamic-subset-node-test-ts-source）：${nonTestFiles.slice(0, 3).join('、')}${nonTestFiles.length > 3 ? ' 等' : ''}——FR 绑定面脏数据可 sillyspec tests --unbind --tests <路径> 清行` })
   if (jsProjectRun.length > 0) {
-    if (jsxRunner) {
-      const isVitest = /vitest/.test(jsxRunner)
-      // jsx 批的 cd 重定基（评审 MEDIUM 清偿）：cdDir 只源 pyRunner——jsxRunner 自带 cd 前缀
-      // （cd frontend && pnpm exec vitest）时文件未重定基产双前缀错路径；独立提取 jsxDir。
-      const jsxDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(jsxRunner)?.[1]
-      const rebaseJsx = (f) => (jsxDir && f.startsWith(jsxDir + '/')) ? f.slice(jsxDir.length + 1) : f
-      // R20（2026-09-27-thin-display-fix 实证，用户授权修复）：Windows cmd 执行器对含
-      // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
-      // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
-      const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
-      const jsxPrefix = `${jsxRunner} ${isVitest ? 'run ' : ''}`
-      const jsxArgs = jsProjectRun.map(rebaseJsx).map(quoteWinPath)
+    // R20（2026-09-27-thin-display-fix 实证，用户授权修复）：Windows cmd 执行器对含
+    // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
+    // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
+    const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
+    // jsx 批按包根分组（2026-10-15-zcode-engine-appserver verify 实证，跨仓事故驱动修复）：
+    // 混合包根（frontend/ 的 tsx 测试 + sillyhub-daemon/ 的 ts 测试同批）共享单一 runner
+    // 前缀时，非本根路径在 runner 的 cwd 下「No test files found」exit 1 恒败（分块修复
+    // 后暴露：第二块全 daemon 路径仍跑 cd frontend）。与 pyGroups 同款：每文件按最近
+    // package.json 推断自身 runner/根；显式命中命令（hits）保持整批单组旧语义。
+    const jsxGroups = new Map() // key: 组命令前缀
+    const jsxUngrouped = []
+    for (const f of jsProjectRun) {
+      // 命中命令（hits）→ 整批单组旧语义；全局推断（jsProjectRun[0]）仅兜底，逐文件按自身包根推断优先。
+      let command = null
+      let dirKey = null
+      if (!jsxRunnerFromHits && cwd) {
+        const inferred = inferJsxRunner(cwd, f)
+        if (inferred) { command = inferred.command; dirKey = inferred.dir || null }
+      }
+      if (!command) command = jsxRunner
+      if (!command) { jsxUngrouped.push(f); continue }
+      if (!jsxGroups.has(command)) jsxGroups.set(command, { files: [], dirKey })
+      jsxGroups.get(command).files.push(f)
+    }
+    const multiGroup = jsxGroups.size > 1
+    for (const [command, grp] of jsxGroups) {
+      const isVitest = /vitest/.test(command)
+      const jsxPrefix = `${command} ${isVitest ? 'run ' : ''}`
+      const grpDir = grp.dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(command)?.[1] || null
+      const rebaseJsx = (f) => (grpDir && f.startsWith(grpDir + '/')) ? f.slice(grpDir.length + 1) : f
+      const jsxArgs = grp.files.map(rebaseJsx).map(quoteWinPath)
       const jsxChunks = chunkByCommandLength(jsxPrefix, jsxArgs)
-      // 单块保持原名零回归；多块 <base>:N 独立计账（files 取该块参数原样回映射由调用方按需）。
+      const baseName = multiGroup ? `deps(auto-jsx:${grp.dirKey || 'root'})` : 'deps(auto-jsx)'
       jsxChunks.forEach((chunk, i) => {
         const isMulti = jsxChunks.length > 1
-        batches.push({ name: isMulti ? `deps(auto-jsx:${i + 1}/${jsxChunks.length})` : 'deps(auto-jsx)', short: 'jsx', command: jsxPrefix + chunk.join(' '), count: chunk.length, dropped: 0, files: chunk })
+        batches.push({ name: isMulti ? `${baseName}:${i + 1}/${jsxChunks.length}` : baseName, short: 'jsx', command: jsxPrefix + chunk.join(' '), count: chunk.length, dropped: 0, files: chunk })
       })
-    } else {
-      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+    }
+    if (jsxUngrouped.length > 0) {
+      // 无运行器可推断的文件（含 !jsxRunner && !cwd 全量形态）：skip 批如实披露（原整批 skip 语义按文件收窄）。
+      batches.push({ name: multiGroup || jsxGroups.size > 0 ? 'deps(auto-jsx-skip:unresolved)' : 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsxUngrouped.length, dropped: 0, skip: true, files: jsxUngrouped, reason: `JSX 测试文件（tsx/jsx，${jsxUngrouped.length} 个）node 原生不可跑且各自最近 package.json 无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }
   }
   if (e2eDroppedFiles.length > 0) {
@@ -3081,6 +3103,26 @@ function traceRepoRoots({ specBase, cwd }) {
 }
 
 /** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling, perFile } */
+/**
+ * 主仓侧候选解析根（worktree 感知；2026-10-15-zcode-engine-appserver verify 实证，跨仓
+ * 事故驱动最小修复）：变更在隔离 worktree 内实现时，新增测试文件在主仓根不可见——
+ * 悬空判定对主仓文件按「主仓根 ∪ 变更 worktree 根」多根解析（任一存在即非悬空）；
+ * 残差执行根同款（文件在 worktree 存在则从 worktree 根跑）。meta 缺失/不可读 → 仅主仓。
+ */
+function traceMainRoots({ specBase, changeName, cwd }) {
+  const roots = [cwd]
+  try {
+    const metaPath = join(specBase, '.runtime', 'worktrees', changeName, 'meta.json')
+    if (existsSync(metaPath)) {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      if (meta && typeof meta.worktreePath === 'string' && meta.worktreePath && existsSync(meta.worktreePath) && meta.worktreePath !== cwd) {
+        roots.push(meta.worktreePath)
+      }
+    }
+  } catch { /* meta 不可读 → 仅主仓（零回归） */ }
+  return roots
+}
+
 export function resolveTraceResidual({ specBase, changeName, cwd }) {
   const anchors = resolveVerifyAnchorSet({ specBase, changeName })
   if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [], perFile: [] }
@@ -3089,6 +3131,7 @@ export function resolveTraceResidual({ specBase, changeName, cwd }) {
   // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚。
   // FR-06（2026-10-09）：文件按行 repo 归属配对（perFile），悬空判定/残差执行按行根解析。
   const repoRoots = traceRepoRoots({ specBase, cwd })
+  const mainRoots = traceMainRoots({ specBase, changeName, cwd })
   const seen = new Set()
   const perFile = []
   for (const r of rows) {
@@ -3100,8 +3143,13 @@ export function resolveTraceResidual({ specBase, changeName, cwd }) {
     }
   }
   const files = [...new Set(perFile.map(x => x.file))].sort()
+  // 主仓文件多根解析：解析到 worktree 根则记录 resolvedRoot（残差执行同款消费）。
+  for (const x of perFile) {
+    if (x.repo) { x.resolvedRoot = repoRoots.get(x.repo) || cwd; continue }
+    x.resolvedRoot = mainRoots.find(root => existsSync(resolve(root, x.file))) || cwd
+  }
   const dangling = perFile
-    .filter(x => !existsSync(resolve((x.repo && repoRoots.get(x.repo)) || cwd, x.file)))
+    .filter(x => !existsSync(resolve(x.resolvedRoot, x.file)))
     .map(x => x.repo ? `${x.repo}:${x.file}` : x.file)
   return { anchors, rows, files, dangling, perFile }
 }
@@ -3180,7 +3228,8 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
   for (const x of (tr.perFile || [])) {
     if (provable.has(String(x.file).replace(/\\/g, '/'))) continue
     const _rk = x.repo || null
-    const _root = (_rk && _repoRoots.get(_rk)) || cwd
+    // worktree 感知（同悬空判定口径）：主仓行按 resolvedRoot（主仓或变更 worktree 根）取执行根。
+    const _root = (_rk && _repoRoots.get(_rk)) || x.resolvedRoot || cwd
     const _gk = _rk + ' ' + _root
     if (!_gmap.has(_gk)) _gmap.set(_gk, { repo: _rk, root: _root, files: [] })
     _gmap.get(_gk).files.push(x.file)
@@ -3323,8 +3372,20 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
     // not ok 以测试文件为套件名（not ok N - test/b.test.mjs），用判账行集匹配批内文件名把
     // 「批失败」收窄到「文件失败」；归因不出（非 TAP/行集缺文件名）保守全记批文件。
     failedFiles: (() => {
+      // 基建失败甄别（坑 verify-incremental-rerun-infra-batch-growth，2026-10-15 两变更实证：
+      // Windows argv 超限/runner 启动失败类批失败无任何测试级失败行，重跑不可能转绿——计入
+      // 前轮失败批只会让增量面随轮膨胀（141→159 自锁）。判据：输出无 not ok/FAILED/ERROR/
+      // AssertionError 任何测试级痕迹，且 reason 命中基建关键词（命令行太长/E2BIG/spawn/
+      // Cannot find module/No test files found）——此类批不进失败批账本，loud 留痕供人工。
+      const INFRA_REASON_RE = /命令行太长|E2BIG|spawn|Cannot find module|No test files found|ENAMETOOLONG/i
+      const TEST_FAILURE_RE = /not ok \d|FAILED|ERROR|AssertionError|assert/i
       const out = new Set()
       for (const r of perModule.filter(x => x.status === 'failed')) {
+        const text = String(r.outputFull || r.outputTail || '')
+        if (!TEST_FAILURE_RE.test(text) && INFRA_REASON_RE.test(String(r.reason || '') + text)) {
+          console.warn(`⚠️ 批 ${r.name} 判定基建失败（${String(r.reason || 'runner 层失败').slice(0, 80)}）——不进增量失败批账本（重跑不可能转绿），修复基建后整轮重测`)
+          continue
+        }
         for (const f of attributeFailedFiles(r)) out.add(f)
       }
       return [...out].sort()

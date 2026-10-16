@@ -18,7 +18,7 @@
  */
 import { createHash } from 'crypto'
 import { existsSync, readFileSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { gitQuiet } from './git-helper.js'
 import { quicklogSidecarPath } from './quicklog.js'
@@ -193,9 +193,38 @@ export function readChangeTrace(changeDir) {
   } catch { return [] }
 }
 
-/** 写 trace（幂等：序列化字节不变跳写；原子：writeAtomicSync） */
+/** 写 trace（幂等：序列化字节不变跳写；原子：writeAtomicSync）
+ *
+ * 幽灵绑定过滤（2026-10-15-zcode-engine-appserver 归档期实证，跨仓事故驱动修复）：
+ * machine 行的 tests 条目若在任一候选根（变更目录上溯项目根 / process.cwd()）都不存在——
+ * 多为卡片文本误提的不存在路径（如 verify 命令笔误被 deps 推断/绑定扫描捕获）——丢弃该
+ * 条目并 console.warn 留痕；agent 行不动（修理工/用户绑定如实保留）；行内条目全被滤光则
+ * 保留原行不滤（交由 apply/verify 的悬空闸门裁决，不在写侧静默删行）。
+ */
 export function writeChangeTrace(changeDir, changeName, rows) {
-  const normalized = rows.map(normalizeRow)
+  const projectRoots = (() => {
+    const cands = []
+    let d = changeDir
+    for (let i = 0; i < 3; i++) { d = dirname(d); cands.push(d.replace(/\\/g, '/')) }
+    cands.push(process.cwd().replace(/\\/g, '/'))
+    return [...new Set(cands)]
+  })()
+  const _existsSomewhere = (f) => projectRoots.some(root => existsSync(join(root, f)))
+  let _ghostDropped = []
+  const _filtered = rows.map(r => {
+    if (r.discovery === 'agent') return r
+    const files = (r.tests || []).map(t => testAnchorFile(t))
+    const ghosts = files.filter(f => !_existsSomewhere(f))
+    if (ghosts.length === 0) return r
+    const ghostKeys = new Set(ghosts)
+    _ghostDropped.push(...ghosts.map(g => `${r.row_id}: ${g}`))
+    const remaining = (r.tests || []).filter(t => !ghostKeys.has(testAnchorFile(t)))
+    return remaining.length > 0 ? { ...r, tests: remaining } : r
+  })
+  if (_ghostDropped.length > 0) {
+    console.warn('⚠️ [test-bindings] 幽灵绑定条目过滤：' + _ghostDropped.length + ' 个不存在的 tests 路径已从 machine 行丢弃（agent 行不动）：\n  ' + _ghostDropped.slice(0, 5).join('\n  '))
+  }
+  const normalized = _filtered.map(normalizeRow)
   const payload = JSON.stringify({
     schemaVersion: 1, change: changeName, rows: normalized,
   }, null, 2) + '\n'

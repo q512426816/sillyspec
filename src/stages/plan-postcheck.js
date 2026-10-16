@@ -88,9 +88,14 @@ export function parseAllowedPaths(content) {
     // 剥首尾成对反引号（坑7 家族：`src/a.js` 整项以反引号开头时 js-yaml/正则路径带 ` 匹配失败报未覆盖；
     // 与 change-list.js 的 cell 归一化同语义——剥两端包裹引号，不动路径内部字符）
     return blockMatch[1].match(/[ \t]*-[ \t]+(.+)/g)?.map(s => {
-      const raw = s.replace(/^[ \t]*-[ \t]+/, '').trim()
+      let raw = s.replace(/^[ \t]*-[ \t]+/, '').trim()
+      // 双横线归一化（2026-10-15-zcode-engine-appserver 归档期实证：手编辑残留 "-   - path"
+      // 嵌套子弹，剥一层外子弹后仍带 "- " 前缀 → 幽灵路径进 allow 面 → apply 越权误拦）。
+      // 循环剥除连续子弹前缀（"- " / "-   " 等任意空白形态）。
+      while (/^-[ \t]+/.test(raw)) raw = raw.replace(/^-+[ \t]+/, '').trim()
       return raw.replace(/^`([^`]*)`$/, '$1').replace(/^['"]|['"]$/g, '').trim()
-    }).filter(Boolean) || []
+    }).filter(Boolean)
+      .filter((v, i, arr) => arr.indexOf(v) === i) // 去重（同卡重复条目不产生重复 allow 项）
   }
   return []
 }
@@ -2308,6 +2313,12 @@ async function executePlanPostcheckRun(context, { autoAdoptBudget = 0 } = {}) {
   const miGen = await generatePlanModuleImpactFirstVersion(changeDir, cwd, specRoot)
   if (miGen.status === 'generated') {
     console.log(`  ✅ module-impact.md 首版已由 CLI 自动生成（归类 ${miGen.matchedCount} 个文件，未匹配 ${miGen.unmatchedCount} 个；影响类型列由 execute/verify 回填）`)
+  } else if (miGen.status === 'skipped' && (miGen.reason === 'no-module-map' || miGen.reason === 'no-declared-files')) {
+    // 坑 plan-module-impact-autogen-missing（2026-10-14 实证：指引说勿手写等 CLI 生成，
+    // 无 module-map/无声明清单时静默 skip → gate 报缺失空转两轮）。非 small 变更在此显式
+    // 告知生成前提缺失 + 逃生口径，agent 不再靠 gate 撞墙才知道。
+    console.warn(`  ⚠️ module-impact.md 首版未能自动生成（${miGen.reason === 'no-module-map' ? '本仓无 .sillyspec/docs/<项目>/modules/_module-map.yaml 模块图' : 'design.md 文件变更清单 main 段无声明文件'}）——gate 仍要求该文件在场`)
+    console.warn('     逃生口径：按 gate 模板手写骨架（章节标题逐字「## 模块影响矩阵」「## 未匹配文件」+「## 更新结果」表骨架 pending，execute/verify 回填），或先跑 sillyspec run scan 建模块图')
   }
 
   // ── 1e. 阶段完成产物校验（plan stage contract）──

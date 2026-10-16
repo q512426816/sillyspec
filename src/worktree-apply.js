@@ -2110,10 +2110,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
           if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
           return result;
         }
+        const _leftoverNote = Array.isArray(rollback.leftovers) && rollback.leftovers.length > 0
+          ? `\n⚠️ 回滚完整性自证：${rollback.leftovers.length} 个文件二次还原后仍有残留（${rollback.leftovers.join(', ')}）——工作区并非完全回滚前状态，后续操作请先核对 git status。`
+          : '';
         result.errors.push(
           `apply --3way 冲突：以下文件与主干「已提交」推进重叠，无法自动合并：\n` +
           `  ${rollback.conflicts.length > 0 ? rollback.conflicts.join('\n  ') : '(未能获取冲突文件列表)'}\n` +
-          `已回滚工作区到 apply 前状态（无半成品冲突标记）。\n` +
+          `已回滚工作区到 apply 前状态（无半成品冲突标记）。${_leftoverNote}\n` +
           `可选：用 --merge 自动三方合并兜底（git merge sillyspec/${changeName}，会引入合并提交）：\n` +
           `  sillyspec worktree apply ${changeName} --merge\n` +
           `或手动解决后重试。`
@@ -2395,7 +2398,28 @@ function rollbackApply(projectRoot, trackedFiles, newFiles, rawStderr = '') {
   }
   // 兜底：若 index 处于 unmerged 状态，重置 index（不影响工作区已还原的文件）
   try { gitQuiet(projectRoot, ['reset', '--quiet']); } catch {}
-  return { conflicts, error };
+  // 回滚完整性自证（2026-10-15-zcode-engine-appserver apply 实证：回滚声明后仍有 3 文件残留
+  // dirty——「已回滚」措辞与工作区实态不符，残段会以「未 commit 变更」形态阻断后续 apply）。
+  // patch 涉及文件逐个复核 status；残留则二次还原（checkout HEAD / 删新建），仍残留如实降级措辞。
+  let leftover = [];
+  try {
+    const st = gitQuiet(projectRoot, ['status', '--porcelain', '--', ...patchFiles]) || '';
+    leftover = st.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.slice(3).replace(/^"|"$/g, '').replace(/\\/g, '/'));
+  } catch { /* status 失败 → 不追加验证（保持旧行为） */ }
+  if (leftover.length > 0) {
+    for (const f of leftover) {
+      try {
+        if (trackedFiles.includes(f)) gitQuiet(projectRoot, ['checkout', 'HEAD', '--', f]);
+        else { const p2 = join(projectRoot, f); if (existsSync(p2)) unlinkSync(p2); }
+      } catch (e2) { error = (error ? error + '; ' : '') + `二次还原 ${f}: ${e2.message}`; }
+    }
+    // 复核
+    try {
+      const st2 = gitQuiet(projectRoot, ['status', '--porcelain', '--', ...patchFiles]) || '';
+      leftover = st2.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.slice(3).replace(/^"|"$/g, '').replace(/\\/g, '/'));
+    } catch { /* 保持 leftovers */ }
+  }
+  return { conflicts, error, leftovers: leftover };
 }
 
 /**
