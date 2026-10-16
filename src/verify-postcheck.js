@@ -3790,7 +3790,7 @@ export function trackVerifyResultRegression(specBase, changeName, absPath) {
     if (!prev || st.mtimeMs >= (prev.mtimeMs || 0)) {
       try {
         mkdirSync(join(specBase, '.runtime'), { recursive: true })
-        writeFileSync(hwmPath, JSON.stringify({ hash, mtimeMs: st.mtimeMs, ts: Date.now() }) + '\n')
+        writeFileSync(hwmPath, JSON.stringify({ hash, mtimeMs: Math.round(st.mtimeMs), ts: Date.now() }) + '\n')
       } catch { /* hwm 落盘失败 → 下次当首次（fail-open） */ }
     }
     return { regressed, prevMtime: prev && prev.mtimeMs ? prev.mtimeMs : null }

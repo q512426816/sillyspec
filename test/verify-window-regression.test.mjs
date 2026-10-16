@@ -85,7 +85,7 @@ test('③ verify-result.md 回退检测：内容变+mtime 回退 → regressed�
     utimesSync(vr, d0, d0)
     const r = trackVerifyResultRegression(specBase, 'c1', vr)
     assert.equal(r.regressed, true, '内容回退+mtime 倒流 → true')
-    assert.equal(r.prevMtime, t1, 'prevMtime 带回高水位时刻（告警文案用）')
+    assert.ok(Math.abs(r.prevMtime - t1) <= 1, `prevMtime 带回高水位时刻（±1ms 容差——utimesSync Date↔ms 往返在部分 fs 有 0.001 粒度差，实际 1792129593701.999 vs 1792129593702）: ${r.prevMtime}`)
     // 回退态不覆盖高水位；agent 重写（内容新+mtime 新）后恢复正常
     const t2 = Date.now()
     writeFileSync(vr, 'v3 重写报告\n')
