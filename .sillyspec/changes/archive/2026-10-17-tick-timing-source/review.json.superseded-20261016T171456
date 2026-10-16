@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-tick-timing-source",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "721263f0ee35a4702628153cf1c9084147b822bb",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 场景行判定序与其正文条款及实现在「跨度超窗+缺锚」组合上不一致（文档内部歧义，非承诺违反）",
+      "evidence": "requirements.md:17 场景把 no-anchor 列在「spread（跨度超窗）」之前，requirements.md:11 正文条款与实现（sentinel-assertions.js:232 起，先判 span>clusterWindowMs→spread 再判 no-anchor）把超窗 spread 前置且 design JSDoc 明示「超窗即铁证，无需存活锚」——正文/实现/设计三方一致，仅场景摘要行序歧义；该组合下行为差异只是一行确认行 vs 静默，均不阻断，绑定测试未覆盖该组合故无冲突断言。",
+      "location": ".sillyspec/changes/2026-10-17-tick-timing-source/requirements.md:17 / src/sentinel-assertions.js:232"
+    },
+    {
+      "severity": "P3",
+      "title": "concentrated 文案以时戳跨度冒充「距收口距离」——起始聚集形态下「集中在收口前 Xs 内」描述失真",
+      "evidence": "flow.js:1499 输出「N 格勾选时戳集中在收口前 ${spanMs}s 内（末尾集中勾选）」——spanMs 是首尾 tick 之差，不含距收口信息；勾选挤在变更开头、随后长时间编码的形态（跨度 90s、存活 2h）会被描述为「集中在收口前 90s 内」，与事实不符（该形态实为开头集中）。输出格式逐字符合 FR-02 场景措辞（规格自身的语义盲点），advisory 不阻断、提醒方向（未边干边勾）仍正确。",
+      "location": "src/flow.js:1499"
+    },
+    {
+      "severity": "P3",
+      "title": "task tick 回显提交命令在 tasks.md/侧车 untracked 时不可一次照抄——缺 git add 前置，「照抄即闭环」略超事实",
+      "evidence": "task-tick.js:182 模板 `git commit -m \"…\" -- <交付文件…> tasks.md 侧车`：git 对未 add（untracked）路径的 commit pathspec 报 \"pathspec did not match any file(s) known to git\"——而提醒触发条件恰是 tasks.md 零 git 提交（186 行「照抄即闭环」），该场景直接粘贴必先撞 git 报错再自行领悟 git add；FR-03 只承诺「可抄提交命令模板」（模板含占位符本需编辑），非 MUST 违反，属教学面可用性缺口（cli-copy-selfsufficient 探针）。",
+      "location": "src/task-tick.js:182"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-16T17:12:28Z"
+}

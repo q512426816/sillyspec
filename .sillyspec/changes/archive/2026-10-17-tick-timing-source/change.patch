@@ -1,0 +1,503 @@
+diff --git a/src/flow.js b/src/flow.js
+index 466262fe..c395a4a2 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -725,7 +725,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           `② 执行走任务循环：对 tasks.md 每个 pending 行——展示「Working on task N/M: <任务>」→ 做 → 测试绿后当场勾一格（\`- [ ]\`→\`- [x]\`：sillyspec task tick --change ${change} --task task-NN 或直接 Edit）→ 下一行；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
+-          `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；`,
++          `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；勾选修改与任务交付同一提交入库（pathspec 带上本变更 tasks.md——task tick 回显给现成命令）；`,
+           `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
+           `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
+           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+@@ -1138,13 +1138,13 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
+     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）；`,
+-    `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
++    `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证；task tick 回显会给现成命令）。`,
+     `✅ 任务面归你（工作分解契约，2026-10-07-thin-tasks-v3）：tasks.md 是你的工作队列——机器种子按真实实现路径改写`,
+     `   （每行=可独立完成并当场验证的一步：做什么+怎么验证；增删改随意，保持 \`- [ ] task-NN:\` 行形态）；`,
+     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
+     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
+     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
+-    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
++    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认；pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库，task tick 回显会给现成命令）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+     // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
+     // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
+     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
+@@ -1395,6 +1395,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
+     let _sentinelEvidenceComplete = false // 哨兵证据完备（status=complete——每格已勾任务均有 token/review.json）：单拍降级判据（2026-10-13-batchtick-evidence-domain-hint）
+     let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
++    // 勾选观测共享采集（2026-10-17-tick-timing-source）：watcher 事件流 + task-ticks.jsonl 侧车
++    // 一次读取——时点判定与勾选节奏门同源消费（此前节奏门单独读，现两门一份数据；检测逻辑
++    // 与优先序不变：事件流先判、空结果回退侧车突发）。侧车=CLI tick 逐格毫秒时戳事实源（随
++    // 归档进 git、不受观测盲窗影响）。任一源缺失按空（fail-open），绝不阻断收口。
++    const _tickObs = await (async () => {
++      try {
++        const { readWatcherEvents } = await import('./watcher.js')
++        const { detectBatchCheckCadence, detectTickBurst } = await import('./sentinel-assertions.js')
++        const stream = readWatcherEvents({ runtimeRoot, change })
++        let ticks = []
++        try { ticks = (await import('./timeline.js')).parseTickLog(readFileSync(join(changeDir, 'task-ticks.jsonl'), 'utf8')) } catch { /* 侧车缺失/不可读按空（fail-open） */ }
++        let batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
++        if (!batch) batch = detectTickBurst(ticks)
++        return { stream, ticks, batch }
++      } catch { return { stream: { exists: false, events: [] }, ticks: [], batch: null } }
++    })()
+     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
+     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
+     // 提交计数不因多行正文失真。
+@@ -1462,20 +1478,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         if (sent.status === 'complete') {
+           _sentinelEvidenceComplete = true
+           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+-          // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
+-          // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
+-          // 这是提醒边干边勾纪律，非假勾）。tasks.md 全程 untracked（未随交付提交）时同款提醒。
+-          // 首提锚定（2026-10-07-tick-timing-first-commit）：--reverse 全 history 首行=首次提交——
+-          // 旧实现 -n 1 取最近一次提交，每任务随交付提交 tasks.md 的渐进形态（首提早于 HEAD）
+-          // 被误报一把勾（完整实测实证：历史 0→1→2 渐进勾选仍出警告）。
++          // 勾选时点判定（2026-10-17-tick-timing-source 换源）：判据从「tasks.md git 首次提交
++          // == 收口最后提交」整体退役——git 历史形态被官方允许的 reset --soft 压扁无声摧毁
++          // （tick-timing-squash-blindspot 坑：并行会话压扁归档把边干边勾的渐进历史抹平，警告
++          // 照出，结构性误报；且 tasks.md 不进交付 pathspec 的纪律下「untracked 直至归档」恒
++          // 复现）。换源=task-ticks.jsonl 侧车墙钟时戳（detectTickTiming 纯函数：跨度超 120s
++          // =边干边勾确认；挤 ≤120s 短窗且变更存活 ≥10×跨度=末尾集中勾选）——墙钟时戳是文件
++          // 事实，压扁/rebase 不可改写，与「审计真相锚 change.patch sha256、不依赖 git 形态」
++          // 口径对齐。节奏门已检出单拍跳/突发时让位（防双重警告——其判定覆盖同一批格子）；
++          // 无侧车观测输出一行 task tick 教学（不再作结构性警告）；advisory 不阻断语义不变。
+           try {
+-            const _firstRaw = gitQuiet(cwd, ['log', '--reverse', '--format=%h', '--', tasksPath])
+-            const tasksIn = _firstRaw ? (String(_firstRaw).split(/\r?\n/).map((x) => x.trim()).filter(Boolean)[0] || null) : null
+-            const lastIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1'])
+-            if (!tasksIn) {
+-              console.warn(`⚠️ 勾选时点：tasks.md 未随交付提交（untracked 直至归档）——勾选证据链靠归档兜底，git 历史不可回溯；下次收口前 tasks.md 一并显式 pathspec 提交`)
+-            } else if (String(tasksIn).trim() === String(lastIn).trim()) {
+-              console.warn(`⚠️ 勾选时点：tasks.md 的首次 git 提交 == 收口最后提交（一把勾模式）——token 证据齐放行，但边干边勾是进度锚（OS Guardrails 同款纪律），下次完成单元即勾`)
++            if (_tickObs.batch) {
++              /* 节奏门将报单拍多格/突发——时点判定让位 */
++            } else {
++              const _baseRaw = st && st.baseline_commit ? gitQuiet(cwd, ['show', '-s', '--format=%ct', String(st.baseline_commit)]) : null
++              const _baseTs = Number(String(_baseRaw ?? '').trim())
++              const { detectTickTiming } = await import('./sentinel-assertions.js')
++              const t = detectTickTiming({ ticks: _tickObs.ticks, lifespanMs: Number.isFinite(_baseTs) && _baseTs > 0 ? Date.now() - _baseTs * 1000 : NaN })
++              if (t.status === 'concentrated') {
++                console.warn(`⚠️ 勾选时点：${t.count} 格勾选时戳集中在 ${Math.max(1, Math.round(t.spanMs / 1000))}s 短窗内（末尾集中勾选形态）——token 证据齐放行，但边干边勾是进度锚，下次完成单元即勾（task tick 回显含现成提交命令）`)
++              } else if (t.status === 'spread') {
++                console.log(`✅ 勾选时点：${t.count} 格勾选时戳跨度 ${Math.max(1, Math.round(t.spanMs / 60000))} 分钟——边干边勾确认（判据=task-ticks 侧车墙钟时戳，不受 git 压扁影响）`)
++              } else if (t.status === 'no-ticks') {
++                console.log(`ℹ️ 勾选时点：无 tick 时戳观测（未走 task tick）——下次勾选建议 sillyspec task tick --change ${change} --task task-NN（即时回显进度与现成提交命令）`)
++              }
++              /* 'single'/'no-anchor' 静默：单格无节奏可言；缺存活锚 fail-open 不判 */
+             }
+           } catch { /* 时点判定 fail-soft */ }
+         }
+@@ -1485,7 +1512,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // 任务面与实际不符可先改写 tasks.md（工作分解归 agent）再逐格勾。token 代勾（governance-
+         // autopilot）已在上方先跑：有证据未勾的格子已代勾，此处拒的纯属零证据未完成面。
+         if (sent.claimTotal > 0 && sent.checked < sent.claimTotal) {
+-          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json），全勾后重跑 flow done`)
++          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json；提交 pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库），全勾后重跑 flow done`)
+           console.error('   任务面与实际实现路径不符时，先改写 tasks.md（工作分解归你，增删改随意）再逐格勾；查下一任务：sillyspec task tick --change ' + `${change}` + ' --task task-NN（回显进度与指针）')
+           appendTelemetry({ sentinel: 'incomplete-tasks', checked: sent.checked, total: sent.claimTotal })
+           reportMidFail('ledger')
+@@ -1503,19 +1530,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：CLI 收口端快连点对事件流不可见（单格
+     // 精确跳），空结果时回退 task-ticks.jsonl 毫秒时戳判突发——CLI 与直接 Edit 两条路径同判。
+     try {
+-      const { readWatcherEvents } = await import('./watcher.js')
+-      const { detectBatchCheckCadence, detectTickBurst, resolveBatchTickAction } = await import('./sentinel-assertions.js')
+-      const stream = readWatcherEvents({ runtimeRoot, change })
+-      let batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+-      if (!batch) {
+-        // 侧车突发回退（2026-10-14-tick-burst-sidecar-gate）：事件流空结果时读 change 目录
+-        // task-ticks.jsonl（CLI tick 毫秒时戳事实源，随归档进 git、不受观测盲窗影响）判快连点；
+-        // 事件流结果优先不双重报告；侧车缺失/坏文件按无证据静默（fail-open）。
+-        try {
+-          const { parseTickLog } = await import('./timeline.js')
+-          batch = detectTickBurst(parseTickLog(readFileSync(join(changeDir, 'task-ticks.jsonl'), 'utf8')))
+-        } catch { /* 侧车缺失/不可读 → 无侧车证据（fail-open） */ }
+-      }
++      const { resolveBatchTickAction } = await import('./sentinel-assertions.js')
++      // 观测消费共享采集（2026-10-17-tick-timing-source）：事件流/侧车/突发判定已在前文哨兵段
++      // 前置采集为 _tickObs（时点判定与节奏门同源一份数据；读取仅前移，检测逻辑与优先序不变
++      // ——事件流先判、空结果回退侧车突发，侧车缺失按空 fail-open）。
++      const stream = _tickObs.stream
++      const batch = _tickObs.batch
+       if (batch) {
+         // 代勾计数取「本拍实时代勾 ∨ 持久化代勾」较大者（二轮 P2-B：重入漂移防护）；决策纯函数
+         // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index a61863cc..5ce84a72 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -207,6 +207,43 @@ export function detectTickBurst(tickLog, opts = {}) {
+   };
+ }
+ 
++/**
++ * 勾选时点判定·换源版（2026-10-17-tick-timing-source，纯函数）：task-ticks.jsonl 侧车的逐格
++ * 墙钟时戳 → 勾选是「边干边勾」还是「末尾集中」。旧判据（tasks.md git 首次提交 == 收口最后
++ * 提交）已退役——git 历史形态被官方允许的 reset --soft 压扁无声摧毁（tick-timing-squash-
++ * blindspot 坑：边干边勾的渐进提交被并行会话压扁后警告照出，结构性误报；且 tasks.md 不进
++ * 交付 pathspec 的纪律下「untracked 直至归档」恒复现）。墙钟时戳是侧车文件事实，压扁/
++ * rebase 均不可改写——与「审计真相锚 change.patch sha256、不依赖 git 形态」口径对齐。
++ * 判定序（豁免优先）：
++ *   'no-ticks'    侧车无记录（agent 全程直接 Edit）——不判（调用方给一行 task tick 教学）；
++ *   'single'      仅 1 格——单格无节奏可言；
++ *   'spread'      时戳跨度 > clusterWindowMs（缺省 120s）——天然分散，边干边勾确认
++ *                 （超窗即铁证，无需存活锚）；
++ *   'no-anchor'   lifespanMs 非有限或 ≤0（baseline 缺失）——fail-open 不判（防误报）；
++ *   'concentrated' 跨度 ≤ clusterWindowMs 且 lifespanMs ≥ ratio×max(跨度,1ms)（缺省 10）
++ *                 ——格子全挤在收口前短窗且变更活得够久，末尾集中勾选形态；
++ *   其余（挤短窗但存活比不足）→ 'spread'——快变更快勾是合法形态，不告。
++ * 输入 ticks 为 [{ts, task}]（parseTickLog 产物或同形）；行序不保证，内部按 ts 排序。
++ * 坏行（ts 非有限/≤0）静默剔除。watcher 采样事件刻意不作判据（部分观测会把分散勾选采样
++ * 成尾窗聚集，与采样合并跳系列坑同源——缺观测宁可教学不判）。
++ * @param {{ticks?:Array<{ts:number,task:string}>, lifespanMs?:number, clusterWindowMs?:number, ratio?:number}} args
++ * @returns {{status:'spread'|'concentrated'|'single'|'no-ticks'|'no-anchor', count:number, spanMs:number}}
++ */
++export function detectTickTiming({ ticks, lifespanMs, clusterWindowMs = 120_000, ratio = 10 } = {}) {
++  const list = (Array.isArray(ticks) ? ticks : [])
++    .map((r) => Number(r && r.ts))
++    .filter((ts) => Number.isFinite(ts) && ts > 0)
++    .sort((a, b) => a - b);
++  if (list.length === 0) return { status: 'no-ticks', count: 0, spanMs: 0 };
++  if (list.length === 1) return { status: 'single', count: 1, spanMs: 0 };
++  const spanMs = list[list.length - 1] - list[0];
++  if (spanMs > clusterWindowMs) return { status: 'spread', count: list.length, spanMs };
++  const life = Number(lifespanMs);
++  if (!Number.isFinite(life) || life <= 0) return { status: 'no-anchor', count: list.length, spanMs };
++  if (life >= ratio * Math.max(spanMs, 1)) return { status: 'concentrated', count: list.length, spanMs };
++  return { status: 'spread', count: list.length, spanMs };
++}
++
+ /**
+  * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
+  * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
+diff --git a/src/task-tick.js b/src/task-tick.js
+index 3a6cf14a..5ce6c467 100644
+--- a/src/task-tick.js
++++ b/src/task-tick.js
+@@ -168,6 +168,27 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence
+     ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
+     : `｜🎉 ${r.total}/${r.total} 全勾——可收口：sillyspec flow done --change ${changeName}`
+   console.log(`${r.kind === 'ticked' ? '✅ 已勾' : 'ℹ️ 已是勾选态（幂等跳过写盘）'}（${r.checked}/${r.total}）${nextTip}`)
++  if (r.kind === 'ticked') {
++    // 勾选随交付入库教学（2026-10-17-tick-timing-source，坑 tick-timing-squash-blindspot 根因 1/3
++    // 断链处）：翻格后给现成提交命令——pathspec 含 tasks.md 与侧车（勾选修改与任务交付同一提交
++    // 入库，消息占位带 task-NN token），把纪律变成可抄的命令；并当场提醒「此前勾选仍未进
++    // git」（已勾 ≥2 格且 tasks.md 零提交）——反馈不再等到 flow done 终点。best-effort：
++    // git 不可用（非 git 目录/失败返回 null）只给命令不给提醒，失败不影响翻格与 exit code。
++    try {
++      const { relative } = await import('node:path')
++      const rel = (p) => relative(cwd, p).split('\\').join('/')
++      const sidecar = join(changesRoot, changeName, 'task-ticks.jsonl')
++      const paths = `${rel(tasksPath)}${existsSync(sidecar) ? ` ${rel(sidecar)}` : ''}`
++      console.log(`📦 勾选随交付入库（add 与 commit 同一清单——勾选修改随任务交付同一提交）：`)
++      console.log(`   git add -- <交付文件…> ${paths}`)
++      console.log(`   git commit -m "<本任务交付概括> (${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${paths}`)
++      const { gitQuiet } = await import('./git-helper.js')
++      const touched = gitQuiet(cwd, ['log', '-n', '1', '--format=%h', '--', tasksPath])
++      if (r.checked >= 2 && touched === '') {
++        console.log(`ℹ️ tasks.md 尚无任何提交（此前勾选未随交付入库）——上面两行命令已把它带进清单，照抄即闭环`)
++      }
++    } catch { /* 教学面 best-effort：失败不影响翻格 */ }
++  }
+   return r
+ }
+ 
+diff --git a/test/batch-tick-gate.test.mjs b/test/batch-tick-gate.test.mjs
+index 48c2e42e..4a6ad092 100644
+--- a/test/batch-tick-gate.test.mjs
++++ b/test/batch-tick-gate.test.mjs
+@@ -265,7 +265,9 @@ test('②f detectTickBurst 纯函数：快连点/渐进/混合/坏行/同任务
+ 
+ test('②h 接线钉：节奏门回退侧车（flow.js 源码锚）', () => {
+   const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
+-  assert.ok(src.includes('detectTickBurst(parseTickLog('), '事件流空结果回退侧车突发检测')
++  // 2026-10-17-tick-timing-source：观测采集前移为 _tickObs 共享（时点判定与节奏门一份数据），
++  // 锚从内联调用形状改为采集点形状——行为等价（②g e2e 钉真行为）。
++  assert.ok(src.includes('batch = detectTickBurst(ticks)'), '事件流空结果回退侧车突发检测（_tickObs 共享采集）')
+   assert.ok(src.includes('task-ticks.jsonl'), '侧车文件面在场（节奏门消费）')
+   assert.ok(src.includes("batch.source === 'tick-burst'"), '拒收文案来源感知（侧车时戳 vs 事件流）')
+ })
+diff --git a/test/task-tick.test.mjs b/test/task-tick.test.mjs
+index c9c1977c..c0422baf 100644
+--- a/test/task-tick.test.mjs
++++ b/test/task-tick.test.mjs
+@@ -158,6 +158,36 @@ test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++// ── ⑧ 勾选随交付入库回显（2026-10-17-tick-timing-source，FR-03）──
++// 坑 tick-timing-squash-blindspot 根因 1/3 断链处：勾选动作与提交动作在执行循环里天然分离——
++// 翻格后给现成提交命令（pathspec 含 tasks.md 与侧车）+ 此前勾选未入库当场提醒。
++
++test('⑧ tick 回显提交命令模板与未入库提醒：命令含 task-NN 占位与 tasks.md/侧车 pathspec；已勾≥2 且 tasks.md 零提交 → 提醒；入库后提醒消失；幂等零教学重复', () => {
++  const { cwd, cli } = makeRepo()
++  const change = '2026-10-01-vtt-8'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
++  const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
++  assert.equal(t1.status, 0, t1.stderr)
++  assert.match(t1.stdout, /git commit -m "<本任务交付概括> \(task-01\)"/, '提交命令模板（消息占位带 token）')
++  assert.match(t1.stdout, /\.sillyspec\/changes\/2026-10-01-vtt-8\/tasks\.md/, 'pathspec 含 tasks.md（相对路径）')
++  assert.match(t1.stdout, /task-ticks\.jsonl/, 'pathspec 含侧车')
++  assert.doesNotMatch(t1.stdout, /未随交付入库/, '首格勾选零历史——不提醒')
++  const t2 = cli(['task', 'tick', '--change', change, '--task', 'task-02'])
++  assert.equal(t2.status, 0, t2.stderr)
++  assert.match(t2.stdout, /\(task-02\)/, '模板 token 随任务')
++  assert.match(t2.stdout, /未随交付入库/, '已勾≥2 且 tasks.md 零 git 提交 → 当场提醒')
++  // tasks.md 随交付入库后提醒消失
++  execFileSync('git', ['add', '--', join(cwd, '.sillyspec', 'changes', change, 'tasks.md')], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'c'], { cwd, stdio: 'pipe' })
++  const t3 = cli(['task', 'tick', '--change', change, '--task', 'task-03'])
++  assert.equal(t3.status, 0, t3.stderr)
++  assert.doesNotMatch(t3.stdout, /未随交付入库/, 'tasks.md 已入库——不再提醒')
++  const again = cli(['task', 'tick', '--change', change, '--task', 'task-03'])
++  assert.match(again.stdout, /已是勾选态/)
++  assert.doesNotMatch(again.stdout, /git commit -m/, '幂等分支零教学重复')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ test('⑦b 侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）', () => {
+   const { cwd, cli } = makeRepo()
+   const change = '2026-10-01-vtt-8'
+diff --git a/test/tick-loop-nudge.test.mjs b/test/tick-loop-nudge.test.mjs
+index 1f168b97..fb2ac134 100644
+--- a/test/tick-loop-nudge.test.mjs
++++ b/test/tick-loop-nudge.test.mjs
+@@ -7,7 +7,9 @@
+  *   ② 勾选纪律指引在协议提示面（2026-10-07-thin-tasks-v3 起从 tasks.md 文件内指令迁至
+  *      flow start 横幅——常驻面改为每次协议输出都看到；文件内零指令）；
+  *   ③ 简报交付纪律含 tasks.md pathspec 提交要求（R19 发现：untracked 直至归档）；
+- *   ④ 哨兵时点判定：一把勾（tasks.md 首次提交==最后提交）→ warn 放行；untracked → 同款 warn。
++ *   ④ 哨兵时点判定（2026-10-17-tick-timing-source 换源）：git 历史判据（首提交==HEAD/
++ *      untracked）退役，换 task-ticks.jsonl 侧车墙钟时戳 detectTickTiming——末尾集中 warn/
++ *      边干边勾确认行/无观测教学行；行为级用例见 tick-timing-source.test.mjs，此处源码钉。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -38,14 +40,16 @@ test('③ 简报交付纪律含 tasks.md 提交要求', () => {
+   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
+   assert.ok(src.includes('tasks.md 一并显式 pathspec 提交'), '交付纪律行含 tasks.md')
+   assert.ok(src.includes('勾选证据进 git 历史'), '理由（R19 实证）')
++  assert.ok(src.includes('task tick 回显'), '现成命令指引（2026-10-17-tick-timing-source 反馈前移）')
+   assert.ok(src.includes('执行期勾选纪律') || src.includes('自愿查看/恢复面'), '简报交叉引用 status（自愿语义，D-007 口径）')
+ })
+ 
+-test('④ 哨兵时点判定钉（一把勾 warn / untracked warn / fail-soft）', () => {
++test('④ 哨兵时点判定钉（2026-10-17-tick-timing-source 换源——git 判据退役、侧车时戳接线）', () => {
+   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
+-  assert.ok(src.includes('一把勾模式'), '一把勾模式 warn 文案')
+-  assert.ok(src.includes('tasks.md 未随交付提交'), 'untracked warn 文案')
+-  assert.ok(src.includes("['log', '--reverse', '--format=%h', '--', tasksPath]"), 'tasks.md 首次提交锚定（--reverse 全 history 首行——2026-10-07-tick-timing-first-commit）')
+-  assert.ok(!src.includes("['log', '--format=%h', '-n', '1', '--', tasksPath]"), '旧最近一次提交锚定零残留（渐进提交形态曾误报一把勾）')
++  assert.ok(src.includes('detectTickTiming'), '时点判定消费 detectTickTiming（侧车墙钟时戳判据）')
++  assert.ok(src.includes('末尾集中勾选'), '末尾集中 warn 文案')
++  assert.ok(src.includes('边干边勾确认'), '边干边勾确认行')
+   assert.ok(src.includes('时点判定 fail-soft'), 'fail-soft')
++  assert.ok(!src.includes("['log', '--reverse', '--format=%h', '--', tasksPath]"), 'git 首提锚定零残留（压扁摧毁判据——坑 tick-timing-squash-blindspot）')
++  assert.ok(!src.includes('tasks.md 未随交付提交'), 'untracked 结构性警告零残留（tasks.md 不进交付 pathspec 纪律下恒复现）')
+ })
+diff --git a/test/tick-timing-source.test.mjs b/test/tick-timing-source.test.mjs
+new file mode 100644
+index 00000000..ce6e4991
+--- /dev/null
++++ b/test/tick-timing-source.test.mjs
+@@ -0,0 +1,192 @@
++/**
++ * tick-timing-source.test.mjs — 勾选时点判定换源（2026-10-17-tick-timing-source）
++ *
++ * 验收面：
++ *   ① detectTickTiming 纯函数判定序与阈值（FR-01）：no-ticks/single/no-anchor/spread/
++ *      concentrated + 挤窗但存活比不足的快变更放行 + opts 阈值覆写 + 乱序输入；
++ *   ② flow done 时点判定换源（FR-02）：侧车时戳分散 + tasks.md git 压扁形态 → 不再出
++ *      「一把勾」警告、出「边干边勾确认」行；侧车集中短窗 → 末尾集中 advisory；
++ *   ④ 教学文案口径断言（FR-04）：flow start 横幅 / 任务未全勾拒收行含「pathspec 带上
++ *      本变更 tasks.md（同一提交入库）」口径。
++ *
++ * 坑背景（multi-agent-platform docs/sillyspec/tick-timing-squash-blindspot）：旧判据读
++ * tasks.md git 首提交==HEAD，官方允许的 reset --soft 压扁会无声摧毁该依据（结构性误报）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, appendFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++import { detectTickTiming } from '../src/sentinel-assertions.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++// ── ① detectTickTiming 纯函数（FR-01）──────────────────────────────────────────
++
++test('detectTickTiming：no-ticks / single / no-anchor 判定序', () => {
++  assert.deepEqual(detectTickTiming({ ticks: [], lifespanMs: 3600_000 }), { status: 'no-ticks', count: 0, spanMs: 0 })
++  assert.equal(detectTickTiming({ ticks: [{ ts: 1000, task: 'task-01' }], lifespanMs: 3600_000 }).status, 'single')
++  // 缺锚 fail-open：lifespanMs 非有限 / ≤0 → no-anchor（不判，防短变更误报）
++  const two = [{ ts: 1000, task: 'task-01' }, { ts: 2000, task: 'task-02' }]
++  assert.equal(detectTickTiming({ ticks: two, lifespanMs: NaN }).status, 'no-anchor')
++  assert.equal(detectTickTiming({ ticks: two }).status, 'no-anchor')
++  assert.equal(detectTickTiming({ ticks: two, lifespanMs: 0 }).status, 'no-anchor')
++})
++
++test('detectTickTiming：时戳分散 → spread（跨度超簇窗）', () => {
++  const t0 = 1_700_000_000_000
++  const ticks = [
++    { ts: t0, task: 'task-01' },
++    { ts: t0 + 60_000, task: 'task-02' },
++    { ts: t0 + 121_000, task: 'task-03' },
++  ]
++  const r = detectTickTiming({ ticks, lifespanMs: 3600_000 })
++  assert.equal(r.status, 'spread')
++  assert.equal(r.count, 3)
++  assert.equal(r.spanMs, 121_000)
++})
++
++test('detectTickTiming：挤尾窗且存活比足 → concentrated；快变更放行 → spread', () => {
++  const t0 = 1_700_000_000_000
++  const clustered = [
++    { ts: t0, task: 'task-01' },
++    { ts: t0 + 30_000, task: 'task-02' },
++    { ts: t0 + 90_000, task: 'task-03' },
++  ]
++  // 跨度 90s ≤ 120s，存活 2h ≥ 10×90s → 末尾集中
++  assert.equal(detectTickTiming({ ticks: clustered, lifespanMs: 7200_000 }).status, 'concentrated')
++  // 同簇但变更只活了 10 分钟 < 10×90s=15 分钟 → 快变更快勾，合法形态放行
++  assert.equal(detectTickTiming({ ticks: clustered, lifespanMs: 600_000 }).status, 'spread')
++  // 挤窗且跨度极小（1s）：存活 2h ≥ 10×1s → concentrated（一把点形态）
++  const burst = [
++    { ts: t0, task: 'task-01' },
++    { ts: t0 + 500, task: 'task-02' },
++    { ts: t0 + 1000, task: 'task-03' },
++  ]
++  assert.equal(detectTickTiming({ ticks: burst, lifespanMs: 7200_000 }).status, 'concentrated')
++})
++
++test('detectTickTiming：opts 阈值覆写与乱序输入', () => {
++  const t0 = 1_700_000_000_000
++  const ticks = [
++    { ts: t0 + 50_000, task: 'task-02' },
++    { ts: t0, task: 'task-01' },
++  ]
++  // 乱序行序：排序后跨度 50s，缺省窗 120s 内、存活 1h ≥ 10×50s → concentrated
++  assert.equal(detectTickTiming({ ticks, lifespanMs: 3600_000 }).status, 'concentrated')
++  // 窗覆写为 10s：跨度 50s 超窗 → spread
++  assert.equal(detectTickTiming({ ticks, lifespanMs: 3600_000, clusterWindowMs: 10_000 }).status, 'spread')
++  // ratio 覆写为 100：存活 1h < 100×50s → spread（放行）
++  assert.equal(detectTickTiming({ ticks, lifespanMs: 3600_000, ratio: 100 }).status, 'spread')
++})
++
++// ── ② flow done 时点判定换源（FR-02）──────────────────────────────────────────
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'ttt-'))
++  // 初始提交（=flow start 的 baseline_commit）注入 2h 前时戳：集中形态用例需要
++  // 「变更存活 ≥10×时戳跨度」的存活锚（committer date 是 detectTickTiming 的存活源）。
++  const OLD = new Date(Date.now() - 2 * 3600_000).toISOString()
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_DATE: OLD, GIT_COMMITTER_DATE: OLD } })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n')
++  writeFileSync(join(cwd, 'exit0.js'), 'process.exit(0)\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const g2 = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  return { cwd, cli, g: g2 }
++}
++
++function fillSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  const dText = readFileSync(dp, 'utf8')
++  if (/<!--AGENT:槽\d+/.test(dText)) {
++    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：夹具'))
++    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 夹具行为\nGiven x\nWhen y\nThen z')
++      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：夹具'))
++  } else {
++    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：夹具'))
++    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（夹具行为句）')
++      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：夹具'))
++  }
++}
++
++test('flow done 换源：侧车分散时戳 + tasks.md 压扁形态 → 无一把勾警告，出边干边勾确认行', () => {
++  const { cwd, cli } = makeRepo()
++  try {
++    const change = '2026-10-17-fx-squash'
++    const r = cli(['flow', 'start', '--change', change, '--input', '夹具压扁回归验证变更标题行\n动机\n\n成功标准：\n- 夹具行为'])
++    assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
++    fillSlots(cwd, change)
++    const ap = cli(['flow', 'approve', '--change', change, '--self-approved'])
++    assert.equal(ap.status, 0, `approve 失败: ${ap.stdout}\n${ap.stderr}`)
++    const base = join(cwd, '.sillyspec', 'changes', change)
++    // 勾两格（CLI tick 侧车留痕）；时戳人工分散写侧车（跨 10 分钟 > 120s 簇窗）
++    const t0 = Date.now() - 3600_000
++    writeFileSync(join(base, 'task-ticks.jsonl'), [
++      JSON.stringify({ ts: t0, task: 'task-01', source: 'task-tick' }),
++      JSON.stringify({ ts: t0 + 600_000, task: 'task-02', source: 'task-tick' }),
++      '',
++    ].join('\n'))
++    const tm = readFileSync(join(base, 'tasks.md'), 'utf8')
++    const ticked = tm.replace(/^- \[ \] (task-\d+:)/gm, '- [x] $1')
++    writeFileSync(join(base, 'tasks.md'), ticked)
++    // 压扁形态：tasks.md 只在收口前的单笔提交里首现（首提交 == HEAD 形态）——旧判据必误报
++    execFileSync('git', ['add', '--', join(base, 'tasks.md'), join(base, 'task-ticks.jsonl')], { cwd, stdio: 'pipe' })
++    execFileSync('git', ['commit', '-q', '-m', '交付：夹具勾选与侧车 (task-01/02)'], { cwd, stdio: 'pipe' })
++    const done = cli(['flow', 'done', '--change', change])
++    const out = `${done.stdout}\n${done.stderr}`
++    assert.ok(!out.includes('一把勾模式'), `旧判据误报仍在: ${out}`)
++    assert.ok(!out.includes('untracked 直至归档'), `结构性 untracked 警告仍在: ${out}`)
++    assert.ok(out.includes('边干边勾确认'), `缺确认行: ${out}`)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('flow done 换源：侧车集中短窗且存活比足 → 末尾集中勾选 advisory（不阻断）', () => {
++  const { cwd, cli, g } = makeRepo()
++  try {
++    const change = '2026-10-17-fx-cluster'
++    const r = cli(['flow', 'start', '--change', change, '--input', '夹具末尾集中勾选验证标题\n动机\n\n成功标准：\n- 夹具行为'])
++    assert.equal(r.status, 0, `start 失败: ${r.stdout}\n${r.stderr}`)
++    fillSlots(cwd, change)
++    const ap = cli(['flow', 'approve', '--change', change, '--self-approved'])
++    assert.equal(ap.status, 0, `approve 失败: ${ap.stdout}\n${ap.stderr}`)
++    const base = join(cwd, '.sillyspec', 'changes', change)
++    // 侧车时戳跨度 90s（>60s 突发窗——节奏门不截走；≤120s 簇窗）；baseline 提交 2h 前
++    // （makeRepo 注入）→ 存活 ≈2h ≥ 10×90s → 末尾集中形态
++    const now = Date.now()
++    writeFileSync(join(base, 'task-ticks.jsonl'), [
++      JSON.stringify({ ts: now - 90_000, task: 'task-01', source: 'task-tick' }),
++      JSON.stringify({ ts: now, task: 'task-02', source: 'task-tick' }),
++      '',
++    ].join('\n'))
++    const tm = readFileSync(join(base, 'tasks.md'), 'utf8')
++    writeFileSync(join(base, 'tasks.md'), tm.replace(/^- \[ \] (task-\d+:)/gm, '- [x] $1'))
++    g(['add', '--', join(base, 'tasks.md'), join(base, 'task-ticks.jsonl')])
++    g(['commit', '-q', '-m', '交付：夹具勾选与侧车 (task-01/02)'])
++    const done = cli(['flow', 'done', '--change', change])
++    const out = `${done.stdout}\n${done.stderr}`
++    assert.ok(out.includes('末尾集中勾选'), `缺末尾集中 advisory: ${out}`)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++// ── ④ 教学文案口径断言（FR-04）───────────────────────────────────────────────
++
++test('文案口径：flow start 横幅与拒收行含「pathspec 带上本变更 tasks.md（同一提交入库）」', async () => {
++  const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.ok(src.includes('pathspec 带上本变更 tasks.md'), 'flow.js 教学文案缺同一提交入库口径')
++  assert.ok(src.includes('勾选修改与任务交付同一提交入库'), 'flow.js 教学文案缺口径短句')
++  assert.ok(src.includes('task tick 回显'), 'flow.js 教学文案缺 task tick 现成命令指引')
++})

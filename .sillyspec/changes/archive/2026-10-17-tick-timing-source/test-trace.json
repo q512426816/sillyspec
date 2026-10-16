@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-tick-timing-source",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-17-tick-timing-source:flow:测试绑定FR-01",
+      "tests": [
+        "test/tick-timing-source.test.mjs「detectTickTiming 判定序与阈值（含覆写/快变更放行）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-tick-timing-source"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-17-tick-timing-source:flow:测试绑定FR-02",
+      "tests": [
+        "test/tick-timing-source.test.mjs「flow done 时点判定换源——压扁形态回归与末尾集中 advisory」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-tick-timing-source"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-17-tick-timing-source:flow:测试绑定FR-03",
+      "tests": [
+        "test/task-tick.test.mjs「tick 回显提交命令模板与未入库提醒」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-tick-timing-source"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-17-tick-timing-source:flow:测试绑定FR-04",
+      "tests": [
+        "test/tick-timing-source.test.mjs「教学文案口径断言（横幅/收编教学/拒收行）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-tick-timing-source"
+    }
+  ]
+}

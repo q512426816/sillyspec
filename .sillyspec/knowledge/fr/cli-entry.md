@@ -10040,3 +10040,88 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-15-harvest-title-clarify/requirements.md#FR-03
 最近确认：ca4632b278f118f62ed0717db6659a2128493e55
+
+## FR-cli-entry-531 detectTickTiming 纯函数：时戳分散→spread；挤尾窗且变更存活≥10×跨度→concentrated；单格/无观测/无锚各有态，缺锚 fail-open
+变更：2026-10-17-tick-timing-source
+状态：active
+摘要：判定序与阈值
+场景正文：
+- 场景：判定序与阈值 — Given 侧车时戳清单与变更存活时长；When 调用 detectTickTiming；Then 按 no-ticks → single → spread（跨度超窗——超窗即铁证无需存活锚）→ no-anchor（缺锚 fail-open）→ concent
+全文：.sillyspec/changes/archive/2026-10-17-tick-timing-source/requirements.md#FR-01
+最近确认：77f2b2ef9acf74cbfd0ce7afaf75bdbf2a82d417
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-tick-timing-source:flow:测试绑定FR-01
+  tests: test/tick-timing-source.test.mjs「detectTickTiming 判定序与阈值（含覆写/快变更放行）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-tick-timing-source
+  status: active
+
+## FR-cli-entry-532 压扁形态回归：侧车时戳分散的变更在 git 历史被压扁后 flow done 不再出一把勾警告（结构性误报消除）
+变更：2026-10-17-tick-timing-source
+状态：active
+摘要：压扁形态不再误报；末尾集中仍提醒
+场景正文：
+- 场景：压扁形态不再误报 — Given 变更侧车含 ≥2 格分散时戳（跨度 > 120s）且 tasks.md 仅有收口时点一次 git 提交（压扁形态）；When flow done；Then 无「一把勾」警告，输出「边干边勾确认（判据=task-ticks 侧车墙钟时戳，不受 git 压扁影响）」确认行
+- 场景：末尾集中仍提醒 — Given 变更侧车时戳集中在 ≤120s 窗内且变更存活 ≥10×跨度；When flow done；Then 输出「勾选时点：N 格勾选时戳集中在 …s 短窗内（末尾集中勾选形态）」advisory，流程放行不被阻断
+全文：.sillyspec/changes/archive/2026-10-17-tick-timing-source/requirements.md#FR-02
+最近确认：77f2b2ef9acf74cbfd0ce7afaf75bdbf2a82d417
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-tick-timing-source:flow:测试绑定FR-02
+  tests: test/tick-timing-source.test.mjs「flow done 时点判定换源——压扁形态回归与末尾集中 advisory」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-tick-timing-source
+  status: active
+
+## FR-cli-entry-533 task tick 翻格成功回显含可抄提交命令（消息模板带 task-NN、pathspec 含 tasks.md 与 task-ticks.jsonl）
+变更：2026-10-17-tick-timing-source
+状态：active
+摘要：回显与提醒
+场景正文：
+- 场景：回显与提醒 — Given git 仓内在途变更，task-01 已勾、tasks.md 零 git 提交；When task tick --task task-02；Then 回显含 `git commit -m "<本任务交付概括> (task-02)"` 且 pathspec 含 tasks.md 与 task-ticks.jso
+全文：.sillyspec/changes/archive/2026-10-17-tick-timing-source/requirements.md#FR-03
+最近确认：77f2b2ef9acf74cbfd0ce7afaf75bdbf2a82d417
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-tick-timing-source:flow:测试绑定FR-03
+  tests: test/task-tick.test.mjs「tick 回显提交命令模板与未入库提醒」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-tick-timing-source
+  status: active
+
+## FR-cli-entry-534 横幅/教学/拒收文案明确勾选修改与任务交付同一提交入库口径
+变更：2026-10-17-tick-timing-source
+状态：active
+摘要：文案口径一致
+场景正文：
+- 场景：文案口径一致 — Given 任意 thin 变更执行 flow start / task 未全勾触发拒收；When 读取横幅与拒收输出；Then 三处文案均含「pathspec 带上本变更 tasks.md（同一提交入库）」口径与 task tick 现成命令指引
+全文：.sillyspec/changes/archive/2026-10-17-tick-timing-source/requirements.md#FR-04
+最近确认：77f2b2ef9acf74cbfd0ce7afaf75bdbf2a82d417
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-tick-timing-source:flow:测试绑定FR-04
+  tests: test/tick-timing-source.test.mjs「教学文案口径断言（横幅/收编教学/拒收行）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-tick-timing-source
+  status: active

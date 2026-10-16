@@ -1,0 +1,136 @@
+{
+  "change": "2026-10-17-tick-timing-source",
+  "baseline": "97c397bbefdf36dfa07d00eb4d8bdba68c56d1ee",
+  "head": "77f2b2ef9acf74cbfd0ce7afaf75bdbf2a82d417",
+  "files": [
+    "src/flow.js",
+    "src/sentinel-assertions.js",
+    "src/task-tick.js",
+    "test/batch-tick-gate.test.mjs",
+    "test/task-tick.test.mjs",
+    "test/tick-loop-nudge.test.mjs",
+    "test/tick-timing-source.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 343,
+    "deletions": 37
+  },
+  "savedAt": "2026-10-16T17:14:57.246Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 2,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "97c397bbefdf36dfa07d00eb4d8bdba68c56d1ee",
+    "totals": {
+      "files": 7,
+      "additions": 343,
+      "deletions": 37
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 50,
+        "deletions": 30,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sentinel-assertions.js",
+        "additions": 37,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 21,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/batch-tick-gate.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-tick.test.mjs",
+        "additions": 30,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/tick-loop-nudge.test.mjs",
+        "additions": 10,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/tick-timing-source.test.mjs",
+        "additions": 192,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9d8f9075fad6e6d7a9b67466547f722e5634b2d03ce0bbe23e602dd581ac137c",
+  "patchStatus": "ok"
+}
