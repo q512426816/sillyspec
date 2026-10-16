@@ -725,7 +725,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           `② 执行走任务循环：对 tasks.md 每个 pending 行——展示「Working on task N/M: <任务>」→ 做 → 测试绿后当场勾一格（\`- [ ]\`→\`- [x]\`：sillyspec task tick --change ${change} --task task-NN 或直接 Edit）→ 下一行；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
-          `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；`,
+          `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；勾选修改与任务交付同一提交入库（pathspec 带上本变更 tasks.md——task tick 回显给现成命令）；`,
           `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
           `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
@@ -1138,13 +1138,13 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）；`,
-    `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
+    `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证；task tick 回显会给现成命令）。`,
     `✅ 任务面归你（工作分解契约，2026-10-07-thin-tasks-v3）：tasks.md 是你的工作队列——机器种子按真实实现路径改写`,
     `   （每行=可独立完成并当场验证的一步：做什么+怎么验证；增删改随意，保持 \`- [ ] task-NN:\` 行形态）；`,
     `   执行循环：对每个未勾行 Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一行——CLI 以 checkbox 为进度状态机`,
     `   （sillyspec task tick --change ${change} --task task-NN 即时回显进度 N/M 与下一任务指针，flow status 同源；或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`），watcher 实时上平台。`,
     `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据只读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
-    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+    `   勾选是收口证据面：每格勾选要有对应提交（消息带 task-NN——逐个列出或 /、，连写如 task-01/02/03，「task-01..task-05」区间写法不认；pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库，task tick 回显会给现成命令）或 review.json，全勾但零证据会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
     // 任务拟法指引（2026-10-12-closeout-task-guidance，三次「哨兵抓收口型任务零证据」复盘）：
     // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
@@ -1512,7 +1512,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 任务面与实际不符可先改写 tasks.md（工作分解归 agent）再逐格勾。token 代勾（governance-
         // autopilot）已在上方先跑：有证据未勾的格子已代勾，此处拒的纯属零证据未完成面。
         if (sent.claimTotal > 0 && sent.checked < sent.claimTotal) {
-          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json），全勾后重跑 flow done`)
+          console.error(`🚫 任务未全勾（${sent.checked}/${sent.claimTotal}）——tasks.md 是完成状态机：完成一件勾一格（每格勾选需对应提交带 task-NN token 或 review.json；提交 pathspec 带上本变更 tasks.md——勾选修改与任务交付同一提交入库），全勾后重跑 flow done`)
           console.error('   任务面与实际实现路径不符时，先改写 tasks.md（工作分解归你，增删改随意）再逐格勾；查下一任务：sillyspec task tick --change ' + `${change}` + ' --task task-NN（回显进度与指针）')
           appendTelemetry({ sentinel: 'incomplete-tasks', checked: sent.checked, total: sent.claimTotal })
           reportMidFail('ledger')
