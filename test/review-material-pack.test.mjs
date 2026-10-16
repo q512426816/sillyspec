@@ -151,10 +151,12 @@ function assert(name, cond, detail = '') {
   assert('组四：素材全缺（change 不存在）→ 空串', await assembleStageReviewMaterials({ stage: 'grill-first', cwd: tmp, changeName: 'no-such-change', specBase: tmp }) === '')
   assert('组四：参数缺失（changeName null）→ 空串', await assembleStageReviewMaterials({ stage: 'execute-qa', cwd: tmp, changeName: null, specBase: tmp }) === '')
 
-  // 接线源码钉：主链 join 装配结果；降级分支 join 空串保持；三模板槽在场（再审不含=组二既有钉）
+  // 接线源码钉：主链注入装配结果；降级分支空串保持；三模板槽在场（再审不含=组二既有钉）
+  // （2026-10-16-release-3-33-0 改钉：fbf0ada4 把裸 split/join 收编进 substituteRaw——
+  //   prompt.js:1701/1709，旧 `.split('{REVIEW_MATERIALS}').join(...)` 字面量已随迁移消失）
   const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
-  assert('组四：prompt.js 主链 join 目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes(".split('{REVIEW_MATERIALS}').join(reviewMaterialsMd)"))
-  assert('组四：降级分支 join 空串保持', promptSrc.includes(".split('{REVIEW_MATERIALS}').join('')"))
+  assert('组四：prompt.js 主链注入目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes("substituteRaw('{REVIEW_MATERIALS}', reviewMaterialsMd)"))
+  assert('组四：降级分支空串保持', promptSrc.includes("substituteRaw('{REVIEW_MATERIALS}', '')"))
   const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(join(REPO_ROOT, f), 'utf8').includes('{REVIEW_MATERIALS}'))
   assert('组四：三阶段模板含 {REVIEW_MATERIALS} 槽', slotOk)
 
