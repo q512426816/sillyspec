@@ -160,9 +160,14 @@ console.log('--- ③b 偷锁 rename 持续失败 → 按超时抛错（不忙等
   // CI node 22/24 上 mock.module 对内置模块命名空间的 spread 枚举不全（本地 node 24.15
   // 含 execFileSync，CI 实测缺——AppendFileSync 缺失报错实证）——显式补关键函数引用，
   // 不依赖 spread 枚举完整性
-  // 不含 constants（node:fs 的不可重定义导出——mock.module 挂载时报 Cannot redefine）
   const fsExports = { ...realFs, appendFileSync: realFs.appendFileSync, writeFileSync: realFs.writeFileSync, existsSync: realFs.existsSync, readFileSync: realFs.readFileSync, renameSync: realFs.renameSync, utimesSync: realFs.utimesSync }
-  void 0
+  // 必须剔除 constants：cjsMockModuleLoad 对 mock exports 逐键 ObjectDefineProperty，
+  // linux 上 fs.constants 是 writable:false/configurable:false 数据属性 → 「Cannot redefine
+  // property: constants」整文件炸（CI 38868232912 / 容器 node 24 实证）；windows 上同属性
+  // writable:true 侥幸不炸——本地绿/CI 红的分叉点。F_OK/R_OK/W_OK/X_OK 同样不可重定义，
+  // 但 enumerable:false，spread 天然不带。裸 'fs' 的 constants 本图不使用（同
+  // worktree-junction-fail-loud.test.mjs 既定解法）。
+  delete fsExports.constants
   fsExports.renameSync = (from, to) => {
     if (String(from) === lockPath) { renameAttempts++; throw Object.assign(new Error('EPERM: 文件被 AV 占用'), { code: 'EPERM' }) }
     return realFs.renameSync(from, to)

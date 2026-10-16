@@ -184,19 +184,35 @@ try {
     writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({ changeName: 'c1', baseHash, mode: 'in-place-fallback', worktreePath: proj }))
     const tasksDir = join(specBase, 'changes', 'c1', 'tasks')
     mkdirSync(tasksDir, { recursive: true })
-    // 声明侧三种脆弱形态：大小写差、尾部注记、./ 前缀（parseTargetFiles 已剥 ./，注记与大小写由对账键归一）
-    writeFileSync(join(tasksDir, 'task-01.md'), '---\nid: task-01\ntarget_files:\n  - Src/Foo.js（入口）\n---\n# task-01\n')
+    // 声明侧脆弱形态：尾部注记 + ./ 前缀（parseTargetFiles 已剥 ./，注记由对账键归一）——
+    // 跨平台钉死。大小写折叠按实现口径仅 win32/darwin 生效（verify-postcheck pathKey 的
+    // foldCase：两平台默认文件系统不敏感；linux 大小写敏感，全局折叠会替写错的路径放水）
+    // ——大小写面随平台分叉断言，linux 侧钉「如实落②类」的反向行为。
+    const caseInsensitiveFs = process.platform === 'win32' || process.platform === 'darwin'
+    const writeTask01 = (decl) => writeFileSync(join(tasksDir, 'task-01.md'), `---\nid: task-01\ntarget_files:\n  - ${decl}\n---\n# task-01\n`)
+    writeTask01('./src/foo.js（入口）')
 
     writeFileSync(join(proj, 'src', 'foo.js'), 'export const a = 1\n')
     git(proj, ['add', 'src/foo.js'])
     git(proj, ['commit', '-q', '-m', 'feat'])
 
     const r = reconcileTargetFiles({ cwd: proj, specBase, changeName: 'c1' })
-    assert(r.missing.length === 0, `大小写+注记声明的文件不再落②类假红（missing 实际 ${JSON.stringify(r.missing)}）`)
+    assert(r.missing.length === 0, `./ 前缀+注记声明的文件不再落②类假红（missing 实际 ${JSON.stringify(r.missing)}）`)
     assert(r.matched.length === 1 && /foo\.js/i.test(r.matched[0]), `归一后命中 matched（实际 ${JSON.stringify(r.matched)}）`)
     assert(r.status === 'ok', `对账状态 ok（实际 ${r.status}）`)
 
-    // 真没做的声明照旧拦（归一不放水）
+    // 大小写面：声明 Src/Foo.js 对磁盘 src/foo.js——不敏感文件系统（win32/darwin）同一文件命中；
+    // linux 保持敏感，写错大小写如实落②类
+    writeTask01('Src/Foo.js（入口）')
+    const rc = reconcileTargetFiles({ cwd: proj, specBase, changeName: 'c1' })
+    if (caseInsensitiveFs) {
+      assert(rc.missing.length === 0 && rc.matched.length === 1, `大小写折叠命中（${process.platform}；missing 实际 ${JSON.stringify(rc.missing)}）`)
+    } else {
+      assert(rc.missing.length === 1 && /Src\/Foo\.js/.test(rc.missing[0].path || ''), `linux 大小写敏感：大小写不符如实落②类不放水（missing 实际 ${JSON.stringify(rc.missing)}）`)
+    }
+
+    // 真没做的声明照旧拦（归一不放水）；先还原 task-01 为可命中形态，隔离 task-02 单变量
+    writeTask01('./src/foo.js（入口）')
     writeFileSync(join(tasksDir, 'task-02.md'), '---\nid: task-02\ntarget_files: [NEW: src/never-made.js]\n---\n# task-02\n')
     const r2 = reconcileTargetFiles({ cwd: proj, specBase, changeName: 'c1' })
     assert(r2.missing.length === 1 && r2.missing[0].isNew === true, 'NEW 声明未建仍落②类（归一只对齐字面差，不放水）')
