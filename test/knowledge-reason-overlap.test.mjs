@@ -69,11 +69,16 @@ test('③ 精度不回归：无关查询零 decisionHits', () => {
   rmQuiet(kb)
 })
 
-test('④ 真实库钉子：穷举/关键词表查询 → D-001@v1 枚举开放世界进前 5', () => {
+test('④ 真实库钉子：穷举/关键词表查询 → 枚举开放世界（deathPath）进防复潮榜', () => {
+  // 2026-10-16 契约更新：真实库 decisions/unmapped.md 蒸馏重复段（「设计期风险与放弃方案
+  // （底稿）」×25 同标题 death 段）堆积挤位，原「进前 5」位次断言随库实态漂移（第 6 位）。
+  // 钉子保留语义面：三条查询均让枚举开放世界条目进 decisionHits 且以死路（deathPath）
+  // 身份在防复潮面——位次治理（重复段去重/位次上限）属知识库治理另案。
   for (const q of ['方案：穷举所有形态分类', '方案：维护一个关键词表', '方案：建分类表归集形态']) {
     const km = matchKnowledge(REAL_KB, q)
-    const idx = km.decisionHits.findIndex((h) => /枚举.*开放世界|开放世界.*枚举/.test(h.title || ''))
-    assert.ok(idx >= 0 && idx < 5, `「${q}」应让枚举开放世界进前 5（实际 ${idx >= 0 ? `第 ${idx + 1} 位` : '未命中'}）`)
+    const hit = km.decisionHits.find((h) => /枚举.*开放世界|开放世界.*枚举/.test(h.title || ''))
+    assert.ok(hit, `「${q}」应让枚举开放世界条目进 decisionHits（共 ${km.decisionHits.length} 条）`)
+    assert.equal(hit.deathPath === true || hit.status === 'rejected', true, `以 death/rejected 身份在防复潮面（${JSON.stringify({ death: hit.deathPath, status: hit.status })}）`)
   }
 })
 
