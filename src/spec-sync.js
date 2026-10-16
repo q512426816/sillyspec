@@ -63,6 +63,61 @@ export function describeSyncError(err) {
   return err && err.message ? err.message : String(err);
 }
 
+// ── 同步失败连续计数与响应体摘要（2026-10-16 生产索引损坏事故可观测性加固）──
+// 事故：平台 422 业务错误只打状态码（真因 HTTP_422_SPEC_BUNDLE_INVALID+路径要手动重放请求
+// 才拿到），且失败走「下次自动重试」无限静默循环——归档半态（本地已归档、平台仍「进行中」）
+// 挂数小时无人知晓。两道护栏：①非 2xx 响应体解析进告警行；②按 label 连续失败计数持久化，
+// 连续 ≥3 次升级 🚨 显式告警，任一次成功清零。
+const FAIL_STREAK_FILE = join('.runtime', 'spec-sync-fail-streak.json');
+const FAIL_STREAK_ESCALATE_AT = 3;
+
+export function describeErrorBody(status, rawBody) {
+  if (!rawBody) return '';
+  try {
+    const j = JSON.parse(rawBody);
+    const code = j.code || `HTTP_${status}`;
+    const p = j.details && j.details.path ? ` path=${j.details.path}` : '';
+    return j.message ? `${code}${p}: ${j.message}` : rawBody.slice(0, 200);
+  } catch {
+    return rawBody.slice(0, 200);
+  }
+}
+
+export function readFailStreak(specRoot) {
+  try {
+    return JSON.parse(readFileSync(join(specRoot, FAIL_STREAK_FILE), 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+export function bumpFailStreak(specRoot, label, detail) {
+  const all = readFailStreak(specRoot);
+  const cur = all[label] || { count: 0 };
+  cur.count += 1;
+  cur.lastAt = new Date().toISOString();
+  if (detail) cur.lastError = String(detail).slice(0, 300);
+  all[label] = cur;
+  try {
+    mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+    writeFileSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n', 'utf8');
+  } catch {
+    // fail-soft：计数落盘失败只影响告警升级，不阻断同步主流程
+  }
+  return cur.count;
+}
+
+export function clearFailStreak(specRoot, label) {
+  const all = readFailStreak(specRoot);
+  if (!all[label]) return;
+  delete all[label];
+  try {
+    writeFileSync(join(specRoot, FAIL_STREAK_FILE), JSON.stringify(all, null, 2) + '\n', 'utf8');
+  } catch {
+    // fail-soft：残留计数只是少清一次，下次成功再清
+  }
+}
+
 function _hashBuffer(buf) {
   return createHash('sha256').update(buf).digest('hex');
 }
@@ -640,9 +695,15 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // 8 分钟才被后续步骤的同步补上）。失败可见、成功不打扰。
       // 连接类失败（404=端点未就绪 / 5xx）走噪音闸（sync-noise.js）：平台未就绪期每步
       // 自动同步重刷同一行，淹没门禁输出；其余状态码（4xx 业务态）每轮该看见。
-      const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}`;
+      const raw = await res.text().catch(() => '');
+      const detail = describeErrorBody(res.status, raw);
+      const failCount = bumpFailStreak(specRoot, logLabel, detail);
+      const line = `[spec-sync] 拉取清单失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
       if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
+      if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+      }
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
@@ -691,6 +752,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   if (ops.length === 0) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${logLabel}`);
     clearStaleTombstoneMarkers(specRoot);
+    clearFailStreak(specRoot, logLabel);
     return { synced: 0 };
   }
 
@@ -706,9 +768,15 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       signal: withSignal(30000),
     });
     if (!res.ok) {
-      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}`;
+      const raw = await res.text().catch(() => '');
+      const detail = describeErrorBody(res.status, raw);
+      const failCount = bumpFailStreak(specRoot, logLabel, detail);
+      const line = `[spec-sync] 同步请求失败 HTTP ${res.status}（文件树本次未同步，下次自动重试）: ${logLabel}${detail ? ` —— ${detail}` : ''}`;
       if (isConnectionClassStatus(res.status)) syncConnectionWarn(line);
       else console.warn(line);
+      if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+        console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+      }
       return { synced: 0 };
     }
     const body = await res.json().catch(() => ({}));
@@ -780,6 +848,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
         writeBaseSnapshot(specRoot, localFiles);
         clearSpecConflictMarker(specRoot, conflictLabel);
         noteSyncSuccess();
+        clearFailStreak(specRoot, logLabel);
         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${conflictLabel}`);
         return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
       }
@@ -811,6 +880,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }
     noteSyncSuccess();
+    clearFailStreak(specRoot, logLabel);
     console.log(`[spec-sync] 已同步 ${ops.length} 个文件变更: ${logLabel}`);
     // 本轮无冲突 = 此前的未决 spec 树冲突已不存在，清残留标记（否则 status 永久红标、
     // 横幅去重单行提示不消——坑 spec-sync-conflict-banner-spam）。全树入口
@@ -828,8 +898,12 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     writeBaseSnapshot(specRoot, localFiles);
     return { synced: ops.length };
   } catch (err) {
+    const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
     const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
     syncConnectionWarn(line); // 网络/超时/熔断均连接类
+    if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+      console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+    }
     return { synced: 0 };
   }
 }
