@@ -107,6 +107,11 @@ modules:
       - src/endpoint-extractor.js
       - src/verify-probes.js
       - src/test-bindings.js
+      - test/probe7-prefill-noise.test.mjs
+      - test/probe7-fr-prefill.test.mjs
+      - test/probe7-anchor-testfile.test.mjs
+      - test/pitfall-probe7-noise.test.mjs
+      - test/acceptance-matrix-probe.test.mjs
       - src/verify-facts-schema.js
       - src/foreign-declared.js
       - src/cross-repo-reconcile.js

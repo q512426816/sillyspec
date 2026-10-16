@@ -61,3 +61,4 @@ created_at: 2026-10-16T07:44:31.079Z
 | 修改 | test/probe7-fr-prefill.test.mjs | P4 全部署类条目卡不注入 FR 池用例 |
 | 修改 | .sillyspec/docs/sillyspec/modules/core-engine.md | 模块卡 verify-probes 条目补预填四缺陷修复摘要 + 最近变更头 |
 | 修改 | .sillyspec/docs/sillyspec/modules/core-engine.changelog.md | 变更索引追加行 |
+| 修改 | .sillyspec/docs/sillyspec/modules/_module-map.yaml | core-engine paths 补 5 个 probe7 测试文件（收口 advisory：交付目录 test 未登记致 P7 FR 落 auto-* 伪域；先例 test/quick-retired.test.mjs@release） |
