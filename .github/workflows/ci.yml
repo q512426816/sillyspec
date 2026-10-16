@@ -20,7 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
+        # mock.module 内置模块 named exports 枚举在 node 22 不全（appendFileSync 等缺失实证 38859877373）——统一 24 与本地开发环一致
       - name: lint（check-syntax 全文件）
         run: npm run lint --silent
 
@@ -32,7 +33,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
+        # mock.module 内置模块 named exports 枚举在 node 22 不全（appendFileSync 等缺失实证 38859877373）——统一 24 与本地开发环一致
       # 依赖必须装：测试框架零三方（node:sqlite/test 内置）但被测 CLI 本体 import 7 个
       # 运行时依赖（js-yaml/chalk/@inquirer/prompts 等，src 下 10+ 文件）——CI 首跑
       # （121a33ee）无 install 步实证两 job 全灭（Cannot find package 'js-yaml'）
@@ -53,7 +55,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
+        # mock.module 内置模块 named exports 枚举在 node 22 不全（appendFileSync 等缺失实证 38859877373）——统一 24 与本地开发环一致
       # docs-check.js 同样 import js-yaml——无 install 首跑 7s 即灭（同 test job 根因）
       - name: install（npm ci 锁定 package-lock）
         run: npm ci --no-audit --no-fund
