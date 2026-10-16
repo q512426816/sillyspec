@@ -3916,6 +3916,7 @@ function mergeProbeSection(oldLines, freshLines) {
     if (/^:?-{3,}:?$/.test(key)) continue // 分隔行（含 :--- / :---: 冒号对齐形态，与门禁 splitMatrixRowCells 文法同源）
     const cells = l.split('|').slice(1).map((c) => c.trim())
     if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop() // 行尾管道的收尾空段
+    if (cells.length === 5 && cells[3] === '判定' && cells[4] === '证据') continue // 表头行不是「已填行」（评审 P3-3：漂移键旧表头携载进注释块会被门禁表头武装重新武装）
     if (cells.length > 0 && cells.every(isPlaceholderCell)) continue // 全占位行（旧模板残形）不携载
     oldFilled.set(key, l)
   }

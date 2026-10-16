@@ -61,9 +61,9 @@ test('1. 携载过滤：对齐分隔行与全占位行不再搬入新渲染（�
   assert.equal(r.text.includes(FILLED_ROW_JIA), true, '键漂移已填行（甲）仍携载——已填格不丢')
   assert.equal(r.text.includes(FILLED_ROW_YI), true, '键漂移已填行（乙）仍携载')
   assert.equal(r.text.includes('<!-- refresh 携载的已填行'), true, '携载块带归属注释（agent 裁决去留）')
-  // carriedRows 计的是「同键原位替换」数（旧表头与新骨架表头同键自匹配计 1）；键漂移行走
-  // stale 追加不计数——携载面以内容断言为准（上方三条 includes）
-  assert.equal(r.carriedRows, 1)
+  // carriedRows 计的是「同键原位替换」数；表头行不属已填行不入携载面（评审 P3-3 整改后，
+  // 旧表头同键自匹配也不再计数）→ 本用例无同键数据行，计数 0；键漂移已填行走 stale 追加
+  assert.equal(r.carriedRows, 0)
 })
 
 test('2. 门禁孤行桶：携载注释后的残行不栽给最近 task 锚（红→绿）', () => {

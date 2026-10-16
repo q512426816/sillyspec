@@ -5476,7 +5476,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         console.log(`✅ 已拉取 spec 快照 → ${specR.specDir}${specR.specVersion ? `（平台 spec_version: ${specR.specVersion}）` : ''}`);
         console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
         if (Array.isArray(specR.resurrectSkipped) && specR.resurrectSkipped.length > 0) {
-          console.log('   防复活抑制已生效：本地已删除文件未从快照恢复（删除 op 上行成功前，快照恢复会被下轮同步重新删除）；确要恢复用 --restore-deleted。');
+          console.log('   防复活抑制已生效：本地已删除文件未从快照恢复（基线有、盘面无=本地删除尚未上行成功，抑制防被服务器旧文件复活）；确要从快照恢复用 --restore-deleted。');
         }
       } else if (/非空/.test(specR.reason || '')) {
         console.error(`❌ ${specR.reason}`);

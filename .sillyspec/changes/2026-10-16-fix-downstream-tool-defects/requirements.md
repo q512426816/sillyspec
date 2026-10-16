@@ -90,7 +90,7 @@ created_at: 2026-10-16T11:15:20.392Z
 - `createGateSnapshot` / `createVerifyGateSnapshot` 的所有失败分支——pnpm/bun/lerna symlink-store 布局拒建、环境目录链接不完整、worktree/基建异常（含现被静默吞掉的 catch）、变更文件集为空的三种成因（git 不可用 / HEAD 无 diff / 他者声明过滤清空）、快照链路异常——**必须**通过可选出参 `failRef` 带出结构化原因字符串，catch 分支**必须**补 warn 日志（异常细节不再静默）。
 - verify --done 实测门与 noAI 质量扫描两处调用方**必须**消费该原因构造 `reportGateSnapshotFallback` 的 reason（替换硬编码笼统文案「变更文件集为空 / 快照基建不可用」）。
 - --done 路径**必须**把 `used_snapshot`（Boolean）与失败时的 `snapshot_fallback_reason` 写入 test-result.json（observability 通道，对齐 2026-10-09 复用观测先例）。
-- 两函数既有 `null` 返回契约**必须**保持不变（不传 `failRef` 时行为与既有逐字节一致）。
+- 两函数既有 `null` 返回契约**必须**保持不变（不传 `failRef` 时返回值与判定行为与既有完全一致；catch 分支新增的 warn 日志是本条显式声明的可见性增强，不构成行为回归——评审 P3-4 澄清：二者不矛盾，自本句起口径统一）。
 
 #### 场景：pnpm 布局拒建原因可见
 

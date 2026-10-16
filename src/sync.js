@@ -1969,7 +1969,7 @@ export class SyncManager {
       }
       // 防复活抑制可见（宁可吵不可静默复活）：被挡路径点名（截断防刷屏），出路指 --restore-deleted
       if (resurrectSkipped.length > 0) {
-        console.warn(`⚠️ [sync] 防复活抑制：${resurrectSkipped.length} 个本地已删除文件未从快照恢复（对应删除 op 尚未上行成功，恢复会被下轮同步重新删除；确要恢复用 --restore-deleted）: ${resurrectSkipped.slice(0, 5).join(', ')}${resurrectSkipped.length > 5 ? ' 等' : ''}`);
+        console.warn(`⚠️ [sync] 防复活抑制：${resurrectSkipped.length} 个本地已删除文件未从快照恢复（基线有、盘面无=本地删除尚未上行成功；确要从快照恢复用 --restore-deleted）: ${resurrectSkipped.slice(0, 5).join(', ')}${resurrectSkipped.length > 5 ? ' 等' : ''}`);
       }
       // 批量写入留痕（2026-09-17 反馈⑥②法证收口）：整树解包=逐字节回放，他机 CRLF 内容
       // 原样落盘——审计行记 时间/触发面/文件数/CRLF 命中数（fail-open）。

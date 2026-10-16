@@ -1128,9 +1128,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
     }
     // FR-04 降级事实落盘：used_snapshot 与失败原因随 test-result.json extra 持久化（快照在场
-    // 时记录随快照销毁；回退主仓时恰好落在主仓 .runtime——降级证据存活面与用途一致）
-    let snapObsFields = { used_snapshot: Boolean(verifyGateSnap) }
-    if (!verifyGateSnap) {
+    // 时记录随快照销毁；回退主仓时恰好落在主仓 .runtime——降级证据存活面与用途一致）。
+    // 评审 P3-2 整改：OFF 开关是主动关闸，不得记成「基建故障/文件集为空」的笼统回退原因。
+    let snapObsFields
+    if (process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
+      snapObsFields = { used_snapshot: false, snapshot_fallback_reason: 'SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1 主动关闸（快照未尝试，非基建故障）' }
+    } else if (verifyGateSnap) {
+      snapObsFields = { used_snapshot: true }
+    } else {
       try {
         const { snapshotObservability } = await import('./gate-snapshot.js')
         snapObsFields = snapshotObservability(false, snapshotFailRef)
