@@ -1367,3 +1367,143 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-16-step-guide-dyn-completeness
   status: active
+
+## FR-runtime-092 test/backlog-batch-a.test.mjs 在 linux 与 windows 双端退出码 0（12/12 通过）
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：mock 装载 CJS 内置模块（新 node）；老 node / windows 行为零回退
+场景正文：
+- 场景：mock 装载 CJS 内置模块（新 node） — Given 容器 node 24.22（linux；CI 为 24.21）下 mock exports 含 `default` 与 `constants`；When 测试注册 mock 后动态 import `../src/quicklog.js?spin-test=…` 触发 CJS `'fs'` 装载；Then 不再抛 `Cannot redefine property: constants`，偷锁分支断言（attempts≥2、按 timeoutMs 抛错）全绿、退出
+- 场景：老 node / windows 行为零回退 — Given node 24.15（win 或 linux 四象限任一）——该版本 mock 装载不炸（与平台无关）；When 本地跑同一文件；Then 仍 12/12 通过——quicklog 的 fs 使用面（openSync/renameSync/appendFileSync 等）不含 `constants
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-01
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-01
+  tests: test/backlog-batch-a.test.mjs「③b 偷锁 rename 持续失败 → 按超时抛错（不忙等自旋）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active
+
+## FR-runtime-093 test/feedback-batch2-hardening.test.mjs 双端退出码 0；⑥ 段 linux 钉「大小写不符如实落②类不放水」、win32/darwin 钉「折叠命中」，./ 前缀+尾部注记与 NEW 未建两项跨平台钉死
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：linux 大小写敏感；win32/darwin 大小写不敏感；注记与前缀归一跨平台
+场景正文：
+- 场景：linux 大小写敏感 — Given linux 磁盘/git 实为 `src/foo.js`，声明写 `Src/Foo.js（入口）`；When `reconcileTargetFiles` 归一比对；Then 该声明如实落②类（missing 含 `Src/Foo.js（入口）`）——禁止全局折叠把写错的路径放水
+- 场景：win32/darwin 大小写不敏感 — Given 同为不敏感文件系统平台；When 同一比对；Then 折叠命中（missing 空、matched 含 `foo.js`）
+- 场景：注记与前缀归一跨平台 — Given 声明写 `./src/foo.js（入口）`（parseTargetFiles 剥 `./`，尾部注记由对账键剥）；When 比对磁盘已改的 `src/foo.js`；Then missing 空、status=ok、matched 命中；随后 `NEW: src/never-made.js` 仍落②类且 isNew=true
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-02
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-02
+  tests: test/feedback-batch2-hardening.test.mjs「⑥ target_files 对账路径键归一」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active
+
+## FR-runtime-094 本地 Linux 容器内全量 npm test 零失败（818 文件）
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：全量池本地跑
+场景正文：
+- 场景：全量池本地跑 — Given 容器可读仓工作树（含 node_modules 纯 JS 依赖）与 git；When 容器内 `npm test --silent`；Then 汇总行失败数为 0（文件数随 HEAD 增长 ≥818）
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-03
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-03
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active
+
+## FR-runtime-095 推送后 CI test job 转绿（lint/docs-gate 维持绿）
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：推 CI 回执
+场景正文：
+- 场景：推 CI 回执 — Given 本地双端（容器 linux + windows）已全绿；When 推送并等 run 结束；Then `gh run view <id>` 三 job 均 success
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-04
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+## FR-runtime-096 零回归：两文件其余断言、src 实现（quicklog.js/verify-postcheck.js）行为不改
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：其余段全绿
+场景正文：
+- 场景：其余段全绿 — Given 两文件除⑥/③b 外各段断言未改；When 双端跑；Then 全部分段通过（backlog-batch-a 12/12；feedback-batch2 六段全通过）
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-05
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-05
+  tests: test/backlog-batch-a.test.mjs「①②③a 各段」 | test/feedback-batch2-hardening.test.mjs「①②③④⑤段」 | test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active
+
+## FR-runtime-097 src/verify-postcheck.js 不嵌裸 NUL 字节（源码可被 grep/rg 检索）
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：检索面
+场景正文：
+- 场景：检索面 — Given 裸 NUL 已替换为 6 字节转义序列；When `grep -n "foldCase" src/verify-postcheck.js`；Then 正常输出命中行（不再被当二进制）；`node --check` 通过且全量套件零失败
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-06
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-06
+  tests: test/run-tests.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active
+
+## FR-runtime-098 quick 审计 EOL 假 M 过滤在 git ≤2.43 上不得静默失效（探测走 --numstat -z）
+变更：2026-10-16-ci-linux-residual-fix
+状态：active
+摘要：老 git 假 M 剔除；rename 不误剔；字面 ` => ` 文件名不误剔（非 windows）
+场景正文：
+- 场景：老 git 假 M 剔除 — Given git 2.39.5 容器 / 2.43 WSL 下 tracked 文件仅行尾 LF→CRLF；When auditQuickCompletion 审计；Then 该文件归 eolOnlyFiles 且不进 changedFiles（EOL 用例红→绿，修复前容器实证）
+- 场景：rename 不误剔 — Given 已暂存重命名 `a.js → b.js` 叠加行尾重写；When 同一审计；Then b.js 留在 changedFiles、eolOnlyFiles 为空（-z 流取新名字段）
+- 场景：字面 ` => ` 文件名不误剔（非 windows） — Given POSIX 仓内 tracked 文件 `src/sub/a => b.js` 发生真实内容修改；When 同一审计；Then 该文件留在 changedFiles、不被误归 eolOnlyFiles（非 -z 解析下曾误剔，已锁回归用例；windows 文件名禁用 `>` 故跳过）
+全文：.sillyspec/changes/archive/2026-10-16-ci-linux-residual-fix/requirements.md#FR-07
+最近确认：354c20bab3e89d9ebd9762c4e5ce092d4ad88394
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-07
+  tests: test/quick-audit-foreign-residue.test.mjs「EOL-only 假 M 剔出审计；真实修改保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-ci-linux-residual-fix
+  status: active

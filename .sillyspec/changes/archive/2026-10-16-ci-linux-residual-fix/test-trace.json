@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-ci-linux-residual-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/backlog-batch-a.test.mjs「③b 偷锁 rename 持续失败 → 按超时抛错（不忙等自旋）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/feedback-batch2-hardening.test.mjs「⑥ target_files 对账路径键归一」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-05",
+      "tests": [
+        "test/backlog-batch-a.test.mjs「①②③a 各段」",
+        "test/feedback-batch2-hardening.test.mjs「①②③④⑤段」",
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-06",
+      "tests": [
+        "test/run-tests.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-16-ci-linux-residual-fix:flow:测试绑定FR-07",
+      "tests": [
+        "test/quick-audit-foreign-residue.test.mjs「EOL-only 假 M 剔出审计；真实修改保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-ci-linux-residual-fix"
+    }
+  ]
+}
