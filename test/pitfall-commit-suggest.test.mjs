@@ -29,6 +29,13 @@ function baseRepo(prefix) {
   return { cwd, specBase: join(cwd, '.sillyspec') }
 }
 
+// 时间窗防漂移（随钟写死的时间会被 lastCommitKey 时间窗过滤——2026-10-16 实测 FR-11
+// 因写死 10-15 23:00 随真实时钟过期而失败）：条目时间 = 运行时 +1h，恒过窗
+const fmtFuture = () => {
+  const d = new Date(Date.now() + 3600_000)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
 const QUICK_MD = (time, titles) => [
   `# QUICKLOG`, '',
   ...titles.flatMap((t, i) => [`## ql-2026${i} | ${time} | ${t}`, '', '状态：已完成', '']),
@@ -44,7 +51,7 @@ test('FR-11：并行会话 QUICKLOG 不在变更集 → 不劫持归档提交（
   // 并行会话 quick 噪声：QUICKLOG 文件不在本次变更集（在别处，不 add 不动）——但时间窗内
   const noiseDir = mk('pcs-noise-')
   mkdirSync(join(noiseDir, '.sillyspec', 'quicklog'), { recursive: true })
-  writeFileSync(join(noiseDir, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-15 23:00:00', ['他侧 quick 修复']))
+  writeFileSync(join(noiseDir, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), QUICK_MD(fmtFuture(), ['他侧 quick 修复']))
   // 本仓 specBase 下也有一个不在变更集的 quicklog（未修改 → 不出现在 porcelain）
   mkdirSync(join(f.specBase, 'quicklog'), { recursive: true })
   writeFileSync(join(f.specBase, 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-14 00:00:00', ['旧条目']))
@@ -59,7 +66,7 @@ test('FR-11：并行会话 QUICKLOG 不在变更集 → 不劫持归档提交（
 test('FR-11：quicklog 文件在变更集 → fix 语义保留；subject 已列标题不进 body 重复', () => {
   const f = baseRepo('pcs-quick-')
   mkdirSync(join(f.specBase, 'quicklog'), { recursive: true })
-  writeFileSync(join(f.specBase, 'quicklog', 'QUICKLOG-t.md'), QUICK_MD('2026-10-15 23:00:00', ['修一处', '再修一处']))
+  writeFileSync(join(f.specBase, 'quicklog', 'QUICKLOG-t.md'), QUICK_MD(fmtFuture(), ['修一处', '再修一处']))
   const cc = collectCommitContext({ cwd: f.cwd })
   assert.equal(cc.suggestion.type, 'fix', 'quick 文件在变更集 → fix')
   assert.ok(cc.suggestion.subject.includes('修一处') && cc.suggestion.subject.includes('再修一处'), 'subject 全列标题')
