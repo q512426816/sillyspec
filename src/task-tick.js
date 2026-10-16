@@ -168,6 +168,25 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
     ? `｜下一任务：${r.next.id} ${r.next.desc.slice(0, 40)}${r.next.desc.length > 40 ? '…' : ''}`
     : `｜🎉 ${r.total}/${r.total} 全勾——可收口：sillyspec flow done --change ${changeName}`
   console.log(`${r.kind === 'ticked' ? '✅ 已勾' : 'ℹ️ 已是勾选态（幂等跳过写盘）'}（${r.checked}/${r.total}）${nextTip}`)
+  if (r.kind === 'ticked') {
+    // 勾选随交付入库教学（2026-10-17-tick-timing-source，坑 tick-timing-squash-blindspot 根因 1/3
+    // 断链处）：翻格后给现成提交命令——pathspec 含 tasks.md 与侧车（勾选修改与任务交付同一提交
+    // 入库，消息占位带 task-NN token），把纪律变成可抄的命令；并当场提醒「此前勾选仍未进
+    // git」（已勾 ≥2 格且 tasks.md 零提交）——反馈不再等到 flow done 终点。best-effort：
+    // git 不可用（非 git 目录/失败返回 null）只给命令不给提醒，失败不影响翻格与 exit code。
+    try {
+      const { relative } = await import('node:path')
+      const rel = (p) => relative(cwd, p).split('\\').join('/')
+      const sidecar = join(changesRoot, changeName, 'task-ticks.jsonl')
+      console.log(`📦 勾选随交付入库（同一提交 pathspec）：`)
+      console.log(`   git commit -m "<本任务交付概括> (${normalizeTaskId(taskId) || taskId})" -- <交付文件…> ${rel(tasksPath)}${existsSync(sidecar) ? ` ${rel(sidecar)}` : ''}`)
+      const { gitQuiet } = await import('./git-helper.js')
+      const touched = gitQuiet(cwd, ['log', '-n', '1', '--format=%h', '--', tasksPath])
+      if (r.checked >= 2 && touched === '') {
+        console.log(`ℹ️ tasks.md 尚无任何提交（此前勾选未随交付入库）——上面的命令已把它带进 pathspec，照抄即闭环`)
+      }
+    } catch { /* 教学面 best-effort：失败不影响翻格 */ }
+  }
   return r
 }
 

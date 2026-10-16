@@ -158,6 +158,36 @@ test('⑦a tick 侧车留痕：翻格追加 task-ticks.jsonl（ts+task+source）
   rmSync(cwd, { recursive: true, force: true })
 })
 
+// ── ⑧ 勾选随交付入库回显（2026-10-17-tick-timing-source，FR-03）──
+// 坑 tick-timing-squash-blindspot 根因 1/3 断链处：勾选动作与提交动作在执行循环里天然分离——
+// 翻格后给现成提交命令（pathspec 含 tasks.md 与侧车）+ 此前勾选未入库当场提醒。
+
+test('⑧ tick 回显提交命令模板与未入库提醒：命令含 task-NN 占位与 tasks.md/侧车 pathspec；已勾≥2 且 tasks.md 零提交 → 提醒；入库后提醒消失；幂等零教学重复', () => {
+  const { cwd, cli } = makeRepo()
+  const change = '2026-10-01-vtt-8'
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
+  const t1 = cli(['task', 'tick', '--change', change, '--task', 'task-01'])
+  assert.equal(t1.status, 0, t1.stderr)
+  assert.match(t1.stdout, /git commit -m "<本任务交付概括> \(task-01\)"/, '提交命令模板（消息占位带 token）')
+  assert.match(t1.stdout, /\.sillyspec\/changes\/2026-10-01-vtt-8\/tasks\.md/, 'pathspec 含 tasks.md（相对路径）')
+  assert.match(t1.stdout, /task-ticks\.jsonl/, 'pathspec 含侧车')
+  assert.doesNotMatch(t1.stdout, /未随交付入库/, '首格勾选零历史——不提醒')
+  const t2 = cli(['task', 'tick', '--change', change, '--task', 'task-02'])
+  assert.equal(t2.status, 0, t2.stderr)
+  assert.match(t2.stdout, /\(task-02\)/, '模板 token 随任务')
+  assert.match(t2.stdout, /未随交付入库/, '已勾≥2 且 tasks.md 零 git 提交 → 当场提醒')
+  // tasks.md 随交付入库后提醒消失
+  execFileSync('git', ['add', '--', join(cwd, '.sillyspec', 'changes', change, 'tasks.md')], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'c'], { cwd, stdio: 'pipe' })
+  const t3 = cli(['task', 'tick', '--change', change, '--task', 'task-03'])
+  assert.equal(t3.status, 0, t3.stderr)
+  assert.doesNotMatch(t3.stdout, /未随交付入库/, 'tasks.md 已入库——不再提醒')
+  const again = cli(['task', 'tick', '--change', change, '--task', 'task-03'])
+  assert.match(again.stdout, /已是勾选态/)
+  assert.doesNotMatch(again.stdout, /git commit -m/, '幂等分支零教学重复')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('⑦b 侧车写失败仅告警不阻断翻格（目录占位 EISDIR 形态）', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-8'
