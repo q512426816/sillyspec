@@ -40,7 +40,9 @@ test('② 行为锚定：真实 node:test stdout 含 ^ℹ fail 0$ 与 ^ℹ pass 
   // node:test 摘要行走 stdout（spec reporter）——runCrossRepoFullTest 的 catch 路径合并
   // e.stdout+e.stderr。⚠️ 剥 NODE_TEST_CONTEXT env：本测试自身经 node --test 跑，该 env
   // 被内层 node --test 继承会静默零跑 exit 0 假绿（ql-20260919-007 实测踩），必须摘除。
-  const out = execFileSync(process.execPath, ['--test', 'ok.test.mjs'], {
+  // 显式 spec reporter（2026-10-16 CI 实证：被外层 --test 套内再跑 --test 时内层默认
+  // reporter 退化为 TAP——摘要行变 # fail 0 形态，ℹ 断言挂。显式指定消除环境差）。
+  const out = execFileSync(process.execPath, ['--test', '--test-reporter=spec', '--test-reporter-destination=stdout', 'ok.test.mjs'], {
     cwd: dir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, NODE_TEST_CONTEXT: undefined },
   })
