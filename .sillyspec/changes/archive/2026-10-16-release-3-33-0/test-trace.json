@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-release-3-33-0",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-release-3-33-0:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-retired.test.mjs「R5 版本锚 3.33.0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-release-3-33-0"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-16-release-3-33-0:flow:测试绑定FR-04",
+      "tests": [
+        "test/lint-ownership-failfast.test.mjs「3e verify lint 硬拦分支走共享归属鉴定降档」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-release-3-33-0"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-16-release-3-33-0:flow:测试绑定FR-06",
+      "tests": [
+        "test/review-material-pack.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-release-3-33-0"
+    }
+  ]
+}

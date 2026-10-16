@@ -1,0 +1,120 @@
+{
+  "change": "2026-10-16-release-3-33-0",
+  "baseline": "121a33eec96d3b689bf1d3a7bf5bd70c2f906135",
+  "head": "5848cf3c432ff63fb38da7cd21d5881c654da14d",
+  "files": [
+    ".github/workflows/ci.yml",
+    "package-lock.json",
+    "package.json",
+    "test/lint-ownership-failfast.test.mjs",
+    "test/quick-retired.test.mjs",
+    "test/review-material-pack.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 26,
+    "deletions": 9
+  },
+  "savedAt": "2026-10-16T03:33:37.760Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "ci",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/ci.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "121a33eec96d3b689bf1d3a7bf5bd70c2f906135",
+    "totals": {
+      "files": 6,
+      "additions": 26,
+      "deletions": 9
+    },
+    "rows": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "additions": 13,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "package-lock.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "package.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/lint-ownership-failfast.test.mjs",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/quick-retired.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/review-material-pack.test.mjs",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "223cd5df9f3135f467bb99837f5d9271997832eb8be09efcbade273511b81633",
+  "patchStatus": "ok"
+}

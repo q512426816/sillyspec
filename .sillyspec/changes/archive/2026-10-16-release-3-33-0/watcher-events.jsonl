@@ -1,0 +1,43 @@
+{"ts":1792119573691,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792119683459,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792119713206,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792119720557,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792119723396,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792119723396,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792119723396,"kind":"commit","stage":null,"detail":"15745009","provisional":true}
+{"ts":1792119730385,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792119758144,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792119760263,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792119760263,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792119760263,"kind":"commit","stage":null,"detail":"a62aa8c2","provisional":true}
+{"ts":1792119891841,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792119893070,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792119893070,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792120040112,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792120046960,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792120053766,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792120053766,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792120064089,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792120074609,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：github/workflows/ci.yml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792120104400,"kind":"commit","stage":null,"detail":"8f43a806","provisional":true}
+{"ts":1792120629453,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792120629453,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792120633531,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792120653484,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792120653503,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792120653503,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1792121002553,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792121019394,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792121036243,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792121049950,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/review-material-pack.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792121056782,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1792121056549,"kind":"commit","stage":null,"detail":"ed34e14f","provisional":true}
+{"ts":1792121060150,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792121060150,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1792121472391,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：github/workflows/ci.yml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792121487082,"kind":"commit","stage":null,"detail":"88f41629","provisional":true}
+{"ts":1792121518942,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true,"source":"task-tick"}
+{"ts":1792121520363,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792121520363,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true}
+{"ts":1792121535176,"kind":"commit","stage":null,"detail":"5848cf3c","provisional":true}
+{"ts":1792121552210,"kind":"gate-run","stage":"verify","detail":"门实测 passed（3.2s） · 20261016033230","provisional":true}

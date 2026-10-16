@@ -1,0 +1,111 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index cdd57e78..113ff8fa 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -33,7 +33,16 @@ jobs:
+       - uses: actions/setup-node@v4
+         with:
+           node-version: '22'
+-      # 零第三方依赖（node:sqlite/test 内置），无 install 步——与本地跑法一致
++      # 依赖必须装：测试框架零三方（node:sqlite/test 内置）但被测 CLI 本体 import 7 个
++      # 运行时依赖（js-yaml/chalk/@inquirer/prompts 等，src 下 10+ 文件）——CI 首跑
++      # （121a33ee）无 install 步实证两 job 全灭（Cannot find package 'js-yaml'）
++      - name: install（npm ci 锁定 package-lock）
++        run: npm ci --no-audit --no-fund
++      - name: 诊断：node/dash 可用性（run-tests 子进程 shell 语义面）
++        run: |
++          which node
++          node -e "0" && echo "sh 直跑 node -e OK"
++          /bin/sh -c 'node -e "0"' && echo "sh -c 内嵌引号 OK"
+       - name: test（run-tests 并发池 + TEMP/HOME 套件隔离）
+         run: npm test --silent
+ 
+@@ -45,6 +54,9 @@ jobs:
+       - uses: actions/setup-node@v4
+         with:
+           node-version: '22'
++      # docs-check.js 同样 import js-yaml——无 install 首跑 7s 即灭（同 test job 根因）
++      - name: install（npm ci 锁定 package-lock）
++        run: npm ci --no-audit --no-fund
+       # ratchet：docs 失效引用数 ≤ 基线（.sillyspec/docs-check-baseline）放行——
+       # 与 pre-push 同一门，推 CI 后本地 pre-push 可降级（见 .husky/pre-push 注记）
+       - name: docs gate ratchet（--against HEAD）
+diff --git a/package-lock.json b/package-lock.json
+index e8c40ea3..2c35b4aa 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.10",
++  "version": "3.33.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.32.10",
++      "version": "3.33.0",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index 60309832..2c215eca 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.32.10",
++  "version": "3.33.0",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/test/lint-ownership-failfast.test.mjs b/test/lint-ownership-failfast.test.mjs
+index 56fad2c0..8ed6b5f3 100644
+--- a/test/lint-ownership-failfast.test.mjs
++++ b/test/lint-ownership-failfast.test.mjs
+@@ -71,7 +71,10 @@ const srcOf = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url))
+   assert(iMoved !== -1, '3c 原位置留前移标记（防重复执行）')
+   const iPrefill = g.indexOf('预填注清零校验未过')
+   assert(iPrefill > -1 && iPrefill < iTest, '3d 预填注 error 门同样前置')
+-  assert(g.includes("verdict === 'pre-existing'"), '3e verify lint 硬拦分支含归属鉴定降档（pre-existing 放行路径）')
++  // 3e（2026-10-15-lint-triage-path-unify 更新契约）：判定收敛到共享 helper
++  // lint-ownership.js（gates 与 verify-quality-scan 双接线源级钉——见 5 号用例），
++  // gates 源内的裸 'pre-existing' 字面量已随判定迁移消失——锚点改为 helper 调用在场。
++  assert(g.includes('lintOwnershipDowngrade'), '3e verify lint 硬拦分支走共享归属鉴定降档（lint-ownership.js helper）')
+ }
+ 
+ // ── 4. quick 门接线 + 措辞 ──
+diff --git a/test/quick-retired.test.mjs b/test/quick-retired.test.mjs
+index aa3064df..2cb96f83 100644
+--- a/test/quick-retired.test.mjs
++++ b/test/quick-retired.test.mjs
+@@ -146,7 +146,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
+   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
+     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
+   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
+-  assert(pkg.version === '3.32.10', `R5 package.json 版本 3.32.10（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
++  assert(pkg.version === '3.33.0', `R5 package.json 版本 3.33.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+ }
+ 
+ cleanupTmpDirs()
+diff --git a/test/review-material-pack.test.mjs b/test/review-material-pack.test.mjs
+index ce3b7e07..a8c468bb 100644
+--- a/test/review-material-pack.test.mjs
++++ b/test/review-material-pack.test.mjs
+@@ -151,10 +151,12 @@ function assert(name, cond, detail = '') {
+   assert('组四：素材全缺（change 不存在）→ 空串', await assembleStageReviewMaterials({ stage: 'grill-first', cwd: tmp, changeName: 'no-such-change', specBase: tmp }) === '')
+   assert('组四：参数缺失（changeName null）→ 空串', await assembleStageReviewMaterials({ stage: 'execute-qa', cwd: tmp, changeName: null, specBase: tmp }) === '')
+ 
+-  // 接线源码钉：主链 join 装配结果；降级分支 join 空串保持；三模板槽在场（再审不含=组二既有钉）
++  // 接线源码钉：主链注入装配结果；降级分支空串保持；三模板槽在场（再审不含=组二既有钉）
++  // （2026-10-16-release-3-33-0 改钉：fbf0ada4 把裸 split/join 收编进 substituteRaw——
++  //   prompt.js:1701/1709，旧 `.split('{REVIEW_MATERIALS}').join(...)` 字面量已随迁移消失）
+   const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
+-  assert('组四：prompt.js 主链 join 目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes(".split('{REVIEW_MATERIALS}').join(reviewMaterialsMd)"))
+-  assert('组四：降级分支 join 空串保持', promptSrc.includes(".split('{REVIEW_MATERIALS}').join('')"))
++  assert('组四：prompt.js 主链注入目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes("substituteRaw('{REVIEW_MATERIALS}', reviewMaterialsMd)"))
++  assert('组四：降级分支空串保持', promptSrc.includes("substituteRaw('{REVIEW_MATERIALS}', '')"))
+   const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(join(REPO_ROOT, f), 'utf8').includes('{REVIEW_MATERIALS}'))
+   assert('组四：三阶段模板含 {REVIEW_MATERIALS} 槽', slotOk)
