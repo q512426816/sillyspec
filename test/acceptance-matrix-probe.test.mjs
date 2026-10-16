@@ -7,9 +7,12 @@
  * 2. 双源结构归属：allowed_paths 测试模式命中（test/ 前缀 + .test. 文件名 + NEW: 前缀剥离）
  *    ∪ marker 解析的 runId 下 review.json changedFiles test/ 前缀；marker 读不到 → execute-runs
  *    目录扫描兜底；review.json 读不到 → 该源空集不报错
- * 3. 关键词提示：标识符 + CJK 片段命中、上限 5 词、命中≠判定（hints 只含命中的条目）
+ * 3. 关键词提示：标识符 + CJK 片段命中、上限 5 词、命中≠判定（hints 只含命中的条目）；
+ *    2026-10-16-probe7-prefill-noise-fix：正文级命中封顶 partial（covered 仅测试名级命中）、
+ *    部署/文档类条目直判 non-testable、候选>5 交人工——本 fixture 的命中均为注释级，断言
+ *    按新契约（旧「注释命中→covered+关键词行号锚点」即被修复的缺陷面）
  * 4. 无 tasks/ 目录 → applicable=false，渲染「不适用（无 TaskCard）」
- * 5. 骨架渲染：探针 7 段位于探针 3 后、四枚举判定槽 + 证据槽、防御行、无归属提示、管道符转义
+ * 5. 骨架渲染：探针 7 段位于探针 3 后、枚举判定槽 + 证据槽全预填、防御行、无归属提示、管道符转义
  * 6. ensureAcceptanceMatrixSection 幂等补段：插探针 3 段后 / 文末追加两形态、二跑零改动、
  *    applicable=false no-op
  * 7. 禁 task-review 静态 import（三步环）源码级断言
@@ -102,6 +105,16 @@ function makeFixtureA() {
     '  - zqxv 零命中条目 wkj（归属在场但测试内容不含关键词）',
     '---',
     '# task-05', '',
+  ].join('\n'))
+  // task-06：有 acceptance、无归属、无部署/文档类词 → uncovered（（无归属测试）证据形态）
+  writeFileSync(join(changeDir, 'tasks', 'task-06.md'), [
+    '---',
+    'id: task-06',
+    'allowed_paths: [docs/plain.md]',
+    'acceptance:',
+    '  - 结果表格标记为 uncovered 待人工',
+    '---',
+    '# task-06', '',
   ].join('\n'))
 
   // 源文件与归属测试文件（关键词 grep 的真实内容面）
@@ -201,14 +214,17 @@ try {
   const i4 = report.indexOf('#### 探针 4：')
   assert(i3 !== -1 && i7 !== -1 && i4 !== -1 && i3 < i7 && i7 < i4, '探针 7 段位于探针 3 后、探针 4 前')
   // ql-20260915-004 probe7-prefill-evidence：判定/证据两列机械预填——占位槽淘汰，四形态断言
+  // 2026-10-16-probe7-prefill-noise-fix：本 fixture 的关键词命中全在注释行（正文级）——
+  // 新契约下 covered 仅测试名级命中，故机械预填全为 partial/non-testable/uncovered（无 covered）
   assert((report.match(/<待填：四选一>/g) || []).length === 0, '判定槽占位淘汰（全预填）')
   assert((report.match(/<TODO>/g) || []).length === 0, '证据槽占位淘汰（全预填）')
-  assert((report.match(/\| covered \|/g) || []).length === 3, `命中≥1 → covered ×3（t1×2 + t2）（实际 ${(report.match(/\| covered \|/g) || []).length}）`)
-  assert((report.match(/\| partial \|/g) || []).length === 1, '有归属零命中 → partial ×1（task-05）')
-  assert((report.match(/\| non-testable \|/g) || []).length === 1, '无归属 + 文档类词 → non-testable ×1（task-04）')
-  assert((report.match(/\| uncovered \|/g) || []).length === 0, '本 fixture 无「无归属非文档类」条目 → uncovered ×0')
-  assert(report.includes('`test/unit-foo.test.mjs:1`（probe7）'), 'covered 证据含首命中 file:line + 关键词锚点')
-  assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), 'partial 证据 = 人工核验提示 + 反引号归属文件')
+  assert((report.match(/\| covered \|/g) || []).length === 0, `注释级命中不再假 covered（实际 ${(report.match(/\| covered \|/g) || []).length}）`)
+  assert((report.match(/\| partial \|/g) || []).length === 4, `正文级/零命中 → partial ×4（t1×2 + t2 + t5）（实际 ${(report.match(/\| partial \|/g) || []).length}）`)
+  assert((report.match(/\| non-testable \|/g) || []).length === 1, '部署/文档类词条目 → non-testable ×1（task-04）')
+  assert((report.match(/\| uncovered \|/g) || []).length === 1, '无归属非文档类条目 → uncovered ×1（task-06）')
+  assert(report.includes('（正文级命中——待人工核验 `test/unit-foo.test.mjs`）'), '正文级命中证据 = 待人工注记 + 反引号归属文件')
+  assert(!report.includes('`test/unit-foo.test.mjs:1`'), '证据不再含关键词首现行号锚点（空心锚根除）')
+  assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), '零命中 partial 证据 = 人工核验提示 + 反引号归属文件')
   assert(report.includes('（无归属测试）'), '无归属证据 = （无归属测试）')
   assert(report.includes('判定列为 CLI 机械预填，agent 逐格复核改写'), '段头预填注记在场（枚举纯值的复核责任声明）')
   assert(report.includes('covered / covered-service / partial / uncovered / non-testable'), '五枚举图例在场')
@@ -228,7 +244,7 @@ try {
   const slots = extractAcceptanceMatrixSlots(sk)
   assert(slots.present && slots.unfilled === 0, `预填判定全为合法枚举（unfilled=0，实际 ${slots.unfilled}）`)
   assert(slots.missingEvidence === 0, `预填证据全过锚点口径（missingEvidence=0，实际 ${slots.missingEvidence}）`)
-  assert(slots.rows.length === 5, `五行数据行（实际 ${slots.rows.length}）`)
+  assert(slots.rows.length === 6, `六行数据行（实际 ${slots.rows.length}）`)
 
   console.log('--- 6. 无 tasks 目录不适用 ---')
   const fxB = makeFixtureB()
@@ -311,10 +327,12 @@ try {
     assert(t1 && t1.testFiles.includes('test/consumer-pivot.test.mjs'),
       `task-01 归属含下游 task-03 的测试文件（实际：${JSON.stringify(t1 && t1.testFiles)}）`)
     assert(t3 && t3.testFiles.includes('test/consumer-pivot.test.mjs'), 'task-03 自身归属不变')
-    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 covered（anchor 在下游测试内）
+    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 partial（下游命中为注释级
+    // 正文命中——新契约封顶 partial；归属并入与命中非空即该测试的修复意图所在）
     const md = renderVerifyProbesReport(r)
     const seg = md.split('**task-01**')[1] ? md.split('**task-01**')[1].split('**task-03**')[0] : ''
-    assert(seg.includes('covered'), `task-01 acceptance 预填 covered（不再假 uncovered；seg=${seg.slice(0, 120)}）`)
+    assert(seg.includes('partial') && seg.includes('正文级命中——待人工核验 `test/consumer-pivot.test.mjs`'),
+      `task-01 acceptance 预填 partial（不再假 uncovered，正文级命中封顶；seg=${seg.slice(0, 200)}）`)
     // 无依赖关系的卡不并入（task-03 不反向承接无关卡——用 fixture 内只两卡，反向断言：t3 归属不含 src-feature.js 类）
     assert(!(t3.testFiles || []).some(f => f.includes('src-feature')), '依赖方向单向：下游不反向并入')
   }

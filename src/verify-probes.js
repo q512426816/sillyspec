@@ -1721,9 +1721,33 @@ const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0
 // 关键词提取：≥3 字符标识符（[A-Za-z_][A-Za-z0-9_]{2,}）∪ ≥2 字连续 CJK 片段，按出现顺序交错
 const PROBE7_TERM_RE = /[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g
 const PROBE7_TERM_CAP = 5
+// 候选帽（2026-10-16-probe7-prefill-noise-fix FR-04 / 缺陷四）：归属候选 >5 且无测试名级
+// 收窄命中 → 判定交人工（uncovered），禁止目录级候选长清单进单元格
+const PROBE7_CANDIDATE_CAP = 5
 // 坑 probe7-prefill-evidence（ql-20260915-004）：无归属时的 non-testable 判别词（机械保守：
-// acceptance 文本命中即预填 non-testable，agent 复核可改写）
+// acceptance 文本命中即预填 non-testable，agent 复核可改写）。
+// 2026-10-16-probe7-prefill-noise-fix FR-01：升级为「条目级直判」——命中即 non-testable
+// （无论归属在场与否），且卡内全部 acceptance 命中时跳过 FR 关联回归候选池注入
+// （缺陷一实证：compose/Dockerfile 卡经 FR 池灌单格 130+ 不相干测试文件）。
 const PROBE7_NONTESTABLE_RE = /文档|部署|doc|deploy|manual|config/i
+// 测试名行形态（FR-02 name 级命中判定）：Python def test_* / class Test*；JS 系 test|it|describe
+// （含 .each/.only/.skip 等链式变体）调用行。命中行含验收词 → 名级命中；证据锚点取该行行号。
+const PROBE7_PY_TESTNAME_RE = /^\s*(?:async\s+)?def\s+(test_\w+)|^\s*class\s+(Test\w+)/
+const PROBE7_JS_TESTNAME_RE = /^\s*(?:test|it|describe)(?:\.[A-Za-z]+)*\s*\(/
+
+/**
+ * 行级测试名判定：返回测试名（Python def/class 名；JS 系取首个引号串，取不到以空串标记
+ * 「名行但名不可提取」由调用方以 term 兜底）；非测试名行返回 null。
+ */
+function probe7TestNameOfLine(line) {
+  const m = String(line).match(PROBE7_PY_TESTNAME_RE)
+  if (m) return m[1] || m[2]
+  if (PROBE7_JS_TESTNAME_RE.test(line)) {
+    const q = String(line).match(/(['"`])([^'"`]{1,80})\1/)
+    return q ? q[2] : ''
+  }
+  return null
+}
 
 /**
  * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
@@ -1810,17 +1834,22 @@ function resolveExecuteRunIdInline(runtimeRoot, changeName) {
 }
 
 /**
- * 读当前 runId 下某 task 的 review.json changedFiles 中 test/ 前缀路径（归属第二源）。
+ * 读当前 runId 下某 task 的 review.json changedFiles 中测试文件路径（归属第二源）。
  * review.json 读不到 / JSON 非法 / changedFiles 非数组 → 空集不报错（提示面，宁缺毋噪）。
+ * opts.wide（2026-10-16-probe7-prefill-noise-fix FR-03 / 同波次提升信号）：过滤口径从
+ * `test/` 前缀换为 isProbe7TestPath——覆盖嵌套 tests/ 目录形态（平台侧实证
+ * sillyhub-daemon/tests/、agent/tests/ 前缀不交，窄口径漏)。缺省窄口径不变（结构归属面
+ * 零行为变化；宽口径仅供 waveFiles 提升信号消费）。
  */
-function readReviewChangedTestFiles(runtimeRoot, runId, taskId) {
+function readReviewChangedTestFiles(runtimeRoot, runId, taskId, opts = {}) {
   try {
     const review = JSON.parse(readFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json'), 'utf8'))
     if (!review || !Array.isArray(review.changedFiles)) return []
+    const wide = !!(opts && opts.wide)
     return review.changedFiles
       .filter(f => typeof f === 'string')
       .map(f => f.split('\\').join('/'))
-      .filter(f => f.startsWith('test/'))
+      .filter(f => wide ? isProbe7TestPath(f) : f.startsWith('test/'))
   } catch {
     return []
   }
@@ -1850,11 +1879,16 @@ function extractAcceptanceTerms(text) {
  * 坑 probe7-prefill-evidence（ql-20260915-004）：anchors 逐词记录首命中 file:line（grep -n
  * 语义——首个包含该词的测试文件内的首行号），供证据列机械预填；terms/files 键维持旧形态
  * （既有消费方/测试零回归）。
+ * 2026-10-16-probe7-prefill-noise-fix FR-02（缺陷二/三，supersedes 上述 anchors 契约）：
+ * 关键词首现行号锚点废除（实证指向 docstring 里的 config 字样 = 空心证据）——改为
+ * nameAnchors：逐行判定测试名行（probe7TestNameOfLine），行含该词且为 def/it/test/describe
+ * 名行才记 {term, file, line, name}（name 不可提取时以 term 兜底）。covered 只认名级命中；
+ * terms/files 语义不变（正文级命中仍在场，判定侧封顶 partial）。
  * @param {Array<string>} testFiles 归属测试文件（仓根相对路径）
  * @param {string} cwd 主仓 cwd
  * @param {string|null} wtRoot worktree 根
  * @param {string[]} [crossRoots] 跨仓仓根（local.yaml repos 注册根，绝对路径）
- * @returns {Record<number, {terms: string[], files: string[], anchors: Array<{term: string, file: string, line: number}>}>}
+ * @returns {Record<number, {terms: string[], files: string[], nameAnchors: Array<{term: string, file: string, line: number, name: string}>}>}
  *   普通对象，可 JSON 序列化
  */
 function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot, crossRoots = []) {
@@ -1871,27 +1905,32 @@ function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot, crossRoot
     cache.set(rel, content)
     return content
   }
-  // 首命中行号（1-based）：indexOf 前缀行计数，CRLF 不影响（按 \n 切）
-  const firstHitLine = (content, term) => {
-    const idx = content.indexOf(term)
-    return idx === -1 ? null : content.slice(0, idx).split('\n').length
-  }
   acceptanceItems.forEach((item, idx) => {
     const hitTerms = []
     const hitFiles = new Set()
-    const anchors = []
+    const nameAnchors = []
     for (const term of extractAcceptanceTerms(item)) {
-      const hits = testFiles.filter(f => { const c = readTest(f); return !!c && c.includes(term) })
-      if (hits.length > 0) {
-        hitTerms.push(term)
-        for (const f of hits) hitFiles.add(f)
-        // 首命中文件内的首命中行（单文件 grep -n 首命中即可，机械保守）
-        const firstFile = hits[0]
-        const line = firstHitLine(readTest(firstFile) || '', term)
-        if (line !== null) anchors.push({ term, file: firstFile, line })
+      let hit = false
+      for (const f of testFiles) {
+        const content = readTest(f)
+        if (!content || !content.includes(term)) continue
+        hit = true
+        hitFiles.add(f)
+        if (nameAnchors.some(a => a.file === f && a.term === term)) continue
+        // 名级判定：首个「含该词且为测试名行」的行（行号 1 基；CRLF 不影响——按 \n 切）
+        const lines = content.split('\n')
+        for (let i = 0; i < lines.length; i++) {
+          if (!lines[i].includes(term)) continue
+          const name = probe7TestNameOfLine(lines[i])
+          if (name !== null) {
+            nameAnchors.push({ term, file: f, line: i + 1, name: name || term })
+            break
+          }
+        }
       }
+      if (hit) hitTerms.push(term)
     }
-    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles], anchors }
+    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles], nameAnchors }
   })
   return hints
 }
@@ -1904,14 +1943,22 @@ function mdEscapeCell(text, cap = 200) {
 }
 
 /**
- * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004）。
+ * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004；
+ * 2026-10-16-probe7-prefill-noise-fix 判定链重写）。
  *
  * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量 probe1-noqa
- * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）：
- *   - 无归属 → uncovered；acceptance 文本含 文档/部署/doc/deploy/manual/config 类词且无归属
- *     → non-testable
- *   - 有归属且命中 ≥1 → covered，证据 = 首命中 `file:line`（term）锚点（≤3 条防膨胀）
- *   - 有归属零命中 → partial，证据 = 无机械命中提示 + 反引号归属文件（满足门禁测试锚点口径）
+ * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）。
+ * 四缺陷实证（消费仓 backend-mem-polling verify 收口）后固定为七级优先链（FR-05）：
+ *   ① 测试名级命中（nameAnchors）→ covered，锚点 = 测试函数名行（file:def行 行号）并引用
+ *      测试名（缺陷二：正文关键词命中即 covered、锚点取 docstring 行号 = 空心证据，根除）；
+ *   ② 条目命中部署/文档类词（PROBE7_NONTESTABLE_RE）→ non-testable（缺陷一：compose 卡
+ *      不该经关键词链冒充承接）；
+ *   ③ 无归属 → uncovered；
+ *   ④ 候选 > PROBE7_CANDIDATE_CAP（且无①收窄）→ uncovered「交人工」（缺陷四：长清单灌格）；
+ *   ⑤ 正文级命中（terms 非空无 nameAnchors）→ partial + 待人工注记（FR-02 封顶）；
+ *   ⑥ 同波次新增/修改归属测试（waveFiles）零字面命中 → covered + 待人工复核（缺陷三：
+ *      真 covered 因同义改写字面不交被误标 partial——本波次 diff 面提升信号）；
+ *   ⑦ 其余有归属零命中 → partial（现状文案）。
  *
  * 门禁兼容（stage-contract.js extractAcceptanceMatrixSlots / MATRIX_VERDICT_WHITELIST）：判定列
  * 须为纯枚举（精确 trim 匹配白名单）——行内尾注「（预填，复核后可改）」会破坏枚举解析，故
@@ -1919,24 +1966,47 @@ function mdEscapeCell(text, cap = 200) {
  * non-testable 证据须非空——预填值均按此口径构造（预填即可过门，复核责任在段头注记明示）。
  * @param {string} item acceptance 条目文本
  * @param {string[]|undefined} testFiles 归属测试文件
- * @param {{terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}|null} hint
+ * @param {{terms: string[], files: string[], nameAnchors?: Array<{term: string, file: string, line: number, name: string}>}|null} hint
+ * @param {{waveFiles?: string[]}} [opts] waveFiles = 同波次新增/修改归属测试（提升信号）
  * @returns {{verdict: string, evidence: string}}
  */
-function prefillMatrixCells(item, testFiles, hint) {
+function prefillMatrixCells(item, testFiles, hint, opts = {}) {
+  const waveFiles = Array.isArray(opts && opts.waveFiles) ? opts.waveFiles : []
   const hasAttribution = Array.isArray(testFiles) && testFiles.length > 0
-  if (!hasAttribution) {
-    return {
-      verdict: PROBE7_NONTESTABLE_RE.test(String(item || '')) ? 'non-testable' : 'uncovered',
-      evidence: '（无归属测试）',
-    }
-  }
-  const anchors = (hint && Array.isArray(hint.anchors)) ? hint.anchors : []
-  if (anchors.length > 0) {
-    const evidence = anchors.slice(0, 3)
-      .map(a => `\`${mdEscapeCell(a.file, 120)}:${a.line}\`（${mdEscapeCell(a.term, 40)}）`)
+  const nameAnchors = (hint && Array.isArray(hint.nameAnchors)) ? hint.nameAnchors : []
+  // ① 测试名级命中 → covered（锚点=测试函数名行 + 测试名引用）
+  if (nameAnchors.length > 0) {
+    const evidence = nameAnchors.slice(0, 3)
+      .map(a => `\`${mdEscapeCell(a.file, 120)}:${a.line}\`（${mdEscapeCell(a.name, 60)}）`)
       .join('、')
     return { verdict: 'covered', evidence }
   }
+  // ② 部署/文档类词 → non-testable（条目级直判，归属在场与否不影响）
+  if (PROBE7_NONTESTABLE_RE.test(String(item || ''))) {
+    return { verdict: 'non-testable', evidence: '（部署/文档类条目——如实际有测试承接请改写）' }
+  }
+  // ③ 无归属
+  if (!hasAttribution) {
+    return { verdict: 'uncovered', evidence: '（无归属测试）' }
+  }
+  // ④ 候选超帽（无测试名级收窄）→ 交人工
+  if (testFiles.length > PROBE7_CANDIDATE_CAP) {
+    return { verdict: 'uncovered', evidence: `（候选 ${testFiles.length} 个——归属不可判定，交人工核验）` }
+  }
+  // ⑤ 正文级命中 → partial（封顶；不再冒充 covered，锚点不含关键词行号）
+  if (hint && Array.isArray(hint.terms) && hint.terms.length > 0) {
+    const first = (Array.isArray(hint.files) && hint.files.length > 0) ? hint.files[0] : testFiles[0]
+    return { verdict: 'partial', evidence: `（正文级命中——待人工核验 \`${mdEscapeCell(first, 120)}\`）` }
+  }
+  // ⑥ 同波次新增/修改归属测试（零字面命中）→ covered + 待人工复核注记
+  const wave = testFiles.filter(f => waveFiles.includes(f))
+  if (wave.length > 0) {
+    const evidence = wave.slice(0, 3)
+      .map(f => `\`${mdEscapeCell(f, 120)}\`（同波次新增/修改——待人工复核）`)
+      .join('、')
+    return { verdict: 'covered', evidence }
+  }
+  // ⑦ 有归属零命中
   return {
     verdict: 'partial',
     evidence: `（无机械命中——人工核验 \`${mdEscapeCell(testFiles[0], 120)}\`）`,
@@ -1959,7 +2029,7 @@ export function renderProbe7Lines(p7) {
     return L
   }
   L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（五选一）：covered / covered-service / partial / uncovered / non-testable（covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点；non-testable 是文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
-  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。covered/covered-service/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/covered-service/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+  L.push('<!-- 预填说明（ql-20260915-004；2026-10-16-probe7-prefill-noise-fix 判定链修订）：判定列为 CLI 机械预填，agent 逐格复核改写——规则优先级：①测试名级命中（def test_* / it(/test(/describe( 名行含验收词）→covered（锚点=测试函数名行+测试名）；②部署/文档/doc/deploy/manual/config 类词条目→non-testable；③无归属→uncovered；④候选>5 且无测试名级收窄→uncovered（归属不可判定交人工）；⑤正文级命中→partial（待人工核验）；⑥同波次新增/修改的归属测试零命中→covered（待人工复核）；⑦其余有归属零命中→partial。covered/covered-service/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/covered-service/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
   // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
@@ -1991,13 +2061,15 @@ export function renderProbe7Lines(p7) {
       // 探针 3 既有 slice 截断先例收敛为前 5 + 「共 N 个」折叠；路径经 mdEscapeCell 防竖线破表）
       const attribCell = (t.testFiles && t.testFiles.length > 0)
         ? t.testFiles.slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('<br>')
-          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（目录级候选全量在 facts/trace，归属按关键词命中与证据锚点收窄）` : '')
+          + (t.testFiles.length > 5 ? `<br>…共 ${t.testFiles.length} 个（归属不可判定——候选全量在 facts/trace，交人工）` : '')
         : '无归属测试——判定大概率 uncovered'
       const h = (t.hints && t.hints[i]) || null
+      // 提示列展示帽（2026-10-16-probe7-prefill-noise-fix FR-04）：正文级命中可跨多文件，
+      // 命中文件同样收敛前 5 + 「共 N 个」折叠——长清单只进 facts/trace，不进单元格
       const hintCell = h
-        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
+        ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).slice(0, 5).map(f => `\`${mdEscapeCell(f, 120)}\``).join('、')}${(h.files || []).length > 5 ? `…共 ${h.files.length} 个` : ''}）`
         : '—'
-      const pre = prefillMatrixCells(item, t.testFiles, h)
+      const pre = prefillMatrixCells(item, t.testFiles, h, { waveFiles: t.waveFiles || [] })
       if (pre.verdict === 'uncovered' || pre.verdict === 'partial') zeroCoverage++
       L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | ${pre.verdict} | ${pre.evidence} |`)
     })
@@ -2244,8 +2316,13 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           .map(p => String(p).replace(/^NEW:\s*/, '').trim())
           .filter(p => p && isProbe7TestPath(p))
         const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
+        // 同波次提升信号（2026-10-16-probe7-prefill-noise-fix FR-03 / 缺陷三）：review changedFiles
+        // 的测试形态路径（wide 口径覆盖嵌套 tests/）——与结构归属分离保存，仅作「零字面命中 →
+        // covered+待人工复核」的提升信号（prefillMatrixCells 第⑥级），不改变归属集本身。
+        const fromReviewWave = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task, { wide: true }) : []
         // 直接下游卡的归属测试并入（provider acceptance 由消费卡测试承接）
         const fromDependents = []
+        const fromDependentsWave = []
         for (const other of cards) {
           if (other.task === card.task) continue
           const deps = dependsOnOf.get(other.task) || []
@@ -2254,13 +2331,24 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
             const t = String(p).replace(/^NEW:\s*/, '').trim()
             if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
           }
+          // 下游卡同波次测试并入提升信号（provider acceptance 由消费卡本波次测试承接，同跨卡口径）
+          if (runId) {
+            for (const f of readReviewChangedTestFiles(runtimeRoot, runId, other.task, { wide: true })) {
+              if (!fromDependentsWave.includes(f)) fromDependentsWave.push(f)
+            }
+          }
         }
         // 收集帽（坑 probe-noise-and-commit-suggest-quality 坑A）：目录级 allowed_paths 递归可卷
         // 入整仓测试树（实证 82 个）——去重后截前 20（展示层另有 5 个硬帽；hints/trace 消费同集）
         const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])].slice(0, 20)
+        // 全条目命中部署/文档类词的卡（docs/deploy 卡）不注入 FR 候选池（2026-10-16-probe7-prefill-noise-fix
+        // FR-01 / 缺陷一：compose/Dockerfile 卡经 FR 回退池整池 join，单格灌 130+ 不相干测试文件）。
+        // 代码卡（含至少一条非部署/文档类条目）注入行为不变。
+        const allNonTestableEntries = card.acceptance.length > 0
+          && card.acceptance.every(a => PROBE7_NONTESTABLE_RE.test(String(a || '')))
         // 无归属卡注入 FR 关联回归既有用例候选（task-02；有归属卡 existingTests 恒空——零噪音）
         const existingTests = []
-        if (frLinkedExisting && testFiles.length === 0) {
+        if (frLinkedExisting && testFiles.length === 0 && !allNonTestableEntries) {
           for (const f of frLinkedExisting.files) {
             if (isProbe7TestPath(f) && !existingTests.includes(f)) existingTests.push(f)
           }
@@ -2272,6 +2360,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           fmError: card.fmError || null,
           testFiles: finalTestFiles,
           existingTests,
+          waveFiles: [...new Set([...fromReviewWave, ...fromDependentsWave])],
           hints: buildAcceptanceHints(card.acceptance, finalTestFiles, cwd, wtRoot, probe7CrossRoots),
         })
       }

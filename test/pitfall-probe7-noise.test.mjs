@@ -31,6 +31,9 @@ test('FR-10：82 文件截断为 5 + 「共 82 个」折叠，路径转义不破
   assert.ok(attribCell.includes('…共 82 个'), '折叠计数在场')
   assert.ok(!attribCell.includes('case-05.'), '第 6 个及以后不展示')
   assert.ok(attribCell.length < 500, `单元格长度收敛（got ${attribCell.length}）`)
+  // 2026-10-16-probe7-prefill-noise-fix FR-04：>5 候选无测试名级收窄 → 判定交人工
+  assert.ok(row.includes('| uncovered |'), '>5 候选 → uncovered（长清单不冒充承接结论）')
+  assert.ok(row.includes('候选 82 个——归属不可判定，交人工核验'), '证据注明候选数与去向')
 })
 
 test('FR-10：≤5 个时不折叠、无计数尾巴', () => {

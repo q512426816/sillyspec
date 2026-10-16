@@ -1,0 +1,30 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-16T07:44:31.079Z
+---
+# 提案书（Proposal）— 2026-10-16-probe7-prefill-noise-fix
+
+## 动机
+
+任务原话转写：verify 探针7验收×测试矩阵预填噪音四缺陷修复（假covered/FR池灌水/空心锚点/真covered误标partial）——依据 multi-agent-platform 仓 docs/sillyspec/verify-probe7-matrix-prefill-four-defects.md（提交 caa6b1fa2，来源 backend-mem-polling verify 收口实测）
+
+动机与背景：探针7矩阵预填四缺陷实测净成本为负——①无归属卡整池注入 FR 关联回归候选（单格 130+ 不相干文件）；②正文关键词命中即预填 covered 且锚点取关键词首现行号（docstring 里的 config 字样成为 docker 配额验收的通过证据，假 covered 8 格）；③真 covered 因测试名同义改写字面不交被误标 partial（6 格多一轮人工升格）；④候选超长清单灌入 verify-result.md 膨胀 200+ 行。
+
+成功标准：
+- deploy/config/doc 类验收条目（PROBE7_NONTESTABLE_RE）直接预填 non-testable，docs/deploy 全_ENTRY 命中的卡不再注入 FR 候选池，单格不再出现 130+ 文件长清单
+- 正文关键词命中最多预填 partial（带待人工注记），永远不自动 covered；covered 仅测试函数名/用例名级命中（def test_* / class Test* / it(/test(/describe( 行）
+- covered 证据锚点指向测试函数名所在行并引用测试名，禁止取关键词首现行号
+- 同波次新增/修改（review changedFiles 面）的归属测试文件在零字面命中时预填 covered+待人工复核注记
+- 候选 >5 且无测试名级收窄信号时预填 uncovered（归属不可判定交人工），单元格禁止长清单
+- 无归属 uncovered、no-frontmatter 跳卡、段在场 no-op、trace 落盘等既有行为零回归，既有测试面全绿
+
+## 变更范围
+
+按成功标准机械推导，共 2 条验收面：
+1. deploy/config/doc 类验收条目（PROBE7_NONTESTABLE_RE）直接预填 non-testable，docs/deploy 全_ENTRY 命中的卡不再注入 FR 候选池，单格不再出现 130+ 文件长清单
+2. 正文关键词命中最多预填 partial（带待人工注记），永远不自动 covered；covered 仅测试函数名/用例名级命中（def test_* / class Test* / it(/test(/describe( 行）- covered 证据锚点指向测试函数名所在行并引用测试名，禁止取关键词首现行号- 同波次新增/修改（review changedFiles 面）的归属测试文件在零字面命中时预填 covered+待人工复核注记- 候选 >5 且无测试名级收窄信号时预填 uncovered（归属不可判定交人工），单元格禁止长清单- 无归属 uncovered、no-frontmatter 跳卡、段在场 no-op、trace 落盘等既有行为零回归，既有测试面全绿
+
+## 成功标准（可验证）
+
+1. deploy/config/doc 类验收条目（PROBE7_NONTESTABLE_RE）直接预填 non-testable，docs/deploy 全_ENTRY 命中的卡不再注入 FR 候选池，单格不再出现 130+ 文件长清单
+2. 正文关键词命中最多预填 partial（带待人工注记），永远不自动 covered；covered 仅测试函数名/用例名级命中（def test_* / class Test* / it(/test(/describe( 行）- covered 证据锚点指向测试函数名所在行并引用测试名，禁止取关键词首现行号- 同波次新增/修改（review changedFiles 面）的归属测试文件在零字面命中时预填 covered+待人工复核注记- 候选 >5 且无测试名级收窄信号时预填 uncovered（归属不可判定交人工），单元格禁止长清单- 无归属 uncovered、no-frontmatter 跳卡、段在场 no-op、trace 落盘等既有行为零回归，既有测试面全绿

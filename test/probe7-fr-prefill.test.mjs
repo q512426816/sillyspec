@@ -33,19 +33,20 @@ function fixture({ withFr }) {
     '---', 'change: demo', '---', '# 设计', '',
     '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/lib.js | 改动 |', '',
   ].join('\n'))
-  writeFileSync(join(changeDir, 'tasks.md'), '---\nauthor: t\n---\n\n# 任务注册表\n\n- [ ] task-01: 无归属任务\n- [ ] task-02: 自带测试任务\n')
-  const card = (id, allowed) => [
+  writeFileSync(join(changeDir, 'tasks.md'), '---\nauthor: t\n---\n\n# 任务注册表\n\n- [ ] task-01: 无归属任务\n- [ ] task-02: 自带测试任务\n- [ ] task-03: 部署文档任务\n')
+  const card = (id, allowed, acceptance = ['返回值 a 恒为 1']) => [
     '---', `id: ${id}`, `title: t-${id}`, `title_zh: 任务${id}`, 'author: t',
     'created_at: 2026-10-06 00:00:00', 'priority: P0', 'depends_on: []', 'blocks: []',
     'requirement_ids: []', 'decision_ids: []',
     'allowed_paths:', ...allowed.map(p => `  - ${p}`),
     'goal: >', '  g', 'implementation:', '  - i',
-    'acceptance:', '  - 返回值 a 恒为 1',
+    'acceptance:', ...acceptance.map(a => `  - ${a}`),
     'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
   ].join('\n')
   mkdirSync(join(changeDir, 'tasks'), { recursive: true })
   writeFileSync(join(changeDir, 'tasks', 'task-01.md'), card('task-01', ['src/lib.js']))
   writeFileSync(join(changeDir, 'tasks', 'task-02.md'), card('task-02', ['src/lib.js', 'test/own.test.mjs']))
+  writeFileSync(join(changeDir, 'tasks', 'task-03.md'), card('task-03', ['docs/x.md'], ['部署文档更新 config 说明']))
   if (withFr) {
     mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
     mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
@@ -89,4 +90,17 @@ test('P3 无 FR 知识：行为与现状一致（无注入、无注记）', () =
   assert.deepEqual(t1.existingTests || [], [], '无注入')
   const md = renderVerifyProbesReport(r)
   assert.ok(!md.includes('既有用例候选'), '无注记行')
+})
+
+test('P4 全部署类条目卡不注入 FR 候选池（2026-10-16-probe7-prefill-noise-fix FR-01 / 缺陷一）', () => {
+  const { root, specBase } = fixture({ withFr: true })
+  const r = runVerifyProbes({ cwd: root, changeName: 'demo', specDir: specBase })
+  const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
+  assert.ok(t3, 'task-03 在矩阵')
+  assert.deepEqual(t3.existingTests || [], [], 'docs 卡不注入 FR 候选池（同一变更 FR 知识在场）')
+  assert.deepEqual(t3.testFiles || [], [], 'docs 卡归属空')
+  const md = renderVerifyProbesReport(r)
+  const sec = md.slice(md.indexOf('**task-03**'))
+  assert.ok(!sec.includes('既有用例候选'), 'task-03 段无既有用例注记行')
+  assert.ok(sec.includes('| non-testable |'), '部署/文档类条目行判定 non-testable')
 })

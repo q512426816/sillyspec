@@ -86,8 +86,10 @@ test('uncovered/partial 行证据无锚零影响（只查 covered）', () => {
 
 // ── FR-09 多根（2026-09-17-pass-cap-semantics task-07 / task-05 实现）：buildAcceptanceHints
 // 双根扩多根——并入 local.yaml repos 注册的跨仓仓根后，跨仓仓根下的测试文件内容可读、
-// 命中不再恒空（矩阵不因跨仓恒预填 partial）。
-test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空，矩阵预填 covered（不恒 partial）', () => {
+// 命中不再恒空（矩阵不再恒「无机械命中」预填）。
+// 2026-10-16-probe7-prefill-noise-fix：命中分级后注释级命中（`// kwCrossRoot7 case`）封顶
+// partial——本用例锁定「内容可读 → 命中非空 → 正文级命中证据」，non-空命中即修复意图。
+test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空，矩阵预填正文级命中证据（不恒零命中）', () => {
   const proj = mkdtempSync(join(tmpdir(), 'p7-crossroot-'))
   tmpRoots.push(proj)
   const crossRoot = mkdtempSync(join(tmpdir(), 'p7-crossrepo-'))
@@ -104,14 +106,15 @@ test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空
   mkdirSync(join(crossRoot, 'test'), { recursive: true })
   writeFileSync(join(crossRoot, 'test', 'crossroot-attrib.test.mjs'), '// kwCrossRoot7 case\nexport {}\n')
 
-  // 对照态：未注册跨仓（单仓双根）→ 读不到内容 → 零命中 → partial 预填
+  // 对照态：未注册跨仓（单仓双根）→ 读不到内容 → 零命中 → partial 预填（无机械命中形态）
   const before = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
   const t1b = before.probe7.tasks.find(t => t.task === 'task-01')
   assert.ok(t1b && (!t1b.hints || !t1b.hints[0]),
     `未注册跨仓根 → 关键词命中恒空（实际 hints=${JSON.stringify(t1b && t1b.hints)}）`)
-  assert.ok(renderVerifyProbesReport(before).includes('| partial |'), '对照态：矩阵预填 partial（跨仓内容不可读）')
+  assert.ok(renderVerifyProbesReport(before).includes('（无机械命中——人工核验 `test/crossroot-attrib.test.mjs`）'),
+    '对照态：矩阵预填零命中 partial（跨仓内容不可读）')
 
-  // 注册跨仓根（local.yaml repos，相对路径按 cwd resolve）→ 多根读取 → 命中 + covered 预填
+  // 注册跨仓根（local.yaml repos，相对路径按 cwd resolve）→ 多根读取 → 命中 + 正文级证据预填
   mkdirSync(specBase, { recursive: true })
   writeFileSync(join(specBase, 'local.yaml'), `repos:\n  crossrepo: ${crossRoot.split('\\').join('/')}\n`)
   const after = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
@@ -119,6 +122,7 @@ test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空
   assert.ok(t1a && t1a.hints && t1a.hints[0] && t1a.hints[0].terms.includes('kwCrossRoot7'),
     `注册跨仓根后命中非空（实际 hints=${JSON.stringify(t1a && t1a.hints)}）`)
   const report = renderVerifyProbesReport(after)
-  assert.ok(report.includes('| covered |') && !report.includes('| partial |'),
-    '多根读取后矩阵预填 covered（不再因跨仓恒预填 partial）')
+  assert.ok(report.includes('正文级命中——待人工核验 `test/crossroot-attrib.test.mjs`')
+    && !report.includes('（无机械命中——人工核验 `test/crossroot-attrib.test.mjs`）'),
+    '多根读取后命中非空 → 正文级命中证据（注释级命中封顶 partial，不再恒零命中）')
 })
