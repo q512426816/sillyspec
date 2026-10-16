@@ -1021,3 +1021,23 @@ gate_snapshot:
 **遇到同步类等待/噪音先查三处**：① 命令尾部卡住不看时钟猜——看是否 `[spec-sync]` 行还没打完（后台化后此形态已消，若再现查 `SILLYSPEC_SYNC_BG` 是否被置 0）；② 后台同步结果/失败去 `spec-sync-bg.log` 翻（不再进主命令输出）；③ 冲突横幅只在日志里出现时，`progress show` 的红标与 `platform resolve` 处置入口不变。
 
 **关联坑名**：`sync-tail-blocks-cli-exit`；上游坑 #54（熔断文案/预算可调，本坑是其「治本」续篇）
+
+## 68. 两类烂标题：完整变更恒变更名兜底 / 轻量变更 50 字硬切残句（2026-10-16 用户实证，已修复）
+
+**症状（平台变更中心 20 条实证：7 条变更名兜底 + 8 条 50 字截断，仅 5 条合格）**：
+1. 完整变更标题显示 `10-16-fix-auth-random-logout` 这类变更名——`run brainstorm` 启动无 --input 时 title 落变更名兜底，brainstorm 写完 proposal 后无人刷新。
+2. 轻量变更标题是 50 字截断长句（如「change 文件树「刷新」同步链路三层静默失败——后端 RPC 预算 3s 短于实测 6~13.5…」）——`--input` 首行超 50 字硬切加 …。
+
+**根因**：
+1. brainstorm 模板 H1 即纯模板「# 提案书（Proposal）」（BRAINSTORM_ARTIFACT_TEMPLATES_MD 正文），`deriveTitleFromLinkedChange` 剥固定前缀为空 → 直接放弃（返回 ''，complete.js 空串不刷新）；proposal「## 动机」节首句本是一句概括素材却无人取。
+2. `deriveChangeTitle` 对超长首行硬切（≤50 契约，motiveFromInput 模块摘要同源），标题是否短全凭 agent 写 --input 首行时的自觉，无机器兜底。
+
+**修复（2026-10-16-short-change-title，提炼口径：目标 20 / 上限 30）**：
+- `distillShortTitleEx/distillShortTitle`（quicklog.js）：超 30 字长句在自然标点（。！？；：、，…—；ASCII 标点仅后随空白/CJK/串尾才算——防 3.5 / 1,000 误切）处截断，截点取距目标 20 最近、落在 [6,30] 区间者，截后剥尾部标点；无可用截点才硬切 30+… 并标 `hardCut`。
+- `deriveChangeTitle` 拆出 `deriveChangeTitleRaw`（首行提取不截断），旧函数 ≤50 契约逐字节不变（模块摘要不牵连）；新增 `deriveShortChangeTitle(Ex)` = Raw+提炼 作标题面统一入口。
+- 调用点切换：flow.js fresh/resume/adopt + run/command.js 四处 initChange 改走提炼；fresh/resume hardCut 时打一行 `💡 … --title` 软提示（不阻断）。
+- `deriveTitleFromLinkedChange`：两文档皆无语义标题（纯模板 H1）时回退读 proposal「## 动机」节首行（跳 MACHINE-DRAFT 包裹标记/AGENT 槽注释/模板占位行，剥 bullet 与「任务原话转写：」前缀）过提炼；无动机节仍返回 ''（空串不刷新契约不变）；H1 语义标题返回前过提炼封顶 ≤30。
+- 存量库内 50 字/变更名标题不由本修复治理（平台收养规则不覆盖语义标题，工具侧重推无效）——回填归平台侧脚本，提炼口径与 `distillShortTitleEx` 对齐。
+- 测试 test/short-change-title.test.mjs（17 例）：两条实证坏标题回放 + 截点择优/硬切/小数保护 + 动机回退与占位跳过 + ≤50 旧契约回归；quick-leftover-title/quicklog-cli-managed/change-title-flow/motive-from-input/change-title-backfill 全绿。
+
+**关联坑名**：`linked-task-placeholder-title`（坑 #31，本坑是其续篇——冒号形态已治、纯模板形态由动机回退收口）

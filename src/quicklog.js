@@ -118,18 +118,74 @@ export function sanitizeDesc(description) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
+// ── 短标题提炼（2026-10-16-short-change-title，变更中心标题治理·工具侧）──
+
+// 提炼参数：目标 20 字 / 上限 30 字 / 截点下限 6 字（更短的截点宁可不切——残词标题比
+// 硬切长句更难读，如「修复，…」切出「修复」）。平台侧回填脚本须与此处口径对齐。
+const SHORT_TITLE_DEFAULTS = Object.freeze({ target: 20, max: 30, floor: 6 })
+// 全角/语义截点：无条件可切。ASCII 标点仅在后随空白/CJK/串尾时才算截点（防 3.5 / 1,000 /
+// e.g. 误切——小数点后随数字是最常见误切源，rpc-budget 标题实证）。
+const SHORT_TITLE_CJK_CUT = new Set([...'。！？；：、，…—～·'])
+const SHORT_TITLE_ASCII_CUT = new Set([...'.,;:!?'])
+const SHORT_TITLE_CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/
+// 截断后尾部清理：剥句读尾标点（引号括号不入此集——「xxx」收尾是平衡结构不能剥）；
+// 再剥截点切进引号体时留下的悬空开口引号/括号。
+const SHORT_TITLE_TRAIL_RE = /[\s。．.!！?？；;：:，,、…—~～·]+$/u
+const SHORT_TITLE_DANGLING_RE = /[「『（《"']+$/u
+
 /**
- * 变更标题推导（用户需求 2026-09-29：changes.title 应为中文描述，≤50 字、建议 ~20 字）。
- * 取 --input 首个非空行（「成功标准：」引导行即止——那是验收面不是标题素材），剥
- * 「需求：/动机：」类标签前缀，空白折叠单行，超长截断加 …；空输入返回 ''（调用方兜底
- * change 名）。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅有指引），
- * --title 显式覆盖一切推导。
+ * 短标题提炼（2026-10-16-short-change-title）。病根：deriveChangeTitle 旧口径对超长首行
+ * 50 字硬切加 …（残句难读），纯靠 agent 自觉写短首行（本地 20 条实证 7 条变更名兜底 +
+ * 8 条硬切残句）。提炼口径：超 max 长句在自然标点处截断——截点取「距 target 最近、
+ * 落在 [floor, max] 区间」者（同距取更短），截后剥尾部标点；无可用截点才硬切
+ * slice(0,max)+'…' 并标 hardCut=true（调用方可据此打 --title 软提示）。
+ * 返回 { title, hardCut }；空输入 { title:'', hardCut:false }。
+ */
+export function distillShortTitleEx(raw, opts = {}) {
+  const { target, max, floor } = { ...SHORT_TITLE_DEFAULTS, ...opts }
+  const s = String(raw || '').replace(/\s+/g, ' ').trim()
+  if (!s) return { title: '', hardCut: false }
+  if (s.length <= max) {
+    return { title: s.replace(SHORT_TITLE_TRAIL_RE, ''), hardCut: false }
+  }
+  // 截点收集：候选标题=标点前缀（去重后按距 target 最近择优）
+  const seen = new Set()
+  const cands = []
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    let cut = SHORT_TITLE_CJK_CUT.has(ch)
+    if (!cut && SHORT_TITLE_ASCII_CUT.has(ch)) {
+      const nx = s[i + 1]
+      cut = nx === undefined || /\s/.test(nx) || SHORT_TITLE_CJK_RE.test(nx)
+    }
+    if (!cut) continue
+    const t = s.slice(0, i).replace(SHORT_TITLE_TRAIL_RE, '').replace(SHORT_TITLE_DANGLING_RE, '').trim()
+    if (t && !seen.has(t)) { seen.add(t); cands.push(t) }
+  }
+  const valid = cands.filter((t) => t.length >= floor && t.length <= max)
+  if (valid.length > 0) {
+    valid.sort((a, b) => (Math.abs(a.length - target) - Math.abs(b.length - target)) || (a.length - b.length))
+    return { title: valid[0], hardCut: false }
+  }
+  return { title: s.slice(0, max) + '…', hardCut: true }
+}
+
+/** distillShortTitleEx 的字符串简版（不需要 hardCut 观测的调用方）。 */
+export function distillShortTitle(raw, opts) {
+  return distillShortTitleEx(raw, opts).title
+}
+
+/**
+ * 变更标题首行提取（不截断）：取 --input 首个非空行（「成功标准：」引导行即止——那是验收
+ * 面不是标题素材），剥「需求：/动机：」类标签前缀，空白折叠单行。截断口径由此分治：
+ * deriveChangeTitle（≤50 硬切，模块摘要用）与 deriveShortChangeTitle（≤30 提炼，标题面用）
+ * 共享本提取，两个口径互不牵连。空输入返回 ''（调用方兜底变更名）。
  * 段头行防御（2026-10-15-title-label-skip）：过门格式示例曾被读成段头形态——agent 把
  * 「动机与背景：」独立成行照抄，白名单无复合词致整行成标题（进度库 6 变更实证）。两道
  * 防御：白名单补复合词（动机与背景/背景与动机）；任意短段头行（≤12 字非冒号内容+行尾
  * 冒号，如「变更背景：」「详细说明：」）整行跳过取次非空行——冒号后无内容不成标题。
  */
-export function deriveChangeTitle(input, max = 50) {
+function deriveChangeTitleRaw(input) {
   for (const l of String(input || '').replace(/\r\n/g, '\n').split('\n')) {
     const t = l.trim()
     if (!t) continue
@@ -137,10 +193,38 @@ export function deriveChangeTitle(input, max = 50) {
     if (/^[^:：]{1,12}[:：]$/.test(t)) continue
     const stripped = t.replace(/^(?:需求|动机|背景|任务|标题|动机与背景|背景与动机)\s*[:：]\s*/, '').trim()
     if (!stripped) continue
-    const one = stripped.replace(/\s+/g, ' ')
-    return one.length > max ? one.slice(0, max) + '…' : one
+    return stripped.replace(/\s+/g, ' ')
   }
   return ''
+}
+
+/**
+ * 变更标题推导（用户需求 2026-09-29：changes.title 应为中文描述，≤50 字、建议 ~20 字）。
+ * --title 显式覆盖一切推导。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅
+ * 有指引）。**2026-10-16-short-change-title 起标题面改走 deriveShortChangeTitle 提炼口径
+ * （目标 20/上限 30，50 字硬切残句实证淘汰）**；本函数 ≤50 硬切口径保持不变——
+ * motiveFromInput 模块变更索引摘要与其同源（flow-parity），勿在此改截断行为。
+ */
+export function deriveChangeTitle(input, max = 50) {
+  const one = deriveChangeTitleRaw(input)
+  if (!one) return ''
+  return one.length > max ? one.slice(0, max) + '…' : one
+}
+
+/**
+ * 变更标题推导·提炼口径（2026-10-16-short-change-title）：deriveChangeTitleRaw 提取首行后
+ * 过 distillShortTitle——目标 20 字上限 30 字、自然标点截断、无截点才硬切。changes.title
+ * 落库面统一入口（flow start/resume/adopt、run initChange）；--title 显式值由调用方直传，
+ * 不经本函数（用户原话不做二次加工）。
+ */
+export function deriveShortChangeTitleEx(input, opts) {
+  const raw = deriveChangeTitleRaw(input)
+  if (!raw) return { title: '', hardCut: false }
+  return distillShortTitleEx(raw, opts)
+}
+
+export function deriveShortChangeTitle(input, opts) {
+  return deriveShortChangeTitleEx(input, opts).title
 }
 
 
@@ -337,6 +421,10 @@ function sanitizeQuicklogUser(user) {
 // 从关联变更的 proposal/design 提取首个 # 标题（去「提案书（Proposal）— / 设计文档（Design）—」固定前缀）。
 // 让 quick --linked-changes 启动时（用户常不带 --input）也能拿到语义标题，而非 (quick 任务) 占位。
 // 读不到任何标题返回 ''（调用方再回退占位符，保持向后兼容）。
+// 2026-10-16-short-change-title：① 返回前过提炼封顶 ≤30 字（超长 dash-desc 不直落标题）；
+// ② 两文档皆无语义标题（纯模板 H1，brainstorm 模板正文即「# 提案书（Proposal）」形态）时
+// 回退读 proposal「## 动机」节首行过提炼——动机首句本是一句概括素材，旧口径放弃致标题
+// 恒变更名兜底（平台变更中心 7/20 实证）。无动机节/无内容行仍返回 ''（空串不刷新契约不变）。
 export function deriveTitleFromLinkedChange(specBase, change) {
   if (!change) return ''
   for (const f of ['proposal.md', 'design.md']) {
@@ -355,7 +443,39 @@ export function deriveTitleFromLinkedChange(specBase, change) {
     if (!raw) continue
     const dash = raw.match(/[—-]\s*(.+)$/)
     const title = dash ? dash[1].trim() : raw
-    if (title) return title
+    if (title) return distillShortTitle(title)
+  }
+  const motive = extractMotivationFirstLine(specBase, change)
+  return motive ? distillShortTitle(motive) : ''
+}
+
+// proposal「## 动机」节首个内容行（动机回退素材，2026-10-16-short-change-title）。
+// 节标题形态对齐 stage-templates（## 动机）与 flow-draft SECTION_HEAD_RE：2-6 级标题行含
+// 「动机」即命中（H1 本身是标题不参与）。内容行跳过空行/表格分隔行/HTML 注释（AGENT 槽）/
+// 模板占位行（「为什么做、解决什么核心问题」），剥 markdown bullet 与「任务原话转写：」
+// 前缀（flow-draft 机器稿动机段固定前缀，剥后即 input 首行，与 deriveShortChangeTitle 同源）。
+// 读不到文件/无节/无合格内容行返回 ''。
+function extractMotivationFirstLine(specBase, change) {
+  let content
+  try { content = readFileSync(join(specBase, 'changes', change, 'proposal.md'), 'utf8') } catch { return '' }
+  let inMotivation = false
+  for (const line of String(content).replace(/\r\n/g, '\n').split('\n')) {
+    const t = line.trim()
+    if (/^#{2,6}\s/.test(t)) {
+      if (inMotivation) return '' // 动机节内直到下一节标题都无合格内容行
+      inMotivation = /^#{2,6}\s*(?:\d+(?:[.、)]\s*)?)?[^\n]*动机/.test(t)
+      continue
+    }
+    if (!inMotivation || !t) continue
+    if (/^[\s|:-]+$/.test(t)) continue // 表格分隔/装饰行
+    if (/^<!--/.test(t)) continue // AGENT 槽等 HTML 注释
+    const stripped = t
+      .replace(/^(?:[-*+]|\d+[.、)])\s+/, '')
+      .replace(/^>\s*/, '')
+      .replace(/^任务原话转写[:：]\s*/, '')
+      .trim()
+    if (!stripped || stripped === '（未提供 --input）' || stripped === '为什么做、解决什么核心问题') continue
+    return stripped
   }
   return ''
 }

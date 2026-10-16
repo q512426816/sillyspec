@@ -29,7 +29,7 @@ import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
 import { runStage } from './stage.js'
-import { sanitizeDesc, deriveChangeTitle } from '../quicklog.js'
+import { sanitizeDesc, deriveShortChangeTitle } from '../quicklog.js'
 import { ProgressManager, resolveSessionIdentity } from '../progress.js'
 import { validateChangeExists, checkTransition } from '../stage-contract.js'
 import { READONLY_AUXILIARY_STAGES } from '../constants.js'
@@ -1301,11 +1301,12 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           }
         }
       } catch { /* 守卫异常不拦正常注册（fail-open）*/ }
-      // 创建时即写 title（与 name/KEY 同时落 db）：--input 首行推导 deriveChangeTitle（≤50 字，
-      // 用户需求 2026-09-29）优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
+      // 创建时即写 title（与 name/KEY 同时落 db）：--input 首行过提炼 deriveShortChangeTitle
+      // （目标 20/上限 30 自然标点截断；2026-10-16-short-change-title，50 字硬切残句淘汰）
+      // 优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
       // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
-      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
+      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
     } else if (isAuxiliary) {
       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
@@ -1332,7 +1333,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       changeName = autoName
       if (!progress) {
         // auxiliary 创建也写 title（--input 优先 / name 兜底），同上完整流程语义。
-        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
         // initChange 可能因 project 表为空返回 null
         if (!progress) {
           progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
@@ -1354,7 +1355,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // initChangeIfNoActive 单语句原子抢占，败者走同一引导。
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
-        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
         if (!claim.created) {
           const activeChanges = claim.activeChanges || []
           console.error(`❌ 已存在 ${activeChanges.length} 个活跃变更，run brainstorm 无 --change 不会自动创建新变更。`)
@@ -1377,7 +1378,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // 正是并发双建的温床）——1 活跃现与多活跃同走 exit 2 引导。
         const date = new Date().toISOString().slice(0, 10)
         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
-        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+        const claim = pm.initChangeIfNoActive(cwd, autoName, { title: inputText ? (deriveShortChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
         if (!claim.created) {
           const activeCount = claim.activeChanges || []
           console.error(`❌ 已存在 ${activeCount.length} 个活跃变更，run auto 无法自动定位目标。`)

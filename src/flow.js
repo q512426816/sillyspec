@@ -689,11 +689,12 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
         } catch { /* 观测旁路 best-effort */ }
         // adopt 标题（用户需求 2026-09-29）：头脑风暴 proposal 的 H1 是人写语义标题，
-        // deriveTitleFromLinkedChange 提取；--title 优先；兜底变更名。adopt 路径此前完全不
+        // deriveTitleFromLinkedChange 提取（纯模板 H1 回退动机首句，2026-10-16-short-change-title）；
+        // --title 优先；再退 --input 首行提炼（≤30 字）；兜底变更名。adopt 路径此前完全不
         // 注册 changes 行——initChange 补插（幂等），既有行 title 空时回填。
         try {
-          const { deriveTitleFromLinkedChange, deriveChangeTitle } = await import('./quicklog.js')
-          const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveChangeTitle(input) || change
+          const { deriveTitleFromLinkedChange, deriveShortChangeTitle } = await import('./quicklog.js')
+          const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveShortChangeTitle(input) || change
           pm.initChange(cwd, change, { title: adoptTitle })
           const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
           if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
@@ -780,17 +781,19 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       writeFlowState(changeDir, { autopilot: true })
       console.log(`🤖 已声明 autopilot：spec 断点人审豁免（用户显式声明留痕）`)
     }
-    // 变更标题补写（用户需求 2026-09-29：title=中文概括 ≤50 字，建议 ~20 字）——存量在途
-    // 变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入改标题）；否则从 --input 首
-    // 行推导、仅当库内 title 为空才写（不覆盖已有语义标题）。best-effort 不阻断恢复简报。
+    // 变更标题补写（用户需求 2026-09-29：title=中文概括；2026-10-16-short-change-title 起
+    // 提炼口径 ≤30 字）——存量在途变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入
+    // 改标题）；否则从 --input 首行提炼、仅当库内 title 为空才写（不覆盖已有语义标题）。
+    // best-effort 不阻断恢复简报。
     try {
-      const { deriveChangeTitle } = await import('./quicklog.js')
+      const { deriveShortChangeTitleEx } = await import('./quicklog.js')
       const _row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
       const _cur = _row ? (_row.title || '') : ''
-      const _derived = titleFlag || deriveChangeTitle(input)
-      if (_derived && (titleFlag || !_cur)) {
-        pm.updateChangeMeta(cwd, change, { title: _derived })
-        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
+      const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
+      if (_derived && _derived.title && (titleFlag || !_cur)) {
+        pm.updateChangeMeta(cwd, change, { title: _derived.title })
+        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived.title}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
+        if (_derived.hardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
       }
     } catch { /* 标题补写 best-effort */ }
     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
@@ -893,16 +896,21 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
 
-  // 变更标题（用户需求 2026-09-29：title=中文概括 ≤50 字、建议 ~20 字，agent 总结）：
-  // --title 显式指定优先；否则 --input 首行推导（agent 在 input 首行写一句中文概括即为标题）；
-  // 两者皆缺用变更名兜底（可辨识但不达意——横幅提示下次带 --title）。
+  // 变更标题（用户需求 2026-09-29：title=中文概括、建议 ~20 字，agent 总结；2026-10-16-
+  // short-change-title 起提炼口径 ≤30 字）：--title 显式指定优先；否则 --input 首行过提炼
+  // （自然标点截断、无截点硬切+软提示）；两者皆缺用变更名兜底（可辨识但不达意——横幅提示
+  // 下次带 --title）。
   let changeTitle = null
+  let _titleHardCut = false
   try {
-    const { deriveChangeTitle } = await import('./quicklog.js')
-    changeTitle = titleFlag || deriveChangeTitle(input) || change
+    const { deriveShortChangeTitleEx } = await import('./quicklog.js')
+    const _derived = titleFlag ? { title: titleFlag, hardCut: false } : deriveShortChangeTitleEx(input)
+    changeTitle = (_derived && _derived.title) || change
+    _titleHardCut = Boolean(_derived && _derived.hardCut)
   } catch { changeTitle = titleFlag || change }
   pm.initChange(cwd, change, { title: changeTitle })
   console.log(`🏷️ 变更标题：${changeTitle}${changeTitle === change ? '（变更名兜底——下次带 --title "<≤20 字中文概括>" 更达意）' : '（面板显示用；建议 ~20 字中文概括，重入 flow start --title 可改）'}`)
+  if (_titleHardCut) console.log(`💡 标题超 30 字且无自然断点已硬切——重入 flow start --title "<≤20 字中文概括>" 可给更短标题（不阻断）`)
   try {
     const { resolveSessionIdentity } = await import('./progress.js')
     const { session } = resolveSessionIdentity({ flagSession: null, cwd })
