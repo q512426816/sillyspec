@@ -1546,15 +1546,33 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // gen:types 重写行尾制造假 M）：git diff --ignore-cr-at-eol HEAD 的变更名单是「真实内容变更」
     // 集——tracked 修改出现在 porcelain 但不在此集 = 纯行尾重写。单次对照调用，剔出 changedFiles
     // 归 eolOnlyFiles 软警告（.gitattributes 指引），不再计入文件行/触发各门。
+    // 探测必须走 --numstat：--name-only 不吃 --ignore-cr-at-eol（git 实测怪癖——git ≤2.43 仍把
+    // 行尾-only 文件列进名单，Debian 12 git 2.39.5 / Ubuntu 24.04 git 2.43.0 实测；git ≥2.54 才
+    // 听话），走 --name-only 会让本过滤在老 git 上静默失效、假 M 坑复活。同
+    // verify-postcheck reconcileActualFiles 的 eolOnlyFiles 探测同口径（该处已按此结论实装）。
     // 注意：gitQuiet 不在本模块 import 面（safeGit 才是）——首版用 gitQuiet 触发
     // ReferenceError 被 catch 吞成 null，又被 new Set(null) 包装成空集 → 全部 tracked 修改
     // 被误判 EOL-only 剔除（audit-quick-completion 回归抓出）。改用 safeGit（已 import，
     // 返回 {value,error}），失败显式落 null 透传不过滤。
+    // numstat 行 `A\tD\t<path>` → 新路径；rename 两形态都要落到新名（与消费侧 porcelain 路径同名）：
+    // 全域 `old => new` 取右侧；同前缀/后缀 `pre{old => new}post` 拼 `pre+new+post`。引号剥壳。
+    const numstatNewPath = (line) => {
+      const i = line.lastIndexOf('\t')
+      if (i <= 0) return ''
+      let p = line.slice(i + 1).trim()
+      const arrow = p.lastIndexOf(' => ')
+      if (arrow !== -1) {
+        const lb = p.lastIndexOf('{', arrow)
+        if (lb === -1) p = p.slice(arrow + 4)
+        else p = p.slice(0, lb) + p.slice(arrow + 4, p.indexOf('}', lb)) + p.slice(p.indexOf('}', lb) + 1)
+      }
+      return p.replace(/^"|"$/g, '').replace(/\\/g, '/')
+    }
     const eolRawList = (() => {
       try {
-        const res = safeGit(cwd, ['diff', '--name-only', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
+        const res = safeGit(cwd, ['diff', '--numstat', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
         if (!res || res.error) return null
-        return String(res.value || '').split('\n').filter(Boolean).map(p => p.replace(/\\/g, '/'))
+        return String(res.value || '').split('\n').map(numstatNewPath).filter(Boolean)
       } catch { return null }
     })()
     const eolRealChanged = eolRawList === null ? null : new Set(eolRawList)

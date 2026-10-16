@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { spawnSync } from 'node:child_process'
@@ -94,6 +94,18 @@ test('EOL-only 假 M 剔出审计；真实修改保留', async () => {
   assert.ok(r.eolOnlyFiles && r.eolOnlyFiles.includes('src/app.js'), 'EOL-only 文件归 eolOnlyFiles')
   assert.ok(!r.changedFiles.includes('src/app.js'), '假 M 不进 changedFiles（文件行/门不触发）')
   assert.ok(r.changedFiles.includes('src/new.js'), '真实修改保留')
+})
+
+// 源码钉：行为测试抓不到版本差——CI runner git ≥2.54 的 --name-only 会吃 --ignore-cr-at-eol，
+// 只有老 git（Debian 12 git 2.39 / Ubuntu 24.04 git 2.43 实测）暴露静默失效；回退 --name-only
+// 会让 EOL 假 M 过滤在老环境复活且 CI 全绿（2026-10-16 容器实证：git 2.39.5 下用例转红）。
+test('源码钉：EOL 假 M 探测走 diff --numstat（--name-only 不吃 --ignore-cr-at-eol）', () => {
+  const src = readFileSync(new URL('../src/run/shared.js', import.meta.url), 'utf8')
+  const start = src.indexOf('const eolRawList = (() => {')
+  assert.ok(start > 0, 'eolRawList 探测块定位成功')
+  const block = src.slice(start, src.indexOf('const eolRealChanged', start))
+  assert.ok(block.includes("'--numstat'"), 'EOL 探测用 diff --numstat')
+  assert.ok(!block.includes("'--name-only'"), '禁止回退 --name-only（git ≤2.43 仍列行尾-only 文件，过滤静默失效）')
 })
 
 test('新增文件 mtime 早于会话启动 → reason 带预存残留归因注记', async () => {
