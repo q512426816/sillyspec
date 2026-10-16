@@ -12,11 +12,15 @@ created_at: 2026-10-16T08:28:38.146Z
 
 1. **`test/backlog-batch-a.test.mjs`③b**：`fsExports` 建好后追加 `delete fsExports.constants`。
    根因不是「spread 枚举不全」（那是上一轮 node 22 的另一坑，已由显式补键解决），而是
-   `cjsMockModuleLoad` 对 mock exports **逐键 `ObjectDefineProperty`**：linux 上 `fs.constants`
-   是 `writable:false/configurable:false` 的数据属性 → 不可重定义直接 TypeError 炸整文件；
-   windows 上同属性 `writable:true` → 侥幸不炸（本地 12/12 绿、CI 红的唯一分叉点）。
+   `cjsMockModuleLoad` 把 mock exports **逐键 `ObjectDefineProperty`** 到目标对象上，而目标在
+   exports 含 `default`（spread 命名空间必带）时是 `moduleExports.default`＝真实 CJS 导出的
+   `module.exports`；`fs.constants` 在该对象上不可重定义（node 24.15 双端实测
+   `{writable:false, configurable:false}`；ESM 命名空间视图显示的 `writable:true` 是合成描述符，
+   不适用）→ node 24.22/24.21（容器/CI）与 22.23 实测抛 TypeError 炸整文件，node 24.15（win/linux
+   四象限实测）不炸——**分叉轴是 node 版本不是平台**（本地 24.15 绿不构成豁免）。
    `F_OK/R_OK/W_OK/X_OK` 同为不可重定义，但 `enumerable:false`，spread 天然不带。
-   同仓 `test/worktree-junction-fail-loud.test.mjs` 已有同款既定解法，按同一口径对齐。
+   同仓 `test/worktree-junction-fail-loud.test.mjs` 已有同款既定解法，按同一口径对齐（其注释
+   「Node ≥26」的口径本轮一并更正为实测版本轴，见下文第 5 条）。
 
 2. **`test/feedback-batch2-hardening.test.mjs`⑥**：把大小写断言拆成平台分叉。实现口径
    （`src/verify-postcheck.js` 的 `pathKey`：`foldCase = win32 || darwin`）是有意为之——
@@ -110,8 +114,9 @@ npm ci && npm test`）——① `--init`（tini 回收）必带：否则容器 P
 4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
 
 1. **乱序/迟到到达**：不涉及时序——三处均为确定性静态判定（mock 键集合、平台常量、字节形态）。
-   CI 与容器的 node 小版本差（24.21/24.22）不影响：`constants` 描述符形态由平台分支决定
-   （linux writable:false），非小版本行为。
+   版本面已实测在案：`constants` 失败与否**由 node 版本分叉**（24.15 双端不炸 vs 22.23/24.21/24.22
+   炸，四象限复现），与平台无关——本变更的容器门（24.22）与 CI（24.21）都在炸的一侧，本地
+   windows 24.15 在另一侧，故双端验证必须覆盖「新 node」侧（容器/CI）才算数。
 2. **并发写**：多会话共享仓下，本变更触碰的两个测试文件与其他在途变更（probe7-prefill-noise-fix）
    文件零交集；提交用显式 pathspec + 同清单，不扫共享暂存区。容器挂载为只读共享面之外的独立
    进程，容器内跑测试写 TEMP（容器 /tmp），不写仓工作树（run-tests 已做套件级 TEMP/HOME 隔离）。
