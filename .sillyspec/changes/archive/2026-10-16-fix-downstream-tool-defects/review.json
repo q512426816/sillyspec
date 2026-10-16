@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-fix-downstream-tool-defects",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a83f1df472d8dce375b3a5796cef77d9f92183f5",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "防复活抑制警告的因果语与代码机理不符（「恢复会被下轮同步重新删除」不成立）",
+      "evidence": "首评锚点 src/sync.js:1972 与 src/index.js:5479。抑制判据实为「基线有、盘面无=本地删除尚未上行成功」（sync.js:1904-1912 即时重算，恢复即退出抑制面），原警告括号内因果句错误。",
+      "location": "src/sync.js:1972",
+      "disposition": "fixed@a83f1df4",
+      "resolution": "sync.js 与 index.js 两处文案已改为「基线有、盘面无=本地删除尚未上行成功；确要从快照恢复用 --restore-deleted」，删除了不成立的「会被下轮同步重新删除」；新文案与 sync.js:1904-1912 实际判定一致。"
+    },
+    {
+      "severity": "P3",
+      "title": "SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 时 observability 原因字段误标为「快照返回 null」",
+      "evidence": "首评锚点 src/run/gates.js:1134-1139：OFF 开关下快照从未尝试，却落「createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）」的失真原因。",
+      "location": "src/run/gates.js:1131-1141",
+      "disposition": "fixed@a83f1df4",
+      "resolution": "gates.js 改三分支：OFF → used_snapshot:false +「SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1 主动关闸（快照未尝试，非基建故障）」；快照在场 → used_snapshot:true；其余 → snapshotObservability(failRef)。非 OFF 路径语义等价，OFF 路径不再误归因。"
+    },
+    {
+      "severity": "P3",
+      "title": "携载注释块内的漂移键表头行可重新武装门禁，孤行误归属通道窄幅残留",
+      "evidence": "首评锚点 verify-probes.js:3912-3920（表头行入 oldFilled 可被携载）+ stage-contract.js:916-917（注释块内表头行重新武装）。",
+      "location": "src/verify-probes.js:3919",
+      "disposition": "fixed@a83f1df4",
+      "resolution": "mergeProbeSection 新增排除「5 列且 cells[3]=判定 ∧ cells[4]=证据」表头行（与门禁表头识别文法逐字同源，含行尾管道空段弹出），注释块内不再出现表头 → 门禁无法被携载块重新武装；合法已填数据行携载不受影响（test 1 两条 includes 断言仍绿）；carriedRows 断言同步 1→0 并附理由注释。verify-carry-orphan-guard + acceptance-matrix-gate 全绿。"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-04「不传 failRef 与改动前逐字节一致」在两个 catch 分支上不严格成立（需求内部矛盾）",
+      "evidence": "首评锚点 gate-snapshot.js:735-736：catch 分支无条件 warn 与「逐字节一致」条款冲突（design 已显式裁决 warn 无条件落）。",
+      "location": ".sillyspec/changes/2026-10-16-fix-downstream-tool-defects/requirements.md:93",
+      "disposition": "fixed@a83f1df4",
+      "resolution": "requirements.md FR-04 末条已澄清：「不传 failRef 时返回值与判定行为与既有完全一致；catch 分支新增 warn 日志是显式声明的可见性增强，不构成行为回归」——条款矛盾在需求层消除，与 design/实现口径统一。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "备注": "首评 4×P3 全部于 a83f1df4 清偿（disposition=fixed@a83f1df4），增量复核未发现新问题：整改面为两处纯文案、gates.js 观测三分支（非 OFF 路径语义等价）、mergeProbeSection 单行过滤（仅影响携载源集，数据行携载断言仍绿）、requirements 措辞澄清；触及模块相关测试族 54/54 绿（verify-carry-orphan-guard/pull-spec-bundle-resurrect-guard/spec-tree-sync-conflict-decouple/gate-snapshot-reason/acceptance-matrix-gate/pull-spec-bundle/gate-snapshot-layout-guard/verify-gate-snapshot/verify-quality-scan）。"
+  },
+  "reviewedAt": "2026-10-16T11:54:38.000Z"
+}

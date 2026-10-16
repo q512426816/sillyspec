@@ -76,3 +76,4 @@
 | 2026-10-15 | 2026-10-16-step-guide-dyn-completeness | 复入附录漏收面根治——凡裸 split/join 注入点收编进 dynSegments，评审六值缺失… |
 | 2026-10-16 | 2026-10-16-probe7-prefill-noise-fix | 探针 7 矩阵预填四缺陷修复（消费仓 backend-mem-polling verify 收口实证转写）：①部署/文档类条目直判 non-testable + 全条目命中卡跳过 FR 候选池注入（单格 130+ 不相干文件灌水根除）；②covered 仅测试名级命中（def test_*/it(/test(/describe( 名行），正文关键词命中封顶 partial——docstring 里 config 字样冒充验收证据的空心锚点废除；③同波次新增/修改归属测试（review changedFiles wide 口径）零字面命中→covered+待人工复核（真 covered 误标 partial 修复）；④候选>5 交人工（uncovered），归属列/提示列 5 帽折叠禁长清单。新测试 test/probe7-prefill-noise.test.mjs 6 用例；acceptance-matrix-probe/testpath-anchor 断言按新契约改写 |
 | 2026-10-16 | 2026-10-16-ci-linux-residual-fix | CI test job linux 余项清偿：backlog-batch-a mock consta… |
+| 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |

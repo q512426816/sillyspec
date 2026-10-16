@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-fix-downstream-tool-defects",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-01",
+      "tests": [
+        "test/pull-spec-bundle-resurrect-guard.test.mjs「防复活：基线有盘面无不写回（红→绿）/无基线全量回放/restoreDeleted 显式恢复/非抑制文件正常回放」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-fix-downstream-tool-defects"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-02",
+      "tests": [
+        "test/spec-tree-sync-conflict-decouple.test.mjs「冲突抑制分支仍上行 spec 树删除 op（红→绿）/补跑异常不改抑制语义」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-fix-downstream-tool-defects"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-carry-orphan-guard.test.mjs「占位与分隔行不携载（红→绿）/键漂移已填行携载/门禁孤行独立桶不栽锚行（红→绿）/正常渲染零行为变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-fix-downstream-tool-defects"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-04",
+      "tests": [
+        "test/gate-snapshot-reason.test.mjs「pnpm 拒建原因（红→绿）/文件集为空成因区分/--done 降级事实落盘（红→绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-fix-downstream-tool-defects"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-05",
+      "tests": [
+        "test/run-tests.mjs「既有相关测试族全量回归（pull-spec-bundle、platform-sync 族、spec-sync 族、verify-papercuts、acceptance-matrix-gate、gate-snapshot 族、verify-quality-scan）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-fix-downstream-tool-defects"
+    }
+  ]
+}

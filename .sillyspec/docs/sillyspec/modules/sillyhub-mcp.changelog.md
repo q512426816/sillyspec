@@ -12,3 +12,4 @@
 | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | worker_prompt 铁律第 1 条 TDD 措辞带按层限定（纯逻辑严格先行/行为契约断用户所见/样式与纯配置不写，判据见「测试用例设计」）。 |
 | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+| 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |

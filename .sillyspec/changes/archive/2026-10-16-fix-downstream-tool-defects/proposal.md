@@ -1,0 +1,35 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-16T11:15:20.392Z
+---
+# 提案书（Proposal）— 2026-10-16-fix-downstream-tool-defects
+
+## 动机
+
+任务原话转写：修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify 携载孤儿残行+门禁误归属、快照降级原因不可见）
+
+动机与背景：下游项目实测踩到三类工具摩擦并已记录缺陷。①同步熔断/409 期间本地删除的任务卡（task-05/06/07 形态）未上行，后续从服务器拉文件树时旧文件被写回本地（复活），验证误报文件未清理+幽灵任务卡——根因：文件级删除无墓碑无队列（唯一通道 syncSpecTree 无状态重算 delete op），且 progress 冲突时 sync() 在 sync.js:696-724 提前 return 把 spec 树同步整轮跳过，下行 pullSpecBundle（sync.js:1905 rm+1924 回放）/ _takePlatformSpecPaths（sync.js:2027）写出前零「本地已删」判定，既有防复活防护全是整目录/已归档粒度。②verify-probes --init --force 携载把旧模板占位/分隔行（首列 :--- 或 — 形态，逃逸 verify-probes.js:3901-3907 三层过滤）当已填行搬进新报告中部，门禁 extractAcceptanceMatrixSlots（stage-contract.js:898-925）按最近前置 **task-NN** 锚行归属残行，误报「N 行判定未填」栽给尾任务（文档同步）。③快照建不起来时全部分支返回裸 null 零原因（gate-snapshot.js:885/894/924/943 及 createGateSnapshot :520/:626/:724），调用方硬编码笼统文案「变更文件集为空/快照基建不可用」（gates.js:1113、verify-quality-scan.js:665），把 pnpm 布局设计性拒建等真实原因全部误标，且 --done 路径降级事实不落盘（noAI 路径已有 usedSnapshot 先例 verify-quality-scan.js:798）。
+
+成功标准：
+- 回归用例红→绿：progress 冲突/熔断窗口内本地删除 spec 文件后，后续 pullSpecBundle / resolve --take-platform 不把服务器旧文件写回本地（活跃变更内单文件粒度；基线有、盘面无=本地删除的抑制判定，且随删除成功上行自然衰减；全新空环境无基线时全量回放行为不变）
+- 回归用例红→绿：progress 409/熔断不再阻断 spec 树 delete op 上行（spec 树与 progress 六表是独立通道，冲突分流不互相封锁）
+- 回归用例红→绿：mergeProbeSection 不再携载 :---/—/待填 等占位与分隔形态行（合法键漂移已填行仍携载且带归属注释）；extractAcceptanceMatrixSlots 对无表头归属的孤行不再栽给最近 task 锚行，改为独立「孤行」报错要求裁决删除或补归属
+- 回归用例红→绿：快照失败分支带出结构化原因（pnpm 布局/变更文件集为空三分成因/junction 失败/worktree 异常详情），两处调用方文案替换硬编码；--done 路径把 usedSnapshot 降级事实落进结果记录
+- 三端兼容 Windows/Linux/macOS；既有相关测试全绿（sync/spec-sync/pull-spec-bundle/verify-papercuts/acceptance-matrix-gate/verify-gate-snapshot 族）
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 回归用例红→绿：progress 冲突/熔断窗口内本地删除 spec 文件后，后续 pullSpecBundle / resolve --take-platform 不把服务器旧文件写回本地（活跃变更内单文件粒度；基线有、盘面无=本地删除的抑制判定，且随删除成功上行自然衰减；全新空环境无基线时全量回放行为不变）
+2. 回归用例红→绿：progress 409/熔断不再阻断 spec 树 delete op 上行（spec 树与 progress 六表是独立通道，冲突分流不互相封锁）
+3. 回归用例红→绿：mergeProbeSection 不再携载 :---/—/待填 等占位与分隔形态行（合法键漂移已填行仍携载且带归属注释）；extractAcceptanceMatrixSlots 对无表头归属的孤行不再栽给最近 task 锚行，改为独立「孤行」报错要求裁决删除或补归属
+4. 回归用例红→绿：快照失败分支带出结构化原因（pnpm 布局/变更文件集为空三分成因/junction 失败/worktree 异常详情），两处调用方文案替换硬编码；--done 路径把 usedSnapshot 降级事实落进结果记录
+5. 三端兼容 Windows/Linux/macOS；既有相关测试全绿（sync/spec-sync/pull-spec-bundle/verify-papercuts/acceptance-matrix-gate/verify-gate-snapshot 族）
+
+## 成功标准（可验证）
+
+1. 回归用例红→绿：progress 冲突/熔断窗口内本地删除 spec 文件后，后续 pullSpecBundle / resolve --take-platform 不把服务器旧文件写回本地（活跃变更内单文件粒度；基线有、盘面无=本地删除的抑制判定，且随删除成功上行自然衰减；全新空环境无基线时全量回放行为不变）
+2. 回归用例红→绿：progress 409/熔断不再阻断 spec 树 delete op 上行（spec 树与 progress 六表是独立通道，冲突分流不互相封锁）
+3. 回归用例红→绿：mergeProbeSection 不再携载 :---/—/待填 等占位与分隔形态行（合法键漂移已填行仍携载且带归属注释）；extractAcceptanceMatrixSlots 对无表头归属的孤行不再栽给最近 task 锚行，改为独立「孤行」报错要求裁决删除或补归属
+4. 回归用例红→绿：快照失败分支带出结构化原因（pnpm 布局/变更文件集为空三分成因/junction 失败/worktree 异常详情），两处调用方文案替换硬编码；--done 路径把 usedSnapshot 降级事实落进结果记录
+5. 三端兼容 Windows/Linux/macOS；既有相关测试全绿（sync/spec-sync/pull-spec-bundle/verify-papercuts/acceptance-matrix-gate/verify-gate-snapshot 族）

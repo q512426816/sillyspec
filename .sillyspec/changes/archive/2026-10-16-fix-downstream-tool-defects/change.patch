@@ -1,0 +1,1080 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index f21dbc54..0511d131 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -67,12 +67,12 @@ mcp:
+ |---|---|---|---|---|
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+ | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:543` |
+-| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:818` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1228` |
++| `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:830` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1240` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1587` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1599` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2467` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2467` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2513` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2513` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -136,7 +136,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3166；shared.js:1118 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2932/3147；shared.js:1144 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4519；sync.js:1587/1595 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4519；sync.js:1599/1607 |
+ | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4471；sync.js:2328 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4257/4286/4270；probe.js:137 |
+diff --git a/src/index.js b/src/index.js
+index 9a30572d..ecbc769c 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5429,7 +5429,7 @@ SillySpec config — local.yaml 配置键速查
+ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+ 
+ 用法:
+-  sillyspec pull --spec [--force]
++  sillyspec pull --spec [--force] [--restore-deleted]
+ 
+ 说明:
+   从 SillyHub 平台拉取当前工作区的 .sillyspec 整树快照（tar 解压到 specDir，
+@@ -5444,6 +5444,10 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+      本命令不自动同步、不在会话中自动刷新；拉取后本地的改动仍需正常推送。
+      daemon 模式下任务/会话开始时会按 spec_version 自动取新，无需手动跑本命令。
+ 
++  防复活抑制（默认开启）：本地已删除、但删除尚未同步到服务器的文件（基线快照有、
++     盘面无），不会从快照写回本地（防「同步失败窗口内删除的任务卡被服务器旧文件复活」）；
++     确要从快照恢复这类文件用 --restore-deleted（纯快照回放语义）。
++
+   拉取进度六表（多机进度同步）请用：sillyspec platform pull [--change <name>]
+ `);
+       if (pullWantsHelp || !pullWantsSpec) {
+@@ -5456,6 +5460,10 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+       }
+ 
+       const pullSpecForce = pullSpecArgs.includes('--force');
++      // 防复活抑制（坑 spec-tree-file-resurrect）的显式恢复通道：默认把「基线有、盘面无」的
++      // 本地已删文件挡在快照回放外（删除 op 未上行成功时不被服务器旧文件复活）；
++      // --restore-deleted = 用户显式意志优先，恢复纯快照回放语义。
++      const pullSpecRestoreDeleted = pullSpecArgs.includes('--restore-deleted');
+       const syncModule = await import('./sync.js');
+       // 未连接明确提示不崩（对齐 platform pull :2289 先例）
+       const smForSpecPull = new syncModule.SyncManager(dir);
+@@ -5463,10 +5471,13 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+         console.error('❌ 未连接平台，请先 sillyspec platform connect');
+         process.exit(1);
+       }
+-      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir });
++      const specR = await syncModule.pullSpecBundle(dir, { force: pullSpecForce, specDir, restoreDeleted: pullSpecRestoreDeleted });
+       if (specR.ok && specR.pulled) {
+         console.log(`✅ 已拉取 spec 快照 → ${specR.specDir}${specR.specVersion ? `（平台 spec_version: ${specR.specVersion}）` : ''}`);
+         console.log('   快照语义：打包时刻快照非实时，无自动同步；本地后续改动仍需正常推送。');
++        if (Array.isArray(specR.resurrectSkipped) && specR.resurrectSkipped.length > 0) {
++          console.log('   防复活抑制已生效：本地已删除文件未从快照恢复（删除 op 上行成功前，快照恢复会被下轮同步重新删除）；确要恢复用 --restore-deleted。');
++        }
+       } else if (/非空/.test(specR.reason || '')) {
+         console.error(`❌ ${specR.reason}`);
+         console.error('   确认整树替换请加 --force（先删除本地 .sillyspec 整树再解包，进度 DB 等本地文件一并丢失；连接凭据 local.yaml 保留，无需重新 connect）');
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index ba9d46d6..f434eef3 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -494,7 +494,12 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
+  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
+  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
+  */
+-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null }) {
++export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
++  // failRef 可选出参（坑 snapshot-fallback-reason-blind，2026-10-16 下游实证）：所有失败分支
++  // 把结构化原因写进 failRef.reason——调用方（verify --done 实测门 / noAI 质量扫描）消费它
++  // 替换硬编码笼统文案，降级原因可直读（pnpm 布局拒建 ≠ 文件集为空 ≠ junction 失败）。
++  // 返回契约不变（失败恒 null）；不传 failRef 行为与既有逐字节一致。
++  const setFail = (reason) => { if (failRef && typeof failRef === 'object') failRef.reason = reason }
+   let snapshotRoot = null
+   try {
+     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
+@@ -519,6 +524,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // 与其让沙箱报无关错误逼 advisory，不如布局命中即作废快照回退主仓（宁可主仓口径）。
+     const layoutHit = detectSymlinkStoreLayout(cwd)
+     if (layoutHit) {
++      setFail(`symlink-store 布局拒建（${layoutHit}）：node_modules 符号链接 store 经 junction 跨根失效，实测必假败——设计性回退主仓实测`)
+       console.warn(`⚠️ 门禁快照对 ${layoutHit} 布局不可靠（node_modules 符号链接 store 经 junction 跨根失效，实测必假败）——跳过快照回退主仓实测；主仓失败再做污染归属鉴定`)
+       return null
+     }
+@@ -625,6 +631,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // 回退主仓现行为（主仓口径可能被并行脏文件污染，但环境真实；两害取轻 + 回退原因可见）。
+     const envMissing = envDirsLinked(cwd, snapshotRoot)
+     if (envMissing.length > 0) {
++      setFail(`环境目录链接不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测`)
+       console.warn(`⚠️ 门禁快照环境不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测（宁可主仓口径不可假沙箱硬挂；回退后失败先做污染归属鉴定）`)
+       // 与正常 cleanup/失败 catch 同一清理体：双清确认才销账（该早退曾残留旧式 --quiet
+       // 清理与无重试 rmSync——独立审查 P1-1 根因未除尽的漏网面）
+@@ -723,7 +730,10 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
+   } catch (e) {
+     // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓；销账同走双清确认
+-    // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）
++    // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）。
++    // 异常细节不再静默（坑 snapshot-fallback-reason-blind）：failRef 带原因 + warn 落日志。
++    setFail(`快照基建异常: ${e && e.message ? e.message : e}`)
++    try { console.warn(`⚠️ 门禁快照基建失败（回退主仓实测）: ${e && e.message ? e.message : e}`) } catch { /* 输出失败不影响回退 */ }
+     if (snapshotRoot) {
+       try {
+         const { dirRemoved, worktreeCleaned } = cleanupSnapshot({ snapshotRoot, cwd })
+@@ -870,7 +880,8 @@ export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_
+  * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+  * @returns {Promise<{snapshotRoot: string, cleanup: () => void, overlaid: number, changeFileCount: number}|null>}
+  */
+-export async function createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts = {} }) {
++export async function createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts = {}, failRef = null }) {
++  const setFail = (reason) => { if (failRef && typeof failRef === 'object') failRef.reason = reason }
+   try {
+     const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+     const { resolveRuntimeRoot } = await import('./shared.js')
+@@ -879,10 +890,19 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+     let verifyRuntimeRoot = null
+     try { verifyRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase) } catch { verifyRuntimeRoot = null }
+     const { splitOwnVsForeignDiffFiles } = await import('../foreign-declared.js')
+-    let changeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
++    // 变更文件集为空三分成因区分（坑 snapshot-fallback-reason-blind）：null=git 不可用/解析
++    // 失败；[]=HEAD 无 diff；他者声明过滤清空在下方单独计——三者处置同为回退主仓，但排查
++    // 出路完全不同，笼统「变更文件集为空」曾把 pnpm 布局拒建也误标成它。
++    const rawChangeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
+       specBase, includeWorkingTree: true,
+-    }) || []
+-    if (changeFiles.length === 0) return null // 无变更文件集 → 无从定向，回退主仓
++    })
++    let changeFiles = rawChangeFiles || []
++    if (changeFiles.length === 0) {
++      setFail(rawChangeFiles === null
++        ? '变更文件集为空（git 不可用/解析失败——非 git 仓或 git 异常，无从定向 overlay）'
++        : '变更文件集为空（HEAD 无 diff——改动可能已全部提交，无可隔离面）')
++      return null // 无变更文件集 → 无从定向，回退主仓
++    }
+     // 他者声明归属过滤（坑 verify-reconcile-foreign-wip 同款）：in-place 模式 working-tree
+     // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
+     // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
+@@ -891,7 +911,10 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+       if (foreign.length > 0) {
+         const foreignSet = new Set(foreign.map(x => x.file))
+         changeFiles = changeFiles.filter(f => !foreignSet.has(f))
+-        if (changeFiles.length === 0) return null
++        if (changeFiles.length === 0) {
++          setFail(`变更文件集为空（${foreign.length} 个 diff 文件全部被他者声明过滤——并行会话声明面覆盖了本变更全部在途文件）`)
++          return null
++        }
+       }
+     } catch { /* 过滤失败退全量（fail-closed：宁可多 overlay 不漏本变更文件） */ }
+ 
+@@ -920,8 +943,12 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+       }
+     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
+ 
+-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot })
+-    if (!snap) return null
++    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
++    if (!snap) {
++      // createGateSnapshot 已把具体原因写进同一 failRef；无 reason（旧形态兜底）补笼统口径
++      if (failRef && typeof failRef === 'object' && !failRef.reason) setFail('快照基建不可用（createGateSnapshot 返回 null，无更细原因）')
++      return null
++    }
+ 
+     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
+     // 在 .sillyspec（gitignore）不进 HEAD，从主仓 specBase 复制 changes/<name>/**
+@@ -940,7 +967,26 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+     } catch { /* 文档复制失败不连坐快照（test_strategy 降级 module 集仍可跑） */ }
+ 
+     return { ...snap, changeFileCount: changeFiles.length, sourceRoot }
+-  } catch {
+-    return null // 任一链路异常 → 回退主仓现行为
++  } catch (e) {
++    // 任一链路异常 → 回退主仓现行为。异常细节不再静默（坑 snapshot-fallback-reason-blind）：
++    // failRef 带原因 + warn 落日志，排查不再靠 stdout 考古。
++    setFail(`快照链路异常: ${e && e.message ? e.message : e}`)
++    try { console.warn(`⚠️ 门禁快照链路异常（回退主仓实测）: ${e && e.stack ? e.stack.split('\n')[0] : e}`) } catch { /* 输出失败不影响回退 */ }
++    return null
+   }
+ }
++
++/**
++ * 快照口径观测字段（坑 snapshot-fallback-reason-blind，FR-04 落盘面）：--done 实测门把
++ * used_snapshot 与降级原因经 runVerifyTestCheck 的 observability 通道带进 test-result.json
++ * extra（对齐 2026-10-09 复用观测先例）。快照在场时记录随快照销毁（无可降级事实）；
++ * 回退主仓时记录恰好落在主仓 .runtime——降级证据存活在主仓，与用途一致。
++ * @param {boolean} used 快照是否真实在场
++ * @param {{ reason?: string }|null} failRef createVerifyGateSnapshot 的出参（可 null）
++ * @returns {{ used_snapshot: boolean, snapshot_fallback_reason?: string }}
++ */
++export function snapshotObservability(used, failRef) {
++  if (used) return { used_snapshot: true }
++  const reason = failRef && failRef.reason ? String(failRef.reason) : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
++  return { used_snapshot: false, snapshot_fallback_reason: reason }
++}
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 707ce85a..78bb436b 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1100,17 +1100,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     // 变更文档随快照（test_strategy 消费）。并行会话在途文件物理不进快照、不参与本门判定。
+     // 快照基建失败 → 回退主仓现行为（失败路径沿用 renderVerifyTestAttribution 归因提示）。
+     let verifyGateSnap = null
++    let snapshotFailRef = null // createVerifyGateSnapshot 出参：结构化失败原因（FR-04，替代硬编码笼统文案）
+     if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
+       try {
+         const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+-        verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
++        snapshotFailRef = {}
++        verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
+         if (verifyGateSnap) {
+           console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+         } else {
+-          // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账
++          // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
++          // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因
++          // （pnpm 布局拒建 / 文件集为空三分成因 / junction 失败 / 基建异常详情），不再笼统
+           try {
+             const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
+-            if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' })
++            const fbReason = snapshotFailRef && snapshotFailRef.reason
++              ? `createVerifyGateSnapshot 返回 null：${snapshotFailRef.reason}`
++              : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
++            if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'verify --done 实测门', reason: fbReason })
+           } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
+         }
+       } catch (e) {
+@@ -1120,6 +1127,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
+       }
+     }
++    // FR-04 降级事实落盘：used_snapshot 与失败原因随 test-result.json extra 持久化（快照在场
++    // 时记录随快照销毁；回退主仓时恰好落在主仓 .runtime——降级证据存活面与用途一致）
++    let snapObsFields = { used_snapshot: Boolean(verifyGateSnap) }
++    if (!verifyGateSnap) {
++      try {
++        const { snapshotObservability } = await import('./gate-snapshot.js')
++        snapObsFields = snapshotObservability(false, snapshotFailRef)
++      } catch {
++        snapObsFields = { used_snapshot: false, snapshot_fallback_reason: snapshotFailRef && snapshotFailRef.reason ? String(snapshotFailRef.reason) : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' }
++      }
++    }
+     const gateCwd = verifyGateSnap ? verifyGateSnap.snapshotRoot : cwd
+     const gateSpecBase = verifyGateSnap ? join(verifyGateSnap.snapshotRoot, '.sillyspec') : specBase
+     let testCheck
+@@ -1220,7 +1238,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         `质量扫描: ${reusableScan ? '命中（上层未消费）' : '指纹失配/无记录'}`,
+         `green-cache: ${greenHit ? '命中（上层未消费）' : '指纹失配/过期/无记录'}`,
+       ].join('；')
+-      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, observability: { fingerprint: _obsFingerprint, reuse_decision: { layer: 'real-run', hit: false, reason: _missReason } }, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
++      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, observability: { fingerprint: _obsFingerprint, reuse_decision: { layer: 'real-run', hit: false, reason: _missReason }, ...snapObsFields }, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
+       printVerifyTestCheck(testCheck)
+       // 自动绑定补全（full-autopilot-parity，R21 thin 迁移）：测试已跑、test-result.json 已落盘，
+       // verify --done 收口时从测试结果自动补全 requirements.md 的空绑定槽——与 thin 同逻辑（逐行扫描）。
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 5bc2db14..d9883aa4 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -655,14 +655,19 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+     } else {
+     try {
+       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+-      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
++      const snapshotFailRef = {} // FR-04：结构化失败原因（pnpm 布局拒建/文件集三分成因/junction/基建异常）
++      snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
+       if (snap) {
+         console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
+       } else {
+-        // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账
++        // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
++        // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因，不再笼统
+         try {
+           const { reportGateSnapshotFallback } = await import('./gate-snapshot.js')
+-          if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'noAI 质量扫描步', reason: 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）' })
++          const fbReason = snapshotFailRef && snapshotFailRef.reason
++            ? `createVerifyGateSnapshot 返回 null：${snapshotFailRef.reason}`
++            : 'createVerifyGateSnapshot 返回 null（变更文件集为空 / 快照基建不可用）'
++          if (typeof reportGateSnapshotFallback === 'function') await reportGateSnapshotFallback({ cwd, changeName, platformOpts, where: 'noAI 质量扫描步', reason: fbReason })
+         } catch { /* 报告失败不改变回退行为（含测试 mock 模块缺导出的形态） */ }
+       }
+     } catch (e) {
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 0e07dfd0..8b25e33d 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -897,7 +897,7 @@ function matrixEvidenceMissing(verdict, evidence) {
+  */
+ export function extractAcceptanceMatrixSlots(verifyMd) {
+   const md = String(verifyMd || '')
+-  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0 }
++  const out = { present: false, rows: [], unfilled: 0, missingEvidence: 0, strayRows: [] }
+   const hm = md.match(/^#### 探针 7[：:]/m)
+   if (!hm) return out
+   out.present = true
+@@ -905,15 +905,27 @@ export function extractAcceptanceMatrixSlots(verifyMd) {
+   const endMatch = rest.match(/^#{1,4}(?:[ \t]|$)/m)
+   const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
+ 
++  // 表头武装（坑 carry-orphan-rows，2026-10-16 下游实证）：五列表行只在探针 7 段已被表头行
++  // 武装时才计数；refresh 携载注释块解除武装——其后残行（旧模板占位行/键漂移携载行）是无
++  // 表头归属的孤行，不栽给最近 **task-NN** 锚误报「判定未填」，进独立 strayRows 桶由
++  // validateAcceptanceMatrix 报错要求裁决。武装是段级粘性（首表头武装整段，锚行不重置——
++  // 锚下不重复表头的既有手写/历史形态照旧按锚归属）；只有携载注释块与其后无新表头重新
++  // 武装的窗口内，行才进孤行桶。正常渲染文法（锚行→表头→分隔→数据行）行为与既有口径一致。
+   let currentTask = ''
++  let tableArmed = false
+   for (const rawLine of sectionText.split(/\r?\n/)) {
+     const anchor = rawLine.match(/^\*\*\s*(task-[A-Za-z0-9._-]+)\s*\*\*/)
+     if (anchor) { currentTask = anchor[1]; continue }
++    if (/<!--\s*refresh 携载/.test(rawLine)) { tableArmed = false; continue } // 携载注释块：其后表行是孤行（直至新表头重新武装）
+     const cells = splitMatrixRowCells(rawLine)
+     if (!cells || cells.length !== 5) continue // 列表防御行/不适用行/非五列表行不计槽
+     const c = cells.map(x => x.trim())
+     if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行 |---|---|…|
+-    if (c[3] === '判定' && c[4] === '证据') continue // 表头行
++    if (c[3] === '判定' && c[4] === '证据') { tableArmed = true; continue } // 表头行（武装本段）
++    if (!tableArmed) {
++      out.strayRows.push({ task: currentTask, acceptance: c[0], verdict: c[3], evidence: c[4] })
++      continue
++    }
+     const verdict = c[3]
+     const evidence = c[4]
+     const row = { task: currentTask, acceptance: c[0], verdict, evidence }
+@@ -985,6 +997,16 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
+       `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由（运行验证移交场景适用：构建回执+移交去向一句话）。`
+     )
+   }
++  // 孤行报错（坑 carry-orphan-rows，2026-10-16 下游实证）：无表头归属的五列残行（refresh
++  // 携载块后的旧模板占位行/键漂移携载行/手误行）不归属任何 task 锚——不栽给最近锚计
++  // unfilled（旧路径误报「文档同步任务判定未填」），独立报错要求裁决：删或补归属。
++  if ((matrix.strayRows || []).length > 0) {
++    const list = matrix.strayRows.map((r) => `${r.task || '（无 task 锚）'}｜${clip(r.acceptance)}`).join('；')
++    errors.push(
++      `探针 7 验收×测试覆盖矩阵存在 ${matrix.strayRows.length} 行无表头归属的孤行（携载残行/旧模板占位行/手误——不属于任何 task 锚下的有效表，不计入任务矩阵）：${list}。` +
++      `修复：删除这些残行，或补全 **task-NN** 锚行与表头后按五列格式填判定与证据。`
++    )
++  }
+ 
+   // ── partial/uncovered × facts.handover 联动（D-003/FR-04，2026-09-17-pass-cap-semantics task-03）──
+   // 部分实现必须有移交去向：矩阵含 partial/uncovered 行且 facts.handover 零有效行（任意
+diff --git a/src/sync.js b/src/sync.js
+index 7c7f39b2..4c6bdd37 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -718,7 +718,19 @@ export class SyncManager {
+           console.warn(`⚠️ [sync] 变更 ${changeName} 的未决冲突已过期（base_ts ≥ 平台 ts=${stalePlatTs}），自动清除并恢复推送`);
+         } else {
+           console.warn(`⚠️ [sync] 变更 ${changeName} 存在未决平台冲突，跳过自动推送。处理：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort`);
+-          return { synced: 0, errors: [`conflict pending: ${changeName}`], conflict: true, suppressed: true };
++          // spec 树与 progress 六表是独立通道（独立端点/独立冲突文件）：progress 冲突抑制
++          // 只应封锁六表上行，不应连带封锁 spec 树——否则删除 op 的唯一上行通道被冲突文件
++          // 长期封锁（2026-10-16 下游实证：409 窗口内本地删除的任务卡在服务器留存，后续整树
++          // 快照拉取把它们写回本地=复活，FR-01 上游成因）。补跑 best-effort：失败不改本分支
++          // 既有的 conflict/suppressed 返回语义（spec 树自身有失败可见性与下轮重试）。
++          let specTreeErrors = [];
++          try {
++            await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
++          } catch (err) {
++            specTreeErrors = [`spec 树补跑失败（不影响抑制语义）: ${err.message}`];
++            debugLog(`[sync] 冲突抑制期间 spec 树同步异常: ${changeName}: ${err.message}`);
++          }
++          return { synced: 0, errors: [`conflict pending: ${changeName}`, ...specTreeErrors], conflict: true, suppressed: true, specTreeAttempted: true };
+         }
+       }
+     }
+@@ -1881,6 +1893,30 @@ export class SyncManager {
+     // ①rm 前先把内容原子写到树外 `<specDir 根名>.local.yaml.bak`（树内会被 rm 一并删掉，
+     //   故放父目录）；②恢复主路径不变，失败时从 .bak 再兜底复制一次；③成功路径末尾
+     //   清理 .bak（明文 token 不留第二份；顺带清历史失败残留）。
++    // 防复活抑制（坑 spec-tree-file-resurrect，2026-10-16 下游实证）：progress 冲突/熔断
++    // 窗口内本地删除的文件（删除 op 未上行成功，服务器清单仍含它）会在整树快照回放时被
++    // 服务器旧内容写回=复活（幽灵任务卡 + 验证误报「文件未清理」）。抑制判据无状态现算：
++    // 基线快照（.runtime/spec-sync-base.json = 上次成功同步时刻的本地文件全集，语义见
++    // spec-sync.js BASE_SNAPSHOT）有、当前盘面无 = 本地删除，回放时跳过这些条目；删除 op
++    // 后续上行成功 → 服务器清单不再含该路径 → bundle 不再携带 → 抑制面自然衰减。
++    // 基线在下方 rm 时会被连带删除（bundle 恒不含 .runtime），故必须在 rm 前读取。
++    // restoreDeleted: true = 用户显式意志优先，跳过抑制（恢复纯快照回放语义）。
++    const suppressResurrect = new Set();
++    const resurrectSkipped = []; // 被防复活抑制挡下的条目（suppressResurrect 命中面；try 外可见供返回值携带）
++    if (!opts.restoreDeleted) {
++      try {
++        const baseRaw = JSON.parse(readFileSync(join(specDir, '.runtime', 'spec-sync-base.json'), 'utf8'));
++        const baseHashes = baseRaw && typeof baseRaw.hashes === 'object' ? baseRaw.hashes : null;
++        if (baseHashes) {
++          for (const p of Object.keys(baseHashes)) {
++            const rel = String(p).replace(/\\/g, '/').replace(/^\.\//, '');
++            if (!rel || rel === 'local.yaml' || rel.startsWith('.runtime/')) continue;
++            if (!existsSync(join(specDir, rel))) suppressResurrect.add(rel);
++          }
++        }
++      } catch { /* 基线缺失/损坏 = 无抑制面（全新空环境全量回放，既有行为不变） */ }
++    }
++
+     const localYamlPath = join(specDir, 'local.yaml');
+     const localYamlBakPath = join(dirname(specDir), `${basename(specDir)}.local.yaml.bak`);
+     let localYamlSaved = null; // null = 本无此文件，无需恢复
+@@ -1916,6 +1952,11 @@ export class SyncManager {
+       const crlfEntries = [];
+       for (const e of entries) {
+         _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
++        const relName = e.name.replace(/^\.\//, '').replace(/\\/g, '/');
++        if (!e.isDir && suppressResurrect.has(relName)) {
++          resurrectSkipped.push(relName); // 基线有、盘面无=本地删除：不从快照复活
++          continue;
++        }
+         const fullPath = join(specDir, e.name);
+         if (e.isDir) {
+           mkdirSync(fullPath, { recursive: true });
+@@ -1926,6 +1967,10 @@ export class SyncManager {
+           if (e.data && e.data.length < 4 * 1024 * 1024) crlfEntries.push([e.name, e.data]); // CRLF 画像采样（超 4MB 大文件跳过采样，写入不受影响）
+         }
+       }
++      // 防复活抑制可见（宁可吵不可静默复活）：被挡路径点名（截断防刷屏），出路指 --restore-deleted
++      if (resurrectSkipped.length > 0) {
++        console.warn(`⚠️ [sync] 防复活抑制：${resurrectSkipped.length} 个本地已删除文件未从快照恢复（对应删除 op 尚未上行成功，恢复会被下轮同步重新删除；确要恢复用 --restore-deleted）: ${resurrectSkipped.slice(0, 5).join(', ')}${resurrectSkipped.length > 5 ? ' 等' : ''}`);
++      }
+       // 批量写入留痕（2026-09-17 反馈⑥②法证收口）：整树解包=逐字节回放，他机 CRLF 内容
+       // 原样落盘——审计行记 时间/触发面/文件数/CRLF 命中数（fail-open）。
+       try {
+@@ -1937,6 +1982,7 @@ export class SyncManager {
+           crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
+           crlfCount: crlfPaths.length,
+           force: opts.force === true,
++          resurrectSkippedCount: resurrectSkipped.length,
+         });
+       } catch { /* 审计 fail-open */ }
+       if (localYamlSaved !== null) {
+@@ -1962,7 +2008,7 @@ export class SyncManager {
+       return { ok: false, pulled: false, specDir, reason: `解压 spec bundle 失败: ${err.message}` };
+     }
+     console.log(`[sync] 已拉取 spec 快照并解压到 ${specDir}${specVersion ? `（平台 spec_version: ${specVersion}，打包时刻快照非实时）` : ''}`);
+-    return { ok: true, pulled: true, specDir, specVersion };
++    return { ok: true, pulled: true, specDir, specVersion, ...(resurrectSkipped.length > 0 ? { resurrectSkipped } : {}) };
+   }
+ 
+   /**
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 6b008c6c..ea76c3c9 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -3897,12 +3897,26 @@ function mergeProbeSection(oldLines, freshLines) {
+     const cell = l.split('|')[1]
+     return cell ? cell.trim() : null
+   }
++  // 占位/分隔单元格（坑 carry-orphan-rows，2026-10-16 下游实证）：全占位行（所有单元格均为
++  // 横线族/占位词/空）被当「已填行」携载，成为夹在报告中部、被门禁栽给最近 task 锚的孤儿
++  // 残行。横线族含 em/en-dash 等全角形态；占位词不区分大小写。部分占位的真实行（有任一
++  // 非占位格）不受影响，照常携载。
++  const isPlaceholderCell = (c) => {
++    const t = String(c ?? '').trim()
++    if (t === '') return true
++    if (/^[-–—―−\s]*$/.test(t)) return true
++    return /^(?:待填|tbd|todo)$/i.test(t)
++  }
+   const oldFilled = new Map()
+   for (const l of oldLines) {
+     if (!/^\s*\|/.test(l)) continue
+     if (/<待填|<TODO/.test(l)) continue
+     const key = firstCell(l)
+-    if (!key || /^-{3,}$/.test(key)) continue // 分隔行/空键不携载
++    if (!key) continue // 空键不携载
++    if (/^:?-{3,}:?$/.test(key)) continue // 分隔行（含 :--- / :---: 冒号对齐形态，与门禁 splitMatrixRowCells 文法同源）
++    const cells = l.split('|').slice(1).map((c) => c.trim())
++    if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop() // 行尾管道的收尾空段
++    if (cells.length > 0 && cells.every(isPlaceholderCell)) continue // 全占位行（旧模板残形）不携载
+     oldFilled.set(key, l)
+   }
+   if (oldFilled.size === 0) return { text: freshLines.join('\n'), carried: 0 }
+diff --git a/test/gate-snapshot-reason.test.mjs b/test/gate-snapshot-reason.test.mjs
+new file mode 100644
+index 00000000..7eddc7cd
+--- /dev/null
++++ b/test/gate-snapshot-reason.test.mjs
+@@ -0,0 +1,69 @@
++// FR-04（2026-10-16-fix-downstream-tool-defects）：快照失败分支带出结构化原因。
++//
++// 坑（2026-10-16 下游实证）：createGateSnapshot/createVerifyGateSnapshot 所有失败分支返回
++// 裸 null 零原因（两处 catch 静默吞异常），调用方硬编码笼统文案「变更文件集为空 / 快照
++// 基建不可用」——把 pnpm symlink-store 布局设计性拒建误标成文件集为空，排查成本直接由此
++// 而来。修法：failRef 可选出参（调用方栈上对象，失败点写 reason）+ catch 补 warn 日志；
++// 返回契约 null 不变；--done 路径经 observability 通道把 used_snapshot/snapshot_fallback_reason
++// 落进 test-result.json。
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { createGateSnapshot, createVerifyGateSnapshot, snapshotObservability } from '../src/run/gate-snapshot.js'
++
++const tmpRoots = []
++after(() => { for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* best effort */ } } })
++
++function makeGitRepo({ lockfile = null } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'ss-snap-reason-'))
++  tmpRoots.push(cwd)
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'a.js'), 'export const a = 1\n', 'utf8')
++  if (lockfile) writeFileSync(join(cwd, lockfile), 'lockfileVersion: 9.0\n', 'utf8')
++  const git = (args) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
++  git(['init', '-q'])
++  git(['config', 'user.email', 't@t'])
++  git(['config', 'user.name', 't'])
++  git(['add', '.'])
++  git(['commit', '-q', '-m', 'init'])
++  return cwd
++}
++
++test('1. pnpm 布局拒建：failRef.reason 点名 symlink-store 布局（红→绿：此前裸 null）', () => {
++  const cwd = makeGitRepo({ lockfile: 'pnpm-lock.yaml' })
++  const failRef = {}
++  const snap = createGateSnapshot({ cwd, files: ['src/a.js'], failRef })
++  assert.equal(snap, null, 'pnpm 布局照旧拒建（返回契约不变）')
++  assert.equal(typeof failRef.reason, 'string', `failRef.reason 应为字符串（实际 ${JSON.stringify(failRef)}）`)
++  assert.ok(/pnpm|symlink-store/i.test(failRef.reason), `原因应点名 pnpm/symlink-store 布局（实际：${failRef.reason}）`)
++})
++
++test('2. 文件集为空成因区分：非 git 仓 → reason 指明 git 不可用（红→绿：此前裸 null）', async () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'ss-snap-nogit-'))
++  tmpRoots.push(cwd)
++  const failRef = {}
++  const snap = await createVerifyGateSnapshot({ cwd, changeName: 'x', specBase: join(cwd, '.sillyspec'), failRef })
++  assert.equal(snap, null)
++  assert.equal(typeof failRef.reason, 'string', `failRef.reason 应为字符串（实际 ${JSON.stringify(failRef)}）`)
++  assert.ok(/git/i.test(failRef.reason), `非 git 仓成因应可辨认（实际：${failRef.reason}）`)
++})
++
++test('3. 不传 failRef 零行为变化：返回 null 不崩', () => {
++  const cwd = makeGitRepo({ lockfile: 'pnpm-lock.yaml' })
++  const snap = createGateSnapshot({ cwd, files: ['src/a.js'] })
++  assert.equal(snap, null, '既有调用形态（无 failRef）行为不变')
++})
++
++test('4. observability 通道：used_snapshot 与降级原因字段（红→绿）', () => {
++  const used = snapshotObservability(true, {})
++  assert.deepEqual(used, { used_snapshot: true })
++  const fellback = snapshotObservability(false, { reason: 'symlink-store 布局拒建（pnpm）' })
++  assert.equal(fellback.used_snapshot, false)
++  assert.ok(fellback.snapshot_fallback_reason.includes('pnpm'), '降级原因透传 failRef.reason')
++  const noReason = snapshotObservability(false, null)
++  assert.equal(noReason.used_snapshot, false)
++  assert.ok(noReason.snapshot_fallback_reason.length > 0, '无 failRef 时兜底笼统文案（向后兼容）')
++})
+diff --git a/test/pull-spec-bundle-resurrect-guard.test.mjs b/test/pull-spec-bundle-resurrect-guard.test.mjs
+new file mode 100644
+index 00000000..90d19247
+--- /dev/null
++++ b/test/pull-spec-bundle-resurrect-guard.test.mjs
+@@ -0,0 +1,202 @@
++// FR-01（2026-10-16-fix-downstream-tool-defects）防复活回归：pullSpecBundle 整树快照回放
++// 必须尊重本地删除面。
++//
++// 坑 spec-tree-file-resurrect（2026-10-16 下游实证）：progress 冲突/熔断窗口内本地删除的
++// 任务卡（删除 op 未上行成功，服务器清单仍含它），后续 pull --spec --force 整树回放把
++// 服务器旧文件写回本地=复活——幽灵任务卡+验证误报「文件未清理」。抑制判据（无状态现算）：
++// 基线快照 spec-sync-base.json（上次成功同步时刻本地文件全集）有、当前盘面无 = 本地删除，
++// 回放跳过；删除上行成功后服务器清单不再含该路径，bundle 不携带 → 抑制自然衰减；
++// restoreDeleted: true 显式恢复通道（用户意志优先）；基线缺失=无抑制面（全新空环境
++// 全量回放，既有行为逐字节不变）。
++//
++// 隔离：cwd 用 os.tmpdir() 临时目录 + mock globalThis.fetch（不发真实网络）。
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
++import { join, dirname, resolve } from 'path'
++import { tmpdir } from 'os'
++import { fileURLToPath } from 'url'
++import { SyncManager, pullSpecBundle } from '../src/sync.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const cliBin = resolve(__dirname, '..', 'bin', 'sillyspec.js')
++
++const tmpRoots = []
++const DELETED_TASK = 'changes/2026-08-29-demo-change/tasks/task-05.md'
++const ALIVE_DOC = 'changes/2026-08-29-demo-change/design.md'
++const DELETED_CONTENT = '# task-05 旧卡（服务器还留着）\n'
++
++function tarHeader(name, size, typeflag) {
++  const h = Buffer.alloc(512)
++  h.write(name.slice(0, 100), 0, 100, 'utf8')
++  h.write(`${size.toString(8).padStart(11, '0')}\0`, 124, 12, 'ascii')
++  h.write(typeflag, 156, 1, 'ascii')
++  h.write('ustar\0', 257, 6, 'ascii')
++  h.write('00', 263, 2, 'ascii')
++  h.write('        ', 148, 8, 'ascii')
++  let sum = 0
++  for (const b of h) sum += b
++  h.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii')
++  return h
++}
++
++function tarEntry(name, content, typeflag = '0') {
++  const data = Buffer.from(content, 'utf8')
++  const pad = (512 - (data.length % 512)) % 512
++  return Buffer.concat([tarHeader(name, data.length, typeflag), data, Buffer.alloc(pad)])
++}
++
++function buildTar(entries) {
++  const parts = entries.map((e) =>
++    e.type === 'dir' ? tarEntry(e.name, '', '5') : tarEntry(e.name, e.content, '0'),
++  )
++  return Buffer.concat([...parts, Buffer.alloc(1024)])
++}
++
++/** 服务器 bundle：仍含被本地删除的 task-05（删除 op 未上行）+ 在场文件的新版 */
++function bundleWithDeletedTask() {
++  return buildTar([
++    { name: 'PLATFORM-BUNDLE.json', content: JSON.stringify({ spec_version: 43 }) },
++    { name: 'changes/', type: 'dir' },
++    { name: 'changes/2026-08-29-demo-change/', type: 'dir' },
++    { name: 'changes/2026-08-29-demo-change/tasks/', type: 'dir' },
++    { name: DELETED_TASK, content: DELETED_CONTENT },
++    { name: ALIVE_DOC, content: '# design\n服务器新版\n' },
++  ])
++}
++
++function okTarResponse(tarBuf, specVersion = '43') {
++  return new Response(tarBuf, {
++    status: 200,
++    headers: { 'Content-Type': 'application/x-tar', 'X-Spec-Version': specVersion },
++  })
++}
++
++/**
++ * 基线快照（上次成功同步时刻本地文件全集）：含被删文件与在场文件。
++ * 键为 specDir 相对 POSIX 路径（walkSpecTree 产物口径）。
++ */
++function writeBaseSnapshot(specDir, paths) {
++  const hashes = {}
++  for (const p of paths) hashes[p] = 'fake-hash-' + p.replace(/[^a-z0-9]/g, '')
++  mkdirSync(join(specDir, '.runtime'), { recursive: true })
++  writeFileSync(join(specDir, '.runtime', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8')
++}
++
++/** 非空 specDir（触发 --force 守卫口径）：基线 + 在场文件，缺被删文件 */
++function makeFixture({ withBaseline = true } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'ss-resurrect-'))
++  tmpRoots.push(cwd)
++  const specDir = join(cwd, '.sillyspec')
++  mkdirSync(join(specDir, 'changes', '2026-08-29-demo-change'), { recursive: true })
++  writeFileSync(join(specDir, ALIVE_DOC), '# design\n本地旧版\n', 'utf8')
++  if (withBaseline) writeBaseSnapshot(specDir, [DELETED_TASK, ALIVE_DOC])
++  return { cwd, specDir }
++}
++
++function mockFetch(impl) {
++  const saved = globalThis.fetch
++  globalThis.fetch = impl
++  return () => { globalThis.fetch = saved }
++}
++
++async function withEnvPlatform(url, token, fn) {
++  const saved = { u: process.env.SILLYHUB_PLATFORM_URL, t: process.env.SILLYHUB_PLATFORM_TOKEN }
++  process.env.SILLYHUB_PLATFORM_URL = url
++  process.env.SILLYHUB_PLATFORM_TOKEN = token
++  try {
++    await fn()
++  } finally {
++    if (saved.u === undefined) delete process.env.SILLYHUB_PLATFORM_URL
++    else process.env.SILLYHUB_PLATFORM_URL = saved.u
++    if (saved.t === undefined) delete process.env.SILLYHUB_PLATFORM_TOKEN
++    else process.env.SILLYHUB_PLATFORM_TOKEN = saved.t
++  }
++}
++
++after(() => {
++  for (const t of tmpRoots) {
++    try { rmSync(t, { recursive: true, force: true }) } catch { /* best effort */ }
++  }
++})
++
++// ── 主路径：基线有、盘面无 → 快照回放不复活（红→绿）──
++test('1. 防复活主路径：本地已删除文件不被快照写回，其余文件正常回放', async () => {
++  const { cwd, specDir } = makeFixture({ withBaseline: true })
++  const restore = mockFetch(async () => okTarResponse(bundleWithDeletedTask()))
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-r1', async () => {
++      const r = await new SyncManager(cwd).pullSpecBundle({ force: true })
++      assert.equal(r.ok, true, `ok（实际 reason=${r.reason}）`)
++      assert.equal(r.pulled, true)
++      // 被抑制：被删文件不复活
++      assert.equal(existsSync(join(specDir, DELETED_TASK)), false, '本地已删除文件不得被快照复活')
++      assert.ok(Array.isArray(r.resurrectSkipped) && r.resurrectSkipped.includes(DELETED_TASK), `resurrectSkipped 应含被抑制路径（实际 ${JSON.stringify(r.resurrectSkipped)}）`)
++      // 其余文件照常回放（服务器新版覆盖本地旧版）
++      assert.equal(readFileSync(join(specDir, ALIVE_DOC), 'utf8'), '# design\n服务器新版\n', '未被抑制的文件照常回放')
++      // local.yaml 不存在场景不受影响（保全链路空转）
++      assert.equal(r.specVersion, '43')
++    })
++  } finally { restore() }
++})
++
++// ── 基线缺失 = 无抑制面，全量回放（既有行为不变）──
++test('2. 无基线（全新空环境形态）：全量回放行为不变，被删文件照旧恢复', async () => {
++  const { cwd, specDir } = makeFixture({ withBaseline: false })
++  const restore = mockFetch(async () => okTarResponse(bundleWithDeletedTask()))
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-r2', async () => {
++      const r = await new SyncManager(cwd).pullSpecBundle({ force: true })
++      assert.equal(r.ok, true)
++      assert.equal(readFileSync(join(specDir, DELETED_TASK), 'utf8'), DELETED_CONTENT, '无基线=无抑制面，回放行为与既有逐字节一致')
++      assert.equal(r.resurrectSkipped, undefined, '未发生抑制时不携带 resurrectSkipped 字段')
++    })
++  } finally { restore() }
++})
++
++// ── 显式恢复通道：restoreDeleted 意志优先 ──
++test('3. restoreDeleted: true 显式恢复：被抑制文件照常恢复落盘', async () => {
++  const { cwd, specDir } = makeFixture({ withBaseline: true })
++  const restore = mockFetch(async () => okTarResponse(bundleWithDeletedTask()))
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-r3', async () => {
++      const r = await new SyncManager(cwd).pullSpecBundle({ force: true, restoreDeleted: true })
++      assert.equal(r.ok, true)
++      assert.equal(readFileSync(join(specDir, DELETED_TASK), 'utf8'), DELETED_CONTENT, '显式意志优先：被抑制文件恢复')
++      assert.equal(r.resurrectSkipped, undefined)
++    })
++  } finally { restore() }
++})
++
++// ── 衰减：删除上行成功后服务器清单不再含该路径 → bundle 无可抑制对象 ──
++test('4. 衰减：删除上行成功后（bundle 无该条目）行为与普通回放一致', async () => {
++  const { cwd, specDir } = makeFixture({ withBaseline: true })
++  const tar = buildTar([
++    { name: 'changes/', type: 'dir' },
++    { name: 'changes/2026-08-29-demo-change/', type: 'dir' },
++    { name: ALIVE_DOC, content: '# design\n删除已收敛后的服务器\n' },
++  ])
++  const restore = mockFetch(async () => okTarResponse(tar, '44'))
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-r4', async () => {
++      const r = await new SyncManager(cwd).pullSpecBundle({ force: true })
++      assert.equal(r.ok, true)
++      assert.equal(existsSync(join(specDir, DELETED_TASK)), false)
++      assert.equal(readFileSync(join(specDir, ALIVE_DOC), 'utf8'), '# design\n删除已收敛后的服务器\n')
++      assert.equal(r.resurrectSkipped, undefined)
++    })
++  } finally { restore() }
++})
++
++// ── 模块级包装器同语义（index.js pull --spec 的实际入口）──
++test('5. 模块级 pullSpecBundle(cwd, opts) 包装器透传 restoreDeleted 语义', async () => {
++  const { cwd, specDir } = makeFixture({ withBaseline: true })
++  const restore = mockFetch(async () => okTarResponse(bundleWithDeletedTask()))
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-r5', async () => {
++      const r = await pullSpecBundle(cwd, { force: true })
++      assert.equal(r.ok, true)
++      assert.equal(existsSync(join(specDir, DELETED_TASK)), false, '包装器默认同样抑制复活')
++    })
++  } finally { restore() }
++})
+diff --git a/test/spec-tree-sync-conflict-decouple.test.mjs b/test/spec-tree-sync-conflict-decouple.test.mjs
+new file mode 100644
+index 00000000..eae2bc1f
+--- /dev/null
++++ b/test/spec-tree-sync-conflict-decouple.test.mjs
+@@ -0,0 +1,120 @@
++// FR-02（2026-10-16-fix-downstream-tool-defects）：progress 冲突抑制分支不得封锁 spec 树
++// 删除 op 上行（spec 树与 progress 六表是独立通道，冲突分流不互相封锁）。
++//
++// 坑（2026-10-16 下游实证）：sync() 读到未决 sync-conflict-<change>.json 提前 return，
++// 挂在其成功路径上的 syncSpecTree（删除 op 唯一上行通道）整轮被跳过——不是失败重试，
++// 是根本不发。409 冲突文件长期在场期间，本地删除永远到不了服务器，后续整树快照拉取
++// 把服务器留存的旧文件写回本地=复活（FR-01 的上游成因）。
++//
++// 隔离：cwd 用 os.tmpdir() 临时目录 + mock globalThis.fetch（不发真实网络）。
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'fs'
++import { join, dirname } from 'path'
++import { tmpdir } from 'os'
++import { SyncManager } from '../src/sync.js'
++
++const tmpRoots = []
++const CHANGE = '2026-10-16-demo-x'
++const DELETED_TASK = `changes/${CHANGE}/tasks/task-06.md`
++
++function makeFixture({ localFiles = [] } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'ss-decouple-'))
++  tmpRoots.push(cwd)
++  const specDir = join(cwd, '.sillyspec')
++  mkdirSync(join(specDir, '.runtime'), { recursive: true })
++  for (const [rel, content] of localFiles) {
++    mkdirSync(dirname(join(specDir, rel)), { recursive: true })
++    writeFileSync(join(specDir, rel), content, 'utf8')
++  }
++  // progress 未决冲突文件（sync() 抑制分支的触发面；不带 platform_last_pushed_at
++  // → 跳过过期自清的 DB 读取，直接进抑制分支）
++  writeFileSync(
++    join(specDir, '.runtime', `sync-conflict-${CHANGE}.json`),
++    JSON.stringify({ change: CHANGE, kind: 'progress', created_at: new Date().toISOString(), note: 'test fixture' }) + '\n',
++    'utf8',
++  )
++  return { cwd, specDir }
++}
++
++/** mock 平台：GET spec-manifest 返回仍含被删文件的清单；POST spec-sync 捕获 ops */
++function makeMockFetch({ serverManifest, postBodyCapture, mode = 'ok' }) {
++  const saved = globalThis.fetch
++  globalThis.fetch = async (url, init = {}) => {
++    const u = String(url)
++    if (u.endsWith('/api/changes/-/spec-manifest')) {
++      if (mode === 'manifest-throw') throw new Error('mock network down')
++      return new Response(JSON.stringify({ files: serverManifest }), { status: 200, headers: { 'Content-Type': 'application/json' } })
++    }
++    if (u.endsWith('/api/changes/-/spec-sync')) {
++      try { postBodyCapture.push(JSON.parse(init.body)) } catch { /* 忽略畸形 */ }
++      return new Response(JSON.stringify({ ok: true, applied: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } })
++    }
++    return new Response(JSON.stringify({ error: 'unexpected endpoint' }), { status: 500 })
++  }
++  return () => { globalThis.fetch = saved }
++}
++
++async function withEnvPlatform(url, token, fn) {
++  const saved = { u: process.env.SILLYHUB_PLATFORM_URL, t: process.env.SILLYHUB_PLATFORM_TOKEN }
++  process.env.SILLYHUB_PLATFORM_URL = url
++  process.env.SILLYHUB_PLATFORM_TOKEN = token
++  try {
++    await fn()
++  } finally {
++    if (saved.u === undefined) delete process.env.SILLYHUB_PLATFORM_URL
++    else process.env.SILLYHUB_PLATFORM_URL = saved.u
++    if (saved.t === undefined) delete process.env.SILLYHUB_PLATFORM_TOKEN
++    else process.env.SILLYHUB_PLATFORM_TOKEN = saved.t
++  }
++}
++
++after(() => {
++  for (const t of tmpRoots) {
++    try { rmSync(t, { recursive: true, force: true }) } catch { /* best effort */ }
++  }
++})
++
++test('1. 冲突抑制期间 spec 树删除 op 照常上行（红→绿：此前整轮被跳过）', async () => {
++  const { cwd, specDir } = makeFixture({
++    localFiles: [[`changes/${CHANGE}/tasks/task-01.md`, '# task-01\n']],
++  })
++  const postBodyCapture = []
++  const restore = makeMockFetch({
++    serverManifest: {
++      // 服务器仍持有两文件：task-01（本地在场、同 hash 口径不影响 delete 断言）与 task-06（本地已删）
++      [`changes/${CHANGE}/tasks/task-01.md`]: { hash: 'h-task01', version: 1, exists: true },
++      [DELETED_TASK]: { hash: 'h-task06', version: 1, exists: true },
++    },
++    postBodyCapture,
++  })
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-d1', async () => {
++      const r = await new SyncManager(cwd).sync(CHANGE)
++      // 抑制语义保持：progress 冲突未决，六表不上行
++      assert.equal(r.conflict, true, 'conflict 语义不变')
++      assert.equal(r.suppressed, true, 'suppressed 语义不变')
++      assert.equal(r.specTreeAttempted, true, '抑制分支应尝试 spec 树同步')
++      // 关键断言：删除 op 到达服务器（此前此路完全不通）
++      const ops = postBodyCapture.flatMap((b) => (Array.isArray(b.ops) ? b.ops : []))
++      const del = ops.find((o) => o.op === 'delete' && o.path === DELETED_TASK)
++      assert.ok(del, `POST ops 应含 delete ${DELETED_TASK}（实际 ops=${JSON.stringify(ops)}）`)
++      assert.equal(existsSync(join(specDir, '.runtime', `sync-conflict-${CHANGE}.json`)), true, 'progress 冲突文件不被触碰（独立通道互不干扰）')
++    })
++  } finally { restore() }
++})
++
++test('2. 补跑异常不改抑制语义：conflict/suppressed 原样返回且不向上抛', async () => {
++  const { cwd } = makeFixture({ localFiles: [] })
++  const postBodyCapture = []
++  const restore = makeMockFetch({ serverManifest: {}, postBodyCapture, mode: 'manifest-throw' })
++  try {
++    await withEnvPlatform('http://hub.example.com', 'shpsync_tok-d2', async () => {
++      const r = await new SyncManager(cwd).sync(CHANGE)
++      assert.equal(r.conflict, true)
++      assert.equal(r.suppressed, true)
++      assert.equal(r.specTreeAttempted, true, '补跑已尝试（清单请求失败属通道内失败）')
++      assert.equal(postBodyCapture.length, 0, '清单失败则无 POST')
++    })
++  } finally { restore() }
++})
+diff --git a/test/verify-carry-orphan-guard.test.mjs b/test/verify-carry-orphan-guard.test.mjs
+new file mode 100644
+index 00000000..13c5f6ce
+--- /dev/null
++++ b/test/verify-carry-orphan-guard.test.mjs
+@@ -0,0 +1,177 @@
++// FR-03（2026-10-16-fix-downstream-tool-defects）：verify 携载孤儿残行 + 门禁误归属双缺陷回归。
++//
++// 坑（2026-10-16 下游实证）：--force 携载把旧模板占位行（| :--- | 对齐分隔行 / | — | 全
++// 占位行）当「已填行」搬进新渲染中部（mergeProbeSection 过滤器只认纯 ASCII --- 与字面
++// <待填/<TODO）；门禁 extractAcceptanceMatrixSlots 按最近前置 **task-NN** 锚行归属每条
++// 五列行——残行落在最后锚之后被栽给尾任务（文档同步类）误报「N 行判定未填」。
++// 修法：携载过滤器补两类排除形态；门禁引入表头武装 + 携载注释解除武装，无武装五列行进
++// 独立 strayRows 孤行桶，validateAcceptanceMatrix 产独立孤行报错要求裁决。
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { applySkeletonPreservingHuman } from '../src/verify-probes.js'
++import { runValidators, extractAcceptanceMatrixSlots } from '../src/stage-contract.js'
++import { IR_STRICT_SINCE } from '../src/constants.js'
++
++const tmpRoots = []
++after(() => { for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* best effort */ } } })
++
++const PROBE7_HEAD = [
++  '#### 探针 7：验收×测试覆盖矩阵',
++  '',
++  '**task-01**',
++  '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++  '|---|---|---|---|---|',
++].join('\n')
++
++const FILLED_ROW_JIA = '| 甲项（旧验收） | `test/a.test.mjs` | 命中 | covered | `test/a.test.mjs` |'
++const FILLED_ROW_YI = '| 乙项（已从 design 撤下） | `test/b.test.mjs` | 命中 | covered | `test/b.test.mjs` |'
++const ALIGNED_SEPARATOR = '| :--- | :--- | :--- | :--- | :--- |'
++const EMDASH_PLACEHOLDER = '| — | — | — | — | — |'
++
++test('1. 携载过滤：对齐分隔行与全占位行不再搬入新渲染（红→绿）；键漂移已填行仍携载', () => {
++  const oldText = [
++    '## 探针结果（CLI 机械预填）',
++    '',
++    PROBE7_HEAD,
++    FILLED_ROW_JIA,
++    ALIGNED_SEPARATOR,
++    EMDASH_PLACEHOLDER,
++    FILLED_ROW_YI,
++    '',
++  ].join('\n')
++  const skeletonText = [
++    '## 探针结果（CLI 机械预填）',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 新丙项 | `test/c.test.mjs` | 命中 | <待填：五选一> | <TODO> |',
++    '',
++  ].join('\n')
++
++  const r = applySkeletonPreservingHuman(oldText, skeletonText)
++  assert.equal(r.text.includes(ALIGNED_SEPARATOR), false, '对齐分隔行 :--- 不得携载进新渲染')
++  assert.equal(r.text.includes(EMDASH_PLACEHOLDER), false, '全占位行 — 不得携载进新渲染')
++  assert.equal(r.text.includes('|---|---|---|---|---|'), true, '骨架自身的纯 ASCII 分隔行照常在场')
++  assert.equal(r.text.includes(FILLED_ROW_JIA), true, '键漂移已填行（甲）仍携载——已填格不丢')
++  assert.equal(r.text.includes(FILLED_ROW_YI), true, '键漂移已填行（乙）仍携载')
++  assert.equal(r.text.includes('<!-- refresh 携载的已填行'), true, '携载块带归属注释（agent 裁决去留）')
++  // carriedRows 计的是「同键原位替换」数（旧表头与新骨架表头同键自匹配计 1）；键漂移行走
++  // stale 追加不计数——携载面以内容断言为准（上方三条 includes）
++  assert.equal(r.carriedRows, 1)
++})
++
++test('2. 门禁孤行桶：携载注释后的残行不栽给最近 task 锚（红→绿）', () => {
++  const md = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 判定枚举解析 | `test/x.test.mjs` | 命中 | covered | `test/x.test.mjs` |',
++    '',
++    '<!-- refresh 携载的已填行（新渲染中无同键行，agent 裁决去留） -->',
++    '| 残行一 | test/x.test.mjs | 命中 | — | — |',
++    '| 残行二 | | | <待填：五选一> | <TODO> |',
++    '',
++  ].join('\n')
++  const m = extractAcceptanceMatrixSlots(md)
++  assert.equal(m.present, true)
++  assert.equal(m.rows.length, 1, '正常表行只计 1（残行不入任务矩阵）')
++  assert.equal(m.rows[0].task, 'task-01')
++  assert.equal(m.unfilled, 0, `残行不计 unfilled（实际 ${m.unfilled}）`)
++  assert.equal(m.missingEvidence, 0)
++  assert.equal(Array.isArray(m.strayRows), true, 'strayRows 桶字段在场')
++  assert.equal(m.strayRows.length, 2, `两条残行进孤行桶（实际 ${m.strayRows.length}）`)
++  assert.equal(m.strayRows[0].acceptance, '残行一')
++})
++
++test('3. 门禁兼容：正常渲染（锚行→表头→分隔→数据行）零行为变化', () => {
++  const md = [
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 判定枚举解析 | `test/x.test.mjs` | 命中 | covered | `test/x.test.mjs` |',
++    '| 证据锚点核验 | `test/x.test.mjs` | 命中 | <待填：五选一> | <TODO> |',
++    '',
++    '**task-02**',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    '| 丙项 | `test/y.test.mjs` | 命中 | non-testable | 构建期产物，运行期不可测 |',
++    '',
++  ].join('\n')
++  const m = extractAcceptanceMatrixSlots(md)
++  assert.equal(m.rows.length, 3)
++  assert.equal(m.unfilled, 1, '未填判定照旧计 unfilled')
++  assert.equal(m.strayRows.length, 0, '正常渲染无孤行')
++  assert.equal(m.rows[2].task, 'task-02', '锚行归属照旧')
++})
++
++// ── validateAcceptanceMatrix 经 runValidators('verify') 注册链 ──
++
++function makeChange(cn, { verifyMd }) {
++  const root = mkdtempSync(join(tmpdir(), 'carry-orphan-'))
++  tmpRoots.push(root)
++  const changeDir = join(root, '.sillyspec', 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '---',
++    `created_at: ${IR_STRICT_SINCE} 08:00:00`,
++    '---',
++    '# 设计', '',
++    '## 文件变更清单', '',
++    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/feature.js | 特性 |', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: 实现\n')
++  mkdirSync(join(changeDir, 'tasks'))
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
++    '---', 'id: task-01', 'title: 门禁', 'allowed_paths:', '  - src/stage-contract.js',
++    'acceptance:', '  - 判定枚举解析', '---', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'verify-result.md'), verifyMd)
++  return { root, cn }
++}
++
++function verifyDoc(bodyLines) {
++  return ['# 验证报告', '', '结论枚举：PASS', '', bodyLines.join('\n'), ''].join('\n')
++}
++
++test('4. 孤行报错：残行产独立 errors 要求裁决（红→绿：此前误报「判定未填」栽给尾任务）', () => {
++  const { root, cn } = makeChange('carry-orphan-gate', {
++    verifyMd: verifyDoc([
++      PROBE7_HEAD,
++      '| 判定枚举解析 | `test/x.test.mjs` | 命中 | covered | `test/x.test.mjs` |',
++      '',
++      '<!-- refresh 携载的已填行（新渲染中无同键行，agent 裁决去留） -->',
++      '| 残行一 | test/x.test.mjs | 命中 | — | — |',
++      '| 残行二 | | | <待填：五选一> | <TODO> |',
++    ]),
++  })
++  const r = runValidators('verify', root, cn)
++  assert.equal(r.ok, false, '残行仍阻断（报告不得带垃圾）')
++  const orphanErr = r.errors.find((e) => e.includes('孤行'))
++  assert.ok(orphanErr, `应有独立「孤行」报错（实际 errors=${JSON.stringify(r.errors)}）`)
++  assert.ok(orphanErr.includes('2 行'), '报错点数残行条数')
++  assert.ok(orphanErr.includes('残行一'), '报错点名残行内容')
++  assert.equal(r.errors.some((e) => e.includes('判定未填')), false, '残行不再被计为「判定未填」（此前误栽给最近 task 锚的报错消失）')
++})
++
++test('5. 兼容：干净报告（正常表行）不产孤行报错', () => {
++  const { root, cn } = makeChange('carry-clean-gate', {
++    verifyMd: verifyDoc([
++      PROBE7_HEAD,
++      '| 判定枚举解析 | `test/x.test.mjs` | 命中 | covered | `test/x.test.mjs` |',
++    ]),
++  })
++  const r = runValidators('verify', root, cn)
++  // 干净报告不受孤行门误伤（其他 validator 面——facts 缺失 fail-closed 等——不属本变更口径，
++  // acceptance-matrix-gate.test.mjs 全链路用例已覆盖）
++  assert.equal(r.errors.some((e) => e.includes('孤行')), false, `孤行门不误伤干净报告（实际 errors=${JSON.stringify(r.errors)}）`)
++})

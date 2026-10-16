@@ -494,3 +494,98 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-16-spec-sync-fail-alarm
   status: active
+
+## FR-docs-026 回归用例红→绿：progress 冲突/熔断窗口内本地删除 spec 文件后，后续 pullSpecBundle / resolve --take-platform 不把服务器旧文件写回本地（活跃变更内单文件粒度；基线有、盘面无=本地删除的抑制判定，且随删除成功上行自然衰减；全新空环境无基线时全量回放行为不变）
+变更：2026-10-16-fix-downstream-tool-defects
+状态：active
+摘要：防复活主路径；全新空环境零行为变化；显式恢复通道；删除上行成功后自然衰减
+全文：.sillyspec/changes/archive/2026-10-16-fix-downstream-tool-defects/requirements.md#FR-01
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-01
+  tests: test/pull-spec-bundle-resurrect-guard.test.mjs「防复活：基线有盘面无不写回（红→绿）/无基线全量回放/restoreDeleted 显式恢复/非抑制文件正常回放」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-fix-downstream-tool-defects
+  status: active
+
+## FR-docs-027 回归用例红→绿：progress 409/熔断不再阻断 spec 树 delete op 上行（spec 树与 progress 六表是独立通道，冲突分流不互相封锁）
+变更：2026-10-16-fix-downstream-tool-defects
+状态：active
+摘要：冲突抑制期间删除 op 照常上行；补跑失败不改抑制语义
+全文：.sillyspec/changes/archive/2026-10-16-fix-downstream-tool-defects/requirements.md#FR-02
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-02
+  tests: test/spec-tree-sync-conflict-decouple.test.mjs「冲突抑制分支仍上行 spec 树删除 op（红→绿）/补跑异常不改抑制语义」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-fix-downstream-tool-defects
+  status: active
+
+## FR-docs-028 回归用例红→绿：mergeProbeSection 不再携载 :---/—/待填 等占位与分隔形态行（合法键漂移已填行仍携载且带归属注释）；extractAcceptanceMatrixSlots 对无表头归属的孤行不再栽给最近 task 锚行，改为独立「孤行」报错要求裁决删除或补归属
+变更：2026-10-16-fix-downstream-tool-defects
+状态：active
+摘要：占位与分隔行不携载；键漂移已填行仍携载；门禁孤行独立桶不栽锚行；正常渲染零行为变化
+全文：.sillyspec/changes/archive/2026-10-16-fix-downstream-tool-defects/requirements.md#FR-03
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-03
+  tests: test/verify-carry-orphan-guard.test.mjs「占位与分隔行不携载（红→绿）/键漂移已填行携载/门禁孤行独立桶不栽锚行（红→绿）/正常渲染零行为变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-fix-downstream-tool-defects
+  status: active
+
+## FR-docs-029 回归用例红→绿：快照失败分支带出结构化原因（pnpm 布局/变更文件集为空三分成因/junction 失败/worktree 异常详情），两处调用方文案替换硬编码；--done 路径把 usedSnapshot 降级事实落进结果记录
+变更：2026-10-16-fix-downstream-tool-defects
+状态：active
+摘要：pnpm 布局拒建原因可见；文件集为空成因区分；--done 降级事实落盘；不传 failRef 零行为变化
+全文：.sillyspec/changes/archive/2026-10-16-fix-downstream-tool-defects/requirements.md#FR-04
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-04
+  tests: test/gate-snapshot-reason.test.mjs「pnpm 拒建原因（红→绿）/文件集为空成因区分/--done 降级事实落盘（红→绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-fix-downstream-tool-defects
+  status: active
+
+## FR-docs-030 三端兼容 Windows/Linux/macOS；既有相关测试全绿（sync/spec-sync/pull-spec-bundle/verify-papercuts/acceptance-matrix-gate/verify-gate-snapshot 族）
+变更：2026-10-16-fix-downstream-tool-defects
+状态：active
+摘要：回归族全绿
+全文：.sillyspec/changes/archive/2026-10-16-fix-downstream-tool-defects/requirements.md#FR-05
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-fix-downstream-tool-defects:flow:测试绑定FR-05
+  tests: test/run-tests.mjs「既有相关测试族全量回归（pull-spec-bundle、platform-sync 族、spec-sync 族、verify-papercuts、acceptance-matrix-gate、gate-snapshot 族、verify-quality-scan）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-fix-downstream-tool-defects
+  status: active
