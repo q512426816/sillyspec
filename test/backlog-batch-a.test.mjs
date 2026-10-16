@@ -160,7 +160,8 @@ console.log('--- ③b 偷锁 rename 持续失败 → 按超时抛错（不忙等
   // CI node 22/24 上 mock.module 对内置模块命名空间的 spread 枚举不全（本地 node 24.15
   // 含 execFileSync，CI 实测缺——AppendFileSync 缺失报错实证）——显式补关键函数引用，
   // 不依赖 spread 枚举完整性
-  const fsExports = { ...realFs, appendFileSync: realFs.appendFileSync, writeFileSync: realFs.writeFileSync, existsSync: realFs.existsSync, readFileSync: realFs.readFileSync, renameSync: realFs.renameSync, utimesSync: realFs.utimesSync, constants: realFs.constants }
+  // 不含 constants（node:fs 的不可重定义导出——mock.module 挂载时报 Cannot redefine）
+  const fsExports = { ...realFs, appendFileSync: realFs.appendFileSync, writeFileSync: realFs.writeFileSync, existsSync: realFs.existsSync, readFileSync: realFs.readFileSync, renameSync: realFs.renameSync, utimesSync: realFs.utimesSync }
   void 0
   fsExports.renameSync = (from, to) => {
     if (String(from) === lockPath) { renameAttempts++; throw Object.assign(new Error('EPERM: 文件被 AV 占用'), { code: 'EPERM' }) }
