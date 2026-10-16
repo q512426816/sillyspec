@@ -88,4 +88,4 @@ FR-02: test/probe7-prefill-noise.test.mjs「FR-02 正文命中封顶 partial 且
 FR-03: test/probe7-prefill-noise.test.mjs「FR-03 同波次新增测试零命中预填 covered+待人工复核」
 FR-04: test/probe7-prefill-noise.test.mjs「FR-04 候选>5 交人工且 hints 跳过」；test/pitfall-probe7-noise.test.mjs「FR-10：82 文件截断为 5 + 「共 82 个」折叠，路径转义不破表」
 FR-05: test/acceptance-matrix-probe.test.mjs「门禁 round-trip：预填渲染直过 extractAcceptanceMatrixSlots」；test/probe7-prefill-noise.test.mjs「FR-05 优先级链固定（七级）」
-FR-06: test/acceptance-matrix-probe.test.mjs（结构归属/幂等补段/双形态解析既有小节）；test/probe7-fr-prefill.test.mjs「P1/P2/P3」；test/probe7-testpath-anchor.test.mjs；test/cross-repo-probe7-anchor.test.mjs
+FR-06: test/acceptance-matrix-probe.test.mjs（结构归属/幂等补段/双形态解析既有小节）；test/probe7-fr-prefill.test.mjs「P1/P2/P3」；test/probe7-testpath-anchor.test.mjs；test/probe7-anchor-testfile.test.mjs（FR-09 多根断言按新契约改写）；test/cross-repo-probe7-anchor.test.mjs

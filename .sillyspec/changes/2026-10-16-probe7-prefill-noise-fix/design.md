@@ -48,3 +48,16 @@ created_at: 2026-10-16T07:44:31.079Z
 - **最大风险：提升信号（第⑥级）方向从「宁 partial」翻向「宁 covered」**——若 review changedFiles 噪声大（如 rebase/工具重写导致无关测试入 changedFiles），会出现新的假 covered。缓解：lift 仅覆盖「零字面命中」格（有正文命中仍封顶 partial）；≥5 候选不触发 lift（第④级在前）；证据显式带「待人工复核」注记供复核者降级；review.json 缺失时不升格。若实测仍噪，回退开关即删除第⑥级（单点）。
 - 试过但放弃：a) 只做「正文命中→partial」不引入测试名判定——不能解决锚点空心，covered 仍来自 docstring 行号；b) 用「测试文件被 diff 触碰」全量提升——会连未归属的改动测试一起升格，过宽；c) FR 池按 acceptance 词过滤收窄——池本身与卡粒度错配（130 文件来自整变更面），过滤后仍可能残留无关文件，不如「代码任务 + >5 交人工」两刀干净；d) 保留 anchors 仅改证据文案——词法层未变，hints.files 仍会把 docstring 命中当承接提示，治标不治本。
 - 兼容风险：acceptance-matrix-probe / testpath-anchor 既有断言按旧契约（注释级命中→covered）钉死——属本记录显式判定的缺陷面，测试按新契约改写（非「改测试绕逻辑」，是契约修订）。
+
+## 文件变更清单
+
+| 操作 | 文件 | 说明 |
+|---|---|---|
+| 修改 | src/verify-probes.js | 探针 7 预填链重写：命中分级（nameAnchors）/七级判定链/FR 池收窄/同波次提升信号/展示帽 |
+| 新增 | test/probe7-prefill-noise.test.mjs | 四缺陷新契约锁定（6 用例：FR-01~05 + 门禁 round-trip） |
+| 修改 | test/acceptance-matrix-probe.test.mjs | 注释级命中断言按新契约改写（covered→partial 等）+ task-06 uncovered 行 |
+| 修改 | test/probe7-anchor-testfile.test.mjs | FR-09 多根断言按新契约改写（正文级命中证据） |
+| 修改 | test/pitfall-probe7-noise.test.mjs | >5 候选 uncovered 交人工断言补充 |
+| 修改 | test/probe7-fr-prefill.test.mjs | P4 全部署类条目卡不注入 FR 池用例 |
+| 修改 | .sillyspec/docs/sillyspec/modules/core-engine.md | 模块卡 verify-probes 条目补预填四缺陷修复摘要 + 最近变更头 |
+| 修改 | .sillyspec/docs/sillyspec/modules/core-engine.changelog.md | 变更索引追加行 |
