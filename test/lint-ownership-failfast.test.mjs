@@ -71,7 +71,10 @@ const srcOf = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url))
   assert(iMoved !== -1, '3c 原位置留前移标记（防重复执行）')
   const iPrefill = g.indexOf('预填注清零校验未过')
   assert(iPrefill > -1 && iPrefill < iTest, '3d 预填注 error 门同样前置')
-  assert(g.includes("verdict === 'pre-existing'"), '3e verify lint 硬拦分支含归属鉴定降档（pre-existing 放行路径）')
+  // 3e（2026-10-15-lint-triage-path-unify 更新契约）：判定收敛到共享 helper
+  // lint-ownership.js（gates 与 verify-quality-scan 双接线源级钉——见 5 号用例），
+  // gates 源内的裸 'pre-existing' 字面量已随判定迁移消失——锚点改为 helper 调用在场。
+  assert(g.includes('lintOwnershipDowngrade'), '3e verify lint 硬拦分支走共享归属鉴定降档（lint-ownership.js helper）')
 }
 
 // ── 4. quick 门接线 + 措辞 ──
