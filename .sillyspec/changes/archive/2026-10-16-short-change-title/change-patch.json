@@ -1,0 +1,125 @@
+{
+  "change": "2026-10-16-short-change-title",
+  "baseline": "f6f22faa3e34eb8c01eabeb2fc6501fc93b3d2d6",
+  "head": "c33843bc117de51b00a2a6a18a111e1f00d13b8e",
+  "files": [
+    "docs/sillyspec/troubleshooting.md",
+    "src/flow.js",
+    "src/quicklog.js",
+    "src/run/command.js",
+    "test/short-change-title.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 356,
+    "deletions": 32
+  },
+  "savedAt": "2026-10-16T13:37:58.154Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "change-management",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/change-management.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "f6f22faa3e34eb8c01eabeb2fc6501fc93b3d2d6",
+    "totals": {
+      "files": 5,
+      "additions": 356,
+      "deletions": 32
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/troubleshooting.md",
+        "additions": 20,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 24,
+        "deletions": 16,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/quicklog.js",
+        "additions": 129,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 8,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/short-change-title.test.mjs",
+        "additions": 175,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "85f8fc8d2e768cc9b740f9463df5358d84b07fcfefcbf746833a3a17829139e5",
+  "patchStatus": "ok"
+}

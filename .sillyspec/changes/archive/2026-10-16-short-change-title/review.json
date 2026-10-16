@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-short-change-title",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "c33843bc117de51b00a2a6a18a111e1f00d13b8e",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "hardCut 软提示文案「无自然断点」与实际判定（[6,30] 区间内无可用截点）存在措辞漂移",
+      "evidence": "distillShortTitleEx 的 hardCut=true 条件是「候选截点经 [floor=6, max=30] 过滤后为空」——存在自然标点但落在区间外（如 35 字句唯一逗号在第 33 字、或首标点在第 3 字）时也硬切，此时提示称「标题超 30 字且无自然断点已硬切」与判定不符；仅文案精度问题，触发条件、修复路径（flow start --title）与不阻断语义均与代码一致",
+      "location": "src/flow.js:912 与 src/flow.js:794（对照 src/quicklog.js:144-166 判定）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——resume 首写者胜 guard 真实存在（src/flow.js:792-794：仅 titleFlag 或库内 title 为空才写）；adopt 路径既有行 title 空才回填（src/flow.js:699-700）；fresh 仅新变更走 initChange，无覆盖面",
+    "并发": "ok——提炼为确定性纯函数（无 RNG/时间/共享态），同输入同推导；写路径沿用既有 initChange/updateChangeMeta 语义未改，无新竞态面",
+    "切换": "ok——distill/动机提取无状态；动机读文件失败 catch 返回 ''（src/quicklog.js:467），任意时点中断不落半态；软提示仅 console 输出不写状态",
+    "作用域": "ok——标题只写本 cwd 进度库 changes 行；grep 全 src 无第二标题推导源（唯一其余消费点 src/flow-parity.js:148 为文档化的 ≤50 模块摘要口径，受测试锁定），平台推送无独立重推导，同源不漂移主张成立"
+  },
+  "reviewedAt": "2026-10-16T13:40:42Z"
+}

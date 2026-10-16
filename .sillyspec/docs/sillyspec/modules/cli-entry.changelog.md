@@ -61,3 +61,4 @@
 | 2026-10-15 | 2026-10-15-decision-anchor-backfill | 效果评估实证（用户问「新变更图谱为何不关联代码」）：决策↔代码的图谱边唯一来源是条目「锚点：」字段，… |
 | 2026-10-15 | 2026-10-15-session-forensics | 会话取证命令 sillyspec diagnose——对照 Superpowers diagnosi… |
 | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
+| 2026-10-16 | 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句 |

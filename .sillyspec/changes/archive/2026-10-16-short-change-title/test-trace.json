@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-16-short-change-title",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-16-short-change-title:flow:测试绑定FR-01",
+      "tests": [
+        "test/short-change-title.test.mjs「distillShortTitle：实证样本/截点选择/硬切/小数保护」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-short-change-title"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-16-short-change-title:flow:测试绑定FR-02",
+      "tests": [
+        "test/short-change-title.test.mjs「deriveShortChangeTitle 与 deriveChangeTitle 口径分治」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-short-change-title"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-16-short-change-title:flow:测试绑定FR-03",
+      "tests": [
+        "test/short-change-title.test.mjs「deriveTitleFromLinkedChange：动机回退/空串保底/dash 封顶」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-short-change-title"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-16-short-change-title:flow:测试绑定FR-04",
+      "tests": [
+        "test/short-change-title.test.mjs「deriveShortChangeTitleEx：hardCut 标记判定（软提示触发面）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-short-change-title"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-16-short-change-title:flow:测试绑定FR-05",
+      "tests": [
+        "test/short-change-title.test.mjs「deriveChangeTitle ≤50 既有契约回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-16-short-change-title"
+    }
+  ]
+}

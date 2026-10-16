@@ -589,3 +589,111 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-16-fix-downstream-tool-defects
   status: active
+
+## FR-docs-031 新增提炼函数：目标 20 字上限 30 字，优先在自然标点（。！？；：、，—等）处截断并剥尾部标点，无标点才硬切加 …，ASCII 小数点/千分位不误切
+变更：2026-10-16-short-change-title
+状态：active
+摘要：实证坏标题——50 字硬切残句；实证坏标题——动机首句（无需提炼）；无自然截点
+场景正文：
+- 场景：实证坏标题——50 字硬切残句 — Given --input 首行「change 文件树「刷新」同步链路三层静默失败——后端 RPC 预算 3s 短于实测 6~13.5s 触发整树重拉」（50+ 字，含全角；When 过提炼函数；Then 必须返回「change 文件树「刷新」同步链路三层静默失败」（破折号前自然截断，≤30 字，无尾部 — 残留）
+- 场景：实证坏标题——动机首句（无需提炼） — Given 动机段首句「用户报告登录的账户有时候莫名其妙被退出登录。」（21 字）；When 过提炼函数；Then 必须返回去尾句号原句，禁止截断或改写句中文字
+- 场景：无自然截点 — Given 40+ 字无任何全角标点的连续中文句；When 过提炼函数；Then 必须返回前 30 字加「…」且 hardCut=true
+全文：.sillyspec/changes/archive/2026-10-16-short-change-title/requirements.md#FR-01
+最近确认：c33843bc117de51b00a2a6a18a111e1f00d13b8e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-short-change-title:flow:测试绑定FR-01
+  tests: test/short-change-title.test.mjs「distillShortTitle：实证样本/截点选择/硬切/小数保护」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-short-change-title
+  status: active
+
+## FR-docs-032 轻量道 flow start/resume/adopt 与完整流程 run initChange 的标题推导改走提炼（≤30 字），motiveFromInput 模块摘要 ≤50 口径不变
+变更：2026-10-16-short-change-title
+状态：active
+摘要：标题入口切换
+场景正文：
+- 场景：标题入口切换 — Given --input 首行为 50+ 字含破折号长句；When flow start / run initChange 推导标题；Then 落库 title 必须为提炼后 ≤30 字短句（非 50 字硬切残句）
+全文：.sillyspec/changes/archive/2026-10-16-short-change-title/requirements.md#FR-02
+最近确认：c33843bc117de51b00a2a6a18a111e1f00d13b8e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-short-change-title:flow:测试绑定FR-02
+  tests: test/short-change-title.test.mjs「deriveShortChangeTitle 与 deriveChangeTitle 口径分治」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-short-change-title
+  status: active
+
+## FR-docs-033 deriveTitleFromLinkedChange 遇纯模板 H1 回退读 proposal「## 动机」首句过提炼；既有「无 H1 无动机 → 空串」契约不变
+变更：2026-10-16-short-change-title
+状态：active
+摘要：纯模板 H1 动机回退；无动机节保底
+场景正文：
+- 场景：纯模板 H1 动机回退 — Given proposal.md 首行「# 提案书（Proposal）」，「## 动机」节首行为「用户报告登录的账户有时候莫名其妙被退出登录，怀疑会话过期策略误伤」；When deriveTitleFromLinkedChange 提取；Then 必须返回动机首句的自然断点提炼（非空、≤30 字、非变更名兜底）
+- 场景：无动机节保底 — Given proposal.md 无 H1 亦无「## 动机」节；When deriveTitleFromLinkedChange 提取；Then 必须返回空串（调用方不刷新 title）
+全文：.sillyspec/changes/archive/2026-10-16-short-change-title/requirements.md#FR-03
+最近确认：c33843bc117de51b00a2a6a18a111e1f00d13b8e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-short-change-title:flow:测试绑定FR-03
+  tests: test/short-change-title.test.mjs「deriveTitleFromLinkedChange：动机回退/空串保底/dash 封顶」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-short-change-title
+  status: active
+
+## FR-docs-034 提炼被硬切时 flow 启动打一行软提示建议 --title，不阻断
+变更：2026-10-16-short-change-title
+状态：active
+摘要：软提示触发与静默
+场景正文：
+- 场景：软提示触发与静默 — Given hardCut=true 的推导结果（非 --title）；When flow start 落标题；Then 必须输出含 --title 建议的一行提示且流程继续；Given 短句/--title 场景 Then 必须无此提示
+全文：.sillyspec/changes/archive/2026-10-16-short-change-title/requirements.md#FR-04
+最近确认：c33843bc117de51b00a2a6a18a111e1f00d13b8e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-short-change-title:flow:测试绑定FR-04
+  tests: test/short-change-title.test.mjs「deriveShortChangeTitleEx：hardCut 标记判定（软提示触发面）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-short-change-title
+  status: active
+
+## FR-docs-035 既有测试 change-title-flow / motive-from-input / change-title-backfill 全绿，新增提炼函数测试含本次实证坏标题样本
+变更：2026-10-16-short-change-title
+状态：active
+摘要：回归与新增同绿
+场景正文：
+- 场景：回归与新增同绿 — When 全量测试跑毕；Then 既有标题测试零失败，新增提炼测试零失败
+全文：.sillyspec/changes/archive/2026-10-16-short-change-title/requirements.md#FR-05
+最近确认：c33843bc117de51b00a2a6a18a111e1f00d13b8e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-16-short-change-title:flow:测试绑定FR-05
+  tests: test/short-change-title.test.mjs「deriveChangeTitle ≤50 既有契约回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-16-short-change-title
+  status: active
