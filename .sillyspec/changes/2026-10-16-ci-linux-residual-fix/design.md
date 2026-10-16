@@ -166,9 +166,11 @@ npm ci && npm test`）——① `--init`（tini 回收）必带：否则容器 P
 评审 verdict=PASS（无 P1），两条 P2 均当场整改、三条 P3 两条接受一条随推送消解：
 
 - **P2-1 根因叙述失实 → 已整改**：`test/backlog-batch-a.test.mjs` /
-  `test/worktree-junction-fail-loud.test.mjs` 注释 + requirements FR-01 + 本记录第 5 条改为
-  四象限实测口径（分叉轴 = node 版本：24.15 双端不炸、24.22/24.21/22.23 炸；ESM 命名空间
-  合成描述符 writable:true 不是 CJS 导出形态）。
+  `test/worktree-junction-fail-loud.test.mjs` 注释 + requirements FR-01 + 本记录第 1/5 条与
+  盲维四问 #1 + proposal 动机段（保留立项转写原文 + 更正指针）全部改为四象限实测口径
+  （分叉轴 = node 版本：24.15 双端不炸、24.22/24.21/22.23 炸；目标对象 = `moduleExports.default`
+  即真实 CJS 导出，descriptor 取自 mock 的 plain 对象；ESM 命名空间合成描述符 writable:true
+  不是 CJS 导出形态）。`flow-state.yaml` 的 `input` 保留原始转写（机器面原始记录，不改写）。
 - **P2-2 字面 ` => ` 文件名误剔（审计放宽）→ 已整改**：EOL 探测改 `--numstat -z` 流解析
   （`numstatZPaths`：普通 `A\tD\t<path>\0`、rename `A\tD\t\0<old>\0<new>\0` 按位置取新名），
   字面 ` => ` 名原样保留；补非 windows 回归用例 + 源码钉断言 `-z` 在场。

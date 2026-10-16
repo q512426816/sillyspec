@@ -10,6 +10,8 @@ created_at: 2026-10-16T08:28:38.146Z
 
 动机与背景：CI 上马后最新跑（38868232912，HEAD 7f4892ce）全量 818 文件收敛至 814 通过/2 失败，余项两类：①test/backlog-batch-a.test.mjs 在 linux 上 mock.module('fs') 装载 CJS 内置模块时对 mock exports 逐键 ObjectDefineProperty，fs.constants 在 linux 是 writable:false/configurable:false 数据属性 → TypeError: Cannot redefine property: constants 整文件炸（windows 上同属性 writable:true 侥幸不炸——本地 12/12 绿与 CI 红的分叉点；同仓 worktree-junction-fail-loud.test.mjs 已有 delete fsExports.constants 既定解法）；②test/feedback-batch2-hardening.test.mjs ⑥ 段把「大小写折叠命中」写成跨平台断言，实现口径（src/verify-postcheck.js pathKey 的 foldCase）仅 win32/darwin 折叠，linux 大小写敏感须如实落②类。两处均属首轮上 CI 的跨平台适配欠账，非产品逻辑缺陷。本轮同时建立本地 Linux 复现能力（Docker node:24-alpine 容器挂载仓 + git），失败面先本地复现再修，不靠盲推等 CI。
 
+> 更正（收口评审 P2-1，保留立项转写原文）：上段「fs.constants 在 linux 是 writable:false…windows 同属性 writable:true 侥幸不炸」的机制叙述经四象限最小复现实测**不成立**——CJS 导出侧描述符双端同形 `{writable:false, configurable:false}`（windows 的 writable:true 读的是 ESM 命名空间的合成描述符），真分叉轴是 **node 版本**（24.15 双端不炸；22.23/24.21/24.22 炸），目标对象是 `moduleExports.default`（真实 CJS 导出）。修法与承诺不变，口径见 design「做法概述」第 1/5 条与「收口评审整改」节。
+
 成功标准：
 - test/backlog-batch-a.test.mjs 在 linux 与 windows 双端退出码 0（12/12 通过）
 - test/feedback-batch2-hardening.test.mjs 双端退出码 0；⑥ 段 linux 钉「大小写不符如实落②类不放水」、win32/darwin 钉「折叠命中」，./ 前缀+尾部注记与 NEW 未建两项跨平台钉死
