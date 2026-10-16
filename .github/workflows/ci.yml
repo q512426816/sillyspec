@@ -38,6 +38,11 @@ jobs:
       # （121a33ee）无 install 步实证两 job 全灭（Cannot find package 'js-yaml'）
       - name: install（npm ci 锁定 package-lock）
         run: npm ci --no-audit --no-fund
+      - name: 诊断：node/dash 可用性（run-tests 子进程 shell 语义面）
+        run: |
+          which node
+          node -e "0" && echo "sh 直跑 node -e OK"
+          /bin/sh -c 'node -e "0"' && echo "sh -c 内嵌引号 OK"
       - name: test（run-tests 并发池 + TEMP/HOME 套件隔离）
         run: npm test --silent
 
