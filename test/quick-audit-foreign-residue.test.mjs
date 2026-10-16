@@ -99,13 +99,28 @@ test('EOL-only 假 M 剔出审计；真实修改保留', async () => {
 // 源码钉：行为测试抓不到版本差——CI runner git ≥2.54 的 --name-only 会吃 --ignore-cr-at-eol，
 // 只有老 git（Debian 12 git 2.39 / Ubuntu 24.04 git 2.43 实测）暴露静默失效；回退 --name-only
 // 会让 EOL 假 M 过滤在老环境复活且 CI 全绿（2026-10-16 容器实证：git 2.39.5 下用例转红）。
-test('源码钉：EOL 假 M 探测走 diff --numstat（--name-only 不吃 --ignore-cr-at-eol）', () => {
+test('源码钉：EOL 假 M 探测走 diff --numstat -z（--name-only 不吃 --ignore-cr-at-eol）', () => {
   const src = readFileSync(new URL('../src/run/shared.js', import.meta.url), 'utf8')
   const start = src.indexOf('const eolRawList = (() => {')
   assert.ok(start > 0, 'eolRawList 探测块定位成功')
   const block = src.slice(start, src.indexOf('const eolRealChanged', start))
   assert.ok(block.includes("'--numstat'"), 'EOL 探测用 diff --numstat')
+  assert.ok(block.includes("'-z'"), '探测带 -z（rename 按位置取新名；非 -z 的 `old => new` 文本与字面 ` => ` 文件名不可区分）')
   assert.ok(!block.includes("'--name-only'"), '禁止回退 --name-only（git ≤2.43 仍列行尾-only 文件，过滤静默失效）')
+})
+
+// 文件名里字面含 ` => `（POSIX 合法；windows 文件名禁用 > 故不可构造、跳过）：真实内容变更
+// 必须留在 changedFiles——非 -z 的 numstat 文本形态会把它当 rename 取错新名而误剔（评审 P2 实证）。
+test('字面 => 文件名的真实修改不被误判 EOL-only（rename 歧义）', { skip: process.platform === 'win32' ? 'windows 文件名禁用 > 无法构造' : false }, async () => {
+  const cwd = setupBase()
+  mkdirSync(join(cwd, 'src', 'sub'), { recursive: true })
+  writeFileSync(join(cwd, 'src', 'sub', 'a => b.js'), 'a\nb\nc\n')
+  git(cwd, ['add', '.'])
+  git(cwd, ['commit', '-q', '-m', 'add => file'])
+  writeFileSync(join(cwd, 'src', 'sub', 'a => b.js'), 'a\nCHANGED\nc\n')
+  const r = await auditQuickCompletion(cwd, guardFor(cwd))
+  assert.ok(r.changedFiles.includes('src/sub/a => b.js'), `真实修改保留（changedFiles 实际 ${JSON.stringify(r.changedFiles)}）`)
+  assert.ok(!(r.eolOnlyFiles || []).includes('src/sub/a => b.js'), '不被误归 eolOnlyFiles')
 })
 
 test('新增文件 mtime 早于会话启动 → reason 带预存残留归因注记', async () => {

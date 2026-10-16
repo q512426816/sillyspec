@@ -1554,25 +1554,27 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
     // ReferenceError 被 catch 吞成 null，又被 new Set(null) 包装成空集 → 全部 tracked 修改
     // 被误判 EOL-only 剔除（audit-quick-completion 回归抓出）。改用 safeGit（已 import，
     // 返回 {value,error}），失败显式落 null 透传不过滤。
-    // numstat 行 `A\tD\t<path>` → 新路径；rename 两形态都要落到新名（与消费侧 porcelain 路径同名）：
-    // 全域 `old => new` 取右侧；同前缀/后缀 `pre{old => new}post` 拼 `pre+new+post`。引号剥壳。
-    const numstatNewPath = (line) => {
-      const i = line.lastIndexOf('\t')
-      if (i <= 0) return ''
-      let p = line.slice(i + 1).trim()
-      const arrow = p.lastIndexOf(' => ')
-      if (arrow !== -1) {
-        const lb = p.lastIndexOf('{', arrow)
-        if (lb === -1) p = p.slice(arrow + 4)
-        else p = p.slice(0, lb) + p.slice(arrow + 4, p.indexOf('}', lb)) + p.slice(p.indexOf('}', lb) + 1)
+    // -z 记录文法（od 实测，git 2.39.5 与 2.54 同形）：普通条目 `<A>\t<D>\t<path>\0`；
+    // rename `<A>\t<D>\t\0<old>\0<new>\0`（计数后路径字段为空，旧/新名各占一个 NUL 字段）——
+    // 按位置取新名。非 -z 的 `old => new` 文本形态与「文件名里字面含 ` => `」不可区分（实测
+    // `sub/a => b.js` 真实内容变更会被误判 rename 而剔出 changedFiles——审计放宽），-z 消歧。
+    // -z 同时不做引号/C 转义，路径原样出（与 porcelain 侧键更一致）。
+    const numstatZPaths = (out) => {
+      const toks = String(out).split('\0')
+      const paths = []
+      for (let i = 0; i < toks.length; i++) {
+        const m = toks[i].match(/^(?:\d+|-)\t(?:\d+|-)\t(.*)$/s)
+        if (!m) continue
+        if (m[1] === '') { paths.push(String(toks[i + 2] || '')); i += 2 }
+        else paths.push(m[1])
       }
-      return p.replace(/^"|"$/g, '').replace(/\\/g, '/')
+      return paths.filter(Boolean)
     }
     const eolRawList = (() => {
       try {
-        const res = safeGit(cwd, ['diff', '--numstat', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
+        const res = safeGit(cwd, ['diff', '--numstat', '-z', '--ignore-cr-at-eol', 'HEAD'], { timeout: 30000 })
         if (!res || res.error) return null
-        return String(res.value || '').split('\n').map(numstatNewPath).filter(Boolean)
+        return numstatZPaths(String(res.value || ''))
       } catch { return null }
     })()
     const eolRealChanged = eolRawList === null ? null : new Set(eolRawList)

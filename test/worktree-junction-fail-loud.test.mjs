@@ -78,11 +78,13 @@ let unlinkCalls = 0
 let provisionCalls = 0
 
 // ── 3. 注册 mock（exports：spread real 命名导出 + 覆盖目标为 wrapper）──
-// Node ≥26 兼容：内置 'fs' 的 constants 导出不可配置，spread 进 mock exports 后
-// Node 内部 cjsMockModuleLoad 对它 defineProperty 抛 "Cannot redefine property: constants"
-// （被测模块链上任何经裸 'fs' 的 ESM import 都会触发，含 fs-atomic.js）。src/ 无人经
-// 裸 'fs' 用 constants（项目 constants 全来自 './constants.js'），从 mock exports 剔除即可，
-// Node 24/26 行为一致。child_process 防御性同剔（该键不存在时 delete 为 no-op）。
+// 内置 'fs' 的 constants 在 CJS 导出上不可重定义（node 24.15 实测 {writable:false,
+// configurable:false}）——spread 进 mock exports 后 Node 内部 cjsMockModuleLoad 对它
+// defineProperty 抛 "Cannot redefine property: constants"（被测模块链上任何经裸 'fs' 的
+// ESM import 都会触发，含 fs-atomic.js）。实测分叉轴是 node 版本不是平台：24.22/24.21
+// （容器/CI）与 22.23 必炸、24.15（win/linux 四象限）不炸——本地版本绿不构成豁免。
+// src/ 无人经裸 'fs' 用 constants（项目 constants 全来自 './constants.js'），从 mock
+// exports 剔除即可。child_process 防御性同剔（该键不存在时 delete 为 no-op）。
 const fsExports = { ...realFs, lstatSync: (...a) => lstatImpl(...a), unlinkSync: (...a) => { unlinkCalls++; return unlinkImpl(...a) } }
 delete fsExports.constants
 await mock.module('fs', { exports: fsExports })
