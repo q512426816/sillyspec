@@ -33,7 +33,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # 零第三方依赖（node:sqlite/test 内置），无 install 步——与本地跑法一致
+      # 依赖必须装：测试框架零三方（node:sqlite/test 内置）但被测 CLI 本体 import 7 个
+      # 运行时依赖（js-yaml/chalk/@inquirer/prompts 等，src 下 10+ 文件）——CI 首跑
+      # （121a33ee）无 install 步实证两 job 全灭（Cannot find package 'js-yaml'）
+      - name: install（npm ci 锁定 package-lock）
+        run: npm ci --no-audit --no-fund
       - name: test（run-tests 并发池 + TEMP/HOME 套件隔离）
         run: npm test --silent
 
@@ -45,6 +49,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # docs-check.js 同样 import js-yaml——无 install 首跑 7s 即灭（同 test job 根因）
+      - name: install（npm ci 锁定 package-lock）
+        run: npm ci --no-audit --no-fund
       # ratchet：docs 失效引用数 ≤ 基线（.sillyspec/docs-check-baseline）放行——
       # 与 pre-push 同一门，推 CI 后本地 pre-push 可降级（见 .husky/pre-push 注记）
       - name: docs gate ratchet（--against HEAD）
