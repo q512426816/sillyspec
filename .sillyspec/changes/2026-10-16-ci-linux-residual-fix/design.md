@@ -67,6 +67,20 @@ created_at: 2026-10-16T08:28:38.146Z
   口径相同），仅在 git ≤2.43 环境把「静默全列」修回「正确过滤」；失败路径仍 fail-open
   （safeGit 错误 → null → 不过滤，与改前一致）。
 
+## 文件变更清单
+
+| 文件 | 变更 |
+|---|---|
+| `test/backlog-batch-a.test.mjs` | ③b mock exports 剔 `constants`（linux 不可重定义炸整文件） |
+| `test/feedback-batch2-hardening.test.mjs` | ⑥ 段大小写断言随平台分叉 + task-01 声明写法辅助 |
+| `test/quick-audit-foreign-residue.test.mjs` | EOL 用例保留 + 新增源码钉（`--numstat` 形态） |
+| `src/verify-postcheck.js` | 裸 NUL → `\u0000` 转义（诊断面卫生，行为零变） |
+| `src/run/shared.js` | EOL 假 M 探测 `--name-only` → `--numstat` + `numstatNewPath` 解析 |
+| `.sillyspec/changes/2026-10-16-ci-linux-residual-fix/*` | 四件套（proposal/requirements/design/tasks）+ 勾选台账 |
+
+未纳入本变更的仓内未提交文件：`quicklog/tmp-fix-review.mjs`（他者在途产物，非本变更交付；
+按 `--accept-dirty-gap` 如实留审计缺口，不冒领）。
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
