@@ -3138,7 +3138,7 @@ export function resolveTraceResidual({ specBase, changeName, cwd }) {
     const repoKey = r.repo && r.repo !== 'main' ? r.repo : null
     for (const t of (r.tests || [])) {
       const f = testAnchorFile(t)
-      const key = (repoKey ? repoKey + ' ' : '') + f
+      const key = (repoKey ? repoKey + '\u0000' : '') + f
       if (!seen.has(key)) { seen.add(key); perFile.push({ repo: repoKey, file: f }) }
     }
   }
@@ -3230,7 +3230,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
     const _rk = x.repo || null
     // worktree 感知（同悬空判定口径）：主仓行按 resolvedRoot（主仓或变更 worktree 根）取执行根。
     const _root = (_rk && _repoRoots.get(_rk)) || x.resolvedRoot || cwd
-    const _gk = _rk + ' ' + _root
+    const _gk = _rk + '\u0000' + _root
     if (!_gmap.has(_gk)) _gmap.set(_gk, { repo: _rk, root: _root, files: [] })
     _gmap.get(_gk).files.push(x.file)
   }
