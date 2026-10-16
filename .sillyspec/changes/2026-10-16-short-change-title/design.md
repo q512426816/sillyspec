@@ -6,17 +6,31 @@ created_at: 2026-10-16T13:20:04.877Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 病根两处：① `deriveChangeTitle` 对 `--input` 首行超 50 字硬切加 …（轻量/完整流程共用）；② `deriveTitleFromLinkedChange` 遇纯模板 H1（`# 提案书（Proposal）`，brainstorm 模板正文即此形态）剥前缀为空后直接放弃，标题恒变更名兜底，而 proposal「## 动机」节首句本是最好的标题素材却无人取。
 
 改法（quicklog.js 单源，调用点切换）：新增纯函数 `distillShortTitleEx(raw)`——超 30 字长句在自然标点（。！？；：、，…—及 ASCII 标点后随非字母数字时）处截断，截点取「距目标 20 最近、落在 6..30 区间」者并剥尾部标点/悬空引号；无可用截点才 `slice(0,30)+'…'` 并标 `hardCut`。`deriveChangeTitle` 拆出 `deriveChangeTitleRaw`（首行提取/标签剥离/成功标准止，不截断），旧函数契约逐字节不变（≤50 硬切，motiveFromInput 模块摘要同源不牵连）；新增 `deriveShortChangeTitle(Ex)` = Raw+提炼 作为标题面新入口。`deriveTitleFromLinkedChange` 两文档皆无语义标题时回退读 proposal「## 动机」节首个内容行（剥 bullet）过提炼；H1 语义标题返回前同样过提炼封顶 ≤30。调用点：flow.js fresh/resume/adopt、run/command.js 四处 initChange 换 `deriveShortChangeTitle`；fresh/resume `hardCut` 时打一行 `--title` 软提示（不阻断）。
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - `src/quicklog.js` 新增导出：`distillShortTitle(raw, opts)`（返回 string）、`distillShortTitleEx(raw, opts)`（返回 `{ title, hardCut }`）、`deriveChangeTitleRaw(input)`（首行提取不截断）、`deriveShortChangeTitle(input)`（string）、`deriveShortChangeTitleEx(input)`（`{ title, hardCut }`）。
 - `deriveChangeTitle(input, max = 50)` 签名与返回口径不变（内部改复用 Raw 提取，输出逐字节等价——motive-from-input/change-title-flow 既有断言为回归锁）。
 - `deriveTitleFromLinkedChange(specBase, change)` 返回值口径变化：纯模板 H1 且无 design 语义标题场景从 `''` 变为动机提炼句（≤30 字）；无动机节/无内容行仍 `''`；其余返回值封顶 ≤30 字。空串不刷新语义（complete.js `if (refinedTitle)`）不变。
 - `changes.title` 落库口径：新推导标题 ≤30 字（原 ≤50 硬切）。CLI 参数面零新增、命令用法零变化。
 - 平台侧零改动：平台收养/不覆盖语义标题逻辑照旧；存量 50 字标题回填归平台侧变更（不在本变更范围）。
+
+## 文件变更清单
+
+| 操作 | 路径 | 说明 |
+|---|---|---|
+| 改 | src/quicklog.js | 新增提炼族（distillShortTitle(Ex)/deriveShortChangeTitle(Ex)/deriveChangeTitleRaw 私有/extractMotivationFirstLine 私有）；deriveChangeTitle 重构为 Raw+≤50 硬切（契约不变）；deriveTitleFromLinkedChange 动机回退+封顶 |
+| 改 | src/flow.js | fresh/resume/adopt 三处标题推导换 deriveShortChangeTitleEx；fresh/resume hardCut 软提示一行 |
+| 改 | src/run/command.js | 完整流程/auxiliary/claim 四处 initChange 标题推导换 deriveShortChangeTitle；注释口径更新 |
+| 增 | test/short-change-title.test.mjs | 17 例：实证坏标题回放/截点择优/硬切/小数保护/动机回退/占位跳过/≤50 旧契约回归 |
+| 改 | docs/sillyspec/troubleshooting.md | #68 留痕（症状/根因/修复/测试/关联坑） |
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
@@ -30,6 +44,8 @@ created_at: 2026-10-16T13:20:04.877Z
    不会。标题只写本 cwd 进度库 changes 行；quicklog 平台推送 payload 沿用同一推导值（同源不漂移）；跨仓基线锚（cross_baselines）路径不触及标题；多实例各自 cwd 各自库，无共享面。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 - 最大风险：截点启发式对无全角标点的长句（英文/长数字串）退化为硬切 30+…，可读性一般——有 --title 显式通道 + hardCut 软提示兜底，且标题是展示元信息非正确性面，接受。
 - 放弃方案①：直接改 `deriveChangeTitle` 内部为提炼口径——motiveFromInput 模块变更索引摘要与其同源，会把 ≤50 摘要一并压成 ≤30（motive-from-input.test.mjs:37 锁定 ≤50 口径），爆炸半径失控；改为拆 Raw + 新函数单点切换。
