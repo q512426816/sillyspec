@@ -213,7 +213,7 @@ test('FR-01/02 thin CLI e2e：flow done 落盘恰好两件 + 查询走快照态'
     sh(cwd, ['init', '-q', '-b', 'main'])
     sh(cwd, ['config', 'user.email', 't@t.com']); sh(cwd, ['config', 'user.name', 't'])
     mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
     writeFileSync(join(cwd, 'base.txt'), 'base\n')
     sh(cwd, ['add', '.']); sh(cwd, ['commit', '-q', '-m', 'base'])
     const cn = '2026-10-09-ct-thin-a1' // 抽查桶外名（sampleBucket 1/4 定额——e2e 夹具不进评审采样）

@@ -91,7 +91,7 @@ test('①f e2e：含未闭合括号动机的 --input 通过 flow start 清晰度
   execFileSync('git', ['-C', cwd, 'config', 'user.email', 't@t'], { stdio: 'pipe' })
   execFileSync('git', ['-C', cwd, 'config', 'user.name', 't'], { stdio: 'pipe' })
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   execFileSync('git', ['-C', cwd, 'add', '.'], { stdio: 'pipe' })
   execFileSync('git', ['-C', cwd, 'commit', '-q', '-m', 'base'], { stdio: 'pipe' })

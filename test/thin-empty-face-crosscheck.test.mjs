@@ -41,7 +41,7 @@ function makeRepo(opts = {}) {
   git(cwd, ['config', 'user.email', 't@t'])
   git(cwd, ['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  let yaml = 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n'
+  let yaml = 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n'
   if (opts.repos) {
     const lib = mkdtempSync(join(tmpdir(), 'tefc-lib-'))
     mkdirSync(join(lib, 'src', 'routes'), { recursive: true })

@@ -129,7 +129,7 @@ test('⑤ e2e：清单写「work.txt（交付：单文件）」→ 收口 scopeA
   git(cwd, ['config', 'user.email', 't@t'])
   git(cwd, ['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   git(cwd, ['add', '.'])
   git(cwd, ['commit', '-q', '-m', 'base'])

@@ -56,7 +56,7 @@ test('② e2e：flow done lint 门 FAIL 输出 lint 命令/尾部/失败文件�
   run(['init', '-q']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   // lint 命令失败且输出提及本变更文件（归属鉴定硬拦口径）
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node lint-fail.js"\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node lint-fail.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'lint-fail.js'), "console.error('src/work.js:1:1 E501 line too long (fake lint)'); process.exit(1)\n")
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])

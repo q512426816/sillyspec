@@ -240,12 +240,18 @@ test('② connect mcp 段成对签发：gateway_url+token 覆盖写；失败降�
 test('probe 401 类型化：token 失效 → mcp-token-invalid（非 daemon-unreachable）', async () => {
   const { probeSillyHub, clearProbeCache } = await import('../src/dispatch/probe.js')
   clearProbeCache()
+  // no-config 门喂 tmp 配置（同 140 行坑口径）：run-tests 隔离 env 下 cwd=REPO_ROOT 的
+  // local.yaml 读取受 HOME 隔离影响（CI 实测 no-config 短路 → 401 类型化断言必挂）
+  const cfgDir401 = mkdtempSync(join(tmpdir(), 'mcpc-401-'))
+  mkdirSync(join(cfgDir401, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cfgDir401, '.sillyspec', 'local.yaml'), 'mcp:\n  url: "http://127.0.0.1:9998"\n  token: "shmcp_probe"\n')
+  const cwd401 = cfgDir401
   const mk = (initStatus) => ({
     probeDaemon: async () => false,
     getLastInitStatus: () => initStatus,
     listToolsWithMeta: async () => ({ tools: [] }),
   })
-  const r1 = await probeSillyHub({ client: mk(401), cwd: REPO_ROOT })
+  const r1 = await probeSillyHub({ client: mk(401), cwd: cwd401 })
   assert.equal(r1.reason, 'mcp-token-invalid', '401 → 类型化 token 失效')
   clearProbeCache()
   const r2 = await probeSillyHub({ client: mk(503), cwd: REPO_ROOT })

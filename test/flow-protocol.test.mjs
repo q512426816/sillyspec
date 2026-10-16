@@ -35,6 +35,7 @@ function makeRepo({ testCmd = 'node -e "0"' } = {}) {
   // flow: mode: thin——2026-09-22-stage-burst-fold 缺省翻 legacy 后轻量跑道测试需显式声明（①②③⑤⑥ 共用本造法；④ 另行整文件覆写 legacy）
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+  writeFileSync(join(cwd, 'exit0.js'), '')
   run(['add', '.'])
   run(['commit', '-q', '-m', 'base'])
   return { cwd, run }

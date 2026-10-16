@@ -48,9 +48,13 @@ export function crossWorktreePath(specBase, changeName, repoKey, placementRoot =
  * @param {string} mainRoot 主仓根（相对路径解析基准）
  * @returns {string} 绝对落位根
  */
+// Windows 盘符形态判定（坑跨平台 CI：POSIX isAbsolute('C:/x')=false → 带引号的盘符路径
+// 被相对主仓根拼接成 test/C:/quoted 伪路径）。跨仓落位本就面向 Windows 盘符场景设计，
+// 语义上盘符路径恒绝对（与 win32 path.isAbsolute 同判，跨平台自洽）。
+const WIN_DRIVE_ABS_RE = /^[A-Za-z]:[/\\]/;
 export function resolvePlacementRoot(raw, mainRoot) {
   const trimmed = String(raw || '').trim().replace(/^['"]|['"]$/g, '');
-  if (isAbsolute(trimmed)) return resolvePath(trimmed);
+  if (isAbsolute(trimmed) || WIN_DRIVE_ABS_RE.test(trimmed)) return resolvePath(trimmed);
   return resolvePath(mainRoot, trimmed);
 }
 

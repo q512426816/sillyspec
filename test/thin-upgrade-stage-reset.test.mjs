@@ -36,7 +36,7 @@ test('① gate FAIL 自动升厚：行值 thin → brainstorm（e2e）', async (
   const run = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' }).toString().trim()
   run(['init', '-q']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node lint-fail.js"\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node lint-fail.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'lint-fail.js'), "console.error('src/work.js:1:1 E501 fake'); process.exit(1)\n")
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
@@ -77,7 +77,7 @@ test('② resume 路径行值非 thin 不越权改动（单元态）', () => {
   const run2 = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' }).toString().trim()
   run2(['init', '-q']); run2(['config', 'user.email', 't@t']); run2(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-13-upthk-y'

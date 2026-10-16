@@ -57,7 +57,7 @@ test('② local.yaml stage.burst: true → true（含同段他键共存）', asy
   const restore = setBurstEnv()
   try {
     assert.equal(await readStageBurst(makeRepo('stage:\n  burst: true\n')), true)
-    assert.equal(await readStageBurst(makeRepo('commands:\n  test: "node -e \\"0\\""\nstage:\n  burst: true\n')), true)
+    assert.equal(await readStageBurst(makeRepo('commands:\n  test: "node exit0.js"\nstage:\n  burst: true\n')), true)
   } finally { restore() }
 })
 

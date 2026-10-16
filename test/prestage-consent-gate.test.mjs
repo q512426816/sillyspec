@@ -34,7 +34,7 @@ function makeRepo() {
   run(['config', 'user.email', 't@t'])
   run(['config', 'user.name', 't'])
   mkdirSync(join(cwd, SPEC), { recursive: true })
-  writeFileSync(join(cwd, SPEC, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, SPEC, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.'])
   run(['commit', '-q', '-m', 'base'])

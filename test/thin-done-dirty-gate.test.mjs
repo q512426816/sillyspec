@@ -39,7 +39,7 @@ function gitRepo(dir) {
 function setupThinChange(cwd, cn, { leaveDirty = false } = {}) {
   const run = gitRepo(cwd)
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const env = { ...process.env, SILLYSPEC_WATCHER: '0' }

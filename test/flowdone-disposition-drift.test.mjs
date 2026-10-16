@@ -105,7 +105,7 @@ test('② e2e：处置重入——漂移警告 + 自动重冻结 + review.json �
   const cwd = fx()
   const run = gitRepo(cwd)
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-05-drift-e2e'
@@ -165,7 +165,7 @@ test('③ e2e：治理面等价漂移——评审保留 + 自动重冻结 + 不�
   const cwd = fx()
   const run = gitRepo(cwd)
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-10-drift-gov-e2e'
@@ -221,7 +221,7 @@ test('④ e2e：冻结件缺失重入——存在性复查触发自动重冻结 
   const cwd = fx()
   const run = gitRepo(cwd)
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const cn = '2026-10-14-freeze-missing-e2e'
@@ -274,7 +274,7 @@ test('⑤ e2e：冻结件缺失 + 评审未锚定——隔离重评（fail-safe 
   const cwd = fx()
   const run = gitRepo(cwd)
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n  lint: "node -e \\"0\\""\nflow:\n  mode: thin\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n  lint: "node exit0.js"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim()

@@ -159,7 +159,7 @@ test('CLI --follow: 追加行后打印新 warning 行（缺省过滤 normal 不�
   const eventsPath = join(root, 'watcher-events-follow-change.jsonl')
   writeFixture(root, 'follow-change', [EV.fakeCheck])
 
-  const child = spawn(process.execPath, [cliBin, 'watcher', 'alerts', '--change', 'follow-change', '--runtime-root', root, '--follow'], {
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', cliBin, 'watcher', 'alerts', '--change', 'follow-change', '--runtime-root', root, '--follow'], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8',
   })
   let out = ''

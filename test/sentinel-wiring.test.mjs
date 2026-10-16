@@ -21,7 +21,7 @@ function makeRepo() {
   const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
   g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n')
   writeFileSync(join(cwd, 'base.txt'), 'b\n')
   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf-8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })

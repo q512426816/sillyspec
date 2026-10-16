@@ -26,7 +26,7 @@ function makeRepo() {
   const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
   run(['init', '-q']); run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.']); run(['commit', '-q', '-m', 'base'])
   return { cwd, run }
