@@ -208,6 +208,43 @@ export function detectTickBurst(tickLog, opts = {}) {
 }
 
 /**
+ * 勾选时点判定·换源版（2026-10-17-tick-timing-source，纯函数）：task-ticks.jsonl 侧车的逐格
+ * 墙钟时戳 → 勾选是「边干边勾」还是「末尾集中」。旧判据（tasks.md git 首次提交 == 收口最后
+ * 提交）已退役——git 历史形态被官方允许的 reset --soft 压扁无声摧毁（tick-timing-squash-
+ * blindspot 坑：边干边勾的渐进提交被并行会话压扁后警告照出，结构性误报；且 tasks.md 不进
+ * 交付 pathspec 的纪律下「untracked 直至归档」恒复现）。墙钟时戳是侧车文件事实，压扁/
+ * rebase 均不可改写——与「审计真相锚 change.patch sha256、不依赖 git 形态」口径对齐。
+ * 判定序（豁免优先）：
+ *   'no-ticks'    侧车无记录（agent 全程直接 Edit）——不判（调用方给一行 task tick 教学）；
+ *   'single'      仅 1 格——单格无节奏可言；
+ *   'spread'      时戳跨度 > clusterWindowMs（缺省 120s）——天然分散，边干边勾确认
+ *                 （超窗即铁证，无需存活锚）；
+ *   'no-anchor'   lifespanMs 非有限或 ≤0（baseline 缺失）——fail-open 不判（防误报）；
+ *   'concentrated' 跨度 ≤ clusterWindowMs 且 lifespanMs ≥ ratio×max(跨度,1ms)（缺省 10）
+ *                 ——格子全挤在收口前短窗且变更活得够久，末尾集中勾选形态；
+ *   其余（挤短窗但存活比不足）→ 'spread'——快变更快勾是合法形态，不告。
+ * 输入 ticks 为 [{ts, task}]（parseTickLog 产物或同形）；行序不保证，内部按 ts 排序。
+ * 坏行（ts 非有限/≤0）静默剔除。watcher 采样事件刻意不作判据（部分观测会把分散勾选采样
+ * 成尾窗聚集，与采样合并跳系列坑同源——缺观测宁可教学不判）。
+ * @param {{ticks?:Array<{ts:number,task:string}>, lifespanMs?:number, clusterWindowMs?:number, ratio?:number}} args
+ * @returns {{status:'spread'|'concentrated'|'single'|'no-ticks'|'no-anchor', count:number, spanMs:number}}
+ */
+export function detectTickTiming({ ticks, lifespanMs, clusterWindowMs = 120_000, ratio = 10 } = {}) {
+  const list = (Array.isArray(ticks) ? ticks : [])
+    .map((r) => Number(r && r.ts))
+    .filter((ts) => Number.isFinite(ts) && ts > 0)
+    .sort((a, b) => a - b);
+  if (list.length === 0) return { status: 'no-ticks', count: 0, spanMs: 0 };
+  if (list.length === 1) return { status: 'single', count: 1, spanMs: 0 };
+  const spanMs = list[list.length - 1] - list[0];
+  if (spanMs > clusterWindowMs) return { status: 'spread', count: list.length, spanMs };
+  const life = Number(lifespanMs);
+  if (!Number.isFinite(life) || life <= 0) return { status: 'no-anchor', count: list.length, spanMs };
+  if (life >= ratio * Math.max(spanMs, 1)) return { status: 'concentrated', count: list.length, spanMs };
+  return { status: 'spread', count: list.length, spanMs };
+}
+
+/**
  * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：检出单拍跳（batchTick 非 null）
  * 时的收口动作裁决。镜像豁免分支退役（2026-10-07-thin-tasks-v3——任务面统一为 agent
  * 工作分解，无镜像面）。五态（决策顺序即豁免优先序）：
