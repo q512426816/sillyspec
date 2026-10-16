@@ -6,6 +6,8 @@ created_at: 2026-10-16T11:15:20.392Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 三条已实证缺陷（2026-10-16 下游项目跑流程踩到，根因均已钉到 file:line）三个独立钉点，互不依赖：
 
 **① spec 树删除被拉取复活**。根因链：文件级删除无墓碑无队列（唯一上行通道 `syncSpecTree` 的 delete op 是无状态重算，spec-sync.js:286-292），progress 冲突时 `sync()` 在 sync.js:696-724 提前 return 把挂在其成功路径上的 `syncSpecTree`（sync.js:907-911）整轮跳过——409 冲突文件长期在场期间删除 op 永远发不出去；而下行落地 `pullSpecBundle`（sync.js:1905 rm 整树 + :1924 逐条回放）写出前零「本地已删」判定。修法两刀：
@@ -18,6 +20,8 @@ created_at: 2026-10-16T11:15:20.392Z
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - `SyncManager.pullSpecBundle(opts)`：opts 新增 `restoreDeleted?: boolean`（缺省 false=启用防复活抑制）；返回值新增 `resurrectSkipped?: string[]`（被抑制路径，仅抑制发生时携带）；新增行为：基线差集抑制（不改变既有 ok/pulled/reason 语义与 local.yaml 保全链路）。
 - `sillyspec pull --spec`：新增 `--restore-deleted` flag 透传 `restoreDeleted`；帮助文案补防复活语义。
 - `SyncManager.sync()`：冲突抑制分支（未决 progress 冲突提前返回处）新增 best-effort `syncSpecTree` 补跑；返回值新增 `specTreeAttempted: true` 标志；既有 `conflict`/`suppressed` 语义不变。
@@ -29,12 +33,22 @@ created_at: 2026-10-16T11:15:20.392Z
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+
 1. **乱序/迟到到达**：删除动作与 bundle 拉取乱序——抑制集在每次 pull 时从「当前盘面」即时重算（无状态），bundle 无论迟到多久都持续被抑制；删除 op 一旦上行成功，服务器清单不再含该路径，后续 bundle 自然不携带（衰减，无清理动作）。本地删除后又想恢复的真实改主意场景走 `--restore-deleted` 显式通道或在本地重建文件（重建后盘面有文件，抑制面自动消失，内容按 update op 正常上行）。携载注释块与孤行的乱序：门禁按行序武装/解除武装，注释块出现在表中间的畸形形态也只影响其后行（进孤行桶），不影响此前已计数行。
 2. **并发写**：多会话并行——A 会话删除文件、B 会话仍持有并编辑该文件：B 盘面文件存在 → B 侧无抑制，B 的 update op 正常上行（内容真改动）；A 拉取被抑制不复活 → 不出现「A 的拉取覆盖 B 的编辑」。`pullSpecBundle` 的 rm 整树与并发进程读写 .sillyspec 的既有风险面不变（--force 本就是显式破坏性动作）。failRef 是调用方栈上对象无共享状态；抑制分支补跑 `syncSpecTree` 与成功路径调用同受 bg-sync 单飞锁/trigger 竞态约束，不新增并发面。
 3. **切换/生命周期**：pullSpecBundle 中途失败——抑制判定在 rm 前完成（内存集合不落盘），rm 后失败走既有 local.yaml .bak 恢复链路，无新增半态；基线被 rm 连带删除是既有行为（bundle 不含 .runtime，回放不重建），本次不新增落盘文件。快照 failRef 在函数返回后由调用方立即消费（同步栈），无跨 await 生命周期问题。
 4. **作用域**：specDir 锚定与 sync()/spec 树同源（`safePlatformSpecDir`，平台模式锚 specRoot）；基线键与 tar 条目名统一归一（`./` 前缀剥离、反斜杠→正斜杠）后比对，Windows/Linux 目录形态一致。daemon（sillyhub-daemon 另一仓）有同款「按 spec_version 自动取新」落地路径，本仓修复不覆盖——跨仓待办在风险节与收口报告声明（本仓 local.yaml 注册仓=1，无跨仓冻结面）。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 - **最大风险（FR-01）**：抑制面误伤——不可能误伤基线外文件（抑制集=基线键∩盘面缺失，交集定义）；真实风险是「用户删除文件后本想借 pull 恢复」，由 `--restore-deleted` 显式通道兜底，默认安全方向与「删除尚未上行成功」的事实一致。
 - **FR-03 风险**：手写报告表头措辞变体不被「表头武装」识别 → 该表数据行从「按锚归属计数」变为「孤行报错」。两者都是阻断性报错，从误归属+误计 unfilled 变为准确孤行提示，误报面收敛；渲染器（renderProbe7Lines）是报告唯一生产者，表头字面稳定，回归用例钉「正常渲染零行为变化」。
@@ -53,6 +67,7 @@ created_at: 2026-10-16T11:15:20.392Z
 | 改 | src/run/gate-snapshot.js | createGateSnapshot/createVerifyGateSnapshot failRef 出参+空集三分成因+catch 补 warn 日志 |
 | 改 | src/run/gates.js | 调用方消费 failRef.reason 替换硬编码文案；--done observability 落 used_snapshot/snapshot_fallback_reason |
 | 改 | src/run/verify-quality-scan.js | 调用方消费 failRef.reason 替换硬编码文案 |
+| 改 | docs/sillyspec/platform-interface-map.md | 6 处 sync.js 行号引用锚随本次行漂移重锚（818→830、1228→1240、1587→1599、1587/1595→1599/1607、2467→2513；doc-ref-check 门禁回归面） |
 | 增 | test/pull-spec-bundle-resurrect-guard.test.mjs | FR-01 回归（红→绿） |
 | 增 | test/spec-tree-sync-conflict-decouple.test.mjs | FR-02 回归（红→绿） |
 | 增 | test/verify-carry-orphan-guard.test.mjs | FR-03 回归（红→绿） |
