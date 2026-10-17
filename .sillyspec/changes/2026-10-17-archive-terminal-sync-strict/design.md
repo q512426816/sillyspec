@@ -8,19 +8,27 @@ created_at: 2026-10-17T06:17:49.417Z
 
 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
 
-归档/删除收尾的 triggerSync 全链 best-effort + 后台化，可靠性押在「下一条命令」上——而终态恰是全生命周期最不可能再有下一条命令的时刻；平台慢窗口内 DB 通道成功 + 文件树通道失败即成 location 半态（生产实证见 multi-agent-platform 仓坑档案）。修法三层：① `spec-sync.js syncSpecTree` 返回加 `ok` 显式契约（12 个返回点分类标记，无 ok=未确认 fail-closed）；② `sync.js` sync() 主链把树通道结果捕获进返回值 `treeOk`（既有 debugLog 吞点不再丢信息）；③ `run/shared.js` 新增 `triggerSyncTerminalStrict`——状态机驱动（仅 DB 终态生效，非终态委托 triggerSync 零行为变化），终态时绕过后台化内联有界同步（45s 下限同后台轮，opts.timeoutMs 可注入），失败 🚨 告警 + 自救命令 + exit 1。接线三终态点：flow.js flow done 收尾、complete.js 阶段完成尾部（状态机驱动单点覆盖 run archive --done）、change-delete.js 第 5 步。用户已批准该中改方案（会话 2026-10-17）。
+归档/删除收尾的 triggerSync 全链 best-effort + 后台化，可靠性押在「下一条命令」上——而终态恰是全生命周期最不可能再有下一条命令的时刻；平台慢窗口内 DB 通道成功 + 文件树通道失败即成 location 半态（生产实证见 multi-agent-platform 仓坑档案）。修法三层：① `spec-sync.js syncSpecTree` 返回加 `ok` 显式契约（11 个返回点分类标记，无 ok=未确认 fail-closed）；② `sync.js` sync() 主链把树通道结果捕获进返回值 `treeOk`（既有 debugLog 吞点不再丢信息）；③ `run/shared.js` 新增 `triggerSyncTerminalStrict`——状态机驱动（仅 DB 终态生效，非终态委托 triggerSync 零行为变化），终态时绕过后台化内联有界同步（45s 下限同后台轮，opts.timeoutMs 可注入），失败 🚨 告警 + 自救命令 + exit 1。接线三终态点：flow.js flow done 收尾、complete.js 阶段完成尾部（状态机驱动单点覆盖 run archive --done）、change-delete.js 第 5 步。用户已批准该中改方案（会话 2026-10-17）。
 
 ## 接口契约
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
 - `syncSpecTree`（spec-sync.js）：返回对象新增可选 `ok: boolean`——成功/合法态 true、通道失败 false、未决冲突三路径不带 ok（未确认）。历史消费方（syncSpecTreeOnly/resolve forcePush）不读该字段，兼容。
-- `SyncManager.sync`（sync.js）：成功路径返回新增 `treeOk: boolean`（树通道 ok 契约透传）；其余返回形状不变，17 个 triggerSync 调用点不消费返回值，兼容。
+- `SyncManager.sync`（sync.js）：成功路径返回新增 `treeOk: boolean`（树通道 ok 契约透传）；其余返回形状不变，triggerSync 全部调用点不消费返回值，兼容。
 - 新导出 `triggerSyncTerminalStrict(cwd, changeName, platformOpts, opts)`（run/shared.js）：opts 支持 `timeoutMs`（测试注入短窗）、`syncImpl`/`changeStatus`（测试注入缝）、`exitOnUnconfirmed:false`（抑制退出码）；返回 `{confirmed, delegated?, skipped?, result?}`。
 - `raceWithAbort`（run/shared.js 模块私有）：补返回值透传（历史调用方忽略返回值，零影响；超时 resolve null）。
 - 端点/命令/表结构：无变化。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
 
 1. 乱序/迟到到达：终态强校验与 bg 后台轮可能并存（先前命令 spawn 的 bg 轮未收）——内联与 bg 对同一 sync() 端点均为幂等推送（409 自愈/无差异 no-op），乱序无害；强校验的树结果可能被 bg 轮提前收敛（no-diff ok:true），判读仍正确。
 2. 并发写：sync() 内部既有 409 乐观锁 + base_ts 自愈链不变；本变更不改任何写路径，仅新增结果透传与终态分支判定（DB 读）。

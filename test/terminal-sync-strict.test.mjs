@@ -62,6 +62,9 @@ test('非终态（status=active）→ 委托既有 triggerSync 语义，不调�
   // 连接态：非终态委托发生在连接检查之后的终态判定分支（未连接时更早静默跳过，语义等价）
   process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
   process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  // 评审 P3：非终态委托路径在连接态会真实 spawn detached bg 子进程（进程/日志副作用）——
+  // SILLYSPEC_SYNC_BG=0 逃生阀回退 inline，本用例只验证「委托不调 syncImpl」，inline 足够
+  process.env.SILLYSPEC_SYNC_BG = '0'
   let syncCalled = 0
   const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
     changeStatus: 'active',
