@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -19,9 +27,15 @@ input: >-
   - test/terminal-sync-strict.test.mjs 全绿（10 用例）
 
   - dogfood 本变更 flow done 收尾强校验静默 confirmed（无 🚨 行、退出码干净）——修复后真实 E2E
-autopilot: false
+autopilot: true
 prestage_ack: true
 baseline_commit: eb09c73c76d3ca457fde4b2bd74a482544ed9d74
-updatedAt: '2026-10-17T06:34:32.382Z'
+updatedAt: '2026-10-17T06:38:48.262Z'
 baseline_sha256: d15fec8cd7e822c8d69d13f3333013ea0293cda61ab1ae7f6d2911935f38e9f0
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+js-meta-skip1)+fr(5)（14.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261017063541\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（48.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261017063541\test-result.json｜门文件 4 个
 

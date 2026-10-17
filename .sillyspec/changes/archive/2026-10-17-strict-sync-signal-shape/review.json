@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-strict-sync-signal-shape",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "560af6a23a038e6ee6118a7bcce7b6b3d2481e22",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "requirements.md 三条 FR 正文为同段模板复制、场景块留占位符未填（文档质量瑕疵，验收实际靠 FR 标题+测试绑定行完成）",
+      "evidence": "FR-01/02/03 正文逐字重复同一段「必须…原样透传…禁止…套娃 TypeError」；三处场景块均为「（按需保留或改写：Given 前提…）」模板占位。功能与测试绑定面完整（FR-01 绑回归钉用例、FR-02 绑 10 用例全绿、FR-03 命令级 dogfood），非阻断",
+      "location": ".sillyspec/changes/2026-10-17-strict-sync-signal-shape/requirements.md:13-31"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a — 单调用点形状修复，无时序假设变化（上一变更 design 已答全量面，本轮 diff 未触及）",
+    "并发": "n/a — 零写路径改动；raceWithAbort 熔断语义不变（超时仍 abort controller → 透传的真 AbortSignal 使在飞 fetch 即时失败，较修复前的套娃假败反而更符合 abort 预期）",
+    "切换": "ok — 失败显性化面（🚨 告警 + 自救命令 + exitCode=1）原样保留，回归钉断言 confirmed=false + 告警在场 + exitCode=1；修复仅让树通道恢复真实判读",
+    "作用域": "n/a — 同上一变更作用域面，DB 同源判定（resolvePlatformSpecDir）未动"
+  },
+  "remediationLog": {
+    "context": "上一变更 2026-10-17-archive-terminal-sync-strict（PASS@eb09c73c）交付代码中的套娃 bug：dogfood flow done 归档收尾被强校验 🚨 当场抓获——安全网按设计工作（半态未静默），自救命令已验证收敛（23 文件上行）；本变更为修被网住的 bug",
+    "rootCause": "raceWithAbort 向 op 传 `{signal: controller.signal}` 形状对象（src/run/shared.js:949），旧默认 runSync `(sig) => sync(changeName, cwd, { signal: sig })` 形参误当裸 AbortSignal 再包一层 → opts.signal = {signal:{signal:AbortSignal}} → syncSpecTree withSignal 的 AbortSignal.any 抛 TypeError → 外层 catch → ok:false → 树通道恒假败",
+    "fix": "默认 runSync 改 `(syncOpts) => syncMod.sync(changeName, cwd, syncOpts)` 原样透传 + 形状契约注释（src/run/shared.js:1102-1106）；与既有 triggerSync 内联用法 `sync(name, cwd, sig)`（sig 即同形状对象）形状一致——已放弃改 raceWithAbort 传裸信号的方案，判断正确（会破坏 triggerSync 既有形状契约）"
+  },
+  "verificationEvidence": {
+    "fr01": "回归钉用例「终态默认同步路径（无 syncImpl 注入）…套娃 TypeError 回归钉」真实存在：走真实默认路径（env 连接态 + 127.0.0.1:9 不可达），断言 confirmed=false + 告警含「平台文件树推送未确认」+ 详情不含 AbortSignal 套娃痕迹 + exitCode=1；反证机理成立——若套娃回归，AbortSignal.any 的 TypeError 消息必含 'AbortSignal' 字样被断言抓获",
+    "fr02": "node --test test/terminal-sync-strict.test.mjs 复跑 10 pass / 0 fail（原九用例未动 + 新增一例）；语法门 node test/check-syntax.mjs 通过（1019 文件，hard fail 0）",
+    "fr03": "命令级 dogfood（本变更 flow done）在评审后执行，同前例无法提前证伪；修复效果已有默认路径真实 sync() 的单测 E2E 覆盖（非注入缝）",
+    "signalShapeDeduction": "静态推演成立：raceWithAbort op({signal: controller.signal}) → 默认 runSync syncOpts 原样透传 → sync(name, cwd, opts) → SyncManager.sync 以 opts.signal 原样分发至全部消费点（syncSpecTree :728/:925 AbortSignal.any、_pushLedgerTombstone :797、push :849、syncDocuments :908、_pushTombstone :937、:1144/:1201）——每处收到的均为真 AbortSignal，无二次包装点；opts.syncImpl 注入缝仅测试消费，生产路径唯一",
+    "deliveryScope": "commit src/ 面恰为申报两文件（src/run/shared.js 6±、test/terminal-sync-strict.test.mjs +16）；其余均为本仓 flow done 归档机制自带产出（.sillyspec changes 归档/knowledge/docs 模块 changelog），非交付面，与申报一致"
+  },
+  "reviewedAt": "2026-10-17T15:32:00+08:00"
+}

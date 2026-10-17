@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-strict-sync-signal-shape",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-17-strict-sync-signal-shape:flow:测试绑定FR-01",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs「终态默认同步路径（无 syncImpl 注入）→ raceWithAbort 的 {signal} 形状对象原样透传（套娃 TypeError 回归钉）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-strict-sync-signal-shape"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-17-strict-sync-signal-shape:flow:测试绑定FR-02",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-strict-sync-signal-shape"
+    }
+  ]
+}

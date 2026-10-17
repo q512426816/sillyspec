@@ -1507,3 +1507,48 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-16-ci-linux-residual-fix
   status: active
+
+## FR-runtime-099 默认同步路径（无 syncImpl 注入）回归单测绿：连接态 + 平台不可达时告警详情不含 AbortSignal 套娃 TypeError
+变更：2026-10-17-strict-sync-signal-shape
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-17-strict-sync-signal-shape/requirements.md#FR-01
+最近确认：560af6a23a038e6ee6118a7bcce7b6b3d2481e22
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-strict-sync-signal-shape:flow:测试绑定FR-01
+  tests: test/terminal-sync-strict.test.mjs「终态默认同步路径（无 syncImpl 注入）→ raceWithAbort 的 {signal} 形状对象原样透传（套娃 TypeError 回归钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-strict-sync-signal-shape
+  status: active
+
+## FR-runtime-100 test/terminal-sync-strict.test.mjs 全绿（10 用例）
+变更：2026-10-17-strict-sync-signal-shape
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-17-strict-sync-signal-shape/requirements.md#FR-02
+最近确认：560af6a23a038e6ee6118a7bcce7b6b3d2481e22
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-strict-sync-signal-shape:flow:测试绑定FR-02
+  tests: test/terminal-sync-strict.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-strict-sync-signal-shape
+  status: active
+
+## FR-runtime-101 dogfood 本变更 flow done 收尾强校验静默 confirmed（无 🚨 行、退出码干净）——修复后真实 E2E
+变更：2026-10-17-strict-sync-signal-shape
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-17-strict-sync-signal-shape/requirements.md#FR-03
+最近确认：560af6a23a038e6ee6118a7bcce7b6b3d2481e22

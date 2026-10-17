@@ -1,0 +1,80 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index fe6b7b44..800a7b4e 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -64,3 +64,4 @@
+ | 2026-10-16 | 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句 |
+ | 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |
+ | 2026-10-16 | 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流 |
++| 2026-10-17 | 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 4f70269e..2ad7c145 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -64,3 +64,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify …
+ - 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句
+ - 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名
++- 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化
+diff --git a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+index f8f786b1..cac73ca3 100644
+--- a/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md
+@@ -13,3 +13,4 @@
+ | 2026-10-14 | 2026-10-14-tdd-scope-guidance | worker_prompt 铁律第 1 条 TDD 措辞带按层限定（纯逻辑严格先行/行为契约断用户所见/样式与纯配置不写，判据见「测试用例设计」）。 |
+ | 2026-10-15 | 2026-10-15-pitfall-batch-clearance | 消费仓 multi-agent-platform 变更 2026-10-14-admin-server-status 全 |
+ | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
++| 2026-10-17 | 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化 |
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.changelog.md b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+index cfc0b5fe..741158ce 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+@@ -11,3 +11,4 @@
+ - 2026-10-16-spec-sync-fail-alarm | spec-sync 失败告警升级——响应体落日志+连续失败计数升级（生产索引损坏事故后的可观测性加固…
+ - 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify …
+ - 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流
++- 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化
+diff --git a/src/run/shared.js b/src/run/shared.js
+index ffba2c4c..8b91e829 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1099,7 +1099,11 @@ export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts =
+   const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
+   let result = null
+   try {
+-    const runSync = opts.syncImpl || ((sig) => syncMod.sync(changeName, cwd, { signal: sig }))
++    // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
++    // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
++    //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
++    //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
++    const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
+     result = await raceWithAbort(runSync, timeoutMs)
+   } catch (e) {
+     result = { synced: 0, errors: [(e && e.message) || String(e)] }
+diff --git a/test/terminal-sync-strict.test.mjs b/test/terminal-sync-strict.test.mjs
+index 898febe4..70d4f3f4 100644
+--- a/test/terminal-sync-strict.test.mjs
++++ b/test/terminal-sync-strict.test.mjs
+@@ -137,6 +137,22 @@ test('终态 + 同步预算熔断（syncImpl 挂起超短窗）→ 按未确认
+   assert.equal(process.exitCode, 1)
+ })
+ 
++test('终态默认同步路径（无 syncImpl 注入）→ raceWithAbort 的 {signal} 形状对象原样透传（套娃 TypeError 回归钉）', async () => {
++  // dogfood 实证回归（2026-10-17-archive-terminal-sync-strict 归档收尾当场抓获）：默认
++  // runSync 若把 raceWithAbort 传入的 {signal} 对象再包一层 { signal: sig }，opts.signal
++  // 变套娃对象 → syncSpecTree 的 AbortSignal.any 抛 TypeError → 树通道恒假败。本用例走
++  // 真实默认路径（platform 指向无服务端口，sync() 内部正常走清单失败分支），钉告警
++  // 详情不含 AbortSignal 套娃痕迹（错误应为网络失败语义）。
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, { changeStatus: 'archived' })
++  assert.equal(r.confirmed, false)
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('平台文件树推送未确认'), out)
++  assert.ok(!out.includes('AbortSignal'), `不应出现套娃 TypeError：${out.slice(0, 300)}`)
++  assert.equal(process.exitCode, 1)
++})
++
+ test('quick 会话 SID → 委托既有 triggerSync（无归档/删除终态）', async () => {
+   const r = await triggerSyncTerminalStrict(cwd, 'quick-abcd1234', {}, {
+     changeStatus: 'archived',
