@@ -137,6 +137,22 @@ test('终态 + 同步预算熔断（syncImpl 挂起超短窗）→ 按未确认�
   assert.equal(process.exitCode, 1)
 })
 
+test('终态默认同步路径（无 syncImpl 注入）→ raceWithAbort 的 {signal} 形状对象原样透传（套娃 TypeError 回归钉）', async () => {
+  // dogfood 实证回归（2026-10-17-archive-terminal-sync-strict 归档收尾当场抓获）：默认
+  // runSync 若把 raceWithAbort 传入的 {signal} 对象再包一层 { signal: sig }，opts.signal
+  // 变套娃对象 → syncSpecTree 的 AbortSignal.any 抛 TypeError → 树通道恒假败。本用例走
+  // 真实默认路径（platform 指向无服务端口，sync() 内部正常走清单失败分支），钉告警
+  // 详情不含 AbortSignal 套娃痕迹（错误应为网络失败语义）。
+  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
+  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
+  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, { changeStatus: 'archived' })
+  assert.equal(r.confirmed, false)
+  const out = errCapture.join('\n')
+  assert.ok(out.includes('平台文件树推送未确认'), out)
+  assert.ok(!out.includes('AbortSignal'), `不应出现套娃 TypeError：${out.slice(0, 300)}`)
+  assert.equal(process.exitCode, 1)
+})
+
 test('quick 会话 SID → 委托既有 triggerSync（无归档/删除终态）', async () => {
   const r = await triggerSyncTerminalStrict(cwd, 'quick-abcd1234', {}, {
     changeStatus: 'archived',

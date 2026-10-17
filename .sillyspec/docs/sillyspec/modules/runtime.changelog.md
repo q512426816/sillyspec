@@ -64,3 +64,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify …
 - 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句
 - 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名
+- 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化

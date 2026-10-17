@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-archive-terminal-sync-strict",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-01",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs「syncSpecTree 未连接平台 → ok:true（本地合法状态，非通道失败）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-archive-terminal-sync-strict"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-02",
+      "tests": [
+        "test/terminal-sync-strict.test.mjs「终态 + 无 treeOk（未确认）→ 🚨 告警 + 自救命令 + exitCode=1」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-archive-terminal-sync-strict"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-03",
+      "tests": [
+        "test/archive-chain.test.mjs",
+        "test/change-delete.test.mjs",
+        "test/flow-done-fail-brief.test.mjs",
+        "test/platform-sync-schema.test.mjs",
+        "test/platform-sync-serialization.test.mjs",
+        "test/run-complete-step-archive.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-17-archive-terminal-sync-strict"
+    }
+  ]
+}

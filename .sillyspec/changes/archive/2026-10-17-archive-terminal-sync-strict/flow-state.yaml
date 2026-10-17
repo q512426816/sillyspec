@@ -1,6 +1,12 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -23,9 +29,16 @@ input: >-
   - 受影响面既有测试零回归（platform-sync 两件 + archive-chain + change-delete + run-complete-step-archive + flow-done-fail-brief）
 
   - 语法门（node test/check-syntax.mjs）通过；dogfood flow done 真实走一遍新强校验路径（平台健康时静默 confirmed）
-autopilot: false
+autopilot: true
 prestage_ack: true
 baseline_commit: 38a49220f172958e2a840af09b7375ee4a7728be
-updatedAt: '2026-10-17T06:17:49.444Z'
+updatedAt: '2026-10-17T06:33:12.067Z'
 baseline_sha256: c642b29e63d133548dee5dfd3c1d8206f4c6656c55667097d8e3b7f6187af9d1
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（0.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261017062305\test-result.json｜lint: passed
+  ← npm run lint（51.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261017062305\test-result.json｜门文件 9 个
 

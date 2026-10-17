@@ -1099,7 +1099,11 @@ export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts = 
   const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
   let result = null
   try {
-    const runSync = opts.syncImpl || ((sig) => syncMod.sync(changeName, cwd, { signal: sig }))
+    // raceWithAbort 向 op 传入 { signal } 形状对象（非裸 AbortSignal，与既有 triggerSync
+    // 内联用法 `sync(name, cwd, sig)` 同一形状）——默认路径原样透传，禁止二次包装
+    //（dogfood 实证：包装成 { signal: sig } 会把套娃对象传进 AbortSignal.any → TypeError，
+    //  强校验当场以 🚨 告警兜住——安全网本身工作正常，此处修被网住的 bug）。
+    const runSync = opts.syncImpl || ((syncOpts) => syncMod.sync(changeName, cwd, syncOpts))
     result = await raceWithAbort(runSync, timeoutMs)
   } catch (e) {
     result = { synced: 0, errors: [(e && e.message) || String(e)] }

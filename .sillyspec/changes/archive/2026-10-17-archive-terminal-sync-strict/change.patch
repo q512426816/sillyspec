@@ -1,0 +1,457 @@
+diff --git a/src/change-delete.js b/src/change-delete.js
+index 74c5fb26..b7aeaca8 100644
+--- a/src/change-delete.js
++++ b/src/change-delete.js
+@@ -12,7 +12,7 @@
+  *     不因删变更丢用户唯一副本的代码；顺带清 execute/stage-review runId marker
+  *     + 该变更的 runtime 取证（pruneArchivedChangeRuntime））
+  *   - git：safeGit add -A 暂存目录删除（best-effort，对齐 archive CLI 下沉 git add）
+- *   - 平台：triggerSync 推终态（sync.js 对 status='deleted' 上行墓碑，平台收敛软删）
++ *   - 平台：triggerSyncTerminalStrict 推终态（sync.js 对 status='deleted' 上行墓碑，平台收敛软删；文件树推送失败显性化）
+  *
+  * 两段式安全（对齐 --cleanup-remnant / --cleanup-ghosts / --align-execute-progress 家族）：
+  * 默认 dry-run 只报告将发生什么，--confirm 才执行。
+@@ -23,7 +23,7 @@
+ import { existsSync, readdirSync, rmSync, statSync } from 'fs';
+ import { join, relative } from 'path';
+ import { safeGit } from './git-helper.js';
+-import { assertSafeChangeName, triggerSync } from './run/shared.js';
++import { assertSafeChangeName, triggerSyncTerminalStrict } from './run/shared.js';
+ import { archiveWorktreeCleanup } from './run/complete-handlers.js';
+ 
+ function countFiles(dir) {
+@@ -156,10 +156,11 @@ export async function deleteChange({ cwd, specDir = null, changeName, confirm =
+       safeGit(cwd, ['add', '-A', '--', relDir]);
+     }
+   } catch { /* 非 git 仓等场景：删除在 git status 可见，暂存非必需 */ }
+-  // 5. 平台终态/墓碑上行（triggerSync 内建 8s 熔断 + 未连接静默；change-delete 是终态
+-  //    一次性命令，await 保证墓碑发出后再退出，输出顺序确定）
++  // 5. 平台终态/墓碑上行（终态强校验：内联有界同步，文件树推送失败显性化——🚨 告警 +
++  //    自救命令 + exit 1；未连接静默。change-delete 是终态一次性命令，await 保证墓碑
++  //    发出后再退出，输出顺序确定）
+   try {
+-    await triggerSync(cwd, changeName, { specRoot: specBase });
++    await triggerSyncTerminalStrict(cwd, changeName, { specRoot: specBase });
+   } catch (e) {
+     warnings.push(`平台终态同步失败（不阻断删除，下次常规同步重试）：${e.message}`);
+   }
+diff --git a/src/flow.js b/src/flow.js
+index c395a4a2..96049765 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -31,7 +31,7 @@ import { DatabaseSync } from 'node:sqlite'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+-import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
++import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+ import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
+ // 2026-10-13-thin-sync-stage：FLOW_STATE_FILE/readFlowState 单一源上移叶子模块 flow-state.js
+@@ -2529,8 +2529,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
+     }
+   } catch { /* 指引 best-effort */ }
+-  // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
+-  try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
++  // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）。
++  // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：flow done 到此 =
++  // 变更已归档，文件树推送失败不再静默半态（🚨 告警 + 自救命令 + exit 1）
++  try { await triggerSyncTerminalStrict(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+   return { change, substeps: doneList }
+ }
+ 
+diff --git a/src/run/complete.js b/src/run/complete.js
+index af6fc42b..4d46cfb4 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -22,7 +22,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { writeCloseTraceArtifacts, projectTraceFaceRows } from '../flow-parity.js'
+ import { withFileLock } from '../quicklog.js'
+-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer, isRetiredAutoBrainstormTable, printRetiredAutoBrainstormRefusal } from './shared.js'
++import { triggerSync, triggerSyncTerminalStrict, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer, isRetiredAutoBrainstormTable, printRetiredAutoBrainstormRefusal } from './shared.js'
+ import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
+ 
+ // 退役自动道守门（2026-10-14-brainstorm-auto-retire）：brainstorm-auto 4 步表已随自动道删除。
+@@ -828,7 +828,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+ 
+     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
+     pm._write(cwd, progress, changeName)
+-    triggerSync(cwd, changeName, platformOpts, { completion: true })
++    // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：状态机驱动——仅
++    // DB status 已达 archived/deleted（archive 阶段完成即此态）走内联强校验，其余阶段
++    // 原样委托 triggerSync（后台化不变，非终态零行为变化）。见 run/shared.js 契约注释。
++    await triggerSyncTerminalStrict(cwd, changeName, platformOpts, { completion: true })
+ 
+     const total = steps.length
+     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 560015a0..ffba2c4c 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -943,7 +943,9 @@ async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
+   const controller = new AbortController()
+   let timer
+   try {
+-    await Promise.race([
++    // 透传 op 结果（2026-10-17 终态强校验消费）：历史调用方（triggerSync 等）忽略返回值
++    // 不受影响；超时分支 resolve(null)——消费方以 null 判「预算熔断」。
++    return await Promise.race([
+       op({ signal: controller.signal }),
+       new Promise((resolve) => { timer = setTimeout(() => { controller.abort(); resolve(null) }, timeoutMs) }),
+     ])
+@@ -1039,6 +1041,82 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
+   }
+ }
+ 
++/**
++ * 终态强校验同步（2026-10-17-archive-half-state-location-stuck-active）。
++ *
++ * 背景（坑档案 docs/sillyspec/archive-half-state-location-stuck-active.md，生产实证）：
++ * triggerSync 全链 best-effort + 后台化，重试是事件驱动（「下一条命令」）——而归档/删除
++ * 是变更生命周期最后一个动作，之后大概率没有下一条命令。平台慢窗口内 DB 通道
++ * （status=archived）成功而文件树通道（location）失败 → 半态：平台「进行中」列表
++ * 幽灵滞留已归档变更，无人再碰则无限期。
++ *
++ * 与 triggerSync 的三点差异：
++ *   1. **终态判定驱动**：仅当 DB 该变更 status ∈ (archived, deleted) 才走强校验；
++ *      非终态（普通阶段完成的 completion 同步等）原样委托 triggerSync（后台化不变，
++ *      零行为变化）。归档收尾允许阻塞换一致性——终态动作没有「下次再推」的假设。
++ *   2. **内联有界**：绕过后台化（结果不再藏进 bg 日志文件），sync() 直跑 + raceWithAbort
++ *      预算 = max(env SILLYSPEC_SYNC_TIMEOUT_MS 可调值, 45s 后台轮下限同款)；opts.timeoutMs
++ *      显式传入时直接生效（测试注入短窗）。
++ *   3. **失败显性化**：sync() 返回 treeOk!==true（syncSpecTree ok 契约，fail-closed——
++ *      无 ok 字段视同未确认）→ 🚨 告警 + 自救命令 + process.exitCode = 1（对齐
++ *      _submitApproval 的「终态网络失败必须可见」先例）。未决冲突（result.conflict）
++ *      不在此列——冲突面已有自己的 resolve 处置横幅，重复告警是噪音。
++ *
++ * @returns {{confirmed: boolean, delegated?: boolean, skipped?: string, result?: object}}
++ */
++export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts = {}, opts = {}) {
++  // quick 会话无实体变更目录（无归档/删除终态）——沿用既有 best-effort 语义
++  if (changeName && QUICK_SID_RE.test(changeName)) {
++    await triggerSync(cwd, changeName, platformOpts, opts)
++    return { confirmed: false, delegated: true }
++  }
++  const syncMod = await import('../sync.js')
++  // 未连接平台：静默 no-op（本地合法状态；强校验只在平台模式下有意义）
++  if (!syncMod.peekPlatformConnected(cwd, platformOpts)) {
++    return { confirmed: false, skipped: 'not-connected' }
++  }
++  // 终态判定（fail-open：DB 读不到/解析失败 → 非终态委托既有语义，不因校验层故障阻断主链）
++  // opts.changeStatus / opts.syncImpl：测试注入缝（对齐 bakeArchiveTimeline writeImpl 惯例）
++  let dbStatus = opts.changeStatus ?? null
++  if (dbStatus === null) {
++    try {
++      const { resolvePlatformSpecDir, ProgressManager } = await import('../progress.js')
++      const specDir = resolvePlatformSpecDir(cwd)
++      if (specDir && existsSync(join(specDir, '.runtime', 'sillyspec.db'))) {
++        const pm = new ProgressManager({ specDir })
++        const row = pm._ensureDB(cwd).getDb().prepare(
++          'SELECT status FROM changes WHERE name = ?'
++        ).get(changeName)
++        dbStatus = row ? row.status : null
++      }
++    } catch { /* 判定失败按非终态处理 */ }
++  }
++  if (dbStatus !== 'archived' && dbStatus !== 'deleted') {
++    await triggerSync(cwd, changeName, platformOpts, opts)
++    return { confirmed: false, delegated: true }
++  }
++  // 终态：内联有界同步（绕过后台化——结果必须当场可判）
++  const timeoutMs = opts.timeoutMs ?? Math.max(resolveSyncTotalTimeoutMs(), 45_000)
++  let result = null
++  try {
++    const runSync = opts.syncImpl || ((sig) => syncMod.sync(changeName, cwd, { signal: sig }))
++    result = await raceWithAbort(runSync, timeoutMs)
++  } catch (e) {
++    result = { synced: 0, errors: [(e && e.message) || String(e)] }
++  }
++  if (result === null) result = { synced: 0, errors: [`同步总预算 ${timeoutMs}ms 熔断`] }
++  // 未决冲突：已有 resolve 处置横幅（syncSpecTree 冲突分支自带），不重复告警
++  if (result.conflict === true) return { confirmed: false, skipped: 'conflict', result }
++  const confirmed = result.treeOk === true
++  if (!confirmed) {
++    const detail = ((result.errors && result.errors[0]) || '文件树通道未确认收敛（见上方 [spec-sync]/[sync] 行）').slice(0, 200)
++    console.error(`🚨 [终态同步] 本地${dbStatus === 'deleted' ? '删除' : '归档'}已完成，但平台文件树推送未确认：${detail}`)
++    console.error(`   平台变更中心可能滞留「进行中」半态。自救（幂等）：sillyspec platform sync --change ${changeName}`)
++    if (opts.exitOnUnconfirmed !== false) process.exitCode = 1
++  }
++  return { confirmed, result }
++}
++
+ /**
+  * 触发步骤开始上报（X3 / design §8.2，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）。
+  *
+diff --git a/src/spec-sync.js b/src/spec-sync.js
+index 5a53626c..7314face 100644
+--- a/src/spec-sync.js
++++ b/src/spec-sync.js
+@@ -665,10 +665,20 @@ function attributeChangeLabel(paths) {
+   return names.size === 1 ? [...names][0] : 'full-tree'
+ }
+ 
++/**
++ * spec 树增量同步（以服务器清单为锚做全树 diff → POST ops）。
++ *
++ * 返回契约（2026-10-17-archive-half-state-location-stuck-active）：`ok` 字段表达
++ * 「本轮文件树通道是否确认收敛」——ok:true = 确认（无差异 no-op / 推送成功 / 冲突自愈
++ * / 未连接本地合法态）；ok:false = 确认失败（清单/推送 HTTP 失败、异常）；**无 ok 字段
++ * = 未确认**（未决冲突待人裁等，fail-closed）。终态强校验消费方
++ * （run/shared.js triggerSyncTerminalStrict）按 `ok === true` 判收敛——历史调用方
++ * （syncSpecTreeOnly / resolve forcePush 等）不消费该字段，向后兼容。
++ */
+ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+   if (!platform || !platform.url || !platform.token) {
+     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
+-    return { synced: 0 };
++    return { synced: 0, ok: true };
+   }
+   // 全树入口（platform sync 无 --change，2026-10-11-sync-conflict-tri-fix FR-03）
+   // changeName=null：日志用 full-tree 标签，冲突归因见下方 conflictLabel。
+@@ -705,7 +715,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+       if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+         console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+       }
+-      return { synced: 0 };
++      return { synced: 0, ok: false };
+     }
+     const body = await res.json().catch(() => ({}));
+     serverManifest = body.files || {};
+@@ -716,7 +726,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+       console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+     }
+-    return { synced: 0 };
++    return { synced: 0, ok: false };
+   }
+ 
+   // 2. walk/hash/diff
+@@ -758,7 +768,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+     debugLog(`[spec-sync] 无差异，跳过同步: ${logLabel}`);
+     clearStaleTombstoneMarkers(specRoot);
+     clearFailStreak(specRoot, logLabel);
+-    return { synced: 0 };
++    return { synced: 0, ok: true };
+   }
+ 
+   // 3. POST ops
+@@ -782,7 +792,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+       if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+         console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+       }
+-      return { synced: 0 };
++      return { synced: 0, ok: false };
+     }
+     const body = await res.json().catch(() => ({}));
+     if (body.conflict) {
+@@ -855,7 +865,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+         noteSyncSuccess();
+         clearFailStreak(specRoot, logLabel);
+         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${conflictLabel}`);
+-        return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
++        return { synced: Math.max(ops.length - followers.length, 0), ok: true, conflict: false, autoResolved: followers.length };
+       }
+       let conflictPath = null;
+       try {
+@@ -901,7 +911,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+     clearStaleTombstoneMarkers(specRoot);
+     writeLastSyncTs(specRoot);
+     writeBaseSnapshot(specRoot, localFiles);
+-    return { synced: ops.length };
++    return { synced: ops.length, ok: true };
+   } catch (err) {
+     const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
+     const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
+@@ -909,7 +919,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+       console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+     }
+-    return { synced: 0 };
++    return { synced: 0, ok: false };
+   }
+ }
+ 
+diff --git a/src/sync.js b/src/sync.js
+index c558b9d7..47e8ca6a 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -916,8 +916,14 @@ export class SyncManager {
+         // 树根与进度锚点同源（safePlatformSpecDir，平台模式 → specRoot）：此前硬编码
+         // cwd/.sillyspec，平台模式下该目录只有 local.yaml（被 walk 排除）→ 本地树恒空
+         // → 服务器清单全量 delete（BUG-01，computeSpecOps 护栏为第二道防线）。
++        // treeOk 透传（2026-10-17-archive-half-state-location-stuck-active）：树通道失败
++        // 不影响进度上行返回值（既有语义不变），但结果对象必须如实携带——终态强校验
++        // （triggerSyncTerminalStrict）按 treeOk 判「平台 location 是否收敛」，吞进
++        // debugLog 会让归档半态（status=archived + location=active）静默存活。
++        let treeOk = false;
+         try {
+-          await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
++          const treeResult = await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
++          treeOk = treeResult && treeResult.ok === true;
+         } catch (err) {
+           debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
+         }
+@@ -934,7 +940,7 @@ export class SyncManager {
+           }
+         }
+ 
+-        return { synced: 1, errors: [] };
++        return { synced: 1, errors: [], treeOk };
+       }
+ 
+       if (res.status !== 409) {
+diff --git a/test/terminal-sync-strict.test.mjs b/test/terminal-sync-strict.test.mjs
+new file mode 100644
+index 00000000..898febe4
+--- /dev/null
++++ b/test/terminal-sync-strict.test.mjs
+@@ -0,0 +1,147 @@
++/**
++ * 终态强校验同步（triggerSyncTerminalStrict）+ syncSpecTree ok 契约单测。
++ *
++ * 坑档案：docs/sillyspec/archive-half-state-location-stuck-active.md（multi-agent-platform 仓）
++ * —— 归档半态（本地 archived、平台 location=active）在平台慢窗口内结构必然可出现，
++ * 且重试链挂在「下一条命令」这个可能永不到来的事件上。本组用例钉三件事：
++ *   1. syncSpecTree 返回契约：ok:true（合法本地态）/ ok:false（通道失败）显式可判；
++ *   2. 强校验状态机：非终态委托 / 未连接静默 / 终态 treeOk 判定 / 冲突让位 / 超时熔断；
++ *   3. 失败显性化：🚨 告警 + 自救命令 + exitCode=1（终态网络失败必须可见先例）。
++ */
++import { test, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import { syncSpecTree } from '../src/spec-sync.js'
++import { triggerSyncTerminalStrict } from '../src/run/shared.js'
++
++let cwd
++let savedEnv
++let savedExitCode
++const errCapture = []
++
++beforeEach(() => {
++  cwd = mkdtempSync(join(tmpdir(), 'sillyspec-term-sync-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  savedEnv = { ...process.env }
++  delete process.env.SILLYHUB_PLATFORM_URL
++  delete process.env.SILLYHUB_PLATFORM_TOKEN
++  delete process.env.SILLYSPEC_SYNC_BG
++  savedExitCode = process.exitCode
++  process.exitCode = undefined
++  errCapture.length = 0
++  console.error = ((...args) => { errCapture.push(args.join(' ')) })
++})
++
++afterEach(() => {
++  console.error = (() => {})
++  process.exitCode = savedExitCode
++  process.env = savedEnv
++  try { rmSync(cwd, { recursive: true, force: true }) } catch { /* 临时目录清理失败不影响断言 */ }
++})
++
++// ── syncSpecTree ok 契约 ────────────────────────────────────────────────────
++
++test('syncSpecTree 未连接平台 → ok:true（本地合法状态，非通道失败）', async () => {
++  const r = await syncSpecTree(cwd, null, 'c1')
++  assert.equal(r.ok, true)
++  assert.equal(r.synced, 0)
++})
++
++test('syncSpecTree 平台不可达（清单拉取异常）→ ok:false（fail-closed 可判失败）', async () => {
++  // 端口 9（discard）无服务：fetch 立即失败走清单异常分支
++  const r = await syncSpecTree(cwd, { url: 'http://127.0.0.1:9', token: 'x' }, 'c1')
++  assert.equal(r.ok, false)
++})
++
++// ── triggerSyncTerminalStrict 状态机 ────────────────────────────────────────
++
++test('非终态（status=active）→ 委托既有 triggerSync 语义，不调强校验同步', async () => {
++  // 连接态：非终态委托发生在连接检查之后的终态判定分支（未连接时更早静默跳过，语义等价）
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  // 评审 P3：非终态委托路径在连接态会真实 spawn detached bg 子进程（进程/日志副作用）——
++  // SILLYSPEC_SYNC_BG=0 逃生阀回退 inline，本用例只验证「委托不调 syncImpl」，inline 足够
++  process.env.SILLYSPEC_SYNC_BG = '0'
++  let syncCalled = 0
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'active',
++    syncImpl: async () => { syncCalled++; return { synced: 1, treeOk: true } },
++  })
++  assert.equal(r.delegated, true)
++  assert.equal(syncCalled, 0)
++  assert.equal(process.exitCode, undefined)
++})
++
++test('未连接平台 → 静默跳过（不触发同步、不告警、不动退出码）', async () => {
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => { throw new Error('不应被调用') },
++  })
++  assert.equal(r.skipped, 'not-connected')
++  assert.equal(errCapture.length, 0)
++  assert.equal(process.exitCode, undefined)
++})
++
++test('终态 + treeOk:true → confirmed，退出码不动', async () => {
++  // 连接态：env 两键（readPlatformConfig env 通道）
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => ({ synced: 1, treeOk: true }),
++  })
++  assert.equal(r.confirmed, true)
++  assert.equal(process.exitCode, undefined)
++})
++
++test('终态 + 无 treeOk（未确认）→ 🚨 告警 + 自救命令 + exitCode=1', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => ({ synced: 0, errors: ['同步请求失败 HTTP 504'] }),
++  })
++  assert.equal(r.confirmed, false)
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('平台文件树推送未确认'), out)
++  assert.ok(out.includes('sillyspec platform sync --change c1'), out)
++  assert.equal(process.exitCode, 1)
++})
++
++test('终态 + 未决冲突 → 让位（conflict 自带 resolve 处置横幅，不重复告警不动退出码）', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'deleted',
++    syncImpl: async () => ({ synced: 0, conflict: true, errors: ['conflict pending: c1'] }),
++  })
++  assert.equal(r.skipped, 'conflict')
++  assert.equal(errCapture.length, 0)
++  assert.equal(process.exitCode, undefined)
++})
++
++test('终态 + 同步预算熔断（syncImpl 挂起超短窗）→ 按未确认处置（告警 + exit 1）', async () => {
++  process.env.SILLYHUB_PLATFORM_URL = 'http://127.0.0.1:9'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 't'
++  const r = await triggerSyncTerminalStrict(cwd, 'c1', {}, {
++    changeStatus: 'archived',
++    timeoutMs: 50,
++    syncImpl: () => new Promise(() => {}), // 永不 resolve
++  })
++  assert.equal(r.confirmed, false)
++  const out = errCapture.join('\n')
++  assert.ok(out.includes('平台文件树推送未确认'), out)
++  assert.equal(process.exitCode, 1)
++})
++
++test('quick 会话 SID → 委托既有 triggerSync（无归档/删除终态）', async () => {
++  const r = await triggerSyncTerminalStrict(cwd, 'quick-abcd1234', {}, {
++    changeStatus: 'archived',
++    syncImpl: async () => { throw new Error('不应被调用') },
++  })
++  assert.equal(r.delegated, true)
++  assert.equal(process.exitCode, undefined)
++})

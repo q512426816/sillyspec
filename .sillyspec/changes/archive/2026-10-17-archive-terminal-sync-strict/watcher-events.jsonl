@@ -1,0 +1,16 @@
+{"ts":1792217873203,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1792217873203,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1792217873203,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1792217873203,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792217897562,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792217907549,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792217917569,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792217917569,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1792217917569,"kind":"commit","stage":null,"detail":"5147c63f","provisional":true}
+{"ts":1792217927938,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792218033952,"kind":"gate-run","stage":"verify","detail":"门实测 failed（73.9s） · 20261017062031","provisional":true}
+{"ts":1792218186989,"kind":"gate-run","stage":"verify","detail":"门实测 passed（0.4s） · 20261017062305","provisional":true}
+{"ts":1792218705734,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792218712544,"kind":"commit","stage":null,"detail":"eb09c73c","provisional":true}
+{"ts":1792218712813,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-17-archive-terminal-sync-strict/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792218791717,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

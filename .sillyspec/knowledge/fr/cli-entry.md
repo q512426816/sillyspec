@@ -10125,3 +10125,76 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-17-tick-timing-source
   status: active
+
+## FR-cli-entry-535 syncSpecTree 返回携带 ok 契约（成功/合法态 true、通道失败 false、未决冲突无 ok=fail-closed 未确认），单测钉两种可达路径
+变更：2026-10-17-archive-terminal-sync-strict
+状态：active
+摘要：主路径；平台不可达
+场景正文：
+- 场景：主路径 — Given 无 platform 配置（本地合法态）；When 调用 syncSpecTree；Then 返回 `{synced:0, ok:true}`（单测钉板）
+- 场景：平台不可达 — Given platform 指向无服务端口；When 调用 syncSpecTree；Then 走清单异常分支返回 `ok:false`（单测钉板）
+全文：.sillyspec/changes/archive/2026-10-17-archive-terminal-sync-strict/requirements.md#FR-01
+最近确认：eb09c73c76d3ca457fde4b2bd74a482544ed9d74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-01
+  tests: test/terminal-sync-strict.test.mjs「syncSpecTree 未连接平台 → ok:true（本地合法状态，非通道失败）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-archive-terminal-sync-strict
+  status: active
+
+## FR-cli-entry-536 triggerSyncTerminalStrict 状态机单测：非终态委托、未连接静默、终态 treeOk 判定、冲突让位、预算熔断按未确认处置、失败告警含自救命令且 exitCode=1，全绿
+变更：2026-10-17-archive-terminal-sync-strict
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 注入 changeStatus/syncImpl 的七种状态组合；When 调用 triggerSyncTerminalStrict；Then 九条用例全绿（委托/静默/确认/告警+退出码/冲突让位/熔断/quick 委托/ok 契约两件）
+全文：.sillyspec/changes/archive/2026-10-17-archive-terminal-sync-strict/requirements.md#FR-02
+最近确认：eb09c73c76d3ca457fde4b2bd74a482544ed9d74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-02
+  tests: test/terminal-sync-strict.test.mjs「终态 + 无 treeOk（未确认）→ 🚨 告警 + 自救命令 + exitCode=1」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-archive-terminal-sync-strict
+  status: active
+
+## FR-cli-entry-537 受影响面既有测试零回归（platform-sync 两件 + archive-chain + change-delete + run-complete-step-archive + flow-done-fail-brief）
+变更：2026-10-17-archive-terminal-sync-strict
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When node --test 六文件；Then fail=0
+全文：.sillyspec/changes/archive/2026-10-17-archive-terminal-sync-strict/requirements.md#FR-03
+最近确认：eb09c73c76d3ca457fde4b2bd74a482544ed9d74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-17-archive-terminal-sync-strict:flow:测试绑定FR-03
+  tests: test/archive-chain.test.mjs | test/change-delete.test.mjs | test/flow-done-fail-brief.test.mjs | test/platform-sync-schema.test.mjs | test/platform-sync-serialization.test.mjs | test/run-complete-step-archive.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-17-archive-terminal-sync-strict
+  status: active
+
+## FR-cli-entry-538 语法门（node test/check-syntax.mjs）通过；dogfood flow done 真实走一遍新强校验路径（平台健康时静默 confirmed）
+变更：2026-10-17-archive-terminal-sync-strict
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — When sillyspec flow done --change 2026-10-17-archive-terminal-sync-strict；Then 收尾同步静默完成（无 🚨 行）、命令退出码不受污染
+全文：.sillyspec/changes/archive/2026-10-17-archive-terminal-sync-strict/requirements.md#FR-04
+最近确认：eb09c73c76d3ca457fde4b2bd74a482544ed9d74

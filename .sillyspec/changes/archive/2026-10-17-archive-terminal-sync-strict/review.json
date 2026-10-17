@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-17-archive-terminal-sync-strict",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "eb09c73c76d3ca457fde4b2bd74a482544ed9d74",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design.md 文件变更清单表残留一处「12 返回点」旧计数（P3-1 勘误漏改表行）",
+      "evidence": "eb09c73c 已把做法概述（design.md:11）改为「11 个返回点」并收敛调用点措辞，但同文件 :48 文件变更清单表行仍写「syncSpecTree 12 返回点加 ok 契约」——纯文档残留，代码与 FR-01 分类（11 处：8 带 ok + 3 不带）无涉",
+      "location": ".sillyspec/changes/2026-10-17-archive-terminal-sync-strict/design.md:48"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok — strict 内联与先前命令 spawn 的 bg 轮并存时对同一 sync() 端点均为幂等推送：base_ts 乐观锁 + 409 自竞态/内容一致双自愈（src/sync.js:998-1023）+ syncSpecTree 服务器清单锚/follower 自动跟随/墓碑通道（src/spec-sync.js:800-900），另有 bg 单飞锁合并重复轮（src/run/bg-sync.js:206-212）；强校验树结果可被 bg 轮提前收敛为 no-diff ok:true，判读仍正确",
+    "并发": "ok — 本变更零新增写路径：strict 对 DB 仅 SELECT status（src/run/shared.js:1088-1091），inline sync 与 bg 轮共用既有 409 乐观锁并发面；raceWithAbort 仅补结果透传 + 超时 resolve(null)（src/run/shared.js:947-953），历史调用方忽略返回值零影响",
+    "切换": "ok — 失败面为 console.error 两行 + process.exitCode=1，不抛异常：complete.js:834 之后「✅ 阶段已完成」与收尾打印照常执行（进度/归档文件在此之前已 pm._write 落盘）；flow.js:2535 外层 try/catch 吞异常但不吞 exitCode；change-delete.js:165 失败仅 warnings.push；exitOnUnconfirmed!==false 逃生阀真实生效（shared.js:1102，单测钉 exitCode 行为）",
+    "作用域": "ok — strict 终态判定 resolvePlatformSpecDir(cwd) 与 bg 终态补推 collectTerminalSyncPending（src/run/bg-sync.js:205-216）逐字同源（同一导入、同一 DB 存在性检查、同一 ProgressManager specDir 构造）；平台 specRoot 模式与本地默认模式一致；跨仓/多实例由平台服务端 base_ts 乐观锁既有机制隔离"
+  },
+  "remediationLog": {
+    "basedOn": "5147c63fc6ee5a5f503a0a89ac07b9c21b6cdcd6 首轮评审（PASS，4×P3）",
+    "remediationCommit": "eb09c73c76d3ca457fde4b2bd74a482544ed9d74",
+    "diffScopeConfirmed": "commit 实改 2 文件 13+/2-（design.md + test/terminal-sync-strict.test.mjs），与申报「三处清偿」相符；另附带补齐 design.md 盲维四问问题头四行（提交版 5147c63f 缺问题行，与首轮评审所读工作树版对齐，纯文档补全）",
+    "p3_1_返回点计数": "已清偿（部分）——做法概述 design.md:11 已改「11 个返回点」；文件变更清单表 :48 残留「12 返回点」未同步，降级为本轮唯一遗留 P3（见 findings）",
+    "p3_2_调用点计数": "已清偿——接口契约「17 个 triggerSync 调用点」改为「triggerSync 全部调用点不消费返回值」，措辞不再锚定漂移数字，论证结论不变",
+    "p3_3_测试副作用": "已清偿——非终态委托用例注入 SILLYSPEC_SYNC_BG=0（test/terminal-sync-strict.test.mjs:65-67）走逃生阀回退 inline，不再 spawn detached bg 子进程；复跑 9/9 绿（用例名与断言未动，仅环境前置）",
+    "p3_4_作用域边缘": "按约定不动作——strict 与 change-delete DB 同源性在 pointer 平台模式与纯本地默认模式均收敛，仅「显式 --spec-dir 指向第三目录且无 pointer」边缘拓扑 fail-open 委托旧语义（最坏=旧行为，契约已声明）；维持知会级，移出 findings",
+    "regressionAfterRemediation": "node --test test/terminal-sync-strict.test.mjs 复跑 9 pass / 0 fail（清偿 diff 仅文档+测试环境前置，src/ 零改动，首轮六文件回归证据继续有效）"
+  },
+  "verificationEvidence": {
+    "fr01": "11 返回点分类与 5147c63f diff 逐条一致（eb09c73c 未触 src/）：ok:true×4（:681/:771/:868/:914）、ok:false×4（:718/:729/:795/:922）、无 ok×3（:838/:856/:895）；两单测钉两可达路径，实测绿",
+    "fr02": "九用例（2 契约+7 状态机）在 eb09c73c 后复跑 9/9 pass 0 fail；告警含自救命令字面量、exitCode=1、冲突让位、熔断按未确认、quick 委托断言均在",
+    "fr03": "首轮实测六文件 22 pass / 0 fail + 语法门通过（1019 文件 hard fail 0）；清偿提交零 src/ 改动，证据继续有效",
+    "fr04": "语法门已复跑通过；dogfood flow done 待评审后执行（flow-state 停在 verify 门），接线已由单测与三接线点代码路径核实",
+    "wiring": "三终态点替换正确（首轮已核，eb09c73c 未触接线）：flow.js:2535 / complete.js:834（platformOpts+{completion:true} 原样透传，985/2032/2162/2330 单步/盖章/跳步调用点保守保留旧 triggerSync）/ change-delete.js:163；flow.js:744/1186 flow start 两出口保持旧 triggerSync"
+  },
+  "reviewedAt": "2026-10-17T15:20:00+08:00"
+}

@@ -1,0 +1,143 @@
+{
+  "change": "2026-10-17-archive-terminal-sync-strict",
+  "baseline": "38a49220f172958e2a840af09b7375ee4a7728be",
+  "head": "eb09c73c76d3ca457fde4b2bd74a482544ed9d74",
+  "files": [
+    "src/change-delete.js",
+    "src/flow.js",
+    "src/run/complete.js",
+    "src/run/shared.js",
+    "src/spec-sync.js",
+    "src/sync.js",
+    "test/terminal-sync-strict.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 268,
+    "deletions": 21
+  },
+  "savedAt": "2026-10-17T06:33:11.473Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sillyhub-mcp",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sillyhub-mcp.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "38a49220f172958e2a840af09b7375ee4a7728be",
+    "totals": {
+      "files": 7,
+      "additions": 268,
+      "deletions": 21
+    },
+    "rows": [
+      {
+        "path": "src/change-delete.js",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 79,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 18,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sync.js",
+        "additions": 8,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/terminal-sync-strict.test.mjs",
+        "additions": 147,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "884cb5d938fc9832e677d2f08c0476ec67e437a0facb03b4b44b778aa019111b",
+  "patchStatus": "ok"
+}
