@@ -31,7 +31,7 @@ import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
-import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
+import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
 // 2026-10-13-thin-sync-stage：FLOW_STATE_FILE/readFlowState 单一源上移叶子模块 flow-state.js
@@ -2529,8 +2529,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
     }
   } catch { /* 指引 best-effort */ }
-  // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
-  try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+  // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）。
+  // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：flow done 到此 =
+  // 变更已归档，文件树推送失败不再静默半态（🚨 告警 + 自救命令 + exit 1）
+  try { await triggerSyncTerminalStrict(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, substeps: doneList }
 }
 

@@ -1,0 +1,31 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-17T06:17:49.417Z
+---
+# 提案书（Proposal）— 2026-10-17-archive-terminal-sync-strict
+
+## 动机
+
+任务原话转写：归档终态同步强校验——文件树半态显性化
+动机：2026-10-17 生产实证（multi-agent-platform 仓 zcode 变更归档后平台「进行中」滞留 54 分钟）：归档收尾的 triggerSync 全链 best-effort + 后台化，平台慢窗口内 DB 通道（status=archived）成功而文件树通道（location）失败即成半态；重试链挂在「下一条命令」这个归档后大概率不存在的事件上（坑档案 docs/sillyspec/archive-half-state-location-stuck-active.md，已获用户批准做中改）。修法：新增 triggerSyncTerminalStrict 终态强校验——状态机驱动（仅 DB status∈archived/deleted 生效，非终态零行为变化）、内联有界（45s 下限同后台轮）、按 syncSpecTree 新增 ok 契约判收敛、失败 🚨 告警 + 自救命令 + exit 1（对齐 _submitApproval 终态网络失败必须可见先例；未决冲突让位给既有 resolve 横幅）。接线三终态点：flow done 收尾、run 阶段完成尾部（complete.js 状态机驱动单点）、change-delete。
+
+成功标准：
+- syncSpecTree 返回携带 ok 契约（成功/合法态 true、通道失败 false、未决冲突无 ok=fail-closed 未确认），单测钉两种可达路径
+- triggerSyncTerminalStrict 状态机单测：非终态委托、未连接静默、终态 treeOk 判定、冲突让位、预算熔断按未确认处置、失败告警含自救命令且 exitCode=1，全绿
+- 受影响面既有测试零回归（platform-sync 两件 + archive-chain + change-delete + run-complete-step-archive + flow-done-fail-brief）
+- 语法门（node test/check-syntax.mjs）通过；dogfood flow done 真实走一遍新强校验路径（平台健康时静默 confirmed）
+
+## 变更范围
+
+按成功标准机械推导，共 4 条验收面：
+1. syncSpecTree 返回携带 ok 契约（成功/合法态 true、通道失败 false、未决冲突无 ok=fail-closed 未确认），单测钉两种可达路径
+2. triggerSyncTerminalStrict 状态机单测：非终态委托、未连接静默、终态 treeOk 判定、冲突让位、预算熔断按未确认处置、失败告警含自救命令且 exitCode=1，全绿
+3. 受影响面既有测试零回归（platform-sync 两件 + archive-chain + change-delete + run-complete-step-archive + flow-done-fail-brief）
+4. 语法门（node test/check-syntax.mjs）通过；dogfood flow done 真实走一遍新强校验路径（平台健康时静默 confirmed）
+
+## 成功标准（可验证）
+
+1. syncSpecTree 返回携带 ok 契约（成功/合法态 true、通道失败 false、未决冲突无 ok=fail-closed 未确认），单测钉两种可达路径
+2. triggerSyncTerminalStrict 状态机单测：非终态委托、未连接静默、终态 treeOk 判定、冲突让位、预算熔断按未确认处置、失败告警含自救命令且 exitCode=1，全绿
+3. 受影响面既有测试零回归（platform-sync 两件 + archive-chain + change-delete + run-complete-step-archive + flow-done-fail-brief）
+4. 语法门（node test/check-syntax.mjs）通过；dogfood flow done 真实走一遍新强校验路径（平台健康时静默 confirmed）

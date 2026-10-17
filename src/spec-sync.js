@@ -665,10 +665,20 @@ function attributeChangeLabel(paths) {
   return names.size === 1 ? [...names][0] : 'full-tree'
 }
 
+/**
+ * spec 树增量同步（以服务器清单为锚做全树 diff → POST ops）。
+ *
+ * 返回契约（2026-10-17-archive-half-state-location-stuck-active）：`ok` 字段表达
+ * 「本轮文件树通道是否确认收敛」——ok:true = 确认（无差异 no-op / 推送成功 / 冲突自愈
+ * / 未连接本地合法态）；ok:false = 确认失败（清单/推送 HTTP 失败、异常）；**无 ok 字段
+ * = 未确认**（未决冲突待人裁等，fail-closed）。终态强校验消费方
+ * （run/shared.js triggerSyncTerminalStrict）按 `ok === true` 判收敛——历史调用方
+ * （syncSpecTreeOnly / resolve forcePush 等）不消费该字段，向后兼容。
+ */
 export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   if (!platform || !platform.url || !platform.token) {
     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
-    return { synced: 0 };
+    return { synced: 0, ok: true };
   }
   // 全树入口（platform sync 无 --change，2026-10-11-sync-conflict-tri-fix FR-03）
   // changeName=null：日志用 full-tree 标签，冲突归因见下方 conflictLabel。
@@ -705,7 +715,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       if (failCount >= FAIL_STREAK_ESCALATE_AT) {
         console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
       }
-      return { synced: 0 };
+      return { synced: 0, ok: false };
     }
     const body = await res.json().catch(() => ({}));
     serverManifest = body.files || {};
@@ -716,7 +726,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
       console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
     }
-    return { synced: 0 };
+    return { synced: 0, ok: false };
   }
 
   // 2. walk/hash/diff
@@ -758,7 +768,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     debugLog(`[spec-sync] 无差异，跳过同步: ${logLabel}`);
     clearStaleTombstoneMarkers(specRoot);
     clearFailStreak(specRoot, logLabel);
-    return { synced: 0 };
+    return { synced: 0, ok: true };
   }
 
   // 3. POST ops
@@ -782,7 +792,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       if (failCount >= FAIL_STREAK_ESCALATE_AT) {
         console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
       }
-      return { synced: 0 };
+      return { synced: 0, ok: false };
     }
     const body = await res.json().catch(() => ({}));
     if (body.conflict) {
@@ -855,7 +865,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
         noteSyncSuccess();
         clearFailStreak(specRoot, logLabel);
         console.log(`[spec-sync] 冲突已自动消解（0 个需人工裁决；本会话改动 ${ops.length - followers.length > 0 ? '已同步' : '无差异'}）: ${conflictLabel}`);
-        return { synced: Math.max(ops.length - followers.length, 0), conflict: false, autoResolved: followers.length };
+        return { synced: Math.max(ops.length - followers.length, 0), ok: true, conflict: false, autoResolved: followers.length };
       }
       let conflictPath = null;
       try {
@@ -901,7 +911,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     clearStaleTombstoneMarkers(specRoot);
     writeLastSyncTs(specRoot);
     writeBaseSnapshot(specRoot, localFiles);
-    return { synced: ops.length };
+    return { synced: ops.length, ok: true };
   } catch (err) {
     const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
     const line = `[spec-sync] 同步异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
@@ -909,7 +919,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
     if (failCount >= FAIL_STREAK_ESCALATE_AT) {
       console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
     }
-    return { synced: 0 };
+    return { synced: 0, ok: false };
   }
 }
 

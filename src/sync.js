@@ -916,8 +916,14 @@ export class SyncManager {
         // 树根与进度锚点同源（safePlatformSpecDir，平台模式 → specRoot）：此前硬编码
         // cwd/.sillyspec，平台模式下该目录只有 local.yaml（被 walk 排除）→ 本地树恒空
         // → 服务器清单全量 delete（BUG-01，computeSpecOps 护栏为第二道防线）。
+        // treeOk 透传（2026-10-17-archive-half-state-location-stuck-active）：树通道失败
+        // 不影响进度上行返回值（既有语义不变），但结果对象必须如实携带——终态强校验
+        // （triggerSyncTerminalStrict）按 treeOk 判「平台 location 是否收敛」，吞进
+        // debugLog 会让归档半态（status=archived + location=active）静默存活。
+        let treeOk = false;
         try {
-          await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
+          const treeResult = await syncSpecTree(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), this._getPlatform(), changeName, { signal: opts.signal });
+          treeOk = treeResult && treeResult.ok === true;
         } catch (err) {
           debugLog(`[sync] spec 树增量同步失败（不影响进度）: ${changeName}: ${err.message}`);
         }
@@ -934,7 +940,7 @@ export class SyncManager {
           }
         }
 
-        return { synced: 1, errors: [] };
+        return { synced: 1, errors: [], treeOk };
       }
 
       if (res.status !== 409) {

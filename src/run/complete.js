@@ -22,7 +22,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { writeCloseTraceArtifacts, projectTraceFaceRows } from '../flow-parity.js'
 import { withFileLock } from '../quicklog.js'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer, isRetiredAutoBrainstormTable, printRetiredAutoBrainstormRefusal } from './shared.js'
+import { triggerSync, triggerSyncTerminalStrict, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer, isRetiredAutoBrainstormTable, printRetiredAutoBrainstormRefusal } from './shared.js'
 import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
 
 // 退役自动道守门（2026-10-14-brainstorm-auto-retire）：brainstorm-auto 4 步表已随自动道删除。
@@ -828,7 +828,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
     pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName, platformOpts, { completion: true })
+    // 终态强校验（2026-10-17-archive-half-state-location-stuck-active）：状态机驱动——仅
+    // DB status 已达 archived/deleted（archive 阶段完成即此态）走内联强校验，其余阶段
+    // 原样委托 triggerSync（后台化不变，非终态零行为变化）。见 run/shared.js 契约注释。
+    await triggerSyncTerminalStrict(cwd, changeName, platformOpts, { completion: true })
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)

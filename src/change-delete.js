@@ -12,7 +12,7 @@
  *     不因删变更丢用户唯一副本的代码；顺带清 execute/stage-review runId marker
  *     + 该变更的 runtime 取证（pruneArchivedChangeRuntime））
  *   - git：safeGit add -A 暂存目录删除（best-effort，对齐 archive CLI 下沉 git add）
- *   - 平台：triggerSync 推终态（sync.js 对 status='deleted' 上行墓碑，平台收敛软删）
+ *   - 平台：triggerSyncTerminalStrict 推终态（sync.js 对 status='deleted' 上行墓碑，平台收敛软删；文件树推送失败显性化）
  *
  * 两段式安全（对齐 --cleanup-remnant / --cleanup-ghosts / --align-execute-progress 家族）：
  * 默认 dry-run 只报告将发生什么，--confirm 才执行。
@@ -23,7 +23,7 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { safeGit } from './git-helper.js';
-import { assertSafeChangeName, triggerSync } from './run/shared.js';
+import { assertSafeChangeName, triggerSyncTerminalStrict } from './run/shared.js';
 import { archiveWorktreeCleanup } from './run/complete-handlers.js';
 
 function countFiles(dir) {
@@ -156,10 +156,11 @@ export async function deleteChange({ cwd, specDir = null, changeName, confirm = 
       safeGit(cwd, ['add', '-A', '--', relDir]);
     }
   } catch { /* 非 git 仓等场景：删除在 git status 可见，暂存非必需 */ }
-  // 5. 平台终态/墓碑上行（triggerSync 内建 8s 熔断 + 未连接静默；change-delete 是终态
-  //    一次性命令，await 保证墓碑发出后再退出，输出顺序确定）
+  // 5. 平台终态/墓碑上行（终态强校验：内联有界同步，文件树推送失败显性化——🚨 告警 +
+  //    自救命令 + exit 1；未连接静默。change-delete 是终态一次性命令，await 保证墓碑
+  //    发出后再退出，输出顺序确定）
   try {
-    await triggerSync(cwd, changeName, { specRoot: specBase });
+    await triggerSyncTerminalStrict(cwd, changeName, { specRoot: specBase });
   } catch (e) {
     warnings.push(`平台终态同步失败（不阻断删除，下次常规同步重试）：${e.message}`);
   }
