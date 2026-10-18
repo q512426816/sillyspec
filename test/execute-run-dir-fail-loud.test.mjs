@@ -145,7 +145,7 @@ console.log('\n--- ② 主写入点不变量（run execute 启动）：marker �
   const r = runCli(cwd, ['run', 'execute', '--change', cn, '--skip-approval'])
   assert(r.status === 0, `execute 启动 exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-120)}）`)
 
-  const marker = join(runtimeRoot, `current-execute-run-id-${cn}`)
+  const marker = join(runtimeRoot, 'state', `current-execute-run-id-${cn}`)
   assert(existsSync(marker), 'marker 已写入')
   const runId = readFileSync(marker, 'utf8').trim()
   assert(existsSync(join(runtimeRoot, 'execute-runs', runId, 'tasks')),
@@ -162,13 +162,14 @@ console.log('\n--- ③ stage.js：mkdir 失败 → 直接 throw → CLI exit 1 +
     '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n')
   mkdirSync(join(cwd, 'src'), { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n') // 障碍：目录位被普通文件占用
 
   const r = runCli(cwd, ['run', 'execute', '--change', cn, '--skip-approval'])
   assert(r.status === 1, `stage.js 主写入点失败 → exit 1（实际 ${r.status}）`)
   assert(r.combined.includes('execute run 目录创建失败'), '输出含「execute run 目录创建失败」')
   assert(r.combined.includes('请检查该路径是否为普通文件/只读'), '输出含修复指引（普通文件/只读）')
-  assert(!existsSync(join(runtimeRoot, `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
+  assert(!existsSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
 }
 
 // ── ④ 分层语义 B：prompt.js 渲染路径降级（console.error 留痕，不抛，prompt 正常输出）──
@@ -181,6 +182,7 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保�
   writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
     '# Plan\n\n## Wave 1\n\n- [ ] task-01: a\n')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n') // 障碍
 
   const { getStageSteps } = await import('../src/run/shared.js')
@@ -202,7 +204,7 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保�
   // 降级注入的 runId 已替换占位符（无残留 {EXECUTE_RUN_ID}）
   const leftover = logBuf.match(/\{EXECUTE_RUN_ID\}/)
   assert(!leftover, 'prompt 内 {EXECUTE_RUN_ID} 已被降级 runId 替换')
-  assert(!existsSync(join(runtimeRoot, `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
+  assert(!existsSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
 }
 
 // ── ⑤ 退役行为钉（2026-09-26-task-review-retire）：execute-runs 损坏 + marker 缺失不再阻断完成 ──
@@ -241,7 +243,7 @@ console.log('\n--- ⑤ 退役钉：execute-runs 损坏/marker 缺失 → execute
   // 障碍：execute-runs 改普通文件 + 删 marker（原 Task Review Gate fallback 会 generate+mkdir 抛）
   rmSync(join(runtimeRoot, 'execute-runs'), { recursive: true, force: true })
   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n')
-  rmSync(join(runtimeRoot, `current-execute-run-id-${cn}`), { force: true })
+  rmSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), { force: true })
 
   r = runCli(cwd, ['run', 'execute', '--done', '--change', cn, '--skip-approval', '--output', 'step done'])
   assert(r.status === 0, `Task Review 退役后：损坏 execute-runs 不阻断 → exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-220)}）`)
@@ -276,7 +278,7 @@ console.log('\n--- ⑥ task-review.js：mkdir 失败 → console.error 留痕但
   git(cwd, ['add', '-A']); git(cwd, ['commit', '-q', '-m', 'work'])
 
   const { generateTaskReviewDrafts } = await import('../src/task-review.js')
-  const marker = join(runtimeRoot, `current-execute-run-id-${cn}`)
+  const marker = join(runtimeRoot, 'state', `current-execute-run-id-${cn}`)
 
   // 成功侧：marker + tasks 目录齐备（不变量），task-01 草稿落盘
   let r1 = (await capture(() => generateTaskReviewDrafts({ changeName: cn, cwd }))).result

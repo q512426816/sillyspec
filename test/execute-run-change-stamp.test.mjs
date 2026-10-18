@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 /**
  * 坑 worktree-cleanup-marker-chain 根治回归：execute run 的 change 归属戳 + 归属化解析
  *
@@ -50,7 +51,8 @@ function writeReview(runtimeRoot, runId, taskId, specVerdict = 'pass', qualityVe
   }))
 }
 function writeMarker(runtimeRoot, changeName, runId) {
-  fs.writeFileSync(path.join(runtimeRoot, 'current-execute-run-id-' + changeName), runId + '\n')
+  mkdirSync(path.join(runtimeRoot, 'state'), { recursive: true })
+  fs.writeFileSync(path.join(runtimeRoot, 'state', 'current-execute-run-id-' + changeName), runId + '\n')
 }
 const cleanup = root => { try { fs.rmSync(root, { recursive: true, force: true }) } catch {} }
 const RUN_A = 'exec-2026-08-19-100000'

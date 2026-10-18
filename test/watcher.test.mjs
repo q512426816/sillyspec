@@ -187,7 +187,8 @@ test('buildSnapshot: 已知产物 hash+checkbox 计数+任务卡+scan stat（三
   writeFileSync(join(changeDir, 'notes-unknown.md'), 'noise') // 未映射文件不入快照
   const runtimeRoot = join(root, '.runtime')
   mkdirSync(runtimeRoot, { recursive: true })
-  writeFileSync(join(runtimeRoot, 'verify-quality-scan-c1.json'), '{}')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'verify-quality-scan-c1.json'), '{}')
 
   const s = buildSnapshot({
     changeDir,
@@ -249,6 +250,7 @@ test('孤儿自愈：正常路径真子进程起跑（锁落盘+存活）——�
   const runtimeRoot = join(specBase, '.runtime')
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(changeDir, 'proposal.md'), '# p\n')
   const child = spawn(process.execPath, ['--input-type=module', '-e',
     `import(${JSON.stringify(new URL('../src/watcher.js', import.meta.url).href)}).then(m => m.runWatcherFromEnv({

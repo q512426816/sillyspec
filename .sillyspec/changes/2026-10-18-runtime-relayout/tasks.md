@@ -9,5 +9,5 @@ created_at: 2026-10-18T03:09:27.361Z
 - [x] task-03: 日志与备份产物接入 runtimeTempPath（watcher.js watcher.log+lock tmp / run-bg-sync spec-sync-bg.log / git-helper.js exclude 面 / consistency-doctor.js audit.log / db.js corrupt / progress.js pre-import）+ temp/ 落径与删除不阻断用例跑绿
 - [x] task-04: pruneArchivedChangeRuntime 扩 state/ 19 类精确名回收（保留根路径兜底）+ 回收用例跑绿
 - [x] task-05: CLI 入口（src/index.js 主分发前）与 doctor 接 migrateRuntimeLayout + 入口迁移用例跑绿
-- [ ] task-06: 既有测试面路径字面量修正（26 文件）+ 全量测试套绿
-- [ ] task-07: 本仓 .sillyspec/.runtime 执行迁移 + 一次性遗留物（repro-*.mjs、anchor-*.mjs、full-test-*.log 等）归置 temp/ + 根目录文件计数验收 ≤60 + flow status 冒烟
+- [x] task-06: 既有测试面路径字面量修正（26 文件）+ 全量测试套绿
+- [x] task-07: 本仓 .sillyspec/.runtime 执行迁移 + 一次性遗留物（repro-*.mjs、anchor-*.mjs、full-test-*.log 等）归置 temp/ + 根目录文件计数验收 ≤60 + flow status 冒烟

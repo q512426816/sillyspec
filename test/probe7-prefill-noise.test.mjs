@@ -101,7 +101,8 @@ function buildFixture() {
   const runtimeRoot = join(specBase, '.runtime')
   const runId = 'exec-2026-10-16-120000'
   mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-06'), { recursive: true })
-  writeFileSync(join(runtimeRoot, 'current-execute-run-id-pn'), runId + '\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'current-execute-run-id-pn'), runId + '\n')
   writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-06', 'review.json'), JSON.stringify({
     schemaVersion: 1, task: 'task-06',
     changedFiles: ['src/only.js', 'agent/tests/new_wave.test.mjs'],

@@ -412,6 +412,7 @@ function buildDeltaFixture({ backendEndpoints, baselineEps } = {}) {
   const runtimeRoot = join(root, 'runtime')
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify({
     schemaVersion: 1,
     change: cn,

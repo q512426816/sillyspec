@@ -277,7 +277,8 @@ function writeWorktreeMeta(specBase, cn) {
 const FIXED_RUN_ID = 'exec-2026-10-09-100000'
 function writePassingTaskReviews(specBase, cn, gitHead) {
   const runtimeRoot = join(specBase, '.runtime')
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
   for (const taskNum of ['01', '02', '03']) {
     const dir = join(runtimeRoot, 'execute-runs', FIXED_RUN_ID, 'tasks', `task-${taskNum}`)
     mkdirSync(dir, { recursive: true })

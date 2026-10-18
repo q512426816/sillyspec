@@ -2805,6 +2805,7 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
               try {
                 const runtimeDir = join(cwd, '.sillyspec', '.runtime');
                 mkdirSync(runtimeDir, { recursive: true });
+                try { mkdirSync(join(runtimeDir, 'state'), { recursive: true }); } catch { /* 回执 fail-open */ }
                 writeFileSync(runtimeStatePath(runtimeDir, `execute-cleanup-${changeName}.json`), JSON.stringify({
                   change: changeName, cleanedAt: new Date().toISOString(),
                   reason: 'execute-completed-no-unapplied-changes',

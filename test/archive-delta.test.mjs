@@ -137,6 +137,7 @@ function buildFixture({
   const changeDir = join(specRoot, 'changes', cn)
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   if (mapYaml != null) {
     mkdirSync(join(specRoot, 'docs', project, 'modules'), { recursive: true })
     writeFileSync(join(specRoot, 'docs', project, 'modules', '_module-map.yaml'), mapYaml)
@@ -153,7 +154,7 @@ function buildFixture({
   const garbage = join(runtimeRoot, 'verify-runs', 'garbage-dir')
   mkdirSync(garbage, { recursive: true })
   writeFileSync(join(garbage, 'reconcile-result.json'), JSON.stringify({ change: CN, matched: ['src/from-garbage.js'] }))
-  if (pathspec != null) writeFileSync(join(runtimeRoot, `apply-pathspec-${cn}.txt`), pathspec)
+  if (pathspec != null) writeFileSync(join(runtimeRoot, 'state', `apply-pathspec-${cn}.txt`), pathspec)
   for (const name of extraChangeDirs) mkdirSync(join(specRoot, 'changes', name), { recursive: true })
   return { root, specRoot, changeDir, runtimeRoot, cn, project }
 }
@@ -221,8 +222,9 @@ console.log('=== 1. collectDeltaSources（四源 fail-soft 采集）===\n')
     `apply-pathspec-<change>.txt 逐行为交付清单（CRLF/空行容错；got ${JSON.stringify(fbRes.deliverables)}）`)
 
   const ghostFx = buildFixture({ cn: '2026-09-05-ghost', extraChangeDirs: [], runs: [], pathspec: null })
-  mkdirSync(join(ghostFx.runtimeRoot, `apply-pathspec-${OTHER_CN}.txt`).replace(/[^\\/]*$/, ''), { recursive: true })
-  writeFileSync(join(ghostFx.runtimeRoot, `apply-pathspec-${OTHER_CN}.txt`), 'src/not-mine.js\n')
+  mkdirSync(join(ghostFx.runtimeRoot, 'state', `apply-pathspec-${OTHER_CN}.txt`).replace(/[^\\/]*$/, ''), { recursive: true })
+  mkdirSync(join(ghostFx.runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(ghostFx.runtimeRoot, 'state', `apply-pathspec-${OTHER_CN}.txt`), 'src/not-mine.js\n')
   const ghostRes = collectDeltaSources({ changeDir: ghostFx.changeDir, specRoot: ghostFx.specRoot, project: ghostFx.project, runtimeRoot: ghostFx.runtimeRoot })
   assert(ghostRes.deliverables.length === 0, '兜底清单按 change 名精确匹配（他人 apply-pathspec 不串台）')
 }

@@ -83,6 +83,7 @@ console.log('\n--- ③ scanResumeCheck advisory 三态 ---')
   const { cwd, specBase } = fixture('dsf-adv-', cn, true)
   const rt = join(specBase, '.runtime')
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   const run = () => {
     const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' '))
     return Promise.resolve(executeScanResumeCheck(cwd, {})).then(() => { console.log = ol; return logs.join('\n') })

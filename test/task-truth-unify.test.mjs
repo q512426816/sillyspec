@@ -37,7 +37,8 @@ test('autoCheck：review pass 勾 / fail 不勾（真源 = review.json verdict�
     mkdirSync(join(changeDir, 'tasks'), { recursive: true })
     mkdirSync(join(rt, 'execute-runs', 'exec-2026-09-11-000000-x1', 'tasks', 'task-01'), { recursive: true })
     mkdirSync(join(rt, 'execute-runs', 'exec-2026-09-11-000000-x1', 'tasks', 'task-02'), { recursive: true })
-    writeFileSync(join(rt, 'current-execute-run-id-c1'), 'exec-2026-09-11-000000-x1\n')
+    mkdirSync(join(rt, 'state'), { recursive: true })
+    writeFileSync(join(rt, 'state', 'current-execute-run-id-c1'), 'exec-2026-09-11-000000-x1\n')
     writeFileSync(join(changeDir, 'tasks.md'), '# tasks\n\n- [ ] task-01: 甲\n- [ ] task-02: 乙\n')
     // task-01 pass（schemaVersion/verdicts 最小形）→ 勾；task-02 fail → 不勾
     writeFileSync(join(rt, 'execute-runs', 'exec-2026-09-11-000000-x1', 'tasks', 'task-01', 'review.json'),

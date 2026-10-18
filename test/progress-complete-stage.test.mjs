@@ -13,7 +13,7 @@
  *
  * 断言三件套：DB（pm.read）+ stdout（runCapturing）+ 文件系统（history/audit.log）。
  */
-import { writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
+import {  writeFileSync, existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { runCapturing, makeRepo, initChange, seedStage, cleanup, report } from './_complete-step-harness.mjs'
 
@@ -81,7 +81,7 @@ console.log('\n--- validate 层：force 强制放行（warn + audit.log + 推进
   assert(r.stdout.includes('已记录审计日志'), 'stdout 提示已记审计')
 
   // audit.log 落地（仅 force 时写）
-  const auditPath = join(specBase, '.runtime', 'audit.log')
+  const auditPath = join(specBase, '.runtime', 'temp', 'audit.log')
   assert(existsSync(auditPath), 'audit.log 创建（force 专属副作用）')
   const auditContent = readFileSync(auditPath, 'utf8')
   const lines = auditContent.trim().split('\n')
@@ -193,7 +193,7 @@ console.log('\n--- W1 stale 放行：存在 stale 步骤 + force → audit + 回
   assert(r.stdout.includes('✅ 阶段 verify 已标记为完成'), 'force 放行 → print ✅')
 
   // audit.log 落地（force 写入，含 stale 步骤名）
-  const auditPath = join(specBase, '.runtime', 'audit.log')
+  const auditPath = join(specBase, '.runtime', 'temp', 'audit.log')
   assert(existsSync(auditPath), 'audit.log 存在')
   const auditContent = readFileSync(auditPath, 'utf8')
   const lines = auditContent.trim().split('\n')

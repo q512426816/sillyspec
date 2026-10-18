@@ -99,6 +99,7 @@ test('claimExecuteRunId 与哈希基准兼容：碰撞重试产出两段后缀�
 test('真实 fs 障碍：execute-runs 被普通文件占用 → 原样上抛（分层 fail 语义交写入点）', () => {
   const runtimeRoot = mkRuntime()
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n')
   assert.throws(() => claimExecuteRunId(runtimeRoot, BASE))
 })

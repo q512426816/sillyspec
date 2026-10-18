@@ -71,6 +71,7 @@ function makeKnowledge(base) {
 
 function writeHits(runtimeDir, lines) {
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   writeFileSync(join(runtimeDir, 'knowledge-hits.jsonl'), lines.join('\n') + '\n')
 }
 

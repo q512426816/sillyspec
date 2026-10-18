@@ -165,7 +165,7 @@ console.log('\n=== 6. resolve 空平台进度不 import + base_ts 不清空（sy
   // 死端口平台地址：keep-local 自动重推失败走「未成功」分支，不影响断言
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'platform:\n  url: http://127.0.0.1:1\n  token: tok\n', 'utf8')
   // 手工落冲突文件（409 非 JSON body 场景的真实形态：platform_progress null）
-  const cfPath = join(cwd, '.sillyspec', '.runtime', 'sync-conflict-rt-change.json')
+  const cfPath = join(cwd, '.sillyspec', '.runtime', 'state', 'sync-conflict-rt-change.json')
   mkdirSync(join(cwd, '.sillyspec', '.runtime'), { recursive: true })
   writeFileSync(cfPath, JSON.stringify({
     change: 'rt-change',

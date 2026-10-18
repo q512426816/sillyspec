@@ -45,7 +45,7 @@ test('reportGateSnapshotFallback：⚠️ 告警块可见 + gate_snapshot_fallba
     const joined = warns.join(' | ')
     assert.ok(joined.includes('gate-snapshot-fallback') && joined.includes('boom-reason'), `告警块含标记与原因（实得：${joined.slice(0, 200)}）`)
     assert.ok(warns.some((w) => w.includes('主仓口径')), '告警块明示口径影响')
-    const tally = JSON.parse(readFileSync(join(dir, '.sillyspec', '.runtime', 'friction-tally-c1.json'), 'utf-8'))
+    const tally = JSON.parse(readFileSync(join(dir, '.sillyspec', '.runtime', 'state', 'friction-tally-c1.json'), 'utf-8'))
     assert.equal(tally.events.gate_snapshot_fallback.count, 1, '摩擦事件计数 1')
     assert.ok(String(tally.events.gate_snapshot_fallback.lastAt), '事件带 lastAt')
     assert.ok((tally.history || []).some((h) => h.type === 'gate_snapshot_fallback' && String(h.detail || '').includes('测试门')), 'history 条目 detail 携来源')
@@ -68,7 +68,7 @@ test('noAI 质量扫描步：快照慢性失败经真实调用点产出 ⚠️ �
       await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     } finally { console.warn = orig }
     assert.ok(warns.some((w) => w.includes('noAI 质量扫描步') && w.includes('gate-snapshot-fallback')), `真实调用点告警可见（实得：${warns.join(' || ').slice(0, 200)}）`)
-    const tally = JSON.parse(readFileSync(join(dir, '.sillyspec', '.runtime', 'friction-tally-c1.json'), 'utf-8'))
+    const tally = JSON.parse(readFileSync(join(dir, '.sillyspec', '.runtime', 'state', 'friction-tally-c1.json'), 'utf-8'))
     assert.ok(tally.events.gate_snapshot_fallback && tally.events.gate_snapshot_fallback.count >= 1, '经真实调用点落 gate_snapshot_fallback 台账')
   } finally {
     try { rmSync(dir, { recursive: true, force: true }) } catch {}

@@ -1342,6 +1342,7 @@ export class SyncManager {
       try {
         const runtimeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime');
         mkdirSync(runtimeDir, { recursive: true });
+        try { mkdirSync(join(runtimeDir, 'state'), { recursive: true }); } catch { /* marker fail-open */ }
         writeFileSync(runtimeStatePath(runtimeDir, `sync-docs-lastpush-${changeName}.json`), JSON.stringify({ hash: docsFingerprint, at: Date.now() }) + '\n', 'utf8');
       } catch { /* marker 失败只损失去重（下轮多推一次），不影响同步 */ }
     }
@@ -2343,9 +2344,11 @@ export class SyncManager {
     if (!specDir) return [];
     const runtimeDir = join(specDir, '.runtime');
     if (!existsSync(runtimeDir)) return [];
+    // 2026-10-18 布局分层：冲突文件落 state/；根目录扫描保留旧布局兜底
     let files = [];
-    try { files = readdirSync(runtimeDir); }
-    catch { return []; }
+    for (const dir of [join(runtimeDir, 'state'), runtimeDir]) {
+      try { files.push(...readdirSync(dir)); } catch { /* 可选层缺失跳过 */ }
+    }
     const conflicts = [];
     // HUB-08：同时扫描进度冲突（sync-conflict-*）与 spec 树冲突（spec-sync-conflict-*），
     // type 字段供 status 展示与 resolve 分流
@@ -2355,7 +2358,7 @@ export class SyncManager {
       else if (f.startsWith('spec-sync-conflict-') && f.endsWith('.json')) prefix = 'spec-sync-conflict-';
       else continue;
       const type = prefix === 'sync-conflict-' ? 'progress' : 'spec-tree';
-      const filePath = join(runtimeDir, f);
+      const filePath = existsSync(runtimeStatePath(runtimeDir, f)) ? runtimeStatePath(runtimeDir, f) : join(runtimeDir, f);
       try {
         const cf = JSON.parse(readFileSync(filePath, 'utf8'));
         conflicts.push({

@@ -39,6 +39,7 @@ function makeFixture() {
   mkdirSync(changeDir, { recursive: true })
   const runtimeRoot = join(root, '.sillyspec', '.runtime')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const mdPath = join(changeDir, 'verify-result.md')
   return { root, changeDir, runtimeRoot, mdPath }
 }

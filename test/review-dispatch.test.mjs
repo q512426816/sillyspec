@@ -232,7 +232,7 @@ test('e2e：状态迁移序列 queued→running→completed + 停滞注入（las
     assert.equal(rec.lastState, 'running', '状态迁移已写入在途记录')
     // 停滞注入：回拨 lastStateAt 超窗 → stalled 提示三选项
     const { writeFileSync: wf } = await import('node:fs')
-    wf(join(sb, '.runtime', 'review-dispatch-c1.json'), JSON.stringify({ ...rec, lastStateAt: Date.now() - 16 * 60_000 }))
+    wf(join(sb, '.runtime', 'state', 'review-dispatch-c1.json'), JSON.stringify({ ...rec, lastStateAt: Date.now() - 16 * 60_000 }))
     const s2 = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli, stallMs: 15 * 60_000 })
     assert.equal(s2.stalled, true, 'running 超 15 分钟无迁移 → stalled')
     assert.ok(s2.stallHint.includes('--kill') && s2.stallHint.includes('继续等'), '停滞提示三选项（继续等/kill/降级）')

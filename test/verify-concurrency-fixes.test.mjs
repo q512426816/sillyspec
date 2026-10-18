@@ -41,6 +41,7 @@ console.log('=== ① verify 服务 PID 分片回收（reapVerifyServices）===\n
   const cwd = mkTmp('pids')
   const runtimeDir = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   // 两个「服务进程」：A 会话与 B 会话各自的长驻子进程
   const spawnSrv = () => {
     const p = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], { stdio: 'ignore' })
@@ -75,6 +76,7 @@ console.log('\n=== ①b 进程树击杀：只登记 shell 包装 PID 也连带�
   const cwd = mkTmp('treekill')
   const runtimeDir = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   // 「python 服务」模拟：node 子进程把自己的 PID 写到文件后长驻；经 shell 包装启动（用户实锤形态）
   const childPidFile = join(runtimeDir, 'child.pid')
   const childScript = `require('fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid)); setInterval(() => {}, 60000)`

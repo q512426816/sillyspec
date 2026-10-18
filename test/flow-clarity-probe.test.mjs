@@ -83,7 +83,7 @@ test('① 新建路径输出含选道自检段＋落首版快照；无 hindsight
   assert.match(s.stdout, /选道自检——对本需求，你还有没有必须问用户才能动手的问题？/, '盘问重述措辞在场')
   assert.match(s.stdout, /run brainstorm --change/, '头脑风暴指路在场')
   assert.ok(!/route-hindsight/.test(s.stdout), '无 hindsight 文件 → 零 hindsight 行（输出与现状一致）')
-  assert.ok(existsSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${change}.json`)), 'start 落首版快照')
+  assert.ok(existsSync(join(cwd, SPEC, '.runtime', 'state', `route-hindsight-baseline-${change}.json`)), 'start 落首版快照')
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -128,7 +128,7 @@ test('② adopt 路径：头脑风暴产物收编输出不含自检段；收编�
   assert.match(s.stdout, /收编/, '收编路径在场')
   assert.ok(!/选道自检/.test(s.stdout), 'adopt 输出不含自检段（无重复仪式）')
   assert.ok(!/route-hindsight：上个/.test(s.stdout), 'adopt 不注入历史提示')
-  assert.ok(existsSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${change}.json`)), 'adopt 落首版快照')
+  assert.ok(existsSync(join(cwd, SPEC, '.runtime', 'state', `route-hindsight-baseline-${change}.json`)), 'adopt 落首版快照')
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -176,7 +176,7 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   execFileSync('git', ['commit', '-q', '-m', 'work (task-01) (task-02) (task-03)'], { cwd, stdio: 'pipe' })
   const cd = join(cwd, SPEC, 'changes', c1)
   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
-  const base = readFileSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${c1}.json`), 'utf8')
+  const base = readFileSync(join(cwd, SPEC, '.runtime', 'state', `route-hindsight-baseline-${c1}.json`), 'utf8')
   assert.ok(JSON.parse(base).design.includes(designV1.split('\n')[0] || ''), '快照锚定起草时点（start 时点内容）')
   // v2 触发器=tasks 改写率（2026-10-04-thin-docs-v2：design 四问是锚、proposal/requirements
   // 书写是合法澄清——hindsight 的「规划翻churn」信号落在 tasks 镜像行大改 >0.6，阈值原生支持）。

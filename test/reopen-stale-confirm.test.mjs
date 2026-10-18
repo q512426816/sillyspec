@@ -119,7 +119,7 @@ console.log('\n--- 场景 2：--done --confirm → 回填生效 + audit.log reop
   assert(staleSteps.length === 0, `DB: stale 全部回填（实际剩 ${staleSteps.length}）`)
   assert(after.stages.brainstorm.steps.every(s => s.status === 'completed'), 'DB: 全部步骤 completed')
 
-  const auditPath = join(specBase, '.runtime', 'audit.log')
+  const auditPath = join(specBase, '.runtime', 'temp', 'audit.log')
   assert(existsSync(auditPath), 'audit.log 存在')
   const entries = readFileSync(auditPath, 'utf8').trim().split('\n').map(l => JSON.parse(l))
   const backfillEntry = entries.find(e => e.action === 'reopen-stale-backfill')
@@ -181,7 +181,7 @@ console.log('\n--- 场景 3：progress complete-stage 遇 stale 拒绝，--force
     assert(after.stages.verify.status === 'completed', 'DB: force 推进阶段为 completed')
     assert(after.stages.verify.steps.filter(s => s.status === 'stale').length === 0, 'DB: stale 步骤已回填为 completed')
 
-    const auditPath = join(specBase, '.runtime', 'audit.log')
+    const auditPath = join(specBase, '.runtime', 'temp', 'audit.log')
     if (existsSync(auditPath)) {
       const lines = readFileSync(auditPath, 'utf8').trim().split('\n')
       const lastEntry = JSON.parse(lines[lines.length - 1])

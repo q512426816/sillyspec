@@ -194,6 +194,7 @@ console.log('\n--- 验收 4：worktree-guard hook 合并多 session guard ---')
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   // 设当前阶段为 quick（readCurrentStage 直读 sillyspec.db current_stage）
   seedStageDb(repo, 'quick')
 
@@ -237,6 +238,7 @@ console.log('\n--- 验收 5：向后兼容（旧单文件 quick-guard.json 并�
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   seedStageDb(repo, 'quick')
 
   // 旧格式：单文件 quick-guard.json（task-03 前，无 session 目录）
@@ -269,6 +271,7 @@ console.log('\n--- 验收 5 补充：无 guard 目录时 hook 不崩 ---')
   const specBase = join(repo, '.sillyspec')
   const runtimeDir = join(specBase, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   seedStageDb(repo, 'quick')
 
   // 无 quick-sessions/ 目录、无 quick-guard.json → hook 不崩，放行非危险命令

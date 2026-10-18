@@ -29,6 +29,7 @@ modules:
       - src/friction-ledger.js
       - src/semantic-guard.js
       - src/runtime-hygiene.js
+      - src/runtime-paths.js
       - src/workspace.js
       - src/run.js
       - src/run/
@@ -377,6 +378,7 @@ blast:
       - src/semantic-guard.js
       - src/workspace.js
       - src/runtime-hygiene.js
+      - src/runtime-paths.js
       - src/progress/
       - src/db.js
       - src/db-engine.js

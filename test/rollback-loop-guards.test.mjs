@@ -49,7 +49,7 @@ test('坑2②：首次 _write 落 .bak 快照；5 分钟内二次写不重建（
   await pm.init(cwd)
   await pm.initChange(cwd, 'bak-change')
   pm._write(cwd, { currentChange: 'bak-change', currentStage: 'brainstorm', stages: {} }, 'bak-change')
-  const bak = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db.bak')
+  const bak = join(cwd, '.sillyspec', '.runtime', 'temp', 'sillyspec.db.bak')
   assert.ok(existsSync(bak), '首次写后 .bak 存在（_openWithFallback 获得恢复源）')
   const m1 = statSync(bak).mtimeMs
   pm._write(cwd, { currentChange: 'bak-change', currentStage: 'brainstorm', stages: {} }, 'bak-change')

@@ -90,7 +90,7 @@ test('① 首报：全幅横幅只列前 5 路径（截断防刷屏），冲突�
     assert.ok(banner.includes('等'), '超过 5 个带「等」截断')
     assert.ok(!banner.includes('f29.md'), '不整包 dump 全部 30 个路径')
     assert.ok(!banner.includes('"changes/'), '不再 JSON.stringify 整包 server_versions')
-    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`), 'utf8'))
+    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`), 'utf8'))
     assert.equal(cf.conflicting_paths.length, 30, '冲突文件仍记全量 30 路径')
     assert.equal(cf.server_versions[paths[29]], 30, '逐文件服务器版本在冲突文件里')
   } finally { m.restore() }
@@ -99,7 +99,7 @@ test('① 首报：全幅横幅只列前 5 路径（截断防刷屏），冲突�
 test('② 同集重复轮：单行提示、冲突文件不重写、返回 suppressed', async () => {
   const { specRoot, manifest, paths } = makeConflictFixture(30)
   const m = mockFetch({ manifest, postResponse: conflictAll(paths) })
-  const cfPath = join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`)
+  const cfPath = join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`)
   try {
     const r1 = await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, CN))
     const afterFirst = readFileSync(cfPath, 'utf8')
@@ -124,7 +124,7 @@ test('③ 冲突集增长：重新全幅横幅 + 重写冲突文件（变化要�
     manifest,
     postResponse: () => conflictAll(paths, extraOn ? { [`changes/${CN}/extra.md`]: 99 } : {}),
   })
-  const cfPath = join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`)
+  const cfPath = join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`)
   try {
     await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, CN))
     const afterFirst = readFileSync(cfPath, 'utf8')
@@ -149,7 +149,7 @@ test('④ 成功轮：清残留冲突标记（冲突已不存在，status 不永
     manifest,
     postResponse: () => (conflictMode ? conflictAll(paths) : { ok: true, new_versions: {}, conflict: false }),
   })
-  const cfPath = join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`)
+  const cfPath = join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`)
   try {
     const r1 = await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, CN))
     assert.equal(r1.result.conflict, true)
@@ -172,7 +172,8 @@ test('⑤ 冲突自动消解轮（全 follower）：同样清残留冲突标记'
   utimesSync(join(specRoot, 'changes/quicklog.md'), new Date(Date.now() - 3_600_000), new Date(Date.now() - 3_600_000))
   writeFileSync(join(specRoot, '.runtime', 'spec-sync-last-success.json'), JSON.stringify({ ts: Date.now() }), 'utf8')
   // 残留的历史冲突标记（上一轮真冲突遗留）
-  const stalePath = join(specRoot, '.runtime', 'spec-sync-conflict-quick-auto.json')
+  mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+  const stalePath = join(specRoot, '.runtime', 'state', 'spec-sync-conflict-quick-auto.json')
   writeFileSync(stalePath, JSON.stringify({ change: 'quick-auto', conflicting_paths: ['changes/old.md'] }), 'utf8')
 
   const m = mockFetch({
@@ -198,7 +199,7 @@ test('⑥ forcePush（resolve --keep-local 重推）不参与去重：真实判�
     manifest,
     postResponse: () => ({ ok: true, new_versions: {}, conflict: true, server_versions: { 'changes/a.md': srvVersion } }),
   })
-  const cfPath = join(specRoot, '.runtime', 'spec-sync-conflict-fp-chg.json')
+  const cfPath = join(specRoot, '.runtime', 'state', 'spec-sync-conflict-fp-chg.json')
   try {
     await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, 'fp-chg'))
     assert.ok(existsSync(cfPath), '首轮落冲突文件')

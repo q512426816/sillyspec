@@ -31,6 +31,7 @@ function mkProject(prefix) {
 function seedDb(cwd, { stage = 'verify' } = {}) {
   const runtimeDir = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   const db = new DB(join(runtimeDir, 'sillyspec.db'))
   db.init()
   const sq = db.getDb()

@@ -11,6 +11,7 @@
  * 无既有 validator 的 required-evidence 与 endpoints（容忍缺省，出场才算）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 
 function checkJson(path, fn) {
@@ -66,7 +67,7 @@ export async function validateChangeArtifacts({ cwd, specBase, changeName, runti
 
   // ③ task review.json（最新 execute run 的逐 task 产物——既有 validateReviewSchema）
   {
-    const markerPath = join(rt, `current-execute-run-id-${changeName}`)
+    const markerPath = runtimeStatePath(rt, `current-execute-run-id-${changeName}`)
     const runId = existsSync(markerPath) ? readFileSync(markerPath, 'utf8').trim() : null
     if (!runId) {
       checks.push({ artifact: 'task reviews', status: 'skip', reason: '无 execute run marker（未经 execute 或已清理）' })

@@ -114,7 +114,9 @@ function writeScanRecord(specBase, change, smokeResult, { withSmoke = true } = {
   mkdirSync(join(specBase, '.runtime'), { recursive: true })
   const rec = { schemaVersion: 1, source: 'cli-noai', testResult: { status: 'passed', command: 'npm test', exitCode: 0 } }
   if (withSmoke) rec.smokeResult = smokeResult
-  writeFileSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`), JSON.stringify(rec, null, 2))
+  mkdirSync(join(specBase, 'state'), { recursive: true })
+  mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specBase, '.runtime', 'state', `verify-quality-scan-${change}.json`), JSON.stringify(rec, null, 2))
 }
 
 /** 经 executeVerifyQualityScan 亲跑 smoke 并读回记录（三态/回退组的统一入口） */
@@ -134,7 +136,7 @@ async function runSmokeScan({ mode, snapEnabled = false, smokeLine = null, chang
     await qscan.executeVerifyQualityScan({ cwd: root, specBase, changeName: change })
   } catch (e) { threw = e }
   cap.restore()
-  const record = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`), 'utf8'))
+  const record = JSON.parse(readFileSync(join(specBase, '.runtime', 'state', `verify-quality-scan-${change}.json`), 'utf8'))
   return { root, specBase, change, record, threw, caught: cap.caught }
 }
 
@@ -298,7 +300,7 @@ test('④c 缺态注释行两态 + 态迁移原位替换 + 无记录 no-op；der
   assert.ok(r2.changed === true && scan2.machineEntries.length === 1 && scan2.absentState === null,
     '态迁移 not-configured → passed：缺态行原位替换为机器段条目（配置后亲跑自动更新）')
 
-  rmSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`))
+  rmSync(join(specBase, '.runtime', 'state', `verify-quality-scan-${change}.json`))
   const r3 = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
   assert.ok(r3.changed === false && String(r3.reason || '').includes('不注入'),
     '无 quality-scan smokeResult 记录 → ensure no-op 不注入（facts.smokeRan 由 task-03 判 not-ran）')
@@ -342,7 +344,7 @@ test('⑤ 一致性对比：一致零打回；改写 exit / 删机器段 / not-r
   writeScanRecord(specBase, change, { ...smokeRec, status: 'failed', exitCode: 3, reason: 'smoke 命令退出码 3' })
   const a4 = auditSmokeReceiptConsistency(md(okLine), specBase, change)
   const okA4 = a4.mismatches.length >= 1 && a4.mismatches.some((x) => x.note.includes('冒充'))
-  rmSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`))
+  rmSync(join(specBase, '.runtime', 'state', `verify-quality-scan-${change}.json`))
   const a5 = auditSmokeReceiptConsistency(md(okLine), specBase, change)
   const okA5 = a5.mismatches.length >= 1 && a5.mismatches.some((x) => x.note.includes('冒充'))
   assert.ok(okA4 && okA5,

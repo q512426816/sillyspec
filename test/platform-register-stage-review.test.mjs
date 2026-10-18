@@ -127,7 +127,7 @@ test('CLI register-stage-review：平台指针模式下 docHash 自动算，产�
     assert.equal(review.docHash, sha256File(join(f.changeDir, 'design.md')), 'docHash=CLI 亲算 sha256（主文档在平台目录）')
     assert.equal(review.reviewedFiles[0], 'changes/demo/design.md')
 
-    const marker = join(f.specRoot, '.runtime', 'current-stage-review-run-id-brainstorm-demo')
+    const marker = join(f.specRoot, '.runtime', 'state', 'current-stage-review-run-id-brainstorm-demo')
     assert.ok(existsSync(marker), 'marker 落平台 runtimeRoot')
 
     assert.ok(!existsSync(join(f.proj, '.sillyspec')), '修复后不应再在项目本地创建 .sillyspec')
@@ -159,7 +159,7 @@ test('CLI backfill-reviews：平台模式下 tasks/ 命中 + execute-run marker 
     // 平台路径解析贯通；无 diff 时草稿数为 0 属合法 fail-open 返回。
     const out = runCli(['backfill-reviews', '--change', 'demo'], f.proj)
     assert.ok(!/无 tasks\/ 目录/.test(out), '平台 specRoot 下 tasks/ 应被命中（本地路径则恒报无 tasks/）')
-    const marker = join(f.specRoot, '.runtime', 'current-execute-run-id-demo')
+    const marker = join(f.specRoot, '.runtime', 'state', 'current-execute-run-id-demo')
     assert.ok(existsSync(marker), 'execute-run marker 应落平台 runtimeRoot')
     assert.ok(!existsSync(join(f.proj, '.sillyspec')), '不应在项目本地创建 .sillyspec')
   } finally { cleanup(f.proj, f.specRoot) }

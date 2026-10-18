@@ -75,8 +75,10 @@ test('②③ 有 review → verdict/通道/刷新序数/代落盘/docHash 现势
   }))
   // marker（getLatestStageReviewRunId 优先读 marker）
   mkdirSync(runtimeRoot, { recursive: true })
-  writeFileSync(join(runtimeRoot, 'current-stage-review-run-id-plan-' + change), 'review-2026-09-16-010000')
-  writeFileSync(join(runtimeRoot, 'current-stage-review-run-id-execute-' + change), 'review-2026-09-16-030000')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'current-stage-review-run-id-plan-' + change), 'review-2026-09-16-010000')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'current-stage-review-run-id-execute-' + change), 'review-2026-09-16-030000')
 
   const r = runCLI(['review', 'status', '--change', change], { cwd })
   console.log('DBG-OUTPUT>>>', r.combined)

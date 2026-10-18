@@ -367,7 +367,8 @@ console.log('\n--- (C) 正当收尾放行：cleanup 后 --done 不再被 deps �
   {
     const f = makeGoneRepo()
     mkdirSync(f.runtimeRoot, { recursive: true })
-    writeFileSync(join(f.runtimeRoot, 'apply-pathspec-chg-c.txt'), 'src/a.py\nsrc/b.js\n')
+    mkdirSync(join(f.runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(f.runtimeRoot, 'state', 'apply-pathspec-chg-c.txt'), 'src/a.py\nsrc/b.js\n')
     const r = await call(f)
     assertEqual(r, true, 'C1: worktree gone + apply-pathspec 凭据 → 门放行（return true）')
   }
@@ -375,7 +376,8 @@ console.log('\n--- (C) 正当收尾放行：cleanup 后 --done 不再被 deps �
   {
     const f = makeGoneRepo()
     mkdirSync(f.runtimeRoot, { recursive: true })
-    writeFileSync(join(f.runtimeRoot, 'execute-cleanup-chg-c.json'), JSON.stringify({ change: 'chg-c', reason: 'x' }))
+    mkdirSync(join(f.runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(f.runtimeRoot, 'state', 'execute-cleanup-chg-c.json'), JSON.stringify({ change: 'chg-c', reason: 'x' }))
     const r = await call(f)
     assertEqual(r, true, 'C2: worktree gone + execute-cleanup 回执 → 门放行（return true）')
   }

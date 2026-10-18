@@ -43,7 +43,8 @@ async function fixture({ withReview = false, stage = 'execute' } = {}) {
       reviewedFiles: ['changes/c1/design.md'], docHash: 'deadbeef', requiredEvidence: [],
       reviewer: { channel: 'main-agent-self-review' }, reviewerNotes: 'fixture',
     }))
-    writeFileSync(join(rt, `current-stage-review-run-id-${stage}-c1`), 'review-run1')
+    mkdirSync(join(rt, 'state'), { recursive: true })
+    writeFileSync(join(rt, 'state', `current-stage-review-run-id-${stage}-c1`), 'review-run1')
   }
   return { cwd: proj, specBase, changeName: 'c1' }
 }

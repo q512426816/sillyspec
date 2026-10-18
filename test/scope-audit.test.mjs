@@ -299,7 +299,8 @@ test('归档形态：实时窗口空 + execute 快照在 → 记录态表（note
     // execute 时点快照（.runtime/scope-audit-<名>.json，行数为 execute 采集真值）
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-archived-change.json'), JSON.stringify({
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-archived-change.json'), JSON.stringify({
       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc1234',
       totals: { files: 1, additions: 42, deletions: 7 },
       rows: [{ path: 'src/a.js', planned: '修改', additions: 42, deletions: 7, kind: 'modified', verdict: 'planned' }],
@@ -334,7 +335,8 @@ test('归档快照冻结优先（quick-f5acdeeb）：窗口非空也出快照 + 
     // 快照：文件集冻结（1 文件）但行数缺失（— 形态：apply 后、锚落地前落盘）
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-frz-change.json'), JSON.stringify({
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-frz-change.json'), JSON.stringify({
       mode: 'full-flow', ok: true, degradedReason: 'baseAnchor=null（post-apply 形态无 diff 锚点）——行数列不可得',
       baseAnchor: null, totals: { files: 1, additions: 0, deletions: 0 },
       rows: [{ path: 'src/a.js', planned: '修改', additions: null, deletions: null, kind: 'modified', verdict: 'planned' }],
@@ -512,7 +514,8 @@ test('C-F01 freshActual：settled 默认出冻结快照，freshActual 绕过出�
     sh(d, ['tag', 'sillyspec-audit/sillyspec/fresh-change'])
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-fresh-change.json'), JSON.stringify({
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-fresh-change.json'), JSON.stringify({
       mode: 'full-flow', ok: true, baseAnchor: null, totals: { files: 1, additions: 1, deletions: 0 },
       rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],
       excluded: { foreignDeclared: [] }, savedAt: '2026-09-11T10:00:00.000Z',
@@ -611,7 +614,8 @@ test('A-F01 篡改检测：patch 被改 → getFileDiff 报 sha256 不匹配拒�
     writeFileSync(join(archivedDir, 'scope-audit.json'), JSON.stringify(snapBody))
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-tamper-change.json'), JSON.stringify(snapBody))
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-tamper-change.json'), JSON.stringify(snapBody))
     // 篡改 patch（与 json 记录的 hash 不再一致）
     writeFileSync(join(archivedDir, 'scope-audit.patch'), patchText.replace('+orig', '+TAMPERED'))
 
@@ -750,7 +754,8 @@ test('快照优先放宽（quick-bd84b852）：活跃 post-apply（无 meta=分�
     // execute 已收尾：无 worktree meta.json（post-apply 形态）+ 快照在
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-settle-change.json'), JSON.stringify({
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-settle-change.json'), JSON.stringify({
       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: 'abc1234',
       totals: { files: 1, additions: 9, deletions: 2 },
       rows: [{ path: 'src/a.js', planned: '修改', additions: 9, deletions: 2, kind: 'modified', verdict: 'planned' }],
@@ -859,7 +864,8 @@ test('审计级 patch 落盘与切片（--file 真·当时内容比对）：归�
     // 快照（记录态触发器）+ 冻结 patch（apply 时点内容：a1→a1/a2-frozen）
     const runtimeRoot = join(specBase, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'scope-audit-slice-change.json'), JSON.stringify({
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'scope-audit-slice-change.json'), JSON.stringify({
       mode: 'full-flow', ok: true, degradedReason: null, baseAnchor: base,
       totals: { files: 1, additions: 1, deletions: 0 },
       rows: [{ path: 'src/a.js', planned: '修改', additions: 1, deletions: 0, kind: 'modified', verdict: 'planned' }],

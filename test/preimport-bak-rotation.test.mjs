@@ -23,8 +23,8 @@ const assert = (cond, msg) => {
 
 const makePM = (cwd) => new ProgressManager({ specDir: join(cwd, '.sillyspec') });
 const runtimeOf = (cwd) => join(cwd, '.sillyspec', '.runtime');
-const listBaks = (cwd) => readdirSync(runtimeOf(cwd))
-  .filter(f => /^sillyspec\.db\.pre-import-.*\.bak$/.test(f)).sort();
+const bakDir = (cwd) => join(runtimeOf(cwd), 'temp')
+const listBaks = (cwd) => { try { return readdirSync(bakDir(cwd)).filter(f => /^sillyspec\.db\.pre-import-.*\.bak$/.test(f)).sort() } catch { return [] } }
 
 const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-preimport-rot-${process.pid}-`));
 
@@ -45,8 +45,10 @@ const makeFixture = () => {
 const seedOldBaks = (cwd, stamps, { withWal = true } = {}) => {
   for (const ts of stamps) {
     const name = `sillyspec.db.pre-import-${ts}.bak`;
-    writeFileSync(join(runtimeOf(cwd), name), `stale-snapshot-${ts}`);
-    if (withWal) writeFileSync(join(runtimeOf(cwd), `${name}-wal`), `stale-wal-${ts}`);
+    mkdirSync(join(runtimeOf(cwd), 'temp'), { recursive: true });
+    mkdirSync(join(runtimeOf(cwd), 'temp'), { recursive: true })
+    writeFileSync(join(runtimeOf(cwd), 'temp', name), `stale-snapshot-${ts}`);
+    if (withWal) writeFileSync(join(runtimeOf(cwd), 'temp', `${name}-wal`), `stale-wal-${ts}`);
   }
 };
 
@@ -76,7 +78,7 @@ console.log('\n--- 1. 默认保留 1 份（旧快照连 -wal 一并回收）---'
 
   // 被裁快照的 -wal 必须一起走；存活快照的 -wal 必须留下——缺侧车的快照恢复时会丢
   // 尾部已提交事务（BUG-18 正是为此才连 -wal 一起备份）。
-  const leftoverWal = readdirSync(runtimeOf(cwd))
+  const leftoverWal = readdirSync(bakDir(cwd))
     .filter(f => /^sillyspec\.db\.pre-import-.*\.bak-wal$/.test(f));
   const survivorWal = `${baks[0]}-wal`;
   const orphanWal = leftoverWal.filter(f => f !== survivorWal);
@@ -123,19 +125,21 @@ console.log('\n--- 3. 相邻文件零误伤 ---');
   const { cwd, pm, payload } = makeFixture();
   seedOldBaks(cwd, ['2026-08-30T22-00-00-000Z'], { withWal: false });
   const rt = runtimeOf(cwd);
-  writeFileSync(join(rt, 'sillyspec.db.bak'), 'main-fallback-chain');
+  mkdirSync(join(rt, 'temp'), { recursive: true })
+  writeFileSync(join(rt, 'temp', 'sillyspec.db.bak'), 'main-fallback-chain');
   writeFileSync(join(rt, 'sillyspec.db.corrupt-2026-08-31T00-00-00-000Z'), 'rescue-copy');
   writeFileSync(join(rt, 'other-tool.bak'), 'not-ours');
-  writeFileSync(join(rt, 'audit.log'), '{"at":"x"}\n');
+  mkdirSync(join(rt, 'temp'), { recursive: true })
+  writeFileSync(join(rt, 'temp', 'audit.log'), '{"at":"x"}\n');
 
   pm.import(cwd, payload, 'c1');
 
   assert(existsSync(join(rt, 'sillyspec.db')), 'sillyspec.db 主库未被裁');
-  assert(readFileSync(join(rt, 'sillyspec.db.bak'), 'utf8') === 'main-fallback-chain',
+  assert(readFileSync(join(rt, 'temp', 'sillyspec.db.bak'), 'utf8') === 'main-fallback-chain',
     '主 sillyspec.db.bak 恢复链未被裁（前缀相似但非 pre-import-）');
   assert(existsSync(join(rt, 'sillyspec.db.corrupt-2026-08-31T00-00-00-000Z')), '.corrupt-<ts> 救援副本未被裁');
   assert(existsSync(join(rt, 'other-tool.bak')), '他者 .bak 未被裁');
-  assert(existsSync(join(rt, 'audit.log')), 'audit.log 未被裁');
+  assert(existsSync(join(rt, 'temp', 'audit.log')), 'audit.log 未被裁');
   assert(listBaks(cwd).length === 1, '同时旧 pre-import 快照确实被裁（裁剪真的生效了）');
 }
 

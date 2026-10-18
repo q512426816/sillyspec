@@ -70,7 +70,7 @@ test('②a syncDocuments 内容未变跳过重复 POST，变化后重推，manua
   const r1 = await sm.syncDocuments(cn)
   assert.equal(r1.synced, 2, '首次推送 synced=2')
   assert.equal(posts, 1, '首次推送 POST 一次')
-  assert.ok(existsSync(join(d, '.sillyspec', '.runtime', `sync-docs-lastpush-${cn}.json`)), '成功后落指纹 marker')
+  assert.ok(existsSync(join(d, '.sillyspec', '.runtime', 'state', `sync-docs-lastpush-${cn}.json`)), '成功后落指纹 marker')
 
   const r2 = await sm.syncDocuments(cn)
   assert.equal(r2.synced, 0, '内容未变 → 跳过（synced=0）')

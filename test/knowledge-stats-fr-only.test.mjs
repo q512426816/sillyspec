@@ -22,6 +22,7 @@ function makeFixture() {
   const runtimeDir = join(base, '.runtime')
   mkdirSync(join(knowledgeDir, 'fr'), { recursive: true })
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   const NL = String.fromCharCode(10)
   writeFileSync(join(knowledgeDir, 'fr', 'core-engine.md'),
     '# FR 索引 — core-engine' + NL + NL +

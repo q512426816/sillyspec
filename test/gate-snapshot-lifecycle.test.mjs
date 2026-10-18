@@ -58,6 +58,7 @@ test('unregister 幂等且缺失不抛', () => {
 test('账本损坏退空数组（fail-open 零阻断）', () => {
   const rt = mkRuntime()
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   writeFileSync(gateSnapshotLedgerPath(rt), '{ 这不是 JSON')
   assert.deepEqual(readGateSnapshotLedger(rt), [])
   // 损坏态下 register 吞异常不抛
@@ -364,6 +365,7 @@ test('doctor 维度：超期失活条目→pass=false+WARNING+root/账龄列示'
 test('doctor 维度：账本损坏/守卫不过→ok（fail-open 零误报）', () => {
   const rt = mkRuntime()
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   writeFileSync(gateSnapshotLedgerPath(rt), '{{{ 坏 JSON')
   assert.equal(detectGateSnapshotLeak({ runtimeRoot: rt, now: NOW, staleHours: 24, isProcessAlive: () => false }).pass, true)
   const p = gateSnapshotLedgerPath(rt)

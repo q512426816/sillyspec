@@ -35,6 +35,7 @@ test('unused 分层文件面口径：整仓 baseline artifact 下只有变更文
     const runtimeRoot = join(specBase, '.runtime')
     const artifactDir = join(runtimeRoot, 'contract-artifacts', 'c1', 'baseline')
     mkdirSync(artifactDir, { recursive: true })
+    mkdirSync(join(artifactDir, 'state'), { recursive: true })
     writeFileSync(join(artifactDir, 'endpoints.json'), JSON.stringify({
       endpoints: [
         { method: 'GET', path: '/api/changed', source: 'a.js' },
@@ -59,6 +60,7 @@ test('无变更文件面（无 changeName）回退 artifact 口径零回归', ()
     const runtimeRoot = join(specBase, '.runtime')
     const artifactDir = join(runtimeRoot, 'contract-artifacts', 'c2', 'baseline')
     mkdirSync(artifactDir, { recursive: true })
+    mkdirSync(join(artifactDir, 'state'), { recursive: true })
     writeFileSync(join(artifactDir, 'endpoints.json'), JSON.stringify({
       endpoints: [{ method: 'GET', path: '/api/x', source: 'a.js' }],
     }))

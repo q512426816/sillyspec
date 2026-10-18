@@ -83,7 +83,8 @@ function writeReviews(repo, cn, runId, ids, { base, head, files } = {}) {
     }))
   }
   mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks'), { recursive: true })
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), runId + '\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), runId + '\n')
 }
 /** 真实提交一次 src-fix.js，返回 { base, head }（git 证据核验用真实 hash） */
 function commitFix(repo) {

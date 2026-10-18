@@ -83,7 +83,9 @@ function makeFixture() {
   const runId = 'exec-2026-09-01-120000'
   const runTasksDir = join(specBase, '.runtime', 'execute-runs', runId, 'tasks')
   mkdirSync(join(runTasksDir, 'task-01'), { recursive: true })
-  writeFileSync(join(specBase, '.runtime', 'current-execute-run-id-c1'), runId + '\n')
+  mkdirSync(join(specBase, 'state'), { recursive: true })
+  mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specBase, '.runtime', 'state', 'current-execute-run-id-c1'), runId + '\n')
   writeFileSync(join(runTasksDir, 'task-01', 'review.json'), JSON.stringify({
     schemaVersion: 2, task: 'task-01', base: baseHash, head,
     changedFiles: ['feature.js'],

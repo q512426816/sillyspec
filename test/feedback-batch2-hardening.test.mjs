@@ -98,7 +98,9 @@ try {
     const runId = 'exec-2026-09-08-120000'
     const reviewDir = join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01')
     mkdirSync(reviewDir, { recursive: true })
-    writeFileSync(join(specBase, '.runtime', 'current-execute-run-id-c1'), runId + '\n')
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', 'current-execute-run-id-c1'), runId + '\n')
     // reviewer 已声明 changedFiles（gate 会交叉校验的真实声明）
     writeFileSync(join(reviewDir, 'review.json'), JSON.stringify({
       schemaVersion: 2, task: 'task-01', base: 'deadbeef', head: 'cafebabe',
@@ -150,7 +152,9 @@ try {
     const runId = 'exec-2026-09-08-130000'
     const reviewDir = join(specRoot, '.runtime', 'execute-runs', runId, 'tasks', 'task-01')
     mkdirSync(reviewDir, { recursive: true })
-    writeFileSync(join(specRoot, '.runtime', 'current-execute-run-id-c1'), runId + '\n')
+    mkdirSync(join(specRoot, 'state'), { recursive: true })
+    mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specRoot, '.runtime', 'state', 'current-execute-run-id-c1'), runId + '\n')
     // 注意 stampExecuteRunChange 归属戳：resolveLatestExecuteRunIdWithTasks 需 run 归属 c1
     writeFileSync(join(specRoot, '.runtime', 'execute-runs', runId, 'change'), 'c1\n')
     // readReview 内嵌 validateReviewSchema——最小骨架过不了校验，须给全 schema 必填字段

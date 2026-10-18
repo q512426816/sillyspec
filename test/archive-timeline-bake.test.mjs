@@ -29,13 +29,15 @@ function makeFixture() {
   const runtimeRoot = join(specBase, '.runtime')
   const destDir = join(specBase, 'changes', 'archive', CHANGE)
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   mkdirSync(destDir, { recursive: true })
   const eventsJsonl = [
     `{"ts":1695800000000,"kind":"born","stage":"brainstorm","detail":"变更诞生"}`,
     `{"ts":1695800010000,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}`,
     `{"ts":1695800020000,"kind":"commit","stage":"tasks","detail":"abc1234 fix: 甲（task-01）"}`,
   ].join('\n') + '\n'
-  writeFileSync(join(runtimeRoot, `watcher-events-${CHANGE}.jsonl`), eventsJsonl)
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `watcher-events-${CHANGE}.jsonl`), eventsJsonl)
   writeFileSync(join(destDir, 'tasks.md'), [
     '---',
     'author: test',
@@ -139,7 +141,7 @@ test('bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一�
 
 test('bakeArchiveTimeline：无事件流跳过，零文件产出带原因', async () => {
   const fx = makeFixture()
-  rmSync(join(fx.runtimeRoot, `watcher-events-${CHANGE}.jsonl`))
+  rmSync(join(fx.runtimeRoot, 'state', `watcher-events-${CHANGE}.jsonl`))
   try {
     const r = await bakeArchiveTimeline({
       cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir, gitLook: fakeGitLook,

@@ -121,6 +121,7 @@ test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量
   const root = mk('cog-mig-')
   const runtimeDir = join(root, '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   const dbPath = join(runtimeDir, 'sillyspec.db')
   // 手工建 v5 库：changes 表为 v6 前基座形态（无 owner_session；isolation/title 等列留给幂等 ALTER 补）；
   // project 表不预建——由 _createSchema 以 DEFAULT 6 落盘（CREATE IF NOT EXISTS 不会改既有表默认值）
@@ -384,7 +385,7 @@ function setupAttributionFixture({ prefix }) {
 }
 
 function readDraft(specBase, changeName) {
-  const runId = readFileSync(join(specBase, '.runtime', `current-execute-run-id-${changeName}`), 'utf8').trim()
+  const runId = readFileSync(join(specBase, '.runtime', 'state', `current-execute-run-id-${changeName}`), 'utf8').trim()
   const p = join(specBase, '.runtime', 'execute-runs', runId, 'tasks', 'task-01', 'review.json')
   return { exists: existsSync(p), draft: existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null }
 }

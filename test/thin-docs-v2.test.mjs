@@ -25,9 +25,10 @@ function fixture(input) {
   const runtimeRoot = join(root, '.runtime')
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const r = draftAll({ changeDir, change: 'c1', input, withTasks: false, runtimeRoot })
   assert.equal(r.schema, DRAFT_SCHEMA_V2)
-  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'draft-ledger-c1.json'), 'utf8'))
+  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'state', 'draft-ledger-c1.json'), 'utf8'))
   const fill = (f, fn) => writeFileSync(join(changeDir, f), fn(readFileSync(join(changeDir, f), 'utf8')))
   // 例行作答（design 四节 + FR 行为句 + 绑定行）——各用例在其上做破坏
   const fillAll = () => {

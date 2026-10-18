@@ -449,6 +449,7 @@ export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj =
   try {
     const json = JSON.stringify(sentinel ? { ...snap, sentinel } : snap);
     if (cacheObj && cacheObj.last === json) return { written: false };
+    try { mkdirSync(join(runtimeRoot, 'state'), { recursive: true }); } catch { /* fail-open */ }
     writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
     if (cacheObj) cacheObj.last = json;
     return { written: true };
@@ -841,6 +842,7 @@ export async function pushEventsToPlatform({ specBase, changeName, events, env =
 function truncateLogIfNeeded(runtimeRoot) {
   try {
     const p = runtimeTempPath(runtimeRoot, WATCHER_LOG_FILENAME);
+    try { mkdirSync(join(runtimeRoot, 'temp'), { recursive: true }); } catch { return; }
     if (statSync(p).size <= LOG_TRUNCATE_THRESHOLD) return;
     const buf = readFileSync(p);
     const keep = buf.subarray(Math.max(0, buf.length - LOG_TRUNCATE_KEEP));
@@ -878,6 +880,7 @@ export async function spawnWatcher(cwd, changeName, opts = {}) {
   let logFd = null;
   try {
     mkdirSync(runtimeRoot, { recursive: true });
+    mkdirSync(join(runtimeRoot, 'temp'), { recursive: true }); // temp/ 可整体删除，写前重建
     logFd = openSync(logPath, 'a');
     stdio = ['ignore', logFd, logFd];
   } catch {
@@ -933,6 +936,7 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 
   const eventsPath = runtimeStatePath(runtimeRoot, `watcher-events-${changeName}.jsonl`);
   const timingPath = runtimeStatePath(runtimeRoot, `watcher-stage-timing-${changeName}.json`);
+  try { mkdirSync(join(runtimeRoot, 'state'), { recursive: true }); } catch { /* fail-open：写入侧自抛 */ }
   let allEvents = [];
 
   const refreshHeartbeat = () => {

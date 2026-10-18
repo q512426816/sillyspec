@@ -511,6 +511,7 @@ console.log('--- 11b. 会话化上下文（entry 级 ctx + body 级 hub_session_
 
     // 预置旧留底产物：logOld 带 change_key（上一次 run 的 ctx）、logNoCtx 无 ctx 字段（旧版本产物）
     mkdirSync(rt, { recursive: true })
+    mkdirSync(join(rt, 'state'), { recursive: true })
     writeFileSync(join(rt, AGENT_LOG_ARTIFACT_FILENAME), JSON.stringify({
       schema_version: 1,
       generated_at: '2026-08-23T09:00:00.000Z',
@@ -749,6 +750,7 @@ console.log('--- 11d. own 打标收敛 / 双向互斥 / 推送范围（D-001 / D
     // 预置留底产物单条目（invocations=3 模拟已有多轮 run）
     const seedLedger = (rt, root, logPath, entryCtx) => {
       mkdirSync(rt, { recursive: true })
+      mkdirSync(join(rt, 'state'), { recursive: true })
       writeFileSync(join(rt, AGENT_LOG_ARTIFACT_FILENAME), JSON.stringify({
         schema_version: 1, generated_at: '2026-09-12T00:00:00.000Z', agent_cwd: pos(root),
         workspace_id: null, scan_run_id: null,
@@ -984,6 +986,7 @@ console.log('--- 13. CLI 集成：sillyspec agent-log ---')
   const proj = makeTmpDir('al-cli-')
   const rt = join(proj, '.sillyspec', '.runtime')
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   const logFile = join(proj, 'sess.jsonl').replace(/\\/g, '/')
   writeFileSync(join(proj, 'sess.jsonl'), '{}\n')
   writeFileSync(join(rt, AGENT_LOG_ARTIFACT_FILENAME), JSON.stringify({

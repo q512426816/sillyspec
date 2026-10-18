@@ -136,7 +136,8 @@ function makeFixtureA() {
   const runtimeRoot = join(specBase, '.runtime')
   const runId = 'exec-2026-09-14-120000'
   mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02'), { recursive: true })
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-c1`), runId + '\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-c1`), runId + '\n')
   writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), JSON.stringify({
     schemaVersion: 1,
     task: 'task-02',
@@ -196,7 +197,7 @@ try {
   assert(t2.hints[0] && t2.hints[0].files[0] === 'test/review-attributed.test.mjs', 'review 归属文件同样进关键词 grep 面')
 
   console.log('--- 4. runId 解析兜底 ---')
-  unlinkSync(join(fx.runtimeRoot, 'current-execute-run-id-c1'))
+  unlinkSync(join(fx.runtimeRoot, 'state', 'current-execute-run-id-c1'))
   const rNoMarker = runVerifyProbes({ cwd: fx.cwd, changeName: 'c1' })
   const t2NoMarker = rNoMarker.probe7.tasks.find(t => t.task === 'task-02')
   assert(t2NoMarker.testFiles.length === 1 && t2NoMarker.testFiles[0] === 'test/review-attributed.test.mjs',

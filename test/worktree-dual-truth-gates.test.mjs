@@ -360,7 +360,8 @@ test('FR-04 集成面：未提交 worktree 改动命中勾选；baselineFiles �
     const rt = join(specBase, '.runtime')
     const runId = 'exec-2026-09-15-010101-x1'
     for (const t of ['task-01', 'task-02']) mkdirSync(join(rt, 'execute-runs', runId, 'tasks', t), { recursive: true })
-    writeFileSync(join(rt, `current-execute-run-id-${cn}`), `${runId}\n`)
+    mkdirSync(join(rt, 'state'), { recursive: true })
+    writeFileSync(join(rt, 'state', `current-execute-run-id-${cn}`), `${runId}\n`)
     mkdirSync(changeDir, { recursive: true })
     writeFileSync(join(changeDir, 'tasks.md'), '# tasks\n\n- [ ] task-01: 甲改文件\n- [ ] task-02: 乙声明未做\n')
     const draft = (task, changedFiles) => JSON.stringify({

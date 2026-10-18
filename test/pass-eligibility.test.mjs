@@ -262,7 +262,9 @@ function mkScanFixture({ change, strategy = null, record = null, receiptCmd = nu
   }
   if (record) {
     mkdirSync(join(specBase, '.runtime'), { recursive: true })
-    writeFileSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`), JSON.stringify(record, null, 2))
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', `verify-quality-scan-${change}.json`), JSON.stringify(record, null, 2))
   }
   const receipt = receiptCmd ? [
     '# 验证报告', '',

@@ -25,6 +25,7 @@ function mkLedgerFixture(designBody) {
   const rt = join(d, '.sillyspec', '.runtime')
   mkdirSync(cd, { recursive: true })
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   const qs = DESIGN_QUESTIONS.sections[2].lines // 四问
   const body = designBody(qs)
   // 骨架全节含问句行（真实 flow start 形态）；仅四问节按 mode 变体

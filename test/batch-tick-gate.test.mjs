@@ -154,7 +154,9 @@ test('②e e2e：证据完备一把勾（反馈实证形态）→ advisory 放�
     gitE(cwd, ['add', tasksPath])
     gitE(cwd, ['commit', '-q', '-m', 'chore: tick (task-01/02/03)'])
     mkdirSync(join(specBase, '.runtime'), { recursive: true })
-    writeFileSync(join(specBase, '.runtime', `watcher-events-${change}.jsonl`),
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', `watcher-events-${change}.jsonl`),
       `${JSON.stringify({ ts: Date.now() - 60_000, kind: 'task-done', stage: 'tasks', detail: 'checked 0→3', source: 'watcher', provisional: true })}\n`)
     writeReviewE(specBase, cwd, change)
     const s2 = cliE(cwd, ['flow', 'done', '--change', change])
@@ -292,7 +294,9 @@ test('②g e2e：CLI 快连点侧车突发（证据完备）→ advisory 放行 
       // CLI 快连点形态：事件流三条单格精确跳 + 侧车 3 行毫秒级相邻
       const now = Date.now()
       mkdirSync(join(specBase, '.runtime'), { recursive: true })
-      writeFileSync(join(specBase, '.runtime', `watcher-events-${change}.jsonl`),
+      mkdirSync(join(specBase, 'state'), { recursive: true })
+      mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+      writeFileSync(join(specBase, '.runtime', 'state', `watcher-events-${change}.jsonl`),
         ['checked 0→1', 'checked 1→2', 'checked 2→3'].map((d, i) =>
           JSON.stringify({ ts: now - 60_000 + i * 900, kind: 'task-done', stage: 'tasks', detail: d, provisional: true, source: 'task-tick' })).join('\n') + '\n')
       writeFileSync(join(specBase, 'changes', change, 'task-ticks.jsonl'),

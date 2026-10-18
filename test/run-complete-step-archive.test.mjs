@@ -116,10 +116,11 @@ console.log('\n--- Case 4: 归档清理 execute/stage-review runId marker ---')
   // 预置该 change 的 execute + stage-review marker（归档后应被清理）
   const runtimeRoot = join(specBase, '.runtime')
   mkdirSync(runtimeRoot, { recursive: true })
-  const execMarker = join(runtimeRoot, `current-execute-run-id-${cn}`)
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  const execMarker = join(runtimeRoot, 'state', `current-execute-run-id-${cn}`)
   const stageMarker = join(runtimeRoot, `current-stage-review-run-id-execute-${cn}`)
   // 其他 change 的 marker（不应被误删）
-  const otherExecMarker = join(runtimeRoot, 'current-execute-run-id-other-change')
+  const otherExecMarker = join(runtimeRoot, 'state', 'current-execute-run-id-other-change')
   writeFileSync(execMarker, 'exec-1\n')
   writeFileSync(stageMarker, 'review-1\n')
   writeFileSync(otherExecMarker, 'exec-2\n')

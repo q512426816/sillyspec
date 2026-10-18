@@ -206,13 +206,17 @@ console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位�
   const dT = join(changeDir, 'design.md')
   writeFileSync(dT, '# Design\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
   mkdirSync(join(dirT, '.runtime'), { recursive: true })
-  writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S2', components: {}, reasons: [], transitions: [] }))
+  mkdirSync(join(dirT, 'state'), { recursive: true })
+  mkdirSync(join(dirT, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(dirT, '.runtime', 'state', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S2', components: {}, reasons: [], transitions: [] }))
   const c2 = classifyReviewTier({ planLevel: 'full', designPath: dT })
   assert(c2.ceremonyTier === 'S2' && c2.tier === 'independent' && c2.reason.includes('档位文件 S2 兜底并入'),
     `档位文件 S2 + 零命中实判 S1 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
 
   // 档位文件低于实判不生效：file S1 + 声明面命中 S2 → 取高 S2（只升不降）
-  writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S1', components: {}, reasons: [], transitions: [] }))
+  mkdirSync(join(dirT, 'state'), { recursive: true })
+  mkdirSync(join(dirT, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(dirT, '.runtime', 'state', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S1', components: {}, reasons: [], transitions: [] }))
   const mapDirT = join(dirT, 'docs', 'demo', 'modules')
   mkdirSync(mapDirT, { recursive: true })
   writeFileSync(join(mapDirT, '_module-map.yaml'), 'modules:\nblast:\n  - prefixes: [a.js]\n    tier: S2\n')
@@ -430,11 +434,11 @@ console.log('\n=== 4b. getLatestStageReviewRunId marker 优先 + cross-change �
 {
   // 1. stageReviewMarkerPath 命名契约（prompt 写 == gate 读，同源 helper）
   assert(
-    stageReviewMarkerPath(join('rt', 'd'), 'plan', 'mychange') === join(join('rt', 'd'), 'current-stage-review-run-id-plan-mychange'),
+    stageReviewMarkerPath(join('rt', 'd'), 'plan', 'mychange') === join(join('rt', 'd'), 'state', 'current-stage-review-run-id-plan-mychange'),
     `stageReviewMarkerPath 含 change: <rt>/current-stage-review-run-id-<stage>-<change>`,
   )
   assert(
-    stageReviewMarkerPath(join('rt', 'd'), 'plan') === join(join('rt', 'd'), 'current-stage-review-run-id-plan'),
+    stageReviewMarkerPath(join('rt', 'd'), 'plan') === join(join('rt', 'd'), 'state', 'current-stage-review-run-id-plan'),
     `stageReviewMarkerPath 无 change（changeName 缺省）: <rt>/current-stage-review-run-id-<stage>`,
   )
 

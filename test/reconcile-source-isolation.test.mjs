@@ -59,6 +59,7 @@ test('② 死锁诊断：post-apply 源全空 → parallelAdvanceHint（禁物�
     const sb = join(cwd, '.sillyspec')
     const rt = join(sb, '.runtime')
     mkdirSync(rt, { recursive: true })
+    mkdirSync(join(rt, 'state'), { recursive: true })
     const a = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName: 'c-x' })
     assert.equal(a.form, 'post-apply')
     assert.ok(a.parallelAdvanceHint, '源全空应出诊断')

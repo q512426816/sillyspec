@@ -53,6 +53,7 @@ function makeFixture() {
   // 局部端点 artifact（单 task 形态）：只有 /api/hit
   const artifactDir = join(specBase, '.runtime', 'contract-artifacts', 'p5p', 'task-1')
   mkdirSync(artifactDir, { recursive: true })
+  mkdirSync(join(artifactDir, 'state'), { recursive: true })
   writeFileSync(join(artifactDir, 'endpoints.json'), JSON.stringify({
     task: 'task-1', type: 'backend_endpoints',
     endpoints: [{ method: 'GET', path: '/api/hit', source: 'daemon/router.py' }],
@@ -64,7 +65,8 @@ console.log('=== 探针 5：apply-pathspec 兜底（diff 空时不回退全仓�
 {
   const { proj, specBase, runtimeRoot } = makeFixture()
   // 主仓 diff 干净（全部已 commit = apply+commit 后形态）+ apply-pathspec 只含 page.js
-  writeFileSync(join(runtimeRoot, 'apply-pathspec-p5p.txt'), 'web/page.js\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'apply-pathspec-p5p.txt'), 'web/page.js\n')
   const r = verifyApiParity(specBase, proj, runtimeRoot, 'p5p')
   console.log(`  summary: ${r.summary}`)
   const missingPaths = r.missingBackend.map(m => m.path)

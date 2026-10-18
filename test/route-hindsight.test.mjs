@@ -30,7 +30,9 @@ function makeRepo() {
 
 function writeBaseline(root, { design = null, tasks = null } = {}) {
   mkdirSync(join(root, '.runtime'), { recursive: true })
-  writeFileSync(join(root, '.runtime', `route-hindsight-baseline-${CHANGE}.json`), JSON.stringify({
+  mkdirSync(join(root, 'state'), { recursive: true })
+  mkdirSync(join(root, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(root, '.runtime', 'state', `route-hindsight-baseline-${CHANGE}.json`), JSON.stringify({
     schemaVersion: 1, change: CHANGE, capturedAt: '2026-09-28T00:00:00.000Z', design, tasks,
   }))
 }
@@ -52,7 +54,7 @@ test('① 快照：首写捕获＋首写者胜（幂等，R-04）', () => {
   assert.equal(r1.captured, true, `首次捕获: ${JSON.stringify(r1)}`)
   const r2 = snapshotBaseline({ specBase: root, change: CHANGE, changeDir })
   assert.equal(r2.captured, false, '二次调用不覆盖（首写者胜）')
-  const j = JSON.parse(readFileSync(join(root, '.runtime', `route-hindsight-baseline-${CHANGE}.json`), 'utf8'))
+  const j = JSON.parse(readFileSync(join(root, '.runtime', 'state', `route-hindsight-baseline-${CHANGE}.json`), 'utf8'))
   assert.equal(j.design, '# 设计\nv1\n')
   rmSync(root, { recursive: true, force: true })
 })

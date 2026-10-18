@@ -62,7 +62,8 @@ test('task review 在场：marker + 合法 review pass；坏 review fail', async
   try {
     const rt = join(specBase, '.runtime')
     mkdirSync(join(rt, 'execute-runs', 'exec-2026-09-11-000000-x1', 'tasks', 'task-01'), { recursive: true })
-    writeFileSync(join(rt, 'current-execute-run-id-c1'), 'exec-2026-09-11-000000-x1\n')
+    mkdirSync(join(rt, 'state'), { recursive: true })
+    writeFileSync(join(rt, 'state', 'current-execute-run-id-c1'), 'exec-2026-09-11-000000-x1\n')
     writeFileSync(join(rt, 'execute-runs', 'exec-2026-09-11-000000-x1', 'tasks', 'task-01', 'review.json'),
       JSON.stringify({ schemaVersion: 1, task: 'task-01', base: 'aaa', head: 'bbb', changedFiles: [], specVerdict: 'pass', qualityVerdict: 'pass' }))
     let r = await validateChangeArtifacts({ cwd: root, specBase, changeName: 'c1' })

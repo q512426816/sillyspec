@@ -170,7 +170,7 @@ test('④ 竞态冲突自动消解：全部冲突路径为本地未改动 → �
     assert.equal(m.postedBodies.length, 1, 'add op 已发出（不受 update 专属的 mtime 预过滤）')
     assert.equal(r.conflict, false, '全部 follower → 自动消解不报冲突')
     assert.equal(r.autoResolved, 1)
-    assert.ok(!existsSync(join(specRoot, '.runtime', 'spec-sync-conflict-quick-abc.json')),
+    assert.ok(!existsSync(join(specRoot, '.runtime', 'state', 'spec-sync-conflict-quick-abc.json')),
       '不落冲突文件（修复前坐实冲突进 resolve 流程）')
     assert.ok(existsSync(join(specRoot, '.runtime', 'spec-sync-base.json')), '消解后写基线（下次 pre-POST 即拦）')
   } finally { m.restore() }
@@ -212,7 +212,7 @@ test('⑤ 真冲突粒度收窄：冲突文件只列本地真改动路径，foll
     assert.equal(r.conflict, true)
     assert.deepEqual(Object.keys(r.serverVersions), ['changes/my-change/design.md'], '真冲突仅本地改动的 design')
     assert.equal(r.autoResolved, 1, '归档 follower 自动跟随')
-    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', 'spec-sync-conflict-my-change.json'), 'utf8'))
+    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-conflict-my-change.json'), 'utf8'))
     assert.deepEqual(cf.conflicting_paths, ['changes/my-change/design.md'], '冲突文件只列真冲突')
     assert.deepEqual(cf.auto_followed, ['changes/archive/2026-08-02-old.md'], 'follower 留痕')
   } finally { m.restore() }

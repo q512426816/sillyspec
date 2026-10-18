@@ -166,7 +166,7 @@ console.log('\n--- 2. spawnBackgroundSync：未连接 / spawned / coalesced / �
     const boot = c.args[c.args.length - 1];
     assert(boot.includes('runBgSyncFromEnv') && boot.includes('import('), '-e bootstrap 动态 import 本模块 runBgSyncFromEnv');
     assert(c.child.unrefCalled === true, 'child.unref() 被调（父进程不被子进程拖住）');
-    assert(r.logPath === join(cwd, '.sillyspec', '.runtime', BG_LOG_FILENAME), 'logPath 指向 .runtime/spec-sync-bg.log');
+    assert(r.logPath === join(cwd, '.sillyspec', '.runtime', 'temp', BG_LOG_FILENAME), 'logPath 指向 .runtime/temp/spec-sync-bg.log');
     // 锁未预写（子进程自写）；清残留以防影响后续用例
     assert(!existsSync(join(cwd, '.sillyspec', '.runtime', BG_LOCK_FILENAME)), '父侧不预写锁（子进程起步自写）');
   }
@@ -174,7 +174,8 @@ console.log('\n--- 2. spawnBackgroundSync：未连接 / spawned / coalesced / �
   // 2c. 活锁 → coalesced + rerunQueued 置位
   {
     const runtimeRoot = join(cwd, '.sillyspec', '.runtime');
-    mkdirSync(runtimeRoot, { recursive: true });
+    mkdirSync(runtimeRoot, { recursive: true })
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true });
     writeFileSync(join(runtimeRoot, BG_LOCK_FILENAME), JSON.stringify({
       pid: process.pid, startedAt: Date.now(), change: 'quick-other', rerunQueued: false,
     }) + '\n', 'utf8');
@@ -230,7 +231,7 @@ console.log('\n--- 3a. 默认后台化：triggerSync 快速返回，同步经子
   const lockGone = await waitUntil(() => !existsSync(join(runtimeRoot, BG_LOCK_FILENAME)), 20_000);
   assert(lockGone, '锁文件在同步完成后自清');
   await sleep(300); // 子进程末条日志落盘余量
-  const logPath = join(runtimeRoot, BG_LOG_FILENAME);
+  const logPath = join(runtimeRoot, 'temp', BG_LOG_FILENAME);
   const logText = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
   assert(logText.includes('后台同步完成'), `日志含「后台同步完成」（${logPath}）`);
   restoreEnv();

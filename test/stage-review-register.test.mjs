@@ -166,7 +166,8 @@ test('10. marker 已存在 → warn + 覆盖为最新', () => {
   try {
     // 预置旧 marker
     mkdirSync(f.runtimeRoot, { recursive: true })
-    const markerPath = join(f.runtimeRoot, 'current-stage-review-run-id-brainstorm-' + f.changeName)
+    mkdirSync(join(f.runtimeRoot, 'state'), { recursive: true })
+    const markerPath = join(f.runtimeRoot, 'state', 'current-stage-review-run-id-brainstorm-' + f.changeName)
     writeFileSync(markerPath, 'review-1999-01-01-000000\n')
     const result = registerStageReview({ changeName: f.changeName, stage: 'brainstorm', cwd: f.specBase, platformOpts: f.platformOpts })
     const after = readFileSync(markerPath, 'utf8').trim()

@@ -216,7 +216,7 @@ test('X1-4 平台 409 code=change_deleted → 拒收非冲突：不落冲突文�
     assert.equal(progressPosts.length, 1, '无重试风暴（单次往返即收敛）')
     const { existsSync } = await import('fs')
     assert.equal(
-      existsSync(join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`)), false,
+      existsSync(join(cwd, '.sillyspec', '.runtime', 'state', `sync-conflict-${name}.json`)), false,
       '不落 sync-conflict 文件（change_deleted ≠ base_ts 冲突）',
     )
   } finally { m.restore() }

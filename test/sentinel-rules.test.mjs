@@ -315,13 +315,14 @@ test('水位：写读往返+内容去重+损坏 null', () => {
   const root = mkdtempSync(join(tmpdir(), 'wm-'))
   try {
     const s = snap()
-    assert.equal(watcherSnapshotPath(root, 'c1'), join(root, 'watcher-last-snapshot-c1.json'))
+    assert.equal(watcherSnapshotPath(root, 'c1'), join(root, 'state', 'watcher-last-snapshot-c1.json'))
     assert.equal(writeSnapshotWatermark(root, 'c1', s, null).written, true)
     const cache = { last: JSON.stringify(s) }
     assert.equal(writeSnapshotWatermark(root, 'c1', s, cache).written, false, '同内容跳过写')
     const wm = loadSnapshotWatermark(root, 'c1')
     assert.equal(wm.ts, s.ts)
-    writeFileSync(join(root, 'watcher-last-snapshot-c1.json'), '{broken', 'utf8')
+    mkdirSync(join(root, 'state'), { recursive: true })
+    writeFileSync(join(root, 'state', 'watcher-last-snapshot-c1.json'), '{broken', 'utf8')
     assert.equal(loadSnapshotWatermark(root, 'c1'), null, '损坏水位 → null 全新启动')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
@@ -374,7 +375,8 @@ test('buildSnapshot 注入面：gitLogImpl/porcelainImpl 产出哨兵字段（�
     writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: a\n- [ ] task-02: b\n', 'utf8')
     const runtimeRoot = join(root, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'verify-quality-scan-c1.json'), JSON.stringify({ testResult: { status: 'passed', ranAt: 't' } }), 'utf8')
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', 'verify-quality-scan-c1.json'), JSON.stringify({ testResult: { status: 'passed', ranAt: 't' } }), 'utf8')
     const s = buildSnapshot({
       changeDir, cwd: root, runtimeRoot, changeName: 'c1',
       gitHeadImpl: () => 'abc1234',
@@ -412,6 +414,7 @@ test('buildSnapshot worktree 分支证据并入：task 提交在分支上不再�
     mkdirSync(changeDir, { recursive: true })
     const runtimeRoot = join(root, '.runtime')
     mkdirSync(runtimeRoot, { recursive: true })
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
     const base = { changeDir, cwd: root, runtimeRoot, changeName: 'c1', gitHeadImpl: () => 'aaa1111' }
     // 主仓 log 只有一个无关提交；worktree 分支上挂着 task-01 提交 → 并入后 R1 有证据
     const s = buildSnapshot({

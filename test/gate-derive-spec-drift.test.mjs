@@ -105,7 +105,8 @@ await pmMain.setStage(mainRepo, 'execute', changeName)
 writeFileSync(join(mainSpec, 'changes', changeName, 'plan.md'), PLAN_MD, 'utf8')
 mkdirSync(mainRuntime, { recursive: true })
 // 主仓 marker = exec-2026-01-01-111111（drift+anchor 应读这个 → 主仓 pass review）
-writeFileSync(join(mainRuntime, `current-execute-run-id-${changeName}`), 'exec-2026-01-01-111111\n', 'utf8')
+mkdirSync(join(mainRuntime, 'state'), { recursive: true })
+writeFileSync(join(mainRuntime, 'state', `current-execute-run-id-${changeName}`), 'exec-2026-01-01-111111\n', 'utf8')
 mkdirSync(join(mainRuntime, 'execute-runs', 'exec-2026-01-01-111111', 'tasks', 'task-01'), { recursive: true })
 writeFileSync(join(mainRuntime, 'execute-runs', 'exec-2026-01-01-111111', 'tasks', 'task-01', 'review.json'),
   passReview('task-01'), 'utf8')
@@ -121,7 +122,8 @@ await pmCopy.initChange(wtRoot, changeName)
 await pmCopy.setStage(wtRoot, 'execute', changeName)
 writeFileSync(join(copySpec, 'changes', changeName, 'plan.md'), PLAN_MD, 'utf8')
 mkdirSync(copyRuntime, { recursive: true })
-writeFileSync(join(copyRuntime, `current-execute-run-id-${changeName}`), 'exec-2026-01-02-999999\n', 'utf8')
+mkdirSync(join(copyRuntime, 'state'), { recursive: true })
+writeFileSync(join(copyRuntime, 'state', `current-execute-run-id-${changeName}`), 'exec-2026-01-02-999999\n', 'utf8')
 
 // ════════════════════════════════════════════════════════════
 // 场景 A：derive task-reviews 副本 cwd → 自动 anchor 读主仓 marker

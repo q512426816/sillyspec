@@ -13,7 +13,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import {  mkdtempSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectFakeCheckCompletion } from '../src/sentinel-assertions.js'
@@ -97,7 +97,9 @@ test('⑤ watcher R1 已退役（2026-09-29-watcher-fakecheck-retire）：翻格
   const changeDir = join(spec, 'changes', change)
   mkdirSync(join(spec, '.runtime'), { recursive: true })
   mkdirSync(changeDir, { recursive: true })
-  writeFileSync(join(spec, '.runtime', `route-hindsight-baseline-${change}.json`),
+  mkdirSync(join(spec, 'state'), { recursive: true })
+  mkdirSync(join(spec, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(spec, '.runtime', 'state', `route-hindsight-baseline-${change}.json`),
     JSON.stringify({ schemaVersion: 1, change, design: null, tasks: TASKS }))
   const snap = (checked) => ({ ts: 1, archived: false, files: { 'tasks.md': { checkedTasks: checked } }, commits: [], reviews: {}, dirtyCode: [] })
   const NL = String.fromCharCode(10)

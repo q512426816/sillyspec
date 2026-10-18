@@ -46,6 +46,7 @@ function fixture(bareDir, { mainDoc = 'design.md', reviewType = 'design', stage 
     reviewerNotes: 'fixture',
   }, null, 2))
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(stageReviewMarkerPath(runtimeRoot, stage, changeName), RUN_ID + '\n')
   return { proj, specBase, runtimeRoot, changeName, changeDir, reviewDir, stage, reviewType, mainDoc }
 }

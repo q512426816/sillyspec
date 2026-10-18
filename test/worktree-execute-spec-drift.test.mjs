@@ -180,9 +180,9 @@ console.log('--- 场景 A：cwd 命中 worktree 副本 → 自动锚定，不 ex
 
   const mainRuntime = join(mainSpec, '.runtime')
   const copyRuntime = join(copySpec, '.runtime')
-  const mainExecMarker = join(mainRuntime, `current-execute-run-id-${changeName}`)
-  const mainStageMarker = join(mainRuntime, `current-stage-review-run-id-execute-${changeName}`)
-  const copyExecMarker = join(copyRuntime, `current-execute-run-id-${changeName}`)
+  const mainExecMarker = join(mainRuntime, 'state', `current-execute-run-id-${changeName}`)
+  const mainStageMarker = join(mainRuntime, 'state', `current-stage-review-run-id-execute-${changeName}`)
+  const copyExecMarker = join(copyRuntime, 'state', `current-execute-run-id-${changeName}`)
   const copyStageMarker = join(copyRuntime, `current-stage-review-run-id-execute-${changeName}`)
 
   // 硬证 1：execute-runs marker（stage.js 固定 runId + prompt.js {EXECUTE_RUN_ID} 注入落盘点）落主仓

@@ -70,7 +70,7 @@ test('FR-07：批量完成前自动补 per-task 草稿（marker/run 一并建立
     const rv = JSON.parse(readFileSync(p, 'utf8'))
     assert.equal(rv.specVerdict, 'cannot_verify', `${t} 草稿 verdict=cannot_verify（待复核升级，不冒充 pass）`)
   }
-  assert.ok(existsSync(join(runtimeRoot, `current-execute-run-id-${f.changeName}`)), 'runId marker 建立')
+  assert.ok(existsSync(join(runtimeRoot, 'state', `current-execute-run-id-${f.changeName}`)), 'runId marker 建立')
   if (r1.batched) assert.equal(r1.aligned, 2, '批量对齐剩余 step')
   else assert.ok(!String(r1.reason || '').includes('review 缺失') || String(r1.reason).includes('草稿零 diff'),
     `若阻断须为草稿零 diff 而非 review 缺失（reason=${r1.reason}）`)

@@ -181,13 +181,14 @@ process.env.SILLYSPEC_STEP_GUIDE = '0'
   const projectName = 'pfs-proj'
   const changeName = '2026-09-18-pfs-fork'
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   // 模块索引：module `core`（prompt 含「core」/「src/core/」即命中 → 非空全量注入）
   const mapDir = join(specBase, 'docs', projectName, 'modules')
   mkdirSync(mapDir, { recursive: true })
   writeFileSync(join(mapDir, '_module-map.yaml'),
     'schema_version: 2\nmodules:\n  core:\n    role: 核心域\n    paths:\n      - src/core/\n', 'utf8')
   mkdirSync(join(specBase, 'changes', changeName), { recursive: true })
-  const ledgerPath = join(runtimeDir, `prompt-inject-${changeName}.json`)
+  const ledgerPath = join(runtimeDir, 'state', `prompt-inject-${changeName}.json`)
   try {
     // 判定三态（纯函数直测——import 同时收口 lint 未引用导出）
     const noLedger = shouldInjectFullContext({ changeName, stageName: 'execute', runtimeRoot: runtimeDir })
@@ -354,21 +355,24 @@ console.log('\n--- 组五：中位长度钩子自检 + 本批采样 ---')
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('\n--- 组六：prune 登记含 prompt-inject 账本 ---')
 {
-  const handlersSrc = readFileSync(join(repoRoot, 'src', 'run', 'complete-handlers.js'), 'utf8')
-  assertTrue(handlersSrc.includes('prompt-inject-${changeName}.json'),
-    'complete-handlers 源文本含 prompt-inject-${changeName}.json 精确文件名枚举（文本级登记钉）')
+  // 2026-10-18 runtime-relayout：prune 回收清单收敛到 runtime-paths.js 家族表（唯一清单源）
+  const pathsSrc = readFileSync(join(repoRoot, 'src', 'runtime-paths.js'), 'utf8')
+  assertTrue(pathsSrc.includes("prefix: 'prompt-inject-', ext: '.json'"),
+    'runtime-paths 源文本含 prompt-inject 家族登记（文本级登记钉，prune 经 runtimeStateFileNames 消费）')
 
   const root = makeTmpRoot('pfs-prune-')
   const runtimeRoot = join(root, '.runtime')
   mkdirSync(runtimeRoot, { recursive: true })
-  writeFileSync(join(runtimeRoot, 'prompt-inject-2026-09-18-pfs-a.json'), '{"stages":{}}\n', 'utf8')
-  writeFileSync(join(runtimeRoot, 'prompt-inject-2026-09-18-pfs-b.json'), '{"stages":{}}\n', 'utf8')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'prompt-inject-2026-09-18-pfs-a.json'), '{"stages":{}}\n', 'utf8')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'prompt-inject-2026-09-18-pfs-b.json'), '{"stages":{}}\n', 'utf8')
   try {
     const r = pruneArchivedChangeRuntime(runtimeRoot, '2026-09-18-pfs-a')
     assertTrue(r.ok === true && r.removed >= 1, `prune 直测：目标账本被删（removed=${r.removed}）`)
-    assertTrue(!existsSync(join(runtimeRoot, 'prompt-inject-2026-09-18-pfs-a.json')),
+    assertTrue(!existsSync(join(runtimeRoot, 'state', 'prompt-inject-2026-09-18-pfs-a.json')),
       '归档回收本变更 prompt-inject 账本（不累积孤儿文件）')
-    assertTrue(existsSync(join(runtimeRoot, 'prompt-inject-2026-09-18-pfs-b.json')),
+    assertTrue(existsSync(join(runtimeRoot, 'state', 'prompt-inject-2026-09-18-pfs-b.json')),
       '他变更账本不动（精确文件名归属，禁 glob 连坐）')
   } finally { cleanupRoot(root) }
 }

@@ -31,6 +31,7 @@ let seq = 0
 const makeRt = () => {
   const rt = join(tmpRoot, `rt-${++seq}`, '.runtime')
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   return rt
 }
 const write = (p, body = 'x') => {
@@ -168,6 +169,7 @@ console.log('\n--- 5. fail-open + 接线在 worktree 早退之前 ---')
   const rt = join(specBase, '.runtime')
   const mine = '2026-09-08-early-return'
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   write(join(rt, `apply-pathspec-${mine}.txt`), 'y.js\n')
   write(join(rt, 'execute-runs', 'exec-early', 'change'), mine + '\n')
   // 无 worktrees/<mine>/meta.json → archiveWorktreeCleanup 走孤儿 force cleanup 后 return

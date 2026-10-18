@@ -175,10 +175,12 @@ export function renderFrictionHintLine(counts) {
 export async function recordFrictionEvent({ cwd, platformOpts, changeName, type, detail }) {
   try {
     if (!FRICTION_TYPES.has(type)) return null
+    // enabled=false 直通：record/consume 双 no-op，.runtime 零写入（D-003 一键全关）。
+    // 必须先于 frictionTallyPath（2026-10-18 起路径助手带 mkdir-p 目录保证，关闭态
+    // 构造路径即建 state/ 目录=破坏零写入契约）
+    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return null
     const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
     if (!tallyPath) return null
-    // enabled=false 直通：record/consume 双 no-op，.runtime 零写入（D-003 一键全关）
-    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return null
     return await withFileLock(tallyPath + ".lock", async () => {
     const tally = readFrictionTally(tallyPath)
     const at = new Date().toISOString()
@@ -208,9 +210,10 @@ export async function recordFrictionEvent({ cwd, platformOpts, changeName, type,
  */
 export async function consumeFrictionHint({ cwd, platformOpts, changeName }) {
   try {
+    // enabled 检查先于路径构造（同 record：关闭态零写入，路径助手 mkdir-p 不触发）
+    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return { hint: null, counts: {} }
     const tallyPath = frictionTallyPath({ cwd, platformOpts, changeName })
     if (!tallyPath || !existsSync(tallyPath)) return { hint: null, counts: {} }
-    if (!readFrictionHintEnabled(deriveSpecBase(cwd, platformOpts))) return { hint: null, counts: {} }
     return await withFileLock(tallyPath + ".lock", async () => {
     const tally = readFrictionTally(tallyPath)
     const counts = {}

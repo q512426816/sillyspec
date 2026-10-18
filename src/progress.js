@@ -11,7 +11,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
-import { RUNTIME_TEMP_DIRNAME } from './runtime-paths.js'
+import { RUNTIME_TEMP_DIRNAME, runtimeTempPath } from './runtime-paths.js'
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir, hostname } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -349,7 +349,7 @@ export class ProgressManager {
     const runtimeDir = this._runtimePath(cwd);
     if (!existsSync(runtimeDir)) {
       mkdirSync(runtimeDir, { recursive: true });
-      for (const d of ['artifacts', 'history', 'logs', 'templates']) {
+      for (const d of ['artifacts', 'history', 'logs', 'templates', 'state', 'temp']) {
         mkdirSync(join(runtimeDir, d), { recursive: true });
       }
     }
@@ -882,10 +882,15 @@ export class ProgressManager {
     let keep = Number(process.env.SILLYSPEC_PREIMPORT_BAK_KEEP);
     if (!Number.isInteger(keep) || keep < 1) keep = PRE_IMPORT_BAK_KEEP_DEFAULT;
 
-    // 快照 2026-10-18 起落 temp/；根目录扫描保留旧布局兜底（迁移幂等收敛后清零）
-    const scanDirs = [this._runtimePath(cwd, RUNTIME_TEMP_DIRNAME), this._runtimePath(cwd)]
-    const baks = [...new Set(scanDirs.flatMap(d => { try { return readdirSync(d) } catch { return [] } }))]
-      .filter(f => PRE_IMPORT_BAK_RE.test(f)).sort();
+    // 快照 2026-10-18 起落 temp/；根目录扫描保留旧布局兜底（迁移幂等收敛后清零）。
+    // 契约：根 runtime 目录缺失仍如实抛 ENOENT（fail-loud 不静默假成功）；temp/ 是可选
+    // 层（迁移前不存在），缺失按空集处理。
+    const rootDir = this._runtimePath(cwd)
+    const scanDirs = [this._runtimePath(cwd, RUNTIME_TEMP_DIRNAME), rootDir]
+    const baks = [...new Set([
+      ...(() => { try { return readdirSync(scanDirs[0]) } catch { return [] } })(),
+      ...readdirSync(rootDir),
+    ])].filter(f => PRE_IMPORT_BAK_RE.test(f)).sort();
     const keepName = keepPath ? basename(keepPath) : null;
     const doomed = baks.slice(0, Math.max(0, baks.length - keep)).filter(f => f !== keepName);
 
@@ -942,7 +947,8 @@ export class ProgressManager {
   _maybeSnapshotBak(cwd) {
     try {
       const dbPath = this._runtimePath(cwd, 'sillyspec.db');
-      const bakPath = dbPath + '.bak';
+      // 2026-10-18 布局分层：可删备份归 temp/（db.js _openWithFallback 双路径回读）
+      const bakPath = runtimeTempPath(dirname(dbPath), 'sillyspec.db.bak');
       const st = existsSync(bakPath) ? statSync(bakPath) : null;
       if (st && Date.now() - st.mtimeMs < ProgressManager.SNAPSHOT_INTERVAL_MS) return;
       const tmpPath = bakPath + '.tmp';

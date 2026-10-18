@@ -27,10 +27,11 @@ function makeFixture({ localFiles = [] } = {}) {
     mkdirSync(dirname(join(specDir, rel)), { recursive: true })
     writeFileSync(join(specDir, rel), content, 'utf8')
   }
+  mkdirSync(join(specDir, '.runtime', 'state'), { recursive: true })
   // progress 未决冲突文件（sync() 抑制分支的触发面；不带 platform_last_pushed_at
   // → 跳过过期自清的 DB 读取，直接进抑制分支）
   writeFileSync(
-    join(specDir, '.runtime', `sync-conflict-${CHANGE}.json`),
+    join(specDir, '.runtime', 'state', `sync-conflict-${CHANGE}.json`),
     JSON.stringify({ change: CHANGE, kind: 'progress', created_at: new Date().toISOString(), note: 'test fixture' }) + '\n',
     'utf8',
   )
@@ -99,7 +100,7 @@ test('1. 冲突抑制期间 spec 树删除 op 照常上行（红→绿：此前�
       const ops = postBodyCapture.flatMap((b) => (Array.isArray(b.ops) ? b.ops : []))
       const del = ops.find((o) => o.op === 'delete' && o.path === DELETED_TASK)
       assert.ok(del, `POST ops 应含 delete ${DELETED_TASK}（实际 ops=${JSON.stringify(ops)}）`)
-      assert.equal(existsSync(join(specDir, '.runtime', `sync-conflict-${CHANGE}.json`)), true, 'progress 冲突文件不被触碰（独立通道互不干扰）')
+      assert.equal(existsSync(join(specDir, '.runtime', 'state', `sync-conflict-${CHANGE}.json`)), true, 'progress 冲突文件不被触碰（独立通道互不干扰）')
     })
   } finally { restore() }
 })

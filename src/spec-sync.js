@@ -585,13 +585,17 @@ export function writeTombstoneAttribution(specRoot, platformDeleted) {
  * 清理条数。挂在两个全绿点：POST 成功无冲突分支与无差异跳过分支。
  */
 export function clearStaleTombstoneMarkers(specRoot) {
+  // 2026-10-18 布局分层：冲突文件落 state/；根目录扫描保留旧布局兜底
   const runtimeDir = join(specRoot, '.runtime');
   let files = [];
-  try { files = readdirSync(runtimeDir); } catch { return 0; }
+  const conflictDirs = [join(runtimeDir, 'state'), runtimeDir]
   let cleared = 0;
-  for (const f of files) {
+  for (const dir of conflictDirs) {
+  let dirFiles = [];
+  try { dirFiles = readdirSync(dir); } catch { continue; }
+  for (const f of dirFiles) {
     if (!f.startsWith('spec-sync-conflict-') || !f.endsWith('.json')) continue;
-    const p = join(runtimeDir, f);
+    const p = join(dir, f);
     try {
       const j = JSON.parse(readFileSync(p, 'utf8'));
       const cp = Array.isArray(j.conflicting_paths) ? j.conflicting_paths : null;
@@ -601,6 +605,7 @@ export function clearStaleTombstoneMarkers(specRoot) {
         cleared++;
       }
     } catch { /* 损坏文件不动 */ }
+  }
   }
   if (cleared > 0) {
     console.log(`[spec-sync] 全绿同步清理 ${cleared} 条陈旧墓碑冲突记录（被删变更已收敛）`);

@@ -78,7 +78,7 @@ test('① 纯墓碑形态：专用横幅（非版本冲突 + manifest-heal 指�
     assert.ok(banner.includes('非版本冲突') && banner.includes('resolve --keep-local 重推无效'), '明示 resolve 无效')
     assert.ok(lines.some((l) => l.includes('manifest-heal')), '恢复指引指向 manifest-heal')
     assert.ok(!lines.some((l) => l.includes('--keep-local | --take-platform')), '不落版本冲突三态处置线')
-    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`), 'utf8'))
+    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`), 'utf8'))
     assert.deepEqual(cf.platform_deleted, [realP, tombP], '冲突文件记墓碑路径')
     assert.equal(cf.conflicting_paths.length, 0, '版本冲突面为空（不误导 resolve）')
   } finally { m.restore() }
@@ -100,7 +100,7 @@ test('② 混合形态：真冲突照常全幅横幅，墓碑路径分离单独�
     assert.ok(!banner.includes('tomb.md'), '墓碑路径不进版本冲突横幅')
     const tombLine = lines.find((l) => l.includes('删除墓碑拒收'))
     assert.ok(tombLine && tombLine.includes('tomb.md'), '墓碑路径单独一行提示')
-    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`), 'utf8'))
+    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', 'state', `spec-sync-conflict-${CN}.json`), 'utf8'))
     assert.deepEqual(cf.platform_deleted, [tombP], '冲突文件附带 platform_deleted')
     assert.deepEqual(cf.conflicting_paths, [realP], '待裁决面只有真冲突路径')
   } finally { m.restore() }

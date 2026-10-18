@@ -444,7 +444,8 @@ console.log('\n=== C. reconcileTargetFiles 对账（git fixture）===\n')
     // apply 落盘的精确清单（worktree-apply.js:1145 同源产物）
     const runtimeDir = join(dir, '.sillyspec', '.runtime')
     mkdirSync(runtimeDir, { recursive: true })
-    writeFileSync(join(runtimeDir, `apply-pathspec-${change}.txt`), 'src/from-pathspec.js\n')
+    mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+    writeFileSync(join(runtimeDir, 'state', `apply-pathspec-${change}.txt`), 'src/from-pathspec.js\n')
 
     const r = reconcileTargetFiles({ cwd: dir, changeName: change })
     assert(r.status === 'ok' && JSON.stringify(r.matched) === JSON.stringify(['src/from-pathspec.js']),

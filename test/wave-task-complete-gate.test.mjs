@@ -81,7 +81,8 @@ function makeFixture({ tasksMd, withReview = false } = {}) {
   if (withReview) {
     const runId = 'exec-2026-09-17-120000'
     mkdirSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02'), { recursive: true })
-    writeFileSync(join(runtimeRoot, `current-execute-run-id-${changeName}`), runId)
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+    writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${changeName}`), runId)
     writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), JSON.stringify({
       schemaVersion: 1,
       task: 'task-02',

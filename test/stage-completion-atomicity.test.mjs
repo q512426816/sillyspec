@@ -303,7 +303,8 @@ console.log('\n--- (f) execute + ctx → validateTaskReviews 零调用（Task Re
     '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
   const runtimeRoot = join(specBase, '.runtime')
   mkdirSync(join(runtimeRoot, 'execute-runs', 'exec-stub', 'tasks', 'task-01'), { recursive: true })
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), 'exec-stub\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), 'exec-stub\n')
   const progress = await seedStage(pm, cwd, cn, 'execute', EXEC_STEPS, 'completed')
 
   const r = await runCapturing(() =>
@@ -327,7 +328,8 @@ console.log('\n--- (g) execute + 无 ctx → validateTaskReviews 零调用（退
     '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
   const runtimeRoot = join(specBase, '.runtime')
   mkdirSync(join(runtimeRoot, 'execute-runs', 'exec-stub2', 'tasks', 'task-01'), { recursive: true })
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), 'exec-stub2\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), 'exec-stub2\n')
   const progress = await seedStage(pm, cwd, cn, 'execute', EXEC_STEPS, 'completed')
 
   const r = await runCapturing(() =>

@@ -75,7 +75,7 @@ test('四合一 happy path：单命令四段结果行（review 落盘/勾选/标
     assert.equal(step(r, 'wt-commit').status, 'done')
     // 落盘事实：review.json verdict + tasks.md 勾选 + 标记清除 + worktree HEAD 前移
     const reviewDir = join(f.specBase, '.runtime')
-    const runId = readFileSync(join(reviewDir, `current-execute-run-id-${CHANGE}`), 'utf8').trim()
+    const runId = readFileSync(join(reviewDir, 'state', `current-execute-run-id-${CHANGE}`), 'utf8').trim()
     const rev = JSON.parse(readFileSync(join(reviewDir, 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), 'utf8'))
     assert.equal(rev.specVerdict, 'pass')
     assert.equal(rev.qualityVerdict, 'pass')
@@ -102,7 +102,7 @@ test('断点重入幂等（护栏#3）：同 verdict 复跑全跳过、零重复
     assert.ok(first.ok)
     const headAfterFirst = wtHead(f.wt)
     const reviewDir = join(f.specBase, '.runtime')
-    const runId = readFileSync(join(reviewDir, `current-execute-run-id-${CHANGE}`), 'utf8').trim()
+    const runId = readFileSync(join(reviewDir, 'state', `current-execute-run-id-${CHANGE}`), 'utf8').trim()
     const reviewPath = join(reviewDir, 'execute-runs', runId, 'tasks', 'task-01', 'review.json')
     const reviewContent = readFileSync(reviewPath, 'utf8')
     const second = await runTaskDone({

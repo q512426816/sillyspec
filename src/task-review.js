@@ -1970,7 +1970,7 @@ export async function writeTaskReview({
   if (!existsSync(taskCardPath)) {
     return { ok: false, errors: [`task 卡不存在：${taskCardPath}（先由 plan 阶段生成或手建）`], warnings }
   }
-  const markerFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  const markerFile = runtimeStatePath(runtimeRoot, 'current-execute-run-id-' + changeName)
   let executeRunId = ''
   try {
     if (existsSync(markerFile)) {
@@ -1987,6 +1987,7 @@ export async function writeTaskReview({
       // 排他认领（坑 exec-run-id-same-second-collision）+ 幂等 mkdir，认领碰撞换后缀
       executeRunId = claimExecuteRunId(runtimeRoot, executeRunId)
       mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
+      try { mkdirSync(dirname(markerFile), { recursive: true }); } catch { /* fail-open */ }
       writeFileSync(markerFile, executeRunId + '\n')
       stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
       warnings.push(`无 execute run marker——已生成新 runId ${executeRunId} 并建目录（正常应先跑过 execute Wave 步）`)

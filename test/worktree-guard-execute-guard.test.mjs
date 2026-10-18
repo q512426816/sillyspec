@@ -55,6 +55,7 @@ function mkProject(prefix) {
 function seedDb(cwd, { name = 'c-exec', stage = 'execute', status = 'active', noWorktree = 0 } = {}) {
   const runtimeDir = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   const db = new DB(join(runtimeDir, 'sillyspec.db'))
   db.init() // node:sqlite DatabaseSync 同步 API，无 await
   const sq = db.getDb()

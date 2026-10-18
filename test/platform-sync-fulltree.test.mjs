@@ -53,7 +53,7 @@ test('全树同步（changeName=null）全绿——add op 推送 + 成功计数 
     assert.equal(calls.post.length, 1)
     assert.equal(calls.post[0].ops[0].op, 'add')
     assert.equal(calls.post[0].ops[0].path, 'changes/archive/chg-a/tasks.md')
-    assert.equal(existsSync(join(root, '.runtime', 'spec-sync-conflict-full-tree.json')), false)
+    assert.equal(existsSync(join(root, '.runtime', 'state', 'spec-sync-conflict-full-tree.json')), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -78,13 +78,13 @@ test('全树冲突归因单一 CJK 变更——冲突文件按变更名落盘（
     assert.equal(calls.post[0].ops[0].op, 'update')
     assert.equal(calls.post[0].ops[0].base_version, 4)
     // 冲突文件归因到变更名（中文文件名，Windows/Linux/macOS 文件系统均合法）
-    const cf = join(root, '.runtime', `spec-sync-conflict-${changeName}.json`)
+    const cf = join(root, '.runtime', 'state', `spec-sync-conflict-${changeName}.json`)
     assert.ok(existsSync(cf), '冲突文件按变更名归因落盘')
     const detail = JSON.parse(readFileSync(cf, 'utf8'))
     assert.equal(detail.change, changeName)
     assert.deepEqual(detail.conflicting_paths, [rel])
     // 不落 full-tree 合并文件
-    assert.equal(existsSync(join(root, '.runtime', 'spec-sync-conflict-full-tree.json')), false)
+    assert.equal(existsSync(join(root, '.runtime', 'state', 'spec-sync-conflict-full-tree.json')), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -110,7 +110,7 @@ test('全树冲突跨多变更——归并 full-tree 单文件（change 字段 f
     const r = await syncSpecTree(root, PLATFORM, null, {})
 
     assert.equal(r.conflict, true)
-    const cf = join(root, '.runtime', 'spec-sync-conflict-full-tree.json')
+    const cf = join(root, '.runtime', 'state', 'spec-sync-conflict-full-tree.json')
     assert.ok(existsSync(cf), '跨变更冲突归并 full-tree 文件')
     const detail = JSON.parse(readFileSync(cf, 'utf8'))
     assert.equal(detail.change, 'full-tree')

@@ -119,7 +119,7 @@ test('③ tick 事件直写：翻格追加精确 task-done（source:task-tick，
   const { cwd, cli } = makeRepo()
   const change = '2026-10-01-vtt-4'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '补齐任务行为验证的面\n成功标准：\n- 行为甲\n- 行为乙\n- 行为丙']).status, 0)
-  const evPath = join(cwd, '.sillyspec', '.runtime', `watcher-events-${change}.jsonl`)
+  const evPath = join(cwd, '.sillyspec', '.runtime', 'state', `watcher-events-${change}.jsonl`)
   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-01']).status, 0)
   assert.equal(cli(['task', 'tick', '--change', change, '--task', 'task-02']).status, 0)
   const stream = readWatcherEvents({ path: evPath })

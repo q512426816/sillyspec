@@ -64,7 +64,7 @@ const setLocalTs = (cwd, name, modified, synced) => {
   ).run(modified, synced, name);
 };
 
-const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`);
+const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', 'state', `sync-conflict-${name}.json`);
 
 const setupCwd = (sub) => {
   const cwd = join(tmpRoot, sub, 'proj');

@@ -72,7 +72,7 @@ const getBaseTs = (cwd, name) => {
   const row = pm._ensureDB(cwd).getDb().prepare('SELECT last_synced_platform_ts FROM changes WHERE name = ?').get(name);
   return row && row.last_synced_platform_ts;
 };
-const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`);
+const conflictPathOf = (cwd, name) => join(cwd, '.sillyspec', '.runtime', 'state', `sync-conflict-${name}.json`);
 
 const setupCwd = (sub, changeName) => {
   const cwd = join(tmpRoot, sub, 'proj');

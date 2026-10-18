@@ -33,6 +33,7 @@ let seq = 0
 const makeRt = () => {
   const rt = join(tmpRoot, `case-${++seq}`, '.sillyspec', '.runtime')
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   return rt
 }
 const ledgerPath = (rt) => join(rt, 'friction-ledger.json')
@@ -43,7 +44,7 @@ const writeLedger = (rt, body) => {
   writeFileSync(p, typeof body === 'string' ? body : JSON.stringify(body, null, 2))
 }
 const writeTally = (rt, change, events) => {
-  const p = join(rt, `friction-tally-${change}.json`)
+  const p = join(rt, 'state', `friction-tally-${change}.json`)
   writeFileSync(p, JSON.stringify({ events, history: [] }, null, 2))
   return p
 }
@@ -195,7 +196,7 @@ console.log('\n--- 7. prune 兜底：残余 merge + archivedAt + ledgerAppend --
   const r = pruneArchivedChangeRuntime(rt, change)
   assert(r.ok === true && typeof r.removed === 'number', '{ok, removed} 既有契约不变（additive）')
   assert(r.ledgerAppend === true, '残余非零 → ledgerAppend:true')
-  assert(!existsSync(join(rt, `friction-tally-${change}.json`)), '残余 tally 仍被删（归档回收语义不变）')
+  assert(!existsSync(join(rt, 'state', `friction-tally-${change}.json`)), '残余 tally 仍被删（归档回收语义不变）')
   const entries = readLedger(rt)
   assert(entries.length === 1 && entries[0].change === change, 'prune merge 落同 change 条目（非双计）')
   assert(entries[0].counts.gate_rollback === 2 && entries[0].counts.verify_run_failed === 1, '主账 2 + 残余 1 累加正确')
@@ -212,10 +213,11 @@ console.log('\n--- 7. prune 兜底：残余 merge + archivedAt + ledgerAppend --
 
   // 7c. 坏 JSON 残余 → 跳过入账，归档照常
   const rt3 = makeRt()
-  writeFileSync(join(rt3, 'friction-tally-2026-09-15-corrupt-residual.json'), '{broken')
+  mkdirSync(join(rt3, 'state'), { recursive: true })
+  writeFileSync(join(rt3, 'state', 'friction-tally-2026-09-15-corrupt-residual.json'), '{broken')
   const r4 = pruneArchivedChangeRuntime(rt3, '2026-09-15-corrupt-residual')
   assert(r4.ok === true && r4.ledgerAppend === false, '坏 JSON 残余 → 跳过入账不抛')
-  assert(!existsSync(join(rt3, 'friction-tally-2026-09-15-corrupt-residual.json')), '坏残余 tally 仍被删')
+  assert(!existsSync(join(rt3, 'state', 'friction-tally-2026-09-15-corrupt-residual.json')), '坏残余 tally 仍被删')
 
   // 7d. 台账写失败 fail-soft：台账路径被目录占位（rename 必炸），归档回收照常
   const rt4 = makeRt()
@@ -225,7 +227,7 @@ console.log('\n--- 7. prune 兜底：残余 merge + archivedAt + ledgerAppend --
   try { r5 = pruneArchivedChangeRuntime(rt4, 'c-failsoft') } catch (e) { r5 = { threw: true, e } }
   assert(r5 && !r5.threw && r5.ok === true, '台账写失败绝不阻断归档回收（红线：不抛、ok 不变）')
   assert(r5.ledgerAppend === false, '台账写失败 → ledgerAppend:false')
-  assert(!existsSync(join(rt4, 'friction-tally-c-failsoft.json')), '台账写失败时 tally 回收照常')
+  assert(!existsSync(join(rt4, 'state', 'friction-tally-c-failsoft.json')), '台账写失败时 tally 回收照常')
 }
 
 // ─────────────────────────────────────────
@@ -238,6 +240,7 @@ console.log('\n--- 8. doctor 税面维度四态 ---')
     const specBase = join(cwd, '.sillyspec')
     const rt = join(specBase, '.runtime')
     mkdirSync(rt, { recursive: true })
+    mkdirSync(join(rt, 'state'), { recursive: true })
     return { cwd, specBase, rt }
   }
 

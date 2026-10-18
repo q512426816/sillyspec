@@ -102,7 +102,7 @@ test('confirm 全量：status=deleted（非 archived）+ 目录移除 + 审计�
     assert.equal(r.dir_removed, true)
     assert.equal(readStatus(cwd, '2026-08-30-full'), 'deleted', 'DB status=deleted（与 archived 语义分离——核心断言）')
     assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', '2026-08-30-full')), '目录已移除')
-    const auditPath = join(cwd, '.sillyspec', '.runtime', 'audit.log')
+    const auditPath = join(cwd, '.sillyspec', '.runtime', 'temp', 'audit.log')
     assert.ok(existsSync(auditPath), '审计日志落盘')
     const audit = readFileSync(auditPath, 'utf8')
     assert.ok(audit.includes('"action":"change-delete"') || audit.includes('"action": "change-delete"'), '审计条目 action=change-delete')

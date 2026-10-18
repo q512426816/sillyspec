@@ -738,9 +738,13 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
     const { cwd, specBase, changeName } = await makeProjectFixture({ changeName: 'c-cf' })
     // 造两类冲突文件（progress + spec-tree），字段与 sync.js listConflictFiles 对齐
     mkdirSync(join(specBase, '.runtime'), { recursive: true })
-    writeFileSync(join(specBase, '.runtime', `sync-conflict-${changeName}.json`),
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', `sync-conflict-${changeName}.json`),
       JSON.stringify({ change: changeName, created_at: '2026-09-02T10:00:00Z' }))
-    writeFileSync(join(specBase, '.runtime', `spec-sync-conflict-${changeName}.json`),
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', `spec-sync-conflict-${changeName}.json`),
       JSON.stringify({ change: changeName }))
     const { envelope, exitCode } = runStatusOverview({ cwd, specBase })
     assert(exitCode === EXIT_OK, '有冲突仍 exit 0（总览成功，冲突是待处理事实非阻断）')
@@ -751,14 +755,18 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
     assert(envelope.warnings.some(w => w.includes(changeName) && w.includes('未决同步冲突')),
       '冲突升 warnings（含变更名，面板看顶层即知）')
     // 损坏文件容错：写一个坏 JSON → 按文件名兜底不崩
-    writeFileSync(join(specBase, '.runtime', 'sync-conflict-broken.json'), '{oops')
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', 'sync-conflict-broken.json'), '{oops')
     const again = runStatusOverview({ cwd, specBase })
     assert(again.exitCode === EXIT_OK && again.envelope.data.pending_conflicts.some(c => c.change === 'broken'),
       '损坏冲突文件按文件名兜底（不崩、change=broken）')
 
     // 10f-补丁：挂在非活跃变更上的冲突，人类可读 show 全局段也显示（治 11 条漏显盲区）
     // 注：全局段在多变更汇总分支——fixture 需 ≥2 活跃 change（单变更走 _showChange 详情分支）
-    writeFileSync(join(specBase, '.runtime', 'sync-conflict-archived-old.json'),
+    mkdirSync(join(specBase, 'state'), { recursive: true })
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', 'sync-conflict-archived-old.json'),
       JSON.stringify({ change: 'archived-old', created_at: '2026-09-01T00:00:00Z' }))
     {
       const { ProgressManager } = await import('../src/progress.js')

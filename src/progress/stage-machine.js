@@ -361,8 +361,12 @@ export class StageMachine {
   /** 未决同步冲突列表（overview 数据源；与 sync.js listConflictFiles 同前缀同字段，fs-only） */
   _listPendingConflicts(specDir) {
     const runtimeDir = join(specDir, '.runtime');
+    // 2026-10-18 布局分层：冲突文件落 state/；根目录扫描保留旧布局兜底
     let files = [];
-    try { files = readdirSync(runtimeDir); } catch { return []; }
+    for (const dir of [join(runtimeDir, 'state'), runtimeDir]) {
+      try { files.push(...readdirSync(dir)); } catch { /* 可选层缺失跳过 */ }
+    }
+    const fileDir = (f) => (existsSync(join(runtimeDir, 'state', f)) ? join(runtimeDir, 'state') : runtimeDir)
     const conflicts = [];
     for (const f of files) {
       const isProgress = f.startsWith('sync-conflict-');
@@ -371,7 +375,7 @@ export class StageMachine {
       let createdAt = null;
       let kind = null;
       try {
-        const cf = JSON.parse(readFileSync(join(runtimeDir, f), 'utf8'));
+        const cf = JSON.parse(readFileSync(join(fileDir(f), f), 'utf8'));
         change = cf.change || change;
         createdAt = cf.created_at || null;
         kind = typeof cf.kind === 'string' ? cf.kind : null;

@@ -59,6 +59,7 @@ const tmpRoots = []
 function makeTmpDir(prefix) {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   tmpRoots.push(dir)
+  mkdirSync(join(dir, 'state'), { recursive: true }) // 2026-10-18 布局分层：per-change 散文件落 state/
   return dir
 }
 
@@ -514,7 +515,7 @@ console.log('\n=== 7. 并发锁：交错写档位文件只升不降（FR-04/D-00
   }
 
   // 7b. taskcard 指定序：高档写先落、低档写后到 → 不回退 + 拒降留痕
-  const p2 = join(runtimeRoot, 'ceremony-tier-seq.json')
+  const p2 = join(runtimeRoot, 'state', 'ceremony-tier-seq.json')
   const first = await lockedTierWrite(p2, 'S3', 'high-first')
   const second = await lockedTierWrite(p2, 'S1', 'low-late')
   assert(first === 'S3' && second === 'S3', `高档先落 S3、低档后到 → 均返回 S3（实际 ${first}/${second}，降档被拒）`)
@@ -523,7 +524,7 @@ console.log('\n=== 7. 并发锁：交错写档位文件只升不降（FR-04/D-00
     `终态 S3 且拒降 reasons 留痕（实际 ${doc2 && doc2.tier}）`)
 
   // 7c. escalateByFriction 驱动检查点链：空档三连升 S0→S1→S2→S3，第四发封顶不再升
-  const p3 = join(runtimeRoot, 'ceremony-tier-chain.json')
+  const p3 = join(runtimeRoot, 'state', 'ceremony-tier-chain.json')
   const chain = []
   for (let i = 0; i < 4; i++) chain.push(await frictionCheckpoint(p3, { gate_rollback: FRICTION_ESCALATION_THRESHOLD }))
   assert(chain[0].tier === 'S1' && chain[1].tier === 'S2' && chain[2].tier === 'S3' && chain[3].tier === 'S3' && chain[3].escalated === false,
@@ -533,7 +534,7 @@ console.log('\n=== 7. 并发锁：交错写档位文件只升不降（FR-04/D-00
 
   // 7d. 锁有效性判别：两并发同账检查点，锁内串行 → 后者必读到前者的 S1 → 终态 S2；
   //     锁失效交错（双双读 S0）→ 终态停在 S1（丢失更新）——终态 S2 即锁真实生效
-  const p5 = join(runtimeRoot, 'ceremony-tier-lockeff.json')
+  const p5 = join(runtimeRoot, 'state', 'ceremony-tier-lockeff.json')
   const pair = await Promise.all([
     frictionCheckpoint(p5, { gate_rollback: FRICTION_ESCALATION_THRESHOLD }),
     frictionCheckpoint(p5, { gate_rollback: FRICTION_ESCALATION_THRESHOLD }),
@@ -543,7 +544,7 @@ console.log('\n=== 7. 并发锁：交错写档位文件只升不降（FR-04/D-00
     `并发同账双检查点 → 终态 S2 无丢失更新（实际 ${doc5 && doc5.tier}；锁失效会停 S1）`)
 
   // 7e. writeAtomicSync 原子性：并发写期间读者恒见完整 JSON（旧版或新版，无半截）
-  const p4 = join(runtimeRoot, 'ceremony-tier-atomic.json')
+  const p4 = join(runtimeRoot, 'state', 'ceremony-tier-atomic.json')
   const writers = Promise.all([lockedTierWrite(p4, 'S3', 'w1'), lockedTierWrite(p4, 'S2', 'w2'), lockedTierWrite(p4, 'S1', 'w3')])
   let polls = 0
   let parseFailures = 0

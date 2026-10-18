@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 /**
  * summarizeTaskCompletion 行为测试 —— archive Step1「任务完成度检查」客观真相源
  *
@@ -38,7 +39,8 @@ function writeReview(runtimeRoot, runId, taskId, specVerdict, qualityVerdict, ex
   }))
 }
 function writeMarker(runtimeRoot, changeName, runId) {
-  fs.writeFileSync(path.join(runtimeRoot, 'current-execute-run-id-' + changeName), runId + '\n')
+  mkdirSync(path.join(runtimeRoot, 'state'), { recursive: true })
+  fs.writeFileSync(path.join(runtimeRoot, 'state', 'current-execute-run-id-' + changeName), runId + '\n')
 }
 const cleanup = root => { try { fs.rmSync(root, { recursive: true, force: true }) } catch {} }
 const CN = '2026-07-28-test-change'

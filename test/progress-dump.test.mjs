@@ -114,6 +114,7 @@ async function makeFixture({ changeName = 'test-change', withArtifacts = false, 
   if (withArtifacts) {
     const artDir = join(specBase, '.runtime', 'artifacts')
     mkdirSync(artDir, { recursive: true })
+    mkdirSync(join(artDir, 'state'), { recursive: true })
     writeFileSync(join(artDir, 'design.md'), '# 设计文档\n')
     writeFileSync(join(artDir, 'plan.md'), '# 实现计划\n')
   }

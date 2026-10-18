@@ -48,6 +48,7 @@ function makeFixture() {
   const runtimeDir = join(base, '.runtime')
   mkdirSync(knowledgeDir, { recursive: true })
   mkdirSync(runtimeDir, { recursive: true })
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
   return { root, base, knowledgeDir, runtimeDir }
 }
 

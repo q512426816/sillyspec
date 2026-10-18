@@ -47,7 +47,8 @@ const FIXED_RUN_ID = 'exec-2026-07-25-100000'
 // taskNums：写哪些 task 的 pass review。省略某 task → 它不会被 autoCheckPlanFromReviews 自动勾选。
 function writePassingTaskReviews(specBase, cn, gitHead, taskNums = ['01', '02', '03']) {
   const runtimeRoot = join(specBase, '.runtime')
-  writeFileSync(join(runtimeRoot, `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `current-execute-run-id-${cn}`), FIXED_RUN_ID, 'utf8')
   const tasksDir = join(runtimeRoot, 'execute-runs', FIXED_RUN_ID, 'tasks')
   for (const taskNum of taskNums) {
     const dir = join(tasksDir, `task-${taskNum}`)

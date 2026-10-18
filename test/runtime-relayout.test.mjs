@@ -181,11 +181,13 @@ console.log('\n--- 8. FR-03 prune：state/ 全家族回收 + 根路径兜底 ---
   for (const n of ['draft-ledger-ARCH.json', 'watcher-events-ARCH.jsonl', `apply-pathspec-${c}.txt`,
     `friction-tally-${c}.json`, `current-execute-run-id-${c}`, `current-stage-review-run-id-plan-${c}`,
     `ceremony-tier-${c}.json`, `test-ledger-${c}.json`]) {
+    mkdirSync(join(root, 'state'), { recursive: true })
     writeFileSync(join(root, 'state', n.includes('ARCH') ? n.replace('ARCH', c) : n), '{}')
   }
   // 根目录旧布局兜底面：混版本迟到文件
   writeFileSync(join(root, `draft-ledger-${c}.json`), 'late-old')
   // 他变更文件：不得连坐
+  mkdirSync(join(root, 'state'), { recursive: true })
   writeFileSync(join(root, 'state', 'draft-ledger-2026-10-18-other.json'), 'OTHER')
 
   const r = pruneArchivedChangeRuntime(root, c)
@@ -203,12 +205,15 @@ console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spa
   const repo = join(tmpRoot, 'repo', 'proj')
   const rt = join(repo, '.sillyspec', '.runtime')
   mkdirSync(rt, { recursive: true })
+  mkdirSync(join(rt, 'state'), { recursive: true })
   writeFileSync(join(rt, 'draft-ledger-2026-01-01-upgrade.json'), 'D')
   writeFileSync(join(rt, 'ceremony-tier-2026-01-01-upgrade.json'), 'C')
   writeFileSync(join(rt, 'watcher.log'), 'L')
   writeFileSync(join(rt, 'repro-junk.mjs'), 'J') // 未知归属：入口迁移也不动
-  const r = spawnSync(process.execPath, [join('bin', 'sillyspec.js'), 'status', '--dir', repo], {
-    cwd: process.cwd(), encoding: 'utf8', timeout: 60000,
+  const childEnv = { ...process.env, SILLYSPEC_SYNC_BG: '0', SILLYSPEC_WATCHER: '0' } // 禁后台旁路：满载套件下子进程拖时间/残留句柄
+  const r = spawnSync(process.execPath, [join(process.cwd(), 'bin', 'sillyspec.js'), 'status', '--dir', repo], {
+    cwd: repo, // 子进程 cwd 锚临时仓：防 cwd 解析在真实仓/测试目录落 .sillyspec 污染
+    encoding: 'utf8', timeout: 60000, env: childEnv,
   })
   const okStatus = r.status === 0 || r.status === null
   assert(okStatus, `CLI status 正常完成（exit=${r.status}）`)

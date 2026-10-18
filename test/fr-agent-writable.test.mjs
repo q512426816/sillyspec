@@ -25,6 +25,7 @@ function fixture() {
   const runtimeRoot = join(root, '.runtime')
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   return { root, changeDir, runtimeRoot }
 }
 
@@ -54,7 +55,7 @@ test('② agent 撰写行为句+场景块（无 amend）——绑定门与 v2 �
   fill('requirements.md', (t) => t
     .replace(/^- （待撰写.*$/m, '- 系统 MUST 使标准 A 行为生效并可判定')
     .replace(/^FR-01: （待填.*$/m, 'FR-01: test/foo.test.mjs 用例 1'))
-  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'draft-ledger-c1.json'), 'utf8'))
+  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'state', 'draft-ledger-c1.json'), 'utf8'))
   const v = verifyThinDocsV2({ changeDir, ledger })
   assert.equal(v.violations.length, 0, `agent 撰写后应通过: ${JSON.stringify(v.violations)}`)
   assert.equal(verifyRequirementBindings({ changeDir }).emptySlots.length, 0, '绑定行已答')
@@ -66,7 +67,7 @@ test('③ 行为句未撰写（待撰写占位在场）→ verifyThinDocsV2 拒�
   draftAll({ changeDir, change: 'c1', input: '动机\n成功标准：\n- 标准 A', runtimeRoot })
   const fill = fillAnswers(changeDir)
   fill('requirements.md', (t) => t.replace(/^FR-01: （待填.*$/m, 'FR-01: test/foo.test.mjs'))
-  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'draft-ledger-c1.json'), 'utf8'))
+  const ledger = JSON.parse(readFileSync(join(runtimeRoot, 'state', 'draft-ledger-c1.json'), 'utf8'))
   const v = verifyThinDocsV2({ changeDir, ledger })
   assert.ok(v.violations.some((x) => /FR-01 行为句未撰写/.test(x)), `待撰写占位应拒: ${JSON.stringify(v.violations)}`)
   rmSync(root, { recursive: true, force: true })

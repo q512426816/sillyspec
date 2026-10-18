@@ -147,7 +147,7 @@ console.log('--- ③ exec-id marker 与 Task Review Gate 同源（marker 缺失�
   writeMeta(wtDir, 'trd3', base)
   writeTask(d, 'trd3', 'task-01', ['feature.js'])
 
-  const marker = path.join(d, '.sillyspec', '.runtime', 'current-execute-run-id-trd3')
+  const marker = path.join(d, '.sillyspec', '.runtime', 'state', 'current-execute-run-id-trd3')
   assertTrue(!fs.existsSync(marker), `调用前 marker 不存在`)
   const r = await generateTaskReviewDrafts({ changeName: 'trd3', cwd: d })
   assertTrue(fs.existsSync(marker), `调用后 marker 已落盘（与 gates.js Task Review Gate 同源 ID）`)

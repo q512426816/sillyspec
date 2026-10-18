@@ -1,7 +1,8 @@
 // W6 Step9a: Revision v1 状态一致性检查 + 修复 + --force 审计日志。
 // 从 src/progress.js 单体 ProgressManager 抽出。持有 pm 引用（构造注入），调 pm.read / pm._write /
 // pm._ensureRuntimeDir / pm._runtimePath（persistence-core 留 facade 本体）。
-import { appendFileSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'fs';
+import { dirname } from 'path';
 import { RUNTIME_TEMP_DIRNAME } from '../runtime-paths.js'
 import { join, resolve } from 'path';
 import { DB } from '../db.js';

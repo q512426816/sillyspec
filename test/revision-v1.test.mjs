@@ -1201,7 +1201,8 @@ console.log('\n--- Case 12: execute review.json 全 pass → 自动修 pending s
   writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), review('task-01'))
   writeFileSync(join(runtimeRoot, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), review('task-02'))
   // runId marker
-  writeFileSync(join(runtimeRoot, 'current-execute-run-id-' + changeName), runId)
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'current-execute-run-id-' + changeName), runId)
 
   const result = await pm.repairConsistency(cwd, { apply: true, changeName })
   assert(result.applied.some(a => a.action === 'align_execute_steps_to_reviews'), '应有 align_execute_steps_to_reviews 自动修复')

@@ -146,7 +146,9 @@ test('§5c 主仓形态 apply-pathspec 补源（ql-20260918-012）：meta/diff �
   git(tmp, ['add', '.']); git(tmp, ['commit', '-q', '-m', 'b'])
   writeFileSync(join(tmp, 'noise.md'), 'uncommitted')  // 并行会话噪声（porcelain 形态）
   mkdirSync(join(tmp, '.sillyspec', '.runtime'), { recursive: true })
-  writeFileSync(join(tmp, '.sillyspec', '.runtime', 'apply-pathspec-c-src.txt'), 'src/machine-interface.js' + String.fromCharCode(10) + 'docs/contract.md' + String.fromCharCode(10))
+  mkdirSync(join(tmp, 'state'), { recursive: true })
+  mkdirSync(join(tmp, '.sillyspec', '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(tmp, '.sillyspec', '.runtime', 'state', 'apply-pathspec-c-src.txt'), 'src/machine-interface.js' + String.fromCharCode(10) + 'docs/contract.md' + String.fromCharCode(10))
   const files = resolveVerifyChangedFiles(tmp, 'c-src', null, { includeWorkingTree: true, specBase: join(tmp, '.sillyspec') })
   assert.ok((files || []).includes('src/machine-interface.js'),
     `apply-pathspec 声明面必须进文件集（实际：${JSON.stringify(files)}）——缺失即主仓 0 命中假 skip 回归`)

@@ -34,8 +34,10 @@ const EV = {
 
 function writeFixture(runtimeRoot, change, records) {
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const lines = records.map((r) => (typeof r === 'string' ? r : JSON.stringify(r)))
-  writeFileSync(join(runtimeRoot, `watcher-events-${change}.jsonl`), lines.join('\n') + '\n', 'utf8')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', `watcher-events-${change}.jsonl`), lines.join('\n') + '\n', 'utf8')
 }
 
 function runCLI(args, cwd) {
@@ -156,7 +158,7 @@ test('CLI 路径穿越守卫: --change 含分隔符 → 非零退出', () => {
 
 test('CLI --follow: 追加行后打印新 warning 行（缺省过滤 normal 不打印），杀超时验证', { timeout: 30000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'wa-follow-'))
-  const eventsPath = join(root, 'watcher-events-follow-change.jsonl')
+  const eventsPath = join(root, 'state', 'watcher-events-follow-change.jsonl')
   writeFixture(root, 'follow-change', [EV.fakeCheck])
 
   const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', cliBin, 'watcher', 'alerts', '--change', 'follow-change', '--runtime-root', root, '--follow'], {

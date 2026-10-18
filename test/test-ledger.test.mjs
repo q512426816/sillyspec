@@ -42,6 +42,7 @@ test('L1 复用态：同码同环境记录后二次查询 → reuse=true；查�
   const repo = makeFixture()
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const args = { runtimeRoot, changeName: 'c-l1', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
 
   const before = consultTestLedger(args)
@@ -63,6 +64,7 @@ test('L2 指纹变：改一行 src（已提交）/新增未提交文件 → 代�
   const repo = makeFixture()
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const args = { runtimeRoot, changeName: 'c-l2', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
   assert.equal(recordTestLedger({ ...args, result: { pass: true } }), true)
 
@@ -88,6 +90,7 @@ test('L3 环境分键：worktree 形态 cwd 与主仓 cwd 互不复用（detectC
 
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const mainArgs = { runtimeRoot, changeName: 'c-l3', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
   const wtArgs = { ...mainArgs, cwd: wtCwd }
   assert.equal(recordTestLedger({ ...mainArgs, result: { pass: true } }), true)
@@ -105,6 +108,7 @@ test('L4 fail-closed：git 不可达不记不复用；失败结果永不记账',
   writeFileSync(join(notGit, 'test', 't.test.mjs'), 'x\n')
   const runtimeRoot = join(notGit, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   const args = { runtimeRoot, changeName: 'c-l4', projectRoot: notGit, testRoot: join(notGit, 'test'), specBase: join(notGit, '.sillyspec'), cwd: notGit, env: {} }
 
   const miss = consultTestLedger(args)

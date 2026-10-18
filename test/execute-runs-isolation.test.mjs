@@ -70,8 +70,8 @@ console.log('--- T-01: drift anchor → execute-runs marker 落主仓 ---')
   assert(rr === mainRuntime, `runtimeRoot 锚主仓 .runtime（期望 ${mainRuntime}，实际 ${rr}）`)
   assert(rr !== copyRuntime, 'runtimeRoot 不落 worktree 副本 .runtime')
 
-  // execute marker 路径 = join(rr, 'current-execute-run-id-<change>')，对齐 stage.js:93 / task-review.js:645
-  const execMarker = join(rr, `current-execute-run-id-${changeName}`)
+  // execute marker 路径 = join(rr, 'state', 'current-execute-run-id-<change>')，对齐 stage.js:93 / task-review.js:645
+  const execMarker = join(rr, 'state', `current-execute-run-id-${changeName}`)
   assert(execMarker.startsWith(mainRuntime), 'execute marker 在主仓 .runtime 下')
   assert(!execMarker.startsWith(copyRuntime), 'execute marker 不在副本 .runtime 下')
 
@@ -82,8 +82,9 @@ console.log('--- T-01: drift anchor → execute-runs marker 落主仓 ---')
   const realOpts = { specDriftAnchor: realMainSpec }
   const realRr = resolveRuntimeRoot(realOpts, realCopySpec)
   mkdirSync(realRr, { recursive: true })
-  writeFileSync(join(realRr, `current-execute-run-id-${changeName}`), 'exec-2026-08-06-000000\n')
-  assert(existsSync(join(realMainSpec, '.runtime', `current-execute-run-id-${changeName}`)),
+  mkdirSync(join(realRr, 'state'), { recursive: true })
+  writeFileSync(join(realRr, 'state', `current-execute-run-id-${changeName}`), 'exec-2026-08-06-000000\n')
+  assert(existsSync(join(realMainSpec, '.runtime', 'state', `current-execute-run-id-${changeName}`)),
     'fs：marker 实际写入主仓 .runtime')
   assert(!existsSync(join(realCopySpec, '.runtime')),
     'fs：副本 .runtime 未被创建（marker 未落副本）')
@@ -137,8 +138,8 @@ console.log('\n--- T-04: 多 change 并行 drift 无 marker 路径冲突 ---')
   const markerA = stageReviewMarkerPath(rr, 'execute', 'changeA')
   const markerB = stageReviewMarkerPath(rr, 'execute', 'changeB')
   assert(markerA !== markerB, '不同 change 的 stage review marker 路径不冲突')
-  const execA = join(rr, 'current-execute-run-id-changeA')
-  const execB = join(rr, 'current-execute-run-id-changeB')
+  const execA = join(rr, 'state', 'current-execute-run-id-changeA')
+  const execB = join(rr, 'state', 'current-execute-run-id-changeB')
   assert(execA !== execB, '不同 change 的 execute marker 路径不冲突')
   // execute-runs/<runId>/ 按 runId 隔离（runId 含时间戳全局唯一）；此处验证路径模板按 runId 分目录
   const run1 = join(rr, 'execute-runs', 'exec-2026-08-06-000001', 'tasks', 'task-01', 'review.json')

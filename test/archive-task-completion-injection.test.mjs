@@ -27,8 +27,10 @@ console.log('--- ① review.json 全 pass → 占位符替换为客观报告（�
   const runtimeRoot = join(cwd, '.sillyspec', '.runtime')
   mkdirSync(changeDir, { recursive: true })
   mkdirSync(runtimeRoot, { recursive: true })
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
   writeFileSync(join(changeDir, 'plan.md'), '- [x] task-01 a\n- [x] task-02 b\n')
-  writeFileSync(join(runtimeRoot, 'current-execute-run-id-' + cn), 'run-x\n')
+  mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
+  writeFileSync(join(runtimeRoot, 'state', 'current-execute-run-id-' + cn), 'run-x\n')
   for (const t of ['01', '02']) {
     const d = join(runtimeRoot, 'execute-runs', 'run-x', 'tasks', 'task-' + t)
     mkdirSync(d, { recursive: true })

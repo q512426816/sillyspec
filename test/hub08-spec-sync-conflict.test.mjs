@@ -81,7 +81,7 @@ const cwd = join(tmpRoot, 'proj')
 mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
 writeFileSync(join(cwd, '.sillyspec', 'a.md'), 'local version content\n')
 writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `platform:\n  url: ${mockUrl}\n  token: tok\n`)
-const specConflictPath = join(cwd, '.sillyspec', '.runtime', `spec-sync-conflict-${CN}.json`)
+const specConflictPath = join(cwd, '.sillyspec', '.runtime', 'state', `spec-sync-conflict-${CN}.json`)
 
 // ── 1. 冲突落文件 ──
 console.log('\n--- 1. syncSpecTree 冲突 → 落 spec-sync-conflict 文件 ---')

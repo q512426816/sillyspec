@@ -36,7 +36,7 @@ const makeCwd = () => {
 }
 const specBaseOf = (cwd) => join(cwd, '.sillyspec')
 const runtimeRootOf = (cwd) => join(specBaseOf(cwd), '.runtime')
-const realTallyPath = (cwd, change) => join(runtimeRootOf(cwd), `friction-tally-${change}.json`)
+const realTallyPath = (cwd, change) => join(runtimeRootOf(cwd), 'state', `friction-tally-${change}.json`)
 const quickTallyPath = (cwd, sessionId) =>
   join(runtimeRootOf(cwd), 'quick-sessions', sessionId, 'friction-tally.json')
 const record = (cwd, changeName, type, detail) => recordFrictionEvent({ cwd, changeName, type, detail }) // async（批 E-③ 锁化）：调用点一律 await

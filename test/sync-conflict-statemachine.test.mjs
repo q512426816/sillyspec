@@ -53,7 +53,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const mockUrl = `http://127.0.0.1:${server.address().port}`;
 
-const conflictPath = (cwd, name) => join(cwd, '.sillyspec', '.runtime', `sync-conflict-${name}.json`);
+const conflictPath = (cwd, name) => join(cwd, '.sillyspec', '.runtime', 'state', `sync-conflict-${name}.json`);
 
 const mkCwd = (sub) => {
   const cwd = join(tmpRoot, sub, 'proj');

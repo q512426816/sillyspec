@@ -48,6 +48,7 @@ console.log('--- Case 2: gate 自生 generateStageReviewRunId + 写 marker → �
   if (!reviewRunId) {
     reviewRunId = generateStageReviewRunId()
     mkdirSync(runtimeRoot, { recursive: true })
+    mkdirSync(join(runtimeRoot, 'state'), { recursive: true })
     writeFileSync(stageReviewMarkerPath(runtimeRoot, stage, change), reviewRunId + '\n')
   }
   const markerPath = stageReviewMarkerPath(runtimeRoot, stage, change)

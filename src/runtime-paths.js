@@ -81,14 +81,26 @@ export function runtimeStateFileNames(changeName) {
   return names
 }
 
+/**
+ * 路径助手自带目录保证（mkdir -p 语义，幂等 fail-open）：库级直调（测试/embedded）不经
+ * CLI 入口迁移，裸 writeFileSync/appendFileSync 落 state|temp 会 ENOENT——写点分散逐个补
+ * mkdir 是打地鼠（2026-10-18 实证四起），在唯一路径构造点收口。读检查顺带建空目录无害
+ * （init 预建面与入口迁移本就常态建这两层）。
+ */
+function _pathWithDir(runtimeRoot, dirname_, filename) {
+  const p = join(runtimeRoot, dirname_, filename)
+  try { mkdirSync(join(runtimeRoot, dirname_), { recursive: true }) } catch { /* fail-open：写入侧自抛真实原因 */ }
+  return p
+}
+
 /** @param {string} runtimeRoot @param {string} filename @returns {string} */
 export function runtimeStatePath(runtimeRoot, filename) {
-  return join(runtimeRoot, RUNTIME_STATE_DIRNAME, filename)
+  return _pathWithDir(runtimeRoot, RUNTIME_STATE_DIRNAME, filename)
 }
 
 /** @param {string} runtimeRoot @param {string} filename @returns {string} */
 export function runtimeTempPath(runtimeRoot, filename) {
-  return join(runtimeRoot, RUNTIME_TEMP_DIRNAME, filename)
+  return _pathWithDir(runtimeRoot, RUNTIME_TEMP_DIRNAME, filename)
 }
 
 function _isTempArtifact(name) {
@@ -117,6 +129,11 @@ export function migrateRuntimeLayout(runtimeRoot) {
     if (prefixes.some((p) => name.startsWith(p))) moves.push({ name, dest: RUNTIME_STATE_DIRNAME })
     else if (_isTempArtifact(name)) moves.push({ name, dest: RUNTIME_TEMP_DIRNAME })
     // 未知归属：不动（用户/工具自置文件无生命周期语义，迁移不猜）
+  }
+  // 无条件预建两层目录（幂等廉价）：CLI 入口路径保证 state/ 在一切写入前就位——
+  // 新仓首跑无文件可搬，靠这里兜住「迁移零动作、写入点裸写 ENOENT」的窗口
+  for (const d of [RUNTIME_STATE_DIRNAME, RUNTIME_TEMP_DIRNAME]) {
+    try { mkdirSync(join(runtimeRoot, d), { recursive: true }) } catch { /* fail-open */ }
   }
   const madeDirs = new Set()
   for (const { name, dest } of moves) {

@@ -196,7 +196,7 @@ console.log('\n--- 3. pull 自竞态防御 ---');
   ).run();
   const r2 = await sm.pull('sr-change');
   assert(r2.conflict === true && !r2.imported, `真冲突（base_ts 停旧且平台更新）仍判冲突（实际 conflict=${r2.conflict} imported=${r2.imported}）`);
-  const cfPath = join(cwd, '.sillyspec', '.runtime', `sync-conflict-sr-change.json`);
+  const cfPath = join(cwd, '.sillyspec', '.runtime', 'state', `sync-conflict-sr-change.json`);
   const { existsSync } = await import('fs');
   assert(existsSync(cfPath), `真冲突落 sync-conflict 文件（${cfPath}）`);
 }

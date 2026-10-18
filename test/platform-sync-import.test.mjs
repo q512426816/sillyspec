@@ -120,9 +120,9 @@ assert(chRow.created_at !== null && chRow.created_at.length > 0, 'created_at 保
 console.log('\n--- 3. .bak 独立 snapshot ---');
 const runtimeDir = join(cwd, '.sillyspec', '.runtime');
 assert(existsSync(runtimeDir), '.runtime 目录存在');
-const baks = readdirSync(runtimeDir).filter(f => /^sillyspec\.db\.pre-import-.*\.bak$/.test(f));
+let baks = []; try { baks = readdirSync(join(runtimeDir, 'temp')).filter(f => /^sillyspec\.db\.pre-import-.*\.bak$/.test(f)); } catch {}
 assert(baks.length >= 1, `.runtime 含 pre-import-*.bak snapshot（实际 ${baks.length} 个）`);
-const bakFull = join(runtimeDir, baks[0]);
+const bakFull = join(runtimeDir, 'temp', baks[0]);
 const bakSize = existsSync(bakFull) ? readFileSync(bakFull).length : 0;
 assert(bakSize > 0, `.bak 非空（${bakSize} bytes，可恢复）`);
 // .bak 可恢复：copyFileSync 回 db 后 DB 仍可读（模拟回滚恢复路径）
