@@ -6,6 +6,8 @@ created_at: 2026-10-18T03:09:27.361Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 `.runtime` 根目录 1649 个条目的堆积根源有三：①19 类按 change 命名的散文件不在归档回收名单内（742 个已归档变更的孤儿只增不减，约 1530 个）；②历次变更遗留的一次性脚本无归属堆积；③日志与 db 备份与核心状态混放。方案分三层：
 
 1. **新布局**：新增 `src/runtime-paths.js` 集中路径助手——`runtimeStatePath(runtimeRoot, filename)`（→ `.runtime/state/`）与 `runtimeTempPath(runtimeRoot, filename)`（→ `.runtime/temp/`），19 类 per-change 散文件全部换用前者（文件名原样，仅目录前缀变化，每个改动点是一行 join 改写）；日志（watcher.log / spec-sync-bg.log / audit.log）、db 备份（.bak / .corrupt-* / .pre-import-*）、锁残留 tmp（watcher.lock.*.tmp）换用后者。核心单例（sillyspec.db、agent-session-log.json、user-inputs.md、friction-ledger.json、spec-sync-*.json 等）与既有子目录（execute-runs/、worktrees/、logs/ 等）不动——它们本就满足"下一级目录"或"根目录单例"形态，搬迁收益小于风险。
@@ -17,6 +19,8 @@ created_at: 2026-10-18T03:09:27.361Z
 
 ## 接口契约
 
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+
 - 新增导出 `src/runtime-paths.js`：`runtimeStatePath(runtimeRoot, filename): string`、`runtimeTempPath(runtimeRoot, filename): string`、`migrateRuntimeLayout(runtimeRoot): { stateMoved, tempMoved, skipped }`（目录缺失/异常返回零计数，绝不抛）。
 - 19 类散文件与 7 类临时产物的磁盘位置变化（`.runtime/<file>` → `.runtime/state|temp/<file>`），CLI 命令面/参数/输出零变化。
 - `pruneArchivedChangeRuntime` 返回结构不变（{ ok, removed, ledgerAppend }），回收面扩大。
@@ -25,6 +29,14 @@ created_at: 2026-10-18T03:09:27.361Z
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
+4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
+
+3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+
+2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+
+1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+
 1. **乱序/迟到到达**：混版本窗口（旧版本进程仍写根目录旧路径）——迁移对"目标已存在"跳过不覆盖（防旧覆盖新）；prune 双路径（root + state/）回收兜底；新写入点全量切换后窗口闭合。迟到文件（旧进程在迁移后写入根目录）下次迁移再收（幂等重入收敛）。
 2. **并发写**：两进程同时迁移——rename 同卷原子，其一失败即跳过（fail-open），幂等重入收敛到一致布局；写入点本身沿用各模块既有原子写（fs-atomic/锁），目录前缀变化不引入新竞争面。state/、temp/ 目录不存在时写入点 mkdir -p（recursive: true，多进程并发 mkdir 不抛）。
 3. **切换/生命周期**：迁移中断→部分搬迁，重跑续搬（按"源存在且目标不存在"判据幂等）；删除 temp/ 后写入点自动重建目录；watcher 活跃锁 watcher.lock 不迁移（租约判定连续性优先，残留 tmp 才进 temp/）。
@@ -32,11 +44,18 @@ created_at: 2026-10-18T03:09:27.361Z
 
 ## 风险与死路
 
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+
 - **最大风险：读写点遗漏**（19 类家族散布 ~25 个源文件，读点比写点多——watcher-events 有 flow.js/index.js/task-tick.js/complete-handlers.js 四处读点）。对策：逐家族 grep 全仓读写点清单化（设计已列写入点文件清单），测试面 26 个既有测试文件做回归网，漏改即路径断裂当场暴露。
 - **次风险：混版本并发窗口**旧进程写根目录——迁移幂等 + prune 双路径兜底，窗口内最坏情况是文件短暂在旧位置（读点已切新会读不到）→ 迁移重入收敛；db 备份/日志无状态语义，风险趋零。
 - 试过放弃的方案：①`state/<change>/` 按 change 建子目录（prune 可 rm -rf 单目录更优雅）——文件名构造面翻倍、迁移映射复杂化，弃；②只做归档回收不动布局——根目录仍混放单例/日志/脚本，用户"统一下一级+temp"诉求不满足，弃；③迁移 sillyspec.db 进子目录——doctor 候选路径/平台指针/WAL 侧车多点引用，单文件非乱源，收益小于风险，弃。
 
 ## 文件变更清单
+
+> 交付面自声明（2026-10-18 收口补齐，对齐 baseline..HEAD 实际 181 文件）：
+> src 49 文件（26 类散文件读写点 + 21 件全局面单例路由 + 冲突扫描双目录兜底 + prune/迁移/入口接线）、
+> test 128 文件（新 1 + 既有 127 的家族/单例路径夹具与期望对齐 + mkdir 保证）、变更目录 6、其余 4。
+> 上方明细表列出核心面；批量测试夹具修正不逐文件枚举（test/*.test.mjs 全部属本变更交付——无并行会话在途文件混入，提交均为显式 pathspec）。
 
 | 操作 | 路径 | 说明 |
 |---|---|---|
@@ -70,6 +89,13 @@ created_at: 2026-10-18T03:09:27.361Z
 | 修改 | src/db.js | sillyspec.db.corrupt-* → temp/ |
 | 修改 | src/progress.js | sillyspec.db.pre-import-* → temp/ |
 | 修改 | src/doctor-diagnostics.js | friction-tally 孤儿扫描随 state/ + 根目录兜底（doctor 命令经 CLI 入口迁移自动覆盖，无需函数内重复调用） |
+| 修改 | src/deleted-ledger.js、src/friction-ledger.js、src/knowledge-hits.js、src/knowledge-vector.js、src/run/gate-snapshot-ledger.js | 全局面台账单例 → state/ |
+| 修改 | src/sync-noise.js、src/write-audit.js、src/run/shared.js、src/run/command.js、src/run/scan-profile.js | 自愈标记/审计流水/告警标记/节流戳/last-delta sidecar → state|temp |
+| 修改 | src/progress/stage-machine.js | _listPendingConflicts 冲突扫描双目录兜底 |
+| 修改 | src/validate-artifacts.js | marker 读点 → state/ |
+| 修改 | src/hooks/worktree-guard.js | scan-guard 读点 → state/ |
+| 修改 | docs/sillyspec/platform-interface-map.md | 22 处 file:line 锚随源码行移重定位 |
+| 修改 | test/*.test.mjs（既有 127 个） | 家族/单例路径夹具与期望对齐 + state/temp 目录 mkdir 保证 |
 | 修改 | test/runtime-relayout.test.mjs（新增） | FR-01~04 用例 |
 | 修改 | test/（既有 26 个引用家族的文件） | 路径字面量回归修正 |
 | 修改 | package.json | version 3.33.0 → 3.33.1（用户裁决） |
