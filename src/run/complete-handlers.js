@@ -30,7 +30,7 @@
  * （非被外层吞）；process.exit 不可被 try 捕获 → 搬迁行为完全等价。
  */
 import { basename, dirname, join, resolve, relative, isAbsolute } from 'node:path'
-import { runtimeStatePath } from '../runtime-paths.js'
+import { runtimeStatePath, runtimeStateFileNames } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync, renameSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
@@ -162,8 +162,9 @@ function ownerFromReviewedFiles(reviewedFiles) {
  * 归档 / change-delete 无 delta 同样可删。
  *
  * 归属 fail-closed（禁 mtime 猜、禁后缀匹配）：
- *   apply-pathspec-<change>.txt 精确文件名
- *   prompt-inject-<change>.json 精确文件名（2026-09-18-preflight-slimming：注入分叉账本回收登记）
+ *   state/ 全家族散文件 + 根目录同名兜底（runtime-paths.js runtimeStateFileNames 唯一清单：
+ *   draft-ledger / watcher 三件套 / test 台账 / ceremony 档位 / 冲突标记 / marker 等，
+ *   含 apply-pathspec-<change>.txt、prompt-inject-<change>.json 两个历史登记家族）
  *   execute-runs/<runId>/ 仅当 `change` 戳全等（无戳旧 run 留下，不按覆盖度启发式删）
  *   stage-reviews/<dir>/ 仅当 review.json reviewedFiles 首段 === changeName
  *   verify-runs/<ts>/ 仅当目录内 JSON 的 change 字段集合 size=1 且等于本变更
@@ -194,33 +195,26 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
     } catch { /* 单份失败不连坐，下次归档/删变更再收 */ }
   }
 
+  // 2026-10-18 布局分层：per-change 散文件全部落 state/，回收名单从三家族扩到全家族
+  // （runtime-paths.js STATE_FAMILIES 唯一清单源，禁 glob 的精确名形态不变）。
+  // 每个精确名试双路径：state/（新布局）+ 根目录（未迁移旧仓/混版本迟到文件兜底——
+  // 迁移幂等收敛后根路径命中恒为零）。friction-tally 删前残余滚台账语义保留（见函数头）。
   try {
-    const pathspec = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`)
-    if (existsSync(pathspec)) gone(pathspec)
-  } catch {}
-
-  // prompt-inject 账本（2026-09-18-preflight-slimming Phase 2 / D-002，Grill 评审 fail②）：
-  // .runtime/prompt-inject-<change>.json 是 change 级派生文件（阶段感知注入分叉的账本），
-  // 变更归档/删除后无读者——不登记回收则按变更数累积孤儿。精确文件名，对齐上方
-  // apply-pathspec / 下方 friction-tally 同款形态（禁 glob/后缀匹配）。
-  try {
-    const ledger = runtimeStatePath(runtimeRoot, `prompt-inject-${changeName}.json`)
-    if (existsSync(ledger)) gone(ledger)
-  } catch {}
-
-  // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
-  // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
-  // 删前残余先滚台账（tax-governance FR-02 兜底滚动点，见函数头注释）。
-  try {
-    const fp = runtimeStatePath(runtimeRoot, `friction-tally-${changeName}.json`)
-    if (existsSync(fp)) {
-      const merged = mergeFrictionEntrySync(runtimeRoot, {
-        change: changeName,
-        counts: residualFrictionCounts(fp),
-        archivedAt: new Date().toISOString(),
-      })
-      ledgerAppend = !!(merged && merged.ok && !merged.skipped)
-      gone(fp)
+    for (const name of runtimeStateFileNames(changeName)) {
+      for (const p of [runtimeStatePath(runtimeRoot, name), join(runtimeRoot, name)]) {
+        try {
+          if (!existsSync(p)) continue
+          if (name === `friction-tally-${changeName}.json`) {
+            const merged = mergeFrictionEntrySync(runtimeRoot, {
+              change: changeName,
+              counts: residualFrictionCounts(p),
+              archivedAt: new Date().toISOString(),
+            })
+            ledgerAppend = !!(merged && merged.ok && !merged.skipped)
+          }
+          gone(p)
+        } catch { /* 单路径失败不连坐 */ }
+      }
     }
   } catch {}
 

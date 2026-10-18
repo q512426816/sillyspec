@@ -17,6 +17,7 @@ import { watcherEventsPath } from '../src/watcher.js'
 import { testLedgerPath } from '../src/run/test-ledger.js'
 import { stageReviewMarkerPath } from '../src/stage-review.js'
 import { bgSyncLogPath, BG_LOG_FILENAME } from '../src/run/bg-sync.js'
+import { pruneArchivedChangeRuntime } from '../src/run/complete-handlers.js'
 
 let failures = 0
 const assert = (cond, msg) => {
@@ -170,7 +171,33 @@ console.log('\n--- 7. FR-02 temp 面：日志/备份产物落 temp/ 且删除后
   assert(recreated, '删除 temp/ 后写入自动重建（无状态语义，功能不依赖 temp 存活）')
 }
 
-console.log('\n--- 8. fail-open：目录缺失/坏路径零副作用不抛 ---')
+console.log('\n--- 8. FR-03 prune：state/ 全家族回收 + 根路径兜底 ---')
+{
+  const root = join(tmpRoot, 'pr', '.runtime')
+  const c = '2026-10-18-arch-me'
+  mkdirSync(join(root, 'state'), { recursive: true })
+  // state/ 全家族在场（抽样覆盖各族形态：json/jsonl/txt/无扩展名 marker）
+  for (const n of ['draft-ledger-ARCH.json', 'watcher-events-ARCH.jsonl', `apply-pathspec-${c}.txt`,
+    `friction-tally-${c}.json`, `current-execute-run-id-${c}`, `current-stage-review-run-id-plan-${c}`,
+    `ceremony-tier-${c}.json`, `test-ledger-${c}.json`]) {
+    writeFileSync(join(root, 'state', n.includes('ARCH') ? n.replace('ARCH', c) : n), '{}')
+  }
+  // 根目录旧布局兜底面：混版本迟到文件
+  writeFileSync(join(root, `draft-ledger-${c}.json`), 'late-old')
+  // 他变更文件：不得连坐
+  writeFileSync(join(root, 'state', 'draft-ledger-2026-10-18-other.json'), 'OTHER')
+
+  const r = pruneArchivedChangeRuntime(root, c)
+  assert(r.ok && r.removed >= 9, `回收含根路径兜底与他变更隔离（removed=${r.removed}）`)
+  assert(!existsSync(join(root, 'state', `draft-ledger-${c}.json`)) && !existsSync(join(root, `draft-ledger-${c}.json`)), 'state/ 与根目录同名双双回收')
+  assert(!existsSync(join(root, 'state', `current-stage-review-run-id-plan-${c}`)), '无扩展名 marker 回收')
+  assert(existsSync(join(root, 'state', 'draft-ledger-2026-10-18-other.json')), '他变更文件不受影响（精确名，非后缀匹配）')
+  // 幂等：重跑零新增回收
+  const r2 = pruneArchivedChangeRuntime(root, c)
+  assert(r2.removed === 0, `幂等（removed=${r2.removed}）`)
+}
+
+console.log('\n--- 9. fail-open：目录缺失/坏路径零副作用不抛 ---')
 {
   const r = migrateRuntimeLayout(join(tmpRoot, 'no-such-runtime'))
   assert(r.stateMoved === 0 && r.tempMoved === 0 && r.skipped === 0, '目录缺失返回零计数不抛')
