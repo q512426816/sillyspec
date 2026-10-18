@@ -630,7 +630,7 @@ const FOLLOW_REPORT_MARKER = 'spec-sync-follow-reported.json';
  */
 export function isFollowerSetChanged(specRoot, key, list) {
   const sorted = [...(list || [])].sort();
-  const p = join(specRoot, '.runtime', FOLLOW_REPORT_MARKER);
+  const p = runtimeStatePath(join(specRoot, '.runtime'), FOLLOW_REPORT_MARKER);
   let cur = {};
   try { cur = JSON.parse(readFileSync(p, 'utf8')) || {}; } catch { /* 无 marker = 首报 */ }
   const prev = Array.isArray(cur[key]) ? cur[key] : [];

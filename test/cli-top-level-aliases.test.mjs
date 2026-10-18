@@ -198,6 +198,8 @@ try {
     const cwd = join(tmpRoot, 'json-parity')
     const specDir = join(cwd, 'spec')
     mkdirSync(specDir, { recursive: true })
+    // 预热一跑：CLI 首调会执行旧布局迁移（幂等收敛），两次对照需在收敛后取样才可比
+    runCLI(['doctor', '--json', '--spec-dir', specDir], cwd)
     const top = runCLI(['doctor', '--json', '--spec-dir', specDir], cwd)
     const viaRun = runCLI(['run', 'doctor', '--json', '--spec-dir', specDir], cwd)
     // generated_at 是运行时间戳，两次调用必然不同，比较前 normalize 掉
