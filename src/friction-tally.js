@@ -24,6 +24,7 @@
  * 不打印任何输出，提示何时打印由调用方决定。
  */
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { withFileLock } from './quicklog.js'
@@ -76,7 +77,7 @@ function frictionTallyPath({ cwd, platformOpts, changeName }) {
   if (QUICK_SESSION_ID_RE.test(changeName)) {
     return join(resolveQuickSessionsDir(platformOpts, specBase), changeName, 'friction-tally.json')
   }
-  return join(resolveRuntimeRoot(platformOpts, specBase), `friction-tally-${changeName}.json`)
+  return runtimeStatePath(resolveRuntimeRoot(platformOpts, specBase), `friction-tally-${changeName}.json`)
 }
 
 /** YAML 布尔值宽松解析：仅显式 false（含引号形态）为关，其余值一律默认开（R-05） */

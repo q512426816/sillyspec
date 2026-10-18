@@ -15,6 +15,7 @@
  *      整块 80 行帽（HANDOFF_LINE_CAP），超限从上下文段尾截，粘贴块与警示行永不动。
  */
 import { ProgressManager, resolveSpecDir } from './progress.js';
+import { runtimeStatePath } from './runtime-paths.js'
 import { MAIN_FLOW_ORDER, STAGE_LABELS } from './progress/shared.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -199,7 +200,7 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   // 保持不变——SESSION_ID 相同不能当硬续证据）。本命令执行即切割：best-effort 给
   // stage-session ledger 盖 handoffAt 章，墙据此放行新会话的 execute/verify 首入。
   try {
-    const ledgerPath = join(specRoot, '.runtime', `stage-session-ledger-${target}.json`);
+    const ledgerPath = runtimeStatePath(join(specRoot, '.runtime'), `stage-session-ledger-${target}.json`);
     let ledger = null;
     try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')); } catch { /* 无账本（阶段未收口）→ 无墙可放行，零动作 */ }
     if (ledger && typeof ledger === 'object') {

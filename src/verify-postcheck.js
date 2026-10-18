@@ -23,6 +23,7 @@
  */
 
 import { execSync, spawnSync } from 'child_process'
+import { runtimeStatePath } from './runtime-paths.js'
 import { createHash } from 'crypto'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
@@ -1424,7 +1425,7 @@ function readTestRerunConfig(specBase) {
 }
 
 function testRerunLedgerPath(specBase, changeName) {
-  return join(specBase, '.runtime', `test-rerun-${changeName || 'change'}.json`)
+  return runtimeStatePath(join(specBase, '.runtime'), `test-rerun-${changeName || 'change'}.json`)
 }
 
 /**
@@ -1861,7 +1862,7 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) {
     try {
       const rtRoot = resolveRuntimeRoot({ runtimeRoot: opts.runtimeRoot, specDriftAnchor: opts.specDriftAnchor }, opts.specBase || join(cwd, '.sillyspec'))
-      const pathspecFile = join(rtRoot, `apply-pathspec-${changeName}.txt`)
+      const pathspecFile = runtimeStatePath(rtRoot, `apply-pathspec-${changeName}.txt`)
       if (existsSync(pathspecFile)) {
         const declared = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean)
           .map(p => p.replace(/\\/g, '/'))
@@ -3780,7 +3781,7 @@ export function trackVerifyResultRegression(specBase, changeName, absPath) {
     if (!absPath || !existsSync(absPath)) return { regressed: false, prevMtime: null }
     const st = statSync(absPath)
     const hash = createHash('sha256').update(readFileSync(absPath)).digest('hex')
-    const hwmPath = join(specBase, '.runtime', `verify-result-hwm-${changeName}.json`)
+    const hwmPath = runtimeStatePath(join(specBase, '.runtime'), `verify-result-hwm-${changeName}.json`)
     let prev = null
     try { prev = JSON.parse(readFileSync(hwmPath, 'utf8')) } catch { prev = null }
     const regressed = !!(prev && typeof prev.hash === 'string' &&
@@ -4307,7 +4308,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
       }
     } catch { /* 窗口源失败静默省略 */ }
     // B3 apply-pathspec 兜底（存在则并入，读取失败静默忽略——前两源不受影响）
-    const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+    const pathspecFile = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`)
     if (existsSync(pathspecFile)) {
       try {
         const lines = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean).map(normalizeReconcilePath)
@@ -4704,7 +4705,7 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
   const rt = runtimeRoot || join(sb, '.runtime')
 
   // —— 声明侧：开跑定价落档（task-03 产物，tier/components/reasons/transitions）——
-  const tierPath = join(rt, `ceremony-tier-${changeName}.json`)
+  const tierPath = runtimeStatePath(rt, `ceremony-tier-${changeName}.json`)
   let tierFile = null
   try { tierFile = JSON.parse(readFileSync(tierPath, 'utf8')) } catch { /* 缺失/坏 JSON → 下方跳过 */ }
   if (tierFile == null || typeof tierFile !== 'object' || Array.isArray(tierFile)) {
@@ -4801,7 +4802,7 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
       recomputedReasons: [`双跑低报自动追赶（事实面 tier=${verdict.factTier}，证据面 seed ${actual.files.length} 文件）`],
       frictionCounts: {},
     })
-    const tierPathForReprice = join(rt, `ceremony-tier-${changeName}.json`)
+    const tierPathForReprice = runtimeStatePath(rt, `ceremony-tier-${changeName}.json`)
     const { writeAtomicSync } = await import('./fs-atomic.js')
     writeAtomicSync(tierPathForReprice, JSON.stringify(caught, null, 2) + '\n')
     result.violation.message += `；档位文件已自动按事实面追赶重定价（${String(declaredTier)} → ${caught.tier}）——修复低报根因后重跑 --done 即对账通过，勿手动改档（ql-013 死锁修复）`

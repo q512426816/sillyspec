@@ -25,6 +25,7 @@
  * 无引用论断检不出。refresh 只声称「核对至 HEAD 的检出项已处理」，不声称「一致」。
  */
 import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { safeGit } from './git-helper.js'
@@ -453,7 +454,7 @@ export async function finalizeRefresh(opts = {}) {
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     mkdirSync(runtimeRoot, { recursive: true })
     const ts = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)
-    auditPath = join(runtimeRoot, `scan-refresh-${ts}.json`)
+    auditPath = runtimeStatePath(runtimeRoot, `scan-refresh-${ts}.json`)
     writeAtomicSync(auditPath, JSON.stringify({
       changeType: 'scan-refresh',
       head: headShort,

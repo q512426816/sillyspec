@@ -19,6 +19,7 @@
  * `task start` 的受影响测试族注入不在本命令面（开工前置提示，保留不动）。
  */
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 
 /**
@@ -50,7 +51,7 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
   let reviewSkipped = false
   try {
     let runId = ''
-    const markerFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+    const markerFile = runtimeStatePath(runtimeRoot, 'current-execute-run-id-' + changeName)
     try {
       if (existsSync(markerFile)) {
         const c = readFileSync(markerFile, 'utf8').trim()

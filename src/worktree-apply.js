@@ -13,6 +13,7 @@
  */
 
 import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync, readFileSync, mkdirSync } from 'fs';
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { createHash } from 'crypto';
@@ -2179,7 +2180,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         result.commitPathspec = commitFiles;
         const runtimeRoot = join(projectRoot, '.sillyspec', '.runtime');
         mkdirSync(runtimeRoot, { recursive: true });
-        const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`);
+        const pathspecFile = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`);
         writeFileSync(pathspecFile, commitFiles.join('\n') + '\n');
         result.pathspecFile = pathspecFile;
       } catch { /* pathspec 落盘失败不影响 apply 结果 */ }

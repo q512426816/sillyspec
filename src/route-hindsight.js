@@ -37,6 +37,7 @@ import { createHash } from 'node:crypto'
 import { join, basename, dirname } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { computeEditRatio } from './flow-draft.js'
+import { runtimeStatePath } from './runtime-paths.js'
 
 /** 超阈判定常量（可调；口径：比例两路为严格大于——恰等于阈值不算超，保守防误标 R-01；
  * 计数两路为大于等于——2 维/2 次即系统性信号）。 */
@@ -107,7 +108,7 @@ function num(v) {
 export function snapshotBaseline({ specBase, change, changeDir }) {
   try {
     const runtimeRoot = join(specBase, '.runtime')
-    const p = join(runtimeRoot, `${BASELINE_PREFIX}${change}.json`)
+    const p = runtimeStatePath(runtimeRoot, `${BASELINE_PREFIX}${change}.json`)
     if (existsSync(p)) return { captured: false, reason: 'already-exists（首写者胜）' }
     const payload = {
       schemaVersion: 1,
@@ -130,7 +131,7 @@ export function snapshotBaseline({ specBase, change, changeDir }) {
  */
 export function baselineSha256({ specBase, change }) {
   try {
-    const p = join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`)
+    const p = runtimeStatePath(join(specBase, '.runtime'), `${BASELINE_PREFIX}${change}.json`)
     if (!existsSync(p)) return null
     return createHash('sha256').update(readTextSafe(p)).digest('hex')
   } catch {
@@ -161,7 +162,7 @@ export function computeHindsightMetrics({ changeDir, reviewJson, flowState }) {
   // ① 首版快照 → 终稿行级改写比
   let designRewriteRatio = 0
   let tasksRewriteRatio = 0
-  const baselineRaw = readTextSafe(join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`))
+  const baselineRaw = readTextSafe(runtimeStatePath(join(specBase, '.runtime'), `${BASELINE_PREFIX}${change}.json`))
   let baseline = null
   if (baselineRaw != null) { try { const j = JSON.parse(baselineRaw); baseline = j && typeof j === 'object' ? j : null } catch { baseline = null } }
   if (baseline) {

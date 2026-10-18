@@ -44,6 +44,7 @@ import { basename, dirname, join, resolve } from 'path';
 import { gitQuiet } from './git-helper.js';
 import { normalizePath, globMatch } from './change-list.js';
 import { resolveTestFileOwners } from './test-bindings.js';
+import { runtimeStatePath, runtimeTempPath } from './runtime-paths.js';
 
 export const WATCHER_LOCK_FILENAME = 'watcher.lock';
 const WATCHER_LOG_FILENAME = 'watcher.log';
@@ -95,7 +96,8 @@ export function readWatcherLock(runtimeRoot) {
 
 function writeWatcherLock(runtimeRoot, lock) {
   mkdirSync(runtimeRoot, { recursive: true });
-  const tmp = join(runtimeRoot, `${WATCHER_LOCK_FILENAME}.${process.pid}.tmp`);
+  try { mkdirSync(join(runtimeRoot, 'temp'), { recursive: true }); } catch { /* 锁写入 fail-open */ }
+  const tmp = runtimeTempPath(runtimeRoot, `${WATCHER_LOCK_FILENAME}.${process.pid}.tmp`);
   writeFileSync(tmp, JSON.stringify(lock) + '\n', 'utf8');
   renameSync(tmp, join(runtimeRoot, WATCHER_LOCK_FILENAME));
 }
@@ -280,7 +282,7 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
     const out = gitQuiet(cwd, ['status', '--porcelain']);
     snap.dirtyCode = out == null ? null : parsePorcelainCodePaths(out);
   }
-  const scanPath = join(runtimeRoot, `verify-quality-scan-${changeName}.json`);
+  const scanPath = runtimeStatePath(runtimeRoot, `verify-quality-scan-${changeName}.json`);
   try {
     const st = statSyncImpl(scanPath);
     snap.scan = { mtimeMs: Math.round(st.mtimeMs), size: st.size };
@@ -426,7 +428,7 @@ function newCommitsBetween(prev, next) {
 // append、内容去重不空转；archived 首拍早退路径不读不写。
 
 export function watcherSnapshotPath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `watcher-last-snapshot-${changeName}.json`);
+  return runtimeStatePath(runtimeRoot, `watcher-last-snapshot-${changeName}.json`);
 }
 
 /** 读水位（损坏/缺失/形状不对 → null）。 */
@@ -461,7 +463,7 @@ export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj =
 // 子进程侧 appendFileSync 落盘名与此处读取名同锚（runWatcherFromEnv 内联字符串的唯一对应）。
 
 export function watcherEventsPath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
+  return runtimeStatePath(runtimeRoot, `watcher-events-${changeName}.jsonl`);
 }
 
 /**
@@ -838,7 +840,7 @@ export async function pushEventsToPlatform({ specBase, changeName, events, env =
 /** 子进程起步截尾日志（>1MB 保后 512KB，整行边界起）。失败只影响日志体积。 */
 function truncateLogIfNeeded(runtimeRoot) {
   try {
-    const p = join(runtimeRoot, WATCHER_LOG_FILENAME);
+    const p = runtimeTempPath(runtimeRoot, WATCHER_LOG_FILENAME);
     if (statSync(p).size <= LOG_TRUNCATE_THRESHOLD) return;
     const buf = readFileSync(p);
     const keep = buf.subarray(Math.max(0, buf.length - LOG_TRUNCATE_KEEP));
@@ -869,9 +871,9 @@ export async function spawnWatcher(cwd, changeName, opts = {}) {
   const runtimeRoot = resolveRuntimeRoot(opts, specBase);
 
   const lock = readWatcherLock(runtimeRoot);
-  if (isWatcherLeaseLive(lock)) return { status: 'coalesced', logPath: join(runtimeRoot, WATCHER_LOG_FILENAME) };
+  if (isWatcherLeaseLive(lock)) return { status: 'coalesced', logPath: runtimeTempPath(runtimeRoot, WATCHER_LOG_FILENAME) };
 
-  const logPath = join(runtimeRoot, WATCHER_LOG_FILENAME);
+  const logPath = runtimeTempPath(runtimeRoot, WATCHER_LOG_FILENAME);
   let stdio = ['ignore', 'ignore', 'ignore'];
   let logFd = null;
   try {
@@ -929,8 +931,8 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
   writeWatcherLock(runtimeRoot, { pid: process.pid, change: changeName, startedAt, heartbeatAt: startedAt });
   console.log(`[watcher] 监听开始 ${new Date().toISOString()}: ${changeName}`);
 
-  const eventsPath = join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
-  const timingPath = join(runtimeRoot, `watcher-stage-timing-${changeName}.json`);
+  const eventsPath = runtimeStatePath(runtimeRoot, `watcher-events-${changeName}.jsonl`);
+  const timingPath = runtimeStatePath(runtimeRoot, `watcher-stage-timing-${changeName}.json`);
   let allEvents = [];
 
   const refreshHeartbeat = () => {

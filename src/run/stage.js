@@ -17,6 +17,7 @@
  *   - 'child_process'（execSync）裸模块名不变
  */
 import { join, dirname } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, unlinkSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
@@ -55,7 +56,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const curSession = process.env.SILLYSPEC_SESSION_ID || ''
         const wallStageData = progress.stages && progress.stages[stageName]
         const firstEntry = !wallStageData || !Array.isArray(wallStageData.steps) || wallStageData.steps.length === 0
-        const wallLedgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
+        const wallLedgerPath = runtimeStatePath(join(specBase, '.runtime'), `stage-session-ledger-${changeName}.json`)
         if (curSession && firstEntry && existsSync(wallLedgerPath)) {
           const wallLedger = JSON.parse(readFileSync(wallLedgerPath, 'utf8'))
           const { isStageWallBlocked } = await import('./shared.js')
@@ -151,7 +152,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     const { generateExecuteRunId, isValidExecuteRunId, claimExecuteRunId } = await import('../task-review.js')
     const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
     const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
-    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const runIdFile = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
     mkdirSync(runtimeRoot, { recursive: true })
     // 优先读取已有的变更专属标记文件（agent 可写内容，格式校验防注入/穿越，非法视为缺失重生成）
     try {

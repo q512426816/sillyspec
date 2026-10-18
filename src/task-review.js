@@ -9,6 +9,7 @@
  */
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, resolve, basename, dirname } from 'path'
 import { execFileSync } from 'child_process'
 import { git, unquoteGitPath } from './git-helper.js'
@@ -959,7 +960,7 @@ export function resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName = n
 }
 
 export function resolveLatestExecuteRunId({ runtimeRoot, changeName }) {
-  const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+  const marker = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
   try {
     if (existsSync(marker)) {
       const c = readFileSync(marker, 'utf8').trim()
@@ -1077,7 +1078,7 @@ export function resolveExecuteRunForChange({ runtimeRoot, changeName, taskIds = 
     // 1. marker
     let markerRunId = null
     try {
-      const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+      const marker = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
       if (existsSync(marker)) {
         const c = readFileSync(marker, 'utf8').trim()
         if (c && !isValidExecuteRunId(c)) console.warn(`[sillyspec] execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），忽略并回退归属扫描`)
@@ -1341,7 +1342,7 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   }
 
   // exec-id：与 Task Review Gate（gates.js:269）/ autoCheckPlanFromReviews 同源
-  const runIdFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  const runIdFile = runtimeStatePath(runtimeRoot, 'current-execute-run-id-' + changeName)
   let executeRunId = ''
   try {
     if (existsSync(runIdFile)) {
@@ -1637,7 +1638,7 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
   // executeRunId：与草稿/gate 同源 marker。缺 marker 不新建 run——adopt 修的是当前 run 里
   // 已存在的 review，marker 丢失说明无「当前 run」语义，无对象可修（gate 对 marker 缺失放行，
   // 下游 Task Review Gate 兜底，这里同口径不造 run）。
-  const runIdFile = join(runtimeRoot, 'current-execute-run-id-' + changeName)
+  const runIdFile = runtimeStatePath(runtimeRoot, 'current-execute-run-id-' + changeName)
   let executeRunId = ''
   try {
     if (existsSync(runIdFile)) {

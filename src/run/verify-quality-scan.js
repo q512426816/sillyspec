@@ -27,6 +27,7 @@
  *      刻意区分）。指纹已含 commands 段原文——配置 smoke 前后指纹自动变化，代码未变不重跑。
  */
 import { createHash } from 'node:crypto'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { execSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -43,7 +44,7 @@ const RECORD_SCHEMA_VERSION = 1
 
 export function qualityScanRecordPath(specBase, changeName) {
   if (!changeName) return null
-  return join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)
+  return runtimeStatePath(join(specBase, '.runtime'), `verify-quality-scan-${changeName}.json`)
 }
 
 /**
@@ -365,7 +366,7 @@ export async function renderVerifyTestAttribution({ cwd, changeName, specBase, r
     // 第二判据（坑 derived-artifact-stale-baseline / verify-attr2-foreign-wip-misdirection）：
     // 完整语义见 gates.js filterStaleBaselineOverlap 注释——两道过滤（必须 dirty + 剔除他者声明集）。
     try {
-      const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+      const pathspecFile = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`)
       if (changeName && existsSync(pathspecFile)) {
         const ownFiles = new Set(readFileSync(pathspecFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).map((f) => f.replace(/\\/g, '/')))
         if (ownFiles.size > 0) {

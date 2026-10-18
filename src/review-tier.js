@@ -35,6 +35,7 @@
  */
 
 import { parseFileChangeList } from './change-list.js'
+import { runtimeStatePath } from './runtime-paths.js'
 import { computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
 import { readCeremonyPricingConfig } from './ceremony-config.js'
 import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
@@ -151,7 +152,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
   if (designPath) {
     try {
       const changeDir = dirname(designPath)
-      const tierPath = join(dirname(dirname(changeDir)), '.runtime', `ceremony-tier-${basename(changeDir)}.json`)
+      const tierPath = runtimeStatePath(join(dirname(dirname(changeDir)), '.runtime'), `ceremony-tier-${basename(changeDir)}.json`)
       if (existsSync(tierPath)) {
         const tf = JSON.parse(readFileSync(tierPath, 'utf8'))
         if (tf && CEREMONY_TIERS.includes(tf.tier)) tierFileTier = tf.tier

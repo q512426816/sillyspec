@@ -7,6 +7,7 @@
  * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from 'fs';
+import { runtimeStatePath } from './runtime-paths.js'
 import { writeAtomicSync } from './fs-atomic.js';
 import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
 import { safeGit, git, gitQuiet } from './git-helper.js';
@@ -5388,6 +5389,8 @@ SillySpec config — local.yaml 配置键速查
         'history': '历史记录目录（init 预建）',
         'logs': '日志目录（init 预建）',
         'templates': '工作流模板目录（init 预建）',
+        'state': '按 change 命名的派生状态目录（watcher 事件流/账本/冲突标记等，归档时随变更精确回收）',
+        'temp': '可随时整体删除的临时产物（日志/db 备份/锁残留 tmp——删后自动重建，无状态语义）',
       };
       let entries;
       try {
@@ -5540,7 +5543,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         }
         if (!tRes.exists) {
           console.error(`📭 ${tChange} 无事件流（未跑过 watcher），无从合成时间线`);
-          console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
+          console.error(`   事件流路径：${runtimeStatePath(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
           process.exit(2);
         }
         const { changeDir, tasksMd, tickLog } = loadChangeTasks(tSpecBase, tChange);

@@ -18,6 +18,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname } from 'node:path'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -41,7 +42,7 @@ const DISPATCH_STATES = ['dispatching', 'in-flight', 'completed', 'failed', 'aba
 
 /** 在途记录路径：{SPEC_ROOT}/.runtime/review-dispatch-<change>.json */
 function dispatchRecordPath(specBase, changeName) {
-  return join(specBase, '.runtime', `review-dispatch-${changeName}.json`)
+  return runtimeStatePath(join(specBase, '.runtime'), `review-dispatch-${changeName}.json`)
 }
 
 /** 读在途记录（无/坏 → null，fail-open 调用方按无在途处理）。 */
@@ -459,7 +460,7 @@ function appendShadowLedgerSkip(runtimeRoot, skip) {
  */
 function readCeremonyTierForShadow(runtimeRoot, changeName) {
   try {
-    const p = join(runtimeRoot, `ceremony-tier-${changeName}.json`)
+    const p = runtimeStatePath(runtimeRoot, `ceremony-tier-${changeName}.json`)
     if (!existsSync(p)) return null
     const doc = JSON.parse(readFileSync(p, 'utf8'))
     if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null
@@ -480,7 +481,7 @@ function generateShadowReviewRunId() {
 //    stage-review.js:751 的主线在途提示内联读的也是主线文件名，不会被影子记录污染）──
 
 function shadowRecordPath(specBase, changeName) {
-  return join(specBase, '.runtime', `review-dispatch-shadow-${changeName}.json`)
+  return runtimeStatePath(join(specBase, '.runtime'), `review-dispatch-shadow-${changeName}.json`)
 }
 
 function readShadowRecord(specBase, changeName) {

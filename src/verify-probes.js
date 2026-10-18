@@ -25,6 +25,7 @@
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
 import { gitQuiet, unquoteGitPath } from './git-helper.js'
 import { hasUnconfirmedPrefill } from './prefill.js'
@@ -1812,7 +1813,7 @@ export function isProbe7TestPath(p) {
  */
 function resolveExecuteRunIdInline(runtimeRoot, changeName) {
   try {
-    const marker = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const marker = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
     if (existsSync(marker)) {
       const c = readFileSync(marker, 'utf8').trim()
       if (c && PROBE7_EXEC_RUN_ID_RE.test(c)) return c
@@ -3146,7 +3147,7 @@ function judgeIntegrationRan(factsPath, runtimeEvidence) {
   const specBase = dirname(dirname(changeDir))
   let record = null
   try {
-    const rec = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`), 'utf8'))
+    const rec = JSON.parse(readFileSync(runtimeStatePath(join(specBase, '.runtime'), `verify-quality-scan-${changeName}.json`), 'utf8'))
     if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai') record = rec
   } catch { record = null }
   let strategy = 'full' // 未配置 test_strategy 默认全量（verify-postcheck resolveTestStrategy 同口径）
@@ -3165,7 +3166,7 @@ function judgeIntegrationRan(factsPath, runtimeEvidence) {
   }
   const notes = []
   if (!record) {
-    notes.push(`ℹ️ quality-scan 实测记录缺失（${join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)}）——facts.integrationRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；--done 亲测替代扫描的场景记录时序不可得，出路=重跑质量扫描步或降级 NOTES）`)
+    notes.push(`ℹ️ quality-scan 实测记录缺失（${runtimeStatePath(join(specBase, '.runtime'), `verify-quality-scan-${changeName}.json`)}）——facts.integrationRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；--done 亲测替代扫描的场景记录时序不可得，出路=重跑质量扫描步或降级 NOTES）`)
   }
   return { ran: 'not-ran', notes }
 }
@@ -3459,7 +3460,7 @@ const SMOKE_ABSENT_LINE_RE = /^<!--\s*smoke 机器段缺态：(not-configured|no
  */
 export function readSmokeResultRecord(specBase, changeName) {
   try {
-    const rec = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`), 'utf8'))
+    const rec = JSON.parse(readFileSync(runtimeStatePath(join(specBase, '.runtime'), `verify-quality-scan-${changeName}.json`), 'utf8'))
     if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai'
       && rec.smokeResult && typeof rec.smokeResult === 'object') {
       return rec.smokeResult
@@ -3496,7 +3497,7 @@ function judgeSmokeRan(factsPath) {
   const changeDir = dirname(factsPath)
   const changeName = basename(changeDir)
   const specBase = dirname(dirname(changeDir))
-  const recordPath = join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)
+  const recordPath = runtimeStatePath(join(specBase, '.runtime'), `verify-quality-scan-${changeName}.json`)
   const smoke = readSmokeResultRecord(specBase, changeName)
   if (smoke) {
     if (smoke.configured === false) return { value: 'not-configured', notes: [] }

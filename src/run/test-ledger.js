@@ -36,6 +36,7 @@
  * （meta.json 并发读先例同款约束）。
  */
 import { createHash } from 'crypto'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join, relative, isAbsolute } from 'path'
 import { gitQuiet } from '../git-helper.js'
@@ -209,7 +210,7 @@ function ledgerKeyFor({ runtimeRoot, changeName, projectRoot, testRoot, specBase
 
 /** 账本路径（per-change 单文件） */
 export function testLedgerPath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `test-ledger-${changeName}.json`)
+  return runtimeStatePath(runtimeRoot, `test-ledger-${changeName}.json`)
 }
 
 /**

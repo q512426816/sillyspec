@@ -2,7 +2,7 @@
  * runtime-paths.js — .runtime 布局分层（state/ 与 temp/）与旧布局一次性迁移。
  *
  * 背景（2026-10-18 用户反馈）：.runtime 根目录堆积 1649 个条目——22 类按 change 命名
- * 的散文件不在归档回收名单（742 个已归档变更的孤儿只增不减）、日志/db 备份与核心
+ * 等 24 类散文件不在归档回收名单、日志/db 备份与核心
  * 状态混放。分野沿用 runtime-hygiene.js 的定界思路，按「删除是否安全」切两层：
  * - **state/**：按 change 命名的派生状态（watcher 事件流、draft ledger、冲突标记…）。
  *   活跃变更在读，归档/删除后无读者——由 pruneArchivedChangeRuntime 精确回收。
@@ -50,6 +50,9 @@ const STATE_FAMILIES = [
   { prefix: 'sync-conflict-', ext: '.json' },
   { prefix: 'spec-sync-conflict-', ext: '.json' },
   { prefix: 'apply-pathspec-', ext: '.txt' },
+  { prefix: 'scope-audit-', ext: '.json' },
+  { prefix: 'scan-refresh-', ext: '.json' },
+  { prefix: 'current-execute-run-id-', ext: '' },
   { prefix: 'current-stage-review-run-id-', ext: '', stages: ['brainstorm', 'plan', 'execute'] },
 ]
 

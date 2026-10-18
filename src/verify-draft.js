@@ -21,6 +21,7 @@
  * 纯 --init（无 --draft）路径零变化；无 sidecar → 门禁 not-applicable（存量变更零红）。
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 // 三件套原语消费方化（R7 切片三 task-04）：标记格式/指纹/三态判定/重锚的机械半边在本模块，
@@ -33,7 +34,7 @@ const AMEND_CMD = 'sillyspec verify-probes --change <变更名> --amend-draft'
 
 /** sidecar 路径（.runtime 下，与质量扫描记录/探针回执同族） */
 export function verifyDraftSidecarPath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `verify-draft-${changeName}.json`)
+  return runtimeStatePath(runtimeRoot, `verify-draft-${changeName}.json`)
 }
 
 /**

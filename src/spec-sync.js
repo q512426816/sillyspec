@@ -19,6 +19,7 @@ import { createHash } from 'crypto';
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, relative, sep } from 'path';
 import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
+import { runtimeStatePath } from './runtime-paths.js';
 import { writeAtomicSync } from './fs-atomic.js';
 
 // 与 sillyhub-daemon/src/spec-sync.ts 共用排除口径（task-07 / FR-06 / D-008@v2）：
@@ -497,7 +498,7 @@ export function partitionConflictPaths(serverVersions, localFiles, baseHashes, l
  */
 function isSamePendingSpecConflict(specRoot, changeName, realPaths) {
   try {
-    const raw = readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`), 'utf8');
+    const raw = readFileSync(runtimeStatePath(join(specRoot, '.runtime'), `spec-sync-conflict-${changeName}.json`), 'utf8');
     const prev = JSON.parse(raw).conflicting_paths;
     if (!Array.isArray(prev) || prev.length !== realPaths.length) return false;
     const prevSet = new Set(prev);
@@ -514,7 +515,7 @@ function isSamePendingSpecConflict(specRoot, changeName, realPaths) {
  */
 function clearSpecConflictMarker(specRoot, changeName) {
   try {
-    const p = join(specRoot, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    const p = runtimeStatePath(join(specRoot, '.runtime'), `spec-sync-conflict-${changeName}.json`);
     if (existsSync(p)) unlinkSync(p);
   } catch { /* 清理失败不影响同步结果 */ }
 }
@@ -553,7 +554,7 @@ export function writeTombstoneAttribution(specRoot, platformDeleted) {
   const byChange = extractTombstonedChanges(platformDeleted);
   const written = [];
   for (const [name, paths] of byChange) {
-    const filePath = join(specRoot, '.runtime', `spec-sync-conflict-${name}.json`);
+    const filePath = runtimeStatePath(join(specRoot, '.runtime'), `spec-sync-conflict-${name}.json`);
     let prev = null;
     try { prev = JSON.parse(readFileSync(filePath, 'utf8')); } catch { /* 首见 */ }
     const record = {
@@ -853,7 +854,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
           debugLog(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
         }
         console.warn(`⚠️ [spec-sync] 变更 ${conflictLabel} 存在未决 spec 树冲突（${realPaths.length} 个文件待裁决，本轮非冲突改动已照常同步）。处理：sillyspec platform resolve ${conflictLabel} --keep-local | --take-platform | --abort`);
-        return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath: join(specRoot, '.runtime', `spec-sync-conflict-${conflictLabel}.json`), suppressed: true };
+        return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath: runtimeStatePath(join(specRoot, '.runtime'), `spec-sync-conflict-${conflictLabel}.json`), suppressed: true };
       }
       if (followers.length > 0) {
         console.warn(`[spec-sync] ${followers.length} 个本地未改动文件自动跟随服务器（正常多端前进，无需人工裁决）: ${followers.slice(0, 5).join(', ')}${followers.length > 5 ? ' 等' : ''}`);
@@ -871,7 +872,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       try {
         const runtimeDir = join(specRoot, '.runtime');
         mkdirSync(runtimeDir, { recursive: true });
-        conflictPath = join(runtimeDir, `spec-sync-conflict-${conflictLabel}.json`);
+        conflictPath = runtimeStatePath(runtimeDir, `spec-sync-conflict-${conflictLabel}.json`);
         writeFileSync(conflictPath, JSON.stringify({
           change: conflictLabel,
           kind: 'spec-tree',

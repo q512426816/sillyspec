@@ -29,6 +29,7 @@
  * endpoint-extractor，被依赖者均不反向 import 本模块。
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { basename, dirname, join } from 'node:path'
 import { parseDecisionDomains, loadModuleMap, deriveActualModules } from './design-facts.js'
 import { parseModuleMapSimple } from './modules.js'
@@ -153,7 +154,7 @@ export function collectDeltaSources({ changeDir, specRoot, project, runtimeRoot,
   // 兜底（Gap-2/D-003）：全无 reconcile → apply-pathspec-<change>.txt 逐行路径作交付清单
   let deliverables = []
   if (!reconcile && runtimeRoot && change) {
-    const text = readTextSafe(join(runtimeRoot, `apply-pathspec-${change}.txt`))
+    const text = readTextSafe(runtimeStatePath(runtimeRoot, `apply-pathspec-${change}.txt`))
     if (text !== null) {
       deliverables = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
     }

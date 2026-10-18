@@ -17,6 +17,7 @@
  *   - node: join(path) + existsSync/readdirSync/readFileSync/mkdirSync/writeFileSync/appendFileSync/statSync(fs)
  */
 import { join, isAbsolute, resolve } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
@@ -846,7 +847,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       let stageLedger = null
       let crossStage = false
       try {
-        const ledgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
+        const ledgerPath = runtimeStatePath(join(specBase, '.runtime'), `stage-session-ledger-${changeName}.json`)
         try { stageLedger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首阶段 */ }
         const r = updateStageSessionLedger(stageLedger, process.env.SILLYSPEC_SESSION_ID, stageName)
         stageLedger = r.ledger
@@ -1021,7 +1022,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     if (stageName === 'execute' && changeName && defSteps && defSteps[currentIdx] && defSteps[nextPendingIdx] &&
         /Wave \d+ 执行/.test(defSteps[currentIdx].name || '') && /Wave \d+ 执行/.test(defSteps[nextPendingIdx].name || '')) {
       try {
-        const ledgerPath = join(specBase, '.runtime', `wave-session-ledger-${changeName}.json`)
+        const ledgerPath = runtimeStatePath(join(specBase, '.runtime'), `wave-session-ledger-${changeName}.json`)
         let ledger = null
         try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首 Wave */ }
         const { ledger: nextLedger, crossWaveAdvisory } = updateWaveSessionLedger(ledger, process.env.SILLYSPEC_SESSION_ID, defSteps[currentIdx].name)
@@ -1643,7 +1644,7 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
     // plan.md Wave 引用行无 checkbox，无处可勾）。tasks.md 存在性作前置。
     const tasksMdPath = join(changeDir, 'tasks.md')
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBaseLc)
-    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const runIdFile = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
     if (!existsSync(tasksMdPath) || !existsSync(runIdFile)) {
       return { autoChecked: false, checkedCount: 0, skippedCount: 0 }
     }
@@ -1801,7 +1802,7 @@ export async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd,
     // 平台模式 runtimeRoot / worktree 漂移 specDriftAnchor 不透传时 marker 恒读不到
     // → 每个 task 进 blockedTasks → 批量完成静默失效
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
-    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const runIdFile = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
     // ── 缺席草稿自动补齐（坑 task-review-retired-archive-mismatch，2026-10-15 归档门口实证）──
     // Task Review 层退役（2026-09-26）后 execute 批量完成不再产 per-task review.json，但本函数
     // 下方复核循环与 archive step2 完成度判定（真相源=review.json verdict）仍以它在场为前提——

@@ -26,6 +26,7 @@
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, relative, dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
@@ -686,7 +687,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
         try {
           const { spawnWatcher } = await import('./watcher.js')
           const w = await spawnWatcher(cwd, change, { specBase })
-          if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+          if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/state/watcher-events-${change}.jsonl（恒带 provisional:true）`)
         } catch { /* 观测旁路 best-effort */ }
         // adopt 标题（2026-09-29；2026-10-16-short-change-title 提炼；2026-10-16-title-range-gate
         // 硬区间 10-30）：头脑风暴 proposal H1 人写语义标题（纯模板 H1 回退动机首句）→ --title
@@ -941,7 +942,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   try {
     const { spawnWatcher } = await import('./watcher.js')
     const r = await spawnWatcher(cwd, change, { specBase })
-    if (r.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+    if (r.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/state/watcher-events-${change}.jsonl（恒带 provisional:true）`)
   } catch { /* 观测旁路 best-effort，绝不阻断协议面 */ }
 
   const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
@@ -1203,7 +1204,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     ? (gitQuiet(cwd, ['rev-list', '--count', `${st.baseline_commit}..HEAD`]) || '0').toString().trim()
     : '?'
   const dirty = changedFilesSinceBaseline(cwd, st.baseline_commit).length
-  const hasLedger = existsSync(join(runtimeRoot, `verify-quality-scan-${change}.json`))
+  const hasLedger = existsSync(runtimeStatePath(runtimeRoot, `verify-quality-scan-${change}.json`))
   console.log([
     `🔁 flow start 恢复简报（重入）: ${change}（tier=${st.tier}${st.legacy_fallback ? '，legacy_fallback=true 混跑回退中' : ''}）`,
     `══════════════════════════════════════════════════════`,
@@ -2495,7 +2496,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // ⑥ events：事件收口（watcher 观测旁路 best-effort 读回，非真相源）
   if (st.substeps?.events === 'done') { skip('events') } else {
     try {
-      const eventsPath = join(runtimeRoot, `watcher-events-${change}.jsonl`)
+      const eventsPath = runtimeStatePath(runtimeRoot, `watcher-events-${change}.jsonl`)
       if (existsSync(eventsPath)) {
         const n = readFileSync(eventsPath, 'utf8').split('\n').filter(Boolean).length
         console.log(`📊 watcher 事件收口：${n} 条 provisional 事件在案（.runtime 留档，平台展示面）`)

@@ -30,6 +30,7 @@
  * （非被外层吞）；process.exit 不可被 try 捕获 → 搬迁行为完全等价。
  */
 import { basename, dirname, join, resolve, relative, isAbsolute } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync, renameSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
@@ -194,7 +195,7 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
   }
 
   try {
-    const pathspec = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+    const pathspec = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`)
     if (existsSync(pathspec)) gone(pathspec)
   } catch {}
 
@@ -203,7 +204,7 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
   // 变更归档/删除后无读者——不登记回收则按变更数累积孤儿。精确文件名，对齐上方
   // apply-pathspec / 下方 friction-tally 同款形态（禁 glob/后缀匹配）。
   try {
-    const ledger = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+    const ledger = runtimeStatePath(runtimeRoot, `prompt-inject-${changeName}.json`)
     if (existsSync(ledger)) gone(ledger)
   } catch {}
 
@@ -211,7 +212,7 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
   // friction-tally-<change>.json 落 runtimeRoot，变更归档/删除后无读者，残留即孤儿文件。
   // 删前残余先滚台账（tax-governance FR-02 兜底滚动点，见函数头注释）。
   try {
-    const fp = join(runtimeRoot, `friction-tally-${changeName}.json`)
+    const fp = runtimeStatePath(runtimeRoot, `friction-tally-${changeName}.json`)
     if (existsSync(fp)) {
       const merged = mergeFrictionEntrySync(runtimeRoot, {
         change: changeName,
@@ -320,15 +321,22 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
       // 手工短名变更（如 login）时误删自动日期前缀变更（2026-08-01-login 天然以 '-login' 结尾）
       // 的 marker。stage 集合与写入侧 stageReviewMarkerPath 的调用方一致。
       const REVIEW_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
-      const markers = readdirSync(runtimeRoot).filter((f) =>
-        f === `current-execute-run-id-${archiveChangeName}` ||
-        REVIEW_STAGES.some(st => f === `current-stage-review-run-id-${st}-${archiveChangeName}`),
-      )
-      for (const m of markers) {
-        try { unlinkSync(join(runtimeRoot, m)) } catch {}
+      // 2026-10-18 布局分层后 marker 落 state/；根目录扫描保留为旧布局兜底（迁移幂等收敛）
+      const markerDirs = [join(runtimeRoot, 'state'), runtimeRoot]
+      let markerCleaned = 0
+      for (const markerDir of markerDirs) {
+        let names = []
+        try { names = readdirSync(markerDir) } catch { continue }
+        const markers = names.filter((f) =>
+          f === `current-execute-run-id-${archiveChangeName}` ||
+          REVIEW_STAGES.some(st => f === `current-stage-review-run-id-${st}-${archiveChangeName}`),
+        )
+        for (const m of markers) {
+          try { unlinkSync(join(markerDir, m)); markerCleaned++ } catch {}
+        }
       }
-      if (markers.length > 0) {
-        console.log(`🧹 归档清理 ${markers.length} 个 runId marker（execute/stage-review）`)
+      if (markerCleaned > 0) {
+        console.log(`🧹 归档清理 ${markerCleaned} 个 runId marker（execute/stage-review）`)
       }
       // 取证回收必须在下方 worktree 块的 `if (!meta) return` 之前：无 meta 早退是常态
       // （apply 已 cleanup），漏接就会让 execute-runs/verify-runs 继续按变更数累积。
@@ -2803,7 +2811,7 @@ export async function handleExecuteWorktreeCleanup({ stageName, changeName, cwd 
               try {
                 const runtimeDir = join(cwd, '.sillyspec', '.runtime');
                 mkdirSync(runtimeDir, { recursive: true });
-                writeFileSync(join(runtimeDir, `execute-cleanup-${changeName}.json`), JSON.stringify({
+                writeFileSync(runtimeStatePath(runtimeDir, `execute-cleanup-${changeName}.json`), JSON.stringify({
                   change: changeName, cleanedAt: new Date().toISOString(),
                   reason: 'execute-completed-no-unapplied-changes',
                 }, null, 2) + '\n', 'utf8');

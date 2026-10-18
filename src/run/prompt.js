@@ -19,6 +19,7 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, dirname, join } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import jsYaml from 'js-yaml'
@@ -868,7 +869,7 @@ export async function renderPreflightFailures({ stageName, stepName, cwd, specBa
 export function shouldInjectFullContext({ changeName, stageName, runtimeRoot } = {}) {
   try {
     if (!runtimeRoot || !changeName || !stageName) return { full: true }
-    const ledgerPath = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+    const ledgerPath = runtimeStatePath(runtimeRoot, `prompt-inject-${changeName}.json`)
     if (!existsSync(ledgerPath)) return { full: true }
     const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8'))
     const rec = (ledger && ledger.stages && typeof ledger.stages === 'object') ? ledger.stages[stageName] : null
@@ -906,7 +907,7 @@ function renderPromptInjectSummaryLine({ firstStep, digest, specBase, projectNam
  * @param {{ runtimeRoot: string, changeName: string, stageName: string, firstStep: number, digest: string }} args
  */
 async function recordPromptInjectLedger({ runtimeRoot, changeName, stageName, firstStep, digest }) {
-  const ledgerPath = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+  const ledgerPath = runtimeStatePath(runtimeRoot, `prompt-inject-${changeName}.json`)
   await withFileLock(ledgerPath + '.lock', () => {
     let ledger = null
     try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { ledger = null }
@@ -1552,7 +1553,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     let runId = ''
     const execSpecBase = resolvePromptSpecBase(platformOpts, cwd)
     const runtimeRoot = resolveRuntimeRoot(platformOpts, execSpecBase)
-    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+    const runIdFile = runtimeStatePath(runtimeRoot, `current-execute-run-id-${changeName}`)
     try {
       if (existsSync(runIdFile)) {
         const c = readFileSync(runIdFile, 'utf8').trim()

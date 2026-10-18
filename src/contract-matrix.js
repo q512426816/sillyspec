@@ -9,6 +9,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, resolve, basename, dirname, relative, isAbsolute } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
@@ -440,7 +441,7 @@ function _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot)
     // 主仓 diff 空（apply 后已 commit / cleanup 完毕）→ apply-pathspec 兜底：apply 成功时落盘的
     // 本变更精确文件清单（与 gates 归因提示②同源）。仍拿不到才回 null（调用方退全仓）。
     try {
-      const pathspecFile = join(runtimeRoot || join(specBase, '.runtime'), `apply-pathspec-${changeName}.txt`)
+      const pathspecFile = runtimeStatePath(runtimeRoot || join(specBase, '.runtime'), `apply-pathspec-${changeName}.txt`)
       if (existsSync(pathspecFile)) {
         const fromPathspec = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean)
         if (fromPathspec.length > 0) {

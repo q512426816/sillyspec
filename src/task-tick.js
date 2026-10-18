@@ -19,6 +19,7 @@
  *   - 归档件只读：变更已归档时拒收（exit 2）。
  */
 import { existsSync, readFileSync, appendFileSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 
 /** 任务行（宽容缩进/星号有序标记，与哨兵判集行锚同口径 + 缩进容差）。 */
@@ -137,7 +138,7 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
     try {
       const { resolveRuntimeRoot } = await import('./run/shared.js')
       const runtimeRoot = resolveRuntimeRoot({}, specBase)
-      const eventsPath = join(runtimeRoot, `watcher-events-${changeName}.jsonl`)
+      const eventsPath = runtimeStatePath(runtimeRoot, `watcher-events-${changeName}.jsonl`)
       const from = Math.max(0, r.checked - 1)
       appendFileSync(eventsPath, JSON.stringify({
         ts: Date.now(), kind: 'task-done', stage: 'tasks',

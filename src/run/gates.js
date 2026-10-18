@@ -28,6 +28,7 @@
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
 import { basename, join, relative, dirname } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -444,8 +445,8 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
   if (worktreeGone && changeName) {
     try {
       const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
-      const legitimatelyEnded = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
-        || existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
+      const legitimatelyEnded = existsSync(runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`))
+        || existsSync(runtimeStatePath(runtimeRoot, `execute-cleanup-${changeName}.json`))
       if (legitimatelyEnded) {
         console.log('ℹ️  worktree 已在 apply/execute 收尾时正当清理（凭据在 .runtime），deps 门放行')
         return true
@@ -549,7 +550,7 @@ function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx,
 
 /** 档位状态文件路径（runtimeRoot 下 per-change；命名对齐 apply-pathspec-<change>.txt 先例） */
 function ceremonyTierFilePath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `ceremony-tier-${changeName}.json`)
+  return runtimeStatePath(runtimeRoot, `ceremony-tier-${changeName}.json`)
 }
 
 /**

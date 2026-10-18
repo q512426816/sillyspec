@@ -32,6 +32,7 @@
  * degraded 仓退 v1 ⊘ 形态不炸主仓表；预执行形态不调内核（跨仓行保持清单形态）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs, isQuickMetadata } from './run/shared.js'
@@ -263,7 +264,7 @@ function readScopeSnapshot(changeDir, runtimeRoot, changeName) {
     } catch { /* 缺失/损坏 → 下一源 */ }
   }
   try {
-    const snap = JSON.parse(readFileSync(join(runtimeRoot, `scope-audit-${changeName}.json`), 'utf8'))
+    const snap = JSON.parse(readFileSync(runtimeStatePath(runtimeRoot, `scope-audit-${changeName}.json`), 'utf8'))
     if (snap && typeof snap === 'object' && Array.isArray(snap.rows)) return snap
   } catch { /* 缺失/损坏 → null */ }
   return null
@@ -859,10 +860,10 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   })() : false
   const hasSnapshotFile = hasMergedScopeAudit
     || (changeDirInfo
-      ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`))
-      : existsSync(join(runtimeRoot, `scope-audit-${changeName}.json`)))
-  const hasApplyPathspec = existsSync(join(runtimeRoot, `apply-pathspec-${changeName}.txt`))
-  const hasCleanupReceipt = existsSync(join(runtimeRoot, `execute-cleanup-${changeName}.json`))
+      ? existsSync(join(changeDirInfo.dir, 'scope-audit.json')) || existsSync(runtimeStatePath(runtimeRoot, `scope-audit-${changeName}.json`))
+      : existsSync(runtimeStatePath(runtimeRoot, `scope-audit-${changeName}.json`)))
+  const hasApplyPathspec = existsSync(runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`))
+  const hasCleanupReceipt = existsSync(runtimeStatePath(runtimeRoot, `execute-cleanup-${changeName}.json`))
   let hasExecuteRunStamp = false
   if (!hasWorktreeMeta && !hasBranch && !hasAuditTag && !hasSnapshotFile && !hasApplyPathspec && !hasCleanupReceipt) {
     try {
@@ -1016,7 +1017,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   let narrowNote = null
   if (freshActual && collectPatch) {
     try {
-      const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
+      const pathspecFile = runtimeStatePath(runtimeRoot, `apply-pathspec-${changeName}.txt`)
       const owned = readFileSync(pathspecFile, 'utf8').split('\n').map(l => toPosix(l.trim())).filter(Boolean)
       if (owned.length > 0) {
         const ownedSet = new Set(owned)

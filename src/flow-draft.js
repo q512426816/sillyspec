@@ -23,6 +23,7 @@ import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks }
 // 占位句常量真同源（2026-10-03-fr-skeleton-gate 评审 P3 清偿）：起草端 Then 兜底与骨架判据
 // （fr-index.isThinSkeletonBodies）共用同一字面量——两处独立字符串会被评审实证为「镜像非同源」。
 import { SKELETON_THEN_PLACEHOLDER } from './fr-index.js'
+import { runtimeStatePath } from './runtime-paths.js'
 
 /** 读文件并归一化 CRLF→LF（2026-09-25-feedback-fixes④：Python/编辑器写盘 CRLF 会破坏 
  锚定的槽位识别 regex）。 */
@@ -88,7 +89,7 @@ const QUESTION_REPAIR_SIM_THRESHOLD = 0.5
 
 /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
 export function draftLedgerPath(runtimeRoot, changeName) {
-  return join(runtimeRoot, `draft-ledger-${changeName}.json`)
+  return runtimeStatePath(runtimeRoot, `draft-ledger-${changeName}.json`)
 }
 
 const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`

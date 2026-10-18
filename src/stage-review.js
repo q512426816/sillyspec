@@ -14,6 +14,7 @@
  */
 
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { join, dirname } from 'path'
 import { createHash } from 'crypto'
@@ -364,7 +365,7 @@ export function generateStageReviewRunId() {
  */
 export function stageReviewMarkerPath(runtimeRoot, stage, changeName) {
   const suffix = changeName ? `${stage}-${changeName}` : stage
-  return join(runtimeRoot, `current-stage-review-run-id-${suffix}`)
+  return runtimeStatePath(runtimeRoot, `current-stage-review-run-id-${suffix}`)
 }
 
 /**
@@ -853,7 +854,7 @@ export function printStageReviewResult(result, context = {}) {
     // fail-open：无 changeName / 无记录 / 读失败 → 零输出（旧口径）。
     if (changeName && runtimeRoot) {
       try {
-        const recPath = join(runtimeRoot, `review-dispatch-${changeName}.json`)
+        const recPath = runtimeStatePath(runtimeRoot, `review-dispatch-${changeName}.json`)
         if (existsSync(recPath)) {
           const rec = JSON.parse(readFileSync(recPath, 'utf8'))
           if (rec && typeof rec === 'object' && (rec.state === 'in-flight' || rec.state === 'dispatching')) {

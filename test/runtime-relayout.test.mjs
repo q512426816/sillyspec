@@ -12,6 +12,10 @@ import {
   runtimeStateFileNames,
   migrateRuntimeLayout,
 } from '../src/runtime-paths.js'
+import { draftLedgerPath } from '../src/flow-draft.js'
+import { watcherEventsPath } from '../src/watcher.js'
+import { testLedgerPath } from '../src/run/test-ledger.js'
+import { stageReviewMarkerPath } from '../src/stage-review.js'
 
 let failures = 0
 const assert = (cond, msg) => {
@@ -59,6 +63,9 @@ console.log('\n--- 2. runtimeStateFileNames：22 家族精确名（含 run-id �
     'sync-conflict-2026-10-18-demo.json',
     'spec-sync-conflict-2026-10-18-demo.json',
     'apply-pathspec-2026-10-18-demo.txt',
+    'scope-audit-2026-10-18-demo.json',
+    'scan-refresh-2026-10-18-demo.json',
+    'current-execute-run-id-2026-10-18-demo',
     'current-stage-review-run-id-brainstorm-2026-10-18-demo',
     'current-stage-review-run-id-plan-2026-10-18-demo',
     'current-stage-review-run-id-execute-2026-10-18-demo',
@@ -131,7 +138,17 @@ console.log('\n--- 5. 幂等：无冲突场景重跑全零 ---')
 }
 
 // ─────────────────────────────────────────
-console.log('\n--- 6. fail-open：目录缺失/坏路径零副作用不抛 ---')
+console.log('\n--- 6. FR-01 写入面：真实写入点产物落 state/ 子目录 ---')
+{
+  const root = join(tmpRoot, 'w', '.runtime')
+  const c = '2026-10-18-demo'
+  assert(draftLedgerPath(root, c) === join(root, 'state', `draft-ledger-${c}.json`), 'draftLedgerPath（flow-draft 写入面）落 state/')
+  assert(watcherEventsPath(root, c) === join(root, 'state', `watcher-events-${c}.jsonl`), 'watcherEventsPath（watcher 子进程落盘锚）落 state/')
+  assert(testLedgerPath(root, c) === join(root, 'state', `test-ledger-${c}.json`), 'testLedgerPath 落 state/')
+  assert(stageReviewMarkerPath(root, 'execute', c) === join(root, 'state', `current-stage-review-run-id-execute-${c}`), 'stageReviewMarkerPath 落 state/')
+}
+
+console.log('\n--- 7. fail-open：目录缺失/坏路径零副作用不抛 ---')
 {
   const r = migrateRuntimeLayout(join(tmpRoot, 'no-such-runtime'))
   assert(r.stateMoved === 0 && r.tempMoved === 0 && r.skipped === 0, '目录缺失返回零计数不抛')

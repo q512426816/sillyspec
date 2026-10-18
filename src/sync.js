@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { writeAtomicSync } from './fs-atomic.js';
+import { runtimeStatePath } from './runtime-paths.js';
 import { join, dirname, basename, isAbsolute, relative, resolve as pathResolve } from 'path';
 import { homedir } from 'os';
 import { resolvePlatformSpecDir } from './progress.js';
@@ -1311,7 +1312,7 @@ export class SyncManager {
         .digest('hex');
     } catch { /* 指纹失败按有变化处理 */ }
     if (!manual && docsFingerprint) {
-      const markerPath = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime', `sync-docs-lastpush-${changeName}.json`);
+      const markerPath = runtimeStatePath(join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime'), `sync-docs-lastpush-${changeName}.json`);
       try {
         const prev = JSON.parse(readFileSync(markerPath, 'utf8'));
         if (prev && prev.hash === docsFingerprint) {
@@ -1341,7 +1342,7 @@ export class SyncManager {
       try {
         const runtimeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime');
         mkdirSync(runtimeDir, { recursive: true });
-        writeFileSync(join(runtimeDir, `sync-docs-lastpush-${changeName}.json`), JSON.stringify({ hash: docsFingerprint, at: Date.now() }) + '\n', 'utf8');
+        writeFileSync(runtimeStatePath(runtimeDir, `sync-docs-lastpush-${changeName}.json`), JSON.stringify({ hash: docsFingerprint, at: Date.now() }) + '\n', 'utf8');
       } catch { /* marker 失败只损失去重（下轮多推一次），不影响同步 */ }
     }
     console.log(`[sync] 已同步 ${syncedCount} 个文档: ${changeName}`);
@@ -1527,7 +1528,7 @@ export class SyncManager {
     if (!specDir) return null;
     const runtimeDir = join(specDir, '.runtime');
     if (!existsSync(runtimeDir)) mkdirSync(runtimeDir, { recursive: true });
-    const conflictPath = join(runtimeDir, `sync-conflict-${changeName}.json`);
+    const conflictPath = runtimeStatePath(runtimeDir, `sync-conflict-${changeName}.json`);
     const payload = {
       change: changeName,
       base_ts: info.base_ts ?? null,
@@ -1548,7 +1549,7 @@ export class SyncManager {
   readConflictFile(changeName) {
     const specDir = safePlatformSpecDir(this.cwd);
     if (!specDir) return null;
-    const conflictPath = join(specDir, '.runtime', `sync-conflict-${changeName}.json`);
+    const conflictPath = runtimeStatePath(join(specDir, '.runtime'), `sync-conflict-${changeName}.json`);
     if (!existsSync(conflictPath)) return null;
     try {
       return JSON.parse(readFileSync(conflictPath, 'utf8'));
@@ -1563,7 +1564,7 @@ export class SyncManager {
   readSpecConflictFile(changeName) {
     const specDir = safePlatformSpecDir(this.cwd);
     if (!specDir) return null;
-    const p = join(specDir, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    const p = runtimeStatePath(join(specDir, '.runtime'), `spec-sync-conflict-${changeName}.json`);
     if (!existsSync(p)) return null;
     try {
       return JSON.parse(readFileSync(p, 'utf8'));
@@ -1576,7 +1577,7 @@ export class SyncManager {
   clearSpecConflictFile(changeName) {
     const specDir = safePlatformSpecDir(this.cwd);
     if (!specDir) return false;
-    const p = join(specDir, '.runtime', `spec-sync-conflict-${changeName}.json`);
+    const p = runtimeStatePath(join(specDir, '.runtime'), `spec-sync-conflict-${changeName}.json`);
     if (!existsSync(p)) return false;
     try { unlinkSync(p); return true; }
     catch { return false; }
@@ -1589,7 +1590,7 @@ export class SyncManager {
   clearConflictFile(changeName) {
     const specDir = safePlatformSpecDir(this.cwd);
     if (!specDir) return false;
-    const conflictPath = join(specDir, '.runtime', `sync-conflict-${changeName}.json`);
+    const conflictPath = runtimeStatePath(join(specDir, '.runtime'), `sync-conflict-${changeName}.json`);
     if (!existsSync(conflictPath)) return false;
     try { unlinkSync(conflictPath); return true; }
     catch { return false; }
