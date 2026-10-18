@@ -1,6 +1,14 @@
-tier: thin
+tier: thick
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -30,11 +38,19 @@ input: >-
 autopilot: false
 prestage_ack: false
 baseline_commit: df205821aee3fe73700e812f13fe720b28f45312
-updatedAt: '2026-10-18T03:15:13.087Z'
+updatedAt: '2026-10-18T06:08:50.606Z'
 baseline_sha256: 0277356a99c0d8ea9584ff81a6c29299667647c3ab591f7f3ebd5169e746c04a
 spec_approved: true
 spec_approved_at: '2026-10-18T03:15:13.087Z'
 spec_approved_by: zcode-runtime-relayout
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-runtime-relayout
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js167+js11+js-meta-skip1+nontest-skip1)+fr(55)（219.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261018055614\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测（增量重跑：增量重跑面 168 文件（前轮失败批 167 ∪
+  基线以来变更 4；基线实测测试集 185 文件，未触碰绿面复用不重跑））。｜lint: passed ← npm run lint（56.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261018055614\test-result.json｜门文件 181 个
 

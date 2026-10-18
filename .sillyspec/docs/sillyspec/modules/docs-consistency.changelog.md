@@ -28,3 +28,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-15 | 2026-10-15-module-path-glob-match | 用户实测发现（平台仓）：FR 沉淀持续落 auto-* 伪域（7 个域 92 条全是近两天新变更）、… |
 | 2026-10-15 | 2026-10-15-ui-proto-form-config | 四例原型形态偏档（fire-equipment/deploy-release-notes/knowl… |
 | 2026-10-15 | 2026-10-15-decision-anchor-backfill | 效果评估实证（用户问「新变更图谱为何不关联代码」）：决策↔代码的图谱边唯一来源是条目「锚点：」字段，… |
+| 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |

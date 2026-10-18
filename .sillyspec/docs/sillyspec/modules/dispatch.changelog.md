@@ -7,3 +7,4 @@
 | 2026-09-10 | 2026-09-10-review-dispatch（P2） | src/review-dispatch.js 归属本模块：runReviewDispatch 三链（create/status/kill）+ probe 三层前置消费 + 在途记录状态机（O_EXCL/终态即清）+ artifacts 双通道回收；D-007 显式例外与防泛化护栏落卡定位段。gate 在途区分在 stage-review.js（core-engine）。 |
 | 2026-10-12 | 2026-10-12-review-probe-injection | dogfood 实证驱动（fire-equipment 会话复盘）：三个生产缺陷（dva 双注册、MyBatis 别名冲 |
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | TDD 分层适用引导：templates/prompts/testcase-design.md 单一源头部加「按层适用」块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写，一句话判据「当 X 发生时用户应看到/发生 Y」）——经既有 include 机制自动流入三派发路径；local-agent.js 写模式行 TDD 措辞带按层限定；机器门零改动；新增 test/tdd-scope-guidance.test.mjs。 |
+| 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |

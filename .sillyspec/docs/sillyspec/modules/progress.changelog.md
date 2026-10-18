@@ -16,3 +16,4 @@ ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段
 | 2026-10-13 | 2026-10-13-thin-sync-stage | 平台变更中心「进行中」列表的轻量变更不显示「轻量」徽章：CLI 对 thin 变更上行的 changes[0].curr |
 | 2026-10-13 | 2026-10-13-sync-ledger-tombstone | 幽灵变更事故（2026-10-13-new-change-e5a27813，multi-agent-platform 仓 |
 | 2026-10-13 | 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm /  |
+| 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |

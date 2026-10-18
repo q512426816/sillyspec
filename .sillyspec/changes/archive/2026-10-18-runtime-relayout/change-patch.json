@@ -1,0 +1,1780 @@
+{
+  "change": "2026-10-18-runtime-relayout",
+  "baseline": "df205821aee3fe73700e812f13fe720b28f45312",
+  "head": "221b0696f0a34907283456dff004f9e5d0b80d23",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "docs/sillyspec/platform-interface-map.md",
+    "package.json",
+    "src/archive-delta.js",
+    "src/contract-matrix.js",
+    "src/db.js",
+    "src/deleted-ledger.js",
+    "src/doctor-diagnostics.js",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "src/friction-ledger.js",
+    "src/friction-tally.js",
+    "src/handoff.js",
+    "src/hooks/worktree-guard.js",
+    "src/index.js",
+    "src/knowledge-hits.js",
+    "src/knowledge-vector.js",
+    "src/progress.js",
+    "src/progress/consistency-doctor.js",
+    "src/progress/stage-machine.js",
+    "src/review-dispatch.js",
+    "src/review-tier.js",
+    "src/route-hindsight.js",
+    "src/run/bg-sync.js",
+    "src/run/command.js",
+    "src/run/complete-handlers.js",
+    "src/run/complete.js",
+    "src/run/gate-snapshot-ledger.js",
+    "src/run/gates.js",
+    "src/run/prompt.js",
+    "src/run/scan-profile.js",
+    "src/run/shared.js",
+    "src/run/stage.js",
+    "src/run/test-ledger.js",
+    "src/run/verify-quality-scan.js",
+    "src/runtime-paths.js",
+    "src/scan-refresh.js",
+    "src/scope-audit.js",
+    "src/spec-sync.js",
+    "src/stage-review.js",
+    "src/sync-noise.js",
+    "src/sync.js",
+    "src/task-done.js",
+    "src/task-review.js",
+    "src/task-tick.js",
+    "src/validate-artifacts.js",
+    "src/verify-draft.js",
+    "src/verify-postcheck.js",
+    "src/verify-probes.js",
+    "src/watcher.js",
+    "src/worktree-apply.js",
+    "src/write-audit.js",
+    "test/acceptance-matrix-probe.test.mjs",
+    "test/agent-session-log.test.mjs",
+    "test/align-execute-review-gate.test.mjs",
+    "test/archive-delta.test.mjs",
+    "test/archive-runtime-prune.test.mjs",
+    "test/archive-task-completion-injection.test.mjs",
+    "test/archive-timeline-bake.test.mjs",
+    "test/batch-tick-gate.test.mjs",
+    "test/ceremony-tier.test.mjs",
+    "test/change-delete.test.mjs",
+    "test/change-ownership-guards.test.mjs",
+    "test/cli-top-level-aliases.test.mjs",
+    "test/close-trace-unified.test.mjs",
+    "test/commit-guard.test.mjs",
+    "test/deleted-ledger.test.mjs",
+    "test/delta-scan-feedback.test.mjs",
+    "test/design-question-line-injection.test.mjs",
+    "test/docs-inject-telemetry.test.mjs",
+    "test/endpoint-baseline.test.mjs",
+    "test/enforce-deps-gate-diagnostic.test.mjs",
+    "test/execute-run-change-stamp.test.mjs",
+    "test/execute-run-dir-fail-loud.test.mjs",
+    "test/execute-run-id-collision.test.mjs",
+    "test/execute-runs-isolation.test.mjs",
+    "test/feedback-batch2-hardening.test.mjs",
+    "test/feedback2-quickfix.test.mjs",
+    "test/flow-clarity-probe.test.mjs",
+    "test/flow-draft.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-route.test.mjs",
+    "test/forensics.test.mjs",
+    "test/fr-agent-writable.test.mjs",
+    "test/fr-governance-telemetry.test.mjs",
+    "test/friction-tally.test.mjs",
+    "test/gate-derive-spec-drift.test.mjs",
+    "test/gate-full-preflight.test.mjs",
+    "test/gate-snapshot-lifecycle.test.mjs",
+    "test/gate-stage-review-hint.test.mjs",
+    "test/gates-snapshot-fallback-visibility.test.mjs",
+    "test/hub08-spec-sync-conflict.test.mjs",
+    "test/knowledge-classify.test.mjs",
+    "test/knowledge-fr-stats.test.mjs",
+    "test/knowledge-inject.test.mjs",
+    "test/knowledge-stats-fr-only.test.mjs",
+    "test/knowledge-stats.test.mjs",
+    "test/knowledge-vector-recall.test.mjs",
+    "test/machine-interface.test.mjs",
+    "test/pass-eligibility.test.mjs",
+    "test/perf-batch-fixes.test.mjs",
+    "test/pitfall-batch-review-backfill.test.mjs",
+    "test/pitfall-stage-review-dir.test.mjs",
+    "test/plan-target-files.test.mjs",
+    "test/platform-dual-root-fixture.test.mjs",
+    "test/platform-register-stage-review.test.mjs",
+    "test/platform-spec-sync-incremental.test.mjs",
+    "test/platform-sync-conflict.test.mjs",
+    "test/platform-sync-fulltree.test.mjs",
+    "test/platform-sync-import.test.mjs",
+    "test/platform-sync-self-echo.test.mjs",
+    "test/platform-sync-self-heal.test.mjs",
+    "test/platform-sync-silent-death.test.mjs",
+    "test/platform-tombstone-and-activity-report.test.mjs",
+    "test/preflight-slimming.test.mjs",
+    "test/preimport-bak-rotation.test.mjs",
+    "test/probe5-change-relevant-surface.test.mjs",
+    "test/probe5-pathspec-fallback.test.mjs",
+    "test/probe7-prefill-noise.test.mjs",
+    "test/progress-complete-stage.test.mjs",
+    "test/progress-dump.test.mjs",
+    "test/pull-spec-bundle-resurrect-guard.test.mjs",
+    "test/quick-retired.test.mjs",
+    "test/quick-session-isolation.test.mjs",
+    "test/quicksync-conflict-granularity.test.mjs",
+    "test/reconcile-source-isolation.test.mjs",
+    "test/reopen-stale-confirm.test.mjs",
+    "test/retro-verify-friction-fixes.test.mjs",
+    "test/review-dispatch.test.mjs",
+    "test/review-status-command.test.mjs",
+    "test/revision-v1.test.mjs",
+    "test/rollback-loop-guards.test.mjs",
+    "test/route-hindsight.test.mjs",
+    "test/run-complete-step-archive.test.mjs",
+    "test/run-complete-step-execute-batch.test.mjs",
+    "test/runtime-relayout.test.mjs",
+    "test/scan-refresh.test.mjs",
+    "test/scope-audit.test.mjs",
+    "test/selfref-warn-window.test.mjs",
+    "test/sentinel-rules.test.mjs",
+    "test/sentinel-unified-evidence.test.mjs",
+    "test/smoke-gate.test.mjs",
+    "test/spec-sync-bg.test.mjs",
+    "test/spec-sync-conflict-banner-dedup.test.mjs",
+    "test/spec-sync-fail-streak.test.mjs",
+    "test/spec-sync-platform-deleted-receipt.test.mjs",
+    "test/spec-sync-tombstone-attribution.test.mjs",
+    "test/spec-tree-sync-conflict-decouple.test.mjs",
+    "test/stage-completion-atomicity.test.mjs",
+    "test/stage-review-marker-auto.test.mjs",
+    "test/stage-review-register.test.mjs",
+    "test/stage-review.test.mjs",
+    "test/sync-conflict-statemachine.test.mjs",
+    "test/sync-noise.test.mjs",
+    "test/task-done.test.mjs",
+    "test/task-review-diffpaths.test.mjs",
+    "test/task-review-draft.test.mjs",
+    "test/task-review-summarize-completion.test.mjs",
+    "test/task-tick.test.mjs",
+    "test/task-truth-unify.test.mjs",
+    "test/tax-governance-ledger.test.mjs",
+    "test/test-ledger.test.mjs",
+    "test/thin-docs-v2.test.mjs",
+    "test/thin-fr-inject-parity.test.mjs",
+    "test/thin-inject-telemetry.test.mjs",
+    "test/tool-defect-audit-fixes.test.mjs",
+    "test/validate-artifacts.test.mjs",
+    "test/vector-switch-hint.test.mjs",
+    "test/verify-concurrency-fixes.test.mjs",
+    "test/verify-draft.test.mjs",
+    "test/verify-papercuts-batch.test.mjs",
+    "test/watcher-alerts.test.mjs",
+    "test/watcher.test.mjs",
+    "test/wave-task-complete-gate.test.mjs",
+    "test/worktree-dual-truth-gates.test.mjs",
+    "test/worktree-execute-spec-drift.test.mjs",
+    "test/worktree-guard-cross-repo-cd.test.mjs",
+    "test/worktree-guard-execute-guard.test.mjs",
+    "test/worktree-guard.test.mjs",
+    "test/write-audit.test.mjs"
+  ],
+  "totals": {
+    "files": 180,
+    "additions": 1187,
+    "deletions": 448
+  },
+  "savedAt": "2026-10-18T05:58:44.559Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 16,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "progress",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 16,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "dispatch",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/dispatch.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 7,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sillyhub-mcp",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sillyhub-mcp.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 125
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "df205821aee3fe73700e812f13fe720b28f45312",
+    "totals": {
+      "files": 183,
+      "additions": 1187,
+      "deletions": 448
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 17,
+        "deletions": 17,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "package.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/archive-delta.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/contract-matrix.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/db.js",
+        "additions": 8,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/deleted-ledger.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/doctor-diagnostics.js",
+        "additions": 8,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow-draft.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/friction-ledger.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/friction-tally.js",
+        "additions": 8,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/handoff.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 26,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-hits.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/progress.js",
+        "additions": 19,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/progress/consistency-doctor.js",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/progress/stage-machine.js",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/review-dispatch.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/review-tier.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/route-hindsight.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/bg-sync.js",
+        "additions": 10,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete-handlers.js",
+        "additions": 40,
+        "deletions": 37,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/gate-snapshot-ledger.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/scan-profile.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/test-ledger.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/runtime-paths.js",
+        "additions": 189,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/scan-refresh.js",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/scope-audit.js",
+        "additions": 7,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 20,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stage-review.js",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sync-noise.js",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sync.js",
+        "additions": 16,
+        "deletions": 12,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/task-done.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/task-review.js",
+        "additions": 7,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/validate-artifacts.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-draft.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 8,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-probes.js",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/watcher.js",
+        "additions": 15,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree-apply.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/write-audit.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/acceptance-matrix-probe.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/agent-session-log.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/align-execute-review-gate.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-delta.test.mjs",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-runtime-prune.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-task-completion-injection.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-timeline-bake.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/batch-tick-gate.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/ceremony-tier.test.mjs",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-delete.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-ownership-guards.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/cli-top-level-aliases.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/close-trace-unified.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/commit-guard.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/deleted-ledger.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/delta-scan-feedback.test.mjs",
+        "additions": 9,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/design-question-line-injection.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/docs-inject-telemetry.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/endpoint-baseline.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/enforce-deps-gate-diagnostic.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/execute-run-change-stamp.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/execute-run-dir-fail-loud.test.mjs",
+        "additions": 7,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/execute-run-id-collision.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/execute-runs-isolation.test.mjs",
+        "additions": 7,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/feedback-batch2-hardening.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/feedback2-quickfix.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-clarity-probe.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-draft.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-protocol.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-route.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/forensics.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-agent-writable.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-governance-telemetry.test.mjs",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/friction-tally.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gate-derive-spec-drift.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gate-full-preflight.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gate-snapshot-lifecycle.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gate-stage-review-hint.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gates-snapshot-fallback-visibility.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/hub08-spec-sync-conflict.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-classify.test.mjs",
+        "additions": 8,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-fr-stats.test.mjs",
+        "additions": 5,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-inject.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-stats-fr-only.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-stats.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-vector-recall.test.mjs",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/machine-interface.test.mjs",
+        "additions": 12,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pass-eligibility.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/perf-batch-fixes.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pitfall-batch-review-backfill.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pitfall-stage-review-dir.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/plan-target-files.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-dual-root-fixture.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-register-stage-review.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-spec-sync-incremental.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-conflict.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-fulltree.test.mjs",
+        "additions": 4,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-import.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-self-echo.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-self-heal.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-sync-silent-death.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/platform-tombstone-and-activity-report.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/preflight-slimming.test.mjs",
+        "additions": 12,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/preimport-bak-rotation.test.mjs",
+        "additions": 13,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe5-change-relevant-surface.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe5-pathspec-fallback.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/probe7-prefill-noise.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/progress-complete-stage.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/progress-dump.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/pull-spec-bundle-resurrect-guard.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/quick-retired.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/quick-session-isolation.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/quicksync-conflict-granularity.test.mjs",
+        "additions": 8,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/reconcile-source-isolation.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/reopen-stale-confirm.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/retro-verify-friction-fixes.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/review-dispatch.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/review-status-command.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/revision-v1.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/rollback-loop-guards.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/route-hindsight.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/run-complete-step-archive.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/run-complete-step-execute-batch.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/runtime-relayout.test.mjs",
+        "additions": 264,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scan-refresh.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/scope-audit.test.mjs",
+        "additions": 12,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/selfref-warn-window.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sentinel-rules.test.mjs",
+        "additions": 6,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sentinel-unified-evidence.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/smoke-gate.test.mjs",
+        "additions": 6,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-bg.test.mjs",
+        "additions": 4,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-conflict-banner-dedup.test.mjs",
+        "additions": 9,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-fail-streak.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-platform-deleted-receipt.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-tombstone-attribution.test.mjs",
+        "additions": 20,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-tree-sync-conflict-decouple.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/stage-completion-atomicity.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/stage-review-marker-auto.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/stage-review-register.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/stage-review.test.mjs",
+        "additions": 8,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sync-conflict-statemachine.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sync-noise.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-done.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-review-diffpaths.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-review-draft.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-review-summarize-completion.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-tick.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/task-truth-unify.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/tax-governance-ledger.test.mjs",
+        "additions": 10,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/test-ledger.test.mjs",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-docs-v2.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-fr-inject-parity.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-inject-telemetry.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/tool-defect-audit-fixes.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/validate-artifacts.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/vector-switch-hint.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/verify-concurrency-fixes.test.mjs",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/verify-draft.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/verify-papercuts-batch.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/watcher-alerts.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/watcher.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/wave-task-complete-gate.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-dual-truth-gates.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-execute-spec-drift.test.mjs",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-guard-cross-repo-cd.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-guard-execute-guard.test.mjs",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-guard.test.mjs",
+        "additions": 10,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/write-audit.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/ceremony-tier.js",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "src/git-helper.js",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "test",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "961002445173f7685bac5ca7b474a98e2e819e5c32dd6d9002bd86bc82f5a574",
+  "patchStatus": "ok"
+}

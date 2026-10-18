@@ -1,0 +1,31 @@
+{"ts":1792292970959,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792293174529,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792293197888,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792293217807,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792293306656,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792293613683,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792293616518,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792293616518,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792293633497,"kind":"commit","stage":null,"detail":"7276a22a","provisional":true}
+{"ts":1792293729556,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/spec-sync.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792293884620,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/task-done.js、src/task-review.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294006039,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/archive-delta.js、src/run/verify-quality-scan.js、src/scan-refresh.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294046081,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/prompt.js、src/worktree-apply.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294195251,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294271057,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792294271057,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792294281776,"kind":"commit","stage":null,"detail":"a65df630","provisional":true}
+{"ts":1792294338335,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294414396,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294444124,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792294444124,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792294444124,"kind":"commit","stage":null,"detail":"2ad777f4","provisional":true}
+{"ts":1792294465175,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294481997,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294508392,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792294508392,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1792294508392,"kind":"commit","stage":null,"detail":"dc67f160","provisional":true}
+{"ts":1792294548755,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.runtime-relayout-patch.py——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792294705524,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1792298846964,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true,"source":"task-tick"}
+{"ts":1792298847730,"kind":"task-done","stage":"tasks","detail":"checked 6→7","provisional":true,"source":"task-tick"}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-18-runtime-relayout",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "446d93fe321a1cf7366bbc00bdf269e640a97d00",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "ceremony-tier/scan-guard 族用户可见文案仍引用迁移前根目录路径（verify-quality-scan 族 4 处已清偿）",
+      "evidence": "增量 446d93fe 已实测核清：complete.js:1148（scope-audit 兜底）与 :1566（current-execute-run-id marker）改经 runtimeStatePath（import 于 :20），verify-probes.js 4 处（:3134/:3444/:3458/:3584）文案补 state/ 前缀属实；但原 finding 同时举证的 ceremony-tier/scan-guard 族文案未随增量修复——review-dispatch.js:678 skip 理由、verify-postcheck.js:4863 console.error、verify-postcheck.js:5120 fixHint、scan-refresh.js:388 报错仍写 `.runtime/ceremony-tier-<change>.json` / `.runtime/scan-guard.json`，实际落点为 `.runtime/state/`（gates.js:553、scan-refresh.js:231/385 经 runtimeStatePath），照文案拼写的路径迁移后不存在。仅误导诊断信息，无门禁判定依赖该路径。",
+      "location": "src/review-dispatch.js:678"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "边界已裁决：可接受——迁移目标存在则跳过不覆盖（runtime-paths.js:176，防旧进程迟到文件盖新文件），迟到文件保守保留根目录、归档时 prune 双路径兜底回收；增量 446d93fe 把 complete.js 两处旧路径读点（scope-audit 兜底/marker）并轨 state/ 后，FR-04『全部读写点同版本切换』的残留缺口闭合。",
+    "并发": "ok——renameSync 同卷原子、逐条 try/catch 跳过（runtime-paths.js:173-186）、mkdir recursive 并发不抛；写入点沿用既有原子写，目录前缀不引入新竞争面。",
+    "切换": "ok——迁移中断重跑按『源存在且目标不存在』续搬（幂等）；temp/ 整体删除后 _pathWithDir 在路径构造点 mkdir 重建（runtime-paths.js:122-126）；watcher 活跃锁不迁（TEMP_PATTERNS 仅匹配 watcher.lock.<pid>.tmp），租约连续性边界已裁决：可接受。",
+    "作用域": "ok——仅对既有 resolveRuntimeRoot 结果加 state|temp 目录前缀，解析机制未动，各 workspace 同构无串台新增面；worktree-guard.js:193-194 双候选（specRoot/projectRoot）保留跨仓 repos 语义。『未知归属文件不迁移』『pending_push 零引用不入产品表（15+1 披露一致）』『sillyspec.db 不迁（多点引用非乱源）』均边界已裁决：可接受。"
+  },
+  "reviewedAt": "2026-10-18T16:30:00.000Z"
+}

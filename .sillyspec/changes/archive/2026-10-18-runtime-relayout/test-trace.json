@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-18-runtime-relayout",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-18-runtime-relayout:flow:测试绑定FR-01",
+      "tests": [
+        "test/runtime-relayout.test.mjs「写入点产物落 state/ 子目录」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-18-runtime-relayout"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-18-runtime-relayout:flow:测试绑定FR-02",
+      "tests": [
+        "test/runtime-relayout.test.mjs「日志与备份产物落 temp/ 子目录且删除不阻断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-18-runtime-relayout"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-18-runtime-relayout:flow:测试绑定FR-03",
+      "tests": [
+        "test/runtime-relayout.test.mjs「pruneArchivedChangeRuntime 回收 state/ 全家族并保留根路径兜底」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-18-runtime-relayout"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-18-runtime-relayout:flow:测试绑定FR-04",
+      "tests": [
+        "test/runtime-relayout.test.mjs「旧布局迁移幂等且 fail-open」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-18-runtime-relayout"
+    }
+  ]
+}

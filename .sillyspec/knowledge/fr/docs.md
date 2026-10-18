@@ -697,3 +697,86 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-16-short-change-title
   status: active
+
+## FR-docs-036 .runtime 根目录不再新增按 change 命名的散文件：8 类产品写入点全部改写入 state/ 子目录（文件名保持不变，仅加目录前缀）
+变更：2026-10-18-runtime-relayout
+状态：active
+摘要：新写入落 state/
+全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-01
+最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-18-runtime-relayout:flow:测试绑定FR-01
+  tests: test/runtime-relayout.test.mjs「写入点产物落 state/ 子目录」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-18-runtime-relayout
+  status: active
+
+## FR-docs-037 可随时删除的产物（日志、db 备份、锁残留 tmp）统一写入 temp/ 子目录，删除 temp/ 内容后各流程功能不受影响
+变更：2026-10-18-runtime-relayout
+状态：active
+摘要：删除 temp/ 后功能不受影响
+全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-02
+最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-18-runtime-relayout:flow:测试绑定FR-02
+  tests: test/runtime-relayout.test.mjs「日志与备份产物落 temp/ 子目录且删除不阻断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-18-runtime-relayout
+  status: active
+
+## FR-docs-038 变更归档/删除时同步回收该变更在 state/ 下的全部散文件（pruneArchivedChangeRuntime 扩名单），不再随归档数累积
+变更：2026-10-18-runtime-relayout
+状态：active
+摘要：归档回收 state/ 散文件
+全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-03
+最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-18-runtime-relayout:flow:测试绑定FR-03
+  tests: test/runtime-relayout.test.mjs「pruneArchivedChangeRuntime 回收 state/ 全家族并保留根路径兜底」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-18-runtime-relayout
+  status: active
+
+## FR-docs-039 旧布局兼容：升级后旧位置文件自动迁移到新位置（幂等、fail-open），既有仓库不丢状态
+变更：2026-10-18-runtime-relayout
+状态：active
+摘要：旧仓升级自动迁移
+全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-04
+最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-18-runtime-relayout:flow:测试绑定FR-04
+  tests: test/runtime-relayout.test.mjs「旧布局迁移幂等且 fail-open」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-18-runtime-relayout
+  status: active
+
+## FR-docs-040 本仓 .sillyspec/.runtime 完成迁移：根目录只剩核心单例与子目录，条目数从 1649 降至 30 以内
+变更：2026-10-18-runtime-relayout
+状态：active
+摘要：本仓清理验收
+全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-05
+最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00

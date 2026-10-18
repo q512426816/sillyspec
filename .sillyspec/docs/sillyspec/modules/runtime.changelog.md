@@ -66,3 +66,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名
 - 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化
 - 2026-10-17-strict-sync-signal-shape | 终态强校验默认路径 signal 形状修复——套娃对象回归钉
+- 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
