@@ -1,4 +1,5 @@
 import { openDatabase, applyPragmas, runTransaction } from './db-engine.js';
+import { runtimeTempPath } from './runtime-paths.js'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 
@@ -102,7 +103,8 @@ export class DB {
    * 全新 node:sqlite 项目不产生主 .bak）。
    */
   _openWithFallback() {
-    const bakPath = `${this.dbPath}.bak`;
+    // .bak 2026-10-18 布局分层后归 temp/；根路径保留兜底（未迁移旧仓/混版本窗口）
+    const bakPath = existsSync(`${this.dbPath}.bak`) ? `${this.dbPath}.bak` : runtimeTempPath(dirname(this.dbPath), 'sillyspec.db.bak');
     // readValid: null=文件不存在；'empty'=存在但 0 字节；'ok'=有内容
     const readValid = (p) => {
       if (!existsSync(p)) return null;
@@ -156,7 +158,11 @@ export class DB {
         // 覆盖前救援快照（2026-08-21 审查 BUG-7）：主库有内容但打不开（"损坏"）时，其中可能
         // 含比 .bak 更新的数据——静默覆盖即静默丢。best-effort 留一份 .corrupt-<ts> 副本供人工恢复。
         if (primaryRaw === 'ok') {
-          try { copyFileSync(this.dbPath, `${this.dbPath}.corrupt-${Date.now()}`); } catch { /* 救援失败不阻断恢复 */ }
+          try {
+          const corruptPath = runtimeTempPath(dirname(this.dbPath), `sillyspec.db.corrupt-${Date.now()}`);
+          try { mkdirSync(dirname(corruptPath), { recursive: true }); } catch { /* fail-open */ }
+          copyFileSync(this.dbPath, corruptPath);
+        } catch { /* 救援失败不阻断恢复 */ }
         }
         // node:sqlite 绑定路径，无 _save：把 .bak 内容 copy 回主库，统一用 dbPath。
         // 体检 BUG-18：主库可能正被其他进程（daemon/另一 CLI）打开——Windows 覆盖他人

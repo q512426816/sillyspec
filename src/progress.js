@@ -11,6 +11,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
+import { RUNTIME_TEMP_DIRNAME } from './runtime-paths.js'
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir, hostname } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -746,7 +747,8 @@ export class ProgressManager {
       throw new Error(`本地进度库不存在，无法 import：${dbPath}`);
     }
     const bakTs = new Date().toISOString().replace(/[:.]/g, '-');
-    const bakPath = this._runtimePath(cwd, `sillyspec.db.pre-import-${bakTs}.bak`);
+    const bakPath = this._runtimePath(cwd, RUNTIME_TEMP_DIRNAME, `sillyspec.db.pre-import-${bakTs}.bak`);
+    try { mkdirSync(dirname(bakPath), { recursive: true }); } catch { /* import 主流程 fail-open */ }
     // 体检 BUG-18：WAL 模式下最近已提交事务可能仍在 -wal 侧车，直接 copy 主库文件会拿到
     // 缺尾部提交的快照（恢复时静默回退进度）。先尽力 checkpoint(TRUNCATE) 把 WAL 合并回主库；
     // 他进程持连接致 checkpoint 不完全时，把 -wal 侧车一并备份，恢复侧才有完整提交
@@ -880,17 +882,20 @@ export class ProgressManager {
     let keep = Number(process.env.SILLYSPEC_PREIMPORT_BAK_KEEP);
     if (!Number.isInteger(keep) || keep < 1) keep = PRE_IMPORT_BAK_KEEP_DEFAULT;
 
-    const runtimeDir = this._runtimePath(cwd);
-    const baks = readdirSync(runtimeDir).filter(f => PRE_IMPORT_BAK_RE.test(f)).sort();
+    // 快照 2026-10-18 起落 temp/；根目录扫描保留旧布局兜底（迁移幂等收敛后清零）
+    const scanDirs = [this._runtimePath(cwd, RUNTIME_TEMP_DIRNAME), this._runtimePath(cwd)]
+    const baks = [...new Set(scanDirs.flatMap(d => { try { return readdirSync(d) } catch { return [] } }))]
+      .filter(f => PRE_IMPORT_BAK_RE.test(f)).sort();
     const keepName = keepPath ? basename(keepPath) : null;
     const doomed = baks.slice(0, Math.max(0, baks.length - keep)).filter(f => f !== keepName);
 
     let removed = 0;
     for (const f of doomed) {
       // 单份删除失败（他进程持句柄 / 权限）不连坐其余份：跳过即可，下次 import 再收。
-      try { unlinkSync(join(runtimeDir, f)); } catch { continue; }
+      const fDir = scanDirs.find(d => { try { return existsSync(join(d, f)) } catch { return false } }) || scanDirs[0]
+      try { unlinkSync(join(fDir, f)); } catch { continue; }
       removed++;
-      const wal = join(runtimeDir, `${f}-wal`);
+      const wal = join(fDir, `${f}-wal`);
       if (existsSync(wal)) {
         try { unlinkSync(wal); } catch { /* 侧车残留无害：不参与恢复链，下次裁剪再收 */ }
       }

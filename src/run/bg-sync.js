@@ -36,11 +36,17 @@
  * 刻意不赌）；父进程内 shared.js 已加载，动态 import 走缓存无额外成本。
  */
 import { spawn } from 'child_process';
+import { runtimeTempPath } from '../runtime-paths.js'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 export const BG_LOCK_FILENAME = 'spec-sync-bg.lock';
 export const BG_LOG_FILENAME = 'spec-sync-bg.log';
+
+/** 后台同步日志路径（2026-10-18 布局分层：可随时删除的产物归 temp/）。 */
+export function bgSyncLogPath(runtimeRoot) {
+  return runtimeTempPath(runtimeRoot, BG_LOG_FILENAME);
+}
 
 // 后台轮参数：单轮预算下限（与 env SILLYSPEC_SYNC_TIMEOUT_MS 取 max）、轮数与总预算帽
 // （防慢平台下无限续轮）；锁时效（pid 活性之外的第二道判死——pid 复用假活兜底，
@@ -108,7 +114,7 @@ export function isBgSyncLockLive(lock, now = Date.now()) {
 /** 子进程起步截尾日志（>1MB 保后 512KB，从整行边界起）。失败只影响日志体积。 */
 function truncateLogIfNeeded(runtimeRoot) {
   try {
-    const p = join(runtimeRoot, BG_LOG_FILENAME);
+    const p = bgSyncLogPath(runtimeRoot);
     if (statSync(p).size <= LOG_TRUNCATE_THRESHOLD) return;
     const buf = readFileSync(p);
     const keep = buf.subarray(Math.max(0, buf.length - LOG_TRUNCATE_KEEP));
@@ -143,15 +149,16 @@ export async function spawnBackgroundSync(cwd, changeName, platformOpts = {}, op
     // 单飞合并：活后台轮在跑，把「还有新状态要同步」并入其下一轮。置位失败（并发写锁）
     // 只损失合并信号——后台轮收尾锁自清，下一条命令重新 spawn，收敛不丢。
     try { writeBgSyncLock(runtimeRoot, { ...lock, rerunQueued: true }); } catch { /* 见上 */ }
-    return { status: 'coalesced', logPath: join(runtimeRoot, BG_LOG_FILENAME) };
+    return { status: 'coalesced', logPath: bgSyncLogPath(runtimeRoot) };
   }
 
   // 日志 fd：子进程 stdout/stderr 直接 append 进日志文件（跨平台 fd 继承）；开不了退 ignore
-  const logPath = join(runtimeRoot, BG_LOG_FILENAME);
+  const logPath = bgSyncLogPath(runtimeRoot);
   let stdio = ['ignore', 'ignore', 'ignore'];
   let logFd = null;
   try {
     mkdirSync(runtimeRoot, { recursive: true });
+    mkdirSync(join(runtimeRoot, 'temp'), { recursive: true }); // temp/ 可被整体删除，写前重建
     logFd = openSync(logPath, 'a');
     stdio = ['ignore', logFd, logFd];
   } catch {

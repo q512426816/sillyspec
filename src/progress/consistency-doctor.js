@@ -2,6 +2,7 @@
 // 从 src/progress.js 单体 ProgressManager 抽出。持有 pm 引用（构造注入），调 pm.read / pm._write /
 // pm._ensureRuntimeDir / pm._runtimePath（persistence-core 留 facade 本体）。
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { RUNTIME_TEMP_DIRNAME } from '../runtime-paths.js'
 import { join, resolve } from 'path';
 import { DB } from '../db.js';
 import { openDatabase } from '../db-engine.js';
@@ -122,8 +123,9 @@ export class ConsistencyDoctor {
   _appendAuditLog(cwd, entry) {
     try {
       this.pm._ensureRuntimeDir(cwd);
-      const auditPath = this.pm._runtimePath(cwd, 'audit.log');
+      const auditPath = this.pm._runtimePath(cwd, RUNTIME_TEMP_DIRNAME, 'audit.log');
       const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
+      try { mkdirSync(dirname(auditPath), { recursive: true }); } catch { /* fail-open */ }
       appendFileSync(auditPath, line + '\n');
     } catch (e) {
       console.warn(`⚠️  审计日志写入失败: ${e.message}`);

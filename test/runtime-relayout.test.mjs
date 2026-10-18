@@ -16,6 +16,7 @@ import { draftLedgerPath } from '../src/flow-draft.js'
 import { watcherEventsPath } from '../src/watcher.js'
 import { testLedgerPath } from '../src/run/test-ledger.js'
 import { stageReviewMarkerPath } from '../src/stage-review.js'
+import { bgSyncLogPath, BG_LOG_FILENAME } from '../src/run/bg-sync.js'
 
 let failures = 0
 const assert = (cond, msg) => {
@@ -148,7 +149,28 @@ console.log('\n--- 6. FR-01 写入面：真实写入点产物落 state/ 子目�
   assert(stageReviewMarkerPath(root, 'execute', c) === join(root, 'state', `current-stage-review-run-id-execute-${c}`), 'stageReviewMarkerPath 落 state/')
 }
 
-console.log('\n--- 7. fail-open：目录缺失/坏路径零副作用不抛 ---')
+console.log('\n--- 7. FR-02 temp 面：日志/备份产物落 temp/ 且删除后可重建 ---')
+{
+  const root = join(tmpRoot, 't', '.runtime')
+  mkdirSync(root, { recursive: true })
+  assert(bgSyncLogPath(root) === join(root, 'temp', BG_LOG_FILENAME), 'bgSyncLogPath（spec-sync-bg.log）落 temp/')
+  // 迁移把旧日志收进 temp/（复用 migrate 的已知产物面）
+  writeFileSync(join(root, 'spec-sync-bg.log'), 'old-log')
+  writeFileSync(join(root, 'watcher.log'), 'old-wlog')
+  const r = migrateRuntimeLayout(root)
+  assert(r.tempMoved === 2 && existsSync(join(root, 'temp', 'watcher.log')), '旧日志迁移入 temp/')
+  // temp/ 整体删除后：无 reader 依赖 + 写入点模式（mkdir recursive + append）自动重建
+  rmSync(join(root, 'temp'), { recursive: true, force: true })
+  let recreated = false
+  try {
+    mkdirSync(join(root, 'temp'), { recursive: true })
+    writeFileSync(bgSyncLogPath(root), 'line')
+    recreated = existsSync(bgSyncLogPath(root))
+  } catch { recreated = false }
+  assert(recreated, '删除 temp/ 后写入自动重建（无状态语义，功能不依赖 temp 存活）')
+}
+
+console.log('\n--- 8. fail-open：目录缺失/坏路径零副作用不抛 ---')
 {
   const r = migrateRuntimeLayout(join(tmpRoot, 'no-such-runtime'))
   assert(r.stateMoved === 0 && r.tempMoved === 0 && r.skipped === 0, '目录缺失返回零计数不抛')
