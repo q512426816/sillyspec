@@ -18,6 +18,7 @@ import { testLedgerPath } from '../src/run/test-ledger.js'
 import { stageReviewMarkerPath } from '../src/stage-review.js'
 import { bgSyncLogPath, BG_LOG_FILENAME } from '../src/run/bg-sync.js'
 import { pruneArchivedChangeRuntime } from '../src/run/complete-handlers.js'
+import { spawnSync } from 'child_process'
 
 let failures = 0
 const assert = (cond, msg) => {
@@ -197,7 +198,26 @@ console.log('\n--- 8. FR-03 prune：state/ 全家族回收 + 根路径兜底 ---
   assert(r2.removed === 0, `幂等（removed=${r2.removed}）`)
 }
 
-console.log('\n--- 9. fail-open：目录缺失/坏路径零副作用不抛 ---')
+console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spawn 级） ---')
+{
+  const repo = join(tmpRoot, 'repo', 'proj')
+  const rt = join(repo, '.sillyspec', '.runtime')
+  mkdirSync(rt, { recursive: true })
+  writeFileSync(join(rt, 'draft-ledger-2026-01-01-upgrade.json'), 'D')
+  writeFileSync(join(rt, 'ceremony-tier-2026-01-01-upgrade.json'), 'C')
+  writeFileSync(join(rt, 'watcher.log'), 'L')
+  writeFileSync(join(rt, 'repro-junk.mjs'), 'J') // 未知归属：入口迁移也不动
+  const r = spawnSync(process.execPath, [join('bin', 'sillyspec.js'), 'status', '--dir', repo], {
+    cwd: process.cwd(), encoding: 'utf8', timeout: 60000,
+  })
+  const okStatus = r.status === 0 || r.status === null
+  assert(okStatus, `CLI status 正常完成（exit=${r.status}）`)
+  assert(existsSync(join(rt, 'state', 'draft-ledger-2026-01-01-upgrade.json')) && existsSync(join(rt, 'state', 'ceremony-tier-2026-01-01-upgrade.json')), '旧布局散文件入口自动迁 state/')
+  assert(existsSync(join(rt, 'temp', 'watcher.log')), '日志入口自动迁 temp/')
+  assert(existsSync(join(rt, 'repro-junk.mjs')), '未知归属文件入口迁移不动（不猜归属）')
+}
+
+console.log('\n--- 10. fail-open：目录缺失/坏路径零副作用不抛 ---')
 {
   const r = migrateRuntimeLayout(join(tmpRoot, 'no-such-runtime'))
   assert(r.stateMoved === 0 && r.tempMoved === 0 && r.skipped === 0, '目录缺失返回零计数不抛')

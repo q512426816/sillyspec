@@ -1109,12 +1109,15 @@ export function detectSelfMaintenanceTax(cwd, authoritySpecDir) {
     const warnings = [];
 
     // ① 活跃非零 tally 列示（events:{type:{count,lastAt}}，X-10 结构）
+    // 2026-10-18 布局分层：tally 落 state/；根目录扫描保留旧布局兜底（入口迁移收敛后恒空）
     try {
-      for (const f of readdirSync(runtimeRoot)) {
+      const tallyDirs = [join(runtimeRoot, 'state'), runtimeRoot]
+      for (const tallyDir of tallyDirs) {
+      for (const f of (() => { try { return readdirSync(tallyDir) } catch { return [] } })()) {
         const m = f.match(/^friction-tally-(.+)\.json$/);
         if (!m) continue;
         let tally = null;
-        try { tally = JSON.parse(readFileSync(join(runtimeRoot, f), 'utf8')); } catch { continue; }
+        try { tally = JSON.parse(readFileSync(join(tallyDir, f), 'utf8')); } catch { continue; }
         const events = tally && typeof tally === 'object' && tally.events && typeof tally.events === 'object' && !Array.isArray(tally.events) ? tally.events : {};
         const segs = [];
         let total = 0;
@@ -1130,6 +1133,7 @@ export function detectSelfMaintenanceTax(cwd, authoritySpecDir) {
         if (total <= 0) continue;
         findings.push(`活跃摩擦：${m[1]}（${segs.join('、')}${lastAt ? `，最近 ${lastAt}` : ''}）`);
         if (total >= TAX_HEAVY_TOTAL) warnings.push(`税重——评估该机制群简化/退役（对照其 decisions 退役判据）：${m[1]}（活跃 total ${total}）`);
+      }
       }
     } catch { /* runtimeRoot 不可读 → 无活跃数据，不误报 */ }
 

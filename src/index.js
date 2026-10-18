@@ -324,6 +324,26 @@ async function main() {
     process.exit(2);
   }
 
+  // ── 旧布局迁移（2026-10-18 runtime-relayout）：per-change 散文件入 state/、可删产物入 temp/。
+  // 每次入口跑一遍（幂等：已收敛后 readdir 一轮零写入）；fail-open 绝不阻断命令。
+  // init 除外——目标仓尚无 .sillyspec 可迁。resolveEffectiveDir 是函数声明（提升后可调）。
+  if (filteredArgs[0] !== 'init') {
+    try {
+      const { migrateRuntimeLayout } = await import('./runtime-paths.js')
+      const roots = new Set()
+      const direct = join(specDir || join(targetDir, '.sillyspec'), '.runtime')
+      roots.add(direct)
+      if (!existsSync(direct)) {
+        try { roots.add(join(resolveEffectiveDir(targetDir), '.sillyspec', '.runtime')) } catch { /* cwd 无仓 = 无可迁 */ }
+      }
+      try {
+        const po = resolvePlatformOpts(targetDir)
+        if (po && po.runtimeRoot) roots.add(po.runtimeRoot)
+      } catch { /* 平台指针不可达 = 无平台侧可迁 */ }
+      for (const rt of roots) migrateRuntimeLayout(rt)
+    } catch { /* 迁移失败不阻断任何命令 */ }
+  }
+
   const command = filteredArgs[0];
   // 支持 sillyspec init /path/to/project 语法：如果第二个参数看起来像路径，当作 targetDir
   if (command === 'init' && filteredArgs[1] && !filteredArgs[1].startsWith('-')) {
