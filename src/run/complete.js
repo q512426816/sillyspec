@@ -1145,7 +1145,7 @@ async function printVerifyScopeDrift({ cwd, changeName, specBase, platformOpts, 
       snapshot = JSON.parse(readFileSync(join(specBase, 'changes', changeName, 'scope-audit.json'), 'utf8'))
     } catch {
       try {
-        snapshot = JSON.parse(readFileSync(join(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
+        snapshot = JSON.parse(readFileSync(runtimeStatePath(resolveRuntimeRoot(platformOpts, specBase), `scope-audit-${changeName}.json`), 'utf8'))
       } catch { /* 快照缺失/损坏 → 跳过对比只打当前 totals */ }
     }
   }
@@ -1563,7 +1563,7 @@ export async function autoTickTasksFromCommitSubjects({ changeName, cwd, specBas
   try {
     const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
     if (!existsSync(_tasksMdPath)) return { ticked: 0, skippedNoAnchor: 0 }
-    const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
+    const _runIdFile = runtimeStatePath(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
     let _tickLog = ''
     try {
       if (existsSync(_runIdFile)) {

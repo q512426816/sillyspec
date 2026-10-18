@@ -3131,7 +3131,7 @@ function classifyReceiptCommandSource(command, sourceMark) {
 /**
  * facts.integrationRan 判定（D-006 判定表，2026-09-17-pass-cap-semantics task-01）：
  * 已跑 = ①quality-scan 实测记录在场（路径规则同 run/verify-quality-scan.js:36
- * qualityScanRecordPath：specBase/.runtime/verify-quality-scan-<changeName>.json，specBase/
+ * qualityScanRecordPath：specBase/.runtime/state/verify-quality-scan-<changeName>.json，specBase/
  * changeName 自 factsPath 目录上推，不依赖调用方传参）且 commands.test 实跑（status 非
  * skipped）且 test_strategy ∈ {full, module, evidence-auto}（evidence-auto 降级 module 已跑
  * 子集按 module 档算已跑；local.yaml 未配置默认 full）；或 ②回执槽存在命令来源含跨层调用的
@@ -3441,7 +3441,7 @@ export function ensureApiCoverageMatrixSection(mdPath, apiFace) {
 
 // ============ smoke 回执槽机器段（2026-09-17-api-coverage-smoke task-02 / FR-03，design §3） ============
 //
-// 唯一事实源 = .runtime/verify-quality-scan-<change>.json 的 smokeResult 段（task-01 契约，
+// 唯一事实源 = .runtime/state/verify-quality-scan-<change>.json 的 smokeResult 段（task-01 契约，
 // R-06 双源兜底——md 被篡改不影响 facts 推导）；本组函数把该记录 ensure 式渲染成
 // verify-result.md「## 集成验证回执」槽内 CLI 拥有的机器段行（source: cli-noai-smoke 标注
 // 识别），agent 只可追加段、不可改写机器段（改写/删除由 verify-postcheck
@@ -3455,7 +3455,7 @@ const SMOKE_ABSENT_LINE_RE = /^<!--\s*smoke 机器段缺态：(not-configured|no
 
 /**
  * 读 quality-scan 记录的 smokeResult 段（路径规则同 judgeIntegrationRan：specBase/
- * .runtime/verify-quality-scan-<changeName>.json）。共享读取点——ensure 注入与 postcheck
+ * .runtime/state/verify-quality-scan-<changeName>.json）。共享读取点——ensure 注入与 postcheck
  * 一致性对比同源取数，不各读各的。记录缺失/损坏/无 smokeResult 段 → null。
  */
 export function readSmokeResultRecord(specBase, changeName) {
@@ -3581,7 +3581,7 @@ export function ensureSmokeReceiptSection(mdPath, opts = {}) {
   if (state === 'passed') {
     const command = String(smoke.command || '')
     const exitVal = typeof smoke.exitCode === 'number' ? smoke.exitCode : ''
-    const noteLine = `<!-- smoke 机器段（CLI ensure 注入，source: ${SMOKE_RECEIPT_SOURCE_MARK}）——唯一事实源是 .runtime/verify-quality-scan-${changeName}.json 的 smokeResult，agent 不可改写/删除（verify 一致性抽查会打回）；ranAt 实录：${smoke.ranAt || '未知'}，durationMs：${typeof smoke.durationMs === 'number' ? smoke.durationMs : '未知'} -->`
+    const noteLine = `<!-- smoke 机器段（CLI ensure 注入，source: ${SMOKE_RECEIPT_SOURCE_MARK}）——唯一事实源是 .runtime/state/verify-quality-scan-${changeName}.json 的 smokeResult，agent 不可改写/删除（verify 一致性抽查会打回）；ranAt 实录：${smoke.ranAt || '未知'}，durationMs：${typeof smoke.durationMs === 'number' ? smoke.durationMs : '未知'} -->`
     targetLines = /[|｜]/.test(command)
       ? [
         noteLine,
