@@ -16,6 +16,7 @@
  * 异常面：全部 fail-open 吞掉（账本/回收任一异常零阻断，退现状残留）。
  */
 import { execFileSync } from 'node:child_process'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -28,7 +29,7 @@ const STALE_HOURS_DEFAULT = 24
 
 /** 账本文件路径（runtime 域：.sillyspec/.runtime/active-gate-snapshots.json） */
 export function gateSnapshotLedgerPath(runtimeRoot) {
-  return join(runtimeRoot, LEDGER_FILE)
+  return runtimeStatePath(runtimeRoot, LEDGER_FILE)
 }
 
 /** 读账本（损坏/缺失/非数组 → 空数组，fail-open） */

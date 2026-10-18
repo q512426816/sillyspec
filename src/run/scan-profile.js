@@ -9,6 +9,7 @@
  *   - executeScanPostcheck 原冗余动态 import('fs'/'path'/'child_process') 删除，改顶部静态（execSync 实际未直接用，纯遗留）
  */
 import { join, basename, extname } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readdirSync, statSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs'
 import { safeGit, resolveRuntimeRoot } from './shared.js'
 import { SCAN_REQUIRED_DOCS } from '../constants.js'
@@ -332,7 +333,7 @@ export async function executeScanResumeCheck(cwd, platformOpts) {
   // .runtime/last-delta.json（归档/delta 补跑写入的最近变更快照），14 天窗口内提示本轮
   // scan 优先核对其涉及模块——advisory 不阻断不改变步骤结构；缺失/过期/解析失败静默。
   try {
-    const sidecarPath = join(resolveRuntimeRoot(platformOpts, specBase), 'last-delta.json')
+    const sidecarPath = runtimeStatePath(resolveRuntimeRoot(platformOpts, specBase), 'last-delta.json')
     if (existsSync(sidecarPath)) {
       const sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
       const ageMs = Date.now() - Date.parse(sidecar.updatedAt || '')

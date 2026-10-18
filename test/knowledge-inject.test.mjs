@@ -148,7 +148,7 @@ console.log('\n--- 3. 未命中 / INDEX 缺失零变化 ---')
     const ki = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 'c1', query: '完全不相关的查询词组' })
     assertTrue(ki.matched === false && ki.section === '', '未命中 section 恒空串（零字节）')
     assertTrue(ki.report === 'Status: no matches', '未命中 report 与升级前字节一致（Status: no matches）')
-    assertTrue(!existsSync(join(fx.runtimeDir, 'knowledge-hits.jsonl')), '未命中不落 hits.jsonl')
+    assertTrue(!existsSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl')), '未命中不落 hits.jsonl')
     const ki2 = buildKnowledgeInjection({ knowledgeDir: join(fx.root, 'no-such-knowledge'), runtimeDir: fx.runtimeDir, change: 'c1', query: '限流' })
     assertTrue(ki2.section === '' && ki2.report === 'Status: no matches (INDEX.md not found)',
       'INDEX 缺失 no-op（matchKnowledge 既有口径透传，不抛）')
@@ -193,7 +193,7 @@ console.log('\n--- 5. outputStep execute {KNOWLEDGE_HIT_REPORT} 升级 ---')
     assertTrue(out.includes('ka-限流正文行A') && out.includes('kb-worktree正文行A'), '命中文件正文进 step prompt')
     assertTrue(!out.includes('{KNOWLEDGE_HIT_REPORT}'), '占位符已替换无残留')
     // 旧 report.json 照旧落盘（matched:true 快照）
-    const reportPath = join(fx.runtimeDir, 'knowledge-hit-report.json')
+    const reportPath = join(fx.runtimeDir, 'state', 'knowledge-hit-report.json')
     assertTrue(existsSync(reportPath), '既有 knowledge-hit-report.json 照旧落盘（兼容共存）')
     const reportJson = JSON.parse(readFileSync(reportPath, 'utf8'))
     // 查询串 = changeName + tasks.md 任务行（不含「灰度」→ 5/6 条命中）
@@ -227,7 +227,7 @@ console.log('\n--- 6. outputStep execute 未命中零变化（字节对比） --
     const outB = await captureOutput(() => outputStep('execute', 0, stepsB, fx.root, changeName, 'ki-proj', { specRoot: fx.specBase }))
     assertTrue(outA === outB, '未命中时完整 prompt 输出与升级前字节一致（A/B 全文对比）')
     assertTrue(outA.includes('Status: no matches') && !outA.includes('📚 命中知识'), '未命中替换为旧口径文本，无知识段膨胀')
-    const reportJson = JSON.parse(readFileSync(join(fx.runtimeDir, 'knowledge-hit-report.json'), 'utf8'))
+    const reportJson = JSON.parse(readFileSync(join(fx.runtimeDir, 'state', 'knowledge-hit-report.json'), 'utf8'))
     assertTrue(reportJson.matched === false && reportJson.entry_count === 0, '未命中 report.json 仍落盘 matched:false（既有行为不变）')
     assertTrue(readKnowledgeHits(fx.runtimeDir).length === 0, '未命中零遥测')
     } finally {

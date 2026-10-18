@@ -170,7 +170,8 @@ test('⑤ 冲突自动消解轮（全 follower）：同样清残留冲突标记'
   // quicksync-conflict-granularity ④ 同款构造：mtime alibi（本地一小时前落盘、未改动）→ follower
   writeFileSync(join(specRoot, 'changes/quicklog.md'), 'ql v1\n', 'utf8')
   utimesSync(join(specRoot, 'changes/quicklog.md'), new Date(Date.now() - 3_600_000), new Date(Date.now() - 3_600_000))
-  writeFileSync(join(specRoot, '.runtime', 'spec-sync-last-success.json'), JSON.stringify({ ts: Date.now() }), 'utf8')
+  mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-last-success.json'), JSON.stringify({ ts: Date.now() }), 'utf8')
   // 残留的历史冲突标记（上一轮真冲突遗留）
   mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
   const stalePath = join(specRoot, '.runtime', 'state', 'spec-sync-conflict-quick-auto.json')

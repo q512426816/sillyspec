@@ -100,7 +100,7 @@ console.log('--- B2. 成功一轮 → 计数清零 ---')
   const r = await syncSpecTree(specRoot, { url: mockUrl, token: 'tok' }, 'streak-chg')
   assert(r.synced >= 1, `成功同步（synced=${r.synced}）`)
   assert(!readFailStreak(specRoot)['streak-chg'], '成功后该 label 计数清零')
-  const raw = readFileSync(join(specRoot, '.runtime', 'spec-sync-fail-streak.json'), 'utf8')
+  const raw = readFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-fail-streak.json'), 'utf8')
   assert(!raw.includes('streak-chg'), '计数文件不再含该 label')
 }
 

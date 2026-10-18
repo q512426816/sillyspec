@@ -26,7 +26,7 @@
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
-import { runtimeStatePath } from './runtime-paths.js'
+import { runtimeStatePath, runtimeTempPath } from './runtime-paths.js'
 import { join, relative, dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
@@ -1292,7 +1292,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 不许在失败面丢失；成功收口走函数末尾同款记录，失败面只多不少）
   const appendTelemetry = (review) => {
     try {
-      appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
+      appendFileSync(runtimeTempPath(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
         ts: new Date().toISOString(), change, protocolCalls: 2,
         draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
         routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,

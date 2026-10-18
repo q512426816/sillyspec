@@ -31,6 +31,7 @@
  * 本模块自身不打印任何输出。
  */
 import { readFileSync, mkdirSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { dirname, join } from 'path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { withFileLock } from './quicklog.js'
@@ -45,7 +46,7 @@ const LEDGER_CAP = 200
 const LEDGER_FILENAME = 'friction-ledger.json'
 
 function ledgerFilePath(runtimeRoot) {
-  return join(runtimeRoot, LEDGER_FILENAME)
+  return runtimeStatePath(runtimeRoot, LEDGER_FILENAME)
 }
 
 /**

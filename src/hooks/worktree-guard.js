@@ -190,8 +190,8 @@ function getScanDocInfo(filePath) {
 
 function readScanGuard(scanDocInfo, projectRoot) {
   const candidates = [
-    path.join(scanDocInfo.specRoot, '.runtime', 'scan-guard.json'),
-    path.join(projectRoot, '.sillyspec', '.runtime', 'scan-guard.json'),
+    path.join(scanDocInfo.specRoot, '.runtime', 'state', 'scan-guard.json'),
+    path.join(projectRoot, '.sillyspec', '.runtime', 'state', 'scan-guard.json'),
   ]
   for (const p of candidates) {
     if (!existsSync(p)) continue

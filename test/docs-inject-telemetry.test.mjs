@@ -49,7 +49,7 @@ function cleanup({ tmp }) {
 
 /** 读 hits.jsonl 末行 JSON（文件缺失 → null） */
 function readLastHit(runtimeDir) {
-  const file = join(runtimeDir, 'knowledge-hits.jsonl')
+  const file = join(runtimeDir, 'state', 'knowledge-hits.jsonl')
   if (!existsSync(file)) return null
   const lines = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n').trimEnd().split('\n')
   return lines.length > 0 ? JSON.parse(lines[lines.length - 1]) : null
@@ -84,7 +84,7 @@ test('未命中：零模块不落遥测行', () => {
     const r = buildModuleContextInjection('纯文案微调与样式调整', idx, fx.specBase, 'proj', { change: '2026-09-21-di-miss' })
     assert.equal(r.text, '', '未命中 text 空（零字节）')
     assert.deepEqual(r.frModules, [], 'frModules 空')
-    assert.ok(!existsSync(join(fx.runtimeDir, 'knowledge-hits.jsonl')), '未命中不新增遥测行')
+    assert.ok(!existsSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl')), '未命中不新增遥测行')
   } finally { cleanup(fx) }
 })
 

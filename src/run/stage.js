@@ -326,7 +326,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         startedAt: new Date().toISOString(),
         forceRescan: quickOpts?.isForceRescan || false,
       }
-      const guardFile = join(specBase, '.runtime', 'scan-guard.json')
+      const guardFile = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
       mkdirSync(dirname(guardFile), { recursive: true })
       // 原子写：hook 进程（worktree-guard 的 readScanGuard）并发读，裸 truncate→write 的
       // 半截窗口会被 JSON.parse 吞成 null → 覆盖保护静默失效（fail-open）

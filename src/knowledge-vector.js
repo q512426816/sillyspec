@@ -35,6 +35,7 @@
  * 404 另有进程级死信短路（端点死信不再空转探测）。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname } from 'path'
 import { readPlatformConfig } from './sync.js'
 import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
@@ -49,7 +50,7 @@ const CAPABILITY_RETRY_MS = 60 * 60 * 1000
 // 机器态的标准落点（knowledge-hits 同款）。写盘全 fail-soft；按平台 URL 匹配（换平台即失效）。
 
 function capabilityCachePath(cwd) {
-  return join(cwd, '.sillyspec', '.runtime', 'vector-capability.json')
+  return runtimeStatePath(join(cwd, '.sillyspec', '.runtime'), 'vector-capability.json')
 }
 
 function readCapabilityCache(cwd) {

@@ -455,8 +455,8 @@ export function writeLastDeltaSidecar(runtimeRoot, summary) {
       updatedAt: new Date().toISOString(),
     }
     mkdirSync(runtimeRoot, { recursive: true })
-    writeFileSync(join(runtimeRoot, 'last-delta.json'), JSON.stringify(payload, null, 2) + '\n')
-    return { ok: true, path: join(runtimeRoot, 'last-delta.json') }
+    writeFileSync(runtimeStatePath(runtimeRoot, 'last-delta.json'), JSON.stringify(payload, null, 2) + '\n')
+    return { ok: true, path: runtimeStatePath(runtimeRoot, 'last-delta.json') }
   } catch (e) {
     console.error(`[sillyspec] last-delta sidecar 写入失败（advisory 将缺席，不阻断 delta 生成）：${e && e.message ? e.message : e}`)
     return { ok: false, reason: e && e.message ? e.message : String(e) }

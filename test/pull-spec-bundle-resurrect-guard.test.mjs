@@ -80,7 +80,8 @@ function writeBaseSnapshot(specDir, paths) {
   const hashes = {}
   for (const p of paths) hashes[p] = 'fake-hash-' + p.replace(/[^a-z0-9]/g, '')
   mkdirSync(join(specDir, '.runtime'), { recursive: true })
-  writeFileSync(join(specDir, '.runtime', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8')
+  mkdirSync(join(specDir, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specDir, '.runtime', 'state', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8')
 }
 
 /** 非空 specDir（触发 --force 守卫口径）：基线 + 在场文件，缺被删文件 */

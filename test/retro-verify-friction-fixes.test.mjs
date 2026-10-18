@@ -237,7 +237,7 @@ target_files:
     const v5 = syncSelfHealWarn(change, 'self-race', '⚠️ [sync] push 409 自竞态判定：ts=t4')
     cap.restore()
     assert(v5 === false && cap.warns.length === 0, '跨进程窗口内静默（每步命令重刷的正是这种）')
-    assert(existsSync(join(rt, 'sync-noise-self-heal.json')), 'marker 已落盘')
+    assert(existsSync(join(rt, 'state', 'sync-noise-self-heal.json')), 'marker 已落盘')
   }
 } finally {
   rmSync(tmpRoot, { recursive: true, force: true })

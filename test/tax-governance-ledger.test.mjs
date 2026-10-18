@@ -36,7 +36,7 @@ const makeRt = () => {
   mkdirSync(join(rt, 'state'), { recursive: true })
   return rt
 }
-const ledgerPath = (rt) => join(rt, 'friction-ledger.json')
+const ledgerPath = (rt) => join(rt, 'state', 'friction-ledger.json')
 const readLedger = (rt) => JSON.parse(readFileSync(ledgerPath(rt), 'utf8'))
 const writeLedger = (rt, body) => {
   const p = ledgerPath(rt)
@@ -221,7 +221,7 @@ console.log('\n--- 7. prune 兜底：残余 merge + archivedAt + ledgerAppend --
 
   // 7d. 台账写失败 fail-soft：台账路径被目录占位（rename 必炸），归档回收照常
   const rt4 = makeRt()
-  mkdirSync(join(rt4, 'friction-ledger.json')) // 目录占位：writeAtomicSync rename 到目录失败
+  mkdirSync(join(rt4, 'state', 'friction-ledger.json')) // 目录占位：writeAtomicSync rename 到目录失败
   writeTally(rt4, 'c-failsoft', { gate_rollback: { count: 1, lastAt: '2026-09-15T09:00:00.000Z' } })
   let r5 = null
   try { r5 = pruneArchivedChangeRuntime(rt4, 'c-failsoft') } catch (e) { r5 = { threw: true, e } }

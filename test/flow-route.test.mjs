@@ -105,7 +105,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+�
   const done = cli(['flow', 'done', '--change', change])
   assert.equal(done.status, 0, `advisory 应轻量档过: ${done.stdout}\n${done.stderr}`)
   assert.match(done.stdout + done.stderr, /route_hint: thick/)
-  const telemetry = readFileSync(join(cwd, '.sillyspec', '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  const telemetry = readFileSync(join(cwd, '.sillyspec', '.runtime', 'temp', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
   const rec = telemetry.find((r) => r.change === change)
   assert.ok(rec && rec.protocolCalls === 2 && rec.routeHint === 'thick' && rec.editRatio > 0.5, `遥测四列记一笔: ${JSON.stringify(rec)}`)
   rmSync(cwd, { recursive: true, force: true })

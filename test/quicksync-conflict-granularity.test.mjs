@@ -118,7 +118,7 @@ test('③ 事故复现链闭环：首同步建基线 → 他端推进+本地 mti
   try {
     const r1 = await syncSpecTree(specRoot, platform, 'my-change')
     assert.equal(r1.synced, 2, '两文件首推')
-    assert.ok(existsSync(join(specRoot, '.runtime', 'spec-sync-base.json')), '基线快照已写')
+    assert.ok(existsSync(join(specRoot, '.runtime', 'state', 'spec-sync-base.json')), '基线快照已写')
   } finally { m.restore() }
 
   // 他端推进：服务器上归档文件内容前进到 v2（本地仍 v1=陈旧副本）；本地归档文件被
@@ -158,7 +158,8 @@ test('④ 竞态冲突自动消解：全部冲突路径为本地未改动 → �
   writeFileSync(join(specRoot, 'changes/quicklog.md'), 'ql v1\n', 'utf8')
   utimesSync(join(specRoot, 'changes/quicklog.md'), new Date(Date.now() - 3_600_000), new Date(Date.now() - 3_600_000))
   mkdirSync(join(specRoot, '.runtime'), { recursive: true })
-  writeFileSync(join(specRoot, '.runtime', 'spec-sync-last-success.json'), JSON.stringify({ ts: Date.now() }), 'utf8')
+  mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-last-success.json'), JSON.stringify({ ts: Date.now() }), 'utf8')
   const platform = { url: 'http://127.0.0.1:9', token: 't' }
 
   const m = mockFetch({
@@ -172,7 +173,7 @@ test('④ 竞态冲突自动消解：全部冲突路径为本地未改动 → �
     assert.equal(r.autoResolved, 1)
     assert.ok(!existsSync(join(specRoot, '.runtime', 'state', 'spec-sync-conflict-quick-abc.json')),
       '不落冲突文件（修复前坐实冲突进 resolve 流程）')
-    assert.ok(existsSync(join(specRoot, '.runtime', 'spec-sync-base.json')), '消解后写基线（下次 pre-POST 即拦）')
+    assert.ok(existsSync(join(specRoot, '.runtime', 'state', 'spec-sync-base.json')), '消解后写基线（下次 pre-POST 即拦）')
   } finally { m.restore() }
 })
 
@@ -192,7 +193,8 @@ test('⑤ 真冲突粒度收窄：冲突文件只列本地真改动路径，foll
   const localNow = hashFiles(walkSpecTree(specRoot))
   const hashes = {}
   for (const f of localNow) if (f.path === 'changes/archive/2026-08-02-old.md') hashes[f.path] = f.hash
-  writeFileSync(join(specRoot, '.runtime', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now() - 60_000, hashes }), 'utf8')
+  mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-base.json'), JSON.stringify({ ts: Date.now() - 60_000, hashes }), 'utf8')
 
   const m = mockFetch({
     manifest: {

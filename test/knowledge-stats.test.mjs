@@ -72,7 +72,7 @@ function makeKnowledge(base) {
 function writeHits(runtimeDir, lines) {
   mkdirSync(runtimeDir, { recursive: true })
   mkdirSync(join(runtimeDir, 'state'), { recursive: true })
-  writeFileSync(join(runtimeDir, 'knowledge-hits.jsonl'), lines.join('\n') + '\n')
+  writeFileSync(join(runtimeDir, 'state', 'knowledge-hits.jsonl'), lines.join('\n') + '\n')
 }
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
@@ -229,7 +229,7 @@ console.log('\n=== Test 6: 纯只读 ===')
   const base = setup('t6')
   try {
     makeKnowledge(base)
-    const hitsPath = join(base, '.runtime', 'knowledge-hits.jsonl')
+    const hitsPath = join(base, '.runtime', 'state', 'knowledge-hits.jsonl')
     const indexPath = join(base, 'knowledge', 'INDEX.md')
     writeHits(join(base, '.runtime'), [
       JSON.stringify({ type: 'inject', change: 'c1', query: 'q1', matchedFiles: ['known-issues.md#a'], at: daysAgo(1) }),

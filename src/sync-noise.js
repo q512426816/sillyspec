@@ -24,6 +24,7 @@
  * 调用方传 noMute 绕过。
  */
 import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'path'
 
 const NOISE_MARKER = 'sync-noise-mute.json'
@@ -254,7 +255,7 @@ let _openedSelfHealByThisProcess = new Set()
 const _seenSelfHealInProcess = new Set()
 
 function _readSelfHealWindows() {
-  const p = _runtimeDir ? join(_runtimeDir, SELF_HEAL_MARKER) : null
+  const p = _runtimeDir ? runtimeStatePath(_runtimeDir, SELF_HEAL_MARKER) : null
   if (!p) return null
   try {
     const s = JSON.parse(readFileSync(p, 'utf8'))
@@ -279,7 +280,7 @@ function _selfHealLineVisible(changeName, kind, noMute) {
   next[key] = now + MUTE_WINDOW_MS
   try {
     mkdirSync(_runtimeDir, { recursive: true })
-    writeFileSync(join(_runtimeDir, SELF_HEAL_MARKER), JSON.stringify(next) + '\n', 'utf8')
+    writeFileSync(runtimeStatePath(_runtimeDir, SELF_HEAL_MARKER), JSON.stringify(next) + '\n', 'utf8')
   } catch { /* marker 写失败 = 闸门失效退化为直通，仅损失降噪 */ }
   _openedSelfHealByThisProcess.add(key)
   return true

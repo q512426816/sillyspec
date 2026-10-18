@@ -248,7 +248,7 @@ describe('computeRefreshPlan 门控与受影响集', () => {
     assert.ok(r.affectedDocs[0].hunks.includes('a2'), 'hunks 材料含变更内容')
     assert.ok(r.affectedDocs[0].commits.includes('change-a'), 'commits 材料含提交说明')
     // guard 握手
-    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'scan-guard.json'), 'utf8'))
+    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'state', 'scan-guard.json'), 'utf8'))
     assert.equal(guard.mode, 'scan-refresh')
     assert.deepEqual(guard.refreshDocs, ['docs/demo/scan/ARCHITECTURE.md'])
     assert.ok(guard.docHashes['docs/demo/scan/ARCHITECTURE.md'], 'docHashes 记录内容哈希')
@@ -373,7 +373,7 @@ describe('scan refresh 全链路 e2e（临时 git 仓）', () => {
     // 由下方独立用例覆盖
     writeFileSync(join(f.scanDir, 'PROJECT.md'), refDoc(f.base, '正文（无引用，不进白名单）'))
     assert.equal(await runRefresh({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' }), 0)
-    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'scan-guard.json'), 'utf8'))
+    const guard = JSON.parse(readFileSync(join(f.specBase, '.runtime', 'state', 'scan-guard.json'), 'utf8'))
     assert.equal(guard.mode, 'scan-refresh')
     const blocked = shouldBlock({ tool: 'Write', filePath: join(f.scanDir, 'ARCHITECTURE.md'), cwd: f.root })
     assert.equal(blocked.blocked, false, '①拍后白名单内文档编辑被 hook 放行')

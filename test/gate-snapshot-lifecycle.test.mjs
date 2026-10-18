@@ -36,7 +36,7 @@ const NOW = 1_800_000_000_000
 
 // ── 账本路径与读写幂等 ──
 test('账本路径落在 runtimeRoot 下（active-gate-snapshots.json）', () => {
-  assert.equal(gateSnapshotLedgerPath('C:/x/.runtime'), join('C:/x/.runtime', 'active-gate-snapshots.json'))
+  assert.equal(gateSnapshotLedgerPath('C:/x/.runtime'), join('C:/x/.runtime', 'state', 'active-gate-snapshots.json'))
 })
 
 test('register 同 root 重复调用幂等（一条目）', () => {

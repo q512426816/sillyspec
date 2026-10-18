@@ -11,6 +11,7 @@
  *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
+import { runtimeTempPath } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, appendFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
@@ -644,7 +645,7 @@ export function warnSelfRefPointerOnce(cwd, specRoot, message) {
   try {
     const dir = join(cwd, '.sillyspec', '.runtime')
     mkdirSync(dir, { recursive: true })
-    const markerPath = join(dir, SELFREF_WARN_MARKER)
+    const markerPath = runtimeTempPath(dir, SELFREF_WARN_MARKER)
     const now = Date.now()
     try {
       const m = JSON.parse(readFileSync(markerPath, 'utf8'))
@@ -1169,7 +1170,8 @@ const AUTO_PULL_THROTTLE_MS = 10_000
 const AUTO_PULL_TIMEOUT_MS = 2_000
 
 function _autoPullThrottlePath(cwd) {
-  return join(cwd, '.sillyspec', '.runtime', 'auto-pull-throttle.json')
+  // 2026-10-18 布局分层：节流戳是可再生产物归 temp/；路径助手自带 mkdir-p
+  return runtimeTempPath(join(cwd, '.sillyspec', '.runtime'), 'auto-pull-throttle.json')
 }
 
 function _autoPullRecently(cwd) {

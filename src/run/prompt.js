@@ -1429,7 +1429,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 注入结果同步落 runtime JSON（与既有 KNOWLEDGE_HIT_REPORT 落盘口径一致）
       const decRuntimeDir = join(decSpecBase, '.runtime')
       mkdirSync(decRuntimeDir, { recursive: true })
-      writeAtomicSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
+      writeAtomicSync(runtimeStatePath(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
     } catch (e) {
       substitute(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
     }
@@ -1496,7 +1496,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       )
       // 写入 runtime JSON（既有机制照旧，新旧遥测共存）
       mkdirSync(runtimeDir, { recursive: true })
-      writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeInjection.json, null, 2) + '\n')
+      writeAtomicSync(runtimeStatePath(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeInjection.json, null, 2) + '\n')
     } catch (e) {
       substitute(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
     }

@@ -163,7 +163,7 @@ console.log('\n=== Test 1: 正常路径四步迁移（标题行前缀寻址） =
     assert(hit && hit.category === 'Known Issues', '路由行落在 Known Issues 分类段')
     assert(hit && hit.keywords.join('|') === 'worktree|删除需先清|junction', '解析回的 keywords 与分词一致')
 
-    const hitsPath = join(base, '.runtime', 'knowledge-hits.jsonl')
+    const hitsPath = join(base, '.runtime', 'state', 'knowledge-hits.jsonl')
     assert(existsSync(hitsPath), '默认 runtimeDir（knowledgeDir/../.runtime）落审计文件')
     const hitLines = read(hitsPath).trim().split('\n')
     assert(hitLines.length === 1, '审计恰好一行')
@@ -192,7 +192,7 @@ console.log('\n=== Test 2: 正文尾注寻址（（qlId）双格式之二） ===
     const uncat = read(join(knowledgeDir, 'uncategorized.md'))
     assert(!uncat.includes('平台配额池不独立') && !uncat.includes('ql-20260901-002-cd34'), 'uncategorized 该条目已删除')
 
-    const rec = JSON.parse(read(join(runtimeDir, 'knowledge-hits.jsonl')).trim())
+    const rec = JSON.parse(read(join(runtimeDir, 'state', 'knowledge-hits.jsonl')).trim())
     assert(rec.type === 'classify' && rec.qlId === 'ql-20260901-002-cd34', '尾注通道审计含 qlId')
   } finally { clean(base) }
 }
@@ -215,7 +215,7 @@ console.log('\n=== Test 3: --title 模糊匹配兜底（三通道之三） ===')
     assert(!uncat.includes('历史遗留条目标题丙'), 'uncategorized 该条目已删除')
 
     // 审计 qlId 取条目自身 qlIdPrefix 兜底（本条无标注 → 字段缺省）
-    const rec = JSON.parse(read(join(base, 'rt', 'knowledge-hits.jsonl')).trim())
+    const rec = JSON.parse(read(join(base, 'rt', 'state', 'knowledge-hits.jsonl')).trim())
     assert(rec.type === 'classify' && !('qlId' in rec), '无标注条目审计不含 qlId 字段')
   } finally { clean(base) }
 }
@@ -311,7 +311,7 @@ console.log('\n=== Test 7: --dry-run 零写盘（三文件 + 审计字节不变�
     assert(r.plan && r.plan.appendToTarget === true && r.plan.removeFromUncategorized === true, 'plan 声明将发生的变更')
     assert(r.plan && typeof r.plan.indexRouteLine === 'string' && r.plan.indexRouteLine.includes('→ ['), 'plan 渲染路由行')
     assert(paths.every((p, i) => read(p) === before[i]), 'uncategorized/目标/INDEX 字节级不变')
-    assert(!existsSync(join(base, 'rt', 'knowledge-hits.jsonl')), 'dry-run 不落审计（零写盘）')
+    assert(!existsSync(join(base, 'rt', 'state', 'knowledge-hits.jsonl')), 'dry-run 不落审计（零写盘）')
   } finally { clean(base) }
 }
 
@@ -339,7 +339,7 @@ console.log('\n=== Test 8: 坏输入错误码 ===')
     assert(r4.ok === false && r4.error.code === 'address_required', '缺 qlId/titleFallback → address_required')
 
     // 失败路径零写盘
-    assert(!existsSync(join(rt, 'knowledge-hits.jsonl')), '失败路径不落审计')
+    assert(!existsSync(join(rt, 'state', 'knowledge-hits.jsonl')), '失败路径不落审计')
   } finally { clean(base) }
 }
 
@@ -380,7 +380,7 @@ console.log('\n=== Test 10: CLI 入口参数校验 ===')
     const out3 = JSON.parse(await captureOutput(() =>
       cmdKnowledgeClassify(base, ['--ql', 'ql-nope', '--file', 'known-issues.md'], opts)))
     assert(out3.ok === false && out3.error.code === 'entry_not_found', 'CLI 坏输入透传 error.code')
-    assert(!existsSync(join(base, '.runtime', 'knowledge-hits.jsonl')), 'CLI 失败路径零审计')
+    assert(!existsSync(join(base, '.runtime', 'state', 'knowledge-hits.jsonl')), 'CLI 失败路径零审计')
   } finally { clean(base) }
 }
 
@@ -405,7 +405,7 @@ console.log('\n=== Test 11: CLI 实迁移与 dry-run ===')
     assert(!read(join(knowledgeDir, 'uncategorized.md')).includes('ql-20260901-001-ab12'), 'CLI 实迁移后 uncategorized 无该段')
     assert(read(join(knowledgeDir, 'known-issues.md')).includes('## worktree 删除需先清 junction'), 'CLI 实迁移后目标文件有该段')
     assert(read(join(knowledgeDir, 'INDEX.md')).includes('- kw1|kw2 → [known-issues.md#worktree 删除需先清 junction](known-issues.md#worktree 删除需先清 junction)'), 'CLI 实迁移后 INDEX 有路由行')
-    const hitsPath = join(base, '.runtime', 'knowledge-hits.jsonl')
+    const hitsPath = join(base, '.runtime', 'state', 'knowledge-hits.jsonl')
     assert(existsSync(hitsPath) && JSON.parse(read(hitsPath).trim()).type === 'classify', 'CLI 实迁移落 classify 审计（opts.runtimeDir 缺省 base/.runtime）')
   } finally { clean(base) }
 }
@@ -446,7 +446,7 @@ console.log('\n=== Test 13: flag-as-value 参数拦截 ===')
       && read(join(knowledgeDir, 'INDEX.md')) === before.idx
       && read(join(knowledgeDir, 'known-issues.md')) === before.ki,
       '拦截发生在写盘前：三个知识文件字节不变')
-    assert(!existsSync(join(base, '.runtime', 'knowledge-hits.jsonl')), '失败路径零审计')
+    assert(!existsSync(join(base, '.runtime', 'state', 'knowledge-hits.jsonl')), '失败路径零审计')
 
     const out2 = JSON.parse(await captureOutput(() =>
       cmdKnowledgeClassify(base, ['--ql', '--dry-run', '--file', 'known-issues.md'], opts)))

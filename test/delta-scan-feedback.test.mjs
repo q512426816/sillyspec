@@ -62,12 +62,12 @@ console.log('\n--- ② writeLastDeltaSidecar：schema/幂等/fail-soft ---')
   mkdirSync(root, { recursive: true })
   const r1 = writeLastDeltaSidecar(join(root, '.rt'), { change: 'c1', affectedFiles: ['src/a.js'], affectedModules: ['runtime'] })
   assert(r1.ok === true, '写入 ok')
-  const payload = JSON.parse(readFileSync(join(root, '.rt', 'last-delta.json'), 'utf8'))
+  const payload = JSON.parse(readFileSync(join(root, '.rt', 'state', 'last-delta.json'), 'utf8'))
   assert(payload.schemaVersion === 1 && payload.change === 'c1' && payload.affectedModules[0] === 'runtime'
     && typeof payload.updatedAt === 'string', 'schema 四字段 + updatedAt')
   // 幂等覆盖
   writeLastDeltaSidecar(join(root, '.rt'), { change: 'c2', affectedFiles: [], affectedModules: [] })
-  assert(JSON.parse(readFileSync(join(root, '.rt', 'last-delta.json'), 'utf8')).change === 'c2', '幂等覆盖')
+  assert(JSON.parse(readFileSync(join(root, '.rt', 'state', 'last-delta.json'), 'utf8')).change === 'c2', '幂等覆盖')
   // fail-soft：缺 runtimeRoot / 缺 change 不抛
   let threw = false
   try {
@@ -92,15 +92,18 @@ console.log('\n--- ③ scanResumeCheck advisory 三态 ---')
   const out0 = await run()
   assert(!out0.includes('增量回灌提示'), 'sidecar 缺失 → 无 advisory')
   // 在场（新鲜）→ 打印
-  writeFileSync(join(rt, 'last-delta.json'), JSON.stringify({ schemaVersion: 1, change: cn, affectedModules: ['runtime'], affectedFiles: ['src/run/a.js'], updatedAt: new Date().toISOString() }))
+  mkdirSync(join(rt, 'state'), { recursive: true })
+  writeFileSync(join(rt, 'state', 'last-delta.json'), JSON.stringify({ schemaVersion: 1, change: cn, affectedModules: ['runtime'], affectedFiles: ['src/run/a.js'], updatedAt: new Date().toISOString() }))
   const out1 = await run()
   assert(out1.includes('增量回灌提示') && out1.includes(cn) && out1.includes('runtime'), '新鲜 sidecar → advisory 打印（change+模块）')
   // 过期（15 天前）→ 静默
-  writeFileSync(join(rt, 'last-delta.json'), JSON.stringify({ schemaVersion: 1, change: cn, affectedModules: ['runtime'], affectedFiles: [], updatedAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString() }))
+  mkdirSync(join(rt, 'state'), { recursive: true })
+  writeFileSync(join(rt, 'state', 'last-delta.json'), JSON.stringify({ schemaVersion: 1, change: cn, affectedModules: ['runtime'], affectedFiles: [], updatedAt: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString() }))
   const out2 = await run()
   assert(!out2.includes('增量回灌提示'), '过期（>14 天）→ 静默')
   // 解析失败 → 静默
-  writeFileSync(join(rt, 'last-delta.json'), '{broken json')
+  mkdirSync(join(rt, 'state'), { recursive: true })
+  writeFileSync(join(rt, 'state', 'last-delta.json'), '{broken json')
   const out3 = await run()
   assert(!out3.includes('增量回灌提示'), '损坏 sidecar → 静默（fail-soft）')
 }

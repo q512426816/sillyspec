@@ -12,6 +12,7 @@
  * 各自整行写入，Windows 下最坏交错按行丢失计，不损主行为）。
  */
 import { appendFileSync, mkdirSync } from 'fs'
+import { runtimeTempPath } from './runtime-paths.js'
 import { join, dirname } from 'path'
 
 const CRLF_BUF = Buffer.from('\r\n')
@@ -25,7 +26,7 @@ const CRLF_BUF = Buffer.from('\r\n')
  */
 export function appendWriteAudit(specDir, record) {
   try {
-    const p = join(specDir, '.runtime', 'write-audit.jsonl')
+    const p = runtimeTempPath(join(specDir, '.runtime'), 'write-audit.jsonl')
     mkdirSync(dirname(p), { recursive: true })
     appendFileSync(p, JSON.stringify({ ts: new Date().toISOString(), ...record }) + '\n', 'utf8')
     return true

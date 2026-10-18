@@ -35,7 +35,8 @@ function seedRepo({ withPlatform, vectorSearch, capability } = {}) {
   if (yaml) writeFileSync(join(root, '.sillyspec', 'local.yaml'), yaml)
   if (capability === 'unavailable') {
     mkdirSync(join(root, '.sillyspec', '.runtime'), { recursive: true })
-    writeFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'),
+    mkdirSync(join(root, '.sillyspec', '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', '.runtime', 'state', 'vector-capability.json'),
       JSON.stringify({ url: MOCK_URL, available: false, probedAt: Date.now() }))
   }
   return root

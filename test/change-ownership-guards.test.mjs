@@ -270,7 +270,7 @@ test('③ 三级解析：--session > env SILLYSPEC_SESSION_ID > quick 会话名 
     assert.ok(ident.session.startsWith('anon@'), `anon 标识形态（实际 ${ident.session}）`)
     assert.ok(warns.some(w => w.includes('SILLYSPEC_SESSION_ID')), '降级 warning 含 export 教学指引')
     assert.ok(warns.some(w => w.includes('--session')), '降级 warning 含 --session flag 指引')
-    assert.ok(existsSync(join(anonRoot, '.sillyspec', '.runtime', 'anon-session-warn.json')), '降频 marker 已落盘')
+    assert.ok(existsSync(join(anonRoot, '.sillyspec', '.runtime', 'temp', 'anon-session-warn.json')), '降频 marker 已落盘')
     // 同进程二次解析不再重复 warning（进程内 memo；跨进程 24h 窗由 marker 承担）
     const warns2 = []
     console.warn = (...a) => warns2.push(a.join(' '))

@@ -12,12 +12,13 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'path'
 
 const HITS_FILENAME = 'knowledge-hits.jsonl'
 
 function hitsFilePath(runtimeDir) {
-  return join(runtimeDir, HITS_FILENAME)
+  return runtimeStatePath(runtimeDir, HITS_FILENAME)
 }
 
 /**

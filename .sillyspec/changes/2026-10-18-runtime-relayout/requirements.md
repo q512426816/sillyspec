@@ -18,7 +18,7 @@ created_at: 2026-10-18T03:09:27.361Z
 
 ### FR-02: 可随时删除的产物（日志、db 备份、锁残留 tmp）统一写入 temp/ 子目录，删除 temp/ 内容后各流程功能不受影响
 
-- 产品代码必须把可随时删除的运行时产物——watcher.log、spec-sync-bg.log、audit.log、sillyspec.db.bak、sillyspec.db.corrupt-*、sillyspec.db.pre-import-*、watcher.lock.*.tmp——写入 `.runtime/temp/` 子目录；删除 `.runtime/temp/` 目录全部内容后，必须不影响任何命令的后续执行正确性（这些产物必须无不可再生的状态语义：日志可丢、备份可丢、锁 tmp 可丢、活跃锁 watcher.lock 不迁）。
+- 产品代码必须把可随时删除的运行时产物——watcher.log、spec-sync-bg.log、audit.log、sillyspec.db.bak、sillyspec.db.corrupt-*、sillyspec.db.pre-import-*、watcher.lock.*.tmp，以及可再生的全局单例产物（doctor-diagnosis.json、flow-telemetry.jsonl、write-audit.jsonl、anon-session-warn.json、selfref-pointer-warn.json、auto-pull-throttle.json）——写入 `.runtime/temp/` 子目录；删除 `.runtime/temp/` 目录全部内容后，必须不影响任何命令的后续执行正确性（这些产物必须无不可再生的状态语义：日志可丢、备份可丢、锁 tmp 可丢、活跃锁 watcher.lock 不迁）。
 
 #### 场景：删除 temp/ 后功能不受影响
 
@@ -46,15 +46,15 @@ created_at: 2026-10-18T03:09:27.361Z
 - When：用户升级 sillyspec 后运行任一 CLI 命令
 - Then：文件被移动到 `.runtime/state/draft-ledger-<active-change>.json` 与 `.runtime/temp/watcher.log`，命令本身正常完成；再次运行命令不再发生任何移动
 
-### FR-05: 本仓 .sillyspec/.runtime 完成迁移：根目录只剩核心单例与子目录，文件数从 1649 降至 60 以内
+### FR-05: 本仓 .sillyspec/.runtime 完成迁移：根目录只剩核心单例与子目录，条目数从 1649 降至 30 以内
 
-- 本仓 `.sillyspec/.runtime` 根目录在变更完成后必须只含核心单例状态文件（db、会话/账本/同步标记等无 change 归属的单例）与子目录；按 change 命名的散文件与一次性遗留物（历次变更的 repro-*.mjs 等脚本、full-test-*.log）必须归置到 state/ 或 temp/；根目录普通文件数必须 ≤60。
+- 本仓 `.sillyspec/.runtime` 根目录在变更完成后必须只含真正的核心单例（sillyspec.db 及其 schema 标记、watcher 活跃锁、agent-session-log、global/spec-version、平台契约的 user-inputs.md）与子目录；按 change 命名的散文件、无 change 归属的全局面账本/标记单例（friction/deleted/knowledge 台账、spec-sync 标记、scan 守卫等 16 件）必须归入 state/；可再生单例产物（doctor 诊断快照、遥测/审计流水、告警标记、auto-pull 节流戳等 6 件）必须归入 temp/；一次性遗留物归置 temp/；根目录总条目数（含子目录）必须 ≤30（用户 2026-10-18 复核反馈：50 条目仍多）。
 
 #### 场景：本仓清理验收
 
-- Given：变更前本仓 `.runtime` 根目录有 1649 个条目
-- When：产品迁移 + 遗留物归置完成
-- Then：根目录普通文件数 ≤60（用 `find .sillyspec/.runtime -maxdepth 1 -type f | wc -l` 验收），且 `sillyspec flow status` 等命令对本仓正常工作
+- Given：变更前本仓 `.runtime` 根目录有 1649 个条目；一轮迁移后 50 条目（用户判仍多）
+- When：全局面单例归位（state/ 16 件 + temp/ 6 件）+ 遗留物归置完成
+- Then：根目录总条目数 ≤30（`ls .sillyspec/.runtime | wc -l` 验收），且 `sillyspec flow status` 等命令对本仓正常工作
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 

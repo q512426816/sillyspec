@@ -142,7 +142,7 @@ console.log('\n--- 5. resolve --take-platform → 按服务器版本覆盖本地
   assert(readFileSync(join(cwd, '.sillyspec', 'a.md'), 'utf8') === SERVER_A_MD, '本地 a.md 已被服务器版本覆盖（本地改动放弃）')
   assert(!existsSync(specConflictPath), '冲突文件已清（take-platform 闭环）')
   // 基线快照刷新：被覆盖路径回写服务器内容 hash → 下次 syncSpecTree 按「本地未改动」豁免回推
-  const base = JSON.parse(readFileSync(join(cwd, '.sillyspec', '.runtime', 'spec-sync-base.json'), 'utf8'))
+  const base = JSON.parse(readFileSync(join(cwd, '.sillyspec', '.runtime', 'state', 'spec-sync-base.json'), 'utf8'))
   const sha = (s) => createHash('sha256').update(s).digest('hex')
   assert(base.hashes && base.hashes['a.md'] === sha(SERVER_A_MD), '内容基线快照已刷新为服务器内容 hash（防下轮回推）')
 }

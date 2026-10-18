@@ -182,7 +182,7 @@ test('⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 �
       const km1 = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
       assert.equal(m.requests.length, 1, `首查真实探测 1 次（实际 ${m.requests.length}）`)
       assert.notEqual(km1.json && km1.json.vector, true, '404 → 本地回退无 vector 标记')
-      const capPath = join(root, '.sillyspec', '.runtime', 'vector-capability.json')
+      const capPath = join(root, '.sillyspec', '.runtime', 'state', 'vector-capability.json')
       const cap = JSON.parse(readFileSync(capPath, 'utf-8'))
       assert.equal(cap.available, false, '404 → 能力缓存 unavailable 落盘（跨进程持久）')
       assert.equal(cap.url, m.url, '缓存按平台 URL 键')
@@ -213,14 +213,15 @@ test('⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平�
       `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
     // 预置过期 unavailable 缓存（probedAt = 2h 前）
     mkdirSync(join(root, '.sillyspec', '.runtime'), { recursive: true })
-    writeFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'),
+    mkdirSync(join(root, '.sillyspec', '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(root, '.sillyspec', '.runtime', 'state', 'vector-capability.json'),
       JSON.stringify({ url: m.url, available: false, probedAt: Date.now() - 2 * 60 * 60 * 1000 }))
     try {
       const kb = join(root, '.sillyspec', 'knowledge')
       const km = await matchKnowledgeHybrid(kb, '完全不在路由词表的查询串', { cwd: root })
       assert.equal(m.requests.length, 1, '过期缓存 → 重新探测 1 次')
       assert.equal(km.json.vector, true, '平台已实现端点 → vector 结果（部署后自动启用实证）')
-      const cap = JSON.parse(readFileSync(join(root, '.sillyspec', '.runtime', 'vector-capability.json'), 'utf-8'))
+      const cap = JSON.parse(readFileSync(join(root, '.sillyspec', '.runtime', 'state', 'vector-capability.json'), 'utf-8'))
       assert.equal(cap.available, true, '成功 → 缓存翻 available')
     } finally { rmQuiet(root) }
   })

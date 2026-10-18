@@ -41,7 +41,7 @@ function makeFixture(prefix) {
       { change_key: 'c9', harness: 'zcode', log_path: '/logs/c9.jsonl', format: 'zcode-model-io-jsonl', session_id: 's9', exists: true },
     ],
   }))
-  write(join(runtimeRoot, 'friction-ledger.json'), JSON.stringify([
+  write(join(runtimeRoot, 'state', 'friction-ledger.json'), JSON.stringify([
     { change: 'c1', counts: { gate_rollback: 1 }, total: 1 },
     { change: 'c9', counts: {}, total: 0 },
   ]))

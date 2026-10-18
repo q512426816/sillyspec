@@ -54,7 +54,7 @@ test('① rot-suspect 事件带 frIds 帽 20（既有字段零改动）', async 
     mkdirSync(changeDir, { recursive: true })
     const r = await rotSuspectFlow({ specBase, change: 'c-rot', changeDir, files: ['src/cli/old.js'] })
     assert.equal(r.strong, 25, '25 条覆盖命中')
-    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const hits = readFileSync(join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
     const ev = hits.find((h) => h.type === 'fr-rot-suspect')
     assert.ok(ev, '事件落盘')
     assert.equal(ev.frIds.length, 20, 'frIds 帽 20')
@@ -99,7 +99,8 @@ test('③④ 裁决候选聚合：id 聚合 + 来源 join；存量无字段事�
       { type: 'fr-rot-suspect', change: 'c-new', domains: ['cli'], strong: 2, count: 2, frIds: ['FR-cli-001', 'FR-cli-002'], source: 'flow-done', at },
       { type: 'fr-unreferenced', change: 'c-new', domain: 'cli', count: 2, ids: ['FR-cli-001', 'FR-cli-003'], at },
     ]
-    writeFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), events.map((e) => JSON.stringify(e)).join('\n') + '\n')
+    mkdirSync(join(specBase, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl'), events.map((e) => JSON.stringify(e)).join('\n') + '\n')
     const s = buildFrIndexStats(join(specBase, 'knowledge'), join(specBase, '.runtime'), { sinceDays: 30 })
     assert.equal(s.events.frRotSuspect, 2, '事件计数含存量（兼容）')
     assert.equal(s.events.frRotSuspectByDomain.find((r) => r.domain === 'cli').count, 5, '域级求和口径不变（3+2）')
@@ -114,7 +115,8 @@ test('③④ 裁决候选聚合：id 聚合 + 来源 join；存量无字段事�
     // 无 id 数据（纯存量）→ 零候选（视图零噪音）
     const specBase2 = buildSpecBase(mkdtempSync(join(tmpdir(), 'fgt3b-')))
     writeCliDomain(specBase2, 2, '2026-09-01-old-a')
-    writeFileSync(join(specBase2, '.runtime', 'knowledge-hits.jsonl'), JSON.stringify({ type: 'fr-rot-suspect', change: 'c', domains: ['cli'], count: 2, at }) + '\n')
+    mkdirSync(join(specBase2, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specBase2, '.runtime', 'state', 'knowledge-hits.jsonl'), JSON.stringify({ type: 'fr-rot-suspect', change: 'c', domains: ['cli'], count: 2, at }) + '\n')
     const s2 = buildFrIndexStats(join(specBase2, 'knowledge'), join(specBase2, '.runtime'), { sinceDays: 30 })
     assert.equal(s2.adjudicationCandidates.length, 0, '纯存量无 id → 零候选')
     try { rmSync(dirname(specBase2), { recursive: true, force: true }) } catch { /* Windows */ }

@@ -243,7 +243,7 @@ writeFileSync(join(design8, 'design.md'), '# v1\n', 'utf8');
 // 8a. 首次同步（服务器空）→ 全量 add 成功 + 写 last-success 标记
 manifestBody = { files: {} };
 const r8a = await syncSpecTree(specRoot8, platform, '2026-08-28-x');
-const markerPath8 = join(specRoot8, '.runtime', 'spec-sync-last-success.json');
+const markerPath8 = join(specRoot8, '.runtime', 'state', 'spec-sync-last-success.json');
 assert(r8a.synced > 0 && existsSync(markerPath8), `首次同步成功且写标记（synced=${r8a.synced}）`);
 const markerTs8 = JSON.parse(readFileSync(markerPath8, 'utf8')).ts;
 assert(Number.isFinite(markerTs8) && markerTs8 > 0, '标记含数值 ts');

@@ -56,6 +56,38 @@ const STATE_FAMILIES = [
   { prefix: 'current-stage-review-run-id-', ext: '', stages: ['brainstorm', 'plan', 'execute'] },
 ]
 
+/**
+ * 全局面单例（无 change 归属但有读者）→ state/（2026-10-18 二轮收敛：根目录只留
+ * db/锁/会话身份/global/spec-version/user-inputs 六件核心）。迁移精确名匹配。
+ */
+export const RUNTIME_STATE_SINGLETONS = [
+  'friction-ledger.json',
+  'deleted-changes.jsonl',
+  'active-gate-snapshots.json',
+  'scan-guard.json',
+  'verify-lint-tally.json',
+  'decision-hits.json',
+  'knowledge-hits.jsonl',
+  'knowledge-hit-report.json',
+  'vector-capability.json',
+  'spec-sync-base.json',
+  'spec-sync-last-success.json',
+  'spec-sync-fail-streak.json',
+  'spec-sync-follow-reported.json',
+  'sync-noise-self-heal.json',
+  'last-delta.json',
+]
+
+/** 可再生全局单例产物（删后可重建、无不可再生状态）→ temp/。 */
+export const RUNTIME_TEMP_SINGLETONS = [
+  'doctor-diagnosis.json',
+  'flow-telemetry.jsonl',
+  'write-audit.jsonl',
+  'anon-session-warn.json',
+  'selfref-pointer-warn.json',
+  'auto-pull-throttle.json',
+]
+
 /** temp/ 侧已知产物：精确名 + 带时间戳/pid 尾的正则（corrupt/pre-import/lock-tmp）。 */
 const TEMP_EXACT = new Set(['watcher.log', 'spec-sync-bg.log', 'audit.log', 'sillyspec.db.bak'])
 const TEMP_PATTERNS = [
@@ -122,12 +154,14 @@ export function migrateRuntimeLayout(runtimeRoot) {
     return out // 目录缺失（该仓库从未跑过流程）= 无可迁
   }
   const prefixes = STATE_FAMILIES.map((f) => f.prefix)
+  const stateSingletons = new Set(RUNTIME_STATE_SINGLETONS)
+  const tempSingletons = new Set(RUNTIME_TEMP_SINGLETONS)
   const moves = [] // { name, dest }
   for (const e of entries) {
     if (!e.isFile()) continue
     const name = e.name
-    if (prefixes.some((p) => name.startsWith(p))) moves.push({ name, dest: RUNTIME_STATE_DIRNAME })
-    else if (_isTempArtifact(name)) moves.push({ name, dest: RUNTIME_TEMP_DIRNAME })
+    if (prefixes.some((p) => name.startsWith(p)) || stateSingletons.has(name)) moves.push({ name, dest: RUNTIME_STATE_DIRNAME })
+    else if (_isTempArtifact(name) || tempSingletons.has(name)) moves.push({ name, dest: RUNTIME_TEMP_DIRNAME })
     // 未知归属：不动（用户/工具自置文件无生命周期语义，迁移不猜）
   }
   // 无条件预建两层目录（幂等廉价）：CLI 入口路径保证 state/ 在一切写入前就位——

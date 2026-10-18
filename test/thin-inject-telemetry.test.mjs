@@ -64,7 +64,7 @@ async function main() {
     const fx = makeSpecRoot()
     try {
       writeMatchFixture(fx.knowledgeDir)
-      const hitsBefore = existsSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'))
+      const hitsBefore = existsSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl'))
         ? readKnowledgeHits(fx.runtimeDir).length
         : 0
       const { lines } = await flowKnowledgeDigest({
@@ -102,7 +102,7 @@ async function main() {
         input: `${THIN_ONLY_TOKEN} 完全不相关语料`,
         filesOverride: ['src/unrelated/bar.js'],
       })
-      const events = existsSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'))
+      const events = existsSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl'))
         ? readKnowledgeHits(fx.runtimeDir).filter((h) => h.type === 'inject')
         : []
       assertTrue(events.length === 0, `② 无命中零落盘（events=${events.length}）`)

@@ -1913,7 +1913,7 @@ export class SyncManager {
     const resurrectSkipped = []; // 被防复活抑制挡下的条目（suppressResurrect 命中面；try 外可见供返回值携带）
     if (!opts.restoreDeleted) {
       try {
-        const baseRaw = JSON.parse(readFileSync(join(specDir, '.runtime', 'spec-sync-base.json'), 'utf8'));
+        const baseRaw = JSON.parse(readFileSync(runtimeStatePath(join(specDir, '.runtime'), 'spec-sync-base.json'), 'utf8'));
         const baseHashes = baseRaw && typeof baseRaw.hashes === 'object' ? baseRaw.hashes : null;
         if (baseHashes) {
           for (const p of Object.keys(baseHashes)) {
@@ -2117,7 +2117,7 @@ export class SyncManager {
     // 基线快照刷新（best-effort）：被覆盖路径回写当前盘面 hash（= 服务器内容 hash）、被删
     // 路径移除条目——下次同步这些路径按「本地未改动」豁免回推（take-platform 语义闭环）。
     try {
-      const baseFile = join(specDir, '.runtime', 'spec-sync-base.json');
+      const baseFile = runtimeStatePath(join(specDir, '.runtime'), 'spec-sync-base.json');
       let base = null;
       try { base = JSON.parse(readFileSync(baseFile, 'utf8')); } catch { base = null; }
       const hashes = base && typeof base.hashes === 'object' ? base.hashes : {};

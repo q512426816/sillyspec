@@ -45,7 +45,7 @@ async function cleanupProject(cwd) {
 }
 
 function ledgerPathOf(cwd) {
-  return join(cwd, '.sillyspec', '.runtime', 'deleted-changes.jsonl')
+  return join(cwd, '.sillyspec', '.runtime', 'state', 'deleted-changes.jsonl')
 }
 
 function readLedgerLines(cwd) {
@@ -124,7 +124,7 @@ test('FR-01: 台账路径不可写 fail-open 不阻断删除主流程', async (t
   await pm.init(cwd)
   pm.initChange(cwd, '2026-10-13-fo-del')
   // 用同名目录占住台账路径（三平台一致的确定性写失败；Windows 目录 chmod 不可靠）
-  mkdirSync(ledgerPathOf(cwd))
+  mkdirSync(ledgerPathOf(cwd), { recursive: true })
   pm.deleteChange(cwd, '2026-10-13-fo-del')
 
   const db = new DatabaseSync(join(cwd, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })

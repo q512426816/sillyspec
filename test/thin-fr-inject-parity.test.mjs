@@ -146,7 +146,7 @@ test('② rotSuspectFlow：三分判据（strong/skip/unknown）+ 遥测 count=s
     assert.equal(r.skip, 1, `skip 应为 1，实际 ${r.skip}`)
     assert.equal(r.unknown, 1, `unknown 应为 1，实际 ${r.unknown}`)
     assert.ok(!('marked' in r), '返回值不再携带 marked（标记层已拆）')
-    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
+    const hits = readFileSync(join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl'), 'utf8')
     assert.ok(hits.includes('fr-rot-suspect') && hits.includes('"source":"flow-done"'))
     assert.ok(hits.includes('"strong":1') && hits.includes('"count":1'), '遥测 count 语义=strong（防污染 knowledge-stats）')
     assert.ok(hits.includes('"unknown":1'), 'unknown 单列遥测')
@@ -208,7 +208,7 @@ test('③ frDupGateFlow：标题重叠 ≥0.6 告警 + 遥测；承接行豁免�
     const r = await frDupGateFlow({ specBase, change: 'c-dup', changeDir, files: ['src/cli/login.js'] })
     assert.equal(r.hits.length, 1, `只应命中重叠标题，实际：${JSON.stringify(r.hits)}`)
     assert.ok(r.warn.includes('FR-01↔FR-cli-001'), '告警应指明 local↔active 对')
-    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
+    const hits = readFileSync(join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl'), 'utf8')
     assert.ok(hits.includes('fr-duplicate-warning') && hits.includes('"source":"flow-done"'))
     // 承接行豁免：FR-01 加承接后不再命中
     writeFileSync(join(changeDir, 'requirements.md'), [

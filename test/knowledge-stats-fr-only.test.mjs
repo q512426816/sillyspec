@@ -29,7 +29,8 @@ function makeFixture() {
     '## FR-core-engine-001 定价引擎' + NL + '变更：c1' + NL + '状态：active' + NL + '摘要：x' + NL)
   writeFileSync(join(knowledgeDir, 'INDEX.md'), '# Knowledge Index' + NL + NL + '## Conventions' + NL + '- key|route → [conventions.md#a](conventions.md#a)' + NL)
   const at = new Date().toISOString()
-  writeFileSync(join(runtimeDir, 'knowledge-hits.jsonl'),
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(runtimeDir, 'state', 'knowledge-hits.jsonl'),
     JSON.stringify({ type: 'inject', change: 'c1', matchedFiles: ['conventions.md#a'], at }) + NL +
     JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 1, source: 'module-inject', at }) + NL)
   return { tmp, base, knowledgeDir, runtimeDir }

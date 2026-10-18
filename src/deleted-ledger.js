@@ -14,12 +14,13 @@
  * 坏行容错：单行 JSON 解析失败跳过该行（外部编辑/半写截断不拖垮读取）。
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { runtimeStatePath } from './runtime-paths.js'
 import { join } from 'node:path'
 
 const LEDGER_FILENAME = 'deleted-changes.jsonl'
 
 function ledgerPath(specDir) {
-  return join(specDir, '.runtime', LEDGER_FILENAME)
+  return runtimeStatePath(join(specDir, '.runtime'), LEDGER_FILENAME)
 }
 
 /**

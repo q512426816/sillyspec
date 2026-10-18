@@ -237,7 +237,7 @@ function recordVerifyLintTally({ specBase, result }) {
   try {
     const runtimeDir = join(specBase, '.runtime')
     mkdirSync(runtimeDir, { recursive: true })
-    const tallyPath = join(runtimeDir, 'verify-lint-tally.json')
+    const tallyPath = runtimeStatePath(runtimeDir, 'verify-lint-tally.json')
     let tally = { totalRuns: 0, failedRuns: 0, history: [] }
     try {
       tally = { ...tally, ...JSON.parse(readFileSync(tallyPath, 'utf8')) }

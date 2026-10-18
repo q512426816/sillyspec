@@ -142,7 +142,8 @@ try {
     assert(isFollowerSetChanged(specRoot, 'stale', set) === true, 'stale 独立首报（不受 follow key 影响）')
 
     // marker 损坏 → 退化为首报（fail-open 到「报」侧，不吞信号）
-    writeFileSync(join(specRoot, '.runtime', 'spec-sync-follow-reported.json'), '{broken', 'utf8')
+    mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true })
+    writeFileSync(join(specRoot, '.runtime', 'state', 'spec-sync-follow-reported.json'), '{broken', 'utf8')
     assert(isFollowerSetChanged(specRoot, 'follow', set) === true, 'marker 损坏时按首报处理')
   }
 } finally {

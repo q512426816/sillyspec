@@ -127,7 +127,7 @@ assert(analyzeStagedFace(['.sillyspec/quicklog/patches/ql-1.json', 'src/a.js'], 
   const r = runGuard(root)
   assert(r.code === 0, '8a 超面 staged → exit 0（只警告不阻断）')
   assert(r.stderr.includes('[commit-guard]') && r.stderr.includes('2026-09-17-other'), '8b stderr 警告指名夹带文件')
-  const auditPath = join(root, '.sillyspec', '.runtime', 'write-audit.jsonl')
+  const auditPath = join(root, '.sillyspec', '.runtime', 'temp', 'write-audit.jsonl')
   assert(existsSync(auditPath), '8c write-audit.jsonl 已留痕')
   const auditLine = readFileSync(auditPath, 'utf8').trim().split('\n').pop()
   const audit = JSON.parse(auditLine)
@@ -199,7 +199,7 @@ function gitCommit(root, args) {
   assert(r.code === 0, '16a pathspec 提交放行（fail-open 恒 exit 0）')
   assert(r.stderr.includes('[commit-guard]') && r.stderr.includes('a.txt') && /未暂存/.test(r.stderr), `16b S3 警告点名路径与机理（实际 stderr：${r.stderr.slice(0, 200)}）`)
   assert(sh('git show HEAD:a.txt', root).includes('FOREIGN-HUNK'), '16c 事故形态复现：外来行确被携带（检测面与事实一致）')
-  const auditPath = join(root, '.sillyspec', '.runtime', 'write-audit.jsonl')
+  const auditPath = join(root, '.sillyspec', '.runtime', 'temp', 'write-audit.jsonl')
   assert(existsSync(auditPath) && readFileSync(auditPath, 'utf8').includes('index_divergence'), '16d write-audit 留痕 signal=index_divergence')
 }
 

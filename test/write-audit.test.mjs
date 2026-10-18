@@ -23,7 +23,7 @@ test('appendWriteAudit：JSONL 追加 + 目录自建 + 多行追加', () => {
   const specDir = join(tmp('basic'), '.sillyspec')
   assert.equal(appendWriteAudit(specDir, { via: 'platform-resolve-take-platform', overwritten: 3, files: ['changes/x/design.md'], crlfPaths: ['changes/x/design.md'], crlfCount: 1 }), true, '首条落盘成功')
   assert.equal(appendWriteAudit(specDir, { via: 'worktree-apply', change: 'c2', files: ['src/a.js'] }), true, '第二条落盘成功')
-  const lines = readFileSync(join(specDir, '.runtime', 'write-audit.jsonl'), 'utf8').trim().split('\n')
+  const lines = readFileSync(join(specDir, '.runtime', 'temp', 'write-audit.jsonl'), 'utf8').trim().split('\n')
   assert.equal(lines.length, 2, '两行审计')
   const first = JSON.parse(lines[0])
   assert.equal(first.via, 'platform-resolve-take-platform', 'via 字段保留')

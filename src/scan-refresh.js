@@ -228,7 +228,7 @@ export function computeRefreshPlan({ projectRoot, specBase, projectName, force =
     try {
       const guardDir = join(specBase, '.runtime')
       mkdirSync(guardDir, { recursive: true })
-      writeAtomicSync(join(guardDir, 'scan-guard.json'), JSON.stringify({
+      writeAtomicSync(runtimeStatePath(guardDir, 'scan-guard.json'), JSON.stringify({
         name_zh: '增量刷新守卫',
         mode: 'scan-refresh',
         refreshDocs,
@@ -382,7 +382,7 @@ export async function finalizeRefresh(opts = {}) {
   const scanDir = join(specBase, 'docs', projectName, 'scan')
   // ①拍 guard 会话态必须存在（握手文件=工单受影响集与内容哈希的唯一来源）
   let guard = null
-  const guardPath = join(specBase, '.runtime', 'scan-guard.json')
+  const guardPath = runtimeStatePath(join(specBase, '.runtime'), 'scan-guard.json')
   try { guard = JSON.parse(readFileSync(guardPath, 'utf8')) } catch { /* 缺失/坏 JSON → 下方拒绝 */ }
   if (!guard || guard.mode !== 'scan-refresh') {
     console.error('scan refresh --done：未找到增量刷新会话态（.runtime/scan-guard.json 无 mode=scan-refresh）')

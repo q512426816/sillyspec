@@ -40,7 +40,7 @@ test('warnSelfRefPointerOnce：窗口内第二次静默，marker 过期后重新
   const m2 = captureWarn(() => warnSelfRefPointerOnce(cwd, 'X:/junction/path', '⚠️ 二次'))
   assert.equal(m2, '', '窗口内第二次静默')
   // 把 marker 时间戳拨回 11 分钟前 → 过期重新告警
-  const markerPath = join(cwd, '.sillyspec', '.runtime', 'selfref-pointer-warn.json')
+  const markerPath = join(cwd, '.sillyspec', '.runtime', 'temp', 'selfref-pointer-warn.json')
   const m = JSON.parse(readFileSync(markerPath, 'utf8'))
   m.at = Date.now() - 11 * 60 * 1000
   writeFileSync(markerPath, JSON.stringify(m))

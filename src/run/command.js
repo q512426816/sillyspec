@@ -20,6 +20,7 @@
  *     './run/stage.js' → './shared.js' 等同级
  */
 import { basename, join, resolve, dirname } from 'node:path'
+import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, statSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
@@ -2383,7 +2384,7 @@ function printAutoCompletionSummary(pm, cwd, changeName, flowStages, specBase) {
     // last-delta 模块清单（sidecar 缺失跳过）
     try {
       const runtimeRoot = join((specBase || join(cwd, '.sillyspec')), '.runtime')
-      const sidecarPath = join(runtimeRoot, 'last-delta.json')
+      const sidecarPath = runtimeStatePath(runtimeRoot, 'last-delta.json')
       if (existsSync(sidecarPath)) {
         const sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8'))
         if (Array.isArray(sidecar.affectedModules) && sidecar.affectedModules.length > 0) {

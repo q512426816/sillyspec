@@ -143,7 +143,8 @@ const CE = [
     JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 14, source: 'digest', at: new Date().toISOString() }),
     JSON.stringify({ type: 'fr-inject', change: 'c2', domains: ['runtime'], count: 4, at: new Date().toISOString() }),  // 存量无 source
   ].join(NL) + NL
-  writeFileSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'), hits)
+  mkdirSync(join(fx.runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl'), hits)
   const st = buildFrIndexStats(fx.knowledgeDir, fx.runtimeDir, {})
   assert(st.events.frInject === 3, `frInject 总数=3（source 维度不裂口径，实际 ${st.events.frInject}）`)
   assert(st.events.frInjectBySource && st.events.frInjectBySource['module-inject'] === 1, 'module-inject 桶=1')
@@ -161,7 +162,8 @@ const CE = [
     JSON.stringify({ type: 'fr-rot-suspect', change: 'q2', domains: ['core-engine'], count: 3, source: 'quick-done', at: new Date().toISOString() }),
     JSON.stringify({ type: 'fr-inject', change: 'q1', domains: ['core-engine'], count: 14, source: 'module-inject', at: new Date().toISOString() }),
   ].join(NL) + NL
-  writeFileSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'), hits)
+  mkdirSync(join(fx.runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(fx.runtimeDir, 'state', 'knowledge-hits.jsonl'), hits)
   const st = buildFrIndexStats(fx.knowledgeDir, fx.runtimeDir, {})
   assert(st.events.frRotSuspect === 2, `frRotSuspect 总事件=2（实际 ${st.events.frRotSuspect}）`)
   const ce = (st.events.frRotSuspectByDomain || []).find(d => d.domain === 'core-engine')

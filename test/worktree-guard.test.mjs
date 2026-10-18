@@ -65,7 +65,8 @@ try {
   // scan 阶段：readCurrentStage SQL 过滤 current_stage IN ('execute','quick')，scan 不在其中 →
   // 等价 '(none)'。scan 文档覆盖保护由 shouldBlockScanDocOverwrite 独立判定（阶段无关）。
   setStage('scan')
-  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(runtimeDir, 'state', 'scan-guard.json'), JSON.stringify({
     sourceCommit: 'new-head',
     startedAt: '2026-06-16T10:00:00.000Z',
     forceRescan: false,
@@ -85,7 +86,8 @@ try {
     true,
     'scan overwrite should block stale source_commit without --force-rescan'
   )
-  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(runtimeDir, 'state', 'scan-guard.json'), JSON.stringify({
     sourceCommit: 'new-head',
     startedAt: '2026-06-16T10:00:00.000Z',
     forceRescan: true,
@@ -99,7 +101,8 @@ try {
   // ── 7/40 位归一化比对（2026-09-14-scan-incremental-refresh D-007@v1）──
   // run/stage.js 写 guard 用 40 位全哈希、scan-postcheck 盖章用 7 位短哈希：旧精确比对
   // 恒不等 → guard 存在即恒拦。归一化后同基线放行 / 异基线拦截恢复设计本意。
-  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(runtimeDir, 'state', 'scan-guard.json'), JSON.stringify({
     sourceCommit: 'abc1234fullhash0000000000000000000000000000',
     startedAt: '2026-06-16T10:00:00.000Z',
     forceRescan: false,
@@ -132,7 +135,8 @@ try {
   )
 
   // ── scan-refresh 会话态白名单（D-007@v1）：白名单内放行 / 白名单外原保护 ──
-  writeFileSync(join(runtimeDir, 'scan-guard.json'), JSON.stringify({
+  mkdirSync(join(runtimeDir, 'state'), { recursive: true })
+  writeFileSync(join(runtimeDir, 'state', 'scan-guard.json'), JSON.stringify({
     name_zh: '增量刷新守卫',
     mode: 'scan-refresh',
     refreshDocs: ['docs/app/scan/ARCHITECTURE.md'],
@@ -171,7 +175,8 @@ try {
   const externalScanDoc = join(externalSpec, 'docs', 'app', 'scan', 'ARCHITECTURE.md')
   mkdirSync(join(externalSpec, '.runtime'), { recursive: true })
   mkdirSync(join(externalSpec, 'docs', 'app', 'scan'), { recursive: true })
-  writeFileSync(join(externalSpec, '.runtime', 'scan-guard.json'), JSON.stringify({
+  mkdirSync(join(externalSpec, '.runtime', 'state'), { recursive: true })
+  writeFileSync(join(externalSpec, '.runtime', 'state', 'scan-guard.json'), JSON.stringify({
     sourceCommit: 'extnew1-head',
     startedAt: '2026-06-16T10:00:00.000Z',
     forceRescan: false,

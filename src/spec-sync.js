@@ -70,7 +70,7 @@ export function describeSyncError(err) {
 // 才拿到），且失败走「下次自动重试」无限静默循环——归档半态（本地已归档、平台仍「进行中」）
 // 挂数小时无人知晓。两道护栏：①非 2xx 响应体解析进告警行；②按 label 连续失败计数持久化，
 // 连续 ≥3 次升级 🚨 显式告警，任一次成功清零。
-const FAIL_STREAK_FILE = join('.runtime', 'spec-sync-fail-streak.json');
+const FAIL_STREAK_FILE = join('.runtime', 'state', 'spec-sync-fail-streak.json');
 const FAIL_STREAK_ESCALATE_AT = 3;
 
 export function describeErrorBody(status, rawBody) {
@@ -388,7 +388,7 @@ const LAST_SUCCESS_MARKER = 'spec-sync-last-success.json';
 
 function readLastSyncTs(specRoot) {
   try {
-    const raw = readFileSync(join(specRoot, '.runtime', LAST_SUCCESS_MARKER), 'utf8');
+    const raw = readFileSync(runtimeStatePath(join(specRoot, '.runtime'), LAST_SUCCESS_MARKER), 'utf8');
     const ts = JSON.parse(raw).ts;
     return Number.isFinite(ts) ? ts : null;
   } catch {
@@ -399,7 +399,7 @@ function readLastSyncTs(specRoot) {
 function writeLastSyncTs(specRoot) {
   try {
     mkdirSync(join(specRoot, '.runtime'), { recursive: true });
-    writeFileSync(join(specRoot, '.runtime', LAST_SUCCESS_MARKER), JSON.stringify({ ts: Date.now() }) + '\n', 'utf8');
+    writeFileSync(runtimeStatePath(join(specRoot, '.runtime'), LAST_SUCCESS_MARKER), JSON.stringify({ ts: Date.now() }) + '\n', 'utf8');
   } catch { /* 标记失败只损失下次的防回推过滤，不影响本次同步结果 */ }
 }
 
@@ -416,7 +416,7 @@ const BASE_SNAPSHOT = 'spec-sync-base.json';
 
 function readBaseSnapshot(specRoot) {
   try {
-    const raw = readFileSync(join(specRoot, '.runtime', BASE_SNAPSHOT), 'utf8');
+    const raw = readFileSync(runtimeStatePath(join(specRoot, '.runtime'), BASE_SNAPSHOT), 'utf8');
     const hashes = JSON.parse(raw).hashes;
     return hashes && typeof hashes === 'object' ? hashes : null;
   } catch {
@@ -429,7 +429,7 @@ function writeBaseSnapshot(specRoot, localFiles) {
     const hashes = {};
     for (const f of localFiles) hashes[f.path] = f.hash;
     mkdirSync(join(specRoot, '.runtime'), { recursive: true });
-    writeFileSync(join(specRoot, '.runtime', BASE_SNAPSHOT), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8');
+    writeFileSync(runtimeStatePath(join(specRoot, '.runtime'), BASE_SNAPSHOT), JSON.stringify({ ts: Date.now(), hashes }, null, 2) + '\n', 'utf8');
   } catch { /* 快照失败只损失下次的内容级防回推，不影响本次同步结果 */ }
 }
 

@@ -7,6 +7,8 @@ import { tmpdir } from 'os'
 import {
   RUNTIME_STATE_DIRNAME,
   RUNTIME_TEMP_DIRNAME,
+  RUNTIME_STATE_SINGLETONS,
+  RUNTIME_TEMP_SINGLETONS,
   runtimeStatePath,
   runtimeTempPath,
   runtimeStateFileNames,
@@ -222,7 +224,29 @@ console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spa
   assert(existsSync(join(rt, 'repro-junk.mjs')), '未知归属文件入口迁移不动（不猜归属）')
 }
 
-console.log('\n--- 10. fail-open：目录缺失/坏路径零副作用不抛 ---')
+console.log('\n--- 10. FR-05b 二轮：全局面单例归位（16 state + 6 temp） ---')
+{
+  assert(RUNTIME_STATE_SINGLETONS.includes('friction-ledger.json') && RUNTIME_STATE_SINGLETONS.includes('last-delta.json')
+    && RUNTIME_STATE_SINGLETONS.includes('spec-sync-base.json') && RUNTIME_STATE_SINGLETONS.length === 15, 'state 单例表 15 件齐（设计清单 16 中 pending_push 零引用不入产品表）')
+  assert(RUNTIME_TEMP_SINGLETONS.includes('doctor-diagnosis.json') && RUNTIME_TEMP_SINGLETONS.includes('auto-pull-throttle.json')
+    && RUNTIME_TEMP_SINGLETONS.length === 6, 'temp 单例表 6 件齐')
+  const root = join(tmpRoot, 's2', '.runtime')
+  mkdirSync(root, { recursive: true })
+  writeFileSync(join(root, 'friction-ledger.json'), 'F')
+  writeFileSync(join(root, 'knowledge-hits.jsonl'), 'K')
+  writeFileSync(join(root, 'spec-sync-base.json'), 'B')
+  writeFileSync(join(root, 'doctor-diagnosis.json'), 'D')
+  writeFileSync(join(root, 'flow-telemetry.jsonl'), 'T')
+  writeFileSync(join(root, 'sillyspec.db'), 'CORE')
+  writeFileSync(join(root, 'user-inputs.md'), 'CORE2')
+  writeFileSync(join(root, 'agent-session-log.json'), 'CORE3')
+  const r = migrateRuntimeLayout(root)
+  assert(r.stateMoved >= 3 && r.tempMoved >= 2, `全局面单例随迁移归位（state=${r.stateMoved} temp=${r.tempMoved}）`)
+  assert(existsSync(join(root, 'state', 'friction-ledger.json')) && existsSync(join(root, 'temp', 'doctor-diagnosis.json')), '单例落位正确')
+  assert(existsSync(join(root, 'sillyspec.db')) && existsSync(join(root, 'user-inputs.md')) && existsSync(join(root, 'agent-session-log.json')), '六个核心单例留根目录')
+}
+
+console.log('\n--- 11. fail-open：目录缺失/坏路径零副作用不抛 ---')
 {
   const r = migrateRuntimeLayout(join(tmpRoot, 'no-such-runtime'))
   assert(r.stateMoved === 0 && r.tempMoved === 0 && r.skipped === 0, '目录缺失返回零计数不抛')

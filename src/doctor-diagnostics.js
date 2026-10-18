@@ -23,6 +23,7 @@
  * writer 落盘到 <authoritySpecDir>/.runtime/。
  */
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
+import { runtimeTempPath } from './runtime-paths.js'
 import { safeGit } from './git-helper.js';
 import { createHash } from 'crypto';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
@@ -1752,7 +1753,7 @@ export function writeDoctorDiagnosis(json, specDir) {
   try {
     const runtimeDir = join(specDir, '.runtime');
     mkdirSync(runtimeDir, { recursive: true });
-    const outPath = join(runtimeDir, 'doctor-diagnosis.json');
+    const outPath = runtimeTempPath(runtimeDir, 'doctor-diagnosis.json');
     writeFileSync(outPath, JSON.stringify(json, null, 2) + '\n');
     return outPath;
   } catch (e) {

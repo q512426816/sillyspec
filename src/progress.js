@@ -123,7 +123,7 @@ export function resolveSessionIdentity({ flagSession = null, quickChangeName = n
       try {
         const markerDir = join(cwd, SPEC_DIR_NAME, RUNTIME_SUBDIR);
         mkdirSync(markerDir, { recursive: true });
-        const markerPath = join(markerDir, ANON_SESSION_WARN_MARKER);
+        const markerPath = runtimeTempPath(markerDir, ANON_SESSION_WARN_MARKER);
         const now = Date.now();
         try {
           const m = JSON.parse(readFileSync(markerPath, 'utf8'));
