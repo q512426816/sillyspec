@@ -1,0 +1,29 @@
+{"ts":1792389641718,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792389757938,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792389804085,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792390316035,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792390561726,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/.sillyspec/——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792391007637,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1792392483519,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-status-heartbeat.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792392572818,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-status-json.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393112145,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow-parity.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393162313,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/command.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393175742,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-empty-face-crosscheck.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393377979,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/close-trace-freeze-integrity.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393698118,"kind":"commit","stage":null,"detail":"4124aa10","provisional":true}
+{"ts":1792393805371,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/quick-retired.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792393995722,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/.sillyspec/——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792394160722,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792394161238,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792394161643,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792394162014,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792394162417,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1792394163060,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792394163060,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1792394190257,"kind":"commit","stage":null,"detail":"f7c5fb12","provisional":true}
+{"ts":1792394190512,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-19-thin-empty-face-cross-repo-freeze/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792394301039,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（87.4s） · 20261019071819","provisional":true}
+{"ts":1792394460874,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792394474624,"kind":"commit","stage":null,"detail":"d8ff8bc2","provisional":true}
+{"ts":1792395358098,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow-parity.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792395375396,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}

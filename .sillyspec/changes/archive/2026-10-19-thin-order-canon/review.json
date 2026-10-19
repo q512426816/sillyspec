@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-order-canon",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "CLAUDE.md 轻量道行的 --autopilot 未带「用户显式」限定词，与 AGENTS.md/模板存在措辞级微差",
+      "evidence": "AGENTS.md:10 与 templates/agents-instruction.md:9 写「批准（flow approve / 用户显式 --autopilot）」，CLAUDE.md:14 仅写「批准（flow approve / --autopilot）」；FR-04 要求的三者同义表述已满足（顺序链一致、CLAUDE.md 规则 5 另有「用户批准先于动码」兜底），但本变更核心风险面正是 autopilot 误用（横幅/SKILL/done 拦截三处均强调「非 agent 自选补救通道」），此处弱化一致性属提示级",
+      "location": "CLAUDE.md:14"
+    },
+    {
+      "severity": "P3",
+      "title": "收口实测门为 skipped（环境缺件两模块跳过），全量绿由本评审补跑定向面补偿核验",
+      "evidence": "flow-state.yaml gate_summary 记「test: skipped ← …deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测｜lint: passed」；本评审亲自跑 flow-order-canon 7/7 绿 + 五锚（flow-checkpoints/clarity-probe/redline-frontload/governance-autopilot/tdd-scope-guidance）与 flow-status-json/heartbeat/quick-retired 共 29 例全绿，留痕如实、非代码缺陷",
+      "location": ".sillyspec/changes/2026-10-19-thin-order-canon/flow-state.yaml:46"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "边界裁决": "①「文案优先而非机器证据门，approve 校验/tick 提醒留下一变更」可接受——有实证依据（git 时间戳系统性说谎、CLI 记录面无 src 编辑事件）且 status 相位修正+approve 超期补批留痕部分补偿，本变更为能力诚实不装门；②「status --json 增量、不移除既有键」可接受——baseline(875511d2) 与 HEAD 键集对比纯增量（仅加 specApproved/specApprovedChannel），phase 文本变化仅人类可读面；③「消费仓旧资产靠 init 按 sha 差异覆盖」可接受——src/command-cards.js:15-65 有锚+sha256 覆盖逻辑实据；④ FR-05 测试绑定「不适用：全量回归由 flow done 实测门覆盖」可接受但注意其实测为 skipped（见 findings#2，本评审已补跑）；「--accept-dirty-gap 13 文件审计缺口」在 design/requirements/proposal 工件内无此声明（grep 零命中），无声明即无需裁决",
+    "探针": "cli-copy-selfsufficient A：PASS——新文案提到的命令/flag 全部真实存在：flow approve --change（src/flow.js:2808）、--autopilot（src/flow.js:2801/963）、--user-confirmed/--self-approved（src/flow.js:2820）、task tick（src/index.js:994→src/task-tick.js）、flow status --json（src/flow.js:2805），拼写一致；cli-copy-selfsufficient B：PASS——「未批准且未声明 --autopilot 时 flow done 拒收」与 src/flow.js:1341 实际判定 if(!st.autopilot&&!st.spec_approved) 一致，autopilot 语义=豁免 spec 断点人审而非跳实测门，status 相位三态判定（src/flow.js:2909-2917）与文案标注一一对应且心跳被 phase.startsWith('②') 门控（未批准不出任务指针，自洽）；config-absent：PASS——本变更 diff 零新增 local.yaml 消费键，缺省路径无回归由 flow-status-json/heartbeat 两测试（无新键环境）跑绿锚定；crossrepo-path-compat：n/a——12 文件冻结面无 worktree/deps/跨仓对账文件（src/flow-parity.js 与两跨仓测试来自并行提交 4124aa10，非本变更）；三个全量红归属：platform-temp-residue-heal 在 baseline 875511d2 快照上即 23/1 红（场景④断言 run quick --status exit 0 与 quick 退役拒绝门矛盾，预存失败——非本变更亦实证非 4124aa10 引入，与本变更冻结面无交集），runtime-relayout 主仓单跑绿，spec-dir-home-guard 红因未追踪 test/.sillyspec 运行残留（git status 确认非提交内容），干净 HEAD 快照两测全绿——本变更对三红均无责"
+  },
+  "reviewedAt": "2026-10-19T07:34:56Z"
+}

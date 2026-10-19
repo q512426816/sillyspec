@@ -29,3 +29,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-15 | 2026-10-15-vector-capability-autodetect | 用户设计裁决：向量开关放每仓 local.yaml 不是终态——端点部署本身就是开关，客户端应自动探… |
 | 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |
 | 2026-10-19 | 2026-10-19-init-drop-gemini-opencode | init 移除 gemini/opencode 工具支持 |
+| 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |

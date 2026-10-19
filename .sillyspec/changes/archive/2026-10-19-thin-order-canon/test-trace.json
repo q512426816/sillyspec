@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-order-canon",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-thin-order-canon:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-order-canon.test.mjs「横幅/adopt/done/approve/恢复简报五面正典句一致与顺手措辞清零」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-order-canon"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-thin-order-canon:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-order-canon.test.mjs「命令卡与 skill 生命周期含批准环节」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-order-canon"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-thin-order-canon:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-order-canon.test.mjs「status 未批准相位停在 spec 与 specApproved 字段」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-order-canon"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-19-thin-order-canon:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-order-canon.test.mjs「模板与本仓 AGENTS/CLAUDE 同步及版本提升」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-order-canon"
+    }
+  ]
+}

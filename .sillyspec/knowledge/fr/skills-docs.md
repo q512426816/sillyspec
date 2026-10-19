@@ -527,3 +527,99 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-10-16-title-range-gate
   status: active
+
+## FR-skills-docs-023 正典顺序句在 flow start 横幅（【你要做的】与三断点纪律）、adopt 收编横幅、flow done 未批准拦截、flow approve 输出面一致落位；全仓「动码前后顺手作答」「写码前后顺手填」「干活时作答」类许可后补的措辞清零
+变更：2026-10-19-thin-order-canon
+状态：active
+摘要：主路径（横幅顺序句）；未批准收口拦截；恢复简报带批准状态
+场景正文：
+- 场景：主路径（横幅顺序句） — Given 全新轻量变更 flow start，When 读取横幅，Then「【你要做的】」首句含「先答 spec 面」且顺序为 spec → 批准 → 动码；grep s
+- 场景：未批准收口拦截 — Given 未批准变更运行 flow done，When 拦截输出，Then 文案含「批准是动码前置」语义并给出补批通道，autopilot 出口标注须用户显式授权。
+- 场景：恢复简报带批准状态 — Given 未批准变更重跑 flow start 恢复，When 读取恢复简报，Then 含批准状态行；未批准时「下一步」指向补批而非「继续干活」。
+全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-01
+最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-order-canon:flow:测试绑定FR-01
+  tests: test/flow-order-canon.test.mjs「横幅/adopt/done/approve/恢复简报五面正典句一致与顺手措辞清零」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-order-canon
+  status: active
+
+## FR-skills-docs-024 assets/command-cards/flow.md 与 .claude/skills/sillyspec-flow/SKILL.md 的生命周期改为「flow start → 补 spec 面 → 批准 → 干活 → flow done」，含 approve 环节
+变更：2026-10-19-thin-order-canon
+状态：active
+摘要：生命周期一致
+场景正文：
+- 场景：生命周期一致 — Given 本变更合入后的两文件，When 读取步骤/生命周期段，Then 均含「批准」环节且顺序为 spec → 批准 → 干活；描述行不再以「直接干活（改代码写测试）」
+全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-02
+最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-order-canon:flow:测试绑定FR-02
+  tests: test/flow-order-canon.test.mjs「命令卡与 skill 生命周期含批准环节」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-order-canon
+  status: active
+
+## FR-skills-docs-025 flow status：未批准且非 autopilot 时相位停在「① spec（→ 待用户批准）」并给提示，--json 增 specApproved 字段
+变更：2026-10-19-thin-order-canon
+状态：active
+摘要：未批准；已批准
+场景正文：
+- 场景：未批准 — Given 未批准且非 autopilot 的变更，When flow status，Then 相位文本含「待用户批准」提示，JSON specApproved=false
+- 场景：已批准 — Given flow approve 已运行的变更，When flow status，Then 相位进入执行段且含「已批准」标注，JSON specApproved=tru
+全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-03
+最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-order-canon:flow:测试绑定FR-03
+  tests: test/flow-order-canon.test.mjs「status 未批准相位停在 spec 与 specApproved 字段」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-order-canon
+  status: active
+
+## FR-skills-docs-026 templates/agents-instruction.md 选道行与规则 3 补轻量道顺序句，本仓 AGENTS.md/CLAUDE.md 同步，package.json 版本号提升使消费仓重跑 init 可取新资产
+变更：2026-10-19-thin-order-canon
+状态：active
+摘要：模板与仓内一致
+场景正文：
+- 场景：模板与仓内一致 — Given 本变更合入后，When 比对模板与 AGENTS.md/CLAUDE.md 轻量道行，Then 三者顺序表述同义且均含批准环节；package.json ver
+全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-04
+最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-order-canon:flow:测试绑定FR-04
+  tests: test/flow-order-canon.test.mjs「模板与本仓 AGENTS/CLAUDE 同步及版本提升」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-order-canon
+  status: active
+
+## FR-skills-docs-027 既有测试锚（flow-checkpoints/flow-redline-frontload/flow-clarity-probe/governance-autopilot/tdd-scope-guidance 等）同步更新，全量测试绿
+变更：2026-10-19-thin-order-canon
+状态：active
+摘要：全量回归
+场景正文：
+- 场景：全量回归 — Given 本变更全部合入，When 跑全量测试，Then 零失败。
+全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-05
+最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5

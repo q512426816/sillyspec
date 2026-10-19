@@ -1,0 +1,195 @@
+{
+  "change": "2026-10-19-thin-order-canon",
+  "baseline": "875511d25454cf584c99ab491fa0cd03231f71ad",
+  "head": "d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "assets/command-cards/flow.md",
+    "package.json",
+    "src/flow.js",
+    "src/run/command.js",
+    "templates/agents-instruction.md",
+    "test/flow-order-canon.test.mjs",
+    "test/flow-status-heartbeat.test.mjs",
+    "test/flow-status-json.test.mjs",
+    "test/quick-retired.test.mjs"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 324,
+    "deletions": 48
+  },
+  "savedAt": "2026-10-19T07:21:24.320Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "skills-docs",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/skills-docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 13,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "875511d25454cf584c99ab491fa0cd03231f71ad",
+    "totals": {
+      "files": 12,
+      "additions": 324,
+      "deletions": 48
+    },
+    "rows": [
+      {
+        "path": ".claude/skills/sillyspec-flow/SKILL.md",
+        "additions": 17,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "AGENTS.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "CLAUDE.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "assets/command-cards/flow.md",
+        "additions": 8,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "package.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 106,
+        "deletions": 24,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/command.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-order-canon.test.mjs",
+        "additions": 182,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-status-heartbeat.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-status-json.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/quick-retired.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "b9b33b25441a12a0aa9a66d1cf96b9dc9f8761032c37d56331c1bd32fabf8e2c",
+  "patchStatus": "ok"
+}
