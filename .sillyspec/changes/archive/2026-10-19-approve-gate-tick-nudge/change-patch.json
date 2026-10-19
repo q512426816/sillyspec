@@ -1,0 +1,111 @@
+{
+  "change": "2026-10-19-approve-gate-tick-nudge",
+  "baseline": "59a2dfc922b0881c0460aeb5ec9c9c22214ed4ce",
+  "head": "811130f031f306c084caabad239605d0d9a35303",
+  "files": [
+    "src/flow-draft.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "src/task-tick.js",
+    "test/approve-gate-tick.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 268,
+    "deletions": 26
+  },
+  "savedAt": "2026-10-19T07:56:33.189Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 13,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "59a2dfc922b0881c0460aeb5ec9c9c22214ed4ce",
+    "totals": {
+      "files": 5,
+      "additions": 268,
+      "deletions": 26
+    },
+    "rows": [
+      {
+        "path": "src/flow-draft.js",
+        "additions": 15,
+        "deletions": 9,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 22,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 62,
+        "deletions": 16,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 16,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/approve-gate-tick.test.mjs",
+        "additions": 153,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "b4e2e09e042809f2615514e54df455eecdf07f2f624c9acf2062e8a2abd16b00",
+  "patchStatus": "ok"
+}

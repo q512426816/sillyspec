@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-approve-gate-tick-nudge",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "811130f031f306c084caabad239605d0d9a35303",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "「判据与原内联逐字一致/行为零变化」在 v1+CRLF 边缘不成立（方向良性、实证复现）",
+      "evidence": "共享函数新增 `.replace(/\\r\\n/g,'\\n')` 归一（flow-review.js:95），而 status 原内联对原始文本跑 v1 槽正则；实测 CRLF 已答 v1 design：原内联判定 false、新函数 true（node 实证）。LF 面逐字等价且既有 status 套件全绿钉住；CRLF 面是假声称的『零变化』，但方向是把 Windows CRLF 已答件从误判未答修正为已答，与 status/tick/approve 三面一致性相容",
+      "location": "src/flow-review.js:95 vs git show abd5ba3f 删除的 flow.js 原内联（matchAll 直接跑 dText）"
+    },
+    {
+      "severity": "P3",
+      "title": "design.md 接口契约与文件变更清单自相矛盾：共享导出一处写『落 flow-draft.js』，实际落 flow-review.js",
+      "evidence": "接口契约节写『新共享导出（落 flow-draft.js…）』，文件变更清单与实际代码均在 flow-review.js（flow-review.js:94）。落 flow-review 是正确工程选择——flow-review 已 import flow-draft 的 DESIGN_QUESTIONS（flow-review.js:21），反向放置会成环；属文档一行失真非实现缺陷",
+      "location": ".sillyspec/changes/2026-10-19-approve-gate-tick-nudge/design.md:23（接口契约节）vs src/flow-review.js:94"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 测试绑定行声称『status 重构前后输出逐字一致（快照对比）』，实测无该形态测试",
+      "evidence": "test ⑥ 是 designSectionsFilled 单元断言（v1/v2 双格式），非 status 端到端快照对比；status 零变化实际由既有 flow-status-json/flow-status-heartbeat 等套件（本次实跑全绿）背书。绑定行文本与测试内容不符，实质覆盖到位",
+      "location": ".sillyspec/changes/2026-10-19-approve-gate-tick-nudge/requirements.md:67 vs test/approve-gate-tick.test.mjs:128-137（test ⑥）"
+    },
+    {
+      "severity": "P3",
+      "title": "只读轨问题行改写产生重复违规双报（同问题两条 violation）",
+      "evidence": "repair:false 时 repairEntries 先在 flow-draft.js:398 报『只读不自动回填』，随后主校验环 questionPresent(dLines) 对同一改写问句再报一次（flow-draft.js:415）——done 轨因回填后 dLines 已含原文而无双报。门判定不受影响（均 exit 1），仅修复指引出现重复行，与『一次给全不靠二跑』的体验目标略损",
+      "location": "src/flow-draft.js:398 + src/flow-draft.js:415"
+    },
+    {
+      "severity": "P3",
+      "title": "降级文案与 tick 警示的两处边缘不精确（均为已披露 fail-soft 边界内）",
+      "evidence": "①『空槽兜底校验通过』后缀在 v2 形态/无 design.md 时（兜底根本未跑）照印——空言为真但不精确，『降级』标注本体在场满足 FR-02；②task tick 读 design.md 失败（文件缺失）时整个警示块静默跳过，连『未批准』腿也不警示——与 design 接口契约『读取失败静默』一致，但 FR-04 字面（四节未答→警示）在该边缘不成立；flow start 恒产 design.md，仅手造/存量变更可达",
+      "location": "src/flow.js:2692；src/task-tick.js:196-208"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "成立——approve 校验读批准时点文件快照（verifyFlowDrafts 纯读），tick 警示只读当下状态；『先码后答再批』形态确实拦不住，与 design 声明一致（不假装能拦）。代码实证与四问答答复相符",
+    "并发": "成立——校验与 writeFlowState 落盘确非原子（2667 块校验→2712 写），窄窗他方改写理论存在，较现状严格更强；flow-state 写走 writeAtomicSync（flow.js:48-58）；tick 读取 try/catch 静默（task-tick.js:196-208）。注：cmdFlowApprove 前置 reportAgentLog（flow.js:2872→2811）在拒批路径也会写 .runtime 机本位遥测日志——先于本变更存在、所有 flow 子命令共面、非变更状态（spec_approved 缺席=未批的等价性成立），不构成新风险",
+    "切换": "成立——拒批路径对变更工件零写盘实证：verifyThinDocsV2 唯一写点 flow-draft.js:401 在 repair!==false 分支内（repairs push 仅 :403，只读轨恒空）；v1 轨 verifyMarkers 在自声明无 fs 的纯模块 machine-draft.js；verifyDesignRecordFilled 纯读（flow-draft.js:1093-1124）；gate 前仅 existsSync/readFlowState。测试①③钉 design/requirements 字节不变与 spec_approved 缺席",
+    "作用域": "成立——draftLedgerPath 为 .runtime 机本位，跨机读不到即 applicable:false 走降级（flow.js:2679-2693）；多变更 --change 隔离，判定函数只读变更目录内文件。designSectionsFallback 是 DESIGN_QUESTIONS 的 alias import（flow-review.js:21），单一源无漂移",
+    "边界裁决": "①『证明答在批前不证明答在码前』=可接受：时序证据路线（approved_at vs 首提交）已由 thin-order-canon 四路调查证伪（批量收口下 git 时间戳系统性说谎），诚实降级为内容门+留痕（超期补批文案自带披露），残余风险由 done 门与收口评审承接；②『ledger 机本位缺失即降级放行』=可接受（带条件）：v2+无 ledger 的跨机批准确实零文档校验，但硬拦会把合法跨机批准卡死、且 ledger 所属机的 done 收口门仍全量校验、终审在收口评审——fail-open+显式降级标注是 nudge 类门的正确取舍；若未来 ledger 跨机共享化则需重评；③『repair 只读轨与 done 自动回填分轨』=可接受：verifyFlowDrafts 仅两调用点（done flow.js:1325 缺省 true 行为不动；approve flow.js:2671 显式 false），只读轨把『回填』转译为带专属指引的 violation，分轨干净",
+    "探针": "cli-copy-selfsufficient A=PASS：新文案命令全部真实——flow approve --change（flow.js:2861-2863）、--user-confirmed/--self-approved 互斥解析（2866-2871）、task tick（index.js:996-999），拼写无误。B=PASS（带 P3 措辞注记见 finding 5）：『文档未齐→exit 1』与 `r.applicable && r.violations.length>0`（flow.js:2673）严格一致；降级标注恰在 !applicable 且 v1 兜底未拒路径（2679-2692）；tick 警示条件与代码判定一致（task-tick.js:199-202）。config-absent-zero-regression=零（本 diff 无任何 local.yaml 消费键新增，新代码只读 design.md/flow-state.yaml/draft-ledger 既有面）。crossrepo-path-compat=n/a 确认（未触 worktree/跨仓文件）。评审对象勘误：任务书 HEAD=811130f0 实为并行会话 thin-review-material-pack 提交；本变更提交=abd5ba3f，其冻结 5 文件 diff 已全量逐行核验，HEAD 工作区中并行会话对 flow.js/flow-review.js 的改动（cmdFlowDone review 子步/renderReviewerTaskbook，不重叠本变更 hunk 区域）已从归因中剔除。测试实证：新套件 7/7 绿；邻接 10 套件（flow-protocol/flow-status-json/flow-status-heartbeat/task-tick/flow-draft/check-approval-status/approve-channel-attest/flow-order-canon/machine-draft/flow-review）99/99 绿",
+    "归属勘误": "冻结面 5 文件=本变更提交 abd5ba3f2ca44b50136efa7edfbbcb2f4f37e29b 的 diff；任务书 sha 811130f0 为其上并行会话（thin-review-material-pack）提交=归档时 HEAD，重叠文件的他侧改动未计入本变更评审面。"
+  },
+  "reviewedAt": "2026-10-19T08:07:55Z"
+}

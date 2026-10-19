@@ -10198,3 +10198,99 @@ superseded_by：FR-core-engine-142
 - 场景：主路径 — When sillyspec flow done --change 2026-10-17-archive-terminal-sync-strict；Then 收尾同步静默完成（无 🚨 行）、命令退出码不受污染
 全文：.sillyspec/changes/archive/2026-10-17-archive-terminal-sync-strict/requirements.md#FR-04
 最近确认：eb09c73c76d3ca457fde4b2bd74a482544ed9d74
+
+## FR-cli-entry-539 approve 硬校验：v2 轨复用 verifyThinDocsV2（须加 repair 只读开关——现状有 design.md 问题行回填写副作用，approve 不得写文件）、v1 轨复用 verifyDesignRecordFilled；design 四节空/FR 待撰写/绑定待填时 approve exit 1 并给修复指引；作答齐备时照常批准
+变更：2026-10-19-approve-gate-tick-nudge
+状态：active
+摘要：空文档过批被拒；齐备放行
+场景正文：
+- 场景：空文档过批被拒 — Given v2 变更 design 四节未答（骨架）/requirements FR 仍「（待撰写」，When flow approve，Then exit 1、无 sp
+- 场景：齐备放行 — Given v2 变更四节已答+FR 行为句+绑定行齐，When flow approve --user-confirmed，Then exit 0、spec_approv
+全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-01
+最近确认：811130f031f306c084caabad239605d0d9a35303
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-01
+  tests: test/approve-gate-tick.test.mjs「approve 硬拒（空文档/未答绑定）与齐备放行、approve 只读（design.md 字节不变）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-approve-gate-tick-nudge
+  status: active
+
+## FR-cli-entry-540 豁免与降级：adopted_from=brainstorm 豁免 design 四节（以 brainstorm design 为准，与 done 门同口径）；draft-ledger 缺失时 fail-open 放行（跨机/存量场景）；verifyThinDocsV2 校验通过但存在 advisory 时不阻断批准
+变更：2026-10-19-approve-gate-tick-nudge
+状态：active
+摘要：brainstorm 收编豁免；ledger 缺失降级
+场景正文：
+- 场景：brainstorm 收编豁免 — Given adopted 变更 design 四节为空（以 brainstorm design 为准），When flow approve，Then 不因四节空拒收（绑定
+- 场景：ledger 缺失降级 — Given 变更目录无 draft-ledger（.runtime 机本位不在此机），When flow approve，Then 放行并在输出含降级标注。
+全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-02
+最近确认：811130f031f306c084caabad239605d0d9a35303
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-02
+  tests: test/approve-gate-tick.test.mjs「brainstorm 豁免与 ledger 缺失 fail-open 降级标注」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-approve-gate-tick-nudge
+  status: active
+
+## FR-cli-entry-541 共享判定上移：status 内联的「design 四节已答」判定（v1 槽/v2 节双格式）抽为可复用导出，status 与 tick 同源调用，行为零变化
+变更：2026-10-19-approve-gate-tick-nudge
+状态：active
+摘要：重构零变化
+场景正文：
+- 场景：重构零变化 — Given 同一 fixture，When 重构前后各跑 flow status（人类面与 --json），Then 输出逐字一致。
+全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-03
+最近确认：811130f031f306c084caabad239605d0d9a35303
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-03
+  tests: test/approve-gate-tick.test.mjs「status 重构前后输出逐字一致（快照对比）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-approve-gate-tick-nudge
+  status: active
+
+## FR-cli-entry-542 task tick 提醒：勾选回显在（design 四节未答 或 未批准且非 autopilot）时附一行「先补 spec 面/先过断点①」警示，advisory 不阻断勾选、不改变回显既有行
+变更：2026-10-19-approve-gate-tick-nudge
+状态：active
+摘要：未答先勾给警示；齐备静默
+场景正文：
+- 场景：未答先勾给警示 — Given v2 变更 design 未答、未批准，When task tick --task task-01，Then 勾选成功（exit 0）且回显末尾含 spec 面
+- 场景：齐备静默 — Given 四节已答+已批准，When task tick，Then 回显与现状逐字一致（零新增行）。
+全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-04
+最近确认：811130f031f306c084caabad239605d0d9a35303
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-04
+  tests: test/approve-gate-tick.test.mjs「tick 警示触发与齐备静默」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-approve-gate-tick-nudge
+  status: active
+
+## FR-cli-entry-543 测试：approve 硬拒/放行/brainstorm 豁免/repair 只读（approve 后 design.md 字节不变）/ledger 缺失放行/tick 提醒触发与静默各就位，既有 flow-status/task-tick/approve 相关测试零回归
+变更：2026-10-19-approve-gate-tick-nudge
+状态：active
+摘要：全量回归
+场景正文：
+- 场景：全量回归 — Given 本变更合入，When 跑既有相关测试与新增测试，Then 零失败。
+全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-05
+最近确认：811130f031f306c084caabad239605d0d9a35303

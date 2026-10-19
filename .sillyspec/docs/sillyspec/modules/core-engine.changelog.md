@@ -79,3 +79,4 @@
 | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
 | 2026-10-16 | 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流 |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
+| 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |

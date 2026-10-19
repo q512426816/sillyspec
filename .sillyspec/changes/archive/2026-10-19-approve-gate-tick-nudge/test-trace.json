@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-approve-gate-tick-nudge",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-01",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「approve 硬拒（空文档/未答绑定）与齐备放行、approve 只读（design.md 字节不变）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-approve-gate-tick-nudge"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-02",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「brainstorm 豁免与 ledger 缺失 fail-open 降级标注」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-approve-gate-tick-nudge"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-03",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「status 重构前后输出逐字一致（快照对比）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-approve-gate-tick-nudge"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-19-approve-gate-tick-nudge:flow:测试绑定FR-04",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「tick 警示触发与齐备静默」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-approve-gate-tick-nudge"
+    }
+  ]
+}
