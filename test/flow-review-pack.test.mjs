@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import {
   parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, PACK_MAX_CHARS,
 } from '../src/flow-review-pack.js'
+import { renderReviewerTaskbook } from '../src/flow-review.js'
 
 function makePackDir(requirementsText) {
   const root = mkdtempSync(join(tmpdir(), 'frpack-'))
@@ -164,5 +165,33 @@ test('② 体积帽：超限行级截断并注记，总长不超帽，确定性�
     // 确定性：同输入同输出（FR-02 纯机械主张的测试锚）
     const q = assembleReviewPack({ changeDir, patchText: bigPatch })
     assert.deepEqual(p, q)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('③ 注入/零注入：packLines 注入形态与位置、缺省/空数组与现状逐字一致', () => {
+  // 零注入三形态逐字一致（缺省/显式 null/空数组）——零回归锚
+  const args = { change: 'c-x', changeDir: '/x/c-x' }
+  const plain = renderReviewerTaskbook(args)
+  assert.equal(plain, renderReviewerTaskbook({ ...args, packLines: null }))
+  assert.equal(plain, renderReviewerTaskbook({ ...args, packLines: [] }))
+  assert.ok(!plain.includes('预消化材料包'))
+
+  const { root, changeDir } = makePackDir(REQ_TEXT)
+  try {
+    const pack = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
+    const base = renderReviewerTaskbook({ change: 'c-x', changeDir })
+    const withPack = renderReviewerTaskbook({ change: 'c-x', changeDir, packLines: pack.lines })
+    // 位置：材料段（change.patch 行）之后、检查单之前
+    const idxPatch = withPack.indexOf('change.patch（交付 diff 冻结件')
+    const idxPack = withPack.indexOf('【预消化材料包')
+    const idxCheck = withPack.indexOf('【检查单')
+    assert.ok(idxPatch > -1 && idxPack > idxPatch && idxCheck > idxPack)
+    // FR 表与摘要行逐字在场 + 基准面语义行随段在场
+    assert.ok(withPack.includes('FR-01: 任务书注入'))
+    assert.ok(withPack.includes('src/one.js（+4/-3，2 hunk）'))
+    assert.ok(withPack.includes('cannot_verify'))
+    // 手术式插入证明：摘除注入块后与零注入产物逐字一致（NL 常量防 shell 转义吃反斜杠）
+    const NL = String.fromCharCode(10)
+    assert.equal(withPack.replace(NL + NL + pack.lines.join(NL), ''), base)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

@@ -2312,7 +2312,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         for (const _w of _assembled.warnings) console.warn(`⚠️ review_probes：${_w}`)
         if (_assembled.lines.length > 0) _probeLines = _assembled.lines
       } catch { /* 探针面 fail-soft：装配失败零注入 */ }
-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines }))
+      // 预消化材料包装配（2026-10-19-thin-review-material-pack）：机械抽取 FR↔测试绑定表 +
+      // 冻结 patch 文件级摘要注入任务书——砍零上下文评审员的定位类读与大 patch 整吞 prefill；
+      // 摘要只从冻结件本身算（不走活 git，防与评审员手里冻结面漂移）；fail-soft 零注入。
+      let _packLines = null
+      try {
+        const { assembleReviewPack } = await import('./flow-review-pack.js')
+        const _pack = assembleReviewPack({ changeDir, patchText })
+        if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
+      } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
+      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
       reportMidFail('review')

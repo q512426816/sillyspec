@@ -220,7 +220,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
  * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
  * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
  */
-export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null }) {
+export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null, packLines = null }) {
   const headFull = String(head || '').trim()
   // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
   // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
@@ -266,6 +266,11 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
     `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
+    // 预消化材料包（2026-10-19-thin-review-material-pack）：CLI 机械抽取的 FR↔测试绑定表 +
+    // 冻结 patch 文件级摘要（flow-review-pack.js 装配，12000 帽行级截断）——砍零上下文评审员
+    // 的定位类读与大 patch 整吞 prefill；段自带基准面语义行（包=索引非证据）；缺省/空数组
+    // 零注入——任务书与现状逐字一致（既有调用方/既有测试零感知）。
+    ...(Array.isArray(packLines) && packLines.length > 0 ? ['', ...packLines] : []),
     ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
     ``,
     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
