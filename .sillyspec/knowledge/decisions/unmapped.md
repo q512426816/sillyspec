@@ -3446,3 +3446,11 @@ supersedes：D-004@v1
 锚点：flow.js/index.js/task-tick.js/complete-handlers.js
 最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
 理由：- **最大风险：读写点遗漏**（19 类家族散布 ~25 个源文件，读点比写点多——watcher-events 有 flow.js/index.js/task-tick.js/complete-handlers.js 四处读点）。对策：逐家族 grep 全仓读写点清单化（设计已列写入点文件清单），测试面 26 个既有测试文件做回归网，漏改即路径断裂当场暴露。 - **次风险：混版本并发窗口**旧进程写根目录——迁移幂等 + prune 双路径兜底，窗口内最坏情况是文件短暂在旧位置（读点已切新会读不到）→ 迁移重入收敛；db 备份/日志无状态语义，风险趋零。 - 试过放弃的方案：①`state/<change>/` 按 change 建子目录（prune 可 rm -rf 单目录更优雅）——文件名构造面翻倍、迁移映射复杂化，弃；②只做归档回收不动布局——根目录仍混放单例/日志/脚本，用户"统一下一级+temp"诉求不满足，弃；③迁移 sillyspec.db 进子目录——doctor 候选路径/平台指针/WAL 侧车多点引用，单文件非乱源，收益小于风险，弃。
+
+## D-unmapped-421@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-19-init-drop-gemini-opencode
+原编号：D-001@v1
+锚点：未记录
+最近确认：9a01342aa41bd725098f810dcf742c0d64562846
+理由：最大风险：Gemini CLI 用户选中 gemini 后 AGENTS.md 不被其自动加载（该 CLI 现默认 GEMINI.md），规则「看得见但没生效」——缓解：file-lifecycle 明写边界与自行引用办法；相比继续生成 GEMINI.md，这是用户明确要求的取舍。放弃的方案：①连同 gemini/opencode 工具类型一起下线（初版方案）——用户澄清否决，类型要保留；②选中 gemini/opencode 时什么都不生成——工具类型变成空壳选项（gemini 无 skills 目录，选中即零产物），AGENTS.md 落点至少保留规则源与 opencode 的原生加载；③保留 injectInstructions 但改成写 AGENTS.md——绕一圈等价于方案②的扩用，徒留死代码。

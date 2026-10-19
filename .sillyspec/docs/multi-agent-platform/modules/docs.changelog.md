@@ -28,3 +28,4 @@
 | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
 | 2026-10-16 | 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句 |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
+| 2026-10-19 | 2026-10-19-init-drop-gemini-opencode | init 移除 gemini/opencode 工具支持 |

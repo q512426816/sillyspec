@@ -1,0 +1,253 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+index 79188e80..274fa09d 100644
+--- a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+@@ -83,7 +83,7 @@ src/worktree.js:188  throw new Error(`changeName 不合法: "${changeName}"，
+ 涉及删除/清理的代码点有刻意保留的 `// ⚠️` 中文警示注释，指向同一份「真实资产」清单：
+ 
+ ```
+-src/init.js:301    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
++src/init.js:288    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）...
+ ```
+ 
+ **隐形规则**：任何会触碰 `.sillyspec/changes/`、`.sillyspec/projects/`、`.sillyspec/.runtime/sillyspec.db` 的清理/重置代码，必须保留 `// ⚠️ 必须保护真实资产` 注释并枚举受保护路径（平台模式 `platformMode` 下整体绕过清理段——项目内 `.sillyspec/` 常只有 local.yaml，整删丢配置）。修改这些函数时不可删除该注释。
+diff --git a/README.md b/README.md
+index 34dda5d5..d2d229f6 100644
+--- a/README.md
++++ b/README.md
+@@ -46,9 +46,9 @@ npx sillyspec init
+ | Claude Code（推荐） | `claude` | `AGENTS.md`（完整指引）+ `CLAUDE.md`（`@AGENTS.md` 指针）+ `.claude/skills/sillyspec-*/` |
+ | Cursor | `cursor` | `.cursor/skills/sillyspec-*/` |
+ | OpenAI Codex | `codex` | `AGENTS.md`（完整指引） |
+-| OpenCode | `opencode` | `INSTRUCTIONS.md` |
+ | OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-*/` |
+-| Gemini | `gemini` | `GEMINI.md` |
++| OpenCode | `opencode` | `AGENTS.md`（完整指引）+ `.opencode/skills/sillyspec-*/` |
++| Gemini | `gemini` | `AGENTS.md`（完整指引） |
+ 
+ ```bash
+ npx sillyspec init --tool claude      # 指定工具
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index d1bf0319..23de277a 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -108,7 +108,7 @@ updated_at: 2026-10-16（2026-10-16 批次：spec-sync 失败可观测性加固
+ 
+ - `AGENTS.md`：**唯一内容源**，`injectAgentsInstructions` 注入完整指引模板（`templates/agents-instruction.md`），版本感知幂等三态四分支；claude/codex 共用同一注入器（`--tool claude,codex` 同选不产生双段）。2026-10-10 起（全量方案）：追加态受管段内容也是完整模板全文——用户自有 AGENTS.md 只在文末追加带版本块标记的完整受管段，原文字节保留。老安装的 `## SillySpec` 旧小段（v≤3.32.3 追加态/injectInstructions 产物）在下次 init 时自动迁移为完整受管段（精确匹配优先，编辑过/CRLF 漂移回退按标题截除）。
+ - `CLAUDE.md`：薄指针文件，仅含 `@AGENTS.md` 导入行（Claude Code 记忆导入语法），由 `injectClaudePointer` 维护；用户自有 CLAUDE.md 只在文末追加受管指针块。2026-08-02 方案的旧完整态 CLAUDE.md 不自动覆盖，stderr 提示迁移。
+-- `GEMINI.md` / `INSTRUCTIONS.md`：与 AGENTS.md 同源同全文——`injectInstructions` 走同一全量注入器（`injectFullInstructions`），版本标记幂等（同版本跳过、异版本刷新块）；改 `@AGENTS.md` 指针需先验证两家对 `@` 导入语法的支持，留待后续变更。
++- `GEMINI.md` / `INSTRUCTIONS.md`：专属注入面已于 **2026-10-19 下线**——init 不再创建或改写这两份文件，gemini/opencode 选中时指引统一落 AGENTS.md（同注入器同全文）。OpenCode 原生读 AGENTS.md（官方 Rules 文档口径，INSTRUCTIONS.md 属旧口径）；Gemini CLI 现仍默认 GEMINI.md、AGENTS.md 未全面原生，如需自动加载可在其 GEMINI.md 中自行引用 AGENTS.md。既有 GEMINI.md/INSTRUCTIONS.md 不迁移不清理，受管段停留在下线前版本不再刷新（下线语义，用户文件字节保留）。
+ - 两文件同属「多操作者常改、非交付物」，已加入 worktree 基线 hash / dirty 检测 / `--stash-dirty` 的排除列表（`worktree.js` `computeBaselineHash` 与 `worktree-apply.js` step 4.5，与 `.claude/`、`docs/` 同口径）。
+ 
+ > **平台模式残留清理边界**（`init.js` `cleanupRuntimeResidue`，由 `run/command.js`（`runCommand`）启动时首次执行一次）：
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 547e5473..817e0868 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -164,8 +164,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:267`）公共入口，flag 在 `command.js:422`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+-- **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:282` 解析后经 `case 'init'`（`index.js:427`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **流程命令卡注入**（`init.js:436` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:285?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:428?` 条件行——2026-10-19 起五工具统一落 AGENTS.md，gemini/opencode 不再产 GEMINI.md/INSTRUCTIONS.md）。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:275` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:282` 解析后经 `case 'init'`（`index.js:427`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:681`/`493` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+ - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:912（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+diff --git a/src/init.js b/src/init.js
+index 39af3f30..b375f231 100644
+--- a/src/init.js
++++ b/src/init.js
+@@ -85,18 +85,8 @@ const TOOL_LABELS = {
+   cursor: 'Cursor',
+   openclaw: 'OpenClaw',
+   codex: 'OpenAI Codex (通过 AGENTS.md)',
+-  gemini: 'Gemini CLI (通过 GEMINI.md)',
+-  opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
+-};
+-
+-// 指令文件工具（gemini/opencode）。codex/claude/zcode 共用 AGENTS.md（跨工具通用标准内容源）；
+-// gemini/opencode 写各自指令文件，内容与 AGENTS.md 同源同全文（改 @AGENTS.md 指针需先验证
+-// 两家对 @ 导入语法的支持，留待后续变更）。
+-const INSTRUCTION_TOOLS = ['gemini', 'opencode'];
+-
+-const INSTRUCTION_FILE_MAP = {
+-  gemini: 'GEMINI.md',
+-  opencode: 'INSTRUCTIONS.md',
++  gemini: 'Gemini CLI',
++  opencode: 'OpenCode',
+ };
+ 
+ // ── 注入指令文件（全量方案，2026-10-10-init-full-injection：完整模板是唯一注入源）──
+@@ -145,7 +135,7 @@ function stripLegacySmallBlock(content) {
+ 
+ /**
+  * 向指引文件注入完整模板（版本感知幂等，三态四分支 + 旧标记迁移）。
+- * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 共用；完整模板（templates/agents-instruction.md）
++ * AGENTS.md 专用（GEMINI.md/INSTRUCTIONS.md 专属注入面 2026-10-19 下线）；完整模板（templates/agents-instruction.md）
+  * 是唯一注入源。取代 design: 2026-08-02-init-claude-md 的 CLAUDE.md 单文件方案与
+  * v≤3.32.3 的追加态小段方案（其 D-004 预留的「marker 方案迁移」即彼方案）。
+  * - 不存在：写完整模板 + 顶部版本注释
+@@ -210,12 +200,6 @@ export function injectAgentsInstructions(projectDir) {
+   injectFullInstructions(join(projectDir, 'AGENTS.md'));
+ }
+ 
+-export function injectInstructions(tool, projectDir) {
+-  const fileName = INSTRUCTION_FILE_MAP[tool];
+-  if (!fileName) return;
+-  injectFullInstructions(join(projectDir, fileName));
+-}
+-
+ /**
+  * 为 Claude Code 写 CLAUDE.md 指针（@AGENTS.md 导入，薄文件）。
+  * - 不存在：写指针文件（版本头注释 + @AGENTS.md）
+@@ -438,17 +422,10 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
+     }
+   }
+ 
+-  // 注入指令文件（gemini/opencode：与 AGENTS.md 同源同全文，共用全量注入器）
+-  for (let i = 0; i < tools.length; i++) {
+-    const toolName = tools[i];
+-    if (INSTRUCTION_TOOLS.includes(toolName)) {
+-      injectInstructions(toolName, projectDir);
+-    }
+-  }
+-
+-  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 小段迁移；
+-  // zcode 2026-09-21-flow-command-cards FR-05 入面——AGENTS.md 是跨工具通用标准内容源）
+-  if (tools.includes('claude') || tools.includes('codex') || tools.includes('zcode')) {
++  // 注入 AGENTS.md 完整指引（版本感知幂等三态四分支 + 旧 ## SillySpec 小段迁移）。
++  // 2026-10-19 起全工具统一落 AGENTS.md：gemini/opencode 不再产 GEMINI.md/INSTRUCTIONS.md
++  // （OpenCode 原生读 AGENTS.md；Gemini CLI 现默认 GEMINI.md，需自行引用 AGENTS.md，边界见 file-lifecycle）
++  if (tools.some((t) => ['claude', 'codex', 'zcode', 'gemini', 'opencode'].includes(t))) {
+     injectAgentsInstructions(projectDir);
+   }
+ 
+diff --git a/test/init-agents-injection.test.mjs b/test/init-agents-injection.test.mjs
+index ce48094f..926e37f7 100644
+--- a/test/init-agents-injection.test.mjs
++++ b/test/init-agents-injection.test.mjs
+@@ -1,9 +1,11 @@
+ /**
+  * init 注入 Agent 指引（全量方案 2026-10-10-init-full-injection：完整模板是唯一注入源，
+- * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
++ * 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
+  * + CLAUDE.md（@AGENTS.md 指针）。直接单测导出的注入器，无需走 cmdInit 重依赖。
++ * GEMINI.md/INSTRUCTIONS.md 专属注入面 2026-10-19 下线（gemini/opencode 统一落 AGENTS.md，
++ * CLI 层行为见 init-tool-multi Test 5），本套件只留 AGENTS.md/CLAUDE.md 注入器用例。
+  */
+-import { injectAgentsInstructions, injectClaudePointer, injectInstructions, getVersion } from '../src/init.js'
++import { injectAgentsInstructions, injectClaudePointer, getVersion } from '../src/init.js'
+ import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync } from 'fs'
+ import { join } from 'path'
+ import os from 'os'
+@@ -174,56 +176,6 @@ console.log('\n--- Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍
+   rmSync(root, { recursive: true, force: true })
+ }
+ 
+-// ══ GEMINI.md / INSTRUCTIONS.md（injectInstructions 全量注入，与 AGENTS.md 同源同全文）══
+-
+-// ── Case 12: 无文件 → 写完整模板 ──
+-console.log('\n--- Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）---')
+-{
+-  const root = makeTempProject()
+-  injectInstructions('gemini', root)
+-  const p = join(root, 'GEMINI.md')
+-  assert(existsSync(p), 'GEMINI.md 已生成')
+-  const content = readFileSync(p, 'utf8')
+-  assert(content.startsWith(`<!-- SillySpec v${VER} — `), '顶部版本注释')
+-  assert(content.includes('# Agent 指引'), '完整模板全文（与 AGENTS.md 同源）')
+-  assert(content.includes('改代码前必须先说明依据'), '含核心规则')
+-  assert(!content.includes('## SillySpec — 规范驱动开发'), '不含旧小段')
+-  rmSync(root, { recursive: true, force: true })
+-}
+-
+-// ── Case 13: 用户自有文件 → 追加完整受管段，同版本幂等 ──
+-console.log('\n--- Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等 ---')
+-{
+-  const root = makeTempProject()
+-  writeFileSync(join(root, 'INSTRUCTIONS.md'), `# My Notes\n\n自己的说明。\n`)
+-  injectInstructions('opencode', root)
+-  const p = join(root, 'INSTRUCTIONS.md')
+-  const first = readFileSync(p, 'utf8')
+-  assert(first.startsWith('# My Notes'), '原文保留在前')
+-  assert(first.includes('自己的说明'), '原文内容字节保留')
+-  assert(first.includes(`<!-- SillySpec v${VER} START`), '完整受管块开始标记')
+-  assert(first.includes('改代码前必须先说明依据'), '受管块为完整模板全文')
+-  const beforeMtime = statSync(p).mtimeMs
+-  injectInstructions('opencode', root)
+-  assert(readFileSync(p, 'utf8') === first, '同版本重跑内容不变（幂等）')
+-  assert(statSync(p).mtimeMs === beforeMtime, '同版本重跑不写文件')
+-  rmSync(root, { recursive: true, force: true })
+-}
+-
+-// ── Case 14: 老安装整文件即旧小段（v≤3.32.3 injectInstructions 新建产物）→ 迁移为完整受管块 ──
+-console.log('\n--- Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留 ---')
+-{
+-  const root = makeTempProject()
+-  const legacyOnly = LEGACY_SMALL.slice(LEGACY_SMALL.indexOf('## SillySpec'))
+-  writeFileSync(join(root, 'GEMINI.md'), legacyOnly)
+-  injectInstructions('gemini', root)
+-  const content = readFileSync(join(root, 'GEMINI.md'), 'utf8')
+-  assert(!content.includes('## SillySpec — 规范驱动开发'), '旧小段标题已迁移清除')
+-  assert(content.startsWith(`<!-- SillySpec v${VER} START`), '文件起始即完整受管块（截除后无空壳）')
+-  assert(content.includes('改代码前必须先说明依据'), '新内容为完整模板全文')
+-  rmSync(root, { recursive: true, force: true })
+-}
+-
+ // ══ CLAUDE.md 指针（injectClaudePointer）══
+ 
+ // ── Case 7: 无文件 → 写指针文件 ──
+diff --git a/test/init-tool-multi.test.mjs b/test/init-tool-multi.test.mjs
+index 0f313251..6e1bed05 100644
+--- a/test/init-tool-multi.test.mjs
++++ b/test/init-tool-multi.test.mjs
+@@ -7,10 +7,12 @@
+  * 3. --tool claude,foo 非法值 → exit 1 且报错含全部合法值
+  * 4. 单值回归：--tool codex 只写 AGENTS.md、不写 CLAUDE.md
+  * 5. 不带 --tool → detectTools 自动检测（零回归）
++ * 6. --tool gemini,opencode（2026-10-19 下线两专属文件）：不产 GEMINI.md/INSTRUCTIONS.md、
++ *    指引统一落 AGENTS.md；既有两文件重跑 init 字节不动
+  */
+ 
+ import { join, resolve, dirname } from 'path'
+-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
++import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+ import { fileURLToPath } from 'url'
+ import { execSync } from 'child_process'
+ import { tmpdir } from 'os'
+@@ -129,6 +131,33 @@ console.log('\n=== Test 4: 单值回归 + 自动检测 ===')
+   clean(project2, spec2)
+ }
+ 
++// ── Test 5: gemini/opencode 选中 → 不产专属文件，指引统一落 AGENTS.md ──
++console.log('\n=== Test 5: --tool gemini,opencode → 无 GEMINI.md/INSTRUCTIONS.md，AGENTS.md 统一落点 ===')
++{
++  const project = tmpDir('t5'), spec = tmpDir('t5-spec')
++  gitInit(project)
++  runOk(`node "${binCLI}" init "${project}" --tool gemini,opencode --spec-dir "${spec}" --no-skills`)
++  assert(!existsSync(join(project, 'GEMINI.md')), 'gemini 不再生成 GEMINI.md（注入面已下线）')
++  assert(!existsSync(join(project, 'INSTRUCTIONS.md')), 'opencode 不再生成 INSTRUCTIONS.md（注入面已下线）')
++  const agents = join(project, 'AGENTS.md')
++  assert(existsSync(agents), '指引统一落 AGENTS.md')
++  assert(readFileSync(agents, 'utf8').includes('# Agent 指引'), 'AGENTS.md 为完整模板（与 claude/codex 同源）')
++  clean(project, spec)
++
++  // 既有 GEMINI.md/INSTRUCTIONS.md（老安装产物/用户文件）重跑 init 字节不动
++  const project2 = tmpDir('t5b'), spec2 = tmpDir('t5b-spec')
++  gitInit(project2)
++  const legacyGemini = '# 老安装 GEMINI.md\n\n<!-- SillySpec v0.0.0-test START — 旧受管段 -->\n旧内容\n<!-- SillySpec END -->\n'
++  const legacyInstr = '# My Notes\n\n自己的说明。\n'
++  writeFileSync(join(project2, 'GEMINI.md'), legacyGemini)
++  writeFileSync(join(project2, 'INSTRUCTIONS.md'), legacyInstr)
++  runOk(`node "${binCLI}" init "${project2}" --tool opencode --spec-dir "${spec2}" --no-skills`)
++  assert(readFileSync(join(project2, 'GEMINI.md'), 'utf8') === legacyGemini, '既有 GEMINI.md 字节不动（不迁移不清理）')
++  assert(readFileSync(join(project2, 'INSTRUCTIONS.md'), 'utf8') === legacyInstr, '既有 INSTRUCTIONS.md 字节不动（不迁移不清理）')
++  assert(existsSync(join(project2, 'AGENTS.md')), '重跑 init 照常注入 AGENTS.md')
++  clean(project2, spec2)
++}
++
+ // ── 汇总 ──
+ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)

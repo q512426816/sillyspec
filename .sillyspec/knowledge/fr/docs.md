@@ -780,3 +780,67 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：本仓清理验收
 全文：.sillyspec/changes/archive/2026-10-18-runtime-relayout/requirements.md#FR-05
 最近确认：446d93fe321a1cf7366bbc00bdf269e640a97d00
+
+## FR-docs-041 init 不再生成/注入 GEMINI.md 与 INSTRUCTIONS.md
+变更：2026-10-19-init-drop-gemini-opencode
+状态：active
+摘要：选中 gemini/opencode 跑 init
+全文：.sillyspec/changes/archive/2026-10-19-init-drop-gemini-opencode/requirements.md#FR-01
+最近确认：9a01342aa41bd725098f810dcf742c0d64562846
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-01
+  tests: test/init-tool-multi.test.mjs「Test 5: --tool gemini,opencode → 不产 GEMINI.md/INSTRUCTIONS.md」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-init-drop-gemini-opencode
+  status: active
+
+## FR-docs-042 gemini/opencode 的指引落点统一并到 AGENTS.md
+变更：2026-10-19-init-drop-gemini-opencode
+状态：active
+摘要：--tool gemini 单选
+全文：.sillyspec/changes/archive/2026-10-19-init-drop-gemini-opencode/requirements.md#FR-02
+最近确认：9a01342aa41bd725098f810dcf742c0d64562846
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-02
+  tests: test/init-tool-multi.test.mjs「Test 5 同场景断言 AGENTS.md 生成」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-init-drop-gemini-opencode
+  status: active
+
+## FR-docs-043 相关测试与文档（README/file-lifecycle/scan）同步，测试面跑绿
+变更：2026-10-19-init-drop-gemini-opencode
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-19-init-drop-gemini-opencode/requirements.md#FR-03
+最近确认：9a01342aa41bd725098f810dcf742c0d64562846
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-03
+  tests: test/doc-ref-check.test.mjs「platform-interface-map 锚全绿」 | test/init-agents-injection.test.mjs「Cases 12-14 删除后全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-init-drop-gemini-opencode
+  status: active
+
+## FR-docs-044 边界：工具类型与检测面不动
+变更：2026-10-19-init-drop-gemini-opencode
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-19-init-drop-gemini-opencode/requirements.md#FR-04
+最近确认：9a01342aa41bd725098f810dcf742c0d64562846

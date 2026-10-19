@@ -1,0 +1,48 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  init 移除 gemini/opencode 工具支持
+
+
+  动机：用户要求工具矩阵瘦身——init 不再提供 gemini（GEMINI.md）与 opencode（INSTRUCTIONS.md）两个工具选项，不再生成/注入这两份指令文件。选道依据：上一轮已定位 init.js
+  工具映射面（VALID_TOOLS/INSTRUCTION_FILE_MAP/detectTools/skills 目录），需求已含决策。
+
+
+  成功标准：
+
+  - sillyspec init 的工具选择（--tool 校验与交互列表）不再出现 gemini、opencode
+
+  - init 不再生成/注入 GEMINI.md 与 INSTRUCTIONS.md（detectTools 也不再据这两文件反推工具）
+
+  - 相关测试与文档（README/file-lifecycle/scan）同步，测试面跑绿
+
+  - 边界：agent-session-log 的 opencode 会话探测器不动（属会话日志子系统，非 init 工具面）
+autopilot: false
+prestage_ack: true
+baseline_commit: 9b8a1031fff3966e85fee2f2b45dbd76ecd9aca7
+updatedAt: '2026-10-19T03:01:39.190Z'
+baseline_sha256: 1b3d0ab9b8a4b556aba6615bcdc096937249e163038bb16bc1d26ede5cc6a613
+spec_approved: true
+spec_approved_at: '2026-10-19T02:50:18.419Z'
+spec_approved_by: zcode-drop-gemini-opencode
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-drop-gemini-opencode
+gate_summary: >-
+  test: skipped ← module[]+deps(js29+js-meta-skip1+nontest-skip1)+fr(28)（6.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261019030020\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（46.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261019030020\test-result.json｜门文件 8 个
+

@@ -6,11 +6,15 @@ created_at: 2026-10-19T02:39:15.721Z
 
 ## 做法概述
 
+本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+
 下线 GEMINI.md / INSTRUCTIONS.md 两份专属指令文件的生成面，gemini/opencode 工具类型保留。src/init.js 三点改动：删 `INSTRUCTION_TOOLS`/`INSTRUCTION_FILE_MAP` 常量与 `injectInstructions` 导出及 doInstall 里的注入循环（这是写这两文件的唯一路径）；AGENTS.md 注入条件从 claude/codex/zcode 扩到含 gemini/opencode（选中即落 AGENTS.md，同源同全文）；TOOL_LABELS 去掉「(通过 GEMINI.md)/(通过 INSTRUCTIONS.md)」后缀。依据：OpenCode 官方默认指令文件已是 AGENTS.md（opencode.ai/docs/rules），INSTRUCTIONS.md 属旧口径；AGENTS.md 是本仓既定跨工具内容源。Gemini CLI 现仍默认 GEMINI.md（AGENTS.md 未全面原生）——对 gemini 而言 AGENTS.md 是可查规则源，用户可自行在 GEMINI.md 引用，边界记入 file-lifecycle。
 
 范围修正留痕：初版方案（2026-10-19 首稿）曾按「移除 gemini/opencode 工具类型」设计，用户澄清后收窄为「只去两文件生成、类型保留」——本稿为修正版。
 
 ## 接口契约
+
+动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
 - CLI 行为：`--tool` 合法值不变（七值）；`--tool gemini`/`--tool opencode` 仍可选中，产物变化 = 不再产出 GEMINI.md/INSTRUCTIONS.md、改为产出 AGENTS.md（完整指引）；opencode 的 `.opencode/skills` 复制不变。
 - src/init.js 导出：删 `injectInstructions(tool, projectDir)`；`injectAgentsInstructions`/`injectClaudePointer`/`detectTools`/`cmdInit` 签名不变。
@@ -29,6 +33,8 @@ created_at: 2026-10-19T02:39:15.721Z
    注入目标均为项目根单文件、按目录隔离，无跨仓串面；detectTools 目录级检测不变；agent-session-log 的 opencode 探测器（数据目录级、平台日志协议）不动，与 init 工具面无共享状态。
 
 ## 风险与死路
+
+本方案最大的风险是什么？试过但放弃的方案及放弃理由？
 
 最大风险：Gemini CLI 用户选中 gemini 后 AGENTS.md 不被其自动加载（该 CLI 现默认 GEMINI.md），规则「看得见但没生效」——缓解：file-lifecycle 明写边界与自行引用办法；相比继续生成 GEMINI.md，这是用户明确要求的取舍。放弃的方案：①连同 gemini/opencode 工具类型一起下线（初版方案）——用户澄清否决，类型要保留；②选中 gemini/opencode 时什么都不生成——工具类型变成空壳选项（gemini 无 skills 目录，选中即零产物），AGENTS.md 落点至少保留规则源与 opencode 的原生加载；③保留 injectInstructions 但改成写 AGENTS.md——绕一圈等价于方案②的扩用，徒留死代码。
 

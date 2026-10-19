@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-init-drop-gemini-opencode",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-01",
+      "tests": [
+        "test/init-tool-multi.test.mjs「Test 5: --tool gemini,opencode → 不产 GEMINI.md/INSTRUCTIONS.md」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-init-drop-gemini-opencode"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-02",
+      "tests": [
+        "test/init-tool-multi.test.mjs「Test 5 同场景断言 AGENTS.md 生成」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-init-drop-gemini-opencode"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-init-drop-gemini-opencode:flow:测试绑定FR-03",
+      "tests": [
+        "test/doc-ref-check.test.mjs「platform-interface-map 锚全绿」",
+        "test/init-agents-injection.test.mjs「Cases 12-14 删除后全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-init-drop-gemini-opencode"
+    }
+  ]
+}

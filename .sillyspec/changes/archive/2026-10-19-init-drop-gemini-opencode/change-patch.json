@@ -1,0 +1,129 @@
+{
+  "change": "2026-10-19-init-drop-gemini-opencode",
+  "baseline": "9b8a1031fff3966e85fee2f2b45dbd76ecd9aca7",
+  "head": "9a01342aa41bd725098f810dcf742c0d64562846",
+  "files": [
+    ".sillyspec/docs/sillyspec/scan/CONVENTIONS.md",
+    "README.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "src/init.js",
+    "test/init-agents-injection.test.mjs",
+    "test/init-tool-multi.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 47,
+    "deletions": 89
+  },
+  "savedAt": "2026-10-19T03:01:37.663Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 2,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 1,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "9b8a1031fff3966e85fee2f2b45dbd76ecd9aca7",
+    "totals": {
+      "files": 7,
+      "additions": 47,
+      "deletions": 89
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/scan/CONVENTIONS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "README.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/init.js",
+        "additions": 7,
+        "deletions": 30,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/init-agents-injection.test.mjs",
+        "additions": 4,
+        "deletions": 52,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/init-tool-multi.test.mjs",
+        "additions": 30,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "97a4ebba1644d5576adb615cf904cf8141575febcfdd32eeedb41f051977afa9",
+  "patchStatus": "ok"
+}
