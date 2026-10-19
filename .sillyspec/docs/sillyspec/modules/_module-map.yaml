@@ -60,6 +60,7 @@ modules:
       - src/flow-state.js
       - src/flow-draft.js
       - src/flow-review.js
+      - src/flow-review-pack.js
       - src/review-probes.js
       - src/flow-parity.js
 
