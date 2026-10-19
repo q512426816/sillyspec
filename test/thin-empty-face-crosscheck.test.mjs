@@ -55,7 +55,8 @@ function makeRepo(opts = {}) {
     git(lib, ['add', '.'])
     git(lib, ['commit', '-qm', 'base'])
     FIXTURE_REPOS.set(cwd, lib)
-    yaml += `repos:\n  libx: ${lib.replace(/\\/g, '/')}\n`
+    // deadkey：不可达注册仓（跨仓对账降级形态；只在显式声明 deadkey 条目的用例里出现）
+    yaml += `repos:\n  libx: ${lib.replace(/\\/g, '/')}\n  deadkey: C:/nonexistent-deadkey-path-xyz\n`
   }
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), yaml)
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
@@ -263,7 +264,7 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
     git(lib, ['add', 'impl.txt'])
     git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
     writeFileSync(join(lib, 'fix.txt'), 'fix\n')
-    fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt'].join('\n'))
+    fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt', '', '### deadkey', '', '- src/dead.js'].join('\n'))
     tickTasks(specBase, cwd, change)
     writeReviewFixture(specBase, cwd, change)
     const s2 = cli(cwd, ['flow', 'done', '--change', change])
@@ -276,10 +277,15 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
     assert.equal(meta.patchStatus, 'ok', '冻结成功状态（非 failed）')
     assert.deepEqual(meta.files, [], '主仓 files 为空')
     const repos = (meta.scopeAudit || {}).repos || []
-    assert.equal(repos.length, 1, '一条跨仓条目')
-    assert.equal(repos[0].key, 'libx')
-    assert.match(repos[0].patch, /impl\.txt/, '提交交付进 patch')
-    assert.match(repos[0].patch, /fix\.txt/, '工作树交付进 patch')
+    assert.equal(repos.length, 2, '健康仓 + 降级仓都原样保留')
+    const libRepo = repos.find((r) => r.key === 'libx')
+    const deadRepo = repos.find((r) => r.key === 'deadkey')
+    assert.ok(libRepo && deadRepo, '两仓条目都在')
+    assert.match(libRepo.patch, /impl\.txt/, '提交交付进 patch')
+    assert.match(libRepo.patch, /fix\.txt/, '工作树交付进 patch')
+    assert.match(libRepo.patchSha256, /^[0-9a-f]{64}$/, '跨仓 patch 正文带 sha256 锚')
+    assert.equal(deadRepo.degraded, true, '降级仓条目不丢')
+    assert.ok(deadRepo.degradedReason, '降级原因随条目留档')
     const vr = readFileSync(join(arch, 'verify-result.md'), 'utf8')
     assert.match(vr, /跨仓 1 仓/, '回执报跨仓冻结')
     assert.doesNotMatch(vr, /无冻结件/, '回执不再写无冻结件')

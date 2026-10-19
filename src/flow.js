@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync, unlinkSync } from 'node:fs'
 import { runtimeStatePath, runtimeTempPath } from './runtime-paths.js'
 import { join, relative, dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -2051,12 +2051,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             })
             emptyFaceCrossRows = recon.rows
             // 「有交付」判定按对账三态行，不按 totals.files——后者含声明未动的 untouched
-            // 占位行（空仓也会得到 files>0，导致空面误落 JSON-only 留档）。
+            // 占位行（空仓也会得到 files>0，导致空面误落 JSON-only 留档）。判定只决定
+            // 落不落件；落件时 repos[] 原样携带全部仓（含降级仓与 degradedReason——
+            // 与非空主仓分支同口径，读侧可感知采集失败面）。
             const deliveredRepoKeys = new Set((Array.isArray(recon.rows) ? recon.rows : [])
               .filter((r) => r && r.crossRepo && r.verdict !== 'untouched')
               .map((r) => r.crossRepo))
-            emptyFaceCrossRepos = (recon.repos || []).filter((r) => r && !r.degraded
-              && (deliveredRepoKeys.has(r.key) || (typeof r.patch === 'string' && r.patch.length > 0)))
+            const hasDelivered = deliveredRepoKeys.size > 0
+              || (recon.repos || []).some((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
+            emptyFaceCrossRepos = hasDelivered ? (recon.repos || []) : []
             for (const n of recon.notes) console.log(`   📎 ${n}`)
           } catch { /* 跨仓对账失败 → 退回空面跳过（fail-soft 不新造阻断面） */ }
         }
@@ -2089,6 +2092,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               modules: [], uncoveredDirs: [], moduleMaps: [],
             },
           })
+          // 重冻结到空主仓面时清掉旧 change.patch：JSON-only 语义下残留的旧正文与
+          // 新 JSON（无顶级 patchSha256）互相矛盾，读侧无法判断哪份是当前冻结面。
+          const stalePatchPath = join(changeDir, 'change.patch')
+          if (existsSync(stalePatchPath)) {
+            try { unlinkSync(stalePatchPath) } catch (e) {
+              console.warn(`⚠️ 旧 change.patch 清理失败（${e.message}）——JSON-only 留档旁存在旧正文，请人工删除后重跑`)
+            }
+          }
           const frozenRepos = emptyFaceCrossRepos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
           console.log(`📦 空面跨仓 patch 留档：change-patch.json（主仓面为空，跨仓 ${emptyFaceCrossRepos.length} 仓、正文 ${frozenRepos}——diff 见 scopeAudit.repos[]）`)
           patchOk = closeTrace.patchStatus === 'ok'

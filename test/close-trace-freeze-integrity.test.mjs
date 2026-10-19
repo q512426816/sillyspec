@@ -283,6 +283,8 @@ test('inspectFreezeArtifacts：JSON-only 跨仓冻结判完整，两缺/坏 JSON
     assert.equal(inspectFreezeArtifacts(dir).complete, false, 'repos 无正文且无 patch → 缺件')
     writeFileSync(join(dir, 'change-patch.json'), '{bad json')
     assert.equal(inspectFreezeArtifacts(dir).complete, false, '坏 JSON → 缺件')
+    writeFileSync(join(dir, 'change.patch'), 'diff --git a/a.js b/a.js\n')
+    assert.equal(inspectFreezeArtifacts(dir).complete, false, '坏 JSON + change.patch 在场仍判缺件（元数据不可信）')
     writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: ['a.js'], totals: { files: 1 } }))
     writeFileSync(join(dir, 'change.patch'), 'diff --git a/a.js b/a.js\n')
     assert.equal(inspectFreezeArtifacts(dir).complete, true, '两件齐全 → 完整')

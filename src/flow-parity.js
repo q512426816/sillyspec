@@ -433,16 +433,20 @@ export function inspectFreezeArtifacts(changeDir) {
   const hasJson = existsSync(patchJsonPath)
   const hasText = existsSync(patchTextPath)
   let repoPatchCount = 0
+  let jsonOk = false
   if (hasJson) {
     try {
       const meta = JSON.parse(readFileSync(patchJsonPath, 'utf8'))
+      jsonOk = true
       const repos = meta && meta.scopeAudit && meta.scopeAudit.repos
       if (Array.isArray(repos)) {
         repoPatchCount = repos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
       }
-    } catch { /* 坏 JSON → 无跨仓正文，按缺件处理 */ }
+    } catch { /* 坏 JSON → 按缺件处理（重冻结兜底） */ }
   }
-  return { hasJson, hasText, repoPatchCount, complete: hasJson && (hasText || repoPatchCount > 0) }
+  // jsonOk 与 hasText 必须同时成立：change.patch 在场但 change-patch.json 损坏时，
+  // 冻结元数据已不可信（审计面缺锚），不能因正文文件在就判完整。
+  return { hasJson, hasText, repoPatchCount, complete: jsonOk && (hasText || repoPatchCount > 0) }
 }
 
 export function detectPatchDrift({ cwd, change, freezeHead }) {
