@@ -379,9 +379,23 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
  * 反解，baseline 自 flow-state.yaml 读取；不可得（非 git 仓/无 flow-state/git 失败/归档后
  * 目录已移走）= 行为与旧版完全一致。保守：被无后缀裸提交触碰过的文件不剔（fail-closed）。
  */
+// 工具治理模板（2026-10-19-freeze-filter-tool-scaffold）：各 agent 工具的
+// skills/commands/settings 注入面——不是本项目的交付语义，冻结面出现只会刷屏
+// 真实交付（消防工作区 4e9eb05b 实证：61 文件里 50 个是 .claude/.codex 模板）。
+// AGENTS.md / INSTRUCTIONS.md 是项目级指令（可能是变更的真实交付），保留。
+const TOOL_GOVERNANCE_DIRS = ['.claude/', '.codex/', '.gemini/', '.opencode/', '.zcode/', '.cursor/']
+const TOOL_GOVERNANCE_FILES = new Set(['CLAUDE.md'])
+
+export function isToolGovernancePath(f) {
+  const p = String(f || '').replace(/\\/g, '/')
+  if (!p) return false
+  return TOOL_GOVERNANCE_FILES.has(p) || TOOL_GOVERNANCE_DIRS.some((d) => p.startsWith(d))
+}
+
 export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
   const base = committedRaw
     .map((f) => String(f).replace(/\\/g, '/'))
+    .filter((p) => !isToolGovernancePath(p))
     .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith('.sillyspec/docs/'))
   try {
     const cwd = opts.cwd || process.cwd()
@@ -510,6 +524,7 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
  */
 export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+    && !isToolGovernancePath(f)
   let dirty = []
   try {
     // -uall（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：全新目录会折叠成
@@ -587,6 +602,7 @@ export function scanOrphanFace(cwd, { baseline } = {}) {
     .split('\n').map((s) => s.trim()).filter(Boolean)
   const isAncestor = (sha, of) => git(['merge-base', '--is-ancestor', sha, of], {}) !== null
   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+    && !isToolGovernancePath(f)
   const orphanCommits = []
   const orphanFiles = new Set()
   for (const h of [...new Set(reflogHashes)]) {

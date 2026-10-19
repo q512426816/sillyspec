@@ -364,3 +364,33 @@ test('无清单段 + 注册跨仓零改动 → 探测零输出', () => {
     rmSync(cwd, { recursive: true, force: true })
   }
 })
+
+// ── 2026-10-19-freeze-filter-tool-scaffold：工具治理模板不入冻结面 ──
+test('e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留', () => {
+  const cwd = makeRepo()
+  const change = '2026-10-19-tefc-tool-filter'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '工具治理模板不入冻结面\n成功标准：\n- 模板剔除源码保留', '--autopilot']).status, 0)
+    mkdirSync(join(cwd, 'src'), { recursive: true })
+    mkdirSync(join(cwd, '.claude', 'skills', 'x'), { recursive: true })
+    writeFileSync(join(cwd, '.claude', 'skills', 'x', 'SKILL.md'), '# template\n')
+    writeFileSync(join(cwd, 'CLAUDE.md'), '# instr\n')
+    writeFileSync(join(cwd, 'src', 'ok.js'), 'ok\n')
+    git(cwd, ['add', '.claude', 'CLAUDE.md', 'src', 'base.txt'])
+    git(cwd, ['commit', '-qm', `chore: 模板+实现 (${change})`])
+    fillDocs(specBase, change)
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `tool-filter: ${s2.stdout}\n${s2.stderr}`)
+    const arch = join(specBase, 'changes', 'archive', change)
+    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
+    assert.deepEqual(meta.files, ['src/ok.js'], '只有源码入冻结面')
+    const patchText = readFileSync(join(arch, 'change.patch'), 'utf8')
+    assert.match(patchText, /src\/ok\.js/, '源码在 patch 内')
+    assert.doesNotMatch(patchText, /\.claude|CLAUDE\.md/, '模板不入 patch')
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})

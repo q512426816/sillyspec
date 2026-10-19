@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { filterCommittedFace } from '../src/flow-parity.js'
+import { filterCommittedFace, isToolGovernancePath } from '../src/flow-parity.js'
 
 const OWN = '.sillyspec/changes/2026-09-27-tool-debt-cleanup/'
 
@@ -43,4 +43,38 @@ test('knowledge 与他侧 docs 外的 .sillyspec 面仍滤除', () => {
 test('反斜杠路径归一后同口径判定', () => {
   const r = filterCommittedFace(['.sillyspec\\docs\\sillyspec\\modules\\setup.md'], OWN)
   assert.deepEqual(r, ['.sillyspec/docs/sillyspec/modules/setup.md'])
+})
+
+// ── 工具治理模板剔除（2026-10-19-freeze-filter-tool-scaffold）──
+// .claude/.codex/.gemini/.opencode/.zcode/.cursor 与 CLAUDE.md 不入冻结面；
+// AGENTS.md / INSTRUCTIONS.md 是项目级指令，保留为交付面。
+test('工具治理模板剔除，项目指令文件保留', () => {
+  const r = filterCommittedFace([
+    '.claude/skills/x/SKILL.md',
+    '.claude/commands/sillyspec/flow.md',
+    '.codex/skills/sillyspec-flow/SKILL.md',
+    '.gemini/settings.json',
+    '.opencode/config.json',
+    '.zcode/skills/a/SKILL.md',
+    '.cursor/rules.md',
+    'CLAUDE.md',
+    'AGENTS.md',
+    'INSTRUCTIONS.md',
+    'src/flow.js',
+  ], OWN)
+  assert.deepEqual(r, ['AGENTS.md', 'INSTRUCTIONS.md', 'src/flow.js'])
+})
+
+test('反斜杠工具模板同样剔除', () => {
+  const r = filterCommittedFace(['.claude\\skills\\x\\SKILL.md', 'CLAUDE.md', 'src\\flow.js'], OWN)
+  assert.deepEqual(r, ['src/flow.js'])
+})
+
+test('isToolGovernancePath 只认工具注入面（AGENTS.md 返回 false）', () => {
+  assert.equal(isToolGovernancePath('.claude/x'), true)
+  assert.equal(isToolGovernancePath('.codex/skills/y'), true)
+  assert.equal(isToolGovernancePath('CLAUDE.md'), true)
+  assert.equal(isToolGovernancePath('CLAUDE.md.bak'), false)
+  assert.equal(isToolGovernancePath('AGENTS.md'), false)
+  assert.equal(isToolGovernancePath('src/CLAUDE.md'), false)
 })
