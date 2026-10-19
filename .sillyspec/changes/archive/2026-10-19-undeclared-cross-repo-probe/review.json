@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-undeclared-cross-repo-probe",
+  "reviewer": "subagent（ZCode 独立子代理）",
+  "verdict": "PASS",
+  "reviewedAgainst": "4d377821eec89934dbd5a81b4b62d548e2b45639",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "冻结面混入上一变更的 changelog 条目（文件级归属：前序变更）",
+      "evidence": "change.patch 第 9 行新增 `2026-10-19-thin-empty-face-cross-repo-freeze` 行；本变更 requirements/design/tasks 均未提该行，HEAD 同时把该变更目录移入 archive（git show --name-status HEAD 可见 R100/R096/A 条目）。同 commit 的 src/flow.js 与 test 才是本变更交付面。行内容本身准确、无功能影响，但冻结面归属被污染。",
+      "location": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md:72（冻结于 .sillyspec/changes/2026-10-19-undeclared-cross-repo-probe/change.patch:9）"
+    },
+    {
+      "severity": "P3",
+      "title": "并发误报披露只覆盖未提交面，零 token 回退会纳入他会话已提交改动",
+      "evidence": "3c 窗口在 `_tokenHit=false` 时用 `git diff --name-only <baseline>` 取全窗口（cross-repo-reconcile.js:299-306），他会话窗口内已提交改动同样会被点名；flow.js:2062 文案只写「未提交面可能含并行会话改动」。仅 console.warn、不阻断，但人工确认提示低估了误报来源。",
+      "location": "src/cross-repo-reconcile.js:299-306；src/flow.js:2062"
+    },
+    {
+      "severity": "P3",
+      "title": "探测传 runtimeRoot/changeName，A 档 reviews-range 可先于 cross_baselines 3c 窗口命中",
+      "evidence": "flow.js:2051-2052 传入 runtimeRoot+changeName；collectRepoActual 先试 tryCollectReviewsRange（cross-repo-reconcile.js:223-229），命中即返回该区间文件集，不再走 design 所称的 3c 基线窗口。thin 无 execute-run 时无影响；存在同变更 runtime 执行面时窗口可能窄于 cross_baselines..工作树，属边缘假阴性面。",
+      "location": "src/flow.js:2051；src/cross-repo-reconcile.js:223"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok：以 flow start 记录的 cross_baselines 为锚，收口一次性判定，无事件序依赖",
+    "并发": "ok：并行未提交 WIP 可致误报但仅 console.warn、无退出/状态写入；文案只提未提交面（见 P3）",
+    "切换": "ok：逐仓 + 整体 try/catch，单仓/整体探测失败均不阻断；只读、幂等",
+    "作用域": "ok：仅读当前 specBase 的 local.yaml 与注册仓；路径解析与 flow start 同源（绝对路径直用，相对路径 resolve(cwd)）"
+  },
+  "reviewedAt": "2026-10-19T18:30:43+08:00"
+}

@@ -1,0 +1,42 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  未标注跨仓交付窗口探测
+
+
+  动机与背景：消防工作区 4e9eb05b 实证——thin 变更 design 无「文件变更清单」段或裸写目录前缀时，主仓冻结面为空或只剩附件/治理模板，真实代码全在注册跨仓窗口内但零告警（2026-10-12..2026-10-19
+  共 14 例）。既有空面门只拦「清单有未标注条目」形态，无清单/全标注两种形态仍静默。
+
+
+  成功标准：
+
+  - 无跨仓规范标注且 local.yaml 注册仓非空时，收口探测各注册仓窗口（cross_baselines..工作树），有交付改动即点名仓键/文件数并给出规范标注三选一指引
+
+  - 探测为 advisory 不阻断；纯文档变更/单仓工作区/跨仓窗口零改动时零输出
+
+  - 新增用例覆盖命中与零触发两态，既有空面门/跨仓冻结测试全绿
+autopilot: true
+prestage_ack: true
+baseline_commit: ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
+updatedAt: '2026-10-19T10:31:18.889Z'
+baseline_sha256: 1fd0170ff85b81d65eea193e66c612934310e8b13ffaecbd009310726d580957
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js90+js-meta-skip1+nontest-skip1)+fr(92)（56.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261019102508\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（43.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261019102508\test-result.json｜门文件 5 个
+

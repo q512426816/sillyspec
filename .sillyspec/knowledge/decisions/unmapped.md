@@ -3486,3 +3486,11 @@ supersedes：D-004@v1
 锚点：src/flow.js
 最近确认：ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
 理由：最大风险：JSON-only 形态对下游读方是新语义——若某读方仍假设「change.patch 必在场」会误判缺件；本次已同步改本仓存在性复查与 verify 回执，平台读侧由后续独立变更适配（消费 repos 元数据）。放弃方案：①把跨仓正文拼进 change.patch——混仓 diff 的 hunk 会按主仓路径解析，读方错位；②对「全规范跨仓标注+空面」直接阻断要求签收——该工作区跨仓交付是常态，阻断等于对常态路径收税，且不产生审计证据。 **已声明的边界（显式裁决面）**：冻结面归属是文件级而非 hunk 级——baseline..HEAD 中并行会话对同一文件的提交会以整文件 diff 混入本变更 change.patch（本仓本轮实证：2026-10-19-thin-order-canon 对 `src/flow.js` 的改动混入）。缓解：AGENTS.md 规则 11 的显式 pathspec 提交保证本变更自身提交只含自身 hunks；收口评审按 git log/show 核对归属。彻底修复（按归属提交逐笔生成 patch）会改变所有 thin 变更的冻结口径，需独立变更立项，不在本次范围。另：`change-patch.json` 损坏时即使 change.patch 在场也判缺件（元数据不可信 → 重冻结），JSON-only 重冻结会清理残留的旧 change.patch。
+
+## D-unmapped-426@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-19-undeclared-cross-repo-probe
+原编号：D-001@v1
+锚点：未记录
+最近确认：4d377821eec89934dbd5a81b4b62d548e2b45639
+理由：最大风险：未提交面无法归属，并行会话在注册仓的 WIP 可能被点名为「本变更未标注交付」——故只做 advisory 且文案标注「疑似/人工确认」，不做阻断。放弃方案：①按文件类别判定「仅脚手架面」（类别表会随工具演进漂移、误伤合法 skill 变更，且生产实证的 `.codex/**` 不在旧分类集内）——改用真实窗口 diff 作证据；②升级为阻断+签收——跨仓交付是该工作区常态，阻断等于对常态路径收税，且探测本身可能受并行 WIP 干扰，宁 advisory。

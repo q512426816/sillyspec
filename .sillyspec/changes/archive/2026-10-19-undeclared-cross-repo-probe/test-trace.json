@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-undeclared-cross-repo-probe",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓有交付 → 窗口探测点名（advisory 不阻断）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-undeclared-cross-repo-probe"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓零改动 → 探测零输出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-undeclared-cross-repo-probe"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-03",
+      "tests": [
+        "test/cross-repo-baseline-anchor.test.mjs",
+        "test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓有交付 → 窗口探测点名（advisory 不阻断）」",
+        "test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓零改动 → 探测零输出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-undeclared-cross-repo-probe"
+    }
+  ]
+}

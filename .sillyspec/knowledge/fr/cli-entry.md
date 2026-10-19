@@ -10446,3 +10446,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-19-thin-empty-face-cross-repo-freeze
   status: active
+
+## FR-cli-entry-552 无跨仓规范标注且 local.yaml 注册仓非空时，收口探测各注册仓窗口（cross_baselines..工作树），有交付改动即点名仓键/文件数并给出规范标注三选一指引
+变更：2026-10-19-undeclared-cross-repo-probe
+状态：active
+摘要：命中未标注跨仓交付
+全文：.sillyspec/changes/archive/2026-10-19-undeclared-cross-repo-probe/requirements.md#FR-01
+最近确认：4d377821eec89934dbd5a81b4b62d548e2b45639
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-01
+  tests: test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓有交付 → 窗口探测点名（advisory 不阻断）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-undeclared-cross-repo-probe
+  status: active
+
+## FR-cli-entry-553 探测为 advisory 不阻断；纯文档变更/单仓工作区/跨仓窗口零改动时零输出
+变更：2026-10-19-undeclared-cross-repo-probe
+状态：active
+摘要：零改动
+全文：.sillyspec/changes/archive/2026-10-19-undeclared-cross-repo-probe/requirements.md#FR-02
+最近确认：4d377821eec89934dbd5a81b4b62d548e2b45639
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-02
+  tests: test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓零改动 → 探测零输出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-undeclared-cross-repo-probe
+  status: active
+
+## FR-cli-entry-554 新增用例覆盖命中与零触发两态，既有空面门/跨仓冻结测试全绿
+变更：2026-10-19-undeclared-cross-repo-probe
+状态：active
+摘要：验证面
+全文：.sillyspec/changes/archive/2026-10-19-undeclared-cross-repo-probe/requirements.md#FR-03
+最近确认：4d377821eec89934dbd5a81b4b62d548e2b45639
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-undeclared-cross-repo-probe:flow:测试绑定FR-03
+  tests: test/cross-repo-baseline-anchor.test.mjs | test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓有交付 → 窗口探测点名（advisory 不阻断）」 | test/thin-empty-face-crosscheck.test.mjs「无清单段 + 注册跨仓零改动 → 探测零输出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-undeclared-cross-repo-probe
+  status: active
