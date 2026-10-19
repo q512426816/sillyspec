@@ -181,11 +181,12 @@ test('③ 注入/零注入：packLines 注入形态与位置、缺省/空数组�
     const pack = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
     const base = renderReviewerTaskbook({ change: 'c-x', changeDir })
     const withPack = renderReviewerTaskbook({ change: 'c-x', changeDir, packLines: pack.lines })
-    // 位置：材料段（change.patch 行）之后、检查单之前
-    const idxPatch = withPack.indexOf('change.patch（交付 diff 冻结件')
+    // 位置：材料段之后、检查单之前（锚材料段头而非 patch 行——冻结形态三分支文案
+    // 由 2026-10-19-thin-empty-face-cross-repo-freeze 按在场件切换，钉死单分支会误伤）
+    const idxMaterial = withPack.indexOf('【材料（按需 Read')
     const idxPack = withPack.indexOf('【预消化材料包')
     const idxCheck = withPack.indexOf('【检查单')
-    assert.ok(idxPatch > -1 && idxPack > idxPatch && idxCheck > idxPack)
+    assert.ok(idxMaterial > -1 && idxPack > idxMaterial && idxCheck > idxPack)
     // FR 表与摘要行逐字在场 + 基准面语义行随段在场
     assert.ok(withPack.includes('FR-01: 任务书注入'))
     assert.ok(withPack.includes('src/one.js（+4/-3，2 hunk）'))
