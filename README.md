@@ -46,9 +46,9 @@ npx sillyspec init
 | Claude Code（推荐） | `claude` | `AGENTS.md`（完整指引）+ `CLAUDE.md`（`@AGENTS.md` 指针）+ `.claude/skills/sillyspec-*/` |
 | Cursor | `cursor` | `.cursor/skills/sillyspec-*/` |
 | OpenAI Codex | `codex` | `AGENTS.md`（完整指引） |
-| OpenCode | `opencode` | `INSTRUCTIONS.md` |
 | OpenClaw | `openclaw` | `.openclaw/skills/sillyspec-*/` |
-| Gemini | `gemini` | `GEMINI.md` |
+| OpenCode | `opencode` | `AGENTS.md`（完整指引）+ `.opencode/skills/sillyspec-*/` |
+| Gemini | `gemini` | `AGENTS.md`（完整指引） |
 
 ```bash
 npx sillyspec init --tool claude      # 指定工具
