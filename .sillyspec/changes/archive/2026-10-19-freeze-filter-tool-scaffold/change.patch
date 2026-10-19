@@ -1,0 +1,142 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 925da360..2cf3c68c 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -70,3 +70,4 @@
+ | 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+ | 2026-10-19 | 2026-10-19-thin-review-material-pack | 轻量评审任务书预消化材料包 |
+ | 2026-10-19 | 2026-10-19-thin-empty-face-cross-repo-freeze | 薄变更空面跨仓冻结补留档 |
++| 2026-10-19 | 2026-10-19-undeclared-cross-repo-probe | 未标注跨仓交付窗口探测 |
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index b2ee8ad0..ddee6385 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -379,9 +379,23 @@ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision,
+  * 反解，baseline 自 flow-state.yaml 读取；不可得（非 git 仓/无 flow-state/git 失败/归档后
+  * 目录已移走）= 行为与旧版完全一致。保守：被无后缀裸提交触碰过的文件不剔（fail-closed）。
+  */
++// 工具治理模板（2026-10-19-freeze-filter-tool-scaffold）：各 agent 工具的
++// skills/commands/settings 注入面——不是本项目的交付语义，冻结面出现只会刷屏
++// 真实交付（消防工作区 4e9eb05b 实证：61 文件里 50 个是 .claude/.codex 模板）。
++// AGENTS.md / INSTRUCTIONS.md 是项目级指令（可能是变更的真实交付），保留。
++const TOOL_GOVERNANCE_DIRS = ['.claude/', '.codex/', '.gemini/', '.opencode/', '.zcode/', '.cursor/']
++const TOOL_GOVERNANCE_FILES = new Set(['CLAUDE.md'])
++
++export function isToolGovernancePath(f) {
++  const p = String(f || '').replace(/\\/g, '/')
++  if (!p) return false
++  return TOOL_GOVERNANCE_FILES.has(p) || TOOL_GOVERNANCE_DIRS.some((d) => p.startsWith(d))
++}
++
+ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
+   const base = committedRaw
+     .map((f) => String(f).replace(/\\/g, '/'))
++    .filter((p) => !isToolGovernancePath(p))
+     .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith('.sillyspec/docs/'))
+   try {
+     const cwd = opts.cwd || process.cwd()
+@@ -510,6 +524,7 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
+  */
+ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
+   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
++    && !isToolGovernancePath(f)
+   let dirty = []
+   try {
+     // -uall（2026-10-08-thin-done-dirty-gate-and-paren-attribution）：全新目录会折叠成
+@@ -587,6 +602,7 @@ export function scanOrphanFace(cwd, { baseline } = {}) {
+     .split('\n').map((s) => s.trim()).filter(Boolean)
+   const isAncestor = (sha, of) => git(['merge-base', '--is-ancestor', sha, of], {}) !== null
+   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
++    && !isToolGovernancePath(f)
+   const orphanCommits = []
+   const orphanFiles = new Set()
+   for (const h of [...new Set(reflogHashes)]) {
+diff --git a/test/filter-committed-face.test.mjs b/test/filter-committed-face.test.mjs
+index 5f4685f5..002d03b7 100644
+--- a/test/filter-committed-face.test.mjs
++++ b/test/filter-committed-face.test.mjs
+@@ -10,7 +10,7 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ 
+-import { filterCommittedFace } from '../src/flow-parity.js'
++import { filterCommittedFace, isToolGovernancePath } from '../src/flow-parity.js'
+ 
+ const OWN = '.sillyspec/changes/2026-09-27-tool-debt-cleanup/'
+ 
+@@ -44,3 +44,37 @@ test('反斜杠路径归一后同口径判定', () => {
+   const r = filterCommittedFace(['.sillyspec\\docs\\sillyspec\\modules\\setup.md'], OWN)
+   assert.deepEqual(r, ['.sillyspec/docs/sillyspec/modules/setup.md'])
+ })
++
++// ── 工具治理模板剔除（2026-10-19-freeze-filter-tool-scaffold）──
++// .claude/.codex/.gemini/.opencode/.zcode/.cursor 与 CLAUDE.md 不入冻结面；
++// AGENTS.md / INSTRUCTIONS.md 是项目级指令，保留为交付面。
++test('工具治理模板剔除，项目指令文件保留', () => {
++  const r = filterCommittedFace([
++    '.claude/skills/x/SKILL.md',
++    '.claude/commands/sillyspec/flow.md',
++    '.codex/skills/sillyspec-flow/SKILL.md',
++    '.gemini/settings.json',
++    '.opencode/config.json',
++    '.zcode/skills/a/SKILL.md',
++    '.cursor/rules.md',
++    'CLAUDE.md',
++    'AGENTS.md',
++    'INSTRUCTIONS.md',
++    'src/flow.js',
++  ], OWN)
++  assert.deepEqual(r, ['AGENTS.md', 'INSTRUCTIONS.md', 'src/flow.js'])
++})
++
++test('反斜杠工具模板同样剔除', () => {
++  const r = filterCommittedFace(['.claude\\skills\\x\\SKILL.md', 'CLAUDE.md', 'src\\flow.js'], OWN)
++  assert.deepEqual(r, ['src/flow.js'])
++})
++
++test('isToolGovernancePath 只认工具注入面（AGENTS.md 返回 false）', () => {
++  assert.equal(isToolGovernancePath('.claude/x'), true)
++  assert.equal(isToolGovernancePath('.codex/skills/y'), true)
++  assert.equal(isToolGovernancePath('CLAUDE.md'), true)
++  assert.equal(isToolGovernancePath('CLAUDE.md.bak'), false)
++  assert.equal(isToolGovernancePath('AGENTS.md'), false)
++  assert.equal(isToolGovernancePath('src/CLAUDE.md'), false)
++})
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index 109d3bd8..2e136efa 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -364,3 +364,33 @@ test('无清单段 + 注册跨仓零改动 → 探测零输出', () => {
+     rmSync(cwd, { recursive: true, force: true })
+   }
+ })
++
++// ── 2026-10-19-freeze-filter-tool-scaffold：工具治理模板不入冻结面 ──
++test('e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留', () => {
++  const cwd = makeRepo()
++  const change = '2026-10-19-tefc-tool-filter'
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '工具治理模板不入冻结面\n成功标准：\n- 模板剔除源码保留', '--autopilot']).status, 0)
++    mkdirSync(join(cwd, 'src'), { recursive: true })
++    mkdirSync(join(cwd, '.claude', 'skills', 'x'), { recursive: true })
++    writeFileSync(join(cwd, '.claude', 'skills', 'x', 'SKILL.md'), '# template\n')
++    writeFileSync(join(cwd, 'CLAUDE.md'), '# instr\n')
++    writeFileSync(join(cwd, 'src', 'ok.js'), 'ok\n')
++    git(cwd, ['add', '.claude', 'CLAUDE.md', 'src', 'base.txt'])
++    git(cwd, ['commit', '-qm', `chore: 模板+实现 (${change})`])
++    fillDocs(specBase, change)
++    tickTasks(specBase, cwd, change)
++    writeReviewFixture(specBase, cwd, change)
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `tool-filter: ${s2.stdout}\n${s2.stderr}`)
++    const arch = join(specBase, 'changes', 'archive', change)
++    const meta = JSON.parse(readFileSync(join(arch, 'change-patch.json'), 'utf8'))
++    assert.deepEqual(meta.files, ['src/ok.js'], '只有源码入冻结面')
++    const patchText = readFileSync(join(arch, 'change.patch'), 'utf8')
++    assert.match(patchText, /src\/ok\.js/, '源码在 patch 内')
++    assert.doesNotMatch(patchText, /\.claude|CLAUDE\.md/, '模板不入 patch')
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})

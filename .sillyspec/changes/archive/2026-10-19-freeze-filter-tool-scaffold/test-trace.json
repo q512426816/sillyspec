@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-freeze-filter-tool-scaffold",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-01",
+      "tests": [
+        "test/filter-committed-face.test.mjs「isToolGovernancePath 只认工具注入面（AGENTS.md 返回 false）」",
+        "test/filter-committed-face.test.mjs「工具治理模板剔除，项目指令文件保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-freeze-filter-tool-scaffold"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-02",
+      "tests": [
+        "test/filter-committed-face.test.mjs「反斜杠工具模板同样剔除」",
+        "test/thin-empty-face-crosscheck.test.mjs「e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-freeze-filter-tool-scaffold"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-freeze-filter-tool-scaffold"
+    }
+  ]
+}

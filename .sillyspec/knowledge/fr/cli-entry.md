@@ -10503,3 +10503,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-19-undeclared-cross-repo-probe
   status: active
+
+## FR-cli-entry-555 filterCommittedFace 剔除 .claude/.codex/.gemini/.opencode/.zcode/.cursor 目录与 CLAUDE.md；AGENTS.md 等项目指令文件保留为交付面
+变更：2026-10-19-freeze-filter-tool-scaffold
+状态：active
+摘要：模板剔除；项目指令保留
+全文：.sillyspec/changes/archive/2026-10-19-freeze-filter-tool-scaffold/requirements.md#FR-01
+最近确认：71b3ff3ebc87ef51ed667b31b66c4ce92e15e638
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-01
+  tests: test/filter-committed-face.test.mjs「isToolGovernancePath 只认工具注入面（AGENTS.md 返回 false）」 | test/filter-committed-face.test.mjs「工具治理模板剔除，项目指令文件保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-freeze-filter-tool-scaffold
+  status: active
+
+## FR-cli-entry-556 新增单测与 e2e 覆盖模板剔除、正常源码保留两态，既有冻结/空面/跨仓测试全绿
+变更：2026-10-19-freeze-filter-tool-scaffold
+状态：active
+摘要：验证面
+全文：.sillyspec/changes/archive/2026-10-19-freeze-filter-tool-scaffold/requirements.md#FR-02
+最近确认：71b3ff3ebc87ef51ed667b31b66c4ce92e15e638
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-02
+  tests: test/filter-committed-face.test.mjs「反斜杠工具模板同样剔除」 | test/thin-empty-face-crosscheck.test.mjs「e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-freeze-filter-tool-scaffold
+  status: active
+
+## FR-cli-entry-557 归档 patch 的 files[]/change.patch 不再出现工具治理模板
+变更：2026-10-19-freeze-filter-tool-scaffold
+状态：active
+摘要：归档双面
+全文：.sillyspec/changes/archive/2026-10-19-freeze-filter-tool-scaffold/requirements.md#FR-03
+最近确认：71b3ff3ebc87ef51ed667b31b66c4ce92e15e638
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-freeze-filter-tool-scaffold:flow:测试绑定FR-03
+  tests: test/thin-empty-face-crosscheck.test.mjs「e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-freeze-filter-tool-scaffold
+  status: active
