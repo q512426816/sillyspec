@@ -54,10 +54,16 @@ created_at: 2026-10-19T06:00:38.189Z
 | 操作 | 路径 | 说明 |
 |---|---|---|
 | 修改 | src/flow.js | 横幅五面文案 + 恢复简报批准状态行 + status 相位推断与 --json 字段 |
+| 修改 | src/run/command.js | 升厚拒绝面「直接干活」改顺序句（次要一致性面） |
 | 修改 | assets/command-cards/flow.md | 生命周期改为 spec→批准→干活→flow done |
-| 修改 | .claude/skills/sillyspec-flow/SKILL.md | description 与②节拆分，补 approve 环节 |
+| 修改 | .claude/skills/sillyspec-flow/SKILL.md | description 保留触发词组、生命周期链更新；②节拆 spec 面/批准/干活三节 |
 | 修改 | templates/agents-instruction.md | 选道行 + 规则 3 轻量道顺序句 |
-| 修改 | AGENTS.md / CLAUDE.md | 本仓两指令文件同步（init 完整态不自动刷新） |
+| 修改 | AGENTS.md | 本仓同步（init 完整态不自动刷新） |
+| 修改 | CLAUDE.md | 本仓同步（同上） |
 | 修改 | package.json | version 3.33.1 → 3.34.0 |
-| 新增 | test/flow-order-canon.test.mjs | FR-01~04 断言（五面正典句/生命周期/status 相位/同步与版本） |
-| 修改 | test/flow-checkpoints.test.mjs 等锚文件 | 同步新文案断言 |
+| 新增 | test/flow-order-canon.test.mjs | FR-01~04 断言（七例先红后绿） |
+| 修改 | test/flow-status-heartbeat.test.mjs | 夹具补 spec_approved（执行段语义=已批准） |
+| 修改 | test/flow-status-json.test.mjs | 同上 |
+| 修改 | test/quick-retired.test.mjs | 版本钉 3.33.1 → 3.34.0 |
+
+既有锚（flow-checkpoints/flow-redline-frontload/flow-clarity-probe/governance-autopilot/tdd-scope-guidance）措辞兼容零改动——断言的关键字（三断点纪律、【你要做的】、红线块顺序、按层适用）在新文案中全部保留。
