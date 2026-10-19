@@ -34,7 +34,10 @@ function readdirSyncSafe(dir) {
   try { return readdirSync(dir) } catch { return [] }
 }
 
-/** 建主仓夹具；opts.repos 时注册跨仓 libx（真实目录在场，主仓根看不到其内容）。 */
+/** makeRepo 产出的跨仓仓路径（cwd → libx），供新用例在 flow start 后向跨仓投递交付。 */
+const FIXTURE_REPOS = new Map()
+
+/** 建主仓夹具；opts.repos 时注册跨仓 libx（真实 git 仓，主仓根看不到其内容）。 */
 function makeRepo(opts = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'tefc-'))
   git(cwd, ['init', '-q', '-b', 'main'])
@@ -44,7 +47,14 @@ function makeRepo(opts = {}) {
   let yaml = 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n'
   if (opts.repos) {
     const lib = mkdtempSync(join(tmpdir(), 'tefc-lib-'))
+    git(lib, ['init', '-q', '-b', 'main'])
+    git(lib, ['config', 'user.email', 't@t'])
+    git(lib, ['config', 'user.name', 't'])
     mkdirSync(join(lib, 'src', 'routes'), { recursive: true })
+    writeFileSync(join(lib, 'base.txt'), 'base\n')
+    git(lib, ['add', '.'])
+    git(lib, ['commit', '-qm', 'base'])
+    FIXTURE_REPOS.set(cwd, lib)
     yaml += `repos:\n  libx: ${lib.replace(/\\/g, '/')}\n`
   }
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), yaml)
@@ -232,6 +242,51 @@ test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标�
     assert.doesNotMatch(out, /冻结面为空但 design 声明清单有/, '不误触未标注阻断')
     assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
   } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+// ── 2026-10-19-thin-empty-face-cross-repo-freeze：空面 + 规范跨仓标注 + 跨仓真实交付
+//    → JSON-only 冻结（change-patch.json 的 repos[].patch，无 change.patch），回执如实报
+//    「跨仓 N 仓」，不再写「无冻结件」 ──
+test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结', () => {
+  const cwd = makeRepo({ repos: true })
+  const lib = FIXTURE_REPOS.get(cwd)
+  const change = '2026-10-19-tefc-xrepo-freeze'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '空面跨仓冻结落 JSON 留档\n成功标准：\n- repos 内有 patch 正文', '--autopilot'])
+    assert.equal(s1.status, 0, `start: ${s1.stderr}`)
+    assert.ok(lib, '跨仓仓路径在场')
+    // 跨仓两笔交付：一笔提交（带变更名 token）+ 一笔工作树未提交
+    writeFileSync(join(lib, 'impl.txt'), 'impl\n')
+    git(lib, ['add', 'impl.txt'])
+    git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
+    writeFileSync(join(lib, 'fix.txt'), 'fix\n')
+    fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt'].join('\n'))
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `空面跨仓冻结: ${s2.stdout}\n${s2.stderr}`)
+    const arch = join(specBase, 'changes', 'archive', change)
+    const metaPath = join(arch, 'change-patch.json')
+    assert.ok(existsSync(metaPath), 'change-patch.json 已落盘')
+    assert.ok(!existsSync(join(arch, 'change.patch')), 'JSON-only：不落 change.patch')
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+    assert.equal(meta.patchStatus, 'ok', '冻结成功状态（非 failed）')
+    assert.deepEqual(meta.files, [], '主仓 files 为空')
+    const repos = (meta.scopeAudit || {}).repos || []
+    assert.equal(repos.length, 1, '一条跨仓条目')
+    assert.equal(repos[0].key, 'libx')
+    assert.match(repos[0].patch, /impl\.txt/, '提交交付进 patch')
+    assert.match(repos[0].patch, /fix\.txt/, '工作树交付进 patch')
+    const vr = readFileSync(join(arch, 'verify-result.md'), 'utf8')
+    assert.match(vr, /跨仓 1 仓/, '回执报跨仓冻结')
+    assert.doesNotMatch(vr, /无冻结件/, '回执不再写无冻结件')
+    assert.match(`${s2.stdout}\n${s2.stderr}`, /空面跨仓 patch 留档/, '收口输出点名 JSON 路线')
+  } finally {
+    const lib2 = FIXTURE_REPOS.get(cwd)
+    if (lib2) rmSync(lib2, { recursive: true, force: true })
     rmSync(cwd, { recursive: true, force: true })
   }
 })

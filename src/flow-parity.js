@@ -267,6 +267,17 @@ export function renderThinDocsDebt({ specBase, projectRoot, changedFiles } = {})
  */
 export function renderVerifyReceipt({ change, baseline, head, gateSummary, review, traceCount, patchMeta, generatedAt }) {
   const sha = patchMeta && patchMeta.patchSha256 ? patchMeta.patchSha256.slice(0, 12) : null
+  // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档没有顶级
+  // patchSha256，但 scopeAudit.repos[] 内有跨仓 patch 正文——回执须如实报「跨仓 N 仓」，
+  // 不能写「无冻结件」（否则平台/归档读者把成功冻结误判成缺件）。
+  const repoFrozen = patchMeta && patchMeta.scopeAudit && Array.isArray(patchMeta.scopeAudit.repos)
+    ? patchMeta.scopeAudit.repos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
+    : []
+  const freezeLine = sha
+    ? `change.patch（sha256 ${sha}…）`
+    : repoFrozen.length > 0
+      ? `跨仓 ${repoFrozen.length} 仓（diff 见 change-patch.json scopeAudit.repos[]；主仓面为空）`
+      : '（无冻结件）'
   const reviewLine = review
     ? review.verdict === 'exempt'
       ? '豁免（低风险证据齐全' + (review.sampled ? '' : '') + '）'
@@ -287,7 +298,7 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
     `- **实测面**：${gateSummary || '—'}`,
     `- **独立评审**：${reviewLine}`,
     `- **测试绑定**：${traceCount > 0 ? `${traceCount} 行（test-trace.json，已随发号提升）` : '0（无锚行）'}`,
-    `- **交付冻结**：${sha ? `change.patch（sha256 ${sha}…）` : '（无冻结件）'}`,
+    `- **交付冻结**：${freezeLine}`,
     `- **生成**：${generatedAt}（机器合成，勿手改；明细见 flow-telemetry.jsonl / change-patch.json）`,
     ``,
   ].join('\n')
@@ -409,6 +420,31 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
  * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
  * @returns {{ drifted: boolean, ownCommits: string[], head: string|null, ownFiles: string[], governanceOnly: boolean, touchedPromiseFace: boolean }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
  */
+/**
+ * 冻结件完整性探针（2026-10-19-thin-empty-face-cross-repo-freeze）：空面跨仓冻结走
+ * JSON-only 留档（主仓面为空，`scopeAudit.repos[]` 承载跨仓 patch 正文，无 change.patch）。
+ * 存在性复查不能把「无 change.patch」一律判缺件——JSON 在场且 repos 内有 patch 正文即完整。
+ * 坏 JSON/读失败按缺件处理（重冻结兜底，fail-safe 不新造静默跳过面）。
+ * @returns {{ hasJson: boolean, hasText: boolean, repoPatchCount: number, complete: boolean }}
+ */
+export function inspectFreezeArtifacts(changeDir) {
+  const patchJsonPath = join(changeDir, 'change-patch.json')
+  const patchTextPath = join(changeDir, 'change.patch')
+  const hasJson = existsSync(patchJsonPath)
+  const hasText = existsSync(patchTextPath)
+  let repoPatchCount = 0
+  if (hasJson) {
+    try {
+      const meta = JSON.parse(readFileSync(patchJsonPath, 'utf8'))
+      const repos = meta && meta.scopeAudit && meta.scopeAudit.repos
+      if (Array.isArray(repos)) {
+        repoPatchCount = repos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
+      }
+    } catch { /* 坏 JSON → 无跨仓正文，按缺件处理 */ }
+  }
+  return { hasJson, hasText, repoPatchCount, complete: hasJson && (hasText || repoPatchCount > 0) }
+}
+
 export function detectPatchDrift({ cwd, change, freezeHead }) {
   try {
     if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
@@ -656,13 +692,17 @@ export function projectTraceFaceRows(rows) {
  * @param {object} meta change-patch.json 顶级增量键（note/moduleScope 等，展开在 totals 后）
  * @returns {{ patchStatus: 'ok'|'failed', patchSha256: string|null }}
  */
-export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {} }) {
+export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {}, patchStatus = null }) {
   const fileList = Array.isArray(files) ? files : []
   const patchOk = typeof patchText === 'string' && patchText.length > 0
   const patchBody = patchOk ? (patchText.endsWith('\n') ? patchText : patchText + '\n') : null
   const patchSha256 = patchBody
     ? createHash('sha256').update(patchBody.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
     : null
+  // 显式 patchStatus（2026-10-19-thin-empty-face-cross-repo-freeze）：空面跨仓冻结
+  // 没有主仓 patchText，但冻结本身成功——调用方传 'ok' 表达「冻结成功，无主仓 patch」，
+  // 不能复用 patchText 判空落 'failed'（平台/归档读者会把成功冻结误判为采集失败）。
+  const status = patchStatus === 'ok' || patchStatus === 'failed' ? patchStatus : (patchOk ? 'ok' : 'failed')
   if (patchOk) writeFileSync(join(changeDir, 'change.patch'), patchBody)
   writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({
     change,
@@ -676,9 +716,9 @@ export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, fi
     ...meta,
     scopeAudit: { ...snapObj },
     ...(patchSha256 ? { patchSha256 } : {}),
-    patchStatus: patchOk ? 'ok' : 'failed',
+    patchStatus: status,
   }, null, 2) + '\n')
-  return { patchStatus: patchOk ? 'ok' : 'failed', patchSha256 }
+  return { patchStatus: status, patchSha256 }
 }
 
 /**

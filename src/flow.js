@@ -1726,9 +1726,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 未锚定一律隔离（fail-safe 宁可多评）。
     const patchJsonPath = join(changeDir, 'change-patch.json')
     const patchTextPath = join(changeDir, 'change.patch')
+    // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
+    // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
+    const { inspectFreezeArtifacts: inspectFreeze } = await import('./flow-parity.js')
+    const freezeState = inspectFreeze(changeDir)
     const missingFreeze = [
-      !existsSync(patchJsonPath) ? 'change-patch.json' : null,
-      !existsSync(patchTextPath) ? 'change.patch' : null,
+      !freezeState.hasJson ? 'change-patch.json' : null,
+      (!freezeState.hasText && freezeState.repoPatchCount === 0) ? 'change.patch' : null,
     ].filter(Boolean)
     let drifted = false
     let drift = null
@@ -2020,11 +2024,71 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           }
           console.warn(`⚠️ --accept-empty-face：显式签收空冻结面与声明面矛盾（${_declared.length} 条声明交付不进冻结面，留痕 flow-state accept_empty_face）`)
         }
-        // 纯跨仓规范标注空面：合规书写不拦，advisory 点名 thin 空面分支不做跨仓冻结的已知缺口
-        if (ownFiles.length === 0 && _declared.length === 0 && planEntries.some((e) => e && e.repo)) {
-          console.warn('⚠️ 声明清单全部为跨仓规范标注且主仓冻结面为空——thin 空面分支不做跨仓冻结与 patch 留档（缺口已知：归档件将无 patch 两件；如需冻结请主仓侧交付或待后续版本支持空面跨仓冻结）')
+        // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：主仓冻结面为空且
+        // 声明清单含规范跨仓标注时，跨仓交付面仍可留档——JSON 路线只写 change-patch.json，
+        // scopeAudit.repos[] 承载各仓 patch 正文/sha256，不写 change.patch（主仓面确为空，
+        // 混入跨仓正文会让按主仓 cwd 解析 hunk 的读方错位）。各仓窗口内无可归属交付时
+        // 维持空面跳过（无清单段形态同此路，留给第 2 步的窗口探测点名）。
+        let emptyFaceCrossRepos = []
+        let emptyFaceCrossRows = undefined
+        if (ownFiles.length === 0 && planEntries.some((e) => e && e.repo)) {
+          try {
+            const { reconcileCrossRepoPlan } = await import('./scope-audit.js')
+            const recon = reconcileCrossRepoPlan({
+              cwd, specBase,
+              runtimeRoot: resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase),
+              changeName: change,
+              planEntries,
+              collectPatch: true,
+              crossBaselines: (st && st.cross_baselines && typeof st.cross_baselines === 'object') ? st.cross_baselines : null,
+            })
+            emptyFaceCrossRows = recon.rows
+            // 「有交付」判定按对账三态行，不按 totals.files——后者含声明未动的 untouched
+            // 占位行（空仓也会得到 files>0，导致空面误落 JSON-only 留档）。
+            const deliveredRepoKeys = new Set((Array.isArray(recon.rows) ? recon.rows : [])
+              .filter((r) => r && r.crossRepo && r.verdict !== 'untouched')
+              .map((r) => r.crossRepo))
+            emptyFaceCrossRepos = (recon.repos || []).filter((r) => r && !r.degraded
+              && (deliveredRepoKeys.has(r.key) || (typeof r.patch === 'string' && r.patch.length > 0)))
+            for (const n of recon.notes) console.log(`   📎 ${n}`)
+          } catch { /* 跨仓对账失败 → 退回空面跳过（fail-soft 不新造阻断面） */ }
         }
-        if (ownFiles.length === 0) {
+        if (ownFiles.length === 0 && emptyFaceCrossRepos.length > 0) {
+          const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
+          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles: [], stats: new Map(), planEntries, crossRepoRows: emptyFaceCrossRows })
+          const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
+          const closeTrace = writeCloseTraceArtifacts({
+            changeDir,
+            change,
+            baseline: st.baseline_commit,
+            head: headCommit,
+            files: [],
+            metaTotals: { files: 0, additions: 0, deletions: 0 },
+            patchText: null,
+            savedAt: new Date().toISOString(),
+            patchStatus: 'ok',
+            snapObj: {
+              mode: 'full-flow', ok: true, degradedReason: null,
+              baseAnchor: st.baseline_commit || null,
+              totals: snapTotals,
+              rows: snapRows,
+              excluded: { foreignDeclared: [] },
+              note: 'flow done 时点冻结（主仓冻结面为空；跨仓交付面见 repos[]）',
+              closedBy: 'flow done',
+              repos: emptyFaceCrossRepos,
+            },
+            meta: {
+              note: 'flow done 时点冻结（主仓冻结面为空；跨仓交付面见 scopeAudit.repos[]——2026-10-19-thin-empty-face-cross-repo-freeze）',
+              modules: [], uncoveredDirs: [], moduleMaps: [],
+            },
+          })
+          const frozenRepos = emptyFaceCrossRepos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
+          console.log(`📦 空面跨仓 patch 留档：change-patch.json（主仓面为空，跨仓 ${emptyFaceCrossRepos.length} 仓、正文 ${frozenRepos}——diff 见 scopeAudit.repos[]）`)
+          patchOk = closeTrace.patchStatus === 'ok'
+        } else if (ownFiles.length === 0) {
+          if (_declared.length === 0 && planEntries.some((e) => e && e.repo)) {
+            console.warn('⚠️ 声明清单全部为跨仓规范标注且主仓冻结面为空——跨仓窗口内没有可归属交付，按空面跳过 patch 留档（如实现应在此，先提交后重跑）')
+          }
           console.log('📦 patch 留档跳过：本变更可归属文件面为空（无交付面改动——治理工件不入冻结面；若实现代码应在此，先提交后重跑）')
           patchOk = true
         } else {

@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { scanOrphanFace } from '../src/flow-parity.js'
+import { scanOrphanFace, inspectFreezeArtifacts } from '../src/flow-parity.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
@@ -263,5 +263,30 @@ test('孤儿提交触及交付面阻断收口（worktree e2e）+ --accept-orphan
   } finally {
     try { git(cwd, ['worktree', 'remove', '--force', wtPath]) } catch { /* 已清理 */ }
     rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+// ── 2026-10-19-thin-empty-face-cross-repo-freeze：冻结件完整性探针 ──
+// JSON-only 跨仓冻结（无 change.patch、repos[] 有 patch 正文）必须判完整；两缺/坏 JSON
+// 仍判缺件（重冻结兜底）。直测纯函数，覆盖存在性复查的读侧契约。
+test('inspectFreezeArtifacts：JSON-only 跨仓冻结判完整，两缺/坏 JSON 判缺件', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ifz-'))
+  try {
+    assert.equal(inspectFreezeArtifacts(dir).complete, false, '两缺 → 缺件')
+    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: [], scopeAudit: { repos: [{ key: 'libx', patch: 'diff --git a/x b/x\n' }] } }))
+    const repoOnly = inspectFreezeArtifacts(dir)
+    assert.equal(repoOnly.hasJson, true)
+    assert.equal(repoOnly.hasText, false)
+    assert.equal(repoOnly.repoPatchCount, 1)
+    assert.equal(repoOnly.complete, true, 'JSON-only 跨仓正文 → 完整')
+    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: [], scopeAudit: { repos: [{ key: 'libx', patch: null }] } }))
+    assert.equal(inspectFreezeArtifacts(dir).complete, false, 'repos 无正文且无 patch → 缺件')
+    writeFileSync(join(dir, 'change-patch.json'), '{bad json')
+    assert.equal(inspectFreezeArtifacts(dir).complete, false, '坏 JSON → 缺件')
+    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: ['a.js'], totals: { files: 1 } }))
+    writeFileSync(join(dir, 'change.patch'), 'diff --git a/a.js b/a.js\n')
+    assert.equal(inspectFreezeArtifacts(dir).complete, true, '两件齐全 → 完整')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })
