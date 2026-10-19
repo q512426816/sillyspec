@@ -466,6 +466,17 @@ export function freezeGapLabels(state) {
   return gaps
 }
 
+/**
+ * 冻结缺口标签（目录级入口，flow done 存在性复查的唯一调用面）：
+ * 检查（inspect）与标签（freezeGapLabels）一次封装——调用点直接用本函数，
+ * 直测本函数即覆盖调用点接线（防「探针修了调用点没接」的回归）。
+ * @param {string} changeDir
+ * @returns {string[]}
+ */
+export function missingFreezeLabels(changeDir) {
+  return freezeGapLabels(inspectFreezeArtifacts(changeDir))
+}
+
 export function detectPatchDrift({ cwd, change, freezeHead }) {
   try {
     if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }

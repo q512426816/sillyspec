@@ -1738,9 +1738,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const patchTextPath = join(changeDir, 'change.patch')
     // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
     // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
-    const { inspectFreezeArtifacts: inspectFreeze, freezeGapLabels } = await import('./flow-parity.js')
     // 完整性以探针的 complete 为准（坏 JSON 即使 change.patch 在场也不可信）。
-    const missingFreeze = freezeGapLabels(inspectFreeze(changeDir))
+    const { missingFreezeLabels } = await import('./flow-parity.js')
+    const missingFreeze = missingFreezeLabels(changeDir)
     let drifted = false
     let drift = null
     if (missingFreeze.length > 0) {
@@ -2262,6 +2262,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     }
     if (patchOk) mark('patch')
   }
+  // 冻结形态复核（含重入 skip 路径——上轮评审 P2：断点续跑回合不执行 patch 分支，
+  // jsonOnlyFreeze 会停在 false，收口指引误报 change.patch）。直接按在场冻结件判定。
+  try {
+    const { inspectFreezeArtifacts: inspectFinal } = await import('./flow-parity.js')
+    const fsFinal = inspectFinal(changeDir)
+    jsonOnlyFreeze = fsFinal.jsonOk && !fsFinal.hasText && fsFinal.repoPatchCount > 0
+  } catch { /* best-effort */ }
 
   // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
