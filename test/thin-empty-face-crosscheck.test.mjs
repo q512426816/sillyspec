@@ -264,6 +264,11 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
     git(lib, ['add', 'impl.txt'])
     git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
     writeFileSync(join(lib, 'fix.txt'), 'fix\n')
+    // 工具治理模板（2026-10-19-cross-repo-face-tool-filter）：跨仓面同口径剔除
+    mkdirSync(join(lib, '.claude', 'skills', 't'), { recursive: true })
+    writeFileSync(join(lib, '.claude', 'skills', 't', 'SKILL.md'), '# template\n')
+    git(lib, ['add', '.claude'])
+    git(lib, ['commit', '-qm', `chore: 模板 (${change})`])
     fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt', '', '### deadkey', '', '- src/dead.js'].join('\n'))
     // 预置旧 change.patch（重冻结到空主仓面的清理路径）：修完仍存在即为回归。
     writeFileSync(join(specBase, 'changes', change, 'change.patch'), 'diff --git a/stale b/stale\n')
@@ -286,8 +291,13 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
     assert.match(libRepo.patch, /impl\.txt/, '提交交付进 patch')
     assert.match(libRepo.patch, /fix\.txt/, '工作树交付进 patch')
     assert.match(libRepo.patchSha256, /^[0-9a-f]{64}$/, '跨仓 patch 正文带 sha256 锚')
+    // 工具治理模板不入跨仓面（2026-10-19-cross-repo-face-tool-filter）
+    assert.doesNotMatch(libRepo.patch, /\.claude/, '跨仓模板不入 patch 正文')
+    const crossRows = (meta.scopeAudit || {}).rows || []
+    assert.ok(!crossRows.some((r) => String(r.path).includes('.claude')), '跨仓模板不入对账行')
     assert.equal(deadRepo.degraded, true, '降级仓条目不丢')
     assert.ok(deadRepo.degradedReason, '降级原因随条目留档')
+    assert.doesNotMatch(String(deadRepo.degradedReason), /nonexistent-deadkey/, '降级原因不含本机路径')
     const vr = readFileSync(join(arch, 'verify-result.md'), 'utf8')
     assert.match(vr, /跨仓 1 仓/, '回执报跨仓冻结')
     assert.doesNotMatch(vr, /无冻结件/, '回执不再写无冻结件')

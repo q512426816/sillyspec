@@ -41,6 +41,7 @@ import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
+import { isToolGovernancePath } from './flow-parity.js'
 import { parseRepoRegistry } from './stages/plan-postcheck.js'
 // 跨仓 per-repo 采集共享内核（2026-09-20 scope-audit-cross-repo task-02 消费 task-01 产物）。
 // 无环确认：cross-repo-reconcile 的静态依赖链（git-helper/plan-postcheck/worktree-apply/
@@ -1373,7 +1374,11 @@ export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName,
     }
     // 真实三态：该仓 actual（filterDeliverableFiles 过滤，主仓口径）× 该组声明面 pathMatches
     // 双向容差（glob/目录前缀兼容，design 清单可写 glob）→ planned / unplanned / untouched
-    const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))].map(toPosix).sort()
+    // 工具治理模板同源剔除（2026-10-19-cross-repo-face-tool-filter）：跨仓面（rows/totals/
+    // patch）与主仓冻结面同口径，不让 .claude/.codex 等注入面刷屏跨仓交付。
+    const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))]
+      .filter((f) => !isToolGovernancePath(f))
+      .map(toPosix).sort()
     const repoStats = collectNumstatByPath(repoActual.repoPath, repoFiles, { baseRef: repoActual.anchor.base })
     const repoMatched = new Set()
     for (const f of repoFiles) {

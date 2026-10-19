@@ -1,0 +1,29 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  跨仓冻结面剔模板与脱敏
+
+
+  动机与背景：平台评审 P2——degradedReason 文案携带产出端本机绝对路径（cross-repo-reconcile.js 注册路径不可达分支），资产卡原样透出；且跨仓 repos[].patch/rows/totals
+  未过滤工具治理模板（.claude/.codex 等），与主仓面口径不一致。
+
+
+  成功标准：
+
+  - 注册路径不可达的 degradedReason 不再包含绝对路径（改为引用 local.yaml repos 键）
+
+  - reconcileCrossRepoPlan 的跨仓文件面（rows/totals/patch）过滤工具治理模板（isToolGovernancePath 同源）
+
+  - 新增用例覆盖：跨仓模板不入 repos[].patch、degradedReason 无路径
+
+  - 既有跨仓/空面/过滤测试全绿
+autopilot: true
+prestage_ack: true
+baseline_commit: 3af47c6be27eab71a99dfd20d2de777dcb7c1a81
+updatedAt: '2026-10-19T10:55:18.770Z'
+baseline_sha256: fed2ca3e8100285797c693d4aaa574c95f9eed9350350c2219987f93c4e3a5d4
+

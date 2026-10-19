@@ -215,8 +215,11 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null, 
     // 2) 仓根（isAbsolute/resolve 兼容 Windows 盘符绝对注册与相对 cwd 注册）
     const repoPath = isAbsolute(rawPath) ? rawPath : resolve(cwd, rawPath)
     if (!existsSync(repoPath)) {
+      // degradedReason 不嵌绝对路径（2026-10-19-cross-repo-face-tool-filter，平台评审 P2）：
+      // 该文案会随 change-patch.json 冻结并透出到平台资产卡，本机布局属环境信息不外泄；
+      // repoPath 仍留在返回值供本机诊断使用。
       return { repo: repoKey, repoPath, anchor: degradedAnchor(), files: [],
-        degradedReason: `注册路径不可达：${repoPath}` }
+        degradedReason: `注册路径不可达（local.yaml repos.${repoKey} 的注册值在本机不存在）——请人工到对应仓核对` }
     }
 
     // 3) A 档 reviews-range：runtimeRoot 与 changeName 双提供才尝试（缺省跳过 = 向后兼容）

@@ -2042,6 +2042,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
             const { collectRepoActual } = await import('./cross-repo-reconcile.js')
             const { filterDeliverableFiles } = await import('./worktree-apply.js')
+            const { isToolGovernancePath } = await import('./flow-parity.js')
             const registeredKeys = loadRegisteredRepoKeys(specBase)
             const probeHits = []
             for (const repoKey of registeredKeys) {
@@ -2054,6 +2055,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
                 })
                 if (!actual || actual.degradedReason) continue
                 const files = filterDeliverableFiles(actual.files || [])
+                  .filter((f) => !isToolGovernancePath(f))
                 if (files.length > 0) probeHits.push({ key: repoKey, count: files.length })
               } catch { /* 单仓探测失败不阻断（fail-soft） */ }
             }
