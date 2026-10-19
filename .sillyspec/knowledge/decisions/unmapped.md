@@ -3470,3 +3470,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：811130f031f306c084caabad239605d0d9a35303
 理由：最大风险是 approve 硬拒的误伤面：存量进行中变更（P1 之前建的）文档可能是旧骨架形态，被新门拒批会打断在途工作。对策：v1 轨走 verifyDesignRecordFilled 同口径、ledger 缺失 fail-open、brainstorm 豁免——三重降级保底；且拒批输出给全修复指引（一次给全，不靠二跑）。 - 放弃方案①：approve 校验加时序证据（spec_approved_at vs 首个 src 提交）——放弃理由：四路调查实证批量收口模式下 git 时间戳系统性说谎（批准恰在单提交前 12 秒 12/12「合规」假象），检查恒放行且 CLI 记录面无 src 编辑事件；完整时序只有 harness 层 PreToolUse 埋点可做，属独立决策的新工程。 - 放弃方案②：tick 硬拒（spec 面未齐禁止勾选）——放弃理由：B 模式（码先于 flow start 的倒推收尾）与既有「先勾后补文档」习惯会被误伤，且勾选证据链（token 提交）已由收口哨兵承担；advisory 达到提醒效果且零误伤。 - 放弃方案③：新写一套 approve 校验逻辑——放弃理由：done 门已有 verifyFlowDrafts 双轨校验与豁免口径（brainstorm/ledger），复用保证两面判定永远同源，新写必然漂移。
+
+## D-unmapped-424@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-19-thin-review-material-pack
+原编号：D-001@v1
+锚点：未记录
+最近确认：e70ea3004aabbd1b8d4a664fece5cedc3af94556
+理由：最大风险：评审员把包当证据用（锚定偏差）——靠段尾基准面语义行（包=定位索引、包外查证须列明、包不足 cannot_verify）与任务书既有「材料按需 Read」预算结构对冲。已知局限：收益不可机测（review.json 不记请求数），本变更不动 review.json schema，收益定性观察。已放弃方案：复用 review-material-pack.js 的 extractDiffSummary（从活 git 解 base，与护栏③冲突且引入 verify-postcheck 依赖面）；给 review.json 加 requestsUsed 字段（schema 变更，与本变更解耦另立）。

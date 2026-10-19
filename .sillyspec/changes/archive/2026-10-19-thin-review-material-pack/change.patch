@@ -1,0 +1,634 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 98f762da..791237ff 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -60,6 +60,7 @@ modules:
+       - src/flow-state.js
+       - src/flow-draft.js
+       - src/flow-review.js
++      - src/flow-review-pack.js
+       - src/review-probes.js
+       - src/flow-parity.js
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 39a4d9cb..ce551c71 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -67,3 +67,4 @@
+ | 2026-10-17 | 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化 |
+ | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
+ | 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |
++| 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index f8385476..60301f10 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -79,3 +79,4 @@
+ | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
+ | 2026-10-16 | 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流 |
+ | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
++| 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+diff --git a/src/flow-review-pack.js b/src/flow-review-pack.js
+new file mode 100644
+index 00000000..4a40043d
+--- /dev/null
++++ b/src/flow-review-pack.js
+@@ -0,0 +1,127 @@
++/**
++ * flow-review-pack.js — 轻量评审任务书预消化材料包（2026-10-19-thin-review-material-pack）。
++ *
++ * 病根：轻量评审任务书把原始件（requirements/design/change.patch）原样丢给零上下文评审员，
++ * 定位类通读 + 大 patch 整吞 prefill 是主要成本（冻结件实测最大 365KB）。完整流程五阶段
++ * 2026-09-19 已为同一病根（评审 ~200x 信息放大）建过材料包（review-material-pack.js），
++ * 本模块把同款机制移植到轻量道，三条护栏（design 记录）：
++ *   ① 纯机械抽取零模型摘要——全部产出来自确定性行/正则解析，防「自述换皮」破坏「不信自述」；
++ *   ② 包=基准面非禁读面——段尾印基准面语义行（照抄完整流程 D-004：包外定向查证须列明、
++ *      包不足写 cannot_verify）；
++ *   ③ 摘要从冻结件本身算——change.patch 文本直解，不走活 git（review-material-pack 的
++ *      extractDiffSummary 走活 git 解 base 那条路不能搬：防「包说的」与评审员手里冻结面漂移）。
++ */
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++/** 材料包整体体积帽（对齐 review-material-pack.js PACK_MAX_CHARS 先例——包不能成为新的全量面）。 */
++export const PACK_MAX_CHARS = 12000
++
++/** 段标题与段尾基准面语义行（护栏②：照抄完整流程 D-004 语义——包=基准面非禁读面）。 */
++const PACK_TITLE = '【预消化材料包（CLI 机械抽取——定位索引非证据）】'
++const PACK_BASELINE = '  （基准面：包=定位索引非证据；包外定向查证须列明；包不足以作答写 cannot_verify）'
++
++/** FR 标题行（h3）：### FR-NN: 标题——锚形态与 requirements 机器起草模板一致。 */
++const FR_HEADING_RE = /^###\s+(FR-\d+)\s*[::]?\s*(.*)$/
++
++/** 测试绑定节内行：FR-NN: 绑定内容。 */
++const FR_BINDING_LINE_RE = /^(FR-\d+)\s*[::]\s*(.+)$/
++
++/** diff 文件头：diff --git a/<旧> b/<新>——路径取 b/ 侧（rename 时即新名）。 */
++const DIFF_GIT_RE = /^diff --git a\/(.+?) b\/(.+)$/
++
++/** hunk 头（计数用，不解析行号——摘要只要 hunk 数）。 */
++const HUNK_RE = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/
++
++/**
++ * FR↔测试绑定表解析（纯函数）：h3 FR 标题按出现序成行，「## 测试绑定」节内 `FR-NN: …`
++ * 行按 id 归并。requirements 缺 FR 标题 → 空数组（调用方按该子源零产出处理）。
++ * @returns {{ fr: string, title: string, binding: string }[]}
++ */
++export function parseFrBindingRows(requirementsText) {
++  const lines = String(requirementsText || '').replace(/\r\n/g, '\n').split('\n')
++  const rows = []
++  for (const line of lines) {
++    const m = line.match(FR_HEADING_RE)
++    if (m) rows.push({ fr: m[1], title: String(m[2] || '').trim(), binding: '' })
++  }
++  if (rows.length === 0) return rows
++  let inBinding = false
++  for (const line of lines) {
++    if (/^##\s/.test(line)) { inBinding = /^##\s*测试绑定/.test(line); continue }
++    if (!inBinding) continue
++    const m = line.match(FR_BINDING_LINE_RE)
++    if (m) {
++      const row = rows.find((r) => r.fr === m[1])
++      if (row) row.binding = String(m[2] || '').trim()
++    }
++  }
++  return rows
++}
++
++/**
++ * 冻结 patch 文件级摘要（纯函数）：按 `diff --git` 头分文件，统计每文件 +增/−删行数
++ * （排除 +++/--- 文件名行）与 hunk 数；rename 取 b/ 侧新路径；Binary 行零计数容错。
++ * 无文件头的杂文本 → 空数组（不抛错——垃圾进空出，调用方按零产出处理）。
++ * @returns {{ path: string, plus: number, minus: number, hunks: number }[]}
++ */
++export function parseFrozenPatchSummary(patchText) {
++  const text = String(patchText || '')
++  if (!text.trim()) return []
++  const lines = text.replace(/\r\n/g, '\n').split('\n')
++  const files = []
++  let cur = null
++  for (const line of lines) {
++    const dg = line.match(DIFF_GIT_RE)
++    if (dg) {
++      if (cur) files.push(cur)
++      cur = { path: dg[2].trim(), plus: 0, minus: 0, hunks: 0 }
++      continue
++    }
++    if (!cur) continue
++    if (HUNK_RE.test(line)) { cur.hunks += 1; continue }
++    if (line.startsWith('+++') || line.startsWith('---')) continue
++    if (line.startsWith('+')) cur.plus += 1
++    else if (line.startsWith('-')) cur.minus += 1
++  }
++  if (cur) files.push(cur)
++  return files
++}
++
++/**
++ * 装配材料包注入行（唯一组包入口）：FR 表与 patch 摘要两子源各自可得各自产出、全缺返回
++ * null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——语义行
++ * 恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
++ * requirements.md 读失败（缺件）→ FR 子段零产出（fail-soft 不抛穿）。
++ * @returns {{ lines: string[], truncated: boolean } | null}
++ */
++export function assembleReviewPack({ changeDir, patchText }) {
++  let frRows = []
++  try {
++    frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
++  } catch { /* 缺件 → FR 子段零产出 */ }
++  const summary = parseFrozenPatchSummary(patchText)
++  if (frRows.length === 0 && summary.length === 0) return null
++  const body = []
++  if (frRows.length > 0) {
++    body.push(`  FR↔测试绑定表（requirements.md 机械解析，${frRows.length} 条）：`)
++    for (const r of frRows) body.push(`  - ${r.fr}: ${r.title}${r.binding ? ` ｜ 绑定: ${r.binding}` : ' ｜ 绑定: （无绑定行）'}`)
++  }
++  if (summary.length > 0) {
++    body.push(`  冻结 patch 文件级摘要（change.patch 机械解析，${summary.length} 文件）：`)
++    for (const f of summary) body.push(`  - ${f.path}（+${f.plus}/-${f.minus}，${f.hunks} hunk）`)
++  }
++  const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
++  let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
++  const lines = [PACK_TITLE]
++  let truncated = false
++  for (const l of body) {
++    const w = l.length + 1
++    if (w > budget) { truncated = true; break }
++    lines.push(l)
++    budget -= w
++  }
++  if (truncated) lines.push(note)
++  lines.push(PACK_BASELINE)
++  return { lines, truncated }
++}
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 4519a732..5feb5bb6 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -86,6 +86,22 @@ function readSlotAnswer(text, markerRe) {
+   return buf.join('\n').trim()
+ }
+ 
++/**
++ * design 四节已答判定（v1 AGENT 槽 / v2 节作答双格式——status 与 task tick 共享单一源，
++ * 2026-10-19-approve-gate-tick-nudge FR-03 上移；判据与 flow status 原内联逻辑逐字一致：
++ * v1 = 槽标记行后紧跟非空行的槽数 ≥3；v2 = DESIGN_QUESTIONS 四节实质作答（问题行剥离）≥3）。
++ */
++export function designSectionsFilled(dText) {
++  const text = String(dText || '').replace(/\r\n/g, '\n')
++  if (!text) return false
++  if (/<!--AGENT:槽\d+/.test(text)) {
++    return Array.from(text.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
++  }
++  try {
++    return DESIGN_QUESTIONS_FALLBACK.sections.filter((s) => readV2SectionAnswer(text, s.heading, DESIGN_QUESTIONS_FALLBACK)).length >= 3
++  } catch { return false }
++}
++
+ /**
+  * 读 v2 纯 markdown design 节作答（2026-10-04-thin-docs-v2）：节标题行到下一节标题之间的
+  * 非空行，剥离四问原文行（DESIGN_QUESTIONS 单一源同源引入——独立字符串会被评审实证为
+@@ -204,7 +220,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+  * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
+  * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
+  */
+-export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null }) {
++export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null, packLines = null }) {
+   const headFull = String(head || '').trim()
+   // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
+   // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
+@@ -234,12 +250,25 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+       ].join('\n')
+     }
+   } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
++  // 冻结面形态（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 跨仓冻结没有
++  // change.patch，交付 diff 在 change-patch.json 的 scopeAudit.repos[]——任务书材料与
++  // 对象表述必须指向真实在場的冻结件，否则评审员按缺失文件判 patch 失败。
++  const hasMainPatchFile = existsSync(join(changeDir, 'change.patch'))
++  let repoPatchKeys = []
++  try {
++    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++    const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
++    repoPatchKeys = repos
++      .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++      .map((r) => String(r.key || '?'))
++  } catch { /* 无/坏 JSON → 单仓形态 */ }
++  const freezeLabel = hasMainPatchFile ? 'change.patch 冻结面' : repoPatchKeys.length > 0 ? 'change-patch.json 跨仓冻结面' : '冻结面'
+   const taskbook = [
+     `⚖️ 独立评审任务书 — ${change}`,
+     `══════════════════════════════════════`,
+     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
+     ...(headFull ? [
+-      `【评审对象】工作区实态 + git HEAD（${headFull}）——change.patch 冻结面若落后于该 HEAD，以`,
++      `【评审对象】工作区实态 + git HEAD（${headFull}）——${freezeLabel}若落后于该 HEAD，以`,
+       `  工作区实态与 git log/show 核对为准；review.json 的 reviewedAgainst 字段照抄上面的完整 sha。`,
+     ] : [
+       `【评审对象】工作区实态 + git HEAD——review.json 的 reviewedAgainst 字段填 git rev-parse HEAD`,
+@@ -249,7 +278,16 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+     `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
+     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
+     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
+-    `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
++    ...(hasMainPatchFile
++      ? [`  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`]
++      : repoPatchKeys.length > 0
++        ? [`  - ${join(changeDir, 'change-patch.json')}（跨仓交付 diff 冻结件——scopeAudit.repos[] 的 ${repoPatchKeys.join('、')} 仓 patch 正文；主仓面为空故无 change.patch，diff 在 JSON 内联）`]
++        : [`  - ${join(changeDir, 'change.patch')}（若缺失按 patch 留档失败处理）`]),
++    // 预消化材料包（2026-10-19-thin-review-material-pack）：CLI 机械抽取的 FR↔测试绑定表 +
++    // 冻结 patch 文件级摘要（flow-review-pack.js 装配，12000 帽行级截断）——砍零上下文评审员
++    // 的定位类读与大 patch 整吞 prefill；段自带基准面语义行（包=索引非证据）；缺省/空数组
++    // 零注入——任务书与现状逐字一致（既有调用方/既有测试零感知）。
++    ...(Array.isArray(packLines) && packLines.length > 0 ? ['', ...packLines] : []),
+     ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
+     ``,
+     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
+diff --git a/src/flow.js b/src/flow.js
+index f4c090dd..5294a39a 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1719,6 +1719,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
+   // 不标 done（重入 done 重试）。
+   let driftRefreeze = false
++  // JSON-only 冻结形态（无主仓 change.patch，跨仓正文在 repos[]）——收口指引文案按它
++  // 切换审计锚表述（2026-10-19-thin-empty-face-cross-repo-freeze）。
++  let jsonOnlyFreeze = false
+   if (st.substeps?.patch === 'done') {
+     // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
+     // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
+@@ -1735,12 +1738,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const patchTextPath = join(changeDir, 'change.patch')
+     // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
+     // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
+-    const { inspectFreezeArtifacts: inspectFreeze } = await import('./flow-parity.js')
+-    const freezeState = inspectFreeze(changeDir)
+-    const missingFreeze = [
+-      !freezeState.hasJson ? 'change-patch.json' : null,
+-      (!freezeState.hasText && freezeState.repoPatchCount === 0) ? 'change.patch' : null,
+-    ].filter(Boolean)
++    // 完整性以探针的 complete 为准（坏 JSON 即使 change.patch 在场也不可信）。
++    const { missingFreezeLabels } = await import('./flow-parity.js')
++    const missingFreeze = missingFreezeLabels(changeDir)
+     let drifted = false
+     let drift = null
+     if (missingFreeze.length > 0) {
+@@ -2067,6 +2067,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
+           const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles: [], stats: new Map(), planEntries, crossRepoRows: emptyFaceCrossRows })
+           const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
++          // 先清旧 change.patch 再写 JSON：JSON-only 语义下残留旧正文与新 JSON（无顶级
++          // patchSha256）互相矛盾。清理失败直接抛出（外层 catch → patch 子步不标 done，
++          // 重入重试），不留「双件并存且复查判完整」的自愈盲区。
++          const stalePatchPath = join(changeDir, 'change.patch')
++          if (existsSync(stalePatchPath)) {
++            try { unlinkSync(stalePatchPath) } catch (e) {
++              throw new Error(`旧 change.patch 清理失败（${e.message}）——保持半态可重入，修复文件权限后重跑`)
++            }
++          }
+           const closeTrace = writeCloseTraceArtifacts({
+             changeDir,
+             change,
+@@ -2092,14 +2101,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+               modules: [], uncoveredDirs: [], moduleMaps: [],
+             },
+           })
+-          // 重冻结到空主仓面时清掉旧 change.patch：JSON-only 语义下残留的旧正文与
+-          // 新 JSON（无顶级 patchSha256）互相矛盾，读侧无法判断哪份是当前冻结面。
+-          const stalePatchPath = join(changeDir, 'change.patch')
+-          if (existsSync(stalePatchPath)) {
+-            try { unlinkSync(stalePatchPath) } catch (e) {
+-              console.warn(`⚠️ 旧 change.patch 清理失败（${e.message}）——JSON-only 留档旁存在旧正文，请人工删除后重跑`)
+-            }
+-          }
++          jsonOnlyFreeze = true
+           const frozenRepos = emptyFaceCrossRepos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
+           console.log(`📦 空面跨仓 patch 留档：change-patch.json（主仓面为空，跨仓 ${emptyFaceCrossRepos.length} 仓、正文 ${frozenRepos}——diff 见 scopeAudit.repos[]）`)
+           patchOk = closeTrace.patchStatus === 'ok'
+@@ -2260,6 +2262,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     }
+     if (patchOk) mark('patch')
+   }
++  // 冻结形态复核（含重入 skip 路径——上轮评审 P2：断点续跑回合不执行 patch 分支，
++  // jsonOnlyFreeze 会停在 false，收口指引误报 change.patch）。直接按在场冻结件判定。
++  try {
++    const { inspectFreezeArtifacts: inspectFinal } = await import('./flow-parity.js')
++    const fsFinal = inspectFinal(changeDir)
++    jsonOnlyFreeze = fsFinal.jsonOk && !fsFinal.hasText && fsFinal.repoPatchCount > 0
++  } catch { /* best-effort */ }
+ 
+   // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
+   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
+@@ -2291,6 +2300,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
+     let patchText = null
+     try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
++    // JSON-only 跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：无主仓
++    // change.patch 时交付 diff 证据在 change-patch.json 的 scopeAudit.repos[].patch——
++    // 不接上的话 classifyReviewNeed 恒判「交付 diff 不可得」，评审定档失真。
++    if (patchText === null) {
++      try {
++        const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++        const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
++        const repoDiff = repos
++          .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++          .map((r) => r.patch)
++          .join('\n')
++        if (repoDiff) patchText = repoDiff
++      } catch { /* 无/坏 JSON → 保持 null（既有判定） */ }
++    }
+     const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
+     if (!tier.required) {
+       console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
+@@ -2312,7 +2335,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         for (const _w of _assembled.warnings) console.warn(`⚠️ review_probes：${_w}`)
+         if (_assembled.lines.length > 0) _probeLines = _assembled.lines
+       } catch { /* 探针面 fail-soft：装配失败零注入 */ }
+-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines }))
++      // 预消化材料包装配（2026-10-19-thin-review-material-pack）：机械抽取 FR↔测试绑定表 +
++      // 冻结 patch 文件级摘要注入任务书——砍零上下文评审员的定位类读与大 patch 整吞 prefill；
++      // 摘要只从冻结件本身算（不走活 git，防与评审员手里冻结面漂移）；fail-soft 零注入。
++      let _packLines = null
++      try {
++        const { assembleReviewPack } = await import('./flow-review-pack.js')
++        const _pack = assembleReviewPack({ changeDir, patchText })
++        if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
++      } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
++      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
+       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+       reportMidFail('review')
+@@ -2608,7 +2640,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+     if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
+       console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
+-      console.log(`   审计真相已冻结在归档件 change.patch（sha256 锚定）+ verify-result + review.json，不依赖 git 历史；`)
++      console.log(`   审计真相已冻结在归档件 ${jsonOnlyFreeze ? 'change-patch.json（跨仓 repos[] 正文+sha256 锚定）' : 'change.patch（sha256 锚定）'} + verify-result + review.json，不依赖 git 历史；`)
+       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
+     }
+   } catch { /* 指引 best-effort */ }
+@@ -2650,6 +2682,39 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag =
+     console.error(`   （拒绝后派生授权须显式再确认——2026-10-12-approve-channel-attest）`)
+     process.exit(2)
+   }
++  // 批准前文档完整性校验（2026-10-19-approve-gate-tick-nudge FR-01/02）：批准=有内容的机器
++  // 事实（批时文档必齐）。复用 done 门同源校验（verifyFlowDrafts 双轨）；repair:false——批准
++  // 面只读，不做 design 问题行自动回填（写盘修复属 done 面）。诚实边界：本门证明「答在批前」，
++  // 不证明「答在码前」——时序证据路线已实证不可行（批量收口下 git 时间戳说谎，thin-order-canon
++  // 四路调查），不做假装能拦的检查。
++  {
++    const runtimeRoot = resolveRuntimeRoot({}, specBase)
++    const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
++    const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
++    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign, repair: false })
++    for (const a of r.advisories || []) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
++    if (r.applicable && r.violations.length > 0) {
++      console.error(`❌ spec 断点未批准——文档未齐（批准是动码前置，先答 spec 面再批）：`)
++      for (const v of r.violations) console.error(`   - ${v}`)
++      console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
++      process.exit(1)
++    }
++    if (!r.applicable) {
++      // draft-ledger 机本位缺失（跨机批准/存量变更）：fail-open 降级——仅 v1（AGENT 槽形态）跑
++      // 空槽兜底；v2 纯 markdown 无 ledger 无法对锚校验，如实降级放行（不假装能查）。
++      let v1Text = null
++      try { v1Text = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { /* 无 design */ }
++      if (v1Text && /<!--AGENT:槽\d+/.test(v1Text)) {
++        const dr = verifyDesignRecordFilled({ changeDir })
++        if (dr.applicable && dr.emptySlots.length > 0) {
++          console.error(`❌ spec 断点未批准——design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
++          console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
++          process.exit(1)
++        }
++      }
++      console.log(`ℹ️ 批准校验降级放行：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过`)
++    }
++  }
+   let approvedBy = by
+   if (!approvedBy) {
+     try {
+@@ -2890,17 +2955,10 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
+     try {
+       const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
+-      // 双格式：v1 AGENT 槽计数；v2 纯 markdown 按节「有实质作答」判（复用 flow-review 的
+-      // v2 节读取——问题原文行剥离；仅标题在场不算已填，防 spec 相位误跳「②执行」）
+-      if (/<!--AGENT:槽\d+/.test(dText)) {
+-        designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+-      } else {
+-        try {
+-          const { readV2SectionAnswer } = await import('./flow-review.js')
+-          const { DESIGN_QUESTIONS } = await import('./flow-draft.js')
+-          designFilled = DESIGN_QUESTIONS.sections.filter((s) => readV2SectionAnswer(dText, s.heading, DESIGN_QUESTIONS)).length >= 3
+-        } catch { designFilled = false }
+-      }
++      // 双格式判定单一源（2026-10-19-approve-gate-tick-nudge FR-03 上移 flow-review.js；
++      // 判据与原内联逻辑逐字一致——status/tick 同源，行为零变化）
++      const { designSectionsFilled } = await import('./flow-review.js')
++      designFilled = designSectionsFilled(dText)
+     } catch { /* 无 design */ }
+     try {
+       const rText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+diff --git a/test/flow-review-pack.test.mjs b/test/flow-review-pack.test.mjs
+new file mode 100644
+index 00000000..66a9d547
+--- /dev/null
++++ b/test/flow-review-pack.test.mjs
+@@ -0,0 +1,198 @@
++/**
++ * flow-review-pack.test.mjs — 轻量评审任务书预消化材料包（2026-10-19-thin-review-material-pack）
++ *
++ * 覆盖验收面（FR-01~FR-04）：
++ *   ① 解析基座：FR 标题/测试绑定行解析、冻结 patch 文件级摘要（±行数/hunk 数/rename/二进制容错）；
++ *   ② 组装三态：两源齐备/部分可得/全缺 null + 体积帽截断注记 + 确定性（同输入同输出）；
++ *   ③ 注入/零注入：packLines 注入形态与位置、缺省/空数组时渲染与现状逐字一致。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import {
++  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, PACK_MAX_CHARS,
++} from '../src/flow-review-pack.js'
++import { renderReviewerTaskbook } from '../src/flow-review.js'
++
++function makePackDir(requirementsText) {
++  const root = mkdtempSync(join(tmpdir(), 'frpack-'))
++  const changeDir = join(root, 'changes', 'c-x')
++  mkdirSync(changeDir, { recursive: true })
++  if (requirementsText !== null) writeFileSync(join(changeDir, 'requirements.md'), requirementsText)
++  return { root, changeDir }
++}
++
++const REQ_TEXT = [
++  '# 需求规格（Requirements）— c-x',
++  '',
++  '## 功能需求',
++  '',
++  '### FR-01: 任务书注入',
++  '',
++  '- 行为句必须注入。',
++  '',
++  '#### 场景：主路径',
++  '',
++  '### FR-02: 体积帽',
++  '',
++  '- 行为句必须截断。',
++  '',
++  '## 测试绑定（每条 FR 至少一行）',
++  '',
++  'FR-01: test/flow-review-pack.test.mjs「注入形态」',
++  'FR-02: test/flow-review-pack.test.mjs「帽截断」',
++  '',
++].join('\n')
++
++const PATCH_TEXT = [
++  'diff --git a/src/one.js b/src/one.js',
++  'index 111..222 100644',
++  '--- a/src/one.js',
++  '+++ b/src/one.js',
++  '@@ -1,4 +1,5 @@',
++  ' ctx',
++  '-old1',
++  '-old2',
++  '+new1',
++  '+new2',
++  '+new3',
++  ' ctx',
++  '@@ -10,3 +11,3 @@',
++  ' ctx',
++  '-old3',
++  '+new4',
++  ' ctx',
++  'diff --git a/renamed/old.md b/renamed/new.md',
++  'similarity index 90%',
++  'rename from renamed/old.md',
++  'rename to renamed/new.md',
++  '--- a/renamed/old.md',
++  '+++ b/renamed/new.md',
++  '@@ -2,2 +2,2 @@',
++  ' ctx',
++  '-x',
++  '+y',
++  'diff --git a/bin/logo.png b/bin/logo.png',
++  'index 333..444 100644',
++  'Binary files a/bin/logo.png and b/bin/logo.png differ',
++  '',
++].join('\n')
++
++test('① 解析基座：FR 标题/绑定行解析（requirements.md 机械解析）', () => {
++  const rows = parseFrBindingRows(REQ_TEXT)
++  assert.equal(rows.length, 2)
++  assert.equal(rows[0].fr, 'FR-01')
++  assert.equal(rows[0].title, '任务书注入')
++  assert.equal(rows[0].binding, 'test/flow-review-pack.test.mjs「注入形态」')
++  assert.equal(rows[1].fr, 'FR-02')
++  assert.equal(rows[1].title, '体积帽')
++  assert.equal(rows[1].binding, 'test/flow-review-pack.test.mjs「帽截断」')
++  // 空文本 → 空数组
++  assert.deepEqual(parseFrBindingRows(''), [])
++  assert.deepEqual(parseFrBindingRows(null), [])
++  // 无绑定节 → FR 行在场、绑定空串
++  const noBind = parseFrBindingRows('# r\n\n### FR-01: t\n')
++  assert.equal(noBind.length, 1)
++  assert.equal(noBind[0].binding, '')
++})
++
++test('① 解析基座：冻结 patch 文件级摘要（±行数/hunk 数/rename/二进制容错）', () => {
++  const files = parseFrozenPatchSummary(PATCH_TEXT)
++  assert.equal(files.length, 3)
++  assert.deepEqual(files[0], { path: 'src/one.js', plus: 4, minus: 3, hunks: 2 })
++  assert.equal(files[1].path, 'renamed/new.md')
++  assert.deepEqual([files[1].plus, files[1].minus, files[1].hunks], [1, 1, 1])
++  assert.deepEqual(files[2], { path: 'bin/logo.png', plus: 0, minus: 0, hunks: 0 })
++  // 空文本 → 空数组
++  assert.deepEqual(parseFrozenPatchSummary(''), [])
++  assert.deepEqual(parseFrozenPatchSummary(null), [])
++  // 垃圾前缀容错：无 diff --git 头的杂行不产文件、不抛错
++  assert.deepEqual(parseFrozenPatchSummary('random text\n+plus line\n'), [])
++})
++
++test('② 组装三态：两源齐备/部分可得/全缺 null', () => {
++  const { root, changeDir } = makePackDir(REQ_TEXT)
++  try {
++    const full = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
++    assert.ok(full && Array.isArray(full.lines) && full.lines.length > 0)
++    assert.ok(full.lines[0].includes('【预消化材料包'))
++    assert.ok(full.lines.some((l) => l.includes('FR-01: 任务书注入') && l.includes('「注入形态」')))
++    assert.ok(full.lines.some((l) => l.includes('src/one.js（+4/-3，2 hunk）')))
++    assert.ok(full.lines[full.lines.length - 1].includes('基准面'))
++    assert.ok(full.lines[full.lines.length - 1].includes('cannot_verify'))
++
++    // 部分可得：仅 requirements（patchText null——跨仓 JSON 冻结面形态，不读活 git 兜底）
++    const frOnly = assembleReviewPack({ changeDir, patchText: null })
++    assert.ok(frOnly.lines.some((l) => l.includes('FR-01:')))
++    assert.ok(!frOnly.lines.some((l) => l.includes('文件级摘要')))
++
++    // 部分可得：仅 patch（requirements 缺件）
++    const r2 = makePackDir(null)
++    try {
++      const patchOnly = assembleReviewPack({ changeDir: r2.changeDir, patchText: PATCH_TEXT })
++      assert.ok(patchOnly.lines.some((l) => l.includes('文件级摘要')))
++      assert.ok(!patchOnly.lines.some((l) => l.includes('FR-01:')))
++    } finally { rmSync(r2.root, { recursive: true, force: true }) }
++
++    // 全缺 → null（零注入由调用方处理）
++    const r3 = makePackDir(null)
++    try {
++      assert.equal(assembleReviewPack({ changeDir: r3.changeDir, patchText: null }), null)
++      assert.equal(assembleReviewPack({ changeDir: r3.changeDir, patchText: '' }), null)
++    } finally { rmSync(r3.root, { recursive: true, force: true }) }
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('② 体积帽：超限行级截断并注记，总长不超帽，确定性同输入同输出', () => {
++  const many = []
++  for (let i = 0; i < 400; i++) {
++    many.push(`diff --git a/src/deep/dir${i}/file-with-long-name-${i}.js b/src/deep/dir${i}/file-with-long-name-${i}.js`)
++    many.push('@@ -1,2 +1,2 @@')
++    many.push('-a')
++    many.push('+b')
++  }
++  const bigPatch = many.join('\n')
++  const { root, changeDir } = makePackDir(REQ_TEXT)
++  try {
++    const p = assembleReviewPack({ changeDir, patchText: bigPatch })
++    assert.ok(p.lines.join('\n').length <= PACK_MAX_CHARS)
++    assert.equal(p.truncated, true)
++    assert.ok(p.lines.some((l) => l.includes('截断')))
++    // 基准面语义行恒为末行（截断不吞语义行）
++    assert.ok(p.lines[p.lines.length - 1].includes('cannot_verify'))
++    // 确定性：同输入同输出（FR-02 纯机械主张的测试锚）
++    const q = assembleReviewPack({ changeDir, patchText: bigPatch })
++    assert.deepEqual(p, q)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('③ 注入/零注入：packLines 注入形态与位置、缺省/空数组与现状逐字一致', () => {
++  // 零注入三形态逐字一致（缺省/显式 null/空数组）——零回归锚
++  const args = { change: 'c-x', changeDir: '/x/c-x' }
++  const plain = renderReviewerTaskbook(args)
++  assert.equal(plain, renderReviewerTaskbook({ ...args, packLines: null }))
++  assert.equal(plain, renderReviewerTaskbook({ ...args, packLines: [] }))
++  assert.ok(!plain.includes('预消化材料包'))
++
++  const { root, changeDir } = makePackDir(REQ_TEXT)
++  try {
++    const pack = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
++    const base = renderReviewerTaskbook({ change: 'c-x', changeDir })
++    const withPack = renderReviewerTaskbook({ change: 'c-x', changeDir, packLines: pack.lines })
++    // 位置：材料段之后、检查单之前（锚材料段头而非 patch 行——冻结形态三分支文案
++    // 由 2026-10-19-thin-empty-face-cross-repo-freeze 按在场件切换，钉死单分支会误伤）
++    const idxMaterial = withPack.indexOf('【材料（按需 Read')
++    const idxPack = withPack.indexOf('【预消化材料包')
++    const idxCheck = withPack.indexOf('【检查单')
++    assert.ok(idxMaterial > -1 && idxPack > idxMaterial && idxCheck > idxPack)
++    // FR 表与摘要行逐字在场 + 基准面语义行随段在场
++    assert.ok(withPack.includes('FR-01: 任务书注入'))
++    assert.ok(withPack.includes('src/one.js（+4/-3，2 hunk）'))
++    assert.ok(withPack.includes('cannot_verify'))
++    // 手术式插入证明：摘除注入块后与零注入产物逐字一致（NL 常量防 shell 转义吃反斜杠）
++    const NL = String.fromCharCode(10)
++    assert.equal(withPack.replace(NL + NL + pack.lines.join(NL), ''), base)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})

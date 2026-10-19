@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-review-material-pack",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-thin-review-material-pack:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-review-pack.test.mjs「注入形态——材料可得时任务书含预消化段（FR 表逐条对应+patch 摘要行数与文件数一致+基准面语义行）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-material-pack"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-thin-review-material-pack:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review-pack.test.mjs「帽截断——超限材料截断并注记；确定性——同输入同输出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-material-pack"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-thin-review-material-pack:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review-pack.test.mjs「零注入一致——缺件/未传参时渲染产物与现状逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-material-pack"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-19-thin-review-material-pack:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-review-pack.test.mjs",
+        "test/flow-review.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-material-pack"
+    }
+  ]
+}

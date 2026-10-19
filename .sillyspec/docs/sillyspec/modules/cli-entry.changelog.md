@@ -68,3 +68,4 @@
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |
 | 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+| 2026-10-19 | 2026-10-19-thin-review-material-pack | 轻量评审任务书预消化材料包 |

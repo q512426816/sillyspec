@@ -10294,3 +10294,79 @@ superseded_by：FR-core-engine-142
 - 场景：全量回归 — Given 本变更合入，When 跑既有相关测试与新增测试，Then 零失败。
 全文：.sillyspec/changes/archive/2026-10-19-approve-gate-tick-nudge/requirements.md#FR-05
 最近确认：811130f031f306c084caabad239605d0d9a35303
+
+## FR-cli-entry-544 评审任务书预消化材料包注入
+变更：2026-10-19-thin-review-material-pack
+状态：active
+摘要：主路径；跨仓 JSON 冻结面
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-material-pack/requirements.md#FR-01
+最近确认：e70ea3004aabbd1b8d4a664fece5cedc3af94556
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-material-pack:flow:测试绑定FR-01
+  tests: test/flow-review-pack.test.mjs「注入形态——材料可得时任务书含预消化段（FR 表逐条对应+patch 摘要行数与文件数一致+基准面语义行）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-material-pack
+  status: active
+
+## FR-cli-entry-545 纯机械抽取与体积帽
+变更：2026-10-19-thin-review-material-pack
+状态：active
+摘要：大 patch 截断
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-material-pack/requirements.md#FR-02
+最近确认：e70ea3004aabbd1b8d4a664fece5cedc3af94556
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-material-pack:flow:测试绑定FR-02
+  tests: test/flow-review-pack.test.mjs「帽截断——超限材料截断并注记；确定性——同输入同输出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-material-pack
+  status: active
+
+## FR-cli-entry-546 零注入逐字一致
+变更：2026-10-19-thin-review-material-pack
+状态：active
+摘要：既有调用方零感知
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-material-pack/requirements.md#FR-03
+最近确认：e70ea3004aabbd1b8d4a664fece5cedc3af94556
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-material-pack:flow:测试绑定FR-03
+  tests: test/flow-review-pack.test.mjs「零注入一致——缺件/未传参时渲染产物与现状逐字一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-material-pack
+  status: active
+
+## FR-cli-entry-547 三态测试全绿
+变更：2026-10-19-thin-review-material-pack
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-material-pack/requirements.md#FR-04
+最近确认：e70ea3004aabbd1b8d4a664fece5cedc3af94556
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-material-pack:flow:测试绑定FR-04
+  tests: test/flow-review-pack.test.mjs | test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-material-pack
+  status: active
