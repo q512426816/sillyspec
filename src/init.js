@@ -85,18 +85,8 @@ const TOOL_LABELS = {
   cursor: 'Cursor',
   openclaw: 'OpenClaw',
   codex: 'OpenAI Codex (通过 AGENTS.md)',
-  gemini: 'Gemini CLI (通过 GEMINI.md)',
-  opencode: 'OpenCode (通过 INSTRUCTIONS.md)',
-};
-
-// 指令文件工具（gemini/opencode）。codex/claude/zcode 共用 AGENTS.md（跨工具通用标准内容源）；
-// gemini/opencode 写各自指令文件，内容与 AGENTS.md 同源同全文（改 @AGENTS.md 指针需先验证
-// 两家对 @ 导入语法的支持，留待后续变更）。
-const INSTRUCTION_TOOLS = ['gemini', 'opencode'];
-
-const INSTRUCTION_FILE_MAP = {
-  gemini: 'GEMINI.md',
-  opencode: 'INSTRUCTIONS.md',
+  gemini: 'Gemini CLI',
+  opencode: 'OpenCode',
 };
 
 // ── 注入指令文件（全量方案，2026-10-10-init-full-injection：完整模板是唯一注入源）──
@@ -145,7 +135,7 @@ function stripLegacySmallBlock(content) {
 
 /**
  * 向指引文件注入完整模板（版本感知幂等，三态四分支 + 旧标记迁移）。
- * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 共用；完整模板（templates/agents-instruction.md）
+ * AGENTS.md 专用（GEMINI.md/INSTRUCTIONS.md 专属注入面 2026-10-19 下线）；完整模板（templates/agents-instruction.md）
  * 是唯一注入源。取代 design: 2026-08-02-init-claude-md 的 CLAUDE.md 单文件方案与
  * v≤3.32.3 的追加态小段方案（其 D-004 预留的「marker 方案迁移」即彼方案）。
  * - 不存在：写完整模板 + 顶部版本注释
@@ -208,12 +198,6 @@ function injectFullInstructions(filePath) {
 
 export function injectAgentsInstructions(projectDir) {
   injectFullInstructions(join(projectDir, 'AGENTS.md'));
-}
-
-export function injectInstructions(tool, projectDir) {
-  const fileName = INSTRUCTION_FILE_MAP[tool];
-  if (!fileName) return;
-  injectFullInstructions(join(projectDir, fileName));
 }
 
 /**
@@ -438,17 +422,10 @@ async function doInstall(projectDir, tools, subprojects = [], specDir = null, op
     }
   }
 
-  // 注入指令文件（gemini/opencode：与 AGENTS.md 同源同全文，共用全量注入器）
-  for (let i = 0; i < tools.length; i++) {
-    const toolName = tools[i];
-    if (INSTRUCTION_TOOLS.includes(toolName)) {
-      injectInstructions(toolName, projectDir);
-    }
-  }
-
-  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 小段迁移；
-  // zcode 2026-09-21-flow-command-cards FR-05 入面——AGENTS.md 是跨工具通用标准内容源）
-  if (tools.includes('claude') || tools.includes('codex') || tools.includes('zcode')) {
+  // 注入 AGENTS.md 完整指引（版本感知幂等三态四分支 + 旧 ## SillySpec 小段迁移）。
+  // 2026-10-19 起全工具统一落 AGENTS.md：gemini/opencode 不再产 GEMINI.md/INSTRUCTIONS.md
+  // （OpenCode 原生读 AGENTS.md；Gemini CLI 现默认 GEMINI.md，需自行引用 AGENTS.md，边界见 file-lifecycle）
+  if (tools.some((t) => ['claude', 'codex', 'zcode', 'gemini', 'opencode'].includes(t))) {
     injectAgentsInstructions(projectDir);
   }
 
