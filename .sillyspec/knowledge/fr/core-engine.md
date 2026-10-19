@@ -4164,3 +4164,79 @@
   confirmed_at: null
   source_change: 2026-10-16-probe7-prefill-noise-fix
   status: active
+
+## FR-core-engine-246 注册路径不可达的 degradedReason 不再包含绝对路径（改为引用 local.yaml repos 键）
+变更：2026-10-19-cross-repo-face-tool-filter
+状态：active
+摘要：降级原因脱敏
+全文：.sillyspec/changes/archive/2026-10-19-cross-repo-face-tool-filter/requirements.md#FR-01
+最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-01
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-cross-repo-face-tool-filter
+  status: active
+
+## FR-core-engine-247 reconcileCrossRepoPlan 的跨仓文件面（rows/totals/patch）过滤工具治理模板（isToolGovernancePath 同源）
+变更：2026-10-19-cross-repo-face-tool-filter
+状态：active
+摘要：跨仓模板剔除
+全文：.sillyspec/changes/archive/2026-10-19-cross-repo-face-tool-filter/requirements.md#FR-02
+最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-02
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-cross-repo-face-tool-filter
+  status: active
+
+## FR-core-engine-248 新增用例覆盖：跨仓模板不入 repos[].patch、degradedReason 无路径
+变更：2026-10-19-cross-repo-face-tool-filter
+状态：active
+摘要：验证面
+全文：.sillyspec/changes/archive/2026-10-19-cross-repo-face-tool-filter/requirements.md#FR-03
+最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-03
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-cross-repo-face-tool-filter
+  status: active
+
+## FR-core-engine-249 既有跨仓/空面/过滤测试全绿
+变更：2026-10-19-cross-repo-face-tool-filter
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-19-cross-repo-face-tool-filter/requirements.md#FR-04
+最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-04
+  tests: test/cross-repo-baseline-anchor.test.mjs | test/cross-repo-patch-freeze.test.mjs | test/scope-audit-cross-repo.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-cross-repo-face-tool-filter
+  status: active

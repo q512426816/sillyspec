@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-cross-repo-face-tool-filter",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-cross-repo-face-tool-filter"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-cross-repo-face-tool-filter"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-cross-repo-face-tool-filter"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-19-cross-repo-face-tool-filter:flow:测试绑定FR-04",
+      "tests": [
+        "test/cross-repo-baseline-anchor.test.mjs",
+        "test/cross-repo-patch-freeze.test.mjs",
+        "test/scope-audit-cross-repo.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-cross-repo-face-tool-filter"
+    }
+  ]
+}

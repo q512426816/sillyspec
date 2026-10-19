@@ -3502,3 +3502,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：71b3ff3ebc87ef51ed667b31b66c4ce92e15e638
 理由：最大风险：只改 `.claude/skills/**` 的合法 skill 变更将不再进入 change.patch（归档仍保留变更文档与 git 历史）——这是显式取舍：工具注入面不算业务交付，且此类变更常为 init 模板刷新，正是生产污染源。放弃方案：①按文件内容/类别智能判定——漂移且误伤合法 skill 编写；②把 `filterDeliverableFiles` 的 tool 档也硬剔——会影响 worktree apply 的交付语义，超出本次范围；③剔除 AGENTS.md——它是跨 harness 的项目指令，可能是真实交付（本仓 3.33.1 刷新即例），故保留。
+
+## D-unmapped-428@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-19-cross-repo-face-tool-filter
+原编号：D-001@v1
+锚点：未记录
+最近确认：6049c3e03f039afa71dde0956f5600407e2ff129
+理由：最大风险：跨仓 patch 与 totals 的既有读方（平台全屏预览/实时对账卡）看到的文件数变小——这是口径修正（模板本就不该计入交付），非数据丢失；模板改动仍在 git 历史与归档文档。放弃方案：①只过滤 patch 不过滤 rows——会造成 totals 与 patch 文件数不一致（生产 112 vs 110 的既有失真复刻）；②在 filterDeliverableFiles 层过滤——会改变 worktree apply 的交付语义（tool 档是软桶），影响面超出本变更。

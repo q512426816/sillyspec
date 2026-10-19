@@ -1,0 +1,92 @@
+diff --git a/src/cross-repo-reconcile.js b/src/cross-repo-reconcile.js
+index 5b188fac..a499b661 100644
+--- a/src/cross-repo-reconcile.js
++++ b/src/cross-repo-reconcile.js
+@@ -215,8 +215,11 @@ export function collectRepoActual({ repoKey, specBase, cwd, runtimeRoot = null,
+     // 2) 仓根（isAbsolute/resolve 兼容 Windows 盘符绝对注册与相对 cwd 注册）
+     const repoPath = isAbsolute(rawPath) ? rawPath : resolve(cwd, rawPath)
+     if (!existsSync(repoPath)) {
++      // degradedReason 不嵌绝对路径（2026-10-19-cross-repo-face-tool-filter，平台评审 P2）：
++      // 该文案会随 change-patch.json 冻结并透出到平台资产卡，本机布局属环境信息不外泄；
++      // repoPath 仍留在返回值供本机诊断使用。
+       return { repo: repoKey, repoPath, anchor: degradedAnchor(), files: [],
+-        degradedReason: `注册路径不可达：${repoPath}` }
++        degradedReason: `注册路径不可达（local.yaml repos.${repoKey} 的注册值在本机不存在）——请人工到对应仓核对` }
+     }
+ 
+     // 3) A 档 reviews-range：runtimeRoot 与 changeName 双提供才尝试（缺省跳过 = 向后兼容）
+diff --git a/src/flow.js b/src/flow.js
+index 019c1950..fc2d0855 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2042,6 +2042,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+             const { collectRepoActual } = await import('./cross-repo-reconcile.js')
+             const { filterDeliverableFiles } = await import('./worktree-apply.js')
++            const { isToolGovernancePath } = await import('./flow-parity.js')
+             const registeredKeys = loadRegisteredRepoKeys(specBase)
+             const probeHits = []
+             for (const repoKey of registeredKeys) {
+@@ -2054,6 +2055,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+                 })
+                 if (!actual || actual.degradedReason) continue
+                 const files = filterDeliverableFiles(actual.files || [])
++                  .filter((f) => !isToolGovernancePath(f))
+                 if (files.length > 0) probeHits.push({ key: repoKey, count: files.length })
+               } catch { /* 单仓探测失败不阻断（fail-soft） */ }
+             }
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 674f0bd7..fa03ab02 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -41,6 +41,7 @@ import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
+ import { safeGit } from './git-helper.js'
+ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+ import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
++import { isToolGovernancePath } from './flow-parity.js'
+ import { parseRepoRegistry } from './stages/plan-postcheck.js'
+ // 跨仓 per-repo 采集共享内核（2026-09-20 scope-audit-cross-repo task-02 消费 task-01 产物）。
+ // 无环确认：cross-repo-reconcile 的静态依赖链（git-helper/plan-postcheck/worktree-apply/
+@@ -1373,7 +1374,11 @@ export function reconcileCrossRepoPlan({ cwd, specBase, runtimeRoot, changeName,
+     }
+     // 真实三态：该仓 actual（filterDeliverableFiles 过滤，主仓口径）× 该组声明面 pathMatches
+     // 双向容差（glob/目录前缀兼容，design 清单可写 glob）→ planned / unplanned / untouched
+-    const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))].map(toPosix).sort()
++    // 工具治理模板同源剔除（2026-10-19-cross-repo-face-tool-filter）：跨仓面（rows/totals/
++    // patch）与主仓冻结面同口径，不让 .claude/.codex 等注入面刷屏跨仓交付。
++    const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))]
++      .filter((f) => !isToolGovernancePath(f))
++      .map(toPosix).sort()
+     const repoStats = collectNumstatByPath(repoActual.repoPath, repoFiles, { baseRef: repoActual.anchor.base })
+     const repoMatched = new Set()
+     for (const f of repoFiles) {
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index 2e136efa..e362c009 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -264,6 +264,11 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
+     git(lib, ['add', 'impl.txt'])
+     git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
+     writeFileSync(join(lib, 'fix.txt'), 'fix\n')
++    // 工具治理模板（2026-10-19-cross-repo-face-tool-filter）：跨仓面同口径剔除
++    mkdirSync(join(lib, '.claude', 'skills', 't'), { recursive: true })
++    writeFileSync(join(lib, '.claude', 'skills', 't', 'SKILL.md'), '# template\n')
++    git(lib, ['add', '.claude'])
++    git(lib, ['commit', '-qm', `chore: 模板 (${change})`])
+     fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt', '', '### deadkey', '', '- src/dead.js'].join('\n'))
+     // 预置旧 change.patch（重冻结到空主仓面的清理路径）：修完仍存在即为回归。
+     writeFileSync(join(specBase, 'changes', change, 'change.patch'), 'diff --git a/stale b/stale\n')
+@@ -286,8 +291,13 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
+     assert.match(libRepo.patch, /impl\.txt/, '提交交付进 patch')
+     assert.match(libRepo.patch, /fix\.txt/, '工作树交付进 patch')
+     assert.match(libRepo.patchSha256, /^[0-9a-f]{64}$/, '跨仓 patch 正文带 sha256 锚')
++    // 工具治理模板不入跨仓面（2026-10-19-cross-repo-face-tool-filter）
++    assert.doesNotMatch(libRepo.patch, /\.claude/, '跨仓模板不入 patch 正文')
++    const crossRows = (meta.scopeAudit || {}).rows || []
++    assert.ok(!crossRows.some((r) => String(r.path).includes('.claude')), '跨仓模板不入对账行')
+     assert.equal(deadRepo.degraded, true, '降级仓条目不丢')
+     assert.ok(deadRepo.degradedReason, '降级原因随条目留档')
++    assert.doesNotMatch(String(deadRepo.degradedReason), /nonexistent-deadkey/, '降级原因不含本机路径')
+     const vr = readFileSync(join(arch, 'verify-result.md'), 'utf8')
+     assert.match(vr, /跨仓 1 仓/, '回执报跨仓冻结')
+     assert.doesNotMatch(vr, /无冻结件/, '回执不再写无冻结件')

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-cross-repo-face-tool-filter",
+  "reviewer": "subagent（ZCode 独立子代理）",
+  "verdict": "PASS",
+  "reviewedAgainst": "6049c3e03f039afa71dde0956f5600407e2ff129",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 场景正半句「degradedReason 含 repos.<key> 引用」无断言，测试只覆盖负半句",
+      "evidence": "实现已满足（degradedReason 文案含 local.yaml repos.${repoKey} 引用），但测试只断言 doesNotMatch /nonexistent-deadkey/（不含路径），未断言含 repos.deadkey 引用——FR 场景 Then 的正半句无测试锚",
+      "location": "test/thin-empty-face-crosscheck.test.mjs:300；src/cross-repo-reconcile.js:222"
+    },
+    {
+      "severity": "P3",
+      "title": "脱敏只覆盖文案字段：repos[].repoPath（本机绝对路径）仍随 scopeAudit 进冻结 change-patch.json",
+      "evidence": "degraded 仓与降级锚条目均把 repoActual.repoPath 原样写入 repos[]，冻结面 meta.scopeAudit.repos[].repoPath 含绝对路径（夹具即 C:/nonexistent-deadkey-path-xyz）；与 FR-01「repoPath 字段仍保留在返回值供本机诊断」的显式承诺一致（非违反），属 design 接口契约已披露的取舍，但平台若渲染该结构化字段则文案脱敏收益部分旁路",
+      "location": "src/scope-audit.js:1365,1424；test/thin-empty-face-crosscheck.test.mjs:287-289"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-19T19:08:30+08:00"
+}

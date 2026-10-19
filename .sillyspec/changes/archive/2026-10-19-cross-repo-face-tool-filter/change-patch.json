@@ -1,0 +1,94 @@
+{
+  "change": "2026-10-19-cross-repo-face-tool-filter",
+  "baseline": "3af47c6be27eab71a99dfd20d2de777dcb7c1a81",
+  "head": "6049c3e03f039afa71dde0956f5600407e2ff129",
+  "files": [
+    "src/cross-repo-reconcile.js",
+    "src/flow.js",
+    "src/scope-audit.js",
+    "test/thin-empty-face-crosscheck.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 22,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-19T11:03:21.555Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3af47c6be27eab71a99dfd20d2de777dcb7c1a81",
+    "totals": {
+      "files": 4,
+      "additions": 22,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/cross-repo-reconcile.js",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/scope-audit.js",
+        "additions": 6,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/thin-empty-face-crosscheck.test.mjs",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "068172043f07bc380563523626e4a053543d8e7dbb8ad47be66b95b44fba5237",
+  "patchStatus": "ok"
+}
