@@ -12,8 +12,16 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  parseFrBindingRows, parseFrozenPatchSummary,
+  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, PACK_MAX_CHARS,
 } from '../src/flow-review-pack.js'
+
+function makePackDir(requirementsText) {
+  const root = mkdtempSync(join(tmpdir(), 'frpack-'))
+  const changeDir = join(root, 'changes', 'c-x')
+  mkdirSync(changeDir, { recursive: true })
+  if (requirementsText !== null) writeFileSync(join(changeDir, 'requirements.md'), requirementsText)
+  return { root, changeDir }
+}
 
 const REQ_TEXT = [
   '# 需求规格（Requirements）— c-x',
@@ -101,4 +109,60 @@ test('① 解析基座：冻结 patch 文件级摘要（±行数/hunk 数/rename
   assert.deepEqual(parseFrozenPatchSummary(null), [])
   // 垃圾前缀容错：无 diff --git 头的杂行不产文件、不抛错
   assert.deepEqual(parseFrozenPatchSummary('random text\n+plus line\n'), [])
+})
+
+test('② 组装三态：两源齐备/部分可得/全缺 null', () => {
+  const { root, changeDir } = makePackDir(REQ_TEXT)
+  try {
+    const full = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
+    assert.ok(full && Array.isArray(full.lines) && full.lines.length > 0)
+    assert.ok(full.lines[0].includes('【预消化材料包'))
+    assert.ok(full.lines.some((l) => l.includes('FR-01: 任务书注入') && l.includes('「注入形态」')))
+    assert.ok(full.lines.some((l) => l.includes('src/one.js（+4/-3，2 hunk）')))
+    assert.ok(full.lines[full.lines.length - 1].includes('基准面'))
+    assert.ok(full.lines[full.lines.length - 1].includes('cannot_verify'))
+
+    // 部分可得：仅 requirements（patchText null——跨仓 JSON 冻结面形态，不读活 git 兜底）
+    const frOnly = assembleReviewPack({ changeDir, patchText: null })
+    assert.ok(frOnly.lines.some((l) => l.includes('FR-01:')))
+    assert.ok(!frOnly.lines.some((l) => l.includes('文件级摘要')))
+
+    // 部分可得：仅 patch（requirements 缺件）
+    const r2 = makePackDir(null)
+    try {
+      const patchOnly = assembleReviewPack({ changeDir: r2.changeDir, patchText: PATCH_TEXT })
+      assert.ok(patchOnly.lines.some((l) => l.includes('文件级摘要')))
+      assert.ok(!patchOnly.lines.some((l) => l.includes('FR-01:')))
+    } finally { rmSync(r2.root, { recursive: true, force: true }) }
+
+    // 全缺 → null（零注入由调用方处理）
+    const r3 = makePackDir(null)
+    try {
+      assert.equal(assembleReviewPack({ changeDir: r3.changeDir, patchText: null }), null)
+      assert.equal(assembleReviewPack({ changeDir: r3.changeDir, patchText: '' }), null)
+    } finally { rmSync(r3.root, { recursive: true, force: true }) }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('② 体积帽：超限行级截断并注记，总长不超帽，确定性同输入同输出', () => {
+  const many = []
+  for (let i = 0; i < 400; i++) {
+    many.push(`diff --git a/src/deep/dir${i}/file-with-long-name-${i}.js b/src/deep/dir${i}/file-with-long-name-${i}.js`)
+    many.push('@@ -1,2 +1,2 @@')
+    many.push('-a')
+    many.push('+b')
+  }
+  const bigPatch = many.join('\n')
+  const { root, changeDir } = makePackDir(REQ_TEXT)
+  try {
+    const p = assembleReviewPack({ changeDir, patchText: bigPatch })
+    assert.ok(p.lines.join('\n').length <= PACK_MAX_CHARS)
+    assert.equal(p.truncated, true)
+    assert.ok(p.lines.some((l) => l.includes('截断')))
+    // 基准面语义行恒为末行（截断不吞语义行）
+    assert.ok(p.lines[p.lines.length - 1].includes('cannot_verify'))
+    // 确定性：同输入同输出（FR-02 纯机械主张的测试锚）
+    const q = assembleReviewPack({ changeDir, patchText: bigPatch })
+    assert.deepEqual(p, q)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

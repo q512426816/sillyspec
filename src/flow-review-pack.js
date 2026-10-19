@@ -14,6 +14,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+/** 材料包整体体积帽（对齐 review-material-pack.js PACK_MAX_CHARS 先例——包不能成为新的全量面）。 */
+export const PACK_MAX_CHARS = 12000
+
+/** 段标题与段尾基准面语义行（护栏②：照抄完整流程 D-004 语义——包=基准面非禁读面）。 */
+const PACK_TITLE = '【预消化材料包（CLI 机械抽取——定位索引非证据）】'
+const PACK_BASELINE = '  （基准面：包=定位索引非证据；包外定向查证须列明；包不足以作答写 cannot_verify）'
+
 /** FR 标题行（h3）：### FR-NN: 标题——锚形态与 requirements 机器起草模板一致。 */
 const FR_HEADING_RE = /^###\s+(FR-\d+)\s*[::]?\s*(.*)$/
 
@@ -79,4 +86,42 @@ export function parseFrozenPatchSummary(patchText) {
   }
   if (cur) files.push(cur)
   return files
+}
+
+/**
+ * 装配材料包注入行（唯一组包入口）：FR 表与 patch 摘要两子源各自可得各自产出、全缺返回
+ * null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——语义行
+ * 恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
+ * requirements.md 读失败（缺件）→ FR 子段零产出（fail-soft 不抛穿）。
+ * @returns {{ lines: string[], truncated: boolean } | null}
+ */
+export function assembleReviewPack({ changeDir, patchText }) {
+  let frRows = []
+  try {
+    frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
+  } catch { /* 缺件 → FR 子段零产出 */ }
+  const summary = parseFrozenPatchSummary(patchText)
+  if (frRows.length === 0 && summary.length === 0) return null
+  const body = []
+  if (frRows.length > 0) {
+    body.push(`  FR↔测试绑定表（requirements.md 机械解析，${frRows.length} 条）：`)
+    for (const r of frRows) body.push(`  - ${r.fr}: ${r.title}${r.binding ? ` ｜ 绑定: ${r.binding}` : ' ｜ 绑定: （无绑定行）'}`)
+  }
+  if (summary.length > 0) {
+    body.push(`  冻结 patch 文件级摘要（change.patch 机械解析，${summary.length} 文件）：`)
+    for (const f of summary) body.push(`  - ${f.path}（+${f.plus}/-${f.minus}，${f.hunks} hunk）`)
+  }
+  const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
+  let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
+  const lines = [PACK_TITLE]
+  let truncated = false
+  for (const l of body) {
+    const w = l.length + 1
+    if (w > budget) { truncated = true; break }
+    lines.push(l)
+    budget -= w
+  }
+  if (truncated) lines.push(note)
+  lines.push(PACK_BASELINE)
+  return { lines, truncated }
 }
