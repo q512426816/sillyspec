@@ -7,10 +7,12 @@
  * 3. --tool claude,foo 非法值 → exit 1 且报错含全部合法值
  * 4. 单值回归：--tool codex 只写 AGENTS.md、不写 CLAUDE.md
  * 5. 不带 --tool → detectTools 自动检测（零回归）
+ * 6. --tool gemini,opencode（2026-10-19 下线两专属文件）：不产 GEMINI.md/INSTRUCTIONS.md、
+ *    指引统一落 AGENTS.md；既有两文件重跑 init 字节不动
  */
 
 import { join, resolve, dirname } from 'path'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 import { tmpdir } from 'os'
@@ -126,6 +128,33 @@ console.log('\n=== Test 4: 单值回归 + 自动检测 ===')
   assert(existsSync(join(project2, 'CLAUDE.md')), '不带 --tool 自动检测 fallback claude（零回归）')
   assert(readFileSync(join(project2, 'CLAUDE.md'), 'utf8').includes('@AGENTS.md'), 'fallback CLAUDE.md 为 @AGENTS.md 指针')
   assert(existsSync(join(project2, 'AGENTS.md')), 'fallback claude 同时生成 AGENTS.md 内容源')
+  clean(project2, spec2)
+}
+
+// ── Test 5: gemini/opencode 选中 → 不产专属文件，指引统一落 AGENTS.md ──
+console.log('\n=== Test 5: --tool gemini,opencode → 无 GEMINI.md/INSTRUCTIONS.md，AGENTS.md 统一落点 ===')
+{
+  const project = tmpDir('t5'), spec = tmpDir('t5-spec')
+  gitInit(project)
+  runOk(`node "${binCLI}" init "${project}" --tool gemini,opencode --spec-dir "${spec}" --no-skills`)
+  assert(!existsSync(join(project, 'GEMINI.md')), 'gemini 不再生成 GEMINI.md（注入面已下线）')
+  assert(!existsSync(join(project, 'INSTRUCTIONS.md')), 'opencode 不再生成 INSTRUCTIONS.md（注入面已下线）')
+  const agents = join(project, 'AGENTS.md')
+  assert(existsSync(agents), '指引统一落 AGENTS.md')
+  assert(readFileSync(agents, 'utf8').includes('# Agent 指引'), 'AGENTS.md 为完整模板（与 claude/codex 同源）')
+  clean(project, spec)
+
+  // 既有 GEMINI.md/INSTRUCTIONS.md（老安装产物/用户文件）重跑 init 字节不动
+  const project2 = tmpDir('t5b'), spec2 = tmpDir('t5b-spec')
+  gitInit(project2)
+  const legacyGemini = '# 老安装 GEMINI.md\n\n<!-- SillySpec v0.0.0-test START — 旧受管段 -->\n旧内容\n<!-- SillySpec END -->\n'
+  const legacyInstr = '# My Notes\n\n自己的说明。\n'
+  writeFileSync(join(project2, 'GEMINI.md'), legacyGemini)
+  writeFileSync(join(project2, 'INSTRUCTIONS.md'), legacyInstr)
+  runOk(`node "${binCLI}" init "${project2}" --tool opencode --spec-dir "${spec2}" --no-skills`)
+  assert(readFileSync(join(project2, 'GEMINI.md'), 'utf8') === legacyGemini, '既有 GEMINI.md 字节不动（不迁移不清理）')
+  assert(readFileSync(join(project2, 'INSTRUCTIONS.md'), 'utf8') === legacyInstr, '既有 INSTRUCTIONS.md 字节不动（不迁移不清理）')
+  assert(existsSync(join(project2, 'AGENTS.md')), '重跑 init 照常注入 AGENTS.md')
   clean(project2, spec2)
 }
 

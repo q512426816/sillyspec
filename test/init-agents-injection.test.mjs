@@ -1,9 +1,11 @@
 /**
  * init 注入 Agent 指引（全量方案 2026-10-10-init-full-injection：完整模板是唯一注入源，
- * AGENTS.md / GEMINI.md / INSTRUCTIONS.md 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
+ * 任何状态都写全文；版本感知幂等三态四分支 + 旧小段迁移）
  * + CLAUDE.md（@AGENTS.md 指针）。直接单测导出的注入器，无需走 cmdInit 重依赖。
+ * GEMINI.md/INSTRUCTIONS.md 专属注入面 2026-10-19 下线（gemini/opencode 统一落 AGENTS.md，
+ * CLI 层行为见 init-tool-multi Test 5），本套件只留 AGENTS.md/CLAUDE.md 注入器用例。
  */
-import { injectAgentsInstructions, injectClaudePointer, injectInstructions, getVersion } from '../src/init.js'
+import { injectAgentsInstructions, injectClaudePointer, getVersion } from '../src/init.js'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync } from 'fs'
 import { join } from 'path'
 import os from 'os'
@@ -171,56 +173,6 @@ console.log('\n--- Case 6b: 旧段 CRLF 漂移 → 按标题截除回退，仍�
   assert(content.includes('自己的规范说明'), '用户内容保留')
   assert(!content.includes('旧段正文（被编辑过）'), '旧段内容（CRLF 漂移态）已截除')
   assert(content.includes(`<!-- SillySpec v${VER} START`), '新受管段已追加')
-  rmSync(root, { recursive: true, force: true })
-}
-
-// ══ GEMINI.md / INSTRUCTIONS.md（injectInstructions 全量注入，与 AGENTS.md 同源同全文）══
-
-// ── Case 12: 无文件 → 写完整模板 ──
-console.log('\n--- Case 12: GEMINI.md 无文件 → 写完整指引（同 AGENTS.md 模板）---')
-{
-  const root = makeTempProject()
-  injectInstructions('gemini', root)
-  const p = join(root, 'GEMINI.md')
-  assert(existsSync(p), 'GEMINI.md 已生成')
-  const content = readFileSync(p, 'utf8')
-  assert(content.startsWith(`<!-- SillySpec v${VER} — `), '顶部版本注释')
-  assert(content.includes('# Agent 指引'), '完整模板全文（与 AGENTS.md 同源）')
-  assert(content.includes('改代码前必须先说明依据'), '含核心规则')
-  assert(!content.includes('## SillySpec — 规范驱动开发'), '不含旧小段')
-  rmSync(root, { recursive: true, force: true })
-}
-
-// ── Case 13: 用户自有文件 → 追加完整受管段，同版本幂等 ──
-console.log('\n--- Case 13: INSTRUCTIONS.md 用户自有文件 → 追加完整受管段 + 同版本幂等 ---')
-{
-  const root = makeTempProject()
-  writeFileSync(join(root, 'INSTRUCTIONS.md'), `# My Notes\n\n自己的说明。\n`)
-  injectInstructions('opencode', root)
-  const p = join(root, 'INSTRUCTIONS.md')
-  const first = readFileSync(p, 'utf8')
-  assert(first.startsWith('# My Notes'), '原文保留在前')
-  assert(first.includes('自己的说明'), '原文内容字节保留')
-  assert(first.includes(`<!-- SillySpec v${VER} START`), '完整受管块开始标记')
-  assert(first.includes('改代码前必须先说明依据'), '受管块为完整模板全文')
-  const beforeMtime = statSync(p).mtimeMs
-  injectInstructions('opencode', root)
-  assert(readFileSync(p, 'utf8') === first, '同版本重跑内容不变（幂等）')
-  assert(statSync(p).mtimeMs === beforeMtime, '同版本重跑不写文件')
-  rmSync(root, { recursive: true, force: true })
-}
-
-// ── Case 14: 老安装整文件即旧小段（v≤3.32.3 injectInstructions 新建产物）→ 迁移为完整受管块 ──
-console.log('\n--- Case 14: GEMINI.md 整文件即旧小段 → 迁移为完整受管块，无空壳残留 ---')
-{
-  const root = makeTempProject()
-  const legacyOnly = LEGACY_SMALL.slice(LEGACY_SMALL.indexOf('## SillySpec'))
-  writeFileSync(join(root, 'GEMINI.md'), legacyOnly)
-  injectInstructions('gemini', root)
-  const content = readFileSync(join(root, 'GEMINI.md'), 'utf8')
-  assert(!content.includes('## SillySpec — 规范驱动开发'), '旧小段标题已迁移清除')
-  assert(content.startsWith(`<!-- SillySpec v${VER} START`), '文件起始即完整受管块（截除后无空壳）')
-  assert(content.includes('改代码前必须先说明依据'), '新内容为完整模板全文')
   rmSync(root, { recursive: true, force: true })
 }
 
