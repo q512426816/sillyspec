@@ -1,6 +1,6 @@
 ---
 name: sillyspec:flow
-description: 轻量变更（默认快道）：需求明确的小/中改动两步收口——flow start → 直接干活 → flow done
+description: 轻量变更（默认快道）：需求明确的小/中改动——flow start → 补 spec 面 → 批准 → 干活 → flow done
 ---
 # 何时用
 
@@ -18,12 +18,16 @@ sillyspec flow start --change <变更名> --input "<一句 10-30 字中文概括
 #    极速变体：用户显式说「极速/别验证/只要 spec 和代码」类原话时才加 --turbo（仅用户显式触发，
 #    禁止你自行启用）——flow-state 留痕，收口跳过实测与重仪式门（hunk/dirty/ui 探针/评审），
 #    spec 结构校验、tasks 全勾、ledger、patch 冻结、distill、归档照常；升厚即失效恢复全量仪式。
-# ② 直接干活：改代码写测试（按层适用——纯逻辑先写、行为契约断用户所见、样式/纯配置不写）；填 design.md 四节（空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；
-#    tasks.md 是你的工作队列——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态），
+# ② 补 spec 面（动码前）：requirements FR 行为句（强度词）+ 测试绑定行、design.md 四节作答
+#    （空节 flow done 拒收；列改动文件用独立「## 文件变更清单」节）；tasks.md 改写为工作队列
+#    ——机器种子改写为实现步骤（每行做什么+怎么验证，保持 `- [ ] task-NN:` 行形态）。
+#    然后过断点①：摘要给用户看 → 用户运行 sillyspec flow approve --change <名>（批准留痕；
+#    用户显式说「直接跑完」→ 重跑 start --autopilot 豁免）。批准是动码前置义务，不是收口补救。
+# ③ 干活（已批准）：写测试、改代码（按层适用——纯逻辑先写、行为契约断用户所见、样式/纯配置不写）；
 #    执行循环：Working on task N/M → 做一件 → 测试绿后当场勾一格（sillyspec task tick --change <名> --task task-NN
 #    即时回显进度与下一任务）→ 下一行；每格勾选要有对应提交（消息带 task-NN），一把勾收口被拒。
 #    交付代码显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交不进审计件）
-# ③ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档；--turbo 变更自动跳过实测与重仪式门）：
+# ④ 收口（CLI 亲自实测 test/lint + 独立评审定档 + patch 留档；--turbo 变更自动跳过实测与重仪式门）：
 sillyspec flow done --change <变更名>
 # 断点恢复 / 随时查进度：
 sillyspec flow status --change <变更名>

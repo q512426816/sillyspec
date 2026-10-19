@@ -1454,7 +1454,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
             if (!flags.includes('--upgrade-thick')) {
               console.error(`⛔ 本变更在轻量跑道上（flow-state 在场）——升厚走完整流程需用户同意，agent 不得自行转道：`)
               console.error(`   · 征得用户同意后带 --upgrade-thick 重跑本命令（落痕留档，首次转厚即转）`)
-              console.error(`   · 用户未确认或选择轻量跑 → 继续轻量变更：直接干活，收口 sillyspec flow done --change ${effectiveChange}`)
+              console.error(`   · 用户未确认或选择轻量跑 → 继续轻量变更：先答 spec 面并过批准再干活（未批准先 flow approve），收口 sillyspec flow done --change ${effectiveChange}`)
               process.exit(2)
             }
             writeFlowState(changeDir, { legacy_fallback: true, upgraded_by_consent: new Date().toISOString() })

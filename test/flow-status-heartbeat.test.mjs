@@ -26,7 +26,7 @@ function fixture({ ticked = ['task-01', 'task-02'], specReady = true } = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'fshb-'))
   const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
+  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\nspec_approved: true\n') // 2026-10-19-thin-order-canon：执行段语义=已批准（docs 齐+未批准停 ① 待批准）
   writeFileSync(join(dir, 'design.md'), specReady ? [
     '# D', '',
     '<!--AGENT:槽1 -->', '答一', '',

@@ -674,7 +674,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
           if (r.drafted.length > 0) console.log(`📌 收编补生成缺失机器稿：${r.drafted.join('、')}（brainstorm 未产的工件机器补齐，criteria 从 proposal 成功标准回提；已存在文件未动）`)
           const b = ensureBindingSlots({ changeDir })
-          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
+          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——动码前作答，flow done 校验）`)
         } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
         // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
         // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
@@ -723,8 +723,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
             : null,
           `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 改写为工作分解（每行=可独立完成并当场验证的一步：做什么+怎么验证；全 \`- [ ]\`——代码开动前工作队列先存在）；`,
+          `🛑 断点①（机器门）：spec 面（任务面+测试绑定槽）定稿后把摘要给用户看 → flow approve --change ${change}（或用户显式 --autopilot）——批准后才动码。design 四节槽收编豁免（以 brainstorm design 为准）。`,
           `② 执行走任务循环：对 tasks.md 每个 pending 行——展示「Working on task N/M: <任务>」→ 做 → 测试绿后当场勾一格（\`- [ ]\`→\`- [x]\`：sillyspec task tick --change ${change} --task task-NN 或直接 Edit）→ 下一行；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
-          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前作答（动码前，与任务面定稿同批）。`,
           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
           `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；勾选修改与任务交付同一提交入库（pathspec 带上本变更 tasks.md——task tick 回显给现成命令）；`,
           `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
@@ -1116,17 +1117,20 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     ``,
     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
     ``,
-    `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
+    // 顺序正典（2026-10-19-thin-order-canon）：行动句必须是顺序句——实证（artifact 时间戳
+    // 还原+跨仓 14 例抽样）agent 跟从【你要做的】首义行动，旧句「直接干活」把动码提前、
+    // 文档与批准沦为收口仪式；正典=先答 spec 面 → 批准 → 才动码（读代码探究不算动码）。
+    `【你要做的】先答 spec 面，批准后才动码：① 答 spec——requirements FR 行为句+测试绑定行、design.md 四节作答（动码前；读代码探究不算动码）；② 断点①——摘要给用户看 → flow approve --change ${change}（或用户显式 --autopilot）；③ 才干活——写测试、改代码。治理工件骨架 CLI 已起草、收口机器做（协议记账单位=change 级）。`,
     // 收口拒收红线前置（2026-10-11-flow-start-redline-frontload）：钉死/空槽/绑定三面都是文档
     // 先行校验，实证第一次最容易踩（四问文本被改写、区间 task-NN 写法零证据被拒）——横幅
     // 头部先行告知，收口才暴露的规则前置到动笔前。
-    `🚫 收口拒收红线（文档先行校验，动笔前先读——第一次最容易踩的就是这三条）：`,
+    `🚫 收口拒收红线（文档须先于动码——动笔前先读，第一次最容易踩的就是这三条）：`,
     `   ① design 四问文本与 FR 标题锚逐字钉死勿改写——问题原文保持原样、答案写在问题下方，改写/删除即收口拒收（文档↔锚逐字对比）；`,
-    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答）；`,
-    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收。`,
+    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答；动码前作答）；`,
+    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收（动码前作答）。`,
     `书写面（纯 markdown 起草）：requirements FR 正文/design 四节作答/测试绑定行都直接写正文——`,
     `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；成功标准漂移只出 advisory 不拒收。`,
-    `⚠️ design.md 四节动码前后顺手作答；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
+    `⚠️ design.md 四节动码前作答（它是断点① 批准的输入——后补属超期补写、留痕可审计）；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
     `   ——勿写在「接口契约」节内（收口按节名解析声明面）。`,
     ...crossRepoHintLines,
     `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
@@ -1151,18 +1155,18 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
     ``,
-    `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+    `🛑 三断点纪律（顺序纪律：①未过不动码；②③为汇报点——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
     `      用户确认后请其运行 sillyspec flow approve --change ${change}（批准留痕）再动手写代码——`,
     `      agent 代跑时如实声明通道：--user-confirmed（转述用户已确认）/ --self-approved（agent 自批），`,
     `      无 flag 按 unattested 留痕（审计面无法区分用户确认与自批）——2026-10-12-approve-channel-attest。`,
-    `      方案错了返工最贵；未批准且未声明 --autopilot 时 flow done 拒收（2026-10-04-thin-docs-v2）；`,
+    `      方案错了返工最贵；批准是动码前置义务（未批准且未声明 --autopilot 时 flow done 亦拒收——2026-10-04-thin-docs-v2）；`,
     `      用户否掉方案 → flow reject --change ${change} --reason <理由>（拒后批准须显式通道再确认）。`,
     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
     `      等用户确认再跑收口。`,
     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
-    `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（留痕），`,
-    `   ②③断点 agent 自主跳过。`,
+    `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（用户显式授权、留痕——非 agent 自选补救通道），`,
+    `   ①②③人审全免（agent 自主跑到底）。`,
     `   随时可查进度：sillyspec flow status --change ${change}`,
     ...(detectUiTouch(input)
       ? [...buildUiGuidanceLines(specBase), '']
@@ -1211,11 +1215,14 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     ...(title ? [`- 标题：${title}`] : []),
     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
+    // 顺序正典（2026-10-19-thin-order-canon）：恢复面带批准状态——重入时 agent 只看简报，
+    // 未批准时「下一步」必须指向补批而非「继续干活」（防先码后批在恢复路径复发）。
+    `- spec 批准：${st.spec_approved ? `✅ 已批准（channel=${approveChannelOf(st)}）` : st.autopilot ? '🔑 autopilot 豁免（用户显式授权）' : '⬜ 未批准——动码前先过断点①（摘要给用户 → flow approve）'}`,
     // 红线重申（2026-10-11-flow-start-redline-frontload）：重入不出首进横幅——钉死规则与
     // task-NN token 形态随简报补位，断点续跑生命周期内规则不丢。
     `- 红线重申：design 四问文本/FR 标题锚逐字钉死勿改写（改写即拒收）；勾选证据提交消息逐个带 task-NN 或 /、，连写（「task-01..task-05」区间写法不认）。`,
     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
-    `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
+    `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : !st.spec_approved && !st.autopilot ? `未批准先补批（摘要给用户 → sillyspec flow approve --change ${change}）；随后继续干活，干完跑 flow done（断点续）` : `继续干活；干完跑 flow done（断点续）`}`,
     ...(digestLines.length > 0 ? ['', ...digestLines] : []),
     // 尾部原型锚（2026-10-14-guide-anchor-adopt-proto）：收编/含原型变更重入时原型指针不隐身
     //（首进 adopt 输出的 🖼️ 行在会话切换后已丢，简报尾部补可发现面；置于 digestLines 后＝绝对
@@ -1332,10 +1339,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       // spec 断点机器门（FR-06/FR-07，护栏#2 零 prompt 劝说——advisory 断点在 0/12 勾选类事故
       // 实证下无牙；v2 起批准是收口硬前提，autopilot 是用户显式豁免通道）
       if (!st.autopilot && !st.spec_approved) {
-        console.error(`❌ spec 断点未批准：本变更（v2 起草）收口需要方案确认留痕`)
-        console.error(`   修复：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
+        console.error(`❌ spec 断点未批准：批准是动码前置义务（不是收口补救动作）——本变更缺方案确认留痕`)
+        console.error(`   补批通道（留痕可审计）：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
         console.error(`     sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
-        console.error(`   或用户显式豁免（自主跑到底）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
+        console.error(`   或用户显式豁免（须用户授权，非 agent 自选）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
         reportMidFail('artifacts')
         process.exit(1)
       }
@@ -2661,7 +2668,7 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = 
     console.warn(`⚠️ agent 自批留痕：如用户实际未确认，请撤销——sillyspec flow reject --change ${change} --reason <理由>`)
   }
   if (patch.spec_rejected_superseded_at) console.log(`   已翻越既有拒绝记录（superseded_at=${patch.spec_rejected_superseded_at}，拒绝理由保留于 spec_rejected_reason）`)
-  console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：sillyspec flow reject --change ${change} --reason <理由>`)
+  console.log(`   批准是动码前置义务：若尚未动码，现在可以开始写码；若已动码，本次属超期补批（留痕可审计）。flow done 断点门已满足。撤销：sillyspec flow reject --change ${change} --reason <理由>`)
 }
 
 /**
@@ -2897,9 +2904,18 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         bindingsFilled = _rows.filter((m) => m[2].trim() && !m[2].trim().startsWith('（待填')).length
       }
     } catch { /* 无 requirements */ }
-    // 阶段推断
+    // 阶段推断（2026-10-19-thin-order-canon：相位看批准——docs 齐但未批准仍停 ① spec 待批准，
+    // 防 status 中途查询面诱导「先执行后卡点」；autopilot 是用户显式豁免、进执行段带标注）
+    const specApproved = st.spec_approved === true
+    const autopilotOn = st.autopilot === true
     let phase = '① spec（填 FR + design 槽）'
-    if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
+    if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) {
+      phase = specApproved
+        ? '② 执行（已批准·写代码跑测试）'
+        : autopilotOn
+          ? '② 执行（autopilot 豁免·写代码跑测试）'
+          : '① spec（→ 待用户批准：摘要给用户后 flow approve）'
+    }
     if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
     // 任务心跳（2026-09-29-flow-task-heartbeat + d007-incontext 纠偏）：②执行阶段把「下一个任务」
     // 交给机器指——当场重读 tasks.md（唯一进度源）取第一个未勾行 + 进度。进度推进本身零 CLI
@@ -2940,6 +2956,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
         designFilled, frFilled, bindingsFilled, bindingsTotal,
         tasksChecked, tasksTotal,
         substeps: subDone, substepsTotal: SUBSTEPS.length,
+        specApproved, specApprovedChannel: specApproved ? approveChannelOf(st) : null,
         ...(st.legacy_fallback ? { legacyFallback: true } : {}),
       }))
       return
@@ -2948,6 +2965,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
       `📋 ${change}`,
       ...(changeTitle ? [`   标题：${changeTitle}`] : []),
       `   阶段：${phase}`,
+      `   spec 批准：${specApproved ? '✅ 已批准' : autopilotOn ? '🔑 autopilot 豁免（用户显式授权）' : '⬜ 未批准（动码前先过断点①）'}`,
       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
       hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,
       ...(heartbeat || []),
