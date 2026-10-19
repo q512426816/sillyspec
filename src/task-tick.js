@@ -190,6 +190,22 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
       }
     } catch { /* 教学面 best-effort：失败不影响翻格 */ }
   }
+  // 顺序正典现场提醒（2026-10-19-approve-gate-tick-nudge FR-04，advisory）：勾选是「正在干活」
+  // 的最高频时刻——spec 面未齐或未过断点① 时给一行警示（不阻断、不改既有行；读取失败静默，
+  // 回显退化为现状）。判定与 flow status 同源（designSectionsFilled 单一源）。
+  try {
+    const dText = readFileSync(join(changesRoot, changeName, 'design.md'), 'utf8')
+    const { designSectionsFilled } = await import('./flow-review.js')
+    const unanswered = !designSectionsFilled(dText)
+    const fsText = readFileSync(join(changesRoot, changeName, 'flow-state.yaml'), 'utf8')
+    const unapproved = !/^spec_approved:\s*true/m.test(fsText) && !/^autopilot:\s*true/m.test(fsText)
+    if (unanswered || unapproved) {
+      const parts = []
+      if (unanswered) parts.push('design 四节未答')
+      if (unapproved) parts.push('未过断点①（flow approve）')
+      console.log(`⚠️ spec 面未就位（${parts.join('、')}）——顺序正典：先答 spec 面并过批准，再继续勾任务`)
+    }
+  } catch { /* 提醒 best-effort：读取失败静默，不影响勾选回显与 exit code */ }
   return r
 }
 

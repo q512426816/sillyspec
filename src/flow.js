@@ -2650,6 +2650,39 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = 
     console.error(`   （拒绝后派生授权须显式再确认——2026-10-12-approve-channel-attest）`)
     process.exit(2)
   }
+  // 批准前文档完整性校验（2026-10-19-approve-gate-tick-nudge FR-01/02）：批准=有内容的机器
+  // 事实（批时文档必齐）。复用 done 门同源校验（verifyFlowDrafts 双轨）；repair:false——批准
+  // 面只读，不做 design 问题行自动回填（写盘修复属 done 面）。诚实边界：本门证明「答在批前」，
+  // 不证明「答在码前」——时序证据路线已实证不可行（批量收口下 git 时间戳说谎，thin-order-canon
+  // 四路调查），不做假装能拦的检查。
+  {
+    const runtimeRoot = resolveRuntimeRoot({}, specBase)
+    const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
+    const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
+    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign, repair: false })
+    for (const a of r.advisories || []) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
+    if (r.applicable && r.violations.length > 0) {
+      console.error(`❌ spec 断点未批准——文档未齐（批准是动码前置，先答 spec 面再批）：`)
+      for (const v of r.violations) console.error(`   - ${v}`)
+      console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
+      process.exit(1)
+    }
+    if (!r.applicable) {
+      // draft-ledger 机本位缺失（跨机批准/存量变更）：fail-open 降级——仅 v1（AGENT 槽形态）跑
+      // 空槽兜底；v2 纯 markdown 无 ledger 无法对锚校验，如实降级放行（不假装能查）。
+      let v1Text = null
+      try { v1Text = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { /* 无 design */ }
+      if (v1Text && /<!--AGENT:槽\d+/.test(v1Text)) {
+        const dr = verifyDesignRecordFilled({ changeDir })
+        if (dr.applicable && dr.emptySlots.length > 0) {
+          console.error(`❌ spec 断点未批准——design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
+          console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
+          process.exit(1)
+        }
+      }
+      console.log(`ℹ️ 批准校验降级放行：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过`)
+    }
+  }
   let approvedBy = by
   if (!approvedBy) {
     try {
@@ -2890,17 +2923,10 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
     try {
       const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
-      // 双格式：v1 AGENT 槽计数；v2 纯 markdown 按节「有实质作答」判（复用 flow-review 的
-      // v2 节读取——问题原文行剥离；仅标题在场不算已填，防 spec 相位误跳「②执行」）
-      if (/<!--AGENT:槽\d+/.test(dText)) {
-        designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
-      } else {
-        try {
-          const { readV2SectionAnswer } = await import('./flow-review.js')
-          const { DESIGN_QUESTIONS } = await import('./flow-draft.js')
-          designFilled = DESIGN_QUESTIONS.sections.filter((s) => readV2SectionAnswer(dText, s.heading, DESIGN_QUESTIONS)).length >= 3
-        } catch { designFilled = false }
-      }
+      // 双格式判定单一源（2026-10-19-approve-gate-tick-nudge FR-03 上移 flow-review.js；
+      // 判据与原内联逻辑逐字一致——status/tick 同源，行为零变化）
+      const { designSectionsFilled } = await import('./flow-review.js')
+      designFilled = designSectionsFilled(dText)
     } catch { /* 无 design */ }
     try {
       const rText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')

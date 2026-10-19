@@ -327,7 +327,7 @@ function draftTasksV2({ change, criteria, withTasks }) {
  * 零 advisory——工作分解归 agent，2026-10-07-thin-tasks-v3）。
  * adopted brainstorm 变更（opts.skipDesign）豁免 design 四节门（设计承诺以 brainstorm design 为准）。
  */
-export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
+export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false, repair = true }) {
   const violations = []
   const advisories = []
   const repairs = []
@@ -392,12 +392,18 @@ export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
         }
       }
       if (repairEntries.length > 0) {
-        try {
-          writeAtomicSync(join(changeDir, 'design.md'), repairedLines.join('\n'))
-          dLines = repairedLines
-          for (const e of repairEntries) repairs.push(`design「${e.heading}」问题行曾被改写——已按锚回填原文（agent 作答保留）：${e.q}`)
-        } catch {
-          for (const e of repairEntries) violations.push(`design「${e.heading}」问题文本被改写——原文：${e.q}（机器回填写盘失败，请手工恢复此行，答案写在下方）`)
+        // repair:false 只读轨（2026-10-19-approve-gate-tick-nudge）：approve 批准面不做自动
+        // 回填（写盘修复属 flow done 面）——违规照报，design.md 字节不动。
+        if (repair === false) {
+          for (const e of repairEntries) violations.push(`design「${e.heading}」问题文本被改写——原文：${e.q}（批准校验只读不自动回填，手工恢复此行后重试）`)
+        } else {
+          try {
+            writeAtomicSync(join(changeDir, 'design.md'), repairedLines.join('\n'))
+            dLines = repairedLines
+            for (const e of repairEntries) repairs.push(`design「${e.heading}」问题行曾被改写——已按锚回填原文（agent 作答保留）：${e.q}`)
+          } catch {
+            for (const e of repairEntries) violations.push(`design「${e.heading}」问题文本被改写——原文：${e.q}（机器回填写盘失败，请手工恢复此行，答案写在下方）`)
+          }
         }
       }
       for (const sec of anchorSections) {
@@ -1057,13 +1063,13 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
  *  schemaVersion===2 → verifyThinDocsV2（文档↔锚对比：问题/节/FR/绑定拒收 + 漂移 advisory）；
  *  v1（缺省）→ verifyMarkers 指纹三态（存量在途变更零影响）。
  *  opts.skipDesign：adopted brainstorm 变更豁免 design 四节门（flow.js 判定后透传）。 */
-export function verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign = false }) {
+export function verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign = false, repair = true }) {
   const ledgerPath = draftLedgerPath(runtimeRoot, change)
   if (!existsSync(ledgerPath)) return { applicable: false, violations: [] }
   let ledger
   try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { return { applicable: false, violations: [] } }
   if (ledger.schemaVersion === DRAFT_SCHEMA_V2) {
-    const r = verifyThinDocsV2({ changeDir, ledger, skipDesign })
+    const r = verifyThinDocsV2({ changeDir, ledger, skipDesign, repair })
     return { applicable: true, schema: DRAFT_SCHEMA_V2, ...r }
   }
   const violations = []

@@ -87,6 +87,22 @@ function readSlotAnswer(text, markerRe) {
 }
 
 /**
+ * design 四节已答判定（v1 AGENT 槽 / v2 节作答双格式——status 与 task tick 共享单一源，
+ * 2026-10-19-approve-gate-tick-nudge FR-03 上移；判据与 flow status 原内联逻辑逐字一致：
+ * v1 = 槽标记行后紧跟非空行的槽数 ≥3；v2 = DESIGN_QUESTIONS 四节实质作答（问题行剥离）≥3）。
+ */
+export function designSectionsFilled(dText) {
+  const text = String(dText || '').replace(/\r\n/g, '\n')
+  if (!text) return false
+  if (/<!--AGENT:槽\d+/.test(text)) {
+    return Array.from(text.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+  }
+  try {
+    return DESIGN_QUESTIONS_FALLBACK.sections.filter((s) => readV2SectionAnswer(text, s.heading, DESIGN_QUESTIONS_FALLBACK)).length >= 3
+  } catch { return false }
+}
+
+/**
  * 读 v2 纯 markdown design 节作答（2026-10-04-thin-docs-v2）：节标题行到下一节标题之间的
  * 非空行，剥离四问原文行（DESIGN_QUESTIONS 单一源同源引入——独立字符串会被评审实证为
  * 镜像非同源）与引导行（> 开头）。空白返回 ''（调用方按未作答处理）。
