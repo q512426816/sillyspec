@@ -1719,6 +1719,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
   // 不标 done（重入 done 重试）。
   let driftRefreeze = false
+  // JSON-only 冻结形态（无主仓 change.patch，跨仓正文在 repos[]）——收口指引文案按它
+  // 切换审计锚表述（2026-10-19-thin-empty-face-cross-repo-freeze）。
+  let jsonOnlyFreeze = false
   if (st.substeps?.patch === 'done') {
     // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
     // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
@@ -1735,12 +1738,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const patchTextPath = join(changeDir, 'change.patch')
     // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
     // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
-    const { inspectFreezeArtifacts: inspectFreeze } = await import('./flow-parity.js')
-    const freezeState = inspectFreeze(changeDir)
-    const missingFreeze = [
-      !freezeState.hasJson ? 'change-patch.json' : null,
-      (!freezeState.hasText && freezeState.repoPatchCount === 0) ? 'change.patch' : null,
-    ].filter(Boolean)
+    const { inspectFreezeArtifacts: inspectFreeze, freezeGapLabels } = await import('./flow-parity.js')
+    // 完整性以探针的 complete 为准（坏 JSON 即使 change.patch 在场也不可信）。
+    const missingFreeze = freezeGapLabels(inspectFreeze(changeDir))
     let drifted = false
     let drift = null
     if (missingFreeze.length > 0) {
@@ -2067,6 +2067,15 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
           const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles: [], stats: new Map(), planEntries, crossRepoRows: emptyFaceCrossRows })
           const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
+          // 先清旧 change.patch 再写 JSON：JSON-only 语义下残留旧正文与新 JSON（无顶级
+          // patchSha256）互相矛盾。清理失败直接抛出（外层 catch → patch 子步不标 done，
+          // 重入重试），不留「双件并存且复查判完整」的自愈盲区。
+          const stalePatchPath = join(changeDir, 'change.patch')
+          if (existsSync(stalePatchPath)) {
+            try { unlinkSync(stalePatchPath) } catch (e) {
+              throw new Error(`旧 change.patch 清理失败（${e.message}）——保持半态可重入，修复文件权限后重跑`)
+            }
+          }
           const closeTrace = writeCloseTraceArtifacts({
             changeDir,
             change,
@@ -2092,14 +2101,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               modules: [], uncoveredDirs: [], moduleMaps: [],
             },
           })
-          // 重冻结到空主仓面时清掉旧 change.patch：JSON-only 语义下残留的旧正文与
-          // 新 JSON（无顶级 patchSha256）互相矛盾，读侧无法判断哪份是当前冻结面。
-          const stalePatchPath = join(changeDir, 'change.patch')
-          if (existsSync(stalePatchPath)) {
-            try { unlinkSync(stalePatchPath) } catch (e) {
-              console.warn(`⚠️ 旧 change.patch 清理失败（${e.message}）——JSON-only 留档旁存在旧正文，请人工删除后重跑`)
-            }
-          }
+          jsonOnlyFreeze = true
           const frozenRepos = emptyFaceCrossRepos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
           console.log(`📦 空面跨仓 patch 留档：change-patch.json（主仓面为空，跨仓 ${emptyFaceCrossRepos.length} 仓、正文 ${frozenRepos}——diff 见 scopeAudit.repos[]）`)
           patchOk = closeTrace.patchStatus === 'ok'
@@ -2291,6 +2293,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
     let patchText = null
     try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
+    // JSON-only 跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：无主仓
+    // change.patch 时交付 diff 证据在 change-patch.json 的 scopeAudit.repos[].patch——
+    // 不接上的话 classifyReviewNeed 恒判「交付 diff 不可得」，评审定档失真。
+    if (patchText === null) {
+      try {
+        const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+        const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
+        const repoDiff = repos
+          .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
+          .map((r) => r.patch)
+          .join('\n')
+        if (repoDiff) patchText = repoDiff
+      } catch { /* 无/坏 JSON → 保持 null（既有判定） */ }
+    }
     const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
     if (!tier.required) {
       console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
@@ -2617,7 +2633,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
     if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
       console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
-      console.log(`   审计真相已冻结在归档件 change.patch（sha256 锚定）+ verify-result + review.json，不依赖 git 历史；`)
+      console.log(`   审计真相已冻结在归档件 ${jsonOnlyFreeze ? 'change-patch.json（跨仓 repos[] 正文+sha256 锚定）' : 'change.patch（sha256 锚定）'} + verify-result + review.json，不依赖 git 历史；`)
       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
     }
   } catch { /* 指引 best-effort */ }

@@ -265,6 +265,8 @@ test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结',
     git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
     writeFileSync(join(lib, 'fix.txt'), 'fix\n')
     fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt', '', '### deadkey', '', '- src/dead.js'].join('\n'))
+    // 预置旧 change.patch（重冻结到空主仓面的清理路径）：修完仍存在即为回归。
+    writeFileSync(join(specBase, 'changes', change, 'change.patch'), 'diff --git a/stale b/stale\n')
     tickTasks(specBase, cwd, change)
     writeReviewFixture(specBase, cwd, change)
     const s2 = cli(cwd, ['flow', 'done', '--change', change])

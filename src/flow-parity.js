@@ -284,7 +284,7 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
       : `${review.verdict}（reviewer 见 review.json${Number.isFinite(review.findingsP1) ? `，P1 ${review.findingsP1}` : ''}）`
     : '—'
   const headNote = head && baseline && head === baseline
-    ? '（等于基线——交付代码尚未提交，冻结面以 change.patch 实际内容为准）'
+    ? '（等于基线——交付代码尚未提交，冻结面以交付留档实际内容为准：change.patch 或 change-patch.json repos[]）'
     : ''
   return [
     `---`,
@@ -446,7 +446,24 @@ export function inspectFreezeArtifacts(changeDir) {
   }
   // jsonOk 与 hasText 必须同时成立：change.patch 在场但 change-patch.json 损坏时，
   // 冻结元数据已不可信（审计面缺锚），不能因正文文件在就判完整。
-  return { hasJson, hasText, repoPatchCount, complete: jsonOk && (hasText || repoPatchCount > 0) }
+  return { hasJson, hasText, jsonOk, repoPatchCount, complete: jsonOk && (hasText || repoPatchCount > 0) }
+}
+
+/**
+ * 冻结缺口标签（存在性复查的调用点共用逻辑，纯函数便于直测）：
+ * 完整 → []；否则给出可读缺件清单（坏 JSON 与真缺件区分，防止「正文在就判完整」盲区）。
+ * @param {{ hasJson?: boolean, hasText?: boolean, jsonOk?: boolean, repoPatchCount?: number, complete?: boolean }} state
+ * @returns {string[]}
+ */
+export function freezeGapLabels(state) {
+  const s = state && typeof state === 'object' ? state : {}
+  if (s.complete === true) return []
+  const gaps = []
+  if (!s.hasJson) gaps.push('change-patch.json')
+  else if (!s.jsonOk) gaps.push('change-patch.json（损坏）')
+  if (!s.hasText && !(Number(s.repoPatchCount) > 0)) gaps.push('change.patch')
+  if (gaps.length === 0) gaps.push('冻结件不完整')
+  return gaps
 }
 
 export function detectPatchDrift({ cwd, change, freezeHead }) {

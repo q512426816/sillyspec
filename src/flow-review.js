@@ -250,12 +250,25 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
       ].join('\n')
     }
   } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
+  // 冻结面形态（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 跨仓冻结没有
+  // change.patch，交付 diff 在 change-patch.json 的 scopeAudit.repos[]——任务书材料与
+  // 对象表述必须指向真实在場的冻结件，否则评审员按缺失文件判 patch 失败。
+  const hasMainPatchFile = existsSync(join(changeDir, 'change.patch'))
+  let repoPatchKeys = []
+  try {
+    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
+    const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
+    repoPatchKeys = repos
+      .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
+      .map((r) => String(r.key || '?'))
+  } catch { /* 无/坏 JSON → 单仓形态 */ }
+  const freezeLabel = hasMainPatchFile ? 'change.patch 冻结面' : repoPatchKeys.length > 0 ? 'change-patch.json 跨仓冻结面' : '冻结面'
   const taskbook = [
     `⚖️ 独立评审任务书 — ${change}`,
     `══════════════════════════════════════`,
     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
     ...(headFull ? [
-      `【评审对象】工作区实态 + git HEAD（${headFull}）——change.patch 冻结面若落后于该 HEAD，以`,
+      `【评审对象】工作区实态 + git HEAD（${headFull}）——${freezeLabel}若落后于该 HEAD，以`,
       `  工作区实态与 git log/show 核对为准；review.json 的 reviewedAgainst 字段照抄上面的完整 sha。`,
     ] : [
       `【评审对象】工作区实态 + git HEAD——review.json 的 reviewedAgainst 字段填 git rev-parse HEAD`,
@@ -265,7 +278,11 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
     `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
-    `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
+    ...(hasMainPatchFile
+      ? [`  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`]
+      : repoPatchKeys.length > 0
+        ? [`  - ${join(changeDir, 'change-patch.json')}（跨仓交付 diff 冻结件——scopeAudit.repos[] 的 ${repoPatchKeys.join('、')} 仓 patch 正文；主仓面为空故无 change.patch，diff 在 JSON 内联）`]
+        : [`  - ${join(changeDir, 'change.patch')}（若缺失按 patch 留档失败处理）`]),
     // 预消化材料包（2026-10-19-thin-review-material-pack）：CLI 机械抽取的 FR↔测试绑定表 +
     // 冻结 patch 文件级摘要（flow-review-pack.js 装配，12000 帽行级截断）——砍零上下文评审员
     // 的定位类读与大 patch 整吞 prefill；段自带基准面语义行（包=索引非证据）；缺省/空数组
