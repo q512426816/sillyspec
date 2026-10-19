@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-empty-face-cross-repo-freeze",
+  "reviewer": "subagent（ZCode 独立子代理·复审）",
+  "verdict": "FAIL",
+  "reviewedAgainst": "734e2511053c73ca70a3e6afd8f2d8ed41d44db5",
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "坏 change-patch.json + change.patch 在场仍判完整——存在性复查未消费 inspectFreezeArtifacts.complete，FR-02/design 显式承诺失效",
+      "evidence": "missingFreeze 只用 hasJson/hasText/repoPatchCount 拼装（complete 在生产路径零消费）；坏 JSON 时 hasJson=true、hasText=true → missingFreeze=[] → 走幂等 skip，不触发重冻结。临时夹具实测（patch 子步标 done + 坏 JSON + 合法 change.patch）：flow done exit 0、无「冻结件缺失」告警，归档保留 `{bad json`。新增单测只断言 complete=false，未覆盖该调用点，形成假保障。",
+      "location": "src/flow.js:1738（对照 src/flow-parity.js:449）"
+    },
+    {
+      "severity": "P2",
+      "title": "JSON-only 冻结在评审定档/任务书仍被当作「patch 留档失败」，任务书唯一 diff 源 change.patch 不存在",
+      "evidence": "评审分类只读 change.patch（无文件→patchText=null）→ 固定命中「交付 diff 不可得（patch 留档失败）」；renderReviewerTaskbook 材料清单只列 change.patch 并称其为「代码事实的唯一来源」，未指向 change-patch.json scopeAudit.repos[]——纯 JSON-only 变更的独立评审按任务书拿不到实际跨仓 diff。",
+      "location": "src/flow-review.js:204"
+    },
+    {
+      "severity": "P3",
+      "title": "verify-result 在 head==baseline 时仍写「冻结面以 change.patch 实际内容为准」，与 JSON-only 回执自相矛盾",
+      "evidence": "headNote 条件只看 head===baseline，不看 change.patch 是否存在；JSON-only 冻结（无 change.patch）且主仓无提交时，同一回执同时输出「跨仓 N 仓…」与「以 change.patch 实际内容为准」。",
+      "location": "src/flow-parity.js:287"
+    },
+    {
+      "severity": "P3",
+      "title": "归档收尾文案在 JSON-only 归档仍宣称「审计真相已冻结在归档件 change.patch（sha256 锚定）」",
+      "evidence": "该行仅以 baseline != finalHead 为条件；JSON-only 场景（治理提交/任务勾选提交使 HEAD 前移）会打印，但归档目录没有 change.patch、JSON 也无 patchSha256。",
+      "location": "src/flow.js:2611"
+    },
+    {
+      "severity": "P3",
+      "title": "JSON-only 重冻结的旧 change.patch 清理非原子，失败/中断窗口会留下矛盾冻结件且后续复查仍判完整",
+      "evidence": "先 writeCloseTraceArtifacts 写 JSON，再 unlinkSync 旧 patch；unlink 失败只 warn 且 patch 子步照常 mark done。若进程在两步之间中断或 unlink 失败，目录同时存在新 JSON（无 patchSha256）与旧正文；下次存在性复查 hasText=true → 判完整不重冻结。新增用例从无旧 patch 的干净目录开始，未覆盖该清理路径。",
+      "location": "src/flow.js:2097"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "边界已裁决：可接受（文件级归属整文件混入；平台读侧后续独立变更适配）"
+  },
+  "reviewedAt": "2026-10-19T15:44:48+08:00"
+}

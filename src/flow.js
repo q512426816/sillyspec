@@ -1735,7 +1735,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 当前 HEAD）；review 处置沿用漂移面同一隔离规则——缺基面无法判 governance-only，
     // 未锚定一律隔离（fail-safe 宁可多评）。
     const patchJsonPath = join(changeDir, 'change-patch.json')
-    const patchTextPath = join(changeDir, 'change.patch')
     // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
     // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
     // 完整性以探针的 complete 为准（坏 JSON 即使 change.patch 在场也不可信）。
@@ -2030,6 +2029,39 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             st.accept_empty_face = true
           }
           console.warn(`⚠️ --accept-empty-face：显式签收空冻结面与声明面矛盾（${_declared.length} 条声明交付不进冻结面，留痕 flow-state accept_empty_face）`)
+        }
+        // ── 未标注跨仓交付窗口探测（2026-10-19-undeclared-cross-repo-probe）──
+        // 生产实证（消防工作区 4e9eb05b，2026-10-12..10-19 共 14 例）：design 无「文件
+        // 变更清单」段、或清单裸写仓目录前缀时，主仓冻结面为空或只剩附件/治理模板，
+        // 真实代码在注册跨仓窗口内却零告警。既有空面门只拦「清单有未标注条目」形态；
+        // 本探测以真实跨仓 diff 为证据补位：无 repo 标注 + 注册仓非空 → 逐仓看
+        // cross_baselines..工作树窗口，有交付改动才点名（advisory 不阻断）。纯文档变更/
+        // 单仓工作区/窗口零改动 → 零输出。未提交面可能含并行会话改动，故文案用「疑似」。
+        if (!planEntries.some((e) => e && e.repo)) {
+          try {
+            const { loadRegisteredRepoKeys } = await import('./scope-audit.js')
+            const { collectRepoActual } = await import('./cross-repo-reconcile.js')
+            const { filterDeliverableFiles } = await import('./worktree-apply.js')
+            const registeredKeys = loadRegisteredRepoKeys(specBase)
+            const probeHits = []
+            for (const repoKey of registeredKeys) {
+              try {
+                const actual = collectRepoActual({
+                  repoKey, specBase, cwd,
+                  runtimeRoot: resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase),
+                  changeName: change,
+                  crossBaselines: (st && st.cross_baselines && typeof st.cross_baselines === 'object') ? st.cross_baselines : null,
+                })
+                if (!actual || actual.degradedReason) continue
+                const files = filterDeliverableFiles(actual.files || [])
+                if (files.length > 0) probeHits.push({ key: repoKey, count: files.length })
+              } catch { /* 单仓探测失败不阻断（fail-soft） */ }
+            }
+            if (probeHits.length > 0) {
+              console.warn(`⚠️ 注册跨仓窗口内有交付改动，但 design 清单未按规范标注（主仓冻结面为空/仅治理件时归档 patch 将缺失这些交付面）：${probeHits.map((h) => `${h.key}（${h.count} 文件）`).join('、')}`)
+              console.warn('   疑似跨仓交付（未提交面可能含并行会话改动，请人工确认归属）。正确写法三选一：① 段头「## <注册key> 仓变更」段内写仓根相对路径；② 子段「### <注册key>」；③ 条目前缀 cross-repo:<注册key>:<仓根相对路径>——key 以 local.yaml repos 注册为准')
+            }
+          } catch { /* 探测整体失败不阻断（fail-soft 不新造阻断面） */ }
         }
         // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：主仓冻结面为空且
         // 声明清单含规范跨仓标注时，跨仓交付面仍可留档——JSON 路线只写 change-patch.json，

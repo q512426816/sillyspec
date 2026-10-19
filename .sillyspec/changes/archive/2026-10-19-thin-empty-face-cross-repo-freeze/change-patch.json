@@ -1,0 +1,129 @@
+{
+  "change": "2026-10-19-thin-empty-face-cross-repo-freeze",
+  "baseline": "875511d25454cf584c99ab491fa0cd03231f71ad",
+  "head": "f8bab1faa0850b271b7682f32006656fe5203036",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "test/close-trace-freeze-integrity.test.mjs",
+    "test/thin-empty-face-crosscheck.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 410,
+    "deletions": 51
+  },
+  "savedAt": "2026-10-19T08:19:06.724Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "875511d25454cf584c99ab491fa0cd03231f71ad",
+    "totals": {
+      "files": 10,
+      "additions": 410,
+      "deletions": 51
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-parity.js",
+        "additions": 77,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 41,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 191,
+        "deletions": 40,
+        "kind": "modified"
+      },
+      {
+        "path": "test/close-trace-freeze-integrity.test.mjs",
+        "additions": 30,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/thin-empty-face-crosscheck.test.mjs",
+        "additions": 65,
+        "deletions": 2,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "65648ef079a48676144b45f433d6f815a9a4f08ef106bd96e7d8a0e0529db859",
+  "patchStatus": "ok"
+}

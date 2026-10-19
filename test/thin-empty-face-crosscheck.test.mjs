@@ -317,3 +317,50 @@ test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行', 
     rmSync(noRepos, { recursive: true, force: true })
   }
 })
+
+// ── 2026-10-19-undeclared-cross-repo-probe：无清单段 + 注册跨仓窗口有交付
+//    → advisory 点名仓键/文件数（不阻断）；窗口零改动 → 零输出 ──
+test('无清单段 + 注册跨仓有交付 → 窗口探测点名（advisory 不阻断）', () => {
+  const cwd = makeRepo({ repos: true })
+  const lib = FIXTURE_REPOS.get(cwd)
+  const change = '2026-10-19-tefc-probe-hit'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '未标注跨仓探测点名告警\n成功标准：\n- 点名不阻断', '--autopilot']).status, 0)
+    writeFileSync(join(lib, 'impl.txt'), 'impl\n')
+    git(lib, ['add', 'impl.txt'])
+    git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
+    fillDocs(specBase, change) // 刻意不写文件变更清单
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `探测不阻断: ${s2.stdout}\n${s2.stderr}`)
+    const out = `${s2.stdout}\n${s2.stderr}`
+    assert.match(out, /注册跨仓窗口内有交付改动/, '探测命中')
+    assert.match(out, /libx（1 文件）/, '点名仓键与文件数')
+    assert.match(out, /正确写法三选一/, '给规范标注指引')
+  } finally {
+    const lib2 = FIXTURE_REPOS.get(cwd)
+    if (lib2) rmSync(lib2, { recursive: true, force: true })
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+test('无清单段 + 注册跨仓零改动 → 探测零输出', () => {
+  const cwd = makeRepo({ repos: true })
+  const change = '2026-10-19-tefc-probe-quiet'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '零改动探测保持零输出\n成功标准：\n- 无告警', '--autopilot']).status, 0)
+    fillDocs(specBase, change)
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `零改动不阻断: ${s2.stdout}\n${s2.stderr}`)
+    assert.doesNotMatch(`${s2.stdout}\n${s2.stderr}`, /注册跨仓窗口内有交付改动/, '零改动零输出')
+  } finally {
+    const lib2 = FIXTURE_REPOS.get(cwd)
+    if (lib2) rmSync(lib2, { recursive: true, force: true })
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})

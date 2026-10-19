@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-empty-face-cross-repo-freeze",
+  "reviewer": "subagent（ZCode 独立子代理·四审）",
+  "verdict": "PASS",
+  "reviewedAgainst": "f8bab1faa0850b271b7682f32006656fe5203036",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "JSON-only 收口指引分支缺直测（修复①仅代码面生效）",
+      "evidence": "flow.js:2265-2271 在 patch 子步之后按在场冻结件复核 jsonOnlyFreeze，2643 据此切换「change-patch.json（跨仓 repos[]）」文案，逻辑正确；但 test/ 全仓检索「审计真相」0 命中，e2e 只断言「空面跨仓 patch 留档」，未覆盖断点续跑（patch 子步已 done 被 skip）回合的指引输出——上轮 P2 的原始触发场景没有回归护栏。",
+      "location": "src/flow.js:2265-2271,2643"
+    },
+    {
+      "severity": "P3",
+      "title": "flow done 遗留未使用局部变量 patchTextPath",
+      "evidence": "三审把内联存在性复查替换为 missingFreezeLabels 后，1738 行的 const patchTextPath 已无任何读取点（全文件仅此一处）；lint 的未引用导出检测只覆盖模块导出符号，局部死变量不会被拦。",
+      "location": "src/flow.js:1738"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-19T08:36:00Z"
+}

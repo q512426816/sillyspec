@@ -1,0 +1,800 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 98f762da..791237ff 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -60,6 +60,7 @@ modules:
+       - src/flow-state.js
+       - src/flow-draft.js
+       - src/flow-review.js
++      - src/flow-review-pack.js
+       - src/review-probes.js
+       - src/flow-parity.js
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index ffa88cdd..ce551c71 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -66,3 +66,5 @@
+ | 2026-10-16 | 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流 |
+ | 2026-10-17 | 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化 |
+ | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
++| 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |
++| 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index f8385476..60301f10 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -79,3 +79,4 @@
+ | 2026-10-16 | 2026-10-16-fix-downstream-tool-defects | 修复 2026-10-16 下游跑流程实证的三条工具缺陷（spec 树删除被拉取复活、verify … |
+ | 2026-10-16 | 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流 |
+ | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
++| 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index a6adfd32..f575f206 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -67,3 +67,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化
+ - 2026-10-17-strict-sync-signal-shape | 终态强校验默认路径 signal 形状修复——套娃对象回归钉
+ - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
++- 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.changelog.md b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+index b3fd92cf..1dfbe46a 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.changelog.md
+@@ -29,3 +29,4 @@ updated_at: 2026-08-24T00:40:00+08:00
+ | 2026-10-15 | 2026-10-15-vector-capability-autodetect | 用户设计裁决：向量开关放每仓 local.yaml 不是终态——端点部署本身就是开关，客户端应自动探… |
+ | 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |
+ | 2026-10-19 | 2026-10-19-init-drop-gemini-opencode | init 移除 gemini/opencode 工具支持 |
++| 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index e880c3eb..b2ee8ad0 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -267,13 +267,24 @@ export function renderThinDocsDebt({ specBase, projectRoot, changedFiles } = {})
+  */
+ export function renderVerifyReceipt({ change, baseline, head, gateSummary, review, traceCount, patchMeta, generatedAt }) {
+   const sha = patchMeta && patchMeta.patchSha256 ? patchMeta.patchSha256.slice(0, 12) : null
++  // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档没有顶级
++  // patchSha256，但 scopeAudit.repos[] 内有跨仓 patch 正文——回执须如实报「跨仓 N 仓」，
++  // 不能写「无冻结件」（否则平台/归档读者把成功冻结误判成缺件）。
++  const repoFrozen = patchMeta && patchMeta.scopeAudit && Array.isArray(patchMeta.scopeAudit.repos)
++    ? patchMeta.scopeAudit.repos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++    : []
++  const freezeLine = sha
++    ? `change.patch（sha256 ${sha}…）`
++    : repoFrozen.length > 0
++      ? `跨仓 ${repoFrozen.length} 仓（diff 见 change-patch.json scopeAudit.repos[]；主仓面为空）`
++      : '（无冻结件）'
+   const reviewLine = review
+     ? review.verdict === 'exempt'
+       ? '豁免（低风险证据齐全' + (review.sampled ? '' : '') + '）'
+       : `${review.verdict}（reviewer 见 review.json${Number.isFinite(review.findingsP1) ? `，P1 ${review.findingsP1}` : ''}）`
+     : '—'
+   const headNote = head && baseline && head === baseline
+-    ? '（等于基线——交付代码尚未提交，冻结面以 change.patch 实际内容为准）'
++    ? '（等于基线——交付代码尚未提交，冻结面以交付留档实际内容为准：change.patch 或 change-patch.json repos[]）'
+     : ''
+   return [
+     `---`,
+@@ -287,7 +298,7 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
+     `- **实测面**：${gateSummary || '—'}`,
+     `- **独立评审**：${reviewLine}`,
+     `- **测试绑定**：${traceCount > 0 ? `${traceCount} 行（test-trace.json，已随发号提升）` : '0（无锚行）'}`,
+-    `- **交付冻结**：${sha ? `change.patch（sha256 ${sha}…）` : '（无冻结件）'}`,
++    `- **交付冻结**：${freezeLine}`,
+     `- **生成**：${generatedAt}（机器合成，勿手改；明细见 flow-telemetry.jsonl / change-patch.json）`,
+     ``,
+   ].join('\n')
+@@ -409,6 +420,63 @@ export function filterCommittedFace(committedRaw, ownPrefix, opts = {}) {
+  * @param {{ cwd: string, change: string, freezeHead: string|null }} opts
+  * @returns {{ drifted: boolean, ownCommits: string[], head: string|null, ownFiles: string[], governanceOnly: boolean, touchedPromiseFace: boolean }} ownCommits=本变更后缀提交的 subject 列表（截 80 字）
+  */
++/**
++ * 冻结件完整性探针（2026-10-19-thin-empty-face-cross-repo-freeze）：空面跨仓冻结走
++ * JSON-only 留档（主仓面为空，`scopeAudit.repos[]` 承载跨仓 patch 正文，无 change.patch）。
++ * 存在性复查不能把「无 change.patch」一律判缺件——JSON 在场且 repos 内有 patch 正文即完整。
++ * 坏 JSON/读失败按缺件处理（重冻结兜底，fail-safe 不新造静默跳过面）。
++ * @returns {{ hasJson: boolean, hasText: boolean, repoPatchCount: number, complete: boolean }}
++ */
++export function inspectFreezeArtifacts(changeDir) {
++  const patchJsonPath = join(changeDir, 'change-patch.json')
++  const patchTextPath = join(changeDir, 'change.patch')
++  const hasJson = existsSync(patchJsonPath)
++  const hasText = existsSync(patchTextPath)
++  let repoPatchCount = 0
++  let jsonOk = false
++  if (hasJson) {
++    try {
++      const meta = JSON.parse(readFileSync(patchJsonPath, 'utf8'))
++      jsonOk = true
++      const repos = meta && meta.scopeAudit && meta.scopeAudit.repos
++      if (Array.isArray(repos)) {
++        repoPatchCount = repos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
++      }
++    } catch { /* 坏 JSON → 按缺件处理（重冻结兜底） */ }
++  }
++  // jsonOk 与 hasText 必须同时成立：change.patch 在场但 change-patch.json 损坏时，
++  // 冻结元数据已不可信（审计面缺锚），不能因正文文件在就判完整。
++  return { hasJson, hasText, jsonOk, repoPatchCount, complete: jsonOk && (hasText || repoPatchCount > 0) }
++}
++
++/**
++ * 冻结缺口标签（存在性复查的调用点共用逻辑，纯函数便于直测）：
++ * 完整 → []；否则给出可读缺件清单（坏 JSON 与真缺件区分，防止「正文在就判完整」盲区）。
++ * @param {{ hasJson?: boolean, hasText?: boolean, jsonOk?: boolean, repoPatchCount?: number, complete?: boolean }} state
++ * @returns {string[]}
++ */
++export function freezeGapLabels(state) {
++  const s = state && typeof state === 'object' ? state : {}
++  if (s.complete === true) return []
++  const gaps = []
++  if (!s.hasJson) gaps.push('change-patch.json')
++  else if (!s.jsonOk) gaps.push('change-patch.json（损坏）')
++  if (!s.hasText && !(Number(s.repoPatchCount) > 0)) gaps.push('change.patch')
++  if (gaps.length === 0) gaps.push('冻结件不完整')
++  return gaps
++}
++
++/**
++ * 冻结缺口标签（目录级入口，flow done 存在性复查的唯一调用面）：
++ * 检查（inspect）与标签（freezeGapLabels）一次封装——调用点直接用本函数，
++ * 直测本函数即覆盖调用点接线（防「探针修了调用点没接」的回归）。
++ * @param {string} changeDir
++ * @returns {string[]}
++ */
++export function missingFreezeLabels(changeDir) {
++  return freezeGapLabels(inspectFreezeArtifacts(changeDir))
++}
++
+ export function detectPatchDrift({ cwd, change, freezeHead }) {
+   try {
+     if (!freezeHead) return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false }
+@@ -656,13 +724,17 @@ export function projectTraceFaceRows(rows) {
+  * @param {object} meta change-patch.json 顶级增量键（note/moduleScope 等，展开在 totals 后）
+  * @returns {{ patchStatus: 'ok'|'failed', patchSha256: string|null }}
+  */
+-export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {} }) {
++export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, files, metaTotals, patchText, savedAt, snapObj, meta = {}, patchStatus = null }) {
+   const fileList = Array.isArray(files) ? files : []
+   const patchOk = typeof patchText === 'string' && patchText.length > 0
+   const patchBody = patchOk ? (patchText.endsWith('\n') ? patchText : patchText + '\n') : null
+   const patchSha256 = patchBody
+     ? createHash('sha256').update(patchBody.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+     : null
++  // 显式 patchStatus（2026-10-19-thin-empty-face-cross-repo-freeze）：空面跨仓冻结
++  // 没有主仓 patchText，但冻结本身成功——调用方传 'ok' 表达「冻结成功，无主仓 patch」，
++  // 不能复用 patchText 判空落 'failed'（平台/归档读者会把成功冻结误判为采集失败）。
++  const status = patchStatus === 'ok' || patchStatus === 'failed' ? patchStatus : (patchOk ? 'ok' : 'failed')
+   if (patchOk) writeFileSync(join(changeDir, 'change.patch'), patchBody)
+   writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify({
+     change,
+@@ -676,9 +748,9 @@ export function writeCloseTraceArtifacts({ changeDir, change, baseline, head, fi
+     ...meta,
+     scopeAudit: { ...snapObj },
+     ...(patchSha256 ? { patchSha256 } : {}),
+-    patchStatus: patchOk ? 'ok' : 'failed',
++    patchStatus: status,
+   }, null, 2) + '\n')
+-  return { patchStatus: patchOk ? 'ok' : 'failed', patchSha256 }
++  return { patchStatus: status, patchSha256 }
+ }
+ 
+ /**
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 4519a732..5feb5bb6 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -86,6 +86,22 @@ function readSlotAnswer(text, markerRe) {
+   return buf.join('\n').trim()
+ }
+ 
++/**
++ * design 四节已答判定（v1 AGENT 槽 / v2 节作答双格式——status 与 task tick 共享单一源，
++ * 2026-10-19-approve-gate-tick-nudge FR-03 上移；判据与 flow status 原内联逻辑逐字一致：
++ * v1 = 槽标记行后紧跟非空行的槽数 ≥3；v2 = DESIGN_QUESTIONS 四节实质作答（问题行剥离）≥3）。
++ */
++export function designSectionsFilled(dText) {
++  const text = String(dText || '').replace(/\r\n/g, '\n')
++  if (!text) return false
++  if (/<!--AGENT:槽\d+/.test(text)) {
++    return Array.from(text.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
++  }
++  try {
++    return DESIGN_QUESTIONS_FALLBACK.sections.filter((s) => readV2SectionAnswer(text, s.heading, DESIGN_QUESTIONS_FALLBACK)).length >= 3
++  } catch { return false }
++}
++
+ /**
+  * 读 v2 纯 markdown design 节作答（2026-10-04-thin-docs-v2）：节标题行到下一节标题之间的
+  * 非空行，剥离四问原文行（DESIGN_QUESTIONS 单一源同源引入——独立字符串会被评审实证为
+@@ -204,7 +220,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+  * 印出完整 sha 并要求 review.json 的 reviewedAgainst 照抄；漂移重冻结据此区分「对着旧冻结面的
+  * 过期评审」与「对着当前 HEAD 的刚完成评审」（实测竞态：复审 PASS 落盘 26 秒后被误隔离）。
+  */
+-export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null }) {
++export function renderReviewerTaskbook({ change, changeDir, head = null, probeLines = null, packLines = null }) {
+   const headFull = String(head || '').trim()
+   // 前轮 findings 注入（2026-10-07-wave-auto-adopt-review-dedup task-02）：复审场景（前轮 FAIL/
+   // 评审隔离重评）下任务书带上前轮清单——已报项只验修复与回归，重点找新增问题，勿整轮重报
+@@ -234,12 +250,25 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+       ].join('\n')
+     }
+   } catch { /* 无 review.json / 损坏 → 首评形态，零注入 */ }
++  // 冻结面形态（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 跨仓冻结没有
++  // change.patch，交付 diff 在 change-patch.json 的 scopeAudit.repos[]——任务书材料与
++  // 对象表述必须指向真实在場的冻结件，否则评审员按缺失文件判 patch 失败。
++  const hasMainPatchFile = existsSync(join(changeDir, 'change.patch'))
++  let repoPatchKeys = []
++  try {
++    const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++    const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
++    repoPatchKeys = repos
++      .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++      .map((r) => String(r.key || '?'))
++  } catch { /* 无/坏 JSON → 单仓形态 */ }
++  const freezeLabel = hasMainPatchFile ? 'change.patch 冻结面' : repoPatchKeys.length > 0 ? 'change-patch.json 跨仓冻结面' : '冻结面'
+   const taskbook = [
+     `⚖️ 独立评审任务书 — ${change}`,
+     `══════════════════════════════════════`,
+     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
+     ...(headFull ? [
+-      `【评审对象】工作区实态 + git HEAD（${headFull}）——change.patch 冻结面若落后于该 HEAD，以`,
++      `【评审对象】工作区实态 + git HEAD（${headFull}）——${freezeLabel}若落后于该 HEAD，以`,
+       `  工作区实态与 git log/show 核对为准；review.json 的 reviewedAgainst 字段照抄上面的完整 sha。`,
+     ] : [
+       `【评审对象】工作区实态 + git HEAD——review.json 的 reviewedAgainst 字段填 git rev-parse HEAD`,
+@@ -249,7 +278,16 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+     `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
+     `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
+     `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
+-    `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
++    ...(hasMainPatchFile
++      ? [`  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`]
++      : repoPatchKeys.length > 0
++        ? [`  - ${join(changeDir, 'change-patch.json')}（跨仓交付 diff 冻结件——scopeAudit.repos[] 的 ${repoPatchKeys.join('、')} 仓 patch 正文；主仓面为空故无 change.patch，diff 在 JSON 内联）`]
++        : [`  - ${join(changeDir, 'change.patch')}（若缺失按 patch 留档失败处理）`]),
++    // 预消化材料包（2026-10-19-thin-review-material-pack）：CLI 机械抽取的 FR↔测试绑定表 +
++    // 冻结 patch 文件级摘要（flow-review-pack.js 装配，12000 帽行级截断）——砍零上下文评审员
++    // 的定位类读与大 patch 整吞 prefill；段自带基准面语义行（包=索引非证据）；缺省/空数组
++    // 零注入——任务书与现状逐字一致（既有调用方/既有测试零感知）。
++    ...(Array.isArray(packLines) && packLines.length > 0 ? ['', ...packLines] : []),
+     ...(priorFindingsMd ? priorFindingsMd.split('\n') : []),
+     ``,
+     `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
+diff --git a/src/flow.js b/src/flow.js
+index b3fe1873..5294a39a 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -25,7 +25,7 @@
+  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync } from 'node:fs'
++import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, renameSync, statSync, unlinkSync } from 'node:fs'
+ import { runtimeStatePath, runtimeTempPath } from './runtime-paths.js'
+ import { join, relative, dirname } from 'node:path'
+ import { DatabaseSync } from 'node:sqlite'
+@@ -674,7 +674,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
+           if (r.drafted.length > 0) console.log(`📌 收编补生成缺失机器稿：${r.drafted.join('、')}（brainstorm 未产的工件机器补齐，criteria 从 proposal 成功标准回提；已存在文件未动）`)
+           const b = ensureBindingSlots({ changeDir })
+-          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
++          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——动码前作答，flow done 校验）`)
+         } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
+         // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
+         // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
+@@ -723,8 +723,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
+             : null,
+           `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 改写为工作分解（每行=可独立完成并当场验证的一步：做什么+怎么验证；全 \`- [ ]\`——代码开动前工作队列先存在）；`,
++          `🛑 断点①（机器门）：spec 面（任务面+测试绑定槽）定稿后把摘要给用户看 → flow approve --change ${change}（或用户显式 --autopilot）——批准后才动码。design 四节槽收编豁免（以 brainstorm design 为准）。`,
+           `② 执行走任务循环：对 tasks.md 每个 pending 行——展示「Working on task N/M: <任务>」→ 做 → 测试绿后当场勾一格（\`- [ ]\`→\`- [x]\`：sillyspec task tick --change ${change} --task task-NN 或直接 Edit）→ 下一行；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+-          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
++          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前作答（动码前，与任务面定稿同批）。`,
+           `✅ 任务面归你（工作分解契约）：tasks.md 是你的工作队列（机器种子可增删改，保持 \`- [ ] task-NN:\` 行形态）——CLI 以 checkbox 为进度状态机（task tick/flow status 实时读它），TodoWrite 类工具不替代；`,
+           `   勾选是收口证据面（逐格核提交 token/review.json）：做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；勾选修改与任务交付同一提交入库（pathspec 带上本变更 tasks.md——task tick 回显给现成命令）；`,
+           `   任务拟法：收口/推送/发布类动作不单列 task（协议自身承担，成功标准照写 requirements）；确需单列的，勾选前先有消息预埋 task-NN token 的交付提交（回执类证据写进提交消息）。`,
+@@ -1116,17 +1117,20 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     ``,
+     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
+     ``,
+-    `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
++    // 顺序正典（2026-10-19-thin-order-canon）：行动句必须是顺序句——实证（artifact 时间戳
++    // 还原+跨仓 14 例抽样）agent 跟从【你要做的】首义行动，旧句「直接干活」把动码提前、
++    // 文档与批准沦为收口仪式；正典=先答 spec 面 → 批准 → 才动码（读代码探究不算动码）。
++    `【你要做的】先答 spec 面，批准后才动码：① 答 spec——requirements FR 行为句+测试绑定行、design.md 四节作答（动码前；读代码探究不算动码）；② 断点①——摘要给用户看 → flow approve --change ${change}（或用户显式 --autopilot）；③ 才干活——写测试、改代码。治理工件骨架 CLI 已起草、收口机器做（协议记账单位=change 级）。`,
+     // 收口拒收红线前置（2026-10-11-flow-start-redline-frontload）：钉死/空槽/绑定三面都是文档
+     // 先行校验，实证第一次最容易踩（四问文本被改写、区间 task-NN 写法零证据被拒）——横幅
+     // 头部先行告知，收口才暴露的规则前置到动笔前。
+-    `🚫 收口拒收红线（文档先行校验，动笔前先读——第一次最容易踩的就是这三条）：`,
++    `🚫 收口拒收红线（文档须先于动码——动笔前先读，第一次最容易踩的就是这三条）：`,
+     `   ① design 四问文本与 FR 标题锚逐字钉死勿改写——问题原文保持原样、答案写在问题下方，改写/删除即收口拒收（文档↔锚逐字对比）；`,
+-    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答）；`,
+-    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收。`,
++    `   ② design.md 四节（做法/接口契约/边界并发四问/风险）每节至少一行——空节拒收（写「不适用：<理由>」也算答；动码前作答）；`,
++    `   ③ requirements 每条 FR 须有带强度词的行为句（必须/禁止/SHOULD）+ 测试绑定行——缺任一即拒收（动码前作答）。`,
+     `书写面（纯 markdown 起草）：requirements FR 正文/design 四节作答/测试绑定行都直接写正文——`,
+     `   文档内零指纹标记、零槽注释、零书写指导（规则以本横幅与命令卡为唯一源）；成功标准漂移只出 advisory 不拒收。`,
+-    `⚠️ design.md 四节动码前后顺手作答；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
++    `⚠️ design.md 四节动码前作答（它是断点① 批准的输入——后补属超期补写、留痕可审计）；列改动文件用独立「## 文件变更清单」节+表格（| 操作 | 路径 | 说明 |）`,
+     `   ——勿写在「接口契约」节内（收口按节名解析声明面）。`,
+     ...crossRepoHintLines,
+     `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
+@@ -1151,18 +1155,18 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
+     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
+     ``,
+-    `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
++    `🛑 三断点纪律（顺序纪律：①未过不动码；②③为汇报点——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+     `      用户确认后请其运行 sillyspec flow approve --change ${change}（批准留痕）再动手写代码——`,
+     `      agent 代跑时如实声明通道：--user-confirmed（转述用户已确认）/ --self-approved（agent 自批），`,
+     `      无 flag 按 unattested 留痕（审计面无法区分用户确认与自批）——2026-10-12-approve-channel-attest。`,
+-    `      方案错了返工最贵；未批准且未声明 --autopilot 时 flow done 拒收（2026-10-04-thin-docs-v2）；`,
++    `      方案错了返工最贵；批准是动码前置义务（未批准且未声明 --autopilot 时 flow done 亦拒收——2026-10-04-thin-docs-v2）；`,
+     `      用户否掉方案 → flow reject --change ${change} --reason <理由>（拒后批准须显式通道再确认）。`,
+     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
+     `      等用户确认再跑收口。`,
+     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
+-    `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（留痕），`,
+-    `   ②③断点 agent 自主跳过。`,
++    `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（用户显式授权、留痕——非 agent 自选补救通道），`,
++    `   ①②③人审全免（agent 自主跑到底）。`,
+     `   随时可查进度：sillyspec flow status --change ${change}`,
+     ...(detectUiTouch(input)
+       ? [...buildUiGuidanceLines(specBase), '']
+@@ -1211,11 +1215,14 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+     ...(title ? [`- 标题：${title}`] : []),
+     `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
+     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
++    // 顺序正典（2026-10-19-thin-order-canon）：恢复面带批准状态——重入时 agent 只看简报，
++    // 未批准时「下一步」必须指向补批而非「继续干活」（防先码后批在恢复路径复发）。
++    `- spec 批准：${st.spec_approved ? `✅ 已批准（channel=${approveChannelOf(st)}）` : st.autopilot ? '🔑 autopilot 豁免（用户显式授权）' : '⬜ 未批准——动码前先过断点①（摘要给用户 → flow approve）'}`,
+     // 红线重申（2026-10-11-flow-start-redline-frontload）：重入不出首进横幅——钉死规则与
+     // task-NN token 形态随简报补位，断点续跑生命周期内规则不丢。
+     `- 红线重申：design 四问文本/FR 标题锚逐字钉死勿改写（改写即拒收）；勾选证据提交消息逐个带 task-NN 或 /、，连写（「task-01..task-05」区间写法不认）。`,
+     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
+-    `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
++    `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : !st.spec_approved && !st.autopilot ? `未批准先补批（摘要给用户 → sillyspec flow approve --change ${change}）；随后继续干活，干完跑 flow done（断点续）` : `继续干活；干完跑 flow done（断点续）`}`,
+     ...(digestLines.length > 0 ? ['', ...digestLines] : []),
+     // 尾部原型锚（2026-10-14-guide-anchor-adopt-proto）：收编/含原型变更重入时原型指针不隐身
+     //（首进 adopt 输出的 🖼️ 行在会话切换后已丢，简报尾部补可发现面；置于 digestLines 后＝绝对
+@@ -1332,10 +1339,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       // spec 断点机器门（FR-06/FR-07，护栏#2 零 prompt 劝说——advisory 断点在 0/12 勾选类事故
+       // 实证下无牙；v2 起批准是收口硬前提，autopilot 是用户显式豁免通道）
+       if (!st.autopilot && !st.spec_approved) {
+-        console.error(`❌ spec 断点未批准：本变更（v2 起草）收口需要方案确认留痕`)
+-        console.error(`   修复：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
++        console.error(`❌ spec 断点未批准：批准是动码前置义务（不是收口补救动作）——本变更缺方案确认留痕`)
++        console.error(`   补批通道（留痕可审计）：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
+         console.error(`     sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
+-        console.error(`   或用户显式豁免（自主跑到底）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
++        console.error(`   或用户显式豁免（须用户授权，非 agent 自选）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
+         reportMidFail('artifacts')
+         process.exit(1)
+       }
+@@ -1712,6 +1719,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
+   // 不标 done（重入 done 重试）。
+   let driftRefreeze = false
++  // JSON-only 冻结形态（无主仓 change.patch，跨仓正文在 repos[]）——收口指引文案按它
++  // 切换审计锚表述（2026-10-19-thin-empty-face-cross-repo-freeze）。
++  let jsonOnlyFreeze = false
+   if (st.substeps?.patch === 'done') {
+     // 处置漂移检测（2026-10-05-disposition-refreeze-drift，主清单 P1）：冻结后又有本变更交付
+     // 提交时，幂等跳过会把 change.patch/review.json 停在处置前时点（归档审计件缺处置面，
+@@ -1726,10 +1736,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 未锚定一律隔离（fail-safe 宁可多评）。
+     const patchJsonPath = join(changeDir, 'change-patch.json')
+     const patchTextPath = join(changeDir, 'change.patch')
+-    const missingFreeze = [
+-      !existsSync(patchJsonPath) ? 'change-patch.json' : null,
+-      !existsSync(patchTextPath) ? 'change.patch' : null,
+-    ].filter(Boolean)
++    // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：JSON-only 留档
++    // （无 change.patch、repos[] 承载跨仓正文）是完整冻结，存在性复查不得判缺件。
++    // 完整性以探针的 complete 为准（坏 JSON 即使 change.patch 在场也不可信）。
++    const { missingFreezeLabels } = await import('./flow-parity.js')
++    const missingFreeze = missingFreezeLabels(changeDir)
+     let drifted = false
+     let drift = null
+     if (missingFreeze.length > 0) {
+@@ -2020,11 +2031,84 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           }
+           console.warn(`⚠️ --accept-empty-face：显式签收空冻结面与声明面矛盾（${_declared.length} 条声明交付不进冻结面，留痕 flow-state accept_empty_face）`)
+         }
+-        // 纯跨仓规范标注空面：合规书写不拦，advisory 点名 thin 空面分支不做跨仓冻结的已知缺口
+-        if (ownFiles.length === 0 && _declared.length === 0 && planEntries.some((e) => e && e.repo)) {
+-          console.warn('⚠️ 声明清单全部为跨仓规范标注且主仓冻结面为空——thin 空面分支不做跨仓冻结与 patch 留档（缺口已知：归档件将无 patch 两件；如需冻结请主仓侧交付或待后续版本支持空面跨仓冻结）')
++        // 空面跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：主仓冻结面为空且
++        // 声明清单含规范跨仓标注时，跨仓交付面仍可留档——JSON 路线只写 change-patch.json，
++        // scopeAudit.repos[] 承载各仓 patch 正文/sha256，不写 change.patch（主仓面确为空，
++        // 混入跨仓正文会让按主仓 cwd 解析 hunk 的读方错位）。各仓窗口内无可归属交付时
++        // 维持空面跳过（无清单段形态同此路，留给第 2 步的窗口探测点名）。
++        let emptyFaceCrossRepos = []
++        let emptyFaceCrossRows = undefined
++        if (ownFiles.length === 0 && planEntries.some((e) => e && e.repo)) {
++          try {
++            const { reconcileCrossRepoPlan } = await import('./scope-audit.js')
++            const recon = reconcileCrossRepoPlan({
++              cwd, specBase,
++              runtimeRoot: resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase),
++              changeName: change,
++              planEntries,
++              collectPatch: true,
++              crossBaselines: (st && st.cross_baselines && typeof st.cross_baselines === 'object') ? st.cross_baselines : null,
++            })
++            emptyFaceCrossRows = recon.rows
++            // 「有交付」判定按对账三态行，不按 totals.files——后者含声明未动的 untouched
++            // 占位行（空仓也会得到 files>0，导致空面误落 JSON-only 留档）。判定只决定
++            // 落不落件；落件时 repos[] 原样携带全部仓（含降级仓与 degradedReason——
++            // 与非空主仓分支同口径，读侧可感知采集失败面）。
++            const deliveredRepoKeys = new Set((Array.isArray(recon.rows) ? recon.rows : [])
++              .filter((r) => r && r.crossRepo && r.verdict !== 'untouched')
++              .map((r) => r.crossRepo))
++            const hasDelivered = deliveredRepoKeys.size > 0
++              || (recon.repos || []).some((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++            emptyFaceCrossRepos = hasDelivered ? (recon.repos || []) : []
++            for (const n of recon.notes) console.log(`   📎 ${n}`)
++          } catch { /* 跨仓对账失败 → 退回空面跳过（fail-soft 不新造阻断面） */ }
+         }
+-        if (ownFiles.length === 0) {
++        if (ownFiles.length === 0 && emptyFaceCrossRepos.length > 0) {
++          const { buildThinSnapshotRows, writeCloseTraceArtifacts } = await import('./flow-parity.js')
++          const { rows: snapRows, totals: snapTotals } = buildThinSnapshotRows({ ownFiles: [], stats: new Map(), planEntries, crossRepoRows: emptyFaceCrossRows })
++          const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
++          // 先清旧 change.patch 再写 JSON：JSON-only 语义下残留旧正文与新 JSON（无顶级
++          // patchSha256）互相矛盾。清理失败直接抛出（外层 catch → patch 子步不标 done，
++          // 重入重试），不留「双件并存且复查判完整」的自愈盲区。
++          const stalePatchPath = join(changeDir, 'change.patch')
++          if (existsSync(stalePatchPath)) {
++            try { unlinkSync(stalePatchPath) } catch (e) {
++              throw new Error(`旧 change.patch 清理失败（${e.message}）——保持半态可重入，修复文件权限后重跑`)
++            }
++          }
++          const closeTrace = writeCloseTraceArtifacts({
++            changeDir,
++            change,
++            baseline: st.baseline_commit,
++            head: headCommit,
++            files: [],
++            metaTotals: { files: 0, additions: 0, deletions: 0 },
++            patchText: null,
++            savedAt: new Date().toISOString(),
++            patchStatus: 'ok',
++            snapObj: {
++              mode: 'full-flow', ok: true, degradedReason: null,
++              baseAnchor: st.baseline_commit || null,
++              totals: snapTotals,
++              rows: snapRows,
++              excluded: { foreignDeclared: [] },
++              note: 'flow done 时点冻结（主仓冻结面为空；跨仓交付面见 repos[]）',
++              closedBy: 'flow done',
++              repos: emptyFaceCrossRepos,
++            },
++            meta: {
++              note: 'flow done 时点冻结（主仓冻结面为空；跨仓交付面见 scopeAudit.repos[]——2026-10-19-thin-empty-face-cross-repo-freeze）',
++              modules: [], uncoveredDirs: [], moduleMaps: [],
++            },
++          })
++          jsonOnlyFreeze = true
++          const frozenRepos = emptyFaceCrossRepos.filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0).length
++          console.log(`📦 空面跨仓 patch 留档：change-patch.json（主仓面为空，跨仓 ${emptyFaceCrossRepos.length} 仓、正文 ${frozenRepos}——diff 见 scopeAudit.repos[]）`)
++          patchOk = closeTrace.patchStatus === 'ok'
++        } else if (ownFiles.length === 0) {
++          if (_declared.length === 0 && planEntries.some((e) => e && e.repo)) {
++            console.warn('⚠️ 声明清单全部为跨仓规范标注且主仓冻结面为空——跨仓窗口内没有可归属交付，按空面跳过 patch 留档（如实现应在此，先提交后重跑）')
++          }
+           console.log('📦 patch 留档跳过：本变更可归属文件面为空（无交付面改动——治理工件不入冻结面；若实现代码应在此，先提交后重跑）')
+           patchOk = true
+         } else {
+@@ -2178,6 +2262,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     }
+     if (patchOk) mark('patch')
+   }
++  // 冻结形态复核（含重入 skip 路径——上轮评审 P2：断点续跑回合不执行 patch 分支，
++  // jsonOnlyFreeze 会停在 false，收口指引误报 change.patch）。直接按在场冻结件判定。
++  try {
++    const { inspectFreezeArtifacts: inspectFinal } = await import('./flow-parity.js')
++    const fsFinal = inspectFinal(changeDir)
++    jsonOnlyFreeze = fsFinal.jsonOk && !fsFinal.hasText && fsFinal.repoPatchCount > 0
++  } catch { /* best-effort */ }
+ 
+   // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
+   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
+@@ -2209,6 +2300,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
+     let patchText = null
+     try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
++    // JSON-only 跨仓冻结（2026-10-19-thin-empty-face-cross-repo-freeze）：无主仓
++    // change.patch 时交付 diff 证据在 change-patch.json 的 scopeAudit.repos[].patch——
++    // 不接上的话 classifyReviewNeed 恒判「交付 diff 不可得」，评审定档失真。
++    if (patchText === null) {
++      try {
++        const meta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8'))
++        const repos = meta && meta.scopeAudit && Array.isArray(meta.scopeAudit.repos) ? meta.scopeAudit.repos : []
++        const repoDiff = repos
++          .filter((r) => r && typeof r.patch === 'string' && r.patch.length > 0)
++          .map((r) => r.patch)
++          .join('\n')
++        if (repoDiff) patchText = repoDiff
++      } catch { /* 无/坏 JSON → 保持 null（既有判定） */ }
++    }
+     const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
+     if (!tier.required) {
+       console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
+@@ -2230,7 +2335,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         for (const _w of _assembled.warnings) console.warn(`⚠️ review_probes：${_w}`)
+         if (_assembled.lines.length > 0) _probeLines = _assembled.lines
+       } catch { /* 探针面 fail-soft：装配失败零注入 */ }
+-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines }))
++      // 预消化材料包装配（2026-10-19-thin-review-material-pack）：机械抽取 FR↔测试绑定表 +
++      // 冻结 patch 文件级摘要注入任务书——砍零上下文评审员的定位类读与大 patch 整吞 prefill；
++      // 摘要只从冻结件本身算（不走活 git，防与评审员手里冻结面漂移）；fail-soft 零注入。
++      let _packLines = null
++      try {
++        const { assembleReviewPack } = await import('./flow-review-pack.js')
++        const _pack = assembleReviewPack({ changeDir, patchText })
++        if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
++      } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
++      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
+       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+       appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+       reportMidFail('review')
+@@ -2526,7 +2640,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+     if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
+       console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
+-      console.log(`   审计真相已冻结在归档件 change.patch（sha256 锚定）+ verify-result + review.json，不依赖 git 历史；`)
++      console.log(`   审计真相已冻结在归档件 ${jsonOnlyFreeze ? 'change-patch.json（跨仓 repos[] 正文+sha256 锚定）' : 'change.patch（sha256 锚定）'} + verify-result + review.json，不依赖 git 历史；`)
+       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
+     }
+   } catch { /* 指引 best-effort */ }
+@@ -2568,6 +2682,39 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag =
+     console.error(`   （拒绝后派生授权须显式再确认——2026-10-12-approve-channel-attest）`)
+     process.exit(2)
+   }
++  // 批准前文档完整性校验（2026-10-19-approve-gate-tick-nudge FR-01/02）：批准=有内容的机器
++  // 事实（批时文档必齐）。复用 done 门同源校验（verifyFlowDrafts 双轨）；repair:false——批准
++  // 面只读，不做 design 问题行自动回填（写盘修复属 done 面）。诚实边界：本门证明「答在批前」，
++  // 不证明「答在码前」——时序证据路线已实证不可行（批量收口下 git 时间戳说谎，thin-order-canon
++  // 四路调查），不做假装能拦的检查。
++  {
++    const runtimeRoot = resolveRuntimeRoot({}, specBase)
++    const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
++    const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
++    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign, repair: false })
++    for (const a of r.advisories || []) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
++    if (r.applicable && r.violations.length > 0) {
++      console.error(`❌ spec 断点未批准——文档未齐（批准是动码前置，先答 spec 面再批）：`)
++      for (const v of r.violations) console.error(`   - ${v}`)
++      console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
++      process.exit(1)
++    }
++    if (!r.applicable) {
++      // draft-ledger 机本位缺失（跨机批准/存量变更）：fail-open 降级——仅 v1（AGENT 槽形态）跑
++      // 空槽兜底；v2 纯 markdown 无 ledger 无法对锚校验，如实降级放行（不假装能查）。
++      let v1Text = null
++      try { v1Text = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { /* 无 design */ }
++      if (v1Text && /<!--AGENT:槽\d+/.test(v1Text)) {
++        const dr = verifyDesignRecordFilled({ changeDir })
++        if (dr.applicable && dr.emptySlots.length > 0) {
++          console.error(`❌ spec 断点未批准——design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
++          console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
++          process.exit(1)
++        }
++      }
++      console.log(`ℹ️ 批准校验降级放行：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过`)
++    }
++  }
+   let approvedBy = by
+   if (!approvedBy) {
+     try {
+@@ -2597,7 +2744,7 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag =
+     console.warn(`⚠️ agent 自批留痕：如用户实际未确认，请撤销——sillyspec flow reject --change ${change} --reason <理由>`)
+   }
+   if (patch.spec_rejected_superseded_at) console.log(`   已翻越既有拒绝记录（superseded_at=${patch.spec_rejected_superseded_at}，拒绝理由保留于 spec_rejected_reason）`)
+-  console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：sillyspec flow reject --change ${change} --reason <理由>`)
++  console.log(`   批准是动码前置义务：若尚未动码，现在可以开始写码；若已动码，本次属超期补批（留痕可审计）。flow done 断点门已满足。撤销：sillyspec flow reject --change ${change} --reason <理由>`)
+ }
+ 
+ /**
+@@ -2808,17 +2955,10 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
+     try {
+       const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
+-      // 双格式：v1 AGENT 槽计数；v2 纯 markdown 按节「有实质作答」判（复用 flow-review 的
+-      // v2 节读取——问题原文行剥离；仅标题在场不算已填，防 spec 相位误跳「②执行」）
+-      if (/<!--AGENT:槽\d+/.test(dText)) {
+-        designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+-      } else {
+-        try {
+-          const { readV2SectionAnswer } = await import('./flow-review.js')
+-          const { DESIGN_QUESTIONS } = await import('./flow-draft.js')
+-          designFilled = DESIGN_QUESTIONS.sections.filter((s) => readV2SectionAnswer(dText, s.heading, DESIGN_QUESTIONS)).length >= 3
+-        } catch { designFilled = false }
+-      }
++      // 双格式判定单一源（2026-10-19-approve-gate-tick-nudge FR-03 上移 flow-review.js；
++      // 判据与原内联逻辑逐字一致——status/tick 同源，行为零变化）
++      const { designSectionsFilled } = await import('./flow-review.js')
++      designFilled = designSectionsFilled(dText)
+     } catch { /* 无 design */ }
+     try {
+       const rText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+@@ -2833,9 +2973,18 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+         bindingsFilled = _rows.filter((m) => m[2].trim() && !m[2].trim().startsWith('（待填')).length
+       }
+     } catch { /* 无 requirements */ }
+-    // 阶段推断
++    // 阶段推断（2026-10-19-thin-order-canon：相位看批准——docs 齐但未批准仍停 ① spec 待批准，
++    // 防 status 中途查询面诱导「先执行后卡点」；autopilot 是用户显式豁免、进执行段带标注）
++    const specApproved = st.spec_approved === true
++    const autopilotOn = st.autopilot === true
+     let phase = '① spec（填 FR + design 槽）'
+-    if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
++    if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) {
++      phase = specApproved
++        ? '② 执行（已批准·写代码跑测试）'
++        : autopilotOn
++          ? '② 执行（autopilot 豁免·写代码跑测试）'
++          : '① spec（→ 待用户批准：摘要给用户后 flow approve）'
++    }
+     if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
+     // 任务心跳（2026-09-29-flow-task-heartbeat + d007-incontext 纠偏）：②执行阶段把「下一个任务」
+     // 交给机器指——当场重读 tasks.md（唯一进度源）取第一个未勾行 + 进度。进度推进本身零 CLI
+@@ -2876,6 +3025,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+         designFilled, frFilled, bindingsFilled, bindingsTotal,
+         tasksChecked, tasksTotal,
+         substeps: subDone, substepsTotal: SUBSTEPS.length,
++        specApproved, specApprovedChannel: specApproved ? approveChannelOf(st) : null,
+         ...(st.legacy_fallback ? { legacyFallback: true } : {}),
+       }))
+       return
+@@ -2884,6 +3034,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
+       `📋 ${change}`,
+       ...(changeTitle ? [`   标题：${changeTitle}`] : []),
+       `   阶段：${phase}`,
++      `   spec 批准：${specApproved ? '✅ 已批准' : autopilotOn ? '🔑 autopilot 豁免（用户显式授权）' : '⬜ 未批准（动码前先过断点①）'}`,
+       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+       hasTasks ? `   任务勾选：${tasksChecked}/${tasksTotal}` : null,
+       ...(heartbeat || []),
+diff --git a/test/close-trace-freeze-integrity.test.mjs b/test/close-trace-freeze-integrity.test.mjs
+index a9a6a9e3..8dfefd3e 100644
+--- a/test/close-trace-freeze-integrity.test.mjs
++++ b/test/close-trace-freeze-integrity.test.mjs
+@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ 
+-import { scanOrphanFace } from '../src/flow-parity.js'
++import { scanOrphanFace, inspectFreezeArtifacts, freezeGapLabels, missingFreezeLabels } from '../src/flow-parity.js'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const CLI = join(ROOT, 'src', 'index.js')
+@@ -265,3 +265,32 @@ test('孤儿提交触及交付面阻断收口（worktree e2e）+ --accept-orphan
+     rmSync(cwd, { recursive: true, force: true })
+   }
+ })
++
++// ── 2026-10-19-thin-empty-face-cross-repo-freeze：冻结件完整性探针 ──
++// JSON-only 跨仓冻结（无 change.patch、repos[] 有 patch 正文）必须判完整；两缺/坏 JSON
++// 仍判缺件（重冻结兜底）。直测纯函数，覆盖存在性复查的读侧契约。
++test('inspectFreezeArtifacts：JSON-only 跨仓冻结判完整，两缺/坏 JSON 判缺件', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'ifz-'))
++  try {
++    assert.equal(inspectFreezeArtifacts(dir).complete, false, '两缺 → 缺件')
++    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: [], scopeAudit: { repos: [{ key: 'libx', patch: 'diff --git a/x b/x\n' }] } }))
++    const repoOnly = inspectFreezeArtifacts(dir)
++    assert.equal(repoOnly.hasJson, true)
++    assert.equal(repoOnly.hasText, false)
++    assert.equal(repoOnly.repoPatchCount, 1)
++    assert.equal(repoOnly.complete, true, 'JSON-only 跨仓正文 → 完整')
++    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: [], scopeAudit: { repos: [{ key: 'libx', patch: null }] } }))
++    assert.equal(inspectFreezeArtifacts(dir).complete, false, 'repos 无正文且无 patch → 缺件')
++    writeFileSync(join(dir, 'change-patch.json'), '{bad json')
++    assert.equal(inspectFreezeArtifacts(dir).complete, false, '坏 JSON → 缺件')
++    writeFileSync(join(dir, 'change.patch'), 'diff --git a/a.js b/a.js\n')
++    assert.equal(inspectFreezeArtifacts(dir).complete, false, '坏 JSON + change.patch 在场仍判缺件（元数据不可信）')
++    assert.deepEqual(freezeGapLabels(inspectFreezeArtifacts(dir)), ['change-patch.json（损坏）'], '调用点缺件标签点名坏 JSON')
++    assert.deepEqual(missingFreezeLabels(dir), ['change-patch.json（损坏）'], '目录级入口（flow done 实际调用面）覆盖同一判定')
++    writeFileSync(join(dir, 'change-patch.json'), JSON.stringify({ files: ['a.js'], totals: { files: 1 } }))
++    writeFileSync(join(dir, 'change.patch'), 'diff --git a/a.js b/a.js\n')
++    assert.equal(inspectFreezeArtifacts(dir).complete, true, '两件齐全 → 完整')
++  } finally {
++    rmSync(dir, { recursive: true, force: true })
++  }
++})
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index d8b9c061..d4e00205 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -34,7 +34,10 @@ function readdirSyncSafe(dir) {
+   try { return readdirSync(dir) } catch { return [] }
+ }
+ 
+-/** 建主仓夹具；opts.repos 时注册跨仓 libx（真实目录在场，主仓根看不到其内容）。 */
++/** makeRepo 产出的跨仓仓路径（cwd → libx），供新用例在 flow start 后向跨仓投递交付。 */
++const FIXTURE_REPOS = new Map()
++
++/** 建主仓夹具；opts.repos 时注册跨仓 libx（真实 git 仓，主仓根看不到其内容）。 */
+ function makeRepo(opts = {}) {
+   const cwd = mkdtempSync(join(tmpdir(), 'tefc-'))
+   git(cwd, ['init', '-q', '-b', 'main'])
+@@ -44,8 +47,16 @@ function makeRepo(opts = {}) {
+   let yaml = 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n'
+   if (opts.repos) {
+     const lib = mkdtempSync(join(tmpdir(), 'tefc-lib-'))
++    git(lib, ['init', '-q', '-b', 'main'])
++    git(lib, ['config', 'user.email', 't@t'])
++    git(lib, ['config', 'user.name', 't'])
+     mkdirSync(join(lib, 'src', 'routes'), { recursive: true })
+-    yaml += `repos:\n  libx: ${lib.replace(/\\/g, '/')}\n`
++    writeFileSync(join(lib, 'base.txt'), 'base\n')
++    git(lib, ['add', '.'])
++    git(lib, ['commit', '-qm', 'base'])
++    FIXTURE_REPOS.set(cwd, lib)
++    // deadkey：不可达注册仓（跨仓对账降级形态；只在显式声明 deadkey 条目的用例里出现）
++    yaml += `repos:\n  libx: ${lib.replace(/\\/g, '/')}\n  deadkey: C:/nonexistent-deadkey-path-xyz\n`
+   }
+   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), yaml)
+   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+@@ -236,6 +247,58 @@ test('空面 + 清单用「## libx 仓变更」h2 段头 → 识别为规范标
+   }
+ })
+ 
++// ── 2026-10-19-thin-empty-face-cross-repo-freeze：空面 + 规范跨仓标注 + 跨仓真实交付
++//    → JSON-only 冻结（change-patch.json 的 repos[].patch，无 change.patch），回执如实报
++//    「跨仓 N 仓」，不再写「无冻结件」 ──
++test('空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结', () => {
++  const cwd = makeRepo({ repos: true })
++  const lib = FIXTURE_REPOS.get(cwd)
++  const change = '2026-10-19-tefc-xrepo-freeze'
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '空面跨仓冻结落 JSON 留档\n成功标准：\n- repos 内有 patch 正文', '--autopilot'])
++    assert.equal(s1.status, 0, `start: ${s1.stderr}`)
++    assert.ok(lib, '跨仓仓路径在场')
++    // 跨仓两笔交付：一笔提交（带变更名 token）+ 一笔工作树未提交
++    writeFileSync(join(lib, 'impl.txt'), 'impl\n')
++    git(lib, ['add', 'impl.txt'])
++    git(lib, ['commit', '-qm', `feat: 实现 (${change})`])
++    writeFileSync(join(lib, 'fix.txt'), 'fix\n')
++    fillDocs(specBase, change, ['## 文件变更清单', '', '### libx', '', '- impl.txt', '- fix.txt', '', '### deadkey', '', '- src/dead.js'].join('\n'))
++    // 预置旧 change.patch（重冻结到空主仓面的清理路径）：修完仍存在即为回归。
++    writeFileSync(join(specBase, 'changes', change, 'change.patch'), 'diff --git a/stale b/stale\n')
++    tickTasks(specBase, cwd, change)
++    writeReviewFixture(specBase, cwd, change)
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `空面跨仓冻结: ${s2.stdout}\n${s2.stderr}`)
++    const arch = join(specBase, 'changes', 'archive', change)
++    const metaPath = join(arch, 'change-patch.json')
++    assert.ok(existsSync(metaPath), 'change-patch.json 已落盘')
++    assert.ok(!existsSync(join(arch, 'change.patch')), 'JSON-only：不落 change.patch')
++    const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++    assert.equal(meta.patchStatus, 'ok', '冻结成功状态（非 failed）')
++    assert.deepEqual(meta.files, [], '主仓 files 为空')
++    const repos = (meta.scopeAudit || {}).repos || []
++    assert.equal(repos.length, 2, '健康仓 + 降级仓都原样保留')
++    const libRepo = repos.find((r) => r.key === 'libx')
++    const deadRepo = repos.find((r) => r.key === 'deadkey')
++    assert.ok(libRepo && deadRepo, '两仓条目都在')
++    assert.match(libRepo.patch, /impl\.txt/, '提交交付进 patch')
++    assert.match(libRepo.patch, /fix\.txt/, '工作树交付进 patch')
++    assert.match(libRepo.patchSha256, /^[0-9a-f]{64}$/, '跨仓 patch 正文带 sha256 锚')
++    assert.equal(deadRepo.degraded, true, '降级仓条目不丢')
++    assert.ok(deadRepo.degradedReason, '降级原因随条目留档')
++    const vr = readFileSync(join(arch, 'verify-result.md'), 'utf8')
++    assert.match(vr, /跨仓 1 仓/, '回执报跨仓冻结')
++    assert.doesNotMatch(vr, /无冻结件/, '回执不再写无冻结件')
++    assert.match(`${s2.stdout}\n${s2.stderr}`, /空面跨仓 patch 留档/, '收口输出点名 JSON 路线')
++  } finally {
++    const lib2 = FIXTURE_REPOS.get(cwd)
++    if (lib2) rmSync(lib2, { recursive: true, force: true })
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
+ // ── FR-04：flow start 横幅两态 ──
+ test('flow start 横幅：注册仓非空出跨仓写法行；为空零该行', () => {
+   const withRepos = makeRepo({ repos: true })

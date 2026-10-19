@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-empty-face-cross-repo-freeze",
+  "reviewer": "subagent（ZCode 独立子代理）",
+  "verdict": "FAIL",
+  "reviewedAgainst": "d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5",
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "FR-02 未兑现：change-patch.json 损坏且 change.patch 在场时仍判完整冻结",
+      "evidence": "inspectFreezeArtifacts 的 complete = hasJson && (hasText || repoPatchCount>0)；JSON.parse 失败被 catch 吞掉后只令 repoPatchCount=0，hasText 仍为 true → complete=true。flow.js 的 missingFreeze 只看三值，随后 patchMeta 解析失败又被 catch 吞掉，漂移检测跳过；最终 verify-result 因 patchMeta=null 写「无冻结件」。FR-02 明确要求「JSON 损坏时判缺件并触发重冻结」，函数注释也写「坏 JSON/读失败按缺件处理」。新增用例只覆盖坏 JSON 且无 change.patch 的组合，未覆盖该路径。",
+      "location": "src/flow-parity.js:443-445；src/flow.js:1740-1758"
+    },
+    {
+      "severity": "P2",
+      "title": "JSON-only 冻结把降级仓剔除出 scopeAudit.repos[]，违背「原样携带各仓」契约",
+      "evidence": "空面分支用 `.filter((r) => r && !r.degraded && ...)` 生成 emptyFaceCrossRepos，既当触发判定又直接作为 repos[] 写盘；reconcileCrossRepoPlan 的 degraded 条目（含 anchor/degradedReason，scope-audit.js:1362-1370）被剔除。非空主仓分支则原样写 recon.repos（flow.js:2183、2206）。混合交付/降级场景下平台读侧看不到降级仓与原因，design「scopeAudit.repos[] 原样携带各仓锚点/计数/patch/patchSha256」未兑现。",
+      "location": "src/flow.js:2058-2059（对照 src/flow.js:2183,2206；src/scope-audit.js:1362-1370）"
+    },
+    {
+      "severity": "P2",
+      "title": "冻结 patch 混入并行变更 2026-10-19-thin-order-canon 的改动，交付面归属不实",
+      "evidence": "change.patch 的 flow start/status/approve 文案与批准门 hunk（注释明写「2026-10-19-thin-order-canon」）来自另一活跃变更，却被 change-patch.json 按本变更 4 文件冻结面计入（src/flow.js +106/-24）。本变更 requirements/design 未声明这些行为变更；按此 patch 归档会把 thin-order-canon 的代码记入本变更审计面。",
+      "location": "change.patch:1117-1180,1215-1228,2668,2904-2965（HEAD src/flow.js:1120,2910；change-patch.json:5-15）"
+    },
+    {
+      "severity": "P3",
+      "title": "JSON-only 分支不清理既有 change.patch，切换后目录不再是 JSON-only 形态",
+      "evidence": "空面跨仓分支以 patchText:null 调 writeCloseTraceArtifacts；该函数只在 patchOk 时写 change.patch，从不删除。若同一 change 早先冻结已落 change.patch（--refreeze/主仓面收缩后再收口），JSON-only 留档后旧 change.patch 仍在，且新 JSON 无顶级 patchSha256——读方可能误读旧主仓 diff。",
+      "location": "src/flow.js:2063-2094；src/flow-parity.js:695-720"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 绑定用例未断言 repos[].patchSha256",
+      "evidence": "FR-01 明确要求 scopeAudit.repos[] 含 patch 正文与 patchSha256；新增用例只断言 patch 正文匹配 impl.txt/fix.txt、patchStatus='ok'、files=[]，全文件无 patchSha256 断言（rg 无命中）。实现侧 scope-audit.js:1413/1424 确实产出该字段，但绑定声称的断言面不完整。",
+      "location": "test/thin-empty-face-crosscheck.test.mjs:252（新增用例）；src/scope-audit.js:1413,1424"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——窗口锚用 flow start cross_baselines；重入 JSON-only 判完整不重复重冻结与 FR-02 一致，迟到提交仅在采集时点窗口内被采集）",
+    "并发": "ok（边界已裁决：可接受——冻结仍由 flow done 单写者整文件覆盖，inspectFreezeArtifacts 只读；未新增共享状态）",
+    "切换": "finding（P1 坏 JSON + change.patch 在场判完整；P3 旧 change.patch 不清理）",
+    "作用域": "finding（P2 降级仓被剔除出 repos[]；P2 冻结面混入 thin-order-canon 他变更）"
+  },
+  "reviewedAt": "2026-10-19T15:34:50+08:00"
+}

@@ -10370,3 +10370,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-19-thin-review-material-pack
   status: active
+
+## FR-cli-entry-548 主仓冻结面为空且 design 清单含规范跨仓标注时，跑跨仓对账并落 change-patch.json（scopeAudit.repos[] 含 patch 正文与 patchSha256），不写 change.patch；各仓均无交付时仍按空面跳过
+变更：2026-10-19-thin-empty-face-cross-repo-freeze
+状态：active
+摘要：空面跨仓有交付；跨仓无交付
+全文：.sillyspec/changes/archive/2026-10-19-thin-empty-face-cross-repo-freeze/requirements.md#FR-01
+最近确认：ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-empty-face-cross-repo-freeze:flow:测试绑定FR-01
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-empty-face-cross-repo-freeze
+  status: active
+
+## FR-cli-entry-549 冻结件存在性复查把「change-patch.json 内 repos 有 patch」视为完整，重入不误报「冻结件缺失」
+变更：2026-10-19-thin-empty-face-cross-repo-freeze
+状态：active
+摘要：JSON-only 留档重入；两缺/坏 JSON
+全文：.sillyspec/changes/archive/2026-10-19-thin-empty-face-cross-repo-freeze/requirements.md#FR-02
+最近确认：ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-empty-face-cross-repo-freeze:flow:测试绑定FR-02
+  tests: test/close-trace-freeze-integrity.test.mjs「inspectFreezeArtifacts：JSON-only 跨仓冻结判完整，两缺/坏 JSON 判缺件」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-empty-face-cross-repo-freeze
+  status: active
+
+## FR-cli-entry-550 verify-result 回执对跨仓冻结构给出明确表述，不再写「无冻结件」
+变更：2026-10-19-thin-empty-face-cross-repo-freeze
+状态：active
+摘要：跨仓冻结回执
+全文：.sillyspec/changes/archive/2026-10-19-thin-empty-face-cross-repo-freeze/requirements.md#FR-03
+最近确认：ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-empty-face-cross-repo-freeze:flow:测试绑定FR-03
+  tests: test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-empty-face-cross-repo-freeze
+  status: active
+
+## FR-cli-entry-551 既有 thin-empty-face-crosscheck / cross-repo-baseline-anchor / close-trace-freeze-integrity 测试全绿，并新增空面跨仓冻结用例
+变更：2026-10-19-thin-empty-face-cross-repo-freeze
+状态：active
+摘要：回归面
+全文：.sillyspec/changes/archive/2026-10-19-thin-empty-face-cross-repo-freeze/requirements.md#FR-04
+最近确认：ca1d202d5c03b283ba9b11e27b41e14df10d1cb3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-empty-face-cross-repo-freeze:flow:测试绑定FR-04
+  tests: test/cross-repo-baseline-anchor.test.mjs | test/cross-repo-patch-freeze.test.mjs | test/thin-empty-face-crosscheck.test.mjs「空面 + 跨仓规范标注且跨仓有交付 → JSON-only 跨仓冻结」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-empty-face-cross-repo-freeze
+  status: active

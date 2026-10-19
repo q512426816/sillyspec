@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-empty-face-cross-repo-freeze",
+  "reviewer": "subagent（ZCode 独立子代理·三审）",
+  "verdict": "PASS",
+  "reviewedAgainst": "773b1e1614eb3e9d07f1c90729516a0854835581",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "断点续跑回合的收口指引未按 JSON-only 冻结形态切换",
+      "evidence": "jsonOnlyFreeze 声明为 false 后仅在本轮实际执行 JSON-only patch 分支时置 true（src/flow.js:2104）；patch 子步已 done 的重入回合走 skip('patch')，该变量保持 false，最终指引（src/flow.js:2636）错误宣称「审计真相已冻结在 change.patch（sha256 锚定）」——而 JSON-only 形态下该文件不存在，本轮 ③ 的文案切换在常见续跑路径（首轮停在 review，二轮续跑）上未生效。",
+      "location": "src/flow.js:2636"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 重入场景只有纯函数直测，调用点接线无回归护栏",
+      "evidence": "test/close-trace-freeze-integrity.test.mjs:272 仅断言 inspectFreezeArtifacts/freezeGapLabels 的组合结果，FR-02 场景「重入 flow done 不打印冻结件缺失」无 CLI 级用例；src/flow.js:1741 的调用点接线（freezeGapLabels(inspectFreeze(changeDir))）本身无测试覆盖，正是上轮 P1「纯函数修了调用点没接」的同类回归面。",
+      "location": "test/close-trace-freeze-integrity.test.mjs:272"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-19T08:16:21Z"
+}
