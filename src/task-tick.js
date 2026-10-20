@@ -206,6 +206,12 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
       console.log(`⚠️ spec 面未就位（${parts.join('、')}）——顺序正典：先答 spec 面并过批准，再继续勾任务`)
     }
   } catch { /* 提醒 best-effort：读取失败静默，不影响勾选回显与 exit code */ }
+  // 执行期用户决策落盘提示（2026-10-20-thin-user-decision-record，advisory）：tick 是执行期
+  // 对 agent 最高频触点——decisions.md 尚未落盘时提一句（用户中途给了实现影响方向可当场
+  // decisions add 记录；缺席合法，纯提示不阻断；存在性判定即时读盘，在场分支零新增行）。
+  if (!existsSync(join(changesRoot, changeName, 'decisions.md'))) {
+    console.log(`💡 本变更 decisions.md 尚未落盘——执行期用户给过实现影响方向的话，当场 sillyspec decisions add --change ${changeName} --id D-001 --title "…" 记录（收口随蒸馏进知识防复潮；纯提示不阻断）`)
+  }
   return r
 }
 
