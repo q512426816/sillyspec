@@ -1,0 +1,44 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量道执行期用户决策当场落盘提示
+
+
+  动机与背景：轻量道执行期用户口头给决策方向（方案取舍/否决/兼容性定调）时无任何落盘纪律——会话内容不可审计，漏记是静默价值漏损（防复潮资产丢失、跨变更复潮无防）。厚流程 brainstorm
+  有「方案选择必须随答随落盘」纪律，轻量道横幅与执行期触点均无对应提示。本变更把纪律前置到三个 agent 触点：start 横幅一行、断点②汇报对账半句、task tick 条件提示（decisions.md
+  缺席时）。任务原话：横幅一行 + 断点②半句 + tick 条件提示 + 对应测试。
+
+
+  成功标准：
+
+  - flow start 横幅含执行期用户决策落盘纪律行（含 decisions add 命令样例与承诺面同步提示）
+
+  - 断点②行含汇报对账半句（执行期用户决策随汇报对账，无则说明无）
+
+  - task tick 回显在 decisions.md 缺席时附落盘提示行，decisions.md 在场时零新增行（条件 gating，纯提示不阻断不改 exit code）
+
+  - 新增测试套件覆盖以上三面且全绿；既有 approve-gate-tick / task-tick / flow-checkpoints / flow-order-canon 套件零回归
+autopilot: false
+prestage_ack: false
+baseline_commit: 94383393f69ce1f2c0ee03485eb4c129190a6e60
+updatedAt: '2026-10-20T02:16:19.719Z'
+baseline_sha256: e76a16826cff48a98de5b6e032bccb219bbf776896d4fb57fc46238f373ca869
+spec_approved: true
+spec_approved_at: '2026-10-20T02:06:48.819Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js100+js-meta-skip1+nontest-skip1)+fr(101)（70.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020021521\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（47.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020021521\test-result.json｜门文件 6 个
+
