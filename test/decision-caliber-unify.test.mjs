@@ -106,6 +106,13 @@ test('④ brainstorm 提示清单同步：两处模板插值正典常量，渲�
   assert.equal(statusInterp, 2, '两处 status 清单插值正典常量（实际 ' + statusInterp + '）')
   assert.ok(!/term \| boundary/.test(stageSrc), '旧散值 type 清单清除')
   assert.ok(!/unresolved \| rejected/.test(stageSrc), '旧散值 status 清单清除')
+  // stage-templates 四件套模板（评审 P2 清偿）：decisions 模板清单同样插值正典（按模板写入不再撞白名单）
+  const tplSrc = readFileSync(join(ROOT, 'src', 'stage-templates.js'), 'utf8')
+  const tplTypeInterp = [...tplSrc.matchAll(/- type: \$\{DECISION_TYPES\.join\(' \| '\)\}/g)].length
+  const tplStatusInterp = [...tplSrc.matchAll(/- status: \$\{DECISION_STATUSES\.join\(' \| '\)\}/g)].length
+  assert.equal(tplTypeInterp, 1, 'stage-templates decisions 模板 type 清单插值正典（实际 ' + tplTypeInterp + '）')
+  assert.equal(tplStatusInterp, 1, 'stage-templates decisions 模板 status 清单插值正典（实际 ' + tplStatusInterp + '）')
+  assert.ok(!/term \| boundary|unresolved \| rejected/.test(tplSrc), '模板旧散值清单清除')
   // 渲染面=正典逐值一致（_extract 再生成产物）
   const rendered = readFileSync(join(ROOT, 'docs', 'prompt', 'brainstorm.md'), 'utf8')
   const renderedTypeLines = [...rendered.matchAll(/^- type: (.+)$/gm)].map((m) => m[1])

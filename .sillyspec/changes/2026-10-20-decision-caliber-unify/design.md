@@ -50,5 +50,6 @@ created_at: 2026-10-20T02:28:57.944Z
 | 修改 | src/decisions-io.js | 白名单改导入派生，type 扩 8 值 |
 | 修改 | src/decision-distill.js | 入选集改派生，状态集 +implemented，头注同步 |
 | 修改 | src/stages/brainstorm.js | 两处模板 type/status 清单对齐正典 |
+| 修改 | src/stage-templates.js | 四件套 decisions 模板清单插值正典（评审 P2 清偿——第四提示面漏网） |
 | 再生成 | docs/prompt/brainstorm.md | _extract 工具链再生成 |
 | 新增 | test/decision-caliber-unify.test.mjs | FR-01..FR-05 行为断言 + 零回归锚 |

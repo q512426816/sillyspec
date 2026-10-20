@@ -16,6 +16,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { DECISION_STATUSES, DECISION_TYPES } from './decision-values.js'
 
 /** brainstorm 四件套产物格式模板（自 stages/brainstorm.js「生成规范文件」步逐字迁移——
  *  与 prompt 指针版本同源；decisions 九字段与可选字段说明一并迁入）。 */
@@ -110,9 +111,9 @@ created_at: <now-datetime>
 # 决策记录（Decisions）
 
 ## D-001@v1: 决策短标题
-- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
+- type: ${DECISION_TYPES.join(' | ')}
 - priority: P0 | P1 | P2
-- status: accepted | unresolved | rejected | superseded
+- status: ${DECISION_STATUSES.join(' | ')}
 - supersedes:
 - source: user | code | docs
 - question: 被解决的问题
