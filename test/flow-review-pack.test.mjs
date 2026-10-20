@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -195,4 +195,18 @@ test('③ 注入/零注入：packLines 注入形态与位置、缺省/空数组�
     const NL = String.fromCharCode(10)
     assert.equal(withPack.replace(NL + NL + pack.lines.join(NL), ''), base)
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('④ 派发纪律：任务书头部行在场 + flow.js 横幅句原样复制（FR-01）', () => {
+  const book = renderReviewerTaskbook({ change: 'c-x', changeDir: '/x/c-x' })
+  assert.match(book, /派发纪律：本任务书原样复制给干净上下文子代理——检查单\/材料包生产权在 CLI，勿自行改写、增删或缩编/)
+  const lines = book.split(String.fromCharCode(10))
+  const idxSep = lines.findIndex((l) => l.startsWith('══════'))
+  const idxRule = lines.findIndex((l) => l.includes('派发纪律'))
+  const idxRole = lines.findIndex((l) => l.startsWith('【角色】'))
+  assert.ok(idxSep > -1 && idxRule === idxSep + 1 && idxRole > idxRule, '纪律行位于分隔线后、角色前')
+  // 横幅句（静态源断言——flow done 打印通道）
+  const flowSrc = readFileSync(new URL('../src/flow.js', import.meta.url), 'utf8')
+  assert.ok(flowSrc.includes('任务书原样复制给子代理'), '横幅含原样复制指令')
+  assert.ok(!flowSrc.includes('起一个干净上下文的子代理执行后重跑本命令'), '旧横幅句已替换')
 })

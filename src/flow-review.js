@@ -266,6 +266,10 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
   const taskbook = [
     `⚖️ 独立评审任务书 — ${change}`,
     `══════════════════════════════════════`,
+    // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：对齐厚道先例（stage-review.js:803 /
+    // index.js:2576）——实测主会话派发时手写缩编 prompt 会把材料包整段丢掉（4 次派发零 pack）；
+    // 检查单/材料包生产权在 CLI，原样复制是纪律不是建议。无条件在场（非可选注入）。
+    `（派发纪律：本任务书原样复制给干净上下文子代理——检查单/材料包生产权在 CLI，勿自行改写、增删或缩编）`,
     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
     ...(headFull ? [
       `【评审对象】工作区实态 + git HEAD（${headFull}）——${freezeLabel}若落后于该 HEAD，以`,

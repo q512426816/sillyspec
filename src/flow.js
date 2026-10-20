@@ -2359,7 +2359,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
       let taskbookHead = null
       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
-      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
+      // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
+      // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
+      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
       // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
       // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
       let _probeLines = null
