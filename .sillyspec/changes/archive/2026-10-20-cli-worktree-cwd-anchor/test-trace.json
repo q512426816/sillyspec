@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-cli-worktree-cwd-anchor",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-cwd-guard.test.mjs「cwd 在 worktree 内跑 status → 锚定警告+主仓口径（第一次静默事故的回归改钉）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-cli-worktree-cwd-anchor"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-cwd-guard.test.mjs「逃生门 --allow-worktree-cwd → 零警告零锚定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-cli-worktree-cwd-anchor"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-cwd-guard.test.mjs「主仓未 init 极端态（路径结构不可达注记——同态回归钉）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-cli-worktree-cwd-anchor"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-04",
+      "tests": [
+        "test/worktree-cwd-guard.test.mjs「detectCwdInsideWorktree（判定单元）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-cli-worktree-cwd-anchor"
+    }
+  ]
+}

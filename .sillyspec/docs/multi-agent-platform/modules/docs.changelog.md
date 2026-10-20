@@ -29,3 +29,5 @@
 | 2026-10-16 | 2026-10-16-short-change-title | 变更标题提炼为 30 字内自然断点短句 |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-19 | 2026-10-19-init-drop-gemini-opencode | init 移除 gemini/opencode 工具支持 |
+| 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
+| 2026-10-20 | 2026-10-20-decision-caliber-unify | 决策类型状态口径单一源统一 |

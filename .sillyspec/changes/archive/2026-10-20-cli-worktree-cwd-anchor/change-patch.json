@@ -1,26 +1,51 @@
 {
   "change": "2026-10-20-cli-worktree-cwd-anchor",
   "baseline": "4badee475860d096a9770d50d1f936f922715640",
-  "head": "10eddc93788f27581e1ca708a167ae213219cb32",
+  "head": "4e1a9d8b27367df8463445297e52dfc39e5dd5c6",
   "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
     ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "docs/prompt/index.html",
+    "src/decision-distill.js",
+    "src/decision-values.js",
+    "src/decisions-io.js",
     "src/flow.js",
     "src/index.js",
+    "src/stages/brainstorm.js",
     "src/task-tick.js",
     "test/config-cat.test.mjs",
+    "test/decision-caliber-unify.test.mjs",
     "test/gate-derive-spec-drift.test.mjs",
     "test/lint-ownership-failfast.test.mjs",
     "test/thin-user-decision-record.test.mjs",
     "test/worktree-cwd-guard.test.mjs"
   ],
   "totals": {
-    "files": 9,
-    "additions": 167,
-    "deletions": 56
+    "files": 20,
+    "additions": 425,
+    "deletions": 79
   },
-  "savedAt": "2026-10-20T02:15:41.773Z",
+  "savedAt": "2026-10-20T02:50:38.625Z",
   "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
   "modules": [
+    {
+      "id": "docs",
+      "files": 3,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
     {
       "id": "cli-entry",
       "files": 2,
@@ -34,12 +59,19 @@
       "doc": "docs/sillyspec/modules/core-engine.md",
       "docTouched": false,
       "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
     }
   ],
   "uncoveredDirs": [
     {
       "dir": "test",
-      "files": 5
+      "files": 6
     }
   ],
   "moduleMaps": [
@@ -51,22 +83,94 @@
     "docs/sillyhub-daemon/modules/_module-map.yaml",
     "docs/sillyspec/modules/_module-map.yaml"
   ],
-  "acceptedDirtyGap": 17,
+  "acceptedDirtyGap": 18,
   "scopeAudit": {
     "mode": "full-flow",
     "ok": true,
     "degradedReason": null,
     "baseAnchor": "4badee475860d096a9770d50d1f936f922715640",
     "totals": {
-      "files": 9,
-      "additions": 167,
-      "deletions": 56
+      "files": 20,
+      "additions": 425,
+      "deletions": 79
     },
     "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
       {
         "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
         "additions": 1,
         "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/_extracted.json",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/brainstorm.md",
+        "additions": 5,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/prompt/index.html",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/decision-distill.js",
+        "additions": 10,
+        "deletions": 8,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/decision-values.js",
+        "additions": 34,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/decisions-io.js",
+        "additions": 5,
+        "deletions": 2,
         "kind": "modified",
         "planned": null,
         "verdict": "unplanned"
@@ -81,11 +185,19 @@
       },
       {
         "path": "src/index.js",
-        "additions": 11,
+        "additions": 21,
         "deletions": 14,
         "kind": "modified",
         "planned": "修改",
         "verdict": "planned"
+      },
+      {
+        "path": "src/stages/brainstorm.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
       },
       {
         "path": "src/task-tick.js",
@@ -100,6 +212,14 @@
         "additions": 11,
         "deletions": 13,
         "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/decision-caliber-unify.test.mjs",
+        "additions": 162,
+        "deletions": 0,
+        "kind": "new",
         "planned": null,
         "verdict": "unplanned"
       },
@@ -129,7 +249,7 @@
       },
       {
         "path": "test/worktree-cwd-guard.test.mjs",
-        "additions": 32,
+        "additions": 52,
         "deletions": 20,
         "kind": "modified",
         "planned": "修改",
@@ -142,6 +262,6 @@
     "note": "flow done 时点冻结（本文件落盘时采集）",
     "closedBy": "flow done"
   },
-  "patchSha256": "da902ca7c59ec28ccccb837c2738e45596d0cb35b98392c882e58c507e19c823",
+  "patchSha256": "d8f5c717d826d0c9f759be1f7c46a836d034d5dadae931e0ced7ea4c6a3932bc",
   "patchStatus": "ok"
 }

@@ -82,3 +82,4 @@
 | 2026-10-19 | 2026-10-19-approve-gate-tick-nudge | 批准门实校验与任务勾选现场提醒 |
 | 2026-10-19 | 2026-10-19-cross-repo-face-tool-filter | 跨仓冻结面剔模板与脱敏 |
 | 2026-10-20 | 2026-10-20-thin-user-decision-record | 轻量道执行期用户决策当场落盘提示 |
+| 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |

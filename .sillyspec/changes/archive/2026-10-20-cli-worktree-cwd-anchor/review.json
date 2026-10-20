@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-cli-worktree-cwd-anchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "4e1a9d8b27367df8463445297e52dfc39e5dd5c6",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "--spec-dir 显式指进 worktree（无 --allow-worktree-cwd）的半拼装形态：旧硬拦面退化为「警告+半锚定」，写入可落 worktree 副本——已清偿于 91a622f5",
+      "evidence": "增量复核确认清偿真实在场：守卫段新增 specDir 连带锚定（src/index.js:413-422）——specDir 经 detectCwdInsideWorktree 判定 sdInfo.worktreeRoot === wtInfo.worktreeRoot（同一 worktree）时重写为 join(wtInfo.mainRepoRoot, '.sillyspec') 并附警告行「⚠️ --spec-dir 指向同一 worktree（…）——已一并锚定主仓 spec 根」。判定边界亲核正确：specDir 在 src/index.js:283 先 resolve 成绝对路径再检测；重写仅在 wtInfo 命中分支内（即 cwd/--dir 本身在 worktree 内）——平台模式（--workspace-id/--spec-root、cwd 在 worktree 外）守卫不命中故零误伤，specDir 指向仓外/他 worktree 时 sdInfo 为 null 或 worktreeRoot 不等、显式意图保留。评审者独立 fixture 亲跑差分实证：cwd=worktree + flow status --change <名> --spec-dir <wtSpec>（无逃生 flag）→ 读到主仓 flow-state（输出主仓阶段进度，warning 行在 stderr）；同输入带 --allow-worktree-cwd → 读 worktree 副本 spec（「变更不存在」）——锚定是行为真实非仅文案。FR-01 行为句已补 specDir 一并锚定 MUST（requirements.md:11），测试用例在场（worktree-cwd-guard 第 94-102 行）。旧三层拼装死角（run/command.js:1100 第二层跳过显式 specDir）经入口层前置重写闭合。",
+      "location": "src/index.js:413-422"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 场景二（--dir 显式指进 worktree → 同款警告+锚定）无 e2e 正例钉——已清偿于 91a622f5",
+      "evidence": "正例已补：test/worktree-cwd-guard.test.mjs:85-92「--dir 显式指进 worktree → 同样锚定主仓（评审 P3① 补正例）」——cwd=主仓 + status --dir <wtRoot>，断言 exit≠2 + 警告含「已自动锚定主仓根」与变更名 demo-change，与 FR-01 场景二 Given/When/Then 对齐；亲跑该套件 10/10 绿。遗留观察（非 finding）：FR-01 测试绑定行（requirements.md:65）仍只点名首例，新增两例未逐名入绑定——「每条 FR 至少一行」schema 已满足、行为句 MUST 已覆盖，注记供后续顺手补。",
+      "location": "test/worktree-cwd-guard.test.mjs:85-92"
+    },
+    {
+      "severity": "P3",
+      "title": "「主仓未 init 极端态」用例前提不成立且与首例同态重复——已清偿于 91a622f5（改注记为同态回归钉）",
+      "evidence": "用例已改注记（test/worktree-cwd-guard.test.mjs:76-83）：明确 worktree 段路径结构蕴含主仓 .sillyspec 祖先目录在场、真实「主仓未 init」结构上不可构造，本例为与首例同态的回归钉（守卫对该形态零新增失败面）；FR-03 绑定行同步（requirements.md:67「路径结构不可达注记——同态回归钉」）——前提失真表述已消除，防御性空洞面如实归档。",
+      "location": "test/worktree-cwd-guard.test.mjs:76-83"
+    },
+    {
+      "severity": "P3",
+      "title": "「worktree 副本零 CLI 写入」绝对表述被守卫段之前的旧布局迁移块例外（先在行为，非本变回归）——留痕遗留（维持）",
+      "evidence": "维持留痕：migrateRuntimeLayout 以守卫前 specDir/targetDir 派生 .runtime 且先于锚定执行（src/index.js:330-345，line 334 仍消费原始 specDir），真实 worktree checkout 无 .runtime 时基本 no-op；清偿提交 91a622f5 提交信息显式注记「P3③④留痕遗留（先在行为非本变回归）」。先在行为、非本变回归，按本仓惯例留痕供顺手修，不阻断。",
+      "location": "src/index.js:330-345"
+    },
+    {
+      "severity": "P3",
+      "title": "逃生门整行在调用方已带 --spec-dir 时拼出双 --spec-dir 且首个嵌入路径不加引号（先在构造，非本变引入）——留痕遗留（维持）",
+      "evidence": "维持留痕：`sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir \"…\"`（src/index.js:411）双 flag 与无引号嵌入问题原样在场（清偿范围未含此项）；提交信息注记同上。先在构造、非本变引入，留痕供顺手修，不阻断。",
+      "location": "src/index.js:411"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T02:48:56Z",
+  "note": "独立子代理增量复核（前轮 PASS@10eddc93 带 1×P2+4×P3，本轮核清偿提交 91a622f5 + 规格入库 6cb2f170 后重写；评审基线 HEAD=4e1a9d8b，工作树该变更面干净）。逐项核实：①P2 清偿亲验——守卫段 specDir 连带锚定逻辑在场（index.js:413-422），同一 worktree 判定边界正确（绝对路径先 resolve；重写仅在守卫命中即 cwd/--dir 自身在 worktree 内时发生→平台模式与跨 worktree 显式意图零误伤，platform --workspace-id/--spec-root 场 cwd 在 worktree 外守卫不命中亲核），独立 fixture 差分亲跑：锚定跑读主仓 flow-state、逃生门跑读 worktree 副本（变更不存在）——行为真实锚定非仅警告文案；FR-01 MUST 句与测试用例齐。②P3①正例在场且断言语义正确（exit≠2+变更名+锚定警告），亲跑套件 10/10 绿（tests 10/pass 10/fail 0）。③P3②注记改写如实（不可构造前提+同态钉归档），FR-03 绑定同步。④P3③④维持留痕：提交信息显式注记，代码面原样（先在行为非本变回归）。⑤并行隔离亲核：git diff --stat 6cb2f170..4e1a9d8b -- src/index.js test/worktree-cwd-guard.test.mjs 空输出（并行 decision-caliber 三提交 d454842c/bde4ab74/4e1a9d8b 只触 decision-values/brainstorm/docs-prompt/module-map/decision-caliber 测试与本变更 .sillyspec 工件目录，零触及守卫段与测试文件）。无新引入问题：init+同 worktree specDir 组合同样被锚定与 FR-01 MUST 语义一致（刻意初始化走逃生门）；警告全走 stderr。维度：并发由 finding 转 ok（specDir 角落已闭合，唯一残余=守卫前迁移块已留痕 P3③）。verdict=PASS 依据：P2/P3①/P3② 三项清偿全部实证到位（代码+规格+测试三方一致且独立复跑绿），P3③④按先在行为留痕不阻断，无 P1、无新增 finding。"
+}

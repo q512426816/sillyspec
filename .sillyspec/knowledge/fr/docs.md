@@ -844,3 +844,223 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：（无场景名）
 全文：.sillyspec/changes/archive/2026-10-19-init-drop-gemini-opencode/requirements.md#FR-04
 最近确认：9a01342aa41bd725098f810dcf742c0d64562846
+
+## FR-docs-045 CLI 入口对 worktree cwd（cwd 或 --dir 命中 worktree 段）：不再 exit 2，改为⚠️警告（变更名/原 cwd/锚定主仓根/逃生门整行）+ 自动把执行目录重锚定到主仓根——命令按主仓口径执行（进度库/变更状态单源）
+变更：2026-10-20-cli-worktree-cwd-anchor
+状态：active
+摘要：主路径（status 在 worktree 内）；--dir 显式指进 worktree
+场景正文：
+- 场景：主路径（status 在 worktree 内） — Given cwd 位于 `.sillyspec/.runtime/worktrees/<change>` 内，主仓根已初始化；When 跑 `sillyspec status`；Then stderr 含锚定警告（变更名+主仓根路径），命令以主仓根为执行目录完成（exit 非 2，输出主仓口径）
+- 场景：--dir 显式指进 worktree — Given `--dir <worktree 内路径>`；When 守卫命中；Then 同款警告+锚定主仓根（显式 --dir 进 worktree 同属误入面；刻意独立实例跑走逃生门）
+全文：.sillyspec/changes/archive/2026-10-20-cli-worktree-cwd-anchor/requirements.md#FR-01
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-01
+  tests: test/worktree-cwd-guard.test.mjs「cwd 在 worktree 内跑 status → 锚定警告+主仓口径（第一次静默事故的回归改钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-cli-worktree-cwd-anchor
+  status: active
+
+## FR-docs-046 --allow-worktree-cwd 显式放行语义不变（跳过守卫零警告零锚定）；wt-commit 豁免不变；--dir 显式主仓根不经守卫（本来就命中不了 worktree 段）
+变更：2026-10-20-cli-worktree-cwd-anchor
+状态：active
+摘要：逃生门零打扰
+场景正文：
+- 场景：逃生门零打扰 — Given cwd 在 worktree 内且带 `--allow-worktree-cwd`；Then 无锚定警告、无重锚定（命令按 worktree 本地口径跑）
+全文：.sillyspec/changes/archive/2026-10-20-cli-worktree-cwd-anchor/requirements.md#FR-02
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-02
+  tests: test/worktree-cwd-guard.test.mjs「逃生门 --allow-worktree-cwd → 零警告零锚定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-cli-worktree-cwd-anchor
+  status: active
+
+## FR-docs-047 主仓根 .sillyspec 存在性由后续未初始化门自然判定（锚定后主仓未 init 的极端态走既有出口，不在守卫内重复判）
+变更：2026-10-20-cli-worktree-cwd-anchor
+状态：active
+摘要：主仓未 init 的极端态
+场景正文：
+- 场景：主仓未 init 的极端态 — Given worktree 存在但主仓根无 .sillyspec；When 跑 `status`（查询类豁免）；Then 锚定警告照常输出，status 按主仓未初始化口径输出（不因守卫新增失败面）
+全文：.sillyspec/changes/archive/2026-10-20-cli-worktree-cwd-anchor/requirements.md#FR-03
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-03
+  tests: test/worktree-cwd-guard.test.mjs「主仓未 init 极端态（路径结构不可达注记——同态回归钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-cli-worktree-cwd-anchor
+  status: active
+
+## FR-docs-048 detectCwdInsideWorktree 单元行为不变；既有 worktree-cwd-guard e2e 断言改钉（exit 2 → 锚定警告 + 主仓口径执行）；守卫相关回归全绿
+变更：2026-10-20-cli-worktree-cwd-anchor
+状态：active
+摘要：改钉五形态
+场景正文：
+- 场景：改钉五形态 — Given worktree-cwd-guard e2e 套件；When 改钉后复跑；Then 单元 2 例 + e2e 5 例全绿（断言语义=锚定而非硬拦）
+全文：.sillyspec/changes/archive/2026-10-20-cli-worktree-cwd-anchor/requirements.md#FR-04
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-cli-worktree-cwd-anchor:flow:测试绑定FR-04
+  tests: test/worktree-cwd-guard.test.mjs「detectCwdInsideWorktree（判定单元）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-cli-worktree-cwd-anchor
+  status: active
+
+## FR-docs-049 本仓 AGENTS/CLAUDE 若述及硬拦行为则同步（查无则记不适用）
+变更：2026-10-20-cli-worktree-cwd-anchor
+状态：active
+摘要：查无即不适用
+场景正文：
+- 场景：查无即不适用 — Given grep 零命中；Then 文档面零改动，本 FR 以不适用记录收口
+全文：.sillyspec/changes/archive/2026-10-20-cli-worktree-cwd-anchor/requirements.md#FR-05
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+
+## FR-docs-050 type/status 值集单一源：decisions-io 导出正典集，decision-distill 入选集自其派生（类型=正典去 scope），零独立字面集
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given src/decision-values.js 导出正典集；When decisions-io 校验与 decision-distill 裁决引用值集；Then 两处零字面重复定义（导入派生），scope 在写入面合法、在蒸馏入选面恒排除
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-01
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-01
+  tests: test/decision-caliber-unify.test.mjs「① 单一源派生」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active
+
+## FR-docs-051 decisions add 可写 feasibility/consistency（写入白名单对齐蒸馏入选面）
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given renderDecisionEntry 入参 type=feasibility / type=consistency；When 渲染条目；Then 零抛错正常产出；type=term / type=risk 等正典外值仍抛「type 白名单外」
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-02
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-02
+  tests: test/decision-caliber-unify.test.mjs「② 写入白名单对齐」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active
+
+## FR-docs-052 status=implemented 条目蒸馏入选（IMPLEMENTED_STATUSES 加 implemented）
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given decisions.md 含 status=implemented、type=architecture 条目；When distillIntoKnowledge 执行；Then 该条目写盘入选；status=draft 同 type 条目不入选
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-03
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-03
+  tests: test/decision-caliber-unify.test.mjs「③ implemented 入选」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active
+
+## FR-docs-053 brainstorm 两处 type 提示清单与正典集一致（term/premise/risk 等散值从提示面清除）
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given brainstorm.js 两处模板清单；When 提取清单值与正典集对比；Then 集合相等（零多值零缺值）；渲染产物含同样清单
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-04
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-04
+  tests: test/decision-caliber-unify.test.mjs「④ brainstorm 提示清单同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active
+
+## FR-docs-054 手写开放世界兼容不变：解析宽容保留、存量散值条目行为零变化
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 含 type=term 条目的 decisions.md（存量形态）；When parseDecisions + distillIntoKnowledge；Then 解析零报错，该条目不入选不写盘（与改动前行为逐字节一致）
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-05
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-05
+  tests: test/decision-caliber-unify.test.mjs「⑤ 开放世界兼容」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active
+
+## FR-docs-055 新增/更新测试全绿，decisions-io/decision-distill 相关既有套件零回归
+变更：2026-10-20-decision-caliber-unify
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更交付完成；When node --test 跑新套件与四既有套件；Then 全部 pass、零 fail
+全文：.sillyspec/changes/archive/2026-10-20-decision-caliber-unify/requirements.md#FR-06
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-decision-caliber-unify:flow:测试绑定FR-06
+  tests: test/decision-caliber-unify.test.mjs「⑥ 既有套件零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-decision-caliber-unify
+  status: active

@@ -3552,3 +3552,29 @@ supersedes：D-004@v1
 理由：是否在 flow done 加 decisions.md 缺席拦截门？
 否决理由：漏记本身不可检测——门只能看见文件缺席、看不见漏记；缺席合法是轻量道懒创建刻意设计（槽4收割/decisions add 按内容触发），硬门误伤合法缺席且制造假安全感
 复潮条件：机器获得会话侧信道或可验证的用户决策事件源（如平台审批事件回流）使漏记可检测时
+
+## D-unmapped-434@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-20-cli-worktree-cwd-anchor
+原编号：D-001@v1
+锚点：未记录
+最近确认：4e1a9d8b27367df8463445297e52dfc39e5dd5c6
+理由：最大风险：锚定静默改变「agent 以为在 worktree 跑」的预期——缓解：警告恒输出（stderr 四行，含原 cwd 与锚定目标，agent 可见可纠偏）；逃生门整行照贴保留刻意独立实例路径。次风险：平台 daemon 在 worktree 模式下 spawn CLI 且 cwd=worktree（若存在此形态）被意外锚定——排查：wt-commit 已豁免（子代理 workdir 形态）；daemon 平台模式 specRoot 异位不经本守卫路径段。放弃的方案：①维持硬拦只加更多指引文案（生产实证指引已够清楚，痛点在来回本身）；②按 SILLYSPEC_SESSION_ID/env 锚定主仓（坑文提及的锚点族）——session env 是多会话共享值不标识仓根，路径结构锚点（mainRepoRoot）已完备，env 锚点对 worktree 场景无增益。
+
+## D-unmapped-435@v1 决策值集正典=写入白名单与蒸馏入选集并集（8 类 7 态单一源）
+状态：implemented
+变更：2026-10-20-decision-caliber-unify
+原编号：D-001@v1
+锚点：src/decision-values.js
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+理由：正典集取并集（type 8 值=status quo 蒸馏 7 类加 scope；status 7 值照旧）且 implemented 计入蒸馏入选：蒸馏 7 类集是修 feasibility 漏选事故的既定意图、scope 排除是文档明载刻意设计；知识库入选输出值本叫「状态：implemented」，输入声明 implemented 却永不入选是遗留缺陷，纳入才写读闭合。单一源 src/decision-values.js，brainstorm 提示清单改常量插值（源头不可漂移）
+
+## D-unmapped-436@v1 存量 40+ 种散值 type 追溯清洗归档件
+状态：rejected
+变更：2026-10-20-decision-caliber-unify
+原编号：D-002@v1
+锚点：未记录
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+理由：是否把历史手写散值条目（risk/term/premise/design 等）批量迁移为正典值？
+否决理由：归档件是审计事实当时提名不追改（仓则）；散值条目本就解析保留不入选，清洗零收益且蒸馏行为难保零漂移，大面积改写归档件风险无限大
+复潮条件：知识库检索对散值条目产生真实召回需求且可证明增量收益时（须先出干跑对照）
