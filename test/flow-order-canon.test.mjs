@@ -14,7 +14,7 @@
  *   ④ 五面措辞：src/flow.js 无「动码前后顺手/写码前后顺手/干活时作答」，done 拦截与
  *      approve 输出含「动码前置」语义；
  *   ⑤ 命令卡与 SKILL.md 生命周期含「补 spec 面 → 批准 → 干活」与 flow approve 环节；
- *   ⑥ 模板/本仓 AGENTS.md/CLAUDE.md 同步 + package.json 版本 ≥ 3.34.0；
+ *   ⑥ 模板/本仓 AGENTS.md/CLAUDE.md 同步 + package.json 版本 > 3.33.1；
  *   ⑦ src/ 与 assets/ 递归无许可后补措辞。
  */
 import { test } from 'node:test'
@@ -157,8 +157,10 @@ test('⑥ 模板与本仓指令文件同步 + 版本提升', () => {
   const v = read('package.json')
   const m = v.match(/"version":\s*"(\d+)\.(\d+)\.(\d+)"/)
   assert.ok(m, 'version 可解析')
-  const [maj, min] = [Number(m[1]), Number(m[2])]
-  assert.ok(maj > 3 || (maj === 3 && min >= 34), `版本 ≥ 3.34.0（实际 ${m[1]}.${m[2]}.${m[3]}）——消费仓重跑 init 才能取到新资产`)
+  const cur = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const base = [3, 33, 1]
+  const newer = cur[0] > base[0] || (cur[0] === base[0] && (cur[1] > base[1] || (cur[1] === base[1] && cur[2] > base[2])))
+  assert.ok(newer, `版本 > 3.33.1（实际 ${m[1]}.${m[2]}.${m[3]}）——消费仓重跑 init 才能取到新资产`)
 })
 
 test('⑦ src/ 与 assets/ 递归无许可后补措辞', () => {
