@@ -14,7 +14,7 @@ created_at: 2026-10-20T01:05:01.366Z
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
-仅 `.sillyspec/known-failures.yaml` 条目面：known_failures 列表从 27 条减至 3 条（保留 `^✖ ⑮ 承诺词必评全链`、`[review.json] ❌ failed——已存在但 verdict 不一致`、`[wt-commit] ❌ failed——--pathspec-from-file`）。源码零改动；无函数/端点/命令签名变化。行为面变化仅一处：真失败（exit≠0 且无 TAP 摘要覆盖）时行级归因不再豁免这些 fixture 文案——归因账更严（不改变 pass/fail 判定本身，exit 码与 TAP 摘要是判定源）。
+仅 `.sillyspec/known-failures.yaml` 条目面：known_failures 列表从 24 条减至 3 条（评审 F2 清偿：初稿「27 条」误引迁移源计数；实删 21 条=FR-01 枚举面，保留 `^✖ ⑮ 承诺词必评全链`、`[review.json] ❌ failed——已存在但 verdict 不一致`、`[wt-commit] ❌ failed——--pathspec-from-file`）。另 test/verify-postcheck-known-failures.test.mjs:462 的入库清单计数钉从 24 同步为 3（评审 F1 清偿：该套件是清单的直连消费测试，「纯配置非测试面」的初稿前提不成立）。源码零改动；无函数/端点/命令签名变化。行为面变化仅一处：真失败（exit≠0 且无 TAP 摘要覆盖）时行级归因不再豁免这些 fixture 文案——归因账更严（不改变 pass/fail 判定本身，exit 码与 TAP 摘要是判定源）。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 

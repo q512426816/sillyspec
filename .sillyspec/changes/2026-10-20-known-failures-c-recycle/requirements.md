@@ -38,6 +38,6 @@ Then 全绿（纯配置变更，源码零改动）
 
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
-FR-01: 不适用：纯配置删除（.sillyspec/known-failures.yaml 非测试面）——判据由 FR-03 回归面承载
-FR-02: 不适用：纯配置保留面（同上）；保留条目在场由收口冻结面 diff 直接可见
-FR-03: test/cross-repo-tap-summary.test.mjs + test/verify-failure-ledger-noise.test.mjs「判定面回归全绿」
+FR-01: test/verify-postcheck-known-failures.test.mjs「合并装载: 入库文件解析 3 条」——清单直连消费计数钉随删面同步（评审 F1 清偿）
+FR-02: test/verify-postcheck-known-failures.test.mjs「合并装载: 入库文件解析 3 条」——保留面在场由计数 3 与保留条目共同钉定
+FR-03: test/verify-postcheck-known-failures.test.mjs + test/cross-repo-tap-summary.test.mjs + test/verify-failure-ledger-noise.test.mjs「判定面回归全绿」
