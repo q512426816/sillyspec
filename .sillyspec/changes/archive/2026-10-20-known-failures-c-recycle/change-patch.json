@@ -1,0 +1,58 @@
+{
+  "change": "2026-10-20-known-failures-c-recycle",
+  "baseline": "daca93d44911c8adc5d20b86e97fe0a951e86dc2",
+  "head": "5f38ad905c44fb86a4d82dff3897c57093014793",
+  "files": [
+    "test/verify-postcheck-known-failures.test.mjs"
+  ],
+  "totals": {
+    "files": 1,
+    "additions": 3,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-20T01:19:00.639Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "daca93d44911c8adc5d20b86e97fe0a951e86dc2",
+    "totals": {
+      "files": 1,
+      "additions": 3,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "test/verify-postcheck-known-failures.test.mjs",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "e3f2b49a3cc720a5bd80ceee34e619f4cc85d42afca2b5f21ed64c461852f752",
+  "patchStatus": "ok"
+}

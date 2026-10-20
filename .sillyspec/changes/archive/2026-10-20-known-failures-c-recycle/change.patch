@@ -1,0 +1,15 @@
+diff --git a/test/verify-postcheck-known-failures.test.mjs b/test/verify-postcheck-known-failures.test.mjs
+index e14a2bf2..5d194588 100644
+--- a/test/verify-postcheck-known-failures.test.mjs
++++ b/test/verify-postcheck-known-failures.test.mjs
+@@ -459,7 +459,9 @@ const j2 = judgeWithKnownFailures(1, "✖ 挂了\n", null, ["^✖ 挂了$"])
+ assert('裁判: 锚定式命中无收敛提示', j2.reason.includes('全部为锚定式命中'), j2.reason)
+ 
+ // 5. 合并装载：入库文件 + local.yaml 两源解析（同键同解析器）
+-assertEqual('合并装载: 入库文件解析 24 条', extractKnownFailures(readFileSync(join(REPO_ROOT, '.sillyspec', 'known-failures.yaml'), 'utf8')).length, 24)
++// 计数随 2026-10-20-known-failures-c-recycle 回收 24→3（node:test 家族按坑缺陷三约定删，
++// 留 D 组 + task-done 同族）。
++assertEqual('合并装载: 入库文件解析 3 条', extractKnownFailures(readFileSync(join(REPO_ROOT, '.sillyspec', 'known-failures.yaml'), 'utf8')).length, 3)
+ assertEqual('合并装载: local 迁移后为空', extractKnownFailures('known_failures: []'), [])
+ 
+ // ── 汇总 ─────────────────────────────────────────────────────────

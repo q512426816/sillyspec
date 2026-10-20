@@ -216,3 +216,4 @@
 - docs|FR|需求|承接 → [fr/docs.md](fr/docs.md)
 - eval|FR|需求|承接 → [fr/eval.md](fr/eval.md)
 - ci|FR|需求|承接 → [fr/ci.md](fr/ci.md)
+- auto-sillyspec|sillyspec|FR|需求|承接 → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)

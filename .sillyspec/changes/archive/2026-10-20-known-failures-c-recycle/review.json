@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-known-failures-c-recycle",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5f38ad905c44fb86a4d82dff3897c57093014793",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "title": "计数断言失败（原阻断项）——已清偿",
+      "detail": "原状：test/verify-postcheck-known-failures.test.mjs:462 硬断言本仓 known-failures.yaml 解析 24 条，aa3ae179 后实为 3 条致套件实测 1 fail，FR-03 违反。清偿核实（HEAD 5f38ad90）：断言改为 3 并带变更溯源注释（「计数随 2026-10-20-known-failures-c-recycle 回收 24→3」）；requirements.md FR-01/FR-02 测试绑定改为挂该套件「合并装载: 入库文件解析 3 条」（初稿「不适用：非测试面」前提撤回）、FR-03 绑定补挂该套件。独立复跑：verify-postcheck-known-failures + cross-repo-tap-summary + verify-failure-ledger-noise + verify-artifact-triage 四套件 17/17 全绿（ℹ fail 0），tracked 文件无本地改动，known-failures.yaml 自 aa3ae179 起零改动。清偿成立。",
+      "resolvedInCommit": "5f38ad905c44fb86a4d82dff3897c57093014793"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "title": "design 计数笔误（原次要项）——已清偿",
+      "detail": "原状：design.md 接口契约「从 27 条减至 3 条」误引 2026-09-28 迁移源计数，实际变更前为 24 条。清偿核实：改为「从 24 条减至 3 条（实删 21 条=FR-01 枚举面）」并在接口契约内记 F1/F2 清偿缘由。残留不可改面：aa3ae179 提交信息中「删三类 24 条」将删除数误写为旧总数——提交信息属不可变历史记录，design.md 已以正确口径覆盖，不构成阻断。",
+      "resolvedInCommit": "5f38ad905c44fb86a4d82dff3897c57093014793"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "title": "披露边界裁决：可接受（维持原裁决）",
+      "detail": "维持：judgeWithKnownFailures 存在「exit≠0 且失败行全命中豁免 → passed」通路（src/verify-postcheck.js 约 1226 行），旧清单在「exit≠0 且无 TAP 摘要覆盖且失败行全为 fixture 噪音」窄路径下可翻 failed→passed，删除后该通路关闭。design「不改 pass/fail 判定本身」措辞在此窄路径不严格（判定收严非纯归因展示），但方向为 fail-safe 单向收紧——只可能新增假红、不可能新增假绿，假红可复跑自愈且「下次命中再锚定回补」通道仍在。裁决：可接受。design.md 该句在清偿提交中未顺带改写，属措辞精度残留，不影响 verdict。"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "title": "防护声明与消费面核实（维持）",
+      "detail": "①verify-postcheck.js:1206 精确存在 exitCode===0 直接 passed 短路（不扫行、不消费清单）；②runCrossRepoFullTest 的 TAP 摘要级判定真实存在（约 2494-2510 行：^ℹ fail 0$ 且 ^ℹ pass N$（N>0）→ exitCode 重置 0 判通过，注释同引坑缺陷三）；③删后 partitionFailures 消费面在 3 条非空清单（1 锚定式+2 具名裸子串）下照常工作，装载端两源合并去重、无最少条数依赖；④删除面 21 条与 FR-01 枚举逐条精确一致、保留面 3 条逐字节不变（aa3ae179 diff 与父提交逐条核对）。"
+    },
+    {
+      "id": "F5",
+      "severity": "P3",
+      "title": "生成物同步：无生成物涉入（维持）",
+      "detail": "两提交合计触碰面：known-failures.yaml + 变更目录文档/任务件 + verify-postcheck-known-failures.test.mjs（计数钉同步，属应改面）。无类型/契约/生成物文件涉入，确认成立。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T01:17:53Z"
+}

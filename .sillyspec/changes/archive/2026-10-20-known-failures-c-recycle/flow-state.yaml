@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -23,11 +31,16 @@ input: >-
 autopilot: false
 prestage_ack: true
 baseline_commit: daca93d44911c8adc5d20b86e97fe0a951e86dc2
-updatedAt: '2026-10-20T01:06:03.562Z'
+updatedAt: '2026-10-20T01:19:38.588Z'
 baseline_sha256: ac9c94ccbad94ceda1b4722cfaf07f05dcebfcc82a28a515f93fd88f37e8ab58
 spec_approved: true
 spec_approved_at: '2026-10-20T01:06:03.562Z'
 spec_approved_by: zcode-pitfall-fix-knownfailures
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-pitfall-fix-knownfailures
+batch_ticked: true
+gate_summary: >-
+  test: skipped 结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020010659\test-result.json
+  — 跳过原因：变更与测试面零关系（3 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: passed ← npm run lint（48.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020010659\test-result.json｜门文件 3 个
 
