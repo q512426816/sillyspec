@@ -1,0 +1,94 @@
+{
+  "change": "2026-10-20-scoped-verify-policy",
+  "baseline": "9f1d9d7cd641f89eb5893fc43b7de09f588ea767",
+  "head": "fe6d83216f78ad37779a86a2cf576ed3cda5a672",
+  "files": [
+    "AGENTS.md",
+    "templates/agents-instruction.md",
+    "test/run-tests.mjs",
+    "test/runner-failure-face.mjs",
+    "test/test-runner-failed-face.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 204,
+    "deletions": 3
+  },
+  "savedAt": "2026-10-20T15:50:37.569Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "9f1d9d7cd641f89eb5893fc43b7de09f588ea767",
+    "totals": {
+      "files": 5,
+      "additions": 204,
+      "deletions": 3
+    },
+    "rows": [
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/run-tests.mjs",
+        "additions": 26,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/runner-failure-face.mjs",
+        "additions": 78,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/test-runner-failed-face.test.mjs",
+        "additions": 98,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "d44b835d9a29c7c79bfe1ab3a6b0dd7ad424bc9ff7f9ad12515f1e2a36def198",
+  "patchStatus": "ok"
+}

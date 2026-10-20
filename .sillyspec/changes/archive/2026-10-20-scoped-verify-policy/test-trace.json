@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-scoped-verify-policy",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-scoped-verify-policy:flow:测试绑定FR-01",
+      "tests": [
+        "test/test-runner-failed-face.test.mjs「AGENTS 双文件口径句逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-scoped-verify-policy"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-scoped-verify-policy:flow:测试绑定FR-02",
+      "tests": [
+        "test/test-runner-failed-face.test.mjs「纯函数三件+flag E2E（env 临时清单）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-scoped-verify-policy"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-scoped-verify-policy:flow:测试绑定FR-03",
+      "tests": [
+        "test/test-runner-failed-face.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-scoped-verify-policy"
+    }
+  ]
+}

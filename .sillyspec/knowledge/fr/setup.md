@@ -2237,3 +2237,67 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-15-vector-capability-autodetect
   status: active
+
+## FR-setup-126 AGENTS 规则自验口径句（必须）
+变更：2026-10-20-scoped-verify-policy
+状态：active
+摘要：主路径——agent 收口前自验
+场景正文：
+- 场景：主路径——agent 收口前自验 — Given agent 完成实现准备收口；When 读 AGENTS.md 规则 4；Then 按变更测试面+lint 自验；全量留给 pre-push，不再每变更手跑。
+全文：.sillyspec/changes/archive/2026-10-20-scoped-verify-policy/requirements.md#FR-01
+最近确认：fe6d83216f78ad37779a86a2cf576ed3cda5a672
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-scoped-verify-policy:flow:测试绑定FR-01
+  tests: test/test-runner-failed-face.test.mjs「AGENTS 双文件口径句逐字一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-scoped-verify-policy
+  status: active
+
+## FR-setup-127 runner 失败面机制（必须）
+变更：2026-10-20-scoped-verify-policy
+状态：active
+摘要：主路径——失败后复跑；边界——清单含已删测试
+场景正文：
+- 场景：主路径——失败后复跑 — Given 上一轮全量 4 文件失败，清单落盘；When node test/run-tests.mjs --failed；Then 只跑 4 个失败文件；全过后清单自清。
+- 场景：边界——清单含已删测试 — Given 清单含 zzz.test.mjs（已不存在）；When --failed；Then warn 跳过该项，其余照常；全空交集时 No test files found exit 0。
+全文：.sillyspec/changes/archive/2026-10-20-scoped-verify-policy/requirements.md#FR-02
+最近确认：fe6d83216f78ad37779a86a2cf576ed3cda5a672
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-scoped-verify-policy:flow:测试绑定FR-02
+  tests: test/test-runner-failed-face.test.mjs「纯函数三件+flag E2E（env 临时清单）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-scoped-verify-policy
+  status: active
+
+## FR-setup-128 测试覆盖与新口径首验（必须）
+变更：2026-10-20-scoped-verify-policy
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When node --test test/test-runner-failed-face.test.mjs + lint；Then 全过零失败。
+全文：.sillyspec/changes/archive/2026-10-20-scoped-verify-policy/requirements.md#FR-03
+最近确认：fe6d83216f78ad37779a86a2cf576ed3cda5a672
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-scoped-verify-policy:flow:测试绑定FR-03
+  tests: test/test-runner-failed-face.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-scoped-verify-policy
+  status: active

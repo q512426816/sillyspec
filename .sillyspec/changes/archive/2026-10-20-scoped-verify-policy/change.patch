@@ -1,0 +1,269 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 83006ed7..78ba8308 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -33,7 +33,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+ 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档（轻量道即：FR 绑定+design 四节+用户批准先于动码，读代码探究不算动码）。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。
++4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）+ lint 即收口证据——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+ 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 63f203e1..730dc0ce 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -32,7 +32,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+ 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档（轻量道即：FR 绑定+design 四节+用户批准先于动码，读代码探究不算动码）。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。
++4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）+ lint 即收口证据——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+ 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+diff --git a/test/run-tests.mjs b/test/run-tests.mjs
+index d68bcbad..1ba0b196 100644
+--- a/test/run-tests.mjs
++++ b/test/run-tests.mjs
+@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
+ import { execFile } from 'node:child_process'
+ import { homedir, tmpdir } from 'node:os'
+ import { promisify } from 'node:util'
++import { readFailureList, filterToFailedFace, persistFailureList } from './runner-failure-face.mjs'
+ 
+ const execFileP = promisify(execFile)
+ 
+@@ -76,10 +77,30 @@ function collectTestFiles(dir) {
+   }
+   return out
+ }
+-const files = collectTestFiles(testDir).sort()
++let files = collectTestFiles(testDir).sort()
++
++// ── --failed 失败面复跑（2026-10-20-scoped-verify-policy）──
++// 上一轮失败清单（默认 .sillyspec/.runtime/test-last-failures.txt，env 可覆写防并行互踩），
++// 存在且非空则本轮只跑清单面；清单项不在当前文件集（改名/已删）warn 跳过不静默。
++// 定位失败不再需要整体重跑（全量 3.5-5 分钟/轮的重复保险费）。
++const failureListPath = process.env.SILLYSPEC_TEST_FAILURE_LIST
++  || join(dirname(testDir), '.sillyspec', '.runtime', 'test-last-failures.txt')
++const failedFace = process.argv.includes('--failed') ? readFailureList(failureListPath) : null
++if (process.argv.includes('--failed')) {
++  if (failedFace === null) {
++    console.log(`ℹ️ --failed：失败清单缺席或为空（${failureListPath}）——按全量跑`)
++  } else {
++    const { face, dropped } = filterToFailedFace(files, failedFace, (f) => relative(testDir, f))
++    console.log(`🔁 --failed：仅重跑上次失败面（${face.length} 个，来自 ${failureListPath}）`)
++    for (const d of dropped) console.log(`  ⚠️ 清单项不在当前测试集（改名/已删，跳过）：${d}`)
++    files = face
++  }
++}
+ 
+ if (files.length === 0) {
+   console.log('No test files found')
++  // 空面早退也自清清单（清单项已全部不在测试集=陈旧名单，留着会让下轮 --failed 继续空转）
++  if (process.argv.includes('--failed')) persistFailureList(failureListPath, [])
+   process.exit(0)
+ }
+ 
+@@ -204,6 +225,10 @@ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
+ if (failures.length > 0) {
+   console.log(`失败文件: ${failures.join(', ')}`)
++  persistFailureList(failureListPath, failures)
++  console.log(`🔁 复跑失败面：node test/run-tests.mjs --failed（清单已落 ${failureListPath}，全绿自清）`)
++} else {
++  persistFailureList(failureListPath, [])
+ }
+ console.log(`${'='.repeat(50)}`)
+ 
+diff --git a/test/runner-failure-face.mjs b/test/runner-failure-face.mjs
+new file mode 100644
+index 00000000..b5e8e059
+--- /dev/null
++++ b/test/runner-failure-face.mjs
+@@ -0,0 +1,78 @@
++/**
++ * runner-failure-face.mjs — 失败面清单纯函数（2026-10-20-scoped-verify-policy）
++ *
++ * run-tests.mjs 的 --failed 复跑与失败清单落盘逻辑提纯：全量失败后定位/修复不需要整体重跑
++ * （实测 3.5-5 分钟/轮），清单落 gitignored runtime、全绿自清；路径可经 env
++ * SILLYSPEC_TEST_FAILURE_LIST 覆写（并行双套件/测试场景分家，与套件 TEMP 隔离同哲学）。
++ * 纯函数无 IO 副作用（persistFailureList 仅收 path 由调用方决定写入时机）。
++ */
++import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
++import { dirname } from 'node:path'
++
++/** 清单文本 → 失败文件名数组（trim/去空行/去重保序）。 */
++export function parseFailureList(text) {
++  const out = []
++  const seen = new Set()
++  for (const line of String(text || '').split(/\r?\n/)) {
++    const name = line.trim()
++    if (!name || seen.has(name)) continue
++    seen.add(name)
++    out.push(name)
++  }
++  return out
++}
++
++/**
++ * 当前文件集 ∩ 清单 → { face, dropped }
++ * 匹配双形态（评审 P2 清偿：清单落盘是 relative(testDir) 形态——子目录测试是 `dispatch/x.test.mjs`
++ * （Windows 下 backslash），单按 basename 匹配会把实存子目录测试误判 dropped）：
++ * 清单项分隔符归一后，等于文件的相对路径（relOf 可注入，runner 传 relative(testDir) 形态）或 basename 即命中。
++ * face=要跑的路径列表（按当前 files 顺序）；dropped=清单中未命中任何文件的名字（调用方 warn）。
++ */
++export function filterToFailedFace(files, failedNames, relOf = null) {
++  const wanted = new Set((failedNames || []).map((n) => String(n).replace(/\\/g, '/')))
++  const face = []
++  const dropped = []
++  const hit = new Set()
++  for (const f of files) {
++    const basename = f.split(/[\\/]/).pop()
++    const rel = relOf ? String(relOf(f)).replace(/\\/g, '/') : null
++    if (wanted.has(basename)) {
++      face.push(f)
++      hit.add(basename)
++    } else if (rel && wanted.has(rel)) {
++      face.push(f)
++      hit.add(rel)
++    }
++  }
++  for (const n of wanted) if (!hit.has(n)) dropped.push(n)
++  return { face, dropped }
++}
++
++/** 落盘失败清单（failures 为空数组/全绿 → 删除清单文件）。fail-soft：写失败 warn 不抛。 */
++export function persistFailureList(listPath, failures) {
++  try {
++    if (!failures || failures.length === 0) {
++      if (existsSync(listPath)) rmSync(listPath, { force: true })
++      return { cleared: true }
++    }
++    mkdirSync(dirname(listPath), { recursive: true })
++    writeFileSync(listPath, failures.join('\n') + '\n', 'utf8')
++    return { cleared: false, count: failures.length }
++  } catch (e) {
++    console.warn(`[runner] ⚠️ 失败清单落盘失败（不阻断套件）：${e && e.message}`)
++    return { cleared: false, error: String(e) }
++  }
++}
++
++/** 读清单（env 覆写路径由调用方解析后传入）；缺席返回 null（=全量照常）。 */
++export function readFailureList(listPath) {
++  try {
++    if (!existsSync(listPath)) return null
++    const text = readFileSync(listPath, 'utf8')
++    const names = parseFailureList(text)
++    return names.length > 0 ? names : null
++  } catch {
++    return null
++  }
++}
+diff --git a/test/test-runner-failed-face.test.mjs b/test/test-runner-failed-face.test.mjs
+new file mode 100644
+index 00000000..c8b39d86
+--- /dev/null
++++ b/test/test-runner-failed-face.test.mjs
+@@ -0,0 +1,98 @@
++/**
++ * test-runner-failed-face.test.mjs — 失败面机制与自验口径（2026-10-20-scoped-verify-policy）
++ *
++ * 锁：①runner-failure-face 纯函数三件（parse 去空去重 / filter 交集+dropped / persist 全绿自清）；
++ *   ②--failed flag E2E（env 指临时清单，含不存在项 → warn + 空交集 No test files found）；
++ *   ③AGENTS.md 与 templates/agents-instruction.md 自验口径句逐字一致（模板随 init 传播）。
++ * 本测试自身按新口径运行：变更测试面+lint 即收口证据，全量归 pre-push。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { parseFailureList, filterToFailedFace, persistFailureList, readFailureList } from './runner-failure-face.mjs'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const RUNNER = join(ROOT, 'test', 'run-tests.mjs')
++
++test('① parseFailureList：trim/去空行/去重保序', () => {
++  const r = parseFailureList('a.test.mjs\n\n  b.test.mjs  \r\na.test.mjs\n\n')
++  assert.deepEqual(r, ['a.test.mjs', 'b.test.mjs'])
++  assert.deepEqual(parseFailureList(''), [])
++  assert.deepEqual(parseFailureList(null), [])
++})
++
++test('① filterToFailedFace：交集保序 + dropped 显式', () => {
++  const files = ['/x/run-a.test.mjs', '/x/other.test.mjs', '/x/run-b.test.mjs']
++  const { face, dropped } = filterToFailedFace(files, ['run-b.test.mjs', 'zzz-gone.test.mjs', 'run-a.test.mjs'])
++  assert.deepEqual(face.map(f => f.split(/[\\/]/).pop()), ['run-a.test.mjs', 'run-b.test.mjs'], '按 files 顺序')
++  assert.deepEqual(dropped, ['zzz-gone.test.mjs'], '缺失项不静默')
++})
++
++test('① filterToFailedFace：子目录往返（评审 P2 清偿）——清单落盘 relative 形态可命中', () => {
++  const files = [
++    'C:/r/test/plain.test.mjs',
++    'C:/r/test/dispatch/wave-auto-adopt.test.mjs',
++    'C:/r/test/probe-suite/p7.test.mjs',
++  ]
++  const relOf = (f) => f.replace('C:/r/test/', '')
++  // 正斜杠相对形态 / Windows 反斜杠形态 / basename 形态 三种清单写法都命中
++  const r1 = filterToFailedFace(files, ['dispatch/wave-auto-adopt.test.mjs', 'probe-suite/p7.test.mjs'], relOf)
++  assert.deepEqual(r1.face.map(f => f.split(/[\\/]/).pop()), ['wave-auto-adopt.test.mjs', 'p7.test.mjs'])
++  assert.deepEqual(r1.dropped, [])
++  const r2 = filterToFailedFace(files, ['dispatch\\wave-auto-adopt.test.mjs'], relOf)
++  assert.equal(r2.face.length, 1, 'backslash 清单形态归一后命中')
++  const r3 = filterToFailedFace(files, ['wave-auto-adopt.test.mjs'], relOf)
++  assert.equal(r3.face.length, 1, 'basename 形态兜底命中')
++  // 无 relOf 时 basename 兜底（向后兼容）
++  const r4 = filterToFailedFace(files, ['p7.test.mjs'])
++  assert.equal(r4.face.length, 1)
++})
++
++test('① persist/read：全绿自清 + 落盘可读', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'rff-'))
++  const p = join(dir, 'sub', 'list.txt')
++  const r1 = persistFailureList(p, ['a.test.mjs', 'b.test.mjs'])
++  assert.equal(r1.cleared, false)
++  assert.deepEqual(readFailureList(p), ['a.test.mjs', 'b.test.mjs'], '落盘后可读')
++  const r2 = persistFailureList(p, [])
++  assert.equal(r2.cleared, true)
++  assert.ok(!existsSync(p), '全绿自清')
++  assert.equal(readFailureList(p), null, '清后读为 null')
++  rmSync(dir, { recursive: true, force: true })
++})
++
++test('② --failed flag E2E：env 临时清单 + 不存在项 → warn + No test files found', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'rff-e2e-'))
++  const listPath = join(dir, 'failures.txt')
++  writeFileSync(listPath, 'zzz-not-exist.test.mjs\n', 'utf8')
++  const r = spawnSync(process.execPath, [RUNNER, '--failed'], {
++    cwd: ROOT, encoding: 'utf8', timeout: 60_000,
++    env: { ...process.env, SILLYSPEC_TEST_FAILURE_LIST: listPath },
++  })
++  const out = r.stdout + r.stderr
++  assert.equal(r.status, 0, `runner 退出码应 0：\n${out.slice(0, 500)}`)
++  assert.match(out, /--failed：仅重跑上次失败面/, '失败面提示在场')
++  assert.match(out, /清单项不在当前测试集（改名\/已删，跳过）：zzz-not-exist\.test\.mjs/, '缺失项 warn')
++  assert.match(out, /No test files found/, '空交集走 No test files found')
++  assert.ok(!existsSync(listPath), '0 文件 0 失败 → 清单自清')
++  rmSync(dir, { recursive: true, force: true })
++})
++
++test('③ AGENTS 双文件自验口径句逐字一致', () => {
++  const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++  const a = read('AGENTS.md')
++  const tpl = read('templates/agents-instruction.md')
++  const KEY = '自验口径＝变更测试面（新增测试+受影响既有面）+ lint 即收口证据'
++  for (const [name, text] of [['AGENTS.md', a], ['templates/agents-instruction.md', tpl]]) {
++    assert.ok(text.includes(KEY), `${name} 含口径句`)
++    assert.ok(text.includes('全量套件归 pre-push 门，勿每变更重复手跑'), `${name} 全量归属句`)
++    assert.ok(text.includes('跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部'), `${name} 日志落盘句`)
++  }
++  // 两文件口径段逐字一致（提取规则4整行比对）
++  const rule4 = (t) => t.split('\n').find(l => l.startsWith('4. **实证核验再收口**'))
++  assert.equal(rule4(a), rule4(tpl), '规则4两文件逐字一致')
++})
