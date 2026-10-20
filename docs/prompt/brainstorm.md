@@ -73,7 +73,7 @@
 - **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出可照抄建议命令（--input 引号内换行合法）：
 
 ```
-sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（首行即变更标题）；随后动机与背景
+sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景
 
 成功标准：
 - <可验证标准>"
@@ -220,9 +220,9 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句中文概括（�
 
 ```markdown
 ## D-001@v1: <短标题>
-- type: term | boundary | premise | architecture | compatibility | risk
+- type: architecture | compatibility | boundary | definition | process | scope | feasibility | consistency
 - priority: P0 | P1 | P2
-- status: accepted | rejected | superseded
+- status: confirmed | accepted | implemented | rejected | proposed | superseded | draft
 - source: user | code | docs
 - question: <被解决的问题>
 - answer: <用户确认或代码查证结果>
@@ -615,9 +615,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ### decisions.md 版本规则
 ```markdown
 ## D-001@v2: 缓存异常时的 fallback 语义
-- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk
+- type: architecture | compatibility | boundary | definition | process | scope | feasibility | consistency
 - priority: P0 | P1 | P2
-- status: accepted | unresolved | rejected | superseded
+- status: confirmed | accepted | implemented | rejected | proposed | superseded | draft
 - supersedes: D-001@v1
 - source: design-grill
 - question: §3 数据流与 §7 容错策略冲突时以哪个为准？

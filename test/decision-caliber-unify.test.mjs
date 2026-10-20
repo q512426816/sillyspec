@@ -97,27 +97,28 @@ test('③ implemented 入选：条目随蒸馏链写盘进知识库', () => {
   assert.doesNotMatch(readFileSync(domainFile, 'utf8'), /草稿项/, 'draft 条目不入库')
 })
 
-test('④ brainstorm 提示清单同步：两处模板与正典逐值一致，渲染产物同步', () => {
+test('④ brainstorm 提示清单同步：两处模板插值正典常量，渲染产物逐值一致', () => {
   const stageSrc = readFileSync(join(ROOT, 'src', 'stages', 'brainstorm.js'), 'utf8')
-  const typeLines = [...stageSrc.matchAll(/^- type: (.+)$/gm)].map((m) => m[1])
-  assert.equal(typeLines.length, 2, '两处 type 清单（实际 ' + typeLines.length + '）')
-  for (const line of typeLines) {
-    const tokens = line.split('|').map((s) => s.trim()).filter(Boolean)
-    assert.deepEqual([...tokens].sort(), [...DECISION_TYPES].sort(), `type 清单=正典 8 值（实际：${line}）`)
-  }
-  const statusLines = [...stageSrc.matchAll(/^- status: (.+)$/gm)].map((m) => m[1])
-  assert.equal(statusLines.length, 2, '两处 status 清单')
-  for (const line of statusLines) {
-    const tokens = line.split('|').map((s) => s.trim()).filter(Boolean)
-    assert.deepEqual([...tokens].sort(), [...DECISION_STATUSES].sort(), `status 清单=正典 7 值（实际：${line}）`)
-  }
-  assert.ok(!/term \| boundary|premise \|/.test(stageSrc) && !/unresolved \|/.test(stageSrc), '散值从提示面清除')
+  // 源面=插值表达式（单一源最强形态：提示清单由常量渲染，源头不可能再漂移）
+  const typeInterp = [...stageSrc.matchAll(/^- type: \$\{DECISION_TYPES\.join\(' \| '\)\}$/gm)].length
+  const statusInterp = [...stageSrc.matchAll(/^- status: \$\{DECISION_STATUSES\.join\(' \| '\)\}$/gm)].length
+  assert.equal(typeInterp, 2, '两处 type 清单插值正典常量（实际 ' + typeInterp + '）')
+  assert.equal(statusInterp, 2, '两处 status 清单插值正典常量（实际 ' + statusInterp + '）')
+  assert.ok(!/term \| boundary/.test(stageSrc), '旧散值 type 清单清除')
+  assert.ok(!/unresolved \| rejected/.test(stageSrc), '旧散值 status 清单清除')
+  // 渲染面=正典逐值一致（_extract 再生成产物）
   const rendered = readFileSync(join(ROOT, 'docs', 'prompt', 'brainstorm.md'), 'utf8')
   const renderedTypeLines = [...rendered.matchAll(/^- type: (.+)$/gm)].map((m) => m[1])
   assert.equal(renderedTypeLines.length, 2, '渲染产物两处 type 清单')
   for (const line of renderedTypeLines) {
     const tokens = line.split('|').map((s) => s.trim()).filter(Boolean)
     assert.deepEqual([...tokens].sort(), [...DECISION_TYPES].sort(), `渲染产物 type 清单=正典（实际：${line}）`)
+  }
+  const renderedStatusLines = [...rendered.matchAll(/^- status: (.+)$/gm)].map((m) => m[1])
+  assert.equal(renderedStatusLines.length, 2, '渲染产物两处 status 清单')
+  for (const line of renderedStatusLines) {
+    const tokens = line.split('|').map((s) => s.trim()).filter(Boolean)
+    assert.deepEqual([...tokens].sort(), [...DECISION_STATUSES].sort(), `渲染产物 status 清单=正典（实际：${line}）`)
   }
 })
 

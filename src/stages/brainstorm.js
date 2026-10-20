@@ -1,4 +1,5 @@
 import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
+import { DECISION_STATUSES, DECISION_TYPES } from '../decision-values.js'
 
 export const definition = {
   name: 'brainstorm',
@@ -192,9 +193,9 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文�
 
 \`\`\`markdown
 ## D-001@v1: <短标题>
-- type: term | boundary | premise | architecture | compatibility | risk
+- type: ${DECISION_TYPES.join(' | ')}
 - priority: P0 | P1 | P2
-- status: accepted | rejected | superseded
+- status: ${DECISION_STATUSES.join(' | ')}
 - source: user | code | docs
 - question: <被解决的问题>
 - answer: <用户确认或代码查证结果>
@@ -525,9 +526,9 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
 ### decisions.md 版本规则
 \`\`\`markdown
 ## D-001@v2: 缓存异常时的 fallback 语义
-- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk
+- type: ${DECISION_TYPES.join(' | ')}
 - priority: P0 | P1 | P2
-- status: accepted | unresolved | rejected | superseded
+- status: ${DECISION_STATUSES.join(' | ')}
 - supersedes: D-001@v1
 - source: design-grill
 - question: §3 数据流与 §7 容错策略冲突时以哪个为准？
