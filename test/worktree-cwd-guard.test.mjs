@@ -1,12 +1,13 @@
 /**
- * worktree cwd 硬拦测试（坑 worktree-cwd-silent-split，2026-08-29 用户实证）
+ * worktree cwd 锚定测试（坑 worktree-cwd-silent-split 硬拦 → 坑 cli-cwd-coupling 拦→导，
+ * 2026-10-20-cli-worktree-cwd-anchor 改钉）
  *
- * 事故：Bash cwd 残留导致 agent 两次误在隔离 worktree 内跑 sillyspec——第一次（status 类顶层
- * 命令）完全静默，进度险些写进 worktree 副本 .sillyspec 与主仓进度库分裂；第二次靠 execute
- * 多实例告警才拦住。修复：CLI 入口（src/index.js main()）对目标目录（cwd / --dir）命中
- * .sillyspec/.runtime/worktrees/<change> 段统一硬报错 exit 2；逃生门 --allow-worktree-cwd /
- * --dir 显式主仓 / wt-commit 命令豁免。runCommand 内的 specDrift 自动锚定保留为第二层防线
- * （不经 CLI 入口的调用方仍受保护）。
+ * 沿革：2026-08-29 事故（Bash cwd 残留致 agent 误在隔离 worktree 内跑 sillyspec，进度险些
+ * 写进副本分裂）后以 exit 2 硬拦 + 指引修复；生产实证（会话 47e2ff1a）agent 三次被拦每次
+ * 1-2 个交互来回——2026-10-20 起「守卫建议的事自动做掉」：⚠️警告（变更名/原 cwd/锚定主仓
+ * 根/逃生门整行）+ 自动重锚定主仓根执行（写入恒落主仓单源，worktree 副本零 CLI 写入）。
+ * 逃生门 --allow-worktree-cwd（零警告零锚定）/ --dir 显式主仓 / wt-commit 豁免语义不变。
+ * runCommand 内的 specDrift 自动锚定保留为第二层防线（不经 CLI 入口的调用方仍受保护）。
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -44,7 +45,7 @@ describe('detectCwdInsideWorktree（判定单元）', () => {
   })
 })
 
-describe('CLI 入口 worktree cwd 硬拦（e2e）', () => {
+describe('CLI 入口 worktree cwd 锚定（e2e）', () => {
   let mainRepo
   let wtRoot
   beforeEach(() => {
@@ -56,37 +57,48 @@ describe('CLI 入口 worktree cwd 硬拦（e2e）', () => {
 
   const runCli = (cwd, args) => spawnSync(process.execPath, [cliBin, ...args], { cwd, encoding: 'utf8' })
 
-  it('cwd 在 worktree 内跑 status → exit 2 + 硬拦文案（第一次静默事故的回归）', () => {
+  it('cwd 在 worktree 内跑 status → 锚定警告 + 主仓口径执行（改钉：不再 exit 2）', () => {
     const res = runCli(wtRoot, ['status'])
     const combined = (res.stdout || '') + (res.stderr || '')
-    assert.equal(res.status, 2, `期望 exit 2，实际 ${res.status}\n${combined}`)
-    assert.ok(combined.includes('demo-change') && combined.includes('隔离 worktree 内'), combined)
-    assert.ok(combined.includes(mainRepo), '修复指引应给出主仓根路径')
+    assert.notEqual(res.status, 2, `不应再 exit 2（锚定语义），实际 ${res.status}\n${combined}`)
+    assert.ok(combined.includes('demo-change') && combined.includes('已自动锚定主仓根'), combined)
+    assert.ok(combined.includes(mainRepo), '警告应给出锚定主仓根路径')
+    assert.ok(combined.includes('--allow-worktree-cwd'), '逃生门整行保留')
   })
 
-  it('cwd 在 worktree 子目录同样硬拦', () => {
+  it('cwd 在 worktree 子目录同样锚定', () => {
     const res = runCli(join(wtRoot, 'src'), ['status'])
-    assert.equal(res.status, 2)
+    const combined = (res.stdout || '') + (res.stderr || '')
+    assert.notEqual(res.status, 2)
+    assert.ok(combined.includes('已自动锚定主仓根'))
   })
 
-  it('逃生门 --allow-worktree-cwd → 不再被硬拦（后续行为与守卫无关）', () => {
+  it('主仓未 init 极端态 → 锚定后走既有未初始化口径（守卫不新增失败面）', () => {
+    // mainRepo 无 .sillyspec（worktree 目录是裸造的）——status 为查询类豁免命令，按主仓未初始化口径输出
+    const res = runCli(wtRoot, ['status'])
+    const combined = (res.stdout || '') + (res.stderr || '')
+    assert.notEqual(res.status, 2)
+    assert.ok(combined.includes('已自动锚定主仓根'), '锚定警告照常')
+  })
+
+  it('逃生门 --allow-worktree-cwd → 零警告零锚定（行为与守卫无关）', () => {
     const res = runCli(wtRoot, ['--allow-worktree-cwd', 'status'])
     const combined = (res.stdout || '') + (res.stderr || '')
-    assert.ok(!combined.includes('隔离 worktree 内'), `不应出现硬拦文案：\n${combined}`)
+    assert.ok(!combined.includes('已自动锚定主仓根'), `不应出现锚定警告：\n${combined}`)
   })
 
-  it('--dir 显式主仓 → 目标不在 worktree 内，不拦', () => {
+  it('--dir 显式主仓 → 目标不在 worktree 内，不锚定', () => {
     mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
     writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), '# guard-test\n', 'utf8')
     const res = runCli(wtRoot, ['status', '--dir', mainRepo])
     const combined = (res.stdout || '') + (res.stderr || '')
-    assert.ok(!combined.includes('隔离 worktree 内'), `不应出现硬拦文案：\n${combined}`)
+    assert.ok(!combined.includes('已自动锚定主仓根'), `不应出现锚定警告：\n${combined}`)
   })
 
   it('wt-commit 命令豁免（子代理 workdir=worktree 内合法操作）', async () => {
-    // 无 git 仓 → wt-commit 会在守卫之后失败，但失败原因不应是 worktree 硬拦
+    // 无 git 仓 → wt-commit 会在守卫之后失败，但失败原因不应是 worktree 锚定
     const res = runCli(wtRoot, ['wt-commit', '-m', 'x', '--', 'a.txt'])
     const combined = (res.stdout || '') + (res.stderr || '')
-    assert.ok(!combined.includes('隔离 worktree 内'), `wt-commit 不应被 worktree 硬拦：\n${combined}`)
+    assert.ok(!combined.includes('已自动锚定主仓根'), `wt-commit 不应触发锚定：\n${combined}`)
   })
 })

@@ -88,7 +88,8 @@ const srcOf = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url))
 // ── 5. 守卫一键放行整行 ──
 {
   const i = srcOf('../src/index.js')
-  assert(i.includes('一键放行') && i.includes('--allow-worktree-cwd --spec-dir'), '5a worktree 守卫报错附双 flag 整行（R4-S-Q 试错 3 次的痛点）')
+  // 2026-10-20-cli-worktree-cwd-anchor 改钉：文案由「一键放行」改「整行照贴」——双 flag 整行保留（R4-S-Q 痛点持续覆盖）
+  assert(i.includes('整行照贴') && i.includes('--allow-worktree-cwd --spec-dir'), '5a worktree 守卫警告附双 flag 整行（R4-S-Q 试错 3 次的痛点）')
   const c = srcOf('../src/run/command.js')
   assert(c.includes('一键指定') && c.includes('--spec-dir "${specBase}"'), '5b monorepo 多实例守卫报错附 --spec-dir 整行')
 }

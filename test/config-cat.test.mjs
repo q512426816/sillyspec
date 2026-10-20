@@ -13,7 +13,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, renameSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import { tmpdir, homedir } from 'os'
 
 import { resolveLocalYaml } from '../src/config-cat.js'
@@ -116,14 +116,11 @@ try {
   // ── 6. CLI 集成 ──
   console.log('\n--- 6. CLI 集成（sillyspec config cat …） ---')
   function runCli(args, cwd) {
-    try {
-      const out = execFileSync(process.execPath, [binPath, 'config', ...args], {
-        cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 60_000,
-      })
-      return { code: 0, out }
-    } catch (e) {
-      return { code: e.status ?? 1, out: (e.stdout || '') + (e.stderr || '') }
-    }
+    // spawnSync 双流捕获：锚定警告走 stderr（console.warn，2026-10-20-cli-worktree-cwd-anchor）
+    const r = spawnSync(process.execPath, [binPath, 'config', ...args], {
+      cwd, encoding: 'utf8', timeout: 60_000,
+    })
+    return { code: r.status ?? 1, out: (r.stdout || '') + (r.stderr || '') }
   }
   {
     const r = runCli(['cat'], main)
@@ -132,11 +129,12 @@ try {
     assert(r.out.includes('http://hub.local'), 'cat 输出文件内容')
   }
   {
-    // 2026-08-29 起 CLI 入口对 worktree cwd 硬拦（坑 worktree-cwd-silent-split）：默认 exit 2；
-    // 显式 --allow-worktree-cwd 放行后，git common-dir 兜底仍解析到主仓配置（原意图保留）
+    // 2026-10-20-cli-worktree-cwd-anchor 改钉：worktree cwd 由 exit 2 硬拦改为锚定主仓根执行
+    // （坑 cli-cwd-coupling 拦→导）；显式 --allow-worktree-cwd 放行后，git common-dir 兜底仍解析到主仓配置（原意图保留）
     const r = runCli(['cat'], stdWt)
-    assert(r.code === 2, `worktree cwd 默认硬拦 exit 2（实际 ${r.code}）`)
-    assert(r.out.includes('隔离 worktree 内'), `硬拦文案点明 worktree（实际：${r.out.slice(-120)}）`)
+    assert(r.code === 0, `worktree cwd 锚定后 cat 以主仓口径退出 0（实际 ${r.code}）`)
+    assert(r.out.includes('已自动锚定主仓根'), `锚定警告可见（实际：${r.out.slice(-160)}）`)
+    assert(r.out.includes(join(main, '.sillyspec', 'local.yaml')), '锚定后解析到主仓配置（写入/读取单源）')
     const r2 = runCli(['--allow-worktree-cwd', 'cat'], stdWt)
     assert(r2.code === 0, `--allow-worktree-cwd 放行后退出 0（实际 ${r2.code}）`)
     assert(r2.out.includes(join(main, '.sillyspec', 'local.yaml')), '放行后 worktree cwd 仍解析到主仓配置')

@@ -394,25 +394,22 @@ async function main() {
     process.exit(1);
   }
 
-  // ── worktree cwd 硬拦（坑 worktree-cwd-silent-split，2026-08-29 用户实证）──
-  // Bash cwd 残留让 agent 两次误在 worktree 内跑 sillyspec：status 类完全静默、进度写进
-  // worktree 副本 .sillyspec 与主仓进度库分裂。守卫在命令分发前拦截，--dir 显式指向主仓
-  // 或 --allow-worktree-cwd 逃生门放行；wt-commit 命令豁免（子代理 workdir=worktree 内合法）。
+  // ── worktree cwd 锚定（坑 worktree-cwd-silent-split 硬拦 → 坑 cli-cwd-coupling 拦→导，
+  // 2026-10-20-cli-worktree-cwd-anchor）──
+  // Bash cwd 残留让 agent 误在 worktree 内跑 sillyspec（生产实证会话 47e2ff1a 三次被拦、每次
+  // 1-2 个交互来回）。守卫建议的事（cd 回主仓根重跑）自动做掉：⚠️警告 + 重锚定主仓根执行——
+  // 写入恒落主仓（单源不变量延续，worktree 副本零 CLI 写入）；刻意以本 worktree 作独立实例跑
+  // 的显式路径（--allow-worktree-cwd --spec-dir）在警告中原样保留；wt-commit 豁免不变。
   if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit') {
     const guardDir = args.includes('--dir') ? dir : process.cwd();
     const wtInfo = detectCwdInsideWorktree(guardDir);
     if (wtInfo) {
-      console.error(`\n❌ 当前在隔离 worktree 内（${wtInfo.changeName}）：${guardDir}`);
-      console.error(`   主仓根：${wtInfo.mainRepoRoot}`);
-      console.error('   SillySpec 进度库只存在于主仓，worktree 内跑会产生分裂进度（坑 worktree-cwd-silent-split）。');
-      console.error('   修复：cd 到主仓根后重跑，或用 --dir <主仓根>，或用 --allow-worktree-cwd 强制放行。');
-      // 一键放行整行（R4-S-Q 实证：agent 试 3 次才拼对组合——worktree 守卫要 --allow-worktree-cwd，
-      // 而 worktree 嵌套在主仓 .sillyspec/.runtime/ 下又触发 monorepo 多实例拦，需再补 --spec-dir
-      // 指向 worktree 自己的 .sillyspec，两 flag 缺一不可。给整行可贴命令，不再让调用方试错拼装。）
       const wtSpecDir = (ancestorSpecDirs(guardDir)[0]) || join(guardDir, '.sillyspec');
-      console.error(`   一键放行（本 worktree 作独立实例跑，整行照贴）：`);
-      console.error(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
-      process.exit(2);
+      console.warn(`\n⚠️ cwd 在隔离 worktree 内（${wtInfo.changeName}）：${guardDir}`);
+      console.warn(`   已自动锚定主仓根执行：${wtInfo.mainRepoRoot}（进度库/变更状态以主仓单源为准——坑 worktree-cwd-silent-split / cli-cwd-coupling 拦→导）。`);
+      console.warn(`   如确需以本 worktree 作独立实例跑（整行照贴）：`);
+      console.warn(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
+      dir = wtInfo.mainRepoRoot;
     }
   }
 

@@ -167,14 +167,16 @@ console.log('\n--- 场景 B：derive task-reviews --spec-dir 副本 → 读副�
 // ════════════════════════════════════════════════════════════
 // 场景 C：gate execute 副本 cwd → 自动 anchor，task-reviews check 读主仓
 // ════════════════════════════════════════════════════════════
-console.log('\n--- 场景 C：gate execute 副本 cwd → 入口硬拦默认拦、--allow-worktree-cwd 放行后自动 anchor 读主仓 ---')
+console.log('\n--- 场景 C：gate execute 副本 cwd → 入口默认锚定主仓、--allow-worktree-cwd 放行走 anchor 路径 ---')
 {
-  // 2026-08-29 起 CLI 入口对 worktree cwd 默认硬拦（坑 worktree-cwd-silent-split）；
-  // 显式 --allow-worktree-cwd 放行后走原 anchor 路径（gateOpts.specDriftAnchor 锚回主仓）
-  const blocked = runCli(wtRoot, ['gate', 'execute', '--change', changeName, '--json'])
-  const blockedOut = (blocked.stdout || '') + (blocked.stderr || '')
-  assert(blocked.status === 2 && blockedOut.includes('隔离 worktree 内'),
-    `AC-C0: worktree cwd 默认被入口硬拦（status=${blocked.status}，尾=${blockedOut.slice(-100)}）`)
+  // 2026-10-20-cli-worktree-cwd-anchor 改钉：入口对 worktree cwd 由 exit 2 硬拦改为锚定主仓
+  // （坑 cli-cwd-coupling 拦→导）——用无副作用的 status 断言默认锚定（gate execute 仍只跑
+  // 放行路径一次，不重复执行以免状态污染 AC-C1..C5）；显式 --allow-worktree-cwd 放行走原
+  // anchor 路径（gateOpts.specDriftAnchor 锚回主仓）
+  const anchored = runCli(wtRoot, ['status'])
+  const anchoredOut = (anchored.stdout || '') + (anchored.stderr || '')
+  assert(anchored.status !== 2 && anchoredOut.includes('已自动锚定主仓根'),
+    `AC-C0: worktree cwd 默认锚定主仓（status=${anchored.status}，尾=${anchoredOut.slice(-100)}）`)
   const res = runCli(wtRoot, ['--allow-worktree-cwd', 'gate', 'execute', '--change', changeName, '--json'])
   const combined = (res.stdout || '') + (res.stderr || '')
   let env = null
