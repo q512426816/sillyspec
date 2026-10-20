@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  修复蒸馏异态升厚触发器死代码
+
+
+  动机与背景：src/flow.js distill 子步的升厚判定 `const abnormal = res && (res.rejected > 0 || res.needsWait > 0)` 两个条件恒
+  false——distillIntoKnowledge 返回值只有 written/skipped/needsWait 三键无 rejected 字段（幽灵引用恒 undefined），needsWait 是字符串、非空串与 > 0
+  比较恒 false。「distill 异态（rejected 缺否决理由/复潮条件等）自动升厚留人工裁决」实际永不触发，决策质量异态被静默吞掉。caliber-unify 变更让 implemented 入选后 needsWait
+  场景更常见，死触发器修复优先级上升。
+
+
+  成功标准：
+
+  - distillIntoKnowledge 返回 needsWait 非空字符串时，flow done distill 子步必须真实升厚（flow-state tier=thick 落盘、upgrade_reason 留痕）
+
+  - needsWait 为 null（正常路径）时升厚判定必须恒不触发，既有行为零回归
+
+  - 升厚判定必须不再引用蒸馏返回值不存在的字段（rejected 幽灵引用清除）
+
+  - 判定逻辑提取为可独立测试的纯函数并有测试覆盖；既有 distill 相关套件零回归
+autopilot: false
+prestage_ack: true
+baseline_commit: 18f295bb42644119d2641b03b2c3f2b505aa1f04
+updatedAt: '2026-10-20T03:01:34.015Z'
+baseline_sha256: bc3145167537f978c64b910606d687888adf91bd1f616286becef2870a14cd76
+spec_approved: true
+spec_approved_at: '2026-10-20T03:01:34.015Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: user-confirmed
+spec_attested_by: anon@DESKTOP-HJ0AM09
+
