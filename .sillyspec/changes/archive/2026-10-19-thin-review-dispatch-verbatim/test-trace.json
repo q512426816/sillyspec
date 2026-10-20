@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-19-thin-review-dispatch-verbatim",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-review-pack.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-dispatch-verbatim"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review-pack.test.mjs「归属切分——三分类注入形态 + 声明外『抽查即可』标注 + 他侧归因带 owner」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-dispatch-verbatim"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-review-pack.test.mjs「fail-soft——归属源失败零注入子段、FR 表与摘要不受影响；体积帽 12000 不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-dispatch-verbatim"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-review-pack.test.mjs",
+        "test/flow-review.test.mjs",
+        "test/review-probes.test.mjs",
+        "test/tick-evidence-multi-anchor.test.mjs",
+        "test/wave-auto-adopt.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-19-thin-review-dispatch-verbatim"
+    }
+  ]
+}

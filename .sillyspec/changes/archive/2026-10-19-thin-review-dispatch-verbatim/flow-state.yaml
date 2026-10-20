@@ -1,0 +1,48 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量评审任务书派发原样复制与归属切分
+
+
+  动机与背景：平台仓实测（sess_716d924d）：CLI 任务书已含预消化材料包，但主会话派发子代理时手写缩编 prompt（全部派发丢包），评审员为甄别冻结面里的并行混入文件做了 22 次 git 考古、单轮评审 88
+  分钟。两根因：① 薄道任务书/横幅缺厚道已有的「原样复制给子代理——勿自行改写增删」指令（stage-review.js:803 / index.js:2576 先例）；② 材料包无归属切分，评审员要自己考古冻结面中哪些文件属本变更。
+
+
+  成功标准：
+
+  - 任务书头部与派发横幅含「原样复制给子代理——检查单生产权在 CLI，勿自行改写增删」指令（对齐厚道措辞）
+
+  - 材料包在冻结面可得时含归属切分段：声明内（design 清单∩冻结面）/声明外（冻结面−design 清单）/他侧归因（splitOwnVsForeignDiffFiles 单源），声明外标注「并行混入候选，抽查即可勿逐文件考古」
+
+  - 归属核算 fail-soft（git 失败/缺件零注入该子段，FR 表与文件摘要不受影响）；整体体积帽 12000 不变
+
+  - 新增测试覆盖指令在场/归属切分注入/fail-soft 零注入/他侧归因形态；既有 flow-review 回归全绿
+autopilot: false
+prestage_ack: false
+baseline_commit: 045fa7bf4220317cef0c61558afa42649b3d323d
+updatedAt: '2026-10-20T00:54:37.884Z'
+baseline_sha256: 233b914f4892d2fac912ada83d5cc060a51ad10961ee886a3a1a6c47b3fe5009
+spec_approved: true
+spec_approved_at: '2026-10-20T00:38:05.335Z'
+spec_approved_by: zcode-thin-review-verbatim
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-thin-review-verbatim
+gate_summary: >-
+  test: skipped ← module[]+deps(js93+js-meta-skip1+nontest-skip1)+fr(95)（63.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020005339\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（48.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020005339\test-result.json｜门文件 7 个
+

@@ -1,0 +1,234 @@
+diff --git a/src/flow-review-pack.js b/src/flow-review-pack.js
+index 4a40043d..cd80de0f 100644
+--- a/src/flow-review-pack.js
++++ b/src/flow-review-pack.js
+@@ -89,13 +89,67 @@ export function parseFrozenPatchSummary(patchText) {
+ }
+ 
+ /**
+- * 装配材料包注入行（唯一组包入口）：FR 表与 patch 摘要两子源各自可得各自产出、全缺返回
+- * null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——语义行
+- * 恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
+- * requirements.md 读失败（缺件）→ FR 子段零产出（fail-soft 不抛穿）。
++ * 归属切分归一（fail-soft 入参）：非法/缺席 → null（调用方零注入该子段）；数组字段缺省按空。
++ * 文件路径统一正斜杠归一（Windows/WSL 混用兼容——评审对象路径口径与冻结件一致）。
++ */
++function normalizeAttribution(attribution) {
++  if (!attribution || typeof attribution !== 'object' || Array.isArray(attribution)) return null
++  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '')
++  const asList = (v) => (Array.isArray(v) ? v.map(norm).filter(Boolean) : [])
++  const foreign = Array.isArray(attribution.foreign)
++    ? attribution.foreign
++      .filter((f) => f && typeof f === 'object' && f.file)
++      .map((f) => ({ file: norm(f.file), owners: Array.isArray(f.owners) ? f.owners.map((o) => String(o)).filter(Boolean) : [] }))
++    : []
++  return { declaredIn: asList(attribution.declaredIn), declaredOut: asList(attribution.declaredOut), foreign }
++}
++
++/** 归属切分三段渲染（2026-10-19-thin-review-dispatch-verbatim）：零计数照常渲染（不静默隐藏）。 */
++function attributionLines(a) {
++  const join = (xs) => (xs.length > 0 ? xs.join('、') : '（无）')
++  const foreignLines = a.foreign.map((f) => `${f.file}←${f.owners.length > 0 ? f.owners.join('/') : '未知变更'}`)
++  return [
++    '  冻结面归属切分（CLI 机械核算——定位索引非证据）：',
++    `  - 声明内（design 变更清单 ∩ 冻结面，${a.declaredIn.length} 文件）：${join(a.declaredIn)}`,
++    `  - 声明外（冻结面−声明清单，${a.declaredOut.length} 文件——共享仓并行混入/生成物候选，抽查即可勿逐文件 git 考古）：${join(a.declaredOut)}`,
++    `  - 他侧归因（提交/声明归属其他变更，${a.foreign.length} 文件）：${join(foreignLines)}`,
++  ]
++}
++
++/**
++ * 归属切分集合运算（纯函数——flow done review 子步装配用）：声明内 = design 变更清单 ∩
++ * 冻结面（他侧归因文件除外，归属歧义按他侧披露处理）；声明外 = 冻结面 − 声明清单 − 他侧
++ * 归因；他侧归因原样归一化（owner 去重保序）。路径统一正斜杠 + 去 `./` 前缀 + 冻结面去重
++ * （Windows/WSL 混用与 patch 同文件多段兼容）。纯集合运算零 IO——git/解析失败由调用方
++ * fail-soft（源头失败 → 不调用本函数）。
++ * @param {{ declaredFiles?: string[], freezeFiles?: string[], foreign?: Array<{file: string, owners?: string[]}> }} args
++ * @returns {{ declaredIn: string[], declaredOut: string[], foreign: Array<{file: string, owners: string[]}> }}
++ */
++export function buildFreezeAttribution({ declaredFiles, freezeFiles, foreign }) {
++  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '')
++  const declared = new Set((Array.isArray(declaredFiles) ? declaredFiles : []).map(norm).filter(Boolean))
++  const frozen = [...new Set((Array.isArray(freezeFiles) ? freezeFiles : []).map(norm).filter(Boolean))]
++  const foreignList = (Array.isArray(foreign) ? foreign : [])
++    .filter((f) => f && typeof f === 'object' && f.file)
++    .map((f) => ({ file: norm(f.file), owners: [...new Set((Array.isArray(f.owners) ? f.owners : []).map(String).filter(Boolean))] }))
++  const foreignSet = new Set(foreignList.map((f) => f.file))
++  return {
++    declaredIn: frozen.filter((f) => declared.has(f) && !foreignSet.has(f)),
++    declaredOut: frozen.filter((f) => !declared.has(f) && !foreignSet.has(f)),
++    foreign: foreignList,
++  }
++}
++
++/**
++ * 装配材料包注入行（唯一组包入口）：FR 表、patch 摘要、归属切分三子源各自可得各自产出、
++ * 全缺返回 null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——
++ * 语义行恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
++ * requirements.md 读失败（缺件）→ FR 子段零产出；attribution 缺席/非法 → 归属子段零产出
++ * （fail-soft 不抛穿，其余子段不受影响）。
++ * @param {{ changeDir: string, patchText: string|null, attribution?: object|null }} args
+  * @returns {{ lines: string[], truncated: boolean } | null}
+  */
+-export function assembleReviewPack({ changeDir, patchText }) {
++export function assembleReviewPack({ changeDir, patchText, attribution = null }) {
+   let frRows = []
+   try {
+     frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
+@@ -111,6 +165,8 @@ export function assembleReviewPack({ changeDir, patchText }) {
+     body.push(`  冻结 patch 文件级摘要（change.patch 机械解析，${summary.length} 文件）：`)
+     for (const f of summary) body.push(`  - ${f.path}（+${f.plus}/-${f.minus}，${f.hunks} hunk）`)
+   }
++  const attr = normalizeAttribution(attribution)
++  if (attr) body.push(...attributionLines(attr))
+   const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
+   let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
+   const lines = [PACK_TITLE]
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 5feb5bb6..ceb56b37 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -266,6 +266,10 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+   const taskbook = [
+     `⚖️ 独立评审任务书 — ${change}`,
+     `══════════════════════════════════════`,
++    // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：对齐厚道先例（stage-review.js:803 /
++    // index.js:2576）——实测主会话派发时手写缩编 prompt 会把材料包整段丢掉（4 次派发零 pack）；
++    // 检查单/材料包生产权在 CLI，原样复制是纪律不是建议。无条件在场（非可选注入）。
++    `（派发纪律：本任务书原样复制给干净上下文子代理——检查单/材料包生产权在 CLI，勿自行改写、增删或缩编）`,
+     `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
+     ...(headFull ? [
+       `【评审对象】工作区实态 + git HEAD（${headFull}）——${freezeLabel}若落后于该 HEAD，以`,
+diff --git a/src/flow.js b/src/flow.js
+index fc2d0855..48fbaa00 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2359,7 +2359,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
+       let taskbookHead = null
+       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
+-      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
++      // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
++      // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
++      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
+       // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
+       // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
+       let _probeLines = null
+@@ -2372,10 +2374,28 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       // 预消化材料包装配（2026-10-19-thin-review-material-pack）：机械抽取 FR↔测试绑定表 +
+       // 冻结 patch 文件级摘要注入任务书——砍零上下文评审员的定位类读与大 patch 整吞 prefill；
+       // 摘要只从冻结件本身算（不走活 git，防与评审员手里冻结面漂移）；fail-soft 零注入。
++      // 归属切分（2026-10-19-thin-review-dispatch-verbatim）：三单源——design 变更清单
++      // （parseFileChangeListDetailed）、他侧归因（splitOwnVsForeignDiffFiles，与 patch 子步
++      // 同源）、冻结面文件集（材料包同源解析）——砍评审员逐文件 git 考古（实测 22 次调用）。
++      // 声明清单缺位/冻结面为空 → attribution=null（该子段零注入，FR 表/摘要不受影响）。
++      let _attribution = null
++      try {
++        const { parseFrozenPatchSummary, buildFreezeAttribution } = await import('./flow-review-pack.js')
++        const _freezeFiles = parseFrozenPatchSummary(patchText).map((f) => f.path)
++        if (_freezeFiles.length > 0) {
++          const { parseFileChangeListDetailed } = await import('./change-list.js')
++          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => e.path)
++          if (_declared.length > 0) {
++            const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
++            const _split = splitOwnVsForeignDiffFiles(cwd, change, _freezeFiles, { specBase })
++            _attribution = buildFreezeAttribution({ declaredFiles: _declared, freezeFiles: _freezeFiles, foreign: _split && _split.foreign })
++          }
++        }
++      } catch { /* 归属面 fail-soft：装配失败零注入该子段 */ }
+       let _packLines = null
+       try {
+         const { assembleReviewPack } = await import('./flow-review-pack.js')
+-        const _pack = assembleReviewPack({ changeDir, patchText })
++        const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution })
+         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
+       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
+       console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
+diff --git a/test/flow-review-pack.test.mjs b/test/flow-review-pack.test.mjs
+index 66a9d547..1cec2029 100644
+--- a/test/flow-review-pack.test.mjs
++++ b/test/flow-review-pack.test.mjs
+@@ -8,11 +8,11 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import {
+-  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, PACK_MAX_CHARS,
++  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, buildFreezeAttribution, PACK_MAX_CHARS,
+ } from '../src/flow-review-pack.js'
+ import { renderReviewerTaskbook } from '../src/flow-review.js'
+ 
+@@ -196,3 +196,69 @@ test('③ 注入/零注入：packLines 注入形态与位置、缺省/空数组
+     assert.equal(withPack.replace(NL + NL + pack.lines.join(NL), ''), base)
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++test('④ 派发纪律：任务书头部行在场 + flow.js 横幅句原样复制（FR-01）', () => {
++  const book = renderReviewerTaskbook({ change: 'c-x', changeDir: '/x/c-x' })
++  assert.match(book, /派发纪律：本任务书原样复制给干净上下文子代理——检查单\/材料包生产权在 CLI，勿自行改写、增删或缩编/)
++  const lines = book.split(String.fromCharCode(10))
++  const idxSep = lines.findIndex((l) => l.startsWith('══════'))
++  const idxRule = lines.findIndex((l) => l.includes('派发纪律'))
++  const idxRole = lines.findIndex((l) => l.startsWith('【角色】'))
++  assert.ok(idxSep > -1 && idxRule === idxSep + 1 && idxRole > idxRule, '纪律行位于分隔线后、角色前')
++  // 横幅句（静态源断言——flow done 打印通道）
++  const flowSrc = readFileSync(new URL('../src/flow.js', import.meta.url), 'utf8')
++  assert.ok(flowSrc.includes('任务书原样复制给子代理'), '横幅含原样复制指令')
++  assert.ok(!flowSrc.includes('起一个干净上下文的子代理执行后重跑本命令'), '旧横幅句已替换')
++})
++
++test('⑤ 归属切分：三分类注入形态 + 声明外抽查标注 + 他侧归因 owner（FR-02）', () => {
++  const { root, changeDir } = makePackDir(REQ_TEXT)
++  try {
++    const attribution = {
++      declaredIn: ['src/a.js', 'test/a.test.mjs'],
++      declaredOut: ['backend/app/core/config.py', 'backend/app/modules/translate/README.md'],
++      foreign: [{ file: 'src/foreign.js', owners: ['2026-10-19-other-change'] }],
++    }
++    const pack = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution })
++    const text = pack.lines.join(String.fromCharCode(10))
++    assert.ok(text.includes('冻结面归属切分'), '归属切分子段在场')
++    assert.ok(text.includes('声明内（design 变更清单 ∩ 冻结面，2 文件）：src/a.js、test/a.test.mjs'), '声明内行')
++    assert.ok(text.includes('声明外（冻结面−声明清单，2 文件——共享仓并行混入/生成物候选，抽查即可勿逐文件 git 考古）：backend/app/core/config.py、backend/app/modules/translate/README.md'), '声明外行含抽查标注')
++    assert.ok(text.includes('他侧归因（提交/声明归属其他变更，1 文件）：src/foreign.js←2026-10-19-other-change'), '他侧归因带 owner')
++    // 声明面完整：零计数不静默隐藏子段
++    const empty = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution: { declaredIn: [], declaredOut: [], foreign: [] } })
++    const et = empty.lines.join(String.fromCharCode(10))
++    assert.ok(et.includes('声明内（design 变更清单 ∩ 冻结面，0 文件）：（无）'), '零计数照常渲染')
++    assert.ok(et.includes('声明外（冻结面−声明清单，0 文件'), '声明外零计数照常渲染')
++    assert.ok(et.includes('他侧归因（提交/声明归属其他变更，0 文件）：（无）'), '他侧归因零计数照常渲染')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('⑥ fail-soft 与归属集合运算：缺席/非法零注入、FR 表与摘要不受影响；声明内外集合正确（FR-03）', () => {
++  const { root, changeDir } = makePackDir(REQ_TEXT)
++  try {
++    // 缺席/非法形态 → 归属子段零注入，其余子段不受影响
++    const noAttr = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
++    const t = noAttr.lines.join(String.fromCharCode(10))
++    assert.ok(!t.includes('冻结面归属切分'), '未传 attribution → 零注入')
++    assert.ok(t.includes('FR↔测试绑定表') && t.includes('冻结 patch 文件级摘要'), 'FR 表/摘要不受影响')
++    const bad = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution: 'oops' })
++    assert.ok(!bad.lines.join(String.fromCharCode(10)).includes('冻结面归属切分'), '非法形态 fail-soft 零注入')
++    // 集合运算：路径归一（反斜杠/./）+ 去重 + 他侧归因排除 + 声明外
++    const BS = String.fromCharCode(92)
++    const attr = buildFreezeAttribution({
++      declaredFiles: [`src${BS}a.js`, './test/a.test.mjs', 'src/not-frozen.js'],
++      freezeFiles: ['src/a.js', `src${BS}a.js`, 'test/a.test.mjs', 'src/b.js', 'src/foreign.js'],
++      foreign: [{ file: 'src/foreign.js', owners: ['2026-10-19-other'] }],
++    })
++    assert.deepEqual(attr.declaredIn, ['src/a.js', 'test/a.test.mjs'], '声明内（去重+归一）')
++    assert.deepEqual(attr.declaredOut, ['src/b.js'], '声明外（排除他侧归因）')
++    assert.deepEqual(attr.foreign, [{ file: 'src/foreign.js', owners: ['2026-10-19-other'] }], '他侧归因原样')
++    // 帽不变：大 patch + 大归属列表仍 ≤ 12000 且截断注记在场
++    const many = Array.from({ length: 400 }, (_, i) => `src/f${i}.js`)
++    const bigPatch = many.map((f) => `diff --git a/${f} b/${f}${String.fromCharCode(10)}@@ -1 +1 @@${String.fromCharCode(10)}-a${String.fromCharCode(10)}+b`).join(String.fromCharCode(10))
++    const big = assembleReviewPack({ changeDir, patchText: bigPatch, attribution: { declaredIn: many, declaredOut: many, foreign: [] } })
++    assert.ok(big.lines.join(String.fromCharCode(10)).length <= PACK_MAX_CHARS, '帽内')
++    assert.equal(big.truncated, true, '超限截断')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})

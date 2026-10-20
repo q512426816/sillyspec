@@ -10560,3 +10560,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-19-freeze-filter-tool-scaffold
   status: active
+
+## FR-cli-entry-558 任务书头部与派发横幅含「原样复制给子代理——检查单生产权在 CLI，勿自行改写增删」指令（对齐厚道措辞）
+变更：2026-10-19-thin-review-dispatch-verbatim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-dispatch-verbatim/requirements.md#FR-01
+最近确认：324e09669383e34f8a66581a230ae7bba97dae08
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-01
+  tests: test/flow-review-pack.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-dispatch-verbatim
+  status: active
+
+## FR-cli-entry-559 材料包在冻结面可得时含归属切分段：声明内（design 清单∩冻结面）/声明外（冻结面−design 清单）/他侧归因（splitOwnVsForeignDiffFiles 单源），声明外标注「并行混入候选，抽查即可勿逐文件考古」
+变更：2026-10-19-thin-review-dispatch-verbatim
+状态：active
+摘要：平台仓混入形态（实测样本）；声明面完整
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-dispatch-verbatim/requirements.md#FR-02
+最近确认：324e09669383e34f8a66581a230ae7bba97dae08
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-02
+  tests: test/flow-review-pack.test.mjs「归属切分——三分类注入形态 + 声明外『抽查即可』标注 + 他侧归因带 owner」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-dispatch-verbatim
+  status: active
+
+## FR-cli-entry-560 归属核算 fail-soft（git 失败/缺件零注入该子段，FR 表与文件摘要不受影响）；整体体积帽 12000 不变
+变更：2026-10-19-thin-review-dispatch-verbatim
+状态：active
+摘要：git 不可用
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-dispatch-verbatim/requirements.md#FR-03
+最近确认：324e09669383e34f8a66581a230ae7bba97dae08
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-03
+  tests: test/flow-review-pack.test.mjs「fail-soft——归属源失败零注入子段、FR 表与摘要不受影响；体积帽 12000 不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-dispatch-verbatim
+  status: active
+
+## FR-cli-entry-561 新增测试覆盖指令在场/归属切分注入/fail-soft 零注入/他侧归因形态；既有 flow-review 回归全绿
+变更：2026-10-19-thin-review-dispatch-verbatim
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-19-thin-review-dispatch-verbatim/requirements.md#FR-04
+最近确认：324e09669383e34f8a66581a230ae7bba97dae08
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-19-thin-review-dispatch-verbatim:flow:测试绑定FR-04
+  tests: test/flow-review-pack.test.mjs | test/flow-review.test.mjs | test/review-probes.test.mjs | test/tick-evidence-multi-anchor.test.mjs | test/wave-auto-adopt.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-19-thin-review-dispatch-verbatim
+  status: active

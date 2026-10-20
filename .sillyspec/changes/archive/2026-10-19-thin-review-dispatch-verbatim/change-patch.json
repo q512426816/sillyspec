@@ -1,0 +1,95 @@
+{
+  "change": "2026-10-19-thin-review-dispatch-verbatim",
+  "baseline": "045fa7bf4220317cef0c61558afa42649b3d323d",
+  "head": "324e09669383e34f8a66581a230ae7bba97dae08",
+  "files": [
+    "src/flow-review-pack.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "test/flow-review-pack.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 155,
+    "deletions": 9
+  },
+  "savedAt": "2026-10-20T00:54:36.316Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "045fa7bf4220317cef0c61558afa42649b3d323d",
+    "totals": {
+      "files": 4,
+      "additions": 155,
+      "deletions": 9
+    },
+    "rows": [
+      {
+        "path": "src/flow-review-pack.js",
+        "additions": 61,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 22,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-review-pack.test.mjs",
+        "additions": 68,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1af9454326a4f2c2a23dd15d209a1287acb53799c073e61c98b6150d11ffb6f6",
+  "patchStatus": "ok"
+}
