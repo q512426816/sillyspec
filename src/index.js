@@ -410,6 +410,16 @@ async function main() {
       console.warn(`   如确需以本 worktree 作独立实例跑（整行照贴）：`);
       console.warn(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
       dir = wtInfo.mainRepoRoot;
+      // 评审 P2 清偿：显式 --spec-dir 指进同一 worktree（无逃生 flag）时一并锚定——否则警告
+      // 「已锚定主仓根」半真，写入仍可落 worktree 副本 .sillyspec（旧硬拦对该组合是全拦的，
+      // 锚定语义必须覆盖同款面）；刻意独立实例跑走 --allow-worktree-cwd（跳过整个守卫）。
+      if (specDir) {
+        const sdInfo = detectCwdInsideWorktree(specDir);
+        if (sdInfo && sdInfo.worktreeRoot === wtInfo.worktreeRoot) {
+          console.warn(`   ⚠️ --spec-dir 指向同一 worktree（${specDir}）——已一并锚定主仓 spec 根。`);
+          specDir = join(wtInfo.mainRepoRoot, '.sillyspec');
+        }
+      }
     }
   }
 

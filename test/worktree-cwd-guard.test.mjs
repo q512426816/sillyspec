@@ -74,11 +74,31 @@ describe('CLI 入口 worktree cwd 锚定（e2e）', () => {
   })
 
   it('主仓未 init 极端态 → 锚定后走既有未初始化口径（守卫不新增失败面）', () => {
-    // mainRepo 无 .sillyspec（worktree 目录是裸造的）——status 为查询类豁免命令，按主仓未初始化口径输出
+    // 评审 P3② 核实：worktree 段路径结构蕴含主仓 .sillyspec 祖先在场——真实「主仓未 init」
+    // 不可构造，本例退化为与首例同态（守卫对该形态零新增失败面的回归钉，FR-03 防御性注记）。
     const res = runCli(wtRoot, ['status'])
     const combined = (res.stdout || '') + (res.stderr || '')
     assert.notEqual(res.status, 2)
     assert.ok(combined.includes('已自动锚定主仓根'), '锚定警告照常')
+  })
+
+  it('--dir 显式指进 worktree → 同样锚定主仓（评审 P3① 补正例）', () => {
+    mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
+    writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), '# anchor-test\n', 'utf8')
+    const res = runCli(mainRepo, ['status', '--dir', wtRoot])
+    const combined = (res.stdout || '') + (res.stderr || '')
+    assert.notEqual(res.status, 2, `--dir 进 worktree 不再 exit 2，实际 ${res.status}\n${combined}`)
+    assert.ok(combined.includes('已自动锚定主仓根') && combined.includes('demo-change'), '锚定警告含变更名')
+  })
+
+  it('--spec-dir 指进同一 worktree（无逃生 flag）→ 一并锚定主仓 spec 根（评审 P2 清偿）', () => {
+    mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
+    writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), '# anchor-test\n', 'utf8')
+    const wtSpec = join(wtRoot, '.sillyspec')
+    const res = runCli(wtRoot, ['status', '--spec-dir', wtSpec])
+    const combined = (res.stdout || '') + (res.stderr || '')
+    assert.notEqual(res.status, 2)
+    assert.ok(combined.includes('已一并锚定主仓 spec 根'), `specDir 锚定警告可见（实际：${combined.slice(-200)}）`)
   })
 
   it('逃生门 --allow-worktree-cwd → 零警告零锚定（行为与守卫无关）', () => {
