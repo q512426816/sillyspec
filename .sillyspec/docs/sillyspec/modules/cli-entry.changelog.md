@@ -76,3 +76,4 @@
 | 2026-10-20 | 2026-10-19-thin-review-dispatch-verbatim | 轻量评审任务书派发原样复制与归属切分 |
 | 2026-10-20 | 2026-10-20-thin-user-decision-record | 轻量道执行期用户决策当场落盘提示 |
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
+| 2026-10-20 | 2026-10-20-distill-abnormal-upgrade-fix | 修复蒸馏异态升厚触发器死代码 |

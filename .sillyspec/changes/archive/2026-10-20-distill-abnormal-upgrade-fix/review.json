@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-distill-abnormal-upgrade-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d163bb94859ba54c2dfe0daa6f07a255d06ac7e1",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试文件头注的契约公式与实现式不完全一致（行为等价，仅注释措辞）",
+      "evidence": "头注写 isDistillAbnormal(res) = Boolean(res && res.needsWait)，实际实现为 Boolean(res && typeof res.needsWait === 'string' && res.needsWait.length > 0)；在返回值契约域（needsWait: string|null）内两者行为等价，实现式对非字符串真值更严格且符合 FR-01「非空字符串」措辞，仅注释未同步精确式。",
+      "location": "test/distill-abnormal-upgrade.test.mjs:9"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T03:12:19Z"
+}

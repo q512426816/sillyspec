@@ -31,3 +31,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
 | 2026-10-20 | 2026-10-20-decision-caliber-unify | 决策类型状态口径单一源统一 |
+| 2026-10-20 | 2026-10-20-distill-abnormal-upgrade-fix | 修复蒸馏异态升厚触发器死代码 |

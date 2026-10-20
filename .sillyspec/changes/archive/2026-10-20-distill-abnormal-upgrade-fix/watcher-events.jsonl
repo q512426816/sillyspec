@@ -1,0 +1,25 @@
+{"ts":1792465117561,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1792465117561,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1792465117561,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792465184583,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792465227735,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792465253471,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792465356356,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792465356399,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792465356399,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792465356399,"kind":"commit","stage":null,"detail":"5223e7b9","provisional":true}
+{"ts":1792465403019,"kind":"commit","stage":null,"detail":"25d46005","provisional":true}
+{"ts":1792465472773,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792465472585,"kind":"commit","stage":null,"detail":"f9968c2a","provisional":true}
+{"ts":1792465472828,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/archive/2026-09-22-thin-fr-distill-sync/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792465476315,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792465476315,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792465533450,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792465535705,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792465535705,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792465535705,"kind":"commit","stage":null,"detail":"02256f49","provisional":true}
+{"ts":1792465536018,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-distill-abnormal-upgrade-fix/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792465546282,"kind":"commit","stage":null,"detail":"d163bb94","provisional":true}
+{"ts":1792465546507,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-distill-abnormal-upgrade-fix/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792465553543,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-distill-abnormal-upgrade-fix/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792465639014,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（75.3s） · 20261020030718","provisional":true}

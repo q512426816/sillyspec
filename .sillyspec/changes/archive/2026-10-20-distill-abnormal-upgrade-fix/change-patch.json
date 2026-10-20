@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-20-distill-abnormal-upgrade-fix",
+  "baseline": "18f295bb42644119d2641b03b2c3f2b505aa1f04",
+  "head": "d163bb94859ba54c2dfe0daa6f07a255d06ac7e1",
+  "files": [
+    "src/decision-distill.js",
+    "src/flow.js",
+    "test/distill-abnormal-upgrade.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 114,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-20T03:08:16.863Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "18f295bb42644119d2641b03b2c3f2b505aa1f04",
+    "totals": {
+      "files": 3,
+      "additions": 114,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": "src/decision-distill.js",
+        "additions": 12,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/distill-abnormal-upgrade.test.mjs",
+        "additions": 97,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "968469fc7fc20cf23a4663f7f38b6feb96c469cad7a593b83f70dffb5fd54c9f",
+  "patchStatus": "ok"
+}

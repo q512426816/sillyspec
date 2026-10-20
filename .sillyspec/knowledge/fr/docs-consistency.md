@@ -1684,3 +1684,87 @@ created_at: 2026-09-28T17:07:05.883Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-15-decision-anchor-backfill/requirements.md#FR-04
 最近确认：2d8d863e368470f4c81b5502763a84de31741701
+
+## FR-docs-consistency-078 distillIntoKnowledge 返回 needsWait 非空字符串时，flow done distill 子步必须真实升厚（flow-state tier=thick 落盘、upgrade_reason 留痕）
+变更：2026-10-20-distill-abnormal-upgrade-fix
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given decisions.md 含 rejected 条目缺否决理由（distill 返回 needsWait 非空）；When 升厚判定执行；Then 判定为真：tier=thick 落盘 + upgrade_reason 留痕
+全文：.sillyspec/changes/archive/2026-10-20-distill-abnormal-upgrade-fix/requirements.md#FR-01
+最近确认：d163bb94859ba54c2dfe0daa6f07a255d06ac7e1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-01
+  tests: test/distill-abnormal-upgrade.test.mjs「① needsWait 非空判真」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-distill-abnormal-upgrade-fix
+  status: active
+
+## FR-docs-consistency-079 needsWait 为 null（正常路径）时升厚判定必须恒不触发，既有行为零回归
+变更：2026-10-20-distill-abnormal-upgrade-fix
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 正常蒸馏（needsWait=null，含 skipped 零输出形态）；When 升厚判定执行；Then 判定为假，tier 不变
+全文：.sillyspec/changes/archive/2026-10-20-distill-abnormal-upgrade-fix/requirements.md#FR-02
+最近确认：d163bb94859ba54c2dfe0daa6f07a255d06ac7e1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-02
+  tests: test/distill-abnormal-upgrade.test.mjs「② 正常路径判假零副作用」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-distill-abnormal-upgrade-fix
+  status: active
+
+## FR-docs-consistency-080 升厚判定必须不再引用蒸馏返回值不存在的字段（rejected 幽灵引用清除）
+变更：2026-10-20-distill-abnormal-upgrade-fix
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given src/flow.js distill 子步；When 检查升厚判定调用；Then flow.js 调用导出纯函数，内联幽灵表达式不在场
+全文：.sillyspec/changes/archive/2026-10-20-distill-abnormal-upgrade-fix/requirements.md#FR-03
+最近确认：d163bb94859ba54c2dfe0daa6f07a255d06ac7e1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-03
+  tests: test/distill-abnormal-upgrade.test.mjs「③ 幽灵引用清除与调用点钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-distill-abnormal-upgrade-fix
+  status: active
+
+## FR-docs-consistency-081 判定逻辑有测试覆盖；既有 distill 相关套件零回归
+变更：2026-10-20-distill-abnormal-upgrade-fix
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更交付完成；When node --test 跑新套件与两既有套件；Then 全部 pass、零 fail
+全文：.sillyspec/changes/archive/2026-10-20-distill-abnormal-upgrade-fix/requirements.md#FR-04
+最近确认：d163bb94859ba54c2dfe0daa6f07a255d06ac7e1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-04
+  tests: test/distill-abnormal-upgrade.test.mjs「④ 既有套件零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-distill-abnormal-upgrade-fix
+  status: active

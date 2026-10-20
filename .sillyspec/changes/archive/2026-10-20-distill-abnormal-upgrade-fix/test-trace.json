@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-distill-abnormal-upgrade-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/distill-abnormal-upgrade.test.mjs「① needsWait 非空判真」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-distill-abnormal-upgrade-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/distill-abnormal-upgrade.test.mjs「② 正常路径判假零副作用」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-distill-abnormal-upgrade-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/distill-abnormal-upgrade.test.mjs「③ 幽灵引用清除与调用点钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-distill-abnormal-upgrade-fix"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-20-distill-abnormal-upgrade-fix:flow:测试绑定FR-04",
+      "tests": [
+        "test/distill-abnormal-upgrade.test.mjs「④ 既有套件零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-distill-abnormal-upgrade-fix"
+    }
+  ]
+}
