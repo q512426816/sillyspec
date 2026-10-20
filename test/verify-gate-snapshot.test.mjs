@@ -101,10 +101,44 @@ test('in-place meta：overlay 源退主仓；他者显式声明的文件剔除�
   try {
     assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 本变更 in-place\n',
       '本变更 working-tree 文件进快照')
-    assert.ok(!existsSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js')),
-      '他者显式声明的文件剔除（归属可判——多会话并发的主场景）')
+    // 2026-10-20-gate-snapshot-carried-deps 改钉（坑缺陷二）：他者声明文件从「物理剔除」改
+    // 「判定面剔除 + 物理携带」——快照依赖自洽（本变更文件 import 他者新增导出不再 TypeError）。
+    assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js')),
+      '他者显式声明的文件物理携带进快照（判定面剔除、归属语义不变——carriedFiles 可观察）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js'), 'utf8'), 'const x = 1\n',
+      '携带内容=overlayRoot（主仓工作区）版本')
+    assert.ok(snap.carriedFiles && snap.carriedFiles.includes('src/declared-foreign.js'),
+      '返回值 carriedFiles 含该文件（判定/归因面剔除的可观察锚）')
     assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'ownerless-wip.js')),
       '无主文件保留（fail-closed：无法排除是本变更自己的未声明改动）')
+  } finally { snap.cleanup() }
+})
+
+test('坑缺陷二主场景（worktree）：本变更依赖他者声明文件的新导出 → 快照携带自洽', async () => {
+  const proj = mk('vgs-dep-')
+  const { specBase, wtDir } = setupBase(proj, 'native')
+  // 他者活跃变更（quick）显式声明 src/util.js（design 文件变更清单口径），其内容在主仓在途
+  // （filterStaleForeignDeclarations 活性判据：无 worktree 的他者变更看主仓未提交集）——
+  // worktree 建立时 baseline 携带把该文件带入 worktree（生产形态）。
+  const quickDir = join(specBase, 'changes', 'quick-x')
+  mkdirSync(quickDir, { recursive: true })
+  writeFileSync(join(quickDir, 'design.md'), '# D\n\n## 文件变更清单\n\n| 文件 | 操作 |\n|------|------|\n| src/util.js | 修改 |\n')
+  writeFileSync(join(proj, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p } // quick 在途\n')
+  // 坑文形态：本变更 feature.js import quick 的新导出——HEAD 旧版无此导出，
+  // 原快照（util.js 被剔且物理不进）必 TypeError 假红
+  writeFileSync(join(wtDir, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p } // worktree 携带版\n')
+  writeFileSync(join(wtDir, 'src', 'feature.js'), 'export { stripPathPrefix } from \'./util.js\'\nexport const f = 2 // 本变更交付\n')
+
+  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
+  assert.ok(snap, '快照创建成功')
+  try {
+    assert.ok(snap.carriedFiles && snap.carriedFiles.includes('src/util.js'),
+      '他者声明的 util.js 进携带面（判定面剔除）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'util.js'), 'utf8'), 'export function stripPathPrefix(p) { return p } // worktree 携带版\n',
+      '快照内 util.js=worktree 新版——import 依赖自洽（缺陷二 TypeError 场景消除）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'),
+      'export { stripPathPrefix } from \'./util.js\'\nexport const f = 2 // 本变更交付\n',
+      '本变更文件照常 overlay（worktree 版）')
   } finally { snap.cleanup() }
 })
 

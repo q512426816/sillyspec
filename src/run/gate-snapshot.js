@@ -494,7 +494,7 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
+export function createGateSnapshot({ cwd, files, carriedFiles = [], sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
   // failRef 可选出参（坑 snapshot-fallback-reason-blind，2026-10-16 下游实证）：所有失败分支
   // 把结构化原因写进 failRef.reason——调用方（verify --done 实测门 / noAI 质量扫描）消费它
   // 替换硬编码笼统文案，降级原因可直读（pnpm 布局拒建 ≠ 文件集为空 ≠ junction 失败）。
@@ -543,7 +543,6 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // 是共享运行时面：.runtime/（sqlite 锁/在途 marker）与 quicklog/（跨会话共享账本）；
     // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
     const overlayRoot = sourceRoot || cwd
-    let overlaid = 0
     // 双写一致性（2026-09-20 红线机检变更实证：主 agent 在主仓直写而 execute 已建 worktree 时，
     // overlay 源=worktree 拿陈旧内容盖掉快照 HEAD 的新版——快照内 import 找不到新导出→门禁假红）。
     // 祖先判据（fr-index-l2 二次实证升级）：基线优先取 merge-base 的每文件祖先内容
@@ -568,9 +567,12 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
       }
       try { return cmpText(readFileSync(join(snapshotRoot, rel))) } catch { return null }
     }
-    for (const f of files) {
+    // 单文件 overlay（判定面 files 与携带面 carriedFiles 共用，2026-10-20-gate-snapshot-
+    // carried-deps 提取）：源=overlayRoot；worktree 模式经三态判定（陈旧取主仓/正常取
+    // worktree/分叉取 worktree 血统 M2）；源侧不存在返回 false（已删/不在场不拷）。
+    const overlayOne = (f) => {
       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
-      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
+      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) return false
       let src = join(overlayRoot, f)
       if (sourceRoot && sourceRoot !== cwd) {
         const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
@@ -595,11 +597,26 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
           }
         }
       }
-      if (!existsSync(src)) continue
+      if (!existsSync(src)) return false
       const dst = join(snapshotRoot, f)
       mkdirSync(dirname(dst), { recursive: true })
       copyFileSync(src, dst)
-      overlaid++
+      return true
+    }
+    let overlaid = 0
+    for (const f of files) { if (overlayOne(f)) overlaid++ }
+
+    // 携带面 overlay（2026-10-20-gate-snapshot-carried-deps，坑 verify-gate-…-three-defects
+    // 缺陷二）：他者声明文件从判定面剔除但物理携带进快照——快照复现本变更实测时真实的依赖
+    // 环境（worktree 模式≈worktree 自洽态；in-place≈主仓混合树）。坑文场景：本变更文件 import
+    // 他者未提交导出（quick 的 stripPathPrefix）→ 原快照装 HEAD 旧版必 TypeError 假红，携带后
+    // 自洽。判定面（files/overlaid）不含携带件——归属语义不变，假红可经控制台清单归因到他者。
+    const carriedList = []
+    if (Array.isArray(carriedFiles) && carriedFiles.length > 0) {
+      for (const f of carriedFiles) {
+        if (files.includes(f)) continue // 判定面已含（own 声明优先级高于他者）——不重复拷
+        if (overlayOne(f)) carriedList.push(f)
+      }
     }
 
     // 环境目录链接（坑 gate-snapshot-env-mismatch，2026-09-12 驾驭第十三批③，用户实证：
@@ -706,7 +723,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // HEAD 健版保证 import 图闭合。新增文件（HEAD 无版）无法回退 → 醒目 warn 保留。
     // 全链 fail-open：找不到解释器/基建异常只 warn 不作废快照（主场景是 Python 项目，
     // JS/TS 的 vitest load 冒烟成本高留后续）。
-    const overlaidPyFiles = files.filter(f => typeof f === 'string' && f.endsWith('.py')
+    const overlaidPyFiles = [...files, ...carriedList].filter(f => typeof f === 'string' && f.endsWith('.py')
       && !f.startsWith('.sillyspec/')
       && existsSync(join(snapshotRoot, f)))
     if (overlaidPyFiles.length > 0 && !skipImportSmoke) {
@@ -727,7 +744,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
         if (dirRemoved && worktreeCleaned) unregisterGateSnapshot({ runtimeRoot, snapshotRoot })
       } catch { /* 双失败已由 cleanupSnapshot 吞掉；条目保留 */ }
     }
-    return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
+    return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks, carriedFiles: carriedList, carried: carriedList.length }
   } catch (e) {
     // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓；销账同走双清确认
     // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）。
@@ -905,11 +922,15 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
     }
     // 他者声明归属过滤（坑 verify-reconcile-foreign-wip 同款）：in-place 模式 working-tree
     // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
-    // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
+    // 清单）从**判定面**剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
+    // 2026-10-20-gate-snapshot-carried-deps（坑 verify-gate-…-three-defects 缺陷二）：被剔
+    // 文件改以「携带面」物理进快照（carriedFiles）——快照依赖自洽，判定/归属语义不变。
+    let carriedForeignFiles = []
     try {
       const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, changeFiles, { specBase, runtimeRoot: verifyRuntimeRoot })
       if (foreign.length > 0) {
         const foreignSet = new Set(foreign.map(x => x.file))
+        carriedForeignFiles = changeFiles.filter(f => foreignSet.has(f))
         changeFiles = changeFiles.filter(f => !foreignSet.has(f))
         if (changeFiles.length === 0) {
           setFail(`变更文件集为空（${foreign.length} 个 diff 文件全部被他者声明过滤——并行会话声明面覆盖了本变更全部在途文件）`)
@@ -943,11 +964,15 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
       }
     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
 
-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
+    const snap = createGateSnapshot({ cwd, files: changeFiles, carriedFiles: carriedForeignFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
     if (!snap) {
       // createGateSnapshot 已把具体原因写进同一 failRef；无 reason（旧形态兜底）补笼统口径
       if (failRef && typeof failRef === 'object' && !failRef.reason) setFail('快照基建不可用（createGateSnapshot 返回 null，无更细原因）')
       return null
+    }
+    if (snap.carriedFiles && snap.carriedFiles.length > 0) {
+      const preview = snap.carriedFiles.slice(0, 5).join('、')
+      console.log(`📦 快照携带 ${snap.carriedFiles.length} 个他者声明文件（依赖自洽面，不进判定/归因面；假红先核对他者变更）${snap.carriedFiles.length > 5 ? `：${preview} 等` : `：${preview}`}`)
     }
 
     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
