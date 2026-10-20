@@ -1,0 +1,29 @@
+{"ts":1792461987671,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792461997847,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792462001298,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792462011501,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/config-cat.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792462057573,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/gate-derive-spec-drift.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792462139900,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/lint-ownership-failfast.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792462267827,"kind":"commit","stage":null,"detail":"6edf58cc","provisional":true}
+{"ts":1792462273666,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792462274589,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792462274589,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792462327622,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1792462331134,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1792462337829,"kind":"commit","stage":null,"detail":"ef648aa7","provisional":true}
+{"ts":1792462342831,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792462344588,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792462344588,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792462348247,"kind":"commit","stage":null,"detail":"e87da537","provisional":true}
+{"ts":1792462351630,"kind":"commit","stage":null,"detail":"d55c18a8","provisional":true}
+{"ts":1792462361894,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792462364850,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792462364850,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792462413770,"kind":"commit","stage":null,"detail":"5ba58099","provisional":true}
+{"ts":1792462426777,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792462428317,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792462428317,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1792462428317,"kind":"commit","stage":null,"detail":"10eddc93","provisional":true}
+{"ts":1792462524048,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（70.1s） · 20261020021521","provisional":true}
+{"ts":1792462612636,"kind":"commit","stage":null,"detail":"93533f6d","provisional":true}
+{"ts":1792462626246,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-thin-user-decision-record/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

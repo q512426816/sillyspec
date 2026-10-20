@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-thin-user-decision-record",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design 称 tick 提示为「try/catch 静默降级」，实现无 try/catch（机制描述字面不符，行为等价）",
+      "evidence": "task-tick.js:209-214 新提示块是裸 if(!existsSync)+console.log，未包裹 try/catch；静默降级实际由 existsSync 不抛异常的 Node 语义保证（读失败返回 false→不提示），与 FR-03「读取失败静默降级为不提示」行为承诺一致，仅 design.md 做法概述里「try/catch 静默降级」的机制措辞与代码不符，无行为差异。",
+      "location": "src/task-tick.js:212"
+    },
+    {
+      "severity": "P3",
+      "title": "横幅/tick 文案样例硬编码 --id D-001，同 id 照抄会追加多版本而非独立新条目（无覆盖丢失）",
+      "evidence": "flow.js:1157 与 task-tick.js:213 样例固定 --id D-001；变更已有 D-001@v1 时照抄会经 index.js:4710-4712 自动升 v2，decisions-io.js:73-76 按同 id@v 匹配不到而追加（action:'appended'），不覆盖既有条目——最坏是同 id 多版本歧义而非数据丢失；且 tick 提示仅在 decisions.md 缺席时出现（首条 D-001 必安全），残余暴露面只在横幅场景的后续照抄，属文案样例固有局限。",
+      "location": "src/flow.js:1157"
+    },
+    {
+      "severity": "P3",
+      "title": "检查单逐条与项目探针结论（无 P1/P2，正文承载）",
+      "evidence": "①FR↔实现↔测试三方一致：FR-01=flow.js:1157 横幅行含命令样例+承诺面同步提示且位于任务面块（1156）与三断点纪律（1159）之间、重入走 printRecoveryBriefing（flow.js:852）不注入；FR-02=flow.js:1166-1167「② 执行断点」与既有句「等用户确认再跑收口」逐字保留仅追加对账半句；FR-03=task-tick.js:212-214 existsSync gating、advisory 位于 return r 前不触 exit code、在场分支零输出；FR-04=测试④内嵌四套件复跑；绑定行四用例名与实际用例一一对应；本评审亲跑 node --test thin-user-decision-record 4/4 绿。②盲维四问与代码相符：乱序（只依赖即时盘面/静态行）、并发（三触点 existsSync 只读零写盘，写入走既有 upsertDecision writeAtomicSync）、切换（重入走恢复简报、tick 无状态即时判定）、作用域（join(changesRoot, changeName, 'decisions.md') 只读本变更目录）。③披露边界逐条裁决：提示噪音自限=可接受（存在即消失）；advisory 不改 exit code=可接受（代码锚点实证）；恢复简报不注入=可接受（恢复面读盘形态一致）；放弃收口硬门=可接受（缺席合法且漏记不可检测，假门禁不做）。④防护声明真实：存在性即时读盘/在场零新增行/exit code 不变均实证存在生效，try/catch 静默见 P3-1。⑤生成物同步：无类型/契约文件变更，n/a。探针：cli-copy-selfsufficient=横幅与 tick 命令样例 decisions add --change <名> --id D-001 --title 与 index.js:4683/4703/4704 实际用法一致（--change assertSafeChangeName、--id /^D-\\d+$/、--title 必填），且 decisions.md 缺席时 upsertDecision 懒创建（decisions-io.js:62-65）——提示命令在提示触发场景可执行成功，文案自洽；文案与门判定一致=提示条件（decisions.md 不存在）与 existsSync 分支严格一致；config-absent-zero-regression=属实（diff 零 local.yaml 键消费）；crossrepo-path-compat=n/a（不触及 worktree/跨仓）。",
+      "location": "src/flow.js:1157"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T02:19:30Z"
+}

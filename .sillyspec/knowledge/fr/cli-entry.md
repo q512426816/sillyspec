@@ -10636,3 +10636,87 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-19-thin-review-dispatch-verbatim
   status: active
+
+## FR-cli-entry-562 flow start 横幅含执行期用户决策落盘纪律行（含 decisions add 命令样例与承诺面同步提示）
+变更：2026-10-20-thin-user-decision-record
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 一个全新轻量变更执行 `flow start`；When 横幅渲染完成；Then stdout 含 /decisions add/ 与 /承诺面|design\/tasks/ 的纪律行，且恢复重入时简报不含该行
+全文：.sillyspec/changes/archive/2026-10-20-thin-user-decision-record/requirements.md#FR-01
+最近确认：93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-thin-user-decision-record:flow:测试绑定FR-01
+  tests: test/thin-user-decision-record.test.mjs「① 横幅纪律行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-thin-user-decision-record
+  status: active
+
+## FR-cli-entry-563 断点②行含汇报对账半句（执行期用户决策随汇报对账，无则说明无）
+变更：2026-10-20-thin-user-decision-record
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 全新轻量变更 flow start 横幅；When 三断点纪律段渲染；Then 断点②行可匹配 /执行断点/ 且含 /对账|decisions/ 的对账半句
+全文：.sillyspec/changes/archive/2026-10-20-thin-user-decision-record/requirements.md#FR-02
+最近确认：93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-thin-user-decision-record:flow:测试绑定FR-02
+  tests: test/thin-user-decision-record.test.mjs「② 断点②对账半句」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-thin-user-decision-record
+  status: active
+
+## FR-cli-entry-564 task tick 回显在 decisions.md 缺席时附落盘提示行，decisions.md 在场时零新增行（条件 gating，纯提示不阻断不改 exit code）
+变更：2026-10-20-thin-user-decision-record
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 在途轻量变更且无 decisions.md；When `task tick` 成功翻格 同变更创建 decisions.md 后再 tick；Then stdout 含 /decisions add/ 提示行且 exit 0 stdout 不含该提示行且既有回显不变
+全文：.sillyspec/changes/archive/2026-10-20-thin-user-decision-record/requirements.md#FR-03
+最近确认：93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-thin-user-decision-record:flow:测试绑定FR-03
+  tests: test/thin-user-decision-record.test.mjs「③ tick 条件提示」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-thin-user-decision-record
+  status: active
+
+## FR-cli-entry-565 新增测试套件覆盖以上三面且全绿；既有 approve-gate-tick / task-tick / flow-checkpoints / flow-order-canon 套件零回归
+变更：2026-10-20-thin-user-decision-record
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更交付完成；When `node --test` 跑新套件与四既有套件；Then 全部 pass、零 fail
+全文：.sillyspec/changes/archive/2026-10-20-thin-user-decision-record/requirements.md#FR-04
+最近确认：93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-thin-user-decision-record:flow:测试绑定FR-04
+  tests: test/thin-user-decision-record.test.mjs「④ 既有套件零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-thin-user-decision-record
+  status: active

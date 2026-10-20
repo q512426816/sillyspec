@@ -74,3 +74,4 @@
 | 2026-10-19 | 2026-10-19-freeze-filter-tool-scaffold | 冻结面剔除工具治理模板 |
 | 2026-10-19 | 2026-10-19-cross-repo-face-tool-filter | 跨仓冻结面剔模板与脱敏 |
 | 2026-10-20 | 2026-10-19-thin-review-dispatch-verbatim | 轻量评审任务书派发原样复制与归属切分 |
+| 2026-10-20 | 2026-10-20-thin-user-decision-record | 轻量道执行期用户决策当场落盘提示 |

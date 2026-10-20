@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-20-thin-user-decision-record",
+  "baseline": "94383393f69ce1f2c0ee03485eb4c129190a6e60",
+  "head": "93533f6d70f1c0af1315ddfb5b6e6fe7527ac07f",
+  "files": [
+    "src/flow.js",
+    "src/task-tick.js",
+    "test/thin-user-decision-record.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 101,
+    "deletions": 1
+  },
+  "savedAt": "2026-10-20T02:17:03.513Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "94383393f69ce1f2c0ee03485eb4c129190a6e60",
+    "totals": {
+      "files": 3,
+      "additions": 101,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/thin-user-decision-record.test.mjs",
+        "additions": 93,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6caebed9b48351a6299b9ba19936006265629942b162ef7859731e5b7a2ab924",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,137 @@
+diff --git a/src/flow.js b/src/flow.js
+index 48fbaa00..7f0e696c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1154,6 +1154,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
+     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
+     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
++    `💡 执行期用户插入决策方向（有实现影响、约束后续变更的取舍/否决/定调）→ 当场 sillyspec decisions add --change ${change} --id D-001 --title "…" 落盘（只留会话=收口档案不可见、跨变更复潮无防）；改变承诺面的同步 design/tasks 对应节。`,
+     ``,
+     `🛑 三断点纪律（顺序纪律：①未过不动码；②③为汇报点——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -1163,7 +1164,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `      方案错了返工最贵；批准是动码前置义务（未批准且未声明 --autopilot 时 flow done 亦拒收——2026-10-04-thin-docs-v2）；`,
+     `      用户否掉方案 → flow reject --change ${change} --reason <理由>（拒后批准须显式通道再确认）。`,
+     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
+-    `      等用户确认再跑收口。`,
++    `      等用户确认再跑收口；汇报顺带对账执行期用户决策（decisions 条目列一下，无则说明无）。`,
+     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
+     `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（用户显式授权、留痕——非 agent 自选补救通道），`,
+     `   ①②③人审全免（agent 自主跑到底）。`,
+diff --git a/src/task-tick.js b/src/task-tick.js
+index 4c599070..9b77495c 100644
+--- a/src/task-tick.js
++++ b/src/task-tick.js
+@@ -206,6 +206,12 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence
+       console.log(`⚠️ spec 面未就位（${parts.join('、')}）——顺序正典：先答 spec 面并过批准，再继续勾任务`)
+     }
+   } catch { /* 提醒 best-effort：读取失败静默，不影响勾选回显与 exit code */ }
++  // 执行期用户决策落盘提示（2026-10-20-thin-user-decision-record，advisory）：tick 是执行期
++  // 对 agent 最高频触点——decisions.md 尚未落盘时提一句（用户中途给了实现影响方向可当场
++  // decisions add 记录；缺席合法，纯提示不阻断；存在性判定即时读盘，在场分支零新增行）。
++  if (!existsSync(join(changesRoot, changeName, 'decisions.md'))) {
++    console.log(`💡 本变更 decisions.md 尚未落盘——执行期用户给过实现影响方向的话，当场 sillyspec decisions add --change ${changeName} --id D-001 --title "…" 记录（收口随蒸馏进知识防复潮；纯提示不阻断）`)
++  }
+   return r
+ }
+ 
+diff --git a/test/thin-user-decision-record.test.mjs b/test/thin-user-decision-record.test.mjs
+new file mode 100644
+index 00000000..409d7db3
+--- /dev/null
++++ b/test/thin-user-decision-record.test.mjs
+@@ -0,0 +1,93 @@
++/**
++ * thin-user-decision-record.test.mjs — 执行期用户决策落盘三触点（2026-10-20-thin-user-decision-record）
++ *
++ * 轻量道执行期用户口头决策无落盘纪律——会话内容不可审计，漏记是静默价值漏损。
++ * 三触点文案注入（零新机制，通道复用既有 decisions add → upsertDecision）：
++ *   ① flow start 全新横幅：执行期用户决策落盘纪律行（命令样例 + 承诺面同步提示）；
++ *     重入恢复简报不注入（恢复面读盘面）。
++ *   ② 断点②行文追加汇报对账半句（保留「执行断点」关键词与既有句）。
++ *   ③ task tick 回显 decisions.md 存在性 gating 提示（advisory：不改 exit code、
++ *     在场分支零新增行）——同 approve-gate-tick 现场提醒形态。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'udr-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\n')
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0', SILLYSPEC_SESSION_ID: 'udr-test' } })
++  return { cwd, cli }
++}
++
++const INPUT = '执行期用户决策落盘提示三触点\n成功标准：\n- 行为 X\n- 行为 Y'
++const CHANGE = '2026-09-01-udr-1'
++
++test('① 横幅纪律行：全新 start 含 decisions add 样例与承诺面提示；重入恢复简报不注入', () => {
++  const { cwd, cli } = makeRepo()
++  const s = cli(['flow', 'start', '--change', CHANGE, '--input', INPUT])
++  assert.equal(s.status, 0, `start exit 0（实际 ${s.status}）`)
++  assert.match(s.stdout, /decisions add --change/, '纪律行含命令样例')
++  assert.match(s.stdout, /承诺面/, '纪律行含承诺面同步提示')
++  // 重入恢复简报：恢复面读盘面，禁止注入新纪律行
++  const r = cli(['flow', 'start', '--change', CHANGE])
++  assert.equal(r.status, 0, `resume exit 0（实际 ${r.status}）`)
++  assert.ok(!/decisions add/.test(r.stdout), `恢复简报不含纪律行，实际尾部：${r.stdout.slice(-400)}`)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 断点②对账半句：保留「执行断点」关键词，追加汇报对账', () => {
++  const { cwd, cli } = makeRepo()
++  const s = cli(['flow', 'start', '--change', CHANGE, '--input', INPUT])
++  assert.equal(s.status, 0)
++  assert.match(s.stdout, /执行断点/, '断点②关键词保留（flow-checkpoints 断言兼容）')
++  assert.match(s.stdout, /等用户确认再跑收口/, '既有句逐字保留')
++  assert.match(s.stdout, /汇报顺带对账/, '追加对账半句')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ tick 条件提示：decisions.md 缺席附提示行；在场零新增（exit code 不变）', () => {
++  const { cwd, cli } = makeRepo()
++  cli(['flow', 'start', '--change', CHANGE, '--input', INPUT])
++  const t1 = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-01'])
++  assert.equal(t1.status, 0, 'advisory 不阻断勾选')
++  assert.match(t1.stdout, /已勾/, '既有回显行在场')
++  assert.match(t1.stdout, /decisions add --change/, '缺席分支附落盘提示')
++  // 决策落盘后 → 提示消失，翻格行为与 exit code 不变
++  writeFileSync(join(cwd, '.sillyspec', 'changes', CHANGE, 'decisions.md'), '# 决策记录\n\n## D-001@v1 样例\n- 状态：confirmed\n')
++  const t2 = cli(['task', 'tick', '--change', CHANGE, '--task', 'task-02'])
++  assert.equal(t2.status, 0)
++  assert.match(t2.stdout, /已勾/, '在场分支既有回显不变')
++  assert.ok(!/decisions add/.test(t2.stdout), `在场分支零新增提示行，实际：${t2.stdout.slice(-400)}`)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 既有套件零回归：approve-gate-tick / task-tick / flow-checkpoints / flow-order-canon 全绿', () => {
++  // 剥离 NODE_TEST_CONTEXT：外层 node --test 注入的该变量会让内层 node --test 把自己
++  // 当成 reporter 子进程秒退（stdout 零摘要、exit 0）——嵌套跑测试套件的已知坑。
++  const env = { ...process.env }
++  delete env.NODE_TEST_CONTEXT
++  const s = spawnSync(process.execPath, [
++    '--test',
++    'test/approve-gate-tick.test.mjs',
++    'test/task-tick.test.mjs',
++    'test/flow-checkpoints.test.mjs',
++    'test/flow-order-canon.test.mjs',
++  ], { cwd: ROOT, encoding: 'utf8', timeout: 300_000, env })
++  assert.equal(s.status, 0, `四套件全绿（实际 exit ${s.status}）\n${(s.stdout + s.stderr).slice(-1500)}`)
++  const failMatch = /ℹ fail (\d+)/.exec(s.stdout)
++  assert.ok(failMatch, 'TAP 摘要在场')
++  assert.equal(failMatch[1], '0', 'fail 计数为 0')
++})
