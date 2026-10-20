@@ -1,0 +1,47 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  自会话耗时画像实证（用户裁决：考虑清楚优化好）：收口往返是全量测试外第二大真实成本——①reviewedAgainst 校验整串拒收带注记 sha（评审代理习惯在 sha 后附实测说明），今晚两次被拒各多一轮 flow
+  done+代理往返；②共享仓每变更必撞 dirty-gap 中断再带 flag 重跑一轮。修法：①isAnchorSha 容忍注记——字段含 7-40 位 hex 词元即通过并归一化（字符串/workspace/repos
+  三处），纯垃圾仍拒；②dirty-gap 中断文案补快速通道指引（脏面全属他会话/残渣且不在本变更交付面时直接 --accept-dirty-gap 重跑，pathspec 提交面已隔离归属）。
+
+
+  成功标准：
+
+  - reviewedAgainst 三形态（字符串/workspace/repos 值）含合法 hex 词元+任意注记文本均通过校验且 review 对象内归一化为纯 sha；无 hex 词元仍整串拒收
+
+  - dirty-gap 阻断文案含快速通道指引句（属他会话/残渣且非本变更交付面→直接重跑带 --accept-dirty-gap）
+
+  - 新增测试锁归一化矩阵与文案锚；变更测试面+lint 绿（新口径，不跑全量）
+autopilot: false
+prestage_ack: true
+baseline_commit: 1e27e8a5a470db4a91bbeb413da61142704273e6
+updatedAt: '2026-10-20T16:35:02.867Z'
+baseline_sha256: f6e2dba77b593f7dced1015088372a761a86b8703d963d9b0376e695465dfc93
+spec_approved: true
+spec_approved_at: '2026-10-20T16:03:10.714Z'
+spec_approved_by: zcode-roundtrip-slim
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-roundtrip-slim
+autopilot_ticked: 1
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js111+js-meta-skip1+nontest-skip1)+fr(112)（63.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020161625\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（46.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020161625\test-result.json｜门文件 6 个
+

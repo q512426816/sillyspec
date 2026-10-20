@@ -78,3 +78,4 @@
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
 | 2026-10-20 | 2026-10-20-distill-abnormal-upgrade-fix | 修复蒸馏异态升厚触发器死代码 |
 | 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |
+| 2026-10-20 | 2026-10-20-closeout-roundtrip-slim | 自会话耗时画像实证（用户裁决：考虑清楚优化好）：收口往返是全量测试外第二大真实成本——①review… |

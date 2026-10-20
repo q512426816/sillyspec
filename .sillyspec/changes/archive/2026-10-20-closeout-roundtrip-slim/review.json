@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-closeout-roundtrip-slim",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）；增量复审代理（4×P3 清偿核验，独立复审会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c",
+  "reReviewOf": "631982186e96ea0b7b16cf304479f6ea3688e592",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "isAnchorSha 死码残留——本变更后全仓零消费",
+      "evidence": "grep 全仓 src/+test/ 仅命中定义行本身；validateReviewJson 与 reviewAnchoredToHead 均已改用 extractAnchorSha。非导出 const，lint 的「未引用导出 0 项」门测不到模块内死码。design 接口契约称「isAnchorSha 语义拆分」，实际为整体替换，应删除。",
+      "location": "src/flow-review.js:344-345",
+      "remediated": true,
+      "remediatedIn": "b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c",
+      "remediationVerified": "定义（原 344-345 行，-3 行）已删；代码面（src/+test/）grep 零残留；extractAnchorSha 全面替代实证：src/flow-review.js:389（字符串）/393（workspace）/402（repos 值）/446（reviewAnchoredToHead）四处消费。注：change 自身文档存 2 处叙事性提及（proposal.md:9 任务原话转写、design.md:17 设计契约描述），均为初审基线 63198218 已见的历史记载且不属本 finding 范围（location=src/flow-review.js），代码面清偿成立。"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 注记容忍矩阵 6/9 格——workspace 纯 sha、repos 无 hex 拒收未入矩阵",
+      "evidence": "FR-03 原文「字符串/对象 workspace/对象 repos 三处 × 纯 sha/sha+注记/无 hex 三态」；实测测试覆盖：字符串三态齐、workspace（sha+注记✔/无 hex✔/纯 sha✘）、repos（sha+注记✔/纯 sha✔/无 hex✘——该分支错误文案 reviewAnchoredToHead 之外的 `reviewedAgainst.repos.<k> 须为…` 零断言）。另 >40 位 hex 长串上界（lookahead 隐式拒收）无显式测试。未覆盖格与已覆盖格走同一 extractAnchorSha，风险低。",
+      "location": "test/review-anchor-annotation-tolerance.test.mjs:35-75",
+      "remediated": true,
+      "remediatedIn": "b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c",
+      "remediationVerified": "三格补齐：workspace 纯 sha 通过且归一化（a2 断言）、repos 值无 hex 拒收且断言文案「reviewedAgainst.repos.urgent 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）」（与 src/flow-review.js:403 模板逐字一致）、41 位连串 hex 上界独立测试拒收。实跑 node --test test/review-anchor-annotation-tolerance.test.mjs：tests 6 / pass 6 / fail 0。矩阵 3×3 齐格+上界。"
+    },
+    {
+      "severity": "P3",
+      "title": "重锚 approve/reject 行锚点语义错位——2962 指 run-stage 导入位，真实 triggerPull 先行调用在 4626",
+      "evidence": "doc-ref-check 93/93 绿系关键词 'triggerPull' 以 'triggerPullActiveChange' 子串命中过门；src/index.js:2962 为 `const { triggerPullActiveChange } = await import('./run/shared.js')`（run-stage 下行 pull），而 platform approve/reject 的「先 triggerPull→POST approval」在 src/index.js:4619-4627（case 'approve' 内 const { triggerPull } = await import + await triggerPull(dir, approveName)）。工具绿但锚点指错站，接口地图导航误导后续读者。同一 hunk 内 stage 命令行锚 2962 语义正确（两行共用同锚属重锚时合并）。",
+      "location": "docs/sillyspec/platform-interface-map.md:137",
+      "remediated": true,
+      "remediatedIn": "b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c",
+      "remediationVerified": "doc L137 锚改 index.js:4626；实证 src/index.js:4626-4627 为 case 'approve' 内 `const { triggerPull } = await import('./run/shared.js'); await triggerPull(dir, approveName);`——platform approve/reject 的 triggerPull 首调用本体。L138 的 index.js:2962 保留给 triggerPullActiveChange（该行正是其 import 位），语义各归其位。doc-ref-check 实跑复现：1 份文档 93 处引用全通过（68 处带关键词断言）。"
+    },
+    {
+      "severity": "P3",
+      "title": "重锚 912→678 括注错配——新锚指 gate ctx 透传，括注仍称「review write 同款透传」",
+      "evidence": "src/index.js:678 为 getOrCreateMultiRepoContext({…platformOpts: { specRoot: gateSpecBase }})（gate ctx，属「等子命令」家族内合法同款透迁）；但 review write 透传本体位置未动仍在 src/index.js:905-912（908 行 rwPlatformOpts.specRoot = rwResolved.specRoot 可同时满足关键词窗口与语义忠实）。旧锚 912 窗口 [910,917] 无 token 必红、重锚有必要，但选点偏移致括注与锚点所指不一致。",
+      "location": "docs/sillyspec/platform-interface-map.md:171",
+      "remediated": true,
+      "remediatedIn": "b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c",
+      "remediationVerified": "括注行（当前文件 169 行）锚改 index.js:908；实证 src/index.js:908 为 `rwPlatformOpts.specRoot = rwResolved.specRoot;`——review write 透传本体（rwResolved 解析后落 platformOpts），括注「review write 同款透传」与锚点所指一致，初审建议选点（908）精确采纳。"
+    }
+  ],
+  "dimensionNotes": { "乱序": "n/a", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-20T16:33:46Z"
+}

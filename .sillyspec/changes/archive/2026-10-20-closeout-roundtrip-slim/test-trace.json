@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-closeout-roundtrip-slim",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-anchor-annotation-tolerance.test.mjs「注记容忍矩阵+归一化+纯垃圾拒收」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-closeout-roundtrip-slim"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-02",
+      "tests": [
+        "test/review-anchor-annotation-tolerance.test.mjs「dirty-gap 文案快速通道锚（源读）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-closeout-roundtrip-slim"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-anchor-annotation-tolerance.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-closeout-roundtrip-slim"
+    }
+  ]
+}

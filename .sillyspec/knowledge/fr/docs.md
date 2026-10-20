@@ -1128,3 +1128,67 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-20-proto-provenance-hardline
   status: active
+
+## FR-docs-059 reviewedAgainst 注记容忍与归一化（必须）
+变更：2026-10-20-closeout-roundtrip-slim
+状态：active
+摘要：主路径——sha+注记；边界——纯垃圾
+场景正文：
+- 场景：主路径——sha+注记 — Given reviewedAgainst = "e5c97358...52（git rev-parse HEAD 实测；区间零交集）"；When validateReviewJson；Then ok=true 且 v.review.reviewedAfter…… reviewedAgainst 归一化为 "e5c97358...52" 纯 sha。
+- 场景：边界——纯垃圾 — Given reviewedAgainst = "就是随便写的"；Then ok=false，错误文案仍为 7-40 位 hex 提示。
+全文：.sillyspec/changes/archive/2026-10-20-closeout-roundtrip-slim/requirements.md#FR-01
+最近确认：b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-01
+  tests: test/review-anchor-annotation-tolerance.test.mjs「注记容忍矩阵+归一化+纯垃圾拒收」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-closeout-roundtrip-slim
+  status: active
+
+## FR-docs-060 dirty-gap 阻断文案快速通道（必须）
+变更：2026-10-20-closeout-roundtrip-slim
+状态：active
+摘要：主路径——共享仓常态
+场景正文：
+- 场景：主路径——共享仓常态 — Given 共享仓有并行会话在途文件，agent 收到阻断；When 读文案；Then 知道非己面脏文件可直接带 --accept-dirty-gap 重跑，省一轮试探。
+全文：.sillyspec/changes/archive/2026-10-20-closeout-roundtrip-slim/requirements.md#FR-02
+最近确认：b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-02
+  tests: test/review-anchor-annotation-tolerance.test.mjs「dirty-gap 文案快速通道锚（源读）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-closeout-roundtrip-slim
+  status: active
+
+## FR-docs-061 测试覆盖与新口径自验（必须）
+变更：2026-10-20-closeout-roundtrip-slim
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When node --test 新测试 + lint；Then 全过零失败。
+全文：.sillyspec/changes/archive/2026-10-20-closeout-roundtrip-slim/requirements.md#FR-03
+最近确认：b9465ed66e9234973861e4ee6f3ce6ea1b2f3c1c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-closeout-roundtrip-slim:flow:测试绑定FR-03
+  tests: test/review-anchor-annotation-tolerance.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-closeout-roundtrip-slim
+  status: active

@@ -1,0 +1,242 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 817e0868..f818038e 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2147/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:950（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3189；shared.js:1159 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2955/3147；shared.js:1159 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4540；sync.js:1607/1607 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4492；sync.js:2339 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4626；shared.js:1159 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2962/3147；shared.js:1159 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4547；sync.js:1607/1607 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4499；sync.js:2339 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4278/4286/4270；probe.js:137 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4285/4286/4270；probe.js:137 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -165,8 +165,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:267`）公共入口，flag 在 `command.js:422`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:436` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:285?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:428?` 条件行——2026-10-19 起五工具统一落 AGENTS.md，gemini/opencode 不再产 GEMINI.md/INSTRUCTIONS.md）。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:275` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:282` 解析后经 `case 'init'`（`index.js:427`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:681`/`493` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:912（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:275` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:282` 解析后经 `case 'init'`（`index.js:461`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:681`/`493` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:908（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:424` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:56`、枚举消费在 `index.js:4376`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:56`、枚举消费在 `index.js:4383`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/flow-review.js b/src/flow-review.js
+index ceb56b37..bf28cc70 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -341,8 +341,18 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+   return taskbook
+ }
+ 
+-/** 锚 sha 形态（7-40 位 hex）。 */
+-const isAnchorSha = (v) => typeof v === 'string' && /^[0-9a-f]{7,40}$/i.test(v.trim())
++/**
++ * 锚 sha 词元提取（2026-10-20-closeout-roundtrip-slim）：字段含 7-40 位独立 hex 词元即通过，
++ * 返回归一化纯 sha（小写）；无词元返回 null。评审代理常在 sha 后附实测注记（今晚两例被整串
++ * 校验拒收，各多一轮收口往返）——词元提取容忍注记形态。归一化只发生在内存对象/返回值，
++ * 不回写文件（校验器只读铁律）。误命中面（如连写分支名含 ≥7 位 hex 段）后果有限：
++ * reviewedAgainst 是溯源锚非门禁比对；风险评估见变更 design 风险1。
++ */
++const extractAnchorSha = (v) => {
++  if (typeof v !== 'string') return null
++  const m = v.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])/)
++  return m ? m[0].toLowerCase() : null
++}
+ 
+ /**
+  * 变更的跨仓冻结面仓键（无 change-patch.json / 无 repos / 不可读 → null=单仓形态）。
+@@ -376,16 +386,22 @@ export function validateReviewJson(path) {
+   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
+   if (r.reviewedAgainst !== undefined) {
+     if (typeof r.reviewedAgainst === 'string') {
+-      if (!isAnchorSha(r.reviewedAgainst)) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
++      const _anchor = extractAnchorSha(r.reviewedAgainst)
++      if (!_anchor) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
++      else r.reviewedAgainst = _anchor
+     } else if (r.reviewedAgainst && typeof r.reviewedAgainst === 'object' && !Array.isArray(r.reviewedAgainst)) {
+-      if (!isAnchorSha(r.reviewedAgainst.workspace)) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
++      const _ws = extractAnchorSha(r.reviewedAgainst.workspace)
++      if (!_ws) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
++      else r.reviewedAgainst.workspace = _ws
+       if (r.reviewedAgainst.repos !== undefined) {
+         const repos = r.reviewedAgainst.repos
+         if (!repos || typeof repos !== 'object' || Array.isArray(repos)) {
+           errors.push('reviewedAgainst.repos 须为对象（仓键 → sha；仓键取 local.yaml repos 注册表键）')
+         } else {
+           for (const [k, v] of Object.entries(repos)) {
+-            if (!isAnchorSha(v)) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
++            const _repo = extractAnchorSha(v)
++            if (!_repo) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
++            else repos[k] = _repo
+           }
+         }
+       }
+@@ -425,9 +441,10 @@ export function reviewAnchoredToHead(reviewPath, head) {
+   try {
+     const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
+     const raRaw = r?.reviewedAgainst
+-    const ra = typeof raRaw === 'string' ? raRaw.trim().toLowerCase()
+-      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace.trim().toLowerCase() : '')
+-    if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
++    const raRawNorm = typeof raRaw === 'string' ? raRaw
++      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace : '')
++    const ra = extractAnchorSha(raRawNorm)
++    if (!ra) return false
+     return h === ra || h.startsWith(ra) || ra.startsWith(h)
+   } catch { return false }
+ }
+diff --git a/src/flow.js b/src/flow.js
+index 0fac1881..2e4f9ed3 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1921,6 +1921,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
+             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
+             console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
++            console.error(`   💡 快速通道：脏文件全属并行会话在途/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap（显式 pathspec 提交面已隔离归属；属本变更的文件必须走①提交）`)
+             reportMidFail('patch')
+             process.exit(1)
+           }
+diff --git a/test/review-anchor-annotation-tolerance.test.mjs b/test/review-anchor-annotation-tolerance.test.mjs
+new file mode 100644
+index 00000000..3596a0a9
+--- /dev/null
++++ b/test/review-anchor-annotation-tolerance.test.mjs
+@@ -0,0 +1,117 @@
++/**
++ * review-anchor-annotation-tolerance.test.mjs — reviewedAgainst 注记容忍+归一化 与 dirty-gap 快速通道
++ * （2026-10-20-closeout-roundtrip-slim）
++ *
++ * 自会话耗时画像实证：评审代理习惯在 sha 后附实测注记，整串 hex 校验两度拒收（各多一轮
++ * 收口往返）；reviewAnchoredToHead 同病（注记判无锚证据）。锁：
++ *   ① validateReviewJson 三形态注记容忍矩阵+内存归一化+纯垃圾仍拒（文案不变）；
++ *   ② reviewAnchoredToHead 注记形态可锚定；
++ *   ③ flow.js dirty-gap 阻断文案含快速通道指引。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { validateReviewJson, reviewAnchoredToHead } from '../src/flow-review.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const SHA = 'e5c97358455a9a91d268be95d4d7c48ef4c75e52'
++const SHA2 = 'fe6d83216f78ad37779a86a2cf576ed3cda5a672'
++
++function makeReview(fields, dir = mkdtempSync(join(tmpdir(), 'raat-'))) {
++  const base = {
++    schemaVersion: 1, change: 'c', reviewer: 'sub', verdict: 'PASS',
++    reviewedAgainst: SHA, findings: [], reviewedAt: '2026-10-20T00:00:00Z',
++    dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' },
++    ...fields,
++  }
++  const p = join(dir, 'review.json')
++  writeFileSync(p, JSON.stringify(base), 'utf8')
++  return { p, dir }
++}
++
++test('① 字符串形态：纯 sha / sha+注记 均过且归一化；纯垃圾拒（文案不变）', () => {
++  const a = makeReview({ reviewedAgainst: SHA })
++  const va = validateReviewJson(a.p)
++  assert.equal(va.ok, true)
++  assert.equal(va.review.reviewedAgainst, SHA, '纯 sha 归一化保留')
++
++  const b = makeReview({ reviewedAgainst: `${SHA}（git rev-parse HEAD 实测；区间 c7ae81ba..HEAD 零交集）` })
++  const vb = validateReviewJson(b.p)
++  assert.equal(vb.ok, true, 'sha+注记容忍')
++  assert.equal(vb.review.reviewedAgainst, SHA, '归一化为纯 sha')
++
++  const c = makeReview({ reviewedAgainst: '就是随便写的没有 sha' })
++  const vc = validateReviewJson(c.p)
++  assert.equal(vc.ok, false)
++  assert.ok(vc.errors.some((e) => e.includes('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')), '错误文案逐字保留')
++
++  const d = makeReview({ reviewedAgainst: `${SHA.toUpperCase()} anchored` })
++  const vd = validateReviewJson(d.p)
++  assert.equal(vd.ok, true)
++  assert.equal(vd.review.reviewedAgainst, SHA, '大写 hex 归一化为小写')
++  for (const x of [a, b, c, d]) rmSync(x.dir, { recursive: true, force: true })
++})
++
++test('① 对象形态：workspace/repos 注记容忍+逐值归一化；workspace 垃圾拒', () => {
++  const a = makeReview({ reviewedAgainst: { workspace: `${SHA}（主仓实测）`, repos: { urgent: `${SHA2} 注记`, spdemo: SHA } } })
++  const va = validateReviewJson(a.p)
++  assert.equal(va.ok, true)
++  assert.equal(va.review.reviewedAgainst.workspace, SHA)
++  assert.equal(va.review.reviewedAgainst.repos.urgent, SHA2)
++  assert.equal(va.review.reviewedAgainst.repos.spdemo, SHA)
++
++  // workspace 纯 sha（评审 P3-2 清偿：矩阵补格）
++  const a2 = makeReview({ reviewedAgainst: { workspace: SHA } })
++  const va2 = validateReviewJson(a2.p)
++  assert.equal(va2.ok, true)
++  assert.equal(va2.review.reviewedAgainst.workspace, SHA, 'workspace 纯 sha 通过')
++
++  // repos 值无 hex → 拒收且文案点名仓键
++  const b2 = makeReview({ reviewedAgainst: { workspace: SHA, repos: { urgent: '没有锚' } } })
++  const vb2 = validateReviewJson(b2.p)
++  assert.equal(vb2.ok, false)
++  assert.ok(vb2.errors.some((e) => e.includes('reviewedAgainst.repos.urgent 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）')), 'repos 值垃圾文案在场')
++
++  const b = makeReview({ reviewedAgainst: { workspace: '没有锚', repos: { urgent: SHA } } })
++  const vb = validateReviewJson(b.p)
++  assert.equal(vb.ok, false)
++  assert.ok(vb.errors.some((e) => e.includes('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')))
++  for (const x of [a, a2, b2, b]) rmSync(x.dir, { recursive: true, force: true })
++})
++
++test('① 上界：>40 位 hex 连串不误收（lookahead 截断后词元仍 ≤40 才有效）', () => {
++  // 41 位 hex：整串是一个超长词元——提取器正则 {7,40} 贪婪到 40 位+lookahead 拒（后跟 hex）→ 回溯找短词元也不满足边界 → 应拒收
++  const long41 = SHA + 'a' // 41 hex chars
++  const a = makeReview({ reviewedAgainst: long41 })
++  const va = validateReviewJson(a.p)
++  // 41 连续 hex：任何 7-40 子段两侧都是 hex（边界断言不满足）→ 无有效词元 → 拒
++  assert.equal(va.ok, false, '41 位连串 hex 不产出有效词元')
++  rmSync(a.dir, { recursive: true, force: true })
++})
++
++test('② reviewAnchoredToHead：注记形态可锚定（不再判无锚证据）', () => {
++  const a = makeReview({ reviewedAgainst: `${SHA}（git rev-parse HEAD 实测）` })
++  assert.equal(reviewAnchoredToHead(a.p, SHA), true, '注记形态锚定成功')
++  assert.equal(reviewAnchoredToHead(a.p, SHA.slice(0, 8)), true, '短 sha 前缀方向仍命中')
++  assert.equal(reviewAnchoredToHead(a.p, SHA2), false, '不同 sha 不误锚')
++  const b = makeReview({ reviewedAgainst: 'garbage' })
++  assert.equal(reviewAnchoredToHead(b.p, SHA), false, '纯垃圾仍 fail-safe false')
++  for (const x of [a, b]) rmSync(x.dir, { recursive: true, force: true })
++})
++
++test('③ 归一化不回写文件（校验器只读）', () => {
++  const a = makeReview({ reviewedAgainst: `${SHA} 注记保留在原稿` })
++  validateReviewJson(a.p)
++  const raw = JSON.parse(readFileSync(a.p, 'utf8'))
++  assert.ok(String(raw.reviewedAgainst).includes('注记保留在原稿'), '原稿注记未被改写')
++  rmSync(a.dir, { recursive: true, force: true })
++})
++
++test('③ flow.js dirty-gap 阻断文案含快速通道指引（源锚）', () => {
++  const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  assert.ok(/快速通道：脏文件全属并行会话在途\/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap/.test(src), '快速通道指引在场')
++  assert.ok(/属本变更的文件必须走①提交/.test(src), '限定句在场（防逃避①）')
++})
