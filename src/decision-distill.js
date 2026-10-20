@@ -1,4 +1,16 @@
 /**
+ * 蒸馏异态判定（2026-10-20-distill-abnormal-upgrade-fix）：needsWait 非空是唯一异态信号——
+ * 与 needsWait 产出（distillIntoKnowledge）单一源同处，返回值契约变化时两处同文件可见不漂移。
+ * 历史：flow done 曾内联 `res.rejected > 0 || res.needsWait > 0`——前半引用返回值不存在的字段
+ * （幽灵引用恒 undefined），后半字符串与 >0 比较恒 false，「异态升厚留人工裁决」从未生效。
+ * @param {{ written?: unknown[], skipped?: string|null, needsWait?: string|null }} res distillIntoKnowledge 返回值（容错 null/undefined）
+ * @returns {boolean} needsWait 为非空字符串时 true
+ */
+export function isDistillAbnormal(res) {
+  return Boolean(res && typeof res.needsWait === 'string' && res.needsWait.length > 0)
+}
+
+/**
  * decision-distill — 决策提炼纯函数（change: 2026-08-23-adopt-harness-practices，FR-02/03/04，D-007@v1）
  *
  * 职责：把变更 decisions.md 中「有实现影响」的决策幂等提炼进 knowledge/decisions/<模块域>.md，

@@ -2531,7 +2531,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       }
     } catch { /* 回读失败 → 空面（回写零命中静默） */ }
   }
-  // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）+ FR 索引提炼
+  // ④ distill：决策提炼（needsWait 异态 → 升厚留人工裁决，不静默吞——判定 isDistillAbnormal
+  //   单一源在 decision-distill.js，2026-10-20-distill-abnormal-upgrade-fix 修复幽灵触发器）+ FR 索引提炼
   // （2026-09-22-thin-fr-distill-sync：轻量变更此前只蒸馏 decisions 不调 indexRequirements——
   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；轻量变更无 design.md，域路由
   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
@@ -2561,13 +2562,13 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       }
     } catch (e) { console.warn(`⚠️ 变更索引回写失败（fail-soft 不阻断归档）：${(e && e.message) || e}`) }
     try {
-      const { distillIntoKnowledge } = await import('./decision-distill.js')
+      const { distillIntoKnowledge, isDistillAbnormal } = await import('./decision-distill.js')
       const knowledgeRoot = join(specBase, 'knowledge')
       const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
       const res = distillIntoKnowledge(changeDir, knowledgeRoot, typeof head === 'string' ? head.trim() : '', null)
-      const abnormal = res && (res.rejected > 0 || res.needsWait > 0)
+      const abnormal = isDistillAbnormal(res)
       if (abnormal) {
-        writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `distill 异态（rejected=${res.rejected} needsWait=${res.needsWait}）——升厚留人工裁决` })
+        writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `distill 异态（needsWait=${res.needsWait}）——升厚留人工裁决` })
         resetThinStageRowOnUpgrade(cwd, change, specBase)
         console.warn(`⚠️ distill 异态 → 已升厚档（tier=thick）。剩余流程按厚档走 run <stage> 完整仪式；归档子步仍将执行（厚档语义不跳过 plan.md 校验）。`)
       }
