@@ -11,7 +11,7 @@
  *   ③ 摘要从冻结件本身算——change.patch 文本直解，不走活 git（review-material-pack 的
  *      extractDiffSummary 走活 git 解 base 那条路不能搬：防「包说的」与评审员手里冻结面漂移）。
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** 材料包整体体积帽（对齐 review-material-pack.js PACK_MAX_CHARS 先例——包不能成为新的全量面）。 */
@@ -141,15 +141,45 @@ export function buildFreezeAttribution({ declaredFiles, freezeFiles, foreign }) 
 }
 
 /**
+ * ledger 测试回执扫描（2026-10-21-review-rerun-scope）：verify-runs 各 runId 目录的
+ * test-result.json 按 change 匹配取目录名时间序最新一条（CLI 收口亲测产物，符合护栏③
+ * 机械抽取——非 agent 自述）。fail-soft：目录缺席/坏 JSON/无匹配 → null（调用方零注入）。
+ */
+export function findLatestTestReceipt(verifyRunsDir, changeName) {
+  try {
+    if (!verifyRunsDir || !changeName || !existsSync(verifyRunsDir)) return null
+    const runIds = readdirSync(verifyRunsDir).filter((d) => /^\d{14,}$/.test(d)).sort()
+    for (let i = runIds.length - 1; i >= 0; i--) {
+      const p = join(verifyRunsDir, runIds[i], 'test-result.json')
+      try {
+        const j = JSON.parse(readFileSync(p, 'utf8'))
+        if (j && j.change === changeName && (j.status || j.exit_code !== undefined)) return j
+      } catch { /* 坏 JSON 跳过更旧轮 */ }
+    }
+  } catch { /* 扫描失败零注入 */ }
+  return null
+}
+
+/** 回执行渲染（机械——ran_at/status/exit/耗时/命令面截断）。 */
+function testReceiptLines(r) {
+  const cmd = String(r.command || '').replace(/\s+/g, ' ').slice(0, 120)
+  const dur = Number.isFinite(r.duration_ms) ? `${Math.round(r.duration_ms / 1000)}s` : '?'
+  return [
+    `  ledger 测试回执（CLI 收口亲测，${r.ran_at || '时间未知'}）：${r.status || 'unknown'} exit=${r.exit_code ?? '?'} ${dur} ｜ 面：${cmd}${String(r.command || '').length > 120 ? '…' : ''}`,
+    `  （回执为 CLI 亲测——评审按复跑口径抽验变更面即可，勿整体重跑）`,
+  ]
+}
+
+/**
  * 装配材料包注入行（唯一组包入口）：FR 表、patch 摘要、归属切分三子源各自可得各自产出、
  * 全缺返回 null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——
  * 语义行恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
  * requirements.md 读失败（缺件）→ FR 子段零产出；attribution 缺席/非法 → 归属子段零产出
  * （fail-soft 不抛穿，其余子段不受影响）。
- * @param {{ changeDir: string, patchText: string|null, attribution?: object|null }} args
+ * @param {{ changeDir: string, patchText: string|null, attribution?: object|null, testReceipt?: object|null }} args
  * @returns {{ lines: string[], truncated: boolean } | null}
  */
-export function assembleReviewPack({ changeDir, patchText, attribution = null }) {
+export function assembleReviewPack({ changeDir, patchText, attribution = null, testReceipt = null }) {
   let frRows = []
   try {
     frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
@@ -167,6 +197,7 @@ export function assembleReviewPack({ changeDir, patchText, attribution = null })
   }
   const attr = normalizeAttribution(attribution)
   if (attr) body.push(...attributionLines(attr))
+  if (testReceipt && typeof testReceipt === 'object') body.push(...testReceiptLines(testReceipt))
   const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
   let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
   const lines = [PACK_TITLE]

@@ -313,6 +313,12 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
       `  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与上方检查单同口径，未答=未审）`,
     ] : []),
     ``,
+    `【复跑口径（与 AGENTS 自验口径同源——2026-10-21-review-rerun-scope）】`,
+    `  - 评审实测按「变更测试面」复跑：新测试 + 直接受影响既有文件；多文件合并一次 node --test 跑（逐文件跑每次付 ~10s 启动税）。`,
+    `  - 全量套件禁止：ledger 收口实测已跑变更面、pre-push 门会跑全量——评审内重复跑全量是三重保险费（2026-10-20 会话画像实证：单次评审内两轮全量 8.4min）。`,
+    `  - 材料包含 ledger 测试回执时以回执为基线抽验复核，勿整体重跑。`,
+    `  - 长输出落 \`.sillyspec/.runtime/logs/\` 日志回看尾部（tail -50），勿整段读入上下文。`,
+    ``,
     `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
     // 代行惯例（坑 flow-done-sentinel-token-split ②，2026-10-08 实证）：宿主无已注册子代理
     // 通道时无法照做「起子代理」——主会话按检查单代行自审可接受，reviewer 字段如实标注
