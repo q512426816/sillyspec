@@ -1552,3 +1552,107 @@ superseded_by：FR-cli-entry-102
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-17-strict-sync-signal-shape/requirements.md#FR-03
 最近确认：560af6a23a038e6ee6118a7bcce7b6b3d2481e22
+
+## FR-runtime-102 createGateSnapshot 增可选 carriedFiles：与 files 同款 overlay 语义（三态源判定/运行时面跳过/import 冒烟），计数与清单入返回值（carriedFiles），不进判定面
+变更：2026-10-20-gate-snapshot-carried-deps
+状态：active
+摘要：携带文件与判定面文件同款源判定
+场景正文：
+- 场景：携带文件与判定面文件同款源判定 — Given worktree 模式下某他者声明文件在主仓与 worktree 有不同修改；When 以 carriedFiles 携带；Then 走同一三态判定（陈旧取主仓/正常取 worktree/分叉取 worktree 血统并警告）
+全文：.sillyspec/changes/archive/2026-10-20-gate-snapshot-carried-deps/requirements.md#FR-01
+最近确认：4badee475860d096a9770d50d1f936f922715640
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-01
+  tests: test/gate-snapshot-carried.test.mjs「carriedFiles 同款 overlay 语义与零回归契约」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-gate-snapshot-carried-deps
+  status: active
+
+## FR-runtime-103 createVerifyGateSnapshot 的 foreign 剔除改为「判定面剔除+物理携带」，控制台提示携带 N 个他者声明文件；全部被剔仍回退主仓的既有语义不变
+变更：2026-10-20-gate-snapshot-carried-deps
+状态：active
+摘要：坑文主场景（快照依赖自洽）；全部被剔回退语义不变
+场景正文：
+- 场景：坑文主场景（快照依赖自洽） — Given quick（他者活跃变更）声明并修改 src/util.js 新增导出 stripPathPrefix（主仓工作区在场），本变更（full，worktree）文；When verify 门建快照；Then src/util.js 从判定面剔除（归属语义不变）但物理携带 worktree/工作区版本进快照——快照内本变更测试不再因缺导出 TypeError
+- 场景：全部被剔回退语义不变 — Given 本变更 diff 文件全部被他者声明过滤；Then 判定面为空 → 回退主仓（既有 failRef 原因文案不变，不因携带面存在而改变）
+全文：.sillyspec/changes/archive/2026-10-20-gate-snapshot-carried-deps/requirements.md#FR-02
+最近确认：4badee475860d096a9770d50d1f936f922715640
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-02
+  tests: test/verify-gate-snapshot.test.mjs「坑文主场景：他者声明依赖携带自洽」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-gate-snapshot-carried-deps
+  status: active
+
+## FR-runtime-104 未声明的无主脏文件在 worktree 模式照旧不进快照（隔离核心不动）；in-place 无主文件 fail-closed 保留语义不变
+变更：2026-10-20-gate-snapshot-carried-deps
+状态：active
+摘要：未声明脏文件隔离不回退
+场景正文：
+- 场景：未声明脏文件隔离不回退 — Given worktree 模式主仓 src/foreign-wip.js 为坏语法脏文件且无任何变更声明它；When 快照建立；Then 该文件不进快照（不进判定面也不进携带面——携带面只收「被剔除的他者声明文件」）
+全文：.sillyspec/changes/archive/2026-10-20-gate-snapshot-carried-deps/requirements.md#FR-03
+最近确认：4badee475860d096a9770d50d1f936f922715640
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-03
+  tests: test/verify-gate-snapshot.test.mjs「native worktree：快照含本变更 worktree 版本 + 变更文档，不含主仓他者脏文件」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-gate-snapshot-carried-deps
+  status: active
+
+## FR-runtime-105 坑文场景钉测试：本变更文件依赖他者声明文件的新导出 → 快照含他者文件工作区版本（依赖自洽）；既有快照套件语义变化处（他者声明文件物理在场断言）同步改钉
+变更：2026-10-20-gate-snapshot-carried-deps
+状态：active
+摘要：改钉而非放松
+场景正文：
+- 场景：改钉而非放松 — Given in-place 用例的 declared-foreign.js；Then 新断言：快照内存在（携带，内容=主仓工作区版本）且返回值 carriedFiles 含它——判定面语义由 FR-02 场景钉定
+全文：.sillyspec/changes/archive/2026-10-20-gate-snapshot-carried-deps/requirements.md#FR-04
+最近确认：4badee475860d096a9770d50d1f936f922715640
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-04
+  tests: test/verify-gate-snapshot.test.mjs「in-place meta：…他者声明文件物理携带改钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-gate-snapshot-carried-deps
+  status: active
+
+## FR-runtime-106 既有 gate-snapshot 全家族测试与 verify 门相关回归全绿
+变更：2026-10-20-gate-snapshot-carried-deps
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-20-gate-snapshot-carried-deps/requirements.md#FR-05
+最近确认：4badee475860d096a9770d50d1f936f922715640
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-05
+  tests: test/gate-snapshot-lineage.test.mjs「全家族回归」 | test/quick-gate-snapshot.test.mjs | test/verify-gate-snapshot.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-gate-snapshot-carried-deps
+  status: active

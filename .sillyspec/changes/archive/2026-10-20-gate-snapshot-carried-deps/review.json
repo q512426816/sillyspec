@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-gate-snapshot-carried-deps",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "4badee475860d096a9770d50d1f936f922715640",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "全部被剔回退语义无测试钉（原阻断项）——已清偿于 4badee47",
+      "evidence": "新增钉测试走真实活性链（他者 design 声明+主仓 dirty 命中+c1 own 空集 → setFail 分支），断言 null + 原因文案子串，亲跑绿",
+      "location": "test/verify-gate-snapshot.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "失败指引把用户引离携带面真因——已清偿于 4badee47（两处一行残留记后续顺手同步）",
+      "evidence": "printSnapshotFailureHint 携带面在场时疑点②指向携带清单+出路；gates 横幅加「未声明」限定；wrapper jsdoc 口径同步。残留：gates.js:1413 usedSnapInfo 字面量缺 carriedFiles（lint 路径有 lintOwnershipDowngrade 兜底）、verify-quality-scan.js:662 横幅无限定（📦 行紧邻其前）",
+      "location": "src/run/gate-snapshot.js:884"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-02 括注与三态语义不一致——已清偿于 4badee47（design.md:11 同款简写为非规范面残留）",
+      "evidence": "requirements.md FR-02 改三态措辞（陈旧取主仓/正常与分叉取 worktree 血统）与 overlayOne 实际语义一致",
+      "location": ".sillyspec/changes/2026-10-20-gate-snapshot-carried-deps/requirements.md"
+    },
+    {
+      "severity": "P3",
+      "title": "rerunSignature/dedupKey 只哈希文件名——他者修好同文件名坏半态后 RERUN=1 仍被拒（遗留，提交信息留痕）",
+      "evidence": "拒因「注定相同」在该场景不成立；RERUN=force / SNAPSHOT_OFF 逃生通道复核在",
+      "location": "src/run/gates.js"
+    },
+    {
+      "severity": "P3",
+      "title": "携带面 .py 冒烟并入无测试钉（遗留，提交信息留痕）",
+      "evidence": "overlaidPyFiles 并入 carriedList（gate-snapshot.js:726）无直接用例；冒烟 fail-open 本身有既有测试",
+      "location": "src/run/gate-snapshot.js:726"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T02:05:00Z",
+  "note": "复核结论由评审子代理 4badee47 增量复核产出（F1/F3/F5 确认清偿、F2/F4 留痕遗留、无 P1；目标套件 11/11、扩面 19 文件 115/115、check-syntax 绿均评审者亲跑）；review.json 落盘环节子代理异常（旧件改名 .superseded 后新件未写出），本文件按其结论机械转写——verdict/findings/dimensionNotes 与其复核回复一致。"
+}

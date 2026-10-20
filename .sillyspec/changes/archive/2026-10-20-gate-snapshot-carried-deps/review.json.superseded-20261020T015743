@@ -1,0 +1,120 @@
+{
+  "review": {
+    "change": "2026-10-20-gate-snapshot-carried-deps",
+    "initial_review_sha": "cd7de490add992c422d7a62ece65d3c881a039d5",
+    "reviewedAgainst": "4badee475860d096a9770d50d1f936f922715640",
+    "head_prefix_verified": "git rev-parse HEAD = 4badee475860d096a9770d50d1f936f922715640（= 清偿 commit 4badee47，任务书一致）",
+    "remediation_commit": "4badee47 fix(gate-snapshot): 评审 F1/F3/F5 清偿（F2/F4 留痕为遗留）——触及 requirements.md / src/run/gate-snapshot.js / src/run/gates.js / test/verify-gate-snapshot.test.mjs（git show --stat 核实）",
+    "reviewed_at": "2026-10-20",
+    "mode": "增量复核（只读纪律，本 review.json 为唯一可写产物）；初始评审五查单/双探针结论在 4badee47 未触及的行为面上全部沿用，此版记录增量复核与 findings 终态",
+    "verdict": "pass",
+    "verdict_note": "无 P1；P2×1 已清偿（F1）、P3×3 已清偿（F3/F5，各带同款一行残留注记）+ P3×2 留痕为遗留（F2/F4，提交信息已注，均有逃生通道）。核心行为面（overlayOne 共用/缺省零回归/隔离核心/全部被剔回退语义/路径口径）在 4badee47 复测全绿。"
+  },
+  "checklist": [
+    {
+      "id": 1,
+      "question": "FR↔实现↔测试三方一致（FR-01..05 逐条）",
+      "answer": "五条全部一致成立（含 F1 清偿后 FR-02 绑定补全、F5 清偿后 FR-02 措辞对齐三态）。",
+      "detail": [
+        "FR-01：与初始评审结论同（4badee47 未触及 createGateSnapshot 主逻辑）——签名/共用 overlayOne/.py 冒烟并入/返回值/overlaid 不含携带件，carried 套件 4 用例绿。",
+        "FR-02：代码一致（判定面剔除+carriedForeignFiles 物理携带+控制台提示；全部被剔 setFail 文案逐字未动、早退先于携带使用）；措辞已修正为「源=overlayRoot 经三态判定：worktree 模式陈旧取主仓/正常与分叉取 worktree 血统，in-place 取主仓工作区版本」（requirements.md FR-02，4badee47）——与 overlayOne 实际语义一致（F5 清偿）。测试绑定双用例齐备：坑文主场景 + 新增「全部 diff 被他者声明过滤 → null 回退主仓，原因文案不变」（F1 清偿，见 findings）。",
+        "FR-03：:77 防弄红断言与 in-place fail-closed 原样（4badee47 未触及测试既有断言）；携带面只收 foreignSet∩changeFiles，未声明无主脏文件无法进入——机制复核沿用初始评审。",
+        "FR-04：in-place 改钉（物理在场+carriedFiles 锚）与坑文主场景钉均绿。",
+        "FR-05：亲跑复核——verify-gate-snapshot + carried 11/11 绿（7+4，与任务书主张一致）；扩面 19 文件（全家族 17 + verify-quality-scan + smoke-gate）115/115 绿；npm run lint（check-syntax）绿。"
+      ]
+    },
+    {
+      "id": 2,
+      "question": "盲维四问与代码相符性",
+      "answer": "四问与代码相符（4badee47 仅改提示文案/jsdoc/测试，未触及四问对应机制）；初始评审结论沿用。",
+      "detail": "乱序=时点态求值不变；并发=同一 copyFileSync 原语+冒烟兜底不变；切换=账本仍只按 snapshotRoot 记账；作用域=carriedForeignFiles 仍源自本仓 splitOwnVsForeignDiffFiles，carriedFiles 唯一消费点仍为 createVerifyGateSnapshot 提示（printSnapshotFailureHint 为只读消费 snapInfo.carriedFiles，无新状态）。"
+    },
+    {
+      "id": 3,
+      "question": "披露边界显式裁决（必答）——最大风险四缓解逐条",
+      "answer": "总体裁决维持可接受。四缓解终态：①已完整落地（失败时点指引分叉补齐，F3 清偿，附两处一行残留注记）②可接受（限 .py，F4 留痕遗留）③可接受（F2 留痕遗留——签名闸交互盲区）④核实未动。",
+      "detail": [
+        "①控制台清单归因——清偿后双层在场：建快照时点 📦 行（gate-snapshot.js:973-976）+ 失败时点 printSnapshotFailureHint 携带分叉（:886-893——携带面在场时疑点②直指「携带的他者声明文件坏半态」并给清单预览+核对他者/SNAPSHOT_OFF 出路；原「并行污染不在疑点内」只保留在无携带分支，语义精确化）。主失败调用面（gates.js:1361 传全量 snap、verify-quality-scan.js:825 传 snap）携带字段可达。",
+        "②冒烟保护——维持初始裁决：.py 携带件并入冒烟已实现，JS/TS 同既有面留后续；无钉（F4 遗留）。",
+        "③期望值严格改善论证——维持初始裁决：依赖场景必假红→自洽成立且被钉；不依赖场景三重前置条件+归因+逃生兜底。F2（rerun 签名闸文件名哈希交互）按提交意见留痕为遗留，逃生通道（RERUN=force / SNAPSHOT_OFF 切换入 env 探针）核实未动。",
+        "④SNAPSHOT_OFF 逃生——4badee47 未触及 gates.js:1105 / verify-quality-scan.js:646 前置判定与 worktree-skip，核实不变。"
+      ]
+    },
+    {
+      "id": 4,
+      "question": "防护声明核实",
+      "answer": "四项核实成立（4badee47 未触及防护机制本体；F1 钉测试补上回退分支回归防线）。",
+      "detail": "overlayOne 共用无漂移（与 cd7de490^ 逐行比对沿用）；缺省零回归（carried 套件缺省用例+quick 套件在新 HEAD 复绿）；files.includes 去重（:617）；filterStaleForeignDeclarations 活性口径（getMainDirtySet --untracked-files=all）下携带源真实性——测试形态与生产形态一致（in-place 主仓脏文件直证、坑文主场景以 worktree 手写复现 baseline 携带，注释明示转写）。"
+    },
+    {
+      "id": 5,
+      "question": "生成物同步",
+      "answer": "确认：本变更（含清偿增量）无类型/契约生成物需要同步。",
+      "detail": "4badee47 触及面=gate-snapshot.js/gates.js/requirements.md/verify-gate-snapshot.test.mjs，无生成面；lint 自带 module-map 覆盖检查亲跑通过；troubleshooting.md 历史引述不受影响。"
+    }
+  ],
+  "probes": [
+    {
+      "id": "config-absent-zero-regression",
+      "applicable": false,
+      "reason": "维持初始裁决：carriedFiles 是 createGateSnapshot 解构函数参数（gate-snapshot.js:497），非 local.yaml 配置键（local.yaml 消费面 gate_snapshot.commands/copy 未动）。",
+      "anchor_anyway": "缺省零回归锚仍在且新 HEAD 复绿：test/gate-snapshot-carried.test.mjs『缺省零回归』用例 + test/quick-gate-snapshot.test.mjs（quick 调用点不传）。"
+    },
+    {
+      "id": "crossrepo-path-compat",
+      "applicable": true,
+      "answer": "维持初始裁决：携带面路径与 files 面同口径，Windows 兼容成立。",
+      "detail": "4badee47 未触及路径处理（carriedForeignFiles 仍与 changeFiles 同源同形 POSIX；overlayOne 共用；foreignSet 原串精确匹配）；本版全部复测在 win32 执行 115/115 绿。"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-02 声明的测试绑定「全部被剔回退语义不变」无对应测试",
+      "resolution": "已清偿（4badee47）：test/verify-gate-snapshot.test.mjs:158-173 新增『全部 diff 被他者声明过滤 → null 回退主仓，原因文案不变（FR-02 回退语义钉）』——in-place 形态他者变更声明覆盖唯一在途文件 src/feature.js，断言 snap===null（携带面不救回——判定面空即回退）且 failRef.reason 含『全部被他者声明过滤』。场景活性核实：other-change design 声明+主仓未提交（dirty 集命中）+c1 无 own 声明集（退 foreign-first）——真实走到 setFail 分支。亲跑绿。",
+      "note": "文案钉为子串级（includes『全部被他者声明过滤』）而非全字面——承载段已覆盖，强度可接受；后续若文案重构需同步此锚。"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "status": "open-legacy",
+      "title": "RERUN 签名闸对携带面内容盲：他者修好同文件名坏半态后 RERUN=1 仍被拒",
+      "detail": "维持初始裁决与证据（verify-quality-scan.js:93-98/:209-221：指纹代码分量=脏文件名集合非内容）。4badee47 未触及该机制，提交信息显式留痕为遗留（『rerun 签名哈希文件名交互……有逃生通道』）。逃生通道复核：RERUN=force 无条件放行；SNAPSHOT_OFF 切换入 env 探针即签名失配。建议后续：rerunSignature/dedupKey 并入携带清单内容哈希。",
+      "evidence": "src/run/verify-quality-scan.js:93-98/:209-221/:623-629；commit 4badee47 message"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "status": "resolved",
+      "title": "失败时点归因提示未随携带面更新：排查③仍称并行污染不在疑点内",
+      "resolution": "已清偿（4badee47）：printSnapshotFailureHint（gate-snapshot.js:884-893）按 snapInfo.carriedFiles 分叉——携带面在场时头部含携带计数、疑点②指向携带的他者声明文件坏半态（预览清单+核对他者变更/SNAPSHOT_OFF 出路），原『并行污染已被快照隔离，不在疑点内』只保留在无携带分支；gates.js:1111 快照横幅改『并行会话未声明脏文件不参与门判定』+携带计数；createVerifyGateSnapshot wrapper jsdoc 同步区分未声明隔离 vs 显式声明携带。主失败调用面（gates.js:1361 / verify-quality-scan.js:825）传全量 snap 携带字段可达。",
+      "note": "两处同款一行残留（清偿范围外，各有一线缓解，不另立 finding）：① gates.js:1413 usedSnapInfo 字面量未带 carriedFiles——lint 硬门失败路径的 hint 走无携带分支（该路径另有 lintOwnershipDowngrade 零交集 advisory 兜底携带件 lint 债）；② verify-quality-scan.js:662 noAI 横幅仍无『未声明』限定/携带计数（📦 携带行紧邻其前打印，归因不缺）。后续触碰这两行时顺手同步即可。"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "status": "open-legacy",
+      "title": "携带面 .py import 冒烟并入无测试钉",
+      "detail": "维持初始裁决（gate-snapshot.js:726 [...files, ...carriedList] 并入，无 carried .py 用例）。4badee47 未触及，提交信息显式留痕为遗留。建议后续补 1 用例：carriedFiles 含语法坏 .py → 快照内该文件为 HEAD 版且 warn。",
+      "evidence": "src/run/gate-snapshot.js:726-736；test/gate-snapshot-carried.test.mjs；commit 4badee47 message"
+    },
+    {
+      "id": "F5",
+      "severity": "P3",
+      "status": "resolved",
+      "title": "FR-02 括注『worktree 模式取 worktree 在场版本』与实际三态语义不完全一致",
+      "resolution": "已清偿（4badee47）：requirements.md FR-02 括注改为『源=overlayRoot 经三态判定：worktree 模式陈旧取主仓/正常与分叉取 worktree 血统，in-place 取主仓工作区版本』——规范工件与 overlayOne 实际语义（陈旧态取主仓版）一致；FR-01 场景与 overlayOne 代码注释本就正确。",
+      "note": "design.md:11 做法概述仍含同款简写（『worktree 模式取 worktree 在场版本』）——设计记录非规范面且 requirements 已纠正，不另立 finding；后续触碰 design 时顺手对齐。"
+    }
+  ],
+  "evidence": {
+    "head": "4badee475860d096a9770d50d1f936f922715640（git rev-parse HEAD；initial review @ cd7de490add992c422d7a62ece65d3c881a039d5）",
+    "targeted_tests": "node --test test/verify-gate-snapshot.test.mjs test/gate-snapshot-carried.test.mjs：tests 11 / pass 11 / fail 0（评审者亲跑，win32，与任务书主张一致）",
+    "family_and_consumer_tests": "全家族 17 文件 + verify-quality-scan + smoke-gate：tests 115 / pass 115 / fail 0（评审者亲跑——覆盖 printSnapshotFailureHint 文案变更的回归面）",
+    "lint": "npm run lint（node test/check-syntax.mjs）绿：1026 文件、未引用导出 0、module-map 覆盖全（评审者亲跑）",
+    "remediation_diff": "git show 4badee47 逐 hunk 复核：F1 测试场景活性链（design 声明+dirty 命中+own 空集）、F3 分叉逻辑与三调用面携带字段可达性、F5 规范措辞逐字核对",
+    "spec_state": "requirements.md 已随清偿更新（FR-02 三态措辞）；design.md/flow-state.yaml 未再变更"
+  }
+}

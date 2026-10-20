@@ -1,0 +1,353 @@
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index f434eef3..62e97f3e 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -494,7 +494,7 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
+  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
+  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
+  */
+-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
++export function createGateSnapshot({ cwd, files, carriedFiles = [], sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null, failRef = null }) {
+   // failRef 可选出参（坑 snapshot-fallback-reason-blind，2026-10-16 下游实证）：所有失败分支
+   // 把结构化原因写进 failRef.reason——调用方（verify --done 实测门 / noAI 质量扫描）消费它
+   // 替换硬编码笼统文案，降级原因可直读（pnpm 布局拒建 ≠ 文件集为空 ≠ junction 失败）。
+@@ -543,7 +543,6 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // 是共享运行时面：.runtime/（sqlite 锁/在途 marker）与 quicklog/（跨会话共享账本）；
+     // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
+     const overlayRoot = sourceRoot || cwd
+-    let overlaid = 0
+     // 双写一致性（2026-09-20 红线机检变更实证：主 agent 在主仓直写而 execute 已建 worktree 时，
+     // overlay 源=worktree 拿陈旧内容盖掉快照 HEAD 的新版——快照内 import 找不到新导出→门禁假红）。
+     // 祖先判据（fr-index-l2 二次实证升级）：基线优先取 merge-base 的每文件祖先内容
+@@ -568,9 +567,12 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+       }
+       try { return cmpText(readFileSync(join(snapshotRoot, rel))) } catch { return null }
+     }
+-    for (const f of files) {
++    // 单文件 overlay（判定面 files 与携带面 carriedFiles 共用，2026-10-20-gate-snapshot-
++    // carried-deps 提取）：源=overlayRoot；worktree 模式经三态判定（陈旧取主仓/正常取
++    // worktree/分叉取 worktree 血统 M2）；源侧不存在返回 false（已删/不在场不拷）。
++    const overlayOne = (f) => {
+       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
+-      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
++      if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) return false
+       let src = join(overlayRoot, f)
+       if (sourceRoot && sourceRoot !== cwd) {
+         const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
+@@ -595,11 +597,26 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+           }
+         }
+       }
+-      if (!existsSync(src)) continue
++      if (!existsSync(src)) return false
+       const dst = join(snapshotRoot, f)
+       mkdirSync(dirname(dst), { recursive: true })
+       copyFileSync(src, dst)
+-      overlaid++
++      return true
++    }
++    let overlaid = 0
++    for (const f of files) { if (overlayOne(f)) overlaid++ }
++
++    // 携带面 overlay（2026-10-20-gate-snapshot-carried-deps，坑 verify-gate-…-three-defects
++    // 缺陷二）：他者声明文件从判定面剔除但物理携带进快照——快照复现本变更实测时真实的依赖
++    // 环境（worktree 模式≈worktree 自洽态；in-place≈主仓混合树）。坑文场景：本变更文件 import
++    // 他者未提交导出（quick 的 stripPathPrefix）→ 原快照装 HEAD 旧版必 TypeError 假红，携带后
++    // 自洽。判定面（files/overlaid）不含携带件——归属语义不变，假红可经控制台清单归因到他者。
++    const carriedList = []
++    if (Array.isArray(carriedFiles) && carriedFiles.length > 0) {
++      for (const f of carriedFiles) {
++        if (files.includes(f)) continue // 判定面已含（own 声明优先级高于他者）——不重复拷
++        if (overlayOne(f)) carriedList.push(f)
++      }
+     }
+ 
+     // 环境目录链接（坑 gate-snapshot-env-mismatch，2026-09-12 驾驭第十三批③，用户实证：
+@@ -706,7 +723,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // HEAD 健版保证 import 图闭合。新增文件（HEAD 无版）无法回退 → 醒目 warn 保留。
+     // 全链 fail-open：找不到解释器/基建异常只 warn 不作废快照（主场景是 Python 项目，
+     // JS/TS 的 vitest load 冒烟成本高留后续）。
+-    const overlaidPyFiles = files.filter(f => typeof f === 'string' && f.endsWith('.py')
++    const overlaidPyFiles = [...files, ...carriedList].filter(f => typeof f === 'string' && f.endsWith('.py')
+       && !f.startsWith('.sillyspec/')
+       && existsSync(join(snapshotRoot, f)))
+     if (overlaidPyFiles.length > 0 && !skipImportSmoke) {
+@@ -727,7 +744,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+         if (dirRemoved && worktreeCleaned) unregisterGateSnapshot({ runtimeRoot, snapshotRoot })
+       } catch { /* 双失败已由 cleanupSnapshot 吞掉；条目保留 */ }
+     }
+-    return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
++    return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks, carriedFiles: carriedList, carried: carriedList.length }
+   } catch (e) {
+     // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓；销账同走双清确认
+     // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）。
+@@ -866,8 +883,15 @@ export function envDirsLinked(cwd, snapshotRoot) {
+  */
+ export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF' } = {}) {
+   if (!snapInfo || !snapInfo.snapshotRoot) return
+-  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}）`)
+-  console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
++  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}${snapInfo.carriedFiles && snapInfo.carriedFiles.length > 0 ? `，携带 ${snapInfo.carriedFiles.length} 个他者声明文件（依赖自洽面）` : ''}）`)
++  // 2026-10-20-gate-snapshot-carried-deps 评审 F3 清偿：携带面在场时他者文件**在**疑点内
++  // （原「并行污染不在疑点内」只对未声明脏文件成立——携带件是声明过的他者内容）。
++  if (snapInfo.carriedFiles && snapInfo.carriedFiles.length > 0) {
++    const preview = snapInfo.carriedFiles.slice(0, 5).join('、')
++    console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 携带的他者声明文件坏半态（${snapInfo.carriedFiles.length > 5 ? `${preview} 等` : preview}——他者变更在途内容，非本变更面）→ 核对他者变更状态或 SNAPSHOT_OFF 对照；③ 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题。`)
++  } else {
++    console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
++  }
+ }
+ 
+ /**
+@@ -875,8 +899,9 @@ export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_
+  * main 工作区，多会话并发任何人的 WIP 都能弄红别人的门）。等价「--worktree 定向跑」：
+  * overlay 文件集 = resolveVerifyChangedFiles（worktree-aware：含 merge-base 补齐与
+  * working-tree），overlay 源 = 本变更 worktree 根（meta 感知；in-place 退主仓 cwd）——
+- * 并行会话的在途文件物理不进快照。变更文档（changes/<name>/**，test_strategy 的
+- * module-impact.md 等消费）从主仓 specBase 随快照复制。
++ * 并行会话**未声明**的在途脏文件物理不进快照（隔离核心）；他者**显式声明**的文件以携带面
++ * 物理进快照（2026-10-20-gate-snapshot-carried-deps：依赖自洽——判定/归因面仍剔除）。
++ * 变更文档（changes/<name>/**，test_strategy 的 module-impact.md 等消费）从主仓 specBase 随快照复制。
+  * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+  * @returns {Promise<{snapshotRoot: string, cleanup: () => void, overlaid: number, changeFileCount: number}|null>}
+  */
+@@ -905,11 +930,15 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+     }
+     // 他者声明归属过滤（坑 verify-reconcile-foreign-wip 同款）：in-place 模式 working-tree
+     // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
+-    // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
++    // 清单）从**判定面**剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
++    // 2026-10-20-gate-snapshot-carried-deps（坑 verify-gate-…-three-defects 缺陷二）：被剔
++    // 文件改以「携带面」物理进快照（carriedFiles）——快照依赖自洽，判定/归属语义不变。
++    let carriedForeignFiles = []
+     try {
+       const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, changeFiles, { specBase, runtimeRoot: verifyRuntimeRoot })
+       if (foreign.length > 0) {
+         const foreignSet = new Set(foreign.map(x => x.file))
++        carriedForeignFiles = changeFiles.filter(f => foreignSet.has(f))
+         changeFiles = changeFiles.filter(f => !foreignSet.has(f))
+         if (changeFiles.length === 0) {
+           setFail(`变更文件集为空（${foreign.length} 个 diff 文件全部被他者声明过滤——并行会话声明面覆盖了本变更全部在途文件）`)
+@@ -943,12 +972,16 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
+       }
+     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
+ 
+-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
++    const snap = createGateSnapshot({ cwd, files: changeFiles, carriedFiles: carriedForeignFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot, failRef })
+     if (!snap) {
+       // createGateSnapshot 已把具体原因写进同一 failRef；无 reason（旧形态兜底）补笼统口径
+       if (failRef && typeof failRef === 'object' && !failRef.reason) setFail('快照基建不可用（createGateSnapshot 返回 null，无更细原因）')
+       return null
+     }
++    if (snap.carriedFiles && snap.carriedFiles.length > 0) {
++      const preview = snap.carriedFiles.slice(0, 5).join('、')
++      console.log(`📦 快照携带 ${snap.carriedFiles.length} 个他者声明文件（依赖自洽面，不进判定/归因面；假红先核对他者变更）${snap.carriedFiles.length > 5 ? `：${preview} 等` : `：${preview}`}`)
++    }
+ 
+     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
+     // 在 .sillyspec（gitignore）不进 HEAD，从主仓 specBase 复制 changes/<name>/**
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 7b26c624..210d40d2 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1108,7 +1108,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         snapshotFailRef = {}
+         verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
+         if (verifyGateSnap) {
+-          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
++          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}${verifyGateSnap.carriedFiles && verifyGateSnap.carriedFiles.length > 0 ? ` + 携带 ${verifyGateSnap.carriedFiles.length} 个他者声明文件（依赖自洽，不进判定面）` : ''}（并行会话未声明脏文件不参与门判定）`)
+         } else {
+           // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
+           // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因
+diff --git a/test/gate-snapshot-carried.test.mjs b/test/gate-snapshot-carried.test.mjs
+new file mode 100644
+index 00000000..551d100c
+--- /dev/null
++++ b/test/gate-snapshot-carried.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * 携带面 carriedFiles（2026-10-20-gate-snapshot-carried-deps FR-01）：
++ * createGateSnapshot 增可选 carriedFiles——与 files 同款 overlay 语义（源判定/运行时面
++ * 跳过/逃逸拒绝），计数与清单入返回值；缺省零回归（carriedFiles=[]、carried=0）。
++ *
++ * 坑文场景（缺陷二：同文件叠加多变更快照缺依赖必破）的机制半场——策略半场（foreign
++ * 剔除改携带）由 test/verify-gate-snapshot.test.mjs 钉。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { createGateSnapshot } from '../src/run/gate-snapshot.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++function setupRepo() {
++  const proj = mk('gsc-main-')
++  git(proj, ['init', '-q'])
++  git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 1\n')
++  writeFileSync(join(proj, 'src', 'util.js'), 'export const stripPathPrefix = null // HEAD 旧版（无新导出体）\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
++  return proj
++}
++
++test('携带件从 overlayRoot 拷进快照，清单与计数入返回值', () => {
++  const proj = setupRepo()
++  // 他者声明文件的「在途新版」（主仓工作区形态——in-place 源）
++  writeFileSync(join(proj, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p }\n')
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2 // 本变更\n')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/feature.js'], carriedFiles: ['src/util.js'] })
++  assert.ok(snap, '快照可用')
++  try {
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'util.js'), 'utf8'),
++      'export function stripPathPrefix(p) { return p }\n',
++      '携带件=overlayRoot（主仓）工作区版本——依赖自洽')
++    assert.deepEqual(snap.carriedFiles, ['src/util.js'], '返回携带清单')
++    assert.equal(snap.carried, 1, '携带计数')
++    assert.equal(snap.overlaid, 1, '判定面计数不含携带件')
++  } finally { snap.cleanup() }
++})
++
++test('缺省零回归：不传 carriedFiles → 空清单零计数，行为与既有一致', () => {
++  const proj = setupRepo()
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2\n')
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/feature.js'] })
++  assert.ok(snap)
++  try {
++    assert.deepEqual(snap.carriedFiles, [], '缺省携带清单为空')
++    assert.equal(snap.carried, 0, '缺省携带计数 0')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 2\n')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'util.js'), 'utf8').replace(/\r\n/g, '\n'),
++      'export const stripPathPrefix = null // HEAD 旧版（无新导出体）\n',
++      '未携带的他者文件保持 HEAD 版（隔离不回退；行尾按 autocrlf 归一）')
++  } finally { snap.cleanup() }
++})
++
++test('源侧不在场的携带件跳过；运行时面/逃逸路径拒绝；与判定面去重', () => {
++  const proj = setupRepo()
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 2\n')
++  const snap = createGateSnapshot({
++    cwd: proj,
++    files: ['src/feature.js'],
++    carriedFiles: [
++      'src/not-in-source.js',            // 源侧不存在（worktree 模式主仓专属 WIP 形态）→ 跳过
++      '.sillyspec/.runtime/marker.json', // 运行时面 → 跳过
++      '../escape.js',                    // 逃逸 → 跳过
++      'src/feature.js',                  // 判定面已含 → 去重不重复计
++    ],
++  })
++  assert.ok(snap)
++  try {
++    assert.deepEqual(snap.carriedFiles, [], '全部跳过/去重 → 携带清单空')
++    assert.equal(snap.carried, 0)
++    assert.ok(!existsSync(join(snap.snapshotRoot, 'src', 'not-in-source.js')))
++  } finally { snap.cleanup() }
++})
++
++test('worktree 三态源判定对携带件同款生效（分叉取 worktree 血统 M2）', () => {
++  const proj = setupRepo()
++  const wt = mk('gsc-wt-'); rmSync(wt, { recursive: true, force: true })
++  git(proj, ['worktree', 'add', '-q', wt, '-b', 'wt-branch'])
++  // 他者声明文件在 worktree 有真修改（新版导出）、主仓工作区同步停HEAD——携带应取 worktree 版
++  writeFileSync(join(wt, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p } // worktree 版\n')
++  writeFileSync(join(wt, 'src', 'feature.js'), 'export const f = 2 // 本变更交付\n')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/feature.js'], carriedFiles: ['src/util.js'], sourceRoot: wt })
++  assert.ok(snap)
++  try {
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'util.js'), 'utf8'),
++      'export function stripPathPrefix(p) { return p } // worktree 版\n',
++      '携带件走同款三态判定（worktree 真修改 → worktree 血统）')
++    assert.deepEqual(snap.carriedFiles, ['src/util.js'])
++  } finally { snap.cleanup() }
++})
+diff --git a/test/verify-gate-snapshot.test.mjs b/test/verify-gate-snapshot.test.mjs
+index f285f978..7a84024d 100644
+--- a/test/verify-gate-snapshot.test.mjs
++++ b/test/verify-gate-snapshot.test.mjs
+@@ -101,13 +101,47 @@ test('in-place meta：overlay 源退主仓；他者显式声明的文件剔除
+   try {
+     assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 本变更 in-place\n',
+       '本变更 working-tree 文件进快照')
+-    assert.ok(!existsSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js')),
+-      '他者显式声明的文件剔除（归属可判——多会话并发的主场景）')
++    // 2026-10-20-gate-snapshot-carried-deps 改钉（坑缺陷二）：他者声明文件从「物理剔除」改
++    // 「判定面剔除 + 物理携带」——快照依赖自洽（本变更文件 import 他者新增导出不再 TypeError）。
++    assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js')),
++      '他者显式声明的文件物理携带进快照（判定面剔除、归属语义不变——carriedFiles 可观察）')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'declared-foreign.js'), 'utf8'), 'const x = 1\n',
++      '携带内容=overlayRoot（主仓工作区）版本')
++    assert.ok(snap.carriedFiles && snap.carriedFiles.includes('src/declared-foreign.js'),
++      '返回值 carriedFiles 含该文件（判定/归因面剔除的可观察锚）')
+     assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'ownerless-wip.js')),
+       '无主文件保留（fail-closed：无法排除是本变更自己的未声明改动）')
+   } finally { snap.cleanup() }
+ })
+ 
++test('坑缺陷二主场景（worktree）：本变更依赖他者声明文件的新导出 → 快照携带自洽', async () => {
++  const proj = mk('vgs-dep-')
++  const { specBase, wtDir } = setupBase(proj, 'native')
++  // 他者活跃变更（quick）显式声明 src/util.js（design 文件变更清单口径），其内容在主仓在途
++  // （filterStaleForeignDeclarations 活性判据：无 worktree 的他者变更看主仓未提交集）——
++  // worktree 建立时 baseline 携带把该文件带入 worktree（生产形态）。
++  const quickDir = join(specBase, 'changes', 'quick-x')
++  mkdirSync(quickDir, { recursive: true })
++  writeFileSync(join(quickDir, 'design.md'), '# D\n\n## 文件变更清单\n\n| 文件 | 操作 |\n|------|------|\n| src/util.js | 修改 |\n')
++  writeFileSync(join(proj, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p } // quick 在途\n')
++  // 坑文形态：本变更 feature.js import quick 的新导出——HEAD 旧版无此导出，
++  // 原快照（util.js 被剔且物理不进）必 TypeError 假红
++  writeFileSync(join(wtDir, 'src', 'util.js'), 'export function stripPathPrefix(p) { return p } // worktree 携带版\n')
++  writeFileSync(join(wtDir, 'src', 'feature.js'), 'export { stripPathPrefix } from \'./util.js\'\nexport const f = 2 // 本变更交付\n')
++
++  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
++  assert.ok(snap, '快照创建成功')
++  try {
++    assert.ok(snap.carriedFiles && snap.carriedFiles.includes('src/util.js'),
++      '他者声明的 util.js 进携带面（判定面剔除）')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'util.js'), 'utf8'), 'export function stripPathPrefix(p) { return p } // worktree 携带版\n',
++      '快照内 util.js=worktree 新版——import 依赖自洽（缺陷二 TypeError 场景消除）')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'),
++      'export { stripPathPrefix } from \'./util.js\'\nexport const f = 2 // 本变更交付\n',
++      '本变更文件照常 overlay（worktree 版）')
++  } finally { snap.cleanup() }
++})
++
+ test('非 git / 无变更文件集 → null（fallback 主仓现行为）', async () => {
+   const plain = mk('vgs-nogit-')
+   assert.equal(await createVerifyGateSnapshot({ cwd: plain, changeName: 'c1', specBase: join(plain, '.sillyspec') }), null,
+@@ -121,6 +155,22 @@ test('非 git / 无变更文件集 → null（fallback 主仓现行为）', asyn
+     '无变更文件集 → null（无从定向）')
+ })
+ 
++test('全部 diff 被他者声明过滤 → null 回退主仓，原因文案不变（FR-02 回退语义钉，评审 F1 清偿）', async () => {
++  const proj = mk('vgs-allforeign-')
++  const { specBase } = setupBase(proj, 'inplace')
++  // 他者活跃变更声明覆盖本变更全部在途文件
++  const otherDir = join(specBase, 'changes', 'other-change')
++  mkdirSync(otherDir, { recursive: true })
++  writeFileSync(join(otherDir, 'design.md'), '# D\n\n## 文件变更清单\n\n| 文件 | 操作 |\n|------|------|\n| src/feature.js | 修改 |\n')
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 9 // 在途\n')
++
++  const failRef = {}
++  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase, failRef })
++  assert.equal(snap, null, '判定面全被剔 → null 回退主仓（携带面不救回——本变更无 own 面）')
++  assert.ok(failRef.reason && failRef.reason.includes('全部被他者声明过滤'),
++    `failRef 原因文案不变（实际：${failRef.reason}）`)
++})
++
+ test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked 新文件内容进快照——回放摩擦#5 永久钉', async () => {
+   const proj = mk('vgs-adopt-')
+   const { specBase, wtDir } = setupBase(proj, 'native')

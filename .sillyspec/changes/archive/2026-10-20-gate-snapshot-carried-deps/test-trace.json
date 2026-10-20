@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-gate-snapshot-carried-deps",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-01",
+      "tests": [
+        "test/gate-snapshot-carried.test.mjs「carriedFiles 同款 overlay 语义与零回归契约」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-gate-snapshot-carried-deps"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-gate-snapshot.test.mjs「坑文主场景：他者声明依赖携带自洽」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-gate-snapshot-carried-deps"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-gate-snapshot.test.mjs「native worktree：快照含本变更 worktree 版本 + 变更文档，不含主仓他者脏文件」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-gate-snapshot-carried-deps"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-gate-snapshot.test.mjs「in-place meta：…他者声明文件物理携带改钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-gate-snapshot-carried-deps"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-20-gate-snapshot-carried-deps:flow:测试绑定FR-05",
+      "tests": [
+        "test/gate-snapshot-lineage.test.mjs「全家族回归」",
+        "test/quick-gate-snapshot.test.mjs",
+        "test/verify-gate-snapshot.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-gate-snapshot-carried-deps"
+    }
+  ]
+}

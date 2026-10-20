@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -31,11 +39,17 @@ input: >-
 autopilot: false
 prestage_ack: true
 baseline_commit: 8b0d5025fdd8b9670f1f21e5505e1013cb36b918
-updatedAt: '2026-10-20T01:22:57.864Z'
+updatedAt: '2026-10-20T01:58:56.530Z'
 baseline_sha256: 2867bee410eb92017b7c2ef9c2d8f3a045d5c17f1f587db6fc37228dca0c85b3
 spec_approved: true
 spec_approved_at: '2026-10-20T01:22:57.863Z'
 spec_approved_by: zcode-pitfall-fix-snapshot
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-pitfall-fix-snapshot
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js20)+fr(1)（24.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020013238\test-result.json｜lint: passed
+  ← npm run lint（47.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020013238\test-result.json｜门文件 6 个
 
