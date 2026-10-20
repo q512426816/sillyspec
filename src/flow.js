@@ -1921,6 +1921,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}），重跑本命令——冻结面自动并入`)
             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
             console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
+            console.error(`   💡 快速通道：脏文件全属并行会话在途/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap（显式 pathspec 提交面已隔离归属；属本变更的文件必须走①提交）`)
             reportMidFail('patch')
             process.exit(1)
           }

@@ -345,6 +345,19 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
 const isAnchorSha = (v) => typeof v === 'string' && /^[0-9a-f]{7,40}$/i.test(v.trim())
 
 /**
+ * 锚 sha 词元提取（2026-10-20-closeout-roundtrip-slim）：字段含 7-40 位独立 hex 词元即通过，
+ * 返回归一化纯 sha（小写）；无词元返回 null。评审代理常在 sha 后附实测注记（今晚两例被整串
+ * 校验拒收，各多一轮收口往返）——词元提取容忍注记形态。归一化只发生在内存对象/返回值，
+ * 不回写文件（校验器只读铁律）。误命中面（如连写分支名含 ≥7 位 hex 段）后果有限：
+ * reviewedAgainst 是溯源锚非门禁比对；风险评估见变更 design 风险1。
+ */
+const extractAnchorSha = (v) => {
+  if (typeof v !== 'string') return null
+  const m = v.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])/)
+  return m ? m[0].toLowerCase() : null
+}
+
+/**
  * 变更的跨仓冻结面仓键（无 change-patch.json / 无 repos / 不可读 → null=单仓形态）。
  * 形状对齐 cross-repo patch 冻结件（repos[] 条目含 key）。
  */
@@ -376,16 +389,22 @@ export function validateReviewJson(path) {
   if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
   if (r.reviewedAgainst !== undefined) {
     if (typeof r.reviewedAgainst === 'string') {
-      if (!isAnchorSha(r.reviewedAgainst)) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
+      const _anchor = extractAnchorSha(r.reviewedAgainst)
+      if (!_anchor) errors.push('reviewedAgainst 须为 7-40 位 hex sha（git rev-parse HEAD 输出，照抄任务书标注）')
+      else r.reviewedAgainst = _anchor
     } else if (r.reviewedAgainst && typeof r.reviewedAgainst === 'object' && !Array.isArray(r.reviewedAgainst)) {
-      if (!isAnchorSha(r.reviewedAgainst.workspace)) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
+      const _ws = extractAnchorSha(r.reviewedAgainst.workspace)
+      if (!_ws) errors.push('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')
+      else r.reviewedAgainst.workspace = _ws
       if (r.reviewedAgainst.repos !== undefined) {
         const repos = r.reviewedAgainst.repos
         if (!repos || typeof repos !== 'object' || Array.isArray(repos)) {
           errors.push('reviewedAgainst.repos 须为对象（仓键 → sha；仓键取 local.yaml repos 注册表键）')
         } else {
           for (const [k, v] of Object.entries(repos)) {
-            if (!isAnchorSha(v)) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
+            const _repo = extractAnchorSha(v)
+            if (!_repo) errors.push(`reviewedAgainst.repos.${k} 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）`)
+            else repos[k] = _repo
           }
         }
       }
@@ -425,9 +444,10 @@ export function reviewAnchoredToHead(reviewPath, head) {
   try {
     const r = JSON.parse(readFileSync(reviewPath, 'utf8'))
     const raRaw = r?.reviewedAgainst
-    const ra = typeof raRaw === 'string' ? raRaw.trim().toLowerCase()
-      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace.trim().toLowerCase() : '')
-    if (!/^[0-9a-f]{7,40}$/.test(ra)) return false
+    const raRawNorm = typeof raRaw === 'string' ? raRaw
+      : (raRaw && typeof raRaw === 'object' && typeof raRaw.workspace === 'string' ? raRaw.workspace : '')
+    const ra = extractAnchorSha(raRawNorm)
+    if (!ra) return false
     return h === ra || h.startsWith(ra) || ra.startsWith(h)
   } catch { return false }
 }
