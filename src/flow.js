@@ -2399,7 +2399,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const { assembleReviewPack, findLatestTestReceipt } = await import('./flow-review-pack.js')
         // ledger 测试回执（2026-10-21-review-rerun-scope）：ledger 先于 review（SUBSTEPS 序），
         // verify-runs 最新本变更 test-result 作回执注入——评审从「自己重跑」变「回执基线抽验」。
-        const _receipt = findLatestTestReceipt(join(resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase), 'verify-runs'), change)
+        const _receipt = findLatestTestReceipt(join(specBase, '.runtime', 'verify-runs'), change)
         const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution, testReceipt: _receipt })
         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }

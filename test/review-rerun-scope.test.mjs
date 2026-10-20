@@ -19,7 +19,7 @@ test('① 任务书复跑口径五要素锚', () => {
   assert.ok(tb.includes('按「变更测试面」复跑'), '要素①变更测试面')
   assert.ok(tb.includes('多文件合并一次 node --test 跑'), '要素②合并一次')
   assert.ok(tb.includes('全量套件禁止'), '要素③全量禁止')
-  assert.ok(tb.includes('ledger 收口实测已跑变更面、pre-push 门会跑全量'), '要素③依据')
+  assert.ok(tb.includes('ledger 收口实测已跑变更面、CI test job 与 pre-push 门'), '要素③依据（P3-1 清偿后措辞）')
   assert.ok(tb.includes('以回执为基线抽验复核，勿整体重跑'), '要素④回执抽验')
   assert.ok(tb.includes('logs/` 日志回看尾部'), '要素⑤日志落盘')
   const idxScope = tb.indexOf('【复跑口径')
@@ -37,6 +37,7 @@ test('② findLatestTestReceipt：取最新匹配 / 缺席 null / 坏 JSON 跳�
   mk('20261020215900', { change: 'other-change', status: 'passed', exit_code: 0 })
   mk('20261020220000', { change: 'my-change', status: 'failed', exit_code: 1, duration_ms: 62000, command: 'node --test a b', ran_at: 't1' })
   mkdirSync(join(vr, '20261020220500'), { recursive: true }); writeFileSync(join(vr, '20261020220500', 'test-result.json'), '{broken') // 坏 JSON 跳过
+  mk('20261020220800', { change: 'my-change', kind: 'lint', status: 'passed', exit_code: 0, command: 'npm run lint' })  // lint-only 回执须跳过（P3-2）
   mk('20261020221000', { change: 'my-change', status: 'passed', exit_code: 0, duration_ms: 45000, command: 'node --test c d e', ran_at: 't2' })
   const r = findLatestTestReceipt(vr, 'my-change')
   assert.ok(r && r.ran_at === 't2', `取最新匹配轮（实际 ran_at=${r && r.ran_at}）`)

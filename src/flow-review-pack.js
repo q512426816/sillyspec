@@ -153,7 +153,8 @@ export function findLatestTestReceipt(verifyRunsDir, changeName) {
       const p = join(verifyRunsDir, runIds[i], 'test-result.json')
       try {
         const j = JSON.parse(readFileSync(p, 'utf8'))
-        if (j && j.change === changeName && (j.status || j.exit_code !== undefined)) return j
+        // kind:'lint' 独立回执（verify-postcheck 同名同目录落盘）不是测试面——跳过防「测试回执」标签错挂 lint 结果
+        if (j && j.change === changeName && j.kind !== 'lint' && (j.status || j.exit_code !== undefined)) return j
       } catch { /* 坏 JSON 跳过更旧轮 */ }
     }
   } catch { /* 扫描失败零注入 */ }
