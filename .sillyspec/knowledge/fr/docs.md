@@ -1064,3 +1064,67 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-20-decision-caliber-unify
   status: active
+
+## FR-docs-056 生成要求溯源硬边界（必须）
+变更：2026-10-20-proto-provenance-hardline
+状态：active
+摘要：主路径——页面级原型管线撑不起；排除——手写视觉稿
+场景正文：
+- 场景：主路径——页面级原型管线撑不起 — Given 本仓原型管线只支持组件级（如仅相对导入 primer），页面级原型需要完整依赖树（antd/状态库/别名导入）；When agent 需产页面级定稿原型；Then 按通道②用项目真实运行面渲染（dev 路由渲染真实组件）后离线化捕获交付——而不是自创旁门或退回手写 HTML。
+- 场景：排除——手写视觉稿 — Given agent 想手写单文件 HTML 作为现状 vs 改进对比稿供用户决策；Then 禁令生效：供用户决策即定稿，必须走三通道之一。
+全文：.sillyspec/changes/archive/2026-10-20-proto-provenance-hardline/requirements.md#FR-01
+最近确认：f31822445273a384b80ed6f5d5c4189176a86f43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-proto-provenance-hardline:flow:测试绑定FR-01
+  tests: test/proto-provenance-hardline.test.mjs「生成要求四要素锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-proto-provenance-hardline
+  status: active
+
+## FR-docs-057 声明面同步（必须）
+变更：2026-10-20-proto-provenance-hardline
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When grep 四处文本面；Then 溯源口径在场且措辞同源。
+全文：.sillyspec/changes/archive/2026-10-20-proto-provenance-hardline/requirements.md#FR-02
+最近确认：f31822445273a384b80ed6f5d5c4189176a86f43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-proto-provenance-hardline:flow:测试绑定FR-02
+  tests: test/proto-provenance-hardline.test.mjs「三处声明面同步锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-proto-provenance-hardline
+  status: active
+
+## FR-docs-058 测试覆盖与全绿（必须）
+变更：2026-10-20-proto-provenance-hardline
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When 跑新增测试与全量；Then 全过、零回归、lint 零错误。
+全文：.sillyspec/changes/archive/2026-10-20-proto-provenance-hardline/requirements.md#FR-03
+最近确认：f31822445273a384b80ed6f5d5c4189176a86f43
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-proto-provenance-hardline:flow:测试绑定FR-03
+  tests: test/proto-provenance-hardline.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-proto-provenance-hardline
+  status: active

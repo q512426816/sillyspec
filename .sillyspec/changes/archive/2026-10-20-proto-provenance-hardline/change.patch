@@ -1,0 +1,137 @@
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 39f48325..4192852b 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -65,7 +65,7 @@
+       {
+         "index": 4,
+         "name": "分段展示设计",
+-        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）\n7. 展示时附一节「**我替你做的决定**」（2026-10-15-brainstorm-interaction-refine FR-04）：从 `decisions.md` 摘出 `source` 非 user 的条目（代码/文档查证得来的 + agent 自行决定的 P1/P2），逐条列 D-xxx@vN + 一句话决定 + 一句依据——让用户边读方案边核这些点，不要埋在决策文件里让他自己去翻；无此类条目时写「无（全部决定均来自你的选择）」\n8. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：\n  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用\n  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）\n  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求（定稿原型＝真码产物，不是手绘图）\n入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：\n- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）\n- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行\n- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过\"看图重新翻译\"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）\n- **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口\n- **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补） + **「我替你做的决定」节**（source≠user 的 D-xxx@vN 逐条；无则写明）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
++        "prompt": "展示完整设计方案供用户确认；涉及 UI 改动时按下方分级决定是否生成 HTML 原型——原型动作必须在暂停之前落定，不能\"等确认后再补\"。\n\n### 操作\n1. 简单项目：几句话整体描述\n2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字\n3. 展示完整设计方案（不要逐段停顿，一次性展示）\n4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 `sillyspec knowledge search --query \"<机制词>\"`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计\n5. 确认变更名（格式：`YYYY-MM-DD-<简短描述>`，例如 `2026-05-13-user-auth`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）\n6. 按「HTML 原型分级」三选一必填：生成原型 / 登记复用既有原型 / 写出跳过原因（见下）\n7. 展示时附一节「**我替你做的决定**」（2026-10-15-brainstorm-interaction-refine FR-04）：从 `decisions.md` 摘出 `source` 非 user 的条目（代码/文档查证得来的 + agent 自行决定的 P1/P2），逐条列 D-xxx@vN + 一句话决定 + 一句依据——让用户边读方案边核这些点，不要埋在决策文件里让他自己去翻；无此类条目时写「无（全部决定均来自你的选择）」\n8. 暂停等待用户确认或修改意见\n\n### HTML 原型分级（按改动程度，不是\"是否碰前端文件\"）\n判定对象是**改造后的界面相对现状的变化程度**：\n- **免生成·登记复用**（用户已提供**可复跑**的 HTML 原型且覆盖本次 UI 面——先判本档再判改动程度）：\n  - 不重画。把原型文件**复制**进 `{SPEC_ROOT}/changes/<change-name>/` 并**必须命名为 `prototype-<名称>.html`**——execute 阶段按此命名扫描注入原型引用，保留中文名/原名＝没登记＝白复用\n  - 输出复用声明：原型来源路径 + 覆盖面（覆盖哪些页面/端）；只覆盖部分 UI 面时如实声明，未覆盖部分仍按下两档生成（变更目录允许多个 prototype-*.html 共存）\n  - 截图/静态设计稿**不适用本档**（不可复跑）——仍按「必须生成」产出可跑 HTML\n- **必须生成**（布局/结构/流程级变化）：\n  - 新增页面、视图、路由\n  - 页面布局变化：区域增删、骨架重排、信息层级调整（如单栏改多栏、列表改看板）\n  - 新交互流程：多步流程、跨页流转、状态驱动的界面变化\n  - 用户提供了截图/设计稿要求按其改造（原型即对照基准）\n- **建议生成**（组件级变化、页面骨架不变）：\n  - 表单重构、列表列调整、弹窗/抽屉流程等局部组件变化\n  - 拿不准时默认生成——宁多勿漏，原型在 execute 阶段可直接对照复用\n- **跳过**（无需生成，但必须声明原因）：\n  - 文案、颜色、间距、字号、图标等样式微调\n  - 纯后端逻辑/CLI/配置/文档，无任何界面变化\n\n### 生成要求（定稿原型＝真码产物，不是手绘图）\n入口文件保存到 `{SPEC_ROOT}/changes/<change-name>/prototype-<名称>.html`（目录不存在则先创建；该命名是 execute 注入契约，不改）。**本仓 local.yaml ui_prototype 段登记的形态约定优先于本节默认阶梯**（form: real-code | single-html；豁免须带 ruling 用户裁决留痕；多仓变更按触达子仓 repos override 优先——方案对比步须知会注入本仓登记态）。真码五要素：\n- **与实现同方言**：用项目真实前端栈构建——组件库/设计 token/样式从项目源码或 node_modules 真实引入（例：React 项目挂真实组件而非仿制标签、Vue 项目用真实 SFC；例词非封闭清单），不手搓仿制样式；**把 token 数值抄进自定义 CSS 变量＝复刻≠引入，仍属手搓仿制**（2026-10-15 knowledge-search 实证误读）\n- **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行\n- **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过\"看图重新翻译\"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）\n- **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口\n- **产物必须可溯源到源码（三通道，手写 HTML 无合法出口）**：变更目录的 prototype-*.html 必须是——①本仓原型管线的编译产物，或 ②项目真实运行面的渲染捕获产物（dev server / 预览路由渲染真实组件后离线化导出；捕获脚本可随变更交付，捕获物仍是渲染结果，禁手改），或 ③登记复用的既有真码原型。**对比稿/视觉稿同样适用：凡供用户评审决策的原型即定稿提案，无粗选豁免**（2026-10-20 dsh 会话实证：视觉对比稿手写 HTML 交付，现状凭主题默认值想象）——粗选仅限口头或一次性草稿快速比选，不落变更目录充当交付物。重做/视觉类变更的现状基线必须真实渲染捕获或用户提供的现有截图，**禁止凭主题默认值想象现状、禁止手写复刻现状**\n- **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下\n\n### 铁律 — 必须等待用户确认设计\n- 展示完整设计方案后必须暂停等用户确认，**不要自己说\"设计已充分确认\"然后推进**（命令由 CLI 在下方注入）\n- 原型生成、复用登记或跳过声明必须在暂停**之前**完成（复用登记＝原型文件已按 `prototype-<名称>.html` 落在变更目录）——暂停是本步骤最后动作，用户确认后直接进入写 design.md，不会回头补\n\n### 输出\n完整设计方案 + 变更名 + 原型文件路径 或 复用声明（来源+覆盖面+登记后路径）或 跳过原因（三选一必填；跳过时写明分级依据，用户可当场否决要求补） + **「我替你做的决定」节**（source≠user 的 D-xxx@vN 逐条；无则写明）\n\n### 注意\n- 不要一次输出大段文字，按模块/Phase 分段\n- 变更名必须以当天日期开头（YYYY-MM-DD-），后跟英文短横线分隔的简短描述（CLI 强制：不合规 exit 2）",
+         "outputHint": "用户确认的设计方案",
+         "optional": false,
+         "requiresWait": true,
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index 5eca48b4..9b3372b2 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -357,6 +357,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ - **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行
+ - **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）
+ - **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口
++- **产物必须可溯源到源码（三通道，手写 HTML 无合法出口）**：变更目录的 prototype-*.html 必须是——①本仓原型管线的编译产物，或 ②项目真实运行面的渲染捕获产物（dev server / 预览路由渲染真实组件后离线化导出；捕获脚本可随变更交付，捕获物仍是渲染结果，禁手改），或 ③登记复用的既有真码原型。**对比稿/视觉稿同样适用：凡供用户评审决策的原型即定稿提案，无粗选豁免**（2026-10-20 dsh 会话实证：视觉对比稿手写 HTML 交付，现状凭主题默认值想象）——粗选仅限口头或一次性草稿快速比选，不落变更目录充当交付物。重做/视觉类变更的现状基线必须真实渲染捕获或用户提供的现有截图，**禁止凭主题默认值想象现状、禁止手写复刻现状**
+ - **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下
+ 
+ ### 铁律 — 必须等待用户确认设计
+diff --git a/src/design-facts.js b/src/design-facts.js
+index 611c3164..8eac1313 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -387,7 +387,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   lines.push('- [ ] frontmatter 字段齐全（author/created_at/scale）')
+   lines.push('- [ ] 引用所有当前版本 D-xxx@vN')
+   lines.push('- [ ] 涉及生命周期关键词时含「生命周期契约表」或紧邻豁免短语')
+-  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选，输出须带素材来源声明：token 源/组件来源/入口位置）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记）')
++  lines.push('- [ ] UI 原型分级核对（涉前端文件时变更目录应有 prototype-*.html——新生成（定稿＝与实现同方言的真码产物，手绘仅限粗选，输出须带素材来源声明：token 源/组件来源/入口位置；产物必须可溯源到源码（管线编译/真实渲染捕获/登记复用三通道），手写 HTML 不得交付，对比稿供用户决策即定稿）或登记复用（复用须按 prototype-<名称>.html 命名，execute 才注入）或跳过原因记入风险登记；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记）')
+   lines.push('- [ ] 不确定的问题标注「⚠️ 自审存疑」')
+   lines.push('')
+ 
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 210d40d2..3f0a5c1f 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -225,7 +225,7 @@ export function warnMissingUiPrototype(stageName, changeName, currentStepName, s
+   const design = readFileSync(designPath, 'utf8')
+   const feExts = [...new Set((design.match(/\.(vue|svelte|astro|tsx|jsx|css|scss|sass|less|styl|html)\b/gi) || []).map(s => s.replace('.', '').toLowerCase()))]
+   if (feExts.length === 0) return
+-  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记——form: real-code 或 single-html+豁免 ruling）`)
++  console.warn(`   ⚠️ design.md 命中前端文件类型（${feExts.join('/')}）但变更目录无 prototype-*.html——轻微样式改动可忽略；布局/交互流程级变化应补原型（sillyspec run brainstorm --reopen 回到「分段展示设计」，或直接让 agent 补生成；已有可复跑 HTML 原型则登记复用：复制进变更目录并命名 prototype-<名称>.html，execute 按此命名注入；产物须可溯源到源码（管线编译/真实渲染捕获/登记复用），手写 HTML 不得交付，对比稿供用户决策即定稿；本仓形态未在 local.yaml ui_prototype 登记的，收口前补登记——form: real-code 或 single-html+豁免 ruling）`)
+ }
+ 
+ /**
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 9001f4ad..6a1f0fce 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -308,6 +308,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ - **可复跑**：能被本项目工具链跑起来（dev server / 组件文档页 / 构建产物均可，入口 HTML 从本地 node_modules 引真实库也行）——先查 scan 文档与现有前端代码就近发现项目原型管线，已有则复用；**历史原型先例同为单文件不构成管线存在**（51 个手绘先例是惯例债不是证据）；查无真码管线时**先单开一个轻量变更搭最小入口**（bootstrap 与业务变更分离），本变更按登记形态或降级声明执行
+ - **高保真＝组件即实现原料，不是「看起来像」**：布局/组件/交互按真实效果呈现，execute 阶段直接对照搬组件，不经过"看图重新翻译"；**生成档输出必带素材来源声明**（真值 token 源文件路径 / 组件来源 / 入口位置——缺声明＝无源可查，2026-10-15 server-logs-panel 实证零声明）
+ - **手绘单文件（自造样式）仅限一次性粗选对比，不得作为定稿原型**（frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；粗选定了方向，升级真码再收口
++- **产物必须可溯源到源码（三通道，手写 HTML 无合法出口）**：变更目录的 prototype-*.html 必须是——①本仓原型管线的编译产物，或 ②项目真实运行面的渲染捕获产物（dev server / 预览路由渲染真实组件后离线化导出；捕获脚本可随变更交付，捕获物仍是渲染结果，禁手改），或 ③登记复用的既有真码原型。**对比稿/视觉稿同样适用：凡供用户评审决策的原型即定稿提案，无粗选豁免**（2026-10-20 dsh 会话实证：视觉对比稿手写 HTML 交付，现状凭主题默认值想象）——粗选仅限口头或一次性草稿快速比选，不落变更目录充当交付物。重做/视觉类变更的现状基线必须真实渲染捕获或用户提供的现有截图，**禁止凭主题默认值想象现状、禁止手写复刻现状**
+ - **例外与降级**：项目本身即单文件 HTML 方言（纯静态站）时单文件即真码，不适用手绘限定；无法同方言真码化（如目标平台无 HTML 运行面）时显式声明降级与理由请用户裁决留痕——静默降级会被收口「UI 视觉证据」探针拦下
+ 
+ ### 铁律 — 必须等待用户确认设计
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+index 1f497618..d84c2751 100644
+--- a/src/ui-visual.js
++++ b/src/ui-visual.js
+@@ -161,6 +161,9 @@ export function buildUiGuidanceLines(specBase = null, paths = []) {
+     `🎨 UI 变更执行须知（本变更触及前端页面或 UI——advisory 引导非门禁）：`,
+     `   1. 定稿原型必须是可复跑的真码产物（与实现同方言、能被本项目工具链构建）——手绘单文件`,
+     `      仅限一次性粗选对比，不作为交付原型（2026-09-28 frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；`,
++    `      产物必须可溯源到源码（本仓管线编译 / 项目真实运行面渲染捕获 / 登记复用，三通道）——手写 HTML`,
++    `      无合法出口；对比稿/视觉稿供用户决策即定稿，无粗选豁免；重做类现状基线须真实捕获或用户截图，`,
++    `      禁止凭主题默认值想象现状（2026-10-20 dsh 会话实证）`,
+     `   2. 开工先就近发现本项目原型管线：查本次变更触达项目自己的脚本、任务与工具链（多项目仓`,
+     `      按触达路径就近，不假设全仓共享一套）；已有则复用，没有则现场搭最小管线并把入口留在`,
+     `      项目惯例位置——下一个会话能自己发现；`,
+diff --git a/test/proto-provenance-hardline.test.mjs b/test/proto-provenance-hardline.test.mjs
+new file mode 100644
+index 00000000..742ea68e
+--- /dev/null
++++ b/test/proto-provenance-hardline.test.mjs
+@@ -0,0 +1,54 @@
++/**
++ * proto-provenance-hardline.test.mjs — 原型产物溯源硬边界（2026-10-20-proto-provenance-hardline）
++ *
++ * dsh 会话 sess_a6c2804d 实证：agent 读过真码五要素并走过管线后，视觉稿轨道仍手写 HTML
++ * 直接交付（23KB 手写 CSS+截图抄 hex），v2 自创 SSR 捕获旁门——粗选豁免边界松+管线撑不起
++ * 页面级时无指引。用户裁决：平台仓不应单独做事，一切由工具引导驾驭。本测试锁：
++ *   ① 生成要求四要素锚：三通道/手写禁令/对比稿即定稿无豁免/现状须捕获；
++ *   ② 三处声明面同步（ui-visual 须知/design-facts 清单/gates 软提醒）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { definition as brainstormDef } from '../src/stages/brainstorm.js'
++import { buildUiGuidanceLines } from '../src/ui-visual.js'
++import { generateDesignSkeleton } from '../src/design-facts.js'
++
++const ROOT = join(fileURLToPath(import.meta.url), '..')
++const showStep = brainstormDef.steps.find(s => (s.prompt || '').includes('HTML 原型分级'))
++assert.ok(showStep, 'brainstorm 原型分级步在场')
++const prompt = showStep.prompt || ''
++const genIdx = prompt.indexOf('### 生成要求')
++const genTier = prompt.slice(genIdx, prompt.indexOf('### 铁律', genIdx))
++
++test('① 生成要求四要素锚', () => {
++  assert.ok(genTier.includes('产物必须可溯源到源码（三通道，手写 HTML 无合法出口）'), '硬边界标题+手写禁令在场')
++  assert.ok(/①本仓原型管线的编译产物/.test(genTier) && /②项目真实运行面的渲染捕获产物/.test(genTier) && /③登记复用的既有真码原型/.test(genTier), '三通道枚举齐')
++  assert.ok(genTier.includes('捕获脚本可随变更交付，捕获物仍是渲染结果，禁手改'), '通道②捕获物禁手改')
++  assert.ok(/对比稿\/视觉稿同样适用：凡供用户评审决策的原型即定稿提案，无粗选豁免/.test(genTier), '对比稿即定稿无豁免')
++  assert.ok(genTier.includes('禁止凭主题默认值想象现状、禁止手写复刻现状'), '现状基线须捕获/截图')
++  assert.ok(genTier.includes('2026-10-20 dsh 会话实证'), '实证锚在场')
++})
++
++test('② ui-visual 须知同步（含既有关键词回归）', () => {
++  const text = buildUiGuidanceLines().join('\n')
++  assert.ok(text.includes('可溯源到源码') && text.includes('三通道'), '须知含溯源三通道')
++  assert.ok(text.includes('手写 HTML') && text.includes('无合法出口'), '须知含手写禁令')
++  assert.ok(text.includes('供用户决策即定稿，无粗选豁免'), '须知含对比稿边界')
++  assert.ok(text.includes('禁止凭主题默认值想象现状'), '须知含现状捕获要求')
++  // 既有关键词回归（guidance-output-neutrality 契约面）
++  for (const key of ['真码产物', '就近发现', '仅限一次性粗选', '用户裁决', '边改边渲染对照']) {
++    assert.ok(text.includes(key), `须知缺既有关键词：${key}`)
++  }
++})
++
++test('② design-facts 清单与 gates 软提醒同步', () => {
++  const skeleton = generateDesignSkeleton({ changeName: '2026-10-20-x' })
++  assert.ok(/可溯源到源码（管线编译\/真实渲染捕获\/登记复用三通道）/.test(skeleton), '清单含三通道')
++  assert.ok(/手写 HTML 不得交付，对比稿供用户决策即定稿/.test(skeleton), '清单含禁令+对比稿边界')
++  const gates = readFileSync(join(ROOT, '..', 'src', 'run', 'gates.js'), 'utf8')
++  assert.ok(/产物须可溯源到源码（管线编译\/真实渲染捕获\/登记复用），手写 HTML 不得交付/.test(gates), 'gates 软提醒同步')
++  assert.ok(/对比稿供用户决策即定稿/.test(gates), 'gates 软提醒含对比稿边界（评审 P3 清偿）')
++})

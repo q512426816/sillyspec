@@ -32,3 +32,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
 | 2026-10-20 | 2026-10-20-decision-caliber-unify | 决策类型状态口径单一源统一 |
 | 2026-10-20 | 2026-10-20-distill-abnormal-upgrade-fix | 修复蒸馏异态升厚触发器死代码 |
+| 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |

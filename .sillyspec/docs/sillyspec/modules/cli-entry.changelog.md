@@ -77,3 +77,4 @@
 | 2026-10-20 | 2026-10-20-thin-user-decision-record | 轻量道执行期用户决策当场落盘提示 |
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
 | 2026-10-20 | 2026-10-20-distill-abnormal-upgrade-fix | 修复蒸馏异态升厚触发器死代码 |
+| 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |

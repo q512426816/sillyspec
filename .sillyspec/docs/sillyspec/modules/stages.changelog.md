@@ -66,3 +66,4 @@
 | 2026-10-16 | 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名 |
 | 2026-10-20 | 2026-10-20-cli-worktree-cwd-anchor | CLI worktree 内跑自动锚定主仓根 |
 | 2026-10-20 | 2026-10-20-decision-caliber-unify | 决策类型状态口径单一源统一 |
+| 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |

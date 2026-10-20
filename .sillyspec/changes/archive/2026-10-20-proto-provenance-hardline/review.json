@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-proto-provenance-hardline",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "f31822445273a384b80ed6f5d5c4189176a86f43",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "gates 软提醒面仅携带 FR-02 枚举口径三组件中的两个（缺「对比稿即定稿」），且该面有意裁剪未在 requirements/design 留痕",
+      "evidence": "FR-02 原文枚举「（溯源三通道/手写禁令/对比稿即定稿）」三组件须三面同步；实测 ui-visual 须知与 design-facts 清单两面对三组件齐全，但 gates.js 新文案为「产物须可溯源到源码（管线编译/真实渲染捕获/登记复用），手写 HTML 不得交付」＝2/3（缺对比稿即定稿），test/proto-provenance-hardline.test.mjs 第 52 行对 gates 也仅断言这两组件——测试弱于 FR 字面。上下文可辩护：该 gate 仅在变更目录无 prototype-*.html 时触发，对比稿规则预设原型在场，写入即不可达死文案；但这一省略属有意设计却未声明，属意图留痕缺口而非功能缺陷。注：FR-02 枚举未含「现状基线须捕获」组件，故 design-facts/gates 不带现状措辞不算缺。",
+      "location": "src/run/gates.js:228",
+      "remediated": true,
+      "remediationNote": "增量确认（2026-10-20）：f31822445273a384b80ed6f5d5c4189176a86f43（git rev-parse 核对＝当前 HEAD）清偿——diff 仅两处 +2/-1：gates.js 软提醒在「手写 HTML 不得交付」后补「，对比稿供用户决策即定稿」，test/proto-provenance-hardline.test.mjs 同步补断言 /对比稿供用户决策即定稿/.test(gates)；两文件工作树与 HEAD 零偏差，测试实跑 3/3 绿（含新断言），三组件现于三面齐全。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T14:31:02Z"
+}

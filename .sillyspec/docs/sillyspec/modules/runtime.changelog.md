@@ -69,3 +69,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
 - 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一
 - 2026-10-20-gate-snapshot-carried-deps | 门禁快照携带他者声明依赖自洽
+- 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：…
