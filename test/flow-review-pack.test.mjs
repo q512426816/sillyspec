@@ -210,3 +210,26 @@ test('④ 派发纪律：任务书头部行在场 + flow.js 横幅句原样复�
   assert.ok(flowSrc.includes('任务书原样复制给子代理'), '横幅含原样复制指令')
   assert.ok(!flowSrc.includes('起一个干净上下文的子代理执行后重跑本命令'), '旧横幅句已替换')
 })
+
+test('⑤ 归属切分：三分类注入形态 + 声明外抽查标注 + 他侧归因 owner（FR-02）', () => {
+  const { root, changeDir } = makePackDir(REQ_TEXT)
+  try {
+    const attribution = {
+      declaredIn: ['src/a.js', 'test/a.test.mjs'],
+      declaredOut: ['backend/app/core/config.py', 'backend/app/modules/translate/README.md'],
+      foreign: [{ file: 'src/foreign.js', owners: ['2026-10-19-other-change'] }],
+    }
+    const pack = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution })
+    const text = pack.lines.join(String.fromCharCode(10))
+    assert.ok(text.includes('冻结面归属切分'), '归属切分子段在场')
+    assert.ok(text.includes('声明内（design 变更清单 ∩ 冻结面，2 文件）：src/a.js、test/a.test.mjs'), '声明内行')
+    assert.ok(text.includes('声明外（冻结面−声明清单，2 文件——共享仓并行混入/生成物候选，抽查即可勿逐文件 git 考古）：backend/app/core/config.py、backend/app/modules/translate/README.md'), '声明外行含抽查标注')
+    assert.ok(text.includes('他侧归因（提交/声明归属其他变更，1 文件）：src/foreign.js←2026-10-19-other-change'), '他侧归因带 owner')
+    // 声明面完整：零计数不静默隐藏子段
+    const empty = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution: { declaredIn: [], declaredOut: [], foreign: [] } })
+    const et = empty.lines.join(String.fromCharCode(10))
+    assert.ok(et.includes('声明内（design 变更清单 ∩ 冻结面，0 文件）：（无）'), '零计数照常渲染')
+    assert.ok(et.includes('声明外（冻结面−声明清单，0 文件'), '声明外零计数照常渲染')
+    assert.ok(et.includes('他侧归因（提交/声明归属其他变更，0 文件）：（无）'), '他侧归因零计数照常渲染')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

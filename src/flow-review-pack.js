@@ -89,13 +89,43 @@ export function parseFrozenPatchSummary(patchText) {
 }
 
 /**
- * 装配材料包注入行（唯一组包入口）：FR 表与 patch 摘要两子源各自可得各自产出、全缺返回
- * null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——语义行
- * 恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
- * requirements.md 读失败（缺件）→ FR 子段零产出（fail-soft 不抛穿）。
+ * 归属切分归一（fail-soft 入参）：非法/缺席 → null（调用方零注入该子段）；数组字段缺省按空。
+ * 文件路径统一正斜杠归一（Windows/WSL 混用兼容——评审对象路径口径与冻结件一致）。
+ */
+function normalizeAttribution(attribution) {
+  if (!attribution || typeof attribution !== 'object' || Array.isArray(attribution)) return null
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '')
+  const asList = (v) => (Array.isArray(v) ? v.map(norm).filter(Boolean) : [])
+  const foreign = Array.isArray(attribution.foreign)
+    ? attribution.foreign
+      .filter((f) => f && typeof f === 'object' && f.file)
+      .map((f) => ({ file: norm(f.file), owners: Array.isArray(f.owners) ? f.owners.map((o) => String(o)).filter(Boolean) : [] }))
+    : []
+  return { declaredIn: asList(attribution.declaredIn), declaredOut: asList(attribution.declaredOut), foreign }
+}
+
+/** 归属切分三段渲染（2026-10-19-thin-review-dispatch-verbatim）：零计数照常渲染（不静默隐藏）。 */
+function attributionLines(a) {
+  const join = (xs) => (xs.length > 0 ? xs.join('、') : '（无）')
+  const foreignLines = a.foreign.map((f) => `${f.file}←${f.owners.length > 0 ? f.owners.join('/') : '未知变更'}`)
+  return [
+    '  冻结面归属切分（CLI 机械核算——定位索引非证据）：',
+    `  - 声明内（design 变更清单 ∩ 冻结面，${a.declaredIn.length} 文件）：${join(a.declaredIn)}`,
+    `  - 声明外（冻结面−声明清单，${a.declaredOut.length} 文件——共享仓并行混入/生成物候选，抽查即可勿逐文件 git 考古）：${join(a.declaredOut)}`,
+    `  - 他侧归因（提交/声明归属其他变更，${a.foreign.length} 文件）：${join(foreignLines)}`,
+  ]
+}
+
+/**
+ * 装配材料包注入行（唯一组包入口）：FR 表、patch 摘要、归属切分三子源各自可得各自产出、
+ * 全缺返回 null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——
+ * 语义行恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
+ * requirements.md 读失败（缺件）→ FR 子段零产出；attribution 缺席/非法 → 归属子段零产出
+ * （fail-soft 不抛穿，其余子段不受影响）。
+ * @param {{ changeDir: string, patchText: string|null, attribution?: object|null }} args
  * @returns {{ lines: string[], truncated: boolean } | null}
  */
-export function assembleReviewPack({ changeDir, patchText }) {
+export function assembleReviewPack({ changeDir, patchText, attribution = null }) {
   let frRows = []
   try {
     frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
@@ -111,6 +141,8 @@ export function assembleReviewPack({ changeDir, patchText }) {
     body.push(`  冻结 patch 文件级摘要（change.patch 机械解析，${summary.length} 文件）：`)
     for (const f of summary) body.push(`  - ${f.path}（+${f.plus}/-${f.minus}，${f.hunks} hunk）`)
   }
+  const attr = normalizeAttribution(attribution)
+  if (attr) body.push(...attributionLines(attr))
   const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
   let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
   const lines = [PACK_TITLE]
