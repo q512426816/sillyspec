@@ -20,3 +20,4 @@ review_force: null
 updatedAt: '2026-09-28T08:27:00.876Z'
 with_tasks: false
 
+commit_type: chore

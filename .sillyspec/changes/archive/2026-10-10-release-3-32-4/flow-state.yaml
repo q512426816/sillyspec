@@ -38,3 +38,4 @@ baseline_sha256: 6411a1ea5b668d9975815b46dbf9f357b96c5d6a4f7f6797593981547d2a92b
 autopilot_ticked: 1
 gate_summary: 'test: —｜lint: —｜门文件 2 个'
 
+commit_type: docs

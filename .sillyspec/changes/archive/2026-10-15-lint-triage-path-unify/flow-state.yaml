@@ -49,3 +49,4 @@ gate_summary: >-
   29；基线实测测试集 83 文件，未触碰绿面复用不重跑））。｜lint: passed ← npm run lint（54.6s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261015104612\test-result.json｜门文件 10 个
 
+commit_type: chore

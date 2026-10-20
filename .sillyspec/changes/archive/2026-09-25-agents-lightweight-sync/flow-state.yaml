@@ -18,3 +18,4 @@ route_hint: thick
 edit_ratio: 1
 gate_summary: 'test: skipped｜lint: passed ← npm run lint（31.5s）｜门文件 7 个'
 
+commit_type: docs

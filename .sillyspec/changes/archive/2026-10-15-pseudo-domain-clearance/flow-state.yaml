@@ -37,3 +37,4 @@ baseline_sha256: 75502543cb0ed4c798ef3667dc8bd79d98c761df94a1cb0eab33573d86da545
 batch_ticked: true
 gate_summary: 'test: —｜lint: —｜门文件 1 个'
 
+commit_type: chore

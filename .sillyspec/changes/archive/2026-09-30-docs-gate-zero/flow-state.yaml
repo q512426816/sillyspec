@@ -19,3 +19,4 @@ edit_ratio: 0.167
 allow_batch_tick: true
 gate_summary: 'test: —｜lint: —｜门文件 5 个'
 
+commit_type: docs

@@ -20,3 +20,4 @@ gate_summary: >-
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927054714\test-result.json｜lint: failed
   ← npm run lint（37.4s）｜门文件 18 个
 
+commit_type: chore

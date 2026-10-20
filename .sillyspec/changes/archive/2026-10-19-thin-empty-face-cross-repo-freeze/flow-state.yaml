@@ -7,6 +7,8 @@ substeps:
   review: done
   probes: done
   distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -31,7 +33,7 @@ input: >-
 autopilot: true
 prestage_ack: false
 baseline_commit: 875511d25454cf584c99ab491fa0cd03231f71ad
-updatedAt: '2026-10-19T08:47:52.554Z'
+updatedAt: '2026-10-19T08:47:53.435Z'
 baseline_sha256: 5cb9f2725a81ef4932683daa2f117ee259c609e4a50e31894018ab3b895b763a
 batch_ticked: true
 upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚

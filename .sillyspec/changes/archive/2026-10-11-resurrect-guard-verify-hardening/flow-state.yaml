@@ -49,3 +49,4 @@ gate_summary: >-
   跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run lint（44.1s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261011140014\test-result.json｜门文件 17 个
 
+commit_type: fix

@@ -46,3 +46,4 @@ gate_summary: >-
   — 跳过原因：变更与测试面零关系（8 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: passed ← npm run lint（36.4s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261008162833\test-result.json｜门文件 8 个
 
+commit_type: feat

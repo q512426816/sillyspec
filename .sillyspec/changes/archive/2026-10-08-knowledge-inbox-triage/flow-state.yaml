@@ -29,3 +29,4 @@ spec_approved_at: '2026-10-08T03:24:15.378Z'
 spec_approved_by: zcode-kb-triage-1008
 gate_summary: 'test: —｜lint: —｜门文件 4 个'
 
+commit_type: docs

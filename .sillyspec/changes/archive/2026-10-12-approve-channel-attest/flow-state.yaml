@@ -43,3 +43,4 @@ gate_summary: >-
   lint（46.9s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261012125531\test-result.json｜门文件 4 个
 
+commit_type: feat

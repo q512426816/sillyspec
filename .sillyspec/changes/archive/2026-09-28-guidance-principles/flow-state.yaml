@@ -21,3 +21,4 @@ gate_summary: >-
   结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-LxeM6Y\.sillyspec\.runtime\verify-runs\20260928055729\test-result.json｜lint:
   passed ← npm run lint（37.1s）｜门文件 8 个
 
+commit_type: chore

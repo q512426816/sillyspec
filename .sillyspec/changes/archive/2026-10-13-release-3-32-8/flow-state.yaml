@@ -38,3 +38,4 @@ gate_summary: >-
   ← npm run lint（50.3s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261013053102\test-result.json｜门文件 4 个
 
+commit_type: chore

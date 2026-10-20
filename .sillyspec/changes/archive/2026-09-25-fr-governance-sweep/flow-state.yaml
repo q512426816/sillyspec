@@ -16,3 +16,4 @@ baseline_commit: aaa8800fd78e233acd28a46977e6743864f00b7f
 updatedAt: '2026-09-25T12:36:53.673Z'
 gate_summary: 'test: skipped｜lint: passed ← npm run lint（33.2s）｜门文件 9 个'
 
+commit_type: docs
