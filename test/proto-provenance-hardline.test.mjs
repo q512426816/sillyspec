@@ -50,4 +50,5 @@ test('② design-facts 清单与 gates 软提醒同步', () => {
   assert.ok(/手写 HTML 不得交付，对比稿供用户决策即定稿/.test(skeleton), '清单含禁令+对比稿边界')
   const gates = readFileSync(join(ROOT, '..', 'src', 'run', 'gates.js'), 'utf8')
   assert.ok(/产物须可溯源到源码（管线编译\/真实渲染捕获\/登记复用），手写 HTML 不得交付/.test(gates), 'gates 软提醒同步')
+  assert.ok(/对比稿供用户决策即定稿/.test(gates), 'gates 软提醒含对比稿边界（评审 P3 清偿）')
 })
