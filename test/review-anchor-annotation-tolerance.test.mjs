@@ -63,11 +63,33 @@ test('① 对象形态：workspace/repos 注记容忍+逐值归一化；workspac
   assert.equal(va.review.reviewedAgainst.repos.urgent, SHA2)
   assert.equal(va.review.reviewedAgainst.repos.spdemo, SHA)
 
+  // workspace 纯 sha（评审 P3-2 清偿：矩阵补格）
+  const a2 = makeReview({ reviewedAgainst: { workspace: SHA } })
+  const va2 = validateReviewJson(a2.p)
+  assert.equal(va2.ok, true)
+  assert.equal(va2.review.reviewedAgainst.workspace, SHA, 'workspace 纯 sha 通过')
+
+  // repos 值无 hex → 拒收且文案点名仓键
+  const b2 = makeReview({ reviewedAgainst: { workspace: SHA, repos: { urgent: '没有锚' } } })
+  const vb2 = validateReviewJson(b2.p)
+  assert.equal(vb2.ok, false)
+  assert.ok(vb2.errors.some((e) => e.includes('reviewedAgainst.repos.urgent 须为 7-40 位 hex sha（该仓 git rev-parse HEAD）')), 'repos 值垃圾文案在场')
+
   const b = makeReview({ reviewedAgainst: { workspace: '没有锚', repos: { urgent: SHA } } })
   const vb = validateReviewJson(b.p)
   assert.equal(vb.ok, false)
   assert.ok(vb.errors.some((e) => e.includes('reviewedAgainst 对象形态须含 workspace: 7-40 位 hex sha（主仓评审对象锚）')))
-  for (const x of [a, b]) rmSync(x.dir, { recursive: true, force: true })
+  for (const x of [a, a2, b2, b]) rmSync(x.dir, { recursive: true, force: true })
+})
+
+test('① 上界：>40 位 hex 连串不误收（lookahead 截断后词元仍 ≤40 才有效）', () => {
+  // 41 位 hex：整串是一个超长词元——提取器正则 {7,40} 贪婪到 40 位+lookahead 拒（后跟 hex）→ 回溯找短词元也不满足边界 → 应拒收
+  const long41 = SHA + 'a' // 41 hex chars
+  const a = makeReview({ reviewedAgainst: long41 })
+  const va = validateReviewJson(a.p)
+  // 41 连续 hex：任何 7-40 子段两侧都是 hex（边界断言不满足）→ 无有效词元 → 拒
+  assert.equal(va.ok, false, '41 位连串 hex 不产出有效词元')
+  rmSync(a.dir, { recursive: true, force: true })
 })
 
 test('② reviewAnchoredToHead：注记形态可锚定（不再判无锚证据）', () => {

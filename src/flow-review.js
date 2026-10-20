@@ -341,9 +341,6 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
   return taskbook
 }
 
-/** 锚 sha 形态（7-40 位 hex）。 */
-const isAnchorSha = (v) => typeof v === 'string' && /^[0-9a-f]{7,40}$/i.test(v.trim())
-
 /**
  * 锚 sha 词元提取（2026-10-20-closeout-roundtrip-slim）：字段含 7-40 位独立 hex 词元即通过，
  * 返回归一化纯 sha（小写）；无词元返回 null。评审代理常在 sha 后附实测注记（今晚两例被整串
