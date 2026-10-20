@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-decision-caliber-unify",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-01",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「① 单一源派生」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「② 写入白名单对齐」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-03",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「③ implemented 入选」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-04",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「④ brainstorm 提示清单同步」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-05",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「⑤ 开放世界兼容」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-20-decision-caliber-unify:flow:测试绑定FR-06",
+      "tests": [
+        "test/decision-caliber-unify.test.mjs「⑥ 既有套件零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-20-decision-caliber-unify"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{"ts":1792463341257,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792463446585,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792463476266,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792463483009,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792463542156,"kind":"commit","stage":null,"detail":"63b201b5","provisional":true}
+{"ts":1792463546688,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792463548871,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792463548871,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792463579260,"kind":"commit","stage":null,"detail":"e6912277","provisional":true}
+{"ts":1792463587528,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792463589469,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792463589469,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1792463665498,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/index.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792463691988,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/worktree-cwd-guard.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792463887108,"kind":"commit","stage":null,"detail":"91a622f5","provisional":true}
+{"ts":1792463910652,"kind":"commit","stage":null,"detail":"6cb2f170","provisional":true}
+{"ts":1792463914134,"kind":"commit","stage":null,"detail":"d454842c","provisional":true}
+{"ts":1792463920424,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792463920823,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792463920823,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1792463941445,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792463941600,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792463941600,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1792463941600,"kind":"commit","stage":null,"detail":"bde4ab74","provisional":true}
+{"ts":1792463941849,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-decision-caliber-unify/task-ticks.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792463959056,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1792463962657,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1792463969335,"kind":"commit","stage":null,"detail":"4e1a9d8b","provisional":true}
+{"ts":1792463979757,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-decision-caliber-unify/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792463989682,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（5.9s） · 20261020023947","provisional":true}
+{"ts":1792464617615,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-cli-worktree-cwd-anchor/review.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792464628007,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/stage-templates.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792464740580,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792464750718,"kind":"commit","stage":null,"detail":"8227bd0a","provisional":true}

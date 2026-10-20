@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-decision-caliber-unify",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "4e1a9d8b27367df8463445297e52dfc39e5dd5c6",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "stage-templates.js 的 decisions.md 格式模板仍是旧口径第四提示面，与写入白名单冲突",
+      "evidence": "该模板 type 清单仍含 term/premise/risk、status 仍为 accepted|unresolved|rejected|superseded（缺 confirmed/implemented/proposed/draft）；模板经 materialize 落盘指导 agent 写 decisions.md，按其写 type=term/status=unresolved 会被 decisions-io 白名单 fail-fast 拒绝——提示面与校验面冲突，本变更「消除口径漂移」目标在该面未闭环。FR-04 明确只绑 brainstorm.js 两处故不构成承诺违反，但属同一问题类残留。",
+      "location": "src/stage-templates.js:113-115"
+    },
+    {
+      "severity": "P3",
+      "title": "冻结 HEAD 内混入并行变更 cli-worktree-cwd-anchor 的交付（src/index.js、worktree 测试等）",
+      "evidence": "diff c1e823c7..4e1a9d8b 全量 stat 含 .sillyspec/changes/2026-10-20-cli-worktree-cwd-anchor/* 与 src/index.js+10、test/worktree-cwd-guard.test.mjs——多 agent 并行在同一冻结点各变更有独立声明，属流程常态非缺陷，仅留痕提示归档核对时勿误记本变更名下。",
+      "location": "src/index.js"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T10:49:11+08:00"
+}
