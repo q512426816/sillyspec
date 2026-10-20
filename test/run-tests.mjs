@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { homedir, tmpdir } from 'node:os'
 import { promisify } from 'node:util'
+import { readFailureList, filterToFailedFace, persistFailureList } from './runner-failure-face.mjs'
 
 const execFileP = promisify(execFile)
 
@@ -76,10 +77,30 @@ function collectTestFiles(dir) {
   }
   return out
 }
-const files = collectTestFiles(testDir).sort()
+let files = collectTestFiles(testDir).sort()
+
+// ── --failed 失败面复跑（2026-10-20-scoped-verify-policy）──
+// 上一轮失败清单（默认 .sillyspec/.runtime/test-last-failures.txt，env 可覆写防并行互踩），
+// 存在且非空则本轮只跑清单面；清单项不在当前文件集（改名/已删）warn 跳过不静默。
+// 定位失败不再需要整体重跑（全量 3.5-5 分钟/轮的重复保险费）。
+const failureListPath = process.env.SILLYSPEC_TEST_FAILURE_LIST
+  || join(dirname(testDir), '.sillyspec', '.runtime', 'test-last-failures.txt')
+const failedFace = process.argv.includes('--failed') ? readFailureList(failureListPath) : null
+if (process.argv.includes('--failed')) {
+  if (failedFace === null) {
+    console.log(`ℹ️ --failed：失败清单缺席或为空（${failureListPath}）——按全量跑`)
+  } else {
+    const { face, dropped } = filterToFailedFace(files, failedFace)
+    console.log(`🔁 --failed：仅重跑上次失败面（${face.length} 个，来自 ${failureListPath}）`)
+    for (const d of dropped) console.log(`  ⚠️ 清单项不在当前测试集（改名/已删，跳过）：${d}`)
+    files = face
+  }
+}
 
 if (files.length === 0) {
   console.log('No test files found')
+  // 空面早退也自清清单（清单项已全部不在测试集=陈旧名单，留着会让下轮 --failed 继续空转）
+  if (process.argv.includes('--failed')) persistFailureList(failureListPath, [])
   process.exit(0)
 }
 
@@ -204,6 +225,10 @@ console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {
   console.log(`失败文件: ${failures.join(', ')}`)
+  persistFailureList(failureListPath, failures)
+  console.log(`🔁 复跑失败面：node test/run-tests.mjs --failed（清单已落 ${failureListPath}，全绿自清）`)
+} else {
+  persistFailureList(failureListPath, [])
 }
 console.log(`${'='.repeat(50)}`)
 
