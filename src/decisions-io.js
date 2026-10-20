@@ -17,9 +17,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
+import { DECISION_STATUSES, DECISION_TYPES } from './decision-values.js'
 
-const STATUS_VALUES = new Set(['confirmed', 'accepted', 'implemented', 'rejected', 'proposed', 'superseded', 'draft'])
-const TYPE_VALUES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process', 'scope'])
+// 白名单=正典全集单一源派生（2026-10-20-decision-caliber-unify）：此前字面集与蒸馏入选集、
+// brainstorm 提示清单三套口径漂移——feasibility/consistency 被写入者拒绝而蒸馏想收。
+const STATUS_VALUES = new Set(DECISION_STATUSES)
+const TYPE_VALUES = new Set(DECISION_TYPES)
 
 /**
  * canonical 条目渲染（正文散文行原样保留在 body 数组）。

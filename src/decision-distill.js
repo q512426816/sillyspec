@@ -24,14 +24,16 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { modulePathMatches } from './modules.js'
 import { basename, dirname, join } from 'node:path'
+import { KNOWLEDGE_STATUSES, KNOWLEDGE_TYPES } from './decision-values.js'
 
-/** FR-02：有实现影响的五类 type（scope 与未知 type 的 confirmed/accepted 不入选） */
-// feasibility 补录（2026-09-11 驾驭第十二批，本仓归档 2026-08-08-concurrent-write-preflight 实证：
-// 8 条 feasibility+accepted 决策因五类集漏选从未入知识库）——可行性裁决是设计决策（技术选型/
-// 可行 vs 不可行），与五类同格；排除集本意只针对 scope（范围裁决不入库）。
-const IMPLEMENTED_TYPES = new Set(['architecture', 'compatibility', 'boundary', 'definition', 'process', 'feasibility', 'consistency'])
-/** FR-02：implemented 入选的 status（superseded 等其余状态不入选） */
-const IMPLEMENTED_STATUSES = new Set(['confirmed', 'accepted'])
+// 入选集=正典单一源派生（2026-10-20-decision-caliber-unify）。历史：五类集漏选 8 条
+// feasibility+accepted 决策（2026-09-11 驾驭第十二批，2026-08-08-concurrent-write-preflight
+// 实证）后扩为 7 值字面集；scope 排除是刻意设计（范围裁决不入库）。现改 KNOWLEDGE_TYPES 派生
+// （恰等于历史 7 值零漂移）。状态集纳入 implemented：知识库入选输出值本就是「状态：implemented」，
+// 输入侧声明 implemented 却永不入选是白名单后加未同步蒸馏的遗留缺陷。
+const IMPLEMENTED_TYPES = new Set(KNOWLEDGE_TYPES)
+/** FR-02：implemented 入选的 status（proposed/draft/superseded 等其余状态不入选） */
+const IMPLEMENTED_STATUSES = new Set(KNOWLEDGE_STATUSES)
 /** 三级兜底终点域（仍不中归此；域文件由本模块自管） */
 const UNMAPPED_DOMAIN = 'unmapped'
 /** 旧格式容错占位值（FR-01：缺锚点/缺 headHash 不阻断） */
