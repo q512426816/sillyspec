@@ -1,0 +1,174 @@
+diff --git a/src/flow-review-pack.js b/src/flow-review-pack.js
+index cd80de0f..924ae0c5 100644
+--- a/src/flow-review-pack.js
++++ b/src/flow-review-pack.js
+@@ -11,7 +11,7 @@
+  *   ③ 摘要从冻结件本身算——change.patch 文本直解，不走活 git（review-material-pack 的
+  *      extractDiffSummary 走活 git 解 base 那条路不能搬：防「包说的」与评审员手里冻结面漂移）。
+  */
+-import { readFileSync } from 'node:fs'
++import { readFileSync, readdirSync, existsSync } from 'node:fs'
+ import { join } from 'node:path'
+ 
+ /** 材料包整体体积帽（对齐 review-material-pack.js PACK_MAX_CHARS 先例——包不能成为新的全量面）。 */
+@@ -140,16 +140,47 @@ export function buildFreezeAttribution({ declaredFiles, freezeFiles, foreign })
+   }
+ }
+ 
++/**
++ * ledger 测试回执扫描（2026-10-21-review-rerun-scope）：verify-runs 各 runId 目录的
++ * test-result.json 按 change 匹配取目录名时间序最新一条（CLI 收口亲测产物，符合护栏③
++ * 机械抽取——非 agent 自述）。fail-soft：目录缺席/坏 JSON/无匹配 → null（调用方零注入）。
++ */
++export function findLatestTestReceipt(verifyRunsDir, changeName) {
++  try {
++    if (!verifyRunsDir || !changeName || !existsSync(verifyRunsDir)) return null
++    const runIds = readdirSync(verifyRunsDir).filter((d) => /^\d{14,}$/.test(d)).sort()
++    for (let i = runIds.length - 1; i >= 0; i--) {
++      const p = join(verifyRunsDir, runIds[i], 'test-result.json')
++      try {
++        const j = JSON.parse(readFileSync(p, 'utf8'))
++        // kind:'lint' 独立回执（verify-postcheck 同名同目录落盘）不是测试面——跳过防「测试回执」标签错挂 lint 结果
++        if (j && j.change === changeName && j.kind !== 'lint' && (j.status || j.exit_code !== undefined)) return j
++      } catch { /* 坏 JSON 跳过更旧轮 */ }
++    }
++  } catch { /* 扫描失败零注入 */ }
++  return null
++}
++
++/** 回执行渲染（机械——ran_at/status/exit/耗时/命令面截断）。 */
++function testReceiptLines(r) {
++  const cmd = String(r.command || '').replace(/\s+/g, ' ').slice(0, 120)
++  const dur = Number.isFinite(r.duration_ms) ? `${Math.round(r.duration_ms / 1000)}s` : '?'
++  return [
++    `  ledger 测试回执（CLI 收口亲测，${r.ran_at || '时间未知'}）：${r.status || 'unknown'} exit=${r.exit_code ?? '?'} ${dur} ｜ 面：${cmd}${String(r.command || '').length > 120 ? '…' : ''}`,
++    `  （回执为 CLI 亲测——评审按复跑口径抽验变更面即可，勿整体重跑）`,
++  ]
++}
++
+ /**
+  * 装配材料包注入行（唯一组包入口）：FR 表、patch 摘要、归属切分三子源各自可得各自产出、
+  * 全缺返回 null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——
+  * 语义行恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。
+  * requirements.md 读失败（缺件）→ FR 子段零产出；attribution 缺席/非法 → 归属子段零产出
+  * （fail-soft 不抛穿，其余子段不受影响）。
+- * @param {{ changeDir: string, patchText: string|null, attribution?: object|null }} args
++ * @param {{ changeDir: string, patchText: string|null, attribution?: object|null, testReceipt?: object|null }} args
+  * @returns {{ lines: string[], truncated: boolean } | null}
+  */
+-export function assembleReviewPack({ changeDir, patchText, attribution = null }) {
++export function assembleReviewPack({ changeDir, patchText, attribution = null, testReceipt = null }) {
+   let frRows = []
+   try {
+     frRows = parseFrBindingRows(readFileSync(join(changeDir, 'requirements.md'), 'utf8'))
+@@ -167,6 +198,7 @@ export function assembleReviewPack({ changeDir, patchText, attribution = null })
+   }
+   const attr = normalizeAttribution(attribution)
+   if (attr) body.push(...attributionLines(attr))
++  if (testReceipt && typeof testReceipt === 'object') body.push(...testReceiptLines(testReceipt))
+   const note = `  …（材料包超 ${PACK_MAX_CHARS} 字符截断——需全文时定向查证并列明）`
+   let budget = PACK_MAX_CHARS - PACK_TITLE.length - PACK_BASELINE.length - note.length
+   const lines = [PACK_TITLE]
+diff --git a/src/flow-review.js b/src/flow-review.js
+index bf28cc70..34ea331a 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -313,6 +313,12 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+       `  （逐条作答：pass 给证据锚点 / gap 给缺件 / fail 给违诺实证——与上方检查单同口径，未答=未审）`,
+     ] : []),
+     ``,
++    `【复跑口径（与 AGENTS 自验口径同源——2026-10-21-review-rerun-scope）】`,
++    `  - 评审实测按「变更测试面」复跑：新测试 + 直接受影响既有文件；多文件合并一次 node --test 跑（逐文件跑每次付 ~10s 启动税）。`,
++    `  - 全量套件禁止：ledger 收口实测已跑变更面、CI test job 与 pre-push 门（lint+docs gate）已覆其余面——评审内重复跑全量是三重保险费（2026-10-20 会话画像实证：单次评审内两轮全量 8.4min）。`,
++    `  - 材料包含 ledger 测试回执时以回执为基线抽验复核，勿整体重跑。`,
++    `  - 长输出落 \`.sillyspec/.runtime/logs/\` 日志回看尾部（tail -50），勿整段读入上下文。`,
++    ``,
+     `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
+     // 代行惯例（坑 flow-done-sentinel-token-split ②，2026-10-08 实证）：宿主无已注册子代理
+     // 通道时无法照做「起子代理」——主会话按检查单代行自审可接受，reviewer 字段如实标注
+diff --git a/src/flow.js b/src/flow.js
+index 2e4f9ed3..0416e42d 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2396,8 +2396,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       } catch { /* 归属面 fail-soft：装配失败零注入该子段 */ }
+       let _packLines = null
+       try {
+-        const { assembleReviewPack } = await import('./flow-review-pack.js')
+-        const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution })
++        const { assembleReviewPack, findLatestTestReceipt } = await import('./flow-review-pack.js')
++        // ledger 测试回执（2026-10-21-review-rerun-scope）：ledger 先于 review（SUBSTEPS 序），
++        // verify-runs 最新本变更 test-result 作回执注入——评审从「自己重跑」变「回执基线抽验」。
++        const _receipt = findLatestTestReceipt(join(specBase, '.runtime', 'verify-runs'), change)
++        const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution, testReceipt: _receipt })
+         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
+       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
+       console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
+diff --git a/test/review-rerun-scope.test.mjs b/test/review-rerun-scope.test.mjs
+new file mode 100644
+index 00000000..68aefaf2
+--- /dev/null
++++ b/test/review-rerun-scope.test.mjs
+@@ -0,0 +1,62 @@
++/**
++ * review-rerun-scope.test.mjs — 评审复跑口径 + ledger 测试回执子源（2026-10-21-review-rerun-scope）
++ *
++ * 四份评审子代会话画像实证：复跑面无口径导致评审内全量套件（最重单次 8.4min×2 轮）。
++ * 锁：①任务书复跑口径五要素；②findLatestTestReceipt 取最新匹配/缺席 null/坏 JSON 跳过；
++ * ③assembleReviewPack 回执行在场/缺席零注入。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { renderReviewerTaskbook } from '../src/flow-review.js'
++import { findLatestTestReceipt, assembleReviewPack } from '../src/flow-review-pack.js'
++
++test('① 任务书复跑口径五要素锚', () => {
++  const tb = renderReviewerTaskbook({ change: '2026-10-21-x', changeDir: 'C:/x', head: 'a'.repeat(40), probeLines: [], packLines: [] })
++  assert.ok(tb.includes('【复跑口径（与 AGENTS 自验口径同源——2026-10-21-review-rerun-scope）】'), '节标题在场')
++  assert.ok(tb.includes('按「变更测试面」复跑'), '要素①变更测试面')
++  assert.ok(tb.includes('多文件合并一次 node --test 跑'), '要素②合并一次')
++  assert.ok(tb.includes('全量套件禁止'), '要素③全量禁止')
++  assert.ok(tb.includes('ledger 收口实测已跑变更面、CI test job 与 pre-push 门'), '要素③依据（P3-1 清偿后措辞）')
++  assert.ok(tb.includes('以回执为基线抽验复核，勿整体重跑'), '要素④回执抽验')
++  assert.ok(tb.includes('logs/` 日志回看尾部'), '要素⑤日志落盘')
++  const idxScope = tb.indexOf('【复跑口径')
++  const idxDiscipline = tb.indexOf('【纪律】')
++  assert.ok(idxScope > 0 && idxDiscipline > idxScope, '位置：检查单之后、纪律之前')
++})
++
++test('② findLatestTestReceipt：取最新匹配 / 缺席 null / 坏 JSON 跳过 / 他变更不串', () => {
++  const root = mkdtempSync(join(tmpdir(), 'rrs-'))
++  const vr = join(root, 'verify-runs')
++  const mk = (runId, obj) => {
++    mkdirSync(join(vr, runId), { recursive: true })
++    writeFileSync(join(vr, runId, 'test-result.json'), JSON.stringify(obj))
++  }
++  mk('20261020215900', { change: 'other-change', status: 'passed', exit_code: 0 })
++  mk('20261020220000', { change: 'my-change', status: 'failed', exit_code: 1, duration_ms: 62000, command: 'node --test a b', ran_at: 't1' })
++  mkdirSync(join(vr, '20261020220500'), { recursive: true }); writeFileSync(join(vr, '20261020220500', 'test-result.json'), '{broken') // 坏 JSON 跳过
++  mk('20261020220800', { change: 'my-change', kind: 'lint', status: 'passed', exit_code: 0, command: 'npm run lint' })  // lint-only 回执须跳过（P3-2）
++  mk('20261020221000', { change: 'my-change', status: 'passed', exit_code: 0, duration_ms: 45000, command: 'node --test c d e', ran_at: 't2' })
++  const r = findLatestTestReceipt(vr, 'my-change')
++  assert.ok(r && r.ran_at === 't2', `取最新匹配轮（实际 ran_at=${r && r.ran_at}）`)
++  assert.equal(findLatestTestReceipt(vr, 'no-such'), null, '无匹配 → null')
++  assert.equal(findLatestTestReceipt(join(root, 'absent'), 'my-change'), null, '目录缺席 → null')
++  assert.equal(findLatestTestReceipt(null, 'x'), null, '空参安全')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('③ assembleReviewPack：回执行在场/缺席零注入', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'rrs-p-'))
++  const reqPath = join(dir, 'requirements.md')
++  writeFileSync(reqPath, '### FR-01: 夹具\n## 测试绑定\nFR-01: test/x「y」\n')
++  const packIn = { changeDir: dir, patchText: 'diff --git a/src/a.js b/src/a.js\n@@ -1 +1 @@\n-x\n+y\n' }
++  const withR = assembleReviewPack({ ...packIn, testReceipt: { change: 'c', status: 'passed', exit_code: 0, duration_ms: 45000, command: 'node --test c d e', ran_at: '2026-10-21T00:00:00Z' } })
++  const textR = withR.lines.join('\n')
++  assert.ok(textR.includes('ledger 测试回执（CLI 收口亲测，2026-10-21T00:00:00Z）：passed exit=0 45s ｜ 面：node --test c d e'), '回执行机械渲染')
++  assert.ok(textR.includes('评审按复跑口径抽验变更面即可，勿整体重跑'), '抽验指引行')
++  const withoutR = assembleReviewPack(packIn)
++  assert.ok(!withoutR.lines.join('\n').includes('测试回执'), '缺席零注入')
++  rmSync(dir, { recursive: true, force: true })
++})

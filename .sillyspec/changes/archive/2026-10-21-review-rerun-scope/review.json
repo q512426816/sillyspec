@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-review-rerun-scope",
+  "reviewer": "general-purpose 子代理（harness Agent 派发，独立于主会话）",
+  "verdict": "PASS",
+  "reviewedAgainst": "ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "口径节要素③「pre-push 门会跑全量」与实际机制不符——pre-push 自 2026-10-16 已降级 lint+docs gate，全量在 CI",
+      "evidence": ".husky/pre-push 首段注释明言「2026-10-16 降级为快速 lint + docs gate：全量测试（10-20 分钟）移交 CI」，hook 体只跑 npm run lint + docs gate + doctor advisory；全量实际在 .github/workflows/ci.yml test job（npm test，CI 红灯阻断合并口径不变）。实质双覆仍在（ledger 变更面 + CI 全量），「评审内禁止全量」的规范性结论不受影响，但任务书向评审员声称的机制面一半失真（声称 pre-push/实为 CI）。该措辞源自 FR-01 原文——FR↔实现↔测试三方一致成立，缺陷在需求文本沿用过期机制认知，属措辞级非行为级。",
+      "location": "src/flow-review.js:318；.husky/pre-push:2-4",
+      "remediation": {
+        "status": "remediated",
+        "commit": "ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f",
+        "note": "措辞改为「CI test job 与 pre-push 门（lint+docs gate）已覆其余面」——与 .husky/pre-push（lint+docs gate）和 .github/workflows/ci.yml test job（npm test 全量）双双实证对齐；测试锚同步（要素③依据断言更新为清偿后措辞）。增量 diff 核对：仅此一行措辞变更+测试锚同步，无其他面漂移。"
+      }
+    },
+    {
+      "severity": "P3",
+      "title": "findLatestTestReceipt 未排除 kind:lint 独立回执——最新轮为 lint-only 时以「测试回执」标签渲染 lint 结果",
+      "evidence": "persistLintResult 在 test 无结果文件而 lint 实跑时，独立落 verify-runs/<ts>/test-result.json（顶层 kind:lint、change/status/exit_code 齐），与测试轮同文件名同目录约定（src/verify-postcheck.js:3450-3466）。findLatestTestReceipt 匹配谓词只查 j.change===changeName && (status||exit_code!==undefined)，不看 kind（src/flow-review-pack.js:156）——序列「轮1 真实测试通过 → 轮2 测试面 skip+lint 独立落盘」时取到轮2，回执行渲染「ledger 测试回执（CLI 收口亲测…）：passed … 面：<lint 命令>」，评审员可能把 lint 通过误读为测试通过。缓解在场：面字段露出的是 lint 命令（部分自证）+口径节要求抽验变更测试面（非盲信回执）。低频（需 test skip + lint 独立落盘且晚于末次测试轮）。",
+      "location": "src/flow-review-pack.js:156（匹配谓词）；src/verify-postcheck.js:3456-3466（kind:lint 写入面）",
+      "remediation": {
+        "status": "remediated",
+        "commit": "ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f",
+        "note": "谓词增 j.kind !== 'lint' 过滤（真实测试轮 writeRunResult 顶层无 kind 键，不受影响——增量 diff 与 writeRunResult 字段面双重核对）；测试补 20261020220800 lint-only 轮（change 匹配且新于 t1），断言取最新仍命中 t2——无过滤时该轮会被返回，断言即证过滤生效。"
+      }
+    },
+    {
+      "severity": "P3",
+      "title": "回执读写根锚定在 --runtime-root 覆盖态分叉——读尊重 opt、写恒挂 specBase/.runtime，覆盖态回执静默缺席",
+      "evidence": "读侧（本变更新增）resolveRuntimeRoot(runtimeRootOpt…)+verify-runs（src/flow.js:2402）尊重 --runtime-root；写侧 writeRunResult 恒写 gateSpecBase/.runtime/verify-runs 且快照回拷目标是 specBase（src/verify-postcheck.js:3501、src/run/quick-audit.js:736-737），flow.js:1588 调 runQuickTestLintGate 未透传 runtimeRoot——--runtime-root ≠ specBase/.runtime 时读不到写位，回执 fail-soft 零注入（仅性能退化：评审退回口径节自跑变更面，无正确性影响）。design 盲维 Q4「runtimeRoot 锚定本仓（与 ledger 写入同根）」仅在默认态（无 --runtime-root）成立；本机实测本次评审路径 runtimeRootOpt=null 同根，命中主路径。",
+      "location": "src/flow.js:2402（读）vs src/verify-postcheck.js:3501（写）",
+      "remediation": {
+        "status": "remediated",
+        "commit": "ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f",
+        "note": "读根改为 join(specBase, '.runtime', 'verify-runs') 与写根（writeRunResult verify-postcheck.js:3501 直挂 + 快照回拷目标 quick-audit.js:736-737）逐字同根；写侧从不写 runtimeRoot 覆盖根，对齐无回执损失，覆盖态分叉消除。"
+      }
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok（P3-3 已于 ecc9d4b6 清偿：读写根逐字对齐 specBase/.runtime/verify-runs）"
+  },
+  "reviewedAt": "2026-10-20T23:59:09.621Z"
+}

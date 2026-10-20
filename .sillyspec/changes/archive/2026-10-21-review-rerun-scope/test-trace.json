@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-review-rerun-scope",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-review-rerun-scope:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-rerun-scope.test.mjs「任务书复跑口径五要素锚」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-rerun-scope"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-review-rerun-scope:flow:测试绑定FR-02",
+      "tests": [
+        "test/review-rerun-scope.test.mjs「回执扫描取最新+装配在场/缺席」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-rerun-scope"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-review-rerun-scope:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-rerun-scope.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-rerun-scope"
+    }
+  ]
+}

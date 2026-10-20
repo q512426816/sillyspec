@@ -10720,3 +10720,67 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-20-thin-user-decision-record
   status: active
+
+## FR-cli-entry-566 评审任务书复跑口径节（必须）
+变更：2026-10-21-review-rerun-scope
+状态：active
+摘要：主路径——评审员读任务书
+场景正文：
+- 场景：主路径——评审员读任务书 — Given 评审子代理收到任务书；When 执行检查单第 1 条（测试真存在且断言该行为）；Then 按变更测试面合并复跑+回执抽验，不跑全量。
+全文：.sillyspec/changes/archive/2026-10-21-review-rerun-scope/requirements.md#FR-01
+最近确认：ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-rerun-scope:flow:测试绑定FR-01
+  tests: test/review-rerun-scope.test.mjs「任务书复跑口径五要素锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-rerun-scope
+  status: active
+
+## FR-cli-entry-567 材料包 ledger 测试回执子源（必须）
+变更：2026-10-21-review-rerun-scope
+状态：active
+摘要：主路径——收口评审带回执；边界——回执缺席
+场景正文：
+- 场景：主路径——收口评审带回执 — Given ledger 刚实测完（verify-runs 有本变更 test-result.json）；When review 子步渲染任务书+材料包；Then 包内含回执行，评审员抽验复核而非重跑。
+- 场景：边界——回执缺席 — Given verify-runs 无匹配（首次/被清理）；Then 包零回执行，口径节仍指引按变更测试面复跑。
+全文：.sillyspec/changes/archive/2026-10-21-review-rerun-scope/requirements.md#FR-02
+最近确认：ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-rerun-scope:flow:测试绑定FR-02
+  tests: test/review-rerun-scope.test.mjs「回执扫描取最新+装配在场/缺席」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-rerun-scope
+  status: active
+
+## FR-cli-entry-568 测试覆盖与 scoped 自验（必须）
+变更：2026-10-21-review-rerun-scope
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 改动落盘；When node --test 新测试 + 受影响面 + lint；Then 全过零失败。
+全文：.sillyspec/changes/archive/2026-10-21-review-rerun-scope/requirements.md#FR-03
+最近确认：ecc9d4b66c9eddfb87670f0b7dfc0b82170ecd2f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-rerun-scope:flow:测试绑定FR-03
+  tests: test/review-rerun-scope.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-rerun-scope
+  status: active
