@@ -18,29 +18,8 @@ known_failures:
   # ── C 组同族：task-done 用例断言的 CLI 预期错误文案（非硬行，裸子串安全）──
   - "[review.json] ❌ failed——已存在但 verdict 不一致"
   - "[wt-commit] ❌ failed——--pathspec-from-file"
-  # ── C 组：node:test fixture 横幅/结果行（原裸 '--- ' 与 'Running ' 已锚定收窄——
-  #    裸 '--- ' 曾可吞 go 的 --- FAIL: 行，M1 实证）──
-  - "^--- .*---$"
-  - "^Running \\d+"
-  - "结果:"
-  - "summary:"
-  # ── 已知 fixture 断言行（锚定到具体用例文案；泛用 AssertionError 裸子串已废）──
-  - "^AssertionError \\[ERR_ASSERTION\\]: 回执实测面回填"
-  # ── 各测试 fixture 专属 token（形态独特、非硬行，裸子串低风险）──
-  - "jsonA="
-  - "jsonB="
-  - "配置: 8 进程"
-  - "域差异双向 WARNING"
-  - "WARNING 放行"
-  - "Delta：交付文件"
-  - "未实现标记"
-  - "count-fail.js"
-  - "Boom-counter"
-  - "node exit1.js"
-  - "deadbeef"
-  - "❌ QUICKLOG 条目"
-  # ── 待审计（含失败词/网络形态，裸子串有吞真风险——下次命中即锚定或删）──
-  - "API parity check failed"
-  - "JSON-RPC error"
-  - "请求失败: fetch failed"
-  - "usage: pytest"
+  # node:test 家族三类条目已按约回收（2026-10-20-known-failures-c-recycle）：坑
+  # verify-gate-worktree-crossrepo-three-defects 缺陷三约定「工具修复后删」——TAP
+  # 摘要级判定已随多版发布覆盖 exit 码丢失面，且 judgeWithKnownFailures 在
+  # exitCode===0 时直接 passed 不扫行（verify-postcheck.js:1206），被删条目仅剩
+  # 真失败场景的行级归因装饰作用（吞真风险面同步收紧）。删前清单见该变更归档件。

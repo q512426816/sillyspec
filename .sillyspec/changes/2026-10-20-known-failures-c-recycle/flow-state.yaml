@@ -1,0 +1,33 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  node:test 豁免 C 组按约回收
+
+
+  动机与背景：坑 verify-gate-worktree-crossrepo-three-defects 缺陷三处置（2026-09-23）约定「sillyspec 仓 known_failures C 段窄豁免（工具修复后删）随下一次
+  sillyspec 发版生效后删除」——TAP 摘要级判定已落地且随多版发布（cross-repo-tap-summary 3/3 绿）；judgeWithKnownFailures 在 exitCode===0 时直接返回
+  passed 不扫行（verify-postcheck.js:1206），node:test fixture 噪音豁免仅剩 exit≠0 且真失败场景的行级归因装饰作用，按约回收（吞真风险面同步收紧）。
+
+
+  成功标准：
+
+  - known-failures.yaml 删除 node:test banner/结果行组与 fixture token 组及待审计组
+
+  - 保留非 node:test 家族：D 组门内嵌套与 task-done 用例 CLI 预期错误文案同族
+
+  - 既有判定相关测试套件零回归
+autopilot: false
+prestage_ack: true
+baseline_commit: daca93d44911c8adc5d20b86e97fe0a951e86dc2
+updatedAt: '2026-10-20T01:06:03.562Z'
+baseline_sha256: ac9c94ccbad94ceda1b4722cfaf07f05dcebfcc82a28a515f93fd88f37e8ab58
+spec_approved: true
+spec_approved_at: '2026-10-20T01:06:03.562Z'
+spec_approved_by: zcode-pitfall-fix-knownfailures
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-pitfall-fix-knownfailures
+
