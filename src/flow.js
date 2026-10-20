@@ -1154,6 +1154,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     // 成功标准≠工作分解——收口/推送/发布是协议自身承担的动作；单列则证据（token 提交）必须先于勾选存在。
     `   任务拟法：收口/推送/发布类动作不单列 task（提交、归档、推送是 flow start→done 协议自身承担的动作——成功标准照写 requirements，勿逐字搬进任务清单）；确需单列的收口/操作型任务，勾选前先做消息预埋 task-NN token 的交付提交——回执类证据（push/publish 回执、构建日志路径）写进提交消息，勿依赖勾选后补；`,
     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度）。`,
+    `💡 执行期用户插入决策方向（有实现影响、约束后续变更的取舍/否决/定调）→ 当场 sillyspec decisions add --change ${change} --id D-001 --title "…" 落盘（只留会话=收口档案不可见、跨变更复潮无防）；改变承诺面的同步 design/tasks 对应节。`,
     ``,
     `🛑 三断点纪律（顺序纪律：①未过不动码；②③为汇报点——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -1163,7 +1164,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `      方案错了返工最贵；批准是动码前置义务（未批准且未声明 --autopilot 时 flow done 亦拒收——2026-10-04-thin-docs-v2）；`,
     `      用户否掉方案 → flow reject --change ${change} --reason <理由>（拒后批准须显式通道再确认）。`,
     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
-    `      等用户确认再跑收口。`,
+    `      等用户确认再跑收口；汇报顺带对账执行期用户决策（decisions 条目列一下，无则说明无）。`,
     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
     `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（用户显式授权、留痕——非 agent 自选补救通道），`,
     `   ①②③人审全免（agent 自主跑到底）。`,
