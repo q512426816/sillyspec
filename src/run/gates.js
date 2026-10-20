@@ -1108,7 +1108,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         snapshotFailRef = {}
         verifyGateSnap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts, failRef: snapshotFailRef })
         if (verifyGateSnap) {
-          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与门判定）`)
+          console.log(`🧪 Verify 实测隔离快照（根：${verifyGateSnap.snapshotRoot}）：HEAD + 本变更 ${verifyGateSnap.changeFileCount} 个文件${verifyGateSnap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}${verifyGateSnap.carriedFiles && verifyGateSnap.carriedFiles.length > 0 ? ` + 携带 ${verifyGateSnap.carriedFiles.length} 个他者声明文件（依赖自洽，不进判定面）` : ''}（并行会话未声明脏文件不参与门判定）`)
         } else {
           // FR-02（2026-10-09-verify-reuse-friction）：null 回退与异常回退同等可见 + 记账；
           // FR-04（2026-10-16-fix-downstream-tool-defects）：reason 消费 failRef 结构化原因

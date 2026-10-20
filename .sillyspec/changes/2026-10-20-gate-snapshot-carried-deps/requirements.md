@@ -18,7 +18,7 @@ Then 走同一三态判定（陈旧取主仓/正常取 worktree/分叉取 worktr
 
 ### FR-02: createVerifyGateSnapshot 的 foreign 剔除改为「判定面剔除+物理携带」，控制台提示携带 N 个他者声明文件；全部被剔仍回退主仓的既有语义不变
 
-`createVerifyGateSnapshot`（src/run/gate-snapshot.js:883）的他者声明过滤必须（MUST）改为：判定面（changeFiles，供 createGateSnapshot files 参数）照旧剔除他者声明文件；被剔除文件必须（MUST）以 `carriedFiles` 传给 createGateSnapshot 物理携带（源=overlayRoot：worktree 模式取 worktree 在场版本、in-place 取主仓工作区版本；源侧不存在的他者文件跳过不携带）。携带发生时控制台必须（MUST）输出提示（携带 N 个他者声明文件·依赖自洽·不进判定面）。他者声明过滤后判定面为空 → 回退主仓的既有语义与失败原因必须（MUST）不变。
+`createVerifyGateSnapshot`（src/run/gate-snapshot.js:883）的他者声明过滤必须（MUST）改为：判定面（changeFiles，供 createGateSnapshot files 参数）照旧剔除他者声明文件；被剔除文件必须（MUST）以 `carriedFiles` 传给 createGateSnapshot 物理携带（源=overlayRoot 经三态判定：worktree 模式陈旧取主仓/正常与分叉取 worktree 血统，in-place 取主仓工作区版本；源侧不存在的他者文件跳过不携带）。携带发生时控制台必须（MUST）输出提示（携带 N 个他者声明文件·依赖自洽·不进判定面）。他者声明过滤后判定面为空 → 回退主仓的既有语义与失败原因必须（MUST）不变。
 
 #### 场景：坑文主场景（快照依赖自洽）
 

@@ -883,8 +883,15 @@ export function envDirsLinked(cwd, snapshotRoot) {
  */
 export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF' } = {}) {
   if (!snapInfo || !snapInfo.snapshotRoot) return
-  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}）`)
-  console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
+  console.error(`   🔬 本次实测执行于隔离快照：${snapInfo.snapshotRoot}（HEAD + 本变更 ${snapInfo.changeFileCount ?? '?'} 个文件${snapInfo.sourceRoot ? '，overlay 自 worktree' : ''}${snapInfo.carriedFiles && snapInfo.carriedFiles.length > 0 ? `，携带 ${snapInfo.carriedFiles.length} 个他者声明文件（依赖自洽面）` : ''}）`)
+  // 2026-10-20-gate-snapshot-carried-deps 评审 F3 清偿：携带面在场时他者文件**在**疑点内
+  // （原「并行污染不在疑点内」只对未声明脏文件成立——携带件是声明过的他者内容）。
+  if (snapInfo.carriedFiles && snapInfo.carriedFiles.length > 0) {
+    const preview = snapInfo.carriedFiles.slice(0, 5).join('、')
+    console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 携带的他者声明文件坏半态（${snapInfo.carriedFiles.length > 5 ? `${preview} 等` : preview}——他者变更在途内容，非本变更面）→ 核对他者变更状态或 SNAPSHOT_OFF 对照；③ 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题。`)
+  } else {
+    console.error(`   失败疑点排查顺序：① 本变更文件自身的真实失败（最常见）→ 修代码；② 快照环境差异（monorepo 依赖布局/环境目录链接缺失）→ 设 ${offEnv}=1 回退主仓复跑对照——主仓过而快照挂即环境问题；③ 并行污染已被快照隔离，不在疑点内。`)
+  }
 }
 
 /**
@@ -892,8 +899,9 @@ export function printSnapshotFailureHint(snapInfo, { offEnv = 'SILLYSPEC_VERIFY_
  * main 工作区，多会话并发任何人的 WIP 都能弄红别人的门）。等价「--worktree 定向跑」：
  * overlay 文件集 = resolveVerifyChangedFiles（worktree-aware：含 merge-base 补齐与
  * working-tree），overlay 源 = 本变更 worktree 根（meta 感知；in-place 退主仓 cwd）——
- * 并行会话的在途文件物理不进快照。变更文档（changes/<name>/**，test_strategy 的
- * module-impact.md 等消费）从主仓 specBase 随快照复制。
+ * 并行会话**未声明**的在途脏文件物理不进快照（隔离核心）；他者**显式声明**的文件以携带面
+ * 物理进快照（2026-10-20-gate-snapshot-carried-deps：依赖自洽——判定/归因面仍剔除）。
+ * 变更文档（changes/<name>/**，test_strategy 的 module-impact.md 等消费）从主仓 specBase 随快照复制。
  * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
  * @returns {Promise<{snapshotRoot: string, cleanup: () => void, overlaid: number, changeFileCount: number}|null>}
  */

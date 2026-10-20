@@ -155,6 +155,22 @@ test('非 git / 无变更文件集 → null（fallback 主仓现行为）', asyn
     '无变更文件集 → null（无从定向）')
 })
 
+test('全部 diff 被他者声明过滤 → null 回退主仓，原因文案不变（FR-02 回退语义钉，评审 F1 清偿）', async () => {
+  const proj = mk('vgs-allforeign-')
+  const { specBase } = setupBase(proj, 'inplace')
+  // 他者活跃变更声明覆盖本变更全部在途文件
+  const otherDir = join(specBase, 'changes', 'other-change')
+  mkdirSync(otherDir, { recursive: true })
+  writeFileSync(join(otherDir, 'design.md'), '# D\n\n## 文件变更清单\n\n| 文件 | 操作 |\n|------|------|\n| src/feature.js | 修改 |\n')
+  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 9 // 在途\n')
+
+  const failRef = {}
+  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase, failRef })
+  assert.equal(snap, null, '判定面全被剔 → null 回退主仓（携带面不救回——本变更无 own 面）')
+  assert.ok(failRef.reason && failRef.reason.includes('全部被他者声明过滤'),
+    `failRef 原因文案不变（实际：${failRef.reason}）`)
+})
+
 test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked 新文件内容进快照——回放摩擦#5 永久钉', async () => {
   const proj = mk('vgs-adopt-')
   const { specBase, wtDir } = setupBase(proj, 'native')
