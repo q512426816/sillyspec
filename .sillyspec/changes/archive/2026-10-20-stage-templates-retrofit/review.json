@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-stage-templates-retrofit",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f5b89b761f7b562048b80f057db96b4d59275c71",
+  "findings": [],
+  "dimensionNotes": { "乱序": "n/a", "并发": "n/a", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-20T03:20:35Z",
+  "checks": {
+    "fr01": "ok：design.md:11 含完整 sha 8227bd0a861f8d1e52aa56ce90ae7626b84c6a71；git show 核对交付 diff 与描述一致——src/stage-templates.js decisions 模板 type/status 由字面旧口径（type 含 term|boundary、status 含 unresolved|rejected）改为 ${DECISION_TYPES.join(' | ')} / ${DECISION_STATUSES.join(' | ')} 正典插值（单一源 src/decision-values.js），term/premise/risk/unresolved 漏网提示面清除",
+    "fr02": "ok：test/decision-caliber-unify.test.mjs 用例④ tplTypeInterp=1 / tplStatusInterp=1 断言及旧散值清除断言真实在场（8227bd0a 交付且现于工作区）；亲跑 node --test 实测 6/6 pass 0 fail",
+    "fr03": "归档步兑现中：归档提交尾缀带 (2026-10-20-stage-templates-retrofit) 待 flow done 归档时验证",
+    "blindDimensions": "ok：本变更 diff 纯 spec 治理文档（design/requirements/tasks），无运行时时序/并发写面，「不适用」成立；交付行为语义已在原生变更 2026-10-20-decision-caliber-unify 论证",
+    "disclosureBoundary": "可接受：冻结面不含交付 diff（基线 d7f0095c 晚于交付 8227bd0a）以 design 引用 + git 历史为审计链——sha 已锚定可 git show 复核；零代码交付成立（工作区无 src/test 脏改动，HEAD 仅触及 .sillyspec）；tasks.md 恰列 task-01/task-02 两条治理任务且已勾",
+    "probes": {
+      "cli-copy-selfsufficient": "ok：本变更零 CLI 文案改动",
+      "config-absent-zero-regression": "ok：未新增 local.yaml 消费键",
+      "crossrepo-path-compat": "n/a：不触及 worktree/跨仓"
+    }
+  }
+}

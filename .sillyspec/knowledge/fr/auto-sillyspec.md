@@ -71,3 +71,42 @@ created_at: 2026-10-20T01:19:37.412Z
   confirmed_at: null
   source_change: 2026-10-20-known-failures-c-recycle
   status: active
+
+## FR-auto-sillyspec-031 本变更 design.md 必须引用交付提交 8227bd0a 完整 sha 与交付内容描述（stage-templates.js decisions 模板清单插值正典）
+变更：2026-10-20-stage-templates-retrofit
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 本变更归档件；When 审计者读 design.md；Then 能取到完整 sha 并用 git show 8227bd0a 复核交付 diff
+全文：.sillyspec/changes/archive/2026-10-20-stage-templates-retrofit/requirements.md#FR-01
+最近确认：f5b89b761f7b562048b80f057db96b4d59275c71
+
+## FR-auto-sillyspec-032 test/decision-caliber-unify.test.mjs 用例④的 stage-templates 插值断言在场且全绿（已验证达标的行为）
+变更：2026-10-20-stage-templates-retrofit
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 交付已在库（8227bd0a）；When 收口实测跑该套件；Then 6/6 pass 零 fail
+全文：.sillyspec/changes/archive/2026-10-20-stage-templates-retrofit/requirements.md#FR-02
+最近确认：f5b89b761f7b562048b80f057db96b4d59275c71
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-20-stage-templates-retrofit:flow:测试绑定FR-02
+  tests: test/decision-caliber-unify.test.mjs「④ brainstorm 提示清单同步」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-20-stage-templates-retrofit
+  status: active
+
+## FR-auto-sillyspec-033 归档完成后审计链可从本变更档案追溯到交付提交 8227bd0a
+变更：2026-10-20-stage-templates-retrofit
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given flow done 完成；When 查归档目录；Then design.md 含 sha 引用、归档提交消息含 (2026-10-20-stage-templates-retrofit) 尾缀
+全文：.sillyspec/changes/archive/2026-10-20-stage-templates-retrofit/requirements.md#FR-03
+最近确认：f5b89b761f7b562048b80f057db96b4d59275c71

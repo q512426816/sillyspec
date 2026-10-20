@@ -1,0 +1,14 @@
+{"ts":1792466040899,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1792466040899,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792466065161,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792466108218,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792466118446,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792466146345,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792466146833,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792466149258,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792466149258,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1792466162908,"kind":"commit","stage":null,"detail":"d77029c6","provisional":true}
+{"ts":1792466170294,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-stage-templates-retrofit/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792466223166,"kind":"commit","stage":null,"detail":"f5b89b76","provisional":true}
+{"ts":1792466230391,"kind":"gate-run","stage":"verify","detail":"门实测 skipped · 20261020031709","provisional":true}
+{"ts":1792466230633,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-20-stage-templates-retrofit/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
