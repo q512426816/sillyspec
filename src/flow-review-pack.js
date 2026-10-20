@@ -117,6 +117,30 @@ function attributionLines(a) {
 }
 
 /**
+ * 归属切分集合运算（纯函数——flow done review 子步装配用）：声明内 = design 变更清单 ∩
+ * 冻结面（他侧归因文件除外，归属歧义按他侧披露处理）；声明外 = 冻结面 − 声明清单 − 他侧
+ * 归因；他侧归因原样归一化（owner 去重保序）。路径统一正斜杠 + 去 `./` 前缀 + 冻结面去重
+ * （Windows/WSL 混用与 patch 同文件多段兼容）。纯集合运算零 IO——git/解析失败由调用方
+ * fail-soft（源头失败 → 不调用本函数）。
+ * @param {{ declaredFiles?: string[], freezeFiles?: string[], foreign?: Array<{file: string, owners?: string[]}> }} args
+ * @returns {{ declaredIn: string[], declaredOut: string[], foreign: Array<{file: string, owners: string[]}> }}
+ */
+export function buildFreezeAttribution({ declaredFiles, freezeFiles, foreign }) {
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '')
+  const declared = new Set((Array.isArray(declaredFiles) ? declaredFiles : []).map(norm).filter(Boolean))
+  const frozen = [...new Set((Array.isArray(freezeFiles) ? freezeFiles : []).map(norm).filter(Boolean))]
+  const foreignList = (Array.isArray(foreign) ? foreign : [])
+    .filter((f) => f && typeof f === 'object' && f.file)
+    .map((f) => ({ file: norm(f.file), owners: [...new Set((Array.isArray(f.owners) ? f.owners : []).map(String).filter(Boolean))] }))
+  const foreignSet = new Set(foreignList.map((f) => f.file))
+  return {
+    declaredIn: frozen.filter((f) => declared.has(f) && !foreignSet.has(f)),
+    declaredOut: frozen.filter((f) => !declared.has(f) && !foreignSet.has(f)),
+    foreign: foreignList,
+  }
+}
+
+/**
  * 装配材料包注入行（唯一组包入口）：FR 表、patch 摘要、归属切分三子源各自可得各自产出、
  * 全缺返回 null（调用方零注入）。体积帽行级截断（不切半行），截断注记置于基准面语义行之前——
  * 语义行恒为末行；标题+正文+注记+语义行总长恒 ≤ PACK_MAX_CHARS（截断预留注记预算）。

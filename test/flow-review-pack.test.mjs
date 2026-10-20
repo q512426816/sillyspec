@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, PACK_MAX_CHARS,
+  parseFrBindingRows, parseFrozenPatchSummary, assembleReviewPack, buildFreezeAttribution, PACK_MAX_CHARS,
 } from '../src/flow-review-pack.js'
 import { renderReviewerTaskbook } from '../src/flow-review.js'
 
@@ -231,5 +231,34 @@ test('⑤ 归属切分：三分类注入形态 + 声明外抽查标注 + 他侧�
     assert.ok(et.includes('声明内（design 变更清单 ∩ 冻结面，0 文件）：（无）'), '零计数照常渲染')
     assert.ok(et.includes('声明外（冻结面−声明清单，0 文件'), '声明外零计数照常渲染')
     assert.ok(et.includes('他侧归因（提交/声明归属其他变更，0 文件）：（无）'), '他侧归因零计数照常渲染')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('⑥ fail-soft 与归属集合运算：缺席/非法零注入、FR 表与摘要不受影响；声明内外集合正确（FR-03）', () => {
+  const { root, changeDir } = makePackDir(REQ_TEXT)
+  try {
+    // 缺席/非法形态 → 归属子段零注入，其余子段不受影响
+    const noAttr = assembleReviewPack({ changeDir, patchText: PATCH_TEXT })
+    const t = noAttr.lines.join(String.fromCharCode(10))
+    assert.ok(!t.includes('冻结面归属切分'), '未传 attribution → 零注入')
+    assert.ok(t.includes('FR↔测试绑定表') && t.includes('冻结 patch 文件级摘要'), 'FR 表/摘要不受影响')
+    const bad = assembleReviewPack({ changeDir, patchText: PATCH_TEXT, attribution: 'oops' })
+    assert.ok(!bad.lines.join(String.fromCharCode(10)).includes('冻结面归属切分'), '非法形态 fail-soft 零注入')
+    // 集合运算：路径归一（反斜杠/./）+ 去重 + 他侧归因排除 + 声明外
+    const BS = String.fromCharCode(92)
+    const attr = buildFreezeAttribution({
+      declaredFiles: [`src${BS}a.js`, './test/a.test.mjs', 'src/not-frozen.js'],
+      freezeFiles: ['src/a.js', `src${BS}a.js`, 'test/a.test.mjs', 'src/b.js', 'src/foreign.js'],
+      foreign: [{ file: 'src/foreign.js', owners: ['2026-10-19-other'] }],
+    })
+    assert.deepEqual(attr.declaredIn, ['src/a.js', 'test/a.test.mjs'], '声明内（去重+归一）')
+    assert.deepEqual(attr.declaredOut, ['src/b.js'], '声明外（排除他侧归因）')
+    assert.deepEqual(attr.foreign, [{ file: 'src/foreign.js', owners: ['2026-10-19-other'] }], '他侧归因原样')
+    // 帽不变：大 patch + 大归属列表仍 ≤ 12000 且截断注记在场
+    const many = Array.from({ length: 400 }, (_, i) => `src/f${i}.js`)
+    const bigPatch = many.map((f) => `diff --git a/${f} b/${f}${String.fromCharCode(10)}@@ -1 +1 @@${String.fromCharCode(10)}-a${String.fromCharCode(10)}+b`).join(String.fromCharCode(10))
+    const big = assembleReviewPack({ changeDir, patchText: bigPatch, attribution: { declaredIn: many, declaredOut: many, foreign: [] } })
+    assert.ok(big.lines.join(String.fromCharCode(10)).length <= PACK_MAX_CHARS, '帽内')
+    assert.equal(big.truncated, true, '超限截断')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

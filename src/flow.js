@@ -2374,10 +2374,28 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       // 预消化材料包装配（2026-10-19-thin-review-material-pack）：机械抽取 FR↔测试绑定表 +
       // 冻结 patch 文件级摘要注入任务书——砍零上下文评审员的定位类读与大 patch 整吞 prefill；
       // 摘要只从冻结件本身算（不走活 git，防与评审员手里冻结面漂移）；fail-soft 零注入。
+      // 归属切分（2026-10-19-thin-review-dispatch-verbatim）：三单源——design 变更清单
+      // （parseFileChangeListDetailed）、他侧归因（splitOwnVsForeignDiffFiles，与 patch 子步
+      // 同源）、冻结面文件集（材料包同源解析）——砍评审员逐文件 git 考古（实测 22 次调用）。
+      // 声明清单缺位/冻结面为空 → attribution=null（该子段零注入，FR 表/摘要不受影响）。
+      let _attribution = null
+      try {
+        const { parseFrozenPatchSummary, buildFreezeAttribution } = await import('./flow-review-pack.js')
+        const _freezeFiles = parseFrozenPatchSummary(patchText).map((f) => f.path)
+        if (_freezeFiles.length > 0) {
+          const { parseFileChangeListDetailed } = await import('./change-list.js')
+          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => e.path)
+          if (_declared.length > 0) {
+            const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+            const _split = splitOwnVsForeignDiffFiles(cwd, change, _freezeFiles, { specBase })
+            _attribution = buildFreezeAttribution({ declaredFiles: _declared, freezeFiles: _freezeFiles, foreign: _split && _split.foreign })
+          }
+        }
+      } catch { /* 归属面 fail-soft：装配失败零注入该子段 */ }
       let _packLines = null
       try {
         const { assembleReviewPack } = await import('./flow-review-pack.js')
-        const _pack = assembleReviewPack({ changeDir, patchText })
+        const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution })
         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
       console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
