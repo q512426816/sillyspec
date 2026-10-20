@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-20-cli-worktree-cwd-anchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "10eddc93788f27581e1ca708a167ae213219cb32",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "--spec-dir 显式指进 worktree（无 --allow-worktree-cwd）的半拼装形态：旧硬拦面退化为「警告+半锚定」，写入可落 worktree 副本——FR-01 MUST NOT 与 design 盲维Q2 单源表述被击穿，且该形态规格未裁决",
+      "evidence": "守卫只重写 dir 不重写也不豁免 specDir（src/index.js:412）；下游第二层 specDrift 锚定明确跳过显式 specDir（src/run/command.js:1100 条件 !platformOpts.specRoot && !specDir），cmdFlow specBase=resolvePlatformSpecDir(cwd, specDir||--spec-root) 显式优先（src/run/command.js:2861 + src/progress.js:158）→ flow/run 写命令经该形态把进度/状态写进 worktree 副本。评审者临时 fixture 亲跑（cwd=worktree + status --spec-dir <wtSpec> 无逃生 flag）：exit 0（旧码同输入 exit 2），警告宣称「已自动锚定主仓根执行」与实际 spec 口径不符（半真）。requirements FR-01 场景二只裁决了 --dir 指进 worktree，--spec-dir 指进 worktree 全文未裁决；R4-S-Q 实证（agent 三次拼 flag）表明半拼装是真实 agent 行为面。处置建议三选一留痕：①触发条件把 specDir 命中 worktree 段视作显式意图豁免（镜像第二层跳过口径）；②锚定时连带重锚 specDir；③维持现状但 requirements 显式裁决并改警告文案不再宣称全量锚定",
+      "location": "src/index.js:403-414"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 场景二（--dir 显式指进 worktree → 同款警告+锚定）无 e2e 正例钉",
+      "evidence": "套件覆盖 cwd 根/子目录、--dir 显式主仓（负例）、逃生门、wt-commit 五形态；--dir-into-worktree 正例零用例——锚定语义仅靠 guardDir=dir 结构成立（src/index.js:404），无回归钉；requirements 为该场景单立 Given/When/Then 却无对应测试绑定",
+      "location": "test/worktree-cwd-guard.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "「主仓未 init 极端态」用例前提不成立且与首例同态重复——FR-03 场景实际未被构造",
+      "evidence": "mkdirSync(wtRoot/src) 递归必然连带创建 mainRepo/.sillyspec 祖先目录，用例注释「mainRepo 无 .sillyspec」为误；锚定后 resolveUninitCwdGate→resolveSpecDir(mainRepo) 命中该目录走 pass（anchor=mainRepo）而非未初始化 block（src/run/shared.js:428 existsSync(spec) 判定）——用例实际是首例的弱断言重复（仅 exit≠2+警告在场，未钉「按主仓未初始化口径输出」）。且路径判定式 worktree 恒活于 main/.sillyspec/.runtime/worktrees 内，「主仓根无 .sillyspec 而 worktree 存在」结构上不可构造——FR-03 场景为防御性空洞面，代码侧单一职责属实（守卫段无任何 .sillyspec 存在性判定，亲核）",
+      "location": "test/worktree-cwd-guard.test.mjs:76-82"
+    },
+    {
+      "severity": "P3",
+      "title": "「worktree 副本零 CLI 写入」绝对表述被守卫段之前的旧布局迁移块例外（先在行为，非本变回归）",
+      "evidence": "migrateRuntimeLayout 以 targetDir（=process.cwd()=worktree）或 specDir 派生 .runtime 且先于锚定执行（src/index.js:330-345）；评审者亲跑实测对 worktree .sillyspec 打印「已跳过整删，仅清理运行时残留」——存在前锚定段的清理写入面（真实 worktree checkout 无 .runtime 时基本 no-op）。design 盲维Q2「锚定后写入全部落主仓」与 commit message 的不变量未限定该前段；旧码 exit 2 时代同样先跑此块，故为表述过强而非行为回归",
+      "location": "src/index.js:330-345"
+    },
+    {
+      "severity": "P3",
+      "title": "逃生门整行在调用方已带 --spec-dir 时拼出双 --spec-dir 且首个嵌入路径不加引号（先在构造，非本变引入）",
+      "evidence": "`sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir \"…\"` 当 args 已含 --spec-dir <路径> 时该 flag 重复出现且嵌入值无引号（路径含空格整行照贴会碎）；旧码（e87da537^ = e8e6b7bf）同款构造，评审者实测亲见双 flag 行。留痕供顺手修",
+      "location": "src/index.js:411"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-20T02:32:10Z",
+  "note": "独立子代理只读评审（评审期 HEAD 前进至 c1e823c7，10eddc93..HEAD 三提交经 git diff --stat 亲核零触及本变评审面）。检查单逐条：①FR↔实现↔测试——FR-01 主面（cwd 误入锚定）三方一致（代码+套件）；FR-02 三豁免一致（args 原串短路/命令名豁免/守卫天然不命中，负例钉齐）；FR-03 代码一致（守卫无存在性判定）但用例前提失真（finding P3-3）；FR-04 一致（shared.js 零 diff 亲核、五形态钉、引用面 8 套件评审者独立复跑全绿：worktree-cwd-guard 8/8、config-cat 25/25、gate-derive-spec-drift 14/14、lint-ownership-failfast 21/21、probe5-worktree-parity 16/16、endpoints-extract-worktree 5/5、close-trace-freeze-integrity 8/8、test-ledger 8/8，check-syntax 绿 1027 文件）；FR-05 查无不适用成立（grep --allow-worktree-cwd 于 AGENTS.md/CLAUDE.md/.claude/CLAUDE.md 零命中亲核）。②盲维四问——Q1/Q3/Q4 属实：入口一次性重写（锚定后 dir 单值消费，targetDir 亲核无守卫后消费点；run/command.js:2347 子进程 cwd=process.cwd() 重入 CLI 自锚定自洽）、无生命周期耦合（守卫不动 worktree 注册/目录）、路径结构同仓（平台异位 worktree 在 runtimeRoot/worktrees/<name> 无 .sillyspec 段，worktree.js:1455 亲核，detectCwdInsideWorktree 不命中）；Q2「写入全部落主仓」绝对表述有两例外（P2 specDir 角落 + P3 迁移前段）→并发记 finding。③披露边界裁决——「锚定静默改变 agent 预期」及缓解：可接受（警告恒四行走 stderr 实测+逃生门整行保留+lint 5a 钉；非静默，exit 码变化与锚定意图自洽）；「--dir 显式指进 worktree 同属误入面被锚定」：可接受（与 cwd 形态同款误入、锚定后语义一致、逃生门仍在；但缺正例钉=P3-2）；「--spec-dir 显式指进 worktree」：不可接受——未裁决（P2-1），要求后续显式定案。④防护声明核实——wt-commit 豁免链路在（command!=='wt-commit' 短路+用例钉）；--allow-worktree-cwd 零警告零锚定在（原串短路+负例钉）；detectCwdInsideWorktree 零改动（git show 空 diff）；warning 走 stderr 不污染 stdout JSON（progress status --json 于 worktree cwd 亲跑：stdout 合法 JSON、警告全在 stderr）。⑤生成物——无类型/契约生成物（交付面=src/index.js+4 测试文件），确认。verdict=PASS 依据：无 P1、主面（默认误入拦→导）实现测试俱齐且独立复跑绿；P2 为规格未裁决角落的遗留面，按本仓惯例（4badee47 review 先例）留痕待裁。"
+}

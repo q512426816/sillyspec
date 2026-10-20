@@ -1,0 +1,49 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  CLI worktree 内跑自动锚定主仓根
+
+
+  动机与背景：坑 cli-cwd-coupling（docs，2026-10-12 记录、2026-10-13 复核延后为设计级）期望修复：「CLI 从锚点自动定位主仓根，对 worktree cwd
+  给出警告而非静默分裂（拦→导）」。现行守卫（src/index.js:401-417，坑 worktree-cwd-silent-split）在 cwd 命中 .sillyspec/.runtime/worktrees/<change>
+  时 exit 2 硬拦并指引「cd 回主仓根重跑」——生产实证（会话 47e2ff1a）agent 三次被拦、每次浪费 1-2 个交互来回。detectCwdInsideWorktree 已精确给出
+  mainRepoRoot（路径结构锚点）——守卫建议的事可自动做掉。
+
+
+  成功标准：
+
+  - CLI 入口对 worktree cwd（cwd 或 --dir 命中 worktree 段）：不再 exit 2，改为⚠️警告（变更名/原 cwd/锚定主仓根/逃生门整行）+
+  自动把执行目录重锚定到主仓根——命令按主仓口径执行（进度库/变更状态单源）
+
+  - --allow-worktree-cwd 显式放行语义不变（跳过守卫零警告零锚定）；wt-commit 豁免不变；--dir 显式主仓根不经守卫（本来就命中不了 worktree 段）
+
+  - 主仓根 .sillyspec 存在性由后续未初始化门自然判定（锚定后主仓未 init 的极端态走既有出口，不在守卫内重复判）
+
+  - detectCwdInsideWorktree 单元行为不变；既有 worktree-cwd-guard e2e 断言改钉（exit 2 → 锚定警告 + 主仓口径执行）；守卫相关回归全绿
+
+  - 本仓 AGENTS/CLAUDE 若述及硬拦行为则同步（查无则记不适用）
+autopilot: false
+prestage_ack: true
+baseline_commit: 4badee475860d096a9770d50d1f936f922715640
+updatedAt: '2026-10-20T02:15:41.775Z'
+baseline_sha256: ab2a8eb37986aae7dd92476d8a7a25a88545aedc5e144a85c5d2e0e74f4efb70
+spec_approved: true
+spec_approved_at: '2026-10-20T02:01:14.301Z'
+spec_approved_by: zcode-pitfall-fix-cwdanchor
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-pitfall-fix-cwdanchor
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js115+js-meta-skip1+nontest-skip1)+fr(112)（73.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020021409\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: passed ← npm run
+  lint（80.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261020021409\test-result.json｜门文件 11 个
+

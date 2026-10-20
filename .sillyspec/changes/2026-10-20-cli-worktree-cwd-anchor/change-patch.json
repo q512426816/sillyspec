@@ -1,0 +1,147 @@
+{
+  "change": "2026-10-20-cli-worktree-cwd-anchor",
+  "baseline": "4badee475860d096a9770d50d1f936f922715640",
+  "head": "10eddc93788f27581e1ca708a167ae213219cb32",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    "src/flow.js",
+    "src/index.js",
+    "src/task-tick.js",
+    "test/config-cat.test.mjs",
+    "test/gate-derive-spec-drift.test.mjs",
+    "test/lint-ownership-failfast.test.mjs",
+    "test/thin-user-decision-record.test.mjs",
+    "test/worktree-cwd-guard.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 167,
+    "deletions": 56
+  },
+  "savedAt": "2026-10-20T02:15:41.773Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "4badee475860d096a9770d50d1f936f922715640",
+    "totals": {
+      "files": 9,
+      "additions": 167,
+      "deletions": 56
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 11,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/task-tick.js",
+        "additions": 6,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/config-cat.test.mjs",
+        "additions": 11,
+        "deletions": 13,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/gate-derive-spec-drift.test.mjs",
+        "additions": 9,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/lint-ownership-failfast.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/thin-user-decision-record.test.mjs",
+        "additions": 93,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/worktree-cwd-guard.test.mjs",
+        "additions": 32,
+        "deletions": 20,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "da902ca7c59ec28ccccb837c2738e45596d0cb35b98392c882e58c507e19c823",
+  "patchStatus": "ok"
+}
