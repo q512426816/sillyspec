@@ -90,7 +90,7 @@ if (process.argv.includes('--failed')) {
   if (failedFace === null) {
     console.log(`ℹ️ --failed：失败清单缺席或为空（${failureListPath}）——按全量跑`)
   } else {
-    const { face, dropped } = filterToFailedFace(files, failedFace)
+    const { face, dropped } = filterToFailedFace(files, failedFace, (f) => relative(testDir, f))
     console.log(`🔁 --failed：仅重跑上次失败面（${face.length} 个，来自 ${failureListPath}）`)
     for (const d of dropped) console.log(`  ⚠️ 清单项不在当前测试集（改名/已删，跳过）：${d}`)
     files = face

@@ -32,6 +32,26 @@ test('① filterToFailedFace：交集保序 + dropped 显式', () => {
   assert.deepEqual(dropped, ['zzz-gone.test.mjs'], '缺失项不静默')
 })
 
+test('① filterToFailedFace：子目录往返（评审 P2 清偿）——清单落盘 relative 形态可命中', () => {
+  const files = [
+    'C:/r/test/plain.test.mjs',
+    'C:/r/test/dispatch/wave-auto-adopt.test.mjs',
+    'C:/r/test/probe-suite/p7.test.mjs',
+  ]
+  const relOf = (f) => f.replace('C:/r/test/', '')
+  // 正斜杠相对形态 / Windows 反斜杠形态 / basename 形态 三种清单写法都命中
+  const r1 = filterToFailedFace(files, ['dispatch/wave-auto-adopt.test.mjs', 'probe-suite/p7.test.mjs'], relOf)
+  assert.deepEqual(r1.face.map(f => f.split(/[\\/]/).pop()), ['wave-auto-adopt.test.mjs', 'p7.test.mjs'])
+  assert.deepEqual(r1.dropped, [])
+  const r2 = filterToFailedFace(files, ['dispatch\\wave-auto-adopt.test.mjs'], relOf)
+  assert.equal(r2.face.length, 1, 'backslash 清单形态归一后命中')
+  const r3 = filterToFailedFace(files, ['wave-auto-adopt.test.mjs'], relOf)
+  assert.equal(r3.face.length, 1, 'basename 形态兜底命中')
+  // 无 relOf 时 basename 兜底（向后兼容）
+  const r4 = filterToFailedFace(files, ['p7.test.mjs'])
+  assert.equal(r4.face.length, 1)
+})
+
 test('① persist/read：全绿自清 + 落盘可读', () => {
   const dir = mkdtempSync(join(tmpdir(), 'rff-'))
   const p = join(dir, 'sub', 'list.txt')

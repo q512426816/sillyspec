@@ -24,18 +24,25 @@ export function parseFailureList(text) {
 
 /**
  * 当前文件集 ∩ 清单 → { face, dropped }
- * face=要跑的绝对路径列表（按当前 files 顺序）；dropped=清单中不在当前文件集的名字（改名/已删，调用方 warn）。
+ * 匹配双形态（评审 P2 清偿：清单落盘是 relative(testDir) 形态——子目录测试是 `dispatch/x.test.mjs`
+ * （Windows 下 backslash），单按 basename 匹配会把实存子目录测试误判 dropped）：
+ * 清单项分隔符归一后，等于文件的相对路径（relOf 可注入，runner 传 relative(testDir) 形态）或 basename 即命中。
+ * face=要跑的路径列表（按当前 files 顺序）；dropped=清单中未命中任何文件的名字（调用方 warn）。
  */
-export function filterToFailedFace(files, failedNames) {
-  const wanted = new Set(failedNames)
+export function filterToFailedFace(files, failedNames, relOf = null) {
+  const wanted = new Set((failedNames || []).map((n) => String(n).replace(/\\/g, '/')))
   const face = []
   const dropped = []
   const hit = new Set()
   for (const f of files) {
-    const name = f.split(/[\\/]/).pop()
-    if (wanted.has(name)) {
+    const basename = f.split(/[\\/]/).pop()
+    const rel = relOf ? String(relOf(f)).replace(/\\/g, '/') : null
+    if (wanted.has(basename)) {
       face.push(f)
-      hit.add(name)
+      hit.add(basename)
+    } else if (rel && wanted.has(rel)) {
+      face.push(f)
+      hit.add(rel)
     }
   }
   for (const n of wanted) if (!hit.has(n)) dropped.push(n)
