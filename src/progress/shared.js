@@ -16,6 +16,10 @@ export const STAGE_LABELS = {
   quick: '⚡ 快速任务',
   explore: '🧭 自由探索',
   archive: '📦 归档变更',
+  // thin 展示键（2026-10-21-overview-thin-stage）：轻量变更出身投影专用（overview
+  // stage_label 查找），不进 VALID_STAGES/STAGE_ORDER——thin 不走阶段机，加进阶段
+  // 清单会建空阶段行扰动级联。◈ 对齐 SillyHub 前端旁路徽标字形（◈ thin）。
+  thin: '◈ 轻量变更',
 };
 
 // 完整阶段顺序（含 scan），仅用于展示/迭代顺序

@@ -9,6 +9,9 @@ import { writeAtomicSync } from '../fs-atomic.js';
 import { timeAgo } from '../datetime.js';
 import { runValidators } from '../stage-contract.js';
 import { QUICK_SID_RE } from '../run/shared.js';
+// thin 出身投影读 flow-state（2026-10-21-overview-thin-stage）：叶子模块，与 progress.js
+// 2026-10-13-thin-sync-stage 同款 import 先例，零新依赖链。
+import { readFlowState } from '../flow-state.js';
 import { VALID_STAGES, STAGE_LABELS, STAGE_ORDER, MAIN_FLOW_ORDER, SPEC_DIR_NAME, CURRENT_VERSION, STALL_WARN_DAYS, emptyStage } from './shared.js';
 
 // quick 会话行（quick-<8hex>）按设计无实体 changes/ 目录（progress.js initChange 跳过建目录），
@@ -314,12 +317,22 @@ export class StageMachine {
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
       const dirMissing = _isGhostChange(changesRoot, cn);
+      // thin 出身投影（2026-10-21-overview-thin-stage，对齐 2026-10-13-thin-sync-stage
+      // 平台上行同款覆写）：本地行出生恒 'brainstorm'（thin 不走阶段机），总览按
+      // flow-state tier 覆写展示值——否则面板把轻量变更渲染成 brainstorm 主管线。仅覆写
+      // envelope 载荷，DB 行不动；listChanges 恒回 active 行（归档不进循环，sync 侧的
+      // status 守卫在此天然满足）；flow-state 缺失/损坏 readFlowState→null、tier=thick
+      // 一律按行值（fail-open 同 sync 口径）。
+      let currentStage = data?.currentStage || null;
+      if (currentStage && readFlowState(this.pm._changePath(cwd, cn))?.tier === 'thin') {
+        currentStage = 'thin';
+      }
       const entry = {
         name: cn,
         readable: !!data,
         ghost: dirMissing,
-        current_stage: data?.currentStage || null,
-        stage_label: data ? (STAGE_LABELS[data.currentStage] || data.currentStage || null) : null,
+        current_stage: currentStage,
+        stage_label: currentStage ? (STAGE_LABELS[currentStage] || currentStage) : null,
         last_active: this.pm._dumpIso(data?.lastActive) || null,
       };
       if (data) {
