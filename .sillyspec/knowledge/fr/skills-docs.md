@@ -623,3 +623,17 @@ created_at: 2026-10-15T01:21:44.811Z
 - 场景：全量回归 — Given 本变更全部合入，When 跑全量测试，Then 零失败。
 全文：.sillyspec/changes/archive/2026-10-19-thin-order-canon/requirements.md#FR-05
 最近确认：d8ff8bc2b9fda1b3e8d062c8f329c260b772edf5
+
+## FR-skills-docs-028 .claude/skills/sillyspec-flow/SKILL.md 出现「交互规范」节，含 AskUserQuestion 强制句与禁编号列表句，语义与 sillyspec-brainstorm 同版
+变更：2026-10-21-flow-skill-askuser
+状态：active
+摘要：多选项决策走问询工具
+全文：.sillyspec/changes/archive/2026-10-21-flow-skill-askuser/requirements.md#FR-01
+最近确认：b9dfb18de4292ba64e383d6ab8b8d7fdaeb578f2
+
+## FR-skills-docs-029 纯 markdown 指令文档变更，无代码行为——测试不适用：无逻辑可断言，验收靠文档审阅
+变更：2026-10-21-flow-skill-askuser
+状态：active
+摘要：单文件追加零代码面
+全文：.sillyspec/changes/archive/2026-10-21-flow-skill-askuser/requirements.md#FR-02
+最近确认：b9dfb18de4292ba64e383d6ab8b8d7fdaeb578f2

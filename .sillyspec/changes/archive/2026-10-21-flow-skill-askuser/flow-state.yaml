@@ -3,6 +3,12 @@ legacy_fallback: false
 substeps:
   artifacts: done
   ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -22,7 +28,7 @@ input: >-
 autopilot: false
 prestage_ack: true
 baseline_commit: 95031f4ca3d205a666d89d55723cfc35a77424b3
-updatedAt: '2026-10-21T06:24:24.490Z'
+updatedAt: '2026-10-21T06:31:25.226Z'
 baseline_sha256: 3d07ad491d1012d62fb1246549be4dd49b856bb6d14b01797943ea92b15bf3d0
 spec_approved: true
 spec_approved_at: '2026-10-21T06:21:46.123Z'
@@ -34,4 +40,8 @@ gate_summary: >-
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021062333\test-result.json｜lint: passed
   ← npm run lint（50.6s）
   结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021062333\test-result.json｜门文件 4 个
+accept_empty_face:
+  at: '2026-10-21T06:27:29.624Z'
+  declaredCount: 1
+  by: zcode-flow-skill-askuser
 

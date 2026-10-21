@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-flow-skill-askuser",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b9dfb18de4292ba64e383d6ab8b8d7fdaeb578f2",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "change.patch 缺失——冻结留档对 .claude/ 工具治理路径为设计盲区，交付面靠 git HEAD 替代核验",
+      "evidence": "任务书口径「若缺失按 patch 留档失败处理」；实证缺失（变更目录仅 design/flow-state/proposal/requirements/task-ticks/tasks 六件）。机理：flow-parity.js TOOL_GOVERNANCE_DIRS 将 .claude/ 排除出冻结面并由 --accept-empty-face 签收。替代核验成立：git show b9dfb18 -- .claude/skills/sillyspec-flow/SKILL.md 提供完整冻结证据（+4/-0 纯追加），工作区与 HEAD 零漂移（git status/diff 均空），故降级 P3 留痕不阻断",
+      "location": ".sillyspec/changes/2026-10-21-flow-skill-askuser/（缺 change.patch）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T06:29:58.000Z"
+}
