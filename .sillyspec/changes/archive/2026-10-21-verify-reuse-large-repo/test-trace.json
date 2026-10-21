@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-verify-reuse-large-repo",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-01",
+      "tests": [
+        "test/verify-reuse-large-repo.test.mjs「大仓（ls-tree>1MB）computeCodeTreeKey 非 null——maxBuffer 回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-verify-reuse-large-repo"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-02",
+      "tests": [
+        "test/verify-reuse-large-repo.test.mjs「isVerifyBatchEligible 纯资格判定矩阵（不 mutating）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-verify-reuse-large-repo"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-03",
+      "tests": [
+        "test/verify-reuse-large-repo.test.mjs「consultFailedScanReuse 命中/键失配/TTL 过期/RERUN 旁路矩阵」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-verify-reuse-large-repo"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-04",
+      "tests": [
+        "test/verify-reuse-large-repo.test.mjs「回归面：既有五文件复跑 0 失败」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-verify-reuse-large-repo"
+    }
+  ]
+}

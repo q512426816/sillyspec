@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-verify-reuse-large-repo",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "d6b314517d6bd99acc438e127187226f875584ae",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "change.patch 冻结件夹带并行变更 diff，与 d6b31451 实际提交面不一致",
+      "evidence": "patch 的 complete.js 段含 protocol-tax（--wait --json/--answers）大段无关 hunks，另含 8 个 p0-p1-hardening changelog .md 行；而 d6b31451 对 complete.js 的实际增量仅 1 行（isVerifyBatchEligible 主体经 4421027e 先行落库，该提交挂 protocol-tax message）——「代码事实唯一来源」的冻结件纯度失守，本次以 git blob 实证替代（六交付文件工作区与 d6b31451 逐字节一致、实现齐备），实质交付无缺口，属冻结/提交归属卫生问题",
+      "location": ".sillyspec/changes/2026-10-21-verify-reuse-large-repo/change.patch:132"
+    },
+    {
+      "severity": "P3",
+      "title": "♻️ 复用披露文案「环境探针入失败签名，环境真变即放行」与 consult 判定链不符",
+      "evidence": "consultFailedScanReuse 只比 dedupKey=fingerprint（commands 配置+代码树键+porcelain 代码行）×known_failures，无环境探针分量（探针在 rerunSignature，见同文件 L123 注释与 RERUN 闸文案）；环境真变不会击穿本复用，放行仅靠代码/豁免变化、TTL 到期或 RERUN 阀——文案从句照抄了 RERUN 闸口径，动作项（RERUN=1/force）本身真实有效，误导在解释从句",
+      "location": "src/run/verify-quality-scan.js:358"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements.md 部分测试绑定名与实件不符",
+      "evidence": "FR-04 绑定声称用例「回归面：既有五文件复跑 0 失败」在 test/verify-reuse-large-repo.test.mjs 中不存在（实件 5 用例为 FR-01×1/FR-02×2/FR-03×2，全绿由 ledger 回执+本次复跑 11/11 承载）；FR-03 绑定「gates.js 复用分支合成 failed 结果」实际测试只直接覆盖共享 helper synthesizeReusedFailedCheck，gates.js/machine-interface 两处接线本身无直接测试锚（行为等价靠 helper 契约间接保证）",
+      "location": ".sillyspec/changes/2026-10-21-verify-reuse-large-repo/requirements.md:71"
+    },
+    {
+      "severity": "P3",
+      "title": "两消费端失败复用与绿缓存优先级不对称",
+      "evidence": "gates.js 绿缓存命中优先（复用咨询在 green-cache 之后的 else 分支内），machine-interface 则复用咨询前置、绿缓存降为 vt==null 的 fallback——若同签名下存在「绿缓存 passed 命中 ∩ 30min 内 failed 记录」交集（如模块子集质量扫描 flaky 失败而全量门实跑已过），gate verify CLI 会被复用阻断而收口门放行；方向保守（fail-closed 错拦非假通过）、30min 有界、RERUN 可逃",
+      "location": "src/machine-interface.js:355"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok",
+    "边界裁决": "三条披露边界均裁决「可接受」：①TTL 假阻断（面漂移）——dedupKey 不含测试面的缺口由 30min TTL 显式补偿，错拦后果是多一轮人工确认而非假通过（fail-closed 方向），RERUN 阀+四出路齐备；②FR-2 调度次优（亲测延后）——中间步顺路亲测正是本变更要消灭的浪费，实测归亲测步/收口门口径一致；③放弃方案三条（变更文件集哈希兜底/无 TTL 复用/CLI 接快照口径）——分别为根因修复后的死代码、无界面漂移风险、语义扩张出界，放弃合理"
+  },
+  "reviewedAt": "2026-10-21T15:14:05Z"
+}

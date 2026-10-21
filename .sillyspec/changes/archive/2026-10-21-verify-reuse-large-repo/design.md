@@ -20,6 +20,16 @@ created_at: 2026-10-21T14:37:30.768Z
 
 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
 
+### 文件变更清单
+
+- src/run/code-face-key.js（safeGit maxBuffer——无导出变化）
+- src/run/complete.js（isVerifyBatchEligible 新导出 + 批量块资格先行接线）
+- src/run/verify-quality-scan.js（consultFailedScanReuse / synthesizeReusedFailedCheck 新导出）
+- src/run/gates.js（收口门实测 else 分支前置失败签名复用咨询）
+- src/machine-interface.js（verify-test facet 前置失败签名复用咨询）
+- test/verify-reuse-large-repo.test.mjs（新增回归测试 5 用例）
+- .sillyspec/docs/sillyspec/modules/runtime.md（模块卡补新机制条目）
+
 - src/run/code-face-key.js：safeGit 私有函数加 maxBuffer——无导出变化。
 - src/run/complete.js：**新导出** `isVerifyBatchEligible({ changeName, specBase, steps })` → `{ eligible: boolean, reason?: string }`（纯判定不 mutating）；detectVerifyBatchFinish 外部行为不变（先资格后 mutating，理由串逐字保留）。
 - src/run/verify-quality-scan.js：**新导出** `consultFailedScanReuse({ specBase, cwd, changeName, plannedSnapshot, maxAgeMs?, forceRerun? })` → `{ reuse: true, record } | { reuse: false, reason }`（TTL 缺省 30min）。

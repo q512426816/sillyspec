@@ -73,3 +73,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
 - 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费
 - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
+- 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治

@@ -329,3 +329,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：4421027e5b776be0f12c38d88517d66275034a9c
 理由：最大风险：① 心跳行污染机器可读输出——若走 stdout，`--json` 消费方 JSON.parse(stdout) 会炸；定案走 stderr（console.error），人类/agent 均可见且 stdout envelope 纯净（pwsh 下 stderr 偶发 NativeCommandError 包装是既有环境噪声，心跳仅 >60s 慢路径出现，可接受）。② 冲突标记正则误报（把文档示例当标记）——限定 stash 面文件集 + 行首 `<{7} `/`={7}$`/`>{7} ` 三形态锚定，误报面收敛到「stash 恢复刚触碰的文件自身含行首标记」，即使误报也只是一次可人工解除的 apply 失败，fail-closed 方向安全。③ anon 自动升级被滥用冒充接管——升级仅限「匿名占位（机器级标识）→ 同主机显式身份」，匿名占位本就只拦他机（R-01 明示局限），升级不弱于既有隔离强度；他人显式/跨机持有不受影响。 试过放弃：① libuv 退出断言崩溃根修——Node on Windows 运行时缺陷（async 句柄关闭竞态），应用层无法根除，降级为 spawn-settle bounded 等待缓解（句柄建立完成后再放行父进程退出）；② known_failures 用 js-yaml 整体重序列化——丢注释，用户文档性受损，放弃，改定向行级手术；③ handoff 原子转移所有权到新 SESSION_ID——与既有「SESSION_ID 是所有权标识非会话实例，交接要求保持不变」设计冲突（handoff.js 头注释与 stage-session ledger 契约），且换 ID 本就是偏离交接块指引的操作，定案为粘贴块内显式预告 --takeover 出路；④ `--continue` 幂等化等 P2 项——不在本变更 P0/P1 范围，未纳入。
+
+## D-unmapped-450@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-21-verify-reuse-large-repo
+原编号：D-001@v1
+锚点：未记录
+最近确认：3c165eb38e5dcccdb611cdabcd8f8c477d258acc
+理由：最大风险：FR-3 的面漂移假阻断——记录实测面 X 后 agent 手动补了测试绑定（面 X+Δ），dedupKey 不含测试面 → 复用可能拦下「其实新面能过」的收口。缓解：30min TTL 收敛窗口 + RERUN=1/force 逃生阀 + 阻断信息给四出路；错拦后果是「多等一轮人工确认」不是假通过（fail-closed 方向）。FR-2 资格先行理论上有「报告刚就绪、亲测本可在本步顺路跑掉却延后」的调度次优——接受（实测本来就该归亲测步，中间步顺路跑正是本次要消灭的浪费）。 试过放弃的方案：① dedupKey 无 git head 时回退「变更文件集内容哈希」——根因查明后不需要（maxBuffer 修复后主路径恢复，兜底代码纯增维护面）；② 收口门复用不带 TTL（与 noAI 闸完全对称）——面漂移风险无界，放弃；③ 把 gate verify CLI 也接快照口径判定——CLI 门本就主仓口径只读跑，接快照是语义扩张，超出本次修复面。

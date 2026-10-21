@@ -92,3 +92,79 @@ created_at: 2026-10-14T06:33:52.447Z
   confirmed_at: null
   source_change: 2026-10-14-gate-verify-apiface-preflight
   status: active
+
+## FR-machine-interface-005 大仓代码树键非空——safeGit 显式 maxBuffer（必须）
+变更：2026-10-21-verify-reuse-large-repo
+状态：active
+摘要：ls-tree 输出 >1MB 的仓；非 git 目录（语义保持）
+全文：.sillyspec/changes/archive/2026-10-21-verify-reuse-large-repo/requirements.md#FR-01
+最近确认：3c165eb38e5dcccdb611cdabcd8f8c477d258acc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-01
+  tests: test/verify-reuse-large-repo.test.mjs「大仓（ls-tree>1MB）computeCodeTreeKey 非 null——maxBuffer 回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-verify-reuse-large-repo
+  status: active
+
+## FR-machine-interface-006 verify 中间步 --done 批量资格先行——批量不会触发不预跑亲测（必须）
+变更：2026-10-21-verify-reuse-large-repo
+状态：active
+摘要：报告未就绪的中间步 --done；报告就绪的 --done（批量会触发）
+全文：.sillyspec/changes/archive/2026-10-21-verify-reuse-large-repo/requirements.md#FR-02
+最近确认：3c165eb38e5dcccdb611cdabcd8f8c477d258acc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-02
+  tests: test/verify-reuse-large-repo.test.mjs「isVerifyBatchEligible 纯资格判定矩阵（不 mutating）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-verify-reuse-large-repo
+  status: active
+
+## FR-machine-interface-007 收口门与 gate verify 对同签名失败记录复用阻断（必须）
+变更：2026-10-21-verify-reuse-large-repo
+状态：active
+摘要：同签名失败复用命中；豁免/代码/配置变化后回退真跑
+全文：.sillyspec/changes/archive/2026-10-21-verify-reuse-large-repo/requirements.md#FR-03
+最近确认：3c165eb38e5dcccdb611cdabcd8f8c477d258acc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-03
+  tests: test/verify-reuse-large-repo.test.mjs「consultFailedScanReuse 命中/键失配/TTL 过期/RERUN 旁路矩阵」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-verify-reuse-large-repo
+  status: active
+
+## FR-machine-interface-008 回归测试与既有测试面全绿（必须）
+变更：2026-10-21-verify-reuse-large-repo
+状态：active
+摘要：测试面
+全文：.sillyspec/changes/archive/2026-10-21-verify-reuse-large-repo/requirements.md#FR-04
+最近确认：3c165eb38e5dcccdb611cdabcd8f8c477d258acc
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-verify-reuse-large-repo:flow:测试绑定FR-04
+  tests: test/verify-reuse-large-repo.test.mjs「回归面：既有五文件复跑 0 失败」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-verify-reuse-large-repo
+  status: active
