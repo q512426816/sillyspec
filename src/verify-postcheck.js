@@ -28,6 +28,7 @@ import { createHash } from 'crypto'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { resolveRuntimeRoot } from './run/shared.js'
+import { unquoteYamlScalar } from './yaml-scalar-unquote.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync } from 'fs'
 import { join, resolve, isAbsolute } from 'path'
 import { readChangeTrace, testAnchorFile } from './test-bindings.js'
@@ -975,7 +976,10 @@ export function extractKnownFailures(yamlText) {
   // 吃到最后一个 ]（行尾注释里含 ] 的极端形态会被并入值，远优于静默清空）。
   const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
   if (inline) {
-    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+    // 条目规范化走 yaml-scalar-unquote 单点（2026-10-21-known-failures-unescape）：双引号条目
+    // 反转义——config known-failures add 写侧按 YAML 规范转义 \\.，旧读侧只剥引号不反转义，
+    // 含反斜杠的锚定豁免模式带着字面双反斜杠进 buildExemptPats，正则语义漂移、豁免静默失配。
+    return inline[1].split(',').map(s => unquoteYamlScalar(s)).filter(Boolean)
   }
   // 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）→ 坑
   // verify-known-failures-block-fragile-chain（2026-09-07 工具复盘升级修复）：块式捕获曾要求
@@ -1002,10 +1006,12 @@ export function extractKnownFailures(yamlText) {
     .map(s => {
       const item = s.trim()
       const full = item.match(/^(['"])(.*)\1$/)
-      if (full) return full[2] // 整体引号值原样保留（内部 # 不是注释）
+      // 引号值经 unquoteYamlScalar 反转义（2026-10-21-known-failures-unescape：与流式同口径，
+      // 双引号 \\.→\. / ''→'；裸值照旧只剥行尾注释）
+      if (full) return unquoteYamlScalar(item)
       const stripped = item.replace(/[ \t]+#.*$/, '').trim() // 行尾注释须 # 前有空白（YAML 语义），裸 # 不截
       const q2 = stripped.match(/^(['"])(.*)\1$/)
-      return q2 ? q2[2] : stripped
+      return q2 ? unquoteYamlScalar(stripped) : stripped
     })
     .filter(Boolean)
 }

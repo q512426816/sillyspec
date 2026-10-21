@@ -18,6 +18,7 @@ import { join, resolve as pathResolve, relative as pathRelative, sep as pathSep 
 import { execFileSync } from 'node:child_process'
 import jsYaml from 'js-yaml'
 import { parseModuleMapSimple } from './modules.js'
+import { unquoteYamlScalar } from './yaml-scalar-unquote.js'
 
 // ── HEAD 模式内容解析层（坑 docs-gate-shared-worktree-parallel-block，2026-09-08 实证）──
 // pre-push gate 校验的语义对象是「被推送的提交树」，而磁盘工作区混有并行会话的未提交
@@ -967,10 +968,12 @@ export function extractKnownFailureKeys(yamlText) {
   if (!yamlText) return []
   const yaml = String(yamlText).replace(/\r\n?/g, '\n')
   // 贪婪 .* 同 verify-postcheck.extractKnownFailures（坑 known-failures-inline-nested-bracket：
-  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）
+  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）。条目规范化三读侧统一走
+  // yaml-scalar-unquote（2026-10-21-known-failures-unescape：双引号反转义——写侧按 YAML 规范
+  // 转义的 \\. 读侧不还原会把豁免键留成字面双反斜杠）
   const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
   if (inline) {
-    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
+    return inline[1].split(',').map(s => unquoteYamlScalar(s)).filter(Boolean)
   }
   // 坑 verify-known-failures-comment-line-truncation → verify-known-failures-block-fragile-chain
   // （与 verify-postcheck.extractKnownFailures 口径互指对齐，逐字同步）：块式捕获曾要求
@@ -995,10 +998,11 @@ export function extractKnownFailureKeys(yamlText) {
     .map(s => {
       const item = s.trim()
       const full = item.match(/^(['"])(.*)\1$/)
-      if (full) return full[2]
+      // 引号值经 unquoteYamlScalar 反转义（与流式/verify-postcheck 三读侧同口径）；裸值照旧剥行尾注释
+      if (full) return unquoteYamlScalar(item)
       const stripped = item.replace(/[ \t]+#.*$/, '').trim()
       const q2 = stripped.match(/^(['"])(.*)\1$/)
-      return q2 ? q2[2] : stripped
+      return q2 ? unquoteYamlScalar(stripped) : stripped
     })
     .filter(Boolean)
 }

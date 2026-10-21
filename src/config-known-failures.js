@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from './fs-atomic.js'
+import { unquoteYamlScalar, unescapeYamlDoubleQuoted } from './yaml-scalar-unquote.js'
 
 /** 块式头行：known_failures: 顶格、后接注释或空（docs-check.js:982 同口径） */
 const BLOCK_HEADER_RE = /^known_failures:\s*(?:#.*)?$/
@@ -34,7 +35,9 @@ const BARE_KEY_SAFE_RE = /^[\w.\-\u4e00-\u9fff]+$/
 export function parseKnownFailureKeys(text) {
   const src = String(text || '')
   const lines = src.split(/\r?\n/)
-  // 流式优先（同键只可能一种形态在场；流式正则更具体）
+  // 流式优先（同键只可能一种形态在场；流式正则更具体）。条目规范化走 yaml-scalar-unquote
+  // 单点（2026-10-21-known-failures-unescape）：双引号条目反转义（renderKey 写侧按规范转义，
+  // 读侧不反转义会把 \\. 留成字面双反斜杠——锚定豁免模式静默失配）。
   for (const l of lines) {
     const m = l.match(INLINE_HEADER_RE)
     if (m) {
@@ -42,7 +45,7 @@ export function parseKnownFailureKeys(text) {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-        .map((s) => unquoteKey(s))
+        .map((s) => unquoteYamlScalar(s))
     }
   }
   const idx = lines.findIndex((l) => BLOCK_HEADER_RE.test(l))
@@ -53,17 +56,17 @@ export function parseKnownFailureKeys(text) {
     if (/^\S/.test(l)) break // 下一个顶层键——段结束
     const m = l.match(ITEM_RE)
     if (m) {
-      const k = m[2] ?? m[3] ?? (m[4] || '').trim()
+      // 双引组内文反转义 / 单引组 ''→' / 兜底组（裸值或正则引号组吃不掉的形态，如内嵌
+      // '' 的单引号条目——ITEM_RE 单引号组 [^']* 在第二个引号停）统一过 unquoteYamlScalar
+      const k = m[2] !== undefined
+        ? unescapeYamlDoubleQuoted(m[2])
+        : m[3] !== undefined
+          ? m[3].replace(/''/g, "'")
+          : unquoteYamlScalar(m[4] || '')
       if (k) keys.push(k)
     }
   }
   return keys
-}
-
-function unquoteKey(s) {
-  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) return s.slice(1, -1)
-  if (s.startsWith("'") && s.endsWith("'") && s.length >= 2) return s.slice(1, -1)
-  return s
 }
 
 function renderKey(k) {
@@ -104,6 +107,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
   if (inlineIdx !== -1) {
     const cur = parseKnownFailureKeys(src)
     const curSet = new Set(cur)
+    const removeHit = cur.filter((k) => removeSet.has(k))
     let next = cur.filter((k) => !removeSet.has(k))
     for (const k of addSet) {
       if (!next.includes(k) && !curSet.has(k)) next.push(k)
@@ -115,7 +119,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
       ? `known_failures: [${next.map(renderKey).join(', ')}]${trailingComment ? ` ${trailingComment}` : ''}`
       : `known_failures: []${trailingComment ? ` ${trailingComment}` : ''}`
     const out = lines.join(nl) + (endedWithNl ? nl : '')
-    return { ok: true, next: out, keys: next }
+    return { ok: true, next: out, keys: next, removedKeys: removeHit }
   }
 
   // 块式形态
@@ -138,7 +142,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
       lines[blockIdx] = 'known_failures: []'
     }
     const out = lines.join(nl) + (endedWithNl ? nl : '')
-    return { ok: true, next: out, keys: keep, removedCount: removeHit.length }
+    return { ok: true, next: out, keys: keep, removedCount: removeHit.length, removedKeys: removeHit }
   }
 
   // 无段：文件尾整段追加（add 空且 remove 命不中 → 无事可做，原样返回）
@@ -187,7 +191,7 @@ export function mutateKnownFailuresFile(yamlPath, edit) {
   const r = applyKnownFailureEdit(text, edit)
   if (!r.ok) return r
   if (r.next !== text) writeAtomicSync(yamlPath, r.next)
-  return { ok: true, keys: r.keys }
+  return { ok: true, keys: r.keys, removedKeys: r.removedKeys || [] }
 }
 
 /**
@@ -238,9 +242,16 @@ export function runKnownFailuresCommand({ yamlPath, exists, verb, keys = [], jso
     return 1
   }
   const uniq = [...new Set(keys.filter(Boolean))]
-  if (json) console.log(JSON.stringify({ cmd: `config known-failures ${want}`, ok: true, changed: uniq, keys: r.keys }))
+  // remove 诚实文案（2026-10-21-known-failures-unescape FR-02）：仅未命中键注记静默忽略——
+  // 旧文案恒打「已移除…（未命中键静默忽略）」，全命中时也自称可能有未命中，误导排查。
+  const removedSet = new Set(r.removedKeys || [])
+  const missed = want === 'remove' ? uniq.filter((k) => !removedSet.has(k)) : []
+  if (json) console.log(JSON.stringify({ cmd: `config known-failures ${want}`, ok: true, changed: want === 'remove' ? [...removedSet] : uniq, missed, keys: r.keys }))
   else {
-    console.log(`✅ known_failures 已${want === 'add' ? '添加' : '移除'}：${uniq.join('、')}${want === 'remove' ? '（未命中键静默忽略）' : ''}——现共 ${r.keys.length} 个`)
+    const note = want === 'remove'
+      ? (missed.length > 0 ? `（未命中键静默忽略：${missed.join('、')}）` : '')
+      : ''
+    console.log(`✅ known_failures 已${want === 'add' ? '添加' : '移除'}：${(want === 'remove' ? [...removedSet] : uniq).join('、')}${note}——现共 ${r.keys.length} 个`)
     console.log(`   校验：sillyspec config known-failures list`)
   }
   return 0
