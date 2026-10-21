@@ -83,3 +83,32 @@ test('H2 --full 档 full-stage-review 的 id 与 error 语义不变', async () =
   assert.equal(full.informational, undefined, '非 informational（error 语义）')
   assert.equal(full.ok, false, '缺 review → error（--done 将拦）')
 })
+
+test('H1c 默认档 brainstorm/plan 产 hint 且文案按 stage 参数化（2026-10-21-p0-p1-hardening FR-04 扩面——dsh z1 实证 brainstorm 收口被伏击 46 分钟）', async () => {
+  for (const st of ['brainstorm', 'plan']) {
+    const { cwd, specBase, changeName } = await fixture({ withReview: false, stage: st })
+    const g = await runGate(st, changeName, { cwd, specBase })
+    const hint = checkById(g.envelope, 'stage-review-hint')
+    assert.ok(hint, `${st} 默认档 stage-review-hint 在场`)
+    assert.equal(hint.informational, true, `${st} informational（不改变 gate 结论）`)
+    assert.ok((hint.warnings || []).some((w) => w.includes(`${st} --done`)), `${st} 文案按 stage 参数化：${hint.warnings}`)
+    assert.ok((hint.warnings || []).some((w) => w.includes('register-stage-review')), `${st} warning 含 register 指引`)
+    assert.ok(!(hint.warnings || []).some((w) => w.includes('execute --done')), `${st} 文案不写死 execute`)
+  }
+})
+
+test('H2b --full 档 brainstorm/plan 的 full-stage-review 在场（与 gates.js 拦截面三阶段对齐）', async () => {
+  for (const st of ['brainstorm', 'plan']) {
+    const { cwd, specBase, changeName } = await fixture({ withReview: false, stage: st })
+    const f = await runGate(st, changeName, { cwd, specBase, full: true })
+    const chk = checkById(f.envelope, 'full-stage-review')
+    assert.ok(chk, `${st} --full 档探测在场`)
+    assert.equal(chk.ok, false, `${st} 缺 review → error 语义（--done 将拦）`)
+    assert.ok((chk.errors || []).some((e) => e.includes(`${st} --done`) && e.includes('register-stage-review')), `${st} 错误文案按 stage 参数化：${chk.errors}`)
+  }
+  // review 在场 → --full 探测静默 ok（brainstorm 形态）
+  const present = await fixture({ withReview: true, stage: 'brainstorm' })
+  const fp = await runGate('brainstorm', present.changeName, { cwd: present.cwd, specBase: present.specBase, full: true })
+  const chkP = checkById(fp.envelope, 'full-stage-review')
+  assert.ok(chkP && chkP.ok === true, 'review 在场 → --full 探测 ok 零 error')
+})

@@ -455,7 +455,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     // 回合）：①target_files reconcile 只读跑（reconcileTargetFiles 纯计算不落盘，--done 的写结果
     // 文件在其调用方）；②stage review 在场探测（marker+review.json——缺则报预期路径，同 --done
     // Stage Review Gate 口径，只报缺不生成）。全只读零副作用；未传 full 零行为变化。
-    if (full && (stage === 'verify' || stage === 'execute')) {
+    if (full && (stage === 'verify' || stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
       // e1. reconcile（verify --done 的 target_files 对账门）
       if (stage === 'verify') {
         try {
@@ -484,10 +484,13 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           });
         }
       }
-      // e2. stage review 在场探测（execute --done 的 Stage Review Gate——verify 不在其列，
-      // 坑 stage-review-verify-enum-gap 2026-10-11：gate 实际只拦 brainstorm/plan/execute，
-      // register 枚举亦无 verify，verify 阶段不产 stage review 期望；verify 的真实门面是 e1 对账）
-      if (stage === 'execute') try {
+      // e2. stage review 在场探测（Stage Review Gate 拦截面的 --full 预检——brainstorm/plan/execute
+      // 三阶段与 gates.js Stage Review Gate 实拦范围逐字对齐；verify 不在其列，坑
+      // stage-review-verify-enum-gap 2026-10-11：register 枚举亦无 verify，verify 阶段不产
+      // stage review 期望；verify 的真实门面是 e1 对账。dsh z1 实证（2026-10-21-p0-p1-hardening
+      // FR-04）：此前 execute 单值使 brainstorm Step8 --done 被 Stage Review Gate「伏击」——
+      // gate 预检全绿而 --done 被拦，46 分钟+3 轮子代理评审才过）
+      if (stage === 'execute' || stage === 'brainstorm' || stage === 'plan') try {
         const { getLatestStageReviewRunId } = await import('./stage-review.js');
         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
         const runId = getLatestStageReviewRunId(rrRoot, stage, changeName);
@@ -496,7 +499,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           code: checkCode('full-stage-review') || 'full_stage_review_missing',
           ok: !!runId,
           errors: !runId
-            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——execute --done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
+            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——${stage} --done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
             : [],
           data: { runId: runId || null },
         });
@@ -518,9 +521,12 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     //    register 指引；在场 → 静默 ok。独立 check id 不与 --full 的 full-stage-review 碰撞，
     //    error 语义（--done 拦）仍归 --full 档与 --done 本体。
     // stage 期望面对齐（坑 stage-review-verify-enum-gap，2026-10-11 实证）：Stage Review Gate
-// 实际只拦 brainstorm/plan/execute（gates.js），register-stage-review 枚举亦无 verify——
-// verify 阶段不产 stage review 提示（提示命令不可执行 + 指称的门禁不存在，双重误导）。
-if (!full && stage === 'execute') {
+    // 实际只拦 brainstorm/plan/execute（gates.js），register-stage-review 枚举亦无 verify——
+    // verify 阶段不产 stage review 提示（提示命令不可执行 + 指称的门禁不存在，双重误导）。
+    // 覆盖面扩全（2026-10-21-p0-p1-hardening FR-04 / dsh z1 实证）：此前 execute 单值——brainstorm
+    // Step8 --done 被 Stage Review Gate 伏击（预检绿灯 vs 收口拦截口径不一致，损失 46 分钟）。
+    // 现与 gates.js 拦截面三阶段逐字对齐；文案按 stage 参数化。
+    if (!full && (stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
       try {
         const { getLatestStageReviewRunId } = await import('./stage-review.js');
         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
@@ -531,7 +537,7 @@ if (!full && stage === 'execute') {
           ok: true,
           informational: true,
           warnings: runId ? [] : [
-            `缺 ${stage} 阶段的 stage review.json——execute --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
+            `缺 ${stage} 阶段的 stage review.json——${stage} --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
           ],
           data: { runId: runId || null },
         });
