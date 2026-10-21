@@ -1,0 +1,43 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  总览投影补thin覆写修轻量渲染
+
+
+  动机与背景：SillyHub 工作区总览卡经 daemon 采集 progress show --json 渲染，轻量（thin）变更被显示成 brainstorm 主管线+步骤0/0；变更比对弹窗 progress
+  行本地=brainstorm vs 平台=thin 恒假漂移。根因：2026-10-13-thin-sync-stage 只给平台上行载荷做了 tier=thin→current_stage='thin' 覆写（progress.js
+  serializeForSync），overview()（progress/stage-machine.js:321）漏了同款投影，envelope 仍报 DB 出生值 brainstorm（thin 不走阶段机）。
+
+
+  成功标准：
+
+  - progress show --json 对 tier=thin 且活跃变更报 current_stage='thin'、stage_label='◈ 轻量变更'
+
+  - tier=thick、无 flow-state、flow-state 损坏三种形态不覆写，维持行值 brainstorm（fail-open 同 sync 口径）
+
+  - 归档行不出现在 overview（listChanges 活跃口径不变）
+
+  - 既有 platform-sync-thin-stage / change-birth-stage-brainstorm / quick-ghost-exclusion 测试零回归
+autopilot: false
+prestage_ack: false
+baseline_commit: 629055318b137fa001706ade11deef65c310e37e
+updatedAt: '2026-10-21T00:54:54.320Z'
+baseline_sha256: 465a285a78596d28a12b51ef7a6a8e8341dc9a8b0c910c3da830aac0e5a5f1c7
+spec_approved: true
+spec_approved_at: '2026-10-21T00:48:51.484Z'
+spec_approved_by: zcode-overview-thin-stage
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-overview-thin-stage
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js7)（18.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021005346\test-result.json｜lint: passed
+  ← npm run lint（67.5s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021005346\test-result.json｜门文件 5 个
+
