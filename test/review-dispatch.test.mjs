@@ -4,8 +4,8 @@
 // create-status-kill 三链 / 中断分支。端到端全链路（task-07）同文件追加。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   buildReviewerTaskBook, readDispatchRecord, createDispatchRecord, clearDispatchRecord,
@@ -260,5 +260,112 @@ test('e2e：dispatching 中断恢复——status 对中断记录给处置指引'
     assert.equal(readDispatchRecord(sb, 'c1'), null)
     const r2 = await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
     assert.equal(r2.ok, true, 'kill 后重派成功（abandoned 不阻塞新派发）')
+  } finally { rmSync(sb, { recursive: true, force: true }) }
+})
+
+// ── 2026-10-21-review-dispatch-answer-salvage：answer 正文回收链（dsh 会话实证形态）──
+// 根因：worker 把完整 review JSON 放回答正文（平台 UI 可见），传输层丢 answer、提取层只扫
+// artifacts → --status 误判 completed-no-artifact，旧文案「--kill 降级」混写误导 agent 降级 self 自审。
+
+test('extractReviewFromArtifacts 第三通道：answer 文本扫首个平衡 JSON（裸 JSON/```json 块/缺省参数向后兼容）', () => {
+  const obj = { schemaVersion: 1, specVerdict: 'pass' }
+  assert.deepEqual(extractReviewFromArtifacts([], JSON.stringify(obj)), obj, '裸 JSON 正文命中通道③')
+  assert.deepEqual(extractReviewFromArtifacts([], `前文说明\n\`\`\`json\n${JSON.stringify(obj)}\n\`\`\`\n后记`), obj, '```json 块形态（dsh 实证）')
+  assert.deepEqual(extractReviewFromArtifacts(null, JSON.stringify(obj)), obj, 'artifacts 非数组不再短路（answer 可回收）')
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'review_json', content: JSON.stringify(obj) }], `噪声 ${JSON.stringify({ wrong: 1 })}`), obj, 'artifacts 通道①优先于 answer 通道③')
+  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'other', text: '噪声文本' }], JSON.stringify(obj)), obj, '通道②失败后通道③接管')
+  assert.equal(extractReviewFromArtifacts([{ kind: 'other', text: 'no json' }], '正文也无 JSON'), null, '三通道全失败 → null')
+  assert.equal(extractReviewFromArtifacts([{ kind: 'other', text: 'no json' }]), null, '缺省第二参：与改前行为逐字一致')
+  const tricky = { note: 'a } b', specVerdict: 'pass' }
+  assert.deepEqual(extractReviewFromArtifacts([], '说明 ' + JSON.stringify(tricky) + ' 收尾'), tricky, '字符串字面量内 } 不误判')
+})
+
+test('任务书产出段含 ```json 块兜底指引（既有 artifacts 指引不丢）', () => {
+  const sb = makeSpecBase()
+  try {
+    const book = buildReviewerTaskBook({ stage: 'plan', changeDir: join(sb, 'changes', 'c1'), reviewRunId: 'review-t2' })
+    assert.ok(book.workerPrompt.includes('首个 ```json 代码块'), '回答正文 json 块兜底指引在场（FR-05）')
+    assert.ok(book.workerPrompt.includes('artifacts 里的 content 字段放纯 JSON 文本'), '既有 artifacts 通道指引不丢')
+  } finally { rmSync(sb, { recursive: true, force: true }) }
+})
+
+test('status 链 e2e：artifacts 空 + answer 正文带 JSON → 第三通道回收落盘 review.json（channel=platform）', async () => {
+  const sb = makeSpecBase()
+  try {
+    const cli = makeMockClient()
+    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: `独立审查完成，结论如下：\n\`\`\`json\n${JSON.stringify(REVIEW_OBJ)}\n\`\`\`\n以上逐条结论附源码锚点。` })
+    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
+    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli, stallMs: 60_000_000 })
+    assert.equal(st.ok, true, '第三通道回收成功（改前此处误判 completed-no-artifact）')
+    assert.equal(st.state, 'completed')
+    assert.equal(st.verdict, 'pass/pass')
+    assert.ok(st.reviewPath.includes(join('stage-reviews', 'plan-review-')), 'review.json 落既有 run 目录')
+    const persisted = JSON.parse(readFileSync(st.reviewPath, 'utf8'))
+    assert.equal(persisted.reviewer.channel, 'platform', 'channel=platform 落款不变')
+    assert.equal(readDispatchRecord(sb, 'c1'), null, '回收成功清记录')
+    // FR-04 正常回收路径亦留原文：worker-answer.md 与 review.json 同 run 目录在场
+    const raw = readFileSync(join(dirname(st.reviewPath), 'worker-answer.md'), 'utf8')
+    assert.ok(raw.includes('```json') && raw.includes('"specVerdict"'), '终态原文在场且含 JSON 正文')
+    assert.ok(st.nextStep && st.nextStep.includes('worker-answer.md'), '回收返回值提示原文留存路径')
+  } finally { rmSync(sb, { recursive: true, force: true }) }
+})
+
+test('completed-no-artifact 文案：含 --salvage/--from 两步指引、不含 --kill、含降级兜底', async () => {
+  const sb = makeSpecBase()
+  try {
+    const cli = makeMockClient()
+    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: 'worker 只回了散文结论，没有可解析 JSON' })
+    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
+    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli })
+    assert.equal(st.ok, false)
+    assert.equal(st.state, 'completed-no-artifact')
+    assert.ok(st.reason.includes('三通道'), 'reason 点明三通道均失败')
+    assert.ok(st.guidance.includes('--salvage') && st.guidance.includes('--from'), '①含 --salvage 与 --from')
+    assert.ok(st.guidance.includes('self'), '②降级兜底（确无结果才降级）在场')
+    assert.ok(!st.guidance.includes('--kill'), '无「--kill 降级」混写（dsh 复盘：误导 agent 跳过回收直接自审）')
+    assert.ok(readDispatchRecord(sb, 'c1'), '失败不清在途记录（--salvage 可重试）')
+  } finally { rmSync(sb, { recursive: true, force: true }) }
+})
+
+test('--salvage：worker-answer.md 落盘 run 目录 + salvagePath/--from 指引；确无结果形态走②', async () => {
+  const sb = makeSpecBase()
+  try {
+    const cli = makeMockClient()
+    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: '散文结论原文（供人工核对）' })
+    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
+    const sv = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli, salvage: true })
+    assert.equal(sv.ok, false, '仍提取不到 JSON（散文无 JSON）')
+    assert.ok(sv.salvagePath && sv.salvagePath.includes('worker-answer.md'), '返回 salvagePath')
+    assert.ok(sv.salvagePath.includes(join('stage-reviews', 'plan-review-')), '落 stage-reviews run 目录（与 review.json 同根）')
+    assert.ok(existsSync(sv.salvagePath), 'worker-answer.md 已落盘')
+    assert.ok(readFileSync(sv.salvagePath, 'utf8').includes('散文结论原文'), '原文内容即 answer 正文')
+    assert.ok(sv.guidance.includes('register-stage-review') && sv.guidance.includes('--from'), '--from 回收指引')
+    assert.ok(!sv.guidance.includes('--kill'), 'salvage 指引亦无 --kill')
+    assert.ok(readDispatchRecord(sb, 'c1'), 'salvage 失败不清记录（幂等可重试）')
+    // 确无结果形态：answer 与 artifacts 全空 → 无原文可落，指引走平台 UI 核对 + ②降级
+    clearDispatchRecord(sb, 'c1')
+    const cli2 = makeMockClient()
+    cli2.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: null })
+    createDispatchRecord(sb, 'c1', { change: 'c1', stage: 'plan', missionId: 'm-1', workerId: 'w-1', state: 'in-flight', createdAt: 't', lastState: 'running', lastStateAt: Date.now(), reviewRunId: 'review-sv2' })
+    const sv2 = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli2, salvage: true })
+    assert.equal(sv2.ok, false)
+    assert.equal(sv2.salvagePath, null, '无原文可落 → salvagePath null')
+    assert.ok(sv2.guidance.includes('平台 UI'), '指引平台 UI 核对')
+    assert.ok(sv2.guidance.includes('self'), '②降级兜底在场')
+  } finally { rmSync(sb, { recursive: true, force: true }) }
+})
+
+test('bad-review 分支：schema 不过走修整回收指引，无 --kill 混写', async () => {
+  const sb = makeSpecBase()
+  try {
+    const cli = makeMockClient()
+    // 可提取但缺 verdict/checklist → persistStageReview schema 拒绝
+    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [{ kind: 'review_json', content: JSON.stringify({ schemaVersion: 1, reviewType: 'design' }) }], answer: null })
+    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'brainstorm', client: cli, probe: OK_PROBE })
+    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli })
+    assert.equal(st.ok, false)
+    assert.equal(st.state, 'bad-review')
+    assert.ok(st.guidance.includes('register-stage-review') && st.guidance.includes('--from'), '修整后 --from 回收指引')
+    assert.ok(!st.guidance.includes('--kill'), '无 --kill 混写')
   } finally { rmSync(sb, { recursive: true, force: true }) }
 })
