@@ -1,0 +1,28 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  平台接口图 checkApproval 锚重锚
+
+
+  动机：docs/sillyspec/platform-interface-map.md:L84 的 shared.js:1274 锚自 protocol-tax 重构 shared.js 后越界（checkApproval 定义现于
+  src/run/shared.js:1316）；该变更已归档但此一处漏修（其 1ba462e5 重锚了其余 19 处），doc-ref-check 全仓唯一残留红。
+
+
+  成功标准：
+
+  - L84 锚更新为 shared.js:1316（checkApproval 定义行），doc-ref-check 全绿（本机临时 known_failures 豁免已同步摘除）
+autopilot: false
+prestage_ack: true
+baseline_commit: b8443ee060c9a9f6fa152379bdc6234bdef30750
+updatedAt: '2026-10-21T17:24:33.411Z'
+baseline_sha256: 996baa05e20416da67f75171ece7fb74b8e1189e880728f80f22288e2df87396
+spec_approved: true
+spec_approved_at: '2026-10-21T17:24:33.410Z'
+spec_approved_by: zcode-verify-reuse-large-repo
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-verify-reuse-large-repo
+
