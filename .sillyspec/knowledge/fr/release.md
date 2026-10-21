@@ -275,3 +275,42 @@ created_at: 2026-10-15T01:33:02.911Z
 - 场景：主路径 — Given 预核验 latest=3.32.9 通过证通道存活；When npm publish；Then 发布回执含 sillyspec@3.32.10 与 shasum
 全文：.sillyspec/changes/archive/2026-10-15-release-3-32-10/requirements.md#FR-03
 最近确认：e95c309f71e68238ce5865a64200469ec0ae551e
+
+## FR-release-004 版本面（必须）
+变更：2026-10-21-release-3-33-3
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 版本面提交落盘；When node --test test/quick-retired.test.mjs；Then 1/1 绿且断言值为 3.33.3。
+全文：.sillyspec/changes/archive/2026-10-21-release-3-33-3/requirements.md#FR-01
+最近确认：0445f9e5a4f4cfdfba3239b6181bfc0e40bbee85
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-release-3-33-3:flow:测试绑定FR-01
+  tests: test/quick-retired.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-release-3-33-3
+  status: active
+
+## FR-release-005 推送与门（必须）
+变更：2026-10-21-release-3-33-3
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 13+ 版本面提交在本地 main；When git push origin main；Then pre-push 门全绿、远端推进、回执记录 a..b 范围。
+全文：.sillyspec/changes/archive/2026-10-21-release-3-33-3/requirements.md#FR-02
+最近确认：0445f9e5a4f4cfdfba3239b6181bfc0e40bbee85
+
+## FR-release-006 发布与双核验（必须）
+变更：2026-10-21-release-3-33-3
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given push 完成；When npm publish && 等待传播 && npm view；Then version=3.33.3、dist-tags.latest=3.33.3。
+全文：.sillyspec/changes/archive/2026-10-21-release-3-33-3/requirements.md#FR-03
+最近确认：0445f9e5a4f4cfdfba3239b6181bfc0e40bbee85
