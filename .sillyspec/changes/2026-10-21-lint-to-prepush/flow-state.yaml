@@ -1,0 +1,32 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  收口 lint 移交 pre-push/CI 门
+
+  用户选定 A 案：flow done 收口不再跑 lint。依据：.husky/pre-push 已每次推送跑 npm run lint + docs gate（2026-10-16 全量测试已移交 CI），收口侧 50.6s 全仓
+  lint 对变更面零感知、是同命令第二遍。做法：local.yaml commands.lint 标 unavailable（CLI 既有标记，收口跳过并留痕理由，src 零改动）；AGENTS.md 与
+  templates/agents-instruction.md 规则 4 措辞同步补 unavailable 语义（两文件规则 4 被测试逐字钉着，必须同改，测试 KEY 句随之更新）；CLAUDE.md 旧文案 lint 句同步。
+
+
+  成功标准：
+
+  - local.yaml 标 unavailable 后 flow done 收口 lint 子步 skipped 且理由可见
+
+  - .husky/pre-push 零改动（仍跑 npm run lint + docs gate）
+
+  - AGENTS.md 与模板规则 4 保持逐字一致且措辞含 unavailable 跳过语义，test-runner-failed-face.test.mjs ③ 更新后绿
+autopilot: false
+prestage_ack: true
+baseline_commit: b275d5782e2c162ec048e99717a623271d39b7c4
+updatedAt: '2026-10-21T12:15:54.099Z'
+baseline_sha256: b2ff353065694082d95ac8a3e78f68b211810e13fdfc88845b856689c63eff6c
+spec_approved: true
+spec_approved_at: '2026-10-21T12:15:54.098Z'
+spec_approved_by: zcode-lint-to-prepush
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-lint-to-prepush
+

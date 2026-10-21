@@ -2252,10 +2252,10 @@ created_at: 2026-09-20T18:20:21.442Z
 - row: 2026-10-20-scoped-verify-policy:flow:测试绑定FR-01
   tests: test/test-runner-failed-face.test.mjs「AGENTS 双文件口径句逐字一致」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: aca234d00d5bb5a177ac1e4e3b494f6619f44836
   source_change: 2026-10-20-scoped-verify-policy
   status: active
 
@@ -2274,10 +2274,10 @@ created_at: 2026-09-20T18:20:21.442Z
 - row: 2026-10-20-scoped-verify-policy:flow:测试绑定FR-02
   tests: test/test-runner-failed-face.test.mjs「纯函数三件+flag E2E（env 临时清单）」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: aca234d00d5bb5a177ac1e4e3b494f6619f44836
   source_change: 2026-10-20-scoped-verify-policy
   status: active
 

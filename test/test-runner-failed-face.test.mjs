@@ -4,7 +4,7 @@
  * 锁：①runner-failure-face 纯函数三件（parse 去空去重 / filter 交集+dropped / persist 全绿自清）；
  *   ②--failed flag E2E（env 指临时清单，含不存在项 → warn + 空交集 No test files found）；
  *   ③AGENTS.md 与 templates/agents-instruction.md 自验口径句逐字一致（模板随 init 传播）。
- * 本测试自身按新口径运行：变更测试面+lint 即收口证据，全量归 pre-push。
+ * 本测试自身按新口径运行：变更测试面即收口证据（lint 已配置时并入；标 unavailable 的仓归 git 钩子/CI 门），全量归 pre-push。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -86,9 +86,10 @@ test('③ AGENTS 双文件自验口径句逐字一致', () => {
   const read = (p) => readFileSync(join(ROOT, p), 'utf8')
   const a = read('AGENTS.md')
   const tpl = read('templates/agents-instruction.md')
-  const KEY = '自验口径＝变更测试面（新增测试+受影响既有面）+ lint 即收口证据'
+  const KEY = '自验口径＝变更测试面（新增测试+受影响既有面）即收口证据'
   for (const [name, text] of [['AGENTS.md', a], ['templates/agents-instruction.md', tpl]]) {
     assert.ok(text.includes(KEY), `${name} 含口径句`)
+    assert.ok(text.includes('未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门'), `${name} lint unavailable 跳过语义`)
     assert.ok(text.includes('全量套件归 pre-push 门，勿每变更重复手跑'), `${name} 全量归属句`)
     assert.ok(text.includes('跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部'), `${name} 日志落盘句`)
   }
