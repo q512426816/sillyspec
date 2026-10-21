@@ -14,7 +14,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines } from './decision-distill.js'
+import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines, FR_ROUTE_STRIP_TOKENS } from './decision-distill.js'
 import { FR_SECTION_RE } from './fr-index.js'
 import { writeAtomicSync } from './fs-atomic.js'
 
@@ -141,9 +141,11 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byC
     syncIndexRoutingLines(knowledgeRoot, {
       section: 'FR 需求索引',
       subdir: 'fr',
+      // 泛词退役（FR-02，2026-10-21-knowledge-tier-denoise）：与 fr-index.js 蒸馏侧同款模板
+      stripTokens: FR_ROUTE_STRIP_TOKENS,
       makeLine: (d) => d.startsWith('auto-')
-        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [fr/${d}.md](fr/${d}.md)`
-        : `- ${d}|FR|需求|承接 → [fr/${d}.md](fr/${d}.md)`,
+        ? `- ${d}|${d.slice(5)} → [fr/${d}.md](fr/${d}.md)`
+        : `- ${d} → [fr/${d}.md](fr/${d}.md)`,
     })
   } catch { /* INDEX 缺席/同步失败不拦迁移（主手术已成） */ }
   const after = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''

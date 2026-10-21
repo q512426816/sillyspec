@@ -85,7 +85,7 @@ test('③ 全域迁移：源空壳删除/目标新建（缺席域）/INDEX 补�
   assert.equal(r2.targetCreated, true)
   assert.ok(existsSync(join(f2.knowledgeRoot, 'fr', 'events-channel.md')))
   const idx = readFileSync(join(f2.knowledgeRoot, 'INDEX.md'), 'utf8')
-  assert.match(idx, /events-channel\|FR\|需求/, 'INDEX 路由行已补')
+  assert.match(idx, /- events-channel → \[fr\/events-channel\.md\]/, 'INDEX 路由行已补')
 })
 
 test('④ 防线：同 ID 冲突拒/anchor 未命中拒/干跑不落盘', () => {

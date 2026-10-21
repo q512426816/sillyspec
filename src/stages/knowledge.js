@@ -118,8 +118,19 @@ export async function cmdSearch(dir, args, opts = {}) {
     vectorHint = vectorSwitchHint(dir)
   } catch { /* 提示 fail-open */ }
 
+  // 停车场过滤披露（FR-01，2026-10-21-knowledge-tier-denoise）：查询命中过 unmapped 停车场
+  // 文件但被检索核心滤除且最终零结果时，披露被滤文件——去噪不丢可见性，人工按需直查。
+  const parkingFiltered = !result.matched && Array.isArray(result.json && result.json.parkingFiltered)
+    ? result.json.parkingFiltered : []
+
   if (!result.matched) {
-    output(true, { query, matches: [], ...(vectorHint ? { hint: vectorHint } : {}) })
+    output(true, {
+      query, matches: [],
+      ...(vectorHint ? { hint: vectorHint } : {}),
+      ...(parkingFiltered.length > 0
+        ? { parkingFiltered, parkingNote: `停车场文件已过滤（${parkingFiltered.join('、')}）——按需直查文件` }
+        : {}),
+    })
     return
   }
 

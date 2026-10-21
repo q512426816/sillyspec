@@ -29,6 +29,7 @@ import {
   joinKnowledgeFile,
   syncIndexRoutingLines,
   discoverModuleIndex,
+  FR_ROUTE_STRIP_TOKENS,
 } from './decision-distill.js';
 
 /** epoch：此前归档不检查/不索引（存量 93 份不回填——不伪造历史，D-007）。 */
@@ -594,10 +595,13 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
       section: 'FR 需求索引',
       subdir: FR_DIR,
       // 伪域路由行追加裸段关键词（auto-backend 行同时吃 'backend' 命中——域名字面作为
-      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）
+      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）。
+      // 泛词退役（FR-02，2026-10-21-knowledge-tier-denoise）：FR|需求|承接 不再全体域共享
+      // （查询含泛词命中全部 fr 行=注入席位行序抽签病根）；存量行 stripTokens 幂等剥离。
+      stripTokens: FR_ROUTE_STRIP_TOKENS,
       makeLine: (d) => d.startsWith('auto-')
-        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
-        : `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
+        ? `- ${d}|${d.slice(5)} → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
+        : `- ${d} → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
     });
   }
 

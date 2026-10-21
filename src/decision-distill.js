@@ -479,15 +479,36 @@ function applyEntryToSections(sections, entry, headHash, sectionNumber, originId
 // INDEX.md decisions 路由行幂等维护（FR-05：写入责任在本模块；只动 ## Decisions 段内指向 decisions/ 的行）
 // ---------------------------------------------------------------------------
 
+/** 路由行共享泛词（FR-02，2026-10-21-knowledge-tier-denoise）：decisions 面 decision|决策 /
+ *  FR 面 FR|需求|承接 曾是全体域共享关键词——查询含泛词即命中全部路由行，注入席位退化为
+ *  INDEX 行序抽签（本仓 Decisions 段 30 行全带泛词实证）。模板侧已删；存量行由
+ *  syncIndexRoutingLines(stripTokens) 幂等剥离。 */
+export const DECISIONS_ROUTE_STRIP_TOKENS = ['decision', '决策']
+export const FR_ROUTE_STRIP_TOKENS = ['FR', '需求', '承接']
+
+/** 路由行关键词表剥泛词：`- kw1|kw2 → [..](..)` 关键词段剔除 tokens（精确等值，trim 后判），
+ *  域名与其余关键词保留；关键词表剥空则整行原样保留（不造坏行）。幂等：已剥行再剥零漂移。 */
+function stripRouteTokens(line, tokens) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return line
+  const m = String(line).match(/^(\s*-\s+)([^→]+?)(\s*→[\s\S]*)$/)
+  if (!m) return line
+  const kept = m[2].split('|').map((k) => k.trim()).filter(Boolean).filter((k) => !tokens.includes(k))
+  if (kept.length === 0) return line
+  return `${m[1]}${kept.join('|')}${m[3]}`
+}
+
 /**
  * 域文件实况 ↔ INDEX 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行。
  * 2026-09-18-fr-index-l1 参数化：section/subdir/makeLine/matchTarget 经参（decisions 缺省不变），
  * fr 侧传 'FR 需求索引' 段与 fr/ 子目录——两类路由行各守各段互不干扰。
+ * stripTokens（FR-02）：对保留行与新行关键词表幂等剥离共享泛词（缺省 [] 行为不变）。
  */
 export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
   const sectionName = opts.section || 'Decisions'
   const subdir = opts.subdir || 'decisions'
-  const makeLine = opts.makeLine || ((d) => `- ${d}|decision|决策 → [${subdir}/${d}.md](${subdir}/${d}.md)`)
+  const stripTokens = Array.isArray(opts.stripTokens) ? opts.stripTokens : []
+  // 路由键=域名（FR-02 泛词退役后的唯一共享形态）；makeLine 传参者自定（fr 面 auto- 伪域附裸段关键词）
+  const makeLine = opts.makeLine || ((d) => `- ${d} → [${subdir}/${d}.md](${subdir}/${d}.md)`)
   const esc = subdir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const targetRe = opts.matchTarget || new RegExp(`^-\\s+.*→\\s*\\[[^\\]]*\\]\\(${esc}/([^)#]+?)(?:\\.md)?(?:#[^)]*)?\\)\\s*$`)
   const domainDir = join(knowledgeRoot, subdir)
@@ -528,15 +549,15 @@ export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
     for (const l of body) {
       const m = l.match(targetRe)
       if (!m) { kept.push(l); continue } // 非路由行（注释/空行）原样保留
-      // 目标域文件仍存在的路由行原样保留（关键词可能被人工扩充）；失效行（文件已不存在）与重复行删
-      if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(l) }
+      // 目标域文件仍存在的路由行保留（关键词可能被人工扩充——剥共享泛词，其余原样）；失效行（文件已不存在）与重复行删
+      if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(stripRouteTokens(l, stripTokens)) }
     }
     // 补行插在段尾空行之前（段尾空行是与下一 `## ` 的分隔，新行追加其后会出现行间空洞）
     const tail = []
     while (kept.length > 0 && kept[kept.length - 1].trim() === '') tail.unshift(kept.pop())
     for (const d of desired) {
       const m = d.match(targetRe)
-      if (m && !seen.has(m[1])) kept.push(d) // 缺行补
+      if (m && !seen.has(m[1])) kept.push(stripRouteTokens(d, stripTokens)) // 缺行补（新模板本无泛词，剥是对旧式 makeLine 的防御）
     }
     kept.push(...tail)
     const sepNeeded = secEnd < lines.length && kept.length > 0 && kept[kept.length - 1].trim() !== ''
@@ -710,7 +731,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   }
 
   // INDEX 路由行对账（仅在实际有条目写入时；零输出场景不动 INDEX）
-  if (written.length > 0) syncIndexRoutingLines(knowledgeRoot)
+  if (written.length > 0) syncIndexRoutingLines(knowledgeRoot, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
 
   return { written, skipped: null, needsWait }
 }

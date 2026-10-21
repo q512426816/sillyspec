@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { runtimeStatePath } from './runtime-paths.js'
 import { join, dirname } from 'path'
 import { readPlatformConfig } from './sync.js'
-import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
+import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile } from './knowledge-match.js'
 
 const VECTOR_TIMEOUT_MS = 3000
 const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
@@ -181,12 +181,14 @@ function specPathToFile(specPath) {
   return String(specPath).replace(/^knowledge\//, '').replace(/\\/g, '/')
 }
 
-/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。 */
-function buildResultFromPlatform(indexDir, pvResults) {
+/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。导出供测试（FR-01 停车场
+ *  候选丢弃断言；策略面全在本地解析的契约不变）。 */
+export function buildResultFromPlatform(indexDir, pvResults) {
   const byFile = new Map()
   for (const r of pvResults) {
     const file = specPathToFile(r.spec_path)
     if (!file.startsWith('decisions/')) continue
+    if (isParkingFile(file)) continue // 停车场候选丢弃（FR-01）——平台向量语料含 unmapped，策略面本地滤
     if (!byFile.has(file)) byFile.set(file, [])
     byFile.get(file).push(r)
   }

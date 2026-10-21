@@ -277,9 +277,9 @@ function makeFixture() {
   const fa = readFileSync(join(knowledgeRoot, 'fr', 'auto-backend.md'), 'utf8')
   assert(fa.includes('伪域（auto- 前缀）：由文件路径段投票派生') && !fa.includes('模块卡：modules/auto-backend.md'),
     '14b 伪域 preamble 自明（无模块卡不谎称）')
-  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训）
+  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训；FR-02 泛词退役——FR|需求|承接 不再全体域共享）
   const idx = readFileSync(join(knowledgeRoot, 'INDEX.md'), 'utf8')
-  assert(idx.includes('- auto-backend|backend|FR|需求|承接 → [fr/auto-backend.md](fr/auto-backend.md)'),
+  assert(idx.includes('- auto-backend|backend → [fr/auto-backend.md](fr/auto-backend.md)'),
     '14c 伪域路由行含裸段关键词（backend 可命中）')
   // 14d: 泛化目录无具体段 → unmapped（原行为保持）
   const db = mkChange('2026-09-21-pd2', '# R\n### FR-01: 单文件行为\n')

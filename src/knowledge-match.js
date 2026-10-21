@@ -292,6 +292,16 @@ function asciiWordHit(sh, text) {
   return new RegExp(`(^|[^a-z0-9-])${sh.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([^a-z0-9-]|$)`, 'i').test(text)
 }
 
+/** 停车场文件（未归类 unmapped 域——decisions 与 fr 两面）：检索核心零返回，文件本身
+ *  保留在盘上供人工直查（search 面以 parkingFiltered 披露指路）。2026-10-21-knowledge-tier-denoise
+ *  FR-01，对齐 FR 注入面 2026-09-29-rot-retire-inject-cap 的 unmapped 过滤口径（停车场非行为域）。 */
+const PARKING_FILES = new Set(['decisions/unmapped.md', 'fr/unmapped.md'])
+
+/** file 是否停车场文件（decisions/fr unmapped；Windows 反斜杠归一后判等）。 */
+export function isParkingFile(file) {
+  return PARKING_FILES.has(String(file || '').replace(/\\/g, '/'))
+}
+
 /**
  * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
  * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
@@ -309,6 +319,7 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
   if (all.length === 0) return null
   const byFile = new Map()
   for (const h of all) {
+    if (isParkingFile(h.file)) continue // 停车场文件不参与词片回退（FR-01）
     let st = byFile.get(h.file)
     if (!st) { st = { entries: [], texts: [] }; byFile.set(h.file, st) }
     st.entries.push(h)
@@ -395,16 +406,21 @@ export function matchByRouting(indexDir, taskContext) {
   }
 
   const contextLower = taskContext.toLowerCase()
-  const matched = allEntries.filter(entry => {
+  const matchedRaw = allEntries.filter(entry => {
     return entry.keywords.some(kw => keywordMatchesContext(kw, contextLower))
   })
+  // 停车场过滤（FR-01，2026-10-21-knowledge-tier-denoise）：unmapped 路由行不进命中集；
+  // 只命中停车场行 → 按零命中处理（hybrid 链继续走向量/图/词片层），json.parkingFiltered
+  // 披露被滤文件供 search 面提示人工直查（可见性不因去噪丢失）。
+  const parkingFiltered = [...new Set(matchedRaw.filter((e) => isParkingFile(e.file)).map((e) => e.file))]
+  const matched = matchedRaw.filter((e) => !isParkingFile(e.file))
 
   if (matched.length === 0) {
     return {
       matched: false,
       entries: [],
       report: 'Status: no matches',
-      json: { matched: false, entry_count: 0, entries: [] },
+      json: { matched: false, entry_count: 0, entries: [], ...(parkingFiltered.length > 0 ? { parkingFiltered } : {}) },
       decisionHits: []
     }
   }

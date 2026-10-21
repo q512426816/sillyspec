@@ -9,7 +9,8 @@
  *   ④ 超时 → 降级（短超时实测）；
  *   ⑤ 路由命中 → 平台不被调用（请求计数钉住）；
  *   ⑥ 开关关闭（local.yaml knowledge.vector_search: off / env off）→ 不被调用；
- *   ⑦ 真实库锚点映射：平台返回 unmapped 的枚举/谓词条目锚 → 本地命中对应条目。
+ *   ⑦ 真实库锚点映射：平台返回正域条目锚 → 本地命中对应条目；返回 unmapped 停车场候选 →
+ *      丢弃（FR-01，2026-10-21-knowledge-tier-denoise——夹具亦由 unmapped 改 core-engine 正域）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -45,16 +46,17 @@ function mockPlatform(mode, results) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}`, requests })))
 }
 
-/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。 */
+/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。
+ *  夹具域 core-engine（FR-01 起 unmapped 停车场候选被检索核心丢弃，不能再作向量正例）。 */
 function seedRepo(mockUrl) {
   const root = mkdtempSync(join(tmpdir(), 'ss-vec-'))
   mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
   writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
     '# Knowledge Index', '', '## Decisions',
-    '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
+    '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
   ].join('\n'))
-  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), [
-    '# 决策知识 — unmapped', '',
+  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'core-engine.md'), [
+    '# 决策知识 — core-engine', '',
     '## D-001@v1 枚举开放世界是错误方向',
     '状态：implemented',
     '理由：教训。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。', '',
@@ -74,12 +76,12 @@ async function withMock(mode, results, fn) {
 
 test('① 命中面：平台候选 → vector 结果＋本地策略面；同步 matchKnowledge 不变', async () => {
   await withMock('ok', [
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-002@v1', score: 0.91 },
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.42 },
+    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-002@v1', score: 0.91 },
+    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.42 },
   ], async (m) => {
     const root = seedRepo(m.url)
     const kb = join(root, '.sillyspec', 'knowledge')
-    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（unmapped|decision|决策）不含这些词 → 路由零命中
+    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（core-engine|decision|决策）不含这些词 → 路由零命中
     assert.equal(matchByRouting(kb, q).matched, false, '前置：路由零命中')
     const km = await matchKnowledgeHybrid(kb, q, { cwd: root })
     assert.equal(km.json.vector, true, 'vector 标记')
@@ -121,7 +123,7 @@ test('②③④ 降级三面：404／不可达／超时 → 本地词片回退�
 })
 
 test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台', async () => {
-  await withMock('ok', [{ spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
+  await withMock('ok', [{ spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
     // ⑤ 路由命中：查询含 tag「决策」
     const root = seedRepo(m.url)
     const kb = join(root, '.sillyspec', 'knowledge')
@@ -140,25 +142,31 @@ test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台'
   })
 })
 
-test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
+test('⑦ 真实库锚点映射：正域条目锚 → 本地命中；unmapped 停车场候选 → 丢弃（FR-01）', async () => {
   // 锚迁移稳定（2026-10-14-decision-legacy-renumber 后条目 id 为全局号、旧号在 originId）——
-  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）
+  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）。
+  // FR-01（2026-10-21-knowledge-tier-denoise）起 unmapped 停车场候选被本地策略面丢弃——
+  // 正例改用正域条目，unmapped 候选改钉丢弃契约。
   const { pathToFileURL } = await import('node:url')
   const { parseDecisionEntries } = await import(pathToFileURL(join(REPO_ROOT, 'src', 'knowledge-match.js')).href)
-  const entry = parseDecisionEntries(join(REAL_SPEC, 'knowledge')).find((h) => /枚举开放世界/.test(h.title || ''))
-  assert.ok(entry, '真实库枚举开放世界条目在场')
+  const all = parseDecisionEntries(join(REAL_SPEC, 'knowledge'))
+  // 正例取任一正域条目（真实库 rejected 全在停车场——正域均为 implemented，锚点映射语义与状态无关）
+  const entry = all.find((h) => !/decisions\/unmapped\.md$/.test(h.file))
+  assert.ok(entry, '真实库正域条目在场')
   await withMock('ok', [
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: entry.id, change: entry.change || '2026-09-26-thin-agent-tasks', score: 0.88 },
+    { spec_path: `knowledge/${entry.file}`, anchor: entry.id, change: entry.change || undefined, score: 0.88 },
+    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.99 },
   ], async (m) => {
     const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
     process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
     process.env.SILLYHUB_PLATFORM_TOKEN = env.SILLYHUB_PLATFORM_TOKEN
     process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'on' // 真实库 local.yaml 无 vector_search 键——2026-10-15 缺省关后显式开启
     try {
-      // 真实库路由命中面广（枚举词表查询走路由），用路由零命中查询触发 vector 层：
+      // 真实库路由命中面广，用路由零命中查询触发 vector 层：
       const km = await matchKnowledgeHybrid(join(REAL_SPEC, 'knowledge'), '帮我把行内顿号并列的标准切开', { cwd: REPO_ROOT })
       assert.equal(km.json.vector, true, '走平台向量层')
-      assert.ok(km.decisionHits.some((h) => /枚举开放世界/.test(h.title || '')), '锚点映射回本地条目')
+      assert.ok(km.decisionHits.some((h) => h.id === entry.id && h.file === entry.file), '正域锚点映射回本地条目')
+      assert.ok(km.decisionHits.every((h) => h.file !== 'decisions/unmapped.md'), 'unmapped 停车场候选被丢弃（FR-01）')
       assert.ok(km.decisionHits.every((h) => typeof h.deathPath === 'boolean' || h.status), '策略面字段本地解析在场')
     } finally {
       delete process.env.SILLYHUB_PLATFORM_URL
@@ -200,15 +208,15 @@ test('⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 �
 
 test('⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）', async () => {
   await withMock('ok', [
-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
+    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.9 },
   ], async (m) => {
     const root = mkdtempSync(join(tmpdir(), 'ss-vec-stale-'))
     mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
     writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
       '# Knowledge Index', '', '## Decisions',
-      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
+      '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
     ].join('\n'))
-    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
+    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'core-engine.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
     writeFileSync(join(root, '.sillyspec', 'local.yaml'),
       `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
     // 预置过期 unavailable 缓存（probedAt = 2h 前）

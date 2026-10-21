@@ -18,7 +18,7 @@
  */
 import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines } from './decision-distill.js'
+import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS } from './decision-distill.js'
 import { writeAtomicSync } from './fs-atomic.js'
 
 const DECISION_HEADER_RE = /^## (D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)@v(\d+)\s*(.*)$/
@@ -135,7 +135,7 @@ export function redomainDecisionEntries({ knowledgeRoot, from, to, anchors = nul
   // INDEX 路由行：decisions 面默认参数（幂等；缺席行补上）
   const indexPath = join(knowledgeRoot, 'INDEX.md')
   const before = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''
-  try { syncIndexRoutingLines(knowledgeRoot) } catch { /* INDEX 缺席/同步失败不拦迁移 */ }
+  try { syncIndexRoutingLines(knowledgeRoot, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS }) } catch { /* INDEX 缺席/同步失败不拦迁移 */ }
   const after = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''
 
   return {
