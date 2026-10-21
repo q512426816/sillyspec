@@ -2260,8 +2260,45 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     return result;
   } finally {
     // stash 恢复（含 --merge 早退 / 各拦截 return / 异常路径——finally 全覆盖，绝不遗漏）
-    if (stashInfo) restoreMainStash(projectRoot, stashInfo);
+    if (stashInfo) {
+      const restored = restoreMainStash(projectRoot, stashInfo);
+      // 恢复步冲突标记检出（FR-02 / dsh z2 实证：apply 输出声称 clean，主仓 tsc 才暴露 stash 冲突
+      // 标记）——机械扫描命中即 fail-closed：错误入 result.errors（apply exit 非零），文件清单与
+      // 处置指引已在恢复处打印。finally 内改写 result 对仍在返回中的同一对象生效。
+      if (restored.conflictFiles && restored.conflictFiles.length > 0) {
+        result.conflictMarkerFiles = restored.conflictFiles;
+        result.errors.push(
+          `--stash-dirty 恢复后检出 git 冲突标记（${restored.conflictFiles.length} 个文件，stash 条目已保留未丢弃）：\n  ${restored.conflictFiles.join('\n  ')}\n` +
+          `逐文件解决冲突标记（<<<<<<< / ======= / >>>>>>>）后 git add，再手动 git stash drop；处置明细见上方恢复输出。`
+        );
+      }
+    }
   }
+}
+
+/** git 冲突标记行首三形态（FR-02 / dsh z2 实证：stash 恢复留 `<<<<<<< Updated upstream` 类标记静默落地，主仓 tsc 才暴露）。
+ *  行首锚定 + `<{7} `/`>{7} ` 带标签（git 冲突标签恒随标记出现）、`={7}` 独占行——文档正文中的
+ *  示例标记（缩进/行中）不触发；CRLF 先归一再匹配。 */
+const CONFLICT_MARKER_RE = /^<{7} .*$|^={7}$|^>{7} .*$/m;
+
+/**
+ * 机械扫描文件集的 git 冲突标记（FR-02）。
+ * 只读；文件缺失/不可读跳过（stash 面里的已删文件不在扫描面）。限定调用方传入的文件集
+ * （stash 面口径），不扫全仓——防把规范文档里描述冲突标记的示例文本误报。
+ * @param {string} projectRoot
+ * @param {string[]} files
+ * @returns {string[]} 命中文件（相对 projectRoot 路径，原序）
+ */
+export function scanConflictMarkers(projectRoot, files) {
+  const hits = [];
+  for (const f of (Array.isArray(files) ? files : [])) {
+    if (!f) continue;
+    try {
+      const text = readFileSync(join(projectRoot, f), 'utf8');
+      if (CONFLICT_MARKER_RE.test(text.replace(/\r\n/g, '\n'))) hits.push(f);
+    } catch { /* 已删/不可读——不在扫描面 */ }
+  }
+  return hits;
 }
 
 /**
@@ -2273,16 +2310,28 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
  *     形态，退出码不可尽信）；
  *   - apply --index 冲突/异常 → stash 条目保留（git apply 失败不 drop），大字打印 SHA 兜底，
  *     绝不自动丢弃、绝不盲 pop 栈顶（并行外部操作可能插队，先按 SHA 校验栈顶归属）。
+ *   - 恢复动作后机械扫描 stash 面冲突标记（FR-02 / dsh z2 实证：两级恢复的 --index 尝试可先落
+ *     标记再失败、普通恢复可带着标记以 0 退出——git 退出码不可尽信）：命中 → 不 drop、打印文件
+ *     清单与处置指引、返回 conflictFiles（调用方 fail-closed 进 errors 使 apply exit 非零）。
  * @param {string} projectRoot
  * @param {{ sha: string, marker: string }} stashInfo
+ * @returns {{ conflictFiles: string[] }}
  */
-function restoreMainStash(projectRoot, { sha, marker }) {
+export function restoreMainStash(projectRoot, { sha, marker }) {
   // 栈顶归属校验按 SHA（git stash list 行不含 SHA，须 rev-parse 对比）——防并行外部操作插队后误恢复他者条目
   const headSha = (gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']) || '').trim();
   if (headSha !== sha) {
     console.error(`⚠️ stash 恢复跳过：栈顶 stash@{0} 已非本次条目（本次 ${sha}，栈顶 ${headSha || '空'}）——可能被并行操作消费/弹出。若本次条目仍在栈中：git stash list 找 ${sha.slice(0, 8)} 后 git stash apply --index <该ref>`);
-    return;
+    return { conflictFiles: [] };
   }
+  // stash 面文件清单（冲突标记扫描口径）：恢复动作前取（条目此刻必在栈顶）。
+  // stash show 只列 tracked 面（--include-untracked 的第三 parent 不在内）——未跟踪文件
+  // 恢复冲突走 already exists 报错路径（非标记形态），不在扫描面。
+  let stashFace = [];
+  try {
+    stashFace = (gitQuiet(projectRoot, ['stash', 'show', '--name-only', 'stash@{0}']) || '')
+      .split('\n').map((s) => s.trim()).filter(Boolean);
+  } catch { /* 面取失败 → 空面，恢复报错路径兜底 */ }
   // 两级恢复：① apply --index（保暂存区状态）——但 apply 本身会把变更留在工作区未提交，stash 树是
   // 全量快照，--index 的合并对「stash 树内但未被 stash 改动的脏文件」（正是刚 apply 落地的文件）
   // 会报 local changes would be overwritten；② 退普通 apply（内容保真恢复，staged 扁平化为
@@ -2297,11 +2346,24 @@ function restoreMainStash(projectRoot, { sha, marker }) {
       restored = 'plain';
       console.warn(`⚠️ 暂存区状态未能完整还原（apply --index 与本次 apply 落地的未提交变更互斥），已退普通恢复——内容保真，staged 文件被扁平化为 unstaged，如需请重新 git add。原因：${String(eIndex.message || eIndex).split('\n').slice(-2)[0] || eIndex}`);
     } catch (e) {
+      // 恢复失败的现场也可能残留标记（--index 尝试先行落标记后抛错）——扫描补报，处置信息更完整
+      const failConflicts = scanConflictMarkers(projectRoot, stashFace);
       console.error(`⚠️ stash 恢复失败（apply 冲突或异常）——stash 条目已保留（未丢弃），SHA 兜底：${sha}`);
       console.error(`   处理：git stash list 定位条目（marker 含 "${String(marker || '').slice(0, 50)}"）；解决工作区冲突后 git stash apply stash@{N} 重试或人工合并；确认无需后再 git stash drop。未跟踪文件若报 already exists，比对内容后手动处理。`);
+      if (failConflicts.length > 0) {
+        console.error(`   恢复失败但工作区已残留冲突标记（${failConflicts.length} 个文件）：${failConflicts.join('、')}——逐文件解决标记后 git add，再 git stash apply stash@{0} 重试`);
+      }
       console.error(`   git 输出: ${String(e.message || e).split('\n').slice(0, 3).join('\n            ')}`);
-      return;
+      return { conflictFiles: failConflicts };
     }
+  }
+  // 恢复后机械扫描（FR-02）：命中 → 不 drop、fail-closed（git 退出码 0 ≠ 无标记，dsh z2 实证）
+  const conflictFiles = scanConflictMarkers(projectRoot, stashFace);
+  if (conflictFiles.length > 0) {
+    console.error(`🚫 stash 恢复后检出 git 冲突标记（${conflictFiles.length} 个文件）——stash 条目保留未丢弃（SHA 兜底：${sha}），本次 apply 记为失败：`);
+    for (const f of conflictFiles) console.error(`   - ${f}`);
+    console.error(`   处置：逐文件解决冲突标记（<<<<<<< / ======= / >>>>>>> 段落二选一或手工合并）后 git add -- <文件>；或 git checkout -- <文件> 放弃恢复态后 git stash apply stash@{0} 重试；确认完成后手动 git stash drop stash@{0}。`);
+    return { conflictFiles };
   }
   try {
     git(projectRoot, ['stash', 'drop', 'stash@{0}'], { timeout: 60000 });
@@ -2315,6 +2377,7 @@ function restoreMainStash(projectRoot, { sha, marker }) {
   } catch (e) {
     console.error(`⚠️ stash drop 失败（改动应已恢复）——手动 git stash drop stash@{0}（${sha}）：${e.message}`);
   }
+  return { conflictFiles: [] };
 }
 
 /**
