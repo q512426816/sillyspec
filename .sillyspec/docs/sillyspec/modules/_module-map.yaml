@@ -37,6 +37,7 @@ modules:
       - src/preview-progress.js
       - src/facade-hint.js
       - src/quick-recommend.js
+      - src/yaml-scalar-unquote.js
       - src/scan-diff.js
       - src/scan-refresh.js
 
