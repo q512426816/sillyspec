@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -53,8 +53,11 @@ test('① 写入路径钉：indexRequirements 产出经解析 preamble 零孤立
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
-test('② 修复数据钉：unmapped 714-720 幽灵修复条目可读且标题恢复', () => {
-  const frs = readActiveFrDigest(join(ROOT, '.sillyspec', 'knowledge'), ['unmapped'])
+test('② 修复数据钉：714-720 幽灵修复条目可读且标题恢复（2026-10-21 清偿后分布真域）', () => {
+  // 2026-10-21-knowledge-tier-denoise：714-720 已按来源覆盖面迁出 unmapped（迁域不换号）——跨全 fr 域定位
+  const kr = join(ROOT, '.sillyspec', 'knowledge')
+  const domains = readdirSync(join(kr, 'fr')).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
+  const frs = readActiveFrDigest(kr, domains)
   const repaired = frs.filter((f) => {
     const n = parseInt(String(f.id).split('-')[2], 10)
     return n >= 714 && n <= 720

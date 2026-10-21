@@ -26,16 +26,17 @@ function rmQuiet(p) {
   try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
 }
 
-/** 造迷你知识库：枚举路由行 → decisions/unmapped.md（无关 rejected 空标题×2 + 教训型死路条目）。 */
+/** 造迷你知识库：枚举路由行 → decisions/cli-entry.md（无关 rejected 空标题×2 + 教训型死路条目；
+ *  夹具域避开 unmapped——FR-01 起停车场文件被检索核心过滤，不能作命中夹具）。 */
 function seedKb(root) {
   mkdirSync(join(root, 'decisions'), { recursive: true })
   writeFileSync(join(root, 'INDEX.md'), [
     '# 知识索引', '',
     '## Decisions',
-    '- 枚举|词表|开放世界 → [决策](decisions/unmapped.md)', '',
+    '- 枚举|词表|开放世界 → [决策](decisions/cli-entry.md)', '',
   ].join('\n'))
-  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
-    '# unmapped 域决策', '',
+  writeFileSync(join(root, 'decisions', 'cli-entry.md'), [
+    '# cli-entry 域决策', '',
     '## D-009@v1',
     '状态： rejected',
     '否决理由：与需求直接冲突', '',

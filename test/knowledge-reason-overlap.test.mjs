@@ -28,10 +28,10 @@ function seedKb(root) {
   mkdirSync(join(root, 'decisions'), { recursive: true })
   writeFileSync(join(root, 'INDEX.md'), [
     '# 知识索引', '', '## Decisions',
-    '- unmapped|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
+    '- cli-entry|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/cli-entry.md)', '',
   ].join('\n'))
-  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
-    '# unmapped 域决策', '',
+  writeFileSync(join(root, 'decisions', 'cli-entry.md'), [
+    '# cli-entry 域决策', '',
     '## D-009@v1',
     '状态： rejected',
     '否决理由：与需求直接冲突', '',
@@ -82,11 +82,11 @@ test('④ 真实库钉子：穷举/关键词表查询 → 枚举开放世界（d
   }
 })
 
-test('⑤ 评分剥数字标点：ASCII 变更名（unmapped-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
+test('⑤ 评分剥数字标点：ASCII 变更名（cli-entry-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
   const kb = mkdtempSync(join(tmpdir(), 'ss-dn-'))
   seedKb(kb)
-  const km = matchKnowledge(kb, '2026-09-28-unmapped-drill')
-  assert.ok(km.decisionHits.length >= 3, '路由 tag unmapped 命中')
+  const km = matchKnowledge(kb, '2026-09-28-cli-entry-drill')
+  assert.ok(km.decisionHits.length >= 3, '路由 tag cli-entry 命中')
   assert.match(km.decisionHits[0].title || '', /枚举开放世界/, `死路先验置顶（实际首位：${JSON.stringify(km.decisionHits[0].title)}）`)
   rmQuiet(kb)
 })

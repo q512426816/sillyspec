@@ -34,12 +34,13 @@ function seedKnowledge(specBase) {
     '# 知识索引',
     '',
     '## Patterns',
-    '- 枚举|词表 → [枚举开放世界是错误方向](decisions/unmapped.md#枚举开放世界)',
+    // 夹具域 cli-entry（FR-01，2026-10-21-knowledge-tier-denoise：unmapped 停车场文件被检索核心过滤）
+    '- 枚举|词表 → [枚举开放世界是错误方向](decisions/cli-entry.md#枚举开放世界)',
     '- 互不相关词 → [无关条目](plain-entry.md)',
     '',
   ].join('\n'))
-  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
-    '# unmapped 域决策',
+  writeFileSync(join(k, 'decisions', 'cli-entry.md'), [
+    '# cli-entry 域决策',
     '',
     '## D-001@v1 枚举开放世界是错误方向',
     '状态： rejected',
@@ -108,8 +109,8 @@ test('①-b 命中场景（死路注记）：implemented＋理由含「死路：
   const { cwd, specBase } = makeRepo('dkc-death-')
   seedKnowledge(specBase)
   // 覆写为教训形态：status=implemented，死路只在理由注记里（2026-09-28-knowledge-inject-ranking）
-  writeFileSync(join(specBase, 'knowledge', 'decisions', 'unmapped.md'), [
-    '# unmapped 域决策', '',
+  writeFileSync(join(specBase, 'knowledge', 'decisions', 'cli-entry.md'), [
+    '# cli-entry 域决策', '',
     '## D-001@v1 枚举开放世界是错误方向',
     '状态： implemented',
     '理由：正确模式：开放世界归 agent。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对', '',

@@ -74,10 +74,12 @@ test('② 查询侧词片回退：复现词命中文件＋条目；泛在词不�
   rmQuiet(root)
 })
 
-test('③ 真实库钉子：谓词守卫/顿号拆分 命中 unmapped 且条目可见；枚举不回归', () => {
+test('③ 真实库钉子：谓词守卫/顿号拆分 回退命中且条目可见；枚举不回归', () => {
   const kmP = matchKnowledge(REAL_KB, '方案：维护一个谓词守卫')
   assert.ok(kmP.matched, '谓词守卫 命中（回退前实测零命中）')
-  assert.ok(kmP.entries.some((e) => String(e.file).includes('unmapped')), '文件级指向 unmapped')
+  // 2026-10-21-knowledge-tier-denoise：谓词条目已清偿迁出 unmapped，且 FR-01 起停车场文件
+  // 不可能出现在命中面——断言翻转为「命中全落真域」
+  assert.ok(kmP.entries.length > 0 && kmP.entries.every((e) => !String(e.file).includes('unmapped')), '文件级命中真域（停车场已清偿+过滤）')
   assert.ok(kmP.decisionHits.some((h) => /谓词/.test(`${h.title} ${h.reason || ''}`)), '含谓词条目进 decisionHits')
 
   // 2026-10-08-knowledge-inbox-triage 归档后 INDEX 新增关键词「拆分」（patterns.md 路由行）——

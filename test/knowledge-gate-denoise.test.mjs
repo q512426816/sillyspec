@@ -33,13 +33,15 @@ function rmQuiet(p) {
 function seedKnowledge(specBase) {
   const k = join(specBase, 'knowledge')
   mkdirSync(join(k, 'decisions'), { recursive: true })
+  // 夹具域用 cli-entry（FR-01，2026-10-21-knowledge-tier-denoise：unmapped 停车场文件被检索核心
+  // 过滤，不能作命中夹具；共现静默行的文件名随之对齐 cli-entry.md）
   writeFileSync(join(k, 'INDEX.md'), [
     '# 知识索引', '',
     '## Decisions',
-    '- unmapped|枚举|词表 → [决策](decisions/unmapped.md)', '',
+    '- cli-entry|枚举|词表 → [决策](decisions/cli-entry.md)', '',
   ].join('\n'))
-  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
-    '# unmapped 域决策', '',
+  writeFileSync(join(k, 'decisions', 'cli-entry.md'), [
+    '# cli-entry 域决策', '',
     '## D-001@v1 枚举开放世界是错误方向',
     '状态： rejected',
     '否决理由：不要用枚举定义这个开放世界——机器只锚封闭面', '',
@@ -113,7 +115,7 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回�
       '# 决策记录（Decisions）', '',
       '## D-001@v1: 方案引入枚举词表机制',
       '- question: 需求形态要不要用词表枚举判定？',
-      '- answer: knowledge-gate 回应——unmapped.md D-001@v1 已甄别：本方案为零枚举面，不复潮。', '',
+      '- answer: knowledge-gate 回应——cli-entry.md D-001@v1 已甄别：本方案为零枚举面，不复潮。', '',
     ].join('\n'))
     const r = await runCapturing(() =>
       completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
@@ -131,7 +133,7 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回�
     writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
       '# 决策记录（Decisions）', '',
       '## D-001@v1: 方案引入枚举词表机制',
-      '- question: 归 unmapped 域的旧机制怎么处理？', '',
+      '- question: 归 cli-entry 域的旧机制怎么处理？', '',
     ].join('\n'))
     const r = await runCapturing(() =>
       completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
