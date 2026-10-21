@@ -20,8 +20,8 @@ created_at: 2026-10-21T14:15:09.575Z
 - 新全局 flag：`--out-file <路径>`（全文写文件，stdout 打提示行+尾部行）、`--tail N`（尾部行数，默认 40）；对所有命令可用；退出码与裸跑逐命令一致。
 - run 命令新 flag：`--wait --json`（stdout 唯一 JSON 对象：change/stage/step/stepName/question/options[{label,description}]，退出码同文本模式）；`--continue --answers <k=v,…>`（k=步骤名或序号，值含逗号用 `k="v,…"` 引号形态；全键命中才回填，任一 miss 整单拒绝 exit≠0 列出未匹配键）。
 - 行为变化点（唯一）：`--continue` 在无 waiting 步骤时从 exit=1 改为幂等 exit=0 + 一行指引（src/run/complete.js 无 waiting 守卫分支）；有 waiting 时语义不变。
-- 新模块导出：src/timing.js（timingMark(segment)/emitTimingIfEnabled()）；src/git-helper.js 增 batchCatFileCheck(cwd, shas[]) → Map<sha,boolean>（单次 `git cat-file --batch-check`，stdin 喂 SHA）。
-- 输出形态变化：同 (change,stage,step) 重复渲染输出增量面（<60 行，固定模板收敛为 step-guide 锚一行引用；换步/换 change 恢复全量）。渲染台账落 `.sillyspec/.runtime/render-ledger.json`（键=change，值=最近全量渲染的 stage/stepIdx 指纹）。
+- 新模块导出：src/timing.js（timedSync/timedAsync/emitTimingIfEnabled()，SEGMENTS=sync/gates/render/state-write）；src/git-helper.js 增 batchCatFileExists(cwd, shas[]) → Map<sha,boolean>（单次 `git cat-file --batch-check`，stdin 喂 SHA；初稿误写 batchCatFileCheck，评审 P3-3 更正）与 batchStageBlobSha256(cwd, paths[]) → Map<path,sha256|null>（单次 `git cat-file --batch`）。
+- 输出形态变化：同 (change,stage,step) 重复渲染输出增量面（<60 行，固定模板收敛为 step-guide 锚一行引用；换步/换 change 恢复全量）。**改道说明（D-001，评审 P3-1 回写）**：实测发现该能力已由既有 reentryHit + `.runtime/step-guide-state/` 变更级台账（2026-09-21-r5-efficiency-batch2）完整提供，本变更加建 render-ledger.json 的计划取消，交付收缩为冻结回归测试；台账写盘为既有裸 writeFileSync（非 writeAtomicSync——design 初稿声称有误，本变更未改动该面，撕裂后果为退回全量渲染，方向安全）。
 - 不改：gate 判定逻辑、steps 状态机、review/dispatch 语义、worktree 生命周期、spec-sync 写路径与 bg-sync 预算、docs check 判定。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
@@ -58,7 +58,8 @@ created_at: 2026-10-21T14:15:09.575Z
 | --- | --- | --- |
 | 新增 | src/timing.js | 分段计时记录器：timingMark(segment)/emitTimingIfEnabled()，env 门控零开销 |
 | 修改 | src/run/shared.js | triggerSync 段 timing 打点；（FR-06 不在此改——只读命令分流在 index.js 命令层） |
-| 修改 | src/run/prompt.js | outputStep 重复渲染增量面 + render 台账读写；render 段 timing 打点 |
+| 修改 | src/run/prompt.js | outputStep status 阶段跳过 triggerStepStartSync（FR-06 真凶点）；render 段 timing 打点；重复渲染为既有 reentryHit（D-001 改道，本变更未改渲染压缩面） |
+| 修改 | src/progress.js | _write 包装 timedSync('state-write')（评审 P3-3 补登） |
 | 修改 | src/run/complete.js | waitStep --json；continueStep --answers 多答/无 waiting 幂等 exit 0；gates/state-write 段打点 |
 | 修改 | src/run/gates.js | completeStageGates 段 timing 打点（判定逻辑零变化） |
 | 修改 | src/index.js | 全局 --out-file/--tail 输出收集器；run 子命令 --json/--answers flag 接线；status/progress show/handoff 只读命令跳过同步 |

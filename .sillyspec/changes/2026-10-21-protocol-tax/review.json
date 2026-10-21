@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-protocol-tax",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e10df32d0f1cfaafb841eb058b2039b085aced1d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design.md/tasks.md 承诺的 render-ledger.json 机制未实现（D-001 改道后文档未回写）",
+      "evidence": "design.md 接口契约与 tasks.md task-03 均宣告新建 .sillyspec/.runtime/render-ledger.json 台账（键=change），但 src/ 全树无 render-ledger 实现；实际复用既有 step-guide-state 台账（decisions.md D-001 记录复用裁决）。FR-02 行为由既有 reentryHit 机制 + 新契约冻结测试（test/output-repeat-delta.test.mjs，复跑绿）兑现，行为无违诺，属设计文档失真非代码缺陷。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/design.md:24; src/run/prompt.js:2119"
+    },
+    {
+      "severity": "P3",
+      "title": "盲维并发作答的防护声明不实：台账写非 writeAtomicSync 而是裸 writeFileSync",
+      "evidence": "design.md 并发作答声称「render 台账用 writeAtomicSync（tmp+rename 原子替换）写」，实际唯一存在的台账 step-guide-state 写入用非原子 writeFileSync（prompt.js:2155）；并发撕裂最坏退化方向安全（读侧 JSON.parse catch → 首见全量渲染，与声称退化方向一致），但声称的原子写防护机制在代码里不存在。",
+      "location": "src/run/prompt.js:2155; .sillyspec/changes/2026-10-21-protocol-tax/design.md:35"
+    },
+    {
+      "severity": "P3",
+      "title": "文件变更清单与接口契约名漂移：src/progress.js 未入清单、batchCatFileCheck 实名 batchCatFileExists",
+      "evidence": "FR-01 的 state-write 段插桩实落 src/progress.js:963（timedSync 包 _writeImpl），但 design 文件变更清单未列该文件（state-write 打点记在 complete.js 行下）；design 接口契约命名 batchCatFileCheck(cwd,shas[])，实际导出为 batchCatFileExists（src/git-helper.js:162）。冻结 patch 内该文件 +5/-0 与工作区实态一致，纯文档漏登。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/design.md:23,55-66; src/progress.js:963; src/git-helper.js:162"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-06/FR-07 性能验收数字留痕载体薄弱：decisions.md 仅存标题无正文",
+      "evidence": "FR-06（status 6.3s→<1.5s）与 FR-07（doctor 41.8s→<5s）的实测数字（0.82s / 3.0-4.0s）只在 commit message（edd81e7b、3c165eb3）留痕，decisions.md 的 D-002/D-003 仅有标题行，两测试头注释声称「实测记录在 decisions.md」与实态不符；性能面无单测锚（测试头已声明属真实环境实测，单测不伪造——口径可接受，但决策正文为空使 FR 验收数字只能靠 commit message 复核。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/decisions.md:5-7"
+    },
+    {
+      "severity": "P3",
+      "title": "timing 测试 runStable 非零退出即重试一次，可掩蔽真实间歇性失败",
+      "evidence": "test/timing-segments.test.mjs:59-63 对子进程 exit≠0 无条件重跑一次、以第二次结果为准（注释披露为 166 文件并行时 SQLite BUSY 抖动硬化）；若本变更引入真实间歇失败且第二次侥幸通过将被放行。评审串行复跑 12 文件一次全绿（无重试命中迹象），当前无实证危害，记录为测试稳健性取舍。",
+      "location": "test/timing-segments.test.mjs:59-63"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok（边界已裁决：可接受——--out-file 被 kill 时文件可能缺失但退出码/stdout 不受影响；幂等 --continue 分支无任何 _write；timing 未开启零开销；批量化失败回退路径均有 catch 实证）",
+    "作用域": "ok（边界已裁决：可接受——step-guide-state 键含 change 名且落各仓自有 .runtime；--out-file 相对路径按进程 cwd resolve；batchCatFileExists 仅读目标仓对象库）"
+  },
+  "reviewedAt": "2026-10-21T16:40:15Z"
+}
