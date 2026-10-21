@@ -23,6 +23,7 @@ modules:
     needs_review: false
     review_reasons: []
     paths:
+      - src/timing.js
       - src/agent-session-log.js
       - src/forensics.js
       - src/friction-tally.js
