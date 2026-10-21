@@ -544,10 +544,10 @@ created_at: 2026-10-15T01:21:44.811Z
 - row: 2026-10-19-thin-order-canon:flow:测试绑定FR-01
   tests: test/flow-order-canon.test.mjs「横幅/adopt/done/approve/恢复简报五面正典句一致与顺手措辞清零」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: 95031f4ca3d205a666d89d55723cfc35a77424b3
   source_change: 2026-10-19-thin-order-canon
   status: active
 
@@ -565,10 +565,10 @@ created_at: 2026-10-15T01:21:44.811Z
 - row: 2026-10-19-thin-order-canon:flow:测试绑定FR-02
   tests: test/flow-order-canon.test.mjs「命令卡与 skill 生命周期含批准环节」
   reason: spec
-  state: candidate
+  state: active
   discovery: machine
-  confirmed_by: null
-  confirmed_at: null
+  confirmed_by: agent
+  confirmed_at: 95031f4ca3d205a666d89d55723cfc35a77424b3
   source_change: 2026-10-19-thin-order-canon
   status: active
 

@@ -1,0 +1,37 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  轻量技能补AskUserQuestion交互规范
+
+  用户要求：sillyspec-flow（轻量变更）skill 缺少其他 skill（brainstorm/commit/auto/explore 等）均有的「交互规范」节——需要用户从多个选项做选择时必须用内置
+  AskUserQuestion 工具把选项作为参数传入让用户作答，禁止用编号列表让用户手动输入数字。补齐该节，措辞与 brainstorm 对齐。skills 源即仓库 .claude/skills/（init.js:462
+  复制源），改一处即改源。
+
+
+  成功标准：
+
+  - .claude/skills/sillyspec-flow/SKILL.md 出现「交互规范」节，含 AskUserQuestion 强制句与禁编号列表句，语义与 sillyspec-brainstorm 同版
+
+  - 纯 markdown 指令文档变更，无代码行为——测试不适用：无逻辑可断言，验收靠文档审阅
+autopilot: false
+prestage_ack: true
+baseline_commit: 95031f4ca3d205a666d89d55723cfc35a77424b3
+updatedAt: '2026-10-21T06:24:24.490Z'
+baseline_sha256: 3d07ad491d1012d62fb1246549be4dd49b856bb6d14b01797943ea92b15bf3d0
+spec_approved: true
+spec_approved_at: '2026-10-21T06:21:46.123Z'
+spec_approved_by: zcode-flow-skill-askuser
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-skill-askuser
+gate_summary: >-
+  test: passed ← module[]+deps(js6)+fr(6)（3.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021062333\test-result.json｜lint: passed
+  ← npm run lint（50.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021062333\test-result.json｜门文件 4 个
+
