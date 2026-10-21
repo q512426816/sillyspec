@@ -1683,12 +1683,18 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const rdStage = rdStageIdx >= 0 && args[rdStageIdx + 1] && !String(args[rdStageIdx + 1]).startsWith("--") ? args[rdStageIdx + 1] : null;
       const rdStatus = args.includes('--status');
       const rdKill = args.includes('--kill');
+      const rdSalvage = args.includes('--salvage');
       const rdMode = rdKill ? 'kill' : rdStatus ? 'status' : 'create';
-      const rdUsage = '用法: sillyspec review-dispatch --change <名> --stage <brainstorm|plan|execute> [--status] [--kill]\n' +
+      const rdUsage = '用法: sillyspec review-dispatch --change <名> --stage <brainstorm|plan|execute> [--status] [--kill] [--status --salvage]\n' +
         '  缺省=派发（probe 前置→create_mission(external)→dispatch_worker(read_only)，异步返回 missionId）\n' +
         '  --status=轮询状态+停滞提示；worker completed 自动回收落盘 review.json（reviewer.channel=platform）\n' +
+        '  --status --salvage=终态原文兜底：worker-answer.md 落盘 + register-stage-review --from 回收指引（提取失败时用）\n' +
         '  --kill=清本地在途记录+平台处置指引（不自动 kill，处置权在人）';
       if (!rdChange) { console.error(rdUsage); process.exit(2); }
+      if (rdSalvage && !rdStatus) {
+        console.error(`❌ --salvage 仅与 --status 组合使用（completed 提取失败后的终态原文兜底回收）\n${rdUsage}`);
+        process.exit(2);
+      }
       assertSafeChangeName(rdChange, '--change 变更名');
       if (rdMode === 'create' && !['brainstorm', 'plan', 'execute'].includes(rdStage)) {
         console.error(`❌ create 形态必须 --stage ∈ brainstorm|plan|execute（实际：${rdStage || '缺'}）\n${rdUsage}`);
@@ -1706,7 +1712,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const rdSpecBase = resolvePlatformSpecDir(dir, specDir);
       const r = await runReviewDispatch({
         mode: rdMode, cwd: dir, specBase: rdSpecBase, changeName: rdChange, stage: rdStage,
-        client: rdClient, budgetUsd: rdCfg.budget_usd, stallMs: rdCfg.stall_ms,
+        client: rdClient, budgetUsd: rdCfg.budget_usd, stallMs: rdCfg.stall_ms, salvage: rdSalvage,
       });
       if (r.ok) {
         if (r.statusLine) console.log(`🛰️ ${r.statusLine}`);
@@ -1721,6 +1727,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       } else {
         console.error(`❌ review-dispatch（${rdMode}）: ${r.reason}`);
         if (r.statusLine) console.error(`   ${r.statusLine}`);
+        if (r.salvagePath) console.error(`   📄 worker 终态原文：${r.salvagePath}`);
         if (r.errors) for (const e of r.errors) console.error(`   - ${e}`);
         if (r.guidance) console.error(`   下一步：\n${r.guidance}`);
         process.exitCode = 1;
