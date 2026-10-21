@@ -670,6 +670,23 @@ export class WorktreeManager {
   }
 
   /**
+   * 确保 worktree 存在（幂等入口，2026-10-21-brainstorm-proto-worktree）
+   * 头脑风暴原型协议的复用语义收敛点：变更 key 已出后可先 create（或 native 复用），
+   * 后续 run execute 再走本入口——meta 已登记即复用，不重建不重新 overlay。
+   * 与 ensureCrossWorktrees 同款「命中即复用」可测先例。
+   * 返回完整 meta 透传（调用方如 ensureDepsFreshness 会整包 spread 写回，瘦身返回会丢字段）。
+   * @param {string} changeName - 变更名
+   * @param {{ base?: string, adoptBranch?: boolean }} opts - 同 create
+   * @returns {{ ...meta, existing: boolean }} 完整 meta + existing 标志（未登记走 create 时为 create 返回值）
+   * @throws {Error} create 失败时原样上抛（git 不可用、changeName 为空等）
+   */
+  ensure(changeName, opts = {}) {
+    const existing = this.getMeta(changeName);
+    if (existing) return { ...existing, existing: true };
+    return { ...this.create(changeName, opts), existing: false };
+  }
+
+  /**
    * 创建 worktree
    * @param {string} changeName - 变更名
    * @param {{ base?: string }} opts - base: 基础分支，默认当前 HEAD

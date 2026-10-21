@@ -100,29 +100,32 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     const effectiveChange = changeName
     const { WorktreeManager } = await import('../worktree.js')
     const wm = new WorktreeManager({ cwd })
-    const existingMeta = wm.getMeta(effectiveChange)
-    if (existingMeta) {
-      console.log(`🔗 worktree 已存在: ${existingMeta.worktreePath} (${existingMeta.mode})`)
+    // ensure（2026-10-21-brainstorm-proto-worktree）：meta 已登记即复用——头脑风暴原型期
+    // 早建的 worktree / native 复用形态与 execute 首建走同一幂等入口，原 getMeta 短路语义收敛于此。
+    let wtResult
+    try {
+      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
+    } catch (e) {
+      console.error(`❌ worktree 创建失败: ${e.message}`)
+      // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
+      // 同名分支可能是用户有意创建的——分支冲突时 create 报错已带三选一决策菜单，删不删
+      // 交由菜单/人工判断；doctor 的分支删除也有 review 锚点 + 无库保守双保护）。
+      console.error(`   修复建议：`)
+      console.error(`   1. 同名分支冲突/收编：按上方报错内三选一菜单处置（遗留分支确认作废后才删；用户指定分支用 --adopt-branch 收编）`)
+      console.error(`   2. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）`)
+      console.error(`   3. 目录残留：确认无未提交改动后清理 .sillyspec/.runtime/worktrees/${effectiveChange}/ 再重试`)
+      process.exit(1)
+    }
+    if (wtResult.existing) {
+      console.log(`🔗 worktree 已存在: ${wtResult.worktreePath} (${wtResult.mode})`)
     } else {
-      try {
-        const result = wm.create(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
-        console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode}${result.adoptedBranch ? ', 收编既有分支' : ''})`)
-      } catch (e) {
-        console.error(`❌ worktree 创建失败: ${e.message}`)
-        // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
-        // 同名分支可能是用户有意创建的——分支冲突时 create 报错已带三选一决策菜单，删不删
-        // 交由菜单/人工判断；doctor 的分支删除也有 review 锚点 + 无库保守双保护）。
-        console.error(`   修复建议：`)
-        console.error(`   1. 同名分支冲突/收编：按上方报错内三选一菜单处置（遗留分支确认作废后才删；用户指定分支用 --adopt-branch 收编）`)
-        console.error(`   2. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）`)
-        console.error(`   3. 目录残留：确认无未提交改动后清理 .sillyspec/.runtime/worktrees/${effectiveChange}/ 再重试`)
-        process.exit(1)
-      }
+      console.log(`🔗 worktree 已创建: ${wtResult.worktreePath} (分支: ${wtResult.branch}, 模式: ${wtResult.mode}${wtResult.adoptedBranch ? ', 收编既有分支' : ''})`)
     }
     // 入口 deps 自检（D-002）：已存在 worktree（create short-circuit 不供给）时重供给
-    if (existingMeta) {
+    //（existing 标志置 undefined：JSON.stringify 丢弃，不随 deps 写回污染 meta.json）
+    if (wtResult.existing) {
       const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
-      await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, existingMeta)
+      await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, { ...wtResult, existing: undefined })
     }
 
     // ── 跨仓仓 worktree 隔离（坑 cross-repo-no-worktree-isolation，2026-08-27 用户实证）──
