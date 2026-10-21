@@ -87,12 +87,13 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
       }],
     }
   }
-  // Act + Assert：正常分支——tool 名/参数 snake_case 对齐，三字段原样解析
+  // Act + Assert：正常分支——tool 名/参数 snake_case 对齐，四字段原样解析
   const r = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
   assert.equal(lastCall.toolName, 'get_worker_result', '调 get_worker_result tool')
   assert.deepEqual(lastCall.args, { mission_id: 'm-1', worker_id: 'w-9' }, '参数 snake_case 对齐 SillyHub schema')
   assert.equal(r.workerId, 'w-9', 'worker_id 解析')
   assert.equal(r.status, 'completed', 'status 解析')
+  assert.equal(r.answer, null, '无 answer/result 字段 → answer null（2026-10-21 契约扩展）')
   assert.deepEqual(
     r.artifacts,
     [
@@ -105,22 +106,22 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
   cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ id: 'w-plat', status: 'completed', artifacts: [] }) }] })
   const rId = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-plat' })
   assert.equal(rId.workerId, 'w-plat', 'id 兜底解析（平台实返形态）')
-  // 空分支：返回无 artifacts 字段 → []；status 缺省 'unknown'
+  // 空分支：返回无 artifacts 字段 → []；status 缺省 'unknown'；answer 缺省 null
   cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9' }) }] })
   const rEmpty = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
-  assert.deepEqual(rEmpty, { workerId: 'w-9', status: 'unknown', artifacts: [] }, '无 artifacts → []，status 缺省 unknown')
+  assert.deepEqual(rEmpty, { workerId: 'w-9', status: 'unknown', artifacts: [], answer: null }, '无 artifacts → []，status 缺省 unknown，answer 缺省 null')
   // isError 分支（token 缺 scope 形态）→ unavailable 形态
   cli._callTool = async () => ({ content: [{ type: 'text', text: "Error executing tool: MCP token lacks required scope 'read'." }], isError: true })
   assert.deepEqual(
     await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
-    { workerId: null, status: 'unavailable', artifacts: [] },
+    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
     'isError → unavailable 不抛',
   )
   // 网络失败（_callTool null）→ unavailable 形态
   cli._callTool = async () => null
   assert.deepEqual(
     await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
-    { workerId: null, status: 'unavailable', artifacts: [] },
+    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
     '网络失败 null → unavailable 不抛',
   )
   // 未配置 → unavailable 且不发网（_callTool 被调即炸；cwd 喂干净 tmp 隔离仓活配置）
@@ -129,10 +130,29 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
   uncfg2._callTool = async () => { throw new Error('未配置不得发网') }
   assert.deepEqual(
     await uncfg2.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
-    { workerId: null, status: 'unavailable', artifacts: [] },
+    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
     '未配置 → unavailable 不发网不抛',
   )
   rmSync(cleanDir2, { recursive: true, force: true })
+})
+
+// 2026-10-21-review-dispatch-answer-salvage FR-02：getWorkerResult 增返 answer 原文——
+// dsh 会话实证 worker 可能把 review JSON 放回答正文而非 artifacts（回收链断点①：
+// 传输层此前直接丢弃 answer 字段，--status 误判 completed-no-artifact 降级 self 自审）
+test('getWorkerResult 增返 answer 原文（answer 优先 / result 兜底 / 非字符串 null）', async () => {
+  const cli = new SillyHubMcpClient({ url: 'http://127.0.0.1:9999', token: 'shmcp_x' })
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9', status: 'completed', artifacts: [], answer: '结论 {"specVerdict":"pass"} 正文' }) }] })
+  const r = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
+  assert.equal(r.answer, '结论 {"specVerdict":"pass"} 正文', 'answer 字符串原文透传（不解析）')
+  // answer 缺失 → result 兜底
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9', result: 'result 字段原文' }) }] })
+  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, 'result 字段原文', 'answer 缺 → result 兜底')
+  // 双字段在场 → answer 优先
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ answer: 'A 原文', result: 'R 原文' }) }] })
+  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, 'A 原文', '双字段在场 answer 优先')
+  // 非字符串形态 → null（传输层只搬字符串原文，语义解析归消费方）
+  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ answer: { obj: 1 } }) }] })
+  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, null, '非字符串 answer → null')
 })
 
 test('③ probe daemon 在线层：false 拦 / true 与 null 放（fail-open）', async () => {

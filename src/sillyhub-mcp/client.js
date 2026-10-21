@@ -610,18 +610,21 @@ export class SillyHubMcpClient {
    * artifacts 原样透传不裁剪：平台实返形态（[{kind, content_ref, id}…] 或演进形态）整组
    * 透传——kind 匹配 / JSON 提取等语义解析归消费方（review-dispatch 的
    * extractReviewFromArtifacts），本封装保持传输层纯度（task-02 constraints）。
+   * answer 原文透传（2026-10-21-review-dispatch-answer-salvage / dsh 会话实证）：worker 可能把
+   * review JSON 放回答正文而非 artifacts——取 tool 返回的 answer 字段（缺省兜底 result 字段）
+   * 字符串原文一并透传，非字符串/双缺 → null；解析仍归消费方，传输层只搬运。
    * @param {object} p
    * @param {string} p.missionId
    * @param {string} p.workerId
-   * @returns {Promise<{workerId: string|null, status: string, artifacts: Array}>}
-   *   正常 → {workerId, status, artifacts} 原样解析（status 缺省 'unknown'，artifacts 缺省 []）；
-   *   未配置 / 调用失败(null) / tool isError → { workerId: null, status: 'unavailable', artifacts: [] }
+   * @returns {Promise<{workerId: string|null, status: string, artifacts: Array, answer: string|null}>}
+   *   正常 → {workerId, status, artifacts, answer} 原样解析（status 缺省 'unknown'，artifacts 缺省 []，answer 缺省 null）；
+   *   未配置 / 调用失败(null) / tool isError → { workerId: null, status: 'unavailable', artifacts: [], answer: null }
    *   （与 dispatchWorker/getDaemonStatus 同族 best-effort，绝不向上抛）
    */
   async getWorkerResult({ missionId, workerId } = {}) {
-    if (!this._configured) return { workerId: null, status: 'unavailable', artifacts: [] };
+    if (!this._configured) return { workerId: null, status: 'unavailable', artifacts: [], answer: null };
     const result = await this._callTool('get_worker_result', { mission_id: missionId, worker_id: workerId });
-    if (result === null || result.isError) return { workerId: null, status: 'unavailable', artifacts: [] };
+    if (result === null || result.isError) return { workerId: null, status: 'unavailable', artifacts: [], answer: null };
     const value = this._parseToolReturnValue(result);
     // workerId 兜底链与 dispatchWorker 同款（2026-09-10 平台实返 {id,…} 形态实证）
     const wid = value && typeof value === 'object'
@@ -631,7 +634,9 @@ export class SillyHubMcpClient {
       ? (value.status ?? 'unknown')
       : 'unknown';
     const artifacts = value && Array.isArray(value.artifacts) ? value.artifacts : [];
-    return { workerId: wid, status, artifacts };
+    const rawAnswer = value && typeof value === 'object' ? (value.answer ?? value.result) : null;
+    const answer = typeof rawAnswer === 'string' ? rawAnswer : null;
+    return { workerId: wid, status, artifacts, answer };
   }
 
   /**
