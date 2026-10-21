@@ -77,3 +77,5 @@ created_at: 2026-10-21T13:38:03.403Z
 | 新增 | test/done-heartbeat.test.mjs | 心跳 wrapper 行为 |
 | 新增 | test/spawn-settle.test.mjs | spawn 稳定化 util |
 | 新增 | test/handoff-takeover-hint.test.mjs | 交接块预告行 |
+| 修改 | docs/sillyspec/platform-interface-map.md | 行号锚自动重锚（本变更 src 插行致 7 处漂移，docs check --fix） |
+| 修改 | docs/sillyspec/architecture-4a.md、file-lifecycle.md、prompt-control-debt.md、review-2026-08-20-full-audit.md | 既有漂移行号锚顺带重锚（--fix 全文档面扫描；非本变更引入的漂移，修正为当前源码真实行号） |

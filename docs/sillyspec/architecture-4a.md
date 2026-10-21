@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2021`），契约转换图（`src/stage-contract.js:2021`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2043`），契约转换图（`src/stage-contract.js:2043`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -59,10 +59,10 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **推进不是自动的，分三层**：
 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
-2. **步骤内推进** `completeStep`（`src/run/complete.js:163`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
-3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:477`）按状态机推荐下一阶段命令。
+2. **步骤内推进** `completeStep`（`src/run/complete.js:185`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:494`）按状态机推荐下一阶段命令。
 
-**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:627`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:644`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
 
 ### 1.3 校验门与审批点
 
@@ -70,8 +70,8 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2021` |
-| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:203` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2043` |
+| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:228` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
 | 阶段完成 gate 级联 | 所有 step completed 时跑 | 失败回滚 | `src/run/gates.js:371,628` |
@@ -79,9 +79,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
 **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:703`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:1427`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+1. `runValidators`（客观产物校验，`src/stage-contract.js:1449`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:1066`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1507`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1524`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:297`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
@@ -99,12 +99,12 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 表 | 用途 | 关键列 / 依据 |
 |---|---|---|
-| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:262` |
-| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:273` + 8 列迁移 |
-| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:278` |
-| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:305` |
-| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:310` |
-| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:319` |
+| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:268` |
+| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:279` + 8 列迁移 |
+| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:284` |
+| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:311` |
+| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:323` |
+| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:325` |
 
 外键级联：`changes` 删 → `stages`/`steps`/`batch_progress`/`approvals` 级联删（`ON DELETE CASCADE`）。
 
@@ -112,7 +112,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 - 当前版本 `DB_SCHEMA_VERSION = 5`（`src/db.js:10`），四处一致性被 `platform-sync-schema.test.mjs` 守卫。
 - **版本戳驱动建表**：侧车 `${dbPath}.schema-version` 内容匹配则跳过 `_createSchema`（高频读路径省 DDL 开销，`db.js:75-85`）。
-- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:349`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
+- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:355`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
 - 版本线（`src/progress/shared.js:29`）：v1/v2 progress.json → v3 迁 SQLite → v4 平台同步 base_ts/脏度 → v5 title/quicklog_id。
 
 ### 2.3 数据治理
@@ -161,7 +161,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | **L7 机器接口** | `src/machine-interface.js` | `gate`/`derive` 无状态只读子命令，输出 envelope JSON 供外部 daemon |
 | **L8 工具层** | `fs-atomic.js`、`git-helper.js`、`db.js`、`constants.js` | 跨切面底层原语 |
 
-> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1085`）。
+> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1096`）。
 
 ### 3.2 调度内核（run/）职责
 
@@ -228,7 +228,7 @@ git worktree 隔离多 Agent 并发改动：每个 change 在 `.sillyspec/.runti
 
 - **创建**（方法 `worktree.js:360`，类 `worktree.js:286`）：submodule/native-worktree 检测 → gitignore 守卫 → 幽灵 worktree fail-closed → 解析 base → `git worktree add`（失败降级 in-place-fallback）→ 占位 meta 原子写 → dirty baseline overlay（`git diff --binary | git apply`）→ baseline checkpoint commit → 依赖供给 → 写完整 meta。
 - **三种 mode**：`worktree`（标准）/ `native-worktree`（外部已 linked）/ `in-place-fallback`（沙箱/权限降级）。
-- **cleanup**（`worktree.js:1507`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1507`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
+- **cleanup**（`worktree.js:1556`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1556`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
 - **node_modules provision**（`src/worktree-deps.js`）：junction/symlink 快路径（Windows `mklink /J`，POSIX `ln -s`，lockfile 一致才 link）+ install 兜底（`inferInstallCommand` 推断 node/maven/gradle/python/generic）。
 
 ### 4.4 跨平台（Win/Linux/macOS）
