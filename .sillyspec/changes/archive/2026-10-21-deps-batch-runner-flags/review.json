@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-deps-batch-runner-flags",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "7d982fb381aa214ed30b0daabde275d11231251d",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "披露边界①（白名单外吃值 flag）后果定性不准：裸 --cov-report 保留会 usage error 炸批可见，非「温和退化不炸批」",
+      "evidence": "design.md:53 对 `--cov-report xml` 空格形态声称「命令退化为裸 flag（行为温和变化，不炸批）」，但 src/verify-postcheck.js:2851 白名单不含 --cov-report，空格形态值词被 :2847 按位置参数丢弃后批命令保留裸 `--cov-report`（test/deps-batch-runner-flags.test.mjs 已锁死该输出）——pytest-cov 的 --cov-report 为必吃值 flag，裸形态报 expected one argument 批失败；同一 design 段落对引号形态的裸 -n 自己承认「usage error → 批失败可见」，同型机理却得相反结论，自相矛盾。裁决：可接受——退化可见非静默、无假绿，用户改等号形态即愈；仅风险定性文案失准。",
+      "location": "src/verify-postcheck.js:2847-2851（对照 .sillyspec/changes/2026-10-21-deps-batch-runner-flags/design.md:53）"
+    },
+    {
+      "severity": "P3",
+      "title": "披露边界②（全引号形态）机理描述与代码不符：引号包裹的 flag 整 token 被静默丢弃，非「退化为裸 -n 批失败可见」",
+      "evidence": "design.md:53 称 `\"-n\" \"auto\"` 极端全引号形态「丢值退化为裸 -n（usage error → 批失败可见，不静默）」，但 src/verify-postcheck.js:2847 的 `!t.startsWith('-')` 判定在剥引号（:2849）之前执行——`\"-n\"` 以引号开头不命中 flag 判定，整 token 连值被按位置参数丢弃，批命令静默不含该 flag（=修复前行为，串行变慢但正确），既非裸 -n 也非可见失败。裁决：可接受——实际后果比披露更温和（退回修复前语义，无新增失败面），但「不静默」的安全声明与实态相反，属文档-代码失配。",
+      "location": "src/verify-postcheck.js:2847-2849（对照 .sillyspec/changes/2026-10-21-deps-batch-runner-flags/design.md:53）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T15:54:48Z"
+}

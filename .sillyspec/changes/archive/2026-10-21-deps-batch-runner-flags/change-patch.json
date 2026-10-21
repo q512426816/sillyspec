@@ -1,0 +1,138 @@
+{
+  "change": "2026-10-21-deps-batch-runner-flags",
+  "baseline": "edd81e7b0a60c2db012fdc858429f3662dfaef4b",
+  "head": "1ba462e5a93816d1ed674acb9d26ff550b5d92af",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    ".sillyspec/docs/sillyspec/modules/machine-interface.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    "src/run/verify-quality-scan.js",
+    "src/verify-postcheck.js",
+    "test/deps-batch-runner-flags.test.mjs",
+    "test/deps-cwd-prefix.test.mjs",
+    "test/verify-reuse-large-repo.test.mjs"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 185,
+    "deletions": 7
+  },
+  "savedAt": "2026-10-21T15:48:39.971Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": true,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "edd81e7b0a60c2db012fdc858429f3662dfaef4b",
+    "totals": {
+      "files": 8,
+      "additions": 185,
+      "deletions": 7
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/machine-interface.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 64,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/deps-batch-runner-flags.test.mjs",
+        "additions": 108,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/deps-cwd-prefix.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/verify-reuse-large-repo.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6dda9b380effde1e047a09ffd714fe8b27c698765c7da165dd2b8d1c06dae819",
+  "patchStatus": "ok"
+}

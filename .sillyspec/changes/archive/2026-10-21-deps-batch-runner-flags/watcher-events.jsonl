@@ -1,0 +1,26 @@
+{"ts":1792595388075,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792595427853,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792595439405,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792595678817,"kind":"commit","stage":null,"detail":"3c165eb3","provisional":true}
+{"ts":1792595788602,"kind":"commit","stage":null,"detail":"f054ffb4","provisional":true}
+{"ts":1792595867461,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/verify-quality-scan.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792596065709,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/verify-reuse-large-repo.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792596435884,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/deps-cwd-prefix.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792596645557,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1792596743235,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792596744397,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792596745056,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792596745486,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792596745486,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1792596807261,"kind":"commit","stage":null,"detail":"7d982fb3","provisional":true}
+{"ts":1792596821501,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-21-deps-batch-runner-flags/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792596916614,"kind":"gate-run","stage":"verify","detail":"门实测 failed（72.6s） · 20261021153515","provisional":true}
+{"ts":1792597215781,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1792597258763,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1792597327306,"kind":"gate-run","stage":"verify","detail":"门实测 failed（44.8s） · 20261021154207","provisional":true}
+{"ts":1792597453577,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1792597477023,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1792597492944,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1792597524481,"kind":"commit","stage":null,"detail":"1ba462e5","provisional":true}
+{"ts":1792597607270,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（84.7s） · 20261021154649","provisional":true}
+{"ts":1792597693028,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}

@@ -1,0 +1,279 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index 4cb30cd0..abfe5cd6 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -32,7 +32,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - `src/stage-review.js` — 阶段级审查门（brainstorm/plan/execute-acceptance 的阶段级 review.json 校验：文档证据 reviewedFiles + docHash）；降级自审配套（2026-09-10 用户反馈①，PI agent 等宿主无 Agent tool）：`isDegradedSelfReview`（reviewerNotes 首行「降级：」约定检测）供 run/gates.js Stage Review Gate 放行时留 ⚠️ 审计行（独立性折损可见可追溯，不构成新阻断）；缺 review.json 报错与 gate FAILED 提示均带降级出口指引，契约（renderReviewJsonContract）同步文档化该约定。通道优先序批次（同日用户裁决「顺序归配置」）：`readReviewChannelPriority`（local.yaml `review_dispatch.channel_priority`，缺省现状序 [agent-tool, platform, host-mcp, self]、未知值忽略、self 恒隐式垫底）+ 契约头部「审查执行通道」段按配置序渲染（platform 通道 P2 review-dispatch 未落地前标注暂跳过，不引用不存在命令）+ `classifyReviewerChannel`（reviewer.channel 结构化落款 > 首行「降级：」兼容 > unspecified；gate 分支：self ⚠️ / platform ℹ️ missionId / 其余静默）
+ - `src/stage-review-checklist.js`——三 stage 审查清单单一来源 `REVIEW_CHECKLISTS`（2026-09-10-review-dispatch task-01/FR-05）：条目自 stages prompt 逐字迁移（下游可能字面引用），渲染前缀规则见模块 docblock；一致性由 test/stage-review-checklist.test.mjs 内嵌快照钉死；prompt 渲染与 review-dispatch worker_prompt 同源消费。stage-review.js 同批增：printStageReviewResult 平台在途区分（内联读 .runtime/review-dispatch-<change>.json 防静态环 fail-open）+ 契约 platform 描述改指 review-dispatch 命令。
+ - `src/task-review.js` — execute 每 task 的 review.json 校验（git 代码 diff 证据：base/head）；runId 并行碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：`claimExecuteRunId`（非递归 mkdir 排他认领 run 目录，EEXIST=同秒碰撞 → 随机短后缀重试；认领即含 tasks/，真实 fs 障碍原样上抛由写入点分层 fail 接管）接入四处 generate 写入点（run/stage.js 主点 + run/gates.js/run/prompt.js/本文件 drafts 与 writeTaskReview 补写点）；`isValidExecuteRunId` 双形态兼容（存量 `exec-YYYY-MM-DD-HHMMSS` + 碰撞后缀 `…-<a-z0-9≤8>`，注入/穿越仍拒）——并行会话同秒启动 execute 不再共享 run 目录互相覆盖 per-task review.json。串台残余收口（同日第二批②）：`resolveLatestExecuteRunId` / `resolveLatestExecuteRunIdWithTasks` 的 mtime fallback 排除「戳属他变更」的有主 run（戳存在且不等值 = 有主，与 resolveExecuteRunForChange 同语义；全部有主 → null 宁缺毋错）——writeTaskReview 在 marker 缺失场景经它们定位 run，不再把本变更 review.json 写进他变更 run 的 tasks/。runId 结构化隔离（同日第三批①，用户建议「run 目录取 change 名哈希隔离」）：generateExecuteRunId(changeName) 附 change 名 FNV-1a 6 位 hex 段（两变更同秒必不同 runId，run 目录天然分家；同变更 regenerate 幂等；无参调用裸秒级向后兼容），isValidExecuteRunId 放宽至 0-2 段后缀（哈希段 + claim 碰撞随机段），与 claimExecuteRunId 排他认领互补——认领治「同 ID 两主」、哈希治「不同变更天生同 ID」
+-- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；reconcileTargetFiles 跨仓段自 2026-09-20-scope-audit-cross-repo 起经 reconcileCrossRepoDeclarations 消费 collectRepoActual 内核（runtimeRoot/changeName 传参贯通喂 A 档 reviews 锡点 + notes 锚点档按 anchor.label 动态文案）；
++- `src/verify-postcheck.js` — verify 完成时 CLI 亲自执行 local.yaml 测试命令与 verify-result.md 自报告对账（自报 PASS 但实测失败 → 阻断）；reconcileTargetFiles 跨仓段自 2026-09-20-scope-audit-cross-repo 起经 reconcileCrossRepoDeclarations 消费 collectRepoActual 内核（runtimeRoot/changeName 传参贯通喂 A 档 reviews 锡点 + notes 锚点档按 anchor.label 动态文案）；buildDepsBatches 的 pytest 运行器提取自 2026-10-21-deps-batch-runner-flags 起保留模块命令尾随 flag——新导出 `extractRunnerTrailingFlags({command, runner})` 纯函数（裸 flag/含等号一体/已知吃值 flag 连值[引号未闭合消费到闭合，-k "a and b" 形态]保留；位置参数[原命令文件面]丢弃由批重定基文件面替代；白名单外吃值 flag 的值按位置参数丢弃温和退化；runner 缺席/无 flag 返回 ''），hits 命中 pyRunner 追加该串（dsh 0ff6f1c8 补充诊断取证：提取正则「截到 pytest 为止」曾静默吞掉 local.yaml 的 -q --no-cov -n auto——deps(auto-py) 批 124 文件单核串行 1183s vs 同仓全量带 -n auto 357s，六轮累计空耗约 1h）；无尾随 flag 命令逐字不变、缺省不注入并行 flag（尊重显式配置）；jsxRunner（vitest/jest）提取路径同变更显式不动；test/deps-batch-runner-flags.test.mjs 直测矩阵 + deps-cwd-prefix.test.mjs ② 契约更新；
+ - `src/verify-probes.js` — verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）+ verify-result.md 骨架与 verify-facts.json 底稿（写入细节见下方 verify-facts v2 节）；探针 3 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②：模块目录主仓在而新测试 untracked 在 worktree 时旧「主仓缺失才回退」不触发 → 假阴「未找到测试文件」；改主仓 ∪ worktree 无条件并集，与探针 5 三根并集同族）。平台模式回显注记（2026-09-10 驾驭小结②）：`formatPlatformPathNote`（pointer 存在时产物回显行尾补「物理写盘在 hub 镜像根 / 主仓同步位置 .sillyspec/changes/<change>/<file>」，本地模式返回空串零变化）+ `writeVerifyFacts` 增 opts.platformNote（纯回显层不进落盘），消「回显镜像路径 / 核对主仓路径」的显示混乱。探针 7 坏 YAML 区分（2026-09-20-taskcard-yaml-hardgate）：parseTaskAcceptance 三态契约 {status: no-frontmatter | invalid-yaml | ok, acceptance, error}（解析归一 src/taskcard-frontmatter.js 单一源），坏卡条目挂 fmError、renderProbe7Lines 优先渲染「frontmatter 非法 YAML（file:行:列 message）」行与真无 acceptance 防御行区分——假防御文案缺陷收口。探针 7 预填判定链重写（2026-10-16-probe7-prefill-noise-fix，消费仓 backend-mem-polling verify 收口四缺陷实证转写——工具缺陷记录见 multi-agent-platform docs/sillyspec/verify-probe7-matrix-prefill-four-defects.md）：七级优先链（①测试名级命中→covered，锚点=测试函数名行[def test_*/class Test*/it(/test(/describe( 行]并引用测试名；②部署/文档类词条目直判 non-testable[条目级，归属在场与否不影响]；③无归属→uncovered；④候选>PROBE7_CANDIDATE_CAP(5) 且无①收窄→uncovered 交人工；⑤正文级命中→partial 封顶[关键词首现行号锚点废除——docstring 里的 config 字样冒充 docker 配额验收证据的空心锚根除]；⑥同波次新增/修改归属测试[review changedFiles wide 口径，嵌套 tests/ 覆盖]零字面命中→covered+待人工复核[真 covered 误标 partial 修复]；⑦零命中→partial）；归属源收窄：全条目命中 NONTESTABLE 正则的卡跳过 FR 关联回归候选池注入（compose/Dockerfile 卡经回退池整池 join 单格 130+ 文件清单根除）；命中提示列 5 帽+归属列折叠文案改交人工；readReviewChangedTestFiles 增 wide 选项（缺省 test/ 前缀零变化）；新测试 test/probe7-prefill-noise.test.mjs（6 用例）
+ - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
+diff --git a/.sillyspec/docs/sillyspec/modules/machine-interface.changelog.md b/.sillyspec/docs/sillyspec/modules/machine-interface.changelog.md
+index 85fe281c..b9955c77 100644
+--- a/.sillyspec/docs/sillyspec/modules/machine-interface.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/machine-interface.changelog.md
+@@ -1,3 +1,4 @@
+ - 2026-09-21-r5-efficiency-batch3 | P1 gate --full 只读预检档：verify/execute 补 --done 独有面（reconcile 只读+stage review 探测），默认档零变化。
+ - 2026-10-14-gate-verify-apiface-preflight | gate verify 预检的接口锚点核对消费 facts.apiFace，但其唯一生产者是 run verify --
+ - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
++- 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index cf1ef7d0..14fcfe11 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -73,3 +73,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
+ - 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费
+ - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
++- 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 12a1b549..262e0b0e 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -355,7 +355,7 @@ export function synthesizeReusedFailedCheck(record) {
+   const t = (record && record.testResult) || {}
+   return {
+     status: 'failed',
+-    reason: `♻️ 复用上次失败实测（失败签名未变：代码指纹/豁免面/快照口径全等${record && record.ranAt ? `，实测于 ${record.ranAt}` : ''}，免重跑）——${(t.reason || '测试失败').split('\n')[0]}。出路：① 修代码 ② 补 known_failures 豁免（均即失配自动重测）③ 环境确已修好：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针入失败签名，环境真变即放行）④ 无条件重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force`,
++    reason: `♻️ 复用上次失败实测（失败签名未变：代码指纹/豁免面/快照口径全等${record && record.ranAt ? `，实测于 ${record.ranAt}` : ''}，免重跑）——${(t.reason || '测试失败').split('\n')[0]}。出路：① 修代码 ② 补 known_failures 豁免（均即失配自动重测）③ 强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（旁路本复用层直接重跑；=force 连 noAI 步失败签名闸一并旁路）`,
+     command: `${t.command || 'commands.test'} (failed-scan-reuse)`,
+     exitCode: typeof t.exitCode === 'number' ? t.exitCode : 1,
+     durationMs: 0,
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 4a53adb1..94677fdf 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2809,6 +2809,64 @@ function inferFullTestCommand(projectRoot) {
+   return null
+ }
+ 
++/**
++ * 运行器尾随 flag 保留（2026-10-21-deps-batch-runner-flags，dsh 0ff6f1c8 补充诊断取证）。
++ * buildDepsBatches 的运行器提取正则「截到 pytest 一词为止」，模块命令（local.yaml modules
++ * 命中）里用户显式配置的尾随 flag（-q --no-cov -n auto 等）被静默丢弃——大依赖批单核
++ * 串行实测 1183s（同仓全量带 -n auto 仅 357s），超时=失败再叠整轮重跑，六轮累计空耗约 1h。
++ *
++ * 本函数从命令串中 runner 词之后、段边界（& | ; 或串尾）之前的 token 流里保留 flag：
++ * - 裸 flag（-q/--no-cov）与含等号一体 flag（--cov-report=xml）整 token 保留；
++ * - 已知吃值 flag（-n/--numprocesses/-k/-m/--maxfail/--timeout/--durations/--junitxml/-p/
++ *   --config/--reporter 等）连同其值保留；值 token 带未闭合引号时消费到引号闭合（-k "a and b"）；
++ * - 位置参数（不以 - 开头且非吃值 flag 之值——原命令的文件/目录面）丢弃：批文件面由
++ *   buildDepsBatches 重定基供给，混入会跑面失控（目录参数把整个目录收进来，子集退化全量）。
++ * 白名单外吃值 flag 的值按位置参数丢弃（如 --cov-report xml 丢 xml 留 --cov-report）——
++ * 温和退化不炸批；漏网成本是性能/报告形态，不是假绿假红。
++ * fail-open：runner 不在命令中/无 flag → ''（调用方拼接零变化）。
++ * @returns {string} 保留 flag 串（含前导空格）；无可保留返回 ''
++ */
++const RUNNER_VALUE_FLAGS = new Set([
++  '-n', '--numprocesses', '-k', '-m', '--maxfail', '--timeout', '--durations',
++  '--junitxml', '--junit-xml', '-p', '--rootdir', '--config', '--reporter', '--reporters',
++])
++export function extractRunnerTrailingFlags({ command, runner }) {
++  if (!command || !runner) return ''
++  const cmd = String(command)
++  const runnerStr = String(runner)
++  const runnerIdx = cmd.indexOf(runnerStr)
++  if (runnerIdx === -1) return ''
++  let after = cmd.slice(runnerIdx + runnerStr.length)
++  const segEnd = after.search(/[&|;]/)
++  if (segEnd !== -1) after = after.slice(0, segEnd)
++  const tokens = after.trim().split(/\s+/).filter(Boolean)
++  if (tokens.length === 0) return ''
++  const kept = []
++  for (let i = 0; i < tokens.length; i++) {
++    const t = tokens[i]
++    if (!t.startsWith('-')) continue // 位置参数（原命令文件面）丢弃
++    kept.push(t)
++    const bare = t.replace(/^["']+|["']+$/g, '')
++    if (bare.includes('=')) continue // 含等号一体值，无需吃下一 token
++    if (!RUNNER_VALUE_FLAGS.has(bare) || i + 1 >= tokens.length) continue
++    const value = tokens[i + 1]
++    kept.push(value)
++    i++
++    // 值 token 引号未闭合（-k "fast and not slow"）→ 消费到引号闭合（空格分隔的多 token 值）
++    const openQ = (value.match(/["']/g) || []).length
++    if (value.startsWith('"') || value.startsWith("'")) {
++      let quotes = openQ
++      while (quotes % 2 === 1 && i + 1 < tokens.length) {
++        const rest = tokens[i + 1]
++        kept.push(rest)
++        quotes += (rest.match(/["']/g) || []).length
++        i++
++      }
++    }
++  }
++  return kept.length ? ' ' + kept.join(' ') : ''
++}
++
+ /**
+  * deps(auto) 运行器推断 + 公平组卷（2026-09-24 R10 实证修复）：
+  * - R10 缺陷①：deps 一律 `node --test` 执行——.py 依赖测试全 SyntaxError 伪败（只能靠豁免放行）。
+@@ -2898,11 +2956,16 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   // 整批 exit 2 假败）。每个 .py 文件按最近 pyproject/uv.lock 祖先归组（与 runner 推断
+   // 同款就近原则——monorepo 子项目各自独立环境）；组内共用该包根的 runner 命令与重定基。
+   // 显式命中命令串（hits）优先且整批共用（用户显式配置语义优先，不拆组）。
++  // 尾随 flag 保留（2026-10-21-deps-batch-runner-flags，dsh 0ff6f1c8 补充诊断取证）：提取
++  // 正则「截到 pytest 一词为止」曾把 local.yaml 模块命令显式配置的 -q --no-cov -n auto 静默
++  // 丢弃——deps(auto-py) 批 124 文件（2081 例）单核串行 1183s，同仓全量 4771 例带 -n auto
++  // 仅 357s（6-10 倍差），600s 超时截在 69% 判失败、六轮累计空耗约 1h。runner 提取后追加
++  // extractRunnerTrailingFlags 保留 flag 串（位置参数仍丢弃——批文件面由重定基供给）。
+   let pyRunner = null
+   for (const h of hits || []) {
+     const cmd = String(h.test || '')
+     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
+-    if (m) { pyRunner = m[1].trim(); break }
++    if (m) { pyRunner = m[1].trim() + extractRunnerTrailingFlags({ command: cmd, runner: m[1] }); break }
+   }
+   // pyGroups: Map<dirKey, { files, command }>；dirKey null = 主仓根（无 cd 前缀）
+   const pyGroups = new Map()
+diff --git a/test/deps-batch-runner-flags.test.mjs b/test/deps-batch-runner-flags.test.mjs
+new file mode 100644
+index 00000000..49698a85
+--- /dev/null
++++ b/test/deps-batch-runner-flags.test.mjs
+@@ -0,0 +1,108 @@
++/**
++ * deps 批运行器尾随 flag 保留回归（2026-10-21-deps-batch-runner-flags）。
++ *
++ * dsh 0ff6f1c8 补充诊断（22:53）取证：buildDepsBatches 的 pytest 运行器提取正则「截到
++ * pytest 一词为止」，local.yaml 模块命令显式配置的 `-q --no-cov -n auto` 被静默丢弃——
++ * multi-agent-platform deps(auto-py) 批 124 文件（2081 例）单核串行 1183s，同仓全量
++ * 4771 例带 -n auto 仅 357s（同规模差 6-10 倍）；600s 超时截在 69% 判失败，六轮验证
++ * 累计空耗约 1 小时。本文件锁死：flag 保留、位置参数丢弃、无 flag 命令零变化、
++ * 重定基/cd 前缀语义不破、jsx 提取路径不动。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { execSync } from 'node:child_process'
++
++const ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
++const u = (p) => new URL('file:///' + p.replace(/\\/g, '/').replace(/^\/*/, '')).href
++const load = async (rel) => await import(u(join(ROOT, rel).replace(/\\/g, '/')))
++
++const { extractRunnerTrailingFlags, buildDepsBatches } = await load('src/verify-postcheck.js')
++
++// ── 纯函数矩阵 ─────────────────────────────────────────────────────────────
++test('extractRunnerTrailingFlags：裸 flag/含等号一体/吃值 flag 连值/位置参数丢弃矩阵', () => {
++  // 高频主路径：-n auto 吃值 + 裸 flag 串 + 目录位置参数丢弃
++  assert.equal(
++    extractRunnerTrailingFlags({ command: 'cd backend && uv run pytest -q --no-cov -n auto app/modules/daemon/tests', runner: 'cd backend && uv run pytest' }),
++    ' -q --no-cov -n auto',
++    '-n auto 值保留、路径位置参数丢弃',
++  )
++  // 含等号一体 flag
++  assert.equal(
++    extractRunnerTrailingFlags({ command: 'uv run pytest --cov-report=xml -q', runner: 'uv run pytest' }),
++    ' --cov-report=xml -q',
++    '含等号 flag 整 token 保留',
++  )
++  // 其他吃值 flag 连值
++  assert.equal(
++    extractRunnerTrailingFlags({ command: 'pytest -k "fast and not slow" -m unit --maxfail 3', runner: 'pytest' }),
++    ' -k "fast and not slow" -m unit --maxfail 3',
++    '-k 表达式（带引号值）/-m/--maxfail 值保留',
++  )
++  // 无尾随 flag → ''（零变化路径）
++  assert.equal(extractRunnerTrailingFlags({ command: 'cd backend && uv run pytest', runner: 'cd backend && uv run pytest' }), '', '无尾随 flag 返回空串')
++  // runner 不在命令中 → ''（防御）
++  assert.equal(extractRunnerTrailingFlags({ command: 'npm test', runner: 'pytest' }), '', 'runner 缺席返回空串')
++  // 段边界防御：runner 之后跟 && 的下一段命令不泄入
++  assert.equal(
++    extractRunnerTrailingFlags({ command: 'cd backend && uv run pytest -n auto && cd .. && echo done', runner: 'cd backend && uv run pytest' }),
++    ' -n auto',
++    '段边界（&&）之后的 token 不泄入',
++  )
++  // 未知吃值 flag 的值被按位置参数丢弃（裸 flag 留下——温和退化不炸批）
++  assert.equal(
++    extractRunnerTrailingFlags({ command: 'pytest --cov-report xml tests/', runner: 'pytest' }),
++    ' --cov-report',
++    '白名单外吃值 flag 的值词丢弃（裸 flag 保留）',
++  )
++})
++
++// ── buildDepsBatches 集成 ───────────────────────────────────────────────────
++function makeFixtureRepo() {
++  const dir = mkdtempSync(join(tmpdir(), 'dbf-'))
++  execSync('git init -q', { cwd: dir })
++  mkdirSync(join(dir, 'backend', 'app', 'tests'), { recursive: true })
++  writeFileSync(join(dir, 'backend', 'app', 'tests', 'test_a.py'), 'def test_a():\n    assert 1\n')
++  writeFileSync(join(dir, 'backend', 'app', 'tests', 'test_b.py'), 'def test_b():\n    assert 1\n')
++  return dir
++}
++
++test('buildDepsBatches：-n auto 保留 + 重定基不破 + 无 flag 命令逐字不变 + jsx 路径不动', () => {
++  const dir = makeFixtureRepo()
++  try {
++    const files = ['backend/app/tests/test_a.py', 'backend/app/tests/test_b.py']
++    // ① 含 -n auto 的命中命令：批命令保留 flag 且文件面重定基（backend/ 剥离）
++    const withFlags = buildDepsBatches({
++      cwd: dir,
++      deps: files,
++      hits: [{ test: 'cd backend && uv run pytest -q --no-cov -n auto app/tests' }],
++    })
++    const pyBatch1 = withFlags.find((b) => b.short === 'py')
++    assert.ok(pyBatch1, 'py 批在场')
++    assert.match(pyBatch1.command, /^cd backend && uv run pytest -q --no-cov -n auto app\/tests\/test_a\.py/, '批命令 = runner + 保留 flag + 重定基文件面')
++    assert.ok(!/app\/tests app\//.test(pyBatch1.command), '原命令位置参数（app/tests）不混入')
++    // ② 无尾随 flag 的命中命令：批命令与现行逐字一致（缺省不补 flag）
++    const noFlags = buildDepsBatches({
++      cwd: dir,
++      deps: files,
++      hits: [{ test: 'cd backend && uv run pytest app/tests' }],
++    })
++    const pyBatch2 = noFlags.find((b) => b.short === 'py')
++    assert.ok(pyBatch2.command.startsWith('cd backend && uv run pytest app/tests/test_a.py'), '无 flag 命令零变化（不注入任何缺省 flag）')
++    assert.ok(!/ -n /.test(pyBatch2.command), '未配置并行就不出现 -n')
++    // ③ vitest 命中命令（jsx 路径）：本变更不动——runner 提取保持「截到 vitest/jest 词」现状
++    const jsx = buildDepsBatches({
++      cwd: dir,
++      deps: ['frontend/src/x.test.tsx'],
++      hits: [{ test: 'cd frontend && npx vitest run --reporter=tap' }],
++    })
++    const jsxBatch = jsx.find((b) => b.short === 'jsx')
++    if (jsxBatch) {
++      assert.doesNotMatch(jsxBatch.command, /--reporter=tap/, 'jsx 提取路径本变更保持不动（flag 不保留也不报错）')
++    }
++  } finally {
++    try { rmSync(dir, { recursive: true, force: true }) } catch {}
++  }
++})
+diff --git a/test/deps-cwd-prefix.test.mjs b/test/deps-cwd-prefix.test.mjs
+index 2b4fad28..97fcd455 100644
+--- a/test/deps-cwd-prefix.test.mjs
++++ b/test/deps-cwd-prefix.test.mjs
+@@ -22,9 +22,13 @@ test('① cd 前缀保留 + 路径重定基（R15/R16 病灶的正解形态）',
+   assert.ok(py.command.includes('tests/test_a.py') && !py.command.includes('backend/tests/test_a.py'), '路径按 backend/ 重定基')
+ })
+ 
+-test('② 裸 pytest 段命令：行为不变（回归保护）', () => {
++test('② 裸 pytest 段命令：位置参数丢弃 + 尾随 flag 保留（2026-10-21-deps-batch-runner-flags 起新契约）', () => {
+   const b = buildDepsBatches({ deps: ['tests/test_a.py'], changedFiles: [], hits: [{ test: 'pytest -q tests' }] })
+-  assert.match(b[0].command, /^pytest tests\/test_a\.py$/)
++  // 原命令位置参数 tests 丢弃（批文件面替代）、显式 flag -q 保留（此前被「截到 pytest 为止」吞掉）
++  assert.match(b[0].command, /^pytest -q tests\/test_a\.py$/)
++  // 无任何尾随 flag 的命令仍逐字不变（缺省不注入 flag）
++  const b2 = buildDepsBatches({ deps: ['tests/test_a.py'], changedFiles: [], hits: [{ test: 'pytest' }] })
++  assert.match(b2[0].command, /^pytest tests\/test_a\.py$/)
+ })
+ 
+ test('③ 无命中模块兜底 + ④ js 组不受影响', () => {
+diff --git a/test/verify-reuse-large-repo.test.mjs b/test/verify-reuse-large-repo.test.mjs
+index 88759f12..f86ea1c1 100644
+--- a/test/verify-reuse-large-repo.test.mjs
++++ b/test/verify-reuse-large-repo.test.mjs
+@@ -225,7 +225,8 @@ test('synthesizeReusedFailedCheck：gates/machine-interface 消费的合成 fail
+   assert.equal(check.status, 'failed', '合成结果保持 failed——阻断语义不因复用放水')
+   assert.match(check.reason, /♻️ 复用上次失败实测/, '披露复用来源')
+   assert.match(check.reason, new RegExp(ranAt.slice(0, 10)), '带上次实测时间')
+-  assert.match(check.reason, /SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force/, '出路含无条件重跑逃生阀')
++  assert.match(check.reason, /SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（旁路本复用层直接重跑/, '出路含强制重跑逃生阀（consult 层无签名比对——文案与判定链一致，评审 P3-2 修正）')
++  assert.doesNotMatch(check.reason, /环境探针入失败签名/, '不再声明 consult 层没有的环境探针语义')
+   assert.match(check.command, /\(failed-scan-reuse\)$/, 'command 标注复用口径')
+   assert.equal(check.exitCode, 1)
+   assert.equal(check.reusedFromRecord, true)

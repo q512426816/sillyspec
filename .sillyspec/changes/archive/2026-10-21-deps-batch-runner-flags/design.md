@@ -23,7 +23,10 @@ created_at: 2026-10-21T15:07:47.079Z
 ### 文件变更清单
 
 - src/verify-postcheck.js（extractRunnerTrailingFlags 新导出 + pyRunner 提取点追加 flag 串）
+- src/run/verify-quality-scan.js（D-001：synthesizeReusedFailedCheck 出路③文案修正——consult 层无环境探针签名）
 - test/deps-batch-runner-flags.test.mjs（新增直测）
+- test/deps-cwd-prefix.test.mjs（② 契约更新：位置参数丢弃 + 尾随 flag 保留的新语义锚）
+- test/verify-reuse-large-repo.test.mjs（D-001 文案跟随：断言锁新出路文案 + 反向锁死环境探针声明不复活）
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 

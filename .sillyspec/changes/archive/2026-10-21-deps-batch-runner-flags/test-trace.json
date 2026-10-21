@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-deps-batch-runner-flags",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-01",
+      "tests": [
+        "test/deps-batch-runner-flags.test.mjs「extractRunnerTrailingFlags：裸 flag/含等号 flag/吃值 flag 值/位置参数丢弃矩阵」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-deps-batch-runner-flags"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-02",
+      "tests": [
+        "test/deps-batch-runner-flags.test.mjs「buildDepsBatches：-n auto 保留 + 重定基不破 + 无 flag 命令逐字不变 + jsx 路径不动」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-deps-batch-runner-flags"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-03",
+      "tests": [
+        "test/deps-batch-runner-flags.test.mjs「回归面：verify-postcheck 既有相关用例复跑 0 失败」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-deps-batch-runner-flags"
+    }
+  ]
+}
