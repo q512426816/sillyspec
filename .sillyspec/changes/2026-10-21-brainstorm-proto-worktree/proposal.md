@@ -1,0 +1,29 @@
+---
+author: flow-machine-draft
+created_at: 2026-10-21T04:01:24.321Z
+---
+# 提案书（Proposal）— 2026-10-21-brainstorm-proto-worktree
+
+## 动机
+
+任务原话转写：头脑风暴原型期早进工作树协议
+
+动机：长探索变更常在头脑风暴预段做真原型（multi-agent-platform 仓 2026-10-20-session-page-dsh-alignment 实证：原型未提交堆在主树，与并行变更/中途发版冲突——发版 pre-push lint 会被打红、他会话 worktree create 的 overlay 会吸收脏面）。已评估结论：文档留主树（CLI 自动锚定 + spec-sync 已剪 worktrees）+ 原型早进 worktree 是既有设计分工，缺的只是：①hook 阶段门拦 brainstorm 期 worktree 内源码 Write/Edit（Bash 反而全放行，worktree-guard.js:808 阶段门先于位置门）；②创建时机与复用协议未成文。
+
+成功标准：
+- 头脑风暴阶段：已注册 worktree（.sillyspec/.runtime/worktrees/<变更名>/ meta.json 登记的 worktreePath）内的源码 Write/Edit 不再被阶段门拦截；主树源码写入维持拦截，且 brainstorm 拦截提示含「变更 key 已出 → worktree create → 进树写原型、文档照常主树」指引
+- 已在 worktree 内（含 native-worktree 复用形态）时不重复创建——复用既有（现状核验+测试固化）
+- 变更 key 产生后建的 worktree，后续 run execute 幂等复用不重建（现状核验+测试固化）
+
+## 变更范围
+
+按成功标准机械推导，共 3 条验收面：
+1. 头脑风暴阶段：已注册 worktree（.sillyspec/.runtime/worktrees/<变更名>/ meta.json 登记的 worktreePath）内的源码 Write/Edit 不再被阶段门拦截；主树源码写入维持拦截，且 brainstorm 拦截提示含「变更 key 已出 → worktree create → 进树写原型、文档照常主树」指引
+2. 已在 worktree 内（含 native-worktree 复用形态）时不重复创建——复用既有（现状核验+测试固化）
+3. 变更 key 产生后建的 worktree，后续 run execute 幂等复用不重建（现状核验+测试固化）
+
+## 成功标准（可验证）
+
+1. 头脑风暴阶段：已注册 worktree（.sillyspec/.runtime/worktrees/<变更名>/ meta.json 登记的 worktreePath）内的源码 Write/Edit 不再被阶段门拦截；主树源码写入维持拦截，且 brainstorm 拦截提示含「变更 key 已出 → worktree create → 进树写原型、文档照常主树」指引
+2. 已在 worktree 内（含 native-worktree 复用形态）时不重复创建——复用既有（现状核验+测试固化）
+3. 变更 key 产生后建的 worktree，后续 run execute 幂等复用不重建（现状核验+测试固化）
