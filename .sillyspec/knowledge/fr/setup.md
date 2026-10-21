@@ -2301,3 +2301,36 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-20-scoped-verify-policy
   status: active
+
+## FR-setup-129 local.yaml 标 unavailable 后 flow done 收口 lint 子步 skipped 且理由可见
+变更：2026-10-21-lint-to-prepush
+状态：active
+摘要：标 unavailable 后收口跳过
+全文：.sillyspec/changes/archive/2026-10-21-lint-to-prepush/requirements.md#FR-01
+最近确认：af6d334b7c0080ccbf67daa13dfa7da1781b11f9
+
+## FR-setup-130 .husky/pre-push 零改动（仍跑 npm run lint + docs gate）
+变更：2026-10-21-lint-to-prepush
+状态：active
+摘要：钩子零改动
+全文：.sillyspec/changes/archive/2026-10-21-lint-to-prepush/requirements.md#FR-02
+最近确认：af6d334b7c0080ccbf67daa13dfa7da1781b11f9
+
+## FR-setup-131 AGENTS.md 与模板规则 4 保持逐字一致且措辞含 unavailable 跳过语义，test-runner-failed-face.test.mjs ③ 更新后绿
+变更：2026-10-21-lint-to-prepush
+状态：active
+摘要：双文件一致与测试同步
+全文：.sillyspec/changes/archive/2026-10-21-lint-to-prepush/requirements.md#FR-03
+最近确认：af6d334b7c0080ccbf67daa13dfa7da1781b11f9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-lint-to-prepush:flow:测试绑定FR-03
+  tests: test/test-runner-failed-face.test.mjs「③ AGENTS 双文件自验口径句逐字一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-lint-to-prepush
+  status: active

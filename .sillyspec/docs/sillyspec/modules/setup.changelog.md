@@ -31,3 +31,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-19 | 2026-10-19-init-drop-gemini-opencode | init 移除 gemini/opencode 工具支持 |
 | 2026-10-19 | 2026-10-19-thin-order-canon | 轻量道顺序正典与文案面统一 |
 | 2026-10-20 | 2026-10-20-scoped-verify-policy | 用户裁决（工具侧钉口径，不靠 agent 自觉）：每变更收口手跑全量测试是重复保险费（实测 3.5-… |
+| 2026-10-21 | 2026-10-21-lint-to-prepush | 收口 lint 移交 pre-push/CI 门 |

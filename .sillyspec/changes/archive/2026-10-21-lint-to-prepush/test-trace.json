@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-lint-to-prepush",
+  "rows": [
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-lint-to-prepush:flow:测试绑定FR-03",
+      "tests": [
+        "test/test-runner-failed-face.test.mjs「③ AGENTS 双文件自验口径句逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-lint-to-prepush"
+    }
+  ]
+}
