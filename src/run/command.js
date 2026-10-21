@@ -1739,7 +1739,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   const changed = await ensureStageSteps(progress, stageName, cwd, specRoot)
   if (changed && effectiveChange) {
     pm._write(cwd, progress, effectiveChange)
-    triggerSync(cwd, effectiveChange, platformOpts)
+    // 只读查看（--status）不推平台（2026-10-21-protocol-tax task-06 / FR-06）：重播种是本地
+    // 自愈写（保留），平台同步面归写命令与 bg-sync——status 的同步语义对齐 progress show。
+    if (!isStatus) triggerSync(cwd, effectiveChange, platformOpts)
     progress = pm.read(cwd, effectiveChange) || progress
   }
   if (changed && _preReseedPending && (isDone || isSkip || isWait)

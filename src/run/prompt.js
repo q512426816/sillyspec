@@ -946,7 +946,10 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
   // 网络阻塞；未连接平台静默 / quick 会话降级跳过 / 8s 熔断 / 失败只 warn，契约全在
   // triggerStepStartSync 内（shared.js docstring 即本接线点的说明），Node 事件循环保证在飞
   // POST 落地后进程才退出。
-  triggerStepStartSync(cwd, changeName, platformOpts)
+  // 例外（2026-10-21-protocol-tax task-06 / FR-06）：status 是只读查看阶段，不推——消费仓
+  // 实测该推送（进程退出等在飞 POST）占 status 命令耗时的大头（10-20s 量级，平台慢时更甚）；
+  // 查看态无步骤起点语义，平台停滞信号的新鲜度交给写命令。
+  if (stageName !== 'status') triggerStepStartSync(cwd, changeName, platformOpts)
 
   // ── 阶段产物模板落盘（R16 减负批次 2026-09-24）：模板出上下文——prompt 只留指针，模板
   //    幂等落盘 <specBase>/.runtime/templates/ 供 agent 写产物前 Read 一次。best-effort：

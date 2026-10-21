@@ -1148,6 +1148,10 @@ async function triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts = {},
  * 每任务上报指引）覆盖。
  */
 export async function triggerStepStartSync(cwd, changeName, platformOpts = {}, opts = {}) {
+  return timedAsync('sync', () => triggerStepStartSyncImpl(cwd, changeName, platformOpts, opts))
+}
+
+async function triggerStepStartSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
   try {
     // 无 changeName（渲染层个别路径/测试 fixture）直接静默——sync(null) 只会打 warn 噪音
     if (!changeName) return
@@ -1235,6 +1239,10 @@ export async function triggerPull(cwd, changeName, platformOpts = {}, opts = {})
  * 供 index.js 在 stage 命令（run/--done/archive）与 approve 决策点注入一行调用。
  */
 export async function triggerPullActiveChange(cwd, platformOpts = {}) {
+  return timedAsync('sync', () => triggerPullActiveChangeImpl(cwd, platformOpts))
+}
+
+async function triggerPullActiveChangeImpl(cwd, platformOpts = {}) {
   // 平台模式走自己的链路，跳过；自指回环（repo-native junction）按本地模式处理
   if (isPlatformMode(platformOpts, cwd)) return
   // 先检查是否连接平台：未连接直接 return，避免 _ensureDB 在无 local.yaml 的 cwd 创建空 DB 污染

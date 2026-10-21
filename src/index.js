@@ -3329,8 +3329,13 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
       // 下行 pull：stage 命令（run/--done，含 archive）启动时拉一次（task-10 / D-009 / FR-04）
       // 不在每步 pull，仅低频边界点；未连接平台静默跳过
-      const { triggerPullActiveChange } = await import('./run/shared.js')
-      await triggerPullActiveChange(effectiveDir)
+      // 例外（2026-10-21-protocol-tax task-06 / FR-06）：status 只读查看不 pull——消费仓实测
+      // pull 占 status 6.3s 的大头（profile 71% idle 等网络）；本地 DB 是查看态事实源
+      //（progress show 同款语义——它从不 pull），新鲜度交给写命令与 daemon/bg-sync。
+      if (command !== 'status') {
+        const { triggerPullActiveChange } = await import('./run/shared.js')
+        await triggerPullActiveChange(effectiveDir)
+      }
       await runCommand(stageArgs, effectiveDir, specDir, { json })
       break
     }
