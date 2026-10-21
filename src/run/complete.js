@@ -2146,7 +2146,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
  * 形态：k1=v1,k2=v2；值含逗号用引号 k="v,含逗号"（引号包裹段内逗号不切分，引号字符本身不保留）。
  * 纯函数：解析失败返回 null（调用方 exit 2）；空键/空值/无等号 token 均视为格式错。
  */
-export function parseAnswersSpec(spec) {
+function parseAnswersSpec(spec) {
   const parts = []
   let cur = ''
   let inQuote = false

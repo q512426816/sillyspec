@@ -17,10 +17,6 @@ const SEGMENTS = ['sync', 'gates', 'render', 'state-write']
 const enabled = process.env.DEBUG_SILLYSPEC_TIMING === '1'
 const acc = new Map()
 
-export function timingEnabled() {
-  return enabled
-}
-
 function record(segment, ms) {
   acc.set(segment, (acc.get(segment) || 0) + ms)
 }
@@ -45,7 +41,7 @@ export async function timedAsync(segment, fn) {
   }
 }
 
-export function emitTimingIfEnabled(stream = process.stderr) {
+function emitTimingIfEnabled(stream = process.stderr) {
   if (!enabled) return
   const parts = SEGMENTS.map((s) => {
     const ms = acc.get(s)
