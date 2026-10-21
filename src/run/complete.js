@@ -724,8 +724,16 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
     // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
     // 判定经 hasPendingVerifyScanStep：DB 步骤行只有 {name,status}（_cliAction 不持久化——评审
     // P1 修复：初版直接读 s._cliAction 恒 false 死代码），按 stageRegistry 定义索引对齐判。
+    // 资格先行（2026-10-21-verify-reuse-large-repo FR-02）：isVerifyBatchEligible 纯判定（只查
+    // 不改）先于亲测——批量不会触发时（报告未就绪/锚定步未过）中间步 --done 不再预跑整轮实测
+    // （dsh 0ff6f1c8 取证：step 3/4/5 各烧一轮 10~13.5 分钟全量实测只为随后单步推进）。资格成立
+    // 时行为不变：先亲测后批量；detectVerifyBatchFinish 内部全量复检不消费本判定，无 TOCTOU。
     let _skipBatch = false
-    if (hasPendingVerifyScanStep(stageName, steps)) {
+    const _batchEligible = isVerifyBatchEligible({ changeName, specBase, steps })
+    if (!_batchEligible.eligible && hasPendingVerifyScanStep(stageName, steps)) {
+      console.log(`   ℹ️ 批量对齐未就绪（${_batchEligible.reason}）——亲测归质量扫描步与收口门，本步不预跑`)
+    }
+    if (_batchEligible.eligible && hasPendingVerifyScanStep(stageName, steps)) {
       try {
         const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
         console.log('   🧪 批量对齐面含 noAI 亲测步——先亲测（幂等，有记录秒回）…')
@@ -1768,28 +1776,46 @@ export function hasPendingVerifyScanStep(stageName, steps) {
   }
 }
 
-export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
-  if (!changeName) return { batched: false, aligned: 0 }
+/**
+ * 批量资格纯判定（2026-10-21-verify-reuse-large-repo FR-02，从 detectVerifyBatchFinish 抽出）：
+ * 只查不改（不 mutating 步骤状态）——verify --done 批量对齐块用它做「预跑亲测」的前置闸：
+ * 资格不成立时中间步 --done 不预跑 executeVerifyQualityScan（实测归亲测步自身与收口门；
+ * dsh 0ff6f1c8 取证：报告未就绪的每个中间步 --done 都整轮实测 10~13.5 分钟纯浪费）。
+ * 判据与 detectVerifyBatchFinish 逐字同源（那边消费本函数，理由串不变）。
+ */
+export function isVerifyBatchEligible({ changeName, specBase, steps }) {
+  if (!changeName) return { eligible: false, reason: '无 changeName' }
   try {
     const changeDir = join(specBase, 'changes', changeName)
     const reportPath = join(changeDir, 'verify-result.md')
-    if (!existsSync(reportPath)) return { batched: false, aligned: 0, reason: 'verify-result.md 缺席（报告未写不批量）' }
+    if (!existsSync(reportPath)) return { eligible: false, reason: 'verify-result.md 缺席（报告未写不批量）' }
     const report = readFileSync(reportPath, 'utf8')
     if (!/结论枚举[：:]\s*`?\s*(PASS WITH NOTES|PASS|FAIL)/.test(report)) {
-      return { batched: false, aligned: 0, reason: '结论枚举未填（待填占位不批量）' }
+      return { eligible: false, reason: '结论枚举未填（待填占位不批量）' }
     }
     if (!existsSync(join(changeDir, 'verify-facts.json'))) {
-      return { batched: false, aligned: 0, reason: 'verify-facts.json 缺席（探针未跑不批量）' }
+      return { eligible: false, reason: 'verify-facts.json 缺席（探针未跑不批量）' }
     }
-    const firstPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
-    if (firstPendingIdx === -1) return { batched: false, aligned: 0, reason: '无剩余 step' }
+    const firstPendingIdx = (steps || []).findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+    if (firstPendingIdx === -1) return { eligible: false, reason: '无剩余 step' }
     if (firstPendingIdx < 2) {
-      return { batched: false, aligned: 0, reason: '锚定步未过（step 1-2 须逐步完成，语义锚定不批量）' }
+      return { eligible: false, reason: '锚定步未过（step 1-2 须逐步完成，语义锚定不批量）' }
     }
+    return { eligible: true }
+  } catch (e) {
+    return { eligible: false, reason: `批量资格判定异常（fail-open 不批量）：${e && e.message ? e.message : e}` }
+  }
+}
+
+export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
+  if (!changeName) return { batched: false, aligned: 0 }
+  const pre = isVerifyBatchEligible({ changeName, specBase, steps })
+  if (!pre.eligible) return { batched: false, aligned: 0, reason: pre.reason }
+  try {
     const now = new Date().toLocaleString('zh-CN', { hour12: false })
     let aligned = 0
     for (const step of steps) {
-      if (step.status === 'pending' || step.status === 'in-progress') {
+      if (step.status === 'pending' || s_status_pending(step)) {
         step.status = 'completed'
         step.completedAt = now
         step._batchAligned = true // 乐观预标戳：gate 失败 rollback 一并回滚（execute 同款）
@@ -2153,16 +2179,31 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     process.exit(1)
   }
 
-  if (!answer && answersSpec == null) {
-    console.error('❌ --continue 需要 --answer 参数（批量回填用 --answers k1=v1,k2=v2）')
+  // --answers 格式错 fail-fast（先于幂等分支：格式错是用法错误，与等待态无关——
+  // 幂等放行的是「合法调用但无等待对象」，不是「任何调用都吞」）
+  if (answersSpec != null && parseAnswersSpec(answersSpec) == null) {
+    console.error('❌ --answers 格式无法解析（期望 k1=v1,k2=v2 形态，值含逗号用引号 k="v,含逗号"）')
     process.exit(2) // 用法错 → exit 2
   }
 
   // 查找 waiting 的步骤
   const waitingSteps = stageData.steps.map((s, i) => ({ ...s, idx: i })).filter(s => s.status === 'waiting')
+  // ── 幂等 no-op（2026-10-21-protocol-tax task-05 / FR-05）──
+  // 无 waiting 步骤时 --continue 从 exit=1 报错改为 exit 0 + 指引行：会话考古（z1）实证
+  // 4 次「无等待步骤」失败全部来自 agent 在两次 --wait 之间干活后的链式防御写法误撞——
+  // 等待态不存在本身不是协议错误，失败化只迫使 agent 多一轮试错。答案不落盘（无对象可回填）。
   if (waitingSteps.length === 0) {
-    console.error(`没有处于等待状态的步骤（阶段 ${stageName} 当前无 waiting 步骤，--continue 无目标）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
-    process.exit(1)
+    console.log(`ℹ️ 当前无等待中的步骤，--continue 幂等跳过（${answersSpec != null ? '--answers 未回填任何答案' : '--answer 未落盘'}）。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
+    const firstActive = stageData.steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked')
+    const firstPending = stageData.steps.findIndex(s => s.status === 'pending')
+    return { stageCompleted: false, currentIdx: firstActive, nextPendingIdx: firstPending }
+  }
+
+  // 有 waiting 步骤时 answer 仍是必填（用法错 exit 2）——放在幂等分支之后：裸 --continue
+  // 无等待对象时幂等放行（FR-05），有等待对象时缺答案照旧硬拦（回填语义不容空答案）。
+  if (!answer && answersSpec == null) {
+    console.error('❌ --continue 需要 --answer 参数（批量回填用 --answers k1=v1,k2=v2）')
+    process.exit(2) // 用法错 → exit 2
   }
 
   // ── --answers 批量回填（2026-10-21-protocol-tax task-04 / FR-04）──
