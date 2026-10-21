@@ -166,6 +166,52 @@ async function test5_nativeRecovery() {
   fs.rmSync(d, { recursive: true })
 }
 
+// ── Test 6: linked worktree 内 create 幂等复用（2026-10-21-brainstorm-proto-worktree FR-02）──
+// 「如果本身就在工作树里了，就不用再创建了」：头脑风暴原型协议下 agent 进驻 linked worktree
+// 后再次 create（如 run execute 触发）——meta 已存在必须原样返回，不 overlay 不重建。
+
+async function test6_createInsideWorktreeIdempotent() {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-'))
+  execSync('git init', { cwd: d, stdio: 'pipe' })
+  execSync('git config user.email "test@test.com"', { cwd: d, stdio: 'pipe' })
+  execSync('git config user.name "test"', { cwd: d, stdio: 'pipe' })
+  execSync('git commit --allow-empty -m "init"', { cwd: d, stdio: 'pipe' })
+
+  const wtDir = path.join(d, 'wt')
+  execSync(`git worktree add ${wtDir} -b test-branch`, { cwd: d, stdio: 'pipe' })
+
+  const { WorktreeManager } = await import('../src/worktree.js')
+
+  // 预登记 native meta（模拟此前已在 worktree 内 create 过一次）
+  const changeName = 'proto-change'
+  const metaDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', changeName)
+  fs.mkdirSync(metaDir, { recursive: true })
+  const metaPath = path.join(metaDir, 'meta.json')
+  const meta = {
+    changeName,
+    worktreePath: wtDir,
+    branch: 'test-branch',
+    baseHash: 'deadbeefdeadbeef',
+    mode: 'native-worktree',
+  }
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+  const before = fs.readFileSync(metaPath, 'utf8')
+
+  // 在 linked worktree 内再次 create → 幂等返回既有，不 overlay/重建
+  const wm = new WorktreeManager({ cwd: wtDir })
+  const r = wm.create(changeName)
+
+  assert(pathEq(r.worktreePath, wtDir), `Test 6 FAIL: worktreePath=${r.worktreePath}, expected ${wtDir}`)
+  assert.equal(r.branch, 'test-branch', 'Test 6 FAIL: branch mismatch')
+  assert.equal(r.baseHash, 'deadbeefdeadbeef', 'Test 6 FAIL: baseHash mismatch')
+  assert.equal(r.mode, 'native-worktree', 'Test 6 FAIL: mode mismatch')
+  assert.strictEqual(fs.readFileSync(metaPath, 'utf8'), before, 'Test 6 FAIL: meta.json should be untouched on idempotent reuse')
+
+  console.log('✅ Test 6: create inside linked worktree is idempotent (meta untouched)')
+
+  fs.rmSync(d, { recursive: true, force: true })
+}
+
 // ── Run all ──
 
 const tests = [
@@ -174,6 +220,7 @@ const tests = [
   ['self-overlay blocked', test3_selfOverlayBlocked],
   ['meta idempotent', test4_metaIdempotent],
   ['native recovery', test5_nativeRecovery],
+  ['create-inside-worktree idempotent', test6_createInsideWorktreeIdempotent],
 ]
 
 let passed = 0, failed = 0
