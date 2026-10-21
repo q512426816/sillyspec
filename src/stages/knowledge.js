@@ -631,11 +631,12 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
       '  propose / classify / inbox / graph / stats / renumber',
       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
+      '  redomain-unmapped [--face decisions|fr] [--apply]  unmapped 停车场存量批量清偿（文件锚/覆盖面投票目标域；dry-run 先行）',
       '',
       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
     ]
     for (const l of lines) console.log(l)
-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats'] })
+    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'redomain-unmapped'] })
     return
   }
   const subCommand = args[0] || ''
@@ -651,6 +652,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       return cmdRefresh(dir, args.slice(1), opts)
     case 'propose':
       return cmdPropose(dir, args.slice(1), opts)
+    case 'redomain-unmapped': {
+      // unmapped 停车场存量批量清偿（FR-04，2026-10-21-knowledge-tier-denoise）：decisions 按文件锚
+      // / fr 按来源变更覆盖面投票目标域；缺省 dry-run 报告先行，--apply 幂等迁移（不裸删、冲突跳过）。
+      const mod = await tryImportSubcommandImpl('../redomain-unmapped.js', 'redomain-unmapped.js')
+      if (!mod || typeof mod.cmdRedomainUnmapped !== 'function') {
+        output(false, {}, { code: 'not_implemented', subcommand: 'redomain-unmapped' })
+        return
+      }
+      return mod.cmdRedomainUnmapped(dir, args.slice(1), opts)
+    }
     case 'graph': {
       // 知识图谱查询面（2026-10-08-knowledge-graph）：neighbors/path/impact/orphans/dangling，
       // --edges 边型筛选；全 JSON 出口（与 search/validate 同族）。
@@ -759,7 +770,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       output(false, {}, {
         code: 'unknown_subcommand',
         subCommand: subCommand,
-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
+        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber', 'redomain-unmapped'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
       })
   }
 }

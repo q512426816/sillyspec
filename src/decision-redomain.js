@@ -33,8 +33,9 @@ function newDomainPreamble(domain) {
   ]
 }
 
-/** 段 → {id, number, version, title, change}（id=number@version 即迁域不换号的身份） */
-function sectionMeta(s) {
+/** 段 → {id, number, version, title, change}（id=number@version 即迁域不换号的身份）。
+ *  导出供 redomain-unmapped 批量清偿驱动复用（FR-04，2026-10-21-knowledge-tier-denoise）。 */
+export function sectionMeta(s) {
   const m = DECISION_HEADER_RE.exec(s.lines[0] || '')
   if (!m) return null
   const id = `${m[1]}@v${m[2]}`
