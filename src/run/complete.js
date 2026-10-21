@@ -161,7 +161,34 @@ export function synthesizeStepOutput({ stageName, stepName, cwd, platformOpts = 
   return `【CLI 合成】步骤「${stepName}」完成${windowNote}；门禁以本次 CLI 校验输出为准（方案取舍等语义说明需 --output 手写）`
 }
 
+/**
+ * --done 心跳可观测 wrapper（FR-03 / dsh z2 实证：verify 纯文档步骤 --done 静默挂起 >5 分钟，
+ * agent 无从分辨在跑还是死锁）：收口链（单步 --done 与阶段完成门全链）超过 60s 时每 60s 打一行
+ * stderr 进度行——stdout 保持纯净（--json envelope 消费方 JSON.parse(stdout) 不被污染）；结束
+ * （任意 return/throw）finally 清理，interval unref（命令中断不残留定时器）。常规 <60s 路径
+ * 零输出零行为变化；intervalMs 可注入供测试。
+ */
+export async function withDoneHeartbeat(label, fn, { intervalMs = 60_000 } = {}) {
+  let beats = 0
+  const hb = setInterval(() => {
+    beats += 1
+    console.error(`⏳ ${label} 收口链仍在执行（已约 ${Math.round((beats * intervalMs) / 1000)}s）——实测门/探针/同步可能较慢；持续超 5 分钟可用 sillyspec flow status / progress show 旁路核对状态（非死锁判定）`)
+  }, intervalMs)
+  hb.unref?.()
+  try {
+    return await fn()
+  } finally {
+    clearInterval(hb)
+  }
+}
+
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+  return withDoneHeartbeat(`${stageName} --done`,
+    () => _completeStepInner(pm, progress, stageName, cwd, outputText, inputText, options),
+    { intervalMs: options.heartbeat?.intervalMs })
+}
+
+async function _completeStepInner(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] } = options
   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
@@ -1372,6 +1399,12 @@ function prefetchDiffFileSet(ctx) {
  * @returns {Promise<object|undefined>} 末轮 completeStep 返回值
  */
 export async function completeStepBurst(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+  return withDoneHeartbeat(`${stageName} --done(burst)`,
+    () => _completeStepBurstInner(pm, progress, stageName, cwd, outputText, inputText, options),
+    { intervalMs: options.heartbeat?.intervalMs })
+}
+
+async function _completeStepBurstInner(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   if (outputText) console.log(`📦 burst 收口摘要：${outputText}`)
   let roundOptions = { ...options, printNext: false }
   // burst 单调时钟基准（坑 stage-burst ①）：null=首轮（用真实时刻），此后每轮保严格递增
