@@ -2074,6 +2074,31 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
     return
   }
 
+  // ── --wait --json（2026-10-21-protocol-tax task-04 / FR-04）──
+  // stdout 输出唯一一个可 JSON.parse 的对象（问询+选项结构化，agent 直连 ask_user_question，
+  // 免解析长文本）；退出码与文本模式一致（成功 0）。仅非盖章路径——--inherit-from 保持文本契约
+  //（盖章路径无问询语义，JSON 化无对象可给）。
+  if (options.waitJson && !inheritFrom) {
+    let waitOptionList = []
+    try {
+      const raw = stageData.steps[currentIdx].waitOptions
+      if (raw) waitOptionList = JSON.parse(raw)
+    } catch { /* 解析失败按无选项处理——JSON 面宁缺勿错 */ }
+    console.log(JSON.stringify({
+      ok: true,
+      command: 'wait',
+      change: changeName || null,
+      stage: stageName,
+      step: currentIdx + 1,
+      stepName: stageData.steps[currentIdx].name,
+      question: outputText || waitReason || null,
+      reason: waitReason || null,
+      options: (Array.isArray(waitOptionList) ? waitOptionList : []).map((o) => ({ label: String(o), description: '' })),
+      resumeCommand: `sillyspec run ${stageName} --continue --answer "你的选择"${changeName ? ` --change ${changeName}` : ''}`,
+    }))
+    return
+  }
+
   console.log(`⏸️  Step ${currentIdx + 1}/${stageData.steps.length} 已暂停等待：${stageData.steps[currentIdx].name}`)
   if (waitReason) console.log(`   原因：${waitReason}`)
   if (waitOptions) console.log(`   选项：${formatWaitOptions(waitOptions)}`)
@@ -2090,8 +2115,36 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
   }
 }
 
+/**
+ * --answers 批量回填键值解析（2026-10-21-protocol-tax task-04 / FR-04）。
+ * 形态：k1=v1,k2=v2；值含逗号用引号 k="v,含逗号"（引号包裹段内逗号不切分，引号字符本身不保留）。
+ * 纯函数：解析失败返回 null（调用方 exit 2）；空键/空值/无等号 token 均视为格式错。
+ */
+export function parseAnswersSpec(spec) {
+  const parts = []
+  let cur = ''
+  let inQuote = false
+  for (const ch of String(spec)) {
+    if (ch === '"') { inQuote = !inQuote; continue }
+    if (ch === ',' && !inQuote) { parts.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  parts.push(cur)
+  const pairs = []
+  for (const p of parts) {
+    const t = p.trim()
+    const eq = t.indexOf('=')
+    if (!t || eq <= 0) return null
+    const key = t.slice(0, eq).trim()
+    const value = t.slice(eq + 1).trim()
+    if (!key || !value) return null
+    pairs.push({ key, value })
+  }
+  return pairs.length > 0 ? pairs : null
+}
+
 export async function continueStep(pm, progress, stageName, cwd, answer, options = {}) {
-  const { changeName, platformOpts = {}, fromStep } = options
+  const { changeName, platformOpts = {}, fromStep, answersSpec = null } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
 
@@ -2100,8 +2153,8 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     process.exit(1)
   }
 
-  if (!answer) {
-    console.error('❌ --continue 需要 --answer 参数')
+  if (!answer && answersSpec == null) {
+    console.error('❌ --continue 需要 --answer 参数（批量回填用 --answers k1=v1,k2=v2）')
     process.exit(2) // 用法错 → exit 2
   }
 
@@ -2110,6 +2163,50 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
   if (waitingSteps.length === 0) {
     console.error(`没有处于等待状态的步骤（阶段 ${stageName} 当前无 waiting 步骤，--continue 无目标）。当前阶段状态：${stageData?.status ?? '未知'}。用 \`sillyspec run ${stageName} --status\` 查看进度，或 \`sillyspec progress show\` 看全局下一步。`)
     process.exit(1)
+  }
+
+  // ── --answers 批量回填（2026-10-21-protocol-tax task-04 / FR-04）──
+  // 一次调用回填多个 waiting 步骤：k=步骤名或 1-based 序号，值含逗号用引号 k="v,含逗号"。
+  // 契约：全键命中才动状态——任一键未命中/重复命中同一 步骤，整单拒绝 exit 1 并列出可用键
+  //（禁止部分回填：半程状态比一次可重试的失败更难收拾）。
+  // 实现：校验通过后按序号升序逐个递归单答路径（--from-step <序号> + --answer），记录/回当前步
+  // 语义/收尾 gate/回放全部复用单答实现——批路径不复制状态机逻辑。
+  if (answersSpec != null) {
+    const pairs = parseAnswersSpec(answersSpec)
+    if (!pairs) {
+      console.error('❌ --answers 格式无法解析（期望 k1=v1,k2=v2 形态，值含逗号用引号 k="v,含逗号"）')
+      process.exit(2) // 用法错 → exit 2
+    }
+    if (answer) {
+      console.error('❌ --answers 与 --answer 互斥（批量回填与单步回答是两条路径，不要同时给）')
+      process.exit(2)
+    }
+    const targets = []
+    const unmatched = []
+    for (const { key, value } of pairs) {
+      const idx = /^\d+$/.test(key)
+        ? parseInt(key, 10) - 1
+        : stageData.steps.findIndex(s => s.name === key)
+      const step = idx >= 0 ? stageData.steps[idx] : null
+      if (!step || step.status !== 'waiting' || targets.some(t => t.idx === idx)) unmatched.push(key)
+      else targets.push({ idx, value })
+    }
+    if (unmatched.length > 0) {
+      console.error(`❌ --answers 键未命中等待中的步骤：${unmatched.join('、')}——整单拒绝，未回填任何步骤。`)
+      console.error(`   可用键（步骤名或 1-based 序号）：${waitingSteps.map(ws => `${ws.idx + 1}="${ws.name}"`).join('、')}`)
+      process.exit(1)
+    }
+    console.log(`📦 --answers 批量回填开始：${targets.length} 个等待步骤（升序逐个回填）`)
+    let lastResult = null
+    for (const t of [...targets].sort((a, b) => a.idx - b.idx)) {
+      lastResult = await continueStep(pm, progress, stageName, cwd, t.value, {
+        ...options,
+        answersSpec: null,
+        fromStep: String(t.idx + 1),
+      })
+    }
+    console.log(`📦 --answers 批量回填完成：${targets.length} 步`)
+    return lastResult
   }
 
   // --from-step 支持在多个 waiting 时指定恢复哪一个（避免被迫 --reset 破坏性重置）。

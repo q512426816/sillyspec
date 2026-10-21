@@ -54,6 +54,7 @@ const VALUE_FLAGS = new Set([
   '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
   '--inherit-from', // wait 继承盖章锚点 <D-xxx@vN>（吃值；2026-09-18-preflight-slimming task-03 / D-003@v2：仅 --wait 场景合法，--wait 分发点校验消费）
   '--step', // --done --step <名|序号> 意图断言（吃值；:340 消费。漏登记死路同 --wait-interactive 前例：burst 说明书出示该形态却被未知参数 exit(2) 拦死，2026-09-23 执行会话实证）
+  '--answers', // --continue --answers k1=v1,k2=v2 批量回填多个 waiting 步骤（吃值；2026-10-21-protocol-tax task-04/FR-04：仅 --continue 场景合法，complete.js continueStep 消费）
 ])
 
 /**
@@ -272,8 +273,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // W1-B: run <stage> 暂不支持 --json。之前 --json 进 knownFlags 白名单却从不读取（静默吞），
   // agent 按 gate/derive 契约期望 envelope 实则拿到混合人类文本。显式 fail-fast 杜绝歧义；
   // 完整 run envelope 待 outputStep 重构（W6）后支持（prompt + nextAction 结构化）。
-  if (opts.json) {
-    console.error('❌ run <stage> 暂不支持 --json（静默吞是 bug，故显式拒绝）。')
+  // 例外（2026-10-21-protocol-tax task-04 / FR-04）：--wait --json 放行——waitStep 输出唯一
+  // JSON 对象（问询+选项结构化，agent 直连 ask_user_question），是明确的局部契约而非静默吞。
+  if (opts.json && !args.includes('--wait')) {
+    console.error('❌ run <stage> 暂不支持 --json（静默吞是 bug，故显式拒绝；--wait 场景除外）。')
     console.error('   查事实用 gate/derive（支持 --json envelope）；run 输出人类可读 prompt 供 agent 直接执行。')
     process.exit(2) // 用法错 → exit 2
   }
@@ -420,6 +423,15 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.exit(2) // 用法错 → exit 2
   }
   const continueAnswer = getFlagValue('--answer')
+  // ── --answers 批量回填（2026-10-21-protocol-tax task-04 / FR-04）──
+  // 仅 --continue 场景合法（同 --inherit-from 模式：脱离 --continue 无消费点，静默吞会让
+  // agent 误以为已回填）；与 --answer 互斥校验在 complete.js 批路径入口（两值都解析完再判）。
+  const continueAnswers = getFlagValue('--answers')
+  if (continueAnswers !== null && !isContinue) {
+    console.error('❌ --answers 仅在 --continue 场景合法（一次回填多个 waiting 步骤：--answers k1=v1,k2=v2）')
+    console.error(`   用法: sillyspec run ${stageName} --continue --answers "1=答案A,3=答案B"`)
+    process.exit(2) // 用法错 → exit 2
+  }
   const resolvedSpecDir = specDir || getFlagValue('--spec-dir') || getFlagValue('--spec-root')
   const platformOpts = {
     specRoot: resolvedSpecDir ? resolve(resolvedSpecDir) : null,
@@ -747,6 +759,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
+    '--answers', // --continue 批量回填 k1=v1,k2=v2（吃值，VALUE_FLAGS 同步登记；2026-10-21-protocol-tax task-04：仅 --continue 场景合法，continueStep 消费）
     '--upgrade-thick', // 轻量→完整升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
     '--same-session', // R17 实验实证死路清偿（cli-protocol-trust）：STAGE_WALL 报错指引「加 --same-session 重跑」（stage.js 硬墙文案），消费在 runStage 逃生口——此前漏登记，照指引重跑即被本白名单 exit 2（指引指向死路的自我矛盾）
     '--force', // 同族第二实例（静态扫描新发现）：quick --cancel 强清消费点与报错指引（可用 --force）在场但未登记——同死路；一致性钉 test/flag-contract.test.mjs 守护整类
@@ -1795,12 +1808,12 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       }
       inheritFrom = waitInheritFrom
     }
-    return await waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, inheritFrom })
+        return await waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, inheritFrom, waitJson: Boolean(opts.json) })
   }
 
   // --continue: 从 waiting 恢复
   if (isContinue) {
-    return await continueStep(pm, progress, stageName, cwd, continueAnswer, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, fromStep: fromStepValue })
+    return await continueStep(pm, progress, stageName, cwd, continueAnswer, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, fromStep: fromStepValue, answersSpec: continueAnswers })
   }
 
   // --done
