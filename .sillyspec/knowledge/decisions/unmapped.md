@@ -3626,3 +3626,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：0445f9e5a4f4cfdfba3239b6181bfc0e40bbee85
 理由：- 风险1：pre-push 全量撞并行会话在途红（今晚曾 4 文件红）。对策：doc-ref 债已清偿；若仍有红按归属判别处置（非本发布引入的修复不阻塞发号判断——必要时带证据上报）。 - 风险2：网络/DNS（先例 3.32.8 曾需 DoH 钉扎）。对策：publish 失败先 npm view 预核验通道，再考虑先例 DoH 通道复用。 - 死路：考虑过跳过 pre-push（--no-verify）——放弃：破坏门禁信任；全量门正是本口径的全量归属位。
+
+## D-unmapped-443@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-21-overview-thin-stage
+原编号：D-001@v1
+锚点：未记录
+最近确认：48da565007c0b7ca56622299ee1f0feadf769380
+理由：- 最大风险：`STAGE_LABELS` 新增 thin 键被未发现的消费方当阶段清单遍历，产生幽灵阶段——已全源码核查无 `Object.keys/entries/values(STAGE_LABELS)` 用法，且 `VALID_STAGES`（阶段表 INSERT/迭代唯一源）不动，级联与 validate 零影响；既有测试面（收口实测）兜底。 - 放弃①daemon 侧后处理（SillyHub daemon 读 flow-state 覆写 current_stage）：把 CLI 的 flow-state 格式知识复制进 daemon 仓，且 conflictSnapshot progress 条目（比对弹窗本地侧）同样源自 CLI envelope，daemon 后处理要修两处——CLI 单点修一处收全链，弃。 - 放弃②overview 对 thin 省略 steps/stages 键：daemon asCount 把缺省强转 0/0，省略对下游显示是 no-op，纯增 envelope 契约噪音（steps 从必有变可有，backend schema 跟动），弃。 - 放弃③把 'thin' 加入 VALID_STAGES/阶段表：thin 不走阶段机（sync 侧注释明示口径），建空阶段行会扰动 completeStage 级联与 consistency 校验，弃。

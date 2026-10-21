@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-overview-thin-stage",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-overview-thin-stage:flow:测试绑定FR-01",
+      "tests": [
+        "test/overview-thin-stage.test.mjs「thin 活跃变更 overview 投影 thin + DB 行不动」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-overview-thin-stage"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-overview-thin-stage:flow:测试绑定FR-02",
+      "tests": [
+        "test/overview-thin-stage.test.mjs「thick/无 flow-state/损坏三形态不覆写」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-overview-thin-stage"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-overview-thin-stage:flow:测试绑定FR-03",
+      "tests": [
+        "test/overview-thin-stage.test.mjs「归档行不出现在 overview」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-overview-thin-stage"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-overview-thin-stage:flow:测试绑定FR-04",
+      "tests": [
+        "test/platform-sync-thin-stage.test.mjs「thin 活跃变更上行阶段投影」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-overview-thin-stage"
+    }
+  ]
+}
