@@ -18,10 +18,11 @@
  * 模块域内解析（沿 fr-index renderFrLines / module-changelog 行形态的机械契约）。
  */
 
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
 import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
 
 // ── 本体常量（design.md 总体方案 §1 的代码化） ──
 
@@ -60,7 +61,7 @@ function extractFilePaths(text, cap = 15) {
 
 // ── 构建器 ──
 
-export function buildKnowledgeGraph(specRoot) {
+function buildKnowledgeGraphFresh(specRoot) {
   const nodes = new Map()
   const edges = []
   const byEdgeType = new Map()
@@ -338,6 +339,85 @@ export function buildKnowledgeGraph(specRoot) {
     byEdgeType: edges.reduce((a, e) => (a[e.type] = (a[e.type] || 0) + 1, a), {}),
   }
   return { root: specRoot, nodes, edges, byEdgeType, stats }
+}
+
+// ── 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）──
+// 图召回是四层检索的第三层 advisory 保底（fail-soft）；构建成本随归档线性（逐变更读
+// design.md+change-patch.json），flow start/知识门/doctor 热路径上无缓存重付。D-003 墓碑
+// 切割原则不变：md/yaml 仍是唯一真相源——缓存只存派生图、键在输入指纹上，不构成第二
+// 真相源；任何失配全量重建。
+// 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
+// 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
+
+const GRAPH_CACHE_VERSION = 1
+const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
+
+function statSignature(p) {
+  try { const s = statSync(p); return `${s.mtimeMs}:${s.size}` } catch { return null }
+}
+
+/** 输入面指纹：knowledge（INDEX+decisions+fr）＋ docs 各项目（modules+scan 文件级）＋
+ *  归档根（dirStamp）＋ quicklog test-bindings。键序固定、数组排序——JSON 稳定比较。
+ *  各面缺席记 null（合法形态：无 docs/ 的小仓、无 fr 库）——缺席本身是指纹的一部分。 */
+function knowledgeGraphFingerprint(specRoot) {
+  const knowledgeDir = join(specRoot, 'knowledge')
+  const docsDir = join(specRoot, 'docs')
+  let projects = []
+  try {
+    projects = readdirSync(docsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((d) => [
+        d.name,
+        fileDirStamp(join(docsDir, d.name, 'modules')),
+        fileDirStamp(join(docsDir, d.name, 'scan')),
+      ])
+  } catch { /* docs/ 缺席 = 无项目面（合法形态）*/ }
+  return {
+    index: statSignature(join(knowledgeDir, 'INDEX.md')),
+    decisions: fileDirStamp(join(knowledgeDir, 'decisions')),
+    fr: fileDirStamp(join(knowledgeDir, 'fr')),
+    projects,
+    archive: dirStamp(join(specRoot, 'changes', 'archive')),
+    testBindings: statSignature(join(specRoot, 'quicklog', 'test-bindings.json')),
+  }
+}
+
+/** 缓存载荷 → 图对象（nodes Map 按 payload 序重建保迭代序一致；byEdgeType/stats 复算）。 */
+function reviveGraph(payload, specRoot) {
+  const nodes = new Map(payload.nodes.map((n) => [String(n.id), n]))
+  const edges = payload.edges.map((e) => ({ s: String(e.s), t: String(e.t), type: e.type, note: String(e.note || '') }))
+  const byEdgeType = new Map()
+  for (const e of edges) {
+    if (!byEdgeType.has(e.type)) byEdgeType.set(e.type, [])
+    byEdgeType.get(e.type).push(e)
+  }
+  const stats = {
+    nodeCount: nodes.size,
+    edgeCount: edges.length,
+    byNodeType: [...nodes.values()].reduce((a, n) => (a[n.type] = (a[n.type] || 0) + 1, a), {}),
+    byEdgeType: edges.reduce((a, e) => (a[e.type] = (a[e.type] || 0) + 1, a), {}),
+  }
+  return { root: payload.root || specRoot, nodes, edges, byEdgeType, stats }
+}
+
+/** 构建入口（缓存包装，签名与返回结构不变）：指纹+TTL+版本键三闸，命中零全量重扫。 */
+export function buildKnowledgeGraph(specRoot) {
+  const fingerprint = knowledgeGraphFingerprint(specRoot)
+  const cachePath = join(specRoot, '.runtime', 'cache', 'knowledge-graph.json')
+  if (fingerprint) {
+    const cached = readHotCache(cachePath, { version: GRAPH_CACHE_VERSION, fingerprint, ttlMs: GRAPH_CACHE_TTL_MS })
+    if (cached && Array.isArray(cached.nodes) && Array.isArray(cached.edges)) return reviveGraph(cached, specRoot)
+  }
+  const graph = buildKnowledgeGraphFresh(specRoot)
+  if (fingerprint) {
+    writeHotCache(cachePath, {
+      version: GRAPH_CACHE_VERSION,
+      fingerprint,
+      payload: { root: graph.root, nodes: [...graph.nodes.values()], edges: graph.edges },
+    })
+  }
+  return graph
 }
 
 /** changelog 三态行解析（表格行 ∪ 列表行 ∪ 标题态——backend 侧主形态；坏行跳过 fail-soft）。 */

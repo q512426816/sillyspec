@@ -19,6 +19,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
+import { readHotCache, writeHotCache, dirStamp } from './hot-cache.js'
 
 const QUICKLOG_ENTRY_RE = /^##\s+(ql-[\w-]+)\s*\|\s*([^|]+)\s*\|\s*(.+)$/
 // 文件注记行：`- path（中文括注）` / `- path(ascii)` / 裸 `- path`（allocateQuicklogEntry
@@ -95,10 +96,23 @@ function parseQuicklogFileEntries(specBase) {
   return entries
 }
 
+/** 伪条目扫描缓存版本（解析契约变化时 bump 即全量失效）。 */
+const FLOW_ARCHIVE_CACHE_VERSION = 1
+
 /** 源②：flow 归档变更伪条目——目录内 flow-state.yaml 在场即认（不校验 yaml 内容：伪条目
- * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。 */
-function parseFlowArchiveEntries(specBase) {
+ * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。
+ * 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）：指纹=归档根子项名全集+根 mtimeMs
+ * （一次 readdir+一次 stat，廉价每次重算）——命中即免逐目录列举与逐变更 proposal.md 读。
+ * 归档件是冻结审计面（无就地编辑形态），指纹对增删/改名完备；坏缓存/失配 fail-open 全量重建。
+ * 导出供测试断言缓存三态（命中/失效/坏缓存）。 */
+export function parseFlowArchiveEntries(specBase) {
   const archiveDir = join(specBase, 'changes', 'archive')
+  const fingerprint = dirStamp(archiveDir)
+  if (fingerprint === null) return []
+  const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
+  const cached = readHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint })
+  if (Array.isArray(cached)) return cached
+
   let dirs
   try {
     dirs = readdirSync(archiveDir, { withFileTypes: true })
@@ -125,6 +139,7 @@ function parseFlowArchiveEntries(specBase) {
       out.push({ qlId: d.name, date, title: title || d.name, solution: '', files: [], source: 'flow' })
     } catch { /* 单目录读取异常 → 跳过该目录（fail-open，不影响其余源） */ }
   }
+  writeHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint, payload: out })
   return out
 }
 

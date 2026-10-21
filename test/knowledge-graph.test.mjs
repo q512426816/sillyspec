@@ -122,8 +122,9 @@ test('①解析全形态：节点边数与本体落位（含同号跨变更不�
   try {
     const before = walkFiles(root)
     const g = buildKnowledgeGraph(join(root, '.sillyspec'))
-    // 不落盘：构建后文件集逐字节不变（D-003 墓碑切割——无缓存文件）
-    assert.deepEqual(walkFiles(root), before)
+    // 落盘面唯一新增 = 派生图缓存（FR-03，2026-10-21-knowledge-tier-denoise；D-003 墓碑切割
+    // 语义不变——md/yaml 仍是唯一真相源，缓存只存派生图、键在输入指纹上、失配即弃）
+    assert.deepEqual(walkFiles(root), [...before, join(root, '.sillyspec', '.runtime', 'cache', 'knowledge-graph.json').slice(root.length)].sort())
 
     const s = g.stats
     // 决策 3 节点：D-001@v1(alpha) / D-002@v1(beta) / D-001@v1(gamma)——同号跨变更不折叠
