@@ -43,6 +43,14 @@ function writeFourPieceFixture(cwd, specBase, cn) {
 const TIMING_ENV = { DEBUG_SILLYSPEC_TIMING: '1' }
 const timingLine = (s) => (s.match(/\[timing\][^\n]*/) || [null])[0]
 
+// 并发抖动硬化（收口实测门实证：166 文件并行时全局 SQLite BUSY/进程风暴可致单次 spawn
+// 瞬断 exit≠0——重放与 5 次单跑均绿）。非零即重试一次，两次都败=真失败照报。
+const runStable = (args, opts) => {
+  let r = runCLI(args, opts)
+  if (r.status !== 0) r = runCLI(args, opts)
+  return r
+}
+
 console.log('=== FR-01 timing 分段计时 ===\n')
 
 console.log('--- Case 1: env=1 渲染命令 → [timing] 行四段名齐全 ---')
@@ -50,7 +58,7 @@ console.log('--- Case 1: env=1 渲染命令 → [timing] 行四段名齐全 ---'
   const { cwd, specBase } = makeRepo('cli-timing-1-')
   const cn = '2026-07-25-timing-render'
   await seedBrainstormToLast(cwd, specBase, cn)
-  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd, env: TIMING_ENV })
+  const r = runStable(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd, env: TIMING_ENV })
   const line = timingLine(r.combined)
   assert(r.status === 0, `exit 0（实际 ${r.status}）`)
   assert(line !== null, `输出含 [timing] 行（实际：${r.combined.slice(-160)}）`)
@@ -67,7 +75,8 @@ console.log('--- Case 2: env=1 末步 --done → gates/state-write 为数字值 
   const cn = '2026-07-25-timing-done'
   await seedBrainstormToLast(cwd, specBase, cn)
   writeFourPieceFixture(cwd, specBase, cn)
-  const r = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认', env: TIMING_ENV })
+  const r0 = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认', env: TIMING_ENV })
+  const r = r0.status === 0 ? r0 : runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认', env: TIMING_ENV })
   const line = timingLine(r.combined)
   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
   assert(line !== null, `--done 输出含 [timing] 行`)
