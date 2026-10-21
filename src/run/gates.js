@@ -28,6 +28,7 @@
  * 不搬：ensureDepsFreshness（execute 入口 deps 自检，调用方 runStage 非 completeStep，归属未来 execute-handler）
  */
 import { basename, join, relative, dirname } from 'node:path'
+import { timedAsync } from '../timing.js'
 import { runtimeStatePath } from '../runtime-paths.js'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -1916,7 +1917,11 @@ function readDesignOwnFiles(specBase, changeName) {
  *          null = 全部通过，调用方继续自管收尾（如下一步提示）；
  *          非 null = gate/handler 失败已 rollback，调用方直接 return。
  */
-export async function completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx = null }) {
+export async function completeStageGates(args) {
+  return timedAsync('gates', () => completeStageGatesImpl(args))
+}
+
+async function completeStageGatesImpl({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText, ctx = null }) {
   // 整体 try/catch（task-04 / review-2026-08-09 #2）：收尾段（execute 预检 + scan handler + validate* +
   // auxiliary 重置 + runStageCompletionGates）任一段抛非结构化异常 → rollbackCompletionAndReturn
   // （回滚 in-progress + 落盘 + 返回未完成对象），不冒顶 exit 1。正常的 _scanResult/_gateEarlyReturn

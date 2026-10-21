@@ -12,6 +12,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, appendFileSync, copyFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { RUNTIME_TEMP_DIRNAME, runtimeTempPath } from './runtime-paths.js'
+import { timedSync } from './timing.js';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir, hostname } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -959,6 +960,10 @@ export class ProgressManager {
   }
 
   _write(cwd, data, changeName = null) {
+    return timedSync('state-write', () => this._writeImpl(cwd, data, changeName))
+  }
+
+  _writeImpl(cwd, data, changeName = null) {
     const cn = changeName || data.currentChange;
     if (!cn) {
       console.warn('⚠️  _write: 无变更名，跳过写入');

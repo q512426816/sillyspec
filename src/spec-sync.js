@@ -16,6 +16,7 @@
  */
 
 import { createHash } from 'crypto';
+import { timedAsync } from './timing.js';
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join, relative, sep } from 'path';
 import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
@@ -724,6 +725,10 @@ function attributeChangeLabel(paths) {
  * （syncSpecTreeOnly / resolve forcePush 等）不消费该字段，向后兼容。
  */
 export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+  return timedAsync('sync', () => syncSpecTreeImpl(specRoot, platform, changeName, opts))
+}
+
+async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
   if (!platform || !platform.url || !platform.token) {
     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
     return { synced: 0, ok: true };

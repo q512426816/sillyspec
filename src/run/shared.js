@@ -11,6 +11,7 @@
  *     本模块仅 re-export，run/ 层现有调用方路径与行为不变。
  */
 import { basename, join, resolve, dirname, sep } from 'node:path'
+import { timedAsync } from '../timing.js'
 import { runtimeTempPath } from '../runtime-paths.js'
 import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, appendFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -981,6 +982,10 @@ function warnPlatformNotConnectedDaily(cwd, platformOpts = {}) {
 }
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
+  return timedAsync('sync', () => triggerSyncImpl(cwd, changeName, platformOpts, opts))
+}
+
+async function triggerSyncImpl(cwd, changeName, platformOpts = {}, opts = {}) {
   // ── 后台异步化（2026-09-20 用户反馈：--done 被网络尾巴拖住分钟级）──
   // 默认把同步整体挪进 detached 后台子进程：17 个调用点全部 fire-and-forget，但进程
   // 退出要等事件循环排空，在飞 fetch 拖住命令返回。回落 inline 的三条件：
@@ -1066,9 +1071,13 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
  * @returns {{confirmed: boolean, delegated?: boolean, skipped?: string, result?: object}}
  */
 export async function triggerSyncTerminalStrict(cwd, changeName, platformOpts = {}, opts = {}) {
+  return timedAsync('sync', () => triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts, opts))
+}
+
+async function triggerSyncTerminalStrictImpl(cwd, changeName, platformOpts = {}, opts = {}) {
   // quick 会话无实体变更目录（无归档/删除终态）——沿用既有 best-effort 语义
   if (changeName && QUICK_SID_RE.test(changeName)) {
-    await triggerSync(cwd, changeName, platformOpts, opts)
+    await triggerSyncImpl(cwd, changeName, platformOpts, opts)
     return { confirmed: false, delegated: true }
   }
   const syncMod = await import('../sync.js')

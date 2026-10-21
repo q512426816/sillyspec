@@ -19,6 +19,7 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, dirname, join } from 'node:path'
+import { timedAsync } from '../timing.js'
 import { runtimeStatePath } from '../runtime-paths.js'
 import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -921,6 +922,10 @@ async function recordPromptInjectLedger({ runtimeRoot, changeName, stageName, fi
 }
 
 export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null, autoMeta = null) {
+  return timedAsync('render', () => outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts, prevStepAnswer, waitHistory, autoMeta))
+}
+
+async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null, autoMeta = null) {
   const step = steps[stepIndex]
   const total = steps.length
   // ── 越界防御 ──
