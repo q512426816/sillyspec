@@ -227,7 +227,8 @@ console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spa
 console.log('\n--- 10. FR-05b 二轮：全局面单例归位（16 state + 6 temp） ---')
 {
   assert(RUNTIME_STATE_SINGLETONS.includes('friction-ledger.json') && RUNTIME_STATE_SINGLETONS.includes('last-delta.json')
-    && RUNTIME_STATE_SINGLETONS.includes('spec-sync-base.json') && RUNTIME_STATE_SINGLETONS.length === 15, 'state 单例表 15 件齐（设计清单 16 中 pending_push 零引用不入产品表）')
+    && RUNTIME_STATE_SINGLETONS.includes('spec-sync-base.json') && RUNTIME_STATE_SINGLETONS.includes('spec-manifest-cache.json')
+    && RUNTIME_STATE_SINGLETONS.length === 16, 'state 单例表 16 件齐（设计清单 16 中 pending_push 零引用不入产品表；+spec-manifest-cache 2026-10-21-cli-manifest-since-cache）')
   assert(RUNTIME_TEMP_SINGLETONS.includes('doctor-diagnosis.json') && RUNTIME_TEMP_SINGLETONS.includes('auto-pull-throttle.json')
     && RUNTIME_TEMP_SINGLETONS.length === 6, 'temp 单例表 6 件齐')
   const root = join(tmpRoot, 's2', '.runtime')
