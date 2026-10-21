@@ -91,7 +91,7 @@ console.log('--- Case 3: 不设 env → 无 [timing] 字样（零输出变化）
   const { cwd, specBase } = makeRepo('cli-timing-3-')
   const cn = '2026-07-25-timing-off'
   await seedBrainstormToLast(cwd, specBase, cn)
-  const r = runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
+  const r = runStable(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
   assert(r.status === 0, `exit 0（实际 ${r.status}）`)
   assert(!r.combined.includes('[timing]'), '默认环境输出无 [timing]')
 }
