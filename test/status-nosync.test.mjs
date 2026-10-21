@@ -22,7 +22,9 @@ const BRAINSTORM_STEPS = [
   '进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案',
   '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件',
 ]
-const TIMING_ENV = { DEBUG_SILLYSPEC_TIMING: '1' }
+// 继承再叠加（勿整体替换——丢 SILLYSPEC_SESSION_ID 会让写命令子进程降级 anon 撞所有权门，
+// 见 timing-segments 收口实证）；DEBUG_SILLYSPEC_TIMING 仅为读 [timing] 行判据
+const TIMING_ENV = { ...process.env, DEBUG_SILLYSPEC_TIMING: '1' }
 const timingLine = (s) => (s.match(/\[timing\][^\n]*/) || [null])[0]
 
 async function seedFixture(cwd, specBase, cn) {

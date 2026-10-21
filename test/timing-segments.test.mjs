@@ -47,7 +47,11 @@ function writeFourPieceFixture(cwd, specBase, cn) {
     '# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底 order_by。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序兜底 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n')
 }
 
-const TIMING_ENV = { DEBUG_SILLYSPEC_TIMING: '1' }
+// env 继承再叠加（勿整体替换）：替换会丢 SILLYSPEC_SESSION_ID——收口实测门 3/3 必红根因
+//（证据 timing-seg-fail-evidence.log）：fixture 被继承 env 的 schema-init 调用以会话身份
+// 认领，env 替换的子进程降级 anon → 所有权门「自己拦自己」exit 1（外部跑全 anon 恒自恒绿，
+// 具完美伪装性）。PATH 等同样靠继承。
+const TIMING_ENV = { ...process.env, DEBUG_SILLYSPEC_TIMING: '1' }
 const timingLine = (s) => (s.match(/\[timing\][^\n]*/) || [null])[0]
 
 // 并发抖动硬化（收口实测门实证：166 文件并行时全局 SQLite BUSY/进程风暴可致单次 spawn
