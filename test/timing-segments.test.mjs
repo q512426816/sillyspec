@@ -10,12 +10,19 @@
  *
  * 风格：_cli-step-harness 子进程 CLI（同 run-complete-step-brainstorm 模式）。
  */
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { makeRepo, initChange, seedStage, runStage, runCLI, cleanup, report } from './_cli-step-harness.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
-const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
+// 失败证据落盘（收口批诊断）：output_tail 只留 4KB 尾部，断言细节常被截——失败时追加写
+// 固定证据文件（含 env 指纹），下次失败现场可考。
+const EVIDENCE = join(tmpdir(), 'timing-seg-fail-evidence.log')
+const assert = (cond, msg, ctx = '') => {
+  cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`),
+    appendFileSync(EVIDENCE, `\n[${new Date().toISOString()}] FAIL: ${msg}\nctx=${ctx}\nenv.DEBUG_SILLYSPEC_TIMING=${process.env.DEBUG_SILLYSPEC_TIMING ?? '(unset)'} env.SILLYSPEC_STEP_GUIDE=${process.env.SILLYSPEC_STEP_GUIDE ?? '(unset)'} env.SILLYSPEC_SESSION_ID=${process.env.SILLYSPEC_SESSION_ID ?? '(unset)'}\n`))
+}
 
 const BRAINSTORM_STEPS = [
   '进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案',
@@ -60,8 +67,8 @@ console.log('--- Case 1: env=1 渲染命令 → [timing] 行四段名齐全 ---'
   await seedBrainstormToLast(cwd, specBase, cn)
   const r = runStable(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd, env: TIMING_ENV })
   const line = timingLine(r.combined)
-  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
-  assert(line !== null, `输出含 [timing] 行（实际：${r.combined.slice(-160)}）`)
+  assert(r.status === 0, `exit 0（实际 ${r.status}）`, r.combined.slice(-400))
+  assert(line !== null, `输出含 [timing] 行（实际：${r.combined.slice(-160)}）`, r.combined.slice(-400))
   if (line) {
     for (const seg of ['sync=', 'gates=', 'render=', 'state-write=']) {
       assert(line.includes(seg), `[timing] 行含段名 ${seg}（行：${line}）`)
@@ -78,7 +85,7 @@ console.log('--- Case 2: env=1 末步 --done → gates/state-write 为数字值 
   const r0 = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认', env: TIMING_ENV })
   const r = r0.status === 0 ? r0 : runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认', env: TIMING_ENV })
   const line = timingLine(r.combined)
-  assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
+  assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`, r.combined.slice(-400))
   assert(line !== null, `--done 输出含 [timing] 行`)
   if (line) {
     assert(/\[timing\].*\bgates=\d+ms/.test(line), `gates 段为数字值（行：${line}）`)
@@ -92,7 +99,7 @@ console.log('--- Case 3: 不设 env → 无 [timing] 字样（零输出变化）
   const cn = '2026-07-25-timing-off'
   await seedBrainstormToLast(cwd, specBase, cn)
   const r = runStable(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
-  assert(r.status === 0, `exit 0（实际 ${r.status}）`)
+  assert(r.status === 0, `exit 0（实际 ${r.status}）`, r.combined.slice(-400))
   assert(!r.combined.includes('[timing]'), '默认环境输出无 [timing]')
 }
 
