@@ -164,6 +164,10 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   } else {
     lines.push('# （流程终态，无续跑命令）');
   }
+  // 所有权接缝预告（2026-10-21-p0-p1-hardening FR-05 / dsh z2 实证：新会话自拟新 SESSION_ID
+  // 而非沿用交接块导出的旧 ID 时，首个写操作必撞 15 分钟活跃窗被迫 --takeover）：粘贴块内显式
+  // 给出出路，消「交接块没预告接管」的设计缺口。
+  lines.push('# ⚠️ 若换用新的 SILLYSPEC_SESSION_ID（不推荐，保持上方导出值即可）：首个写操作（--done/--answer 等）会撞所有权活跃窗——等窗过期自动接管，或首写带 --takeover 显式接管留痕');
   lines.push('# ── 交接块结束 ──');
   lines.push('');
   lines.push(`📋 ${target}：当前 ${STAGE_LABELS[currentStage] || currentStage}${steps.length > 0 ? `（步骤 ${doneSteps}/${steps.length}）` : ''}${stageCompleted ? ' ✅ 已完成' : ''}`);

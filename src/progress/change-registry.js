@@ -3,6 +3,7 @@
 // pm._changePath（persistence-core 留 facade 本体）。无共享常量依赖。
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs';
 import { join } from 'path';
+import { hostname } from 'os';
 import { appendDeletedLedger } from '../deleted-ledger.js';
 
 // 所有权活跃心跳窗缺省（2026-09-14-change-ownership-guards task-02 / FR-01）：owner 非本会话
@@ -290,6 +291,7 @@ export class ChangeRegistry {
    *   - opts.forced（--takeover）            → takeover-forced       放行（无条件接管，调用方重写 owner 留痕）
    *   - owner 为空（无行/NULL）               → no-owner              放行（存量无主行，任何会话可接管）
    *   - owner === selfSession                 → self                  放行（本会话自有 change 零路径变化）
+   *   - owner 本机匿名占位 + selfSession 显式 → takeover-anon-upgrade 放行（同主机显式身份自动升级，FR-05）
    *   - owner 他人 且 now-last_active ≥ 窗口  → takeover-stale        放行（窗口外自动接管重写）
    *   - owner 他人 且活跃窗内                 → blocked-active-owner  拒绝（allowed:false，调用方打结构化错误）
    * last_active 缺失/不可解析按陈旧处理：无法证明新鲜即不拦——护栏拦「可证活跃」，不因时间戳
@@ -313,6 +315,19 @@ export class ChangeRegistry {
     if (opts.forced) return { allowed: true, action: 'takeover-forced', owner, lastActive, heartbeatMs };
     if (owner === null) return { allowed: true, action: 'no-owner', owner: null, lastActive, heartbeatMs };
     if (owner === opts.selfSession) return { allowed: true, action: 'self', owner, lastActive, heartbeatMs };
+    // 匿名占位所有权自动升级（2026-10-21-p0-p1-hardening FR-05 / dsh z1 实证：首调未设
+    // SESSION_ID → owner 落 anon@<host>，同机 agent 数分钟后补设显式身份，被
+    // blocked-active-owner 拦 15 分钟活跃窗，被迫 --takeover——自己锁自己）。anon@ 是机器级
+    // 降级标识（缺省只拦他机），同主机的显式身份（--session/env 三级解析，非 anon 降级）严格
+    // 更具体：直接放行升级（调用方 setChangeOwner 重写留痕），不必 --takeover。跨主机匿名
+    // （owner 的 @ 后缀 ≠ 本机 hostname）与任何显式 owner 持有不在此列，照旧新鲜度判定。
+    if (
+      typeof owner === 'string' && owner.startsWith('anon@')
+      && typeof opts.selfSession === 'string' && opts.selfSession && !opts.selfSession.startsWith('anon@')
+      && owner === `anon@${hostname()}`
+    ) {
+      return { allowed: true, action: 'takeover-anon-upgrade', owner, lastActive, heartbeatMs };
+    }
     // owner 他人：新鲜度决定拒绝 / 自动接管
     const lastMs = lastActive ? new Date(lastActive).getTime() : NaN;
     const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();

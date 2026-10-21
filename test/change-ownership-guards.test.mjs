@@ -21,7 +21,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
+import { tmpdir, hostname } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -484,4 +484,43 @@ test('⑦b 他人活跃 change 归档 → 所有权拒绝（exit 1 + 接管指�
   assert.ok(r.stdout.includes('正被其他会话持有') && r.stdout.includes('other-session'), '报错含 owner 结构化字段')
   assert.ok(r.stdout.includes('--takeover'), '报错含显式接管指引')
   assert.ok(existsSync(changeDir), '目录未动')
+})
+
+test('⑧ 匿名占位所有权自动升级（2026-10-21-p0-p1-hardening FR-05 / dsh z1 实证：首调忘设 SESSION_ID → anon 自锁被迫 --takeover）', () => {
+  const { cwd, specBase } = makeRepo('cog-anon-')
+  const pm = new ProgressManager({ specDir: specBase })
+  pm.registerChange(cwd, 'c1')
+  const me = hostname()
+
+  // 场景 1：owner=本机匿名占位 + 显式身份（env/flag 三级解析结果）→ 放行 + takeover-anon-upgrade
+  pm.setChangeOwner(cwd, 'c1', `anon@${me}`)
+  const up = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
+  assert.equal(up.allowed, true, '匿名占位同主机自动升级放行（免 --takeover）')
+  assert.equal(up.action, 'takeover-anon-upgrade')
+
+  // 场景 2：跨机匿名占位 → 照旧拦（机器级隔离语义保持）
+  pm.setChangeOwner(cwd, 'c1', 'anon@other-host')
+  const cross = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
+  assert.equal(cross.allowed, false, '跨机匿名仍拦')
+  assert.equal(cross.action, 'blocked-active-owner')
+
+  // 场景 3：匿名 self 对同机匿名 owner → self 既有分支（字符串等值，零路径变化）
+  pm.setChangeOwner(cwd, 'c1', `anon@${me}`)
+  const anonSelf = pm.assertChangeOwnership(cwd, 'c1', { selfSession: `anon@${me}`, nowMs: Date.now() })
+  assert.equal(anonSelf.allowed, true)
+  assert.equal(anonSelf.action, 'self')
+
+  // 场景 4：他人显式持有（活跃窗内）→ 照旧拦（升级不弱化既有隔离强度）
+  pm.setChangeOwner(cwd, 'c1', 'other-explicit')
+  const blocked = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
+  assert.equal(blocked.allowed, false, '他人显式持有仍拦')
+  assert.equal(blocked.action, 'blocked-active-owner')
+
+  // 场景 5：本机匿名 owner 窗口外 → takeover-stale 既有分支优先级不受影响（stale 先于新分支无歧义：
+  // 显式身份 + 匿名 owner 命中 anon-upgrade；显式 owner + 窗口外走 stale——两分支互不抢占）
+  pm.setChangeOwner(cwd, 'c1', 'other-explicit')
+  const setOld = pm._ensureDB(cwd).getDb().prepare("UPDATE changes SET last_active = ? WHERE name = 'c1'")
+  setOld.run(new Date(Date.now() - 30 * 60 * 1000).toISOString())
+  const stale = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
+  assert.equal(stale.action, 'takeover-stale', '显式 owner 窗口外照旧 stale 接管')
 })
