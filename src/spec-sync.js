@@ -433,6 +433,48 @@ function writeBaseSnapshot(specRoot, localFiles) {
   } catch { /* 快照失败只损失下次的内容级防回推，不影响本次同步结果 */ }
 }
 
+// ── spec-manifest 增量游标缓存（2026-10-21-cli-manifest-since-cache）──
+// 平台 spec-manifest 支持 ?since=<spec_version> 增量返回（multi-agent-platform
+// 2026-10-21-spec-manifest-incremental）。缓存 = 上次消费的整份清单 + 游标 +
+// 连续增量计数：稳态拉取只传变化行（生产实测全量 2.2MB/13145 行、5.5s@~400KBps
+// 链路——单请求吃掉 CLI 同步 8s 总预算七成；增量后 <10KB/亚秒）。
+// 形态 {spec_version:int, files:{path:{hash,version,exists}}, inc_count:int}；
+// .runtime 在上传排除面，缓存不进同步树。fail-soft：读写任何失败都退化为
+// 全量拉取（与无缓存同路径，行为不劣于现状）。
+const MANIFEST_CACHE = 'spec-manifest-cache.json';
+
+// 定期全量对账阈值：连续增量 N 轮后强制不带 since 全量（缓存与服务器脱钩的
+// 幻影行防线，design 风险节）。env SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY 可调。
+function resolveReconcileEvery() {
+  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY);
+  if (Number.isInteger(raw) && raw >= 1 && raw <= 10000) return raw;
+  return 50;
+}
+
+function readManifestCache(specRoot) {
+  try {
+    const c = JSON.parse(readFileSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE), 'utf8'));
+    if (
+      c && Number.isInteger(c.spec_version) && c.files && typeof c.files === 'object'
+      && Number.isInteger(c.inc_count)
+    ) return c;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeManifestCache(specRoot, cache) {
+  try {
+    mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true });
+    writeAtomicSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE), JSON.stringify(cache));
+  } catch { /* 缓存写失败只损失增量优化，下轮全量（fail-soft） */ }
+}
+
+function clearManifestCache(specRoot) {
+  try { unlinkSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE)); } catch { /* 不存在即无事 */ }
+}
+
 /**
  * 丢弃「跟随服务器」型 update op（坑 quicksync-conflict-granularity ①）。
  *
@@ -698,10 +740,15 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
   const manifestUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-manifest`;
   const syncUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-sync`;
 
-  // 1. GET 服务器清单
+  // 1. GET 服务器清单（2026-10-21-cli-manifest-since-cache：缓存感知——有可用
+  //    缓存带 ?since=<游标> 拉增量行合并；无缓存/对账轮/SILLYSPEC_SPEC_SYNC_FULL=1
+  //    走全量并落缓存；旧平台响应无 spec_version → 作废缓存回退现状行为；服务端
+  //    spec_version 倒退（重建）→ 一次性全量对账）
   let serverManifest = {};
+  const manifestCache = process.env.SILLYSPEC_SPEC_SYNC_FULL ? null : readManifestCache(specRoot);
+  const cacheUsable = manifestCache && manifestCache.inc_count < resolveReconcileEvery();
   try {
-    const res = await fetch(manifestUrl, {
+    const res = await fetch(cacheUsable ? `${manifestUrl}?since=${manifestCache.spec_version}` : manifestUrl, {
       headers: { Authorization: `Bearer ${platform.token}` },
       signal: withSignal(10000),
     });
@@ -724,7 +771,41 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       return { synced: 0, ok: false };
     }
     const body = await res.json().catch(() => ({}));
-    serverManifest = body.files || {};
+    if (cacheUsable && typeof body.spec_version === 'number' && body.spec_version >= manifestCache.spec_version) {
+      // 增量合并：响应行（含 exists=false 墓碑行）逐行覆盖进缓存——与拉全量等价
+      const merged = { ...manifestCache.files, ...(body.files || {}) };
+      writeManifestCache(specRoot, { spec_version: body.spec_version, files: merged, inc_count: manifestCache.inc_count + 1 });
+      serverManifest = merged;
+    } else if (cacheUsable && typeof body.spec_version === 'number') {
+      // 服务端 spec_version 倒退（重建/回滚）——缓存脱离服务端纪元，一次性全量对账。
+      // 对账失败按拉取失败 fail-closed（ok:false）：空锚会触发全量 add 风暴，禁用。
+      debugLog(`[spec-sync] spec_version 倒退（${manifestCache.spec_version} → ${body.spec_version}，服务端重建？）——回退全量清单对账`);
+      const full = await fetch(manifestUrl, {
+        headers: { Authorization: `Bearer ${platform.token}` },
+        signal: withSignal(10000),
+      });
+      if (!full.ok) {
+        const failCount = bumpFailStreak(specRoot, logLabel, `倒退对账全量 HTTP ${full.status}`);
+        console.warn(`[spec-sync] 倒退对账全量拉取失败 HTTP ${full.status}（文件树本次未同步，下次自动重试）: ${logLabel}`);
+        if (failCount >= FAIL_STREAK_ESCALATE_AT) {
+          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
+        }
+        return { synced: 0, ok: false };
+      }
+      const fullBody = await full.json().catch(() => ({}));
+      serverManifest = fullBody.files || {};
+      if (typeof fullBody.spec_version === 'number') writeManifestCache(specRoot, { spec_version: fullBody.spec_version, files: serverManifest, inc_count: 0 });
+      else clearManifestCache(specRoot);
+    } else if (typeof body.spec_version === 'number') {
+      // 全量响应（首拉/对账轮/强制全量）：整份落缓存
+      writeManifestCache(specRoot, { spec_version: body.spec_version, files: body.files || {}, inc_count: 0 });
+      serverManifest = body.files || {};
+    } else {
+      // 旧平台（响应无 spec_version 字段）：忽略 since 参数恒回全量——作废缓存，
+      // 未部署窗口内行为与现状完全一致
+      serverManifest = body.files || {};
+      clearManifestCache(specRoot);
+    }
   } catch (err) {
     const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
     const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;

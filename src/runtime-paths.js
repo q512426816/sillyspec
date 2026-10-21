@@ -74,6 +74,9 @@ export const RUNTIME_STATE_SINGLETONS = [
   'spec-sync-last-success.json',
   'spec-sync-fail-streak.json',
   'spec-sync-follow-reported.json',
+  // 2026-10-21-cli-manifest-since-cache：spec-manifest 增量游标缓存（有读者、
+  // 不可再生前同步全量代价高——state/ 语义）
+  'spec-manifest-cache.json',
   'sync-noise-self-heal.json',
   'last-delta.json',
 ]
