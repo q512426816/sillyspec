@@ -1768,3 +1768,68 @@ created_at: 2026-09-28T17:07:05.883Z
   confirmed_at: null
   source_change: 2026-10-20-distill-abnormal-upgrade-fix
   status: active
+
+## FR-docs-consistency-082 头脑风暴阶段：已注册 worktree（.sillyspec/.runtime/worktrees/<变更名>/ meta.json 登记的 worktreePath）内的源码 Write/Edit 不再被阶段门拦截；主树源码写入维持拦截，且 brainstorm 拦截提示含「变更 key 已出 → worktree create → 进树写原型、文档照常主树」指引
+变更：2026-10-21-brainstorm-proto-worktree
+状态：active
+摘要：brainstorm 期已注册 worktree 内源码写入放行；brainstorm 期主树源码写入拦截且提示含原型协议指引；未登记的 worktrees 存储区子路径维持拦截
+场景正文：
+- 场景：brainstorm 期已注册 worktree 内源码写入放行 — Given sillyspec.db 有 active change（current_stage='brainstorm'），且 .sillyspec/.runtime/w；When shouldBlock({tool:'Write', filePath:<worktreePath>/src/x.js})；Then blocked=false
+- 场景：brainstorm 期主树源码写入拦截且提示含原型协议指引 — Given 同上场景；When shouldBlock({tool:'Write', filePath:<主树根>/src/x.js})；Then blocked=true 且 reason 含 worktree create 指引文案
+- 场景：未登记的 worktrees 存储区子路径维持拦截 — Given .sillyspec/.runtime/worktrees/<他名>/ 目录存在但无 meta.json；When shouldBlock({tool:'Write', filePath:<该目录>/src/x.js})；Then blocked=true
+全文：.sillyspec/changes/archive/2026-10-21-brainstorm-proto-worktree/requirements.md#FR-01
+最近确认：25e267fc5c5063acdbb6eb7ba2b7eeb77970735c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-01
+  tests: test/worktree-guard.test.mjs「brainstorm 期已注册 worktree 内源码写入放行 + 主树拦截提示含原型协议指引 + 未登记存储区仍拦」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-brainstorm-proto-worktree
+  status: active
+
+## FR-docs-consistency-083 已在 worktree 内（含 native-worktree 复用形态）时不重复创建——复用既有（现状核验+测试固化）
+变更：2026-10-21-brainstorm-proto-worktree
+状态：active
+摘要：linked worktree 内 create 幂等复用
+场景正文：
+- 场景：linked worktree 内 create 幂等复用 — Given cwd 位于 git linked worktree 且该变更名的 meta.json 已登记（native-worktree 形态）；When 再次 wm.create(<变更名>)；Then 返回值与既有 meta 一致（branch/worktreePath/baseHash/mode），不发生 overlay/重建
+全文：.sillyspec/changes/archive/2026-10-21-brainstorm-proto-worktree/requirements.md#FR-02
+最近确认：25e267fc5c5063acdbb6eb7ba2b7eeb77970735c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-02
+  tests: test/worktree-native-overlay.test.mjs「linked worktree 内 create：meta 已存在幂等复用」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-brainstorm-proto-worktree
+  status: active
+
+## FR-docs-consistency-084 变更 key 产生后建的 worktree，后续 run execute 幂等复用不重建（现状核验+测试固化）
+变更：2026-10-21-brainstorm-proto-worktree
+状态：active
+摘要：ensure 幂等
+场景正文：
+- 场景：ensure 幂等 — Given worktree meta 已登记；When 连续两次 wm.ensure(<变更名>)；Then 两次均返回既有登记（existing=true、baseHash 不变），不触发 create 重建路径
+全文：.sillyspec/changes/archive/2026-10-21-brainstorm-proto-worktree/requirements.md#FR-03
+最近确认：25e267fc5c5063acdbb6eb7ba2b7eeb77970735c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-03
+  tests: test/worktree-ensure-idempotent.test.mjs「ensure：meta 已存在幂等返回既有不重建」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-brainstorm-proto-worktree
+  status: active

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-brainstorm-proto-worktree",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "25e267fc5c5063acdbb6eb7ba2b7eeb77970735c",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "execute 阶段位置门 :845 成为不可达的重复分支",
+      "evidence": "新增豁免（:815）与既有 execute 位置门（:845）同谓词 isInsideRegisteredWorktree、同入参 absPath/projectRoot，:815 在所有路径上先返回，:845 恒不可达——纯冗余无行为影响，建议后续清理",
+      "location": "src/hooks/worktree-guard.js:845"
+    },
+    {
+      "severity": "P3",
+      "title": "原型协议指引双份维护面：STAGE_HINTS['brainstorm'] 从本门不可达，有效指引实际落 '(none)'",
+      "evidence": "readCurrentStage SQL 只回 execute/quick/null（:335），buildStageHint 的 stage 实参只可能是 execute/quick/'(none)'，brainstorm 专属条目（:74-78）是死文案；FR-01 提示断言实际经 '(none)' 行（:71-72）满足——design 已披露此契约并双落指引，但两份文案需人工同步，只改一处会漂移",
+      "location": "src/hooks/worktree-guard.js:74"
+    },
+    {
+      "severity": "P3",
+      "title": "位置豁免把已注册 worktree 内的 meta.json 自身也纳入放行面",
+      "evidence": "标准模式 worktreePath=getWorktreePath(name) 即存储目录（worktree.js:698），meta.json 落在其中，:815 豁免使其在 brainstorm 等阶段可写；损毁自限（getMeta parseJSON 失败返回 null → create 幽灵守卫接管）且 Bash 侧对 worktree 内本就无条件放行，风险自限于本变更自身登记",
+      "location": "src/hooks/worktree-guard.js:815"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T06:14:58Z"
+}

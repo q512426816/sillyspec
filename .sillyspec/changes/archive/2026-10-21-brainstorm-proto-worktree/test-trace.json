@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-brainstorm-proto-worktree",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-01",
+      "tests": [
+        "test/worktree-guard.test.mjs「brainstorm 期已注册 worktree 内源码写入放行 + 主树拦截提示含原型协议指引 + 未登记存储区仍拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-brainstorm-proto-worktree"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-02",
+      "tests": [
+        "test/worktree-native-overlay.test.mjs「linked worktree 内 create：meta 已存在幂等复用」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-brainstorm-proto-worktree"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-brainstorm-proto-worktree:flow:测试绑定FR-03",
+      "tests": [
+        "test/worktree-ensure-idempotent.test.mjs「ensure：meta 已存在幂等返回既有不重建」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-brainstorm-proto-worktree"
+    }
+  ]
+}

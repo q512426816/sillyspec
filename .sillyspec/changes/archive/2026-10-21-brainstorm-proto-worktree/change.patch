@@ -1,0 +1,2065 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2a922b5f..00ffcf39 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -130,6 +130,8 @@ modules:
+       - src/knowledge-digest.js
+       - src/redomain.js
+       - src/decision-redomain.js
++      - src/redomain-unmapped.js
++      - src/hot-cache.js
+       - src/doctor-diagnostics.js
+       - src/fr-index.js
+       - src/fs-atomic.js
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index a16f87bf..488652db 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -479,15 +479,36 @@ function applyEntryToSections(sections, entry, headHash, sectionNumber, originId
+ // INDEX.md decisions 路由行幂等维护（FR-05：写入责任在本模块；只动 ## Decisions 段内指向 decisions/ 的行）
+ // ---------------------------------------------------------------------------
+ 
++/** 路由行共享泛词（FR-02，2026-10-21-knowledge-tier-denoise）：decisions 面 decision|决策 /
++ *  FR 面 FR|需求|承接 曾是全体域共享关键词——查询含泛词即命中全部路由行，注入席位退化为
++ *  INDEX 行序抽签（本仓 Decisions 段 30 行全带泛词实证）。模板侧已删；存量行由
++ *  syncIndexRoutingLines(stripTokens) 幂等剥离。 */
++export const DECISIONS_ROUTE_STRIP_TOKENS = ['decision', '决策']
++export const FR_ROUTE_STRIP_TOKENS = ['FR', '需求', '承接']
++
++/** 路由行关键词表剥泛词：`- kw1|kw2 → [..](..)` 关键词段剔除 tokens（精确等值，trim 后判），
++ *  域名与其余关键词保留；关键词表剥空则整行原样保留（不造坏行）。幂等：已剥行再剥零漂移。 */
++function stripRouteTokens(line, tokens) {
++  if (!Array.isArray(tokens) || tokens.length === 0) return line
++  const m = String(line).match(/^(\s*-\s+)([^→]+?)(\s*→[\s\S]*)$/)
++  if (!m) return line
++  const kept = m[2].split('|').map((k) => k.trim()).filter(Boolean).filter((k) => !tokens.includes(k))
++  if (kept.length === 0) return line
++  return `${m[1]}${kept.join('|')}${m[3]}`
++}
++
+ /**
+  * 域文件实况 ↔ INDEX 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行。
+  * 2026-09-18-fr-index-l1 参数化：section/subdir/makeLine/matchTarget 经参（decisions 缺省不变），
+  * fr 侧传 'FR 需求索引' 段与 fr/ 子目录——两类路由行各守各段互不干扰。
++ * stripTokens（FR-02）：对保留行与新行关键词表幂等剥离共享泛词（缺省 [] 行为不变）。
+  */
+ export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
+   const sectionName = opts.section || 'Decisions'
+   const subdir = opts.subdir || 'decisions'
+-  const makeLine = opts.makeLine || ((d) => `- ${d}|decision|决策 → [${subdir}/${d}.md](${subdir}/${d}.md)`)
++  const stripTokens = Array.isArray(opts.stripTokens) ? opts.stripTokens : []
++  // 路由键=域名（FR-02 泛词退役后的唯一共享形态）；makeLine 传参者自定（fr 面 auto- 伪域附裸段关键词）
++  const makeLine = opts.makeLine || ((d) => `- ${d} → [${subdir}/${d}.md](${subdir}/${d}.md)`)
+   const esc = subdir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+   const targetRe = opts.matchTarget || new RegExp(`^-\\s+.*→\\s*\\[[^\\]]*\\]\\(${esc}/([^)#]+?)(?:\\.md)?(?:#[^)]*)?\\)\\s*$`)
+   const domainDir = join(knowledgeRoot, subdir)
+@@ -528,15 +549,15 @@ export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
+     for (const l of body) {
+       const m = l.match(targetRe)
+       if (!m) { kept.push(l); continue } // 非路由行（注释/空行）原样保留
+-      // 目标域文件仍存在的路由行原样保留（关键词可能被人工扩充）；失效行（文件已不存在）与重复行删
+-      if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(l) }
++      // 目标域文件仍存在的路由行保留（关键词可能被人工扩充——剥共享泛词，其余原样）；失效行（文件已不存在）与重复行删
++      if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(stripRouteTokens(l, stripTokens)) }
+     }
+     // 补行插在段尾空行之前（段尾空行是与下一 `## ` 的分隔，新行追加其后会出现行间空洞）
+     const tail = []
+     while (kept.length > 0 && kept[kept.length - 1].trim() === '') tail.unshift(kept.pop())
+     for (const d of desired) {
+       const m = d.match(targetRe)
+-      if (m && !seen.has(m[1])) kept.push(d) // 缺行补
++      if (m && !seen.has(m[1])) kept.push(stripRouteTokens(d, stripTokens)) // 缺行补（新模板本无泛词，剥是对旧式 makeLine 的防御）
+     }
+     kept.push(...tail)
+     const sepNeeded = secEnd < lines.length && kept.length > 0 && kept[kept.length - 1].trim() !== ''
+@@ -710,7 +731,7 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
+   }
+ 
+   // INDEX 路由行对账（仅在实际有条目写入时；零输出场景不动 INDEX）
+-  if (written.length > 0) syncIndexRoutingLines(knowledgeRoot)
++  if (written.length > 0) syncIndexRoutingLines(knowledgeRoot, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
+ 
+   return { written, skipped: null, needsWait }
+ }
+diff --git a/src/decision-redomain.js b/src/decision-redomain.js
+index e98c2518..ffeb04cc 100644
+--- a/src/decision-redomain.js
++++ b/src/decision-redomain.js
+@@ -18,7 +18,7 @@
+  */
+ import { existsSync, readFileSync, unlinkSync } from 'fs'
+ import { join } from 'path'
+-import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines } from './decision-distill.js'
++import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS } from './decision-distill.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ 
+ const DECISION_HEADER_RE = /^## (D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+)@v(\d+)\s*(.*)$/
+@@ -33,8 +33,9 @@ function newDomainPreamble(domain) {
+   ]
+ }
+ 
+-/** 段 → {id, number, version, title, change}（id=number@version 即迁域不换号的身份） */
+-function sectionMeta(s) {
++/** 段 → {id, number, version, title, change}（id=number@version 即迁域不换号的身份）。
++ *  导出供 redomain-unmapped 批量清偿驱动复用（FR-04，2026-10-21-knowledge-tier-denoise）。 */
++export function sectionMeta(s) {
+   const m = DECISION_HEADER_RE.exec(s.lines[0] || '')
+   if (!m) return null
+   const id = `${m[1]}@v${m[2]}`
+@@ -135,7 +136,7 @@ export function redomainDecisionEntries({ knowledgeRoot, from, to, anchors = nul
+   // INDEX 路由行：decisions 面默认参数（幂等；缺席行补上）
+   const indexPath = join(knowledgeRoot, 'INDEX.md')
+   const before = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''
+-  try { syncIndexRoutingLines(knowledgeRoot) } catch { /* INDEX 缺席/同步失败不拦迁移 */ }
++  try { syncIndexRoutingLines(knowledgeRoot, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS }) } catch { /* INDEX 缺席/同步失败不拦迁移 */ }
+   const after = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''
+ 
+   return {
+diff --git a/src/fr-index.js b/src/fr-index.js
+index ea720acd..e7ab0bf5 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -29,6 +29,7 @@ import {
+   joinKnowledgeFile,
+   syncIndexRoutingLines,
+   discoverModuleIndex,
++  FR_ROUTE_STRIP_TOKENS,
+ } from './decision-distill.js';
+ 
+ /** epoch：此前归档不检查/不索引（存量 93 份不回填——不伪造历史，D-007）。 */
+@@ -594,10 +595,13 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+       section: 'FR 需求索引',
+       subdir: FR_DIR,
+       // 伪域路由行追加裸段关键词（auto-backend 行同时吃 'backend' 命中——域名字面作为
+-      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）
++      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）。
++      // 泛词退役（FR-02，2026-10-21-knowledge-tier-denoise）：FR|需求|承接 不再全体域共享
++      // （查询含泛词命中全部 fr 行=注入席位行序抽签病根）；存量行 stripTokens 幂等剥离。
++      stripTokens: FR_ROUTE_STRIP_TOKENS,
+       makeLine: (d) => d.startsWith('auto-')
+-        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
+-        : `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
++        ? `- ${d}|${d.slice(5)} → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
++        : `- ${d} → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
+     });
+   }
+ 
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 39a68801..5179916b 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -67,11 +67,14 @@ const STAGE_HINTS = {
+     '  - <可验证标准>"',
+     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
+     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
++    '',
++    '若在头脑风暴阶段做真原型（变更 key 已出）：sillyspec worktree create <变更名> 进隔离树写原型，',
++    '已在 worktree 内则复用当前目录不重复创建；文档照常主树（worktree 内运行 sillyspec 自动锚回主仓根）。',
+   ],
+   'brainstorm': [
+-    '当前在 brainstorm（需求分析）阶段，这个阶段只写文档，不写代码。',
+-    '完成 brainstorm 后，流程会自动推进到 plan → execute。',
+-    'execute 阶段才允许写代码。',
++    '当前在 brainstorm（需求分析）阶段：spec 文档写主树；做真原型须先进隔离 worktree——变更 key 已出，运行 sillyspec worktree create <变更名>（已在 worktree 内则复用当前目录，不重复创建），原型代码写 worktree 内。',
++    '文档不受影响：worktree 内运行 sillyspec 会自动锚回主仓根，文档照常落主树。',
++    '完成 brainstorm 后，流程会自动推进到 plan → execute；execute 会复用已建的 worktree。',
+   ],
+   'plan': [
+     '当前在 plan（计划制定）阶段，这个阶段只写计划文档和任务蓝图，不写代码。',
+@@ -805,6 +808,12 @@ export function shouldBlockWrite(filePath, cwd) {
+   // 2. 文件门禁：文档类/配置类始终放行，但 worktree 存储区内的源码必须继续走登记校验。
+   if (!isInsideWorktreeStorage(absPath, projectRoot) && matchFileWhitelist(absPath)) return { blocked: false }
+ 
++  // 2.5 位置豁免（2026-10-21-brainstorm-proto-worktree）：已注册 worktree（meta.json 登记）
++  // 是隔离区——路径落在其内即放行，不问阶段，与 Bash 侧 worktree-cwd 全放行对称。
++  // 头脑风暴期做真原型的协议出口：变更 key 已出 → sillyspec worktree create → 进树写原型。
++  // 未登记的 worktrees 存储区子目录不沾此豁免（下方阶段门照拦）。
++  if (isInsideRegisteredWorktree(absPath, projectRoot)) return { blocked: false }
++
+   if (!['execute', 'quick'].includes(stage)) {
+     return {
+       blocked: true,
+diff --git a/src/hot-cache.js b/src/hot-cache.js
+new file mode 100644
+index 00000000..f8df55f7
+--- /dev/null
++++ b/src/hot-cache.js
+@@ -0,0 +1,60 @@
++/**
++ * hot-cache.js — 跨进程热路径缓存小工具（2026-10-21-knowledge-tier-denoise FR-03）
++ *
++ * 服务对象：纯读派生面（quicklog flow 归档伪条目扫描、knowledge-graph 构建）——输入是
++ * 冻结/低频变更面（归档目录、知识库、模块图），派生结果跨进程可复用。落点
++ * .sillyspec/.runtime/cache/（gitignored 且被平台 spec 上传排除——与 vector-capability
++ * 同款纪律；writeAtomicSync 自建父目录）。
++ *
++ * 契约：
++ *   - 读：SILLYSPEC_HOT_CACHE=off 逃生阀直 null；version/fingerprint 任一不匹配 → null；
++ *     ttlMs>0 且 savedAt 超窗 → null；坏 JSON/缺文件 → null（fail-open，缓存非真相源）
++ *   - 写：原子；写失败 fail-soft 返回 false（加速面失败不阻断本体）
++ *   - fingerprint 须可 JSON 稳定序列化且键序/元素序确定（数组按序构造，dirStamp 已排序）
++ */
++import { readFileSync, readdirSync, statSync } from 'fs'
++import { join } from 'path'
++import { writeAtomicSync } from './fs-atomic.js'
++
++/** 读缓存：命中返回 payload，任何不匹配/损坏/关闭 → null。 */
++export function readHotCache(cachePath, { version, fingerprint, ttlMs = 0, now = Date.now() }) {
++  if (process.env.SILLYSPEC_HOT_CACHE === 'off') return null
++  try {
++    const obj = JSON.parse(readFileSync(cachePath, 'utf-8'))
++    if (!obj || obj.version !== version) return null
++    if (JSON.stringify(obj.fingerprint) !== JSON.stringify(fingerprint)) return null
++    if (ttlMs > 0 && !(typeof obj.savedAt === 'number' && now - obj.savedAt <= ttlMs)) return null
++    return obj.payload
++  } catch { return null }
++}
++
++/** 写缓存：原子落盘 {version, fingerprint, savedAt, payload}；失败 fail-soft。 */
++export function writeHotCache(cachePath, { version, fingerprint, payload, now = Date.now() }) {
++  try {
++    writeAtomicSync(cachePath, JSON.stringify({ version, fingerprint, savedAt: now, payload }))
++    return true
++  } catch { return false }
++}
++
++/** 目录级指纹：子项名全集 + 目录 mtimeMs——子项增删/改名必变；不感知深层内容变化
++ *  （配冻结输入面用：归档目录、或配 TTL 硬上限）。目录缺席 → null。 */
++export function dirStamp(dir) {
++  try {
++    return { names: readdirSync(dir).sort(), mtimeMs: statSync(dir).mtimeMs }
++  } catch { return null }
++}
++
++/** 文件级指纹：目录内全部文件（含 _module-map.yaml 等非 md）名 → mtimeMs:size，按名排序。
++ *  感知本目录文件的新增/删除/就地重写（模块卡归档重写、知识文件蒸馏都在此列）；
++ *  不递归子目录（子目录增删由上层逐目录 fileDirStamp 覆盖）。目录缺席 → null。 */
++export function fileDirStamp(dir) {
++  try {
++    const out = []
++    for (const f of readdirSync(dir).sort()) {
++      const st = statSync(join(dir, f))
++      if (st.isDirectory()) continue
++      out.push([f, `${st.mtimeMs}:${st.size}`])
++    }
++    return out
++  } catch { return null }
++}
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 3055226e..112f9105 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -18,10 +18,11 @@
+  * 模块域内解析（沿 fr-index renderFrLines / module-changelog 行形态的机械契约）。
+  */
+ 
+-import { existsSync, readFileSync, readdirSync } from 'fs'
++import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+ import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
+ import { modulePathMatches, parseModuleMapSimple } from './modules.js'
++import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
+ 
+ // ── 本体常量（design.md 总体方案 §1 的代码化） ──
+ 
+@@ -60,7 +61,7 @@ function extractFilePaths(text, cap = 15) {
+ 
+ // ── 构建器 ──
+ 
+-export function buildKnowledgeGraph(specRoot) {
++function buildKnowledgeGraphFresh(specRoot) {
+   const nodes = new Map()
+   const edges = []
+   const byEdgeType = new Map()
+@@ -340,6 +341,85 @@ export function buildKnowledgeGraph(specRoot) {
+   return { root: specRoot, nodes, edges, byEdgeType, stats }
+ }
+ 
++// ── 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）──
++// 图召回是四层检索的第三层 advisory 保底（fail-soft）；构建成本随归档线性（逐变更读
++// design.md+change-patch.json），flow start/知识门/doctor 热路径上无缓存重付。D-003 墓碑
++// 切割原则不变：md/yaml 仍是唯一真相源——缓存只存派生图、键在输入指纹上，不构成第二
++// 真相源；任何失配全量重建。
++// 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
++// 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
++
++const GRAPH_CACHE_VERSION = 1
++const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
++
++function statSignature(p) {
++  try { const s = statSync(p); return `${s.mtimeMs}:${s.size}` } catch { return null }
++}
++
++/** 输入面指纹：knowledge（INDEX+decisions+fr）＋ docs 各项目（modules+scan 文件级）＋
++ *  归档根（dirStamp）＋ quicklog test-bindings。键序固定、数组排序——JSON 稳定比较。
++ *  各面缺席记 null（合法形态：无 docs/ 的小仓、无 fr 库）——缺席本身是指纹的一部分。 */
++function knowledgeGraphFingerprint(specRoot) {
++  const knowledgeDir = join(specRoot, 'knowledge')
++  const docsDir = join(specRoot, 'docs')
++  let projects = []
++  try {
++    projects = readdirSync(docsDir, { withFileTypes: true })
++      .filter((d) => d.isDirectory())
++      .sort((a, b) => a.name.localeCompare(b.name))
++      .map((d) => [
++        d.name,
++        fileDirStamp(join(docsDir, d.name, 'modules')),
++        fileDirStamp(join(docsDir, d.name, 'scan')),
++      ])
++  } catch { /* docs/ 缺席 = 无项目面（合法形态）*/ }
++  return {
++    index: statSignature(join(knowledgeDir, 'INDEX.md')),
++    decisions: fileDirStamp(join(knowledgeDir, 'decisions')),
++    fr: fileDirStamp(join(knowledgeDir, 'fr')),
++    projects,
++    archive: dirStamp(join(specRoot, 'changes', 'archive')),
++    testBindings: statSignature(join(specRoot, 'quicklog', 'test-bindings.json')),
++  }
++}
++
++/** 缓存载荷 → 图对象（nodes Map 按 payload 序重建保迭代序一致；byEdgeType/stats 复算）。 */
++function reviveGraph(payload, specRoot) {
++  const nodes = new Map(payload.nodes.map((n) => [String(n.id), n]))
++  const edges = payload.edges.map((e) => ({ s: String(e.s), t: String(e.t), type: e.type, note: String(e.note || '') }))
++  const byEdgeType = new Map()
++  for (const e of edges) {
++    if (!byEdgeType.has(e.type)) byEdgeType.set(e.type, [])
++    byEdgeType.get(e.type).push(e)
++  }
++  const stats = {
++    nodeCount: nodes.size,
++    edgeCount: edges.length,
++    byNodeType: [...nodes.values()].reduce((a, n) => (a[n.type] = (a[n.type] || 0) + 1, a), {}),
++    byEdgeType: edges.reduce((a, e) => (a[e.type] = (a[e.type] || 0) + 1, a), {}),
++  }
++  return { root: payload.root || specRoot, nodes, edges, byEdgeType, stats }
++}
++
++/** 构建入口（缓存包装，签名与返回结构不变）：指纹+TTL+版本键三闸，命中零全量重扫。 */
++export function buildKnowledgeGraph(specRoot) {
++  const fingerprint = knowledgeGraphFingerprint(specRoot)
++  const cachePath = join(specRoot, '.runtime', 'cache', 'knowledge-graph.json')
++  if (fingerprint) {
++    const cached = readHotCache(cachePath, { version: GRAPH_CACHE_VERSION, fingerprint, ttlMs: GRAPH_CACHE_TTL_MS })
++    if (cached && Array.isArray(cached.nodes) && Array.isArray(cached.edges)) return reviveGraph(cached, specRoot)
++  }
++  const graph = buildKnowledgeGraphFresh(specRoot)
++  if (fingerprint) {
++    writeHotCache(cachePath, {
++      version: GRAPH_CACHE_VERSION,
++      fingerprint,
++      payload: { root: graph.root, nodes: [...graph.nodes.values()], edges: graph.edges },
++    })
++  }
++  return graph
++}
++
+ /** changelog 三态行解析（表格行 ∪ 列表行 ∪ 标题态——backend 侧主形态；坏行跳过 fail-soft）。 */
+ export function parseChangelogEntries(content) {
+   const out = []
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 95c2b820..94446e9f 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -292,6 +292,16 @@ function asciiWordHit(sh, text) {
+   return new RegExp(`(^|[^a-z0-9-])${sh.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([^a-z0-9-]|$)`, 'i').test(text)
+ }
+ 
++/** 停车场文件（未归类 unmapped 域——decisions 与 fr 两面）：检索核心零返回，文件本身
++ *  保留在盘上供人工直查（search 面以 parkingFiltered 披露指路）。2026-10-21-knowledge-tier-denoise
++ *  FR-01，对齐 FR 注入面 2026-09-29-rot-retire-inject-cap 的 unmapped 过滤口径（停车场非行为域）。 */
++const PARKING_FILES = new Set(['decisions/unmapped.md', 'fr/unmapped.md'])
++
++/** file 是否停车场文件（decisions/fr unmapped；Windows 反斜杠归一后判等）。 */
++export function isParkingFile(file) {
++  return PARKING_FILES.has(String(file || '').replace(/\\/g, '/'))
++}
++
+ /**
+  * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
+  * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
+@@ -309,6 +319,7 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
+   if (all.length === 0) return null
+   const byFile = new Map()
+   for (const h of all) {
++    if (isParkingFile(h.file)) continue // 停车场文件不参与词片回退（FR-01）
+     let st = byFile.get(h.file)
+     if (!st) { st = { entries: [], texts: [] }; byFile.set(h.file, st) }
+     st.entries.push(h)
+@@ -395,16 +406,21 @@ export function matchByRouting(indexDir, taskContext) {
+   }
+ 
+   const contextLower = taskContext.toLowerCase()
+-  const matched = allEntries.filter(entry => {
++  const matchedRaw = allEntries.filter(entry => {
+     return entry.keywords.some(kw => keywordMatchesContext(kw, contextLower))
+   })
++  // 停车场过滤（FR-01，2026-10-21-knowledge-tier-denoise）：unmapped 路由行不进命中集；
++  // 只命中停车场行 → 按零命中处理（hybrid 链继续走向量/图/词片层），json.parkingFiltered
++  // 披露被滤文件供 search 面提示人工直查（可见性不因去噪丢失）。
++  const parkingFiltered = [...new Set(matchedRaw.filter((e) => isParkingFile(e.file)).map((e) => e.file))]
++  const matched = matchedRaw.filter((e) => !isParkingFile(e.file))
+ 
+   if (matched.length === 0) {
+     return {
+       matched: false,
+       entries: [],
+       report: 'Status: no matches',
+-      json: { matched: false, entry_count: 0, entries: [] },
++      json: { matched: false, entry_count: 0, entries: [], ...(parkingFiltered.length > 0 ? { parkingFiltered } : {}) },
+       decisionHits: []
+     }
+   }
+diff --git a/src/knowledge-quicklog.js b/src/knowledge-quicklog.js
+index 0381dbf0..67ad3db7 100644
+--- a/src/knowledge-quicklog.js
++++ b/src/knowledge-quicklog.js
+@@ -19,6 +19,7 @@
+ 
+ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
++import { readHotCache, writeHotCache, dirStamp } from './hot-cache.js'
+ 
+ const QUICKLOG_ENTRY_RE = /^##\s+(ql-[\w-]+)\s*\|\s*([^|]+)\s*\|\s*(.+)$/
+ // 文件注记行：`- path（中文括注）` / `- path(ascii)` / 裸 `- path`（allocateQuicklogEntry
+@@ -95,10 +96,23 @@ function parseQuicklogFileEntries(specBase) {
+   return entries
+ }
+ 
++/** 伪条目扫描缓存版本（解析契约变化时 bump 即全量失效）。 */
++const FLOW_ARCHIVE_CACHE_VERSION = 1
++
+ /** 源②：flow 归档变更伪条目——目录内 flow-state.yaml 在场即认（不校验 yaml 内容：伪条目
+- * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。 */
+-function parseFlowArchiveEntries(specBase) {
++ * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。
++ * 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）：指纹=归档根子项名全集+根 mtimeMs
++ * （一次 readdir+一次 stat，廉价每次重算）——命中即免逐目录列举与逐变更 proposal.md 读。
++ * 归档件是冻结审计面（无就地编辑形态），指纹对增删/改名完备；坏缓存/失配 fail-open 全量重建。
++ * 导出供测试断言缓存三态（命中/失效/坏缓存）。 */
++export function parseFlowArchiveEntries(specBase) {
+   const archiveDir = join(specBase, 'changes', 'archive')
++  const fingerprint = dirStamp(archiveDir)
++  if (fingerprint === null) return []
++  const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
++  const cached = readHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint })
++  if (Array.isArray(cached)) return cached
++
+   let dirs
+   try {
+     dirs = readdirSync(archiveDir, { withFileTypes: true })
+@@ -125,6 +139,7 @@ function parseFlowArchiveEntries(specBase) {
+       out.push({ qlId: d.name, date, title: title || d.name, solution: '', files: [], source: 'flow' })
+     } catch { /* 单目录读取异常 → 跳过该目录（fail-open，不影响其余源） */ }
+   }
++  writeHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint, payload: out })
+   return out
+ }
+ 
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+index aa6bbe0a..63551681 100644
+--- a/src/knowledge-vector.js
++++ b/src/knowledge-vector.js
+@@ -38,7 +38,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+ import { runtimeStatePath } from './runtime-paths.js'
+ import { join, dirname } from 'path'
+ import { readPlatformConfig } from './sync.js'
+-import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
++import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries, isParkingFile } from './knowledge-match.js'
+ 
+ const VECTOR_TIMEOUT_MS = 3000
+ const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
+@@ -181,12 +181,14 @@ function specPathToFile(specPath) {
+   return String(specPath).replace(/^knowledge\//, '').replace(/\\/g, '/')
+ }
+ 
+-/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。 */
+-function buildResultFromPlatform(indexDir, pvResults) {
++/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。导出供测试（FR-01 停车场
++ *  候选丢弃断言；策略面全在本地解析的契约不变）。 */
++export function buildResultFromPlatform(indexDir, pvResults) {
+   const byFile = new Map()
+   for (const r of pvResults) {
+     const file = specPathToFile(r.spec_path)
+     if (!file.startsWith('decisions/')) continue
++    if (isParkingFile(file)) continue // 停车场候选丢弃（FR-01）——平台向量语料含 unmapped，策略面本地滤
+     if (!byFile.has(file)) byFile.set(file, [])
+     byFile.get(file).push(r)
+   }
+diff --git a/src/redomain-unmapped.js b/src/redomain-unmapped.js
+new file mode 100644
+index 00000000..a174cfd7
+--- /dev/null
++++ b/src/redomain-unmapped.js
+@@ -0,0 +1,204 @@
++/**
++ * redomain-unmapped.js — unmapped 停车场存量批量清偿驱动（FR-04，2026-10-21-knowledge-tier-denoise）
++ *
++ * 决策/FR 条目落 unmapped 是域路由失败的兜底——源头匹配器已修（2026-10-15-module-path-glob-match），
++ * 存量需机器通道清偿（decision-redomain.js 头注：迁移原语已在，缺批量推断与编排）。本模块即编排：
++ *   - decisions 条目：文件锚（「文件：」字段行）逐文件 matchedModuleIds 投票 → 目标真模块域
++ *   - fr 条目：来源变更覆盖面（frCoverageFiles 三源：归档 design 交付表 ∪ change-patch ∪ git）→ 同款投票
++ *   - 投票零命中/无锚 → 留 unmapped 并在报告列明残量原因（宁漏勿错，不裸删）
++ * 迁移原语复用 redomainDecisionEntries / redomainFrEntries：段字节整体搬运、迁域不换号、
++ * 目标域同 id 同变更冲突跳过、幂等；INDEX 路由行随原语内 sync 维护（FR-02 泛词已退役）。
++ * 只动 knowledge 活库，不回写归档件（D-unmapped-152 死路：归档是冻结审计面）。
++ */
++import { existsSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { splitKnowledgeSections, discoverModuleIndex } from './decision-distill.js'
++import { matchedModuleIds, frCoverageFiles, FR_SECTION_RE } from './fr-index.js'
++import { anchorFilePaths } from './knowledge-match.js'
++import { redomainDecisionEntries, sectionMeta } from './decision-redomain.js'
++import { redomainFrEntries } from './redomain.js'
++
++const DECISION_FILE_LINE_RE = /^文件[：:]\s*(.+)$/
++const DECISION_ANCHOR_LINE_RE = /^锚点[：:]\s*(.*)$/
++const FR_HEADER_RE = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/
++
++/** 决策段 → 路径数组：双源——「文件：」行集（显式字段）∪「锚点：」行 anchorFilePaths 路径
++ *  提取（本仓实证 443 条全走锚点源：distill 的 文件： 字段极少发射，锚点是标准兜底
++ *  命中源——与 knowledge-match/knowledge-graph 的 anchors 边同判法）。 */
++function filesFromDecisionSection(lines) {
++  const out = []
++  for (const l of lines) {
++    const line = String(l || '')
++    const m = line.match(DECISION_FILE_LINE_RE)
++    if (m) out.push(...String(m[1]).split(/[,，、\s]+/).map((s) => s.replace(/\\/g, '/')).filter(Boolean))
++    const a = line.match(DECISION_ANCHOR_LINE_RE)
++    if (a) out.push(...anchorFilePaths(a[1]))
++  }
++  return out
++}
++
++/** FR 段「变更：」行（source change 迁移过滤键同款判法）。 */
++function changeFromSection(lines) {
++  for (const l of lines) {
++    const m = String(l || '').match(/^变更[：:]\s*(\S+)/)
++    if (m) return m[1]
++  }
++  return null
++}
++
++/** 文件集 → 目标域投票：逐文件 matchedModuleIds（修复后的 glob 匹配器，多命中并计），
++ *  最高票为域；平票字典序（确定性）。零命中 → null（留停车场）。 */
++function voteDomain(files, moduleIndex) {
++  const tally = new Map()
++  for (const f of files) {
++    for (const mid of matchedModuleIds(moduleIndex, f)) tally.set(mid, (tally.get(mid) || 0) + 1)
++  }
++  if (tally.size === 0) return null
++  return [...tally.entries()].sort((a, b) => (b[1] - a[1]) || (a[0] < b[0] ? -1 : 1))[0][0]
++}
++
++function planDecisionsFace(knowledgeRoot, archiveRoot, moduleIndex) {
++  const fromPath = join(knowledgeRoot, 'decisions', 'unmapped.md')
++  if (!existsSync(fromPath)) return { absent: true, groups: [], leftover: [] }
++  const parsed = splitKnowledgeSections(readFileSync(fromPath, 'utf8'))
++  const groups = new Map()
++  const leftover = []
++  for (const s of parsed.sections) {
++    const meta = sectionMeta(s)
++    if (!meta) continue
++    // 三源：文件： 行 ∪ 锚点路径（显式锚优先）→ 都不中再走来源变更覆盖面（fr 面同款——
++    // 本仓实证 417/443 锚点「未记录」，436/443 有「变更：」行，覆盖面是主力推断源）
++    const files = filesFromDecisionSection(s.lines)
++    const change = changeFromSection(s.lines)
++    let domain = files.length > 0 ? voteDomain(files, moduleIndex) : null
++    if (!domain && change) {
++      const cov = [...frCoverageFiles({ archiveRoot, changeName: change })]
++      if (cov.length > 0) domain = voteDomain(cov, moduleIndex)
++    }
++    if (!domain) {
++      const reason = files.length === 0
++        ? (change ? '锚点无路径且来源覆盖面不命中任何模块' : '无文件锚/锚点路径且无来源变更')
++        : '锚不命中任何模块'
++      leftover.push({ id: meta.id, title: meta.title, reason })
++      continue
++    }
++    if (!groups.has(domain)) groups.set(domain, [])
++    groups.get(domain).push(meta.id)
++  }
++  return {
++    groups: [...groups.entries()].map(([domain, ids]) => ({ domain, ids })),
++    leftover,
++    total: parsed.sections.filter((s) => sectionMeta(s)).length,
++  }
++}
++
++function planFrFace(knowledgeRoot, archiveRoot, moduleIndex) {
++  const fromPath = join(knowledgeRoot, 'fr', 'unmapped.md')
++  if (!existsSync(fromPath)) return { absent: true, groups: [], leftover: [] }
++  const parsed = splitKnowledgeSections(readFileSync(fromPath, 'utf8'), { sectionRegex: FR_SECTION_RE, buildId: (n) => n })
++  const groups = new Map()
++  const leftover = []
++  for (const s of parsed.sections) {
++    const h = FR_HEADER_RE.exec(s.lines[0] || '')
++    if (!h) continue
++    const id = h[1]
++    const title = (h[2] || '').trim()
++    const change = changeFromSection(s.lines)
++    const files = change ? [...frCoverageFiles({ archiveRoot, changeName: change })] : []
++    const domain = files.length > 0 ? voteDomain(files, moduleIndex) : null
++    if (!domain) {
++      leftover.push({ id, title, reason: !change ? '无来源变更' : '来源变更覆盖面不命中任何模块' })
++      continue
++    }
++    if (!groups.has(domain)) groups.set(domain, [])
++    groups.get(domain).push(id)
++  }
++  return {
++    groups: [...groups.entries()].map(([domain, ids]) => ({ domain, ids })),
++    leftover,
++    total: parsed.sections.filter((s) => FR_HEADER_RE.exec(s.lines[0] || '')).length,
++  }
++}
++
++/**
++ * 干跑计划：各面分组（目标域 → 条目 id 集）与残量（id/标题/不可推断原因）。
++ * @param {{knowledgeRoot: string, archiveRoot: string}} opts
++ * @returns {{decisions: object, fr: object}} 各面 {absent?, groups, leftover, total?}
++ */
++export function planUnmappedRedomain({ knowledgeRoot, archiveRoot }) {
++  const moduleIndex = discoverModuleIndex(knowledgeRoot) || { modules: {} }
++  return {
++    decisions: planDecisionsFace(knowledgeRoot, archiveRoot, moduleIndex),
++    fr: planFrFace(knowledgeRoot, archiveRoot, moduleIndex),
++  }
++}
++
++/**
++ * 执行清偿（先内部重算计划——apply 自带干跑等价性；幂等：重跑同批 0 迁移）。
++ * 单组失败不拦其余组（逐组收集结果与错误如实上报）。
++ * @param {{knowledgeRoot: string, archiveRoot: string, faces?: string[]}} opts faces 缺省双面
++ * @returns {{results: object, plan: object}} results 各面 {moved, movedByDomain, skippedConflicts, errors}
++ */
++export function applyUnmappedRedomain({ knowledgeRoot, archiveRoot, faces = ['decisions', 'fr'] }) {
++  const plan = planUnmappedRedomain({ knowledgeRoot, archiveRoot })
++  const empty = { moved: 0, movedByDomain: {}, skippedConflicts: [], errors: [] }
++  const results = {}
++  const run = (groups, migrate) => {
++    const acc = { moved: 0, movedByDomain: {}, skippedConflicts: [], errors: [] }
++    for (const g of groups) {
++      try {
++        const res = migrate(g)
++        acc.moved += res.moved.length
++        acc.movedByDomain[g.domain] = res.moved.length
++        if (Array.isArray(res.skippedConflicts)) acc.skippedConflicts.push(...res.skippedConflicts.map((id) => `${g.domain}:${id}`))
++      } catch (e) {
++        acc.errors.push({ domain: g.domain, error: e && e.message ? e.message : String(e) })
++      }
++    }
++    return acc
++  }
++  results.decisions = faces.includes('decisions')
++    ? run(plan.decisions.groups,
++        (g) => redomainDecisionEntries({ knowledgeRoot, from: 'unmapped', to: g.domain, anchors: g.ids }))
++    : { ...empty }
++  results.fr = faces.includes('fr')
++    ? run(plan.fr.groups,
++        (g) => redomainFrEntries({ knowledgeRoot, from: 'unmapped', to: g.domain, anchors: g.ids }))
++    : { ...empty }
++  return { results, plan }
++}
++
++/**
++ * CLI 子命令（stages/knowledge.js 经 tryImportSubcommandImpl 装载）：
++ * sillyspec knowledge redomain-unmapped [--face decisions|fr] [--apply]
++ * 缺省 dry-run 只出报告（JSON 出口与 search/graph 同族）；--apply 幂等落盘。
++ */
++export async function cmdRedomainUnmapped(dir, args, opts = {}) {
++  const specBase = opts.specDir || join(dir, '.sillyspec')
++  const knowledgeRoot = join(specBase, 'knowledge')
++  const archiveRoot = join(specBase, 'changes', 'archive')
++  const face = args.includes('--face')
++    ? (args[args.indexOf('--face') + 1] === 'decisions' ? 'decisions' : args[args.indexOf('--face') + 1] === 'fr' ? 'fr' : 'all')
++    : 'all'
++  const apply = args.includes('--apply')
++  const emit = (ok, data, error) => console.log(JSON.stringify({ ok, ...data, ...(error ? { error } : {}) }, null, 2))
++
++  if (!existsSync(join(knowledgeRoot, 'INDEX.md'))) {
++    emit(false, {}, { code: 'knowledge_dir_missing', path: knowledgeRoot })
++    return
++  }
++  if (apply) {
++    const faces = face === 'all' ? ['decisions', 'fr'] : [face]
++    const { results, plan } = applyUnmappedRedomain({ knowledgeRoot, archiveRoot, faces })
++    const leftoverFace = (name) => (faces.includes(name) ? plan[name].leftover : [])
++    emit(true, {
++      mode: 'apply', face,
++      decisions: results.decisions,
++      fr: results.fr,
++      leftover: { decisions: leftoverFace('decisions'), fr: leftoverFace('fr') },
++    })
++    return
++  }
++  const plan = planUnmappedRedomain({ knowledgeRoot, archiveRoot })
++  emit(true, { mode: 'dry-run', face, decisions: plan.decisions, fr: plan.fr })
++}
+diff --git a/src/redomain.js b/src/redomain.js
+index ae953b49..9f041eb9 100644
+--- a/src/redomain.js
++++ b/src/redomain.js
+@@ -14,7 +14,7 @@
+  */
+ import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+ import { join } from 'path'
+-import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines } from './decision-distill.js'
++import { splitKnowledgeSections, joinKnowledgeFile, syncIndexRoutingLines, FR_ROUTE_STRIP_TOKENS } from './decision-distill.js'
+ import { FR_SECTION_RE } from './fr-index.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ 
+@@ -141,9 +141,11 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byC
+     syncIndexRoutingLines(knowledgeRoot, {
+       section: 'FR 需求索引',
+       subdir: 'fr',
++      // 泛词退役（FR-02，2026-10-21-knowledge-tier-denoise）：与 fr-index.js 蒸馏侧同款模板
++      stripTokens: FR_ROUTE_STRIP_TOKENS,
+       makeLine: (d) => d.startsWith('auto-')
+-        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [fr/${d}.md](fr/${d}.md)`
+-        : `- ${d}|FR|需求|承接 → [fr/${d}.md](fr/${d}.md)`,
++        ? `- ${d}|${d.slice(5)} → [fr/${d}.md](fr/${d}.md)`
++        : `- ${d} → [fr/${d}.md](fr/${d}.md)`,
+     })
+   } catch { /* INDEX 缺席/同步失败不拦迁移（主手术已成） */ }
+   const after = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : ''
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 46e89201..3a1c4f87 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -100,29 +100,32 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+     const effectiveChange = changeName
+     const { WorktreeManager } = await import('../worktree.js')
+     const wm = new WorktreeManager({ cwd })
+-    const existingMeta = wm.getMeta(effectiveChange)
+-    if (existingMeta) {
+-      console.log(`🔗 worktree 已存在: ${existingMeta.worktreePath} (${existingMeta.mode})`)
++    // ensure（2026-10-21-brainstorm-proto-worktree）：meta 已登记即复用——头脑风暴原型期
++    // 早建的 worktree / native 复用形态与 execute 首建走同一幂等入口，原 getMeta 短路语义收敛于此。
++    let wtResult
++    try {
++      wtResult = wm.ensure(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
++    } catch (e) {
++      console.error(`❌ worktree 创建失败: ${e.message}`)
++      // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
++      // 同名分支可能是用户有意创建的——分支冲突时 create 报错已带三选一决策菜单，删不删
++      // 交由菜单/人工判断；doctor 的分支删除也有 review 锚点 + 无库保守双保护）。
++      console.error(`   修复建议：`)
++      console.error(`   1. 同名分支冲突/收编：按上方报错内三选一菜单处置（遗留分支确认作废后才删；用户指定分支用 --adopt-branch 收编）`)
++      console.error(`   2. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）`)
++      console.error(`   3. 目录残留：确认无未提交改动后清理 .sillyspec/.runtime/worktrees/${effectiveChange}/ 再重试`)
++      process.exit(1)
++    }
++    if (wtResult.existing) {
++      console.log(`🔗 worktree 已存在: ${wtResult.worktreePath} (${wtResult.mode})`)
+     } else {
+-      try {
+-        const result = wm.create(effectiveChange, { adoptBranch: !!(quickOpts && quickOpts.adoptBranch) })
+-        console.log(`🔗 worktree 已创建: ${result.worktreePath} (分支: ${result.branch}, 模式: ${result.mode}${result.adoptedBranch ? ', 收编既有分支' : ''})`)
+-      } catch (e) {
+-        console.error(`❌ worktree 创建失败: ${e.message}`)
+-        // 修复建议不再无条件推荐 git branch -D（坑 worktree-user-branch-conflict，2026-08-24：
+-        // 同名分支可能是用户有意创建的——分支冲突时 create 报错已带三选一决策菜单，删不删
+-        // 交由菜单/人工判断；doctor 的分支删除也有 review 锚点 + 无库保守双保护）。
+-        console.error(`   修复建议：`)
+-        console.error(`   1. 同名分支冲突/收编：按上方报错内三选一菜单处置（遗留分支确认作废后才删；用户指定分支用 --adopt-branch 收编）`)
+-        console.error(`   2. worktree 状态异常：sillyspec worktree doctor --fix（分支删除有 review 锚点保护，不会误删在用分支）`)
+-        console.error(`   3. 目录残留：确认无未提交改动后清理 .sillyspec/.runtime/worktrees/${effectiveChange}/ 再重试`)
+-        process.exit(1)
+-      }
++      console.log(`🔗 worktree 已创建: ${wtResult.worktreePath} (分支: ${wtResult.branch}, 模式: ${wtResult.mode}${wtResult.adoptedBranch ? ', 收编既有分支' : ''})`)
+     }
+     // 入口 deps 自检（D-002）：已存在 worktree（create short-circuit 不供给）时重供给
+-    if (existingMeta) {
++    //（existing 标志置 undefined：JSON.stringify 丢弃，不随 deps 写回污染 meta.json）
++    if (wtResult.existing) {
+       const execSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+-      await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, existingMeta)
++      await ensureDepsFreshness(cwd, effectiveChange, execSpecBase, { ...wtResult, existing: undefined })
+     }
+ 
+     // ── 跨仓仓 worktree 隔离（坑 cross-repo-no-worktree-isolation，2026-08-27 用户实证）──
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 5181af34..01cf12e0 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -118,8 +118,19 @@ export async function cmdSearch(dir, args, opts = {}) {
+     vectorHint = vectorSwitchHint(dir)
+   } catch { /* 提示 fail-open */ }
+ 
++  // 停车场过滤披露（FR-01，2026-10-21-knowledge-tier-denoise）：查询命中过 unmapped 停车场
++  // 文件但被检索核心滤除且最终零结果时，披露被滤文件——去噪不丢可见性，人工按需直查。
++  const parkingFiltered = !result.matched && Array.isArray(result.json && result.json.parkingFiltered)
++    ? result.json.parkingFiltered : []
++
+   if (!result.matched) {
+-    output(true, { query, matches: [], ...(vectorHint ? { hint: vectorHint } : {}) })
++    output(true, {
++      query, matches: [],
++      ...(vectorHint ? { hint: vectorHint } : {}),
++      ...(parkingFiltered.length > 0
++        ? { parkingFiltered, parkingNote: `停车场文件已过滤（${parkingFiltered.join('、')}）——按需直查文件` }
++        : {}),
++    })
+     return
+   }
+ 
+@@ -620,11 +631,12 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
+       '  propose / classify / inbox / graph / stats / renumber',
+       '  renumber [--dry-run|--apply]  存量决策号迁移为全局号（dry-run 先行；apply 写盘幂等）',
++      '  redomain-unmapped [--face decisions|fr] [--apply]  unmapped 停车场存量批量清偿（文件锚/覆盖面投票目标域；dry-run 先行）',
+       '',
+       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
+     ]
+     for (const l of lines) console.log(l)
+-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats'] })
++    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'redomain-unmapped'] })
+     return
+   }
+   const subCommand = args[0] || ''
+@@ -640,6 +652,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       return cmdRefresh(dir, args.slice(1), opts)
+     case 'propose':
+       return cmdPropose(dir, args.slice(1), opts)
++    case 'redomain-unmapped': {
++      // unmapped 停车场存量批量清偿（FR-04，2026-10-21-knowledge-tier-denoise）：decisions 按文件锚
++      // / fr 按来源变更覆盖面投票目标域；缺省 dry-run 报告先行，--apply 幂等迁移（不裸删、冲突跳过）。
++      const mod = await tryImportSubcommandImpl('../redomain-unmapped.js', 'redomain-unmapped.js')
++      if (!mod || typeof mod.cmdRedomainUnmapped !== 'function') {
++        output(false, {}, { code: 'not_implemented', subcommand: 'redomain-unmapped' })
++        return
++      }
++      return mod.cmdRedomainUnmapped(dir, args.slice(1), opts)
++    }
+     case 'graph': {
+       // 知识图谱查询面（2026-10-08-knowledge-graph）：neighbors/path/impact/orphans/dangling，
+       // --edges 边型筛选；全 JSON 出口（与 search/validate 同族）。
+@@ -748,7 +770,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       output(false, {}, {
+         code: 'unknown_subcommand',
+         subCommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest', 'graph', 'renumber', 'redomain-unmapped'],  // dump 随 graph 路由面（2026-10-09-graph-dump-layout）
+       })
+   }
+ }
+diff --git a/src/worktree.js b/src/worktree.js
+index 7ce69a8f..8b559c57 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -669,6 +669,23 @@ export class WorktreeManager {
+     return parseJSON(readFileSync(metaPath, 'utf8'));
+   }
+ 
++  /**
++   * 确保 worktree 存在（幂等入口，2026-10-21-brainstorm-proto-worktree）
++   * 头脑风暴原型协议的复用语义收敛点：变更 key 已出后可先 create（或 native 复用），
++   * 后续 run execute 再走本入口——meta 已登记即复用，不重建不重新 overlay。
++   * 与 ensureCrossWorktrees 同款「命中即复用」可测先例。
++   * 返回完整 meta 透传（调用方如 ensureDepsFreshness 会整包 spread 写回，瘦身返回会丢字段）。
++   * @param {string} changeName - 变更名
++   * @param {{ base?: string, adoptBranch?: boolean }} opts - 同 create
++   * @returns {{ ...meta, existing: boolean }} 完整 meta + existing 标志（未登记走 create 时为 create 返回值）
++   * @throws {Error} create 失败时原样上抛（git 不可用、changeName 为空等）
++   */
++  ensure(changeName, opts = {}) {
++    const existing = this.getMeta(changeName);
++    if (existing) return { ...existing, existing: true };
++    return { ...this.create(changeName, opts), existing: false };
++  }
++
+   /**
+    * 创建 worktree
+    * @param {string} changeName - 变更名
+diff --git a/test/decision-route-vocab.test.mjs b/test/decision-route-vocab.test.mjs
+index 51d14f09..640b82a1 100644
+--- a/test/decision-route-vocab.test.mjs
++++ b/test/decision-route-vocab.test.mjs
+@@ -74,10 +74,12 @@ test('② 查询侧词片回退：复现词命中文件＋条目；泛在词不
+   rmQuiet(root)
+ })
+ 
+-test('③ 真实库钉子：谓词守卫/顿号拆分 命中 unmapped 且条目可见；枚举不回归', () => {
++test('③ 真实库钉子：谓词守卫/顿号拆分 回退命中且条目可见；枚举不回归', () => {
+   const kmP = matchKnowledge(REAL_KB, '方案：维护一个谓词守卫')
+   assert.ok(kmP.matched, '谓词守卫 命中（回退前实测零命中）')
+-  assert.ok(kmP.entries.some((e) => String(e.file).includes('unmapped')), '文件级指向 unmapped')
++  // 2026-10-21-knowledge-tier-denoise：谓词条目已清偿迁出 unmapped，且 FR-01 起停车场文件
++  // 不可能出现在命中面——断言翻转为「命中全落真域」
++  assert.ok(kmP.entries.length > 0 && kmP.entries.every((e) => !String(e.file).includes('unmapped')), '文件级命中真域（停车场已清偿+过滤）')
+   assert.ok(kmP.decisionHits.some((h) => /谓词/.test(`${h.title} ${h.reason || ''}`)), '含谓词条目进 decisionHits')
+ 
+   // 2026-10-08-knowledge-inbox-triage 归档后 INDEX 新增关键词「拆分」（patterns.md 路由行）——
+diff --git a/test/design-knowledge-check.test.mjs b/test/design-knowledge-check.test.mjs
+index 9ba59616..17df64f6 100644
+--- a/test/design-knowledge-check.test.mjs
++++ b/test/design-knowledge-check.test.mjs
+@@ -34,12 +34,13 @@ function seedKnowledge(specBase) {
+     '# 知识索引',
+     '',
+     '## Patterns',
+-    '- 枚举|词表 → [枚举开放世界是错误方向](decisions/unmapped.md#枚举开放世界)',
++    // 夹具域 cli-entry（FR-01，2026-10-21-knowledge-tier-denoise：unmapped 停车场文件被检索核心过滤）
++    '- 枚举|词表 → [枚举开放世界是错误方向](decisions/cli-entry.md#枚举开放世界)',
+     '- 互不相关词 → [无关条目](plain-entry.md)',
+     '',
+   ].join('\n'))
+-  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
+-    '# unmapped 域决策',
++  writeFileSync(join(k, 'decisions', 'cli-entry.md'), [
++    '# cli-entry 域决策',
+     '',
+     '## D-001@v1 枚举开放世界是错误方向',
+     '状态： rejected',
+@@ -108,8 +109,8 @@ test('①-b 命中场景（死路注记）：implemented＋理由含「死路：
+   const { cwd, specBase } = makeRepo('dkc-death-')
+   seedKnowledge(specBase)
+   // 覆写为教训形态：status=implemented，死路只在理由注记里（2026-09-28-knowledge-inject-ranking）
+-  writeFileSync(join(specBase, 'knowledge', 'decisions', 'unmapped.md'), [
+-    '# unmapped 域决策', '',
++  writeFileSync(join(specBase, 'knowledge', 'decisions', 'cli-entry.md'), [
++    '# cli-entry 域决策', '',
+     '## D-001@v1 枚举开放世界是错误方向',
+     '状态： implemented',
+     '理由：正确模式：开放世界归 agent。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对', '',
+diff --git a/test/fr-index.test.mjs b/test/fr-index.test.mjs
+index 7fe56fa1..2980075a 100644
+--- a/test/fr-index.test.mjs
++++ b/test/fr-index.test.mjs
+@@ -277,9 +277,9 @@ function makeFixture() {
+   const fa = readFileSync(join(knowledgeRoot, 'fr', 'auto-backend.md'), 'utf8')
+   assert(fa.includes('伪域（auto- 前缀）：由文件路径段投票派生') && !fa.includes('模块卡：modules/auto-backend.md'),
+     '14b 伪域 preamble 自明（无模块卡不谎称）')
+-  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训）
++  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训；FR-02 泛词退役——FR|需求|承接 不再全体域共享）
+   const idx = readFileSync(join(knowledgeRoot, 'INDEX.md'), 'utf8')
+-  assert(idx.includes('- auto-backend|backend|FR|需求|承接 → [fr/auto-backend.md](fr/auto-backend.md)'),
++  assert(idx.includes('- auto-backend|backend → [fr/auto-backend.md](fr/auto-backend.md)'),
+     '14c 伪域路由行含裸段关键词（backend 可命中）')
+   // 14d: 泛化目录无具体段 → unmapped（原行为保持）
+   const db = mkChange('2026-09-21-pd2', '# R\n### FR-01: 单文件行为\n')
+diff --git a/test/fr-unmapped-repair.test.mjs b/test/fr-unmapped-repair.test.mjs
+index 5ebc13bb..a02aa1a2 100644
+--- a/test/fr-unmapped-repair.test.mjs
++++ b/test/fr-unmapped-repair.test.mjs
+@@ -9,7 +9,7 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath, pathToFileURL } from 'node:url'
+@@ -53,8 +53,11 @@ test('① 写入路径钉：indexRequirements 产出经解析 preamble 零孤立
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-test('② 修复数据钉：unmapped 714-720 幽灵修复条目可读且标题恢复', () => {
+-  const frs = readActiveFrDigest(join(ROOT, '.sillyspec', 'knowledge'), ['unmapped'])
++test('② 修复数据钉：714-720 幽灵修复条目可读且标题恢复（2026-10-21 清偿后分布真域）', () => {
++  // 2026-10-21-knowledge-tier-denoise：714-720 已按来源覆盖面迁出 unmapped（迁域不换号）——跨全 fr 域定位
++  const kr = join(ROOT, '.sillyspec', 'knowledge')
++  const domains = readdirSync(join(kr, 'fr')).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
++  const frs = readActiveFrDigest(kr, domains)
+   const repaired = frs.filter((f) => {
+     const n = parseInt(String(f.id).split('-')[2], 10)
+     return n >= 714 && n <= 720
+diff --git a/test/knowledge-gate-denoise.test.mjs b/test/knowledge-gate-denoise.test.mjs
+index 0caa576d..ff6cf21f 100644
+--- a/test/knowledge-gate-denoise.test.mjs
++++ b/test/knowledge-gate-denoise.test.mjs
+@@ -33,13 +33,15 @@ function rmQuiet(p) {
+ function seedKnowledge(specBase) {
+   const k = join(specBase, 'knowledge')
+   mkdirSync(join(k, 'decisions'), { recursive: true })
++  // 夹具域用 cli-entry（FR-01，2026-10-21-knowledge-tier-denoise：unmapped 停车场文件被检索核心
++  // 过滤，不能作命中夹具；共现静默行的文件名随之对齐 cli-entry.md）
+   writeFileSync(join(k, 'INDEX.md'), [
+     '# 知识索引', '',
+     '## Decisions',
+-    '- unmapped|枚举|词表 → [决策](decisions/unmapped.md)', '',
++    '- cli-entry|枚举|词表 → [决策](decisions/cli-entry.md)', '',
+   ].join('\n'))
+-  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
+-    '# unmapped 域决策', '',
++  writeFileSync(join(k, 'decisions', 'cli-entry.md'), [
++    '# cli-entry 域决策', '',
+     '## D-001@v1 枚举开放世界是错误方向',
+     '状态： rejected',
+     '否决理由：不要用枚举定义这个开放世界——机器只锚封闭面', '',
+@@ -113,7 +115,7 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回
+       '# 决策记录（Decisions）', '',
+       '## D-001@v1: 方案引入枚举词表机制',
+       '- question: 需求形态要不要用词表枚举判定？',
+-      '- answer: knowledge-gate 回应——unmapped.md D-001@v1 已甄别：本方案为零枚举面，不复潮。', '',
++      '- answer: knowledge-gate 回应——cli-entry.md D-001@v1 已甄别：本方案为零枚举面，不复潮。', '',
+     ].join('\n'))
+     const r = await runCapturing(() =>
+       completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
+@@ -131,7 +133,7 @@ test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回
+     writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
+       '# 决策记录（Decisions）', '',
+       '## D-001@v1: 方案引入枚举词表机制',
+-      '- question: 归 unmapped 域的旧机制怎么处理？', '',
++      '- question: 归 cli-entry 域的旧机制怎么处理？', '',
+     ].join('\n'))
+     const r = await runCapturing(() =>
+       completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
+diff --git a/test/knowledge-graph.test.mjs b/test/knowledge-graph.test.mjs
+index 0ffbcbb9..33e5fbac 100644
+--- a/test/knowledge-graph.test.mjs
++++ b/test/knowledge-graph.test.mjs
+@@ -122,8 +122,9 @@ test('①解析全形态：节点边数与本体落位（含同号跨变更不
+   try {
+     const before = walkFiles(root)
+     const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+-    // 不落盘：构建后文件集逐字节不变（D-003 墓碑切割——无缓存文件）
+-    assert.deepEqual(walkFiles(root), before)
++    // 落盘面唯一新增 = 派生图缓存（FR-03，2026-10-21-knowledge-tier-denoise；D-003 墓碑切割
++    // 语义不变——md/yaml 仍是唯一真相源，缓存只存派生图、键在输入指纹上、失配即弃）
++    assert.deepEqual(walkFiles(root), [...before, join(root, '.sillyspec', '.runtime', 'cache', 'knowledge-graph.json').slice(root.length)].sort())
+ 
+     const s = g.stats
+     // 决策 3 节点：D-001@v1(alpha) / D-002@v1(beta) / D-001@v1(gamma)——同号跨变更不折叠
+diff --git a/test/knowledge-hotpath-cache.test.mjs b/test/knowledge-hotpath-cache.test.mjs
+new file mode 100644
+index 00000000..f689971e
+--- /dev/null
++++ b/test/knowledge-hotpath-cache.test.mjs
+@@ -0,0 +1,178 @@
++/**
++ * knowledge-hotpath-cache.test.mjs — 2026-10-21-knowledge-tier-denoise FR-03
++ * quicklog flow 归档伪条目扫描与 knowledge-graph 构建的跨进程缓存：
++ * 命中等价 / 归档新增失效 / 坏缓存 fail-open / TTL 过期重建 / 输入面变化失效。
++ */
++
++import { join } from 'path'
++import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, utimesSync } from 'fs'
++import { fileURLToPath, pathToFileURL } from 'url'
++import { tmpdir } from 'os'
++
++const __filename = fileURLToPath(import.meta.url)
++const __dirname = join(__filename, '..')
++const root = join(__dirname, '..')
++
++const { parseFlowArchiveEntries } = await import(pathToFileURL(join(root, 'src', 'knowledge-quicklog.js')).href)
++const { buildKnowledgeGraph } = await import(pathToFileURL(join(root, 'src', 'knowledge-graph.js')).href)
++const { readHotCache } = await import(pathToFileURL(join(root, 'src', 'hot-cache.js')).href)
++
++let passed = 0, failed = 0
++
++function assert(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function setup(name) {
++  const dir = join(tmpdir(), `khc-test-${name}`)
++  rmSync(dir, { recursive: true, force: true })
++  mkdirSync(dir, { recursive: true })
++  return dir
++}
++function clean(...dirs) {
++  for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++function mkArchive(specBase, name, { title = `# ${name} 标题`, flowState = 'tier: thin\n' } = {}) {
++  const dir = join(specBase, 'changes', 'archive', name)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), flowState)
++  writeFileSync(join(dir, 'proposal.md'), `${title}\n`)
++  return dir
++}
++
++// ── quicklog 伪条目：命中等价 ──
++console.log('\n=== T1: 伪条目扫描——首扫落缓存、二扫逐字段等价 ===')
++{
++  const specBase = setup('t1')
++  try {
++    mkArchive(specBase, '2026-01-01-alpha', { title: '# 甲变更标题' })
++    mkArchive(specBase, '2026-01-02-beta', { title: '# 乙变更标题' })
++    const e1 = parseFlowArchiveEntries(specBase)
++    assert(e1.length === 2 && e1[0].qlId === '2026-01-01-alpha' && e1[0].title === '甲变更标题' && e1[0].source === 'flow', '首扫解析正确')
++    const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
++    assert(existsSync(cachePath), '缓存文件落盘')
++    const e2 = parseFlowArchiveEntries(specBase)
++    assert(JSON.stringify(e1) === JSON.stringify(e2), '二扫命中缓存逐字段等价')
++  } finally { clean(specBase) }
++}
++
++// ── quicklog 伪条目：缓存命中证据（子文件删除不触发指纹变化 → 仍返回缓存）──
++console.log('\n=== T2: 冻结面指纹——深层子文件变化不重扫（命中证据）===')
++{
++  const specBase = setup('t2')
++  try {
++    const dir = mkArchive(specBase, '2026-01-01-alpha')
++    parseFlowArchiveEntries(specBase)
++    rmSync(join(dir, 'flow-state.yaml')) // 归档根 mtime 不变——冻结面语义下走缓存
++    const e = parseFlowArchiveEntries(specBase)
++    assert(e.length === 1 && e[0].qlId === '2026-01-01-alpha', '子文件删除后仍命中缓存（归档根指纹未变）')
++  } finally { clean(specBase) }
++}
++
++// ── quicklog 伪条目：归档新增失效 + 坏缓存 fail-open ──
++console.log('\n=== T3: 归档新增触发指纹失效 → 全量重建含新目录 ===')
++{
++  const specBase = setup('t3')
++  try {
++    mkArchive(specBase, '2026-01-01-alpha')
++    parseFlowArchiveEntries(specBase)
++    mkArchive(specBase, '2026-01-02-beta', { title: '# 乙变更标题' })
++    const e = parseFlowArchiveEntries(specBase)
++    assert(e.length === 2 && e.some((x) => x.qlId === '2026-01-02-beta'), '新增归档目录进结果（重建）')
++  } finally { clean(specBase) }
++}
++console.log('\n=== T4: 坏缓存 fail-open → 全量重建不抛错 ===')
++{
++  const specBase = setup('t4')
++  try {
++    mkArchive(specBase, '2026-01-01-alpha')
++    parseFlowArchiveEntries(specBase)
++    writeFileSync(join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json'), '{broken json')
++    const e = parseFlowArchiveEntries(specBase)
++    assert(e.length === 1 && e[0].qlId === '2026-01-01-alpha', '坏缓存丢弃重建，结果正确')
++  } finally { clean(specBase) }
++}
++
++// ── knowledge-graph：命中等价 ──
++console.log('\n=== T5: graph 构建——缓存命中与全量构建逐字段等价 ===')
++{
++  const specBase = setup('t5')
++  try {
++    mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
++      '# Knowledge Index', '', '## Decisions',
++      '- core-engine|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
++    ].join('\n'))
++    writeFileSync(join(specBase, 'knowledge', 'decisions', 'core-engine.md'), [
++      '# 决策知识 — core-engine', '',
++      '## D-001@v1 决策一', '状态：implemented', '理由：理由', '文件：src/a.js', '',
++    ].join('\n'))
++    mkArchive(specBase, '2026-01-01-alpha')
++    writeFileSync(join(specBase, 'changes', 'archive', '2026-01-01-alpha', 'design.md'),
++      '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/a.js |\n')
++    const g1 = buildKnowledgeGraph(specBase)
++    assert(g1.nodes.size > 0 && g1.stats.byNodeType.decision >= 1, '全量构建有决策节点')
++    const cachePath = join(specBase, '.runtime', 'cache', 'knowledge-graph.json')
++    assert(existsSync(cachePath), '图缓存落盘')
++    const g2 = buildKnowledgeGraph(specBase)
++    assert(JSON.stringify([...g1.nodes.values()]) === JSON.stringify([...g2.nodes.values()]), '节点面逐字段等价（含迭代序）')
++    assert(JSON.stringify(g1.edges) === JSON.stringify(g2.edges), '边面逐字段等价')
++    assert(JSON.stringify(g1.stats) === JSON.stringify(g2.stats), 'stats 等价')
++    assert(JSON.stringify([...g1.byEdgeType.keys()]) === JSON.stringify([...g2.byEdgeType.keys()]), 'byEdgeType 键序等价')
++  } finally { clean(specBase) }
++}
++
++// ── knowledge-graph：TTL 过期重建 + 输入面变化失效 ──
++console.log('\n=== T6: TTL 过期 → 重建（savedAt 刷新为证据）===')
++{
++  const specBase = setup('t6')
++  try {
++    mkdirSync(join(specBase, 'knowledge'), { recursive: true })
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
++    buildKnowledgeGraph(specBase)
++    const cachePath = join(specBase, '.runtime', 'cache', 'knowledge-graph.json')
++    const raw = JSON.parse(readFileSync(cachePath, 'utf-8'))
++    const stale = Date.now() - 20 * 60 * 1000
++    writeFileSync(cachePath, JSON.stringify({ ...raw, savedAt: stale }))
++    buildKnowledgeGraph(specBase)
++    const raw2 = JSON.parse(readFileSync(cachePath, 'utf-8'))
++    assert(raw2.savedAt > stale + 10 * 60 * 1000, '超 TTL 缓存被重建刷新（savedAt 回到当下）')
++  } finally { clean(specBase) }
++}
++console.log('\n=== T7: 输入面变化（knowledge 文件新增）→ 指纹失效重建 ===')
++{
++  const specBase = setup('t7')
++  try {
++    mkdirSync(join(specBase, 'knowledge'), { recursive: true })
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
++    buildKnowledgeGraph(specBase)
++    // decisions 只经 INDEX Decisions 路由行发现（parseDecisionEntries 契约）——新增面带路由行
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
++      '# Knowledge Index', '', '## Decisions',
++      '- core-engine|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
++    ].join('\n'))
++    mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
++    writeFileSync(join(specBase, 'knowledge', 'decisions', 'core-engine.md'),
++      '# 决策知识 — core-engine\n\n## D-001@v1 决策一\n状态：implemented\n')
++    const g = buildKnowledgeGraph(specBase)
++    assert(g.stats.byNodeType.decision >= 1, '新增决策文件后重建出决策节点')
++  } finally { clean(specBase) }
++}
++console.log('\n=== T8: 逃生阀 SILLYSPEC_HOT_CACHE=off → 恒 miss ===')
++{
++  const specBase = setup('t8')
++  try {
++    mkArchive(specBase, '2026-01-01-alpha')
++    parseFlowArchiveEntries(specBase)
++    const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
++    process.env.SILLYSPEC_HOT_CACHE = 'off'
++    try {
++      assert(readHotCache(cachePath, { version: 1, fingerprint: {} }) === null, 'off 状态读缓存恒 null')
++    } finally { delete process.env.SILLYSPEC_HOT_CACHE }
++  } finally { clean(specBase) }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)
+diff --git a/test/knowledge-inject-ranking.test.mjs b/test/knowledge-inject-ranking.test.mjs
+index 45958788..9532b1b6 100644
+--- a/test/knowledge-inject-ranking.test.mjs
++++ b/test/knowledge-inject-ranking.test.mjs
+@@ -26,16 +26,17 @@ function rmQuiet(p) {
+   try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
+ }
+ 
+-/** 造迷你知识库：枚举路由行 → decisions/unmapped.md（无关 rejected 空标题×2 + 教训型死路条目）。 */
++/** 造迷你知识库：枚举路由行 → decisions/cli-entry.md（无关 rejected 空标题×2 + 教训型死路条目；
++ *  夹具域避开 unmapped——FR-01 起停车场文件被检索核心过滤，不能作命中夹具）。 */
+ function seedKb(root) {
+   mkdirSync(join(root, 'decisions'), { recursive: true })
+   writeFileSync(join(root, 'INDEX.md'), [
+     '# 知识索引', '',
+     '## Decisions',
+-    '- 枚举|词表|开放世界 → [决策](decisions/unmapped.md)', '',
++    '- 枚举|词表|开放世界 → [决策](decisions/cli-entry.md)', '',
+   ].join('\n'))
+-  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
+-    '# unmapped 域决策', '',
++  writeFileSync(join(root, 'decisions', 'cli-entry.md'), [
++    '# cli-entry 域决策', '',
+     '## D-009@v1',
+     '状态： rejected',
+     '否决理由：与需求直接冲突', '',
+diff --git a/test/knowledge-reason-overlap.test.mjs b/test/knowledge-reason-overlap.test.mjs
+index fd789c69..ebc20516 100644
+--- a/test/knowledge-reason-overlap.test.mjs
++++ b/test/knowledge-reason-overlap.test.mjs
+@@ -28,10 +28,10 @@ function seedKb(root) {
+   mkdirSync(join(root, 'decisions'), { recursive: true })
+   writeFileSync(join(root, 'INDEX.md'), [
+     '# 知识索引', '', '## Decisions',
+-    '- unmapped|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
++    '- cli-entry|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/cli-entry.md)', '',
+   ].join('\n'))
+-  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
+-    '# unmapped 域决策', '',
++  writeFileSync(join(root, 'decisions', 'cli-entry.md'), [
++    '# cli-entry 域决策', '',
+     '## D-009@v1',
+     '状态： rejected',
+     '否决理由：与需求直接冲突', '',
+@@ -82,11 +82,11 @@ test('④ 真实库钉子：穷举/关键词表查询 → 枚举开放世界（d
+   }
+ })
+ 
+-test('⑤ 评分剥数字标点：ASCII 变更名（unmapped-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
++test('⑤ 评分剥数字标点：ASCII 变更名（cli-entry-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
+   const kb = mkdtempSync(join(tmpdir(), 'ss-dn-'))
+   seedKb(kb)
+-  const km = matchKnowledge(kb, '2026-09-28-unmapped-drill')
+-  assert.ok(km.decisionHits.length >= 3, '路由 tag unmapped 命中')
++  const km = matchKnowledge(kb, '2026-09-28-cli-entry-drill')
++  assert.ok(km.decisionHits.length >= 3, '路由 tag cli-entry 命中')
+   assert.match(km.decisionHits[0].title || '', /枚举开放世界/, `死路先验置顶（实际首位：${JSON.stringify(km.decisionHits[0].title)}）`)
+   rmQuiet(kb)
+ })
+diff --git a/test/knowledge-tier-denoise.test.mjs b/test/knowledge-tier-denoise.test.mjs
+new file mode 100644
+index 00000000..7b0bcd35
+--- /dev/null
++++ b/test/knowledge-tier-denoise.test.mjs
+@@ -0,0 +1,285 @@
++/**
++ * knowledge-tier-denoise.test.mjs — 2026-10-21-knowledge-tier-denoise
++ * FR-01 unmapped 停车场三路零返回（路由命中/词片回退/向量候选）+ search 披露行；
++ * FR-02 路由行共享泛词剥离（模板零泛词/存量幂等剥离/人工关键词保留/泛词查询不再全池命中）。
++ */
++
++import { join } from 'path'
++import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
++import { fileURLToPath, pathToFileURL } from 'url'
++import { tmpdir } from 'os'
++
++const __filename = fileURLToPath(import.meta.url)
++const __dirname = join(__filename, '..')
++const root = join(__dirname, '..')
++
++const { matchByRouting, matchKnowledge, fallbackByQueryShingles, isParkingFile } = await import(
++  pathToFileURL(join(root, 'src', 'knowledge-match.js')).href
++)
++const { buildResultFromPlatform } = await import(
++  pathToFileURL(join(root, 'src', 'knowledge-vector.js')).href
++)
++const { syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS, FR_ROUTE_STRIP_TOKENS } = await import(
++  pathToFileURL(join(root, 'src', 'decision-distill.js')).href
++)
++const { redomainFrEntries } = await import(pathToFileURL(join(root, 'src', 'redomain.js')).href)
++const { redomainDecisionEntries } = await import(pathToFileURL(join(root, 'src', 'decision-redomain.js')).href)
++const { cmdSearch } = await import(pathToFileURL(join(root, 'src', 'stages', 'knowledge.js')).href)
++
++let passed = 0, failed = 0
++
++function assert(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function setup(name) {
++  const dir = join(tmpdir(), `ktd-test-${name}`)
++  rmSync(dir, { recursive: true, force: true })
++  mkdirSync(dir, { recursive: true })
++  return dir
++}
++function clean(...dirs) {
++  for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++function writeDecisions(kr, domains) {
++  for (const [domain, sections] of Object.entries(domains)) {
++    mkdirSync(join(kr, 'decisions'), { recursive: true })
++    writeFileSync(join(kr, 'decisions', `${domain}.md`), [
++      `# 决策知识 — ${domain}`, '',
++      ...sections.flatMap((s) => [s, '']),
++    ].join('\n'))
++  }
++}
++
++// ── FR-01：路由命中过滤停车场 ──
++console.log('\n=== T1: 路由命中——停车场行不进 matched/decisionHits ===')
++{
++  const dir = setup('t1')
++  try {
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)',
++      '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)',
++    ].join('\n'))
++    writeDecisions(dir, {
++      unmapped: ['## D-001@v1 停车场条目\n状态：rejected\n变更：2026-01-01-a\n否决理由：测试理由\n复潮条件：无'],
++      'core-engine': ['## D-002@v1 正域条目\n状态：rejected\n变更：2026-01-01-b\n否决理由：测试理由\n复潮条件：无'],
++    })
++    const r = matchByRouting(dir, '任务涉及决策处理')
++    assert(r.matched === true, '泛词命中后仍有真域结果')
++    assert(r.entries.length === 1 && r.entries[0].file === 'decisions/core-engine.md', 'matched 只剩 core-engine 行')
++    assert(r.decisionHits.every((h) => h.file !== 'decisions/unmapped.md'), 'decisionHits 不含停车场文件')
++  } finally { clean(dir) }
++}
++
++// ── FR-01：只命中停车场 → 零命中 + parkingFiltered 披露 ──
++console.log('\n=== T2: 只命中停车场行 → matched=false + json.parkingFiltered ===')
++{
++  const dir = setup('t2')
++  try {
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- unmapped|知识图谱|影响面 → [decisions/unmapped.md](decisions/unmapped.md)',
++    ].join('\n'))
++    writeDecisions(dir, { unmapped: ['## D-001@v1 图谱条目\n状态：rejected\n变更：2026-01-01-a\n否决理由：测试理由\n复潮条件：无'] })
++    const r = matchByRouting(dir, '知识图谱检索')
++    assert(r.matched === false, '停车场唯一命中按零命中处理')
++    assert(JSON.stringify(r.json.parkingFiltered) === JSON.stringify(['decisions/unmapped.md']), 'json.parkingFiltered 披露被滤文件')
++    assert(isParkingFile('decisions/unmapped.md') && isParkingFile('fr\\unmapped.md'.replace('\\', '/')), 'isParkingFile 双面判等')
++    // 语义无关查询零披露（未发生过滤）
++    const r2 = matchByRouting(dir, '完全不相关查询词')
++    assert(r2.json.parkingFiltered === undefined, '零命中且无过滤时不披露')
++  } finally { clean(dir) }
++}
++
++// ── FR-01：词片回退跳过停车场 ──
++console.log('\n=== T3: 词片回退——unmapped 复现窗口命中不返回 ===')
++{
++  const dir = setup('t3')
++  try {
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Conventions', '- 构建|lint → [conventions.md](conventions.md)', '',
++      '## Decisions',
++      '- unmapped|停车场键 → [decisions/unmapped.md](decisions/unmapped.md)',
++      '- core-engine|引擎键 → [decisions/core-engine.md](decisions/core-engine.md)',
++    ].join('\n'))
++    writeFileSync(join(dir, 'conventions.md'), '# 约定\n')
++    // 3 条目 → ceil = max(2, floor(0.05*3)) = 2：'图谱' 恰现 2 次落在复现窗口 [2,2]
++    writeDecisions(dir, {
++      unmapped: [
++        '## D-001@v1 图谱条目一\n状态：confirmed\n变更：2026-01-01-a\n理由：图谱相关',
++        '## D-002@v1 无关条目二\n状态：confirmed\n变更：2026-01-01-b\n理由：无关',
++        '## D-003@v1 无关条目三\n状态：confirmed\n变更：2026-01-01-c\n理由：无关',
++      ],
++      'core-engine': ['## D-004@v1 english title only\n状态：confirmed\n变更：2026-01-01-d\n理由：reason text'],
++    })
++    const fb = fallbackByQueryShingles(dir, '图谱设计')
++    assert(fb === null, '唯一复现文件是停车场 → 回退返回 null（零命中语义）')
++    const r = matchKnowledge(dir, '图谱设计')
++    assert(r.matched === false, 'matchKnowledge 端到端停车场零返回')
++  } finally { clean(dir) }
++}
++
++// ── FR-01：向量召回候选丢弃停车场 ──
++console.log('\n=== T4: buildResultFromPlatform——unmapped 候选被丢弃 ===')
++{
++  const dir = setup('t4')
++  try {
++    writeDecisions(dir, {
++      unmapped: ['## D-001@v1 停车场条目\n状态：rejected\n变更：2026-01-01-a\n否决理由：测试理由\n复潮条件：无'],
++      'core-engine': ['## D-002@v1 正域条目\n状态：rejected\n变更：2026-01-01-b\n否决理由：测试理由\n复潮条件：无'],
++    })
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- unmapped|停车场键 → [decisions/unmapped.md](decisions/unmapped.md)',
++      '- core-engine|引擎键 → [decisions/core-engine.md](decisions/core-engine.md)',
++    ].join('\n'))
++    const built = buildResultFromPlatform(dir, [
++      { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
++      { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-002@v1', score: 0.8 },
++    ])
++    assert(built !== null, '非停车场候选照常解析')
++    assert(built.entries.length === 1 && built.entries[0].file === 'decisions/core-engine.md', 'entries 不含停车场')
++    assert(built.decisionHits.every((h) => h.file !== 'decisions/unmapped.md') && built.decisionHits.length === 1, 'decisionHits 只剩正域条目')
++    const onlyParking = buildResultFromPlatform(dir, [
++      { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
++    ])
++    assert(onlyParking === null, '全部候选是停车场 → null（降级本地层）')
++  } finally { clean(dir) }
++}
++
++// ── FR-01：search 披露行 ──
++console.log('\n=== T5: knowledge search——过滤致零时披露停车场文件 ===')
++{
++  const repoDir = join(tmpdir(), 'ktd-test-t5-repo')
++  const dir = join(repoDir, '.sillyspec', 'knowledge')
++  rmSync(repoDir, { recursive: true, force: true })
++  try {
++    mkdirSync(dir, { recursive: true })
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- unmapped|知识图谱 → [decisions/unmapped.md](decisions/unmapped.md)',
++    ].join('\n'))
++    mkdirSync(join(dir, 'decisions'), { recursive: true })
++    writeFileSync(join(dir, 'decisions', 'unmapped.md'), '# 决策知识 — unmapped\n\n## D-001@v1 图谱条目\n状态：rejected\n变更：2026-01-01-a\n否决理由：测试理由\n复潮条件：无\n')
++    const lines = []
++    const origLog = console.log
++    console.log = (...a) => lines.push(a.join(' '))
++    try {
++      await cmdSearch(repoDir, ['--query', '知识图谱'], {})
++    } finally { console.log = origLog }
++    const out = lines.join('\n')
++    assert(out.includes('停车场文件已过滤'), '回显含披露行')
++    assert(out.includes('decisions/unmapped.md'), '披露行列明被滤文件')
++  } finally { clean(repoDir) }
++}
++
++// ── FR-02：decisions 面模板零泛词 + 存量剥离 + 人工关键词保留 + 幂等 ──
++console.log('\n=== T6: decisions 面 sync——泛词剥离/缺行零泛词补/幂等 ===')
++{
++  const dir = setup('t6')
++  try {
++    writeDecisions(dir, {
++      'core-engine': ['## D-001@v1 条目\n状态：confirmed\n变更：2026-01-01-a\n理由：理由'],
++      unmapped: ['## D-002@v1 条目\n状态：confirmed\n变更：2026-01-01-b\n理由：理由'],
++    })
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)',
++      '- unmapped|decision|决策|知识图谱|影响面 → [decisions/unmapped.md](decisions/unmapped.md)',
++      '- 非路由注释行原样保留',
++      '',
++      '## FR 需求索引',
++      '- core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)',
++    ].join('\n'))
++    const changed = syncIndexRoutingLines(dir, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
++    assert(changed === true, '首跑发生剥离')
++    const after1 = readFileSync(join(dir, 'INDEX.md'), 'utf8')
++    assert(after1.includes('- core-engine → [decisions/core-engine.md](decisions/core-engine.md)'), '存量行剥成纯域名键')
++    assert(after1.includes('- unmapped|知识图谱|影响面 → [decisions/unmapped.md](decisions/unmapped.md)'), '人工扩充关键词保留')
++    assert(!/^- .*\|decision\|决策 →/.test(after1), 'decisions 段不再含泛词行')
++    assert(after1.includes('- 非路由注释行原样保留'), '非路由行不动')
++    assert(after1.includes('- core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)'), 'fr 段不被 decisions 面 sync 波及')
++    const changed2 = syncIndexRoutingLines(dir, { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
++    assert(changed2 === false, '二跑幂等零漂移')
++    // 泛词查询不再全池命中
++    const r = matchByRouting(dir, '决策 decision')
++    assert(r.matched === false, '泛词查询不再命中全部路由行')
++  } finally { clean(dir) }
++}
++
++// ── FR-02：fr 面（含 auto- 伪域裸段关键词）──
++console.log('\n=== T7: fr 面 sync——泛词剥离/auto- 裸段键保留 ===')
++{
++  const dir = setup('t7')
++  try {
++    mkdirSync(join(dir, 'fr'), { recursive: true })
++    writeFileSync(join(dir, 'fr', 'core-engine.md'), '# FR 索引 — core-engine\n')
++    writeFileSync(join(dir, 'fr', 'auto-backend.md'), '# FR 索引 — auto-backend\n')
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## FR 需求索引',
++      '- core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)',
++      '',
++    ].join('\n'))
++    syncIndexRoutingLines(dir, {
++      section: 'FR 需求索引',
++      subdir: 'fr',
++      stripTokens: FR_ROUTE_STRIP_TOKENS,
++      makeLine: (d) => d.startsWith('auto-')
++        ? `- ${d}|${d.slice(5)} → [fr/${d}.md](fr/${d}.md)`
++        : `- ${d} → [fr/${d}.md](fr/${d}.md)`,
++    })
++    const after = readFileSync(join(dir, 'INDEX.md'), 'utf8')
++    assert(after.includes('- core-engine → [fr/core-engine.md](fr/core-engine.md)'), '存量 fr 行剥成纯域名键')
++    assert(after.includes('- auto-backend|backend → [fr/auto-backend.md](fr/auto-backend.md)'), 'auto- 伪域新行带裸段关键词且零泛词')
++    assert(!/\|FR\|需求\|承接/.test(after), 'fr 段不再含泛词')
++  } finally { clean(dir) }
++}
++
++// ── FR-02：迁移调用方接线（redomain 双面 sync 传参）──
++console.log('\n=== T8: redomain 双面迁移后 INDEX 路由行同步剥泛词 ===')
++{
++  const dir = setup('t8')
++  try {
++    mkdirSync(join(dir, 'fr'), { recursive: true })
++    writeFileSync(join(dir, 'fr', 'core-engine.md'), [
++      '# FR 索引 — core-engine', '', '## FR-core-engine-1 既有条目', '状态：active', '',
++    ].join('\n'))
++    writeFileSync(join(dir, 'fr', 'unmapped.md'), [
++      '# FR 索引 — unmapped', '', '## FR-unmapped-9 迁移条目', '变更：2026-01-01-a', '',
++    ].join('\n'))
++    writeDecisions(dir, {
++      'core-engine': ['## D-001@v1 条目\n状态：confirmed\n变更：2026-01-01-a\n理由：理由'],
++      unmapped: ['## D-002@v1 条目\n状态：confirmed\n变更：2026-01-01-b\n理由：理由'],
++    })
++    writeFileSync(join(dir, 'INDEX.md'), [
++      '# Knowledge Index', '',
++      '## Decisions',
++      '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)',
++      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)',
++      '',
++      '## FR 需求索引',
++      '- core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)',
++      '- unmapped|FR|需求|承接 → [fr/unmapped.md](fr/unmapped.md)',
++    ].join('\n'))
++    const frRes = redomainFrEntries({ knowledgeRoot: dir, from: 'unmapped', to: 'core-engine' })
++    assert(frRes.moved.length === 1, 'FR 面迁移 1 条')
++    const dRes = redomainDecisionEntries({ knowledgeRoot: dir, from: 'unmapped', to: 'core-engine' })
++    assert(dRes.moved.length === 1, 'decisions 面迁移 1 条')
++    const after = readFileSync(join(dir, 'INDEX.md'), 'utf8')
++    assert(!/\|decision\|决策/.test(after) && !/\|FR\|需求\|承接/.test(after), '迁移触发双面 sync 后 INDEX 零泛词')
++    assert(!after.includes('fr/unmapped.md]'), '源域删空后路由行移除')
++  } finally { clean(dir) }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+index 0d38a5f9..5630a61c 100644
+--- a/test/knowledge-vector-recall.test.mjs
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -9,7 +9,8 @@
+  *   ④ 超时 → 降级（短超时实测）；
+  *   ⑤ 路由命中 → 平台不被调用（请求计数钉住）；
+  *   ⑥ 开关关闭（local.yaml knowledge.vector_search: off / env off）→ 不被调用；
+- *   ⑦ 真实库锚点映射：平台返回 unmapped 的枚举/谓词条目锚 → 本地命中对应条目。
++ *   ⑦ 真实库锚点映射：平台返回正域条目锚 → 本地命中对应条目；返回 unmapped 停车场候选 →
++ *      丢弃（FR-01，2026-10-21-knowledge-tier-denoise——夹具亦由 unmapped 改 core-engine 正域）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -45,16 +46,17 @@ function mockPlatform(mode, results) {
+   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}`, requests })))
+ }
+ 
+-/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。 */
++/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。
++ *  夹具域 core-engine（FR-01 起 unmapped 停车场候选被检索核心丢弃，不能再作向量正例）。 */
+ function seedRepo(mockUrl) {
+   const root = mkdtempSync(join(tmpdir(), 'ss-vec-'))
+   mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+   writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
+     '# Knowledge Index', '', '## Decisions',
+-    '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
++    '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
+   ].join('\n'))
+-  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), [
+-    '# 决策知识 — unmapped', '',
++  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'core-engine.md'), [
++    '# 决策知识 — core-engine', '',
+     '## D-001@v1 枚举开放世界是错误方向',
+     '状态：implemented',
+     '理由：教训。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。', '',
+@@ -74,12 +76,12 @@ async function withMock(mode, results, fn) {
+ 
+ test('① 命中面：平台候选 → vector 结果＋本地策略面；同步 matchKnowledge 不变', async () => {
+   await withMock('ok', [
+-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-002@v1', score: 0.91 },
+-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.42 },
++    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-002@v1', score: 0.91 },
++    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.42 },
+   ], async (m) => {
+     const root = seedRepo(m.url)
+     const kb = join(root, '.sillyspec', 'knowledge')
+-    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（unmapped|decision|决策）不含这些词 → 路由零命中
++    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（core-engine|decision|决策）不含这些词 → 路由零命中
+     assert.equal(matchByRouting(kb, q).matched, false, '前置：路由零命中')
+     const km = await matchKnowledgeHybrid(kb, q, { cwd: root })
+     assert.equal(km.json.vector, true, 'vector 标记')
+@@ -121,7 +123,7 @@ test('②③④ 降级三面：404／不可达／超时 → 本地词片回退
+ })
+ 
+ test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台', async () => {
+-  await withMock('ok', [{ spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
++  await withMock('ok', [{ spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
+     // ⑤ 路由命中：查询含 tag「决策」
+     const root = seedRepo(m.url)
+     const kb = join(root, '.sillyspec', 'knowledge')
+@@ -140,25 +142,31 @@ test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台'
+   })
+ })
+ 
+-test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
++test('⑦ 真实库锚点映射：正域条目锚 → 本地命中；unmapped 停车场候选 → 丢弃（FR-01）', async () => {
+   // 锚迁移稳定（2026-10-14-decision-legacy-renumber 后条目 id 为全局号、旧号在 originId）——
+-  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）
++  // 动态查当前号作 mock 锚（顺带钉「向量契约：anchor=本地条目当前 id」等值语义）。
++  // FR-01（2026-10-21-knowledge-tier-denoise）起 unmapped 停车场候选被本地策略面丢弃——
++  // 正例改用正域条目，unmapped 候选改钉丢弃契约。
+   const { pathToFileURL } = await import('node:url')
+   const { parseDecisionEntries } = await import(pathToFileURL(join(REPO_ROOT, 'src', 'knowledge-match.js')).href)
+-  const entry = parseDecisionEntries(join(REAL_SPEC, 'knowledge')).find((h) => /枚举开放世界/.test(h.title || ''))
+-  assert.ok(entry, '真实库枚举开放世界条目在场')
++  const all = parseDecisionEntries(join(REAL_SPEC, 'knowledge'))
++  // 正例取任一正域条目（真实库 rejected 全在停车场——正域均为 implemented，锚点映射语义与状态无关）
++  const entry = all.find((h) => !/decisions\/unmapped\.md$/.test(h.file))
++  assert.ok(entry, '真实库正域条目在场')
+   await withMock('ok', [
+-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: entry.id, change: entry.change || '2026-09-26-thin-agent-tasks', score: 0.88 },
++    { spec_path: `knowledge/${entry.file}`, anchor: entry.id, change: entry.change || undefined, score: 0.88 },
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.99 },
+   ], async (m) => {
+     const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
+     process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
+     process.env.SILLYHUB_PLATFORM_TOKEN = env.SILLYHUB_PLATFORM_TOKEN
+     process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'on' // 真实库 local.yaml 无 vector_search 键——2026-10-15 缺省关后显式开启
+     try {
+-      // 真实库路由命中面广（枚举词表查询走路由），用路由零命中查询触发 vector 层：
++      // 真实库路由命中面广，用路由零命中查询触发 vector 层：
+       const km = await matchKnowledgeHybrid(join(REAL_SPEC, 'knowledge'), '帮我把行内顿号并列的标准切开', { cwd: REPO_ROOT })
+       assert.equal(km.json.vector, true, '走平台向量层')
+-      assert.ok(km.decisionHits.some((h) => /枚举开放世界/.test(h.title || '')), '锚点映射回本地条目')
++      assert.ok(km.decisionHits.some((h) => h.id === entry.id && h.file === entry.file), '正域锚点映射回本地条目')
++      assert.ok(km.decisionHits.every((h) => h.file !== 'decisions/unmapped.md'), 'unmapped 停车场候选被丢弃（FR-01）')
+       assert.ok(km.decisionHits.every((h) => typeof h.deathPath === 'boolean' || h.status), '策略面字段本地解析在场')
+     } finally {
+       delete process.env.SILLYHUB_PLATFORM_URL
+@@ -200,15 +208,15 @@ test('⑧ 缺省 auto（2026-10-15-vector-capability-autodetect）：键未写 
+ 
+ test('⑩ 过期能力缓存：probedAt 超过重试窗 → 重新探测（平台部署后自动启用）', async () => {
+   await withMock('ok', [
+-    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 },
++    { spec_path: 'knowledge/decisions/core-engine.md', anchor: 'D-001@v1', score: 0.9 },
+   ], async (m) => {
+     const root = mkdtempSync(join(tmpdir(), 'ss-vec-stale-'))
+     mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+     writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
+       '# Knowledge Index', '', '## Decisions',
+-      '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
++      '- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
+     ].join('\n'))
+-    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
++    writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'core-engine.md'), '# d\n\n## D-001@v1 某决策\n状态：implemented\n')
+     writeFileSync(join(root, '.sillyspec', 'local.yaml'),
+       `project:\n  type: generic\nplatform:\n  url: ${m.url}\n  token: test-token\n`)
+     // 预置过期 unavailable 缓存（probedAt = 2h 前）
+diff --git a/test/redomain-unmapped-bulk.test.mjs b/test/redomain-unmapped-bulk.test.mjs
+new file mode 100644
+index 00000000..943baaf2
+--- /dev/null
++++ b/test/redomain-unmapped-bulk.test.mjs
+@@ -0,0 +1,158 @@
++/**
++ * redomain-unmapped-bulk.test.mjs — 2026-10-21-knowledge-tier-denoise FR-04
++ * unmapped 停车场批量清偿：文件锚/覆盖面推断迁移、无锚留痕、冲突跳过、幂等重跑。
++ */
++
++import { join } from 'path'
++import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
++import { fileURLToPath, pathToFileURL } from 'url'
++import { tmpdir } from 'os'
++
++const __filename = fileURLToPath(import.meta.url)
++const __dirname = join(__filename, '..')
++const root = join(__dirname, '..')
++
++const { planUnmappedRedomain, applyUnmappedRedomain } = await import(
++  pathToFileURL(join(root, 'src', 'redomain-unmapped.js')).href
++)
++
++let passed = 0, failed = 0
++
++function assert(cond, msg) {
++  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
++  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
++}
++
++function setup(name) {
++  const dir = join(tmpdir(), `rub-test-${name}`)
++  rmSync(dir, { recursive: true, force: true })
++  return dir
++}
++function clean(...dirs) {
++  for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {}
++}
++
++/** 标准夹具：模块图（cli 域 ← src/cli/、core 域 ← src/core/）+ decisions/fr unmapped 存量 + 归档来源变更。 */
++function fixture(name) {
++  const specBase = setup(name)
++  const kr = join(specBase, 'knowledge')
++  mkdirSync(join(kr, 'decisions'), { recursive: true })
++  mkdirSync(join(kr, 'fr'), { recursive: true })
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'),
++    'modules:\n  cli:\n    paths:\n      - src/cli/\n  core:\n    paths:\n      - src/core/\n')
++  writeFileSync(join(kr, 'INDEX.md'), [
++    '# Knowledge Index', '',
++    '## Decisions',
++    '- unmapped|停车场 → [decisions/unmapped.md](decisions/unmapped.md)',
++    '- cli → [decisions/cli.md](decisions/cli.md)',
++    '- core → [decisions/core.md](decisions/core.md)', '',
++    '## FR 需求索引',
++    '- unmapped → [fr/unmapped.md](fr/unmapped.md)',
++    '- cli → [fr/cli.md](fr/cli.md)',
++    '- core → [fr/core.md](fr/core.md)',
++  ].join('\n'))
++  // decisions 存量：D-001 文件锚命中 cli；D-002 无锚无来源变更；D-003 锚不命中（来源覆盖面也缺席）；
++  // D-004 仅锚点行路径命中 core（锁锚点源）
++  writeFileSync(join(kr, 'decisions', 'unmapped.md'), [
++    '# 决策知识 — unmapped', '',
++    '## D-001@v1 有锚条目', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '文件：src/cli/one.js', '',
++    '## D-002@v1 无锚条目', '状态：implemented', '理由：理由', '',
++    '## D-003@v1 锚不命中', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '文件：docs/zz/other.md', '',
++    '## D-004@v1 锚点源条目', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '锚点：src/core/two.js:88', '',
++  ].join('\n'))
++  writeFileSync(join(kr, 'decisions', 'cli.md'), '# 决策知识 — cli\n')
++  writeFileSync(join(kr, 'decisions', 'core.md'), '# 决策知识 — core\n')
++  // fr 存量：FR-unmapped-1 来源变更覆盖面命中 core；FR-unmapped-2 无来源变更
++  writeFileSync(join(kr, 'fr', 'unmapped.md'), [
++    '# FR 索引 — unmapped', '',
++    '## FR-unmapped-1 有来源条目', '状态：active', '变更：2026-01-02-b', '',
++    '## FR-unmapped-2 无来源条目', '状态：active', '',
++  ].join('\n'))
++  writeFileSync(join(kr, 'fr', 'cli.md'), '# FR 索引 — cli\n')
++  writeFileSync(join(kr, 'fr', 'core.md'), '# FR 索引 — core\n')
++  // 归档来源变更 2026-01-02-b：design 交付表指向 src/core/
++  const arch = join(specBase, 'changes', 'archive', '2026-01-02-b')
++  mkdirSync(arch, { recursive: true })
++  writeFileSync(join(arch, 'design.md'),
++    '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/core/thing.js |\n')
++  return { specBase, kr }
++}
++
++const countEntries = (p, re) => (readFileSync(p, 'utf8').match(re) || []).length
++
++// ── T1: dry-run 计划——分组正确、残量留痕 ──
++console.log('\n=== T1: plan——文件锚/覆盖面投票与残量原因 ===')
++{
++  const f = fixture('t1')
++  try {
++    const plan = planUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
++    assert(plan.decisions.groups.length === 2, 'decisions：文件锚组（cli）+ 锚点源组（core）')
++    const g = Object.fromEntries(plan.decisions.groups.map((x) => [x.domain, x.ids]))
++    assert(g.cli && g.cli.join() === 'D-001@v1', 'D-001 按文件锚投票进 cli 组')
++    assert(g.core && g.core.join() === 'D-004@v1', 'D-004 按锚点路径源进 core 组')
++    const reasons = Object.fromEntries(plan.decisions.leftover.map((x) => [x.id, x.reason]))
++    assert(reasons['D-002@v1'] === '无文件锚/锚点路径且无来源变更' && reasons['D-003@v1'] === '锚不命中任何模块', 'decisions 残量留痕原因明确')
++    assert(plan.fr.groups.length === 1 && plan.fr.groups[0].domain === 'core'
++      && plan.fr.groups[0].ids.join() === 'FR-unmapped-1', 'fr：FR-unmapped-1 按来源覆盖面进 core 组')
++    assert(plan.fr.leftover.length === 1 && plan.fr.leftover[0].reason === '无来源变更', 'fr 残量留痕')
++    assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 4, 'dry-run 零落盘')
++  } finally { clean(f.specBase) }
++}
++
++// ── T2: apply——迁移落盘、INDEX 维护、幂等 ──
++console.log('\n=== T2: apply——迁移/INDEX/幂等 ===')
++{
++  const f = fixture('t2')
++  try {
++    const { results } = applyUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
++    assert(results.decisions.moved === 2 && results.decisions.movedByDomain.cli === 1 && results.decisions.movedByDomain.core === 1, 'decisions 迁 2 条（cli+core）')
++    assert(results.fr.moved === 1 && results.fr.movedByDomain.core === 1, 'fr 迁 1 条进 core')
++    assert(readFileSync(join(f.kr, 'decisions', 'cli.md'), 'utf8').includes('## D-001@v1'), 'D-001 段整体落 cli 域')
++    assert(readFileSync(join(f.kr, 'fr', 'core.md'), 'utf8').includes('## FR-unmapped-1'), 'FR-unmapped-1 段整体落 core 域')
++    assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 2, 'unmapped 决策剩残量 2（不裸删）')
++    assert(readFileSync(join(f.kr, 'decisions', 'core.md'), 'utf8').includes('## D-004@v1'), 'D-004 锚点源条目落 core 域')
++    assert(countEntries(join(f.kr, 'fr', 'unmapped.md'), /^## FR-/gm) === 1, 'unmapped FR 剩残量 1')
++    const idx = readFileSync(join(f.kr, 'INDEX.md'), 'utf8')
++    assert(idx.includes('- cli → [decisions/cli.md](decisions/cli.md)'), 'INDEX 路由行维护（零泛词形态）')
++    // 幂等：二次 apply——可推断条目已不在源，0 迁移零漂移
++    const r2 = applyUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
++    assert(r2.results.decisions.moved === 0 && r2.results.fr.moved === 0
++      && r2.results.decisions.errors.length === 0 && r2.results.fr.errors.length === 0, '幂等重跑 0 迁移零报错')
++  } finally { clean(f.specBase) }
++}
++
++// ── T3: 冲突跳过——目标域同 id 同变更既有段 ──
++console.log('\n=== T3: 目标域同 id 同变更冲突跳过不覆盖 ===')
++{
++  const f = fixture('t3')
++  try {
++    const before = readFileSync(join(f.kr, 'decisions', 'cli.md'), 'utf8')
++    // 预置目标域同 id 同变更段
++    writeFileSync(join(f.kr, 'decisions', 'cli.md'), before + '## D-001@v1 既有同号条目\n状态：implemented\n变更：2026-01-01-a\n理由：占位\n\n')
++    const { results } = applyUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
++    assert(results.decisions.skippedConflicts.length === 1 && results.decisions.skippedConflicts[0] === 'cli:D-001@v1', '冲突跳过并上报')
++    assert(readFileSync(join(f.kr, 'decisions', 'cli.md'), 'utf8').includes('既有同号条目'), '目标域既有段不被覆盖')
++    assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 3, '冲突条目留守源域')
++  } finally { clean(f.specBase) }
++}
++
++// ── T4: 面缺席容错 + faces 裁剪 ──
++console.log('\n=== T4: 面缺席容错与 faces 裁剪 ===')
++{
++  const specBase = setup('t4')
++  const kr = join(specBase, 'knowledge')
++  try {
++    mkdirSync(join(kr, 'decisions'), { recursive: true })
++    writeFileSync(join(kr, 'INDEX.md'), '# Knowledge Index\n\n## Decisions\n- unmapped|停车场 → [decisions/unmapped.md](decisions/unmapped.md)\n')
++    writeFileSync(join(kr, 'decisions', 'unmapped.md'), '# 决策知识 — unmapped\n\n## D-001@v1 孤条\n状态：implemented\n变更：2026-01-01-a\n理由：无锚\n')
++    const plan = planUnmappedRedomain({ knowledgeRoot: kr, archiveRoot: join(specBase, 'changes', 'archive') })
++    assert(plan.fr.absent === true, 'fr 面缺席容错（absent 标记非报错）')
++    assert(plan.decisions.leftover.length === 1, 'decisions 无锚残量照常留痕')
++    const { results } = applyUnmappedRedomain({ knowledgeRoot: kr, archiveRoot: join(specBase, 'changes', 'archive'), faces: ['fr'] })
++    assert(results.decisions.moved === 0 && Object.keys(results.decisions.movedByDomain).length === 0, 'faces 裁剪：decisions 面不动')
++  } finally { clean(specBase) }
++}
++
++console.log(`\n结果: ${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)
+diff --git a/test/redomain.test.mjs b/test/redomain.test.mjs
+index 4848804e..9d9441eb 100644
+--- a/test/redomain.test.mjs
++++ b/test/redomain.test.mjs
+@@ -85,7 +85,7 @@ test('③ 全域迁移：源空壳删除/目标新建（缺席域）/INDEX 补
+   assert.equal(r2.targetCreated, true)
+   assert.ok(existsSync(join(f2.knowledgeRoot, 'fr', 'events-channel.md')))
+   const idx = readFileSync(join(f2.knowledgeRoot, 'INDEX.md'), 'utf8')
+-  assert.match(idx, /events-channel\|FR\|需求/, 'INDEX 路由行已补')
++  assert.match(idx, /- events-channel → \[fr\/events-channel\.md\]/, 'INDEX 路由行已补')
+ })
+ 
+ test('④ 防线：同 ID 冲突拒/anchor 未命中拒/干跑不落盘', () => {
+diff --git a/test/worktree-ensure-idempotent.test.mjs b/test/worktree-ensure-idempotent.test.mjs
+new file mode 100644
+index 00000000..d68f9494
+--- /dev/null
++++ b/test/worktree-ensure-idempotent.test.mjs
+@@ -0,0 +1,106 @@
++/**
++ * worktree ensure 幂等语义回归（2026-10-21-brainstorm-proto-worktree FR-03）
++ *
++ * 「变更 key 产生后建的 worktree，后续 run execute 幂等复用不重建」：
++ * WorktreeManager.ensure 是该语义的收敛点（stage.js execute 分支原 getMeta 短路提取而来）。
++ *  1. meta 已登记 → ensure 返回完整 meta + existing=true，不触发 create 重建路径
++ *  2. 连续两次 ensure 结果一致（baseHash 不变、meta.json 不被改写）
++ *  3. meta 未登记 → ensure 走 create（existing=false），之后 ensure 再调即复用
++ */
++
++import fs from 'fs'
++import path from 'path'
++import os from 'os'
++import { execSync } from 'child_process'
++import { strict as assert } from 'node:assert'
++import { pathEq } from './_path-eq.mjs'
++
++function makeRepo() {
++  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-ensure-'))
++  execSync('git init', { cwd: d, stdio: 'pipe' })
++  execSync('git config user.email "test@test.com"', { cwd: d, stdio: 'pipe' })
++  execSync('git config user.name "test"', { cwd: d, stdio: 'pipe' })
++  execSync('git commit --allow-empty -m "init"', { cwd: d, stdio: 'pipe' })
++  fs.mkdirSync(path.join(d, '.sillyspec'), { recursive: true })
++  fs.writeFileSync(path.join(d, '.gitignore'), '.sillyspec/\n')
++  return d
++}
++
++// ── Case 1+2: meta 已登记 → ensure 幂等复用，两次一致、meta 不改写 ──
++async function test_existingMetaIdempotent() {
++  const d = makeRepo()
++  const { WorktreeManager } = await import('../src/worktree.js')
++  const wm = new WorktreeManager({ cwd: d })
++
++  const changeName = 'proto-change'
++  const metaDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', changeName)
++  fs.mkdirSync(metaDir, { recursive: true })
++  const metaPath = path.join(metaDir, 'meta.json')
++  const meta = {
++    changeName,
++    worktreePath: path.join(d, 'elsewhere'),
++    branch: 'sillyspec/proto-change',
++    baseHash: 'deadbeefdeadbeef',
++    mode: 'worktree',
++    baselineCommit: 'cafebabecafebabe',
++    depsStatus: 'fresh',
++  }
++  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
++  const before = fs.readFileSync(metaPath, 'utf8')
++
++  const r1 = wm.ensure(changeName)
++  assert.equal(r1.existing, true, 'Case 1 FAIL: existing should be true when meta present')
++  assert.equal(r1.branch, meta.branch, 'Case 1 FAIL: branch mismatch')
++  assert.equal(r1.baseHash, meta.baseHash, 'Case 1 FAIL: baseHash mismatch')
++  assert.equal(r1.baselineCommit, meta.baselineCommit, 'Case 1 FAIL: full meta should pass through (baselineCommit lost)')
++
++  const r2 = wm.ensure(changeName)
++  assert.equal(r2.existing, true, 'Case 2 FAIL: second ensure should also be existing')
++  assert.equal(r2.baseHash, r1.baseHash, 'Case 2 FAIL: baseHash changed between ensure calls')
++  assert.strictEqual(fs.readFileSync(metaPath, 'utf8'), before, 'Case 2 FAIL: meta.json should be untouched by ensure')
++
++  console.log('✅ Case 1+2: ensure with existing meta is idempotent (full meta passthrough, file untouched)')
++  fs.rmSync(d, { recursive: true, force: true })
++}
++
++// ── Case 3: meta 未登记 → ensure 首建（existing=false），再 ensure 即复用 ──
++async function test_missingMetaCreatesThenReuses() {
++  const d = makeRepo()
++  const { WorktreeManager } = await import('../src/worktree.js')
++  const wm = new WorktreeManager({ cwd: d })
++
++  const changeName = 'fresh-change'
++  const r1 = wm.ensure(changeName)
++  assert.equal(r1.existing, false, 'Case 3 FAIL: first ensure should create (existing=false)')
++  assert.ok(r1.branch === 'sillyspec/' + changeName, `Case 3 FAIL: branch=${r1.branch}`)
++  assert.ok(fs.existsSync(r1.worktreePath), 'Case 3 FAIL: worktree dir should exist after create')
++
++  const r2 = wm.ensure(changeName)
++  assert.equal(r2.existing, true, 'Case 3 FAIL: second ensure should reuse')
++  assert.ok(pathEq(r2.worktreePath, r1.worktreePath), 'Case 3 FAIL: worktreePath differs on reuse')
++  assert.equal(r2.baseHash, r1.baseHash, 'Case 3 FAIL: baseHash differs on reuse')
++
++  console.log('✅ Case 3: ensure creates when missing, then reuses idempotently')
++  fs.rmSync(d, { recursive: true, force: true })
++}
++
++// ── Run all ──
++
++const tests = [
++  ['existing meta idempotent', test_existingMetaIdempotent],
++  ['missing meta creates then reuses', test_missingMetaCreatesThenReuses],
++]
++
++let passed = 0, failed = 0
++for (const [name, fn] of tests) {
++  try {
++    await fn()
++    passed++
++  } catch (e) {
++    failed++
++    console.error(`❌ ${name}: ${e.message}`)
++  }
++}
++
++console.log(`\n${passed}/${tests.length} passed`)
++if (failed > 0) process.exit(1)
+diff --git a/test/worktree-guard.test.mjs b/test/worktree-guard.test.mjs
+index 092120ed..486f1da9 100644
+--- a/test/worktree-guard.test.mjs
++++ b/test/worktree-guard.test.mjs
+@@ -62,6 +62,28 @@ try {
+     'ordinary .sillyspec docs should remain writable'
+   )
+ 
++  // ── 头脑风暴原型协议（2026-10-21-brainstorm-proto-worktree）：位置豁免——已注册
++  // worktree（meta.json 登记）内源码写入任何阶段放行，与 Bash 侧 worktree-cwd 全放行
++  // 对称；主树维持拦截且提示含原型协议指引；未登记存储区子路径维持拦截。 ──
++  setStage('brainstorm')
++  {
++    const r = shouldBlock({ tool: 'Write', filePath: join(registeredWorktree, 'src', 'proto.tsx'), cwd: root })
++    assert.equal(r.blocked, false, 'brainstorm-stage writes inside registered worktree should be allowed (location exemption)')
++  }
++  {
++    const r = shouldBlock({ tool: 'Write', filePath: join(root, 'src', 'proto.tsx'), cwd: root })
++    assert.equal(r.blocked, true, 'brainstorm-stage main-tree source writes stay blocked')
++    assert.ok(
++      String(r.reason || '').includes('worktree create'),
++      'brainstorm block reason should include worktree create guidance',
++    )
++  }
++  assert.equal(
++    shouldBlock({ tool: 'Write', filePath: join(unregisteredWorktree, 'src', 'proto.tsx'), cwd: root }).blocked,
++    true,
++    'brainstorm-stage writes to unregistered worktree storage stay blocked'
++  )
++
+   // scan 阶段：readCurrentStage SQL 过滤 current_stage IN ('execute','quick')，scan 不在其中 →
+   // 等价 '(none)'。scan 文档覆盖保护由 shouldBlockScanDocOverwrite 独立判定（阶段无关）。
+   setStage('scan')
+diff --git a/test/worktree-native-overlay.test.mjs b/test/worktree-native-overlay.test.mjs
+index 26155c0f..168c3548 100644
+--- a/test/worktree-native-overlay.test.mjs
++++ b/test/worktree-native-overlay.test.mjs
+@@ -166,6 +166,52 @@ async function test5_nativeRecovery() {
+   fs.rmSync(d, { recursive: true })
+ }
+ 
++// ── Test 6: linked worktree 内 create 幂等复用（2026-10-21-brainstorm-proto-worktree FR-02）──
++// 「如果本身就在工作树里了，就不用再创建了」：头脑风暴原型协议下 agent 进驻 linked worktree
++// 后再次 create（如 run execute 触发）——meta 已存在必须原样返回，不 overlay 不重建。
++
++async function test6_createInsideWorktreeIdempotent() {
++  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-'))
++  execSync('git init', { cwd: d, stdio: 'pipe' })
++  execSync('git config user.email "test@test.com"', { cwd: d, stdio: 'pipe' })
++  execSync('git config user.name "test"', { cwd: d, stdio: 'pipe' })
++  execSync('git commit --allow-empty -m "init"', { cwd: d, stdio: 'pipe' })
++
++  const wtDir = path.join(d, 'wt')
++  execSync(`git worktree add ${wtDir} -b test-branch`, { cwd: d, stdio: 'pipe' })
++
++  const { WorktreeManager } = await import('../src/worktree.js')
++
++  // 预登记 native meta（模拟此前已在 worktree 内 create 过一次）
++  const changeName = 'proto-change'
++  const metaDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', changeName)
++  fs.mkdirSync(metaDir, { recursive: true })
++  const metaPath = path.join(metaDir, 'meta.json')
++  const meta = {
++    changeName,
++    worktreePath: wtDir,
++    branch: 'test-branch',
++    baseHash: 'deadbeefdeadbeef',
++    mode: 'native-worktree',
++  }
++  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
++  const before = fs.readFileSync(metaPath, 'utf8')
++
++  // 在 linked worktree 内再次 create → 幂等返回既有，不 overlay/重建
++  const wm = new WorktreeManager({ cwd: wtDir })
++  const r = wm.create(changeName)
++
++  assert(pathEq(r.worktreePath, wtDir), `Test 6 FAIL: worktreePath=${r.worktreePath}, expected ${wtDir}`)
++  assert.equal(r.branch, 'test-branch', 'Test 6 FAIL: branch mismatch')
++  assert.equal(r.baseHash, 'deadbeefdeadbeef', 'Test 6 FAIL: baseHash mismatch')
++  assert.equal(r.mode, 'native-worktree', 'Test 6 FAIL: mode mismatch')
++  assert.strictEqual(fs.readFileSync(metaPath, 'utf8'), before, 'Test 6 FAIL: meta.json should be untouched on idempotent reuse')
++
++  console.log('✅ Test 6: create inside linked worktree is idempotent (meta untouched)')
++
++  fs.rmSync(d, { recursive: true, force: true })
++}
++
+ // ── Run all ──
+ 
+ const tests = [
+@@ -174,6 +220,7 @@ const tests = [
+   ['self-overlay blocked', test3_selfOverlayBlocked],
+   ['meta idempotent', test4_metaIdempotent],
+   ['native recovery', test5_nativeRecovery],
++  ['create-inside-worktree idempotent', test6_createInsideWorktreeIdempotent],
+ ]
+ 
+ let passed = 0, failed = 0

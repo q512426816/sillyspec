@@ -1,0 +1,373 @@
+{
+  "change": "2026-10-21-brainstorm-proto-worktree",
+  "baseline": "3fd7cf3b6c29958a54cee8c72b4b89bf628d9a70",
+  "head": "25e267fc5c5063acdbb6eb7ba2b7eeb77970735c",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "src/decision-distill.js",
+    "src/decision-redomain.js",
+    "src/fr-index.js",
+    "src/hooks/worktree-guard.js",
+    "src/hot-cache.js",
+    "src/knowledge-graph.js",
+    "src/knowledge-match.js",
+    "src/knowledge-quicklog.js",
+    "src/knowledge-vector.js",
+    "src/redomain-unmapped.js",
+    "src/redomain.js",
+    "src/run/stage.js",
+    "src/stages/knowledge.js",
+    "src/worktree.js",
+    "test/decision-route-vocab.test.mjs",
+    "test/design-knowledge-check.test.mjs",
+    "test/fr-index.test.mjs",
+    "test/fr-unmapped-repair.test.mjs",
+    "test/knowledge-gate-denoise.test.mjs",
+    "test/knowledge-graph.test.mjs",
+    "test/knowledge-hotpath-cache.test.mjs",
+    "test/knowledge-inject-ranking.test.mjs",
+    "test/knowledge-reason-overlap.test.mjs",
+    "test/knowledge-tier-denoise.test.mjs",
+    "test/knowledge-vector-recall.test.mjs",
+    "test/redomain-unmapped-bulk.test.mjs",
+    "test/redomain.test.mjs",
+    "test/worktree-ensure-idempotent.test.mjs",
+    "test/worktree-guard.test.mjs",
+    "test/worktree-native-overlay.test.mjs"
+  ],
+  "totals": {
+    "files": 31,
+    "additions": 1370,
+    "deletions": 98
+  },
+  "savedAt": "2026-10-21T06:08:30.857Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 9,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 16
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3fd7cf3b6c29958a54cee8c72b4b89bf628d9a70",
+    "totals": {
+      "files": 31,
+      "additions": 1370,
+      "deletions": 98
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/decision-distill.js",
+        "additions": 26,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/decision-redomain.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/fr-index.js",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 12,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/hot-cache.js",
+        "additions": 60,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 82,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 18,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-quicklog.js",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/redomain-unmapped.js",
+        "additions": 204,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/redomain.js",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 22,
+        "deletions": 19,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 25,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/worktree.js",
+        "additions": 17,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/decision-route-vocab.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/design-knowledge-check.test.mjs",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/fr-index.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/fr-unmapped-repair.test.mjs",
+        "additions": 6,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-gate-denoise.test.mjs",
+        "additions": 7,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-graph.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-hotpath-cache.test.mjs",
+        "additions": 178,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-inject-ranking.test.mjs",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-reason-overlap.test.mjs",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-tier-denoise.test.mjs",
+        "additions": 285,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-vector-recall.test.mjs",
+        "additions": 27,
+        "deletions": 19,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/redomain-unmapped-bulk.test.mjs",
+        "additions": 158,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/redomain.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/worktree-ensure-idempotent.test.mjs",
+        "additions": 106,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-guard.test.mjs",
+        "additions": 22,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/worktree-native-overlay.test.mjs",
+        "additions": 47,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "26b40f71a2e3beb4e8744319aeda1077ba2c70e146f2c050e723f8e2014ed136",
+  "patchStatus": "ok"
+}

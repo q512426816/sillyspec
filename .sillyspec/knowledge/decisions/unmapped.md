@@ -281,3 +281,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：f5b89b761f7b562048b80f057db96b4d59275c71
 理由：最大风险=形式主义（为补流程装样子）——倒推入册的价值仅在审计链补全，若交付本身未验证就是空转。对冲：FR-02 绑定真实测试且收口实测门复核（6/6 绿是协议硬门非自述）。放弃的方案：a) 手工改上一变更归档件（往 change.patch 里补 diff）——归档件是 sha256 锚定的冻结审计面，回写违反不可变原则（D-unmapped-152 同款死路：归档件不回写）；b) revert 后重交付走完整协议——无谓翻搅 git 历史，交付内容零变化纯增风险；c) 不补册（接受缺口留 git log）——缺口已向用户披露、用户指示入册，补册成本一条轻量变更是合理对价。
+
+## D-unmapped-444@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-21-brainstorm-proto-worktree
+原编号：D-001@v1
+锚点：未记录
+最近确认：25e267fc5c5063acdbb6eb7ba2b7eeb77970735c
+理由：最大风险：豁免面覆盖 verify 阶段——「verify 只审查不改码」的软约束在 worktree 内被放开。判定：可接受。Bash 侧对 worktree 内 cwd 本就无条件放行（echo > 即可写文件），Write/Edit 门与 Bash 门不一致才是现状异常；隔离区内改动不进主树、apply 有 allowlist 门把交付面，风险有双层兜底。 放弃案①：按变更活跃态收窄（仅 DB status='active' 的变更 worktree 放行）——放弃：hook 无法知道当前 agent 属于哪个 change，只能按路径判；且归档残留 worktree 的可写性与 Bash 侧对齐更可预期，引入 DB 活跃态判断反而制造两门不一致窗口。 放弃案②：给 brainstorm 加专用声明（如 proto-worktree flag/mode）——放弃：多一层声明状态要维护，收益只是名义上的「阶段纯度」；位置豁免一条规则覆盖全部非 execute 阶段，且与 Bash 侧策略同构。 放弃案③：只改 STAGE_HINTS 指引不动豁免（纯文档）——放弃：hooked harness 里 agent 被拦后按指引进了 worktree 仍被 :808 阶段门拦死，指引成死路，问题没解。

@@ -3,3 +3,4 @@ ql-20260911-030-bad4 | guard 白名单收口：git branch 整类只读放行改�
 - 2026-10-15-title-label-skip | 标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句+存量…
 - 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
+- 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
