@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-p0-p1-hardening",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "2cbe778e170a09a1990e1e7cf189dfaa131b7017",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "0556fee8 夹带删除他变更目录（release-3-33-3 源目录清理），design 文件变更清单未声明",
+      "evidence": "该提交（本变更 task-01 回执）删除 .sillyspec/changes/2026-10-21-release-3-33-3/ 6 文件；核实为基线内归档提交 62905531 只拷贝到 changes/archive/ 未删源目录的迟滞清理，archive/ 副本完整在场，无数据丢失；属治理工件范围（冻结 patch 按其 note 政策不含 .sillyspec/changes/），仅范围登记缺口非数据正确性风险。",
+      "location": ".sillyspec/changes/2026-10-21-release-3-33-3/* (deleted in 0556fee8); archive at .sillyspec/changes/archive/2026-10-21-release-3-33-3/"
+    },
+    {
+      "severity": "P3",
+      "title": "local.yaml「读取失败」态 fail-soft 已实现但无测试断言（探针要求三态各有断言）",
+      "evidence": "doctor detectLocalYamlIntegrity 与 listKnownFailures/mutateKnownFailuresFile 对 readFileSync 失败均有 catch+指引分支（doctor-diagnostics.js:652 / config-known-failures.js:171,186），但测试只覆盖无文件（D1）/坏 YAML（D3）/BOM（D4）与 config 缺文件（P5）/坏 YAML（P3/P4），权限/占用型读取失败态零断言；fail-soft 代码路径在场，风险为覆盖缺口非行为缺陷。",
+      "location": "src/doctor-diagnostics.js:652-659; src/config-known-failures.js:171-176; test/doctor-local-yaml.test.mjs; test/config-known-failures.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "design 盲维作答「known-failures 命令只碰 cwd/.sillyspec/local.yaml」与实现的解析链不符（措辞偏窄）",
+      "evidence": "实现走 resolveLocalYaml 既有链（config-cat.js:33——specBase 候选+祖先链+git common-dir 兜底，含 home 拒绝守卫与 Windows 大小写归一），与 config cat/register-repo 同一解析契约；行为更符合仓内既有语义且有跨作用域守卫，但 design「只碰 cwd/.sillyspec」一句话与实际写目标面不完全一致，属设计文字精度问题非串台风险。",
+      "location": "src/index.js:5437-5451; src/config-cat.js:33-90; .sillyspec/changes/2026-10-21-p0-p1-hardening/design.md「边界与并发」第 4 问"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T14:41:27Z"
+}

@@ -1,0 +1,387 @@
+{
+  "change": "2026-10-21-p0-p1-hardening",
+  "baseline": "7324768c9b3cff27f1cc3a1c539d914950ecac5d",
+  "head": "2cbe778e170a09a1990e1e7cf189dfaa131b7017",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "docs/sillyspec/architecture-4a.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "docs/sillyspec/prompt-control-debt.md",
+    "docs/sillyspec/review-2026-08-20-full-audit.md",
+    "src/config-known-failures.js",
+    "src/doctor-diagnostics.js",
+    "src/handoff.js",
+    "src/index.js",
+    "src/machine-interface.js",
+    "src/progress/change-registry.js",
+    "src/run/bg-sync.js",
+    "src/run/complete.js",
+    "src/runtime-paths.js",
+    "src/spawn-settle.js",
+    "src/spec-sync.js",
+    "src/watcher.js",
+    "src/worktree-apply.js",
+    "src/worktree.js",
+    "test/apply-stash-conflict-scan.test.mjs",
+    "test/change-ownership-guards.test.mjs",
+    "test/config-known-failures.test.mjs",
+    "test/doctor-local-yaml.test.mjs",
+    "test/done-heartbeat.test.mjs",
+    "test/gate-stage-review-hint.test.mjs",
+    "test/handoff-takeover-hint.test.mjs",
+    "test/runtime-relayout.test.mjs",
+    "test/spawn-settle.test.mjs",
+    "test/spec-sync-manifest-cache.test.mjs",
+    "test/worktree-gitignore-probe.test.mjs"
+  ],
+  "totals": {
+    "files": 31,
+    "additions": 1527,
+    "deletions": 64
+  },
+  "savedAt": "2026-10-21T14:27:54.405Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 5,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "progress",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "machine-interface",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/machine-interface.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 11
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7324768c9b3cff27f1cc3a1c539d914950ecac5d",
+    "totals": {
+      "files": 31,
+      "additions": 1527,
+      "deletions": 64
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "docs/sillyspec/architecture-4a.md",
+        "additions": 17,
+        "deletions": 17,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/file-lifecycle.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 7,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/prompt-control-debt.md",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "docs/sillyspec/review-2026-08-20-full-audit.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/config-known-failures.js",
+        "additions": 247,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/doctor-diagnostics.js",
+        "additions": 57,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/handoff.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 24,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/machine-interface.js",
+        "additions": 16,
+        "deletions": 10,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/progress/change-registry.js",
+        "additions": 15,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/bg-sync.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 33,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/runtime-paths.js",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/spawn-settle.js",
+        "additions": 47,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 89,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/watcher.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree-apply.js",
+        "additions": 67,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/worktree.js",
+        "additions": 42,
+        "deletions": 10,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/apply-stash-conflict-scan.test.mjs",
+        "additions": 83,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/change-ownership-guards.test.mjs",
+        "additions": 40,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/config-known-failures.test.mjs",
+        "additions": 130,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/doctor-local-yaml.test.mjs",
+        "additions": 60,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/done-heartbeat.test.mjs",
+        "additions": 62,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/gate-stage-review-hint.test.mjs",
+        "additions": 29,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/handoff-takeover-hint.test.mjs",
+        "additions": 59,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/runtime-relayout.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/spawn-settle.test.mjs",
+        "additions": 56,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-manifest-cache.test.mjs",
+        "additions": 251,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/worktree-gitignore-probe.test.mjs",
+        "additions": 69,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "3c62e4ef5d706f6eeebb175b495184b598d54ff4c8835f0c24261af2b29d06e4",
+  "patchStatus": "ok"
+}

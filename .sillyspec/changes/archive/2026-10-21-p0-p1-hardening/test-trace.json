@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-p0-p1-hardening",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-dispatch.test.mjs",
+        "test/sillyhub-mcp-platform-fixes.test.mjs「回收链五项能力回归锚——既有用例全绿」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-02",
+      "tests": [
+        "test/apply-stash-conflict-scan.test.mjs「恢复后冲突标记扫描命中保留 stash+进 errors；干净恢复行为不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-03",
+      "tests": [
+        "test/done-heartbeat.test.mjs「慢收口心跳行（stderr）+结束清理；常规路径零输出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-04",
+      "tests": [
+        "test/gate-stage-review-hint.test.mjs「brainstorm/plan 默认档+--full 档 hint 在场且文案按 stage 参数化；verify 维持无 hint」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-05",
+      "tests": [
+        "test/change-ownership-guards.test.mjs「匿名同机自动升级/他人显式仍拦/跨机匿名仍拦」",
+        "test/handoff-takeover-hint.test.mjs「交接块含 --takeover 预告行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-06",
+      "tests": [
+        "test/worktree-gitignore-probe.test.mjs「EPERM fail-open+重试；真未忽略照旧拦；重试后按真实判定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-07",
+      "tests": [
+        "test/config-known-failures.test.mjs「增删查 roundtrip+注释保留+坏 YAML 拒改」",
+        "test/doctor-local-yaml.test.mjs「坏 YAML/BOM finding+好文件零 finding」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-10-21-p0-p1-hardening:flow:测试绑定FR-08",
+      "tests": [
+        "test/spawn-settle.test.mjs「spawn/error 事件即 resolve；上限兜底；已退出立即返回」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-p0-p1-hardening"
+    }
+  ]
+}

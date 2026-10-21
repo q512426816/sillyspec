@@ -72,3 +72,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：…
 - 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
 - 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费
+- 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复

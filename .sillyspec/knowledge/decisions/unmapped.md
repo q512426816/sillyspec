@@ -321,3 +321,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
 理由：最大风险：**缓存与服务器清单脱钩后的幻影行**（缓存含服务器已不存在的行 → 每轮生成 no-op delete op）。诱因仅限缓存文件被外部破坏或服务器纪元更换；防线三层——spec_version 倒退检测全量对账、inc_count 定期全量对账（默认 50 轮）、`SILLYSPEC_SPEC_SYNC_FULL=1` 逃生门；幻影 delete 在服务端本就是无行 no-op（R-07），changes/ 整删另有 computeSpecOps 空树守卫兜底。次风险：缓存文件体积与全量清单同量级（2MB 级）——本地磁盘无压力，读取 <50ms（实测量级），可接受。 放弃的方案：① 只存游标不存 files（每次让服务器返回「游标后全量」）——服务器需新语义（返回基线+增量两段）且无合并锚，协议复杂化；② ETag/If-None-Match 整体未变短路——无变化场景才有效，任何单行变化仍全量 2.2MB；③ 服务器端存客户端会话——有状态、多机 CLI 各自游标互踩，与无状态端点原则冲突。
+
+## D-unmapped-449@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-21-p0-p1-hardening
+原编号：D-001@v1
+锚点：未记录
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+理由：最大风险：① 心跳行污染机器可读输出——若走 stdout，`--json` 消费方 JSON.parse(stdout) 会炸；定案走 stderr（console.error），人类/agent 均可见且 stdout envelope 纯净（pwsh 下 stderr 偶发 NativeCommandError 包装是既有环境噪声，心跳仅 >60s 慢路径出现，可接受）。② 冲突标记正则误报（把文档示例当标记）——限定 stash 面文件集 + 行首 `<{7} `/`={7}$`/`>{7} ` 三形态锚定，误报面收敛到「stash 恢复刚触碰的文件自身含行首标记」，即使误报也只是一次可人工解除的 apply 失败，fail-closed 方向安全。③ anon 自动升级被滥用冒充接管——升级仅限「匿名占位（机器级标识）→ 同主机显式身份」，匿名占位本就只拦他机（R-01 明示局限），升级不弱于既有隔离强度；他人显式/跨机持有不受影响。 试过放弃：① libuv 退出断言崩溃根修——Node on Windows 运行时缺陷（async 句柄关闭竞态），应用层无法根除，降级为 spawn-settle bounded 等待缓解（句柄建立完成后再放行父进程退出）；② known_failures 用 js-yaml 整体重序列化——丢注释，用户文档性受损，放弃，改定向行级手术；③ handoff 原子转移所有权到新 SESSION_ID——与既有「SESSION_ID 是所有权标识非会话实例，交接要求保持不变」设计冲突（handoff.js 头注释与 stage-session ledger 契约），且换 ID 本就是偏离交接块指引的操作，定案为粘贴块内显式预告 --takeover 出路；④ `--continue` 幂等化等 P2 项——不在本变更 P0/P1 范围，未纳入。

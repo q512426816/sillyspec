@@ -18,3 +18,4 @@ ql-20260911-030-bad4 | updateStep stepId 查找收进 UPDATE 同一事务+阶段
 | 2026-10-13 | 2026-10-13-autocreate-atomic-claim | 幽灵变更事故源头竞态（2026-10-13-new-change-e5a27813）：run brainstorm /  |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-21 | 2026-10-21-overview-thin-stage | 总览投影补thin覆写修轻量渲染 |
+| 2026-10-21 | 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复 |

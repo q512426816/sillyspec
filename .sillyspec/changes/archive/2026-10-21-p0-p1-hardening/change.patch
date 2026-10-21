@@ -1,0 +1,2137 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 00ffcf39..efd5b743 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -54,6 +54,7 @@ modules:
+       - src/spec-dir-typo.js
+       - src/change-delete.js
+       - src/config-cat.js
++      - src/config-known-failures.js
+       - src/local-register.js
+       - src/commit-suggest.js
+       - src/flow.js
+@@ -222,6 +223,7 @@ modules:
+       - src/write-audit.js
+       - src/commit-guard.js
+       - src/watcher.js
++      - src/spawn-settle.js
+       - src/sentinel-assertions.js
+       - src/timeline.js
+       - src/route-hindsight.js
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index eb145111..4ce16d85 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI 
+ 
+ ### 1.2 流程状态机
+ 
+-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2021`），契约转换图（`src/stage-contract.js:2021`）：
++**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:2043`），契约转换图（`src/stage-contract.js:2043`）：
+ 
+ ```
+ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+@@ -59,10 +59,10 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ **推进不是自动的，分三层**：
+ 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
+-2. **步骤内推进** `completeStep`（`src/run/complete.js:163`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+-3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:477`）按状态机推荐下一阶段命令。
++2. **步骤内推进** `completeStep`（`src/run/complete.js:185`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
++3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:494`）按状态机推荐下一阶段命令。
+ 
+-**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:627`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
++**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:644`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+ 
+ ### 1.3 校验门与审批点
+ 
+@@ -70,8 +70,8 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ | 门 | 触发 | 阻断 | 依据 |
+ |---|---|---|---|
+-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2021` |
+-| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:203` |
++| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:2043` |
++| WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:228` |
+ | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
+ | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
+ | 阶段完成 gate 级联 | 所有 step completed 时跑 | 失败回滚 | `src/run/gates.js:371,628` |
+@@ -79,9 +79,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
+ 
+ **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:703`，统一收尾管线）顺序：
+-1. `runValidators`（客观产物校验，`src/stage-contract.js:1427`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
++1. `runValidators`（客观产物校验，`src/stage-contract.js:1449`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+ 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:1066`）。
+-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1507`）。
++3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1524`）。
+ 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:297`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+ 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
+ 
+@@ -99,12 +99,12 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ | 表 | 用途 | 关键列 / 依据 |
+ |---|---|---|
+-| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:262` |
+-| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:273` + 8 列迁移 |
+-| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:278` |
+-| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:305` |
+-| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:310` |
+-| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:319` |
++| `project` | 全局单行（id 恒为 1） | `name` / `schema_version`(=5) / 时间戳 — `db.js:268` |
++| `changes` | 变更主表 | `name`(UNIQUE) / `current_stage`(默认 scan) / `status`(active/archived) / 隔离列 / 平台同步戳 / `title`/`quicklog_id` — `db.js:279` + 8 列迁移 |
++| `stages` | 阶段行 | `change_id`(FK CASCADE) / `stage` / `status` / `revision` 等重开支持列 — `db.js:284` |
++| `steps` | 步骤行 | `stage_id`(FK CASCADE) / `status` / `output` / `ordering` + wait 交互列；**无 UNIQUE**，用 DELETE-then-INSERT UPSERT — `db.js:311` |
++| `batch_progress` | 批量任务统计 | `change_id`(UNIQUE) / total/completed/failed/skipped — `db.js:323` |
++| `approvals` | 平台审批状态 | `change_id`(UNIQUE) / `status`(默认 not_required)；`read()` 不读此表 — `db.js:325` |
+ 
+ 外键级联：`changes` 删 → `stages`/`steps`/`batch_progress`/`approvals` 级联删（`ON DELETE CASCADE`）。
+ 
+@@ -112,7 +112,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ - 当前版本 `DB_SCHEMA_VERSION = 5`（`src/db.js:10`），四处一致性被 `platform-sync-schema.test.mjs` 守卫。
+ - **版本戳驱动建表**：侧车 `${dbPath}.schema-version` 内容匹配则跳过 `_createSchema`（高频读路径省 DDL 开销，`db.js:75-85`）。
+-- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:349`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
++- **Migration**：无独立框架，全部走 `_migrateAddColumn`（`db.js:355`）幂等 `ALTER TABLE ADD COLUMN`；bump 版本戳 → 下次 init 整体重跑。
+ - 版本线（`src/progress/shared.js:29`）：v1/v2 progress.json → v3 迁 SQLite → v4 平台同步 base_ts/脏度 → v5 title/quicklog_id。
+ 
+ ### 2.3 数据治理
+@@ -161,7 +161,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | **L7 机器接口** | `src/machine-interface.js` | `gate`/`derive` 无状态只读子命令，输出 envelope JSON 供外部 daemon |
+ | **L8 工具层** | `fs-atomic.js`、`git-helper.js`、`db.js`、`constants.js` | 跨切面底层原语 |
+ 
+-> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1085`）。
++> W6 重构后 `run.js`（`run.js:5-6（barrel re-export）`）退化为纯 barrel，真正逻辑全在 `run/*.js` 叶子模块；`progress.js`（878 行）是 facade，转发给 4 个子模块（`progress.js:1096`）。
+ 
+ ### 3.2 调度内核（run/）职责
+ 
+@@ -228,7 +228,7 @@ git worktree 隔离多 Agent 并发改动：每个 change 在 `.sillyspec/.runti
+ 
+ - **创建**（方法 `worktree.js:360`，类 `worktree.js:286`）：submodule/native-worktree 检测 → gitignore 守卫 → 幽灵 worktree fail-closed → 解析 base → `git worktree add`（失败降级 in-place-fallback）→ 占位 meta 原子写 → dirty baseline overlay（`git diff --binary | git apply`）→ baseline checkpoint commit → 依赖供给 → 写完整 meta。
+ - **三种 mode**：`worktree`（标准）/ `native-worktree`（外部已 linked）/ `in-place-fallback`（沙箱/权限降级）。
+-- **cleanup**（`worktree.js:1507`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1507`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
++- **cleanup**（`worktree.js:1556`）：三重清理 + **fail-closed**（`hasUnappliedChanges` 有未 apply 交付则拒绝，需 `--force`）；**Windows junction 必须先解链**（`worktree.js:1556`），否则 `rmSync` 跟随 junction 误删主仓 node_modules。
+ - **node_modules provision**（`src/worktree-deps.js`）：junction/symlink 快路径（Windows `mklink /J`，POSIX `ln -s`，lockfile 一致才 link）+ install 兜底（`inferInstallCommand` 推断 node/maven/gradle/python/generic）。
+ 
+ ### 4.4 跨平台（Win/Linux/macOS）
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 23de277a..fc519098 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -291,7 +291,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1507（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1524（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index f818038e..663e3136 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:311/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:536；command.js:1726/1912/1992/2003/2201 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:337/389/659/693/763/912/2130（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:536；command.js:1726/1912/1992/2003/2201 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2147/2136/2216 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:950（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1304 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4626；shared.js:1159 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2962/3147；shared.js:1159 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4547；sync.js:1607/1607 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4499；sync.js:2339 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4633；shared.js:1159 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2969/3147；shared.js:1159 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4554；sync.js:1607/1607 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4506；sync.js:2339 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4285/4286/4270；probe.js:137 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:4292/4286/4270；probe.js:137 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:56`、枚举消费在 `index.js:4383`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:56`、枚举消费在 `index.js:4390`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 420450df..ef1e43c7 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -101,7 +101,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：一次 plan 阶段 + quick 阶段使用复盘的 7 条改进点，逐条对源码核实后裁决（先查本债单 + 实证，不重复提议已决策项）。
+ 
+ - ⏭ **plan-b TaskCard 行数逼字段丢失**：plan.js prompt 要求「总长度 20~40 行」（plan.js:508/388/491，2026-08-18 行号校准），但 plan-postcheck.js **无 max-line 校验**（grep 无 `>40`/maxLine）→ 20-40 是纯 persuasion；且 postcheck **不校验 title_zh 等字段完整性**（grep 无 title_zh）→ 子代理为压行数丢字段是**静默丢失**（实证：task-05 合并 title/title_zh 只留中文 title）。**裁决 defer**：修法二选一——① 放宽 prompt 行数上限（如 20~50，复杂 task 可到 60，frontmatter 字段不可缺）；② plan-postcheck 加 frontmatter 字段完整性硬校验（title_zh 等）。均改源码超 doc-only，留 follow-up；倾向②（enforcement 优于放宽劝说，符合债单原则）。
+-- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`src/run/complete.js:968` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:968/490），plan/execute/verify 仍走通用 else（complete.js:968）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
++- 🐛 **plan-c plan→scan 回头路（已知半修 bug）**：`src/run/complete.js:999` 注释明说——scan 是 STAGE_ORDER 首位且「永未完成」，通用 `_getNextSuggestion` 会「误推 scan（回头路）」；**仅 brainstorm/quick 加了专属分支**（complete.js:999/490），plan/execute/verify 仍走通用 else（complete.js:999）→ 用户 plan 完成后被提示「下一步 scan」（语义错，plan 后应 execute）。**裁决**：Bug，修法 = 给 plan/execute/verify 加专属分支（或 _getNextSuggestion 排除 auxiliary/永未完成阶段），改 complete.js，留 follow-up。
+ - ⏭ **quick-① QUICKLOG 四段 `--output` 落盘格式粗糙**：quick step3 `--done --output` 的四段（需求/根因/方案/结果）被 CLI 原样塞进单行 `结果：需求：…结果：…`（双层「结果：」前缀），强制 agent 手工精修拆行。属 P6「仪式负担下沉 CLI」主题——CLI 应解析四段分行落盘，不该让 agent 补排版。**裁决 defer**：改 quicklog.js 落盘逻辑（按「需求：/根因：/方案：/结果：」split 成 4 行），留 follow-up。
+   - **2026-08-04 follow-up 已修 + 再补一坑**：首修用 `split(/(?=需求：|根因：|方案：|结果：)/)` 任意位置切，实证发现**正文引用字段标签字样会被误切**（根因里写「双层「结果：」前缀」→ 根因行被断成两行）——正是本次登记 quick 的 QUICKLOG 精修现场踩到。**二修改双级扫描 `splitSingleLineFields`**：先按字段边界严格扫描（真实标签=串首/前导空白/句末标点。；！？，引用字样因前导「/|( 非边界字符而跳过），严格失败退回顺序扫描兜底，缺标签落单行兜底。补回归 test 2e/2f（改前红改后绿），quicklog 82/0。残余边界：正文引用标签且**前导恰为空白/句末标点**时仍可能错位（如「按 方案： 处理」），属无标记文本固有歧义，写正文避免给标签字样加空白前缀。
+ - ⏭ **quick-② lint 对 doc-only 改动空转**：CLAUDE.md 规则 8 要求 `--done` 前 npm test + lint，但 lint 只扫 JS 不碰 docs/（实证「Checked 66 JavaScript files」对 doc 改动零信息）。**裁决 defer**：修法二选一——① quick 按 `--files` 文件类型跳过 lint（全非 .js 时跳过）；② CLAUDE.md 规则 8 细化为「仅当触及 src/test 时必跑 lint/test」。倾向①（CLI 自动判定优于改人类指令）。
+@@ -175,7 +175,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ ### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
+ 状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
+ 
+-来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1262`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
++来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1346`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+ 
+ **钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
+ 
+@@ -206,7 +206,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+ 
+-- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:151 / prompt.js:1435 / gates.js:561 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:184，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:304）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:304）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
++- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:151 / prompt.js:1449 / gates.js:561 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:184，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:304）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:304）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+ 
+ ---
+ 
+@@ -216,7 +216,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
+ 
+ **brainstorm 复盘**
+-- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1808）= advisory 打印不阻断（gates.js:1808 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1808）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
++- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1825）= advisory 打印不阻断（gates.js:1825 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1825）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+ - ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
+ - ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
+ 
+@@ -297,7 +297,7 @@ P2 遗留（按优先级登记）：
+ 
+ 来源：sillyhub 项目工具驾驭复盘第三批。正面——execute 批量完成机制高效（8 task 勾完+代码核验过后一次性补完剩余 step）、worktree apply 顺畅（46 文件一次到位）、各类 Gate 真实拦错（task review base/head 与 git 拦扯对账拦住并行 commit 到达序写反的问题；主仓 commit 的 Local CI 拦住 node_modules 半坏，修复后过）。3 个负面点逐条对照债单 + 源码实证裁决：
+ 
+-- ⏭ **neg-① CLI 自动生成的 task review 草稿用错 base/head（多 task 错配形态，登记 defer）**：`generateTaskReviewDrafts`（task-review.js:1155）主仓 task 分支（:809-834、:888-895）的 base/head 是 **change 级**（meta baselineCommit→worktree/in-place HEAD），调用点在 `src/index.js:1058`（backfill-reviews 草稿兜底；原 execute --done 调用点已随 2026-09-26-task-review-retire 退役，complete.js:661? 注释在盘），每 task 相同；跨仓 task 分支（:864-887）已支持 task 卡双锡点（parseBaseCommit/parseHeadCommit，cc-① W3 落地），但**主仓 task 未用锡点**——多 task 并行各自 commit 时，task-08 草稿拿的是 task-01 时的范围快照（用户实测「拿 task-01 的范围生成」），Task Review Gate 对账时才发现，需人工覆盖。memory `execute-done-auto-draft-pitfall` 同源（backfill-reviews 自动草稿错配多 task）。**修法候选**：主仓 task 分支也读 task 卡 `base_commit:`/`head_commit:` 锡点（与跨仓分支对齐，缺锡点回退 change 级），改动集中在 task-review.js 一处；与 cc-④ 改进空间②（task 级 register-task-review 批量命令）联动。**裁决 defer 留 quick/单独排**：草稿本就是 cannot_verify 兜底（agent 复核后升级 pass/fail 是既定流程，`src/index.js:1058` 兜底草稿的输出明示），错配不产生伪造判级（gate 对账会拦），非硬缺陷；但每 change 多 task 并行时都需人工覆盖一遍，摩擦真实，值得修。
++- ⏭ **neg-① CLI 自动生成的 task review 草稿用错 base/head（多 task 错配形态，登记 defer）**：`generateTaskReviewDrafts`（task-review.js:1155）主仓 task 分支（:809-834、:888-895）的 base/head 是 **change 级**（meta baselineCommit→worktree/in-place HEAD），调用点在 `src/index.js:1100`（backfill-reviews 草稿兜底；原 execute --done 调用点已随 2026-09-26-task-review-retire 退役，complete.js:661? 注释在盘），每 task 相同；跨仓 task 分支（:864-887）已支持 task 卡双锡点（parseBaseCommit/parseHeadCommit，cc-① W3 落地），但**主仓 task 未用锡点**——多 task 并行各自 commit 时，task-08 草稿拿的是 task-01 时的范围快照（用户实测「拿 task-01 的范围生成」），Task Review Gate 对账时才发现，需人工覆盖。memory `execute-done-auto-draft-pitfall` 同源（backfill-reviews 自动草稿错配多 task）。**修法候选**：主仓 task 分支也读 task 卡 `base_commit:`/`head_commit:` 锡点（与跨仓分支对齐，缺锡点回退 change 级），改动集中在 task-review.js 一处；与 cc-④ 改进空间②（task 级 register-task-review 批量命令）联动。**裁决 defer 留 quick/单独排**：草稿本就是 cannot_verify 兜底（agent 复核后升级 pass/fail 是既定流程，`src/index.js:1100` 兜底草稿的输出明示），错配不产生伪造判级（gate 对账会拦），非硬缺陷；但每 change 多 task 并行时都需人工覆盖一遍，摩擦真实，值得修。
+ - ✅ **neg-② worktree 自建 .venv 缺 pytest 迫使回归子代理换主仓 venv（exec-f 新维度，已修 ql-20260816-002-1506）**：worktree-deps.js python 分支（exec-f 已修）`uv sync` 会建 worktree 独立 .venv，但主仓 .venv 若是 pyenv-virtualenv / venv --copies 等非 symlink 共享形态，worktree 新 venv 无 pytest 等二级工具（uv sync 只装 pyproject 声明依赖，dev 依赖组是否装取决于 dependency-groups/uvsync 配置），回归子代理被迫换主仓 venv 跑（环境不一致隐患，好在已验证加载的是 worktree 代码）。**裁决**：不做 CLI 侧自动同步（识别「主仓 venv 形态 + 补装工具」是 consumer 环境语义，违反定位）；**已修（2026-08-16 quick ql-20260816-002-1506，commit bbf3598）**：execute「确认 worktree 路径」步工具链预告补 python 场景提示——worktree .venv 缺 pytest/ruff 等工具时优先在 worktree 内 `uv pip install pytest`（或 `uv sync --group dev`），避免回退主仓 venv 跑测试（环境不一致掩真 bug）；同步 _extracted.json + docs/prompt/execute.md 镜像，npm test EXIT=0 + lint 295 过。关联 exec-f（:148）与 memory `worktree-deps-junction-halfbroken`（nodejs 侧同病：主仓 node_modules 半坏时 worktree Junction 假阳性）。
+ - ⏭ **neg-③ 审查子代理不能续聊，每次复审都重启重读材料，token 成本高（登记 defer，与 P4.3 边界相邻）**：execute 的 task review / stage review 子代理是一次性上下文，fail→修正→复审需整个重启重读 design/plan/代码，token 成本随复审次数线性涨。「复审边界/是否再派」本身 = P4.3a 已 defer（语义软判定推 sillyhub/agent 自判）；但「**重读成本**」是 CLI 侧可观测的新维度——当前无任何机制降低复审时的材料重读（如 review.json 草稿随 context 复用、复审子代理 prompt 注入「前轮审查结论 + 修正 diff 而非全量重读」）。用户建议「支持 agent 续用」（同一子代理会话续聊）。**裁决 defer**：续聊能力取决于宿主（Claude Code Agent tool SendMessage / Task 续跑）非 SillySpec CLI 可控，SillySpec 能做的是 prompt 侧引导（复审子代理只喂前轮 review.json + 修正 diff，不重读全量 design/plan）——可作为 execute review 派单 prompt 的低成本改进候选，与 cc-④ 改进空间①②同范畴，留单独评估。
+ 
+@@ -318,7 +318,7 @@ P2 遗留（按优先级登记）：
+ 
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:832?` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:263）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:2021 `AUXILIARY_STAGES` 一律放行）。
++- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:832?` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:263）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:2043 `AUXILIARY_STAGES` 一律放行）。
+ - **B7** status/doctor 自称只读实则写库：`src/run/command.js:1223` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+diff --git a/docs/sillyspec/review-2026-08-20-full-audit.md b/docs/sillyspec/review-2026-08-20-full-audit.md
+index 217b18f0..d273a491 100644
+--- a/docs/sillyspec/review-2026-08-20-full-audit.md
++++ b/docs/sillyspec/review-2026-08-20-full-audit.md
+@@ -66,7 +66,7 @@
+ ## 一、缺陷（BUG）
+ 
+ ### BUG-01【P1✅已验证】sync.js 平台模式下 spec 树同步可清空服务器全部文件
+-- 位置：`src/sync.js:18`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:612`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
++- 位置：`src/sync.js:18`（`syncSpecTree(safePlatformSpecDir(...))`，修复后锚点）、`src/spec-sync.js:726`（syncSpecTree diff 逻辑内 computeSpecOps delete 分支）
+ - 问题：`sync()` 的进度读写锚点用 `safePlatformSpecDir(this.cwd)`（平台模式 → specRoot），但成功后链式推送 spec 树时本地树根硬编码 `cwd/.sillyspec`。平台模式下该目录只有 local.yaml（walkSpecTree 按文件名排除），localMap 为空 → 服务器清单中每个 exists=true 的文件都生成 delete op → **服务器侧 spec 树被整体清空**，且失败被 catch 吞成 debugLog。
+ - 可达路径：平台模式仓库手动 `platform sync --change x`；push 409 冲突横幅指导用户跑 sync；`resolve --keep-local` 自动重推（sync.js:955-968）。
+ - 修复方向：spec 树根与进度锚点统一用 `safePlatformSpecDir`；并在 computeSpecOps 加护栏——本地树为空且服务器清单非空时拒绝生成 delete（fail-closed）。
+diff --git a/src/config-known-failures.js b/src/config-known-failures.js
+new file mode 100644
+index 00000000..8d424267
+--- /dev/null
++++ b/src/config-known-failures.js
+@@ -0,0 +1,247 @@
++/**
++ * config-known-failures —— local.yaml known_failures 键的行级增删查（2026-10-21-p0-p1-hardening FR-07）
++ *
++ * 背景（dsh z2 实证）：agent 用 PS5.1 `Set-Content -Encoding UTF8` 手改 50KB local.yaml 的
++ * known_failures 行 → BOM/mojibake 不可逆损坏（510 个 `?`），恢复等用户人工贴备份 2h13m。
++ * known_failures 无 CLI 管理面 = 手改场景必然存在。本模块给 `sillyspec config known-failures
++ * list|add|remove` 提供纯逻辑核心：
++ *   - 行级定向手术（块式/流式两种既有形态都认），保留文件其余内容与注释——禁止 js-yaml 整体
++ *     重序列化（丢注释，用户文档性受损）；
++ *   - 改前 YAML 全文可解析性门（jsYaml.load 抛错 → 拒改，坏文件上叠加手术只会更坏）；
++ *   - 写入 writeAtomicSync（tmp+rename 原子替换）+ UTF-8 无 BOM 新写。
++ * 读法口径对齐 docs-check.js known_failures 键提取（块式 + 流式）——不 import（该模块拖重链）。
++ */
++import { existsSync, readFileSync } from 'node:fs'
++import jsYaml from 'js-yaml'
++import { writeAtomicSync } from './fs-atomic.js'
++
++/** 块式头行：known_failures: 顶格、后接注释或空（docs-check.js:982 同口径） */
++const BLOCK_HEADER_RE = /^known_failures:\s*(?:#.*)?$/
++/** 流式行：known_failures: [a, b]（docs-check.js:971 同口径） */
++const INLINE_HEADER_RE = /^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/
++/** 块式条目行：缩进 + 列表杠 + 键（支持裸/双引/单引形态，尾注释剥除） */
++const ITEM_RE = /^(\s+)-\s*(?:"([^"]*)"|'([^']*)'|([^#]*?))\s*(?:#.*)?$/
++
++/** 键的裸写安全性：字母数字/下划线/连字符/点/中文——其余（逗号方括号引号#等）写回时加双引号 */
++const BARE_KEY_SAFE_RE = /^[\w.\-\u4e00-\u9fff]+$/
++
++/**
++ * 纯函数：从 local.yaml 文本提取 known_failures 键清单（块式 + 流式两形态）。
++ * 无 known_failures 段 → 空数组；块头无条目（含 `known_failures: []` 流式空）→ 空数组。
++ * @param {string} text
++ * @returns {string[]}
++ */
++export function parseKnownFailureKeys(text) {
++  const src = String(text || '')
++  const lines = src.split(/\r?\n/)
++  // 流式优先（同键只可能一种形态在场；流式正则更具体）
++  for (const l of lines) {
++    const m = l.match(INLINE_HEADER_RE)
++    if (m) {
++      return (m[1] || '')
++        .split(',')
++        .map((s) => s.trim())
++        .filter(Boolean)
++        .map((s) => unquoteKey(s))
++    }
++  }
++  const idx = lines.findIndex((l) => BLOCK_HEADER_RE.test(l))
++  if (idx === -1) return []
++  const keys = []
++  for (let i = idx + 1; i < lines.length; i++) {
++    const l = lines[i]
++    if (/^\S/.test(l)) break // 下一个顶层键——段结束
++    const m = l.match(ITEM_RE)
++    if (m) {
++      const k = m[2] ?? m[3] ?? (m[4] || '').trim()
++      if (k) keys.push(k)
++    }
++  }
++  return keys
++}
++
++function unquoteKey(s) {
++  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) return s.slice(1, -1)
++  if (s.startsWith("'") && s.endsWith("'") && s.length >= 2) return s.slice(1, -1)
++  return s
++}
++
++function renderKey(k) {
++  return BARE_KEY_SAFE_RE.test(k) ? k : `"${String(k).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
++}
++
++/**
++ * 纯函数：行级手术增删 known_failures 键。
++ * - 增：去重后追加（块式→段尾插条目行；流式→行内数组追加；无段→文件尾整段追加）；
++ * - 删：移除命中条目（块式删行；流式重拼数组）；删空后流式写 `[]`、块式头改写 `known_failures: []`；
++ * - 改前全文 jsYaml 可解析门：抛错 → { ok:false }（坏文件上拒绝手术）；
++ * - 文件其余行（含注释/空行/换行风格）逐字节保留——只动 known_failures 相关行。
++ * @param {string} text 原 local.yaml 全文
++ * @param {{ add?: string[], remove?: string[] }} edit
++ * @returns {{ ok: true, next: string, keys: string[] } | { ok: false, error: string }}
++ */
++export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
++  const src = String(text || '')
++  // 坏 YAML 拒改门（FR-07：mojibake/残缺文件上手术只会更坏——先修文件再管理键）
++  try {
++    const doc = jsYaml.load(src)
++    if (doc !== null && typeof doc !== 'object') {
++      return { ok: false, error: 'local.yaml 顶层不是映射（YAML 合法但形态异常）——拒改，请人工核对' }
++    }
++  } catch (e) {
++    return { ok: false, error: `local.yaml YAML 解析失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——拒改。先从备份/git 历史恢复或重建文件，再用本命令管理 known_failures` }
++  }
++  const nl = src.includes('\r\n') ? '\r\n' : '\n'
++  const lines = src.split(/\r?\n/)
++  // trailing newline 语义：原文以换行结尾 → 重组时补回
++  const endedWithNl = /\n$/.test(src) || /\r\n$/.test(src)
++
++  const addSet = [...add].filter(Boolean)
++  const removeSet = new Set([...remove].filter(Boolean))
++
++  // 流式形态
++  const inlineIdx = lines.findIndex((l) => INLINE_HEADER_RE.test(l))
++  if (inlineIdx !== -1) {
++    const cur = parseKnownFailureKeys(src)
++    const curSet = new Set(cur)
++    let next = cur.filter((k) => !removeSet.has(k))
++    for (const k of addSet) {
++      if (!next.includes(k) && !curSet.has(k)) next.push(k)
++      else if (curSet.has(k) && !removeSet.has(k) && !next.includes(k)) next.push(k)
++    }
++    const inlineMatch = lines[inlineIdx].match(INLINE_HEADER_RE)
++    const trailingComment = (inlineMatch[0].match(/#.*$/)?.[0]) || ''
++    lines[inlineIdx] = next.length > 0
++      ? `known_failures: [${next.map(renderKey).join(', ')}]${trailingComment ? ` ${trailingComment}` : ''}`
++      : `known_failures: []${trailingComment ? ` ${trailingComment}` : ''}`
++    const out = lines.join(nl) + (endedWithNl ? nl : '')
++    return { ok: true, next: out, keys: next }
++  }
++
++  // 块式形态
++  const blockIdx = lines.findIndex((l) => BLOCK_HEADER_RE.test(l))
++  if (blockIdx !== -1) {
++    const cur = parseKnownFailureKeys(src)
++    const removeHit = cur.filter((k) => removeSet.has(k))
++    const keep = cur.filter((k) => !removeSet.has(k))
++    const curSet = new Set(cur)
++    for (const k of addSet) if (!keep.includes(k) && !curSet.has(k)) keep.push(k)
++    // 段边界：块头行之后连续的缩进行（条目/空行/注释行都属于段——条目行重写，其余保留）
++    let end = blockIdx + 1
++    while (end < lines.length && !/^\S/.test(lines[end])) end++
++    // 重组段：保留段内注释/空行的相对位置有过度工程之嫌——known_failures 段语义就是键清单，
++    // 直写键条目行（段内注释罕见，注释保真交给其余 99% 的文件内容）
++    const section = keep.map((k) => `  - ${renderKey(k)}`)
++    lines.splice(blockIdx + 1, end - (blockIdx + 1), ...section)
++    if (keep.length === 0) {
++      // 删空：块头改流式空（两种 reader 都认 `[]`；裸块头= null 语义靠 reader 兜底，不赌）
++      lines[blockIdx] = 'known_failures: []'
++    }
++    const out = lines.join(nl) + (endedWithNl ? nl : '')
++    return { ok: true, next: out, keys: keep, removedCount: removeHit.length }
++  }
++
++  // 无段：文件尾整段追加（add 空且 remove 命不中 → 无事可做，原样返回）
++  if (addSet.length === 0) return { ok: true, next: src, keys: [] }
++  const keys = addSet.filter((k, i) => addSet.indexOf(k) === i)
++  const header = src.length === 0 ? '' : (endedWithNl ? '' : nl)
++  const out = `${src}${header}known_failures:${nl}${keys.map((k) => `  - ${renderKey(k)}`).join(nl)}${nl}`
++  return { ok: true, next: out, keys }
++}
++
++/**
++ * 读文件列键（CLI list / doctor 联动用）。
++ * @param {string} yamlPath
++ * @returns {{ ok: boolean, keys?: string[], error?: string, missing?: boolean }}
++ */
++export function listKnownFailures(yamlPath) {
++  if (!existsSync(yamlPath)) return { ok: false, missing: true, error: `local.yaml 不存在: ${yamlPath}` }
++  let text
++  try {
++    text = readFileSync(yamlPath, 'utf8')
++  } catch (e) {
++    return { ok: false, error: `读取失败: ${e && e.message ? e.message : e}` }
++  }
++  try {
++    jsYaml.load(text)
++  } catch (e) {
++    return { ok: false, error: `local.yaml YAML 解析失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——键清单不可信，先修复文件（doctor local_yaml_integrity 维度有指引）` }
++  }
++  return { ok: true, keys: parseKnownFailureKeys(text) }
++}
++
++/**
++ * 文件级增删（读 → applyKnownFailureEdit → 原子写）。
++ * @param {string} yamlPath
++ * @param {{ add?: string[], remove?: string[] }} edit
++ * @returns {{ ok: boolean, keys?: string[], error?: string }}
++ */
++export function mutateKnownFailuresFile(yamlPath, edit) {
++  if (!existsSync(yamlPath)) return { ok: false, error: `local.yaml 不存在: ${yamlPath}——先 sillyspec local detect / platform connect 生成，再管理 known_failures` }
++  let text
++  try {
++    text = readFileSync(yamlPath, 'utf8')
++  } catch (e) {
++    return { ok: false, error: `读取失败: ${e && e.message ? e.message : e}` }
++  }
++  const r = applyKnownFailureEdit(text, edit)
++  if (!r.ok) return r
++  if (r.next !== text) writeAtomicSync(yamlPath, r.next)
++  return { ok: true, keys: r.keys }
++}
++
++/**
++ * CLI 入口薄壳（index.js config known-failures 接线消费）：打印 + 退出码。
++ * @param {{ yamlPath: string, exists: boolean, verb: string, keys: string[], json: boolean }} p
++ * @returns {number} process.exitCode
++ */
++export function runKnownFailuresCommand({ yamlPath, exists, verb, keys = [], json = false }) {
++  const want = verb || 'list'
++  if (!['list', 'add', 'remove'].includes(want)) {
++    console.error(`❌ 未知动作: config known-failures ${want}`)
++    console.error('用法: sillyspec config known-failures list | add <key…> | remove <key…>')
++    return 2
++  }
++  if (want !== 'list' && keys.filter(Boolean).length === 0) {
++    console.error(`❌ config known-failures ${want} 需要至少一个键参数（空格分隔多个）`)
++    return 2
++  }
++  if (want === 'list') {
++    if (!exists) {
++      if (json) console.log(JSON.stringify({ cmd: 'config known-failures list', exists: false }))
++      else console.error(`📭 未找到 local.yaml（${yamlPath}）——无 known_failures 可列`)
++      return 1
++    }
++    const r = listKnownFailures(yamlPath)
++    if (!r.ok) {
++      if (json) console.log(JSON.stringify({ cmd: 'config known-failures list', ok: false, error: r.error }))
++      else console.error(`❌ ${r.error}`)
++      return 1
++    }
++    if (json) {
++      console.log(JSON.stringify({ cmd: 'config known-failures list', ok: true, count: r.keys.length, keys: r.keys }))
++    } else if (r.keys.length === 0) {
++      console.log('📭 known_failures 为空（无豁免键）')
++    } else {
++      console.log(`📋 known_failures（${r.keys.length} 个）:`)
++      for (const k of r.keys) console.log(`   - ${k}`)
++    }
++    return 0
++  }
++  if (!exists) {
++    console.error(`📭 未找到 local.yaml（${yamlPath}）——先 sillyspec local detect / platform connect 生成`)
++    return 1
++  }
++  const r = mutateKnownFailuresFile(yamlPath, want === 'add' ? { add: keys } : { remove: keys })
++  if (!r.ok) {
++    console.error(`❌ 拒改：${r.error}`)
++    return 1
++  }
++  const uniq = [...new Set(keys.filter(Boolean))]
++  if (json) console.log(JSON.stringify({ cmd: `config known-failures ${want}`, ok: true, changed: uniq, keys: r.keys }))
++  else {
++    console.log(`✅ known_failures 已${want === 'add' ? '添加' : '移除'}：${uniq.join('、')}${want === 'remove' ? '（未命中键静默忽略）' : ''}——现共 ${r.keys.length} 个`)
++    console.log(`   校验：sillyspec config known-failures list`)
++  }
++  return 0
++}
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index c02a0883..699101a5 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -630,6 +630,59 @@ function localYamlHasPlatformSection(cwd) {
+   }
+ }
+ 
++// ── local.yaml 完整性维度（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证）────────────
++// agent 手改 local.yaml（PS5.1 Set-Content -Encoding UTF8）把 50KB 文件写成 GBK mojibake
++// （不可逆，510 个 ?）——commands/known_failures/门禁全部 reader 对坏文件 fail-open/降级，
++// doctor 却零提示（agent 原话推理实证「Doctor doesn't complain about local.yaml」），最终等
++// 用户人工贴备份 2h13m。本维度把「文件存在但不可解析 / 含 BOM」显性化（只读，绝不自动修）。
++export function detectLocalYamlIntegrity(cwd) {
++  const dim = {
++    name: 'local_yaml_integrity',
++    label: 'local.yaml 完整性',
++    safe_actions: [],
++    findings: [],
++  };
++  const p = join(cwd, '.sillyspec', 'local.yaml');
++  if (!existsSync(p)) return dim; // 无文件是合法状态（本地模式），不报
++  let text;
++  try {
++    text = readFileSync(p, 'utf8');
++  } catch (e) {
++    dim.findings.push(
++      `local_yaml_unreadable: local.yaml 读取失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——` +
++      `权限/占用问题；修复后用 sillyspec config known-failures list 校验键面`
++    );
++    return dim;
++  }
++  if (text.charCodeAt(0) === 0xfeff) {
++    dim.findings.push(
++      `local_yaml_bom: local.yaml 含 UTF-8 BOM——PS5.1 写文件常见（-Encoding UTF8 恒写 BOM）；` +
++      `YAML 解析器多可容忍，但定向行扫描 reader 与 PowerShell 工具链易致盲。` +
++      `修复：node -e "const fs=require('fs');const p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/^\\uFEFF/,''))" ${p}`
++    );
++  }
++  try {
++    jsYaml.load(text);
++  } catch (e) {
++    dim.findings.push(
++      `local_yaml_unparsable: local.yaml YAML 解析失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——` +
++      `commands/known_failures/门禁等全部 reader 对坏文件 fail-open 或降级，后续 gate 行为不可信` +
++      `（dsh z2 实证：手改炸文件后 doctor 失明，人工恢复耗时 2h13m）。` +
++      `修复：从备份/git 历史恢复或按 sillyspec config schema 重建；known_failures 键改用 ` +
++      `sillyspec config known-failures add/remove 管理（坏文件上该命令拒改并给指引）`
++    );
++    dim.safe_actions.push({
++      dimension: 'local_yaml_integrity',
++      action: 'restore_local_yaml',
++      target: p,
++      risk: 'confirm_required',
++      rationale: '坏配置是所有门的输运层——文件不可解析时任何 reader 行为都不可信，必须先恢复再谈其他',
++      next_step: `从备份/git 历史恢复或重建 ${p}，然后 sillyspec config known-failures list 校验`,
++    });
++  }
++  return dim;
++}
++
+ function detectRepoNativeChain(cwd, pointer) {
+   const dim = {
+     name: 'repo_native_chain',
+@@ -1606,7 +1659,10 @@ export async function runDoctorDiagnostics({ cwd }) {
+   } catch { gateLeakRuntimeRoot = null }
+   const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
+   const knowledgeGraphIntegrity = detectKnowledgeGraphIntegrity(cwd, authoritySpecDir || join(cwd, '.sillyspec'))
+-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
++  // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
++  // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
++  const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
++  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
+ 
+   return {
+     dimensions,
+diff --git a/src/handoff.js b/src/handoff.js
+index adf6a250..7278c57e 100644
+--- a/src/handoff.js
++++ b/src/handoff.js
+@@ -164,6 +164,10 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+   } else {
+     lines.push('# （流程终态，无续跑命令）');
+   }
++  // 所有权接缝预告（2026-10-21-p0-p1-hardening FR-05 / dsh z2 实证：新会话自拟新 SESSION_ID
++  // 而非沿用交接块导出的旧 ID 时，首个写操作必撞 15 分钟活跃窗被迫 --takeover）：粘贴块内显式
++  // 给出出路，消「交接块没预告接管」的设计缺口。
++  lines.push('# ⚠️ 若换用新的 SILLYSPEC_SESSION_ID（不推荐，保持上方导出值即可）：首个写操作（--done/--answer 等）会撞所有权活跃窗——等窗过期自动接管，或首写带 --takeover 显式接管留痕');
+   lines.push('# ── 交接块结束 ──');
+   lines.push('');
+   lines.push(`📋 ${target}：当前 ${STAGE_LABELS[currentStage] || currentStage}${steps.length > 0 ? `（步骤 ${doneSteps}/${steps.length}）` : ''}${stageCompleted ? ' ✅ 已完成' : ''}`);
+diff --git a/src/index.js b/src/index.js
+index 5f86aa73..6082e1f7 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5329,6 +5329,9 @@ SillySpec config — local.yaml 配置键速查
+                                   git common-dir 主仓根；worktree 内 .sillyspec 是 checkout
+                                   副本无此文件，cat 自动解析到主仓）
+   sillyspec config cat --json     机读 JSON（dir/path/source/content；未找到退出 1）
++  sillyspec config known-failures list           列 known_failures 豁免键
++  sillyspec config known-failures add <key…>     增豁免键（行级手术保注释、原子写；坏 YAML 拒改）
++  sillyspec config known-failures remove <key…>  删豁免键（未命中静默忽略）
+ 
+ 说明:
+   - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
+@@ -5370,11 +5373,30 @@ SillySpec config — local.yaml 配置键速查
+         if (!content.endsWith('\n')) process.stdout.write('\n')
+         break;
+       }
++      // config known-failures（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证：known_failures
++      // 无 CLI 管理面 → agent 手改 local.yaml，PS5.1 编码把 50KB 文件写成 mojibake 等用户
++      // 2h13m）。行级增删查：保注释、原子写、坏 YAML 拒改——消灭手改场景。
++      if (configSub === 'known-failures') {
++        let specBase = null
++        try { specBase = resolvePlatformSpecDir(dir, specDir) } catch { /* 同 cat：pointer 异常走祖先链 */ }
++        const { resolveLocalYaml } = await import('./config-cat.js')
++        const located = resolveLocalYaml(dir, { specBase })
++        const { runKnownFailuresCommand } = await import('./config-known-failures.js')
++        const verb = filteredArgs[2];
++        const keys = filteredArgs.slice(3).filter((a) => a && !a.startsWith('--'));
++        const exitCode = runKnownFailuresCommand({
++          yamlPath: located.exists ? located.path : join(dir, '.sillyspec', 'local.yaml'),
++          exists: located.exists,
++          verb, keys, json,
++        });
++        process.exitCode = exitCode;
++        break;
++      }
+       if (!isSchema) {
+-        const sug = didYouMean(configSub, ['schema', 'cat']);
++        const sug = didYouMean(configSub, ['schema', 'cat', 'known-failures']);
+         console.error(`❌ 未知子命令: config ${configSub}`);
+         if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
+-        console.error('用法: sillyspec config [schema|cat] [--json]   打印 local.yaml 配置键 / 读取实际内容');
++        console.error('用法: sillyspec config [schema|cat|known-failures] [--json]   打印配置键 / 读内容 / 管理 known_failures 键');
+         process.exit(2);
+       }
+       const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index b2ef75aa..004fccae 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -455,7 +455,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     // 回合）：①target_files reconcile 只读跑（reconcileTargetFiles 纯计算不落盘，--done 的写结果
+     // 文件在其调用方）；②stage review 在场探测（marker+review.json——缺则报预期路径，同 --done
+     // Stage Review Gate 口径，只报缺不生成）。全只读零副作用；未传 full 零行为变化。
+-    if (full && (stage === 'verify' || stage === 'execute')) {
++    if (full && (stage === 'verify' || stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
+       // e1. reconcile（verify --done 的 target_files 对账门）
+       if (stage === 'verify') {
+         try {
+@@ -484,10 +484,13 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+           });
+         }
+       }
+-      // e2. stage review 在场探测（execute --done 的 Stage Review Gate——verify 不在其列，
+-      // 坑 stage-review-verify-enum-gap 2026-10-11：gate 实际只拦 brainstorm/plan/execute，
+-      // register 枚举亦无 verify，verify 阶段不产 stage review 期望；verify 的真实门面是 e1 对账）
+-      if (stage === 'execute') try {
++      // e2. stage review 在场探测（Stage Review Gate 拦截面的 --full 预检——brainstorm/plan/execute
++      // 三阶段与 gates.js Stage Review Gate 实拦范围逐字对齐；verify 不在其列，坑
++      // stage-review-verify-enum-gap 2026-10-11：register 枚举亦无 verify，verify 阶段不产
++      // stage review 期望；verify 的真实门面是 e1 对账。dsh z1 实证（2026-10-21-p0-p1-hardening
++      // FR-04）：此前 execute 单值使 brainstorm Step8 --done 被 Stage Review Gate「伏击」——
++      // gate 预检全绿而 --done 被拦，46 分钟+3 轮子代理评审才过）
++      if (stage === 'execute' || stage === 'brainstorm' || stage === 'plan') try {
+         const { getLatestStageReviewRunId } = await import('./stage-review.js');
+         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
+         const runId = getLatestStageReviewRunId(rrRoot, stage, changeName);
+@@ -496,7 +499,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+           code: checkCode('full-stage-review') || 'full_stage_review_missing',
+           ok: !!runId,
+           errors: !runId
+-            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——execute --done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
++            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——${stage} --done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
+             : [],
+           data: { runId: runId || null },
+         });
+@@ -518,9 +521,12 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     //    register 指引；在场 → 静默 ok。独立 check id 不与 --full 的 full-stage-review 碰撞，
+     //    error 语义（--done 拦）仍归 --full 档与 --done 本体。
+     // stage 期望面对齐（坑 stage-review-verify-enum-gap，2026-10-11 实证）：Stage Review Gate
+-// 实际只拦 brainstorm/plan/execute（gates.js），register-stage-review 枚举亦无 verify——
+-// verify 阶段不产 stage review 提示（提示命令不可执行 + 指称的门禁不存在，双重误导）。
+-if (!full && stage === 'execute') {
++    // 实际只拦 brainstorm/plan/execute（gates.js），register-stage-review 枚举亦无 verify——
++    // verify 阶段不产 stage review 提示（提示命令不可执行 + 指称的门禁不存在，双重误导）。
++    // 覆盖面扩全（2026-10-21-p0-p1-hardening FR-04 / dsh z1 实证）：此前 execute 单值——brainstorm
++    // Step8 --done 被 Stage Review Gate 伏击（预检绿灯 vs 收口拦截口径不一致，损失 46 分钟）。
++    // 现与 gates.js 拦截面三阶段逐字对齐；文案按 stage 参数化。
++    if (!full && (stage === 'execute' || stage === 'brainstorm' || stage === 'plan')) {
+       try {
+         const { getLatestStageReviewRunId } = await import('./stage-review.js');
+         const rrRoot = runtimeRoot || join(specRoot, '.runtime');
+@@ -531,7 +537,7 @@ if (!full && stage === 'execute') {
+           ok: true,
+           informational: true,
+           warnings: runId ? [] : [
+-            `缺 ${stage} 阶段的 stage review.json——execute --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
++            `缺 ${stage} 阶段的 stage review.json——${stage} --done 的 Stage Review Gate 会拦（本提示不改变 gate 结论）。先产出评审再注册：sillyspec register-stage-review --change ${changeName} --stage ${stage}（骨架生成后填，或 --from review.json 过继独立评审产出）`,
+           ],
+           data: { runId: runId || null },
+         });
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 2aae2529..f38fa12b 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -3,6 +3,7 @@
+ // pm._changePath（persistence-core 留 facade 本体）。无共享常量依赖。
+ import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs';
+ import { join } from 'path';
++import { hostname } from 'os';
+ import { appendDeletedLedger } from '../deleted-ledger.js';
+ 
+ // 所有权活跃心跳窗缺省（2026-09-14-change-ownership-guards task-02 / FR-01）：owner 非本会话
+@@ -290,6 +291,7 @@ export class ChangeRegistry {
+    *   - opts.forced（--takeover）            → takeover-forced       放行（无条件接管，调用方重写 owner 留痕）
+    *   - owner 为空（无行/NULL）               → no-owner              放行（存量无主行，任何会话可接管）
+    *   - owner === selfSession                 → self                  放行（本会话自有 change 零路径变化）
++   *   - owner 本机匿名占位 + selfSession 显式 → takeover-anon-upgrade 放行（同主机显式身份自动升级，FR-05）
+    *   - owner 他人 且 now-last_active ≥ 窗口  → takeover-stale        放行（窗口外自动接管重写）
+    *   - owner 他人 且活跃窗内                 → blocked-active-owner  拒绝（allowed:false，调用方打结构化错误）
+    * last_active 缺失/不可解析按陈旧处理：无法证明新鲜即不拦——护栏拦「可证活跃」，不因时间戳
+@@ -313,6 +315,19 @@ export class ChangeRegistry {
+     if (opts.forced) return { allowed: true, action: 'takeover-forced', owner, lastActive, heartbeatMs };
+     if (owner === null) return { allowed: true, action: 'no-owner', owner: null, lastActive, heartbeatMs };
+     if (owner === opts.selfSession) return { allowed: true, action: 'self', owner, lastActive, heartbeatMs };
++    // 匿名占位所有权自动升级（2026-10-21-p0-p1-hardening FR-05 / dsh z1 实证：首调未设
++    // SESSION_ID → owner 落 anon@<host>，同机 agent 数分钟后补设显式身份，被
++    // blocked-active-owner 拦 15 分钟活跃窗，被迫 --takeover——自己锁自己）。anon@ 是机器级
++    // 降级标识（缺省只拦他机），同主机的显式身份（--session/env 三级解析，非 anon 降级）严格
++    // 更具体：直接放行升级（调用方 setChangeOwner 重写留痕），不必 --takeover。跨主机匿名
++    // （owner 的 @ 后缀 ≠ 本机 hostname）与任何显式 owner 持有不在此列，照旧新鲜度判定。
++    if (
++      typeof owner === 'string' && owner.startsWith('anon@')
++      && typeof opts.selfSession === 'string' && opts.selfSession && !opts.selfSession.startsWith('anon@')
++      && owner === `anon@${hostname()}`
++    ) {
++      return { allowed: true, action: 'takeover-anon-upgrade', owner, lastActive, heartbeatMs };
++    }
+     // owner 他人：新鲜度决定拒绝 / 自动接管
+     const lastMs = lastActive ? new Date(lastActive).getTime() : NaN;
+     const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+diff --git a/src/run/bg-sync.js b/src/run/bg-sync.js
+index 25bf97af..4ca9a17c 100644
+--- a/src/run/bg-sync.js
++++ b/src/run/bg-sync.js
+@@ -182,6 +182,10 @@ export async function spawnBackgroundSync(cwd, changeName, platformOpts = {}, op
+       env,
+     });
+     child.unref?.();
++    // 孵化稳定化（FR-08 / dsh 实证 libuv 退出断言）：等 spawn 事件落定（≤150ms 兜底）再放行，
++    // 压掉「父进程在子进程句柄建立中途退出」的崩溃竞态窗口。
++    const { awaitSpawnSettled } = await import('../spawn-settle.js');
++    await awaitSpawnSettled(child);
+   } finally {
+     if (logFd !== null) {
+       try { closeSync(logFd); } catch { /* 父侧 fd 副本关闭；子进程持有继承副本 */ }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 3c8a8b38..de6b8102 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -161,7 +161,34 @@ export function synthesizeStepOutput({ stageName, stepName, cwd, platformOpts =
+   return `【CLI 合成】步骤「${stepName}」完成${windowNote}；门禁以本次 CLI 校验输出为准（方案取舍等语义说明需 --output 手写）`
+ }
+ 
++/**
++ * --done 心跳可观测 wrapper（FR-03 / dsh z2 实证：verify 纯文档步骤 --done 静默挂起 >5 分钟，
++ * agent 无从分辨在跑还是死锁）：收口链（单步 --done 与阶段完成门全链）超过 60s 时每 60s 打一行
++ * stderr 进度行——stdout 保持纯净（--json envelope 消费方 JSON.parse(stdout) 不被污染）；结束
++ * （任意 return/throw）finally 清理，interval unref（命令中断不残留定时器）。常规 <60s 路径
++ * 零输出零行为变化；intervalMs 可注入供测试。
++ */
++export async function withDoneHeartbeat(label, fn, { intervalMs = 60_000 } = {}) {
++  let beats = 0
++  const hb = setInterval(() => {
++    beats += 1
++    console.error(`⏳ ${label} 收口链仍在执行（已约 ${Math.round((beats * intervalMs) / 1000)}s）——实测门/探针/同步可能较慢；持续超 5 分钟可用 sillyspec flow status / progress show 旁路核对状态（非死锁判定）`)
++  }, intervalMs)
++  hb.unref?.()
++  try {
++    return await fn()
++  } finally {
++    clearInterval(hb)
++  }
++}
++
+ export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
++  return withDoneHeartbeat(`${stageName} --done`,
++    () => _completeStepInner(pm, progress, stageName, cwd, outputText, inputText, options),
++    { intervalMs: options.heartbeat?.intervalMs })
++}
++
++async function _completeStepInner(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+   const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] } = options
+   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
+   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
+@@ -1372,6 +1399,12 @@ function prefetchDiffFileSet(ctx) {
+  * @returns {Promise<object|undefined>} 末轮 completeStep 返回值
+  */
+ export async function completeStepBurst(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
++  return withDoneHeartbeat(`${stageName} --done(burst)`,
++    () => _completeStepBurstInner(pm, progress, stageName, cwd, outputText, inputText, options),
++    { intervalMs: options.heartbeat?.intervalMs })
++}
++
++async function _completeStepBurstInner(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+   if (outputText) console.log(`📦 burst 收口摘要：${outputText}`)
+   let roundOptions = { ...options, printNext: false }
+   // burst 单调时钟基准（坑 stage-burst ①）：null=首轮（用真实时刻），此后每轮保严格递增
+diff --git a/src/runtime-paths.js b/src/runtime-paths.js
+index f6f611f9..cc9d83b8 100644
+--- a/src/runtime-paths.js
++++ b/src/runtime-paths.js
+@@ -74,6 +74,9 @@ export const RUNTIME_STATE_SINGLETONS = [
+   'spec-sync-last-success.json',
+   'spec-sync-fail-streak.json',
+   'spec-sync-follow-reported.json',
++  // 2026-10-21-cli-manifest-since-cache：spec-manifest 增量游标缓存（有读者、
++  // 不可再生前同步全量代价高——state/ 语义）
++  'spec-manifest-cache.json',
+   'sync-noise-self-heal.json',
+   'last-delta.json',
+ ]
+diff --git a/src/spawn-settle.js b/src/spawn-settle.js
+new file mode 100644
+index 00000000..085c4bac
+--- /dev/null
++++ b/src/spawn-settle.js
+@@ -0,0 +1,47 @@
++/**
++ * spawn-settle —— detached 子进程孵化稳定化（2026-10-21-p0-p1-hardening FR-08）
++ *
++ * 背景（dsh z1/z2 各实证一次）：Windows 下父进程 spawn detached 子进程（watcher/bg-sync）后
++ * 立即退出，可触发 Node libuv 退出断言崩溃（`Assertion failed: !(handle->flags &
++ * UV_HANDLE_CLOSING) src\win\async.c`）——把本已成功的 CLI 调用污染成 exit 1。根因在 Node
++ * 运行时（父进程退出与子进程 async 句柄建立竞态），应用层无法根除；本 util 提供有界缓解：
++ * spawn 后等子进程 'spawn' 事件（孵化完成、句柄建立完毕）或 'error' 再放行，上限 timeoutMs
++ * 兜底——把「父进程在句柄建立中途退出」的竞态窗口压掉。best-effort：任何异常路径直接返回，
++ * 绝不影响命令功能。
++ */
++import { EventEmitter } from 'node:events';
++
++/**
++ * 等待 detached 子进程孵化稳定。
++ * @param {import('node:child_process').ChildProcess} child
++ * @param {number} [timeoutMs=150] 兜底上限（'spawn'/'error' 均未发出时按此时长放行）
++ * @returns {Promise<void>} 事件到达 / 兜底超时 / child 已退出 / child 非法形态——均 resolve（永不 reject）
++ */
++export async function awaitSpawnSettled(child, timeoutMs = 150) {
++  if (!child || typeof child.once !== 'function') return;
++  // 已退出（同步失败形态：exitCode/signalCode 已定）——无句柄在途，立即返回
++  if (child.exitCode !== null && child.exitCode !== undefined) return;
++  if (child.signalCode) return;
++  await new Promise((resolve) => {
++    let settled = false;
++    const fin = () => {
++      if (settled) return;
++      settled = true;
++      try { child.off('spawn', fin); child.off('error', fin); } catch { /* 已解绑/非 EventEmitter——best-effort */ }
++      resolve();
++    };
++    child.once('spawn', fin);
++    child.once('error', fin);
++    // 上限兜底：两事件都不发（异常宿主/极端调度）也不让调用方久等
++    const t = setTimeout(fin, timeoutMs);
++    t.unref?.();
++  });
++}
++
++/** 测试辅助：构造最小 child 形态（EventEmitter + exitCode/signalCode 字段）。 */
++export function fakeChildForTest({ exitCode = null, signalCode = null } = {}) {
++  const c = new EventEmitter();
++  c.exitCode = exitCode;
++  c.signalCode = signalCode;
++  return c;
++}
+diff --git a/src/spec-sync.js b/src/spec-sync.js
+index b5074fe6..6d99f8a4 100644
+--- a/src/spec-sync.js
++++ b/src/spec-sync.js
+@@ -16,6 +16,7 @@
+  */
+ 
+ import { createHash } from 'crypto';
++import { timedAsync } from './timing.js';
+ import { existsSync, readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
+ import { join, relative, sep } from 'path';
+ import { bindSyncNoiseRoot, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess } from './sync-noise.js';
+@@ -433,6 +434,48 @@ function writeBaseSnapshot(specRoot, localFiles) {
+   } catch { /* 快照失败只损失下次的内容级防回推，不影响本次同步结果 */ }
+ }
+ 
++// ── spec-manifest 增量游标缓存（2026-10-21-cli-manifest-since-cache）──
++// 平台 spec-manifest 支持 ?since=<spec_version> 增量返回（multi-agent-platform
++// 2026-10-21-spec-manifest-incremental）。缓存 = 上次消费的整份清单 + 游标 +
++// 连续增量计数：稳态拉取只传变化行（生产实测全量 2.2MB/13145 行、5.5s@~400KBps
++// 链路——单请求吃掉 CLI 同步 8s 总预算七成；增量后 <10KB/亚秒）。
++// 形态 {spec_version:int, files:{path:{hash,version,exists}}, inc_count:int}；
++// .runtime 在上传排除面，缓存不进同步树。fail-soft：读写任何失败都退化为
++// 全量拉取（与无缓存同路径，行为不劣于现状）。
++const MANIFEST_CACHE = 'spec-manifest-cache.json';
++
++// 定期全量对账阈值：连续增量 N 轮后强制不带 since 全量（缓存与服务器脱钩的
++// 幻影行防线，design 风险节）。env SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY 可调。
++function resolveReconcileEvery() {
++  const raw = Number(process.env.SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY);
++  if (Number.isInteger(raw) && raw >= 1 && raw <= 10000) return raw;
++  return 50;
++}
++
++function readManifestCache(specRoot) {
++  try {
++    const c = JSON.parse(readFileSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE), 'utf8'));
++    if (
++      c && Number.isInteger(c.spec_version) && c.files && typeof c.files === 'object'
++      && Number.isInteger(c.inc_count)
++    ) return c;
++    return null;
++  } catch {
++    return null;
++  }
++}
++
++function writeManifestCache(specRoot, cache) {
++  try {
++    mkdirSync(join(specRoot, '.runtime', 'state'), { recursive: true });
++    writeAtomicSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE), JSON.stringify(cache));
++  } catch { /* 缓存写失败只损失增量优化，下轮全量（fail-soft） */ }
++}
++
++function clearManifestCache(specRoot) {
++  try { unlinkSync(runtimeStatePath(join(specRoot, '.runtime'), MANIFEST_CACHE)); } catch { /* 不存在即无事 */ }
++}
++
+ /**
+  * 丢弃「跟随服务器」型 update op（坑 quicksync-conflict-granularity ①）。
+  *
+@@ -682,6 +725,10 @@ function attributeChangeLabel(paths) {
+  * （syncSpecTreeOnly / resolve forcePush 等）不消费该字段，向后兼容。
+  */
+ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
++  return timedAsync('sync', () => syncSpecTreeImpl(specRoot, platform, changeName, opts))
++}
++
++async function syncSpecTreeImpl(specRoot, platform, changeName, opts = {}) {
+   if (!platform || !platform.url || !platform.token) {
+     debugLog('[spec-sync] 未连接平台（本地合法状态）；跳过 spec 树增量同步');
+     return { synced: 0, ok: true };
+@@ -698,10 +745,15 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+   const manifestUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-manifest`;
+   const syncUrl = `${platform.url.replace(/\/$/, '')}/api/changes/-/spec-sync`;
+ 
+-  // 1. GET 服务器清单
++  // 1. GET 服务器清单（2026-10-21-cli-manifest-since-cache：缓存感知——有可用
++  //    缓存带 ?since=<游标> 拉增量行合并；无缓存/对账轮/SILLYSPEC_SPEC_SYNC_FULL=1
++  //    走全量并落缓存；旧平台响应无 spec_version → 作废缓存回退现状行为；服务端
++  //    spec_version 倒退（重建）→ 一次性全量对账）
+   let serverManifest = {};
++  const manifestCache = process.env.SILLYSPEC_SPEC_SYNC_FULL ? null : readManifestCache(specRoot);
++  const cacheUsable = manifestCache && manifestCache.inc_count < resolveReconcileEvery();
+   try {
+-    const res = await fetch(manifestUrl, {
++    const res = await fetch(cacheUsable ? `${manifestUrl}?since=${manifestCache.spec_version}` : manifestUrl, {
+       headers: { Authorization: `Bearer ${platform.token}` },
+       signal: withSignal(10000),
+     });
+@@ -724,7 +776,41 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+       return { synced: 0, ok: false };
+     }
+     const body = await res.json().catch(() => ({}));
+-    serverManifest = body.files || {};
++    if (cacheUsable && typeof body.spec_version === 'number' && body.spec_version >= manifestCache.spec_version) {
++      // 增量合并：响应行（含 exists=false 墓碑行）逐行覆盖进缓存——与拉全量等价
++      const merged = { ...manifestCache.files, ...(body.files || {}) };
++      writeManifestCache(specRoot, { spec_version: body.spec_version, files: merged, inc_count: manifestCache.inc_count + 1 });
++      serverManifest = merged;
++    } else if (cacheUsable && typeof body.spec_version === 'number') {
++      // 服务端 spec_version 倒退（重建/回滚）——缓存脱离服务端纪元，一次性全量对账。
++      // 对账失败按拉取失败 fail-closed（ok:false）：空锚会触发全量 add 风暴，禁用。
++      debugLog(`[spec-sync] spec_version 倒退（${manifestCache.spec_version} → ${body.spec_version}，服务端重建？）——回退全量清单对账`);
++      const full = await fetch(manifestUrl, {
++        headers: { Authorization: `Bearer ${platform.token}` },
++        signal: withSignal(10000),
++      });
++      if (!full.ok) {
++        const failCount = bumpFailStreak(specRoot, logLabel, `倒退对账全量 HTTP ${full.status}`);
++        console.warn(`[spec-sync] 倒退对账全量拉取失败 HTTP ${full.status}（文件树本次未同步，下次自动重试）: ${logLabel}`);
++        if (failCount >= FAIL_STREAK_ESCALATE_AT) {
++          console.warn(`🚨 [spec-sync] 已连续 ${failCount} 次同步失败——平台文件树可能持续落后（变更中心或仍显示「进行中」/旧内容）: ${logLabel}`);
++        }
++        return { synced: 0, ok: false };
++      }
++      const fullBody = await full.json().catch(() => ({}));
++      serverManifest = fullBody.files || {};
++      if (typeof fullBody.spec_version === 'number') writeManifestCache(specRoot, { spec_version: fullBody.spec_version, files: serverManifest, inc_count: 0 });
++      else clearManifestCache(specRoot);
++    } else if (typeof body.spec_version === 'number') {
++      // 全量响应（首拉/对账轮/强制全量）：整份落缓存
++      writeManifestCache(specRoot, { spec_version: body.spec_version, files: body.files || {}, inc_count: 0 });
++      serverManifest = body.files || {};
++    } else {
++      // 旧平台（响应无 spec_version 字段）：忽略 since 参数恒回全量——作废缓存，
++      // 未部署窗口内行为与现状完全一致
++      serverManifest = body.files || {};
++      clearManifestCache(specRoot);
++    }
+   } catch (err) {
+     const failCount = bumpFailStreak(specRoot, logLabel, describeSyncError(err));
+     const line = `[spec-sync] 拉取清单异常（文件树本次未同步，下次自动重试）: ${logLabel}: ${describeSyncError(err)}`;
+diff --git a/src/watcher.js b/src/watcher.js
+index 3694825c..ce90517e 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -904,6 +904,10 @@ export async function spawnWatcher(cwd, changeName, opts = {}) {
+       env: childEnv,
+     });
+     child.unref?.();
++    // 孵化稳定化（FR-08 / dsh 实证 libuv 退出断言）：等 spawn 事件落定（≤150ms 兜底）再放行，
++    // 压掉「父进程在子进程句柄建立中途退出」的崩溃竞态窗口。
++    const { awaitSpawnSettled } = await import('./spawn-settle.js');
++    await awaitSpawnSettled(child);
+   } finally {
+     if (logFd !== null) {
+       try { closeSync(logFd); } catch { /* 父侧 fd 副本关闭；子进程持有继承副本 */ }
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 04318e8c..c9e32ca0 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -2260,8 +2260,45 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+     return result;
+   } finally {
+     // stash 恢复（含 --merge 早退 / 各拦截 return / 异常路径——finally 全覆盖，绝不遗漏）
+-    if (stashInfo) restoreMainStash(projectRoot, stashInfo);
++    if (stashInfo) {
++      const restored = restoreMainStash(projectRoot, stashInfo);
++      // 恢复步冲突标记检出（FR-02 / dsh z2 实证：apply 输出声称 clean，主仓 tsc 才暴露 stash 冲突
++      // 标记）——机械扫描命中即 fail-closed：错误入 result.errors（apply exit 非零），文件清单与
++      // 处置指引已在恢复处打印。finally 内改写 result 对仍在返回中的同一对象生效。
++      if (restored.conflictFiles && restored.conflictFiles.length > 0) {
++        result.conflictMarkerFiles = restored.conflictFiles;
++        result.errors.push(
++          `--stash-dirty 恢复后检出 git 冲突标记（${restored.conflictFiles.length} 个文件，stash 条目已保留未丢弃）：\n  ${restored.conflictFiles.join('\n  ')}\n` +
++          `逐文件解决冲突标记（<<<<<<< / ======= / >>>>>>>）后 git add，再手动 git stash drop；处置明细见上方恢复输出。`
++        );
++      }
++    }
++  }
++}
++
++/** git 冲突标记行首三形态（FR-02 / dsh z2 实证：stash 恢复留 `<<<<<<< Updated upstream` 类标记静默落地，主仓 tsc 才暴露）。
++ *  行首锚定 + `<{7} `/`>{7} ` 带标签（git 冲突标签恒随标记出现）、`={7}` 独占行——文档正文中的
++ *  示例标记（缩进/行中）不触发；CRLF 先归一再匹配。 */
++const CONFLICT_MARKER_RE = /^<{7} .*$|^={7}$|^>{7} .*$/m;
++
++/**
++ * 机械扫描文件集的 git 冲突标记（FR-02）。
++ * 只读；文件缺失/不可读跳过（stash 面里的已删文件不在扫描面）。限定调用方传入的文件集
++ * （stash 面口径），不扫全仓——防把规范文档里描述冲突标记的示例文本误报。
++ * @param {string} projectRoot
++ * @param {string[]} files
++ * @returns {string[]} 命中文件（相对 projectRoot 路径，原序）
++ */
++export function scanConflictMarkers(projectRoot, files) {
++  const hits = [];
++  for (const f of (Array.isArray(files) ? files : [])) {
++    if (!f) continue;
++    try {
++      const text = readFileSync(join(projectRoot, f), 'utf8');
++      if (CONFLICT_MARKER_RE.test(text.replace(/\r\n/g, '\n'))) hits.push(f);
++    } catch { /* 已删/不可读——不在扫描面 */ }
+   }
++  return hits;
+ }
+ 
+ /**
+@@ -2273,16 +2310,28 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+  *     形态，退出码不可尽信）；
+  *   - apply --index 冲突/异常 → stash 条目保留（git apply 失败不 drop），大字打印 SHA 兜底，
+  *     绝不自动丢弃、绝不盲 pop 栈顶（并行外部操作可能插队，先按 SHA 校验栈顶归属）。
++ *   - 恢复动作后机械扫描 stash 面冲突标记（FR-02 / dsh z2 实证：两级恢复的 --index 尝试可先落
++ *     标记再失败、普通恢复可带着标记以 0 退出——git 退出码不可尽信）：命中 → 不 drop、打印文件
++ *     清单与处置指引、返回 conflictFiles（调用方 fail-closed 进 errors 使 apply exit 非零）。
+  * @param {string} projectRoot
+  * @param {{ sha: string, marker: string }} stashInfo
++ * @returns {{ conflictFiles: string[] }}
+  */
+-function restoreMainStash(projectRoot, { sha, marker }) {
++export function restoreMainStash(projectRoot, { sha, marker }) {
+   // 栈顶归属校验按 SHA（git stash list 行不含 SHA，须 rev-parse 对比）——防并行外部操作插队后误恢复他者条目
+   const headSha = (gitQuiet(projectRoot, ['rev-parse', '--verify', 'stash@{0}']) || '').trim();
+   if (headSha !== sha) {
+     console.error(`⚠️ stash 恢复跳过：栈顶 stash@{0} 已非本次条目（本次 ${sha}，栈顶 ${headSha || '空'}）——可能被并行操作消费/弹出。若本次条目仍在栈中：git stash list 找 ${sha.slice(0, 8)} 后 git stash apply --index <该ref>`);
+-    return;
++    return { conflictFiles: [] };
+   }
++  // stash 面文件清单（冲突标记扫描口径）：恢复动作前取（条目此刻必在栈顶）。
++  // stash show 只列 tracked 面（--include-untracked 的第三 parent 不在内）——未跟踪文件
++  // 恢复冲突走 already exists 报错路径（非标记形态），不在扫描面。
++  let stashFace = [];
++  try {
++    stashFace = (gitQuiet(projectRoot, ['stash', 'show', '--name-only', 'stash@{0}']) || '')
++      .split('\n').map((s) => s.trim()).filter(Boolean);
++  } catch { /* 面取失败 → 空面，恢复报错路径兜底 */ }
+   // 两级恢复：① apply --index（保暂存区状态）——但 apply 本身会把变更留在工作区未提交，stash 树是
+   // 全量快照，--index 的合并对「stash 树内但未被 stash 改动的脏文件」（正是刚 apply 落地的文件）
+   // 会报 local changes would be overwritten；② 退普通 apply（内容保真恢复，staged 扁平化为
+@@ -2297,12 +2346,25 @@ function restoreMainStash(projectRoot, { sha, marker }) {
+       restored = 'plain';
+       console.warn(`⚠️ 暂存区状态未能完整还原（apply --index 与本次 apply 落地的未提交变更互斥），已退普通恢复——内容保真，staged 文件被扁平化为 unstaged，如需请重新 git add。原因：${String(eIndex.message || eIndex).split('\n').slice(-2)[0] || eIndex}`);
+     } catch (e) {
++      // 恢复失败的现场也可能残留标记（--index 尝试先行落标记后抛错）——扫描补报，处置信息更完整
++      const failConflicts = scanConflictMarkers(projectRoot, stashFace);
+       console.error(`⚠️ stash 恢复失败（apply 冲突或异常）——stash 条目已保留（未丢弃），SHA 兜底：${sha}`);
+       console.error(`   处理：git stash list 定位条目（marker 含 "${String(marker || '').slice(0, 50)}"）；解决工作区冲突后 git stash apply stash@{N} 重试或人工合并；确认无需后再 git stash drop。未跟踪文件若报 already exists，比对内容后手动处理。`);
++      if (failConflicts.length > 0) {
++        console.error(`   恢复失败但工作区已残留冲突标记（${failConflicts.length} 个文件）：${failConflicts.join('、')}——逐文件解决标记后 git add，再 git stash apply stash@{0} 重试`);
++      }
+       console.error(`   git 输出: ${String(e.message || e).split('\n').slice(0, 3).join('\n            ')}`);
+-      return;
++      return { conflictFiles: failConflicts };
+     }
+   }
++  // 恢复后机械扫描（FR-02）：命中 → 不 drop、fail-closed（git 退出码 0 ≠ 无标记，dsh z2 实证）
++  const conflictFiles = scanConflictMarkers(projectRoot, stashFace);
++  if (conflictFiles.length > 0) {
++    console.error(`🚫 stash 恢复后检出 git 冲突标记（${conflictFiles.length} 个文件）——stash 条目保留未丢弃（SHA 兜底：${sha}），本次 apply 记为失败：`);
++    for (const f of conflictFiles) console.error(`   - ${f}`);
++    console.error(`   处置：逐文件解决冲突标记（<<<<<<< / ======= / >>>>>>> 段落二选一或手工合并）后 git add -- <文件>；或 git checkout -- <文件> 放弃恢复态后 git stash apply stash@{0} 重试；确认完成后手动 git stash drop stash@{0}。`);
++    return { conflictFiles };
++  }
+   try {
+     git(projectRoot, ['stash', 'drop', 'stash@{0}'], { timeout: 60000 });
+     // 防静默不落地（用户实证②）：drop 后栈顶不得仍是本 SHA
+@@ -2315,6 +2377,7 @@ function restoreMainStash(projectRoot, { sha, marker }) {
+   } catch (e) {
+     console.error(`⚠️ stash drop 失败（改动应已恢复）——手动 git stash drop stash@{0}（${sha}）：${e.message}`);
+   }
++  return { conflictFiles: [] };
+ }
+ 
+ /**
+diff --git a/src/worktree.js b/src/worktree.js
+index 8b559c57..9d10768d 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -331,17 +331,42 @@ export function detectIsolation(cwd = process.cwd()) {
+ }
+ 
+ /**
+- * 检查 worktree 存储目录是否被 .gitignore 忽略
+- * @param {string} cwd - 项目根目录
+- * @returns {{ ignored: boolean, path: string }}
++ * 检查 worktree 存储目录是否被 .gitignore 忽略（2026-10-21-p0-p1-hardening FR-06 三态分流）。
++ *
++ * 三态结局（dsh z2 实证：沙箱下 spawnSync git 抛 EPERM 被旧实现当成「未忽略」误报，阻断
++ * worktree 创建 27 分钟并迫使用户提权——git 退出码与探测失败必须分流）：
++ *   - { ignored: true }  git 判定已忽略（exit 0）；
++ *   - { ignored: false } git 判定确未忽略（check-ignore exit 1）——调用方照旧阻断；
++ *   - { ignored: null, probeError } 探测失败（spawn 异常 EPERM/ENOENT/超时等，git 未给出
++ *     判定）——立即重试一次仍失败时按「无法证实未忽略」上报，调用方 fail-open 放行+警告。
++ * runner 可注入供测试（缺省本模块 git）。
++ * @param {string} cwd 项目根目录
++ * @param {Function} [runner] 注入式 git 执行器（(cwd, args, opts) => string）
++ * @returns {{ ignored: boolean|null, path: string, probeError?: string, retried?: boolean }}
+  */
+-function checkWorktreeDirIgnored(cwd = process.cwd()) {
++export function checkWorktreeDirIgnored(cwd = process.cwd(), runner = git) {
+   const relPath = WORKTREES_REL;
++  const attempt = () => {
++    try {
++      runner(cwd, ['check-ignore', '-q', relPath]);
++      return { ignored: true };
++    } catch (e) {
++      // git 正常判定「未忽略」= exit 1（e.status 数字）——与 spawn 失败（e.status 缺失，
++      // e.code=EPERM/ENOENT/ETIMEDOUT 等）分流：前者是判定结果，后者是探测故障。
++      if (e && typeof e.status === 'number') return { ignored: false };
++      throw e;
++    }
++  };
+   try {
+-    git(cwd, ['check-ignore', '-q', relPath]);
+-    return { ignored: true, path: relPath };
+-  } catch {
+-    return { ignored: false, path: relPath };
++    return { ...attempt(), path: relPath };
++  } catch (first) {
++    try {
++      const r = attempt();
++      return { ...r, path: relPath, retried: true };
++    } catch (second) {
++      const probeError = String((second && (second.code || second.message)) || second).split('\n')[0];
++      return { ignored: null, path: relPath, probeError, retried: true };
++    }
+   }
+ }
+ 
+@@ -725,9 +750,10 @@ export class WorktreeManager {
+       });
+     }
+ 
+-    // 1. 检查 worktree 目录是否被 gitignore
++    // 1. 检查 worktree 目录是否被 gitignore（三态：已忽略放行 / 确未忽略阻断 / 探测失败
++    //    fail-open 放行+警告——FR-06 / dsh z2 实证 EPERM 误报「未忽略」阻断创建 27 分钟）
+     const ignoreStatus = checkWorktreeDirIgnored(this.cwd);
+-    if (!ignoreStatus.ignored) {
++    if (ignoreStatus.ignored === false) {
+       throw new Error(
+         `worktree 存储目录 ${ignoreStatus.path} 未被 .gitignore 忽略，` +
+         `创建 worktree 可能导致内容被误提交。\n` +
+@@ -735,6 +761,12 @@ export class WorktreeManager {
+         `或运行 sillyspec doctor 检查修复。`
+       );
+     }
++    if (ignoreStatus.ignored === null) {
++      console.warn(
++        `⚠️ worktrees gitignore 探测失败（${ignoreStatus.probeError}${ignoreStatus.retried ? '，已重试 1 次仍失败' : ''}——沙箱/杀软拦 git 子进程常见）——无法证实「未忽略」，按已忽略继续（不阻断创建）。` +
++        `人工复核：git check-ignore -q ${ignoreStatus.path}（exit 0=已忽略）；若确实未忽略请补 .gitignore: ${ignoreStatus.path}/`
++      );
++    }
+ 
+     // 2. 检查 worktree 是否已存在
+     if (existsSync(worktreePath)) {
+diff --git a/test/apply-stash-conflict-scan.test.mjs b/test/apply-stash-conflict-scan.test.mjs
+new file mode 100644
+index 00000000..7961a023
+--- /dev/null
++++ b/test/apply-stash-conflict-scan.test.mjs
+@@ -0,0 +1,83 @@
++/**
++ * apply-stash-conflict-scan（2026-10-21-p0-p1-hardening FR-02）
++ *
++ * dsh z2 实证事故：worktree apply --stash-dirty 恢复步静默留 git 冲突标记（`<<<<<<< Updated
++ * upstream`），apply 输出声称 clean、主仓 tsc 才暴露。锁死契约：
++ *   U1 scanConflictMarkers：行首三形态命中（含 CRLF），缩进/行中示例不误报，缺文件跳过
++ *   I1 干净恢复：无标记 → 照常 drop + conflictFiles 空（既有行为不变）
++ *   I2 恢复成功但 stash 面文件带标记 → 不 drop + conflictFiles 命中（fail-closed）
++ *   I3 两级恢复均冲突（工作区重叠改动）→ 失败分支残留标记补报 + 条目保留
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { scanConflictMarkers, restoreMainStash } from '../src/worktree-apply.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const git = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++const gitOk = (cwd, args) => { try { git(cwd, args); return true } catch { return false } }
++
++function initRepo(prefix) {
++  const d = mk(prefix)
++  git(d, ['init', '-q'])
++  git(d, ['config', 'user.email', 't@t.local'])
++  git(d, ['config', 'user.name', 't'])
++  return d
++}
++
++test('U1 scanConflictMarkers：行首三形态命中（含 CRLF），缩进/行中示例不误报，缺文件跳过', () => {
++  const d = mk('scanmk-')
++  writeFileSync(join(d, 'hit-lf.txt'), 'a\n<<<<<<< Updated upstream\nb\n=======\nc\n>>>>>>> Stashed changes\n')
++  writeFileSync(join(d, 'hit-crlf.txt'), 'a\r\n<<<<<<< ours\r\nb\r\n=======\r\nc\r\n>>>>>>> theirs\r\n')
++  writeFileSync(join(d, 'clean.txt'), 'plain\n======= not-a-marker（行中带尾随内容）\n  <<<<<<< indented（缩进示例）\n')
++  const hits = scanConflictMarkers(d, ['hit-lf.txt', 'hit-crlf.txt', 'clean.txt', 'missing.txt'])
++  assert.deepEqual(hits, ['hit-lf.txt', 'hit-crlf.txt'], `仅行首三形态命中：${hits}`)
++})
++
++test('I1 干净恢复：无标记 → 照常 drop，conflictFiles 空（行为不变）', () => {
++  const d = initRepo('rclean-')
++  writeFileSync(join(d, 'a.txt'), 'one\ntwo\n')
++  git(d, ['add', '.']); git(d, ['commit', '-qm', 'init'])
++  writeFileSync(join(d, 'a.txt'), 'one\ntwo\nthree\n') // 脏改动入 stash
++  git(d, ['stash', 'push', '-m', 'marker1', '--', '.'])
++  const sha = git(d, ['rev-parse', '--verify', 'stash@{0}']).trim()
++  const r = restoreMainStash(d, { sha, marker: 'marker1' })
++  assert.deepEqual(r.conflictFiles, [], '干净恢复 conflictFiles 空')
++  assert.equal(gitOk(d, ['rev-parse', '--verify', 'stash@{0}']), false, 'stash 已照常 drop')
++  assert.match(readFileSync(join(d, 'a.txt'), 'utf8'), /three/, '改动恢复落地')
++})
++
++test('I2 恢复成功但 stash 面文件带标记 → 不 drop + conflictFiles 命中（fail-closed）', () => {
++  const d = initRepo('rmark-')
++  writeFileSync(join(d, 'a.txt'), 'one\n')
++  git(d, ['add', '.']); git(d, ['commit', '-qm', 'init'])
++  // 用户脏文件本身含标记（git 退出码 0 的「静默标记」形态：标记来自 stash 内容本身）
++  writeFileSync(join(d, 'a.txt'), 'one\n<<<<<<< Updated upstream\nx\n=======\ny\n>>>>>>> Stashed changes\n')
++  git(d, ['stash', 'push', '-m', 'marker2', '--', '.'])
++  const sha = git(d, ['rev-parse', '--verify', 'stash@{0}']).trim()
++  const r = restoreMainStash(d, { sha, marker: 'marker2' })
++  assert.deepEqual(r.conflictFiles, ['a.txt'], '恢复成功但扫描命中标记')
++  assert.equal(gitOk(d, ['rev-parse', '--verify', 'stash@{0}']), true, 'stash 条目保留未 drop（SHA 兜底）')
++})
++
++test('I3 两级恢复均冲突（HEAD 已推进再恢复）→ 失败分支残留标记补报 + 条目保留', () => {
++  const d = initRepo('rconf-')
++  writeFileSync(join(d, 'a.txt'), 'one\ntwo\nthree\n')
++  git(d, ['add', '.']); git(d, ['commit', '-qm', 'init'])
++  writeFileSync(join(d, 'a.txt'), 'one-DIRTY\ntwo\nthree\n')
++  git(d, ['stash', 'push', '-m', 'marker3', '--', '.'])
++  // 真实形态（dsh z2 同构）：stash 后主仓 HEAD 在同区域推进（模拟 apply 落地已提交）——
++  // stash apply 三方合并 base≠HEAD → 冲突留 `<<<<<<< Updated upstream` 标记 + exit 非零
++  writeFileSync(join(d, 'a.txt'), 'one-COMMITTED\ntwo\nthree\n')
++  git(d, ['add', '.']); git(d, ['commit', '-qm', 'advance'])
++  const sha = git(d, ['rev-parse', '--verify', 'stash@{0}']).trim()
++  const r = restoreMainStash(d, { sha, marker: 'marker3' })
++  assert.ok(r.conflictFiles.includes('a.txt'), `失败分支残留标记补报：${JSON.stringify(r.conflictFiles)}`)
++  assert.ok(readFileSync(join(d, 'a.txt'), 'utf8').includes('<<<<<<<'), '标记确实在工作区')
++  assert.equal(gitOk(d, ['rev-parse', '--verify', 'stash@{0}']), true, '失败路径条目保留')
++})
+diff --git a/test/change-ownership-guards.test.mjs b/test/change-ownership-guards.test.mjs
+index bd94a256..f0e30c49 100644
+--- a/test/change-ownership-guards.test.mjs
++++ b/test/change-ownership-guards.test.mjs
+@@ -21,7 +21,7 @@ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+-import { tmpdir } from 'node:os'
++import { tmpdir, hostname } from 'node:os'
+ import { spawnSync } from 'node:child_process'
+ import { fileURLToPath } from 'node:url'
+ 
+@@ -485,3 +485,42 @@ test('⑦b 他人活跃 change 归档 → 所有权拒绝（exit 1 + 接管指
+   assert.ok(r.stdout.includes('--takeover'), '报错含显式接管指引')
+   assert.ok(existsSync(changeDir), '目录未动')
+ })
++
++test('⑧ 匿名占位所有权自动升级（2026-10-21-p0-p1-hardening FR-05 / dsh z1 实证：首调忘设 SESSION_ID → anon 自锁被迫 --takeover）', () => {
++  const { cwd, specBase } = makeRepo('cog-anon-')
++  const pm = new ProgressManager({ specDir: specBase })
++  pm.registerChange(cwd, 'c1')
++  const me = hostname()
++
++  // 场景 1：owner=本机匿名占位 + 显式身份（env/flag 三级解析结果）→ 放行 + takeover-anon-upgrade
++  pm.setChangeOwner(cwd, 'c1', `anon@${me}`)
++  const up = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
++  assert.equal(up.allowed, true, '匿名占位同主机自动升级放行（免 --takeover）')
++  assert.equal(up.action, 'takeover-anon-upgrade')
++
++  // 场景 2：跨机匿名占位 → 照旧拦（机器级隔离语义保持）
++  pm.setChangeOwner(cwd, 'c1', 'anon@other-host')
++  const cross = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
++  assert.equal(cross.allowed, false, '跨机匿名仍拦')
++  assert.equal(cross.action, 'blocked-active-owner')
++
++  // 场景 3：匿名 self 对同机匿名 owner → self 既有分支（字符串等值，零路径变化）
++  pm.setChangeOwner(cwd, 'c1', `anon@${me}`)
++  const anonSelf = pm.assertChangeOwnership(cwd, 'c1', { selfSession: `anon@${me}`, nowMs: Date.now() })
++  assert.equal(anonSelf.allowed, true)
++  assert.equal(anonSelf.action, 'self')
++
++  // 场景 4：他人显式持有（活跃窗内）→ 照旧拦（升级不弱化既有隔离强度）
++  pm.setChangeOwner(cwd, 'c1', 'other-explicit')
++  const blocked = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
++  assert.equal(blocked.allowed, false, '他人显式持有仍拦')
++  assert.equal(blocked.action, 'blocked-active-owner')
++
++  // 场景 5：本机匿名 owner 窗口外 → takeover-stale 既有分支优先级不受影响（stale 先于新分支无歧义：
++  // 显式身份 + 匿名 owner 命中 anon-upgrade；显式 owner + 窗口外走 stale——两分支互不抢占）
++  pm.setChangeOwner(cwd, 'c1', 'other-explicit')
++  const setOld = pm._ensureDB(cwd).getDb().prepare("UPDATE changes SET last_active = ? WHERE name = 'c1'")
++  setOld.run(new Date(Date.now() - 30 * 60 * 1000).toISOString())
++  const stale = pm.assertChangeOwnership(cwd, 'c1', { selfSession: 'dsh-web-explicit', nowMs: Date.now() })
++  assert.equal(stale.action, 'takeover-stale', '显式 owner 窗口外照旧 stale 接管')
++})
+diff --git a/test/config-known-failures.test.mjs b/test/config-known-failures.test.mjs
+new file mode 100644
+index 00000000..a4dd29dc
+--- /dev/null
++++ b/test/config-known-failures.test.mjs
+@@ -0,0 +1,130 @@
++/**
++ * config-known-failures（2026-10-21-p0-p1-hardening FR-07）
++ *
++ * dsh z2 实证：known_failures 无 CLI 管理面 → agent PS5.1 手改 local.yaml 写成 mojibake
++ * （等用户 2h13m）。锁死契约：
++ *   P1 parse：块式/流式/无段三形态键提取
++ *   P2 行级手术：块式增删（其余行含注释逐字节保留）/ 流式增删 / 无段追加 / 删空归 []
++ *   P3 坏 YAML 拒改（解析失败 → { ok:false }，文件不动）
++ *   P4 文件级 roundtrip：mutateKnownFailuresFile + listKnownFailures（原子写、无 BOM）
++ *   P5 CLI 薄壳：list 缺文件 exit 1 / 未知动作 exit 2 / add 空键 exit 2
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import {
++  parseKnownFailureKeys,
++  applyKnownFailureEdit,
++  listKnownFailures,
++  mutateKnownFailuresFile,
++  runKnownFailuresCommand,
++} from '../src/config-known-failures.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('P1 parse：块式/流式/无段三形态', () => {
++  const block = '# 顶部注释\nplatform:\n  url: x\nknown_failures:\n  - change-name.foo\n  - "decisions.behind_threshold"\nreview:\n  x: 1\n'
++  assert.deepEqual(parseKnownFailureKeys(block), ['change-name.foo', 'decisions.behind_threshold'], '块式（含引号形态）')
++  const inline = 'known_failures: [a.b, c-d] # 尾注释\n'
++  assert.deepEqual(parseKnownFailureKeys(inline), ['a.b', 'c-d'], '流式含尾注释')
++  const none = 'platform:\n  url: x\n'
++  assert.deepEqual(parseKnownFailureKeys(none), [], '无段 → 空')
++  const emptyInline = 'known_failures: []\n'
++  assert.deepEqual(parseKnownFailureKeys(emptyInline), [], '流式空 → 空')
++})
++
++test('P2 行级手术：块式增删且其余行逐字节保留；无段追加；删空归 []', () => {
++  const orig = [
++    '# 用户注释：门禁豁免清单',
++    'platform:',
++    '  url: https://x',
++    'known_failures:',
++    '  - change-name.foo',
++    'review:',
++    '  enabled: true',
++    '',
++  ].join('\n')
++  // 增
++  const addR = applyKnownFailureEdit(orig, { add: ['change-name.bar'] })
++  assert.equal(addR.ok, true)
++  assert.deepEqual(addR.keys, ['change-name.foo', 'change-name.bar'])
++  const addLines = addR.next.split('\n')
++  assert.ok(addLines.includes('  - change-name.bar'), '新键条目行在场')
++  assert.equal(addLines[0], '# 用户注释：门禁豁免清单', '顶部注释保留')
++  assert.equal(addLines.indexOf('review:'), addLines.indexOf('  - change-name.bar') + 1, '后续段落位置保持')
++  assert.ok(!addR.next.includes('change-name.foo#'), '原键行未被改写')
++  // 删
++  const rmR = applyKnownFailureEdit(addR.next, { remove: ['change-name.foo'] })
++  assert.equal(rmR.ok, true)
++  assert.deepEqual(rmR.keys, ['change-name.bar'])
++  assert.ok(!rmR.next.split('\n').includes('  - change-name.foo'), '命中键行已删')
++  assert.ok(rmR.next.includes('# 用户注释：门禁豁免清单'), '注释仍保留')
++  // 删空
++  const emptyR = applyKnownFailureEdit(rmR.next, { remove: ['change-name.bar'] })
++  assert.equal(emptyR.ok, true)
++  assert.deepEqual(emptyR.keys, [])
++  assert.ok(emptyR.next.split('\n').includes('known_failures: []'), '删空归流式空形态（两种 reader 都认）')
++  // 无段追加
++  const noSection = 'platform:\n  url: x\n'
++  const appR = applyKnownFailureEdit(noSection, { add: ['k1', 'k1', 'k2'] })
++  assert.equal(appR.ok, true)
++  assert.deepEqual(appR.keys, ['k1', 'k2'], '追加去重')
++  assert.ok(appR.next.endsWith('known_failures:\n  - k1\n  - k2\n'), '文件尾整段追加')
++  // 流式增删
++  const inline = 'known_failures: [a, b] # 豁免\n'
++  const inAdd = applyKnownFailureEdit(inline, { add: ['c'] })
++  assert.ok(inAdd.ok && inAdd.next.includes('known_failures: [a, b, c] # 豁免'), `流式追加保尾注释：${inAdd.next.trim()}`)
++  const inRm = applyKnownFailureEdit(inline, { remove: ['a'] })
++  assert.ok(inRm.ok && inRm.next.includes('known_failures: [b] # 豁免'), '流式删除')
++})
++
++test('P3 坏 YAML 拒改：解析失败 → ok:false 且原文件不动', () => {
++  const broken = 'platform:\n  url: [unclosed\n\xef\xbf\xbd mojibake ???'
++  const r = applyKnownFailureEdit(broken, { add: ['k'] })
++  assert.equal(r.ok, false, '拒改')
++  assert.match(r.error, /解析失败/, `错误含修复指引方向：${r.error}`)
++  // 顶层非映射同样拒（YAML 合法但形态异常）
++  const scalar = 'just a string\n'
++  const r2 = applyKnownFailureEdit(scalar, { add: ['k'] })
++  assert.equal(r2.ok, false, '顶层标量拒改')
++})
++
++test('P4 文件级 roundtrip：add → list → remove；无 BOM；注释保留', () => {
++  const d = mk('kf-')
++  const p = join(d, 'local.yaml')
++  writeFileSync(p, '# 项目本地配置\ncommands:\n  lint: npm run lint\n')
++  const a = mutateKnownFailuresFile(p, { add: ['change-name.x1'] })
++  assert.equal(a.ok, true)
++  const buf = readFileSync(p)
++  assert.notEqual(buf[0], 0xef, '无 BOM')
++  const text = buf.toString('utf8')
++  assert.ok(text.includes('# 项目本地配置'), '注释保留')
++  assert.ok(text.includes('lint: npm run lint'), '其余段落保留')
++  const l = listKnownFailures(p)
++  assert.equal(l.ok, true)
++  assert.deepEqual(l.keys, ['change-name.x1'])
++  const r = mutateKnownFailuresFile(p, { remove: ['change-name.x1', 'not-there'] })
++  assert.equal(r.ok, true, '未命中键静默忽略')
++  assert.deepEqual(listKnownFailures(p).keys, [])
++  // 坏 YAML 文件级拒改（文件保持原样）
++  writeFileSync(p, 'bad: [unclosed\n')
++  const before = readFileSync(p, 'utf8')
++  const bad = mutateKnownFailuresFile(p, { add: ['k'] })
++  assert.equal(bad.ok, false, '坏文件拒改')
++  assert.equal(readFileSync(p, 'utf8'), before, '文件未被改动')
++})
++
++test('P5 CLI 薄壳退出码', () => {
++  assert.equal(runKnownFailuresCommand({ yamlPath: 'x', exists: false, verb: 'list' }), 1, '缺文件 list → 1')
++  assert.equal(runKnownFailuresCommand({ yamlPath: 'x', exists: true, verb: 'nonsense' }), 2, '未知动作 → 2')
++  assert.equal(runKnownFailuresCommand({ yamlPath: 'x', exists: true, verb: 'add', keys: [] }), 2, 'add 空键 → 2')
++  assert.equal(runKnownFailuresCommand({ yamlPath: 'x', exists: false, verb: 'add', keys: ['k'] }), 1, '缺文件 add → 1')
++  const d = mk('kfcli-')
++  const p = join(d, 'local.yaml')
++  writeFileSync(p, 'known_failures: []\n')
++  assert.equal(runKnownFailuresCommand({ yamlPath: p, exists: true, verb: 'list', json: true }), 0, 'list json → 0')
++})
+diff --git a/test/doctor-local-yaml.test.mjs b/test/doctor-local-yaml.test.mjs
+new file mode 100644
+index 00000000..2aaf4d82
+--- /dev/null
++++ b/test/doctor-local-yaml.test.mjs
+@@ -0,0 +1,60 @@
++/**
++ * doctor-local-yaml（2026-10-21-p0-p1-hardening FR-07）
++ *
++ * dsh z2 实证：agent 手改 local.yaml 写成 mojibake，doctor 对坏文件零提示（等用户人工
++ * 恢复 2h13m）。锁死契约（detectLocalYamlIntegrity 只读维度）：
++ *   D1 无文件 → 零 finding（本地模式合法态）
++ *   D2 好文件 → 零 finding
++ *   D3 坏 YAML → local_yaml_unparsable finding + restore safe_action
++ *   D4 含 BOM → local_yaml_bom finding
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { detectLocalYamlIntegrity } from '../src/doctor-diagnostics.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function withLocalYaml(content) {
++  const d = mk('dly-')
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
++  writeFileSync(join(d, '.sillyspec', 'local.yaml'), content)
++  return d
++}
++
++test('D1 无 local.yaml → 零 finding（合法态）', () => {
++  const d = mk('dly-none-')
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
++  const dim = detectLocalYamlIntegrity(d)
++  assert.equal(dim.name, 'local_yaml_integrity')
++  assert.deepEqual(dim.findings, [])
++})
++
++test('D2 好文件 → 零 finding', () => {
++  const d = withLocalYaml('# 配置\ncommands:\n  lint: npm run lint\n')
++  const dim = detectLocalYamlIntegrity(d)
++  assert.deepEqual(dim.findings, [], `好文件零 finding：${dim.findings}`)
++})
++
++test('D3 坏 YAML → unparsable finding + restore safe_action（含 known-failures 指引）', () => {
++  const d = withLocalYaml('platform:\n  url: [unclosed\n??? mojibake ??\n')
++  const dim = detectLocalYamlIntegrity(d)
++  assert.equal(dim.findings.length, 1)
++  assert.match(dim.findings[0], /local_yaml_unparsable/)
++  assert.match(dim.findings[0], /known-failures/, '给 known-failures 管理指引')
++  assert.ok(dim.safe_actions.some((a) => a.action === 'restore_local_yaml' && a.next_step.includes('恢复')), 'safe_action 给恢复下一步')
++})
++
++test('D4 含 BOM → bom finding（坏 YAML 同时在场则两条都报）', () => {
++  const d = withLocalYaml('﻿commands:\n  lint: x\n')
++  const dim = detectLocalYamlIntegrity(d)
++  assert.equal(dim.findings.length, 1)
++  assert.match(dim.findings[0], /local_yaml_bom/)
++  const both = withLocalYaml('﻿bad: [unclosed\n')
++  const dim2 = detectLocalYamlIntegrity(both)
++  assert.equal(dim2.findings.length, 2, `BOM + 解析失败并报：${dim2.findings.map((f) => f.slice(0, 30))}`)
++})
+diff --git a/test/done-heartbeat.test.mjs b/test/done-heartbeat.test.mjs
+new file mode 100644
+index 00000000..53093b94
+--- /dev/null
++++ b/test/done-heartbeat.test.mjs
+@@ -0,0 +1,62 @@
++/**
++ * done-heartbeat（2026-10-21-p0-p1-hardening FR-03）
++ *
++ * dsh z2 实证：verify 纯文档步骤 --done 静默挂起 >5 分钟，agent 无从分辨在跑还是死锁。
++ * 锁死契约（withDoneHeartbeat，completeStep/completeStepBurst 外层薄 wrapper）：
++ *   H1 快路径零输出（<interval 完成 → 无心跳行，返回值透传）
++ *   H2 慢路径心跳行（>2×interval → ≥2 行 stderr 进度行，含 label；结束后不再打印）
++ *   H3 异常路径清理（fn throw → 心跳清除 + 异常透传）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { withDoneHeartbeat } from '../src/run/complete.js'
++
++/** 捕获 console.error 全程（含 fn 内部的异步期）——restore 必须在 await 完成之后 */
++async function withCapturedStderr(fn) {
++  const orig = console.error
++  const lines = []
++  console.error = (...a) => lines.push(a.join(' '))
++  try {
++    const value = await fn()
++    return { lines, value }
++  } finally {
++    console.error = orig
++  }
++}
++
++const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
++
++test('H1 快路径：interval 内完成 → 零心跳输出，返回值透传', async () => {
++  const { lines, value } = await withCapturedStderr(() => withDoneHeartbeat('test --done', async () => 'ret-value', { intervalMs: 200 }))
++  assert.equal(value, 'ret-value', '返回值透传')
++  await sleep(230) // 结束后不再打印
++  assert.deepEqual(lines, [], `快路径零输出：${lines}`)
++})
++
++test('H2 慢路径：超 interval → stderr 心跳行（含 label 与时长），结束即停', async () => {
++  const { lines } = await withCapturedStderr(() => withDoneHeartbeat('verify --done', () => sleep(150), { intervalMs: 40 }))
++  const beats = lines.filter((l) => l.includes('verify --done') && l.includes('收口链仍在执行'))
++  assert.ok(beats.length >= 2, `≥2 行心跳：${lines}`)
++  assert.ok(beats.every((l) => l.includes('旁路核对')), '心跳行含旁路核对建议')
++  const count = lines.length
++  await sleep(120)
++  assert.equal(lines.length, count, '结束后不再打印（finally 清理）')
++})
++
++test('H3 异常路径：fn throw → 异常透传 + 心跳清理', async () => {
++  const fast = await withCapturedStderr(async () => {
++    try { return await withDoneHeartbeat('boom --done', async () => { await sleep(50); throw new Error('boom') }, { intervalMs: 500 }) }
++    catch (e) { return e }
++  })
++  assert.match(String(fast.value?.message || fast.value), /boom/, '异常透传（不吞）')
++  assert.deepEqual(fast.lines, [], 'interval 未到即抛 → 无心跳行')
++  const slow = await withCapturedStderr(async () => {
++    try { return await withDoneHeartbeat('boom2 --done', async () => { await sleep(100); throw new Error('boom2') }, { intervalMs: 30 }) }
++    catch (e) { return e }
++  })
++  assert.match(String(slow.value?.message || slow.value), /boom2/)
++  assert.ok(slow.lines.length >= 1, `throw 前心跳已打：${slow.lines}`)
++  const n = slow.lines.length
++  await sleep(120)
++  assert.equal(slow.lines.length, n, '抛出后心跳停止')
++})
+diff --git a/test/gate-stage-review-hint.test.mjs b/test/gate-stage-review-hint.test.mjs
+index 799b11fb..e279c55c 100644
+--- a/test/gate-stage-review-hint.test.mjs
++++ b/test/gate-stage-review-hint.test.mjs
+@@ -83,3 +83,32 @@ test('H2 --full 档 full-stage-review 的 id 与 error 语义不变', async () =
+   assert.equal(full.informational, undefined, '非 informational（error 语义）')
+   assert.equal(full.ok, false, '缺 review → error（--done 将拦）')
+ })
++
++test('H1c 默认档 brainstorm/plan 产 hint 且文案按 stage 参数化（2026-10-21-p0-p1-hardening FR-04 扩面——dsh z1 实证 brainstorm 收口被伏击 46 分钟）', async () => {
++  for (const st of ['brainstorm', 'plan']) {
++    const { cwd, specBase, changeName } = await fixture({ withReview: false, stage: st })
++    const g = await runGate(st, changeName, { cwd, specBase })
++    const hint = checkById(g.envelope, 'stage-review-hint')
++    assert.ok(hint, `${st} 默认档 stage-review-hint 在场`)
++    assert.equal(hint.informational, true, `${st} informational（不改变 gate 结论）`)
++    assert.ok((hint.warnings || []).some((w) => w.includes(`${st} --done`)), `${st} 文案按 stage 参数化：${hint.warnings}`)
++    assert.ok((hint.warnings || []).some((w) => w.includes('register-stage-review')), `${st} warning 含 register 指引`)
++    assert.ok(!(hint.warnings || []).some((w) => w.includes('execute --done')), `${st} 文案不写死 execute`)
++  }
++})
++
++test('H2b --full 档 brainstorm/plan 的 full-stage-review 在场（与 gates.js 拦截面三阶段对齐）', async () => {
++  for (const st of ['brainstorm', 'plan']) {
++    const { cwd, specBase, changeName } = await fixture({ withReview: false, stage: st })
++    const f = await runGate(st, changeName, { cwd, specBase, full: true })
++    const chk = checkById(f.envelope, 'full-stage-review')
++    assert.ok(chk, `${st} --full 档探测在场`)
++    assert.equal(chk.ok, false, `${st} 缺 review → error 语义（--done 将拦）`)
++    assert.ok((chk.errors || []).some((e) => e.includes(`${st} --done`) && e.includes('register-stage-review')), `${st} 错误文案按 stage 参数化：${chk.errors}`)
++  }
++  // review 在场 → --full 探测静默 ok（brainstorm 形态）
++  const present = await fixture({ withReview: true, stage: 'brainstorm' })
++  const fp = await runGate('brainstorm', present.changeName, { cwd: present.cwd, specBase: present.specBase, full: true })
++  const chkP = checkById(fp.envelope, 'full-stage-review')
++  assert.ok(chkP && chkP.ok === true, 'review 在场 → --full 探测 ok 零 error')
++})
+diff --git a/test/handoff-takeover-hint.test.mjs b/test/handoff-takeover-hint.test.mjs
+new file mode 100644
+index 00000000..9f9ea0a8
+--- /dev/null
++++ b/test/handoff-takeover-hint.test.mjs
+@@ -0,0 +1,59 @@
++/**
++ * handoff-takeover-hint（2026-10-21-p0-p1-hardening FR-05）
++ *
++ * dsh z2 实证：新会话自拟新 SESSION_ID（未沿用交接块导出值）→ 首个写操作撞所有权活跃窗，
++ * 交接块没预告 --takeover 出路。锁死契约：
++ *   T1 粘贴块内含 --takeover 预告行（位于「交接块结束」标记之前）
++ *   T2 预告行只在粘贴块内出现一次，且不改变既有「SESSION_ID 保持不变」警示语义
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { ProgressManager } from '../src/progress.js'
++import { buildHandoff } from '../src/handoff.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++async function fixtureAtBrainstorm() {
++  const proj = mk('hofx-')
++  const specBase = join(proj, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  execFileSync('git', ['init', '-q'], { cwd: proj, encoding: 'utf8' })
++  execFileSync('git', ['config', 'user.email', 't@t.local'], { cwd: proj, encoding: 'utf8' })
++  execFileSync('git', ['config', 'user.name', 't'], { cwd: proj, encoding: 'utf8' })
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init(proj)
++  await pm.initChange(proj, 'c1')
++  const progress = pm.read(proj, 'c1')
++  progress.currentStage = 'brainstorm'
++  progress.stages = progress.stages || {}
++  progress.stages.brainstorm = {
++    status: 'in-progress',
++    steps: [{ name: '澄清', status: 'completed' }, { name: '展示设计', status: 'pending' }],
++  }
++  pm._write(proj, progress, 'c1')
++  return { proj, changeName: 'c1' }
++}
++
++test('T1 粘贴块内含 --takeover 预告行（换新 SESSION_ID 场景的出路）', async () => {
++  const { proj, changeName } = await fixtureAtBrainstorm()
++  const r = await buildHandoff({ cwd: proj, changeName })
++  assert.equal(r.ok, true, `交接块生成成功：${r.error || ''}`)
++  const endIdx = r.lines.findIndex((l) => l.includes('交接块结束'))
++  const hintIdx = r.lines.findIndex((l) => l.includes('--takeover') && l.includes('SESSION_ID'))
++  assert.ok(hintIdx !== -1, `预告行在场：${r.lines.join(' | ')}`)
++  assert.ok(endIdx !== -1 && hintIdx < endIdx, '预告行在粘贴块内（结束标记之前）')
++})
++
++test('T2 既有「SESSION_ID 必须保持不变」警示语义保留', async () => {
++  const { proj, changeName } = await fixtureAtBrainstorm()
++  const r = await buildHandoff({ cwd: proj, changeName })
++  assert.ok(r.lines.some((l) => l.includes('必须保持不变')), '既有警示行保留')
++  assert.ok(r.lines.some((l) => l.startsWith('export SILLYSPEC_SESSION_ID=') || l.includes('export SILLYSPEC_SESSION_ID')), '导出行保留')
++})
+diff --git a/test/runtime-relayout.test.mjs b/test/runtime-relayout.test.mjs
+index c3092368..eb47b4a1 100644
+--- a/test/runtime-relayout.test.mjs
++++ b/test/runtime-relayout.test.mjs
+@@ -227,7 +227,8 @@ console.log('\n--- 9. FR-04 入口迁移：CLI 调用自动收敛旧布局（spa
+ console.log('\n--- 10. FR-05b 二轮：全局面单例归位（16 state + 6 temp） ---')
+ {
+   assert(RUNTIME_STATE_SINGLETONS.includes('friction-ledger.json') && RUNTIME_STATE_SINGLETONS.includes('last-delta.json')
+-    && RUNTIME_STATE_SINGLETONS.includes('spec-sync-base.json') && RUNTIME_STATE_SINGLETONS.length === 15, 'state 单例表 15 件齐（设计清单 16 中 pending_push 零引用不入产品表）')
++    && RUNTIME_STATE_SINGLETONS.includes('spec-sync-base.json') && RUNTIME_STATE_SINGLETONS.includes('spec-manifest-cache.json')
++    && RUNTIME_STATE_SINGLETONS.length === 16, 'state 单例表 16 件齐（设计清单 16 中 pending_push 零引用不入产品表；+spec-manifest-cache 2026-10-21-cli-manifest-since-cache）')
+   assert(RUNTIME_TEMP_SINGLETONS.includes('doctor-diagnosis.json') && RUNTIME_TEMP_SINGLETONS.includes('auto-pull-throttle.json')
+     && RUNTIME_TEMP_SINGLETONS.length === 6, 'temp 单例表 6 件齐')
+   const root = join(tmpRoot, 's2', '.runtime')
+diff --git a/test/spawn-settle.test.mjs b/test/spawn-settle.test.mjs
+new file mode 100644
+index 00000000..79b15af2
+--- /dev/null
++++ b/test/spawn-settle.test.mjs
+@@ -0,0 +1,56 @@
++/**
++ * spawn-settle（2026-10-21-p0-p1-hardening FR-08）
++ *
++ * dsh z1/z2 各实证一次：Windows 下父进程 spawn detached 子进程后立即退出触发 libuv
++ * 断言崩溃（async.c）污染 exit code。awaitSpawnSettled 契约：
++ *   S1 'spawn' 事件 → 立即 resolve（不等兜底上限）
++ *   S2 'error' 事件 → 立即 resolve（孵化失败也算稳定）
++ *   S3 事件均不发 → timeoutMs 兜底 resolve
++ *   S4 已退出 child（exitCode/signalCode 已定）→ 零等待立即 resolve
++ *   S5 非法入参（null/非 EventEmitter）→ 不抛
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { awaitSpawnSettled, fakeChildForTest } from '../src/spawn-settle.js'
++
++const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
++
++test('S1 spawn 事件即 resolve（远早于兜底上限）', async () => {
++  const c = fakeChildForTest()
++  setTimeout(() => c.emit('spawn'), 10)
++  const t0 = Date.now()
++  await awaitSpawnSettled(c, 1000)
++  assert.ok(Date.now() - t0 < 500, 'spawn 事件驱动，未等满 1000ms 上限')
++})
++
++test('S2 error 事件即 resolve', async () => {
++  const c = fakeChildForTest()
++  setTimeout(() => c.emit('error', new Error('spawn ENOENT')), 5)
++  const t0 = Date.now()
++  await awaitSpawnSettled(c, 1000)
++  assert.ok(Date.now() - t0 < 500, 'error 事件驱动')
++})
++
++test('S3 两事件均不发 → timeoutMs 兜底 resolve', async () => {
++  const c = fakeChildForTest()
++  const t0 = Date.now()
++  await awaitSpawnSettled(c, 60)
++  const dt = Date.now() - t0
++  assert.ok(dt >= 50 && dt < 400, `兜底时长合理（${dt}ms）`)
++})
++
++test('S4 已退出 child → 零等待立即 resolve', async () => {
++  const exited = fakeChildForTest({ exitCode: 1 })
++  const t0 = Date.now()
++  await awaitSpawnSettled(exited, 5000)
++  assert.ok(Date.now() - t0 < 50, 'exitCode 已定不等待')
++  const signaled = fakeChildForTest({ signalCode: 'SIGKILL' })
++  await awaitSpawnSettled(signaled, 5000)
++  assert.ok(Date.now() - t0 < 100, 'signalCode 已定不等待')
++})
++
++test('S5 非法入参不抛', async () => {
++  await awaitSpawnSettled(null, 50)
++  await awaitSpawnSettled(undefined, 50)
++  await awaitSpawnSettled({}, 50)
++})
+diff --git a/test/spec-sync-manifest-cache.test.mjs b/test/spec-sync-manifest-cache.test.mjs
+new file mode 100644
+index 00000000..f4738765
+--- /dev/null
++++ b/test/spec-sync-manifest-cache.test.mjs
+@@ -0,0 +1,251 @@
++// 2026-10-21-cli-manifest-since-cache 验收：CLI spec-manifest 增量游标缓存。
++//
++// 验收点（design.md / requirements FR-01~05）：
++// 1. 首拉无缓存 → 不带 since 全量 + 缓存落盘（inc_count=0）
++// 2. 有缓存 → GET 带 ?since=<spec_version>，增量行（含墓碑）合并进缓存与锚
++// 3. 对账轮（RECONCILE_EVERY）/ SILLYSPEC_SPEC_SYNC_FULL=1 → 全量并重置缓存
++// 4. 旧平台（响应无 spec_version）→ 作废缓存回退全量（未部署窗口兼容）
++// 5. 服务端 spec_version 倒退 → 一次性全量对账；对账失败 fail-closed（ok:false 零 POST）
++// 6. 稳态（无差异轮）端到端 <1s 且零 POST
++//
++// 隔离：cwd 用 os.tmpdir() 临时目录 + Node http mock server（127.0.0.1 随机端口），
++// 服务端按 landing_version 语义过滤 since 增量（模拟平台 20261021130000 行为）。
++import { mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
++import { createHash } from 'crypto';
++import { join } from 'path';
++import { tmpdir } from 'os';
++import http from 'http';
++import { syncSpecTree } from '../src/spec-sync.js';
++
++let failures = 0;
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg);
++  else { console.error('  ❌ ' + msg); failures++; }
++};
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-manifest-cache-${process.pid}-`));
++
++const sha = (s) => createHash('sha256').update(s).digest('hex');
++
++// ── mock 平台：state/ 布局对齐服务端（files 携带 _lv 印章仅供 since 过滤）──
++const srv = {
++  specVersion: 0,
++  files: {}, // path -> {hash, version, exists, _lv}
++  legacy: false, // 旧平台：响应无 spec_version
++  fullFails: false, // 倒退对账的全量请求模拟 500
++};
++let manifestRequests = []; // {url, since}
++let syncPosts = 0;
++const server = http.createServer((req, res) => {
++  let body = '';
++  req.on('data', (c) => { body += c; });
++  req.on('end', () => {
++    if (req.url.includes('/api/changes/-/spec-manifest')) {
++      const m = req.url.match(/[?&]since=(\d+)/);
++      const since = m ? Number(m[1]) : null;
++      manifestRequests.push({ url: req.url, since });
++      if (srv.legacy) {
++        res.writeHead(200, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ files: stripLv(srv.files) }));
++        return;
++      }
++      if (since === null && srv.fullFails) {
++        res.writeHead(500, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ message: 'boom' }));
++        return;
++      }
++      const files = since === null
++        ? stripLv(srv.files)
++        : stripLv(Object.fromEntries(Object.entries(srv.files).filter(([, v]) => (v._lv || 0) > since)));
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ files, spec_version: srv.specVersion }));
++    } else if (req.url.includes('/api/changes/-/spec-sync')) {
++      syncPosts++;
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ ok: true, new_versions: {}, conflict: false, server_versions: null }));
++    } else {
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ status: 'ok' }));
++    }
++  });
++});
++function stripLv(files) {
++  const out = {};
++  for (const [p, v] of Object.entries(files)) out[p] = { hash: v.hash, version: v.version, exists: v.exists };
++  return out;
++}
++await new Promise((r) => server.listen(0, '127.0.0.1', r));
++const platform = { url: `http://127.0.0.1:${server.address().port}`, token: 'test-token' };
++
++const cachePath = (root) => join(root, '.runtime', 'state', 'spec-manifest-cache.json');
++const readCache = (root) => JSON.parse(readFileSync(cachePath(root), 'utf8'));
++const makeWs = (name) => {
++  const root = join(tmpRoot, name, '.sillyspec');
++  mkdirSync(join(root, 'changes', 'demo'), { recursive: true });
++  return root;
++};
++const writeLocal = (root, rel, content) => {
++  const p = join(root, rel);
++  mkdirSync(join(p, '..'), { recursive: true });
++  writeFileSync(p, content, 'utf8');
++};
++
++console.log('\n[spec-sync-manifest-cache] 2026-10-21：CLI 清单增量游标消费');
++
++// ── 1. 首拉全量落缓存（FR-02 场景：首次同步）──
++console.log('\n--- 1. 首拉全量落缓存 ---');
++{
++  const root = makeWs('ws1');
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  srv.files = { 'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 } };
++  srv.specVersion = 1;
++  manifestRequests = [];
++  const r = await syncSpecTree(root, platform, 'demo');
++  assert(manifestRequests.length === 1 && manifestRequests[0].since === null, '首拉不带 since（全量）');
++  assert(existsSync(cachePath(root)), '缓存文件已落盘');
++  const c = readCache(root);
++  assert(c.spec_version === 1 && c.inc_count === 0, `缓存 {spec_version:1, inc_count:0}（实际 ${c.spec_version}/${c.inc_count}）`);
++  assert(Object.keys(c.files).length === 1, '缓存 files 为全量单行');
++  assert(r.ok === true && syncPosts === 0, '本地与服务端一致 → 零 POST ok:true');
++}
++
++// ── 2. 增量合并 + 缓存推进 + 墓碑行（FR-01 主路径）──
++console.log('\n--- 2. 增量合并与缓存推进 ---');
++{
++  const root = makeWs('ws2');
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  writeLocal(root, 'changes/demo/tasks.md', '# tasks\n');
++  writeLocal(root, 'changes/demo/gone.md', '# gone\n');
++  // 首拉：服务端 v2 有 design/gone（无 tasks）
++  srv.files = {
++    'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 },
++    'changes/demo/gone.md': { hash: sha('# gone\n'), version: 1, exists: true, _lv: 2 },
++  };
++  srv.specVersion = 2;
++  manifestRequests = [];
++  await syncSpecTree(root, platform, 'demo'); // 首拉 + 推 tasks.md add + gone delete? gone 本地在
++  const firstCache = readCache(root);
++  assert(firstCache.spec_version === 2, '首拉缓存 v2');
++
++  // 服务端落地新行 + 软删 gone（v3）；本地补 gone 删除、加 tasks 已在上轮
++  writeLocal(root, 'changes/demo/plan.md', '# plan\n');
++  srv.files['changes/demo/gone.md'] = { hash: sha('# gone\n'), version: 2, exists: false, _lv: 3 };
++  srv.files['changes/demo/plan.md'] = { hash: sha('# plan\n'), version: 1, exists: true, _lv: 3 };
++  srv.files['changes/demo/tasks.md'] = { hash: sha('# tasks\n'), version: 1, exists: true, _lv: 3 };
++  srv.specVersion = 3;
++  rmSync(join(root, 'changes', 'demo', 'gone.md'));
++  manifestRequests = [];
++  syncPosts = 0;
++  const r = await syncSpecTree(root, platform, 'demo');
++  assert(manifestRequests.length === 1 && manifestRequests[0].since === 2, `增量请求带 ?since=2（实际 ${manifestRequests[0]?.url}）`);
++  const c = readCache(root);
++  assert(c.spec_version === 3 && c.inc_count === 1, `缓存推进 v3/inc=1（实际 ${c.spec_version}/${c.inc_count}）`);
++  assert(c.files['changes/demo/gone.md'].exists === false, '墓碑行合并进缓存（exists=false）');
++  assert(c.files['changes/demo/design.md'].version === 1, '未触碰行保留（合并不丢行）');
++  assert(r.ok === true, `增量锚驱动收敛（synced=${r.synced}）`);
++}
++
++// ── 3. 对账轮与强制全量（FR-02 场景：对账轮 / 环境变量）──
++console.log('\n--- 3. 对账轮与强制全量 ---');
++{
++  const root = makeWs('ws3');
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  srv.files = { 'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 } };
++  srv.specVersion = 1;
++  await syncSpecTree(root, platform, 'demo');
++  process.env.SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY = '1';
++  manifestRequests = [];
++  await syncSpecTree(root, platform, 'demo'); // inc_count 已 0？首拉后=0 → 增量 1 次 → inc=1
++  assert(manifestRequests[0]?.since === 1, 'RECONCILE_EVERY=1 时第 2 轮仍增量（inc=0<1）');
++  manifestRequests = [];
++  await syncSpecTree(root, platform, 'demo'); // inc=1 ≥ 1 → 对账全量
++  assert(manifestRequests[0]?.since === null, '对账轮走全量（不带 since）');
++  assert(readCache(root).inc_count === 0, '对账后计数归零');
++  delete process.env.SILLYSPEC_SPEC_SYNC_RECONCILE_EVERY;
++
++  process.env.SILLYSPEC_SPEC_SYNC_FULL = '1';
++  manifestRequests = [];
++  await syncSpecTree(root, platform, 'demo');
++  assert(manifestRequests[0]?.since === null, 'SILLYSPEC_SPEC_SYNC_FULL=1 强制全量');
++  assert(readCache(root).inc_count === 0, '强制全量重置缓存');
++  delete process.env.SILLYSPEC_SPEC_SYNC_FULL;
++}
++
++// ── 4. 旧平台兼容（FR-03）──
++console.log('\n--- 4. 旧平台无 spec_version ---');
++{
++  const root = makeWs('ws4');
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  srv.files = { 'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 } };
++  srv.specVersion = 1;
++  await syncSpecTree(root, platform, 'demo'); // 建缓存
++  assert(existsSync(cachePath(root)), '前置：缓存存在');
++  srv.legacy = true;
++  manifestRequests = [];
++  const r = await syncSpecTree(root, platform, 'demo');
++  assert(manifestRequests[0]?.since === 1, '带 since 请求（旧平台忽略该参数）');
++  assert(!existsSync(cachePath(root)), '旧平台响应作废缓存（文件删除）');
++  assert(r.ok === true, '旧平台回退全量行为正常（ok:true）');
++  srv.legacy = false;
++}
++
++// ── 5. 服务端倒退对账（FR-04）──
++console.log('\n--- 5. spec_version 倒退对账 ---');
++{
++  const root = makeWs('ws5');
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  srv.files = { 'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 5 } };
++  srv.specVersion = 5;
++  await syncSpecTree(root, platform, 'demo');
++  srv.files = { 'changes/demo/design.md': { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 } };
++  srv.specVersion = 1; // 服务端重建
++  manifestRequests = [];
++  const r = await syncSpecTree(root, platform, 'demo');
++  assert(manifestRequests.length === 2 && manifestRequests[0].since === 5 && manifestRequests[1].since === null,
++    `倒退触发两次请求：since=5 → 全量（实际 ${manifestRequests.map((x) => x.since)}）`);
++  assert(readCache(root).spec_version === 1 && readCache(root).inc_count === 0, '对账后缓存以服务端新纪元重置');
++  assert(r.ok === true, '倒退对账收敛 ok:true');
++
++  // 对账请求失败 → fail-closed（ok:false，零 POST）
++  srv.fullFails = true;
++  srv.specVersion = 0; // 再次倒退（1 → 0）
++  manifestRequests = [];
++  syncPosts = 0;
++  const r2 = await syncSpecTree(root, platform, 'demo');
++  assert(r2.ok === false && syncPosts === 0, '对账失败 fail-closed：ok:false 且零 POST（防空锚 add 风暴）');
++  srv.fullFails = false;
++}
++
++// ── 6. 稳态 <1s e2e（FR-05）──
++console.log('\n--- 6. 稳态端到端 <1s ---');
++{
++  const root = makeWs('ws6');
++  // 模拟真实规模锚：缓存 5000 行（内存合并量级远超生产稳态增量），本地与
++  // 服务端一致——hist 行全为墓碑（exists=false，CLI diff 过滤不产生 op，
++  // 对齐生产清单 95% 为 changes/ 历史/墓碑行的真实形态）
++  const bigFiles = {};
++  writeLocal(root, 'changes/demo/design.md', '# v1\n');
++  bigFiles['changes/demo/design.md'] = { hash: sha('# v1\n'), version: 1, exists: true, _lv: 1 };
++  for (let i = 0; i < 5000; i++) {
++    const p = `changes/hist/h${i}/plan.md`;
++    bigFiles[p] = { hash: sha(`hist-${i}`), version: 1, exists: false, _lv: 1 };
++  }
++  srv.files = bigFiles;
++  srv.specVersion = 1;
++  syncPosts = 0;
++  await syncSpecTree(root, platform, 'demo'); // 首拉建缓存（本地与服务端一致，零 op）
++  assert(syncPosts === 0, '前置：首拉即稳态（零 POST）');
++  manifestRequests = [];
++  syncPosts = 0;
++  const t0 = Date.now();
++  const r = await syncSpecTree(root, platform, 'demo');
++  const dt = Date.now() - t0;
++  assert(manifestRequests[0]?.since === 1, '稳态走增量（since=1，响应体只含 0 行变化）');
++  assert(dt < 1000, `端到端耗时 <1s（实际 ${dt}ms）`);
++  assert(syncPosts === 0 && r.ok === true, '稳态零 POST ok:true');
++}
++
++server.close();
++try { rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* Windows 句柄残留容忍 */ }
++console.log(`\n[spec-sync-manifest-cache] 结果：${failures === 0 ? 'ALL PASS' : `${failures} FAILED`}`);
++process.exitCode = failures === 0 ? 0 : 1;
+diff --git a/test/worktree-gitignore-probe.test.mjs b/test/worktree-gitignore-probe.test.mjs
+new file mode 100644
+index 00000000..23a50e50
+--- /dev/null
++++ b/test/worktree-gitignore-probe.test.mjs
+@@ -0,0 +1,69 @@
++/**
++ * worktree-gitignore-probe（2026-10-21-p0-p1-hardening FR-06）
++ *
++ * dsh z2 实证：沙箱下 spawnSync git 抛 EPERM 被旧实现当成「未忽略」，阻断 worktree 创建
++ * 27 分钟并迫使用户提权。锁死契约（checkWorktreeDirIgnored 三态）：
++ *   G1 真仓已忽略 → ignored:true；真仓未忽略 → ignored:false（git 判定，exit 1）
++ *   G2 注入 runner 两次抛 EPERM（无 status）→ ignored:null + probeError + retried（fail-open 信号）
++ *   G3 runner 首次 EPERM 二次成功 → 按第二次真实判定 + retried:true
++ *   G4 runner 抛 exit 1（有 status）→ 立即 ignored:false（是判定结果不是故障，不重试）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { checkWorktreeDirIgnored } from '../src/worktree.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const gitInit = (d) => {
++  execFileSync('git', ['init', '-q'], { cwd: d, encoding: 'utf8' })
++  execFileSync('git', ['config', 'user.email', 't@t.local'], { cwd: d, encoding: 'utf8' })
++  execFileSync('git', ['config', 'user.name', 't'], { cwd: d, encoding: 'utf8' })
++}
++
++test('G1 真仓：已忽略 → true；未忽略 → false（git 判定分流）', () => {
++  const d = mk('gi-')
++  gitInit(d)
++  writeFileSync(join(d, '.gitignore'), '.sillyspec/.runtime/worktrees\n')
++  const ok = checkWorktreeDirIgnored(d)
++  assert.equal(ok.ignored, true, 'gitignore 在场 → 已忽略')
++  assert.equal(ok.path, '.sillyspec/.runtime/worktrees')
++  const d2 = mk('gn-')
++  gitInit(d2)
++  writeFileSync(join(d2, '.gitignore'), 'node_modules\n')
++  const no = checkWorktreeDirIgnored(d2)
++  assert.equal(no.ignored, false, '确实未忽略 → false（调用方照旧阻断）')
++  assert.equal(no.probeError, undefined, '判定结果不带 probeError')
++})
++
++test('G2 探测失败（EPERM×2）→ ignored:null + probeError + retried（fail-open 信号）', () => {
++  const eperm = Object.assign(new Error('spawnSync git EPERM'), { code: 'EPERM' })
++  let calls = 0
++  const runner = () => { calls++; throw eperm }
++  const r = checkWorktreeDirIgnored('x', runner)
++  assert.equal(r.ignored, null, '无法证实未忽略 → null（非 false）')
++  assert.match(r.probeError, /EPERM/, `probeError 含异常码：${r.probeError}`)
++  assert.equal(r.retried, true, '内置一次重试已发生')
++  assert.equal(calls, 2, '共尝试 2 次（首试 + 重试 1 次）')
++})
++
++test('G3 首次 EPERM 二次成功 → 按第二次真实判定 + retried', () => {
++  const eperm = Object.assign(new Error('spawnSync git EPERM'), { code: 'EPERM' })
++  let calls = 0
++  const runner = () => { calls++; if (calls === 1) throw eperm; return '' }
++  const r = checkWorktreeDirIgnored('x', runner)
++  assert.deepEqual({ ignored: r.ignored, retried: r.retried }, { ignored: true, retried: true }, '重试成功按真实判定（exit 0=已忽略）')
++})
++
++test('G4 git 判定 exit 1（有 status）→ 立即 false 不重试', () => {
++  const exit1 = Object.assign(new Error('git exit 1'), { status: 1 })
++  let calls = 0
++  const runner = () => { calls++; throw exit1 }
++  const r = checkWorktreeDirIgnored('x', runner)
++  assert.deepEqual({ ignored: r.ignored, retried: r.retried, probeError: r.probeError }, { ignored: false, retried: undefined, probeError: undefined }, '判定结果≠探测故障，不重试')
++  assert.equal(calls, 1, '仅 1 次调用')
++})

@@ -25,3 +25,4 @@ ql-20260911-030-bad4 | hasUnappliedChanges 无 meta 改保守 true（对齐 dir 
 | 2026-10-12 | 2026-10-12-close-trace-freeze-integrity | 平台仓 2026-10-12-ws-ref-ws-name 归档暴露收口留痕三缺陷（实证核查）：①轻量道 change. |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-21 | 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议 |
+| 2026-10-21 | 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复 |

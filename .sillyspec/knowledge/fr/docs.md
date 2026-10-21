@@ -1192,3 +1192,162 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-20-closeout-roundtrip-slim
   status: active
+
+## FR-docs-062 getWorkerResult 返回体含 worker 回答正文（向后兼容）；review-dispatch 提取器在 artifacts 缺失时从回答正文提取平衡 JSON；worker 终态原文落盘；失败文案先给 salvage/--from 救回路径再谈降级；派发任务书注明宿主不支持 artifacts 时 JSON 放回答正文代码块
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：回归锚
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-01
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-01
+  tests: test/review-dispatch.test.mjs | test/sillyhub-mcp-platform-fixes.test.mjs「回收链五项能力回归锚——既有用例全绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-063 worktree apply 恢复步后机械扫描变更面冲突标记（<<<<<<< / ======= / >>>>>>>），命中即 exit 非零并列出文件
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：恢复留冲突标记（dsh z2 实证事故）；干净恢复零扰动
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-02
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-02
+  tests: test/apply-stash-conflict-scan.test.mjs「恢复后冲突标记扫描命中保留 stash+进 errors；干净恢复行为不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-064 run verify --done 输出进度心跳，同步类 IO 移出关键路径后台化，不再静默挂起
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：慢收口可见；常规速度零噪音
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-03
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-03
+  tests: test/done-heartbeat.test.mjs「慢收口心跳行（stderr）+结束清理；常规路径零输出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-065 stage-review-hint 探测覆盖 brainstorm/plan/execute 与 gates.js 拦截范围对齐；Stage Review 门输出含可粘贴的评审子代理 prompt 模板与 register-stage-review 骨架指引
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：brainstorm/plan 预警在场；verify 维持排除
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-04
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-04
+  tests: test/gate-stage-review-hint.test.mjs「brainstorm/plan 默认档+--full 档 hint 在场且文案按 stage 参数化；verify 维持无 hint」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-066 handoff 交接块原子转移所有权到新 SESSION_ID（或显式预告首个写操作需 --takeover）；写操作命令支持 --session flag；匿名占位所有权+同主机显式身份自动升级免 --takeover
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：匿名自锁消除（dsh z1 实证）；他人显式持有仍拦；跨机匿名仍拦；交接块预告
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-05
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-05
+  tests: test/change-ownership-guards.test.mjs「匿名同机自动升级/他人显式仍拦/跨机匿名仍拦」 | test/handoff-takeover-hint.test.mjs「交接块含 --takeover 预告行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-067 worktree gitignore 探测区分探测失败（EPERM 等）与确实未忽略两种文案并内置一次重试
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：探测失败 fail-open；真未忽略照旧拦；重试成功
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-06
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-06
+  tests: test/worktree-gitignore-probe.test.mjs「EPERM fail-open+重试；真未忽略照旧拦；重试后按真实判定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-068 doctor 新增 local.yaml 可解析性检查项；新增 config known-failures add/remove 管理子命令
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：增删查 roundtrip；坏 YAML 拒改；doctor 发现坏配置
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-07
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-07
+  tests: test/config-known-failures.test.mjs「增删查 roundtrip+注释保留+坏 YAML 拒改」 | test/doctor-local-yaml.test.mjs「坏 YAML/BOM finding+好文件零 finding」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-069 后台 spec-sync 子进程退出前显式清理句柄，缓解 libuv 退出断言崩溃
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：spawn 稳定化
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-08
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-p0-p1-hardening:flow:测试绑定FR-08
+  tests: test/spawn-settle.test.mjs「spawn/error 事件即 resolve；上限兜底；已退出立即返回」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-p0-p1-hardening
+  status: active
+
+## FR-docs-070 以上各项均有对应测试，变更测试面全绿
+变更：2026-10-21-p0-p1-hardening
+状态：active
+摘要：聚合口径
+全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-09
+最近确认：4421027e5b776be0f12c38d88517d66275034a9c
