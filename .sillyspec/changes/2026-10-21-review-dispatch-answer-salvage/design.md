@@ -29,6 +29,16 @@ created_at: 2026-10-21T07:38:16.101Z
 
 影子链（dispatchShadowReview status）同步把 gr.answer 传入提取（通道③受益，fail 形态仍只记账）；影子不加 salvage/worker-answer.md（影子本就有 review-raw.json 证据面且 accounting-only 无交互指引）。其余命令/文件格式：无变化。
 
+### 文件变更清单（收口自声明）
+
+| 文件 | 变更 |
+|---|---|
+| src/sillyhub-mcp/client.js | getWorkerResult 增返 answer 原文（answer 优先 / result 兜底 / 非字符串 null；unavailable 分支补 answer:null） |
+| src/review-dispatch.js | scanFirstBalancedJson 抽共用；extractReviewFromArtifacts 第三通道；writeWorkerAnswer 终态原文落盘；status completed 分支两步出口文案（plain/salvage/bad-review 三形态）；runReviewDispatch opts 增 salvage；影子链 answer 接线；buildReviewerTaskBook 产出段 json 块指引 |
+| src/index.js | review-dispatch 命令 --salvage flag 解析/组合校验/透传；usage 与失败面输出（salvagePath 行） |
+| test/sillyhub-mcp-platform-fixes.test.mjs | getWorkerResult shape 断言同步（answer:null）+ answer/result 透传新用例 |
+| test/review-dispatch.test.mjs | 新增 7 用例：第三通道单测/任务书 json 块/answer 回收 e2e/completed-no-artifact 文案/salvage 落盘（含确无结果形态）/bad-review 文案 |
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
