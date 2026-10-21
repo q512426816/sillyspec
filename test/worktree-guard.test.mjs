@@ -62,6 +62,28 @@ try {
     'ordinary .sillyspec docs should remain writable'
   )
 
+  // ── 头脑风暴原型协议（2026-10-21-brainstorm-proto-worktree）：位置豁免——已注册
+  // worktree（meta.json 登记）内源码写入任何阶段放行，与 Bash 侧 worktree-cwd 全放行
+  // 对称；主树维持拦截且提示含原型协议指引；未登记存储区子路径维持拦截。 ──
+  setStage('brainstorm')
+  {
+    const r = shouldBlock({ tool: 'Write', filePath: join(registeredWorktree, 'src', 'proto.tsx'), cwd: root })
+    assert.equal(r.blocked, false, 'brainstorm-stage writes inside registered worktree should be allowed (location exemption)')
+  }
+  {
+    const r = shouldBlock({ tool: 'Write', filePath: join(root, 'src', 'proto.tsx'), cwd: root })
+    assert.equal(r.blocked, true, 'brainstorm-stage main-tree source writes stay blocked')
+    assert.ok(
+      String(r.reason || '').includes('worktree create'),
+      'brainstorm block reason should include worktree create guidance',
+    )
+  }
+  assert.equal(
+    shouldBlock({ tool: 'Write', filePath: join(unregisteredWorktree, 'src', 'proto.tsx'), cwd: root }).blocked,
+    true,
+    'brainstorm-stage writes to unregistered worktree storage stay blocked'
+  )
+
   // scan 阶段：readCurrentStage SQL 过滤 current_stage IN ('execute','quick')，scan 不在其中 →
   // 等价 '(none)'。scan 文档覆盖保护由 shouldBlockScanDocOverwrite 独立判定（阶段无关）。
   setStage('scan')

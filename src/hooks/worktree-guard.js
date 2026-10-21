@@ -67,11 +67,14 @@ const STAGE_HINTS = {
     '  - <可验证标准>"',
     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
+    '',
+    '若在头脑风暴阶段做真原型（变更 key 已出）：sillyspec worktree create <变更名> 进隔离树写原型，',
+    '已在 worktree 内则复用当前目录不重复创建；文档照常主树（worktree 内运行 sillyspec 自动锚回主仓根）。',
   ],
   'brainstorm': [
-    '当前在 brainstorm（需求分析）阶段，这个阶段只写文档，不写代码。',
-    '完成 brainstorm 后，流程会自动推进到 plan → execute。',
-    'execute 阶段才允许写代码。',
+    '当前在 brainstorm（需求分析）阶段：spec 文档写主树；做真原型须先进隔离 worktree——变更 key 已出，运行 sillyspec worktree create <变更名>（已在 worktree 内则复用当前目录，不重复创建），原型代码写 worktree 内。',
+    '文档不受影响：worktree 内运行 sillyspec 会自动锚回主仓根，文档照常落主树。',
+    '完成 brainstorm 后，流程会自动推进到 plan → execute；execute 会复用已建的 worktree。',
   ],
   'plan': [
     '当前在 plan（计划制定）阶段，这个阶段只写计划文档和任务蓝图，不写代码。',
@@ -804,6 +807,12 @@ export function shouldBlockWrite(filePath, cwd) {
 
   // 2. 文件门禁：文档类/配置类始终放行，但 worktree 存储区内的源码必须继续走登记校验。
   if (!isInsideWorktreeStorage(absPath, projectRoot) && matchFileWhitelist(absPath)) return { blocked: false }
+
+  // 2.5 位置豁免（2026-10-21-brainstorm-proto-worktree）：已注册 worktree（meta.json 登记）
+  // 是隔离区——路径落在其内即放行，不问阶段，与 Bash 侧 worktree-cwd 全放行对称。
+  // 头脑风暴期做真原型的协议出口：变更 key 已出 → sillyspec worktree create → 进树写原型。
+  // 未登记的 worktrees 存储区子目录不沾此豁免（下方阶段门照拦）。
+  if (isInsideRegisteredWorktree(absPath, projectRoot)) return { blocked: false }
 
   if (!['execute', 'quick'].includes(stage)) {
     return {
