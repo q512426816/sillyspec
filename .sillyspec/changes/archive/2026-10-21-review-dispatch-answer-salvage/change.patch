@@ -1,0 +1,518 @@
+diff --git a/src/index.js b/src/index.js
+index d284740d..5f86aa73 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1683,12 +1683,18 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const rdStage = rdStageIdx >= 0 && args[rdStageIdx + 1] && !String(args[rdStageIdx + 1]).startsWith("--") ? args[rdStageIdx + 1] : null;
+       const rdStatus = args.includes('--status');
+       const rdKill = args.includes('--kill');
++      const rdSalvage = args.includes('--salvage');
+       const rdMode = rdKill ? 'kill' : rdStatus ? 'status' : 'create';
+-      const rdUsage = '用法: sillyspec review-dispatch --change <名> --stage <brainstorm|plan|execute> [--status] [--kill]\n' +
++      const rdUsage = '用法: sillyspec review-dispatch --change <名> --stage <brainstorm|plan|execute> [--status] [--kill] [--status --salvage]\n' +
+         '  缺省=派发（probe 前置→create_mission(external)→dispatch_worker(read_only)，异步返回 missionId）\n' +
+         '  --status=轮询状态+停滞提示；worker completed 自动回收落盘 review.json（reviewer.channel=platform）\n' +
++        '  --status --salvage=终态原文兜底：worker-answer.md 落盘 + register-stage-review --from 回收指引（提取失败时用）\n' +
+         '  --kill=清本地在途记录+平台处置指引（不自动 kill，处置权在人）';
+       if (!rdChange) { console.error(rdUsage); process.exit(2); }
++      if (rdSalvage && !rdStatus) {
++        console.error(`❌ --salvage 仅与 --status 组合使用（completed 提取失败后的终态原文兜底回收）\n${rdUsage}`);
++        process.exit(2);
++      }
+       assertSafeChangeName(rdChange, '--change 变更名');
+       if (rdMode === 'create' && !['brainstorm', 'plan', 'execute'].includes(rdStage)) {
+         console.error(`❌ create 形态必须 --stage ∈ brainstorm|plan|execute（实际：${rdStage || '缺'}）\n${rdUsage}`);
+@@ -1706,7 +1712,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const rdSpecBase = resolvePlatformSpecDir(dir, specDir);
+       const r = await runReviewDispatch({
+         mode: rdMode, cwd: dir, specBase: rdSpecBase, changeName: rdChange, stage: rdStage,
+-        client: rdClient, budgetUsd: rdCfg.budget_usd, stallMs: rdCfg.stall_ms,
++        client: rdClient, budgetUsd: rdCfg.budget_usd, stallMs: rdCfg.stall_ms, salvage: rdSalvage,
+       });
+       if (r.ok) {
+         if (r.statusLine) console.log(`🛰️ ${r.statusLine}`);
+@@ -1721,6 +1727,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       } else {
+         console.error(`❌ review-dispatch（${rdMode}）: ${r.reason}`);
+         if (r.statusLine) console.error(`   ${r.statusLine}`);
++        if (r.salvagePath) console.error(`   📄 worker 终态原文：${r.salvagePath}`);
+         if (r.errors) for (const e of r.errors) console.error(`   - ${e}`);
+         if (r.guidance) console.error(`   下一步：\n${r.guidance}`);
+         process.exitCode = 1;
+diff --git a/src/review-dispatch.js b/src/review-dispatch.js
+index e00771e0..e6f69f14 100644
+--- a/src/review-dispatch.js
++++ b/src/review-dispatch.js
+@@ -110,50 +110,65 @@ export function detectStall(record, nowMs, stallMs) {
+ }
+ 
+ /**
+- * 从 artifacts 提取 review JSON（双通道容错，design 风险登记「平台 artifacts 形态演进」）：
++ * 首个平衡 JSON 对象扫描（通道②/③共用）：从文本首个 { 起括号配对扫描（字符串字面量内的
++ * } 不计数），命中即 JSON.parse 返回对象；无 {} / 首个平衡段解析失败 → null。
++ */
++function scanFirstBalancedJson(text) {
++  const t = String(text)
++  const start = t.indexOf('{')
++  if (start === -1) return null
++  let depth = 0, inStr = false, esc = false
++  for (let i = start; i < t.length; i++) {
++    const ch = t[i]
++    if (esc) { esc = false; continue }
++    if (ch === '\\') { esc = true; continue }
++    if (ch === '"') { inStr = !inStr; continue }
++    if (inStr) continue
++    if (ch === '{') depth++
++    else if (ch === '}') {
++      depth--
++      if (depth === 0) {
++        try {
++          const obj = JSON.parse(t.slice(start, i + 1))
++          if (obj && typeof obj === 'object') return obj
++        } catch { return null }
++      }
++    }
++  }
++  return null
++}
++
++/**
++ * 从 artifacts / answer 提取 review JSON（三通道容错，design 风险登记「平台 artifacts 形态演进」）：
+  * ① kind 含 review/review_json 的 artifact，content/content_ref/text 字段 JSON.parse 优先；
+- * ② 兜底任一 artifact 文本字段提取首个平衡 {} 对象。全失败 → null（调用方给人工 get_worker_result 指引）。
++ * ② 兜底任一 artifact 文本字段提取首个平衡 {} 对象；
++ * ③ answer 正文扫描（2026-10-21-review-dispatch-answer-salvage / dsh 会话实证：worker 把完整
++ *   review JSON 放回答正文而非 artifacts——任务书已明示该兜底形态）。
++ * 第二参可缺省——只传 artifacts 时行为与改前逐字一致（向后兼容）。全失败 → null（调用方给 --salvage 兜底指引）。
+  */
+-export function extractReviewFromArtifacts(artifacts) {
+-  if (!Array.isArray(artifacts)) return null
++export function extractReviewFromArtifacts(artifacts, answer) {
+   const texts = []
+-  for (const a of artifacts) {
+-    if (!a || typeof a !== 'object') continue
+-    const kind = String(a.kind || '')
+-    const text = typeof a.content === 'string' ? a.content
+-      : typeof a.content_ref === 'string' ? a.content_ref
+-      : typeof a.text === 'string' ? a.text : null
+-    if (text === null) continue
+-    if (/review/i.test(kind)) {
+-      try {
+-        const obj = JSON.parse(text)
+-        if (obj && typeof obj === 'object') return obj
+-      } catch { /* 该条不是合法 JSON，落兜底通道 */ }
++  if (Array.isArray(artifacts)) {
++    for (const a of artifacts) {
++      if (!a || typeof a !== 'object') continue
++      const kind = String(a.kind || '')
++      const text = typeof a.content === 'string' ? a.content
++        : typeof a.content_ref === 'string' ? a.content_ref
++        : typeof a.text === 'string' ? a.text : null
++      if (text === null) continue
++      if (/review/i.test(kind)) {
++        try {
++          const obj = JSON.parse(text)
++          if (obj && typeof obj === 'object') return obj
++        } catch { /* 该条不是合法 JSON，落兜底通道 */ }
++      }
++      texts.push(text)
+     }
+-    texts.push(text)
+   }
++  if (typeof answer === 'string' && answer) texts.push(answer)
+   for (const t of texts) {
+-    const start = t.indexOf('{')
+-    if (start === -1) continue
+-    // 首个平衡对象：括号配对扫描（字符串字面量内的 } 不计数）
+-    let depth = 0, inStr = false, esc = false
+-    for (let i = start; i < t.length; i++) {
+-      const ch = t[i]
+-      if (esc) { esc = false; continue }
+-      if (ch === '\\') { esc = true; continue }
+-      if (ch === '"') { inStr = !inStr; continue }
+-      if (inStr) continue
+-      if (ch === '{') depth++
+-      else if (ch === '}') {
+-        depth--
+-        if (depth === 0) {
+-          try {
+-            const obj = JSON.parse(t.slice(start, i + 1))
+-            if (obj && typeof obj === 'object') return obj
+-          } catch { break }
+-        }
+-      }
+-    }
++    const obj = scanFirstBalancedJson(t)
++    if (obj) return obj
+   }
+   return null
+ }
+@@ -161,7 +176,8 @@ export function extractReviewFromArtifacts(artifacts) {
+ /**
+  * 组装 reviewer 任务书（FR-01 派发质量的核心）：四要素——①单源清单（前缀按 checklist
+  * docblock 规则）②review.json 契约（与 gate 同源）③期望产出方式（read_only worker：
+- * 结论经 artifacts 返回，**不写任何文件**——落盘归 CLI）④铁律段（禁改文件/禁 git commit）。
++ * 结论经 artifacts 返回，**不写任何文件**——落盘归 CLI；宿主不支持 artifacts 时放回答正文
++ * 首个 ```json 块，回收链第三通道兜底）④铁律段（禁改文件/禁 git commit）。
+  */
+ export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPriority, probeLines = null }) {
+   const mainDoc = STAGE_MAIN_DOC[stage] || 'design.md'
+@@ -183,6 +199,7 @@ export function buildReviewerTaskBook({ stage, changeDir, reviewRunId, channelPr
+     '## 产出方式（read_only 约束）',
+     '- **禁止修改任何文件、禁止 git commit、禁止写盘**——你只读文档与必要的源码佐证。',
+     '- 把**完整 review.json 文本**（按上方契约 schema，含 reviewer: {"channel":"platform"}）作为产出返回（artifacts 里的 content 字段放纯 JSON 文本）。',
++    '- 宿主/平台不支持 artifacts 回传时，把**完整 review.json 文本**放进回答正文的**首个 ```json 代码块**（CLI 回收链会从回答正文扫描兜底）。',
+     '- docHash 可占位（调度方 CLI 会按主文档机械重算），其余字段照实填写。',
+   ].join('\n')
+   return {
+@@ -219,6 +236,32 @@ export function persistStageReview({ runtimeRoot, stage, changeName, reviewRunId
+   return { ok: true, reviewPath }
+ }
+ 
++/**
++ * worker 终态原文落盘（2026-10-21-review-dispatch-answer-salvage FR-04 证据链）：completed
++ * 回收路径统一调用——answer 原文优先，缺省序列化 artifacts 原文；两者皆空返回 null（无原文
++ * 可落，调用方走「确无结果」口径）。与 review.json 同 run 目录（结构化结论 + 原文证据并存，
++ * dsh 事故里人工只能靠平台 UI 贴回原文——原文必须本地在场）。best-effort：写失败 warn 不抛。
++ * @returns {string|null} 落盘绝对路径；无内容/写失败 null
++ */
++function writeWorkerAnswer({ runtimeRoot, stage, reviewRunId, gr }) {
++  try {
++    const answer = gr && typeof gr.answer === 'string' && gr.answer
++      ? gr.answer
++      : gr && Array.isArray(gr.artifacts) && gr.artifacts.length > 0
++        ? JSON.stringify(gr.artifacts, null, 2) + '\n'
++        : null
++    if (!answer) return null
++    const dir = join(runtimeRoot, 'stage-reviews', `${stage}-${reviewRunId}`)
++    mkdirSync(dir, { recursive: true })
++    const p = join(dir, 'worker-answer.md')
++    writeAtomicSync(p, answer.endsWith('\n') ? answer : answer + '\n')
++    return p
++  } catch (e) {
++    console.warn(`[sillyspec] worker-answer.md 落盘失败（不阻断回收）: ${e && e.message ? e.message : String(e)}`)
++    return null
++  }
++}
++
+ /** 降级指引（channel_priority 去 platform 的剩余序渲染；probe 失败 / worker 失败共用）。 */
+ export function renderFallbackGuidance(cwd) {
+   const rest = readReviewChannelPriority(cwd).filter((c) => c !== 'platform')
+@@ -235,13 +278,15 @@ export function renderFallbackGuidance(cwd) {
+  * @param {object} opts
+  *   mode: 'create'|'status'|'kill'；cwd/specBase/changeName 必填；stage（create 必填）；
+  *   client: SillyHubMcpClient 实例（create/status 用）；probe: 可注入（默认真 probeSillyHub）；
+- *   budgetUsd（默认 1.0）；stallMs（默认 900000）；reviewRunId（status 回收时缺省读 marker）。
++ *   budgetUsd（默认 1.0）；stallMs（默认 900000）；reviewRunId（status 回收时缺省读 marker）；
++ *   salvage（status 专用，默认 false——completed 提取失败时返回 salvagePath + --from 回收指引，
++ *   在途记录不清可重试；CLI 形态 `--status --salvage`）。
+  * @returns {Promise<{ok: boolean, ...}>} 永不抛——所有异常转 {ok:false, reason}
+  */
+ export async function runReviewDispatch(opts = {}) {
+   const {
+     mode = 'create', cwd = process.cwd(), specBase, changeName,
+-    stage, client, probe, budgetUsd = 1.0, stallMs = 900_000, reviewRunId,
++    stage, client, probe, budgetUsd = 1.0, stallMs = 900_000, reviewRunId, salvage = false,
+   } = opts
+   if (!specBase || !changeName) return { ok: false, reason: '缺少 specBase/changeName' }
+ 
+@@ -340,21 +385,37 @@ export async function runReviewDispatch(opts = {}) {
+       }
+       if (st === 'completed') {
+         const gr = await client.getWorkerResult({ missionId: rec.missionId, workerId: rec.workerId })
+-        const review = extractReviewFromArtifacts(gr && gr.artifacts)
++        const runtimeRoot = join(specBase, '.runtime')
++        // 终态原文先落盘再提取（FR-04：无论提取成败，原文证据与 review.json 同 run 目录在场）
++        const answerPath = writeWorkerAnswer({ runtimeRoot, stage: rec.stage, reviewRunId: rec.reviewRunId, gr })
++        const review = extractReviewFromArtifacts(gr && gr.artifacts, gr && gr.answer)
+         if (!review) {
+-          return { ok: false, state: 'completed-no-artifact', statusLine, reason: 'worker completed 但 artifacts 提取不到 review JSON', guidance: `人工核对：平台 get_worker_result（mission ${rec.missionId} / worker ${rec.workerId}）；确认无法回收再 --kill 降级。` }
++          // 两步出口（dsh 事故复盘：旧文案「--kill 降级」混写处置与降级，误导 agent 跳过回收直接自审）：
++          // ① --salvage 兜底回收（落盘原文 + --from 指引）② 确认平台确无结果才降级
++          const reason = 'worker completed 但三通道（artifacts kind / artifacts 文本 / answer 正文）均提取不到 review JSON'
++          if (salvage) {
++            return {
++              ok: false, state: 'completed-no-artifact', statusLine, salvagePath: answerPath, reason,
++              guidance: answerPath
++                ? `① worker 终态原文已落盘 ${answerPath}——人工核对/修整出 review.json 后运行 sillyspec register-stage-review --change ${changeName} --stage ${rec.stage} --from <修整后的review.json> 回收\n② 确认平台确无结果（UI 核对 mission ${rec.missionId}）才按通道优先序降级：\n${renderFallbackGuidance(cwd)}`
++                : `① 平台未回传任何终态原文（answer 与 artifacts 均空）——在平台 UI 核对 mission ${rec.missionId} / worker ${rec.workerId}\n② 确认确无结果才按通道优先序降级：\n${renderFallbackGuidance(cwd)}`,
++            }
++          }
++          return {
++            ok: false, state: 'completed-no-artifact', statusLine, reason,
++            guidance: `① 回收兜底：sillyspec review-dispatch --status --salvage --change ${changeName}（自动落盘 worker-answer.md 并提示 register-stage-review --from 回收；平台 UI 可先核对 mission ${rec.missionId}）\n② 确认平台确无结果才按通道优先序降级：\n${renderFallbackGuidance(cwd)}`,
++          }
+         }
+-        const runtimeRoot = join(specBase, '.runtime')
+         const mainDocPath = join(specBase, 'changes', changeName, STAGE_MAIN_DOC[rec.stage] || 'design.md')
+         const p = persistStageReview({
+           runtimeRoot, stage: rec.stage, changeName, reviewRunId: rec.reviewRunId,
+           reviewObj: review, missionId: rec.missionId, mainDocPath,
+         })
+         if (!p.ok) {
+-          return { ok: false, state: 'bad-review', statusLine, errors: p.errors, guidance: 'artifacts 里的 review 不符 schema——--kill 后降级，或人工按契约修 review.json（mission 证据保留）。' }
++          return { ok: false, state: 'bad-review', statusLine, errors: p.errors, guidance: `① 提取到的 review 不符 schema——按契约修整（终态原文参考：${answerPath || '同目录 worker-answer.md'}）后运行 sillyspec register-stage-review --change ${changeName} --stage ${rec.stage} --from <修整后的review.json> 回收\n② 确认平台确无结果才按通道优先序降级：\n${renderFallbackGuidance(cwd)}` }
+         }
+         clearDispatchRecord(specBase, changeName)
+-        return { ok: true, state: 'completed', statusLine, reviewPath: p.reviewPath, verdict: `${review.specVerdict}/${review.qualityVerdict}` }
++        return { ok: true, state: 'completed', statusLine, reviewPath: p.reviewPath, verdict: `${review.specVerdict}/${review.qualityVerdict}`, nextStep: answerPath ? `终态原文已留存 ${answerPath}` : undefined }
+       }
+       if (st === 'failed' || st === 'killed') {
+         clearDispatchRecord(specBase, changeName)
+@@ -774,7 +835,8 @@ export async function dispatchShadowReview(opts = {}) {
+       }
+       if (st === 'completed') {
+         const gr = await client.getWorkerResult({ missionId: rec.missionId, workerId: rec.workerId })
+-        const review = extractReviewFromArtifacts(gr && gr.artifacts)
++        // 通道③同步受益（answer 正文——主线同款；影子 accounting-only 不加 salvage 交互面）
++        const review = extractReviewFromArtifacts(gr && gr.artifacts, gr && gr.answer)
+         if (!review) {
+           await mutateShadowLedger(runtimeRoot, (ledger) => {
+             const e = ledger.entries.find((x) => x && x.shadowRunId === rec.shadowRunId)
+diff --git a/src/sillyhub-mcp/client.js b/src/sillyhub-mcp/client.js
+index 18caa8e1..4a3fccbe 100644
+--- a/src/sillyhub-mcp/client.js
++++ b/src/sillyhub-mcp/client.js
+@@ -610,18 +610,21 @@ export class SillyHubMcpClient {
+    * artifacts 原样透传不裁剪：平台实返形态（[{kind, content_ref, id}…] 或演进形态）整组
+    * 透传——kind 匹配 / JSON 提取等语义解析归消费方（review-dispatch 的
+    * extractReviewFromArtifacts），本封装保持传输层纯度（task-02 constraints）。
++   * answer 原文透传（2026-10-21-review-dispatch-answer-salvage / dsh 会话实证）：worker 可能把
++   * review JSON 放回答正文而非 artifacts——取 tool 返回的 answer 字段（缺省兜底 result 字段）
++   * 字符串原文一并透传，非字符串/双缺 → null；解析仍归消费方，传输层只搬运。
+    * @param {object} p
+    * @param {string} p.missionId
+    * @param {string} p.workerId
+-   * @returns {Promise<{workerId: string|null, status: string, artifacts: Array}>}
+-   *   正常 → {workerId, status, artifacts} 原样解析（status 缺省 'unknown'，artifacts 缺省 []）；
+-   *   未配置 / 调用失败(null) / tool isError → { workerId: null, status: 'unavailable', artifacts: [] }
++   * @returns {Promise<{workerId: string|null, status: string, artifacts: Array, answer: string|null}>}
++   *   正常 → {workerId, status, artifacts, answer} 原样解析（status 缺省 'unknown'，artifacts 缺省 []，answer 缺省 null）；
++   *   未配置 / 调用失败(null) / tool isError → { workerId: null, status: 'unavailable', artifacts: [], answer: null }
+    *   （与 dispatchWorker/getDaemonStatus 同族 best-effort，绝不向上抛）
+    */
+   async getWorkerResult({ missionId, workerId } = {}) {
+-    if (!this._configured) return { workerId: null, status: 'unavailable', artifacts: [] };
++    if (!this._configured) return { workerId: null, status: 'unavailable', artifacts: [], answer: null };
+     const result = await this._callTool('get_worker_result', { mission_id: missionId, worker_id: workerId });
+-    if (result === null || result.isError) return { workerId: null, status: 'unavailable', artifacts: [] };
++    if (result === null || result.isError) return { workerId: null, status: 'unavailable', artifacts: [], answer: null };
+     const value = this._parseToolReturnValue(result);
+     // workerId 兜底链与 dispatchWorker 同款（2026-09-10 平台实返 {id,…} 形态实证）
+     const wid = value && typeof value === 'object'
+@@ -631,7 +634,9 @@ export class SillyHubMcpClient {
+       ? (value.status ?? 'unknown')
+       : 'unknown';
+     const artifacts = value && Array.isArray(value.artifacts) ? value.artifacts : [];
+-    return { workerId: wid, status, artifacts };
++    const rawAnswer = value && typeof value === 'object' ? (value.answer ?? value.result) : null;
++    const answer = typeof rawAnswer === 'string' ? rawAnswer : null;
++    return { workerId: wid, status, artifacts, answer };
+   }
+ 
+   /**
+diff --git a/test/review-dispatch.test.mjs b/test/review-dispatch.test.mjs
+index 24b6e3a8..813fe1a4 100644
+--- a/test/review-dispatch.test.mjs
++++ b/test/review-dispatch.test.mjs
+@@ -4,8 +4,8 @@
+ // create-status-kill 三链 / 中断分支。端到端全链路（task-07）同文件追加。
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+-import { join } from 'node:path'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
++import { join, dirname } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import {
+   buildReviewerTaskBook, readDispatchRecord, createDispatchRecord, clearDispatchRecord,
+@@ -262,3 +262,110 @@ test('e2e：dispatching 中断恢复——status 对中断记录给处置指引'
+     assert.equal(r2.ok, true, 'kill 后重派成功（abandoned 不阻塞新派发）')
+   } finally { rmSync(sb, { recursive: true, force: true }) }
+ })
++
++// ── 2026-10-21-review-dispatch-answer-salvage：answer 正文回收链（dsh 会话实证形态）──
++// 根因：worker 把完整 review JSON 放回答正文（平台 UI 可见），传输层丢 answer、提取层只扫
++// artifacts → --status 误判 completed-no-artifact，旧文案「--kill 降级」混写误导 agent 降级 self 自审。
++
++test('extractReviewFromArtifacts 第三通道：answer 文本扫首个平衡 JSON（裸 JSON/```json 块/缺省参数向后兼容）', () => {
++  const obj = { schemaVersion: 1, specVerdict: 'pass' }
++  assert.deepEqual(extractReviewFromArtifacts([], JSON.stringify(obj)), obj, '裸 JSON 正文命中通道③')
++  assert.deepEqual(extractReviewFromArtifacts([], `前文说明\n\`\`\`json\n${JSON.stringify(obj)}\n\`\`\`\n后记`), obj, '```json 块形态（dsh 实证）')
++  assert.deepEqual(extractReviewFromArtifacts(null, JSON.stringify(obj)), obj, 'artifacts 非数组不再短路（answer 可回收）')
++  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'review_json', content: JSON.stringify(obj) }], `噪声 ${JSON.stringify({ wrong: 1 })}`), obj, 'artifacts 通道①优先于 answer 通道③')
++  assert.deepEqual(extractReviewFromArtifacts([{ kind: 'other', text: '噪声文本' }], JSON.stringify(obj)), obj, '通道②失败后通道③接管')
++  assert.equal(extractReviewFromArtifacts([{ kind: 'other', text: 'no json' }], '正文也无 JSON'), null, '三通道全失败 → null')
++  assert.equal(extractReviewFromArtifacts([{ kind: 'other', text: 'no json' }]), null, '缺省第二参：与改前行为逐字一致')
++  const tricky = { note: 'a } b', specVerdict: 'pass' }
++  assert.deepEqual(extractReviewFromArtifacts([], '说明 ' + JSON.stringify(tricky) + ' 收尾'), tricky, '字符串字面量内 } 不误判')
++})
++
++test('任务书产出段含 ```json 块兜底指引（既有 artifacts 指引不丢）', () => {
++  const sb = makeSpecBase()
++  try {
++    const book = buildReviewerTaskBook({ stage: 'plan', changeDir: join(sb, 'changes', 'c1'), reviewRunId: 'review-t2' })
++    assert.ok(book.workerPrompt.includes('首个 ```json 代码块'), '回答正文 json 块兜底指引在场（FR-05）')
++    assert.ok(book.workerPrompt.includes('artifacts 里的 content 字段放纯 JSON 文本'), '既有 artifacts 通道指引不丢')
++  } finally { rmSync(sb, { recursive: true, force: true }) }
++})
++
++test('status 链 e2e：artifacts 空 + answer 正文带 JSON → 第三通道回收落盘 review.json（channel=platform）', async () => {
++  const sb = makeSpecBase()
++  try {
++    const cli = makeMockClient()
++    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: `独立审查完成，结论如下：\n\`\`\`json\n${JSON.stringify(REVIEW_OBJ)}\n\`\`\`\n以上逐条结论附源码锚点。` })
++    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
++    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli, stallMs: 60_000_000 })
++    assert.equal(st.ok, true, '第三通道回收成功（改前此处误判 completed-no-artifact）')
++    assert.equal(st.state, 'completed')
++    assert.equal(st.verdict, 'pass/pass')
++    assert.ok(st.reviewPath.includes(join('stage-reviews', 'plan-review-')), 'review.json 落既有 run 目录')
++    const persisted = JSON.parse(readFileSync(st.reviewPath, 'utf8'))
++    assert.equal(persisted.reviewer.channel, 'platform', 'channel=platform 落款不变')
++    assert.equal(readDispatchRecord(sb, 'c1'), null, '回收成功清记录')
++    // FR-04 正常回收路径亦留原文：worker-answer.md 与 review.json 同 run 目录在场
++    const raw = readFileSync(join(dirname(st.reviewPath), 'worker-answer.md'), 'utf8')
++    assert.ok(raw.includes('```json') && raw.includes('"specVerdict"'), '终态原文在场且含 JSON 正文')
++    assert.ok(st.nextStep && st.nextStep.includes('worker-answer.md'), '回收返回值提示原文留存路径')
++  } finally { rmSync(sb, { recursive: true, force: true }) }
++})
++
++test('completed-no-artifact 文案：含 --salvage/--from 两步指引、不含 --kill、含降级兜底', async () => {
++  const sb = makeSpecBase()
++  try {
++    const cli = makeMockClient()
++    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: 'worker 只回了散文结论，没有可解析 JSON' })
++    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
++    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli })
++    assert.equal(st.ok, false)
++    assert.equal(st.state, 'completed-no-artifact')
++    assert.ok(st.reason.includes('三通道'), 'reason 点明三通道均失败')
++    assert.ok(st.guidance.includes('--salvage') && st.guidance.includes('--from'), '①含 --salvage 与 --from')
++    assert.ok(st.guidance.includes('self'), '②降级兜底（确无结果才降级）在场')
++    assert.ok(!st.guidance.includes('--kill'), '无「--kill 降级」混写（dsh 复盘：误导 agent 跳过回收直接自审）')
++    assert.ok(readDispatchRecord(sb, 'c1'), '失败不清在途记录（--salvage 可重试）')
++  } finally { rmSync(sb, { recursive: true, force: true }) }
++})
++
++test('--salvage：worker-answer.md 落盘 run 目录 + salvagePath/--from 指引；确无结果形态走②', async () => {
++  const sb = makeSpecBase()
++  try {
++    const cli = makeMockClient()
++    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: '散文结论原文（供人工核对）' })
++    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'plan', client: cli, probe: OK_PROBE })
++    const sv = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli, salvage: true })
++    assert.equal(sv.ok, false, '仍提取不到 JSON（散文无 JSON）')
++    assert.ok(sv.salvagePath && sv.salvagePath.includes('worker-answer.md'), '返回 salvagePath')
++    assert.ok(sv.salvagePath.includes(join('stage-reviews', 'plan-review-')), '落 stage-reviews run 目录（与 review.json 同根）')
++    assert.ok(existsSync(sv.salvagePath), 'worker-answer.md 已落盘')
++    assert.ok(readFileSync(sv.salvagePath, 'utf8').includes('散文结论原文'), '原文内容即 answer 正文')
++    assert.ok(sv.guidance.includes('register-stage-review') && sv.guidance.includes('--from'), '--from 回收指引')
++    assert.ok(!sv.guidance.includes('--kill'), 'salvage 指引亦无 --kill')
++    assert.ok(readDispatchRecord(sb, 'c1'), 'salvage 失败不清记录（幂等可重试）')
++    // 确无结果形态：answer 与 artifacts 全空 → 无原文可落，指引走平台 UI 核对 + ②降级
++    clearDispatchRecord(sb, 'c1')
++    const cli2 = makeMockClient()
++    cli2.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [], answer: null })
++    createDispatchRecord(sb, 'c1', { change: 'c1', stage: 'plan', missionId: 'm-1', workerId: 'w-1', state: 'in-flight', createdAt: 't', lastState: 'running', lastStateAt: Date.now(), reviewRunId: 'review-sv2' })
++    const sv2 = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli2, salvage: true })
++    assert.equal(sv2.ok, false)
++    assert.equal(sv2.salvagePath, null, '无原文可落 → salvagePath null')
++    assert.ok(sv2.guidance.includes('平台 UI'), '指引平台 UI 核对')
++    assert.ok(sv2.guidance.includes('self'), '②降级兜底在场')
++  } finally { rmSync(sb, { recursive: true, force: true }) }
++})
++
++test('bad-review 分支：schema 不过走修整回收指引，无 --kill 混写', async () => {
++  const sb = makeSpecBase()
++  try {
++    const cli = makeMockClient()
++    // 可提取但缺 verdict/checklist → persistStageReview schema 拒绝
++    cli.getWorkerResult = async () => ({ workerId: 'w-1', status: 'completed', artifacts: [{ kind: 'review_json', content: JSON.stringify({ schemaVersion: 1, reviewType: 'design' }) }], answer: null })
++    await runReviewDispatch({ mode: 'create', cwd: sb, specBase: sb, changeName: 'c1', stage: 'brainstorm', client: cli, probe: OK_PROBE })
++    const st = await runReviewDispatch({ mode: 'status', cwd: sb, specBase: sb, changeName: 'c1', client: cli })
++    assert.equal(st.ok, false)
++    assert.equal(st.state, 'bad-review')
++    assert.ok(st.guidance.includes('register-stage-review') && st.guidance.includes('--from'), '修整后 --from 回收指引')
++    assert.ok(!st.guidance.includes('--kill'), '无 --kill 混写')
++  } finally { rmSync(sb, { recursive: true, force: true }) }
++})
+diff --git a/test/sillyhub-mcp-platform-fixes.test.mjs b/test/sillyhub-mcp-platform-fixes.test.mjs
+index 7e3adc1d..306639e7 100644
+--- a/test/sillyhub-mcp-platform-fixes.test.mjs
++++ b/test/sillyhub-mcp-platform-fixes.test.mjs
+@@ -87,12 +87,13 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
+       }],
+     }
+   }
+-  // Act + Assert：正常分支——tool 名/参数 snake_case 对齐，三字段原样解析
++  // Act + Assert：正常分支——tool 名/参数 snake_case 对齐，四字段原样解析
+   const r = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
+   assert.equal(lastCall.toolName, 'get_worker_result', '调 get_worker_result tool')
+   assert.deepEqual(lastCall.args, { mission_id: 'm-1', worker_id: 'w-9' }, '参数 snake_case 对齐 SillyHub schema')
+   assert.equal(r.workerId, 'w-9', 'worker_id 解析')
+   assert.equal(r.status, 'completed', 'status 解析')
++  assert.equal(r.answer, null, '无 answer/result 字段 → answer null（2026-10-21 契约扩展）')
+   assert.deepEqual(
+     r.artifacts,
+     [
+@@ -105,22 +106,22 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
+   cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ id: 'w-plat', status: 'completed', artifacts: [] }) }] })
+   const rId = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-plat' })
+   assert.equal(rId.workerId, 'w-plat', 'id 兜底解析（平台实返形态）')
+-  // 空分支：返回无 artifacts 字段 → []；status 缺省 'unknown'
++  // 空分支：返回无 artifacts 字段 → []；status 缺省 'unknown'；answer 缺省 null
+   cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9' }) }] })
+   const rEmpty = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
+-  assert.deepEqual(rEmpty, { workerId: 'w-9', status: 'unknown', artifacts: [] }, '无 artifacts → []，status 缺省 unknown')
++  assert.deepEqual(rEmpty, { workerId: 'w-9', status: 'unknown', artifacts: [], answer: null }, '无 artifacts → []，status 缺省 unknown，answer 缺省 null')
+   // isError 分支（token 缺 scope 形态）→ unavailable 形态
+   cli._callTool = async () => ({ content: [{ type: 'text', text: "Error executing tool: MCP token lacks required scope 'read'." }], isError: true })
+   assert.deepEqual(
+     await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+-    { workerId: null, status: 'unavailable', artifacts: [] },
++    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
+     'isError → unavailable 不抛',
+   )
+   // 网络失败（_callTool null）→ unavailable 形态
+   cli._callTool = async () => null
+   assert.deepEqual(
+     await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+-    { workerId: null, status: 'unavailable', artifacts: [] },
++    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
+     '网络失败 null → unavailable 不抛',
+   )
+   // 未配置 → unavailable 且不发网（_callTool 被调即炸；cwd 喂干净 tmp 隔离仓活配置）
+@@ -129,12 +130,31 @@ test('getWorkerResult 三分支：正常 artifacts 原样透传 / 空缺 [] / is
+   uncfg2._callTool = async () => { throw new Error('未配置不得发网') }
+   assert.deepEqual(
+     await uncfg2.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' }),
+-    { workerId: null, status: 'unavailable', artifacts: [] },
++    { workerId: null, status: 'unavailable', artifacts: [], answer: null },
+     '未配置 → unavailable 不发网不抛',
+   )
+   rmSync(cleanDir2, { recursive: true, force: true })
+ })
+ 
++// 2026-10-21-review-dispatch-answer-salvage FR-02：getWorkerResult 增返 answer 原文——
++// dsh 会话实证 worker 可能把 review JSON 放回答正文而非 artifacts（回收链断点①：
++// 传输层此前直接丢弃 answer 字段，--status 误判 completed-no-artifact 降级 self 自审）
++test('getWorkerResult 增返 answer 原文（answer 优先 / result 兜底 / 非字符串 null）', async () => {
++  const cli = new SillyHubMcpClient({ url: 'http://127.0.0.1:9999', token: 'shmcp_x' })
++  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9', status: 'completed', artifacts: [], answer: '结论 {"specVerdict":"pass"} 正文' }) }] })
++  const r = await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })
++  assert.equal(r.answer, '结论 {"specVerdict":"pass"} 正文', 'answer 字符串原文透传（不解析）')
++  // answer 缺失 → result 兜底
++  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ worker_id: 'w-9', result: 'result 字段原文' }) }] })
++  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, 'result 字段原文', 'answer 缺 → result 兜底')
++  // 双字段在场 → answer 优先
++  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ answer: 'A 原文', result: 'R 原文' }) }] })
++  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, 'A 原文', '双字段在场 answer 优先')
++  // 非字符串形态 → null（传输层只搬字符串原文，语义解析归消费方）
++  cli._callTool = async () => ({ content: [{ type: 'text', text: JSON.stringify({ answer: { obj: 1 } }) }] })
++  assert.equal((await cli.getWorkerResult({ missionId: 'm-1', workerId: 'w-9' })).answer, null, '非字符串 answer → null')
++})
++
+ test('③ probe daemon 在线层：false 拦 / true 与 null 放（fail-open）', async () => {
+   clearProbeCache()
+   // 坑 probe-cwd 环境依赖（probe-no-config-cwd-leak 对偶面）：probeSillyHub 即使注入

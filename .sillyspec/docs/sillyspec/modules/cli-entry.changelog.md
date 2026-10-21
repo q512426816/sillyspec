@@ -80,3 +80,4 @@
 | 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |
 | 2026-10-20 | 2026-10-20-closeout-roundtrip-slim | 自会话耗时画像实证（用户裁决：考虑清楚优化好）：收口往返是全量测试外第二大真实成本——①review… |
 | 2026-10-20 | 2026-10-21-review-rerun-scope | 评审子代会话画像实证（用户裁决：改）：评审思考面合理、复跑面不合理——ui-proto 评审内部两轮… |
+| 2026-10-21 | 2026-10-21-review-dispatch-answer-salvage | 修独立评审回收链：answer 原文兜底 |

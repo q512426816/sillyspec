@@ -10784,3 +10784,98 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-21-review-rerun-scope
   status: active
+
+## FR-cli-entry-569 worker 把 review JSON 放 answer 正文（artifacts 空/不可解析）时，--status 能经第三通道回收落盘 review.json（channel=platform 落款不变）
+变更：2026-10-21-review-dispatch-answer-salvage
+状态：active
+摘要：answer 正文回收（dsh 实证形态）；向后兼容
+全文：.sillyspec/changes/archive/2026-10-21-review-dispatch-answer-salvage/requirements.md#FR-01
+最近确认：f27d52f08db0345965fef871144bff6fd0b6d916
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-01
+  tests: test/review-dispatch.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-dispatch-answer-salvage
+  status: active
+
+## FR-cli-entry-570 getWorkerResult 返回值含 answer 原文且既有消费方零回归（既有测试全绿）
+变更：2026-10-21-review-dispatch-answer-salvage
+状态：active
+摘要：answer 透传；既有消费方零回归
+全文：.sillyspec/changes/archive/2026-10-21-review-dispatch-answer-salvage/requirements.md#FR-02
+最近确认：f27d52f08db0345965fef871144bff6fd0b6d916
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-02
+  tests: test/sillyhub-mcp-platform-fixes.test.mjs「getWorkerResult 增返 answer/result 原文（answer 优先 / result 兜底 / 双缺 null / unavailable answer:null / 既有断言同步新 shape）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-dispatch-answer-salvage
+  status: active
+
+## FR-cli-entry-571 completed-no-artifact 文案含 --salvage/--from 两步指引、不含「--kill 降级」
+变更：2026-10-21-review-dispatch-answer-salvage
+状态：active
+摘要：失败指引改写
+全文：.sillyspec/changes/archive/2026-10-21-review-dispatch-answer-salvage/requirements.md#FR-03
+最近确认：f27d52f08db0345965fef871144bff6fd0b6d916
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-03
+  tests: test/review-dispatch.test.mjs「completed-no-artifact 文案：含 --salvage/--from 两步指引、不含 --kill、含降级兜底」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-dispatch-answer-salvage
+  status: active
+
+## FR-cli-entry-572 --status --salvage 落盘 worker-answer.md 于 stage-reviews run 目录
+变更：2026-10-21-review-dispatch-answer-salvage
+状态：active
+摘要：salvage 兜底；正常回收也留原文
+全文：.sillyspec/changes/archive/2026-10-21-review-dispatch-answer-salvage/requirements.md#FR-04
+最近确认：f27d52f08db0345965fef871144bff6fd0b6d916
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-04
+  tests: test/review-dispatch.test.mjs「--salvage：worker-answer.md 落盘 run 目录 + salvagePath/--from 指引；正常回收路径亦留原文」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-dispatch-answer-salvage
+  status: active
+
+## FR-cli-entry-573 任务书含 json 块指引；新增+受影响测试全绿 + lint 绿
+变更：2026-10-21-review-dispatch-answer-salvage
+状态：active
+摘要：任务书双出口
+全文：.sillyspec/changes/archive/2026-10-21-review-dispatch-answer-salvage/requirements.md#FR-05
+最近确认：f27d52f08db0345965fef871144bff6fd0b6d916
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-05
+  tests: test/review-dispatch.test.mjs「任务书产出段含 ```json 块兜底指引（既有 artifacts 指引不丢）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-review-dispatch-answer-salvage
+  status: active

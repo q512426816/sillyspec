@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-review-dispatch-answer-salvage",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f27d52f08db0345965fef871144bff6fd0b6d916",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "第三通道只尝试首个平衡段：answer 散文中若在 json 块之前出现花括号片段则整条 answer 不可回收",
+      "evidence": "scanFirstBalancedJson 从文本首个 { 起扫描，首个平衡段 JSON.parse 失败即 return null（catch { return null }），不再尝试后续 json 块——与通道②语义一致且 design 明示「同②实现」，属声明的契约内鲁棒性边界而非承诺违反；任务书 ```json 首块指引部分缓解",
+      "location": "src/review-dispatch.js:114-137"
+    },
+    {
+      "severity": "P3",
+      "title": "design 影子链排除案理由引用的 review-raw.json 证据面在提取失败路径并不存在",
+      "evidence": "review-raw.json 仅在 persistShadowStageReview schema 拒绝分支落盘（review-dispatch.js:668），影子提取全失败时只记账不落原文；排除结论本身仍成立（影子 status completed-no-artifact 返回 accountingOnly:true 无交互指引面，salvage 无消费口），仅理由表述不精确",
+      "location": "src/review-dispatch.js:668, 843-849"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T08:07:00Z"
+}

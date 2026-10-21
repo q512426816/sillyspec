@@ -1,0 +1,118 @@
+{
+  "change": "2026-10-21-review-dispatch-answer-salvage",
+  "baseline": "948637184b8019d6ca6a7c9db3997ecc2437bb86",
+  "head": "f27d52f08db0345965fef871144bff6fd0b6d916",
+  "files": [
+    "src/index.js",
+    "src/review-dispatch.js",
+    "src/sillyhub-mcp/client.js",
+    "test/review-dispatch.test.mjs",
+    "test/sillyhub-mcp-platform-fixes.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 264,
+    "deletions": 63
+  },
+  "savedAt": "2026-10-21T07:58:54.791Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "dispatch",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/dispatch.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sillyhub-mcp",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sillyhub-mcp.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "948637184b8019d6ca6a7c9db3997ecc2437bb86",
+    "totals": {
+      "files": 5,
+      "additions": 264,
+      "deletions": 63
+    },
+    "rows": [
+      {
+        "path": "src/index.js",
+        "additions": 9,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/review-dispatch.js",
+        "additions": 109,
+        "deletions": 47,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/sillyhub-mcp/client.js",
+        "additions": 11,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/review-dispatch.test.mjs",
+        "additions": 109,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/sillyhub-mcp-platform-fixes.test.mjs",
+        "additions": 26,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "8ec60fcd502cdbf5950dfed8bc6dbd02a08eca525b86849ac2232e706f37bb5d",
+  "patchStatus": "ok"
+}

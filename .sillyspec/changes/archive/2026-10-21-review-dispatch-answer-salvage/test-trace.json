@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-review-dispatch-answer-salvage",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-dispatch.test.mjs「extractReviewFromArtifacts 第三通道：answer 文本扫首个平衡 JSON（裸 JSON/```json 块/缺省参数向后兼容）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-dispatch.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-02",
+      "tests": [
+        "test/sillyhub-mcp-platform-fixes.test.mjs「getWorkerResult 增返 answer/result 原文（answer 优先 / result 兜底 / 双缺 null / unavailable answer:null / 既有断言同步新 shape）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-dispatch.test.mjs「completed-no-artifact 文案：含 --salvage/--from 两步指引、不含 --kill、含降级兜底」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-04",
+      "tests": [
+        "test/review-dispatch.test.mjs「--salvage：worker-answer.md 落盘 run 目录 + salvagePath/--from 指引；正常回收路径亦留原文」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-21-review-dispatch-answer-salvage:flow:测试绑定FR-05",
+      "tests": [
+        "test/review-dispatch.test.mjs「任务书产出段含 ```json 块兜底指引（既有 artifacts 指引不丢）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-review-dispatch-answer-salvage"
+    }
+  ]
+}
