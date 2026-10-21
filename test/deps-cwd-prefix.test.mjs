@@ -22,9 +22,13 @@ test('① cd 前缀保留 + 路径重定基（R15/R16 病灶的正解形态）',
   assert.ok(py.command.includes('tests/test_a.py') && !py.command.includes('backend/tests/test_a.py'), '路径按 backend/ 重定基')
 })
 
-test('② 裸 pytest 段命令：行为不变（回归保护）', () => {
+test('② 裸 pytest 段命令：位置参数丢弃 + 尾随 flag 保留（2026-10-21-deps-batch-runner-flags 起新契约）', () => {
   const b = buildDepsBatches({ deps: ['tests/test_a.py'], changedFiles: [], hits: [{ test: 'pytest -q tests' }] })
-  assert.match(b[0].command, /^pytest tests\/test_a\.py$/)
+  // 原命令位置参数 tests 丢弃（批文件面替代）、显式 flag -q 保留（此前被「截到 pytest 为止」吞掉）
+  assert.match(b[0].command, /^pytest -q tests\/test_a\.py$/)
+  // 无任何尾随 flag 的命令仍逐字不变（缺省不注入 flag）
+  const b2 = buildDepsBatches({ deps: ['tests/test_a.py'], changedFiles: [], hits: [{ test: 'pytest' }] })
+  assert.match(b2[0].command, /^pytest tests\/test_a\.py$/)
 })
 
 test('③ 无命中模块兜底 + ④ js 组不受影响', () => {

@@ -355,7 +355,7 @@ export function synthesizeReusedFailedCheck(record) {
   const t = (record && record.testResult) || {}
   return {
     status: 'failed',
-    reason: `♻️ 复用上次失败实测（失败签名未变：代码指纹/豁免面/快照口径全等${record && record.ranAt ? `，实测于 ${record.ranAt}` : ''}，免重跑）——${(t.reason || '测试失败').split('\n')[0]}。出路：① 修代码 ② 补 known_failures 豁免（均即失配自动重测）③ 环境确已修好：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针入失败签名，环境真变即放行）④ 无条件重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force`,
+    reason: `♻️ 复用上次失败实测（失败签名未变：代码指纹/豁免面/快照口径全等${record && record.ranAt ? `，实测于 ${record.ranAt}` : ''}，免重跑）——${(t.reason || '测试失败').split('\n')[0]}。出路：① 修代码 ② 补 known_failures 豁免（均即失配自动重测）③ 强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（旁路本复用层直接重跑；=force 连 noAI 步失败签名闸一并旁路）`,
     command: `${t.command || 'commands.test'} (failed-scan-reuse)`,
     exitCode: typeof t.exitCode === 'number' ? t.exitCode : 1,
     durationMs: 0,

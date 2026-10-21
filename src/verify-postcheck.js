@@ -2810,6 +2810,64 @@ function inferFullTestCommand(projectRoot) {
 }
 
 /**
+ * 运行器尾随 flag 保留（2026-10-21-deps-batch-runner-flags，dsh 0ff6f1c8 补充诊断取证）。
+ * buildDepsBatches 的运行器提取正则「截到 pytest 一词为止」，模块命令（local.yaml modules
+ * 命中）里用户显式配置的尾随 flag（-q --no-cov -n auto 等）被静默丢弃——大依赖批单核
+ * 串行实测 1183s（同仓全量带 -n auto 仅 357s），超时=失败再叠整轮重跑，六轮累计空耗约 1h。
+ *
+ * 本函数从命令串中 runner 词之后、段边界（& | ; 或串尾）之前的 token 流里保留 flag：
+ * - 裸 flag（-q/--no-cov）与含等号一体 flag（--cov-report=xml）整 token 保留；
+ * - 已知吃值 flag（-n/--numprocesses/-k/-m/--maxfail/--timeout/--durations/--junitxml/-p/
+ *   --config/--reporter 等）连同其值保留；值 token 带未闭合引号时消费到引号闭合（-k "a and b"）；
+ * - 位置参数（不以 - 开头且非吃值 flag 之值——原命令的文件/目录面）丢弃：批文件面由
+ *   buildDepsBatches 重定基供给，混入会跑面失控（目录参数把整个目录收进来，子集退化全量）。
+ * 白名单外吃值 flag 的值按位置参数丢弃（如 --cov-report xml 丢 xml 留 --cov-report）——
+ * 温和退化不炸批；漏网成本是性能/报告形态，不是假绿假红。
+ * fail-open：runner 不在命令中/无 flag → ''（调用方拼接零变化）。
+ * @returns {string} 保留 flag 串（含前导空格）；无可保留返回 ''
+ */
+const RUNNER_VALUE_FLAGS = new Set([
+  '-n', '--numprocesses', '-k', '-m', '--maxfail', '--timeout', '--durations',
+  '--junitxml', '--junit-xml', '-p', '--rootdir', '--config', '--reporter', '--reporters',
+])
+export function extractRunnerTrailingFlags({ command, runner }) {
+  if (!command || !runner) return ''
+  const cmd = String(command)
+  const runnerStr = String(runner)
+  const runnerIdx = cmd.indexOf(runnerStr)
+  if (runnerIdx === -1) return ''
+  let after = cmd.slice(runnerIdx + runnerStr.length)
+  const segEnd = after.search(/[&|;]/)
+  if (segEnd !== -1) after = after.slice(0, segEnd)
+  const tokens = after.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return ''
+  const kept = []
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (!t.startsWith('-')) continue // 位置参数（原命令文件面）丢弃
+    kept.push(t)
+    const bare = t.replace(/^["']+|["']+$/g, '')
+    if (bare.includes('=')) continue // 含等号一体值，无需吃下一 token
+    if (!RUNNER_VALUE_FLAGS.has(bare) || i + 1 >= tokens.length) continue
+    const value = tokens[i + 1]
+    kept.push(value)
+    i++
+    // 值 token 引号未闭合（-k "fast and not slow"）→ 消费到引号闭合（空格分隔的多 token 值）
+    const openQ = (value.match(/["']/g) || []).length
+    if (value.startsWith('"') || value.startsWith("'")) {
+      let quotes = openQ
+      while (quotes % 2 === 1 && i + 1 < tokens.length) {
+        const rest = tokens[i + 1]
+        kept.push(rest)
+        quotes += (rest.match(/["']/g) || []).length
+        i++
+      }
+    }
+  }
+  return kept.length ? ' ' + kept.join(' ') : ''
+}
+
+/**
  * deps(auto) 运行器推断 + 公平组卷（2026-09-24 R10 实证修复）：
  * - R10 缺陷①：deps 一律 `node --test` 执行——.py 依赖测试全 SyntaxError 伪败（只能靠豁免放行）。
  * - R10 缺陷②：字母序 slice(0,30) 截断——前端 .tsx 依赖测试恒被后端 .py 挤出跑面。
@@ -2898,11 +2956,16 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // 整批 exit 2 假败）。每个 .py 文件按最近 pyproject/uv.lock 祖先归组（与 runner 推断
   // 同款就近原则——monorepo 子项目各自独立环境）；组内共用该包根的 runner 命令与重定基。
   // 显式命中命令串（hits）优先且整批共用（用户显式配置语义优先，不拆组）。
+  // 尾随 flag 保留（2026-10-21-deps-batch-runner-flags，dsh 0ff6f1c8 补充诊断取证）：提取
+  // 正则「截到 pytest 一词为止」曾把 local.yaml 模块命令显式配置的 -q --no-cov -n auto 静默
+  // 丢弃——deps(auto-py) 批 124 文件（2081 例）单核串行 1183s，同仓全量 4771 例带 -n auto
+  // 仅 357s（6-10 倍差），600s 超时截在 69% 判失败、六轮累计空耗约 1h。runner 提取后追加
+  // extractRunnerTrailingFlags 保留 flag 串（位置参数仍丢弃——批文件面由重定基供给）。
   let pyRunner = null
   for (const h of hits || []) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
-    if (m) { pyRunner = m[1].trim(); break }
+    if (m) { pyRunner = m[1].trim() + extractRunnerTrailingFlags({ command: cmd, runner: m[1] }); break }
   }
   // pyGroups: Map<dirKey, { files, command }>；dirKey null = 主仓根（无 cd 前缀）
   const pyGroups = new Map()
