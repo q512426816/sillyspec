@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-docref-checkapproval-reanchor",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5929f3da4ddea89580e4741cca1f8d749230e053",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T17:27:34Z"
+}

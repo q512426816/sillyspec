@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-docref-checkapproval-reanchor",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-docref-checkapproval-reanchor:flow:测试绑定FR-01",
+      "tests": [
+        "test/doc-ref-check.test.mjs「doc-ref-check: 引用校验全绿（含 L84 checkApproval 锚）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-docref-checkapproval-reanchor"
+    }
+  ]
+}

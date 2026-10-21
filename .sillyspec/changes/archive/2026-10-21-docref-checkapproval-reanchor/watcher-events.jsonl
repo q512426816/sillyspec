@@ -1,0 +1,8 @@
+{"ts":1792603473904,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792603475395,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792603475395,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792603475395,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792603475395,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792603518096,"kind":"commit","stage":null,"detail":"5929f3da","provisional":true}
+{"ts":1792603518690,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-21-docref-checkapproval-reanchor/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792603553079,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（28.0s） · 20261021172550","provisional":true}

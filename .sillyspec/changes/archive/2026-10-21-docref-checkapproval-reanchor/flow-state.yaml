@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -18,11 +26,16 @@ input: >-
 autopilot: false
 prestage_ack: true
 baseline_commit: b8443ee060c9a9f6fa152379bdc6234bdef30750
-updatedAt: '2026-10-21T17:24:33.411Z'
+updatedAt: '2026-10-21T17:28:01.092Z'
 baseline_sha256: 996baa05e20416da67f75171ece7fb74b8e1189e880728f80f22288e2df87396
 spec_approved: true
 spec_approved_at: '2026-10-21T17:24:33.410Z'
 spec_approved_by: zcode-verify-reuse-large-repo
 spec_approved_channel: user-confirmed
 spec_attested_by: zcode-verify-reuse-large-repo
+gate_summary: >-
+  test: skipped ← module[]+deps(js29+js-meta-skip1)+fr(30)（28.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021172550\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml 未配置 commands.lint（或标记
+  unavailable）。｜门文件 4 个
 
