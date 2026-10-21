@@ -12,4 +12,4 @@ created_at: 2026-10-21T13:38:03.403Z
 - [x] task-06: checkWorktreeDirIgnored 三态分流（已忽略/确未忽略/探测失败）+ 一次重试 + 探测失败 fail-open 放行与警告
 - [x] task-07: doctor local_yaml_integrity 维度（坏 YAML/BOM finding）+ config known-failures list/add/remove 子命令（行级手术保注释，原子写无 BOM，坏 YAML 拒改）
 - [x] task-08: watcher/bg-sync detached spawn 后 awaitSpawnSettled 稳定化（spawn/error 事件或 150ms 上限，已退出立即返回）
-- [ ] task-09: 新增/扩展测试全部落地（apply-stash-conflict-scan / done-heartbeat / gate-stage-review-hint 扩 / change-ownership-guards 扩 / handoff-takeover-hint / worktree-gitignore-probe / config-known-failures / doctor-local-yaml / spawn-settle）且变更测试面全绿
+- [x] task-09: 新增/扩展测试全部落地（apply-stash-conflict-scan / done-heartbeat / gate-stage-review-hint 扩 / change-ownership-guards 扩 / handoff-takeover-hint / worktree-gitignore-probe / config-known-failures / doctor-local-yaml / spawn-settle）且变更测试面全绿
