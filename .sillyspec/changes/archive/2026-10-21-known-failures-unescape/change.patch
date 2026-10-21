@@ -1,0 +1,371 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index abf5a64e..c1d0de33 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -37,6 +37,7 @@ modules:
+       - src/preview-progress.js
+       - src/facade-hint.js
+       - src/quick-recommend.js
++      - src/yaml-scalar-unquote.js
+       - src/scan-diff.js
+       - src/scan-refresh.js
+ 
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index a02787f8..21afc85b 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -34,6 +34,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
+ - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
+ - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
+ - **verify-quality-scan.js 质量扫描三机制**（ql-20260920-010 修复一 a/d，对撞三轮 verify 68 分钟单步收口）— ①失败签名去重：`computeQualityScanDedupKey`（代码指纹 + known_failures 豁免面哈希——指纹不含豁免面而 agent 假红补救恰恰靠加豁免条目，键独立补齐防误拦补救路径）+ `loadLastQualityScanRecord`（读回最近记录不论成败）+ `shouldReuseLastFailedScan`（纯函数四路不重跑：逃生阀/无失败记录/存量无键/键或快照口径失配）；`executeVerifyQualityScan` 入口先对账——失败签名未变（代码/豁免面/HEAD/快照口径均未动）→ 跳过重跑直接重放上次失败与出路指引（逃生阀 `SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1`）；storeQualityScan 记录 additive 增 dedupKey/usedSnapshot 两键。②伪影分诊编排：`applyArtifactTriageRerun`——测试失败经 classifyTestFailureArtifact（分类器在 core-engine 卡 verify-postcheck.js）命中已知沙箱伪影形态 → 主树口径单点复跑对照：过=伪影坐实按主树结果放行（artifactTriage 证据随台账）、仍挂=真失败拦截（两口径注记）；主树口径失败只注记 advice 不复跑；分诊永不单独放行。③module 缺省收窄消费侧见 core-engine 卡（runVerifyTestCheck 内部）。
++- **known_failures 三读侧 YAML 反转义单点**（2026-10-21-known-failures-unescape）— 新零依赖叶子 `src/yaml-scalar-unquote.js`（`unquoteYamlScalar`：双引号标准转义集反转义 \\→\、\\"→" 等未知转义回落字面 / 单引号 ''→' / 裸值 trim；`unescapeYamlDoubleQuoted` 供已剥引号的内文）——config-known-failures 写侧 renderKey 按 YAML 规范转义，而三读侧（verify-postcheck.extractKnownFailures 判账豁免 / docs-check.extractKnownFailureKeys / config-known-failures.parseKnownFailureKeys CLI list·remove）原先只剥引号不反转义，含反斜杠的锚定豁免模式（如 doc-ref-check\.test\.mjs$）带着字面双反斜杠进 buildExemptPats，正则语义漂移为「字面反斜杠+任意字符」、豁免静默永不命中，CLI remove 同因必未命中（实战：2026-10-21-verify-reuse-large-repo 收口被逼手改 local.yaml）；三读侧条目映射统一 import 本单点后 round-trip 原样（add→判账拿到用户键面）。同批：applyKnownFailureEdit 流式分支补 removedKeys（与块式 removedCount 对齐），runKnownFailuresCommand remove 文案改诚实（仅未命中键注记静默忽略——旧文案全命中也恒打括注）；config 侧块式兜底组（ITEM_RE 引号组吃不掉的内嵌 '' 形态）统一过 unquoteYamlScalar。出界：inline 流式 split(',') 引号内逗号盲区与 verify 块式行尾注释不剥的既有不一致不动（另案）；known-failures.yaml 入库文件走 js-yaml 整解析无此病。test/known-failures-unescape.test.mjs（round-trip/三读侧一致/remove 文案）。
+ - **大仓复用链失效根治三件**（2026-10-21-verify-reuse-large-repo，dsh 0ff6f1c8 取证：verify 76 分钟同码态全量实测 6×10~13.5min）— ①`code-face-key.js` safeGit 显式 maxBuffer=256MB（execFileSync 默认 1MB，大仓 ls-tree -r -z 1.95MB 必抛 ENOBUFS 被吞 null → 指纹/dedupKey/passedKey 全链失效，对齐 git-helper GIT_MAX_BUFFER 口径）；②`complete.js` 新导出 `isVerifyBatchEligible`（纯资格判定只查不改，判据与 detectVerifyBatchFinish 逐字同源、后者改为消费它）+ 批量块资格先行——资格不成立时中间步 --done 不再预跑 executeVerifyQualityScan（实测归亲测步与收口门）；③`verify-quality-scan.js` 新导出 `consultFailedScanReuse`（包装既有三件 + 30min TTL 面漂移防护 + forceRerun 旁路）与 `synthesizeReusedFailedCheck`（合成 failed：♻️ 披露 + 四出路 + reusedFromRecord 标记）——gates.js 收口门实测 else 分支与 machine-interface verify-test facet 真跑前咨询，同签名失败不重跑照常阻断（RERUN 逃生阀与 noAI 闸同阀对称）；存量 null 键记录保守重跑一次后新记录即携带键。
+ - **知识闭环消费端注入与收尾渲染**（2026-09-14-knowledge-loop-close，`src/run/prompt.js` + `src/run/complete-handlers.js`）— prompt.js `buildKnowledgeInjection` 命中知识机械注入：matchKnowledge 命中按 INDEX 行序取 top-3 不同 file、单文件首 40 行截断渲染「📚 命中知识」段（未命中 section='' 调用方零字节），三个注入点——execute「确认执行范围」step（升级既有 {KNOWLEDGE_HIT_REPORT}，报告级→正文级）/ quick step1 quickFirstStep（查询串 readQuickGuardField('taskDescription')）/ execute.js buildWavePrompt 本地孪生（静态 import 会成环触发 TDZ，格式等价由 test/knowledge-inject.test.mjs 锁定）；命中同时逐条 `appendKnowledgeHit` 落 `.runtime/knowledge-hits.jsonl` 事件流（type:inject，fail-soft；旧 knowledge-hit-report.json 照旧写，新旧遥测共存）。complete-handlers.js 生产端收尾渲染：quick --done 归类提议器（进程内四字段 outputText 拼查询串跑 matchKnowledge，命中渲染「📚 待归类提议」引导 `knowledge classify`，未命中/纯新增不提议）+ knowledge-baseline 棘轮（uncategorized 条数超线软警告不阻断、低于基线自动收紧、文件缺失视为未启用）+ archive 收尾 uncategorized 抽审清单渲染。stats 聚合命令消费同一事件流输出命中矩阵/死重清单（src/knowledge-stats.js 本体归 core-engine 卡）。 2026-09-23 知识可见性 quick 升级：棘轮渲染改「知识收件箱」横幅（complete-handlers buildKnowledgeInboxLines——待审>0 即渲染不再基线内静默，标题直出前 3 条+余量指引，超基线 ⚠️ 升级，清空才静默；2026-09-23 用户反馈「聊天过程中完全不知道待审知识」）；NEW `sillyspec knowledge inbox [--json]` 按需收件箱视图（cmdKnowledgeInbox，uncategorized 标题+ql 前缀+一行摘要+基线态；parseUncategorizedEntries 随之 export）；quick 资产尾 FR 计数带去处明细（frFiles 文件清单）；测试锚 test/knowledge-inbox.test.mjs。
+ - **R5 效率第 2 批两行为**（2026-09-21-r5-efficiency-batch2）— ①**M1 指令指纹增量**（`src/run/prompt.js`，D-001@v1）：outputStep 静态段渲染后 sha256 指纹（computeStepGuideFingerprint，模板掩码易变占位符后取散列）——首见（指纹变更/落盘缺失）全量渲染+落盘 `.runtime/step-guides/<stage>-<step>-<fp8>.md`，复入（指纹一致）只出短头部（指纹/落盘路径/「需要全文 Read 上述路径」提醒+动态附录）；动态注入段（材料包/知识命中/{DOCS_DEBT}/进度快照）永不缓存照常渲染；复入状态为变更级（change+stage+step→指纹，防模板级误短路 knowledge-inject 两路径字节一致测试）；v1 默认关、`SILLYSPEC_STEP_GUIDE=1` 显式开（跨进程短输出与 CLI stdout 确定性测试族相容后再翻默认，退役判据锚定 R5 重跑注入体积）；`--json`（withJsonOutput）不受影响走全量。②**M2 gate 快照血统**（`src/run/gate-snapshot.js`，D-002@v2）：会话文件 overlay 双写一致性按 merge-base 祖先内容三方比对（CRLF 归一+trim 同口径，非 mtime），③态分叉（双侧均异于祖先且互不相等）**改取 worktree 分支版**（定向跑语义=验本变更分支交付，主仓侧同文件异动=干扰源）+保留警告并附对齐指引（「主仓侧改动若需保留请 apply/对齐后复跑」）；①态（主仓直写新/worktree 停基线→取主仓，2026-09-20 保护场景）与②态（仅 worktree 异动→保持 worktree）逐字节不动——batch1 假红（主仓并行异动+worktree 新测试→src/test 血统断裂 module 假红）根治；三态钉 test/gate-snapshot-lineage.test.mjs，端到端复刻 test/verify-gate-snapshot.test.mjs。
+diff --git a/src/config-known-failures.js b/src/config-known-failures.js
+index 8d424267..61e5dd63 100644
+--- a/src/config-known-failures.js
++++ b/src/config-known-failures.js
+@@ -14,6 +14,7 @@
+ import { existsSync, readFileSync } from 'node:fs'
+ import jsYaml from 'js-yaml'
+ import { writeAtomicSync } from './fs-atomic.js'
++import { unquoteYamlScalar, unescapeYamlDoubleQuoted } from './yaml-scalar-unquote.js'
+ 
+ /** 块式头行：known_failures: 顶格、后接注释或空（docs-check.js:982 同口径） */
+ const BLOCK_HEADER_RE = /^known_failures:\s*(?:#.*)?$/
+@@ -34,7 +35,9 @@ const BARE_KEY_SAFE_RE = /^[\w.\-\u4e00-\u9fff]+$/
+ export function parseKnownFailureKeys(text) {
+   const src = String(text || '')
+   const lines = src.split(/\r?\n/)
+-  // 流式优先（同键只可能一种形态在场；流式正则更具体）
++  // 流式优先（同键只可能一种形态在场；流式正则更具体）。条目规范化走 yaml-scalar-unquote
++  // 单点（2026-10-21-known-failures-unescape）：双引号条目反转义（renderKey 写侧按规范转义，
++  // 读侧不反转义会把 \\. 留成字面双反斜杠——锚定豁免模式静默失配）。
+   for (const l of lines) {
+     const m = l.match(INLINE_HEADER_RE)
+     if (m) {
+@@ -42,7 +45,7 @@ export function parseKnownFailureKeys(text) {
+         .split(',')
+         .map((s) => s.trim())
+         .filter(Boolean)
+-        .map((s) => unquoteKey(s))
++        .map((s) => unquoteYamlScalar(s))
+     }
+   }
+   const idx = lines.findIndex((l) => BLOCK_HEADER_RE.test(l))
+@@ -53,19 +56,19 @@ export function parseKnownFailureKeys(text) {
+     if (/^\S/.test(l)) break // 下一个顶层键——段结束
+     const m = l.match(ITEM_RE)
+     if (m) {
+-      const k = m[2] ?? m[3] ?? (m[4] || '').trim()
++      // 双引组内文反转义 / 单引组 ''→' / 兜底组（裸值或正则引号组吃不掉的形态，如内嵌
++      // '' 的单引号条目——ITEM_RE 单引号组 [^']* 在第二个引号停）统一过 unquoteYamlScalar
++      const k = m[2] !== undefined
++        ? unescapeYamlDoubleQuoted(m[2])
++        : m[3] !== undefined
++          ? m[3].replace(/''/g, "'")
++          : unquoteYamlScalar(m[4] || '')
+       if (k) keys.push(k)
+     }
+   }
+   return keys
+ }
+ 
+-function unquoteKey(s) {
+-  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) return s.slice(1, -1)
+-  if (s.startsWith("'") && s.endsWith("'") && s.length >= 2) return s.slice(1, -1)
+-  return s
+-}
+-
+ function renderKey(k) {
+   return BARE_KEY_SAFE_RE.test(k) ? k : `"${String(k).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+ }
+@@ -104,6 +107,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
+   if (inlineIdx !== -1) {
+     const cur = parseKnownFailureKeys(src)
+     const curSet = new Set(cur)
++    const removeHit = cur.filter((k) => removeSet.has(k))
+     let next = cur.filter((k) => !removeSet.has(k))
+     for (const k of addSet) {
+       if (!next.includes(k) && !curSet.has(k)) next.push(k)
+@@ -115,7 +119,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
+       ? `known_failures: [${next.map(renderKey).join(', ')}]${trailingComment ? ` ${trailingComment}` : ''}`
+       : `known_failures: []${trailingComment ? ` ${trailingComment}` : ''}`
+     const out = lines.join(nl) + (endedWithNl ? nl : '')
+-    return { ok: true, next: out, keys: next }
++    return { ok: true, next: out, keys: next, removedKeys: removeHit }
+   }
+ 
+   // 块式形态
+@@ -138,7 +142,7 @@ export function applyKnownFailureEdit(text, { add = [], remove = [] } = {}) {
+       lines[blockIdx] = 'known_failures: []'
+     }
+     const out = lines.join(nl) + (endedWithNl ? nl : '')
+-    return { ok: true, next: out, keys: keep, removedCount: removeHit.length }
++    return { ok: true, next: out, keys: keep, removedCount: removeHit.length, removedKeys: removeHit }
+   }
+ 
+   // 无段：文件尾整段追加（add 空且 remove 命不中 → 无事可做，原样返回）
+@@ -187,7 +191,7 @@ export function mutateKnownFailuresFile(yamlPath, edit) {
+   const r = applyKnownFailureEdit(text, edit)
+   if (!r.ok) return r
+   if (r.next !== text) writeAtomicSync(yamlPath, r.next)
+-  return { ok: true, keys: r.keys }
++  return { ok: true, keys: r.keys, removedKeys: r.removedKeys || [] }
+ }
+ 
+ /**
+@@ -238,9 +242,16 @@ export function runKnownFailuresCommand({ yamlPath, exists, verb, keys = [], jso
+     return 1
+   }
+   const uniq = [...new Set(keys.filter(Boolean))]
+-  if (json) console.log(JSON.stringify({ cmd: `config known-failures ${want}`, ok: true, changed: uniq, keys: r.keys }))
++  // remove 诚实文案（2026-10-21-known-failures-unescape FR-02）：仅未命中键注记静默忽略——
++  // 旧文案恒打「已移除…（未命中键静默忽略）」，全命中时也自称可能有未命中，误导排查。
++  const removedSet = new Set(r.removedKeys || [])
++  const missed = want === 'remove' ? uniq.filter((k) => !removedSet.has(k)) : []
++  if (json) console.log(JSON.stringify({ cmd: `config known-failures ${want}`, ok: true, changed: want === 'remove' ? [...removedSet] : uniq, missed, keys: r.keys }))
+   else {
+-    console.log(`✅ known_failures 已${want === 'add' ? '添加' : '移除'}：${uniq.join('、')}${want === 'remove' ? '（未命中键静默忽略）' : ''}——现共 ${r.keys.length} 个`)
++    const note = want === 'remove'
++      ? (missed.length > 0 ? `（未命中键静默忽略：${missed.join('、')}）` : '')
++      : ''
++    console.log(`✅ known_failures 已${want === 'add' ? '添加' : '移除'}：${(want === 'remove' ? [...removedSet] : uniq).join('、')}${note}——现共 ${r.keys.length} 个`)
+     console.log(`   校验：sillyspec config known-failures list`)
+   }
+   return 0
+diff --git a/src/docs-check.js b/src/docs-check.js
+index 29c3d5e7..38af4bc7 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -18,6 +18,7 @@ import { join, resolve as pathResolve, relative as pathRelative, sep as pathSep
+ import { execFileSync } from 'node:child_process'
+ import jsYaml from 'js-yaml'
+ import { parseModuleMapSimple } from './modules.js'
++import { unquoteYamlScalar } from './yaml-scalar-unquote.js'
+ 
+ // ── HEAD 模式内容解析层（坑 docs-gate-shared-worktree-parallel-block，2026-09-08 实证）──
+ // pre-push gate 校验的语义对象是「被推送的提交树」，而磁盘工作区混有并行会话的未提交
+@@ -967,10 +968,12 @@ export function extractKnownFailureKeys(yamlText) {
+   if (!yamlText) return []
+   const yaml = String(yamlText).replace(/\r\n?/g, '\n')
+   // 贪婪 .* 同 verify-postcheck.extractKnownFailures（坑 known-failures-inline-nested-bracket：
+-  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）
++  // 值内 ] 使 [^\]]* 截断、整表静默清空；两处复刻必须同口径互指）。条目规范化三读侧统一走
++  // yaml-scalar-unquote（2026-10-21-known-failures-unescape：双引号反转义——写侧按 YAML 规范
++  // 转义的 \\. 读侧不还原会把豁免键留成字面双反斜杠）
+   const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
+   if (inline) {
+-    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
++    return inline[1].split(',').map(s => unquoteYamlScalar(s)).filter(Boolean)
+   }
+   // 坑 verify-known-failures-comment-line-truncation → verify-known-failures-block-fragile-chain
+   // （与 verify-postcheck.extractKnownFailures 口径互指对齐，逐字同步）：块式捕获曾要求
+@@ -995,10 +998,11 @@ export function extractKnownFailureKeys(yamlText) {
+     .map(s => {
+       const item = s.trim()
+       const full = item.match(/^(['"])(.*)\1$/)
+-      if (full) return full[2]
++      // 引号值经 unquoteYamlScalar 反转义（与流式/verify-postcheck 三读侧同口径）；裸值照旧剥行尾注释
++      if (full) return unquoteYamlScalar(item)
+       const stripped = item.replace(/[ \t]+#.*$/, '').trim()
+       const q2 = stripped.match(/^(['"])(.*)\1$/)
+-      return q2 ? q2[2] : stripped
++      return q2 ? unquoteYamlScalar(stripped) : stripped
+     })
+     .filter(Boolean)
+ }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 94677fdf..48145ffd 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -28,6 +28,7 @@ import { createHash } from 'crypto'
+ import { IR_STRICT_SINCE } from './constants.js'
+ import { gitQuiet } from './git-helper.js'
+ import { resolveRuntimeRoot } from './run/shared.js'
++import { unquoteYamlScalar } from './yaml-scalar-unquote.js'
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, appendFileSync } from 'fs'
+ import { join, resolve, isAbsolute } from 'path'
+ import { readChangeTrace, testAnchorFile } from './test-bindings.js'
+@@ -975,7 +976,10 @@ export function extractKnownFailures(yamlText) {
+   // 吃到最后一个 ]（行尾注释里含 ] 的极端形态会被并入值，远优于静默清空）。
+   const inline = yaml.match(/^known_failures:\s*\[(.*)\]\s*(?:#.*)?$/m)
+   if (inline) {
+-    return inline[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)
++    // 条目规范化走 yaml-scalar-unquote 单点（2026-10-21-known-failures-unescape）：双引号条目
++    // 反转义——config known-failures add 写侧按 YAML 规范转义 \\.，旧读侧只剥引号不反转义，
++    // 含反斜杠的锚定豁免模式带着字面双反斜杠进 buildExemptPats，正则语义漂移、豁免静默失配。
++    return inline[1].split(',').map(s => unquoteYamlScalar(s)).filter(Boolean)
+   }
+   // 坑 verify-known-failures-comment-line-truncation（2026-08-28 连续踩两次）→ 坑
+   // verify-known-failures-block-fragile-chain（2026-09-07 工具复盘升级修复）：块式捕获曾要求
+@@ -1002,10 +1006,12 @@ export function extractKnownFailures(yamlText) {
+     .map(s => {
+       const item = s.trim()
+       const full = item.match(/^(['"])(.*)\1$/)
+-      if (full) return full[2] // 整体引号值原样保留（内部 # 不是注释）
++      // 引号值经 unquoteYamlScalar 反转义（2026-10-21-known-failures-unescape：与流式同口径，
++      // 双引号 \\.→\. / ''→'；裸值照旧只剥行尾注释）
++      if (full) return unquoteYamlScalar(item)
+       const stripped = item.replace(/[ \t]+#.*$/, '').trim() // 行尾注释须 # 前有空白（YAML 语义），裸 # 不截
+       const q2 = stripped.match(/^(['"])(.*)\1$/)
+-      return q2 ? q2[2] : stripped
++      return q2 ? unquoteYamlScalar(stripped) : stripped
+     })
+     .filter(Boolean)
+ }
+diff --git a/src/yaml-scalar-unquote.js b/src/yaml-scalar-unquote.js
+new file mode 100644
+index 00000000..91137dff
+--- /dev/null
++++ b/src/yaml-scalar-unquote.js
+@@ -0,0 +1,43 @@
++/**
++ * yaml-scalar-unquote —— local.yaml known_failures 条目的 YAML 标量规范化单点
++ * （2026-10-21-known-failures-unescape）。
++ *
++ * 背景（2026-10-21-verify-reuse-large-repo 收口实战）：写侧（config-known-failures
++ * renderKey）按 YAML 规范把含反斜杠的锚定豁免模式转义成双引号形态，三个读侧
++ * （verify-postcheck extractKnownFailures / docs-check / config-known-failures
++ * parseKnownFailureKeys）各自拷贝的「剥引号」提取不反转义——模式带着字面双反斜杠
++ * 到达豁免匹配层，正则语义漂移为「字面反斜杠+任意字符」，豁免静默永不命中；CLI
++ * remove 同因必未命中。本模块把「条目级规范化」收敛为单点，三读侧统一 import。
++ *
++ * 零依赖叶子（三消费方刻意轻量化不引重链——js-yaml 整解析会动既有「断链容忍/
++ * 注释容忍」行为面，超出对称性修复）；分段/注释容忍结构归各读侧既有实现。
++ */
++
++/**
++ * 双引号标量内文反转义（YAML 双引号转义集；未知转义回落字面字符——键面无 \x 八进制等
++ * 罕见形态，宽松回落优于抛错）。传 inner（不含两侧引号）。
++ * @param {string} inner
++ * @returns {string}
++ */
++export function unescapeYamlDoubleQuoted(inner) {
++  return String(inner ?? '').replace(/\\(.)/gs, (m, c) => {
++    if (c === 'n') return '\n'
++    if (c === 't') return '\t'
++    if (c === 'r') return '\r'
++    if (c === '0') return '\0'
++    return c // \\ → \、\" → "、\' → '；未知转义回落字面
++  })
++}
++
++/**
++ * 条目标量规范化（token 可带/不带引号）：双引号 → 反转义；单引号 → '' → '（YAML 单引号
++ * 唯一转义）；裸值 → trim 原样。不剥行尾注释（归调用方既有结构）。
++ * @param {string} s
++ * @returns {string}
++ */
++export function unquoteYamlScalar(s) {
++  const t = String(s ?? '').trim()
++  if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) return unescapeYamlDoubleQuoted(t.slice(1, -1))
++  if (t.length >= 2 && t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1).replace(/''/g, "'")
++  return t
++}
+diff --git a/test/known-failures-unescape.test.mjs b/test/known-failures-unescape.test.mjs
+new file mode 100644
+index 00000000..c0133421
+--- /dev/null
++++ b/test/known-failures-unescape.test.mjs
+@@ -0,0 +1,99 @@
++/**
++ * known_failures 三读侧 YAML 反转义对称回归（2026-10-21-known-failures-unescape）。
++ *
++ * 实战转写（2026-10-21-verify-reuse-large-repo 收口）：config known-failures add 写侧按
++ * YAML 规范把 `doc-ref-check\.test\.mjs$` 写成 `"doc-ref-check\\.test\\.mjs$"`，三个读侧
++ * （verify 判账 / docs-check / CLI 管理面）只剥引号不反转义——模式带着字面双反斜杠进
++ * buildExemptPats，正则语义漂移为「字面反斜杠+任意字符」，豁免静默永不命中；CLI remove
++ * 同因必未命中且文案恒称已移除。本文件锁死：round-trip 原样、三读侧一致、remove 诚实文案。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++const ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
++const u = (p) => new URL('file:///' + p.replace(/\\/g, '/').replace(/^\/*/, '')).href
++const load = async (rel) => await import(u(join(ROOT, rel).replace(/\\/g, '/')))
++
++const { unquoteYamlScalar, unescapeYamlDoubleQuoted } = await load('src/yaml-scalar-unquote.js')
++const { parseKnownFailureKeys, applyKnownFailureEdit, runKnownFailuresCommand } = await load('src/config-known-failures.js')
++const { extractKnownFailures, judgeTapOutput } = await load('src/verify-postcheck.js')
++const { extractKnownFailureKeys } = await load('src/docs-check.js')
++
++// ── 叶子单点矩阵 ───────────────────────────────────────────────────────────
++test('unquoteYamlScalar / unescapeYamlDoubleQuoted：双引号转义集/单引号引号/裸值矩阵', () => {
++  assert.equal(unescapeYamlDoubleQuoted('a\\\\.b$'), 'a\\.b$', '双引号内文 \\\\→\\（其余原样）')
++  assert.equal(unescapeYamlDoubleQuoted('x\\"y\\n\\t'), 'x"y\n\t', '\\"→" / \\n→换行 / \\t→制表')
++  assert.equal(unescapeYamlDoubleQuoted('q\\dz'), 'qdz', '未知转义回落字面')
++  assert.equal(unquoteYamlScalar('"doc-ref-check\\\\.test\\\\.mjs$"'), 'doc-ref-check\\.test\\.mjs$', '双引号 token 反转义')
++  assert.equal(unquoteYamlScalar("'it''s'"), "it's", "单引号 ''→'")
++  assert.equal(unquoteYamlScalar('  bare.key  '), 'bare.key', '裸值 trim 原样')
++  assert.equal(unquoteYamlScalar('"'), '"', '奇形引号不剥')
++})
++
++// ── round-trip：add 写入 → 三读侧原样 → 豁免真实命中 ────────────────────────
++test('round-trip：含反斜杠锚定模式 add→三读侧解析原样→judgeTapOutput 豁免命中', () => {
++  const pattern = 'doc-ref-check\\.test\\.mjs$' // 用户原样（单反斜杠）
++  const r = applyKnownFailureEdit('known_failures: []\n', { add: [pattern] })
++  assert.ok(r.ok, 'add 成功')
++  assert.match(r.next, /"doc-ref-check\\\\\.test\\\\\.mjs\$"/, '文件里是规范 YAML 双引号转义形态')
++  // 三读侧都拿到用户原样模式
++  assert.deepEqual(parseKnownFailureKeys(r.next), [pattern], 'CLI 管理面读侧原样')
++  assert.deepEqual(extractKnownFailures(r.next), [pattern], 'verify 判账读侧原样')
++  assert.deepEqual(extractKnownFailureKeys(r.next), [pattern], 'docs-check 读侧原样')
++  // 判账链终点：豁免真实命中 TAP not ok 行（修复前：正则里 \\\\. 语义=字面反斜杠+任意字符 → 永不命中）
++  const tapOut = 'TAP version 13\nok 1 - a\nnot ok 12 - test\\doc-ref-check.test.mjs\n1..30'
++  const judged = judgeTapOutput(1, tapOut, 'reason', [pattern])
++  assert.equal(judged.status, 'passed', '锚定豁免真实生效')
++  assert.equal(judged.remainingLines.length, 0)
++})
++
++test('三读侧一致性：块式×双引/单引/裸键混合 fixture 结果逐项相等', () => {
++  const yamlBlock = [
++    'known_failures:',
++    '  - "anchor\\\\.escaped\\\\.key$"',
++    "  - 'single''quote'",
++    '  - bare.key',
++    '  # 归因注释',
++    'other_key: 1',
++  ].join('\n')
++  const expected = ['anchor\\.escaped\\.key$', "single'quote", 'bare.key']
++  assert.deepEqual(parseKnownFailureKeys(yamlBlock), expected, 'CLI 侧（块式双引反转义）')
++  assert.deepEqual(extractKnownFailures(yamlBlock), expected, 'verify 侧与 CLI 一致')
++  assert.deepEqual(extractKnownFailureKeys(yamlBlock), expected, 'docs-check 侧与 CLI 一致')
++})
++
++// ── remove 诚实文案 + 原样键匹配 ───────────────────────────────────────────
++test('remove 诚实文案：全命中无未命中括记 / 部分未命中仅注记未命中键 + 原样键匹配', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'kfu-'))
++  const logs = []
++  const origLog = console.log
++  const origErr = console.error
++  console.log = (...a) => logs.push(a.join(' '))
++  console.error = () => {}
++  try {
++    const yamlPath = join(dir, 'local.yaml')
++    const pattern = 'some\\.flake\\.test\\.mjs$'
++    writeFileSync(yamlPath, 'known_failures: []\n')
++    // ① 全命中：remove 传入的键刚 add 过（原样键匹配存储转义键）
++    runKnownFailuresCommand({ yamlPath, exists: true, verb: 'add', keys: [pattern] })
++    const code = runKnownFailuresCommand({ yamlPath, exists: true, verb: 'remove', keys: [pattern] })
++    assert.equal(code, 0)
++    const removeMsg = logs.filter((l) => l.includes('已移除')).pop()
++    assert.ok(removeMsg.includes('已移除：' + pattern), '移除消息含原样键')
++    assert.ok(!removeMsg.includes('未命中'), '全命中不得打印未命中括注（旧文案恒打）')
++    assert.deepEqual(parseKnownFailureKeys(readFileSync(yamlPath, 'utf8')), [], '键已移除')
++    // ② 部分未命中：仅对未命中键注记
++    writeFileSync(yamlPath, 'known_failures: ["keep\\\\.me$"]\n')
++    runKnownFailuresCommand({ yamlPath, exists: true, verb: 'remove', keys: ['keep\\.me$', 'not\\.there$'] })
++    const partial = logs.filter((l) => l.includes('已移除')).pop()
++    assert.ok(partial.includes('已移除：keep\\.me$'), '命中键移除（原样键匹配存储转义键）')
++    assert.match(partial, /未命中键静默忽略：not\\\.there\$/, '仅未命中键注记')
++  } finally {
++    console.log = origLog
++    console.error = origErr
++    try { rmSync(dir, { recursive: true, force: true }) } catch {}
++  }
++})

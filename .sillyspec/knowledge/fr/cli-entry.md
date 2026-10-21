@@ -10879,3 +10879,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-21-review-dispatch-answer-salvage
   status: active
+
+## FR-cli-entry-574 三读侧 YAML 双引号反转义对称（必须）
+变更：2026-10-21-known-failures-unescape
+状态：active
+摘要：round-trip；三读侧一致
+全文：.sillyspec/changes/archive/2026-10-21-known-failures-unescape/requirements.md#FR-01
+最近确认：ea05501b7c2b0060d8542a2933d0209a25bcfe19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-known-failures-unescape:flow:测试绑定FR-01
+  tests: test/known-failures-unescape.test.mjs「round-trip：含反斜杠锚定模式 add→三读侧解析原样→judgeTapOutput 豁免命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-known-failures-unescape
+  status: active
+
+## FR-cli-entry-575 CLI remove 诚实文案 + 原样键匹配（必须）
+变更：2026-10-21-known-failures-unescape
+状态：active
+摘要：remove 全命中；remove 部分未命中
+全文：.sillyspec/changes/archive/2026-10-21-known-failures-unescape/requirements.md#FR-02
+最近确认：ea05501b7c2b0060d8542a2933d0209a25bcfe19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-known-failures-unescape:flow:测试绑定FR-02
+  tests: test/known-failures-unescape.test.mjs「remove 诚实文案：全命中无未命中括注 / 部分未命中仅注记未命中键 + 原样键匹配」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-known-failures-unescape
+  status: active
+
+## FR-cli-entry-576 测试与既有面（必须）
+变更：2026-10-21-known-failures-unescape
+状态：active
+摘要：测试面
+全文：.sillyspec/changes/archive/2026-10-21-known-failures-unescape/requirements.md#FR-03
+最近确认：ea05501b7c2b0060d8542a2933d0209a25bcfe19
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-known-failures-unescape:flow:测试绑定FR-03
+  tests: test/known-failures-unescape.test.mjs「回归面：config-known-failures / verify-postcheck-known-failures / doctor-local-yaml 复跑 0 失败」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-known-failures-unescape
+  status: active

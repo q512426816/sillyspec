@@ -76,3 +76,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治
 - 2026-10-21-deps-batch-runner-flags | deps 批保留运行器尾随 flag（并行恢复）
 - 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测
+- 2026-10-21-known-failures-unescape | known_failures 三读侧 YAML 反转义对称

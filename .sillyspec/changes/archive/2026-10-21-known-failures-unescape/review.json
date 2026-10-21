@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-known-failures-unescape",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ea05501b7c2b0060d8542a2933d0209a25bcfe19",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-02/design 契约字面写「流式分支补 removedCount」而交付统一在 removedKeys 字段",
+      "evidence": "applyKnownFailureEdit 流式分支返回 removedKeys（无 removedCount），块式两者都返；全仓 src/test 无任何 removedCount 消费方（仅 config-known-failures.js:145 一处产出即死字段）；行为契约（全命中无括注/仅未命中键注记/原样键匹配）由 removedKeys 全额兑现且测试钉死——纯字段命名漂移，无行为影响",
+      "location": "src/config-known-failures.js:122,145；design.md「接口契约」节"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T17:20:27Z"
+}
