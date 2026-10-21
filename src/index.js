@@ -6,7 +6,7 @@
  * 只负责两件事：init（安装命令模板）和 setup（安装 MCP 工具）。
  * 状态管理通过 sillyspec.db（SQLite）完成，使用 `sillyspec progress` 命令。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, writeSync, unlinkSync } from 'fs';
 import { runtimeStatePath } from './runtime-paths.js'
 import { writeAtomicSync } from './fs-atomic.js';
 import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
@@ -237,6 +237,47 @@ function refuseRetiredQuickFreshStart(stageArgs) {
   process.exit(1)
 }
 
+/**
+ * 全局输出收集器（2026-10-21-protocol-tax FR-03）。
+ *
+ * 收编会话考古（z1）发现的 agent 自发模式：44/48 次把 CLI 输出重定向进日志再 tail 尾部——
+ * 工具精心生成的规则大半没进上下文，且 shell 包装会掩蔽真实退出码。内建后：全文落
+ * --out-file 文件、stdout 只回提示行+尾 N 行（--tail，默认 40），退出码零拦截（失败信息
+ * 进尾行或全文件，不丢）。
+ *
+ * 实现要点：
+ * - 拦截点选 process.stdout.write/process.stderr.write（console.log/error 底层同路，
+ *   JSON envelope 直写 process.stdout 的命令也被覆盖；stdio:'inherit' 的子进程直写 fd
+ *   不经此层——已知豁免面，退出码不受影响）。
+ * - exit 钩子同步落盘+尾行输出用 fs.writeSync 直写 fd（exit 期 pipe 异步写会丢）。
+ * - 观测面优先、绝不改变命令成败：写文件失败退化为全量打印；收集器任何异常不影响退出码。
+ */
+function installOutFileRedirect(outFile, tailN) {
+  const entries = [];
+  const push = (chunk) => { entries.push(typeof chunk === 'string' ? chunk : chunk.toString()); return true; };
+  process.stdout.write = push;
+  process.stderr.write = push;
+  process.on('exit', () => {
+    const full = entries.join('');
+    let wrote = true;
+    try { writeFileSync(outFile, full); } catch { wrote = false; }
+    if (!wrote) {
+      try {
+        writeSync(2, `⚠️ --out-file 写入失败（${outFile}）——改为全量打印：\n`);
+        writeSync(1, full);
+      } catch { /* exit 期 best-effort */ }
+      return;
+    }
+    const lines = full.split('\n');
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const tail = lines.slice(-tailN);
+    try {
+      writeSync(1, `📄 全文已写 ${outFile}（${lines.length} 行，尾 ${tail.length} 行）：\n`);
+      if (tail.length) writeSync(1, tail.join('\n') + '\n');
+    } catch { /* exit 期 best-effort */ }
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -269,6 +310,9 @@ async function main() {
   // 平台模式 flag（init 落平台指针用；非 init 命令时忽略——runCommand 自行解析 filteredArgs）
   let platformWorkspaceId = null;
   let platformRuntimeRoot = null;
+  // 全局输出收集器（2026-10-21-protocol-tax FR-03）：--out-file <路径> / --tail N
+  let outFileRedirect = null;
+  let outFileTailLines = null;
   const filteredArgs = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -305,6 +349,13 @@ async function main() {
       platformRuntimeRoot = resolve(args[i + 1]);
       filteredArgs.push(args[i], args[i + 1]);
       i++;
+    } else if (args[i] === '--out-file' && args[i + 1] && !args[i + 1].startsWith('--')) {
+      // 全局输出收集器（2026-10-21-protocol-tax FR-03）：全文落文件、stdout 只回尾 N 行
+      outFileRedirect = resolve(args[i + 1]);
+      i++;
+    } else if (args[i] === '--tail' && args[i + 1] && /^\d+$/.test(args[i + 1]) && parseInt(args[i + 1], 10) > 0) {
+      outFileTailLines = parseInt(args[i + 1], 10);
+      i++;
     } else if (args[i] === '--interactive' || args[i] === '-i') {
       interactive = true;
     } else if (args[i] === '--allow-worktree-cwd') {
@@ -323,6 +374,13 @@ async function main() {
     console.error('❌ --non-interactive 与 --interactive 互斥（一个禁用交互、一个强制交互），请只保留一个。');
     process.exit(2);
   }
+
+  // --out-file/--tail 校验与安装（2026-10-21-protocol-tax FR-03）：必须在任何命令输出之前装好
+  if (outFileTailLines !== null && outFileRedirect === null) {
+    console.error('❌ --tail 需与 --out-file 同用（控制 --out-file 模式下 stdout 尾部行数，默认 40）。');
+    process.exit(2);
+  }
+  if (outFileRedirect) installOutFileRedirect(outFileRedirect, outFileTailLines ?? 40);
 
   // ── 旧布局迁移（2026-10-18 runtime-relayout）：per-change 散文件入 state/、可删产物入 temp/。
   // 每次入口跑一遍（幂等：已收敛后 readdir 一轮零写入）；fail-open 绝不阻断命令。
