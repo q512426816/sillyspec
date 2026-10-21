@@ -1355,8 +1355,28 @@ export class WorktreeManager {
     // 探针二对象显式主仓根（_resolveMainRepoRoot）——native-worktree 复用路径下 cwd 是
     // worktree、其 HEAD 即分支自身，按 cwd 探会「永不锚定」fail-open。
     const mainRoot = this._resolveMainRepoRoot();
+    // ── 锚集批量化（2026-10-21-protocol-tax task-07 / FR-07）──
+    // 锚定判定 =「可达自 branch」∧「不可达自主仓 HEAD」，数学上等价于 hash ∈
+    // rev-list(branch --not mainHEAD)（分支独有集，sillyspec/* 变更分支恒小）。旧实现逐
+    // hash 双 merge-base 探针（Windows spawn 贵，doctor 实测 8.2s/21%）；两 spawn 等价替换。
+    // 等价性：is-ancestor(hash,branch) ⟺ hash ∈ rev-list(branch)；探针二排除语义 ⟺ --not。
+    // 任一 spawn 失败（null）→ anchorSet 置空回退旧逐对探针，fail-closed 语义原样保留。
+    let anchorSet = null;
+    try {
+      const mainHead = gitQuiet(mainRoot, ['rev-parse', 'HEAD']);
+      if (mainHead) {
+        const unique = gitQuiet(this.cwd, ['rev-list', branch, '--not', mainHead]);
+        if (unique !== null) anchorSet = new Set(unique ? unique.split('\n').filter(Boolean) : []);
+      }
+    } catch { /* 回退逐对探针 */ }
     for (const [hash, paths] of candidates) {
-      // 探针一（语义不变）：merge-base --is-ancestor 祖先或自身 → exit 0 输出空串（gitQuiet
+      if (anchorSet) {
+        // 查锚集：在分支独有集内 → 锚定；否则不计入（含未知/畸形 hash——非真实对象无可
+        // 悬空链，同旧探针一 null→continue 语义）
+        if (anchorSet.has(hash)) refs.push(...paths);
+        continue;
+      }
+      // 探针一（语义不变，批量化失败回退路径）：merge-base --is-ancestor 祖先或自身 → exit 0 输出空串（gitQuiet
       // 返回 ''≠null）；非祖先 → exit 1 → null；未知/畸形 hash → 报错非零 → null（不在分支
       // 内，语义正确——非真实对象无可悬空链）
       if (gitQuiet(this.cwd, ['merge-base', '--is-ancestor', hash, branch]) === null) continue;

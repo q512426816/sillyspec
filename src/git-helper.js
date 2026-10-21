@@ -15,6 +15,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 
 /**
  * git C 风格引号路径解码：`\\` `\"` `\n` `\t` 与 `\NNN` 八进制**原始字节**。
@@ -144,6 +145,87 @@ export function git(cwd, args, opts = {}) {
   const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(env), windowsHide: true })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
+}
+
+/**
+ * 批量对象存在性判定（2026-10-21-protocol-tax task-07 / FR-07）。
+ *
+ * 单次 `git cat-file --batch-check`（SHA 列表走 stdin）替代逐 SHA `cat-file -e`——
+ * Windows 单次 git spawn ~100-150ms，归档锚点校验在 681 归档仓实测串行 25s+，批量化后
+ * 一次 spawn 判完全部。探针形态 `<sha>^{commit}` 与旧逐查同构（tag/tree 对象不算 commit）。
+ *
+ * @param {string} cwd
+ * @param {string[]} shas 40-hex SHA 列表（大小写不敏感，返回键统一小写）
+ * @returns {Map<string, boolean>} sha → 是否为可解析 commit；整批失败返回空 Map
+ *   （调用方查表 miss = false = 不可解析 = 悬空——与逐查失败同向 fail，不静默洗白）
+ */
+export function batchCatFileExists(cwd, shas) {
+  const map = new Map()
+  if (!Array.isArray(shas) || shas.length === 0) return map
+  const probes = shas.map((s) => `${s}^{commit}`)
+  try {
+    const out = execFileSync('git', buildFullArgs(cwd, ['cat-file', '--batch-check']), {
+      encoding: 'utf8', timeout: 30000, maxBuffer: GIT_MAX_BUFFER,
+      input: probes.join('\n') + '\n',
+      env: gitChildEnv(), windowsHide: true,
+    })
+    for (const line of String(out).split('\n')) {
+      // 行形态：可解析 → git 回显**解析后裸 SHA**（不回显输入串）`<sha> commit <size>`；
+      // 不可解析 → 回显输入串 `<sha>^{commit} missing`。统一剥后缀取裸 SHA 作键。
+      const m = line.match(/^([0-9a-f]{40})(?:\^\{commit\})?\s+(\S+)/i)
+      if (m) map.set(m[1].toLowerCase(), m[2] === 'commit')
+    }
+  } catch { /* 整批失败：空表全 miss=悬空（同逐查失败语义） */ }
+  return map
+}
+
+/**
+ * 批量暂存区 blob 内容哈希（2026-10-21-protocol-tax task-07 / FR-07 配套）。
+ *
+ * 单次 `git cat-file --batch`（stdin 逐行 `:path`）替代逐文件 `git show :path`——apply
+ * 交付指纹漂移维度对最近 5 份 manifest × 全部文件逐个起进程，Windows spawn 税可观。
+ * 响应按输入顺序回流：成功 `<oid> blob <size>\n<content>\n`、缺失 `<ref> missing\n`；
+ * 内容与写侧同基（staged blob 即 LF 规范态），sha256 直算 content 字节。
+ *
+ * @param {string} cwd
+ * @param {string[]} paths 仓库相对路径列表
+ * @returns {Map<string, string|null>} path → staged 内容 sha256（null=未暂存/不可解析）；
+ *   整批失败返回空 Map（调用方查表 miss=null=未暂存，与逐查 gitQuiet null 同语义）
+ */
+export function batchStageBlobSha256(cwd, paths) {
+  const map = new Map()
+  if (!Array.isArray(paths) || paths.length === 0) return map
+  let out
+  try {
+    out = execFileSync('git', buildFullArgs(cwd, ['cat-file', '--batch']), {
+      encoding: 'buffer', timeout: 30000, maxBuffer: GIT_MAX_BUFFER,
+      input: paths.map((p) => `:${p}`).join('\n') + '\n',
+      env: gitChildEnv(), windowsHide: true,
+    })
+  } catch { return map }
+  const buf = Buffer.isBuffer(out) ? out : Buffer.from(String(out), 'binary')
+  let pos = 0
+  let idx = 0
+  while (pos < buf.length && idx < paths.length) {
+    const nl = buf.indexOf(0x0a, pos)
+    if (nl === -1) break
+    const header = buf.toString('utf8', pos, nl).trim()
+    pos = nl + 1
+    const parts = header.split(/\s+/)
+    if (parts[parts.length - 1] === 'missing') {
+      map.set(paths[idx], null)
+      idx++
+      continue
+    }
+    const size = Number.parseInt(parts[parts.length - 1], 10)
+    if (!Number.isFinite(size) || pos + size > buf.length) break // 形态意外：截断防错读
+    map.set(paths[idx], createHash('sha256').update(buf.subarray(pos, pos + size)).digest('hex'))
+    pos += size + 1 // 内容 + 尾随换行
+    idx++
+  }
+  // 尾部未覆盖的路径（流截断等）按未暂存处理——与逐查失败同向
+  for (; idx < paths.length; idx++) map.set(paths[idx], null)
+  return map
 }
 
 /**

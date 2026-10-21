@@ -25,6 +25,8 @@
 import { openDatabase, pluckGet, pluckAll } from './db-engine.js';
 import { runtimeTempPath } from './runtime-paths.js'
 import { safeGit } from './git-helper.js';
+import { batchCatFileExists } from './git-helper.js';
+import { batchStageBlobSha256 } from './git-helper.js';
 import { createHash } from 'crypto';
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs';
 import { join, relative, resolve, dirname } from 'path';
@@ -1076,6 +1078,17 @@ function detectApplyManifestDrift(cwd, specDir) {
     const scanned = manifests.slice(0, 5)
     const findings = []
     let checked = 0
+    // ── staged 态批量预取（2026-10-21-protocol-tax task-07 / FR-07）──
+    // 旧实现逐文件 `git show :<path>`（最近 5 份 manifest × 全部文件逐个 spawn，Windows 税
+    // 可观）；单次 `git cat-file --batch` 按输入序回流等价替换。miss=null=未暂存，与旧
+    // gitQuiet null 同语义；整批失败空表全 miss（不洗白：暂存面查不到就当未暂存处理）。
+    const stagedEntries = []
+    for (const m of scanned) {
+      for (const ent of m.files) {
+        if (ent && typeof ent.path === 'string' && typeof ent.sha256 === 'string') stagedEntries.push(ent)
+      }
+    }
+    const stagedMap = batchStageBlobSha256(cwd, stagedEntries.map((e) => e.path))
     for (const m of scanned) {
       for (const ent of m.files) {
         if (!ent || typeof ent.path !== 'string' || typeof ent.sha256 !== 'string') continue // 坏条目跳过
@@ -1089,10 +1102,8 @@ function detectApplyManifestDrift(cwd, specDir) {
             .update(Buffer.from(raw.toString('latin1').replace(/\r\n/g, '\n'), 'latin1'))
             .digest('hex')
         } catch { /* 盘上无 → 丢失分支候选 */ }
-        // staged 态：git show :<path> buffer 直接 sha256（staged blob 即 LF 规范态，与写侧同基）
-        let stagedHash = null
-        const blob = gitQuiet(cwd, ['show', `:${ent.path}`], { encoding: 'buffer', timeout: 15000 })
-        if (Buffer.isBuffer(blob)) stagedHash = createHash('sha256').update(blob).digest('hex')
+        // staged 态：查批量预取表（task-07；staged blob 即 LF 规范态，与写侧同基）
+        const stagedHash = stagedMap.get(ent.path) ?? null
         const tag = `${m.change}×${ent.path}`
         if (worktreeHash === null && stagedHash === null) {
           findings.push(`${tag} 丢失（盘上与暂存区皆无；期望 ${short(ent.sha256)}）`)
@@ -1286,6 +1297,22 @@ export function detectArchiveIntegrity(cwd, authoritySpecDir) {
     };
   }
   const offenders = [];
+  // ── 锚点批量预检（2026-10-21-protocol-tax task-07 / FR-07）──
+  // 旧实现主循环内逐 SHA 起 `git cat-file -e`（消费仓 681 归档 × ≤2 SHA × Windows 单 spawn
+  // ~130ms ≈ 25s+，doctor 实测 41.8s 的 70% 在此）。改为循环前收集全量 40-hex SHA、单次
+  // `git cat-file --batch-check` 判存，主循环 anchorOk 查表。等价性：missing/探针失败 =
+  // 旧 safeGit error → 均按不可解析=悬空同向 fail；change-patch.json 缺失/不可解析 →
+  // 两版同样不计锚点欠账（主循环 catch 语义原样）。
+  const anchorShas = new Set();
+  for (const name of names) {
+    try {
+      const cpMetaPre = JSON.parse(readFileSync(join(archiveDir, name, 'change-patch.json'), 'utf8'));
+      for (const sha of [cpMetaPre?.head, cpMetaPre?.baseline]) {
+        if (sha && /^[0-9a-f]{40}$/i.test(String(sha))) anchorShas.add(String(sha).toLowerCase());
+      }
+    } catch { /* change-patch.json 缺失/不可解析：主循环既有语义不变（不计锚点欠账） */ }
+  }
+  const anchorExists = batchCatFileExists(cwd, [...anchorShas]);
   // FR 索引面（D14 第四检查数据源，循环外一次扫描复用；fr/ 不存在=仓未启用，全跳不误报）
   const frKnowledgeRoot = join(authoritySpecDir, 'knowledge');
   const frEnabled = existsSync(join(frKnowledgeRoot, 'fr'));
@@ -1376,7 +1403,7 @@ export function detectArchiveIntegrity(cwd, authoritySpecDir) {
         const cpMeta = JSON.parse(readFileSync(cpJsonPath, 'utf8'));
         const anchorOk = (sha) => {
           if (!sha || !/^[0-9a-f]{40}$/i.test(String(sha))) return !sha; // 空锚不算悬空（无 git 基线形态）
-          return !safeGit(cwd, ['cat-file', '-e', `${sha}^{commit}`]).error;
+          return anchorExists.get(String(sha).toLowerCase()) === true; // 查批量预检表（task-07/FR-07）
         };
         const headDangling = !anchorOk(cpMeta.head);
         const baseDangling = !anchorOk(cpMeta.baseline);
