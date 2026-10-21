@@ -75,3 +75,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
 - 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治
 - 2026-10-21-deps-batch-runner-flags | deps 批保留运行器尾随 flag（并行恢复）
+- 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测

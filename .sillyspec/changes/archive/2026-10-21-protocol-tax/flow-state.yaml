@@ -1,0 +1,57 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  砍协议税：心跳往返合并＋输出增量＋计时观测
+
+
+  动机与背景：对 2026-10-20-session-page-dsh-alignment 两会话（z1 需求+规划 / z2 执行）考古实测：z1 26 轮真实用户问答对应约 60 次 CLI
+  心跳往返（--wait/--continue 对），协议面占主会话 39% tool call，主会话上下文耗尽被迫把 plan 阶段委托子代理；agent 44/48 次把 CLI 输出重定向进日志只看尾部——步骤指引规则未送达
+  agent 上下文（靠撞门学流程的直接原因）。本机实测 doctor 41.8s（CPU profile 95% 串行 spawnSync：归档锚点逐 SHA 起 git cat-file）；消费仓 status --change
+  6.3s（71% idle 等平台同步，遍历 681 归档 spec 树）。用户已认可收缩方案：T3 计时观测、T5 输出增量+--out-file、T4 心跳合并为核心，T1 只读命令跳同步、T2 doctor 批量化为顺手项；T6
+  范围传感器与写命令增量同步明确不做（排后续按数据定）。
+
+
+  成功标准：
+
+  - DEBUG_SILLYSPEC_TIMING=1 时 run/flow 命令尾部输出分段耗时（sync/gates/render/state-write 至少四段），不开时零输出变化
+
+  - 同一步骤重复进入时不再全量重放固定模板：重复渲染首屏 <60 行，固定规则收敛为 step-guide 锚文件一行引用
+
+  - 新增全局 --out-file <路径> 与 --tail N：全文写文件、stdout 只出尾 N 行，退出码与不用 flag 完全一致
+
+  - run <stage> --wait --json：问询+选项结构化 JSON 输出；--continue --answers k1=v1,k2=v2 一次携带多问多答
+
+  - --continue 在无等待步骤时改为幂等 no-op（exit 0 + 提示行），不再 exit=1
+
+  - status/progress show/handoff 查看等只读命令不再触发平台同步（消费仓 status --change 6.3s → <1.5s），同步仍由写命令与 bg-sync 承担
+
+  - doctor 归档锚点校验批量化（单次 git cat-file --batch-check），实测 41.8s → <5s 且 findings 输出与改前逐条等价
+autopilot: false
+prestage_ack: false
+baseline_commit: c39072a80b092a4e5a7d82b481831cacf1bb852a
+updatedAt: '2026-10-21T16:44:57.836Z'
+baseline_sha256: 25cca7cc6186b788beb29da8c2fac0d20dfc2f4694b45d7b408339d6c5af5cd1
+spec_approved: true
+spec_approved_at: '2026-10-21T14:20:19.571Z'
+spec_approved_by: zcode-protocol-tax
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-protocol-tax
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js167+js-meta-skip1+nontest-skip2)+fr(163)（158.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021162315\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml
+  未配置 commands.lint（或标记 unavailable）。｜门文件 36 个
+

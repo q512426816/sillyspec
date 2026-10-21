@@ -15,3 +15,4 @@
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
 - 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费
 - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
+- 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测

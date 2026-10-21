@@ -1807,3 +1807,60 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-21-cli-manifest-since-cache
   status: active
+
+## FR-runtime-112 pytest 运行器提取保留尾随 flag（必须）
+变更：2026-10-21-deps-batch-runner-flags
+状态：active
+摘要：模块命令含并行 flag；无尾随 flag 的命令零变化
+全文：.sillyspec/changes/archive/2026-10-21-deps-batch-runner-flags/requirements.md#FR-01
+最近确认：1ba462e5a93816d1ed674acb9d26ff550b5d92af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-01
+  tests: test/deps-batch-runner-flags.test.mjs「extractRunnerTrailingFlags：裸 flag/含等号 flag/吃值 flag 值/位置参数丢弃矩阵」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-deps-batch-runner-flags
+  status: active
+
+## FR-runtime-113 批命令形态钉死 + 既有语义面零回归（必须）
+变更：2026-10-21-deps-batch-runner-flags
+状态：active
+摘要：重定基保持
+全文：.sillyspec/changes/archive/2026-10-21-deps-batch-runner-flags/requirements.md#FR-02
+最近确认：1ba462e5a93816d1ed674acb9d26ff550b5d92af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-02
+  tests: test/deps-batch-runner-flags.test.mjs「buildDepsBatches：-n auto 保留 + 重定基不破 + 无 flag 命令逐字不变 + jsx 路径不动」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-deps-batch-runner-flags
+  status: active
+
+## FR-runtime-114 纯函数导出 + 直测（必须）
+变更：2026-10-21-deps-batch-runner-flags
+状态：active
+摘要：测试面
+全文：.sillyspec/changes/archive/2026-10-21-deps-batch-runner-flags/requirements.md#FR-03
+最近确认：1ba462e5a93816d1ed674acb9d26ff550b5d92af
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-deps-batch-runner-flags:flow:测试绑定FR-03
+  tests: test/deps-batch-runner-flags.test.mjs「回归面：verify-postcheck 既有相关用例复跑 0 失败」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-deps-batch-runner-flags
+  status: active

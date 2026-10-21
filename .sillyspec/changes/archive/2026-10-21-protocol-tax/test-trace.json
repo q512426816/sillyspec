@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-protocol-tax",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-01",
+      "tests": [
+        "test/timing-segments.test.mjs「timing 四段输出与默认零变化」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-02",
+      "tests": [
+        "test/output-repeat-delta.test.mjs「重复渲染<60行+锚引用/换步恢复全量」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-03",
+      "tests": [
+        "test/out-file-tail.test.mjs「全文件+尾行+退出码一致（含失败命令）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-04",
+      "tests": [
+        "test/wait-json-answers.test.mjs「wait --json 可解析/answers 一次多答/键无匹配整单拒绝」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-05",
+      "tests": [
+        "test/continue-idempotent.test.mjs「无 waiting 时 exit 0+指引/有 waiting 语义不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-06",
+      "tests": [
+        "test/status-nosync.test.mjs「status 无 [sync] 行且不触发同步/写命令同步不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-21-protocol-tax:flow:测试绑定FR-07",
+      "tests": [
+        "test/doctor-anchor-batch.test.mjs「悬空判定与逐 SHA 版等价/批量单进程」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-protocol-tax"
+    }
+  ]
+}

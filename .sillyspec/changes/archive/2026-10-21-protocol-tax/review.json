@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-protocol-tax",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "2990664d57f71d2f041fa7b92ae6112d21a41504",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design.md/tasks.md 曾承诺的 render-ledger.json 机制未实现（已由 2990664d 消化）",
+      "evidence": "原 finding：design 接口契约与 tasks.md task-03 宣告新建 .sillyspec/.runtime/render-ledger.json，实际复用既有 reentryHit + step-guide-state 台账（src/run/prompt.js:2119-2155），FR-02 行为达标纯文档失真。2990664d 已回写改道说明（D-001、评审 P3-1 字样在案），design.md:24 现态与代码一致。tasks.md task-03 行仍留旧文案，属已勾结历史任务卡、不另立 finding。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/design.md:24; src/run/prompt.js:2119"
+    },
+    {
+      "severity": "P3",
+      "title": "并发防护声明不实（writeAtomicSync 声称 vs 裸 writeFileSync 实态）——2990664d 已改为如实披露",
+      "evidence": "step-guide-state 台账写入实为非原子 writeFileSync（src/run/prompt.js:2155），撕裂最坏退化为全量渲染（读侧 JSON.parse catch fail-open，方向安全）。2990664d 后 design.md 明确声明「台账写盘为既有裸 writeFileSync（非 writeAtomicSync——design 初稿声称有误，本变更未改动该面，撕裂后果为退回全量渲染，方向安全）」——声明与代码事实对齐，边界已裁决：可接受（该面为本变更未触碰的既有代码）。",
+      "location": "src/run/prompt.js:2155; .sillyspec/changes/2026-10-21-protocol-tax/design.md:24"
+    },
+    {
+      "severity": "P3",
+      "title": "文件变更清单与契约名漂移（progress.js 漏登 / batchCatFileCheck 实名 batchCatFileExists）——已由 2990664d 消化",
+      "evidence": "原 finding：state-write 段插桩实落 src/progress.js:963 未入清单、契约名不符。2990664d 已在 design.md 文件变更清单补登 progress.js 行并更正契约为 batchCatFileExists + 补记 batchStageBlobSha256（src/git-helper.js:162/180 双双实证存在）。残余见新增 P3（design.md:59 timingMark 字样）。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/design.md:23,59,64; src/progress.js:963; src/git-helper.js:162"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-06/FR-07 性能验收数字留痕薄弱（decisions.md 仅标题）——已由 2990664d 消化",
+      "evidence": "原 finding：性能数字只在 commit message。2990664d 已为 D-001~D-005 五条决策补正文：D-002 记三层归因（入口 pull/重播种推送/真凶 outputStep 的 triggerStepStartSync 在飞 POST）与 0.82s 实测，与 prompt.js:949-951、index.js:3336 双修复点代码事实一致；D-003 记三处批量化（batchCatFileExists 70% 热点 / rev-list 锚集数学等价+失败回退 / batchStageBlobSha256）与 run1-3 实测 3.0/4.0/3.5s，与 doctor-diagnostics.js:1303-1315、worktree.js:1358-1374 实态一致。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/decisions.md:5-20"
+    },
+    {
+      "severity": "P3",
+      "title": "timing 测试 runStable 非零退出即重试一次，可掩蔽真实间歇性失败（维持原判，未消化）",
+      "evidence": "test/timing-segments.test.mjs:59-63 对子进程 exit≠0 无条件重跑一次以第二次为准（注释披露为并行套件 SQLite BUSY 抖动硬化，D-005 正文亦披露「两次误诊保留为纵深防御」）。取舍已披露且评审串行复跑 12 文件一次全绿，无实证危害；记录为测试稳健性边界：可接受。",
+      "location": "test/timing-segments.test.mjs:59-63"
+    },
+    {
+      "severity": "P3",
+      "title": "（2990664d 复核新增）design.md:59 表格行残留 timingMark(segment) 字样——该导出不存在",
+      "evidence": "src/timing.js 实际导出 timingEnabled/timedSync/timedAsync/emitTimingIfEnabled，无 timingMark；2990664d 更正了接口契约行（design.md:23）但文件变更清单表格行（line 59）未同步更正，同文件内新旧两处自相矛盾。纯文档字样残留，无行为影响。",
+      "location": ".sillyspec/changes/2026-10-21-protocol-tax/design.md:59; src/timing.js:20-48"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "ok（边界已裁决：可接受——--out-file 被 kill 时文件可能缺失但退出码/stdout 不受影响；幂等 --continue 分支无任何 _write；timing 未开启零开销；批量化失败回退路径均有 catch 实证）",
+    "作用域": "ok（边界已裁决：可接受——step-guide-state 键含 change 名且落各仓自有 .runtime；--out-file 相对路径按进程 cwd resolve；batchCatFileExists 仅读目标仓对象库）"
+  },
+  "reviewedAt": "2026-10-21T16:43:38Z"
+}

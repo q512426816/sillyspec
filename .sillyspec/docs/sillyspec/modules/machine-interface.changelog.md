@@ -2,3 +2,4 @@
 - 2026-10-14-gate-verify-apiface-preflight | gate verify 预检的接口锚点核对消费 facts.apiFace，但其唯一生产者是 run verify --
 - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
 - 2026-10-21-verify-reuse-large-repo | verify 实测复用大仓全链失效根治
+- 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测

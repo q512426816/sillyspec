@@ -1351,3 +1351,150 @@ created_at: 2026-10-15T09:21:13.934Z
 摘要：聚合口径
 全文：.sillyspec/changes/archive/2026-10-21-p0-p1-hardening/requirements.md#FR-09
 最近确认：4421027e5b776be0f12c38d88517d66275034a9c
+
+## FR-docs-071 DEBUG_SILLYSPEC_TIMING=1 时 run/flow 命令尾部输出分段耗时（sync/gates/render/state-write 至少四段），不开时零输出变化
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：主路径
+场景正文：
+- 场景：主路径 — Given 临时仓存在活跃 change；When 以 `DEBUG_SILLYSPEC_TIMING=1` 运行任一 run 渲染/推进命令；Then 输出含 `[tim
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-01
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-01
+  tests: test/timing-segments.test.mjs「timing 四段输出与默认零变化」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-072 同一步骤重复进入时不再全量重放固定模板：重复渲染首屏 <60 行，固定规则收敛为 step-guide 锚文件一行引用
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：重复进入
+场景正文：
+- 场景：重复进入 — Given 活跃 change 处于 stage 的 step N；When 第二次运行同步骤渲染命令；Then 首屏 <60 行且含锚文件引用行、不含路径铁律全文；Whe
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-02
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-02
+  tests: test/output-repeat-delta.test.mjs「重复渲染<60行+锚引用/换步恢复全量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-073 新增全局 --out-file <路径> 与 --tail N：全文写文件、stdout 只出尾 N 行，退出码与不用 flag 完全一致
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：成功与失败命令
+场景正文：
+- 场景：成功与失败命令 — Given 任一命令成功路径；When 加 `--out-file f --tail 5`；Then stdout ≤7 行（提示行+5 尾行）、f 含全文、退出码与裸跑一
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-03
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-03
+  tests: test/out-file-tail.test.mjs「全文件+尾行+退出码一致（含失败命令）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-074 run <stage> --wait --json：问询+选项结构化 JSON 输出；--continue --answers k1=v1,k2=v2 一次携带多问多答
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：一次三答与键无匹配
+场景正文：
+- 场景：一次三答与键无匹配 — Given 阶段存在 3 个 waiting 步骤；When `--continue --answers "2=答案A,3=答案B,4=答案C"`；Then 三步全部回填且
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-04
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-04
+  tests: test/wait-json-answers.test.mjs「wait --json 可解析/answers 一次多答/键无匹配整单拒绝」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-075 --continue 在无等待步骤时改为幂等 no-op（exit 0 + 提示行），不再 exit=1
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：幂等与保留语义
+场景正文：
+- 场景：幂等与保留语义 — Given 阶段无 waiting 步骤；When `--continue`；Then exit 0 且输出含 progress show 指引；Given 阶段有 1 个
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-05
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-05
+  tests: test/continue-idempotent.test.mjs「无 waiting 时 exit 0+指引/有 waiting 语义不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-076 status/progress show/handoff 查看等只读命令不再触发平台同步（消费仓 status --change 6.3s → <1.5s），同步仍由写命令与 bg-sync 承担
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：只读不同步、写路径不变
+场景正文：
+- 场景：只读不同步、写路径不变 — Given 已配置平台连接的仓；When `status --change <名>`；Then 输出无 [sync] 行且命令 <1.5s；When 任一写命令成功执行；T
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-06
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-06
+  tests: test/status-nosync.test.mjs「status 无 [sync] 行且不触发同步/写命令同步不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
+
+## FR-docs-077 doctor 归档锚点校验批量化（单次 git cat-file --batch-check），实测 41.8s → <5s 且 findings 输出与改前逐条等价
+变更：2026-10-21-protocol-tax
+状态：active
+摘要：等价与批量
+场景正文：
+- 场景：等价与批量 — Given fixture 含多个归档（change-patch.json 含有效与悬空 SHA 混合）；When 运行 detectArchiveIntegrity；Th
+全文：.sillyspec/changes/archive/2026-10-21-protocol-tax/requirements.md#FR-07
+最近确认：2990664d57f71d2f041fa7b92ae6112d21a41504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-protocol-tax:flow:测试绑定FR-07
+  tests: test/doctor-anchor-batch.test.mjs「悬空判定与逐 SHA 版等价/批量单进程」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-protocol-tax
+  status: active
