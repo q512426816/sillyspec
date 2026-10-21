@@ -5329,6 +5329,9 @@ SillySpec config — local.yaml 配置键速查
                                   git common-dir 主仓根；worktree 内 .sillyspec 是 checkout
                                   副本无此文件，cat 自动解析到主仓）
   sillyspec config cat --json     机读 JSON（dir/path/source/content；未找到退出 1）
+  sillyspec config known-failures list           列 known_failures 豁免键
+  sillyspec config known-failures add <key…>     增豁免键（行级手术保注释、原子写；坏 YAML 拒改）
+  sillyspec config known-failures remove <key…>  删豁免键（未命中静默忽略）
 
 说明:
   - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
@@ -5370,11 +5373,30 @@ SillySpec config — local.yaml 配置键速查
         if (!content.endsWith('\n')) process.stdout.write('\n')
         break;
       }
+      // config known-failures（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证：known_failures
+      // 无 CLI 管理面 → agent 手改 local.yaml，PS5.1 编码把 50KB 文件写成 mojibake 等用户
+      // 2h13m）。行级增删查：保注释、原子写、坏 YAML 拒改——消灭手改场景。
+      if (configSub === 'known-failures') {
+        let specBase = null
+        try { specBase = resolvePlatformSpecDir(dir, specDir) } catch { /* 同 cat：pointer 异常走祖先链 */ }
+        const { resolveLocalYaml } = await import('./config-cat.js')
+        const located = resolveLocalYaml(dir, { specBase })
+        const { runKnownFailuresCommand } = await import('./config-known-failures.js')
+        const verb = filteredArgs[2];
+        const keys = filteredArgs.slice(3).filter((a) => a && !a.startsWith('--'));
+        const exitCode = runKnownFailuresCommand({
+          yamlPath: located.exists ? located.path : join(dir, '.sillyspec', 'local.yaml'),
+          exists: located.exists,
+          verb, keys, json,
+        });
+        process.exitCode = exitCode;
+        break;
+      }
       if (!isSchema) {
-        const sug = didYouMean(configSub, ['schema', 'cat']);
+        const sug = didYouMean(configSub, ['schema', 'cat', 'known-failures']);
         console.error(`❌ 未知子命令: config ${configSub}`);
         if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
-        console.error('用法: sillyspec config [schema|cat] [--json]   打印 local.yaml 配置键 / 读取实际内容');
+        console.error('用法: sillyspec config [schema|cat|known-failures] [--json]   打印配置键 / 读内容 / 管理 known_failures 键');
         process.exit(2);
       }
       const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');

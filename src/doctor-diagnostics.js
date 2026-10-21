@@ -630,6 +630,59 @@ function localYamlHasPlatformSection(cwd) {
   }
 }
 
+// ── local.yaml 完整性维度（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证）────────────
+// agent 手改 local.yaml（PS5.1 Set-Content -Encoding UTF8）把 50KB 文件写成 GBK mojibake
+// （不可逆，510 个 ?）——commands/known_failures/门禁全部 reader 对坏文件 fail-open/降级，
+// doctor 却零提示（agent 原话推理实证「Doctor doesn't complain about local.yaml」），最终等
+// 用户人工贴备份 2h13m。本维度把「文件存在但不可解析 / 含 BOM」显性化（只读，绝不自动修）。
+export function detectLocalYamlIntegrity(cwd) {
+  const dim = {
+    name: 'local_yaml_integrity',
+    label: 'local.yaml 完整性',
+    safe_actions: [],
+    findings: [],
+  };
+  const p = join(cwd, '.sillyspec', 'local.yaml');
+  if (!existsSync(p)) return dim; // 无文件是合法状态（本地模式），不报
+  let text;
+  try {
+    text = readFileSync(p, 'utf8');
+  } catch (e) {
+    dim.findings.push(
+      `local_yaml_unreadable: local.yaml 读取失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——` +
+      `权限/占用问题；修复后用 sillyspec config known-failures list 校验键面`
+    );
+    return dim;
+  }
+  if (text.charCodeAt(0) === 0xfeff) {
+    dim.findings.push(
+      `local_yaml_bom: local.yaml 含 UTF-8 BOM——PS5.1 写文件常见（-Encoding UTF8 恒写 BOM）；` +
+      `YAML 解析器多可容忍，但定向行扫描 reader 与 PowerShell 工具链易致盲。` +
+      `修复：node -e "const fs=require('fs');const p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/^\\uFEFF/,''))" ${p}`
+    );
+  }
+  try {
+    jsYaml.load(text);
+  } catch (e) {
+    dim.findings.push(
+      `local_yaml_unparsable: local.yaml YAML 解析失败（${String(e && e.message ? e.message : e).split('\n')[0]}）——` +
+      `commands/known_failures/门禁等全部 reader 对坏文件 fail-open 或降级，后续 gate 行为不可信` +
+      `（dsh z2 实证：手改炸文件后 doctor 失明，人工恢复耗时 2h13m）。` +
+      `修复：从备份/git 历史恢复或按 sillyspec config schema 重建；known_failures 键改用 ` +
+      `sillyspec config known-failures add/remove 管理（坏文件上该命令拒改并给指引）`
+    );
+    dim.safe_actions.push({
+      dimension: 'local_yaml_integrity',
+      action: 'restore_local_yaml',
+      target: p,
+      risk: 'confirm_required',
+      rationale: '坏配置是所有门的输运层——文件不可解析时任何 reader 行为都不可信，必须先恢复再谈其他',
+      next_step: `从备份/git 历史恢复或重建 ${p}，然后 sillyspec config known-failures list 校验`,
+    });
+  }
+  return dim;
+}
+
 function detectRepoNativeChain(cwd, pointer) {
   const dim = {
     name: 'repo_native_chain',
@@ -1606,7 +1659,10 @@ export async function runDoctorDiagnostics({ cwd }) {
   } catch { gateLeakRuntimeRoot = null }
   const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
   const knowledgeGraphIntegrity = detectKnowledgeGraphIntegrity(cwd, authoritySpecDir || join(cwd, '.sillyspec'))
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity];
+  // FR-07（2026-10-21-p0-p1-hardening / dsh z2 实证）：local.yaml 完整性——此前 doctor 对
+  // mojibake 坏文件完全失明（agent 手改炸文件后 doctor 报一堆别项零提示，等用户人工恢复 2h13m）
+  const localYamlIntegrity = detectLocalYamlIntegrity(cwd);
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, crossWorktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak, knowledgeGraphIntegrity, localYamlIntegrity];
 
   return {
     dimensions,
