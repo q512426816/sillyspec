@@ -1228,6 +1228,29 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       printVerifyTestCheck(testCheck)
       _obsJournal('green-cache', true, null)
     } else {
+      // ── 失败签名复用（2026-10-21-verify-reuse-large-repo FR-03）：真跑前先咨询上次失败──
+      // 同签名（代码指纹×豁免面×快照口径全等）+ 30min 窗口内 → 不重跑，合成 failed 照常阻断
+      // （dsh 0ff6f1c8 取证：文档门修复循环里每轮 --done 都整轮重测同签名失败 10~13.5 分钟）。
+      // fail-closed：任一判据不可得/失配/TTL 过期 → 照旧真跑。RERUN 逃生阀与 noAI 闸同阀对称。
+      let _failedReuse = null
+      try {
+        const { consultFailedScanReuse, synthesizeReusedFailedCheck } = await import('./verify-quality-scan.js')
+        const consult = consultFailedScanReuse({
+          specBase, cwd, changeName,
+          plannedSnapshot: Boolean(verifyGateSnap),
+          forceRerun: Boolean(process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN),
+        })
+        if (consult.reuse) _failedReuse = synthesizeReusedFailedCheck(consult.record)
+        else if (consult.reason && consult.reason !== 'no-failed-record') {
+          _obsJournal('quality-scan-failed', false, consult.reason)
+        }
+      } catch { /* 咨询异常 → 真跑（复用是优化不是正确性依赖） */ }
+      if (_failedReuse) {
+        testCheck = _failedReuse
+        console.log(`\n♻️ Verify 测试对账：失败签名复用——上次实测 failed 且签名未变，免重跑（阻断照常，出路见下）`)
+        printVerifyTestCheck(testCheck)
+        _obsJournal('quality-scan-failed', true, null)
+      } else {
       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
       // restrictFiles 接线（2026-09-26-verify-gate-restrictfiles，评审 P2 留痕缺口的清偿）：
@@ -1288,6 +1311,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           }
         }
       } catch { /* auto-bind fail-soft */ }
+      } // 失败签名复用分支到此为止——下方记账层对 failed 复用结果是 no-op（passed 守卫）
       // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
       if (!traceHasActiveRows) {
       try {

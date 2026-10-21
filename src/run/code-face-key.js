@@ -24,7 +24,10 @@ import { createHash } from 'node:crypto';
 
 function safeGit(cwd, args) {
   try {
-    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true });
+    // maxBuffer：execFileSync 默认 1MB，ls-tree -r -z 大仓输出必超（multi-agent-platform 1.95MB /
+    // 本仓 1.76MB，dsh 0ff6f1c8 取证）——ENOBUFS 被 catch 吞成 null 曾让指纹/dedupKey/passedKey
+    // 全链失效、verify 同码态全量实测 6×10~13.5min。256MB 对齐 git-helper GIT_MAX_BUFFER 口径。
+    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, maxBuffer: 256 * 1024 * 1024, windowsHide: true });
   } catch {
     return null;
   }

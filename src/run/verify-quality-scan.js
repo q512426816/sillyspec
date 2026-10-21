@@ -318,6 +318,57 @@ export function shouldReuseLastPassedScan({ lastRecord, currentPassedKey, planne
 }
 
 /**
+ * 收口门/gate verify 的失败签名复用咨询（2026-10-21-verify-reuse-large-repo FR-03）。
+ * 包装既有三件（loadLastQualityScanRecord + computeQualityScanDedupKey +
+ * shouldReuseLastFailedScan），供 gates.js 实测 else 分支与 machine-interface verify-test
+ * facet 在真跑前调用：上次 failed 且失败签名未变 → 不重跑，消费侧合成 failed 结果照常阻断
+ * （dsh 0ff6f1c8 取证：同签名失败在收口门前被完整重跑，每轮 10~13.5 分钟）。
+ *
+ * 与 noAI 步内 shouldReuseLastFailedScan 的两点刻意差异：
+ *   1. TTL（缺省 30min，对齐 green-cache 窗口）——dedupKey 不含测试面，agent 手动补测试
+ *      绑定后面漂移（记录面 X，本轮应跑面 X+Δ）在 noAI 步由「步骤不推进」自兜底，收口门
+ *      复用会把旧面失败压到新面收口上，窗口须有界；
+ *   2. RERUN 逃生阀由消费侧透传 forceRerun（与 noAI 失败签名闸同阀对称——环境确已修好等
+ *      场景不因复用层锁死）。
+ * fail-closed：任一判据不可得/失配 → { reuse: false, reason }，消费侧照旧真跑。
+ */
+export function consultFailedScanReuse({ specBase, cwd, changeName, plannedSnapshot, maxAgeMs = 30 * 60 * 1000, forceRerun = false, now = Date.now() }) {
+  const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
+  const verdict = shouldReuseLastFailedScan({
+    lastRecord,
+    currentDedupKey: computeQualityScanDedupKey({ cwd, specBase }),
+    plannedSnapshot,
+    forceRerun,
+  })
+  if (!verdict.reuse) return { reuse: false, reason: verdict.reason, record: null }
+  if (maxAgeMs != null) {
+    const ranAtMs = Date.parse(lastRecord.ranAt || '')
+    if (!Number.isFinite(ranAtMs) || now - ranAtMs > maxAgeMs) {
+      return { reuse: false, reason: `ttl-expired（上次实测 ${lastRecord.ranAt || '未知时间'} 超 ${Math.round(maxAgeMs / 60000)}min 窗口——面漂移防护，照旧真跑）`, record: null }
+    }
+  }
+  return { reuse: true, reason: null, record: lastRecord }
+}
+
+/** consultFailedScanReuse 命中后的合成 testCheck（消费侧共用——披露统一、字段齐全） */
+export function synthesizeReusedFailedCheck(record) {
+  const t = (record && record.testResult) || {}
+  return {
+    status: 'failed',
+    reason: `♻️ 复用上次失败实测（失败签名未变：代码指纹/豁免面/快照口径全等${record && record.ranAt ? `，实测于 ${record.ranAt}` : ''}，免重跑）——${(t.reason || '测试失败').split('\n')[0]}。出路：① 修代码 ② 补 known_failures 豁免（均即失配自动重测）③ 环境确已修好：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针入失败签名，环境真变即放行）④ 无条件重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force`,
+    command: `${t.command || 'commands.test'} (failed-scan-reuse)`,
+    exitCode: typeof t.exitCode === 'number' ? t.exitCode : 1,
+    durationMs: 0,
+    outputTail: t.outputTail || null,
+    resultPath: t.resultPath || null,
+    strategy: t.strategy || null,
+    failureRemaining: t.failureRemaining || t.failure_remaining || null,
+    failureExempted: t.failureExempted || t.failure_exempted || null,
+    reusedFromRecord: true,
+  }
+}
+
+/**
  * 伪影分诊编排（ql-20260920-010 修复一 a）：测试失败 → classify 分类 → 命中且本次是
  * 快照口径 → 主树口径单点复跑对照。复跑过 = 伪影坐实：返回主树结果 + artifactTriage
  * 证据（放行有据，disclosure 走 console + 台账，不改 passed.reason 语义）；复跑仍挂 =

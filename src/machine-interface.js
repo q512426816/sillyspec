@@ -352,9 +352,24 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
       let greenRoot = null;
       try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
-      const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
-        () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
-        (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
+      // 失败签名复用（2026-10-21-verify-reuse-large-repo FR-03）：真跑前咨询上次质量扫描失败——
+      // 同签名（代码指纹×豁免面）+ 快照口径一致（CLI 门主仓口径跑，plannedSnapshot=false）+
+      // 30min 窗口 → 不重跑，合成 failed（♻️ 披露 + 四出路）照常进 check not-ok 语义。
+      // gate verify 预检每轮整跑同签名失败 10~13.5 分钟的浪费由此消除（dsh 0ff6f1c8 取证）。
+      let vt = null;
+      try {
+        const { consultFailedScanReuse, synthesizeReusedFailedCheck } = await import('./run/verify-quality-scan.js');
+        const consult = consultFailedScanReuse({
+          specBase: specRoot, cwd, changeName, plannedSnapshot: false,
+          forceRerun: Boolean(process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN),
+        });
+        if (consult.reuse) vt = synthesizeReusedFailedCheck(consult.record);
+      } catch { /* 咨询异常 → 照旧 green-cache/真跑 */ }
+      if (vt == null) {
+        vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
+          () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
+          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
+      }
       const vtWarnings = [];
       if (vt.cached) vtWarnings.push(vt.reason);
       if (vt.status === 'skipped') {

@@ -1815,7 +1815,7 @@ export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
     const now = new Date().toLocaleString('zh-CN', { hour12: false })
     let aligned = 0
     for (const step of steps) {
-      if (step.status === 'pending' || s_status_pending(step)) {
+      if (step.status === 'pending' || step.status === 'in-progress') {
         step.status = 'completed'
         step.completedAt = now
         step._batchAligned = true // 乐观预标戳：gate 失败 rollback 一并回滚（execute 同款）
