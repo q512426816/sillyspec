@@ -54,6 +54,7 @@ modules:
       - src/spec-dir-typo.js
       - src/change-delete.js
       - src/config-cat.js
+      - src/config-known-failures.js
       - src/local-register.js
       - src/commit-suggest.js
       - src/flow.js
@@ -222,6 +223,7 @@ modules:
       - src/write-audit.js
       - src/commit-guard.js
       - src/watcher.js
+      - src/spawn-settle.js
       - src/sentinel-assertions.js
       - src/timeline.js
       - src/route-hindsight.js

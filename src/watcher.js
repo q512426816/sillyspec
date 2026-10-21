@@ -904,6 +904,10 @@ export async function spawnWatcher(cwd, changeName, opts = {}) {
       env: childEnv,
     });
     child.unref?.();
+    // 孵化稳定化（FR-08 / dsh 实证 libuv 退出断言）：等 spawn 事件落定（≤150ms 兜底）再放行，
+    // 压掉「父进程在子进程句柄建立中途退出」的崩溃竞态窗口。
+    const { awaitSpawnSettled } = await import('./spawn-settle.js');
+    await awaitSpawnSettled(child);
   } finally {
     if (logFd !== null) {
       try { closeSync(logFd); } catch { /* 父侧 fd 副本关闭；子进程持有继承副本 */ }
