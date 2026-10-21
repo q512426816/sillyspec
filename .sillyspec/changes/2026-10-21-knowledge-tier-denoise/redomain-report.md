@@ -1,0 +1,268 @@
+# unmapped 停车场存量清偿报告（2026-10-21-knowledge-tier-denoise FR-04）
+
+执行前存量：decisions/unmapped.md 443 条；fr/unmapped.md 633 条
+
+## decisions 面 dry-run 计划
+
+- 总条目 443；可迁移 408 条（17 个目标域）；残量 35 条（宁漏勿错，不裸删）
+- 目标域分组：daemon=29、backend=40、frontend=40、core-engine=77、cli-entry=110、runtime=20、stages=4、docs=24、sync=10、setup=4、docs-consistency=8、change-management=4、skills-docs=6、worktree=9、progress=3、release=14、eval=6
+- 残量原因分布：{"无文件锚/锚点路径且无来源变更":7,"锚点无路径且来源覆盖面不命中任何模块":28}
+- 残量清单（id · 标题 · 原因）：
+  - D-unmapped-002@v1 · : 平台共享智能体绑定的守护进程取管理员自己名下 · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-003@v2 · : 平台共享智能体会话——源码只读 + 指定目录可写 · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-004@v2 · : 共享机器/智能体由用户在会话中显式选择 · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-005@v1 · : 实现方案选 B——统一授权表 daemon_runtime_grants · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-006@v1 · : 打破 daemon 零改动 Non-Goal——session 级 overlay roots 写守卫增量（spik · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-007@v1 · : platform grant 的 pinned runtime 不经共享档案直接钉定 → 404 · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-022@v1 · : 缓存范围 = has_permission + data_scope 一并覆盖 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-023@v2 · : 失效策略 = 整体清空 + 失效失败 ERROR 告警(supersedes D-002@v1) · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-024@v2 · : 缓存粒度 = 拆键 platform/all/workspace + everywhere 内存并集(superse · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-025@v1 · : 无 Redis 降级 = 回退查 DB(不加本地兜底) · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-026@v1 · : ppm-scope uuid 反序列化保证类型 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-027@v1 · : WorkspaceService.create 失效点补全 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-049@v1 · : 方案 A——daemon 消费 SDK task_* + agent_task_status SSE 通道扩展 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-050@v1 · : 生命周期双写——SSE 事件 + [TASK_*] 持久日志行 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-051@v1 · : 跨轮归位在 backend 落库时做（submit_messages 重映射 run_id） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-052@v1 · : 空 prompt 防御——后端 422 为主，前端禁点为辅 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-066@v1 · : 注入通道选前导拼接，不动 system_prompt 与 daemon · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-067@v1 · : 仅首轮注入 + 覆盖重派重渲染路径；后续轮次与服务身份注入不带 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-068@v2 · : 不加 Role 字段，角色名称直接给 agent 自行判断沟通风格 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-069@v1 · : SillySpec 工具规则条件注入（工作区根存在 .sillyspec/ 才拼） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-070@v1 · : batch（批量任务）路径本期不注入 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-071@v1 · : 整体方案选 A（后端前导拼接 + Role 受众字段），否决 B（纯 prompt 猜测）与 C（system_pr · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-078@v1 · : 缺口①触发形态 — 心跳恢复事件触发 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-079@v1 · : 下载校验口径 — 零子进程 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-080@v1 · : respawn 最后防线 — 不退出保活 · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-081@v1 · : respawn 前校验提前到 stop 之前（主拦截点） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-084@v1 · : PPM 个人工作台头像维持首字占位（用户头像功能非目标） · 无文件锚/锚点路径且无来源变更
+  - D-unmapped-138@v1 · 维持 R-01 接受不修代码，文档登记观察项（方案 A） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-173@v1 · 风险与死路（design 槽4 收割） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-177@v1 · 风险与死路（design 槽4 收割） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-218@v1 · 风险与死路（design 槽4 收割） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-309@v1 · 风险与死路（design 槽4 收割） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-381@v1 · 风险与死路（design 槽4 收割） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-430@v1 · 设计期风险与放弃方案（底稿） · 锚点无路径且来源覆盖面不命中任何模块
+  - D-unmapped-438@v1 · 设计期风险与放弃方案（底稿） · 锚点无路径且来源覆盖面不命中任何模块
+
+## fr 面 dry-run 计划
+
+- 总条目 633；可迁移 423 条（8 个目标域）；残量 210 条（宁漏勿错，不裸删）
+- 目标域分组：backend=198、frontend=166、daemon=5、agent=6、ppm=23、core-engine=14、sync=3、runtime=8
+- 残量原因分布：{"来源变更覆盖面不命中任何模块":210}
+- 残量清单（id · 标题 · 原因）：
+  - FR-unmapped-001 · 普通项目可创建 Workspace · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-002 · 平台托管规范空间 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-003 · Agent Spec Profile · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-004 · 规范冲突策略 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-005 · Claude Code Agent 接入 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-006 · Agent 类型一致性 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-007 · 规范文件独立存储 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-008 · SillySpec CLI 作为 Agent 工具 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-009 · SpecValidator 程序验证 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-010 · Agent stdout 逐行流式发布 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-011 · SSE 实时日志端点 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-012 · 前端实时日志消费 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-013 · DB 日志持久化不受影响 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-014 · Workspace 吸收 Component 元数据 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-015 · 移除旧 Component 核心数据面 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-016 · 创建 WorkspaceRelation · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-017 · 支持循环依赖图 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-018 · Change 支持多 Workspace · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-019 · Task 支持多 Workspace · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-020 · AgentRun 支持多 Workspace · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-021 · AgentSpecBundle 基于 Workspace Graph 构建 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-022 · 全局拓扑 API · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-023 · 后续独立变更包边界 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-024 · Router 统一挂载 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-025 · Workflow 状态流转 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-026 · Spec Guardian 门禁 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-027 · Policy 校验 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-028 · AuditLog · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-029 · 创建 candidate · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-030 · Reviewer 确认 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-031 · 验证和推广 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-032 · 废弃 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-033 · 查询过滤 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-034 · runtime 注册 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-035 · heartbeat · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-036 · claim task · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-037 · 隔离执行环境 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-038 · 消息流上报 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-039 · 执行完成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-040 · 创建沙箱 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-041 · 文件快照 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-042 · 执行任务 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-043 · 导出结果 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-044 · 清理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-045 · 普通 repo 注册 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-046 · 导入已有规范 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-047 · 规范同步 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-048 · 规范校验 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-049 · Kill 运行中的 Agent · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-050 · Diff 收集 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-051 · 进程注册表 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-052 · Stale Run 清理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-053 · Allowed Paths 隔离 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-054 · 输出脱敏 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-055 · 前端 Agent Run 列表页 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-056 · 前端 Agent Run 详情页 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-057 · 前端 SSE 日志流 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-058 · tasks.md 模板生成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-059 · verification.md 模板生成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-060 · MASTER.md 格式增强 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-061 · batch-generate 传递 lease_id · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-062 · Git 提交并推送 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-063 · 创建 Pull Request · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-064 · PAT 安全处理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-065 · 幂等创建（idempotency_key） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-066 · 执行恢复（resume_token） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-067 · 进度快照（checkpoint） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-068 · 乐观锁（optimistic_lock） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-069 · 审批门（approval_token） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-070 · 上下文一致性（context_fingerprint） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-071 · 重试控制 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-072 · ToolPolicy CRUD · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-073 · AgentRun 关联 ToolPolicy · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-074 · 策略校验 — 工具白名单 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-075 · 策略校验 — 路径限制 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-076 · 策略校验 — shell 命令黑名单 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-077 · 策略校验 — 资源限制 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-078 · run_tests 工具 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-079 · http_get 工具 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-080 · 审计双写 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-081 · spec-bootstrap 创建异步 AgentRun · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-082 · bootstrap 通过 ClaudeCodeAdapter 执行 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-083 · Agent 执行 init + scan + 验证 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-084 · Workspace 页面实时展示消息流 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-085 · 双入口用户确认/指导 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-086 · 后端 SSE 支持续传参数 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-087 · SSE 事件携带 log_id · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-088 · AgentRunStreamClient 连接管理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-089 · 断线自动重连 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-090 · 断线日志回填 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-091 · log_id 去重 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-092 · Workspace 详情页集成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-093 · 生成项目规范统一为 Bootstrap 流程并跳转详情页 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-094 · 进入详情页自动检测并恢复进行中的 Bootstrap 回显 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-095 · Bootstrap 执行期间防止重复触发 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-096 · Bootstrap 成功后自动创建子组件 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-097 · 完成后详情页刷新子组件计数 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-098 · Gate 时机修正 — transition 时 gate=none · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-099 · complete_stage 统一入口 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-100 · rerun_stage 同阶段重跑 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-101 · verify→propose 回退边 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-102 · proposal-review 修正 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-103 · plan-review 修正 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-104 · human-test 修正 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-105 · archive-confirm API · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-106 · 前端 Gate 面板 comment · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-107 · 归档确认按钮修正 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-108 · 清理旧 UI 残留 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-109 · 日志区域宽度自适应 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-110 · 长日志行显示 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-111 · 小屏兼容 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-112 · 日志块内水平滚动 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-113 · 页面无 X 轴滚动条 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-114 · 日志内容完整性 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-115 · 现有功能不受影响 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-127 · 守护进程注册 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-128 · 任务认领 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-129 · 任务执行 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-130 · 心跳续期 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-131 · 进度报告 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-132 · 任务完成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-133 · 运行时管理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-134 · 运行位置选择 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-135 · 优雅降级 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-136 · 密钥隔离 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-137 · Platform Admin 权限校验 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-138 · 安全保护 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-139 · 用户列表增强 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-140 · 用户详情 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-141 · 管理员重置密码 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-142 · 审计日志 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-207 · 统一调度入口 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-208 · 废弃子进程直跑路径 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-209 · CLAUDE.md 不被覆盖 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-210 · 阶段配置完整 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-211 · AgentSpecBundle 含阶段上下文 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-212 · 状态同步 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-213 · 三字段边界 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-214 · 工作目录正确 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-215 · Transition Response Model · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-216 · 测试覆盖 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-236 · Codex runtime 创建 interactive session · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-237 · Codex 支持同一 session 多轮对话 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-238 · Codex 支持运行中 interrupt · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-239 · Codex 输出进入现有日志与 SSE · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-240 · Codex session 支持 end 与历史回看 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-241 · Codex 支持 reopen 与 daemon recovery · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-242 · frontend Codex runtime 不走 quick-chat · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-243 · Codex 普通 approval 策略与 Claude Code 一致 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-244 · Codex 用户输入请求复用现有 dialog 卡片 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-245 · Claude Code interactive 行为不回退 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-425 · TaskExecute 支持 file_urls 字段 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-426 · 计划任务执行填报上传附件（按天） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-427 · 问题执行填报上传附件（按天） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-428 · 执行记录表回显附件 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-429 · 跨天填报每天各自附件 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-647 · daemon 消费 SDK 任务生命周期消息（D-001@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-648 · 异步启动回执解析兜底（D-001@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-649 · [TASK_*] 持久日志行（D-002@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-650 · backend 事件 schema 扩展与透传（D-001@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-651 · 子代理日志跨轮归位（D-003@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-652 · 后台卡片全生命周期展示（D-005@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-653 · 子代理目录与会话块异步感知（D-005@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-654 · 空 prompt 注入防御（D-004@v1） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-655 · spike 验证 SDK 运行时发射（R-01） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-656 · Playwright 基础设施 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-657 · 测试身份与数据准备 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-658 · API 登录与会话注入 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-659 · 真实 UI 登录链路用例（auth.spec） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-660 · 导航冒烟用例（navigation.spec） · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-661 · 本机运行文档与凭据卫生 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-662 · CI e2e job · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-663 · 双测试栈隔离与类型覆盖 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-664 · 依赖清理 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-665 · sillyspec 版本显示 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-666 · 手动远程升级 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-667 · 升级过程可见 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-668 · 运行期自动定期升级 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-669 · 数据链与兼容 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-670 · 统一 current_stage 枚举 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-671 · 新增 human_gate 字段 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-672 · 旧数据迁移 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-673 · Agent 驱动流转规则 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-674 · propose 文档确认 Gate · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-675 · proposal-review API · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-676 · plan 文档确认 Gate · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-677 · plan-review API · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-678 · execute 完成自动 verify · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-679 · verify 自动修复闭环 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-680 · human-test API · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-681 · 前端按 gate 渲染交互 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-682 · 简化新建变更 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-683 · 归档 Gate · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-684 · 创建变更 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-685 · 变更列表展示阶段 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-686 · 启动变更执行 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-687 · 实时进度展示 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-688 · 查看变更文档 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-689 · 变更执行完成 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-690 · 创建变更自动进入 clarifying 阶段 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-691 · 状态机转换必须遵循合法转换规则 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-692 · Agent 仅在 ready_for_dev 阶段可启动执行 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-693 · 业务验收必须选择反馈分类 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-694 · 归档必须通过 6 项门禁检查 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-695 · 旧数据兼容迁移 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-696 · 配置 spec_data_root · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-697 · 补建 spec_workspaces 记录 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-698 · 迁移已有 scan 文档 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-699 · ScanDocsService 从 spec_root 读取 · 来源变更覆盖面不命中任何模块
+  - FR-unmapped-714 · 现有测试不回归 · 来源变更覆盖面不命中任何模块
+
+## apply 结果
+
+- decisions 面：迁移 408 条（{"daemon":29,"backend":40,"frontend":40,"core-engine":77,"cli-entry":110,"runtime":20,"stages":4,"docs":24,"sync":10,"setup":4,"docs-consistency":8,"change-management":4,"skills-docs":6,"worktree":9,"progress":3,"release":14,"eval":6}）；冲突跳过 0；组错误 0
+- fr 面：迁移 423 条（{"backend":198,"frontend":166,"daemon":5,"agent":6,"ppm":23,"core-engine":14,"sync":3,"runtime":8}）；冲突跳过 0；组错误 0
+- 执行后存量：decisions/unmapped.md 35 条（前 443）；fr/unmapped.md 210 条（前 633）

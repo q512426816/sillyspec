@@ -14,18 +14,25 @@ import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { splitKnowledgeSections, discoverModuleIndex } from './decision-distill.js'
 import { matchedModuleIds, frCoverageFiles, FR_SECTION_RE } from './fr-index.js'
+import { anchorFilePaths } from './knowledge-match.js'
 import { redomainDecisionEntries, sectionMeta } from './decision-redomain.js'
 import { redomainFrEntries } from './redomain.js'
 
 const DECISION_FILE_LINE_RE = /^文件[：:]\s*(.+)$/
+const DECISION_ANCHOR_LINE_RE = /^锚点[：:]\s*(.*)$/
 const FR_HEADER_RE = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/
 
-/** 决策段「文件：」行集 → 路径数组（多行容错；split 口径与 knowledge-match splitDecisionFiles 对齐）。 */
+/** 决策段 → 路径数组：双源——「文件：」行集（显式字段）∪「锚点：」行 anchorFilePaths 路径
+ *  提取（本仓实证 443 条全走锚点源：distill 的 文件： 字段极少发射，锚点是标准兜底
+ *  命中源——与 knowledge-match/knowledge-graph 的 anchors 边同判法）。 */
 function filesFromDecisionSection(lines) {
   const out = []
   for (const l of lines) {
-    const m = String(l || '').match(DECISION_FILE_LINE_RE)
+    const line = String(l || '')
+    const m = line.match(DECISION_FILE_LINE_RE)
     if (m) out.push(...String(m[1]).split(/[,，、\s]+/).map((s) => s.replace(/\\/g, '/')).filter(Boolean))
+    const a = line.match(DECISION_ANCHOR_LINE_RE)
+    if (a) out.push(...anchorFilePaths(a[1]))
   }
   return out
 }
@@ -50,7 +57,7 @@ function voteDomain(files, moduleIndex) {
   return [...tally.entries()].sort((a, b) => (b[1] - a[1]) || (a[0] < b[0] ? -1 : 1))[0][0]
 }
 
-function planDecisionsFace(knowledgeRoot, moduleIndex) {
+function planDecisionsFace(knowledgeRoot, archiveRoot, moduleIndex) {
   const fromPath = join(knowledgeRoot, 'decisions', 'unmapped.md')
   if (!existsSync(fromPath)) return { absent: true, groups: [], leftover: [] }
   const parsed = splitKnowledgeSections(readFileSync(fromPath, 'utf8'))
@@ -59,10 +66,20 @@ function planDecisionsFace(knowledgeRoot, moduleIndex) {
   for (const s of parsed.sections) {
     const meta = sectionMeta(s)
     if (!meta) continue
+    // 三源：文件： 行 ∪ 锚点路径（显式锚优先）→ 都不中再走来源变更覆盖面（fr 面同款——
+    // 本仓实证 417/443 锚点「未记录」，436/443 有「变更：」行，覆盖面是主力推断源）
     const files = filesFromDecisionSection(s.lines)
-    const domain = files.length > 0 ? voteDomain(files, moduleIndex) : null
+    const change = changeFromSection(s.lines)
+    let domain = files.length > 0 ? voteDomain(files, moduleIndex) : null
+    if (!domain && change) {
+      const cov = [...frCoverageFiles({ archiveRoot, changeName: change })]
+      if (cov.length > 0) domain = voteDomain(cov, moduleIndex)
+    }
     if (!domain) {
-      leftover.push({ id: meta.id, title: meta.title, reason: files.length === 0 ? '无文件锚' : '锚不命中任何模块' })
+      const reason = files.length === 0
+        ? (change ? '锚点无路径且来源覆盖面不命中任何模块' : '无文件锚/锚点路径且无来源变更')
+        : '锚不命中任何模块'
+      leftover.push({ id: meta.id, title: meta.title, reason })
       continue
     }
     if (!groups.has(domain)) groups.set(domain, [])
@@ -111,7 +128,7 @@ function planFrFace(knowledgeRoot, archiveRoot, moduleIndex) {
 export function planUnmappedRedomain({ knowledgeRoot, archiveRoot }) {
   const moduleIndex = discoverModuleIndex(knowledgeRoot) || { modules: {} }
   return {
-    decisions: planDecisionsFace(knowledgeRoot, moduleIndex),
+    decisions: planDecisionsFace(knowledgeRoot, archiveRoot, moduleIndex),
     fr: planFrFace(knowledgeRoot, archiveRoot, moduleIndex),
   }
 }

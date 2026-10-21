@@ -368,3 +368,163 @@ supersedes：D-004@v1
 理由：放 src/run/shared.js export（readStageBurst 旁）：渲染门（stage.js renderStageBurst）与完成门（command.js 两处 --done 分发）共用同一常量，防两处字面量漂移。执行期越界披露：该裁决使 task-03 提交含 stage.js import 行切换与 shared.js 常量 export（两文件原属 task-01/02 的 allowed_paths）——非破坏性、可逆、不推翻任何 D，属主代理直写模式歧义裁决条款范围。
 故障面：无（常量单一源）。
 退役判据：无。
+
+## D-unmapped-151@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-verify-gate-restrictfiles
+原编号：D-001@v1
+锚点：未记录
+最近确认：bf1d0f2db9ee166f83ef1cce9f4c8cdc07c1a715
+理由：最大风险=restrictFiles 收窄后模块选择漏测（文件面解析错变更文件→选错模块子集）——与 quick 门同函数同风险面，quick 侧长期实证可接受；空清单防御分支保住「宁全量不假 skip」的 fail-closed 底线。死路：空清单也传（restrict []）——正是本变更要修的假 skip 形态的反面制造，弃。
+
+## D-unmapped-163@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-full-autopilot-parity
+原编号：D-001@v1
+锚点：未记录
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+理由：最大风险=auto-tick 的近 20 提交窗口可能捕到其他变更的 task token（多 agent 共享仓）——窗口缩小到 run 范围更精确但 runId 解析复杂度高；20 窗口是 pragmatic 平衡，误勾由 checkExecuteCodeEvidence 兜底。auto-bind 的 test-result 路径在平台模式（runtime 分离根）可能读不到——fail-soft 跳过不阻断，与 thin 同风险面。死路：GWT 预填直接迁移（用 input 文本推导 full 的 FR）——full 的 requirements 来自对话演化，input 只是起点；直接迁移会产出生成式填空题质量低于 thin（无对话上下文），弃。
+
+## D-unmapped-165@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-gate-face-binding-parity
+原编号：D-001@v1
+锚点：未记录
+最近确认：978beb6e8799b986d5a63c7ce2b8a10fa12c17aa
+理由：最大风险：faceOverride 旁路了快照 diff 的二次校验——若调用方面过声明（含未真改文件），动态子集可能多跑（宁多勿漏，方向安全）；权威面上游已过 foreign 归因收窄（splitOwnVsForeignDiffFiles），过声明面受双保险。次风险：brainstorm --done 追加槽改变 full 流程 requirements 形态，下游消费者（索引/对账）按 AGENT 槽注释扫描——槽是注释面不进指纹，verifyFlowDrafts 不校验 full 侧。放弃方案：快照锚 baseline commit（改 createGateSnapshot 全局面，波及 verify 门与 quick 通道）——影响面大且 thin 权威面已现成，不值。
+
+## D-unmapped-180@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：roadmap-copy-purge
+原编号：D-001@v1
+锚点：未记录
+最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8
+理由：最大风险：误判「无消费」——已全源码 grep 复核（ROADMAP 在 src/ 共 8 处：worktree.js×2 注释、complete-handlers×2 lite 豁免措辞、next.js×2 绿地探测、archive.js×1 条件指令、status.js×1 cat），无任何写侧、无条件不成立的读侧；.claude/skills 两处文案提及（archive 描述「+ 更新 ROADMAP」、explore cat 行）属提示面非行为面，文件缺席后自失活，留待后续产品级变更一并出清（不在本次批准面）。放弃的方案：保留但机器化维护—— lite/thin 归档豁免使其永远缺主力通道数据，且三套真源已覆盖，不值得维护。
+
+## D-unmapped-182@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-flow-date-gate
+原编号：D-001@v1
+锚点：未记录
+最近确认：31d2f81eb57cd7385ccff82207f9717fcf42c806
+理由：最大风险：既有 ~46 处 flow start 测试调用点用非日期名（fc-1 / flow-h2-t1 / sw-fake 等），过门后假红——逐文件把名字适配为日期前缀形态（固定 2026-09-01- 前缀，日期不验当天）。次风险：报错文案被测试断言（validateChangeName 非法名用例仍先触发、文案不变）。试过放弃：自动补前缀（名字漂移见槽1）；门放 cmdFlowStart 内部（会拦 mcp/平台工具直调与库调用，违背「门只在 CLI 边界」既定决策）。
+
+## D-unmapped-183@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-split-guard-and-gate-report
+原编号：D-001@v1
+锚点：未记录
+最近确认：0380b797dc3fadebcfaeb3e51366083aa5989fd4
+理由：最大风险：谓词词表漏词导致该拆的不拆（标准粒度变粗）——保守方向（不拆优于误拆，误拆需人工重写 FR，不拆只是粒度粗），词表可增量扩。放弃方案：取消斜杠拆分（推翻 2026-09-25 刻意决策且有测试锁定——评审否决）；全仓 env 白名单清洗（Windows 砍系统变量风险，归 P1 变更处理）。
+
+## D-unmapped-196@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-knowledge-gate-denoise
+原编号：D-001@v1
+锚点：未记录
+最近确认：1217e82b1b9a53594b9b0e41fdfc08a990eff6cf
+理由：风险：① 零分过滤可能压掉「标题与查询零重叠但语义相关」的真 rejected——防复潮面本就靠词面路由，标题零重叠即零证据，可接受（宁少勿噪，与狼来了面取舍一致）；② 已回应静默的共现判据有误静默面（正文恰含同 id＋域名但非回应语境）——误静默有界：仅损失门 warn 信号（flow 注入段与 {DECISION_HITS} 两面不套用静默，冗余在场；正文 token 变动后自然恢复）；③ score 透出让消费方各取所需，若未来消费方误当阈值语义用需文档化。退役判据=噪音投诉消失后若出现「真命中被漏弹」实证，回退为仅死路优先。
+
+## D-unmapped-213@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-30-quality-scan-passed-idempotent
+原编号：D-001@v1
+锚点：未记录
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+理由：最大风险：幂等闸吞真实重测需求。三层防线：①passedKey 内容敏感（dedupKey 的文件集口径对同文件未提交修改是盲的——开发中被既有 noAI 动作测试当场抓住：fixture 同文件翻转失败版，dedupKey 全等闸误命中；内容键正是为此存在，测试第五轮钉死）②lint failed 记录不入闸（保 lint 阻断发声）③RERUN=1/force 逃生阀与失败闸同阀。已放弃方案：a) 闸键直接用 dedupKey——同文件未提交内容修改盲区会吞真实代码修改（实证如上），弃；b) 闸键用 rerunSignature——其内容敏感面只覆盖 test/ 目录（computeTestFaceDigest(join(cwd,'test'))），仓根/子目录源文件同文件修改仍盲，弃；c) execute 侧复用 loadReusableQualityScan（--done 读侧）——它只校验 fingerprint（文件集口径），同盲区，弃。已知残留：git() 缺省 trim 吃 porcelain 首行前导空格是既有全局行为（影响所有经 porcelainCodeLines 的路径解析首行），本变更只在自己调用点传 trim:false 修正，未动 git-helper 公共行为（影响面大，若修应独立变更）。
+
+## D-unmapped-214@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-30-snapshot-symlink-store-subdir
+原编号：D-001@v1
+锚点：未记录
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+理由：最大风险：误报面扩大——子目录有 bun.lock 但根是标准 npm 且快照本可用 → 被跳快照回主仓（牺牲隔离性换布局安全）。裁决为可接受：与既有「宁可主仓口径」同向（本仓 sillyspec 自身即 pnpm 根判据跳快照运行，主仓口径+污染归属鉴定兜底是已验证形态）；且 apps 型子目录 lockfile 意味着该 app 的 node_modules 符号链接网在 junction 快照内跨根失效，跳过是正确方向。已放弃方案：a) 递归扫两层——packages/* workspace 型 lockfile 在根、一层已覆盖 apps 型，递归徒增误报面与 I/O，弃；b) 探测 node_modules/.pnpm 目录存在性代替 lockfile——node_modules 是 gitignored 可变面（装/卸依赖瞬时态），lockfile 是 tracked 稳定判据，弃。残留边界：子目录仅 yarn（无 pnpm/bun/lerna 判据）不命中——yarn classic 无 symlink store 坑（PnP 另算），维持现状。
+
+## D-unmapped-232@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-05-guidance-consistency
+原编号：D-001@v1
+锚点：未记录
+最近确认：7d5e3de151ca53ff4b4ed2d6a185e510347bf8df
+理由：最大风险：AGENTS.md 格式要点若与 flow start 格式门未来演进不同步会变成第二份漂移文档——以「要点级」而非「全文复制」表述（只写行形态不复制报错全文），漂移面最小化。放弃的方案：把格式说明同时写进 flow start 的 --help 输出（入口更近）——该输出文案在 flow.js（并行会话在途），本轮不可触碰；AGENTS.md 已是可动的最近入口，help 面留给在途落盘后。
+
+## D-unmapped-249@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-agent-log-detect-hint
+原编号：D-001@v1
+锚点：未记录
+最近确认：a39154be47e8c14fb3b00b2935218208c46400fb
+理由：最大风险：展示名映射 HARNESS_DISPLAY_NAMES 成为新的次要漂移点（新 harness 忘加映射→展示退化为 name 原样）。已用缺省回退消解——退化形态仍含全部家数，只是不美化，且测试遍历断言按「映射名或 name 原样」命中，两种形态都受覆盖。 试过放弃：① 仅更新硬编码文案为 8 家——不解决根因，注册表再扩仍漂移，放弃；② 提示全部用 name 原样拼接（claude-code / deepseek-dsh）——零映射零漂移但可读性差（品牌大小写混乱），放弃，取映射+回退折中。
+
+## D-unmapped-293@v1 方案架构——单变更四 Wave（brainstorm step4 裁决存档）
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+原编号：D-001@v1
+锚点：未记录
+最近确认：84407be4
+理由：单变更 2026-10-09-verify-reuse-friction 分四 Wave（W1 快照口径死循环+可见性 / W2 指纹树键化+观测 / W3 便宜门前移 / W4 跨仓 per-repo）。evidence：multi-agent-platform 2026-10-09 tombstone 取证（.runtime 质量扫描记录 usedSnapshot=false + 13 份 test-result + sqlite 会话命令时间线交叉归因，四机制实证独立可并行修）。放弃方案：A 五变更拆分（流程开销×5，gates.js/verify-quality-scan.js 共触文件串行依赖强）；C 只修两大头（与用户拍板的全清单不符）。
+
+## D-unmapped-294@v1 复用指纹的代码面分量=代码树内容键（git ls-tree 过滤哈希），非 HEAD、非最近触码提交
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+原编号：D-002@v1
+锚点：未记录
+最近确认：84407be4
+理由：HEAD 换 `git ls-tree -r HEAD` 按既有非代码路径口径过滤后的内容哈希；整树 oid 相同走快路径沿用上次键。纯文档提交不击穿、代码提交必击穿；git 原生对象哈希天然内容寻址，无语言/框架枚举（红线合规）。evidence：本案 13:35-14:10 五笔提交（多为纯文档）每笔击穿两类缓存实证；13:31-13:33 纯文档未提交态秒过对照。放弃方案：最近触码提交（git log 对 revert/merge/cherry-pick 语义不可靠）；mtime（非 git 事实、跨平台不可靠）；整树 oid 直接作键（文档提交也变树 oid，治不了本病——只能当快路径缓存用）。
+
+## D-unmapped-295@v1 快照口径复用闸比对「实际口径」——先建快照后判复用
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+原编号：D-003@v1
+锚点：未记录
+最近确认：84407be4
+理由：executeVerifyQualityScan 把 shouldReuseLastPassedScan 移到快照创建之后，plannedSnapshot 参数改 actualScope=Boolean(snap)。连续失败（false==false）收敛命中；口径真实切换仍失配。evidence：本案记录 usedSnapshot=false × planned=true 恒失配 → 4 轮 × 3.5min 纯浪费实证。放弃方案：快照可行性探测预判（探测与真建两套口径会再分叉）；删掉口径守卫（主仓/快照口径混用会吞真实代码差异——防作弊语义不能丢）。
+
+## D-unmapped-296@v1 门序前移的安全边界——只移纯事实门，实测依赖门不动
+状态：implemented
+变更：2026-10-09-verify-reuse-friction
+原编号：D-004@v1
+锚点：未记录
+最近确认：84407be4
+理由：仅 required-evidence 与 target_files 对账两门（纯 git/文档事实）前移到实测门前并入 R16 聚合；PASS 封顶/parity/超时降档等消费实测结果的门不动。evidence：本案 13:33 与 14:00-14:10 每轮先付 3.5 分钟实测再被对账门拦实证；两门调用链已核对无实测数据依赖。风险护栏：执行期调用链复核，发现隐藏依赖即回退该门原位记录在案。
+
+## D-unmapped-399@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-lint-triage-path-unify
+原编号：D-001@v1
+锚点：未记录
+最近确认：0a916a84b0c0132c85eced89d8c487010ff1a006
+理由：最大风险：降档被滥用掩盖真失败——unattributable（输出无可识别路径）与鉴定链异常都保守返回 false 硬拦，且降档仅在「lint 单独失败」时生效（testFailed 优先 throw），配合降档 warning 三行提示（含存量债文件清单与清偿建议），滥用面可控。试过放弃：①只在 quality-scan 复制一份 triage 代码——制造第二实现即复发原缺陷（两路径分叉），放弃；②把降档判定塞进 verify-postcheck.js——该文件正被并行会话在途迭代（active WIP），编辑即 interleaved 提交风险，放独立新模块避开。
+
+## D-unmapped-401@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-decision-anchor-backfill
+原编号：D-001@v1
+锚点：未记录
+最近确认：2d8d863e368470f4c81b5502763a84de31741701
+理由：最大风险：自动回填错锚（文本唯一路径非落点，如对比方案文件）——保守三闸：恰一唯一判定 + 黑名单（自引用/工件/互引）+ 存量人工全清单裁决（坏锚 15 行还原实测）；蒸馏端多候选直接弃回填。次风险：回填锚点使 docs-check 规则开始校验这些条目（原「未记录」静默跳过）→ advisory 量增加——这是功能按设计工作（回填路径存在性有保障：来自真实文本/交付面）。放弃方案：①域过滤口径（探针 1-3% 弃用）；②裸文件名基名解析回填（歧义面大，口径 C 不启用）；③存量全量回填含低置信（本变更只回填恰一路径高置信，其余留未记录诚实态）。
+
+## D-unmapped-414@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-16-fix-downstream-tool-defects
+原编号：D-001@v1
+锚点：未记录
+最近确认：a83f1df472d8dce375b3a5796cef77d9f92183f5
+理由：- **最大风险（FR-01）**：抑制面误伤——不可能误伤基线外文件（抑制集=基线键∩盘面缺失，交集定义）；真实风险是「用户删除文件后本想借 pull 恢复」，由 `--restore-deleted` 显式通道兜底，默认安全方向与「删除尚未上行成功」的事实一致。 - **FR-03 风险**：手写报告表头措辞变体不被「表头武装」识别 → 该表数据行从「按锚归属计数」变为「孤行报错」。两者都是阻断性报错，从误归属+误计 unfilled 变为准确孤行提示，误报面收敛；渲染器（renderProbe7Lines）是报告唯一生产者，表头字面稳定，回归用例钉「正常渲染零行为变化」。 - **FR-04 弃案**：改返回形态 null→`{error}` 哨兵对象——17+ 处调用与 gate-snapshot-layout-guard / verify-gate-snapshot 两测试文件的 null 断言全要动，收益（类型显式）不抵破坏面；failRef 出参零破坏。**B 档弃案**：让 pnpm 布局真能建快照（pnpm deploy/快照内离线 install/拷贝 node_modules）——新机制非修 bug，且团队已三次实证 junction 跨根失效在先，留待独立立项。 - **FR-02 弃案**：spec 树同步挪到 progress push 之前/并行——改变「progress 成功后顺带推文档与 spec 树」的既有顺序契约（2026-08-16-auto-sync-from-repo / 2026-08-17-spec-file-incremental-sync 锚定），且并行发请求加重熔断窗口竞争；抑制分支补跑是纯增量、无网络请求时零成本。 - **残差（显式不修）**：熔断窗口内 in-flight abort 仍会中断当轮 spec 树同步——无状态重算 + 下轮重试是既有设计（HUB-09 预算语义），本变更只根治「冲突文件长期封锁」这一确定性死锁面；daemon 侧同款复活路径跨仓另修。
+
+## D-unmapped-419@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-17-strict-sync-signal-shape
+原编号：D-001@v1
+锚点：未记录
+最近确认：560af6a23a038e6ee6118a7bcce7b6b3d2481e22
+理由：最大风险：无——单行形状修复 + 回归钉；已放弃方案：改 raceWithAbort 传裸 AbortSignal（将破坏既有 triggerSync 内联用法 `sync(name, cwd, sig)` 的 opts 形状契约，面大不用）。
+
+## D-unmapped-431@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-20-gate-snapshot-carried-deps
+原编号：D-001@v1
+锚点：未记录
+最近确认：4badee475860d096a9770d50d1f936f922715640
+理由：最大风险：他者声明文件自身是坏半态时（他者 quick 正改到一半），携带进快照可能弄红本变更的门（隔离原教旨的反向代价）。缓解：①携带必伴随控制台清单（假红可归因到具体他者文件）；②携带面同受 import 冒烟保护（.py 坏半态回退 HEAD）；③对比现状——本变更依赖他者文件时现状是**必**假红（坑文场景），不依赖时携带才**可能**假红（他者恰好坏半态且影响本变更测试路径）——期望值严格改善；④SNAPSHOT_OFF 逃生通道不变。放弃的方案：①主仓全部脏文件并入快照——未声明脏文件无归属，假红不可归因，违背隔离立命之本（test:77 防弄红断言）；②declared 集静态依赖闭包拷贝——跨语言 import 图静态分析不可靠（JS/TS 动态 import、Python 延迟导入），漏判仍假红、误判扩大携带面；③快照内真失败自动回退主仓——放宽污染归属鉴定（主仓失败可能是并行污染），且与「快照失败先 SNAPSHOT_OFF 对照」的既有排障纪律冲突。

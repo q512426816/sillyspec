@@ -130,6 +130,8 @@ modules:
       - src/knowledge-digest.js
       - src/redomain.js
       - src/decision-redomain.js
+      - src/redomain-unmapped.js
+      - src/hot-cache.js
       - src/doctor-diagnostics.js
       - src/fr-index.js
       - src/fs-atomic.js

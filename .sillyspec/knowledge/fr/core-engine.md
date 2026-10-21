@@ -4240,3 +4240,455 @@
   confirmed_at: null
   source_change: 2026-10-19-cross-repo-face-tool-filter
   status: active
+
+## FR-unmapped-700 探针 7 机械落 candidate 行
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-01
+最近确认：6ac260bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-bindings:task-01:acc-0-51d246e4
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-01:acc-1-78043252
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-01:acc-2-e71a53b1
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-01:acc-3-cebdfb96
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-03:acc-0-bcd6deef
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-03:acc-1-3e6bf0f5
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-03:acc-2-a18f4a5f
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-07:acc-0-71a4c768
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-07:acc-1-af4c425d
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+
+## FR-unmapped-701 晋升规则（candidate→active）
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-02
+最近确认：6ac260bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-bindings:task-04:acc-0-1522f9df
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-04:acc-1-1b2634c8
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-04:acc-2-681ac3ba
+  tests: src/test-bindings.js | test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+
+## FR-unmapped-702 归档提升（局部锚→全局锚）
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-03
+最近确认：6ac260bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-bindings:task-06:acc-0-cd06e5b3
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-06:acc-1-dddeb61c
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-06:acc-2-964247dc
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+
+## FR-unmapped-703 字段级所有权（四硬约束）
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-04
+最近确认：6ac260bd
+
+## FR-unmapped-704 quick --done 落 ql 绑定
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-05
+最近确认：6ac260bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-bindings:task-05:acc-0-db654bed
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-05:acc-1-5a6066b6
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-05:acc-2-6c65358e
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+
+## FR-unmapped-705 `sillyspec tests` CLI（视图+修理工）
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-06
+最近确认：6ac260bd
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-bindings:task-02:acc-0-47e78e16
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-02:acc-1-e3b33f8b
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+- row: 2026-09-24-fr-test-bindings:task-02:acc-2-305ae83e
+  tests: test/test-bindings.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-bindings
+  status: active
+
+## FR-unmapped-706 锚空间与解析纪律
+变更：2026-09-24-fr-test-bindings
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-bindings/requirements.md#FR-07
+最近确认：6ac260bd
+
+## FR-unmapped-707 锚点集与残差计算
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-01
+最近确认：82002514
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-readside:task-01:acc-0-a6712e34
+  tests: src/test-bindings.js | test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-01:acc-1-8c9c98e3
+  tests: src/test-bindings.js | test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-01:acc-2-a3b566ec
+  tests: src/test-bindings.js | test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-06:acc-0-403c4d5c
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+
+## FR-unmapped-708 保守差集
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-02
+最近确认：82002514
+
+## FR-unmapped-709 执行矩阵（现选测逐字保留 + 残差加法）
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-03
+最近确认：82002514
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-readside:task-03:acc-0-0757aeb5
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-03:acc-1-5fce2602
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-03:acc-2-2bbb616e
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-03:acc-3-ab11fe60
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+
+## FR-unmapped-710 runner 解析（复用既有推断面）
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-04
+最近确认：82002514
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-readside:task-02:acc-0-ad5bed88
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-02:acc-1-57ffdb67
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-02:acc-2-e9d57f71
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+
+## FR-unmapped-711 悬空硬错
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-05
+最近确认：82002514
+
+## FR-unmapped-712 披露
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-06
+最近确认：82002514
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-readside:task-04:acc-0-26bd3105
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-04:acc-1-085ad9bd
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+
+## FR-unmapped-713 账本停复用护栏
+变更：2026-09-24-fr-test-readside
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-24-fr-test-readside/requirements.md#FR-07
+最近确认：82002514
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-24-fr-test-readside:task-05:acc-0-28f4e3e3
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active
+- row: 2026-09-24-fr-test-readside:task-05:acc-1-f7cdf6ed
+  tests: test/verify-trace-residual.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-24-fr-test-readside
+  status: active

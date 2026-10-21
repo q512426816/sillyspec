@@ -1237,3 +1237,53 @@
 - 场景：默认场景 — Given 全部既有 pi-events 用例与 claude/codex 会话；Then 映射表零改动；既有用例仅 expected 数组适配（追加派生事件）；claude/codex 零变化
 全文：.sillyspec/changes/archive/2026-09-07-pi-task-events/requirements.md#FR-04
 最近确认：35f3d6528
+
+## FR-unmapped-224 DaemonService facade 兼容，router.py 零改动
+变更：2026-06-22-2026-06-22-daemon-service-split
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given `router.py` 的端点以 `svc = DaemonService(session)` 实例化并调用 `DaemonService` 的方法 任一 da；When 拆分完成，`DaemonService` 退化为持有 5 子 service 引用的 facade 拆分前后分别调用；Then `git diff backend/app/modules/daemon/router.py` 为空 HTTP 状态码、响应体、副作用（DB 写入 / Redi
+全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-01
+最近确认：7db5ab6b3
+
+## FR-unmapped-225 51 方法按子域归位，5 子包分层
+变更：2026-06-22-2026-06-22-daemon-service-split
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-004@v1
+场景正文：
+- 场景：默认场景 — Given `DaemonService` 含 51 个方法，分布于 runtime/lease/run_sync/session/patch 五类（按操作主对象） 私有辅；When 按 design §6 文件变更清单归位 归位 统计各子域 service.py 行数；Then 每个方法存在于对应子域 `service.py`（RuntimeService/LeaseService/RunSyncService/SessionServi
+全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-02
+最近确认：7db5ab6b3
+
+## FR-unmapped-226 DaemonLeaseService 原位保留，agent 跨模块调用不破
+变更：2026-06-22-2026-06-22-daemon-service-split
+状态：active
+摘要：默认场景
+依据决策：D-003@v1
+场景正文：
+- 场景：默认场景 — Given `backend/app/modules/agent/service.py...:545` 执行 `from app.modules.daemon.lease_service import DaemonLe；When 拆分完成 迁移；Then import 成功；`cancel_lease` 行为不变；`lease_service.py` 文件未被移动/重命名/删除 迁入新 `lease/servic
+全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-03
+最近确认：7db5ab6b3
+
+## FR-unmapped-227 生命周期契约不变（行为不变）
+变更：2026-06-22-2026-06-22-daemon-service-split
+状态：active
+摘要：默认场景
+依据决策：D-001@v1
+场景正文：
+- 场景：默认场景 — When 拆分完成 拆分后运行；Then 状态转移、触发条件、关键字段、活动态/终态定义全部不变 全部通过（无逻辑变更导致的行为偏差）
+全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-04
+最近确认：7db5ab6b3
+
+## FR-unmapped-228 异常类 re-export，import 路径兼容
+变更：2026-06-22-2026-06-22-daemon-service-split
+状态：active
+摘要：默认场景
+依据决策：D-002@v1
+场景正文：
+- 场景：默认场景 — Given `repo://sillyhub/backend/app/modules/daemon/router/__init__.py:55` 的 `from app.modules.daemon.service import (DaemonLeaseNotFound, D；When 异常类定义迁入各子包 execute 阶段以 `grep -rn "from app.modules.daemon.service import"` 全量收集
+全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-05
+最近确认：7db5ab6b3

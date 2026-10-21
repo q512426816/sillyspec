@@ -185,3 +185,35 @@ supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）
 最近确认：2a9e4a5f
 理由：移至 validatePlanFeasibility 步骤 0b（紧随 :1298 重复键检测）。理由：①D-004@v1 先例——重复键（js-yaml 4 对重复映射键 throw）与非法 YAML 同为 jsYaml 抛错类，当时终裁「只能在 feasibility 入口单点拦截」，四处下游 catch 静默降级保留；②runPlanPostcheck 聚合器 1b 可行性先于 1c 契约校验同 pass 运行（src/stages/plan-postcheck.js:1741-1760），入口拦截即 plan 门全链路覆盖，「契约门禁空过」在聚合路径上不可能发生；③knowledge conventions「双维度报同一漂移信号时后加维度须豁免」——契约门禁再报 YAML 错=同一信号双维度重复刷屏。validateCrossTaskContracts 保持纯契约对账语义；parseTaskContracts 的 yamlError 键（显式降级注记）供独立消费方判读，jsdoc 注明 YAML 合法性归 feasibility。
 supersedes：D-001@v1 的「落点 validateCrossTaskContracts 预检」条目；v1 其余内容（共享解析源/三态契约/探针 7 文案区分/additive 键）不变。
+
+## D-unmapped-153@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-review-unsupervised-exit
+原编号：D-001@v1
+锚点：未记录
+最近确认：0675d7d76cbde1b21ef55d24dbe8f135048c78c0
+理由：最大风险=豁免被滥用（有派发能力的环境也写声明逃避评审）——对抗面：声明是显式自曝文件随归档公开（审计可见）+遥测可观测豁免率（异常升高可查）+指引明示「有派发能力时豁免不适用」；不做密码学强验（agent 环境能力 CLI 无法机器判定——诚实暴露优于伪检测）。死路：CLI 检测派发能力（harness 工具集对 CLI 不可见）——伪检测比声明制更假，弃；死路：豁免凭据用 env/flag（不落盘不留痕=可静默滥用）——文件制随归档，弃。
+
+## D-unmapped-264@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-verify-friction-fix
+原编号：D-001@v1
+锚点：未记录
+最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
+理由：最大风险：refresh 的「已手填」判定依赖占位标记启发（`<待填`/`<!--TODO` 缺席 = 已填）——探针 1/3/5/6 这类直接渲染结论行、永无占位的段永远判 kept，预填过期要靠 --force（有备份兜底）；反向误判（agent 在段内追加叙述但占位仍在）会连带被替换，靠前置备份 + 逐段报告暴露，属可接受残余。试过但放弃：① 按「新旧渲染逐字节 diff」判定未触碰——需保存历史渲染指纹，gate 抽查机制已占用该信号位，复杂度不成比例；② refresh 时整段保留已填行、只重排未填行——行级携载已覆盖 38 格矩阵主场景，全行保真方案把 stale 行永远带下去；③ 给 gate last 加 --full 重跑——那正是要消灭的超时路径，读盘 3ms 解决。第二个风险：声明宽收的「不涉及接口」可能在个别 design 的无关散文中出现而误判 declared=0——影响面是 API 矩阵渲染少一行（advisory 层），且数字声明优先，已在测试钉住优先序。
+
+## D-unmapped-298@v1 写侧供料——死路走 rejected 通道的指令落点
+状态：implemented
+变更：2026-10-09-rejected-write-side
+原编号：D-001@v1
+锚点：src/stages/brainstorm.js:223
+最近确认：201c1c14d7319d6b00ca9f305d4cf95eeb7d2336
+理由：产生侧指令（brainstorm 提出方案步+对账步）与收割面底稿定性（flow 收割提示行+skill 指引）四个落点；机器收割器、蒸馏器、needsWait 闸原样不动——语义归 agent、机械转写归收割器、闸门已有只缺指令
+
+## D-unmapped-303@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-10-brainstorm-skill-title
+原编号：D-001@v1
+锚点：src/stages/brainstorm.js
+最近确认：730426594a32383ad7ab53f6d4f8e7e7c542f3ca
+理由：最大风险：指引与 CLI 实际提取规则不一致（如 agent 误以为 brainstorm 另有 --title 参数）。对策：文案锚定真实机制（H1 前缀剥除后取简述），并保留 design.md 固定格式 `# 设计文档（Design）— <简述>` 的既有 CLI 强制要求不重复改写。放弃方案：改 src/stages/brainstorm.js 的 step prompt 同步加字数口径——用户诉求限定在 skill 层，CLI prompt 层不在本变更面（后续需要可另起变更）。

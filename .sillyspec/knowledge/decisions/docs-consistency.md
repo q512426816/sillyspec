@@ -201,3 +201,67 @@ supersedes：D-003@v1
 理由：定制：migration 族（migrate/migration/migrations）+ scheduling 族（dispatch/scheduler/scheduling/cron/job/jobs），共 9 token。依据：①现行六域中 auth/permission/billing/lock 在本仓 src/ 零路径实体（grep 实证无 auth/billing/permission 命名文件；lock 无 lock 命名文件）——声明无实体的域是死配置，违反「项目自己的危险面自己声明」口径；②migration 族保住现行命中面（src/migrate.js、src/docs-migrate.js 今日即被 migrations?/migrate 命中——迁移工具/文档迁移是本仓真风险域）；③scheduling 族是本 dispatch/异步任务域的自 declaration（现行通用表 schedul(?:er|ing)|cron|jobs? 在本仓恰零命中，dispatch 词不在通用表——本仓按自身模块图补 declaration：src/dispatch/、src/review-dispatch.js），这是迁移的立意本身：声名面反映项目实况而非全宇宙猜测。行为面如实登记：本仓 dispatch 域文件自本变更起 span 命中→S2 / quick L2（比现行严）——这正是声明面该有的灵敏度。
 故障面：dispatch 域灵敏度上升带来的误伤面（纯文档性 dispatch 改动也被 quick L2 提示）——L2 是 advisory 不阻断；dispatch 域确属异步任务风险域，误伤面可接受。
 退役判据：本仓模块图重构使 dispatch/migration 域消亡时随 map 评审退役。
+
+## D-unmapped-200@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-brainstorm-exit-thin-default
+原编号：D-001@v1
+锚点：未记录
+最近确认：1f0ec6bae9a8c6daeda8f7925b88cbe9353d1c8e
+理由：风险：① 拿不准默认 small 可能低估真复杂变更——兜底三层：实测失败自动升厚（既有）、--upgrade-thick 用户决策（既有）、收编后 thin 道自身门禁（实测/评审/patch）；② 模板标题下 agent 忘写 scale→null→默认收编，行为与 small 一致（符合设计）；③ premise-fail 型需求（前提不成立）仍要走满 8 步——行为演习发现的真实摩擦，属早期短路道新课题（记残留在变更报告）。行为级闭环验收：小白鼠带模糊中等规模需求（测试慢优化）走全链——入口选道进头脑风暴（负面信号命中）、Step 8 按新判据落 scale=small、CLI 指路 flow start 收编、下一步命令即收编命令——原始问题「头脑风暴后直奔五阶段」的反例实测成立。
+
+## D-unmapped-254@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-wallclock-entry
+原编号：D-001@v1
+锚点：未记录
+最近确认：9946796884354bfe0a55318aeb740575d61f4127
+理由：最大风险：scan facts markdown 的 `generatedAt` 消费者（人读文档、快照 diff）看到值形状变化（UTC→本地）。已核实仓库内无测试断言 UTC 形、无机器按该字段做时间运算（git --since 消费的是 verify-facts.json），风险面收敛于人读显示。 放弃的方案：让 toWallClock 只接受 ISO 字符串并手写正则解析——放弃，正则白名单就是格式枚举，开放解析面应委托 Date 构造器；再如给 scan-facts 保留 UTC 但加后缀标注——放弃，与 datetime.js 既定的人读=本地墙钟约定冲突，制造两种并存形状。
+
+## D-unmapped-255@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-06-module-map-list-leak
+原编号：D-001@v1
+锚点：未记录
+最近确认：bb882b535e34e2a82d97f0324d0f88e4420bf591
+理由：最大风险：依赖「泄漏项」的行为面——若有下游逻辑意外依赖污染数据（如某模块故意把单段 tag 当 path 用、或测试断言了污染形态），收紧后行为变化。已核：仓内测试 fixtures 均无 paths 后跟 tags 的块式写法（这正是泄漏长期不可见的原因）；泄漏项全是 tags/aliases/symbols/deps 值，语义上就不是路径。次风险：在场过滤把「动机里提到的未来新文件」token 滤掉致路由落空——已按「在场或图内」双判收敛（图内目标文件照常路由），落空走诚实提示（起点无依据），优于误路由冒充真域，取舍在设计里写明。量化口径注记（评审 P3 清偿）：早期粗计「950 条实路径」是修复前解析面计数（含 450 条带斜杠泄漏垃圾：入口注释/路由串/模块描述）；jsYaml ground truth 对账真实声明为 500 条，泄漏项合计 1375 条——test 头注释与本设计以 500/1375 为准，proposal 转写中的 950 为过程记录不再修正（历史镜像）。 放弃的方案：①parseModuleMapSimple 式字段名枚举白名单补全三解析器——放弃，开放世界字段集枚举不全即是本 bug 的成因（用户约束亦禁止）；②换 js-yaml 整体解析——放弃，三个解析器各有「只取平面子集、坏段不缺省不拦截」的容错立场（注释明示），整体解析改变坏段行为与性能面，超出本修复的刀口。
+
+## D-unmapped-291@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-09-module-card-updated-at-iso
+原编号：D-001@v1
+锚点：未记录
+最近确认：7cbdba1009a347093ab7be9d7d4309b86acd2c57
+理由：最大风险：存量卡旧式戳（+08:00 标称、瞬间失真 8h）不迁移，基于 updated_at 做瞬间比较的下游（如 worktree-guard 对 scan 文档的手工编辑检测——它读的是 scan 文档不是模块卡）对旧卡仍是失真值——接受：worktree-guard 不消费模块卡 updated_at；模块卡 updated_at 当前无瞬间比较消费方，纯展示/溯源。试过放弃：①nowWallClock 本地墙钟裸形状——与人读 created_at 口径混同，且丢机器可比性（Date.parse 按本地解释，跨机歧义）；②本地时刻 + 真实机器偏移（如 +08:00 动态计算）——格式正确但需偏移计算逻辑，收益仅显示本地化，全量 Z + 展示端本地化是更简约定。
+
+## D-unmapped-372@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-14-decision-id-p2-hardening
+原编号：D-001@v1
+锚点：未记录
+最近确认：b8ab4be3713e53c344ae5ecda70994b775a62d6e
+理由：- 最大风险：legacy 条目不再折叠 + 来源兜底使历史条目在注入/图/touch 面新增可见量（20 条来源条目 + 2 条隐身复现）——防复潮注入按 score/死路过滤，新增可见的是既存事实非噪声；回放断言（tests）锁定增量面。 - 死路（放弃）：把 20 行「来源：」数据一次性改写为「变更：」（数据迁移）——归档/知识文件是审计面，本单以读侧兼容达成同等可见性，零数据改写；后续重蒸馏自然收敛。 - 死路（放弃）：豁免键直接改语义砍掉裸键——消费仓既有配置静默失效（advisory 噪声复活），保留兼容 + 新形态并存。
+
+## D-unmapped-373@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-10-14-decision-legacy-renumber
+原编号：D-001@v1
+锚点：未记录
+最近确认：1cb2fc91c7a752bac7172540c9892efedc0b476b
+理由：- 最大风险：真实库一次性重写 29 文件 701 节段——回退靠 git（迁移前状态已提交）；dry-run 对账先行（计划数=底数实测）；节段其余行逐字节保留 + 次序不变把改写面压到标题行与插入行两处。 - 平台向量索引：旧 anchor（局部号）在平台索引重建前不再命中——等值匹配下这些条目向量召回降级（本地词面检索不受影响），重建随平台 ingest 恢复；探针验证结果如实留档。 - 死路（放弃）：不做迁移只靠「自然收敛」——决策条目无跨变更承接机制，legacy 号永续共存（用户不接受永久双形态，裁决翻案）。 - 死路（放弃）：fanout 副本逐文件各自发号——违背单一身份铁律（FR 侧 R1 裁决同源），组内同号才保豁免键/引用/图节点一致性。
+
+## D-unmapped-394@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-15-module-path-glob-match
+原编号：D-001@v1
+锚点：未记录
+最近确认：13193a27324463c1d173b3a69645c7d73611a5de
+理由：最大风险：命中面变宽可能把「脏卡/过宽 pattern」的路径吸进模块归属（如 `**` 过宽 pattern 吞全仓）——评估：pattern 质量是卡作者责任，历史精确条目语义逐字未变；过宽 pattern 在旧世界也会命中（前缀语义同样宽）。次风险：存量数据（平台仓 92 条伪域 + 444 条 unmapped 决策）不随本修复自动迁移——本变更止增量；存量清偿属消费仓数据治理（伪域可 tests --redomain 迁；unmapped 决策因 id 寻址含 file 键迁移需专门工具，与本仓 C5 同裁决缓办）。第三风险：head 注释再踩 `*/` 序列坑（模块注释曾因 `**/*.tsx`/`**/` 字面量提前闭合——两次实测）——已改措辞，留训于设计。放弃方案：①把 globMatch 复制进 modules.js（重复实现，违反单一源）；②改 sillyspec-scan 生成非 glob 卡（卡形态已散落消费仓存量 + scan 重扫成本，匹配器宽容化收益全局）；③只在 fr-index 单点修（decision/module-impact/docs-debt 等仍失效，治标不治本）。
+
+## D-unmapped-435@v1 决策值集正典=写入白名单与蒸馏入选集并集（8 类 7 态单一源）
+状态：implemented
+变更：2026-10-20-decision-caliber-unify
+原编号：D-001@v1
+锚点：src/decision-values.js
+最近确认：8227bd0a861f8d1e52aa56ce90ae7626b84c6a71
+理由：正典集取并集（type 8 值=status quo 蒸馏 7 类加 scope；status 7 值照旧）且 implemented 计入蒸馏入选：蒸馏 7 类集是修 feasibility 漏选事故的既定意图、scope 排除是文档明载刻意设计；知识库入选输出值本叫「状态：implemented」，输入声明 implemented 却永不入选是遗留缺陷，纳入才写读闭合。单一源 src/decision-values.js，brainstorm 提示清单改常量插值（源头不可漂移）

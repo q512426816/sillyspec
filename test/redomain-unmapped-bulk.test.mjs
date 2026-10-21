@@ -52,12 +52,14 @@ function fixture(name) {
     '- cli → [fr/cli.md](fr/cli.md)',
     '- core → [fr/core.md](fr/core.md)',
   ].join('\n'))
-  // decisions 存量：D-001 文件锚命中 cli；D-002 无锚；D-003 锚不命中任何模块
+  // decisions 存量：D-001 文件锚命中 cli；D-002 无锚无来源变更；D-003 锚不命中（来源覆盖面也缺席）；
+  // D-004 仅锚点行路径命中 core（锁锚点源）
   writeFileSync(join(kr, 'decisions', 'unmapped.md'), [
     '# 决策知识 — unmapped', '',
     '## D-001@v1 有锚条目', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '文件：src/cli/one.js', '',
-    '## D-002@v1 无锚条目', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '',
+    '## D-002@v1 无锚条目', '状态：implemented', '理由：理由', '',
     '## D-003@v1 锚不命中', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '文件：docs/zz/other.md', '',
+    '## D-004@v1 锚点源条目', '状态：implemented', '变更：2026-01-01-a', '理由：理由', '锚点：src/core/two.js:88', '',
   ].join('\n'))
   writeFileSync(join(kr, 'decisions', 'cli.md'), '# 决策知识 — cli\n')
   writeFileSync(join(kr, 'decisions', 'core.md'), '# 决策知识 — core\n')
@@ -85,14 +87,16 @@ console.log('\n=== T1: plan——文件锚/覆盖面投票与残量原因 ===')
   const f = fixture('t1')
   try {
     const plan = planUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
-    assert(plan.decisions.groups.length === 1 && plan.decisions.groups[0].domain === 'cli'
-      && plan.decisions.groups[0].ids.join() === 'D-001@v1', 'decisions：D-001 按锚投票进 cli 组')
+    assert(plan.decisions.groups.length === 2, 'decisions：文件锚组（cli）+ 锚点源组（core）')
+    const g = Object.fromEntries(plan.decisions.groups.map((x) => [x.domain, x.ids]))
+    assert(g.cli && g.cli.join() === 'D-001@v1', 'D-001 按文件锚投票进 cli 组')
+    assert(g.core && g.core.join() === 'D-004@v1', 'D-004 按锚点路径源进 core 组')
     const reasons = Object.fromEntries(plan.decisions.leftover.map((x) => [x.id, x.reason]))
-    assert(reasons['D-002@v1'] === '无文件锚' && reasons['D-003@v1'] === '锚不命中任何模块', 'decisions 残量留痕原因明确')
+    assert(reasons['D-002@v1'] === '无文件锚/锚点路径且无来源变更' && reasons['D-003@v1'] === '锚不命中任何模块', 'decisions 残量留痕原因明确')
     assert(plan.fr.groups.length === 1 && plan.fr.groups[0].domain === 'core'
       && plan.fr.groups[0].ids.join() === 'FR-unmapped-1', 'fr：FR-unmapped-1 按来源覆盖面进 core 组')
     assert(plan.fr.leftover.length === 1 && plan.fr.leftover[0].reason === '无来源变更', 'fr 残量留痕')
-    assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 3, 'dry-run 零落盘')
+    assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 4, 'dry-run 零落盘')
   } finally { clean(f.specBase) }
 }
 
@@ -102,11 +106,12 @@ console.log('\n=== T2: apply——迁移/INDEX/幂等 ===')
   const f = fixture('t2')
   try {
     const { results } = applyUnmappedRedomain({ knowledgeRoot: f.kr, archiveRoot: join(f.specBase, 'changes', 'archive') })
-    assert(results.decisions.moved === 1 && results.decisions.movedByDomain.cli === 1, 'decisions 迁 1 条进 cli')
+    assert(results.decisions.moved === 2 && results.decisions.movedByDomain.cli === 1 && results.decisions.movedByDomain.core === 1, 'decisions 迁 2 条（cli+core）')
     assert(results.fr.moved === 1 && results.fr.movedByDomain.core === 1, 'fr 迁 1 条进 core')
     assert(readFileSync(join(f.kr, 'decisions', 'cli.md'), 'utf8').includes('## D-001@v1'), 'D-001 段整体落 cli 域')
     assert(readFileSync(join(f.kr, 'fr', 'core.md'), 'utf8').includes('## FR-unmapped-1'), 'FR-unmapped-1 段整体落 core 域')
     assert(countEntries(join(f.kr, 'decisions', 'unmapped.md'), /^## D-/gm) === 2, 'unmapped 决策剩残量 2（不裸删）')
+    assert(readFileSync(join(f.kr, 'decisions', 'core.md'), 'utf8').includes('## D-004@v1'), 'D-004 锚点源条目落 core 域')
     assert(countEntries(join(f.kr, 'fr', 'unmapped.md'), /^## FR-/gm) === 1, 'unmapped FR 剩残量 1')
     const idx = readFileSync(join(f.kr, 'INDEX.md'), 'utf8')
     assert(idx.includes('- cli → [decisions/cli.md](decisions/cli.md)'), 'INDEX 路由行维护（零泛词形态）')

@@ -155,6 +155,11 @@
 - setup → [decisions/setup.md](decisions/setup.md)
 - stages → [decisions/stages.md](decisions/stages.md)
 - worktree → [decisions/worktree.md](decisions/worktree.md)
+- docs → [decisions/docs.md](decisions/docs.md)
+- sync → [decisions/sync.md](decisions/sync.md)
+- skills-docs → [decisions/skills-docs.md](decisions/skills-docs.md)
+- release → [decisions/release.md](decisions/release.md)
+- eval → [decisions/eval.md](decisions/eval.md)
 
 ## FR 需求索引
 - host-fs-handler → [fr/host-fs-handler.md](fr/host-fs-handler.md)
@@ -201,7 +206,7 @@
 - 摘录|碎片|截断|slice|续行合并|括号换行 → [机器摘录碎片化](known-issues.md#-机器摘录碎片化行级切分拆括号换行--tasks-渲染-slice060-硬切)
 - verify|批量快进|noAI|亲测|互锁|integrationRan → [verify 批量快进互锁](known-issues.md#-verify-批量快进与-noai-亲测步互锁四步绕行)
 - 绿地|伪域|auto-|unmapped|模块图|bootstrap|deliverableFiles → [绿地伪域断流](known-issues.md#-绿地无模块图仓-fr-知识落伪域与-unmapped-大池断流)
-- 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/unmapped.md](decisions/unmapped.md)
+- 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/cli-entry.md](decisions/cli-entry.md)
 - change-management → [fr/change-management.md](fr/change-management.md)
 - docs-consistency → [fr/docs-consistency.md](fr/docs-consistency.md)
 - hooks → [fr/hooks.md](fr/hooks.md)
@@ -217,3 +222,5 @@
 - eval → [fr/eval.md](fr/eval.md)
 - ci → [fr/ci.md](fr/ci.md)
 - auto-sillyspec|sillyspec → [fr/auto-sillyspec.md](fr/auto-sillyspec.md)
+- agent → [fr/agent.md](fr/agent.md)
+- ppm → [fr/ppm.md](fr/ppm.md)
