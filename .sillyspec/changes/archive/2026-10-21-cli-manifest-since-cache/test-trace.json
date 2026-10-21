@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-cli-manifest-since-cache",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-01",
+      "tests": [
+        "test/spec-sync-manifest-cache.test.mjs「增量主路径合并+缓存推进 / 墓碑行合并」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-cli-manifest-since-cache"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-02",
+      "tests": [
+        "test/spec-sync-manifest-cache.test.mjs「首拉全量落缓存 / 对账轮全量 / SILLYSPEC_SPEC_SYNC_FULL 强制全量」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-cli-manifest-since-cache"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-03",
+      "tests": [
+        "test/spec-sync-manifest-cache.test.mjs「旧平台无 spec_version 回退全量并作废缓存」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-cli-manifest-since-cache"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-04",
+      "tests": [
+        "test/spec-sync-manifest-cache.test.mjs「spec_version 倒退全量对账 / 对账请求失败 fail-closed」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-cli-manifest-since-cache"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-05",
+      "tests": [
+        "test/spec-sync-manifest-cache.test.mjs「稳态无差异端到端 <1s 且零 POST」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-cli-manifest-since-cache"
+    }
+  ]
+}

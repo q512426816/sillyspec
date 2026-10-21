@@ -13,3 +13,4 @@
 - 2026-10-17-tick-timing-source | 勾选时点判定换源tick时戳流
 - 2026-10-17-archive-terminal-sync-strict | 归档终态同步强校验——文件树半态显性化
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
+- 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费

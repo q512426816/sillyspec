@@ -1712,3 +1712,98 @@ superseded_by：FR-cli-entry-102
 摘要：跨仓推断
 全文：.sillyspec/changes/archive/2026-10-09-verify-reuse-friction/requirements.md#FR-08
 最近确认：84407be4
+
+## FR-runtime-107 有缓存时 GET 带 ?since=<spec_version>，响应增量行合并进缓存（含墓碑行）
+变更：2026-10-21-cli-manifest-since-cache
+状态：active
+摘要：增量主路径；墓碑行经增量流合并
+全文：.sillyspec/changes/archive/2026-10-21-cli-manifest-since-cache/requirements.md#FR-01
+最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-01
+  tests: test/spec-sync-manifest-cache.test.mjs「增量主路径合并+缓存推进 / 墓碑行合并」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-cli-manifest-since-cache
+  status: active
+
+## FR-runtime-108 无缓存/对账轮/环境变量 SILLYSPEC_SPEC_SYNC_FULL=1 走全量并落缓存
+变更：2026-10-21-cli-manifest-since-cache
+状态：active
+摘要：首次同步；对账轮
+全文：.sillyspec/changes/archive/2026-10-21-cli-manifest-since-cache/requirements.md#FR-02
+最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-02
+  tests: test/spec-sync-manifest-cache.test.mjs「首拉全量落缓存 / 对账轮全量 / SILLYSPEC_SPEC_SYNC_FULL 强制全量」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-cli-manifest-since-cache
+  status: active
+
+## FR-runtime-109 旧平台响应（无 spec_version）自动作废缓存回退全量，行为与现状一致
+变更：2026-10-21-cli-manifest-since-cache
+状态：active
+摘要：旧平台兼容
+全文：.sillyspec/changes/archive/2026-10-21-cli-manifest-since-cache/requirements.md#FR-03
+最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-03
+  tests: test/spec-sync-manifest-cache.test.mjs「旧平台无 spec_version 回退全量并作废缓存」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-cli-manifest-since-cache
+  status: active
+
+## FR-runtime-110 服务端 spec_version 倒退（重建）时一次性全量重拉对账
+变更：2026-10-21-cli-manifest-since-cache
+状态：active
+摘要：服务端重建
+全文：.sillyspec/changes/archive/2026-10-21-cli-manifest-since-cache/requirements.md#FR-04
+最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-04
+  tests: test/spec-sync-manifest-cache.test.mjs「spec_version 倒退全量对账 / 对账请求失败 fail-closed」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-cli-manifest-since-cache
+  status: active
+
+## FR-runtime-111 稳态清单请求 <1s（本地 mock e2e 实证）
+变更：2026-10-21-cli-manifest-since-cache
+状态：active
+摘要：稳态 e2e
+全文：.sillyspec/changes/archive/2026-10-21-cli-manifest-since-cache/requirements.md#FR-05
+最近确认：2cbe778e170a09a1990e1e7cf189dfaa131b7017
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-cli-manifest-since-cache:flow:测试绑定FR-05
+  tests: test/spec-sync-manifest-cache.test.mjs「稳态无差异端到端 <1s 且零 POST」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-cli-manifest-since-cache
+  status: active

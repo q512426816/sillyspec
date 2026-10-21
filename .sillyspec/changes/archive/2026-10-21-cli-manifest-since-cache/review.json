@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-cli-manifest-since-cache",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "6365590b240fe285194e00b37cf67494572129f3",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "SILLYSPEC_SPEC_SYNC_FULL 用真值判断而非 ='1'，语义宽于文档字面",
+      "evidence": "src/spec-sync.js:753 以 process.env.SILLYSPEC_SPEC_SYNC_FULL 真值（任何非空串，含 '0'/'false'）即跳过缓存强制全量；requirements/design 字面为 '=1'。全量拉取永远安全（仅性能差异）且未约定值行为无承诺被违，故 P3：建议改 ==='1' 或文档注明任意非空值生效。",
+      "location": "src/spec-sync.js:753"
+    },
+    {
+      "severity": "P3",
+      "title": "倒退对账 fail-closed 仅覆盖 HTTP 级失败，200+不可解析响应体仍产出空锚",
+      "evidence": "src/spec-sync.js:800-801 对账全量 fetch 返回 200 但 body 不可解析时 fullBody 兜底为 {}，serverManifest 变空锚继续 diff（空锚全量 add 风暴正是 FR-04 括注要禁的形态）；仅 !full.ok 走 ok:false。该边缘与改动前主路径行为（body.json().catch(()=>({})) 同构，patch 第 109 行原文）完全对齐、非本变更引入回归，且缓存已清空下轮自动全量自愈——P3 边缘加固建议（json 解析失败同样 fail-closed），非承诺违反。",
+      "location": "src/spec-sync.js:800-801"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-21T22:29:15+08:00"
+}

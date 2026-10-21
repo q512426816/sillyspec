@@ -1,0 +1,50 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  CLI 清单增量游标消费
+
+  动机：平台 spec-manifest 已支持 ?since=<spec_version> 增量返回（multi-agent-platform 2026-10-21-spec-manifest-incremental 已归档）。CLI
+  每条命令全量拉清单（2.2MB/5.5s@400KBps）吃掉 8s 同步预算——本变更加本地清单缓存+since 增量合并，稳态亚秒。旧平台（无 spec_version 字段）自动回退全量，兼容未部署窗口。
+
+
+  成功标准：
+
+  - 有缓存时 GET 带 ?since=<spec_version>，响应增量行合并进缓存（含墓碑行）
+
+  - 无缓存/对账轮/环境变量 SILLYSPEC_SPEC_SYNC_FULL=1 走全量并落缓存
+
+  - 旧平台响应（无 spec_version）自动作废缓存回退全量，行为与现状一致
+
+  - 服务端 spec_version 倒退（重建）时一次性全量重拉对账
+
+  - 稳态清单请求 <1s（本地 mock e2e 实证）
+autopilot: false
+prestage_ack: true
+baseline_commit: 7324768c9b3cff27f1cc3a1c539d914950ecac5d
+updatedAt: '2026-10-21T14:30:04.142Z'
+baseline_sha256: e6c6e9a74ed5f2a23cdc291c6840c3b5fdb2705ece39e15d468ea1a19d3ac156
+spec_approved: true
+spec_approved_at: '2026-10-21T14:14:16.771Z'
+spec_approved_by: zcode-spec-manifest-incremental
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-spec-manifest-incremental
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: skipped ← module[]+deps(js31+js-meta-skip1)+fr(31)（15.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261021142153\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml 未配置 commands.lint（或标记
+  unavailable）。｜门文件 12 个
+

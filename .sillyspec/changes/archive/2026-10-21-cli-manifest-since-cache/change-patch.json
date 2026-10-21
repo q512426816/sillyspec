@@ -1,0 +1,111 @@
+{
+  "change": "2026-10-21-cli-manifest-since-cache",
+  "baseline": "7324768c9b3cff27f1cc3a1c539d914950ecac5d",
+  "head": "6365590b240fe285194e00b37cf67494572129f3",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "src/runtime-paths.js",
+    "src/spec-sync.js",
+    "test/runtime-relayout.test.mjs",
+    "test/spec-sync-manifest-cache.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 342,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-21T14:22:19.764Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 22,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7324768c9b3cff27f1cc3a1c539d914950ecac5d",
+    "totals": {
+      "files": 5,
+      "additions": 342,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/runtime-paths.js",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 84,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/runtime-relayout.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/spec-sync-manifest-cache.test.mjs",
+        "additions": 251,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "f9efb267395bf335e4a3de35ea7a3fa4b218fe315625507f50c94ed12fb5f58e",
+  "patchStatus": "ok"
+}

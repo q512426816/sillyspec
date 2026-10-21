@@ -53,4 +53,6 @@ created_at: 2026-10-21T14:12:39.701Z
 | 操作 | 路径 | 说明 |
 |---|---|---|
 | 改 | src/spec-sync.js | 清单拉取段缓存感知（since 增量合并/全量落缓存/旧平台回退/倒退对账）+ 4 个缓存 helper |
+| 改 | src/runtime-paths.js | spec-manifest-cache.json 登记 RUNTIME_STATE_SINGLETONS（state/ 卫生语义） |
+| 改 | test/runtime-relayout.test.mjs | 单例表计数锚 15→16 随注册前移 |
 | 增 | test/spec-sync-manifest-cache.test.mjs | 本地 mock server e2e：增量合并/全量回退/倒退对账/稳态 <1s |
