@@ -331,17 +331,42 @@ export function detectIsolation(cwd = process.cwd()) {
 }
 
 /**
- * 检查 worktree 存储目录是否被 .gitignore 忽略
- * @param {string} cwd - 项目根目录
- * @returns {{ ignored: boolean, path: string }}
+ * 检查 worktree 存储目录是否被 .gitignore 忽略（2026-10-21-p0-p1-hardening FR-06 三态分流）。
+ *
+ * 三态结局（dsh z2 实证：沙箱下 spawnSync git 抛 EPERM 被旧实现当成「未忽略」误报，阻断
+ * worktree 创建 27 分钟并迫使用户提权——git 退出码与探测失败必须分流）：
+ *   - { ignored: true }  git 判定已忽略（exit 0）；
+ *   - { ignored: false } git 判定确未忽略（check-ignore exit 1）——调用方照旧阻断；
+ *   - { ignored: null, probeError } 探测失败（spawn 异常 EPERM/ENOENT/超时等，git 未给出
+ *     判定）——立即重试一次仍失败时按「无法证实未忽略」上报，调用方 fail-open 放行+警告。
+ * runner 可注入供测试（缺省本模块 git）。
+ * @param {string} cwd 项目根目录
+ * @param {Function} [runner] 注入式 git 执行器（(cwd, args, opts) => string）
+ * @returns {{ ignored: boolean|null, path: string, probeError?: string, retried?: boolean }}
  */
-function checkWorktreeDirIgnored(cwd = process.cwd()) {
+export function checkWorktreeDirIgnored(cwd = process.cwd(), runner = git) {
   const relPath = WORKTREES_REL;
+  const attempt = () => {
+    try {
+      runner(cwd, ['check-ignore', '-q', relPath]);
+      return { ignored: true };
+    } catch (e) {
+      // git 正常判定「未忽略」= exit 1（e.status 数字）——与 spawn 失败（e.status 缺失，
+      // e.code=EPERM/ENOENT/ETIMEDOUT 等）分流：前者是判定结果，后者是探测故障。
+      if (e && typeof e.status === 'number') return { ignored: false };
+      throw e;
+    }
+  };
   try {
-    git(cwd, ['check-ignore', '-q', relPath]);
-    return { ignored: true, path: relPath };
-  } catch {
-    return { ignored: false, path: relPath };
+    return { ...attempt(), path: relPath };
+  } catch (first) {
+    try {
+      const r = attempt();
+      return { ...r, path: relPath, retried: true };
+    } catch (second) {
+      const probeError = String((second && (second.code || second.message)) || second).split('\n')[0];
+      return { ignored: null, path: relPath, probeError, retried: true };
+    }
   }
 }
 
@@ -725,14 +750,21 @@ export class WorktreeManager {
       });
     }
 
-    // 1. 检查 worktree 目录是否被 gitignore
+    // 1. 检查 worktree 目录是否被 gitignore（三态：已忽略放行 / 确未忽略阻断 / 探测失败
+    //    fail-open 放行+警告——FR-06 / dsh z2 实证 EPERM 误报「未忽略」阻断创建 27 分钟）
     const ignoreStatus = checkWorktreeDirIgnored(this.cwd);
-    if (!ignoreStatus.ignored) {
+    if (ignoreStatus.ignored === false) {
       throw new Error(
         `worktree 存储目录 ${ignoreStatus.path} 未被 .gitignore 忽略，` +
         `创建 worktree 可能导致内容被误提交。\n` +
         `请先在 .gitignore 中添加: ${ignoreStatus.path}/\n` +
         `或运行 sillyspec doctor 检查修复。`
+      );
+    }
+    if (ignoreStatus.ignored === null) {
+      console.warn(
+        `⚠️ worktrees gitignore 探测失败（${ignoreStatus.probeError}${ignoreStatus.retried ? '，已重试 1 次仍失败' : ''}——沙箱/杀软拦 git 子进程常见）——无法证实「未忽略」，按已忽略继续（不阻断创建）。` +
+        `人工复核：git check-ignore -q ${ignoreStatus.path}（exit 0=已忽略）；若确实未忽略请补 .gitignore: ${ignoreStatus.path}/`
       );
     }
 
