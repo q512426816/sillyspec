@@ -1498,3 +1498,22 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-21-protocol-tax
   status: active
+
+## FR-docs-078 平台接口图 checkApproval 锚重锚（必须）
+变更：2026-10-21-docref-checkapproval-reanchor
+状态：active
+摘要：重锚后校验
+全文：.sillyspec/changes/archive/2026-10-21-docref-checkapproval-reanchor/requirements.md#FR-01
+最近确认：5929f3da4ddea89580e4741cca1f8d749230e053
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-docref-checkapproval-reanchor:flow:测试绑定FR-01
+  tests: test/doc-ref-check.test.mjs「doc-ref-check: 引用校验全绿（含 L84 checkApproval 锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-docref-checkapproval-reanchor
+  status: active

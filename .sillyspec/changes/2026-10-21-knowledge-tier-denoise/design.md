@@ -16,7 +16,7 @@ created_at: 2026-10-21T03:59:03.756Z
 - `knowledge-vector.js buildResultFromPlatform`：spec_path→file 映射后丢弃停车场文件候选；
 - `stages/knowledge.js` search 回显在过滤致零结果时补一行披露（保人工可见性——文件本身仍在盘上可直查）。
 
-**② 路由行去泛词（FR-02）**——`decision-distill.js:490` 默认 makeLine 删 `|decision|决策`、`fr-index.js:593-598` FR 面 makeLine 删 `|FR|需求|承接`（auto- 伪域分支同口径）；`syncIndexRoutingLines` 增 `opts.stripTokens` 参数：对保留行与新行的关键词表幂等剥离指定泛词（域名与其余关键词保留，行不删）。四个调用方（decision-distill:713 / fr-index:593 / redomain:141 / decision-redomain:138）按各自面传参，存量行随任意一次 distill/归档/迁移自动清偿，另对本仓 INDEX 手动执行一次 sync 即时生效。
+**② 路由行去泛词（FR-02）**——`decision-distill.js:506` 默认 makeLine 删 `|decision|决策`、`fr-index.js:593-598` FR 面 makeLine 删 `|FR|需求|承接`（auto- 伪域分支同口径）；`syncIndexRoutingLines` 增 `opts.stripTokens` 参数：对保留行与新行的关键词表幂等剥离指定泛词（域名与其余关键词保留，行不删）。四个调用方（decision-distill:713 / fr-index:593 / redomain:141 / decision-redomain:138）按各自面传参，存量行随任意一次 distill/归档/迁移自动清偿，另对本仓 INDEX 手动执行一次 sync 即时生效。
 
 **③ 热路径缓存（FR-03）**——新增小工具模块（读/写原子 JSON：{version, fingerprint, savedAt, payload}，writeAtomicSync 落 `.sillyspec/.runtime/cache/`）：
 - quicklog 伪条目（`knowledge-quicklog.js parseFlowArchiveEntries`）：指纹=归档根目录名列表 + 归档根 stat.mtimeMs（目录增删/改名必变；归档件是冻结审计面，无就地编辑形态），指纹廉价每次重算，命中即免 765 次 readdir + ≤369 次 proposal.md 读；
