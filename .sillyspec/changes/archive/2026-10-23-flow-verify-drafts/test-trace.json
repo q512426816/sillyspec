@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-verify-drafts",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-flow-verify-drafts:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-verify-drafts.test.mjs「①骨架未答 exit1 全列+零写盘」",
+        "test/flow-verify-drafts.test.mjs「②答齐 exit0 通过行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-verify-drafts"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-flow-verify-drafts:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-verify-drafts.test.mjs「③--json 同判定同退出码」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-verify-drafts"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-flow-verify-drafts:flow:测试绑定FR-03",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「①-③ approve 回归锚零改动全绿」",
+        "test/flow-verify-drafts.test.mjs「④missing/非法 exit2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-verify-drafts"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-flow-verify-drafts:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-verify-drafts.test.mjs「⑤start 横幅断点①含自查指引行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-verify-drafts"
+    }
+  ]
+}

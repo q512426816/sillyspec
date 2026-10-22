@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-verify-drafts",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "79f8808bb65338c6012af930f10b798f32f9e9ba",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "分发注释「零写盘零状态副作用」为绝对措辞，实际存在共用 best-effort 遥测写入（注释精度问题，非 FR 违诺）",
+      "evidence": "verify-drafts 分发注释声称零写盘，但入口先调 reportAgentLog（全 flow 子命令共用），可能写 <runtimeRoot>/agent-session-log.json；该写入在 .runtime 不在变更目录，FR-01 的真实承诺（变更文件字节不变）有测试锚且实测为真，仅注释绝对化措辞与字面不符",
+      "location": "src/flow.js:3038（注释）与 src/flow.js:3042（reportAgentLog 调用）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok；边界已裁决：可接受——时点快照自查非持续保证（结论随时点失效），通过行文案明示通过≠批准、下一步 approve，无持续性主张",
+    "并发": "ok；边界已裁决：可接受——repair:false 零写变更面，与并行起草会话最坏竞争=多报一条 violation 重跑收敛（保守方向偏报）；共用 agent-session-log 遥测写入见 P3",
+    "切换": "ok——无状态副作用，任意时点中断即退出，exit 1 不留半态（测试①锚 flow-state.yaml 字节不变，测试②锚无 spec_approved 落盘）",
+    "作用域": "ok；边界已裁决：可接受——ledger 机本位缺失时 degraded 如实降级＋v1 AGENT 槽兜底仍跑、v2 纯 markdown 不假装能查，与 approve 降级语义同源（computeSpecFaceChecks 单一源，无第二份判定）；--runtime-root 走 flow 族既有解析轨（src/flow.js:2944→3043）"
+  },
+  "reviewedAt": "2026-10-22T17:06:51.000Z"
+}

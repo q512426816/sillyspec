@@ -10936,3 +10936,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-21-known-failures-unescape
   status: active
+
+## FR-cli-entry-577 flow verify-drafts 只读自查（与批准门同判定同源）
+变更：2026-10-23-flow-verify-drafts
+状态：active
+摘要：骨架未答自查；答齐通过
+场景正文：
+- 场景：骨架未答自查 — Given flow start 后 v2 骨架未作答（design 四节空、FR 待撰写、绑定待填）；When 运行 `flow verify-drafts --chan
+- 场景：答齐通过 — Given 四节/FR 行为句/绑定行全部答齐；When 运行同命令；Then exit 0、输出通过行与批准指引、零写盘。
+全文：.sillyspec/changes/archive/2026-10-23-flow-verify-drafts/requirements.md#FR-01
+最近确认：79f8808bb65338c6012af930f10b798f32f9e9ba
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-verify-drafts:flow:测试绑定FR-01
+  tests: test/flow-verify-drafts.test.mjs「①骨架未答 exit1 全列+零写盘」 | test/flow-verify-drafts.test.mjs「②答齐 exit0 通过行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-verify-drafts
+  status: active
+
+## FR-cli-entry-578 --json 结构化输出与人类渲染同判定同退出码
+变更：2026-10-23-flow-verify-drafts
+状态：active
+摘要：fail 态 JSON
+场景正文：
+- 场景：fail 态 JSON — Given 骨架未答；When 运行 `flow verify-drafts --change <名> --json`；Then stdout 为可解析单对象、violat
+全文：.sillyspec/changes/archive/2026-10-23-flow-verify-drafts/requirements.md#FR-02
+最近确认：79f8808bb65338c6012af930f10b798f32f9e9ba
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-verify-drafts:flow:测试绑定FR-02
+  tests: test/flow-verify-drafts.test.mjs「③--json 同判定同退出码」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-verify-drafts
+  status: active
+
+## FR-cli-entry-579 错误路径与 approve 零变化
+变更：2026-10-23-flow-verify-drafts
+状态：active
+摘要：变更缺失
+场景正文：
+- 场景：变更缺失 — Given 指定变更目录不存在；When 运行 verify-drafts；Then exit 2、文案指向 flow start。
+全文：.sillyspec/changes/archive/2026-10-23-flow-verify-drafts/requirements.md#FR-03
+最近确认：79f8808bb65338c6012af930f10b798f32f9e9ba
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-verify-drafts:flow:测试绑定FR-03
+  tests: test/approve-gate-tick.test.mjs「①-③ approve 回归锚零改动全绿」 | test/flow-verify-drafts.test.mjs「④missing/非法 exit2」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-verify-drafts
+  status: active
+
+## FR-cli-entry-580 flow start 横幅断点① 增起草自查指引
+变更：2026-10-23-flow-verify-drafts
+状态：active
+摘要：横幅指引行
+场景正文：
+- 场景：横幅指引行 — Given 全新 flow start 渲染；Then 断点① 块输出含 `flow verify-drafts` 字样的自查指引行。
+全文：.sillyspec/changes/archive/2026-10-23-flow-verify-drafts/requirements.md#FR-04
+最近确认：79f8808bb65338c6012af930f10b798f32f9e9ba
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-verify-drafts:flow:测试绑定FR-04
+  tests: test/flow-verify-drafts.test.mjs「⑤start 横幅断点①含自查指引行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-verify-drafts
+  status: active

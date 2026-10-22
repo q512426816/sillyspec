@@ -353,3 +353,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：5929f3da4ddea89580e4741cca1f8d749230e053
 理由：无实质风险（一行字面量；校验器即回归锚）。放弃方案：无。
+
+## D-unmapped-453@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-23-flow-verify-drafts
+原编号：D-001@v1
+锚点：未记录
+最近确认：79f8808bb65338c6012af930f10b798f32f9e9ba
+理由：最大风险：抽共享源时 approve 行为漂移——对策：approve 输出文案与退出码逐字保持，approve-channel-attest / approve-gate-tick 既有套件零改动全绿作回归锚。放弃方案：①独立实现一份「轻量校验」（两路判定必然漂移，弃）；②把 violations 明细塞进 flow status 恢复简报（status 是自愿查看面，塞校验输出令恢复简报膨胀——与 protocol-tax 输出瘦身方向相反，弃）。
