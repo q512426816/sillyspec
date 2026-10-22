@@ -1158,6 +1158,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     ``,
     `🛑 三断点纪律（顺序纪律：①未过不动码；②③为汇报点——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+    `      起草完先自查：sillyspec flow verify-drafts --change ${change}（与批准门同判定——自查通过再请批准，用户一次过）；`,
     `      用户确认后请其运行 sillyspec flow approve --change ${change}（批准留痕）再动手写代码——`,
     `      agent 代跑时如实声明通道：--user-confirmed（转述用户已确认）/ --self-approved（agent 自批），`,
     `      无 flag 按 unattested 留痕（审计面无法区分用户确认与自批）——2026-10-12-approve-channel-attest。`,
@@ -2713,6 +2714,82 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
 
 /** flow 命令族入口（index.js case 'flow' 接线）：flow start|done|amend-draft。 */
 /**
+ * spec 面完整性只读校验单一源（2026-10-23-flow-verify-drafts）：approve 批准门与
+ * verify-drafts 自查命令同判定同源——verifyFlowDrafts repair:false 只读轨（不做 design 问题行
+ * 自动回填，写盘修复属 done 面）+ ledger 机本位缺失降级（仅 v1 AGENT 槽形态跑空槽兜底）。
+ * 纯计算零打印：调用方各自渲染（approve 文案钉死既有形态，verify-drafts 按新面渲染）。
+ * 返回 { applicable, schema, violations, advisories, skipDesign, degraded, v1EmptySlots }。
+ */
+async function computeSpecFaceChecks({ changeDir, change, specBase, runtimeRootOpt = null }) {
+  const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
+  const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
+  const st = readFlowState(changeDir) || {}
+  const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
+  const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign, repair: false })
+  const out = {
+    applicable: r.applicable === true, schema: r.schema || null,
+    violations: r.violations || [], advisories: r.advisories || [],
+    skipDesign: adoptedDesign, degraded: false, v1EmptySlots: [],
+  }
+  if (!r.applicable) {
+    // draft-ledger 机本位缺失（跨机/存量变更）：fail-open 降级——仅 v1（AGENT 槽形态）跑空槽
+    // 兜底；v2 纯 markdown 无 ledger 无法对锚校验，如实降级（不假装能查）。
+    out.degraded = true
+    let v1Text = null
+    try { v1Text = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { /* 无 design */ }
+    if (v1Text && /<!--AGENT:槽\d+/.test(v1Text)) {
+      const dr = verifyDesignRecordFilled({ changeDir })
+      if (dr.applicable) out.v1EmptySlots = dr.emptySlots
+    }
+  }
+  return out
+}
+
+/**
+ * flow verify-drafts（2026-10-23-flow-verify-drafts）：spec 面起草自查只读命令——起草完
+ * 先自查（与批准门同判定同源 computeSpecFaceChecks）、通过再请用户批准，把「用户跑 approve
+ * 被 exit 1 硬拒」的往返消灭在 agent 侧。零写盘、零状态副作用（通过≠批准——批准仍走 approve
+ * 留痕）。--json 与人类渲染同判定同退出码（对齐 flow status --json 双态同源先例）。
+ */
+async function cmdFlowVerifyDrafts({ change, cwd, specBase, runtimeRootOpt = null, json = false }) {
+  const changeDir = join(specBase, 'changes', change)
+  if (!existsSync(changeDir)) {
+    const msg = `❌ 变更不存在：${change}（flow verify-drafts 在 flow start 之后、approve 之前运行——起草面自查）`
+    if (json) console.log(JSON.stringify({ change, status: 'missing' }))
+    else console.error(msg)
+    process.exit(2)
+  }
+  const r = await computeSpecFaceChecks({ changeDir, change, specBase, runtimeRootOpt })
+  const hasViolations = r.applicable && r.violations.length > 0
+  const hasEmptySlots = r.degraded && r.v1EmptySlots.length > 0
+  const passed = !hasViolations && !hasEmptySlots
+  if (json) {
+    console.log(JSON.stringify({
+      change, passed, applicable: r.applicable, schema: r.schema,
+      violations: r.violations, advisories: r.advisories,
+      skipDesign: r.skipDesign, degraded: r.degraded, v1EmptySlots: r.v1EmptySlots,
+    }))
+    if (!passed) process.exit(1) // 与人类渲染同退出码（json 不分叉）
+  } else if (passed) {
+    for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
+    if (r.degraded) console.log(`ℹ️ 自查降级：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过（v2 纯 markdown 无法对锚校验，如实降级）`)
+    console.log(`✅ spec 面自查通过（0 violations）——通过≠批准：请把摘要给用户看，用户确认后 sillyspec flow approve --change ${change}（批准留痕后动码）`)
+  } else {
+    for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
+    if (hasViolations) {
+      console.error(`❌ spec 面自查未通过——${r.violations.length} 处违规（与 flow approve 批准门同判定；一次全列，修复后重跑本命令）：`)
+      for (const v of r.violations) console.error(`   - ${v}`)
+    }
+    if (hasEmptySlots) {
+      console.error(`❌ spec 面自查未通过——design.md 有 ${r.v1EmptySlots.length} 个空 AGENT 槽（${r.v1EmptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
+    }
+    console.error(`   修复后重跑：sillyspec flow verify-drafts --change ${change}——通过再请用户批准（flow approve），用户一次过`)
+    process.exit(1)
+  }
+  return { change, passed }
+}
+
+/**
  * flow approve（2026-10-04-thin-docs-v2 FR-06）：spec 断点用户批准留痕——用户确认 FR+design
  * 方案后运行；写 flow-state {spec_approved,spec_approved_at,spec_approved_by}。flow done 的
  * v2 机器门消费该证据（未批准且未声明 autopilot → 拒收）。
@@ -2747,11 +2824,10 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = 
   // 面只读，不做 design 问题行自动回填（写盘修复属 done 面）。诚实边界：本门证明「答在批前」，
   // 不证明「答在码前」——时序证据路线已实证不可行（批量收口下 git 时间戳说谎，thin-order-canon
   // 四路调查），不做假装能拦的检查。
+  // 计算单一源 computeSpecFaceChecks（2026-10-23-flow-verify-drafts 抽取共享）——本块只保留
+  // approve 面的渲染与退出，文案与退出码逐字保持（既有测试零改动作回归锚）。
   {
-    const runtimeRoot = resolveRuntimeRoot({}, specBase)
-    const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
-    const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
-    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign, repair: false })
+    const r = await computeSpecFaceChecks({ changeDir, change, specBase })
     for (const a of r.advisories || []) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
     if (r.applicable && r.violations.length > 0) {
       console.error(`❌ spec 断点未批准——文档未齐（批准是动码前置，先答 spec 面再批）：`)
@@ -2762,15 +2838,10 @@ async function cmdFlowApprove({ change, cwd, specBase, by = null, channelFlag = 
     if (!r.applicable) {
       // draft-ledger 机本位缺失（跨机批准/存量变更）：fail-open 降级——仅 v1（AGENT 槽形态）跑
       // 空槽兜底；v2 纯 markdown 无 ledger 无法对锚校验，如实降级放行（不假装能查）。
-      let v1Text = null
-      try { v1Text = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { /* 无 design */ }
-      if (v1Text && /<!--AGENT:槽\d+/.test(v1Text)) {
-        const dr = verifyDesignRecordFilled({ changeDir })
-        if (dr.applicable && dr.emptySlots.length > 0) {
-          console.error(`❌ spec 断点未批准——design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
-          console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
-          process.exit(1)
-        }
+      if (r.v1EmptySlots.length > 0) {
+        console.error(`❌ spec 断点未批准——design.md 有 ${r.v1EmptySlots.length} 个空 AGENT 槽（${r.v1EmptySlots.join('、')}）：每节至少一行（「不适用：<理由>」也算答）`)
+        console.error(`   作答齐备后重跑：sillyspec flow approve --change ${change} [--user-confirmed|--self-approved]`)
+        process.exit(1)
       }
       console.log(`ℹ️ 批准校验降级放行：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过`)
     }
@@ -2962,6 +3033,15 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     await reportAgentLog(change, sub)
     return cmdFlowReject({ change, cwd, specBase, reason: getFlag('--reason') })
   }
+  if (sub === 'verify-drafts') {
+    // spec 面起草自查只读面（2026-10-23-flow-verify-drafts）：与批准门同判定同源——起草完先
+    // 自查、通过再请批准，用户被拒往返消灭在 agent 侧；零写盘零状态副作用。
+    const change = getFlag('--change')
+    if (!change) { console.error('❌ flow verify-drafts 需 --change <名>'); process.exit(2) }
+    validateChangeName(change)
+    await reportAgentLog(change, sub)
+    return cmdFlowVerifyDrafts({ change, cwd, specBase, runtimeRootOpt, json: jsonGlobal || hasFlag('--json') })
+  }
   if (sub === 'diff') {
     // 只读查询面（2026-10-13-flow-diff-cmd）：change 粒度文件统计双态口——与 status 同级自愿面
     const change = getFlag('--change')
@@ -3152,7 +3232,7 @@ export async function cmdFlow(args, cwd, specDir = null, opts = {}) {
     console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
     return r
   }
-  console.error('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow diff --change <名> [--json]（只读文件统计）')
+  console.error('用法: sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）＋动机与背景详述＋独立一行『成功标准：』＋每行一条『- 可验证标准』>" [--thick|--with-tasks] [--no-prestage（hindsight 标记在场时声明需求已含决策，留痕放行）] | sillyspec flow done --change <名> | sillyspec flow status --change <名> [--json] | sillyspec flow verify-drafts --change <名> [--json]（spec 面只读自查，通过再请批准） | sillyspec flow diff --change <名> [--json]（只读文件统计）')
   console.error('      --input 可照抄形态（引号内换行合法）：')
   console.error('      sillyspec flow start --change <名> --input "<一句 10-30 字中文概括（首行即变更标题，硬区间 10-30 必须、建议 ~20 字）；随后动机与背景')
   console.error('')
