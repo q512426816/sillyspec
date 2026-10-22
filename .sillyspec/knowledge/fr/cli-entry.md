@@ -11107,3 +11107,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-flow-done-preflight
   status: active
+
+## FR-cli-entry-585 dirty_gate_ignore 配置键与单一源剔除
+变更：2026-10-23-dirty-gate-ignore
+状态：active
+摘要：配置命中剔除；unit 返回
+场景正文：
+- 场景：配置命中剔除 — 
+- 场景：unit 返回 — Given 直调 collectFreezeFiles 且 dirty 面含命中与未命中文件；Then dirtyWarned 只含未命中文件、dirtyIgnored 只
+全文：.sillyspec/changes/archive/2026-10-23-dirty-gate-ignore/requirements.md#FR-01
+最近确认：932698f0db4294d0492efd7610a1f6aac2bb7a2e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-dirty-gate-ignore:flow:测试绑定FR-01
+  tests: test/dirty-gate-ignore.test.mjs「②配置命中剔除+完成收口+留痕行」 | test/dirty-gate-ignore.test.mjs「④unit dirtyIgnored/dirtyWarned 切分」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-dirty-gate-ignore
+  status: active
+
+## FR-cli-entry-586 三态 fail-soft 零回归
+变更：2026-10-23-dirty-gate-ignore
+状态：active
+摘要：未配置零回归
+场景正文：
+- 场景：未配置零回归 — Given 残渣文件在场但未配置 dirty_gate_ignore；When 运行 flow done；Then 照常阻断（既有文案原样），无剔除留痕行。
+全文：.sillyspec/changes/archive/2026-10-23-dirty-gate-ignore/requirements.md#FR-02
+最近确认：932698f0db4294d0492efd7610a1f6aac2bb7a2e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-dirty-gate-ignore:flow:测试绑定FR-02
+  tests: test/dirty-gate-ignore.test.mjs「①未配置照常阻断（零回归锚）」 | test/dirty-gate-ignore.test.mjs「③前缀不命中照常阻断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-dirty-gate-ignore
+  status: active
+
+## FR-cli-entry-587 预检同源继承与文案同步
+变更：2026-10-23-dirty-gate-ignore
+状态：active
+摘要：预检继承
+场景正文：
+- 场景：预检继承 — Given 配置命中残渣且 dirty 面仅残渣；When 运行 flow done；Then 预检零 finding（实测照常启动），权威门留 ℹ️ 剔除行后完成。
+全文：.sillyspec/changes/archive/2026-10-23-dirty-gate-ignore/requirements.md#FR-03
+最近确认：932698f0db4294d0492efd7610a1f6aac2bb7a2e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-dirty-gate-ignore:flow:测试绑定FR-03
+  tests: test/dirty-gate-ignore.test.mjs「②配置命中剔除+完成收口+留痕行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-dirty-gate-ignore
+  status: active
+
+## FR-cli-entry-588 测试矩阵
+变更：2026-10-23-dirty-gate-ignore
+状态：active
+摘要：四态
+场景正文：
+- 场景：四态 — Given temp 仓与直调各场景；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-dirty-gate-ignore/requirements.md#FR-04
+最近确认：932698f0db4294d0492efd7610a1f6aac2bb7a2e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-dirty-gate-ignore:flow:测试绑定FR-04
+  tests: test/dirty-gate-ignore.test.mjs「①-④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-dirty-gate-ignore
+  status: active

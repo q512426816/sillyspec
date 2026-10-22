@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-dirty-gate-ignore",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "932698f0db4294d0492efd7610a1f6aac2bb7a2e",
+  "findings": [],
+  "dimensionNotes": { "乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok" },
+  "reviewedAt": "2026-10-22T23:47:49.000Z"
+}

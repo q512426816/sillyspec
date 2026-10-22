@@ -1,0 +1,54 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  dirty 门已知残渣忽略配置键
+
+
+  动机与背景：2026-10-23 四子代理收口画像：dirty-gap 门 56% 触发率（102/181 归档带 acceptedDirtyGap），其中大头是共享仓已知残渣（quicklog/、test/.sillyspec/
+  运行库等既不属本变更也无他会话活跃声明）——每次触发仍要人工重跑带 --accept-dirty-gap（6f87c173 已为此补快速通道文案，说明现行为方向就偏）。新增 local.yaml dirty_gate_ignore
+  配置键（module_gate_ignore 同款先例：目录前缀、单行逗号、posix）：配置内的已知残渣从 dirty 冻结缺口面剔除并一行留痕，仓主一次声明长期生效；未配置/坏配置/读取失败 fail-soft
+  行为与现状逐字一致。过滤落在 collectFreezeFiles 单一源内（权威门与 2026-10-23-flow-done-preflight
+  预检同源继承，零镜像面）。用户已显式授权继续（2026-10-23「继续」）——autopilot 直跑到底，--no-prestage 声明需求已含决策（方案经四子代理分析定案）。
+
+
+  成功标准：
+
+  - local.yaml 新键 dirty_gate_ignore（单行逗号分隔目录/文件前缀，posix）：collectFreezeFiles 在 dirty 面收集中剔除命中前缀的文件并在返回值带 dirtyIgnored
+  清单；patch 子步权威门对剔除留一行 ℹ️（N 个 dirty 文件按 dirty_gate_ignore 剔除——已知残渣面）；剔除后缺口面为空则不阻断直接走冻结（收口完成）
+
+  - 未配置该键/键值非法/local.yaml 不可读三态 fail-soft：dirty 门行为与改动前逐字一致（仍阻断），零回归有测试锚
+
+  - 收口预检（flow-preflight.js）经同一 collectFreezeFiles 自动继承忽略——配置在场时预检不再产 dirty-gap finding，无需改预检代码
+
+  - 阻断文案（权威门+预检两处拷贝）各增第④条出路指引（dirty_gate_ignore 固定忽略），两处逐字同步
+
+  - 测试：未配置照常阻断（零回归锚）/ 配置命中剔除+完成收口+留痕行 / 前缀不命中照常阻断 / unit collectFreezeFiles 返回 dirtyIgnored
+autopilot: true
+prestage_ack: true
+baseline_commit: d4ea05622de445ffc79eff8d4fc6a213f63ea5bf
+updatedAt: '2026-10-22T23:48:22.611Z'
+baseline_sha256: 93fb63894229dbc3e78ca8d96c47600a00854b4fa7baec1ebe8d04f1c656c569
+spec_approved: true
+spec_approved_at: '2026-10-22T23:39:57.954Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js100+js-meta-skip1+nontest-skip1)+fr(101)（62.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261022234453\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml
+  未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+
