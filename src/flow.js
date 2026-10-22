@@ -83,14 +83,18 @@ export function readFlowConfig(specBase) {
     // module_gate_ignore（2026-10-12-thin-module-gate-and-feed）：未登记目录软门的固定忽略清单，
     // 单行逗号串（目录前缀，posix）——列表块形态不支持，readFlowConfig 同款逐键正则防线
     const ig = raw.match(/^\s*module_gate_ignore\s*:\s*(.+)$/m)
+    // turbo docs-auto 常设授权档（2026-10-23-turbo-docs-auto）：仓主一行声明纯文档面自动降档；
+    // 逐键正则同款防线，未配置/坏值（turbo: off 等）fail-soft 恒 false
+    const turboDocsAuto = /^\s*turbo\s*:\s*docs-auto\s*$/m.test(raw)
     return {
       mode,
       editRatioThreshold: th ? Number(th[1]) : 0.5,
       editRatioEnforcement: en ? en[1] : 'advisory',
       moduleGateIgnore: ig ? ig[1].split(',').map((s) => s.trim()).filter(Boolean) : [],
+      turboDocsAuto,
     }
   } catch {
-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [] }
+    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [], turboDocsAuto: false }
   }
 }
 
@@ -1269,7 +1273,35 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   }
   // 极速模式读态（2026-10-14-thin-turbo-mode FR-02/D-007）：turbo && tier!=='thick' 双条件——
   // 升厚（distill 异态/verify 失败/--thick 起步）后 turbo 残留不短路厚档仪式，重入即恢复全量校验
-  const turbo = st.turbo === true && st.tier !== 'thick'
+  // turbo 双源（2026-10-23-turbo-docs-auto）：旗标档（--turbo 用户显式）原样；未开且仓主常设
+  // 授权 turbo: docs-auto 时按面自动降档——面=changedFilesSinceBaseline（提交∪脏面）经
+  // dirty_gate_ignore 前缀剔除（与 dirty 门同一残渣口径）后非空且无文件命中代码分类器
+  // （quick-audit 单一源）。fail-closed：面空/含代码/读取或判定异常一律走全量（不静默降档）；
+  // 升厚即失效对双源同效（tier=thick 关）。授权权在仓主（local.yaml 一行），agent 仍无法自选。
+  const turboFlag = st.turbo === true && st.tier !== 'thick'
+  let turbo = turboFlag
+  let turboSource = turboFlag ? 'flag' : null
+  if (!turbo && st.tier !== 'thick') {
+    try {
+      if (readFlowConfig(specBase).turboDocsAuto === true) {
+        const { readDirtyGateIgnore } = await import('./flow-parity.js')
+        const { CODE_PATH_SEGMENT_RE, CODE_EXTENSION_RE } = await import('./run/quick-audit.js')
+        const ignorePfx = readDirtyGateIgnore(specBase)
+        const face = (changedFilesSinceBaseline(cwd, st.baseline_commit) || [])
+          .filter((f) => !ignorePfx.some((p) => f.startsWith(p)))
+        const docsOnly = face.length > 0 && !face.some((f) => CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f))
+        if (docsOnly) {
+          turbo = true
+          turboSource = 'docs-auto'
+          console.log(`⚡ turbo(docs-auto)：提交/冻结面纯文档（${face.length} 文件）——实测/评审/UI 探针按极速档跳过（授权源 local.yaml turbo: docs-auto；升厚即失效）`)
+        }
+      }
+    } catch { /* 面判定异常 fail-closed 走全量 */ }
+  }
+  // 实测门 reason 的授权源标签（防文案漂移：docs-auto 档不得显示「用户显式触发」）
+  const turboLabel = turboSource === 'docs-auto'
+    ? 'local.yaml turbo: docs-auto 常设授权（提交/冻结面纯文档）'
+    : `用户显式触发 ${st.turbo_since || '时点未记'}`
   const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
   // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
   // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
@@ -1621,7 +1653,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 对齐 quick-audit env 逃生门 skip 形态先例 src/run/quick-audit.js:482）。
     // 失败升厚分支（下方 action==='fail'）turbo 下天然不触达——升厚语义不变。
     const gate = turbo
-      ? { action: 'skip', failed: [], reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——test+lint 实测跳过（审计留痕；本次收口不含测试客观核验）`, test: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: `⚡ 极速模式（用户显式触发 ${st.turbo_since || '时点未记'}）——本次收口不含测试客观核验（审计留痕）`, resultPath: null }, lint: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: '⚡ 极速模式——lint 实测跳过（审计留痕）', resultPath: null } }
+      ? { action: 'skip', failed: [], reason: `⚡ 极速模式（${turboLabel}）——test+lint 实测跳过（审计留痕；本次收口不含测试客观核验）`, test: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: `⚡ 极速模式（${turboLabel}）——本次收口不含测试客观核验（审计留痕）`, resultPath: null }, lint: { status: 'skipped', command: null, exitCode: null, durationMs: null, outputTail: null, reason: '⚡ 极速模式——lint 实测跳过（审计留痕）', resultPath: null } }
       : await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧哨兵带 baseline 区间，quick 侧区间不可靠——单判不双判 */ })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)

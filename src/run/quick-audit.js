@@ -358,8 +358,10 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
 // 无 /g 标志无状态，提级零行为差）：
 //   ① 路径段匹配：任意层出现 src / test / tests / __tests__ 段（src-guide 等长名不误蹭——按段全等）
 //   ② 代码扩展名兜底：src/test 目录约定外的代码（backend/app/**.py、scripts/*.go 等）
-const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
-const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
+// export（2026-10-23-turbo-docs-auto）：flow.js docs-auto 档纯文档面判定同源消费——
+// 分类器单一源（宁可多跑不可漏跑口径），本体零变化
+export const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
+export const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
 
 // 测试文件判定：目录段（test/tests/__tests__——比 quick-gate-profile 的 TEST_DIR_RE 多认裸
 // test/ 段，本仓 test/ 下即有无 .test. 后缀的 .mjs）+ basename test_ 前缀 + .test./_test./.spec.
