@@ -1,0 +1,95 @@
+{
+  "change": "2026-10-23-flow-done-preflight",
+  "baseline": "2a730dc64303015062b3c8083e0df152581f6774",
+  "head": "32b0e919913c1c6f2a09017400bee7525e860ab6",
+  "files": [
+    "src/flow-preflight.js",
+    "src/flow.js",
+    "test/flow-done-preflight.test.mjs",
+    "test/flow-protocol.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 250,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-22T17:22:37.755Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 17,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "2a730dc64303015062b3c8083e0df152581f6774",
+    "totals": {
+      "files": 4,
+      "additions": 250,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/flow-preflight.js",
+        "additions": 67,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 35,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-done-preflight.test.mjs",
+        "additions": 145,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-protocol.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9c4af27a7af0f259d0248d1277a72dde4d4ef68211f557ebf9a7e3f9b8121cc6",
+  "patchStatus": "ok"
+}

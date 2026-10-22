@@ -11021,3 +11021,89 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-flow-verify-drafts
   status: active
+
+## FR-cli-entry-581 实测门前只读收口预检（fail-together 一次报全）
+变更：2026-10-23-flow-done-preflight
+状态：active
+摘要：dirty 命中预检拦截；处置旗标镜像放行
+场景正文：
+- 场景：dirty 命中预检拦截 — Given 共享主仓存在未提交交付文件（collectFreezeFiles dirtyWarned 非空）且未带处置旗标；When 运行 flow done；Then 在
+- 场景：处置旗标镜像放行 — 
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-preflight/requirements.md#FR-01
+最近确认：32b0e919913c1c6f2a09017400bee7525e860ab6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-preflight:flow:测试绑定FR-01
+  tests: test/flow-done-preflight.test.mjs「①dirty 命中实测未启动+一次报全」 | test/flow-done-preflight.test.mjs「②--accept-dirty-gap 镜像放行完成收口」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-preflight
+  status: active
+
+## FR-cli-entry-582 预检与权威门同判定同源、全过静默
+变更：2026-10-23-flow-done-preflight
+状态：active
+摘要：断点续不误拦；turbo 镜像
+场景正文：
+- 场景：断点续不误拦 — Given 首轮 dirty 拦截后带处置旗标重跑通过且 patch 子步完成；When 后续重跑（无旗标）；Then 预检因 patch 子步已 done 跳过 dirt
+- 场景：turbo 镜像 — Given turbo 在场且 dirty 缺口在场；When 预检运行；Then 不产 dirty-gap finding（权威门 turbo 路径同款降 advisor
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-preflight/requirements.md#FR-02
+最近确认：32b0e919913c1c6f2a09017400bee7525e860ab6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-preflight:flow:测试绑定FR-02
+  tests: test/flow-done-preflight.test.mjs「③unit 镜像守卫（patchDone/turbo/freezeDirty 不拦）」 | test/flow-done-preflight.test.mjs「④干净面全过预检静默」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-preflight
+  status: active
+
+## FR-cli-entry-583 处置后重走既有断点续语义
+变更：2026-10-23-flow-done-preflight
+状态：active
+摘要：处置后放行
+场景正文：
+- 场景：处置后放行 — Given 预检拦 dirty 后重跑带 --accept-dirty-gap；Then 预检通过、实测照常启动、收口完成且 change-patch.json 留痕 ac
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-preflight/requirements.md#FR-03
+最近确认：32b0e919913c1c6f2a09017400bee7525e860ab6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-preflight:flow:测试绑定FR-03
+  tests: test/flow-done-preflight.test.mjs「②--accept-dirty-gap 镜像放行完成收口」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-preflight
+  status: active
+
+## FR-cli-entry-584 e2e+unit 测试锁行为
+变更：2026-10-23-flow-done-preflight
+状态：active
+摘要：测试矩阵
+场景正文：
+- 场景：测试矩阵 — Given temp 仓与直调各场景；When 分别执行；Then 断言如上各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-preflight/requirements.md#FR-04
+最近确认：32b0e919913c1c6f2a09017400bee7525e860ab6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-preflight:flow:测试绑定FR-04
+  tests: test/flow-done-preflight.test.mjs「①-④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-preflight
+  status: active

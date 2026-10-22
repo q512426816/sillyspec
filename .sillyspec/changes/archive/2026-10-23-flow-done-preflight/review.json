@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-done-preflight",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "32b0e919913c1c6f2a09017400bee7525e860ab6",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-22T17:26:38.000Z"
+}

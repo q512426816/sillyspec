@@ -85,3 +85,4 @@
 | 2026-10-21 | 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测 |
 | 2026-10-21 | 2026-10-21-known-failures-unescape | known_failures 三读侧 YAML 反转义对称 |
 | 2026-10-22 | 2026-10-23-flow-verify-drafts | flow verify-drafts 起草自查只读命令 |
+| 2026-10-22 | 2026-10-23-flow-done-preflight | flow done 收口预检一次报全 |

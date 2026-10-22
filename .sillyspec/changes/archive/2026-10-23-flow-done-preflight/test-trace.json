@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-done-preflight",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-flow-done-preflight:flow:测试绑定FR-01",
+      "tests": [
+        "test/flow-done-preflight.test.mjs「①dirty 命中实测未启动+一次报全」",
+        "test/flow-done-preflight.test.mjs「②--accept-dirty-gap 镜像放行完成收口」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-preflight"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-flow-done-preflight:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-done-preflight.test.mjs「③unit 镜像守卫（patchDone/turbo/freezeDirty 不拦）」",
+        "test/flow-done-preflight.test.mjs「④干净面全过预检静默」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-preflight"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-flow-done-preflight:flow:测试绑定FR-03",
+      "tests": [
+        "test/flow-done-preflight.test.mjs「②--accept-dirty-gap 镜像放行完成收口」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-preflight"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-flow-done-preflight:flow:测试绑定FR-04",
+      "tests": [
+        "test/flow-done-preflight.test.mjs「①-④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-preflight"
+    }
+  ]
+}

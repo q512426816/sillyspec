@@ -1,0 +1,16 @@
+{"ts":1792689080226,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792689080226,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792689080226,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792689152496,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792689328334,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792689348045,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792689348045,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792689595354,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/flow-protocol.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792689647563,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792689647798,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792689648017,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792689650429,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792689650429,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1792689657360,"kind":"commit","stage":null,"detail":"32b0e919","provisional":true}
+{"ts":1792689721402,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（49.5s） · 20261022172201","provisional":true}
+{"ts":1792689754168,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs/sillyspec/modules/_module-map.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

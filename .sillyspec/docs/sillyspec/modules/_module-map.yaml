@@ -66,6 +66,7 @@ modules:
       - src/flow-review-pack.js
       - src/review-probes.js
       - src/flow-parity.js
+      - src/flow-preflight.js
 
   progress:
     status: active
