@@ -1598,6 +1598,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
             console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
             console.error(`   💡 快速通道：脏文件全属并行会话在途/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap（显式 pathspec 提交面已隔离归属；属本变更的文件必须走①提交）`)
+            console.error(`   ④ 已知残渣固定忽略：.sillyspec/local.yaml 加 dirty_gate_ignore: <目录前缀>（单行逗号分隔，同 module_gate_ignore）`)
             console.error(`   ${f.files.slice(0, 3).join('、')}${f.files.length > 3 ? ' 等' : ''}`)
           } else if (f.id === 'orphan-face') {
             // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）
@@ -1938,6 +1939,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (freeze.dirtyAdded.length > 0) {
           console.log(`🔒 ${exclusiveFrom === 'flag' ? '--freeze-dirty 显式声明' : '会话专属 worktree'}：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
         }
+        // 已知残渣剔除留痕（2026-10-23-dirty-gate-ignore）：collectFreezeFiles 单一源剔除
+        // dirty_gate_ignore 命中面——每轮一行可审计（配了什么、剔了几个），预检同源继承。
+        if (Array.isArray(freeze.dirtyIgnored) && freeze.dirtyIgnored.length > 0) {
+          console.log(`ℹ️ ${freeze.dirtyIgnored.length} 个 dirty 文件按 local.yaml dirty_gate_ignore 剔除（已知残渣面，不入冻结缺口）：${freeze.dirtyIgnored.slice(0, 3).join('、')}${freeze.dirtyIgnored.length > 3 ? ' 等' : ''}`)
+        }
         if (freeze.dirtyWarned.length > 0) {
           console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
           console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交可归档后压扁（见收口指引）`)
@@ -1958,6 +1964,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
             console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
             console.error(`   💡 快速通道：脏文件全属并行会话在途/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap（显式 pathspec 提交面已隔离归属；属本变更的文件必须走①提交）`)
+            console.error(`   ④ 已知残渣固定忽略：.sillyspec/local.yaml 加 dirty_gate_ignore: <目录前缀>（单行逗号分隔，同 module_gate_ignore）`)
             reportMidFail('patch')
             process.exit(1)
           }

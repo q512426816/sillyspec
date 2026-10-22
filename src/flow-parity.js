@@ -522,6 +522,20 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
  * gate-snapshot 同款判定注入）时未提交 dirty 交付面一并入冻结——独占树内 dirty 全归属本变更；
  * 共享主仓无法归属 → 不入面只警告（他侧声明的 dirty 连警告都免）。
  */
+/**
+ * dirty_gate_ignore 读取（2026-10-23-dirty-gate-ignore，module_gate_ignore/readFlowConfig
+ * 同款逐键正则防线）：local.yaml 单行逗号串（目录/文件前缀，posix），列表块形态不支持。
+ * 三态 fail-soft——未配置/键值非法/local.yaml 不可读 → 空清单（dirty 门行为与现状逐字一致）。
+ */
+export function readDirtyGateIgnore(specBase) {
+  try {
+    const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
+    const m = raw.match(/^\s*dirty_gate_ignore\s*:\s*(.+)$/m)
+    if (!m) return []
+    return m[1].split(',').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+  } catch { return [] }
+}
+
 export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
   const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
     && !isToolGovernancePath(f)
@@ -540,6 +554,12 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
       if (deliverable(path) && !dirty.includes(path)) dirty.push(path)
     }
   } catch { /* git 失败零 dirty 面 */ }
+  // 已知残渣前缀剔除（2026-10-23-dirty-gate-ignore，单一源）：仓主显式声明的残渣面
+  // （quicklog/、测试夹具运行库等）不进 dirty 冻结缺口——剔除进 dirtyIgnored 随返回值
+  // 留证（权威门打 ℹ️ 留痕行）；预检（flow-preflight.js）经本函数自动同源继承。
+  const ignorePrefixes = readDirtyGateIgnore(specBase)
+  const dirtyIgnored = ignorePrefixes.length > 0 ? dirty.filter((f) => ignorePrefixes.some((pfx) => f.startsWith(pfx))) : []
+  if (dirtyIgnored.length > 0) dirty = dirty.filter((f) => !dirtyIgnored.includes(f))
   // 归属切分单点：exclusive（worktree/--freeze-dirty）与共享主仓共用——他侧已声明 dirty 永不入冻
   // （评审 P2 修复：--freeze-dirty 承诺「非他侧声明」，全量冻入会造成跨变更审计双计；worktree
   // 下 own 恒为全量，切分无伤）
@@ -547,8 +567,8 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
   try {
     ownDirty = splitOwnVsForeignDiffFiles(cwd, change, dirty, { specBase }).own
   } catch { /* 归属切分失败：exclusive 保留全量（声明即边界），共享主仓退全量警告 */ }
-  if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [] }
-  return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+  if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [], dirtyIgnored }
+  return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty, dirtyIgnored }
 }
 
 /**
