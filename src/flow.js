@@ -1579,6 +1579,41 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
+    // ── 收口预检（fail-together 一次报全，2026-10-23-flow-done-preflight）：实测门前只读收集
+    //    便宜阻断条件（dirty-gap/orphan 预判）——56% 触发率的 dirty 门不再每轮先付完整实测；
+    //    命中即拦在付费实测之前，全部条件+处置出路一次报全（b1ab65b2「两条修复一次给全」
+    //    模式升格）。全过静默零行为变化；判定与权威门同源同旗标镜像（collectCloseoutPreflight
+    //    fail-safe：异常静默放行，权威门仍在原子步原序）。
+    {
+      const { collectCloseoutPreflight } = await import('./flow-preflight.js')
+      const pre = await collectCloseoutPreflight({ cwd, specBase, change, st, freezeDirty, acceptDirtyGap, acceptOrphanFace, turbo })
+      if (pre.findings.length > 0) {
+        console.error(`⛔ 收口预检未过——${pre.findings.length} 项阻断条件（fail-together 一次报全；实测未启动，处置后重跑同一条命令从断点续）：`)
+        for (const f of pre.findings) {
+          if (f.id === 'dirty-gap') {
+            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）
+            console.error(`   ▸ ${f.count} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+            console.error(`⛔ 未提交交付缺口未显式处置——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
+            console.error(`   ① git commit 这些文件（信息尾缀带 (${change}) 或 （${change}）），重跑本命令——冻结面自动并入`)
+            console.error(`   ② 全部归属本变更：flow done --change ${change} --freeze-dirty`)
+            console.error(`   ③ 接受审计缺口：flow done --change ${change} --accept-dirty-gap`)
+            console.error(`   💡 快速通道：脏文件全属并行会话在途/运行残渣且不在本变更交付面时，直接重跑带 --accept-dirty-gap（显式 pathspec 提交面已隔离归属；属本变更的文件必须走①提交）`)
+            console.error(`   ${f.files.slice(0, 3).join('、')}${f.files.length > 3 ? ' 等' : ''}`)
+          } else if (f.id === 'orphan-face') {
+            // 逐字复用 patch 子步权威门文案（防两路口径漂移——文案即契约面）
+            console.error(`   ▸ 会话专属 worktree 冻结面外交付改动——三选一：`)
+            console.error(`⛔ 会话专属 worktree 存在冻结面外交付改动：${f.commits.length} 个提交不在 HEAD 祖先链（patch-id 不等价）触及 ${f.count} 个交付文件——收口阻断（不归档；处置后重跑同一条命令从断点续）：`)
+            console.error(`   提交：${f.commits.slice(0, 5).map((c) => c.slice(0, 10)).join('、')}${f.commits.length > 5 ? ' 等' : ''}`)
+            console.error(`   文件：${f.files.slice(0, 5).join('、')}${f.files.length > 5 ? ' 等' : ''}`)
+            console.error(`   ① git rebase/cherry-pick 这些提交到 HEAD（补齐冻结面）后重跑`)
+            console.error(`   ② 确认放弃这些提交：清理对应分支/reflog 源后重跑`)
+            console.error(`   ③ 接受缺口留痕：flow done --change ${change} --accept-orphan-face`)
+          }
+        }
+        reportMidFail('patch')
+        process.exit(1)
+      }
+    }
     // 极速模式实测门跳过（2026-10-14-thin-turbo-mode FR-02/D-002）：turbo 在场不调
     // runQuickTestLintGate，合成 gate 同形状 skipped 对象（带 status:'skipped' 完整形态——
     // 下方 fmt 对 null 显示 '—'，带形态才输出「skipped — 跳过原因」，审计可见；

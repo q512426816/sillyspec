@@ -260,8 +260,9 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.ok(existsSync(join(specBase, 'changes', change)), '阻断不归档（change 仍 active）')
   const ok = cli(cwd, ['flow', 'done', '--change', change, '--accept-dirty-gap'])
   assert.equal(ok.status, 0, `显式接受缺口后应通过: ${ok.stdout}\n${ok.stderr}`)
-  // 实测面对账行在阻断轮（ledger 先于 patch 执行；重跑轮 ledger 幂等 skip 不再输出）
-  assert.match(blocked.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
+  // 实测面对账行移至放行轮（2026-10-23-flow-done-preflight：dirty 预检在实测门前拦截——
+  // 阻断轮不再白跑一轮实测；放行轮 ledger 首跑输出对账行，再后续重跑才幂等 skip）
+  assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
   assert.match(ok.stdout, /变更 patch 留档/, 'patch 留档行（noAI 冻结）')
   const archDir = join(specBase, 'changes', 'archive')
   const archived = readdirSync(archDir)[0]
