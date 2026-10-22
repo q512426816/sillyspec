@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-turbo-docs-auto",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-turbo-docs-auto:flow:测试绑定FR-01",
+      "tests": [
+        "test/turbo-docs-auto.test.mjs「①配置+纯文档面→完成无任务书+授权源行」",
+        "test/turbo-docs-auto.test.mjs「④旗标档 reason 原样」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-turbo-docs-auto"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-turbo-docs-auto:flow:测试绑定FR-02",
+      "tests": [
+        "test/turbo-docs-auto.test.mjs「②同面未配置→任务书照常」",
+        "test/turbo-docs-auto.test.mjs「③配置+src 面→不降档任务书照常」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-turbo-docs-auto"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-turbo-docs-auto:flow:测试绑定FR-03",
+      "tests": [
+        "test/turbo-docs-auto.test.mjs「①配置+纯文档面→完成无任务书+授权源行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-turbo-docs-auto"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-turbo-docs-auto:flow:测试绑定FR-04",
+      "tests": [
+        "test/turbo-docs-auto.test.mjs「①-④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-turbo-docs-auto"
+    }
+  ]
+}

@@ -11192,3 +11192,89 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-dirty-gate-ignore
   status: active
+
+## FR-cli-entry-589 turbo docs-auto 常设授权档与自动降档
+变更：2026-10-23-turbo-docs-auto
+状态：active
+摘要：纯文档面自动降档；旗标档不变
+场景正文：
+- 场景：纯文档面自动降档 — Given local.yaml 配 turbo: docs-auto，变更交付面仅文档（docs/note.md，盲维四问实质作答——无本档必评）；When 运行 flo
+- 场景：旗标档不变 — Given --turbo 旗标档（st.turbo=true）；When 运行 flow done；Then 行为与改动前逐字一致（turboSource=flag，re
+全文：.sillyspec/changes/archive/2026-10-23-turbo-docs-auto/requirements.md#FR-01
+最近确认：6df7e3d814ae3a9eab2395d7a61660aaba9f60e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-turbo-docs-auto:flow:测试绑定FR-01
+  tests: test/turbo-docs-auto.test.mjs「①配置+纯文档面→完成无任务书+授权源行」 | test/turbo-docs-auto.test.mjs「④旗标档 reason 原样」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-turbo-docs-auto
+  status: active
+
+## FR-cli-entry-590 fail-closed 面判定与零回归
+变更：2026-10-23-turbo-docs-auto
+状态：active
+摘要：含代码面不降档；未配置零回归
+场景正文：
+- 场景：含代码面不降档 — Given 配置在场但交付面含 src/work.js；When 运行 flow done；Then 不降档：评审照常定档（盲维实质作答→任务书 exit 1）、无 tur
+- 场景：未配置零回归 — Given 同纯文档面但未配置键；When 运行 flow done；Then 评审照常定档（任务书 exit 1）——豁免来自配置而非面本身。
+全文：.sillyspec/changes/archive/2026-10-23-turbo-docs-auto/requirements.md#FR-02
+最近确认：6df7e3d814ae3a9eab2395d7a61660aaba9f60e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-turbo-docs-auto:flow:测试绑定FR-02
+  tests: test/turbo-docs-auto.test.mjs「②同面未配置→任务书照常」 | test/turbo-docs-auto.test.mjs「③配置+src 面→不降档任务书照常」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-turbo-docs-auto
+  status: active
+
+## FR-cli-entry-591 授权源可观测
+变更：2026-10-23-turbo-docs-auto
+状态：active
+摘要：reason 区分授权源
+场景正文：
+- 场景：reason 区分授权源 — Given docs-auto 降档收口；Then gate reason 含 `local.yaml turbo: docs-auto` 且不含 `用户显式触发`。
+全文：.sillyspec/changes/archive/2026-10-23-turbo-docs-auto/requirements.md#FR-03
+最近确认：6df7e3d814ae3a9eab2395d7a61660aaba9f60e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-turbo-docs-auto:flow:测试绑定FR-03
+  tests: test/turbo-docs-auto.test.mjs「①配置+纯文档面→完成无任务书+授权源行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-turbo-docs-auto
+  status: active
+
+## FR-cli-entry-592 测试矩阵
+变更：2026-10-23-turbo-docs-auto
+状态：active
+摘要：四态
+场景正文：
+- 场景：四态 — Given temp 仓与直调各场景；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-turbo-docs-auto/requirements.md#FR-04
+最近确认：6df7e3d814ae3a9eab2395d7a61660aaba9f60e8
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-turbo-docs-auto:flow:测试绑定FR-04
+  tests: test/turbo-docs-auto.test.mjs「①-④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-turbo-docs-auto
+  status: active

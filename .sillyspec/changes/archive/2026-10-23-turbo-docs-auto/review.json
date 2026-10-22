@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-turbo-docs-auto",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "6df7e3d814ae3a9eab2395d7a61660aaba9f60e8",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "披露边界裁决留痕：docs-auto 档与旗标档同形全免评审（无采样差异化）——裁决可接受",
+      "evidence": "design 风险与死路如实披露该弃案取舍；授权权在仓主常设配置（local.yaml turbo: docs-auto）+面判定 fail-closed（代码分类器 quick-audit 单一源、脏面在场、异常走全量）+降档留一行授权源可事后审计，豁免面既有 1/4 采样校准不受影响——取舍有防护承载，可接受",
+      "location": "src/flow.js:2403"
+    },
+    {
+      "severity": "P3",
+      "title": "乱序作答措辞过强：「冻结面同样不含它（无静默放行窗口）」不严格成立",
+      "evidence": "docs-only 判定快照（flow.js:1290 changedFilesSinceBaseline）与 patch 冻结面子步非同一时点——判定后、冻结前的秒级窗口内落地的代码提交会进本轮冻结 patch 而实测/评审已跳过；兜底真实存在（该提交所属变更自身收口见代码面即不降档走全量，冻结 patch 亦留痕可审计），边界本体（迟到提交不进本轮判定）裁决可接受，仅「无静默放行窗口」的绝对化措辞应收窄",
+      "location": "src/flow.js:1290"
+    },
+    {
+      "severity": "P3",
+      "title": "作用域残余未披露：面判定仅覆盖本仓，主仓纯文档+跨仓代码混合交付不在判定面内",
+      "evidence": "docs-auto 判定只读本仓 changedFilesSinceBaseline(cwd)（src/flow.js:1290）；纯跨仓交付（主仓面空）已被 face.length>0 fail-closed 覆盖，但主仓文档+已登记跨仓代码的混合面会降档跳过实测/评审；design 作用域答「面判定用本仓」陈述为事实、未标该残余。触达需仓主显式配置+混合交付，窗口窄且冻结 patch 留痕可审计——裁决：残余可接受但应补披露",
+      "location": "src/flow.js:1290"
+    },
+    {
+      "severity": "P3",
+      "title": "文案漂移（微小）：评审豁免理由行在 docs-auto 源下仍打「用户显式极速声明」",
+      "evidence": "flow.js:2407「⚡ 极速模式：评审子步豁免（用户显式极速声明=风险自担留痕）」对 docs-auto 源原样输出——授权源是仓主配置非用户显式；不含 FR-03 禁用的「用户显式触发」字面（实测门 reason 已按 turboLabel 正确分源渲染，测试①断言通过），放行/阻断判定本身一致，仅理由行标签错源",
+      "location": "src/flow.js:2407"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-10-22T23:58:45.000Z"
+}
