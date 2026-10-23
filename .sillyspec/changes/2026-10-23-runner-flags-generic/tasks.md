@@ -8,4 +8,4 @@ created_at: 2026-10-23T07:03:48.235Z
 - [x] task-02: 三个注入点：py 推断组 grp.command、js 批 jsPrefix、jsx 推断批 jsxPrefix（hits 来源不注入防双加）——flags 均置于文件参数之前（node/go 类参数解析在首个位置参数处截断）；chunkByCommandLength 计入 flags 长度
 - [x] task-03: readDepsRegressCap(specBase)（N 1-2000|off|缺省 null）+ 组面应用：own=changedFiles∩deps 优先整跑；off=只跑 own；N=own∪依赖面前 N；loud 披露被弃数与去向（归 pre-push/CI 门）；缺省零回归
 - [x] task-04: schema 注册 runner_flags(object)/deps_regress_cap(string)+example token；平台仓 local.yaml 落地 runner_flags{py}+deps_regress_cap: off、config validate exit 0
-- [ ] task-05: 测试：两键解析三态＋三注入点源码锚＋缺省零回归锚＋schema/config-validate 套件绿
+- [x] task-05: 测试：两键解析三态＋三注入点源码锚＋缺省零回归锚＋schema/config-validate 套件绿
