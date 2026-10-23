@@ -5395,6 +5395,7 @@ SillySpec config — local.yaml 配置键速查
   sillyspec config known-failures list           列 known_failures 豁免键
   sillyspec config known-failures add <key…>     增豁免键（行级手术保注释、原子写；坏 YAML 拒改）
   sillyspec config known-failures remove <key…>  删豁免键（未命中静默忽略）
+  sillyspec config validate [--json]             逐键校验 local.yaml（错误 exit 1；缺文件=零配置可用 exit 0）
 
 说明:
   - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
@@ -5436,6 +5437,17 @@ SillySpec config — local.yaml 配置键速查
         if (!content.endsWith('\n')) process.stdout.write('\n')
         break;
       }
+      // config validate（2026-10-23-config-validate-skill）：逐键校验（schema 单一源；YAML/
+      // 类型/枚举/段内必填凭据闭合，未知键警告）——agent 写完配置的硬验证门（技能末步=本命令
+      // exit 0 才算完成）；缺文件=零配置可用 info exit 0（69 键仅凭据族真必填）。
+      if (configSub === 'validate') {
+        let specBase = null
+        try { specBase = resolvePlatformSpecDir(dir, specDir) } catch { /* 同 cat：pointer 异常走祖先链 */ }
+        const { cmdConfigValidate } = await import('./config-validate.js')
+        const exitCode = cmdConfigValidate({ dir, specBase, json })
+        process.exitCode = exitCode
+        break;
+      }
       // config known-failures（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证：known_failures
       // 无 CLI 管理面 → agent 手改 local.yaml，PS5.1 编码把 50KB 文件写成 mojibake 等用户
       // 2h13m）。行级增删查：保注释、原子写、坏 YAML 拒改——消灭手改场景。
@@ -5456,10 +5468,10 @@ SillySpec config — local.yaml 配置键速查
         break;
       }
       if (!isSchema) {
-        const sug = didYouMean(configSub, ['schema', 'cat', 'known-failures']);
+        const sug = didYouMean(configSub, ['schema', 'cat', 'validate', 'known-failures']);
         console.error(`❌ 未知子命令: config ${configSub}`);
         if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
-        console.error('用法: sillyspec config [schema|cat|known-failures] [--json]   打印配置键 / 读内容 / 管理 known_failures 键');
+        console.error('用法: sillyspec config [schema|cat|validate|known-failures] [--json]   打印配置键 / 读内容 / 校验 / 管理 known_failures 键');
         process.exit(2);
       }
       const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');

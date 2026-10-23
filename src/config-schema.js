@@ -122,6 +122,15 @@ export const LOCAL_YAML_SCHEMA = {
       keys: [
         { path: 'modules.<name>.path', type: 'string', optional: true, status: 'live', readers: ['extractModules (src/verify-postcheck.js)', 'parseLocalYamlModules (src/plan-postcheck.js)', 'extractModulePaths (src/worktree-deps.js)'], desc: '子模块目录路径（相对仓库根）。', example: 'frontend/' },
         { path: 'modules.<name>.test', type: 'string', optional: true, status: 'deprecated', readers: ['extractModules (src/verify-postcheck.js，退役提示用）'], desc: '【2026-09-26-dynamic-test-inference 退役，不再消费】测试面按变更动态推断、runner 自项目结构（pyproject/uv.lock/package.json 就近祖先）推断。模块级 flaky 处置迁 known_failures。块在场时 CLI 打印退役指引。', example: 'cd frontend && pnpm test' },
+        { path: 'fr_unmapped_baseline', type: 'integer', optional: true, status: 'live', readers: ['unmapped 大池消音（src/fr-index.js）'], desc: 'unmapped 域 FR 条数消音基线（跨仓历史堆积已清算时设当前值；增量 >10 才警告，缺省 0=无基线恒警告行为）。', example: '720' },
+      ],
+    },
+    {
+      id: 'repos',
+      title: '跨仓注册表',
+      note: '仓键 → 本地工作目录。注册后参与跨仓冻结面/对账/未标注交付探测与跨仓 worktree 落位；条目两种形态：字符串路径或 {path, worktree} 对象（worktree=跨仓 worktree 落位根，优先级见 worktree.crossPlacement）。local.yaml 本就 gitignored，真实本地路径不入库。',
+      keys: [
+        { path: 'repos.<repo键>', type: 'string', optional: true, status: 'live', readers: ['跨仓冻结/对账（src/cross-repo-reconcile.js）、注册探测（src/local-register.js）、跨仓 worktree（src/worktree-cross.js）'], desc: '仓键 → 该仓本地工作目录绝对路径（或 {path, worktree} 对象形态）。', example: 'shared-lib: C:/path/to/shared-lib' },
       ],
     },
     {
@@ -131,6 +140,7 @@ export const LOCAL_YAML_SCHEMA = {
       keys: [
         { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
+        { path: 'fr_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readFrRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-fr-regress-default-off 缺省翻转】FR 关联回归层本地实测开关：缺省（不写）=不跑（归 pre-push/CI 门，收口披露行留痕）；N（1-2000）=前 N 个绑定文件进实测面；all=全跑旧行为显式恢复；off=同缺省。', example: '40' },
       ],
     },
     {
@@ -188,6 +198,12 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用轻量协议开关：thin（缺省——2026-09-25-thin-default-flip 翻转，入口归一：常规变更默认轻量跑道，需求不清晰 CLI 拦下指路头脑风暴预段，实测失败自动升厚）= flow start/done 轻量跑道；legacy = 显式回旧道（run <stage> 全族行为逐字不动，flow start 拒跑并指路）。切回一行 yaml。', example: 'thin' },
         { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可轻量档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
+        // 以下四键为根级标量（无点 path——2026-10-23-config-validate-skill 补登：此前散落
+        // 各 reader 内联正则、schema 发现面缺失；校验器按注册面跟随）
+        { path: 'turbo', type: 'enum', values: ['docs-auto'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-23-turbo-docs-auto】纯文档面常设极速授权档：docs-auto=CLI 按提交∪脏面自动判纯文档（代码分类器同源）降档 turbo（实测/评审/UI 探针跳过，授权源留痕）；不写=关（--turbo 旗标档不受影响，agent 仍不可自启）。', example: 'docs-auto' },
+        { path: 'review_inline_wait', type: 'integer', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-23-review-inline-dispatch】薄道评审平台单调用通道等待预算秒数（1-600，钳 300s 帽）：>0 时 flow done 评审缺席分支经 SillyHub 派发 readOnly worker 有界轮询回收、同调用登记（missing→PASS 往返消灭）；任何失败回退任务书面零损失；不写/坏值=关。', example: '180' },
+        { path: 'dirty_gate_ignore', type: 'string', optional: true, status: 'live', readers: ['readDirtyGateIgnore (src/flow-parity.js)'], desc: '【2026-10-23-dirty-gate-ignore】dirty 冻结缺口门的已知残渣前缀忽略清单（单行逗号分隔、posix 前缀匹配，module_gate_ignore 同款）：命中面从缺口剔除并每轮 ℹ️ 留痕；三态 fail-soft 未配置=现状。', example: 'quicklog, test/.sillyspec' },
+        { path: 'module_gate_ignore', type: 'string', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-12-thin-module-gate-and-feed】模块图未登记目录软门的固定忽略清单（单行逗号、目录前缀、posix）——合法未登记面（根级脚本/配置等）免登记签收。', example: 'scripts, .github' },
       ],
     },
     {
@@ -426,6 +442,18 @@ dispatch:
 #   mode: thin               # thin=flow start/done 轻量跑道（协议必需交互=2）| legacy=既有 run <stage> 全族（回滚一行）
 #   edit_ratio_threshold: 0.5   # 机器稿改写比例路由阈值（超阈提示厚档；缺省 0.5）
 #   edit_ratio_enforcement: advisory   # advisory=测绿可轻量过只提示（缺省）| block=超阈阻断
+#
+# ── 收口调优（根级键，缺省零配置即用——注释态=缺省已最优，确要调优再解注释）──
+# turbo: docs-auto   # 纯文档面自动极速档（实测/评审/UI 探针跳过，授权源留痕）；不写=关
+# review_inline_wait: 180   # 评审平台单调用等待秒（1-600，需 SillyHub）；不写=评审任务书面模式
+# dirty_gate_ignore: quicklog, test/.sillyspec   # dirty 门已知残渣前缀（单行逗号、posix 前缀）
+# module_gate_ignore: scripts   # 模块图软门固定忽略目录（单行逗号、前缀匹配）
+# fr_regress_cap: 40   # FR 回归层本地开关：缺省不跑归 pre-push/CI 门；N=前 N 个；all=全跑旧行为
+# fr_unmapped_baseline: 720   # unmapped 域 FR 消音基线（跨仓历史堆积已清算时设）
+#
+# ── 跨仓注册表（注册后参与跨仓冻结/对账；local.yaml gitignored 故真实路径不入库）──
+# repos:
+#   shared-lib: C:/path/to/shared-lib   # 或对象形态 {path: …, worktree: <跨仓落位根>}
 
 # ── 阶段说明书下发与会话墙（R16 减负批次）──
 # stage:
