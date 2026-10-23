@@ -2348,3 +2348,31 @@ created_at: 2026-09-20T18:20:21.442Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-schema-registration-debt/requirements.md#FR-02
 最近确认：18177dfc5da32ece4be3ae98cbd07311fe001c57
+
+## FR-setup-134 readVerifyPyFlags(specBase) 逐键正则读取 py_runner_flags（引号剥离/注释剥离；缺省/坏值/不可读 fail-soft 空串=现状零回归）
+变更：2026-10-23-py-runner-flags
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-py-runner-flags/requirements.md#FR-01
+最近确认：0b1793eb262d5b61791dc974b238051fb3336c2b
+
+## FR-setup-135 runModuleSubset 推断路径对每个 py 组命令追加该 flags；hits 路径行为零变化
+变更：2026-10-23-py-runner-flags
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-py-runner-flags/requirements.md#FR-02
+最近确认：0b1793eb262d5b61791dc974b238051fb3336c2b
+
+## FR-setup-136 schema 注册 py_runner_flags（string）+ renderExample token 行（防漂耦合过）；平台仓 local.yaml 落地该键且 config validate exit 0
+变更：2026-10-23-py-runner-flags
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-py-runner-flags/requirements.md#FR-03
+最近确认：0b1793eb262d5b61791dc974b238051fb3336c2b
+
+## FR-setup-137 测试：readVerifyPyFlags 三态 unit＋源码接线锚＋config-schema/config-validate 套件绿
+变更：2026-10-23-py-runner-flags
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-py-runner-flags/requirements.md#FR-04
+最近确认：0b1793eb262d5b61791dc974b238051fb3336c2b
