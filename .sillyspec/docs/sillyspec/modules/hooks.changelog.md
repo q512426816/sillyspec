@@ -4,3 +4,4 @@ ql-20260911-030-bad4 | guard 白名单收口：git branch 整类只读放行改�
 - 2026-10-16-title-range-gate | 变更标题强制 10 到 30 字命名
 - 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收
 - 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议
+- 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿

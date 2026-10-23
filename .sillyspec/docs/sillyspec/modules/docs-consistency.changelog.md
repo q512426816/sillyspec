@@ -35,3 +35,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |
 | 2026-10-21 | 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议 |
 | 2026-10-21 | 2026-10-21-known-failures-unescape | known_failures 三读侧 YAML 反转义对称 |
+| 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |

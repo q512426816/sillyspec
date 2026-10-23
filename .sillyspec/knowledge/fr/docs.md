@@ -1517,3 +1517,79 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-21-docref-checkapproval-reanchor
   status: active
+
+## FR-docs-079 知识检索三路核心对 unmapped 停车场文件零返回
+变更：2026-10-21-knowledge-tier-denoise
+状态：active
+摘要：路由命中停车场行不注入；词片回退跳过停车场；向量召回候选被丢弃；search 披露行
+全文：.sillyspec/changes/archive/2026-10-21-knowledge-tier-denoise/requirements.md#FR-01
+最近确认：413f7cf7ed6ed66c97550d272e795b04f92c10b1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-01
+  tests: test/knowledge-tier-denoise.test.mjs「unmapped 停车场三路零返回（路由命中/词片回退/向量候选）+ search 披露行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-knowledge-tier-denoise
+  status: active
+
+## FR-docs-080 INDEX 路由行根除全体域共享泛词
+变更：2026-10-21-knowledge-tier-denoise
+状态：active
+摘要：新域行零泛词；存量行幂等剥离；泛词查询不再全池命中
+全文：.sillyspec/changes/archive/2026-10-21-knowledge-tier-denoise/requirements.md#FR-02
+最近确认：413f7cf7ed6ed66c97550d272e795b04f92c10b1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-02
+  tests: test/knowledge-tier-denoise.test.mjs「路由行共享泛词剥离：新行零泛词/存量幂等剥离/人工关键词保留/泛词查询不再全池命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-knowledge-tier-denoise
+  status: active
+
+## FR-docs-081 热路径扫描跨进程缓存（quicklog 伪条目 + knowledge-graph）
+变更：2026-10-21-knowledge-tier-denoise
+状态：active
+摘要：二次调用命中缓存；归档新增触发失效；坏缓存 fail-open
+全文：.sillyspec/changes/archive/2026-10-21-knowledge-tier-denoise/requirements.md#FR-03
+最近确认：413f7cf7ed6ed66c97550d272e795b04f92c10b1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-03
+  tests: test/knowledge-hotpath-cache.test.mjs「quicklog 伪条目与 graph 构建缓存：命中等价/归档新增失效/坏缓存 fail-open」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-knowledge-tier-denoise
+  status: active
+
+## FR-docs-082 unmapped 存量机器清偿（复用 redomain 原语的批量通道 + 本仓执行）
+变更：2026-10-21-knowledge-tier-denoise
+状态：active
+摘要：可推断条目迁移；迁不动留痕；幂等重跑
+全文：.sillyspec/changes/archive/2026-10-21-knowledge-tier-denoise/requirements.md#FR-04
+最近确认：413f7cf7ed6ed66c97550d272e795b04f92c10b1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-04
+  tests: test/redomain-unmapped-bulk.test.mjs「unmapped 批量清偿：文件锚推断迁移/无锚留痕/冲突跳过/幂等重跑」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-21-knowledge-tier-denoise
+  status: active

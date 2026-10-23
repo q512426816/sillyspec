@@ -143,7 +143,7 @@ describe('FR-03 提炼幂等与版本前进', () => {
     assert.deepEqual(r1.written, [{ file: 'decisions/core.md', id: 'D-core-001@v1', action: 'append' }], JSON.stringify(r1.written))
     const snap1 = snapshot(knowledgeRoot)
     assert.ok(snap1.has('INDEX.md'), 'INDEX 路由行随首次写入创建')
-    assert.ok(snap1.get('INDEX.md').includes('- core|decision|决策 → [decisions/core.md](decisions/core.md)'), '路由行格式契约')
+    assert.ok(snap1.get('INDEX.md').includes('- core → [decisions/core.md](decisions/core.md)'), '路由行格式契约（FR-02 泛词退役后路由键=域名，2026-10-21-knowledge-tier-denoise task-07 回归清偿补漏）')
 
     const r2 = distillIntoKnowledge(changeDir, knowledgeRoot, HEAD)
     assert.equal(r2.written.length, 1)

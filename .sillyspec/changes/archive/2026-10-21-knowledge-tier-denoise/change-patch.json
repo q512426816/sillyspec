@@ -1,0 +1,710 @@
+{
+  "change": "2026-10-21-knowledge-tier-denoise",
+  "baseline": "3fd7cf3b6c29958a54cee8c72b4b89bf628d9a70",
+  "head": "413f7cf7ed6ed66c97550d272e795b04f92c10b1",
+  "files": [
+    ".sillyspec/docs/SillyHub/scan/CONCERNS.md",
+    ".sillyspec/docs/backend/scan/CONCERNS.md",
+    ".sillyspec/docs/backend/scan/CONVENTIONS.md",
+    ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+    ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/change-management.md",
+    ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    ".sillyspec/docs/sillyspec/modules/dispatch.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/hooks.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/machine-interface.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/progress.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.md",
+    ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/setup.md",
+    ".sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/sync.changelog.md",
+    ".sillyspec/docs/sillyspec/modules/worktree.changelog.md",
+    ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+    "docs/sillyspec/platform-interface-map.md",
+    "package-lock.json",
+    "package.json",
+    "src/config-known-failures.js",
+    "src/decision-distill.js",
+    "src/decision-redomain.js",
+    "src/deleted-ledger.js",
+    "src/docs-check.js",
+    "src/fr-index.js",
+    "src/hooks/worktree-guard.js",
+    "src/hot-cache.js",
+    "src/knowledge-graph.js",
+    "src/knowledge-match.js",
+    "src/knowledge-quicklog.js",
+    "src/knowledge-vector.js",
+    "src/machine-interface.js",
+    "src/progress/change-registry.js",
+    "src/redomain-unmapped.js",
+    "src/redomain.js",
+    "src/run/code-face-key.js",
+    "src/run/complete.js",
+    "src/run/gates.js",
+    "src/run/stage.js",
+    "src/run/verify-quality-scan.js",
+    "src/runtime-paths.js",
+    "src/spec-sync.js",
+    "src/stages/knowledge.js",
+    "src/timing.js",
+    "src/verify-postcheck.js",
+    "src/worktree.js",
+    "src/yaml-scalar-unquote.js",
+    "test/decision-route-vocab.test.mjs",
+    "test/decisions-lifecycle.test.mjs",
+    "test/deps-batch-runner-flags.test.mjs",
+    "test/deps-cwd-prefix.test.mjs",
+    "test/design-knowledge-check.test.mjs",
+    "test/fr-index.test.mjs",
+    "test/fr-unmapped-repair.test.mjs",
+    "test/knowledge-gate-denoise.test.mjs",
+    "test/knowledge-graph.test.mjs",
+    "test/knowledge-hotpath-cache.test.mjs",
+    "test/knowledge-inject-ranking.test.mjs",
+    "test/knowledge-reason-overlap.test.mjs",
+    "test/knowledge-tier-denoise.test.mjs",
+    "test/knowledge-vector-recall.test.mjs",
+    "test/known-failures-unescape.test.mjs",
+    "test/quick-retired.test.mjs",
+    "test/redomain-unmapped-bulk.test.mjs",
+    "test/redomain.test.mjs",
+    "test/rename-ledger-tombstone.test.mjs",
+    "test/runtime-relayout.test.mjs",
+    "test/spec-sync-manifest-cache.test.mjs",
+    "test/verify-reuse-large-repo.test.mjs",
+    "test/worktree-ensure-idempotent.test.mjs",
+    "test/worktree-guard.test.mjs",
+    "test/worktree-native-overlay.test.mjs"
+  ],
+  "totals": {
+    "files": 82,
+    "additions": 3496,
+    "deletions": 207
+  },
+  "savedAt": "2026-10-23T15:08:03.603Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 8,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": true,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "progress",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 10,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": true,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "machine-interface",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/machine-interface.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "hooks",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/hooks.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 24
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3fd7cf3b6c29958a54cee8c72b4b89bf628d9a70",
+    "totals": {
+      "files": 82,
+      "additions": 3496,
+      "deletions": 207
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/SillyHub/scan/CONCERNS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/backend/scan/CONCERNS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/backend/scan/CONVENTIONS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/modules/docs.changelog.md",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/change-management.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/cli-entry.changelog.md",
+        "additions": 14,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/dispatch.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/hooks.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/machine-interface.changelog.md",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/progress.changelog.md",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+        "additions": 9,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+        "additions": 7,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/setup.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/sync.changelog.md",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/worktree.changelog.md",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 18,
+        "deletions": 18,
+        "kind": "modified"
+      },
+      {
+        "path": "package-lock.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "package.json",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/config-known-failures.js",
+        "additions": 258,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/decision-distill.js",
+        "additions": 26,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "src/decision-redomain.js",
+        "additions": 5,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/deleted-ledger.js",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/docs-check.js",
+        "additions": 8,
+        "deletions": 4,
+        "kind": "modified"
+      },
+      {
+        "path": "src/fr-index.js",
+        "additions": 7,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/hooks/worktree-guard.js",
+        "additions": 12,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/hot-cache.js",
+        "additions": 60,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 82,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 18,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/knowledge-quicklog.js",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/machine-interface.js",
+        "additions": 34,
+        "deletions": 13,
+        "kind": "modified"
+      },
+      {
+        "path": "src/progress/change-registry.js",
+        "additions": 30,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/redomain-unmapped.js",
+        "additions": 204,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/redomain.js",
+        "additions": 5,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/code-face-key.js",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 185,
+        "deletions": 14,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/gates.js",
+        "additions": 30,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/stage.js",
+        "additions": 22,
+        "deletions": 19,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 51,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/runtime-paths.js",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/spec-sync.js",
+        "additions": 89,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 68,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/timing.js",
+        "additions": 55,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 250,
+        "deletions": 14,
+        "kind": "modified"
+      },
+      {
+        "path": "src/worktree.js",
+        "additions": 80,
+        "deletions": 11,
+        "kind": "modified"
+      },
+      {
+        "path": "src/yaml-scalar-unquote.js",
+        "additions": 43,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/decision-route-vocab.test.mjs",
+        "additions": 4,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/decisions-lifecycle.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/deps-batch-runner-flags.test.mjs",
+        "additions": 108,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/deps-cwd-prefix.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/design-knowledge-check.test.mjs",
+        "additions": 6,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "test/fr-index.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/fr-unmapped-repair.test.mjs",
+        "additions": 6,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-gate-denoise.test.mjs",
+        "additions": 7,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-graph.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-hotpath-cache.test.mjs",
+        "additions": 178,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/knowledge-inject-ranking.test.mjs",
+        "additions": 10,
+        "deletions": 5,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-reason-overlap.test.mjs",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-tier-denoise.test.mjs",
+        "additions": 285,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/knowledge-vector-recall.test.mjs",
+        "additions": 27,
+        "deletions": 19,
+        "kind": "modified"
+      },
+      {
+        "path": "test/known-failures-unescape.test.mjs",
+        "additions": 99,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/quick-retired.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/redomain-unmapped-bulk.test.mjs",
+        "additions": 158,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/redomain.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/rename-ledger-tombstone.test.mjs",
+        "additions": 155,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/runtime-relayout.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/spec-sync-manifest-cache.test.mjs",
+        "additions": 251,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/verify-reuse-large-repo.test.mjs",
+        "additions": 234,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/worktree-ensure-idempotent.test.mjs",
+        "additions": 106,
+        "deletions": 0,
+        "kind": "new"
+      },
+      {
+        "path": "test/worktree-guard.test.mjs",
+        "additions": 22,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/worktree-native-overlay.test.mjs",
+        "additions": 47,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "d66b378a98a8c8be2f0a4a076e3f034850d8200d99b30f08a4e2d57954ce78a0",
+  "patchStatus": "ok"
+}

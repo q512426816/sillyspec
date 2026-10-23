@@ -79,3 +79,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-21-known-failures-unescape | known_failures 三读侧 YAML 反转义对称
 - 2026-10-23-turbo-docs-auto | turbo docs-auto 常设授权档
 - 2026-10-23-push-squash | 推送前按变更压扁本地未推送提交
+- 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿

@@ -95,9 +95,13 @@ test('⑤ 真实库 digest 钉子：flowKnowledgeDigest 注入段渲染该条目
     changeDir: cd,
     input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
   })
-  const line = r.lines.find((l) => /枚举.*开放世界/.test(l))
+  // 按条目号精确定位（D-unmapped-150 迁域不换号，2026-10-21-knowledge-tier-denoise task-06 落
+  // decisions/cli-entry.md）——词面 find(/枚举.*开放世界/) 会被 knowledge-scope-inject 新增的
+  // 规约 00 恒注入行抢走首匹配（该行含同词面但无死路短句，2026-10-23 实证）。
+  const line = r.lines.find((l) => /D-unmapped-150/.test(l))
   assert.ok(line, `注入段应含枚举开放世界条目（实际行：${r.lines.join(' | ').slice(0, 300)}）`)
   assert.match(line, /死路|否决理由/, '带死路短句或否决理由渲染')
+  assert.match(line, /decisions\/cli-entry\.md/, '迁域不换号：条目渲染带真实域文件指针')
   assert.ok(r.summary.rejectedDecisions >= 1, 'summary 计数含死路面')
   rmQuiet(cd)
 })

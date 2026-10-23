@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-knowledge-tier-denoise",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "413f7cf7ed6ed66c97550d272e795b04f92c10b1",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "search 披露行只覆盖路由层过滤源；词片回退/向量路径的停车场过滤致零结果时无披露",
+      "evidence": "parkingFiltered 信息仅由 matchByRouting 产生（knowledge-match.js:415,423）；fallbackByQueryShingles 在聚合前跳过停车场（knowledge-match.js:322，只命中停车场→返回 null 无过滤元数据）、buildResultFromPlatform 全候选为停车场时返回 null（knowledge-vector.js:191），两者丢失过滤事实；cmdSearch 只读 result.json.parkingFiltered（stages/knowledge.js:123-131），故 FR-01 披露承诺按字面覆盖三路、实际仅路由路径生效（绑定测试 T5 也只测路由路径）。核心零返回承诺三路均已兑现且更严格（静默零而非带披露零），影响限于 advisory 层可见性辅助。",
+      "location": "src/stages/knowledge.js:123"
+    },
+    {
+      "severity": "P3",
+      "title": "redomain-unmapped 的 --face 非法值静默回退 all 面",
+      "evidence": "cmdRedomainUnmapped 对 --face 取值严格判等 'decisions'/'fr'，其余值（含拼写错误如 --face decision）静默按 'all' 执行（redomain-unmapped.js:181），--apply 时会双面迁移而非报错；缓解：apply 幂等、推断宁漏勿错、help 文案声明 dry-run 先行。建议非法值显式报错。",
+      "location": "src/redomain-unmapped.js:181"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-23T16:05:00.000Z"
+}

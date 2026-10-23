@@ -93,3 +93,4 @@
 | 2026-10-23 | 2026-10-23-py-runner-flags | py 推断运行器尾随 flag 键 |
 | 2026-10-23 | 2026-10-23-runner-flags-generic | runner_flags 通用化与依赖面档位 |
 | 2026-10-23 | 2026-10-23-knowledge-scope-inject | 知识注入作用域（全部/仓库/模块/关键词） |
+| 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |

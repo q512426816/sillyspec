@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-21-knowledge-tier-denoise",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-tier-denoise.test.mjs「unmapped 停车场三路零返回（路由命中/词片回退/向量候选）+ search 披露行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-knowledge-tier-denoise"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-tier-denoise.test.mjs「路由行共享泛词剥离：新行零泛词/存量幂等剥离/人工关键词保留/泛词查询不再全池命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-knowledge-tier-denoise"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-hotpath-cache.test.mjs「quicklog 伪条目与 graph 构建缓存：命中等价/归档新增失效/坏缓存 fail-open」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-knowledge-tier-denoise"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-21-knowledge-tier-denoise:flow:测试绑定FR-04",
+      "tests": [
+        "test/redomain-unmapped-bulk.test.mjs「unmapped 批量清偿：文件锚推断迁移/无锚留痕/冲突跳过/幂等重跑」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-21-knowledge-tier-denoise"
+    }
+  ]
+}
