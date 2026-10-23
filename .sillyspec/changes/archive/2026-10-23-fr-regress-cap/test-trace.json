@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-fr-regress-cap",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-fr-regress-cap:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「①applyFrRegressCap 四态（截断/不截/off/无帽）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-cap"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-fr-regress-cap:flow:测试绑定FR-02",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「②readFrRegressCap 三态 fail-soft」",
+        "test/fr-regress-cap.test.mjs「③既有面零回归（套件零改动全绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-cap"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-fr-regress-cap:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「④本仓 local.yaml 键在场断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-cap"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-fr-regress-cap:flow:测试绑定FR-04",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「①-④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-cap"
+    }
+  ]
+}

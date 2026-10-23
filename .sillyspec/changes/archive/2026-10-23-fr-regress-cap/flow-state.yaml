@@ -1,0 +1,56 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  FR 回归面帽配置键
+
+
+  动机与背景：实测面三源（变更测试∪FR 关联回归∪import 依赖）中 FR 层自 2026-10-06 fr-regress-cap-drop 起优先面豁免帽整跑——脸肥域每次收口拖迷你全量：本仓 cli-entry 域 441 条
+  active FR → 每次 97-103 个绑定文件；平台仓 multi-agent-platform 实证 session-composer-slim 一轮 fr(237)+deps(~200)=440 文件
+  706.9s，review-risk-fixes-2 fr(97)=316.9s，多轮+评审复跑即小时级体感。用户裁决（2026-10-23 原话）：「别让跑全量测试啊，留 ci 跑，甚至只跑自己写的就行了」。新增 local.yaml
+  fr_regress_cap：N=FR 绑定面前 N 个进实测面（其余 loud 披露归 pre-push/CI 门），off=FR 层整体跳过（只跑变更∪import 依赖——验收层不动），缺省=无帽整跑零回归。本仓落地
+  fr_regress_cap: 24 自举（收口面 26 deps+24 fr≈50 文件）。用户已显式授权继续——autopilot 直跑到底，--no-prestage 声明需求已含决策（用户原话即裁决）。
+
+
+  成功标准：
+
+  - local.yaml 新键 fr_regress_cap（readFrRegressCap 逐键正则 fail-soft：正整数 1-2000 有效、off=0、缺省/坏值=无帽现状）：runVerifyTestCheck 组面时对
+  FR 关联回归面应用帽——超帽时前 N 个进实测面（现有稳定序），被弃 K 个与去向 loud 披露一行（归 pre-push/CI 门，防静默漏测）；off 时 FR 层跳过并 loud 披露（变更∪import 依赖照跑）
+
+  - 帽应用为纯函数 applyFrRegressCap(fr, cap)（fr 对象→{fr,
+  capApplied}），frLinked/frReport/优先面标记从帽后面自然推导（无第二套口径）；缺省无键时行为与改动前逐字一致（零回归锚）
+
+  - 变更自身测试与 import 依赖层不受键影响（验收层不动——直接断言面保持）
+
+  - 本仓 local.yaml 落地 fr_regress_cap: 24（自举：本变更收口即吃到帽）
+
+  - 测试：applyFrRegressCap 纯函数四态（无帽/N 内不截/超帽截断+kept/total/off 归零）＋readFrRegressCap 三态＋既有 verify-postcheck/quick-audit
+  测试面零改动全绿
+autopilot: true
+prestage_ack: true
+baseline_commit: a199a51a1989f7209ac21a7203a4c9b8ade5344e
+updatedAt: '2026-10-23T00:39:51.689Z'
+baseline_sha256: 2769cb87be7119194642ec313bd1915ee6556f84c370e165d56747bd24c120ef
+spec_approved: true
+spec_approved_at: '2026-10-23T00:30:53.506Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js30+nontest-skip2)+fr(24)（19.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023003140\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml 未配置 commands.lint（或标记
+  unavailable）。｜门文件 8 个
+

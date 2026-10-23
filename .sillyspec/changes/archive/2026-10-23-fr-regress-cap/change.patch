@@ -1,0 +1,157 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 48145ffd..94aa80b0 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -3349,6 +3349,41 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
+  * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
+  * runVerifyTestCheck 全链只为断言组卷接线）。
+  */
++/**
++ * fr_regress_cap 读取（2026-10-23-fr-regress-cap，逐键正则同款防线 + normalizeLineEndings
++ * CRLF 归一）：正整数 1-2000 → N；off → 0（FR 层整体跳过）；缺省/坏值/不可读 → null
++ * （无帽=现状零回归）。轻量正则不引 yaml 依赖（extractTestCommand 同风格）。
++ */
++export function readFrRegressCap(specBase) {
++  try {
++    const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
++    const m = raw.match(/^[ \t]*fr_regress_cap:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
++    if (!m) return null
++    const v = m[1].trim().replace(/^["']|["']$/g, '')
++    if (/^off$/i.test(v)) return 0
++    if (/^\d+$/.test(v)) {
++      const n = Number(v)
++      if (n >= 1 && n <= 2000) return n
++    }
++    return null // 坏值 fail-soft=无帽
++  } catch { return null }
++}
++
++/**
++ * FR 回归面帽纯函数（2026-10-23-fr-regress-cap）：fr.files 超帽截前 N 个（现有稳定序）；
++ * cap=0（off）整层归零；null/undefined/帽内零截断 → 原对象零变化。返回 { fr, capApplied }，
++ * capApplied={kept,total}|null 供 loud 披露。下游（frLinked/frReport/优先面标记/批组卷）
++ * 从帽后面对象自然推导，无第二套口径。
++ */
++export function applyFrRegressCap(fr, cap) {
++  if (cap === null || cap === undefined || !fr || !Array.isArray(fr.files) || fr.files.length === 0) {
++    return { fr, capApplied: null }
++  }
++  if (cap === 0) return { fr: { ...fr, files: [] }, capApplied: { kept: 0, total: fr.files.length } }
++  if (fr.files.length <= cap) return { fr, capApplied: null }
++  return { fr: { ...fr, files: fr.files.slice(0, cap) }, capApplied: { kept: cap, total: fr.files.length } }
++}
++
+ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, observability = null }) {
+   const subsetStartedAt = Date.now()
+   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
+@@ -3366,6 +3401,19 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+   if (!fr) {
+     try { fr = collectFrLinkedTests({ specBase, changeName, changedFiles: changedFiles || [], projectRoot: cwd }) } catch { fr = null }
+   }
++  // fr_regress_cap 施帽（2026-10-23-fr-regress-cap）：脸肥域（单域数百 active FR）收口拖
++  // 迷你全量的保险层瘦身；验收层（变更测试∪import 依赖）不动。帽后推导零第二口径
++  // （frLinked/frReport/优先面标记全走帽后 fr）；超帽/off loud 披露归 pre-push/CI 门；
++  // 缺省无键=无帽整跑（零回归）。
++  let frCapApplied = null
++  try {
++    const frCap = readFrRegressCap(specBase)
++    if (frCap !== null) {
++      const capped = applyFrRegressCap(fr, frCap)
++      fr = capped.fr
++      frCapApplied = capped.capApplied
++    }
++  } catch { /* 键读取 fail-soft=无帽 */ }
+   // 优先面全量口径（2026-10-06-fr-priority-overlap）：frLinked 只含与 deps 无重叠的「新增」
+   // 绑定文件——重叠者此前拿不到优先权，仍按普通依赖受帽字母序弃置（resume-title 收口实测
+   // 64 绑定弃 14）。绑定面钦定即优先，不论与 import 依赖面是否重叠；fr 缺席回退空数组
+@@ -3382,6 +3430,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+       console.warn(`⚠️ ${fr.unresolved.length} 个 FR 绑定测试路径无法自仓根解析（不入实测面）：${fr.unresolved.slice(0, 3).join('、')}${fr.unresolved.length > 3 ? ' 等' : ''}——sillyspec tests repair-paths 可修`)
+     }
+   }
++  if (frCapApplied) {
++    console.log(`ℹ️ fr_regress_cap：FR 关联回归面 ${frCapApplied.kept}/${frCapApplied.total} 进实测面，其余 ${frCapApplied.total - frCapApplied.kept} 个归 pre-push/CI 门（local.yaml fr_regress_cap 可调：N=前 N 个 / off=整层跳过）`)
++  }
+   const depsAll = [...new Set([...deps, ...frLinked])].sort()
+   let depsBatches = []
+   if (depsAll.length > 0) {
+diff --git a/test/fr-regress-cap.test.mjs b/test/fr-regress-cap.test.mjs
+new file mode 100644
+index 00000000..5fbd489a
+--- /dev/null
++++ b/test/fr-regress-cap.test.mjs
+@@ -0,0 +1,75 @@
++/**
++ * fr-regress-cap.test.mjs — FR 回归面帽配置键（2026-10-23-fr-regress-cap）
++ *
++ *   ① applyFrRegressCap 四态：无帽原对象/N 内不截/超帽截断 kept-total/off 归零（FR-01）
++ *   ② readFrRegressCap 三态 fail-soft：缺省 null/合法 N/off=0/坏值 null（含 CRLF 容错）（FR-02）
++ *   ③ 既有面零回归：本仓 local.yaml 键在场（自举断言）+ verify-postcheck 导出面既有套件回归（FR-02/03）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { applyFrRegressCap, readFrRegressCap } from '../src/verify-postcheck.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++const FR = (n) => ({ files: Array.from({ length: n }, (_, i) => `test/t${i}.test.mjs`), frHits: Array.from({ length: n }, (_, i) => ({ id: `FR-01${i}` })), unresolved: [] })
++
++test('① applyFrRegressCap 四态', () => {
++  const fr = FR(100)
++  // 无帽（null/undefined）→ 原对象零变化
++  assert.equal(applyFrRegressCap(fr, null).fr, fr, 'null 无帽原对象')
++  assert.equal(applyFrRegressCap(fr, undefined).fr, fr, 'undefined 无帽原对象')
++  assert.equal(applyFrRegressCap(null, 24).fr, null, 'fr 缺席原样')
++  // N 内不截
++  const inCap = applyFrRegressCap(fr, 200)
++  assert.equal(inCap.fr, fr, '帽内零截断原对象')
++  assert.equal(inCap.capApplied, null, '帽内无披露')
++  // 超帽截断
++  const over = applyFrRegressCap(fr, 24)
++  assert.equal(over.fr.files.length, 24, '截前 24')
++  assert.deepEqual(over.fr.files, fr.files.slice(0, 24), '现有稳定序前缀')
++  assert.deepEqual(over.capApplied, { kept: 24, total: 100 }, 'kept/total 披露口径')
++  assert.equal(over.fr.frHits.length, 100, 'frHits 保留（触达披露仍按全量计）')
++  // off 归零
++  const off = applyFrRegressCap(fr, 0)
++  assert.deepEqual(off.fr.files, [], 'off 整层归零')
++  assert.deepEqual(off.capApplied, { kept: 0, total: 100 }, 'off 披露')
++  // 空面零操作
++  assert.equal(applyFrRegressCap(FR(0), 24).capApplied, null, '空面无披露')
++})
++
++test('② readFrRegressCap 三态 fail-soft（含 CRLF 容错）', () => {
++  const d = mkdtempSync(join(tmpdir(), 'frc-'))
++  try {
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    const specBase = join(d, '.sillyspec')
++    const p = join(specBase, 'local.yaml')
++    writeFileSync(p, 'project:\n  type: generic\n')
++    assert.equal(readFrRegressCap(specBase), null, '未配置 null（无帽=现状）')
++    writeFileSync(p, 'project:\n  type: generic\nfr_regress_cap: 24\n')
++    assert.equal(readFrRegressCap(specBase), 24, '合法 N')
++    writeFileSync(p, 'project:\n  type: generic\nfr_regress_cap: off\n')
++    assert.equal(readFrRegressCap(specBase), 0, 'off=0')
++    writeFileSync(p, 'project:\n  type: generic\nfr_regress_cap: abc\n')
++    assert.equal(readFrRegressCap(specBase), null, '坏值 fail-soft null')
++    writeFileSync(p, 'project:\n  type: generic\nfr_regress_cap: 99999\n')
++    assert.equal(readFrRegressCap(specBase), null, '超界（>2000）fail-soft null')
++    // CRLF 容错（local.yaml 常为 CRLF——normalizeLineEndings 入口归一）
++    writeFileSync(p, 'project:\r\n  type: generic\r\nfr_regress_cap: 24\r\n')
++    assert.equal(readFrRegressCap(specBase), 24, 'CRLF 行尾仍命中')
++    rmSync(p, { force: true })
++    assert.equal(readFrRegressCap(specBase), null, '不可读 fail-soft null')
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('③ 本仓自举：local.yaml 键在场 + 缺省消费方语义锚', () => {
++  const yaml = readFileSync(join(ROOT, '.sillyspec', 'local.yaml'), 'utf8')
++  assert.match(yaml, /^fr_regress_cap:[ \t]*24[ \t]*$/m, '本仓已落地 fr_regress_cap: 24（自举——本变更收口即吃到帽）')
++  // 键读取单源消费（组面接线在 runModuleSubset fr 段——源码锚）
++  const src = readFileSync(join(ROOT, 'src', 'verify-postcheck.js'), 'utf8')
++  assert.ok(src.includes('applyFrRegressCap(fr, frCap)'), '组面接线在位（单一消费点）')
++  assert.ok(src.includes('归 pre-push/CI 门'), 'loud 披露去向在位')
++})

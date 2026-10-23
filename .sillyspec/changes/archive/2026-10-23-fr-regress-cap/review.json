@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-fr-regress-cap",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5e828bc224a174502b282b04601663787cebd871",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "测试绑定用例名与交付测试文件漂移：③④两用例名不存在（合并为③，零回归无实名用例）",
+      "evidence": "requirements.md 测试绑定声称 FR-02「③既有面零回归（套件零改动全绿）」与 FR-03「④本仓 local.yaml 键在场断言」；交付的 test/fr-regress-cap.test.mjs 仅 3 例（①②③），③ 实名为「本仓自举：local.yaml 键在场 + 缺省消费方语义锚」（键在场断言在此兑现），无 ④、无名为「既有面零回归」的用例——零回归主张由收口实测回执与既有套件承载而非文件内用例。实质覆盖在：评审复跑 EXIT=0（①②③ + verify-crlf-module-subset-e2e 88 例 + verify-postcheck-module 5 例全绿），属绑定可追溯性断链而非行为风险",
+      "location": ".sillyspec/changes/2026-10-23-fr-regress-cap/requirements.md:47-50 ↔ test/fr-regress-cap.test.mjs:102,126,150"
+    },
+    {
+      "severity": "P3",
+      "title": "「未配置键时组面输出与改前逐字一致」的测试锚为纯函数级间接锚",
+      "evidence": "缺省零回归锚在 applyFrRegressCap(fr,null) 返回同引用原对象断言（test ① assert.equal 同引用）+ readFrRegressCap 缺省 null（test ②）+ 既有面套件绿；runModuleSubset 全链 no-key 路径无逐字输出断言。代码结构上门控成立（施帽与披露行均被 frCap!==null / frCapApplied 双门控，缺省时零路径副作用），既有 e2e（fixture 无键走全链组面）复跑绿佐证，风险低记录备查",
+      "location": "src/verify-postcheck.js:3404-3416（施帽段）+ 3433-3436（披露行门控）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——帽在组面单一时点现算（readFrRegressCap 每次 runModuleSubset 调用时读取、无模块级缓存态），design 作答与代码一致；边界已裁决：可接受（键变更下一轮收口即生效，与 known_failures 等既有配置面同语义）",
+    "并发": "ok——键读取 try/catch fail-soft（读失败/竞态最坏=null=该轮无帽多跑，保守方向），applyFrRegressCap 纯函数零写盘，design 作答属实；边界已裁决：可接受",
+    "切换": "ok——帽不落任何状态面（capApplied 仅同轮内存变量用于披露行），被弃面由披露行+回执恒可见，中断重跑幂等；边界已裁决：可接受",
+    "作用域": "ok——键从受验仓 specBase 的 local.yaml 读取（仓级作用域），test ② 临时目录 fixture 验证不串台；边界已裁决：可接受（消费仓需升级 CLI 才能配键，缺省无键=无帽保版本兼容）。注：本仓自举键在 .sillyspec/local.yaml:79（该文件为 .gitignore:6 忽略的机本地文件，工作区实态即交付形态，test ③ 活锚防删）"
+  },
+  "probeNotes": {
+    "cli-copy-selfsufficient（文案自足）": "pass——新披露行提到的 local.yaml 键 fr_regress_cap 与取值语义（N=前 N 个 / off=整层跳过）真实存在且拼写正确（src/verify-postcheck.js readFrRegressCap：1-2000 正整数→N、off→0、缺省/坏值/不可读→null），无虚构命令/flag/路径，报错一次给全（被弃数+去向+可调键名）",
+    "cli-copy-selfsufficient（文案与门判定一致性）": "pass——披露行仅在 frCapApplied 非 null（超帽截断/off）时打印；缺省/坏值/不可读三态 frCapApplied=null 不打印不施帽——文案描述的放行/阻断条件与代码门控一致（src/verify-postcheck.js:3433-3436）",
+    "config-absent-zero-regression": "pass——未配置/坏配置/读取失败三态各有断言（test ②：缺省 null、坏值 abc→null、越界 99999→null、删文件不可读→null，另含 CRLF 容错与合法 N、off=0）；fail-soft try/catch 不拦主流程；缺省路径零回归锚=纯函数同引用断言+既有面复跑绿（本次 EXIT=0）+CLI 回执 fr(24) 可见帽生效",
+    "crossrepo-path-compat": "n/a——变更未触 worktree*/cross-repo*/local-register 面（冻结面仅 src/verify-postcheck.js + test/fr-regress-cap.test.mjs；local.yaml 键读取走既有 specBase 语义）"
+  },
+  "reviewedAt": "2026-10-23T00:39:00.124Z"
+}

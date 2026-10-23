@@ -1,0 +1,14 @@
+{"ts":1792715299084,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792715299084,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792715299084,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792715312665,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792715356050,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/verify-postcheck.js.tmp.26192.61ca8133ad63——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792715379423,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1792715453674,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792715453945,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792715454191,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792715454443,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792715454906,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792715454906,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1792715458543,"kind":"commit","stage":null,"detail":"5e828bc2","provisional":true}
+{"ts":1792715502197,"kind":"gate-run","stage":"verify","detail":"门实测 skipped（19.3s） · 20261023003140","provisional":true}
