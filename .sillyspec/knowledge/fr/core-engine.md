@@ -4692,3 +4692,88 @@
   confirmed_at: null
   source_change: 2026-09-24-fr-test-readside
   status: active
+
+## FR-core-engine-250 fr_regress_cap 配置键与 FR 回归面帽
+变更：2026-10-23-fr-regress-cap
+状态：active
+摘要：超帽截断；off 整层跳过
+场景正文：
+- 场景：超帽截断 — Given fr.files 含 100 个绑定文件且键=24；When 组面；Then 前 24 个进实测面并保持优先面标记，输出「24/100 进实测面，其余 76 个
+- 场景：off 整层跳过 — Given 键=off 且 fr.files 非空；When 组面；Then FR 层零文件进实测面，输出整层跳过披露行；变更测试与 import 依赖层照跑。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-cap/requirements.md#FR-01
+最近确认：5e828bc224a174502b282b04601663787cebd871
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-cap:flow:测试绑定FR-01
+  tests: test/fr-regress-cap.test.mjs「①applyFrRegressCap 四态（截断/不截/off/无帽）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-cap
+  status: active
+
+## FR-core-engine-251 验收层不动与零回归
+变更：2026-10-23-fr-regress-cap
+状态：active
+摘要：缺省零回归
+场景正文：
+- 场景：缺省零回归 — Given 未配置键；When 组面（fr.files 100）；Then 100 个全部进实测面（现状），无帽披露行。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-cap/requirements.md#FR-02
+最近确认：5e828bc224a174502b282b04601663787cebd871
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-cap:flow:测试绑定FR-02
+  tests: test/fr-regress-cap.test.mjs「②readFrRegressCap 三态 fail-soft」 | test/fr-regress-cap.test.mjs「③既有面零回归（套件零改动全绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-cap
+  status: active
+
+## FR-core-engine-252 本仓自举落地
+变更：2026-10-23-fr-regress-cap
+状态：active
+摘要：自举收口
+场景正文：
+- 场景：自举收口 — Given 本仓配置 24 且本变更触达 cli-entry 域 400+ FR；When 本变更 flow done；Then 实测面 fr 分量 ≤24 并有帽披露行。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-cap/requirements.md#FR-03
+最近确认：5e828bc224a174502b282b04601663787cebd871
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-cap:flow:测试绑定FR-03
+  tests: test/fr-regress-cap.test.mjs「④本仓 local.yaml 键在场断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-cap
+  status: active
+
+## FR-core-engine-253 测试矩阵
+变更：2026-10-23-fr-regress-cap
+状态：active
+摘要：矩阵
+场景正文：
+- 场景：矩阵 — Given 直调各形态；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-cap/requirements.md#FR-04
+最近确认：5e828bc224a174502b282b04601663787cebd871
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-cap:flow:测试绑定FR-04
+  tests: test/fr-regress-cap.test.mjs「①-④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-cap
+  status: active
