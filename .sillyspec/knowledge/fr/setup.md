@@ -2334,3 +2334,17 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-21-lint-to-prepush
   status: active
+
+## FR-setup-132 config-schema 注册 commands.scan:check（string）/module_paths（object，legacy 旧字段）/ui_prototype.form（string，段内其他子键经占位形态免未知警告）三键，readers 如实标注；renderExample 补对应 token 行（防漂耦合测试同步过）
+变更：2026-10-23-schema-registration-debt
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-schema-registration-debt/requirements.md#FR-01
+最近确认：18177dfc5da32ece4be3ae98cbd07311fe001c57
+
+## FR-setup-133 config-schema.test 与 config-validate.test 全绿；平台仓 local.yaml validate 复跑零警告
+变更：2026-10-23-schema-registration-debt
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-schema-registration-debt/requirements.md#FR-02
+最近确认：18177dfc5da32ece4be3ae98cbd07311fe001c57

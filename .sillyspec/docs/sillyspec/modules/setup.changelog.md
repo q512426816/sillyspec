@@ -33,3 +33,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-20 | 2026-10-20-scoped-verify-policy | 用户裁决（工具侧钉口径，不靠 agent 自觉）：每变更收口手跑全量测试是重复保险费（实测 3.5-… |
 | 2026-10-21 | 2026-10-21-lint-to-prepush | 收口 lint 移交 pre-push/CI 门 |
 | 2026-10-23 | 2026-10-23-config-validate-skill | config validate 与配置引导技能 |
+| 2026-10-23 | 2026-10-23-schema-registration-debt | schema 补登三键（平台仓 dogfood 欠账） |
