@@ -91,3 +91,4 @@
 | 2026-10-23 | 2026-10-23-fr-regress-cap | FR 回归面帽配置键 |
 | 2026-10-23 | 2026-10-23-fr-regress-default-off | FR 回归层缺省关闭 |
 | 2026-10-23 | 2026-10-23-py-runner-flags | py 推断运行器尾随 flag 键 |
+| 2026-10-23 | 2026-10-23-runner-flags-generic | runner_flags 通用化与依赖面档位 |
