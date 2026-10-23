@@ -276,6 +276,7 @@ modules:
       - src/command-cards.js
       - src/setup.js
       - src/config-schema.js
+      - src/config-validate.js
       - src/local-detect.js
       - templates/
       - assets/command-cards/

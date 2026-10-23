@@ -637,3 +637,90 @@ created_at: 2026-10-15T01:21:44.811Z
 摘要：单文件追加零代码面
 全文：.sillyspec/changes/archive/2026-10-21-flow-skill-askuser/requirements.md#FR-02
 最近确认：b9dfb18de4292ba64e383d6ab8b8d7fdaeb578f2
+
+## FR-skills-docs-030 sillyspec config validate 逐键校验命令
+变更：2026-10-23-config-validate-skill
+状态：active
+摘要：坏类型错误；段内缺凭据；缺文件零配置
+场景正文：
+- 场景：坏类型错误 — Given local.yaml 含 commands.test_timeout_sec: "abc"（string 而非 number）；When validate；Th
+- 场景：段内缺凭据 — Given mcp 段有 url 无 token；When validate；Then 错误 exit 1 点名缺键。
+- 场景：缺文件零配置 — Given local.yaml 不存在；When validate；Then info 提示零配置可用 exit 0。
+全文：.sillyspec/changes/archive/2026-10-23-config-validate-skill/requirements.md#FR-01
+最近确认：0622e2e3bb5fdbd7971b514e837d709150b354ab
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-config-validate-skill:flow:测试绑定FR-01
+  tests: test/config-validate.test.mjs「①校验函数 unit 八态」 | test/config-validate.test.mjs「②CLI e2e --json 双态与退出码」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-config-validate-skill
+  status: active
+
+## FR-skills-docs-031 sillyspec-config 引导技能（末步硬门=validate）
+变更：2026-10-23-config-validate-skill
+状态：active
+摘要：技能硬门锚
+场景正文：
+- 场景：技能硬门锚 — Given 技能文件在场；Then 含「config validate」与「必须通过/exit 0 才算完成」硬门表述与决策表。
+全文：.sillyspec/changes/archive/2026-10-23-config-validate-skill/requirements.md#FR-02
+最近确认：0622e2e3bb5fdbd7971b514e837d709150b354ab
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-config-validate-skill:flow:测试绑定FR-02
+  tests: test/config-validate.test.mjs「③技能文件存在性与硬门文案锚」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-config-validate-skill
+  status: active
+
+## FR-skills-docs-032 帮助面与数据源消费原则（执行期扩展：补登未注册键）
+变更：2026-10-23-config-validate-skill
+状态：active
+摘要：help 列新命令；本仓 dogfood
+场景正文：
+- 场景：help 列新命令 — Given sillyspec config help；Then 输出含 validate 行。
+- 场景：本仓 dogfood — Given 本仓真实 local.yaml（含 review_probes 列表/repos/fr_unmapped_baseline）；When validate；The
+全文：.sillyspec/changes/archive/2026-10-23-config-validate-skill/requirements.md#FR-03
+最近确认：0622e2e3bb5fdbd7971b514e837d709150b354ab
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-config-validate-skill:flow:测试绑定FR-03
+  tests: test/config-validate.test.mjs「④config help 列 validate 行（源码锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-config-validate-skill
+  status: active
+
+## FR-skills-docs-033 测试矩阵
+变更：2026-10-23-config-validate-skill
+状态：active
+摘要：矩阵
+场景正文：
+- 场景：矩阵 — Given 直调与 CLI 各形态；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-config-validate-skill/requirements.md#FR-04
+最近确认：0622e2e3bb5fdbd7971b514e837d709150b354ab
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-config-validate-skill:flow:测试绑定FR-04
+  tests: test/config-validate.test.mjs「①-④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-config-validate-skill
+  status: active

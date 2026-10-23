@@ -90,3 +90,4 @@
 | 2026-10-22 | 2026-10-23-turbo-docs-auto | turbo docs-auto 常设授权档 |
 | 2026-10-23 | 2026-10-23-review-inline-dispatch | 评审派发平台通道单调用化 |
 | 2026-10-23 | 2026-10-23-fr-regress-default-off | FR 回归层缺省关闭 |
+| 2026-10-23 | 2026-10-23-config-validate-skill | config validate 与配置引导技能 |
