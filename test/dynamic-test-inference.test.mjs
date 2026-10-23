@@ -215,20 +215,26 @@ test('upsertFrBindings projectRoot：写入路径归一仓根相对（丢前缀/
 
 // ── 6 E2E：未配置仓缺省动态子集 + FR 回归并入 + doc-only 空 ───────────
 
-test('runVerifyTestCheck E2E：无 local.yaml 的仓（R22 之痛）缺省动态子集实测 + FR 回归并入', () => {
+test('runVerifyTestCheck E2E：无 local.yaml 的仓（R22 之痛）缺省动态子集实测；FR 回归并入须 fr_regress_cap: all 显式开启', () => {
   const { root, specBase } = frFixture()
   sh(['git', 'init', '-q'], root)
   sh(['git', 'config', 'user.email', 't@t'], root)
   sh(['git', 'config', 'user.name', 't'], root)
   sh(['git', 'add', '.'], root)
   sh(['git', 'commit', '-qm', 'init'], root)
-  // 变更触碰 src/lib.js（FR-core-001 覆盖面）→ 三源：FR 回归 bound.test.mjs 并入
+  // 变更触碰 src/lib.js（FR-core-001 覆盖面）。v2 缺省（2026-10-23-fr-regress-default-off）：
+  // FR 关联回归层缺省不跑——bound.test.mjs 仅 FR 绑定不 import 变更文件 → 三源空 → dynamic-empty
   writeFileSync(join(root, 'src', 'lib.js'), 'export const a = 2\n')
   delete process.env.NODE_TEST_CONTEXT
   const r = runVerifyTestCheck({ cwd: root, specBase, changeName: null })
-  assert.equal(r.status, 'passed', `动态子集通过（${r.reason || ''}）`)
-  assert.equal(r.mode, 'dynamic-subset', '缺省=动态子集（无 local.yaml 测试配置不再 skip/裸全量）')
-  assert.match(String(r.command), /deps\(js1\)/, `FR 绑定测试并入执行面（${r.command}）`)
+  assert.equal(r.mode, 'dynamic-empty', 'v2 缺省：FR 层跳过后三源空 → dynamic-empty（无 local.yaml 不再 skip/裸全量——R22 教学面由下方 all 相证明）')
+  assert.equal(r.status, 'skipped', `FR 层缺省跳过 → 面空 skipped（${r.reason || ''}）`)
+  // 显式开启（all=旧行为）：FR 绑定测试并入执行面
+  writeFileSync(join(specBase, 'local.yaml'), 'fr_regress_cap: all\n')
+  const r2 = runVerifyTestCheck({ cwd: root, specBase, changeName: null })
+  assert.equal(r2.status, 'passed', `all 开启后动态子集通过（${r2.reason || ''}）`)
+  assert.equal(r2.mode, 'dynamic-subset')
+  assert.match(String(r2.command), /deps\(js1\)/, `FR 绑定测试并入执行面（${r2.command}）`)
 })
 
 test('runVerifyTestCheck E2E：doc-only 变更 → dynamic-empty 不硬跑全量', () => {

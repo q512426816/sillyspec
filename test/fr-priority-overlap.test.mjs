@@ -44,6 +44,9 @@ function fixture({ withFr }) {
     mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
     mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
     mkdirSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change'), { recursive: true })
+    // 显式恢复旧行为（2026-10-23-fr-regress-default-off：FR 层缺省不跑——本套件测的就是
+    // FR 优先面组卷，需全跑口径）
+    writeFileSync(join(specBase, 'local.yaml'), 'fr_regress_cap: all\n')
     writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  core:\n    paths:\n      - src/\n')
     writeFileSync(join(specBase, 'changes', 'archive', '2026-09-20-old-change', 'change-patch.json'), '{"files": ["src/lib.js"]}\n')
     writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [

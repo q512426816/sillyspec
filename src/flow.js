@@ -638,7 +638,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
   const _localYaml = join(specBase, 'local.yaml')
   if (!existsSync(_localYaml) && !existsSync(join(specBase, 'changes', change))) {
     console.error('❌ local.yaml 不存在——先跑 sillyspec init（mode/lint/known_failures 等 init 级配置的落点）。')
-    console.error('   测试面无需在此配置（2026-09-26 起：测试门按变更动态推断——本变更测试 ∪ FR 关联回归 ∪ import 依赖，')
+    console.error('   测试面无需在此配置（测试门按变更动态推断——本变更测试 ∪ import 依赖；FR 关联回归层缺省不跑归 pre-push/CI 门（2026-10-23-fr-regress-default-off），fr_regress_cap: N|all 可开启，')
     console.error('   runner 自项目结构 pyproject/package.json 推断；modules.*.test/commands.test 已退役，后者仅显式 test_strategy: full 生效）。')
     process.exit(2)
   }
@@ -1414,7 +1414,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (dr.applicable && dr.emptySlots.length > 0) {
           console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
           console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
-          console.error(`   恢复指引：槽标记（<!--AGENT:槽N）被删时，从 .runtime/step-guides/ 的指纹缓存可找骨架原文；或删 design.md 后重入 flow start 补生成（criteria 从 proposal 回提）`)
+          console.error(`   恢复指引：槽标记（<!--AGENT:槽N）被删时，骨架原文永存于 .runtime/state/draft-ledger-${change}.json 的 files["design.md"].text（draft-ledger 机器稿首版永存——2026-10-23 实证修正：step-guides/ 只有阶段指引，从未缓存 flow design 骨架，旧指引指向不存在的缓存）；从 ledger 取槽标记与问题行原样补回（作答放问题行之后——槽在问题行前会被当成答案）；或删 design.md 后重入 flow start 补生成（criteria 从 proposal 回提，注意会重置为骨架态）`)
           reportMidFail('artifacts')
           process.exit(1)
         }
