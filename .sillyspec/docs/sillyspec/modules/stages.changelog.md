@@ -68,3 +68,4 @@
 | 2026-10-20 | 2026-10-20-decision-caliber-unify | 决策类型状态口径单一源统一 |
 | 2026-10-20 | 2026-10-20-proto-provenance-hardline | dsh 会话 sess_a6c2804d 实证（用户裁决：平台仓不应单独做事，一切由工具引导驾驭）：… |
 | 2026-10-21 | 2026-10-21-brainstorm-proto-worktree | 头脑风暴原型期早进工作树协议 |
+| 2026-10-23 | 2026-10-23-knowledge-scope-discoverability | 知识作用域发现面三处引导 |
