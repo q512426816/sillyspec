@@ -11278,3 +11278,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-turbo-docs-auto
   status: active
+
+## FR-cli-entry-593 review_inline_wait 配置键与平台单调用派发
+变更：2026-10-23-review-inline-dispatch
+状态：active
+摘要：单调用回收
+场景正文：
+- 场景：单调用回收 — 
+全文：.sillyspec/changes/archive/2026-10-23-review-inline-dispatch/requirements.md#FR-01
+最近确认：07565eb7366003febf78168fba95f31a271bb708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-review-inline-dispatch:flow:测试绑定FR-01
+  tests: test/review-inline-dispatch.test.mjs「①fake client 成功单调用回收（落盘+reviewer+同源登记消费）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-review-inline-dispatch
+  status: active
+
+## FR-cli-entry-594 回退面零损失（任何失败回退现状任务书面）
+变更：2026-10-23-review-inline-dispatch
+状态：active
+摘要：键未配置零回归；超时回退
+场景正文：
+- 场景：键未配置零回归 — Given 键未配置；When 必评变更收口；Then 行为与改动前逐字一致（任务书+exit 1，无 inline 尝试行）。
+- 场景：超时回退 — Given 键=5 且平台 5s 未完成；When 收口；Then 打印一行超时留痕（含 missionId 指引）后任务书面照常 exit 1。
+全文：.sillyspec/changes/archive/2026-10-23-review-inline-dispatch/requirements.md#FR-02
+最近确认：07565eb7366003febf78168fba95f31a271bb708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-review-inline-dispatch:flow:测试绑定FR-02
+  tests: test/review-inline-dispatch.test.mjs「②probe 不可用回退」 | test/review-inline-dispatch.test.mjs「③超时回退」 | test/review-inline-dispatch.test.mjs「⑤e2e 键未配置零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-review-inline-dispatch
+  status: active
+
+## FR-cli-entry-595 提取与登记单一源
+变更：2026-10-23-review-inline-dispatch
+状态：active
+摘要：同源登记
+场景正文：
+- 场景：同源登记 — Given inline 回收 verdict=FAIL+P1；Then 走既有 FAIL 拦截分支（不许归档），与子代理路径同判定。
+全文：.sillyspec/changes/archive/2026-10-23-review-inline-dispatch/requirements.md#FR-03
+最近确认：07565eb7366003febf78168fba95f31a271bb708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-review-inline-dispatch:flow:测试绑定FR-03
+  tests: test/review-inline-dispatch.test.mjs「④坏 JSON 回退（validateReviewJson 同一源拒收）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-review-inline-dispatch
+  status: active
+
+## FR-cli-entry-596 测试矩阵
+变更：2026-10-23-review-inline-dispatch
+状态：active
+摘要：矩阵
+场景正文：
+- 场景：矩阵 — Given fake client 与 temp 仓各场景；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-review-inline-dispatch/requirements.md#FR-04
+最近确认：07565eb7366003febf78168fba95f31a271bb708
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-review-inline-dispatch:flow:测试绑定FR-04
+  tests: test/review-inline-dispatch.test.mjs「①-⑤＋readFlowConfig 键三态 unit」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-review-inline-dispatch
+  status: active

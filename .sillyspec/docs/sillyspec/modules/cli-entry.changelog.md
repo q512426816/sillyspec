@@ -88,3 +88,4 @@
 | 2026-10-22 | 2026-10-23-flow-done-preflight | flow done 收口预检一次报全 |
 | 2026-10-22 | 2026-10-23-dirty-gate-ignore | dirty 门已知残渣忽略配置键 |
 | 2026-10-22 | 2026-10-23-turbo-docs-auto | turbo docs-auto 常设授权档 |
+| 2026-10-23 | 2026-10-23-review-inline-dispatch | 评审派发平台通道单调用化 |

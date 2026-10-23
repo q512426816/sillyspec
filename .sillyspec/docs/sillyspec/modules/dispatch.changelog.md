@@ -9,3 +9,4 @@
 | 2026-10-14 | 2026-10-14-tdd-scope-guidance | TDD 分层适用引导：templates/prompts/testcase-design.md 单一源头部加「按层适用」块（纯逻辑严格先行/行为契约断用户所见/视觉样式与纯配置不写，一句话判据「当 X 发生时用户应看到/发生 Y」）——经既有 include 机制自动流入三派发路径；local-agent.js 写模式行 TDD 措辞带按层限定；机器门零改动；新增 test/tdd-scope-guidance.test.mjs。 |
 | 2026-10-18 | 2026-10-18-runtime-relayout | runtime 目录分层重排与归档回收 |
 | 2026-10-21 | 2026-10-21-review-dispatch-answer-salvage | 修独立评审回收链：answer 原文兜底 |
+| 2026-10-23 | 2026-10-23-review-inline-dispatch | 评审派发平台通道单调用化 |
