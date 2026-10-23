@@ -91,3 +91,4 @@
 | 2026-10-23 | 2026-10-23-review-inline-dispatch | 评审派发平台通道单调用化 |
 | 2026-10-23 | 2026-10-23-fr-regress-default-off | FR 回归层缺省关闭 |
 | 2026-10-23 | 2026-10-23-config-validate-skill | config validate 与配置引导技能 |
+| 2026-10-23 | 2026-10-23-knowledge-scope-inject | 知识注入作用域（全部/仓库/模块/关键词） |
