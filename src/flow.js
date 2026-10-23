@@ -297,6 +297,29 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     summary.domains = domains
     summary.frCount = frs.length
     lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
+    const scopedLines = []
+    // 作用域注入（2026-10-23-knowledge-scope-inject）：①工具内置中立性行恒注入（规约 00——
+    // 不依赖仓侧配置：语言锁定类设计错误在决策时点被提醒，2026-10-23 实证驱动的内置面）；
+    // ②always/repo 条目恒注入（帽 5 条+溢出计数）；③module:<域> 条目仅触达域命中时注入；
+    // ④无标记条目走关键词面（零改动）。解析/读取 fail-soft 零输出。
+    try {
+      const { collectScopedKnowledge } = await import('./knowledge-scope.js')
+      const scoped = collectScopedKnowledge(knowledgeRoot)
+      const alwaysRepo = [...scoped.always, ...scoped.repo]
+      summary.scopedEntries = alwaysRepo.length
+      scopedLines.push('   🧭 工具中立性（内置规约 00，每变更恒注入）：不枚举定义开放世界、不锁死开发语言/框架——配置与机制用 CLI 自有分类（批类别/路径集合），新增语言只加探测适配。')
+      for (const e of alwaysRepo.slice(0, 5)) {
+        scopedLines.push(`   📌 [${e.scope}] ${e.id}：${e.summary}`)
+      }
+      if (alwaysRepo.length > 5) scopedLines.push(`   （+${alwaysRepo.length - 5} 条恒注入条目见 knowledge/）`)
+      const moduleEntries = []
+      for (const d of domains) for (const e of (scoped.modules[d] || [])) moduleEntries.push({ ...e, domain: d })
+      for (const e of moduleEntries.slice(0, 3)) {
+        scopedLines.push(`   📌 [module:${e.domain}] ${e.id}：${e.summary}`)
+      }
+      if (moduleEntries.length > 3) scopedLines.push(`   （+${moduleEntries.length - 3} 条触达域作用域条目见 knowledge/）`)
+      lines.push(...scopedLines)
+    } catch { /* 作用域注入 fail-soft：FR/关键词面不受影响 */ }
     if (domains.length === 0) {
       lines.push(`   触达域：起点无依据（--input 无路径语料、无 design 清单）——干活涉及 src 后 resume/收口会补查；`)
       lines.push(`   相关域现行 FR 可自行查 knowledge/fr/<域>.md（INDEX.md 有路由）。`)
@@ -367,6 +390,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     if (domains.length === 0 && rejected.length === 0 && !km.matched) {
       lines.length = 0
       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)
+      if (scopedLines.length > 0) lines.push(...scopedLines) // 恒注入面不被空态折叠吞（2026-10-23-knowledge-scope-inject）
     }
     // 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：零命中=正需要语义召回
     // 而未获得的时刻——平台已连接但开关未开（缺省关）时给一行可执行提示；有命中/未连接/
