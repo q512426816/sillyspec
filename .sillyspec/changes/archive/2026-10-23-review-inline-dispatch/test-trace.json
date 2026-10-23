@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-review-inline-dispatch",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-review-inline-dispatch:flow:测试绑定FR-01",
+      "tests": [
+        "test/review-inline-dispatch.test.mjs「①fake client 成功单调用回收（落盘+reviewer+同源登记消费）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-review-inline-dispatch"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-review-inline-dispatch:flow:测试绑定FR-02",
+      "tests": [
+        "test/review-inline-dispatch.test.mjs「②probe 不可用回退」",
+        "test/review-inline-dispatch.test.mjs「③超时回退」",
+        "test/review-inline-dispatch.test.mjs「⑤e2e 键未配置零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-review-inline-dispatch"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-review-inline-dispatch:flow:测试绑定FR-03",
+      "tests": [
+        "test/review-inline-dispatch.test.mjs「④坏 JSON 回退（validateReviewJson 同一源拒收）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-review-inline-dispatch"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-review-inline-dispatch:flow:测试绑定FR-04",
+      "tests": [
+        "test/review-inline-dispatch.test.mjs「①-⑤＋readFlowConfig 键三态 unit」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-review-inline-dispatch"
+    }
+  ]
+}

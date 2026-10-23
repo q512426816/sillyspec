@@ -1,0 +1,55 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  评审派发平台通道单调用化
+
+
+  动机与背景：轻量变慢四子代理画像：评审往返是 src 变更剩余最大单项成本——missing→PASS 结构性多付一次协议调用+一轮主代理调度（中位 7-10 分钟/变更，覆盖 ~74%
+  变更）。仓内已有完整平台派发链（review-dispatch.js：SillyHubMcpClient probe→createMission→dispatchWorker→listWorkers→getWorkerResult，厚道
+  stage 评审在用），薄道 review 子步未接。新增配置门控的单调用通道：flow done 评审缺席分支在 local.yaml review_inline_wait>0 且平台可用时，把
+  renderReviewerTaskbook 产物作为 workerPrompt 派发平台、有界轮询（键值秒数，帽 300s）、getWorkerResult 三通道提取薄道 review.json（validateReviewJson
+  同一源校验）后落盘并同调用继续登记子步——missing→PASS 往返消灭。任何失败面（键未配置/平台不可用/create 失败/超时/提取失败/schema 违规）一律回退现状任务书面 exit
+  1，零治理损失。用户已显式授权继续（2026-10-23「继续」「下一步」）——autopilot 直跑到底，--no-prestage 声明需求已含决策（方案经四子代理分析定案）。
+
+
+  成功标准：
+
+  - local.yaml 新键 review_inline_wait: <秒>（readFlowConfig 逐键正则，正整数 1-600 有效、缺省/0/坏值=off 零回归）：flow done review 缺席分支在键有效且平台
+  probe 可用时单调用派发——workerPrompt=薄道评审任务书全文，有界轮询至完成，提取+validateReviewJson 通过→写 changeDir/review.json→同调用继续既有登记块（不 exit
+  不再欠一次 done）
+
+  - 提取与登记单一源：inline 产物走既有 validateReviewJson+登记判定（无第二套）；reviewer 字段如实 'platform-inline'；missionId/workerId 随收口输出留痕
+
+  - 回退面零损失：键 off/probe 不可用/create/dispatch 失败/超时未完成/提取失败/schema 违规——打印一行 inline 尝试结果后按现状任务书面 exit 1（既有承诺词必评/评审 P1
+  拦截等测试零改动全绿）
+
+  - 测试：unit fake client（成功同调用登记链/probe 不可用回退/超时回退/坏 JSON 回退）＋e2e 键未配置零回归（任务书面原样）
+autopilot: true
+prestage_ack: true
+baseline_commit: 35085c50918e6d640161280487dfefc73e094c30
+updatedAt: '2026-10-23T00:18:33.773Z'
+baseline_sha256: ca158edd9323d9f8cc34de772d12d677ae8e7078ff54521e8e9f0de6547b4a6a
+spec_approved: true
+spec_approved_at: '2026-10-23T00:05:49.496Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: skipped ← module[]+deps(js102+js-meta-skip1+nontest-skip1)+fr(103)（62.0s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023001142\test-result.json —
+  跳过原因：模块子集含环境缺件跳过（已跑模块全绿）：deps(auto-js-meta-skip)、deps(auto-nontest-skip)——补装依赖后恢复实测。｜lint: skipped — 跳过原因：local.yaml
+  未配置 commands.lint（或标记 unavailable）。｜门文件 5 个
+

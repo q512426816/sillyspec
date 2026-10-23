@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-review-inline-dispatch",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "07565eb7366003febf78168fba95f31a271bb708",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design 心跳承诺与实现不一致：轮询进度心跳仅在状态变化时输出，长 running 阶段零心跳",
+      "evidence": "design.md 风险与死路承诺「轮询期每 15s 打一行进度心跳」缓解阻塞体感，但实现（say 仅在 st!==lastState 时触发，默认 pollIntervalMs=5s）在状态长时间不变时无任何输出——承诺的缓解弱于设计，纯 UX 面无数据正确性风险",
+      "location": "src/review-dispatch.js:508-510"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-23T00:17:54.000Z"
+}

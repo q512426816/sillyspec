@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-23-review-inline-dispatch",
+  "baseline": "35085c50918e6d640161280487dfefc73e094c30",
+  "head": "07565eb7366003febf78168fba95f31a271bb708",
+  "files": [
+    "src/flow.js",
+    "src/review-dispatch.js",
+    "test/review-inline-dispatch.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 356,
+    "deletions": 37
+  },
+  "savedAt": "2026-10-23T00:11:51.224Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "dispatch",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/dispatch.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 18,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "35085c50918e6d640161280487dfefc73e094c30",
+    "totals": {
+      "files": 3,
+      "additions": 356,
+      "deletions": 37
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 80,
+        "deletions": 37,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/review-dispatch.js",
+        "additions": 99,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/review-inline-dispatch.test.mjs",
+        "additions": 177,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2ba616a969b8548b9dd07c7ce7aa4afbc6abc269cb88c1810f250ed5b84e0560",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,454 @@
+diff --git a/src/flow.js b/src/flow.js
+index ee858482..88ce2cc9 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -86,15 +86,19 @@ export function readFlowConfig(specBase) {
+     // turbo docs-auto 常设授权档（2026-10-23-turbo-docs-auto）：仓主一行声明纯文档面自动降档；
+     // 逐键正则同款防线，未配置/坏值（turbo: off 等）fail-soft 恒 false
+     const turboDocsAuto = /^\s*turbo\s*:\s*docs-auto\s*$/m.test(raw)
++    // review_inline_wait（2026-10-23-review-inline-dispatch）：薄道评审平台单调用通道的等待
++    // 预算秒数（1-600 正整数有效；缺省/坏值 0=off——回退现状任务书面零回归）
++    const riw = raw.match(/^\s*review_inline_wait\s*:\s*([0-9]+)\s*$/m)
+     return {
+       mode,
+       editRatioThreshold: th ? Number(th[1]) : 0.5,
+       editRatioEnforcement: en ? en[1] : 'advisory',
+       moduleGateIgnore: ig ? ig[1].split(',').map((s) => s.trim()).filter(Boolean) : [],
+       turboDocsAuto,
++      reviewInlineWaitSeconds: riw ? Math.min(600, Math.max(0, Number(riw[1]))) : 0,
+     }
+   } catch {
+-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [], turboDocsAuto: false }
++    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [], turboDocsAuto: false, reviewInlineWaitSeconds: 0 }
+   }
+ }
+ 
+@@ -2426,6 +2430,41 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       } catch { /* 无/坏 JSON → 保持 null（既有判定） */ }
+     }
+     const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
++    // 登记块单一源（2026-10-23-review-inline-dispatch）：子代理重跑路径与平台 inline 回收
++    // 路径同源消费——validateReviewJson+FAIL/P1 拦截+P2/P3 留债+PASS mark，无第二套判定。
++    const registerReviewOutcome = async () => {
++      const v = validateReviewJson(join(changeDir, 'review.json'))
++      if (!v.ok) {
++        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
++        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
++        appendTelemetry(reviewOutcome) // 修评审 P2①
++        reportMidFail('review')
++        process.exit(1)
++      }
++      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
++      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
++      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
++        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
++        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
++        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
++        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
++        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
++        reportMidFail('review')
++        process.exit(1)
++      }
++      if (others.length > 0) {
++        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
++        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
++        // 处置提示（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
++        // P2/P3 非阻断可留债归档；要修则修复面决定是否重评——只碰治理文件不动本变更
++        // requirements/design 的后缀提交触发治理面等价保留（评审保留+自动重冻结，零重评）；
++        // 触及交付面或承诺面才隔离重评（任务书带前轮 findings，复审只验修复+新增）。
++        console.warn(`   💡 处置参考：P2/P3 非阻断，可留债归档；要修——只碰治理文件（.sillyspec/**，不动本变更 requirements/design）的提交不触发重评；触及交付面或 requirements/design 需重评（复审只验修复+新增，非全量首评）`)
++      }
++      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
++      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
++      mark('review')
++    }
+     if (!tier.required) {
+       console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
+       reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
+@@ -2436,9 +2475,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
+       let taskbookHead = null
+       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
+-      // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
+-      // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
+-      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
++      // 平台单调用通道（2026-10-23-review-inline-dispatch）：review_inline_wait 键门控——键有效
++      // 先试 inline（派发→有界等待→回收→同调用登记，missing→PASS 往返消灭）；任何失败回退
++      // 现状任务书面（零治理损失）。键 off 时本分支与改动前逐字一致。
++      const inlineWaitSec = readFlowConfig(specBase).reviewInlineWaitSeconds
++      if (inlineWaitSec > 0) {
++        console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——平台单调用通道已启用（review_inline_wait=${inlineWaitSec}s），先试 inline 派发：`)
++      } else {
++        // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
++        // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
++        console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
++      }
+       // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
+       // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
+       let _probeLines = null
+@@ -2478,43 +2525,39 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution, testReceipt: _receipt })
+         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
+       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
+-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
+-      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+-      appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+-      reportMidFail('review')
+-      process.exit(1)
+-    } else {
+-      const v = validateReviewJson(join(changeDir, 'review.json'))
+-      if (!v.ok) {
+-        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
+-        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
+-        appendTelemetry(reviewOutcome) // 修评审 P2①
+-        reportMidFail('review')
+-        process.exit(1)
++      const taskbookText = renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines })
++      let inlineWritten = false
++      if (inlineWaitSec > 0) {
++        try {
++          const { runThinReviewInline } = await import('./review-dispatch.js')
++          const inline = await runThinReviewInline({
++            cwd, specBase, change, changeDir, taskbookText,
++            waitMs: Math.min(300_000, inlineWaitSec * 1000),
++            log: (m) => console.log(m),
++          })
++          if (inline.ok) {
++            console.log(`✅ 平台评审单调用回收（mission ${String(inline.missionId).slice(0, 8)}/worker ${String(inline.workerId).slice(0, 8)}，reviewer=platform-inline）——同调用登记结论（missing→PASS 往返消灭）`)
++            inlineWritten = true
++          } else {
++            console.log(`ℹ️ 平台评审单调用未回收：${inline.reason}——回退评审任务书面`)
++          }
++        } catch (e) {
++          console.log(`ℹ️ 平台评审单调用异常（${(e && e.message) || e}）——回退评审任务书面`)
++        }
+       }
+-      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
+-      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
+-      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
+-        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
+-        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+-        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
+-        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
+-        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
++      if (!inlineWritten) {
++        if (inlineWaitSec > 0) {
++          console.log(`⚖️ 回退评审任务书面——任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
++        }
++        console.log(taskbookText)
++        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
++        appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+         reportMidFail('review')
+         process.exit(1)
+       }
+-      if (others.length > 0) {
+-        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
+-        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
+-        // 处置提示（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
+-        // P2/P3 非阻断可留债归档；要修则修复面决定是否重评——只碰治理文件不动本变更
+-        // requirements/design 的后缀提交触发治理面等价保留（评审保留+自动重冻结，零重评）；
+-        // 触及交付面或承诺面才隔离重评（任务书带前轮 findings，复审只验修复+新增）。
+-        console.warn(`   💡 处置参考：P2/P3 非阻断，可留债归档；要修——只碰治理文件（.sillyspec/**，不动本变更 requirements/design）的提交不触发重评；触及交付面或 requirements/design 需重评（复审只验修复+新增，非全量首评）`)
+-      }
+-      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
+-      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
+-      mark('review')
++      await registerReviewOutcome()
++    } else {
++      await registerReviewOutcome()
+     }
+   }
+ 
+diff --git a/src/review-dispatch.js b/src/review-dispatch.js
+index e6f69f14..b946f765 100644
+--- a/src/review-dispatch.js
++++ b/src/review-dispatch.js
+@@ -436,6 +436,105 @@ export async function runReviewDispatch(opts = {}) {
+   }
+ }
+ 
++// ════════ 薄道评审平台单调用派发（2026-10-23-review-inline-dispatch）════════
++/**
++ * 薄道（thin flow）review 子步的平台单调用通道：flow done 评审缺席分支经 local.yaml
++ * review_inline_wait 键门控调用——薄道任务书（renderReviewerTaskbook 产物+平台产出方式
++ * 尾注，任务书生产权仍在 CLI）派发平台 readOnly worker，有界轮询至完成/超时，三通道
++ * 提取复用厚道 extractReviewFromArtifacts（JSON 对象提取与 schema 无关）+ 薄道
++ * validateReviewJson 同一源校验，通过才落 changeDir/review.json（reviewer=platform-inline
++ * 如实标注）——成功后调用方同调用继续登记子步，missing→PASS 往返消灭。
++ * 任何失败返回 {ok:false, reason}——调用方回退现状任务书面（零治理损失）。
++ * 不写 dispatch record（那是厚道跨命令异步形态；单调用在途态只随返回值与输出留痕）。
++ */
++export async function runThinReviewInline(opts = {}) {
++  const {
++    cwd = process.cwd(), specBase, change, changeDir, taskbookText,
++    waitMs = 60_000, pollIntervalMs = 5_000, budgetUsd = 1.0,
++    client = null, probe = null, log = null,
++  } = opts
++  const say = typeof log === 'function' ? log : () => {}
++  if (!specBase || !change || !changeDir || typeof taskbookText !== 'string' || !taskbookText.trim()) {
++    return { ok: false, reason: '缺少 specBase/change/changeDir/taskbookText' }
++  }
++  let cl = client
++  if (!cl) {
++    try {
++      const { SillyHubMcpClient } = await import('./sillyhub-mcp/client.js')
++      cl = new SillyHubMcpClient({ cwd })
++    } catch (e) {
++      return { ok: false, reason: `client 构建失败（${(e && e.message) || e}）` }
++    }
++  }
++  if (!cl || typeof cl.createMission !== 'function' || typeof cl.dispatchWorker !== 'function'
++    || typeof cl.listWorkers !== 'function' || typeof cl.getWorkerResult !== 'function') {
++    return { ok: false, reason: 'client 不具备平台派发接口（create/dispatch/list/result）' }
++  }
++  try {
++    const probeFn = probe || (await import('./dispatch/probe.js')).probeSillyHub
++    const pr = await probeFn({ client: cl, worktreePath: null, cwd })
++    if (!pr || pr.available !== true) {
++      return { ok: false, reason: `平台通道不可用（${pr && pr.reason ? pr.reason : 'probe 异常'}）` }
++    }
++    const objective = `轻量变更独立评审（${change}）——按任务书产出 review.json 结论`
++    const workerPrompt = taskbookText + '\n' + [
++      '',
++      '【平台通道产出方式（read_only 约束——覆盖上方「写到文件」指引）】',
++      '- 平台 worker 禁止写任何文件、禁止 git 操作：把完整 review.json 文本（上方 schema）作为产出返回。',
++      '- 优先放 artifacts（kind 含 review，content 字段放纯 JSON 文本）；宿主不支持 artifacts 时放回答正文首个 ```json 代码块（CLI 回收链三通道兜底）。',
++    ].join('\n')
++    const mission = await cl.createMission({ objective, orchestrationMode: 'external', budgetUsd })
++    const missionId = mission && mission.missionId
++    if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId' }
++    say(`🛰️ 平台评审已派发（mission ${String(missionId).slice(0, 8)}）——有界等待 ${Math.round(waitMs / 1000)}s（review_inline_wait）`)
++    let worker = null
++    try {
++      worker = await cl.dispatchWorker({ missionId, objective, readOnly: true, worktreePath: cwd, workerPrompt })
++    } catch (e) {
++      return { ok: false, reason: `dispatch_worker 异常（${(e && e.message) || e}）`, missionId }
++    }
++    const workerId = worker && worker.workerId
++    if (!workerId) return { ok: false, reason: 'dispatch_worker 未返回 workerId', missionId }
++    const deadline = Date.now() + Math.max(1000, waitMs)
++    let lastState = ''
++    while (Date.now() < deadline) {
++      await new Promise((r) => setTimeout(r, Math.max(200, Math.min(pollIntervalMs, deadline - Date.now()))))
++      let w = null
++      try {
++        const workers = await cl.listWorkers(missionId)
++        w = Array.isArray(workers) ? workers.find((x) => x && (x.id === workerId || x.worker_id === workerId)) : null
++      } catch { /* 单次轮询抖动按在途继续（下轮重试） */ }
++      const st = w ? String(w.status || '') : 'unknown'
++      if (st !== lastState) {
++        say(`🛰️ 平台评审状态：${st}（剩 ${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))}s）`)
++        lastState = st
++      }
++      if (st === 'failed' || st === 'killed') return { ok: false, reason: `worker 终态 ${st}`, missionId, workerId }
++      if (st === 'completed') {
++        const gr = await cl.getWorkerResult({ missionId, workerId })
++        const extracted = extractReviewFromArtifacts(gr && gr.artifacts, gr && gr.answer)
++        if (!extracted || typeof extracted !== 'object') {
++          return { ok: false, reason: 'worker completed 但三通道提取不到 review JSON（artifacts kind/文本、answer 正文）——平台 UI 可回看 mission', missionId, workerId }
++        }
++        // reviewer 如实标注（覆盖 worker 任意填法）；change 对齐本变更；其余字段产物原样不改写
++        const candidate = { ...extracted, change, reviewer: 'platform-inline' }
++        const reviewPath = join(changeDir, 'review.json')
++        writeAtomicSync(reviewPath, JSON.stringify(candidate, null, 2) + '\n')
++        const { validateReviewJson } = await import('./flow-review.js')
++        const v = validateReviewJson(reviewPath)
++        if (!v.ok) {
++          try { rmSync(reviewPath, { force: true }) } catch { /* 删件失败由下轮覆盖兜底 */ }
++          return { ok: false, reason: `提取的 review 不符薄道 schema（${v.errors.join('；')}）——原文可参考平台 mission UI`, missionId, workerId }
++        }
++        return { ok: true, missionId, workerId, reviewPath }
++      }
++    }
++    return { ok: false, reason: `等待 ${Math.round(waitMs / 1000)}s 未完成（在途 mission ${missionId} 可在平台 UI 回看；本轮回退任务书面）`, missionId, workerId }
++  } catch (e) {
++    return { ok: false, reason: `inline 派发异常（${(e && e.message) || String(e)}）` }
++  }
++}
++
+ // ════════ 影子期派发（2026-09-18-ceremony-risk-pricing task-06 / FR-04 / D-007@v1 / R-04 / R-06）════════
+ // 依据：design.md「总体方案 Phase 3」+「风险登记 R-04/R-06」+ plan.md「Wave 4」+ 全局硬约束 2。
+ // 定位：S0/S1 轻档变更在明面轻仪主线外，后台静默派发重仪式独立评审**只记账不阻断**——
+diff --git a/test/review-inline-dispatch.test.mjs b/test/review-inline-dispatch.test.mjs
+new file mode 100644
+index 00000000..88434b56
+--- /dev/null
++++ b/test/review-inline-dispatch.test.mjs
+@@ -0,0 +1,177 @@
++/**
++ * review-inline-dispatch.test.mjs — 薄道评审平台单调用通道（2026-10-23-review-inline-dispatch）
++ *
++ * runThinReviewInline（probe→create→dispatch→有界轮询→三通道提取→validateReviewJson→落盘）：
++ *   ① fake client 成功：回收落盘+reviewer=platform-inline+validateReviewJson 同一源通过（FR-01）
++ *   ② probe 不可用：ok:false 零落盘（FR-02）
++ *   ③ 超时：ok:false 零落盘、reason 含在途 mission 指引（FR-02）
++ *   ④ 坏 JSON（schema 违规）：落盘即删件回退——validateReviewJson 同一源拒收（FR-03）
++ *   ⑤ e2e 键未配置：评审缺席分支行为与改前一致（任务书+exit 1，无 inline 尝试行）（FR-02 零回归锚）
++ *   ⑥ readFlowConfig reviewInlineWaitSeconds 三态（未配置 0/合法值/坏值 0）（FR-04）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { runThinReviewInline } from '../src/review-dispatch.js'
++import { readFlowConfig } from '../src/flow.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++const CHANGE = '2026-09-01-rid-1'
++const HEAD_SHA = 'a'.repeat(40)
++
++function fakeClient({ status = 'completed', result } = {}) {
++  return {
++    createMission: async () => ({ missionId: 'mission-abc12345' }),
++    dispatchWorker: async () => ({ workerId: 'worker-xyz98765' }),
++    listWorkers: async () => [{ id: 'worker-xyz98765', status }],
++    getWorkerResult: async () => result,
++  }
++}
++const okProbe = async () => ({ available: true })
++const badProbe = async () => ({ available: false, reason: 'daemon-unreachable' })
++const goodReview = (over = {}) => JSON.stringify({
++  schemaVersion: 1, change: CHANGE, reviewer: 'subagent', verdict: 'PASS',
++  reviewedAgainst: HEAD_SHA, findings: [],
++  dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' },
++  reviewedAt: '2026-10-23T00:00:00.000Z', ...over,
++})
++
++function tmpChangeDir() {
++  const specBase = mkdtempSync(join(tmpdir(), 'rid-'))
++  mkdirSync(join(specBase, 'local.yaml') ? specBase : specBase, { recursive: true })
++  const changeDir = join(specBase, 'changes', CHANGE)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(specBase, 'local.yaml'), 'project:\n  type: generic\n')
++  return { specBase, changeDir }
++}
++
++test('① fake client 成功：回收落盘+reviewer=platform-inline+同一源校验通过', async () => {
++  const { specBase, changeDir } = tmpChangeDir()
++  try {
++    const r = await runThinReviewInline({
++      cwd: specBase, specBase, change: CHANGE, changeDir,
++      taskbookText: '⚖️ 任务书正文（夹具）',
++      waitMs: 3_000, pollIntervalMs: 10,
++      client: fakeClient({ result: { answer: goodReview() } }),
++      probe: okProbe,
++    })
++    assert.equal(r.ok, true, `应回收成功（实际 ${JSON.stringify(r).slice(0, 300)}）`)
++    const p = join(changeDir, 'review.json')
++    assert.ok(existsSync(p), 'review.json 落盘')
++    const j = JSON.parse(readFileSync(p, 'utf8'))
++    assert.equal(j.reviewer, 'platform-inline', 'reviewer 如实标注')
++    assert.equal(j.verdict, 'PASS')
++    assert.equal(j.reviewedAgainst, HEAD_SHA, '锚原样保留')
++    assert.ok(String(r.missionId).includes('abc12345'), 'missionId 留痕')
++  } finally { rmSync(specBase, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('② probe 不可用：ok:false 零落盘', async () => {
++  const { specBase, changeDir } = tmpChangeDir()
++  try {
++    const r = await runThinReviewInline({
++      cwd: specBase, specBase, change: CHANGE, changeDir, taskbookText: 'taskbook',
++      waitMs: 1_000, pollIntervalMs: 10,
++      client: fakeClient(), probe: badProbe,
++    })
++    assert.equal(r.ok, false)
++    assert.match(r.reason, /平台通道不可用/)
++    assert.ok(!existsSync(join(changeDir, 'review.json')), '零落盘')
++  } finally { rmSync(specBase, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('③ 超时：ok:false 零落盘，reason 含在途 mission 指引', async () => {
++  const { specBase, changeDir } = tmpChangeDir()
++  try {
++    const r = await runThinReviewInline({
++      cwd: specBase, specBase, change: CHANGE, changeDir, taskbookText: 'taskbook',
++      waitMs: 1_200, pollIntervalMs: 100,
++      client: fakeClient({ status: 'running' }), probe: okProbe,
++    })
++    assert.equal(r.ok, false)
++    assert.match(r.reason, /未完成.*mission.*平台 UI/, `超时留痕（实际：${r.reason}）`)
++    assert.ok(!existsSync(join(changeDir, 'review.json')), '零落盘')
++  } finally { rmSync(specBase, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('④ 坏 JSON（schema 违规）：落盘即删件回退——validateReviewJson 同一源拒收', async () => {
++  const { specBase, changeDir } = tmpChangeDir()
++  try {
++    // 4a：answer 不是 JSON → 三通道提取不到
++    const ra = await runThinReviewInline({
++      cwd: specBase, specBase, change: CHANGE, changeDir, taskbookText: 't',
++      waitMs: 2_000, pollIntervalMs: 10,
++      client: fakeClient({ result: { answer: '我看过了没问题' } }), probe: okProbe,
++    })
++    assert.equal(ra.ok, false)
++    assert.match(ra.reason, /提取不到 review JSON/)
++    assert.ok(!existsSync(join(changeDir, 'review.json')), '4a 零落盘')
++    // 4b：JSON 在场但 verdict 非法 → 落盘校验不过即删件
++    const rb = await runThinReviewInline({
++      cwd: specBase, specBase, change: CHANGE, changeDir, taskbookText: 't',
++      waitMs: 2_000, pollIntervalMs: 10,
++      client: fakeClient({ result: { answer: goodReview({ verdict: '看起来没问题' }) } }), probe: okProbe,
++    })
++    assert.equal(rb.ok, false)
++    assert.match(rb.reason, /不符薄道 schema/, `schema 拒收留痕（实际：${rb.reason}）`)
++    assert.ok(!existsSync(join(changeDir, 'review.json')), '4b 违规件已删（同一源把关，坏产物进不了登记）')
++  } finally { rmSync(specBase, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('⑤ e2e 键未配置：评审缺席分支与改前一致（任务书+exit 1，无 inline 尝试）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'rid-e-'))
++  const cn = '2026-09-01-rid-e2e'
++  try {
++    const run = (() => { const g = (a) => execFileSync('git', a, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim(); g(['init', '-q', '-b', 'main']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't']); return g })()
++    mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node exit0.js"\nflow:\n  mode: thin\n')
++    writeFileSync(join(cwd, 'base.txt'), 'base\n')
++    run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++    const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++    const s1 = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'start', '--change', cn, '--autopilot', '--input', 'inline 派发 e2e 夹具面\n\n成功标准：\n- 回退行为'], { cwd, encoding: 'utf8', timeout: 120_000, env })
++    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++    const base = join(cwd, '.sillyspec', 'changes', cn)
++    writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++      .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n夹具实质作答——触发盲维必评信号。')
++      + '\n## 文件变更清单\n\n| 操作 | 路径 | 说明 |\n|---|---|---|\n| 新增 | docs/note.md | 交付 |\n')
++    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
++      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
++    writeFileSync(join(base, 'tasks.md'), '---\nauthor: fixture\n---\n\n# 任务注册表（Tasks）\n\n- [x] task-01: 交付文档面（e2e 夹具）\n')
++    mkdirSync(join(cwd, 'docs'), { recursive: true }); writeFileSync(join(cwd, 'docs', 'note.md'), '# n\n')
++    writeFileSync(join(cwd, 'ev.txt'), 'ev\n')
++    run(['add', 'ev.txt', 'docs/note.md']); run(['commit', '-q', '-m', `docs (${cn}) (task-01)`])
++    const s = spawnSync(process.execPath, [CLI, '--dir', cwd, 'flow', 'done', '--change', cn], { cwd, encoding: 'utf8', timeout: 300_000, env })
++    const out = s.stdout + s.stderr
++    assert.ok(s.status !== 0, '必评面停评审 exit 1')
++    assert.match(out, /评审任务书如下，任务书原样复制给子代理/, '原版派发纪律横幅（逐字一致）')
++    assert.match(out, /独立评审任务书/, '任务书在场')
++    assert.ok(!out.includes('平台单调用'), '键未配置零 inline 尝试（零回归）')
++    assert.ok(!out.includes('🛰️'), '无平台心跳输出')
++  } finally { rmSync(cwd, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('⑥ readFlowConfig reviewInlineWaitSeconds 三态', () => {
++  const d = mkdtempSync(join(tmpdir(), 'rid-u-'))
++  try {
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    const specBase = join(d, '.sillyspec')
++    const p = join(specBase, 'local.yaml')
++    writeFileSync(p, 'project:\n  type: generic\n')
++    assert.equal(readFlowConfig(specBase).reviewInlineWaitSeconds, 0, '未配置 0=off')
++    writeFileSync(p, 'project:\n  type: generic\nreview_inline_wait: 120\n')
++    assert.equal(readFlowConfig(specBase).reviewInlineWaitSeconds, 120, '合法值 120')
++    writeFileSync(p, 'project:\n  type: generic\nreview_inline_wait: 99999\n')
++    assert.equal(readFlowConfig(specBase).reviewInlineWaitSeconds, 600, '超界钳到 600 帽')
++    writeFileSync(p, 'project:\n  type: generic\nreview_inline_wait: abc\n')
++    assert.equal(readFlowConfig(specBase).reviewInlineWaitSeconds, 0, '坏值 fail-soft 0')
++    rmSync(p, { force: true })
++    assert.equal(readFlowConfig(specBase).reviewInlineWaitSeconds, 0, '不可读 fail-soft 0')
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
