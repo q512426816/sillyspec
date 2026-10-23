@@ -48,4 +48,5 @@ readFrRegressCap 返回语义 v2（缺省/坏值/不可读→0；off→0；N→N
 | 改 | src/flow.js | start 横幅 local.yaml 缺席指引行测试面文案同步 |
 | 改 | .sillyspec/local.yaml | 移除 fr_regress_cap 键，注释留痕用户裁决 |
 | 改 | test/fr-priority-overlap.test.mjs | 夹具显式 fr_regress_cap: all（留痕注释），旧断言原样 |
+| 改 | test/dynamic-test-inference.test.mjs | E2E 拆两相：缺省 dynamic-empty（reason 如实含 fr_regress_cap 跳过）+ all 恢复并入（评审 P1 修复锚） |
 | 改 | test/fr-regress-cap.test.mjs | v2 五态/本仓缺席断言/披露行文案锚 |

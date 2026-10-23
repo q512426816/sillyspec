@@ -2253,7 +2253,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     if (incremental) {
       subsetInput = incremental.files
       console.log(`⚡ ${incremental.note}`)
-      console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ FR 关联回归 ∪ import 依赖），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
+      console.log(`ℹ️ 动态测试子集（增量重跑档）：修复面三源重算（本变更测试 ∪ import 依赖；FR 关联回归层按 fr_regress_cap——缺省不跑归 pre-push/CI 门，2026-10-23-fr-regress-default-off），runner 自项目结构推断。恒全子集：local.yaml verify: test_rerun: full`)
       mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: subsetInput, frPre: null })
       if (mainResult && typeof mainResult === 'object') {
         mainResult.mode = 'incremental-rerun'
@@ -2280,15 +2280,23 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     } catch { /* 记账失败不阻断（下轮退化全子集） */ }
   } else {
     // —— dynamic-empty：变更与测试面零关系——
-    // 无自身测试、无 import 依赖测试、无 FR 关联绑定 → 不硬跑全量（防超时/预存失败面，
-    // 同旧 module 0 命中防误伤初衷）；全量覆盖请显式 test_strategy: full。
+    // 无自身测试、无 import 依赖测试（+FR 关联回归层：v2 缺省跳过或绑定面为空）→ 不硬跑
+    // 全量（防超时/预存失败面，同旧 module 0 命中防误伤初衷）；全量覆盖请显式 test_strategy: full。
+    // FR 层被帽跳过（frCapApplied 在场 total>0）≠「无绑定」——reason 如实陈述并打披露行
+    // （2026-10-23-fr-regress-default-off 评审 P1 修复：缺省跳过恒披露不静默）。
+    if (frCapApplied && frCapApplied.total > 0) {
+      console.log(`ℹ️ fr_regress_cap：FR 关联回归面 ${frCapApplied.kept}/${frCapApplied.total} 进实测面，其余 ${frCapApplied.total - frCapApplied.kept} 个归 pre-push/CI 门（可开启：local.yaml fr_regress_cap: <N|all>——N=前 N 个 / all=全跑旧行为；缺省不跑）`)
+    }
+    const frEmptyNote = frCapApplied && frCapApplied.total > 0
+      ? `FR 关联回归层被 fr_regress_cap 跳过（绑定 ${frCapApplied.total} 个未跑，归 pre-push/CI 门）`
+      : '无 FR 关联绑定'
     mainResult = {
       status: 'skipped',
       command: null,
       exitCode: null,
       durationMs: null,
       outputTail: null,
-      reason: `变更与测试面零关系（${lastChangedFiles.length} 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。全量覆盖请显式 test_strategy: full。` + eaNote,
+      reason: `变更与测试面零关系（${lastChangedFiles.length} 个变更文件无自身测试、无 import 依赖测试、${frEmptyNote}）——动态子集空，不硬跑全量（防超时/预存失败面）。全量覆盖请显式 test_strategy: full。` + eaNote,
       resultPath: null,
       mode: 'dynamic-empty',
       fallbackReason: null,

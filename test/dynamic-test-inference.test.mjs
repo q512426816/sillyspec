@@ -229,6 +229,10 @@ test('runVerifyTestCheck E2E：无 local.yaml 的仓（R22 之痛）缺省动态
   const r = runVerifyTestCheck({ cwd: root, specBase, changeName: null })
   assert.equal(r.mode, 'dynamic-empty', 'v2 缺省：FR 层跳过后三源空 → dynamic-empty（无 local.yaml 不再 skip/裸全量——R22 教学面由下方 all 相证明）')
   assert.equal(r.status, 'skipped', `FR 层缺省跳过 → 面空 skipped（${r.reason || ''}）`)
+  // 评审 P1 修复锚（2026-10-23-fr-regress-default-off）：绑定在场被缺省跳过 ≠「无绑定」——
+  // reason 如实陈述跳过（不静默、不谎报），回执/审计面可见去向与开启口。
+  assert.match(String(r.reason), /被 fr_regress_cap 跳过/, `reason 如实含跳过陈述（${r.reason}）`)
+  assert.doesNotMatch(String(r.reason), /无 FR 关联绑定/, 'reason 不再谎报无绑定')
   // 显式开启（all=旧行为）：FR 绑定测试并入执行面
   writeFileSync(join(specBase, 'local.yaml'), 'fr_regress_cap: all\n')
   const r2 = runVerifyTestCheck({ cwd: root, specBase, changeName: null })

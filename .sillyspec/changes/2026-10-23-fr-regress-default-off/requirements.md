@@ -45,6 +45,6 @@ Given 直调与文本锚各形态；When 分别执行；Then 断言各自成立�
 ## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
 
 FR-01: test/fr-regress-cap.test.mjs「②readFrRegressCap v2 五态（缺省 0/all null/N/off/坏值）」
-FR-02: test/fr-regress-cap.test.mjs「⑤缺省 off 披露行文案锚（含开启指引）」
+FR-02: test/fr-regress-cap.test.mjs「③本仓缺省断言与消费点单一源锚（披露行开启指引文案锚）」＋test/dynamic-test-inference.test.mjs「缺省 dynamic-empty reason 如实（评审 P1 修复锚）」
 FR-03: test/fr-priority-overlap.test.mjs「夹具显式 all 旧断言原样绿」＋test/fr-regress-cap.test.mjs「③本仓键缺席断言」
 FR-04: test/fr-regress-cap.test.mjs「②③⑤」
