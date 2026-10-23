@@ -1,0 +1,176 @@
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 01cf12e0..21dbd015 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -627,6 +627,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       '  inspect <文件>        查看单个知识文件条目结构',
+       '  validate              校验知识库完整性（INDEX 锚点/注册/幽灵条目——纯读）',
+       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
++      '  scope                 知识注入作用域现状与标记语法（always/repo/module/关键词；纯读）',
+       '  stats                 覆盖率/死条目统计（纯读）',
+       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
+       '  propose / classify / inbox / graph / stats / renumber',
+@@ -636,7 +637,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
+     ]
+     for (const l of lines) console.log(l)
+-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'redomain-unmapped'] })
++    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped'] })
+     return
+   }
+   const subCommand = args[0] || ''
+@@ -706,6 +707,48 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       }
+       return mod.cmdKnowledgeStats(dir, args.slice(1), opts)
+     }
++    case 'scope': {
++      // 知识注入作用域发现面（2026-10-23-knowledge-scope-discoverability）：机制 2026-10-23-
++      // knowledge-scope-inject 落地但零发现面（用户追问「在哪引导配置」）——本命令列四档现状+
++      // 标记语法教学（示例与 collectScopedKnowledge 解析同源），空态明示仅关键词档在用。
++      // 纯读零写盘；--json 单对象供程序化消费。
++      try {
++        const { collectScopedKnowledge } = await import('../knowledge-scope.js')
++        const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
++        const scoped = collectScopedKnowledge(knowledgeDir)
++        const moduleEntries = Object.entries(scoped.modules)
++        const total = new Set([...scoped.always, ...scoped.repo, ...moduleEntries.flatMap(([, v]) => v)].map((e) => e.id)).size
++        const guide = [
++          '作用域标记（HTML 注释，写在 top-level knowledge/<文件>.md 的 section heading 之下；无标记=关键词命中现状）：',
++          '  <!-- scope: always -->              每次变更恒注入（跨仓通用规约）',
++          '  <!-- scope: repo -->                本仓每次变更恒注入（仓级约束）',
++          '  <!-- scope: module:<域>[,<域>] -->   仅当触达该知识域时注入（域 id 与 FR 域同源，逗号多域）',
++          '查看现状：sillyspec knowledge scope；flow start 注入块中以 📌 行呈现；机制变更：2026-10-23-knowledge-scope-inject',
++        ]
++        if (opts.json || args.slice(1).includes('--json')) {
++          output(true, { subcommand: 'scope', ...scoped, total, guide })
++        } else {
++          console.log(`🧭 知识注入作用域现状（${total} 条 scoped；关键词档始终生效）`)
++          if (scoped.always.length > 0) {
++            console.log('  always（每次变更恒注入）：')
++            for (const e of scoped.always) console.log(`    - ${e.id}：${e.summary}`)
++          }
++          if (scoped.repo.length > 0) {
++            console.log('  repo（本仓恒注入）：')
++            for (const e of scoped.repo) console.log(`    - ${e.id}：${e.summary}`)
++          }
++          for (const [d, list] of moduleEntries) {
++            console.log(`  module:${d}（触达该域时注入）：`)
++            for (const e of list) console.log(`    - ${e.id}：${e.summary}`)
++          }
++          if (total === 0) console.log('  当前仅关键词档在用（无任何 scoped 标记）——要恒注入的规约/仓级约束按下述标记声明：')
++          for (const l of guide) console.log(`  ${l}`)
++        }
++      } catch (e) {
++        output(false, {}, { code: 'scope_failed', message: String((e && e.message) || e) })
++      }
++      return
++    }
+     case 'digest': {
+       // 治理信号摘要（2026-09-27-knowledge-digest）：四类沉睡信号（rot 待复核/收件箱积压/
+       // 伪域落库/绑定解析失败）超阈才见人——安静即健康态。--json 供平台 RPC 消费（信号卡）。
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 1e684567..c5579e95 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -26,7 +26,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ ## 恢复与查看
+ - 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
+ - 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
+-- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
++- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）；知识条目可声明注入作用域（`<!-- scope: always|repo|module:<域> -->`，无标记=关键词档）——现状与语法：`sillyspec knowledge scope`
+ 
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+diff --git a/test/knowledge-scope-cmd.test.mjs b/test/knowledge-scope-cmd.test.mjs
+new file mode 100644
+index 00000000..31e51733
+--- /dev/null
++++ b/test/knowledge-scope-cmd.test.mjs
+@@ -0,0 +1,87 @@
++/**
++ * knowledge-scope-cmd.test.mjs — 知识作用域发现面（2026-10-23-knowledge-scope-discoverability）
++ *
++ * ① CLI e2e：knowledge scope --json 列 scoped 条目（always/repo/module 分桶）＋guide 语法在场；
++ *    空态人类输出明示「仅关键词档在用」并给出三形态标记语法（FR-01）
++ * ② 发现面锚：knowledge help 列 scope；AGENTS 模板知识库行含作用域指引；sillyspec-config
++ *    技能含「知识注入作用域」节与标记语法（FR-02）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function cli(cwd, args) {
++  const r = spawnSync(process.execPath, [CLI, '--dir', cwd, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  return { status: r.status, out: (r.stdout || '') + (r.stderr || ''), stdout: r.stdout || '' }
++}
++function jsonOf(stdout) {
++  const i = stdout.indexOf('{')
++  assert.ok(i !== -1, `stdout 无 JSON：${stdout.slice(0, 200)}`)
++  return JSON.parse(stdout.slice(i))
++}
++
++test('① CLI e2e：有 scoped 条目 → --json 分桶；人类输出含语义', () => {
++  const d = mkdtempSync(join(tmpdir(), 'kscmd-'))
++  try {
++    mkdirSync(join(d, '.sillyspec', 'knowledge'), { recursive: true })
++    writeFileSync(join(d, '.sillyspec', 'knowledge', 'rules.md'), [
++      '## 通用规约',
++      '<!-- scope: always -->',
++      '每次变更都要注入的规约。',
++      '',
++      '## 仓级约束',
++      '<!-- scope: repo -->',
++      '本仓发布前跑锚套件。',
++      '',
++      '## 模块路由',
++      '<!-- scope: module:cli-entry,core-engine -->',
++      '模块域 id 与 FR 域同源。',
++    ].join('\n'))
++    const r = cli(d, ['knowledge', 'scope', '--json'])
++    assert.equal(r.status, 0, `exit 0（${r.out.slice(0, 300)}）`)
++    const j = jsonOf(r.stdout)
++    assert.equal(j.ok, true)
++    assert.equal(j.total, 3, `total 3（实际 ${j.total}）`)
++    assert.equal(j.always[0].id, 'rules.md#通用规约')
++    assert.equal(j.repo[0].id, 'rules.md#仓级约束')
++    assert.deepEqual(Object.keys(j.modules).sort(), ['cli-entry', 'core-engine'])
++    assert.ok(Array.isArray(j.guide) && j.guide.some((l) => l.includes('scope: always')), 'guide 含标记语法')
++    // 人类输出
++    const h = cli(d, ['knowledge', 'scope'])
++    assert.equal(h.status, 0)
++    assert.match(h.out, /知识注入作用域现状（3 条 scoped/, '人类输出计数')
++    assert.match(h.out, /always（每次变更恒注入）/, 'always 分节')
++    assert.match(h.out, /scope: module:<域>/, '语法教学在场')
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('①b 空态：明示仅关键词档在用 + 三形态语法 + 放置位置教学', () => {
++  const d = mkdtempSync(join(tmpdir(), 'kscmd-'))
++  try {
++    mkdirSync(join(d, '.sillyspec', 'knowledge'), { recursive: true })
++    const r = cli(d, ['knowledge', 'scope'])
++    assert.equal(r.status, 0)
++    assert.match(r.out, /当前仅关键词档在用/, '空态明示')
++    for (const token of ['scope: always', 'scope: repo', 'scope: module:<域>', 'section heading 之下']) {
++      assert.ok(r.out.includes(token), `语法教学含「${token}」`)
++    }
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('② 发现面锚：help/模板/技能三处引导', () => {
++  const help = readFileSync(join(ROOT, 'src', 'stages', 'knowledge.js'), 'utf8')
++  assert.match(help, /scope\s+知识注入作用域现状与标记语法/, 'knowledge help 列 scope')
++  const tpl = readFileSync(join(ROOT, 'templates', 'agents-instruction.md'), 'utf8')
++  assert.ok(tpl.includes('scope: always|repo|module:<域>'), 'AGENTS 模板含标记语法')
++  assert.ok(tpl.includes('sillyspec knowledge scope'), 'AGENTS 模板含命令指针')
++  const skill = readFileSync(join(ROOT, '.claude', 'skills', 'sillyspec-config', 'SKILL.md'), 'utf8')
++  assert.match(skill, /知识注入作用域/, '技能节在场')
++  assert.ok(skill.includes('scope: always') && skill.includes('sillyspec knowledge scope'), '技能含语法与命令')
++})
