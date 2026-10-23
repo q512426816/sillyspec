@@ -1593,3 +1593,60 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-21-knowledge-tier-denoise
   status: active
+
+## FR-docs-083 归档面 staged（A/R）但 HEAD 树无本变更 archive 路径时，提示走 stderr 🚨 并附幂等命令与不执行后果；已落库时走 stdout 语义不变
+变更：2026-10-23-flow-done-shared-repo-multi-session-frictions
+状态：active
+摘要：未落库半态；已落库
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-shared-repo-multi-session-frictions/requirements.md#FR-01
+最近确认：ec173b13d125d63acc8ed5b2f71c1ac7e5b43cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-01
+  tests: test/archive-commit-suggest-race.test.mjs「runArchiveChain 真链：未落库态 stderr 升级与幂等命令」 | test/archive-commit-suggest-race.test.mjs「已落库态 stdout 语义不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-shared-repo-multi-session-frictions
+  status: active
+
+## FR-docs-084 archiveLandedInHeadTree 纯函数三态有测试锚（落地/未落地/-changeName 后缀兼容形态）
+变更：2026-10-23-flow-done-shared-repo-multi-session-frictions
+状态：active
+摘要：三态
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-shared-repo-multi-session-frictions/requirements.md#FR-02
+最近确认：ec173b13d125d63acc8ed5b2f71c1ac7e5b43cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-02
+  tests: test/archive-commit-suggest-race.test.mjs「archiveLandedInHeadTree 三态判定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-shared-repo-multi-session-frictions
+  status: active
+
+## FR-docs-085 既有 archive-commit-suggest-race 套件绿；doc-ref-check 行号引用绿
+变更：2026-10-23-flow-done-shared-repo-multi-session-frictions
+状态：active
+摘要：验收
+全文：.sillyspec/changes/archive/2026-10-23-flow-done-shared-repo-multi-session-frictions/requirements.md#FR-03
+最近确认：ec173b13d125d63acc8ed5b2f71c1ac7e5b43cd6
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-03
+  tests: test/archive-commit-suggest-race.test.mjs | test/doc-ref-check.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-flow-done-shared-repo-multi-session-frictions
+  status: active

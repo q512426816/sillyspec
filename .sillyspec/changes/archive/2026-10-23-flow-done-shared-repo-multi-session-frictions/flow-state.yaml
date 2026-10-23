@@ -1,0 +1,41 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  flow done 归档提交未落库守卫与回归锚
+
+
+  倒推收编（代码已先写好，工作区在途三文件）：flow done 归档子步曾实证「打印提交命令≠落库」半态——共享仓暂存区竞态下命令没人执行/被抢跑，归档目录全 staged 但 HEAD 树无归档路径，pull/清理即丢归档。本变更 =
+  archiveLandedInHeadTree 落库判定（纯函数）+ 归档提交提示按落地态分流（未落库升级 stderr 🚨+幂等可执行命令+后果说明；已落库语义不变）+ 配套回归用例 + platform-interface-map
+  行号引用同步。今日三个变更收口实战均依赖该守卫工作。成功标准来自已验证达标的行为转写。
+
+
+  成功标准：
+
+  - 归档面 staged（A/R）但 HEAD 树无本变更 archive 路径时，提示走 stderr 🚨 并附幂等命令与不执行后果；已落库时走 stdout 语义不变
+
+  - archiveLandedInHeadTree 纯函数三态有测试锚（落地/未落地/-changeName 后缀兼容形态）
+
+  - 既有 archive-commit-suggest-race 套件绿；doc-ref-check 行号引用绿
+autopilot: true
+prestage_ack: true
+baseline_commit: 5a723b8c127670e196594b872e6fdd571e41047b
+updatedAt: '2026-10-23T15:33:58.320Z'
+baseline_sha256: 41eae6265e6e66300f878b1e354f228fd17cd83a31b4fb3ee91b0ee63e1a7880
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js27)（12.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023152201\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+

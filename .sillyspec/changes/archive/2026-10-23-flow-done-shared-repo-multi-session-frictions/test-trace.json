@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-done-shared-repo-multi-session-frictions",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-01",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「runArchiveChain 真链：未落库态 stderr 升级与幂等命令」",
+        "test/archive-commit-suggest-race.test.mjs「已落库态 stdout 语义不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-shared-repo-multi-session-frictions"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-02",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs「archiveLandedInHeadTree 三态判定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-shared-repo-multi-session-frictions"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-flow-done-shared-repo-multi-session-frictions:flow:测试绑定FR-03",
+      "tests": [
+        "test/archive-commit-suggest-race.test.mjs",
+        "test/doc-ref-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-flow-done-shared-repo-multi-session-frictions"
+    }
+  ]
+}

@@ -855,17 +855,26 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
 }
 
 /**
- * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
- *
- * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
- * flow thin 轻量工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
- * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
- * → 时间线烤制（fail-open，2026-09-28-archive-timeline-bake）→ unregisterChange 终态一致化
- * → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
- * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
- *
- * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+ * 归档落库判定（2026-10-23-flow-done-shared-repo-multi-session-frictions 缺陷③）：HEAD 树中
+ * 是否已含本变更的归档目录条目（.sillyspec/changes/archive/<changeName>/ 下一层首段）。
+ * 目录名口径：archiveDestDirName 现行=裸变更名；`-<changeName>` 后缀兼容历史日期前缀形态。
+ * 纯函数（headTreeFiles 由调用方 git ls-tree 取好传入，测试零 git 依赖）。
+ * @param {{headTreeFiles:string, changeName:string}} p
+ * @returns {boolean}
  */
+export function archiveLandedInHeadTree({ headTreeFiles, changeName }) {
+  const prefix = '.sillyspec/changes/archive/'
+  const name = String(changeName || '')
+  if (!name) return false
+  for (const line of String(headTreeFiles || '').split('\n')) {
+    const p = line.trim().replace(/\\/g, '/')
+    if (!p.startsWith(prefix)) continue
+    const first = p.slice(prefix.length).split('/')[0]
+    if (first === name || first.endsWith('-' + name)) return true
+  }
+  return false
+}
+
 /**
  * 归档提交 pathspec 构成（2026-10-06-archive-cmd-race-and-brief：共享暂存区竞态加固）。
  *
@@ -920,6 +929,18 @@ export function resolveArchiveCommitPathspecs({ changeName, stagedNameStatus, he
   return { pathspecs, dropped }
 }
 
+/**
+ * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
+ *
+ * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
+ * flow thin 轻量工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
+ * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
+ * → 时间线烤制（fail-open，2026-09-28-archive-timeline-bake）→ unregisterChange 终态一致化
+ * → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
+ * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
+ *
+ * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+ */
 export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null, extraDocs = null } = {}) {
   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
   // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
@@ -1152,12 +1173,26 @@ try {
     existsFn: (p) => { try { return existsSync(join(cwd, p)) } catch { return false } },
   })
   if (pathspecs.length > 0) {
-    console.log(`🧾 归档提交一笔到位（src 锚 HEAD 树/归档侧目录 pathspec/共享面按在场——共享暂存区竞态加固）：`)
-    console.log(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`)
-    if (dropped.length > 0) {
-      console.log(`   ⚠️ 丢弃 ${dropped.length} 个瞬时暂存条目（HEAD 不在册且工作区不在场——并行会话动了共享暂存区，未入命令）：${dropped.join('、')}`)
+    // 落库断言（2026-10-23-flow-done-shared-repo-multi-session-frictions 缺陷③）：打印命令≠落库
+    // ——共享暂存区竞态下命令没人执行/被并行会话抢跑，都呈现「归档目录全 staged（A/R）+ 源侧
+    // 删除停 D + flow done 报成功」的半态（实测 pull/清理丢归档）。终态不得只以打印当成功：
+    // HEAD 树含本变更归档路径=已落库（ℹ️ 语义不变）；未落库=🚨 升级 stderr + 可复制命令 + 后果。
+    const landed = archiveLandedInHeadTree({ headTreeFiles: String(headTreeRaw || ''), changeName })
+    const out = landed ? console.log : console.error
+    if (!landed) {
+      console.error(`🚨 归档提交未落库：归档目录已进暂存区（A/R）但 HEAD 树中无 .sillyspec/changes/archive/ 下本变更路径——只打印不执行 ≠ 归档成功（共享仓竞态：命令未被本会话执行或被并行会话抢跑）`)
+      console.error(`   立即执行（幂等；pathspec 限本变更面）：`)
+    } else {
+      console.log(`🧾 归档提交一笔到位（归档路径已在 HEAD 树——余下 staged 面一笔带走；src 锚 HEAD 树/归档侧目录 pathspec/共享面按在场——共享暂存区竞态加固）：`)
     }
-    console.log(`   （若执行报 pathspec 不匹配：共享仓暂存区在打印→执行间又被并行会话改动——git diff --cached --name-only 全量重核，以实际面替换 pathspec 后再提交）`)
+    out(`   git commit -m "chore(archive): ${changeName} 归档留档" -- ${pathspecs.join(' ')}`)
+    if (dropped.length > 0) {
+      out(`   ⚠️ 丢弃 ${dropped.length} 个瞬时暂存条目（HEAD 不在册且工作区不在场——并行会话动了共享暂存区，未入命令）：${dropped.join('、')}`)
+    }
+    out(`   （若执行报 pathspec 不匹配：共享仓暂存区在打印→执行间又被并行会话改动——git diff --cached --name-only 全量重核，以实际面替换 pathspec 后再提交）`)
+    if (!landed) {
+      console.error(`   不执行的后果：归档件只存在于暂存区——下一次 pull/清理/工作区重置会丢归档。执行后核对：git log --oneline -1 应见「chore(archive): ${changeName} 归档留档」。`)
+    }
   }
 } catch { /* 提示失败不阻断归档（advisory） */ }
       if (othersResidual.length > 0) {

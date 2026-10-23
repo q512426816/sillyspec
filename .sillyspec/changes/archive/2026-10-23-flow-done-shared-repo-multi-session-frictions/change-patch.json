@@ -1,0 +1,92 @@
+{
+  "change": "2026-10-23-flow-done-shared-repo-multi-session-frictions",
+  "baseline": "5a723b8c127670e196594b872e6fdd571e41047b",
+  "head": "ec173b13d125d63acc8ed5b2f71c1ac7e5b43cd6",
+  "files": [
+    "docs/sillyspec/platform-interface-map.md",
+    "src/run/complete-handlers.js",
+    "test/archive-commit-suggest-race.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 104,
+    "deletions": 18
+  },
+  "savedAt": "2026-10-23T15:33:56.896Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 1,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "5a723b8c127670e196594b872e6fdd571e41047b",
+    "totals": {
+      "files": 3,
+      "additions": 104,
+      "deletions": 18
+    },
+    "rows": [
+      {
+        "path": "docs/sillyspec/platform-interface-map.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete-handlers.js",
+        "additions": 49,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/archive-commit-suggest-race.test.mjs",
+        "additions": 54,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "a56ce22a62030bf03cafecf6f5f07436f84d708ab162b8db33a32f30cf140dd3",
+  "patchStatus": "ok"
+}

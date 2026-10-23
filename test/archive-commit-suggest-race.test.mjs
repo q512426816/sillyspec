@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
-const { resolveArchiveCommitPathspecs, runArchiveChain } = await import(pathToFileURL(join(ROOT, '..', 'src', 'run', 'complete-handlers.js')).href)
+const { resolveArchiveCommitPathspecs, runArchiveChain, archiveLandedInHeadTree } = await import(pathToFileURL(join(ROOT, '..', 'src', 'run', 'complete-handlers.js')).href)
 const { ProgressManager } = await import(pathToFileURL(join(ROOT, '..', 'src', 'progress.js')).href)
 
 const CHANGE = '2026-10-06-race-x'
@@ -94,7 +94,11 @@ async function driveArchiveChain(cwd) {
   await pm.initChange(cwd, CHANGE)
   const lines = []
   const orig = console.log
+  const origErr = console.error
+  // 双流捕获（2026-10-23 缺陷③落库断言）：未落库态建议块走 console.error（🚨 升级），
+  // 已落库态走 console.log——两流合并后断言语义不变（命令行/execPrintedCommand 照旧）
   console.log = (...a) => { lines.push(a.join(' ')) }
+  console.error = (...a) => { lines.push(a.join(' ')) }
   try {
     await runArchiveChain({
       pm, cwd, specBase, changeName: CHANGE,
@@ -104,6 +108,7 @@ async function driveArchiveChain(cwd) {
     })
   } finally {
     console.log = orig
+    console.error = origErr
   }
   return lines.join('\n')
 }
@@ -117,11 +122,16 @@ function execPrintedCommand(cwd, printed) {
   return { status: spawnSync('git', ['-C', cwd, 'commit', '-m', msg, '--', ...paths], { encoding: 'utf8' }).status, paths }
 }
 
-test('② runArchiveChain 真链正常形态：打印命令原样执行 exit 0，rename 两侧都落地', { timeout: 60000 }, async () => {
+test('② runArchiveChain 真链正常形态：未落库态 🚨 + 命令原样执行 exit 0，rename 两侧都落地', { timeout: 60000 }, async () => {
   const { cwd } = await buildRepo()
   try {
     const printed = await driveArchiveChain(cwd)
-    assert.ok(printed.includes('归档提交一笔到位'), '建议块在场')
+    // 缺陷③落库断言：临时仓归档面 staged 未提交 → 未落库态——🚨 升级 + 可执行命令 + 后果告知
+    assert.ok(printed.includes('归档提交未落库'), `未落库态应 🚨 升级，实际：${printed}`)
+    assert.ok(printed.includes('立即执行'), '应给出立即执行指引')
+    assert.ok(printed.includes('丢归档'), '应告知不执行的后果')
+    assert.ok(printed.includes('git log --oneline -1'), '应给执行后核对方式')
+    assert.ok(!printed.includes('归档提交一笔到位（归档路径已在 HEAD 树'), '未落库态不得走已落库 ℹ️ 文案')
     assert.ok(printed.includes('pathspec 不匹配'), 'fallback 指引在场')
     const r = execPrintedCommand(cwd, printed)
     assert.equal(r.status, 0, `打印命令应 exit 0（paths=${r.paths.join(' ')}）`)
@@ -132,6 +142,31 @@ test('② runArchiveChain 真链正常形态：打印命令原样执行 exit 0�
     assert.ok(r.paths.includes(`.sillyspec/changes/archive/${CHANGE}/`), 'dst 收拢为归档目录 pathspec')
     assert.ok(r.paths.includes(`.sillyspec/changes/${CHANGE}/design.md`), 'src 侧 HEAD 在册路径保留')
     assert.ok(!r.paths.some((p) => p.startsWith(`.sillyspec/changes/archive/${CHANGE}/`) && p.length > `.sillyspec/changes/archive/${CHANGE}/`.length), 'dst 不再逐文件罗列')
+    // 提交落库后：HEAD 树判定翻转为已落库（纯函数用真仓 ls-tree 复核）
+    const headTree = git(cwd, ['ls-tree', '-r', '--name-only', 'HEAD'])
+    assert.equal(archiveLandedInHeadTree({ headTreeFiles: headTree, changeName: CHANGE }), true, '提交后 HEAD 树含归档路径——landed 判定应翻 true')
+  } finally { cleanup(cwd) }
+})
+
+test('②b 已落库态：HEAD 树含归档路径时提示走 stdout ℹ️ 且无 🚨', { timeout: 60000 }, async () => {
+  const { cwd } = await buildRepo()
+  try {
+    // 预置已落库形态：历史日期前缀目录 archive/2026-10-01-<CHANGE>/ 先行入库——
+    // landed 判定的 `-<changeName>` 后缀兼容形态命中（纯函数三态锚同源），且与本链
+    // 即将搬移的裸名 dest 不冲突（同名 dest 会触发「目标目录已存在」process.exit）。
+    const archDir = join(cwd, '.sillyspec', 'changes', 'archive', `2026-10-01-${CHANGE}`)
+    mkdirSync(archDir, { recursive: true })
+    writeFileSync(join(archDir, 'prev.md'), 'prev\n')
+    git(cwd, ['add', '.sillyspec/changes/archive'])
+    git(cwd, ['commit', '-qm', 'chore(archive): 预置历史前缀已落库锚'])
+    assert.equal(git(cwd, ['ls-tree', '-r', '--name-only', 'HEAD']).includes(`archive/2026-10-01-${CHANGE}/prev.md`), true)
+    // 本链搬移裸名 dest：暂存面非空且 HEAD 树已含后缀兼容归档首段 → landed 分流
+    const printed = await driveArchiveChain(cwd)
+    assert.ok(!printed.includes('归档提交未落库'), `已落库态不得 🚨，实际：${printed}`)
+    assert.ok(printed.includes('归档提交一笔到位（归档路径已在 HEAD 树'), `已落库态应走 stdout ℹ️ 分流，实际：${printed}`)
+    assert.ok(printed.includes('git commit -m '), '已落库态仍给出可执行命令')
+    const r = execPrintedCommand(cwd, printed)
+    assert.equal(r.status, 0, `已落库态打印命令应 exit 0`)
   } finally { cleanup(cwd) }
 })
 
@@ -149,6 +184,22 @@ test('③ 竞态注入：幽灵 A 先进暂存区后消失，命令仍可执行�
     const show = git(cwd, ['show', '--name-status', '--format=', 'HEAD'])
     assert.ok(!show.includes('phantom-sibling'), `提交面不得含幽灵：${show}`)
   } finally { cleanup(cwd) }
+})
+
+test('⑤ archiveLandedInHeadTree 纯函数：裸名/后缀兼容/同名子串不误报/负例', () => {
+  const name = '2026-10-06-race-x'
+  // 裸变更名（archiveDestDirName 现行口径）
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec/changes/archive/${name}/design.md\n.sillyspec/knowledge/fr.md`, changeName: name }), true, '裸名归档路径→已落库')
+  // 历史日期前缀形态兼容（<prefix>-<changeName>）
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec/changes/archive/2026-10-05-${name}/design.md`, changeName: name }), true, '后缀兼容形态→已落库')
+  // 同名做他名后缀段（-v2 结尾）不误报
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec/changes/archive/${name}-v2/design.md`, changeName: name }), false, '他变更名以本名开头不误报')
+  // 无归档路径 / 空树 / 空变更名
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec/changes/${name}/design.md`, changeName: name }), false, '活跃目录不算落库')
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: '', changeName: name }), false, '空树→未落库')
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec/changes/archive/${name}/x.md`, changeName: '' }), false, '空变更名→false（防御）')
+  // 反斜杠路径容错（Windows ls-tree 输出形态）
+  assert.equal(archiveLandedInHeadTree({ headTreeFiles: `.sillyspec\\changes\\archive\\${name}\\design.md`, changeName: name }), true, '反斜杠形态归一后命中')
 })
 
 test('④ test:core 清单驻留：本测试文件在 package.json test:core 内（防移出日常拦截面）', () => {

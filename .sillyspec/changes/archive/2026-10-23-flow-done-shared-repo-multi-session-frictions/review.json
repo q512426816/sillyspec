@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-flow-done-shared-repo-multi-session-frictions",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "ec173b13d125d63acc8ed5b2f71c1ac7e5b43cd6",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok — 落库判定仅在打印时点 HEAD 树快照内计算（complete-handlers.js:1167-1180），无时序假设；「打印→执行」窗口竞动由 1192 行全量重核指引兜底，②真链+③竞态注入双锚复跑绿",
+    "并发": "ok — design 死路 1（CLI 不代执行归档提交）与实现一致：提示段只读（gitQuiet diff/ls-tree，1167-1168），advisory 不阻断由 1197 try/catch 兑现；pathspec 限本变更面有测试①③锚；本轮新增②b 的预置锚走「历史日期前缀目录先行 commit」构造，不与在途暂存面互扰，无新并发缺陷",
+    "切换": "ok — design 死路 2（未落库不 exit 1 硬拦，披露不阻断）核实一致：提示分支零状态变更（不 mv/add/commit），幂等重入合法；新增②b 补上已落库态重入面（提示 stdout+命令 exit 0）的回归锚",
+    "作用域": "ok — 判定锚定 cwd 的 HEAD 树与本变更目录名；`-<changeName>` 后缀兼容的误报面已在 design 风险节声明且有反例锚（⑤ -v2 不误报，test:196）；②b 有意走后缀兼容形态构造 landed 分流，与声明口径同源（纯函数⑤同形态锚），非静默扩权"
+  },
+  "reviewedAt": "2026-10-23T15:33:31Z"
+}

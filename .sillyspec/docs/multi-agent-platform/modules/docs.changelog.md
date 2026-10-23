@@ -37,3 +37,4 @@
 | 2026-10-21 | 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测 |
 | 2026-10-21 | 2026-10-21-docref-checkapproval-reanchor | 平台接口图 checkApproval 锚重锚 |
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
+| 2026-10-23 | 2026-10-23-flow-done-shared-repo-multi-session-frictions | flow done 归档提交未落库守卫与回归锚 |
