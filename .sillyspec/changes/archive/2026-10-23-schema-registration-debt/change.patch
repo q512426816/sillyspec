@@ -1,0 +1,48 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 02127307..c9a005dd 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -75,6 +75,7 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
+         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
+         { path: 'commands.knowledge-gate', type: 'boolean', optional: true, status: 'live', readers: ['completeStep (src/run/complete.js)'], desc: '【2026-09-28-unclear-req-to-brainstorm FR-03/D-004】brainstorm 方案步（提出 2-3 种方案）--done 知识检索命中回显开关——缺省 true=开（对 --output 与 decisions.md 条目跑既有检索匹配器，命中 warn 回显「须 evidence 回应或说明不复潮」不阻断）；false（或 off）关回显，无命中时输出与现状一致。', example: 'false' },
++        { path: 'commands.scan:check', type: 'string', optional: true, status: 'live', readers: ['scan 漂移检查（scripts/scan-drift-check.py 经 scan 流程调用）'], desc: '【2026-10-23-schema-registration-debt 平台仓 dogfood 补登】scan 产物漂移自检命令。', example: 'python scripts/scan-drift-check.py' },
+       ],
+     },
+     {
+@@ -122,6 +123,7 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'modules.<name>.path', type: 'string', optional: true, status: 'live', readers: ['extractModules (src/verify-postcheck.js)', 'parseLocalYamlModules (src/plan-postcheck.js)', 'extractModulePaths (src/worktree-deps.js)'], desc: '子模块目录路径（相对仓库根）。', example: 'frontend/' },
+         { path: 'modules.<name>.test', type: 'string', optional: true, status: 'deprecated', readers: ['extractModules (src/verify-postcheck.js，退役提示用）'], desc: '【2026-09-26-dynamic-test-inference 退役，不再消费】测试面按变更动态推断、runner 自项目结构（pyproject/uv.lock/package.json 就近祖先）推断。模块级 flaky 处置迁 known_failures。块在场时 CLI 打印退役指引。', example: 'cd frontend && pnpm test' },
++        { path: 'module_paths', type: 'object', optional: true, status: 'live', readers: ['module_paths 旧字段（部分工具仍用——平台仓 dogfood 2026-10-23 核实在用）'], desc: '【旧字段】模块名 → 目录路径映射（如 backend: backend/）。部分工具仍消费；新配置勿再写（模块归属走 docs/<project>/modules/_module-map.yaml）。', example: '{ backend: backend/, frontend: frontend/ }' },
+         { path: 'fr_unmapped_baseline', type: 'integer', optional: true, status: 'live', readers: ['unmapped 大池消音（src/fr-index.js）'], desc: 'unmapped 域 FR 条数消音基线（跨仓历史堆积已清算时设当前值；增量 >10 才警告，缺省 0=无基线恒警告行为）。', example: '720' },
+       ],
+     },
+@@ -299,6 +301,15 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'change-ownership.heartbeat_minutes', type: 'integer', optional: true, status: 'live', readers: ['assertChangeOwnership (src/progress/change-registry.js — 本变更 task-02 接线消费)'], desc: '所有者活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（--takeover 显式接管）；窗口外 → 放行并自动接管。缺省 15。', example: '15' },
+       ],
+     },
++    {
++      id: 'ui_prototype',
++      title: 'UI 原型形态契约（每仓）',
++      note: '【2026-10-15-ui-proto-form-config】frontend 触达的 UI 变更定稿原型形态：real-code=真码走仓内原型管线（推荐）；single-html=单 HTML 例外（须 ruling 三键留痕：by/at/reason）。缺省未配置=flow start 强提醒登记。',
++      keys: [
++        { path: 'ui_prototype.form', type: 'enum', values: ['real-code', 'single-html'], optional: true, status: 'live', readers: ['readUiPrototypeForm (src/ui-visual.js)'], desc: '本仓原型形态契约：real-code（真码管线）/ single-html（单 HTML 例外，须 ruling 裁决留痕）。', example: 'real-code' },
++        { path: 'ui_prototype.<key>', type: 'string', optional: true, status: 'live', readers: ['readUiPrototypeForm (src/ui-visual.js)——豁免裁决 ruling{by,at,reason} 等扩展子键'], desc: '扩展子键占位（豁免裁决 ruling 族等）——子键名开放，校验不枚举。', example: 'ruling_by' },
++      ],
++    },
+     {
+       id: 'ceremony',
+       title: '评审仪式档位（ceremony tier）',
+@@ -448,6 +459,11 @@ dispatch:
+ # review_inline_wait: 180   # 评审平台单调用等待秒（1-600，需 SillyHub）；不写=评审任务书面模式
+ # dirty_gate_ignore: quicklog, test/.sillyspec   # dirty 门已知残渣前缀（单行逗号、posix 前缀）
+ # module_gate_ignore: scripts   # 模块图软门固定忽略目录（单行逗号、前缀匹配）
++# commands:
++#   scan:check: python scripts/scan-drift-check.py   # scan 漂移自检命令
++# module_paths: { backend: backend/, frontend: frontend/ }   # 旧字段（部分工具仍用；新配置勿写）
++# ui_prototype:
++#   form: real-code   # UI 原型形态契约（real-code / single-html+ruling 豁免）
+ # fr_regress_cap: 40   # FR 回归层本地开关：缺省不跑归 pre-push/CI 门；N=前 N 个；all=全跑旧行为
+ # fr_unmapped_baseline: 720   # unmapped 域 FR 消音基线（跨仓历史堆积已清算时设）
+ #

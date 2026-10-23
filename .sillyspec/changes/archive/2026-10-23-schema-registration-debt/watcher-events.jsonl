@@ -1,0 +1,11 @@
+{"ts":1792724158619,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1792724158619,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1792724158619,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1792724158619,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1792724277190,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792724277190,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792724277190,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792724277190,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1792724472404,"kind":"commit","stage":null,"detail":"18177dfc","provisional":true}
+{"ts":1792724497004,"kind":"gate-run","stage":"verify","detail":"门实测 passed（19.1s） · 20261023030135","provisional":true}
+{"ts":1792724500456,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

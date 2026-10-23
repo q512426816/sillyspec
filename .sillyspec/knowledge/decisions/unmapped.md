@@ -425,3 +425,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：1602451249dcc1fc2b4c637b02862e6cecd320b0
 理由：风险=锚漏改致 quick-retired 假红——对策：三处 grep 全量核对+锚套件实跑绿。放弃：不发版直接让消费仓装 git ref（非正式分发通道，弃）。
+
+## D-unmapped-462@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-23-schema-registration-debt
+原编号：D-001@v1
+锚点：未记录
+最近确认：18177dfc5da32ece4be3ae98cbd07311fe001c57
+理由：风险=readers 标注不准（旧字段消费点散）——desc 如实标「部分工具仍用」不虚构具体文件。放弃：给 module_paths 做逐叶子键校验（消费点本就模糊，object 整体校验足够，弃）。

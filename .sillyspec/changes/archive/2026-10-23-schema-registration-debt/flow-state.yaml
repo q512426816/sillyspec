@@ -1,0 +1,45 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  schema 补登三键（平台仓 dogfood 欠账）
+
+
+  动机与背景：config validate 上线后在平台仓（multi-agent-platform）dogfood 又发现 3 个真实消费键未注册 schema：commands.scan:check（scan
+  漂移检查消费）、module_paths（旧字段部分工具仍用）、ui_prototype（2026-10-15-ui-proto-form-config 消费段）——校验器报未知键警告，报假警瓦解校验面信任。与变更 8 的 7
+  键补登同性质（发现面/校验面/示例面三同源）。用户指令链：升级 CLI＋瘦身平台仓配置（2026-10-23）——本变更为其直接后续。autopilot 直跑到底，--no-prestage 声明需求已含决策。
+
+
+  成功标准：
+
+  - config-schema 注册 commands.scan:check（string）/module_paths（object，legacy
+  旧字段）/ui_prototype.form（string，段内其他子键经占位形态免未知警告）三键，readers 如实标注；renderExample 补对应 token 行（防漂耦合测试同步过）
+
+  - config-schema.test 与 config-validate.test 全绿；平台仓 local.yaml validate 复跑零警告
+autopilot: true
+prestage_ack: true
+baseline_commit: f8708f85953d6d8b382fb0b2432504008fc410e7
+updatedAt: '2026-10-23T03:01:41.639Z'
+baseline_sha256: 43c8432bccdff2aca9ed30d8da93dc71ada8b02aca6e0ae338971311967ff310
+spec_approved: true
+spec_approved_at: '2026-10-23T02:57:57.749Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（19.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023030135\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+
