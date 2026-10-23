@@ -11363,3 +11363,88 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-review-inline-dispatch
   status: active
+
+## FR-cli-entry-597 readFrRegressCap 语义 v2（缺省翻转）
+变更：2026-10-23-fr-regress-default-off
+状态：active
+摘要：缺省即 off；all 显式恢复旧行为
+场景正文：
+- 场景：缺省即 off — Given temp 仓 local.yaml 无 fr_regress_cap 键且 FR 索引非空；When 组面；Then FR 层零文件进实测面、披露行在场（0/N
+- 场景：all 显式恢复旧行为 — Given 键=all；When 组面；Then FR 绑定面全部进实测面（旧行为），无帽披露行。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-default-off/requirements.md#FR-01
+最近确认：5949a4e473957a99c378b9684da1f0e7d1b8871b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-default-off:flow:测试绑定FR-01
+  tests: test/fr-regress-cap.test.mjs「②readFrRegressCap v2 五态（缺省 0/all null/N/off/坏值）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-default-off
+  status: active
+
+## FR-cli-entry-598 披露与教学面反映新缺省
+变更：2026-10-23-fr-regress-default-off
+状态：active
+摘要：文案如实
+场景正文：
+- 场景：文案如实 — Given 缺省 off 且 FR 索引非空；When 收口组面；Then 信息行描述为「本变更测试 ∪ import 依赖（FR 关联回归层缺省不跑…）」而非宣称含 FR
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-default-off/requirements.md#FR-02
+最近确认：5949a4e473957a99c378b9684da1f0e7d1b8871b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-default-off:flow:测试绑定FR-02
+  tests: test/dynamic-test-inference.test.mjs「缺省 dynamic-empty reason 如实（评审 P1 修复锚）」 | test/fr-regress-cap.test.mjs「③本仓缺省断言与消费点单一源锚（披露行开启指引文案锚）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-default-off
+  status: active
+
+## FR-cli-entry-599 既有面适配与本仓配置收敛
+变更：2026-10-23-fr-regress-default-off
+状态：active
+摘要：夹具适配
+场景正文：
+- 场景：夹具适配 — Given fr-priority-overlap 夹具显式 all；When 跑套件；Then 旧断言（fr 标签/优先面）原样通过。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-default-off/requirements.md#FR-03
+最近确认：5949a4e473957a99c378b9684da1f0e7d1b8871b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-default-off:flow:测试绑定FR-03
+  tests: test/fr-priority-overlap.test.mjs「夹具显式 all 旧断言原样绿」 | test/fr-regress-cap.test.mjs「③本仓键缺席断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-default-off
+  status: active
+
+## FR-cli-entry-600 测试矩阵
+变更：2026-10-23-fr-regress-default-off
+状态：active
+摘要：矩阵
+场景正文：
+- 场景：矩阵 — Given 直调与文本锚各形态；When 分别执行；Then 断言各自成立。
+全文：.sillyspec/changes/archive/2026-10-23-fr-regress-default-off/requirements.md#FR-04
+最近确认：5949a4e473957a99c378b9684da1f0e7d1b8871b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-fr-regress-default-off:flow:测试绑定FR-04
+  tests: test/dynamic-test-inference.test.mjs「两相 E2E」 | test/fr-regress-cap.test.mjs「①②③」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-fr-regress-default-off
+  status: active

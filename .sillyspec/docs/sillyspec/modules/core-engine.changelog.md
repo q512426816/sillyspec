@@ -89,3 +89,4 @@
 | 2026-10-21 | 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测 |
 | 2026-10-21 | 2026-10-21-known-failures-unescape | known_failures 三读侧 YAML 反转义对称 |
 | 2026-10-23 | 2026-10-23-fr-regress-cap | FR 回归面帽配置键 |
+| 2026-10-23 | 2026-10-23-fr-regress-default-off | FR 回归层缺省关闭 |
