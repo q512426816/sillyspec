@@ -36,3 +36,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-23 | 2026-10-23-schema-registration-debt | schema 补登三键（平台仓 dogfood 欠账） |
 | 2026-10-23 | 2026-10-23-py-runner-flags | py 推断运行器尾随 flag 键 |
 | 2026-10-23 | 2026-10-23-runner-flags-generic | runner_flags 通用化与依赖面档位 |
+| 2026-10-23 | 2026-10-23-knowledge-scope-discoverability | 知识作用域发现面三处引导 |

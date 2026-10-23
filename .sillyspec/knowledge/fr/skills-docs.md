@@ -724,3 +724,24 @@ created_at: 2026-10-15T01:21:44.811Z
   confirmed_at: null
   source_change: 2026-10-23-config-validate-skill
   status: active
+
+## FR-skills-docs-034 sillyspec knowledge scope [--json]：扫描 knowledge/*.md 作用域标记并输出四档现状（always/repo 条目清单、module 域分布、关键词档说明）；无任何 scoped 条目时明示「当前仅关键词档在用」+marker 三形态语法与放置位置（top-level knowledge/*.md section heading 下）；--json 单对象 {always,repo,modules,guide}；纯读零写盘
+变更：2026-10-23-knowledge-scope-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-knowledge-scope-discoverability/requirements.md#FR-01
+最近确认：e2af70a75bb952c1962feda5dd3957a903073eca
+
+## FR-skills-docs-035 knowledge help/子命令清单列 scope；templates/agents-instruction.md 知识库行含作用域指引一句（含 knowledge scope 命令指针）；sillyspec-config 技能含标记语法+命令+「无标记=关键词」说明
+变更：2026-10-23-knowledge-scope-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-knowledge-scope-discoverability/requirements.md#FR-02
+最近确认：e2af70a75bb952c1962feda5dd3957a903073eca
+
+## FR-skills-docs-036 测试：CLI e2e（有空态文案/有条目清单/--json 形态）+ 模板与技能文案锚；既有 knowledge 套件零改动回归绿
+变更：2026-10-23-knowledge-scope-discoverability
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-knowledge-scope-discoverability/requirements.md#FR-03
+最近确认：e2af70a75bb952c1962feda5dd3957a903073eca
