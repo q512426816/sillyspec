@@ -3011,14 +3011,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     }
     pyGroups.get(key).files.push(f)
   }
-  // py_runner_flags（2026-10-23-py-runner-flags）：推断路径（无 hits 模块命令来源）补尾随
-  // flags——hits 路径的模块命令自带 flags（extractRunnerTrailingFlags），此处不双加；
-  // pytest 参数序无关，flags 置于文件面前；缺省空=零回归。
-  if (!pyRunner && pyGroups.size > 0) {
-    try {
-      const pyFlags = readVerifyPyFlags(specBase)
-      if (pyFlags) for (const grp of pyGroups.values()) grp.command = `${grp.command} ${pyFlags}`
-    } catch { /* 键读取 fail-soft=无 flags */ }
+  // runner_flags（2026-10-23-runner-flags-generic，语言中立）：推断路径按批类别注入声明
+  // flags——批类别=CLI 自有 runner 分类（py|js|jsx|…，未知类别前向兼容，不枚举语言）。
+  // hits 路径的模块命令自带 flags（extractRunnerTrailingFlags），此处不双加；flags 置于
+  // 文件参数之前（node/go 类参数解析在首个位置参数处截断）；缺省空=零回归。
+  let runnerFlags = {}
+  try { runnerFlags = readRunnerFlags(specBase) } catch { /* fail-soft 空映射 */ }
+  const flagsSuffix = (kind) => (runnerFlags[kind] ? `${runnerFlags[kind]} ` : '')
+  if (!pyRunner && pyGroups.size > 0 && runnerFlags.py) {
+    for (const grp of pyGroups.values()) grp.command = `${grp.command} ${runnerFlags.py}`
   }
   if (!pyRunner && pyGroups.size > 0) pyRunner = pyGroups.values().next().value.command
   // JSX 运行器推断（2026-09-26-residual-runner-parity 起 + 结构推断源）：.tsx/.jsx 是 node
@@ -3086,7 +3087,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     }
   }
   if (jsNative.length > 0) {
-    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout '
+    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ' + flagsSuffix('js')
     const jsChunks = chunkByCommandLength(jsPrefix, jsNative)
     jsChunks.forEach((chunk, i) => {
       const isMulti = jsChunks.length > 1
@@ -3124,7 +3125,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     const multiGroup = jsxGroups.size > 1
     for (const [command, grp] of jsxGroups) {
       const isVitest = /vitest/.test(command)
-      const jsxPrefix = `${command} ${isVitest ? 'run ' : ''}`
+      const jsxPrefix = `${command} ${isVitest ? 'run ' : ''}${jsxRunnerFromHits ? '' : flagsSuffix('jsx')}`
       const grpDir = grp.dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(command)?.[1] || null
       const rebaseJsx = (f) => (grpDir && f.startsWith(grpDir + '/')) ? f.slice(grpDir.length + 1) : f
       const jsxArgs = grp.files.map(rebaseJsx).map(quoteWinPath)
@@ -3381,19 +3382,65 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
  * runVerifyTestCheck 全链只为断言组卷接线）。
  */
 /**
- * py_runner_flags 读取（2026-10-23-py-runner-flags，逐键正则 + CRLF 归一）：动态子集
- * deps(auto-py) 推断路径（无 hits 模块命令）此前生成裸 pytest——模块命令里的
- * -q --no-cov -n auto 全丢，单核串行（平台仓实证：25 文件 149s；同仓 124 文件串行 1183s
- * vs 带 -n auto 6-10×）。本键让仓主显式声明推断批尾随 flags；缺省/坏值/不可读 → ''（零回归）。
- * 显式配置责任在仓主（xdist 未装却配 -n auto 会报错可见、可改）。
+ * runner_flags 读取（2026-10-23-runner-flags-generic，语言中立）：local.yaml 的批类别 →
+ * 尾随 flags 映射（批类别 = CLI 自有 runner 分类 py|js|jsx|…，未知类别保留、前向兼容——
+ * 不枚举语言/框架，对齐 AGENTS 规约 00）。嵌套块行式解析（引号/注释/CRLF 容错，块结束于
+ * 去缩进行）；py_runner_flags 单键保留为兼容别名（映射到 py）。缺省/坏值/不可读 → 空映射
+ * （零回归）。flags 注入置于文件参数之前（node/go 类参数解析在首个位置参数处截断）。
  */
-export function readVerifyPyFlags(specBase) {
+export function readRunnerFlags(specBase) {
+  const out = {}
   try {
     const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
-    const m = raw.match(/^[ 	]*py_runner_flags[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
-    if (!m) return ''
-    return m[1].trim().replace(/^["']|["']$/g, '').trim()
-  } catch { return '' }
+    const legacy = raw.match(/^[ 	]*py_runner_flags[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
+    if (legacy) {
+      const v = legacy[1].trim().replace(/^["']|["']$/g, '').trim()
+      if (v) out.py = v
+    }
+    const lines = raw.split(String.fromCharCode(10))
+    let inBlock = false
+    let indent = -1
+    for (const line of lines) {
+      if (!inBlock) {
+        if (/^[ 	]*runner_flags[ 	]*:[ 	]*(?:#.*)?$/.test(line)) { inBlock = true; indent = -1 }
+        continue
+      }
+      if (!line.trim() || /^[ 	]*#/.test(line)) continue
+      const m = /^([ 	]+)([A-Za-z0-9_.:+/-]+)[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/.exec(line)
+      if (!m) { if (!/^[ 	]/.test(line)) break; continue }
+      if (indent === -1) indent = m[1].length
+      if (m[1].length < indent) { break }
+      const v = m[3].trim().replace(/^["']|["']$/g, '').trim()
+      if (v) out[m[2]] = v
+    }
+  } catch { /* fail-soft 空映射 */ }
+  return out
+}
+
+/** py_runner_flags 兼容别名（2026-10-23-py-runner-flags；泛化后保留读口——等价 readRunnerFlags().py）。 */
+export function readVerifyPyFlags(specBase) {
+  return readRunnerFlags(specBase).py || ''
+}
+
+/**
+ * deps_regress_cap 读取（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
+ * N（1-2000）= 变更自身测试优先整跑、import 依赖只取前 N 个；off = 只跑变更自身测试（其余
+ * 归 pre-push/CI 门）；缺省/坏值/不可读 → null（全跑=现状零回归）。own 判定=变更触碰文件集
+ * ∩ 依赖面（测试文件），与语言/框架无关。
+ */
+export function readDepsRegressCap(specBase) {
+  try {
+    const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+    const m = raw.match(/^[ 	]*deps_regress_cap[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
+    if (!m) return null
+    const v = m[1].trim().replace(/^["']|["']$/g, '')
+    if (/^off$/i.test(v)) return 0
+    if (/^\d+$/.test(v)) {
+      const n = Number(v)
+      if (n >= 1 && n <= 2000) return n
+    }
+    return null
+  } catch { return null }
 }
 
 /**
@@ -3439,7 +3486,29 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
   // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
   // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
-  const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  let deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  // deps_regress_cap（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
+  // own（变更触碰文件集∩依赖面）优先整跑，其余按 N 截断/off 全弃（归 pre-push/CI 门）。
+  // 缺省 null=全跑（现状零回归）。own 判定与语言/框架无关（纯路径集合运算）。
+  let depsCapApplied = null
+  try {
+    const depCap = readDepsRegressCap(specBase)
+    if (depCap !== null && deps.length > 0) {
+      const ownSet = new Set((changedFiles || []).map((f) => String(f).split(String.fromCharCode(92)).join('/')))
+      const own = deps.filter((f) => ownSet.has(f))
+      const rest = deps.filter((f) => !ownSet.has(f))
+      if (depCap === 0) {
+        deps = own
+        depsCapApplied = { kept: own.length, total: own.length + rest.length }
+      } else if (rest.length > depCap) {
+        deps = [...own, ...rest.slice(0, depCap)]
+        depsCapApplied = { kept: deps.length, total: own.length + rest.length }
+      }
+    }
+  } catch { /* 键读取 fail-soft=全跑 */ }
+  if (depsCapApplied) {
+    console.log(`ℹ️ deps_regress_cap：实测依赖面 ${depsCapApplied.kept}/${depsCapApplied.total} 进实测面，其余 ${depsCapApplied.total - depsCapApplied.kept} 个归 pre-push/CI 门（可开启：local.yaml deps_regress_cap: <N|off>——N=前 N 个依赖 / off=只跑变更自身测试；缺省全跑）`)
+  }
   // FR 关联回归源（2026-09-26-dynamic-test-inference 三源之二）：active FR 覆盖面（来源变更
   // patch ∪ 绑定）∩ 本次触碰文件 ≠ ∅ 者，其绑定 tests 解析仓根相对后并入实测面——「需求→
   // 用例」映射即测试需求。frPre 在场用调用方预计算（runVerifyTestCheck 决策已扫过，免二次

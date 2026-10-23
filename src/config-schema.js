@@ -142,7 +142,9 @@ export const LOCAL_YAML_SCHEMA = {
       keys: [
         { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
-        { path: 'py_runner_flags', type: 'string', optional: true, status: 'live', readers: ['readVerifyPyFlags (src/verify-postcheck.js)'], desc: '【2026-10-23-py-runner-flags】动态子集 deps(auto-py) 推断路径的尾随 flags（模块命令来源 hits 路径自带 flags，不适用）——如 "-q --no-cov -n auto"（需 pytest-xdist）；缺省不写=裸 pytest 现状。仓主显式声明，误配会在实测输出可见可改。', example: '-q --no-cov -n auto' },
+        { path: 'runner_flags', type: 'object', optional: true, status: 'live', readers: ['readRunnerFlags (src/verify-postcheck.js)'], desc: '【2026-10-23-runner-flags-generic，语言中立】推断批尾随 flags 映射：批类别（CLI 自有 runner 分类 py|js|jsx|…，未知类别前向兼容）→ flags 串。flags 置于文件参数前（node/go 类参数解析在首个位置参数处截断）；hits 路径自带 flags 不注入。缺省不写=现状。', example: 'py: "-q --no-cov -n auto" / jsx: "--pool=forks"' },
+        { path: 'py_runner_flags', type: 'string', optional: true, status: 'deprecated', readers: ['readRunnerFlags 兼容别名 (src/verify-postcheck.js)'], desc: '【已泛化】runner_flags.py 的单键旧别名（2026-10-23-py-runner-flags 遗留）；新配置写 runner_flags 映射。', example: '-q --no-cov -n auto' },
+        { path: 'deps_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readDepsRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-runner-flags-generic，语言中立】import 依赖面档位：N（1-2000）=变更自身测试优先、依赖只取前 N；off=只跑变更自身测试（关联回归归 pre-push/CI 门）；不写=全跑。own=变更触碰文件∩依赖面，纯路径集合运算不涉语言。', example: 'off' },
         { path: 'fr_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readFrRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-fr-regress-default-off 缺省翻转】FR 关联回归层本地实测开关：缺省（不写）=不跑（归 pre-push/CI 门，收口披露行留痕）；N（1-2000）=前 N 个绑定文件进实测面；all=全跑旧行为显式恢复；off=同缺省。', example: '40' },
       ],
     },
@@ -467,7 +469,9 @@ dispatch:
 #   form: real-code   # UI 原型形态契约（real-code / single-html+ruling 豁免）
 # fr_regress_cap: 40   # FR 回归层本地开关：缺省不跑归 pre-push/CI 门；N=前 N 个；all=全跑旧行为
 # fr_unmapped_baseline: 720   # unmapped 域 FR 消音基线（跨仓历史堆积已清算时设）
-# py_runner_flags: "-q --no-cov -n auto"   # deps(auto-py) 推断批尾随 flags（需 xdist；缺省裸跑）
+# runner_flags:            # 推断批尾随 flags（按批类别 py|js|jsx|…，未知类别前向兼容）
+#   py: "-q --no-cov -n auto"
+# deps_regress_cap: off    # import 依赖面：off=只跑变更自身测试；N=前 N 个依赖文件；不写=全跑
 #
 # ── 跨仓注册表（注册后参与跨仓冻结/对账；local.yaml gitignored 故真实路径不入库）──
 # repos:
