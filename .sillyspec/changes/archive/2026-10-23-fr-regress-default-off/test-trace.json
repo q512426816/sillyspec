@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-fr-regress-default-off",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-fr-regress-default-off:flow:测试绑定FR-01",
+      "tests": [
+        "test/fr-regress-cap.test.mjs「②readFrRegressCap v2 五态（缺省 0/all null/N/off/坏值）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-default-off"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-fr-regress-default-off:flow:测试绑定FR-02",
+      "tests": [
+        "test/dynamic-test-inference.test.mjs「缺省 dynamic-empty reason 如实（评审 P1 修复锚）」",
+        "test/fr-regress-cap.test.mjs「③本仓缺省断言与消费点单一源锚（披露行开启指引文案锚）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-default-off"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-fr-regress-default-off:flow:测试绑定FR-03",
+      "tests": [
+        "test/fr-priority-overlap.test.mjs「夹具显式 all 旧断言原样绿」",
+        "test/fr-regress-cap.test.mjs「③本仓键缺席断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-default-off"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-fr-regress-default-off:flow:测试绑定FR-04",
+      "tests": [
+        "test/dynamic-test-inference.test.mjs「两相 E2E」",
+        "test/fr-regress-cap.test.mjs「①②③」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-fr-regress-default-off"
+    }
+  ]
+}

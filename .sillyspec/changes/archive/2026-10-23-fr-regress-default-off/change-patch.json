@@ -1,0 +1,111 @@
+{
+  "change": "2026-10-23-fr-regress-default-off",
+  "baseline": "29876e05e08ec1f9de58f9296a4ec3a6e3e2956c",
+  "head": "5949a4e473957a99c378b9684da1f0e7d1b8871b",
+  "files": [
+    "src/flow.js",
+    "src/verify-postcheck.js",
+    "test/dynamic-test-inference.test.mjs",
+    "test/fr-priority-overlap.test.mjs",
+    "test/fr-regress-cap.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 93,
+    "deletions": 57
+  },
+  "savedAt": "2026-10-23T01:21:38.621Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "29876e05e08ec1f9de58f9296a4ec3a6e3e2956c",
+    "totals": {
+      "files": 5,
+      "additions": 93,
+      "deletions": 57
+    },
+    "rows": [
+      {
+        "path": "src/flow.js",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 49,
+        "deletions": 27,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/dynamic-test-inference.test.mjs",
+        "additions": 15,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-priority-overlap.test.mjs",
+        "additions": 3,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/fr-regress-cap.test.mjs",
+        "additions": 24,
+        "deletions": 23,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "b414db7756a774cbac3bbbc49fc9de869aceb2698b3608c31c1c37cd6b486f3a",
+  "patchStatus": "ok"
+}

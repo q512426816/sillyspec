@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-fr-regress-default-off",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "5949a4e473957a99c378b9684da1f0e7d1b8871b",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok——键每轮组面时点重读无缓存（src/verify-postcheck.js:2177 决策层产生点、:3431 runModuleSubset 本地收集路径各一次实读），all/N/off 切换下一轮即生效，与 design 盲维 1 作答一致",
+    "并发": "ok——读取 fail-soft 到 0（src/verify-postcheck.js:3393 catch→0），本变更零新增写盘，竞态最坏退化方向=少跑（保守），与 design 盲维 2 作答一致",
+    "切换": "ok——纯读取语义变更无状态迁移，中断重跑幂等；声明边界「升级即变脸（存量仓实测面变小）」已裁决：可接受——用户裁决留痕（.sillyspec/local.yaml:78-79 注释+design）、缺省跳过恒打披露行不静默（src/verify-postcheck.js:2287-2289 与 :3455-3457 两路径均在）、all 一行恢复旧行为（E2E 第二相实证）、CI/pre-push 兜底不变",
+    "作用域": "ok——键仓级（specBase 下的 local.yaml），夹具各自 tmp 目录隔离（test/fr-priority-overlap.test.mjs:47-49 显式 all）；版本兼容出口显式（all→null）；绑定未跑归 pre-push/CI 门为已裁决可接受边界（去向在 reason 与披露行显式可见）"
+  },
+  "reviewedAt": "2026-10-23T01:26:16.000Z"
+}
