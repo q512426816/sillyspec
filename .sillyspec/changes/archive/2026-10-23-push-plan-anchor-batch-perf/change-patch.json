@@ -1,0 +1,76 @@
+{
+  "change": "2026-10-23-push-plan-anchor-batch-perf",
+  "baseline": "28bf99cadf56ab1bf0f803d99bd6e3d87629d201",
+  "head": "fe962b056b2fff15d37dbd2ae6e2333277a1fa87",
+  "files": [
+    "src/push.js",
+    "test/push-cli.test.mjs"
+  ],
+  "totals": {
+    "files": 2,
+    "additions": 66,
+    "deletions": 4
+  },
+  "savedAt": "2026-10-23T15:47:08.750Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "28bf99cadf56ab1bf0f803d99bd6e3d87629d201",
+    "totals": {
+      "files": 2,
+      "additions": 66,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": "src/push.js",
+        "additions": 46,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/push-cli.test.mjs",
+        "additions": 20,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "914678f562c80f0685bc53bf8db71b1f554572be8de427122de22a1b9aac030a",
+  "patchStatus": "ok"
+}

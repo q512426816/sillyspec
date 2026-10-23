@@ -1,0 +1,18 @@
+{"ts":1792770025209,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792770025209,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792770048683,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/push.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792770124322,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/push-cli.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792770317234,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792770317626,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792770318004,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792770317842,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792770317842,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}
+{"ts":1792770318385,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792770321507,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792770321507,"kind":"task-done","stage":"tasks","detail":"checked 2→4","provisional":true}
+{"ts":1792770334870,"kind":"commit","stage":null,"detail":"c91d0a38","provisional":true}
+{"ts":1792770371157,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792770381111,"kind":"commit","stage":null,"detail":"fe962b05","provisional":true}
+{"ts":1792770381359,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-23-push-plan-anchor-batch-perf/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792770421018,"kind":"gate-run","stage":"verify","detail":"门实测 passed（31.8s） · 20261023154659","provisional":true}
+{"ts":1792770444144,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}

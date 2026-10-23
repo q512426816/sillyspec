@@ -198,6 +198,26 @@ test('⑤ 活锚点抬升：scan source_commit 落区间内时 effectiveBase 抬
   } finally { cleanup(join(work, '..')) }
 })
 
+test('⑤b 预存坏锚点：警告收敛单行（计数+分类+首 3 标识）', async () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    const scanDir = join(work, '.sillyspec', 'docs', 'proj', 'scan')
+    mkdirSync(scanDir, { recursive: true })
+    writeFileSync(join(scanDir, 'PROJECT.md'), '---\nsource_commit: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n---\n# project\n')
+    writeFileSync(join(scanDir, 'STRUCTURE.md'), '---\nsource_commit: 0000000000000000000000000000000000000000\n---\n# structure\n')
+    const oldHead = git(work, ['rev-parse', 'HEAD'])
+    const r = await runPush({ cwd: work, dryRun: true })
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    const anchorWarnings = r.plan.warnings.filter((w) => /锚点/.test(w))
+    assert.equal(anchorWarnings.length, 1, `坏锚点警告应恰 1 行，实际：${JSON.stringify(anchorWarnings, null, 1)}`)
+    assert.match(anchorWarnings[0], /2 个已跳过/)
+    assert.match(anchorWarnings[0], /不可解析 2 \/ 非 HEAD 祖先 0/)
+    assert.match(anchorWarnings[0], /首 3：scan proj\/scan\/PROJECT\.md/)
+    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead)
+  } finally { cleanup(join(work, '..')) }
+})
+
 test('⑥ --mode none：只推送，不改写历史', async () => {
   const { work, remote, branch } = makeRepo()
   try {

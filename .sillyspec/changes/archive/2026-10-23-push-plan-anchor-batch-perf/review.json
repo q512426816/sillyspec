@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-push-plan-anchor-batch-perf",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "fe962b056b2fff15d37dbd2ae6e2333277a1fa87",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "短哈希锚点解析成功形态无测试钉，design 风险节「测试锚钉短哈希解析成功形态」与实态不符",
+      "evidence": "push 测试面锚点全为完整 40 hex（test/push-cli.test.mjs ①/⑤/⑤b），无 7 位短哈希成功解析用例；而生产者 src/scan-refresh.js:236 写 sourceCommit: headShort（7 位短哈希）——FR-01 要求保留的「输入短哈希→完整 sha」映射走的是 scan 锚点生产主流路径却零直接覆盖。实现本身经本仓实证核验正确（7 位短哈希 + ^{commit} 回显完整 40 hex、序对齐），故仅为覆盖缺口+design 表述超前，非功能缺陷。",
+      "location": ".sillyspec/changes/2026-10-23-push-plan-anchor-batch-perf/design.md 风险节；src/scan-refresh.js:236；test/push-cli.test.mjs:201-219"
+    },
+    {
+      "severity": "P3",
+      "title": "batchCommitResolve 按行分帧对齐：锚点值含换行符的损坏元数据会使后续锚点错位（可错配他人 sha）",
+      "evidence": "src/push.js:353-354 以 `${s}^{commit}` 按行拼 stdin 且未过滤输入中的 \\n/\\r；change-patch.json（cp.baseline/cp.head）与 worktree meta.json 值未过 hex 正则，若被手工损坏为含换行的字符串，会多占请求行致后续响应错位——后续锚点可能被误判不可解析（跳过+advisory，fail-safe 向）或错配前一锚的 sha（活锚保护失准）。既有产出方（parseSourceCommit/flow-state 均带 [0-9a-f] 正则、scan-refresh 写 hex）不会触发；旧逐锚 rev-parse 无此耦合。实证核验：单行畸形输入（a/b）每行恰一响应行、不破坏分帧，触发面仅限值内嵌换行。建议：含 \\n/\\r 的输入直接置 null。",
+      "location": "src/push.js:353-364"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding（P3 换行分帧错位，见 findings[1]）；边界已裁决：可接受——batch-check 响应序=输入序（git 文档保证+本仓实证），fetch 与计划间远端推进由既有推送前 tipNow 再探守卫兜底（src/push.js:859-863），时序语义不变",
+    "并发": "ok；边界已裁决：可接受——批量解析全只读（cat-file --batch-check 无写路径），不改锁/CAS 面；非 dry-run 复用 fetch 后跟踪引用仍受 tipNow 再探 + CAS update-ref 双兜底",
+    "切换": "ok；边界已裁决：可接受——整批失败（git() 抛错/超时）返回空 Map=全锚不可解析，与逐锚 rev-parse 失败同向 fail（src/push.js:357 catch 语义经 git-helper.js:149 抛错版核实），不误杀 live 锚；响应缺失行同样落 null fail-safe；无新状态",
+    "作用域": "ok；边界已裁决：可接受——batchCommitResolve 锚定 ctx.repoRoot（planPush 与 runPush 各自 resolveRepoContext 同仓同源），锚点仍来自当前仓 specBase，无跨仓面触碰（config-absent-zero-regression：未新增 local.yaml 键，n/a 如实判定；crossrepo-path-compat：n/a 如实判定）"
+  },
+  "reviewedAt": "2026-10-23T15:51:03Z"
+}

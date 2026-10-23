@@ -11552,3 +11552,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-push-review-debt
   status: active
+
+## FR-cli-entry-609 锚点可解析性判定合并为单次批量调用，逐锚 spawn 消除
+变更：2026-10-23-push-plan-anchor-batch-perf
+状态：active
+摘要：多锚批量
+全文：.sillyspec/changes/archive/2026-10-23-push-plan-anchor-batch-perf/requirements.md#FR-01
+最近确认：fe962b056b2fff15d37dbd2ae6e2333277a1fa87
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-plan-anchor-batch-perf:flow:测试绑定FR-01
+  tests: test/push-cli.test.mjs「--dry-run 零写盘」 | test/push-plan.test.mjs「签名标记解析纯函数」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-plan-anchor-batch-perf
+  status: active
+
+## FR-cli-entry-610 预存坏锚点警告收敛为单行摘要
+变更：2026-10-23-push-plan-anchor-batch-perf
+状态：active
+摘要：43 个预存坏锚点
+全文：.sillyspec/changes/archive/2026-10-23-push-plan-anchor-batch-perf/requirements.md#FR-02
+最近确认：fe962b056b2fff15d37dbd2ae6e2333277a1fa87
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-plan-anchor-batch-perf:flow:测试绑定FR-02
+  tests: test/push-cli.test.mjs「--dry-run 零写盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-plan-anchor-batch-perf
+  status: active
+
+## FR-cli-entry-611 非 dry-run 路径消除第二次 ls-remote 网络探测
+变更：2026-10-23-push-plan-anchor-batch-perf
+状态：active
+摘要：真推送
+全文：.sillyspec/changes/archive/2026-10-23-push-plan-anchor-batch-perf/requirements.md#FR-03
+最近确认：fe962b056b2fff15d37dbd2ae6e2333277a1fa87
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-plan-anchor-batch-perf:flow:测试绑定FR-03
+  tests: test/push-cli.test.mjs「③ 快进 push + --undo」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-plan-anchor-batch-perf
+  status: active
+
+## FR-cli-entry-612 计划输出语义不变，既有测试面全绿
+变更：2026-10-23-push-plan-anchor-batch-perf
+状态：active
+摘要：验收
+全文：.sillyspec/changes/archive/2026-10-23-push-plan-anchor-batch-perf/requirements.md#FR-04
+最近确认：fe962b056b2fff15d37dbd2ae6e2333277a1fa87
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-plan-anchor-batch-perf:flow:测试绑定FR-04
+  tests: test/push-cli.test.mjs | test/push-plan.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-plan-anchor-batch-perf
+  status: active

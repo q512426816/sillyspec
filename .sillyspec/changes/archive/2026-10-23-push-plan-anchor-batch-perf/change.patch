@@ -1,0 +1,116 @@
+diff --git a/src/push.js b/src/push.js
+index 67f4f968..0cb0ce6a 100644
+--- a/src/push.js
++++ b/src/push.js
+@@ -337,6 +337,34 @@ function revParseTree(repoRoot, ref) {
+   return r.error || !r.value ? null : r.value.trim()
+ }
+ 
++/**
++ * 批量解析锚点 commit（1 次 spawn 替代逐锚 rev-parse——43 锚 × 2 spawn 曾占 dry-run ~2.9s，
++ * 2026-10-23 实测）。`git cat-file --batch-check` 响应序=输入序（文档保证），按输入序对齐：
++ * 可解析回显 `<完整sha> commit <size>`（短哈希输入回显完整 sha，不能按回显内容反查短哈希
++ * 输入），缺失回显 `<输入> missing`。
++ * @returns {Map<string, string|null>} 输入 sha（原样）→ 解析后完整 sha；null=不可解析
++ */
++function batchCommitResolve(repoRoot, shas) {
++  const uniq = [...new Set(shas.map((s) => String(s || '').trim()).filter(Boolean))]
++  const map = new Map()
++  if (uniq.length === 0) return map
++  let out
++  try {
++    out = git(repoRoot, ['cat-file', '--batch-check'], {
++      input: uniq.map((s) => `${s}^{commit}`).join('\n') + '\n',
++      timeout: GIT_TIMEOUT, trim: false,
++    })
++  } catch { return map } // 整批失败：空 Map（调用方逐锚走不可解析路径，同向 fail 不洗白）
++  const lines = String(out).split('\n').map((l) => l.trim()).filter(Boolean)
++  for (let i = 0; i < uniq.length; i++) {
++    const line = lines[i]
++    if (!line || /\smissing$/.test(line)) { map.set(uniq[i], null); continue }
++    const full = line.split(/\s+/)[0]
++    map.set(uniq[i], /^[0-9a-f]{40,64}$/i.test(full) ? full : null)
++  }
++  return map
++}
++
+ function isAncestor(repoRoot, a, b) {
+   if (!a || !b) return false
+   return safeGit(repoRoot, ['merge-base', '--is-ancestor', a, b]).error === null
+@@ -422,19 +450,28 @@ function collectAnchorCandidates(specBase) {
+ function computeEffectiveBase({ repoRoot, head, base, anchors = [], explicitBase = false }) {
+   const warnings = []
+   const original = base
++  // 批量解析：1 次 spawn 替代逐锚 rev-parse（43 锚 × 2 spawn 曾占 dry-run ~2.9s，实测）；
++  // 祖先判定只对幸存 live 锚逐个 spawn（live 数通常 0-3，成本可忽略）。
++  const resolvedMap = batchCommitResolve(repoRoot, anchors.map((a) => a.sha))
+   const live = []
+   const seen = new Set()
++  const broken = { unresolvable: [], notAncestor: [] }
+   for (const a of anchors) {
+-    const sha = revParseCommit(repoRoot, a.sha)
+-    if (!sha) { warnings.push(`锚点不可解析（预存坏锚点，跳过）：${a.kind} ${a.id} ${String(a.sha).slice(0, 10)}`); continue }
++    const sha = resolvedMap.get(String(a.sha).trim()) || null
++    if (!sha) { broken.unresolvable.push(`${a.kind} ${a.id} ${String(a.sha).slice(0, 10)}`); continue }
+     if (!isAncestor(repoRoot, sha, head)) {
+-      warnings.push(`锚点不是 HEAD 祖先（预存脱锚，压扁不修复）：${a.kind} ${a.id} ${sha.slice(0, 10)}`)
++      broken.notAncestor.push(`${a.kind} ${a.id} ${sha.slice(0, 10)}`)
+       continue
+     }
+     if (seen.has(sha)) continue
+     seen.add(sha)
+     live.push({ ...a, sha })
+   }
++  const brokenCount = broken.unresolvable.length + broken.notAncestor.length
++  if (brokenCount > 0) {
++    const first3 = [...broken.unresolvable, ...broken.notAncestor].slice(0, 3).join('、')
++    warnings.push(`预存锚点异常 ${brokenCount} 个已跳过（不可解析 ${broken.unresolvable.length} / 非 HEAD 祖先 ${broken.notAncestor.length}；首 3：${first3}）——预存脱锚压扁不修复，advisory 不阻断`)
++  }
+   const advance = (cur, target) => {
+     if (!cur) return target
+     if (isAncestor(repoRoot, cur, target)) return target
+@@ -771,7 +808,12 @@ export async function runPush({
+         git(ctx.repoRoot, ['fetch', '--no-tags', targetForFetch.remote, targetForFetch.remoteBranch], { timeout: 120000 })
+       } catch { /* 远端分支可能不存在/离线；planPush 会用 ls-remote 给出可执行错误 */ }
+     }
+-    const plan = planPush({ cwd, specDir, mode, change, base, remote, branch })
++    // fetch 后复用远端跟踪引用——非 dry-run 路径免第二次 ls-remote 网络探测（dry-run 不 fetch，
++    // 仍走 planPush 内单次 ls-remote；推送前的安全再探不变，见下方 tipNow）
++    const fetchedRemoteSha = (!dryRun && targetForFetch.ok)
++      ? revParseCommit(ctx.repoRoot, targetForFetch.remoteRef)
++      : null
++    const plan = planPush({ cwd, specDir, mode, change, base, remote, branch, remoteSha: fetchedRemoteSha })
+     if (!plan.ok) return { ok: false, exitCode: plan.exitCode || 1, plan, errors: plan.errors, warnings: [...warnings, ...(plan.warnings || [])], humanLines: [], envelope: { command: 'push', ok: false, mode, branch: ctx.branch, errors: plan.errors, warnings: [...warnings, ...(plan.warnings || [])] } }
+     const humanLines = renderPushPlan({ plan, dryRun })
+     const envelope = {
+diff --git a/test/push-cli.test.mjs b/test/push-cli.test.mjs
+index b38caff6..1b57c889 100644
+--- a/test/push-cli.test.mjs
++++ b/test/push-cli.test.mjs
+@@ -198,6 +198,26 @@ test('⑤ 活锚点抬升：scan source_commit 落区间内时 effectiveBase 抬
+   } finally { cleanup(join(work, '..')) }
+ })
+ 
++test('⑤b 预存坏锚点：警告收敛单行（计数+分类+首 3 标识）', async () => {
++  const { work } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    const scanDir = join(work, '.sillyspec', 'docs', 'proj', 'scan')
++    mkdirSync(scanDir, { recursive: true })
++    writeFileSync(join(scanDir, 'PROJECT.md'), '---\nsource_commit: deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n---\n# project\n')
++    writeFileSync(join(scanDir, 'STRUCTURE.md'), '---\nsource_commit: 0000000000000000000000000000000000000000\n---\n# structure\n')
++    const oldHead = git(work, ['rev-parse', 'HEAD'])
++    const r = await runPush({ cwd: work, dryRun: true })
++    assert.equal(r.ok, true, JSON.stringify(r.errors))
++    const anchorWarnings = r.plan.warnings.filter((w) => /锚点/.test(w))
++    assert.equal(anchorWarnings.length, 1, `坏锚点警告应恰 1 行，实际：${JSON.stringify(anchorWarnings, null, 1)}`)
++    assert.match(anchorWarnings[0], /2 个已跳过/)
++    assert.match(anchorWarnings[0], /不可解析 2 \/ 非 HEAD 祖先 0/)
++    assert.match(anchorWarnings[0], /首 3：scan proj\/scan\/PROJECT\.md/)
++    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead)
++  } finally { cleanup(join(work, '..')) }
++})
++
+ test('⑥ --mode none：只推送，不改写历史', async () => {
+   const { work, remote, branch } = makeRepo()
+   try {
