@@ -1,0 +1,330 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index a380a9fd..523c4ba4 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -142,7 +142,9 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
+         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
+-        { path: 'py_runner_flags', type: 'string', optional: true, status: 'live', readers: ['readVerifyPyFlags (src/verify-postcheck.js)'], desc: '【2026-10-23-py-runner-flags】动态子集 deps(auto-py) 推断路径的尾随 flags（模块命令来源 hits 路径自带 flags，不适用）——如 "-q --no-cov -n auto"（需 pytest-xdist）；缺省不写=裸 pytest 现状。仓主显式声明，误配会在实测输出可见可改。', example: '-q --no-cov -n auto' },
++        { path: 'runner_flags', type: 'object', optional: true, status: 'live', readers: ['readRunnerFlags (src/verify-postcheck.js)'], desc: '【2026-10-23-runner-flags-generic，语言中立】推断批尾随 flags 映射：批类别（CLI 自有 runner 分类 py|js|jsx|…，未知类别前向兼容）→ flags 串。flags 置于文件参数前（node/go 类参数解析在首个位置参数处截断）；hits 路径自带 flags 不注入。缺省不写=现状。', example: 'py: "-q --no-cov -n auto" / jsx: "--pool=forks"' },
++        { path: 'py_runner_flags', type: 'string', optional: true, status: 'deprecated', readers: ['readRunnerFlags 兼容别名 (src/verify-postcheck.js)'], desc: '【已泛化】runner_flags.py 的单键旧别名（2026-10-23-py-runner-flags 遗留）；新配置写 runner_flags 映射。', example: '-q --no-cov -n auto' },
++        { path: 'deps_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readDepsRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-runner-flags-generic，语言中立】import 依赖面档位：N（1-2000）=变更自身测试优先、依赖只取前 N；off=只跑变更自身测试（关联回归归 pre-push/CI 门）；不写=全跑。own=变更触碰文件∩依赖面，纯路径集合运算不涉语言。', example: 'off' },
+         { path: 'fr_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readFrRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-fr-regress-default-off 缺省翻转】FR 关联回归层本地实测开关：缺省（不写）=不跑（归 pre-push/CI 门，收口披露行留痕）；N（1-2000）=前 N 个绑定文件进实测面；all=全跑旧行为显式恢复；off=同缺省。', example: '40' },
+       ],
+     },
+@@ -467,7 +469,9 @@ dispatch:
+ #   form: real-code   # UI 原型形态契约（real-code / single-html+ruling 豁免）
+ # fr_regress_cap: 40   # FR 回归层本地开关：缺省不跑归 pre-push/CI 门；N=前 N 个；all=全跑旧行为
+ # fr_unmapped_baseline: 720   # unmapped 域 FR 消音基线（跨仓历史堆积已清算时设）
+-# py_runner_flags: "-q --no-cov -n auto"   # deps(auto-py) 推断批尾随 flags（需 xdist；缺省裸跑）
++# runner_flags:            # 推断批尾随 flags（按批类别 py|js|jsx|…，未知类别前向兼容）
++#   py: "-q --no-cov -n auto"
++# deps_regress_cap: off    # import 依赖面：off=只跑变更自身测试；N=前 N 个依赖文件；不写=全跑
+ #
+ # ── 跨仓注册表（注册后参与跨仓冻结/对账；local.yaml gitignored 故真实路径不入库）──
+ # repos:
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 1be5b856..77705f84 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -3011,14 +3011,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+     }
+     pyGroups.get(key).files.push(f)
+   }
+-  // py_runner_flags（2026-10-23-py-runner-flags）：推断路径（无 hits 模块命令来源）补尾随
+-  // flags——hits 路径的模块命令自带 flags（extractRunnerTrailingFlags），此处不双加；
+-  // pytest 参数序无关，flags 置于文件面前；缺省空=零回归。
+-  if (!pyRunner && pyGroups.size > 0) {
+-    try {
+-      const pyFlags = readVerifyPyFlags(specBase)
+-      if (pyFlags) for (const grp of pyGroups.values()) grp.command = `${grp.command} ${pyFlags}`
+-    } catch { /* 键读取 fail-soft=无 flags */ }
++  // runner_flags（2026-10-23-runner-flags-generic，语言中立）：推断路径按批类别注入声明
++  // flags——批类别=CLI 自有 runner 分类（py|js|jsx|…，未知类别前向兼容，不枚举语言）。
++  // hits 路径的模块命令自带 flags（extractRunnerTrailingFlags），此处不双加；flags 置于
++  // 文件参数之前（node/go 类参数解析在首个位置参数处截断）；缺省空=零回归。
++  let runnerFlags = {}
++  try { runnerFlags = readRunnerFlags(specBase) } catch { /* fail-soft 空映射 */ }
++  const flagsSuffix = (kind) => (runnerFlags[kind] ? `${runnerFlags[kind]} ` : '')
++  if (!pyRunner && pyGroups.size > 0 && runnerFlags.py) {
++    for (const grp of pyGroups.values()) grp.command = `${grp.command} ${runnerFlags.py}`
+   }
+   if (!pyRunner && pyGroups.size > 0) pyRunner = pyGroups.values().next().value.command
+   // JSX 运行器推断（2026-09-26-residual-runner-parity 起 + 结构推断源）：.tsx/.jsx 是 node
+@@ -3086,7 +3087,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+     }
+   }
+   if (jsNative.length > 0) {
+-    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout '
++    const jsPrefix = 'node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ' + flagsSuffix('js')
+     const jsChunks = chunkByCommandLength(jsPrefix, jsNative)
+     jsChunks.forEach((chunk, i) => {
+       const isMulti = jsChunks.length > 1
+@@ -3124,7 +3125,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+     const multiGroup = jsxGroups.size > 1
+     for (const [command, grp] of jsxGroups) {
+       const isVitest = /vitest/.test(command)
+-      const jsxPrefix = `${command} ${isVitest ? 'run ' : ''}`
++      const jsxPrefix = `${command} ${isVitest ? 'run ' : ''}${jsxRunnerFromHits ? '' : flagsSuffix('jsx')}`
+       const grpDir = grp.dirKey || /(?:^|\s)cd\s+(\S+)\s*&&/.exec(command)?.[1] || null
+       const rebaseJsx = (f) => (grpDir && f.startsWith(grpDir + '/')) ? f.slice(grpDir.length + 1) : f
+       const jsxArgs = grp.files.map(rebaseJsx).map(quoteWinPath)
+@@ -3381,19 +3382,65 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
+  * runVerifyTestCheck 全链只为断言组卷接线）。
+  */
+ /**
+- * py_runner_flags 读取（2026-10-23-py-runner-flags，逐键正则 + CRLF 归一）：动态子集
+- * deps(auto-py) 推断路径（无 hits 模块命令）此前生成裸 pytest——模块命令里的
+- * -q --no-cov -n auto 全丢，单核串行（平台仓实证：25 文件 149s；同仓 124 文件串行 1183s
+- * vs 带 -n auto 6-10×）。本键让仓主显式声明推断批尾随 flags；缺省/坏值/不可读 → ''（零回归）。
+- * 显式配置责任在仓主（xdist 未装却配 -n auto 会报错可见、可改）。
++ * runner_flags 读取（2026-10-23-runner-flags-generic，语言中立）：local.yaml 的批类别 →
++ * 尾随 flags 映射（批类别 = CLI 自有 runner 分类 py|js|jsx|…，未知类别保留、前向兼容——
++ * 不枚举语言/框架，对齐 AGENTS 规约 00）。嵌套块行式解析（引号/注释/CRLF 容错，块结束于
++ * 去缩进行）；py_runner_flags 单键保留为兼容别名（映射到 py）。缺省/坏值/不可读 → 空映射
++ * （零回归）。flags 注入置于文件参数之前（node/go 类参数解析在首个位置参数处截断）。
+  */
++export function readRunnerFlags(specBase) {
++  const out = {}
++  try {
++    const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
++    const legacy = raw.match(/^[ 	]*py_runner_flags[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
++    if (legacy) {
++      const v = legacy[1].trim().replace(/^["']|["']$/g, '').trim()
++      if (v) out.py = v
++    }
++    const lines = raw.split(String.fromCharCode(10))
++    let inBlock = false
++    let indent = -1
++    for (const line of lines) {
++      if (!inBlock) {
++        if (/^[ 	]*runner_flags[ 	]*:[ 	]*(?:#.*)?$/.test(line)) { inBlock = true; indent = -1 }
++        continue
++      }
++      if (!line.trim() || /^[ 	]*#/.test(line)) continue
++      const m = /^([ 	]+)([A-Za-z0-9_.:+/-]+)[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/.exec(line)
++      if (!m) { if (!/^[ 	]/.test(line)) break; continue }
++      if (indent === -1) indent = m[1].length
++      if (m[1].length < indent) { break }
++      const v = m[3].trim().replace(/^["']|["']$/g, '').trim()
++      if (v) out[m[2]] = v
++    }
++  } catch { /* fail-soft 空映射 */ }
++  return out
++}
++
++/** py_runner_flags 兼容别名（2026-10-23-py-runner-flags；泛化后保留读口——等价 readRunnerFlags().py）。 */
+ export function readVerifyPyFlags(specBase) {
++  return readRunnerFlags(specBase).py || ''
++}
++
++/**
++ * deps_regress_cap 读取（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
++ * N（1-2000）= 变更自身测试优先整跑、import 依赖只取前 N 个；off = 只跑变更自身测试（其余
++ * 归 pre-push/CI 门）；缺省/坏值/不可读 → null（全跑=现状零回归）。own 判定=变更触碰文件集
++ * ∩ 依赖面（测试文件），与语言/框架无关。
++ */
++export function readDepsRegressCap(specBase) {
+   try {
+     const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+-    const m = raw.match(/^[ 	]*py_runner_flags[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
+-    if (!m) return ''
+-    return m[1].trim().replace(/^["']|["']$/g, '').trim()
+-  } catch { return '' }
++    const m = raw.match(/^[ 	]*deps_regress_cap[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
++    if (!m) return null
++    const v = m[1].trim().replace(/^["']|["']$/g, '')
++    if (/^off$/i.test(v)) return 0
++    if (/^\d+$/.test(v)) {
++      const n = Number(v)
++      if (n >= 1 && n <= 2000) return n
++    }
++    return null
++  } catch { return null }
+ }
+ 
+ /**
+@@ -3439,7 +3486,29 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
+   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
+   // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
+   // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
+-  const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
++  let deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
++  // deps_regress_cap（2026-10-23-runner-flags-generic，语言中立）：import 依赖面档位——
++  // own（变更触碰文件集∩依赖面）优先整跑，其余按 N 截断/off 全弃（归 pre-push/CI 门）。
++  // 缺省 null=全跑（现状零回归）。own 判定与语言/框架无关（纯路径集合运算）。
++  let depsCapApplied = null
++  try {
++    const depCap = readDepsRegressCap(specBase)
++    if (depCap !== null && deps.length > 0) {
++      const ownSet = new Set((changedFiles || []).map((f) => String(f).split(String.fromCharCode(92)).join('/')))
++      const own = deps.filter((f) => ownSet.has(f))
++      const rest = deps.filter((f) => !ownSet.has(f))
++      if (depCap === 0) {
++        deps = own
++        depsCapApplied = { kept: own.length, total: own.length + rest.length }
++      } else if (rest.length > depCap) {
++        deps = [...own, ...rest.slice(0, depCap)]
++        depsCapApplied = { kept: deps.length, total: own.length + rest.length }
++      }
++    }
++  } catch { /* 键读取 fail-soft=全跑 */ }
++  if (depsCapApplied) {
++    console.log(`ℹ️ deps_regress_cap：实测依赖面 ${depsCapApplied.kept}/${depsCapApplied.total} 进实测面，其余 ${depsCapApplied.total - depsCapApplied.kept} 个归 pre-push/CI 门（可开启：local.yaml deps_regress_cap: <N|off>——N=前 N 个依赖 / off=只跑变更自身测试；缺省全跑）`)
++  }
+   // FR 关联回归源（2026-09-26-dynamic-test-inference 三源之二）：active FR 覆盖面（来源变更
+   // patch ∪ 绑定）∩ 本次触碰文件 ≠ ∅ 者，其绑定 tests 解析仓根相对后并入实测面——「需求→
+   // 用例」映射即测试需求。frPre 在场用调用方预计算（runVerifyTestCheck 决策已扫过，免二次
+diff --git a/test/py-runner-flags.test.mjs b/test/py-runner-flags.test.mjs
+index c2917e89..f7b215ab 100644
+--- a/test/py-runner-flags.test.mjs
++++ b/test/py-runner-flags.test.mjs
+@@ -1,9 +1,10 @@
+ /**
+- * py-runner-flags.test.mjs — deps(auto-py) 推断路径尾随 flags（2026-10-23-py-runner-flags）
++ * py-runner-flags.test.mjs — py_runner_flags 别名语义（2026-10-23-py-runner-flags；
++ * 泛化后 2026-10-23-runner-flags-generic：读口保留为 readRunnerFlags().py 别名）
+  *
+- * ① readVerifyPyFlags 三态：缺省空串 / 合法值（引号剥离）/ 不可读空串（含 CRLF 与注释）（FR-01）
+- * ② 接线锚：runModuleSubset 推断路径追加 flags 且 hits 路径不双加（源码形态锚）
+- * ③ schema 注册 + example token（发现面三同源）
++ * ① readVerifyPyFlags 别名三态：缺省空串/合法值（引号剥离）/不可读空串（含 CRLF）
++ * ② 接线锚：runner_flags 泛化接线在位（py 组经 runnerFlags.py 注入）
++ * ③ schema 注册（别名 deprecated）与 example token（runner_flags 映射形态）
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -11,12 +12,12 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
+ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+-import { readVerifyPyFlags } from '../src/verify-postcheck.js'
++import { readVerifyPyFlags, readRunnerFlags } from '../src/verify-postcheck.js'
+ import { flatKeys, renderExample } from '../src/config-schema.js'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ 
+-test('① readVerifyPyFlags 三态', () => {
++test('① readVerifyPyFlags 别名三态', () => {
+   const d = mkdtempSync(join(tmpdir(), 'prf-'))
+   try {
+     mkdirSync(join(d, '.sillyspec'), { recursive: true })
+@@ -25,24 +26,28 @@ test('① readVerifyPyFlags 三态', () => {
+     writeFileSync(p, 'project:\n  type: generic\n')
+     assert.equal(readVerifyPyFlags(specBase), '', '缺省空串（零回归）')
+     writeFileSync(p, 'py_runner_flags: "-q --no-cov -n auto"\n')
+-    assert.equal(readVerifyPyFlags(specBase), '-q --no-cov -n auto', '合法值（引号剥离）')
++    assert.equal(readVerifyPyFlags(specBase), '-q --no-cov -n auto', '旧单键别名等价')
++    writeFileSync(p, 'runner_flags:\n  py: "-q -n 4"\n')
++    assert.equal(readVerifyPyFlags(specBase), '-q -n 4', '新映射形态同读口')
+     writeFileSync(p, "py_runner_flags: '-q -n 4'  # 注释\r\n")
+     assert.equal(readVerifyPyFlags(specBase), '-q -n 4', '单引号+注释+CRLF')
+     writeFileSync(p, 'py_runner_flags:\n')
+     assert.equal(readVerifyPyFlags(specBase), '', '空值空串')
+     rmSync(p, { force: true })
+     assert.equal(readVerifyPyFlags(specBase), '', '不可读空串')
++    assert.deepEqual(readRunnerFlags(specBase), {}, '泛化读口同源空映射')
+   } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
+ })
+ 
+-test('② 接线锚：推断路径追加、hits 路径不双加', () => {
++test('② 接线锚：py 组经 runnerFlags.py 注入（泛化后）', () => {
+   const src = readFileSync(join(ROOT, 'src', 'verify-postcheck.js'), 'utf8')
+-  assert.ok(src.includes('grp.command = `${grp.command} ${pyFlags}`'), '推断路径追加在位')
++  assert.ok(src.includes('runnerFlags.py'), 'py 组注入走泛化映射')
+   assert.ok(src.includes('此处不双加'), 'double-add guard comment present')
+-  assert.ok(src.includes('readVerifyPyFlags(specBase)'), 'reader 接线在位')
++  assert.ok(src.includes('readRunnerFlags(specBase)'), 'reader 接线在位')
+ })
+ 
+-test('③ schema 注册与 example token', () => {
+-  assert.ok(flatKeys().some((k) => k.path === 'py_runner_flags' && k.status === 'live'), 'schema 已注册 live 键')
+-  assert.ok(renderExample().includes('py_runner_flags'), 'example 含 token（防漂耦合）')
++test('③ schema 与 example（别名 deprecated，映射形态 teaching）', () => {
++  assert.ok(flatKeys().some((k) => k.path === 'py_runner_flags' && k.status === 'deprecated'), '旧单键标 deprecated')
++  assert.ok(flatKeys().some((k) => k.path === 'runner_flags' && k.status === 'live'), '泛化键 live')
++  assert.ok(renderExample().includes('runner_flags'), 'example 含 runner_flags token（防漂耦合）')
+ })
+diff --git a/test/runner-flags-generic.test.mjs b/test/runner-flags-generic.test.mjs
+new file mode 100644
+index 00000000..48a05a4f
+--- /dev/null
++++ b/test/runner-flags-generic.test.mjs
+@@ -0,0 +1,76 @@
++/**
++ * runner-flags-generic.test.mjs — runner_flags 映射与 deps_regress_cap 通用档
++ * （2026-10-23-runner-flags-generic，语言中立：批类别=CLI 自有 runner 分类，不枚举语言）
++ *
++ * ① readRunnerFlags：嵌套块多类别/未知类别保留/别名 py_runner_flags→py/缺省空/CRLF
++ * ② readDepsRegressCap：缺省 null/off 0/N/坏值 null/CRLF
++ * ③ 注入点锚：py 组/js 前缀/jsx 推断批（hits 不注入）＋ deps 面截断与披露
++ * ④ schema 注册与 example token
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { readRunnerFlags, readDepsRegressCap, readVerifyPyFlags } from '../src/verify-postcheck.js'
++import { flatKeys, renderExample } from '../src/config-schema.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++function withYaml(text, fn) {
++  const d = mkdtempSync(join(tmpdir(), 'rfg-'))
++  try {
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    writeFileSync(join(d, '.sillyspec', 'local.yaml'), text)
++    return fn(join(d, '.sillyspec'))
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++}
++
++test('① readRunnerFlags 嵌套映射/未知类别/别名/缺省', () => {
++  withYaml('project:\n  type: generic\n', (specBase) => {
++    assert.deepEqual(readRunnerFlags(specBase), {}, '缺省空映射（零回归）')
++  })
++  withYaml(
++    'runner_flags:\n  py: "-q --no-cov -n auto"\n  jsx: "--pool=forks"  # 注释\n  go: "-count=1"\ncommands:\n  lint: npm run lint\n',
++    (specBase) => {
++      const f = readRunnerFlags(specBase)
++      assert.equal(f.py, '-q --no-cov -n auto', 'py 类别')
++      assert.equal(f.jsx, '--pool=forks', 'jsx 类别（注释剥离）')
++      assert.equal(f.go, '-count=1', '未知类别保留（前向兼容）')
++      assert.equal(f.commands, undefined, '块外键不入映射')
++    })
++  withYaml('py_runner_flags: "-q -n 4"\r\n', (specBase) => {
++    assert.equal(readRunnerFlags(specBase).py, '-q -n 4', '旧单键别名→py（CRLF）')
++    assert.equal(readVerifyPyFlags(specBase), '-q -n 4', 'readVerifyPyFlags 别名读口等价')
++  })
++})
++
++test('② readDepsRegressCap 三态', () => {
++  withYaml('project:\n  type: generic\n', (s) => assert.equal(readDepsRegressCap(s), null, '缺省 null=全跑'))
++  withYaml('deps_regress_cap: off\n', (s) => assert.equal(readDepsRegressCap(s), 0, 'off=0'))
++  withYaml('deps_regress_cap: 12\n', (s) => assert.equal(readDepsRegressCap(s), 12, 'N'))
++  withYaml('deps_regress_cap: abc\n', (s) => assert.equal(readDepsRegressCap(s), null, '坏值 null'))
++  withYaml('deps_regress_cap: "off"\r\n', (s) => assert.equal(readDepsRegressCap(s), 0, '引号+CRLF'))
++})
++
++test('③ 注入点与截断接线锚', () => {
++  const src = readFileSync(join(ROOT, 'src', 'verify-postcheck.js'), 'utf8')
++  assert.ok(src.includes("const flagsSuffix = (kind) => (runnerFlags[kind] ? `${runnerFlags[kind]} ` : '')"), '统一 flagsSuffix')
++  assert.ok(src.includes("+ flagsSuffix('js')"), 'js 批前缀注入')
++  assert.ok(src.includes("jsxRunnerFromHits ? '' : flagsSuffix('jsx')"), 'jsx 推断注入且 hits 不注入')
++  assert.ok(src.includes('runnerFlags.py'), 'py 组注入')
++  assert.ok(src.includes('readDepsRegressCap(specBase)'), 'deps 档位读取接线')
++  assert.ok(src.includes('deps_regress_cap：实测依赖面'), '截断披露行在位')
++  assert.ok(src.includes('ownSet'), 'own 优先集合运算在位')
++})
++
++test('④ schema 注册与 example token', () => {
++  const keys = flatKeys()
++  assert.ok(keys.some((k) => k.path === 'runner_flags' && k.status === 'live'), 'runner_flags live')
++  assert.ok(keys.some((k) => k.path === 'deps_regress_cap' && k.status === 'live'), 'deps_regress_cap live')
++  assert.ok(keys.some((k) => k.path === 'py_runner_flags' && k.status === 'deprecated'), 'py_runner_flags 标 deprecated 别名')
++  const ex = renderExample()
++  assert.ok(ex.includes('runner_flags'), 'example 含 runner_flags token')
++  assert.ok(ex.includes('deps_regress_cap'), 'example 含 deps_regress_cap token')
++})
