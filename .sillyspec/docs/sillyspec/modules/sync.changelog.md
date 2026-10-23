@@ -16,3 +16,4 @@
 - 2026-10-21-cli-manifest-since-cache | CLI 清单增量游标消费
 - 2026-10-21-p0-p1-hardening | P0/P1 硬化：评审回收链与门禁接缝修复
 - 2026-10-21-protocol-tax | 砍协议税：心跳往返合并＋输出增量＋计时观测
+- 2026-10-23-rename-platform-tombstone | rename 落台账推旧名墓碑根治幽灵变更

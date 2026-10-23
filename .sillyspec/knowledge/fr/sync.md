@@ -678,3 +678,67 @@ created_at: 2026-09-22T09:42:59.537Z
   confirmed_at: null
   source_change: 2026-09-27-watcher-push-endpoint
   status: active
+
+## FR-sync-044 renameChange 成功后旧名落删除台账 status='deleted'
+变更：2026-10-23-rename-platform-tombstone
+状态：active
+摘要：主路径；目录缺失的变更被改名
+全文：.sillyspec/changes/archive/2026-10-23-rename-platform-tombstone/requirements.md#FR-01
+最近确认：2921364ddcc22f78cd1d62686adaf0c1c0bbc9ad
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-rename-platform-tombstone:flow:测试绑定FR-01
+  tests: test/rename-ledger-tombstone.test.mjs「FR-01: renameChange 成功后旧名落 deleted 台账（含目录缺失分支）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-rename-platform-tombstone
+  status: active
+
+## FR-sync-045 旧名的 sync 走台账墓碑分支合成 POST 收敛平台行
+变更：2026-10-23-rename-platform-tombstone
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-rename-platform-tombstone/requirements.md#FR-02
+最近确认：2921364ddcc22f78cd1d62686adaf0c1c0bbc9ad
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-rename-platform-tombstone:flow:测试绑定FR-02
+  tests: test/rename-ledger-tombstone.test.mjs「FR-02: rename 后旧名 sync 合成 deleted 墓碑 POST」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-rename-platform-tombstone
+  status: active
+
+## FR-sync-046 rename 未实际发生时不落台账
+变更：2026-10-23-rename-platform-tombstone
+状态：active
+摘要：旧名缺失；新名冲突
+全文：.sillyspec/changes/archive/2026-10-23-rename-platform-tombstone/requirements.md#FR-03
+最近确认：2921364ddcc22f78cd1d62686adaf0c1c0bbc9ad
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-rename-platform-tombstone:flow:测试绑定FR-03
+  tests: test/rename-ledger-tombstone.test.mjs「FR-03: rename 失败路径不落台账」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-rename-platform-tombstone
+  status: active
+
+## FR-sync-047 存量幽灵行清理（multi-agent-platform 仓现场）
+变更：2026-10-23-rename-platform-tombstone
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-rename-platform-tombstone/requirements.md#FR-04
+最近确认：2921364ddcc22f78cd1d62686adaf0c1c0bbc9ad

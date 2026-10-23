@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-rename-platform-tombstone",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "111d9de9f8c2499428b92ddddeddc5481e4bed01",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "deleted-ledger.js 头注释台账路径陈旧（缺 state/ 层）",
+      "evidence": "头注释写 `.sillyspec/.runtime/deleted-changes.jsonl`，实际经 runtimeStatePath（runtime-paths.js RUNTIME_STATE_SINGLETONS 含该文件）落 `.runtime/state/deleted-changes.jsonl`（测试 readLedgerLines 同证）；本变更触碰了该头注释却未顺手修正陈旧路径行，requirements.md FR-01 写的是正确路径，两处文档不一致",
+      "location": "src/deleted-ledger.js:13"
+    },
+    {
+      "severity": "P3",
+      "title": "design 盲维①对 A→B→A 本地重新 active 的 409 文案归因不精确",
+      "evidence": "A→B→A 改回后本地行 active，serializeForSync 载荷 status=active，localTombstone=false，走 sync.js:868 的 ⚠️ warn 变体而非 design 所称「ℹ️ 分流文案」（ℹ️ 在 :865，仅本地也终态时命中）；声明的边界本身成立——409 change_deleted 拒收、零 errors、platformDeleted 返回、不落冲突文件，裁决可接受，仅措辞瑕疵",
+      "location": ".sillyspec/changes/2026-10-23-rename-platform-tombstone/design.md:25"
+    },
+    {
+      "severity": "P3",
+      "title": "ℹ️ 台账提示行在 fail-open 写入失败时仍无条件打印",
+      "evidence": "appendDeletedLedger 内部 try/catch warn 不抛（deleted-ledger.js:42-46），失败时 change-registry.js:604 的「旧名已记删除台账」照常输出，与紧邻的 ⚠️ 失败告警自相矛盾；罕见 IO 失败面（runtimeStatePath 自带 mkdir 兜底），不影响数据正确性与测试",
+      "location": "src/progress/change-registry.js:603-604"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-23T06:42:05Z"
+}

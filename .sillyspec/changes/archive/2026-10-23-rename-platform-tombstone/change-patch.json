@@ -1,0 +1,87 @@
+{
+  "change": "2026-10-23-rename-platform-tombstone",
+  "baseline": "c309979af71cebec54c124425bb059294db15ab0",
+  "head": "111d9de9f8c2499428b92ddddeddc5481e4bed01",
+  "files": [
+    "src/deleted-ledger.js",
+    "src/progress/change-registry.js",
+    "test/rename-ledger-tombstone.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 173,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-23T06:35:20.363Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "progress",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/progress.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "c309979af71cebec54c124425bb059294db15ab0",
+    "totals": {
+      "files": 3,
+      "additions": 173,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/deleted-ledger.js",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/progress/change-registry.js",
+        "additions": 15,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/rename-ledger-tombstone.test.mjs",
+        "additions": 155,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "a39c2ae1e68d4e1d447e1ddae43cebd6d1073eabdb97236ac39a6d589b94a413",
+  "patchStatus": "ok"
+}

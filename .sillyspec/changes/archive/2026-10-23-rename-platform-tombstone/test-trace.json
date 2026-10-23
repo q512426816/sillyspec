@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-rename-platform-tombstone",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-rename-platform-tombstone:flow:测试绑定FR-01",
+      "tests": [
+        "test/rename-ledger-tombstone.test.mjs「FR-01: renameChange 成功后旧名落 deleted 台账（含目录缺失分支）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-rename-platform-tombstone"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-rename-platform-tombstone:flow:测试绑定FR-02",
+      "tests": [
+        "test/rename-ledger-tombstone.test.mjs「FR-02: rename 后旧名 sync 合成 deleted 墓碑 POST」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-rename-platform-tombstone"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-rename-platform-tombstone:flow:测试绑定FR-03",
+      "tests": [
+        "test/rename-ledger-tombstone.test.mjs「FR-03: rename 失败路径不落台账」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-rename-platform-tombstone"
+    }
+  ]
+}
