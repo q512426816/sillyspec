@@ -1,0 +1,47 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  发布 3.33.5 版本面（八变更收口）
+
+
+  动机与背景：本会话八个变更（verify-drafts 自查/收口预检 fail-together/dirty_gate_ignore/turbo docs-auto/评审平台单调用/fr_regress_cap/FR
+  回归层缺省关闭/config validate 与引导技能）已全部闭环归档，消费仓升级解锁需要版本面。两个 breaking 须在 release notes 明示：FR 关联回归层缺省不跑（fr_regress_cap: all
+  恢复）、缺省翻转类配置语义。同批本仓 local.yaml 配置清理（删除退役态 commands/空 known_failures/stage.burst/repos Temp
+  残留——纯本机文件不入包不入库）。用户显式指令：提交推送发布 npm 3.33.5——autopilot 直跑到底，--no-prestage 声明需求已含决策（用户原话即裁决）。
+
+
+  成功标准：
+
+  - package.json 与 package-lock.json version 同步 3.33.5；test/quick-retired.test.mjs R5 版本锚断言同步 3.33.5 且该套件跑绿
+
+  - npm run lint 过（pre-push 同款快速门）
+
+  - 提交推送 origin main（只带版本面与变更目录 pathspec，不夹带并行会话在途文件）；npm publish 发布 3.33.5 成功（或如实报告失败原因）
+autopilot: true
+prestage_ack: true
+baseline_commit: b0410b828d7357b0c709665bc0a68482e6dbb26a
+updatedAt: '2026-10-23T02:45:10.994Z'
+baseline_sha256: 8dafe5077ecd4b97ffda746e8337747c602f4d435662fd7eb6af72e30713bbe8
+spec_approved: true
+spec_approved_at: '2026-10-23T02:43:35.682Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js28)（13.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023024506\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 8 个
+

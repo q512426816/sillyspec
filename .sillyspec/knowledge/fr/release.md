@@ -314,3 +314,24 @@ created_at: 2026-10-15T01:33:02.911Z
 - 场景：主路径 — Given push 完成；When npm publish && 等待传播 && npm view；Then version=3.33.3、dist-tags.latest=3.33.3。
 全文：.sillyspec/changes/archive/2026-10-21-release-3-33-3/requirements.md#FR-03
 最近确认：0445f9e5a4f4cfdfba3239b6181bfc0e40bbee85
+
+## FR-release-007 package.json 与 package-lock.json version 同步 3.33.5；test/quick-retired.test.mjs R5 版本锚断言同步 3.33.5 且该套件跑绿
+变更：2026-10-23-release-3-33-5
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-release-3-33-5/requirements.md#FR-01
+最近确认：1602451249dcc1fc2b4c637b02862e6cecd320b0
+
+## FR-release-008 npm run lint 过（pre-push 同款快速门）
+变更：2026-10-23-release-3-33-5
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-release-3-33-5/requirements.md#FR-02
+最近确认：1602451249dcc1fc2b4c637b02862e6cecd320b0
+
+## FR-release-009 提交推送 origin main（只带版本面与变更目录 pathspec，不夹带并行会话在途文件）；npm publish 发布 3.33.5 成功（或如实报告失败原因）
+变更：2026-10-23-release-3-33-5
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-23-release-3-33-5/requirements.md#FR-03
+最近确认：1602451249dcc1fc2b4c637b02862e6cecd320b0

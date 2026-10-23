@@ -1,0 +1,8 @@
+{"ts":1792723415558,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792723415558,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792723415558,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792723415558,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1792723415808,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package-lock.json、package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792723455739,"kind":"commit","stage":null,"detail":"caa632eb","provisional":true}
+{"ts":1792723491837,"kind":"commit","stage":null,"detail":"16024512","provisional":true}
+{"ts":1792723509455,"kind":"gate-run","stage":"verify","detail":"门实测 passed（13.6s） · 20261023024506","provisional":true}
