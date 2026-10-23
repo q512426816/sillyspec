@@ -457,3 +457,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：f6259dac59ede489a1f3f04675bdd77478a2f236
 理由：风险=消费仓误配 flags 或 deps_regress_cap 过激致本地漏测（CI 红后置）——显式配置责任在仓主，loud 披露每轮可见；放弃：按语言/框架提供专用键（py_flags/go_flags/…）= 开放世界枚举违反规约 00，弃；按框架名匹配注入（vitest/jest/pytest 各写一套）同理弃——统一走 CLI 的批类别。
+
+## D-unmapped-466@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-23-knowledge-scope-inject
+原编号：D-001@v1
+锚点：未记录
+最近确认：e27c3af6f1acf04b7151592483a1f327eff2c2a8
+理由：风险=恒注入条目膨胀淹没简报（帽 5 条+溢出计数缓解）；module 域命名与知识域/模块图不一致致永不命中——文档注明用 knowledge 域 id（与 FR 域同源）。放弃：新独立 scope 配置文件（双份真相、迁移成本）；文件级标记（section 粒度更贴合 INDEX 路由）。

@@ -132,6 +132,7 @@ modules:
       - src/greenfield-bootstrap.js
       - src/fr-index.js
       - src/knowledge-digest.js
+      - src/knowledge-scope.js
       - src/redomain.js
       - src/decision-redomain.js
       - src/redomain-unmapped.js

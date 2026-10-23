@@ -1,0 +1,7 @@
+{"ts":1792740315892,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792740315892,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792740315892,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792740315892,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1792740834901,"kind":"commit","stage":null,"detail":"e27c3af6","provisional":true}
+{"ts":1792740891858,"kind":"gate-run","stage":"verify","detail":"门实测 passed（41.6s） · 20261023073449","provisional":true}
+{"ts":1792740924923,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs/sillyspec/modules/_module-map.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

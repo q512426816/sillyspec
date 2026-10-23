@@ -1,0 +1,226 @@
+diff --git a/src/flow.js b/src/flow.js
+index c830d1e7..c46bf854 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -297,6 +297,29 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     summary.domains = domains
+     summary.frCount = frs.length
+     lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
++    const scopedLines = []
++    // 作用域注入（2026-10-23-knowledge-scope-inject）：①工具内置中立性行恒注入（规约 00——
++    // 不依赖仓侧配置：语言锁定类设计错误在决策时点被提醒，2026-10-23 实证驱动的内置面）；
++    // ②always/repo 条目恒注入（帽 5 条+溢出计数）；③module:<域> 条目仅触达域命中时注入；
++    // ④无标记条目走关键词面（零改动）。解析/读取 fail-soft 零输出。
++    try {
++      const { collectScopedKnowledge } = await import('./knowledge-scope.js')
++      const scoped = collectScopedKnowledge(knowledgeRoot)
++      const alwaysRepo = [...scoped.always, ...scoped.repo]
++      summary.scopedEntries = alwaysRepo.length
++      scopedLines.push('   🧭 工具中立性（内置规约 00，每变更恒注入）：不枚举定义开放世界、不锁死开发语言/框架——配置与机制用 CLI 自有分类（批类别/路径集合），新增语言只加探测适配。')
++      for (const e of alwaysRepo.slice(0, 5)) {
++        scopedLines.push(`   📌 [${e.scope}] ${e.id}：${e.summary}`)
++      }
++      if (alwaysRepo.length > 5) scopedLines.push(`   （+${alwaysRepo.length - 5} 条恒注入条目见 knowledge/）`)
++      const moduleEntries = []
++      for (const d of domains) for (const e of (scoped.modules[d] || [])) moduleEntries.push({ ...e, domain: d })
++      for (const e of moduleEntries.slice(0, 3)) {
++        scopedLines.push(`   📌 [module:${e.domain}] ${e.id}：${e.summary}`)
++      }
++      if (moduleEntries.length > 3) scopedLines.push(`   （+${moduleEntries.length - 3} 条触达域作用域条目见 knowledge/）`)
++      lines.push(...scopedLines)
++    } catch { /* 作用域注入 fail-soft：FR/关键词面不受影响 */ }
+     if (domains.length === 0) {
+       lines.push(`   触达域：起点无依据（--input 无路径语料、无 design 清单）——干活涉及 src 后 resume/收口会补查；`)
+       lines.push(`   相关域现行 FR 可自行查 knowledge/fr/<域>.md（INDEX.md 有路由）。`)
+@@ -367,6 +390,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     if (domains.length === 0 && rejected.length === 0 && !km.matched) {
+       lines.length = 0
+       lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)
++      if (scopedLines.length > 0) lines.push(...scopedLines) // 恒注入面不被空态折叠吞（2026-10-23-knowledge-scope-inject）
+     }
+     // 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：零命中=正需要语义召回
+     // 而未获得的时刻——平台已连接但开关未开（缺省关）时给一行可执行提示；有命中/未连接/
+diff --git a/src/knowledge-scope.js b/src/knowledge-scope.js
+new file mode 100644
+index 00000000..e81b8253
+--- /dev/null
++++ b/src/knowledge-scope.js
+@@ -0,0 +1,82 @@
++/**
++ * knowledge-scope.js — 知识注入作用域解析（2026-10-23-knowledge-scope-inject）
++ *
++ * 背景：知识注入此前只有「触达域 FR + 关键词命中」两类——AGENTS 规约 00（不枚举定义
++ * 开放世界/不锁死开发语言框架）一直在指令文件里，但决策时点没有「每次都注入」通道，
++ * agent 在配置/机制设计上犯语言锁定即实证（py_runner_flags 一案）。本模块让知识条目
++ * 声明作用域，注入逻辑按类分流：
++ *   - always：每次变更都注入（跨仓通用规约，如工具中立性）
++ *   - repo：本仓库每次变更都注入（仓级约束）
++ *   - module:<域>[,<域>]：仅当触达域（resolveTouchedDomains 同源）命中时注入
++ *   - 无标记：关键词命中现状（不恒注入）
++ *
++ * 标记形态（HTML 注释，主观内容用 HTML 注释不污染渲染；置于 section heading 之后的
++ * 本节内任意位置有效）：
++ *   <!-- scope: always -->
++ *   <!-- scope: repo -->
++ *   <!-- scope: module:cli-entry,core-engine -->
++ *
++ * 条目粒度 = section（heading）——knowledge 的 INDEX 路由与命中面都以 file#heading 为
++ * 单位，标记跟随原文、旧知识零迁移。纯读 fail-soft（坏文件/不可读跳过，异常返回空态）。
++ */
++import { readdirSync, readFileSync } from 'fs'
++import { join } from 'path'
++
++const SCOPE_RE = /<!--\s*scope\s*:\s*(always|repo|module\s*:\s*([^>]+?))\s*-->/i
++
++/**
++ * 扫描 knowledgeRoot 顶层 *.md（INDEX.md 除外）收集作用域条目。
++ * @returns {{ always: Array, repo: Array, modules: Record<string, Array> }}
++ *   条目形如 { id: 'file.md#heading', file, heading, summary, scope, domains? }
++ */
++export function collectScopedKnowledge(knowledgeRoot) {
++  const out = { always: [], repo: [], modules: {} }
++  let entries = []
++  try { entries = readdirSync(knowledgeRoot) } catch { return out }
++  for (const f of entries) {
++    if (!String(f).endsWith('.md') || f === 'INDEX.md') continue
++    let text
++    try { text = readFileSync(join(knowledgeRoot, f), 'utf8') } catch { continue }
++    let cur = null // { heading, scope, domains, summary }
++    const flush = () => {
++      if (!cur || !cur.scope) return
++      const entry = {
++        id: `${f}#${cur.heading}`,
++        file: f,
++        heading: cur.heading,
++        summary: cur.summary || '',
++        scope: cur.scope,
++        ...(cur.scope === 'module' ? { domains: cur.domains } : {}),
++      }
++      if (cur.scope === 'always') out.always.push(entry)
++      else if (cur.scope === 'repo') out.repo.push(entry)
++      else for (const d of cur.domains) (out.modules[d] ||= []).push(entry)
++    }
++    for (const line of String(text).split(/\r?\n/)) {
++      const h = /^(#{1,6})\s+(.+?)\s*$/.exec(line)
++      if (h) { flush(); cur = { heading: h[2].trim(), scope: null, domains: [], summary: '' }; continue }
++      if (!cur) continue
++      const m = SCOPE_RE.exec(line)
++      if (m) {
++        const kind = m[1].toLowerCase()
++        if (kind === 'always' || kind === 'repo') { cur.scope = kind; cur.domains = [] }
++        else {
++          cur.scope = 'module'
++          cur.domains = String(m[2] || '').split(',').map((s) => s.trim()).filter(Boolean)
++        }
++        continue
++      }
++      // 首行有效正文作摘要（跳空行/注释/代码围栏），≤80 字
++      if (!cur.summary) {
++        const t = line.trim()
++        if (t && !t.startsWith('<!--') && !t.startsWith('```') && !t.startsWith('|')) {
++          cur.summary = t.slice(0, 80)
++        }
++      }
++    }
++    flush()
++  }
++  return out
++}
++
++export default { collectScopedKnowledge }
+diff --git a/test/knowledge-scope-inject.test.mjs b/test/knowledge-scope-inject.test.mjs
+new file mode 100644
+index 00000000..cdca71eb
+--- /dev/null
++++ b/test/knowledge-scope-inject.test.mjs
+@@ -0,0 +1,90 @@
++/**
++ * knowledge-scope-inject.test.mjs — 知识注入作用域（2026-10-23-knowledge-scope-inject）
++ *
++ * ① collectScopedKnowledge：always/repo/module 标记解析、无标记不产出、INDEX.md 排除、
++ *    坏目录 fail-soft、摘要取首行有效正文（FR-01）
++ * ② flowKnowledgeDigest 集成：内置中立性行恒注入；always/repo 条目恒注入；有标记条目的
++ *    文本形态（📌 [scope] file#heading：摘要）（FR-02/FR-03）
++ * ③ 缺省锚：无 scoped 条目的仓仅多内置行，FR/关键词/否决段结构不变（FR-02 零回归）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { collectScopedKnowledge } from '../src/knowledge-scope.js'
++import { flowKnowledgeDigest } from '../src/flow.js'
++
++function mkKnowledge(files) {
++  const d = mkdtempSync(join(tmpdir(), 'ksc-'))
++  const specBase = join(d, '.sillyspec')
++  const kr = join(specBase, 'knowledge')
++  mkdirSync(kr, { recursive: true })
++  for (const [name, text] of Object.entries(files)) writeFileSync(join(kr, name), text)
++  return { d, specBase, changeDir: join(specBase, 'changes', '2026-01-01-x') }
++}
++
++test('① collectScopedKnowledge 解析三态', () => {
++  const { d, specBase } = mkKnowledge({
++    'conventions.md': [
++      '# 约定',
++      '',
++      '## 工具中立性',
++      '<!-- scope: always -->',
++      '不锁死语言与框架，用 CLI 自有分类。',
++      '',
++      '## 本仓发布纪律',
++      '<!-- scope: repo -->',
++      '发布前跑锚套件。',
++      '',
++      '## 模块路由规则',
++      '<!-- scope: module:cli-entry,core-engine -->',
++      '模块域 id 与 FR 域同源。',
++      '',
++      '## 普通条目',
++      '这条没有作用域标记。',
++    ].join('\n'),
++    'INDEX.md': '## 工具中立性\n<!-- scope: always -->\n不应被采集\n',
++  })
++  try {
++    const s = collectScopedKnowledge(join(specBase, 'knowledge'))
++    assert.equal(s.always.length, 1, 'always 一条（INDEX 排除）')
++    assert.equal(s.always[0].id, 'conventions.md#工具中立性')
++    assert.match(s.always[0].summary, /不锁死语言与框架/, '摘要取首行有效正文')
++    assert.equal(s.repo.length, 1, 'repo 一条')
++    assert.equal(s.repo[0].id, 'conventions.md#本仓发布纪律')
++    assert.deepEqual(Object.keys(s.modules).sort(), ['cli-entry', 'core-engine'], 'module 两域各自入桶')
++    assert.equal(s.modules['cli-entry'][0].id, 'conventions.md#模块路由规则')
++    const uniqueIds = new Set([...s.always, ...s.repo, ...Object.values(s.modules).flat()].map((e) => e.id))
++    assert.equal(uniqueIds.size, 3, '无标记 section 不产出（双域条目去重后 3 个唯一 section）')
++    // 坏目录 fail-soft
++    assert.deepEqual(collectScopedKnowledge(join(specBase, 'missing-dir')), { always: [], repo: [], modules: {} })
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('② flowKnowledgeDigest 集成：内置行恒注入＋scoped 条目在场', async () => {
++  const { d, specBase, changeDir } = mkKnowledge({
++    'rules.md': '## 中立性\n<!-- scope: always -->\n批类别是 CLI 自有分类。\n\n## 仓级\n<!-- scope: repo -->\n发布前锚套件。\n',
++  })
++  try {
++    const r = await flowKnowledgeDigest({ specBase, change: '2026-01-01-x', changeDir, input: '标题素材面\n成功标准：\n- 行为 X' })
++    const text = r.lines.join('\n')
++    assert.match(text, /🧭 工具中立性（内置规约 00，每变更恒注入）/, '内置中立性行恒注入')
++    assert.match(text, /📌 \[always\] rules\.md#中立性：批类别是 CLI 自有分类/, 'always 条目注入形态')
++    assert.match(text, /📌 \[repo\] rules\.md#仓级：发布前锚套件/, 'repo 条目注入形态')
++    assert.match(text, /🧠 知识注入/, '既有段头保留')
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('③ 缺省锚：无 scoped 条目时仅多内置行、既有段结构不变', async () => {
++  const { d, specBase, changeDir } = mkKnowledge({
++    'plain.md': '## 普通条目\n没有标记的内容。\n',
++  })
++  try {
++    const r = await flowKnowledgeDigest({ specBase, change: '2026-01-01-x', changeDir, input: '标题素材面\n成功标准：\n- 行为 X' })
++    const text = r.lines.join('\n')
++    assert.match(text, /🧭 工具中立性（内置规约 00/, '内置行在场（有意新增）')
++    assert.doesNotMatch(text, /📌 \[/, '无 scoped 条目零条目输出')
++    assert.match(text, /语料未命中知识库/, '既有空态折叠行结构不变')
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})

@@ -1,0 +1,54 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  知识注入作用域（全部/仓库/模块/关键词）
+
+
+  动机与背景：用户批评（2026-10-23 原话）：「我在 agent.md 里描述的你都没遵守呢，还是要我每次补充中立信息，我们工具知识库注入逻辑是否可以增加一个每次变更都会注入的专属知识呀，或者可以分类 按
+  全部、仓库、模块、关键词匹配，目前只有关键词吧？」——规约 00（不枚举开放世界/不锁死语言框架）一直在 AGENTS.md，但注入面只有触达域 FR + 关键词命中，决策时点没有「每次都注入」通道，本人（agent）在
+  py_runner_flags 上犯语言锁定即实证。实现：知识条目支持作用域标记（HTML 注释 marker：scope: always/repo/module:<域>[,<域>]；缺省=关键词现状）——always/repo 每次
+  flow start 注入（全部与仓库两级，帽 5 条+溢出计数），module 命中触达域时注入，关键词面零改动；另加工具内置中立性提示行（规约 00，每变更恒注入，不依赖仓侧配置）。autopilot
+  直跑到底，--no-prestage 声明需求已含决策。
+
+
+  成功标准：
+
+  - 知识文件 section 支持作用域标记（scope: always / scope: repo / scope: module:域[,域]，HTML 注释形态；标记置于 heading
+  后、本节内有效；无标记=关键词现状不注入）；collectScopedKnowledge(knowledgeRoot) 解析 top-level knowledge/*.md（INDEX.md 除外）产出
+  always/repo/modules{域:[条目]}，条目含 file#heading 标识与首行摘要（≤80 字）
+
+  - flowKnowledgeDigest 注入：always+repo 每次调用恒注入（≤5 条+溢出计数行，块头之后 FR 段之前）；module 作用域条目仅当 domains（resolveTouchedDomains
+  同源）命中该域时注入；关键词/否决决策/FR 段零改动；解析读取 fail-soft 空态零输出（缺省零回归）
+
+  - 工具内置中立性行每变更恒注入（规约 00：不枚举开放世界/不锁死语言框架——CLI 自有分类（批类别/路径集合），新增语言只加探测适配）——消费仓无需任何配置即获得
+
+  - 测试：collectScopedKnowledge 三态（always/repo/module 解析、无标记不产出、坏文件 fail-soft）＋flowKnowledgeDigest 集成（恒注入条目+内置行在场；无 scoped
+  条目输出与改动前逐字一致）＋既有 knowledge 族套件回归绿
+autopilot: true
+prestage_ack: true
+baseline_commit: 38a6c1fda537d2dec6a76dd226694ce210ff9374
+updatedAt: '2026-10-23T07:35:27.395Z'
+baseline_sha256: 69e43777bab2e5f2bf6d647b0d887f3d5b29916a47fb4aa55e6ccc5567362abd
+spec_approved: true
+spec_approved_at: '2026-10-23T07:25:15.208Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（41.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023073449\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 8 个
+
