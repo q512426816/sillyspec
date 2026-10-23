@@ -1168,7 +1168,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
     `   测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`（无测试面写「不适用：理由」）。`,
     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
-    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
+    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后用 sillyspec push 压扁并推送`,
     `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
@@ -2006,7 +2006,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
         if (freeze.dirtyWarned.length > 0) {
           console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
-          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交可归档后压扁（见收口指引）`)
+          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交归档后用 sillyspec push 压扁并推送（见收口指引）`)
           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
           // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
           // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
@@ -2841,7 +2841,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   try {
     const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
     if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
-      console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
+      console.log(`🧹 推送前可用 sillyspec push 压扁本地未推送提交（默认 by-change；--mode one 合并为一笔；禁止 reset --soft / git push --force）`)
       console.log(`   审计真相已冻结在归档件 ${jsonOnlyFreeze ? 'change-patch.json（跨仓 repos[] 正文+sha256 锚定）' : 'change.patch（sha256 锚定）'} + verify-result + review.json，不依赖 git 历史；`)
       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
     }

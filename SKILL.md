@@ -54,6 +54,7 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 | `/sillyspec:resume` | 恢复工作 |
 | `/sillyspec:doctor` | 项目自检 |
 | `/sillyspec:commit` | 智能提交 |
+| `/sillyspec:push` | 推送前压扁本地未推送提交并快进推送 |
 | `/sillyspec:knowledge` | 知识库检索 / 沉淀 |
 | `/sillyspec:export` | 导出成功方案为可复用模板 |
 | `/sillyspec:workspace` | 多项目工作区管理 |
@@ -69,6 +70,7 @@ sillyspec run execute         执行开发阶段（子代理并行 + worktree �
 sillyspec run verify          执行验证阶段
 sillyspec run archive         执行归档阶段
 sillyspec flow start/done/status  轻量变更（默认快道，2 次调用收口）
+sillyspec push                推送前压扁本地未推送提交并快进推送（默认 by-change）
 sillyspec run explore         自由探索
 sillyspec progress show       显示当前项目状态
 sillyspec setup               安装推荐 MCP 工具

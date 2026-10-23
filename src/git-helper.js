@@ -96,23 +96,31 @@ function gitChildEnv(env) {
  * 安全执行 git：失败不抛，返回 { value, error } 结构。
  * @param {string} cwd
  * @param {string[]} args
- * @param {{ trim?: boolean, timeout?: number, retryOnTimeout?: boolean }} [opts]
+ * @param {{ trim?: boolean, timeout?: number, retryOnTimeout?: boolean, input?: string|Buffer, stdio?: string[] }} [opts]
  *   - trim:false 保留原样输出（git status --porcelain 首行前导空格
  *     是状态码的一部分，trim 会削掉致 parsePorcelainPath 丢首字符，坑见 auditQuickCompletion 注释）
  *   - timeout 默认 5000ms，长操作（大 diff / worktree list）可传更大值
  *   - retryOnTimeout:true 时，ETIMEDOUT 用 2× timeout 重试一次（默认 false 向后兼容）。
  *     机器忙时 git 子进程启动慢易瞬时超时；审计锚点 git 调用失败即 blocked 中断 quick，
  *     重试一次能消化绝大多数瞬时抖动，免去用户手工重跑。权限 / 损坏等非超时错误不重试（救不回）。
+ *   - input: 写入子进程 stdin；传入时自动把 stdio[0] 设为 pipe（否则 Node 静默丢弃 input）
+ *   - stdio: 显式覆盖子进程 stdio
  * @returns {{ value: string|null, error: string|null }}
  */
 export function safeGit(cwd, args, opts = {}) {
-  const { trim = true, timeout = 5000, retryOnTimeout = false } = opts
+  const { trim = true, timeout = 5000, retryOnTimeout = false, input, stdio = null } = opts
   const fullArgs = buildFullArgs(cwd, args)
+  // stdin 形态：input 传入时必须把 stdin 设为 pipe——Node 的 execFileSync 在
+  // stdio[0]='ignore' 时会静默丢弃 input（commit-tree -F - 会收到空消息）。
+  const childStdio = stdio || (input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'])
   // 单次尝试：返回 { value, errorObj }（errorObj 为原始 Error 或 null），不在内部格式化 message。
   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
   const attempt = (t) => {
     try {
-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(), windowsHide: true })
+      let value = execFileSync('git', fullArgs, {
+        encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: childStdio,
+        ...(input === undefined ? {} : { input }), env: gitChildEnv(), windowsHide: true,
+      })
       if (trim) value = value.trim()
       return { value, errorObj: null }
     } catch (e) {
@@ -131,18 +139,26 @@ export function safeGit(cwd, args, opts = {}) {
  * 调用方自行 catch；不经 shell，参数以数组元素传递。
  * @param {string} cwd
  * @param {string[]} args
- * @param {{ trim?: boolean, timeout?: number, encoding?: string }} [opts]
+ * @param {{ trim?: boolean, timeout?: number, encoding?: string, env?: NodeJS.ProcessEnv, input?: string|Buffer, stdio?: string[] }} [opts]
  *   - encoding:'buffer' 返回原始 Buffer（git diff --binary 等**二进制输出**专用——
  *     utf8 解码会破坏 NUL 字节使补丁不可应用；Buffer 输出跳过 trim）
+ *   - input: 写入子进程 stdin（如 commit-tree -F - 的多行消息）；传入时自动把 stdio[0] 设为 pipe
+ *   - stdio: 显式覆盖子进程 stdio（push 需要实时透传 hook 输出时用 inherit）
  * @returns {string|Buffer}
  */
 export function git(cwd, args, opts = {}) {
-  const { trim = true, timeout = 5000, encoding = 'utf8', env } = opts
+  const { trim = true, timeout = 5000, encoding = 'utf8', env, input, stdio = null } = opts
   const fullArgs = buildFullArgs(cwd, args)
   // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
   // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）；
   // 最终经 gitChildEnv 展开合并并权威注入 GIT_OPTIONAL_LOCKS=0（调用方 GIT 键照常透传）
-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(env), windowsHide: true })
+  // stdio：input 传入时 stdin 必须 pipe——Node 在 stdio[0]='ignore' 下会静默丢弃 input
+  // （commit-tree -F - 收到空消息）；push 用 inherit 透传 pre-push hook 输出。
+  const childStdio = stdio || (input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'])
+  const value = execFileSync('git', fullArgs, {
+    encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: childStdio,
+    ...(input === undefined ? {} : { input }), env: gitChildEnv(env), windowsHide: true,
+  })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
 }

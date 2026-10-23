@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-push-squash",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "f16711d3dedeb6741dc32a08881305b68eb4b60d",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-04 两守卫场景（区间含已推送提交 / merge commit）有代码零测试，push-plan.test.mjs 无绑定声称的「守卫拒绝矩阵」用例",
+      "evidence": "实现存在：planPush 内 `--not --remotes` 已推送区间拒绝与 `rev-list --merges` merge 拒绝均在；但 6 个变更面测试文件中无任何断言命中这两条守卫（push-cli 测试④仅覆盖 base 分叉/staged/worktree，push-plan 为纯函数层），FR-04 场景块「区间含已推送提交→拒绝并说明不允许 force-push」无测试锚；绑定短语「守卫拒绝矩阵」在 push-plan.test.mjs 中无对应 test() 名，实际仅参数解析与 one-foreign 拒绝可勉强对应。行为已兑现、无数据风险，故 P2 非 P1。",
+      "location": "src/push.js:planPush（patch 行 881-892）；test/push-plan.test.mjs、test/push-cli.test.mjs 全文无该两场景断言"
+    },
+    {
+      "severity": "P2",
+      "title": "design 风险节承诺「签名与 tag 给 warning」，src/push.js 无任何签名/tag 检测或 warning 代码——防护声明未兑现",
+      "evidence": "design.md 风险节：「签名提交丢签名、tag 指向旧提交……v1……签名与 tag 给 warning」。push.js 全文 warnings 仅来自锚点抬升/无归属段/staged/dirty/untracked，collectCommits 不取 %G 签名字段，无 tag 存在性检查。签名提交被 commit-tree 静默重写为无签名提交、tag 静默指向旧提交。有 pre-squash 备份 ref 可溯、树不变量保内容，非数据丢失，故 P2。",
+      "location": ".sillyspec/changes/2026-10-23-push-squash/design.md:49（风险节）；src/push.js 全文（patch 行 303-1137）无签名/tag warning"
+    },
+    {
+      "severity": "P3",
+      "title": "git-helper.js 注释与实现漂移：注释称「push 用 inherit 透传 pre-push hook 输出」，pushBranch 实际未传 stdio；push 失败报错不含 hook stderr 详情",
+      "evidence": "git() 新增注释「push 用 inherit 透传 pre-push hook 输出」，但 pushBranch 调用 `git(repoRoot, ['push',...], { timeout, trim:false })` 未传 stdio（默认 pipe）。pre-push hook 确实执行（无 --no-verify，承诺兑现），但 hook 失败时 e.message 仅含 exit code，lint/docs gate 失败详情不可见，用户需手工二跑 git push 定位——与 cli-copy-selfsufficient「报错一次给全、不依赖二跑」预期相抵；非数据正确性问题故 P3。",
+      "location": "src/git-helper.js（patch 行 226 注释）；src/push.js pushBranch（patch 行 973-980）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——rev-list --reverse 拓扑序不依赖时间；by-change 只合并连续段不跨段重排；推送前 tipNow 再探远端推进并拒绝；声明边界「远端在 plan 与 push 之间推进时 CAS/push 自然拒绝，可 --undo 后重跑」可接受）",
+    "并发": "ok（边界已裁决：可接受——withFileLock 真实存在（src/quicklog.js:40）覆盖非 dry-run 全临界区（fetch→plan→备份→CAS→push），锁落 git-common-dir；update-ref 三参 CAS 旧值不匹配即失败且清 post ref；dry-run 无锁但全只读，可接受；undo 不走锁但为单步 CAS，design 未承诺 undo 加锁）",
+    "切换": "ok（边界已裁决：可接受——备份前中断原 ref 不变；CAS 后 push 前中断本地压扁保留且 pre/post ref 可审计；push 失败不自动回滚（声明边界，可接受：保留压扁+重试/undo 指引）；进行中 merge/rebase/cherry-pick/detached 一律拒绝；undo 要求 HEAD 精确等于 postSha 且远端未指向压扁结果，防抹掉后续工作）",
+    "作用域": "ok（边界已裁决：可接受——worktree cwd 非 dry-run 拒绝（dry-run 只读跳过，可接受）；--branch v1 仅断言不切分支（usage 如实披露）；--mode none 跳过已推送区间检查是显式设计（不压扁无需该守卫，FR-04 条文限定压扁前）；跨仓/平台同步/其他分支声明不在范围；活锚点只读当前仓 specBase，缺失/坏文件 fail-soft）"
+  },
+  "reviewedAt": "2026-10-23T14:05:00.000Z"
+}

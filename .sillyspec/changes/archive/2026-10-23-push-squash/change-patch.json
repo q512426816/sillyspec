@@ -1,0 +1,266 @@
+{
+  "change": "2026-10-23-push-squash",
+  "baseline": "7fae4183a70edeca50ed871eb9d1509da267b61e",
+  "head": "f16711d3dedeb6741dc32a08881305b68eb4b60d",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "AGENTS.md",
+    "README.md",
+    "SKILL.md",
+    "assets/command-cards/push.md",
+    "package.json",
+    "src/command-cards.js",
+    "src/flow.js",
+    "src/git-helper.js",
+    "src/index.js",
+    "src/push.js",
+    "src/run/shared.js",
+    "templates/agents-instruction.md",
+    "test/command-cards.test.mjs",
+    "test/flow-guidance.test.mjs",
+    "test/git-helper-input.test.mjs",
+    "test/push-cli.test.mjs",
+    "test/push-plan.test.mjs",
+    "test/push-skill.test.mjs"
+  ],
+  "totals": {
+    "files": 19,
+    "additions": 1435,
+    "deletions": 21
+  },
+  "savedAt": "2026-10-23T13:14:14.901Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "worktree",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/worktree.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 6
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "7fae4183a70edeca50ed871eb9d1509da267b61e",
+    "totals": {
+      "files": 20,
+      "additions": 1435,
+      "deletions": 21
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "README.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "SKILL.md",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "assets/command-cards/push.md",
+        "additions": 38,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "package.json",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/command-cards.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 3,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/git-helper.js",
+        "additions": 22,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 34,
+        "deletions": 3,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/push.js",
+        "additions": 834,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/shared.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/command-cards.test.mjs",
+        "additions": 6,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/flow-guidance.test.mjs",
+        "additions": 27,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/git-helper-input.test.mjs",
+        "additions": 65,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/push-cli.test.mjs",
+        "additions": 233,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/push-plan.test.mjs",
+        "additions": 124,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/push-skill.test.mjs",
+        "additions": 39,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-push/SKILL.md",
+        "planned": "新增",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "6017c22ad9804f9e57f77150887d5d3147ed628c5b53e8b0ff0fa84cab980fa9",
+  "patchStatus": "ok"
+}

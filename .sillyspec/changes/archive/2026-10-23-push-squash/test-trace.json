@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-push-squash",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-01",
+      "tests": [
+        "test/push-cli.test.mjs「--dry-run 零写盘」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-02",
+      "tests": [
+        "test/push-plan.test.mjs「by-change 连续段与 task token 保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-03",
+      "tests": [
+        "test/push-cli.test.mjs「压扁后 index/工作区不变且远端快进」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-04",
+      "tests": [
+        "test/push-cli.test.mjs「真实仓守卫拒绝」",
+        "test/push-plan.test.mjs「守卫拒绝矩阵」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-05",
+      "tests": [
+        "test/push-cli.test.mjs「备份 ref 与 --undo」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-23-push-squash:flow:测试绑定FR-06",
+      "tests": [
+        "test/flow-guidance.test.mjs「flow done 不再提示 reset --soft」",
+        "test/push-skill.test.mjs「push skill 与命令卡一致性」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-squash"
+    }
+  ]
+}

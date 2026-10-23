@@ -1,0 +1,1733 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index c22eacc5..35ef5ffd 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -49,6 +49,7 @@ modules:
+     paths:
+       - src/handoff.js
+       - src/index.js
++      - src/push.js
+       - src/ui-visual.js
+       - src/hunk-attribution.js
+       - bin/sillyspec.js
+diff --git a/AGENTS.md b/AGENTS.md
+index 82630dcd..bf3ff0e0 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -43,5 +43,6 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 11. **禁止目录级 git add / git add -A**（多会话共享仓）：目录级暂存会夹带并行会话的进行中文件甚至误删已提交文件。提交一律用显式 pathspec，且 **add 与 commit 用同一份清单**：`git commit -m "..." -- 文件1 文件2`——带 pathspec 的 commit 只提交这些路径，他侧已 staged 的条目既不被带走、也原样留给对方；裸 `git commit` 提交的是整个共享暂存区，他会话 add 过的文件会被一并扫入。核对暂存面固定用 `git diff --cached --name-only` 全量读取，禁用过滤式核对（过滤正是致盲原因）；核对与提交分开两条命令执行，不得链在同一命令里（链行没有拦截点）。安装了 commit-guard hook 的仓会对超声明面的 staged 文件警告（只警告不阻断）。
+ 12. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+ 13. **边干边勾（任务进度唯一源=变更的 tasks.md）**：完成一个任务单元（实现到位 + 相关测试跑绿）当场勾对应格——`sillyspec task tick --change <名> --task task-NN`（即时回显进度与下一任务）或直接 Edit 翻格 `- [ ]`→`- [x]`，勿攒到收口一把勾。harness 自带的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度投影、收口哨兵、断点恢复只读 tasks.md。
++14. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged 文件/Dirty 文件不替人提交或清理。
+ 
+ 00. **不要枚举定义开放世界 以及 不要限制死 开发语言和框架**
+\ No newline at end of file
+diff --git a/README.md b/README.md
+index d2d229f6..1e8a6aa0 100644
+--- a/README.md
++++ b/README.md
+@@ -116,6 +116,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
+ | `/sillyspec:resume` | 恢复工作（支持大模块阶段进度） |
+ | `/sillyspec:doctor` | 项目自检与状态修复 |
+ | `/sillyspec:commit` | 智能提交 |
++| `/sillyspec:push` | 推送前压扁本地未推送提交并快进推送 |
+ | `/sillyspec:workspace` | 多项目工作区管理 |
+ | `/sillyspec:export` | 导出成功方案为可复用模板 |
+ 
+@@ -126,6 +127,7 @@ sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/ver
+ sillyspec run <stage> --done     完成当前步骤并推进到下一步
+ sillyspec run <stage> --status   查看阶段进度
+ sillyspec progress show          显示当前项目状态
++sillyspec push                   推送前压扁本地未推送提交并快进推送（默认 by-change）
+ sillyspec init                   初始化（零交互，自动检测工具）
+ sillyspec setup                  安装推荐 MCP 工具（交互式）
+ sillyspec setup --list           查看已安装 MCP 状态
+diff --git a/SKILL.md b/SKILL.md
+index f7264aaf..4e8284b4 100644
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -54,6 +54,7 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
+ | `/sillyspec:resume` | 恢复工作 |
+ | `/sillyspec:doctor` | 项目自检 |
+ | `/sillyspec:commit` | 智能提交 |
++| `/sillyspec:push` | 推送前压扁本地未推送提交并快进推送 |
+ | `/sillyspec:knowledge` | 知识库检索 / 沉淀 |
+ | `/sillyspec:export` | 导出成功方案为可复用模板 |
+ | `/sillyspec:workspace` | 多项目工作区管理 |
+@@ -69,6 +70,7 @@ sillyspec run execute         执行开发阶段（子代理并行 + worktree 
+ sillyspec run verify          执行验证阶段
+ sillyspec run archive         执行归档阶段
+ sillyspec flow start/done/status  轻量变更（默认快道，2 次调用收口）
++sillyspec push                推送前压扁本地未推送提交并快进推送（默认 by-change）
+ sillyspec run explore         自由探索
+ sillyspec progress show       显示当前项目状态
+ sillyspec setup               安装推荐 MCP 工具
+diff --git a/assets/command-cards/push.md b/assets/command-cards/push.md
+new file mode 100644
+index 00000000..9baff2f5
+--- /dev/null
++++ b/assets/command-cards/push.md
+@@ -0,0 +1,38 @@
++---
++name: sillyspec:push
++description: 推送前压扁本地未推送提交并快进推送（默认 by-change；拒绝改写已推送历史与 force-push）
++---
++# 何时用
++
++- `flow done` / `archive` 收口、提交完成后准备推送到远端。
++- 用户说“推送 / push / 推到 origin / 发布 / 整理中间提交”。
++- 不适用：已推送历史改写、他人分支未授权改写、平台进度同步（用 `platform sync`）。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 多会话所有权判定依赖
++sillyspec push --dry-run                       # 先看计划，零写盘
++sillyspec push                                 # 默认 by-change：连续同变更段压扁 + 快进推送
++sillyspec push --mode one --change <名>        # 全部未推送提交合并一笔（守卫通过才可）
++sillyspec push --no-push                       # 只压扁不推送
++sillyspec push --undo                          # 推送前恢复最近一次压扁
++# pre-push hook 会跑 lint/docs gate；失败必须修复，禁止 --no-verify
++```
++
++# 防坑清单
++
++- 不要直接 `git push`、`git push --force`，也不要手工 `git reset --soft` 压扁。
++- base 非 HEAD 祖先 / upstream 领先 → 拒绝；先人工 fetch/rebase，本命令不 force。
++- index 有 staged 改动 → 拒绝；不要替其他会话提交或清理暂存区。
++- 在 SillySpec worktree 内 → 拒绝；先 `worktree apply` 回主仓再 push。
++- 区间含 merge commit / 已推送提交 → 默认拒绝；不要试图展平他人已推送历史。
++- by-change 只合并连续段；裸提交与其他变更提交原样保留，不跨段重排。
++- one 模式必须 `--change`；有活跃变更或其他归属提交时拒绝。
++- 活锚点（scan `source_commit` / 活跃 baseline / change-patch / worktree meta）自动抬升 base；不要手工越过。
++- 备份 ref 不自动清理；`--undo` 只允许推送前，已推送后拒绝。
++
++# 边界声明
++
++本卡不含实现细节——计划、分段、锚点抬升、CAS 与推送由 `sillyspec push` 按当前仓状态实时计算。
++本卡不替代 commit：先用 `sillyspec commit` 或显式 pathspec 提交，再 push。
+diff --git a/package.json b/package.json
+index f282b7ca..9ddb40b5 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs test/wave-auto-adopt.test.mjs test/test-incremental-rerun.test.mjs test/knowledge-graph.test.mjs test/explore-graph-guidance.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs test/doc-ref-check.test.mjs test/flow-status-json.test.mjs test/flow-status-title.test.mjs test/flow-resume-title.test.mjs test/datetime-timeago.test.mjs test/resume-domain-flip.test.mjs test/fr-regress-cap-drop.test.mjs test/fr-priority-overlap.test.mjs test/archive-commit-suggest-race.test.mjs test/flow-done-fail-brief.test.mjs test/verify-probes-refresh-backup.test.mjs test/taskcard-yaml-triage-validate.test.mjs test/gate-last-reader.test.mjs test/status-multi-active-list.test.mjs test/gate-docs-only.test.mjs test/probe7-fr-prefill.test.mjs test/plan-fill-batch-config.test.mjs test/step-guide-prune.test.mjs test/gate-stage-review-hint.test.mjs test/design-ref-suggest.test.mjs test/flow-friction-batch3.test.mjs test/wave-auto-adopt.test.mjs test/test-incremental-rerun.test.mjs test/knowledge-graph.test.mjs test/explore-graph-guidance.test.mjs test/git-helper-input.test.mjs test/push-plan.test.mjs test/push-cli.test.mjs test/push-skill.test.mjs test/flow-guidance.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/command-cards.js b/src/command-cards.js
+index da5b7a87..c7cfc96d 100644
+--- a/src/command-cards.js
++++ b/src/command-cards.js
+@@ -10,7 +10,7 @@ import { writeAtomicSync } from './fs-atomic.js'
+ 
+ export const COMMAND_CARD_TARGETS = { zcode: '.zcode/commands/sillyspec', claude: '.claude/commands/sillyspec' }
+ // flow=轻量变更默认道入口卡（2026-09-25-quick-channel-retire 配套：quick 退役后快道首次有卡）
+-export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'status']
++export const COMMAND_CARD_NAMES = ['flow', 'run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'status', 'push']
+ 
+ const ANCHOR_TAIL_RE = /\n?<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->\s*$/
+ const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
+diff --git a/src/flow.js b/src/flow.js
+index c46bf854..db2f8fc7 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1168,7 +1168,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `📜 requirements 每条 FR = 标题锚 + 行为句 + 按需场景块（#### 场景：名 + Given/When/Then）；`,
+     `   测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`（无测试面写「不适用：理由」）。`,
+     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
+-    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
++    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后用 sillyspec push 压扁并推送`,
+     `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
+     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
+     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
+@@ -2006,7 +2006,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+         if (freeze.dirtyWarned.length > 0) {
+           console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+-          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交可归档后压扁（见收口指引）`)
++          console.warn(`   ① 先提交这些文件（信息尾缀带变更名）后重跑 ② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 确认接受审计缺口：重跑 flow done --accept-dirty-gap（缺口数随 change-patch.json 留痕）。Git 中间提交归档后用 sillyspec push 压扁并推送（见收口指引）`)
+           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+           // 收口阻断门（2026-10-08-thin-done-dirty-gate-and-paren-attribution，坑①修复：
+           // multi-agent-platform docs/sillyspec/thin-done-src-commit-order-and-attribution-paren.md）
+@@ -2841,7 +2841,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   try {
+     const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+     if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
+-      console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
++      console.log(`🧹 推送前可用 sillyspec push 压扁本地未推送提交（默认 by-change；--mode one 合并为一笔；禁止 reset --soft / git push --force）`)
+       console.log(`   审计真相已冻结在归档件 ${jsonOnlyFreeze ? 'change-patch.json（跨仓 repos[] 正文+sha256 锚定）' : 'change.patch（sha256 锚定）'} + verify-result + review.json，不依赖 git 历史；`)
+       console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
+     }
+diff --git a/src/git-helper.js b/src/git-helper.js
+index 96e1a1fe..24830435 100644
+--- a/src/git-helper.js
++++ b/src/git-helper.js
+@@ -96,23 +96,31 @@ function gitChildEnv(env) {
+  * 安全执行 git：失败不抛，返回 { value, error } 结构。
+  * @param {string} cwd
+  * @param {string[]} args
+- * @param {{ trim?: boolean, timeout?: number, retryOnTimeout?: boolean }} [opts]
++ * @param {{ trim?: boolean, timeout?: number, retryOnTimeout?: boolean, input?: string|Buffer, stdio?: string[] }} [opts]
+  *   - trim:false 保留原样输出（git status --porcelain 首行前导空格
+  *     是状态码的一部分，trim 会削掉致 parsePorcelainPath 丢首字符，坑见 auditQuickCompletion 注释）
+  *   - timeout 默认 5000ms，长操作（大 diff / worktree list）可传更大值
+  *   - retryOnTimeout:true 时，ETIMEDOUT 用 2× timeout 重试一次（默认 false 向后兼容）。
+  *     机器忙时 git 子进程启动慢易瞬时超时；审计锚点 git 调用失败即 blocked 中断 quick，
+  *     重试一次能消化绝大多数瞬时抖动，免去用户手工重跑。权限 / 损坏等非超时错误不重试（救不回）。
++ *   - input: 写入子进程 stdin；传入时自动把 stdio[0] 设为 pipe（否则 Node 静默丢弃 input）
++ *   - stdio: 显式覆盖子进程 stdio
+  * @returns {{ value: string|null, error: string|null }}
+  */
+ export function safeGit(cwd, args, opts = {}) {
+-  const { trim = true, timeout = 5000, retryOnTimeout = false } = opts
++  const { trim = true, timeout = 5000, retryOnTimeout = false, input, stdio = null } = opts
+   const fullArgs = buildFullArgs(cwd, args)
++  // stdin 形态：input 传入时必须把 stdin 设为 pipe——Node 的 execFileSync 在
++  // stdio[0]='ignore' 时会静默丢弃 input（commit-tree -F - 会收到空消息）。
++  const childStdio = stdio || (input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'])
+   // 单次尝试：返回 { value, errorObj }（errorObj 为原始 Error 或 null），不在内部格式化 message。
+   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
+   const attempt = (t) => {
+     try {
+-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(), windowsHide: true })
++      let value = execFileSync('git', fullArgs, {
++        encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: childStdio,
++        ...(input === undefined ? {} : { input }), env: gitChildEnv(), windowsHide: true,
++      })
+       if (trim) value = value.trim()
+       return { value, errorObj: null }
+     } catch (e) {
+@@ -131,18 +139,26 @@ export function safeGit(cwd, args, opts = {}) {
+  * 调用方自行 catch；不经 shell，参数以数组元素传递。
+  * @param {string} cwd
+  * @param {string[]} args
+- * @param {{ trim?: boolean, timeout?: number, encoding?: string }} [opts]
++ * @param {{ trim?: boolean, timeout?: number, encoding?: string, env?: NodeJS.ProcessEnv, input?: string|Buffer, stdio?: string[] }} [opts]
+  *   - encoding:'buffer' 返回原始 Buffer（git diff --binary 等**二进制输出**专用——
+  *     utf8 解码会破坏 NUL 字节使补丁不可应用；Buffer 输出跳过 trim）
++ *   - input: 写入子进程 stdin（如 commit-tree -F - 的多行消息）；传入时自动把 stdio[0] 设为 pipe
++ *   - stdio: 显式覆盖子进程 stdio（push 需要实时透传 hook 输出时用 inherit）
+  * @returns {string|Buffer}
+  */
+ export function git(cwd, args, opts = {}) {
+-  const { trim = true, timeout = 5000, encoding = 'utf8', env } = opts
++  const { trim = true, timeout = 5000, encoding = 'utf8', env, input, stdio = null } = opts
+   const fullArgs = buildFullArgs(cwd, args)
+   // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
+   // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）；
+   // 最终经 gitChildEnv 展开合并并权威注入 GIT_OPTIONAL_LOCKS=0（调用方 GIT 键照常透传）
+-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env: gitChildEnv(env), windowsHide: true })
++  // stdio：input 传入时 stdin 必须 pipe——Node 在 stdio[0]='ignore' 下会静默丢弃 input
++  // （commit-tree -F - 收到空消息）；push 用 inherit 透传 pre-push hook 输出。
++  const childStdio = stdio || (input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'])
++  const value = execFileSync('git', fullArgs, {
++    encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: childStdio,
++    ...(input === undefined ? {} : { input }), env: gitChildEnv(env), windowsHide: true,
++  })
+   if (Buffer.isBuffer(value)) return value
+   return trim ? value.trim() : value
+ }
+diff --git a/src/index.js b/src/index.js
+index a99c555a..8e8a4e54 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -119,7 +119,7 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
+   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
+   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
+-  sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
++  sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）；sillyspec push [--dry-run] [--mode by-change|one|none] [--change <名>] [--no-push] [--undo] [--json]  推送前压扁本地未推送提交并快进推送（默认按变更分段；不改写已推送历史、不 force）
+   sillyspec verify-probes --change <name> [--init [--force]]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架（--force 覆盖重生成，手填内容会重置）
+   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
+   sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
+@@ -458,7 +458,7 @@ async function main() {
+   // 1-2 个交互来回）。守卫建议的事（cd 回主仓根重跑）自动做掉：⚠️警告 + 重锚定主仓根执行——
+   // 写入恒落主仓（单源不变量延续，worktree 副本零 CLI 写入）；刻意以本 worktree 作独立实例跑
+   // 的显式路径（--allow-worktree-cwd --spec-dir）在警告中原样保留；wt-commit 豁免不变。
+-  if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit') {
++  if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit' && command !== 'push') {
+     const guardDir = args.includes('--dir') ? dir : process.cwd();
+     const wtInfo = detectCwdInsideWorktree(guardDir);
+     if (wtInfo) {
+@@ -5774,8 +5774,39 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+         printed = wAll ? wRes.events.length : wRes.warnings.length;
+       }
+     }
++    case 'push': {
++      // 推送前压扁（2026-10-23-push-squash）：显式命令，不接 pre-push hook 自动改写。
++      // 默认 by-change，只处理 base..HEAD 本地未推送段；commit-tree + update-ref 保 index/工作区
++      // 零变化，pre/post 备份 ref 可 undo；绝不 force / 不 --no-verify。--json 已由全局层剥离。
++      // 放在 switch 末尾：避免插行造成 docs 里 index.js:N 的行号引用整体漂移。
++      const { parsePushArgs, runPush, PUSH_USAGE } = await import('./push.js');
++      const parsed = parsePushArgs(filteredArgs.slice(1));
++      if (!parsed.ok) {
++        for (const e of parsed.errors) console.error(`❌ ${e}`);
++        console.error(PUSH_USAGE);
++        process.exit(2);
++      }
++      if (parsed.options.help) {
++        console.log(PUSH_USAGE);
++        break;
++      }
++      const r = await runPush({ cwd: dir, specDir, ...parsed.options, json });
++      if (json) {
++        console.log(JSON.stringify(r.envelope, null, 2));
++        for (const w of r.warnings || []) console.error(`⚠️ ${w}`);
++        process.exitCode = r.exitCode;
++        break;
++      }
++      for (const line of r.humanLines || []) console.log(line);
++      for (const w of r.warnings || []) console.warn(`⚠️ ${w}`);
++      if (!r.ok) {
++        for (const e of r.errors || []) console.error(`❌ ${e}`);
++        process.exitCode = r.exitCode || 1;
++      }
++      break;
++    }
+     default: {
+-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher'];
++      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
+       const suggestion = didYouMean(command, topCommands);
+       console.error(`❌ 未知命令: ${command}`);
+       if (command === '--status') {
+diff --git a/src/push.js b/src/push.js
+new file mode 100644
+index 00000000..1a693f75
+--- /dev/null
++++ b/src/push.js
+@@ -0,0 +1,834 @@
++/**
++ * sillyspec push — 推送前压扁本地未推送提交（2026-10-23-push-squash）
++ *
++ * 定位：客户反馈每 task 一笔、归档两笔、merge 兜底带入 worktree 全量历史，远端提交过密。
++ * 本模块提供显式命令：以目标远端分支为 base，只处理 `base..HEAD` 的本地未推送段；默认按
++ * “连续且归属同一变更”的提交段分组，压成按变更一笔；`--mode one` 合并为一个大提交；
++ * 然后普通快进 push。禁止 pre-push hook 静默改写、禁止改写已推送历史、禁止 force-push。
++ *
++ * 核心安全不变量：
++ *   ① 新 tip 树 == 旧 HEAD 树（commit-tree 取段末树），index/工作区/暂存区零变化；
++ *   ② base 必须是 HEAD 祖先，且区间内不得含任何 remote-tracking ref 可达的提交；
++ *   ③ pre/post 备份 ref + CAS update-ref + 文件锁，并发/中断可恢复；
++ *   ④ SillySpec 活锚点（scan source_commit / active baseline / change-patch / worktree meta）
++ *      抬升 effectiveBase，保证压扁后旧锚点仍是新 HEAD 祖先；
++ *   ⑤ by-change 合成 subject 带 `(<变更名>)`，body 保留全部原始消息与 task-NN 证据 token。
++ *
++ * 本模块不直接 console；人类输出由调用方（index.js）渲染，便于 --json 保持 stdout 纯净。
++ */
++import { existsSync, readFileSync, readdirSync } from 'node:fs'
++import { join, resolve } from 'node:path'
++import { git, safeGit, gitQuiet } from './git-helper.js'
++
++const PUSH_MODES = ['by-change', 'one', 'none']
++const GIT_TIMEOUT = 30000
++const PUSH_TIMEOUT = 600000
++const MAX_MESSAGE_BYTES = 200000
++const PLUMBING_RE = /^sillyspec:/
++
++export const PUSH_USAGE = `用法: sillyspec push [--mode by-change|one|none] [--change <名>] [--dry-run] [--no-push]
++                     [--undo] [--base <ref>] [--remote <名>] [--branch <名>] [--json]
++
++推送前压扁当前分支相对目标远端的本地未推送提交，然后快进推送。
++  --mode by-change  默认：连续且归属同一变更的提交压成一笔；无归属提交原样保留
++  --mode one        全部未推送提交合并为一个大提交（需 --change；有活跃变更时拒绝）
++  --mode none       只推送，不压扁
++  --dry-run         只打印计划，不建备份 ref、不改写、不推送
++  --no-push         只压扁，不推送
++  --undo            恢复最近一次压扁前的本地分支（远端已更新时拒绝）
++  --base <ref>      显式指定压扁基线（默认取目标远端分支）
++  --remote <名>     目标远端（默认 branch.<分支>.pushRemote/remote，再退 origin）
++  --branch <名>     只作断言：必须等于当前 checkout 分支
++  --json            机器可读输出`
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 纯函数：参数解析 / 归属识别 / 分组 / 消息 / 计划渲染
++// ─────────────────────────────────────────────────────────────────────────────
++
++function escapeRegExp(s) {
++  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
++}
++
++function normalizeText(s) {
++  return String(s == null ? '' : s).replace(/\r\n/g, '\n')
++}
++
++function splitLines(s) {
++  return String(s == null ? '' : s).split('\n').map((x) => x.trim()).filter(Boolean)
++}
++
++/**
++ * 解析 push 参数（纯函数）。未知 flag/位置参数/互斥组合一律 fail-closed。
++ * @param {string[]} argv 命令后的参数（不含 `push` 本身；--json 已由全局层剥离）
++ * @returns {{ok:true,options:object}|{ok:false,errors:string[]}}
++ */
++export function parsePushArgs(argv = []) {
++  const options = {
++    mode: 'by-change', change: null, dryRun: false, noPush: false, undo: false,
++    base: null, remote: null, branch: null, help: false, json: false,
++  }
++  const errors = []
++  const valueFlags = new Set(['--mode', '--change', '--base', '--remote', '--branch'])
++  const boolFlags = new Set(['--dry-run', '--no-push', '--undo', '--help', '-h', '--json'])
++  for (let i = 0; i < argv.length; i++) {
++    const a = String(argv[i])
++    if (a === '--') { errors.push('push 不接受位置参数或 pathspec（只操作当前分支的未推送提交）'); break }
++    let key = a
++    let inlineValue = null
++    if (a.startsWith('--') && a.includes('=')) {
++      key = a.slice(0, a.indexOf('='))
++      inlineValue = a.slice(a.indexOf('=') + 1)
++    }
++    if (boolFlags.has(key)) {
++      if (inlineValue !== null) { errors.push(`${key} 不接受值`); continue }
++      if (key === '--help' || key === '-h') options.help = true
++      else if (key === '--dry-run') options.dryRun = true
++      else if (key === '--no-push') options.noPush = true
++      else if (key === '--undo') options.undo = true
++      else if (key === '--json') options.json = true
++      continue
++    }
++    if (valueFlags.has(key)) {
++      const v = inlineValue !== null ? inlineValue : argv[i + 1]
++      if (v == null || String(v).startsWith('--') || String(v).trim() === '') {
++        errors.push(`${key} 缺少值`)
++        continue
++      }
++      if (inlineValue === null) i++
++      if (key === '--mode') options.mode = String(v)
++      else if (key === '--change') options.change = String(v)
++      else if (key === '--base') options.base = String(v)
++      else if (key === '--remote') options.remote = String(v)
++      else if (key === '--branch') options.branch = String(v)
++      continue
++    }
++    if (a.startsWith('-')) { errors.push(`未知参数: ${a}`); continue }
++    errors.push(`不接受位置参数: ${a}`)
++  }
++  if (!PUSH_MODES.includes(options.mode)) errors.push(`--mode 非法：${options.mode}（应为 ${PUSH_MODES.join('|')}）`)
++  if (options.mode === 'one' && !options.change) errors.push('--mode one 必须带 --change <名>（明确归属）')
++  if (options.change != null && options.mode !== 'one') errors.push('--change 仅用于 --mode one')
++  if (options.undo) {
++    for (const k of ['mode', 'change', 'base']) {
++      const def = k === 'mode' ? 'by-change' : null
++      if (options[k] !== def) errors.push(`--undo 不能与 --${k} 同用`)
++    }
++    if (options.dryRun) errors.push('--undo 不能与 --dry-run 同用')
++    if (options.noPush) errors.push('--undo 不能与 --no-push 同用')
++  }
++  if (options.mode === 'none' && options.noPush) errors.push('--mode none 已不压扁，不能与 --no-push 同用')
++  if (errors.length) return { ok: false, errors }
++  return { ok: true, options }
++}
++
++/**
++ * 从 subject 识别变更归属。只认已知变更名（附日期前缀）与括号锚，避免把正文/文件名误判。
++ * 多个候选 = 歧义 → null（按无归属处理，不猜）。
++ * @param {string} subject
++ * @param {string[]} knownChanges
++ * @returns {string|null}
++ */
++export function detectChangeOwner(subject, knownChanges = []) {
++  const s = normalizeText(subject)
++  const hits = new Set()
++  for (const m of s.matchAll(/(?:^|[^\w.-])(\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)(?=$|[^\w.-])/g)) hits.add(m[1])
++  const sorted = [...knownChanges].filter(Boolean).sort((a, b) => b.length - a.length)
++  for (const name of sorted) {
++    const re = new RegExp(`(^|[^A-Za-z0-9._-])${escapeRegExp(name)}([^A-Za-z0-9._-]|$)`)
++    if (re.test(s)) hits.add(name)
++  }
++  return hits.size === 1 ? [...hits][0] : null
++}
++
++/** plumbing 提交（worktree baseline/WIP/align）无变更名时，贴到相邻归属段；不跨裸提交猜测。 */
++function attachPlumbingOwners(commits) {
++  for (let i = 0; i < commits.length; i++) {
++    const c = commits[i]
++    if (c.owner || !PLUMBING_RE.test(c.subject)) continue
++    for (let j = i - 1; j >= 0; j--) {
++      if (commits[j].owner) { c.owner = commits[j].owner; break }
++    }
++    if (c.owner) continue
++    for (let j = i + 1; j < commits.length; j++) {
++      if (commits[j].owner) { c.owner = commits[j].owner; break }
++    }
++  }
++}
++
++/**
++ * 合成压扁提交消息：subject 带 `(<owner>)`，body 保留原始 subject 清单 + 原始正文；
++ * 原始消息里的 task-NN token 必须全部保留（缺失时追加 Task-Evidence 行）。
++ */
++export function buildSquashMessage({ commits, owner, mode = 'by-change' }) {
++  const list = Array.isArray(commits) ? commits : []
++  if (list.length === 0) throw new Error('buildSquashMessage: commits 为空')
++  const last = list[list.length - 1]
++  const meaningful = list.filter((c) => !PLUMBING_RE.test(c.subject))
++  const baseSubject = normalizeText((meaningful[0] || last).subject).trim() || 'chore: squash local commits'
++  const name = owner || null
++  let subject = baseSubject
++  if (name) {
++    const anchored = new RegExp(`[（(]\\s*${escapeRegExp(name)}\\s*[）)]`).test(subject)
++    if (!anchored) {
++      if (/^chore\(archive\):/.test(subject) && subject.includes(name)) {
++        subject = `chore(archive): 归档留档 (${name})`
++      } else {
++        subject = `${subject} (${name})`
++      }
++    }
++  }
++  const summary = [`Squashed ${list.length} commits (${list[0].sha.slice(0, 7)}..${last.sha.slice(0, 7)}):`]
++  for (const c of list) summary.push(`- ${c.sha.slice(0, 7)} ${normalizeText(c.subject).trim()}`)
++  const bodies = list.map((c) => normalizeText(c.body).trim()).filter(Boolean)
++  let msg = `${subject}\n\n${summary.join('\n')}\n`
++  if (bodies.length > 0) {
++    msg += '\nOriginal commit bodies:\n'
++    for (let i = 0; i < bodies.length; i++) {
++      if (i > 0) msg += '\n---\n'
++      msg += bodies[i] + '\n'
++    }
++  }
++  const allText = list.map((c) => `${c.subject}\n${c.body}`).join('\n')
++  const tokens = [...new Set([...allText.matchAll(/\btask-\d{1,4}\b/g)].map((m) => m[0]))]
++  const missing = tokens.filter((t) => !msg.includes(t))
++  if (missing.length > 0) msg += `\nTask-Evidence: ${missing.join(' ')}\n`
++  if (Buffer.byteLength(msg, 'utf8') > MAX_MESSAGE_BYTES) {
++    // 超大段只保留 subject 清单 + 全部证据 token，避免提交信息无上限膨胀；
++    // 原始正文仍可通过备份 ref 的旧提交追溯。
++    const compact = [`${subject}`, '', ...summary, '', `Task-Evidence: ${tokens.join(' ')}`].join('\n') + '\n'
++    msg = Buffer.byteLength(compact, 'utf8') <= MAX_MESSAGE_BYTES ? compact : compact.slice(0, MAX_MESSAGE_BYTES)
++  }
++  return msg
++}
++
++/**
++ * 提交分组（纯函数）。by-change 只合并连续同归属段；one 全段一笔；none 不压扁。
++ * @param {{commits:Array, mode:string, changeName?:string|null, knownChanges?:string[]}} p
++ * @returns {{ok:true,groups:Array,needsRewrite:boolean,warnings:string[]}|{ok:false,error:string}}
++ */
++export function classifyCommits({ commits, mode = 'by-change', changeName = null, knownChanges = [] }) {
++  const list = (Array.isArray(commits) ? commits : []).map((c) => ({ ...c }))
++  if (mode === 'none') return { ok: true, groups: [], needsRewrite: false, warnings: [] }
++  if (list.length === 0) return { ok: true, groups: [], needsRewrite: false, warnings: [] }
++  for (const c of list) {
++    if (c.owner === undefined) c.owner = detectChangeOwner(c.subject, knownChanges)
++  }
++  attachPlumbingOwners(list)
++  const warnings = []
++  if (mode === 'one') {
++    const foreign = list.filter((c) => c.owner && c.owner !== changeName)
++    if (foreign.length > 0) {
++      return { ok: false, error: `--mode one 区间含其他变更提交（${[...new Set(foreign.map((c) => c.owner))].join('、')}）——请用默认 by-change 或先拆分提交` }
++    }
++    const group = { owner: changeName, commits: list, tree: list[list.length - 1].tree, action: 'squash' }
++    group.message = list.length > 1 ? buildSquashMessage({ commits: list, owner: changeName, mode }) : list[0].message
++    group.subject = list.length > 1 ? group.message.split('\n')[0] : list[0].subject
++    return { ok: true, groups: [group], needsRewrite: list.length > 1, warnings }
++  }
++  const groups = []
++  for (const c of list) {
++    const last = groups[groups.length - 1]
++    if (c.owner && last && last.owner === c.owner) last.commits.push(c)
++    else groups.push({ owner: c.owner, commits: [c] })
++  }
++  // 无归属的连续提交不合并（FR-02：原样保留为独立提交）
++  const expanded = []
++  for (const g of groups) {
++    if (!g.owner && g.commits.length > 1) {
++      for (const c of g.commits) expanded.push({ owner: null, commits: [c] })
++    } else expanded.push(g)
++  }
++  for (const g of expanded) {
++    g.tree = g.commits[g.commits.length - 1].tree
++    if (g.commits.length > 1) {
++      g.action = 'squash'
++      g.message = buildSquashMessage({ commits: g.commits, owner: g.owner, mode })
++      g.subject = g.message.split('\n')[0]
++    } else {
++      g.action = 'keep'
++      g.message = g.commits[0].message
++      g.subject = g.commits[0].subject
++    }
++  }
++  if (expanded.some((g) => g.action === 'squash' && !g.owner)) {
++    warnings.push('存在无变更归属的多提交段——已按单提交保留，未压扁')
++  }
++  return { ok: true, groups: expanded, needsRewrite: expanded.some((g) => g.action === 'squash'), warnings }
++}
++
++/** 人类可读计划行。纯函数，不打印。 */
++export function renderPushPlan({ plan, dryRun = false } = {}) {
++  const lines = []
++  const short = (s) => String(s || '').slice(0, 10)
++  lines.push(`📦 sillyspec push 计划（mode=${plan.mode}，branch=${plan.ctx?.branch || '?'}，remote=${plan.target?.remote || '?'}/${plan.target?.remoteBranch || '?'}）`)
++  lines.push(`   HEAD ${short(plan.ctx?.head)}，base ${short(plan.effectiveBase)}${plan.baseRaised ? `（已从 ${short(plan.base)} 抬升）` : ''}；未推送提交 ${plan.commits.length} 个，分 ${plan.groups.length} 段`)
++  for (const g of plan.groups) {
++    const old = g.commits.length === 1 ? short(g.commits[0].sha) : `${short(g.commits[0].sha)}..${short(g.commits[g.commits.length - 1].sha)}`
++    const owner = g.owner || '（无变更归属）'
++    const action = g.action === 'squash' ? `压扁 ${g.commits.length} 笔` : '保留'
++    lines.push(`   - [${owner}] ${old} → ${action}：${g.subject}`)
++  }
++  if (!plan.needsRewrite) lines.push('   无需压扁，直接推送当前历史')
++  for (const w of plan.warnings || []) lines.push(`   ⚠️ ${w}`)
++  if (dryRun) lines.push('   仅预览：未建备份 ref、未改写、未推送')
++  return lines
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// IO：仓库/目标/锚点/提交读取
++// ─────────────────────────────────────────────────────────────────────────────
++
++function resolveRepoContext({ cwd = process.cwd() } = {}) {
++  const top = safeGit(cwd, ['rev-parse', '--show-toplevel'])
++  if (top.error || !top.value) return { ok: false, error: `当前目录不是 git 仓库：${top.error || '无输出'}` }
++  const repoRoot = top.value.trim()
++  const gd = safeGit(repoRoot, ['rev-parse', '--git-dir'])
++  const gcd = safeGit(repoRoot, ['rev-parse', '--git-common-dir'])
++  if (gd.error || gcd.error) return { ok: false, error: 'git rev-parse --git-dir/--git-common-dir 失败' }
++  const gitDir = resolve(repoRoot, gd.value.trim())
++  const commonDir = resolve(repoRoot, gcd.value.trim())
++  const headRes = safeGit(repoRoot, ['rev-parse', 'HEAD'])
++  if (headRes.error || !headRes.value) return { ok: false, error: '仓库尚无 HEAD（空仓）——先提交再压扁' }
++  const head = headRes.value.trim()
++  const branchRes = safeGit(repoRoot, ['symbolic-ref', '--short', '-q', 'HEAD'])
++  const detached = !!branchRes.error || !branchRes.value
++  const branch = detached ? null : branchRes.value.trim()
++  const shallow = gitQuiet(repoRoot, ['rev-parse', '--is-shallow-repository']) === 'true'
++  const inProgress = []
++  for (const marker of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'BISECT_LOG', 'rebase-merge', 'rebase-apply']) {
++    const p = gitQuiet(repoRoot, ['rev-parse', '--git-path', marker])
++    if (p && existsSync(resolve(repoRoot, p))) inProgress.push(marker)
++  }
++  return { ok: true, repoRoot, gitDir, commonDir, head, branch, detached, shallow, inProgress }
++}
++
++function resolvePushTarget({ repoRoot, branch, remote = null, remoteBranch = null }) {
++  if (!branch) return { ok: false, error: 'detached HEAD 无分支——先 git switch <分支>' }
++  const r = remote
++    || gitQuiet(repoRoot, ['config', '--get', `branch.${branch}.pushRemote`])
++    || gitQuiet(repoRoot, ['config', '--get', `branch.${branch}.remote`])
++    || 'origin'
++  let rb = remoteBranch
++  if (!rb) {
++    const merge = gitQuiet(repoRoot, ['config', '--get', `branch.${branch}.merge`])
++    if (merge && merge.startsWith('refs/heads/')) rb = merge.slice('refs/heads/'.length)
++  }
++  rb = rb || branch
++  const url = gitQuiet(repoRoot, ['remote', 'get-url', r])
++  if (!url) return { ok: false, error: `远端不存在或不可达：${r}（git remote get-url 失败）` }
++  return { ok: true, remote: r, remoteBranch: rb, remoteRef: `refs/remotes/${r}/${rb}` }
++}
++
++function lsRemoteTip(repoRoot, remote, remoteBranch) {
++  const out = gitQuiet(repoRoot, ['ls-remote', '--heads', remote, `refs/heads/${remoteBranch}`], { timeout: 60000 })
++  const line = String(out == null ? '' : out).split('\n').map((x) => x.trim()).find(Boolean)
++  return line ? line.split(/\s+/)[0] : null
++}
++
++function revParseCommit(repoRoot, ref) {
++  if (!ref) return null
++  const r = safeGit(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
++  return r.error || !r.value ? null : r.value.trim()
++}
++
++function revParseTree(repoRoot, ref) {
++  if (!ref) return null
++  const r = safeGit(repoRoot, ['rev-parse', '--verify', '--quiet', `${ref}^{tree}`])
++  return r.error || !r.value ? null : r.value.trim()
++}
++
++function isAncestor(repoRoot, a, b) {
++  if (!a || !b) return false
++  return safeGit(repoRoot, ['merge-base', '--is-ancestor', a, b]).error === null
++}
++
++function parseSourceCommit(content) {
++  const m = normalizeText(content).match(/^---\s*\n[\s\S]*?^source_commit:\s*([0-9a-f]{7,40})\s*$/m)
++  return m ? m[1] : null
++}
++
++/** 已知变更名（活跃 + 归档目录），供 subject 归属识别。 */
++function collectKnownChanges(specBase) {
++  const out = new Set()
++  for (const root of [join(specBase, 'changes'), join(specBase, 'changes', 'archive')]) {
++    try {
++      for (const e of readdirSync(root, { withFileTypes: true })) {
++        if (e.isDirectory() && /^\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+$/.test(e.name)) out.add(e.name)
++      }
++    } catch { /* 目录缺失/不可读 → 跳过 */ }
++  }
++  return [...out].sort((a, b) => b.length - a.length)
++}
++
++/**
++ * 收集 SillySpec 活锚点（只读；缺失/坏文件 fail-soft 跳过）。
++ * @returns {Array<{kind:string,id:string,sha:string}>}
++ */
++function collectAnchorCandidates(specBase) {
++  const anchors = []
++  const push = (kind, id, sha) => { if (sha) anchors.push({ kind, id, sha: String(sha).trim() }) }
++  // scan 文档
++  try {
++    const docsRoot = join(specBase, 'docs')
++    for (const p of readdirSync(docsRoot, { withFileTypes: true })) {
++      if (!p.isDirectory() || p.name.startsWith('.')) continue
++      const scanDir = join(docsRoot, p.name, 'scan')
++      if (!existsSync(scanDir)) continue
++      for (const f of readdirSync(scanDir)) {
++        if (!f.endsWith('.md')) continue
++        try { push('scan', `${p.name}/scan/${f}`, parseSourceCommit(readFileSync(join(scanDir, f), 'utf8'))) } catch { /* 单文档失败跳过 */ }
++      }
++    }
++  } catch { /* 无 docs */ }
++  // 活跃变更 baseline + change-patch
++  try {
++    const changesRoot = join(specBase, 'changes')
++    for (const p of readdirSync(changesRoot, { withFileTypes: true })) {
++      if (!p.isDirectory() || p.name === 'archive') continue
++      const dir = join(changesRoot, p.name)
++      try {
++        const st = readFileSync(join(dir, 'flow-state.yaml'), 'utf8')
++        const m = st.match(/^baseline_commit:\s*'?([0-9a-f]{7,40})'?\s*$/m)
++        if (m) push('flow-baseline', p.name, m[1])
++      } catch { /* 无 flow-state */ }
++      try {
++        const cp = JSON.parse(readFileSync(join(dir, 'change-patch.json'), 'utf8'))
++        push('change-patch-baseline', p.name, cp.baseline)
++        push('change-patch-head', p.name, cp.head)
++      } catch { /* 无 change-patch/不可解析 */ }
++    }
++  } catch { /* 无 changes */ }
++  // worktree meta
++  try {
++    const wtRoot = join(specBase, '.runtime', 'worktrees')
++    for (const p of readdirSync(wtRoot, { withFileTypes: true })) {
++      if (!p.isDirectory()) continue
++      try {
++        const meta = JSON.parse(readFileSync(join(wtRoot, p.name, 'meta.json'), 'utf8'))
++        for (const key of ['baselineCommit', 'actualBaseHash', 'baseHash']) {
++          if (meta[key]) push('worktree-meta', `${p.name}:${key}`, meta[key])
++        }
++      } catch { /* 单 worktree meta 失败跳过 */ }
++    }
++  } catch { /* 无 worktrees */ }
++  return anchors
++}
++
++/**
++ * 计算 effectiveBase：所有活锚点必须仍是新 HEAD 祖先。
++ * 显式 --base 早于活锚点 → 拒绝；锚点分叉 → 取最低共同后代（通常是 merge commit）。
++ * @returns {{ok:true,base:string,anchors:Array,warnings:string[],raised:boolean}|{ok:false,error:string}}
++ */
++function computeEffectiveBase({ repoRoot, head, base, anchors = [], explicitBase = false }) {
++  const warnings = []
++  const original = base
++  const live = []
++  const seen = new Set()
++  for (const a of anchors) {
++    const sha = revParseCommit(repoRoot, a.sha)
++    if (!sha) { warnings.push(`锚点不可解析（预存坏锚点，跳过）：${a.kind} ${a.id} ${String(a.sha).slice(0, 10)}`); continue }
++    if (!isAncestor(repoRoot, sha, head)) {
++      warnings.push(`锚点不是 HEAD 祖先（预存脱锚，压扁不修复）：${a.kind} ${a.id} ${sha.slice(0, 10)}`)
++      continue
++    }
++    if (seen.has(sha)) continue
++    seen.add(sha)
++    live.push({ ...a, sha })
++  }
++  const advance = (cur, target) => {
++    if (!cur) return target
++    if (isAncestor(repoRoot, cur, target)) return target
++    if (isAncestor(repoRoot, target, cur)) return cur
++    return lowestCommonDescendant(repoRoot, [cur, target], head)
++  }
++  if (explicitBase) {
++    for (const a of live) {
++      if (!isAncestor(repoRoot, a.sha, base)) {
++        return { ok: false, error: `--base ${String(base).slice(0, 10)} 早于活锚点 ${a.kind} ${a.id}（${a.sha.slice(0, 10)}）——请把 base 抬到锚点之后，或先刷新/归档对应变更` }
++      }
++    }
++  }
++  const maximal = live.filter((a) => !live.some((b) => b.sha !== a.sha && isAncestor(repoRoot, a.sha, b.sha)))
++  let next = base
++  if (maximal.length === 1) {
++    next = advance(next, maximal[0].sha)
++  } else if (maximal.length > 1) {
++    const common = lowestCommonDescendant(repoRoot, maximal.map((a) => a.sha), head)
++    if (!common) return { ok: false, error: '活锚点分叉且找不到共同后代——先跑全量 scan/归档活跃变更，或显式 --base 到所有锚点之后' }
++    next = advance(next, common)
++  }
++  if (!next || !isAncestor(repoRoot, next, head)) return { ok: false, error: 'effectiveBase 不是 HEAD 祖先（内部算法错误）' }
++  for (const a of live) {
++    if (!isAncestor(repoRoot, a.sha, next)) {
++      return { ok: false, error: `effectiveBase ${next.slice(0, 10)} 未覆盖活锚点 ${a.kind} ${a.id}（${a.sha.slice(0, 10)}）` }
++    }
++  }
++  if (next !== original) {
++    warnings.push(`effectiveBase 因活锚点抬升：${String(original).slice(0, 10)} → ${next.slice(0, 10)}（${live.filter((a) => !isAncestor(repoRoot, a.sha, original)).map((a) => `${a.kind}:${a.id}`).join('、')}）`)
++  }
++  return { ok: true, base: next, anchors: live, warnings, raised: next !== original }
++}
++
++function lowestCommonDescendant(repoRoot, shas, head) {
++  const uniq = [...new Set(shas.filter(Boolean))]
++  if (uniq.length === 0) return head
++  if (uniq.some((s) => s === head)) return head
++  const lists = []
++  for (const sha of uniq) {
++    const out = gitQuiet(repoRoot, ['rev-list', '--ancestry-path', '--reverse', `${sha}..${head}`], { timeout: GIT_TIMEOUT })
++    const arr = splitLines(out)
++    if (arr.length === 0) return head
++    lists.push(arr)
++  }
++  const sets = lists.map((l) => new Set(l))
++  const common = lists[0].find((sha) => sets.every((s) => s.has(sha)))
++  if (!common) return null
++  if (uniq.some((s) => !isAncestor(repoRoot, s, common))) return null
++  return common
++}
++
++/** 读取 `base..HEAD` 提交（拓扑正序）。 */
++function collectCommits({ repoRoot, base, head }) {
++  const out = git(repoRoot, [
++    'log', '--reverse', '--no-color', '--no-decorate', '-z',
++    '--format=%H%x1f%T%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%B',
++    `${base}..${head}`,
++  ], { timeout: GIT_TIMEOUT, trim: false })
++  return String(out).split('\x00').map((block) => block.replace(/^\n+/, '')).filter(Boolean).map((block) => {
++    const f = block.split('\x1f')
++    const message = normalizeText(f.slice(6).join('\x1f'))
++    const nl = message.indexOf('\n')
++    return {
++      sha: f[0].trim(),
++      tree: f[1].trim(),
++      parents: splitLines(f[2]).length > 0 ? f[2].trim().split(/\s+/).filter(Boolean) : [],
++      author: { name: f[3], email: f[4], date: f[5] },
++      message,
++      subject: nl === -1 ? message.trim() : message.slice(0, nl).trim(),
++      body: nl === -1 ? '' : message.slice(nl + 1),
++    }
++  })
++}
++
++function readStatus(repoRoot) {
++  const staged = splitLines(gitQuiet(repoRoot, ['diff', '--cached', '--name-only']))
++  const dirty = splitLines(gitQuiet(repoRoot, ['diff', '--name-only']))
++  const untracked = splitLines(gitQuiet(repoRoot, ['ls-files', '--others', '--exclude-standard']))
++  const porcelain = gitQuiet(repoRoot, ['status', '--porcelain'], { trim: false }) || ''
++  return { staged, dirty, untracked, porcelain }
++}
++
++async function detectWorktree(cwd) {
++  try {
++    const { detectCwdInsideWorktree } = await import('./run/shared.js')
++    return detectCwdInsideWorktree(cwd)
++  } catch { return null }
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 计划层
++// ─────────────────────────────────────────────────────────────────────────────
++
++/**
++ * 只读计划：解析仓库/目标/base/锚点/提交/分组；不写任何 ref/index/工作区/远端。
++ * @returns {{ok:true, ...}|{ok:false, exitCode:number, errors:string[], warnings:string[]}}
++ */
++export function planPush({
++  cwd = process.cwd(), specDir = null, mode = 'by-change', change = null,
++  base = null, remote = null, branch = null, remoteSha = null,
++} = {}) {
++  const fail = (msg, exitCode = 1) => ({ ok: false, exitCode, errors: [msg], warnings: [] })
++  const ctx = resolveRepoContext({ cwd })
++  if (!ctx.ok) return fail(ctx.error)
++  if (ctx.detached) return fail('detached HEAD 无分支——先 git switch <分支>', 2)
++  if (branch && branch !== ctx.branch) return fail(`--branch ${branch} 与当前 checkout 分支 ${ctx.branch} 不一致（v1 只允许当前分支）`, 2)
++  if (ctx.shallow) return fail('shallow clone 的祖先/patch-id 不可靠——先 git fetch --unshallow', 2)
++  if (ctx.inProgress.length > 0) return fail(`仓库有进行中的 git 操作（${ctx.inProgress.join('、')}）——先完成或中止后再 push`, 2)
++  const target = resolvePushTarget({ repoRoot: ctx.repoRoot, branch: ctx.branch, remote })
++  if (!target.ok) return fail(target.error, 2)
++  const specBase = specDir ? resolve(specDir) : join(ctx.repoRoot, '.sillyspec')
++  const warnings = []
++  if (change && !/^[A-Za-z0-9._-]+$/.test(change)) return fail(`--change 非法：${change}`, 2)
++
++  // 远端 tip：优先调用方刚 fetch 的结果；否则 ls-remote（只读，不改 remote-tracking ref）
++  const tip = remoteSha || lsRemoteTip(ctx.repoRoot, target.remote, target.remoteBranch)
++  let baseSha = null
++  if (base) {
++    baseSha = revParseCommit(ctx.repoRoot, base)
++    if (!baseSha) return fail(`--base 不可解析：${base}`, 2)
++  } else if (tip) {
++    baseSha = revParseCommit(ctx.repoRoot, tip)
++    if (!baseSha) return fail(`远端分支 ${target.remote}/${target.remoteBranch} 的 tip ${tip.slice(0, 10)} 本地不可达——先 git fetch ${target.remote} ${target.remoteBranch}，或显式 --base`, 1)
++  } else {
++    return fail(`远端分支 ${target.remote}/${target.remoteBranch} 不存在——新分支请显式 --base <ref>`, 2)
++  }
++  if (!isAncestor(ctx.repoRoot, baseSha, ctx.head)) {
++    return fail(`base ${baseSha.slice(0, 10)} 不是 HEAD 祖先（远端领先或已分叉）——先 git fetch/rebase 后再 push；本命令不 force`, 1)
++  }
++  const knownChanges = collectKnownChanges(specBase)
++  const anchorCandidates = collectAnchorCandidates(specBase)
++  const eff = computeEffectiveBase({ repoRoot: ctx.repoRoot, head: ctx.head, base: baseSha, anchors: anchorCandidates, explicitBase: !!base })
++  if (!eff.ok) return fail(eff.error, 1)
++  warnings.push(...eff.warnings)
++  const effectiveBase = eff.base
++  if (effectiveBase === ctx.head) {
++    return { ok: true, ctx, target, specBase, mode, change, base: baseSha, effectiveBase, remoteSha: tip, baseRaised: eff.raised, anchors: eff.anchors, commits: [], groups: [], needsRewrite: false, warnings: [...warnings, 'base 已到 HEAD，无未推送提交'] }
++  }
++  // 区间含已推送提交 → 拒绝（仅压扁模式需要；--mode none 只推送，天然允许）
++  if (mode !== 'none') {
++    const allRange = splitLines(gitQuiet(ctx.repoRoot, ['rev-list', `${effectiveBase}..${ctx.head}`]))
++    const unpushed = new Set(splitLines(gitQuiet(ctx.repoRoot, ['rev-list', `${effectiveBase}..${ctx.head}`, '--not', '--remotes'])))
++    const pushedInRange = allRange.filter((sha) => !unpushed.has(sha))
++    if (pushedInRange.length > 0) {
++      return fail(`压扁区间含 ${pushedInRange.length} 个已被远端 ref 可达的提交——拒绝压扁（本命令不 force-push）`, 1)
++    }
++    const merges = splitLines(gitQuiet(ctx.repoRoot, ['rev-list', '--merges', `${effectiveBase}..${ctx.head}`]))
++    if (merges.length > 0) {
++      return fail(`压扁区间含 ${merges.length} 个 merge commit——默认拒绝（展平 merge 拓扑会丢语义）；先人工整理为线性历史或改用 --mode none`, 1)
++    }
++  }
++  if (mode === 'one' && eff.anchors.some((a) => a.kind === 'flow-baseline' && a.id !== change)) {
++    return fail('--mode one 与活跃变更相交——单一大提交会让文件归属不可按变更切分；请等活跃变更 flow done，或用默认 by-change', 1)
++  }
++  const commits = collectCommits({ repoRoot: ctx.repoRoot, base: effectiveBase, head: ctx.head })
++  if (commits.length === 0) {
++    return fail('未收集到待处理提交（base..HEAD 为空）——检查 --base 或远端状态', 1)
++  }
++  const cls = classifyCommits({ commits, mode, changeName: change, knownChanges })
++  if (!cls.ok) return fail(cls.error, 1)
++  warnings.push(...cls.warnings)
++  if (mode === 'by-change' && knownChanges.length === 0) {
++    warnings.push('未发现 .sillyspec 变更元数据（changes/ 目录为空）——by-change 无归属可分组；需要合成一笔请用 --mode one --change <名>')
++  }
++  return {
++    ok: true, ctx, target, specBase, mode, change, knownChanges,
++    base: baseSha, effectiveBase, remoteSha: tip, baseRaised: eff.raised,
++    anchors: eff.anchors, commits, groups: cls.groups, needsRewrite: cls.needsRewrite,
++    warnings,
++  }
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 执行层
++// ─────────────────────────────────────────────────────────────────────────────
++
++function timestampToken() {
++  return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
++}
++
++function backupRefs(branch, ts) {
++  const b = String(branch || 'detached').replace(/\s+/g, '-')
++  return {
++    pre: `refs/sillyspec/pre-squash/${b}/${ts}`,
++    post: `refs/sillyspec/post-squash/${b}/${ts}`,
++  }
++}
++
++function commitWithMessage({ repoRoot, tree, parent, message, author }) {
++  const env = {
++    ...process.env,
++    GIT_AUTHOR_NAME: author?.name || 'sillyspec',
++    GIT_AUTHOR_EMAIL: author?.email || 'sillyspec@push.local',
++    GIT_COMMITTER_NAME: author?.name || 'sillyspec',
++    GIT_COMMITTER_EMAIL: author?.email || 'sillyspec@push.local',
++  }
++  if (author?.date) env.GIT_AUTHOR_DATE = author.date
++  return git(repoRoot, ['commit-tree', tree, '-p', parent, '-F', '-'], {
++    input: message, timeout: GIT_TIMEOUT, env,
++  })
++}
++
++function rewriteChain({ repoRoot, base, groups, oldHead }) {
++  let parent = base
++  let rewritten = false
++  const mapping = []
++  for (const g of groups) {
++    const last = g.commits[g.commits.length - 1]
++    const originalParent = g.commits[0].parents[0] || null
++    if (!rewritten && g.action === 'keep' && g.commits.length === 1 && parent === originalParent) {
++      // 前缀单提交且父链未变：复用原提交，避免无谓改写更多 hash
++      mapping.push({ from: g.commits[0].sha, to: g.commits[0].sha, action: 'keep' })
++      parent = g.commits[0].sha
++      continue
++    }
++    rewritten = true
++    const newSha = commitWithMessage({
++      repoRoot, tree: g.tree, parent, message: g.message, author: last.author,
++    })
++    if (!newSha) throw new Error('git commit-tree 未返回 commit hash')
++    const newTree = revParseTree(repoRoot, newSha)
++    if (newTree !== g.tree) throw new Error(`commit-tree 树不一致：期望 ${g.tree.slice(0, 10)}，实际 ${String(newTree).slice(0, 10)}`)
++    mapping.push({ from: g.commits[0].sha, to: newSha, action: g.action })
++    parent = newSha
++  }
++  if (parent !== oldHead && revParseTree(repoRoot, parent) !== revParseTree(repoRoot, oldHead)) {
++    throw new Error('压扁后 HEAD 树与旧 HEAD 不一致——拒绝更新分支')
++  }
++  return { newHead: parent, mapping }
++}
++
++function pushBranch({ repoRoot, remote, branch, remoteBranch }) {
++  try {
++    const out = git(repoRoot, ['push', remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`], { timeout: PUSH_TIMEOUT, trim: false })
++    return { ok: true, output: String(out || '') }
++  } catch (e) {
++    return { ok: false, error: String(e && e.message ? e.message : e) }
++  }
++}
++
++/**
++ * 执行 push（含锁/备份/CAS/推送）。dry-run 只调 planPush，不取锁不写 ref。
++ * @returns {Promise<{ok:boolean,exitCode:number,plan?:object,oldHead?:string,newHead?:string,pushed?:boolean,backupRefs?:object,errors:string[],warnings:string[],humanLines:string[],envelope:object}>}
++ */
++export async function runPush({
++  cwd = process.cwd(), specDir = null, mode = 'by-change', change = null,
++  base = null, remote = null, branch = null, dryRun = false, noPush = false,
++  undo = false, json = false, log = () => {}, warn = () => {},
++} = {}) {
++  const warnings = []
++  const errors = []
++  if (undo) return undoPush({ cwd, remote, branch, json })
++
++  const ctx = resolveRepoContext({ cwd })
++  if (!ctx.ok) return { ok: false, exitCode: 1, errors: [ctx.error], warnings, humanLines: [], envelope: { command: 'push', ok: false, errors: [ctx.error] } }
++  const wt = await detectWorktree(cwd)
++  if (wt && !dryRun) {
++    const msg = `cwd 在 SillySpec worktree 内（${wt.changeName}）——默认拒绝压扁（scanOrphanFace 会把旧提交误判为冻结面外）；先 sillyspec worktree apply 回主仓，再从主仓 push`
++    return { ok: false, exitCode: 2, errors: [msg], warnings, humanLines: [], envelope: { command: 'push', ok: false, errors: [msg] } }
++  }
++  const status = readStatus(ctx.repoRoot)
++  if (status.staged.length > 0) {
++    const msg = `index 有 ${status.staged.length} 个已暂存文件——压扁不改变暂存区，但为避免误解先提交或 restore --staged；未暂存/未跟踪文件不阻止执行`
++    return { ok: false, exitCode: 2, errors: [msg], warnings, humanLines: [], envelope: { command: 'push', ok: false, errors: [msg] } }
++  }
++  if (status.dirty.length > 0) warnings.push(`工作区有 ${status.dirty.length} 个未暂存修改——不会进入本次提交/推送`)
++  if (status.untracked.length > 0) warnings.push(`工作区有 ${status.untracked.length} 个未跟踪文件——不会进入本次提交/推送`)
++
++  // 目标远端解析一次，fetch 用真实 push remote（不能硬编码 origin）
++  const targetForFetch = resolvePushTarget({ repoRoot: ctx.repoRoot, branch: ctx.branch, remote })
++  const exec = async () => {
++    // 执行前 fetch 目标分支（dry-run 不走这里）；新分支 fetch 失败交给 planPush 报“缺 --base”
++    if (!dryRun && targetForFetch.ok) {
++      try {
++        git(ctx.repoRoot, ['fetch', '--no-tags', targetForFetch.remote, targetForFetch.remoteBranch], { timeout: 120000 })
++      } catch { /* 远端分支可能不存在/离线；planPush 会用 ls-remote 给出可执行错误 */ }
++    }
++    const plan = planPush({ cwd, specDir, mode, change, base, remote, branch })
++    if (!plan.ok) return { ok: false, exitCode: plan.exitCode || 1, plan, errors: plan.errors, warnings: [...warnings, ...(plan.warnings || [])], humanLines: [], envelope: { command: 'push', ok: false, mode, branch: ctx.branch, errors: plan.errors, warnings: [...warnings, ...(plan.warnings || [])] } }
++    const humanLines = renderPushPlan({ plan, dryRun })
++    const envelope = {
++      schema_version: 1, command: 'push', ok: true, branch: plan.ctx.branch,
++      remote: plan.target.remote, remote_branch: plan.target.remoteBranch,
++      base: plan.effectiveBase, old_head: plan.ctx.head, new_head: plan.ctx.head,
++      mode: plan.mode, dry_run: dryRun, pushed: false,
++      groups: plan.groups.map((g) => ({ owner: g.owner, action: g.action, count: g.commits.length, from: g.commits[0].sha, to: g.commits[g.commits.length - 1].sha, subject: g.subject })),
++      backup_refs: [], errors: [], warnings: [...warnings, ...plan.warnings],
++    }
++    if (dryRun) return { ok: true, exitCode: 0, plan, errors: [], warnings: envelope.warnings, humanLines, envelope }
++
++    let newHead = plan.ctx.head
++    let refs = null
++    if (plan.needsRewrite) {
++      const ts = timestampToken()
++      refs = backupRefs(plan.ctx.branch, ts)
++      try {
++        git(ctx.repoRoot, ['update-ref', refs.pre, plan.ctx.head], { timeout: GIT_TIMEOUT })
++        const rewritten = rewriteChain({ repoRoot: ctx.repoRoot, base: plan.effectiveBase, groups: plan.groups, oldHead: plan.ctx.head })
++        newHead = rewritten.newHead
++        if (newHead === plan.ctx.head) throw new Error('压扁未产生新提交（内部状态异常）')
++        const oldTree = revParseTree(ctx.repoRoot, plan.ctx.head)
++        const newTree = revParseTree(ctx.repoRoot, newHead)
++        if (oldTree !== newTree) throw new Error('压扁后树与旧 HEAD 不一致——拒绝更新分支')
++        git(ctx.repoRoot, ['update-ref', refs.post, newHead], { timeout: GIT_TIMEOUT })
++        try {
++          git(ctx.repoRoot, ['update-ref', '-m', `sillyspec push: squash ${plan.commits.length} commits`, `refs/heads/${plan.ctx.branch}`, newHead, plan.ctx.head], { timeout: GIT_TIMEOUT })
++        } catch (e) {
++          try { gitQuiet(ctx.repoRoot, ['update-ref', '-d', refs.post]) } catch { /* 清理失败不掩盖主错误 */ }
++          throw new Error(`分支已被并发推进，CAS 更新失败（未改写远端）：${String(e && e.message ? e.message : e).split('\n')[0]}——重跑 --dry-run 重新计划`)
++        }
++      } catch (e) {
++        const msg = String(e && e.message ? e.message : e)
++        return { ok: false, exitCode: 1, plan, oldHead: plan.ctx.head, newHead, backupRefs: refs, errors: [msg], warnings: envelope.warnings, humanLines, envelope: { ...envelope, ok: false, new_head: newHead, errors: [msg], backup_refs: refs ? [refs.pre, refs.post] : [] } }
++      }
++      envelope.old_head = plan.ctx.head
++      envelope.new_head = newHead
++      envelope.backup_refs = [refs.pre, refs.post]
++      humanLines.push(`✅ 已压扁：${plan.ctx.head.slice(0, 10)} → ${newHead.slice(0, 10)}（备份 ref: ${refs.pre} / ${refs.post}）`)
++    }
++    if (!noPush) {
++      // 推送前再探一次远端：计划后远端被推进 → 拒绝，避免基于旧 base 的 non-FF
++      const tipNow = lsRemoteTip(ctx.repoRoot, plan.target.remote, plan.target.remoteBranch)
++      if (tipNow && plan.remoteSha && tipNow !== plan.remoteSha) {
++        const msg = `远端分支在计划后被更新（${plan.remoteSha.slice(0, 10)} → ${tipNow.slice(0, 10)}）——本地压扁已保留，请重跑 --dry-run 重新计划或用 --undo 恢复`
++        return { ok: false, exitCode: 1, plan, oldHead: plan.ctx.head, newHead, pushed: false, backupRefs: refs, errors: [msg], warnings: envelope.warnings, humanLines, envelope: { ...envelope, ok: false, errors: [msg] } }
++      }
++      const pushed = pushBranch({ repoRoot: ctx.repoRoot, remote: plan.target.remote, branch: plan.ctx.branch, remoteBranch: plan.target.remoteBranch })
++      if (!pushed.ok) {
++        const msg = `git push 失败（本地压扁已保留）：${pushed.error}`
++        return { ok: false, exitCode: 1, plan, oldHead: plan.ctx.head, newHead, pushed: false, backupRefs: refs, errors: [msg], warnings: envelope.warnings, humanLines, envelope: { ...envelope, ok: false, errors: [msg] } }
++      }
++      envelope.pushed = true
++      humanLines.push(`🚀 已推送 ${plan.target.remote}/${plan.target.remoteBranch}（快进，无 force）`)
++      if (pushed.output) humanLines.push(...String(pushed.output).trim().split('\n').filter(Boolean))
++    } else {
++      humanLines.push('ℹ️ --no-push：仅压扁，未推送')
++    }
++    return { ok: true, exitCode: 0, plan, oldHead: plan.ctx.head, newHead, pushed: envelope.pushed, backupRefs: refs, errors: [], warnings: envelope.warnings, humanLines, envelope }
++  }
++
++  if (dryRun) return exec()
++  const { withFileLock } = await import('./quicklog.js')
++  const lockPath = join(ctx.commonDir, 'sillyspec-push.lock')
++  try {
++    return await withFileLock(lockPath, exec, {
++      staleMs: 10 * 60 * 1000,
++      timeoutMs: 120000,
++      retryMs: 200,
++      content: JSON.stringify({ pid: process.pid, session: process.env.SILLYSPEC_SESSION_ID || 'anon', branch: ctx.branch, purpose: 'push', startedAt: new Date().toISOString() }),
++    })
++  } catch (e) {
++    const msg = `push 锁获取/执行失败：${String(e && e.message ? e.message : e).split('\n')[0]}`
++    return { ok: false, exitCode: 1, errors: [msg], warnings, humanLines: [], envelope: { command: 'push', ok: false, errors: [msg], warnings } }
++  }
++}
++
++/**
++ * 恢复最近一次压扁前的本地分支。只在当前 HEAD 精确等于 post-squash ref 且远端尚未
++ * 指向压扁结果时允许；不做 force，不推送。
++ */
++async function undoPush({ cwd = process.cwd(), remote = null, branch = null, json = false } = {}) {
++  const fail = (msg, exitCode = 1) => ({ ok: false, exitCode, errors: [msg], warnings: [], humanLines: [], envelope: { command: 'push', ok: false, undo: true, errors: [msg] } })
++  const ctx = resolveRepoContext({ cwd })
++  if (!ctx.ok) return fail(ctx.error)
++  if (ctx.detached) return fail('detached HEAD 无分支——不能 undo', 2)
++  if (branch && branch !== ctx.branch) return fail(`--branch ${branch} 与当前分支 ${ctx.branch} 不一致`, 2)
++  const target = resolvePushTarget({ repoRoot: ctx.repoRoot, branch: ctx.branch, remote })
++  if (!target.ok) return fail(target.error, 2)
++  const prefix = `refs/sillyspec/post-squash/${ctx.branch}/`
++  const refs = splitLines(gitQuiet(ctx.repoRoot, ['for-each-ref', '--sort=-creatordate', '--format=%(refname)', prefix]) || '')
++  if (refs.length === 0) return fail('没有可恢复的 post-squash 备份 ref——未在本分支执行过 sillyspec push --no-push/压扁', 2)
++  const postRef = refs[0]
++  const ts = postRef.slice(prefix.length)
++  const preRef = `refs/sillyspec/pre-squash/${ctx.branch}/${ts}`
++  const postSha = revParseCommit(ctx.repoRoot, postRef)
++  const preSha = revParseCommit(ctx.repoRoot, preRef)
++  if (!postSha || !preSha) return fail(`备份 ref 不可解析（${postRef} / ${preRef}）`)
++  if (ctx.head !== postSha) return fail(`当前 HEAD ${ctx.head.slice(0, 10)} 不是最近一次压扁结果 ${postSha.slice(0, 10)}——已有新提交，拒绝 undo（避免抹掉后续工作）`)
++  const tip = lsRemoteTip(ctx.repoRoot, target.remote, target.remoteBranch)
++  if (tip && (tip === postSha || isAncestor(ctx.repoRoot, postSha, tip))) {
++    return fail(`远端 ${target.remote}/${target.remoteBranch} 已指向压扁结果——拒绝 undo（会让本地落后远端并制造 non-FF）；如确需改写远端历史请人工处理`)
++  }
++  if (tip && tip !== preSha && !isAncestor(ctx.repoRoot, tip, preSha)) {
++    return fail(`远端已变化（${tip.slice(0, 10)}），既不等于压扁前 ${preSha.slice(0, 10)} 也不是其祖先——拒绝 undo，先人工核对`)
++  }
++  try {
++    git(ctx.repoRoot, ['update-ref', '-m', 'sillyspec push: undo squash', `refs/heads/${ctx.branch}`, preSha, postSha], { timeout: GIT_TIMEOUT })
++  } catch (e) {
++    return fail(`undo CAS 失败：${String(e && e.message ? e.message : e).split('\n')[0]}`)
++  }
++  const humanLines = [`↩️ 已恢复 ${ctx.branch}：${postSha.slice(0, 10)} → ${preSha.slice(0, 10)}（备份 ref 保留）`]
++  return {
++    ok: true, exitCode: 0, oldHead: postSha, newHead: preSha, errors: [], warnings: [], humanLines,
++    envelope: { schema_version: 1, command: 'push', ok: true, undo: true, branch: ctx.branch, remote: target.remote, remote_branch: target.remoteBranch, old_head: postSha, new_head: preSha, errors: [], warnings: [] },
++  }
++}
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 01b20209..cfb33757 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -390,7 +390,7 @@ export function detectCwdInsideWorktree(dir) {
+ export const UNINIT_CWD_GATE_EXEMPT = new Set([
+   'init', 'scan', 'doctor', 'status', 'progress', 'next', 'workspace',
+   'setup', 'knowledge', 'local', 'config', 'mcp', 'dashboard', 'platform',
+-  'wt-commit', 'agent-log',
++  'wt-commit', 'push', 'agent-log',
+ ])
+ 
+ /**
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index c5579e95..d15b0274 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -42,3 +42,4 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 11. **禁止目录级 git add / git add -A**（多会话共享仓）：目录级暂存会夹带并行会话的进行中文件甚至误删已提交文件。提交一律用显式 pathspec，且 **add 与 commit 用同一份清单**：`git commit -m "..." -- 文件1 文件2`——带 pathspec 的 commit 只提交这些路径，他侧已 staged 的条目既不被带走、也原样留给对方；裸 `git commit` 提交的是整个共享暂存区，他会话 add 过的文件会被一并扫入。核对暂存面固定用 `git diff --cached --name-only` 全量读取，禁用过滤式核对（过滤正是致盲原因）；核对与提交分开两条命令执行，不得链在同一命令里（链行没有拦截点）。安装了 commit-guard hook 的仓会对超声明面的 staged 文件警告（只警告不阻断）。
+ 12. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+ 13. **边干边勾（任务进度唯一源=变更的 tasks.md）**：完成一个任务单元（实现到位 + 相关测试跑绿）当场勾对应格——`sillyspec task tick --change <名> --task task-NN`（即时回显进度与下一任务）或直接 Edit 翻格 `- [ ]`→`- [x]`，勿攒到收口一把勾。harness 自带的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度投影、收口哨兵、断点恢复只读 tasks.md。
++14. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged 文件/Dirty 文件不替人提交或清理。
+diff --git a/test/command-cards.test.mjs b/test/command-cards.test.mjs
+index d66609f2..754567b4 100644
+--- a/test/command-cards.test.mjs
++++ b/test/command-cards.test.mjs
+@@ -13,14 +13,14 @@ const anchorRe = /<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->$/
+ 
+ // ── 1. 资产齐全（发布白屏本地防线）──
+ const assets = readCardAssets()
+-t(assets.size === 7, `包内卡资产 7 张（实得 ${assets.size}）`)
++t(assets.size === 8, `包内卡资产 8 张（实得 ${assets.size}）`)
+ for (const n of COMMAND_CARD_NAMES) t(assets.has(n), `资产在列：${n}.md`)
+ 
+ // ── 2. 四段契约内容锚（FR-04）──
+ for (const [name, body] of assets) {
+   const stage = name.replace('run-', '')
+   t(body.includes('# 何时用') && body.includes('# 生命周期速查') && body.includes('# 防坑清单') && body.includes('# 边界声明'), `${name} 四段契约齐`)
+-  t(name === 'status' || name === 'flow' ? body.includes(`sillyspec ${stage}`) : body.includes(`sillyspec run ${stage}`), `${name} 生命周期含命令`)
++  t(name === 'status' || name === 'flow' || name === 'push' ? body.includes(`sillyspec ${stage}`) : body.includes(`sillyspec run ${stage}`), `${name} 生命周期含命令`)
+ }
+ // flow 卡为默认快道入口：含两步协议与清晰度门格式锚
+ const flowCard = assets.get('flow')
+@@ -29,7 +29,7 @@ t(flowCard.includes('flow start') && flowCard.includes('成功标准：') && flo
+ // ── 3. 注入产生双落点 7 卡（FR-01/03）──
+ const proj = mk('cc-')
+ const r1 = await injectCommandCards(proj, { tools: ['zcode', 'claude'], version: '9.9.9' })
+-t(r1.written.length === 14 && r1.warnings.length === 0, `首轮全写（7×2，实得 ${r1.written.length}；警告 ${r1.warnings.length}）`)
++t(r1.written.length === 16 && r1.warnings.length === 0, `首轮全写（8×2，实得 ${r1.written.length}；警告 ${r1.warnings.length}）`)
+ t(existsSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-plan.md')), 'zcode 落点在')
+ t(existsSync(join(proj, COMMAND_CARD_TARGETS.claude, 'status.md')), 'claude 落点在')
+ const landed = readFileSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-plan.md'), 'utf8')
+@@ -41,14 +41,14 @@ const before = readFileSync(f1).toString()
+ const stat = statSync(f1)
+ await new Promise((r) => setTimeout(r, 1100))
+ const r2 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.9' })
+-t(r2.written.length === 0 && r2.updated.length === 0 && r2.skipped.length === 7, `同参重跑 no-op（skipped=${r2.skipped.length}）`)
++t(r2.written.length === 0 && r2.updated.length === 0 && r2.skipped.length === 8, `同参重跑 no-op（skipped=${r2.skipped.length}）`)
+ t(r2.warnings.length === 0, `no-op 零警告（完好文件勿误判手改——实得 ${JSON.stringify(r2.warnings)}）`)
+ t(statSync(f1).mtimeMs === stat.mtimeMs, 'mtime 不动')
+ t(readFileSync(f1).toString() === before, '内容零变化')
+ 
+ // ── 5. 内容更新覆盖（分支 2b：完好但内容旧——纯版本号变内容同应 no-op，先钉语义）──
+ const r3a = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
+-t(r3a.updated.length === 0 && r3a.skipped.length === 7, '纯版本变内容同 → no-op（内容 sha 才是判据）')
++t(r3a.updated.length === 0 && r3a.skipped.length === 8, '纯版本变内容同 → no-op（内容 sha 才是判据）')
+ const fFlow = join(proj, COMMAND_CARD_TARGETS.zcode, 'flow.md')
+ const curLanded = readFileSync(fFlow, 'utf8')
+ const curBody = curLanded.slice(0, curLanded.match(/<!-- sillyspec-card/).index)
+@@ -58,7 +58,7 @@ const oldSha = createHash('sha256').update(oldBody, 'utf8').digest('hex')
+ writeFileSync(fFlow, `${oldBody}<!-- sillyspec-card: v9.9.9 sha256=${oldSha} -->
+ `, 'utf8')
+ const r3 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
+-t(r3.updated.length === 1 && r3.updated.includes('flow') && r3.skipped.length === 6, `内容更新覆盖（仅旧内容那张：updated=${JSON.stringify(r3.updated)} skipped=${r3.skipped.length}）`)
++t(r3.updated.length === 1 && r3.updated.includes('flow') && r3.skipped.length === 7, `内容更新覆盖（仅旧内容那张：updated=${JSON.stringify(r3.updated)} skipped=${r3.skipped.length}）`)
+ t(readFileSync(fFlow, 'utf8').includes('v9.9.10') && !readFileSync(fFlow, 'utf8').includes('旧版内容'), '覆盖后为新内容+新锚')
+ 
+ // ── 6. 手改正文 → 跳过；force → 覆盖（分支 3）──
+diff --git a/test/flow-guidance.test.mjs b/test/flow-guidance.test.mjs
+new file mode 100644
+index 00000000..a48fe791
+--- /dev/null
++++ b/test/flow-guidance.test.mjs
+@@ -0,0 +1,27 @@
++/**
++ * flow 收口指引不再教 reset --soft（2026-10-23-push-squash task-06 / FR-06）
++ *
++ * reset --soft 会把共享暂存区内容卷进压扁提交；官方入口统一为 sillyspec push。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++
++test('flow done 指引：不再出现 reset --soft 压扁命令，改为 sillyspec push', () => {
++  const flow = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.equal(flow.includes('git reset --soft ${st.baseline_commit'), false, '旧的 reset --soft 动态命令必须退役')
++  assert.match(flow, /sillyspec push 压扁本地未推送提交/)
++  assert.match(flow, /git 中间提交归档后用 sillyspec push 压扁并推送/)
++  assert.match(flow, /Git 中间提交归档后用 sillyspec push 压扁并推送/)
++})
++
++test('AGENTS 模板注入推送纪律', () => {
++  const tpl = readFileSync(join(ROOT, '..', 'templates', 'agents-instruction.md'), 'utf8')
++  assert.match(tpl, /推送前压扁/)
++  assert.match(tpl, /sillyspec push/)
++  assert.match(tpl, /git reset --soft/)
++})
+diff --git a/test/git-helper-input.test.mjs b/test/git-helper-input.test.mjs
+new file mode 100644
+index 00000000..8f5df68f
+--- /dev/null
++++ b/test/git-helper-input.test.mjs
+@@ -0,0 +1,65 @@
++/**
++ * git-helper stdin 扩展回归（2026-10-23-push-squash task-01）
++ *
++ * 背景：`git commit-tree -F -` 需要把多行提交消息写入子进程 stdin。Node 的
++ * `execFileSync` 在 `stdio[0]='ignore'` 时会静默丢弃 `input`——只加 input 字段不改
++ * stdio 会让 commit-tree 收到空消息。本测试同时钉住 `git()` 与 `safeGit()` 两条入口。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { dirname } from 'node:path'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { git, safeGit } = await import(pathToFileURL(join(ROOT, '..', 'src', 'git-helper.js')).href)
++
++function run(cwd, args) {
++  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
++}
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'push-git-input-'))
++  run(cwd, ['init', '-q'])
++  run(cwd, ['config', 'user.email', 't@t'])
++  run(cwd, ['config', 'user.name', 't'])
++  writeFileSync(join(cwd, 'a.txt'), 'a\n')
++  run(cwd, ['add', 'a.txt'])
++  run(cwd, ['commit', '-qm', 'base (2026-10-23-push-squash)'])
++  return cwd
++}
++
++test('git() 的 input 真正写入 stdin：commit-tree 收到多行消息', () => {
++  const cwd = makeRepo()
++  try {
++    const head = run(cwd, ['rev-parse', 'HEAD'])
++    const tree = run(cwd, ['rev-parse', 'HEAD^{tree}'])
++    const message = 'test: stdin message (2026-10-23-push-squash)\n\n第二行\ntask-01 task-02/03\n'
++    const sha = git(cwd, ['commit-tree', tree, '-p', head, '-F', '-'], { input: message, timeout: 30000 })
++    assert.match(sha, /^[0-9a-f]{40,64}$/)
++    const body = run(cwd, ['show', '-s', '--format=%B', sha])
++    assert.match(body, /test: stdin message/)
++    assert.match(body, /task-01 task-02\/03/)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
++  }
++})
++
++test('safeGit() 的 input 同样生效；不传 input 时行为不变', () => {
++  const cwd = makeRepo()
++  try {
++    const head = run(cwd, ['rev-parse', 'HEAD'])
++    const tree = run(cwd, ['rev-parse', 'HEAD^{tree}'])
++    const r = safeGit(cwd, ['commit-tree', tree, '-p', head, '-F', '-'], { input: 'safe: by stdin\n', timeout: 30000 })
++    assert.equal(r.error, null)
++    assert.match(r.value, /^[0-9a-f]{40,64}$/)
++    const plain = safeGit(cwd, ['rev-parse', 'HEAD'])
++    assert.equal(plain.error, null)
++    assert.equal(plain.value, head)
++  } finally {
++    rmSync(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
++  }
++})
+diff --git a/test/push-cli.test.mjs b/test/push-cli.test.mjs
+new file mode 100644
+index 00000000..2f8c1b50
+--- /dev/null
++++ b/test/push-cli.test.mjs
+@@ -0,0 +1,233 @@
++/**
++ * sillyspec push 执行层回归（2026-10-23-push-squash task-03）
++ *
++ * 真实临时 git 仓 + bare remote，覆盖：
++ *  ① --dry-run 零写盘；② by-change 压扁 + 树/工作区不变；③ 快进 push；
++ *  ④ 备份 ref 与 --undo（推送前可恢复、推送后拒绝）；⑤ 守卫矩阵（base 分叉/暂存区/worktree）；
++ *  ⑥ 活锚点抬升（scan source_commit 落区间内）；⑦ --mode none 只推送。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const BIN = join(ROOT, '..', 'bin', 'sillyspec.js')
++const { planPush, runPush } = await import(pathToFileURL(join(ROOT, '..', 'src', 'push.js')).href)
++const APP = '2026-10-23-app'
++const OTHER = '2026-10-23-other'
++
++function git(dir, args, opts = {}) {
++  return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
++    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts,
++  }).trim()
++}
++
++function gitQuiet(dir, args) {
++  try { return git(dir, args) } catch { return null }
++}
++
++function cleanup(dir) {
++  try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } catch { /* Windows 句柄占用 */ }
++}
++
++function makeRepo({ change = APP } = {}) {
++  const root = mkdtempSync(join(tmpdir(), 'push-cli-'))
++  const remote = join(root, 'remote.git')
++  const work = join(root, 'work')
++  mkdirSync(remote)
++  git(remote, ['init', '--bare', '-q'])
++  mkdirSync(work)
++  git(work, ['init', '-q'])
++  git(work, ['config', 'user.email', 't@t'])
++  git(work, ['config', 'user.name', 't'])
++  writeFileSync(join(work, 'base.txt'), 'base\n')
++  git(work, ['add', 'base.txt'])
++  git(work, ['commit', '-qm', 'chore: base'])
++  const branch = git(work, ['symbolic-ref', '--short', 'HEAD'])
++  git(work, ['remote', 'add', 'origin', remote])
++  git(work, ['push', '-q', '-u', 'origin', branch])
++  const base = git(work, ['rev-parse', 'HEAD'])
++  // 变更元数据（untracked；只用于 knownChanges / active baseline 锚点）
++  const changeDir = join(work, '.sillyspec', 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
++  return { root, remote, work, branch, base }
++}
++
++function commitFile(work, file, content, message) {
++  writeFileSync(join(work, file), content)
++  git(work, ['add', file])
++  git(work, ['commit', '-qm', message])
++  return git(work, ['rev-parse', 'HEAD'])
++}
++
++function addChange(work, name, base) {
++  const dir = join(work, '.sillyspec', 'changes', name)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${base}\n`)
++}
++
++test('① --dry-run 零写盘：HEAD/index/工作区/refs 全不变', async () => {
++  const { work, branch } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
++    const headBefore = git(work, ['rev-parse', 'HEAD'])
++    const statusBefore = git(work, ['status', '--porcelain'])
++    const refsBefore = gitQuiet(work, ['for-each-ref', '--format=%(refname)', 'refs/sillyspec'])
++    const r = await runPush({ cwd: work, dryRun: true })
++    assert.equal(r.ok, true)
++    assert.equal(r.plan.needsRewrite, true)
++    assert.equal(r.plan.groups.length, 1)
++    assert.equal(git(work, ['rev-parse', 'HEAD']), headBefore)
++    assert.equal(git(work, ['status', '--porcelain']), statusBefore)
++    assert.equal(gitQuiet(work, ['for-each-ref', '--format=%(refname)', 'refs/sillyspec']) || '', refsBefore || '')
++    assert.equal(git(work, ['rev-parse', branch]), headBefore)
++  } finally { cleanup(join(work, '..')) }
++})
++
++test('② by-change 压扁：树/工作区不变，变更名与 task token 保留，备份 ref 在场', async () => {
++  const { work, base } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP}) task-02/03`)
++    commitFile(work, 'b1.txt', 'b1\n', `feat: b1 (${OTHER})`)
++    addChange(work, OTHER, base)
++    writeFileSync(join(work, 'dirty.txt'), 'dirty\n')
++    const oldHead = git(work, ['rev-parse', 'HEAD'])
++    const oldTree = git(work, ['rev-parse', 'HEAD^{tree}'])
++    const statusBefore = git(work, ['status', '--porcelain'])
++    const r = await runPush({ cwd: work, noPush: true })
++    assert.equal(r.ok, true, JSON.stringify(r.errors))
++    assert.equal(r.plan.groups.length, 2, 'A 段 + B 段')
++    const subjects = git(work, ['log', '--reverse', '--format=%s', `${base}..HEAD`]).split('\n').filter(Boolean)
++    assert.equal(subjects.length, 2, subjects.join(' | '))
++    assert.match(subjects[0], new RegExp(`\\(${APP}\\)`))
++    assert.match(subjects[0], /feat: a1/)
++    assert.match(subjects[1], new RegExp(`\\(${OTHER}\\)`))
++    assert.equal(git(work, ['rev-parse', 'HEAD^{tree}']), oldTree, '新 tip 树必须等于旧 HEAD 树')
++    assert.notEqual(git(work, ['rev-parse', 'HEAD']), oldHead)
++    const body = git(work, ['show', '-s', '--format=%B', 'HEAD^'])
++    assert.match(body, /task-02\/03/)
++    assert.equal(git(work, ['status', '--porcelain']), statusBefore)
++    const refs = git(work, ['for-each-ref', '--format=%(refname)', 'refs/sillyspec/pre-squash/', 'refs/sillyspec/post-squash/'])
++    assert.match(refs, /refs\/sillyspec\/pre-squash\//)
++    assert.match(refs, /refs\/sillyspec\/post-squash\//)
++  } finally { cleanup(join(work, '..')) }
++})
++
++test('③ 快进 push + --undo：推送前可恢复，推送后拒绝', async () => {
++  const { work, remote, base, branch } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
++    const oldHead = git(work, ['rev-parse', 'HEAD'])
++    const squash = await runPush({ cwd: work, noPush: true })
++    assert.equal(squash.ok, true, JSON.stringify(squash.errors))
++    const undo = await runPush({ cwd: work, undo: true })
++    assert.equal(undo.ok, true, JSON.stringify(undo.errors))
++    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead)
++
++    const pushed = await runPush({ cwd: work })
++    assert.equal(pushed.ok, true, JSON.stringify(pushed.errors))
++    assert.equal(pushed.pushed, true)
++    const remoteLog = git(remote, ['log', '--format=%s', branch]).split('\n').filter(Boolean)
++    assert.deepEqual(remoteLog, git(work, ['log', '--format=%s', branch]).split('\n').filter(Boolean))
++    const afterPush = await runPush({ cwd: work, undo: true })
++    assert.equal(afterPush.ok, false, '已推送后 undo 必须拒绝')
++    assert.match(afterPush.errors.join('\n'), /已推送|已指向|non-FF/)
++  } finally { cleanup(join(work, '..')) }
++})
++
++test('④ 守卫：base 分叉 / staged 改动 / worktree cwd 均拒绝', async () => {
++  const { root, work, remote, branch } = makeRepo()
++  try {
++    // staged 守卫
++    writeFileSync(join(work, 'staged.txt'), 's\n')
++    git(work, ['add', 'staged.txt'])
++    const staged = await runPush({ cwd: work, dryRun: true })
++    assert.equal(staged.ok, false)
++    assert.match(staged.errors.join('\n'), /已暂存/)
++    git(work, ['restore', '--staged', 'staged.txt'])
++
++    // base 分叉：另一个 clone 推进远端
++    const other = join(root, 'other')
++    execFileSync('git', ['clone', '-q', remote, other], { stdio: ['ignore', 'pipe', 'pipe'] })
++    git(other, ['config', 'user.email', 't@t'])
++    git(other, ['config', 'user.name', 't'])
++    writeFileSync(join(other, 'remote.txt'), 'r\n')
++    git(other, ['add', 'remote.txt'])
++    git(other, ['commit', '-qm', 'chore: remote moves'])
++    git(other, ['push', '-q', 'origin', branch])
++    git(work, ['fetch', '-q', 'origin'])
++    const diverged = await runPush({ cwd: work, dryRun: true })
++    assert.equal(diverged.ok, false)
++    assert.match(diverged.errors.join('\n'), /不是 HEAD 祖先/)
++
++    // worktree cwd 守卫（路径段判定；不要求真是链接 worktree）
++    const wt = join(work, '.sillyspec', '.runtime', 'worktrees', APP)
++    mkdirSync(wt, { recursive: true })
++    const inWt = await runPush({ cwd: wt })
++    assert.equal(inWt.ok, false)
++    assert.match(inWt.errors.join('\n'), /worktree/)
++  } finally { cleanup(root) }
++})
++
++test('⑤ 活锚点抬升：scan source_commit 落区间内时 effectiveBase 抬到锚点', async () => {
++  const { work, base } = makeRepo()
++  try {
++    const a1 = commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    const scanDir = join(work, '.sillyspec', 'docs', 'proj', 'scan')
++    mkdirSync(scanDir, { recursive: true })
++    writeFileSync(join(scanDir, 'PROJECT.md'), `---\nsource_commit: ${a1}\n---\n# project\n`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
++    commitFile(work, 'a3.txt', 'a3\n', `feat: a3 (${APP})`)
++    const r = await runPush({ cwd: work, noPush: true })
++    assert.equal(r.ok, true, JSON.stringify(r.errors))
++    assert.equal(r.plan.effectiveBase, a1, 'base 必须抬到 scan 锚点')
++    assert.equal(r.plan.baseRaised, true)
++    assert.equal(git(work, ['merge-base', '--is-ancestor', a1, 'HEAD']) !== null, true)
++    const subjects = git(work, ['log', '--reverse', '--format=%s', `${a1}..HEAD`]).split('\n').filter(Boolean)
++    assert.equal(subjects.length, 1, '只压扁锚点之后的 a2+a3')
++    assert.match(subjects[0], new RegExp(`\\(${APP}\\)`))
++    assert.notEqual(base, a1)
++  } finally { cleanup(join(work, '..')) }
++})
++
++test('⑥ --mode none：只推送，不改写历史', async () => {
++  const { work, remote, branch } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
++    const oldHead = git(work, ['rev-parse', 'HEAD'])
++    const r = await runPush({ cwd: work, mode: 'none' })
++    assert.equal(r.ok, true, JSON.stringify(r.errors))
++    assert.equal(r.plan.needsRewrite, false)
++    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead)
++    assert.equal(git(remote, ['rev-parse', branch]), oldHead)
++  } finally { cleanup(join(work, '..')) }
++})
++
++test('⑦ CLI 接线：--dry-run --json 纯净、未知参数 exit 2、--help exit 0', () => {
++  const { work } = makeRepo()
++  try {
++    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
++    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
++    const dry = spawnSync(process.execPath, [BIN, 'push', '--dry-run', '--json'], { cwd: work, encoding: 'utf8' })
++    assert.equal(dry.status, 0, dry.stderr)
++    const parsed = JSON.parse(dry.stdout)
++    assert.equal(parsed.command, 'push')
++    assert.equal(parsed.dry_run, true)
++    assert.equal(parsed.groups.length, 1)
++    const bad = spawnSync(process.execPath, [BIN, 'push', '--nope'], { cwd: work, encoding: 'utf8' })
++    assert.equal(bad.status, 2)
++    assert.match(bad.stderr, /未知参数/)
++    const help = spawnSync(process.execPath, [BIN, 'push', '--help'], { cwd: work, encoding: 'utf8' })
++    assert.equal(help.status, 0)
++    assert.match(help.stdout, /用法: sillyspec push/)
++  } finally { cleanup(join(work, '..')) }
++})
+diff --git a/test/push-plan.test.mjs b/test/push-plan.test.mjs
+new file mode 100644
+index 00000000..ec5347ba
+--- /dev/null
++++ b/test/push-plan.test.mjs
+@@ -0,0 +1,124 @@
++/**
++ * push 计划层纯函数回归（2026-10-23-push-squash task-02）
++ *
++ * 覆盖：参数解析、变更归属识别、by-change 连续段分组、one 模式守卫、消息合成
++ * （变更名 + task-NN 证据保留）、计划渲染。零 git 依赖，便于快速定位逻辑回归。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { pathToFileURL } from 'node:url'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const {
++  parsePushArgs, detectChangeOwner, classifyCommits, buildSquashMessage, renderPushPlan,
++} = await import(pathToFileURL(join(ROOT, '..', 'src', 'push.js')).href)
++
++const APP = '2026-10-23-app'
++const OTHER = '2026-10-23-other'
++
++function commit({ sha, subject, body = '', tree = 't' + sha, parents = ['p'] }) {
++  const message = body ? `${subject}\n\n${body}` : subject
++  return { sha, tree, parents, author: { name: 't', email: 't@t', date: '2026-10-23T00:00:00Z' }, message, subject, body }
++}
++
++test('parsePushArgs：默认 by-change；one 必须带 --change；未知/互斥 fail-closed', () => {
++  assert.deepEqual(parsePushArgs([]).options.mode, 'by-change')
++  assert.equal(parsePushArgs(['--mode', 'one']).ok, false)
++  assert.equal(parsePushArgs(['--mode', 'one', '--change', APP]).ok, true)
++  assert.equal(parsePushArgs(['--mode', 'bad']).ok, false)
++  assert.equal(parsePushArgs(['--unknown']).ok, false)
++  assert.equal(parsePushArgs(['file.txt']).ok, false)
++  assert.equal(parsePushArgs(['--undo', '--mode', 'one', '--change', APP]).ok, false)
++  assert.equal(parsePushArgs(['--undo', '--remote', 'origin']).ok, true)
++  assert.equal(parsePushArgs(['--mode', 'none', '--no-push']).ok, false)
++  assert.equal(parsePushArgs(['--dry-run', '--json']).options.dryRun, true, '--json 由全局层剥离，这里不应报未知')
++})
++
++test('detectChangeOwner：括号/归档/plumbing 形态与歧义', () => {
++  assert.equal(detectChangeOwner(`feat: a (${APP})`, [APP, OTHER]), APP)
++  assert.equal(detectChangeOwner(`chore(archive): ${APP} 归档留档`, [APP, OTHER]), APP)
++  assert.equal(detectChangeOwner(`sillyspec: baseline checkpoint for ${APP}`, [APP, OTHER]), APP)
++  assert.equal(detectChangeOwner(`sillyspec: auto-commit worktree WIP (3 files)`, [APP, OTHER]), null)
++  assert.equal(detectChangeOwner(`feat: mix (${APP}) (${OTHER})`, [APP, OTHER]), null)
++  assert.equal(detectChangeOwner(`feat: manual change`, [APP, OTHER]), null)
++})
++
++test('classifyCommits by-change：连续同变更段压扁，plumbing 贴段，非连续不跨段', () => {
++  const commits = [
++    commit({ sha: 'a1', subject: `feat: a1 (${APP})`, body: 'task-01' }),
++    commit({ sha: 'a2', subject: 'sillyspec: align baseline files to main (pre-merge, 1 files)' }),
++    commit({ sha: 'a3', subject: `feat: a3 (${APP})`, body: 'task-02/03' }),
++    commit({ sha: 'b1', subject: `feat: b1 (${OTHER})` }),
++    commit({ sha: 'a4', subject: `feat: a4 (${APP})` }),
++  ]
++  const r = classifyCommits({ commits, mode: 'by-change', knownChanges: [APP, OTHER] })
++  assert.equal(r.ok, true)
++  assert.equal(r.groups.length, 3, 'A1+A2+A3 / B1 / A4')
++  assert.deepEqual(r.groups.map((g) => g.owner), [APP, OTHER, APP])
++  assert.deepEqual(r.groups.map((g) => g.commits.length), [3, 1, 1])
++  assert.equal(r.groups[0].action, 'squash')
++  assert.equal(r.groups[1].action, 'keep')
++  assert.match(r.groups[0].subject, new RegExp(`\\(${APP}\\)`))
++  assert.match(r.groups[0].message, /task-01/)
++  assert.match(r.groups[0].message, /task-02\/03/)
++  assert.equal(r.needsRewrite, true)
++})
++
++test('classifyCommits：无归属连续提交不合并，单提交不重写', () => {
++  const r1 = classifyCommits({ commits: [commit({ sha: 'x1', subject: 'manual 1' }), commit({ sha: 'x2', subject: 'manual 2' })], mode: 'by-change', knownChanges: [] })
++  assert.equal(r1.groups.length, 2)
++  assert.equal(r1.needsRewrite, false)
++
++  const r2 = classifyCommits({ commits: [commit({ sha: 'a1', subject: `feat: only (${APP})` })], mode: 'by-change', knownChanges: [APP] })
++  assert.equal(r2.groups.length, 1)
++  assert.equal(r2.groups[0].action, 'keep')
++  assert.equal(r2.needsRewrite, false)
++})
++
++test('classifyCommits one：仅允许单变更；外部变更拒绝', () => {
++  const ok = classifyCommits({
++    commits: [commit({ sha: 'a1', subject: `feat: a1 (${APP})` }), commit({ sha: 'a2', subject: `feat: a2 (${APP})` })],
++    mode: 'one', changeName: APP, knownChanges: [APP, OTHER],
++  })
++  assert.equal(ok.ok, true)
++  assert.equal(ok.groups.length, 1)
++  assert.equal(ok.groups[0].commits.length, 2)
++  assert.match(ok.groups[0].subject, new RegExp(`\\(${APP}\\)`))
++
++  const bad = classifyCommits({
++    commits: [commit({ sha: 'a1', subject: `feat: a1 (${APP})` }), commit({ sha: 'b1', subject: `feat: b1 (${OTHER})` })],
++    mode: 'one', changeName: APP, knownChanges: [APP, OTHER],
++  })
++  assert.equal(bad.ok, false)
++  assert.match(bad.error, /其他变更提交/)
++})
++
++test('buildSquashMessage：body 里独有的 task token 也保留', () => {
++  const msg = buildSquashMessage({
++    commits: [
++      commit({ sha: 'a1', subject: `feat: a1 (${APP})`, body: '普通说明' }),
++      commit({ sha: 'a2', subject: `feat: a2 (${APP})`, body: '证据：task-07 已通过' }),
++    ],
++    owner: APP,
++  })
++  assert.match(msg, /^feat: a1 \(2026-10-23-app\)/m)
++  assert.match(msg, /task-07/)
++  assert.match(msg, /Squashed 2 commits/)
++})
++
++test('renderPushPlan：分组/抬升/预览行可读', () => {
++  const plan = {
++    mode: 'by-change', ctx: { branch: 'main', head: 'a'.repeat(40) }, target: { remote: 'origin', remoteBranch: 'main' },
++    base: 'b'.repeat(40), effectiveBase: 'c'.repeat(40), baseRaised: true,
++    commits: [1, 2, 3], needsRewrite: true,
++    groups: [{ owner: APP, commits: [{ sha: 'a1'.repeat(20) }, { sha: 'a2'.repeat(20) }], action: 'squash', subject: `feat: a (${APP})` }],
++    warnings: ['w1'],
++  }
++  const lines = renderPushPlan({ plan, dryRun: true }).join('\n')
++  assert.match(lines, /mode=by-change/)
++  assert.match(lines, /effectiveBase|抬升|已从/)
++  assert.match(lines, /压扁 2 笔/)
++  assert.match(lines, /仅预览/)
++})
+diff --git a/test/push-skill.test.mjs b/test/push-skill.test.mjs
+new file mode 100644
+index 00000000..8c038653
+--- /dev/null
++++ b/test/push-skill.test.mjs
+@@ -0,0 +1,39 @@
++/**
++ * push skill / 命令卡一致性回归（2026-10-23-push-squash task-05）
++ *
++ * 钉住：skill frontmatter 与安全纪律、命令卡四段契约、COMMAND_CARD_NAMES 注册。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, existsSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { COMMAND_CARD_NAMES, readCardAssets } = await import(pathToFileURL(join(ROOT, '..', 'src', 'command-cards.js')).href)
++
++test('push skill：frontmatter、命令与安全纪律', () => {
++  const file = join(ROOT, '..', '.claude', 'skills', 'sillyspec-push', 'SKILL.md')
++  assert.equal(existsSync(file), true, 'skill 文件必须存在')
++  const text = readFileSync(file, 'utf8')
++  assert.match(text, /^---\s*\nname:\s*sillyspec:push\s*$/m)
++  assert.match(text, /description:/)
++  assert.match(text, /sillyspec push --dry-run/)
++  assert.match(text, /sillyspec push --mode one --change/)
++  assert.match(text, /不要直接 `git push`/)
++  assert.match(text, /不要手工 `git reset --soft`/)
++  assert.match(text, /不要 `--no-verify`/)
++  assert.match(text, /worktree cwd 内压扁/)
++})
++
++test('push 命令卡：资产在场、四段契约、顶层命令形态', () => {
++  const assets = readCardAssets()
++  assert.equal(assets.has('push'), true)
++  const card = assets.get('push')
++  for (const section of ['# 何时用', '# 生命周期速查', '# 防坑清单', '# 边界声明']) {
++    assert.equal(card.includes(section), true, `缺少 ${section}`)
++  }
++  assert.match(card, /sillyspec push/)
++  assert.match(card, /sillyspec push --dry-run/)
++  assert.equal(COMMAND_CARD_NAMES.includes('push'), true)
++})

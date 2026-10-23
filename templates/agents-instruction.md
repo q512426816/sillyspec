@@ -42,3 +42,4 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文�
 11. **禁止目录级 git add / git add -A**（多会话共享仓）：目录级暂存会夹带并行会话的进行中文件甚至误删已提交文件。提交一律用显式 pathspec，且 **add 与 commit 用同一份清单**：`git commit -m "..." -- 文件1 文件2`——带 pathspec 的 commit 只提交这些路径，他侧已 staged 的条目既不被带走、也原样留给对方；裸 `git commit` 提交的是整个共享暂存区，他会话 add 过的文件会被一并扫入。核对暂存面固定用 `git diff --cached --name-only` 全量读取，禁用过滤式核对（过滤正是致盲原因）；核对与提交分开两条命令执行，不得链在同一命令里（链行没有拦截点）。安装了 commit-guard hook 的仓会对超声明面的 staged 文件警告（只警告不阻断）。
 12. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 13. **边干边勾（任务进度唯一源=变更的 tasks.md）**：完成一个任务单元（实现到位 + 相关测试跑绿）当场勾对应格——`sillyspec task tick --change <名> --task task-NN`（即时回显进度与下一任务）或直接 Edit 翻格 `- [ ]`→`- [x]`，勿攒到收口一把勾。harness 自带的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度投影、收口哨兵、断点恢复只读 tasks.md。
+14. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged 文件/Dirty 文件不替人提交或清理。

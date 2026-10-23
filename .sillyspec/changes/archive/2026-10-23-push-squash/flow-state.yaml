@@ -1,0 +1,48 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  推送前按变更压扁本地未推送提交
+
+
+  客户反馈使用工具后 git 提交过多（每 task 一笔、归档两笔、merge 兜底带入 worktree 全量历史）。需要提供显式 sillyspec
+  push：只改写当前分支相对目标远端的未推送段，默认按连续变更段压扁，可选合并为一个大提交，然后快进推送。禁止 pre-push hook 静默改写、禁止改写已推送历史、禁止
+  force-push。并行会话场景下不得动他会话未提交文件，不得在活跃 worktree 内压扁；用备份 ref、CAS、文件锁保证可恢复。
+
+
+  成功标准：
+
+  - sillyspec push --dry-run 只输出计划，不改写 ref/index/工作区/远端
+
+  - 默认 by-change 将连续同变更提交压成一笔，保留变更名与全部 task-NN 证据 token
+
+  - 执行后 index/工作区逐字节不变，远端快进推送成功
+
+  - base 非 HEAD 祖先、区间含已推送提交、活跃 worktree、merge commit、staged 改动等场景被拒绝并给出可执行指引
+
+  - 压扁前自动建备份 ref，--undo 可在推送前恢复
+
+  - 新增 sillyspec:push skill 与 push 命令卡，flow done 不再提示 reset --soft
+autopilot: true
+prestage_ack: false
+baseline_commit: 7fae4183a70edeca50ed871eb9d1509da267b61e
+updatedAt: '2026-10-23T13:18:47.461Z'
+baseline_sha256: c1e2b68d4ff31e162b0e7359b354fb527c773d196d0a776b2a1ca8070c4820d3
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js7)（21.1s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023131353\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 26 个
+

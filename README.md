@@ -116,6 +116,7 @@ SillySpec 进度库使用 SQLite 持久化（基于 Node.js 内置的 `node:sqli
 | `/sillyspec:resume` | 恢复工作（支持大模块阶段进度） |
 | `/sillyspec:doctor` | 项目自检与状态修复 |
 | `/sillyspec:commit` | 智能提交 |
+| `/sillyspec:push` | 推送前压扁本地未推送提交并快进推送 |
 | `/sillyspec:workspace` | 多项目工作区管理 |
 | `/sillyspec:export` | 导出成功方案为可复用模板 |
 
@@ -126,6 +127,7 @@ sillyspec run <stage>            执行阶段（auto/brainstorm/plan/execute/ver
 sillyspec run <stage> --done     完成当前步骤并推进到下一步
 sillyspec run <stage> --status   查看阶段进度
 sillyspec progress show          显示当前项目状态
+sillyspec push                   推送前压扁本地未推送提交并快进推送（默认 by-change）
 sillyspec init                   初始化（零交互，自动检测工具）
 sillyspec setup                  安装推荐 MCP 工具（交互式）
 sillyspec setup --list           查看已安装 MCP 状态

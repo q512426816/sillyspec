@@ -49,6 +49,7 @@ modules:
     paths:
       - src/handoff.js
       - src/index.js
+      - src/push.js
       - src/ui-visual.js
       - src/hunk-attribution.js
       - bin/sillyspec.js

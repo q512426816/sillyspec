@@ -119,7 +119,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
-  sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
+  sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）；sillyspec push [--dry-run] [--mode by-change|one|none] [--change <名>] [--no-push] [--undo] [--json]  推送前压扁本地未推送提交并快进推送（默认按变更分段；不改写已推送历史、不 force）
   sillyspec verify-probes --change <name> [--init [--force]]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架（--force 覆盖重生成，手填内容会重置）
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
@@ -458,7 +458,7 @@ async function main() {
   // 1-2 个交互来回）。守卫建议的事（cd 回主仓根重跑）自动做掉：⚠️警告 + 重锚定主仓根执行——
   // 写入恒落主仓（单源不变量延续，worktree 副本零 CLI 写入）；刻意以本 worktree 作独立实例跑
   // 的显式路径（--allow-worktree-cwd --spec-dir）在警告中原样保留；wt-commit 豁免不变。
-  if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit') {
+  if (!args.includes('--allow-worktree-cwd') && command !== 'wt-commit' && command !== 'push') {
     const guardDir = args.includes('--dir') ? dir : process.cwd();
     const wtInfo = detectCwdInsideWorktree(guardDir);
     if (wtInfo) {
@@ -5774,8 +5774,39 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         printed = wAll ? wRes.events.length : wRes.warnings.length;
       }
     }
+    case 'push': {
+      // 推送前压扁（2026-10-23-push-squash）：显式命令，不接 pre-push hook 自动改写。
+      // 默认 by-change，只处理 base..HEAD 本地未推送段；commit-tree + update-ref 保 index/工作区
+      // 零变化，pre/post 备份 ref 可 undo；绝不 force / 不 --no-verify。--json 已由全局层剥离。
+      // 放在 switch 末尾：避免插行造成 docs 里 index.js:N 的行号引用整体漂移。
+      const { parsePushArgs, runPush, PUSH_USAGE } = await import('./push.js');
+      const parsed = parsePushArgs(filteredArgs.slice(1));
+      if (!parsed.ok) {
+        for (const e of parsed.errors) console.error(`❌ ${e}`);
+        console.error(PUSH_USAGE);
+        process.exit(2);
+      }
+      if (parsed.options.help) {
+        console.log(PUSH_USAGE);
+        break;
+      }
+      const r = await runPush({ cwd: dir, specDir, ...parsed.options, json });
+      if (json) {
+        console.log(JSON.stringify(r.envelope, null, 2));
+        for (const w of r.warnings || []) console.error(`⚠️ ${w}`);
+        process.exitCode = r.exitCode;
+        break;
+      }
+      for (const line of r.humanLines || []) console.log(line);
+      for (const w of r.warnings || []) console.warn(`⚠️ ${w}`);
+      if (!r.ok) {
+        for (const e of r.errors || []) console.error(`❌ ${e}`);
+        process.exitCode = r.exitCode || 1;
+      }
+      break;
+    }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

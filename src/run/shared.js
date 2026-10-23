@@ -390,7 +390,7 @@ export function detectCwdInsideWorktree(dir) {
 export const UNINIT_CWD_GATE_EXEMPT = new Set([
   'init', 'scan', 'doctor', 'status', 'progress', 'next', 'workspace',
   'setup', 'knowledge', 'local', 'config', 'mcp', 'dashboard', 'platform',
-  'wt-commit', 'agent-log',
+  'wt-commit', 'push', 'agent-log',
 ])
 
 /**

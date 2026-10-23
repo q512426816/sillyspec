@@ -745,3 +745,117 @@ created_at: 2026-10-15T01:21:44.811Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-knowledge-scope-discoverability/requirements.md#FR-03
 最近确认：e2af70a75bb952c1962feda5dd3957a903073eca
+
+## FR-skills-docs-037 sillyspec push --dry-run 只输出计划，不改写 ref/index/工作区/远端
+变更：2026-10-23-push-squash
+状态：active
+摘要：有未推送提交；没有未推送提交
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-01
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-01
+  tests: test/push-cli.test.mjs「--dry-run 零写盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active
+
+## FR-skills-docs-038 默认 by-change 将连续同变更提交压成一笔，保留变更名与全部 task-NN 证据 token
+变更：2026-10-23-push-squash
+状态：active
+摘要：连续同变更段；证据 token 保留
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-02
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-02
+  tests: test/push-plan.test.mjs「by-change 连续段与 task token 保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active
+
+## FR-skills-docs-039 执行后 index/工作区逐字节不变，远端快进推送成功
+变更：2026-10-23-push-squash
+状态：active
+摘要：暂存区与工作区有在途改动；快进推送
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-03
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-03
+  tests: test/push-cli.test.mjs「压扁后 index/工作区不变且远端快进」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active
+
+## FR-skills-docs-040 base 非 HEAD 祖先、区间含已推送提交、活跃 worktree、merge commit、staged 改动等场景被拒绝并给出可执行指引
+变更：2026-10-23-push-squash
+状态：active
+摘要：base 分叉；活跃 worktree；区间含已推送提交
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-04
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-04
+  tests: test/push-cli.test.mjs「真实仓守卫拒绝」 | test/push-plan.test.mjs「守卫拒绝矩阵」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active
+
+## FR-skills-docs-041 压扁前自动建备份 ref，--undo 可在推送前恢复
+变更：2026-10-23-push-squash
+状态：active
+摘要：压扁后撤销；已推送后撤销
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-05
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-05
+  tests: test/push-cli.test.mjs「备份 ref 与 --undo」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active
+
+## FR-skills-docs-042 新增 sillyspec:push skill 与 push 命令卡，flow done 不再提示 reset --soft
+变更：2026-10-23-push-squash
+状态：active
+摘要：init 分发；收口指引
+全文：.sillyspec/changes/archive/2026-10-23-push-squash/requirements.md#FR-06
+最近确认：f16711d3dedeb6741dc32a08881305b68eb4b60d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-squash:flow:测试绑定FR-06
+  tests: test/flow-guidance.test.mjs「flow done 不再提示 reset --soft」 | test/push-skill.test.mjs「push skill 与命令卡一致性」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-squash
+  status: active

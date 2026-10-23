@@ -35,6 +35,7 @@
 18. **发现 SillySpec 自身缺陷或改进点**，记录到 `docs/`（troubleshooting.md / ROADMAP / quicklog），处理好后归档。
 19. **改动触及 `src/stages/*` 或文件生命周期代码**，按下方「文件生命周期文档同步」「提示词文档同步」同步文档与 `.claude/skills/`。
 20. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+21. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged/Dirty 文件不替人提交或清理。
 
 ## 项目状态
 - 已发布 npm（版本以 package.json 为准，不在此手写以防漂移）；`.sillyspec/` 进度库、测试 fixture、quicklog 可重置，不要求历史兼容。
