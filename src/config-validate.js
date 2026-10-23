@@ -8,12 +8,12 @@
  * （schema 注册面新增键照常跟随，无需改本模块）。
  *
  * 判级：错误（exit 1）=YAML 解析失败/顶层非映射/段非映射/枚举越界/结构性类型错（标量位
- * 收到映射或数组）/段内必填键缺失（凭据族两键齐全才生效）。警告（exit 0）=未知键（可能
- * 无效果）。info（exit 0）=deprecated 键在场/空文件。标量级宽容：YAML 标量弱型是事实
- * （fr_regress_cap: 24 解析为 number、24 引号形态为 string 同义），类型检查只拦结构性
- * 错配，标量间不再互拦（防自造摩擦——真实配置错误是嵌套错/键拼错/凭据缺半，不是 24 与
- * "24" 之别）。缺文件=零配置可用 info exit 0（69 键仅 4 凭据键真必填且仅平台用户——
- * 零配置契约锚）。
+ * 收到映射或数组）/不可强转标量（number/integer 键收 "abc" 类纯文本、boolean 键收非
+ * true|false 串）/段内必填键缺失（凭据族两键齐全才生效）。警告（exit 0）=未知键（可能
+ * 无效果）。info（exit 0）=deprecated 键在场/空文件。标量强转语义（评审 P1 修正）：数字
+ * 串与数字同义（"2400"≡2400——YAML 弱型等价），但不可强转的错拼类必拦——防「宽容」变成
+ * 放过 FR 承诺要拦的坏值。缺文件=零配置可用 info exit 0（69 键仅 4 凭据键真必填且仅平台
+ * 用户——零配置契约锚）。
  */
 import yaml from 'js-yaml'
 import { readFileSync } from 'fs'
@@ -39,7 +39,9 @@ function buildRegistry() {
 
 const kindOf = (v) => (v === null || v === undefined ? 'null' : Array.isArray(v) ? 'array' : typeof v)
 
-/** 结构级类型检查：标量位收映射/数组=错；枚举越界=错；其余标量形态宽容（见模块头）。 */
+/** 类型检查（评审 P1 修正口径：可强转宽容、不可强转判错）——YAML 标量弱型下 24 与 "24"
+ * 同义（number/integer 收数字串合法），但 "abc" 这类不可强转错拼必须拦（FR-01 场景）；
+ * boolean 收非 true/false 串判错；string 收任意标量；结构错配（标量位收映射/数组）恒错。 */
 function checkType(def, v, path, errors) {
   const kind = kindOf(v)
   if (kind === 'null') return
@@ -58,6 +60,18 @@ function checkType(def, v, path, errors) {
   }
   if (def.type === 'enum' && !(def.values || []).map(String).includes(String(v))) {
     errors.push(`「${path}」取值越界：${JSON.stringify(v)}（合法：${(def.values || []).join('|')}）`)
+    return
+  }
+  if ((def.type === 'number' || def.type === 'integer') && kind === 'string' && !/^-?\d+(\.\d+)?$/.test(v.trim())) {
+    errors.push(`「${path}」期望${def.type === 'integer' ? '整数' : '数字'}，实得字符串 ${JSON.stringify(v)}（不可强转——数字串可，纯文本不可）`)
+    return
+  }
+  if (def.type === 'integer' && kind === 'string' && !/^-?\d+$/.test(v.trim())) {
+    errors.push(`「${path}」期望整数，实得 ${JSON.stringify(v)}`)
+    return
+  }
+  if (def.type === 'boolean' && kind === 'string' && !/^(true|false)$/i.test(v.trim())) {
+    errors.push(`「${path}」期望布尔（true/false），实得 ${JSON.stringify(v)}`)
   }
 }
 
@@ -142,7 +156,13 @@ export function cmdConfigValidate({ dir, specBase = null, json = false } = {}) {
     else console.log('✅ local.yaml 不存在——零配置可用（全部键走缺省；仅平台/MCP 凭据族真必填，需要时 sillyspec platform connect 一键写入）。\n   需要调优时：sillyspec config schema 查键 ＋ sillyspec-config 技能引导；写完跑 sillyspec config validate 验证。')
     return 0
   }
-  const v = validateLocalYamlContent(readFileSync(r.path, 'utf8'))
+  let v
+  try { v = validateLocalYamlContent(readFileSync(r.path, 'utf8')) } catch (e) {
+    // 读盘竞态兜底（评审 P3 清偿）：resolve 与 read 之间文件消失/被锁——优雅报错不裸崩
+    if (json) console.log(JSON.stringify({ file: r.path, exists: true, passed: false, errors: [`local.yaml 读取失败：${(e && e.message) || e}（可能刚被移动/删除——重跑）`], warnings: [], infos: [], keysChecked: 0 }, null, 2))
+    else console.error(`❌ local.yaml 读取失败：${(e && e.message) || e}（可能刚被移动/删除——重跑 sillyspec config validate）`)
+    return 1
+  }
   const passed = v.errors.length === 0
   if (json) {
     console.log(JSON.stringify({ file: r.path, exists: true, passed, ...v }, null, 2))

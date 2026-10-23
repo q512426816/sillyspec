@@ -41,9 +41,17 @@ test('① validateLocalYamlContent unit 八态', () => {
   const ok = validateLocalYamlContent(GOOD)
   assert.deepEqual([ok.errors, ok.warnings], [[], []], `好配置零错零警（实际 ${JSON.stringify(ok)}）`)
   assert.equal(ok.keysChecked, 10, `已查 10 键（实际 ${ok.keysChecked}）`)
-  // 2 坏类型错：标量位收到映射（结构性错配）
+  // 2 坏类型错：FR-01 承诺场景（number 键收不可强转字符串）＋结构错配双形态（评审 P1 修正锚）
+  const badNum = validateLocalYamlContent('commands:\n  test_timeout_sec: "abc"\n')
+  assert.ok(badNum.errors.some((e) => e.includes('commands.test_timeout_sec') && e.includes('期望')), `FR 场景坏数字串判错（${badNum.errors}）`)
   const badType = validateLocalYamlContent('commands:\n  lint:\n    a: 1\n')
   assert.ok(badType.errors.some((e) => e.includes('commands.lint')), `结构类型错点名键（${badType.errors}）`)
+  // 2b 数字串可强转同义（宽容不误伤）
+  const numStr = validateLocalYamlContent('commands:\n  test_timeout_sec: "2400"\n')
+  assert.equal(numStr.errors.length, 0, `数字串合法（${numStr.errors}）`)
+  // 2c boolean 键收非 true/false 串判错
+  const badBool = validateLocalYamlContent('commands:\n  knowledge-gate: "nope"\n')
+  assert.ok(badBool.errors.some((e) => e.includes('knowledge-gate')), `坏布尔串判错（${badBool.errors}）`)
   // 3 未知键警
   const unknown = validateLocalYamlContent('totally_unknown: 1\n')
   assert.equal(unknown.errors.length, 0)
