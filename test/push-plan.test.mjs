@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = dirname(fileURLToPath(import.meta.url))
 const {
-  parsePushArgs, detectChangeOwner, classifyCommits, buildSquashMessage, renderPushPlan,
+  parsePushArgs, detectChangeOwner, classifyCommits, buildSquashMessage, renderPushPlan, signatureWarnFromFlags,
 } = await import(pathToFileURL(join(ROOT, '..', 'src', 'push.js')).href)
 
 const APP = '2026-10-23-app'
@@ -106,6 +106,17 @@ test('buildSquashMessage：body 里独有的 task token 也保留', () => {
   assert.match(msg, /^feat: a1 \(2026-10-23-app\)/m)
   assert.match(msg, /task-07/)
   assert.match(msg, /Squashed 2 commits/)
+})
+
+test('签名标记解析纯函数', () => {
+  const sha = (c) => c.repeat(40)
+  assert.equal(signatureWarnFromFlags([{ sha: sha('a'), flag: 'N' }, { sha: sha('b'), flag: 'N' }]), null, '全无签名 → null（零误报）')
+  const w = signatureWarnFromFlags([{ sha: sha('a'), flag: 'N' }, { sha: sha('b'), flag: 'G' }, { sha: sha('c'), flag: 'E' }])
+  assert.match(w, /2 个带签名提交/)
+  assert.match(w, /无签名提交/)
+  assert.match(w, /人工处理/)
+  const w2 = signatureWarnFromFlags([])
+  assert.equal(w2, null)
 })
 
 test('renderPushPlan：分组/抬升/预览行可读', () => {

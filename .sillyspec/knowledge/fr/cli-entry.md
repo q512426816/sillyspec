@@ -11476,3 +11476,79 @@ superseded_by：FR-core-engine-142
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-knowledge-scope-inject/requirements.md#FR-04
 最近确认：e27c3af6f1acf04b7151592483a1f327eff2c2a8
+
+## FR-cli-entry-605 push-cli 新增「区间含已推送提交拒绝」「merge commit 拒绝」两个真仓守卫用例并绿
+变更：2026-10-23-push-review-debt
+状态：active
+摘要：区间含已推送提交；区间含 merge commit
+全文：.sillyspec/changes/archive/2026-10-23-push-review-debt/requirements.md#FR-01
+最近确认：05de635886c0f34b498cba3e63255deea4601504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-review-debt:flow:测试绑定FR-01
+  tests: test/push-cli.test.mjs「守卫：区间含 merge commit 拒绝」 | test/push-cli.test.mjs「守卫：区间含已推送提交拒绝」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-review-debt
+  status: active
+
+## FR-cli-entry-606 tag 指向压扁区间时计划输出 warning；全无签名提交时不产生签名 warning；签名检测逻辑有纯函数测试锚
+变更：2026-10-23-push-review-debt
+状态：active
+摘要：tag 落在压扁区间；全无签名
+全文：.sillyspec/changes/archive/2026-10-23-push-review-debt/requirements.md#FR-02
+最近确认：05de635886c0f34b498cba3e63255deea4601504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-review-debt:flow:测试绑定FR-02
+  tests: test/push-cli.test.mjs「tag 落压扁区间告警与无签名零误报」 | test/push-plan.test.mjs「签名标记解析纯函数」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-review-debt
+  status: active
+
+## FR-cli-entry-607 pre-push hook 失败时 human 模式实时透传 hook 输出（报错一次给全），--json 模式错误信息含 stderr；git-helper 注释与实现对齐
+变更：2026-10-23-push-review-debt
+状态：active
+摘要：hook 失败
+全文：.sillyspec/changes/archive/2026-10-23-push-review-debt/requirements.md#FR-03
+最近确认：05de635886c0f34b498cba3e63255deea4601504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-review-debt:flow:测试绑定FR-03
+  tests: test/push-cli.test.mjs「pre-push hook 失败：human 透传与 json 含 stderr」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-review-debt
+  status: active
+
+## FR-cli-entry-608 lint 绿、变更面测试绿
+变更：2026-10-23-push-review-debt
+状态：active
+摘要：验收
+全文：.sillyspec/changes/archive/2026-10-23-push-review-debt/requirements.md#FR-04
+最近确认：05de635886c0f34b498cba3e63255deea4601504
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-23-push-review-debt:flow:测试绑定FR-04
+  tests: test/push-cli.test.mjs「守卫：区间含已推送提交拒绝」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-23-push-review-debt
+  status: active

@@ -600,12 +600,61 @@ export function planPush({
   if (mode === 'by-change' && knownChanges.length === 0) {
     warnings.push('未发现 .sillyspec 变更元数据（changes/ 目录为空）——by-change 无归属可分组；需要合成一笔请用 --mode one --change <名>')
   }
+  if (mode !== 'none') {
+    warnings.push(...buildRangeAdvisories({ repoRoot: ctx.repoRoot, base: effectiveBase, head: ctx.head, commits }))
+  }
   return {
     ok: true, ctx, target, specBase, mode, change, knownChanges,
     base: baseSha, effectiveBase, remoteSha: tip, baseRaised: eff.raised,
     anchors: eff.anchors, commits, groups: cls.groups, needsRewrite: cls.needsRewrite,
     warnings,
   }
+}
+
+/**
+ * 签名标记解析（纯函数，供单测直测）：`git log --format=%G?` 的 flag 非 N 即带签名
+ * （G 有效/B 无效/E 过期/U 无法验证/X 签名过期）。压扁用 commit-tree 重写，签名不可迁移——
+ * 带签名提交必须告警，让用户在远端拒收/协作要求签名场景下先人工决策。
+ * @param {Array<{sha:string,flag:string}>} flags
+ * @returns {string|null} null=全无签名（零误报）
+ */
+export function signatureWarnFromFlags(flags) {
+  const signed = (Array.isArray(flags) ? flags : []).filter((f) => f && f.flag && f.flag !== 'N')
+  if (signed.length === 0) return null
+  const preview = signed.slice(0, 3).map((f) => String(f.sha).slice(0, 7)).join('、')
+  return `区间含 ${signed.length} 个带签名提交（${preview}${signed.length > 3 ? ' 等' : ''}）——压扁会将其重写为无签名提交（签名不可迁移，pre-squash 备份 ref 保原提交可溯）；如远端/协作方要求签名，请先人工处理`
+}
+
+/**
+ * 压扁区间 advisory（只读，不参与守卫判定）：tag 落区间 + 带签名提交。
+ * 警示是披露面——计划后远端/本地变化的改写安全仍由守卫与 CAS 保证。
+ */
+function buildRangeAdvisories({ repoRoot, base, head, commits }) {
+  const out = []
+  // tag 落压扁区间：tip ∈ (base..head]（tag 不随改写，仍指旧提交，备份 ref 保活可溯）
+  const rangeSet = new Set((commits || []).map((c) => c.sha))
+  const tagRefs = splitLines(gitQuiet(repoRoot, ['for-each-ref', 'refs/tags', '--format=%(refname:short)%09%(*objectname)%09%(objectname)'], { timeout: GIT_TIMEOUT }))
+  const inRangeTags = []
+  for (const line of tagRefs) {
+    const parts = line.split('\t')
+    const name = parts[0]
+    // annotated tag：*objectname=剥皮 commit；lightweight：*objectname 空，objectname 即 commit
+    const tip = parts[1] || parts[2]
+    if (!name || !tip || !rangeSet.has(tip)) continue
+    inRangeTags.push(name)
+  }
+  if (inRangeTags.length > 0) {
+    out.push(`${inRangeTags.length} 个 tag 指向压扁区间内提交（${inRangeTags.slice(0, 5).join('、')}${inRangeTags.length > 5 ? ' 等' : ''}）——tag 不随改写（仍指旧提交，pre-squash 备份 ref 保原提交可溯）；如需 tag 跟随压扁结果，推送后人工 git tag -f <tag> <新HEAD>`)
+  }
+  // 签名提交告警：commit-tree 重写后签名丢失
+  const signOut = gitQuiet(repoRoot, ['log', '--format=%H%x1f%G?', `${base}..${head}`], { timeout: GIT_TIMEOUT })
+  const flags = splitLines(signOut).map((line) => {
+    const i = line.indexOf('\x1f')
+    return i === -1 ? { sha: line, flag: 'N' } : { sha: line.slice(0, i), flag: line.slice(i + 1).trim() }
+  })
+  const sigWarn = signatureWarnFromFlags(flags)
+  if (sigWarn) out.push(sigWarn)
+  return out
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -667,12 +716,21 @@ function rewriteChain({ repoRoot, base, groups, oldHead }) {
   return { newHead: parent, mapping }
 }
 
-function pushBranch({ repoRoot, remote, branch, remoteBranch }) {
+function pushBranch({ repoRoot, remote, branch, remoteBranch, json = false }) {
   try {
-    const out = git(repoRoot, ['push', remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`], { timeout: PUSH_TIMEOUT, trim: false })
+    // human 模式 inherit：pre-push hook 输出实时直达终端——报错一次给全，不依赖二跑定位
+    // （cli-copy-selfsufficient 探针口径）；--json 模式保持 pipe 捕获，stderr 并入错误信息供机器消费。
+    const out = git(repoRoot, ['push', remote, `refs/heads/${branch}:refs/heads/${remoteBranch}`], {
+      timeout: PUSH_TIMEOUT, trim: false,
+      stdio: json ? undefined : ['ignore', 'inherit', 'inherit'],
+    })
     return { ok: true, output: String(out || '') }
   } catch (e) {
-    return { ok: false, error: String(e && e.message ? e.message : e) }
+    // json（pipe）模式把 hook 的 stderr/stdout 并入错误信息——报错一次给全；
+    // human（inherit）模式下输出已实时直达终端，e.stderr 为空属预期。
+    const detail = [e && e.stderr, e && e.stdout].map((x) => String(x == null ? '' : x).trim()).filter(Boolean).join('\n')
+    const first = String(e && e.message ? e.message : e).split('\n')[0]
+    return { ok: false, error: detail ? `${first}\n${detail}` : first }
   }
 }
 
@@ -762,7 +820,7 @@ export async function runPush({
         const msg = `远端分支在计划后被更新（${plan.remoteSha.slice(0, 10)} → ${tipNow.slice(0, 10)}）——本地压扁已保留，请重跑 --dry-run 重新计划或用 --undo 恢复`
         return { ok: false, exitCode: 1, plan, oldHead: plan.ctx.head, newHead, pushed: false, backupRefs: refs, errors: [msg], warnings: envelope.warnings, humanLines, envelope: { ...envelope, ok: false, errors: [msg] } }
       }
-      const pushed = pushBranch({ repoRoot: ctx.repoRoot, remote: plan.target.remote, branch: plan.ctx.branch, remoteBranch: plan.target.remoteBranch })
+      const pushed = pushBranch({ repoRoot: ctx.repoRoot, remote: plan.target.remote, branch: plan.ctx.branch, remoteBranch: plan.target.remoteBranch, json })
       if (!pushed.ok) {
         const msg = `git push 失败（本地压扁已保留）：${pushed.error}`
         return { ok: false, exitCode: 1, plan, oldHead: plan.ctx.head, newHead, pushed: false, backupRefs: refs, errors: [msg], warnings: envelope.warnings, humanLines, envelope: { ...envelope, ok: false, errors: [msg] } }

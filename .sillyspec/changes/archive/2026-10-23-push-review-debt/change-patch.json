@@ -1,0 +1,86 @@
+{
+  "change": "2026-10-23-push-review-debt",
+  "baseline": "b5b9b59afb101f1491c819b6426f9a505bfa9bb2",
+  "head": "05de635886c0f34b498cba3e63255deea4601504",
+  "files": [
+    "src/push.js",
+    "test/push-cli.test.mjs",
+    "test/push-plan.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 141,
+    "deletions": 5
+  },
+  "savedAt": "2026-10-23T13:40:02.954Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "b5b9b59afb101f1491c819b6426f9a505bfa9bb2",
+    "totals": {
+      "files": 3,
+      "additions": 141,
+      "deletions": 5
+    },
+    "rows": [
+      {
+        "path": "src/push.js",
+        "additions": 62,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/push-cli.test.mjs",
+        "additions": 67,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/push-plan.test.mjs",
+        "additions": 12,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "d9766aff5c3321be075b488805f255393d6b013f3163b9934a448dd9fa8c9c1f",
+  "patchStatus": "ok"
+}

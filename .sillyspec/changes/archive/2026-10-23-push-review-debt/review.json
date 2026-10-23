@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-push-review-debt",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "05de635886c0f34b498cba3e63255deea4601504",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 测试锚未显式断言「远端零变化」（仅断言 HEAD 不变）",
+      "evidence": "requirements FR-01 承诺测试「断言拒绝后 HEAD 与远端零变化」，但 test ⑧⑨ 仅断言 rev-parse HEAD 不变；远端零变化由结构保证（守卫在 planPush 计划期拒绝即返回，dry-run 全程无写 ref/无 push），无数据正确性风险，属承诺措辞与断言面的缺口而非行为缺陷",
+      "location": "test/push-cli.test.mjs:236-251"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "notes_detail": {
+    "fr_evidence": {
+      "FR-01": "守卫为既有代码 src/push.js:577-589（文案逐字对应测试断言：『已被远端 ref 可达…本命令不 force-push』『merge commit…改用 --mode none』）；本变更按承诺只新增测试：test/push-cli.test.mjs ⑧（第二远端分支 leaked 使 a1 被 remote-tracking 可达）⑨（no-ff 合并构造）均为真仓集成用例，断言 ok=false+错误语义+HEAD 不变；复跑绿",
+      "FR-02": "src/push.js:603-605 计划期挂 advisory（mode!=='none'）、632-660 buildRangeAdvisories（tag for-each-ref refs/tags 剥皮 *objectname 匹配区间集合；签名 git log --format=%H%x1f%G? 解析）；signatureWarnFromFlags 纯函数已导出（621-626）并被 test/push-plan.test.mjs「签名标记解析纯函数」直测（全 N→null、混 G/E→计数告警、空→null）；test ⑩ 断言 tag 告警出现且全无签名区间零签名告警；复跑均绿",
+      "FR-03": "pushBranch src/push.js:719-737：human 模式 stdio=['ignore','inherit','inherit']，json 传 undefined 落 git() 默认 ['ignore','pipe','pipe']（行为不变，与 design 承诺一致）；src/git-helper.js:149-157 git() 支持 stdio 覆盖，156 行注释『push 用 inherit 透传 pre-push hook 输出』与实现对齐（git-helper 本文件零改动，兑现 design）；json 失败路径 e.stderr/stdout 并入错误（826-829），test ⑪ 断言 envelope.errors 含 HOOK-FAIL-SIGNAL，复跑绿；human 模式 pushed.output 变空串由 src/push.js:830 truthy 守卫优雅跳过，无回显回归",
+      "FR-04": "复跑变更面 node --test test/push-plan.test.mjs test/push-cli.test.mjs：19/19 pass（41.5s，exit 0）；npm run lint（node test/check-syntax.mjs）绿：1085 文件通过、未引用导出 0 项、module-map 覆盖全"
+    },
+    "blind_dimensions": "乱序：advisory 只读快照内计算且不参与守卫判定（守卫独立跑 rev-list），『远端 tip 再探』守卫真实存在于 runPush（计划后 tipNow 不符即拒绝改写）——design 作答与代码一致。并发：advisory 仅 for-each-ref/log 只读查询，无写面，文件锁/CAS 未被 diff 触碰。切换：inherit 仅改输出通道，子进程生命周期与失败路径返回结构不变，pre/post 备份 ref 链未触碰。作用域：for-each-ref refs/tags 与 git log 均限定 ctx.repoRoot 当前仓 refs 命名空间，无跨仓/跨 worktree 面",
+    "declared_boundaries": [
+      "边界1（design 死路1）：签名检测不造真实 GPG 集成，以纯函数单测+真仓零误报负断言替代——可接受：解析逻辑全在被单测覆盖的纯函数内，%G? 语义是 git 自身契约，Windows CI 拉 GPG 环境脆且慢",
+      "边界2（design 死路2）：human 模式放弃捕获转发、push 输出改实时直达终端（humanLines 不再回显 push stdout）——可接受：实时性正是 FR-03 要求，830 行 truthy 守卫使空 output 无害，--json 消费面保留 pipe 不变",
+      "边界3（design 死路3）：不改已归档 2026-10-23-push-squash 冻结件，绑定短语在本变更 requirements 以真实测试名重写——可接受：sha256 锚定件不可改是流程约束，绑定对齐属实（测试名逐字核对一致）",
+      "边界4（盲维1 作答）：tag/签名警示为 advisory 不参与守卫判定——可接受且已实证（守卫 577-589 与 advisory 603-605 代码路径独立）",
+      "边界5（隐含）：advisory 仅压扁模式（mode!=='none'）产出——可接受：--mode none 不改写历史，tag/签名无损失场景无需告警"
+    ],
+    "probes": {
+      "cli-copy-selfsufficient": "pass——新文案提到的 --mode none（src/push.js:35 帮助+parsePushArgs 支持）、git tag -f <tag> <新HEAD>（真实 git 用法）、pre-squash 备份 ref（refs/sillyspec/pre-squash/ 命名空间，src/push.js:671）均真实存在拼写正确；merge 守卫报错一次给全（计数+原因+人工整理/--mode none 两条出路）；文案与判定一致（tag 不随 commit-tree 改写、签名重写即丢均为真实语义）",
+      "config-absent-zero-regression": "pass——本变更未新增 local.yaml 消费键，无三态问题",
+      "crossrepo-path-compat": "n/a——未触及 worktree/deps/跨仓对账"
+    },
+    "generated_artifacts": "n/a——无类型/契约文件变更"
+  },
+  "reviewedAt": "2026-10-23T13:44:15.000Z"
+}

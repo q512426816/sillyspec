@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-push-review-debt",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-push-review-debt:flow:测试绑定FR-01",
+      "tests": [
+        "test/push-cli.test.mjs「守卫：区间含 merge commit 拒绝」",
+        "test/push-cli.test.mjs「守卫：区间含已推送提交拒绝」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-review-debt"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-push-review-debt:flow:测试绑定FR-02",
+      "tests": [
+        "test/push-cli.test.mjs「tag 落压扁区间告警与无签名零误报」",
+        "test/push-plan.test.mjs「签名标记解析纯函数」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-review-debt"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-push-review-debt:flow:测试绑定FR-03",
+      "tests": [
+        "test/push-cli.test.mjs「pre-push hook 失败：human 透传与 json 含 stderr」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-review-debt"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-push-review-debt:flow:测试绑定FR-04",
+      "tests": [
+        "test/push-cli.test.mjs「守卫：区间含已推送提交拒绝」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-push-review-debt"
+    }
+  ]
+}

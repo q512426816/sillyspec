@@ -231,3 +231,70 @@ test('⑦ CLI 接线：--dry-run --json 纯净、未知参数 exit 2、--help ex
     assert.match(help.stdout, /用法: sillyspec push/)
   } finally { cleanup(join(work, '..')) }
 })
+
+test('⑧ 守卫：区间含已推送提交拒绝', async () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
+    // 把 a1 推到另一远端分支 → a1 被 remote-tracking ref 可达，落进压扁区间
+    git(work, ['push', '-q', 'origin', 'HEAD~1:refs/heads/leaked'])
+    git(work, ['fetch', '-q', 'origin'])
+    const oldHead = git(work, ['rev-parse', 'HEAD'])
+    const r = await runPush({ cwd: work, dryRun: true })
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join('\n'), /已被远端 ref 可达/)
+    assert.match(r.errors.join('\n'), /不 force-push/)
+    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead, '拒绝后 HEAD 不变')
+  } finally { cleanup(join(work, '..')) }
+})
+
+test('⑨ 守卫：区间含 merge commit 拒绝', async () => {
+  const { work, branch } = makeRepo()
+  try {
+    commitFile(work, 'm1.txt', 'm1\n', `feat: m1 (${APP})`)
+    git(work, ['checkout', '-qb', 'feat'])
+    commitFile(work, 'f1.txt', 'f1\n', `feat: f1 (${APP})`)
+    git(work, ['checkout', '-q', branch])
+    git(work, ['merge', '--no-ff', '-m', `merge feat (${APP})`, 'feat'])
+    const oldHead = git(work, ['rev-parse', 'HEAD'])
+    const r = await runPush({ cwd: work, dryRun: true })
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join('\n'), /merge commit/)
+    assert.match(r.errors.join('\n'), /--mode none/)
+    assert.equal(git(work, ['rev-parse', 'HEAD']), oldHead, '拒绝后 HEAD 不变')
+  } finally { cleanup(join(work, '..')) }
+})
+
+test('⑩ tag 落压扁区间告警与无签名零误报', async () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    git(work, ['tag', 'v-in-range'])
+    commitFile(work, 'a2.txt', 'a2\n', `feat: a2 (${APP})`)
+    const r = await runPush({ cwd: work, dryRun: true })
+    assert.equal(r.ok, true, JSON.stringify(r.errors))
+    const warnings = r.plan.warnings.join('\n')
+    assert.match(warnings, /v-in-range/)
+    assert.match(warnings, /压扁区间/)
+    assert.match(warnings, /git tag -f/)
+    assert.equal(r.plan.warnings.some((w) => /带签名提交/.test(w)), false, '全无签名 → 不产生签名告警（零误报）')
+  } finally { cleanup(join(work, '..')) }
+})
+
+test('⑪ pre-push hook 失败：ok=false，json 错误含 hook stderr', async () => {
+  const { work } = makeRepo()
+  try {
+    commitFile(work, 'a1.txt', 'a1\n', `feat: a1 (${APP})`)
+    mkdirSync(join(work, '.git', 'hooks'), { recursive: true })
+    writeFileSync(join(work, '.git', 'hooks', 'pre-push'), '#!/bin/sh\necho HOOK-FAIL-SIGNAL >&2\nexit 1\n', { mode: 0o755 })
+    const r = await runPush({ cwd: work })
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join('\n'), /push 失败/)
+    const rj = await runPush({ cwd: work, json: true })
+    assert.equal(rj.ok, false)
+    assert.match(rj.envelope.errors.join('\n'), /HOOK-FAIL-SIGNAL/, 'json 模式错误必须含 hook stderr（报错一次给全）')
+    const oldHead = git(work, ['rev-parse', 'HEAD'])
+    assert.ok(oldHead, '本地状态仍在（不自动回滚）')
+  } finally { cleanup(join(work, '..')) }
+})
