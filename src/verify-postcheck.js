@@ -3349,6 +3349,41 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
  * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
  * runVerifyTestCheck 全链只为断言组卷接线）。
  */
+/**
+ * fr_regress_cap 读取（2026-10-23-fr-regress-cap，逐键正则同款防线 + normalizeLineEndings
+ * CRLF 归一）：正整数 1-2000 → N；off → 0（FR 层整体跳过）；缺省/坏值/不可读 → null
+ * （无帽=现状零回归）。轻量正则不引 yaml 依赖（extractTestCommand 同风格）。
+ */
+export function readFrRegressCap(specBase) {
+  try {
+    const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+    const m = raw.match(/^[ \t]*fr_regress_cap:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
+    if (!m) return null
+    const v = m[1].trim().replace(/^["']|["']$/g, '')
+    if (/^off$/i.test(v)) return 0
+    if (/^\d+$/.test(v)) {
+      const n = Number(v)
+      if (n >= 1 && n <= 2000) return n
+    }
+    return null // 坏值 fail-soft=无帽
+  } catch { return null }
+}
+
+/**
+ * FR 回归面帽纯函数（2026-10-23-fr-regress-cap）：fr.files 超帽截前 N 个（现有稳定序）；
+ * cap=0（off）整层归零；null/undefined/帽内零截断 → 原对象零变化。返回 { fr, capApplied }，
+ * capApplied={kept,total}|null 供 loud 披露。下游（frLinked/frReport/优先面标记/批组卷）
+ * 从帽后面对象自然推导，无第二套口径。
+ */
+export function applyFrRegressCap(fr, cap) {
+  if (cap === null || cap === undefined || !fr || !Array.isArray(fr.files) || fr.files.length === 0) {
+    return { fr, capApplied: null }
+  }
+  if (cap === 0) return { fr: { ...fr, files: [] }, capApplied: { kept: 0, total: fr.files.length } }
+  if (fr.files.length <= cap) return { fr, capApplied: null }
+  return { fr: { ...fr, files: fr.files.slice(0, cap) }, capApplied: { kept: cap, total: fr.files.length } }
+}
+
 export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null, observability = null }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
@@ -3366,6 +3401,19 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
   if (!fr) {
     try { fr = collectFrLinkedTests({ specBase, changeName, changedFiles: changedFiles || [], projectRoot: cwd }) } catch { fr = null }
   }
+  // fr_regress_cap 施帽（2026-10-23-fr-regress-cap）：脸肥域（单域数百 active FR）收口拖
+  // 迷你全量的保险层瘦身；验收层（变更测试∪import 依赖）不动。帽后推导零第二口径
+  // （frLinked/frReport/优先面标记全走帽后 fr）；超帽/off loud 披露归 pre-push/CI 门；
+  // 缺省无键=无帽整跑（零回归）。
+  let frCapApplied = null
+  try {
+    const frCap = readFrRegressCap(specBase)
+    if (frCap !== null) {
+      const capped = applyFrRegressCap(fr, frCap)
+      fr = capped.fr
+      frCapApplied = capped.capApplied
+    }
+  } catch { /* 键读取 fail-soft=无帽 */ }
   // 优先面全量口径（2026-10-06-fr-priority-overlap）：frLinked 只含与 deps 无重叠的「新增」
   // 绑定文件——重叠者此前拿不到优先权，仍按普通依赖受帽字母序弃置（resume-title 收口实测
   // 64 绑定弃 14）。绑定面钦定即优先，不论与 import 依赖面是否重叠；fr 缺席回退空数组
@@ -3381,6 +3429,9 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
     if (fr.unresolved.length > 0) {
       console.warn(`⚠️ ${fr.unresolved.length} 个 FR 绑定测试路径无法自仓根解析（不入实测面）：${fr.unresolved.slice(0, 3).join('、')}${fr.unresolved.length > 3 ? ' 等' : ''}——sillyspec tests repair-paths 可修`)
     }
+  }
+  if (frCapApplied) {
+    console.log(`ℹ️ fr_regress_cap：FR 关联回归面 ${frCapApplied.kept}/${frCapApplied.total} 进实测面，其余 ${frCapApplied.total - frCapApplied.kept} 个归 pre-push/CI 门（local.yaml fr_regress_cap 可调：N=前 N 个 / off=整层跳过）`)
   }
   const depsAll = [...new Set([...deps, ...frLinked])].sort()
   let depsBatches = []
