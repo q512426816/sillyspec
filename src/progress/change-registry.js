@@ -513,6 +513,9 @@ export class ChangeRegistry {
    * @param {string} cwd - 项目根目录
    * @param {string} oldName - 旧变更名
    * @param {string} newName - 新变更名
+   *
+   * 成功后旧名落删除台账 status='deleted'（2026-10-23-rename-platform-tombstone）：
+   * 平台按 change_key 建行，旧平台名行靠 sync 台账墓碑分支收敛，防幽灵永挂。
    */
   renameChange(cwd, oldName, newName) {
     if (!oldName || !newName) {
@@ -588,7 +591,18 @@ export class ChangeRegistry {
     } else {
       mkdirSync(newDir, { recursive: true });
     }
-    if (renamed) console.log(`✅ 变更已重命名：${oldName} → ${newName}`);
+    if (renamed) {
+      console.log(`✅ 变更已重命名：${oldName} → ${newName}`);
+      // 平台旧名墓碑凭证（2026-10-23-rename-platform-tombstone，坑9 幽灵家族第三变种）：
+      // 平台按 change_key 建行而 rename 只改本地，旧平台名行无终态凭证会永挂 active
+      // （2026-10-23-new-change-43a74c51 实证：自动建名 16 秒后被改名，平台幽灵）。
+      // 旧名对平台即终态弃名，语义用既有 'deleted' 承载（平台 _apply_cli_tombstone 只认
+      // deleted/archived，不扩表面）；daemon reconcile / 显式 platform sync --change 旧名
+      // 时由 sync 台账分支合成墓碑收敛。仅 renamed（DB+目录双成）落账：missing/conflict/
+      // stolen/FS 回滚分支到此为止（行还叫旧名时不得有其终态台账）。fail-open 同删除/归档。
+      appendDeletedLedger(this.pm._getSpecDir(cwd), oldName, 'deleted');
+      console.log('ℹ️  旧名已记删除台账（status=deleted），平台旧名行将由墓碑同步收敛');
+    }
   }
 
   /**

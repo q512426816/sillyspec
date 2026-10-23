@@ -6,7 +6,9 @@
  * DB 行被外部手段物理清除后（rm + 裸 SQL，任何 sillyspec 官方路径都不物理删行），后续
  * platform sync --change 一律「变更无进度数据」空转，平台行永挂 in_progress/active。
  * 台账让「存在过且已达终态」这一事实脱离 DB 行存活而可查：deleteChange/unregisterChange
- * 在事务提交后追加一行；sync() 的行缺失分支据此合成墓碑补推（见 sync.js 台账分支）。
+ * 在事务提交后追加一行；renameChange 对旧名追加 deleted 行（平台按 change_key 建行，
+ * rename 只改本地，旧平台名行的唯一终态凭证——2026-10-23-rename-platform-tombstone）；
+ * sync() 的行缺失分支据此合成墓碑补推（见 sync.js 台账分支）。
  *
  * 形态契约：`.sillyspec/.runtime/deleted-changes.jsonl`，每行一个 JSON 对象
  * { name, status: 'deleted'|'archived', at: ISO }；追加-only（读取侧 latest-wins），
