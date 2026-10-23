@@ -436,6 +436,105 @@ export async function runReviewDispatch(opts = {}) {
   }
 }
 
+// ════════ 薄道评审平台单调用派发（2026-10-23-review-inline-dispatch）════════
+/**
+ * 薄道（thin flow）review 子步的平台单调用通道：flow done 评审缺席分支经 local.yaml
+ * review_inline_wait 键门控调用——薄道任务书（renderReviewerTaskbook 产物+平台产出方式
+ * 尾注，任务书生产权仍在 CLI）派发平台 readOnly worker，有界轮询至完成/超时，三通道
+ * 提取复用厚道 extractReviewFromArtifacts（JSON 对象提取与 schema 无关）+ 薄道
+ * validateReviewJson 同一源校验，通过才落 changeDir/review.json（reviewer=platform-inline
+ * 如实标注）——成功后调用方同调用继续登记子步，missing→PASS 往返消灭。
+ * 任何失败返回 {ok:false, reason}——调用方回退现状任务书面（零治理损失）。
+ * 不写 dispatch record（那是厚道跨命令异步形态；单调用在途态只随返回值与输出留痕）。
+ */
+export async function runThinReviewInline(opts = {}) {
+  const {
+    cwd = process.cwd(), specBase, change, changeDir, taskbookText,
+    waitMs = 60_000, pollIntervalMs = 5_000, budgetUsd = 1.0,
+    client = null, probe = null, log = null,
+  } = opts
+  const say = typeof log === 'function' ? log : () => {}
+  if (!specBase || !change || !changeDir || typeof taskbookText !== 'string' || !taskbookText.trim()) {
+    return { ok: false, reason: '缺少 specBase/change/changeDir/taskbookText' }
+  }
+  let cl = client
+  if (!cl) {
+    try {
+      const { SillyHubMcpClient } = await import('./sillyhub-mcp/client.js')
+      cl = new SillyHubMcpClient({ cwd })
+    } catch (e) {
+      return { ok: false, reason: `client 构建失败（${(e && e.message) || e}）` }
+    }
+  }
+  if (!cl || typeof cl.createMission !== 'function' || typeof cl.dispatchWorker !== 'function'
+    || typeof cl.listWorkers !== 'function' || typeof cl.getWorkerResult !== 'function') {
+    return { ok: false, reason: 'client 不具备平台派发接口（create/dispatch/list/result）' }
+  }
+  try {
+    const probeFn = probe || (await import('./dispatch/probe.js')).probeSillyHub
+    const pr = await probeFn({ client: cl, worktreePath: null, cwd })
+    if (!pr || pr.available !== true) {
+      return { ok: false, reason: `平台通道不可用（${pr && pr.reason ? pr.reason : 'probe 异常'}）` }
+    }
+    const objective = `轻量变更独立评审（${change}）——按任务书产出 review.json 结论`
+    const workerPrompt = taskbookText + '\n' + [
+      '',
+      '【平台通道产出方式（read_only 约束——覆盖上方「写到文件」指引）】',
+      '- 平台 worker 禁止写任何文件、禁止 git 操作：把完整 review.json 文本（上方 schema）作为产出返回。',
+      '- 优先放 artifacts（kind 含 review，content 字段放纯 JSON 文本）；宿主不支持 artifacts 时放回答正文首个 ```json 代码块（CLI 回收链三通道兜底）。',
+    ].join('\n')
+    const mission = await cl.createMission({ objective, orchestrationMode: 'external', budgetUsd })
+    const missionId = mission && mission.missionId
+    if (!missionId) return { ok: false, reason: 'create_mission 未返回 missionId' }
+    say(`🛰️ 平台评审已派发（mission ${String(missionId).slice(0, 8)}）——有界等待 ${Math.round(waitMs / 1000)}s（review_inline_wait）`)
+    let worker = null
+    try {
+      worker = await cl.dispatchWorker({ missionId, objective, readOnly: true, worktreePath: cwd, workerPrompt })
+    } catch (e) {
+      return { ok: false, reason: `dispatch_worker 异常（${(e && e.message) || e}）`, missionId }
+    }
+    const workerId = worker && worker.workerId
+    if (!workerId) return { ok: false, reason: 'dispatch_worker 未返回 workerId', missionId }
+    const deadline = Date.now() + Math.max(1000, waitMs)
+    let lastState = ''
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, Math.max(200, Math.min(pollIntervalMs, deadline - Date.now()))))
+      let w = null
+      try {
+        const workers = await cl.listWorkers(missionId)
+        w = Array.isArray(workers) ? workers.find((x) => x && (x.id === workerId || x.worker_id === workerId)) : null
+      } catch { /* 单次轮询抖动按在途继续（下轮重试） */ }
+      const st = w ? String(w.status || '') : 'unknown'
+      if (st !== lastState) {
+        say(`🛰️ 平台评审状态：${st}（剩 ${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))}s）`)
+        lastState = st
+      }
+      if (st === 'failed' || st === 'killed') return { ok: false, reason: `worker 终态 ${st}`, missionId, workerId }
+      if (st === 'completed') {
+        const gr = await cl.getWorkerResult({ missionId, workerId })
+        const extracted = extractReviewFromArtifacts(gr && gr.artifacts, gr && gr.answer)
+        if (!extracted || typeof extracted !== 'object') {
+          return { ok: false, reason: 'worker completed 但三通道提取不到 review JSON（artifacts kind/文本、answer 正文）——平台 UI 可回看 mission', missionId, workerId }
+        }
+        // reviewer 如实标注（覆盖 worker 任意填法）；change 对齐本变更；其余字段产物原样不改写
+        const candidate = { ...extracted, change, reviewer: 'platform-inline' }
+        const reviewPath = join(changeDir, 'review.json')
+        writeAtomicSync(reviewPath, JSON.stringify(candidate, null, 2) + '\n')
+        const { validateReviewJson } = await import('./flow-review.js')
+        const v = validateReviewJson(reviewPath)
+        if (!v.ok) {
+          try { rmSync(reviewPath, { force: true }) } catch { /* 删件失败由下轮覆盖兜底 */ }
+          return { ok: false, reason: `提取的 review 不符薄道 schema（${v.errors.join('；')}）——原文可参考平台 mission UI`, missionId, workerId }
+        }
+        return { ok: true, missionId, workerId, reviewPath }
+      }
+    }
+    return { ok: false, reason: `等待 ${Math.round(waitMs / 1000)}s 未完成（在途 mission ${missionId} 可在平台 UI 回看；本轮回退任务书面）`, missionId, workerId }
+  } catch (e) {
+    return { ok: false, reason: `inline 派发异常（${(e && e.message) || String(e)}）` }
+  }
+}
+
 // ════════ 影子期派发（2026-09-18-ceremony-risk-pricing task-06 / FR-04 / D-007@v1 / R-04 / R-06）════════
 // 依据：design.md「总体方案 Phase 3」+「风险登记 R-04/R-06」+ plan.md「Wave 4」+ 全局硬约束 2。
 // 定位：S0/S1 轻档变更在明面轻仪主线外，后台静默派发重仪式独立评审**只记账不阻断**——

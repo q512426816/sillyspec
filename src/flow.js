@@ -86,15 +86,19 @@ export function readFlowConfig(specBase) {
     // turbo docs-auto 常设授权档（2026-10-23-turbo-docs-auto）：仓主一行声明纯文档面自动降档；
     // 逐键正则同款防线，未配置/坏值（turbo: off 等）fail-soft 恒 false
     const turboDocsAuto = /^\s*turbo\s*:\s*docs-auto\s*$/m.test(raw)
+    // review_inline_wait（2026-10-23-review-inline-dispatch）：薄道评审平台单调用通道的等待
+    // 预算秒数（1-600 正整数有效；缺省/坏值 0=off——回退现状任务书面零回归）
+    const riw = raw.match(/^\s*review_inline_wait\s*:\s*([0-9]+)\s*$/m)
     return {
       mode,
       editRatioThreshold: th ? Number(th[1]) : 0.5,
       editRatioEnforcement: en ? en[1] : 'advisory',
       moduleGateIgnore: ig ? ig[1].split(',').map((s) => s.trim()).filter(Boolean) : [],
       turboDocsAuto,
+      reviewInlineWaitSeconds: riw ? Math.min(600, Math.max(0, Number(riw[1]))) : 0,
     }
   } catch {
-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [], turboDocsAuto: false }
+    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory', moduleGateIgnore: [], turboDocsAuto: false, reviewInlineWaitSeconds: 0 }
   }
 }
 
@@ -2426,6 +2430,41 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       } catch { /* 无/坏 JSON → 保持 null（既有判定） */ }
     }
     const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
+    // 登记块单一源（2026-10-23-review-inline-dispatch）：子代理重跑路径与平台 inline 回收
+    // 路径同源消费——validateReviewJson+FAIL/P1 拦截+P2/P3 留债+PASS mark，无第二套判定。
+    const registerReviewOutcome = async () => {
+      const v = validateReviewJson(join(changeDir, 'review.json'))
+      if (!v.ok) {
+        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
+        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
+        appendTelemetry(reviewOutcome) // 修评审 P2①
+        reportMidFail('review')
+        process.exit(1)
+      }
+      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
+      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
+      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
+        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
+        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
+        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
+        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
+        reportMidFail('review')
+        process.exit(1)
+      }
+      if (others.length > 0) {
+        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
+        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
+        // 处置提示（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
+        // P2/P3 非阻断可留债归档；要修则修复面决定是否重评——只碰治理文件不动本变更
+        // requirements/design 的后缀提交触发治理面等价保留（评审保留+自动重冻结，零重评）；
+        // 触及交付面或承诺面才隔离重评（任务书带前轮 findings，复审只验修复+新增）。
+        console.warn(`   💡 处置参考：P2/P3 非阻断，可留债归档；要修——只碰治理文件（.sillyspec/**，不动本变更 requirements/design）的提交不触发重评；触及交付面或 requirements/design 需重评（复审只验修复+新增，非全量首评）`)
+      }
+      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
+      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
+      mark('review')
+    }
     if (!tier.required) {
       console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
       reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
@@ -2436,9 +2475,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       // 不再被漂移重冻结误隔离（实测竞态修复）。rev-parse 失败传 null（任务书退引导形态）。
       let taskbookHead = null
       try { const h = gitQuiet(cwd, ['rev-parse', 'HEAD']); if (h && /^[0-9a-f]{7,40}$/i.test(String(h).trim())) taskbookHead = String(h).trim() } catch { /* best-effort */ }
-      // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
-      // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
-      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
+      // 平台单调用通道（2026-10-23-review-inline-dispatch）：review_inline_wait 键门控——键有效
+      // 先试 inline（派发→有界等待→回收→同调用登记，missing→PASS 往返消灭）；任何失败回退
+      // 现状任务书面（零治理损失）。键 off 时本分支与改动前逐字一致。
+      const inlineWaitSec = readFlowConfig(specBase).reviewInlineWaitSeconds
+      if (inlineWaitSec > 0) {
+        console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——平台单调用通道已启用（review_inline_wait=${inlineWaitSec}s），先试 inline 派发：`)
+      } else {
+        // 派发纪律（2026-10-19-thin-review-dispatch-verbatim）：横幅是主会话派发时最先读到的通道，
+        // 明确「原样复制」——实测手写缩编会丢材料包（厚道 stage-review.js:803 同款指令的薄道对齐）。
+        console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
+      }
       // 项目评审探针装配（2026-10-12-review-probe-injection）：local.yaml 数据驱动的项目特有
       // 必查面注入任务书（未配置零注入；装载告警/帽留痕 best-effort 提示，不阻断渲染）。
       let _probeLines = null
@@ -2478,43 +2525,39 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const _pack = assembleReviewPack({ changeDir, patchText, attribution: _attribution, testReceipt: _receipt })
         if (_pack && Array.isArray(_pack.lines) && _pack.lines.length > 0) _packLines = _pack.lines
       } catch { /* 材料包面 fail-soft：装配失败零注入 */ }
-      console.log(renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines }))
-      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
-      appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
-      reportMidFail('review')
-      process.exit(1)
+      const taskbookText = renderReviewerTaskbook({ change, changeDir, head: taskbookHead, probeLines: _probeLines, packLines: _packLines })
+      let inlineWritten = false
+      if (inlineWaitSec > 0) {
+        try {
+          const { runThinReviewInline } = await import('./review-dispatch.js')
+          const inline = await runThinReviewInline({
+            cwd, specBase, change, changeDir, taskbookText,
+            waitMs: Math.min(300_000, inlineWaitSec * 1000),
+            log: (m) => console.log(m),
+          })
+          if (inline.ok) {
+            console.log(`✅ 平台评审单调用回收（mission ${String(inline.missionId).slice(0, 8)}/worker ${String(inline.workerId).slice(0, 8)}，reviewer=platform-inline）——同调用登记结论（missing→PASS 往返消灭）`)
+            inlineWritten = true
+          } else {
+            console.log(`ℹ️ 平台评审单调用未回收：${inline.reason}——回退评审任务书面`)
+          }
+        } catch (e) {
+          console.log(`ℹ️ 平台评审单调用异常（${(e && e.message) || e}）——回退评审任务书面`)
+        }
+      }
+      if (!inlineWritten) {
+        if (inlineWaitSec > 0) {
+          console.log(`⚖️ 回退评审任务书面——任务书原样复制给子代理（勿自行改写增删）执行后重跑本命令：\n`)
+        }
+        console.log(taskbookText)
+        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+        appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+        reportMidFail('review')
+        process.exit(1)
+      }
+      await registerReviewOutcome()
     } else {
-      const v = validateReviewJson(join(changeDir, 'review.json'))
-      if (!v.ok) {
-        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
-        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
-        appendTelemetry(reviewOutcome) // 修评审 P2①
-        reportMidFail('review')
-        process.exit(1)
-      }
-      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
-      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
-      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
-        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
-        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
-        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
-        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
-        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
-        reportMidFail('review')
-        process.exit(1)
-      }
-      if (others.length > 0) {
-        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
-        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
-        // 处置提示（2026-10-10-drift-review-governance-keep，坑 drift-review-governance-loop）：
-        // P2/P3 非阻断可留债归档；要修则修复面决定是否重评——只碰治理文件不动本变更
-        // requirements/design 的后缀提交触发治理面等价保留（评审保留+自动重冻结，零重评）；
-        // 触及交付面或承诺面才隔离重评（任务书带前轮 findings，复审只验修复+新增）。
-        console.warn(`   💡 处置参考：P2/P3 非阻断，可留债归档；要修——只碰治理文件（.sillyspec/**，不动本变更 requirements/design）的提交不触发重评；触及交付面或 requirements/design 需重评（复审只验修复+新增，非全量首评）`)
-      }
-      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
-      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
-      mark('review')
+      await registerReviewOutcome()
     }
   }
 
