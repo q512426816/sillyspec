@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-config-validate-skill",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0622e2e3bb5fdbd7971b514e837d709150b354ab",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——快照校验无状态，写读竞态最坏多报一轮重跑即收敛；validateLocalYamlContent 纯函数零副作用实证）",
+    "并发": "ok（边界已裁决：可接受——零写盘；读盘竞态 P3 兜底真实在场：cmdConfigValidate 对 readFileSync try/catch 优雅 exit 1 双态输出，不裸崩）",
+    "切换": "ok（无状态副作用不落任何标记，exit 1 无半态，修后重跑即过）",
+    "作用域": "ok（resolveLocalYaml 走 config-cat 既有 worktree 感知候选链，校验解析到的真实文件本位，不串台）"
+  },
+  "reviewedAt": "2026-10-23T01:59:12.000Z"
+}

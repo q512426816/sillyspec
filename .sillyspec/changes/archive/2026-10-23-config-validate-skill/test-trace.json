@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-23-config-validate-skill",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-23-config-validate-skill:flow:测试绑定FR-01",
+      "tests": [
+        "test/config-validate.test.mjs「①校验函数 unit 八态」",
+        "test/config-validate.test.mjs「②CLI e2e --json 双态与退出码」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-config-validate-skill"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-23-config-validate-skill:flow:测试绑定FR-02",
+      "tests": [
+        "test/config-validate.test.mjs「③技能文件存在性与硬门文案锚」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-config-validate-skill"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-23-config-validate-skill:flow:测试绑定FR-03",
+      "tests": [
+        "test/config-validate.test.mjs「④config help 列 validate 行（源码锚）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-config-validate-skill"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-23-config-validate-skill:flow:测试绑定FR-04",
+      "tests": [
+        "test/config-validate.test.mjs「①-④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-23-config-validate-skill"
+    }
+  ]
+}

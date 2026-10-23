@@ -1,0 +1,110 @@
+{
+  "change": "2026-10-23-config-validate-skill",
+  "baseline": "d38a113b43a2a3d44122d202e82b8c7088309518",
+  "head": "0622e2e3bb5fdbd7971b514e837d709150b354ab",
+  "files": [
+    "src/config-schema.js",
+    "src/config-validate.js",
+    "src/index.js",
+    "test/config-validate.test.mjs"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 354,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-23T01:55:54.745Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d38a113b43a2a3d44122d202e82b8c7088309518",
+    "totals": {
+      "files": 5,
+      "additions": 354,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 28,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/config-validate.js",
+        "additions": 180,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 14,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/config-validate.test.mjs",
+        "additions": 132,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": ".claude/skills/sillyspec-config/SKILL.md",
+        "planned": null,
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "28fdf7191d76165d127fae457146110b4d51dd6815facab41fad0d50f4bf017b",
+  "patchStatus": "ok"
+}

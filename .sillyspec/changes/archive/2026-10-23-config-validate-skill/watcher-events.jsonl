@@ -1,0 +1,20 @@
+{"ts":1792719120890,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792719120890,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792719120890,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792719406971,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/config-schema.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792719537119,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：.claude/skills/sillyspec-config/——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792719596045,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/config-validate.test.mjs.tmp.26192.ecd52e99a0d9——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792719785469,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1792719785469,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1792719798785,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1792719799080,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1792719798882,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792719798882,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1792719799507,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1792719799790,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1792719802511,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1792719802511,"kind":"task-done","stage":"tasks","detail":"checked 1→4","provisional":true}
+{"ts":1792719802511,"kind":"commit","stage":null,"detail":"d32089a5","provisional":true}
+{"ts":1792719871538,"kind":"gate-run","stage":"verify","detail":"门实测 passed（11.9s） · 20261023014430","provisional":true}
+{"ts":1792719982603,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs/sillyspec/modules/_module-map.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1792720545206,"kind":"commit","stage":null,"detail":"0622e2e3","provisional":true}

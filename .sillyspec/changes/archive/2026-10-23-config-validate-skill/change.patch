@@ -1,0 +1,427 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index d9d9a3f0..02127307 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -122,6 +122,15 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'modules.<name>.path', type: 'string', optional: true, status: 'live', readers: ['extractModules (src/verify-postcheck.js)', 'parseLocalYamlModules (src/plan-postcheck.js)', 'extractModulePaths (src/worktree-deps.js)'], desc: '子模块目录路径（相对仓库根）。', example: 'frontend/' },
+         { path: 'modules.<name>.test', type: 'string', optional: true, status: 'deprecated', readers: ['extractModules (src/verify-postcheck.js，退役提示用）'], desc: '【2026-09-26-dynamic-test-inference 退役，不再消费】测试面按变更动态推断、runner 自项目结构（pyproject/uv.lock/package.json 就近祖先）推断。模块级 flaky 处置迁 known_failures。块在场时 CLI 打印退役指引。', example: 'cd frontend && pnpm test' },
++        { path: 'fr_unmapped_baseline', type: 'integer', optional: true, status: 'live', readers: ['unmapped 大池消音（src/fr-index.js）'], desc: 'unmapped 域 FR 条数消音基线（跨仓历史堆积已清算时设当前值；增量 >10 才警告，缺省 0=无基线恒警告行为）。', example: '720' },
++      ],
++    },
++    {
++      id: 'repos',
++      title: '跨仓注册表',
++      note: '仓键 → 本地工作目录。注册后参与跨仓冻结面/对账/未标注交付探测与跨仓 worktree 落位；条目两种形态：字符串路径或 {path, worktree} 对象（worktree=跨仓 worktree 落位根，优先级见 worktree.crossPlacement）。local.yaml 本就 gitignored，真实本地路径不入库。',
++      keys: [
++        { path: 'repos.<repo键>', type: 'string', optional: true, status: 'live', readers: ['跨仓冻结/对账（src/cross-repo-reconcile.js）、注册探测（src/local-register.js）、跨仓 worktree（src/worktree-cross.js）'], desc: '仓键 → 该仓本地工作目录绝对路径（或 {path, worktree} 对象形态）。', example: 'shared-lib: C:/path/to/shared-lib' },
+       ],
+     },
+     {
+@@ -131,6 +140,7 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'verify.test_rerun', type: 'enum', values: ['incremental', 'full'], optional: true, status: 'live', readers: ['readTestRerunConfig (src/verify-postcheck.js — dynamic-subset 分支增量档)'], desc: '实测门失败后重跑档：incremental（缺省）= 前轮失败后，下轮只跑「失败批测试文件 ∪ 自失败基线以来变更文件」的三源推断面（未触碰绿面复用，返工轮分钟级）；full = 恒全子集重跑（2026-10-07 前现状，保守项目用）。env SILLYSPEC_TEST_RERUN 优先。仅作用 dynamic-subset 档（显式 test_strategy: full 不受影响）。', example: 'verify: { test_rerun: full }' },
+         { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
++        { path: 'fr_regress_cap', type: 'string', optional: true, status: 'live', readers: ['readFrRegressCap (src/verify-postcheck.js)'], desc: '【2026-10-23-fr-regress-default-off 缺省翻转】FR 关联回归层本地实测开关：缺省（不写）=不跑（归 pre-push/CI 门，收口披露行留痕）；N（1-2000）=前 N 个绑定文件进实测面；all=全跑旧行为显式恢复；off=同缺省。', example: '40' },
+       ],
+     },
+     {
+@@ -188,6 +198,12 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用轻量协议开关：thin（缺省——2026-09-25-thin-default-flip 翻转，入口归一：常规变更默认轻量跑道，需求不清晰 CLI 拦下指路头脑风暴预段，实测失败自动升厚）= flow start/done 轻量跑道；legacy = 显式回旧道（run <stage> 全族行为逐字不动，flow start 拒跑并指路）。切回一行 yaml。', example: 'thin' },
+         { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
+         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可轻量档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
++        // 以下四键为根级标量（无点 path——2026-10-23-config-validate-skill 补登：此前散落
++        // 各 reader 内联正则、schema 发现面缺失；校验器按注册面跟随）
++        { path: 'turbo', type: 'enum', values: ['docs-auto'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-23-turbo-docs-auto】纯文档面常设极速授权档：docs-auto=CLI 按提交∪脏面自动判纯文档（代码分类器同源）降档 turbo（实测/评审/UI 探针跳过，授权源留痕）；不写=关（--turbo 旗标档不受影响，agent 仍不可自启）。', example: 'docs-auto' },
++        { path: 'review_inline_wait', type: 'integer', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-23-review-inline-dispatch】薄道评审平台单调用通道等待预算秒数（1-600，钳 300s 帽）：>0 时 flow done 评审缺席分支经 SillyHub 派发 readOnly worker 有界轮询回收、同调用登记（missing→PASS 往返消灭）；任何失败回退任务书面零损失；不写/坏值=关。', example: '180' },
++        { path: 'dirty_gate_ignore', type: 'string', optional: true, status: 'live', readers: ['readDirtyGateIgnore (src/flow-parity.js)'], desc: '【2026-10-23-dirty-gate-ignore】dirty 冻结缺口门的已知残渣前缀忽略清单（单行逗号分隔、posix 前缀匹配，module_gate_ignore 同款）：命中面从缺口剔除并每轮 ℹ️ 留痕；三态 fail-soft 未配置=现状。', example: 'quicklog, test/.sillyspec' },
++        { path: 'module_gate_ignore', type: 'string', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '【2026-10-12-thin-module-gate-and-feed】模块图未登记目录软门的固定忽略清单（单行逗号、目录前缀、posix）——合法未登记面（根级脚本/配置等）免登记签收。', example: 'scripts, .github' },
+       ],
+     },
+     {
+@@ -426,6 +442,18 @@ dispatch:
+ #   mode: thin               # thin=flow start/done 轻量跑道（协议必需交互=2）| legacy=既有 run <stage> 全族（回滚一行）
+ #   edit_ratio_threshold: 0.5   # 机器稿改写比例路由阈值（超阈提示厚档；缺省 0.5）
+ #   edit_ratio_enforcement: advisory   # advisory=测绿可轻量过只提示（缺省）| block=超阈阻断
++#
++# ── 收口调优（根级键，缺省零配置即用——注释态=缺省已最优，确要调优再解注释）──
++# turbo: docs-auto   # 纯文档面自动极速档（实测/评审/UI 探针跳过，授权源留痕）；不写=关
++# review_inline_wait: 180   # 评审平台单调用等待秒（1-600，需 SillyHub）；不写=评审任务书面模式
++# dirty_gate_ignore: quicklog, test/.sillyspec   # dirty 门已知残渣前缀（单行逗号、posix 前缀）
++# module_gate_ignore: scripts   # 模块图软门固定忽略目录（单行逗号、前缀匹配）
++# fr_regress_cap: 40   # FR 回归层本地开关：缺省不跑归 pre-push/CI 门；N=前 N 个；all=全跑旧行为
++# fr_unmapped_baseline: 720   # unmapped 域 FR 消音基线（跨仓历史堆积已清算时设）
++#
++# ── 跨仓注册表（注册后参与跨仓冻结/对账；local.yaml gitignored 故真实路径不入库）──
++# repos:
++#   shared-lib: C:/path/to/shared-lib   # 或对象形态 {path: …, worktree: <跨仓落位根>}
+ 
+ # ── 阶段说明书下发与会话墙（R16 减负批次）──
+ # stage:
+diff --git a/src/config-validate.js b/src/config-validate.js
+new file mode 100644
+index 00000000..79d6847c
+--- /dev/null
++++ b/src/config-validate.js
+@@ -0,0 +1,180 @@
++/**
++ * config-validate.js — local.yaml 逐键校验器（2026-10-23-config-validate-skill）
++ *
++ * 用户配置哲学（2026-10-23 裁决原话）：「能不要配置的就别让用户配置，默认都集成好；实在
++ * 不好配置的要生成一个技能去引导 agent 怎么填写，并且 agent 写完要 CLI 验证通过才行」。
++ * 本模块是那句「CLI 验证」：sillyspec config validate 经 config-cat 权威路径链解析真实
++ * local.yaml（worktree 感知），按 LOCAL_YAML_SCHEMA 单一源逐键校验——校验只消费不生产
++ * （schema 注册面新增键照常跟随，无需改本模块）。
++ *
++ * 判级：错误（exit 1）=YAML 解析失败/顶层非映射/段非映射/枚举越界/结构性类型错（标量位
++ * 收到映射或数组）/不可强转标量（number/integer 键收 "abc" 类纯文本、boolean 键收非
++ * true|false 串）/段内必填键缺失（凭据族两键齐全才生效）。警告（exit 0）=未知键（可能
++ * 无效果）。info（exit 0）=deprecated 键在场/空文件。标量强转语义（评审 P1 修正）：数字
++ * 串与数字同义（"2400"≡2400——YAML 弱型等价），但不可强转的错拼类必拦——防「宽容」变成
++ * 放过 FR 承诺要拦的坏值。缺文件=零配置可用 info exit 0（69 键仅 4 凭据键真必填且仅平台
++ * 用户——零配置契约锚）。
++ */
++import yaml from 'js-yaml'
++import { readFileSync } from 'fs'
++import { LOCAL_YAML_SCHEMA } from './config-schema.js'
++import { resolveLocalYaml } from './config-cat.js'
++
++/** schema 注册面索引：path→def、已知顶层键（段 id ∪ 无点 path）、含占位段的段（免未知键误报）。 */
++function buildRegistry() {
++  const byPath = new Map()
++  const sectionIds = new Set()
++  const rootScalars = new Set()
++  const placeholderSections = new Set()
++  for (const sec of LOCAL_YAML_SCHEMA.sections || []) {
++    sectionIds.add(sec.id)
++    for (const k of sec.keys || []) {
++      byPath.set(k.path, k)
++      if (!k.path.includes('.')) rootScalars.add(k.path)
++      if (/<[^>]+>/.test(k.path)) placeholderSections.add(sec.id)
++    }
++  }
++  return { byPath, sectionIds, knownTop: new Set([...sectionIds, ...rootScalars]), placeholderSections }
++}
++
++const kindOf = (v) => (v === null || v === undefined ? 'null' : Array.isArray(v) ? 'array' : typeof v)
++
++/** 类型检查（评审 P1 修正口径：可强转宽容、不可强转判错）——YAML 标量弱型下 24 与 "24"
++ * 同义（number/integer 收数字串合法），但 "abc" 这类不可强转错拼必须拦（FR-01 场景）；
++ * boolean 收非 true/false 串判错；string 收任意标量；结构错配（标量位收映射/数组）恒错。 */
++function checkType(def, v, path, errors) {
++  const kind = kindOf(v)
++  if (kind === 'null') return
++  const scalarSpot = ['string', 'number', 'integer', 'enum', 'boolean', 'json'].includes(def.type)
++  if (scalarSpot && (kind === 'object' || kind === 'array')) {
++    errors.push(`「${path}」期望${def.type === 'enum' ? `枚举（${(def.values || []).join('|')}）` : def.type}标量，实得 ${kind}——嵌套层级写错（该键是叶子值不是段）`)
++    return
++  }
++  if (def.type === 'object' && kind !== 'object') {
++    errors.push(`「${path}」期望键值映射，实得 ${kind}`)
++    return
++  }
++  if (def.type === 'array' && kind !== 'array') {
++    errors.push(`「${path}」期望列表，实得 ${kind}`)
++    return
++  }
++  if (def.type === 'enum' && !(def.values || []).map(String).includes(String(v))) {
++    errors.push(`「${path}」取值越界：${JSON.stringify(v)}（合法：${(def.values || []).join('|')}）`)
++    return
++  }
++  if ((def.type === 'number' || def.type === 'integer') && kind === 'string' && !/^-?\d+(\.\d+)?$/.test(v.trim())) {
++    errors.push(`「${path}」期望${def.type === 'integer' ? '整数' : '数字'}，实得字符串 ${JSON.stringify(v)}（不可强转——数字串可，纯文本不可）`)
++    return
++  }
++  if (def.type === 'integer' && kind === 'string' && !/^-?\d+$/.test(v.trim())) {
++    errors.push(`「${path}」期望整数，实得 ${JSON.stringify(v)}`)
++    return
++  }
++  if (def.type === 'boolean' && kind === 'string' && !/^(true|false)$/i.test(v.trim())) {
++    errors.push(`「${path}」期望布尔（true/false），实得 ${JSON.stringify(v)}`)
++  }
++}
++
++/**
++ * 校验 local.yaml 文本（纯函数）。@returns {{errors:string[], warnings:string[], infos:string[], keysChecked:number}}
++ */
++export function validateLocalYamlContent(text) {
++  const { byPath, knownTop, placeholderSections } = buildRegistry()
++  const errors = [], warnings = [], infos = []
++  let doc
++  try { doc = yaml.load(text) } catch (e) {
++    return { errors: [`YAML 解析失败：${(e && e.message) || e}——agent 手改易犯缩进/Tab/编码错（doctor 的 local_yaml_integrity 维度查编码）`], warnings, infos, keysChecked: 0 }
++  }
++  if (doc == null) doc = {}
++  const topKind = kindOf(doc)
++  if (topKind !== 'object') {
++    return { errors: [`local.yaml 顶层必须是键值映射（实得 ${topKind}）`], warnings, infos, keysChecked: 0 }
++  }
++  const sectionIds = new Set((LOCAL_YAML_SCHEMA.sections || []).map((s) => s.id))
++  let checked = 0
++  const checkDef = (def, v, path) => {
++    checked++
++    checkType(def, v, path, errors)
++    if (def.status === 'deprecated') infos.push(`「${path}」已退役（${String(def.desc || '').slice(0, 80)}…）——新配置勿再写`)
++  }
++  for (const [k, v] of Object.entries(doc)) {
++    if (!knownTop.has(k)) {
++      warnings.push(`未知顶层键「${k}」——sillyspec config schema 可查全部已知键（未知键大概率无效果；确认拼写与层级）`)
++      continue
++    }
++    if (sectionIds.has(k) && byPath.has(k) === false) {
++      // 纯段（如 project/commands）：校验段内键。两种真实形态：键值映射（commands.lint）
++      // 与列表-of-对象（review_probes 列表项字段建模为 sec.field 点路径——本仓 dogfood 实证）。
++      if (v == null) continue
++      const vKind = kindOf(v)
++      if (vKind !== 'object' && vKind !== 'array') { errors.push(`段「${k}」必须是键值映射或列表（实得 ${vKind}）`); continue }
++      const entries = vKind === 'array'
++        ? (v.every((it) => kindOf(it) === 'object') ? v.flatMap((it) => Object.entries(it)) : Object.entries(v[0] || {}))
++        : Object.entries(v)
++      for (const [ik, iv] of entries) {
++        const path = `${k}.${ik}`
++        const def = byPath.get(path)
++        if (!def) {
++          // 占位段（modules.<name>.path 族）：子键名是用户自定义 id，注册面无法穷举——
++          // 未知子键不警告（占位形态本身合法），具体叶子键校验交给占位 path 前缀匹配不到即跳过
++          if (!placeholderSections.has(k)) warnings.push(`「${path}」不在注册键表（可能拼错/层级错，或新版键未同步 schema——sillyspec config schema 核对）`)
++          continue
++        }
++        checkDef(def, iv, path)
++      }
++    } else {
++      // 根级标量键（test_strategy/module_gate_ignore/…）
++      const def = byPath.get(k)
++      if (!def) { warnings.push(`键「${k}」不在注册键表`); continue }
++      checkDef(def, v, k)
++    }
++  }
++  // 段内必填闭合（required:true 键所在段在场则须齐全——mcp/platform 凭据族两键成对才生效）
++  for (const sec of LOCAL_YAML_SCHEMA.sections || []) {
++    if (!(sec.id in doc) || doc[sec.id] == null || kindOf(doc[sec.id]) !== 'object') continue
++    for (const kd of sec.keys || []) {
++      if (kd.required !== true || !kd.path.startsWith(`${sec.id}.`)) continue
++      const leaf = kd.path.slice(sec.id.length + 1)
++      if (!(leaf in doc[sec.id])) {
++        errors.push(`段「${sec.id}」缺必填键「${leaf}」——${sec.id === 'mcp' || sec.id === 'platform' ? '凭据两键齐全才生效（缺半整段回退缺省/env）；补齐或整段删除' : '必填键'}`)
++      }
++    }
++  }
++  if (checked === 0 && errors.length === 0) infos.push('local.yaml 在场但无任何已注册键（空段/仅注释）——等于零配置形态')
++  return { errors, warnings, infos, keysChecked: checked }
++}
++
++/**
++ * config validate 子命令体：路径链解析（config-cat 同源，worktree 感知）→ 校验 → 人类/--json
++ * 双态渲染。退出码：0=通过（可含警告/info），1=有错误；缺文件=零配置 info exit 0。
++ */
++export function cmdConfigValidate({ dir, specBase = null, json = false } = {}) {
++  const r = resolveLocalYaml(dir, { specBase })
++  if (!r.exists) {
++    const payload = { file: null, exists: false, passed: true, errors: [], warnings: [], infos: ['local.yaml 不存在——零配置可用（全部键走缺省；仅平台/MCP 凭据族真必填）'], keysChecked: 0 }
++    if (json) console.log(JSON.stringify(payload, null, 2))
++    else console.log('✅ local.yaml 不存在——零配置可用（全部键走缺省；仅平台/MCP 凭据族真必填，需要时 sillyspec platform connect 一键写入）。\n   需要调优时：sillyspec config schema 查键 ＋ sillyspec-config 技能引导；写完跑 sillyspec config validate 验证。')
++    return 0
++  }
++  let v
++  try { v = validateLocalYamlContent(readFileSync(r.path, 'utf8')) } catch (e) {
++    // 读盘竞态兜底（评审 P3 清偿）：resolve 与 read 之间文件消失/被锁——优雅报错不裸崩
++    if (json) console.log(JSON.stringify({ file: r.path, exists: true, passed: false, errors: [`local.yaml 读取失败：${(e && e.message) || e}（可能刚被移动/删除——重跑）`], warnings: [], infos: [], keysChecked: 0 }, null, 2))
++    else console.error(`❌ local.yaml 读取失败：${(e && e.message) || e}（可能刚被移动/删除——重跑 sillyspec config validate）`)
++    return 1
++  }
++  const passed = v.errors.length === 0
++  if (json) {
++    console.log(JSON.stringify({ file: r.path, exists: true, passed, ...v }, null, 2))
++  } else {
++    console.log(`${passed ? '✅' : '❌'} local.yaml 校验${passed ? '通过' : '未通过'}（${r.path}${r.source ? `，来源 ${r.source}` : ''}；已查 ${v.keysChecked} 个注册键）`)
++    for (const e of v.errors) console.error(`   错误：${e}`)
++    for (const w of v.warnings) console.warn(`   警告：${w}`)
++    for (const i of v.infos) console.log(`   ℹ️ ${i}`)
++    if (passed && v.warnings.length === 0 && v.errors.length === 0) console.log('   无警告无未知键。')
++    if (!passed) console.error('   修复后重跑：sillyspec config validate（exit 0 才算配置完成——sillyspec-config 技能硬门）')
++  }
++  return passed ? 0 : 1
++}
++
++export default { validateLocalYamlContent, cmdConfigValidate }
+diff --git a/src/index.js b/src/index.js
+index fef17129..a99c555a 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5395,6 +5395,7 @@ SillySpec config — local.yaml 配置键速查
+   sillyspec config known-failures list           列 known_failures 豁免键
+   sillyspec config known-failures add <key…>     增豁免键（行级手术保注释、原子写；坏 YAML 拒改）
+   sillyspec config known-failures remove <key…>  删豁免键（未命中静默忽略）
++  sillyspec config validate [--json]             逐键校验 local.yaml（错误 exit 1；缺文件=零配置可用 exit 0）
+ 
+ 说明:
+   - 数据源：src/config-schema.js（唯一真相；reader 见各键「读取点」）
+@@ -5436,6 +5437,17 @@ SillySpec config — local.yaml 配置键速查
+         if (!content.endsWith('\n')) process.stdout.write('\n')
+         break;
+       }
++      // config validate（2026-10-23-config-validate-skill）：逐键校验（schema 单一源；YAML/
++      // 类型/枚举/段内必填凭据闭合，未知键警告）——agent 写完配置的硬验证门（技能末步=本命令
++      // exit 0 才算完成）；缺文件=零配置可用 info exit 0（69 键仅凭据族真必填）。
++      if (configSub === 'validate') {
++        let specBase = null
++        try { specBase = resolvePlatformSpecDir(dir, specDir) } catch { /* 同 cat：pointer 异常走祖先链 */ }
++        const { cmdConfigValidate } = await import('./config-validate.js')
++        const exitCode = cmdConfigValidate({ dir, specBase, json })
++        process.exitCode = exitCode
++        break;
++      }
+       // config known-failures（2026-10-21-p0-p1-hardening FR-07 / dsh z2 实证：known_failures
+       // 无 CLI 管理面 → agent 手改 local.yaml，PS5.1 编码把 50KB 文件写成 mojibake 等用户
+       // 2h13m）。行级增删查：保注释、原子写、坏 YAML 拒改——消灭手改场景。
+@@ -5456,10 +5468,10 @@ SillySpec config — local.yaml 配置键速查
+         break;
+       }
+       if (!isSchema) {
+-        const sug = didYouMean(configSub, ['schema', 'cat', 'known-failures']);
++        const sug = didYouMean(configSub, ['schema', 'cat', 'validate', 'known-failures']);
+         console.error(`❌ 未知子命令: config ${configSub}`);
+         if (sug) console.error(`   你是想输入「config ${sug}」吗？`);
+-        console.error('用法: sillyspec config [schema|cat|known-failures] [--json]   打印配置键 / 读内容 / 管理 known_failures 键');
++        console.error('用法: sillyspec config [schema|cat|validate|known-failures] [--json]   打印配置键 / 读内容 / 校验 / 管理 known_failures 键');
+         process.exit(2);
+       }
+       const { renderSchemaHuman, renderSchemaJson } = await import('./config-schema.js');
+diff --git a/test/config-validate.test.mjs b/test/config-validate.test.mjs
+new file mode 100644
+index 00000000..ee932216
+--- /dev/null
++++ b/test/config-validate.test.mjs
+@@ -0,0 +1,132 @@
++/**
++ * config-validate.test.mjs — config validate 逐键校验 + 配置引导技能（2026-10-23-config-validate-skill）
++ *
++ *   ① validateLocalYamlContent unit 八态：好配置过/坏类型错/未知键警/段内缺凭据错/
++ *      空文件过+info/deprecated info/枚举越界错/占位段免误报（FR-01）
++ *   ② CLI e2e：--json 双态与退出码（坏 1/好 0/缺文件 0 零配置契约）（FR-01）
++ *   ③ 技能文件存在性与硬门文案锚（FR-02）
++ *   ④ config help 列 validate 行＋本会话新键已注册（schema 补登锚）（FR-03/FR-04）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { validateLocalYamlContent, cmdConfigValidate } from '../src/config-validate.js'
++import { flatKeys } from '../src/config-schema.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++const GOOD = [
++  'project:',
++  '  type: nodejs',
++  'commands:',
++  '  lint: npm run lint',
++  '  test_timeout_sec: 2400',
++  'test_strategy: full',
++  'fr_regress_cap: 40',
++  'turbo: docs-auto',
++  'review_inline_wait: 180',
++  'dirty_gate_ignore: quicklog, test/.sillyspec',
++  'mcp:',
++  '  url: https://hub.example.com',
++  '  token: tk-123',
++].join('\n') + '\n'
++
++test('① validateLocalYamlContent unit 八态', () => {
++  // 1 好配置过（零错误零警告，计数=在场注册键数）
++  const ok = validateLocalYamlContent(GOOD)
++  assert.deepEqual([ok.errors, ok.warnings], [[], []], `好配置零错零警（实际 ${JSON.stringify(ok)}）`)
++  assert.equal(ok.keysChecked, 10, `已查 10 键（实际 ${ok.keysChecked}）`)
++  // 2 坏类型错：FR-01 承诺场景（number 键收不可强转字符串）＋结构错配双形态（评审 P1 修正锚）
++  const badNum = validateLocalYamlContent('commands:\n  test_timeout_sec: "abc"\n')
++  assert.ok(badNum.errors.some((e) => e.includes('commands.test_timeout_sec') && e.includes('期望')), `FR 场景坏数字串判错（${badNum.errors}）`)
++  const badType = validateLocalYamlContent('commands:\n  lint:\n    a: 1\n')
++  assert.ok(badType.errors.some((e) => e.includes('commands.lint')), `结构类型错点名键（${badType.errors}）`)
++  // 2b 数字串可强转同义（宽容不误伤）
++  const numStr = validateLocalYamlContent('commands:\n  test_timeout_sec: "2400"\n')
++  assert.equal(numStr.errors.length, 0, `数字串合法（${numStr.errors}）`)
++  // 2c boolean 键收非 true/false 串判错
++  const badBool = validateLocalYamlContent('commands:\n  knowledge-gate: "nope"\n')
++  assert.ok(badBool.errors.some((e) => e.includes('knowledge-gate')), `坏布尔串判错（${badBool.errors}）`)
++  // 3 未知键警
++  const unknown = validateLocalYamlContent('totally_unknown: 1\n')
++  assert.equal(unknown.errors.length, 0)
++  assert.ok(unknown.warnings.some((w) => w.includes('totally_unknown')), '未知顶层键警告')
++  // 4 段内缺凭据错（mcp 有 url 无 token）
++  const half = validateLocalYamlContent('mcp:\n  url: https://x.example.com\n')
++  assert.ok(half.errors.some((e) => e.includes('mcp') && e.includes('token')), `缺必填键点名（${half.errors}）`)
++  // 5 空文件过 + info
++  const empty = validateLocalYamlContent('# 只有注释\n')
++  assert.deepEqual([empty.errors, empty.warnings], [[], []])
++  assert.ok(empty.infos.some((i) => i.includes('无任何已注册键')), '空文件 info')
++  // 6 deprecated info（commands.test 已退役）
++  const dep = validateLocalYamlContent('commands:\n  test: npm test\n')
++  assert.ok(dep.infos.some((i) => i.includes('commands.test') && i.includes('退役')), 'deprecated 键 info')
++  // 7 枚举越界错
++  const enumBad = validateLocalYamlContent('project:\n  type: ruby\n')
++  assert.ok(enumBad.errors.some((e) => e.includes('project.type') && e.includes('越界')), `枚举越界点名（${enumBad.errors}）`)
++  // 8 占位段免误报（modules.<name> 子键名自定义不警告）
++  const ph = validateLocalYamlContent('modules:\n  core:\n    paths:\n      - src/\n')
++  assert.ok(!ph.warnings.some((w) => w.includes('modules.core')), `占位段子键免误报（${ph.warnings}）`)
++  // 附：YAML 解析失败
++  const badYaml = validateLocalYamlContent('a:\n\t- tab indent\n')
++  assert.ok(badYaml.errors.some((e) => e.includes('YAML 解析失败')), '坏 YAML 错误')
++})
++
++test('② CLI e2e：--json 双态与退出码（坏 1/好 0/缺文件 0）', () => {
++  const d = mkdtempSync(join(tmpdir(), 'cv-'))
++  try {
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    const p = join(d, '.sillyspec', 'local.yaml')
++    const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd: d, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++    // 坏：段内缺凭据 → exit 1，--json 单对象
++    writeFileSync(p, 'mcp:\n  url: https://x\n')
++    const bad = cli(['config', 'validate', '--json'])
++    assert.equal(bad.status, 1, `坏配置 exit 1（实际 ${bad.status}）`)
++    const jb = JSON.parse(bad.stdout)
++    assert.equal(jb.passed, false)
++    assert.ok(Array.isArray(jb.errors) && jb.errors.length > 0)
++    // 人类渲染同判定同码
++    const badH = cli(['config', 'validate'])
++    assert.equal(badH.status, 1, '人类渲染同退出码')
++    assert.match(badH.stdout + badH.stderr, /校验未通过/)
++    // 好 → exit 0
++    writeFileSync(p, GOOD)
++    const good = cli(['config', 'validate', '--json'])
++    assert.equal(good.status, 0, `好配置 exit 0（输出 ${(good.stdout || '').slice(0, 200)}）`)
++    assert.equal(JSON.parse(good.stdout).passed, true)
++    // 缺文件 → exit 0 零配置契约
++    rmSync(p, { force: true })
++    const miss = cli(['config', 'validate', '--json'])
++    assert.equal(miss.status, 0, '缺文件 exit 0（零配置可用）')
++    const jm = JSON.parse(miss.stdout)
++    assert.equal(jm.exists, false)
++    assert.ok(jm.infos.some((i) => i.includes('零配置')), 'info 含零配置契约句')
++    // cmdConfigValidate 直调缺文件同 0
++    assert.equal(cmdConfigValidate({ dir: d, json: false }), 0)
++  } finally { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) }
++})
++
++test('③ 技能文件在场与硬门文案锚', () => {
++  const p = join(ROOT, '.claude', 'skills', 'sillyspec-config', 'SKILL.md')
++  assert.ok(existsSync(p), '技能文件在场（init 分发源 .claude/skills/sillyspec-*）')
++  const t = readFileSync(p, 'utf8')
++  assert.match(t, /默认零配置可用/, '首节零配置契约')
++  assert.match(t, /必填场景决策表/, '决策表在场')
++  assert.match(t, /config validate/, '硬门命令在场')
++  assert.match(t, /exit 0 才算配置完成/, '硬门表述（不通过不许宣称完成）')
++  assert.match(t, /platform connect/, '凭据族引导走 connect 非手填')
++})
++
++test('④ help 列 validate 行＋本会话新键已注册（schema 补登锚）', () => {
++  const src = readFileSync(join(ROOT, 'src', 'index.js'), 'utf8')
++  assert.match(src, /config validate \[--json\].*逐键校验/, 'help 文案列 validate')
++  const paths = new Set(flatKeys().map((k) => k.path))
++  for (const key of ['turbo', 'review_inline_wait', 'dirty_gate_ignore', 'module_gate_ignore', 'fr_regress_cap']) {
++    assert.ok(paths.has(key), `本会话键「${key}」已注册 config-schema（发现面/校验面/示例面三同源）`)
++  }
++})

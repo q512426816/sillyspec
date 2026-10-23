@@ -1,0 +1,53 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  config validate 与配置引导技能
+
+
+  动机与背景：用户配置哲学裁决（2026-10-23 原话）：「整个 local.yaml 能不要配置的就别让用户配置，默认都集成好；实在不好配置的要生成一个技能去引导 agent 怎么填写，并且 agent 写完要 CLI
+  验证通过才行」。现状审计：config-schema 69 键中仅 4 个凭据键（mcp/platform url+token，且仅平台用户）真必填，commands.test 已退役为全量逃生阀、测试面动态推断，本会话七个变更又把
+  FR 帽/turbo/dirty 忽略/评审单调用全部做成缺省零回归——「零配置可用」大半是现状但无契约与教学；真缺口有二：①逐键语义校验命令（doctor 只有编码完整性维度，agent 写完配置无从验证）②引导技能（agent
+  不知道哪些场景才需要键、怎么探测仓结构、写完必须过验证）。交付：sillyspec config validate（schema 单一源逐键校验，人类+--json 双态，错误 exit 1）+ sillyspec-config
+  技能（决策表：仅列必填场景；探测流程；末步硬门=validate 通过才算完成）。用户已显式授权——autopilot 直跑到底，--no-prestage 声明需求已含决策（用户原话即裁决）。
+
+
+  成功标准：
+
+  - 新子命令 sillyspec config validate：经 config-cat 权威路径链解析 local.yaml（worktree 感知）——YAML 解析失败=错误 exit 1；在场键按 config-schema
+  单一源逐键校验（类型/枚举/段内必填：如 mcp 段有 url 无 token=错误）；未知顶层键=警告；local.yaml 不存在=info 提示零配置可用 exit 0（零配置契约锚）；人类渲染与 --json
+  同判定同退出码（0=通过可含警告，1=有错误）
+
+  - 新技能 .claude/skills/sillyspec-config/SKILL.md（随 init 分发面同源）：首节即「默认零配置可用」+必填场景决策表（平台凭据/跨仓注册/lint
+  收口/项目特有探针等），探测流程（config cat 看现状→按决策表探测仓结构→只写需要的键），末步硬门（config validate 必须 exit 0 才算完成，失败按输出修复禁止跳过宣称完成）
+
+  - config help 文案列 validate 子命令；config schema 数据源零改动（校验只消费不生产）
+
+  - 测试：校验函数 unit（好配置过/坏类型错/未知键警/段内缺凭据错/空文件过/缺文件 info 过）＋CLI e2e（--json 双态与退出码）＋技能文件存在性与硬门文案锚
+autopilot: true
+prestage_ack: true
+baseline_commit: d38a113b43a2a3d44122d202e82b8c7088309518
+updatedAt: '2026-10-23T01:59:53.319Z'
+baseline_sha256: ee95b2c3df0a88a5fa2e7e058f2f3f99244149744844425945c3ca552d502d19
+spec_approved: true
+spec_approved_at: '2026-10-23T01:32:55.855Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（11.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023014430\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+
