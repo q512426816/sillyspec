@@ -3011,6 +3011,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
     }
     pyGroups.get(key).files.push(f)
   }
+  // py_runner_flags（2026-10-23-py-runner-flags）：推断路径（无 hits 模块命令来源）补尾随
+  // flags——hits 路径的模块命令自带 flags（extractRunnerTrailingFlags），此处不双加；
+  // pytest 参数序无关，flags 置于文件面前；缺省空=零回归。
+  if (!pyRunner && pyGroups.size > 0) {
+    try {
+      const pyFlags = readVerifyPyFlags(specBase)
+      if (pyFlags) for (const grp of pyGroups.values()) grp.command = `${grp.command} ${pyFlags}`
+    } catch { /* 键读取 fail-soft=无 flags */ }
+  }
   if (!pyRunner && pyGroups.size > 0) pyRunner = pyGroups.values().next().value.command
   // JSX 运行器推断（2026-09-26-residual-runner-parity 起 + 结构推断源）：.tsx/.jsx 是 node
   // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），
@@ -3371,6 +3380,22 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
  * export 供直测（buildDepsBatches 同款先例——fixture 需真跑测试文件，不宜经
  * runVerifyTestCheck 全链只为断言组卷接线）。
  */
+/**
+ * py_runner_flags 读取（2026-10-23-py-runner-flags，逐键正则 + CRLF 归一）：动态子集
+ * deps(auto-py) 推断路径（无 hits 模块命令）此前生成裸 pytest——模块命令里的
+ * -q --no-cov -n auto 全丢，单核串行（平台仓实证：25 文件 149s；同仓 124 文件串行 1183s
+ * vs 带 -n auto 6-10×）。本键让仓主显式声明推断批尾随 flags；缺省/坏值/不可读 → ''（零回归）。
+ * 显式配置责任在仓主（xdist 未装却配 -n auto 会报错可见、可改）。
+ */
+export function readVerifyPyFlags(specBase) {
+  try {
+    const raw = normalizeLineEndings(readFileSync(join(specBase, 'local.yaml'), 'utf8'))
+    const m = raw.match(/^[ 	]*py_runner_flags[ 	]*:[ 	]*([^#\n]+?)[ 	]*(?:#.*)?$/m)
+    if (!m) return ''
+    return m[1].trim().replace(/^["']|["']$/g, '').trim()
+  } catch { return '' }
+}
+
 /**
  * fr_regress_cap 读取 v2（2026-10-23-fr-regress-default-off，缺省翻转：用户裁决「默认就不跑，
  * 配置可以开启」）：缺省（无键）/坏值/不可读 → 0（off——FR 关联回归层本地不跑，归 pre-push/CI
