@@ -1,0 +1,50 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  py 推断运行器尾随 flag 键
+
+
+  动机与背景：会话回执实证（平台仓 2026-10-23-session-network-context）：动态子集 deps(auto-py) 25 文件
+  149.3s——单核串行。根因：2026-10-21-deps-batch-runner-flags 的尾随 flag 保留只接在 hits（module 命中命令串）路径；test_strategy: module
+  退役后走纯推断路径（module[]），inferPyRunner 生成裸 uv run pytest，模块命令里的 -q --no-cov -n auto 全丢（同仓实证：124 文件串行 1183s vs 带 -n auto
+  6-10 倍差）。修法：local.yaml 新键 verify.py_runner_flags（显式声明推断路径附加 flags，缺省空=现状零回归），推断批命令按 pytest flags+files 组装；schema
+  注册+example token+平台仓落地 "-q --no-cov -n auto"（预计 149s → 40-70s）。用户指令链：查看两会话效果→为什么还那么慢（2026-10-23）。autopilot
+  直跑到底，--no-prestage 声明需求已含决策。
+
+
+  成功标准：
+
+  - readVerifyPyFlags(specBase) 逐键正则读取 verify.py_runner_flags（引号剥离/注释剥离；缺省/坏值/不可读 fail-soft 空串=现状零回归）
+
+  - runModuleSubset 推断路径对每个 py 组命令追加该 flags；hits 路径行为零变化
+
+  - schema 注册 verify.py_runner_flags（string）+ renderExample token 行（防漂耦合过）；平台仓 local.yaml 落地该键且 config validate exit 0
+
+  - 测试：readVerifyPyFlags 三态 unit＋源码接线锚＋config-schema/config-validate 套件绿
+autopilot: true
+prestage_ack: true
+baseline_commit: bfc29340e77ff756064656462e8ec0ecabf690a7
+updatedAt: '2026-10-23T06:38:19.948Z'
+baseline_sha256: 26f96ac7a7f150f49c3800f00bb53de590bc43745f0942e5f7d873fd50e436d6
+spec_approved: true
+spec_approved_at: '2026-10-23T06:29:07.603Z'
+spec_approved_by: zcode-flow-speedup
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-flow-speedup
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（11.9s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261023063810\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 9 个
+

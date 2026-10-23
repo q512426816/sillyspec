@@ -433,3 +433,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：18177dfc5da32ece4be3ae98cbd07311fe001c57
 理由：风险=readers 标注不准（旧字段消费点散）——desc 如实标「部分工具仍用」不虚构具体文件。放弃：给 module_paths 做逐叶子键校验（消费点本就模糊，object 整体校验足够，弃）。
+
+## D-unmapped-463@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-23-py-runner-flags
+原编号：D-001@v1
+锚点：未记录
+最近确认：0b1793eb262d5b61791dc974b238051fb3336c2b
+理由：风险=消费仓误配 flags 致 pytest 参数错（如无 xdist 配 -n auto 报错）——显式配置责任在仓主，报错可见可改；放弃：缺省自动加 -n auto（xdist 未必安装，默认加会打挂无 xdist 仓，弃）。

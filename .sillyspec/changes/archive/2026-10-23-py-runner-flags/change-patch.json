@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-23-py-runner-flags",
+  "baseline": "bfc29340e77ff756064656462e8ec0ecabf690a7",
+  "head": "0b1793eb262d5b61791dc974b238051fb3336c2b",
+  "files": [
+    "src/config-schema.js",
+    "src/verify-postcheck.js",
+    "test/py-runner-flags.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 75,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-23T06:38:18.793Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 20,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "bfc29340e77ff756064656462e8ec0ecabf690a7",
+    "totals": {
+      "files": 3,
+      "additions": 75,
+      "deletions": 0
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 2,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 25,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "planned"
+      },
+      {
+        "path": "test/py-runner-flags.test.mjs",
+        "additions": 48,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9c12ddca8b4510cfb2c22ca6fb0d43cc24fbaca973800a7cbe555471f4751ae5",
+  "patchStatus": "ok"
+}
