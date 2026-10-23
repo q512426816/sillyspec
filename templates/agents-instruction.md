@@ -26,7 +26,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文�
 ## 恢复与查看
 - 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
 - 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
-- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
+- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）；知识条目可声明注入作用域（`<!-- scope: always|repo|module:<域> -->`，无标记=关键词档）——现状与语法：`sillyspec knowledge scope`
 
 ## 核心规则
 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。

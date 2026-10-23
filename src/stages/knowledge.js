@@ -627,6 +627,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '  inspect <文件>        查看单个知识文件条目结构',
       '  validate              校验知识库完整性（INDEX 锚点/注册/幽灵条目——纯读）',
       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
+      '  scope                 知识注入作用域现状与标记语法（always/repo/module/关键词；纯读）',
       '  stats                 覆盖率/死条目统计（纯读）',
       '  refresh               重扫 scan 文档重写 generated/ 区（**写盘**——先 validate 再用）',
       '  propose / classify / inbox / graph / stats / renumber',
@@ -636,7 +637,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '写盘面子命令（refresh/propose/classify）先跑同名只读命令确认现状；探索用法先看本帮助。',
     ]
     for (const l of lines) console.log(l)
-    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'redomain-unmapped'] })
+    output(true, { help: true, subcommands: ['search', 'inspect', 'validate', 'digest', 'refresh', 'propose', 'classify', 'inbox', 'graph', 'stats', 'scope', 'redomain-unmapped'] })
     return
   }
   const subCommand = args[0] || ''
@@ -705,6 +706,48 @@ export async function cmdKnowledge(args, dir, opts = {}) {
         return
       }
       return mod.cmdKnowledgeStats(dir, args.slice(1), opts)
+    }
+    case 'scope': {
+      // 知识注入作用域发现面（2026-10-23-knowledge-scope-discoverability）：机制 2026-10-23-
+      // knowledge-scope-inject 落地但零发现面（用户追问「在哪引导配置」）——本命令列四档现状+
+      // 标记语法教学（示例与 collectScopedKnowledge 解析同源），空态明示仅关键词档在用。
+      // 纯读零写盘；--json 单对象供程序化消费。
+      try {
+        const { collectScopedKnowledge } = await import('../knowledge-scope.js')
+        const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
+        const scoped = collectScopedKnowledge(knowledgeDir)
+        const moduleEntries = Object.entries(scoped.modules)
+        const total = new Set([...scoped.always, ...scoped.repo, ...moduleEntries.flatMap(([, v]) => v)].map((e) => e.id)).size
+        const guide = [
+          '作用域标记（HTML 注释，写在 top-level knowledge/<文件>.md 的 section heading 之下；无标记=关键词命中现状）：',
+          '  <!-- scope: always -->              每次变更恒注入（跨仓通用规约）',
+          '  <!-- scope: repo -->                本仓每次变更恒注入（仓级约束）',
+          '  <!-- scope: module:<域>[,<域>] -->   仅当触达该知识域时注入（域 id 与 FR 域同源，逗号多域）',
+          '查看现状：sillyspec knowledge scope；flow start 注入块中以 📌 行呈现；机制变更：2026-10-23-knowledge-scope-inject',
+        ]
+        if (opts.json || args.slice(1).includes('--json')) {
+          output(true, { subcommand: 'scope', ...scoped, total, guide })
+        } else {
+          console.log(`🧭 知识注入作用域现状（${total} 条 scoped；关键词档始终生效）`)
+          if (scoped.always.length > 0) {
+            console.log('  always（每次变更恒注入）：')
+            for (const e of scoped.always) console.log(`    - ${e.id}：${e.summary}`)
+          }
+          if (scoped.repo.length > 0) {
+            console.log('  repo（本仓恒注入）：')
+            for (const e of scoped.repo) console.log(`    - ${e.id}：${e.summary}`)
+          }
+          for (const [d, list] of moduleEntries) {
+            console.log(`  module:${d}（触达该域时注入）：`)
+            for (const e of list) console.log(`    - ${e.id}：${e.summary}`)
+          }
+          if (total === 0) console.log('  当前仅关键词档在用（无任何 scoped 标记）——要恒注入的规约/仓级约束按下述标记声明：')
+          for (const l of guide) console.log(`  ${l}`)
+        }
+      } catch (e) {
+        output(false, {}, { code: 'scope_failed', message: String((e && e.message) || e) })
+      }
+      return
     }
     case 'digest': {
       // 治理信号摘要（2026-09-27-knowledge-digest）：四类沉睡信号（rot 待复核/收件箱积压/

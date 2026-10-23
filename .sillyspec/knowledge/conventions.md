@@ -103,3 +103,7 @@ sillyhub-daemon 的 vitest.config.ts include 仅 `tests/**/*.test.ts`——src �
 
 - daemon 模块测试主要在 `backend/app/modules/daemon/tests/`（conftest + 绝大多数用例，如 test_pending_update_upsert / test_machines_router / test_register_heartbeat_daemon）；顶层 `backend/tests/modules/daemon/` 只有契约/迁移/版本管理少数文件（test_protocol_session_contract / test_daemon_version_management）。写 TaskCard allowed_paths 与 verify 命令时先按此归属，别把 app/modules/... 的测试写到 tests/modules/... 路径。
 - 来源：2026-08-31-machine-sillyspec-version task-02/task-03（design 首版路径写错目录，plan 阶段修正）
+
+## 配置与机制设计纪律（本仓常驻，2026-10-23）
+<!-- scope: repo -->
+默认零配置可用：机制先落代码缺省（fail-soft、缺省零回归），配置键只用于仓主显式调优；键与机制必须语言中立——不枚举开放世界、不锁死开发语言/框架（用 CLI 自有分类：runner 批类别/路径集合，未知类别前向兼容）；新增消费键须同步 config-schema 注册+example+测试，写完跑 sillyspec config validate 到 exit 0（键发现面/校验面/示例面三同源）。
