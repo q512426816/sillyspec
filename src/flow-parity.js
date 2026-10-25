@@ -517,6 +517,46 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
 }
 
 /**
+ * 交付面锚定判定（2026-10-24-flow-done-review-artifact-drift-loop，坑实证三连循环）：
+ * 复审锚（review.json.reviewedAgainst）之后的本变更 own 提交只碰治理文件（.sillyspec/**，
+ * 典型形态=review.json 自身的归档前提交）且未触承诺面（requirements/design）→ 评审对象
+ * （交付面）自锚点起未变，结论有效。
+ *
+ * 堵 detectPatchDrift 两保留路径的复合盲区：reviewAnchoredToHead 要求锚==当前 HEAD——锚与
+ * HEAD 之间隔着 review.json 提交即恒 false；governanceOnly 看整个冻结窗——窗口内更早的
+ * 复审前修复提交（复审 reviewedAgainst 已覆盖）把 ownFiles 拖进交付文件 → 恒 false →
+ * 隔离重评 → 重评再提交 review.json 又前移……循环。本判定把「已覆盖」的度量单位从窗口
+ * 换成锚点：锚后的 own 提交才是复审未见的面。
+ *
+ * fail-safe：锚空/非祖先（rebase 重写）/git 失败 → false（宁可多评）。
+ * @returns {{ok: boolean, ownCount: number, files: string[], touchedPromiseFace: boolean}}
+ */
+export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
+  try {
+    const a = String(anchorSha || '').trim().toLowerCase()
+    if (!/^[0-9a-f]{7,40}$/.test(a)) return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false }
+    // 非零退出码（非祖先/git 失败）由 execFileSync 抛出走 catch fail-safe
+    execFileSync('git', ['merge-base', '--is-ancestor', a, 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    const log = execFileSync('git', ['log', '--name-only', '--format=%x00%s', `${a}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    const files = []
+    let ownCount = 0
+    for (const block of String(log).split('\x00')) {
+      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
+      const subject = lines[0]
+      if (!subject) continue
+      if (parseChangeNamesFromSubject(subject).includes(change)) {
+        ownCount++
+        for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
+      }
+    }
+    const promiseFace = [`.sillyspec/changes/${change}/requirements.md`, `.sillyspec/changes/${change}/design.md`]
+    const touchedPromiseFace = files.some((f) => promiseFace.includes(f))
+    const ok = files.every((f) => f.startsWith('.sillyspec/')) && !touchedPromiseFace
+    return { ok, ownCount, files, touchedPromiseFace }
+  } catch { return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false } }
+}
+
+/**
  * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
  * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
  * gate-snapshot 同款判定注入）时未提交 dirty 交付面一并入冻结——独占树内 dirty 全归属本变更；

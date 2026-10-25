@@ -404,3 +404,79 @@ test('e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留', () => {
     rmSync(cwd, { recursive: true, force: true })
   }
 })
+
+// ── 2026-10-24-flow-done-new-prefix-crossrepo-ambiguity：NEW: 前缀新建声明不再误落跨仓嫌疑 ──
+// 坑实证：repos 注册在场时 design 清单 NEW:<path> 整串当路径查主仓必 miss → 同时落
+// 「疑似跨仓声明」与「声明面自证 missing」（同一批文件两个矛盾告警）。修复=三处裸比点
+// 剥 NEW: 前缀（scope-audit.js:1263 同款口径）——NEW 文件已提交在盘 → 非嫌疑、自证命中。
+test('NEW: 前缀新建声明（已提交在盘）→ 零跨仓嫌疑告警 + 自证命中 + 归档通过', { timeout: 180_000 }, () => {
+  const cwd = makeRepo({ repos: true })
+  const change = '2026-10-24-npa-fix'
+  const specBase = join(cwd, '.sillyspec')
+  try {
+    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', 'NEW 前缀声明不误判跨仓\n成功标准：\n- 零嫌疑告警归档通过', '--autopilot'])
+    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+    mkdirSync(join(cwd, 'src', 'newmod'), { recursive: true })
+    writeFileSync(join(cwd, 'src', 'newmod', 'helper.js'), 'export const h = 1\n')
+    git(cwd, ['add', 'src/newmod/helper.js'])
+    git(cwd, ['commit', '-q', '-m', `feat: new module (${change}) (task-01)`])
+    fillDocs(specBase, change, FLIST_TABLE(['NEW:src/newmod/helper.js']))
+    tickTasks(specBase, cwd, change)
+    writeReviewFixture(specBase, cwd, change)
+    const s2 = cli(cwd, ['flow', 'done', '--change', change])
+    assert.equal(s2.status, 0, `NEW: 声明应收口通过: ${s2.stdout}\n${s2.stderr}`)
+    const out = `${s2.stdout}\n${s2.stderr}`
+    assert.doesNotMatch(out, /疑似跨仓声明未按规范标注/, '剥前缀后主仓存在 → 不落跨仓嫌疑')
+    assert.doesNotMatch(out, /声明面自证/, '声明（剥 NEW: 后）命中冻结面 → 零自证 missing')
+    assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
+  } finally {
+    rmSync(cwd, { recursive: true, force: true })
+  }
+})
+
+// ── 2026-10-24-flow-done-review-findings-status-blind：增量复审 resolved P1 不再恒拦 ──
+// 坑实证：FAIL 后修复→增量复审（verdict=PASS、历史条目标 status: resolved 保留）被
+// findings.some(P1) 盲判恒拦。修复=阻断只计开放项（isOpenFinding 词表；未知值 fail-closed 仍拦）。
+test('增量复审：resolved P1 + verdict PASS → 收口通过；open P1（显式 status）仍拦', { timeout: 180_000 }, () => {
+  // 臂 A：resolved P1 → PASS 收口
+  const cwdA = makeRepo()
+  const changeA = '2026-10-24-fsb-resolved'
+  const specA = join(cwdA, '.sillyspec')
+  // 臂 B：open P1（显式 status=open）→ 仍拦截
+  const cwdB = makeRepo()
+  const changeB = '2026-10-24-fsb-open'
+  const specB = join(cwdB, '.sillyspec')
+  try {
+    for (const [cwd, change, specBase, findings, wantStatus, wantPattern] of [
+      [cwdA, changeA, specA, [{ severity: 'P1', status: 'resolved', title: '已修复项', evidence: 'e', location: 'l' }], 0, null],
+      [cwdB, changeB, specB, [{ severity: 'P1', status: 'open', title: '开放项', evidence: 'e', location: 'l' }], null, /开放 P1 发现 1 项/],
+    ]) {
+      const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '增量复审 status 语义\n成功标准：\n- resolved 不拦 open 拦', '--autopilot'])
+      assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+      writeFileSync(join(cwd, 'work.txt'), 'done\n')
+      git(cwd, ['add', 'work.txt'])
+      git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
+      fillDocs(specBase, change)
+      // 承诺词强制评审必经（否则低风险夹具走豁免面，预置 review.json 不进门——门禁两臂都测不到）
+      const rq = join(specBase, 'changes', change, 'requirements.md')
+      writeFileSync(rq, readFileSync(rq, 'utf8').replace('协议夹具行为句', '并发写入不丢失（协议夹具行为句）'))
+      tickTasks(specBase, cwd, change)
+      const head = git(cwd, ['rev-parse', 'HEAD'])
+      writeFileSync(join(specBase, 'changes', change, 'review.json'), JSON.stringify({
+        schemaVersion: 1, change, reviewer: 'test-fixture', verdict: 'PASS', reviewedAgainst: head,
+        findings, dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
+      }, null, 2))
+      const s2 = cli(cwd, ['flow', 'done', '--change', change])
+      if (wantStatus === 0) {
+        assert.equal(s2.status, 0, `resolved P1 应放行: ${s2.stdout}\n${s2.stderr}`)
+        assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
+      } else {
+        assert.notEqual(s2.status, 0, 'open P1 必须拦截')
+        assert.match(`${s2.stdout}\n${s2.stderr}`, wantPattern, '拦截文案计开放项')
+      }
+    }
+  } finally {
+    rmSync(cwdA, { recursive: true, force: true })
+    rmSync(cwdB, { recursive: true, force: true })
+  }
+})

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-24-flow-done-review-artifact-drift-loop",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-01",
+      "tests": [
+        "test/flowdone-disposition-drift.test.mjs「⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提交拦 / 触承诺面拦 / 非祖先锚 fail-safe」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-24-flow-done-review-artifact-drift-loop"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review.test.mjs「isOpenFinding 词表：已解决/接受态 false，缺省与未知值 fail-closed true」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-24-flow-done-review-artifact-drift-loop"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review.test.mjs「validateReviewJson：findings[].status 额外字段不拒收（PASS + resolved P1 合法）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-24-flow-done-review-artifact-drift-loop"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「增量复审：resolved P1 + verdict PASS → 收口通过；open P1（显式 status）仍拦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-24-flow-done-review-artifact-drift-loop"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-03",
+      "tests": [
+        "test/thin-empty-face-crosscheck.test.mjs「NEW: 前缀新建声明（已提交在盘）→ 零跨仓嫌疑告警 + 自证命中 + 归档通过」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-24-flow-done-review-artifact-drift-loop"
+    }
+  ]
+}

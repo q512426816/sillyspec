@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket,
+  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket, isOpenFinding,
 } from '../src/flow-review.js'
 
 function makeChangeDir(designText, requirementsText) {
@@ -348,4 +348,39 @@ test('⑩ 盲维不适用变体：既有口径回归（不适用仍豁免、实�
   t = classifyReviewNeed({ changeDir: c.changeDir, patchText: '+++ a\n+let x = 1', change: quietName })
   assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `实质作答仍升级: ${t.reasons}`)
   rmSync(c.root, { recursive: true, force: true })
+})
+
+// ── 2026-10-24-flow-done-review-findings-status-blind：isOpenFinding 词表 + status 字段容忍 ──
+test('isOpenFinding 词表：已解决/接受态 false，缺省与未知值 fail-closed true', () => {
+  assert.equal(isOpenFinding({ severity: 'P1' }), true, '无 status=开放（首评缺省形态）')
+  assert.equal(isOpenFinding({ severity: 'P1', status: '' }), true, '空 status=开放')
+  for (const st of ['resolved', 'resolved-as-accepted', 'accepted', 'false-positive']) {
+    assert.equal(isOpenFinding({ severity: 'P1', status: st }), false, `${st}=已解决`)
+  }
+  assert.equal(isOpenFinding({ severity: 'P1', status: 'RESOLVED' }), false, '大小写不敏感')
+  assert.equal(isOpenFinding({ severity: 'P1', status: 'in-progress' }), true, '未知值 fail-closed 仍开放')
+  assert.equal(isOpenFinding(null), true, 'null 防御=开放')
+})
+
+test('validateReviewJson：findings[].status 额外字段不拒收（PASS + resolved P1 合法）', () => {
+  const { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n普通\n')
+  try {
+    const rp = join(changeDir, 'review.json')
+    writeFileSync(rp, JSON.stringify({
+      schemaVersion: 1, change: 'c-x', reviewer: 'subagent', verdict: 'PASS',
+      reviewedAgainst: 'a'.repeat(40),
+      findings: [
+        { severity: 'P1', status: 'resolved', title: '已修复', evidence: 'e', location: 'l' },
+        { severity: 'P2', status: 'false-positive', title: '误报', evidence: 'e' },
+      ],
+      dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' },
+      reviewedAt: '2026-10-24T00:00:00.000Z',
+    }))
+    const v = validateReviewJson(rp)
+    assert.equal(v.ok, true, `status 字段应被容忍: ${v.errors}`)
+    assert.equal(v.review.findings.length, 2)
+    assert.equal(isOpenFinding(v.review.findings[0]), false, 'resolved P1 非开放')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

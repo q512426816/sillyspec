@@ -513,3 +513,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：fe962b056b2fff15d37dbd2ae6e2333277a1fa87
 理由：- 最大风险：短哈希解析映射错位（批量回显的是完整 sha，输入是短哈希）——按输入序对齐而非按回显内容对齐，测试锚钉短哈希解析成功形态。 - 死路 1：用 `rev-list HEAD` 全集 + 本地 Set 判祖先——sound 性不足（topo 序不判传递闭包）或全集过大，且 is-ancestor 语义（相等=真）需特判，放弃；只批量化「可解析性」，祖先判定维持逐 live 锚 spawn（live 少，成本可忽略）。 - 死路 2：改 git-helper 的 batchCatFileExists 契约——它被归档锚点校验消费（按回显 sha 作键），改键序影响既有消费方；push.js 内做输入序对齐的本地批量，不动公共契约。
+
+## D-unmapped-473@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-24-flow-done-review-artifact-drift-loop
+原编号：D-001@v1
+锚点：未记录
+最近确认：fa9993688f139f22a1403cb1c0acdc80c023d8cf
+理由：最大风险：治理文件前缀 `.sillyspec/` 判定把「借治理路径夹带交付内容」的提交误判为保留——缓解：承诺面（requirements/design）单列强拦（touchedPromiseFace → 不成立），且 review.json 等治理件本身不进 patch 冻结面，夹带内容不因保留判定进冻结证据；后果方向是多保留一轮评审对象而非漏拦交付变更。试过放弃的方案：①放宽 reviewAnchoredToHead 为「锚是 HEAD 祖先」——把复审后真正的交付提交也放行，假绿方向不可接受；②按文件 mtime/索引快照判交付面变化——mtime 不可靠（checkout/重排即漂移），快照引入新冻结面与既有 patch 冻结重复；③在评审员侧解决（评审前自查锚后提交）——评审员无收口视野，循环仍在收口侧，治标不治本。

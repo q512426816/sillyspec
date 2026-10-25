@@ -309,3 +309,48 @@ test('⑤ e2e：冻结件缺失 + 评审未锚定——隔离重评（fail-safe 
   assert.ok(out3.includes('独立评审任务书'), '重评任务书再现')
   assert.ok(s3.status !== 0, '重评入口 exit ≠ 0')
 })
+
+// ── 2026-10-24-flow-done-review-artifact-drift-loop：交付面锚定（锚后治理件提交不隔离）──
+// 坑实证循环：复审锚（reviewedAgainst=修复后 HEAD）→ 提交 review.json → drift 两保留路径
+// 双盲（reviewAnchoredToHead 隔着 review.json 提交恒 false；governanceOnly 被窗口内更早的
+// 复审已覆盖修复提交拖 false）→ 隔离重评 → 再提交又前移。deliveryFaceAnchoredAfter 把度量
+// 单位换成锚点：锚后 own 提交只碰 .sillyspec/** 且未触承诺面 → 交付面未变，结论有效。
+const { deliveryFaceAnchoredAfter } = await import('../src/flow-parity.js')
+
+test('⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提交拦 / 触承诺面拦 / 非祖先锚 fail-safe', () => {
+  const d = fx()
+  const run = gitRepo(d)
+  writeFileSync(join(d, 'base.txt'), 'base\n')
+  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
+  // 复审前的修复提交（交付面——复审 reviewedAgainst 锚在它之后，属已覆盖面）
+  mkdirSync(join(d, 'src'), { recursive: true }); writeFileSync(join(d, 'src', 'fix.js'), 'fix\n')
+  run(['add', '.']); run(['commit', '-q', '-m', `fix: 评审修复 (${CHG}) (task-01)`])
+  const anchor = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
+  // 形态 1：锚后 review.json 治理件提交（坑循环形态）→ ok
+  mkdirSync(join(d, '.sillyspec', 'changes', CHG), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'changes', CHG, 'review.json'), '{}\n')
+  run(['add', '.']); run(['commit', '-q', '-m', `chore: review (${CHG})`])
+  let r = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
+  assert.equal(r.ok, true, `锚后仅治理件应 ok（files=${JSON.stringify(r.files)}）`)
+  assert.equal(r.ownCount, 1)
+  // 形态 2：锚后再有交付提交 → 不 ok（评审确实没见过）
+  writeFileSync(join(d, 'src', 'late.js'), 'late\n')
+  run(['add', '.']); run(['commit', '-q', '-m', `feat: 锚后交付 (${CHG}) (task-02)`])
+  r = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
+  assert.equal(r.ok, false, '锚后交付文件提交必须不 ok（重评正当）')
+  // 形态 3：触承诺面（requirements/design）→ 不 ok
+  const d2 = fx()
+  const run2 = gitRepo(d2)
+  writeFileSync(join(d2, 'base.txt'), 'base\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
+  const anchor2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
+  mkdirSync(join(d2, '.sillyspec', 'changes', CHG), { recursive: true })
+  writeFileSync(join(d2, '.sillyspec', 'changes', CHG, 'requirements.md'), 'r\n')
+  run2(['add', '.']); run2(['commit', '-q', '-m', `docs: 承诺面后改 (${CHG})`])
+  r = deliveryFaceAnchoredAfter({ cwd: d2, change: CHG, anchorSha: anchor2 })
+  assert.equal(r.ok, false, '触 requirements（承诺面）必须不 ok')
+  assert.equal(r.touchedPromiseFace, true)
+  // 形态 4：非祖先锚 / 空锚 → fail-safe false
+  assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: 'deadbeef' }).ok, false, '非祖先锚 fail-safe')
+  assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: '' }).ok, false, '空锚 fail-safe')
+})

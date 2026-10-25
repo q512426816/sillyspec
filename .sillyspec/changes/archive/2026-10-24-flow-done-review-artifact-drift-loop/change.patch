@@ -1,0 +1,422 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 6f1e7228..cb87f928 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -516,6 +516,46 @@ export function detectPatchDrift({ cwd, change, freezeHead }) {
+   } catch { return { drifted: false, ownCommits: [], head: null, ownFiles: [], governanceOnly: false, touchedPromiseFace: false } }
+ }
+ 
++/**
++ * 交付面锚定判定（2026-10-24-flow-done-review-artifact-drift-loop，坑实证三连循环）：
++ * 复审锚（review.json.reviewedAgainst）之后的本变更 own 提交只碰治理文件（.sillyspec/**，
++ * 典型形态=review.json 自身的归档前提交）且未触承诺面（requirements/design）→ 评审对象
++ * （交付面）自锚点起未变，结论有效。
++ *
++ * 堵 detectPatchDrift 两保留路径的复合盲区：reviewAnchoredToHead 要求锚==当前 HEAD——锚与
++ * HEAD 之间隔着 review.json 提交即恒 false；governanceOnly 看整个冻结窗——窗口内更早的
++ * 复审前修复提交（复审 reviewedAgainst 已覆盖）把 ownFiles 拖进交付文件 → 恒 false →
++ * 隔离重评 → 重评再提交 review.json 又前移……循环。本判定把「已覆盖」的度量单位从窗口
++ * 换成锚点：锚后的 own 提交才是复审未见的面。
++ *
++ * fail-safe：锚空/非祖先（rebase 重写）/git 失败 → false（宁可多评）。
++ * @returns {{ok: boolean, ownCount: number, files: string[], touchedPromiseFace: boolean}}
++ */
++export function deliveryFaceAnchoredAfter({ cwd, change, anchorSha }) {
++  try {
++    const a = String(anchorSha || '').trim().toLowerCase()
++    if (!/^[0-9a-f]{7,40}$/.test(a)) return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false }
++    // 非零退出码（非祖先/git 失败）由 execFileSync 抛出走 catch fail-safe
++    execFileSync('git', ['merge-base', '--is-ancestor', a, 'HEAD'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++    const log = execFileSync('git', ['log', '--name-only', '--format=%x00%s', `${a}..HEAD`], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
++    const files = []
++    let ownCount = 0
++    for (const block of String(log).split('\x00')) {
++      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean)
++      const subject = lines[0]
++      if (!subject) continue
++      if (parseChangeNamesFromSubject(subject).includes(change)) {
++        ownCount++
++        for (const f of lines.slice(1)) files.push(f.replace(/\\/g, '/'))
++      }
++    }
++    const promiseFace = [`.sillyspec/changes/${change}/requirements.md`, `.sillyspec/changes/${change}/design.md`]
++    const touchedPromiseFace = files.some((f) => promiseFace.includes(f))
++    const ok = files.every((f) => f.startsWith('.sillyspec/')) && !touchedPromiseFace
++    return { ok, ownCount, files, touchedPromiseFace }
++  } catch { return { ok: false, ownCount: 0, files: [], touchedPromiseFace: false } }
++}
++
+ /**
+  * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
+  * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 34ea331a..e337bcb9 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -337,7 +337,9 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+     ] : [
+       `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
+     ]),
+-    `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
++    `  "findings": [ { "severity": "P1|P2|P3", "status": "open|resolved|resolved-as-accepted|accepted|false-positive", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
++    `  （增量复审：已解决/接受的历史条目保留在 findings 并标 status——收口阻断只计 open 的 P1；首评可省略 status，缺省=open）`,
++    `  （写入纪律（2026-10-24-flow-done-review-artifact-drift-loop）：review.json 写 ${'<changeDir>/review.json'}——目录不存在=变更已归档/被移，停止并报告，勿重建目录；评审产物保持工作区未提交态，随归档提交一次性入库（先行提交会触发审计时点漂移判定））`,
+     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
+     `  "reviewedAt": "<ISO 时间>"`,
+     `}`,
+@@ -354,7 +356,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
+  * 不回写文件（校验器只读铁律）。误命中面（如连写分支名含 ≥7 位 hex 段）后果有限：
+  * reviewedAgainst 是溯源锚非门禁比对；风险评估见变更 design 风险1。
+  */
+-const extractAnchorSha = (v) => {
++export const extractAnchorSha = (v) => {
+   if (typeof v !== 'string') return null
+   const m = v.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])/)
+   return m ? m[0].toLowerCase() : null
+@@ -376,11 +378,25 @@ function readCrossRepoKeys(changeDir) {
+ }
+ 
+ /**
+- * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
++ * finding 开放态判定（2026-10-24-flow-done-review-findings-status-blind，坑实证）：增量复审
++ * （FAIL 后修复 → resume 同一评审员）天然在 findings 中保留历史条目并标 status——阻断判定
++ * 只数开放项。已解决集（评审员侧语义面，大小写不敏感）：resolved / resolved-as-accepted /
++ * accepted / false-positive；status 缺省/未知值=开放（fail-closed：不因新词表静默放行）。
++ */
++export function isOpenFinding(f) {
++  const s = String((f && f.status) || '').trim().toLowerCase()
++  if (!s) return true
++  return !['resolved', 'resolved-as-accepted', 'accepted', 'false-positive'].includes(s)
++}
++
++/**
++ * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含开放 P1 由调用方拦截。
+  * reviewedAgainst（评审对象锚）：可选字段——缺省容忍（旧产物向后兼容）。双形态
+  * （2026-10-12-tick-evidence-multi-anchor）：字符串（既有，7-40 hex）或对象
+  * {workspace: sha, repos: {<key>: sha}}——跨仓交付的「对着哪个面评审」可机核；
+  * 仓键开放（local.yaml repos 注册表键空间，CLI 不枚举校验键集合）。
++ * findings[].status：可选字段（isOpenFinding 词表）——校验不拒绝未知值（展示面保留），
++ * 阻断语义由调用方按 isOpenFinding 收敛（fail-closed）。
+  */
+ export function validateReviewJson(path) {
+   let raw
+diff --git a/src/flow.js b/src/flow.js
+index db2f8fc7..749e91a6 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1884,13 +1884,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
+           console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结（治理工件不入冻结面，治理修复随归档目录本体留档）`)
+         } else {
+-          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
++          // 交付面锚定（2026-10-24-flow-done-review-artifact-drift-loop，坑实证三连循环）：
++          // 复审锚之后的 own 提交只碰治理文件（review.json 自身提交的典型形态）→ 评审对象
++          // （交付面）自锚点起未变，保留。堵两保留路径的复合盲区：reviewAnchoredToHead 要求
++          // 锚==当前 HEAD（隔着 review.json 提交即恒 false）；governanceOnly 聚合整个冻结窗
++          // （复审已覆盖的更早修复提交把 ownFiles 拖进交付文件 → 恒 false）→ 隔离重评 →
++          // 重评再提交 review.json 又前移……循环。度量单位从窗口换成锚点：锚后才是复审未见。
++          let _deliveryAnchored = null
+           try {
+-            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+-            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+-          } catch (e) {
+-            quarantineOk = false
+-            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
++            const { extractAnchorSha } = await import('./flow-review.js')
++            const { deliveryFaceAnchoredAfter } = await import('./flow-parity.js')
++            const _raw = JSON.parse(readFileSync(reviewPath, 'utf8'))
++            const _anchor = extractAnchorSha(_raw && _raw.reviewedAgainst)
++            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor }) : null
++          } catch { /* 锚读取/判定失败 → 走隔离（fail-safe 宁可多评） */ }
++          if (_deliveryAnchored && _deliveryAnchored.ok) {
++            console.log(`   review.json 保留不隔离——复审锚（reviewedAgainst）之后的本变更提交仅触及治理文件（${_deliveryAnchored.ownCount} 个提交，未触 requirements/design），评审对象（交付面）自锚点起未变，结论有效；change.patch 自动重冻结（治理工件不入冻结面）`)
++          } else {
++            const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
++            try {
++              renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
++              console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
++            } catch (e) {
++              quarantineOk = false
++              console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
++            }
+           }
+         }
+       }
+@@ -2087,7 +2105,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // 首段命中注册仓的条目额外标注 key，点名+三种正确语法指引。
+         const _declared = []
+         for (const e of planEntries) {
+-          const pe = String((e && e.path) || '').split('\\').join('/')
++          // NEW: 前缀剥除（坑 flow-done-new-prefix-crossrepo-ambiguity，scope-audit.js:1263 同款
++          // 口径）：新建声明整串 NEW:<path> 当路径查主仓必 miss → 误落「疑似跨仓」；剥后存在性
++          // 核验对真实路径（NEW 文件已提交则在盘），NEW 语义留给 design 门禁的原文校验。
++          const pe = String((e && e.path) || '').split('\\').join('/').replace(/^NEW:/, '')
+           if (!pe || pe.startsWith('.sillyspec/')) continue
+           if (e.repo) continue
+           _declared.push({ path: pe })
+@@ -2385,7 +2406,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             const designPath = join(changeDir, 'design.md')
+             if (existsSync(designPath)) {
+               const { parseFileChangeListDetailed } = await import('./change-list.js')
+-              const declared = parseFileChangeListDetailed(designPath).map((e) => e.path)
++              const declared = parseFileChangeListDetailed(designPath).map((e) => String(e.path).replace(/^NEW:/, ''))
+               const frozenSet = new Set(ownFiles.map((f) => String(f).replace(/\\/g, '/')))
+               const missing = declared.filter((p) => !frozenSet.has(p) && !p.startsWith('.sillyspec/'))
+               if (missing.length > 0) {
+@@ -2412,17 +2433,18 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
+   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
+   // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
+-  // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
++  // 协议调用数不变）；FAIL 或开放 P1 发现=拦截（修复后删件重评再重跑 done，断点续——开放判定
++  // 见 flow-review.js isOpenFinding，2026-10-24-flow-done-review-findings-status-blind）。
+   if (st.substeps?.review === 'done') {
+     skip('review')
+     // 回填（修评审 P2②：续跑成功轮遥测不失忆——review 已发生但子步已标，从留档件回读结论）
+     try {
+-      const { validateReviewJson } = await import('./flow-review.js')
++      const { validateReviewJson, isOpenFinding } = await import('./flow-review.js')
+       const rp = join(changeDir, 'review.json')
+       if (existsSync(rp)) {
+         const v = validateReviewJson(rp)
+         reviewOutcome = v.ok
+-          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || ''))).length, backfilled: true }
++          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')) && isOpenFinding(f)).length, backfilled: true }
+           : { required: true, sampled: false, verdict: 'invalid', backfilled: true }
+       } else {
+         reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
+@@ -2465,12 +2487,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         reportMidFail('review')
+         process.exit(1)
+       }
+-      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
+-      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
++      // 开放 P1 才阻断（2026-10-24-flow-done-review-findings-status-blind，坑实证）：增量复审
++      // 保留历史条目并标 status（resolved/resolved-as-accepted/accepted/false-positive）——
++      // 旧口径 findings.some(P1) 盲判 status，把 verdict=PASS 的增量复审恒拦在收口门。
++      const { isOpenFinding } = await import('./flow-review.js')
++      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')) && isOpenFinding(f))
++      const others = (v.review.findings || []).filter((f) => !p1s.includes(f))
+       if (v.review.verdict === 'FAIL' || p1s.length > 0) {
+-        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
+-        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
++        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，开放 P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
++        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}${f.status ? `·${f.status}` : ''}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+         console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
++        console.error(`   （增量复审提示：已解决/接受的历史条目保留并标 status=resolved/resolved-as-accepted/accepted/false-positive——阻断只计开放项，勿反复改 verdict）`)
+         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
+         appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
+         reportMidFail('review')
+@@ -2532,7 +2559,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const _freezeFiles = parseFrozenPatchSummary(patchText).map((f) => f.path)
+         if (_freezeFiles.length > 0) {
+           const { parseFileChangeListDetailed } = await import('./change-list.js')
+-          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => e.path)
++          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => String(e.path).replace(/^NEW:/, ''))
+           if (_declared.length > 0) {
+             const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+             const _split = splitOwnVsForeignDiffFiles(cwd, change, _freezeFiles, { specBase })
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 496dbaab..a945599f 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -583,8 +583,8 @@ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
+   const ok = cli(cwd, ['flow', 'done', '--change', change, '--freeze-dirty'])
+   assert.equal(ok.status, 0, `done 失败: ${ok.stdout}\n${ok.stderr}`)
+   assert.match(ok.stdout + ok.stderr, /显式声明.*并入冻结面|--freeze-dirty.*并入冻结/, '声明入冻提示')
+-  assert.match(ok.stdout, /Git 历史可自由整理/, '压扁指引在场')
+-  assert.match(ok.stdout, /reset --soft/, 'reset 指引含基线')
++  assert.match(ok.stdout, /sillyspec push 压扁本地未推送提交/, '压扁指引在场（4af0b660 指引改版：sillyspec push 压扁为新契约）')
++  assert.match(ok.stdout, /禁止 reset --soft/, 'reset --soft 禁令在场（压扁只走 sillyspec push）')
+   const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
+   const archived = readdirSync(archDir)[0]
+   const meta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+index 380e05cb..0c0039ed 100644
+--- a/test/flow-review.test.mjs
++++ b/test/flow-review.test.mjs
+@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ import {
+-  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket,
++  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, reviewAnchoredToHead, sampleBucket, isOpenFinding,
+ } from '../src/flow-review.js'
+ 
+ function makeChangeDir(designText, requirementsText) {
+@@ -349,3 +349,38 @@ test('⑩ 盲维不适用变体：既有口径回归（不适用仍豁免、实
+   assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `实质作答仍升级: ${t.reasons}`)
+   rmSync(c.root, { recursive: true, force: true })
+ })
++
++// ── 2026-10-24-flow-done-review-findings-status-blind：isOpenFinding 词表 + status 字段容忍 ──
++test('isOpenFinding 词表：已解决/接受态 false，缺省与未知值 fail-closed true', () => {
++  assert.equal(isOpenFinding({ severity: 'P1' }), true, '无 status=开放（首评缺省形态）')
++  assert.equal(isOpenFinding({ severity: 'P1', status: '' }), true, '空 status=开放')
++  for (const st of ['resolved', 'resolved-as-accepted', 'accepted', 'false-positive']) {
++    assert.equal(isOpenFinding({ severity: 'P1', status: st }), false, `${st}=已解决`)
++  }
++  assert.equal(isOpenFinding({ severity: 'P1', status: 'RESOLVED' }), false, '大小写不敏感')
++  assert.equal(isOpenFinding({ severity: 'P1', status: 'in-progress' }), true, '未知值 fail-closed 仍开放')
++  assert.equal(isOpenFinding(null), true, 'null 防御=开放')
++})
++
++test('validateReviewJson：findings[].status 额外字段不拒收（PASS + resolved P1 合法）', () => {
++  const { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n普通\n')
++  try {
++    const rp = join(changeDir, 'review.json')
++    writeFileSync(rp, JSON.stringify({
++      schemaVersion: 1, change: 'c-x', reviewer: 'subagent', verdict: 'PASS',
++      reviewedAgainst: 'a'.repeat(40),
++      findings: [
++        { severity: 'P1', status: 'resolved', title: '已修复', evidence: 'e', location: 'l' },
++        { severity: 'P2', status: 'false-positive', title: '误报', evidence: 'e' },
++      ],
++      dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'ok', 作用域: 'ok' },
++      reviewedAt: '2026-10-24T00:00:00.000Z',
++    }))
++    const v = validateReviewJson(rp)
++    assert.equal(v.ok, true, `status 字段应被容忍: ${v.errors}`)
++    assert.equal(v.review.findings.length, 2)
++    assert.equal(isOpenFinding(v.review.findings[0]), false, 'resolved P1 非开放')
++  } finally {
++    rmSync(root, { recursive: true, force: true })
++  }
++})
+diff --git a/test/flowdone-disposition-drift.test.mjs b/test/flowdone-disposition-drift.test.mjs
+index 600d8a8d..de83a346 100644
+--- a/test/flowdone-disposition-drift.test.mjs
++++ b/test/flowdone-disposition-drift.test.mjs
+@@ -309,3 +309,48 @@ test('⑤ e2e：冻结件缺失 + 评审未锚定——隔离重评（fail-safe
+   assert.ok(out3.includes('独立评审任务书'), '重评任务书再现')
+   assert.ok(s3.status !== 0, '重评入口 exit ≠ 0')
+ })
++
++// ── 2026-10-24-flow-done-review-artifact-drift-loop：交付面锚定（锚后治理件提交不隔离）──
++// 坑实证循环：复审锚（reviewedAgainst=修复后 HEAD）→ 提交 review.json → drift 两保留路径
++// 双盲（reviewAnchoredToHead 隔着 review.json 提交恒 false；governanceOnly 被窗口内更早的
++// 复审已覆盖修复提交拖 false）→ 隔离重评 → 再提交又前移。deliveryFaceAnchoredAfter 把度量
++// 单位换成锚点：锚后 own 提交只碰 .sillyspec/** 且未触承诺面 → 交付面未变，结论有效。
++const { deliveryFaceAnchoredAfter } = await import('../src/flow-parity.js')
++
++test('⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提交拦 / 触承诺面拦 / 非祖先锚 fail-safe', () => {
++  const d = fx()
++  const run = gitRepo(d)
++  writeFileSync(join(d, 'base.txt'), 'base\n')
++  run(['add', '.']); run(['commit', '-q', '-m', 'base'])
++  // 复审前的修复提交（交付面——复审 reviewedAgainst 锚在它之后，属已覆盖面）
++  mkdirSync(join(d, 'src'), { recursive: true }); writeFileSync(join(d, 'src', 'fix.js'), 'fix\n')
++  run(['add', '.']); run(['commit', '-q', '-m', `fix: 评审修复 (${CHG}) (task-01)`])
++  const anchor = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).trim()
++  // 形态 1：锚后 review.json 治理件提交（坑循环形态）→ ok
++  mkdirSync(join(d, '.sillyspec', 'changes', CHG), { recursive: true })
++  writeFileSync(join(d, '.sillyspec', 'changes', CHG, 'review.json'), '{}\n')
++  run(['add', '.']); run(['commit', '-q', '-m', `chore: review (${CHG})`])
++  let r = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
++  assert.equal(r.ok, true, `锚后仅治理件应 ok（files=${JSON.stringify(r.files)}）`)
++  assert.equal(r.ownCount, 1)
++  // 形态 2：锚后再有交付提交 → 不 ok（评审确实没见过）
++  writeFileSync(join(d, 'src', 'late.js'), 'late\n')
++  run(['add', '.']); run(['commit', '-q', '-m', `feat: 锚后交付 (${CHG}) (task-02)`])
++  r = deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: anchor })
++  assert.equal(r.ok, false, '锚后交付文件提交必须不 ok（重评正当）')
++  // 形态 3：触承诺面（requirements/design）→ 不 ok
++  const d2 = fx()
++  const run2 = gitRepo(d2)
++  writeFileSync(join(d2, 'base.txt'), 'base\n')
++  run2(['add', '.']); run2(['commit', '-q', '-m', 'base'])
++  const anchor2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: d2, encoding: 'utf8' }).trim()
++  mkdirSync(join(d2, '.sillyspec', 'changes', CHG), { recursive: true })
++  writeFileSync(join(d2, '.sillyspec', 'changes', CHG, 'requirements.md'), 'r\n')
++  run2(['add', '.']); run2(['commit', '-q', '-m', `docs: 承诺面后改 (${CHG})`])
++  r = deliveryFaceAnchoredAfter({ cwd: d2, change: CHG, anchorSha: anchor2 })
++  assert.equal(r.ok, false, '触 requirements（承诺面）必须不 ok')
++  assert.equal(r.touchedPromiseFace, true)
++  // 形态 4：非祖先锚 / 空锚 → fail-safe false
++  assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: 'deadbeef' }).ok, false, '非祖先锚 fail-safe')
++  assert.equal(deliveryFaceAnchoredAfter({ cwd: d, change: CHG, anchorSha: '' }).ok, false, '空锚 fail-safe')
++})
+diff --git a/test/thin-empty-face-crosscheck.test.mjs b/test/thin-empty-face-crosscheck.test.mjs
+index e362c009..e11a5670 100644
+--- a/test/thin-empty-face-crosscheck.test.mjs
++++ b/test/thin-empty-face-crosscheck.test.mjs
+@@ -404,3 +404,79 @@ test('e2e：.claude/ 与 CLAUDE.md 剔除，正常源码保留', () => {
+     rmSync(cwd, { recursive: true, force: true })
+   }
+ })
++
++// ── 2026-10-24-flow-done-new-prefix-crossrepo-ambiguity：NEW: 前缀新建声明不再误落跨仓嫌疑 ──
++// 坑实证：repos 注册在场时 design 清单 NEW:<path> 整串当路径查主仓必 miss → 同时落
++// 「疑似跨仓声明」与「声明面自证 missing」（同一批文件两个矛盾告警）。修复=三处裸比点
++// 剥 NEW: 前缀（scope-audit.js:1263 同款口径）——NEW 文件已提交在盘 → 非嫌疑、自证命中。
++test('NEW: 前缀新建声明（已提交在盘）→ 零跨仓嫌疑告警 + 自证命中 + 归档通过', { timeout: 180_000 }, () => {
++  const cwd = makeRepo({ repos: true })
++  const change = '2026-10-24-npa-fix'
++  const specBase = join(cwd, '.sillyspec')
++  try {
++    const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', 'NEW 前缀声明不误判跨仓\n成功标准：\n- 零嫌疑告警归档通过', '--autopilot'])
++    assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++    mkdirSync(join(cwd, 'src', 'newmod'), { recursive: true })
++    writeFileSync(join(cwd, 'src', 'newmod', 'helper.js'), 'export const h = 1\n')
++    git(cwd, ['add', 'src/newmod/helper.js'])
++    git(cwd, ['commit', '-q', '-m', `feat: new module (${change}) (task-01)`])
++    fillDocs(specBase, change, FLIST_TABLE(['NEW:src/newmod/helper.js']))
++    tickTasks(specBase, cwd, change)
++    writeReviewFixture(specBase, cwd, change)
++    const s2 = cli(cwd, ['flow', 'done', '--change', change])
++    assert.equal(s2.status, 0, `NEW: 声明应收口通过: ${s2.stdout}\n${s2.stderr}`)
++    const out = `${s2.stdout}\n${s2.stderr}`
++    assert.doesNotMatch(out, /疑似跨仓声明未按规范标注/, '剥前缀后主仓存在 → 不落跨仓嫌疑')
++    assert.doesNotMatch(out, /声明面自证/, '声明（剥 NEW: 后）命中冻结面 → 零自证 missing')
++    assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
++  } finally {
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++// ── 2026-10-24-flow-done-review-findings-status-blind：增量复审 resolved P1 不再恒拦 ──
++// 坑实证：FAIL 后修复→增量复审（verdict=PASS、历史条目标 status: resolved 保留）被
++// findings.some(P1) 盲判恒拦。修复=阻断只计开放项（isOpenFinding 词表；未知值 fail-closed 仍拦）。
++test('增量复审：resolved P1 + verdict PASS → 收口通过；open P1（显式 status）仍拦', { timeout: 180_000 }, () => {
++  // 臂 A：resolved P1 → PASS 收口
++  const cwdA = makeRepo()
++  const changeA = '2026-10-24-fsb-resolved'
++  const specA = join(cwdA, '.sillyspec')
++  // 臂 B：open P1（显式 status=open）→ 仍拦截
++  const cwdB = makeRepo()
++  const changeB = '2026-10-24-fsb-open'
++  const specB = join(cwdB, '.sillyspec')
++  try {
++    for (const [cwd, change, specBase, findings, wantStatus, wantPattern] of [
++      [cwdA, changeA, specA, [{ severity: 'P1', status: 'resolved', title: '已修复项', evidence: 'e', location: 'l' }], 0, null],
++      [cwdB, changeB, specB, [{ severity: 'P1', status: 'open', title: '开放项', evidence: 'e', location: 'l' }], null, /开放 P1 发现 1 项/],
++    ]) {
++      const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '增量复审 status 语义\n成功标准：\n- resolved 不拦 open 拦', '--autopilot'])
++      assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++      writeFileSync(join(cwd, 'work.txt'), 'done\n')
++      git(cwd, ['add', 'work.txt'])
++      git(cwd, ['commit', '-q', '-m', `work (${change}) (task-01)`])
++      fillDocs(specBase, change)
++      // 承诺词强制评审必经（否则低风险夹具走豁免面，预置 review.json 不进门——门禁两臂都测不到）
++      const rq = join(specBase, 'changes', change, 'requirements.md')
++      writeFileSync(rq, readFileSync(rq, 'utf8').replace('协议夹具行为句', '并发写入不丢失（协议夹具行为句）'))
++      tickTasks(specBase, cwd, change)
++      const head = git(cwd, ['rev-parse', 'HEAD'])
++      writeFileSync(join(specBase, 'changes', change, 'review.json'), JSON.stringify({
++        schemaVersion: 1, change, reviewer: 'test-fixture', verdict: 'PASS', reviewedAgainst: head,
++        findings, dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
++      }, null, 2))
++      const s2 = cli(cwd, ['flow', 'done', '--change', change])
++      if (wantStatus === 0) {
++        assert.equal(s2.status, 0, `resolved P1 应放行: ${s2.stdout}\n${s2.stderr}`)
++        assert.ok(readdirSyncSafe(join(specBase, 'changes', 'archive')).some((d) => d.includes(change)), '归档完成')
++      } else {
++        assert.notEqual(s2.status, 0, 'open P1 必须拦截')
++        assert.match(`${s2.stdout}\n${s2.stderr}`, wantPattern, '拦截文案计开放项')
++      }
++    }
++  } finally {
++    rmSync(cwdA, { recursive: true, force: true })
++    rmSync(cwdB, { recursive: true, force: true })
++  }
++})

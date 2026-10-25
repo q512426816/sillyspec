@@ -583,8 +583,8 @@ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
   const ok = cli(cwd, ['flow', 'done', '--change', change, '--freeze-dirty'])
   assert.equal(ok.status, 0, `done 失败: ${ok.stdout}\n${ok.stderr}`)
   assert.match(ok.stdout + ok.stderr, /显式声明.*并入冻结面|--freeze-dirty.*并入冻结/, '声明入冻提示')
-  assert.match(ok.stdout, /Git 历史可自由整理/, '压扁指引在场')
-  assert.match(ok.stdout, /reset --soft/, 'reset 指引含基线')
+  assert.match(ok.stdout, /sillyspec push 压扁本地未推送提交/, '压扁指引在场（4af0b660 指引改版：sillyspec push 压扁为新契约）')
+  assert.match(ok.stdout, /禁止 reset --soft/, 'reset --soft 禁令在场（压扁只走 sillyspec push）')
   const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
   const archived = readdirSync(archDir)[0]
   const meta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))

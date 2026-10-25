@@ -337,7 +337,9 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
     ] : [
       `  "reviewedAgainst": "<评审对象 HEAD 完整 sha——照抄任务书标注的 sha>",`,
     ]),
-    `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
+    `  "findings": [ { "severity": "P1|P2|P3", "status": "open|resolved|resolved-as-accepted|accepted|false-positive", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
+    `  （增量复审：已解决/接受的历史条目保留在 findings 并标 status——收口阻断只计 open 的 P1；首评可省略 status，缺省=open）`,
+    `  （写入纪律（2026-10-24-flow-done-review-artifact-drift-loop）：review.json 写 ${'<changeDir>/review.json'}——目录不存在=变更已归档/被移，停止并报告，勿重建目录；评审产物保持工作区未提交态，随归档提交一次性入库（先行提交会触发审计时点漂移判定））`,
     `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
     `  "reviewedAt": "<ISO 时间>"`,
     `}`,
@@ -354,7 +356,7 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
  * 不回写文件（校验器只读铁律）。误命中面（如连写分支名含 ≥7 位 hex 段）后果有限：
  * reviewedAgainst 是溯源锚非门禁比对；风险评估见变更 design 风险1。
  */
-const extractAnchorSha = (v) => {
+export const extractAnchorSha = (v) => {
   if (typeof v !== 'string') return null
   const m = v.match(/(?<![0-9a-fA-F])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])/)
   return m ? m[0].toLowerCase() : null
@@ -376,11 +378,25 @@ function readCrossRepoKeys(changeDir) {
 }
 
 /**
- * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
+ * finding 开放态判定（2026-10-24-flow-done-review-findings-status-blind，坑实证）：增量复审
+ * （FAIL 后修复 → resume 同一评审员）天然在 findings 中保留历史条目并标 status——阻断判定
+ * 只数开放项。已解决集（评审员侧语义面，大小写不敏感）：resolved / resolved-as-accepted /
+ * accepted / false-positive；status 缺省/未知值=开放（fail-closed：不因新词表静默放行）。
+ */
+export function isOpenFinding(f) {
+  const s = String((f && f.status) || '').trim().toLowerCase()
+  if (!s) return true
+  return !['resolved', 'resolved-as-accepted', 'accepted', 'false-positive'].includes(s)
+}
+
+/**
+ * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含开放 P1 由调用方拦截。
  * reviewedAgainst（评审对象锚）：可选字段——缺省容忍（旧产物向后兼容）。双形态
  * （2026-10-12-tick-evidence-multi-anchor）：字符串（既有，7-40 hex）或对象
  * {workspace: sha, repos: {<key>: sha}}——跨仓交付的「对着哪个面评审」可机核；
  * 仓键开放（local.yaml repos 注册表键空间，CLI 不枚举校验键集合）。
+ * findings[].status：可选字段（isOpenFinding 词表）——校验不拒绝未知值（展示面保留），
+ * 阻断语义由调用方按 isOpenFinding 收敛（fail-closed）。
  */
 export function validateReviewJson(path) {
   let raw

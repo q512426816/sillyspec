@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-24-flow-done-review-artifact-drift-loop",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "fa9993688f139f22a1403cb1c0acdc80c023d8cf",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "design.md 接口契约未收录同批收编交付的 NEW: 前缀剥除行为变化（三处裸比点）",
+      "evidence": "commit 155f19e4 倒推收编中断会话在途工作，flow.js 三处把 NEW:<path> 剥前缀再比（跨仓嫌疑判定/设计门 missing 核验/冻结归属比对）——对外可见行为变化（NEW: 声明不再误落跨仓嫌疑与自证 missing），但 design.md 接口契约只写了 deliveryFaceAnchoredAfter/isOpenFinding/任务书三件，未提 NEW: 剥除；缓解：proposal 动机、commit message、测试头注释均披露收编来历，FR-03 绑定测试「NEW: 前缀新建声明…」覆盖该行为且本评审复跑绿；文档对齐缺口非承诺违反。",
+      "location": "src/flow.js:2111,2409,2562（design.md 接口契约节缺对应条目）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-25T11:25:10.000Z"
+}

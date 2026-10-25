@@ -1,0 +1,107 @@
+{
+  "change": "2026-10-24-flow-done-review-artifact-drift-loop",
+  "baseline": "e26546db6247f7b07df5e68583ab7e5a041d9014",
+  "head": "fa9993688f139f22a1403cb1c0acdc80c023d8cf",
+  "files": [
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "test/flow-protocol.test.mjs",
+    "test/flow-review.test.mjs",
+    "test/flowdone-disposition-drift.test.mjs",
+    "test/thin-empty-face-crosscheck.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 261,
+    "deletions": 22
+  },
+  "savedAt": "2026-10-25T11:20:44.856Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "e26546db6247f7b07df5e68583ab7e5a041d9014",
+    "totals": {
+      "files": 7,
+      "additions": 261,
+      "deletions": 22
+    },
+    "rows": [
+      {
+        "path": "src/flow-parity.js",
+        "additions": 40,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 19,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 43,
+        "deletions": 16,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-protocol.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-review.test.mjs",
+        "additions": 36,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flowdone-disposition-drift.test.mjs",
+        "additions": 45,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/thin-empty-face-crosscheck.test.mjs",
+        "additions": 76,
+        "deletions": 0,
+        "kind": "modified"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "1ed272f7dd9ee06baadc2e6ba40b5967303fa1db406dedf248288c2ae0a90b5a",
+  "patchStatus": "ok"
+}

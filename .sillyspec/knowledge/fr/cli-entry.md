@@ -11628,3 +11628,60 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-23-push-plan-anchor-batch-perf
   status: active
+
+## FR-cli-entry-613 复审锚后仅治理文件 own 提交不再触发隔离重评（deliveryFaceAnchoredAfter 判定 + flowdone-disposition-drift 回归绿）
+变更：2026-10-24-flow-done-review-artifact-drift-loop
+状态：active
+摘要：主路径；边界（fail-safe）
+全文：.sillyspec/changes/archive/2026-10-24-flow-done-review-artifact-drift-loop/requirements.md#FR-01
+最近确认：fa9993688f139f22a1403cb1c0acdc80c023d8cf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-01
+  tests: test/flowdone-disposition-drift.test.mjs「⑥ deliveryFaceAnchoredAfter：锚后治理件提交 ok / 锚后交付提交拦 / 触承诺面拦 / 非祖先锚 fail-safe」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-24-flow-done-review-artifact-drift-loop
+  status: active
+
+## FR-cli-entry-614 findings 阻断只计开放 P1，status 缺省/未知值按开放收敛（isOpenFinding + flow-review 测试绿）
+变更：2026-10-24-flow-done-review-artifact-drift-loop
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-24-flow-done-review-artifact-drift-loop/requirements.md#FR-02
+最近确认：fa9993688f139f22a1403cb1c0acdc80c023d8cf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-02
+  tests: test/flow-review.test.mjs「validateReviewJson：findings[].status 额外字段不拒收（PASS + resolved P1 合法）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-24-flow-done-review-artifact-drift-loop
+  status: active
+
+## FR-cli-entry-615 评审写入纪律面 thin-empty-face-crosscheck 绿；受影响面 flow-review/flowdone-disposition-drift/thin-empty-face-crosscheck 33/33 绿 + lint 1085 文件绿
+变更：2026-10-24-flow-done-review-artifact-drift-loop
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-24-flow-done-review-artifact-drift-loop/requirements.md#FR-03
+最近确认：fa9993688f139f22a1403cb1c0acdc80c023d8cf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-24-flow-done-review-artifact-drift-loop:flow:测试绑定FR-03
+  tests: test/thin-empty-face-crosscheck.test.mjs「NEW: 前缀新建声明（已提交在盘）→ 零跨仓嫌疑告警 + 自证命中 + 归档通过」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-24-flow-done-review-artifact-drift-loop
+  status: active

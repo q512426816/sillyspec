@@ -1884,13 +1884,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // P2 文档措辞也付整轮子代理评审费（循环，被迫手工重排执行顺序自赎）。
           console.log(`   review.json 保留不隔离——窗口内本变更提交仅触及治理文件（${drift.ownFiles.length} 个，未触 requirements/design），评审对象（交付面）未变，结论对最新面等价；change.patch 自动重冻结（治理工件不入冻结面，治理修复随归档目录本体留档）`)
         } else {
-          const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+          // 交付面锚定（2026-10-24-flow-done-review-artifact-drift-loop，坑实证三连循环）：
+          // 复审锚之后的 own 提交只碰治理文件（review.json 自身提交的典型形态）→ 评审对象
+          // （交付面）自锚点起未变，保留。堵两保留路径的复合盲区：reviewAnchoredToHead 要求
+          // 锚==当前 HEAD（隔着 review.json 提交即恒 false）；governanceOnly 聚合整个冻结窗
+          // （复审已覆盖的更早修复提交把 ownFiles 拖进交付文件 → 恒 false）→ 隔离重评 →
+          // 重评再提交 review.json 又前移……循环。度量单位从窗口换成锚点：锚后才是复审未见。
+          let _deliveryAnchored = null
           try {
-            renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
-            console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
-          } catch (e) {
-            quarantineOk = false
-            console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
+            const { extractAnchorSha } = await import('./flow-review.js')
+            const { deliveryFaceAnchoredAfter } = await import('./flow-parity.js')
+            const _raw = JSON.parse(readFileSync(reviewPath, 'utf8'))
+            const _anchor = extractAnchorSha(_raw && _raw.reviewedAgainst)
+            _deliveryAnchored = _anchor ? deliveryFaceAnchoredAfter({ cwd, change, anchorSha: _anchor }) : null
+          } catch { /* 锚读取/判定失败 → 走隔离（fail-safe 宁可多评） */ }
+          if (_deliveryAnchored && _deliveryAnchored.ok) {
+            console.log(`   review.json 保留不隔离——复审锚（reviewedAgainst）之后的本变更提交仅触及治理文件（${_deliveryAnchored.ownCount} 个提交，未触 requirements/design），评审对象（交付面）自锚点起未变，结论有效；change.patch 自动重冻结（治理工件不入冻结面）`)
+          } else {
+            const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+            try {
+              renameSync(reviewPath, `${reviewPath}.superseded-${ts}`)
+              console.warn(`   旧 review.json 已隔离为 review.json.superseded-${ts}（评审结论对着旧冻结面）——重新执行评审任务书后再收口`)
+            } catch (e) {
+              quarantineOk = false
+              console.error(`   ⚠️ 旧 review.json 隔离失败（${e.message}）——本次保持现状幂等跳过，手动删除/改名 ${reviewPath} 后重跑（将自动重冻结+重评）`)
+            }
           }
         }
       }
@@ -2087,7 +2105,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 首段命中注册仓的条目额外标注 key，点名+三种正确语法指引。
         const _declared = []
         for (const e of planEntries) {
-          const pe = String((e && e.path) || '').split('\\').join('/')
+          // NEW: 前缀剥除（坑 flow-done-new-prefix-crossrepo-ambiguity，scope-audit.js:1263 同款
+          // 口径）：新建声明整串 NEW:<path> 当路径查主仓必 miss → 误落「疑似跨仓」；剥后存在性
+          // 核验对真实路径（NEW 文件已提交则在盘），NEW 语义留给 design 门禁的原文校验。
+          const pe = String((e && e.path) || '').split('\\').join('/').replace(/^NEW:/, '')
           if (!pe || pe.startsWith('.sillyspec/')) continue
           if (e.repo) continue
           _declared.push({ path: pe })
@@ -2385,7 +2406,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             const designPath = join(changeDir, 'design.md')
             if (existsSync(designPath)) {
               const { parseFileChangeListDetailed } = await import('./change-list.js')
-              const declared = parseFileChangeListDetailed(designPath).map((e) => e.path)
+              const declared = parseFileChangeListDetailed(designPath).map((e) => String(e.path).replace(/^NEW:/, ''))
               const frozenSet = new Set(ownFiles.map((f) => String(f).replace(/\\/g, '/')))
               const missing = declared.filter((p) => !frozenSet.has(p) && !p.startsWith('.sillyspec/'))
               if (missing.length > 0) {
@@ -2412,17 +2433,18 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
   // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
-  // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
+  // 协议调用数不变）；FAIL 或开放 P1 发现=拦截（修复后删件重评再重跑 done，断点续——开放判定
+  // 见 flow-review.js isOpenFinding，2026-10-24-flow-done-review-findings-status-blind）。
   if (st.substeps?.review === 'done') {
     skip('review')
     // 回填（修评审 P2②：续跑成功轮遥测不失忆——review 已发生但子步已标，从留档件回读结论）
     try {
-      const { validateReviewJson } = await import('./flow-review.js')
+      const { validateReviewJson, isOpenFinding } = await import('./flow-review.js')
       const rp = join(changeDir, 'review.json')
       if (existsSync(rp)) {
         const v = validateReviewJson(rp)
         reviewOutcome = v.ok
-          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || ''))).length, backfilled: true }
+          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')) && isOpenFinding(f)).length, backfilled: true }
           : { required: true, sampled: false, verdict: 'invalid', backfilled: true }
       } else {
         reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
@@ -2465,12 +2487,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         reportMidFail('review')
         process.exit(1)
       }
-      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
-      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
+      // 开放 P1 才阻断（2026-10-24-flow-done-review-findings-status-blind，坑实证）：增量复审
+      // 保留历史条目并标 status（resolved/resolved-as-accepted/accepted/false-positive）——
+      // 旧口径 findings.some(P1) 盲判 status，把 verdict=PASS 的增量复审恒拦在收口门。
+      const { isOpenFinding } = await import('./flow-review.js')
+      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')) && isOpenFinding(f))
+      const others = (v.review.findings || []).filter((f) => !p1s.includes(f))
       if (v.review.verdict === 'FAIL' || p1s.length > 0) {
-        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
-        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，开放 P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
+        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}${f.status ? `·${f.status}` : ''}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
         console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
+        console.error(`   （增量复审提示：已解决/接受的历史条目保留并标 status=resolved/resolved-as-accepted/accepted/false-positive——阻断只计开放项，勿反复改 verdict）`)
         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
         appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
         reportMidFail('review')
@@ -2532,7 +2559,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const _freezeFiles = parseFrozenPatchSummary(patchText).map((f) => f.path)
         if (_freezeFiles.length > 0) {
           const { parseFileChangeListDetailed } = await import('./change-list.js')
-          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => e.path)
+          const _declared = parseFileChangeListDetailed(join(changeDir, 'design.md')).map((e) => String(e.path).replace(/^NEW:/, ''))
           if (_declared.length > 0) {
             const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
             const _split = splitOwnVsForeignDiffFiles(cwd, change, _freezeFiles, { specBase })

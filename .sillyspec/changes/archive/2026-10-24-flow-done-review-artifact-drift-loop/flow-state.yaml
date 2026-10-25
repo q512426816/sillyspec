@@ -1,0 +1,43 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  复审交付面锚定与评审开放态收敛判定；动机：倒推收编 2026-10-24 中断会话留在工作区的在途六文件（src/flow-parity.js、src/flow-review.js、src/flow.js +
+  三个配套测试）。坑实证：复审锚之后本变更 own 提交仅触治理文件（review.json 自身提交典型形态）时，reviewAnchoredToHead 要求锚==HEAD 恒 false、governanceOnly
+  聚合整个冻结窗被复审前修复提交污染也恒 false——隔离重评→重评再提交 review.json 又前移，三连循环；另增量复审保留的历史 findings 无 status
+  语义，阻断判定盲数全条目。改法：deliveryFaceAnchoredAfter 把已覆盖度量单位从窗口换成锚点（锚后 own 提交只碰治理文件且未触 requirements/design→评审对象未变，fail-safe
+  宁可多评）；isOpenFinding 开放态词表（resolved/resolved-as-accepted/accepted/false-positive，缺省未知=fail-closed 开放），阻断只计开放
+  P1；评审任务书写入纪律（目录不存在=已归档停手，评审产物保持未提交随归档入库）。
+
+
+  成功标准：
+
+  - 复审锚后仅治理文件 own 提交不再触发隔离重评（deliveryFaceAnchoredAfter 判定 + flowdone-disposition-drift 回归绿）
+
+  - findings 阻断只计开放 P1，status 缺省/未知值按开放收敛（isOpenFinding + flow-review 测试绿）
+
+  - 评审写入纪律面 thin-empty-face-crosscheck 绿；受影响面 flow-review/flowdone-disposition-drift/thin-empty-face-crosscheck 33/33 绿
+  + lint 1085 文件绿
+autopilot: true
+prestage_ack: false
+baseline_commit: e26546db6247f7b07df5e68583ab7e5a041d9014
+updatedAt: '2026-10-25T11:25:55.414Z'
+baseline_sha256: 062238a726c6eef8d44b1041447f3f3064063c760ccdad85dfdd571f9ae3d669
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js1)（41.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261025112033\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 10 个
+
