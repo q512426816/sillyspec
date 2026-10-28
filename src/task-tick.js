@@ -158,6 +158,22 @@ export async function runTaskTick({ changeName, cwd, taskId, specBase, evidence 
     } catch (e) {
       console.warn(`⚠️ 勾选留痕写失败（task-ticks.jsonl：${e && e.code ? e.code : e}）——翻格不受影响，timeline 勾选时刻退事件流推断`)
     }
+    // 影子存档（2026-10-28-shadow-checkpoint）：勾选即快照——tasks.md 翻格+侧车落盘后落一个
+    // git 影子提交到 refs/sillyspec/checkpoints/<change>，断点恢复从进度级升到内容级。
+    // best-effort fail-open（模块内零抛出，此处再兜一层）：任何失败只回显一行，绝不影响翻格。
+    try {
+      const { createCheckpoint } = await import('./checkpoint.js')
+      const cp = await createCheckpoint({
+        repoRoot: cwd, changeName,
+        session: process.env.SILLYSPEC_SESSION_ID,
+        taskId: normalizeTaskId(taskId) || taskId,
+      })
+      if (cp.kind === 'created') console.log(`🗂️  影子存档 ${String(cp.sha).slice(0, 8)}（${cp.files} 文件变更）→ refs/sillyspec/checkpoints/${changeName}`)
+      else if (cp.kind === 'noop') console.log(`🗂️  影子存档 noop（工作区无变化，零对象）`)
+      else console.log(`🗂️  影子存档跳过：${cp.reason}${cp.detail ? `（${cp.detail}）` : ''}`)
+    } catch (e) {
+      console.warn(`⚠️ 影子存档失败（不阻断勾选）：${e && e.message ? e.message : e}`)
+    }
     // 工件即时重推（2026-10-07-allticked-gate-docs-resync）：翻格即任务面变更——顺带触发
     // spec-sync，平台不再停留 start 时点快照（真实会话实证：改写后平台恒显初稿）。best-effort。
     try {

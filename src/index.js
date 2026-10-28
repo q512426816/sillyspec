@@ -148,6 +148,9 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec change-rename <旧变更名> <新变更名>
   sillyspec change-delete <变更名> [--confirm]  删除变更（DB status='deleted' 与归档语义分离 +
                                       移目录 + 清 worktree + 推平台墓碑；默认 dry-run）
+  sillyspec checkpoint --change <名> [--diff <sha> [--path <p>]] [--restore <sha>
+                                      [--path <p>|--all] --yes] [--delete-ref]
+                                      影子存档面：列出 task tick 自动落的存档链，预览/按路径读档
   sillyspec knowledge <search --query "..." --limit N
                         | inspect --id "..."
                         | validate | refresh
@@ -5055,6 +5058,76 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       process.exitCode = r.ok ? 0 : 1;
       break;
     }
+    case 'checkpoint': {
+      // 2026-10-28-shadow-checkpoint：影子存档面——task tick 自动落档（refs/sillyspec/
+      // checkpoints/<change>），本动词提供列出/预览/读档/清 ref 的人工面。恢复纪律（FR-03）：
+      // --restore 必须显式 --yes；先 --diff 同参预览再执行是推荐路径。
+      const cpVal = (flag) => {
+        const i = filteredArgs.indexOf(flag);
+        return i >= 0 && filteredArgs[i + 1] && !String(filteredArgs[i + 1]).startsWith('--')
+          ? filteredArgs[i + 1] : null;
+      };
+      const cpChange = cpVal('--change');
+      if (!cpChange) {
+        console.error('❌ 用法: sillyspec checkpoint --change <名> [--diff <sha> [--path <p>]] [--restore <sha> [--path <p>|--all] --yes] [--delete-ref]');
+        process.exitCode = 2;
+        break;
+      }
+      const { listCheckpoints, previewRestore, restoreCheckpoint, deleteCheckpointRef } = await import('./checkpoint.js');
+      const cpDiffSha = cpVal('--diff');
+      const cpRestoreSha = cpVal('--restore');
+      const pathArgs = [];
+      for (let i = 0; i < filteredArgs.length - 1; i++) {
+        if (filteredArgs[i] === '--path' && !String(filteredArgs[i + 1]).startsWith('--')) pathArgs.push(filteredArgs[i + 1]);
+      }
+      const cpAll = filteredArgs.includes('--all');
+      const cpYes = filteredArgs.includes('--yes');
+      const cpDeleteRef = filteredArgs.includes('--delete-ref');
+      if (cpDeleteRef) {
+        const okDel = deleteCheckpointRef(dir, cpChange);
+        console.log(okDel ? `🗑️  已删除 refs/sillyspec/checkpoints/${cpChange}` : `ℹ️  无 refs/sillyspec/checkpoints/${cpChange}（无可删）`);
+        break;
+      }
+      if (cpDiffSha) {
+        try {
+          const pv = await previewRestore({ repoRoot: dir, sha: cpDiffSha, paths: pathArgs });
+          console.log(pv.stat || '（无差异）');
+          if (pv.patch) console.log(pv.patch);
+        } catch (e) {
+          console.error(`❌ 预览失败：${e && e.message ? e.message : e}`);
+          process.exitCode = 1;
+        }
+        break;
+      }
+      if (cpRestoreSha) {
+        if (!cpYes) {
+          console.error(`❌ 恢复需显式 --yes（建议先 --diff 同参预览）：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p] 再 --restore <sha> --path <p> --yes`);
+          process.exitCode = 2;
+          break;
+        }
+        if (!cpAll && pathArgs.length === 0) {
+          console.error('❌ 整树恢复需 --all（按路径恢复用 --path <p>，可多次）');
+          process.exitCode = 2;
+          break;
+        }
+        const rr = await restoreCheckpoint({ repoRoot: dir, sha: cpRestoreSha, changeName: cpChange, paths: pathArgs, all: cpAll });
+        if (rr.ok) console.log(`🗂️  已读档 ${cpRestoreSha.slice(0, 8)} → ${(cpAll ? ['.'] : pathArgs).join(' ')}（仅写工作区，共享暂存区未动）`);
+        else { console.error(`❌ ${rr.reason}`); process.exitCode = 1; }
+        break;
+      }
+      const list = await listCheckpoints({ repoRoot: dir, changeName: cpChange });
+      if (!list.length) {
+        console.log(`ℹ️  变更 ${cpChange} 暂无影子存档（task tick 成功勾选时自动落档；checkpoint.enabled=false 时关闭）`);
+        break;
+      }
+      console.log(`🗂️  变更 ${cpChange} 影子存档链（${list.length} 档，新→旧）：`);
+      for (const c of list) {
+        const when = new Date(c.ts).toISOString().replace('T', ' ').slice(0, 19);
+        console.log(`   ${c.sha.slice(0, 8)}  ${when}  ${c.taskId || '-'}  ${c.files} 文件`);
+      }
+      console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes`);
+      break;
+    }
     case 'flow': {
       // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2。
       // --json 全局透传（2026-10-06-flow-status-json）：该 flag 在上方全局解析段被剥出
@@ -5806,7 +5879,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

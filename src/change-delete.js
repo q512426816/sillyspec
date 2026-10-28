@@ -106,12 +106,23 @@ export async function deleteChange({ cwd, specDir = null, changeName, confirm = 
 
   const dirFiles = dirExists ? countFiles(dirPath) : 0;
   const worktreeInfo = await probeWorktree(cwd, changeName);
+  // 影子存档探测（2026-10-28-shadow-checkpoint）：dry-run 也报存档链规模——「删了丢多少存档」
+  // 与「删了丢代码」同级的决策信息。非 git 仓/无 ref 静默 null。
+  let checkpointInfo = null;
+  try {
+    const { hasCheckpointRef, listCheckpoints } = await import('./checkpoint.js');
+    if (hasCheckpointRef(cwd, changeName)) {
+      const list = await listCheckpoints({ repoRoot: cwd, changeName });
+      checkpointInfo = { ref: `refs/sillyspec/checkpoints/${changeName}`, count: list.length };
+    }
+  } catch { /* 非 git 仓/探测失败：无存档面 */ }
 
   if (!confirm) {
     return {
       ok: true, action: 'dry_run', change: changeName,
       db_row: row, dir: dirExists ? { path: dirPath, files: dirFiles } : null,
       worktree: worktreeInfo,
+      checkpoints: checkpointInfo,
       already_deleted: alreadyDeleted,
     };
   }
@@ -149,6 +160,18 @@ export async function deleteChange({ cwd, specDir = null, changeName, confirm = 
   } catch (e) {
     warnings.push(`worktree 清理失败（不阻断删除）：${e.message}`);
   }
+  // 3.5 影子存档 ref 清理（2026-10-28-shadow-checkpoint FR-05）：删除是终态，存档链随变更
+  // 一并清 ref（对象交 git gc 自然回收）；归档不删（审计面保留）。best-effort：失败仅警告。
+  let checkpointsRemoved = false;
+  try {
+    const { hasCheckpointRef, deleteCheckpointRef } = await import('./checkpoint.js');
+    if (hasCheckpointRef(cwd, changeName)) {
+      checkpointsRemoved = deleteCheckpointRef(cwd, changeName);
+      if (!checkpointsRemoved) warnings.push(`影子存档 ref 删除失败（不阻断，可手删 refs/sillyspec/checkpoints/${changeName}）`);
+    }
+  } catch (e) {
+    warnings.push(`影子存档 ref 清理异常（不阻断删除）：${e.message}`);
+  }
   // 4. git 暂存目录删除（best-effort：非 git 仓 / specBase 在仓外时跳过，git status 照常可见）
   try {
     const relDir = relative(cwd, dirPath).split('\\').join('/');
@@ -178,6 +201,6 @@ export async function deleteChange({ cwd, specDir = null, changeName, confirm = 
   return {
     ok: true, action: 'deleted', change: changeName,
     db_updated: dbUpdated, dir_removed: dirExists, files_removed: dirFiles,
-    worktree: worktreeInfo, warnings,
+    worktree: worktreeInfo, checkpoints_removed: checkpointsRemoved, warnings,
   };
 }

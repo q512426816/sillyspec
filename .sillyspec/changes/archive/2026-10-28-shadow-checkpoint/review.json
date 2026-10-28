@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-shadow-checkpoint",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "硬排除作用域口径不一致：reset pathspec 根锚定 vs 护栏 isHardExcluded 任意深度段——嵌套产物目录进快照且不计入体积护栏",
+      "evidence": "git reset -- <pathspec> 为根锚定匹配（临时仓实测：git reset -q -- node_modules … 后 packages/app/node_modules/pkg/x.js 与 dist2/sub/dist/z.js 仍留在索引，仅根级被移出），而 isHardExcluded 按任意路径段判定排除——嵌套（monorepo 形态）未忽略的 node_modules/__pycache__ 等会进快照树却被护栏视为已排除不计体积，「只计真会进快照的文件」口径被破坏；line 29 注释「目录名匹配任意深度段」与 reset 实际行为不符，design 盲维4「硬排除清单…不进快照」仅根级成立。影响有界（常见 .gitignore 的 node_modules/ 本就任意深度兜住；fail-open 方向安全不阻断 tick）",
+      "location": "src/checkpoint.js:29-41"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-05 测试绑定第二半「deleteCheckpointRef 失败不阻断」无对应用例",
+      "evidence": "requirements.md FR-05 绑定行声称测试覆盖「change-delete 后 ref 清除；deleteCheckpointRef 失败不阻断」，但 test 只断言成功路径（dry-run 报规模 + checkpoints_removed=true + ref 不存在），无失败注入（如 update-ref 失败）用例；best-effort try/catch 与警告在 change-delete.js:163-171 真实存在但未实测",
+      "location": "test/shadow-checkpoint.test.mjs:215-237"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "checkpoint --delete-ref 把「ref 不存在」与「update-ref 删除失败」混为一谈",
+      "evidence": "deleteCheckpointRef 返回 false 有两因（ref 不在 / update-ref 失败），CLI 分支统一回显「无 refs/sillyspec/checkpoints/<change>（无可删）」——删除失败（ref 实际仍在）时文案误导为不存在；对照 change-delete.js 同函数失败时正确区分「删除失败（可手删）」警告",
+      "location": "src/index.js:5087-5088"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-01「双会话并发测试」实为两 session 顺序执行，非真并行",
+      "evidence": "测试用 sess-a→sess-b 顺序两次 createCheckpoint 断言 staged 面与 index 字节级不变；机制上无共享可变点（临时索引按会话分文件、共享 index 零读写、update-ref 原子后写者胜），design 盲维2 已显式声明并发语义（丢一档不丢数据），顺序双会话+字节级断言实质覆盖风险面",
+      "location": "test/shadow-checkpoint.test.mjs:53-63"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "listCheckpoints 截 -n 200 且 restore 链内校验依赖该列表——超 200 档的旧档不可经 CLI 读档（未披露边界）",
+      "evidence": "git log -n 200 截链，restoreCheckpoint 以 listCheckpoints 结果做 SHA 在链校验；实际档数≈成功翻格次数（幂等重勾不落档），单变更超 200 档罕见，读面/审计面（git 直接查 ref）不受限",
+      "location": "src/checkpoint.js:174"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-10-28T05:17:11Z"
+}

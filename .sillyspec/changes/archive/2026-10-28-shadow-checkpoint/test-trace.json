@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-shadow-checkpoint",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-01",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「create 落档：树含 tracked+untracked、共享 index 零触碰、临时索引清理」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-02",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「无变化 no-op：ref 与对象库不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-03",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「list/diff 预览/按路径 restore 仅写工作区」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-04",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「体积护栏超阈值跳过留痕且 tick exit 0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-05",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「change-delete 后 ref 清除；deleteCheckpointRef 失败不阻断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-06",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「enabled=false 不落档；无键/解析失败缺省开启」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-28-shadow-checkpoint:flow:测试绑定FR-07",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-shadow-checkpoint"
+    }
+  ]
+}

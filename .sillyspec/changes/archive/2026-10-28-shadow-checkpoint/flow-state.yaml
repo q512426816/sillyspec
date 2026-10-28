@@ -1,0 +1,56 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  任务勾选即影子存档，随时读档回滚
+
+
+  多 agent 共享仓的断点恢复目前只有进度级（tasks.md 记做到哪），没有内容级（工作区长什么样）——agent 跑歪或改崩时没有手段回到出事前状态，只能手工 git 抢救。本变更用 git 原生 plumbing 在每次
+  task tick 时落影子提交存档：临时索引（GIT_INDEX_FILE 按会话隔离，绝不碰共享暂存区）→ read-tree HEAD → add -A（硬排除常见产物目录与 .env*）→ write-tree → tree
+  SHA 与上次相同即零开销跳过 → commit-tree 挂 refs/sillyspec/checkpoints/<change>。恢复走 git restore --source 按路径选择性读档、先 diff
+  预览；大体积未忽略产物超阈值跳过留痕不阻断；change 删除时同步清 ref；local.yaml 可关；worktree 会话 v1 不启用。零新依赖，三平台原生。
+
+
+  成功标准：
+
+  - task tick 成功勾选时自动落影子提交到 refs/sillyspec/checkpoints/<change>，快照覆盖 tracked+untracked，全程零触碰共享 index（双会话并发测试断言暂存区不变）
+
+  - 无变化时跳过不落对象（tree SHA 相同 no-op）
+
+  - 支持列出与恢复：读档前 diff 预览，按路径选择性恢复
+
+  - 体积护栏：未忽略 untracked 总量超阈值跳过并留痕，不阻断 tick
+
+  - change-delete 时同步删除对应 checkpoint ref
+
+  - local.yaml 配置开关（缺省开启）
+
+  - 纯 git plumbing 实现，无新依赖，Windows/Linux/macOS 兼容
+autopilot: false
+prestage_ack: false
+baseline_commit: b195fe1faa7eb9a1cf6379a7b8a09df2549d4a4d
+updatedAt: '2026-10-28T05:18:10.339Z'
+baseline_sha256: ea52b055f3480f166eb14a583a87b9d82db2ea07daf830efd9ce66bd6400ac5b
+spec_approved: true
+spec_approved_at: '2026-10-28T04:41:48.221Z'
+spec_approved_by: zcode-shadow-cp
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-shadow-cp
+batch_ticked: true
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js25)（17.8s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261028050818\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 9 个
+

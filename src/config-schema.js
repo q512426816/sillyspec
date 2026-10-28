@@ -79,6 +79,15 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'checkpoint',
+      title: '影子存档（task tick 快照）',
+      note: '机制先落代码缺省（fail-open，缺省零回归）——键只用于仓主显式调优（2026-10-28-shadow-checkpoint）。',
+      keys: [
+        { path: 'checkpoint.enabled', type: 'boolean', optional: true, status: 'live', readers: ['readCheckpointConfig (src/checkpoint.js)'], desc: '影子存档开关——task tick 成功翻格后落 git 影子提交到 refs/sillyspec/checkpoints/<change>（临时索引零触碰共享暂存区，断点恢复从进度级升到内容级）。缺省 true；false 关闭（tick 照常）。解析失败 fail-open 取缺省。', example: 'false' },
+        { path: 'checkpoint.maxUntrackedMB', type: 'number', optional: true, status: 'live', readers: ['readCheckpointConfig (src/checkpoint.js)'], desc: '体积护栏——未忽略 untracked 总量超过该 MB 数时跳过本次存档并留痕（早停判定，不遍历全树；硬排除目录不计入）。缺省 200。', example: '50' },
+      ],
+    },
+    {
       id: 'knowledge',
       title: '知识检索（平台向量语义召回）',
       note: '可选段——缺省（未写整段/auto）跟随平台能力自动探测：端点在场自动启用、未部署缓存 1h 内跳过（部署后自动启用，零配置；2026-10-15-platform-vector-search）。off=显式逃生阀强制关，on=强制开跳过探测。能力缓存落 .runtime/vector-capability.json（gitignored）；提示触点：knowledge search hint 键、flow 注入零命中行（auto 未就绪时信息性提示）。',
@@ -424,6 +433,11 @@ commands:
   # test_timeout_sec: 2400   # commands.test 超时秒数（慢仓提帽；缺省 600，env SILLYSPEC_TEST_TIMEOUT_MS 同效）
   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
+
+# ── 影子存档（task tick 快照；缺省开启零配置，仅在显式调优时写）──
+# checkpoint:
+#   enabled: true             # 影子存档开关（false 关闭，tick 照常）
+#   maxUntrackedMB: 200       # 体积护栏——未忽略 untracked 总量超此 MB 数跳过存档留痕
 
 # ── 知识检索（平台向量语义召回）──
 # 缺省（未写整段）跟随平台能力自动探测：端点在场自动启用、未部署自动跳过（部署后自动

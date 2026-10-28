@@ -38,3 +38,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-10-23 | 2026-10-23-runner-flags-generic | runner_flags 通用化与依赖面档位 |
 | 2026-10-23 | 2026-10-23-knowledge-scope-discoverability | 知识作用域发现面三处引导 |
 | 2026-10-23 | 2026-10-23-push-squash | 推送前按变更压扁本地未推送提交 |
+| 2026-10-28 | 2026-10-28-shadow-checkpoint | 任务勾选即影子存档，随时读档回滚 |

@@ -96,6 +96,7 @@ modules:
       - src/task-review.js
       - src/task-done.js
       - src/task-tick.js
+      - src/checkpoint.js
       - src/verify-draft.js
       - src/machine-draft.js
       - src/verify-postcheck.js

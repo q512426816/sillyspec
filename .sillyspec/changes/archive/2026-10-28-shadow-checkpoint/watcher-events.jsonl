@@ -1,0 +1,32 @@
+{"ts":1793162407895,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793162431064,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793162437861,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793162746461,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/task-tick.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793162766255,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/change-delete.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793163210208,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/docs/sillyspec/modules/_module-map.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793163359305,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793163360566,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793163360566,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793163366183,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793163367655,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793163367655,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793163370384,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793163371366,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793163371366,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793163383330,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793163384877,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793163384877,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793163388358,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1793163388677,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793163388677,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1793163421970,"kind":"commit","stage":null,"detail":"673abcee","provisional":true}
+{"ts":1793163659399,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-28-shadow-checkpoint/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793163693033,"kind":"gate-run","stage":"verify","detail":"门实测 failed（17.8s） · 20261028050132","provisional":true}
+{"ts":1793163947786,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1793163964436,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1793163987618,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1793164001086,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1793164011117,"kind":"commit","stage":null,"detail":"0b8fb7d0","provisional":true}
+{"ts":1793164011352,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-28-shadow-checkpoint/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793164054539,"kind":"commit","stage":null,"detail":"17ff2d4b","provisional":true}
+{"ts":1793164101229,"kind":"gate-run","stage":"verify","detail":"门实测 passed（17.8s） · 20261028050818","provisional":true}

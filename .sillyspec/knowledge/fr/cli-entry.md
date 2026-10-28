@@ -11685,3 +11685,136 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-24-flow-done-review-artifact-drift-loop
   status: active
+
+## FR-cli-entry-616 task tick 成功勾选时自动落影子提交到 refs/sillyspec/checkpoints/<change>，快照覆盖 tracked+untracked，全程零触碰共享 index（双会话并发测试断言暂存区不变）
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：主路径（落档+零触碰）；checkpoint 失败不阻断 tick
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-01
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-01
+  tests: test/shadow-checkpoint.test.mjs「create 落档：树含 tracked+untracked、共享 index 零触碰、临时索引清理」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-617 无变化时跳过不落对象（tree SHA 相同 no-op）
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：连续无改动
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-02
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-02
+  tests: test/shadow-checkpoint.test.mjs「无变化 no-op：ref 与对象库不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-618 支持列出与恢复：读档前 diff 预览，按路径选择性恢复
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：按路径读档
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-03
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-03
+  tests: test/shadow-checkpoint.test.mjs「list/diff 预览/按路径 restore 仅写工作区」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-619 体积护栏：未忽略 untracked 总量超阈值跳过并留痕，不阻断 tick
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：超阈值跳过
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-04
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-04
+  tests: test/shadow-checkpoint.test.mjs「体积护栏超阈值跳过留痕且 tick exit 0」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-620 change-delete 时同步删除对应 checkpoint ref
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：删除变更清 ref
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-05
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-05
+  tests: test/shadow-checkpoint.test.mjs「change-delete 后 ref 清除；deleteCheckpointRef 失败不阻断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-621 local.yaml 配置开关（缺省开启）
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：开关关闭
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-06
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-06
+  tests: test/shadow-checkpoint.test.mjs「enabled=false 不落档；无键/解析失败缺省开启」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
+
+## FR-cli-entry-622 纯 git plumbing 实现，无新依赖，Windows/Linux/macOS 兼容
+变更：2026-10-28-shadow-checkpoint
+状态：active
+摘要：Windows 实测
+全文：.sillyspec/changes/archive/2026-10-28-shadow-checkpoint/requirements.md#FR-07
+最近确认：17ff2d4b075afe9bf2bb1d2035e5c1388ecc59de
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-shadow-checkpoint:flow:测试绑定FR-07
+  tests: test/shadow-checkpoint.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-shadow-checkpoint
+  status: active
