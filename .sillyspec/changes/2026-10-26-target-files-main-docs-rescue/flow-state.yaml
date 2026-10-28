@@ -1,0 +1,28 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  target-files 主仓治理文档救赎（假红根治）；动机：倒推收编 2026-10-27 中断会话留在工作区的在途三件（src/verify-postcheck.js +
+  test/target-files-main-docs-rescue.test.mjs + package.json test:core 登记）。坑实证（2026-10-26-session-stage-progress verify
+  门）：模块卡等治理文档按 CLI 铁律一律写主仓（绝不写 worktree 副本），而 worktree 形态 actual=worktree diff+porcelain 结构性看不见主仓侧改动——声明主仓治理路径恒落 missing
+  假红，「写 worktree=产物蒸发，写主仓=对账 missing」两规则打架，此前只能 target_files:[] 绕行。改法：reconcileTargetFiles 在 worktree 形态增救赎臂——主仓
+  .sillyspec/ 的 status（未提交）∪ baseline..HEAD diff（已提交）构成主仓治理面，仅救赎「声明而 missing」的主仓治理路径（不扩 undeclared 面，与近窗救赎同语义；-uall
+  展开未跟踪目录折叠；fail-open 读失败走既有判定）。配回归三臂（救赎命中/已提交臂/无改动不虚造 matched）。
+
+
+  成功标准：
+
+  - worktree 形态声明主仓治理文档经主仓实际改动面救赎命中，missing 清零且 undeclared 不扩（新测试①②绿）
+
+  - 主仓无改动时不虚造 matched（missing 如实在场，新测试③绿）
+
+  - 受影响面 verify-postcheck 关联套件 25/25 绿 + lint 1087 文件绿
+autopilot: true
+prestage_ack: false
+baseline_commit: 91157fc0a03e30ba5aea56ae27cc9e1c912cd9a8
+updatedAt: '2026-10-28T00:26:52.916Z'
+baseline_sha256: 3ad9255285146824a8ed3e7c92368bd9b5160cd4d576219b484687c66867a735
+

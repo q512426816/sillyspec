@@ -4806,6 +4806,51 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   if (rescuedCount > 0) {
     notes.push(`对账救赎：${rescuedCount} 个声明文件经近窗提交触及面命中（isolated worktree per-task commit 形态，porcelain 恒空——R9/R11 四连拦根治）`)
   }
+  // 主仓治理文档救赎（坑 target-files-worktree-docs-mismatch，2026-10-26-session-stage-progress
+  // verify 实证）：模块卡等主仓 .sillyspec/ 文档按 CLI 铁律「一律写主仓，绝不写 worktree 副本」
+  // ——worktree 形态 actual（wt diff+porcelain）结构性看不见主仓侧改动，声明主仓治理路径恒落
+  // ②类假红（「写 worktree=产物蒸发，写主仓=对账 missing」两规则打架）。救赎面=主仓 .sillyspec/
+  // 的 status（未提交）∪ baseline..HEAD diff（已提交），仅救赎「声明而 missing」的主仓治理路径
+  // （不扩 undeclared 面——与 R9/R11 窗口救赎同语义）。fail-open：主仓读取失败走既有 missing 判定。
+  if (actual.form === 'worktree') {
+    const govDeclared = declaredPaths.filter((p) => {
+      const clean = String(p).replace(/\\/g, '/').replace(/^NEW:/, '')
+      return clean.startsWith('.sillyspec/')
+    })
+    if (govDeclared.length > 0) {
+      let mainDocsRescued = 0
+      try {
+        const mainFace = new Set()
+        // -uall：未跟踪目录缺省折叠成目录条目（?? .sillyspec/docs/<proj>/ 整目录一行）——
+        // 模块卡常为新建文件，折叠形态对不上文件级声明，逐文件展开（scope-audit 同款口径）
+        const st = gitQuiet(cwd, ['status', '--porcelain', '--untracked-files=all', '--', '.sillyspec/'], { timeout: 30000, trim: false })
+        for (const line of String(st || '').split('\n')) {
+          if (!line || line.length < 4) continue
+          const p = line.slice(3).trim().replace(/^"|"$/g, '')
+          const arrow = p.indexOf(' -> ')
+          const f = (arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/')
+          if (f) mainFace.add(pathKey(f))
+        }
+        if (actual.baseAnchor) {
+          const df = gitQuiet(cwd, ['diff', '--name-only', `${actual.baseAnchor}..HEAD`, '--', '.sillyspec/'], { timeout: 30000 })
+          for (const f of String(df || '').split('\n')) {
+            const t = f.trim().replace(/\\/g, '/')
+            if (t) mainFace.add(pathKey(t))
+          }
+        }
+        for (const p of govDeclared) {
+          const clean = String(p).replace(/\\/g, '/').replace(/^NEW:/, '')
+          if (!actualKeySet.has(pathKey(p)) && mainFace.has(pathKey(clean))) {
+            actualKeySet.add(pathKey(p))
+            mainDocsRescued++
+          }
+        }
+      } catch { /* 主仓治理面读取失败 → 走既有 missing 判定（fail-open 不新造阻断） */ }
+      if (mainDocsRescued > 0) {
+        notes.push(`主仓治理文档救赎：${mainDocsRescued} 个 .sillyspec/ 声明经主仓实际改动面命中（worktree 对账面看不见主仓侧模块卡等治理文档——「治理文档一律写主仓」铁律与 worktree actual 的结构性错配，2026-10-26 实证）`)
+      }
+    }
+  }
   // ①交集（计数进 evidence）：唯一路径口径（多卡声明同文件只计一次）
   for (const path of declaredPaths) {
     if (actualKeySet.has(pathKey(path))) matched.push(path)
