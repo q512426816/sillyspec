@@ -561,3 +561,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
 理由：最大风险是声明源噪声：未归档旧变更的陈旧 design 声明会喂活假重叠（既有坑 baseline-overlay-cross-change-contamination 同源现象）——advisory 定位容忍（提示而非阻断），文案里给「确认对方变更已死可归档后消音」出口；若实测噪声大，后续可加活跃度过滤（DB last_active 阈值），本版不做（先看真实使用密度）。 放弃的方案：① 重叠检测做成批准门硬阻断——把「路由建议」升格为「禁行」，违反「不是禁止是分流」的设计意图，且陈旧声明会制造假禁行；② 用 collectForeignDeclaredFiles 逐变更查他侧声明——N 次全量扫描 + own-priority 语义（双方声明归 own）恰好把重叠面藏掉，方向相反；③ 落地序列新做调度器——既有 main-repo.lock + apply --3way + guard 预检已覆盖序列与合并，重做是重复建设，本变更只在指引文案里把既有机器串成协议叙事。
+
+## D-unmapped-479@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-29-open-metrics-gate
+原编号：D-001@v1
+锚点：未记录
+最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
+理由：最大风险：存量仓首配即红——指标工具对全仓历史代码报红，配置者第一次启用就被拦，治理成本突袭。缓解：desc 写明「通过标准由命令自身定义——建议命令只扫变更面/自带阈值」，且不配置零影响；这是声明的采用边界（用户渐进采用，CLI 不替人清存量债）。 放弃的方案：① 绑定 crapper/dryer/mutator 内置集成——违背工具中立纪律且引入新依赖，改开放命令门；② metrics 做 lint 同款 ownership triage（存量债降级 advisory）——依赖「失败输出含文件路径」提取前提，指标工具输出形态千差万别（分数表/JSON/正文），归属鉴定不可靠，误判比不判更糟，范围控制责任交给用户命令；③ 复用 commands.lint 塞复合命令（`lint && crap-check`）——超时语义混用、证据面不分 kind 无法对账、存量 lint 配置被动改变行为；④ metrics 失败 advisory 不阻断（学 lint 观察期先例）——lint 当年观察期是因外部数据未足，而 metrics 的非零退出语义由用户命令自定义（用户写 `crap-check --fail-over 10 src` 就是他的标准），首版即硬门才配得上「确定性质量门」的采纳初衷，且 fail-open 缺省已保证不配置零影响。 已知取舍：超时=failed 对慢工具会假红——desc 明示慢工具提帽（metrics_timeout_sec）或放 pre-push/CI 层，不在每变更收口跑。

@@ -72,6 +72,8 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'commands.lint', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: 'lint 命令——quick --done 触及 src/test 时 CLI 亲自执行（P0-2 门禁，失败阻断完成）。', example: 'npm run lint' },
         { path: 'commands.test_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['resolveTestTimeoutMs (src/verify-postcheck.js)'], desc: 'commands.test 超时秒数（R9 实证 2026-09-23：全量套件实测可达 27min，固定 600s 帽必杀）——优先级 local.yaml 本键 > env SILLYSPEC_TEST_TIMEOUT_MS > 缺省 600。慢仓在此提帽，防真慢套件被当超时失败。', example: '2400' },
         { path: 'commands.lint_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyLintCheck (src/verify-postcheck.js)'], desc: 'commands.lint 超时秒数——优先级 显式调用参 > 本键 > env SILLYSPEC_LINT_TIMEOUT_MS > 缺省 180（快照内 junction I/O 慢，快照路径调用侧显式传 300）。', example: '600' },
+        { path: 'commands.metrics', type: 'string', optional: true, status: 'live', readers: ['runVerifyMetricsCheck (src/verify-postcheck.js)', 'runQuickTestLintGate (src/run/quick-audit.js)'], desc: '【2026-10-29-open-metrics-gate】可选指标门命令——收口实测在隔离快照内执行，非零退出=门红阻断收口；未配置或标 unavailable 跳过留痕（fail-open）。适合复杂度上限/重复率/死代码/覆盖率阈值类秒级检查：命令开放不绑定工具，生态/构建工具检查任务（npx 类零安装、mvn/gradle 检查目标等）或仓内自写脚本均可；执行时注入 SILLYSPEC_CHANGE_FILES（本变更文件清单，POSIX 相对路径换行分隔）供大仓增量门只扫变更面（历史存量债不拦新变更）；变异测试等慢工具建议提帽或放 pre-push/CI 层。', example: 'npx jscpd src' },
+        { path: 'commands.metrics_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyMetricsCheck (src/verify-postcheck.js)'], desc: 'commands.metrics 超时秒数——优先级 显式调用参 > 本键 > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒） > 缺省 180（快照内 junction I/O 慢，快照路径调用侧显式传 300）。', example: '600' },
         { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
         { path: 'commands.knowledge-gate', type: 'boolean', optional: true, status: 'live', readers: ['completeStep (src/run/complete.js)'], desc: '【2026-09-28-unclear-req-to-brainstorm FR-03/D-004】brainstorm 方案步（提出 2-3 种方案）--done 知识检索命中回显开关——缺省 true=开（对 --output 与 decisions.md 条目跑既有检索匹配器，命中 warn 回显「须 evidence 回应或说明不复潮」不阻断）；false（或 off）关回显，无命中时输出与现状一致。', example: 'false' },
@@ -432,6 +434,8 @@ commands:
   # install: npm install   # worktree 依赖安装命令
   # test_timeout_sec: 2400   # commands.test 超时秒数（慢仓提帽；缺省 600，env SILLYSPEC_TEST_TIMEOUT_MS 同效）
   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
+  # metrics: npx jscpd src   # 可选指标门：收口实测非零退出阻断（复杂度/重复/死代码/覆盖率阈值类秒级检查；执行注入 SILLYSPEC_CHANGE_FILES=本变更文件清单可只扫变更面；变异测试类慢工具建议 pre-push/CI）
+  # metrics_timeout_sec: 600   # commands.metrics 超时秒数（缺省 180）
   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
 
 # ── 影子存档（task tick 快照；缺省开启零配置，仅在显式调优时写）──

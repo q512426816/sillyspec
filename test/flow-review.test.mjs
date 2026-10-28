@@ -384,3 +384,13 @@ test('validateReviewJson：findings[].status 额外字段不拒收（PASS + reso
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+// ── 评审任务书假测试判据（2026-10-29-open-metrics-gate task-04 / FR-02）──
+test('任务书检查单含空实现判据与根因判据', () => {
+  const book = renderReviewerTaskbook({ change: 'c-criteria', changeDir: '/x/c-criteria' })
+  assert.equal(typeof book, 'string')
+  assert.ok(book.includes('空实现判据'), '检查单含空实现判据关键句')
+  assert.ok(book.includes('空操作') && book.includes('仍可能全绿'), '空实现判据给出可操作检验法')
+  assert.ok(book.includes('根因判据') && book.includes('guard'), '检查单含根因判据（guard 掩盖≠修复）')
+  assert.ok(/6\./.test(book), '判据为编号检查项（可逐条作答）')
+})

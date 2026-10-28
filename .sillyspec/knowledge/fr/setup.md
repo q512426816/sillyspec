@@ -2411,3 +2411,92 @@ created_at: 2026-09-20T18:20:21.442Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-runner-flags-generic/requirements.md#FR-05
 最近确认：f6259dac59ede489a1f3f04675bdd77478a2f236
+
+## FR-setup-143 收口开放指标门（commands.metrics）
+变更：2026-10-29-open-metrics-gate
+状态：active
+摘要：未配置跳过（fail-open）；配置且通过；配置且失败阻断；超时门红；纯 doc/配置变更不跑
+场景正文：
+- 场景：未配置跳过（fail-open） — Given local.yaml 无 metrics 键或值为 unavailable / When 收口实测触及代码文件 / Then metrics 检查返回 stat
+- 场景：配置且通过 — Given metrics 为退出码 0 的命令 / When 收口实测 / Then 该命令在门禁隔离快照内执行（非主仓工作区），status=passed，结果以 ki
+- 场景：配置且失败阻断 — Given metrics 为退出码非 0 的命令 / When 收口实测 / Then failed 含 'metrics'、action=fail，收口被拦；修复后重跑
+- 场景：超时门红 — Given 命令运行超过 metrics_timeout_sec（或缺省 180s 帽）/ Then status=failed（reason 注明超时秒数）并阻断。
+- 场景：纯 doc/配置变更不跑 — Given 变更文件均未触及代码（CODE_PATH_SEGMENT_RE / CODE_EXTENSION_RE 双通道不中）/ Then 整个实测走既有 skip 早退
+全文：.sillyspec/changes/archive/2026-10-29-open-metrics-gate/requirements.md#FR-01
+最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-open-metrics-gate:flow:测试绑定FR-01
+  tests: test/quick-metrics-gate.test.mjs「增量门注入：命令子进程环境含 SILLYSPEC_CHANGE_FILES=变更清单（换行分隔 POSIX 路径）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-open-metrics-gate
+  status: active
+
+## FR-setup-144 评审面假测试判据（空实现判据 + 根因判据）
+变更：2026-10-29-open-metrics-gate
+状态：active
+摘要：任务书渲染含判据；advisory 命中附判据
+场景正文：
+- 场景：任务书渲染含判据 — When renderReviewerTaskbook 渲染任意变更任务书 / Then 检查单含两条可判定判据文案（评审员可据其对「测试有效性」与「修复根因性」逐条作答
+- 场景：advisory 命中附判据 — Given 变更交付 ≥3 个 src 类文件且 0 个测试文件改动 / When buildTestSurfaceAdvisory 计算 / Then 返回文案末尾附空实
+全文：.sillyspec/changes/archive/2026-10-29-open-metrics-gate/requirements.md#FR-02
+最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-open-metrics-gate:flow:测试绑定FR-02
+  tests: test/quick-metrics-gate.test.mjs「advisory 命中附空实现判据句；负例返回 null 不变」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-open-metrics-gate
+  status: active
+
+## FR-setup-145 配置面注册与自动带出
+变更：2026-10-29-open-metrics-gate
+状态：active
+摘要：schema 注册可见；example 自动带出；AGENTS 模板并列句
+场景正文：
+- 场景：schema 注册可见 — Then LOCAL_YAML_SCHEMA commands 段含两新键（path/type/readers/desc/example 齐全），config 校验链路通
+- 场景：example 自动带出 — When renderExample() 生成示例 / Then 输出含 metrics 两键行（沿既有生成链，无特判分支）。
+- 场景：AGENTS 模板并列句 — When 读 templates/agents-instruction.md 核心规则 4 / Then lint 语义句后并列 commands.metrics 同款语
+全文：.sillyspec/changes/archive/2026-10-29-open-metrics-gate/requirements.md#FR-03
+最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-open-metrics-gate:flow:测试绑定FR-03
+  tests: test/quick-metrics-gate.test.mjs「引导面三处在场：example 注释 + AGENTS 模板规则 4 并列句 + skipped reason 引导句」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-open-metrics-gate
+  status: active
+
+## FR-setup-146 测试面与零依赖
+变更：2026-10-29-open-metrics-gate
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-29-open-metrics-gate/requirements.md#FR-04
+最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-open-metrics-gate:flow:测试绑定FR-04
+  tests: test/quick-metrics-gate.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-open-metrics-gate
+  status: active

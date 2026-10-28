@@ -63,6 +63,32 @@ console.log('\n--- 1. LOCAL_YAML_SCHEMA 结构健全 ---')
   assert(!keys.some((k) => k.path === 'worktree-hook.fileWhitelist'), 'fileWhitelist 已从 schema 移除（无消费方）')
 }
 
+// ── 1b. commands.metrics 两键注册（2026-10-29-open-metrics-gate FR-03）──
+console.log('\n--- 1b. commands.metrics / metrics_timeout_sec 注册 ---')
+{
+  const keys = flatKeys()
+  const metrics = keys.find((k) => k.path === 'commands.metrics')
+  assert(Boolean(metrics), 'commands.metrics 已注册')
+  if (metrics) {
+    assert(metrics.type === 'string' && metrics.status === 'live' && metrics.optional === true, 'commands.metrics 形态：string/optional/live')
+    assert(metrics.readers.some((r) => r.includes('runVerifyMetricsCheck')), 'readers 指向 runVerifyMetricsCheck')
+    assert(metrics.readers.some((r) => r.includes('runQuickTestLintGate')), 'readers 指向 runQuickTestLintGate（收口挂载）')
+    assert(metrics.desc.includes('SILLYSPEC_CHANGE_FILES'), 'desc 含增量门注入指引')
+    assert(metrics.desc.includes('非零退出'), 'desc 含阻断语义')
+    assert(metrics.desc.includes('慢工具'), 'desc 含快慢定位（慢工具建议 pre-push/CI）')
+  }
+  const mto = keys.find((k) => k.path === 'commands.metrics_timeout_sec')
+  assert(Boolean(mto), 'commands.metrics_timeout_sec 已注册')
+  if (mto) {
+    assert(mto.type === 'number' && mto.status === 'live' && mto.optional === true, 'metrics_timeout_sec 形态：number/optional/live')
+    assert(mto.desc.includes('180'), 'desc 写缺省 180s 超时链')
+  }
+  // renderExample 自动带出（第 4 节防漂耦合已通用覆盖 token；此处显式钉键行与注释引导在场）
+  const ex = renderExample()
+  assert(ex.includes('metrics:'), 'renderExample 输出含 metrics 键行')
+  assert(ex.includes('metrics_timeout_sec:'), 'renderExample 输出含 metrics_timeout_sec 键行')
+}
+
 // ── 2. renderSchemaHuman ──
 console.log('\n--- 2. renderSchemaHuman ---')
 {

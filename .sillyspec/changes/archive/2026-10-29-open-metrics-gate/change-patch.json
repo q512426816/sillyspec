@@ -1,0 +1,149 @@
+{
+  "change": "2026-10-29-open-metrics-gate",
+  "baseline": "d91ede6f43bc0fac3718322abeb26e83d2db0bf7",
+  "head": "e7c4ec047a8df79b8fc0002a9eed41fc32917f5c",
+  "files": [
+    "src/config-schema.js",
+    "src/flow-review.js",
+    "src/run/gate-snapshot.js",
+    "src/run/quick-audit.js",
+    "src/run/verify-quality-scan.js",
+    "src/verify-postcheck.js",
+    "templates/agents-instruction.md",
+    "test/config-schema.test.mjs",
+    "test/flow-review.test.mjs",
+    "test/quick-metrics-gate.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 500,
+    "deletions": 20
+  },
+  "savedAt": "2026-10-28T16:45:27.347Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "setup",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/setup.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "d91ede6f43bc0fac3718322abeb26e83d2db0bf7",
+    "totals": {
+      "files": 10,
+      "additions": 500,
+      "deletions": 20
+    },
+    "rows": [
+      {
+        "path": "src/config-schema.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/flow-review.js",
+        "additions": 4,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/gate-snapshot.js",
+        "additions": 3,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/quick-audit.js",
+        "additions": 30,
+        "deletions": 8,
+        "kind": "modified"
+      },
+      {
+        "path": "src/run/verify-quality-scan.js",
+        "additions": 29,
+        "deletions": 7,
+        "kind": "modified"
+      },
+      {
+        "path": "src/verify-postcheck.js",
+        "additions": 116,
+        "deletions": 3,
+        "kind": "modified"
+      },
+      {
+        "path": "templates/agents-instruction.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "test/config-schema.test.mjs",
+        "additions": 26,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/flow-review.test.mjs",
+        "additions": 10,
+        "deletions": 0,
+        "kind": "modified"
+      },
+      {
+        "path": "test/quick-metrics-gate.test.mjs",
+        "additions": 277,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "ed932c404d024932b015e3509e6da936d31124a3bb575d608638cad96fa1704a",
+  "patchStatus": "ok"
+}

@@ -999,7 +999,9 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
       }
     } catch { /* 文档复制失败不连坐快照（test_strategy 降级 module 集仍可跑） */ }
 
-    return { ...snap, changeFileCount: changeFiles.length, sourceRoot }
+    // changeFiles 透出（2026-10-29-open-metrics-gate task-03）：厚道 verify 质量扫描的 metrics
+    // 增量门注入（SILLYSPEC_CHANGE_FILES）需要本快照自算的变更文件集——additive，既有消费方零感知。
+    return { ...snap, changeFileCount: changeFiles.length, changeFiles, sourceRoot }
   } catch (e) {
     // 任一链路异常 → 回退主仓现行为。异常细节不再静默（坑 snapshot-fallback-reason-blind）：
     // failRef 带原因 + warn 落日志，排查不再靠 stdout 考古。

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-29-open-metrics-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e7c4ec047a8df79b8fc0002a9eed41fc32917f5c",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：CNF 降档放弃「输出无文件路径」半条件（FR-01 原文含此条件，实现/design 声明放弃）",
+      "evidence": "lint 的 CNF 降档有 extractLintFailureFiles 非空维持硬拦的护栏，metrics 刻意不做（代码注释与 design 风险节声明：指标输出无标准路径形态，无从提取）——机理：输出恰含 CNF 特征文本（如 command not found 字样）的真失败会被降档 skipped 不拦门。残余风险低（CNF 签名检测先行、修复指引在场、lint 同款先例），裁决可接受。",
+      "location": "src/verify-postcheck.js:440"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：FR-01 场景「kind: metrics 计入 verify-runs」在并入路径只落 metrics 节、无顶层 kind 字段",
+      "evidence": "persistLintResult section 泛化后，test 有结果文件时 metrics 并入 test-result.json 的 metrics 节（j[section]），仅独立落盘路径才有顶层 kind:'metrics'——design 接口契约已声明「复用 persistLintResult 的合并/独立落盘语义」，绑定测试双向断言（独立 kind 或并入节均可），证据可发现性保留，裁决可接受。",
+      "location": "src/verify-postcheck.js:3794"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "零依赖断言弱于绑定声明：只查指标工具名子集，非「dependencies 集合与基线一致」",
+      "evidence": "FR-04 绑定行声称断言依赖集合与基线一致，实际测试只过滤 /jscpd|crapper|dryer|mutator|stryker|mutation/i 名单——加任意非指标工具依赖仍全绿。事实层面零依赖成立（change.patch 无 package.json hunk、工作区 package.json 干净），属断言强度缺口非违诺。",
+      "location": "test/quick-metrics-gate.test.mjs:185"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "坏配置态无专测（探针 config-absent-zero-regression 三态要求中的坏配置一态缺专门用例）",
+      "evidence": "未配置（1a）/unavailable（1b）/local.yaml 缺席（1c）均有断言，但 metrics: 空值/畸形值的 fail-soft 提取无专门用例——提取器裸值正则要求 ≥1 字符，空值不匹配→返回 null→skipped，与 lint 同构推定安全；缺省路径零回归已有 quick-test-gate 回归 42/42 绿锚定。",
+      "location": "test/quick-metrics-gate.test.mjs:31"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——metrics 结果是收口时点执行快照、不参与状态机推进；最迟形态超时=failed 拦门而非静默丢弃，reason 注明秒数 verify-postcheck.js:430；重跑走 verify-runs 时间戳新目录无合并问题）",
+    "并发": "ok（边界已裁决：可接受——不建 tally 共享写面；命令在门禁隔离快照内执行（gateCwd/gateSpecBase quick-audit.js:629），超时回退主仓有 warn 留痕，与 lint 同款语义）",
+    "切换": "ok（边界已裁决：可接受——快照 cleanup 走既有 finally；FAIL 证据回拷后 resultPath 重映射已含 metrics（quick-audit.js:746）；worktree 会话跳快照直接实测继承既有判定）",
+    "作用域": "ok（边界已裁决：可接受——命令仅来源本仓 .sillyspec/local.yaml 与 lint/test 同信任边界；SILLYSPEC_CHANGE_FILES 注入前反斜杠归一 POSIX（verify-postcheck.js），测试 4a 以 Windows 形态入参断言跨平台换行分隔清单）"
+  },
+  "reviewedAt": "2026-10-28T16:50:37Z"
+}

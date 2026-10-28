@@ -401,7 +401,7 @@ export function buildTestSurfaceAdvisory(files) {
     if (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)) srcCount++
   }
   if (srcCount < MIN_SRC_FILES_FOR_TEST_ADVISORY || testCount > 0) return null
-  return `⚠️ 测试面厚度 advisory：交付面 ${srcCount} 个 src 类文件但测试面为空（0 个测试文件改动，P2 账本测试面无增量可对账），确认无需测试增量？（advisory 不阻断——轻量变更/burst 实证测试量仅为旧流程 40%）`
+  return `⚠️ 测试面厚度 advisory：交付面 ${srcCount} 个 src 类文件但测试面为空（0 个测试文件改动，P2 账本测试面无增量可对账），确认无需测试增量？（advisory 不阻断——轻量变更/burst 实证测试量仅为旧流程 40%）另空实现判据：若把实现改成全部返回空测试仍全绿，则测试是摆设——要补就补断言可观察行为的真测试（2026-10-29-open-metrics-gate task-04）`
 }
 
 /**
@@ -477,7 +477,7 @@ export function mergeGateFiles(audited, declared) {
 
 export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null, skipSentinel = false }) {
   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
-    return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
+    return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null, metrics: null }
   }
   const audited = Array.isArray(changedFiles) ? changedFiles : []
   // 门禁文件集 = 审计 ∪ 声明边界（并集，2026-09-23 ql-018 修复）：旧口径二选一（审计非空时
@@ -499,10 +499,10 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     (f) => typeof f === 'string' && (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)),
   )
   if (files.length === 0) {
-    return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null }
+    return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null, metrics: null }
   }
   if (codeFiles.length === 0) {
-    return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }
+    return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null, metrics: null }
   }
 
   // ── 测试最低面 advisory（资产三小件②）：放在两条早退之后——纯 doc/env skip/空清单
@@ -517,7 +517,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   // （Grill X-001 附注）。specBase 同理用主仓的（快照副本 local.yaml 不参与开关判定）。
   const semanticGuard = buildSemanticGuardHits({ cwd, specBase, files, changeName })
 
-  const { runVerifyTestCheck, runVerifyLintCheck } = await import('../verify-postcheck.js')
+  const { runVerifyTestCheck, runVerifyLintCheck, runVerifyMetricsCheck } = await import('../verify-postcheck.js')
 
   // ── 隔离快照执行（2026-09-10 驾驭小结第六批②，用户实证「lint 实测对账在主仓跑被并行
   // 会话脏文件拦门」）：HEAD 干净快照 + 本会话文件 overlay 后在快照内跑 test+lint——并行
@@ -565,6 +565,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   const failed = []
   let test = null
   let lint = null
+  let metrics = null
   try {
     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
     //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
@@ -620,6 +621,18 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     if (snapshot && lint.status === 'failed' && /超时/.test(String(lint.reason || ''))) {
       console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
       lint = runVerifyLintCheck({ cwd, specBase })
+    }
+    // ── 收口指标门（2026-10-29-open-metrics-gate task-03，ub-mode「确定性质量门」采纳）：
+    //    commands.metrics 配置才执行，lint 同款隔离快照口径 + 超时回退主仓；非零退出计入
+    //    failed 阻断收口（通过标准由命令自身定义——design 风险节声明的边界）。files 透传注入
+    //    SILLYSPEC_CHANGE_FILES（审计∪声明口径，大仓增量门只扫变更面，存量债不拦新变更）。──
+    metrics = runVerifyMetricsCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined, changeFiles: files })
+    if (snapshot && metrics.status === 'failed' && /超时/.test(String(metrics.reason || ''))) {
+      console.warn('⚠️ 快照 metrics 超时（junction I/O 慢）→ 主仓复跑 metrics（并行噪声可能混入——失败先做归属鉴定）')
+      metrics = runVerifyMetricsCheck({ cwd, specBase, changeFiles: files })
+    }
+    if (metrics.status === 'failed') {
+      failed.push('metrics')
     }
     // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
     // 证据（区间提交消息标题与正文均无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
@@ -700,14 +713,23 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         lint.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint }) || lint.resultPath || null
       }
     } catch { /* 持久化 best-effort，不影响门禁语义 */ }
+    // metrics 结果持久化（2026-10-29-open-metrics-gate task-03）：同 lint 语义——并入 test 的
+    // test-result.json（metrics 节）或独立落盘（kind: 'metrics'），证据面供收口评审与排障直读。
+    try {
+      if (metrics && (metrics.status === 'passed' || metrics.status === 'failed')) {
+        const { persistLintResult } = await import('../verify-postcheck.js')
+        metrics.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint: metrics, section: 'metrics' }) || metrics.resultPath || null
+      }
+    } catch { /* 持久化 best-effort，不影响门禁语义 */ }
     return {
       action: failed.length > 0 ? 'fail' : 'pass',
       failed,
       reason: failed.length > 0
         ? `实测失败：${failed.join(' + ')}（命令与输出尾部见上；修复后重跑 --done 不丢进度）`
-        : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
+        : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${metrics && metrics.status === 'passed' ? '；metrics 指标门实测通过' : ''}${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
       test,
       lint,
+      metrics,
       // 语义护栏 WARNING（task-06）：只增可选字段，action/failed 判定与调用方读取面均不受影响
       semanticGuard,
     }
@@ -721,7 +743,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
           // 结果路径重映射（评审 P1 清偿）：快照内写下的 resultPath 指向快照临时目录——清理后
           // existsSync 恒 false，flow done 的 FAIL 三件套会静默失效。回拷后把 test/lint 的
           // resultPath 改写为主仓路径（对象即返回值，finally 在 return 落地前变异生效）。
-          for (const r of [test, lint]) {
+          for (const r of [test, lint, metrics]) {
             if (r && typeof r.resultPath === 'string' && r.resultPath.startsWith(gateSpecBase)) {
               r.resultPath = specBase + r.resultPath.slice(gateSpecBase.length)
             }
@@ -764,7 +786,7 @@ export function printQuickTestLintGate(gate) {
     console.log(`\n🧪 quick test+lint 门禁 — SKIP：${gate.reason}`)
     return
   }
-  for (const [label, r] of [['test', gate.test], ['lint', gate.lint]]) {
+  for (const [label, r] of [['test', gate.test], ['lint', gate.lint], ['metrics', gate.metrics]]) {
     if (!r) continue
     const icon = r.status === 'failed' ? '❌' : r.status === 'passed' ? '✅' : '⏭️'
     const dur = typeof r.durationMs === 'number' ? ` (${(r.durationMs / 1000).toFixed(1)}s)` : ''

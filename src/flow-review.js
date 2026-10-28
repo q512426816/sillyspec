@@ -303,6 +303,10 @@ export function renderReviewerTaskbook({ change, changeDir, head = null, probeLi
     `     没有任何声明边界时写「无声明边界」。未裁决=未审。`,
     `  4. 作答中的防护声明（如有）：声称的防护机制在代码里真实存在且生效？`,
     `  5. 生成物同步（如涉及）：类型/契约文件与实现对齐？`,
+    // 测试有效性与根因性（2026-10-29-open-metrics-gate task-04，ub-mode「Test Behavior, Not
+    // Implementation」/「Fix Root Causes」转写）：从「测试存在且绿」升级到「测试有效」——空实现
+    // 判据给评审员可操作的假测试检验法，根因判据拦「吞崩溃 guard 冒充修复」。
+    `  6. 测试有效性与根因性（假测试判据两问）：空实现判据——把绑定测试所测的实现改成全部返回空的空操作，若测试仍可能全绿则测试无效（断言须测可观察行为，mock 一切零断言的摆设测试按无效报）；根因判据——diff 中的修复是否只是吞崩溃/藏失败的 guard（兜底掩盖≠根因消除，须指出并按严重度裁决）。`,
     // 项目评审探针（2026-10-12-review-probe-injection）：local.yaml review_probes 数据驱动注入——
     // 检查单生产权收归 CLI 的项目特有面（dogfood 实证：主代理手写清单没想到的面无人查）。
     // 未配置零注入——本段缺省时任务书与历史形态逐字一致（零回归）。

@@ -345,6 +345,117 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
 }
 
 /**
+ * 从 local.yaml 文本提取 commands.metrics（2026-10-29-open-metrics-gate，task-02）。
+ * 与 extractLintCommand 同风格同容错（带引号/不带引号/unavailable）。
+ * 模块内私有（runVerifyMetricsCheck 消费）。
+ */
+function extractMetricsCommand(yamlText) {
+  if (!yamlText) return null
+  const doubleQuoted = yamlText.match(/^\s*metrics:\s*"([^"]+)"\s*(?:#.*)?$/m)
+  const singleQuoted = yamlText.match(/^\s*metrics:\s*'([^']+)'\s*(?:#.*)?$/m)
+  const quoted = doubleQuoted || singleQuoted
+  if (quoted && quoted[1]) {
+    return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
+  }
+  const bare = yamlText.match(/^\s*metrics:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
+  if (bare && bare[1]) {
+    const cmd = bare[1].trim()
+    return cmd.toLowerCase() === 'unavailable' ? null : cmd
+  }
+  return null
+}
+
+/**
+ * 收口指标门实测：跑 local.yaml commands.metrics（2026-10-29-open-metrics-gate，task-02——
+ * ub-mode「确定性质量门」采纳件）。与 runVerifyLintCheck 同构（fail-open 缺省/超时链/CNF 降档/
+ * 输出尾部），刻意差异（design.md 风险节声明的边界）：
+ * - 非 zero/超时即 failed：通过标准由命令自身定义（用户写 crap-check --fail-over 10 src 就是
+ *   他的标准），首版即硬门，无 lint 式观察期
+ * - 无 tally（lint 的 verify-lint-tally 是共享写面，指标门无观察期升级消费方）
+ * - 无 failureFiles/归属鉴定（指标输出无标准路径形态——分数表/JSON/正文，误判比不判更糟，
+ *   扫描范围控制责任交给命令本身）
+ * - CNF 环境缺件降档无「输出含路径」护栏（lint 有 extractLintFailureFiles 非空维持硬拦的
+ *   护栏；指标输出形态开放无从提取——CNF 签名即环境信号）
+ * - 可选 changeFiles → 注入 SILLYSPEC_CHANGE_FILES（POSIX 相对路径换行分隔）：大仓增量门
+ *   只扫变更面（与测试面动态子集同哲学，存量债不拦新变更）；不读该变量的命令零感知
+ * 信任边界与 runVerifyLintCheck 一致：命令只来源于主仓 .sillyspec/local.yaml。
+ */
+export function runVerifyMetricsCheck({ cwd, specBase, timeoutMs, changeFiles } = {}) {
+  const localYamlPath = join(specBase, 'local.yaml')
+  const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
+  const command = extractMetricsCommand(yamlText)
+
+  if (!command) {
+    return {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      // skipped reason 自带配置引导（引导面③，FR-01）：收口输出与证据文件即引导面，不另设说教输出
+      reason: yamlText
+        ? 'local.yaml 未配置 commands.metrics（或标记 unavailable）——可选指标门：配置后收口实测该命令，非零退出阻断（适合复杂度/重复率/死代码/覆盖率阈值类秒级检查；执行时注入 SILLYSPEC_CHANGE_FILES 变更清单可只扫变更面；变异测试等慢工具建议 pre-push/CI 层）'
+        : `local.yaml 不存在（${localYamlPath}）`,
+    }
+  }
+
+  // 超时链同 lint：显式参 > local.yaml metrics_timeout_sec > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180s
+  const yamlMetricsTimeoutMs = (() => {
+    const m = String(yamlText || '').match(/^\s*metrics_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
+    return m && Number(m[1]) > 0 ? Number(m[1]) * 1000 : 0
+  })()
+  const METRICS_TIMEOUT_MS = timeoutMs || yamlMetricsTimeoutMs || Number(process.env.SILLYSPEC_METRICS_TIMEOUT_MS) || 3 * 60 * 1000
+  const startedAt = Date.now()
+  let exitCode = 0
+  let output = ''
+  let reason = null
+  // 增量门注入（FR-01）：changeFiles 非空时随子进程环境注入——命令侧按需消费，跨平台 POSIX 路径
+  const envExtra = Array.isArray(changeFiles) && changeFiles.length > 0
+    ? { SILLYSPEC_CHANGE_FILES: changeFiles.map((f) => String(f).replace(/\\/g, '/')).join('\n') }
+    : null
+  try {
+    output = decodeShellOutput(execSync(command, {
+      cwd,
+      encoding: 'buffer',
+      timeout: METRICS_TIMEOUT_MS,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      ...(envExtra ? { env: { ...process.env, ...envExtra } } : null),
+    }))
+  } catch (e) {
+    exitCode = typeof e.status === 'number' ? e.status : 1
+    output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
+    reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= METRICS_TIMEOUT_MS
+      ? `metrics 命令超时（>${METRICS_TIMEOUT_MS / 1000}s）`
+      : `metrics 命令退出码 ${exitCode}`
+  }
+  const durationMs = Date.now() - startedAt
+  const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+  let status = exitCode === 0 ? 'passed' : 'failed'
+  let finalReason = exitCode === 0 ? null : reason
+  // 环境缺件降档（复用 lint 语义，2026-09-23 实证先例）：CNF 是环境信号非代码失败，硬拦只会逼
+  // 逃生口；指标输出形态开放，无从做 lint 的「输出含路径维持硬拦」护栏——CNF 签名即降档依据。
+  if (status === 'failed') {
+    const cnf = detectCommandMissingFailure(output)
+    if (cnf.matched) {
+      status = 'skipped'
+      finalReason = `环境缺件：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败不拦门；安装对应工具后 metrics 恢复实测`
+      console.warn(`⚠️ metrics 实测环境缺件降档为跳过：${cnf.evidence}——修复环境（安装工具）而非改代码`)
+    }
+  }
+
+  return {
+    status,
+    command,
+    exitCode,
+    durationMs,
+    outputTail,
+    reason: finalReason,
+  }
+}
+
+/**
  * lint 硬门决策（2026-09-09 升硬，外部数据驱动）：观察期 tally 14 次 5 败全真阳性零误伤，
  * 且 pre-push 钩子本就硬拦——verify 侧硬门只是同一标准 fail-fast 前移。
  * 逃生档：SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕，对齐 quick 门 skip env 先例）。
@@ -3669,8 +3780,10 @@ export function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures
  * 优先并入 test 的 test-result.json（modules 并列一节 `lint` 字段，读改写）；test 无
  * 结果文件（skipped/未跑）而 lint 实跑时，用 writeRunResult 形状独立落一份（kind: 'lint'
  * 标识）。返回落盘路径，失败返回 null（best-effort，不阻断门禁）。
+ * section 参数（2026-10-29-open-metrics-gate task-02）：并入字段名与独立件 kind 的泛化
+ * ——metrics 结果走同款落盘语义（section: 'metrics'），缺省 'lint' 零变化。
  */
-export function persistLintResult({ specBase, changeName, testResultPath, lint }) {
+export function persistLintResult({ specBase, changeName, testResultPath, lint, section = 'lint' }) {
   if (!lint || (lint.status !== 'passed' && lint.status !== 'failed')) return null
   if (testResultPath && existsSync(testResultPath)) {
     try {
@@ -3678,7 +3791,7 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint }
       // 并入节自带 resultPath（收编评审 P3：调用方在 persistLintResult 返回后才给 lint.resultPath
       // 赋值——只变异对象不重写盘，并入节会永远缺 resultPath。这里预先补齐，调用方赋同值幂等）
       lint.resultPath = testResultPath
-      j.lint = lint
+      j[section] = lint
       writeFileSync(testResultPath, JSON.stringify(j, null, 2) + '\n')
       return testResultPath
     } catch { /* 结果文件损坏 → 退独立落盘 */ }
@@ -3691,7 +3804,7 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint }
     holder.resultPath = join(runDir, 'test-result.json')
     writeFileSync(holder.resultPath, JSON.stringify({
       change: changeName || null,
-      kind: 'lint',
+      kind: section,
       command: lint.command,
       exit_code: lint.exitCode,
       status: lint.status,

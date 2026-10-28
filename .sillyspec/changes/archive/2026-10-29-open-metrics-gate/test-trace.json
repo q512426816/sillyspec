@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-29-open-metrics-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「未配置跳过：无 metrics 键与 unavailable 两形态均 skipped 留痕不拦门」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「配置通过：退出码 0 → passed 且 kind: metrics 证据落 verify-runs」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「配置失败阻断：退出码非 0 → failed 含 metrics、action=fail」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「超时门红：超 metrics_timeout_sec 帽 → failed（reason 注明超时）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「环境缺件降档：CNF 特征且无文件路径 → skipped 带修复指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「纯 doc 变更：实测早退 skip，metrics 不执行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「增量门注入：命令子进程环境含 SILLYSPEC_CHANGE_FILES=变更清单（换行分隔 POSIX 路径）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-review.test.mjs「任务书检查单含空实现判据与根因判据（关键句断言在场）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-02",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「advisory 命中附空实现判据句；负例返回 null 不变」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/config-schema.test.mjs「commands.metrics 与 metrics_timeout_sec 注册（readers/desc/example）及 renderExample 带出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-03",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「引导面三处在场：example 注释 + AGENTS 模板规则 4 并列句 + skipped reason 引导句」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-29-open-metrics-gate:flow:测试绑定FR-04",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-open-metrics-gate"
+    }
+  ]
+}

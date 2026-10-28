@@ -1,0 +1,49 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  收口开放指标门与假测试评审判据
+
+
+  动机与背景：ub-mode（Uncle Bob 2026-10-25 发布的 agent 技能仓，3438 star）核心价值两点：确定性质量门（crapper CRAP 评分 / dryer 重复检测 / mutator
+  变异测试——机器在环硬判定）与测试有效性纪律（测行为不测实现，空实现仍绿即假测试）。对照本仓：流程门硬（状态机+收口实测），但指标面只有测试绿+lint 绿；假测试无判据。经会话讨论采纳两点进本仓：收口开放指标门 +
+  评审面假测试判据。不引入新依赖，命令开放不绑死任何工具；缺省未配置零开销（跳过留痕），慢工具（变异测试）定位 pre-push/CI 层不在每变更收口跑。
+
+
+  成功标准：
+
+  - local.yaml 新增 commands.metrics 键：未配置或标 unavailable 时收口跳过留痕（复用 lint 的 fail-open 语义）；配置后收口实测在隔离快照内执行，非零退出=门红阻断收口，结果计入
+  verify-runs 证据（kind: metrics），支持 metrics_timeout_sec 超时链
+
+  - 收口评审 taskbook（renderReviewerTaskbook）与测试厚度
+  advisory（buildTestSurfaceAdvisory）增补两判据：空实现判据（若每个函数返回空测试仍全绿则测试无效）与根因判据（只藏崩溃的 guard 不是修复）
+
+  - config-schema 注册新键（readers/desc/example），local.yaml.example 与 {LOCAL_COMMANDS} 注入自动带出，示例注释提及 CRAP/重复/变异类工具与快慢定位但不绑定
+
+  - 零新 npm 依赖；新增测试覆盖门三态（未配置跳过/配置通过/配置失败阻断）与判据文案渲染；quick-audit/flow-review/config-schema 相关既有面回归绿 + lint 绿
+autopilot: true
+prestage_ack: true
+baseline_commit: d91ede6f43bc0fac3718322abeb26e83d2db0bf7
+updatedAt: '2026-10-28T16:52:04.824Z'
+baseline_sha256: b24609b6d5ffc38efb993eddfd2f7e6c6225c8a59957068ad5e8a6664be52a97
+spec_approved: true
+spec_approved_at: '2026-10-28T16:25:59.500Z'
+spec_approved_by: zi-ubmode-adopt
+spec_approved_channel: user-confirmed
+spec_attested_by: zi-ubmode-adopt
+gate_summary: >-
+  test: passed ← module[]+deps(js30)（12.4s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261028164511\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 13 个
+

@@ -32,7 +32,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文�
 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档（轻量道即：FR 绑定+design 四节+用户批准先于动码，读代码探究不算动码）。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
+4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）；指标门同款可选：`commands.metrics` 配置后收口实测该命令（非零退出阻断；未配置/`unavailable` 跳过留痕）——适合复杂度/重复率/死代码/覆盖率阈值类秒级检查（命令开放不绑定工具，`npx` 工具或 mvn/gradle 检查目标均可；执行时注入 `SILLYSPEC_CHANGE_FILES` 变更文件清单，大仓可只扫变更面），变异测试等慢工具建议 pre-push/CI。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
