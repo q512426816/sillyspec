@@ -98,3 +98,4 @@
 | 2026-10-28 | 2026-10-26-target-files-main-docs-rescue | target-files 主仓治理文档救赎（假红根治）；动机：倒推收编 2026-10-27 中断会… |
 | 2026-10-28 | 2026-10-28-shadow-checkpoint | 任务勾选即影子存档，随时读档回滚 |
 | 2026-10-28 | 2026-10-28-cp-review-debt | checkpoint 评审三债清偿：口径统一与链校验解耦 |
+| 2026-10-28 | 2026-10-28-overlap-route | target-file 重叠事前路由：检测与分流提示 |

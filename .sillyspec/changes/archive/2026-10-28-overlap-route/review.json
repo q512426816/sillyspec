@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-overlap-route",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "a1b8e36852f585eaaab7496b55133c38f448623b",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "FR-04/FR-05 测试绑定名实不符——绑定行已改实名覆盖，与实际测试面逐字对上",
+      "evidence": "增量提交 a1b8e368 仅改 requirements.md 绑定四行（FR-01/03 措辞对齐实际断言文案）：FR-04 改为「overlapAdvisoryFor 纯函数：相交出路由提示文案/无相交 null（flow.js 钩子为三行薄接线 fail-open，逻辑面在纯函数侧覆盖；集成路径经 FR-05 既有套件回归兜底）」——与 flow.js:2947-2951 实际形态一致，薄接线无直测如实披露；FR-05 改为 test/flow-verify-drafts.test.mjs 5 用例 + test/approve-gate-tick.test.mjs 7 用例——approve-gate-tick.test.mjs 实测恰 7 个 test() 用例，两套件在 a1b8e368 复跑 5/5、7/7 全绿。名实落差消除；「集成钩子无直测」以显式披露债形态保留（并入第三条 open 口径）。",
+      "location": ".sillyspec/changes/2026-10-28-overlap-route/requirements.md:61-65"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "advisory/动词文案命令形态与用法行不一致——已改位置参数形态",
+      "evidence": "增量提交 a1b8e368 改两处：src/index.js:5148 `worktree apply --change <后到变更名>`→`worktree apply <后到变更名>`；src/overlap-detect.js:65 `worktree apply --change <名>`→`worktree apply <名>`。与 worktree 子命令自身用法行（src/index.js:3781 `sillyspec worktree apply <change-name>`）及 AGENTS.md 惯例一致；位置参数形态为首代码径（wtName=filteredArgs.slice(2).find(a=>!a.startsWith('-'))），无需依赖 flag 值旁落的巧合路径。overlap-detect 复跑 8/8（文案断言含 'worktree apply' 仍过）。",
+      "location": "src/overlap-detect.js:65"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "留债：overlap 动词动态 import 在 try 外（导入失败非零退出违 FR-03 字面）+ verify-drafts 集成钩子无直测",
+      "evidence": "a1b8e368 未触及：src/index.js:5136 `await import('./overlap-detect.js')` 仍在 try 块外（detectDeclaredOverlaps 调用与 resolvePlatformSpecDir 在 try 内），模块级导入失败走顶层错误处理非零退出；与 flow.js 钩子（import 在 try 内）不对称。现实触发面≈0（同包静态文件，测试每次 CLI 子进程加载成功）。同口径承载集成级直测债：flow.js:2945-2951 钩子无直接测试驱动——绑定行已如实披露为薄接线，债已显式化，按留债口径保持 open 待后续清偿。",
+      "location": "src/index.js:5136"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-28T06:27:18Z"
+}

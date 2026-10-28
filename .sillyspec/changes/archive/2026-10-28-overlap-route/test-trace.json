@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-overlap-route",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-overlap-route:flow:测试绑定FR-01",
+      "tests": [
+        "test/overlap-detect.test.mjs「双变更同声明检出/不相交返回空/损坏声明空集 fail-open（含反斜杠归一）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-overlap-route"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-28-overlap-route:flow:测试绑定FR-02",
+      "tests": [
+        "test/overlap-detect.test.mjs「归档方退出重叠判定」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-overlap-route"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-28-overlap-route:flow:测试绑定FR-03",
+      "tests": [
+        "test/overlap-detect.test.mjs「sillyspec overlap 动词：有重叠列清单附分流与落地序列指引/零重叠确认行/恒 exit 0」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-overlap-route"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-28-overlap-route:flow:测试绑定FR-04",
+      "tests": [
+        "test/overlap-detect.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-overlap-route"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-28-overlap-route:flow:测试绑定FR-05",
+      "tests": [
+        "test/approve-gate-tick.test.mjs「批准门 7 用例零回归」",
+        "test/flow-verify-drafts.test.mjs「verify-drafts 判定面既有 5 用例零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-overlap-route"
+    }
+  ]
+}

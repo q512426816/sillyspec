@@ -1,0 +1,265 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index a2d05a6c..1cac2ecd 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -122,6 +122,7 @@ modules:
+       - test/acceptance-matrix-probe.test.mjs
+       - src/verify-facts-schema.js
+       - src/foreign-declared.js
++      - src/overlap-detect.js
+       - src/cross-repo-reconcile.js
+       - src/probe7-anchor-check.js
+       - src/knowledge-match.js
+diff --git a/src/flow.js b/src/flow.js
+index 749e91a6..fc8f2ee9 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2942,6 +2942,13 @@ async function cmdFlowVerifyDrafts({ change, cwd, specBase, runtimeRootOpt = nul
+     for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
+     if (r.degraded) console.log(`ℹ️ 自查降级：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过（v2 纯 markdown 无法对锚校验，如实降级）`)
+     console.log(`✅ spec 面自查通过（0 violations）——通过≠批准：请把摘要给用户看，用户确认后 sillyspec flow approve --change ${change}（批准留痕后动码）`)
++    // 重叠路由 advisory（2026-10-28-overlap-route FR-04）：批准前最后一个高频触点——当前
++    // 变更声明与他人活跃变更相交时一行分流提示。fail-open 静默：检测异常不拦批准不影响退出码。
++    try {
++      const { overlapAdvisoryFor } = await import('./overlap-detect.js')
++      const line = overlapAdvisoryFor(change, { cwd, specBase })
++      if (line) console.warn(line)
++    } catch { /* advisory 静默：检测失败不拦批准 */ }
+   } else {
+     for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
+     if (hasViolations) {
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index 14799d55..3a76ac56 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -174,7 +174,8 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
+  * （退回旧 foreign-first 行为，fail-closed 不放大放行面）。
+  * @returns {Set<string>} 正斜杠归一后的声明路径集
+  */
+-function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
++// export 补齐（2026-10-28-overlap-route）：重叠检测复用声明加载单一源，防口径漂移
++export function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+   const set = new Set()
+   if (!currentChangeName) return set
+   const norm = (p) => String(p || '').replace(/\\/g, '/')
+diff --git a/src/index.js b/src/index.js
+index 838154d4..87e45dd6 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -151,6 +151,8 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec checkpoint --change <名> [--diff <sha> [--path <p>]] [--restore <sha>
+                                       [--path <p>|--all] --yes] [--delete-ref]
+                                       影子存档面：列出 task tick 自动落的存档链，预览/按路径读档
++  sillyspec overlap                  查询活跃变更 target-file 声明重叠（advisory——检出即附
++                                      worktree 分流与落地序列指引）
+   sillyspec knowledge <search --query "..." --limit N
+                         | inspect --id "..."
+                         | validate | refresh
+@@ -5128,6 +5130,26 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+       console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes${list.length >= 200 ? '\nℹ️  列表显示截 200 档（仅展示面）——全量走 git：git log --format="%H %s" refs/sillyspec/checkpoints/' + cpChange : ''}`);
+       break;
+     }
++    case 'overlap': {
++      // 2026-10-28-overlap-route：target-file 声明重叠仓级查询（advisory 恒 exit 0）——
++      // 事前路由信号：检出重叠附 worktree 分流与落地序列指引（不是禁止是分流）。
++      const { detectDeclaredOverlaps } = await import('./overlap-detect.js');
++      let overlaps = [];
++      try { overlaps = detectDeclaredOverlaps({ cwd: dir, specBase: resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec') }); }
++      catch (e) { console.log(`ℹ️  重叠检测不可用（advisory 面静默退化）：${e && e.message ? e.message : e}`); break; }
++      if (!overlaps.length) {
++        console.log(`✅ 无 target-file 声明重叠——各活跃变更声明面互不相交（落地零冲突预期）`);
++        break;
++      }
++      console.log(`⚠️  ${overlaps.length} 个文件被多个活跃变更声明（并行改同一文件是冲突地带）：`);
++      for (const o of overlaps) {
++        console.log(`   ${o.file} ← ${o.changes.join('、')}`);
++      }
++      console.log(`\n🔀 分流建议：其一转 worktree 形态并行——sillyspec worktree apply <后到变更名>（隔离干活，互不可见互不干扰）。`);
++      console.log(`   落地序列（既有机器）：先落地者干净进主线；后落地者 apply --3way 三方合并（同文件不同区域自动过，同段冲突摆出裁决）；并发落地由 main-repo.lock 串行。`);
++      console.log(`   确认某方已死：归档后其声明自动退出重叠判定（归档件只读）。`);
++      break;
++    }
+     case 'flow': {
+       // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2。
+       // --json 全局透传（2026-10-06-flow-status-json）：该 flag 在上方全局解析段被剥出
+@@ -5879,7 +5901,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+       break;
+     }
+     default: {
+-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
++      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'overlap', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
+       const suggestion = didYouMean(command, topCommands);
+       console.error(`❌ 未知命令: ${command}`);
+       if (command === '--status') {
+diff --git a/src/overlap-detect.js b/src/overlap-detect.js
+new file mode 100644
+index 00000000..e5882059
+--- /dev/null
++++ b/src/overlap-detect.js
+@@ -0,0 +1,68 @@
++/**
++ * overlap-detect.js — 活跃变更 target-file 声明重叠检测（2026-10-28-overlap-route）
++ *
++ * 定位：同 target-file 并行的事前路由信号——落地侧机器已厚（worktree apply --3way 三方
++ * 合并、main-repo.lock 全仓串行、guard 相交预检、base 漂移 re-anchor），缺的是干活期的
++ * 「两个活跃变更声明了同一文件」检测：重叠拖到落地才撞见，错失把后到者分流进 worktree
++ * 的窗口。本模块只做检测与呈现（advisory），不做调度不做阻断——「不是禁止，是分流」。
++ *
++ * 机制：声明加载单一源复用 foreign-declared.loadOwnDeclaredSet（design §6 文件变更
++ * 清单 ∪ task 卡 allowed_paths/target_files，quick 会话 guard 形态），构建文件→变更集
++ * 反查表，声明同一文件的变更数 ≥2 即重叠条目。瞬时快照零持久状态；归档（目录移入
++ * changes/archive/）天然退出反查表。
++ *
++ * 消费面：sillyspec overlap 仓级查询动词；flow verify-drafts 通过分支的路由 advisory。
++ */
++import { readdirSync } from 'fs'
++import { join } from 'path'
++import { loadOwnDeclaredSet } from './foreign-declared.js'
++
++/**
++ * 检测活跃变更间的 target-file 声明重叠。
++ * @param {{cwd?: string, specBase?: string}} opts 二选一（specBase 优先）
++ * @returns {Array<{file: string, changes: string[]}>} file 正斜杠归一、changes 字典序、
++ *   条目按 file 排序；无重叠返回 []。任何读取失败 fail-open（该变更空集），绝不抛出。
++ */
++export function detectDeclaredOverlaps({ cwd, specBase } = {}) {
++  const base = specBase || join(cwd || process.cwd(), '.sillyspec')
++  const runtimeRoot = join(base, '.runtime')
++  let names = []
++  try {
++    names = readdirSync(join(base, 'changes'), { withFileTypes: true })
++      .filter((e) => e.isDirectory() && e.name !== 'archive')
++      .map((e) => e.name)
++  } catch {
++    return [] // 无 changes/ 目录：零活跃变更
++  }
++  const byFile = new Map()
++  for (const name of names) {
++    const own = loadOwnDeclaredSet(base, runtimeRoot, name) // 内部 fail-open：解析失败空集
++    if (!own || own.size === 0) continue
++    for (const f of own) {
++      if (!byFile.has(f)) byFile.set(f, new Set())
++      byFile.get(f).add(name)
++    }
++  }
++  const overlaps = []
++  for (const [file, changes] of byFile) {
++    if (changes.size >= 2) overlaps.push({ file, changes: [...changes].sort() })
++  }
++  return overlaps.sort((a, b) => a.file.localeCompare(b.file))
++}
++
++/**
++ * 指定变更的重叠路由提示文案（verify-drafts 通过分支钩子用）。
++ * @returns {string|null} null=该变更无重叠（调用方零输出）；有则返回一行提示
++ *   （分流建议 + 落地序列 + 详查指引）。纯函数：检测异常由上层 try/catch fail-open。
++ */
++export function overlapAdvisoryFor(changeName, { cwd, specBase } = {}) {
++  const name = String(changeName || '')
++  if (!name) return null
++  const mine = detectDeclaredOverlaps({ cwd, specBase }).filter((o) => o.changes.includes(name))
++  if (mine.length === 0) return null
++  const others = [...new Set(mine.flatMap((o) => o.changes).filter((c) => c !== name))].join('、')
++  const files = mine.slice(0, 3).map((o) => `${o.file}←${o.changes.join(',')}`).join('；') + (mine.length > 3 ? ` 等 ${mine.length} 个` : '')
++  return `⚠️ [重叠路由] 本变更与活跃变更 ${others} 声明了相同文件（${files}）——并行改同一文件是冲突地带，建议其一转 worktree 形态（sillyspec worktree apply <名>）；落地序列：先落地干净进、后落地 apply --3way 三方合并（并发由 main-repo.lock 串行）。详见 sillyspec overlap`
++}
++
++export default { detectDeclaredOverlaps, overlapAdvisoryFor }
+diff --git a/test/overlap-detect.test.mjs b/test/overlap-detect.test.mjs
+new file mode 100644
+index 00000000..cd8b0d6d
+--- /dev/null
++++ b/test/overlap-detect.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * target-file 声明重叠检测测试 — 2026-10-28-overlap-route
++ *
++ * 覆盖矩阵：
++ *   检出        双变更同声明检出（文件+归属清单）、不相交返回空、损坏声明空集 fail-open
++ *   归档退出    重叠方移入 changes/archive/ 后退出判定
++ *   动词        sillyspec overlap：有重叠列清单附分流与落地序列指引、零重叠确认行、恒 exit 0
++ *   advisory    overlapAdvisoryFor：相交出提示行（含分流与序列）、无相交返回 null
++ *   零回归      既有 verify-drafts 判定面测试复跑（FR-05——在收口动态面跑，此处以
++ *               detectDeclaredOverlaps 纯函数 + 动词输出为锚）
++ */
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, renameSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { runCLI, report } from './_cli-step-harness.mjs'
++
++const count = { passed: 0, failed: 0, failures: [] }
++const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
++const tmpRoots = []
++
++/** 造一个带 design §6 声明的变更目录（表格式文件变更清单——与真实 flow 面同形态）。 */
++function seedChange(specBase, name, files, { broken = false } = {}) {
++  const dir = join(specBase, 'changes', name)
++  mkdirSync(dir, { recursive: true })
++  const rows = broken
++    ? `| 修改 | ${files.join(' 与 ')}（故意缺表格闭合与规范列，解析应得空集）`
++    : files.map((f) => `| 修改 | ${f} | 测试声明 |`).join('\n')
++  writeFileSync(join(dir, 'design.md'), [
++    '# 设计记录（Design Record）',
++    '',
++    '## 做法概述',
++    '',
++    'fixture。',
++    '',
++    '## 文件变更清单',
++    '',
++    '| 操作 | 路径 | 说明 |',
++    '| --- | --- | --- |',
++    rows,
++    '',
++  ].join('\n'))
++  return dir
++}
++
++const { detectDeclaredOverlaps, overlapAdvisoryFor } = await import('../src/overlap-detect.js')
++
++// ── FR-01 检出 / 不相交空 / fail-open 空集 ──
++{
++  const root = mkdtempSync(join(tmpdir(), 'ovl-')); tmpRoots.push(root)
++  const specBase = join(root, '.sillyspec')
++  const A = '2026-10-28-ovl-a', B = '2026-10-28-ovl-b', C = '2026-10-28-ovl-c', D = '2026-10-28-ovl-d'
++  seedChange(specBase, A, ['src/main.js', 'src/a-only.js'])
++  seedChange(specBase, B, ['src\\main.js', 'src/b-only.js']) // 反斜杠形态：归一后同文件
++  seedChange(specBase, C, ['src/c-only.js'])
++  seedChange(specBase, D, ['src/main.js'], { broken: true }) // 损坏声明：空集不喂重叠
++  const r = detectDeclaredOverlaps({ cwd: root })
++  assert(r.length === 1 && r[0].file === 'src/main.js' && r[0].changes.join(',') === [A, B].join(','),
++    `双变更同声明检出（实际 ${JSON.stringify(r)}）——含反斜杠归一、损坏声明空集、不相交集不计`)
++  const adv = overlapAdvisoryFor(A, { cwd: root })
++  assert(adv !== null && adv.includes(B) && adv.includes('src/main.js') && adv.includes('worktree apply') && adv.includes('3way'),
++    `advisory 文案含对方变更/文件/分流与落地序列（${adv ? adv.slice(0, 80) + '…' : 'null'}）`)
++  assert(overlapAdvisoryFor(C, { cwd: root }) === null, '不相交变更 advisory 为 null（零输出）')
++
++  // ── FR-02 归档退出 ──
++  mkdirSync(join(specBase, 'changes', 'archive'), { recursive: true })
++  renameSync(join(specBase, 'changes', B), join(specBase, 'changes', 'archive', B))
++  const r2 = detectDeclaredOverlaps({ cwd: root })
++  assert(r2.length === 0, `重叠方归档后退出判定（实际 ${JSON.stringify(r2)}）`)
++
++  // ── FR-03 动词：有重叠 ──
++  const B2 = '2026-10-28-ovl-b2'
++  seedChange(specBase, B2, ['src/main.js'])
++  const c1 = runCLI(['overlap'], { cwd: root })
++  assert(c1.status === 0 && c1.stdout.includes('src/main.js') && c1.stdout.includes(A) && c1.stdout.includes(B2),
++    `overlap 动词列重叠（exit ${c1.status}，输出含文件与两变更）`)
++  assert(c1.stdout.includes('worktree apply') && c1.stdout.includes('3way') && c1.stdout.includes('main-repo.lock'),
++    '动词输出附分流与落地序列指引（worktree apply / 3way / main-repo.lock）')
++
++  // ── FR-03 动词：零重叠 ──
++  const root2 = mkdtempSync(join(tmpdir(), 'ovl2-')); tmpRoots.push(root2)
++  const specBase2 = join(root2, '.sillyspec')
++  seedChange(specBase2, '2026-10-28-ovl-solo', ['src/x.js'])
++  const c2 = runCLI(['overlap'], { cwd: root2 })
++  assert(c2.status === 0 && c2.stdout.includes('无 target-file 声明重叠'), `零重叠确认行恒 exit 0（exit ${c2.status}）`)
++
++  // 空仓（无 changes/）：fail-open 空数组 + 动词零重叠
++  const root3 = mkdtempSync(join(tmpdir(), 'ovl3-')); tmpRoots.push(root3)
++  assert(detectDeclaredOverlaps({ cwd: root3 }).length === 0, '无 .sillyspec/changes 目录 fail-open 空数组')
++}
++
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++report(count.passed, count.failed, count.failures)

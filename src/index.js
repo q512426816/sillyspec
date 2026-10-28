@@ -151,6 +151,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec checkpoint --change <名> [--diff <sha> [--path <p>]] [--restore <sha>
                                       [--path <p>|--all] --yes] [--delete-ref]
                                       影子存档面：列出 task tick 自动落的存档链，预览/按路径读档
+  sillyspec overlap                  查询活跃变更 target-file 声明重叠（advisory——检出即附
+                                      worktree 分流与落地序列指引）
   sillyspec knowledge <search --query "..." --limit N
                         | inspect --id "..."
                         | validate | refresh
@@ -5128,6 +5130,26 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes${list.length >= 200 ? '\nℹ️  列表显示截 200 档（仅展示面）——全量走 git：git log --format="%H %s" refs/sillyspec/checkpoints/' + cpChange : ''}`);
       break;
     }
+    case 'overlap': {
+      // 2026-10-28-overlap-route：target-file 声明重叠仓级查询（advisory 恒 exit 0）——
+      // 事前路由信号：检出重叠附 worktree 分流与落地序列指引（不是禁止是分流）。
+      const { detectDeclaredOverlaps } = await import('./overlap-detect.js');
+      let overlaps = [];
+      try { overlaps = detectDeclaredOverlaps({ cwd: dir, specBase: resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec') }); }
+      catch (e) { console.log(`ℹ️  重叠检测不可用（advisory 面静默退化）：${e && e.message ? e.message : e}`); break; }
+      if (!overlaps.length) {
+        console.log(`✅ 无 target-file 声明重叠——各活跃变更声明面互不相交（落地零冲突预期）`);
+        break;
+      }
+      console.log(`⚠️  ${overlaps.length} 个文件被多个活跃变更声明（并行改同一文件是冲突地带）：`);
+      for (const o of overlaps) {
+        console.log(`   ${o.file} ← ${o.changes.join('、')}`);
+      }
+      console.log(`\n🔀 分流建议：其一转 worktree 形态并行——sillyspec worktree apply <后到变更名>（隔离干活，互不可见互不干扰）。`);
+      console.log(`   落地序列（既有机器）：先落地者干净进主线；后落地者 apply --3way 三方合并（同文件不同区域自动过，同段冲突摆出裁决）；并发落地由 main-repo.lock 串行。`);
+      console.log(`   确认某方已死：归档后其声明自动退出重叠判定（归档件只读）。`);
+      break;
+    }
     case 'flow': {
       // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2。
       // --json 全局透传（2026-10-06-flow-status-json）：该 flag 在上方全局解析段被剥出
@@ -5879,7 +5901,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       break;
     }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'checkpoint', 'overlap', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher', 'commit', 'push'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

@@ -11818,3 +11818,98 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-28-shadow-checkpoint
   status: active
+
+## FR-cli-entry-623 两个活跃变更声明同一文件时 detectDeclaredOverlaps 检出（文件+归属变更清单），声明不相交返回空（测试断言）
+变更：2026-10-28-overlap-route
+状态：active
+摘要：双变更同声明
+全文：.sillyspec/changes/archive/2026-10-28-overlap-route/requirements.md#FR-01
+最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-overlap-route:flow:测试绑定FR-01
+  tests: test/overlap-detect.test.mjs「双变更同声明检出/不相交返回空/损坏声明空集 fail-open（含反斜杠归一）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-overlap-route
+  status: active
+
+## FR-cli-entry-624 已归档变更的声明不参与重叠判定（测试断言）
+变更：2026-10-28-overlap-route
+状态：active
+摘要：归档退出
+全文：.sillyspec/changes/archive/2026-10-28-overlap-route/requirements.md#FR-02
+最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-overlap-route:flow:测试绑定FR-02
+  tests: test/overlap-detect.test.mjs「归档方退出重叠判定」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-overlap-route
+  status: active
+
+## FR-cli-entry-625 sillyspec overlap 列重叠并附分流指引（先到主检出、后到建议 worktree apply；落地序列：先落地干净进、后落地三方合并、并发由 main-repo.lock 串行）
+变更：2026-10-28-overlap-route
+状态：active
+摘要：有重叠查询
+全文：.sillyspec/changes/archive/2026-10-28-overlap-route/requirements.md#FR-03
+最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-overlap-route:flow:测试绑定FR-03
+  tests: test/overlap-detect.test.mjs「sillyspec overlap 动词：有重叠列清单附分流与落地序列指引/零重叠确认行/恒 exit 0」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-overlap-route
+  status: active
+
+## FR-cli-entry-626 flow verify-drafts 自查通过后，当前变更声明与他人活跃变更相交时输出一行路由提示（advisory 非阻断，检测失败静默不拦批准）
+变更：2026-10-28-overlap-route
+状态：active
+摘要：批准前路由提示
+全文：.sillyspec/changes/archive/2026-10-28-overlap-route/requirements.md#FR-04
+最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-overlap-route:flow:测试绑定FR-04
+  tests: test/overlap-detect.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-overlap-route
+  status: active
+
+## FR-cli-entry-627 既有 verify-drafts/批准门零回归，零新依赖
+变更：2026-10-28-overlap-route
+状态：active
+摘要：零回归
+全文：.sillyspec/changes/archive/2026-10-28-overlap-route/requirements.md#FR-05
+最近确认：a1b8e36852f585eaaab7496b55133c38f448623b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-overlap-route:flow:测试绑定FR-05
+  tests: test/approve-gate-tick.test.mjs「批准门 7 用例零回归」 | test/flow-verify-drafts.test.mjs「verify-drafts 判定面既有 5 用例零回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-overlap-route
+  status: active

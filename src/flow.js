@@ -2942,6 +2942,13 @@ async function cmdFlowVerifyDrafts({ change, cwd, specBase, runtimeRootOpt = nul
     for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
     if (r.degraded) console.log(`ℹ️ 自查降级：draft-ledger 不在此机（.runtime 机本位/存量变更）——空槽兜底校验通过（v2 纯 markdown 无法对锚校验，如实降级）`)
     console.log(`✅ spec 面自查通过（0 violations）——通过≠批准：请把摘要给用户看，用户确认后 sillyspec flow approve --change ${change}（批准留痕后动码）`)
+    // 重叠路由 advisory（2026-10-28-overlap-route FR-04）：批准前最后一个高频触点——当前
+    // 变更声明与他人活跃变更相交时一行分流提示。fail-open 静默：检测异常不拦批准不影响退出码。
+    try {
+      const { overlapAdvisoryFor } = await import('./overlap-detect.js')
+      const line = overlapAdvisoryFor(change, { cwd, specBase })
+      if (line) console.warn(line)
+    } catch { /* advisory 静默：检测失败不拦批准 */ }
   } else {
     for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}（不阻断批准）`)
     if (hasViolations) {

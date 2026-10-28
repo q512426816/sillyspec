@@ -174,7 +174,8 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
  * （退回旧 foreign-first 行为，fail-closed 不放大放行面）。
  * @returns {Set<string>} 正斜杠归一后的声明路径集
  */
-function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
+// export 补齐（2026-10-28-overlap-route）：重叠检测复用声明加载单一源，防口径漂移
+export function loadOwnDeclaredSet(specBase, runtimeRoot, currentChangeName) {
   const set = new Set()
   if (!currentChangeName) return set
   const norm = (p) => String(p || '').replace(/\\/g, '/')

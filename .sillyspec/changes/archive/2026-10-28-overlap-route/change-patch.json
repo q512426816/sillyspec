@@ -1,0 +1,119 @@
+{
+  "change": "2026-10-28-overlap-route",
+  "baseline": "321e8e43f9d24557137d1275076417634b00b923",
+  "head": "a1b8e36852f585eaaab7496b55133c38f448623b",
+  "files": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "src/flow.js",
+    "src/foreign-declared.js",
+    "src/index.js",
+    "src/overlap-detect.js",
+    "test/overlap-detect.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 193,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-28T06:27:50.955Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "321e8e43f9d24557137d1275076417634b00b923",
+    "totals": {
+      "files": 6,
+      "additions": 193,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 7,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/foreign-declared.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 23,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/overlap-detect.js",
+        "additions": 68,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/overlap-detect.test.mjs",
+        "additions": 92,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "45e5c84e2c38afcd2ac20cbead7d180b1065a4212269eb288c762b03d3315259",
+  "patchStatus": "ok"
+}

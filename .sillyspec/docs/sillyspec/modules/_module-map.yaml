@@ -122,6 +122,7 @@ modules:
       - test/acceptance-matrix-probe.test.mjs
       - src/verify-facts-schema.js
       - src/foreign-declared.js
+      - src/overlap-detect.js
       - src/cross-repo-reconcile.js
       - src/probe7-anchor-check.js
       - src/knowledge-match.js
