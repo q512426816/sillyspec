@@ -1947,3 +1947,86 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-28-knowledge-hits-cli-push
   status: active
+
+## FR-runtime-120 test/r5-wiring-three.test.mjs 单独直跑不再抛 TDZ，原用例全绿
+变更：2026-10-28-stages-cycle-root-fix
+状态：active
+摘要：TDZ 入口形态直跑
+全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-01
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-01
+  tests: test/r5-wiring-three.test.mjs | test/stages-cycle-regression.test.mjs「TDZ 入口形态直跑绿（r5-wiring 同入口 import 完整进程）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-stages-cycle-root-fix
+  status: active
+
+## FR-runtime-121 run/shared.js 静态 import 面不再含 stages/index.js（测试断言锁死，防回边复潮）
+变更：2026-10-28-stages-cycle-root-fix
+状态：active
+摘要：断言锁死
+全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-02
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-02
+  tests: test/stages-cycle-regression.test.mjs「run/shared 静态 import 面断言 + 点用动态 import 存在」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-stages-cycle-root-fix
+  status: active
+
+## FR-runtime-122 local.yaml 的 r5-wiring-three known_failures 机器豁免撤销（该测试回归默认验证面）
+变更：2026-10-28-stages-cycle-root-fix
+状态：active
+摘要：豁免撤销
+全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-03
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-03
+  tests: test/stages-cycle-regression.test.mjs「known_failures 清单不含 r5-wiring 锚定键」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-stages-cycle-root-fix
+  status: active
+
+## FR-runtime-123 CLI 既有入口零回归（受影响面测试绿）
+变更：2026-10-28-stages-cycle-root-fix
+状态：active
+摘要：注册表消费面回归
+全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-04
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-04
+  tests: test/stages-cycle-regression.test.mjs「getStageSteps 注册表消费回归（quick/standard 两档）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-stages-cycle-root-fix
+  status: active
+
+## FR-runtime-124 零新依赖
+变更：2026-10-28-stages-cycle-root-fix
+状态：active
+摘要：依赖面断言
+全文：.sillyspec/changes/archive/2026-10-28-stages-cycle-root-fix/requirements.md#FR-05
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7

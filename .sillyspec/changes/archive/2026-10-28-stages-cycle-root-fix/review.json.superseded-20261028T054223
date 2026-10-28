@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-stages-cycle-root-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "70595d9a8f5d8dc631540399d100fe505b01bcee",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "交付物引用不存在的函数名 resolveStageSteps（实际为 getStageSteps）",
+      "evidence": "design.md「做法概述」称 stageRegistry 静态 import「仅在 resolveStageSteps 一处函数内使用（run/shared.js:2508）」，requirements FR-04 称「resolveStageSteps 等既有调用方」——但全仓 grep 无 resolveStageSteps 定义；实际唯一使用点是 getStageSteps（src/run/shared.js:2457 定义，2513 动态 import）。随变更入库的代码注释本身也写错：src/run/shared.js:115「resolveStageSteps 已是 async，点用动态 import 断环」。测试文件与 commit message 用名正确。纯文档/注释准确性问题，无功能影响，但误导后续考古。",
+      "location": "src/run/shared.js:115; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/design.md:13; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/requirements.md:41"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "import 面锁死正则可被语法变体绕过（多行 import/双引号/裸副作用 import）",
+      "evidence": "断言正则 /^import\\s[^;\\n]*from\\s+'[^']*stages\\/index\\.js'/m 实测：单行单引号原形命中，但多行 import（import {\\n stageRegistry\\n} from '../stages/index.js'）、双引号 specifier、裸副作用 import '../stages/index.js' 三种变体均不命中——后两者/三者同样会重建静态回边。design「静态断言锁死该文件的 import 面」对正则单独而言表述过强。判定可接受的依据：纵深防御成立——TDZ 入口子进程测试（test/stages-cycle-regression.test.mjs:27-39）以完整进程 import run/complete.js 复刻原崩溃入口（经 flow-parity.js 子树使 run/shared.js 首次求值发生在 execute.js 子树内），回边以任何语法形态回潮都会令该子进程抛 TDZ 失败，功能面防复潮不依赖正则。",
+      "location": "test/stages-cycle-regression.test.mjs:44-45"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-03 测试绑定断言的是入库 known-failures.yaml 代理面而非 local.yaml 本体",
+      "evidence": "requirements FR-03 的对象是 .sillyspec/local.yaml 的 known_failures 豁免撤销，但测试断言的是入库 .sillyspec/known-failures.yaml 不含 r5-wiring（分层纪律防夹带），不直接验证 local.yaml。可接受理由：local.yaml 为 gitignored 机器本位文件，入库测试无法可移植断言其状态；FR-03 实际状态经评审实证——local.yaml:68 known_failures: []（豁免已撤），且 flow-state gate_summary 留有 CLI 亲测回执。",
+      "location": "test/stages-cycle-regression.test.mjs:49-54; .sillyspec/local.yaml:68"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-28T05:40:29Z",
+  "checklistAnswers": {
+    "frImplTestConsistency": "五条 FR 三方一致：FR-01 r5-wiring-three 直跑复验 4/4 绿（无豁免）+ 新 TDZ 子进程用例绿；FR-02 静态 import 已删（src/run/shared.js:112-115 注释替代）+ getStageSteps:2513 点用 await import + 断言在场；FR-03 local.yaml known_failures: [] 实证已撤；FR-04 消费回归三档（verify 注册表 7 步/quick 3 步/未知档 null）复跑绿；FR-05 diff 无 package.json、无新导出。唯一瑕疵：FR-04/design 引用函数名错误（见 P3 finding 1）。",
+    "blindDimensions": "design 四问与代码相符：①乱序——修复只动模块求值图（静态→动态），任何调用顺序下 stageRegistry 仅在完整初始化后访问，经 execute.js 静态闭包 44 模块实测确认不含 stages/index.js；②并发——无共享写面，ESM 单次求值+动态 import 缓存，getStageSteps 并发首调共享同一模块 promise；③切换——中断/失败语义与静态形同构；④作用域——每进程独立模块图，worktree 各自进程不串台。",
+    "boundaryAdjudication": "①环只断一条边是否充分：可接受——评审独立计算 post-fix execute.js 静态闭包（44 模块）不含 stages/index.js 亦不含其他引者（progress/prompt/gates/complete-handlers/command 均不在子树），证实 run/shared.js 是唯一静态回边，设计声称的诊断结论为真；②动态 import 首调延迟：可接受——getStageSteps 非热路径且首调后走缓存；③未断 execute→knowledge-hits：可接受——知识遥测为正当依赖方向，环成因在 run/shared 共享库背上重依赖（仅一处使用的 stageRegistry），断该边是架构正确切点（断知识链任一边同样可解环但属错位修补）；④放弃惰性注册表/搬叶子方案：可接受——API 面翻动/动 10+ 文件与最小断边不成比例；⑤local.yaml 不入 diff：可接受——gitignored 机器面，状态已实证。",
+    "protectionReal": "防护真实但分层：import 面正则只锁单行单引号形态（见 P3 finding 2），真正的任意形态防线是 TDZ 子进程用例——其入口与 r5-wiring 基线崩溃入口同构（import run/complete.js；崩溃机制实证：complete.js:24 flow-parity 子树先于 :26 shared.js 触达 execute.js → knowledge-hits(knowledge-hits.js:17) → agent-session-log(agent-session-log.js:56) 首次求值 run/shared.js → 旧 :112 静态 import 在 execute 求值中途触发 stages/index.js → index.js:18 注册表字面量访问 TDZ 绑定），回边以任何语法回归都会使该用例红。",
+    "artifactSync": "确认：本变更无类型/契约/codegen 面（纯 JS ESM 仓），无可同步生成物。",
+    "probeCliCopy": "确认：diff 无 CLI 文案面，cli-copy-selfsufficient 不适用。",
+    "probeConfigAbsent": "确认：无新配置键（known_failures 条目属机器面撤销，非新增），config-absent-zero-regression 不适用。",
+    "probeCrossrepoPath": "确认：测试子进程入口 'file://' + path.split('\\\\').join('/') 在 Windows 产 file://C:/...（Node 规范化盘符 host，本机实测 status=0 绿），在 POSIX 产 file:///abs/path，跨平台正确。",
+    "rerunResults": "node test/stages-cycle-regression.test.mjs → 7/7 绿；node test/r5-wiring-three.test.mjs → 4 tests 4 pass 0 fail（无豁免直跑）。"
+  }
+}

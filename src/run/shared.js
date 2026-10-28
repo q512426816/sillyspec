@@ -109,7 +109,10 @@ export function assertDatedChangeName(name, label = '变更名') {
 
 import { buildExecuteSteps } from '../stages/execute.js'
 import { buildPlanSteps } from '../stages/plan.js'
-import { stageRegistry } from '../stages/index.js'
+// stageRegistry 不静态引 stages/index.js（2026-10-28-stages-cycle-root-fix）：execute.js 子树
+// （knowledge-hits → agent-session-log → run/shared）回边使 index.js 首次求值 stageRegistry
+// 时 execute 绑定仍在 TDZ（execute.js:19-21 注释记载的坑形态再犯）——唯一使用点
+// getStageSteps 已是 async，点用动态 import 断环（同函数 await import 惰性先例）。
 import { parseRepo, parseRepoRegistry } from '../stages/plan-postcheck.js'
 import { MultiRepoContext } from './multi-repo-context.js'
 
@@ -2505,6 +2508,9 @@ export async function getStageSteps(stageName, cwd, progress, specDir = null) {
       return buildQuickScanSteps()
     }
   }
+  // 动态取注册表（断环点，见文件头 import 区注释）：首次求值时机后移到调用点，
+  // 此处到达时 stages/index.js 及其全部阶段定义必已完成初始化
+  const { stageRegistry } = await import('../stages/index.js')
   const def = stageRegistry[stageName]
   return def ? def.steps : null
 }

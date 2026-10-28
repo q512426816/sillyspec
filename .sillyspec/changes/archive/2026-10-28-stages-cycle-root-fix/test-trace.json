@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-stages-cycle-root-fix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-01",
+      "tests": [
+        "test/r5-wiring-three.test.mjs",
+        "test/stages-cycle-regression.test.mjs「TDZ 入口形态直跑绿（r5-wiring 同入口 import 完整进程）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-stages-cycle-root-fix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-02",
+      "tests": [
+        "test/stages-cycle-regression.test.mjs「run/shared 静态 import 面断言 + 点用动态 import 存在」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-stages-cycle-root-fix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-03",
+      "tests": [
+        "test/stages-cycle-regression.test.mjs「known_failures 清单不含 r5-wiring 锚定键」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-stages-cycle-root-fix"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-28-stages-cycle-root-fix:flow:测试绑定FR-04",
+      "tests": [
+        "test/stages-cycle-regression.test.mjs「getStageSteps 注册表消费回归（quick/standard 两档）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-stages-cycle-root-fix"
+    }
+  ]
+}

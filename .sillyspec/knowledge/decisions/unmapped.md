@@ -537,3 +537,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：bc750ba451daf06cf23833db7f39ce6cdf74783a
 理由：最大风险：救赎把「主仓恰好改过同名治理文件但本变更没写」的声明误判为 matched——缓解：救赎只对显式声面生效且限治理前缀，误判后果是对账少一条 missing（保守方向是少拦不是假绿），且 notes 披露救赎计数可审计。试过但放弃的方案：①扩 worktree actual 读主仓全量 status——把主仓侧无关改动也卷进对账面，undeclared 假红换一种方式回来；②铁律改成都写 worktree 再同步主仓——「产物蒸发」风险方向（worktree 清理即丢档）不可接受；③对账时把治理路径从声明面剔除（不查）——自废对账语义，真缺产物从此无人拦。
+
+## D-unmapped-476@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-28-stages-cycle-root-fix
+原编号：D-001@v1
+锚点：未记录
+最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
+理由：最大风险是环不只这一条（同一子树可能还有其他模块静态引 stages/index.js 系），断此边后换入口形态仍撞——对策：诊断脚本全子树扫描确认 run/shared.js 是唯一回边（常量/进度等直引者不在 execute.js 子树内），并加 FR-02 静态断言锁死该文件的 import 面防复潮。次级风险：动态 import 首调有微小延迟（<1ms，模块已缓存路径无感）——getStageSteps 非热路径，可忽略。 放弃的方案：① 改 stages/index.js 把 stageRegistry 惰性化（getter/工厂）——所有消费方 API 面翻动，风险远大于收益；② 断 execute.js → knowledge-hits 边——那是知识遥测的正当依赖方向，反向把 appendKnowledgeHit 惰性化属错位修补（环的成因在 run/shared 这个共享库背了重依赖，不在知识链）；③ 把 stageRegistry 挪到轻叶子模块——注册表定义与阶段定义文件强耦合，搬家动 10+ 文件。

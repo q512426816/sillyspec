@@ -82,3 +82,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿
 - 2026-10-23-flow-done-shared-repo-multi-session-frictions | flow done 归档提交未落库守卫与回归锚
 - 2026-10-28-knowledge-hits-cli-push | CLI 直报主通道收尾（用户拍板：本地必写+有平台配置即增量直报）：appendKnowledgeH…
+- 2026-10-28-stages-cycle-root-fix | 断 stages 循环引用：run/shared 惰性取注册表

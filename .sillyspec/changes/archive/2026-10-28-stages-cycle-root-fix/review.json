@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-stages-cycle-root-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "3995056145c880fe9bf3fb41ce47ab7a9ef45fd7",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "交付物引用不存在的函数名 resolveStageSteps（实际为 getStageSteps）",
+      "evidence": "首评（against 70595d9a）：design.md「做法概述」/「接口契约」/「风险」/「文件变更清单」、requirements.md FR-04 正文与测试绑定、tasks.md task-01/task-04、以及入库代码注释 src/run/shared.js:115 均引用不存在的 resolveStageSteps；实际唯一使用点为 getStageSteps（src/run/shared.js:2457 定义，2513 点用动态 import）。清偿验证（against 39950561）：git diff 70595d9a..39950561 全量增量仅此一事——src/run/shared.js:115 注释 ×1、design.md ×4、tasks.md ×2、requirements.md ×2，全部为 resolveStageSteps→getStageSteps 纯 token 纠偏，零功能面改动；grep 全 src/ + test/ + 三份纠偏文档无残留（exit 1）；复跑 node test/stages-cycle-regression.test.mjs 仍 7/7 绿。",
+      "location": "src/run/shared.js:115; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/design.md:13; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/requirements.md:41,64; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/tasks.md:7,10"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "import 面锁死正则可被语法变体绕过（多行 import/双引号/裸副作用 import）",
+      "evidence": "断言正则 /^import\\s[^;\\n]*from\\s+'[^']*stages\\/index\\.js'/m 实测：单行单引号原形命中，但多行 import、双引号 specifier、裸副作用 import '../stages/index.js' 三种变体均不命中——三者同样会重建静态回边。design「静态断言锁死该文件的 import 面」对正则单独而言表述过强。判定可接受的依据：纵深防御成立——TDZ 入口子进程测试（test/stages-cycle-regression.test.mjs:27-39）以完整进程 import run/complete.js 复刻原崩溃入口（经 flow-parity.js 子树使 run/shared.js 首次求值发生在 execute.js 子树内），回边以任何语法形态回潮都会令该子进程抛 TDZ 失败，功能面防复潮不依赖正则。增量复审确认该用例仍绿。",
+      "location": "test/stages-cycle-regression.test.mjs:44-45"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-03 测试绑定断言的是入库 known-failures.yaml 代理面而非 local.yaml 本体",
+      "evidence": "requirements FR-03 的对象是 .sillyspec/local.yaml 的 known_failures 豁免撤销，但测试断言的是入库 .sillyspec/known-failures.yaml 不含 r5-wiring（分层纪律防夹带），不直接验证 local.yaml。可接受理由：local.yaml 为 gitignored 机器本位文件，入库测试无法可移植断言其状态；FR-03 实际状态经评审实证——local.yaml:68 known_failures: []（豁免已撤），且 flow-state gate_summary 留有 CLI 亲测回执。",
+      "location": "test/stages-cycle-regression.test.mjs:49-54; .sillyspec/local.yaml:68"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "增量请求声称 change.patch 按审计时点留存未改——实际已在最终收口重新冻结（含纠偏后名）",
+      "evidence": "增量复审请求称「change.patch 冻结件与 review.json 引文按审计时点留存未改」，但 change-patch.json 元数据显示 head=3995056145c880fe9bf3fb41ce47ab7a9ef45fd7、savedAt=2026-10-28T05:42:23.960Z（晚于首评 05:40:29Z 与纠偏提交），change.patch 内容为纠偏后文本（patch 第 13 行「getStageSteps 已是 async」）——即断点续收口时 CLI 按 flow-done 协议以最终 HEAD 重新冻结，并非首评时点原件。判定可接受：重冻结行为本身协议正确（patch 冻结语义=收口时点 baseline..HEAD 交付面），冻结件完整性核对一致（baseline 5e3f3f10、head 39950561、文件清单 src/run/shared.js + test/stages-cycle-regression.test.mjs、+75/-1 与全量增量吻合）；本条仅纠正请求描述与事实的偏差，留痕防后续审计误信「原件未动」。",
+      "location": ".sillyspec/changes/2026-10-28-stages-cycle-root-fix/change-patch.json; .sillyspec/changes/2026-10-28-stages-cycle-root-fix/change.patch:13"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-28T05:44:53Z",
+  "checklistAnswers": {
+    "incrementalScope": "本次为断点续收口增量复审，只验 39950561 相对 70595d9a 的修复增量（复审只验修复+新增，未重跑全量首评面）。全量增量经 git diff 70595d9a..39950561 逐行核过：4 文件 9 行变更全部为 resolveStageSteps→getStageSteps 名字纠偏（src/run/shared.js:115 注释 ×1、design.md ×4、tasks.md ×2、requirements.md ×2），无任何夹带功能改动；grep 确认 src/、test/ 与三份纠偏文档零残留。命名 P3 清偿成立，标 resolved。",
+    "rerunResults": "node test/stages-cycle-regression.test.mjs → 7/7 绿（含 TDZ 子进程完整进程用例——注释行变更经此用例实证 shared.js 仍正常求值加载）。r5-wiring-three 未重跑：增量仅触及注释与文档，无执行语义面，且 TDZ 子进程用例已覆盖模块求值路径。",
+    "frozenArtifactCheck": "change.patch/change-patch.json 在最终收口（05:42:23Z）以 head=39950561 重新冻结，内容含纠偏后名，清单与总量（2 文件 +75/-1）核对一致——协议正确但与增量请求「留存未改」表述不符，记 P3 accepted 留痕（见 finding 4）。",
+    "priorReviewBasis": "首评（reviewedAgainst 70595d9a）全部结论——环机制实证（flow-parity 路径使 run/shared.js 首次求值落入 execute.js 子树→旧 :112 静态 import 触发 index.js:18 TDZ）、execute.js 静态闭包 44 模块不含 stages/index.js（唯一回边证实）、r5-wiring 4/4、盲维四问、探针三项——在本增量中无任何触动（增量零功能面），继续有效。",
+    "probeCliCopy": "确认：增量无 CLI 文案面，不适用。",
+    "probeConfigAbsent": "确认：增量无新配置键，不适用。",
+    "probeCrossrepoPath": "确认：增量未触及路径形态；首评已验 file:// 拼接跨平台正确，继续有效。"
+  }
+}
