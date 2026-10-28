@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-knowledge-hits-cli-push",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-hits-push.test.mjs「写后直报：有配置触发 POST 且请求体/Bearer 头正确」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-knowledge-hits-cli-push"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-hits-push.test.mjs「端点失败静默：非 2xx/网络错 warn 一行不抛、本地行完好」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-knowledge-hits-cli-push"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-hits-push.test.mjs「直报不阻塞：appendKnowledgeHit 同步返回不等待 fetch」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-knowledge-hits-cli-push"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-hits-push.test.mjs「未配置静默跳过零日志 / SILLYSPEC_HITS_PUSH=0 关闭」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-knowledge-hits-cli-push"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-hits-push.test.mjs「specBase 反推跨平台路径形态（反斜杠/尾分隔符）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-knowledge-hits-cli-push"
+    }
+  ]
+}

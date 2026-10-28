@@ -1864,3 +1864,86 @@ superseded_by：FR-cli-entry-102
   confirmed_at: null
   source_change: 2026-10-21-deps-batch-runner-flags
   status: active
+
+## FR-runtime-115 appendKnowledgeHit 落盘成功后 fire 直报：local.yaml platform.url/token 在场（或 env 同名先例）→ POST {url}/api/changes/-/hits-sync（Bearer token，body 单行 lines 数组 + daemon_local_id=cli-<platform.user|cli>），照 pushAgentLogToPlatform 先例 AbortController 超时 + best-effort（网络/非 2xx warn 一行不抛，本地已落盘+daemon 兜底）
+变更：2026-10-28-knowledge-hits-cli-push
+状态：active
+摘要：写后直报；端点失败静默
+全文：.sillyspec/changes/archive/2026-10-28-knowledge-hits-cli-push/requirements.md#FR-01
+最近确认：630392b1ae1c981f23eb714630d3a2c08496bfb0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-01
+  tests: test/knowledge-hits-push.test.mjs「端点失败静默：非 2xx/网络错 warn 一行不抛、本地行完好」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-knowledge-hits-cli-push
+  status: active
+
+## FR-runtime-116 直报不得阻塞注入主流程（void fire 不 await 不抛）；进程退出拖住由 fetch 活跃 socket 自然语义+超时兜底
+变更：2026-10-28-knowledge-hits-cli-push
+状态：active
+摘要：主流程不阻塞
+全文：.sillyspec/changes/archive/2026-10-28-knowledge-hits-cli-push/requirements.md#FR-02
+最近确认：630392b1ae1c981f23eb714630d3a2c08496bfb0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-02
+  tests: test/knowledge-hits-push.test.mjs「直报不阻塞：appendKnowledgeHit 同步返回不等待 fetch」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-knowledge-hits-cli-push
+  status: active
+
+## FR-runtime-117 env SILLYSPEC_HITS_PUSH=0 显式关闭直报（agent-log PUSH 先例同款）；未配置 platform（未连接平台）静默跳过零日志
+变更：2026-10-28-knowledge-hits-cli-push
+状态：active
+摘要：开关关闭；未连接平台
+全文：.sillyspec/changes/archive/2026-10-28-knowledge-hits-cli-push/requirements.md#FR-03
+最近确认：630392b1ae1c981f23eb714630d3a2c08496bfb0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-03
+  tests: test/knowledge-hits-push.test.mjs「未配置静默跳过零日志 / SILLYSPEC_HITS_PUSH=0 关闭」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-knowledge-hits-cli-push
+  status: active
+
+## FR-runtime-118 单测覆盖：写后触发上报（有配置）/未配置跳过/开关关闭跳过/端点失败静默不抛且本地行不受影响
+变更：2026-10-28-knowledge-hits-cli-push
+状态：active
+摘要：收口实测
+全文：.sillyspec/changes/archive/2026-10-28-knowledge-hits-cli-push/requirements.md#FR-04
+最近确认：630392b1ae1c981f23eb714630d3a2c08496bfb0
+
+## FR-runtime-119 跨平台兼容（Windows/Linux/macOS 路径与编码）
+变更：2026-10-28-knowledge-hits-cli-push
+状态：active
+摘要：Windows 路径形态
+全文：.sillyspec/changes/archive/2026-10-28-knowledge-hits-cli-push/requirements.md#FR-05
+最近确认：630392b1ae1c981f23eb714630d3a2c08496bfb0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-knowledge-hits-cli-push:flow:测试绑定FR-05
+  tests: test/knowledge-hits-push.test.mjs「specBase 反推跨平台路径形态（反斜杠/尾分隔符）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-knowledge-hits-cli-push
+  status: active

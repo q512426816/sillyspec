@@ -994,7 +994,10 @@ export function detectAgentLogEntries(opts) {
  * specBase/local.yaml platform 段（url + token，与链路 A 同源）。
  * @returns {{url:string, token:string}|null} 未配置返回 null（合法状态，静默跳过上报）
  */
-function readPlatformPushConfig(specBase, env = process.env) {
+export function readPlatformPushConfig(specBase, env = process.env) {
+  // 2026-10-28-knowledge-hits-cli-push：export 化（签名与行为零变化）——
+  // knowledge-hits.js 写后直报复用同一配置解析（单一源，不复制 local.yaml
+  // 解析逻辑）。
   if (env.SILLYHUB_PLATFORM_URL && env.SILLYHUB_PLATFORM_TOKEN) {
     return { url: env.SILLYHUB_PLATFORM_URL, token: env.SILLYHUB_PLATFORM_TOKEN };
   }

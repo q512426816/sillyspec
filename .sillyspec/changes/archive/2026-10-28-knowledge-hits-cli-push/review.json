@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-knowledge-hits-cli-push",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "e6b1fb4128f4d5aa662bf8b9a2ab13f26cb9863d",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "specBaseFromRuntimeDir 裸 `.runtime` 单段输入返回截断串（slice(0,-1) 切掉末字符）",
+      "evidence": "idx=lastIndexOf('/')=-1 时 last=norm；若输入恰为裸 `.runtime`，last==='.runtime' 条件通过落到 raw.slice(0,-1) 返回 '.runtim'。触发面为零：实测全部 15 个 appendKnowledgeHit 调用语句（flow.js×3 / run/gates.js / run/shared.js / run/archive-distill.js×2 / run/prompt.js×5 / stages/execute.js / stage-contract.js / knowledge-classify.js，含 buildKnowledgeInjection 两个调用点）runtimeDir 均为 join(<specBase>,'.runtime') ≥2 段形态。后果降级安全：错误 specBase 下 local.yaml 读不到 → readPlatformPushConfig 返回 null → 静默跳过直报，本地行已落盘、daemon 兜底覆盖。留档建议：idx===-1 分支应显式返回 '' 或 '.'。",
+      "location": "src/knowledge-hits.js:44-48"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-03「零日志」面测试断言缺口：未配置/开关关闭态未断言 console.warn 零调用",
+      "evidence": "requirements FR-03 场景声明「零 fetch 调用、零日志」，测试③④断言了 calls.length===0（零 fetch）但 warnCount 已装计数器却未在③④后断言不变。代码结构上未配置/被禁用在 readPlatformPushConfig 之前提前 return，warn 不可能发生——行为正确，仅测试对账面少一行断言。后续顺手补 `assert(warnCount === warnBefore)` 即闭环。",
+      "location": "test/knowledge-hits-push.test.mjs:101-111"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "requirements/tasks 残留旧形态文本 daemon_local_id=cli-<platform.user|cli>，未随 design 裁决更新",
+      "evidence": "requirements.md FR-01 与 tasks.md task-01 仍写 `daemon_local_id=cli-<platform.user|cli>`；design.md 接口契约已显式裁决恒 'cli'（理由充分：通道标识已足够、user 维度平台侧可由 shpsync_ 令牌溯源、不扩 readPlatformPushConfig 解析面），实现（src/knowledge-hits.js:79）与测试（daemon_local_id='cli' 断言）均与 design 一致。裁决本身可接受；残留文本是规格源内部不一致的文档债，未来对账可能困惑。",
+      "location": ".sillyspec/changes/2026-10-28-knowledge-hits-cli-push/requirements.md:9"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "测试临时目录清理为空占位（rmSyncSafe 无实现）",
+      "evidence": "test/knowledge-hits-push.test.mjs:182 rmSyncSafe 是空函数，tmpRoots 不清理。注释声称「清理由 runner TEMP 隔离兜底」——核实属实：test/run-tests.mjs:13-38 做套件级 TEMP 隔离（TEMP/TMP/TMPDIR 全指向套件唯一目录），套件跑法下无残留扩散；但直跑（node test/knowledge-hits-push.test.mjs）会在系统 TEMP 残留小目录。同仓先例 knowledge-fr-stats.test.mjs:182 有真 rmSync 实现，本文件相对退化。测试卫生债，不影响正确性。",
+      "location": "test/knowledge-hits-push.test.mjs:179-182"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "design「resolveRuntimeRoot 产物都归一到 <specBase>/.runtime」表述过强（透传分支形态不保证）",
+      "evidence": "resolveRuntimeRoot（src/run/shared.js:482-486）第一分支透传 platformOpts.runtimeRoot（daemon 注入值），形态不保证末段为 .runtime。但遥测 append 面实测无一走该分支：run/archive-distill.js:70 实为 join(specBase,'.runtime')；透传分支仅 bg-sync/watcher 使用且不触发遥测 append。异常形态下 specBaseFromRuntimeDir 的容错分支（末段非 .runtime 原样返回）会降级为「读不到配置→静默跳过」，行为安全。设计声称的表述精度问题，非行为缺陷。",
+      "location": "src/knowledge-hits.js:33-35"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-27T23:33:00Z"
+}

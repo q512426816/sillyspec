@@ -1,0 +1,93 @@
+{
+  "change": "2026-10-28-knowledge-hits-cli-push",
+  "baseline": "67e50bcca2adb9ecd502d12086c0ac8cb994da84",
+  "head": "e6b1fb4128f4d5aa662bf8b9a2ab13f26cb9863d",
+  "files": [
+    "src/agent-session-log.js",
+    "src/knowledge-hits.js",
+    "test/knowledge-hits-push.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 269,
+    "deletions": 2
+  },
+  "savedAt": "2026-10-27T23:29:10.335Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "acceptedDirtyGap": 3,
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "67e50bcca2adb9ecd502d12086c0ac8cb994da84",
+    "totals": {
+      "files": 3,
+      "additions": 269,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "src/agent-session-log.js",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-hits.js",
+        "additions": 80,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-hits-push.test.mjs",
+        "additions": 185,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "26241e39e7c06402ee4c1e4c6ca0ef0d442f8f553f4c19f421c194c9b2076eb1",
+  "patchStatus": "ok"
+}
