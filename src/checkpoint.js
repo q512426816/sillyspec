@@ -26,9 +26,12 @@ const DEFAULT_MAX_UNTRACKED_MB = 200
 const SUBJECT_PREFIX = 'sillyspec-cp: '
 const NOOP_GUARD_TREE_TIMEOUT_MS = 60000
 
-/** 硬排除清单（add 后在临时索引上 reset 的路径）。目录名匹配任意深度段；.env* 限根级。 */
+/** 硬排除清单（add 后在临时索引上 reset 的路径）。目录用 glob 双星任意深度形态
+ * （:(glob) 魔法 + 前置双星斜杠 + 尾部斜杠双星——实证 2.45：缺尾部 /** 时零匹配，
+ * 根级与嵌套 packages/x/node_modules 一并排除，2026-10-28-cp-review-debt FR-01）；
+ * .env* 与 .sillyspec/.runtime 维持根级语义。 */
 const EXCLUDE_DIRS = ['node_modules', 'dist', 'build', 'target', '.venv', 'venv', '__pycache__', '.next', '.cache', 'coverage']
-const RESET_SPECS = [...EXCLUDE_DIRS, '.env', '.env.*', '.sillyspec/.runtime']
+const RESET_SPECS = [...EXCLUDE_DIRS.map((d) => `:(glob)**/${d}/**`), '.env', '.env.*', '.sillyspec/.runtime']
 
 /** 与 EXCLUDE_SPECS 同口径的 JS 判定（体积护栏用——只计真会进快照的文件）。 */
 function isHardExcluded(p) {
@@ -197,13 +200,33 @@ export async function previewRestore({ repoRoot, sha, paths = [] }) {
 }
 
 /**
+ * 链内校验（无上限）：subject 前缀过滤全链——不复用 listCheckpoints 的 -n 200 显示帽
+ * （截断解耦，2026-10-28-cp-review-debt FR-03：超帽旧档同样可读，主历史普通提交仍拒）。
+ */
+function isCheckpointInChain(repoRoot, ref, sha) {
+  const subjects = gitQuiet(repoRoot, ['log', '--format=%H %s', ref])
+  if (!subjects) return false
+  for (const line of subjects.split('\n')) {
+    if (!line) continue
+    const commitSha = line.slice(0, 40)
+    const subject = line.slice(41)
+    if (!subject.startsWith(SUBJECT_PREFIX)) break // 链尾以下为主历史，止步
+    if (commitSha === sha) return true
+  }
+  return false
+}
+
+/**
  * 读档：git restore --source（仅写工作区，零触碰 index）。调用方负责 --yes 确认纪律。
  * @param {{repoRoot: string, sha: string, paths?: string[], all?: boolean}} opts
  * @returns {Promise<{ok: boolean, reason?: string, restored: string[]}>}
  */
 export async function restoreCheckpoint({ repoRoot, sha, changeName, paths = [], all = false }) {
-  const list = await listCheckpoints({ repoRoot, changeName: changeName || '' })
-  if (!list.some((c) => c.sha === sha)) return { ok: false, reason: 'sha 不在该变更存档链中（用 checkpoint --change 列出可用 SHA）', restored: [] }
+  const name = String(changeName || '')
+  const ref = REF_PREFIX + name
+  if (!SAFE_CHANGE_NAME_RE.test(name) || !isCheckpointInChain(repoRoot, ref, sha)) {
+    return { ok: false, reason: 'sha 不在该变更存档链中（用 checkpoint --change 列出可用 SHA）', restored: [] }
+  }
   const target = (all || !paths.length) ? ['.'] : paths
   try {
     git(repoRoot, ['restore', `--source=${sha}`, '--', ...target])

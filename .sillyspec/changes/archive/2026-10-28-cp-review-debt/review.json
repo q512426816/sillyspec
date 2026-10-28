@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-cp-review-debt",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "9407cb2f2dc203940baa51efe8854c3d3cdf984c",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "前序评审 open 债 #3（checkpoint --delete-ref 混淆「ref 不存在」与「update-ref 删除失败」）不在本变更三债清单内，代码仍未修",
+      "evidence": "前序评审（archive/2026-10-28-shadow-checkpoint/review.json）有 3 条 open + 2 条 accepted P3；本变更清偿的是其中 #1（glob 口径）、#2（删除失败臂用例）与 accepted #5（截断解耦），design 做法概述①②③与此对应。open #3 的代码现场原样：deleteCheckpointRef 返回 false 时无论 ref 本就不存在还是 update-ref -d 真失败，均打印「ℹ️ 无 refs/... （无可删）」且退出码 0——两态合一未拆分。属遗留债未入账披露，不属本变更交付缺陷，需后续变更或债务台账跟踪。",
+      "location": "src/index.js:5087-5088"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "FR-03 场景字面「含显示帽之外的档」未以 ≥200 档实链复现",
+      "evidence": "新用例以 1 档链验证新扫描路径两臂（链内档通过 + 主历史普通提交拒绝），解耦为结构性——restoreCheckpoint 校验路径已完全改走 isCheckpointInChain，全路径无 -n 200（src/checkpoint.js:206-229），显示帽只留在 listCheckpoints 显示面（:177）；≥200 档 fixture 需 201 次 createCheckpoint（每次多次 git 子进程），成本与单测套件不成比例。结构性解耦 + 两臂行为断言可接受。",
+      "location": "test/shadow-checkpoint.test.mjs:287-299"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "isCheckpointInChain 的「遇非 checkpoint subject 止步」仅在解析层——git log 进程仍输出链下全部主历史",
+      "evidence": "JS 层 break（src/checkpoint.js:213）只停止解析，execFileSync 已捕获全量输出：git log 从 ref 走到根，超长历史仓每次 restore 校验多读全史文本（≈100B/commit；256MB buffer 上限需 ≈270 万 commit 才触顶，届时 gitQuiet 返回 null → 校验 false → 拒读且 reason 与「不在链中」同文案）。现实仓（万级 commit）毫秒级、无正确性影响，接受为性能注记。",
+      "location": "src/checkpoint.js:206-217"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-28T05:59:24Z"
+}

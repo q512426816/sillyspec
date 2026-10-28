@@ -1,0 +1,143 @@
+diff --git a/src/checkpoint.js b/src/checkpoint.js
+index 25f9820c..d3563afe 100644
+--- a/src/checkpoint.js
++++ b/src/checkpoint.js
+@@ -26,9 +26,12 @@ const DEFAULT_MAX_UNTRACKED_MB = 200
+ const SUBJECT_PREFIX = 'sillyspec-cp: '
+ const NOOP_GUARD_TREE_TIMEOUT_MS = 60000
+ 
+-/** 硬排除清单（add 后在临时索引上 reset 的路径）。目录名匹配任意深度段；.env* 限根级。 */
++/** 硬排除清单（add 后在临时索引上 reset 的路径）。目录用 glob 双星任意深度形态
++ * （:(glob) 魔法 + 前置双星斜杠 + 尾部斜杠双星——实证 2.45：缺尾部 /** 时零匹配，
++ * 根级与嵌套 packages/x/node_modules 一并排除，2026-10-28-cp-review-debt FR-01）；
++ * .env* 与 .sillyspec/.runtime 维持根级语义。 */
+ const EXCLUDE_DIRS = ['node_modules', 'dist', 'build', 'target', '.venv', 'venv', '__pycache__', '.next', '.cache', 'coverage']
+-const RESET_SPECS = [...EXCLUDE_DIRS, '.env', '.env.*', '.sillyspec/.runtime']
++const RESET_SPECS = [...EXCLUDE_DIRS.map((d) => `:(glob)**/${d}/**`), '.env', '.env.*', '.sillyspec/.runtime']
+ 
+ /** 与 EXCLUDE_SPECS 同口径的 JS 判定（体积护栏用——只计真会进快照的文件）。 */
+ function isHardExcluded(p) {
+@@ -196,14 +199,34 @@ export async function previewRestore({ repoRoot, sha, paths = [] }) {
+   return { stat, patch }
+ }
+ 
++/**
++ * 链内校验（无上限）：subject 前缀过滤全链——不复用 listCheckpoints 的 -n 200 显示帽
++ * （截断解耦，2026-10-28-cp-review-debt FR-03：超帽旧档同样可读，主历史普通提交仍拒）。
++ */
++function isCheckpointInChain(repoRoot, ref, sha) {
++  const subjects = gitQuiet(repoRoot, ['log', '--format=%H %s', ref])
++  if (!subjects) return false
++  for (const line of subjects.split('\n')) {
++    if (!line) continue
++    const commitSha = line.slice(0, 40)
++    const subject = line.slice(41)
++    if (!subject.startsWith(SUBJECT_PREFIX)) break // 链尾以下为主历史，止步
++    if (commitSha === sha) return true
++  }
++  return false
++}
++
+ /**
+  * 读档：git restore --source（仅写工作区，零触碰 index）。调用方负责 --yes 确认纪律。
+  * @param {{repoRoot: string, sha: string, paths?: string[], all?: boolean}} opts
+  * @returns {Promise<{ok: boolean, reason?: string, restored: string[]}>}
+  */
+ export async function restoreCheckpoint({ repoRoot, sha, changeName, paths = [], all = false }) {
+-  const list = await listCheckpoints({ repoRoot, changeName: changeName || '' })
+-  if (!list.some((c) => c.sha === sha)) return { ok: false, reason: 'sha 不在该变更存档链中（用 checkpoint --change 列出可用 SHA）', restored: [] }
++  const name = String(changeName || '')
++  const ref = REF_PREFIX + name
++  if (!SAFE_CHANGE_NAME_RE.test(name) || !isCheckpointInChain(repoRoot, ref, sha)) {
++    return { ok: false, reason: 'sha 不在该变更存档链中（用 checkpoint --change 列出可用 SHA）', restored: [] }
++  }
+   const target = (all || !paths.length) ? ['.'] : paths
+   try {
+     git(repoRoot, ['restore', `--source=${sha}`, '--', ...target])
+diff --git a/src/index.js b/src/index.js
+index 81f6a4a3..838154d4 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5125,7 +5125,7 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+         const when = new Date(c.ts).toISOString().replace('T', ' ').slice(0, 19);
+         console.log(`   ${c.sha.slice(0, 8)}  ${when}  ${c.taskId || '-'}  ${c.files} 文件`);
+       }
+-      console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes`);
++      console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes${list.length >= 200 ? '\nℹ️  列表显示截 200 档（仅展示面）——全量走 git：git log --format="%H %s" refs/sillyspec/checkpoints/' + cpChange : ''}`);
+       break;
+     }
+     case 'flow': {
+diff --git a/test/shadow-checkpoint.test.mjs b/test/shadow-checkpoint.test.mjs
+index c615d8ad..761fe522 100644
+--- a/test/shadow-checkpoint.test.mjs
++++ b/test/shadow-checkpoint.test.mjs
+@@ -236,6 +236,69 @@ const refOf = (cn) => `refs/sillyspec/checkpoints/${cn}`
+   } catch { /* 池里无实例 */ }
+ }
+ 
++// ═══════════════════════════════════════════════════════════════════════════
++// 评审债清偿（2026-10-28-cp-review-debt）：嵌套排除口径 / 删除失败臂 / 链校验解耦
++// ═══════════════════════════════════════════════════════════════════════════
++{
++  // FR-01 嵌套产物任意深度：护栏不计 + reset glob 排除（两侧同口径）
++  const { cwd } = makeRepo('cp-nest-'); tmpRoots.push(cwd)
++  const { createCheckpoint } = await import('../src/checkpoint.js')
++  const CNn = '2026-10-28-cp-nest'
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'checkpoint:\n  maxUntrackedMB: 0.001\n')
++  writeFileSync(join(cwd, 'src-main.js'), 'tracked edit\n') // gitignore 清空？fixture 有 .gitignore（只忽略 .sillyspec/）；src-main.js 为 untracked 非忽略
++  mkdirSync(join(cwd, 'packages', 'x', 'node_modules', 'pkg'), { recursive: true })
++  writeFileSync(join(cwd, 'packages', 'x', 'node_modules', 'pkg', 'big.js'), 'x'.repeat(8192))
++  mkdirSync(join(cwd, 'apps', 'web', 'dist'), { recursive: true })
++  writeFileSync(join(cwd, 'apps', 'web', 'dist', 'a.js'), 'a')
++  const rn = await createCheckpoint({ repoRoot: cwd, changeName: CNn, session: 'nest' })
++  assert(rn.kind === 'created', `嵌套产物不计护栏（小阈值下仍 created；实际 ${rn.kind}/${rn.reason}）`)
++  const treeN = git(cwd, ['ls-tree', '-r', '--name-only', `refs/sillyspec/checkpoints/${CNn}`]).split('\n')
++  assert(!treeN.some((f) => f.includes('node_modules/') || f.startsWith('apps/web/dist/')),
++    '嵌套 node_modules/dist 不进快照（任意深度口径）')
++  assert(treeN.includes('src-main.js'), '非排除路径照常进快照')
++}
++
++{
++  // FR-02 change-delete 失败臂：ref 删除被锁占位，主流程照常 + 警告留痕
++  const { cwd, specBase } = makeRepo('cp-lock-'); tmpRoots.push(cwd)
++  const CNl = '2026-10-28-cp-lock'
++  await initChange(cwd, specBase, CNl)
++  const { createCheckpoint, hasCheckpointRef } = await import('../src/checkpoint.js')
++  const rl = await createCheckpoint({ repoRoot: cwd, changeName: CNl, session: 'lock' })
++  assert(rl.kind === 'created', '失败臂前置：存档已落')
++  const refPath = join(cwd, '.git', 'refs', 'sillyspec', 'checkpoints', `${CNl}.lock`)
++  mkdirSync(join(cwd, '.git', 'refs', 'sillyspec', 'checkpoints'), { recursive: true })
++  writeFileSync(refPath, '') // update-ref -d 抢锁失败
++  const { deleteChange } = await import('../src/change-delete.js')
++  const dl = await deleteChange({ cwd, specDir: specBase, changeName: CNl, confirm: true })
++  assert(dl.ok === true && dl.dir_removed === true, `锁占位下删除主流程照常完成（ok=${dl.ok}）`)
++  assert((dl.warnings || []).some((w) => w.includes('影子存档 ref 删除失败')), `警告留痕（warnings：${(dl.warnings || []).join(' | ') || '无'}）`)
++  assert(hasCheckpointRef(cwd, CNl) === true, 'ref 因锁保留（可手删指引有效）')
++  try {
++    const { ProgressManager } = await import('../src/progress.js')
++    const key = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
++    const db = ProgressManager._dbPool.get(key)
++    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(key) }
++  } catch { /* 池里无实例 */ }
++}
++
++{
++  // FR-03 链校验解耦：链内档通过（新无上限扫描路径），主历史普通提交（链祖先但非档）仍拒
++  const { cwd } = makeRepo('cp-chain-'); tmpRoots.push(cwd)
++  const { createCheckpoint, restoreCheckpoint } = await import('../src/checkpoint.js')
++  const CNch = '2026-10-28-cp-chain'
++  const headBefore = git(cwd, ['rev-parse', 'HEAD'])
++  writeFileSync(join(cwd, 'a.txt'), 'v1\n')
++  const rc1 = await createCheckpoint({ repoRoot: cwd, changeName: CNch, session: 'ch' })
++  assert(rc1.kind === 'created', '链校验前置：档已落')
++  const rrMain = await restoreCheckpoint({ repoRoot: cwd, sha: headBefore, changeName: CNch, paths: ['a.txt'] })
++  assert(!rrMain.ok && /存档链/.test(rrMain.reason || ''), '主历史普通提交（首档之父）拒绝读档——链祖先≠档')
++  writeFileSync(join(cwd, 'a.txt'), 'v2\n')
++  const rrCp = await restoreCheckpoint({ repoRoot: cwd, sha: rc1.sha, changeName: CNch, paths: ['a.txt'] })
++  assert(rrCp.ok, '链内档经新无上限扫描校验通过')
++}
++
+ // ═══════════════════════════════════════════════════════════════════════════
+ // 收尾
+ // ═══════════════════════════════════════════════════════════════════════════

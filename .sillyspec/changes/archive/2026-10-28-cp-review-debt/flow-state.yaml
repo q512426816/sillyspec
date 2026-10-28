@@ -1,0 +1,49 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  checkpoint 评审三债清偿：口径统一与链校验解耦
+
+
+  2026-10-28-shadow-checkpoint 独立评审留三条 P3 债，本变更一并清偿：①硬排除口径不一致——add 后 reset 的 pathspec（node_modules 等）根锚定，体积护栏
+  isHardExcluded 按任意深度段过滤：monorepo 嵌套产物目录（packages/x/node_modules）会进快照却不计护栏，两侧统一为任意深度（reset 改 :(glob)**/
+  前缀形态）；②FR-05「删除失败不阻断」无用例——补 change-delete 确认路径下 ref 删除失败（锁文件占位）仍完成删除且留警告的用例；③listCheckpoints -n 200 截断且
+  restoreCheckpoint 链内校验复用该列表——超 200 档旧档不可读，链校验改为独立无上限扫描（列表显示面保留 200 帽仅作展示）。
+
+
+  成功标准：
+
+  - 嵌套产物目录（packages/x/node_modules、深层 dist 等）不进快照且不计体积护栏（两侧同口径，测试断言）
+
+  - change-delete 在 ref 删除失败（update-ref 被锁占位）时仍完成删除主流程，警告留痕（测试断言）
+
+  - 存档链内校验不再受列表截断影响（独立无上限扫描；显示面截 200 保留并注明全量走 git 直查）
+
+  - 既有 shadow-checkpoint 测试面零回归，零新依赖
+autopilot: false
+prestage_ack: true
+baseline_commit: 008aa096e378ecdbbfcaaf5eb699f1a04f8a9111
+updatedAt: '2026-10-28T06:00:10.766Z'
+baseline_sha256: 46ff51580b2e975b439bcd46f67661bed27442362bc0a92edd3d491f82f34267
+spec_approved: true
+spec_approved_at: '2026-10-28T05:47:55.869Z'
+spec_approved_by: zcode-cp-debt
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-cp-debt
+batch_ticked: true
+gate_summary: >-
+  test: passed ← module[]+deps(js16)（10.3s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261028055334\test-result.json｜lint: skipped
+  — 跳过原因：local.yaml 未配置 commands.lint（或标记 unavailable）。｜门文件 6 个
+

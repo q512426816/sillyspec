@@ -98,3 +98,4 @@
 | 2026-10-23 | 2026-10-23-push-plan-anchor-batch-perf | push 计划层锚点批量解析提速 |
 | 2026-10-25 | 2026-10-24-flow-done-review-artifact-drift-loop | 复审交付面锚定与评审开放态收敛判定；动机：倒推收编 2026-10-24 中断会话留在工作区的在途六… |
 | 2026-10-28 | 2026-10-28-shadow-checkpoint | 任务勾选即影子存档，随时读档回滚 |
+| 2026-10-28 | 2026-10-28-cp-review-debt | checkpoint 评审三债清偿：口径统一与链校验解耦 |

@@ -237,6 +237,69 @@ const refOf = (cn) => `refs/sillyspec/checkpoints/${cn}`
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 评审债清偿（2026-10-28-cp-review-debt）：嵌套排除口径 / 删除失败臂 / 链校验解耦
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  // FR-01 嵌套产物任意深度：护栏不计 + reset glob 排除（两侧同口径）
+  const { cwd } = makeRepo('cp-nest-'); tmpRoots.push(cwd)
+  const { createCheckpoint } = await import('../src/checkpoint.js')
+  const CNn = '2026-10-28-cp-nest'
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'checkpoint:\n  maxUntrackedMB: 0.001\n')
+  writeFileSync(join(cwd, 'src-main.js'), 'tracked edit\n') // gitignore 清空？fixture 有 .gitignore（只忽略 .sillyspec/）；src-main.js 为 untracked 非忽略
+  mkdirSync(join(cwd, 'packages', 'x', 'node_modules', 'pkg'), { recursive: true })
+  writeFileSync(join(cwd, 'packages', 'x', 'node_modules', 'pkg', 'big.js'), 'x'.repeat(8192))
+  mkdirSync(join(cwd, 'apps', 'web', 'dist'), { recursive: true })
+  writeFileSync(join(cwd, 'apps', 'web', 'dist', 'a.js'), 'a')
+  const rn = await createCheckpoint({ repoRoot: cwd, changeName: CNn, session: 'nest' })
+  assert(rn.kind === 'created', `嵌套产物不计护栏（小阈值下仍 created；实际 ${rn.kind}/${rn.reason}）`)
+  const treeN = git(cwd, ['ls-tree', '-r', '--name-only', `refs/sillyspec/checkpoints/${CNn}`]).split('\n')
+  assert(!treeN.some((f) => f.includes('node_modules/') || f.startsWith('apps/web/dist/')),
+    '嵌套 node_modules/dist 不进快照（任意深度口径）')
+  assert(treeN.includes('src-main.js'), '非排除路径照常进快照')
+}
+
+{
+  // FR-02 change-delete 失败臂：ref 删除被锁占位，主流程照常 + 警告留痕
+  const { cwd, specBase } = makeRepo('cp-lock-'); tmpRoots.push(cwd)
+  const CNl = '2026-10-28-cp-lock'
+  await initChange(cwd, specBase, CNl)
+  const { createCheckpoint, hasCheckpointRef } = await import('../src/checkpoint.js')
+  const rl = await createCheckpoint({ repoRoot: cwd, changeName: CNl, session: 'lock' })
+  assert(rl.kind === 'created', '失败臂前置：存档已落')
+  const refPath = join(cwd, '.git', 'refs', 'sillyspec', 'checkpoints', `${CNl}.lock`)
+  mkdirSync(join(cwd, '.git', 'refs', 'sillyspec', 'checkpoints'), { recursive: true })
+  writeFileSync(refPath, '') // update-ref -d 抢锁失败
+  const { deleteChange } = await import('../src/change-delete.js')
+  const dl = await deleteChange({ cwd, specDir: specBase, changeName: CNl, confirm: true })
+  assert(dl.ok === true && dl.dir_removed === true, `锁占位下删除主流程照常完成（ok=${dl.ok}）`)
+  assert((dl.warnings || []).some((w) => w.includes('影子存档 ref 删除失败')), `警告留痕（warnings：${(dl.warnings || []).join(' | ') || '无'}）`)
+  assert(hasCheckpointRef(cwd, CNl) === true, 'ref 因锁保留（可手删指引有效）')
+  try {
+    const { ProgressManager } = await import('../src/progress.js')
+    const key = join(cwd, '.sillyspec', '.runtime', 'sillyspec.db')
+    const db = ProgressManager._dbPool.get(key)
+    if (db) { try { db.close() } catch {} ProgressManager._dbPool.delete(key) }
+  } catch { /* 池里无实例 */ }
+}
+
+{
+  // FR-03 链校验解耦：链内档通过（新无上限扫描路径），主历史普通提交（链祖先但非档）仍拒
+  const { cwd } = makeRepo('cp-chain-'); tmpRoots.push(cwd)
+  const { createCheckpoint, restoreCheckpoint } = await import('../src/checkpoint.js')
+  const CNch = '2026-10-28-cp-chain'
+  const headBefore = git(cwd, ['rev-parse', 'HEAD'])
+  writeFileSync(join(cwd, 'a.txt'), 'v1\n')
+  const rc1 = await createCheckpoint({ repoRoot: cwd, changeName: CNch, session: 'ch' })
+  assert(rc1.kind === 'created', '链校验前置：档已落')
+  const rrMain = await restoreCheckpoint({ repoRoot: cwd, sha: headBefore, changeName: CNch, paths: ['a.txt'] })
+  assert(!rrMain.ok && /存档链/.test(rrMain.reason || ''), '主历史普通提交（首档之父）拒绝读档——链祖先≠档')
+  writeFileSync(join(cwd, 'a.txt'), 'v2\n')
+  const rrCp = await restoreCheckpoint({ repoRoot: cwd, sha: rc1.sha, changeName: CNch, paths: ['a.txt'] })
+  assert(rrCp.ok, '链内档经新无上限扫描校验通过')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 收尾
 // ═══════════════════════════════════════════════════════════════════════════
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }

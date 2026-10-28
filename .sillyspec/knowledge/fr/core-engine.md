@@ -4777,3 +4777,79 @@
   confirmed_at: null
   source_change: 2026-10-23-fr-regress-cap
   status: active
+
+## FR-core-engine-254 嵌套产物目录（packages/x/node_modules、深层 dist 等）不进快照且不计体积护栏（两侧同口径，测试断言）
+变更：2026-10-28-cp-review-debt
+状态：active
+摘要：monorepo 嵌套产物
+全文：.sillyspec/changes/archive/2026-10-28-cp-review-debt/requirements.md#FR-01
+最近确认：9407cb2f2dc203940baa51efe8854c3d3cdf984c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-cp-review-debt:flow:测试绑定FR-01
+  tests: test/shadow-checkpoint.test.mjs「嵌套产物目录任意深度排除（快照树不含且护栏不计）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-cp-review-debt
+  status: active
+
+## FR-core-engine-255 change-delete 在 ref 删除失败（update-ref 被锁占位）时仍完成删除主流程，警告留痕（测试断言）
+变更：2026-10-28-cp-review-debt
+状态：active
+摘要：锁占位失败臂
+全文：.sillyspec/changes/archive/2026-10-28-cp-review-debt/requirements.md#FR-02
+最近确认：9407cb2f2dc203940baa51efe8854c3d3cdf984c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-cp-review-debt:flow:测试绑定FR-02
+  tests: test/shadow-checkpoint.test.mjs「ref 删除锁占位失败不阻断 change-delete 且警告留痕」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-cp-review-debt
+  status: active
+
+## FR-core-engine-256 存档链内校验不再受列表截断影响（独立无上限扫描；显示面截 200 保留并注明全量走 git 直查）
+变更：2026-10-28-cp-review-debt
+状态：active
+摘要：截断解耦
+全文：.sillyspec/changes/archive/2026-10-28-cp-review-debt/requirements.md#FR-03
+最近确认：9407cb2f2dc203940baa51efe8854c3d3cdf984c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-cp-review-debt:flow:测试绑定FR-03
+  tests: test/shadow-checkpoint.test.mjs「链内校验解耦显示截断（独立扫描，链外仍拒）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-cp-review-debt
+  status: active
+
+## FR-core-engine-257 既有 shadow-checkpoint 测试面零回归，零新依赖
+变更：2026-10-28-cp-review-debt
+状态：active
+摘要：回归
+全文：.sillyspec/changes/archive/2026-10-28-cp-review-debt/requirements.md#FR-04
+最近确认：9407cb2f2dc203940baa51efe8854c3d3cdf984c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-28-cp-review-debt:flow:测试绑定FR-04
+  tests: test/change-delete.test.mjs | test/shadow-checkpoint.test.mjs「全套回归（48+ 新增用例全绿）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-28-cp-review-debt
+  status: active

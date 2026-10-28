@@ -5125,7 +5125,7 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
         const when = new Date(c.ts).toISOString().replace('T', ' ').slice(0, 19);
         console.log(`   ${c.sha.slice(0, 8)}  ${when}  ${c.taskId || '-'}  ${c.files} 文件`);
       }
-      console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes`);
+      console.log(`\n预览：sillyspec checkpoint --change ${cpChange} --diff <sha> [--path p]｜读档：--restore <sha> --path <p> --yes${list.length >= 200 ? '\nℹ️  列表显示截 200 档（仅展示面）——全量走 git：git log --format="%H %s" refs/sillyspec/checkpoints/' + cpChange : ''}`);
       break;
     }
     case 'flow': {

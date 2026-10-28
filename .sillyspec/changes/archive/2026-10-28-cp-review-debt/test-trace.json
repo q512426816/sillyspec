@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-28-cp-review-debt",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-28-cp-review-debt:flow:测试绑定FR-01",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「嵌套产物目录任意深度排除（快照树不含且护栏不计）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-cp-review-debt"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-28-cp-review-debt:flow:测试绑定FR-02",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「ref 删除锁占位失败不阻断 change-delete 且警告留痕」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-cp-review-debt"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-28-cp-review-debt:flow:测试绑定FR-03",
+      "tests": [
+        "test/shadow-checkpoint.test.mjs「链内校验解耦显示截断（独立扫描，链外仍拒）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-cp-review-debt"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-28-cp-review-debt:flow:测试绑定FR-04",
+      "tests": [
+        "test/change-delete.test.mjs",
+        "test/shadow-checkpoint.test.mjs「全套回归（48+ 新增用例全绿）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-28-cp-review-debt"
+    }
+  ]
+}

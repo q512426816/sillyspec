@@ -545,3 +545,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：3995056145c880fe9bf3fb41ce47ab7a9ef45fd7
 理由：最大风险是环不只这一条（同一子树可能还有其他模块静态引 stages/index.js 系），断此边后换入口形态仍撞——对策：诊断脚本全子树扫描确认 run/shared.js 是唯一回边（常量/进度等直引者不在 execute.js 子树内），并加 FR-02 静态断言锁死该文件的 import 面防复潮。次级风险：动态 import 首调有微小延迟（<1ms，模块已缓存路径无感）——getStageSteps 非热路径，可忽略。 放弃的方案：① 改 stages/index.js 把 stageRegistry 惰性化（getter/工厂）——所有消费方 API 面翻动，风险远大于收益；② 断 execute.js → knowledge-hits 边——那是知识遥测的正当依赖方向，反向把 appendKnowledgeHit 惰性化属错位修补（环的成因在 run/shared 这个共享库背了重依赖，不在知识链）；③ 把 stageRegistry 挪到轻叶子模块——注册表定义与阶段定义文件强耦合，搬家动 10+ 文件。
+
+## D-unmapped-477@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-28-cp-review-debt
+原编号：D-001@v1
+锚点：未记录
+最近确认：9407cb2f2dc203940baa51efe8854c3d3cdf984c
+理由：最大风险是 `:(glob)**/<dir>` pathspec 语义与预期偏差（不同 git 版本对 glob 魔法的 `**` 行为）——对策：测试直接断言嵌套路径不进快照树（行为锚而非语法锚），实测 git 版本（本机）通过；若某些老 git 不支持 glob 魔法，reset 会报错走 fail-open skip（存档退化但 tick 不受影响），属安全方向。 放弃的方案：① 把 .env* 也改成任意深度——敏感文件按项目根级约定，深层同名文件多为模板/示例（.env.example），全局排除过宽；② restore 校验改 merge-base --is-ancestor——祖先判定过宽（主历史全部提交都是链祖先，非 checkpoint 的普通提交会被放行读档）；③ 显示面也去帽——超长链列屏无信息量，帽是展示层的合理取舍（评审债的本质是校验被显示帽绑架，不是帽本身）。
