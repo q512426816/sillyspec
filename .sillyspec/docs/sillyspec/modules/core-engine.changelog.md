@@ -95,3 +95,4 @@
 | 2026-10-23 | 2026-10-23-knowledge-scope-inject | 知识注入作用域（全部/仓库/模块/关键词） |
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
 | 2026-10-27 | 2026-10-28-knowledge-hits-cli-push | CLI 直报主通道收尾（用户拍板：本地必写+有平台配置即增量直报）：appendKnowledgeH… |
+| 2026-10-28 | 2026-10-26-target-files-main-docs-rescue | target-files 主仓治理文档救赎（假红根治）；动机：倒推收编 2026-10-27 中断会… |

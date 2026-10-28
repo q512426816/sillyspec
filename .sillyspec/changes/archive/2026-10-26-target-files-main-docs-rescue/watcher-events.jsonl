@@ -1,0 +1,13 @@
+{"ts":1793147216596,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1793147266394,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793147296310,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793147307354,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793147308160,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793147308463,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793147309749,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793147309749,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1793147320546,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：package.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793147330398,"kind":"commit","stage":null,"detail":"bc750ba4","provisional":true}
+{"ts":1793147340504,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793147358085,"kind":"gate-run","stage":"verify","detail":"门实测 passed（12.9s） · 20261028002917","provisional":true}
+{"ts":1793147954640,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

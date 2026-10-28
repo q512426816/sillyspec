@@ -335,3 +335,60 @@ created_at: 2026-10-15T01:33:02.911Z
 摘要：主路径
 全文：.sillyspec/changes/archive/2026-10-23-release-3-33-5/requirements.md#FR-03
 最近确认：1602451249dcc1fc2b4c637b02862e6cecd320b0
+
+## FR-release-010 worktree 形态声明主仓治理文档经主仓实际改动面救赎命中，missing 清零且 undeclared 不扩（新测试①②绿）
+变更：2026-10-26-target-files-main-docs-rescue
+状态：active
+摘要：主路径（未提交臂）；已提交臂
+全文：.sillyspec/changes/archive/2026-10-26-target-files-main-docs-rescue/requirements.md#FR-01
+最近确认：bc750ba451daf06cf23833db7f39ce6cdf74783a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-01
+  tests: test/target-files-main-docs-rescue.test.mjs「② 主仓已提交治理文档（baseline..HEAD）→ diff 臂同样救赎」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-26-target-files-main-docs-rescue
+  status: active
+
+## FR-release-011 主仓无改动时不虚造 matched（missing 如实在场，新测试③绿）
+变更：2026-10-26-target-files-main-docs-rescue
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-26-target-files-main-docs-rescue/requirements.md#FR-02
+最近确认：bc750ba451daf06cf23833db7f39ce6cdf74783a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-02
+  tests: test/target-files-main-docs-rescue.test.mjs「③ 主仓侧无该改动 → 不虚造 matched（missing 如实在场）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-26-target-files-main-docs-rescue
+  status: active
+
+## FR-release-012 受影响面 verify-postcheck 关联套件 25/25 绿 + lint 1087 文件绿
+变更：2026-10-26-target-files-main-docs-rescue
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-26-target-files-main-docs-rescue/requirements.md#FR-03
+最近确认：bc750ba451daf06cf23833db7f39ce6cdf74783a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-03
+  tests: test/target-files-main-docs-rescue.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-26-target-files-main-docs-rescue
+  status: active

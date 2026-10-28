@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-26-target-files-main-docs-rescue",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "bc750ba451daf06cf23833db7f39ce6cdf74783a",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "救赎面把「删除」也计为改动：声明路径在窗口内被他会话删除时仍判 matched，design「少拦不是假绿」的方向论断对删除子情形不成立（实为假绿方向）",
+      "evidence": "status -uall 的 ` D` 行与 diff --name-only 的删除路径都进 mainFace（slice(3) 不分状态位），命中即 matched——但该文件在 HEAD 已不存在。缓解成立：面限显式声明+治理前缀、需他会在窗口内恰好删除同名治理文档、notes 披露可审计，edge-of-edge 可接受留痕。",
+      "location": "src/verify-postcheck.js:4826-4839"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  }
+}

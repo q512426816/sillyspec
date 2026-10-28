@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-26-target-files-main-docs-rescue",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-01",
+      "tests": [
+        "test/target-files-main-docs-rescue.test.mjs「① 主仓未提交模块卡编辑 → 救赎命中：missing 清零 + notes 披露 + undeclared 不扩」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-26-target-files-main-docs-rescue"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-01",
+      "tests": [
+        "test/target-files-main-docs-rescue.test.mjs「② 主仓已提交治理文档（baseline..HEAD）→ diff 臂同样救赎」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-26-target-files-main-docs-rescue"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-02",
+      "tests": [
+        "test/target-files-main-docs-rescue.test.mjs「③ 主仓侧无该改动 → 不虚造 matched（missing 如实在场）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-26-target-files-main-docs-rescue"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-26-target-files-main-docs-rescue:flow:测试绑定FR-03",
+      "tests": [
+        "test/target-files-main-docs-rescue.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-26-target-files-main-docs-rescue"
+    }
+  ]
+}
