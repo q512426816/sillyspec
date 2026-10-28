@@ -84,3 +84,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-28-knowledge-hits-cli-push | CLI 直报主通道收尾（用户拍板：本地必写+有平台配置即增量直报）：appendKnowledgeH…
 - 2026-10-28-stages-cycle-root-fix | 断 stages 循环引用：run/shared 惰性取注册表
 - 2026-10-29-open-metrics-gate | 收口开放指标门与假测试评审判据
+- 2026-10-29-metrics-routes | 指标门路由形态：路径集合多语言路由

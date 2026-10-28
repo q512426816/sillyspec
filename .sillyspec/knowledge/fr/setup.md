@@ -2500,3 +2500,91 @@ created_at: 2026-09-20T18:20:21.442Z
   confirmed_at: null
   source_change: 2026-10-29-open-metrics-gate
   status: active
+
+## FR-setup-147 metrics_routes 路由门（解析与执行）
+变更：2026-10-29-metrics-routes
+状态：active
+摘要：命中执行；段全等前缀（不误蹭）；部分失败阻断；零命中跳过；未配置零回归
+场景正文：
+- 场景：命中执行 — Given metrics_routes 配置 frontend(paths:[frontend/])与 jvm(paths:[backend/])两 gate / Whe
+- 场景：段全等前缀（不误蹭） — Given gate paths 含 frontend/ / When 变更文件为 frontend-v2/a.js / Then 该 gate 不命中（零交集 → 路由门
+- 场景：部分失败阻断 — Given 两个 gate 均命中 / When 其一退出码非 0、另一退出码 0 / Then 路由门整体 failed（failed 计入 'metrics'），结果对
+- 场景：零命中跳过 — Given metrics_routes 段在场 / When 变更文件面与所有 gate 的 paths 零交集 / Then 路由门 skipped 留痕（reason
+- 场景：未配置零回归 — Given local.yaml 无 metrics_routes 段 / Then 路由门不参与（null/缺席），收口行为与 2026-10-29-open-metri
+全文：.sillyspec/changes/archive/2026-10-29-metrics-routes/requirements.md#FR-01
+最近确认：b2b4c12798b5119d9937ab055fc49c939f267f35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-metrics-routes:flow:测试绑定FR-01
+  tests: test/quick-metrics-gate.test.mjs「gate CNF 降档：单 CNF 不掩盖真 failed、全 CNF → 整体 skipped」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-metrics-routes
+  status: active
+
+## FR-setup-148 与单命令门共存与证据归并
+变更：2026-10-29-metrics-routes
+状态：active
+摘要：共存执行；路由证据落盘
+场景正文：
+- 场景：共存执行 — Given 同时配置 commands.metrics 与 metrics_routes 且均命中/配置 / Then 两者先后执行、结果均在 gate.metrics 证
+- 场景：路由证据落盘 — Given 路由门实跑（至少一 gate 执行）/ Then verify-runs 证据含 kind: 'routes'（或并入节）与逐 gate 的 name/stat
+全文：.sillyspec/changes/archive/2026-10-29-metrics-routes/requirements.md#FR-02
+最近确认：b2b4c12798b5119d9937ab055fc49c939f267f35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-metrics-routes:flow:测试绑定FR-02
+  tests: test/quick-metrics-gate.test.mjs「路由证据落盘：kind routes + gates 数组带 gate 名」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-metrics-routes
+  status: active
+
+## FR-setup-149 配置面注册与引导面同步
+变更：2026-10-29-metrics-routes
+状态：active
+摘要：schema 注册可见；AGENTS 模板提及路由
+场景正文：
+- 场景：schema 注册可见 — Then LOCAL_YAML_SCHEMA 含 metrics_routes.<name>.* 三键（path/type/readers/desc/example 齐全
+- 场景：AGENTS 模板提及路由 — Then templates/agents-instruction.md 规则 4 的 metrics 语义句含 metrics_routes 路由形态提及。
+全文：.sillyspec/changes/archive/2026-10-29-metrics-routes/requirements.md#FR-03
+最近确认：b2b4c12798b5119d9937ab055fc49c939f267f35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-metrics-routes:flow:测试绑定FR-03
+  tests: test/config-schema.test.mjs「metrics_routes.<name>.* 注册与 renderExample 路由示例带出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-metrics-routes
+  status: active
+
+## FR-setup-150 测试面与零依赖
+变更：2026-10-29-metrics-routes
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-10-29-metrics-routes/requirements.md#FR-04
+最近确认：b2b4c12798b5119d9937ab055fc49c939f267f35
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-29-metrics-routes:flow:测试绑定FR-04
+  tests: test/quick-metrics-gate.test.mjs「路径 POSIX 归一：Windows 反斜杠变更文件与配置路径均可命中」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-29-metrics-routes
+  status: active

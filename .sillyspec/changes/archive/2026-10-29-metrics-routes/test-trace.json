@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-29-metrics-routes",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「路由命中：仅命中 gate 执行、SILLYSPEC_CHANGE_FILES=命中子集、未命中 gate 不跑」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「段全等前缀：frontend/ 不命中 frontend-v2/、深路径子目录命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「部分失败：任一 gate 非零 → 整体 failed、gates 数组逐 gate 形状与输出尾部」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「零命中跳过：有段无交集 → skipped 留痕；未配置 → 缺席零回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「per-gate 超时：gate timeout_sec 帽杀 → 该 gate failed 并入整体」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-01",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「gate CNF 降档：单 CNF 不掩盖真 failed、全 CNF → 整体 skipped」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-02",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「共存：单命令 + 路由同跑、证据并存、failed 归并 'metrics' 一次」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-02",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「路由证据落盘：kind routes + gates 数组带 gate 名」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-03",
+      "tests": [
+        "test/config-schema.test.mjs「metrics_routes.<name>.* 注册与 renderExample 路由示例带出」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-29-metrics-routes:flow:测试绑定FR-04",
+      "tests": [
+        "test/quick-metrics-gate.test.mjs「路径 POSIX 归一：Windows 反斜杠变更文件与配置路径均可命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-29-metrics-routes"
+    }
+  ]
+}

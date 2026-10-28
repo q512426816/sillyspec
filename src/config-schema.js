@@ -81,6 +81,16 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'metrics_routes',
+      title: '指标门路由（多语言/monorepo）',
+      note: '【2026-10-29-metrics-routes】与 commands.metrics 单命令门共存：按变更文件面 ∩ gate.paths 路径前缀路由，仅执行命中 gate（串行）；语言中立（路径集合，不枚举语言/框架）。段未配置=零变化。',
+      keys: [
+        { path: 'metrics_routes.<name>.paths', type: 'array', optional: true, status: 'live', readers: ['extractMetricsRoutes (src/verify-postcheck.js)'], desc: 'gate 的路径前缀集合（仓根相对）——段全等匹配：frontend/ 不命中 frontend-v2/；引号数组 `["a/", "b/"]` 或逗分裸串均可。', example: '["frontend/", "packages/web/"]' },
+        { path: 'metrics_routes.<name>.command', type: 'string', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 的指标门命令——gate 命中（变更文件面 ∩ paths 非空）才执行，非零退出=门红；gate 子进程注入 SILLYSPEC_CHANGE_FILES=该 gate 命中子集（gate 内工具可增量扫）。', example: 'npx --prefix frontend eslint . --max-warnings 0' },
+        { path: 'metrics_routes.<name>.timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 级超时秒数——优先级 本键 > 调用侧快照帽 > commands.metrics_timeout_sec > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180。', example: '300' },
+      ],
+    },
+    {
       id: 'checkpoint',
       title: '影子存档（task tick 快照）',
       note: '机制先落代码缺省（fail-open，缺省零回归）——键只用于仓主显式调优（2026-10-28-shadow-checkpoint）。',
@@ -436,6 +446,14 @@ commands:
   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
   # metrics: npx jscpd src   # 可选指标门：收口实测非零退出阻断（复杂度/重复/死代码/覆盖率阈值类秒级检查；执行注入 SILLYSPEC_CHANGE_FILES=本变更文件清单可只扫变更面；变异测试类慢工具建议 pre-push/CI）
   # metrics_timeout_sec: 600   # commands.metrics 超时秒数（缺省 180）
+# metrics_routes:             # 多语言/monorepo 路由门（与上面 metrics 单命令可共存；仅跑变更命中的 gate）
+#   web:
+#     paths: ["frontend/", "packages/web/"]   # 路径前缀集合（段全等：frontend/ 不蹭 frontend-v2/）
+#     command: npx --prefix frontend eslint . --max-warnings 0
+#   jvm:
+#     paths: ["backend/"]
+#     command: mvn -B -f backend/pom.xml pmd:check
+#     timeout_sec: 300         # gate 级超时（缺省 180）；gate 子进程注入 SILLYSPEC_CHANGE_FILES=命中子集
   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
 
 # ── 影子存档（task tick 快照；缺省开启零配置，仅在显式调优时写）──

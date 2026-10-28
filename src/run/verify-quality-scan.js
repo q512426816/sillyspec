@@ -105,7 +105,7 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
  * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
  * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
  */
-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, metricsResult = null, usedSnapshot = false, missReason = null, scopeDecision = null }) {
+export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, metricsResult = null, metricsRoutesResult = null, usedSnapshot = false, missReason = null, scopeDecision = null }) {
   const path = qualityScanRecordPath(specBase, changeName)
   if (!path) return null
   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
@@ -139,6 +139,8 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
       smokeResult: smokeResult || null,
       // metrics 指标门结果（2026-10-29-open-metrics-gate，additive——存量记录无键读侧兼容）
       metricsResult: metricsResult || null,
+      // 路由门结果（2026-10-29-metrics-routes，additive 同上）
+      metricsRoutesResult: metricsRoutesResult || null,
     }, null, 2) + '\n')
     return { path, fingerprint }
   } catch (e) {
@@ -655,7 +657,7 @@ function warnIfMainRepoDirtyForGate(cwd) {
  * `run verify` 复入本步重新实测（指纹随代码修复失配，--done 不会复用旧失败结果）。
  */
 export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
-  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact, runVerifyMetricsCheck } = await import('../verify-postcheck.js')
+  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact, runVerifyMetricsCheck, runVerifyMetricsRoutesCheck } = await import('../verify-postcheck.js')
   // ── RERUN 失败签名闸（r5l-forensic-verdict.md 方案 4 / 评审护栏#6 五态）──
   // R5-L 实证：RERUN=1 两次强制重扫各烧 ~8M 重发 + 10m/6.8m 等待，而失败签名未变——重跑
   // 结果注定相同。故 RERUN=1 生效前先对账失败签名（dedupKey 已含代码指纹×豁免面，再叠测试
@@ -810,6 +812,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   let testCheck
   let lintCheck
   let metricsCheck = null
+  let metricsRoutesCheck = null
   let coverageCheck = null
   let smokeResult = null
   try {
@@ -846,6 +849,24 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
       const mIcon = metricsCheck.status === 'failed' ? '❌' : '✅'
       console.log(`${mIcon} metrics 指标门实测 ${metricsCheck.status}${metricsCheck.command ? ` ← ${metricsCheck.command}` : ''}${metricsCheck.status === 'failed' && metricsCheck.reason ? ` — ${String(metricsCheck.reason).split('\n')[0]}` : ''}`)
     }
+    // ── 路由指标门（2026-10-29-metrics-routes task-02）：与 quick 道同款——变更文件面 ∩
+    //    gate.paths 段全等前缀路由，仅命中 gate 执行；failed 与单命令门归并阻断。──
+    metricsRoutesCheck = runVerifyMetricsRoutesCheck({
+      cwd: gateCwd, specBase: gateSpecBase,
+      timeoutMs: snap ? 5 * 60 * 1000 : undefined,
+      changeFiles: snap && Array.isArray(snap.changeFiles) ? snap.changeFiles : null,
+    })
+    const routeTimeoutHit = (metricsRoutesCheck.gates || []).some((g) => g && g.status === 'failed' && /超时/.test(String(g.reason || '')))
+    if (snap && metricsRoutesCheck.status === 'failed' && routeTimeoutHit) {
+      console.warn('⚠️ 快照 metrics 路由 gate 超时（junction I/O 慢）→ 主仓复跑路由门（并行噪声可能混入）')
+      metricsRoutesCheck = runVerifyMetricsRoutesCheck({ cwd, specBase, changeFiles: snap && Array.isArray(snap.changeFiles) ? snap.changeFiles : null })
+    }
+    if (metricsRoutesCheck.status !== 'skipped') {
+      for (const g of metricsRoutesCheck.gates || []) {
+        const icon = g.status === 'failed' ? '❌' : g.status === 'passed' ? '✅' : '⏭️'
+        console.log(`${icon} metrics gate「${g.name}」 ${g.status} ← ${g.command}${g.status === 'failed' && g.reason ? ` — ${String(g.reason).split('\n')[0]}` : ''}`)
+      }
+    }
   if (lintCheck.status !== 'skipped') {
     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
   }
@@ -871,12 +892,14 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   } finally {
     if (snap) { try { snap.cleanup() } catch {} }
   }
-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, metricsResult: metricsCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
+  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, metricsResult: metricsCheck, metricsRoutesResult: metricsRoutesCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
   const testFailed = testCheck.status === 'failed'
   const lintBlocked = shouldBlockVerifyLint(lintCheck)
   // metrics 指标门阻断（2026-10-29-open-metrics-gate task-03）：非零/超时即 failed——通过标准
   // 由命令自身定义（无 lint 式归属鉴定，design 风险节声明边界）；skipped（未配置/环境缺件）不拦。
   const metricsFailed = Boolean(metricsCheck && metricsCheck.status === 'failed')
+  // 路由门阻断（2026-10-29-metrics-routes task-02）：任一命中 gate 失败即拦——与单命令门同一道门
+  const metricsRoutesFailed = Boolean(metricsRoutesCheck && metricsRoutesCheck.status === 'failed')
   // 2026-10-15-lint-triage-path-unify：lint 归属鉴定降档接线（与 gates --done 路径同源共享
   // helper）——零交集存量债降档 advisory 不 throw；owned/unattributable/鉴定异常维持硬拦
   // （保守）。仅在「lint 单独失败」时降档（testFailed 优先 throw——测试失败不作 lint 降档
@@ -889,17 +912,17 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
   // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
   // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
-  if (testFailed || lintCheck.status === 'failed' || metricsFailed) {
-    await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : metricsFailed ? 'metrics' : 'lint' })
+  if (testFailed || lintCheck.status === 'failed' || metricsFailed || metricsRoutesFailed) {
+    await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : (metricsFailed || metricsRoutesFailed) ? 'metrics' : 'lint' })
   }
-  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded) || metricsFailed) {
+  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded) || metricsFailed || metricsRoutesFailed) {
     if (snap) {
       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
         printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
     }
     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })
-    const which = testFailed ? '测试' : metricsFailed ? '指标门（metrics）' : 'lint'
+    const which = testFailed ? '测试' : (metricsFailed || metricsRoutesFailed) ? '指标门（metrics）' : 'lint'
     throw new Error(`noAI 质量扫描实测${which}失败——本步骤未完成（进度不推进）。输出与归因提示见上方；修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''} 复入本步重新实测。`)
   }
   console.log(`\n✅ noAI 质量扫描全绿——本步骤自动完成；--done 对账将复用本次实测（代码变更即失配重测）。机械事实持续全绿时，verify-probes --init 会预填 PASS 结论草稿（草稿待确认，复核后可改写）。`)

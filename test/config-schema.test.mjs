@@ -89,6 +89,26 @@ console.log('\n--- 1b. commands.metrics / metrics_timeout_sec 注册 ---')
   assert(ex.includes('metrics_timeout_sec:'), 'renderExample 输出含 metrics_timeout_sec 键行')
 }
 
+// ── 1c. metrics_routes 路由键注册（2026-10-29-metrics-routes FR-03）──
+console.log('\n--- 1c. metrics_routes.<name>.* 注册 ---')
+{
+  const keys = flatKeys()
+  const paths = keys.find((k) => k.path === 'metrics_routes.<name>.paths')
+  assert(Boolean(paths), 'metrics_routes.<name>.paths 已注册')
+  if (paths) {
+    assert(paths.type === 'array' && paths.status === 'live' && paths.optional === true, 'paths 键形态：array/optional/live')
+    assert(paths.readers.some((r) => r.includes('extractMetricsRoutes')), 'readers 指向 extractMetricsRoutes')
+    assert(paths.desc.includes('段全等'), 'desc 注明段全等前缀（不误蹭）')
+  }
+  const cmd = keys.find((k) => k.path === 'metrics_routes.<name>.command')
+  assert(Boolean(cmd) && cmd.readers.some((r) => r.includes('runVerifyMetricsRoutesCheck')), 'command 键注册且 readers 指向 runVerifyMetricsRoutesCheck')
+  const tsec = keys.find((k) => k.path === 'metrics_routes.<name>.timeout_sec')
+  assert(Boolean(tsec) && tsec.desc.includes('180'), 'timeout_sec 键注册且 desc 写缺省 180')
+  const ex = renderExample()
+  assert(ex.includes('metrics_routes:'), 'renderExample 含路由段示例')
+  assert(ex.includes('段全等') || ex.includes('不蹭'), 'example 注释含段全等提示')
+}
+
 // ── 2. renderSchemaHuman ──
 console.log('\n--- 2. renderSchemaHuman ---')
 {

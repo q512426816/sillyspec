@@ -569,3 +569,11 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：e7c4ec047a8df79b8fc0002a9eed41fc32917f5c
 理由：最大风险：存量仓首配即红——指标工具对全仓历史代码报红，配置者第一次启用就被拦，治理成本突袭。缓解：desc 写明「通过标准由命令自身定义——建议命令只扫变更面/自带阈值」，且不配置零影响；这是声明的采用边界（用户渐进采用，CLI 不替人清存量债）。 放弃的方案：① 绑定 crapper/dryer/mutator 内置集成——违背工具中立纪律且引入新依赖，改开放命令门；② metrics 做 lint 同款 ownership triage（存量债降级 advisory）——依赖「失败输出含文件路径」提取前提，指标工具输出形态千差万别（分数表/JSON/正文），归属鉴定不可靠，误判比不判更糟，范围控制责任交给用户命令；③ 复用 commands.lint 塞复合命令（`lint && crap-check`）——超时语义混用、证据面不分 kind 无法对账、存量 lint 配置被动改变行为；④ metrics 失败 advisory 不阻断（学 lint 观察期先例）——lint 当年观察期是因外部数据未足，而 metrics 的非零退出语义由用户命令自定义（用户写 `crap-check --fail-over 10 src` 就是他的标准），首版即硬门才配得上「确定性质量门」的采纳初衷，且 fail-open 缺省已保证不配置零影响。 已知取舍：超时=failed 对慢工具会假红——desc 明示慢工具提帽（metrics_timeout_sec）或放 pre-push/CI 层，不在每变更收口跑。
+
+## D-unmapped-480@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-10-29-metrics-routes
+原编号：D-001@v1
+锚点：未记录
+最近确认：b2b4c12798b5119d9937ab055fc49c939f267f35
+理由：最大风险：**前缀误蹭/漏配**——路径段边界匹配写错会让 frontend/ 误吃 frontend-v2/ 的变更（假门红）或深路径漏命中（假跳过）。缓解：匹配算法钉死段全等语义（`file === p || file.startsWith(p.endsWith('/') ? p : p + '/')`），正反两向专测（误蹭负例 + 深路径命中正例）；解析器缩进语义随 modules 块坑史（任意非零缩进，不硬编码空格数）。 放弃的方案：① glob/通配路径——前缀集合已覆盖 monorepo 目录形态（modules 先例同口径），glob 引入 Windows 通配语义与转义复杂度，收益不成比例；② gate 并行执行——秒级 gate 串行总时长可控，并行放大资源峰值且输出交错难归因；③ 按语言扩展名自动路由（.ts→eslint、.java→PMD）——枚举开放世界违反规约 00（新语言要改 CLI），路径集合是仓主声明的中性事实；④ 路由复用 modules 块（modules.<name>.metrics 键）——modules 块语义是测试子集映射，混入指标门职责耦合两个机制的生命周期，独立段更清晰。 已知取舍：gate 命中子集注入 SILLYSPEC_CHANGE_FILES 是**该 gate 的命中文件**（非全变更面）——gate 内工具天然只看自己的域；需要全量的命令仍走单命令形态（共存）。

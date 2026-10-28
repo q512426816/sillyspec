@@ -456,6 +456,217 @@ export function runVerifyMetricsCheck({ cwd, specBase, timeoutMs, changeFiles } 
 }
 
 /**
+ * metrics_routes 的 paths 值解析：`["a/", "b/"]` 引号数组 / `a/, b/` 逗分裸串 / `"a/"` 单值
+ * 均归一为 string[]（2026-10-29-metrics-routes task-01）。模块内私有。
+ */
+function parseMetricsPathsValue(raw) {
+  if (!raw) return null
+  let s = String(raw).trim()
+  const arrM = s.match(/^\[(.*)\]$/s)
+  if (arrM) s = arrM[1]
+  const parts = s.split(',').map((p) => p.trim().replace(/^["']|["']$/g, '').trim()).filter(Boolean)
+  return parts.length > 0 ? parts : null
+}
+
+/**
+ * 路径段全等前缀匹配（2026-10-29-metrics-routes task-01）：file 归一 POSIX 后判断
+ * `file === base || file.startsWith(base + '/')`——`frontend/` 不命中 `frontend-v2/x`
+ * （段全等，防字符级误蹭），深路径子目录命中。双侧反斜杠归一（Windows 变更文件/配置同口径）。
+ * 模块内私有。
+ */
+function matchesPathPrefix(file, prefix) {
+  const f = String(file || '').replace(/\\/g, '/')
+  const base = String(prefix || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!f || !base) return false
+  return f === base || f.startsWith(base + '/')
+}
+
+/**
+ * 从 local.yaml 文本提取 metrics_routes 段（2026-10-29-metrics-routes task-01）。
+ * 形态随 modules 块先例（extractModules 同风格，坑史同源：任意非零缩进、inline flow 与
+ * 子块展开双形态）。每条目需 paths（前缀集合）与 command（缺一跳过该条目——路由无 paths
+ * 无从匹配）；timeout_sec 可选。轻量行扫描，不引 yaml 依赖。
+ *
+ *   metrics_routes:
+ *     web:
+ *       paths: ["frontend/", "packages/web/"]
+ *       command: "npx --prefix frontend eslint . --max-warnings 0"
+ *       timeout_sec: 300
+ *     web-inline: { paths: "frontend/, packages/web/", command: "make web-check" }
+ *
+ * @param {string} yamlText
+ * @returns {Record<string, {paths: string[], command: string, timeoutSec: number|null}>|null}
+ *   无段或无有效条目 → null（调用方按未配置处理，缺省零回归）
+ */
+export function extractMetricsRoutes(yamlText) {
+  if (!yamlText) return null
+  const lines = normalizeLineEndings(yamlText).split('\n')
+  let startIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (/^metrics_routes:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
+  }
+  if (startIdx === -1) return null
+
+  const routes = {}
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i]
+    const entry = line.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
+    if (!entry) {
+      // 新顶层 key（行首非空格非注释非空）→ 块结束
+      if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#') && line.trim() !== '') break
+      continue
+    }
+    const name = entry[2]
+    const rest = (entry[3] || '').trim()
+    if (rest === '' || rest.startsWith('#')) {
+      // 子块展开式：paths / command / timeout_sec 子行（缩进须深于条目行）
+      let paths = null
+      let command = null
+      let timeoutSec = null
+      for (let j = i + 1; j < lines.length; j++) {
+        const sub = lines[j]
+        if (sub.trim() === '' || sub.trim().startsWith('#')) continue
+        const subM = sub.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
+        if (!subM || subM[1].length <= entry[1].length) break
+        const key = subM[2]
+        const raw = (subM[3] || '').trim()
+        if (key === 'paths') paths = parseMetricsPathsValue(raw)
+        if (key === 'command') command = raw.replace(/^["']|["']$/g, '') || null
+        if (key === 'timeout_sec') { const n = Number(raw); if (Number.isFinite(n) && n > 0) timeoutSec = n }
+      }
+      if (paths && command) routes[name] = { paths, command, timeoutSec }
+      continue
+    }
+    // inline flow mapping: { paths: [...], command: "...", timeout_sec: N }
+    const pathsRaw = parseFlowValue(rest, 'paths')
+    const command = parseFlowValue(rest, 'command')
+    const tRaw = parseFlowValue(rest, 'timeout_sec')
+    if (command) {
+      const paths = parseMetricsPathsValue(pathsRaw)
+      if (paths) {
+        const n = Number(tRaw)
+        routes[name] = { paths, command, timeoutSec: tRaw && Number.isFinite(n) && n > 0 ? n : null }
+      }
+    }
+  }
+  return Object.keys(routes).length > 0 ? routes : null
+}
+
+/**
+ * 路由指标门实测（2026-10-29-metrics-routes task-01——多语言/monorepo 的路径集合路由）。
+ * 变更文件面 ∩ gate.paths 段全等前缀 → 仅执行命中 gate（未触域不跑——与测试面动态子集同
+ * 哲学）；每 gate 子进程注入 SILLYSPEC_CHANGE_FILES=该 gate 命中子集；串行执行（放弃并行：
+ * 秒级 gate 串行总时长可控，并行放大资源峰值且输出交错难归因——design 风险节声明）。
+ * 语义逐条复用单命令门（runVerifyMetricsCheck）：非零/超时=failed、CNF 环境缺件降档、
+ * 输出尾部。gate 级超时链（特异者胜）：gate.timeout_sec > 显式调用参 > metrics_timeout_sec
+ * > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180s——per-gate 显式值不被调用侧快照
+ * 通用帽（5min）反向压低。
+ * 聚合形态：任一 gate failed → failed；全部命中 gate CNF 降档 → skipped（CNF 不掩盖亦不被
+ * 掩盖）；其余 → passed。顶层字段与单命令结果同构（printQuickTestLintGate 通用循环直读），
+ * gates 数组逐 gate 带 name/status/exitCode/outputTail/matchedFiles。
+ */
+export function runVerifyMetricsRoutesCheck({ cwd, specBase, timeoutMs, changeFiles } = {}) {
+  const localYamlPath = join(specBase, 'local.yaml')
+  const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
+  const routes = extractMetricsRoutes(yamlText)
+
+  if (!routes) {
+    return {
+      status: 'skipped', kind: 'routes', gates: [],
+      command: null, exitCode: null, durationMs: null, outputTail: null,
+      reason: yamlText
+        ? 'local.yaml 未配置 metrics_routes 段——多语言/monorepo 仓可按路径集合路由多个指标门（与 commands.metrics 单命令可共存，执行只跑变更命中的 gate；见 config schema desc）'
+        : `local.yaml 不存在（${localYamlPath}）`,
+    }
+  }
+
+  const files = (Array.isArray(changeFiles) ? changeFiles : []).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
+  const hitGates = []
+  for (const [name, gate] of Object.entries(routes)) {
+    const matched = files.filter((f) => gate.paths.some((p) => matchesPathPrefix(f, p)))
+    if (matched.length > 0) hitGates.push({ name, gate, matched })
+  }
+  if (hitGates.length === 0) {
+    return {
+      status: 'skipped', kind: 'routes', gates: [],
+      command: null, exitCode: null, durationMs: null, outputTail: null,
+      reason: `metrics_routes 零命中（变更文件面与 ${Object.keys(routes).length} 个 gate 的 paths 均无交集——未触域不跑，增量语义）gates：${Object.keys(routes).join('、')}`,
+    }
+  }
+
+  const yamlGlobalTimeoutMs = (() => {
+    const m = String(yamlText || '').match(/^\s*metrics_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
+    return m && Number(m[1]) > 0 ? Number(m[1]) * 1000 : 0
+  })()
+  const startedAt = Date.now()
+  const gates = []
+  for (const { name, gate, matched } of hitGates) {
+    const capMs = (gate.timeoutSec ? gate.timeoutSec * 1000 : 0)
+      || timeoutMs
+      || yamlGlobalTimeoutMs
+      || Number(process.env.SILLYSPEC_METRICS_TIMEOUT_MS)
+      || 3 * 60 * 1000
+    const gateStartedAt = Date.now()
+    let exitCode = 0
+    let output = ''
+    let gateReason = null
+    try {
+      output = decodeShellOutput(execSync(gate.command, {
+        cwd,
+        encoding: 'buffer',
+        timeout: capMs,
+        maxBuffer: 32 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+        env: { ...process.env, SILLYSPEC_CHANGE_FILES: matched.join('\n') },
+      }))
+    } catch (e) {
+      exitCode = typeof e.status === 'number' ? e.status : 1
+      output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
+      gateReason = e.signal === 'SIGTERM' && Date.now() - gateStartedAt >= capMs
+        ? `gate「${name}」超时（>${capMs / 1000}s）`
+        : `gate「${name}」退出码 ${exitCode}`
+    }
+    const durationMs = Date.now() - gateStartedAt
+    const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+    let status = exitCode === 0 ? 'passed' : 'failed'
+    let finalReason = exitCode === 0 ? null : gateReason
+    if (status === 'failed') {
+      const cnf = detectCommandMissingFailure(output)
+      if (cnf.matched) {
+        status = 'skipped'
+        finalReason = `gate「${name}」环境缺件：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败不拦门；安装对应工具后恢复实测`
+        console.warn(`⚠️ metrics gate「${name}」环境缺件降档为跳过：${cnf.evidence}——修复环境（安装工具）而非改代码`)
+      }
+    }
+    gates.push({ name, status, command: gate.command, exitCode, durationMs, outputTail, reason: finalReason, matchedFiles: matched })
+  }
+
+  const failedGates = gates.filter((g) => g.status === 'failed')
+  const skippedGates = gates.filter((g) => g.status === 'skipped')
+  const status = failedGates.length > 0 ? 'failed' : (skippedGates.length === gates.length ? 'skipped' : 'passed')
+  const reason = failedGates.length > 0
+    ? `路由门 ${failedGates.length}/${gates.length} 个 gate 失败：${failedGates.map((g) => g.name).join('、')}`
+    : (status === 'skipped'
+      ? `路由门全部命中 gate 环境缺件降档（${skippedGates.map((g) => g.name).join('、')}）——安装工具后恢复实测`
+      : `路由门 ${gates.length} 个 gate 全过（${gates.map((g) => g.name).join('、')}）`)
+  // 聚合 outputTail：失败 gate 的 name+尾部拼接（打印/定位面）；无失败为 null
+  const outputTail = failedGates.length > 0
+    ? failedGates.map((g) => `── gate「${g.name}」──\n${g.outputTail || g.reason || ''}`).join('\n')
+    : null
+  return {
+    status,
+    kind: 'routes',
+    gates,
+    command: null,
+    exitCode: failedGates.length > 0 ? failedGates[0].exitCode : 0,
+    durationMs: Date.now() - startedAt,
+    outputTail,
+    reason,
+  }
+}
+
+/**
  * lint 硬门决策（2026-09-09 升硬，外部数据驱动）：观察期 tally 14 次 5 败全真阳性零误伤，
  * 且 pre-push 钩子本就硬拦——verify 侧硬门只是同一标准 fail-fast 前移。
  * 逃生档：SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕，对齐 quick 门 skip env 先例）。
@@ -3811,6 +4022,9 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint, 
       duration_ms: lint.durationMs,
       output_tail: lint.outputTail,
       reason: lint.reason || null,
+      // gates 透传（2026-10-29-metrics-routes task-01）：路由门独立件带逐 gate 明细；
+      // 单命令/lint 无该数组零影响（additive）。
+      ...(Array.isArray(lint.gates) ? { gates: lint.gates } : {}),
       ran_at: new Date().toISOString(),
     }, null, 2) + '\n')
     return holder.resultPath

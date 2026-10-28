@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-29-metrics-routes",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "b2b4c12798b5119d9937ab055fc49c939f267f35",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决留痕：超时链实现含「显式调用参（快照 5min 帽）」层，FR-01 文本链未列",
+      "evidence": "FR-01 原文链为 gate.timeout_sec > metrics_timeout_sec > env > 180s；实现（src/verify-postcheck.js:612-616 capMs 链）与 config-schema desc、design 注释四方一致地在 gate 之下插入调用侧显式参层。FR 声明的相对序在无显式参时保持；该层是快照执行环境帽且快照超时触发主仓复跑（quick-audit.js:643-645）不静默吞。裁决：可接受。",
+      "location": "src/verify-postcheck.js:612"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "config-absent 探针三态断言不全：坏配置条目与 local.yaml 读取异常态无专门断言",
+      "evidence": "未配置态有断言（test 10e/11c）、零命中态有断言（10b）；但「条目缺 paths/command 被跳过」（extractMetricsRoutes 的 if (paths && command) 分支）与「local.yaml 存在但读取异常」两态无直接测试。行为安全（坏条目全跳则归 null 走未配置 skipped；读取异常与既有单命令门同 existsSync+readFileSync 模式非新风险面），但探针要求三态各有断言。不阻断收口。",
+      "location": "src/verify-postcheck.js:547"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "FR-02 正文称证据走 section 'metrics'，实现落独立 section 'routes'",
+      "evidence": "quick-audit.js:742 persistLintResult section 'routes'。FR-02 场景原文自带容差「verify-runs 证据含 kind: 'routes'（或并入节）」，kind/gates 数组/并存不覆盖/failed 归并恰一次承诺全兑现且被 11a 实测断言。措辞级偏差，裁决可接受。",
+      "location": "src/run/quick-audit.js:742"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-29T07:29:35+08:00"
+}

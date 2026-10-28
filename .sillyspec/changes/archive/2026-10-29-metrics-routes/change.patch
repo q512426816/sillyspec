@@ -1,0 +1,749 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 10507726..72f547b3 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -80,6 +80,16 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'commands.scan:check', type: 'string', optional: true, status: 'live', readers: ['scan 漂移检查（scripts/scan-drift-check.py 经 scan 流程调用）'], desc: '【2026-10-23-schema-registration-debt 平台仓 dogfood 补登】scan 产物漂移自检命令。', example: 'python scripts/scan-drift-check.py' },
+       ],
+     },
++    {
++      id: 'metrics_routes',
++      title: '指标门路由（多语言/monorepo）',
++      note: '【2026-10-29-metrics-routes】与 commands.metrics 单命令门共存：按变更文件面 ∩ gate.paths 路径前缀路由，仅执行命中 gate（串行）；语言中立（路径集合，不枚举语言/框架）。段未配置=零变化。',
++      keys: [
++        { path: 'metrics_routes.<name>.paths', type: 'array', optional: true, status: 'live', readers: ['extractMetricsRoutes (src/verify-postcheck.js)'], desc: 'gate 的路径前缀集合（仓根相对）——段全等匹配：frontend/ 不命中 frontend-v2/；引号数组 `["a/", "b/"]` 或逗分裸串均可。', example: '["frontend/", "packages/web/"]' },
++        { path: 'metrics_routes.<name>.command', type: 'string', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 的指标门命令——gate 命中（变更文件面 ∩ paths 非空）才执行，非零退出=门红；gate 子进程注入 SILLYSPEC_CHANGE_FILES=该 gate 命中子集（gate 内工具可增量扫）。', example: 'npx --prefix frontend eslint . --max-warnings 0' },
++        { path: 'metrics_routes.<name>.timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyMetricsRoutesCheck (src/verify-postcheck.js)'], desc: 'gate 级超时秒数——优先级 本键 > 调用侧快照帽 > commands.metrics_timeout_sec > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180。', example: '300' },
++      ],
++    },
+     {
+       id: 'checkpoint',
+       title: '影子存档（task tick 快照）',
+@@ -436,6 +446,14 @@ commands:
+   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
+   # metrics: npx jscpd src   # 可选指标门：收口实测非零退出阻断（复杂度/重复/死代码/覆盖率阈值类秒级检查；执行注入 SILLYSPEC_CHANGE_FILES=本变更文件清单可只扫变更面；变异测试类慢工具建议 pre-push/CI）
+   # metrics_timeout_sec: 600   # commands.metrics 超时秒数（缺省 180）
++# metrics_routes:             # 多语言/monorepo 路由门（与上面 metrics 单命令可共存；仅跑变更命中的 gate）
++#   web:
++#     paths: ["frontend/", "packages/web/"]   # 路径前缀集合（段全等：frontend/ 不蹭 frontend-v2/）
++#     command: npx --prefix frontend eslint . --max-warnings 0
++#   jvm:
++#     paths: ["backend/"]
++#     command: mvn -B -f backend/pom.xml pmd:check
++#     timeout_sec: 300         # gate 级超时（缺省 180）；gate 子进程注入 SILLYSPEC_CHANGE_FILES=命中子集
+   # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
+ 
+ # ── 影子存档（task tick 快照；缺省开启零配置，仅在显式调优时写）──
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 0fd507be..4db58acb 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -477,7 +477,7 @@ export function mergeGateFiles(audited, declared) {
+ 
+ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null, skipSentinel = false }) {
+   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
+-    return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null, metrics: null }
++    return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null, metrics: null, metricsRoutes: null }
+   }
+   const audited = Array.isArray(changedFiles) ? changedFiles : []
+   // 门禁文件集 = 审计 ∪ 声明边界（并集，2026-09-23 ql-018 修复）：旧口径二选一（审计非空时
+@@ -499,10 +499,10 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     (f) => typeof f === 'string' && (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)),
+   )
+   if (files.length === 0) {
+-    return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null, metrics: null }
++    return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null, metrics: null, metricsRoutes: null }
+   }
+   if (codeFiles.length === 0) {
+-    return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null, metrics: null }
++    return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null, metrics: null, metricsRoutes: null }
+   }
+ 
+   // ── 测试最低面 advisory（资产三小件②）：放在两条早退之后——纯 doc/env skip/空清单
+@@ -517,7 +517,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+   // （Grill X-001 附注）。specBase 同理用主仓的（快照副本 local.yaml 不参与开关判定）。
+   const semanticGuard = buildSemanticGuardHits({ cwd, specBase, files, changeName })
+ 
+-  const { runVerifyTestCheck, runVerifyLintCheck, runVerifyMetricsCheck } = await import('../verify-postcheck.js')
++  const { runVerifyTestCheck, runVerifyLintCheck, runVerifyMetricsCheck, runVerifyMetricsRoutesCheck } = await import('../verify-postcheck.js')
+ 
+   // ── 隔离快照执行（2026-09-10 驾驭小结第六批②，用户实证「lint 实测对账在主仓跑被并行
+   // 会话脏文件拦门」）：HEAD 干净快照 + 本会话文件 overlay 后在快照内跑 test+lint——并行
+@@ -566,6 +566,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+   let test = null
+   let lint = null
+   let metrics = null
++  let metricsRoutes = null
+   try {
+     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
+     //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
+@@ -634,6 +635,18 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     if (metrics.status === 'failed') {
+       failed.push('metrics')
+     }
++    // ── 路由指标门（2026-10-29-metrics-routes task-02——多语言/monorepo 路径集合路由）：
++    //    单命令门之后执行；failed 归并（同计 'metrics' 一次——两形态是同一道门的两种配置
++    //    形态，重复计会让 failed 数组出现同名项）。files 同源注入路由（gate 命中子集）。──
++    metricsRoutes = runVerifyMetricsRoutesCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined, changeFiles: files })
++    const routeTimeoutHit = (metricsRoutes.gates || []).some((g) => g && g.status === 'failed' && /超时/.test(String(g.reason || '')))
++    if (snapshot && metricsRoutes.status === 'failed' && routeTimeoutHit) {
++      console.warn('⚠️ 快照 metrics 路由 gate 超时（junction I/O 慢）→ 主仓复跑路由门（并行噪声可能混入——失败先做归属鉴定）')
++      metricsRoutes = runVerifyMetricsRoutesCheck({ cwd, specBase, changeFiles: files })
++    }
++    if (metricsRoutes.status === 'failed' && !failed.includes('metrics')) {
++      failed.push('metrics')
++    }
+     // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
+     // 证据（区间提交消息标题与正文均无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
+     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2，同 flow 侧 %B%x1e 口径）。
+@@ -721,15 +734,24 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         metrics.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint: metrics, section: 'metrics' }) || metrics.resultPath || null
+       }
+     } catch { /* 持久化 best-effort，不影响门禁语义 */ }
++    // 路由门证据（2026-10-29-metrics-routes task-02）：section 'routes'——并入 test-result.json
++    // 的 routes 节或独立件 kind: 'routes'（带 gates 数组），与单命令 metrics 节并存互不覆盖。
++    try {
++      if (metricsRoutes && (metricsRoutes.status === 'passed' || metricsRoutes.status === 'failed')) {
++        const { persistLintResult } = await import('../verify-postcheck.js')
++        metricsRoutes.resultPath = persistLintResult({ specBase, changeName: typeof changeName === 'string' ? changeName : null, testResultPath: test && test.resultPath, lint: metricsRoutes, section: 'routes' }) || metricsRoutes.resultPath || null
++      }
++    } catch { /* 持久化 best-effort，不影响门禁语义 */ }
+     return {
+       action: failed.length > 0 ? 'fail' : 'pass',
+       failed,
+       reason: failed.length > 0
+         ? `实测失败：${failed.join(' + ')}（命令与输出尾部见上；修复后重跑 --done 不丢进度）`
+-        : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${metrics && metrics.status === 'passed' ? '；metrics 指标门实测通过' : ''}${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
++        : `触及 src/test 共 ${codeFiles.length} 个文件，test+lint 实测通过（或未配置命令自动跳过）${metrics && metrics.status === 'passed' ? '；metrics 指标门实测通过' : ''}${metricsRoutes && metricsRoutes.status === 'passed' ? '；metrics 路由门全过' : ''}${snapshot ? '（隔离快照口径：并行会话脏文件不计入）' : ''}`,
+       test,
+       lint,
+       metrics,
++      metricsRoutes,
+       // 语义护栏 WARNING（task-06）：只增可选字段，action/failed 判定与调用方读取面均不受影响
+       semanticGuard,
+     }
+@@ -743,7 +765,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+           // 结果路径重映射（评审 P1 清偿）：快照内写下的 resultPath 指向快照临时目录——清理后
+           // existsSync 恒 false，flow done 的 FAIL 三件套会静默失效。回拷后把 test/lint 的
+           // resultPath 改写为主仓路径（对象即返回值，finally 在 return 落地前变异生效）。
+-          for (const r of [test, lint, metrics]) {
++          for (const r of [test, lint, metrics, metricsRoutes]) {
+             if (r && typeof r.resultPath === 'string' && r.resultPath.startsWith(gateSpecBase)) {
+               r.resultPath = specBase + r.resultPath.slice(gateSpecBase.length)
+             }
+@@ -786,16 +808,20 @@ export function printQuickTestLintGate(gate) {
+     console.log(`\n🧪 quick test+lint 门禁 — SKIP：${gate.reason}`)
+     return
+   }
+-  for (const [label, r] of [['test', gate.test], ['lint', gate.lint], ['metrics', gate.metrics]]) {
++  for (const [label, r] of [['test', gate.test], ['lint', gate.lint], ['metrics', gate.metrics], ['metrics-routes', gate.metricsRoutes]]) {
+     if (!r) continue
+     const icon = r.status === 'failed' ? '❌' : r.status === 'passed' ? '✅' : '⏭️'
+     const dur = typeof r.durationMs === 'number' ? ` (${(r.durationMs / 1000).toFixed(1)}s)` : ''
+-    console.log(`${icon} ${label}: ${r.status}${r.command ? ` ← ${r.command}${dur}` : ''}${r.status === 'skipped' && r.reason ? ` — ${r.reason}` : ''}`)
++    const gatesNote = Array.isArray(r.gates) && r.gates.length > 0 ? ` [gates: ${r.gates.map((g) => `${g.name}=${g.status}`).join(', ')}]` : ''
++    console.log(`${icon} ${label}: ${r.status}${r.command ? ` ← ${r.command}${dur}` : ''}${gatesNote}${r.status === 'skipped' && r.reason ? ` — ${r.reason}` : ''}`)
+   }
+   if (gate.action === 'fail') {
+     console.error(`\n🚫 quick test+lint 门禁 — BLOCKED：${gate.reason}`)
+     for (const key of gate.failed) {
+-      const r = gate[key]
++      // 'metrics' 归并键：单命令门与路由门共用——取有输出尾部者（单命令绿而路由红时尾部挂
++      // metricsRoutes；两者均红时先单命令，路由尾部在其 resultPath 证据件可读）
++      let r = gate[key]
++      if (key === 'metrics' && !(r && r.outputTail) && gate.metricsRoutes && gate.metricsRoutes.outputTail) r = gate.metricsRoutes
+       if (r && r.outputTail) console.error(`   ── ${key} 输出尾部 ──\n${r.outputTail}`)
+     }
+     console.error(`   quick 已停止：修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_QUICK_TEST_GATE=skip（审计留痕）。`)
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 96938a74..cd7bab71 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -105,7 +105,7 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
+  * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
+  * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
+  */
+-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, metricsResult = null, usedSnapshot = false, missReason = null, scopeDecision = null }) {
++export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, metricsResult = null, metricsRoutesResult = null, usedSnapshot = false, missReason = null, scopeDecision = null }) {
+   const path = qualityScanRecordPath(specBase, changeName)
+   if (!path) return null
+   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
+@@ -139,6 +139,8 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
+       smokeResult: smokeResult || null,
+       // metrics 指标门结果（2026-10-29-open-metrics-gate，additive——存量记录无键读侧兼容）
+       metricsResult: metricsResult || null,
++      // 路由门结果（2026-10-29-metrics-routes，additive 同上）
++      metricsRoutesResult: metricsRoutesResult || null,
+     }, null, 2) + '\n')
+     return { path, fingerprint }
+   } catch (e) {
+@@ -655,7 +657,7 @@ function warnIfMainRepoDirtyForGate(cwd) {
+  * `run verify` 复入本步重新实测（指纹随代码修复失配，--done 不会复用旧失败结果）。
+  */
+ export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
+-  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact, runVerifyMetricsCheck } = await import('../verify-postcheck.js')
++  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact, runVerifyMetricsCheck, runVerifyMetricsRoutesCheck } = await import('../verify-postcheck.js')
+   // ── RERUN 失败签名闸（r5l-forensic-verdict.md 方案 4 / 评审护栏#6 五态）──
+   // R5-L 实证：RERUN=1 两次强制重扫各烧 ~8M 重发 + 10m/6.8m 等待，而失败签名未变——重跑
+   // 结果注定相同。故 RERUN=1 生效前先对账失败签名（dedupKey 已含代码指纹×豁免面，再叠测试
+@@ -810,6 +812,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   let testCheck
+   let lintCheck
+   let metricsCheck = null
++  let metricsRoutesCheck = null
+   let coverageCheck = null
+   let smokeResult = null
+   try {
+@@ -846,6 +849,24 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+       const mIcon = metricsCheck.status === 'failed' ? '❌' : '✅'
+       console.log(`${mIcon} metrics 指标门实测 ${metricsCheck.status}${metricsCheck.command ? ` ← ${metricsCheck.command}` : ''}${metricsCheck.status === 'failed' && metricsCheck.reason ? ` — ${String(metricsCheck.reason).split('\n')[0]}` : ''}`)
+     }
++    // ── 路由指标门（2026-10-29-metrics-routes task-02）：与 quick 道同款——变更文件面 ∩
++    //    gate.paths 段全等前缀路由，仅命中 gate 执行；failed 与单命令门归并阻断。──
++    metricsRoutesCheck = runVerifyMetricsRoutesCheck({
++      cwd: gateCwd, specBase: gateSpecBase,
++      timeoutMs: snap ? 5 * 60 * 1000 : undefined,
++      changeFiles: snap && Array.isArray(snap.changeFiles) ? snap.changeFiles : null,
++    })
++    const routeTimeoutHit = (metricsRoutesCheck.gates || []).some((g) => g && g.status === 'failed' && /超时/.test(String(g.reason || '')))
++    if (snap && metricsRoutesCheck.status === 'failed' && routeTimeoutHit) {
++      console.warn('⚠️ 快照 metrics 路由 gate 超时（junction I/O 慢）→ 主仓复跑路由门（并行噪声可能混入）')
++      metricsRoutesCheck = runVerifyMetricsRoutesCheck({ cwd, specBase, changeFiles: snap && Array.isArray(snap.changeFiles) ? snap.changeFiles : null })
++    }
++    if (metricsRoutesCheck.status !== 'skipped') {
++      for (const g of metricsRoutesCheck.gates || []) {
++        const icon = g.status === 'failed' ? '❌' : g.status === 'passed' ? '✅' : '⏭️'
++        console.log(`${icon} metrics gate「${g.name}」 ${g.status} ← ${g.command}${g.status === 'failed' && g.reason ? ` — ${String(g.reason).split('\n')[0]}` : ''}`)
++      }
++    }
+   if (lintCheck.status !== 'skipped') {
+     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
+   }
+@@ -871,12 +892,14 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   } finally {
+     if (snap) { try { snap.cleanup() } catch {} }
+   }
+-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, metricsResult: metricsCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
++  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, metricsResult: metricsCheck, metricsRoutesResult: metricsRoutesCheck, usedSnapshot: Boolean(snap), missReason: _missReasonParts.join('；') || null, scopeDecision: { planned: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF, actual: Boolean(snap) } })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+   // metrics 指标门阻断（2026-10-29-open-metrics-gate task-03）：非零/超时即 failed——通过标准
+   // 由命令自身定义（无 lint 式归属鉴定，design 风险节声明边界）；skipped（未配置/环境缺件）不拦。
+   const metricsFailed = Boolean(metricsCheck && metricsCheck.status === 'failed')
++  // 路由门阻断（2026-10-29-metrics-routes task-02）：任一命中 gate 失败即拦——与单命令门同一道门
++  const metricsRoutesFailed = Boolean(metricsRoutesCheck && metricsRoutesCheck.status === 'failed')
+   // 2026-10-15-lint-triage-path-unify：lint 归属鉴定降档接线（与 gates --done 路径同源共享
+   // helper）——零交集存量债降档 advisory 不 throw；owned/unattributable/鉴定异常维持硬拦
+   // （保守）。仅在「lint 单独失败」时降档（testFailed 优先 throw——测试失败不作 lint 降档
+@@ -889,17 +912,17 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
+   // lint 失败（SILLYSPEC_VERIFY_LINT_GATE=advisory 时不 throw）同样是摩擦信号，计数不应随
+   // 逃生阀漂移。recordFrictionEvent 自带静默降级，不影响本步推进/throw 语义。
+-  if (testFailed || lintCheck.status === 'failed' || metricsFailed) {
+-    await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : metricsFailed ? 'metrics' : 'lint' })
++  if (testFailed || lintCheck.status === 'failed' || metricsFailed || metricsRoutesFailed) {
++    await recordFrictionEvent({ cwd, changeName, platformOpts, type: 'verify_run_failed', detail: testFailed ? 'test' : (metricsFailed || metricsRoutesFailed) ? 'metrics' : 'lint' })
+   }
+-  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded) || metricsFailed) {
++  if (testFailed || (lintBlocked && !lintAdvisoryDowngraded) || metricsFailed || metricsRoutesFailed) {
+     if (snap) {
+       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+         printSnapshotFailureHint(snap) } catch { /* 提示失败不影响阻断 */ }
+     }
+     const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+     await renderVerifyTestAttribution({ cwd, changeName, specBase, runtimeRoot })
+-    const which = testFailed ? '测试' : metricsFailed ? '指标门（metrics）' : 'lint'
++    const which = testFailed ? '测试' : (metricsFailed || metricsRoutesFailed) ? '指标门（metrics）' : 'lint'
+     throw new Error(`noAI 质量扫描实测${which}失败——本步骤未完成（进度不推进）。输出与归因提示见上方；修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''} 复入本步重新实测。`)
+   }
+   console.log(`\n✅ noAI 质量扫描全绿——本步骤自动完成；--done 对账将复用本次实测（代码变更即失配重测）。机械事实持续全绿时，verify-probes --init 会预填 PASS 结论草稿（草稿待确认，复核后可改写）。`)
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index c89e9548..1d24909b 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -455,6 +455,217 @@ export function runVerifyMetricsCheck({ cwd, specBase, timeoutMs, changeFiles }
+   }
+ }
+ 
++/**
++ * metrics_routes 的 paths 值解析：`["a/", "b/"]` 引号数组 / `a/, b/` 逗分裸串 / `"a/"` 单值
++ * 均归一为 string[]（2026-10-29-metrics-routes task-01）。模块内私有。
++ */
++function parseMetricsPathsValue(raw) {
++  if (!raw) return null
++  let s = String(raw).trim()
++  const arrM = s.match(/^\[(.*)\]$/s)
++  if (arrM) s = arrM[1]
++  const parts = s.split(',').map((p) => p.trim().replace(/^["']|["']$/g, '').trim()).filter(Boolean)
++  return parts.length > 0 ? parts : null
++}
++
++/**
++ * 路径段全等前缀匹配（2026-10-29-metrics-routes task-01）：file 归一 POSIX 后判断
++ * `file === base || file.startsWith(base + '/')`——`frontend/` 不命中 `frontend-v2/x`
++ * （段全等，防字符级误蹭），深路径子目录命中。双侧反斜杠归一（Windows 变更文件/配置同口径）。
++ * 模块内私有。
++ */
++function matchesPathPrefix(file, prefix) {
++  const f = String(file || '').replace(/\\/g, '/')
++  const base = String(prefix || '').replace(/\\/g, '/').replace(/\/+$/, '')
++  if (!f || !base) return false
++  return f === base || f.startsWith(base + '/')
++}
++
++/**
++ * 从 local.yaml 文本提取 metrics_routes 段（2026-10-29-metrics-routes task-01）。
++ * 形态随 modules 块先例（extractModules 同风格，坑史同源：任意非零缩进、inline flow 与
++ * 子块展开双形态）。每条目需 paths（前缀集合）与 command（缺一跳过该条目——路由无 paths
++ * 无从匹配）；timeout_sec 可选。轻量行扫描，不引 yaml 依赖。
++ *
++ *   metrics_routes:
++ *     web:
++ *       paths: ["frontend/", "packages/web/"]
++ *       command: "npx --prefix frontend eslint . --max-warnings 0"
++ *       timeout_sec: 300
++ *     web-inline: { paths: "frontend/, packages/web/", command: "make web-check" }
++ *
++ * @param {string} yamlText
++ * @returns {Record<string, {paths: string[], command: string, timeoutSec: number|null}>|null}
++ *   无段或无有效条目 → null（调用方按未配置处理，缺省零回归）
++ */
++export function extractMetricsRoutes(yamlText) {
++  if (!yamlText) return null
++  const lines = normalizeLineEndings(yamlText).split('\n')
++  let startIdx = -1
++  for (let i = 0; i < lines.length; i++) {
++    if (/^metrics_routes:\s*(?:#.*)?$/.test(lines[i])) { startIdx = i; break }
++  }
++  if (startIdx === -1) return null
++
++  const routes = {}
++  for (let i = startIdx + 1; i < lines.length; i++) {
++    const line = lines[i]
++    const entry = line.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
++    if (!entry) {
++      // 新顶层 key（行首非空格非注释非空）→ 块结束
++      if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#') && line.trim() !== '') break
++      continue
++    }
++    const name = entry[2]
++    const rest = (entry[3] || '').trim()
++    if (rest === '' || rest.startsWith('#')) {
++      // 子块展开式：paths / command / timeout_sec 子行（缩进须深于条目行）
++      let paths = null
++      let command = null
++      let timeoutSec = null
++      for (let j = i + 1; j < lines.length; j++) {
++        const sub = lines[j]
++        if (sub.trim() === '' || sub.trim().startsWith('#')) continue
++        const subM = sub.match(/^([ \t]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
++        if (!subM || subM[1].length <= entry[1].length) break
++        const key = subM[2]
++        const raw = (subM[3] || '').trim()
++        if (key === 'paths') paths = parseMetricsPathsValue(raw)
++        if (key === 'command') command = raw.replace(/^["']|["']$/g, '') || null
++        if (key === 'timeout_sec') { const n = Number(raw); if (Number.isFinite(n) && n > 0) timeoutSec = n }
++      }
++      if (paths && command) routes[name] = { paths, command, timeoutSec }
++      continue
++    }
++    // inline flow mapping: { paths: [...], command: "...", timeout_sec: N }
++    const pathsRaw = parseFlowValue(rest, 'paths')
++    const command = parseFlowValue(rest, 'command')
++    const tRaw = parseFlowValue(rest, 'timeout_sec')
++    if (command) {
++      const paths = parseMetricsPathsValue(pathsRaw)
++      if (paths) {
++        const n = Number(tRaw)
++        routes[name] = { paths, command, timeoutSec: tRaw && Number.isFinite(n) && n > 0 ? n : null }
++      }
++    }
++  }
++  return Object.keys(routes).length > 0 ? routes : null
++}
++
++/**
++ * 路由指标门实测（2026-10-29-metrics-routes task-01——多语言/monorepo 的路径集合路由）。
++ * 变更文件面 ∩ gate.paths 段全等前缀 → 仅执行命中 gate（未触域不跑——与测试面动态子集同
++ * 哲学）；每 gate 子进程注入 SILLYSPEC_CHANGE_FILES=该 gate 命中子集；串行执行（放弃并行：
++ * 秒级 gate 串行总时长可控，并行放大资源峰值且输出交错难归因——design 风险节声明）。
++ * 语义逐条复用单命令门（runVerifyMetricsCheck）：非零/超时=failed、CNF 环境缺件降档、
++ * 输出尾部。gate 级超时链（特异者胜）：gate.timeout_sec > 显式调用参 > metrics_timeout_sec
++ * > env SILLYSPEC_METRICS_TIMEOUT_MS（毫秒）> 缺省 180s——per-gate 显式值不被调用侧快照
++ * 通用帽（5min）反向压低。
++ * 聚合形态：任一 gate failed → failed；全部命中 gate CNF 降档 → skipped（CNF 不掩盖亦不被
++ * 掩盖）；其余 → passed。顶层字段与单命令结果同构（printQuickTestLintGate 通用循环直读），
++ * gates 数组逐 gate 带 name/status/exitCode/outputTail/matchedFiles。
++ */
++export function runVerifyMetricsRoutesCheck({ cwd, specBase, timeoutMs, changeFiles } = {}) {
++  const localYamlPath = join(specBase, 'local.yaml')
++  const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
++  const routes = extractMetricsRoutes(yamlText)
++
++  if (!routes) {
++    return {
++      status: 'skipped', kind: 'routes', gates: [],
++      command: null, exitCode: null, durationMs: null, outputTail: null,
++      reason: yamlText
++        ? 'local.yaml 未配置 metrics_routes 段——多语言/monorepo 仓可按路径集合路由多个指标门（与 commands.metrics 单命令可共存，执行只跑变更命中的 gate；见 config schema desc）'
++        : `local.yaml 不存在（${localYamlPath}）`,
++    }
++  }
++
++  const files = (Array.isArray(changeFiles) ? changeFiles : []).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
++  const hitGates = []
++  for (const [name, gate] of Object.entries(routes)) {
++    const matched = files.filter((f) => gate.paths.some((p) => matchesPathPrefix(f, p)))
++    if (matched.length > 0) hitGates.push({ name, gate, matched })
++  }
++  if (hitGates.length === 0) {
++    return {
++      status: 'skipped', kind: 'routes', gates: [],
++      command: null, exitCode: null, durationMs: null, outputTail: null,
++      reason: `metrics_routes 零命中（变更文件面与 ${Object.keys(routes).length} 个 gate 的 paths 均无交集——未触域不跑，增量语义）gates：${Object.keys(routes).join('、')}`,
++    }
++  }
++
++  const yamlGlobalTimeoutMs = (() => {
++    const m = String(yamlText || '').match(/^\s*metrics_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
++    return m && Number(m[1]) > 0 ? Number(m[1]) * 1000 : 0
++  })()
++  const startedAt = Date.now()
++  const gates = []
++  for (const { name, gate, matched } of hitGates) {
++    const capMs = (gate.timeoutSec ? gate.timeoutSec * 1000 : 0)
++      || timeoutMs
++      || yamlGlobalTimeoutMs
++      || Number(process.env.SILLYSPEC_METRICS_TIMEOUT_MS)
++      || 3 * 60 * 1000
++    const gateStartedAt = Date.now()
++    let exitCode = 0
++    let output = ''
++    let gateReason = null
++    try {
++      output = decodeShellOutput(execSync(gate.command, {
++        cwd,
++        encoding: 'buffer',
++        timeout: capMs,
++        maxBuffer: 32 * 1024 * 1024,
++        stdio: ['ignore', 'pipe', 'pipe'],
++        windowsHide: true,
++        env: { ...process.env, SILLYSPEC_CHANGE_FILES: matched.join('\n') },
++      }))
++    } catch (e) {
++      exitCode = typeof e.status === 'number' ? e.status : 1
++      output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
++      gateReason = e.signal === 'SIGTERM' && Date.now() - gateStartedAt >= capMs
++        ? `gate「${name}」超时（>${capMs / 1000}s）`
++        : `gate「${name}」退出码 ${exitCode}`
++    }
++    const durationMs = Date.now() - gateStartedAt
++    const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
++    let status = exitCode === 0 ? 'passed' : 'failed'
++    let finalReason = exitCode === 0 ? null : gateReason
++    if (status === 'failed') {
++      const cnf = detectCommandMissingFailure(output)
++      if (cnf.matched) {
++        status = 'skipped'
++        finalReason = `gate「${name}」环境缺件：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败不拦门；安装对应工具后恢复实测`
++        console.warn(`⚠️ metrics gate「${name}」环境缺件降档为跳过：${cnf.evidence}——修复环境（安装工具）而非改代码`)
++      }
++    }
++    gates.push({ name, status, command: gate.command, exitCode, durationMs, outputTail, reason: finalReason, matchedFiles: matched })
++  }
++
++  const failedGates = gates.filter((g) => g.status === 'failed')
++  const skippedGates = gates.filter((g) => g.status === 'skipped')
++  const status = failedGates.length > 0 ? 'failed' : (skippedGates.length === gates.length ? 'skipped' : 'passed')
++  const reason = failedGates.length > 0
++    ? `路由门 ${failedGates.length}/${gates.length} 个 gate 失败：${failedGates.map((g) => g.name).join('、')}`
++    : (status === 'skipped'
++      ? `路由门全部命中 gate 环境缺件降档（${skippedGates.map((g) => g.name).join('、')}）——安装工具后恢复实测`
++      : `路由门 ${gates.length} 个 gate 全过（${gates.map((g) => g.name).join('、')}）`)
++  // 聚合 outputTail：失败 gate 的 name+尾部拼接（打印/定位面）；无失败为 null
++  const outputTail = failedGates.length > 0
++    ? failedGates.map((g) => `── gate「${g.name}」──\n${g.outputTail || g.reason || ''}`).join('\n')
++    : null
++  return {
++    status,
++    kind: 'routes',
++    gates,
++    command: null,
++    exitCode: failedGates.length > 0 ? failedGates[0].exitCode : 0,
++    durationMs: Date.now() - startedAt,
++    outputTail,
++    reason,
++  }
++}
++
+ /**
+  * lint 硬门决策（2026-09-09 升硬，外部数据驱动）：观察期 tally 14 次 5 败全真阳性零误伤，
+  * 且 pre-push 钩子本就硬拦——verify 侧硬门只是同一标准 fail-fast 前移。
+@@ -3811,6 +4022,9 @@ export function persistLintResult({ specBase, changeName, testResultPath, lint,
+       duration_ms: lint.durationMs,
+       output_tail: lint.outputTail,
+       reason: lint.reason || null,
++      // gates 透传（2026-10-29-metrics-routes task-01）：路由门独立件带逐 gate 明细；
++      // 单命令/lint 无该数组零影响（additive）。
++      ...(Array.isArray(lint.gates) ? { gates: lint.gates } : {}),
+       ran_at: new Date().toISOString(),
+     }, null, 2) + '\n')
+     return holder.resultPath
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index e9895d45..2f47d233 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -32,7 +32,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+ 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档（轻量道即：FR 绑定+design 四节+用户批准先于动码，读代码探究不算动码）。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）；指标门同款可选：`commands.metrics` 配置后收口实测该命令（非零退出阻断；未配置/`unavailable` 跳过留痕）——适合复杂度/重复率/死代码/覆盖率阈值类秒级检查（命令开放不绑定工具，`npx` 工具或 mvn/gradle 检查目标均可；执行时注入 `SILLYSPEC_CHANGE_FILES` 变更文件清单，大仓可只扫变更面），变异测试等慢工具建议 pre-push/CI。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
++4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）；指标门同款可选：`commands.metrics` 配置后收口实测该命令（非零退出阻断；未配置/`unavailable` 跳过留痕）——适合复杂度/重复率/死代码/覆盖率阈值类秒级检查（命令开放不绑定工具，`npx` 工具或 mvn/gradle 检查目标均可；执行时注入 `SILLYSPEC_CHANGE_FILES` 变更文件清单，大仓可只扫变更面），变异测试等慢工具建议 pre-push/CI；多语言/monorepo 仓可用 `metrics_routes` 路由门按路径集合配多个 gate（仅跑变更命中的 gate，gate 子进程注入 `SILLYSPEC_CHANGE_FILES`=该 gate 命中子集）。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+ 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+diff --git a/test/config-schema.test.mjs b/test/config-schema.test.mjs
+index c37653d8..40a2a7e0 100644
+--- a/test/config-schema.test.mjs
++++ b/test/config-schema.test.mjs
+@@ -89,6 +89,26 @@ console.log('\n--- 1b. commands.metrics / metrics_timeout_sec 注册 ---')
+   assert(ex.includes('metrics_timeout_sec:'), 'renderExample 输出含 metrics_timeout_sec 键行')
+ }
+ 
++// ── 1c. metrics_routes 路由键注册（2026-10-29-metrics-routes FR-03）──
++console.log('\n--- 1c. metrics_routes.<name>.* 注册 ---')
++{
++  const keys = flatKeys()
++  const paths = keys.find((k) => k.path === 'metrics_routes.<name>.paths')
++  assert(Boolean(paths), 'metrics_routes.<name>.paths 已注册')
++  if (paths) {
++    assert(paths.type === 'array' && paths.status === 'live' && paths.optional === true, 'paths 键形态：array/optional/live')
++    assert(paths.readers.some((r) => r.includes('extractMetricsRoutes')), 'readers 指向 extractMetricsRoutes')
++    assert(paths.desc.includes('段全等'), 'desc 注明段全等前缀（不误蹭）')
++  }
++  const cmd = keys.find((k) => k.path === 'metrics_routes.<name>.command')
++  assert(Boolean(cmd) && cmd.readers.some((r) => r.includes('runVerifyMetricsRoutesCheck')), 'command 键注册且 readers 指向 runVerifyMetricsRoutesCheck')
++  const tsec = keys.find((k) => k.path === 'metrics_routes.<name>.timeout_sec')
++  assert(Boolean(tsec) && tsec.desc.includes('180'), 'timeout_sec 键注册且 desc 写缺省 180')
++  const ex = renderExample()
++  assert(ex.includes('metrics_routes:'), 'renderExample 含路由段示例')
++  assert(ex.includes('段全等') || ex.includes('不蹭'), 'example 注释含段全等提示')
++}
++
+ // ── 2. renderSchemaHuman ──
+ console.log('\n--- 2. renderSchemaHuman ---')
+ {
+diff --git a/test/quick-metrics-gate.test.mjs b/test/quick-metrics-gate.test.mjs
+index 30760408..8533899e 100644
+--- a/test/quick-metrics-gate.test.mjs
++++ b/test/quick-metrics-gate.test.mjs
+@@ -172,6 +172,7 @@ console.log('--- 6. 引导面三在场 ---')
+   const agentsTpl = readFileSync(join(repoRoot, 'templates', 'agents-instruction.md'), 'utf8')
+   assert(agentsTpl.includes('commands.metrics'), '引导面② AGENTS 模板规则 4 并列 metrics 语义句')
+   assert(agentsTpl.includes('SILLYSPEC_CHANGE_FILES'), '引导面② AGENTS 模板含增量门注入提示')
++  assert(agentsTpl.includes('metrics_routes'), '引导面② AGENTS 模板提及路由门形态（多语言/monorepo）')
+   const ex = renderExample()
+   assert(ex.includes('metrics:') && ex.includes('metrics_timeout_sec:'), '引导面① renderExample 含两键行')
+   assert(ex.includes('SILLYSPEC_CHANGE_FILES'), '引导面① example 注释含增量门提示')
+@@ -270,6 +271,201 @@ console.log('--- 9. buildTestSurfaceAdvisory 附判据 ---')
+   assert(buildTestSurfaceAdvisory(['docs/a.md', 'README.md', 'notes/b.md']) === null, '纯 doc → null 不变')
+ }
+ 
++// ─── 10. 路由门单元（metrics_routes，2026-10-29-metrics-routes task-01）───
++console.log('--- 10. runVerifyMetricsRoutesCheck 路由 ---')
++{
++  const { runVerifyMetricsRoutesCheck, extractMetricsRoutes } = await import('../src/verify-postcheck.js')
++
++  // 10a. 命中执行：仅命中 gate 跑 + 命中子集注入 + 未命中 gate 不跑
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  web:',
++      '    paths: ["src/web/", "packages/web/"]',
++      '    command: \'node -e "process.exit(0)"\'',
++      '  jvm:',
++      '    paths: ["backend/"]',
++      '    command: \'node -e "process.exit(3)"\'',
++    ].join('\n') + '\n')
++    const r = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src/web/a.js'] })
++    assert(r.kind === 'routes', `kind: routes（实际 ${r.kind}）`)
++    assert(r.status === 'passed', `仅 web 命中且过 → 整体 passed（实际 ${r.status}）`)
++    assert(r.gates.length === 1 && r.gates[0].name === 'web', `只有 web gate 执行（实际 ${JSON.stringify(r.gates.map(g => g.name))}）——jvm 未命中不跑（exit 3 不触发）`)
++    assert(Array.isArray(r.gates[0].matchedFiles) && r.gates[0].matchedFiles[0] === 'src/web/a.js', 'gate 记录命中子集')
++  }
++  // 10b. 段全等前缀：frontend/ 不误蹭 frontend-v2/；深路径子目录命中
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  web:',
++      '    paths: ["frontend/"]',
++      '    command: \'node -e "process.exit(0)"\'',
++    ].join('\n') + '\n')
++    const noHit = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['frontend-v2/a.js', 'other/b.js'] })
++    assert(noHit.status === 'skipped' && String(noHit.reason).includes('零命中'), `frontend-v2 不被 frontend/ 误蹭 → 零命中 skipped（实际 ${noHit.status}）`)
++    const deep = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['frontend/a/b/c.js'] })
++    assert(deep.status === 'passed' && deep.gates.length === 1, '深路径子目录命中')
++  }
++  // 10c. POSIX 归一：Windows 反斜杠变更文件命中
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  web:',
++      '    paths: ["src/web/"]',
++      '    command: \'node -e "process.exit(0)"\'',
++    ].join('\n') + '\n')
++    const r = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src\\web\\a.js'] })
++    assert(r.status === 'passed' && r.gates.length === 1, `反斜杠变更文件归一后命中（实际 ${r.status}）`)
++  }
++  // 10d. 部分失败：任一 gate 非零 → 整体 failed + gates 逐 gate 形状 + 输出尾部
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  ok:',
++      '    paths: ["src/ok/"]',
++      '    command: \'node -e "process.exit(0)"\'',
++      '  bad:',
++      '    paths: ["src/bad/"]',
++      '    command: \'node -e "process.exit(4)"\'',
++    ].join('\n') + '\n')
++    const r = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src/ok/a.js', 'src/bad/b.js'] })
++    assert(r.status === 'failed', `部分失败 → 整体 failed（实际 ${r.status}）`)
++    assert(r.reason.includes('bad') && String(r.outputTail).includes('gate「bad」'), '聚合 reason/outputTail 指名失败 gate')
++    const badGate = r.gates.find((g) => g.name === 'bad')
++    assert(badGate && badGate.status === 'failed' && badGate.exitCode === 4, 'gates 数组逐 gate 带 status/exitCode')
++  }
++  // 10e. 零命中跳过 / 未配置零回归
++  {
++    const { proj, specBase } = makeSpecBase('commands:\n  lint: x\n')
++    const none = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src/a.js'] })
++    assert(none.status === 'skipped' && String(none.reason).includes('未配置 metrics_routes'), '未配置段 → skipped 留痕（含路由引导）')
++    assert(extractMetricsRoutes('commands:\n  lint: x\n') === null, 'extractor 无段 → null')
++  }
++  // 10f. per-gate 超时：gate timeout_sec 帽杀 → 该 gate failed 并入整体
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  slow:',
++      '    paths: ["src/"]',
++      '    command: \'node -e "setTimeout(()=>{},10000)"\'',
++      '    timeout_sec: 1',
++    ].join('\n') + '\n')
++    const r = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src/a.js'] })
++    assert(r.status === 'failed', `per-gate 超时 → failed（实际 ${r.status}）`)
++    assert(String(r.gates[0].reason).includes('超时') || String(r.outputTail || '').includes('超时'), `gate 级 reason/输出尾部注明超时（gate reason=${r.gates[0].reason}）`)
++  }
++  // 10g. gate CNF 降档：单 CNF 不掩盖真 failed；全 CNF → 整体 skipped
++  {
++    const { proj, specBase } = makeSpecBase([
++      'metrics_routes:',
++      '  missing:',
++      '    paths: ["src/a/"]',
++      '    command: sillyspec-no-such-gate-bin-9 --flag',
++      '  real:',
++      '    paths: ["src/b/"]',
++      '    command: \'node -e "process.exit(2)"\'',
++    ].join('\n') + '\n')
++    const mixed = runVerifyMetricsRoutesCheck({ cwd: proj, specBase, changeFiles: ['src/a/x.js', 'src/b/y.js'] })
++    assert(mixed.status === 'failed', `CNF gate 不掩盖真 failed（实际 ${mixed.status}）`)
++    const missingGate = mixed.gates.find((g) => g.name === 'missing')
++    assert(missingGate && missingGate.status === 'skipped' && String(missingGate.reason).includes('环境缺件'), 'CNF gate 降档 skipped 带指引')
++    const { proj: p2, specBase: s2 } = makeSpecBase([
++      'metrics_routes:',
++      '  missing:',
++      '    paths: ["src/"]',
++      '    command: sillyspec-no-such-gate-bin-9 --flag',
++    ].join('\n') + '\n')
++    const allCnf = runVerifyMetricsRoutesCheck({ cwd: p2, specBase: s2, changeFiles: ['src/a.js'] })
++    assert(allCnf.status === 'skipped', `全 CNF → 整体 skipped（实际 ${allCnf.status}）`)
++  }
++  // 10h. inline flow 形态解析
++  {
++    const routes = extractMetricsRoutes('metrics_routes:\n  web: { paths: "frontend/, packages/web/", command: "make web-check", timeout_sec: 90 }\n')
++    assert(routes && routes.web && routes.web.paths.length === 2 && routes.web.command === 'make web-check' && routes.web.timeoutSec === 90, `inline flow 形态解析（实际 ${JSON.stringify(routes)}）`)
++  }
++}
++
++// ─── 11. 路由门集成（runQuickTestLintGate 共存与归并，task-02）───
++console.log('--- 11. 路由门与单命令共存 ---')
++{
++  const { runQuickTestLintGate, printQuickTestLintGate } = await import('../src/run/quick-audit.js')
++  const execFileSync = (await import('child_process')).execFileSync
++  function makeGateFixture2({ yaml } = {}) {
++    const proj = mkdtempSync(join(tmpdir(), 'rgate-'))
++    tmpRoots.push(proj)
++    const specBase = join(proj, '.sillyspec')
++    mkdirSync(specBase, { recursive: true })
++    if (yaml !== undefined) writeFileSync(join(specBase, 'local.yaml'), yaml)
++    for (const args of [['init', '-q'], ['config', 'user.email', 't@t.local'], ['config', 'user.name', 't']]) {
++      execFileSync('git', args, { cwd: proj, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++    }
++    return { proj, specBase }
++  }
++  const SRC = ['src/index.js']
++
++  // 11a. 单命令过 + 路由 gate 红 → fail，failed 归并 'metrics' 一次，双证据在场
++  {
++    const yaml = [
++      'commands:',
++      '  test: \'node -e "process.exit(0)"\'',
++      '  lint: \'node -e "process.exit(0)"\'',
++      '  metrics: \'node -e "process.exit(0)"\'',
++      'metrics_routes:',
++      '  web:',
++      '    paths: ["src/"]',
++      '    command: \'node -e "process.exit(4)"\'',
++    ].join('\n') + '\n'
++    const { proj, specBase } = makeGateFixture2({ yaml })
++    const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: SRC })
++    assert(gate.action === 'fail', `路由 gate 红 → fail（实际 ${gate.action}）`)
++    assert(gate.failed.filter((k) => k === 'metrics').length === 1, `failed 归并 'metrics' 恰一次（实际 ${JSON.stringify(gate.failed)}）`)
++    assert(gate.metrics && gate.metrics.status === 'passed', '单命令门照常独立判定（passed）')
++    assert(gate.metricsRoutes && gate.metricsRoutes.status === 'failed', '路由门 failed 挂 metricsRoutes 字段')
++    const rp = gate.metricsRoutes.resultPath
++    if (typeof rp === 'string' && existsSync(rp)) {
++      const j = JSON.parse(readFileSync(rp, 'utf8'))
++      assert(j.kind === 'routes' || (j.routes && j.routes.kind === 'routes'), '路由证据 kind: routes')
++      const gatesArr = j.gates || (j.routes && j.routes.gates)
++      assert(Array.isArray(gatesArr) && gatesArr.some((g) => g.name === 'web' && g.status === 'failed'), '路由证据 gates 数组带 gate 名与状态')
++    } else {
++      assert(false, `路由证据落盘缺失（resultPath=${rp}）`)
++    }
++    // 打印面：metrics-routes 行带 gates 注记；BLOCKED 尾部取路由输出（归并键回退）
++    const logs = [], errs = []
++    const origLog = console.log, origErr = console.error
++    console.log = (...a) => logs.push(a.join(' '))
++    console.error = (...a) => errs.push(a.join(' '))
++    printQuickTestLintGate(gate)
++    console.log = origLog; console.error = origErr
++    assert(logs.some((l) => l.includes('metrics-routes') && l.includes('web=failed')), '打印含路由行与 gates 注记')
++    assert(errs.some((e) => e.includes('gate「web」')), 'BLOCKED 尾部经归并键回退呈现路由 gate 输出')
++  }
++  // 11b. 双绿 → pass，reason 提及路由门
++  {
++    const yaml = [
++      'commands:',
++      '  test: \'node -e "process.exit(0)"\'',
++      '  lint: \'node -e "process.exit(0)"\'',
++      '  metrics: \'node -e "process.exit(0)"\'',
++      'metrics_routes:',
++      '  web:',
++      '    paths: ["src/"]',
++      '    command: \'node -e "process.exit(0)"\'',
++    ].join('\n') + '\n'
++    const { proj, specBase } = makeGateFixture2({ yaml })
++    const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: SRC })
++    assert(gate.action === 'pass', `双绿 → pass（实际 ${gate.action}）`)
++    assert(gate.reason.includes('路由门全过'), 'pass reason 提及路由门')
++  }
++  // 11c. 未配置路由 → metricsRoutes 为 skipped 留痕（含路由引导），不拦
++  {
++    const { proj, specBase } = makeGateFixture2({ yaml: '# 空 local.yaml\n' })
++    const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: SRC })
++    assert(gate.action === 'pass' && gate.metricsRoutes && gate.metricsRoutes.status === 'skipped', '未配置路由 → skipped 留痕零回归')
++    assert(String(gate.metricsRoutes.reason).includes('metrics_routes'), '留痕含路由形态引导')
++  }
++}
++
+ console.log('\n==================================================')
+ console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+ console.log('==================================================')
