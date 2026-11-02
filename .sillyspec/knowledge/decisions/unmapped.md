@@ -1,6 +1,7 @@
 # 决策知识 — unmapped
 
 > decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。
+> 【2026-11-02-knowledge-status-lines】本池条目为检索面-only 停车场（语义等价 draft/exclude）——检索核心已过滤，条目仅供人工翻阅与数据对账。
 
 ## D-unmapped-002@v1 : 平台共享智能体绑定的守护进程取管理员自己名下
 状态：implemented

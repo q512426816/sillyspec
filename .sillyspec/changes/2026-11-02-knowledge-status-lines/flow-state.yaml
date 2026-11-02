@@ -1,0 +1,40 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  known-issues 状态行与停车场头注收尾
+
+
+  4C 方案审查确认：状态行纯数据侧标注零代码行为变化（isResolvedRoute 只读 INDEX 不读正文，docs-check 只扫 decisions/*.md，anchor_drift 只比 heading，scope
+  摘要面不收集本仓 known-issues）；修正两点——decisions/unmapped 不加 draft 字段行（字段行是 docs-check 机械解析契约且 producer=decision-distill
+  勿手改），改头注一行自描述；状态行放条目首段说明之后（防 scope 摘要误取，虽本仓无 scope 标记）。标注错误无检索后果（复核以语义准确为目标不设行为门）。
+
+
+  成功标准：
+
+  - 状态行：本仓 known-issues.md 53 条 heading 全部标注一行「- 状态：现行|已修复|已解决|已退役|观察|债务」（固定六值词表），放首段说明之后；heading/标题词/INDEX
+  全不动；判据=emoji+标题词+正文语义启发式，先出建议清单再落盘
+
+  - 平台 48 条：只出建议清单（heading→建议状态→判据）不写入
+
+  - decisions/unmapped 头注加一行「本池条目为检索面-only 停车场（语义等价 draft/exclude）」自描述（不加字段行）
+
+  - fr/unmapped 头注「残余 625 条」修正为实际（2 条）并更新治理注记
+
+  - 验收：knowledge validate 零新增告警 + docs-check 零回归 + eval 六探针五面零回归 + 既有 knowledge-rank-denoise 测试绿（isResolvedRoute 不变性）
+
+  - 测试：不适用——纯数据标注（验收靠 validate/docs-check/eval 零回归）
+autopilot: true
+prestage_ack: true
+baseline_commit: 312d28d8fff1c5e63d17ae421c7694c7d58cabc6
+updatedAt: '2026-11-02T12:58:09.946Z'
+baseline_sha256: c2469c3ca8f4d2d650e35028abd2d6096e43263df86cdfc1d3cefcd93d0ff4b6
+spec_approved: true
+spec_approved_at: '2026-11-02T12:58:09.945Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+
