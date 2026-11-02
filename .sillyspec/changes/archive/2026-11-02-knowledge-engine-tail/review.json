@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-engine-tail",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "0dffc5eb",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "sectionFilePaths 无锚点早退还整篇未过滤，裸名词 doc-refs 仍建边",
+      "evidence": "src/knowledge-graph.js:92 在 ent.anchor 为空时直接 return extractFilePaths(text, 15)，绕开 :100 的 filter(p => p.includes('/'))；实测无锚点 INDEX 行 [A](gotchas.md) + 正文 Next.js/Node.js/local.yaml/model.py 仍生成四条裸名 doc-refs，而新用例（test/knowledge-graph.test.mjs:381）只覆盖带锚点分支。",
+      "location": "src/knowledge-graph.js:92",
+      "resolution": "无锚点整篇回退分支同样过滤「含 /」；测试加无锚点 INDEX 行断言只建 src/a.js 边"
+    },
+    {
+      "severity": "P2",
+      "status": "open",
+      "title": "prompt/execute 的 scopeMatchedFiles 含未渲染的 scope 否决条目",
+      "evidence": "三处均调 scopeTelemetryRefs（flow.js:399/prompt.js:604/execute.js:153），但 prompt.js:532-570 与 execute.js:99-139 只渲染 entries/routeHits/scopeEntries，不渲染 scopeDecisionHits；实测 buildKnowledgeInjection 事件 scopeMatchedFiles 含 decisions/hot.md#D-900@v1 而 section 无 D-900，违背「实际展示子集」口径。",
+      "location": "src/run/prompt.js:604"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-02 绑定的三处/不双记测试不存在，standalone 形态无断言",
+      "evidence": "requirements.md:90 绑定 test/thin-inject-telemetry.test.mjs「scopeMatchedFiles 三处口径与不双记」，但该文件无 scopeMatchedFiles 字样；唯一断言在 test/knowledge-fusion.test.mjs:193 且只覆盖 flow 融合形态，prompt/execute 与 standalone 不双记均无测试（FR-04 明确要求两形态断言）。",
+      "location": "requirements.md:90",
+      "resolution": "补 prompt 遥测对齐 + standalone 不双记两个用例（flow 融合形态已有）"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "向量融合用例未钉 base.entries、去重/原序与失败降级",
+      "evidence": "test/knowledge-fusion.test.mjs:162-189 只断言 matched/decisionHits/json.vector/json.scope/fetchCalls=1；FR-01 要求的 base entries 保留、scope 增量去重与原序、以及「图构建抛错返回 built」场景均未断言，向量分支自身实现改错时这些点不会变红。",
+      "location": "test/knowledge-fusion.test.mjs:162",
+      "resolution": "补 scope 去重断言；base.entries/原序由 fuseScopeRecall 既有测试覆盖，抛错分支为防御性难构造"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design 文件清单漏记 eval/knowledge/baseline.json",
+      "evidence": "design.md:55-68 变更清单无 baseline.json，但 commit 597a80c6 实际改了 head/knowledge_hash/self 计数 14 行，change-patch.json files 也含该文件——交付面记录不一致，FR-05 的 eval 证据链缺一条。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-engine-tail/design.md:57",
+      "resolution": "design 文件清单补 eval/knowledge/baseline.json"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "fuseBaseWithScope 插入位置使 matchKnowledgeHybrid 的 JSDoc 脱挂",
+      "evidence": "src/knowledge-vector.js:239-246 的 JSDoc 属于 matchKnowledgeHybrid，但 247-263 插入 helper 后 265 才是 export function，导出函数失去紧邻文档块。",
+      "location": "src/knowledge-vector.js:247",
+      "resolution": "fuseBaseWithScope 移至 matchKnowledgeHybrid JSDoc 之前，文档紧贴定义"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T08:52:21.630Z"
+}

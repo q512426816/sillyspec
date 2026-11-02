@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-engine-tail",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-knowledge-engine-tail:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「向量路径融合对称（mock fetch + env on）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-engine-tail"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-knowledge-engine-tail:flow:测试绑定FR-02",
+      "tests": [
+        "test/thin-inject-telemetry.test.mjs「scopeMatchedFiles 三处口径与不双记」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-engine-tail"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-02-knowledge-engine-tail:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-graph.test.mjs「section doc-refs 裸名词过滤 + frCount 删除 + 版本 4」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-engine-tail"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-knowledge-engine-tail:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「向量融合空实现判据」",
+        "test/thin-inject-telemetry.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-engine-tail"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-engine-tail:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-graph.test.mjs",
+        "test/thin-inject-telemetry.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-engine-tail"
+    }
+  ]
+}

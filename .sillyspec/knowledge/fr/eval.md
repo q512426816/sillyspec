@@ -861,3 +861,120 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-11-02-knowledge-fusion
   status: active
+
+## FR-eval-044 FR-01 向量路径融合：matchKnowledgeHybrid 抽 fuseBaseWithScope 公共 helper（路由/向量两分支同源、catch 返回 base、scopeFiles 经 graphPathCandidates 规整）；测试钉 base 契约、去重、原序、json.vector 保留且 json.scope 不设、buildSearchMatches channel=vector、零额外网络
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：向量命中 + scope 独有；向量路径失败降级
+场景正文：
+- 场景：向量命中 + scope 独有 — Given 路由零命中、向量命中一条决策、scopeFiles 指向热文件；When matchKnowledgeHybrid（VECTOR=on + mock 平台）；Then 结果保留向量 decisionHits 原序，scopeDecisionHits 含 scope 独有条目；不设 json.scope
+- 场景：向量路径失败降级 — Given 向量命中但图构建/遍历抛错；When 融合；Then 返回向量 built 原对象（不降级词片、不丢已得结果）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-01
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-engine-tail:flow:测试绑定FR-01
+  tests: test/knowledge-fusion.test.mjs「向量路径融合对称（mock fetch + env on）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-engine-tail
+  status: active
+
+## FR-eval-045 FR-02 遥测 scope 可见性：flow/prompt/execute 三处注入点统一新增 scopeMatchedFiles（实际展示子集：rejected/deathPath top3 + scopeEntries top3，按 ref 去重）；matchedFiles 保持查询通道语义（entries+routeHits）；mentionedFiles 按实际展示集合构造；knowledge-stats 口径文档同步；standalone 与融合两形态不双记
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：三处口径一致；不双记
+场景正文：
+- 场景：三处口径一致 — Given 同一知识 fixture 分别走 flow/prompt/Wave 注入；When 读取 hits.jsonl；Then 三处事件都有 scopeMatchedFiles 且内容规则一致；matchedFiles 不含 scope 增量
+- 场景：不双记 — Given standalone scope 命中（路由/向量零命中）；When 落遥测；Then matchedFiles 含 scopeEntries（经 entries），scopeMatchedFiles 不含重复项
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-02
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-engine-tail:flow:测试绑定FR-02
+  tests: test/thin-inject-telemetry.test.mjs「scopeMatchedFiles 三处口径与不双记」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-engine-tail
+  status: active
+
+## FR-eval-046 FR-03 图卫生：sectionFilePaths 出口过滤「路径必须含 /」（只改 section 级 doc-refs，卡片/scan 不动）；GRAPH_CACHE_VERSION 3→4；删除 scopeRecall 的 frCount/frs 收集与测试字面量、注释改为 FR 召回由域路由 digest 承担；getKnowledgeGraph memo 只加注记（不统一 standalone）
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：散文 token 不建边；旧缓存失效
+场景正文：
+- 场景：散文 token 不建边 — Given section 正文含 Next.js、Node.js、local.yaml、model.py 与 src/a.js；When 建 section 级 doc-refs；Then 只对 src/a.js 建边（裸名词全部过滤）
+- 场景：旧缓存失效 — Given 存量 cache 为 version 3；When 升级后首次构建；Then 不命中旧缓存（version 4 重建；边数按预期下降）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-03
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-engine-tail:flow:测试绑定FR-03
+  tests: test/knowledge-graph.test.mjs「section doc-refs 裸名词过滤 + frCount 删除 + 版本 4」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-engine-tail
+  status: active
+
+## FR-eval-047 FR-04 测试：向量融合用例（mock fetch + 局仓 local.yaml platform + env on，未修复必红）、遥测两形态断言、doc-refs 过滤正反例（Next.js 不建边/src/a.js 建边）、frCount 删除后图谱测试全绿
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：空实现判据
+场景正文：
+- 场景：空实现判据 — Given 把向量分支恢复为 `if (built) return built`；When 跑向量融合用例；Then 必须失败（测试不是空转）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-04
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-engine-tail:flow:测试绑定FR-04
+  tests: test/knowledge-fusion.test.mjs「向量融合空实现判据」 | test/thin-inject-telemetry.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-engine-tail
+  status: active
+
+## FR-eval-048 FR-05 回归：145 测试全绿 + lint 绿 + eval 五面不回归 + 六探针 GREEN；向量路径 eval 不覆盖（VECTOR=off）写入 verify-result 交付说明
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：验收口径
+场景正文：
+- 场景：验收口径 — Given 变更完成；When flow done；Then 测试全绿 + lint 绿 + eval 不回归 + 六探针 GREEN + 向量路径证据仅单测（已注明）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-05
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-engine-tail:flow:测试绑定FR-05
+  tests: test/knowledge-graph.test.mjs | test/thin-inject-telemetry.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-engine-tail
+  status: active
+
+## FR-eval-049 FR-06 数据规划记录（不占 FR）：design/README 记「下一轮数据扩容必须 flow 形态带 scope_files + fusion 子集升主刻度，并混入非标题复述查询」
+变更：2026-11-02-knowledge-engine-tail
+状态：active
+摘要：注记在场
+场景正文：
+- 场景：注记在场 — Given 变更完成；When 读 design/README；Then 数据规划注记在场（可检索）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-engine-tail/requirements.md#FR-06
+最近确认：0dffc5eb666c759f523da6938e4a4b292ea3123a
