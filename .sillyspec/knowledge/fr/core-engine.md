@@ -4853,3 +4853,97 @@
   confirmed_at: null
   source_change: 2026-10-28-cp-review-debt
   status: active
+
+## FR-core-engine-258 工具：redomain-unmapped 加 --map <file>（显式映射 [{id,domain}]，id 精确匹配、过期 id 被精确命中断言拦截；特殊 domain __prune__ 删段原语：精确计数断言、裁空删文件 + syncIndexRoutingLines、prune-only 也调 sync）；--map 模式 apply fail-fast（放弃逐组容错）；守恒断言 apply 时重算段头总数；幂等复跑 0 迁移断言；正文归一化比对与 supersedes 目标留源均作警告输出
+变更：2026-11-02-knowledge-redomain-map
+状态：active
+摘要：过期 id 拦截；裁空删文件
+场景正文：
+- 场景：过期 id 拦截 — Given 映射表含文件中不存在的 id；When --map dry-run/apply；Then 报错列出未知 id 并中止（不静默漏迁）
+- 场景：裁空删文件 — Given 某文件全部条目映射为 __prune__；When apply；Then 源文件删除且 INDEX 对应路由行清除
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-redomain-map/requirements.md#FR-01
+最近确认：715a73f5f68dae3951de710f0dd8e81e9f0b4f83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-redomain-map:flow:测试绑定FR-01
+  tests: test/redomain-unmapped-map.test.mjs「--map 迁移与 __prune__ 契约」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-redomain-map
+  status: active
+
+## FR-core-engine-259 本仓执行：裁 229 条 duplicate（decisions 21 + fr 208，执行时重新验证清单防 id 漂移）；9 unique 不动不打标（4B 报告给 4A ledger 指针 + 锚点未记录/投票零命中/需人工定域说明）；模板保留原位；fr/unmapped 头注「残余 625 条」失真记 4C
+变更：2026-11-02-knowledge-redomain-map
+状态：active
+摘要：id 漂移防御
+场景正文：
+- 场景：id 漂移防御 — Given 4A 归档后 unmapped 新增了 1 条模板；When 生成裁剪清单；Then 重新判定而非照抄 4A ledger，新增条目不被误裁（非 duplicate 类）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-redomain-map/requirements.md#FR-02
+最近确认：715a73f5f68dae3951de710f0dd8e81e9f0b4f83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-redomain-map:flow:测试绑定FR-02
+  tests: test/redomain-unmapped-map.test.mjs「duplicate 重验证与裁剪执行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-redomain-map
+  status: active
+
+## FR-core-engine-260 平台输出：135 条建议两栏（117 干净胜者直喂 + 18 平票只列候选域集不填 domain）+ 平台 fr/backend.md 无段头孤儿字段块结构破损警告 + 执行时重生成提示；不写平台仓
+变更：2026-11-02-knowledge-redomain-map
+状态：active
+摘要：平票不硬选
+场景正文：
+- 场景：平票不硬选 — Given 某 id 三路平票 daemon|sillyhub-daemon|agent-detector；When 生成建议；Then 输出候选集（不填 domain）而非字典序硬选
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-redomain-map/requirements.md#FR-03
+最近确认：715a73f5f68dae3951de710f0dd8e81e9f0b4f83
+
+## FR-core-engine-261 验收：段头守恒（裁后 decisions = 模板+unique+运行时新增、fr = 2、duplicate 清零）+ apply 后幂等复跑 0 迁移 + eval 六探针 GREEN 五面零回归（unmapped 已被检索过滤，预期零变化）+ 显式 pathspec 提交可回滚
+变更：2026-11-02-knowledge-redomain-map
+状态：active
+摘要：检索零变化
+场景正文：
+- 场景：检索零变化 — Given 裁剪 229 条；When 跑 eval 全量对比 baseline；Then 五面指标逐位一致、六探针 GREEN
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-redomain-map/requirements.md#FR-04
+最近确认：715a73f5f68dae3951de710f0dd8e81e9f0b4f83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-redomain-map:flow:测试绑定FR-04
+  tests: test/redomain-unmapped-map.test.mjs「守恒与幂等复跑」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-redomain-map
+  status: active
+
+## FR-core-engine-262 测试：--map plan/apply、__prune__ 裁剪、裁到 0 段删文件+INDEX 清行、守恒、幂等、过期 id 报错、supersedes 警告、prune-only INDEX 同步；既有 redomain 三套测试回归
+变更：2026-11-02-knowledge-redomain-map
+状态：active
+摘要：空实现判据
+场景正文：
+- 场景：空实现判据 — Given 移除 __prune__ 原语的计数断言；When 跑新测试；Then 必须失败
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-redomain-map/requirements.md#FR-05
+最近确认：715a73f5f68dae3951de710f0dd8e81e9f0b4f83
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-redomain-map:flow:测试绑定FR-05
+  tests: test/redomain-unmapped-map.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-redomain-map
+  status: active

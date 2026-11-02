@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-redomain-map",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "pruneUnmappedEntries fr 面 INDEX 同步传参错误：裁空后 INDEX 残留幽灵路由行，FR-01「INDEX 对应路由行清除」场景对 fr 面不成立",
+      "evidence": "face='fr' 时传 {} → syncIndexRoutingLines 落默认 section='Decisions'/subdir='decisions'（正确参数见 src/redomain.js:141-147 的 FR 需求索引/fr/FR_ROUTE_STRIP_TOKENS）；临时 fixture 实证：fr 面整段 __prune__ 后 fr/unmapped.md 已删但 INDEX 仍留 `- unmapped|FR → [fr/unmapped.md]` 路由行。次因（预存行为）：子目录全部裁空时 syncIndexRoutingLines 在 domains.length===0 处 return false（decision-distill.js:519），即使参数正确也不清残行。生产未触发（fr 裁后剩 2 段、文件未删）。",
+      "location": "src/redomain-unmapped.js:302",
+      "resolution": "fr 面同步改传 FR_ROUTE_STRIP_TOKENS（与 redomainFrEntries 同款）——裁空后 INDEX 行清除"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "--map 缺值时静默回落启发式通道（含 --apply 破坏性面）",
+      "evidence": "args[mapIdx+1] 为 undefined 时 mapFile 为 falsy，`if (mapFile)` 不成立 → 直接走启发式分支；CLI 实证 `--apply --map`（--map 居尾缺值）静默执行 mode:\"apply\" 的投票迁移——用户要的显式精确映射通道被无声切换到投票通道且带写盘。`--map --apply` 序则把 '--apply' 当文件名报 ENOENT（报错但文案误导）。缺值应显式报错拒绝。",
+      "location": "src/redomain-unmapped.js:185-186",
+      "resolution": "--map 缺值/flag 值显式报错 map_value_required，不再回落启发式通道"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-05 声称的「INDEX 清行」测试断言缺失，且 fixture FR 段名与真实契约不符——正是该盲区掩盖 P2-1",
+      "evidence": "test/redomain-unmapped-map.test.mjs 全文件无任何对 INDEX.md 内容的断言（声称覆盖「裁到 0 段删文件+INDEX 清行」「prune-only INDEX 同步」）；fixture INDEX 用 `## FR` 段名而真实契约是 `## FR 需求索引`（redomain.js:142），即使修复 P2-1 传参该 fixture 也匹配不到 fr 段，测不到清行行为。",
+      "location": "test/redomain-unmapped-map.test.mjs:22"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "cli-copy-selfsufficient 缺口：usage 帮助文案未更新 --map",
+      "evidence": "knowledge 帮助面 usage 行仍为 `redomain-unmapped [--face decisions|fr] [--apply]`，新增的 --map 显式映射通道（本变更核心接口）在 CLI 帮助面零披露，报错文案与实现一致但入口不可发现。",
+      "location": "src/stages/knowledge.js:664"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-01 标题行「正文归一化比对……作警告输出」未实现且未留痕降级",
+      "evidence": "工具只收 {id,domain} 无平台访问无从比对（架构上合理），gen-prune-map.mjs 已算段 hash 证据但 prune map 落盘时剥除、4B-REPORT 也未披露正文差异统计；proposal.md:11 的「226/229 逐字节一致、2 条仅锚点拼写差异——比对作警告」只留在方案文档。验收段（requirements.md:11）未复述该子句——规格标题行与实现有无痕落差。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-redomain-map/gen-prune-map.mjs:93"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "平台清单数字 117/18（方案审查快照）→ 125/10（执行）差异未在报告留痕解释",
+      "evidence": "复现核验：以脚本口径（reason 锚点正则+平台归档覆盖面+平台模块索引）对当前平台重算得 125/10 与产物逐 id 相同、manual 全为二元平票零命中 0；proposal 的三路平票例 daemon|sillyhub-daemon|agent-detector 已不在 manual 集合——8 条漂移大概率平台知识/模块索引在审查与执行间变动所致，产物自嵌「执行时须重新生成」提示，但 4B-REPORT 未解释与方案审查数字的差异。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-redomain-map/4B-REPORT.md:24"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "design 边界答 3「中断后重跑，已迁移组幂等跳过」与实现不符",
+      "evidence": "部分已迁移后复跑同 map，已迁 id 不在源文件 → planFromMap 收进 unknownIds → applyFromMap 直接 throw（「映射表含源文件不存在的 id」），不是幂等跳过；全量复跑 alreadyApplied 与零迁移首跑均幂等 ok。fail-fast 本身符合 FR-01，仅边界答夸大了恢复面（实际兜底是 git 回滚）。",
+      "location": "src/redomain-unmapped.js:331"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "gen-prune-map.mjs 死变量构造错误路径，误导读者",
+      "evidence": "line 112 `const archiveRoot = join(PLATFORM, '.sillyspec'.replace('.sillyspec',''), '.sillyspec','changes','archive')` 拼出 knowledge/.sillyspec/changes/archive（不存在）且从未被使用，实际生效的是 line 115 的 platformArchiveRoot；一次性脚本，影响仅可读性。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-redomain-map/gen-prune-map.mjs:112"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "全 unknown id → alreadyApplied 与 FR-01 场景「过期 id 报错中止」的字面张力",
+      "evidence": "映射表全部 id 不在源文件时 planFromMap 返回 alreadyApplied=true 不报错（apply 0 迁移成功）；字面违反场景行「报错列出未知 id 并中止」，但同一 FR 的「幂等复跑 0 迁移断言」要求全量复跑（必然全 unknown）成功——二者不可兼得，实现选择幂等优先、dry-run 仍列 unknownIds、测试内显式注释记录该权衡。自洽，接受。",
+      "location": "src/redomain-unmapped.js:277"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T12:08:26.877Z"
+}

@@ -1,0 +1,22 @@
+{"ts":1793619838812,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793619838812,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793619838812,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793619925002,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/redomain-unmapped.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793620233887,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793620235990,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793620235990,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793620242988,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793620246336,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793620246228,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793620246228,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793620250023,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793620249870,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793620249870,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793620253283,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1793620253345,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793620253345,"kind":"task-done","stage":"tasks","detail":"checked 3→5","provisional":true}
+{"ts":1793620273101,"kind":"commit","stage":null,"detail":"c4c867d8","provisional":true}
+{"ts":1793620273354,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-02-knowledge-redomain-map/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793620280114,"kind":"gate-run","stage":"verify","detail":"门实测 passed（0.4s） · 20261102115118","provisional":true}
+{"ts":1793621181714,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1793621308393,"kind":"commit","stage":null,"detail":"715a73f5","provisional":true}
