@@ -3624,50 +3624,9 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       }
       break;
     }
-    case 'quicklog': {
-      // known-issues ④ v1（2026-09-16）：QUICKLOG 多会话条目交织——本会话提交 git add 整文件
-      // 会夹带并行会话未完成条目，只能手工四步舞（备份→剥离→commit→恢复）。本命令一键机制化：
-      // 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG 文件+patches sidecar+额外
-      // pathspec）→ 恢复工作区（并行条目留未提交态）。参数面照抄 wt-commit 先例（--change/-m/--
-      // pathspec）+ 可重复 --ql（guard 缺失/损坏时的显式逃生门；含已取消条目）。
-      if (filteredArgs[1] !== 'commit') {
-        console.error(`❌ 未知 quicklog 子命令: ${filteredArgs[1] || '(空)'}——当前支持: sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]`);
-        process.exit(1);
-      }
-      const qlRest = filteredArgs.slice(2);
-      const qlDd = qlRest.indexOf('--');
-      const qlFlags = qlDd === -1 ? qlRest : qlRest.slice(0, qlDd);
-      const qlExtra = qlDd === -1 ? [] : qlRest.slice(qlDd + 1);
-      let qlChange = null;
-      let qlMessage = null;
-      const qlIds = [];
-      for (let i = 0; i < qlFlags.length; i++) {
-        if (qlFlags[i] === '--change' && qlFlags[i + 1]) qlChange = qlFlags[++i];
-        else if ((qlFlags[i] === '-m' || qlFlags[i] === '--message') && qlFlags[i + 1]) qlMessage = qlFlags[++i];
-        else if (qlFlags[i] === '--ql' && qlFlags[i + 1]) qlIds.push(qlFlags[++i]);
-      }
-      try {
-        const { resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
-        const qlSpecBase = resolvePlatformSpecDir(dir, specDir);
-        const { resolveQuickSessionsDir } = await import('./run/shared.js');
-        const qlSessionsDir = resolveQuickSessionsDir(resolvePlatformOpts(dir, specDir), qlSpecBase);
-        let qlUser = 'unknown';
-        try { qlUser = (await import('./git-helper.js')).git(dir, ['config', 'user.name']) || 'unknown'; } catch {}
-        const { runQuicklogCommit } = await import('./quicklog.js');
-        const r = await runQuicklogCommit({
-          specBase: qlSpecBase, cwd: dir, gitUser: qlUser, qlIds,
-          changeName: qlChange, sessionsDir: qlSessionsDir,
-          message: qlMessage, extraPathspecs: qlExtra,
-        });
-        if (json) console.log(JSON.stringify({ command: 'quicklog commit', ...r }, null, 2));
-        else if (r.skipped) console.log(`⏭️  quicklog commit 无新内容跳过（HEAD 不动）：${r.shortHead}（条目均已收编：${(r.skippedQlIds || []).join(', ') || '（无）'}）`);
-        else console.log(`✅ quicklog commit 完成：${r.shortHead}（${r.files.length} 文件；收编 ${(r.committedQlIds || []).join(', ')}）\n   并行会话条目已恢复为工作区未提交态；备份：${(r.backupPaths || []).join(' , ')}`);
-      } catch (e) {
-        console.error(`❌ quicklog commit 失败：${e.message}`);
-        process.exit(1);
-      }
-      break;
-    }
+    // quicklog CLI 子命令已下线（2026-11-03-quicklog-business-retire）：
+    // quicklog 业务面（QUICKLOG 日志系统）用户已停用；工具函数（withFileLock/标题推导等）
+    // 保留在 quicklog.js 供其他模块消费。knowledge-quicklog.js 解析层同批删除。
     case 'worktree': {
       const { WorktreeManager } = await import('./worktree.js');
       const { ProgressManager, resolveSessionIdentity } = await import('./progress.js');
