@@ -57,3 +57,23 @@
 
 {"id":"s-fr-prod-01","repo":"sillyspec","face":"fr","query":"worktree 工作树 清理 隔离","scope_files":["src/worktree.js"],"expected":["fr/worktree.md"],"subset":"prod","note":"生产同源：src/worktree.js → worktree 域"}
 {"id":"p-fr-prod-01","repo":"platform","face":"fr","query":"SSE 流式消费 token authorization","scope_files":["frontend/src/lib/fetch-sse.ts"],"expected":["fr/frontend.md"],"subset":"prod","note":"生产同源：fetch-sse.ts → frontend 域"}
+{"id":"auto-sillyspec-01","repo":"sillyspec","face":"decisions","query":"cli-entry 收口机器门拦 decisions.md 缺席","expected":["decisions/cli-entry.md#D-unmapped-433@v1"]}
+{"id":"auto-sillyspec-02","repo":"sillyspec","face":"decisions","query":"core-engine 否决入库侧路由词表派生 同窗词片按序截断=抽签","expected":["decisions/core-engine.md#D-unmapped-197@v1"]}
+{"id":"auto-sillyspec-03","repo":"sillyspec","face":"decisions","query":"core-engine 错位目录归一否决「marker 值改为完整目录名」","expected":["decisions/core-engine.md#D-unmapped-375@v1"]}
+{"id":"auto-sillyspec-04","repo":"sillyspec","face":"decisions","query":"core-engine archive 复合真相源方案否决","expected":["decisions/core-engine.md#D-unmapped-377@v1"]}
+{"id":"auto-sillyspec-05","repo":"sillyspec","face":"decisions","query":"docs 收割器机器自动拆 rejected 条目","expected":["decisions/docs.md#D-unmapped-299@v1"]}
+{"id":"auto-sillyspec-06","repo":"sillyspec","face":"decisions","query":"docs distill 侧从 confirmed","expected":["decisions/docs.md#D-unmapped-300@v1"]}
+{"id":"auto-sillyspec-07","repo":"sillyspec","face":"decisions","query":"docs 只修厚道不动轻量道","expected":["decisions/docs.md#D-unmapped-301@v1"]}
+{"id":"auto-sillyspec-08","repo":"sillyspec","face":"decisions","query":"docs 存量 40+ 种散值","expected":["decisions/docs.md#D-unmapped-436@v1"]}
+{"id":"auto-platform-01","repo":"platform","face":"decisions","query":"app-admin-pages 落选 并入设置页 Tab（方案","expected":["decisions/app-admin-pages.md#D-unmapped-004@v1"]}
+{"id":"auto-platform-02","repo":"platform","face":"decisions","query":"app-admin-pages 落选 工作区首页挂卡片（方案 C）","expected":["decisions/app-admin-pages.md#D-unmapped-005@v1"]}
+{"id":"auto-platform-03","repo":"platform","face":"decisions","query":"backend 落选 方案 B（扩展","expected":["decisions/backend.md#D-backend-009@v1"]}
+{"id":"auto-platform-04","repo":"platform","face":"decisions","query":"backend 落选 方案 C（基于","expected":["decisions/backend.md#D-backend-010@v1"]}
+{"id":"auto-platform-05","repo":"platform","face":"decisions","query":"backend 落选 本地文件缓存（向量序列化到 .runtime","expected":["decisions/backend.md#D-backend-020@v1"]}
+{"id":"auto-platform-06","repo":"platform","face":"decisions","query":"backend 落选 仅做启动预热（不改存储）","expected":["decisions/backend.md#D-backend-021@v1"]}
+{"id":"auto-platform-07","repo":"platform","face":"decisions","query":"backend 落选 方案 B（后台常驻同步协程）","expected":["decisions/backend.md#D-backend-023@v1"]}
+{"id":"auto-platform-08","repo":"platform","face":"decisions","query":"backend 落选 方案 C（首查触发","expected":["decisions/backend.md#D-backend-024@v1"]}
+{"id":"auto-platform-09","repo":"platform","face":"decisions","query":"backend 落选 平台行携带记录名（方案 B）","expected":["decisions/backend.md#D-backend-033@v1"]}
+{"id":"auto-platform-10","repo":"platform","face":"decisions","query":"backend 落选 新增 daemon「列记录」RPC（方案","expected":["decisions/backend.md#D-sillyhub-daemon-001@v1"]}
+{"id":"auto-platform-11","repo":"platform","face":"decisions","query":"backend 落选 方案 C（进程内卸载","expected":["decisions/backend.md#D-unmapped-057@v1"]}
+{"id":"auto-platform-12","repo":"platform","face":"decisions","query":"backend 方案 B（只加大宽限窗 不加族系列）","expected":["decisions/backend.md#D-unmapped-065@v1"]}
