@@ -20,7 +20,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare } from './knowledge-match.js'
+import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge } from './knowledge-match.js'
 import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
 
@@ -952,9 +952,12 @@ export function scopeRecall(graph, scopeFiles) {
   const seen = new Set()
   const pushHit = (n, score, via) => {
     const base = n.attrs.hit || {}
+    // 幽灵/畸形过滤（2026-11-02-knowledge-fusion FR-02）：supersedes 链上的 ghost 决策节点
+    // 无 attrs.hit——真实库已复现 {file:undefined,id:undefined} 的畸形 hit 扩散到消费面
+    if (n.attrs.ghost || !base.file || !base.id) return
     // 去重键含 change（2026-11-02-scope-recall 评审 P2）：D-id 是变更内局部号，跨变更同号常见——
     // 只按 file#id 去重会让 implemented 直连条目抢先占用键、吞掉 rejected 两跳（渲染面失效）
-    const key = `${base.file || ''}#${base.id || ''}#${base.change || ''}`
+    const key = `${base.file}#${base.id}#${base.change || ''}`
     if (seen.has(key)) return
     seen.add(key)
     hits.push({ ...base, file: base.file, score, via })
@@ -993,6 +996,91 @@ export function buildScopeRecallResult(recall) {
       entries: recall.entries.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
     },
     decisionHits: recall.decisionHits,
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 检索融合（2026-11-02-knowledge-fusion）
+// 路由命中原先 early-return，scope 层（热文件触达的 rejected/手工条目）永远不可达。
+// 契约（子代理审查修正版）：只追加不重排——base 的 decisionHits/entries 原对象原序不动，
+// scope 独有命中进 scopeDecisionHits/scopeEntries（带 via provenance）；不做跨通道 score
+// 排序（路由 Jaccard / scope 2/1 / 向量 / 词片尺度不可比）；空 scope/零命中返回 base 原对象。
+// ═══════════════════════════════════════════════════════════════
+
+/** 融合纯函数：base 路由结果 + recall（scopeRecall）→ 追加字段的新对象；无可追加时返回 base。 */
+export function fuseScopeRecall(base, recall) {
+  if (!base || !base.matched || !recall) return base
+  const dKey = (h) => `${h.file}#${h.id}#${h.change || ''}`
+  const eKey = (e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+  const seenD = new Set((base.decisionHits || []).map(dKey))
+  const seenE = new Set((base.entries || []).map(eKey))
+  const addD = []
+  for (const h of recall.decisionHits || []) {
+    if (!h || !h.file || !h.id) continue // 畸形命中过滤（ghost 已在 scopeRecall 侧滤）
+    const k = dKey(h)
+    if (seenD.has(k)) continue
+    seenD.add(k)
+    addD.push({ ...h, via: h.via || 'scope' })
+    if (addD.length >= 20) break
+  }
+  const addE = []
+  for (const e of recall.entries || []) {
+    if (!e || !e.file) continue
+    const k = eKey(e)
+    if (seenE.has(k)) continue
+    seenE.add(k)
+    addE.push({ ...e, via: 'scope' })
+    if (addE.length >= 3) break
+  }
+  if (addD.length === 0 && addE.length === 0) return base
+  return {
+    ...base,
+    ...(addD.length > 0 ? { scopeDecisionHits: addD } : {}),
+    ...(addE.length > 0 ? { scopeEntries: addE } : {}),
+    scopeFused: { decisions: addD.length, entries: addE.length },
+  }
+}
+
+/** 键规整：机器键（design 交付清单/allowed_paths/target_files）→ 图内精确文件路径。
+ *  过滤 glob、目录前缀（尾斜杠）、无扩展名形态；POSIX 归一去重。宁空不造（不猜前缀展开）。 */
+export function graphPathCandidates(files) {
+  const out = []
+  const seen = new Set()
+  for (const raw of Array.isArray(files) ? files : [files]) {
+    const p = String(raw || '').trim().replace(/\\/g, '/').replace(/^\.\//, '')
+    if (!p || /[?*[{\]]/.test(p)) continue
+    if (p.endsWith('/')) continue
+    if (!/\.[A-Za-z0-9]{1,10}$/.test(p)) continue
+    if (seen.has(p)) continue
+    seen.add(p)
+    out.push(p)
+  }
+  return out
+}
+
+/** 进程级图 memo（CLI 短进程生命周期）：路由命中后的融合每次多付 ~45ms 图读取，
+ *  同进程多次调用（多 Wave）复用同一图对象。 */
+const graphMemo = new Map()
+export function getKnowledgeGraph(specRoot) {
+  const key = String(specRoot || '')
+  if (graphMemo.has(key)) return graphMemo.get(key)
+  const g = buildKnowledgeGraph(specRoot)
+  graphMemo.set(key, g)
+  return g
+}
+
+/** 同步融合入口：matchKnowledge（路由+词片回退）→ scope 融合 → 失败原样返回路由结果。
+ *  execute step / Wave 的同步注入路径使用；不改 matchKnowledge 默认语义。 */
+export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
+  const base = matchKnowledge(indexDir, query, { includeResolved: opts.includeResolved })
+  const scopeFiles = graphPathCandidates(opts.scopeFiles || [])
+  if (!base || !base.matched || scopeFiles.length === 0) return base
+  try {
+    const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
+    const recall = scopeRecall(getKnowledgeGraph(specRoot), scopeFiles)
+    return fuseScopeRecall(base, recall) || base
+  } catch {
+    return base // fail-soft：scope 构建失败不掉词片回退（FR-05）
   }
 }
 

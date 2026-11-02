@@ -22,6 +22,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
 // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
 import { matchKnowledge } from '../knowledge-match.js'
+import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
 import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 
@@ -46,14 +47,27 @@ function buildWaveKnowledgeSection(changeDir, wave) {
     const query = (Array.isArray(wave && wave.tasks) ? wave.tasks : [])
       .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
     if (!query.trim()) return ''
-    const result = matchKnowledge(knowledgeDir, query)
+    // scope 键（2026-11-02-knowledge-fusion FR-04）：Wave 用 task 卡 target_files/allowed_paths
+    // （机器键）→ graphPathCandidates 规整为图内精确文件路径；无卡/无声明不编造
+    const scopeFiles = graphPathCandidates((wave.tasks || []).flatMap((t) => {
+      const file = t && (t.file || (t.index ? path.join('tasks', `task-${String(t.index).padStart(2, '0')}.md`) : ''))
+      if (!file) return []
+      try {
+        const text = readFileSync(path.join(changeDir, file), 'utf8')
+        const out = []
+        for (const m of text.matchAll(/^(?:target_files|allowed_paths)\s*[：:]\s*(.+)$/gm)) out.push(...m[1].split(/[,，\s]+/))
+        return out
+      } catch { return [] }
+    }))
+    const result = matchKnowledgeWithScope(knowledgeDir, query, { scopeFiles })
     // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
     const quick = matchQuicklogContext(specBase, query)
     const humanEntries = result.entries || []
     const routeHits = result.routeHits || []
+    const scopeEntries = result.scopeEntries || []
     if (!result.matched && quick.hits.length === 0) return ''
     const lines = []
-    if (humanEntries.length > 0 || routeHits.length > 0) {
+    if (humanEntries.length > 0 || routeHits.length > 0 || scopeEntries.length > 0) {
     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
     const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
     lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
@@ -90,6 +104,9 @@ function buildWaveKnowledgeSection(changeDir, wave) {
     }
     if (routeHits.length > 0) {
       lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
+    }
+    if (scopeEntries.length > 0) {
+      lines.push(`📚 触达文件关联手工条目（scope，按需 Read）：${scopeEntries.slice(0, 3).map(ref).join('；')}`)
     }
     }
     // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）

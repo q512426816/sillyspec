@@ -22,6 +22,8 @@ export function rankWithMatches(hits, expected) {
 
 /**
  * scope 面按 subset 分组指标（frozen/added——FR-05 子集单列，禁止用新增 case 掩盖冻结子集）。
+ * reachable = rank 非 null 比例：融合子集（2026-11-02-knowledge-fusion）的价值是「从不可达变可达」，
+ * 在「不重排路由」契约下期望可能落在路由尾部（top3=0 但 reachable=1）——两者都要如实可见。
  */
 export function subsetSummaries(faceResult, cases) {
   const groups = {}
@@ -31,7 +33,11 @@ export function subsetSummaries(faceResult, cases) {
     const key = c.subset || 'default'
     ;(groups[key] = groups[key] || []).push(d.raw_rank === null ? Infinity : d.raw_rank)
   }
-  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [k, summarize(ranks)]))
+  const r4 = (x) => Math.round(x * 10000) / 10000
+  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [
+    k,
+    { ...summarize(ranks), reachable: ranks.length > 0 ? r4(ranks.filter((r) => Number.isFinite(r)).length / ranks.length) : 0 },
+  ]))
 }
 
 /** 单仓单面：raw/rendered 双口径 + 截断清单 + 每 case 名次明细。 */
@@ -44,11 +50,11 @@ export async function runFace(repoPath, face, cases) {
     let rawHits = []
     let renderedHits = []
     if (face === 'entries') {
-      const r = await runEntries(repoPath, c.query)
+      const r = await runEntries(repoPath, c.query, { scopeFiles: c.subset === 'fusion' ? (c.scope_files || []) : [] })
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 3)
     } else if (face === 'decisions') {
-      const r = await runDecisions(repoPath, c.query)
+      const r = await runDecisions(repoPath, c.query, { scopeFiles: c.subset === 'fusion' ? (c.scope_files || []) : [] })
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 5)
     } else if (face === 'fr') {

@@ -246,7 +246,20 @@ export function buildResultFromPlatform(indexDir, pvResults) {
  */
 export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
   const r = matchByRouting(indexDir, taskContext, opts)
-  if (r.matched) return r
+  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
+  if (r.matched) {
+    // 融合（2026-11-02-knowledge-fusion）：路由命中后仍跑 scope——热文件触达的 rejected/手工条目
+    // 原先被 early-return 永久遮住。只追加 scopeDecisionHits/scopeEntries（不重排路由结果）；
+    // scope 构建失败原样返回路由结果；仍不跑平台向量（路由命中零网络）。
+    if (scopeFiles.length > 0) {
+      try {
+        const { getKnowledgeGraph, scopeRecall, fuseScopeRecall } = await import('./knowledge-graph.js')
+        const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
+        return fuseScopeRecall(r, scopeRecall(getKnowledgeGraph(specRoot), scopeFiles)) || r
+      } catch { return r }
+    }
+    return r
+  }
   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
   if (vectorEnabled(cwd)) {
     const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
@@ -254,7 +267,6 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
     if (built) return built
   }
   // scope 遍历层（第三层）：只在 scope 非空且向量零命中后接管；fail-soft（图构建异常静默降级词片）
-  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
   if (scopeFiles.length > 0) {
     try {
       const { buildKnowledgeGraph, scopeRecall, buildScopeRecallResult } = await import('./knowledge-graph.js')

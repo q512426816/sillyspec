@@ -27,16 +27,23 @@ function knowledgeDirOf(repoRoot) { return join(specRootOf(repoRoot), 'knowledge
 
 function entryKey(e) { return e.anchor ? `${e.file}#${e.anchor}` : e.file }
 
-/** entries 面：生产 hybrid 入口的 entries（只手工条目；路由行已由变更 1 移入 routeHits）。 */
-export async function runEntries(repoRoot, query) {
-  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
-  return { matched: r.matched, hits: (r.entries || []).map(entryKey), raw: r.entries || [], routeHits: r.routeHits || [] }
+/** entries 面：生产 hybrid 入口的 entries（只手工条目；路由行已由变更 1 移入 routeHits）。
+ *  opts.scopeFiles（仅 fusion 子集传）：融合增量 scopeEntries 追加在路由 entries 之后。 */
+export async function runEntries(repoRoot, query, opts = {}) {
+  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot, scopeFiles: opts.scopeFiles || [] })
+  const hits = [...(r.entries || []).map(entryKey), ...(r.scopeEntries || []).map(entryKey)]
+  return { matched: r.matched, hits, raw: r.entries || [], routeHits: r.routeHits || [], scopeEntries: r.scopeEntries || [] }
 }
 
-/** decisions 面：生产 hybrid 入口的 decisionHits（rejected/死路优先序）。 */
-export async function runDecisions(repoRoot, query) {
-  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
-  return { hits: (r.decisionHits || []).map((h) => `${h.file}#${h.id}`), raw: r.decisionHits || [] }
+/** decisions 面：生产 hybrid 入口的 decisionHits（rejected/死路优先序）。
+ *  opts.scopeFiles（仅 fusion 子集传）：融合增量 scopeDecisionHits 追加在路由 decisionHits 之后。 */
+export async function runDecisions(repoRoot, query, opts = {}) {
+  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot, scopeFiles: opts.scopeFiles || [] })
+  const hits = [
+    ...(r.decisionHits || []).map((h) => `${h.file}#${h.id}`),
+    ...(r.scopeDecisionHits || []).map((h) => `${h.file}#${h.id}`),
+  ]
+  return { hits, raw: r.decisionHits || [], scopeDecisionHits: r.scopeDecisionHits || [] }
 }
 
 /** fr 面：FR 索引 digest（readActiveFrDigest）+ query×标题重叠排序（buildFrIndexDigestSection 的

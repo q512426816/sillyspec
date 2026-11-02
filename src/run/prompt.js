@@ -98,7 +98,8 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 import { matchKnowledge } from '../knowledge-match.js'
 import { matchQuicklogContext } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
-import { readActiveFrDigest } from '../fr-index.js'
+import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
+import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
 // stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
 import { validateDesignFileList } from '../design-facts.js'
@@ -532,7 +533,8 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
   const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
   const humanEntries = knowledgeResult.entries || []
   const routeHits = knowledgeResult.routeHits || []
-  if (humanEntries.length === 0 && routeHits.length === 0) return ''
+  const scopeEntriesPreview = knowledgeResult.scopeEntries || []
+  if (humanEntries.length === 0 && routeHits.length === 0 && scopeEntriesPreview.length === 0) return ''
   const lines = []
   lines.push(`📚 命中知识（CLI 按任务描述机械匹配，top-${maxFiles}）`)
   if (humanEntries.length > 0) {
@@ -562,6 +564,10 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
   if (routeHits.length > 0) {
     lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
   }
+  const scopeEntries = knowledgeResult.scopeEntries || []
+  if (scopeEntries.length > 0) {
+    lines.push(`📚 触达文件关联手工条目（scope，按需 Read）：${scopeEntries.slice(0, 3).map(ref).join('；')}`)
+  }
   return lines.join('\n')
 }
 
@@ -578,8 +584,10 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
  *   report/json：matchKnowledge 原样透传（execute 调用方沿用旧 report.json 落盘与未命中替换口径）。
  *   遥测 append 单独 fail-soft（hits 写失败不影响注入本体）；匹配/渲染异常向上抛由调用方降级。
  */
-export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
-  const knowledgeResult = matchKnowledge(knowledgeDir, String(query || ''))
+export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, scopeFiles = [], maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
+  // 融合（2026-11-02-knowledge-fusion）：同步入口 = matchKnowledge（路由/词片）+ scope 融合；
+  // scopeFiles 为机器键（design 交付清单/quick allowedFiles），键规整在 graphPathCandidates 内做
+  const knowledgeResult = matchKnowledgeWithScope(knowledgeDir, String(query || ''), { scopeFiles })
   // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立——INDEX 未命中时 quicklog 照常
   // 注入（两 retrieval 面互为补充）；fail-open（无 quicklog/异常 → 空 hits 零注入）。
   // specBase 由 knowledgeDir 上溯（两个注入点传的都是 <specBase>/knowledge）。
@@ -1505,11 +1513,20 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
         } catch {}
       }
       const runtimeDir = join(effectiveSpecBase, '.runtime')
+      // scope 键（FR-04）：execute step 用 design 交付清单（机器键，图内精确路径由 graphPathCandidates 规整）
+      let scopeFiles = []
+      if (changeName) {
+        try {
+          const designText = readFileSync(join(effectiveSpecBase, 'changes', changeName, 'design.md'), 'utf8')
+          scopeFiles = graphPathCandidates(deliverableFilesFromDesignText(designText))
+        } catch { /* 无 design.md = 无键（不编造） */ }
+      }
       const knowledgeInjection = buildKnowledgeInjection({
         knowledgeDir,
         runtimeDir,
         change: changeName || '',
         query: taskContext,
+        scopeFiles,
       })
       substitute(
         /\{KNOWLEDGE_HIT_REPORT\}/g,
@@ -2025,11 +2042,18 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
       const kiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const kiQuery = String(readQuickGuardField(changeName, kiSpecBase, 'taskDescription') || '')
       if (kiQuery.trim() !== '') {
+        // scope 键（FR-04）：quick 仅 guard.allowedFiles（--files 声明）存在时传，缺失不编造
+        let kiScope = []
+        try {
+          const declared = readQuickGuardField(changeName, kiSpecBase, 'allowedFiles')
+          if (declared) kiScope = graphPathCandidates(String(declared).split(/[,，\s]+/))
+        } catch { /* 无声明 = 无键 */ }
         const ki = buildKnowledgeInjection({
           knowledgeDir: join(kiSpecBase, 'knowledge'),
           runtimeDir: join(kiSpecBase, '.runtime'),
           change: changeName || '',
           query: kiQuery,
+          scopeFiles: kiScope,
         })
         if (ki.section) {
           promptText = promptText + '\n\n' + ki.section

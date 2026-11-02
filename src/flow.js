@@ -372,6 +372,21 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       const src = km.routeHits.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
       lines.push(`   🧭 决策/FR 路由命中（专用通道，按需 Read）：${src}`)
     }
+    // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节——路由 rejected top-5
+    // 不被热文件历史否决挤占（独立语义：触碰过的文件曾被否决/记死路）
+    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
+    if (scopeRejected.length > 0) {
+      lines.push(`   🧭 触达文件关联否决（scope 视角——触碰过的文件曾被否决/记死路，防复潮——除非复潮条件满足勿重提）：`)
+      for (const h of scopeRejected) {
+        const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
+        lines.push(`   - ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${h.via === 'two-hop' ? '两跳' : '直连'}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
+      }
+    }
+    const scopeEntries = km.scopeEntries || []
+    if (scopeEntries.length > 0) {
+      const src = scopeEntries.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
+      lines.push(`   📚 触达文件关联手工条目（按需 Read）：${src}`)
+    }
     // 遥测导线（2026-10-15-thin-inject-telemetry）：轻量道注入此前不落 hits.jsonl——thin 常态化后
     // inject 事件流断流（本仓 10-09 后归零实证），knowledge stats 从未命中判定被盲区污染。
     // 分级字段（A2-lite）：injectedFiles=正文实际注入（thin 面恒空——只出按需 Read 行）、

@@ -153,6 +153,9 @@ async function main() {
         // 子集单列（FR-05）：frozen（原 5 条）与 added 分开报，禁止用新增 case 掩盖冻结子集
         faceResult.subsets = subsetSummaries(faceResult, faceCases)
         faceResult.scope_unreachable = faceResult.details.filter((d) => d.raw_rank === null).map((d) => d.id)
+      } else if (face === 'entries' || face === 'decisions') {
+        // fusion 子集单列（2026-11-02-knowledge-fusion FR-07）：新增 case 不混入旧 case 聚合解读
+        if (faceCases.some((c) => c.subset)) faceResult.subsets = subsetSummaries(faceResult, faceCases)
       }
       result.metrics[repo][face] = faceResult
     }
