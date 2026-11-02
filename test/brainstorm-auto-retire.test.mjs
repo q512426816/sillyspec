@@ -96,7 +96,7 @@ test('② 存量 auto 表触达 → 退役报错且进度未重种', () => {
 })
 
 test('③ 现行文件零悬挂引用（src/test/docs/prompt）', () => {
-  const g = (args) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8' })
+  const g = (args) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
   const tracked = g(['ls-files']).split('\n').filter(Boolean)
   const offenders = []
   for (const f of tracked) {

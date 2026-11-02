@@ -162,6 +162,25 @@ console.log('\n=== Test 8: cmdSearch 传参 ===')
   assert(/buildSearchPayload\(result/.test(src), 'cmdSearch 走统一载荷构造（routeHits 不丢）')
 }
 
+// ── 7: 底稿资格门（FR-01 of series-final-cleanup） ──
+console.log('\n=== Test 7: 底稿资格门 ===')
+{
+  const dir = setup('gate', {
+    'INDEX.md': '# I\n\n## Decisions\n- demo → [d](decisions/x.md)\n',
+    'decisions/x.md': [
+      '## D-001@v1 设计期风险与放弃方案（底稿）', '状态：implemented', '变更：a', '理由：死路：某方案不兼容', '',
+      '## D-002@v1 方案 B 否决', '状态：rejected', '变更：a', '否决理由：死路：某工具不兼容', '',
+    ].join('\n'),
+  })
+  try {
+    const r = matchByRouting(dir, 'demo')
+    const tpl = r.decisionHits.find((h) => h.id === 'D-001@v1')
+    const real = r.decisionHits.find((h) => h.id === 'D-002@v1')
+    assert(tpl && tpl.deathPath === false, '模板标题（底稿）+死路理由 → 不获 deathPath')
+    assert(real && real.deathPath === true, '真否决+死路理由 → 正常获得 deathPath')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`knowledge-rank-denoise tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

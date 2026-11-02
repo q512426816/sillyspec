@@ -104,7 +104,10 @@ const FLOW_ARCHIVE_CACHE_VERSION = 1
  * 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）：指纹=归档根子项名全集+根 mtimeMs
  * （一次 readdir+一次 stat，廉价每次重算）——命中即免逐目录列举与逐变更 proposal.md 读。
  * 归档件是冻结审计面（无就地编辑形态），指纹对增删/改名完备；坏缓存/失配 fail-open 全量重建。
- * 导出供测试断言缓存三态（命中/失效/坏缓存）。 */
+ * 导出供测试断言缓存三态（命中/失效/坏缓存）。
+ * 注（2026-11-02-series-final-cleanup）：归档变更检索源已由 scope 两跳（knowledge-graph.js
+ * 的 file←deliverables←change←from-change 链）替代——本函数当前仅被缓存测试消费，非活检索
+ * 面接线点。如需恢复归档变更的 query 驱动检索，优先走 scope 通道而非在此重新接线。 */
 export function parseFlowArchiveEntries(specBase) {
   const archiveDir = join(specBase, 'changes', 'archive')
   const fingerprint = dirStamp(archiveDir)

@@ -62,6 +62,10 @@ function isDecisionRoute(entry) {
 }
 
 const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+)\s*(.*)$/
+
+/** 底稿模板标题特征词（与 4A provenance 分类同源单一口径）：harvestSlot4Decision 产的
+ *  process 级流程取舍框架词——不是具体方案否决，deathPath 不应赋予（2026-11-02-series-final-cleanup）。 */
+const TEMPLATE_TITLE_RE = /设计期风险与放弃方案|风险与死路|design\s*槽\s*4\s*收割|底稿/
 const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
 // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
 // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
@@ -130,7 +134,11 @@ function parseDecisionFile(filePath, file) {
       // 死路注记识别（2026-09-28-knowledge-inject-ranking）：「理由」含「死路：」字面标记的教训型
       // 条目——记录它的决策本体是 accepted/implemented（死路只是理由里的注记），按状态过滤会被
       // 压制到组外，恰丢最该防复潮的（实测：D-001@v1 枚举开放世界排 148/188 位永不回显）。
-      cur.deathPath = /死路[：:]/.test(cur.reason || '')
+      // 底稿资格门（2026-11-02-series-final-cleanup）：模板标题条目（设计期风险与放弃方案/风险
+      // 与死路/底稿——harvestSlot4Decision 产的 process 级流程取舍）不获 deathPath——它们不是真
+      // 否决，标 deathPath 会占防复潮席位且使停车场清零条件永不可满足（终审实证 4C/5/6 归档蒸馏
+      // 又产出 4 条底稿 D-485~488）
+      cur.deathPath = /死路[：:]/.test(cur.reason || '') && !TEMPLATE_TITLE_RE.test(cur.title || '')
       hits.push(cur)
     }
     cur = null
