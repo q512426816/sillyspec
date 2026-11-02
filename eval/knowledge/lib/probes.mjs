@@ -25,20 +25,25 @@ function excludesAll(hits, expected) {
   return (expected || []).every((e) => !hits.some((h) => hitMatches(h, e)))
 }
 
-/** 物化 fixture 到 mkdtemp 仓根；返回仓根（调用方负责清理）。 */
+/** 物化 fixture 到 mkdtemp 仓根；写入中途失败时清理临时目录再抛（不泄漏）。 */
 export function materialize(fixture) {
   const root = mkdtempSync(join(tmpdir(), `ek-probe-${fixture.defect}-`))
-  const kdir = join(root, '.sillyspec', 'knowledge')
-  for (const [rel, content] of Object.entries(fixture.files || {})) {
-    const p = join(kdir, rel)
-    mkdirSync(dirname(p), { recursive: true })
-    writeFileSync(p, content)
+  try {
+    const kdir = join(root, '.sillyspec', 'knowledge')
+    for (const [rel, content] of Object.entries(fixture.files || {})) {
+      const p = join(kdir, rel)
+      mkdirSync(dirname(p), { recursive: true })
+      writeFileSync(p, content)
+    }
+  } catch (e) {
+    rmSync(root, { recursive: true, force: true })
+    throw e
   }
   return root
 }
 
-/** 单 case 评估 → { name, pass, detail }。 */
-export function evaluateCase(repoRoot, c) {
+/** 单 case 评估 → { name, pass, detail, hits }。 */
+export async function evaluateCase(repoRoot, c) {
   const expect = c.expect || {}
   const fails = []
   let hits = []
@@ -47,7 +52,7 @@ export function evaluateCase(repoRoot, c) {
     else if (c.kind === 'decisions') hits = runDecisions(repoRoot, c.query).hits
     else if (c.kind === 'scope') hits = runScope(repoRoot, c.scope_files || []).merged
     else {
-      const rows = searchView(repoRoot, c.query)
+      const rows = await searchView(repoRoot, c.query, Infinity)
       hits = rows.map((r) => r.file)
       if (expect.score_contract) {
         const bad = rows.filter((r) => r.score !== r.matchedTags.length)
@@ -76,13 +81,14 @@ export function evaluateCase(repoRoot, c) {
 }
 
 /** 全量探针（六个 fixture 顺序执行；tmp 目录 finally 清理）。 */
-export function runAllProbes() {
+export async function runAllProbes() {
   const out = []
   for (const fixture of PROBE_FIXTURES) {
     let root = ''
     try {
       root = materialize(fixture)
-      const cases = fixture.cases.map((c) => evaluateCase(root, c))
+      const cases = []
+      for (const c of fixture.cases) cases.push(await evaluateCase(root, c))
       out.push({ defect: fixture.defect, pass: cases.every((c) => c.pass), cases })
     } finally {
       if (root) rmSync(root, { recursive: true, force: true })

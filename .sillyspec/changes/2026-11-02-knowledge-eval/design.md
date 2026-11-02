@@ -22,7 +22,7 @@ created_at: 2026-11-02T02:07:32.486Z
 
 新增文件：`eval/knowledge/run.mjs`（CLI 入口）、`eval/knowledge/lib/{dataset,engine,metrics,snapshot,report}.mjs`、`eval/knowledge/datasets/organic.jsonl`、`eval/knowledge/fixtures/*`、`eval/knowledge/baseline.json`、`eval/knowledge/README.md`。
 
-CLI 参数：`--repo sillyspec|platform|all`（仓根取自项目注册表或默认两仓绝对路径）、`--face entries|decisions|search|scope|all`、`--set-baseline`、`--json`、`--smoke`（零数据依赖的冒烟）。默认行为 = 读取 baseline 并对比输出。
+CLI 参数：`--repo <path|label:path>[,<path>…]`（任意仓，缺省当前仓；label 对齐数据集 repo 字段）、`--face entries|decisions|search|scope|all`（非法值报错退出）、`--set-baseline`（临时文件+rename 原子写）、`--json`、`--smoke`（零数据依赖的冒烟）。默认行为 = 读取 baseline 并对比输出；快照不一致时同时输出基线与当前两套指标。
 
 `baseline.json` 结构（键序固定）：
 ```
@@ -74,5 +74,8 @@ knowledge 目录在评测期间变化会使 self/organic 的期望与现场不�
 | 新增 | eval/knowledge/fixtures/ | 六类缺陷探针 fixture |
 | 新增 | eval/knowledge/baseline.json | 可提交基线 |
 | 新增 | eval/knowledge/README.md | 用法与指标说明 |
-| 新增 | test/eval-knowledge-*.test.mjs | 五条 FR 的测试绑定 |
+| 新增 | eval/knowledge/lib/repos.mjs | --repo 任意仓路径解析（项目中立） |
+| 新增 | eval/knowledge/lib/faces.mjs | 分面 raw/rendered 双口径与截断归因 |
+| 新增 | eval/knowledge/lib/probes.mjs | 六类缺陷探针执行器 |
+| 修改 | src/stages/knowledge.js | 抽 buildSearchMatches 单一源（cmdSearch 与评测共用） |
 | 修改 | package.json | 新增 eval:knowledge 脚本 |

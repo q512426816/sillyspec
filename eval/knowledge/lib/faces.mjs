@@ -1,9 +1,9 @@
 /**
  * eval/knowledge/lib/faces.mjs — 分面执行（raw/rendered 双口径 + 截断归因）
  *
- * raw = 引擎全量命中序；rendered = 各消费面实际切片（flow 📚 行 top-3、rejected top-5、
- * search limit 10、scope entry 3 + decision 20）。raw 命中而 rendered 不中 → truncated，
- * 用于区分「引擎未召回」与「召回了但被截断/渲染丢弃」。
+ * raw = 引擎全量命中序（不预先截断）；rendered = 各消费面实际切片（flow 📚 行 top-3、
+ * rejected top-5、search limit 10、scope entry 3 + decision 20）。raw 命中而 rendered 不中
+ * → truncated；每 case 的 raw_rank/rendered_rank 进 details（FR-03 的 rank 记录面）。
  */
 import { runEntries, runDecisions, searchView, runScope } from './engine.mjs'
 import { hitMatches } from './probes.mjs'
@@ -20,11 +20,12 @@ export function rankWithMatches(hits, expected) {
   return best
 }
 
-/** 单仓单面：raw/rendered 双口径 + 截断清单。 */
-export function runFace(repoPath, face, cases) {
+/** 单仓单面：raw/rendered 双口径 + 截断清单 + 每 case 名次明细。 */
+export async function runFace(repoPath, face, cases) {
   const ranksRaw = []
   const ranksRendered = []
   const truncated = []
+  const details = []
   for (const c of cases) {
     let rawHits = []
     let renderedHits = []
@@ -37,7 +38,7 @@ export function runFace(repoPath, face, cases) {
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 5)
     } else if (face === 'search') {
-      rawHits = searchView(repoPath, c.query, 10).map((r) => r.file)
+      rawHits = (await searchView(repoPath, c.query, Infinity)).map((r) => r.file)
       renderedHits = rawHits.slice(0, 10)
     } else if (face === 'scope') {
       const r = runScope(repoPath, c.scope_files || [])
@@ -50,7 +51,14 @@ export function runFace(repoPath, face, cases) {
     const rn = rankWithMatches(renderedHits, expected)
     ranksRaw.push(rr)
     ranksRendered.push(rn)
-    if (Number.isFinite(rr) && !Number.isFinite(rn)) truncated.push(c.id)
+    const isTruncated = Number.isFinite(rr) && !Number.isFinite(rn)
+    if (isTruncated) truncated.push(c.id)
+    details.push({
+      id: c.id,
+      raw_rank: Number.isFinite(rr) ? rr : null,
+      rendered_rank: Number.isFinite(rn) ? rn : null,
+      truncated: isTruncated,
+    })
   }
-  return { raw: summarize(ranksRaw), rendered: summarize(ranksRendered), truncated }
+  return { raw: summarize(ranksRaw), rendered: summarize(ranksRendered), truncated, details }
 }

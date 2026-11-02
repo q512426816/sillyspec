@@ -29,13 +29,15 @@ export function renderTable(result) {
 }
 
 /**
- * baseline 对比：快照指纹不一致 → snapshot_mismatch；各面 raw.top3 与 probe 状态变化逐项列出。
- * @returns {{mismatches: string[], changes: string[]}}
+ * baseline 对比：快照指纹不一致 → snapshot_mismatch；各面 raw.top3 与 probe 状态变化逐项列出；
+ * baselineSummary 返回基线侧每面 raw/rendered 全量指标（mismatch 时两套指标都要可见）。
+ * @returns {{mismatches: string[], changes: string[], baselineSummary: object}}
  */
 export function diffBaseline(cur, base) {
   const mismatches = []
   const changes = []
-  if (!base || typeof base !== 'object') return { mismatches, changes }
+  const baselineSummary = {}
+  if (!base || typeof base !== 'object') return { mismatches, changes, baselineSummary }
   for (const repo of Object.keys(cur.snapshot || {})) {
     const b = base.snapshot?.[repo]
     const c = cur.snapshot[repo]
@@ -47,9 +49,13 @@ export function diffBaseline(cur, base) {
   for (const repo of Object.keys(cur.metrics || {})) {
     const bm = base.metrics?.[repo] || {}
     for (const face of Object.keys(cur.metrics[repo])) {
-      const b3 = bm[face]?.raw?.top3
+      const bmFace = bm[face]
       const c3 = cur.metrics[repo][face].raw.top3
-      if (typeof b3 === 'number' && r4(b3) !== r4(c3)) changes.push(`${repo}/${face} raw.top3 ${b3} → ${c3}`)
+      if (bmFace && bmFace.raw) {
+        baselineSummary[`${repo}/${face}`] = { raw: bmFace.raw, rendered: bmFace.rendered }
+        const b3 = bmFace.raw.top3
+        if (typeof b3 === 'number' && r4(b3) !== r4(c3)) changes.push(`${repo}/${face} raw.top3 ${b3} → ${c3}`)
+      }
     }
   }
   for (const defect of Object.keys(cur.probes || {})) {
@@ -57,5 +63,5 @@ export function diffBaseline(cur, base) {
       changes.push(`probe ${defect}: ${base.probes[defect] ? 'GREEN' : 'RED'} → ${cur.probes[defect] ? 'GREEN' : 'RED'}`)
     }
   }
-  return { mismatches, changes }
+  return { mismatches, changes, baselineSummary }
 }

@@ -135,7 +135,18 @@ export async function cmdSearch(dir, args, opts = {}) {
   }
 
   // 增强：为每个匹配项补充 path、title、summary、score
-  const matches = result.entries.slice(0, limit).map(entry => {
+  const matches = buildSearchMatches(result, knowledgeDir, limit)
+
+  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}) })
+}
+
+/**
+ * 检索结果 → search 面展示行（title/summary/score 增强）。
+ * 导出为单一源：cmdSearch 与评测适配层（eval/knowledge）共用同一构造，
+ * 评测的 score 契约探针测的就是生产逻辑本身（2026-11-02-knowledge-eval 评审 P2）。
+ */
+export function buildSearchMatches(result, knowledgeDir, limit) {
+  return result.entries.slice(0, limit).map(entry => {
     const filePath = join(knowledgeDir, entry.file)
     let title = entry.display
     let summary = ''
@@ -157,8 +168,6 @@ export async function cmdSearch(dir, args, opts = {}) {
       category: entry.category,
     }
   })
-
-  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}) })
 }
 
 // ── inspect ──

@@ -95,16 +95,17 @@ console.log('\n=== Test 7: 分面 raw/rendered ===')
   const dir = materialize(fixture)
   try {
     // 期望第 4 位：raw 命中但 rendered(top-3) 不中 → truncated
-    const deep = runFace(dir, 'entries', [{ id: 'deep', query: 'alpha', expected: ['d.md#d'] }])
+    const deep = await runFace(dir, 'entries', [{ id: 'deep', query: 'alpha', expected: ['d.md#d'] }])
     assert(deep.raw.top3 === 0, 'raw rank=4 → raw.top3=0')
     assert(deep.rendered.top3 === 0, 'rendered 前 3 不含 → rendered.top3=0')
     assert(deep.truncated.includes('deep'), 'raw 召回而 rendered 丢 → truncated 记录')
+    assert(deep.details[0].raw_rank === 4 && deep.details[0].rendered_rank === null, 'per-case 名次明细记录 raw=4/rendered=null')
     // 期望第 2 位：双口径均中、无截断
-    const near = runFace(dir, 'entries', [{ id: 'near', query: 'alpha', expected: ['b.md#b'] }])
+    const near = await runFace(dir, 'entries', [{ id: 'near', query: 'alpha', expected: ['b.md#b'] }])
     assert(near.raw.top3 === 1 && near.rendered.top3 === 1, '第 2 位双口径均中')
     assert(near.truncated.length === 0, '无截断')
-    // search 面：file 级投影
-    const sf = runFace(dir, 'search', [{ id: 'sf', query: 'alpha', expected: ['b.md#b'] }])
+    // search 面：file 级投影 + 全量 raw 不预截断
+    const sf = await runFace(dir, 'search', [{ id: 'sf', query: 'alpha', expected: ['b.md#b'] }])
     assert(sf.raw.top3 === 1, 'search 面 anchor 期望投影到 file 级后命中')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
@@ -124,7 +125,7 @@ console.log('\n=== Test 8: decisions 面 ===')
   }
   const dir = materialize(fixture)
   try {
-    const m = runFace(dir, 'decisions', [{ id: 'd1', query: 'alpha', expected: ['decisions/demo.md#D-002@v1'] }])
+    const m = await runFace(dir, 'decisions', [{ id: 'd1', query: 'alpha', expected: ['decisions/demo.md#D-002@v1'] }])
     assert(m.raw.top1 === 1, 'rejected 条目排前 → top1 命中')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
@@ -142,6 +143,29 @@ console.log('\n=== Test 9: parseRepoArgs ===')
   let threw = false
   try { parseRepoArgs(`x:${join(root, 'a')},x:${join(root, 'b')}`, root) } catch { threw = true }
   assert(threw === true, '重复标签抛错（不静默覆盖）')
+}
+
+// ── 10: diffBaseline（快照不一致 + 指标变化 + baseline 两套值） ──
+console.log('\n=== Test 10: diffBaseline ===')
+{
+  const { diffBaseline } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'report.mjs')).href)
+  const cur = {
+    snapshot: { r: { head: 'bbb', knowledge_hash: 'h2' } },
+    metrics: { r: { entries: { raw: { top1: 0.5, top3: 0.5, mrr: 0.5 }, rendered: { top1: 0.5, top3: 0.5, mrr: 0.5 } } } },
+    probes: { 'score-contract': true },
+  }
+  const base = {
+    snapshot: { r: { head: 'aaa', knowledge_hash: 'h1' } },
+    metrics: { r: { entries: { raw: { top1: 0.25, top3: 0.25, mrr: 0.25 }, rendered: { top1: 0.25, top3: 0.25, mrr: 0.25 } } } },
+    probes: { 'score-contract': false },
+  }
+  const d = diffBaseline(cur, base)
+  assert(d.mismatches.length === 1 && /snapshot_mismatch/.test(d.mismatches[0]), '快照差异 → snapshot_mismatch')
+  assert(d.baselineSummary['r/entries'].raw.top3 === 0.25 && d.baselineSummary['r/entries'].rendered.top3 === 0.25, 'baselineSummary 保留基线侧 raw+rendered 全量指标')
+  assert(d.changes.some((c) => /raw\.top3 0\.25 → 0\.5/.test(c)), '指标变化逐项列出')
+  assert(d.changes.some((c) => /probe score-contract: RED → GREEN/.test(c)), 'probe 翻转列出')
+  const empty = diffBaseline(cur, null)
+  assert(empty.mismatches.length === 0 && empty.changes.length === 0, '无基线 → 空 diff 不抛')
 }
 
 // ── 汇总 ──

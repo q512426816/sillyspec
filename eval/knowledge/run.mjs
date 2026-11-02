@@ -12,11 +12,11 @@
  *
  * 设计锚：.sillyspec/changes/2026-11-02-knowledge-eval/design.md
  * 零网络零遥测：强制 SILLYSPEC_KNOWLEDGE_VECTOR=off / SILLYSPEC_HITS_PUSH=0，只调纯读引擎；
- * 唯一写点是 --set-baseline 的 baseline.json 与图派生缓存（可再生，非遥测）。
- * 面：entries@3（flow 📚）、decisions@5（rejected 优先）、search@10（cmdSearch 镜像）、
- *     scope@3/20（图遍历）；每面同时输出 raw（引擎全量）与 rendered（消费面切片）两套指标。
+ * 唯一写点是 --set-baseline 的 baseline.json（临时文件+rename 原子落盘）与图派生缓存（可再生）。
+ * 面：entries@3（flow 📚）、decisions@5（rejected 优先）、search@10（cmdSearch 等价）、
+ *     scope@3/20（图遍历）；raw=引擎全量、rendered=消费面切片，per-case 名次进 details。
  */
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -43,6 +43,11 @@ const val = (n) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null
 }
 
+const facesArg = val('--face') || 'all'
+if (!['all', ...FACES].includes(facesArg)) {
+  console.error(`❌ 未知面：${facesArg}（可选 ${['all', ...FACES].join('|')}）`)
+  process.exit(2)
+}
 let REPO_ROOTS
 try {
   REPO_ROOTS = parseRepoArgs(val('--repo'), repoRoot)
@@ -50,7 +55,6 @@ try {
   console.error(`❌ ${e.message}`)
   process.exit(2)
 }
-const facesArg = val('--face') || 'all'
 const wantFaces = facesArg === 'all' ? FACES : [facesArg]
 
 /** self 集 smoke：own 命中率 + name-only 对照（leak_gap = full − name_only，越接近 0 越靠变更名泄漏）。 */
@@ -76,14 +80,16 @@ function runSelfSmoke(repoPath, repo) {
   }
 }
 
-/** --smoke：零数据依赖冒烟（probes + baseline 读写往返于 mkdtemp）。 */
-function runSmoke() {
-  const probes = Object.fromEntries(runAllProbes().map((p) => [p.defect, p.pass]))
+/** --smoke：零数据依赖冒烟（probes + baseline 原子读写往返于 mkdtemp）。 */
+async function runSmoke() {
+  const probes = Object.fromEntries((await runAllProbes()).map((p) => [p.defect, p.pass]))
   const dir = mkdtempSync(join(tmpdir(), 'ek-smoke-'))
   try {
     const f = join(dir, 'baseline.json')
+    const tmp = `${f}.tmp`
     const payload = { version: 1, probes }
-    writeFileSync(f, JSON.stringify(payload, null, 2))
+    writeFileSync(tmp, JSON.stringify(payload, null, 2))
+    renameSync(tmp, f)
     const back = JSON.parse(readFileSync(f, 'utf8'))
     if (JSON.stringify(back) !== JSON.stringify(payload)) throw new Error('baseline 读写往返失败')
   } finally {
@@ -92,9 +98,9 @@ function runSmoke() {
   return probes
 }
 
-function main() {
+async function main() {
   if (has('--smoke')) {
-    const probes = runSmoke()
+    const probes = await runSmoke()
     const detected = Object.entries(probes).filter(([, p]) => p === false).map(([d]) => d)
     const out = { ok: true, mode: 'smoke', probes, detected_defects: detected }
     if (has('--json')) {
@@ -117,16 +123,20 @@ function main() {
     metrics: {},
     self_smoke: {},
     probes: {},
+    warnings: [],
   }
   for (const [repo, path] of REPO_ROOTS) {
     const repoCases = organic.filter((c) => c.repo === repo)
     result.cases[repo] = { organic: repoCases.length, self: 0 }
     if (!existsSync(join(path, '.sillyspec', 'knowledge'))) {
-      result.snapshot[repo] = { head: '', knowledge_hash: '', knowledge_files: 0, missing: true, path }
+      result.warnings.push(existsSync(path)
+        ? `仓无 .sillyspec/knowledge：${repo} → ${path}`
+        : `仓路径不存在：${repo} → ${path}`)
+      result.snapshot[repo] = { head: '', knowledge_hash: '', knowledge_files: 0, missing: true }
       result.metrics[repo] = {}
       continue
     }
-    result.snapshot[repo] = { ...snapshotFingerprint(path), path }
+    result.snapshot[repo] = snapshotFingerprint(path)
     result.metrics[repo] = {}
     for (const face of wantFaces) {
       let faceCases = []
@@ -134,20 +144,26 @@ function main() {
       else if (face === 'decisions') faceCases = repoCases.filter((c) => c.face === 'decisions')
       else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries')
       else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0)
-      result.metrics[repo][face] = runFace(path, face, faceCases)
+      result.metrics[repo][face] = await runFace(path, face, faceCases)
     }
     const self = runSelfSmoke(path, repo)
     result.self_smoke[repo] = self
     result.cases[repo].self = self.cases
   }
   const unmatched = organic.filter((c) => !REPO_ROOTS.has(c.repo))
-  result.probes = Object.fromEntries(runAllProbes().map((p) => [p.defect, p.pass]))
+  result.probes = Object.fromEntries((await runAllProbes()).map((p) => [p.defect, p.pass]))
 
-  let diffs = { mismatches: [], changes: [] }
+  let diffs = { mismatches: [], changes: [], baselineSummary: {} }
   if (has('--set-baseline')) {
-    writeFileSync(BASELINE, JSON.stringify(result, null, 2) + '\n')
+    const tmp = `${BASELINE}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(result, null, 2) + '\n')
+    renameSync(tmp, BASELINE) // 原子落盘（中途崩溃不产半截基线）
   } else if (existsSync(BASELINE)) {
-    try { diffs = diffBaseline(result, JSON.parse(readFileSync(BASELINE, 'utf8'))) } catch { /* 坏 baseline 只告警 */ }
+    try {
+      diffs = diffBaseline(result, JSON.parse(readFileSync(BASELINE, 'utf8')))
+    } catch (e) {
+      diffs.error = `baseline 解析失败：${e.message}——按无基线处理（当前指标仍有效）`
+    }
   }
 
   if (has('--json')) {
@@ -155,11 +171,22 @@ function main() {
     return
   }
   console.log(renderTable(result))
+  if (result.warnings.length > 0) console.log(`\n⚠️ ${result.warnings.join('；')}`)
   if (skipped.length > 0) console.log(`\n⚠️ organic 跳过 ${skipped.length} 条（字段缺失/期望空）：${skipped.map((s) => `${s.id || `L${s.line}`}:${s.reason}`).join(' ')}`)
   if (unmatched.length > 0) console.log(`\n⚠️ organic 有 ${unmatched.length} 条未匹配本次仓标签（${[...new Set(unmatched.map((c) => c.repo))].join('、')}）——用 --repo label:path 对齐标签或忽略`)
-  if (diffs.mismatches.length > 0) console.log(`\n⚠️ ${diffs.mismatches.join('；')}——基线与当前快照不一致，数值对比需谨慎`)
+  if (diffs.error) console.log(`\n⚠️ ${diffs.error}`)
+  if (diffs.mismatches.length > 0) {
+    console.log(`\n⚠️ ${diffs.mismatches.join('；')}——基线与当前快照不一致，两套指标并列如下`)
+    for (const [k, v] of Object.entries(diffs.baselineSummary || {})) {
+      console.log(`   baseline ${k}: raw top1=${v.raw.top1} top3=${v.raw.top3} mrr=${v.raw.mrr}`
+        + ` | rendered top1=${v.rendered.top1} top3=${v.rendered.top3} mrr=${v.rendered.mrr}`)
+    }
+  }
   if (diffs.changes.length > 0) console.log(`\n📊 相对 baseline 变化：\n  ${diffs.changes.join('\n  ')}`)
   if (has('--set-baseline')) console.log(`\n✅ baseline 已写入 ${BASELINE}`)
 }
 
-main()
+main().catch((e) => {
+  console.error(`❌ 评测失败：${e && e.stack ? e.stack : e}`)
+  process.exit(1)
+})

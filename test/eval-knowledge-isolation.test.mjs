@@ -2,7 +2,7 @@
  * eval-knowledge-isolation.test.mjs — 快照指纹与隔离测试（FR-04 绑定）
  */
 import { join } from 'node:path'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -89,6 +89,31 @@ console.log('\n=== Test 5: gitHead 真实仓 ===')
 {
   const head = gitHead(root)
   assert(/^[0-9a-f]{40}$/.test(head), '本仓 HEAD 为 40 位 hex')
+}
+
+// ── 6: 零遥测副作用（FR-04：源码级 + 运行时） ──
+console.log('\n=== Test 6: 零遥测副作用 ===')
+{
+  const fs = await import('node:fs')
+  const libDir = join(root, 'eval', 'knowledge', 'lib')
+  const src = [
+    fs.readFileSync(join(root, 'eval', 'knowledge', 'run.mjs'), 'utf8'),
+    ...fs.readdirSync(libDir).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(join(libDir, f), 'utf8')),
+  ].join('\n')
+  assert(!/appendKnowledgeHit/.test(src), '工具不调用遥测写入 appendKnowledgeHit')
+  assert(!/pushKnowledgeHitToPlatform/.test(src), '工具不调用平台直报')
+  assert(!/\bfetch\s*\(/.test(src), '工具代码不发网络请求')
+  assert(!/knowledge-hits\.jsonl/.test(src), '工具不引用 knowledge-hits.jsonl')
+  const d = setup('side')
+  try {
+    mkdirSync(join(d, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+    writeFileSync(join(d, '.sillyspec', 'knowledge', 'INDEX.md'), '# I\n\n## Decisions\n- alpha → [d](decisions/x.md)\n')
+    writeFileSync(join(d, '.sillyspec', 'knowledge', 'decisions', 'x.md'), '## D-0001@v1 alpha\n状态：implemented\n')
+    const { runEntries, runDecisions } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'engine.mjs')).href)
+    runEntries(d, 'alpha')
+    runDecisions(d, 'alpha')
+    assert(!existsSync(join(d, '.sillyspec', '.runtime', 'state', 'knowledge-hits.jsonl')), '跑引擎后零遥测文件产生')
+  } finally { rmSync(d, { recursive: true, force: true }) }
 }
 
 // ── 汇总 ──

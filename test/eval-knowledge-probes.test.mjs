@@ -48,15 +48,15 @@ console.log('\n=== Test 2: case 评估语义 ===')
   }
   const dir = materialize(fixture)
   try {
-    const ok = evaluateCase(dir, { name: 'contains 通过', kind: 'entries', query: 'alpha', expect: { contains: ['a.md#a'] } })
+    const ok = await evaluateCase(dir, { name: 'contains 通过', kind: 'entries', query: 'alpha', expect: { contains: ['a.md#a'] } })
     assert(ok.pass === true, 'contains 命中 → pass')
-    const miss = evaluateCase(dir, { name: 'contains 失败', kind: 'entries', query: 'alpha', expect: { contains: ['b.md#b'] } })
+    const miss = await evaluateCase(dir, { name: 'contains 失败', kind: 'entries', query: 'alpha', expect: { contains: ['b.md#b'] } })
     assert(miss.pass === false && /缺少期望命中/.test(miss.detail), 'contains 未命中 → fail 且有理由')
-    const ex = evaluateCase(dir, { name: 'excludes 失败', kind: 'entries', query: 'alpha', expect: { excludes: ['a.md'] } })
+    const ex = await evaluateCase(dir, { name: 'excludes 失败', kind: 'entries', query: 'alpha', expect: { excludes: ['a.md'] } })
     assert(ex.pass === false && /出现禁止命中/.test(ex.detail), 'excludes 违规 → fail')
-    const empty = evaluateCase(dir, { name: '空', kind: 'entries', query: '完全不存在的词zzz', expect: { empty: true } })
+    const empty = await evaluateCase(dir, { name: '空', kind: 'entries', query: '完全不存在的词zzz', expect: { empty: true } })
     assert(empty.pass === true, 'empty=true 且零命中 → pass')
-    const bad = evaluateCase(dir, { name: '未知 kind', kind: 'nope', query: 'x', expect: {} })
+    const bad = await evaluateCase(dir, { name: '未知 kind', kind: 'nope', query: 'x', expect: {} })
     assert(bad.pass === false && /未知 kind/.test(bad.detail), '未知 kind → fail 不静默')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
@@ -76,13 +76,13 @@ console.log('\n=== Test 3: fixture 完整性 ===')
 // ── 4: 全量执行结构与工具自检 ──
 console.log('\n=== Test 4: 全量执行 ===')
 {
-  const results = runAllProbes()
+  const results = await runAllProbes()
   assert(results.length === 6, '返回六类结果')
   assert(results.every((r) => typeof r.pass === 'boolean' && Array.isArray(r.cases)), '结果结构完整')
   const linkage = results.find((r) => r.defect === 'linkage')
   assert(linkage && linkage.pass === true, 'linkage 探针（工具自身健康报告）pass')
-  // 探针检出能力：至少一类缺陷被检出（pass=false），证明断言不是空转
-  assert(results.some((r) => r.pass === false), '至少一类缺陷被检出（断言非空转）')
+  // 断言可转绿性由 Test 2 的合成用例证明（满足期望 → pass=true）；这里不硬编码当前缺陷红绿，
+  // 否则每类修复后本测试反红——缺陷状态由 baseline.json 记录。
 }
 
 // ── 汇总 ──

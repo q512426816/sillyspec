@@ -108,6 +108,8 @@ export function extractTelemetryPool(telemetryPath, { limitPerChange = 3 } = {})
   }
   const out = []
   for (const [change, queries] of byChange) for (const q of queries) out.push({ change, query: q })
+  // 稳定排序（不依赖遥测事件到达顺序——乱序/迟到无关，变量见 design 盲维①）
+  out.sort((a, b) => a.change.localeCompare(b.change) || a.query.localeCompare(b.query))
   return out
 }
 

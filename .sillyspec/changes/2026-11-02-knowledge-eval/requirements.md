@@ -8,7 +8,7 @@ created_at: 2026-11-02T02:07:32.486Z
 
 ### FR-01: 三源数据集：organic（遥测 query 去重池，本仓 110/平台 548，抽样人工 anchor 级标签 30 条起步）、self（211 条归档 input 回放，leave-one-out 防泄漏，只作 smoke 不作质量指标）、probes（合成缺陷 fixtures）
 
-评测数据集必须且只能由三源组成：organic（从遥测 query 去重池分层抽样并人工标注 anchor 级期望命中，≥30 条）、self（归档 flow-state input 回放，leave-one-out 防泄漏，仅作链路 smoke）、probes（六类缺陷的合成 fixture）。每个 case 必须携带 repo、face、query、expected 字段且可机器校验；self 集禁止参与质量指标计算。
+评测数据集必须且只能由三源组成：organic（从遥测 query 去重池分层抽样并人工标注 anchor 级期望命中，≥30 条）、self（归档 flow-state input 回放，leave-one-out 防泄漏，仅作链路 smoke）、probes（六类缺陷的合成 fixture）。每个 case 必须携带 repo、face、query、expected 字段且可机器校验；self 集禁止参与质量指标计算。self 的 leave-one-out 落地为 name-only 对照（leak_gap 量化同文泄漏，D-001）。
 
 #### 场景：organic 标签缺失
 
