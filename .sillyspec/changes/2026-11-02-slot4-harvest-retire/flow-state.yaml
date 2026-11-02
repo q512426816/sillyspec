@@ -1,0 +1,36 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  槽4 底稿收割源头下线
+
+
+  harvestSlot4Decision 从 design 风险与死路段合成 decisions.md 底稿条目（D-001@v1 设计期风险与放弃方案），随蒸馏链进 knowledge/unmapped——4A 实证本仓 47
+  条、平台 173 条全是此产物，标题模板化、无真否决语义、锚点未记录/无意义。底稿资格门（series-final-cleanup）已解决行为面（不占防复潮席位），但数据面 distill
+  持续产出使停车场回涨。根治：收割函数不再写盘，风险分析保留在 design.md（归档冻结已保全），不再合成伪决策条目。
+
+
+  成功标准：
+
+  - harvestSlot4Decision 改为恒返回 {harvested:false, reason}，不再写 decisions.md；函数保留签名（flow.js 调用点兼容）但 flow.js 摘除收割调用与日志
+
+  - 测试：slot4-distill-fix.test.mjs 和 decision-anchor-backfill.test.mjs 适配（收割相关断言改为验证不写盘/幂等跳过；anchorBackfillCandidate
+  纯函数保留——蒸馏端还消费）
+
+  - 存量底稿不动（已无行为影响，后续数据治理清理）
+
+  - 验收：全量 npm test 零红 + eval 六探针 GREEN + lint 绿 + 显式 pathspec 提交
+autopilot: true
+prestage_ack: true
+baseline_commit: fd1a2ac9e6c71bb39a86d55da9fc4e4749c7cdc6
+updatedAt: '2026-11-02T20:56:59.556Z'
+baseline_sha256: e9041144516709aaa74270dd96f3de82d183a127462a9ad8eb09b90d8ae1cddf
+spec_approved: true
+spec_approved_at: '2026-11-02T20:56:59.555Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

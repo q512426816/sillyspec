@@ -31,7 +31,7 @@ test('① anchorBackfillCandidate 全形态', () => {
   assert.equal(anchorBackfillCandidate('反斜杠形态 src\\flow.js 单一路径'), 'src/flow.js', '反斜杠归一')
 })
 
-// ── ② 收割端 ─────────────────────────────────────────────────────────────────
+// ── ② 收割端——已下线（2026-11-02-slot4-harvest-retire）：收割不写盘，锚点回填由蒸馏端单端承担 ──
 
 function fixtureChange(root, riskAnswer) {
   const changeDir = join(root, 'changes', '2026-10-15-anchor-fixture')
@@ -44,23 +44,13 @@ function fixtureChange(root, riskAnswer) {
   return changeDir
 }
 
-test('② 收割端：恰一路径 → - 锚点：行；无路径 → 无该行', () => {
+test('② 收割端已下线：不写 decisions.md（原收割→锚点回填功能归蒸馏端单端）', () => {
   const root = mkdtempSync(join(tmpdir(), 'anc-hv-'))
   try {
     const d1 = fixtureChange(root, '最大风险：注入遥测写失败——落点 src/flow.js 遥测块 fail-soft 兜底')
     const r1 = harvestSlot4Decision({ changeDir: d1, change: '2026-10-15-anchor-fixture' })
-    assert.equal(r1.harvested, true)
-    const md1 = readFileSync(join(d1, 'decisions.md'), 'utf8')
-    assert.ok(md1.includes('- 锚点：src/flow.js'), '恰一路径 → 锚点行在场')
-    assert.ok(md1.includes('- 答案：'), '答案行照旧')
-
-    const root2 = mkdtempSync(join(tmpdir(), 'anc-hv2-'))
-    try {
-      const d2 = fixtureChange(root2, '风险在流程语义层面：契约理解偏差，无具体文件落点')
-      harvestSlot4Decision({ changeDir: d2, change: '2026-10-15-anchor-fixture' })
-      const md2 = readFileSync(join(d2, 'decisions.md'), 'utf8')
-      assert.ok(!md2.includes('锚点：'), '无路径 → 无锚点行（不编造）')
-    } finally { rmSync(root2, { recursive: true, force: true }) }
+    assert.equal(r1.harvested, false, '收割已下线——恒 harvested:false')
+    assert.ok(!existsSync(join(d1, 'decisions.md')), 'decisions.md 不被创建')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

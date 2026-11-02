@@ -1,17 +1,13 @@
 /**
- * slot4-distill-fix.test.mjs — 槽4 收割→决策蒸馏断链修复（2026-09-26-slot4-distill-fix）
+ * slot4-distill-fix.test.mjs — 槽4 收割已下线（2026-11-02-slot4-harvest-retire）
  *
- * 病根：harvestSlot4Decision 产出条目无「状态：」字段，distillIntoKnowledge 只入选
- * confirmed|accepted|rejected → 收割条目永不入选（宣称「随蒸馏链进 knowledge」断链，
- * thin-agent-tasks 枚举教训留档归档而 knowledge 零落地的实证）。
- *
- * 覆盖验收面：
- *   ① 收割条目含「状态：confirmed」且经 distillIntoKnowledge 实测入选落盘；
- *   ② 无状态旧格式仍不入选（蒸馏既有行为回归——非收割来源的裸条目不该混入）。
+ * 历史（2026-09-26-slot4-distill-fix）：收割条目补状态字段使蒸馏入选。2026-11-02 根治：
+ * 收割不再写盘（4A 实证产物全是模板底稿），测试改为验证 no-op 行为；② 蒸馏无状态
+ * 回归保留（非收割来源的裸条目不该混入——distill 行为不变）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -20,33 +16,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const { harvestSlot4Decision } = await import(pathToFileURL(join(ROOT, 'src', 'flow-parity.js')).href)
 const { distillIntoKnowledge } = await import(pathToFileURL(join(ROOT, 'src', 'decision-distill.js')).href)
 
-function mkChangeDir(tmp, slot4Answer) {
-  const changeDir = join(tmp, 'changes', 'c-s4')
-  mkdirSync(changeDir, { recursive: true })
-  writeFileSync(join(changeDir, 'design.md'), [
-    '# 设计记录', '',
-    '<!--AGENT:槽4 风险与死路作答 -->',
-    slot4Answer, '',
-  ].join('\n'))
-  return changeDir
-}
-
-test('① 收割→蒸馏全链：状态字段补齐后入选并落 knowledge/decisions', () => {
+test('① 收割已下线：不写 decisions.md（恒 harvested:false）', () => {
   const tmp = mkdtempSync(join(tmpdir(), 's4f-'))
   try {
-    const changeDir = mkChangeDir(tmp, '枚举开放世界是错误方向——开放分类归 agent，机器只锚定封闭面。\n第二行教训：穷举错误不因规模变小而变对。\n第三行：实例三——域关键词分类表被用户否决。')
+    const changeDir = join(tmp, 'changes', 'c-s4')
+    mkdirSync(changeDir, { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), [
+      '# 设计记录', '',
+      '<!--AGENT:槽4 风险与死路作答 -->',
+      '枚举开放世界是错误方向——开放分类归 agent。', '',
+    ].join('\n'))
     const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
-    assert.ok(h.harvested, `应收割（${h.reason}）`)
-    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
-    assert.ok(/- 状态：confirmed/.test(decText), '收割条目应含状态字段')
-    const kr = join(tmp, 'knowledge'); mkdirSync(kr, { recursive: true })
-    const r = distillIntoKnowledge(changeDir, kr, 'abc123', null)
-    assert.ok(r.written.length > 0, `蒸馏应入选（实际 skipped=${r.skipped}）`)
-    const files = readdirSync(join(kr, 'decisions'))
-    const body = readFileSync(join(kr, 'decisions', files[0]), 'utf8')
-    assert.ok(body.includes('枚举开放世界'), '教训首行应落 knowledge')
-    assert.ok(body.includes('穷举错误不因规模变小而变对'), '多行答案的后续行不丢失（评审 P1：一行展平）')
-    assert.ok(body.includes('域关键词分类表'), '末行在场（全文落盘）')
+    assert.ok(!h.harvested, '收割已下线——恒 harvested:false')
+    assert.ok(String(h.reason).includes('下线'), 'reason 含下线说明')
+    assert.ok(!existsSync(join(changeDir, 'decisions.md')), 'decisions.md 不被创建')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
@@ -66,21 +49,15 @@ test('② 无状态旧格式不入选（蒸馏既有行为回归）', () => {
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
-test('③ 收割条目标题自解释（无机制词+frontmatter 出处保留）', () => {
+test('③ 已有 decisions.md 时幂等跳过（不覆盖）', () => {
   const tmp = mkdtempSync(join(tmpdir(), 's4f3-'))
   try {
-    const changeDir = mkChangeDir(tmp, '最大风险：真实库一次性重写——回退靠 git。\n死路（放弃）：不做迁移只靠自然收敛——用户不接受永久双形态。')
-    const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
-    assert.ok(h.harvested, `应收割（${h.reason}）`)
-    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
-    const titleLine = decText.split('\n').find((l) => l.startsWith('## D-001@v1:'))
-    assert.ok(titleLine, 'D-001 标题行在场')
-    assert.equal(
-      titleLine,
-      '## D-001@v1: 设计期风险与放弃方案（底稿）',
-      '标题自解释：内容（设计期风险与放弃方案）+ 性质（底稿）',
-    )
-    assert.ok(!/槽4|收割/.test(titleLine), '标题不含流程机制词（槽4/收割）')
-    assert.ok(/^author: flow-machine-draft$/m.test(decText), '机器合成出处由 frontmatter 承载')
+    const changeDir = join(tmp, 'changes', 'c-idem')
+    mkdirSync(changeDir, { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), '# 设计\n风险段内容\n')
+    writeFileSync(join(changeDir, 'decisions.md'), '# 决策\n## D-001@v1 已有决策\n')
+    const h = harvestSlot4Decision({ changeDir, change: 'c-idem' })
+    assert.ok(!h.harvested, '已有 decisions.md → 不覆盖')
+    assert.ok(String(h.reason).includes('已在场'), 'reason 含已在场')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })

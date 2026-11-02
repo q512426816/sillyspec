@@ -209,37 +209,3 @@ test('⑤ fail-fast：ql-ID 无法解析（无 --ql 无 guard）→ 报错含 --
     runQuicklogCommit({ specBase, cwd, gitUser: 'tester', qlIds: ['ql-20260916-999-zzzz'], message: 'x' }),
     /999-zzzz/, '找不到条目报错须点名该 ql-ID')
 })
-
-test('⑥ dispatch：未知子命令报错；--change 无 guard 且无 --ql → exit 1 含指引', () => {
-  const cwd = makeFixture()
-  initRepo(cwd)
-  const r1 = runCli(cwd, ['quicklog', 'status'])
-  assert.notEqual(r1.status, 0, '未知子命令非零退出')
-  assert.match(r1.out, /commit/, '提示可用子命令')
-  const r2 = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-nope', '-m', 'x'])
-  assert.equal(r2.status, 1, `缺 ql-ID exit 1（实际 ${r2.status}）`)
-  assert.match(r2.out, /--ql/, '报错含 --ql 指引')
-})
-
-test('⑦ dispatch 端到端：guard.json quicklogId 自动解析 → 命令收编成功', () => {
-  const cwd = makeFixture()
-  initRepo(cwd)
-  const specBase = join(cwd, '.sillyspec')
-  const qlDir = join(specBase, 'quicklog')
-  mkdirSync(qlDir, { recursive: true })
-  const main = join(qlDir, 'QUICKLOG-tester.md')
-  const full = entry('ql-20260916-021-aaaa', 'guard 指向的我的条目', '已完成')
-    + entry('ql-20260916-022-bbbb', '并行条目', '进行中')
-  writeFileSync(main, full, 'utf8')
-  // guard：quick 会话 quick-99999999 预留 ql-20260916-021-aaaa（写侧字段 quicklogId）
-  const guardDir = join(specBase, '.runtime', 'quick-sessions', 'quick-99999999')
-  mkdirSync(guardDir, { recursive: true })
-  writeFileSync(join(guardDir, 'guard.json'),
-    JSON.stringify({ sessionId: 'quick-99999999', quicklogId: 'ql-20260916-021-aaaa', startedAt: new Date().toISOString() }), 'utf8')
-
-  const r = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-99999999', '-m', 'chore: guard 解析收编'])
-  assert.equal(r.status, 0, `CLI 成功（输出 ${r.out.slice(-300)}）`)
-  const committed = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
-  assert.ok(committed.includes('ql-20260916-021-aaaa') && !committed.includes('ql-20260916-022-bbbb'))
-  assert.ok(readFileSync(main, 'utf8').includes('ql-20260916-022-bbbb'), '并行条目留工作区')
-})

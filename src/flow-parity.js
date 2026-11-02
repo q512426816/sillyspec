@@ -305,60 +305,20 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
 }
 
 /**
- * design 槽4（风险与死路）实质作答收割 → decisions.md（已有不覆盖）。
- * @returns {{harvested: boolean, reason?: string}}
+ * design 槽4（风险与死路）收割——已下线（2026-11-02-slot4-harvest-retire）。
+ *
+ * 历史动机（2026-09-25-thin-parity-assets）：轻量变更决策产出从零到一，合成底稿条目随蒸馏
+ * 链进 knowledge。4A 数据对账实证产物全是模板底稿（本仓 47 条、平台 173 条），标题模板化、
+ * 无真否决语义——底稿资格门（series-final-cleanup）已解决行为面（不占防复潮席位），本变更
+ * 根治数据面：不再合成伪决策条目。风险分析内容保留在 design.md 归档冻结件（信息零丢失）。
+ *
+ * 函数保留签名与导出（flow.js 调用点已摘除，anchorBackfillCandidate 同文件导出不能删）。
+ * @returns {{harvested: boolean, reason: string}} 恒 {harvested:false}
  */
 export function harvestSlot4Decision({ changeDir, change }) {
   const decPath = join(changeDir, 'decisions.md')
   if (existsSync(decPath)) return { harvested: false, reason: 'decisions.md 已在场（不覆盖）' }
-  let dText
-  try { dText = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return { harvested: false, reason: '无 design.md' } }
-  const lines = dText.replace(/\r\n/g, '\n').split('\n')
-  let inSlot = false
-  const buf = []
-  for (const line of lines) {
-    if (/^<!--\s*AGENT:槽4/.test(line)) { inSlot = true; continue }
-    if (inSlot && (/^<!--/.test(line) || /^#{1,6}\s/.test(line))) break
-    if (inSlot) buf.push(line)
-  }
-  let answer = buf.join('\n').trim()
-  // v2 纯 markdown（2026-10-04-thin-docs-v2）：无槽标记时改读「风险与死路」节正文（复用
-  // flow-review 的 v2 节读取——剥离问题原文行；单一源 DESIGN_QUESTIONS 防镜像漂移）
-  if (!inSlot) {
-    const risksSec = DESIGN_QUESTIONS.sections.find((s) => s.key === 'risks')
-    answer = readV2SectionAnswer(dText, risksSec.heading, DESIGN_QUESTIONS)
-  }
-  if (!answer || /^不适用/.test(answer)) return { harvested: false, reason: '槽4 空/不适用' }
-  // 锚点自动回填（2026-10-15-decision-anchor-backfill 收割端）：风险段作答文本恰含一个
-  // 路径 token → 写入 - 锚点：行（源 decisions.md 是真相源，蒸馏自然带上、人可改）；
-  // 0/多候选不写（蒸馏端渲染时还会再兜底一次同款判定）。单一源 anchorBackfillCandidate。
-  const anchorCand = anchorBackfillCandidate(answer)
-  const anchorLine = anchorCand ? [`- 锚点：${anchorCand}`] : []
-  const text = [
-    '---',
-    `author: flow-machine-draft`,
-    `created_at: ${new Date().toISOString()}`,
-    '---',
-    `# 决策记录（Decisions）— ${change}`,
-    '',
-    // 标题自解释（2026-10-15-harvest-title-clarify）：读者面是 decisions 文档与 knowledge，
-    // 机制出处（槽4 收割）由 frontmatter author: flow-machine-draft 承载，标题只说内容与性质。
-    `## D-001@v1: 设计期风险与放弃方案（底稿）`,
-    `- 类型：process`,
-    `- 状态：confirmed`,
-    ...anchorLine,
-    // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
-    // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
-    // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。
-    // 槽4 是定案的流程/方法论取舍，process+confirmed 语义成立。
-    `- 答案：${answer.replace(/\s*\n+\s*/g, ' ')}`,
-    // 正文用「答案」标签（同修）：distill 落盘「理由：」行取 entry.answer——此前「- 决策：」非白名单
-    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。一行展平（评审 P1 清偿）：字段解析是
-    // 单行契约，多行槽4 作答经 \n 续行会静默丢后续行——收割端压平为单行（空格分隔）保全文。
-    '',
-  ].join('\n')
-  writeAtomicSync(decPath, text)
-  return { harvested: true }
+  return { harvested: false, reason: '底稿收割已下线（2026-11-02-slot4-harvest-retire）——风险分析保留在 design.md 归档件，不再合成伪决策条目' }
 }
 
 export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary, motiveFromInput }

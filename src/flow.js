@@ -2742,13 +2742,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；轻量变更无 design.md，域路由
   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
   if (st.substeps?.distill === 'done') { skip('distill') } else {
-    // 槽4收割（2026-09-25-thin-parity-assets：design「风险与死路」实质作答合成 decisions.md——
-    // 轻量变更决策产出从零到一；已有 decisions 不覆盖）
-    try {
-      const { harvestSlot4Decision } = await import('./flow-parity.js')
-      const h = harvestSlot4Decision({ changeDir, change })
-      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（底稿——作答里的放弃方案请拆成 rejected 条目再收口；随蒸馏链进 knowledge）`)
-    } catch { /* 收割 best-effort */ }
+    // 槽4收割已下线（2026-11-02-slot4-harvest-retire）：design 风险段不再合成伪决策条目——
+    // 风险分析保留在 design.md 归档件（信息零丢失），底稿条目 4A 实证为纯模板噪声
     // 模块变更索引机械回写（2026-10-12-thin-module-gate-and-feed 二档）：命中模块的卡/sidecar
     // 追加一行本变更条目——零语义判断（日期/变更名/动机首行全已知），split-changelog 契约 sidecar
     // 优先、卡内「## 变更索引」节次之、变更名在场即跳过（断点续跑幂等）。moduleScope 由上方
