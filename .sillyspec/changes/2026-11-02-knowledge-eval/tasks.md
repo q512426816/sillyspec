@@ -9,4 +9,4 @@ created_at: 2026-11-02T02:07:32.486Z
 - [x] task-03: 六类缺陷探针 fixture——fixtures/ 下 score-contract、word-boundary、route-rows、scope-manual、fixed-entries、linkage 六个最小合成知识库与断言，配 test/eval-knowledge-probes.test.mjs 并跑绿
 - [x] task-04: 引擎适配与分面 runner——lib/engine.mjs 只读适配 matchByRouting/parseDecisionEntries/scopeRecall/buildKnowledgeGraph，run.mjs 输出 entries@3、decisionHits@5、search@10、scope@3/20 的 raw+rendered 与截断差异，零副作用控制（env + mkdtemp），配 runner 测试并跑绿
 - [x] task-05: baseline 与出口——lib/report.mjs diff 输出、baseline.json 写入/对比与 snapshot_mismatch 告警、package.json 的 eval:knowledge 脚本、README、零网络 smoke test（test/eval-knowledge-smoke.test.mjs）并跑绿
-- [ ] task-06: 两仓实跑落基线——--repo all 跑通并提交 baseline.json，跑变更测试面回归（knowledge/eval 相关既有测试）确认零回归
+- [x] task-06: 两仓实跑落基线——--repo all 跑通并提交 baseline.json，跑变更测试面回归（knowledge/eval 相关既有测试）确认零回归
