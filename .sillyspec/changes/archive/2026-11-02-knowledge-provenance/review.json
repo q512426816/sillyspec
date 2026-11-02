@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-provenance",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "27efef89",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "duplicate 判定把合成序号/原编号当全局身份，131 条平台真实决策被误判为可归档",
+      "evidence": "otherRepoIdSets 把 decisions 的 id 与 originId 合并进同一 Set（81-98），classify 再用条目 id 或 originId 查该集合（124）。但 decisions/unmapped 的 D-unmapped-NNN 与『原编号』都是按文件/按变更重置的合成序号：platform 非模板真实决策 135 条中 131 条被判 duplicate-of-platform，0/135 在 local 存在同名条目；125 条靠合成序号碰撞（如 platform D-unmapped-026@v1 / 2026-10-15-dsh-engine-acp『dsh 二进制发现策略』对 local D-unmapped-026@v1 / 2026-07-23-rbac-permission-cache『ppm-scope uuid...』），6 条靠原编号碰撞（如 D-004@v1 在多变更复用）。131 条全部无相同 change/title 证据，却被建议 archive-or-prune 且不进入 4B manual-domain-map；local D-unmapped-084@v1 也因同号碰撞被误判（platform 无对应条目）。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/provenance.mjs:124",
+      "resolution": "duplicate 改「同 id/originId + 同 change」精确判定（legacy 回退同 id+hash）；平台 135 条真实决策全部 unique，本仓 unique 7 + 有证据重复 21"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "守恒断言是恒等式，头计数/处置覆盖/平台只读断言并未真正实现",
+      "evidence": "ledger 直接由 localDec/localFr/platformDec/platformFr 展开构造（136-141），154-156 再用 ledger.length 与同一组数组的长度和比较，该断言按构造恒成立，无法发现解析漏条；design/requirements 称按 `## ` 头计数，实际未做。FR-03 声称的『处置表条目数=N（脚本断言）』不存在（报告直接遍历 ledger 生成表），『平台只读』仅由执行前后 hash 间接覆盖。当前 75/210/308 与原始头计数一致是本次人工核对结果，不是脚本断言保证。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/provenance.mjs:136-160",
+      "resolution": "守恒改为文件段头独立计数（75/210/308/0=593）；处置表覆盖断言独立计数；平台只读由两仓 knowledge hash 前后一致断言覆盖"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "报告与审查数字对照不完整，差异无解释（FR-05）",
+      "evidence": "4A-REPORT.md 对照表仅 4 行（9-12）；FR-05 要求的 46/28、173/135、210/208、可迁 39 未纳入对照。75 vs 74 只写『差异（如实记录）』，未说明原因（原始 `## ` 头计数确为 75，审查基准 74 少计 1 条 template）；47 vs 46、平台 131+4 vs 135 也未解释，无法满足『差异有解释（如实记录）』。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/4A-REPORT.md:7-18",
+      "resolution": "对照表补全 46/28、173/135、210/208、overlap 1026，并解释 75vs74、47vs46 差异"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "平台路径硬编码且缺失时静默降级，跨平台/错报风险",
+      "evidence": "PLATFORM 固定为 C:/Users/qinyi/IdeaProjects/multi-agent-platform/...（17），无环境变量或参数覆盖，与 design『平台绝对可覆盖』不符；路径不存在时 beforePlatform=null、platformDec=[]，脚本仍 exit 0，local 28 条 duplicate 会翻成 unique，仅数字行显示 308→0/1026→0，无显式失败。违反 AGENTS 规则 7（Windows/Linux/macOS 兼容）。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/provenance.mjs:17",
+      "resolution": "SILLYSPEC_PLATFORM_KNOWLEDGE 可覆盖；路径缺失 exit 2 不再静默降级"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "4B/4C 输入清单不完整，处置表缺 title（FR-03）",
+      "evidence": "处置表列为 仓|id|文件|change|class|动作|理由（4A-REPORT.md:215），无标题列，而 FR-03 要求 unique real 列 id/标题/变更；『下一变更输入』只给定义不给清单（227），实际 manual-domain-map 仅 6 条（2 local fr + 4 platform decisions），且因 P1 漏掉 131 条平台真实决策，4B 可迁清单不可用。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/4A-REPORT.md:213-229",
+      "resolution": "处置表加 title；manual-domain-map 清单完整 144 条（本仓 7 decisions + 2 fr + 平台 135）"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "sameRepoDuplicates 语义不一致且只统计单文件",
+      "evidence": "210 条 local fr 全部为 0，75 条 local decisions 全部为 1，平台重复条目为 2（113-119,142-145）；字段未统一为『出现次数』或『重复数』，且只统计 unmapped 单文件，跨文件同 ID 不计入，无法满足 FR-01『同仓重复数』。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/provenance.mjs:142-145",
+      "resolution": "字段移除，重复证据改 dupEvidence（id@change / id@hash 形态）"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "fr 也会被套模板特征分类，与 FR-02『fr 只分 duplicate/unique』不符",
+      "evidence": "classify() 对 localFr/platformFr 同样执行 TEMPLATE_RE（121-126,138-140）；当前 fr 标题/理由无模板词，计数未暴露，但规则上可产出 template-draft。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-provenance/provenance.mjs:121-126",
+      "resolution": "classify 加 allowTemplate，fr 面只分 duplicate-of-platform / unique"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-11-02T09:15:33.058Z"
+}

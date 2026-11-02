@@ -110,3 +110,48 @@ created_at: 2026-10-20T01:19:37.412Z
 - 场景：主路径 — Given flow done 完成；When 查归档目录；Then design.md 含 sha 引用、归档提交消息含 (2026-10-20-stage-templates-retrofit) 尾缀
 全文：.sillyspec/changes/archive/2026-10-20-stage-templates-retrofit/requirements.md#FR-03
 最近确认：f5b89b761f7b562048b80f057db96b4d59275c71
+
+## FR-auto-sillyspec-034 provenance ledger：两仓 decisions/unmapped 与 fr/unmapped 逐条记录（id、来源仓、所在文件、内容 hash、是否在另一仓存在、同仓重复数），落变更目录 JSON
+变更：2026-11-02-knowledge-provenance
+状态：active
+摘要：条目守恒
+场景正文：
+- 场景：条目守恒 — Given 本仓 decisions/unmapped 74 条、fr/unmapped 210 条、平台 decisions/unmapped 308 条（按 `## D；When 生成 ledger；Then JSON 条目数与头计数一致（守恒断言随脚本执行）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-01
+最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
+
+## FR-auto-sillyspec-035 分类：decisions 分 template-draft / real / duplicate-of-platform / unique；fr 分 duplicate-of-platform / unique，模板判定基于标题/理由的底稿模板特征
+变更：2026-11-02-knowledge-provenance
+状态：active
+摘要：模板分层
+场景正文：
+- 场景：模板分层 — Given 本仓 74 条中 46 条为模板底稿；When 分类；Then template-draft 计数与实测对齐（差异如实记录在报告）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-02
+最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
+
+## FR-auto-sillyspec-036 处置表：每条给出建议动作（draft 标记、归档裁剪、人工域映射候选）+ 理由，覆盖全部条目无遗漏
+变更：2026-11-02-knowledge-provenance
+状态：active
+摘要：无遗漏
+场景正文：
+- 场景：无遗漏 — Given ledger 共 N 条；When 读报告处置表；Then 处置表条目数 = N（脚本断言）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-03
+最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
+
+## FR-auto-sillyspec-037 零写入：不改任何知识文件；平台仓只读分析
+变更：2026-11-02-knowledge-provenance
+状态：active
+摘要：执行前后 hash 一致
+场景正文：
+- 场景：执行前后 hash 一致 — Given 脚本执行；When 比较两仓 knowledge 目录前后 hash；Then 必须一致（零写入断言）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-04
+最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
+
+## FR-auto-sillyspec-038 报告可审计：统计数字与审查实测对齐（或如实记录差异），落 4A-REPORT.md 随变更归档
+变更：2026-11-02-knowledge-provenance
+状态：active
+摘要：数字对照
+场景正文：
+- 场景：数字对照 — Given 报告生成；When 人工对照审查实测；Then 关键计数一致或差异有解释（如实记录）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-05
+最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
