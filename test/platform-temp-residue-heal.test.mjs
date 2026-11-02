@@ -140,6 +140,8 @@ console.log('\n=== 场景④：入口二裸调 run 降级自愈（CLI 子进程�
 {
   const cwd = setup('e2')
   poisonDecl(cwd, join(fakeTmp, 'spec'))
+  // 预初始化 .sillyspec 目录（2026-10-10 uninit 硬门要求 run 命令在已初始化目录执行）
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   const r = runEnv(['--dir', cwd, 'run', 'quick', '--status'])
   assert(r.code === 0, `裸调 run quick --status exit 0（实际 ${r.code}）`)
   assert(r.stderr.includes('temp 残留平台接管声明'), 'stderr 含降级 warn')

@@ -1,0 +1,100 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 4bb9b1ae..4bba92d8 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -33,7 +33,7 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
+ 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档（轻量道即：FR 绑定+design 四节+用户批准先于动码，读代码探究不算动码）。测试按层适用：纯逻辑先写测试，行为契约断言用户可见行为，视觉样式与纯配置/文档不写测试（记「不适用：理由」，验收靠规范与人工）。
+-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
++4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`（未配置/标 `unavailable` → 收口跳过并留痕理由，归 pre-push/CI 门——pre-push 已跑同款 lint 的仓可标 unavailable 免重复）；指标门同款可选：`commands.metrics` 配置后收口实测该命令（非零退出阻断；未配置/`unavailable` 跳过留痕）——适合复杂度/重复率/死代码/覆盖率阈值类秒级检查（命令开放不绑定工具，`npx` 工具或 mvn/gradle 检查目标均可；执行时注入 `SILLYSPEC_CHANGE_FILES` 变更文件清单，大仓可只扫变更面），变异测试等慢工具建议 pre-push/CI；多语言/monorepo 仓可用 `metrics_routes` 路由门按路径集合配多个 gate（仅跑变更命中的 gate，gate 子进程注入 `SILLYSPEC_CHANGE_FILES`=该 gate 命中子集）。以落盘文件与测试结果为准，不信口头"已完成"。自验口径＝变更测试面（新增测试+受影响既有面）即收口证据（lint 已配置时一并实测；标 `unavailable` 的仓归 git 钩子/CI 门）——全量套件归 pre-push 门，勿每变更重复手跑（共享仓全量红先做归属判别，非本变更引入如实留痕不阻断）；跑批输出落 `.sillyspec/.runtime/logs/` 日志回看尾部，勿整段吞掉。
+ 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+ 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+ 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 40aa8ea8..34384ee6 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -62,6 +62,10 @@ function isDecisionRoute(entry) {
+ }
+ 
+ const DECISION_HEADER_RE = /^##\s+(D-(?:[A-Za-z0-9_\-\u4e00-\u9fff]+-)?\d+@v\d+)\s*(.*)$/
++
++/** 底稿模板标题特征词（与 4A provenance 分类同源单一口径）：harvestSlot4Decision 产的
++ *  process 级流程取舍框架词——不是具体方案否决，deathPath 不应赋予（2026-11-02-series-final-cleanup）。 */
++const TEMPLATE_TITLE_RE = /设计期风险与放弃方案|风险与死路|design\s*槽\s*4\s*收割|底稿/
+ const DECISION_FIELD_RE = /^(状态|文件|理由|否决理由|复潮条件|supersedes)\s*[：:]\s*(.*)$/
+ // 「锚点：」单独标签精确匹配读入（仿 docs-check.js parseDecisionEntries 先例）——绝不并入
+ // DECISION_FIELD_RE：其 else-if 链末尾的 reason 回填（else if (!cur.reason)）会把锚点值
+@@ -130,7 +134,11 @@ function parseDecisionFile(filePath, file) {
+       // 死路注记识别（2026-09-28-knowledge-inject-ranking）：「理由」含「死路：」字面标记的教训型
+       // 条目——记录它的决策本体是 accepted/implemented（死路只是理由里的注记），按状态过滤会被
+       // 压制到组外，恰丢最该防复潮的（实测：D-001@v1 枚举开放世界排 148/188 位永不回显）。
+-      cur.deathPath = /死路[：:]/.test(cur.reason || '')
++      // 底稿资格门（2026-11-02-series-final-cleanup）：模板标题条目（设计期风险与放弃方案/风险
++      // 与死路/底稿——harvestSlot4Decision 产的 process 级流程取舍）不获 deathPath——它们不是真
++      // 否决，标 deathPath 会占防复潮席位且使停车场清零条件永不可满足（终审实证 4C/5/6 归档蒸馏
++      // 又产出 4 条底稿 D-485~488）
++      cur.deathPath = /死路[：:]/.test(cur.reason || '') && !TEMPLATE_TITLE_RE.test(cur.title || '')
+       hits.push(cur)
+     }
+     cur = null
+diff --git a/src/knowledge-quicklog.js b/src/knowledge-quicklog.js
+index bb49dc0e..79390c3c 100644
+--- a/src/knowledge-quicklog.js
++++ b/src/knowledge-quicklog.js
+@@ -104,7 +104,10 @@ const FLOW_ARCHIVE_CACHE_VERSION = 1
+  * 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）：指纹=归档根子项名全集+根 mtimeMs
+  * （一次 readdir+一次 stat，廉价每次重算）——命中即免逐目录列举与逐变更 proposal.md 读。
+  * 归档件是冻结审计面（无就地编辑形态），指纹对增删/改名完备；坏缓存/失配 fail-open 全量重建。
+- * 导出供测试断言缓存三态（命中/失效/坏缓存）。 */
++ * 导出供测试断言缓存三态（命中/失效/坏缓存）。
++ * 注（2026-11-02-series-final-cleanup）：归档变更检索源已由 scope 两跳（knowledge-graph.js
++ * 的 file←deliverables←change←from-change 链）替代——本函数当前仅被缓存测试消费，非活检索
++ * 面接线点。如需恢复归档变更的 query 驱动检索，优先走 scope 通道而非在此重新接线。 */
+ export function parseFlowArchiveEntries(specBase) {
+   const archiveDir = join(specBase, 'changes', 'archive')
+   const fingerprint = dirStamp(archiveDir)
+diff --git a/test/brainstorm-auto-retire.test.mjs b/test/brainstorm-auto-retire.test.mjs
+index 44c04add..82fc72bd 100644
+--- a/test/brainstorm-auto-retire.test.mjs
++++ b/test/brainstorm-auto-retire.test.mjs
+@@ -96,7 +96,7 @@ test('② 存量 auto 表触达 → 退役报错且进度未重种', () => {
+ })
+ 
+ test('③ 现行文件零悬挂引用（src/test/docs/prompt）', () => {
+-  const g = (args) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8' })
++  const g = (args) => execFileSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+   const tracked = g(['ls-files']).split('\n').filter(Boolean)
+   const offenders = []
+   for (const f of tracked) {
+diff --git a/test/knowledge-rank-denoise.test.mjs b/test/knowledge-rank-denoise.test.mjs
+index 68bd908a..4f18997c 100644
+--- a/test/knowledge-rank-denoise.test.mjs
++++ b/test/knowledge-rank-denoise.test.mjs
+@@ -162,6 +162,25 @@ console.log('\n=== Test 8: cmdSearch 传参 ===')
+   assert(/buildSearchPayload\(result/.test(src), 'cmdSearch 走统一载荷构造（routeHits 不丢）')
+ }
+ 
++// ── 7: 底稿资格门（FR-01 of series-final-cleanup） ──
++console.log('\n=== Test 7: 底稿资格门 ===')
++{
++  const dir = setup('gate', {
++    'INDEX.md': '# I\n\n## Decisions\n- demo → [d](decisions/x.md)\n',
++    'decisions/x.md': [
++      '## D-001@v1 设计期风险与放弃方案（底稿）', '状态：implemented', '变更：a', '理由：死路：某方案不兼容', '',
++      '## D-002@v1 方案 B 否决', '状态：rejected', '变更：a', '否决理由：死路：某工具不兼容', '',
++    ].join('\n'),
++  })
++  try {
++    const r = matchByRouting(dir, 'demo')
++    const tpl = r.decisionHits.find((h) => h.id === 'D-001@v1')
++    const real = r.decisionHits.find((h) => h.id === 'D-002@v1')
++    assert(tpl && tpl.deathPath === false, '模板标题（底稿）+死路理由 → 不获 deathPath')
++    assert(real && real.deathPath === true, '真否决+死路理由 → 正常获得 deathPath')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++}
++
+ // ── 汇总 ──
+ console.log(`\n${'='.repeat(40)}`)
+ console.log(`knowledge-rank-denoise tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

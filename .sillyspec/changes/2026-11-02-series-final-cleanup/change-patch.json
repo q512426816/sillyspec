@@ -1,0 +1,103 @@
+{
+  "change": "2026-11-02-series-final-cleanup",
+  "baseline": "fdf3c66d21a2e077eaedf10a4e2edc49bbae7f63",
+  "head": "745d6e4feedb49901797beb57ac18ca4a7ac1891",
+  "files": [
+    "AGENTS.md",
+    "src/knowledge-match.js",
+    "src/knowledge-quicklog.js",
+    "test/brainstorm-auto-retire.test.mjs",
+    "test/knowledge-rank-denoise.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 34,
+    "deletions": 4
+  },
+  "savedAt": "2026-11-02T15:59:17.280Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "fdf3c66d21a2e077eaedf10a4e2edc49bbae7f63",
+    "totals": {
+      "files": 5,
+      "additions": 34,
+      "deletions": 4
+    },
+    "rows": [
+      {
+        "path": "AGENTS.md",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 9,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-quicklog.js",
+        "additions": 4,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/brainstorm-auto-retire.test.mjs",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-rank-denoise.test.mjs",
+        "additions": 19,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "2a6bde1bbc32fde69315ea370f2aabca564d1e91fa9ca98926337ab2dd1974b8",
+  "patchStatus": "ok"
+}
