@@ -143,18 +143,18 @@ async function main() {
     result.metrics[repo] = {}
     for (const face of wantFaces) {
       let faceCases = []
-      if (face === 'entries') faceCases = repoCases.filter((c) => c.face === 'entries')
-      else if (face === 'decisions') faceCases = repoCases.filter((c) => c.face === 'decisions')
-      else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries')
+      if (face === 'entries') faceCases = repoCases.filter((c) => c.face === 'entries' && c.subset !== 'fusion')
+      else if (face === 'decisions') faceCases = repoCases.filter((c) => c.face === 'decisions' && c.subset !== 'fusion')
+      else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries' && c.subset !== 'fusion')
       else if (face === 'fr') faceCases = repoCases.filter((c) => c.face === 'fr')
-      else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0)
+      else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0 && c.face !== 'fr')
       const faceResult = await runFace(path, face, faceCases)
       if (face === 'scope') {
         // 子集单列（FR-05）：frozen（原 5 条）与 added 分开报，禁止用新增 case 掩盖冻结子集
         faceResult.subsets = subsetSummaries(faceResult, faceCases)
         faceResult.scope_unreachable = faceResult.details.filter((d) => d.raw_rank === null).map((d) => d.id)
-      } else if (face === 'entries' || face === 'decisions') {
-        // fusion 子集单列（2026-11-02-knowledge-fusion FR-07）：新增 case 不混入旧 case 聚合解读
+      } else if (face === 'entries' || face === 'decisions' || face === 'fr') {
+        // fusion / fr prod-approx 子集单列：新增 case 不混入旧 case 聚合解读
         if (faceCases.some((c) => c.subset)) faceResult.subsets = subsetSummaries(faceResult, faceCases)
       }
       result.metrics[repo][face] = faceResult

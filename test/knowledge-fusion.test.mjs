@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -20,6 +20,7 @@ const { buildKnowledgeGraph, scopeRecall, fuseScopeRecall, graphPathCandidates, 
 const { matchByRouting } = await import(pathToFileURL(join(root, 'src', 'knowledge-match.js')).href)
 const { matchKnowledgeHybrid } = await import(pathToFileURL(join(root, 'src', 'knowledge-vector.js')).href)
 const { flowKnowledgeDigest } = await import(pathToFileURL(join(root, 'src', 'flow.js')).href)
+const { parseTaskCardPaths } = await import(pathToFileURL(join(root, 'src', 'stages', 'execute.js')).href)
 
 /** 融合 fixture：路由命中 zebra；scope 文件 src/hot.js 上有 rejected/implemented/手工条目/ghost；
  *  归档变更 2026-03-03-z 交付 src/twohop.js（两跳 rejected）；src/many.js 上 25 条 rejected + 4 手工条目。 */
@@ -84,13 +85,16 @@ test('FR-01/02：路由命中 + scope 独有 rejected/手工条目/两跳 只追
     assert.ok(sd.every((h) => h.file && h.id), '无 file/id 缺失的畸形 hit（ghost 过滤）')
     assert.ok((fused.scopeEntries || []).some((e) => e.file === 'gotchas.md' && e.anchor === 'hot-坑'), 'scope 独有手工条目收入')
     assert.equal(fused.json.scope, undefined, '不设置 json.scope（保持 routing 语义）')
+    // 原序：路由 entries 顺序与 base 完全一致（只追加不重排）
+    const baseRoute = matchByRouting(kdir, 'zebra')
+    assert.deepEqual(fused.entries.map((e) => `${e.file}#${e.anchor || ''}`), baseRoute.entries.map((e) => `${e.file}#${e.anchor || ''}`), '路由 entries 原序不变（只追加不重排）')
     // 两跳
     const twoHop = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/twohop.js'] })
     assert.ok((twoHop.scopeDecisionHits || []).some((h) => h.id === 'D-700@v1' && h.via === 'two-hop' && h.score === 1), '两跳 rejected（via=two-hop/score=1）')
-    // 手工条目 cap 3（4 节 → 3）
+    // 手工条目 cap 精确 3（4 节 → 3）；决策 cap 精确 20（25→20）
     const manyE = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/many.js'] })
-    assert.ok((manyE.scopeEntries || []).length <= 3, 'scopeEntries cap 3')
-    assert.ok((manyE.scopeDecisionHits || []).length <= 20, 'scopeDecisionHits cap 20（25→20）')
+    assert.equal((manyE.scopeEntries || []).length, 3, 'scopeEntries 精确 cap 3')
+    assert.equal((manyE.scopeDecisionHits || []).length, 20, 'scopeDecisionHits 精确 cap 20（25→20）')
     // 路由 entries 不被截断（conventions 1 条仍在）
     assert.ok(manyE.entries.some((e) => e.file === 'conventions.md'), '路由 entries 不受融合影响')
   } finally { cleanup(r) }
@@ -141,6 +145,21 @@ test('FR-03：flowKnowledgeDigest 集成——filesOverride 触发 scope 否决�
     assert.ok(out.lines.some((l) => l.includes('触达文件关联否决')), 'flow 注入段出现 scope 否决小节')
     assert.ok(out.lines.some((l) => l.includes('触达文件关联手工条目')), 'flow 注入段出现 scope 手工条目指针')
   } finally { cleanup(r) }
+})
+
+test('FR-04：task 卡键三形态解析（块列表/内联/NEW:）', () => {
+  const card = [
+    '---', 'task: demo', '---', '',
+    'target_files:', '  - src/a.js', '  - NEW:src/b.js', '',
+    'allowed_paths: [src/c.js, src/]', '',
+  ].join('\n')
+  assert.deepEqual(parseTaskCardPaths(card), ['src/a.js', 'src/b.js', 'src/c.js', 'src/'], '块列表逐项 + NEW: 剥离 + 内联方括号解析')
+  assert.deepEqual(graphPathCandidates(parseTaskCardPaths(card)), ['src/a.js', 'src/b.js', 'src/c.js'], '目录前缀被过滤（图内精确路径才传）')
+  // 孪生 scope 指针行文案锁（改单侧即红）
+  const pSrc = readFileSync(join(root, 'src', 'run', 'prompt.js'), 'utf8')
+  const eSrc = readFileSync(join(root, 'src', 'stages', 'execute.js'), 'utf8')
+  const twinLine = '📚 触达文件关联手工条目（scope，按需 Read）'
+  assert.ok(pSrc.includes(twinLine) && eSrc.includes(twinLine), 'prompt/execute 孪生 scope 指针行文案一致')
 })
 
 test('FR-05：fail-soft 与零平台调用', async () => {

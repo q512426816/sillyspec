@@ -58,7 +58,7 @@ export async function runFace(repoPath, face, cases) {
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 5)
     } else if (face === 'fr') {
-      const r = runFr(repoPath, c.query)
+      const r = runFr(repoPath, c.query, { scopeFiles: c.scope_files || [] })
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 8)
     } else if (face === 'search') {

@@ -553,8 +553,8 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
               console.warn(`   - 路由命中 ${_base}（按需 Read）`)
             }
-            // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节（≤3）
-            for (const h of _scopeHits) {
+            // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节（≤3，已回应过滤同源）
+            for (const h of _scopeHits.filter((h) => !_answered(h))) {
               const _via = h.via === 'two-hop' ? '两跳' : '直连'
               console.warn(`   - 触达文件关联否决 ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${_via}）${h.status === 'rejected' ? `否决理由：${h.reason || '（未记录）'}` : `⚰️死路：${deathPathNote(h.reason)}`}`)
             }

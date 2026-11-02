@@ -31,6 +31,38 @@ const KNOWLEDGE_INJECT_MAX_FILES = 3
 const KNOWLEDGE_INJECT_MAX_LINES = 40
 
 /**
+ * task 卡机器键解析（2026-11-02-knowledge-fusion 评审 P1）：target_files / allowed_paths
+ * 三形态——内联列表 `[a, b]`、inline `a, b`、块列表（字段行后 `- item` 行）；剥 NEW: 前缀
+ * 与反引号/引号。旧实现用单行正则 + \s* 跨行，块列表只捕获首项且带 `- ` 前缀。
+ */
+export function parseTaskCardPaths(text) {
+  const out = []
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(?:target_files|allowed_paths)\s*[：:]\s*(.*)$/.exec(lines[i])
+    if (!m) continue
+    const inline = m[1].trim()
+    if (inline) {
+      const cleaned = inline.replace(/^\[|\]$/g, '')
+      for (const part of cleaned.split(/[,，\s]+/)) if (part) out.push(part)
+      continue
+    }
+    // 块列表：后续 `- item`（缩进可选），遇到非列表行停止
+    for (let j = i + 1; j < lines.length; j++) {
+      const lm = /^\s*-\s+(.+)$/.exec(lines[j])
+      if (!lm) break
+      out.push(lm[1].trim())
+    }
+  }
+  return out.map((p) => String(p)
+    .replace(/^NEW:\s*/i, '')
+    .replace(/^`+|`+$/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .trim())
+    .filter(Boolean)
+}
+
+/**
  * Wave 粒度机械知识注入段（task-04，FR-04 / D-002@v1 总体方案 D）：用本 Wave 各 task 标题拼接
  * 串跑 matchKnowledge，命中文件正文以纯文本段注入 buildWavePrompt 输出（**禁止 {{include:}} 形式**
  * ——execute-testcase-design-include.test.mjs:74 include 计数恰为 1 的断言约束）。未命中返回 ''
@@ -53,10 +85,7 @@ function buildWaveKnowledgeSection(changeDir, wave) {
       const file = t && (t.file || (t.index ? path.join('tasks', `task-${String(t.index).padStart(2, '0')}.md`) : ''))
       if (!file) return []
       try {
-        const text = readFileSync(path.join(changeDir, file), 'utf8')
-        const out = []
-        for (const m of text.matchAll(/^(?:target_files|allowed_paths)\s*[：:]\s*(.+)$/gm)) out.push(...m[1].split(/[,，\s]+/))
-        return out
+        return parseTaskCardPaths(readFileSync(path.join(changeDir, file), 'utf8'))
       } catch { return [] }
     }))
     const result = matchKnowledgeWithScope(knowledgeDir, query, { scopeFiles })

@@ -13,12 +13,14 @@
  * （可再生派生，fixture 场景落 mkdtemp，真实仓仅缓存，不触测试/遥测面）。
  */
 import { join } from 'node:path'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { parseDecisionEntries, keywordMatchesContext } from '../../../src/knowledge-match.js'
 import { buildKnowledgeGraph, scopeRecall } from '../../../src/knowledge-graph.js'
 import { matchKnowledgeHybrid } from '../../../src/knowledge-vector.js'
 import { buildSearchMatches } from '../../../src/stages/knowledge.js'
-import { readActiveFrDigest, frTitleOverlap } from '../../../src/fr-index.js'
+import { readActiveFrDigest, frTitleOverlap, resolveTouchedDomains, rankFrDigestForInjection } from '../../../src/fr-index.js'
+import { parseModuleMapSimple } from '../../../src/modules.js'
 
 const graphCache = new Map()
 
@@ -46,10 +48,36 @@ export async function runDecisions(repoRoot, query, opts = {}) {
   return { hits, raw: r.decisionHits || [], scopeDecisionHits: r.scopeDecisionHits || [] }
 }
 
-/** fr 面：FR 索引 digest（readActiveFrDigest）+ query×标题重叠排序（buildFrIndexDigestSection 的
- *  FR 通道刻度；生产按 design 交付清单路由域，这里以标题可达性近似）。 */
-export function runFr(repoRoot, query) {
+/** 合并 docs/<项目>/modules/_module-map.yaml 模块索引（生产触达域解析输入）。 */
+function moduleIndexFor(specRoot) {
+  const out = {}
+  try {
+    for (const p of readdirSync(join(specRoot, 'docs'), { withFileTypes: true })) {
+      if (!p.isDirectory()) continue
+      const f = join(specRoot, 'docs', p.name, 'modules', '_module-map.yaml')
+      if (!existsSync(f)) continue
+      Object.assign(out, parseModuleMapSimple(readFileSync(f, 'utf8')))
+    }
+  } catch { /* 无 docs = 空索引 */ }
+  return out
+}
+
+/** fr 面：带 scope_files 的 case 走生产同源通道（resolveTouchedDomains 触达域 → 域内
+ *  readActiveFrDigest → rankFrDigestForInjection TierA/TierB）；纯文本查询无机器键，走近似面
+ *  （全域 digest + 标题重叠，channel=approx）并单列、不进对比门槛。 */
+export function runFr(repoRoot, query, opts = {}) {
+  const specRoot = specRootOf(repoRoot)
   const kdir = knowledgeDirOf(repoRoot)
+  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
+  if (scopeFiles.length > 0) {
+    try {
+      const domains = [...resolveTouchedDomains(tmpdir(), moduleIndexFor(specRoot), scopeFiles, kdir)]
+      const frs = readActiveFrDigest(kdir, domains)
+      const ranked = rankFrDigestForInjection({ archiveRoot: join(specRoot, 'changes', 'archive'), frs, changed: scopeFiles })
+      const ordered = ranked.ranked || []
+      return { hits: ordered.map((f) => `fr/${f.domain}.md#${f.id}`), raw: ordered, channel: 'prod' }
+    } catch { /* 生产路由失败 → 近似面兜底（如实标 channel） */ }
+  }
   let domains = []
   try {
     domains = readdirSync(join(kdir, 'fr')).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
@@ -58,7 +86,7 @@ export function runFr(repoRoot, query) {
   const q = String(query || '')
   const scored = entries.map((e) => ({ e, s: frTitleOverlap(q, `${e.id} ${e.title || ''}`) }))
   scored.sort((a, b) => (b.s - a.s) || a.e.id.localeCompare(b.e.id))
-  return { hits: scored.map((x) => `fr/${x.e.domain}.md#${x.e.id}`), raw: scored.map((x) => x.e) }
+  return { hits: scored.map((x) => `fr/${x.e.domain}.md#${x.e.id}`), raw: scored.map((x) => x.e), channel: 'approx' }
 }
 
 /**
