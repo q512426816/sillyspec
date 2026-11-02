@@ -641,6 +641,44 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
     if (keep && !taken.has(e.number)) { taken.add(e.number); keep.change = changeName; batch.push(keep) }
   }
 
+  // 文件字段自动填充（2026-11-03-decision-files-autofill）：变更交付面 → 无关联条目的「文件：」字段。
+  // 策略：① 条目已有文件字段或有有效锚点 → 不动；② 单决策变更 → 全部交付文件填入（语义成立：
+  // 该变更只做了一个决策，交付面即影响面）；③ 多决策变更 → 仅填条目正文（答案/理由）中实际
+  // 提到的交付文件（信号匹配，防过度关联——方法论决策不对应单一代码位置）。
+  // 数据源：change-patch.json 的 files 列表（归档时生成，蒸馏在归档后跑——时序正确）。
+  const deliverableFiles = (() => {
+    try {
+      const patchPath = join(changeDir, 'change-patch.json')
+      if (!existsSync(patchPath)) return []
+      const patch = JSON.parse(readFileSync(patchPath, 'utf8'))
+      return (Array.isArray(patch.files) ? patch.files : []).map(f => String(f).replace(/\\/g, '/')).filter(Boolean)
+    } catch { return [] }
+  })()
+  const noAssociation = batch.filter(e =>
+    !(e.files && e.files.length > 0) &&
+    !(e.anchor && e.anchor.trim() && e.anchor.trim() !== NOT_RECORDED)
+  )
+  if (deliverableFiles.length > 0 && noAssociation.length > 0) {
+    if (batch.length === 1) {
+      // 单决策：全部交付文件
+      noAssociation[0].files = deliverableFiles.slice(0, 20)
+      console.log(`  📎 文件字段自动填充：单决策变更 ← 交付面 ${deliverableFiles.length} 个文件`)
+    } else {
+      // 多决策：仅填正文实际提到的
+      for (const e of noAssociation) {
+        const text = [e.answer, e.reason, e.normalizedRequirement, e.question].join('\n')
+        const matched = deliverableFiles.filter(f => text.includes(f))
+        if (matched.length > 0) e.files = matched.slice(0, 10)
+      }
+      const filled = noAssociation.filter(e => e.files && e.files.length > 0).length
+      if (filled > 0) console.log(`  📎 文件字段自动填充：${filled}/${noAssociation.length} 条从交付面信号匹配`)
+    }
+    const still = noAssociation.filter(e => !(e.files && e.files.length > 0))
+    if (still.length > 0) {
+      console.log(`  ⚠️ ${still.length} 条决策无代码关联（无锚点无文件，多决策但正文未提及交付文件）——decisions add 时带 --files 可显式指定`)
+    }
+  }
+
   const decisionsDir = join(knowledgeRoot, 'decisions')
   mkdirSync(decisionsDir, { recursive: true })
   const idx = moduleIndex || discoverModuleIndex(knowledgeRoot)

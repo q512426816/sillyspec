@@ -4724,7 +4724,7 @@ SillySpec platform — SillyHub 平台同步
       const decChangeIdx = args.indexOf('--change');
       const decChange = decChangeIdx >= 0 && args[decChangeIdx + 1] && !String(args[decChangeIdx + 1]).startsWith("--") ? args[decChangeIdx + 1] : null;
       if (!decChange || !['add', 'list'].includes(decSub)) {
-        console.error('用法: sillyspec decisions add --change <名> --id D-001 --title "…" [--version N] [--status confirmed] [--type architecture] [--domain x（可重复）] [--question/--answer/--anchor/--reject-reason/--revisit-when/--supersedes/--impacts/--note]\n  sillyspec decisions list --change <名>');
+        console.error('用法: sillyspec decisions add --change <名> --id D-001 --title "…" [--version N] [--status confirmed] [--type architecture] [--domain x（可重复）] [--question/--answer/--anchor/--files <逗号分隔路径>/--reject-reason/--revisit-when/--supersedes/--impacts/--note]\n  sillyspec decisions list --change <名>');
         process.exit(2);
       }
       assertSafeChangeName(decChange, '--change 变更名');
@@ -4765,6 +4765,8 @@ SillySpec platform — SillyHub 平台同步
         question: decFlag('--question') || undefined,
         answer: decFlag('--answer') || undefined,
         anchor: decFlag('--anchor') || undefined,
+        // 文件字段（2026-11-03-decision-files-autofill）：逗号分隔路径 → 数组 + POSIX 归一
+        files: decFlag('--files') ? decFlag('--files').split(/[,，、]/).map(s => s.trim().replace(/\\/g, '/')).filter(Boolean) : undefined,
         rejectReason: decFlag('--reject-reason') || undefined,
         revisitWhen: decFlag('--revisit-when') || undefined,
         supersedes: decFlag('--supersedes') || undefined,
