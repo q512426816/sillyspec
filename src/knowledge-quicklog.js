@@ -180,64 +180,6 @@ function sourceRank(entry) {
  * @returns {{ hits: Array<{ qlId: string, date: string, title: string, files: string[] }>, report: string }}
  *   无 quicklog / 无命中 / 任何异常 → { hits: [], report: '' }（fail-open，永不抛）
  */
-export function matchQuicklogContext(specBase, taskContext, { limit = 3 } = {}) {
-  try {
-    if (!specBase || !taskContext) return { hits: [], report: '' }
-    const entries = parseQuicklogEntries(specBase)
-    if (entries.length === 0) return { hits: [], report: '' }
-    const tokens = contextTokens(taskContext)
-    if (tokens.length === 0) return { hits: [], report: '' }
-
-    const scored = []
-    for (const e of entries) {
-      const hay = [e.title, e.solution, e.files.join(' ')].join(' ').toLowerCase()
-      const basenames = new Set(e.files.map((f) => f.split('/').pop().toLowerCase()))
-      let score = 0
-      let tokenHits = 0
-      let fileHit = 0
-      for (const t of tokens) {
-        let hit = false
-        if (/[^\x00-\x7f]/.test(t)) {
-          hit = hay.includes(t)
-        } else {
-          hit = new RegExp(`(^|[^a-z0-9])${escapeRegex(t)}([^a-z0-9]|$)`).test(hay)
-          if (!hit && t.length >= 4) {
-            for (const b of basenames) {
-              if (b.includes(t)) {
-                hit = true
-                fileHit++
-                score += FILE_HIT_WEIGHT
-                break
-              }
-            }
-          }
-        }
-        if (hit) {
-          score += 1
-          tokenHits++
-        }
-      }
-      if (fileHit >= 1 || tokenHits >= MIN_TOKEN_HITS) {
-        scored.push({ entry: e, score, fileHit })
-      }
-    }
-    scored.sort((a, b) =>
-      (sourceRank(a.entry) - sourceRank(b.entry)) ||
-      (b.fileHit - a.fileHit) ||
-      (b.score - a.score) ||
-      String(b.entry.date).localeCompare(String(a.entry.date))
-    )
-    const top = scored.slice(0, Math.max(1, limit)).map((s) => ({
-      qlId: s.entry.qlId,
-      date: String(s.entry.date).slice(0, 10),
-      title: s.entry.title,
-      files: s.entry.files,
-    }))
-    return { hits: top, report: renderQuicklogSection(top) }
-  } catch {
-    return { hits: [], report: '' }
-  }
-}
 
 /**
  * 注入段渲染（prompt.js 与 execute.js 孪生共用——仅段头层级不同）。
@@ -246,16 +188,3 @@ export function matchQuicklogContext(specBase, taskContext, { limit = 3 } = {}) 
  * @param {Array<{qlId,date,title,files}>} hits
  * @param {{ h3?: boolean }} [opts] - execute.js Wave prompt 内用 h3（### ）对齐知识段层级
  */
-export function renderQuicklogSection(hits, { h3 = false } = {}) {
-  if (!Array.isArray(hits) || hits.length === 0) return ''
-  const lines = [
-    `${h3 ? '### ' : ''}🕘 近期 quick 修补（quicklog 机械匹配，top-${hits.length}——历史记录非权威断言，细节按 ql-ID 回源 .sillyspec/quicklog/ 或读代码）`,
-  ]
-  for (const h of hits) {
-    const files = (h.files || []).slice(0, 2).join(', ')
-    const title = String(h.title || '').slice(0, 60)
-    const date = String(h.date || '').slice(0, 10)
-    lines.push(` - ${h.qlId} · ${title} · ${date}${files ? ` · ${files}` : ''}`)
-  }
-  return lines.join('\n')
-}

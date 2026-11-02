@@ -96,7 +96,6 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge } from '../knowledge-match.js'
-import { matchQuicklogContext } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
@@ -588,18 +587,11 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
   // 融合（2026-11-02-knowledge-fusion）：同步入口 = matchKnowledge（路由/词片）+ scope 融合；
   // scopeFiles 为机器键（design 交付清单/quick allowedFiles），键规整在 graphPathCandidates 内做
   const knowledgeResult = matchKnowledgeWithScope(knowledgeDir, String(query || ''), { scopeFiles })
-  // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立——INDEX 未命中时 quicklog 照常
-  // 注入（两 retrieval 面互为补充）；fail-open（无 quicklog/异常 → 空 hits 零注入）。
-  // specBase 由 knowledgeDir 上溯（两个注入点传的都是 <specBase>/knowledge）。
-  const quick = knowledgeDir
-    ? matchQuicklogContext(dirname(knowledgeDir), String(query || ''))
-    : { hits: [], report: '' }
-  if (!knowledgeResult.matched && quick.hits.length === 0) {
+  if (!knowledgeResult.matched) {
     return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json }
   }
   const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
-  const qSection = quick.report || ''
-  const section = [kSection, qSection].filter(Boolean).join('\n\n')
+  const section = kSection
   const routeFiles = (knowledgeResult.routeHits || []).map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file))
   const scopeMatchedFiles = scopeTelemetryRefs(knowledgeResult, { includeRejected: false })
   try {
@@ -607,14 +599,12 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
       type: 'inject',
       change: change || '',
       query: String(query || ''),
-      // routeHits 一并进 matchedFiles：stats 命中矩阵不把 decisions/fr 误标 neverHit（FR-04）
       matchedFiles: [...knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)), ...routeFiles],
       // scope 展示面独立字段（2026-11-02-knowledge-engine-tail FR-02）：不并入 matchedFiles
       ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
-      quicklogIds: quick.hits.map(h => h.qlId),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
-  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, quickHits: quick.hits }
+  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json}
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；

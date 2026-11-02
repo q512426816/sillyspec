@@ -23,7 +23,6 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
 import { matchKnowledge } from '../knowledge-match.js'
 import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
-import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 
 // 机械知识注入限额（与 run/prompt.js KNOWLEDGE_INJECT_MAX_FILES/MAX_LINES 同值孪生，R-02 膨胀控制）
@@ -89,12 +88,10 @@ function buildWaveKnowledgeSection(changeDir, wave) {
       } catch { return [] }
     }))
     const result = matchKnowledgeWithScope(knowledgeDir, query, { scopeFiles })
-    // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
-    const quick = matchQuicklogContext(specBase, query)
     const humanEntries = result.entries || []
     const routeHits = result.routeHits || []
     const scopeEntries = result.scopeEntries || []
-    if (!result.matched && quick.hits.length === 0) return ''
+    if (humanEntries.length === 0 && routeHits.length === 0 && scopeEntries.length === 0) return ''
     const lines = []
     if (humanEntries.length > 0 || routeHits.length > 0 || scopeEntries.length > 0) {
     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
@@ -138,11 +135,6 @@ function buildWaveKnowledgeSection(changeDir, wave) {
       lines.push(`📚 触达文件关联手工条目（scope，按需 Read）：${scopeEntries.slice(0, 3).map(ref).join('；')}`)
     }
     }
-    // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）
-    if (quick.hits.length > 0) {
-      if (lines.length > 0) lines.push('')
-      lines.push(renderQuicklogSection(quick.hits, { h3: true }))
-    }
     try {
       appendKnowledgeHit(path.join(specBase, '.runtime'), {
         type: 'inject',
@@ -153,7 +145,6 @@ function buildWaveKnowledgeSection(changeDir, wave) {
           const scopeMatchedFiles = scopeTelemetryRefs(result, { includeRejected: false })
           return scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}
         })() : {}),
-        quicklogIds: quick.hits.map(h => h.qlId),
       })
     } catch { /* 遥测 fail-soft（R-04） */ }
     return lines.join('\n') + '\n'
