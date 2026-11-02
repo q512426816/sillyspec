@@ -601,7 +601,7 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
   const qSection = quick.report || ''
   const section = [kSection, qSection].filter(Boolean).join('\n\n')
   const routeFiles = (knowledgeResult.routeHits || []).map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file))
-  const scopeMatchedFiles = scopeTelemetryRefs(knowledgeResult)
+  const scopeMatchedFiles = scopeTelemetryRefs(knowledgeResult, { includeRejected: false })
   try {
     appendKnowledgeHit(runtimeDir, {
       type: 'inject',

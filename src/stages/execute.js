@@ -150,7 +150,7 @@ function buildWaveKnowledgeSection(changeDir, wave) {
         query,
         matchedFiles: result.matched ? [...humanEntries, ...routeHits].map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
         ...(result.matched ? (() => {
-          const scopeMatchedFiles = scopeTelemetryRefs(result)
+          const scopeMatchedFiles = scopeTelemetryRefs(result, { includeRejected: false })
           return scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}
         })() : {}),
         quicklogIds: quick.hits.map(h => h.qlId),

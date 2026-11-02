@@ -89,7 +89,7 @@ function sectionFilePaths(knowledgeDir, ent, cache) {
   }
   if (!text) return []
   const key = normalizeAnchorForCompare(ent.anchor)
-  if (!key) return extractFilePaths(text, 15)
+  if (!key) return extractFilePaths(text, 15).filter((p) => p.includes('/')) // 无锚点整篇回退同样过滤裸名词
   const hit = splitSections(text).find((s) => {
     const hn = normalizeAnchorForCompare(s.title)
     return hn === key || (hn.length >= 6 && key.length >= 6 && (hn.startsWith(key) || key.startsWith(hn)))
@@ -1093,10 +1093,14 @@ export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
 
 /** scope 展示面遥测引用（2026-11-02-knowledge-engine-tail FR-02）：三处注入点统一口径——
  *  只记实际展示子集（scope 否决 rejected/deathPath top3 + scopeEntries top3），按 ref 去重。
- *  独立字段 scopeMatchedFiles，不并入 matchedFiles（否则 knowledge-stats 的 neverHit 失真）。 */
-export function scopeTelemetryRefs(result) {
+ *  独立字段 scopeMatchedFiles，不并入 matchedFiles（否则 knowledge-stats 的 neverHit 失真）。
+ *  includeRejected：flow 有否决独立小节 → true；prompt/execute 渲染器只展示 scopeEntries → false
+ *  （评审 P2-2：遥测必须与实际渲染面对齐，不得记录未展示的条目）。 */
+export function scopeTelemetryRefs(result, { includeRejected = true } = {}) {
   const shown = [
-    ...((result && result.scopeDecisionHits) || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3),
+    ...(includeRejected
+      ? ((result && result.scopeDecisionHits) || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
+      : []),
     ...((result && result.scopeEntries) || []).slice(0, 3),
   ]
   return [...new Set(shown.map((x) => {

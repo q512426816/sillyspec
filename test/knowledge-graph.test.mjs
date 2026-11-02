@@ -694,16 +694,18 @@ test('engine-tail FR-03：section doc-refs 裸名词过滤（Next.js 等不建�
   const K = (p) => join(root, '.sillyspec', p)
   try {
     mkdirSync(K('knowledge'), { recursive: true })
-    writeFileSync(K('knowledge/INDEX.md'), '# I\n\n## Gotchas\n- a → [A](gotchas.md#sec-a)\n')
+    writeFileSync(K('knowledge/INDEX.md'), '# I\n\n## Gotchas\n- a → [A](gotchas.md#sec-a)\n- b → [B](gotchas.md)\n')
     writeFileSync(K('knowledge/gotchas.md'), [
       '# G', '',
       '## sec a', '',
       '正文提及 Next.js、Node.js、local.yaml、model.py 与 src/a.js。', '',
     ].join('\n'))
     const g = buildKnowledgeGraph(join(root, '.sillyspec'))
-    const edges = g.edges.filter((e) => e.type === 'doc-refs' && e.s.includes('#sec-a'))
-    assert.ok(edges.some((e) => e.t === 'src/a.js'), '含 / 的路径建边')
-    assert.ok(!edges.some((e) => ['Next.js', 'Node.js', 'local.yaml', 'model.py'].includes(e.t)), '裸名词技术 token 不建边')
+    const anchored = g.edges.filter((e) => e.type === 'doc-refs' && e.s.includes('#sec-a'))
+    assert.ok(anchored.some((e) => e.t === 'src/a.js'), '含 / 的路径建边')
+    assert.ok(!anchored.some((e) => ['Next.js', 'Node.js', 'local.yaml', 'model.py'].includes(e.t)), '裸名词技术 token 不建边')
+    const bare = g.edges.filter((e) => e.type === 'doc-refs' && e.s === 'entry:gotchas.md')
+    assert.ok(bare.length > 0 && bare.every((e) => e.t === 'src/a.js'), '无锚点整篇回退同样只建含 / 的边')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

@@ -66,3 +66,4 @@ created_at: 2026-11-02T08:04:03.235Z
 | 修改 | test/thin-inject-telemetry.test.mjs | scopeMatchedFiles 两形态断言 |
 | 修改 | test/knowledge-graph.test.mjs | doc-refs 过滤正反例 + frCount 删除适配 |
 | 修改 | eval/knowledge/README.md | 数据规划注记（flow 形态带 scope + fusion 升主刻度 + 非标题复述查询） |
+| 修改 | eval/knowledge/baseline.json | 变更后基线（五面与前一版一致） |

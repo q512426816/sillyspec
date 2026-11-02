@@ -21,6 +21,7 @@ const { matchByRouting } = await import(pathToFileURL(join(root, 'src', 'knowled
 const { matchKnowledgeHybrid } = await import(pathToFileURL(join(root, 'src', 'knowledge-vector.js')).href)
 const { flowKnowledgeDigest } = await import(pathToFileURL(join(root, 'src', 'flow.js')).href)
 const { parseTaskCardPaths } = await import(pathToFileURL(join(root, 'src', 'stages', 'execute.js')).href)
+const { buildKnowledgeInjection } = await import(pathToFileURL(join(root, 'src', 'run', 'prompt.js')).href)
 
 /** 融合 fixture：路由命中 zebra；scope 文件 src/hot.js 上有 rejected/implemented/手工条目/ghost；
  *  归档变更 2026-03-03-z 交付 src/twohop.js（两跳 rejected）；src/many.js 上 25 条 rejected + 4 手工条目。 */
@@ -180,6 +181,7 @@ test('FR-01：向量命中路径融合（对称性，未修复必红）', async 
     assert.ok(out.matched, '向量命中')
     assert.ok((out.decisionHits || []).some((h) => h.id === 'D-900@v1'), '向量 base decisionHits 保留')
     assert.ok((out.scopeDecisionHits || []).length > 0, '向量路径也融合 scope 增量（旧实现此处为空）')
+    assert.ok(!(out.scopeDecisionHits || []).some((h) => h.id === 'D-900@v1'), '向量通道已收的 D-900 在 scope 侧去重')
     assert.equal(out.json && out.json.scope, undefined, '不设 json.scope')
     assert.equal(out.json && out.json.vector, true, 'json.vector 保留（channel 仍 vector）')
   } finally {
@@ -202,6 +204,33 @@ test('FR-02：flow 遥测 scopeMatchedFiles 单列（不污染 matchedFiles）',
     assert.ok(Array.isArray(ev.scopeMatchedFiles) && ev.scopeMatchedFiles.some((f) => f.includes('D-900')), 'scope 否决进 scopeMatchedFiles')
     assert.ok(!(ev.matchedFiles || []).some((f) => f.includes('#D-900')), 'matchedFiles 保持查询通道语义（不含 scope 决策）')
     assert.ok((ev.mentionedFiles || []).some((f) => f.includes('gotchas.md')), 'mentionedFiles 含实际展示的 scope 条目')
+  } finally { cleanup(r) }
+})
+
+test('FR-02：prompt 遥测 scopeMatchedFiles 只含实际展示的 scopeEntries', async () => {
+  const r = buildFusionFixture()
+  try {
+    const kdir = join(r, '.sillyspec', 'knowledge')
+    const runtimeDir = join(r, '.sillyspec', '.runtime')
+    const out = await buildKnowledgeInjection({ knowledgeDir: kdir, runtimeDir, change: 'zebra', query: 'zebra', scopeFiles: ['src/hot.js'] })
+    assert.ok(out.section.includes('触达文件关联手工条目'), '注入段展示 scopeEntries 指针行')
+    assert.ok(!out.section.includes('D-900'), '注入段不展示 scope 否决（prompt 渲染器无否决小节）')
+    const ev = readFileSync(join(runtimeDir, 'state', 'knowledge-hits.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).pop()
+    assert.ok((ev.scopeMatchedFiles || []).every((f) => !f.includes('#D-9')), '遥测不含未展示的否决条目（与实际渲染面对齐）')
+    assert.ok((ev.scopeMatchedFiles || []).some((f) => f.includes('gotchas.md')), '遥测含展示的 scopeEntries')
+  } finally { cleanup(r) }
+})
+
+test('FR-02：standalone scope 不双记（matchedFiles 含 entries，无 scopeMatchedFiles）', async () => {
+  const r = buildFusionFixture()
+  try {
+    const specBase = join(r, '.sillyspec')
+    const changeDir = join(specBase, 'changes', 'zzz-none')
+    mkdirSync(changeDir, { recursive: true })
+    await flowKnowledgeDigest({ specBase, change: 'zzz-none', changeDir, input: '', filesOverride: ['src/hot.js'] })
+    const ev = readFileSync(join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).pop()
+    assert.ok((ev.matchedFiles || []).some((f) => f.includes('gotchas.md')), 'standalone scope entries 经 entries 进 matchedFiles')
+    assert.equal(ev.scopeMatchedFiles, undefined, 'standalone 不双记（无 scopeMatchedFiles）')
   } finally { cleanup(r) }
 })
 

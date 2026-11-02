@@ -237,14 +237,6 @@ export function buildResultFromPlatform(indexDir, pvResults) {
 }
 
 /**
- * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
- * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ scope 遍历 → 本地词片 → 空。
- * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
- * opts.scopeFiles（2026-10-08-knowledge-graph，FR-04 承接 FR-cli-entry-234）：变更触碰文件集
- * ——机器算的图查询键（D-004：flow 注入段传 touched、complete 门传 decisions.md 锚点提取）。
- * 缺省/空数组 → 遍历层整体跳过，行为与不携带该参数的旧行为逐字段一致（回归钉死）。
- */
-/**
  * base（路由/向量结果）+ scopeFiles → 融合结果（2026-11-02-knowledge-engine-tail FR-01）。
  * 路由命中与向量命中两条路径共用本实现（消除「同一 early-return 病只修一半」）：
  * scopeFiles 经 graphPathCandidates 规整；scope 构建/遍历失败返回 base 原对象（fail-soft）。
@@ -262,6 +254,14 @@ async function fuseBaseWithScope(base, indexDir, scopeFiles) {
   } catch { return base }
 }
 
+/**
+ * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
+ * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ scope 遍历 → 本地词片 → 空。
+ * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
+ * opts.scopeFiles（2026-10-08-knowledge-graph，FR-04 承接 FR-cli-entry-234）：变更触碰文件集
+ * ——机器算的图查询键（D-004：flow 注入段传 touched、complete 门传 decisions.md 锚点提取）。
+ * 缺省/空数组 → 遍历层整体跳过，行为与不携带该参数的旧行为逐字段一致（回归钉死）。
+ */
 export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
   const r = matchByRouting(indexDir, taskContext, opts)
   const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
