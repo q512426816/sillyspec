@@ -135,9 +135,9 @@ function dupEvidence(e, other) {
   return ''
 }
 
-function classify(entries, other, repo, file) {
+function classify(entries, other, repo, file, { allowTemplate = true } = {}) {
   return entries.map((e) => {
-    const template = TEMPLATE_RE.test(`${e.title} ${e.reason || ''}`)
+    const template = allowTemplate && TEMPLATE_RE.test(`${e.title} ${e.reason || ''}`)
     const evidence = dupEvidence(e, other)
     const dupOther = Boolean(evidence)
     const cls = template ? 'template-draft' : dupOther ? 'duplicate-of-platform' : 'unique'
@@ -153,9 +153,9 @@ function classify(entries, other, repo, file) {
 
 const ledger = [
   ...classify(localDec, platformAll.dec, 'sillyspec', localDecFile),
-  ...classify(localFr, platformAll.fr, 'sillyspec', localFrFile),
+  ...classify(localFr, platformAll.fr, 'sillyspec', localFrFile, { allowTemplate: false }),
   ...classify(platformDec, localAll.dec, 'platform', localDecFile),
-  ...classify(platformFr, localAll.fr, 'platform', localFrFile),
+  ...classify(platformFr, localAll.fr, 'platform', localFrFile, { allowTemplate: false }),
 ].sort((a, b) => (a.repo === b.repo ? a.id.localeCompare(b.id) : a.repo.localeCompare(b.repo)))
 
 const afterLocal = knowledgeHash(LOCAL)

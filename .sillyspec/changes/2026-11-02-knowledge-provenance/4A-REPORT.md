@@ -1,6 +1,6 @@
 # 4A 数据分层与来源对账报告（只读）
 
-生成时间：2026-11-02T09:15:06.192Z
+生成时间：2026-11-02T09:15:33.002Z
 平台知识库：`C:/Users/qinyi/IdeaProjects/multi-agent-platform/.sillyspec/knowledge`
 段头守恒：ledger 593 = 本仓 decisions 75 + 本仓 fr 210 + 平台 decisions 308 + 平台 fr 0
 零写入：两仓 knowledge 目录执行前后 hash 一致（断言通过）
