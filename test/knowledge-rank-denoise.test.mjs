@@ -5,15 +5,16 @@
  *       FR-04 routeHits 分离 / FR-05 DF 排序。
  */
 import { join } from 'node:path'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const root = join(__filename, '..', '..')
 
-const { buildSearchMatches } = await import(pathToFileURL(join(root, 'src', 'stages', 'knowledge.js')).href)
-const { matchByRouting, keywordMatchesContext } = await import(pathToFileURL(join(root, 'src', 'knowledge-match.js')).href)
+const { buildSearchMatches, buildSearchPayload } = await import(pathToFileURL(join(root, 'src', 'stages', 'knowledge.js')).href)
+const { matchByRouting, keywordMatchesContext, queryShingles } = await import(pathToFileURL(join(root, 'src', 'knowledge-match.js')).href)
+const { buildKnowledgeInjection } = await import(pathToFileURL(join(root, 'src', 'run', 'prompt.js')).href)
 
 let passed = 0
 let failed = 0
@@ -101,6 +102,64 @@ console.log('\n=== Test 4: DF 排序 ===')
     const r2 = matchByRouting(dir, 'sillyspec specificword 查询')
     assert(JSON.stringify(r.entries.map((e) => e.file)) === JSON.stringify(r2.entries.map((e) => e.file)), '重复运行顺序一致（确定性）')
   } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// ── 5: search 载荷保留 routeHits（FR-04 P1 修复） ──
+console.log('\n=== Test 5: search 载荷 routeHits ===')
+{
+  const dir = setup('payload', {
+    'INDEX.md': '# I\n\n## Decisions\n- alpha → [demo](decisions/demo.md)\n',
+    'decisions/demo.md': '## D-001@v1 alpha 决策\n状态：implemented\n变更：x\n',
+  })
+  try {
+    const r = matchByRouting(dir, 'alpha 功能')
+    assert(r.matched === true && r.entries.length === 0, '只命中路由行：entries 空、matched 仍 true')
+    const payload = buildSearchPayload(r, dir, 10, 'alpha 功能')
+    assert(payload.matches.length === 0, 'matches 为空（无手工条目）')
+    assert(payload.routeHits.length === 1 && payload.routeHits[0].file === 'decisions/demo.md', 'routeHits 保留决策指针')
+    assert(typeof payload.routeNote === 'string' && payload.routeNote.includes('路由命中'), 'routeNote 指路文案在场')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// ── 6: 词片拆分（FR-02） ──
+console.log('\n=== Test 6: 词片拆分 ===')
+{
+  const sh = queryShingles('修复 worktree_apply 冲突')
+  assert(sh.includes('worktree_apply'), '保留整词 worktree_apply')
+  assert(sh.includes('worktree') && sh.includes('apply'), '额外产出拆分片段 worktree/apply')
+  const kebab = queryShingles('修复 cli-entry 路由')
+  assert(kebab.includes('cli-entry'), 'kebab-case 整词保留')
+}
+
+// ── 7: 消费面指针行与遥测（FR-04） ──
+console.log('\n=== Test 7: 注入面指针行与遥测 ===')
+{
+  const dir = setup('inject', {
+    '.sillyspec/knowledge/INDEX.md': '# I\n\n## Decisions\n- alpha → [demo](decisions/demo.md)\n',
+    '.sillyspec/knowledge/decisions/demo.md': '## D-001@v1 alpha 决策\n状态：implemented\n变更：x\n',
+  })
+  try {
+    const runtimeDir = join(dir, '.sillyspec', '.runtime')
+    const out = await buildKnowledgeInjection({
+      knowledgeDir: join(dir, '.sillyspec', 'knowledge'),
+      runtimeDir,
+      change: 'c',
+      query: 'alpha 功能',
+    })
+    assert(out.matched === true, 'matched=true（routeHits 通道）')
+    assert(out.section.includes('🧭 决策/FR 路由命中'), '注入段出 routeHits 指针行')
+    assert(!out.section.includes('Entries: 0'), '不出空段头（空 entries 不渲染空知识段）')
+    const hits = readFileSync(join(runtimeDir, 'state', 'knowledge-hits.jsonl'), 'utf8')
+    assert(hits.includes('decisions/demo.md'), '遥测 matchedFiles 含 routeHits（stats 不误标 neverHit）')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// ── 8: cmdSearch 传参（includeResolved 贯穿） ──
+console.log('\n=== Test 8: cmdSearch 传参 ===')
+{
+  const src = readFileSync(join(root, 'src', 'stages', 'knowledge.js'), 'utf8')
+  assert(/matchKnowledgeHybrid\(knowledgeDir, query, \{ cwd: dir, includeResolved \}\)/.test(src), 'cmdSearch 把 includeResolved 传入 hybrid')
+  assert(/buildSearchPayload\(result/.test(src), 'cmdSearch 走统一载荷构造（routeHits 不丢）')
 }
 
 // ── 汇总 ──

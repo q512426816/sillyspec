@@ -278,8 +278,8 @@ export function keywordMatchesContext(keyword, contextLower) {
 /** 查询词片抽取：CJK 连续段 bigram ＋ ≥4 字符 ASCII 词（小写；短词与标点数字不参与；
  *  纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。
  *  snake/kebab 复合词保留整词并额外产出 ≥4 字符拆分片段（FR-02：查询 worktree_apply 时
- *  worktree、apply 仍可命中正文只写 worktree 的条目）。 */
-function queryShingles(taskContext) {
+ *  worktree、apply 仍可命中正文只写 worktree 的条目）。导出供评测与单测（零行为变化）。 */
+export function queryShingles(taskContext) {
   const raw = String(taskContext || '')
   const shingles = new Set()
   if (/[\u4e00-\u9fff]/.test(raw)) {

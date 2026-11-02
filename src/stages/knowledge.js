@@ -125,30 +125,41 @@ export async function cmdSearch(dir, args, opts = {}) {
   // 文件但被检索核心滤除且最终零结果时，披露被滤文件——去噪不丢可见性，人工按需直查。
   const parkingFiltered = !result.matched && Array.isArray(result.json && result.json.parkingFiltered)
     ? result.json.parkingFiltered : []
-  // 已修复过滤披露（FR-03，2026-11-02-knowledge-rank-denoise）：仿 parkingFiltered——
-  // 过滤了已修复条目不静默，给 --include-resolved 指路。
-  const resolvedFiltered = Array.isArray(result.json && result.json.resolvedFiltered)
+  const payload = buildSearchPayload(result, knowledgeDir, limit, query)
+
+  output(true, {
+    query,
+    ...payload,
+    ...(vectorHint ? { hint: vectorHint } : {}),
+    ...(parkingFiltered.length > 0
+      ? { parkingFiltered, parkingNote: `停车场文件已过滤（${parkingFiltered.join('、')}）——按需直查文件` }
+      : {}),
+  })
+}
+
+/**
+ * search 面输出载荷（matches + routeHits + 已修复披露）——生产与评测共用单一构造。
+ * routeHits 承载 fr/decisions 路由行指针：FR-04 要求 search 消费面不静默丢失 implemented
+ * 决策/FR 可见性（entries 已移出路由行，只命中路由行的查询不能返回空 matches 了事）。
+ */
+export function buildSearchPayload(result, knowledgeDir, limit, query) {
+  const matches = result && result.matched ? buildSearchMatches(result, knowledgeDir, limit, query) : []
+  const routeHits = ((result && result.routeHits) || []).map(e => ({
+    file: e.file,
+    anchor: e.anchor || '',
+    category: e.category || '',
+  }))
+  const resolvedFiltered = Array.isArray(result && result.json && result.json.resolvedFiltered)
     ? result.json.resolvedFiltered : []
-  const resolvedNote = resolvedFiltered.length > 0
-    ? { resolvedFiltered, resolvedNote: `已修复条目已过滤（${resolvedFiltered.join('、')}）——需查看加 --include-resolved` }
-    : {}
-
-  if (!result.matched) {
-    output(true, {
-      query, matches: [],
-      ...(vectorHint ? { hint: vectorHint } : {}),
-      ...(parkingFiltered.length > 0
-        ? { parkingFiltered, parkingNote: `停车场文件已过滤（${parkingFiltered.join('、')}）——按需直查文件` }
-        : {}),
-      ...resolvedNote,
-    })
-    return
+  return {
+    matches,
+    ...(routeHits.length > 0
+      ? { routeHits, routeNote: '决策/FR 路由命中（专用通道，按需 Read）' }
+      : {}),
+    ...(resolvedFiltered.length > 0
+      ? { resolvedFiltered, resolvedNote: `已修复条目已过滤（${resolvedFiltered.join('、')}）——需查看加 --include-resolved` }
+      : {}),
   }
-
-  // 增强：为每个匹配项补充 path、title、summary、score
-  const matches = buildSearchMatches(result, knowledgeDir, limit, query)
-
-  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}), ...resolvedNote })
 }
 
 /**
