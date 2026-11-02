@@ -1,0 +1,95 @@
+{
+  "change": "2026-11-02-constraint-mechanize",
+  "baseline": "0a31f8bd1ac5379da08bb03baef18d30b8e47bb8",
+  "head": "bc17735dec5d91896d7aa545089cd73e9c7bfa5d",
+  "files": [
+    "AGENTS.md",
+    "src/flow.js",
+    "src/run/complete.js"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 10,
+    "deletions": 1
+  },
+  "savedAt": "2026-11-02T13:40:36.927Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "0a31f8bd1ac5379da08bb03baef18d30b8e47bb8",
+    "totals": {
+      "files": 4,
+      "additions": 10,
+      "deletions": 1
+    },
+    "rows": [
+      {
+        "path": "AGENTS.md",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 1,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 7,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/run/complete.js 或 review 探针面",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "eeaf269863186d8d5590b97803fb5a30b908f482d27495adb5514165b14b7979",
+  "patchStatus": "ok"
+}

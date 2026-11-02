@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-constraint-mechanize",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "64a8bd03",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "P2",
+      "open": true,
+      "fr": "FR-01",
+      "summary": "FR-01 测试绑定未兑现：requirements 绑定「test/knowledge-fusion.test.mjs『注入面文案含任务词汇反例』或 test/knowledge-inject.test.mjs（源码锁）」，两者均不存在，提交 bc17735d 无任何 test/ 变更——新反例行无回归锁（对照先例：既有中立性行引入时在 test/knowledge-scope-inject.test.mjs 有『内置行在场（有意新增）』断言）",
+      "evidence": "git show --stat HEAD 无 test/ 文件；grep『任务词汇|反例|写死|--repo』于 test/knowledge-inject.test.mjs / test/knowledge-fusion.test.mjs / test/knowledge-rank-denoise.test.mjs 零命中。功能性在场已在源码核实（src/flow.js:312），行为无损，属覆盖债非行为缺陷",
+      "title": "git show --stat HEAD 无 test/ 文件；grep『任务词汇|反例|写死|--repo』于 test/knowledge-inject.test.mjs / test/knowledge-fusion.test.mjs / test/knowledge-rank-denoise.test.mjs 零命中。功能性在场已在源码核实（src/flow.js:312），行为无损，属覆盖债非行为缺陷"
+    },
+    {
+      "id": "R2",
+      "severity": "P2",
+      "open": true,
+      "fr": "FR-02",
+      "summary": "FR-02 子句未实现：「decisions add 的字段提示面（如有 usage/help 文案）必须提及可选的『落地层：』字段」——src/index.js:4768 的 decisions add 用法串仍只列 --question/--answer/--anchor 等既有字段，未提「落地层：」",
+      "evidence": "grep『落地层』src/ 仅 complete.js 两处（本变更加的自检），index.js usage 零命中。缓解项：门提示文案自身已指引『在对应决策补「落地层：」字段（D-002 先例）』，且该字段为 decisions.md 自由文本非 CLI 解析字段",
+      "title": "grep『落地层』src/ 仅 complete.js 两处（本变更加的自检），index.js usage 零命中。缓解项：门提示文案自身已指引『在对应决策补「落地层：」字段（D-002 先例）』，且该字段为 decisions.md 自由文本非 CLI 解析字段"
+    },
+    {
+      "id": "R3",
+      "severity": "P2",
+      "open": true,
+      "fr": "FR-02",
+      "summary": "触发条件较 requirements 正文收窄：正文为「含『用户原话保留』标记或『死路』注记的事故类条目」两路触发，实现为 /用户原话保留|落地层[：:]/——纯『死路』条目不触发转写自检（死路条目仍走既有 scope 否决独立小节回显，仅缺自检提示）",
+      "evidence": "src/run/complete.js:565 正则；主触发路（用户原话保留）在场且与变更批准面描述一致，属 requirements 措辞与实现的子集偏差",
+      "title": "src/run/complete.js:565 正则；主触发路（用户原话保留）在场且与变更批准面描述一致，属 requirements 措辞与实现的子集偏差"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（纯文案/文档/提示行追加，无顺序依赖；恒注入行追加在 scopedLines 数组，渲染序确定）",
+    "并发": "ok（无新增写点：数组 push + console.warn + AGENTS.md 文档行，均在既有调用帧内）",
+    "切换": "ok（advisory 无状态无门；knowledge-gate 外层 try/catch fail-open 保持，自检异常随整段放行不阻断完成）",
+    "作用域": "ok（AGENTS.md 仓级持久载体；flow.js/complete.js 为 CLI 全局代码但文案本身无项目特定内容——与规约 00 自洽，未写死任何项目名/路径）"
+  },
+  "verification": {
+    "probes": "node --test test/knowledge-inject.test.mjs test/knowledge-fusion.test.mjs test/knowledge-rank-denoise.test.mjs → 12 tests pass 0 fail（含 custom-runner 套件全 PASS）+ 补跑 test/knowledge-scope-inject.test.mjs（恒注入行格式锁面）3 tests pass；npm run lint → 1101 files 绿 EXIT=0；补跑 node eval/knowledge/run.mjs --smoke → 六探针（score-contract/word-boundary/route-rows/scope-manual/fixed-entries/linkage）全 GREEN EXIT=0",
+    "log": ".sillyspec/.runtime/logs/review-q6.log",
+    "frChecks": {
+      "FR-01": "PASS-with-note：src/flow.js:312 反例行任务词汇在场（写死/路径/--repo/项目特定 env/硬编码仓表），无政策词升维（中立性/开放世界不出现在反例行）；单行同前缀格式，scope-inject ②③ 断言绿不破格式。测试绑定缺位见 R1",
+      "FR-02": "PASS-with-note：src/run/complete.js:563-568 触发 _dm（本变更 decisions.md，L496-498 读取）含 用户原话保留|落地层： 时 console.warn 自检提示（测试/门/接口/规约 + 落地层字段 D-002 先例），纯 advisory 无行为门（无 throw/exit，随 knowledge-gate warn 段输出，local.yaml 可关回显同前）。子句缺位见 R2/R3",
+      "FR-03": "PASS：AGENTS.md 规约 00 行下直接附反例注记，任务词汇 + 用户原话引文（『这工具是给无限制的项目使用的』），仓级持久载体可检索；文件尾无换行为存量状态非本变更新增",
+      "FR-04": "PASS：三测试文件 + lint + eval smoke 复跑全绿（见 probes）；注入面文案变更未破既有断言"
+    }
+  },
+  "reviewedAt": "2026-11-02T13:49:46.423Z"
+}

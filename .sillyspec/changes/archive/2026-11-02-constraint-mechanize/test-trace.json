@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-constraint-mechanize",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-constraint-mechanize:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「注入面文案含任务词汇反例」",
+        "test/knowledge-inject.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-constraint-mechanize"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-constraint-mechanize:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-fusion.test.mjs",
+        "test/knowledge-inject.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-constraint-mechanize"
+    }
+  ]
+}

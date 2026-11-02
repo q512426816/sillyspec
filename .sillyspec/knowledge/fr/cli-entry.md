@@ -11913,3 +11913,63 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-10-28-overlap-route
   status: active
+
+## FR-cli-entry-628 FR-01 规约 00 反例：flow.js:311 恒注入行附一条任务词汇反例（如「评测工具缺省写死两仓路径即违规——每条路径必须来自 --repo 参数或缺省当前仓」），反例用用户原话的任务词汇非政策话语
+变更：2026-11-02-constraint-mechanize
+状态：active
+摘要：反例词汇
+场景正文：
+- 场景：反例词汇 — Given 恒注入面输出；When agent 读到规约 00；Then 反例行含任务词汇（写死/路径/--repo）而非政策词（中立性/开放世界）
+全文：.sillyspec/changes/archive/2026-11-02-constraint-mechanize/requirements.md#FR-01
+最近确认：64a8bd0386f5d814f6447623b4f1c37a19f6bbbe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-constraint-mechanize:flow:测试绑定FR-01
+  tests: test/knowledge-fusion.test.mjs「注入面文案含任务词汇反例」 | test/knowledge-inject.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-constraint-mechanize
+  status: active
+
+## FR-cli-entry-629 FR-02 事故转写自检：decision-distill 的评审探针/收割面（complete 门/review probes）加一道自检——当本变更执行期有用户会话纠正时，提示「用户的纠正原话转写进了哪一层（测试/门/接口/规约）」，未转写则 decisions add 时要求补「落地层：」字段（D-002 先例已有此字段形态）
+变更：2026-11-02-constraint-mechanize
+状态：active
+摘要：事故类条目触发
+场景正文：
+- 场景：事故类条目触发 — Given decisions.md 含「用户原话保留」的事故类条目；When complete 门/review 跑；Then 输出提示「用户纠正原话转写进了哪一层（测试/门/接口/规约）」自检
+全文：.sillyspec/changes/archive/2026-11-02-constraint-mechanize/requirements.md#FR-02
+最近确认：64a8bd0386f5d814f6447623b4f1c37a19f6bbbe
+
+## FR-cli-entry-630 FR-03 模板更新：AGENTS.md 的规约 00 或知识库 conventions 加任务词汇反例注记（持久载体）
+变更：2026-11-02-constraint-mechanize
+状态：active
+摘要：注记在场
+场景正文：
+- 场景：注记在场 — Given 变更完成；When 读 AGENTS.md 或 conventions.md；Then 规约 00 附近含任务词汇反例（可检索）
+全文：.sillyspec/changes/archive/2026-11-02-constraint-mechanize/requirements.md#FR-03
+最近确认：64a8bd0386f5d814f6447623b4f1c37a19f6bbbe
+
+## FR-cli-entry-631 FR-04 验收：六探针 GREEN 五面零回归 + lint 绿 + 既有测试全绿 + 注入面文案变更不破注入测试（探针更新如需）
+变更：2026-11-02-constraint-mechanize
+状态：active
+摘要：注入面回归
+场景正文：
+- 场景：注入面回归 — Given 恒注入行变化；When 跑 flow/inject 测试；Then 全绿（文案变更不破格式断言）
+全文：.sillyspec/changes/archive/2026-11-02-constraint-mechanize/requirements.md#FR-04
+最近确认：64a8bd0386f5d814f6447623b4f1c37a19f6bbbe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-constraint-mechanize:flow:测试绑定FR-04
+  tests: test/knowledge-fusion.test.mjs | test/knowledge-inject.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-constraint-mechanize
+  status: active

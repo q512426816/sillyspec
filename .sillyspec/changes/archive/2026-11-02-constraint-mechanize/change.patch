@@ -1,0 +1,43 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index bf3ff0e0..4bb9b1ae 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -45,4 +45,5 @@ sillyspec flow start --change <YYYY-MM-DD-名> --input "<一句 10-30 字中文
+ 13. **边干边勾（任务进度唯一源=变更的 tasks.md）**：完成一个任务单元（实现到位 + 相关测试跑绿）当场勾对应格——`sillyspec task tick --change <名> --task task-NN`（即时回显进度与下一任务）或直接 Edit 翻格 `- [ ]`→`- [x]`，勿攒到收口一把勾。harness 自带的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度投影、收口哨兵、断点恢复只读 tasks.md。
+ 14. **推送前压扁**：本地未推送提交统一走 `sillyspec push`（默认 by-change；`--mode one` 需明确归属），禁止直接 `git push`、`git push --force` 或手工 `git reset --soft` 压扁；已推送历史不改写，并行会话的 staged 文件/Dirty 文件不替人提交或清理。
+ 
+-00. **不要枚举定义开放世界 以及 不要限制死 开发语言和框架**
+\ No newline at end of file
++00. **不要枚举定义开放世界 以及 不要限制死 开发语言和框架**
++    - 反例（任务词汇）：评测工具缺省写死两个仓的路径即违规——每条路径必须来自 `--repo` 参数或缺省当前仓；出现具体项目名/项目特定 env/硬编码仓表即违规（2026-11-02 用户原话纠正实证：「这工具是给无限制的项目使用的」）
+\ No newline at end of file
+diff --git a/src/flow.js b/src/flow.js
+index e628bb45..526b434c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -309,6 +309,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+       const alwaysRepo = [...scoped.always, ...scoped.repo]
+       summary.scopedEntries = alwaysRepo.length
+       scopedLines.push('   🧭 工具中立性（内置规约 00，每变更恒注入）：不枚举定义开放世界、不锁死开发语言/框架——配置与机制用 CLI 自有分类（批类别/路径集合），新增语言只加探测适配。')
++      scopedLines.push('   🧭 反例（任务词汇——违规现场词面相似即命中）：评测工具缺省写死两个仓的路径即违规——每条路径必须来自 --repo 参数或缺省当前仓；出现具体项目名/项目特定 env/硬编码仓表即违规（2026-11-02 用户原话纠正实证）。')
+       for (const e of alwaysRepo.slice(0, 5)) {
+         scopedLines.push(`   📌 [${e.scope}] ${e.id}：${e.summary}`)
+       }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index ab24ec24..1b034063 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -559,6 +559,13 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
+               console.warn(`   - 触达文件关联否决 ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${_via}）${h.status === 'rejected' ? `否决理由：${h.reason || '（未记录）'}` : `⚰️死路：${deathPathNote(h.reason)}`}`)
+             }
+             console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
++            // 用户纠正转写自检（2026-11-02-constraint-mechanize FR-02）：本变更 decisions.md 有
++            // 「用户原话保留」事故类条目时提示转写层——点火器转写纪律（用户纠正是生成时刻约束力
++            // 最强的力量，跨会话零存续，最强用法是当场转写进测试/门/接口/规约）
++            const _hasUserCorrection = _dm && /用户原话保留|落地层[：:]/.test(_dm)
++            if (_hasUserCorrection) {
++              console.warn(`   🔥 用户纠正转写自检：本变更记录了用户纠正——原话转写进了哪一层（测试/门/接口/规约）？未转写则在对应决策补「落地层：」字段（D-002 先例）`)
++            }
+           }
+         }
+       }
