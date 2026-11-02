@@ -3,7 +3,7 @@
   "generated_by": "eval/knowledge/run.mjs",
   "snapshot": {
     "sillyspec": {
-      "head": "b3226291c6a3ccf31202a6e0720a79fa974a8e75",
+      "head": "efce0baa305e18c15893dc86f30d402743c82545",
       "knowledge_hash": "b510413e62cc76dbc79bba48c5ca021822e049d014c1bdcc755e2644ce6f51a7",
       "knowledge_files": 139
     },
@@ -19,7 +19,7 @@
       "self": 206
     },
     "platform": {
-      "organic": 26,
+      "organic": 29,
       "self": 329
     }
   },
@@ -400,15 +400,15 @@
       },
       "decisions": {
         "raw": {
-          "top1": 0.7778,
-          "top3": 0.7778,
-          "mrr": 0.7778,
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
           "n": 9
         },
         "rendered": {
-          "top1": 0.7778,
-          "top3": 0.7778,
-          "mrr": 0.7778,
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
           "n": 9
         },
         "truncated": [],
@@ -457,14 +457,14 @@
           },
           {
             "id": "p-dec-07",
-            "raw_rank": null,
-            "rendered_rank": null,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "p-dec-08",
-            "raw_rank": null,
-            "rendered_rank": null,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           }
         ]
@@ -542,16 +542,16 @@
       },
       "scope": {
         "raw": {
-          "top1": 0.6667,
+          "top1": 0.8333,
           "top3": 1,
-          "mrr": 0.8333,
-          "n": 3
+          "mrr": 0.9167,
+          "n": 6
         },
         "rendered": {
-          "top1": 0.6667,
+          "top1": 0.8333,
           "top3": 1,
-          "mrr": 0.8333,
-          "n": 3
+          "mrr": 0.9167,
+          "n": 6
         },
         "truncated": [],
         "details": [
@@ -572,14 +572,32 @@
             "raw_rank": 1,
             "rendered_rank": 1,
             "truncated": false
+          },
+          {
+            "id": "p-scope-04",
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
+          },
+          {
+            "id": "p-scope-05",
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
+          },
+          {
+            "id": "p-scope-06",
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           }
         ],
         "subsets": {
           "added": {
-            "top1": 0.6667,
+            "top1": 0.8333,
             "top3": 1,
-            "mrr": 0.8333,
-            "n": 3
+            "mrr": 0.9167,
+            "n": 6
           }
         },
         "scope_unreachable": []

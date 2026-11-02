@@ -174,5 +174,23 @@ console.log('\n=== T8: 逃生阀 SILLYSPEC_HOT_CACHE=off → 恒 miss ===')
   } finally { clean(specBase) }
 }
 
+// ── 2026-11-02-scope-recall：手工文档编辑触发图重建（v2 manualDocs 指纹） ──
+console.log('\n=== T9: 手工文档编辑触发图重建 ===')
+{
+  const dir = setup('manual-docs')
+  const specBase = join(dir, '.sillyspec')
+  try {
+    mkdirSync(join(specBase, 'knowledge'), { recursive: true })
+    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# I\n\n## Gotchas\n- a → [A](gotchas.md#sec-a)\n')
+    writeFileSync(join(specBase, 'knowledge', 'gotchas.md'), '# G\n\n## sec a\n\n无路径提及。\n')
+    const g1 = buildKnowledgeGraph(specBase)
+    const before = g1.edges.filter((e) => e.type === 'doc-refs').length
+    writeFileSync(join(specBase, 'knowledge', 'gotchas.md'), '# G\n\n## sec a\n\n引用 src/new.js 的说明。\n')
+    const g2 = buildKnowledgeGraph(specBase)
+    const after = g2.edges.filter((e) => e.type === 'doc-refs').length
+    assert(before === 0 && after === 1, '手工文档编辑触发重建（doc-refs 边 0→1，指纹含 manualDocs）')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
 console.log(`\n结果: ${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

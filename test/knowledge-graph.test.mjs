@@ -630,3 +630,73 @@ test('⑫impactFromDecisionsMd：锚点+模块域双结构键 → graphImpact �
     assert.deepEqual(impactFromDecisionsMd(g, '## D-001@v1: x\n- 模块域: core-engine\n'), [])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+// ═══ 2026-11-02-scope-recall：section 级 doc-refs / entries-only / 两跳 ═══
+
+/** scope 召回 fixture：两个手工 section 各引一路径 + 一个变更三条决策（rejected/implemented/direct）。 */
+function buildScopeFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'kg-scope-'))
+  const K = (p) => join(root, '.sillyspec', p)
+  mkdirSync(K('knowledge/decisions'), { recursive: true })
+  mkdirSync(K('knowledge/fr'), { recursive: true })
+  mkdirSync(K('docs/proj/modules'), { recursive: true })
+  mkdirSync(K('changes/archive/2026-01-01-scope-change'), { recursive: true })
+  writeFileSync(K('docs/proj/modules/_module-map.yaml'), 'modules:\n  demo:\n    paths:\n      - src/shared.js\n')
+  writeFileSync(K('knowledge/INDEX.md'), [
+    '# Knowledge Index', '',
+    '## Gotchas',
+    '- gotchaA → [A 坑](gotchas.md#sec-a)',
+    '- gotchaB → [B 坑](gotchas.md#sec-b)', '',
+    '## Decisions',
+    '- scope|decision → [demo](decisions/demo.md)', '',
+  ].join('\n'))
+  writeFileSync(K('knowledge/gotchas.md'), [
+    '# Gotchas', '',
+    '## sec a', '',
+    'A 节引用 src/a.js 的说明。', '',
+    '## sec b', '',
+    'B 节引用 src/b.js 的说明。', '',
+  ].join('\n'))
+  writeFileSync(K('knowledge/decisions/demo.md'), [
+    '## D-001@v1 两跳否决', '状态：rejected', '变更：2026-01-01-scope-change', '否决理由：样例', '',
+    '## D-002@v1 两跳实现', '状态：implemented', '变更：2026-01-01-scope-change', '理由：样例', '',
+    '## D-003@v1 直连否决', '状态：rejected', '变更：2026-02-02-direct', '锚点：src/a.js:1', '否决理由：样例', '',
+  ].join('\n'))
+  writeFileSync(K('knowledge/fr/demo.md'), '## FR-demo-001 需求\n变更：2026-01-01-scope-change\n状态：active\n')
+  writeFileSync(K('changes/archive/2026-01-01-scope-change/design.md'), [
+    '# 设计', '',
+    '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 新增 | src/shared.js | 两跳文件 |', '',
+  ].join('\n'))
+  return root
+}
+
+test('scope-recall FR-01：section 级 doc-refs 边界与 entries-only 返回', () => {
+  const root = buildScopeFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const docRefs = g.edges.filter((e) => e.type === 'doc-refs')
+    assert.ok(docRefs.some((e) => e.s.endsWith('#sec-a') && e.t === 'src/a.js'), 'sec-a → src/a.js')
+    assert.ok(docRefs.some((e) => e.s.endsWith('#sec-b') && e.t === 'src/b.js'), 'sec-b → src/b.js')
+    assert.ok(!docRefs.some((e) => e.s.endsWith('#sec-a') && e.t === 'src/b.js'), '异 section 不串边（section 级隔离）')
+    assert.equal(EDGE_STRENGTH['doc-refs'], 'medium', 'doc-refs 保持 medium（graphPath/impact 语义不动）')
+    const entryNode = [...g.nodes.values()].find((n) => n.id.endsWith('#sec-a'))
+    assert.ok(entryNode && entryNode.attrs.anchor === 'sec-a' && entryNode.attrs.category === 'Gotchas', 'entry 节点携带 anchor/category 属性')
+    const r1 = scopeRecall(g, ['src/a.js'])
+    assert.ok(r1.entries.some((e) => `${e.file}#${e.anchor}` === 'gotchas.md#sec-a'), 'scopeRecall 收 doc-refs 手工条目')
+    assert.ok(r1.decisionHits.some((h) => h.id === 'D-003@v1' && h.via === 'direct' && h.score === 2), '直连决策 via=direct/score=2')
+    const onlyEntries = buildScopeRecallResult(scopeRecall(g, ['src/b.js']))
+    assert.ok(onlyEntries && onlyEntries.matched === true, 'entries-only（无决策）非 null')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('scope-recall FR-02：两跳只收 rejected/deathPath', () => {
+  const root = buildScopeFixture()
+  try {
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const r = scopeRecall(g, ['src/shared.js'])
+    assert.ok(r.decisionHits.some((h) => h.id === 'D-001@v1' && h.via === 'two-hop' && h.score === 1), '两跳 rejected 收入')
+    assert.ok(!r.decisionHits.some((h) => h.id === 'D-002@v1'), '两跳 implemented 模板底稿排除')
+    assert.ok(!r.decisionHits.some((h) => h.id === 'D-003@v1'), '无关变更决策不串入')
+    assert.ok(r.decisionHits.length <= 20, '引擎 cap 20')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

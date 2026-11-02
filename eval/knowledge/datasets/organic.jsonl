@@ -40,8 +40,8 @@
 {"id":"p-dec-04","repo":"platform","face":"decisions","query":"backend 落选 仅做启动预热 不改存储","expected":["decisions/backend.md#D-backend-021@v1"]}
 {"id":"p-dec-05","repo":"platform","face":"decisions","query":"backend 落选 方案 B 后台常驻同步协程","expected":["decisions/backend.md#D-backend-023@v1"]}
 {"id":"p-dec-06","repo":"platform","face":"decisions","query":"backend 落选 平台行携带记录名 方案 B","expected":["decisions/backend.md#D-backend-033@v1"]}
-{"id":"p-dec-07","repo":"platform","face":"decisions","query":"daemon 落选 新增 daemon 列记录 RPC 方案 C","expected":["decisions/backend.md#D-sillyhub-daemon-001@v1"]}
-{"id":"p-dec-08","repo":"platform","face":"decisions","query":"frontend 零 daemon 改动 backend 拼 allowed_roots 路径 方案 A","expected":["decisions/frontend_components.md#D-005@v1"]}
+{"id":"p-dec-07","repo":"platform","face":"decisions","query":"backend 落选 新增 daemon 列记录 RPC 方案 C","expected":["decisions/backend.md#D-sillyhub-daemon-001@v1"]}
+{"id":"p-dec-08","repo":"platform","face":"decisions","query":"backend 落选 方案 C 首查触发 周期刷新混合","expected":["decisions/backend.md#D-backend-024@v1"]}
 {"id":"p-scope-01","repo":"platform","face":"scope","query":"frontend SSE fetch-sse Authorization header","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"],"scope_files":["frontend/src/lib/fetch-sse.ts"],"subset":"added"}
 {"id":"p-scope-02","repo":"platform","face":"scope","query":"backend auth_deps monkeypatch has_permission","expected":["testing-gotchas.md#后端monkeypatch-has_permission-必须双-patchauth_deps-导入时绑定--rbac-模块属性"],"scope_files":["backend/app/core/auth_deps.py"],"subset":"added"}
 {"id":"p-scope-03","repo":"platform","face":"scope","query":"backend audit hooks lifespan 审计日志","expected":["known-issues.md#-audit_hooks-只在测试-lifespan-注册生产审计要业务代码显式写-auditlog"],"scope_files":["backend/app/main.py"],"subset":"added"}
@@ -50,3 +50,6 @@
 {"id":"s-scope-03","repo":"sillyspec","face":"scope","query":"flow 前门 决策记录","expected":["decisions/cli-entry.md#D-unmapped-433@v1"],"scope_files":["src/flow.js"],"subset":"added"}
 {"id":"s-scope-04","repo":"sillyspec","face":"scope","query":"execute 阶段 风险死路","expected":["decisions/stages.md#D-unmapped-153@v1"],"scope_files":["src/stages/execute.js"],"subset":"added"}
 {"id":"s-scope-05","repo":"sillyspec","face":"scope","query":"CLI 入口 决策","expected":["decisions/cli-entry.md#D-unmapped-161@v1"],"scope_files":["src/index.js"],"subset":"added"}
+{"id":"p-scope-04","repo":"platform","face":"scope","query":"frontend SSE agent-stream 流式消费","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"],"scope_files":["frontend/src/lib/agent-stream.ts"],"subset":"added"}
+{"id":"p-scope-05","repo":"platform","face":"scope","query":"login_enabled get_current_user 检查","expected":["known-issues.md#-2026-06-17--login_enabled-必须在-get_current_user-检查不能只在-login-入口commit-d62ec975"],"scope_files":["backend/app/core/auth_deps.py"],"subset":"added"}
+{"id":"p-scope-06","repo":"platform","face":"scope","query":"tailwind md 视口断点 侧栏","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"],"scope_files":["frontend/src/components/changes/detail/change-sessions-card.tsx"],"subset":"added"}

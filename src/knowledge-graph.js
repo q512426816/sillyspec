@@ -400,7 +400,7 @@ function buildKnowledgeGraphFresh(specRoot) {
 // 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
 // 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
 
-const GRAPH_CACHE_VERSION = 2
+const GRAPH_CACHE_VERSION = 3
 const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
 
 function statSignature(p) {
@@ -952,7 +952,9 @@ export function scopeRecall(graph, scopeFiles) {
   const seen = new Set()
   const pushHit = (n, score, via) => {
     const base = n.attrs.hit || {}
-    const key = `${base.file || ''}#${base.id || ''}`
+    // 去重键含 change（2026-11-02-scope-recall 评审 P2）：D-id 是变更内局部号，跨变更同号常见——
+    // 只按 file#id 去重会让 implemented 直连条目抢先占用键、吞掉 rejected 两跳（渲染面失效）
+    const key = `${base.file || ''}#${base.id || ''}#${base.change || ''}`
     if (seen.has(key)) return
     seen.add(key)
     hits.push({ ...base, file: base.file, score, via })
