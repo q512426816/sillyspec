@@ -28,7 +28,8 @@
     "test": "node test/run-tests.mjs",
     "lint": "node test/check-syntax.mjs",
     "eval:dry": "node eval/run.mjs --dry-run",
-    "eval:pilot": "node eval/run.mjs --pilot"
+    "eval:pilot": "node eval/run.mjs --pilot",
+    "eval:knowledge": "node eval/knowledge/run.mjs"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",

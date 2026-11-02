@@ -264,8 +264,9 @@ function escapeRegex(s) {
  * - 过短关键词（<2 字符）视为噪音，不参与匹配
  * - 非 ASCII（中文等）用子串匹配
  * - ASCII 关键词用词边界匹配，避免子串误命中（如 "DB" 不命中 "dashboard"）
+ * 导出供评测适配层（eval/knowledge）复用同一判定——零行为变化。
  */
-function keywordMatchesContext(keyword, contextLower) {
+export function keywordMatchesContext(keyword, contextLower) {
   const kw = keyword.toLowerCase().trim()
   if (kw.length < 2) return false
   if (/[^\x00-\x7f]/.test(kw)) return contextLower.includes(kw)

@@ -1,0 +1,39 @@
+tier: thin
+legacy_fallback: false
+substeps: {}
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  知识检索评测面：分面基线与缺陷探针
+
+
+  当前知识库检索缺乏任何量化验收面，此前所有改进（词边界、层序、灌入）都是盲修。需要一个可复跑、只读、分消费面的评测工具，为后续排序与降噪变更提供验收尺子。历史遥测 matchedFiles 被旧版本代码污染不可作标签，归档 input
+  仅本仓 2026-10 轻量道 211 条且平台仓为零，故主查询语料用遥测 query 池配合人工标签。
+
+
+  成功标准：
+
+  - 三源数据集：organic（遥测 query 去重池，本仓 110/平台 548，抽样人工 anchor 级标签 30 条起步）、self（211 条归档 input 回放，leave-one-out 防泄漏，只作 smoke
+  不作质量指标）、probes（合成缺陷 fixtures）
+
+  - 缺陷探针 fixtures 覆盖六类：score 输出契约（=命中标签数）、词边界（_/- 策略）、fr/decisions 路由行混入 entries 率、scope 层手工条目可达性、known-issues
+  已修复条目注入率、决策↔代码关联率
+
+  - 分面 runner 输出 Top-1/Top-3（entries@3、decisionHits@5、search@10、scope@3/20 四个核心面），raw 与 rendered 两套结果可区分引擎未召回与渲染截断
+
+  - 全流程零网络零遥测副作用（SILLYSPEC_KNOWLEDGE_VECTOR=off、SILLYSPEC_HITS_PUSH=0、临时 runtimeDir），结果带 git HEAD + knowledge 目录 hash
+  快照指纹
+
+  - baseline.json 可提交可 diff，npm run eval:knowledge 可复跑，附零网络 smoke test
+autopilot: true
+prestage_ack: true
+baseline_commit: 05901a963032f87e9c0c0f40b6d94810413730c1
+updatedAt: '2026-11-02T02:09:50.081Z'
+baseline_sha256: cbdf0de01462337dcb54964d576be59348dedae7a466324a209575bfe18db6d9
+spec_approved: true
+spec_approved_at: '2026-11-02T02:09:50.081Z'
+spec_approved_by: anon@DESKTOP-HJ0AM09
+spec_approved_channel: agent-self
+spec_attested_by: anon@DESKTOP-HJ0AM09
+

@@ -1,0 +1,35 @@
+// organic 评测集 — 遥测 query 抽样 + 人工 anchor 级标签（冻结：提交后不随遥测漂移）
+// 字段：id / repo(sillyspec|platform) / face(entries|decisions|search|scope) / query / expected[]
+// expected 含 "#" = 精确 file#anchor；不含 "#" = 文件级（匹配该文件任意命中）
+// scope_files（可选）= scope 面图遍历的机器键；无此字段的 case 不进 scope 面
+// 标注口径：查询的真实技术意图应对口的知识条目；当前未命中即为红基线，供后续变更对比
+{"id":"s-tel-01","repo":"sillyspec","face":"decisions","query":"2026-09-28-kgd 方案探索：用枚举词表扫描开放世界形态的需求并自动分类","expected":["decisions/unmapped.md#D-unmapped-150@v1"],"note":"防复潮：查询应召回已否决的「枚举开放世界」决策"}
+{"id":"s-tel-02","repo":"sillyspec","face":"entries","query":"route-hindsight 模块（指标计算/阈值/落库/读取）＋单测 brainstorm Step4/5 指引模板加机制词检索固定动作","expected":["decisions/core-engine.md"],"note":"防复潮注入挂 brainstorm Step2 的决策在 core-engine 域"}
+{"id":"s-tel-03","repo":"sillyspec","face":"entries","query":"flow.js 前门盘问渲染＋hindsight 提示注入＋收口指标接线＋单测 complete.js 方案步 --done 门检索回显＋config-schema 逃生阀","expected":["decisions/cli-entry.md"],"note":"flow 前门/命令面决策在 cli-entry 域"}
+{"id":"s-tel-04","repo":"sillyspec","face":"entries","query":"标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句","expected":["fr/cli-entry.md"],"note":"changes.title 三段链路等 FR 在 cli-entry 域"}
+{"id":"s-tel-05","repo":"sillyspec","face":"decisions","query":"用枚举词表扫描开放世界形态的需求并自动分类","expected":["decisions/unmapped.md#D-unmapped-150@v1"],"note":"同一意图的短查询变体"}
+{"id":"s-man-01","repo":"sillyspec","face":"entries","query":"worktree 清理 node_modules junction 删除","expected":["sillyspec-gotchas.md"],"scope_files":["src/worktree.js"],"note":"junction 解链坑在 gotchas 手工条目"}
+{"id":"s-man-02","repo":"sillyspec","face":"decisions","query":"worktree 清理 node_modules junction 删除","expected":["decisions/worktree.md#D-worktree-001@v1"],"scope_files":["src/worktree.js"],"note":"两次事故实录的决策条目；当前 decisionHits 为空（红基线）"}
+{"id":"s-man-03","repo":"sillyspec","face":"entries","query":"worktree doctor --fix 标记 installed 但 node_modules junction 实际未建","expected":["sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建"],"scope_files":["src/worktree.js"],"note":"精确锚点命中验证"}
+{"id":"s-man-04","repo":"sillyspec","face":"entries","query":"daemon mcp-server 子进程不继承 claude.exe 环境","expected":["patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv"],"scope_files":["src/mcp-server.js"]}
+{"id":"s-man-05","repo":"sillyspec","face":"entries","query":"execute worktree 里没有 node_modules 子代理 cwd 要显式 worktree 路径","expected":["sillyspec-gotchas.md#execute-worktree-无-node_modules--子代理-cwd-需显式-worktree-路径"],"scope_files":["src/stages/execute.js"]}
+{"id":"s-man-06","repo":"sillyspec","face":"entries","query":"reopen --from step n 后 --done 把后续未执行步骤回填 completed","expected":["sillyspec-gotchas.md#reopen---from-step-n-后---done-会把后续未执行步骤回填-completed"]}
+{"id":"s-man-07","repo":"sillyspec","face":"entries","query":"sqlite pragma foreign_keys 默认关闭 cascade 失效 孤儿变更清理","expected":["sillyspec-gotchas.md#sqlite-pragma-foreign_keys-默认关闭致-cascade-失效清理孤儿变更"]}
+{"id":"s-man-08","repo":"sillyspec","face":"entries","query":"plan execute 子代理 cwd 设到变更目录 嵌套 sillyspec 副作用","expected":["sillyspec-gotchas.md#planexecute-子代理可能把-cwd-设到变更目录产生嵌套-sillyspec-副作用"]}
+{"id":"s-man-09","repo":"sillyspec","face":"entries","query":"sillyspec 版本发布 package.json 同步 R5 锚","expected":["fr/release.md"]}
+{"id":"s-man-10","repo":"sillyspec","face":"entries","query":"docs gate 基线棘轮 339 替换 379","expected":["fr/docs.md"]}
+{"id":"p-tel-01","repo":"platform","face":"entries","query":"工具输出捕获链路按 Windows 码页探测解码,修复 TOOL_RESULT 中文乱码落库问题","expected":["known-issues.md"],"note":"码页乱码条目在 known-issues"}
+{"id":"p-tel-02","repo":"platform","face":"entries","query":"修复 daemon 码页探测解码器 GBK 流式回退死代码（StringDecoder.write 不抛错）并顺修两处注释漂移","expected":["known-issues.md"]}
+{"id":"p-tel-03","repo":"platform","face":"entries","query":"buildSpawnEnv 注入 PYTHONIOENCODING/PYTHONUTF8 缺省让 claude Bash 子进程源端吐 UTF-8","expected":["known-issues.md"]}
+{"id":"p-tel-04","repo":"platform","face":"entries","query":"修复 codex driver JSON-RPC id 空间碰撞：nextRpcId 与 nextJsonRpcId 统一单计数器分配","expected":["patterns.md"]}
+{"id":"p-tel-05","repo":"platform","face":"entries","query":"后端事件表 ORM + alembic 建表迁移 + conftest 建表","expected":["known-issues.md"],"note":"alembic 并行变更撞 revision 多 head 坑"}
+{"id":"p-tel-06","repo":"platform","face":"entries","query":"后端 schema + service（append_events 去重上限 / list_events 正序增量）","expected":["conventions.md"]}
+{"id":"p-tel-07","repo":"platform","face":"entries","query":"蒸馏任务条点击跳转会话页——distill-task-bar 增查看会话入口，经 /sessions?session=<agent_session_id> 深链打开对应蒸馏会话","expected":["known-issues.md"],"note":"AgentMission.session_id 列不可信判别口径坑"}
+{"id":"p-tel-08","repo":"platform","face":"entries","query":"claude 会话 one_m 勾选未作用于主模型——ANTHROPIC_MODEL 与 interactive create model 参数按角色映射 one_m 补 [1m] 后缀","expected":["decisions/interactive.md"]}
+{"id":"p-tel-09","repo":"platform","face":"entries","query":"会话页空闲降频：消息队列兜底轮询 5s→30s（SSE queue_changed 事件驱动即时刷新为主链，轮询纯兜底）","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"]}
+{"id":"p-tel-10","repo":"platform","face":"entries","query":"手机端会话页样式优化：降噪（用量条/配置条/占位文案）+ 会话内容放大（气泡字号宽度），仅 mobile 变体生效","expected":["fr/app-mobile-pages.md"]}
+{"id":"p-tel-11","repo":"platform","face":"entries","query":"手机端会话页功能入口收纳（用户约束：不砍功能）：用量条收进头部更多菜单会话用量区，配置条 mobile 增设设置展开钮","expected":["fr/app-mobile-pages.md"]}
+{"id":"p-tel-12","repo":"platform","face":"entries","query":"手机端会话页二轮样式收敛：正文 16 回调 14px，底部配置区一行化，打断钮 mobile 图标化","expected":["fr/app-mobile-pages.md"]}
+{"id":"p-tel-13","repo":"platform","face":"entries","query":"沉淀弹层三修：快速修复多选失效（只能选一个）弹层样式溢出超出视口 新建 agent 配置补供应商/模型选择","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"]}
+{"id":"p-tel-14","repo":"platform","face":"entries","query":"修复 frontend-ci 连续失败：page.test.tsx user_input 断言未随 ql-20260918-003 行为变更同步","expected":["fr/api-types.md"]}
+{"id":"p-tel-15","repo":"platform","face":"entries","query":"registry 注册两 format + host-fs-handler 透传新字段与 totalUsage 平台 messages schema 可选新字段 + openapi/gen:types","expected":["fr/host-fs-handler.md"]}
