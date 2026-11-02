@@ -88,3 +88,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-11-02-knowledge-rank-denoise | 知识检索排序与降噪：四类缺陷转绿
 - 2026-11-02-knowledge-fusion | 检索融合与消费面 scope 键统一
 - 2026-11-02-knowledge-engine-tail | 检索引擎遗留收尾：向量融合与图卫生
+- 2026-11-02-quicklog-inject-retire | quicklog 检索注入面下线

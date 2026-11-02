@@ -453,3 +453,11 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
 理由：**风险**：状态误判——无检索后果（isResolvedRoute 不读正文），建议清单人工复核兜底。 **放弃的方案**：① decisions/unmapped 加「状态：draft」字段行——docs-check 机械解析契约+producer 幂等性风险（审查实证），改头注自描述；② 改 isResolvedRoute 读正文状态行——数据迁移不夹带检索行为变化（变更 4 审查裁决），留独立变更。
+
+## D-unmapped-487@v1 设计期风险与放弃方案（底稿）
+状态：implemented
+变更：2026-11-02-quicklog-inject-retire
+原编号：D-001@v1
+锚点：未记录
+最近确认：13825bae60785cf4182923729092174238437d59
+理由：**风险**：摘除后注入测试对 quicklog 段的断言（若有）需同步摘除——grep 确认。 **放弃的方案**：全删 quicklog 子系统（quicklog.js + 目录 + test-bindings）——test-binding 强边消失影响图谱、11+ 测试文件连锁、且 QUICKLOG 记录是独立子系统非检索面，需用户另行决策。

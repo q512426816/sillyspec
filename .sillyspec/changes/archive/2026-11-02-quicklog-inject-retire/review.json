@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-quicklog-inject-retire",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "13825bae60785cf4182923729092174238437d59",
+  "findings": [
+    {
+      "id": "R5-F1",
+      "severity": "P3",
+      "file": "src/knowledge-quicklog.js",
+      "lines": "38, 146-190",
+      "title": "已删功能的死代码与孤儿 docstring 残留（注释级 grep 残留）",
+      "detail": "matchQuicklogContext/renderQuicklogSection 函数体已删，但其专属打分机具整段残留且已无任何调用方：contextTokens/escapeRegex/FILE_HIT_WEIGHT/MIN_TOKEN_HITS/sourceRank 及 ASCII_TOKEN_RE/CJK_RUN_RE（L146-173），加两块无函数可附的孤儿 JSDoc（L175-182 matchQuicklogContext、L184-190 renderQuicklogSection，后者以悬空注释收尾全文件）；L38 parseQuicklogEntries docstring 仍引用「matchQuicklogContext 排序 source 键」——grep 四符号在 src 的唯一残留即此注释行。行为零影响；check-syntax lint 的未引用导出检查只看导出面（这些是模块内私有），故 lint 绿但拦不住。",
+      "recommendation": "后续清理变更删除 L146-190 死代码块并改写 L38 注释（source 字段仍由解析面产出，注释改为陈述排序语义归历史或删除）。不阻断本变更。"
+    },
+    {
+      "id": "R5-F2",
+      "severity": "P3",
+      "file": "src/run/prompt.js",
+      "lines": "21",
+      "title": "dirname 导入悬空（唯一使用点随摘除消失）",
+      "detail": "基线版 dirname 仅在 L595 matchQuicklogContext(dirname(knowledgeDir), ...) 一处使用；摘除后 import { basename, dirname, join } 中 dirname 无引用（basename/join 仍在用）。语法检查型 lint 不报未用导入。行为零影响。",
+      "recommendation": "随手清理：import 收窄为 { basename, join }。不阻断。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "checks": [
+    {
+      "item": "摘除干净（grep 零残留 + 只有减法无改法）",
+      "result": "pass-with-note",
+      "evidence": "grep src/ 四符号（matchQuicklogContext/renderQuicklogSection/quicklogIds/quickHits）代码级零残留——唯一命中为 knowledge-quicklog.js:38 注释行（见 R5-F1）。prompt.js：early-return 由 !matched && quick空 改回 !matched，无 quicklog 时条件等价；section 由 [kSection,''].filter(Boolean).join('\\n\\n') 改为 kSection，空串过滤下逐字节等价。execute.js：守卫由 !matched 改为 entries/routeHits/scopeEntries 全空——等价性核验：matchByRouting matched=true 必含 rankedHuman>0 或 routeHits>0（knowledge-match.js L490），matched=false 时三数组俱空且 fuseScopeRecall 仅在 base.matched 时追加 scope 字段（knowledge-graph.js L1016/L1084），两方向均无非减法差异。quicklogIds 遥测字段移除无 src 消费方（grep 零），属 FR-01 声明行为。"
+    },
+    {
+      "item": "范围正确（test-bindings/quicklog 目录/knowledge-graph 未动）",
+      "result": "pass",
+      "evidence": "diff 034f87b2..13825bae 仅 5 交付文件（3 src + 2 test）+ 变更目录工件；.sillyspec/quicklog/test-bindings.json 在盘且 git 跟踪未动；knowledge-graph.js 不在 diff；冻结补丁（change-patch.json，head=13825bae）文件面一致。根 quicklog/ 与 test/.sillyspec/ 为 local.yaml dirty_gate_ignore 明文记载的历史运行残渣（mtime 2026-10-17/10-20，早于本变更），非本变更产物。"
+    },
+    {
+      "item": "测试面（解析面 2 用例 + hotpath-cache + inject 回归）",
+      "result": "pass",
+      "evidence": "复跑三文件全绿：knowledge-quicklog 解析面恰 2 用例（单条目解析/归档伪条目）、knowledge-inject 全量断言绿（含「未命中 Wave 零注入（字节零膨胀）」与双实现漂移锁）、hotpath-cache 绿（parseFlowArchiveEntries 保留）。门快照（verify-runs/20261102132543）deps(auto-js) 30 文件 + module 组 exit 0 全绿。"
+    },
+    {
+      "item": "项目探针（local.yaml review_probes 三条）",
+      "result": "pass",
+      "evidence": "cli-copy-selfsufficient：本变更未触 CLI 报错/指引/门禁文案，仅删 prompt 注入段与遥测字段；无新文案需自足性核验（R5-F1 的注释漂移归代码文档债非 CLI 面）。config-absent-zero-regression：未新增 local.yaml 消费键；零回归主张有测试锚（inject 字节级断言）+ diff 逻辑等价核验。crossrepo-path-compat：未触 worktree/deps/跨仓文件，n/a。"
+    },
+    {
+      "item": "复跑三件套 + smoke + lint",
+      "result": "pass",
+      "evidence": "node --test 三文件 pass 3/0 fail；eval/knowledge --smoke 六探针全 GREEN（score-contract/word-boundary/route-rows/scope-manual/fixed-entries/linkage）；npm run lint（check-syntax，1101 文件）exit 0 含未引用导出 0 项。日志 .sillyspec/.runtime/logs/review-q5.log。"
+    }
+  ],
+  "reviewedAt": "2026-11-02T15:55:00+08:00"
+}

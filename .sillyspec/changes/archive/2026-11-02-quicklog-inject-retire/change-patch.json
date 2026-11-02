@@ -1,0 +1,117 @@
+{
+  "change": "2026-11-02-quicklog-inject-retire",
+  "baseline": "034f87b231a4a4058135275f445766c8ad7a0659",
+  "head": "13825bae60785cf4182923729092174238437d59",
+  "files": [
+    "src/knowledge-quicklog.js",
+    "src/run/prompt.js",
+    "src/stages/execute.js",
+    "test/knowledge-inject.test.mjs",
+    "test/knowledge-quicklog.test.mjs"
+  ],
+  "totals": {
+    "files": 5,
+    "additions": 38,
+    "deletions": 356
+  },
+  "savedAt": "2026-11-02T13:25:50.979Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "034f87b231a4a4058135275f445766c8ad7a0659",
+    "totals": {
+      "files": 5,
+      "additions": 38,
+      "deletions": 356
+    },
+    "rows": [
+      {
+        "path": "src/knowledge-quicklog.js",
+        "additions": 0,
+        "deletions": 71,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 3,
+        "deletions": 13,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/execute.js",
+        "additions": 1,
+        "deletions": 10,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-inject.test.mjs",
+        "additions": 0,
+        "deletions": 58,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-quicklog.test.mjs",
+        "additions": 34,
+        "deletions": 204,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "ca99a848d682fd14c7a0272958a0df656fff2660f9c1574b684b2a5340bc80ff",
+  "patchStatus": "ok"
+}

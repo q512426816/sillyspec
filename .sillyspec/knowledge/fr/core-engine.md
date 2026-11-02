@@ -4947,3 +4947,96 @@
   confirmed_at: null
   source_change: 2026-11-02-knowledge-redomain-map
   status: active
+
+## FR-core-engine-263 注入面摘除：execute.js/prompt.js 两处 matchQuicklogContext + renderQuicklogSection 调用与 quicklogIds 遥测字段写入摘除；无 quicklog 时注入段输出与现状逐字节一致（quicklog 段消失是唯一预期差异）
+变更：2026-11-02-quicklog-inject-retire
+状态：active
+摘要：无 quicklog 零变化
+场景正文：
+- 场景：无 quicklog 零变化 — Given 仓内无 quicklog 命中（当前常态——最后一次 2026-10-09）；When 摘除后跑注入；Then 输出与摘除前逐字节一致（quick 段本来就不渲染）
+全文：.sillyspec/changes/archive/2026-11-02-quicklog-inject-retire/requirements.md#FR-01
+最近确认：13825bae60785cf4182923729092174238437d59
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-quicklog-inject-retire:flow:测试绑定FR-01
+  tests: test/knowledge-inject.test.mjs「注入面回归（quicklog 段摘除后零差异）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-quicklog-inject-retire
+  status: active
+
+## FR-core-engine-264 knowledge-quicklog.js：删除 matchQuicklogContext/renderQuicklogSection 导出（无消费后）；保留 parseFlowArchiveEntries 与其余导出（hotpath 测试消费）
+变更：2026-11-02-quicklog-inject-retire
+状态：active
+摘要：导出面收缩
+场景正文：
+- 场景：导出面收缩 — Given matchQuicklogContext 无 src 消费方；When 删除导出；Then lint 未引用导出检查通过；hotpath-cache 测试仍绿
+全文：.sillyspec/changes/archive/2026-11-02-quicklog-inject-retire/requirements.md#FR-02
+最近确认：13825bae60785cf4182923729092174238437d59
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-quicklog-inject-retire:flow:测试绑定FR-02
+  tests: test/knowledge-hotpath-cache.test.mjs「parseFlowArchiveEntries 保留回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-quicklog-inject-retire
+  status: active
+
+## FR-core-engine-265 图谱不变：test-bindings.json 保留（test-binding 强边照常）；quicklog/ 目录不删
+变更：2026-11-02-quicklog-inject-retire
+状态：active
+摘要：图谱零变化
+场景正文：
+- 场景：图谱零变化 — Given 本变更完成；When buildKnowledgeGraph；Then test-binding 边数与变更前一致
+全文：.sillyspec/changes/archive/2026-11-02-quicklog-inject-retire/requirements.md#FR-03
+最近确认：13825bae60785cf4182923729092174238437d59
+
+## FR-core-engine-266 测试：knowledge-quicklog.test.mjs 中 matchQuicklogContext 用例摘除、其余保留；execute/prompt 注入测试（knowledge-inject 等）回归绿；hotpath-cache 测试绿
+变更：2026-11-02-quicklog-inject-retire
+状态：active
+摘要：测试面收缩与回归
+场景正文：
+- 场景：测试面收缩与回归 — Given 功能删除；When 测试适配；Then 已删功能的用例摘除、其余全绿
+全文：.sillyspec/changes/archive/2026-11-02-quicklog-inject-retire/requirements.md#FR-04
+最近确认：13825bae60785cf4182923729092174238437d59
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-quicklog-inject-retire:flow:测试绑定FR-04
+  tests: test/knowledge-quicklog.test.mjs「用例面收缩后其余绿」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-quicklog-inject-retire
+  status: active
+
+## FR-core-engine-267 验收：eval 六探针 GREEN 五面零回归 + lint 绿 + 显式 pathspec 提交
+变更：2026-11-02-quicklog-inject-retire
+状态：active
+摘要：检索零影响
+场景正文：
+- 场景：检索零影响 — Given quicklog 检索面下线；When 跑 eval；Then 五面指标逐位一致（quicklog 面本就不在 eval 面）
+全文：.sillyspec/changes/archive/2026-11-02-quicklog-inject-retire/requirements.md#FR-05
+最近确认：13825bae60785cf4182923729092174238437d59
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-quicklog-inject-retire:flow:测试绑定FR-05
+  tests: test/knowledge-hotpath-cache.test.mjs | test/knowledge-inject.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-quicklog-inject-retire
+  status: active
