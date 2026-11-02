@@ -309,6 +309,7 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       const alwaysRepo = [...scoped.always, ...scoped.repo]
       summary.scopedEntries = alwaysRepo.length
       scopedLines.push('   🧭 工具中立性（内置规约 00，每变更恒注入）：不枚举定义开放世界、不锁死开发语言/框架——配置与机制用 CLI 自有分类（批类别/路径集合），新增语言只加探测适配。')
+      scopedLines.push('   🧭 反例（任务词汇——违规现场词面相似即命中）：评测工具缺省写死两个仓的路径即违规——每条路径必须来自 --repo 参数或缺省当前仓；出现具体项目名/项目特定 env/硬编码仓表即违规（2026-11-02 用户原话纠正实证）。')
       for (const e of alwaysRepo.slice(0, 5)) {
         scopedLines.push(`   📌 [${e.scope}] ${e.id}：${e.summary}`)
       }

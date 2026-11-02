@@ -559,6 +559,13 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
               console.warn(`   - 触达文件关联否决 ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${_via}）${h.status === 'rejected' ? `否决理由：${h.reason || '（未记录）'}` : `⚰️死路：${deathPathNote(h.reason)}`}`)
             }
             console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
+            // 用户纠正转写自检（2026-11-02-constraint-mechanize FR-02）：本变更 decisions.md 有
+            // 「用户原话保留」事故类条目时提示转写层——点火器转写纪律（用户纠正是生成时刻约束力
+            // 最强的力量，跨会话零存续，最强用法是当场转写进测试/门/接口/规约）
+            const _hasUserCorrection = _dm && /用户原话保留|落地层[：:]/.test(_dm)
+            if (_hasUserCorrection) {
+              console.warn(`   🔥 用户纠正转写自检：本变更记录了用户纠正——原话转写进了哪一层（测试/门/接口/规约）？未转写则在对应决策补「落地层：」字段（D-002 先例）`)
+            }
           }
         }
       }
