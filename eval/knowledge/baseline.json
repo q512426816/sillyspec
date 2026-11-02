@@ -3,12 +3,12 @@
   "generated_by": "eval/knowledge/run.mjs",
   "snapshot": {
     "sillyspec": {
-      "head": "be2a42b368e382e1b0a0180c01dcd992c415c14b",
-      "knowledge_hash": "4e9bdba520cb279f00d21d1c0b9fe846f3a684c29d266e022eedf1bbac92e764",
+      "head": "9407335b055e8b6f87471aeeb14d503e0978705c",
+      "knowledge_hash": "e75e8cee80479d886bc33c8f27f00191f7a733a2d6f9f5b95a65e25f99ee4a17",
       "knowledge_files": 139
     },
     "platform": {
-      "head": "77dd9eaf349bacc1f318968970d1777ec5e1387c",
+      "head": "2ef4ea0460957804dcaca9fc0659a31e5dcf96a8",
       "knowledge_hash": "4249e8428193b57ae867af2ec9f970e1c8652ee5496b0c99895dfb50e560ec35",
       "knowledge_files": 160
     }
@@ -16,7 +16,7 @@
   "cases": {
     "sillyspec": {
       "organic": 23,
-      "self": 207
+      "self": 208
     },
     "platform": {
       "organic": 30,
@@ -756,10 +756,10 @@
   },
   "self_smoke": {
     "sillyspec": {
-      "cases": 207,
+      "cases": 208,
       "skipped": 601,
-      "own_hit_top3": 0.029,
-      "name_only_top3": 0.029,
+      "own_hit_top3": 0.0288,
+      "name_only_top3": 0.0288,
       "leak_gap": 0
     },
     "platform": {

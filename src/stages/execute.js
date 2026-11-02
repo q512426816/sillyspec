@@ -22,7 +22,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
 // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
 import { matchKnowledge } from '../knowledge-match.js'
-import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
+import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 
@@ -149,6 +149,10 @@ function buildWaveKnowledgeSection(changeDir, wave) {
         change: path.basename(changeDir),
         query,
         matchedFiles: result.matched ? [...humanEntries, ...routeHits].map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
+        ...(result.matched ? (() => {
+          const scopeMatchedFiles = scopeTelemetryRefs(result)
+          return scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}
+        })() : {}),
         quicklogIds: quick.hits.map(h => h.qlId),
       })
     } catch { /* 遥测 fail-soft（R-04） */ }

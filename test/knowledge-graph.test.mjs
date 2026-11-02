@@ -309,7 +309,7 @@ test('⑥召回接线：层序四层 + 无 scope 逐字节等价 + 保底命中 
     assert.ok(rec.decisionHits.length >= 2)
     assert.equal(rec.decisionHits[0].status, 'rejected') // rejected 排前
     // buildScopeRecallResult：零决策可达 → null（层降级）
-    assert.equal(buildScopeRecallResult({ decisionHits: [], entries: [], frCount: 0, scopeSize: 1 }), null)
+    assert.equal(buildScopeRecallResult({ decisionHits: [], entries: [], scopeSize: 1 }), null)
     // scope 空 → null（整层跳过语义）
     assert.equal(scopeRecall(g, []), null)
   } finally { rmSync(root, { recursive: true, force: true }) }
@@ -686,6 +686,24 @@ test('scope-recall FR-01：section 级 doc-refs 边界与 entries-only 返回', 
     assert.ok(r1.decisionHits.some((h) => h.id === 'D-003@v1' && h.via === 'direct' && h.score === 2), '直连决策 via=direct/score=2')
     const onlyEntries = buildScopeRecallResult(scopeRecall(g, ['src/b.js']))
     assert.ok(onlyEntries && onlyEntries.matched === true, 'entries-only（无决策）非 null')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('engine-tail FR-03：section doc-refs 裸名词过滤（Next.js 等不建边）', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kg-docrefs-'))
+  const K = (p) => join(root, '.sillyspec', p)
+  try {
+    mkdirSync(K('knowledge'), { recursive: true })
+    writeFileSync(K('knowledge/INDEX.md'), '# I\n\n## Gotchas\n- a → [A](gotchas.md#sec-a)\n')
+    writeFileSync(K('knowledge/gotchas.md'), [
+      '# G', '',
+      '## sec a', '',
+      '正文提及 Next.js、Node.js、local.yaml、model.py 与 src/a.js。', '',
+    ].join('\n'))
+    const g = buildKnowledgeGraph(join(root, '.sillyspec'))
+    const edges = g.edges.filter((e) => e.type === 'doc-refs' && e.s.includes('#sec-a'))
+    assert.ok(edges.some((e) => e.t === 'src/a.js'), '含 / 的路径建边')
+    assert.ok(!edges.some((e) => ['Next.js', 'Node.js', 'local.yaml', 'model.py'].includes(e.t)), '裸名词技术 token 不建边')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

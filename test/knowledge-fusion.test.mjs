@@ -162,6 +162,49 @@ test('FR-04：task 卡键三形态解析（块列表/内联/NEW:）', () => {
   assert.ok(pSrc.includes(twinLine) && eSrc.includes(twinLine), 'prompt/execute 孪生 scope 指针行文案一致')
 })
 
+test('FR-01：向量命中路径融合（对称性，未修复必红）', async () => {
+  const r = buildFusionFixture()
+  const origEnv = process.env.SILLYSPEC_KNOWLEDGE_VECTOR
+  const origFetch = globalThis.fetch
+  let fetchCalls = 0
+  try {
+    writeFileSync(join(r, '.sillyspec', 'local.yaml'), 'platform:\n  url: "https://example.test"\n  token: "t"\n')
+    process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'on'
+    globalThis.fetch = async () => {
+      fetchCalls++
+      return { ok: true, json: async () => ({ ok: true, results: [{ spec_path: 'knowledge/decisions/hot.md', anchor: 'D-900@v1', change: '2026-01-01-x', score: 0.9 }] }) }
+    }
+    const kdir = join(r, '.sillyspec', 'knowledge')
+    const out = await matchKnowledgeHybrid(kdir, '完全不命中路由的查询词 zzz', { cwd: r, scopeFiles: ['src/hot.js'] })
+    assert.equal(fetchCalls, 1, '向量层调用一次（零额外网络）')
+    assert.ok(out.matched, '向量命中')
+    assert.ok((out.decisionHits || []).some((h) => h.id === 'D-900@v1'), '向量 base decisionHits 保留')
+    assert.ok((out.scopeDecisionHits || []).length > 0, '向量路径也融合 scope 增量（旧实现此处为空）')
+    assert.equal(out.json && out.json.scope, undefined, '不设 json.scope')
+    assert.equal(out.json && out.json.vector, true, 'json.vector 保留（channel 仍 vector）')
+  } finally {
+    if (origEnv === undefined) delete process.env.SILLYSPEC_KNOWLEDGE_VECTOR
+    else process.env.SILLYSPEC_KNOWLEDGE_VECTOR = origEnv
+    globalThis.fetch = origFetch
+    cleanup(r)
+  }
+})
+
+test('FR-02：flow 遥测 scopeMatchedFiles 单列（不污染 matchedFiles）', async () => {
+  const r = buildFusionFixture()
+  try {
+    const specBase = join(r, '.sillyspec')
+    const changeDir = join(specBase, 'changes', 'zebra')
+    mkdirSync(changeDir, { recursive: true })
+    await flowKnowledgeDigest({ specBase, change: 'zebra', changeDir, input: '', filesOverride: ['src/hot.js'] })
+    const hitFile = join(specBase, '.runtime', 'state', 'knowledge-hits.jsonl')
+    const ev = readFileSync(hitFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).pop()
+    assert.ok(Array.isArray(ev.scopeMatchedFiles) && ev.scopeMatchedFiles.some((f) => f.includes('D-900')), 'scope 否决进 scopeMatchedFiles')
+    assert.ok(!(ev.matchedFiles || []).some((f) => f.includes('#D-900')), 'matchedFiles 保持查询通道语义（不含 scope 决策）')
+    assert.ok((ev.mentionedFiles || []).some((f) => f.includes('gotchas.md')), 'mentionedFiles 含实际展示的 scope 条目')
+  } finally { cleanup(r) }
+})
+
 test('FR-05：fail-soft 与零平台调用', async () => {
   const r = buildFusionFixture()
   const origFetch = globalThis.fetch

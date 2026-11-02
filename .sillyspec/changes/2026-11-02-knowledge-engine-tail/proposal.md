@@ -1,0 +1,38 @@
+---
+author: flow-machine-draft
+created_at: 2026-11-02T08:04:03.234Z
+---
+# 提案书（Proposal）— 2026-11-02-knowledge-engine-tail
+
+## 动机
+
+任务原话转写：检索引擎遗留收尾：向量融合与图卫生
+
+变更 0~3 已归档，四轮独立评审留下引擎侧小债：向量命中路径没有融合（knowledge-vector.js 的 if(built) return built——同一 early-return 病只修了路由侧）、遥测漏带 scope 展示面（flow/prompt/execute 三处注入点 matchedFiles 只含查询通道）、scopeRecall 的 frCount 恒 0 且注释与实现不符、section 级 doc-refs 混入 Next.js/Node.js 类散文 token、memo 与 hot-cache 两条取图路径并存。子代理方案审查修正：遥测不能只改 flow.js 且应新增独立 scopeMatchedFiles 字段（并入 matchedFiles 会让 neverHit 失真）；memo 不统一 standalone（同进程陈旧有实测）；doc-refs 过滤只限 section 级、规则用「含 /」、必须 bump GRAPH_CACHE_VERSION；frCount 直接删除而非改注释；向量路径 eval 不覆盖（VECTOR=off），证据只能靠单测。
+
+成功标准：
+- FR-01 向量路径融合：matchKnowledgeHybrid 抽 fuseBaseWithScope 公共 helper（路由/向量两分支同源、catch 返回 base、scopeFiles 经 graphPathCandidates 规整）；测试钉 base 契约、去重、原序、json.vector 保留且 json.scope 不设、buildSearchMatches channel=vector、零额外网络
+- FR-02 遥测 scope 可见性：flow/prompt/execute 三处注入点统一新增 scopeMatchedFiles（实际展示子集：rejected/deathPath top3 + scopeEntries top3，按 ref 去重）；matchedFiles 保持查询通道语义（entries+routeHits）；mentionedFiles 按实际展示集合构造；knowledge-stats 口径文档同步；standalone 与融合两形态不双记
+- FR-03 图卫生：sectionFilePaths 出口过滤「路径必须含 /」（只改 section 级 doc-refs，卡片/scan 不动）；GRAPH_CACHE_VERSION 3→4；删除 scopeRecall 的 frCount/frs 收集与测试字面量、注释改为 FR 召回由域路由 digest 承担；getKnowledgeGraph memo 只加注记（不统一 standalone）
+- 测试：向量融合用例（mock fetch + 局仓 local.yaml platform + env on，未修复必红）、遥测两形态断言、doc-refs 过滤正反例（Next.js 不建边/src/a.js 建边）、frCount 删除后图谱测试全绿
+- 回归：145 测试全绿 + lint 绿 + eval 五面不回归 + 六探针 GREEN；向量路径 eval 不覆盖（VECTOR=off）写入 verify-result 交付说明
+- 数据规划记录（不占 FR）：design/README 记「下一轮数据扩容必须 flow 形态带 scope_files + fusion 子集升主刻度，并混入非标题复述查询」
+
+## 变更范围
+
+按成功标准机械推导，共 6 条验收面：
+1. FR-01 向量路径融合：matchKnowledgeHybrid 抽 fuseBaseWithScope 公共 helper（路由/向量两分支同源、catch 返回 base、scopeFiles 经 graphPathCandidates 规整）；测试钉 base 契约、去重、原序、json.vector 保留且 json.scope 不设、buildSearchMatches channel=vector、零额外网络
+2. FR-02 遥测 scope 可见性：flow/prompt/execute 三处注入点统一新增 scopeMatchedFiles（实际展示子集：rejected/deathPath top3 + scopeEntries top3，按 ref 去重）；matchedFiles 保持查询通道语义（entries+routeHits）；mentionedFiles 按实际展示集合构造；knowledge-stats 口径文档同步；standalone 与融合两形态不双记
+3. FR-03 图卫生：sectionFilePaths 出口过滤「路径必须含 /」（只改 section 级 doc-refs，卡片/scan 不动）；GRAPH_CACHE_VERSION 3→4；删除 scopeRecall 的 frCount/frs 收集与测试字面量、注释改为 FR 召回由域路由 digest 承担；getKnowledgeGraph memo 只加注记（不统一 standalone）
+4. 测试：向量融合用例（mock fetch + 局仓 local.yaml platform + env on，未修复必红）、遥测两形态断言、doc-refs 过滤正反例（Next.js 不建边/src/a.js 建边）、frCount 删除后图谱测试全绿
+5. 回归：145 测试全绿 + lint 绿 + eval 五面不回归 + 六探针 GREEN；向量路径 eval 不覆盖（VECTOR=off）写入 verify-result 交付说明
+6. 数据规划记录（不占 FR）：design/README 记「下一轮数据扩容必须 flow 形态带 scope_files + fusion 子集升主刻度，并混入非标题复述查询」
+
+## 成功标准（可验证）
+
+1. FR-01 向量路径融合：matchKnowledgeHybrid 抽 fuseBaseWithScope 公共 helper（路由/向量两分支同源、catch 返回 base、scopeFiles 经 graphPathCandidates 规整）；测试钉 base 契约、去重、原序、json.vector 保留且 json.scope 不设、buildSearchMatches channel=vector、零额外网络
+2. FR-02 遥测 scope 可见性：flow/prompt/execute 三处注入点统一新增 scopeMatchedFiles（实际展示子集：rejected/deathPath top3 + scopeEntries top3，按 ref 去重）；matchedFiles 保持查询通道语义（entries+routeHits）；mentionedFiles 按实际展示集合构造；knowledge-stats 口径文档同步；standalone 与融合两形态不双记
+3. FR-03 图卫生：sectionFilePaths 出口过滤「路径必须含 /」（只改 section 级 doc-refs，卡片/scan 不动）；GRAPH_CACHE_VERSION 3→4；删除 scopeRecall 的 frCount/frs 收集与测试字面量、注释改为 FR 召回由域路由 digest 承担；getKnowledgeGraph memo 只加注记（不统一 standalone）
+4. 测试：向量融合用例（mock fetch + 局仓 local.yaml platform + env on，未修复必红）、遥测两形态断言、doc-refs 过滤正反例（Next.js 不建边/src/a.js 建边）、frCount 删除后图谱测试全绿
+5. 回归：145 测试全绿 + lint 绿 + eval 五面不回归 + 六探针 GREEN；向量路径 eval 不覆盖（VECTOR=off）写入 verify-result 交付说明
+6. 数据规划记录（不占 FR）：design/README 记「下一轮数据扩容必须 flow 形态带 scope_files + fusion 子集升主刻度，并混入非标题复述查询」

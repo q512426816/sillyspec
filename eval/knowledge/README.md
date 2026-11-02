@@ -90,6 +90,16 @@ runner 强制 `SILLYSPEC_KNOWLEDGE_VECTOR=off`、`SILLYSPEC_HITS_PUSH=0`，只�
 不写 `knowledge-hits.jsonl`、不发平台请求、不写平台能力缓存。唯一写点：`--set-baseline`
 的 baseline.json 与图派生缓存（`<specRoot>/.runtime/cache/`，可再生、非遥测）。
 
+## 数据规划注记（2026-11-02-knowledge-engine-tail）
+
+下一轮数据扩容（organic 到每仓 50）必须同时满足三条，否则尺子会重复打满：
+
+1. **flow 形态带 scope_files**：生产 flow start 恒传 scopeFiles，而 eval 的 entries/decisions 常规
+   case 目前测的是「无 scope 的 hybrid」——扩容时常规 case 整体带 scope_files，fusion 子集升为主刻度。
+2. **fusion 子集升主刻度**：当前 fusion n=2、fr prod n=1，只能证明通道存在，不能证明生产效果。
+3. **混入非标题复述查询**：现有有机 case 多为「域关键词+标题」公式化查询（平台 decisions 1.0 n=9
+   已打满），扩容时纳入真实任务描述类查询，否则 decisions/entries 面失去分辨力。
+
 ## 当前基线（2026-11-02，数据集面归位后）
 
 本仓的实例基线（两仓用 `--repo sillyspec:<本仓路径>,platform:<平台仓路径>` 生成；

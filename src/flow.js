@@ -31,6 +31,7 @@ import { join, relative, dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
+import { scopeTelemetryRefs } from './knowledge-graph.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync, triggerSyncTerminalStrict, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
@@ -393,7 +394,15 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     // mentionedFiles=显式展示给 agent 的锚点（📚 行 top-3）。既有 matchedFiles 口径不变
     // （knowledge-stats 消费面零回归）。仅命中面非空才落盘；fail-soft（R-04）不阻断注入。
     const thinMatchedFiles = km.matched ? [...(km.entries || []), ...(km.routeHits || [])].map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : []
-    if (thinMatchedFiles.length > 0 || rejected.length > 0) {
+    // scope 展示面遥测（FR-02）：独立字段 scopeMatchedFiles（不并入 matchedFiles——防 neverHit 失真）；
+    // mentionedFiles 按实际展示集合（📚 top3 + 🧭 top3 + scope top3+3，去重）
+    const scopeMatchedFiles = km.matched ? scopeTelemetryRefs(km) : []
+    const mentionedFiles = [...new Set([
+      ...(km.entries || []).slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
+      ...(km.routeHits || []).slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
+      ...scopeMatchedFiles,
+    ])].slice(0, 12)
+    if (thinMatchedFiles.length > 0 || rejected.length > 0 || scopeMatchedFiles.length > 0) {
       try {
         const { appendKnowledgeHit } = await import('./knowledge-hits.js')
         appendKnowledgeHit(join(specBase, '.runtime'), {
@@ -402,7 +411,8 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
           query: kmQuery,
           matchedFiles: thinMatchedFiles,
           injectedFiles: [],
-          mentionedFiles: thinMatchedFiles.slice(0, 3),
+          mentionedFiles,
+          ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
           rejectedCount: rejected.length,
           source: 'thin-start',
         })

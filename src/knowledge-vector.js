@@ -244,6 +244,24 @@ export function buildResultFromPlatform(indexDir, pvResults) {
  * ——机器算的图查询键（D-004：flow 注入段传 touched、complete 门传 decisions.md 锚点提取）。
  * 缺省/空数组 → 遍历层整体跳过，行为与不携带该参数的旧行为逐字段一致（回归钉死）。
  */
+/**
+ * base（路由/向量结果）+ scopeFiles → 融合结果（2026-11-02-knowledge-engine-tail FR-01）。
+ * 路由命中与向量命中两条路径共用本实现（消除「同一 early-return 病只修一半」）：
+ * scopeFiles 经 graphPathCandidates 规整；scope 构建/遍历失败返回 base 原对象（fail-soft）。
+ */
+async function fuseBaseWithScope(base, indexDir, scopeFiles) {
+  if (!base || !base.matched) return base
+  const raw = Array.isArray(scopeFiles) ? scopeFiles.filter(Boolean) : []
+  if (raw.length === 0) return base
+  try {
+    const { graphPathCandidates, getKnowledgeGraph, scopeRecall, fuseScopeRecall } = await import('./knowledge-graph.js')
+    const files = graphPathCandidates(raw)
+    if (files.length === 0) return base
+    const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
+    return fuseScopeRecall(base, scopeRecall(getKnowledgeGraph(specRoot), files)) || base
+  } catch { return base }
+}
+
 export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
   const r = matchByRouting(indexDir, taskContext, opts)
   const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
@@ -251,20 +269,15 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
     // 融合（2026-11-02-knowledge-fusion）：路由命中后仍跑 scope——热文件触达的 rejected/手工条目
     // 原先被 early-return 永久遮住。只追加 scopeDecisionHits/scopeEntries（不重排路由结果）；
     // scope 构建失败原样返回路由结果；仍不跑平台向量（路由命中零网络）。
-    if (scopeFiles.length > 0) {
-      try {
-        const { getKnowledgeGraph, scopeRecall, fuseScopeRecall } = await import('./knowledge-graph.js')
-        const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
-        return fuseScopeRecall(r, scopeRecall(getKnowledgeGraph(specRoot), scopeFiles)) || r
-      } catch { return r }
-    }
-    return r
+    return fuseBaseWithScope(r, indexDir, scopeFiles)
   }
   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
   if (vectorEnabled(cwd)) {
     const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
     const built = pv ? buildResultFromPlatform(indexDir, pv.results) : null
-    if (built) return built
+    // 向量命中路径同样融合（FR-01 对称性）：平台向量自动探测开启、词面弱、路由零命中时，
+    // scope 增量不应因向量 early-return 丢失。
+    if (built) return fuseBaseWithScope(built, indexDir, scopeFiles)
   }
   // scope 遍历层（第三层）：只在 scope 非空且向量零命中后接管；fail-soft（图构建异常静默降级词片）
   if (scopeFiles.length > 0) {

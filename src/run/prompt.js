@@ -99,7 +99,7 @@ import { matchKnowledge } from '../knowledge-match.js'
 import { matchQuicklogContext } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
-import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
+import { matchKnowledgeWithScope, graphPathCandidates, scopeTelemetryRefs } from '../knowledge-graph.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
 // stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
 import { validateDesignFileList } from '../design-facts.js'
@@ -601,6 +601,7 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
   const qSection = quick.report || ''
   const section = [kSection, qSection].filter(Boolean).join('\n\n')
   const routeFiles = (knowledgeResult.routeHits || []).map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file))
+  const scopeMatchedFiles = scopeTelemetryRefs(knowledgeResult)
   try {
     appendKnowledgeHit(runtimeDir, {
       type: 'inject',
@@ -608,6 +609,8 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
       query: String(query || ''),
       // routeHits 一并进 matchedFiles：stats 命中矩阵不把 decisions/fr 误标 neverHit（FR-04）
       matchedFiles: [...knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)), ...routeFiles],
+      // scope 展示面独立字段（2026-11-02-knowledge-engine-tail FR-02）：不并入 matchedFiles
+      ...(scopeMatchedFiles.length > 0 ? { scopeMatchedFiles } : {}),
       quicklogIds: quick.hits.map(h => h.qlId),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }

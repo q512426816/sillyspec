@@ -94,7 +94,10 @@ function sectionFilePaths(knowledgeDir, ent, cache) {
     const hn = normalizeAnchorForCompare(s.title)
     return hn === key || (hn.length >= 6 && key.length >= 6 && (hn.startsWith(key) || key.startsWith(hn)))
   })
-  return hit ? extractFilePaths(hit.body, 15) : []
+  // 裸名词过滤（2026-11-02-knowledge-engine-tail FR-03）：section 正文常含 Next.js/Node.js/
+  // local.yaml/model.py 这类技术名 token——纯词法规则「必须含 /」才建边（存在性判断会让图依赖
+  // 构建时文件系统状态、破坏缓存确定性；只改 section 级，模块卡/scan 采集不动）
+  return hit ? extractFilePaths(hit.body, 15).filter((p) => p.includes('/')) : []
 }
 
 // ── 构建器 ──
@@ -400,7 +403,7 @@ function buildKnowledgeGraphFresh(specRoot) {
 // 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
 // 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
 
-const GRAPH_CACHE_VERSION = 3
+const GRAPH_CACHE_VERSION = 4
 const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
 
 function statSignature(p) {
@@ -935,12 +938,13 @@ export function scopeRecall(graph, scopeFiles) {
     if (h.status === 'rejected' || h.deathPath) twoHop.add(e.s)
   }
   const decisions = []
-  const frs = []
   for (const id of reachable) {
     const n = graph.nodes.get(id)
     if (!n) continue
     if (n.type === 'decision') decisions.push(n)
-    else if (n.type === 'fr') frs.push(n)
+    // 注：FR 不参与 scope 两跳（图中无内部 anchors/deliverables 边指向 FR 节点；FR 召回由
+    // 域路由 digest（readActiveFrDigest + rankFrDigestForInjection）承载——
+    // 2026-11-02-knowledge-engine-tail 删除恒 0 的 frCount 字段）
   }
   // decisionHits：parseDecisionEntries 原生形态（attrs.hit 直出）+ score（direct=2/two-hop=1，
   // 渲染面 h.status==='rejected' && score>0 过滤器依赖）
@@ -980,7 +984,7 @@ export function scopeRecall(graph, scopeFiles) {
     const file = a.file || String(id).replace(/^entry:/, '').split('#')[0]
     return { category: a.category || 'Scoped', keywords: ['scope'], file, anchor: a.anchor || '', display: a.display || n.label }
   }).slice(0, 3)
-  return { decisionHits: hits, entries, frCount: frs.length, scopeSize: scopes.length }
+  return { decisionHits: hits, entries, scopeSize: scopes.length }
 }
 
 /** scopeRecall → matchKnowledge 同构四键返回（knowledge-vector 消费——策略面全本地解析）。
@@ -1059,7 +1063,10 @@ export function graphPathCandidates(files) {
 }
 
 /** 进程级图 memo（CLI 短进程生命周期）：路由命中后的融合每次多付 ~45ms 图读取，
- *  同进程多次调用（多 Wave）复用同一图对象。 */
+ *  同进程多次调用（多 Wave）复用同一图对象。
+ *  注（2026-11-02-knowledge-engine-tail FR-03）：本 memo 无失效机制——长驻消费方（daemon 等）
+ *  需自行调用 buildKnowledgeGraph 或注入失效；当前无长驻进程走此路径，standalone 分支也保持
+ *  buildKnowledgeGraph（指纹缓存）不统一到 memo（同进程陈旧图有实测）。 */
 const graphMemo = new Map()
 export function getKnowledgeGraph(specRoot) {
   const key = String(specRoot || '')
@@ -1082,6 +1089,21 @@ export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
   } catch {
     return base // fail-soft：scope 构建失败不掉词片回退（FR-05）
   }
+}
+
+/** scope 展示面遥测引用（2026-11-02-knowledge-engine-tail FR-02）：三处注入点统一口径——
+ *  只记实际展示子集（scope 否决 rejected/deathPath top3 + scopeEntries top3），按 ref 去重。
+ *  独立字段 scopeMatchedFiles，不并入 matchedFiles（否则 knowledge-stats 的 neverHit 失真）。 */
+export function scopeTelemetryRefs(result) {
+  const shown = [
+    ...((result && result.scopeDecisionHits) || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3),
+    ...((result && result.scopeEntries) || []).slice(0, 3),
+  ]
+  return [...new Set(shown.map((x) => {
+    if (!x) return ''
+    if (x.id) return `${x.file}#${x.id}`
+    return x.anchor ? `${x.file}#${x.anchor}` : x.file
+  }).filter(Boolean))]
 }
 
 /** 变更 decisions.md（九字段形态）「锚点：」字段 → scope 文件集（complete 门的需求期机器键，D-004）。

@@ -4,6 +4,9 @@
  * 职责：聚合 .runtime/knowledge-hits.jsonl 遥测事件流（task-01 KnowledgeHitsAPI 写入：
  * task-04 注入点写 type:inject、task-02 classify 写 type:classify），输出近 N 天命中矩阵
  * （文件 × 次数 × 最近命中时间）与从未命中清单（对照 INDEX.md 全集标注疑似死重）。
+ * 注（2026-11-02-knowledge-engine-tail FR-02）：scope 展示面走独立字段 `scopeMatchedFiles`
+ * （top3+3 展示子集）——命中矩阵/neverHit 只按 `matchedFiles`（查询通道）统计，scope 通道
+ * 不参与 neverHit 判定（防同一决策域文件反复计命中原决定死重）。
  * 纯只读：不写 hits/INDEX/知识文件任何输入；死重清单只报告，不自动删除/合并（非目标）。
  *
  * 计数口径：
