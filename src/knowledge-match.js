@@ -334,12 +334,29 @@ export function normalizeAnchorForCompare(s) {
   return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
 }
 
-/** 条目是否「已知问题-已修复」类（默认注入/检索排除；--include-resolved 才返回）。 */
-function isResolvedRoute(entry) {
+/** 条目是否「已知问题-已修复」类（默认注入/检索排除；--include-resolved 才返回）。
+ *  双源判定（2026-11-03 接线）：① INDEX display/anchor 标题词（既有——覆盖未迁移到状态行格式的条目）
+ *  ② 目标文件正文状态行（`- 状态：已修复/已解决/已退役`——4C 落盘后主判据）。任一命中即 resolved。 */
+function isResolvedRoute(entry, knowledgeRoot) {
   const file = String(entry.file || '').replace(/\\/g, '/')
   const isKnownIssues = entry.category === 'Known Issues' || /(^|\/)known-issues\.md$/.test(file)
   if (!isKnownIssues) return false
-  return RESOLVED_WORDS.test(`${entry.display || ''} ${entry.anchor || ''}`)
+  if (RESOLVED_WORDS.test(`${entry.display || ''} ${entry.anchor || ''}`)) return true
+  // 正文状态行判据：读目标文件，按 anchor 匹配 heading 后查段内状态行
+  if (knowledgeRoot && entry.anchor) {
+    try {
+      const content = readFileSync(join(knowledgeRoot, file), 'utf8')
+      const key = normalizeAnchorForCompare(entry.anchor)
+      const blocks = content.replace(/\r\n?/g, '\n').split(/^## /m).slice(1)
+      for (const b of blocks) {
+        const hn = normalizeAnchorForCompare(b.split('\n')[0])
+        if (hn === key || (hn.length >= 6 && key.length >= 6 && (hn.startsWith(key) || key.startsWith(hn)))) {
+          return /^\s*-\s*状态[：:]\s*(已修复|已解决|已退役)/m.test(b)
+        }
+      }
+    } catch { /* 文件不可读回退标题词 */ }
+  }
+  return false
 }
 
 /**
@@ -456,7 +473,7 @@ export function matchByRouting(indexDir, taskContext, opts = {}) {
   const parkingExcluded = matchedRaw.filter((e) => !isParkingFile(e.file))
   // 已修复过滤（FR-03，2026-11-02-knowledge-rank-denoise）：known-issues 显式词条目默认排除，
   // includeResolved 才返回；json.resolvedFiltered 披露（仿 parkingFiltered）。
-  const resolvedFiltered = opts.includeResolved ? [] : parkingExcluded.filter(isResolvedRoute)
+  const resolvedFiltered = opts.includeResolved ? [] : parkingExcluded.filter((e) => isResolvedRoute(e, indexDir))
   const resolvedFiles = [...new Set(resolvedFiltered.map((e) => e.file))]
   const resolvedNote = resolvedFiles.length > 0
     ? { resolvedFiltered: resolvedFiles, resolvedNote: '已修复条目已过滤——需查看加 --include-resolved' }
@@ -474,7 +491,7 @@ export function matchByRouting(indexDir, taskContext, opts = {}) {
   // DF 相关度排序（FR-05，2026-11-02-knowledge-rank-denoise）：分母 = entries 可展示语料
   // （排除 fr/decisions 路由行、停车场、已修复条目）；命中数优先 → Σ(1/DF) 破平 → INDEX 行序兜底。
   // 泛词（出现在大量路由行的流程词）权重被压缩，长尾具体词上浮；同分顺序确定（重复运行一致）。
-  const humanCorpus = allEntries.filter((e) => !isRouteRow(e) && !isParkingFile(e.file) && !isResolvedRoute(e))
+  const humanCorpus = allEntries.filter((e) => !isRouteRow(e) && !isParkingFile(e.file) && !isResolvedRoute(e, indexDir))
   const dfMap = new Map()
   for (const e of humanCorpus) {
     const seenKw = new Set()
