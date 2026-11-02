@@ -32,17 +32,31 @@ organic 字段：`id / repo / face(entries|decisions|search|scope) / query / exp
 `expected` 含 `#` 为精确 `file#anchor`；不含 `#` 为文件级前缀匹配。空 `expected` 的 case 计入
 `skipped_cases` 并披露，绝不静默当零命中。
 
-## 四个消费面与指标
+## 五个消费面与指标
 
 | 面 | 真实入口 | rendered 口径 | k |
 |---|---|---|---|
-| entries | `matchByRouting().entries`（flow 📚 行） | 前 3（不去重） | 3 |
-| decisions | `matchByRouting().decisionHits`（rejected/死路优先） | 前 5 | 5 |
-| search | `cmdSearch` 镜像（`searchView`，file 级） | limit 10 | 10 |
-| scope | `scopeRecall` 图遍历 | entry 3 + decision 20 | 3/20 |
+| entries | `matchKnowledgeHybrid` 的 entries（flow 📚 行） | 前 3（不去重） | 3 |
+| decisions | `matchKnowledgeHybrid` 的 decisionHits（rejected/死路优先） | 前 5 | 5 |
+| search | `cmdSearch` 等价（hybrid + `buildSearchMatches`，file 级） | limit 10 | 10 |
+| scope | `scopeRecall` 图遍历（引擎内建 cap 3/20，raw==rendered，truncated 恒空） | entry 3 + decision 20 | 3/20 |
+| fr | `readActiveFrDigest` + query×标题重叠（FR 索引 digest 通道） | 前 8 | 8 |
 
-每面同时输出 **raw**（引擎全量命中序）与 **rendered**（消费面实际切片）两套 Top-1/Top-3/MRR。
+entries/decisions/search 与生产入口同源（hybrid 三层 + 生产构造单一源）；fr 面承载
+「FR 条目能否被 query 找到」的刻度（生产按 design 交付清单路由域，此处以标题可达性近似）。
+`file`/`fr`/`decisions` 期望在迁移后归位：entries 面只测手工知识条目，fr/decisions 文件期望
+走各自专用面（2026-11-02 复核 P1-②——旧数据集把路由行期望挂在 entries 面，rank-denoise
+的 route-rows 修复会让它们结构性 miss，数字会假性回退）。
+
+每面同时输出 **raw**（引擎命中序）与 **rendered**（消费面实际切片）两套 Top-1/Top-3/MRR。
 `truncated` = raw 命中而 rendered 未呈现的 case——用于区分「引擎没召回」与「召回了但被截断」。
+`details` 记录每 case 的 raw_rank/rendered_rank（--json 输出）。
+
+## 数据集标签自检
+
+`validateLabels` 在每次运行校验 expected 的 file 存在性与 anchor 可达性（文件正文或 INDEX
+含该锚点串），检出「结构性不可命中」标签（如 epoch 迁移后 D-id 换了域文件）并输出
+`label_issues`——标签不会随知识库演化静默腐烂。
 
 ## 六类缺陷探针（probe RED = 缺陷仍在）
 
@@ -76,17 +90,20 @@ runner 强制 `SILLYSPEC_KNOWLEDGE_VECTOR=off`、`SILLYSPEC_HITS_PUSH=0`，只�
 不写 `knowledge-hits.jsonl`、不发平台请求、不写平台能力缓存。唯一写点：`--set-baseline`
 的 baseline.json 与图派生缓存（`<specRoot>/.runtime/cache/`，可再生、非遥测）。
 
-## 当前基线（2026-11-02，知识排序与降噪后）
+## 当前基线（2026-11-02，数据集面归位后）
 
 本仓的实例基线（两仓用 `--repo sillyspec:<本仓路径>,platform:<平台仓路径>` 生成；
 仓标签与数据集 repo 字段对齐——换项目时基线与数据集一起替换）：
 
-- sillyspec：entries raw top3 0.5833（n=12，较变更 1 前 0.1667 上升；其中 5 条 route-expected
-  case 在 entries 面结构性 miss，候选集缩小影响需单列）、decisions top3 0.3333（n=3）、
-  scope top3 0.2（n=5）、self own_hit 0.0291 / leak_gap 0。
-- platform：entries raw top3 0.6667（n=15）、self own_hit 0.0245 / leak_gap 0.0183。
+- sillyspec：entries top1/top3 1.0（n=7）、decisions 0.6（n=5）、search 1.0（n=7）、
+  scope 0.2（n=5）、fr top3 0.3333（n=3）、self own_hit 0.0291 / leak_gap 0。
+- platform：entries 0.5556/0.8889（n=9）、decisions 1.0（n=1）、fr top3 0.2（n=5）、
+  scope n=0（未标注）、self own_hit 0.0274 / leak_gap 0.0213。
 - 探针：score-contract / word-boundary / route-rows / fixed-entries 四类 GREEN（变更 1 修复），
-  scope-manual 仍 RED（变更 2 范围）、linkage GREEN。
+  scope-manual 仍 RED（变更 2 范围）、linkage GREEN。标签自检 0 问题。
+
+注意：entries/decisions 面的 n 较小（7/5/9/1），每个 case 摆动 ~10 个百分点；fr 面 top3 偏低
+（0.2~0.33）是 FR 标题可达性的真实信号，留变更 2/3 评估。scope 面平台 n=0 待补标注。
 
 后续变更（排序降噪、scope 两跳、融合）以本 baseline 为对照，验收看各面 raw/rendered 变化
 与对应探针翻转，目标 entries/search Top-3 ≥ 0.8。

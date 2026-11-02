@@ -63,5 +63,13 @@ export function diffBaseline(cur, base) {
       changes.push(`probe ${defect}: ${base.probes[defect] ? 'GREEN' : 'RED'} → ${cur.probes[defect] ? 'GREEN' : 'RED'}`)
     }
   }
+  // self 趋势指标（不进质量门槛，仅 diff 可见——own_hit_top3 变化反映蒸馏→检索链路质量）
+  for (const repo of Object.keys(cur.self_smoke || {})) {
+    const b = base.self_smoke?.[repo]
+    const c = cur.self_smoke[repo]
+    if (b && c && typeof b.own_hit_top3 === 'number' && typeof c.own_hit_top3 === 'number' && r4(b.own_hit_top3) !== r4(c.own_hit_top3)) {
+      changes.push(`self[${repo}] own_hit_top3 ${b.own_hit_top3} → ${c.own_hit_top3}（趋势，非门槛）`)
+    }
+  }
   return { mismatches, changes, baselineSummary }
 }

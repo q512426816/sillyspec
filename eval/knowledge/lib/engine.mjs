@@ -2,19 +2,23 @@
  * eval/knowledge/lib/engine.mjs — 只读适配生产检索引擎（评测面）
  *
  * 统一命中键：entries/search/scope-entry = `file#anchor`（anchor 缺省为 file）；
- * decisions/scope-decision = `file#id`。期望侧不含 "#" 时按文件级前缀匹配（runner 展开）。
+ * decisions/scope-decision = `file#id`；fr = `fr/<域>.md#<FR-id>`。
+ * 期望侧不含 "#" 时按文件级前缀匹配（runner 展开）。
  *
- * search 面直接复用生产构造 buildSearchMatches（stages/knowledge.js 单一源）——score 契约
- * 探针测的就是 cmdSearch 本身；检索走 matchKnowledgeHybrid（路由→向量→词片回退，真实三层）。
+ * 三个检索通道与生产同源：
+ * - entries/decisions 走 matchKnowledgeHybrid（路由→向量→词片回退，生产 flow/prompt/execute 同入口）；
+ * - search 走 matchKnowledgeHybrid + buildSearchMatches（cmdSearch 生产构造单一源）；
+ * - fr 走 readActiveFrDigest（FR 索引 digest 生产通道）+ 标题重叠排序。
  * 零网络零遥测：向量层由调用方 env 关闭；只调纯读函数。图构建缓存写 <specRoot>/.runtime/cache
  * （可再生派生，fixture 场景落 mkdtemp，真实仓仅缓存，不触测试/遥测面）。
  */
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
-import { matchByRouting, parseDecisionEntries, keywordMatchesContext } from '../../../src/knowledge-match.js'
+import { existsSync, readdirSync } from 'node:fs'
+import { parseDecisionEntries, keywordMatchesContext } from '../../../src/knowledge-match.js'
 import { buildKnowledgeGraph, scopeRecall } from '../../../src/knowledge-graph.js'
 import { matchKnowledgeHybrid } from '../../../src/knowledge-vector.js'
 import { buildSearchMatches } from '../../../src/stages/knowledge.js'
+import { readActiveFrDigest, frTitleOverlap } from '../../../src/fr-index.js'
 
 const graphCache = new Map()
 
@@ -23,16 +27,31 @@ function knowledgeDirOf(repoRoot) { return join(specRootOf(repoRoot), 'knowledge
 
 function entryKey(e) { return e.anchor ? `${e.file}#${e.anchor}` : e.file }
 
-/** entries 面：路由命中的面向人条目（当前实现含 fr/decisions 路由行——探针③的检测对象）。 */
-export function runEntries(repoRoot, query) {
-  const r = matchByRouting(knowledgeDirOf(repoRoot), query)
-  return { matched: r.matched, hits: r.entries.map(entryKey), raw: r.entries }
+/** entries 面：生产 hybrid 入口的 entries（只手工条目；路由行已由变更 1 移入 routeHits）。 */
+export async function runEntries(repoRoot, query) {
+  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
+  return { matched: r.matched, hits: (r.entries || []).map(entryKey), raw: r.entries || [], routeHits: r.routeHits || [] }
 }
 
-/** decisions 面：rejected/死路优先的决策命中通道。 */
-export function runDecisions(repoRoot, query) {
-  const r = matchByRouting(knowledgeDirOf(repoRoot), query)
+/** decisions 面：生产 hybrid 入口的 decisionHits（rejected/死路优先序）。 */
+export async function runDecisions(repoRoot, query) {
+  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
   return { hits: (r.decisionHits || []).map((h) => `${h.file}#${h.id}`), raw: r.decisionHits || [] }
+}
+
+/** fr 面：FR 索引 digest（readActiveFrDigest）+ query×标题重叠排序（buildFrIndexDigestSection 的
+ *  FR 通道刻度；生产按 design 交付清单路由域，这里以标题可达性近似）。 */
+export function runFr(repoRoot, query) {
+  const kdir = knowledgeDirOf(repoRoot)
+  let domains = []
+  try {
+    domains = readdirSync(join(kdir, 'fr')).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
+  } catch { /* 无 fr 目录 = 空面 */ }
+  const entries = readActiveFrDigest(kdir, domains)
+  const q = String(query || '')
+  const scored = entries.map((e) => ({ e, s: frTitleOverlap(q, `${e.id} ${e.title || ''}`) }))
+  scored.sort((a, b) => (b.s - a.s) || a.e.id.localeCompare(b.e.id))
+  return { hits: scored.map((x) => `fr/${x.e.domain}.md#${x.e.id}`), raw: scored.map((x) => x.e) }
 }
 
 /**
@@ -52,7 +71,7 @@ export async function searchView(repoRoot, query, limit = Infinity) {
   }))
 }
 
-/** scope 面：图遍历召回（全量 entryHits/decisionHits；消费面截断由 faces 层做）。 */
+/** scope 面：图遍历召回（引擎内建 cap 保持——entry 3 + decision 20，与生产 scopeRecall 一致）。 */
 export function runScope(repoRoot, scopeFiles) {
   const root = specRootOf(repoRoot)
   if (!graphCache.has(root)) graphCache.set(root, buildKnowledgeGraph(root))

@@ -110,8 +110,8 @@ console.log('\n=== Test 6: 零遥测副作用 ===')
     writeFileSync(join(d, '.sillyspec', 'knowledge', 'INDEX.md'), '# I\n\n## Decisions\n- alpha → [d](decisions/x.md)\n')
     writeFileSync(join(d, '.sillyspec', 'knowledge', 'decisions', 'x.md'), '## D-0001@v1 alpha\n状态：implemented\n')
     const { runEntries, runDecisions } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'engine.mjs')).href)
-    runEntries(d, 'alpha')
-    runDecisions(d, 'alpha')
+    await runEntries(d, 'alpha')
+    await runDecisions(d, 'alpha')
     assert(!existsSync(join(d, '.sillyspec', '.runtime', 'state', 'knowledge-hits.jsonl')), '跑引擎后零遥测文件产生')
   } finally { rmSync(d, { recursive: true, force: true }) }
 }

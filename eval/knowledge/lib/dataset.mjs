@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { parseDecisionEntries } from '../../../src/knowledge-match.js'
 import { readFlowState } from '../../../src/flow-state.js'
 
-const FACES = new Set(['entries', 'decisions', 'search', 'scope'])
+const FACES = new Set(['entries', 'decisions', 'search', 'scope', 'fr'])
 
 /** organic case 字段校验；返回 null = 合法，否则错误原因。
  *  repo 是数据集标签（对应 --repo 的 label 或路径 basename），非项目枚举——任意仓可用。 */
@@ -123,4 +123,46 @@ export function listProbes(fixturesDir) {
   } catch {
     return []
   }
+}
+
+/**
+ * 标签有效性自检（2026-11-02 复核 P1-①）：expected 的 file 必须存在于目标仓 knowledge 下、
+ * 含 # 时 anchor 必须出现在目标文件正文或 INDEX 中——抓「标签指向不存在的锚点」（如 epoch
+ * 迁移后 D-id 换了域文件）这类结构性不可命中。宽口径字符串包含（slug/标题形态差异不误判）。
+ * @param {Array} cases organic cases
+ * @param {Map<string,string>} repoRootByTag 仓标签 → 仓根
+ * @returns {Array<{id:string, expected:string, reason:string}>}
+ */
+export function validateLabels(cases, repoRootByTag) {
+  const issues = []
+  const indexCache = new Map()
+  for (const c of cases) {
+    const root = repoRootByTag.get(c.repo)
+    if (!root) continue // 未参与本次运行的仓标签不算标签错误
+    const kdir = join(root, '.sillyspec', 'knowledge')
+    if (!indexCache.has(kdir)) {
+      let text = ''
+      try { text = readFileSync(join(kdir, 'INDEX.md'), 'utf8') } catch { /* 无 INDEX = 空 */ }
+      indexCache.set(kdir, text)
+    }
+    const indexText = indexCache.get(kdir)
+    for (const exp of c.expected) {
+      const [file, anchor] = String(exp).split('#')
+      const fp = join(kdir, file)
+      if (!existsSync(fp)) {
+        issues.push({ id: c.id, expected: exp, reason: 'file-missing' })
+        continue
+      }
+      if (!anchor) continue
+      let text = ''
+      try { text = readFileSync(fp, 'utf8') } catch {
+        issues.push({ id: c.id, expected: exp, reason: 'file-unreadable' })
+        continue
+      }
+      if (!text.includes(anchor) && !indexText.includes(anchor)) {
+        issues.push({ id: c.id, expected: exp, reason: 'anchor-missing', file })
+      }
+    }
+  }
+  return issues
 }

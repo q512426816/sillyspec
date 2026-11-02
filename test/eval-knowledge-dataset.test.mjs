@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const root = join(__filename, '..', '..')
 
-const { loadOrganic, validateOrganicCase, buildSelfCases, extractTelemetryPool } = await import(
+const { loadOrganic, validateOrganicCase, buildSelfCases, extractTelemetryPool, validateLabels } = await import(
   pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'dataset.mjs')).href
 )
 
@@ -35,6 +35,7 @@ console.log('\n=== Test 1: organic case 校验 ===')
   assert(validateOrganicCase({ ...ok, id: '' }) === 'id', '缺 id')
   assert(validateOrganicCase({ ...ok, repo: undefined }) === 'repo', '缺 repo 标签')
   assert(validateOrganicCase({ ...ok, repo: 'any-project-label' }) === null, '任意仓标签合法（不枚举项目）')
+  assert(validateOrganicCase({ ...ok, face: 'fr' }) === null, 'fr 面合法')
   assert(validateOrganicCase({ ...ok, face: 'nope' }) === 'face', '非法 face')
   assert(validateOrganicCase({ ...ok, query: '  ' }) === 'query', '空 query')
   assert(validateOrganicCase({ ...ok, expected: [] }) === 'expected-empty', '空 expected')
@@ -110,6 +111,26 @@ console.log('\n=== Test 4: 遥测池抽取 ===')
     assert(pool.filter((p) => p.change === 'c1').length === 3, '同变更限流生效')
     assert(pool.every((p) => p.query !== 'q6'), '非 inject 事件不进池')
     assert(extractTelemetryPool(join(d, 'none.jsonl')).length === 0, '文件缺失 → 空池')
+  } finally { rmSync(d, { recursive: true, force: true }) }
+}
+
+// ── 5: 标签有效性自检 ──
+console.log('\n=== Test 5: validateLabels ===')
+{
+  const d = setup('labels')
+  try {
+    mkdirSync(join(d, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
+    writeFileSync(join(d, '.sillyspec', 'knowledge', 'INDEX.md'), '# I\n')
+    writeFileSync(join(d, '.sillyspec', 'knowledge', 'decisions', 'x.md'), '## D-001@v1 标题\n状态：implemented\n')
+    const issues = validateLabels([
+      { id: 'ok', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-001@v1'] },
+      { id: 'missing-file', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/nope.md'] },
+      { id: 'missing-anchor', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-999@v1'] },
+    ], new Map([['r', d]]))
+    assert(issues.length === 2, '两条结构性问题检出')
+    assert(issues.some((i) => i.id === 'missing-file' && i.reason === 'file-missing'), 'file-missing 检出')
+    assert(issues.some((i) => i.id === 'missing-anchor' && i.reason === 'anchor-missing'), 'anchor-missing 检出（标签指向不存在锚点）')
+    assert(validateLabels([{ id: 'x', repo: 'not-running', face: 'entries', query: 'q', expected: ['nope.md'] }], new Map()).length === 0, '未参与运行的仓标签不判错')
   } finally { rmSync(d, { recursive: true, force: true }) }
 }
 

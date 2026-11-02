@@ -168,6 +168,23 @@ console.log('\n=== Test 10: diffBaseline ===')
   assert(empty.mismatches.length === 0 && empty.changes.length === 0, '无基线 → 空 diff 不抛')
 }
 
+// ── 11: fr 面（FR 索引 digest 通道） ──
+console.log('\n=== Test 11: fr 面 ===')
+{
+  const fixture = {
+    defect: 'synthetic-fr',
+    files: {
+      'INDEX.md': '# I\n',
+      'fr/demo.md': '## FR-demo-001 alpha 需求标题\n变更：x\n状态：active\n摘要：主路径\n',
+    },
+  }
+  const dir = materialize(fixture)
+  try {
+    const m = await runFace(dir, 'fr', [{ id: 'f1', query: 'alpha 需求标题', expected: ['fr/demo.md#FR-demo-001'] }])
+    assert(m.raw.top3 === 1, 'fr 面命中 FR 条目')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`eval-knowledge-runner tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

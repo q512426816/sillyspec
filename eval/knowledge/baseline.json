@@ -3,7 +3,7 @@
   "generated_by": "eval/knowledge/run.mjs",
   "snapshot": {
     "sillyspec": {
-      "head": "6ca826303439beac181a49ecab2a909638d0bb8a",
+      "head": "9bfaa74ffee75c2132b4d40b407b941b00cdd4cb",
       "knowledge_hash": "b8a9b4bc16d0c36bddc2b5c434c00ad5bd53498434c48ec88ed8ccbfdccc871e",
       "knowledge_files": 139
     },
@@ -27,37 +27,19 @@
     "sillyspec": {
       "entries": {
         "raw": {
-          "top1": 0.5833,
-          "top3": 0.5833,
-          "mrr": 0.5833,
-          "n": 12
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 7
         },
         "rendered": {
-          "top1": 0.5833,
-          "top3": 0.5833,
-          "mrr": 0.5833,
-          "n": 12
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 7
         },
         "truncated": [],
         "details": [
-          {
-            "id": "s-tel-02",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-tel-03",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-tel-04",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
           {
             "id": "s-man-01",
             "raw_rank": 1,
@@ -99,46 +81,46 @@
             "raw_rank": 1,
             "rendered_rank": 1,
             "truncated": false
-          },
-          {
-            "id": "s-man-09",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-man-10",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
           }
         ]
       },
       "decisions": {
         "raw": {
-          "top1": 0.3333,
-          "top3": 0.3333,
-          "mrr": 0.3333,
-          "n": 3
+          "top1": 0.6,
+          "top3": 0.6,
+          "mrr": 0.6,
+          "n": 5
         },
         "rendered": {
-          "top1": 0.3333,
-          "top3": 0.3333,
-          "mrr": 0.3333,
-          "n": 3
+          "top1": 0.6,
+          "top3": 0.6,
+          "mrr": 0.6,
+          "n": 5
         },
         "truncated": [],
         "details": [
           {
             "id": "s-tel-01",
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
+          },
+          {
+            "id": "s-tel-02",
+            "raw_rank": null,
+            "rendered_rank": null,
+            "truncated": false
+          },
+          {
+            "id": "s-tel-03",
             "raw_rank": null,
             "rendered_rank": null,
             "truncated": false
           },
           {
             "id": "s-tel-05",
-            "raw_rank": null,
-            "rendered_rank": null,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
@@ -151,37 +133,19 @@
       },
       "search": {
         "raw": {
-          "top1": 0.5833,
-          "top3": 0.5833,
-          "mrr": 0.5833,
-          "n": 12
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 7
         },
         "rendered": {
-          "top1": 0.5833,
-          "top3": 0.5833,
-          "mrr": 0.5833,
-          "n": 12
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 7
         },
         "truncated": [],
         "details": [
-          {
-            "id": "s-tel-02",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-tel-03",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-tel-04",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
           {
             "id": "s-man-01",
             "raw_rank": 1,
@@ -222,18 +186,6 @@
             "id": "s-man-08",
             "raw_rank": 1,
             "rendered_rank": 1,
-            "truncated": false
-          },
-          {
-            "id": "s-man-09",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "s-man-10",
-            "raw_rank": null,
-            "rendered_rank": null,
             "truncated": false
           }
         ]
@@ -282,6 +234,44 @@
             "raw_rank": null,
             "rendered_rank": null,
             "truncated": false
+          }
+        ]
+      },
+      "fr": {
+        "raw": {
+          "top1": 0,
+          "top3": 0.3333,
+          "mrr": 0.2293,
+          "n": 3
+        },
+        "rendered": {
+          "top1": 0,
+          "top3": 0.3333,
+          "mrr": 0.1667,
+          "n": 3
+        },
+        "truncated": [
+          "s-tel-04",
+          "s-man-10"
+        ],
+        "details": [
+          {
+            "id": "s-tel-04",
+            "raw_rank": 13,
+            "rendered_rank": null,
+            "truncated": true
+          },
+          {
+            "id": "s-man-09",
+            "raw_rank": 2,
+            "rendered_rank": 2,
+            "truncated": false
+          },
+          {
+            "id": "s-man-10",
+            "raw_rank": 9,
+            "rendered_rank": null,
+            "truncated": true
           }
         ]
       }
@@ -289,16 +279,16 @@
     "platform": {
       "entries": {
         "raw": {
-          "top1": 0.3333,
-          "top3": 0.5333,
-          "mrr": 0.4222,
-          "n": 15
+          "top1": 0.5556,
+          "top3": 0.8889,
+          "mrr": 0.7037,
+          "n": 9
         },
         "rendered": {
-          "top1": 0.3333,
-          "top3": 0.5333,
-          "mrr": 0.4222,
-          "n": 15
+          "top1": 0.5556,
+          "top3": 0.8889,
+          "mrr": 0.7037,
+          "n": 9
         },
         "truncated": [],
         "details": [
@@ -345,83 +335,54 @@
             "truncated": false
           },
           {
-            "id": "p-tel-08",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
             "id": "p-tel-09",
             "raw_rank": 1,
             "rendered_rank": 1,
             "truncated": false
           },
           {
-            "id": "p-tel-10",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-11",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-12",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
             "id": "p-tel-13",
             "raw_rank": 1,
             "rendered_rank": 1,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-14",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-15",
-            "raw_rank": null,
-            "rendered_rank": null,
             "truncated": false
           }
         ]
       },
       "decisions": {
         "raw": {
-          "top1": 0,
-          "top3": 0,
-          "mrr": 0,
-          "n": 0
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 1
         },
         "rendered": {
-          "top1": 0,
-          "top3": 0,
-          "mrr": 0,
-          "n": 0
+          "top1": 1,
+          "top3": 1,
+          "mrr": 1,
+          "n": 1
         },
         "truncated": [],
-        "details": []
+        "details": [
+          {
+            "id": "p-tel-08",
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
+          }
+        ]
       },
       "search": {
         "raw": {
-          "top1": 0.3333,
-          "top3": 0.5333,
-          "mrr": 0.4222,
-          "n": 15
+          "top1": 0.5556,
+          "top3": 0.8889,
+          "mrr": 0.7037,
+          "n": 9
         },
         "rendered": {
-          "top1": 0.3333,
-          "top3": 0.5333,
-          "mrr": 0.4222,
-          "n": 15
+          "top1": 0.5556,
+          "top3": 0.8889,
+          "mrr": 0.7037,
+          "n": 9
         },
         "truncated": [],
         "details": [
@@ -468,51 +429,15 @@
             "truncated": false
           },
           {
-            "id": "p-tel-08",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
             "id": "p-tel-09",
             "raw_rank": 1,
             "rendered_rank": 1,
             "truncated": false
           },
           {
-            "id": "p-tel-10",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-11",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-12",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
             "id": "p-tel-13",
             "raw_rank": 1,
             "rendered_rank": 1,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-14",
-            "raw_rank": null,
-            "rendered_rank": null,
-            "truncated": false
-          },
-          {
-            "id": "p-tel-15",
-            "raw_rank": null,
-            "rendered_rank": null,
             "truncated": false
           }
         ]
@@ -532,6 +457,58 @@
         },
         "truncated": [],
         "details": []
+      },
+      "fr": {
+        "raw": {
+          "top1": 0,
+          "top3": 0.2,
+          "mrr": 0.1278,
+          "n": 5
+        },
+        "rendered": {
+          "top1": 0,
+          "top3": 0.2,
+          "mrr": 0.1,
+          "n": 5
+        },
+        "truncated": [
+          "p-tel-10",
+          "p-tel-11",
+          "p-tel-12",
+          "p-tel-14"
+        ],
+        "details": [
+          {
+            "id": "p-tel-10",
+            "raw_rank": 34,
+            "rendered_rank": null,
+            "truncated": true
+          },
+          {
+            "id": "p-tel-11",
+            "raw_rank": 32,
+            "rendered_rank": null,
+            "truncated": true
+          },
+          {
+            "id": "p-tel-12",
+            "raw_rank": 35,
+            "rendered_rank": null,
+            "truncated": true
+          },
+          {
+            "id": "p-tel-14",
+            "raw_rank": 20,
+            "rendered_rank": null,
+            "truncated": true
+          },
+          {
+            "id": "p-tel-15",
+            "raw_rank": 2,
+            "rendered_rank": 2,
+            "truncated": false
+          }
+        ]
       }
     }
   },
@@ -546,9 +523,9 @@
     "platform": {
       "cases": 329,
       "skipped": 488,
-      "own_hit_top3": 0.0243,
+      "own_hit_top3": 0.0274,
       "name_only_top3": 0.0061,
-      "leak_gap": 0.0182
+      "leak_gap": 0.0213
     }
   },
   "probes": {
@@ -559,5 +536,6 @@
     "fixed-entries": true,
     "linkage": true
   },
+  "label_issues": [],
   "warnings": []
 }

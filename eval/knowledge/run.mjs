@@ -20,7 +20,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync, rmSyn
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
-import { loadOrganic, buildSelfCases } from './lib/dataset.mjs'
+import { loadOrganic, buildSelfCases, validateLabels } from './lib/dataset.mjs'
 import { runDecisions } from './lib/engine.mjs'
 import { snapshotFingerprint } from './lib/snapshot.mjs'
 import { runAllProbes } from './lib/probes.mjs'
@@ -58,16 +58,16 @@ try {
 const wantFaces = facesArg === 'all' ? FACES : [facesArg]
 
 /** self 集 smoke：own 命中率 + name-only 对照（leak_gap = full − name_only，越接近 0 越靠变更名泄漏）。 */
-function runSelfSmoke(repoPath, repo) {
+async function runSelfSmoke(repoPath, repo) {
   const { cases, skipped } = buildSelfCases(repoPath, repo)
   if (cases.length === 0) return { cases: 0, skipped: skipped.length }
   let full = 0
   let nameOnly = 0
   for (const c of cases) {
     const name = c.id.replace(/^self-/, '')
-    const ownHit = (q) => rankWithMatches(runDecisions(repoPath, q).hits, c.own) <= 3
-    if (ownHit(c.query)) full++
-    if (ownHit(name)) nameOnly++
+    const ownHit = async (q) => rankWithMatches((await runDecisions(repoPath, q)).hits, c.own) <= 3
+    if (await ownHit(c.query)) full++
+    if (await ownHit(name)) nameOnly++
   }
   const n = cases.length
   const r4 = (x) => Math.round(x * 10000) / 10000
@@ -115,6 +115,7 @@ async function main() {
   }
 
   const { cases: organic, skipped } = loadOrganic(DATASET)
+  const labelIssues = validateLabels(organic, REPO_ROOTS)
   const result = {
     version: 1,
     generated_by: 'eval/knowledge/run.mjs',
@@ -123,6 +124,7 @@ async function main() {
     metrics: {},
     self_smoke: {},
     probes: {},
+    label_issues: labelIssues,
     warnings: [],
   }
   for (const [repo, path] of REPO_ROOTS) {
@@ -143,10 +145,11 @@ async function main() {
       if (face === 'entries') faceCases = repoCases.filter((c) => c.face === 'entries')
       else if (face === 'decisions') faceCases = repoCases.filter((c) => c.face === 'decisions')
       else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries')
+      else if (face === 'fr') faceCases = repoCases.filter((c) => c.face === 'fr')
       else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0)
       result.metrics[repo][face] = await runFace(path, face, faceCases)
     }
-    const self = runSelfSmoke(path, repo)
+    const self = await runSelfSmoke(path, repo)
     result.self_smoke[repo] = self
     result.cases[repo].self = self.cases
   }
@@ -172,6 +175,7 @@ async function main() {
   }
   console.log(renderTable(result))
   if (result.warnings.length > 0) console.log(`\n⚠️ ${result.warnings.join('；')}`)
+  if (labelIssues.length > 0) console.log(`\n⚠️ 数据集标签自检 ${labelIssues.length} 条问题（结构性不可命中）：${labelIssues.map((i) => `${i.id}:${i.reason}`).join(' ')}`)
   if (skipped.length > 0) console.log(`\n⚠️ organic 跳过 ${skipped.length} 条（字段缺失/期望空）：${skipped.map((s) => `${s.id || `L${s.line}`}:${s.reason}`).join(' ')}`)
   if (unmatched.length > 0) console.log(`\n⚠️ organic 有 ${unmatched.length} 条未匹配本次仓标签（${[...new Set(unmatched.map((c) => c.repo))].join('、')}）——用 --repo label:path 对齐标签或忽略`)
   if (diffs.error) console.log(`\n⚠️ ${diffs.error}`)

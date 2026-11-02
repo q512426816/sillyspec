@@ -48,8 +48,8 @@ export async function evaluateCase(repoRoot, c) {
   const fails = []
   let hits = []
   if (c.kind === 'entries' || c.kind === 'search' || c.kind === 'decisions' || c.kind === 'scope') {
-    if (c.kind === 'entries') hits = runEntries(repoRoot, c.query).hits
-    else if (c.kind === 'decisions') hits = runDecisions(repoRoot, c.query).hits
+    if (c.kind === 'entries') hits = (await runEntries(repoRoot, c.query)).hits
+    else if (c.kind === 'decisions') hits = (await runDecisions(repoRoot, c.query)).hits
     else if (c.kind === 'scope') hits = runScope(repoRoot, c.scope_files || []).merged
     else {
       const rows = await searchView(repoRoot, c.query, Infinity)

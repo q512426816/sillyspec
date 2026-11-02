@@ -5,11 +5,11 @@
  * rejected top-5、search limit 10、scope entry 3 + decision 20）。raw 命中而 rendered 不中
  * → truncated；每 case 的 raw_rank/rendered_rank 进 details（FR-03 的 rank 记录面）。
  */
-import { runEntries, runDecisions, searchView, runScope } from './engine.mjs'
+import { runEntries, runDecisions, runFr, searchView, runScope } from './engine.mjs'
 import { hitMatches } from './probes.mjs'
 import { summarize } from './metrics.mjs'
 
-export const FACES = ['entries', 'decisions', 'search', 'scope']
+export const FACES = ['entries', 'decisions', 'search', 'scope', 'fr']
 
 /** 期望谓词排名（file 级前缀语义；1-based，未命中 = Infinity）。 */
 export function rankWithMatches(hits, expected) {
@@ -30,13 +30,17 @@ export async function runFace(repoPath, face, cases) {
     let rawHits = []
     let renderedHits = []
     if (face === 'entries') {
-      const r = runEntries(repoPath, c.query)
+      const r = await runEntries(repoPath, c.query)
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 3)
     } else if (face === 'decisions') {
-      const r = runDecisions(repoPath, c.query)
+      const r = await runDecisions(repoPath, c.query)
       rawHits = r.hits
       renderedHits = r.hits.slice(0, 5)
+    } else if (face === 'fr') {
+      const r = runFr(repoPath, c.query)
+      rawHits = r.hits
+      renderedHits = r.hits.slice(0, 8)
     } else if (face === 'search') {
       rawHits = (await searchView(repoPath, c.query, Infinity)).map((r) => r.file)
       renderedHits = rawHits.slice(0, 10)
