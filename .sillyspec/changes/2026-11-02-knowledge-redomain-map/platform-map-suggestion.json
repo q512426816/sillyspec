@@ -1,0 +1,993 @@
+{
+  "generated_at": "2026-11-02T11:48:55.004Z",
+  "direct": [
+    {
+      "id": "D-unmapped-026@v1",
+      "title": "dsh 二进制发现策略——照 agent-detector 先例",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-027@v1",
+      "title": "dsh 版本门语义——最低版本门 + 警告（不硬拒）",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-028@v1",
+      "title": "驱动层实现方式——自研 ACP 驱动（方案 A）",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-029@v1",
+      "title": "落选——官方 @agentclientprotocol/sdk 客户端包（方案 B）",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-030@v1",
+      "title": "落选——headless --json 短命进程批处理通道（方案 C）",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-031@v1",
+      "title": "执行期任务边界合并——task-03 驱动与 task-04 注册的类型依赖",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-032@v1",
+      "title": "执行期任务边界修正——task-07 单一源实为 runtimes.ts",
+      "change": "2026-10-15-dsh-engine-acp",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-036@v1",
+      "title": "日志源=应用侧落文件+轮转（用户亲选）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-037@v1",
+      "title": "展示形式=结构化+自动刷新（用户亲选）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-038@v1",
+      "title": "下载范围=单文件可选历史（用户亲选）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-039@v1",
+      "title": "权限=复用 system_status:read（用户亲选）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-040@v1",
+      "title": "日志落盘实现=单点插入文件写入（用户亲选，方案 A）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-041@v1",
+      "title": "页面布局=日志卡满宽居底（用户亲选）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-042@v1",
+      "title": "日志条数参数与轮转参数的可配口径（AI 定案，可否决）",
+      "change": "2026-10-15-server-logs-panel",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-043@v1",
+      "title": "ZCode 引擎发现策略——三段式探测（env 覆盖 → PATH → Desktop 固定路径）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-044@v1",
+      "title": "会话数据隔离边界——配置面 per-session 隔离，会话库接受机器共享",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-045@v1",
+      "title": "模型路由——平台 LlmProvider 接管（per-session provider_config.json 注入）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-046@v1",
+      "title": "版本门语义——最低版本门 + 警告（不硬拒）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-047@v1",
+      "title": "驱动层实现方式——自研 ZCode 私有协议驱动（无备选，落选项登记）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-048@v1",
+      "title": "落选——等待官方 ACP/SDK 支持面（事实性落选登记）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-049@v1",
+      "title": "驱动承载形态——独立驱动 + 独立轻量信封层 + 每会话一进程（方案 A）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-050@v1",
+      "title": "执行期三类协议形状修正（实测驱动，task-08 冒烟抓出）",
+      "change": "2026-10-15-zcode-engine-appserver",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-057@v1",
+      "title": "落选——方案 C（进程内卸载 + 拉长轮询 + 缓存）",
+      "change": "2026-10-16-backend-mem-polling",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-060@v1",
+      "title": "sessions 表增 family_id 列建模会话族",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-061@v1",
+      "title": "refresh 复用检测从全用户吊销改为族级吊销",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-062@v1",
+      "title": "grace 宽限窗默认 60s → 300s",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-063@v1",
+      "title": "前端 doRefresh 按状态码分流——5xx 抛错不清会话",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-064@v1",
+      "title": "根因一实现方案选 A（会话族吊销 + 宽限窗加大）",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-065@v1",
+      "title": "方案 B（只加大宽限窗，不加族系列）",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-066@v1",
+      "title": "方案 C（复用检测只拒绝不吊销）",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-067@v1",
+      "title": "族吊销必须内部 commit（执行期裁决，纠正 design 笔误）",
+      "change": "2026-10-16-fix-auth-random-logout",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-118@v1",
+      "title": "参考粒度＝交互模型与数据口径，不移植 DSH 插件化客户端架构",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-119@v1",
+      "title": "动机＝日常主力工作台 + 对外演示可用 + 与 DSH 直接对标（非「会话规模爆炸」驱动）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-120@v1",
+      "title": "视图模型不在对话里拍板——先出 HTML 原型看效果再定（用户选 C）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-121@v1",
+      "title": "原型出「A/B 双形态对比」单页（我的判断）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-122@v1",
+      "title": "成功标准延后到原型确认后定稿（草案 SC-01..SC-05 随原型呈现）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-123@v1",
+      "title": "方案定稿推迟到原型确认轮；原型出 A/C 双形态（修订 D-005 的 A/B 组合）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-124@v1",
+      "title": "原型形态升级为 dev 预览路由（直接渲染真实会话组件）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-125@v1",
+      "title": "「继续用静态 prototype:build 复刻会话页」被否决",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-126@v1",
+      "title": "静态交付形态＝真实组件树的 SSR 快照 + 内联 CSS（交互仍走 dev 路由）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-127@v2",
+      "title": "视觉基线＝真实页面的**结构**（三主题并存，不把深色当基线）〔取代 D-015@v1〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-128@v1",
+      "title": "视觉稿必须由真实组件产出（手绘 HTML 只作参考，不作定稿）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-129@v1",
+      "title": "静态原型导出必须「浏览器水合后序列化 DOM」，禁止抓 SSR HTML",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-130@v1",
+      "title": "此前三次「效果不咋地 / 看不出区别」的判定，基于缺正文的残缺稿，需在修复稿上重判",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-131@v1",
+      "title": "删除轮间 1px hairline，仅以留白分隔轮次（用户方向）",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-132@v1",
+      "title": "对比加强（答案压过过程）——四组参数定稿",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-133@v1",
+      "title": "轨迹视图形态＝泳道时间轴（共享绝对时间轴 × 输入/模型/工具），账本降为「调用」档",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-134@v1",
+      "title": "过程行采用 DSH 式语义标签（思考 / 运行命令 / 收到任务消息…），daemon 采集缓发",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-135@v1",
+      "title": "1b 快照落库点修正——interactive 轮走 `close_run_steps`，不走 `lease/service.complete_lease`〔2026-10-21 execute 期实证〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-136@v1",
+      "title": "1b 读模型落点＝`GET /sessions/{id}/runs`（SessionRunRead），`TurnOutlineItemRead` 不加字段〔2026-10-21 execute 期裁决〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-137@v1",
+      "title": "后到快照必须在「run 已终态」的二次上报里补写侧表（否则 1b 对 interactive 全废）〔2026-10-21 execute 期实证〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-138@v1",
+      "title": "前端降级判据以 capability 为准；`snapshot=null` 且 `capability` 也缺＝「未接线」，不出卡〔2026-10-21 execute 期裁决〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-139@v1",
+      "title": "TTFT/attempt 实际只能 `basis=\"approx\"`（三引擎均无「模型请求起点」事件）；attempt 沿用近似起点而非只记终点〔2026-10-21 execute 期实证〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-140@v1",
+      "title": "迁移链尾锚测试随新迁移一并前移（提交 hook 强制连带）〔2026-10-21 execute 期登记〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-141@v1",
+      "title": "`partial` 且无文件清单时出「一行提示卡」——不得静默成「本轮无改动」〔2026-10-21 execute 期独立审查阻断项修复〕",
+      "change": "2026-10-20-session-page-dsh-alignment",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-151@v1",
+      "title": "轨迹面板以 dsh（deepseek-harness）ui-trajectory 为视觉与交互基准",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-152@v1",
+      "title": "顶部固定布局——工具栏与时间线不随账本滚动",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-153@v1",
+      "title": "工具栏四项语义与行为",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-154@v1",
+      "title": "账本形态——无表头两列紧凑表格",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-155@v1",
+      "title": "详情面板——多标签 + 可调宽",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-156@v1",
+      "title": "采用组件族拆分方案（B）",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-157@v1",
+      "title": "否决「原地重构 trajectory-view.tsx」（方案 A）",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-158@v1",
+      "title": "否决「直接移植 dsh 组件」（方案 C）",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-159@v1",
+      "title": "总览缩略条随 D-017 一并裁剪，实际时长保留缩放/平移/双击重置",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-160@v1",
+      "title": "设计方案与真码原型定稿",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-161@v1",
+      "title": "搜索时折叠整体失效，时间线不做降透明",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-162@v1",
+      "title": "折叠/搜索隐藏选中行时清空选中，键盘只遍历可见行",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-163@v1",
+      "title": "工具行参数/结果字段来源（允许 from-turn-views 小改）",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-164@v1",
+      "title": "等宽模式为只读概览",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-165@v1",
+      "title": "D-007 覆盖 D-005 的 Schema 子项",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-166@v1",
+      "title": "时长偏好为全局偏好",
+      "change": "2026-10-22-trajectory-view-redesign",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-199@v1",
+      "title": "每轮注入【网络环境】前导段，不动首轮一次性策略",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-200@v1",
+      "title": "同网段判定双源——后端观测 daemon 请求源 IP 为 ground truth，daemon 自报网卡列表用于拼访问地址",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-201@v1",
+      "title": "共享机器的内网 IP 对借用人可见",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-202@v2",
+      "title": "共享机器权威口径 = grants 表（supersedes D-005@v1）",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-203@v1",
+      "title": "注入去重——内容快照变化才重注 + 会话内最短间隔兜底",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-204@v1",
+      "title": "排队/steering 轮注入语义——入队存用户 IP，派发时重算判定",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-205@v1",
+      "title": "快照 60s 窗口语义——不吞变化，到点补注",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-206@v1",
+      "title": "心跳契约扩展须同步四个钉子测试文件",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-207@v1",
+      "title": "daemon_instances 加 JSON 列 + Alembic 迁移，链尾锚测试前移一行",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-208@v1",
+      "title": "实现方案选定——方案 A 平台自动注入（每轮 CIDR 判定 + 前导段注入）",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-209@v1",
+      "title": "落选方案 B——agent 按需查询工具（get_network_info MCP 工具）",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-210@v1",
+      "title": "落选方案 C——仅前端展示网络徽标不注入",
+      "change": "2026-10-23-session-network-context",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-230@v1",
+      "title": "按 dsh 引擎机制做全套（消息来源标记 + 请求头快照），跨三端",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-231@v1",
+      "title": "系统提示词行做「配置面快照」口径（引擎全文不可得）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-232@v1",
+      "title": "存量历史会话如实呈现（无标记 → 用户行），不做启发式兜底",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-233@v1",
+      "title": "revert 已提交的启发式代码（77ba0588b / c93aafc84）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-234@v1",
+      "title": "采用方案 A——复用日志通道（metadata 盖戳 + 新 channel 快照 + submit 透传修复）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-235@v1",
+      "title": "否决「独立快照表 + REST 上报」（方案 B）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-236@v1",
+      "title": "否决「纯前端不落库」（方案 C）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-237@v1",
+      "title": "设计定稿——三段式（注入盖戳 / daemon 快照 / 前端行）+ 真码原型",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-238@v1",
+      "title": "新注入类归 turn_trigger 体系（非独立 sender 键）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-239@v1",
+      "title": "变更检测在 daemon 侧，只报 initial/change（非每轮落快照）",
+      "change": "2026-10-25-trajectory-source-model",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-247@v2",
+      "title": "忽略条目按顶层聚合展示，不递归展开（措辞精度修订）",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-248@v1",
+      "title": "diff 基线一律 HEAD，不区分暂存区；untracked/已删除特例展示",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-249@v1",
+      "title": "explorer 树着色不改点击行为，diff 入口仅修改集合视图",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-250@v1",
+      "title": "状态采集沿用 git_log 既有三层链路，daemon 新增两个平名能力",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-251@v1",
+      "title": "落选——方案 B（explorer 契约内嵌状态字段）— rejected",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-252@v1",
+      "title": "落选——方案 C（daemon watch + 实时推送）— rejected",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-253@v1",
+      "title": "untracked diff 采集用局部 execFile 读退出码（exit 0/1 均成功）",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-254@v1",
+      "title": "porcelain v2 解析契约——末段 rejoin、u 条目按 modified、祖先蓝点不含 ignored",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-255@v1",
+      "title": "并行变更遗留红测试的就地对齐（turn-timeline 断言恢复）",
+      "change": "2026-10-25-explorer-git-status",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-257@v1",
+      "title": "否决方案 B——后端推断式（零 daemon 改动）",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-258@v1",
+      "title": "否决方案 C——心跳快照轮询",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-259@v1",
+      "title": "超时阈值=前端常量 30s（非用户/服务端配置）",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-260@v1",
+      "title": "轮内阶段由客户端从已有事件映射，不发新事件",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-261@v1",
+      "title": "阶段上报失败静默降级，不阻塞会话主流程",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-262@v1",
+      "title": "断线/刷新后阶段未知→回退现有兜底文案，不做持久化",
+      "change": "2026-10-26-session-stage-progress",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-266@v1",
+      "title": "回退安全性前提=单会话单活跃 run 不变式(反例排查)",
+      "change": "2026-10-26-turn-phase-orphan-fallback",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-269@v1",
+      "title": "轻量变更耗时口径=总时长",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-270@v1",
+      "title": "全量异常态=异色圈+状态字",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-271@v1",
+      "title": "进度展示位置=下拉项内嵌+入口旁单个总进度圈",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-272@v1",
+      "title": "数据链路=方案A后端投影扩展",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-273@v1",
+      "title": "execute 阶段圈口径=Task 表 n/m",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-274@v1",
+      "title": "brainstorm→thin 分流态归轻量渲染",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-275@v1",
+      "title": "升厚变更切换全量渲染+标注",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-276@v2",
+      "title": "轻量数据通道=daemon heartbeat 载荷扩展+条目 workspace 维度+backend 全新逐变更写入路径",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-277@v1",
+      "title": "入口圈选取=前端显式 updated_at 重排",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-278@v1",
+      "title": "heartbeat thin_flow 写入不刷 changes.updated_at",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-279@v1",
+      "title": "已归档项不渲染进度行",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-280@v1",
+      "title": "落选方案B（前端按需拉详情）",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-281@v1",
+      "title": "落选方案C（daemon SSE 实时推）",
+      "change": "2026-10-26-session-change-progress-hover",
+      "domain": "daemon",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-293@v1",
+      "title": "治本方案选定方案C（scoped 增量承接归档 + 探针对账兜底）",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": "backend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-317@v1",
+      "title": "落选——估算并入既有 usage_update 通道",
+      "change": "2026-10-29-engine-live-perception",
+      "domain": "frontend",
+      "candidates": []
+    },
+    {
+      "id": "D-unmapped-318@v1",
+      "title": "落选——纯前端等待态分级（不动 daemon）",
+      "change": "2026-10-29-engine-live-perception",
+      "domain": "frontend",
+      "candidates": []
+    }
+  ],
+  "manual": [
+    {
+      "id": "D-unmapped-075@v1",
+      "title": "rejected 方案 B——后端聚合端点 GET /sessions/{id}/decisions",
+      "change": "2026-10-16-session-decision-pill",
+      "domain": null,
+      "candidates": [
+        "frontend",
+        "frontend_components"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-291@v1",
+      "title": "治本目标定为增量方案（又快又稳）",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-292@v1",
+      "title": "mem_limit 再上调只作方案附录建议，不在本次实施",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-294@v1",
+      "title": "方案A（免 reparse 靶向改库）落选",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-295@v1",
+      "title": "方案B（全量合并窗治理）落选",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-296@v1",
+      "title": "双通道时效分档（结构性立即 / 普通推送 2 分钟合并窗）",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-297@v1",
+      "title": "漂移探针只告警不自动修复",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-298@v1",
+      "title": "bundle gzip 构建加同版本 single-flight",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-299@v1",
+      "title": "structural 触发撞在途 reparse 时尾随改「完成回调即时补发」",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    },
+    {
+      "id": "D-unmapped-300@v1",
+      "title": "bundle 等待者 Future 失败传播 + 降级自建",
+      "change": "2026-10-27-archive-reparse-oom-governance",
+      "domain": null,
+      "candidates": [
+        "backend",
+        "frontend"
+      ],
+      "note": "平票或零命中——人工定域"
+    }
+  ],
+  "note": "执行时在平台仓重新生成/验证；平票只列候选域集不填 domain；平台 fr/backend.md 存在无段头孤儿字段块，执行 --map 前先修结构"
+}

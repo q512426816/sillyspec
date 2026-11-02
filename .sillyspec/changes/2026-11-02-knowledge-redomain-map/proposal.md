@@ -1,0 +1,35 @@
+---
+author: flow-machine-draft
+created_at: 2026-11-02T11:41:53.573Z
+---
+# 提案书（Proposal）— 2026-11-02-knowledge-redomain-map
+
+## 动机
+
+任务原话转写：定向迁移与裁剪：unmapped 收敛
+
+4A 已归档（provenance ledger）：本仓 decisions/unmapped 75 条 = 47 模板 + 21 duplicate（同 id+change 平台有对应，fork 快照）+ 7 unique（全平台域、锚点未记录、投票零命中）；fr/unmapped 210 = 208 duplicate + 2 unique；平台 135 条 unique 需仓主执行。4B 方案审查修正四点：验收数字改运行时段头守恒（4A 后已新增 1 条模板）；229 条 duplicate 正文比对 226 逐字节一致、2 条仅锚点拼写差异——比对作警告不作阻断；平台平票 18/135（含三路平票，字典序硬选语义错误）——清单分 117 直喂 + 18 平票候选集两栏；supersedes 预检两仓当前批次零命中——作警告不作门。
+
+成功标准：
+- 工具：redomain-unmapped 加 --map <file>（显式映射 [{id,domain}]，id 精确匹配、过期 id 被精确命中断言拦截；特殊 domain __prune__ 删段原语：精确计数断言、裁空删文件 + syncIndexRoutingLines、prune-only 也调 sync）；--map 模式 apply fail-fast（放弃逐组容错）；守恒断言 apply 时重算段头总数；幂等复跑 0 迁移断言；正文归一化比对与 supersedes 目标留源均作警告输出
+- 本仓执行：裁 229 条 duplicate（decisions 21 + fr 208，执行时重新验证清单防 id 漂移）；9 unique 不动不打标（4B 报告给 4A ledger 指针 + 锚点未记录/投票零命中/需人工定域说明）；模板保留原位；fr/unmapped 头注「残余 625 条」失真记 4C
+- 平台输出：135 条建议两栏（117 干净胜者直喂 + 18 平票只列候选域集不填 domain）+ 平台 fr/backend.md 无段头孤儿字段块结构破损警告 + 执行时重生成提示；不写平台仓
+- 验收：段头守恒（裁后 decisions = 模板+unique+运行时新增、fr = 2、duplicate 清零）+ apply 后幂等复跑 0 迁移 + eval 六探针 GREEN 五面零回归（unmapped 已被检索过滤，预期零变化）+ 显式 pathspec 提交可回滚
+- 测试：--map plan/apply、__prune__ 裁剪、裁到 0 段删文件+INDEX 清行、守恒、幂等、过期 id 报错、supersedes 警告、prune-only INDEX 同步；既有 redomain 三套测试回归
+
+## 变更范围
+
+按成功标准机械推导，共 5 条验收面：
+1. 工具：redomain-unmapped 加 --map <file>（显式映射 [{id,domain}]，id 精确匹配、过期 id 被精确命中断言拦截；特殊 domain __prune__ 删段原语：精确计数断言、裁空删文件 + syncIndexRoutingLines、prune-only 也调 sync）；--map 模式 apply fail-fast（放弃逐组容错）；守恒断言 apply 时重算段头总数；幂等复跑 0 迁移断言；正文归一化比对与 supersedes 目标留源均作警告输出
+2. 本仓执行：裁 229 条 duplicate（decisions 21 + fr 208，执行时重新验证清单防 id 漂移）；9 unique 不动不打标（4B 报告给 4A ledger 指针 + 锚点未记录/投票零命中/需人工定域说明）；模板保留原位；fr/unmapped 头注「残余 625 条」失真记 4C
+3. 平台输出：135 条建议两栏（117 干净胜者直喂 + 18 平票只列候选域集不填 domain）+ 平台 fr/backend.md 无段头孤儿字段块结构破损警告 + 执行时重生成提示；不写平台仓
+4. 验收：段头守恒（裁后 decisions = 模板+unique+运行时新增、fr = 2、duplicate 清零）+ apply 后幂等复跑 0 迁移 + eval 六探针 GREEN 五面零回归（unmapped 已被检索过滤，预期零变化）+ 显式 pathspec 提交可回滚
+5. 测试：--map plan/apply、__prune__ 裁剪、裁到 0 段删文件+INDEX 清行、守恒、幂等、过期 id 报错、supersedes 警告、prune-only INDEX 同步；既有 redomain 三套测试回归
+
+## 成功标准（可验证）
+
+1. 工具：redomain-unmapped 加 --map <file>（显式映射 [{id,domain}]，id 精确匹配、过期 id 被精确命中断言拦截；特殊 domain __prune__ 删段原语：精确计数断言、裁空删文件 + syncIndexRoutingLines、prune-only 也调 sync）；--map 模式 apply fail-fast（放弃逐组容错）；守恒断言 apply 时重算段头总数；幂等复跑 0 迁移断言；正文归一化比对与 supersedes 目标留源均作警告输出
+2. 本仓执行：裁 229 条 duplicate（decisions 21 + fr 208，执行时重新验证清单防 id 漂移）；9 unique 不动不打标（4B 报告给 4A ledger 指针 + 锚点未记录/投票零命中/需人工定域说明）；模板保留原位；fr/unmapped 头注「残余 625 条」失真记 4C
+3. 平台输出：135 条建议两栏（117 干净胜者直喂 + 18 平票只列候选域集不填 domain）+ 平台 fr/backend.md 无段头孤儿字段块结构破损警告 + 执行时重生成提示；不写平台仓
+4. 验收：段头守恒（裁后 decisions = 模板+unique+运行时新增、fr = 2、duplicate 清零）+ apply 后幂等复跑 0 迁移 + eval 六探针 GREEN 五面零回归（unmapped 已被检索过滤，预期零变化）+ 显式 pathspec 提交可回滚
+5. 测试：--map plan/apply、__prune__ 裁剪、裁到 0 段删文件+INDEX 清行、守恒、幂等、过期 id 报错、supersedes 警告、prune-only INDEX 同步；既有 redomain 三套测试回归

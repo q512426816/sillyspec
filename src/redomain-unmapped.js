@@ -10,9 +10,10 @@
  * 目标域同 id 同变更冲突跳过、幂等；INDEX 路由行随原语内 sync 维护（FR-02 泛词已退役）。
  * 只动 knowledge 活库，不回写归档件（D-unmapped-152 死路：归档是冻结审计面）。
  */
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { splitKnowledgeSections, discoverModuleIndex } from './decision-distill.js'
+import { splitKnowledgeSections, discoverModuleIndex, joinKnowledgeFile, syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS } from './decision-distill.js'
+import { writeAtomicSync } from './fs-atomic.js'
 import { matchedModuleIds, frCoverageFiles, FR_SECTION_RE } from './fr-index.js'
 import { anchorFilePaths } from './knowledge-match.js'
 import { redomainDecisionEntries, sectionMeta } from './decision-redomain.js'
@@ -181,11 +182,39 @@ export async function cmdRedomainUnmapped(dir, args, opts = {}) {
     ? (args[args.indexOf('--face') + 1] === 'decisions' ? 'decisions' : args[args.indexOf('--face') + 1] === 'fr' ? 'fr' : 'all')
     : 'all'
   const apply = args.includes('--apply')
+  const mapIdx = args.indexOf('--map')
+  const mapFile = mapIdx >= 0 ? args[mapIdx + 1] : null
   const emit = (ok, data, error) => console.log(JSON.stringify({ ok, ...data, ...(error ? { error } : {}) }, null, 2))
 
   if (!existsSync(join(knowledgeRoot, 'INDEX.md'))) {
     emit(false, {}, { code: 'knowledge_dir_missing', path: knowledgeRoot })
     return
+  }
+  // --map 显式映射模式（2026-11-02-knowledge-redomain-map FR-01）：旁路投票；apply fail-fast
+  if (mapFile) {
+    let map = null
+    try { map = JSON.parse(readFileSync(mapFile, 'utf8')) } catch (e) {
+      emit(false, {}, { code: 'map_file_invalid', file: mapFile, detail: e && e.message })
+      return
+    }
+    if (!Array.isArray(map) || map.some((e) => !e || typeof e.id !== 'string' || typeof e.domain !== 'string')) {
+      emit(false, {}, { code: 'map_entries_invalid', expected: '[{id, domain}]' })
+      return
+    }
+    const faces = face === 'all' ? ['decisions', 'fr'] : [face]
+    try {
+      if (apply) {
+        const results = faces.map((f) => applyFromMap({ knowledgeRoot, archiveRoot, face: f, map }))
+        emit(true, { mode: 'apply-map', face, results })
+        return
+      }
+      const plans = faces.map((f) => planFromMap({ knowledgeRoot, face: f, map }))
+      emit(true, { mode: 'dry-run-map', face, plans })
+      return
+    } catch (e) {
+      emit(false, {}, { code: 'map_apply_failed', detail: e && e.message ? e.message : String(e) })
+      return
+    }
   }
   if (apply) {
     const faces = face === 'all' ? ['decisions', 'fr'] : [face]
@@ -201,4 +230,129 @@ export async function cmdRedomainUnmapped(dir, args, opts = {}) {
   }
   const plan = planUnmappedRedomain({ knowledgeRoot, archiveRoot })
   emit(true, { mode: 'dry-run', face, decisions: plan.decisions, fr: plan.fr })
+}
+
+// ═══ 2026-11-02-knowledge-redomain-map：--map 显式映射模式（FR-01）═══
+// 显式契约 [{id, domain}]（domain 可为 __prune__ 删段）——旁路启发式投票；apply fail-fast
+// （显式契约不容半途容错）；守恒/幂等断言以 apply 时刻文件为准；supersedes 留源作警告。
+
+export const PRUNE_DOMAIN = '__prune__'
+
+/** unmapped 文件段解析（face 决定契约）。 */
+function parseUnmappedFace(knowledgeRoot, face) {
+  const fromPath = face === 'fr' ? join(knowledgeRoot, 'fr', 'unmapped.md') : join(knowledgeRoot, 'decisions', 'unmapped.md')
+  if (!existsSync(fromPath)) return null
+  const parsed = face === 'fr'
+    ? splitKnowledgeSections(readFileSync(fromPath, 'utf8'), { sectionRegex: FR_SECTION_RE, buildId: (n) => n })
+    : splitKnowledgeSections(readFileSync(fromPath, 'utf8'))
+  const metas = parsed.sections.map((s) => (face === 'fr' ? frMeta(s) : sectionMeta(s))).filter(Boolean)
+  return { fromPath, parsed, metas, total: metas.length }
+}
+
+function frMeta(s) {
+  const h = FR_HEADER_RE.exec(s.lines[0] || '')
+  return h ? { id: h[1], title: (h[2] || '').trim() } : null
+}
+
+/** 显式映射 → 计划：迁移 groups + prunes + unknownIds（部分未知=报错；全部未知=已全部处理）。 */
+export function planFromMap({ knowledgeRoot, face, map }) {
+  const src = parseUnmappedFace(knowledgeRoot, face)
+  if (!src) throw new Error(`源文件不存在（face=${face}: unmapped.md）`)
+  const byId = new Map(src.metas.map((m) => [m.id, m]))
+  const unknownIds = map.map((e) => e.id).filter((id) => !byId.has(id))
+  const groups = new Map()
+  const prunes = []
+  for (const e of map) {
+    if (!byId.has(e.id)) continue
+    if (e.domain === PRUNE_DOMAIN) { prunes.push(e.id); continue }
+    if (!groups.has(e.domain)) groups.set(e.domain, [])
+    groups.get(e.domain).push(e.id)
+  }
+  return {
+    face,
+    total: src.total,
+    groups: [...groups.entries()].map(([domain, ids]) => ({ domain, ids })).sort((a, b) => a.domain.localeCompare(b.domain)),
+    prunes,
+    unknownIds,
+    alreadyApplied: unknownIds.length === map.length && map.length > 0,
+  }
+}
+
+/** __prune__ 原语：从源文件删段——精确计数断言、裁空删文件 + INDEX 同步（prune-only 也调）。 */
+export function pruneUnmappedEntries({ knowledgeRoot, face, anchors }) {
+  const src = parseUnmappedFace(knowledgeRoot, face)
+  if (!src) throw new Error(`源文件不存在（face=${face}: unmapped.md）`)
+  const anchorSet = new Set(anchors)
+  const staying = []
+  const pruned = []
+  for (const s of src.parsed.sections) {
+    const meta = face === 'fr' ? frMeta(s) : sectionMeta(s)
+    if (!meta) { staying.push(s); continue }
+    if (anchorSet.has(meta.id)) pruned.push(meta.id)
+    else staying.push(s)
+  }
+  if (pruned.length !== anchors.length) {
+    const got = new Set(pruned)
+    throw new Error(`prune 精确计数断言失败：未命中 ${anchors.filter((a) => !got.has(a)).join('、')}`)
+  }
+  const sourceDeleted = staying.length === 0
+  if (sourceDeleted) unlinkSync(src.fromPath)
+  else writeAtomicSync(src.fromPath, joinKnowledgeFile(src.parsed.preamble, staying))
+  try {
+    syncIndexRoutingLines(knowledgeRoot, face === 'fr' ? {} : { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
+  } catch { /* INDEX 缺席/同步失败不拦裁剪（幂等可重跑） */ }
+  return { pruned, sourceDeleted }
+}
+
+/** supersedes 留源警告：被处理段的 supersedes 引用（基号）与留守段 id 基号相同 → 警告。 */
+function supersedesLeftBehind(knowledgeRoot, face, processedIds) {
+  const src = parseUnmappedFace(knowledgeRoot, face)
+  if (!src) return []
+  const baseOf = (s) => String(s || '').replace(/@v\d+$/, '')
+  const processedBases = new Set(processedIds.map(baseOf))
+  const stayingBases = new Set(src.metas.map((m) => m.id).filter((id) => !processedBases.has(baseOf(id))).map(baseOf))
+  const warnings = []
+  for (const s of src.parsed.sections) {
+    const meta = face === 'fr' ? frMeta(s) : sectionMeta(s)
+    if (!meta || !processedBases.has(baseOf(meta.id))) continue
+    const sup = (s.lines.join('\n').match(/^supersedes[：:]\s*(\S+)/m) || [])[1]
+    if (sup && stayingBases.has(baseOf(sup))) warnings.push(`${meta.id} 的 supersedes 目标 ${sup} 留在源文件`)
+  }
+  return warnings
+}
+
+/**
+ * --map apply（fail-fast）：迁移组 + 裁剪顺序执行，任何失败整体上抛（已写部分靠幂等复跑收敛）。
+ * 守恒断言（apply 后重算段头 = 原段头 − moved − pruned）与幂等（全部已处理 → alreadyApplied）内嵌。
+ */
+export function applyFromMap({ knowledgeRoot, archiveRoot, face, map }) {
+  const plan = planFromMap({ knowledgeRoot, face, map })
+  if (plan.alreadyApplied) return { face, alreadyApplied: true, moved: 0, pruned: 0, conservation: 'ok', warnings: [] }
+  if (plan.unknownIds.length > 0) throw new Error(`映射表含源文件不存在的 id：${plan.unknownIds.join('、')}`)
+  const processed = [...plan.groups.flatMap((g) => g.ids), ...plan.prunes]
+  const warnings = supersedesLeftBehind(knowledgeRoot, face, processed)
+  let moved = 0
+  const movedByDomain = {}
+  for (const g of plan.groups) {
+    const res = face === 'fr'
+      ? redomainFrEntries({ knowledgeRoot, from: 'unmapped', to: g.domain, anchors: g.ids })
+      : redomainDecisionEntries({ knowledgeRoot, from: 'unmapped', to: g.domain, anchors: g.ids })
+    moved += res.moved.length
+    movedByDomain[g.domain] = res.moved.length
+    if (Array.isArray(res.skippedConflicts) && res.skippedConflicts.length > 0) {
+      warnings.push(`目标域 ${g.domain} 冲突跳过：${res.skippedConflicts.join('、')}`)
+    }
+  }
+  let pruned = 0
+  if (plan.prunes.length > 0) {
+    pruned = pruneUnmappedEntries({ knowledgeRoot, face, anchors: plan.prunes }).pruned.length
+  }
+  // 守恒断言：apply 后源段头 = 原 − moved − pruned（skippedConflicts 留守 → moved 不含）
+  const after = parseUnmappedFace(knowledgeRoot, face)
+  const afterTotal = after ? after.total : 0
+  const expected = plan.total - moved - pruned
+  if (afterTotal !== expected) {
+    throw new Error(`守恒断言失败：apply 后段头 ${afterTotal} ≠ 原段头 ${plan.total} − moved ${moved} − pruned ${pruned}`)
+  }
+  return { face, alreadyApplied: false, moved, movedByDomain, pruned, conservation: `ok（${plan.total} − ${moved} − ${pruned} = ${afterTotal}）`, warnings }
 }
