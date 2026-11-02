@@ -1,0 +1,243 @@
+{
+  "change": "2026-11-02-knowledge-eval",
+  "baseline": "05901a963032f87e9c0c0f40b6d94810413730c1",
+  "head": "8d9d57c387161937c11cd436275834875ebd64d9",
+  "files": [
+    "eval/knowledge/README.md",
+    "eval/knowledge/baseline.json",
+    "eval/knowledge/datasets/organic.jsonl",
+    "eval/knowledge/fixtures/index.mjs",
+    "eval/knowledge/lib/dataset.mjs",
+    "eval/knowledge/lib/engine.mjs",
+    "eval/knowledge/lib/faces.mjs",
+    "eval/knowledge/lib/metrics.mjs",
+    "eval/knowledge/lib/probes.mjs",
+    "eval/knowledge/lib/report.mjs",
+    "eval/knowledge/lib/snapshot.mjs",
+    "eval/knowledge/run.mjs",
+    "package.json",
+    "src/knowledge-match.js",
+    "test/eval-knowledge-dataset.test.mjs",
+    "test/eval-knowledge-isolation.test.mjs",
+    "test/eval-knowledge-probes.test.mjs",
+    "test/eval-knowledge-runner.test.mjs",
+    "test/eval-knowledge-smoke.test.mjs"
+  ],
+  "totals": {
+    "files": 19,
+    "additions": 1616,
+    "deletions": 2
+  },
+  "savedAt": "2026-11-02T02:23:42.854Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "release",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/release.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "eval",
+      "files": 12,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "05901a963032f87e9c0c0f40b6d94810413730c1",
+    "totals": {
+      "files": 19,
+      "additions": 1616,
+      "deletions": 2
+    },
+    "rows": [
+      {
+        "path": "eval/knowledge/README.md",
+        "additions": 85,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/baseline.json",
+        "additions": 185,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/datasets/organic.jsonl",
+        "additions": 35,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/fixtures/index.mjs",
+        "additions": 123,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/dataset.mjs",
+        "additions": 124,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/engine.mjs",
+        "additions": 77,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/faces.mjs",
+        "additions": 56,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "eval/knowledge/lib/metrics.mjs",
+        "additions": 56,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/probes.mjs",
+        "additions": 92,
+        "deletions": 0,
+        "kind": "new",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "eval/knowledge/lib/report.mjs",
+        "additions": 61,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/snapshot.mjs",
+        "additions": 55,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/run.mjs",
+        "additions": 160,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "package.json",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/eval-knowledge-dataset.test.mjs",
+        "additions": 118,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-knowledge-isolation.test.mjs",
+        "additions": 97,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-knowledge-probes.test.mjs",
+        "additions": 91,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-knowledge-runner.test.mjs",
+        "additions": 135,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/eval-knowledge-smoke.test.mjs",
+        "additions": 62,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7171c65b21a339656c05e512f9e78ffb34c6f84bf66a578d3bc5f67e9f30403f",
+  "patchStatus": "ok"
+}

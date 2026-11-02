@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-eval",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "50c240fc6125d0e81e9bb0f1b2de9edf6431e79f",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "FR-03 raw/rendered 口径缺陷：search/scope 的 raw 在引擎侧已截断，raw==rendered，截断归因失效；且无 per-case raw rank 记录",
+      "evidence": "faces.mjs 的 search 分支先调 searchView(...,10)（engine.mjs 内已 slice(0,10)）再 slice(0,10)；scope 分支用 runScope().merged（engine.mjs 内已 entryHits.slice(0,3)+decisionHits.slice(0,20)），两分支 rawHits 与 renderedHits 完全相同。实测 12 条命中、期望第 12 位：entries raw mrr=0.0833 且 truncated=[deep12]，search raw mrr=0、truncated=[]——引擎召回被误报为未召回，baseline 的 search/scope truncated 恒空。另 runFace 只返回 summarize 聚合值+truncated 的 case id，不返回 raw 名次；requirements 第 41-43 行要求 raw 段记录 rank=6、rendered 未呈现，test 7 也只断言 raw.top3=0 与 truncated 含 id。",
+      "location": "eval/knowledge/lib/faces.mjs:39-55; eval/knowledge/lib/engine.mjs:38-58; test/eval-knowledge-runner.test.mjs:96-102",
+      "resolution": "faces: search 用 searchView(limit=Infinity) 全量、scope 用 runScope().merged 全量（engine 不再预截断）；details 输出 raw_rank/rendered_rank；Test 7 断言 raw_rank=4/rendered=null"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "search 面不是 cmdSearch 等价：只调 matchByRouting，丢失 hybrid 的本地词片回退",
+      "evidence": "engine.searchView 仅调用 matchByRouting；真实 cmdSearch 调用 matchKnowledgeHybrid，路由零命中后（VECTOR=off 时）仍走 fallbackByQueryShingles，两路径结果不同。README 表声称 search 为 cmdSearch 镜像，FR-03 要求 cmdSearch 等价 entries 序，当前实现低报零路由命中场景。",
+      "location": "eval/knowledge/lib/engine.mjs:38-48; src/stages/knowledge.js:88-129; src/knowledge-vector.js:247-267",
+      "resolution": "engine.searchView 改调 matchKnowledgeHybrid（路由→向量→词片回退），与 cmdSearch 同路径；VECTOR=off 下零命中走词片层"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "score-contract 探针测的是 eval 侧镜像，不是真实 cmdSearch 的 score 计算",
+      "evidence": "searchView 自行赋 score=e.keywords.length，fixture 断言 score===matchedTags.length；真实 cmdSearch 的 score 赋值在 src/stages/knowledge.js 另算，engine.mjs 注释也承认需两处同步改。只修生产代码不会让探针转绿，只改镜像则探针假绿而生产缺陷仍在，违反 FR-02‘修复后通过’的根因要求。",
+      "location": "eval/knowledge/lib/engine.mjs:41-47; eval/knowledge/fixtures/index.mjs:10-23; src/stages/knowledge.js:120-123",
+      "resolution": "src/stages/knowledge.js 抽 buildSearchMatches 导出，cmdSearch 与 engine.searchView 共用单一源；probe 测生产构造本身"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "坏 baseline 被静默吞掉：catch 为空实现，与注释‘只告警’不符",
+      "evidence": "JSON.parse/diffBaseline 异常被空的 catch 捕获，diffs 保持 {mismatches:[],changes:[]}，进程 exit 0 且无任何 warning；坏 baseline 与无 baseline 不可区分，FR-05 的基线完整性检查可被无声绕过。",
+      "location": "eval/knowledge/run.mjs:149-151",
+      "resolution": "run.mjs baseline 读取 catch 写入 diffs.error 并文本告警，坏 baseline 与无基线可区分"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-05 snapshot_mismatch 场景未同时给出两套指标",
+      "evidence": "diffBaseline 只对 raw.top3 和 probe 翻转生成 changes；renderTable 只打印当前指标，snapshot 不一致时基线侧 top1/top3/mrr 未输出，rendered 指标也不参与 diff，不满足 requirements 第 60-63 行‘同时给出两套指标’。",
+      "location": "eval/knowledge/lib/report.mjs:35-60; eval/knowledge/run.mjs:146-162",
+      "resolution": "diffBaseline 返回 baselineSummary（每面 raw+rendered 的 top1/top3/mrr）；mismatch 时逐面并列两套指标"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-05 的 diffBaseline/snapshot_mismatch 与 baseline 读写往返没有真实测试，空实现可全绿",
+      "evidence": "测试面 grep 无 diffBaseline/renderTable/self_smoke 用例；smoke 测试只验证 --smoke --json 的字段形状与 baseline 结构，若把 diffBaseline 改成 return {mismatches:[],changes:[]} 或删除 runSmoke 内的写读往返，现有测试仍全部通过。",
+      "location": "test/eval-knowledge-smoke.test.mjs:21-57; eval/knowledge/lib/report.mjs:35-60; eval/knowledge/run.mjs:80-93",
+      "resolution": "Test 10 diffBaseline 三面断言（快照/指标/probe）+ runSmoke 真实 CLI 原子读写往返"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-04 零副作用测试绑定名不副实：isolation 测试只覆盖快照指纹",
+      "evidence": "test/eval-knowledge-isolation.test.mjs 所有用例只测 hashKnowledgeTree/snapshotFingerprint/gitHead，无 knowledge-hits.jsonl 前后行数、无 fetch/appendKnowledgeHit/pushKnowledgeHit 调用断言。当前代码经全局搜索确无遥测调用（eval/knowledge 内零命中，调用链只到纯读/本地图缓存），但回归无测试拦截。",
+      "location": "test/eval-knowledge-isolation.test.mjs:1-97; eval/knowledge/run.mjs:31-32",
+      "resolution": "isolation Test 6：静态扫描工具源码不含 appendKnowledgeHit/pushKnowledgeHitToPlatform/fetch/knowledge-hits.jsonl + tmp 仓跑引擎后零遥测文件"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "probes 测试硬编码‘至少一类缺陷仍 RED’，修复后测试反红；且不验证逐类修复转绿",
+      "evidence": "Test 4 第 85 行断言 results.some(r => r.pass === false)；六类缺陷全部修复后该断言必然失败，形成阻碍修复的反向守卫。测试只测执行器语义 + linkage GREEN，不验证每个 fixture 在对应缺陷修复后能 pass，fixture 期望写错也能保持绿灯（只要仍有一类 false）。",
+      "location": "test/eval-knowledge-probes.test.mjs:79-85",
+      "resolution": "probes 测试删除 results.some(pass===false) 反向守卫；断言可转绿性由 Test 2 合成用例证明，缺陷状态只进 baseline"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "并发/清理残余：--set-baseline 非原子无锁；materialize 中途抛错会泄漏 mkdtemp",
+      "evidence": "baseline 用 writeFileSync 直接截断写入，无 flock/temp+rename；design 第 45 行只声明‘单写者约定’。probes.mjs 先 mkdtempSync 再逐文件写入，若写入抛错，root 尚未赋值给 runAllProbes 的局部变量，finally 的 if(root) 不会清理该临时目录。",
+      "location": "eval/knowledge/run.mjs:147-148; eval/knowledge/lib/probes.mjs:29-38; eval/knowledge/lib/probes.mjs:81-89; .sillyspec/changes/2026-11-02-knowledge-eval/design.md:45",
+      "resolution": "--set-baseline 临时文件+renameSync 原子写；materialize 写失败 catch 清理 mkdtemp 后重抛"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "CLI 参数与仓缺失静默降级：非法 --face 产出零指标，不存在的 --repo 文本模式无警告",
+      "evidence": "wantFaces 未校验成员，未知 face 走 runFace 的空分支并输出全零；run.mjs 只把缺失仓写入 snapshot.missing，renderTable 不打印缺失警告。实测 --repo demo:C:/nonexistent/nope --face entries 退出 0、snapshot.missing=true、文本无提示。",
+      "location": "eval/knowledge/run.mjs:53-54; eval/knowledge/run.mjs:124-137; eval/knowledge/lib/report.mjs:9-29",
+      "resolution": "--face 非法值 exit 2；仓缺失/无 knowledge 目录写入 result.warnings 并文本输出"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "baseline.json 提交绝对路径与环境相关 self_smoke，削弱‘可提交可 diff’稳定性",
+      "evidence": "baseline.snapshot.sillyspec.path 与 platform.path 为 C:/Users/... 绝对路径，run.mjs 还把 path 和现场 self_smoke 计数/命中率写入 baseline；换机、换克隆目录或归档变化即漂移，产生 diff 噪音并泄露本机路径。",
+      "location": "eval/knowledge/baseline.json:9; eval/knowledge/baseline.json:15; eval/knowledge/run.mjs:125-129",
+      "resolution": "snapshot 不再记录绝对路径；self_smoke 计数/命中率保留为有意信号（dry smoke 数据，变化即信号）"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "design.md 的 CLI 契约与文件清单在 D-002 后未同步，仍写旧两仓接口",
+      "evidence": "design.md 第 25 行仍写 --repo sillyspec|platform|all（仓根取默认两仓绝对路径），与已修正的 run.mjs --repo <path|label:path> 缺省当前仓不一致；文件变更清单也漏掉 faces.mjs/probes.mjs（change-patch 将其标为 unplanned）。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-eval/design.md:25; .sillyspec/changes/2026-11-02-knowledge-eval/design.md:63-78",
+      "resolution": "design CLI 契约改为 --repo <path|label:path> 缺省当前仓；文件清单补 probes.mjs/faces.mjs/repos.mjs/buildSearchMatches；requirements FR-01 补 D-001 口径"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "乱序四问的作答与代码不一致：extractTelemetryPool 按到达顺序取前 N，未排序",
+      "evidence": "design 第 41 行称按 (change,query) 去重后排序取前 N；dataset.mjs 实际按文件扫描序取每 change 前 limitPerChange 条，无任何排序，抽样结果依赖事件到达顺序。当前 runner 不调用该函数且 organic 已冻结，故影响限于未来重建数据集。",
+      "location": "eval/knowledge/lib/dataset.mjs:90-112; .sillyspec/changes/2026-11-02-knowledge-eval/design.md:41",
+      "resolution": "extractTelemetryPool 尾巴加 change/query 稳定排序，乱序与迟到不影响抽样"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：self 仅作 smoke 可接受；D-001 以 name-only 对照替代字面 leave-one-out",
+      "evidence": "run.mjs 只把 self 结果写入 self_smoke，质量指标只消费 organic；runSelfSmoke 比较完整 input 与变更名的 own_hit_top3 并输出 leak_gap，用于量化同文泄漏。D-001 已记录字面剔除会使 expected 为空的理由；可接受该替代，但 requirements.md 仍写 leave-one-out，文案应同步。",
+      "location": "eval/knowledge/run.mjs:56-77; eval/knowledge/lib/dataset.mjs:55-84; .sillyspec/changes/2026-11-02-knowledge-eval/requirements.md:9-11"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：organic 冻结可接受（30 条实测有效），但冻结无自动化守卫",
+      "evidence": "实测 loadOrganic(datasets/organic.jsonl)=30 cases、skipped=0、repo 标签 sillyspec/platform 各 15；冻结依赖提交与 git diff 约定，dataset 测试只喂临时合成 JSONL，未加载提交数据集，也未做内容 hash 守卫。",
+      "location": "eval/knowledge/datasets/organic.jsonl:1-35; test/eval-knowledge-dataset.test.mjs:44-65"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：search 面 anchor 投影 file 级可接受",
+      "evidence": "faces.mjs 对 search 的 expected 做 split('#')[0] 投影；cmdSearch 输出本身是文件级 matches，无 anchor 维度，故该降精度符合消费面语义；代价是同一文件的不同 anchor 无法区分。",
+      "location": "eval/knowledge/lib/faces.mjs:47-48"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：图缓存写 <specRoot>/.runtime/cache 可接受，但 FR-04‘缓存只写临时目录’的字面要求未满足",
+      "evidence": "runScope 调 buildKnowledgeGraph → writeHotCache(<specRoot>/.runtime/cache/knowledge-graph.json)，writeAtomicSync 原子写且 .gitignore 第 7 行排除；不写 knowledge-hits、无网络，属可再生非遥测缓存。engine.mjs/README 已披露，但 design 第 45 行并发答案只列 baseline+mkdtemp，漏了该写点；FR-04 场景文字需改写或该写点需改临时目录。",
+      "location": "eval/knowledge/lib/engine.mjs:50-54; src/knowledge-graph.js:407-417; .gitignore:7"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：工具中立/D-002 可接受（源码无具体项目名/env/仓表）",
+      "evidence": "grep run.mjs 与 lib/*.mjs 无 multi-agent-platform、SILLYSPEC_EVAL_PLATFORM_ROOT、REPO_ROOTS 仓表；parseRepoArgs 支持任意 path/label:path、缺省当前仓、重复标签报错；smoke 测试源码扫描 run.mjs+lib/*.mjs。datasets/baseline/README 中的项目标签属可替换实例数据。",
+      "location": "eval/knowledge/run.mjs:1-8; eval/knowledge/lib/repos.mjs:30-41; test/eval-knowledge-smoke.test.mjs:59-71"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T03:20:43.596Z"
+}

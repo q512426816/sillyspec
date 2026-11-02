@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-eval",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-knowledge-eval:flow:测试绑定FR-01",
+      "tests": [
+        "test/eval-knowledge-dataset.test.mjs「三源数据集加载与校验」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-eval"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-knowledge-eval:flow:测试绑定FR-02",
+      "tests": [
+        "test/eval-knowledge-probes.test.mjs「六类缺陷探针断言」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-eval"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-02-knowledge-eval:flow:测试绑定FR-03",
+      "tests": [
+        "test/eval-knowledge-runner.test.mjs「分面指标与 raw/rendered 对比」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-eval"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-knowledge-eval:flow:测试绑定FR-04",
+      "tests": [
+        "test/eval-knowledge-isolation.test.mjs「零副作用与快照指纹」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-eval"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-eval:flow:测试绑定FR-05",
+      "tests": [
+        "test/eval-knowledge-smoke.test.mjs「baseline 读写往返与 CLI 冒烟」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-eval"
+    }
+  ]
+}

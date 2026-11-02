@@ -345,3 +345,109 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-10-15-eval-timeout-enforcement
   status: active
+
+## FR-eval-020 三源数据集：organic（遥测 query 去重池，本仓 110/平台 548，抽样人工 anchor 级标签 30 条起步）、self（211 条归档 input 回放，leave-one-out 防泄漏，只作 smoke 不作质量指标）、probes（合成缺陷 fixtures）
+变更：2026-11-02-knowledge-eval
+状态：active
+摘要：organic 标签缺失；self 集泄漏
+场景正文：
+- 场景：organic 标签缺失 — Given 某 organic case 未填 expected 或 expected 为空数组；When runner 加载数据集；Then 该 case 必须被跳过并计入 skipped_cases，禁止静默当作零命中参与指标
+- 场景：self 集泄漏 — Given self case 的查询来自归档 input 且期望命中的知识由同一变更蒸馏；When 计算指标；Then 该 case 必须仅出现在 smoke 段，且 leave-one-out 剔除自身变更蒸馏的知识后仍可检出链路是否连通
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-eval/requirements.md#FR-01
+最近确认：50c240fc6125d0e81e9bb0f1b2de9edf6431e79f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-eval:flow:测试绑定FR-01
+  tests: test/eval-knowledge-dataset.test.mjs「三源数据集加载与校验」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-eval
+  status: active
+
+## FR-eval-021 缺陷探针 fixtures 覆盖六类：score 输出契约（=命中标签数）、词边界（_/- 策略）、fr/decisions 路由行混入 entries 率、scope 层手工条目可达性、known-issues 已修复条目注入率、决策↔代码关联率
+变更：2026-11-02-knowledge-eval
+状态：active
+摘要：缺陷存在时
+场景正文：
+- 场景：缺陷存在时 — Given 当前代码仍带某类缺陷；When 运行对应 probe fixture；Then 断言必须失败并给出缺陷类别与实测值，禁止 fail-open 跳过
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-eval/requirements.md#FR-02
+最近确认：50c240fc6125d0e81e9bb0f1b2de9edf6431e79f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-eval:flow:测试绑定FR-02
+  tests: test/eval-knowledge-probes.test.mjs「六类缺陷探针断言」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-eval
+  status: active
+
+## FR-eval-022 分面 runner 输出 Top-1/Top-3（entries@3、decisionHits@5、search@10、scope@3/20 四个核心面），raw 与 rendered 两套结果可区分引擎未召回与渲染截断
+变更：2026-11-02-knowledge-eval
+状态：active
+摘要：渲染截断
+场景正文：
+- 场景：渲染截断 — Given 引擎在第 6 位命中了期望条目而消费面只取前 3；When 输出该 case；Then raw 段必须记录该条目的 rank=6，rendered 段必须记录未呈现，两者差异计入 truncated 计数
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-eval/requirements.md#FR-03
+最近确认：50c240fc6125d0e81e9bb0f1b2de9edf6431e79f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-eval:flow:测试绑定FR-03
+  tests: test/eval-knowledge-runner.test.mjs「分面指标与 raw/rendered 对比」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-eval
+  status: active
+
+## FR-eval-023 全流程零网络零遥测副作用（SILLYSPEC_KNOWLEDGE_VECTOR=off、SILLYSPEC_HITS_PUSH=0、临时 runtimeDir），结果带 git HEAD + knowledge 目录 hash 快照指纹
+变更：2026-11-02-knowledge-eval
+状态：active
+摘要：副作用检测
+场景正文：
+- 场景：副作用检测 — Given runner 在真实仓上执行一轮评测；When 对比执行前后 knowledge-hits.jsonl 的行数与平台网络请求计数；Then 行数必须不变且零网络请求；缓存类写入仅允许出现在临时目录
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-eval/requirements.md#FR-04
+最近确认：50c240fc6125d0e81e9bb0f1b2de9edf6431e79f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-eval:flow:测试绑定FR-04
+  tests: test/eval-knowledge-isolation.test.mjs「零副作用与快照指纹」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-eval
+  status: active
+
+## FR-eval-024 baseline.json 可提交可 diff，npm run eval:knowledge 可复跑，附零网络 smoke test
+变更：2026-11-02-knowledge-eval
+状态：active
+摘要：基线漂移
+场景正文：
+- 场景：基线漂移 — Given 当前快照指纹与 baseline.json 记录的指纹不同；When 默认运行（非 --set-baseline）；Then 输出必须显式标注 snapshot_mismatch 并同时给出两套指标，禁止静默覆盖基线
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-eval/requirements.md#FR-05
+最近确认：50c240fc6125d0e81e9bb0f1b2de9edf6431e79f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-eval:flow:测试绑定FR-05
+  tests: test/eval-knowledge-smoke.test.mjs「baseline 读写往返与 CLI 冒烟」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-eval
+  status: active
