@@ -76,15 +76,17 @@ runner 强制 `SILLYSPEC_KNOWLEDGE_VECTOR=off`、`SILLYSPEC_HITS_PUSH=0`，只�
 不写 `knowledge-hits.jsonl`、不发平台请求、不写平台能力缓存。唯一写点：`--set-baseline`
 的 baseline.json 与图派生缓存（`<specRoot>/.runtime/cache/`，可再生、非遥测）。
 
-## 当前基线（2026-11-02，首次落盘）
+## 当前基线（2026-11-02，知识排序与降噪后）
 
 本仓的实例基线（两仓用 `--repo sillyspec:<本仓路径>,platform:<平台仓路径>` 生成；
 仓标签与数据集 repo 字段对齐——换项目时基线与数据集一起替换）：
 
-- sillyspec：entries raw top3 0.1667（n=12）、decisions top3 0.3333（n=3）、scope top3 0.2（n=5）、
-  self own_hit 0.0291 / leak_gap 0。
+- sillyspec：entries raw top3 0.5833（n=12，较变更 1 前 0.1667 上升；其中 5 条 route-expected
+  case 在 entries 面结构性 miss，候选集缩小影响需单列）、decisions top3 0.3333（n=3）、
+  scope top3 0.2（n=5）、self own_hit 0.0291 / leak_gap 0。
 - platform：entries raw top3 0.6667（n=15）、self own_hit 0.0245 / leak_gap 0.0183。
-- 探针：5 类 RED（缺陷仍在）、linkage GREEN。
+- 探针：score-contract / word-boundary / route-rows / fixed-entries 四类 GREEN（变更 1 修复），
+  scope-manual 仍 RED（变更 2 范围）、linkage GREEN。
 
 后续变更（排序降噪、scope 两跳、融合）以本 baseline 为对照，验收看各面 raw/rendered 变化
 与对应探针翻转，目标 entries/search Top-3 ≥ 0.8。

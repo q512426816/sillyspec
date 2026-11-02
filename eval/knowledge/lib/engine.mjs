@@ -45,8 +45,7 @@ export async function searchView(repoRoot, query, limit = Infinity) {
   const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: repoRoot })
   if (!result || !result.matched) return []
   const ctx = String(query || '').toLowerCase()
-  // buildSearchMatches 与 entries 同序同长（slice+map 一一对应）——按索引补回 file 键
-  return buildSearchMatches(result, knowledgeDir, limit).map((row, i) => ({
+  return buildSearchMatches(result, knowledgeDir, limit, query).map((row, i) => ({
     ...row,
     file: result.entries[i] ? result.entries[i].file : row.path.replace(/^knowledge[\\/]/, ''),
     matchedTags: (row.tags || []).filter((k) => keywordMatchesContext(k, ctx)),

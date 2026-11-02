@@ -245,7 +245,7 @@ export function buildResultFromPlatform(indexDir, pvResults) {
  * 缺省/空数组 → 遍历层整体跳过，行为与不携带该参数的旧行为逐字段一致（回归钉死）。
  */
 export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
-  const r = matchByRouting(indexDir, taskContext)
+  const r = matchByRouting(indexDir, taskContext, opts)
   if (r.matched) return r
   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
   if (vectorEnabled(cwd)) {

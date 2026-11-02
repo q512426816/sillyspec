@@ -49,18 +49,21 @@ function buildWaveKnowledgeSection(changeDir, wave) {
     const result = matchKnowledge(knowledgeDir, query)
     // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
     const quick = matchQuicklogContext(specBase, query)
+    const humanEntries = result.entries || []
+    const routeHits = result.routeHits || []
     if (!result.matched && quick.hits.length === 0) return ''
     const lines = []
-    if (result.matched) {
+    if (humanEntries.length > 0 || routeHits.length > 0) {
     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
     const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
     lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
-    lines.push(`Status: matched | Entries: ${result.entries.length} | Sources:`)
-    for (const e of result.entries) lines.push(` - ${ref(e)}`)
-    lines.push(`（命中清单如上；正文按 INDEX 行序注入前 ${KNOWLEDGE_INJECT_MAX_FILES} 个不同文件，单文件首 ${KNOWLEDGE_INJECT_MAX_LINES} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
+    if (humanEntries.length > 0) {
+    lines.push(`Status: matched | Entries: ${humanEntries.length} | Sources:`)
+    for (const e of humanEntries) lines.push(` - ${ref(e)}`)
+    lines.push(`（命中清单如上；正文按相关度注入前 ${KNOWLEDGE_INJECT_MAX_FILES} 个不同文件，单文件首 ${KNOWLEDGE_INJECT_MAX_LINES} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
     const seen = new Set()
     const picked = []
-    for (const e of result.entries) {
+    for (const e of humanEntries) {
       if (seen.has(e.file)) continue
       seen.add(e.file)
       picked.push(e)
@@ -85,6 +88,10 @@ function buildWaveKnowledgeSection(changeDir, wave) {
       }
     }
     }
+    if (routeHits.length > 0) {
+      lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
+    }
+    }
     // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）
     if (quick.hits.length > 0) {
       if (lines.length > 0) lines.push('')
@@ -95,7 +102,7 @@ function buildWaveKnowledgeSection(changeDir, wave) {
         type: 'inject',
         change: path.basename(changeDir),
         query,
-        matchedFiles: result.matched ? result.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
+        matchedFiles: result.matched ? [...humanEntries, ...routeHits].map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
         quicklogIds: quick.hits.map(h => h.qlId),
       })
     } catch { /* 遥测 fail-soft（R-04） */ }

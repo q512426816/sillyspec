@@ -366,12 +366,18 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       const src = km.entries.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
       lines.push(`   📚 知识命中（INDEX 关键词，按需 Read）：${src}`)
     }
+    // routeHits 指针行（FR-04，2026-11-02-knowledge-rank-denoise）：entries 移出 fr/decisions
+    // 路由行后，implemented 决策与 FR 的可见性由这里承载（只指路不注入正文）。
+    if (km.matched && (km.routeHits || []).length > 0) {
+      const src = km.routeHits.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
+      lines.push(`   🧭 决策/FR 路由命中（专用通道，按需 Read）：${src}`)
+    }
     // 遥测导线（2026-10-15-thin-inject-telemetry）：轻量道注入此前不落 hits.jsonl——thin 常态化后
     // inject 事件流断流（本仓 10-09 后归零实证），knowledge stats 从未命中判定被盲区污染。
     // 分级字段（A2-lite）：injectedFiles=正文实际注入（thin 面恒空——只出按需 Read 行）、
     // mentionedFiles=显式展示给 agent 的锚点（📚 行 top-3）。既有 matchedFiles 口径不变
     // （knowledge-stats 消费面零回归）。仅命中面非空才落盘；fail-soft（R-04）不阻断注入。
-    const thinMatchedFiles = km.matched ? (km.entries || []).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : []
+    const thinMatchedFiles = km.matched ? [...(km.entries || []), ...(km.routeHits || [])].map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : []
     if (thinMatchedFiles.length > 0 || rejected.length > 0) {
       try {
         const { appendKnowledgeHit } = await import('./knowledge-hits.js')

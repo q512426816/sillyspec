@@ -524,32 +524,43 @@ function pickTopKnowledgeEntries(entries, maxFiles) {
   return picked
 }
 
-/** 命中正文段渲染（段头 + Status/Sources 命中报告语义 + top-3 文件截断正文）。 */
+/** 命中正文段渲染（段头 + Status/Sources 命中报告语义 + top-3 文件截断正文）。
+ *  路由行分离（FR-04，2026-11-02-knowledge-rank-denoise）：entries 仅手工条目注入正文；
+ *  routeHits（fr/decisions 路由行）以指针行呈现，保 implemented 决策可见性；空 entries 且
+ *  无 routeHits 时返回空串（不出段头空段）。 */
 function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) {
   const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+  const humanEntries = knowledgeResult.entries || []
+  const routeHits = knowledgeResult.routeHits || []
+  if (humanEntries.length === 0 && routeHits.length === 0) return ''
   const lines = []
   lines.push(`📚 命中知识（CLI 按任务描述机械匹配，top-${maxFiles}）`)
-  lines.push(`Status: matched | Entries: ${knowledgeResult.entries.length} | Sources:`)
-  for (const e of knowledgeResult.entries) lines.push(` - ${ref(e)}`)
-  lines.push(`（命中清单如上；正文按 INDEX 行序注入前 ${maxFiles} 个不同文件，单文件首 ${maxLines} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
-  for (const e of pickTopKnowledgeEntries(knowledgeResult.entries, maxFiles)) {
-    lines.push('')
-    lines.push(`── ${ref(e)}${e.display ? `（${e.display}）` : ''} ──`)
-    let body = ''
-    try {
-      // CRLF/CR 归一（Windows 知识文件 + 行数截断按 \n 切分）
-      body = readFileSync(join(knowledgeDir, e.file), 'utf8').replace(/\r\n?/g, '\n')
-    } catch (err) {
-      lines.push(`（文件不可读：${err && err.message ? err.message : err}）`)
-      continue
+  if (humanEntries.length > 0) {
+    lines.push(`Status: matched | Entries: ${humanEntries.length} | Sources:`)
+    for (const e of humanEntries) lines.push(` - ${ref(e)}`)
+    lines.push(`（命中清单如上；正文按相关度注入前 ${maxFiles} 个不同文件，单文件首 ${maxLines} 行截断——未注入条目需要时按 Sources 路径自行读取）`)
+    for (const e of pickTopKnowledgeEntries(humanEntries, maxFiles)) {
+      lines.push('')
+      lines.push(`── ${ref(e)}${e.display ? `（${e.display}）` : ''} ──`)
+      let body = ''
+      try {
+        // CRLF/CR 归一（Windows 知识文件 + 行数截断按 \n 切分）
+        body = readFileSync(join(knowledgeDir, e.file), 'utf8').replace(/\r\n?/g, '\n')
+      } catch (err) {
+        lines.push(`（文件不可读：${err && err.message ? err.message : err}）`)
+        continue
+      }
+      const bodyLines = body.split('\n')
+      if (bodyLines.length > maxLines) {
+        lines.push(bodyLines.slice(0, maxLines).join('\n'))
+        lines.push('…（截断）')
+      } else {
+        lines.push(body.replace(/\n+$/, ''))
+      }
     }
-    const bodyLines = body.split('\n')
-    if (bodyLines.length > maxLines) {
-      lines.push(bodyLines.slice(0, maxLines).join('\n'))
-      lines.push('…（截断）')
-    } else {
-      lines.push(body.replace(/\n+$/, ''))
-    }
+  }
+  if (routeHits.length > 0) {
+    lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
   }
   return lines.join('\n')
 }
@@ -581,12 +592,14 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
   const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
   const qSection = quick.report || ''
   const section = [kSection, qSection].filter(Boolean).join('\n\n')
+  const routeFiles = (knowledgeResult.routeHits || []).map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file))
   try {
     appendKnowledgeHit(runtimeDir, {
       type: 'inject',
       change: change || '',
       query: String(query || ''),
-      matchedFiles: knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
+      // routeHits 一并进 matchedFiles：stats 命中矩阵不把 decisions/fr 误标 neverHit（FR-04）
+      matchedFiles: [...knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)), ...routeFiles],
       quicklogIds: quick.hits.map(h => h.qlId),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }

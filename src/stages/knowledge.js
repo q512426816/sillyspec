@@ -19,7 +19,7 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { parseKnowledgeIndex } from '../knowledge-match.js'
+import { parseKnowledgeIndex, keywordMatchesContext } from '../knowledge-match.js'
 import { matchKnowledgeHybrid } from '../knowledge-vector.js'
 
 // ── 工具函数 ──
@@ -107,8 +107,11 @@ export async function cmdSearch(dir, args, opts = {}) {
     return
   }
 
+  // 已修复条目显式包含（FR-03，2026-11-02-knowledge-rank-denoise）——默认排除
+  const includeResolved = args.includes('--include-resolved')
+
   // 复用 knowledge-match 引擎（三层 hybrid：路由→平台向量→本地词片，2026-09-29-knowledge-vector-recall）
-  const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir })
+  const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir, includeResolved })
 
   // 向量开关发现性提示（2026-10-15-vector-switch-discoverability）：平台已连接+开关未开
   // （缺省关）→ hint 键（vectorSwitchHint 单源，flow 注入零命中行同款文案）；其余空串零输出。
@@ -122,6 +125,13 @@ export async function cmdSearch(dir, args, opts = {}) {
   // 文件但被检索核心滤除且最终零结果时，披露被滤文件——去噪不丢可见性，人工按需直查。
   const parkingFiltered = !result.matched && Array.isArray(result.json && result.json.parkingFiltered)
     ? result.json.parkingFiltered : []
+  // 已修复过滤披露（FR-03，2026-11-02-knowledge-rank-denoise）：仿 parkingFiltered——
+  // 过滤了已修复条目不静默，给 --include-resolved 指路。
+  const resolvedFiltered = Array.isArray(result.json && result.json.resolvedFiltered)
+    ? result.json.resolvedFiltered : []
+  const resolvedNote = resolvedFiltered.length > 0
+    ? { resolvedFiltered, resolvedNote: `已修复条目已过滤（${resolvedFiltered.join('、')}）——需查看加 --include-resolved` }
+    : {}
 
   if (!result.matched) {
     output(true, {
@@ -130,27 +140,34 @@ export async function cmdSearch(dir, args, opts = {}) {
       ...(parkingFiltered.length > 0
         ? { parkingFiltered, parkingNote: `停车场文件已过滤（${parkingFiltered.join('、')}）——按需直查文件` }
         : {}),
+      ...resolvedNote,
     })
     return
   }
 
   // 增强：为每个匹配项补充 path、title、summary、score
-  const matches = buildSearchMatches(result, knowledgeDir, limit)
+  const matches = buildSearchMatches(result, knowledgeDir, limit, query)
 
-  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}) })
+  output(true, { query, matches, ...(vectorHint ? { hint: vectorHint } : {}), ...resolvedNote })
 }
 
 /**
- * 检索结果 → search 面展示行（title/summary/score 增强）。
- * 导出为单一源：cmdSearch 与评测适配层（eval/knowledge）共用同一构造，
- * 评测的 score 契约探针测的就是生产逻辑本身（2026-11-02-knowledge-eval 评审 P2）。
+ * 检索结果 → search 面展示行（title/summary 增强 + 命中数评分）。
+ * 导出为单一源：cmdSearch 与评测适配层（eval/knowledge）共用同一构造。
+ * score = tags 中实际命中 query 的标签数（keywordMatchesContext 同一判定）——关键词表长
+ * 不再冒充命中数（2026-11-02-knowledge-rank-denoise FR-01）。
+ * channel 标明命中通道：routing（INDEX 路由）/ fallback（词片回退）/ vector / scope。
  */
-export function buildSearchMatches(result, knowledgeDir, limit) {
+export function buildSearchMatches(result, knowledgeDir, limit, query) {
+  const ctx = String(query || '').toLowerCase()
+  const channel = result && result.json && result.json.fallback ? 'fallback'
+    : result && result.json && result.json.vector ? 'vector'
+      : result && result.json && result.json.scope ? 'scope'
+        : 'routing'
   return result.entries.slice(0, limit).map(entry => {
     const filePath = join(knowledgeDir, entry.file)
     let title = entry.display
     let summary = ''
-    let score = entry.keywords.length // 简单评分：匹配关键词数量
 
     if (existsSync(filePath)) {
       const content = readFileSync(filePath, 'utf8')
@@ -158,13 +175,15 @@ export function buildSearchMatches(result, knowledgeDir, limit) {
       summary = extractSummary(content)
     }
 
+    const tags = entry.keywords
     return {
       id: pathToId(entry.file, knowledgeDir),
       path: join('knowledge', entry.file),
       title,
       summary,
-      score,
-      tags: entry.keywords,
+      score: tags.filter(k => keywordMatchesContext(k, ctx)).length,
+      tags,
+      channel,
       category: entry.category,
     }
   })

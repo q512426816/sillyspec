@@ -320,8 +320,8 @@ console.log('\n--- 9. buildWavePrompt Wave 粒度注入 ---')
     const blocksOf = s => [...s.matchAll(/^── .+$/gm)].map(m => m[0])
     assertTrue(JSON.stringify(blocksOf(out)) === JSON.stringify(blocksOf(ki.section)),
       'Wave 段与 prompt.js 版文件块格式逐字一致（ESM 环约束下双实现的漂移锁）')
-    assertTrue(out.includes('（命中清单如上；正文按 INDEX 行序注入前 3 个不同文件，单文件首 40 行截断') &&
-      ki.section.includes('（命中清单如上；正文按 INDEX 行序注入前 3 个不同文件，单文件首 40 行截断'),
+    assertTrue(out.includes('（命中清单如上；正文按相关度注入前 3 个不同文件，单文件首 40 行截断') &&
+      ki.section.includes('（命中清单如上；正文按相关度注入前 3 个不同文件，单文件首 40 行截断'),
       '限额说明行文案一致（限额常量漂移锁）')
   } finally { restore(); cleanup(fx) }
 }

@@ -70,7 +70,8 @@ console.log('\n=== T1: 路由命中——停车场行不进 matched/decisionHits
     })
     const r = matchByRouting(dir, '任务涉及决策处理')
     assert(r.matched === true, '泛词命中后仍有真域结果')
-    assert(r.entries.length === 1 && r.entries[0].file === 'decisions/core-engine.md', 'matched 只剩 core-engine 行')
+    assert(r.entries.length === 0, 'entries 不含 decisions/fr 路由行（移入 routeHits）')
+    assert((r.routeHits || []).some((e) => e.file === 'decisions/core-engine.md'), 'matched 保留在 routeHits')
     assert(r.decisionHits.every((h) => h.file !== 'decisions/unmapped.md'), 'decisionHits 不含停车场文件')
   } finally { clean(dir) }
 }

@@ -532,7 +532,8 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
             : () => false
           const _echoHits = _hits.filter((h) => !_answered(h))
           const _entries = km.matched ? (km.entries || []) : []
-          if (_echoHits.length > 0 || _entries.length > 0) {
+          const _routeHits = km.matched ? (km.routeHits || []) : []
+          if (_echoHits.length > 0 || _entries.length > 0 || _routeHits.length > 0) {
             const { deathPathNote, decisionChangeQualifier } = await import('../knowledge-match.js')
             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
             for (const h of _echoHits.slice(0, 5)) {
@@ -545,6 +546,10 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
             for (const e of _entries.slice(0, 3)) {
               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
               console.warn(`   - 知识条目 ${_base}${e.display ? `（${e.display}）` : ''}`)
+            }
+            for (const e of _routeHits.slice(0, 3)) {
+              const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
+              console.warn(`   - 路由命中 ${_base}（按需 Read）`)
             }
             console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
           }

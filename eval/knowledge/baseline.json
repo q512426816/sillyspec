@@ -3,13 +3,13 @@
   "generated_by": "eval/knowledge/run.mjs",
   "snapshot": {
     "sillyspec": {
-      "head": "f0ae9ddad97c462960bc3d92044e37f73f87f062",
-      "knowledge_hash": "80a32f03a89a03e6e52fa72f9c64f018254b29f7672144786117f8c3a54790e9",
+      "head": "6ca826303439beac181a49ecab2a909638d0bb8a",
+      "knowledge_hash": "b8a9b4bc16d0c36bddc2b5c434c00ad5bd53498434c48ec88ed8ccbfdccc871e",
       "knowledge_files": 139
     },
     "platform": {
-      "head": "f40871f8c7d74acd4e645439cce215a3c3e283fe",
-      "knowledge_hash": "ec3f770f1e266486af134e085e7c7452d4f5906f3ed2f0fd906ea4b592836a38",
+      "head": "77dd9eaf349bacc1f318968970d1777ec5e1387c",
+      "knowledge_hash": "4249e8428193b57ae867af2ec9f970e1c8652ee5496b0c99895dfb50e560ec35",
       "knowledge_files": 160
     }
   },
@@ -20,32 +20,25 @@
     },
     "platform": {
       "organic": 15,
-      "self": 328
+      "self": 329
     }
   },
   "metrics": {
     "sillyspec": {
       "entries": {
         "raw": {
-          "top1": 0.0833,
-          "top3": 0.1667,
-          "mrr": 0.1882,
+          "top1": 0.5833,
+          "top3": 0.5833,
+          "mrr": 0.5833,
           "n": 12
         },
         "rendered": {
-          "top1": 0.0833,
-          "top3": 0.1667,
-          "mrr": 0.1111,
+          "top1": 0.5833,
+          "top3": 0.5833,
+          "mrr": 0.5833,
           "n": 12
         },
-        "truncated": [
-          "s-man-01",
-          "s-man-03",
-          "s-man-04",
-          "s-man-05",
-          "s-man-08",
-          "s-man-10"
-        ],
+        "truncated": [],
         "details": [
           {
             "id": "s-tel-02",
@@ -67,27 +60,27 @@
           },
           {
             "id": "s-man-01",
-            "raw_rank": 5,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           },
           {
             "id": "s-man-03",
-            "raw_rank": 8,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           },
           {
             "id": "s-man-04",
-            "raw_rank": 6,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           },
           {
             "id": "s-man-05",
-            "raw_rank": 12,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           },
           {
             "id": "s-man-06",
@@ -97,15 +90,15 @@
           },
           {
             "id": "s-man-07",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "s-man-08",
-            "raw_rank": 10,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 1,
+            "rendered_rank": 1,
+            "truncated": false
           },
           {
             "id": "s-man-09",
@@ -115,9 +108,9 @@
           },
           {
             "id": "s-man-10",
-            "raw_rank": 4,
+            "raw_rank": null,
             "rendered_rank": null,
-            "truncated": true
+            "truncated": false
           }
         ]
       },
@@ -158,15 +151,15 @@
       },
       "search": {
         "raw": {
-          "top1": 0.0833,
-          "top3": 0.1667,
-          "mrr": 0.2084,
+          "top1": 0.5833,
+          "top3": 0.5833,
+          "mrr": 0.5833,
           "n": 12
         },
         "rendered": {
-          "top1": 0.0833,
-          "top3": 0.1667,
-          "mrr": 0.2084,
+          "top1": 0.5833,
+          "top3": 0.5833,
+          "mrr": 0.5833,
           "n": 12
         },
         "truncated": [],
@@ -191,26 +184,26 @@
           },
           {
             "id": "s-man-01",
-            "raw_rank": 5,
-            "rendered_rank": 5,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "s-man-03",
-            "raw_rank": 5,
-            "rendered_rank": 5,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "s-man-04",
-            "raw_rank": 4,
-            "rendered_rank": 4,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "s-man-05",
-            "raw_rank": 8,
-            "rendered_rank": 8,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
@@ -221,14 +214,14 @@
           },
           {
             "id": "s-man-07",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "s-man-08",
-            "raw_rank": 7,
-            "rendered_rank": 7,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
@@ -239,8 +232,8 @@
           },
           {
             "id": "s-man-10",
-            "raw_rank": 4,
-            "rendered_rank": 4,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           }
         ]
@@ -297,31 +290,29 @@
       "entries": {
         "raw": {
           "top1": 0.3333,
-          "top3": 0.6667,
-          "mrr": 0.48,
+          "top3": 0.5333,
+          "mrr": 0.4222,
           "n": 15
         },
         "rendered": {
           "top1": 0.3333,
-          "top3": 0.6667,
-          "mrr": 0.4667,
+          "top3": 0.5333,
+          "mrr": 0.4222,
           "n": 15
         },
-        "truncated": [
-          "p-tel-02"
-        ],
+        "truncated": [],
         "details": [
           {
             "id": "p-tel-01",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "p-tel-02",
-            "raw_rank": 5,
-            "rendered_rank": null,
-            "truncated": true
+            "raw_rank": 2,
+            "rendered_rank": 2,
+            "truncated": false
           },
           {
             "id": "p-tel-03",
@@ -349,14 +340,14 @@
           },
           {
             "id": "p-tel-07",
-            "raw_rank": 1,
-            "rendered_rank": 1,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           },
           {
             "id": "p-tel-08",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           },
           {
@@ -397,8 +388,8 @@
           },
           {
             "id": "p-tel-15",
-            "raw_rank": 2,
-            "rendered_rank": 2,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           }
         ]
@@ -422,28 +413,28 @@
       "search": {
         "raw": {
           "top1": 0.3333,
-          "top3": 0.6667,
-          "mrr": 0.48,
+          "top3": 0.5333,
+          "mrr": 0.4222,
           "n": 15
         },
         "rendered": {
           "top1": 0.3333,
-          "top3": 0.6667,
-          "mrr": 0.48,
+          "top3": 0.5333,
+          "mrr": 0.4222,
           "n": 15
         },
         "truncated": [],
         "details": [
           {
             "id": "p-tel-01",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": 1,
+            "rendered_rank": 1,
             "truncated": false
           },
           {
             "id": "p-tel-02",
-            "raw_rank": 5,
-            "rendered_rank": 5,
+            "raw_rank": 2,
+            "rendered_rank": 2,
             "truncated": false
           },
           {
@@ -472,14 +463,14 @@
           },
           {
             "id": "p-tel-07",
-            "raw_rank": 1,
-            "rendered_rank": 1,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           },
           {
             "id": "p-tel-08",
-            "raw_rank": 3,
-            "rendered_rank": 3,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           },
           {
@@ -520,8 +511,8 @@
           },
           {
             "id": "p-tel-15",
-            "raw_rank": 2,
-            "rendered_rank": 2,
+            "raw_rank": null,
+            "rendered_rank": null,
             "truncated": false
           }
         ]
@@ -547,25 +538,25 @@
   "self_smoke": {
     "sillyspec": {
       "cases": 206,
-      "skipped": 599,
+      "skipped": 600,
       "own_hit_top3": 0.0291,
       "name_only_top3": 0.0291,
       "leak_gap": 0
     },
     "platform": {
-      "cases": 328,
+      "cases": 329,
       "skipped": 488,
-      "own_hit_top3": 0.0244,
+      "own_hit_top3": 0.0243,
       "name_only_top3": 0.0061,
-      "leak_gap": 0.0183
+      "leak_gap": 0.0182
     }
   },
   "probes": {
-    "score-contract": false,
-    "word-boundary": false,
-    "route-rows": false,
+    "score-contract": true,
+    "word-boundary": true,
+    "route-rows": true,
     "scope-manual": false,
-    "fixed-entries": false,
+    "fixed-entries": true,
     "linkage": true
   },
   "warnings": []

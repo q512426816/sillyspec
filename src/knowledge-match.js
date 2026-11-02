@@ -264,22 +264,31 @@ function escapeRegex(s) {
  * - 过短关键词（<2 字符）视为噪音，不参与匹配
  * - 非 ASCII（中文等）用子串匹配
  * - ASCII 关键词用词边界匹配，避免子串误命中（如 "DB" 不命中 "dashboard"）
+ * 词边界口径（2026-11-02-knowledge-rank-denoise FR-02）：`_` 是词字符、`-` 是边界——
+ * node 不命中 node_modules，但 worktree 仍命中 kebab-case 变更名（2026-05-29-worktree-*）。
  * 导出供评测适配层（eval/knowledge）复用同一判定——零行为变化。
  */
 export function keywordMatchesContext(keyword, contextLower) {
   const kw = keyword.toLowerCase().trim()
   if (kw.length < 2) return false
   if (/[^\x00-\x7f]/.test(kw)) return contextLower.includes(kw)
-  return new RegExp(`(^|[^a-z0-9])${escapeRegex(kw)}([^a-z0-9]|$)`).test(contextLower)
+  return new RegExp(`(^|[^a-z0-9_])${escapeRegex(kw)}([^a-z0-9_]|$)`).test(contextLower)
 }
 
 /** 查询词片抽取：CJK 连续段 bigram ＋ ≥4 字符 ASCII 词（小写；短词与标点数字不参与；
- * 纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。 */
+ *  纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。
+ *  snake/kebab 复合词保留整词并额外产出 ≥4 字符拆分片段（FR-02：查询 worktree_apply 时
+ *  worktree、apply 仍可命中正文只写 worktree 的条目）。 */
 function queryShingles(taskContext) {
   const raw = String(taskContext || '')
   const shingles = new Set()
   if (/[\u4e00-\u9fff]/.test(raw)) {
-    for (const w of raw.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) || []) shingles.add(w)
+    for (const w of raw.toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) || []) {
+      shingles.add(w)
+      if (/[_-]/.test(w)) {
+        for (const part of w.split(/[_-]/)) if (part.length >= 4) shingles.add(part)
+      }
+    }
   }
   for (const seg of raw.match(/[\u4e00-\u9fff]+/g) || []) {
     for (let i = 0; i < seg.length - 1; i++) shingles.add(seg.slice(i, i + 2))
@@ -287,10 +296,11 @@ function queryShingles(taskContext) {
   return [...shingles]
 }
 
-/** ASCII 词片词边界命中（CJK 词片 includes 即可）；转义防正则注入。 */
+/** ASCII 词片词边界命中（CJK 词片 includes 即可）；转义防正则注入。
+ *  边界口径与 keywordMatchesContext 统一：`_` 词字符、`-` 边界（FR-02）。 */
 function asciiWordHit(sh, text) {
   if (!/^[a-z]/.test(sh)) return text.includes(sh)
-  return new RegExp(`(^|[^a-z0-9-])${sh.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([^a-z0-9-]|$)`, 'i').test(text)
+  return new RegExp(`(^|[^a-z0-9_])${sh.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9_]|$)`, 'i').test(text)
 }
 
 /** 停车场文件（未归类 unmapped 域——decisions 与 fr 两面）：检索核心零返回，文件本身
@@ -301,6 +311,19 @@ const PARKING_FILES = new Set(['decisions/unmapped.md', 'fr/unmapped.md'])
 /** file 是否停车场文件（decisions/fr unmapped；Windows 反斜杠归一后判等）。 */
 export function isParkingFile(file) {
   return PARKING_FILES.has(String(file || '').replace(/\\/g, '/'))
+}
+
+/** 已修复条目显式词（FR-03，2026-11-02-knowledge-rank-denoise）：只认 INDEX display/anchor
+ *  的显式词，不读正文 heading（锚点→heading 归一脆弱）；绿色标记不作唯一键（平台实测
+ *  6 条绿色非词条目中 4 条是现行事实/债务，误杀代价高于漏 2 条已解决项）。 */
+const RESOLVED_WORDS = /已修复|已解决|已退役/
+
+/** 条目是否「已知问题-已修复」类（默认注入/检索排除；--include-resolved 才返回）。 */
+function isResolvedRoute(entry) {
+  const file = String(entry.file || '').replace(/\\/g, '/')
+  const isKnownIssues = entry.category === 'Known Issues' || /(^|\/)known-issues\.md$/.test(file)
+  if (!isKnownIssues) return false
+  return RESOLVED_WORDS.test(`${entry.display || ''} ${entry.anchor || ''}`)
 }
 
 /**
@@ -381,7 +404,7 @@ export function fallbackByQueryShingles(indexDir, taskContext) {
  *   命中的 Decisions 路由行所指向 decisions/<域>.md 内的全部 D-xxx@vN 条目，rejected 优先排序；
  *   无 decisions 库 / 路由行未命中 → decisionHits: []（其余字段行为与现状一致）。
  */
-export function matchByRouting(indexDir, taskContext) {
+export function matchByRouting(indexDir, taskContext, opts = {}) {
   const indexPath = join(indexDir, 'INDEX.md')
 
   // INDEX.md 不存在
@@ -414,19 +437,59 @@ export function matchByRouting(indexDir, taskContext) {
   // 只命中停车场行 → 按零命中处理（hybrid 链继续走向量/图/词片层），json.parkingFiltered
   // 披露被滤文件供 search 面提示人工直查（可见性不因去噪丢失）。
   const parkingFiltered = [...new Set(matchedRaw.filter((e) => isParkingFile(e.file)).map((e) => e.file))]
-  const matched = matchedRaw.filter((e) => !isParkingFile(e.file))
+  const parkingExcluded = matchedRaw.filter((e) => !isParkingFile(e.file))
+  // 已修复过滤（FR-03，2026-11-02-knowledge-rank-denoise）：known-issues 显式词条目默认排除，
+  // includeResolved 才返回；json.resolvedFiltered 披露（仿 parkingFiltered）。
+  const resolvedFiltered = opts.includeResolved ? [] : parkingExcluded.filter(isResolvedRoute)
+  const resolvedFiles = [...new Set(resolvedFiltered.map((e) => e.file))]
+  const resolvedNote = resolvedFiles.length > 0
+    ? { resolvedFiltered: resolvedFiles, resolvedNote: '已修复条目已过滤——需查看加 --include-resolved' }
+    : {}
+  const matchedAll = parkingExcluded.filter((e) => !resolvedFiltered.includes(e))
 
-  if (matched.length === 0) {
+  // 路由行分离（FR-04，2026-11-02-knowledge-rank-denoise）：fr/decisions 路由行不进面向人的
+  // entries（各有 decisionHits / readActiveFrDigest 专用通道），改走条件式 routeHits——
+  // 消费面据此出指针行，避免静默丢失 implemented 决策与 FR 的可见性；顶层键仅在非空时出现
+  // （无路由行命中的场景保持旧四键+decisionHits 结构不变）。
+  const isRouteRow = (e) => isDecisionRoute(e) || /^fr\//.test(String(e.file || '').replace(/\\/g, '/'))
+  const humanEntries = matchedAll.filter((e) => !isRouteRow(e))
+  const routeHits = matchedAll.filter(isRouteRow)
+
+  // DF 相关度排序（FR-05，2026-11-02-knowledge-rank-denoise）：分母 = entries 可展示语料
+  // （排除 fr/decisions 路由行、停车场、已修复条目）；命中数优先 → Σ(1/DF) 破平 → INDEX 行序兜底。
+  // 泛词（出现在大量路由行的流程词）权重被压缩，长尾具体词上浮；同分顺序确定（重复运行一致）。
+  const humanCorpus = allEntries.filter((e) => !isRouteRow(e) && !isParkingFile(e.file) && !isResolvedRoute(e))
+  const dfMap = new Map()
+  for (const e of humanCorpus) {
+    const seenKw = new Set()
+    for (const kw of e.keywords) {
+      const k = String(kw).toLowerCase()
+      if (seenKw.has(k)) continue
+      seenKw.add(k)
+      dfMap.set(k, (dfMap.get(k) || 0) + 1)
+    }
+  }
+  const scoredHuman = humanEntries.map((e, i) => {
+    const matchedKws = [...new Set(e.keywords.map((k) => String(k).toLowerCase()))]
+      .filter((k) => keywordMatchesContext(k, contextLower))
+    const hits = matchedKws.length
+    const rarity = matchedKws.reduce((s, k) => s + 1 / Math.max(1, dfMap.get(k) || 1), 0)
+    return { e, i, hits, rarity }
+  })
+  scoredHuman.sort((a, b) => (b.hits - a.hits) || (b.rarity - a.rarity) || (a.i - b.i))
+  const rankedHuman = scoredHuman.map((x) => x.e)
+
+  if (rankedHuman.length === 0 && routeHits.length === 0) {
     return {
       matched: false,
       entries: [],
       report: 'Status: no matches',
-      json: { matched: false, entry_count: 0, entries: [], ...(parkingFiltered.length > 0 ? { parkingFiltered } : {}) },
+      json: { matched: false, entry_count: 0, entries: [], ...(parkingFiltered.length > 0 ? { parkingFiltered } : {}), ...resolvedNote },
       decisionHits: []
     }
   }
 
-  const sources = matched.map(e => {
+  const sources = [...rankedHuman, ...routeHits].map(e => {
     const base = e.anchor ? `${e.file}#${e.anchor}` : e.file
     return ` - ${base}`
   }).join('\n')
@@ -435,20 +498,25 @@ export function matchByRouting(indexDir, taskContext) {
     'Knowledge Context',
     '─────────────────',
     `Status: matched`,
-    `Entries: ${matched.length}`,
+    `Entries: ${rankedHuman.length}`,
+    ...(routeHits.length > 0 ? [`Route hits: ${routeHits.length}`] : []),
     'Sources:',
     sources
   ].join('\n')
 
   const json = {
     matched: true,
-    entry_count: matched.length,
-    entries: matched.map(e => ({
+    entry_count: rankedHuman.length,
+    entries: rankedHuman.map(e => ({
       file: e.file,
       anchor: e.anchor,
       keywords: e.keywords,
       category: e.category
-    }))
+    })),
+    ...(routeHits.length > 0 ? {
+      routeHits: routeHits.map(e => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
+    } : {}),
+    ...resolvedNote
   }
 
   // decisionHits（task-04）：任务上下文命中的 Decisions 路由行 → 解析其指向的
@@ -458,7 +526,7 @@ export function matchByRouting(indexDir, taskContext) {
   // D-001@v1 排 148/188 位）。重叠判据复用 fr-index frTitleOverlap（字符 bigram，
   // 封闭面非语义判定）。
   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
-  const decisionRoutes = matched.filter(isDecisionRoute)
+  const decisionRoutes = routeHits.filter(isDecisionRoute)
   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
   // 评分文本 = id＋标题；评分前剥除数字与标点（2026-09-28-knowledge-score-denoise：{DECISION_HITS}
   // 场景 taskContext=ASCII 变更名，日期「2026-09-28」与 id「D-009@v1」共享 -0/09 数字 bigram 即
@@ -474,7 +542,14 @@ export function matchByRouting(indexDir, taskContext) {
     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
   ].map((h) => ({ ...h, score: relScore(h) }))
 
-  return { matched: true, entries: matched, report, json, decisionHits }
+  return {
+    matched: true,
+    entries: rankedHuman,
+    ...(routeHits.length > 0 ? { routeHits } : {}),
+    report,
+    json,
+    decisionHits,
+  }
 }
 
 /**
@@ -482,8 +557,8 @@ export function matchByRouting(indexDir, taskContext) {
  * 异步三层入口（平台向量优先于本地回退）见 knowledge-vector.js matchKnowledgeHybrid
  * （2026-09-29-knowledge-vector-recall）——同步调用方与既有测试全部走本函数。
  */
-export function matchKnowledge(indexDir, taskContext) {
-  const r = matchByRouting(indexDir, taskContext)
+export function matchKnowledge(indexDir, taskContext, opts = {}) {
+  const r = matchByRouting(indexDir, taskContext, opts)
   if (r.matched) return r
   const fb = fallbackByQueryShingles(indexDir, taskContext)
   return fb || r

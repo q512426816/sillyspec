@@ -129,8 +129,9 @@ test('① flowKnowledgeDigest：无域依据且语料不命中 → 折叠一行�
     const changeDir = join(specBase, 'changes', 'c-empty')
     mkdirSync(changeDir, { recursive: true })
     const r = await flowKnowledgeDigest({ specBase, change: 'zzz-unrelated', changeDir, input: '', filesOverride: [] })
-    assert.equal(r.lines.length, 1, `应折叠为一行，实际：${JSON.stringify(r.lines)}`)
-    assert.ok(r.lines[0].includes('未命中') || r.lines[0].includes('无'), '空态行应说明未命中')
+    // 折叠行必须存在（内置规约 00 恒注入行自 2026-10-23 起恒在场——本断言不锁总行数，防恒注入面扩展时误红）
+    assert.ok(r.lines.length >= 1, `至少折叠行在场，实际：${JSON.stringify(r.lines)}`)
+    assert.ok(r.lines.some((l) => l.includes('未命中') || l.includes('无')), '空态行应说明未命中')
     assert.equal(r.summary.frCount, 0)
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
