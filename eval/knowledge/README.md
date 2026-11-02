@@ -6,17 +6,19 @@
 ## 用法
 
 ```bash
-node eval/knowledge/run.mjs                     # 两仓全量，读取 baseline 并对比
-node eval/knowledge/run.mjs --repo sillyspec    # 单仓
+node eval/knowledge/run.mjs                     # 评当前仓（缺省），读取 baseline 并对比
+node eval/knowledge/run.mjs --repo <path>       # 评任意仓（路径；可逗号分隔多个）
+node eval/knowledge/run.mjs --repo <label>:<path>,<label>:<path>   # 显式仓标签（对齐数据集 repo 字段）
 node eval/knowledge/run.mjs --face entries      # 单面
 node eval/knowledge/run.mjs --json              # 机器可读
 node eval/knowledge/run.mjs --set-baseline      # 写入 baseline.json（提交入库）
 node eval/knowledge/run.mjs --smoke             # 零数据依赖冒烟（六类探针 + baseline 往返）
-npm run eval:knowledge                          # 等价于全量
+npm run eval:knowledge                          # 等价于评当前仓
 ```
 
-平台仓路径默认 `C:/Users/qinyi/IdeaProjects/multi-agent-platform`，可用环境变量
-`SILLYSPEC_EVAL_PLATFORM_ROOT` 覆盖；仓不存在时该仓自动跳过并披露。
+**工具中立**：runner 不枚举任何具体项目——仓从 `--repo` 路径解析，缺省当前仓；
+仓标签取 `label:` 显式值或路径 basename。`datasets/organic.jsonl` 里的 repo 字段只是标签，
+与本仓的实例数据一起提交；换项目时替换数据集即可，工具代码零改动。
 
 ## 三个数据源
 
@@ -75,6 +77,9 @@ runner 强制 `SILLYSPEC_KNOWLEDGE_VECTOR=off`、`SILLYSPEC_HITS_PUSH=0`，只�
 的 baseline.json 与图派生缓存（`<specRoot>/.runtime/cache/`，可再生、非遥测）。
 
 ## 当前基线（2026-11-02，首次落盘）
+
+本仓的实例基线（两仓用 `--repo sillyspec:<本仓路径>,platform:<平台仓路径>` 生成；
+仓标签与数据集 repo 字段对齐——换项目时基线与数据集一起替换）：
 
 - sillyspec：entries raw top3 0.1667（n=12）、decisions top3 0.3333（n=3）、scope top3 0.2（n=5）、
   self own_hit 0.0291 / leak_gap 0。

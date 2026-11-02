@@ -12,13 +12,13 @@ import { parseDecisionEntries } from '../../../src/knowledge-match.js'
 import { readFlowState } from '../../../src/flow-state.js'
 
 const FACES = new Set(['entries', 'decisions', 'search', 'scope'])
-const REPOS = new Set(['sillyspec', 'platform'])
 
-/** organic case 字段校验；返回 null = 合法，否则错误原因。 */
+/** organic case 字段校验；返回 null = 合法，否则错误原因。
+ *  repo 是数据集标签（对应 --repo 的 label 或路径 basename），非项目枚举——任意仓可用。 */
 export function validateOrganicCase(c) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return 'not-object'
   if (!c.id || typeof c.id !== 'string') return 'id'
-  if (!REPOS.has(c.repo)) return 'repo'
+  if (!c.repo || typeof c.repo !== 'string') return 'repo'
   if (!FACES.has(c.face)) return 'face'
   if (!c.query || typeof c.query !== 'string' || !c.query.trim()) return 'query'
   if (!Array.isArray(c.expected) || c.expected.length === 0) return 'expected-empty'

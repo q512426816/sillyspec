@@ -2,8 +2,12 @@
 /**
  * eval/knowledge/run.mjs — 知识检索评测 runner（变更 0：评测面）
  *
+ * 通用性（工具中立）：不枚举任何具体项目——`--repo` 接受任意仓路径（逗号分隔，
+ * 可 `<label>:<path>` 显式标签），缺省评当前仓；organic 数据集的 repo 字段是标签，
+ * 与 `--repo` 的 label 或路径 basename 对应。
+ *
  * 用法：
- *   node eval/knowledge/run.mjs [--repo sillyspec|platform|all] [--face entries|decisions|search|scope|all]
+ *   node eval/knowledge/run.mjs [--repo <path|label:path>[,<path>…]] [--face entries|decisions|search|scope|all]
  *                               [--set-baseline] [--json] [--smoke]
  *
  * 设计锚：.sillyspec/changes/2026-11-02-knowledge-eval/design.md
@@ -22,6 +26,7 @@ import { snapshotFingerprint } from './lib/snapshot.mjs'
 import { runAllProbes } from './lib/probes.mjs'
 import { renderTable, diffBaseline } from './lib/report.mjs'
 import { runFace, rankWithMatches, FACES } from './lib/faces.mjs'
+import { parseRepoArgs } from './lib/repos.mjs'
 
 process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
 process.env.SILLYSPEC_HITS_PUSH = '0'
@@ -38,13 +43,14 @@ const val = (n) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null
 }
 
-const REPO_ROOTS = {
-  sillyspec: repoRoot,
-  platform: process.env.SILLYSPEC_EVAL_PLATFORM_ROOT || 'C:/Users/qinyi/IdeaProjects/multi-agent-platform',
+let REPO_ROOTS
+try {
+  REPO_ROOTS = parseRepoArgs(val('--repo'), repoRoot)
+} catch (e) {
+  console.error(`❌ ${e.message}`)
+  process.exit(2)
 }
 const facesArg = val('--face') || 'all'
-const reposArg = val('--repo') || 'all'
-const REPOS = reposArg === 'all' ? Object.keys(REPO_ROOTS) : [reposArg]
 const wantFaces = facesArg === 'all' ? FACES : [facesArg]
 
 /** self 集 smoke：own 命中率 + name-only 对照（leak_gap = full − name_only，越接近 0 越靠变更名泄漏）。 */
@@ -107,23 +113,20 @@ function main() {
     version: 1,
     generated_by: 'eval/knowledge/run.mjs',
     snapshot: {},
-    cases: {
-      sillyspec: { organic: organic.filter((c) => c.repo === 'sillyspec').length, self: 0 },
-      platform: { organic: organic.filter((c) => c.repo === 'platform').length, self: 0 },
-    },
+    cases: {},
     metrics: {},
     self_smoke: {},
     probes: {},
   }
-  for (const repo of REPOS) {
-    const path = REPO_ROOTS[repo]
+  for (const [repo, path] of REPO_ROOTS) {
+    const repoCases = organic.filter((c) => c.repo === repo)
+    result.cases[repo] = { organic: repoCases.length, self: 0 }
     if (!existsSync(join(path, '.sillyspec', 'knowledge'))) {
-      result.snapshot[repo] = { head: '', knowledge_hash: '', knowledge_files: 0, missing: true }
+      result.snapshot[repo] = { head: '', knowledge_hash: '', knowledge_files: 0, missing: true, path }
       result.metrics[repo] = {}
       continue
     }
-    result.snapshot[repo] = snapshotFingerprint(path)
-    const repoCases = organic.filter((c) => c.repo === repo)
+    result.snapshot[repo] = { ...snapshotFingerprint(path), path }
     result.metrics[repo] = {}
     for (const face of wantFaces) {
       let faceCases = []
@@ -137,6 +140,7 @@ function main() {
     result.self_smoke[repo] = self
     result.cases[repo].self = self.cases
   }
+  const unmatched = organic.filter((c) => !REPO_ROOTS.has(c.repo))
   result.probes = Object.fromEntries(runAllProbes().map((p) => [p.defect, p.pass]))
 
   let diffs = { mismatches: [], changes: [] }
@@ -147,11 +151,12 @@ function main() {
   }
 
   if (has('--json')) {
-    console.log(JSON.stringify({ ok: true, skipped_cases: skipped.length, ...result, diff: diffs }, null, 2))
+    console.log(JSON.stringify({ ok: true, skipped_cases: skipped.length, unmatched_cases: unmatched.length, ...result, diff: diffs }, null, 2))
     return
   }
   console.log(renderTable(result))
   if (skipped.length > 0) console.log(`\n⚠️ organic 跳过 ${skipped.length} 条（字段缺失/期望空）：${skipped.map((s) => `${s.id || `L${s.line}`}:${s.reason}`).join(' ')}`)
+  if (unmatched.length > 0) console.log(`\n⚠️ organic 有 ${unmatched.length} 条未匹配本次仓标签（${[...new Set(unmatched.map((c) => c.repo))].join('、')}）——用 --repo label:path 对齐标签或忽略`)
   if (diffs.mismatches.length > 0) console.log(`\n⚠️ ${diffs.mismatches.join('；')}——基线与当前快照不一致，数值对比需谨慎`)
   if (diffs.changes.length > 0) console.log(`\n📊 相对 baseline 变化：\n  ${diffs.changes.join('\n  ')}`)
   if (has('--set-baseline')) console.log(`\n✅ baseline 已写入 ${BASELINE}`)

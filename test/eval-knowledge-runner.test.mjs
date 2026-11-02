@@ -1,7 +1,7 @@
 /**
  * eval-knowledge-runner.test.mjs — 评测指标纯函数测试（FR-03 绑定）
  */
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { rmSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -127,6 +127,21 @@ console.log('\n=== Test 8: decisions 面 ===')
     const m = runFace(dir, 'decisions', [{ id: 'd1', query: 'alpha', expected: ['decisions/demo.md#D-002@v1'] }])
     assert(m.raw.top1 === 1, 'rejected 条目排前 → top1 命中')
   } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+
+// ── 9: 仓参数解析（通用，不枚举项目） ──
+console.log('\n=== Test 9: parseRepoArgs ===')
+{
+  const { parseRepoArgs, parseRepoSpec } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'repos.mjs')).href)
+  const d = parseRepoArgs(null, root)
+  assert(d.size === 1 && d.has(basename(root)), '缺省 = 当前仓（标签=basename）')
+  const m = parseRepoArgs(`alpha:${join(root, 'a')},beta:${join(root, 'b')}`, root)
+  assert(m.get('alpha') === resolve(join(root, 'a')) && m.get('beta') === resolve(join(root, 'b')), 'label:path 显式标签')
+  const win = parseRepoSpec('C:/repos/proj')
+  assert(win.label === 'proj', 'Windows 盘符不当作 label 分隔符')
+  let threw = false
+  try { parseRepoArgs(`x:${join(root, 'a')},x:${join(root, 'b')}`, root) } catch { threw = true }
+  assert(threw === true, '重复标签抛错（不静默覆盖）')
 }
 
 // ── 汇总 ──

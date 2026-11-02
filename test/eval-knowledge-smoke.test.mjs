@@ -56,6 +56,20 @@ console.log('\n=== Test 3: baseline 契约 ===')
   }
 }
 
+// ── 4: 工具中立法（不枚举具体项目） ──
+console.log('\n=== Test 4: 工具中立法 ===')
+{
+  const fs = await import('node:fs')
+  const libDir = join(root, 'eval', 'knowledge', 'lib')
+  const files = [join(root, 'eval', 'knowledge', 'run.mjs'),
+    ...fs.readdirSync(libDir).filter((f) => f.endsWith('.mjs')).map((f) => join(libDir, f))]
+  const src = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
+  assert(!/multi-agent-platform/.test(src), '工具代码不含具体项目名')
+  assert(!/SILLYSPEC_EVAL_PLATFORM_ROOT/.test(src), '工具代码不含项目特定 env')
+  assert(!/REPO_ROOTS\s*=\s*\{/.test(src), '工具代码不硬编码仓表（仓从 --repo 解析）')
+  assert(/parseRepoArgs/.test(src), '仓解析走通用 parseRepoArgs')
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`eval-knowledge-smoke tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

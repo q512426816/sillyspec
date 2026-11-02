@@ -3,14 +3,16 @@
   "generated_by": "eval/knowledge/run.mjs",
   "snapshot": {
     "sillyspec": {
-      "head": "05901a963032f87e9c0c0f40b6d94810413730c1",
+      "head": "8d9d57c387161937c11cd436275834875ebd64d9",
       "knowledge_hash": "80a32f03a89a03e6e52fa72f9c64f018254b29f7672144786117f8c3a54790e9",
-      "knowledge_files": 139
+      "knowledge_files": 139,
+      "path": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec"
     },
     "platform": {
       "head": "892d72104582ed700c32a4f1897e69f6a4364799",
       "knowledge_hash": "3f3186bfc15f6d0aa054bfe294378e7aef1d8e01f6a472113995dc742cc15136",
-      "knowledge_files": 160
+      "knowledge_files": 160,
+      "path": "C:\\Users\\qinyi\\IdeaProjects\\multi-agent-platform"
     }
   },
   "cases": {
