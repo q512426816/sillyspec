@@ -1,6 +1,14 @@
 tier: thin
 legacy_fallback: false
-substeps: {}
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
@@ -30,11 +38,16 @@ input: >-
 autopilot: true
 prestage_ack: true
 baseline_commit: 312d28d8fff1c5e63d17ae421c7694c7d58cabc6
-updatedAt: '2026-11-02T12:58:09.946Z'
+updatedAt: '2026-11-02T13:11:14.831Z'
 baseline_sha256: c2469c3ca8f4d2d650e35028abd2d6096e43263df86cdfc1d3cefcd93d0ff4b6
 spec_approved: true
 spec_approved_at: '2026-11-02T12:58:09.945Z'
 spec_approved_by: anon@DESKTOP-HJ0AM09
 spec_approved_channel: agent-self
 spec_attested_by: anon@DESKTOP-HJ0AM09
+batch_ticked: true
+gate_summary: >-
+  test: skipped 结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261102130111\test-result.json
+  — 跳过原因：变更与测试面零关系（3 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。｜lint: skipped — 跳过原因：local.yaml 未配置
+  commands.lint（或标记 unavailable）。｜门文件 3 个
 

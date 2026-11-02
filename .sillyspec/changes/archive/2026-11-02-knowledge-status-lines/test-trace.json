@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-status-lines",
+  "rows": [
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-status-lines:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「isResolvedRoute 不变性」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-status-lines"
+    }
+  ]
+}

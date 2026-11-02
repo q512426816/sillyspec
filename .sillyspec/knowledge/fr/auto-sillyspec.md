@@ -155,3 +155,69 @@ created_at: 2026-10-20T01:19:37.412Z
 - 场景：数字对照 — Given 报告生成；When 人工对照审查实测；Then 关键计数一致或差异有解释（如实记录）
 全文：.sillyspec/changes/archive/2026-11-02-knowledge-provenance/requirements.md#FR-05
 最近确认：3f2421bd96c16584248c661b27e790c3ee948f5b
+
+## FR-auto-sillyspec-039 状态行：本仓 known-issues.md 53 条 heading 全部标注一行「- 状态：现行|已修复|已解决|已退役|观察|债务」（固定六值词表），放首段说明之后；heading/标题词/INDEX 全不动；判据=emoji+标题词+正文语义启发式，先出建议清单再落盘
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：词表约束
+场景正文：
+- 场景：词表约束 — Given 某条建议状态不在六值词表；When 落盘；Then 拒绝写入（词表外值必须人工改判）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-01
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+## FR-auto-sillyspec-040 平台 48 条：只出建议清单（heading→建议状态→判据）不写入
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：跨仓零写
+场景正文：
+- 场景：跨仓零写 — Given 平台 known-issues.md；When 生成建议 输出清单文件；平台仓文件 hash 前后一致
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-02
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+## FR-auto-sillyspec-041 decisions/unmapped 头注加一行「本池条目为检索面-only 停车场（语义等价 draft/exclude）」自描述（不加字段行）
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：字段行不动
+场景正文：
+- 场景：字段行不动 — Given 条目已有「状态：implemented」字段行；When 本变更；Then 该行原样保留（仅头注加行）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-03
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+## FR-auto-sillyspec-042 fr/unmapped 头注「残余 625 条」修正为实际（2 条）并更新治理注记
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：数字与实测一致
+场景正文：
+- 场景：数字与实测一致 — Given fr/unmapped.md 当前段头数为 2；When 修正头注；Then 注记数字 = 2
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-04
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+## FR-auto-sillyspec-043 验收：knowledge validate 零新增告警 + docs-check 零回归 + eval 六探针五面零回归 + 既有 knowledge-rank-denoise 测试绿（isResolvedRoute 不变性）
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：isResolvedRoute 不变
+场景正文：
+- 场景：isResolvedRoute 不变 — Given 状态行落盘后；When 跑 test/knowledge-rank-denoise.test.mjs 与 eval；Then 全绿零回归（读取逻辑只看 INDEX，正文状态行零行为影响）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-05
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-status-lines:flow:测试绑定FR-05
+  tests: test/knowledge-rank-denoise.test.mjs「isResolvedRoute 不变性」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-status-lines
+  status: active
+
+## FR-auto-sillyspec-044 测试：不适用——纯数据标注（验收靠 validate/docs-check/eval 零回归）
+变更：2026-11-02-knowledge-status-lines
+状态：active
+摘要：不适用留痕
+场景正文：
+- 场景：不适用留痕 — Given AGENTS.md 规则「纯配置/文档不写测试」；When spec 填写；Then 测试绑定记「不适用：理由」
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-status-lines/requirements.md#FR-06
+最近确认：6c523fa826089a414853e8e4d5fe1d4deae08d5a

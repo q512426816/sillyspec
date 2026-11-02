@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-status-lines",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "6c523fa826089a414853e8e4d5fe1d4deae08d5a",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "title": "FR-01 位置条款字面未满足：48/53 条状态行紧贴 heading（在首段说明之前），且两种条目形态位置不一致",
+      "detail": "requirements.md FR-11 / proposal.md / design.md 三处均写「状态行必须放条目首段说明之后（不紧贴 heading）」。实测：48 条 prose 条目（heading→空行→首段 结构）的状态行落在 heading 紧下方、首段说明之前；5 条 bullet 条目（heading→列表块 结构）的状态行落在列表块之后（条目尾部）。根因在 annotate-status.mjs L61-84 写入状态机「向前找首个空行、插在空行前」——48 条 heading 后紧跟空行，所得『首段』为空，状态行即贴 heading。与条款字面相反且两种形态互不一致。",
+      "evidence": "known-issues.md 逐条机检：53 heading 中 48 条 heading 与状态行之间无非空行、5 条（CLI flag 白名单/机器摘录碎片化/verify 批量快照/绿地伪域/Task Review 已退役）状态行在非空内容之后；脚本注释自述「插在空行前」。",
+      "impact": "零行为后果（已实证）：本仓 known-issues.md 无 scope 标记（grep 0 命中）；isResolvedRoute/matchByRouting 只读 INDEX.md 的 display/anchor（src/knowledge-match.js L329-335/L449-456），不读条目正文；knowledge validate ok=true 0 errors；eval scope-manual 探针 GREEN。提案动机自述『防 scope 摘要误取，虽本仓无 scope 标记』——所防条件本仓不存在。",
+      "remediation": "非阻断。二选一收尾：① 后续 doc-only 变更把 48 条状态行移到首段说明之后（机械、零风险）；② 或修订 spec/design 措辞，把「heading 紧下方元数据行」定为正式约定（当前落盘形态对人工阅读反而更规整）。"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "title": "grep 计数 54≠53 差异已定性：1 条既有正文行与新增状态行同前缀，Task Review 条目现挂双「- 状态：」行",
+      "detail": "HEAD~1 L221 既有正文行「- 状态：已退役（2026-09-26-task-review-retire）。三处消费门删除……」（长文退役说明）非本次新增；本次新增 53 行全部六值词表内（现行 7/已修复 18/已退役 1/观察 25/债务 2，已解决 0——词表值未被使用，合规）。该既有行按最小 diff 原则正确保留，但 Task Review 条目（L248 起）现同时含既有长行（L250）与新增短行（L252），人工 grep 观感为重复标注。",
+      "evidence": "git show HEAD~1:.sillyspec/knowledge/known-issues.md L221 在场；本仓 diff +53/-0 与 53 行词表内新增自洽。",
+      "impact": "纯观感，无解析面影响。",
+      "remediation": "可选：后续把既有长行前缀改为「- 退役说明：」类区分前缀。"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "title": "「含 5 条未路由条照标」计数失准：实测未路由为 6 条",
+      "detail": "proposal/requirements/commit message 均写「5 条未路由条照标」；对 INDEX.md 直查实测无路由行的条目为 6 条（后台任务写通道宽限无界 / 嵌套 test-runner 挂测误判 / npm 12 remote tarball / npm 重装 package-lock / Task Review 层已退役 / decisions-unmapped 285KB 存量池）。53 条全部照标，数据完整性标准不受影响，仅描述性计数失准（疑沿用 4C 提案时点旧数）。",
+      "impact": "无验收面影响（FR-01 的硬标准是 53 条全标，已满足）。",
+      "remediation": "无需改数据；后续文档引用时以实测 6 为准。"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "title": "commit message「lint 1101 绿」与 gate 记录不一致：收口门 lint 实为 skipped",
+      "detail": "flow-state.yaml gate_summary 记「lint: skipped——local.yaml 未配置 commands.lint」；实测 .sillyspec/local.yaml 确无 commands.lint 键。门行为符合 AGENTS.md 规则 4（未配置→跳过并留痕，归 pre-push/CI 门），但 commit message 中「lint 1101 绿」主张无已配置验证通道背书，属口头证据与门记录的表述失配。",
+      "impact": "门自身处置正确；仅提交信息表述超出留痕证据。",
+      "remediation": "无需动作；后续 commit message 验证主张与 gate 记录对齐。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——状态行为独立文档行、无顺序依赖；源码走查确认无任何消费方按位置读条目正文行（isResolvedRoute 只读 INDEX）",
+    "并发": "ok——单写者、显式 pathspec 提交；commit 11 文件全部在声明面内（8 变更目录 + 3 knowledge 目标），未夹带并行会话文件（quicklog/、test/.sillyspec/ 留未跟踪，且 local.yaml dirty_gate_ignore 已预先承认二者为既有残渣，时间戳 10-17/10-20 均早于本变更）",
+    "切换": "ok——纯增量数据行、git 可回滚；flow-state substeps 全 done；本评审复跑三面全绿可复现",
+    "作用域": "ok——仅本仓落盘；平台零写双证：脚本结构性零写（writeFileSync 仅指向本仓 LOCAL_KI 与变更目录清单文件）+ 平台仓实测（.sillyspec/knowledge/ 工作树干净，known-issues.md 最后提交 2026-10-21 早于变更窗口）；平台默认路径硬编码但可 SILLYSPEC_PLATFORM_KNOWLEDGE 覆盖"
+  },
+  "reviewedAt": "2026-11-02T21:10:11+08:00"
+}
