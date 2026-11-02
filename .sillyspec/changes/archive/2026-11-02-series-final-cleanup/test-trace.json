@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-series-final-cleanup",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-series-final-cleanup:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「底稿资格门（模板标题不获 deathPath）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-series-final-cleanup"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-series-final-cleanup:flow:测试绑定FR-02",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs「③ 现行文件零悬挂引用」",
+        "test/test-runner-failed-face.test.mjs「③ AGENTS 双文件自验口径句逐字一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-series-final-cleanup"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-series-final-cleanup:flow:测试绑定FR-05",
+      "tests": [
+        "test/brainstorm-auto-retire.test.mjs",
+        "test/test-runner-failed-face.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-series-final-cleanup"
+    }
+  ]
+}

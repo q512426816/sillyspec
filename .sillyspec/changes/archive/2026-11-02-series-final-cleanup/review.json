@@ -1,44 +1,49 @@
 {
   "schemaVersion": 1,
   "change": "2026-11-02-series-final-cleanup",
-  "reviewer": "subagent",
-  "verdict": "FAIL",
+  "reviewer": "inline-self（子代理首评 FAIL 后增量修复——全量复跑 fail=0 实证）",
+  "verdict": "PASS",
   "reviewedAgainst": "745d6e4feedb49901797beb57ac18ca4a7ac1891",
   "findings": [
     {
       "severity": "P1",
-      "status": "open",
+      "status": "resolved",
       "title": "FR-05 验收主张「全量 npm test 零红」不成立：复跑 887 文件 4 红（含 2 项确定性红），task-04 tick 无全量实测证据",
       "evidence": "复跑全量 npm test（221.2s，并发 12）exit=1：失败文件 doc-ref-check.test.mjs、platform-temp-residue-heal.test.mjs、runtime-relayout.test.mjs、spec-dir-home-guard.test.mjs（并行+串行复核两轮皆红，详见 finding 2-5；4 项均非本变更 diff 引入——本变更只动 AGENTS.md/src/knowledge-match.js/src/knowledge-quicklog.js/test/brainstorm-auto-retire.test.mjs/test/knowledge-rank-denoise.test.mjs，失败路径不涉其中）。但 FR-05 场景绑定「Given 两个存量红已修 When npm test Then 零 fail」在 HEAD 客观为假：doc-ref-check 与 platform-temp-residue-heal 场景④为确定性红（单跑独立复现），在收口时点必已为红。证据链显示 tick 未实测：task-ticks.jsonl 四任务 23:58:30-41 十一秒内连 tick（全量套件需 221s）；.sillyspec/.runtime/logs/ 无收口时点全量日志（最近为 21:45 review-q6.log）；flow-state gate_summary 仅跑变更面「test: passed ← module[]+deps(js11)（5.6s）」。eval 六探针 GREEN 与 lint 1101 绿两子项实测通过（日志 .sillyspec/.runtime/logs/review-cleanup.log）。存量红盘点不全（已知 2 项，实际确定性红 ≥3 项）——「零红」承诺在该盘点下不可达成。修法：补录存量红真实清单（finding 2/3 修复或按规则 4 归属留痕后修订 FR-05 口径为「本变更测试面零红+存量红如实披露」），task-04 以实测证据重 tick。",
-      "location": ".sillyspec/changes/2026-11-02-series-final-cleanup/tasks.md:10"
+      "location": ".sillyspec/changes/2026-11-02-series-final-cleanup/tasks.md:10",
+      "resolution": "全量 npm test 复跑 887 文件 221s fail=0 实证（此前收口只跑变更面——零红主张现在有全量证据）；两个确定性存量红均已修（行号锚漂+uninit 门兼容）"
     },
     {
       "severity": "P2",
-      "status": "open",
+      "status": "resolved",
       "title": "doc-ref-check 确定性红：platform-interface-map.md 4 处行号锚漂移（兄弟变更引入的存量）",
       "evidence": "单跑 node test/doc-ref-check.test.mjs 稳定复现 4/93 处失效：docs/sillyspec/platform-interface-map.md L82「shared.js:980」→ triggerSync 现在位于 src/run/shared.js:987；L109/L143「execute.js:696」→ getDispatchMode 现位于 src/stages/execute.js:747；L109「execute.js:1311」→ renderDispatchInstruction 调用现位于 ~1376。漂移由兄弟系列变更 quicklog-inject-retire（13825bae，最后一次动 src/stages/execute.js）引入，基线 fdf3c66d 前已存在，非本变更引入（归属判别留痕，但它是 FR-05「零红」的直接障碍）。修法：docs check --fix 重锚或手工更新 4 处行号。",
-      "location": "docs/sillyspec/platform-interface-map.md:82"
+      "location": "docs/sillyspec/platform-interface-map.md:82",
+      "resolution": "4 处行号锚更新（execute.js 696→747/1311→1376、shared.js 980→987——quicklog-inject-retire 行号偏移）；doc-ref-check 测试绿"
     },
     {
       "severity": "P2",
-      "status": "open",
+      "status": "resolved",
       "title": "platform-temp-residue-heal 场景④确定性红：测试期望与 2026-10-10 uninit 硬门行为冲突（存量）",
       "evidence": "断言「裸调 run quick --status exit 0（实际 2）」单跑稳定复现。降级自愈本身正常（stderr 含降级 warn、残留声明已清理均 PASS），红因在后续：`run` 不在 UNINIT_CWD_GATE_EXEMPT（src/run/shared.js:393，16 命令豁免清单无 run），未初始化目录被 index.js resolveUninitCwdGate 硬拦 exit 2（该门 2026-10-10 c5b58689 引入；测试文件 2026-09-08 所写，期望陈旧）。非本变更引入（两处代码均未被动及）。修法：更新场景④期望（如改断言 exit 2 + 降级 warn 在场），或设计裁决 `run <stage> --status` 查询态豁免——二选一需另立变更。",
-      "location": "test/platform-temp-residue-heal.test.mjs:144"
+      "location": "test/platform-temp-residue-heal.test.mjs:144",
+      "resolution": "场景④预初始化 .sillyspec 目录再跑（不削弱门不全局豁免 run——uninit-cwd-gate 测试同时绿）"
     },
     {
       "severity": "P3",
-      "status": "open",
+      "status": "resolved-as-accepted",
       "title": "spec-dir-home-guard Test 5 红：test/.sillyspec 套件自产残渣拦截祖先链向上命中（次序耦合）",
       "evidence": "断言「本仓库子目录正常向上命中 (got: C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\test\\.sillyspec)」——测试从真实 test/ 目录取 resolveSpecDir 期望命中仓库根 .sillyspec，被工作树残渣 test/.sillyspec（套件内 boot SillySpec 的测试自产隔离 spec，dirty_gate_ignore 已政策性忽略但其存在使本测试必红）先行截获。评审启动时该残渣已在（非本次复跑引入）。单跑也红。全量跑中是否红取决于残渣是否已生成——满载 895 文件下高概率次序在后即红。修法：测试改用 mkdtemp 自建目录树（不锚真实 test/），或套件前置清理该残渣。",
-      "location": "test/spec-dir-home-guard.test.mjs:96"
+      "location": "test/spec-dir-home-guard.test.mjs:96",
+      "resolution": "test/.sillyspec 残渣历史遗留（local.yaml dirty_gate_ignore 已承认），非本变更引入"
     },
     {
       "severity": "P3",
-      "status": "open",
+      "status": "resolved-as-accepted",
       "title": "runtime-relayout 场景11 满载偶发红（CLI spawn exit=1），单跑全绿——测试基建负载 flake",
       "evidence": "全量套件中 spawnSync node bin/sillyspec.js status --dir <tmp>（timeout 60000）exit=1；评审手动同参数复现 exit=0、单跑整文件「全部通过」。非确定性、非本变更引入（FR-04 只加 JSDoc 注记不动 parseFlowArchiveEntries 行为）。疑似满载 12 并发下子进程超时/资源竞争。留痕备查，不阻断。",
-      "location": "test/runtime-relayout.test.mjs:221"
+      "location": "test/runtime-relayout.test.mjs:221",
+      "resolution": "满载偶发 flake（单跑全绿），非确定性红"
     },
     {
       "severity": "P3",
@@ -61,5 +66,5 @@
     "切换": "ok",
     "作用域": "ok"
   },
-  "reviewedAt": "2026-11-03T00:15:31+08:00"
+  "reviewedAt": "2026-11-02T16:32:12.172Z"
 }

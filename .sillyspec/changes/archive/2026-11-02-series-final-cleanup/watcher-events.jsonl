@@ -1,0 +1,24 @@
+{"ts":1793634649640,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793634649640,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793634649640,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793634741140,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1793634835693,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1793635110308,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793635110308,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793635110308,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793635115409,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793635117294,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793635117294,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793635118586,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793635120988,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793635120988,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793635121871,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793635124490,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793635124490,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793635140975,"kind":"commit","stage":null,"detail":"745d6e4f","provisional":true}
+{"ts":1793635141201,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-02-series-final-cleanup/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793635154414,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.6s） · 20261102155912","provisional":true}
+{"ts":1793636055062,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1793636478588,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/run/shared.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793636805915,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/platform-temp-residue-heal.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793637116946,"kind":"commit","stage":null,"detail":"119c587f","provisional":true}

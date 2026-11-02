@@ -1650,3 +1650,85 @@ created_at: 2026-10-15T09:21:13.934Z
   confirmed_at: null
   source_change: 2026-10-23-flow-done-shared-repo-multi-session-frictions
   status: active
+
+## FR-docs-086 底稿资格门：knowledge-match.js 的 deathPath 判定跳过模板标题条目（设计期风险与放弃方案/风险与死路/底稿特征词——它们是 process 级流程取舍非真否决，标 deathPath 会占防复潮席位且使 4D 模板清零条件永不可满足）；测试锁「模板标题不获 deathPath，真否决仍正常获得」
+变更：2026-11-02-series-final-cleanup
+状态：active
+摘要：模板不占席位；真否决不受影响
+场景正文：
+- 场景：模板不占席位 — Given 条目标题为「设计期风险与放弃方案（底稿）」且理由含「死路：」；When parseDecisionEntries；Then deathPath 为 false（不占防复潮席位）
+- 场景：真否决不受影响 — Given 条目标题为「方案 B 否决」且理由含「死路：某工具不兼容」；When parseDecisionEntries；Then deathPath 为 true（正常进入防复潮可达集）
+全文：.sillyspec/changes/archive/2026-11-02-series-final-cleanup/requirements.md#FR-01
+最近确认：119c587fd0169ceb4a0604f5375c51fa1e25f28b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-series-final-cleanup:flow:测试绑定FR-01
+  tests: test/knowledge-rank-denoise.test.mjs「底稿资格门（模板标题不获 deathPath）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-series-final-cleanup
+  status: active
+
+## FR-docs-087 存量红修复入库：AGENTS.md 规则4 与模板逐字一致 + brainstorm-auto-retire maxBuffer 8MB
+变更：2026-11-02-series-final-cleanup
+状态：active
+摘要：两文件逐字一致
+场景正文：
+- 场景：两文件逐字一致 — Given test-runner-failed-face ③ 断言规则 4 两文件逐字一致；When 跑测试；Then 全绿
+全文：.sillyspec/changes/archive/2026-11-02-series-final-cleanup/requirements.md#FR-02
+最近确认：119c587fd0169ceb4a0604f5375c51fa1e25f28b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-series-final-cleanup:flow:测试绑定FR-02
+  tests: test/brainstorm-auto-retire.test.mjs「③ 现行文件零悬挂引用」 | test/test-runner-failed-face.test.mjs「③ AGENTS 双文件自验口径句逐字一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-series-final-cleanup
+  status: active
+
+## FR-docs-088 4D 推迟决策补录：decisions add D-001 记「unmapped 降权参与推迟——模板底稿不清零不解禁；复潮条件：底稿资格门落地且停车场真实残量 ≤5/条」
+变更：2026-11-02-series-final-cleanup
+状态：active
+摘要：决策在场
+场景正文：
+- 场景：决策在场 — Given 变更完成；When 读 decisions.md；Then D-001 含推迟理由与复潮条件
+全文：.sillyspec/changes/archive/2026-11-02-series-final-cleanup/requirements.md#FR-03
+最近确认：119c587fd0169ceb4a0604f5375c51fa1e25f28b
+
+## FR-docs-089 parseFlowArchiveEntries 注记：文件头注记「归档检索源已由 scope 两跳（knowledge-graph）替代——本函数仅缓存测试消费，非活检索面接线点」
+变更：2026-11-02-series-final-cleanup
+状态：active
+摘要：注记在场
+场景正文：
+- 场景：注记在场 — Given 变更完成；When 读 knowledge-quicklog.js parseFlowArchiveEntries JSDoc；Then 含替代注记
+全文：.sillyspec/changes/archive/2026-11-02-series-final-cleanup/requirements.md#FR-04
+最近确认：119c587fd0169ceb4a0604f5375c51fa1e25f28b
+
+## FR-docs-090 验收：全量 npm test 零红（含两个存量红修复）+ eval 六探针 GREEN + lint 绿
+变更：2026-11-02-series-final-cleanup
+状态：active
+摘要：全量零红
+场景正文：
+- 场景：全量零红 — Given 两个存量红已修；When npm test；Then 零 fail
+全文：.sillyspec/changes/archive/2026-11-02-series-final-cleanup/requirements.md#FR-05
+最近确认：119c587fd0169ceb4a0604f5375c51fa1e25f28b
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-series-final-cleanup:flow:测试绑定FR-05
+  tests: test/brainstorm-auto-retire.test.mjs | test/test-runner-failed-face.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-series-final-cleanup
+  status: active
