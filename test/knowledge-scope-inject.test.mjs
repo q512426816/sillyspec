@@ -70,6 +70,7 @@ test('② flowKnowledgeDigest 集成：内置行恒注入＋scoped 条目在场'
     const r = await flowKnowledgeDigest({ specBase, change: '2026-01-01-x', changeDir, input: '标题素材面\n成功标准：\n- 行为 X' })
     const text = r.lines.join('\n')
     assert.match(text, /🧭 工具中立性（内置规约 00，每变更恒注入）/, '内置中立性行恒注入')
+    assert.match(text, /🧭 反例（任务词汇——违规现场词面相似即命中）/, '规约 00 任务词汇反例恒注入（2026-11-02-constraint-mechanize）')
     assert.match(text, /📌 \[always\] rules\.md#中立性：批类别是 CLI 自有分类/, 'always 条目注入形态')
     assert.match(text, /📌 \[repo\] rules\.md#仓级：发布前锚套件/, 'repo 条目注入形态')
     assert.match(text, /🧠 知识注入/, '既有段头保留')
