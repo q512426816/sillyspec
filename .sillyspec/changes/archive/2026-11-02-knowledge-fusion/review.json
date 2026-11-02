@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-fusion",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "b86ec81ac1265b67ed44eeaf1df591d0b103c18f",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "Wave scope 键解析只取每个字段首项，target_files 的 NEW:/内联列表全部失效——FR-04 Wave 面实际不生效",
+      "evidence": "正则 `/^(?:target_files|allowed_paths)\\s*[：:]\\s*(.+)$/gm` 的 `\\s*` 会跨行，块列表（真实卡的主流形态：`allowed_paths:\\n  - path`）只捕获首条；内联 `[a, b]` 捕获含方括号被 graphPathCandidates 丢弃；首条 `NEW:src/x.js` 的 NEW: 前缀未被剥（graphPathCandidates 只剥 ./）与图节点不匹配。实测 canonical 卡（次项命中/目录首项/target_files NEW:/inline）均无 scope 注入，仅首项为文件的卡生效。",
+      "location": "src/stages/execute.js:58",
+      "resolution": "parseTaskCardPaths 重写：块列表逐项（旧 s* 跨行只取首项）、NEW: 剥离、内联方括号解析；三形态单测 + 目录过滤断言"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "prompt/execute 孪生 scope 指针行未进格式锁，knowledge-inject.test.mjs 未按设计更新",
+      "evidence": "prompt.js:569 与 execute.js:109 新增同一 `📚 触达文件关联手工条目（scope，按需 Read）` 行，但 test/knowledge-inject.test.mjs:318-325 的格式锁只比较 `── file` 正文块，无 scope fixture/断言；design.md 文件清单称该测试已同步，HEAD 实际未触及该文件，改单侧不会变红。",
+      "location": "test/knowledge-inject.test.mjs:318",
+      "resolution": "knowledge-fusion.test.mjs 加源码级孪生文案锁（prompt/execute 同 scope 指针行，改单侧即红）"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved-as-accepted",
+      "title": "FR-05 fail-soft 用例未真正构造图构建失败，只断言了零平台调用",
+      "evidence": "test/knowledge-fusion.test.mjs:146-160 用正常 fixture 调 matchKnowledgeHybrid 并断言 fetchCalls=0，没有让 getKnowledgeGraph/scopeRecall 抛错再断言 deepEqual(base)；两处 `catch { return base }`（knowledge-vector.js:259、knowledge-graph.js:1083）处于零覆盖。",
+      "location": "test/knowledge-fusion.test.mjs:146",
+      "resolution": "空图/零命中 deepEqual 路径已覆盖；catch 抛错分支为防御性（不破坏封装难以构造真实抛错），已注释说明"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "三个 scope 键来源（execute design 清单/Wave task 卡/quick guard）无集成测试，Wave 缺陷因此漏网",
+      "evidence": "knowledge-fusion.test.mjs:115-131 的「键规整与不传面」只测 graphPathCandidates 纯函数；prompt.js:1517-1529（design 清单）、prompt.js:2046-2056（guard.allowedFiles）、execute.js:52-61（task 卡）均无「真实字段形态 → scope 命中」断言，FR-04 的键读取路径未被锁定。",
+      "location": "test/knowledge-fusion.test.mjs:115",
+      "resolution": "parseTaskCardPaths 三形态单测直接覆盖 Wave 键（旧实现必红）；execute design 清单/quick guard 共用 graphPathCandidates 规整"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "complete 的 scope 小节未复用 _answered 过滤，已回应决策会在独立小节重复回显",
+      "evidence": "complete.js:533 的 _echoHits 走了 _answered，而 :537 的 _scopeHits 只按 deathPath/status 过滤；同一 scope 命中若已在 decisions.md 回应，仍会被 scope 行再次提示，违背既有「已回应不重弹」纪律。",
+      "location": "src/run/complete.js:537",
+      "resolution": "complete scope 小节复用 _answered 过滤（已回应决策不重复回显）"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "FR-01「原序不重排」与 cap 20/3 只被存在性/上界断言覆盖，未钉死",
+      "evidence": "knowledge-fusion.test.mjs:75-97 只断言 route entries/decisionHits 仍存在（some），未断言融合后数组顺序；cap 断言为 `<=20`/`<=3`，把上限改成 5 仍会绿；改成重排 base 但不删除也会绿。",
+      "location": "test/knowledge-fusion.test.mjs:75",
+      "resolution": "原序 deepEqual 断言 + cap 精确 ===20/===3"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "新增 fusion case 同时进入 search 面聚合，baseline 同提交重写使 FR-07 的五面逐位一致不可独立核验",
+      "evidence": "run.mjs:148 令 search 面消费 entries cases，s-fusion-01 因此进入 search（baseline search n 7→8、top1 1→0.875），而 run.mjs:153-158 只为 scope/entries/decisions 生成 subsets，search 无 fusion 单列；FR-07 声称五面与 baseline 逐位一致，实际靠重写 baseline 消除 diff。",
+      "location": "eval/knowledge/run.mjs:148",
+      "resolution": "search/entries/decisions 面排除 fusion 子集（聚合不混）；baseline 独立核验在交付说明记录（同提交重写属流程事实）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T06:54:55.152Z"
+}

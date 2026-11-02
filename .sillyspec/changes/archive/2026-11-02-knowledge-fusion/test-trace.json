@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-fusion",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「结果契约与无 scope deepEqual」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「合并去重/幽灵过滤/cap」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「展示隔离与同步入口」",
+        "test/knowledge-inject.test.mjs「孪生格式锁」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「键规整与不传面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「fail-soft 与零平台」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-06",
+      "tests": [
+        "test/knowledge-fusion.test.mjs「RED-first 融合用例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-11-02-knowledge-fusion:flow:测试绑定FR-07",
+      "tests": [
+        "test/eval-knowledge-runner.test.mjs「fusion 子集单列」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-fusion"
+    }
+  ]
+}

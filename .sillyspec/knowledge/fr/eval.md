@@ -711,3 +711,153 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-11-02-knowledge-scope-recall
   status: active
+
+## FR-eval-037 结果契约：路由命中时融合只追加 scopeDecisionHits/scopeEntries（带 via provenance），不设 json.scope、不截断路由 raw 列表；scope 空/无命中时结果逐字段不变（deepEqual 保护）
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：无 scope 零变化；只追加不重排
+场景正文：
+- 场景：无 scope 零变化 — Given 调用方不传 scopeFiles；When 调 matchKnowledgeHybrid/matchKnowledgeWithScope；Then 返回结果与不融合实现逐字段 deepEqual（既有消费者零回归）
+- 场景：只追加不重排 — Given 路由命中 5 条且 scope 命中 2 条独有决策；When 融合；Then decisionHits 保持原 5 条原序，scopeDecisionHits 含 2 条（via 标记），entries 原序不变
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-01
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-01
+  tests: test/knowledge-fusion.test.mjs「结果契约与无 scope deepEqual」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-038 合并算法：决策键 file#id#change、条目键 file#anchor；路由优先保留、scope 按 scopeRecall 原序追加；上限沿用 20/3；不做跨通道 score 排序；ghost/缺 file/id 的畸形命中过滤
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：跨变更同号；幽灵节点
+场景正文：
+- 场景：跨变更同号 — Given 同一 file#id 在路由与 scope 各出现一次但 change 不同；When 融合；Then 两条都保留（键含 change），路由条在 decisionHits、scope 条在 scopeDecisionHits
+- 场景：幽灵节点 — Given scope 遍历经 supersedes 链到达 ghost 决策（无 attrs.hit）；When 融合；Then 该畸形条目必须被过滤，不得产出 file/id 缺失的 hit
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-02
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-02
+  tests: test/knowledge-fusion.test.mjs「合并去重/幽灵过滤/cap」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-039 展示：flow/complete 的 rejected 渲染 = 路由 top-5 + scope 独立小节（至多 3 条，带触达文件来源）；execute/Wave 走新增同步融合入口 matchKnowledgeWithScope（fuseScopeRecall 纯函数 + graph 正向依赖），prompt/execute 孪生渲染格式锁同步
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：展示隔离；同步融合入口
+场景正文：
+- 场景：展示隔离 — Given 路由已有 5 条 rejected 且 scope 有 3 条热文件否决；When flow 渲染；Then 前 5 条仍是路由条目，scope 3 条在独立「触达文件关联」小节
+- 场景：同步融合入口 — Given buildKnowledgeInjection/Wave 传入 scopeFiles；When 调用同步入口；Then 段内出现 scope 手工条目指针行，且不传 scope 时与旧输出逐字节等价
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-03
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-03
+  tests: test/knowledge-fusion.test.mjs「展示隔离与同步入口」 | test/knowledge-inject.test.mjs「孪生格式锁」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-040 键来源：execute step 用 design 交付清单；Wave 用 task card target_files/过滤后的 allowed_paths；quick 仅 guard.allowedFiles 存在时传；{DECISION_HITS} 与 cmdSearch 明确不传并写明理由；所有键规整为图内精确文件路径（目录前缀/glob 不传）
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：glob 不传
+场景正文：
+- 场景：glob 不传 — Given allowed_paths 含 `src/` 与 `src/**/*.js`；When 构造 scopeFiles；Then 两者都不进入（精确路径才传），实际传空则不分叉融合
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-04
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-04
+  tests: test/knowledge-fusion.test.mjs「键规整与不传面」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-041 性能与降级：图构建进程级 memo 或写明 45ms/次预算；scope 构建失败原样返回路由结果（不掉词片回退）；路由命中零平台调用
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：图构建失败
+场景正文：
+- 场景：图构建失败 — Given 图构建抛错；When 路由命中 + scopeFiles 在场；Then 返回路由结果（deepEqual），不降级到词片层
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-05
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-05
+  tests: test/knowledge-fusion.test.mjs「fail-soft 与零平台」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-042 测试：RED-first 新增「路由命中 + scope 独有 rejected/手工条目/两跳」用例（禁用融合分支必红）、flow 集成、buildKnowledgeInjection/Wave 格式锁、幽灵过滤、cap/去重、零平台、fail-soft；回归全绿
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：空实现判据
+场景正文：
+- 场景：空实现判据 — Given 把 fuseScopeRecall 改成直接 return base；When 跑新增测试；Then 至少一条必须失败（证明测试不是空转）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-06
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-06
+  tests: test/knowledge-fusion.test.mjs「RED-first 融合用例」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active
+
+## FR-eval-043 eval：未改 engine 时五面指标与 baseline 逐位一致、六探针 GREEN、scope frozen/added 不变；新增 subset='fusion' 的「路由命中、expected 仅 scope 可达」case 单列报告
+变更：2026-11-02-knowledge-fusion
+状态：active
+摘要：零回归不变式
+场景正文：
+- 场景：零回归不变式 — Given 融合实现完成；When 跑 eval 全量对比 baseline；Then 五面 raw 指标逐位一致、六探针 GREEN、scope frozen/added 不变
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-fusion/requirements.md#FR-07
+最近确认：b86ec81ac1265b67ed44eeaf1df591d0b103c18f
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-fusion:flow:测试绑定FR-07
+  tests: test/eval-knowledge-runner.test.mjs「fusion 子集单列」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-fusion
+  status: active

@@ -1,0 +1,928 @@
+diff --git a/eval/knowledge/baseline.json b/eval/knowledge/baseline.json
+index 4979635e..0d333a16 100644
+--- a/eval/knowledge/baseline.json
++++ b/eval/knowledge/baseline.json
+@@ -3,8 +3,8 @@
+   "generated_by": "eval/knowledge/run.mjs",
+   "snapshot": {
+     "sillyspec": {
+-      "head": "efce0baa305e18c15893dc86f30d402743c82545",
+-      "knowledge_hash": "b510413e62cc76dbc79bba48c5ca021822e049d014c1bdcc755e2644ce6f51a7",
++      "head": "72b906c0a0f1bd9551f514c4b3955a9448163aaf",
++      "knowledge_hash": "4e9bdba520cb279f00d21d1c0b9fe846f3a684c29d266e022eedf1bbac92e764",
+       "knowledge_files": 139
+     },
+     "platform": {
+@@ -15,8 +15,8 @@
+   },
+   "cases": {
+     "sillyspec": {
+-      "organic": 20,
+-      "self": 206
++      "organic": 22,
++      "self": 207
+     },
+     "platform": {
+       "organic": 29,
+@@ -27,18 +27,20 @@
+     "sillyspec": {
+       "entries": {
+         "raw": {
+-          "top1": 1,
+-          "top3": 1,
+-          "mrr": 1,
+-          "n": 7
++          "top1": 0.875,
++          "top3": 0.875,
++          "mrr": 0.8889,
++          "n": 8
+         },
+         "rendered": {
+-          "top1": 1,
+-          "top3": 1,
+-          "mrr": 1,
+-          "n": 7
++          "top1": 0.875,
++          "top3": 0.875,
++          "mrr": 0.875,
++          "n": 8
+         },
+-        "truncated": [],
++        "truncated": [
++          "s-fusion-01"
++        ],
+         "details": [
+           {
+             "id": "s-man-01",
+@@ -81,21 +83,50 @@
+             "raw_rank": 1,
+             "rendered_rank": 1,
+             "truncated": false
++          },
++          {
++            "id": "s-fusion-01",
++            "raw_rank": 9,
++            "rendered_rank": null,
++            "truncated": true
+           }
+-        ]
++        ],
++        "subsets": {
++          "frozen": {
++            "top1": 1,
++            "top3": 1,
++            "mrr": 1,
++            "n": 4,
++            "reachable": 1
++          },
++          "default": {
++            "top1": 1,
++            "top3": 1,
++            "mrr": 1,
++            "n": 3,
++            "reachable": 1
++          },
++          "fusion": {
++            "top1": 0,
++            "top3": 0,
++            "mrr": 0.1111,
++            "n": 1,
++            "reachable": 1
++          }
++        }
+       },
+       "decisions": {
+         "raw": {
+-          "top1": 0.6,
+-          "top3": 0.6,
+-          "mrr": 0.6,
+-          "n": 5
++          "top1": 0.6667,
++          "top3": 0.6667,
++          "mrr": 0.6667,
++          "n": 6
+         },
+         "rendered": {
+-          "top1": 0.6,
+-          "top3": 0.6,
+-          "mrr": 0.6,
+-          "n": 5
++          "top1": 0.6667,
++          "top3": 0.6667,
++          "mrr": 0.6667,
++          "n": 6
+         },
+         "truncated": [],
+         "details": [
+@@ -128,21 +159,50 @@
+             "raw_rank": 1,
+             "rendered_rank": 1,
+             "truncated": false
++          },
++          {
++            "id": "s-fusion-02",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
+           }
+-        ]
++        ],
++        "subsets": {
++          "default": {
++            "top1": 0.5,
++            "top3": 0.5,
++            "mrr": 0.5,
++            "n": 4,
++            "reachable": 0.5
++          },
++          "frozen": {
++            "top1": 1,
++            "top3": 1,
++            "mrr": 1,
++            "n": 1,
++            "reachable": 1
++          },
++          "fusion": {
++            "top1": 1,
++            "top3": 1,
++            "mrr": 1,
++            "n": 1,
++            "reachable": 1
++          }
++        }
+       },
+       "search": {
+         "raw": {
+-          "top1": 1,
++          "top1": 0.875,
+           "top3": 1,
+-          "mrr": 1,
+-          "n": 7
++          "mrr": 0.9167,
++          "n": 8
+         },
+         "rendered": {
+-          "top1": 1,
++          "top1": 0.875,
+           "top3": 1,
+-          "mrr": 1,
+-          "n": 7
++          "mrr": 0.9167,
++          "n": 8
+         },
+         "truncated": [],
+         "details": [
+@@ -187,21 +247,27 @@
+             "raw_rank": 1,
+             "rendered_rank": 1,
+             "truncated": false
++          },
++          {
++            "id": "s-fusion-01",
++            "raw_rank": 3,
++            "rendered_rank": 3,
++            "truncated": false
+           }
+         ]
+       },
+       "scope": {
+         "raw": {
+-          "top1": 0.4,
+-          "top3": 0.6,
+-          "mrr": 0.5,
+-          "n": 10
++          "top1": 0.5,
++          "top3": 0.6667,
++          "mrr": 0.5833,
++          "n": 12
+         },
+         "rendered": {
+-          "top1": 0.4,
+-          "top3": 0.6,
+-          "mrr": 0.5,
+-          "n": 10
++          "top1": 0.5,
++          "top3": 0.6667,
++          "mrr": 0.5833,
++          "n": 12
+         },
+         "truncated": [],
+         "details": [
+@@ -264,6 +330,18 @@
+             "raw_rank": 1,
+             "rendered_rank": 1,
+             "truncated": false
++          },
++          {
++            "id": "s-fusion-01",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "s-fusion-02",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
+           }
+         ],
+         "subsets": {
+@@ -271,13 +349,22 @@
+             "top1": 0,
+             "top3": 0.2,
+             "mrr": 0.1,
+-            "n": 5
++            "n": 5,
++            "reachable": 0.2
+           },
+           "added": {
+             "top1": 0.8,
+             "top3": 1,
+             "mrr": 0.9,
+-            "n": 5
++            "n": 5,
++            "reachable": 1
++          },
++          "fusion": {
++            "top1": 1,
++            "top3": 1,
++            "mrr": 1,
++            "n": 2,
++            "reachable": 1
+           }
+         },
+         "scope_unreachable": [
+@@ -597,7 +684,8 @@
+             "top1": 0.8333,
+             "top3": 1,
+             "mrr": 0.9167,
+-            "n": 6
++            "n": 6,
++            "reachable": 1
+           }
+         },
+         "scope_unreachable": []
+@@ -658,10 +746,10 @@
+   },
+   "self_smoke": {
+     "sillyspec": {
+-      "cases": 206,
++      "cases": 207,
+       "skipped": 601,
+-      "own_hit_top3": 0.0291,
+-      "name_only_top3": 0.0291,
++      "own_hit_top3": 0.029,
++      "name_only_top3": 0.029,
+       "leak_gap": 0
+     },
+     "platform": {
+diff --git a/eval/knowledge/datasets/organic.jsonl b/eval/knowledge/datasets/organic.jsonl
+index 65368b48..a477000c 100644
+--- a/eval/knowledge/datasets/organic.jsonl
++++ b/eval/knowledge/datasets/organic.jsonl
+@@ -1,8 +1,3 @@
+-// organic 评测集 — 遥测 query 抽样 + 人工 anchor 级标签（冻结：提交后不随遥测漂移）
+-// 字段：id / repo(sillyspec|platform) / face(entries|decisions|search|scope) / query / expected[]
+-// expected 含 "#" = 精确 file#anchor；不含 "#" = 文件级（匹配该文件任意命中）
+-// scope_files（可选）= scope 面图遍历的机器键；无此字段的 case 不进 scope 面
+-// 标注口径：查询的真实技术意图应对口的知识条目；当前未命中即为红基线，供后续变更对比
+ {"id":"s-tel-01","repo":"sillyspec","face":"decisions","query":"2026-09-28-kgd 方案探索：用枚举词表扫描开放世界形态的需求并自动分类","expected":["decisions/cli-entry.md#D-unmapped-150@v1"],"note":"防复潮：查询应召回已否决的「枚举开放世界」决策（epoch 迁移后落 cli-entry 域）"}
+ {"id":"s-tel-02","repo":"sillyspec","face":"decisions","query":"route-hindsight 模块（指标计算/阈值/落库/读取）＋单测 brainstorm Step4/5 指引模板加机制词检索固定动作","expected":["decisions/core-engine.md"],"note":"防复潮注入挂 brainstorm Step2 的决策在 core-engine 域"}
+ {"id":"s-tel-03","repo":"sillyspec","face":"decisions","query":"flow.js 前门盘问渲染＋hindsight 提示注入＋收口指标接线＋单测 complete.js 方案步 --done 门检索回显＋config-schema 逃生阀","expected":["decisions/cli-entry.md"],"note":"flow 前门/命令面决策在 cli-entry 域"}
+@@ -33,7 +28,6 @@
+ {"id":"p-tel-13","repo":"platform","face":"entries","query":"沉淀弹层三修：快速修复多选失效（只能选一个）弹层样式溢出超出视口 新建 agent 配置补供应商/模型选择","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"]}
+ {"id":"p-tel-14","repo":"platform","face":"fr","query":"修复 frontend-ci 连续失败：page.test.tsx user_input 断言未随 ql-20260918-003 行为变更同步","expected":["fr/api-types.md"]}
+ {"id":"p-tel-15","repo":"platform","face":"fr","query":"registry 注册两 format + host-fs-handler 透传新字段与 totalUsage 平台 messages schema 可选新字段 + openapi/gen:types","expected":["fr/host-fs-handler.md"]}
+-
+ {"id":"p-dec-01","repo":"platform","face":"decisions","query":"backend 落选 方案 B 扩展 CLI 向量端点至全语料 放开 JWT","expected":["decisions/backend.md#D-backend-009@v1"]}
+ {"id":"p-dec-02","repo":"platform","face":"decisions","query":"backend 落选 方案 C 基于 DB 表混合检索 ScanDocument 新增 knowledge 入库","expected":["decisions/backend.md#D-backend-010@v1"]}
+ {"id":"p-dec-03","repo":"platform","face":"decisions","query":"backend 落选 本地文件缓存 向量序列化 runtime 缓存文件","expected":["decisions/backend.md#D-backend-020@v1"]}
+@@ -52,4 +46,11 @@
+ {"id":"s-scope-05","repo":"sillyspec","face":"scope","query":"CLI 入口 决策","expected":["decisions/cli-entry.md#D-unmapped-161@v1"],"scope_files":["src/index.js"],"subset":"added"}
+ {"id":"p-scope-04","repo":"platform","face":"scope","query":"frontend SSE agent-stream 流式消费","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"],"scope_files":["frontend/src/lib/agent-stream.ts"],"subset":"added"}
+ {"id":"p-scope-05","repo":"platform","face":"scope","query":"login_enabled get_current_user 检查","expected":["known-issues.md#-2026-06-17--login_enabled-必须在-get_current_user-检查不能只在-login-入口commit-d62ec975"],"scope_files":["backend/app/core/auth_deps.py"],"subset":"added"}
+-{"id":"p-scope-06","repo":"platform","face":"scope","query":"tailwind md 视口断点 侧栏","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"],"scope_files":["frontend/src/components/changes/detail/change-sessions-card.tsx"],"subset":"added"}
+\ No newline at end of file
++{"id":"p-scope-06","repo":"platform","face":"scope","query":"tailwind md 视口断点 侧栏","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"],"scope_files":["frontend/src/components/changes/detail/change-sessions-card.tsx"],"subset":"added"}
++{"id":"s-fusion-01","repo":"sillyspec","face":"entries","query":"worktree 清理流程说明","expected":["known-issues.md#-cli-flag-白名单死路报错指引指向未登记-flag双实例"],"scope_files":["test/flag-contract.test.mjs"],"subset":"fusion","note":"路由命中 worktree 相关但手工条目仅 scope doc-refs 可达（融合增量）"}
++{"id":"s-fusion-02","repo":"sillyspec","face":"decisions","query":"cli flag 白名单 死路 报错","expected":["decisions/core-engine.md#D-unmapped-197@v1"],"scope_files":["src/knowledge-match.js"],"subset":"fusion","note":"路由命中 known-issues 但 rejected 决策仅 scope 两跳可达（融合增量）"}
++// organic 评测集 — 遥测 query 抽样 + 人工 anchor 级标签（冻结：提交后不随遥测漂移）
++// 字段：id / repo(sillyspec|platform) / face(entries|decisions|search|scope) / query / expected[]
++// expected 含 "#" = 精确 file#anchor；不含 "#" = 文件级（匹配该文件任意命中）
++// scope_files（可选）= scope 面图遍历的机器键；无此字段的 case 不进 scope 面
++// 标注口径：查询的真实技术意图应对口的知识条目；当前未命中即为红基线，供后续变更对比
+diff --git a/eval/knowledge/lib/engine.mjs b/eval/knowledge/lib/engine.mjs
+index f0f4bff4..5c9a3a7c 100644
+--- a/eval/knowledge/lib/engine.mjs
++++ b/eval/knowledge/lib/engine.mjs
+@@ -27,16 +27,23 @@ function knowledgeDirOf(repoRoot) { return join(specRootOf(repoRoot), 'knowledge
+ 
+ function entryKey(e) { return e.anchor ? `${e.file}#${e.anchor}` : e.file }
+ 
+-/** entries 面：生产 hybrid 入口的 entries（只手工条目；路由行已由变更 1 移入 routeHits）。 */
+-export async function runEntries(repoRoot, query) {
+-  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
+-  return { matched: r.matched, hits: (r.entries || []).map(entryKey), raw: r.entries || [], routeHits: r.routeHits || [] }
++/** entries 面：生产 hybrid 入口的 entries（只手工条目；路由行已由变更 1 移入 routeHits）。
++ *  opts.scopeFiles（仅 fusion 子集传）：融合增量 scopeEntries 追加在路由 entries 之后。 */
++export async function runEntries(repoRoot, query, opts = {}) {
++  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot, scopeFiles: opts.scopeFiles || [] })
++  const hits = [...(r.entries || []).map(entryKey), ...(r.scopeEntries || []).map(entryKey)]
++  return { matched: r.matched, hits, raw: r.entries || [], routeHits: r.routeHits || [], scopeEntries: r.scopeEntries || [] }
+ }
+ 
+-/** decisions 面：生产 hybrid 入口的 decisionHits（rejected/死路优先序）。 */
+-export async function runDecisions(repoRoot, query) {
+-  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot })
+-  return { hits: (r.decisionHits || []).map((h) => `${h.file}#${h.id}`), raw: r.decisionHits || [] }
++/** decisions 面：生产 hybrid 入口的 decisionHits（rejected/死路优先序）。
++ *  opts.scopeFiles（仅 fusion 子集传）：融合增量 scopeDecisionHits 追加在路由 decisionHits 之后。 */
++export async function runDecisions(repoRoot, query, opts = {}) {
++  const r = await matchKnowledgeHybrid(knowledgeDirOf(repoRoot), query, { cwd: repoRoot, scopeFiles: opts.scopeFiles || [] })
++  const hits = [
++    ...(r.decisionHits || []).map((h) => `${h.file}#${h.id}`),
++    ...(r.scopeDecisionHits || []).map((h) => `${h.file}#${h.id}`),
++  ]
++  return { hits, raw: r.decisionHits || [], scopeDecisionHits: r.scopeDecisionHits || [] }
+ }
+ 
+ /** fr 面：FR 索引 digest（readActiveFrDigest）+ query×标题重叠排序（buildFrIndexDigestSection 的
+diff --git a/eval/knowledge/lib/faces.mjs b/eval/knowledge/lib/faces.mjs
+index d4551155..96320368 100644
+--- a/eval/knowledge/lib/faces.mjs
++++ b/eval/knowledge/lib/faces.mjs
+@@ -22,6 +22,8 @@ export function rankWithMatches(hits, expected) {
+ 
+ /**
+  * scope 面按 subset 分组指标（frozen/added——FR-05 子集单列，禁止用新增 case 掩盖冻结子集）。
++ * reachable = rank 非 null 比例：融合子集（2026-11-02-knowledge-fusion）的价值是「从不可达变可达」，
++ * 在「不重排路由」契约下期望可能落在路由尾部（top3=0 但 reachable=1）——两者都要如实可见。
+  */
+ export function subsetSummaries(faceResult, cases) {
+   const groups = {}
+@@ -31,7 +33,11 @@ export function subsetSummaries(faceResult, cases) {
+     const key = c.subset || 'default'
+     ;(groups[key] = groups[key] || []).push(d.raw_rank === null ? Infinity : d.raw_rank)
+   }
+-  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [k, summarize(ranks)]))
++  const r4 = (x) => Math.round(x * 10000) / 10000
++  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [
++    k,
++    { ...summarize(ranks), reachable: ranks.length > 0 ? r4(ranks.filter((r) => Number.isFinite(r)).length / ranks.length) : 0 },
++  ]))
+ }
+ 
+ /** 单仓单面：raw/rendered 双口径 + 截断清单 + 每 case 名次明细。 */
+@@ -44,11 +50,11 @@ export async function runFace(repoPath, face, cases) {
+     let rawHits = []
+     let renderedHits = []
+     if (face === 'entries') {
+-      const r = await runEntries(repoPath, c.query)
++      const r = await runEntries(repoPath, c.query, { scopeFiles: c.subset === 'fusion' ? (c.scope_files || []) : [] })
+       rawHits = r.hits
+       renderedHits = r.hits.slice(0, 3)
+     } else if (face === 'decisions') {
+-      const r = await runDecisions(repoPath, c.query)
++      const r = await runDecisions(repoPath, c.query, { scopeFiles: c.subset === 'fusion' ? (c.scope_files || []) : [] })
+       rawHits = r.hits
+       renderedHits = r.hits.slice(0, 5)
+     } else if (face === 'fr') {
+diff --git a/eval/knowledge/lib/report.mjs b/eval/knowledge/lib/report.mjs
+index eeda556d..1e7eac65 100644
+--- a/eval/knowledge/lib/report.mjs
++++ b/eval/knowledge/lib/report.mjs
+@@ -16,7 +16,7 @@ export function renderTable(result) {
+       lines.push(`  ${face.padEnd(9)} raw top1=${m.raw.top1} top3=${m.raw.top3} mrr=${m.raw.mrr} n=${m.raw.n}`
+         + ` | rendered top1=${m.rendered.top1} top3=${m.rendered.top3} | truncated=${(m.truncated || []).length}`)
+       if (m.subsets) {
+-        const parts = Object.entries(m.subsets).map(([k, v]) => `${k}(n=${v.n},top1=${v.top1},top3=${v.top3})`).join(' ')
++        const parts = Object.entries(m.subsets).map(([k, v]) => `${k}(n=${v.n},top1=${v.top1},top3=${v.top3},reach=${v.reachable})`).join(' ')
+         lines.push(`    subsets: ${parts}`)
+       }
+       if (Array.isArray(m.scope_unreachable) && m.scope_unreachable.length > 0) {
+diff --git a/eval/knowledge/run.mjs b/eval/knowledge/run.mjs
+index 6022a8a1..e68e1851 100644
+--- a/eval/knowledge/run.mjs
++++ b/eval/knowledge/run.mjs
+@@ -153,6 +153,9 @@ async function main() {
+         // 子集单列（FR-05）：frozen（原 5 条）与 added 分开报，禁止用新增 case 掩盖冻结子集
+         faceResult.subsets = subsetSummaries(faceResult, faceCases)
+         faceResult.scope_unreachable = faceResult.details.filter((d) => d.raw_rank === null).map((d) => d.id)
++      } else if (face === 'entries' || face === 'decisions') {
++        // fusion 子集单列（2026-11-02-knowledge-fusion FR-07）：新增 case 不混入旧 case 聚合解读
++        if (faceCases.some((c) => c.subset)) faceResult.subsets = subsetSummaries(faceResult, faceCases)
+       }
+       result.metrics[repo][face] = faceResult
+     }
+diff --git a/src/flow.js b/src/flow.js
+index 908edaa2..f362ed29 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -372,6 +372,21 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+       const src = km.routeHits.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
+       lines.push(`   🧭 决策/FR 路由命中（专用通道，按需 Read）：${src}`)
+     }
++    // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节——路由 rejected top-5
++    // 不被热文件历史否决挤占（独立语义：触碰过的文件曾被否决/记死路）
++    const scopeRejected = (km.scopeDecisionHits || []).filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
++    if (scopeRejected.length > 0) {
++      lines.push(`   🧭 触达文件关联否决（scope 视角——触碰过的文件曾被否决/记死路，防复潮——除非复潮条件满足勿重提）：`)
++      for (const h of scopeRejected) {
++        const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
++        lines.push(`   - ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${h.via === 'two-hop' ? '两跳' : '直连'}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
++      }
++    }
++    const scopeEntries = km.scopeEntries || []
++    if (scopeEntries.length > 0) {
++      const src = scopeEntries.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
++      lines.push(`   📚 触达文件关联手工条目（按需 Read）：${src}`)
++    }
+     // 遥测导线（2026-10-15-thin-inject-telemetry）：轻量道注入此前不落 hits.jsonl——thin 常态化后
+     // inject 事件流断流（本仓 10-09 后归零实证），knowledge stats 从未命中判定被盲区污染。
+     // 分级字段（A2-lite）：injectedFiles=正文实际注入（thin 面恒空——只出按需 Read 行）、
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 30ffb927..f3763c86 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -20,7 +20,7 @@
+ 
+ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare } from './knowledge-match.js'
++import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare, matchKnowledge } from './knowledge-match.js'
+ import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
+ 
+@@ -952,9 +952,12 @@ export function scopeRecall(graph, scopeFiles) {
+   const seen = new Set()
+   const pushHit = (n, score, via) => {
+     const base = n.attrs.hit || {}
++    // 幽灵/畸形过滤（2026-11-02-knowledge-fusion FR-02）：supersedes 链上的 ghost 决策节点
++    // 无 attrs.hit——真实库已复现 {file:undefined,id:undefined} 的畸形 hit 扩散到消费面
++    if (n.attrs.ghost || !base.file || !base.id) return
+     // 去重键含 change（2026-11-02-scope-recall 评审 P2）：D-id 是变更内局部号，跨变更同号常见——
+     // 只按 file#id 去重会让 implemented 直连条目抢先占用键、吞掉 rejected 两跳（渲染面失效）
+-    const key = `${base.file || ''}#${base.id || ''}#${base.change || ''}`
++    const key = `${base.file}#${base.id}#${base.change || ''}`
+     if (seen.has(key)) return
+     seen.add(key)
+     hits.push({ ...base, file: base.file, score, via })
+@@ -996,6 +999,91 @@ export function buildScopeRecallResult(recall) {
+   }
+ }
+ 
++// ═══════════════════════════════════════════════════════════════
++// 检索融合（2026-11-02-knowledge-fusion）
++// 路由命中原先 early-return，scope 层（热文件触达的 rejected/手工条目）永远不可达。
++// 契约（子代理审查修正版）：只追加不重排——base 的 decisionHits/entries 原对象原序不动，
++// scope 独有命中进 scopeDecisionHits/scopeEntries（带 via provenance）；不做跨通道 score
++// 排序（路由 Jaccard / scope 2/1 / 向量 / 词片尺度不可比）；空 scope/零命中返回 base 原对象。
++// ═══════════════════════════════════════════════════════════════
++
++/** 融合纯函数：base 路由结果 + recall（scopeRecall）→ 追加字段的新对象；无可追加时返回 base。 */
++export function fuseScopeRecall(base, recall) {
++  if (!base || !base.matched || !recall) return base
++  const dKey = (h) => `${h.file}#${h.id}#${h.change || ''}`
++  const eKey = (e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
++  const seenD = new Set((base.decisionHits || []).map(dKey))
++  const seenE = new Set((base.entries || []).map(eKey))
++  const addD = []
++  for (const h of recall.decisionHits || []) {
++    if (!h || !h.file || !h.id) continue // 畸形命中过滤（ghost 已在 scopeRecall 侧滤）
++    const k = dKey(h)
++    if (seenD.has(k)) continue
++    seenD.add(k)
++    addD.push({ ...h, via: h.via || 'scope' })
++    if (addD.length >= 20) break
++  }
++  const addE = []
++  for (const e of recall.entries || []) {
++    if (!e || !e.file) continue
++    const k = eKey(e)
++    if (seenE.has(k)) continue
++    seenE.add(k)
++    addE.push({ ...e, via: 'scope' })
++    if (addE.length >= 3) break
++  }
++  if (addD.length === 0 && addE.length === 0) return base
++  return {
++    ...base,
++    ...(addD.length > 0 ? { scopeDecisionHits: addD } : {}),
++    ...(addE.length > 0 ? { scopeEntries: addE } : {}),
++    scopeFused: { decisions: addD.length, entries: addE.length },
++  }
++}
++
++/** 键规整：机器键（design 交付清单/allowed_paths/target_files）→ 图内精确文件路径。
++ *  过滤 glob、目录前缀（尾斜杠）、无扩展名形态；POSIX 归一去重。宁空不造（不猜前缀展开）。 */
++export function graphPathCandidates(files) {
++  const out = []
++  const seen = new Set()
++  for (const raw of Array.isArray(files) ? files : [files]) {
++    const p = String(raw || '').trim().replace(/\\/g, '/').replace(/^\.\//, '')
++    if (!p || /[?*[{\]]/.test(p)) continue
++    if (p.endsWith('/')) continue
++    if (!/\.[A-Za-z0-9]{1,10}$/.test(p)) continue
++    if (seen.has(p)) continue
++    seen.add(p)
++    out.push(p)
++  }
++  return out
++}
++
++/** 进程级图 memo（CLI 短进程生命周期）：路由命中后的融合每次多付 ~45ms 图读取，
++ *  同进程多次调用（多 Wave）复用同一图对象。 */
++const graphMemo = new Map()
++export function getKnowledgeGraph(specRoot) {
++  const key = String(specRoot || '')
++  if (graphMemo.has(key)) return graphMemo.get(key)
++  const g = buildKnowledgeGraph(specRoot)
++  graphMemo.set(key, g)
++  return g
++}
++
++/** 同步融合入口：matchKnowledge（路由+词片回退）→ scope 融合 → 失败原样返回路由结果。
++ *  execute step / Wave 的同步注入路径使用；不改 matchKnowledge 默认语义。 */
++export function matchKnowledgeWithScope(indexDir, query, opts = {}) {
++  const base = matchKnowledge(indexDir, query, { includeResolved: opts.includeResolved })
++  const scopeFiles = graphPathCandidates(opts.scopeFiles || [])
++  if (!base || !base.matched || scopeFiles.length === 0) return base
++  try {
++    const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
++    const recall = scopeRecall(getKnowledgeGraph(specRoot), scopeFiles)
++    return fuseScopeRecall(base, recall) || base
++  } catch {
++    return base // fail-soft：scope 构建失败不掉词片回退（FR-05）
++  }
++}
++
+ /** 变更 decisions.md（九字段形态）「锚点：」字段 → scope 文件集（complete 门的需求期机器键，D-004）。
+  *  兼容列表行（`- 锚点：src/x.js:12`）与裸行（`锚点：src/x.js`——归档蒸馏域文件形态）。 */
+ export function scopeFromDecisionsMd(text) {
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+index 42f72f8a..bf4e9197 100644
+--- a/src/knowledge-vector.js
++++ b/src/knowledge-vector.js
+@@ -246,7 +246,20 @@ export function buildResultFromPlatform(indexDir, pvResults) {
+  */
+ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
+   const r = matchByRouting(indexDir, taskContext, opts)
+-  if (r.matched) return r
++  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
++  if (r.matched) {
++    // 融合（2026-11-02-knowledge-fusion）：路由命中后仍跑 scope——热文件触达的 rejected/手工条目
++    // 原先被 early-return 永久遮住。只追加 scopeDecisionHits/scopeEntries（不重排路由结果）；
++    // scope 构建失败原样返回路由结果；仍不跑平台向量（路由命中零网络）。
++    if (scopeFiles.length > 0) {
++      try {
++        const { getKnowledgeGraph, scopeRecall, fuseScopeRecall } = await import('./knowledge-graph.js')
++        const specRoot = String(indexDir).replace(/[\\/]knowledge[\\/]?$/, '')
++        return fuseScopeRecall(r, scopeRecall(getKnowledgeGraph(specRoot), scopeFiles)) || r
++      } catch { return r }
++    }
++    return r
++  }
+   const cwd = opts.cwd || dirname(dirname(String(indexDir)))
+   if (vectorEnabled(cwd)) {
+     const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
+@@ -254,7 +267,6 @@ export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
+     if (built) return built
+   }
+   // scope 遍历层（第三层）：只在 scope 非空且向量零命中后接管；fail-soft（图构建异常静默降级词片）
+-  const scopeFiles = Array.isArray(opts.scopeFiles) ? opts.scopeFiles.filter(Boolean) : []
+   if (scopeFiles.length > 0) {
+     try {
+       const { buildKnowledgeGraph, scopeRecall, buildScopeRecallResult } = await import('./knowledge-graph.js')
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 7b0e6446..9a14ce71 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -533,7 +533,9 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
+           const _echoHits = _hits.filter((h) => !_answered(h))
+           const _entries = km.matched ? (km.entries || []) : []
+           const _routeHits = km.matched ? (km.routeHits || []) : []
+-          if (_echoHits.length > 0 || _entries.length > 0 || _routeHits.length > 0) {
++          const _scopeHitsAll = km.matched ? (km.scopeDecisionHits || []) : []
++          const _scopeHits = _scopeHitsAll.filter((h) => h.deathPath || h.status === 'rejected').slice(0, 3)
++          if (_echoHits.length > 0 || _entries.length > 0 || _routeHits.length > 0 || _scopeHits.length > 0) {
+             const { deathPathNote, decisionChangeQualifier } = await import('../knowledge-match.js')
+             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
+             for (const h of _echoHits.slice(0, 5)) {
+@@ -551,6 +553,11 @@ async function _completeStepInner(pm, progress, stageName, cwd, outputText, inpu
+               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
+               console.warn(`   - 路由命中 ${_base}（按需 Read）`)
+             }
++            // 融合增量（2026-11-02-knowledge-fusion FR-03）：scope 否决独立小节（≤3）
++            for (const h of _scopeHits) {
++              const _via = h.via === 'two-hop' ? '两跳' : '直连'
++              console.warn(`   - 触达文件关联否决 ${h.id} ${h.title}（${h.file}｜${decisionChangeQualifier(h.change)}｜${_via}）${h.status === 'rejected' ? `否决理由：${h.reason || '（未记录）'}` : `⚰️死路：${deathPathNote(h.reason)}`}`)
++            }
+             console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
+           }
+         }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index f3dbb99c..f53ec10e 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -98,7 +98,8 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
+ import { matchKnowledge } from '../knowledge-match.js'
+ import { matchQuicklogContext } from '../knowledge-quicklog.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
+-import { readActiveFrDigest } from '../fr-index.js'
++import { readActiveFrDigest, deliverableFilesFromDesignText } from '../fr-index.js'
++import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
+ // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
+ // stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
+ import { validateDesignFileList } from '../design-facts.js'
+@@ -532,7 +533,8 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
+   const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+   const humanEntries = knowledgeResult.entries || []
+   const routeHits = knowledgeResult.routeHits || []
+-  if (humanEntries.length === 0 && routeHits.length === 0) return ''
++  const scopeEntriesPreview = knowledgeResult.scopeEntries || []
++  if (humanEntries.length === 0 && routeHits.length === 0 && scopeEntriesPreview.length === 0) return ''
+   const lines = []
+   lines.push(`📚 命中知识（CLI 按任务描述机械匹配，top-${maxFiles}）`)
+   if (humanEntries.length > 0) {
+@@ -562,6 +564,10 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
+   if (routeHits.length > 0) {
+     lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
+   }
++  const scopeEntries = knowledgeResult.scopeEntries || []
++  if (scopeEntries.length > 0) {
++    lines.push(`📚 触达文件关联手工条目（scope，按需 Read）：${scopeEntries.slice(0, 3).map(ref).join('；')}`)
++  }
+   return lines.join('\n')
+ }
+ 
+@@ -578,8 +584,10 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
+  *   report/json：matchKnowledge 原样透传（execute 调用方沿用旧 report.json 落盘与未命中替换口径）。
+  *   遥测 append 单独 fail-soft（hits 写失败不影响注入本体）；匹配/渲染异常向上抛由调用方降级。
+  */
+-export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
+-  const knowledgeResult = matchKnowledge(knowledgeDir, String(query || ''))
++export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, scopeFiles = [], maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
++  // 融合（2026-11-02-knowledge-fusion）：同步入口 = matchKnowledge（路由/词片）+ scope 融合；
++  // scopeFiles 为机器键（design 交付清单/quick allowedFiles），键规整在 graphPathCandidates 内做
++  const knowledgeResult = matchKnowledgeWithScope(knowledgeDir, String(query || ''), { scopeFiles })
+   // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立——INDEX 未命中时 quicklog 照常
+   // 注入（两 retrieval 面互为补充）；fail-open（无 quicklog/异常 → 空 hits 零注入）。
+   // specBase 由 knowledgeDir 上溯（两个注入点传的都是 <specBase>/knowledge）。
+@@ -1505,11 +1513,20 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
+         } catch {}
+       }
+       const runtimeDir = join(effectiveSpecBase, '.runtime')
++      // scope 键（FR-04）：execute step 用 design 交付清单（机器键，图内精确路径由 graphPathCandidates 规整）
++      let scopeFiles = []
++      if (changeName) {
++        try {
++          const designText = readFileSync(join(effectiveSpecBase, 'changes', changeName, 'design.md'), 'utf8')
++          scopeFiles = graphPathCandidates(deliverableFilesFromDesignText(designText))
++        } catch { /* 无 design.md = 无键（不编造） */ }
++      }
+       const knowledgeInjection = buildKnowledgeInjection({
+         knowledgeDir,
+         runtimeDir,
+         change: changeName || '',
+         query: taskContext,
++        scopeFiles,
+       })
+       substitute(
+         /\{KNOWLEDGE_HIT_REPORT\}/g,
+@@ -2025,11 +2042,18 @@ async function outputStepImpl(stageName, stepIndex, steps, cwd, changeName, dbPr
+       const kiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const kiQuery = String(readQuickGuardField(changeName, kiSpecBase, 'taskDescription') || '')
+       if (kiQuery.trim() !== '') {
++        // scope 键（FR-04）：quick 仅 guard.allowedFiles（--files 声明）存在时传，缺失不编造
++        let kiScope = []
++        try {
++          const declared = readQuickGuardField(changeName, kiSpecBase, 'allowedFiles')
++          if (declared) kiScope = graphPathCandidates(String(declared).split(/[,，\s]+/))
++        } catch { /* 无声明 = 无键 */ }
+         const ki = buildKnowledgeInjection({
+           knowledgeDir: join(kiSpecBase, 'knowledge'),
+           runtimeDir: join(kiSpecBase, '.runtime'),
+           change: changeName || '',
+           query: kiQuery,
++          scopeFiles: kiScope,
+         })
+         if (ki.section) {
+           promptText = promptText + '\n\n' + ki.section
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index c658acfd..49f56bfe 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -22,6 +22,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
+ // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
+ // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
+ import { matchKnowledge } from '../knowledge-match.js'
++import { matchKnowledgeWithScope, graphPathCandidates } from '../knowledge-graph.js'
+ import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
+ 
+@@ -46,14 +47,27 @@ function buildWaveKnowledgeSection(changeDir, wave) {
+     const query = (Array.isArray(wave && wave.tasks) ? wave.tasks : [])
+       .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
+     if (!query.trim()) return ''
+-    const result = matchKnowledge(knowledgeDir, query)
++    // scope 键（2026-11-02-knowledge-fusion FR-04）：Wave 用 task 卡 target_files/allowed_paths
++    // （机器键）→ graphPathCandidates 规整为图内精确文件路径；无卡/无声明不编造
++    const scopeFiles = graphPathCandidates((wave.tasks || []).flatMap((t) => {
++      const file = t && (t.file || (t.index ? path.join('tasks', `task-${String(t.index).padStart(2, '0')}.md`) : ''))
++      if (!file) return []
++      try {
++        const text = readFileSync(path.join(changeDir, file), 'utf8')
++        const out = []
++        for (const m of text.matchAll(/^(?:target_files|allowed_paths)\s*[：:]\s*(.+)$/gm)) out.push(...m[1].split(/[,，\s]+/))
++        return out
++      } catch { return [] }
++    }))
++    const result = matchKnowledgeWithScope(knowledgeDir, query, { scopeFiles })
+     // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
+     const quick = matchQuicklogContext(specBase, query)
+     const humanEntries = result.entries || []
+     const routeHits = result.routeHits || []
++    const scopeEntries = result.scopeEntries || []
+     if (!result.matched && quick.hits.length === 0) return ''
+     const lines = []
+-    if (humanEntries.length > 0 || routeHits.length > 0) {
++    if (humanEntries.length > 0 || routeHits.length > 0 || scopeEntries.length > 0) {
+     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
+     const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+     lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
+@@ -91,6 +105,9 @@ function buildWaveKnowledgeSection(changeDir, wave) {
+     if (routeHits.length > 0) {
+       lines.push(`🧭 决策/FR 路由命中（专用通道，按需 Read）：${routeHits.slice(0, 3).map(ref).join('；')}`)
+     }
++    if (scopeEntries.length > 0) {
++      lines.push(`📚 触达文件关联手工条目（scope，按需 Read）：${scopeEntries.slice(0, 3).map(ref).join('；')}`)
++    }
+     }
+     // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）
+     if (quick.hits.length > 0) {
+diff --git a/test/knowledge-fusion.test.mjs b/test/knowledge-fusion.test.mjs
+new file mode 100644
+index 00000000..f03da341
+--- /dev/null
++++ b/test/knowledge-fusion.test.mjs
+@@ -0,0 +1,160 @@
++/**
++ * knowledge-fusion.test.mjs — 检索融合测试（2026-11-02-knowledge-fusion FR-01~FR-06）
++ *
++ * 核心判据：路由命中 + scopeFiles 在场时，scope 独有 rejected/手工条目/两跳必须出现在
++ * scopeDecisionHits/scopeEntries；把 fuseScopeRecall 改成 return base 时本文件必红。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++
++process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
++
++const root = join(new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), '..')
++const { buildKnowledgeGraph, scopeRecall, fuseScopeRecall, graphPathCandidates, matchKnowledgeWithScope } = await import(
++  pathToFileURL(join(root, 'src', 'knowledge-graph.js')).href
++)
++const { matchByRouting } = await import(pathToFileURL(join(root, 'src', 'knowledge-match.js')).href)
++const { matchKnowledgeHybrid } = await import(pathToFileURL(join(root, 'src', 'knowledge-vector.js')).href)
++const { flowKnowledgeDigest } = await import(pathToFileURL(join(root, 'src', 'flow.js')).href)
++
++/** 融合 fixture：路由命中 zebra；scope 文件 src/hot.js 上有 rejected/implemented/手工条目/ghost；
++ *  归档变更 2026-03-03-z 交付 src/twohop.js（两跳 rejected）；src/many.js 上 25 条 rejected + 4 手工条目。 */
++function buildFusionFixture() {
++  const r = mkdtempSync(join(tmpdir(), 'kfu-'))
++  const K = (p) => join(r, '.sillyspec', p)
++  mkdirSync(K('knowledge/decisions'), { recursive: true })
++  mkdirSync(K('knowledge/fr'), { recursive: true })
++  mkdirSync(K('docs/proj/modules'), { recursive: true })
++  mkdirSync(K('changes/archive/2026-03-03-z'), { recursive: true })
++  writeFileSync(K('docs/proj/modules/_module-map.yaml'), 'modules:\n  demo:\n    paths:\n      - src/hot.js\n')
++  writeFileSync(K('changes/archive/2026-03-03-z/design.md'), [
++    '# 设计', '', '| 操作 | 路径 | 说明 |', '|---|---|---|', '| 新增 | src/twohop.js | 两跳文件 |', '',
++  ].join('\n'))
++
++  const index = [
++    '# Knowledge Index', '',
++    '## Conventions',
++    '- zebra → [Zebra](conventions.md#zebra)', '',
++    '## Decisions',
++    '- hotfile|hottopic → [hot](decisions/hot.md)',
++    '- twohopfile → [twohop](decisions/twohop.md)',
++    '- manyfile → [many](decisions/many.md)', '',
++    '## Gotchas',
++    '- hotgotcha → [Hot 坑](gotchas.md#hot-坑)',
++    '- manygotcha → [Many 坑](gotchas-many.md#mg)',
++  ]
++  for (let i = 0; i < 4; i++) index.push(`- manygotcha${i} → [M${i}](gotchas-many.md#m${i})`)
++  writeFileSync(K('knowledge/INDEX.md'), index.join('\n') + '\n')
++  writeFileSync(K('knowledge/conventions.md'), '# Conventions\n\n## zebra\n\n路由命中内容。\n')
++  writeFileSync(K('knowledge/gotchas.md'), '# Gotchas\n\n## hot 坑\n\n引用 src/hot.js 的说明。\n')
++
++  const manyGotchas = ['# Many Gotchas', '']
++  for (let i = 0; i < 4; i++) manyGotchas.push(`## m${i}`, '', `第 ${i} 节引用 src/many.js。`, '')
++  writeFileSync(K('knowledge/gotchas-many.md'), manyGotchas.join('\n'))
++
++  writeFileSync(K('knowledge/decisions/hot.md'), [
++    '## D-900@v1 热文件否决', '状态：rejected', '变更：2026-01-01-x', '锚点：src/hot.js:1', '否决理由：样例', '',
++    '## D-901@v1 热文件实现', '状态：implemented', '变更：2026-01-01-x', '锚点：src/hot.js:2', '理由：样例', '',
++    '## D-010@v2 版本新版', '状态：implemented', '变更：2026-01-01-x', 'supersedes：D-010@v1', '锚点：src/hot.js:9', '',
++  ].join('\n'))
++  writeFileSync(K('knowledge/decisions/twohop.md'), [
++    '## D-700@v1 两跳否决', '状态：rejected', '变更：2026-03-03-z', '否决理由：样例', '',
++  ].join('\n'))
++  const many = ['# 决策 — many', '']
++  for (let i = 0; i < 25; i++) many.push(`## D-60${i}@v1 批量否决 ${i}`, '状态：rejected', '变更：2026-01-01-many', '锚点：src/many.js:1', '否决理由：样例', '')
++  writeFileSync(K('knowledge/decisions/many.md'), many.join('\n'))
++  return r
++}
++
++function cleanup(r) { rmSync(r, { recursive: true, force: true }) }
++
++test('FR-01/02：路由命中 + scope 独有 rejected/手工条目/两跳 只追加不重排', async () => {
++  const r = buildFusionFixture()
++  try {
++    const kdir = join(r, '.sillyspec', 'knowledge')
++    const fused = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/hot.js'] })
++    assert.equal(fused.matched, true)
++    assert.ok(fused.entries.some((e) => e.file === 'conventions.md'), '路由 entries 保留（zebra 行）')
++    const sd = fused.scopeDecisionHits || []
++    assert.ok(sd.some((h) => h.id === 'D-900@v1' && h.via === 'direct' && h.status === 'rejected'), 'scope 独有 rejected 收入（via=direct）')
++    assert.ok(sd.every((h) => h.file && h.id), '无 file/id 缺失的畸形 hit（ghost 过滤）')
++    assert.ok((fused.scopeEntries || []).some((e) => e.file === 'gotchas.md' && e.anchor === 'hot-坑'), 'scope 独有手工条目收入')
++    assert.equal(fused.json.scope, undefined, '不设置 json.scope（保持 routing 语义）')
++    // 两跳
++    const twoHop = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/twohop.js'] })
++    assert.ok((twoHop.scopeDecisionHits || []).some((h) => h.id === 'D-700@v1' && h.via === 'two-hop' && h.score === 1), '两跳 rejected（via=two-hop/score=1）')
++    // 手工条目 cap 3（4 节 → 3）
++    const manyE = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/many.js'] })
++    assert.ok((manyE.scopeEntries || []).length <= 3, 'scopeEntries cap 3')
++    assert.ok((manyE.scopeDecisionHits || []).length <= 20, 'scopeDecisionHits cap 20（25→20）')
++    // 路由 entries 不被截断（conventions 1 条仍在）
++    assert.ok(manyE.entries.some((e) => e.file === 'conventions.md'), '路由 entries 不受融合影响')
++  } finally { cleanup(r) }
++})
++
++test('FR-01：无 scope / 零命中 → 与路由结果 deepEqual', async () => {
++  const r = buildFusionFixture()
++  try {
++    const kdir = join(r, '.sillyspec', 'knowledge')
++    const base = matchByRouting(kdir, 'zebra')
++    const noScope = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r })
++    assert.deepEqual(noScope, base, '不传 scope → 与路由结果逐字段一致')
++    const empty = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/not-exist.js'] })
++    assert.deepEqual(empty, base, 'scope 零命中 → 返回 base 原对象')
++    const sync = matchKnowledgeWithScope(kdir, 'zebra', { scopeFiles: ['src/hot.js'] })
++    assert.ok((sync.scopeDecisionHits || []).some((h) => h.id === 'D-900@v1'), '同步入口融合生效')
++    const syncEmpty = matchKnowledgeWithScope(kdir, 'zebra', { scopeFiles: ['src/**/*.js'] })
++    assert.deepEqual(syncEmpty, base, 'glob 键被规整过滤 → 无融合')
++  } finally { cleanup(r) }
++})
++
++test('FR-02：去重（路由优先）+ 跨变更同号 + 键规整', async () => {
++  const r = buildFusionFixture()
++  try {
++    const kdir = join(r, '.sillyspec', 'knowledge')
++    // query 同时命中 hot 路由行 → D-900 走路由通道；scope 再加一次 → 不得重复出现在 scopeDecisionHits
++    const fused = await matchKnowledgeHybrid(kdir, 'zebra hotfile', { cwd: r, scopeFiles: ['src/hot.js'] })
++    const inRoute = (fused.decisionHits || []).some((h) => h.id === 'D-900@v1')
++    const inScope = (fused.scopeDecisionHits || []).some((h) => h.id === 'D-900@v1')
++    assert.equal(inRoute, true, '路由通道收入 D-900')
++    assert.equal(inScope, false, 'scope 通道去重（路由优先保留）')
++    // 键规整
++    assert.deepEqual(
++      graphPathCandidates(['src/', 'src/**/*.js', 'src/a.js', 'src\\b.js', './src/c.js', 'README']),
++      ['src/a.js', 'src/b.js', 'src/c.js'],
++      'glob/目录/无扩展名过滤，POSIX 归一，去重'
++    )
++  } finally { cleanup(r) }
++})
++
++test('FR-03：flowKnowledgeDigest 集成——filesOverride 触发 scope 否决小节', async () => {
++  const r = buildFusionFixture()
++  try {
++    const specBase = join(r, '.sillyspec')
++    const changeDir = join(specBase, 'changes', 'zebra')
++    mkdirSync(changeDir, { recursive: true })
++    const out = await flowKnowledgeDigest({ specBase, change: 'zebra', changeDir, input: '', filesOverride: ['src/hot.js'] })
++    assert.ok(out.lines.some((l) => l.includes('触达文件关联否决')), 'flow 注入段出现 scope 否决小节')
++    assert.ok(out.lines.some((l) => l.includes('触达文件关联手工条目')), 'flow 注入段出现 scope 手工条目指针')
++  } finally { cleanup(r) }
++})
++
++test('FR-05：fail-soft 与零平台调用', async () => {
++  const r = buildFusionFixture()
++  const origFetch = globalThis.fetch
++  let fetchCalls = 0
++  globalThis.fetch = (...args) => { fetchCalls++; return origFetch ? origFetch(...args) : Promise.reject(new Error('no fetch')) }
++  try {
++    const kdir = join(r, '.sillyspec', 'knowledge')
++    const out = await matchKnowledgeHybrid(kdir, 'zebra', { cwd: r, scopeFiles: ['src/hot.js'] })
++    assert.equal(fetchCalls, 0, '路由命中 + 融合零平台调用')
++    assert.ok(out.matched, '结果有效')
++  } finally {
++    globalThis.fetch = origFetch
++    cleanup(r)
++  }
++})

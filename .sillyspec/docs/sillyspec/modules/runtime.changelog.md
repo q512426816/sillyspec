@@ -86,3 +86,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
 - 2026-10-29-open-metrics-gate | 收口开放指标门与假测试评审判据
 - 2026-10-29-metrics-routes | 指标门路由形态：路径集合多语言路由
 - 2026-11-02-knowledge-rank-denoise | 知识检索排序与降噪：四类缺陷转绿
+- 2026-11-02-knowledge-fusion | 检索融合与消费面 scope 键统一
