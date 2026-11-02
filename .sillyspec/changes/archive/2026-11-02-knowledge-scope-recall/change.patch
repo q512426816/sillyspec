@@ -1,0 +1,819 @@
+diff --git a/eval/knowledge/baseline.json b/eval/knowledge/baseline.json
+index b458ddff..dea47675 100644
+--- a/eval/knowledge/baseline.json
++++ b/eval/knowledge/baseline.json
+@@ -3,8 +3,8 @@
+   "generated_by": "eval/knowledge/run.mjs",
+   "snapshot": {
+     "sillyspec": {
+-      "head": "9bfaa74ffee75c2132b4d40b407b941b00cdd4cb",
+-      "knowledge_hash": "b8a9b4bc16d0c36bddc2b5c434c00ad5bd53498434c48ec88ed8ccbfdccc871e",
++      "head": "b3226291c6a3ccf31202a6e0720a79fa974a8e75",
++      "knowledge_hash": "b510413e62cc76dbc79bba48c5ca021822e049d014c1bdcc755e2644ce6f51a7",
+       "knowledge_files": 139
+     },
+     "platform": {
+@@ -15,11 +15,11 @@
+   },
+   "cases": {
+     "sillyspec": {
+-      "organic": 15,
++      "organic": 20,
+       "self": 206
+     },
+     "platform": {
+-      "organic": 15,
++      "organic": 26,
+       "self": 329
+     }
+   },
+@@ -192,16 +192,16 @@
+       },
+       "scope": {
+         "raw": {
+-          "top1": 0.2,
+-          "top3": 0.2,
+-          "mrr": 0.2,
+-          "n": 5
++          "top1": 0.4,
++          "top3": 0.6,
++          "mrr": 0.5,
++          "n": 10
+         },
+         "rendered": {
+-          "top1": 0.2,
+-          "top3": 0.2,
+-          "mrr": 0.2,
+-          "n": 5
++          "top1": 0.4,
++          "top3": 0.6,
++          "mrr": 0.5,
++          "n": 10
+         },
+         "truncated": [],
+         "details": [
+@@ -213,8 +213,8 @@
+           },
+           {
+             "id": "s-man-02",
+-            "raw_rank": 1,
+-            "rendered_rank": 1,
++            "raw_rank": 2,
++            "rendered_rank": 2,
+             "truncated": false
+           },
+           {
+@@ -234,7 +234,57 @@
+             "raw_rank": null,
+             "rendered_rank": null,
+             "truncated": false
++          },
++          {
++            "id": "s-scope-01",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "s-scope-02",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "s-scope-03",
++            "raw_rank": 2,
++            "rendered_rank": 2,
++            "truncated": false
++          },
++          {
++            "id": "s-scope-04",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "s-scope-05",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
+           }
++        ],
++        "subsets": {
++          "frozen": {
++            "top1": 0,
++            "top3": 0.2,
++            "mrr": 0.1,
++            "n": 5
++          },
++          "added": {
++            "top1": 0.8,
++            "top3": 1,
++            "mrr": 0.9,
++            "n": 5
++          }
++        },
++        "scope_unreachable": [
++          "s-man-01",
++          "s-man-03",
++          "s-man-04",
++          "s-man-05"
+         ]
+       },
+       "fr": {
+@@ -350,16 +400,16 @@
+       },
+       "decisions": {
+         "raw": {
+-          "top1": 1,
+-          "top3": 1,
+-          "mrr": 1,
+-          "n": 1
++          "top1": 0.7778,
++          "top3": 0.7778,
++          "mrr": 0.7778,
++          "n": 9
+         },
+         "rendered": {
+-          "top1": 1,
+-          "top3": 1,
+-          "mrr": 1,
+-          "n": 1
++          "top1": 0.7778,
++          "top3": 0.7778,
++          "mrr": 0.7778,
++          "n": 9
+         },
+         "truncated": [],
+         "details": [
+@@ -368,6 +418,54 @@
+             "raw_rank": 1,
+             "rendered_rank": 1,
+             "truncated": false
++          },
++          {
++            "id": "p-dec-01",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-02",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-03",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-04",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-05",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-06",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-07",
++            "raw_rank": null,
++            "rendered_rank": null,
++            "truncated": false
++          },
++          {
++            "id": "p-dec-08",
++            "raw_rank": null,
++            "rendered_rank": null,
++            "truncated": false
+           }
+         ]
+       },
+@@ -444,19 +542,47 @@
+       },
+       "scope": {
+         "raw": {
+-          "top1": 0,
+-          "top3": 0,
+-          "mrr": 0,
+-          "n": 0
++          "top1": 0.6667,
++          "top3": 1,
++          "mrr": 0.8333,
++          "n": 3
+         },
+         "rendered": {
+-          "top1": 0,
+-          "top3": 0,
+-          "mrr": 0,
+-          "n": 0
++          "top1": 0.6667,
++          "top3": 1,
++          "mrr": 0.8333,
++          "n": 3
+         },
+         "truncated": [],
+-        "details": []
++        "details": [
++          {
++            "id": "p-scope-01",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          },
++          {
++            "id": "p-scope-02",
++            "raw_rank": 2,
++            "rendered_rank": 2,
++            "truncated": false
++          },
++          {
++            "id": "p-scope-03",
++            "raw_rank": 1,
++            "rendered_rank": 1,
++            "truncated": false
++          }
++        ],
++        "subsets": {
++          "added": {
++            "top1": 0.6667,
++            "top3": 1,
++            "mrr": 0.8333,
++            "n": 3
++          }
++        },
++        "scope_unreachable": []
+       },
+       "fr": {
+         "raw": {
+@@ -515,7 +641,7 @@
+   "self_smoke": {
+     "sillyspec": {
+       "cases": 206,
+-      "skipped": 600,
++      "skipped": 601,
+       "own_hit_top3": 0.0291,
+       "name_only_top3": 0.0291,
+       "leak_gap": 0
+@@ -532,7 +658,7 @@
+     "score-contract": true,
+     "word-boundary": true,
+     "route-rows": true,
+-    "scope-manual": false,
++    "scope-manual": true,
+     "fixed-entries": true,
+     "linkage": true
+   },
+diff --git a/eval/knowledge/datasets/organic.jsonl b/eval/knowledge/datasets/organic.jsonl
+index b9318250..8810f1e7 100644
+--- a/eval/knowledge/datasets/organic.jsonl
++++ b/eval/knowledge/datasets/organic.jsonl
+@@ -8,11 +8,11 @@
+ {"id":"s-tel-03","repo":"sillyspec","face":"decisions","query":"flow.js 前门盘问渲染＋hindsight 提示注入＋收口指标接线＋单测 complete.js 方案步 --done 门检索回显＋config-schema 逃生阀","expected":["decisions/cli-entry.md"],"note":"flow 前门/命令面决策在 cli-entry 域"}
+ {"id":"s-tel-04","repo":"sillyspec","face":"fr","query":"标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句","expected":["fr/cli-entry.md"],"note":"changes.title 三段链路等 FR 在 cli-entry 域"}
+ {"id":"s-tel-05","repo":"sillyspec","face":"decisions","query":"用枚举词表扫描开放世界形态的需求并自动分类","expected":["decisions/cli-entry.md#D-unmapped-150@v1"],"note":"同一意图的短查询变体"}
+-{"id":"s-man-01","repo":"sillyspec","face":"entries","query":"worktree 清理 node_modules junction 删除","expected":["sillyspec-gotchas.md"],"scope_files":["src/worktree.js"],"note":"junction 解链坑在 gotchas 手工条目"}
+-{"id":"s-man-02","repo":"sillyspec","face":"decisions","query":"worktree 清理 node_modules junction 删除","expected":["decisions/worktree.md#D-worktree-001@v1"],"scope_files":["src/worktree.js"],"note":"两次事故实录的决策条目（hybrid 面已命中 raw_rank=1）"}
+-{"id":"s-man-03","repo":"sillyspec","face":"entries","query":"worktree doctor --fix 标记 installed 但 node_modules junction 实际未建","expected":["sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建"],"scope_files":["src/worktree.js"],"note":"精确锚点命中验证"}
+-{"id":"s-man-04","repo":"sillyspec","face":"entries","query":"daemon mcp-server 子进程不继承 claude.exe 环境","expected":["patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv"],"scope_files":["src/mcp-server.js"]}
+-{"id":"s-man-05","repo":"sillyspec","face":"entries","query":"execute worktree 里没有 node_modules 子代理 cwd 要显式 worktree 路径","expected":["sillyspec-gotchas.md#execute-worktree-无-node_modules--子代理-cwd-需显式-worktree-路径"],"scope_files":["src/stages/execute.js"]}
++{"id":"s-man-01","repo":"sillyspec","face":"entries","query":"worktree 清理 node_modules junction 删除","expected":["sillyspec-gotchas.md"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"junction 解链坑在 gotchas 手工条目"}
++{"id":"s-man-02","repo":"sillyspec","face":"decisions","query":"worktree 清理 node_modules junction 删除","expected":["decisions/worktree.md#D-worktree-001@v1"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"两次事故实录的决策条目（hybrid 面已命中 raw_rank=1）"}
++{"id":"s-man-03","repo":"sillyspec","face":"entries","query":"worktree doctor --fix 标记 installed 但 node_modules junction 实际未建","expected":["sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"精确锚点命中验证"}
++{"id":"s-man-04","repo":"sillyspec","face":"entries","query":"daemon mcp-server 子进程不继承 claude.exe 环境","expected":["patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv"],"scope_files":["src/mcp-server.js"],"subset":"frozen"}
++{"id":"s-man-05","repo":"sillyspec","face":"entries","query":"execute worktree 里没有 node_modules 子代理 cwd 要显式 worktree 路径","expected":["sillyspec-gotchas.md#execute-worktree-无-node_modules--子代理-cwd-需显式-worktree-路径"],"scope_files":["src/stages/execute.js"],"subset":"frozen"}
+ {"id":"s-man-06","repo":"sillyspec","face":"entries","query":"reopen --from step n 后 --done 把后续未执行步骤回填 completed","expected":["sillyspec-gotchas.md#reopen---from-step-n-后---done-会把后续未执行步骤回填-completed"]}
+ {"id":"s-man-07","repo":"sillyspec","face":"entries","query":"sqlite pragma foreign_keys 默认关闭 cascade 失效 孤儿变更清理","expected":["sillyspec-gotchas.md#sqlite-pragma-foreign_keys-默认关闭致-cascade-失效清理孤儿变更"]}
+ {"id":"s-man-08","repo":"sillyspec","face":"entries","query":"plan execute 子代理 cwd 设到变更目录 嵌套 sillyspec 副作用","expected":["sillyspec-gotchas.md#planexecute-子代理可能把-cwd-设到变更目录产生嵌套-sillyspec-副作用"]}
+@@ -33,3 +33,20 @@
+ {"id":"p-tel-13","repo":"platform","face":"entries","query":"沉淀弹层三修：快速修复多选失效（只能选一个）弹层样式溢出超出视口 新建 agent 配置补供应商/模型选择","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"]}
+ {"id":"p-tel-14","repo":"platform","face":"fr","query":"修复 frontend-ci 连续失败：page.test.tsx user_input 断言未随 ql-20260918-003 行为变更同步","expected":["fr/api-types.md"]}
+ {"id":"p-tel-15","repo":"platform","face":"fr","query":"registry 注册两 format + host-fs-handler 透传新字段与 totalUsage 平台 messages schema 可选新字段 + openapi/gen:types","expected":["fr/host-fs-handler.md"]}
++
++{"id":"p-dec-01","repo":"platform","face":"decisions","query":"backend 落选 方案 B 扩展 CLI 向量端点至全语料 放开 JWT","expected":["decisions/backend.md#D-backend-009@v1"]}
++{"id":"p-dec-02","repo":"platform","face":"decisions","query":"backend 落选 方案 C 基于 DB 表混合检索 ScanDocument 新增 knowledge 入库","expected":["decisions/backend.md#D-backend-010@v1"]}
++{"id":"p-dec-03","repo":"platform","face":"decisions","query":"backend 落选 本地文件缓存 向量序列化 runtime 缓存文件","expected":["decisions/backend.md#D-backend-020@v1"]}
++{"id":"p-dec-04","repo":"platform","face":"decisions","query":"backend 落选 仅做启动预热 不改存储","expected":["decisions/backend.md#D-backend-021@v1"]}
++{"id":"p-dec-05","repo":"platform","face":"decisions","query":"backend 落选 方案 B 后台常驻同步协程","expected":["decisions/backend.md#D-backend-023@v1"]}
++{"id":"p-dec-06","repo":"platform","face":"decisions","query":"backend 落选 平台行携带记录名 方案 B","expected":["decisions/backend.md#D-backend-033@v1"]}
++{"id":"p-dec-07","repo":"platform","face":"decisions","query":"daemon 落选 新增 daemon 列记录 RPC 方案 C","expected":["decisions/backend.md#D-sillyhub-daemon-001@v1"]}
++{"id":"p-dec-08","repo":"platform","face":"decisions","query":"frontend 零 daemon 改动 backend 拼 allowed_roots 路径 方案 A","expected":["decisions/frontend_components.md#D-005@v1"]}
++{"id":"p-scope-01","repo":"platform","face":"scope","query":"frontend SSE fetch-sse Authorization header","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"],"scope_files":["frontend/src/lib/fetch-sse.ts"],"subset":"added"}
++{"id":"p-scope-02","repo":"platform","face":"scope","query":"backend auth_deps monkeypatch has_permission","expected":["testing-gotchas.md#后端monkeypatch-has_permission-必须双-patchauth_deps-导入时绑定--rbac-模块属性"],"scope_files":["backend/app/core/auth_deps.py"],"subset":"added"}
++{"id":"p-scope-03","repo":"platform","face":"scope","query":"backend audit hooks lifespan 审计日志","expected":["known-issues.md#-audit_hooks-只在测试-lifespan-注册生产审计要业务代码显式写-auditlog"],"scope_files":["backend/app/main.py"],"subset":"added"}
++{"id":"s-scope-01","repo":"sillyspec","face":"scope","query":"cli flag 白名单死路报错","expected":["known-issues.md#-cli-flag-白名单死路报错指引指向未登记-flag双实例"],"scope_files":["test/flag-contract.test.mjs"],"subset":"added"}
++{"id":"s-scope-02","repo":"sillyspec","face":"scope","query":"知识匹配引擎 枚举开放世界 否决","expected":["decisions/core-engine.md#D-unmapped-197@v1"],"scope_files":["src/knowledge-match.js"],"subset":"added"}
++{"id":"s-scope-03","repo":"sillyspec","face":"scope","query":"flow 前门 决策记录","expected":["decisions/cli-entry.md#D-unmapped-433@v1"],"scope_files":["src/flow.js"],"subset":"added"}
++{"id":"s-scope-04","repo":"sillyspec","face":"scope","query":"execute 阶段 风险死路","expected":["decisions/stages.md#D-unmapped-153@v1"],"scope_files":["src/stages/execute.js"],"subset":"added"}
++{"id":"s-scope-05","repo":"sillyspec","face":"scope","query":"CLI 入口 决策","expected":["decisions/cli-entry.md#D-unmapped-161@v1"],"scope_files":["src/index.js"],"subset":"added"}
+\ No newline at end of file
+diff --git a/eval/knowledge/fixtures/index.mjs b/eval/knowledge/fixtures/index.mjs
+index 7cf0fd47..5fad4a54 100644
+--- a/eval/knowledge/fixtures/index.mjs
++++ b/eval/knowledge/fixtures/index.mjs
+@@ -74,14 +74,23 @@ export const PROBE_FIXTURES = [
+         '## Decisions',
+         '- foo → [决策域](decisions/demo.md)', '',
+         '## Gotchas',
+-        '- foo|junction → [Foo 坑](gotchas.md#foo-junction)', '',
++        '- foo|junction → [Foo 坑](gotchas.md#foo-junction)',
++        '- other → [Other 区](gotchas.md#other-section)', '',
++      ].join('\n'),
++      'gotchas.md': [
++        '# Gotchas', '',
++        '## foo junction 清理', '',
++        '修 src/foo.js 时先解链 node_modules junction。', '',
++        '## other section', '',
++        '另一个模块维护 src/bar.js 的说明。', '',
+       ].join('\n'),
+-      'gotchas.md': '# Gotchas\n\n## foo junction 清理\n\n修 src/foo.js 时先解链 node_modules junction。\n',
+       'decisions/demo.md': '## D-001@v1 foo 决策\n状态：implemented\n锚点：src/foo.js:10\n变更：fix-demo\n',
+     },
+     cases: [
+       { name: '决策锚点强边可达（基础链路）', kind: 'scope', scope_files: ['src/foo.js'], expect: { contains: ['decisions/demo.md#D-001@v1'] } },
+       { name: '手工条目正文路径可达（手工知识不短路）', kind: 'scope', scope_files: ['src/foo.js'], expect: { contains: ['gotchas.md#foo-junction'] } },
++      { name: 'entries-only 正例（无决策锚点仍返回）', kind: 'scope', scope_files: ['src/bar.js'], expect: { contains: ['gotchas.md#other-section'] } },
++      { name: 'section 隔离负例（异路径不串节）', kind: 'scope', scope_files: ['src/bar.js'], expect: { excludes: ['gotchas.md#foo-junction'] } },
+     ],
+   },
+   {
+diff --git a/eval/knowledge/lib/dataset.mjs b/eval/knowledge/lib/dataset.mjs
+index ff621db6..06d70c0a 100644
+--- a/eval/knowledge/lib/dataset.mjs
++++ b/eval/knowledge/lib/dataset.mjs
+@@ -8,7 +8,7 @@
+  */
+ import { existsSync, readFileSync, readdirSync } from 'node:fs'
+ import { join } from 'node:path'
+-import { parseDecisionEntries } from '../../../src/knowledge-match.js'
++import { parseDecisionEntries, normalizeAnchorForCompare } from '../../../src/knowledge-match.js'
+ import { readFlowState } from '../../../src/flow-state.js'
+ 
+ const FACES = new Set(['entries', 'decisions', 'search', 'scope', 'fr'])
+@@ -23,6 +23,10 @@ export function validateOrganicCase(c) {
+   if (!c.query || typeof c.query !== 'string' || !c.query.trim()) return 'query'
+   if (!Array.isArray(c.expected) || c.expected.length === 0) return 'expected-empty'
+   if (c.expected.some((e) => typeof e !== 'string' || !e.trim())) return 'expected-item'
++  if (c.scope_files !== undefined) {
++    if (!Array.isArray(c.scope_files) || c.scope_files.length === 0) return 'scope_files'
++    if (c.scope_files.some((f) => typeof f !== 'string' || !f.trim())) return 'scope_files-item'
++  }
+   return null
+ }
+ 
+@@ -127,25 +131,23 @@ export function listProbes(fixturesDir) {
+ 
+ /**
+  * 标签有效性自检（2026-11-02 复核 P1-①）：expected 的 file 必须存在于目标仓 knowledge 下、
+- * 含 # 时 anchor 必须出现在目标文件正文或 INDEX 中——抓「标签指向不存在的锚点」（如 epoch
+- * 迁移后 D-id 换了域文件）这类结构性不可命中。宽口径字符串包含（slug/标题形态差异不误判）。
++ * 含 # 时 anchor 必须能以归一化形态在目标文件正文中找到（不再回退 INDEX——防止「anchor 只在
++ * INDEX、heading 已漂移」的旧契约通过自检）；scope_files 必须是目标仓真实存在的文件。
++ * reject 结构性不可命中标签（如 epoch 迁移后 D-id 换了域文件）。
+  * @param {Array} cases organic cases
+  * @param {Map<string,string>} repoRootByTag 仓标签 → 仓根
+- * @returns {Array<{id:string, expected:string, reason:string}>}
++ * @returns {Array<{id:string, expected?:string, reason:string}>}
+  */
+ export function validateLabels(cases, repoRootByTag) {
+   const issues = []
+-  const indexCache = new Map()
+   for (const c of cases) {
+     const root = repoRootByTag.get(c.repo)
+     if (!root) continue // 未参与本次运行的仓标签不算标签错误
+     const kdir = join(root, '.sillyspec', 'knowledge')
+-    if (!indexCache.has(kdir)) {
+-      let text = ''
+-      try { text = readFileSync(join(kdir, 'INDEX.md'), 'utf8') } catch { /* 无 INDEX = 空 */ }
+-      indexCache.set(kdir, text)
++    for (const sf of c.scope_files || []) {
++      const p = join(root, String(sf).replace(/\\/g, '/'))
++      if (!existsSync(p)) issues.push({ id: c.id, expected: sf, reason: 'scope-file-missing' })
+     }
+-    const indexText = indexCache.get(kdir)
+     for (const exp of c.expected) {
+       const [file, anchor] = String(exp).split('#')
+       const fp = join(kdir, file)
+@@ -159,8 +161,9 @@ export function validateLabels(cases, repoRootByTag) {
+         issues.push({ id: c.id, expected: exp, reason: 'file-unreadable' })
+         continue
+       }
+-      if (!text.includes(anchor) && !indexText.includes(anchor)) {
+-        issues.push({ id: c.id, expected: exp, reason: 'anchor-missing', file })
++      const normAnchor = normalizeAnchorForCompare(anchor)
++      if (!normAnchor || !normalizeAnchorForCompare(text).includes(normAnchor)) {
++        issues.push({ id: c.id, expected: exp, reason: 'anchor-heading-missing', file })
+       }
+     }
+   }
+diff --git a/eval/knowledge/lib/faces.mjs b/eval/knowledge/lib/faces.mjs
+index f496da6b..d4551155 100644
+--- a/eval/knowledge/lib/faces.mjs
++++ b/eval/knowledge/lib/faces.mjs
+@@ -20,6 +20,20 @@ export function rankWithMatches(hits, expected) {
+   return best
+ }
+ 
++/**
++ * scope 面按 subset 分组指标（frozen/added——FR-05 子集单列，禁止用新增 case 掩盖冻结子集）。
++ */
++export function subsetSummaries(faceResult, cases) {
++  const groups = {}
++  for (const c of cases) {
++    const d = faceResult.details.find((x) => x.id === c.id)
++    if (!d) continue
++    const key = c.subset || 'default'
++    ;(groups[key] = groups[key] || []).push(d.raw_rank === null ? Infinity : d.raw_rank)
++  }
++  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [k, summarize(ranks)]))
++}
++
+ /** 单仓单面：raw/rendered 双口径 + 截断清单 + 每 case 名次明细。 */
+ export async function runFace(repoPath, face, cases) {
+   const ranksRaw = []
+diff --git a/eval/knowledge/lib/report.mjs b/eval/knowledge/lib/report.mjs
+index a9e3568b..eeda556d 100644
+--- a/eval/knowledge/lib/report.mjs
++++ b/eval/knowledge/lib/report.mjs
+@@ -15,6 +15,13 @@ export function renderTable(result) {
+     for (const [face, m] of Object.entries(result.metrics[repo])) {
+       lines.push(`  ${face.padEnd(9)} raw top1=${m.raw.top1} top3=${m.raw.top3} mrr=${m.raw.mrr} n=${m.raw.n}`
+         + ` | rendered top1=${m.rendered.top1} top3=${m.rendered.top3} | truncated=${(m.truncated || []).length}`)
++      if (m.subsets) {
++        const parts = Object.entries(m.subsets).map(([k, v]) => `${k}(n=${v.n},top1=${v.top1},top3=${v.top3})`).join(' ')
++        lines.push(`    subsets: ${parts}`)
++      }
++      if (Array.isArray(m.scope_unreachable) && m.scope_unreachable.length > 0) {
++        lines.push(`    scope_unreachable: ${m.scope_unreachable.join('、')}`)
++      }
+     }
+     const ss = result.self_smoke?.[repo]
+     if (ss && ss.cases > 0) {
+diff --git a/eval/knowledge/run.mjs b/eval/knowledge/run.mjs
+index 54c5fb28..6022a8a1 100644
+--- a/eval/knowledge/run.mjs
++++ b/eval/knowledge/run.mjs
+@@ -25,7 +25,8 @@ import { runDecisions } from './lib/engine.mjs'
+ import { snapshotFingerprint } from './lib/snapshot.mjs'
+ import { runAllProbes } from './lib/probes.mjs'
+ import { renderTable, diffBaseline } from './lib/report.mjs'
+-import { runFace, rankWithMatches, FACES } from './lib/faces.mjs'
++import { runFace, rankWithMatches, FACES, subsetSummaries } from './lib/faces.mjs'
++import { summarize } from './lib/metrics.mjs'
+ import { parseRepoArgs } from './lib/repos.mjs'
+ 
+ process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
+@@ -147,7 +148,13 @@ async function main() {
+       else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries')
+       else if (face === 'fr') faceCases = repoCases.filter((c) => c.face === 'fr')
+       else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0)
+-      result.metrics[repo][face] = await runFace(path, face, faceCases)
++      const faceResult = await runFace(path, face, faceCases)
++      if (face === 'scope') {
++        // 子集单列（FR-05）：frozen（原 5 条）与 added 分开报，禁止用新增 case 掩盖冻结子集
++        faceResult.subsets = subsetSummaries(faceResult, faceCases)
++        faceResult.scope_unreachable = faceResult.details.filter((d) => d.raw_rank === null).map((d) => d.id)
++      }
++      result.metrics[repo][face] = faceResult
+     }
+     const self = await runSelfSmoke(path, repo)
+     result.self_smoke[repo] = self
+diff --git a/src/knowledge-graph.js b/src/knowledge-graph.js
+index 112f9105..01448a64 100644
+--- a/src/knowledge-graph.js
++++ b/src/knowledge-graph.js
+@@ -20,7 +20,7 @@
+ 
+ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
++import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare } from './knowledge-match.js'
+ import { modulePathMatches, parseModuleMapSimple } from './modules.js'
+ import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
+ 
+@@ -59,6 +59,44 @@ function extractFilePaths(text, cap = 15) {
+   return out
+ }
+ 
++/** section 切分：按 `## ` 标题切段（标题到文末；无子标题的整篇为一个无标题段）。 */
++function splitSections(text) {
++  const out = []
++  let cur = null
++  for (const line of text.split('\n')) {
++    const m = /^##\s+(.+)$/.exec(line)
++    if (m) {
++      cur = { title: m[1].trim(), body: '' }
++      out.push(cur)
++      continue
++    }
++    if (cur) cur.body += `${line}\n`
++  }
++  return out
++}
++
++/** section 级正文路径提取（2026-11-02-scope-recall FR-01）：用归一化锚点匹配 section 标题
++ *  （长度≥6 的双向前缀容忍，兼容 INDEX slug 与 heading 的 emoji/标点差异），只对命中 section
++ *  的文本跑路径提取——全文档粒度实测噪声不可接受（单路径最多挂 65 个条目）。
++ *  无锚点条目退化为整篇（保守）。文件读取按次缓存。 */
++function sectionFilePaths(knowledgeDir, ent, cache) {
++  const file = posix(ent.file)
++  if (!file.endsWith('.md')) return []
++  let text = cache.get(file)
++  if (text === undefined) {
++    try { text = readFileSync(join(knowledgeDir, file), 'utf8').replace(/\r\n?/g, '\n') } catch { text = null }
++    cache.set(file, text)
++  }
++  if (!text) return []
++  const key = normalizeAnchorForCompare(ent.anchor)
++  if (!key) return extractFilePaths(text, 15)
++  const hit = splitSections(text).find((s) => {
++    const hn = normalizeAnchorForCompare(s.title)
++    return hn === key || (hn.length >= 6 && key.length >= 6 && (hn.startsWith(key) || key.startsWith(hn)))
++  })
++  return hit ? extractFilePaths(hit.body, 15) : []
++}
++
+ // ── 构建器 ──
+ 
+ function buildKnowledgeGraphFresh(specRoot) {
+@@ -94,11 +132,24 @@ function buildKnowledgeGraphFresh(specRoot) {
+   let routeCount = 0
+   if (existsSync(join(knowledgeDir, 'INDEX.md'))) {
+     addNode('doc:INDEX', 'doc', 'knowledge/INDEX.md', { kind: 'manual-index' })
++    const docCache = new Map()
+     for (const ent of indexEntries) {
+       if (/^(decisions|fr|proposed)\//.test(posix(ent.file))) continue // 决策/FR 有自己的节点面
+       const id = ent.anchor ? `entry:${ent.file}#${ent.anchor}` : `entry:${ent.file}`
+-      addNode(id, 'entry', ent.display || ent.anchor || ent.file, { file: ent.file, keywords: ent.keywords })
++      addNode(id, 'entry', ent.display || ent.anchor || ent.file, {
++        file: ent.file,
++        keywords: ent.keywords,
++        category: ent.category || '',
++        anchor: ent.anchor || '',
++        display: ent.display || '',
++      })
+       if (addEdge('doc:INDEX', id, 'route', ent.keywords[0] || '')) routeCount++
++      // section 级 doc-refs（FR-01，2026-11-02-scope-recall）：手工条目标题路径 → file 边
++      // （medium 强度——scope 层显式消费，graphPath/impact 不受影响）
++      for (const p of sectionFilePaths(knowledgeDir, ent, docCache)) {
++        addNode(p, 'file', p.split('/').pop())
++        addEdge(id, p, 'doc-refs', '手工条目 section 路径')
++      }
+     }
+   }
+ 
+@@ -349,7 +400,7 @@ function buildKnowledgeGraphFresh(specRoot) {
+ // 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
+ // 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
+ 
+-const GRAPH_CACHE_VERSION = 1
++const GRAPH_CACHE_VERSION = 2
+ const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
+ 
+ function statSignature(p) {
+@@ -375,6 +426,13 @@ function knowledgeGraphFingerprint(specRoot) {
+   } catch { /* docs/ 缺席 = 无项目面（合法形态）*/ }
+   return {
+     index: statSignature(join(knowledgeDir, 'INDEX.md')),
++    // 手工文档 stat（FR-01）：section doc-refs 依赖 INDEX 引用的手工文档正文——编辑必须触发重建
++    manualDocs: existsSync(join(knowledgeDir, 'INDEX.md'))
++      ? parseKnowledgeIndex(knowledgeDir)
++        .filter((e) => !/^(decisions|fr|proposed)\//.test(posix(e.file)))
++        .map((e) => [e.file, statSignature(join(knowledgeDir, e.file))])
++        .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
++      : null,
+     decisions: fileDirStamp(join(knowledgeDir, 'decisions')),
+     fr: fileDirStamp(join(knowledgeDir, 'fr')),
+     projects,
+@@ -832,18 +890,21 @@ export function graphNodesSearch(graph, search, limit = 20) {
+ // ═══════════════════════════════════════════════════════════════
+ 
+ /** scope 文件集 → 可达知识集（decisionHits 形态 + entries 素材）。
+- *  遍历：file ←anchors← decision（+supersedes 链一跳）→ from-change/belongs-module 侧线；
+- *  FR 侧：file ←deliverables（变更维）与 anchors 直连。rejected ∪ 死路 保底进场（防复潮）。 */
++ *  遍历：file ←anchors← decision/FR（直连，score=2）；supersedes 链一跳；
++ *  file ←doc-refs← 手工条目（section 级正文路径，medium 直证边 → entries）；
++ *  两跳防复潮：file ←deliverables← change ←from-change← rejected/deathPath 决策（score=1）。
++ *  排序：rejected/死路优先 → direct>two-hop → 变更名日期降序 → id。引擎 cap 20。 */
+ export function scopeRecall(graph, scopeFiles) {
+   const scopes = [...new Set((Array.isArray(scopeFiles) ? scopeFiles : [scopeFiles]).map(posix).filter(Boolean))]
+   if (scopes.length === 0) return null
++  const scopeSet = new Set(scopes)
+   const strong = graph.edges.filter((e) => EDGE_STRENGTH[e.type] === 'strong')
+   const reachable = new Set()
+   // 一跳：文件 ←anchors← 决策/FR
+   for (const e of strong) {
+-    if (e.type === 'anchors' && scopes.includes(e.t)) reachable.add(e.s)
++    if (e.type === 'anchors' && scopeSet.has(posix(e.t))) reachable.add(e.s)
+     // 变更维：scope 命中变更交付面（scope 可能传变更名而非文件——调用方宽松契约）
+-    if (e.type === 'deliverables' && scopes.includes(e.s)) reachable.add(e.t)
++    if (e.type === 'deliverables' && scopeSet.has(posix(e.s))) reachable.add(e.t)
+   }
+   // supersedes 链一跳（版本链追新/旧）
+   for (const id of [...reachable]) {
+@@ -853,6 +914,26 @@ export function scopeRecall(graph, scopeFiles) {
+       else if (e.t === id && graph.nodes.has(e.s)) reachable.add(e.s)
+     }
+   }
++  // 手工条目 doc-refs（FR-01）：medium 边显式消费——不进 strong 集，graphPath/impact 语义不动
++  const entryReachable = new Set()
++  for (const e of graph.edges) {
++    if (e.type !== 'doc-refs' || !scopeSet.has(posix(e.t))) continue
++    const n = graph.nodes.get(e.s)
++    if (n && n.type === 'entry') entryReachable.add(e.s)
++  }
++  // 两跳防复潮（FR-02）：file ←deliverables← change ←from-change← 决策，只收 rejected/deathPath
++  const changesOf = new Set()
++  for (const e of graph.edges) {
++    if (e.type === 'deliverables' && scopeSet.has(posix(e.t))) changesOf.add(e.s)
++  }
++  const twoHop = new Set()
++  for (const e of graph.edges) {
++    if (e.type !== 'from-change' || !changesOf.has(e.t)) continue
++    const n = graph.nodes.get(e.s)
++    if (!n || n.type !== 'decision') continue
++    const h = n.attrs.hit || {}
++    if (h.status === 'rejected' || h.deathPath) twoHop.add(e.s)
++  }
+   const decisions = []
+   const frs = []
+   for (const id of reachable) {
+@@ -861,29 +942,50 @@ export function scopeRecall(graph, scopeFiles) {
+     if (n.type === 'decision') decisions.push(n)
+     else if (n.type === 'fr') frs.push(n)
+   }
+-  // decisionHits：parseDecisionEntries 原生形态（attrs.hit 直出——零重解析），rejected∪死路优先
+-  const hits = decisions.map((n) => ({ ...n.attrs.hit, file: n.attrs.hit.file }))
++  // decisionHits：parseDecisionEntries 原生形态（attrs.hit 直出）+ score（direct=2/two-hop=1，
++  // 渲染面 h.status==='rejected' && score>0 过滤器依赖）
++  const changeDate = (c) => {
++    const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(c || ''))
++    return m ? m[1] : ''
++  }
++  const hits = []
++  const seen = new Set()
++  const pushHit = (n, score, via) => {
++    const base = n.attrs.hit || {}
++    const key = `${base.file || ''}#${base.id || ''}`
++    if (seen.has(key)) return
++    seen.add(key)
++    hits.push({ ...base, file: base.file, score, via })
++  }
++  for (const n of decisions) pushHit(n, 2, 'direct')
++  for (const id of twoHop) {
++    const n = graph.nodes.get(id)
++    if (n) pushHit(n, 1, 'two-hop')
++  }
+   const death = (h) => h.status === 'rejected' || h.deathPath
+-  hits.sort((a, b) => ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0)) || ((b.status === 'rejected' ? 1 : 0) - (a.status === 'rejected' ? 1 : 0)))
+-  const rejectedFirst = [...hits.filter(death), ...hits.filter((h) => !death(h))]
+-  if (rejectedFirst.length > 20) rejectedFirst.length = 20
+-  const entries = rejectedFirst.slice(0, 3).map((h) => ({
+-    category: 'Decisions',
+-    keywords: ['scope'],
+-    file: h.file,
+-    anchor: h.id,
+-    display: `${h.file}#${h.id}（scope 遍历召回）`,
+-  }))
+-  return { decisionHits: rejectedFirst, entries, frCount: frs.length, scopeSize: scopes.length }
++  hits.sort((a, b) => (Number(death(b)) - Number(death(a)))
++    || (b.score - a.score)
++    || (changeDate(b.change) > changeDate(a.change) ? 1 : changeDate(b.change) < changeDate(a.change) ? -1 : 0)
++    || String(a.id).localeCompare(String(b.id)))
++  if (hits.length > 20) hits.length = 20
++  // 手工条目（FR-01）：doc-refs 命中的 entry 节点，cap 3
++  const entries = [...entryReachable].map((id) => {
++    const n = graph.nodes.get(id)
++    const a = n.attrs || {}
++    const file = a.file || String(id).replace(/^entry:/, '').split('#')[0]
++    return { category: a.category || 'Scoped', keywords: ['scope'], file, anchor: a.anchor || '', display: a.display || n.label }
++  }).slice(0, 3)
++  return { decisionHits: hits, entries, frCount: frs.length, scopeSize: scopes.length }
+ }
+ 
+-/** scopeRecall → matchKnowledge 同构四键返回（knowledge-vector 消费——策略面全本地解析）。 */
++/** scopeRecall → matchKnowledge 同构四键返回（knowledge-vector 消费——策略面全本地解析）。
++ *  entries-only 场景（只命中手工条目、无决策）也必须返回——不得因 decisionHits 空整层短路。 */
+ export function buildScopeRecallResult(recall) {
+-  if (!recall || recall.decisionHits.length === 0) return null
++  if (!recall || (recall.decisionHits.length === 0 && recall.entries.length === 0)) return null
+   return {
+     matched: true,
+     entries: recall.entries,
+-    report: `Status: scope-traversal matched (${recall.decisionHits.length} entries from ${recall.scopeSize} scope files)`,
++    report: `Status: scope-traversal matched (${recall.decisionHits.length} decisions, ${recall.entries.length} entries from ${recall.scopeSize} scope files)`,
+     json: {
+       matched: true, entry_count: recall.entries.length, scope: true,
+       entries: recall.entries.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index c91a4e91..40aa8ea8 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -318,6 +318,14 @@ export function isParkingFile(file) {
+  *  6 条绿色非词条目中 4 条是现行事实/债务，误杀代价高于漏 2 条已解决项）。 */
+ const RESOLVED_WORDS = /已修复|已解决|已退役/
+ 
++/** 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
++ *  INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
++ *  ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
++ *  容忍处理。单一源：knowledge 命令校验与图谱 section 匹配（2026-11-02-scope-recall）共用。 */
++export function normalizeAnchorForCompare(s) {
++  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
++}
++
+ /** 条目是否「已知问题-已修复」类（默认注入/检索排除；--include-resolved 才返回）。 */
+ function isResolvedRoute(entry) {
+   const file = String(entry.file || '').replace(/\\/g, '/')
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index baa1a308..0d98224d 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -19,7 +19,7 @@
+ import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
+ import { join, basename } from 'path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { parseKnowledgeIndex, keywordMatchesContext } from '../knowledge-match.js'
++import { parseKnowledgeIndex, keywordMatchesContext, normalizeAnchorForCompare } from '../knowledge-match.js'
+ import { matchKnowledgeHybrid } from '../knowledge-vector.js'
+ 
+ // ── 工具函数 ──
+@@ -29,16 +29,6 @@ function resolveKnowledgeDir(dir, specDir) {
+   return join(base, 'knowledge')
+ }
+ 
+-/**
+- * 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
+- * INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
+- * ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
+- * 容忍处理。仅用于 validate 告警，不参与命中判定（单一源方向见 T2）。
+- */
+-function normalizeAnchorForCompare(s) {
+-  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+-}
+-
+ function output(ok, data, error) {
+   const result = { ok, ...data }
+   if (error) result.error = error
+diff --git a/test/eval-knowledge-dataset.test.mjs b/test/eval-knowledge-dataset.test.mjs
+index 10714e9c..5cd5c096 100644
+--- a/test/eval-knowledge-dataset.test.mjs
++++ b/test/eval-knowledge-dataset.test.mjs
+@@ -36,6 +36,8 @@ console.log('\n=== Test 1: organic case 校验 ===')
+   assert(validateOrganicCase({ ...ok, repo: undefined }) === 'repo', '缺 repo 标签')
+   assert(validateOrganicCase({ ...ok, repo: 'any-project-label' }) === null, '任意仓标签合法（不枚举项目）')
+   assert(validateOrganicCase({ ...ok, face: 'fr' }) === null, 'fr 面合法')
++  assert(validateOrganicCase({ ...ok, scope_files: [] }) === 'scope_files', '空 scope_files 非法')
++  assert(validateOrganicCase({ ...ok, scope_files: [''] }) === 'scope_files-item', 'scope_files 空项非法')
+   assert(validateOrganicCase({ ...ok, face: 'nope' }) === 'face', '非法 face')
+   assert(validateOrganicCase({ ...ok, query: '  ' }) === 'query', '空 query')
+   assert(validateOrganicCase({ ...ok, expected: [] }) === 'expected-empty', '空 expected')
+@@ -126,10 +128,12 @@ console.log('\n=== Test 5: validateLabels ===')
+       { id: 'ok', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-001@v1'] },
+       { id: 'missing-file', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/nope.md'] },
+       { id: 'missing-anchor', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-999@v1'] },
++      { id: 'missing-scope-file', repo: 'r', face: 'scope', query: 'q', expected: ['decisions/x.md'], scope_files: ['src/nope.js'] },
+     ], new Map([['r', d]]))
+-    assert(issues.length === 2, '两条结构性问题检出')
++    assert(issues.length === 3, '三条结构性问题检出')
+     assert(issues.some((i) => i.id === 'missing-file' && i.reason === 'file-missing'), 'file-missing 检出')
+-    assert(issues.some((i) => i.id === 'missing-anchor' && i.reason === 'anchor-missing'), 'anchor-missing 检出（标签指向不存在锚点）')
++    assert(issues.some((i) => i.id === 'missing-anchor' && i.reason === 'anchor-heading-missing'), 'anchor-heading-missing 检出（标签指向不存在锚点）')
++    assert(issues.some((i) => i.id === 'missing-scope-file' && i.reason === 'scope-file-missing'), 'scope-file-missing 检出')
+     assert(validateLabels([{ id: 'x', repo: 'not-running', face: 'entries', query: 'q', expected: ['nope.md'] }], new Map()).length === 0, '未参与运行的仓标签不判错')
+   } finally { rmSync(d, { recursive: true, force: true }) }
+ }
+diff --git a/test/eval-knowledge-runner.test.mjs b/test/eval-knowledge-runner.test.mjs
+index cdd60f8f..ce786639 100644
+--- a/test/eval-knowledge-runner.test.mjs
++++ b/test/eval-knowledge-runner.test.mjs
+@@ -185,6 +185,18 @@ console.log('\n=== Test 11: fr 面 ===')
+   } finally { rmSync(dir, { recursive: true, force: true }) }
+ }
+ 
++// ── 12: scope 子集单列（FR-05） ──
++console.log('\n=== Test 12: subsetSummaries ===')
++{
++  const { subsetSummaries } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'faces.mjs')).href)
++  const fr = { details: [{ id: 'a', raw_rank: 1 }, { id: 'b', raw_rank: null }, { id: 'c', raw_rank: 6 }] }
++  const s = subsetSummaries(fr, [
++    { id: 'a', subset: 'frozen' }, { id: 'b', subset: 'added' }, { id: 'c', subset: 'added' },
++  ])
++  assert(s.frozen.n === 1 && s.frozen.top1 === 1, 'frozen 子集单列（1 条 rank1）')
++  assert(s.added.n === 2 && s.added.top3 === 0, 'added 子集单列（rank null 与 6 → top3=0，不掩盖）')
++}
++
+ // ── 汇总 ──
+ console.log(`\n${'='.repeat(40)}`)
+ console.log(`eval-knowledge-runner tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

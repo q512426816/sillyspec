@@ -1,0 +1,33 @@
+{"ts":1793596764644,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793596764644,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793596764644,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793596808399,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/knowledge-match.js、src/stages/knowledge.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793596825157,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/knowledge-graph.js、src/knowledge-match.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793596901181,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793596903935,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793596903935,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793596907173,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793596907674,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793596907674,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793596957893,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：val/knowledge/datasets/organic.jsonl——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793597014030,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/eval-knowledge-dataset.test.mjs、test/eval-knowledge-runner.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793597060463,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/lib/report.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793597123222,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：val/knowledge/baseline.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793597196714,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793597199537,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793597199537,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793597200820,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793597203439,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793597203439,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793597204460,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1793597206973,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793597206973,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1793597221327,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true,"source":"task-tick"}
+{"ts":1793597223627,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793597223627,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true}
+{"ts":1793597240555,"kind":"commit","stage":null,"detail":"efce0baa","provisional":true}
+{"ts":1793597250877,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-02-knowledge-scope-recall/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793597261305,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.8s） · 20261102052740","provisional":true}
+{"ts":1793598163257,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1793598752429,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-graph.test.mjs、test/knowledge-hotpath-cache.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793599009616,"kind":"commit","stage":null,"detail":"d6113aa1","provisional":true}

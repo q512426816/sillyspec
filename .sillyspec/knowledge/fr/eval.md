@@ -583,3 +583,131 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-11-02-knowledge-rank-denoise
   status: active
+
+## FR-eval-031 A 段：entry 节点补 category/anchor/display；section 级 doc-refs 建边（extractFilePaths + normalizeAnchorForCompare 前缀容忍，保持 medium 强度不动 graphPath/impact）；scopeRecall 显式收 doc-refs entry 且 entries-only 返回非 null；GRAPH_CACHE_VERSION 1→2 且 fingerprint 含 INDEX 引用的手工文档 stat
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：section 级隔离；entries-only 不短路
+场景正文：
+- 场景：section 级隔离 — Given 同一文档两个 section，只有 A 节正文含 src/foo.js；When 对 src/foo.js 做 scope 遍历；Then 只有 A 节对应的 entry 可达，B 节不得串入
+- 场景：entries-only 不短路 — Given scopeFiles 只命中手工文档 doc-refs、无任何决策锚点；When scopeRecall + buildScopeRecallResult；Then 必须返回 matched 结果（不得因 decisionHits 空而 null）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-01
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-01
+  tests: test/knowledge-graph.test.mjs「section 级 doc-refs 与 scopeRecall entry 收集」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active
+
+## FR-eval-032 B 段：两跳 file→deliverables 反查 change→from-change 反查决策，只收 rejected/deathPath；排序 rejected/deathPath 优先→direct>two-hop→变更名日期→id；scope hit 设 score（direct=2/two-hop=1）保证渲染面过滤器可见；引擎 decision cap 保持 20
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：两跳只收防复潮；渲染面可见
+场景正文：
+- 场景：两跳只收防复潮 — Given 某文件被 100+ 变更交付过且两跳可达 144 条决策（139 implemented）；When scope 遍历；Then 输出只含 rejected/deathPath 条目，且 cap ≤20
+- 场景：渲染面可见 — Given 两跳命中一条 rejected 决策；When 走 flow 防复潮过滤器（h.deathPath || (rejected && score>0)）；Then 该条目必须通过（score 在场）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-02
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-02
+  tests: test/knowledge-graph.test.mjs「两跳 rejected/deathPath 与排序」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active
+
+## FR-eval-033 C 段：平台 decisions 补 8~10 条（27 条非 parking rejected 中选、排除同文件重复 id、query 用「域关键词+标题」配方）；scope 面两侧各补 5~8 条带 scope_files 的 case（平台用 fetch-sse/auth_deps/main.py 三个真实 doc-refs 路径）；validateLabels 扩展 scope_files 存在性与 anchor heading 归一化校验 + scope-unreachable 静态可达性警告
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：停车 reject 不可选
+场景正文：
+- 场景：停车 reject 不可选 — Given 平台 rejected 中有 24 条位于 decisions/unmapped.md（停车场）；When 构造 decisions case；Then 禁止选用这些条目（结构性不可命中）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-03
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-03
+  tests: test/eval-knowledge-dataset.test.mjs「scope_files 校验与 scope-unreachable」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active
+
+## FR-eval-034 探针：scope-manual GREEN（补 entries-only 正例与 section 隔离负例）；其余五类保持/转绿
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：探针升级
+场景正文：
+- 场景：探针升级 — Given 修复后的图谱与 scopeRecall；When 跑六类探针；Then 六类全 GREEN（scope-manual 含新正负例）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-04
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-04
+  tests: test/eval-knowledge-probes.test.mjs「scope-manual entries-only 正例与 section 负例」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active
+
+## FR-eval-035 验收口径：原 5 条 scope 冻结子集单列如实报告（预计仍 0.2，不得用新增 case 掩盖）；新增 scope 子集单列 top3（平台 n≥6、本仓 n≥5）；entries/decisions/search/fr 旧 case 逐条 rank 不回归（平台 decisions n 扩大导致 top3 变化属预期）
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：子集单列
+场景正文：
+- 场景：子集单列 — Given scope 面数据集含 frozen 与 added 两组 case；When 跑评测；Then 输出含 scope.subsets.frozen 与 scope.subsets.added 两套指标，且 details 可按子集追溯
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-05
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-05
+  tests: test/eval-knowledge-runner.test.mjs「scope 子集单列与 details」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active
+
+## FR-eval-036 回归：knowledge 面全绿 + lint 绿；baseline 更新 version=1；organic 到每仓 50 推迟为独立数据变更
+变更：2026-11-02-knowledge-scope-recall
+状态：active
+摘要：收口口径
+场景正文：
+- 场景：收口口径 — Given 变更完成；When flow done；Then knowledge 面测试全绿 + lint 绿 + baseline version=1 + 悬空增量已单列说明
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-scope-recall/requirements.md#FR-06
+最近确认：d6113aa18cb942dc8ffd62f6797649fa63c44aef
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-scope-recall:flow:测试绑定FR-06
+  tests: test/knowledge-graph.test.mjs | test/knowledge-hotpath-cache.test.mjs「手工文档编辑触发图缓存失效」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-scope-recall
+  status: active

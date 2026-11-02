@@ -1,0 +1,188 @@
+{
+  "change": "2026-11-02-knowledge-scope-recall",
+  "baseline": "b3226291c6a3ccf31202a6e0720a79fa974a8e75",
+  "head": "efce0baa305e18c15893dc86f30d402743c82545",
+  "files": [
+    "eval/knowledge/baseline.json",
+    "eval/knowledge/datasets/organic.jsonl",
+    "eval/knowledge/fixtures/index.mjs",
+    "eval/knowledge/lib/dataset.mjs",
+    "eval/knowledge/lib/faces.mjs",
+    "eval/knowledge/lib/report.mjs",
+    "eval/knowledge/run.mjs",
+    "src/knowledge-graph.js",
+    "src/knowledge-match.js",
+    "src/stages/knowledge.js",
+    "test/eval-knowledge-dataset.test.mjs",
+    "test/eval-knowledge-runner.test.mjs"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 389,
+    "deletions": 90
+  },
+  "savedAt": "2026-11-02T05:27:46.358Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "eval",
+      "files": 7,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "b3226291c6a3ccf31202a6e0720a79fa974a8e75",
+    "totals": {
+      "files": 13,
+      "additions": 389,
+      "deletions": 90
+    },
+    "rows": [
+      {
+        "path": "eval/knowledge/baseline.json",
+        "additions": 159,
+        "deletions": 33,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/datasets/organic.jsonl",
+        "additions": 22,
+        "deletions": 5,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/fixtures/index.mjs",
+        "additions": 11,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/dataset.mjs",
+        "additions": 15,
+        "deletions": 12,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/faces.mjs",
+        "additions": 14,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/report.mjs",
+        "additions": 7,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "eval/knowledge/run.mjs",
+        "additions": 9,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-graph.js",
+        "additions": 125,
+        "deletions": 23,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 8,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 1,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/eval-knowledge-dataset.test.mjs",
+        "additions": 6,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/eval-knowledge-runner.test.mjs",
+        "additions": 12,
+        "deletions": 0,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-graph.test.mjs / test/knowledge-hotpath-cache.test.mjs / test/eval-knowledge-*.test.mjs",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9ff34d735b571bf7f7f9843aec87ed4380129b905301efc0044050b712e0b824",
+  "patchStatus": "ok"
+}

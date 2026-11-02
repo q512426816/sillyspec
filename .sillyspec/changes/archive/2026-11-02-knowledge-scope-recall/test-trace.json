@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-scope-recall",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-graph.test.mjs「section 级 doc-refs 与 scopeRecall entry 收集」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-graph.test.mjs「两跳 rejected/deathPath 与排序」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-03",
+      "tests": [
+        "test/eval-knowledge-dataset.test.mjs「scope_files 校验与 scope-unreachable」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-04",
+      "tests": [
+        "test/eval-knowledge-probes.test.mjs「scope-manual entries-only 正例与 section 负例」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-05",
+      "tests": [
+        "test/eval-knowledge-runner.test.mjs「scope 子集单列与 details」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-02-knowledge-scope-recall:flow:测试绑定FR-06",
+      "tests": [
+        "test/knowledge-graph.test.mjs",
+        "test/knowledge-hotpath-cache.test.mjs「手工文档编辑触发图缓存失效」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-scope-recall"
+    }
+  ]
+}

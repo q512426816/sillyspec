@@ -71,3 +71,4 @@
 | 2026-10-23 | 2026-10-23-knowledge-scope-discoverability | 知识作用域发现面三处引导 |
 | 2026-10-23 | 2026-10-21-knowledge-tier-denoise | 知识库分级治理：注入去噪、缓存止血与存量清偿 |
 | 2026-11-02 | 2026-11-02-knowledge-rank-denoise | 知识检索排序与降噪：四类缺陷转绿 |
+| 2026-11-02 | 2026-11-02-knowledge-scope-recall | scope 召回两跳与手工条目可达 |

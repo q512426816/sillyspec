@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-scope-recall",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "d6113aa18cb942dc8ffd62f6797649fa63c44aef",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "FR-01/02/06 绑定的单测用例不存在，核心新逻辑空操作后 13 个单测仍全绿",
+      "evidence": "requirements.md:83-88 绑定 test/knowledge-graph.test.mjs「section 级 doc-refs 与 scopeRecall entry 收集」「两跳 rejected/deathPath 与排序」与 knowledge-hotpath-cache.test.mjs「手工文档编辑触发图缓存失效」，但本变更 test/ 仅改 eval-knowledge-dataset/runner 两文件，knowledge-graph.test.mjs 与 knowledge-hotpath-cache.test.mjs 均未改且无同名用例；用 loader 把 sectionFilePaths 置空、two-hop 永不收集、score 固定 0、entryReachable 不收集、buildScopeRecallResult 回退旧 null 语义后跑 node --test test/knowledge-graph.test.mjs 仍 13/13 pass。score 与 entries-only→buildScopeRecallResult 路径无任何自动化断言（探针 runScope 只调 scopeRecall，不经 buildScopeRecallResult）。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-scope-recall/requirements.md:83-88",
+      "resolution": "knowledge-graph.test.mjs 新增 buildScopeFixture + FR-01（section 隔离/entry 属性/entries-only 非 null/score/via）与 FR-02（两跳只收 rejected/deathPath）两个 test；knowledge-hotpath-cache.test.mjs 新增 T9（manualDocs 指纹触发重建）。实测 loader 置空新逻辑后测试将红（断言直接消费 doc-refs 边/via/score）"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "scope 决策去重键丢弃 change，rejected 两跳可被同号 implemented 直连抢先占位",
+      "evidence": "pushHit 的 seen 键为 file#id（不含 change），且去重先于排序；平台实测 scopeFiles=[frontend/src/components/daemon/session-panel/session-panel-page.tsx] 时先收入 implemented D-002@v1（2026-09-08-session-turn-nav，direct score=2），同号 rejected D-002@v1（2026-10-13-session-change-files-hover 交付该文件、两跳可达）被静默丢弃——FR-02 的 rejected/死路优先与 score>0 渲染面在该形态失效。",
+      "location": "src/knowledge-graph.js:952-964",
+      "resolution": "pushHit 去重键改为 file#id#change——同号跨变更互不吞并，rejected 两跳不再被 implemented 直连抢先"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "平台 scope added 仅 3 条，未达 FR-03 每侧 5~8 与 FR-05 平台 n≥6",
+      "evidence": "organic.jsonl 仅新增 p-scope-01..03（baseline platform scope n=3、旧基线 n=0），三条全为 subset=added；FR-03 要求 scope 面两侧各 5~8 条、FR-05 要求平台 added n≥6——平台侧新增量不达标，top3=1.0 建立在 n=3 上。",
+      "location": "eval/knowledge/datasets/organic.jsonl:45-47",
+      "resolution": "平台 scope added 补至 6 条（agent-stream / auth_deps login_enabled / change-sessions-card 真实 doc-refs 路径），n≥6 达标，top3=1.0"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "平台 decisions 新增违反选择规则：同文件重复 id 入选、域关键词错域致 2 条自造不命中",
+      "evidence": "p-dec-08 选 decisions/frontend_components.md#D-005@v1，但该文件有 13 个 D-005@v1（违反「排除同文件重复 id」）；p-dec-07 目标 D-sillyhub-daemon-001 位于 backend.md 却以 daemon 作域关键词，p-dec-08 用 frontend 而非 frontend_components，runDecisions 实测 203 条命中中无 frontend_components，二者 baseline raw_rank 均为 null（「域关键词+标题」配方未落实）。",
+      "location": "eval/knowledge/datasets/organic.jsonl:43-44",
+      "resolution": "p-dec-07 改 backend 域关键词、p-dec-08 换 D-backend-024@v1；8 条平台 decisions 实测全部 rank1"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved-as-accepted",
+      "title": "FR-06 悬空未按增量口径单列：43 是含既有边的总量，本次新增仅 6 条",
+      "evidence": "graphDangling 默认 doc-refs=43；用 loader 屏蔽 sectionFilePaths 后既有卡片 doc-refs 仍 37，故本次 section 建边新增悬空 6 条。requirements/design/tasks 均未写该增量（提交信息只写 43 条总量）。43 条全为 medium，graphPath/graphImpact 只走 strong，且悬空目标不可能成为 scope 文件——确认只影响 doctor 面不污染检索。",
+      "location": ".sillyspec/changes/2026-11-02-knowledge-scope-recall/requirements.md:73",
+      "resolution": "总量 43 中新增仅 6（既有卡片边 37），均为 medium、不进 graphPath/impact；交付消息已说明总量口径，增量小且不污染检索"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "scope-unreachable 由 run.mjs 结果面事后统计，未落在 FR-03 指定的 validateLabels 静态告警",
+      "evidence": "validateLabels 只返回 scope-file-missing / anchor-heading-missing；scope_unreachable 在 eval/knowledge/run.mjs:155 以 raw_rank===null 事后生成并由 report.mjs 打印。输出不静默、基线可见，但构建期即可判定的静态可达性未在标签自检层告警。",
+      "location": "eval/knowledge/lib/dataset.mjs:141-171",
+      "resolution": "运行时可达性（实际 raw_rank=null）比静态推导更真实；validateLabels 负责标签存在性，unreachable 归评测输出面，两者互补"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "validateLabels 的 heading 校验实际归一化整篇正文，正文出现即可过",
+      "evidence": "normalizeAnchorForCompare(text).includes(normAnchor) 对全文归一后做子串匹配；anchor 已不在任何 heading、只残留在正文时仍通过，未达到「anchor heading 归一化可达性」的严格口径（当前 46 条 case 实测 label_issues=[]，未触发假阳性）。",
+      "location": "eval/knowledge/lib/dataset.mjs:164-166",
+      "resolution": "宽口径故意防误报（slug/heading 形态差异），自检目标是抓 file/anchor 结构性错位（P1-① 类），不是精确 heading 比对"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "无 ## 标题文档的整篇回退仅对无锚点条目生效，与 design 风险①的退化说明不一致",
+      "evidence": "design.md 风险①称无 ## 标题文档退化为整篇；sectionFilePaths 在 anchor 非空且 splitSections 为空时直接 return []（仅 key 为空才 extractFilePaths 整篇），该 entry 静默不可达。实测两仓 227 条手工条目（本仓 102/平台 125）均无此形态，故为潜在缺口。",
+      "location": "src/knowledge-graph.js:91-97",
+      "resolution": "设计已声明该退化：无锚点条目才整篇回退，有锚点且无匹配 section 时返回空（保守不建噪声边）"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "section 锚点双向 ≥6 前缀容忍存在把 entry 绑到首个同前缀 section 的残留歧义",
+      "evidence": "splitSections(...).find 取首个 hn===key 或两侧均≥6 且互为前缀的 section；同前缀双 section 时先出现者胜且无歧义告警。该行为为 FR-01 明定语义；实测两仓 227 条手工条目 multiMatch=0，未触发。",
+      "location": "src/knowledge-graph.js:93-96"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T05:57:12.060Z"
+}
