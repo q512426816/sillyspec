@@ -1,0 +1,146 @@
+{
+  "change": "2026-11-02-slot4-harvest-retire",
+  "baseline": "fd1a2ac9e6c71bb39a86d55da9fc4e4749c7cdc6",
+  "head": "3f4bb4549c0085ba8455f7851707962dd5a733bf",
+  "files": [
+    "src/flow-parity.js",
+    "src/flow.js",
+    "src/index.js",
+    "src/knowledge-quicklog.js",
+    "test/decision-anchor-backfill.test.mjs",
+    "test/knowledge-hotpath-cache.test.mjs",
+    "test/knowledge-quicklog.test.mjs",
+    "test/quicklog-commit-slice.test.mjs",
+    "test/slot4-distill-fix.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 80,
+    "deletions": 552
+  },
+  "savedAt": "2026-11-02T21:23:21.643Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 5
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "fd1a2ac9e6c71bb39a86d55da9fc4e4749c7cdc6",
+    "totals": {
+      "files": 9,
+      "additions": 80,
+      "deletions": 552
+    },
+    "rows": [
+      {
+        "path": "src/flow-parity.js",
+        "additions": 10,
+        "deletions": 50,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 2,
+        "deletions": 7,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/index.js",
+        "additions": 3,
+        "deletions": 44,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-quicklog.js",
+        "additions": 0,
+        "deletions": 193,
+        "kind": "deleted",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/decision-anchor-backfill.test.mjs",
+        "additions": 4,
+        "deletions": 14,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-hotpath-cache.test.mjs",
+        "additions": 37,
+        "deletions": 114,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-quicklog.test.mjs",
+        "additions": 0,
+        "deletions": 49,
+        "kind": "deleted",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/quicklog-commit-slice.test.mjs",
+        "additions": 0,
+        "deletions": 34,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/slot4-distill-fix.test.mjs",
+        "additions": 24,
+        "deletions": 47,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "26455d2d22cc2b3e2da286a166a7efaf5842de8370c6e067958df8c31b4beda5",
+  "patchStatus": "ok"
+}

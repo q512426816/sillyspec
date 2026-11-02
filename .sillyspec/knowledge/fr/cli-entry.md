@@ -11973,3 +11973,76 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-02-constraint-mechanize
   status: active
+
+## FR-cli-entry-632 harvestSlot4Decision 改为恒返回 {harvested:false, reason}，不再写 decisions.md；函数保留签名（flow.js 调用点兼容）但 flow.js 摘除收割调用与日志
+变更：2026-11-02-slot4-harvest-retire
+状态：active
+摘要：不再产 decisions.md；幂等
+场景正文：
+- 场景：不再产 decisions.md — Given design.md 有实质风险段作答且变更无 decisions.md；When flow done 收口；Then decisions.md 不被创建（风险分析已在 design.md 归档件保全）
+- 场景：幂等 — Given 变更已有 decisions.md；When 调用；Then 返回 {harvested:false, reason 含'已在场'} 不写不覆盖
+全文：.sillyspec/changes/archive/2026-11-02-slot4-harvest-retire/requirements.md#FR-01
+最近确认：3f4bb4549c0085ba8455f7851707962dd5a733bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-slot4-harvest-retire:flow:测试绑定FR-01
+  tests: test/slot4-distill-fix.test.mjs「收割不写盘（改造后）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-slot4-harvest-retire
+  status: active
+
+## FR-cli-entry-633 测试：slot4-distill-fix.test.mjs 和 decision-anchor-backfill.test.mjs 适配（收割相关断言改为验证不写盘/幂等跳过；anchorBackfillCandidate 纯函数保留——蒸馏端还消费）
+变更：2026-11-02-slot4-harvest-retire
+状态：active
+摘要：空实现判据
+场景正文：
+- 场景：空实现判据 — Given 恢复收割写盘；When 跑新测试；Then 「不写盘」断言必红
+全文：.sillyspec/changes/archive/2026-11-02-slot4-harvest-retire/requirements.md#FR-02
+最近确认：3f4bb4549c0085ba8455f7851707962dd5a733bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-slot4-harvest-retire:flow:测试绑定FR-02
+  tests: test/decision-anchor-backfill.test.mjs「适配回归」 | test/slot4-distill-fix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-slot4-harvest-retire
+  status: active
+
+## FR-cli-entry-634 存量底稿不动（已无行为影响，后续数据治理清理）
+变更：2026-11-02-slot4-harvest-retire
+状态：active
+摘要：存量零变化
+场景正文：
+- 场景：存量零变化 — Given 本变更完成；When 跑 eval；Then 六探针 GREEN 五面零回归
+全文：.sillyspec/changes/archive/2026-11-02-slot4-harvest-retire/requirements.md#FR-03
+最近确认：3f4bb4549c0085ba8455f7851707962dd5a733bf
+
+## FR-cli-entry-635 验收：全量 npm test 零红 + eval 六探针 GREEN + lint 绿 + 显式 pathspec 提交
+变更：2026-11-02-slot4-harvest-retire
+状态：active
+摘要：全量零红
+场景正文：
+- 场景：全量零红 — Given 变更完成；When npm test；Then fail=0
+全文：.sillyspec/changes/archive/2026-11-02-slot4-harvest-retire/requirements.md#FR-04
+最近确认：3f4bb4549c0085ba8455f7851707962dd5a733bf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-slot4-harvest-retire:flow:测试绑定FR-04
+  tests: test/decision-anchor-backfill.test.mjs | test/slot4-distill-fix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-slot4-harvest-retire
+  status: active

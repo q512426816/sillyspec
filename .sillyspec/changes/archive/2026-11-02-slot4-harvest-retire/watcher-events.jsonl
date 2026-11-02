@@ -1,0 +1,20 @@
+{"ts":1793653008991,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793653008991,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793653008991,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793653019457,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793653039475,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow-parity.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793653128448,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/index.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793653144928,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/knowledge-quicklog.js、test/knowledge-quicklog.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793653186107,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-hotpath-cache.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793653609228,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow-parity.js、src/index.js、src/knowledge-quicklog.js、test/knowledge-hotpath-cache.test.mjs、test/knowledge-quicklog.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793653619325,"kind":"commit","stage":null,"detail":"5de4d4b5","provisional":true}
+{"ts":1793653770044,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/quicklog-commit-slice.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793654406607,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793654409880,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793654409880,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793654421261,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793654424149,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793654424149,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793654449528,"kind":"commit","stage":null,"detail":"3f4bb454","provisional":true}
+{"ts":1793654450143,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-02-slot4-harvest-retire/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793654569416,"kind":"gate-run","stage":"verify","detail":"门实测 passed（83.6s） · 20261102212249","provisional":true}

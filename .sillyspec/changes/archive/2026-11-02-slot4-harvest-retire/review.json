@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-slot4-harvest-retire",
+  "reviewer": "inline-self（小变更收窄面——纯减法 no-op 化，无 P1 风险面）",
+  "verdict": "PASS",
+  "reviewedAgainst": "3f4bb4549c0085ba8455f7851707962dd5a733bf",
+  "findings": [
+    {"severity": "P3", "status": "accepted", "title": "存量底稿未清理", "evidence": "unmapped 47+ 条底稿条目仍在——底稿资格门已使其行为面无效", "location": "knowledge/decisions/unmapped.md"}
+  ],
+  "dimensionNotes": {"乱序": "ok", "并发": "ok", "切换": "ok", "作用域": "ok"},
+  "reviewedAt": "2026-11-03T05:23:37+08:00"
+}

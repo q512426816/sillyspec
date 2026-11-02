@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-slot4-harvest-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-slot4-harvest-retire:flow:测试绑定FR-01",
+      "tests": [
+        "test/slot4-distill-fix.test.mjs「收割不写盘（改造后）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-slot4-harvest-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-slot4-harvest-retire:flow:测试绑定FR-02",
+      "tests": [
+        "test/decision-anchor-backfill.test.mjs「适配回归」",
+        "test/slot4-distill-fix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-slot4-harvest-retire"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-slot4-harvest-retire:flow:测试绑定FR-04",
+      "tests": [
+        "test/decision-anchor-backfill.test.mjs",
+        "test/slot4-distill-fix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-slot4-harvest-retire"
+    }
+  ]
+}

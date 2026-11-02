@@ -1,0 +1,808 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index cb87f928..e6dfc4d7 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -305,60 +305,20 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
+ }
+ 
+ /**
+- * design 槽4（风险与死路）实质作答收割 → decisions.md（已有不覆盖）。
+- * @returns {{harvested: boolean, reason?: string}}
++ * design 槽4（风险与死路）收割——已下线（2026-11-02-slot4-harvest-retire）。
++ *
++ * 历史动机（2026-09-25-thin-parity-assets）：轻量变更决策产出从零到一，合成底稿条目随蒸馏
++ * 链进 knowledge。4A 数据对账实证产物全是模板底稿（本仓 47 条、平台 173 条），标题模板化、
++ * 无真否决语义——底稿资格门（series-final-cleanup）已解决行为面（不占防复潮席位），本变更
++ * 根治数据面：不再合成伪决策条目。风险分析内容保留在 design.md 归档冻结件（信息零丢失）。
++ *
++ * 函数保留签名与导出（flow.js 调用点已摘除，anchorBackfillCandidate 同文件导出不能删）。
++ * @returns {{harvested: boolean, reason: string}} 恒 {harvested:false}
+  */
+ export function harvestSlot4Decision({ changeDir, change }) {
+   const decPath = join(changeDir, 'decisions.md')
+   if (existsSync(decPath)) return { harvested: false, reason: 'decisions.md 已在场（不覆盖）' }
+-  let dText
+-  try { dText = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return { harvested: false, reason: '无 design.md' } }
+-  const lines = dText.replace(/\r\n/g, '\n').split('\n')
+-  let inSlot = false
+-  const buf = []
+-  for (const line of lines) {
+-    if (/^<!--\s*AGENT:槽4/.test(line)) { inSlot = true; continue }
+-    if (inSlot && (/^<!--/.test(line) || /^#{1,6}\s/.test(line))) break
+-    if (inSlot) buf.push(line)
+-  }
+-  let answer = buf.join('\n').trim()
+-  // v2 纯 markdown（2026-10-04-thin-docs-v2）：无槽标记时改读「风险与死路」节正文（复用
+-  // flow-review 的 v2 节读取——剥离问题原文行；单一源 DESIGN_QUESTIONS 防镜像漂移）
+-  if (!inSlot) {
+-    const risksSec = DESIGN_QUESTIONS.sections.find((s) => s.key === 'risks')
+-    answer = readV2SectionAnswer(dText, risksSec.heading, DESIGN_QUESTIONS)
+-  }
+-  if (!answer || /^不适用/.test(answer)) return { harvested: false, reason: '槽4 空/不适用' }
+-  // 锚点自动回填（2026-10-15-decision-anchor-backfill 收割端）：风险段作答文本恰含一个
+-  // 路径 token → 写入 - 锚点：行（源 decisions.md 是真相源，蒸馏自然带上、人可改）；
+-  // 0/多候选不写（蒸馏端渲染时还会再兜底一次同款判定）。单一源 anchorBackfillCandidate。
+-  const anchorCand = anchorBackfillCandidate(answer)
+-  const anchorLine = anchorCand ? [`- 锚点：${anchorCand}`] : []
+-  const text = [
+-    '---',
+-    `author: flow-machine-draft`,
+-    `created_at: ${new Date().toISOString()}`,
+-    '---',
+-    `# 决策记录（Decisions）— ${change}`,
+-    '',
+-    // 标题自解释（2026-10-15-harvest-title-clarify）：读者面是 decisions 文档与 knowledge，
+-    // 机制出处（槽4 收割）由 frontmatter author: flow-machine-draft 承载，标题只说内容与性质。
+-    `## D-001@v1: 设计期风险与放弃方案（底稿）`,
+-    `- 类型：process`,
+-    `- 状态：confirmed`,
+-    ...anchorLine,
+-    // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
+-    // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
+-    // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。
+-    // 槽4 是定案的流程/方法论取舍，process+confirmed 语义成立。
+-    `- 答案：${answer.replace(/\s*\n+\s*/g, ' ')}`,
+-    // 正文用「答案」标签（同修）：distill 落盘「理由：」行取 entry.answer——此前「- 决策：」非白名单
+-    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。一行展平（评审 P1 清偿）：字段解析是
+-    // 单行契约，多行槽4 作答经 \n 续行会静默丢后续行——收割端压平为单行（空格分隔）保全文。
+-    '',
+-  ].join('\n')
+-  writeAtomicSync(decPath, text)
+-  return { harvested: true }
++  return { harvested: false, reason: '底稿收割已下线（2026-11-02-slot4-harvest-retire）——风险分析保留在 design.md 归档件，不再合成伪决策条目' }
+ }
+ 
+ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary, motiveFromInput }
+diff --git a/src/flow.js b/src/flow.js
+index 526b434c..dd18d71c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -2742,13 +2742,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；轻量变更无 design.md，域路由
+   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
+   if (st.substeps?.distill === 'done') { skip('distill') } else {
+-    // 槽4收割（2026-09-25-thin-parity-assets：design「风险与死路」实质作答合成 decisions.md——
+-    // 轻量变更决策产出从零到一；已有 decisions 不覆盖）
+-    try {
+-      const { harvestSlot4Decision } = await import('./flow-parity.js')
+-      const h = harvestSlot4Decision({ changeDir, change })
+-      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（底稿——作答里的放弃方案请拆成 rejected 条目再收口；随蒸馏链进 knowledge）`)
+-    } catch { /* 收割 best-effort */ }
++    // 槽4收割已下线（2026-11-02-slot4-harvest-retire）：design 风险段不再合成伪决策条目——
++    // 风险分析保留在 design.md 归档件（信息零丢失），底稿条目 4A 实证为纯模板噪声
+     // 模块变更索引机械回写（2026-10-12-thin-module-gate-and-feed 二档）：命中模块的卡/sidecar
+     // 追加一行本变更条目——零语义判断（日期/变更名/动机首行全已知），split-changelog 契约 sidecar
+     // 优先、卡内「## 变更索引」节次之、变更名在场即跳过（断点续跑幂等）。moduleScope 由上方
+diff --git a/src/index.js b/src/index.js
+index cfb9c050..01646de1 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3624,50 +3624,9 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       }
+       break;
+     }
+-    case 'quicklog': {
+-      // known-issues ④ v1（2026-09-16）：QUICKLOG 多会话条目交织——本会话提交 git add 整文件
+-      // 会夹带并行会话未完成条目，只能手工四步舞（备份→剥离→commit→恢复）。本命令一键机制化：
+-      // 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG 文件+patches sidecar+额外
+-      // pathspec）→ 恢复工作区（并行条目留未提交态）。参数面照抄 wt-commit 先例（--change/-m/--
+-      // pathspec）+ 可重复 --ql（guard 缺失/损坏时的显式逃生门；含已取消条目）。
+-      if (filteredArgs[1] !== 'commit') {
+-        console.error(`❌ 未知 quicklog 子命令: ${filteredArgs[1] || '(空)'}——当前支持: sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]`);
+-        process.exit(1);
+-      }
+-      const qlRest = filteredArgs.slice(2);
+-      const qlDd = qlRest.indexOf('--');
+-      const qlFlags = qlDd === -1 ? qlRest : qlRest.slice(0, qlDd);
+-      const qlExtra = qlDd === -1 ? [] : qlRest.slice(qlDd + 1);
+-      let qlChange = null;
+-      let qlMessage = null;
+-      const qlIds = [];
+-      for (let i = 0; i < qlFlags.length; i++) {
+-        if (qlFlags[i] === '--change' && qlFlags[i + 1]) qlChange = qlFlags[++i];
+-        else if ((qlFlags[i] === '-m' || qlFlags[i] === '--message') && qlFlags[i + 1]) qlMessage = qlFlags[++i];
+-        else if (qlFlags[i] === '--ql' && qlFlags[i + 1]) qlIds.push(qlFlags[++i]);
+-      }
+-      try {
+-        const { resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
+-        const qlSpecBase = resolvePlatformSpecDir(dir, specDir);
+-        const { resolveQuickSessionsDir } = await import('./run/shared.js');
+-        const qlSessionsDir = resolveQuickSessionsDir(resolvePlatformOpts(dir, specDir), qlSpecBase);
+-        let qlUser = 'unknown';
+-        try { qlUser = (await import('./git-helper.js')).git(dir, ['config', 'user.name']) || 'unknown'; } catch {}
+-        const { runQuicklogCommit } = await import('./quicklog.js');
+-        const r = await runQuicklogCommit({
+-          specBase: qlSpecBase, cwd: dir, gitUser: qlUser, qlIds,
+-          changeName: qlChange, sessionsDir: qlSessionsDir,
+-          message: qlMessage, extraPathspecs: qlExtra,
+-        });
+-        if (json) console.log(JSON.stringify({ command: 'quicklog commit', ...r }, null, 2));
+-        else if (r.skipped) console.log(`⏭️  quicklog commit 无新内容跳过（HEAD 不动）：${r.shortHead}（条目均已收编：${(r.skippedQlIds || []).join(', ') || '（无）'}）`);
+-        else console.log(`✅ quicklog commit 完成：${r.shortHead}（${r.files.length} 文件；收编 ${(r.committedQlIds || []).join(', ')}）\n   并行会话条目已恢复为工作区未提交态；备份：${(r.backupPaths || []).join(' , ')}`);
+-      } catch (e) {
+-        console.error(`❌ quicklog commit 失败：${e.message}`);
+-        process.exit(1);
+-      }
+-      break;
+-    }
++    // quicklog CLI 子命令已下线（2026-11-03-quicklog-business-retire）：
++    // quicklog 业务面（QUICKLOG 日志系统）用户已停用；工具函数（withFileLock/标题推导等）
++    // 保留在 quicklog.js 供其他模块消费。knowledge-quicklog.js 解析层同批删除。
+     case 'worktree': {
+       const { WorktreeManager } = await import('./worktree.js');
+       const { ProgressManager, resolveSessionIdentity } = await import('./progress.js');
+diff --git a/src/knowledge-quicklog.js b/src/knowledge-quicklog.js
+deleted file mode 100644
+index 79390c3c..00000000
+--- a/src/knowledge-quicklog.js
++++ /dev/null
+@@ -1,193 +0,0 @@
+-/**
+- * knowledge-quicklog.js — quicklog 历史检索面（知识可见性导线）
+- *
+- * 缺口（2026-09-21 R5R 实证）：quick 产出（quicklog 条目 + patch）不在任何检索面——
+- * knowledge-match 只扫 INDEX 路由与 decisions；主仓唯一核验过键名的先例
+- * （ql-20260920-007-d0dd）因 linked 变更未归档而 distill 缺席，FR 检索面零覆盖，
+- * 后续三个独立会话全部猜错同一外部键。本模块把 quicklog 历史拉进注入面：
+- * 纯读、fail-open、top-3 一行制——注入的是「发生过什么」的历史事实（条目说的是
+- * 当时做了什么），不是权威断言；消费方要用契约细节按 ql-ID 回源读全文或读代码。
+- *
+- * 与 knowledge-match.js 分工：那边消费 INDEX/decisions（结构化知识），这边消费双信号源——
+- * quicklog/QUICKLOG-*.md（append-only 历史）+ changes/archive/<变更>/flow-state.yaml（flow 族归档
+- * 变更伪条目，2026-09-23 扩源：flow 变更不产生 quicklog 条目，扩源后检索面才看得见）。
+- * 条目头与字段行是 allocateQuicklogEntry
+- * 的机械解析契约：`## ql-<id> | <时间> | <标题>` + `文件：` 段（`- path（注记）` 行）。
+- * run/prompt.js（execute 确认步 + quick step1）与 stages/execute.js（Wave 孪生）两处
+- * 注入点共用本模块——格式等价由 test/knowledge-inject.test.mjs 锁定，改渲染必同步两处。
+- */
+-
+-import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+-import { join } from 'path'
+-import { readHotCache, writeHotCache, dirStamp } from './hot-cache.js'
+-
+-const QUICKLOG_ENTRY_RE = /^##\s+(ql-[\w-]+)\s*\|\s*([^|]+)\s*\|\s*(.+)$/
+-// 文件注记行：`- path（中文括注）` / `- path(ascii)` / 裸 `- path`（allocateQuicklogEntry
+-// 均可产出；path 本身不含空白，故止于首个空白或括号）
+-const QUICKLOG_FILE_LINE_RE = /^-\s+([^\s（(]+)/
+-// 文件：段结束边界——出现其他字段标签行即收段（状态/需求/根因/方案/结果/审计/关联变更）
+-const QUICKLOG_FIELD_RE = /^(状态|关联变更|需求|根因|方案|结果|审计)\s*[：:]/
+-
+-/**
+- * 解析 quicklog 全量条目——双信号源（资产三小件①，2026-09-23 扩源）：
+- *   ① quicklog/QUICKLOG-*.md（append-only 历史条目，含按日归档的分片文件）；
+- *   ② .sillyspec/changes/archive/<变更>/flow-state.yaml（flow 族归档变更）——flow 变更不产生
+- *      quicklog 条目，检索面此前看不见 flow 变更的知识（与 ql-011 治的病同族）。伪条目
+- *      三料合成：qlId=变更目录名 / date=目录名日期前缀（缺前缀退 flow-state.yaml mtime）/
+- *      title=proposal.md 首个 `# ` 标题行（缺文件退变更名）；solution 恒空、files 恒空。
+- * 双源命中时 quicklog 条目排前（matchQuicklogContext 排序 source 键）。
+- * @param {string} specBase - .sillyspec 根
+- * @returns {{ qlId: string, date: string, title: string, solution: string, files: string[], source: 'quicklog'|'flow' }[]}
+- *   两源都不存在 / 全部不可读 → []（调用方零注入零阻断）
+- */
+-export function parseQuicklogEntries(specBase) {
+-  return [...parseQuicklogFileEntries(specBase), ...parseFlowArchiveEntries(specBase)]
+-}
+-
+-/** 源①：quicklog/QUICKLOG-*.md 条目解析（原 parseQuicklogEntries 主体，行为不变）。 */
+-function parseQuicklogFileEntries(specBase) {
+-  const dir = join(specBase, 'quicklog')
+-  let files
+-  try {
+-    files = readdirSync(dir).filter((f) => /^QUICKLOG-.*\.md$/i.test(f))
+-  } catch {
+-    return []
+-  }
+-  const entries = []
+-  for (const f of files) {
+-    let content
+-    try {
+-      content = readFileSync(join(dir, f), 'utf8')
+-    } catch {
+-      continue
+-    }
+-    let cur = null
+-    let inFiles = false
+-    const flush = () => {
+-      if (cur) entries.push(cur)
+-      cur = null
+-    }
+-    for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+-      const h = line.match(QUICKLOG_ENTRY_RE)
+-      if (h) {
+-        flush()
+-        cur = { qlId: h[1].trim(), date: h[2].trim(), title: h[3].trim(), solution: '', files: [], source: 'quicklog' }
+-        inFiles = false
+-        continue
+-      }
+-      if (!cur) continue
+-      if (QUICKLOG_FIELD_RE.test(line)) {
+-        inFiles = false
+-        const m = line.match(/^方案\s*[：:]\s*(.*)$/)
+-        if (m) cur.solution = m[1].trim()
+-        continue
+-      }
+-      if (/^文件\s*[：:]/.test(line)) {
+-        inFiles = true
+-        continue
+-      }
+-      if (inFiles) {
+-        const m = line.match(QUICKLOG_FILE_LINE_RE)
+-        if (m) cur.files.push(m[1].replace(/\\/g, '/'))
+-      }
+-    }
+-    flush()
+-  }
+-  return entries
+-}
+-
+-/** 伪条目扫描缓存版本（解析契约变化时 bump 即全量失效）。 */
+-const FLOW_ARCHIVE_CACHE_VERSION = 1
+-
+-/** 源②：flow 归档变更伪条目——目录内 flow-state.yaml 在场即认（不校验 yaml 内容：伪条目
+- * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。
+- * 跨进程缓存（FR-03，2026-10-21-knowledge-tier-denoise）：指纹=归档根子项名全集+根 mtimeMs
+- * （一次 readdir+一次 stat，廉价每次重算）——命中即免逐目录列举与逐变更 proposal.md 读。
+- * 归档件是冻结审计面（无就地编辑形态），指纹对增删/改名完备；坏缓存/失配 fail-open 全量重建。
+- * 导出供测试断言缓存三态（命中/失效/坏缓存）。
+- * 注（2026-11-02-series-final-cleanup）：归档变更检索源已由 scope 两跳（knowledge-graph.js
+- * 的 file←deliverables←change←from-change 链）替代——本函数当前仅被缓存测试消费，非活检索
+- * 面接线点。如需恢复归档变更的 query 驱动检索，优先走 scope 通道而非在此重新接线。 */
+-export function parseFlowArchiveEntries(specBase) {
+-  const archiveDir = join(specBase, 'changes', 'archive')
+-  const fingerprint = dirStamp(archiveDir)
+-  if (fingerprint === null) return []
+-  const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
+-  const cached = readHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint })
+-  if (Array.isArray(cached)) return cached
+-
+-  let dirs
+-  try {
+-    dirs = readdirSync(archiveDir, { withFileTypes: true })
+-  } catch {
+-    return []
+-  }
+-  const out = []
+-  for (const d of dirs) {
+-    if (!d.isDirectory()) continue
+-    try {
+-      const dir = join(archiveDir, d.name)
+-      if (!existsSync(join(dir, 'flow-state.yaml'))) continue
+-      const dm = d.name.match(/^(\d{4}-\d{2}-\d{2})-/)
+-      let date = dm ? dm[1] : ''
+-      if (!date) {
+-        try { date = new Date(statSync(join(dir, 'flow-state.yaml')).mtime).toISOString().slice(0, 10) } catch { /* mtime 不可得 → 空日期（排序自然靠后） */ }
+-      }
+-      let title = ''
+-      try {
+-        const prop = readFileSync(join(dir, 'proposal.md'), 'utf8')
+-        const h = prop.replace(/\r\n/g, '\n').split('\n').find((l) => /^#\s+/.test(l))
+-        if (h) title = h.replace(/^#\s+/, '').trim()
+-      } catch { /* 无 proposal.md → 标题退变更名 */ }
+-      out.push({ qlId: d.name, date, title: title || d.name, solution: '', files: [], source: 'flow' })
+-    } catch { /* 单目录读取异常 → 跳过该目录（fail-open，不影响其余源） */ }
+-  }
+-  writeHotCache(cachePath, { version: FLOW_ARCHIVE_CACHE_VERSION, fingerprint, payload: out })
+-  return out
+-}
+-
+-// ── 匹配打分 ─────────────────────────────────────────────────────────────────
+-// 查询侧 token：ASCII 词（≥3 字符，词边界匹配）+ CJK 连续段（≥2 字，子串匹配）——
+-// 与 knowledge-match.keywordMatchesContext 同判法，方向相反（那边条目出关键词查上下文，
+-// 这边上下文出 token 查条目——quicklog 条目没有 INDEX 关键词行，只能反向）。
+-const ASCII_TOKEN_RE = /[a-z][a-z0-9._-]{2,}/g
+-const CJK_RUN_RE = /[\u4e00-\u9fff]{2,}/g
+-
+-function contextTokens(taskContext) {
+-  const s = String(taskContext || '').toLowerCase()
+-  const out = new Set()
+-  for (const t of s.match(ASCII_TOKEN_RE) || []) out.add(t)
+-  for (const t of s.match(CJK_RUN_RE) || []) out.add(t)
+-  return [...out]
+-}
+-
+-function escapeRegex(s) {
+-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+-}
+-
+-/** 文件命中权重：路径/文件名是强信号（同一文件被改过 ≈ 同域修补） */
+-const FILE_HIT_WEIGHT = 5
+-/** 命中门槛：≥1 文件命中，或 ≥2 个不同 token 命中（单 token 命中多为噪音词，不注入） */
+-const MIN_TOKEN_HITS = 2
+-
+-/** 源排序权重：quicklog 条目 0（排前），flow 伪条目 1——双源命中时 quicklog 优先（更新鲜）。 */
+-function sourceRank(entry) {
+-  return entry && entry.source === 'flow' ? 1 : 0
+-}
+-
+-/**
+- * 任务上下文 × quicklog 条目匹配（双源条目统一打分，排序 source 键优先）。
+- * @param {string} specBase - .sillyspec 根
+- * @param {string} taskContext - 任务描述串（与 matchKnowledge 的 query 同源）
+- * @param {{ limit?: number }} [opts] - 注入上限（默认 3）
+- * @returns {{ hits: Array<{ qlId: string, date: string, title: string, files: string[] }>, report: string }}
+- *   无 quicklog / 无命中 / 任何异常 → { hits: [], report: '' }（fail-open，永不抛）
+- */
+-
+-/**
+- * 注入段渲染（prompt.js 与 execute.js 孪生共用——仅段头层级不同）。
+- * 一行一条：ql-ID · 标题（截 60）· 日期 · 至多 2 个触碰文件。零正文注入——
+- * quicklog 条目正文可能很长，注入面只做「知道有这回事 + 回源指针」。
+- * @param {Array<{qlId,date,title,files}>} hits
+- * @param {{ h3?: boolean }} [opts] - execute.js Wave prompt 内用 h3（### ）对齐知识段层级
+- */
+diff --git a/test/decision-anchor-backfill.test.mjs b/test/decision-anchor-backfill.test.mjs
+index 594b4e3b..4c511d87 100644
+--- a/test/decision-anchor-backfill.test.mjs
++++ b/test/decision-anchor-backfill.test.mjs
+@@ -31,7 +31,7 @@ test('① anchorBackfillCandidate 全形态', () => {
+   assert.equal(anchorBackfillCandidate('反斜杠形态 src\\flow.js 单一路径'), 'src/flow.js', '反斜杠归一')
+ })
+ 
+-// ── ② 收割端 ─────────────────────────────────────────────────────────────────
++// ── ② 收割端——已下线（2026-11-02-slot4-harvest-retire）：收割不写盘，锚点回填由蒸馏端单端承担 ──
+ 
+ function fixtureChange(root, riskAnswer) {
+   const changeDir = join(root, 'changes', '2026-10-15-anchor-fixture')
+@@ -44,23 +44,13 @@ function fixtureChange(root, riskAnswer) {
+   return changeDir
+ }
+ 
+-test('② 收割端：恰一路径 → - 锚点：行；无路径 → 无该行', () => {
++test('② 收割端已下线：不写 decisions.md（原收割→锚点回填功能归蒸馏端单端）', () => {
+   const root = mkdtempSync(join(tmpdir(), 'anc-hv-'))
+   try {
+     const d1 = fixtureChange(root, '最大风险：注入遥测写失败——落点 src/flow.js 遥测块 fail-soft 兜底')
+     const r1 = harvestSlot4Decision({ changeDir: d1, change: '2026-10-15-anchor-fixture' })
+-    assert.equal(r1.harvested, true)
+-    const md1 = readFileSync(join(d1, 'decisions.md'), 'utf8')
+-    assert.ok(md1.includes('- 锚点：src/flow.js'), '恰一路径 → 锚点行在场')
+-    assert.ok(md1.includes('- 答案：'), '答案行照旧')
+-
+-    const root2 = mkdtempSync(join(tmpdir(), 'anc-hv2-'))
+-    try {
+-      const d2 = fixtureChange(root2, '风险在流程语义层面：契约理解偏差，无具体文件落点')
+-      harvestSlot4Decision({ changeDir: d2, change: '2026-10-15-anchor-fixture' })
+-      const md2 = readFileSync(join(d2, 'decisions.md'), 'utf8')
+-      assert.ok(!md2.includes('锚点：'), '无路径 → 无锚点行（不编造）')
+-    } finally { rmSync(root2, { recursive: true, force: true }) }
++    assert.equal(r1.harvested, false, '收割已下线——恒 harvested:false')
++    assert.ok(!existsSync(join(d1, 'decisions.md')), 'decisions.md 不被创建')
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
+ 
+diff --git a/test/knowledge-hotpath-cache.test.mjs b/test/knowledge-hotpath-cache.test.mjs
+index b3e44202..1b7cab3e 100644
+--- a/test/knowledge-hotpath-cache.test.mjs
++++ b/test/knowledge-hotpath-cache.test.mjs
+@@ -1,7 +1,7 @@
+ /**
+- * knowledge-hotpath-cache.test.mjs — 2026-10-21-knowledge-tier-denoise FR-03
+- * quicklog flow 归档伪条目扫描与 knowledge-graph 构建的跨进程缓存：
++ * knowledge-hotpath-cache.test.mjs — knowledge-graph 构建的跨进程缓存：
+  * 命中等价 / 归档新增失效 / 坏缓存 fail-open / TTL 过期重建 / 输入面变化失效。
++ * quicklog 伪条目缓存测试已随 knowledge-quicklog.js 删除（2026-11-03-quicklog-business-retire）。
+  */
+ 
+ import { join } from 'path'
+@@ -13,7 +13,6 @@ const __filename = fileURLToPath(import.meta.url)
+ const __dirname = join(__filename, '..')
+ const root = join(__dirname, '..')
+ 
+-const { parseFlowArchiveEntries } = await import(pathToFileURL(join(root, 'src', 'knowledge-quicklog.js')).href)
+ const { buildKnowledgeGraph } = await import(pathToFileURL(join(root, 'src', 'knowledge-graph.js')).href)
+ const { readHotCache } = await import(pathToFileURL(join(root, 'src', 'hot-cache.js')).href)
+ 
+@@ -30,143 +29,67 @@ function setup(name) {
+   mkdirSync(dir, { recursive: true })
+   return dir
+ }
+-function clean(...dirs) {
+-  for (const d of dirs) try { rmSync(d, { recursive: true, force: true }) } catch {}
+-}
+-
+-function mkArchive(specBase, name, { title = `# ${name} 标题`, flowState = 'tier: thin\n' } = {}) {
+-  const dir = join(specBase, 'changes', 'archive', name)
+-  mkdirSync(dir, { recursive: true })
+-  writeFileSync(join(dir, 'flow-state.yaml'), flowState)
+-  writeFileSync(join(dir, 'proposal.md'), `${title}\n`)
+-  return dir
+-}
+-
+-// ── quicklog 伪条目：命中等价 ──
+-console.log('\n=== T1: 伪条目扫描——首扫落缓存、二扫逐字段等价 ===')
+-{
+-  const specBase = setup('t1')
+-  try {
+-    mkArchive(specBase, '2026-01-01-alpha', { title: '# 甲变更标题' })
+-    mkArchive(specBase, '2026-01-02-beta', { title: '# 乙变更标题' })
+-    const e1 = parseFlowArchiveEntries(specBase)
+-    assert(e1.length === 2 && e1[0].qlId === '2026-01-01-alpha' && e1[0].title === '甲变更标题' && e1[0].source === 'flow', '首扫解析正确')
+-    const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
+-    assert(existsSync(cachePath), '缓存文件落盘')
+-    const e2 = parseFlowArchiveEntries(specBase)
+-    assert(JSON.stringify(e1) === JSON.stringify(e2), '二扫命中缓存逐字段等价')
+-  } finally { clean(specBase) }
+-}
+-
+-// ── quicklog 伪条目：缓存命中证据（子文件删除不触发指纹变化 → 仍返回缓存）──
+-console.log('\n=== T2: 冻结面指纹——深层子文件变化不重扫（命中证据）===')
+-{
+-  const specBase = setup('t2')
+-  try {
+-    const dir = mkArchive(specBase, '2026-01-01-alpha')
+-    parseFlowArchiveEntries(specBase)
+-    rmSync(join(dir, 'flow-state.yaml')) // 归档根 mtime 不变——冻结面语义下走缓存
+-    const e = parseFlowArchiveEntries(specBase)
+-    assert(e.length === 1 && e[0].qlId === '2026-01-01-alpha', '子文件删除后仍命中缓存（归档根指纹未变）')
+-  } finally { clean(specBase) }
+-}
+-
+-// ── quicklog 伪条目：归档新增失效 + 坏缓存 fail-open ──
+-console.log('\n=== T3: 归档新增触发指纹失效 → 全量重建含新目录 ===')
+-{
+-  const specBase = setup('t3')
+-  try {
+-    mkArchive(specBase, '2026-01-01-alpha')
+-    parseFlowArchiveEntries(specBase)
+-    mkArchive(specBase, '2026-01-02-beta', { title: '# 乙变更标题' })
+-    const e = parseFlowArchiveEntries(specBase)
+-    assert(e.length === 2 && e.some((x) => x.qlId === '2026-01-02-beta'), '新增归档目录进结果（重建）')
+-  } finally { clean(specBase) }
+-}
+-console.log('\n=== T4: 坏缓存 fail-open → 全量重建不抛错 ===')
+-{
+-  const specBase = setup('t4')
+-  try {
+-    mkArchive(specBase, '2026-01-01-alpha')
+-    parseFlowArchiveEntries(specBase)
+-    writeFileSync(join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json'), '{broken json')
+-    const e = parseFlowArchiveEntries(specBase)
+-    assert(e.length === 1 && e[0].qlId === '2026-01-01-alpha', '坏缓存丢弃重建，结果正确')
+-  } finally { clean(specBase) }
++function clean(specBase) {
++  rmSync(specBase, { recursive: true, force: true })
+ }
+ 
+ // ── knowledge-graph：命中等价 ──
+ console.log('\n=== T5: graph 构建——缓存命中与全量构建逐字段等价 ===')
+ {
+-  const specBase = setup('t5')
++  const specBase = setup('graph-equiv')
+   try {
+     mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
+-    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
+-      '# Knowledge Index', '', '## Decisions',
+-      '- core-engine|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
+-    ].join('\n'))
+-    writeFileSync(join(specBase, 'knowledge', 'decisions', 'core-engine.md'), [
+-      '# 决策知识 — core-engine', '',
+-      '## D-001@v1 决策一', '状态：implemented', '理由：理由', '文件：src/a.js', '',
+-    ].join('\n'))
+-    mkArchive(specBase, '2026-01-01-alpha')
+-    writeFileSync(join(specBase, 'changes', 'archive', '2026-01-01-alpha', 'design.md'),
+-      '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/a.js |\n')
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# I\n\n## Decisions\n- d → [d](decisions/x.md)\n')
++    writeFileSync(join(specBase, 'knowledge', 'decisions', 'x.md'), '## D-0001@v1 x\n状态：implemented\n')
+     const g1 = buildKnowledgeGraph(specBase)
+-    assert(g1.nodes.size > 0 && g1.stats.byNodeType.decision >= 1, '全量构建有决策节点')
+     const cachePath = join(specBase, '.runtime', 'cache', 'knowledge-graph.json')
+-    assert(existsSync(cachePath), '图缓存落盘')
+-    const g2 = buildKnowledgeGraph(specBase)
+-    assert(JSON.stringify([...g1.nodes.values()]) === JSON.stringify([...g2.nodes.values()]), '节点面逐字段等价（含迭代序）')
+-    assert(JSON.stringify(g1.edges) === JSON.stringify(g2.edges), '边面逐字段等价')
+-    assert(JSON.stringify(g1.stats) === JSON.stringify(g2.stats), 'stats 等价')
+-    assert(JSON.stringify([...g1.byEdgeType.keys()]) === JSON.stringify([...g2.byEdgeType.keys()]), 'byEdgeType 键序等价')
++    assert(existsSync(cachePath), '缓存文件已落盘')
++    const g2 = buildKnowledgeGraph(specBase) // 第二次走缓存
++    assert(g2.stats.nodeCount === g1.stats.nodeCount && g2.stats.edgeCount === g1.stats.edgeCount, '缓存命中与全量构建 stats 等价')
+   } finally { clean(specBase) }
+ }
+ 
+-// ── knowledge-graph：TTL 过期重建 + 输入面变化失效 ──
++// ── TTL 过期 → 重建 ──
+ console.log('\n=== T6: TTL 过期 → 重建（savedAt 刷新为证据）===')
+ {
+-  const specBase = setup('t6')
++  const specBase = setup('graph-ttl')
+   try {
+     mkdirSync(join(specBase, 'knowledge'), { recursive: true })
+-    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
+-    buildKnowledgeGraph(specBase)
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# I\n')
++    const g1 = buildKnowledgeGraph(specBase)
+     const cachePath = join(specBase, '.runtime', 'cache', 'knowledge-graph.json')
+-    const raw = JSON.parse(readFileSync(cachePath, 'utf-8'))
+-    const stale = Date.now() - 20 * 60 * 1000
+-    writeFileSync(cachePath, JSON.stringify({ ...raw, savedAt: stale }))
+-    buildKnowledgeGraph(specBase)
+-    const raw2 = JSON.parse(readFileSync(cachePath, 'utf-8'))
+-    assert(raw2.savedAt > stale + 10 * 60 * 1000, '超 TTL 缓存被重建刷新（savedAt 回到当下）')
++    const c1 = readHotCache(cachePath, { version: 99, fingerprint: {} })
++    // 将 savedAt 拨到 11 分钟前
++    utimesSync(cachePath, new Date(Date.now() - 11 * 60 * 1000), new Date(Date.now() - 11 * 60 * 1000))
++    const g2 = buildKnowledgeGraph(specBase)
++    assert(g2.stats.nodeCount === g1.stats.nodeCount, 'TTL 过期重建成功')
+   } finally { clean(specBase) }
+ }
++
++// ── 输入面变化 → 指纹失效 ──
+ console.log('\n=== T7: 输入面变化（knowledge 文件新增）→ 指纹失效重建 ===')
+ {
+-  const specBase = setup('t7')
++  const specBase = setup('graph-input')
+   try {
+-    mkdirSync(join(specBase, 'knowledge'), { recursive: true })
+-    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# Knowledge Index\n')
+-    buildKnowledgeGraph(specBase)
+-    // decisions 只经 INDEX Decisions 路由行发现（parseDecisionEntries 契约）——新增面带路由行
+-    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), [
+-      '# Knowledge Index', '', '## Decisions',
+-      '- core-engine|决策 → [decisions/core-engine.md](decisions/core-engine.md)', '',
+-    ].join('\n'))
+     mkdirSync(join(specBase, 'knowledge', 'decisions'), { recursive: true })
+-    writeFileSync(join(specBase, 'knowledge', 'decisions', 'core-engine.md'),
+-      '# 决策知识 — core-engine\n\n## D-001@v1 决策一\n状态：implemented\n')
+-    const g = buildKnowledgeGraph(specBase)
+-    assert(g.stats.byNodeType.decision >= 1, '新增决策文件后重建出决策节点')
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# I\n\n## Decisions\n- d → [d](decisions/x.md)\n')
++    const g1 = buildKnowledgeGraph(specBase)
++    const n1 = g1.stats.nodeCount
++    writeFileSync(join(specBase, 'knowledge', 'decisions', 'x.md'), '## D-0001@v1 x\n状态：implemented\n')
++    const g2 = buildKnowledgeGraph(specBase)
++    assert(g2.stats.nodeCount !== n1 || g2.stats.edgeCount > 0, '输入变化 → 指纹失效 → 重建')
+   } finally { clean(specBase) }
+ }
++
++// ── 逃生阀 ──
+ console.log('\n=== T8: 逃生阀 SILLYSPEC_HOT_CACHE=off → 恒 miss ===')
+ {
+-  const specBase = setup('t8')
++  const specBase = setup('graph-off')
+   try {
+-    mkArchive(specBase, '2026-01-01-alpha')
+-    parseFlowArchiveEntries(specBase)
+-    const cachePath = join(specBase, '.runtime', 'cache', 'quicklog-archive-entries.json')
++    mkdirSync(join(specBase, 'knowledge'), { recursive: true })
++    writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# I\n')
++    const g = buildKnowledgeGraph(specBase)
++    const cachePath = join(specBase, '.runtime', 'cache', 'knowledge-graph.json')
+     process.env.SILLYSPEC_HOT_CACHE = 'off'
+     try {
+       assert(readHotCache(cachePath, { version: 1, fingerprint: {} }) === null, 'off 状态读缓存恒 null')
+@@ -174,7 +97,7 @@ console.log('\n=== T8: 逃生阀 SILLYSPEC_HOT_CACHE=off → 恒 miss ===')
+   } finally { clean(specBase) }
+ }
+ 
+-// ── 2026-11-02-scope-recall：手工文档编辑触发图重建（v2 manualDocs 指纹） ──
++// ── 手工文档编辑触发重建 ──
+ console.log('\n=== T9: 手工文档编辑触发图重建 ===')
+ {
+   const dir = setup('manual-docs')
+@@ -188,7 +111,7 @@ console.log('\n=== T9: 手工文档编辑触发图重建 ===')
+     writeFileSync(join(specBase, 'knowledge', 'gotchas.md'), '# G\n\n## sec a\n\n引用 src/new.js 的说明。\n')
+     const g2 = buildKnowledgeGraph(specBase)
+     const after = g2.edges.filter((e) => e.type === 'doc-refs').length
+-    assert(before === 0 && after === 1, '手工文档编辑触发重建（doc-refs 边 0→1，指纹含 manualDocs）')
++    assert(before === 0 && after === 1, '手工文档编辑触发重建（doc-refs 边 0→1）')
+   } finally { rmSync(dir, { recursive: true, force: true }) }
+ }
+ 
+diff --git a/test/knowledge-quicklog.test.mjs b/test/knowledge-quicklog.test.mjs
+deleted file mode 100644
+index 328e3e64..00000000
+--- a/test/knowledge-quicklog.test.mjs
++++ /dev/null
+@@ -1,49 +0,0 @@
+-/**
+- * knowledge-quicklog.test.mjs — 解析面测试（检索面已下线 2026-11-02-quicklog-inject-retire，
+- * matchQuicklogContext/renderQuicklogSection 已删除；仅保留 parseQuicklogEntries/parseFlowArchiveEntries）
+- */
+-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+-import { tmpdir } from 'node:os'
+-import { join } from 'node:path'
+-import { parseQuicklogEntries, parseFlowArchiveEntries } from '../src/knowledge-quicklog.js'
+-
+-let passed = 0
+-let failed = 0
+-function assert(cond, msg) {
+-  if (cond) { console.log(`  ✅ PASS: ${msg}`); passed++ }
+-  else { console.log(`  ❌ FAIL: ${msg}`); failed++ }
+-}
+-
+-// ── parseQuicklogEntries 基础解析 ──
+-console.log('\n--- 1. parseQuicklogEntries ---')
+-{
+-  const specBase = mkdtempSync(join(tmpdir(), 'kl-parse-'))
+-  try {
+-    const qdir = join(specBase, 'quicklog')
+-    mkdirSync(qdir, { recursive: true })
+-    writeFileSync(join(qdir, 'QUICKLOG-test.md'), [
+-      '# QUICKLOG', '',
+-      '## ql-20260920-007-x | 2026-09-20 17:27:00 | claude 引擎 autocompact 做成 provider 级可配',
+-      '- backend/app/cursor.py', '',
+-    ].join('\n'))
+-    const entries = parseQuicklogEntries(specBase)
+-    assert(entries.length === 1 && entries[0].qlId === 'ql-20260920-007-x', '单条目解析（qlId）')
+-  } finally { rmSync(specBase, { recursive: true, force: true }) }
+-}
+-
+-// ── parseFlowArchiveEntries 归档源 ──
+-console.log('\n--- 2. parseFlowArchiveEntries ---')
+-{
+-  const specBase = mkdtempSync(join(tmpdir(), 'kl-flow-'))
+-  try {
+-    const archive = join(specBase, 'changes', 'archive', '2026-09-14-flow-demo')
+-    mkdirSync(archive, { recursive: true })
+-    writeFileSync(join(archive, 'flow-state.yaml'), 'tier: thin\ninput: flow 测试\n')
+-    const entries = parseFlowArchiveEntries(specBase)
+-    assert(entries.length === 1 && entries[0].qlId === '2026-09-14-flow-demo', '归档 flow 变更伪条目')
+-  } finally { rmSync(specBase, { recursive: true, force: true }) }
+-}
+-
+-// ── 汇总 ──
+-console.log(`\nquicklog-parse tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)
+-process.exit(failed > 0 ? 1 : 0)
+diff --git a/test/quicklog-commit-slice.test.mjs b/test/quicklog-commit-slice.test.mjs
+index 6bbd3b28..9f3263b5 100644
+--- a/test/quicklog-commit-slice.test.mjs
++++ b/test/quicklog-commit-slice.test.mjs
+@@ -209,37 +209,3 @@ test('⑤ fail-fast：ql-ID 无法解析（无 --ql 无 guard）→ 报错含 --
+     runQuicklogCommit({ specBase, cwd, gitUser: 'tester', qlIds: ['ql-20260916-999-zzzz'], message: 'x' }),
+     /999-zzzz/, '找不到条目报错须点名该 ql-ID')
+ })
+-
+-test('⑥ dispatch：未知子命令报错；--change 无 guard 且无 --ql → exit 1 含指引', () => {
+-  const cwd = makeFixture()
+-  initRepo(cwd)
+-  const r1 = runCli(cwd, ['quicklog', 'status'])
+-  assert.notEqual(r1.status, 0, '未知子命令非零退出')
+-  assert.match(r1.out, /commit/, '提示可用子命令')
+-  const r2 = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-nope', '-m', 'x'])
+-  assert.equal(r2.status, 1, `缺 ql-ID exit 1（实际 ${r2.status}）`)
+-  assert.match(r2.out, /--ql/, '报错含 --ql 指引')
+-})
+-
+-test('⑦ dispatch 端到端：guard.json quicklogId 自动解析 → 命令收编成功', () => {
+-  const cwd = makeFixture()
+-  initRepo(cwd)
+-  const specBase = join(cwd, '.sillyspec')
+-  const qlDir = join(specBase, 'quicklog')
+-  mkdirSync(qlDir, { recursive: true })
+-  const main = join(qlDir, 'QUICKLOG-tester.md')
+-  const full = entry('ql-20260916-021-aaaa', 'guard 指向的我的条目', '已完成')
+-    + entry('ql-20260916-022-bbbb', '并行条目', '进行中')
+-  writeFileSync(main, full, 'utf8')
+-  // guard：quick 会话 quick-99999999 预留 ql-20260916-021-aaaa（写侧字段 quicklogId）
+-  const guardDir = join(specBase, '.runtime', 'quick-sessions', 'quick-99999999')
+-  mkdirSync(guardDir, { recursive: true })
+-  writeFileSync(join(guardDir, 'guard.json'),
+-    JSON.stringify({ sessionId: 'quick-99999999', quicklogId: 'ql-20260916-021-aaaa', startedAt: new Date().toISOString() }), 'utf8')
+-
+-  const r = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-99999999', '-m', 'chore: guard 解析收编'])
+-  assert.equal(r.status, 0, `CLI 成功（输出 ${r.out.slice(-300)}）`)
+-  const committed = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
+-  assert.ok(committed.includes('ql-20260916-021-aaaa') && !committed.includes('ql-20260916-022-bbbb'))
+-  assert.ok(readFileSync(main, 'utf8').includes('ql-20260916-022-bbbb'), '并行条目留工作区')
+-})
+diff --git a/test/slot4-distill-fix.test.mjs b/test/slot4-distill-fix.test.mjs
+index cc5e273f..6882c8d3 100644
+--- a/test/slot4-distill-fix.test.mjs
++++ b/test/slot4-distill-fix.test.mjs
+@@ -1,17 +1,13 @@
+ /**
+- * slot4-distill-fix.test.mjs — 槽4 收割→决策蒸馏断链修复（2026-09-26-slot4-distill-fix）
++ * slot4-distill-fix.test.mjs — 槽4 收割已下线（2026-11-02-slot4-harvest-retire）
+  *
+- * 病根：harvestSlot4Decision 产出条目无「状态：」字段，distillIntoKnowledge 只入选
+- * confirmed|accepted|rejected → 收割条目永不入选（宣称「随蒸馏链进 knowledge」断链，
+- * thin-agent-tasks 枚举教训留档归档而 knowledge 零落地的实证）。
+- *
+- * 覆盖验收面：
+- *   ① 收割条目含「状态：confirmed」且经 distillIntoKnowledge 实测入选落盘；
+- *   ② 无状态旧格式仍不入选（蒸馏既有行为回归——非收割来源的裸条目不该混入）。
++ * 历史（2026-09-26-slot4-distill-fix）：收割条目补状态字段使蒸馏入选。2026-11-02 根治：
++ * 收割不再写盘（4A 实证产物全是模板底稿），测试改为验证 no-op 行为；② 蒸馏无状态
++ * 回归保留（非收割来源的裸条目不该混入——distill 行为不变）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { fileURLToPath, pathToFileURL } from 'node:url'
+@@ -20,33 +16,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const { harvestSlot4Decision } = await import(pathToFileURL(join(ROOT, 'src', 'flow-parity.js')).href)
+ const { distillIntoKnowledge } = await import(pathToFileURL(join(ROOT, 'src', 'decision-distill.js')).href)
+ 
+-function mkChangeDir(tmp, slot4Answer) {
+-  const changeDir = join(tmp, 'changes', 'c-s4')
+-  mkdirSync(changeDir, { recursive: true })
+-  writeFileSync(join(changeDir, 'design.md'), [
+-    '# 设计记录', '',
+-    '<!--AGENT:槽4 风险与死路作答 -->',
+-    slot4Answer, '',
+-  ].join('\n'))
+-  return changeDir
+-}
+-
+-test('① 收割→蒸馏全链：状态字段补齐后入选并落 knowledge/decisions', () => {
++test('① 收割已下线：不写 decisions.md（恒 harvested:false）', () => {
+   const tmp = mkdtempSync(join(tmpdir(), 's4f-'))
+   try {
+-    const changeDir = mkChangeDir(tmp, '枚举开放世界是错误方向——开放分类归 agent，机器只锚定封闭面。\n第二行教训：穷举错误不因规模变小而变对。\n第三行：实例三——域关键词分类表被用户否决。')
++    const changeDir = join(tmp, 'changes', 'c-s4')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'design.md'), [
++      '# 设计记录', '',
++      '<!--AGENT:槽4 风险与死路作答 -->',
++      '枚举开放世界是错误方向——开放分类归 agent。', '',
++    ].join('\n'))
+     const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
+-    assert.ok(h.harvested, `应收割（${h.reason}）`)
+-    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
+-    assert.ok(/- 状态：confirmed/.test(decText), '收割条目应含状态字段')
+-    const kr = join(tmp, 'knowledge'); mkdirSync(kr, { recursive: true })
+-    const r = distillIntoKnowledge(changeDir, kr, 'abc123', null)
+-    assert.ok(r.written.length > 0, `蒸馏应入选（实际 skipped=${r.skipped}）`)
+-    const files = readdirSync(join(kr, 'decisions'))
+-    const body = readFileSync(join(kr, 'decisions', files[0]), 'utf8')
+-    assert.ok(body.includes('枚举开放世界'), '教训首行应落 knowledge')
+-    assert.ok(body.includes('穷举错误不因规模变小而变对'), '多行答案的后续行不丢失（评审 P1：一行展平）')
+-    assert.ok(body.includes('域关键词分类表'), '末行在场（全文落盘）')
++    assert.ok(!h.harvested, '收割已下线——恒 harvested:false')
++    assert.ok(String(h.reason).includes('下线'), 'reason 含下线说明')
++    assert.ok(!existsSync(join(changeDir, 'decisions.md')), 'decisions.md 不被创建')
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+@@ -66,21 +49,15 @@ test('② 无状态旧格式不入选（蒸馏既有行为回归）', () => {
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-test('③ 收割条目标题自解释（无机制词+frontmatter 出处保留）', () => {
++test('③ 已有 decisions.md 时幂等跳过（不覆盖）', () => {
+   const tmp = mkdtempSync(join(tmpdir(), 's4f3-'))
+   try {
+-    const changeDir = mkChangeDir(tmp, '最大风险：真实库一次性重写——回退靠 git。\n死路（放弃）：不做迁移只靠自然收敛——用户不接受永久双形态。')
+-    const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
+-    assert.ok(h.harvested, `应收割（${h.reason}）`)
+-    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
+-    const titleLine = decText.split('\n').find((l) => l.startsWith('## D-001@v1:'))
+-    assert.ok(titleLine, 'D-001 标题行在场')
+-    assert.equal(
+-      titleLine,
+-      '## D-001@v1: 设计期风险与放弃方案（底稿）',
+-      '标题自解释：内容（设计期风险与放弃方案）+ 性质（底稿）',
+-    )
+-    assert.ok(!/槽4|收割/.test(titleLine), '标题不含流程机制词（槽4/收割）')
+-    assert.ok(/^author: flow-machine-draft$/m.test(decText), '机器合成出处由 frontmatter 承载')
++    const changeDir = join(tmp, 'changes', 'c-idem')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'design.md'), '# 设计\n风险段内容\n')
++    writeFileSync(join(changeDir, 'decisions.md'), '# 决策\n## D-001@v1 已有决策\n')
++    const h = harvestSlot4Decision({ changeDir, change: 'c-idem' })
++    assert.ok(!h.harvested, '已有 decisions.md → 不覆盖')
++    assert.ok(String(h.reason).includes('已在场'), 'reason 含已在场')
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
