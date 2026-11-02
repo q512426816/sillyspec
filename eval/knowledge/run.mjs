@@ -25,7 +25,8 @@ import { runDecisions } from './lib/engine.mjs'
 import { snapshotFingerprint } from './lib/snapshot.mjs'
 import { runAllProbes } from './lib/probes.mjs'
 import { renderTable, diffBaseline } from './lib/report.mjs'
-import { runFace, rankWithMatches, FACES } from './lib/faces.mjs'
+import { runFace, rankWithMatches, FACES, subsetSummaries } from './lib/faces.mjs'
+import { summarize } from './lib/metrics.mjs'
 import { parseRepoArgs } from './lib/repos.mjs'
 
 process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
@@ -147,7 +148,13 @@ async function main() {
       else if (face === 'search') faceCases = repoCases.filter((c) => c.face === 'entries')
       else if (face === 'fr') faceCases = repoCases.filter((c) => c.face === 'fr')
       else if (face === 'scope') faceCases = repoCases.filter((c) => Array.isArray(c.scope_files) && c.scope_files.length > 0)
-      result.metrics[repo][face] = await runFace(path, face, faceCases)
+      const faceResult = await runFace(path, face, faceCases)
+      if (face === 'scope') {
+        // 子集单列（FR-05）：frozen（原 5 条）与 added 分开报，禁止用新增 case 掩盖冻结子集
+        faceResult.subsets = subsetSummaries(faceResult, faceCases)
+        faceResult.scope_unreachable = faceResult.details.filter((d) => d.raw_rank === null).map((d) => d.id)
+      }
+      result.metrics[repo][face] = faceResult
     }
     const self = await runSelfSmoke(path, repo)
     result.self_smoke[repo] = self

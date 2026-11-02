@@ -318,6 +318,14 @@ export function isParkingFile(file) {
  *  6 条绿色非词条目中 4 条是现行事实/债务，误杀代价高于漏 2 条已解决项）。 */
 const RESOLVED_WORDS = /已修复|已解决|已退役/
 
+/** 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
+ *  INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
+ *  ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
+ *  容忍处理。单一源：knowledge 命令校验与图谱 section 匹配（2026-11-02-scope-recall）共用。 */
+export function normalizeAnchorForCompare(s) {
+  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+}
+
 /** 条目是否「已知问题-已修复」类（默认注入/检索排除；--include-resolved 才返回）。 */
 function isResolvedRoute(entry) {
   const file = String(entry.file || '').replace(/\\/g, '/')

@@ -20,7 +20,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths } from './knowledge-match.js'
+import { parseKnowledgeIndex, parseDecisionEntries, anchorFilePaths, normalizeAnchorForCompare } from './knowledge-match.js'
 import { modulePathMatches, parseModuleMapSimple } from './modules.js'
 import { readHotCache, writeHotCache, dirStamp, fileDirStamp } from './hot-cache.js'
 
@@ -59,6 +59,44 @@ function extractFilePaths(text, cap = 15) {
   return out
 }
 
+/** section 切分：按 `## ` 标题切段（标题到文末；无子标题的整篇为一个无标题段）。 */
+function splitSections(text) {
+  const out = []
+  let cur = null
+  for (const line of text.split('\n')) {
+    const m = /^##\s+(.+)$/.exec(line)
+    if (m) {
+      cur = { title: m[1].trim(), body: '' }
+      out.push(cur)
+      continue
+    }
+    if (cur) cur.body += `${line}\n`
+  }
+  return out
+}
+
+/** section 级正文路径提取（2026-11-02-scope-recall FR-01）：用归一化锚点匹配 section 标题
+ *  （长度≥6 的双向前缀容忍，兼容 INDEX slug 与 heading 的 emoji/标点差异），只对命中 section
+ *  的文本跑路径提取——全文档粒度实测噪声不可接受（单路径最多挂 65 个条目）。
+ *  无锚点条目退化为整篇（保守）。文件读取按次缓存。 */
+function sectionFilePaths(knowledgeDir, ent, cache) {
+  const file = posix(ent.file)
+  if (!file.endsWith('.md')) return []
+  let text = cache.get(file)
+  if (text === undefined) {
+    try { text = readFileSync(join(knowledgeDir, file), 'utf8').replace(/\r\n?/g, '\n') } catch { text = null }
+    cache.set(file, text)
+  }
+  if (!text) return []
+  const key = normalizeAnchorForCompare(ent.anchor)
+  if (!key) return extractFilePaths(text, 15)
+  const hit = splitSections(text).find((s) => {
+    const hn = normalizeAnchorForCompare(s.title)
+    return hn === key || (hn.length >= 6 && key.length >= 6 && (hn.startsWith(key) || key.startsWith(hn)))
+  })
+  return hit ? extractFilePaths(hit.body, 15) : []
+}
+
 // ── 构建器 ──
 
 function buildKnowledgeGraphFresh(specRoot) {
@@ -94,11 +132,24 @@ function buildKnowledgeGraphFresh(specRoot) {
   let routeCount = 0
   if (existsSync(join(knowledgeDir, 'INDEX.md'))) {
     addNode('doc:INDEX', 'doc', 'knowledge/INDEX.md', { kind: 'manual-index' })
+    const docCache = new Map()
     for (const ent of indexEntries) {
       if (/^(decisions|fr|proposed)\//.test(posix(ent.file))) continue // 决策/FR 有自己的节点面
       const id = ent.anchor ? `entry:${ent.file}#${ent.anchor}` : `entry:${ent.file}`
-      addNode(id, 'entry', ent.display || ent.anchor || ent.file, { file: ent.file, keywords: ent.keywords })
+      addNode(id, 'entry', ent.display || ent.anchor || ent.file, {
+        file: ent.file,
+        keywords: ent.keywords,
+        category: ent.category || '',
+        anchor: ent.anchor || '',
+        display: ent.display || '',
+      })
       if (addEdge('doc:INDEX', id, 'route', ent.keywords[0] || '')) routeCount++
+      // section 级 doc-refs（FR-01，2026-11-02-scope-recall）：手工条目标题路径 → file 边
+      // （medium 强度——scope 层显式消费，graphPath/impact 不受影响）
+      for (const p of sectionFilePaths(knowledgeDir, ent, docCache)) {
+        addNode(p, 'file', p.split('/').pop())
+        addEdge(id, p, 'doc-refs', '手工条目 section 路径')
+      }
     }
   }
 
@@ -349,7 +400,7 @@ function buildKnowledgeGraphFresh(specRoot) {
 // 陈旧边界（有意接受）：指纹感知本目录文件级变化与目录增删，但 docs 树深层就地重写若
 // 未触及被 stat 的文件面则漏——TTL 10min 硬上限兜底，advisory 面有界陈旧可接受。
 
-const GRAPH_CACHE_VERSION = 1
+const GRAPH_CACHE_VERSION = 2
 const GRAPH_CACHE_TTL_MS = 10 * 60 * 1000
 
 function statSignature(p) {
@@ -375,6 +426,13 @@ function knowledgeGraphFingerprint(specRoot) {
   } catch { /* docs/ 缺席 = 无项目面（合法形态）*/ }
   return {
     index: statSignature(join(knowledgeDir, 'INDEX.md')),
+    // 手工文档 stat（FR-01）：section doc-refs 依赖 INDEX 引用的手工文档正文——编辑必须触发重建
+    manualDocs: existsSync(join(knowledgeDir, 'INDEX.md'))
+      ? parseKnowledgeIndex(knowledgeDir)
+        .filter((e) => !/^(decisions|fr|proposed)\//.test(posix(e.file)))
+        .map((e) => [e.file, statSignature(join(knowledgeDir, e.file))])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      : null,
     decisions: fileDirStamp(join(knowledgeDir, 'decisions')),
     fr: fileDirStamp(join(knowledgeDir, 'fr')),
     projects,
@@ -832,18 +890,21 @@ export function graphNodesSearch(graph, search, limit = 20) {
 // ═══════════════════════════════════════════════════════════════
 
 /** scope 文件集 → 可达知识集（decisionHits 形态 + entries 素材）。
- *  遍历：file ←anchors← decision（+supersedes 链一跳）→ from-change/belongs-module 侧线；
- *  FR 侧：file ←deliverables（变更维）与 anchors 直连。rejected ∪ 死路 保底进场（防复潮）。 */
+ *  遍历：file ←anchors← decision/FR（直连，score=2）；supersedes 链一跳；
+ *  file ←doc-refs← 手工条目（section 级正文路径，medium 直证边 → entries）；
+ *  两跳防复潮：file ←deliverables← change ←from-change← rejected/deathPath 决策（score=1）。
+ *  排序：rejected/死路优先 → direct>two-hop → 变更名日期降序 → id。引擎 cap 20。 */
 export function scopeRecall(graph, scopeFiles) {
   const scopes = [...new Set((Array.isArray(scopeFiles) ? scopeFiles : [scopeFiles]).map(posix).filter(Boolean))]
   if (scopes.length === 0) return null
+  const scopeSet = new Set(scopes)
   const strong = graph.edges.filter((e) => EDGE_STRENGTH[e.type] === 'strong')
   const reachable = new Set()
   // 一跳：文件 ←anchors← 决策/FR
   for (const e of strong) {
-    if (e.type === 'anchors' && scopes.includes(e.t)) reachable.add(e.s)
+    if (e.type === 'anchors' && scopeSet.has(posix(e.t))) reachable.add(e.s)
     // 变更维：scope 命中变更交付面（scope 可能传变更名而非文件——调用方宽松契约）
-    if (e.type === 'deliverables' && scopes.includes(e.s)) reachable.add(e.t)
+    if (e.type === 'deliverables' && scopeSet.has(posix(e.s))) reachable.add(e.t)
   }
   // supersedes 链一跳（版本链追新/旧）
   for (const id of [...reachable]) {
@@ -853,6 +914,26 @@ export function scopeRecall(graph, scopeFiles) {
       else if (e.t === id && graph.nodes.has(e.s)) reachable.add(e.s)
     }
   }
+  // 手工条目 doc-refs（FR-01）：medium 边显式消费——不进 strong 集，graphPath/impact 语义不动
+  const entryReachable = new Set()
+  for (const e of graph.edges) {
+    if (e.type !== 'doc-refs' || !scopeSet.has(posix(e.t))) continue
+    const n = graph.nodes.get(e.s)
+    if (n && n.type === 'entry') entryReachable.add(e.s)
+  }
+  // 两跳防复潮（FR-02）：file ←deliverables← change ←from-change← 决策，只收 rejected/deathPath
+  const changesOf = new Set()
+  for (const e of graph.edges) {
+    if (e.type === 'deliverables' && scopeSet.has(posix(e.t))) changesOf.add(e.s)
+  }
+  const twoHop = new Set()
+  for (const e of graph.edges) {
+    if (e.type !== 'from-change' || !changesOf.has(e.t)) continue
+    const n = graph.nodes.get(e.s)
+    if (!n || n.type !== 'decision') continue
+    const h = n.attrs.hit || {}
+    if (h.status === 'rejected' || h.deathPath) twoHop.add(e.s)
+  }
   const decisions = []
   const frs = []
   for (const id of reachable) {
@@ -861,29 +942,50 @@ export function scopeRecall(graph, scopeFiles) {
     if (n.type === 'decision') decisions.push(n)
     else if (n.type === 'fr') frs.push(n)
   }
-  // decisionHits：parseDecisionEntries 原生形态（attrs.hit 直出——零重解析），rejected∪死路优先
-  const hits = decisions.map((n) => ({ ...n.attrs.hit, file: n.attrs.hit.file }))
+  // decisionHits：parseDecisionEntries 原生形态（attrs.hit 直出）+ score（direct=2/two-hop=1，
+  // 渲染面 h.status==='rejected' && score>0 过滤器依赖）
+  const changeDate = (c) => {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(c || ''))
+    return m ? m[1] : ''
+  }
+  const hits = []
+  const seen = new Set()
+  const pushHit = (n, score, via) => {
+    const base = n.attrs.hit || {}
+    const key = `${base.file || ''}#${base.id || ''}`
+    if (seen.has(key)) return
+    seen.add(key)
+    hits.push({ ...base, file: base.file, score, via })
+  }
+  for (const n of decisions) pushHit(n, 2, 'direct')
+  for (const id of twoHop) {
+    const n = graph.nodes.get(id)
+    if (n) pushHit(n, 1, 'two-hop')
+  }
   const death = (h) => h.status === 'rejected' || h.deathPath
-  hits.sort((a, b) => ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0)) || ((b.status === 'rejected' ? 1 : 0) - (a.status === 'rejected' ? 1 : 0)))
-  const rejectedFirst = [...hits.filter(death), ...hits.filter((h) => !death(h))]
-  if (rejectedFirst.length > 20) rejectedFirst.length = 20
-  const entries = rejectedFirst.slice(0, 3).map((h) => ({
-    category: 'Decisions',
-    keywords: ['scope'],
-    file: h.file,
-    anchor: h.id,
-    display: `${h.file}#${h.id}（scope 遍历召回）`,
-  }))
-  return { decisionHits: rejectedFirst, entries, frCount: frs.length, scopeSize: scopes.length }
+  hits.sort((a, b) => (Number(death(b)) - Number(death(a)))
+    || (b.score - a.score)
+    || (changeDate(b.change) > changeDate(a.change) ? 1 : changeDate(b.change) < changeDate(a.change) ? -1 : 0)
+    || String(a.id).localeCompare(String(b.id)))
+  if (hits.length > 20) hits.length = 20
+  // 手工条目（FR-01）：doc-refs 命中的 entry 节点，cap 3
+  const entries = [...entryReachable].map((id) => {
+    const n = graph.nodes.get(id)
+    const a = n.attrs || {}
+    const file = a.file || String(id).replace(/^entry:/, '').split('#')[0]
+    return { category: a.category || 'Scoped', keywords: ['scope'], file, anchor: a.anchor || '', display: a.display || n.label }
+  }).slice(0, 3)
+  return { decisionHits: hits, entries, frCount: frs.length, scopeSize: scopes.length }
 }
 
-/** scopeRecall → matchKnowledge 同构四键返回（knowledge-vector 消费——策略面全本地解析）。 */
+/** scopeRecall → matchKnowledge 同构四键返回（knowledge-vector 消费——策略面全本地解析）。
+ *  entries-only 场景（只命中手工条目、无决策）也必须返回——不得因 decisionHits 空整层短路。 */
 export function buildScopeRecallResult(recall) {
-  if (!recall || recall.decisionHits.length === 0) return null
+  if (!recall || (recall.decisionHits.length === 0 && recall.entries.length === 0)) return null
   return {
     matched: true,
     entries: recall.entries,
-    report: `Status: scope-traversal matched (${recall.decisionHits.length} entries from ${recall.scopeSize} scope files)`,
+    report: `Status: scope-traversal matched (${recall.decisionHits.length} decisions, ${recall.entries.length} entries from ${recall.scopeSize} scope files)`,
     json: {
       matched: true, entry_count: recall.entries.length, scope: true,
       entries: recall.entries.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),

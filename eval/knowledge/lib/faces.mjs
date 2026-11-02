@@ -20,6 +20,20 @@ export function rankWithMatches(hits, expected) {
   return best
 }
 
+/**
+ * scope 面按 subset 分组指标（frozen/added——FR-05 子集单列，禁止用新增 case 掩盖冻结子集）。
+ */
+export function subsetSummaries(faceResult, cases) {
+  const groups = {}
+  for (const c of cases) {
+    const d = faceResult.details.find((x) => x.id === c.id)
+    if (!d) continue
+    const key = c.subset || 'default'
+    ;(groups[key] = groups[key] || []).push(d.raw_rank === null ? Infinity : d.raw_rank)
+  }
+  return Object.fromEntries(Object.entries(groups).map(([k, ranks]) => [k, summarize(ranks)]))
+}
+
 /** 单仓单面：raw/rendered 双口径 + 截断清单 + 每 case 名次明细。 */
 export async function runFace(repoPath, face, cases) {
   const ranksRaw = []

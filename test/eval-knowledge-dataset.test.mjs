@@ -36,6 +36,8 @@ console.log('\n=== Test 1: organic case 校验 ===')
   assert(validateOrganicCase({ ...ok, repo: undefined }) === 'repo', '缺 repo 标签')
   assert(validateOrganicCase({ ...ok, repo: 'any-project-label' }) === null, '任意仓标签合法（不枚举项目）')
   assert(validateOrganicCase({ ...ok, face: 'fr' }) === null, 'fr 面合法')
+  assert(validateOrganicCase({ ...ok, scope_files: [] }) === 'scope_files', '空 scope_files 非法')
+  assert(validateOrganicCase({ ...ok, scope_files: [''] }) === 'scope_files-item', 'scope_files 空项非法')
   assert(validateOrganicCase({ ...ok, face: 'nope' }) === 'face', '非法 face')
   assert(validateOrganicCase({ ...ok, query: '  ' }) === 'query', '空 query')
   assert(validateOrganicCase({ ...ok, expected: [] }) === 'expected-empty', '空 expected')
@@ -126,10 +128,12 @@ console.log('\n=== Test 5: validateLabels ===')
       { id: 'ok', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-001@v1'] },
       { id: 'missing-file', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/nope.md'] },
       { id: 'missing-anchor', repo: 'r', face: 'decisions', query: 'q', expected: ['decisions/x.md#D-999@v1'] },
+      { id: 'missing-scope-file', repo: 'r', face: 'scope', query: 'q', expected: ['decisions/x.md'], scope_files: ['src/nope.js'] },
     ], new Map([['r', d]]))
-    assert(issues.length === 2, '两条结构性问题检出')
+    assert(issues.length === 3, '三条结构性问题检出')
     assert(issues.some((i) => i.id === 'missing-file' && i.reason === 'file-missing'), 'file-missing 检出')
-    assert(issues.some((i) => i.id === 'missing-anchor' && i.reason === 'anchor-missing'), 'anchor-missing 检出（标签指向不存在锚点）')
+    assert(issues.some((i) => i.id === 'missing-anchor' && i.reason === 'anchor-heading-missing'), 'anchor-heading-missing 检出（标签指向不存在锚点）')
+    assert(issues.some((i) => i.id === 'missing-scope-file' && i.reason === 'scope-file-missing'), 'scope-file-missing 检出')
     assert(validateLabels([{ id: 'x', repo: 'not-running', face: 'entries', query: 'q', expected: ['nope.md'] }], new Map()).length === 0, '未参与运行的仓标签不判错')
   } finally { rmSync(d, { recursive: true, force: true }) }
 }

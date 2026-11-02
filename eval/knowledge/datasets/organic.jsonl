@@ -8,11 +8,11 @@
 {"id":"s-tel-03","repo":"sillyspec","face":"decisions","query":"flow.js 前门盘问渲染＋hindsight 提示注入＋收口指标接线＋单测 complete.js 方案步 --done 门检索回显＋config-schema 逃生阀","expected":["decisions/cli-entry.md"],"note":"flow 前门/命令面决策在 cli-entry 域"}
 {"id":"s-tel-04","repo":"sillyspec","face":"fr","query":"标题/摘要提取对段头行免疫：标签行跳过取次行+复合词白名单+模块索引摘要同源+模板首行改概括句","expected":["fr/cli-entry.md"],"note":"changes.title 三段链路等 FR 在 cli-entry 域"}
 {"id":"s-tel-05","repo":"sillyspec","face":"decisions","query":"用枚举词表扫描开放世界形态的需求并自动分类","expected":["decisions/cli-entry.md#D-unmapped-150@v1"],"note":"同一意图的短查询变体"}
-{"id":"s-man-01","repo":"sillyspec","face":"entries","query":"worktree 清理 node_modules junction 删除","expected":["sillyspec-gotchas.md"],"scope_files":["src/worktree.js"],"note":"junction 解链坑在 gotchas 手工条目"}
-{"id":"s-man-02","repo":"sillyspec","face":"decisions","query":"worktree 清理 node_modules junction 删除","expected":["decisions/worktree.md#D-worktree-001@v1"],"scope_files":["src/worktree.js"],"note":"两次事故实录的决策条目（hybrid 面已命中 raw_rank=1）"}
-{"id":"s-man-03","repo":"sillyspec","face":"entries","query":"worktree doctor --fix 标记 installed 但 node_modules junction 实际未建","expected":["sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建"],"scope_files":["src/worktree.js"],"note":"精确锚点命中验证"}
-{"id":"s-man-04","repo":"sillyspec","face":"entries","query":"daemon mcp-server 子进程不继承 claude.exe 环境","expected":["patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv"],"scope_files":["src/mcp-server.js"]}
-{"id":"s-man-05","repo":"sillyspec","face":"entries","query":"execute worktree 里没有 node_modules 子代理 cwd 要显式 worktree 路径","expected":["sillyspec-gotchas.md#execute-worktree-无-node_modules--子代理-cwd-需显式-worktree-路径"],"scope_files":["src/stages/execute.js"]}
+{"id":"s-man-01","repo":"sillyspec","face":"entries","query":"worktree 清理 node_modules junction 删除","expected":["sillyspec-gotchas.md"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"junction 解链坑在 gotchas 手工条目"}
+{"id":"s-man-02","repo":"sillyspec","face":"decisions","query":"worktree 清理 node_modules junction 删除","expected":["decisions/worktree.md#D-worktree-001@v1"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"两次事故实录的决策条目（hybrid 面已命中 raw_rank=1）"}
+{"id":"s-man-03","repo":"sillyspec","face":"entries","query":"worktree doctor --fix 标记 installed 但 node_modules junction 实际未建","expected":["sillyspec-gotchas.md#worktree-doctor---fix-标记-installed-但-node_modules-junction-实际未建"],"scope_files":["src/worktree.js"],"subset":"frozen","note":"精确锚点命中验证"}
+{"id":"s-man-04","repo":"sillyspec","face":"entries","query":"daemon mcp-server 子进程不继承 claude.exe 环境","expected":["patterns.md#mcp-server-子进程不继承-claudeexe-完整环境env-必须放-mcpserversenv"],"scope_files":["src/mcp-server.js"],"subset":"frozen"}
+{"id":"s-man-05","repo":"sillyspec","face":"entries","query":"execute worktree 里没有 node_modules 子代理 cwd 要显式 worktree 路径","expected":["sillyspec-gotchas.md#execute-worktree-无-node_modules--子代理-cwd-需显式-worktree-路径"],"scope_files":["src/stages/execute.js"],"subset":"frozen"}
 {"id":"s-man-06","repo":"sillyspec","face":"entries","query":"reopen --from step n 后 --done 把后续未执行步骤回填 completed","expected":["sillyspec-gotchas.md#reopen---from-step-n-后---done-会把后续未执行步骤回填-completed"]}
 {"id":"s-man-07","repo":"sillyspec","face":"entries","query":"sqlite pragma foreign_keys 默认关闭 cascade 失效 孤儿变更清理","expected":["sillyspec-gotchas.md#sqlite-pragma-foreign_keys-默认关闭致-cascade-失效清理孤儿变更"]}
 {"id":"s-man-08","repo":"sillyspec","face":"entries","query":"plan execute 子代理 cwd 设到变更目录 嵌套 sillyspec 副作用","expected":["sillyspec-gotchas.md#planexecute-子代理可能把-cwd-设到变更目录产生嵌套-sillyspec-副作用"]}
@@ -33,3 +33,20 @@
 {"id":"p-tel-13","repo":"platform","face":"entries","query":"沉淀弹层三修：快速修复多选失效（只能选一个）弹层样式溢出超出视口 新建 agent 配置补供应商/模型选择","expected":["conventions.md#tailwind-md-是视口断点非容器断点侧栏内嵌组件禁用响应式前缀"]}
 {"id":"p-tel-14","repo":"platform","face":"fr","query":"修复 frontend-ci 连续失败：page.test.tsx user_input 断言未随 ql-20260918-003 行为变更同步","expected":["fr/api-types.md"]}
 {"id":"p-tel-15","repo":"platform","face":"fr","query":"registry 注册两 format + host-fs-handler 透传新字段与 totalUsage 平台 messages schema 可选新字段 + openapi/gen:types","expected":["fr/host-fs-handler.md"]}
+
+{"id":"p-dec-01","repo":"platform","face":"decisions","query":"backend 落选 方案 B 扩展 CLI 向量端点至全语料 放开 JWT","expected":["decisions/backend.md#D-backend-009@v1"]}
+{"id":"p-dec-02","repo":"platform","face":"decisions","query":"backend 落选 方案 C 基于 DB 表混合检索 ScanDocument 新增 knowledge 入库","expected":["decisions/backend.md#D-backend-010@v1"]}
+{"id":"p-dec-03","repo":"platform","face":"decisions","query":"backend 落选 本地文件缓存 向量序列化 runtime 缓存文件","expected":["decisions/backend.md#D-backend-020@v1"]}
+{"id":"p-dec-04","repo":"platform","face":"decisions","query":"backend 落选 仅做启动预热 不改存储","expected":["decisions/backend.md#D-backend-021@v1"]}
+{"id":"p-dec-05","repo":"platform","face":"decisions","query":"backend 落选 方案 B 后台常驻同步协程","expected":["decisions/backend.md#D-backend-023@v1"]}
+{"id":"p-dec-06","repo":"platform","face":"decisions","query":"backend 落选 平台行携带记录名 方案 B","expected":["decisions/backend.md#D-backend-033@v1"]}
+{"id":"p-dec-07","repo":"platform","face":"decisions","query":"daemon 落选 新增 daemon 列记录 RPC 方案 C","expected":["decisions/backend.md#D-sillyhub-daemon-001@v1"]}
+{"id":"p-dec-08","repo":"platform","face":"decisions","query":"frontend 零 daemon 改动 backend 拼 allowed_roots 路径 方案 A","expected":["decisions/frontend_components.md#D-005@v1"]}
+{"id":"p-scope-01","repo":"platform","face":"scope","query":"frontend SSE fetch-sse Authorization header","expected":["conventions.md#前端-sse-消费统一-fetch-ssetoken-走-authorization-header禁用-eventsource"],"scope_files":["frontend/src/lib/fetch-sse.ts"],"subset":"added"}
+{"id":"p-scope-02","repo":"platform","face":"scope","query":"backend auth_deps monkeypatch has_permission","expected":["testing-gotchas.md#后端monkeypatch-has_permission-必须双-patchauth_deps-导入时绑定--rbac-模块属性"],"scope_files":["backend/app/core/auth_deps.py"],"subset":"added"}
+{"id":"p-scope-03","repo":"platform","face":"scope","query":"backend audit hooks lifespan 审计日志","expected":["known-issues.md#-audit_hooks-只在测试-lifespan-注册生产审计要业务代码显式写-auditlog"],"scope_files":["backend/app/main.py"],"subset":"added"}
+{"id":"s-scope-01","repo":"sillyspec","face":"scope","query":"cli flag 白名单死路报错","expected":["known-issues.md#-cli-flag-白名单死路报错指引指向未登记-flag双实例"],"scope_files":["test/flag-contract.test.mjs"],"subset":"added"}
+{"id":"s-scope-02","repo":"sillyspec","face":"scope","query":"知识匹配引擎 枚举开放世界 否决","expected":["decisions/core-engine.md#D-unmapped-197@v1"],"scope_files":["src/knowledge-match.js"],"subset":"added"}
+{"id":"s-scope-03","repo":"sillyspec","face":"scope","query":"flow 前门 决策记录","expected":["decisions/cli-entry.md#D-unmapped-433@v1"],"scope_files":["src/flow.js"],"subset":"added"}
+{"id":"s-scope-04","repo":"sillyspec","face":"scope","query":"execute 阶段 风险死路","expected":["decisions/stages.md#D-unmapped-153@v1"],"scope_files":["src/stages/execute.js"],"subset":"added"}
+{"id":"s-scope-05","repo":"sillyspec","face":"scope","query":"CLI 入口 决策","expected":["decisions/cli-entry.md#D-unmapped-161@v1"],"scope_files":["src/index.js"],"subset":"added"}

@@ -15,6 +15,13 @@ export function renderTable(result) {
     for (const [face, m] of Object.entries(result.metrics[repo])) {
       lines.push(`  ${face.padEnd(9)} raw top1=${m.raw.top1} top3=${m.raw.top3} mrr=${m.raw.mrr} n=${m.raw.n}`
         + ` | rendered top1=${m.rendered.top1} top3=${m.rendered.top3} | truncated=${(m.truncated || []).length}`)
+      if (m.subsets) {
+        const parts = Object.entries(m.subsets).map(([k, v]) => `${k}(n=${v.n},top1=${v.top1},top3=${v.top3})`).join(' ')
+        lines.push(`    subsets: ${parts}`)
+      }
+      if (Array.isArray(m.scope_unreachable) && m.scope_unreachable.length > 0) {
+        lines.push(`    scope_unreachable: ${m.scope_unreachable.join('、')}`)
+      }
     }
     const ss = result.self_smoke?.[repo]
     if (ss && ss.cases > 0) {

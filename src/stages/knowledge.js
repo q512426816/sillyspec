@@ -19,7 +19,7 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { parseKnowledgeIndex, keywordMatchesContext } from '../knowledge-match.js'
+import { parseKnowledgeIndex, keywordMatchesContext, normalizeAnchorForCompare } from '../knowledge-match.js'
 import { matchKnowledgeHybrid } from '../knowledge-vector.js'
 
 // ── 工具函数 ──
@@ -27,16 +27,6 @@ import { matchKnowledgeHybrid } from '../knowledge-vector.js'
 function resolveKnowledgeDir(dir, specDir) {
   const base = specDir || join(dir, '.sillyspec')
   return join(base, 'knowledge')
-}
-
-/**
- * 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
- * INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
- * ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
- * 容忍处理。仅用于 validate 告警，不参与命中判定（单一源方向见 T2）。
- */
-function normalizeAnchorForCompare(s) {
-  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
 }
 
 function output(ok, data, error) {

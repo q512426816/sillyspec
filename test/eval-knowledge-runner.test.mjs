@@ -185,6 +185,18 @@ console.log('\n=== Test 11: fr 面 ===')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 }
 
+// ── 12: scope 子集单列（FR-05） ──
+console.log('\n=== Test 12: subsetSummaries ===')
+{
+  const { subsetSummaries } = await import(pathToFileURL(join(root, 'eval', 'knowledge', 'lib', 'faces.mjs')).href)
+  const fr = { details: [{ id: 'a', raw_rank: 1 }, { id: 'b', raw_rank: null }, { id: 'c', raw_rank: 6 }] }
+  const s = subsetSummaries(fr, [
+    { id: 'a', subset: 'frozen' }, { id: 'b', subset: 'added' }, { id: 'c', subset: 'added' },
+  ])
+  assert(s.frozen.n === 1 && s.frozen.top1 === 1, 'frozen 子集单列（1 条 rank1）')
+  assert(s.added.n === 2 && s.added.top3 === 0, 'added 子集单列（rank null 与 6 → top3=0，不掩盖）')
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`eval-knowledge-runner tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

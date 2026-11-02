@@ -8,7 +8,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseDecisionEntries } from '../../../src/knowledge-match.js'
+import { parseDecisionEntries, normalizeAnchorForCompare } from '../../../src/knowledge-match.js'
 import { readFlowState } from '../../../src/flow-state.js'
 
 const FACES = new Set(['entries', 'decisions', 'search', 'scope', 'fr'])
@@ -23,6 +23,10 @@ export function validateOrganicCase(c) {
   if (!c.query || typeof c.query !== 'string' || !c.query.trim()) return 'query'
   if (!Array.isArray(c.expected) || c.expected.length === 0) return 'expected-empty'
   if (c.expected.some((e) => typeof e !== 'string' || !e.trim())) return 'expected-item'
+  if (c.scope_files !== undefined) {
+    if (!Array.isArray(c.scope_files) || c.scope_files.length === 0) return 'scope_files'
+    if (c.scope_files.some((f) => typeof f !== 'string' || !f.trim())) return 'scope_files-item'
+  }
   return null
 }
 
@@ -127,25 +131,23 @@ export function listProbes(fixturesDir) {
 
 /**
  * 标签有效性自检（2026-11-02 复核 P1-①）：expected 的 file 必须存在于目标仓 knowledge 下、
- * 含 # 时 anchor 必须出现在目标文件正文或 INDEX 中——抓「标签指向不存在的锚点」（如 epoch
- * 迁移后 D-id 换了域文件）这类结构性不可命中。宽口径字符串包含（slug/标题形态差异不误判）。
+ * 含 # 时 anchor 必须能以归一化形态在目标文件正文中找到（不再回退 INDEX——防止「anchor 只在
+ * INDEX、heading 已漂移」的旧契约通过自检）；scope_files 必须是目标仓真实存在的文件。
+ * reject 结构性不可命中标签（如 epoch 迁移后 D-id 换了域文件）。
  * @param {Array} cases organic cases
  * @param {Map<string,string>} repoRootByTag 仓标签 → 仓根
- * @returns {Array<{id:string, expected:string, reason:string}>}
+ * @returns {Array<{id:string, expected?:string, reason:string}>}
  */
 export function validateLabels(cases, repoRootByTag) {
   const issues = []
-  const indexCache = new Map()
   for (const c of cases) {
     const root = repoRootByTag.get(c.repo)
     if (!root) continue // 未参与本次运行的仓标签不算标签错误
     const kdir = join(root, '.sillyspec', 'knowledge')
-    if (!indexCache.has(kdir)) {
-      let text = ''
-      try { text = readFileSync(join(kdir, 'INDEX.md'), 'utf8') } catch { /* 无 INDEX = 空 */ }
-      indexCache.set(kdir, text)
+    for (const sf of c.scope_files || []) {
+      const p = join(root, String(sf).replace(/\\/g, '/'))
+      if (!existsSync(p)) issues.push({ id: c.id, expected: sf, reason: 'scope-file-missing' })
     }
-    const indexText = indexCache.get(kdir)
     for (const exp of c.expected) {
       const [file, anchor] = String(exp).split('#')
       const fp = join(kdir, file)
@@ -159,8 +161,9 @@ export function validateLabels(cases, repoRootByTag) {
         issues.push({ id: c.id, expected: exp, reason: 'file-unreadable' })
         continue
       }
-      if (!text.includes(anchor) && !indexText.includes(anchor)) {
-        issues.push({ id: c.id, expected: exp, reason: 'anchor-missing', file })
+      const normAnchor = normalizeAnchorForCompare(anchor)
+      if (!normAnchor || !normalizeAnchorForCompare(text).includes(normAnchor)) {
+        issues.push({ id: c.id, expected: exp, reason: 'anchor-heading-missing', file })
       }
     }
   }
