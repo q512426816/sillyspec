@@ -451,3 +451,135 @@ created_at: 2026-10-15T12:09:39.989Z
   confirmed_at: null
   source_change: 2026-11-02-knowledge-eval
   status: active
+
+## FR-eval-025 score 契约：buildSearchMatches 接收 query、score=实际命中标签数，合成条目输出 channel 字段；probe score-contract 转 GREEN
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：表长不再冒充命中数；合成条目 channel
+场景正文：
+- 场景：表长不再冒充命中数 — Given 某路由行有 4 个关键词而 query 只命中其中 1 个；When 调 search 视图；Then score 必须为 1 且 matchedTags 长度为 1
+- 场景：合成条目 channel — Given 词片回退返回的合成条目 keywords 为查询词片；When 输出 search 视图；Then 该行必须带 channel=fallback，score 按命中词片数计算
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-01
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-01
+  tests: test/knowledge-rank-denoise.test.mjs「score 契约与 channel」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active
+
+## FR-eval-026 词边界：两处统一 _ 为词字符、- 为边界（[^a-z0-9_]）；shingle 抽取保留 _- 整词并额外产出拆分片段；kebab-case 正反例单测（worktree 命中 2026-*-worktree-*、不命中 worktree_apply）
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：下划线不越界；kebab-case 仍可命中；snake_case 词片拆分
+场景正文：
+- 场景：下划线不越界 — Given 关键词 node 与上下文含 node_modules；When 匹配；Then 必须不命中；上下文含独立 node 时必须命中
+- 场景：kebab-case 仍可命中 — Given 关键词 worktree 与上下文 2026-05-29-worktree-isolation；When 匹配；Then 必须命中；上下文 worktree_apply 时必须不命中
+- 场景：snake_case 词片拆分 — Given 查询含 worktree_apply；When 抽取词片；Then 必须同时含 worktree_apply 与 worktree、apply 拆分片段
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-02
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-02
+  tests: test/knowledge-rank-denoise.test.mjs「词边界与词片拆分」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active
+
+## FR-eval-027 已修复过滤：known-issues 分类 + INDEX display/anchor 显式词（已修复/已解决/已退役）判定，fail-open；includeResolved 贯穿 search；resolvedFiltered 披露；probe fixed-entries 转 GREEN
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：默认排除与显式包含；非已修复不误杀
+场景正文：
+- 场景：默认排除与显式包含 — Given 一条 INDEX 行 display 含「已修复」；When 默认 query 命中该行；Then entries 必须不含它且 resolvedFiltered 含该文件；带 --include-resolved 时必须返回
+- 场景：非已修复不误杀 — Given known-issues 中标题含 🟢 但 display/anchor 无显式词（现行事实/债务）；When 默认 query 命中；Then 必须保留（绿色标记不是唯一键）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-03
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-03
+  tests: test/knowledge-rank-denoise.test.mjs「已修复过滤与 includeResolved」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active
+
+## FR-eval-028 routeHits 分离：entries 只留手工条目、新增条件式 routeHits 键、decisionHits 内部全量保留；search/prompt/execute/flow/complete 不丢 routeHits 可见性（指针行）；空 entries 不渲染空知识段；probe route-rows 转 GREEN
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：entries 纯净且决策通道不受影响；空 entries 不渲染空段
+场景正文：
+- 场景：entries 纯净且决策通道不受影响 — Given 查询同时命中手工条目与 decisions 路由行；When 调 matchByRouting；Then entries 只含手工条目、routeHits 含 decisions 文件、decisionHits 非空
+- 场景：空 entries 不渲染空段 — Given 查询只命中 fr/decisions 路由行；When 渲染知识注入段；Then 必须不出段头空段（只出 routeHits 指针行或整段省略）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-04
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-04
+  tests: test/knowledge-rank-denoise.test.mjs「routeHits 分离」 | test/knowledge-tier-denoise.test.mjs「路由行移出 entries 且 decisionHits 保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active
+
+## FR-eval-029 DF 排序：entries 可展示语料为分母、Σ(1/DF) 或命中数优先+DF 破平、合成单测锁泛词不主导；organic entries/search 对比基线并单列候选集缩小影响
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：泛词不主导；确定性
+场景正文：
+- 场景：泛词不主导 — Given 5 条路由行含泛词 sillyspec、1 条含长尾词（两条都命中 query）；When 排序；Then 长尾词条目必须排在泛词条目之前
+- 场景：确定性 — Given 两条条目同分；When 重复运行；Then 顺序必须一致（INDEX 行序 tie-break）
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-05
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-05
+  tests: test/knowledge-rank-denoise.test.mjs「DF 泛词不主导」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active
+
+## FR-eval-030 回归：knowledge 面 20 个测试文件全绿；eval 基线更新（version=1）；scope-manual 记录为变更 2 范围
+变更：2026-11-02-knowledge-rank-denoise
+状态：active
+摘要：探针与基线
+场景正文：
+- 场景：探针与基线 — Given 变更完成；When 跑 eval --smoke 与全量；Then 四类转 GREEN、scope-manual 仍 RED（范围外留档）、baseline version=1
+全文：.sillyspec/changes/archive/2026-11-02-knowledge-rank-denoise/requirements.md#FR-06
+最近确认：18ab28b6313ad55ebae0f53b7f2cbf5d19878b79
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-06
+  tests: test/eval-knowledge-probes.test.mjs「四类探针转绿」 | test/eval-knowledge-runner.test.mjs「基线指标与 details」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-02-knowledge-rank-denoise
+  status: active

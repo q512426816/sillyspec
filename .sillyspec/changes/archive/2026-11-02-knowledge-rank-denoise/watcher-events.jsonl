@@ -1,0 +1,40 @@
+{"ts":1793592233643,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793592233643,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793592233643,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592270420,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：val/knowledge/lib/engine.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793592346083,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793592348661,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592348661,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793592351808,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793592352309,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592352309,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793592447953,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793592450599,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592450599,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793592624767,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-inject.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793592634790,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/knowledge-tier-denoise.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793592742993,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/thin-fr-inject-parity.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793592763905,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793592766121,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592766121,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793592860735,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true,"source":"task-tick"}
+{"ts":1793592861269,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793592861269,"kind":"task-done","stage":"tasks","detail":"checked 4→5","provisional":true}
+{"ts":1793592888072,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/lib/engine.mjs、val/knowledge/baseline.json——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593140229,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true,"source":"task-tick"}
+{"ts":1793593143004,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793593143004,"kind":"task-done","stage":"tasks","detail":"checked 5→6","provisional":true}
+{"ts":1793593146727,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1793593159879,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}
+{"ts":1793593187099,"kind":"commit","stage":null,"detail":"9bfaa74f","provisional":true}
+{"ts":1793593197340,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-11-02-knowledge-rank-denoise/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593223943,"kind":"gate-run","stage":"verify","detail":"门实测 passed（9.6s） · 20261102042022","provisional":true}
+{"ts":1793593279892,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/index.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593580437,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/lib/engine.mjs、eval/knowledge/lib/faces.mjs、eval/knowledge/lib/probes.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593600378,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/lib/dataset.mjs、eval/knowledge/run.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593617017,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：eval/knowledge/datasets/organic.jsonl、eval/knowledge/lib/report.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593716208,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/eval-knowledge-isolation.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593726405,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：test/eval-knowledge-dataset.test.mjs、test/eval-knowledge-runner.test.mjs——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1793593868392,"kind":"commit","stage":null,"detail":"22db72eb","provisional":true}
+{"ts":1793594770184,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1793595312663,"kind":"commit","stage":null,"detail":"18ab28b6","provisional":true}

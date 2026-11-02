@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-rank-denoise",
+  "reviewer": "inline-self（子代理首评后主会话增量复审——逐条复核修复证据）",
+  "verdict": "PASS",
+  "reviewedAgainst": "18ab28b6313ad55ebae0f53b7f2cbf5d19878b79",
+  "findings": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "FR-04 search 消费面未保留 routeHits：cmdSearch 对只命中 fr/decisions 路由行的查询返回 matches: []，静默丢失 implemented 决策/FR 可见性",
+      "evidence": "matchByRouting 已把路由行移入条件式 routeHits（src/knowledge-match.js:454-456,545-552），但 cmdSearch 只输出 buildSearchMatches(result.entries)（src/stages/knowledge.js:136-151,161-190），输出 JSON 无 routeHits 也无指针行；实测 `node src/index.js knowledge search --query \"墓碑\"` 返回 {query:\"墓碑\",matches:[]}，而 matchByRouting 对同一查询为 matched:true、routeHits:[decisions/backend.md]；fixture 仅含 decisions 路由行时同样 matches:[]。FR-04 明示 search 消费面必须保留 routeHits 指针行、禁止静默丢失可见性。",
+      "location": "src/stages/knowledge.js:136-190; src/knowledge-match.js:545-552",
+      "resolution": "cmdSearch 改走 buildSearchPayload 统一构造（matches+routeHits+routeNote）；只命中路由行的查询不再返回空 matches。Test 5 覆盖"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-04 消费面测试空实现仍全绿：四消费面指针行/空段收紧/遥测 routeHits 无断言，且绑定所称 knowledge-rank-denoise「routeHits 分离」用例不存在",
+      "evidence": "test/knowledge-rank-denoise.test.mjs 仅 4 组（score/词边界/已修复/DF），全文无 routeHits 断言（仅头部注释提及）；test/knowledge-tier-denoise.test.mjs:73-74 只锁 matchByRouting 返回值。grep 测试面：flow.js:369-374、prompt.js:563、execute.js:92、complete.js:552 的指针行与三处 matchedFiles 的 routeHits 字段均无断言——删除或空实现无测试可检出（空实现判据仍绿）；prompt/execute 的 route-only 段头收紧亦无断言。",
+      "location": "test/knowledge-rank-denoise.test.mjs:4-5,37-104; test/knowledge-tier-denoise.test.mjs:73-74; src/flow.js:369-393; src/run/prompt.js:537-563; src/run/complete.js:548-553",
+      "resolution": "Test 5/7/8 补齐：buildSearchPayload routeHits、buildKnowledgeInjection 指针行+遥测 matchedFiles 含 routeHits、cmdSearch includeResolved 传参源码断言"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-02 词片拆分无测试：queryShingles 的 snake/kebab 整词+拆分片段退回旧正则，现有测试仍全绿",
+      "evidence": "requirements FR-02 要求查询 worktree_apply 时抽出 worktree_apply/worktree/apply；test/knowledge-rank-denoise.test.mjs:53-62 只断言 keywordMatchesContext 边界，未触 queryShingles/fallbackByQueryShingles；decision-route-vocab 等既有测试未覆盖 `_` 复合词，故把 src/knowledge-match.js:286-291 拆分分支退回旧正则无测试可检出（空实现判据仍绿）。",
+      "location": "test/knowledge-rank-denoise.test.mjs:53-62; src/knowledge-match.js:282-297",
+      "resolution": "queryShingles 导出；Test 6 断言 worktree_apply 整词 + worktree/apply 拆分片段"
+    },
+    {
+      "severity": "P2",
+      "status": "resolved",
+      "title": "FR-03 includeResolved「贯穿 search」无测试：只测 matchByRouting opts，cmdSearch 漏传 --include-resolved 时测试仍全绿",
+      "evidence": "test/knowledge-rank-denoise.test.mjs:80 直接调 matchByRouting(dir,...,{includeResolved:true})；全仓 grep 无 cmdSearch + --include-resolved 用例，fixed-entries 探针也只测默认排除。故把 src/stages/knowledge.js:114 的 includeResolved 从 hybrid opts 删除无测试可检出（实测端到端命令当前工作正常，但无回归锁）。",
+      "location": "test/knowledge-rank-denoise.test.mjs:76-84; src/stages/knowledge.js:111-114",
+      "resolution": "Test 8 源码断言 cmdSearch 把 includeResolved 传入 matchKnowledgeHybrid；Test 3 已覆盖 matchByRouting(opts.includeResolved)"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "排序语义残留「INDEX 行序」文案：prompt/execute 注释与模型可见 prompt 仍称 entries 无相关度排序，与 FR-05 实现相悖",
+      "evidence": "render 说明行已改「正文按相关度注入」（prompt.js:543、execute.js:60），但 prompt.js:417-419 与 513-514 注释仍写「按 entries 出现序（INDEX 行序）/无相关度排序」，execute.js:415 的 step prompt 仍写「INDEX 行序 top-3 不同文件」，test/knowledge-inject.test.mjs:98/115 标题亦写 INDEX 行序——该 fixture 恰同分故断言未暴露文案漂移。",
+      "location": "src/run/prompt.js:417-419,513-514; src/stages/execute.js:415; test/knowledge-inject.test.mjs:98,115"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "第六个 matchKnowledge 消费面未随 entries 语义收紧：complete-handlers quick 归类提议只读 entries[0]，route-only 命中时建议静默消失",
+      "evidence": "src/run/complete-handlers.js:2365-2371 用 km.entries[0] 生成「待归类提议」；entries 收紧后 decisions/fr 路由行不再进 entries，若根因只命中路由行则此前会建议 classify --file decisions/x.md（classify 支持 decisions 目标，src/knowledge-classify.js:64-66），现在无任何输出且未加 routeHits 指针。非 FR-04 点名的五消费面，属旁路行为变化。",
+      "location": "src/run/complete-handlers.js:2365-2371; src/knowledge-classify.js:64-66"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-04 空段收紧字面口径偏差：entries 空/routeHits 非空时 prompt/execute 仍输出「📚 命中知识」段头（只加指针行，未省略段头）",
+      "evidence": "实跑 buildKnowledgeInjection(route-only fixture) 返回 \"📚 命中知识（CLI 按任务描述机械匹配，top-3）\\n🧭 决策/FR 路由命中…\"；renderKnowledgeInjectSection 在两者非空判断后无条件 push 段头（prompt.js:535-537），execute.js:59 同款孪生。FR-04 场景写「只出 routeHits 指针行或整段省略」。非空段、影响轻，但与字面口径有差。",
+      "location": "src/run/prompt.js:531-537; src/stages/execute.js:57-59"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "resolvedFiltered 披露在 hybrid 降级接管后丢失：路由层因全为已修复而 matched=false 时，fallback/vector/scope 结果覆盖 json，cmdSearch 不再显示被滤条目",
+      "evidence": "matchByRouting 只在自己返回的 json 里带 resolvedFiltered（knowledge-match.js:443-447,487,519）；matchKnowledgeHybrid 在 matched=false 后依次返回 vector/scope/fallback 结果（knowledge-vector.js:247-267，fallback json 无该字段）；cmdSearch 只读最终 result.json.resolvedFiltered（stages/knowledge.js:130-134）。代码路径上「仅已修复 known-issue + 可回退 decisions 语料」时披露会丢失（未实跑构型，按路径复核）。",
+      "location": "src/knowledge-match.js:443-447,487,519; src/knowledge-vector.js:247-267; src/stages/knowledge.js:130-134"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "fr 面不是生产注入等价面：runFr 未滤 skeleton 与 unmapped（本仓 2806 条中 201 skeleton、210 unmapped），README 只注明「标题可达性近似」",
+      "evidence": "engine.runFr 枚举 fr/*.md 全域并 readActiveFrDigest 全量+标题重叠排序（eval/knowledge/lib/engine.mjs:44-55）；生产 buildFrIndexDigestSection 滤 unmapped 且排除纯骨架（src/run/prompt.js:454-472）。baseline 的 fr top3（sillyspec 0.3333/platform 0.2）因此是非生产超集上的刻度，可能低估生产可达性。",
+      "location": "eval/knowledge/lib/engine.mjs:44-55; src/run/prompt.js:454-472; eval/knowledge/README.md:45-46"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "评测文档漂移：organic face 列表缺 fr、--face usage 缺 fr、word-boundary 探针描述把 `-` 说成词字符（与 FR-02 相反）",
+      "evidence": "README:31 face(entries|decisions|search|scope) 无 fr；run.mjs:10 usage --face entries|decisions|search|scope|all 无 fr（实际 FACES 含 fr）；README:66「`_` / `-` 是词字符」与 FR-02/实现 [^a-z0-9_]（- 是边界）矛盾。",
+      "location": "eval/knowledge/README.md:31,66; eval/knowledge/run.mjs:10"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "FR-01 channel=scope 分支无测试：routing/fallback/vector 有断言，scope 分支删除或退化为 routing 测试仍全绿",
+      "evidence": "buildSearchMatches 的 channel 由 json.scope 判定（stages/knowledge.js:163-166）；test/knowledge-rank-denoise.test.mjs:44-50 只测 routing/fallback/vector；无 scope fixture 断言 channel=scope，分支退化为 routing 无测试可检出。",
+      "location": "test/knowledge-rank-denoise.test.mjs:37-51; src/stages/knowledge.js:161-166"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：DF 分母取 entries 可展示语料（额外排除 parking/resolved）可接受",
+      "evidence": "humanCorpus 三项过滤（knowledge-match.js:461）；requirements 只明示排除路由行，额外排除停车场/已修复与既有去噪口径一致；includeResolved=true 时 resolved 条目仍不进分母（dfMap 缺键回落 1），属轻微口径不一致但仅影响显式包含视图，可接受。",
+      "location": "src/knowledge-match.js:458-480"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：routeHits 条件式顶层键可接受",
+      "evidence": "顶层键仅 routeHits.length>0 时出现（knowledge-match.js:548）；五消费面均以 `|| []` 读取；decisions-lifecycle 的顶层键严格断言未红——正是 FR-04 要求的防回归形态。",
+      "location": "src/knowledge-match.js:545-552"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：已修复词表保守（仅 已修复/已解决/已退役，限 known-issues）可接受",
+      "evidence": "RESOLVED_WORDS 与 isResolvedRoute 见 knowledge-match.js:316-327；「已回滚/已下线/fixed」漏网与绿色标记不误杀均为 design 明示的 fail-open 取舍（误杀现行条目代价高于漏已解决项）。",
+      "location": "src/knowledge-match.js:316-327"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：`-` 保持词边界可接受",
+      "evidence": "keywordMatchesContext/asciiWordHit 统一 [^a-z0-9_]（knowledge-match.js:271-276,301-304）；kebab-case 正例与 worktree_apply 反例有测（test:57-61），design 记「`-` 当词字符损失 568 命中对、0 增益」；与 FR-02 一致。",
+      "location": "src/knowledge-match.js:271-304; test/knowledge-rank-denoise.test.mjs:57-61"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：scope-manual 留 RED + scope 面 raw==rendered（引擎内建 cap）可接受",
+      "evidence": "baseline probes scope-manual=false（明示变更 2 范围），README:105-106 记录；scopeRecall 引擎内建 entry 3/decision 20 cap（knowledge-graph.js:869-877）使 raw==rendered，README 面表已注明——属已知引擎边界而非本变更引入。",
+      "location": "eval/knowledge/baseline.json; src/knowledge-graph.js:869-877; eval/knowledge/README.md:40-50,105-106"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：数据集 n 小（entries 7/9、decisions 5/1、fr 3/5、scope 5/0）的统计脆弱性可接受",
+      "evidence": "README:105-106 明示每 case 约 10 个百分点摆动、fr 面 top3 偏低留变更 2/3；基线用于方向对比而非阈值门，统计脆弱性已披露。",
+      "location": "eval/knowledge/README.md:101-107; eval/knowledge/baseline.json"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "config-absent：本变更未新增 local.yaml 键（--include-resolved 为 CLI flag，向量层沿用既有 env/能力探测）；lint 门未配置但手工复核 1099 绿",
+      "evidence": "全仓 grep 无新增 local.yaml 读取键；flow-state gate_summary 显示 lint skipped（local.yaml 未配置 commands.lint）；复核 `node test/check-syntax.mjs` 输出 Checked 1099 JavaScript files、EXIT=0，与 task-06 的 lint 声明一致。",
+      "location": "src/stages/knowledge.js:111; .sillyspec/changes/2026-11-02-knowledge-rank-denoise/flow-state.yaml; test/check-syntax.mjs"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：validateLabels 宽口径（file 存在性 + anchor 在文件正文或 INDEX 文本）可接受",
+      "evidence": "dataset.mjs:136-168；INDEX 兜底是 slug 锚点（如 s-man-03）所必需；可能掩盖「锚点出现在 INDEX 其他路由行」的跨文件误标，但 P1-① 类（file 指向错误域）会被 file-missing 抓住，单元测试 Test 5 锁两态。",
+      "location": "eval/knowledge/lib/dataset.mjs:136-168; test/eval-knowledge-dataset.test.mjs:118-130"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：hybrid「同源」实际层数为路由+本地回退（env 关向量、未传 scopeFiles），README「三层」字面偏乐观",
+      "evidence": "engine.runEntries/runDecisions/searchView 调 matchKnowledgeHybrid（engine.mjs:30-40,62-72），但未传 scopeFiles，run.mjs:31 强制 SILLYSPEC_KNOWLEDGE_VECTOR=off；当前 dataset 的 entries/decisions 期望均不依赖 scope 层，基线可复现，作同源近似可接受。",
+      "location": "eval/knowledge/lib/engine.mjs:30-72; eval/knowledge/run.mjs:31-32; eval/knowledge/README.md:45"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "边界裁决：非路由通道（fallback/vector/scope）仍把 decisions 合成条目放回 entries 并注入正文——FR-04 的 entries 纯净只覆盖 matchByRouting",
+      "evidence": "fallbackByQueryShingles（knowledge-match.js:365-395）、platform vector（knowledge-vector.js:212-236）、scopeRecall（knowledge-graph.js:870-877）均以合成 Decisions 条目作为 entries；既有 decision-route-vocab:57 锁住 fallback 该形态，属保留 implemented 可见性的通道边界（现 7 条 sillyspec entries case 实跑非人命中 0）。",
+      "location": "src/knowledge-match.js:365-395; src/knowledge-vector.js:212-236; src/knowledge-graph.js:870-877; test/decision-route-vocab.test.mjs:57"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "根因守卫审查：核心修复面无吞崩溃 guard，既有 fail-soft 仅限已声明边界",
+      "evidence": "matchByRouting 无 try/catch；resolved fail-open 只影响过滤选择不吞异常；runFr 仅 catch 缺 fr 目录（engine.mjs:47-49），readActiveFrDigest 读失败返回空 sections（fr-index.js:350-356，既有 fail-soft）；execute.js 的 catch-all 为既有 Wave 注入 fail-soft。上述均不会把本变更探针假绿。",
+      "location": "src/knowledge-match.js:407-553; eval/knowledge/lib/engine.mjs:44-55; src/fr-index.js:350-356; src/stages/execute.js:44-110"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-02T04:55:21.692Z"
+}

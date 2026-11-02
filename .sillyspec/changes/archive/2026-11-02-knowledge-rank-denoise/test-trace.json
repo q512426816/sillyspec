@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-02-knowledge-rank-denoise",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「score 契约与 channel」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「词边界与词片拆分」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「已修复过滤与 includeResolved」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「routeHits 分离」",
+        "test/knowledge-tier-denoise.test.mjs「路由行移出 entries 且 decisionHits 保留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-05",
+      "tests": [
+        "test/knowledge-rank-denoise.test.mjs「DF 泛词不主导」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-11-02-knowledge-rank-denoise:flow:测试绑定FR-06",
+      "tests": [
+        "test/eval-knowledge-probes.test.mjs「四类探针转绿」",
+        "test/eval-knowledge-runner.test.mjs「基线指标与 details」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-02-knowledge-rank-denoise"
+    }
+  ]
+}

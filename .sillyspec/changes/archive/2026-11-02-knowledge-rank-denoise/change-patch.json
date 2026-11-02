@@ -1,0 +1,228 @@
+{
+  "change": "2026-11-02-knowledge-rank-denoise",
+  "baseline": "6ca826303439beac181a49ecab2a909638d0bb8a",
+  "head": "9bfaa74ffee75c2132b4d40b407b941b00cdd4cb",
+  "files": [
+    "eval/knowledge/README.md",
+    "eval/knowledge/baseline.json",
+    "eval/knowledge/lib/engine.mjs",
+    "src/flow.js",
+    "src/knowledge-match.js",
+    "src/knowledge-vector.js",
+    "src/run/complete.js",
+    "src/run/prompt.js",
+    "src/stages/execute.js",
+    "src/stages/knowledge.js",
+    "test/knowledge-inject.test.mjs",
+    "test/knowledge-rank-denoise.test.mjs",
+    "test/knowledge-tier-denoise.test.mjs",
+    "test/thin-fr-inject-parity.test.mjs"
+  ],
+  "totals": {
+    "files": 14,
+    "additions": 397,
+    "deletions": 169
+  },
+  "savedAt": "2026-11-02T04:20:39.416Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "eval",
+      "files": 3,
+      "doc": "docs/sillyspec/modules/eval.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 4
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "6ca826303439beac181a49ecab2a909638d0bb8a",
+    "totals": {
+      "files": 16,
+      "additions": 397,
+      "deletions": 169
+    },
+    "rows": [
+      {
+        "path": "eval/knowledge/README.md",
+        "additions": 6,
+        "deletions": 4,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "eval/knowledge/baseline.json",
+        "additions": 89,
+        "deletions": 98,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "eval/knowledge/lib/engine.mjs",
+        "additions": 1,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/flow.js",
+        "additions": 7,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-match.js",
+        "additions": 93,
+        "deletions": 18,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/knowledge-vector.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/complete.js",
+        "additions": 6,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/run/prompt.js",
+        "additions": 35,
+        "deletions": 22,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/execute.js",
+        "additions": 13,
+        "deletions": 6,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 30,
+        "deletions": 11,
+        "kind": "modified",
+        "planned": "修改",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-inject.test.mjs",
+        "additions": 2,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/knowledge-rank-denoise.test.mjs",
+        "additions": 109,
+        "deletions": 0,
+        "kind": "new",
+        "planned": "新增",
+        "verdict": "planned"
+      },
+      {
+        "path": "test/knowledge-tier-denoise.test.mjs",
+        "additions": 2,
+        "deletions": 1,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "test/thin-fr-inject-parity.test.mjs",
+        "additions": 3,
+        "deletions": 2,
+        "kind": "modified",
+        "planned": null,
+        "verdict": "unplanned"
+      },
+      {
+        "path": "src/knowledge-stats.js",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      },
+      {
+        "path": "test/knowledge-tier-denoise.test.mjs 等既有断言",
+        "planned": "修改",
+        "additions": 0,
+        "deletions": 0,
+        "kind": "modified",
+        "verdict": "untouched"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "9d54c994cb79e1362f010936d05fdc5b6e466aaacfcfdd412aba36131200cbb3",
+  "patchStatus": "ok"
+}
