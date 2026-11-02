@@ -12,7 +12,7 @@
  */
 import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { splitKnowledgeSections, discoverModuleIndex, joinKnowledgeFile, syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS } from './decision-distill.js'
+import { splitKnowledgeSections, discoverModuleIndex, joinKnowledgeFile, syncIndexRoutingLines, DECISIONS_ROUTE_STRIP_TOKENS, FR_ROUTE_STRIP_TOKENS } from './decision-distill.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { matchedModuleIds, frCoverageFiles, FR_SECTION_RE } from './fr-index.js'
 import { anchorFilePaths } from './knowledge-match.js'
@@ -186,6 +186,12 @@ export async function cmdRedomainUnmapped(dir, args, opts = {}) {
   const mapFile = mapIdx >= 0 ? args[mapIdx + 1] : null
   const emit = (ok, data, error) => console.log(JSON.stringify({ ok, ...data, ...(error ? { error } : {}) }, null, 2))
 
+  // --map 缺值显式拒绝（评审 P2：静默回落启发式通道 = 显式契约被切到投票且带写盘）
+  if (mapIdx >= 0 && (!mapFile || mapFile.startsWith('--'))) {
+    emit(false, {}, { code: 'map_value_required', usage: '--map <file.json>（[{id, domain}]，domain 可为 __prune__）' })
+    return
+  }
+
   if (!existsSync(join(knowledgeRoot, 'INDEX.md'))) {
     emit(false, {}, { code: 'knowledge_dir_missing', path: knowledgeRoot })
     return
@@ -299,7 +305,8 @@ export function pruneUnmappedEntries({ knowledgeRoot, face, anchors }) {
   if (sourceDeleted) unlinkSync(src.fromPath)
   else writeAtomicSync(src.fromPath, joinKnowledgeFile(src.parsed.preamble, staying))
   try {
-    syncIndexRoutingLines(knowledgeRoot, face === 'fr' ? {} : { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
+    // fr 面必须传 FR_ROUTE_STRIP_TOKENS（评审 P2：传 {} 落默认 Decisions 段——fr 裁空后 INDEX 残留幽灵路由行）
+    syncIndexRoutingLines(knowledgeRoot, face === 'fr' ? { stripTokens: FR_ROUTE_STRIP_TOKENS } : { stripTokens: DECISIONS_ROUTE_STRIP_TOKENS })
   } catch { /* INDEX 缺席/同步失败不拦裁剪（幂等可重跑） */ }
   return { pruned, sourceDeleted }
 }
