@@ -130,6 +130,7 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-05-wt-list-resilience
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-05-wt-list-resilience/tasks.md, src/worktree.js, test/worktree-list-resilience.test.mjs, .sillyspec/changes/2026-10-05-wt-list-resilience/apply-manifest.json, .sillyspec/changes/2026-10-05-wt-list-resilience/design.md, .sillyspec/changes/2026-10-05-wt-list-resilience/proposal.md, .sillyspec/changes/2026-10-05-wt-list-resilience/requirements.md
 最近确认：33bc4d2857eb29f15e10f062808e3d9d8eee2385
 理由：最大风险：changeName 兜底目录名后，若某历史注册表目录名与变更名不一致（理论上只在手工改名目录时出现），list/doctor 会按目录名匹配——但该形态下旧行为是 undefined 崩溃/失配，兜底严格更优，不构成回退面。放弃的方案：① 渲染器（index.js）侧判空——只修 CLI 一处，doctor 的 undefined 失配仍在，且 index.js 当前被并行会话在途占用（不可改）；② 写入侧强制补全历史件——要迁移已落盘 meta，读侧问题写侧修，收益错位。均已弃。
 
@@ -138,6 +139,7 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-05-branch-ref-anchor-scope
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-05-branch-ref-anchor-scope/tasks.md, src/worktree.js, test/backlog-final-batch.test.mjs, test/branch-ref-anchor-scope.test.mjs, .sillyspec/changes/2026-10-05-branch-ref-anchor-scope/design.md, .sillyspec/changes/2026-10-05-branch-ref-anchor-scope/proposal.md, .sillyspec/changes/2026-10-05-branch-ref-anchor-scope/requirements.md
 最近确认：4983de1d7330240faeeabe6d47ca9b80f7f0c3bc
 理由：最大风险：主仓 HEAD 恰好不含某历史 hash 但另一常驻 ref（如 origin/main）含——探针二判「不在主仓可达」→ 误锚（多余 tag，不删任何东西，安全方向）；反之不存在漏锚面：hash 要悬空必须同时在分支上且不在任何常驻 ref，而探针二只看 HEAD 这一个 ref——HEAD 不含而 origin/main 含的场景锚定是多余的但无害。放弃的方案：① 枚举全部 refs 逐一判可达——覆盖更全但 N 探针成本与配置面（remote 名不确定）不成比例，且收益仅是少打几个无害 tag；② 改为 rev-list branch ^HEAD 取分支独有集再做集合判——语义等价但一次性拉全集在候选仅个位数时反而更重。均已弃。
 
@@ -146,6 +148,7 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-06-git-optional-locks
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-06-git-optional-locks/tasks.md, src/git-helper.js, test/git-optional-locks.test.mjs, .sillyspec/changes/2026-10-06-git-optional-locks/design.md, .sillyspec/changes/2026-10-06-git-optional-locks/proposal.md, .sillyspec/changes/2026-10-06-git-optional-locks/requirements.md
 最近确认：549d1fd1ad01c69a24799dc22016c6fe1a976dac
 理由：最大风险：读命令不再刷新 stat 缓存，后续读每次都要重扫文件 stat——大仓上 status 略慢、index 文件 mtime 不再被本工具更新。可接受：正确性无差（status 结果仍如实反映工作区），性能差在毫秒级轮询场景不可观测。 放弃的方案：①逐调用点加 `--no-optional-locks` flag——放弃，只覆盖被改的调用点且维护面碎；watcher/后台全覆盖需要枚举改点，恰是要避免的形态。②在 stageArchiveSourceSideMoves 里对 lock 类错误做有界重试——放弃（本变更时点）：重试是下游补丁，治标；上游消灭锁窗口后本工具自扰的锁冲突已不存在，外部进程的偶发冲突由 archive-stage-claim 的告警面兜住。若外部冲突实测高频再议。
 
@@ -154,6 +157,7 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-10-worktree-salvage-archive-aware
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/design.md, .sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/flow-state.yaml, .sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/proposal.md, .sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/requirements.md, .sillyspec/changes/2026-10-10-worktree-salvage-archive-aware/tasks.md, src/worktree.js, test/worktree-spec-salvage.test.mjs
 最近确认：e6ac0ef313acd83af9d5626877be05e58fa9b67d
 理由：最大风险：归档副本存在但 worktree 副本更新（归档后子代理又向 worktree 写入的极端时序）——本设计以 archive 副本为权威静默跳过（warn 有计数与路径清单，人工可对账），不自动覆盖，避免把「更旧快照复活」换成「更新内容覆盖归档件」的对称事故。试过放弃的方案：① 调用方传 archived flag——五入口逐一接线，漏一处即复活，且 doctor 入口判定口径（worktree.js:1795）与打捞内判定会形成两套真相；② 归档态整树跳过——「两处均缺」的真独有产物会随清理蒸发，违背打捞初衷（坑 worktree-spec-artifact-misplace）；③ 内容比对 archive 副本差异列入冲突清单——事故场景 13 文件全部内容有差（旧快照 vs 终版），全列纯噪音。
 
@@ -192,6 +196,7 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-10-repo-inline-worktree-placement
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-10-repo-inline-worktree-placement/design.md, .sillyspec/changes/2026-10-10-repo-inline-worktree-placement/flow-state.yaml, .sillyspec/changes/2026-10-10-repo-inline-worktree-placement/proposal.md, .sillyspec/changes/2026-10-10-repo-inline-worktree-placement/requirements.md, .sillyspec/changes/2026-10-10-repo-inline-worktree-placement/tasks.md, src/config-schema.js, src/hooks/worktree-guard.js, src/stages/plan-postcheck.js, src/worktree-cross.js, src/worktree-deps.js, test/cross-worktree-placement.test.mjs, test/parse-repo.test.mjs, test/worktree-deps-sibling-repo.test.mjs, test/worktree-guard-cross-repo-cd.test.mjs, .sillyspec/changes/2026-10-10-repo-inline-worktree-placement/review.json
 最近确认：1afcd83db8d1680f0ca8146c043294ca9fdc1549
 理由：最大风险：三处手写 YAML 解析（plan-postcheck 内核、guard parseSimpleYaml 产物消费、deps 内联 IIFE）对同一对象形态的解析漂移——缓解：内核 `_parseRepoEntries` 单一事实源 + 旁路两处各自的最小升级 + 三处都有形态级测试（场景 16/17、guard-cd 既有回归、sibling-repo 既有回归）。试过但放弃的方案：直接删除 worktree.crossPlacement（未发布、干净迁移）——上一变更刚归档发号 FR-setup-083~089（knowledge/fr 已入库），删除需 supersede 对账且破坏「归档件即事实」原则；保留兼容读面零成本（readCrossPlacementConfig 已存在），优先级内联 > legacy 平滑迁移。
 
@@ -200,5 +205,6 @@ created_at: 2026-08-23T22:40:00+08:00
 变更：2026-10-10-cross-wt-repo-local-placement
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/design.md, .sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/flow-state.yaml, .sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/proposal.md, .sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/requirements.md, .sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/tasks.md, src/cross-placement.js, src/cross-repo-reconcile.js, src/run/multi-repo-context.js, src/worktree-cross.js, test/cross-repo-worktree-isolation.test.mjs, test/cross-worktree-placement.test.mjs, .sillyspec/changes/2026-10-10-cross-wt-repo-local-placement/review.json.superseded-20261010T115347
 最近确认：cb90e30eeb36c5ac9d5b9486ddd9c1a13191df15
 理由：最大风险：R-01 跨仓仓的 .git 目录只读/异常导致 exclude 写失败（warn 降级，worktree 成 untracked 噪音——apply 清单校验兜底，不阻断）；R-02 仓内 .sillyspec 目录会被用户的 IDE 全局搜索/索引扫到重复内容（主仓同形态用户已习惯，execute 期临时存在、cleanup 即删）；R-03 候选寻址的探测顺序依赖注册表权威性——注册表条目指向已亡目录而旧公式处恰有他者残留 meta 时会误命中（注册表写读同链路维护，残留面与 sweep 治理重合）。 试过但放弃的方案：自动兄弟目录（<path> 旁猜一个 sillyspec-worktrees）——向用户仓外未知位置写目录侵入性大且名字无约定，仓内受控命名空间（.sillyspec/）语义更干净；删除旧公式兜底（注册表已够）——存量 worktree（升级前的变更收口中断态）会失联，兼容成本为零则不做断崖。

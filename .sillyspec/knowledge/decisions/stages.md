@@ -191,6 +191,7 @@ supersedes：D-001@v1 的「落点 validateCrossTaskContracts 预检」条目；
 变更：2026-09-26-review-unsupervised-exit
 原编号：D-001@v1
 锚点：未记录
+文件：src/run/gates.js, src/stages/brainstorm.js, src/stages/execute.js, src/stages/plan.js, test/review-unsupervised-exit.test.mjs, .sillyspec/changes/2026-09-26-review-unsupervised-exit/design.md, .sillyspec/changes/2026-09-26-review-unsupervised-exit/flow-state.yaml, .sillyspec/changes/2026-09-26-review-unsupervised-exit/proposal.md, .sillyspec/changes/2026-09-26-review-unsupervised-exit/requirements.md, .sillyspec/changes/2026-09-26-review-unsupervised-exit/tasks.md
 最近确认：0675d7d76cbde1b21ef55d24dbe8f135048c78c0
 理由：最大风险=豁免被滥用（有派发能力的环境也写声明逃避评审）——对抗面：声明是显式自曝文件随归档公开（审计可见）+遥测可观测豁免率（异常升高可查）+指引明示「有派发能力时豁免不适用」；不做密码学强验（agent 环境能力 CLI 无法机器判定——诚实暴露优于伪检测）。死路：CLI 检测派发能力（harness 工具集对 CLI 不可见）——伪检测比声明制更假，弃；死路：豁免凭据用 env/flag（不落盘不留痕=可静默滥用）——文件制随归档，弃。
 
@@ -199,6 +200,7 @@ supersedes：D-001@v1 的「落点 validateCrossTaskContracts 预检」条目；
 变更：2026-10-06-verify-friction-fix
 原编号：D-001@v1
 锚点：未记录
+文件：.sillyspec/changes/2026-10-06-verify-friction-fix/design.md, .sillyspec/changes/2026-10-06-verify-friction-fix/flow-state.yaml, .sillyspec/changes/2026-10-06-verify-friction-fix/proposal.md, .sillyspec/changes/2026-10-06-verify-friction-fix/requirements.md, .sillyspec/changes/2026-10-06-verify-friction-fix/tasks.md, docs/sillyspec/platform-interface-map.md, package.json, src/design-facts.js, src/index.js, src/machine-interface.js, src/stages/plan-postcheck.js, src/stages/plan.js, src/taskcard-frontmatter.js, src/verify-probes.js, templates/prompts/taskcard-rules.md, test/gate-last-reader.test.mjs, test/taskcard-yaml-triage-validate.test.mjs, test/verify-probes-refresh-backup.test.mjs
 最近确认：2faced26e0c4129d1489655c68b78a21c1cbc90a
 理由：最大风险：refresh 的「已手填」判定依赖占位标记启发（`<待填`/`<!--TODO` 缺席 = 已填）——探针 1/3/5/6 这类直接渲染结论行、永无占位的段永远判 kept，预填过期要靠 --force（有备份兜底）；反向误判（agent 在段内追加叙述但占位仍在）会连带被替换，靠前置备份 + 逐段报告暴露，属可接受残余。试过但放弃：① 按「新旧渲染逐字节 diff」判定未触碰——需保存历史渲染指纹，gate 抽查机制已占用该信号位，复杂度不成比例；② refresh 时整段保留已填行、只重排未填行——行级携载已覆盖 38 格矩阵主场景，全行保真方案把 stale 行永远带下去；③ 给 gate last 加 --full 重跑——那正是要消灭的超时路径，读盘 3ms 解决。第二个风险：声明宽收的「不涉及接口」可能在个别 design 的无关散文中出现而误判 declared=0——影响面是 API 矩阵渲染少一行（advisory 层），且数字声明优先，已在测试钉住优先序。
 
