@@ -153,7 +153,7 @@ SillySpec CLI — 规范驱动开发工具包
                                       影子存档面：列出 task tick 自动落的存档链，预览/按路径读档
   sillyspec overlap                  查询活跃变更 target-file 声明重叠（advisory——检出即附
                                       worktree 分流与落地序列指引）
-  sillyspec knowledge <search --query "..." --limit N [--include-resolved]
+  sillyspec knowledge <search "<关键词>" [--limit N] [--include-resolved]（--query 等效）
                         | inspect --id "..."
                         | validate | refresh
                         | propose --title "..." --category <name>

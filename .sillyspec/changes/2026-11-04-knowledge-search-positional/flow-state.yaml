@@ -1,0 +1,35 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+born_face: thin
+with_tasks: false
+review_force: null
+input: >-
+  knowledge search 支持位置参数形态
+
+
+  动机：平台仓反馈（2026-11-04）——AGENTS.md 写的用法是 sillyspec knowledge search "<关键词>"，但 CLI 实际要求 --query 显式 flag，文档与 CLI 不一致；且
+  AGENTS.md 由 init 分发、存量仓不随模板更新自动刷新，只改文档无法治愈存量仓。
+
+
+  成功标准：
+
+  - sillyspec knowledge search "关键词"（位置参数形态）与 --query "关键词" 等效可用
+
+  - --query 显式形态保持兼容，两形态并存时 --query 优先
+
+  - flag-as-value 防护语义保持（--query 后跟 flag 字面量仍按缺参处理）
+
+  - AGENTS.md 模板与 CLI help 的用法说明与实际行为一致
+autopilot: false
+prestage_ack: true
+baseline_commit: 3b816dce7802a9ae9a321b8332ea9f680886b817
+updatedAt: '2026-11-03T16:29:16.286Z'
+baseline_sha256: b58a5e13b277e7586cbc90f5cd7bcae42ead29614f164d7167a4e9f0519abe11
+spec_approved: true
+spec_approved_at: '2026-11-03T16:25:46.386Z'
+spec_approved_by: zcode-knowledge-search-positional
+spec_approved_channel: user-confirmed
+spec_attested_by: zcode-knowledge-search-positional
+

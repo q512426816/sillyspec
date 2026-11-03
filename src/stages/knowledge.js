@@ -75,13 +75,28 @@ function extractTitle(content) {
 
 // ── search ──
 
+// 位置参数取词（2026-11-04-knowledge-search-positional）：--query 缺失时取首个非 flag
+// 且非 flag 值的 token 作查询词（AGENTS.md 模板形态 search "<关键词>"）。跳过 '--' 开头
+// token 与 --limit 的值 token——防 ['--limit','2'] 的 '2' 被误拾；flag 字面量永不入查询词
+// （flag-as-value 坑语义保持：--query 后跟 flag 仍按缺参，不从残参里捡词）。
+function positionalQuery(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--limit') { i += 1; continue }
+    if (a.startsWith('--')) continue
+    return a
+  }
+  return ''
+}
+
 export async function cmdSearch(dir, args, opts = {}) {
   const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
   // flag-as-value 防护（坑 knowledge-flag-as-value）：值以 '--' 开头视为漏传（只读命令，
   // 按缺参处理落入既有 required 校验/默认值，不静默拿 flag 字面量当查询词）
   const queryIdx = args.indexOf('--query')
   const queryRaw = queryIdx >= 0 ? args[queryIdx + 1] : ''
-  const query = queryRaw && !queryRaw.startsWith('--') ? queryRaw : ''
+  // --query 优先（显式压过位置推断）；缺失时回退位置参数形态
+  const query = (queryRaw && !queryRaw.startsWith('--') ? queryRaw : '') || positionalQuery(args)
   const limitIdx = args.indexOf('--limit')
   const limitRaw = limitIdx >= 0 ? args[limitIdx + 1] : ''
   const parsedLimit = limitRaw && !limitRaw.startsWith('--') ? parseInt(limitRaw, 10) : NaN
@@ -652,7 +667,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       '用法: sillyspec knowledge <子命令> [参数]',
       '',
       '子命令:',
-      '  search "<关键词>"     检索知识库（命中自动注入 prompt 的同源面）',
+      '  search "<关键词>"     检索知识库（--query 等效；命中自动注入 prompt 的同源面）',
       '  inspect <文件>        查看单个知识文件条目结构',
       '  validate              校验知识库完整性（INDEX 锚点/注册/幽灵条目——纯读）',
       '  digest                治理信号卡（rot/伪域/坏绑定——纯读）',
