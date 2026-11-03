@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-knowledge-search-positional",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "reviewedAgainst": "0a3d053e9c5d0c48732814c83a97da4be224a99c",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "「flag-as-value 仍按缺参」声明在残参含位置词时不成立（未声明边界）",
+      "evidence": "实测 cmdSearch(dir,['--query','--limit','3','词']) 经由 positionalQuery 回退取得 query='词' 正常执行而非缺参——design 接口契约「flag-as-value（--query --limit）仍按缺参」与 src/stages/knowledge.js:80-81 代码注释「不从残参里捡词」只在残参无位置词时成立；行为本身可辩护（用户确供了查询词）但声明过宽且该角落无测试覆盖，建议收窄措辞或补用例。",
+      "location": "src/stages/knowledge.js:99"
+    },
+    {
+      "severity": "P3",
+      "status": "accepted",
+      "title": "「-- 开头查询词必须走 --query」的逃生口实为两形态皆不可达",
+      "evidence": "queryRaw.startsWith('--') 既有防护使 --query 同样拒收 '--' 前缀值（src/stages/knowledge.js:99 左支），声明的「必须走 --query」是死路；属病态输入+变更前既有限制，本变更未加剧，位置形态侧（flag 字面量永不入词）已如实兑现。",
+      "location": "src/stages/knowledge.js:99"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "T2 第二断言恒真（空断言），「位置词不泄漏」实际未被有效验证",
+      "evidence": "ok(!JSON.stringify(r).includes('位置词') || r.query === '知识图谱') 的右析取支与断言一完全同式——断言一通过则本断言永真，不具独立判别力；FR-02 核心行为（--query 优先）由断言一真实覆盖，此处仅为测试质量毛刺，删去右析取支即修复。",
+      "location": "test/knowledge-search-positional.test.mjs:83"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-11-03T16:34:55Z"
+}

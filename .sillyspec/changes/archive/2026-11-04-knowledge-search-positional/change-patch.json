@@ -1,0 +1,86 @@
+{
+  "change": "2026-11-04-knowledge-search-positional",
+  "baseline": "3b816dce7802a9ae9a321b8332ea9f680886b817",
+  "head": "0a3d053e9c5d0c48732814c83a97da4be224a99c",
+  "files": [
+    "src/index.js",
+    "src/stages/knowledge.js",
+    "test/knowledge-search-positional.test.mjs"
+  ],
+  "totals": {
+    "files": 3,
+    "additions": 134,
+    "deletions": 3
+  },
+  "savedAt": "2026-11-03T16:30:48.083Z",
+  "note": "flow done 时点冻结（本变更可归属交付面：baseline..HEAD 提交面过滤 .sillyspec/ 只留 .sillyspec/docs/ 交付文档 + 独占树未提交交付；治理工件目录不入冻结——2026-10-12-close-trace-freeze-integrity FR-01）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "scopeAudit": {
+    "mode": "full-flow",
+    "ok": true,
+    "degradedReason": null,
+    "baseAnchor": "3b816dce7802a9ae9a321b8332ea9f680886b817",
+    "totals": {
+      "files": 3,
+      "additions": 134,
+      "deletions": 3
+    },
+    "rows": [
+      {
+        "path": "src/index.js",
+        "additions": 1,
+        "deletions": 1,
+        "kind": "modified"
+      },
+      {
+        "path": "src/stages/knowledge.js",
+        "additions": 17,
+        "deletions": 2,
+        "kind": "modified"
+      },
+      {
+        "path": "test/knowledge-search-positional.test.mjs",
+        "additions": 116,
+        "deletions": 0,
+        "kind": "new"
+      }
+    ],
+    "excluded": {
+      "foreignDeclared": []
+    },
+    "note": "flow done 时点冻结（本文件落盘时采集）",
+    "closedBy": "flow done"
+  },
+  "patchSha256": "7663f753dcdd06c8de23d83b71f756057fc564238853923f4a2731114b31e311",
+  "patchStatus": "ok"
+}

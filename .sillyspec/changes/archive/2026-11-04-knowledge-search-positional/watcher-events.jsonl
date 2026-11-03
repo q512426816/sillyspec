@@ -1,0 +1,18 @@
+{"ts":1793722850672,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1793722870736,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793723133160,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1793723316525,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true,"source":"task-tick"}
+{"ts":1793723319402,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793723319402,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1793723322968,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true,"source":"task-tick"}
+{"ts":1793723323122,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793723323122,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1793723326626,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true,"source":"task-tick"}
+{"ts":1793723326645,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793723326645,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1793723330857,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true,"source":"task-tick"}
+{"ts":1793723333655,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1793723333655,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1793723350383,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1793723409292,"kind":"commit","stage":null,"detail":"0a3d053e","provisional":true}
+{"ts":1793723439038,"kind":"gate-run","stage":"verify","detail":"门实测 passed（4.9s） · 20261103163036","provisional":true}

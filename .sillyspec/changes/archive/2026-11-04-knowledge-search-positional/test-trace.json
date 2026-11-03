@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-11-04-knowledge-search-positional",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-11-04-knowledge-search-positional:flow:测试绑定FR-01",
+      "tests": [
+        "test/knowledge-search-positional.test.mjs「T1 位置参数与 --query 等效」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-knowledge-search-positional"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-11-04-knowledge-search-positional:flow:测试绑定FR-02",
+      "tests": [
+        "test/knowledge-search-positional.test.mjs「T2 两形态并存 --query 优先」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-knowledge-search-positional"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-11-04-knowledge-search-positional:flow:测试绑定FR-03",
+      "tests": [
+        "test/knowledge-search-positional.test.mjs「T3 flag-as-value 防护保持」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-knowledge-search-positional"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-11-04-knowledge-search-positional:flow:测试绑定FR-04",
+      "tests": [
+        "test/knowledge-search-positional.test.mjs「T4 help 面位置参数形态一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-11-04-knowledge-search-positional"
+    }
+  ]
+}

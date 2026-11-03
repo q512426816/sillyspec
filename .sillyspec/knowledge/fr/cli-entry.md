@@ -12046,3 +12046,79 @@ superseded_by：FR-core-engine-142
   confirmed_at: null
   source_change: 2026-11-02-slot4-harvest-retire
   status: active
+
+## FR-cli-entry-636 sillyspec knowledge search "关键词"（位置参数形态）与 --query "关键词" 等效可用
+变更：2026-11-04-knowledge-search-positional
+状态：active
+摘要：主路径；位置参数与 --limit 混排
+全文：.sillyspec/changes/archive/2026-11-04-knowledge-search-positional/requirements.md#FR-01
+最近确认：0a3d053e9c5d0c48732814c83a97da4be224a99c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-knowledge-search-positional:flow:测试绑定FR-01
+  tests: test/knowledge-search-positional.test.mjs「T1 位置参数与 --query 等效」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-knowledge-search-positional
+  status: active
+
+## FR-cli-entry-637 --query 显式形态保持兼容，两形态并存时 --query 优先
+变更：2026-11-04-knowledge-search-positional
+状态：active
+摘要：两形态并存
+全文：.sillyspec/changes/archive/2026-11-04-knowledge-search-positional/requirements.md#FR-02
+最近确认：0a3d053e9c5d0c48732814c83a97da4be224a99c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-knowledge-search-positional:flow:测试绑定FR-02
+  tests: test/knowledge-search-positional.test.mjs「T2 两形态并存 --query 优先」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-knowledge-search-positional
+  status: active
+
+## FR-cli-entry-638 flag-as-value 防护语义保持（--query 后跟 flag 字面量仍按缺参处理）
+变更：2026-11-04-knowledge-search-positional
+状态：active
+摘要：flag-as-value 既有坑
+全文：.sillyspec/changes/archive/2026-11-04-knowledge-search-positional/requirements.md#FR-03
+最近确认：0a3d053e9c5d0c48732814c83a97da4be224a99c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-knowledge-search-positional:flow:测试绑定FR-03
+  tests: test/knowledge-search-positional.test.mjs「T3 flag-as-value 防护保持」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-knowledge-search-positional
+  status: active
+
+## FR-cli-entry-639 AGENTS.md 模板与 CLI help 的用法说明与实际行为一致
+变更：2026-11-04-knowledge-search-positional
+状态：active
+摘要：help 面一致性
+全文：.sillyspec/changes/archive/2026-11-04-knowledge-search-positional/requirements.md#FR-04
+最近确认：0a3d053e9c5d0c48732814c83a97da4be224a99c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-11-04-knowledge-search-positional:flow:测试绑定FR-04
+  tests: test/knowledge-search-positional.test.mjs「T4 help 面位置参数形态一致」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-11-04-knowledge-search-positional
+  status: active

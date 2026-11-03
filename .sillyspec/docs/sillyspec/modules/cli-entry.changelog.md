@@ -106,3 +106,4 @@
 | 2026-11-02 | 2026-11-02-knowledge-engine-tail | 检索引擎遗留收尾：向量融合与图卫生 |
 | 2026-11-02 | 2026-11-02-constraint-mechanize | 约束力机制化：规约 00 反例与事故转写字段 |
 | 2026-11-02 | 2026-11-02-slot4-harvest-retire | 槽4 底稿收割源头下线 |
+| 2026-11-03 | 2026-11-04-knowledge-search-positional | knowledge search 支持位置参数形态 |
