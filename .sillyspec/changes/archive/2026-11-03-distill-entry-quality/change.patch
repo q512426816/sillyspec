@@ -1,0 +1,59 @@
+diff --git a/backend/app/modules/knowledge/distill.py b/backend/app/modules/knowledge/distill.py
+index 129dfbd0c..2667e81ff 100644
+--- a/backend/app/modules/knowledge/distill.py
++++ b/backend/app/modules/knowledge/distill.py
+@@ -169,6 +169,10 @@ def build_distill_prompt(
+       2026-11-03 加固：文样改为「落盘前 ls 核验、悬空回落 cwd .sillyspec 并
+       留痕偏差」，删除失实的「会话结束自动上行」承诺；propose 命令换单引号
+       body + ``--from`` 来源标记；新增公共回流确认段（显式 platform sync）。
++      2026-11-03 条目质量加固（distill-entry-quality）：提炼要求第 2 条字段
++      清单扩展「适用条件与反例」并附编辑实录句（以实际落盘差异为准，不只写
++      修改意图），新增第 3 条断言实证纪律（会话事实支撑/超实证承诺收窄/禁推
++      测性断言），查重条目顺延为第 4 条。
+ 
+     quick-2dba0118：quick 式来源指引改为**条目级**——quicklog 是单文件多条目
+     形态（QUICKLOG-*.md 内 ``## <ql-id>`` 节），不再指 ``<ql>.md`` 独立文件
+@@ -238,8 +242,9 @@ def build_distill_prompt(
+         "1. 只保留值得长期复用的知识：踩坑与解法、可复用模式、平台约定与契约；忽略过程性"
+         "描述与一次性信息。宁缺毋滥：通常 2～5 条，确无可沉淀内容时直接汇报「本批无候选」，"
+         "不硬凑。\n"
+-        "2. 每条知识独立成条，标题概括问题本身，正文用 Markdown 写清「问题、解法、证据（文件/提交）、适用条件」。\n"
+-        '3. 动笔前先查重：sillyspec knowledge search --query "<关键词>"（必须用 --query 传参）；'
++        "2. 每条知识独立成条，标题概括问题本身，正文用 Markdown 写清「问题、解法、证据（文件/提交）、适用条件与反例」：适用条件写明何时适用，反例写明何时不适用或不能推广到的场景，防止条目被下游当成无条件规则；记录修复或方案取舍时，以实际落盘的编辑与最终差异为准，不得只写修改意图。\n"
++        "3. 每条断言都要有会话事实支撑（文件路径、提交、命令输出或用户原话）；「支持/自动/无需」类承诺超出实证范围时收窄表述或补证据，禁止写推测性断言。\n"
++        '4. 动笔前先查重：sillyspec knowledge search --query "<关键词>"（必须用 --query 传参）；'
+         "命中相近条目时沿用其原标题重提——同题即幂等更新，不会产生重复条目。\n"
+         f"{focus_line}"
+         "\n落盘方式（每条都必须走 sillyspec knowledge propose 写入，禁止用其它任何写文件方式"
+diff --git a/backend/app/modules/knowledge/tests/test_distill.py b/backend/app/modules/knowledge/tests/test_distill.py
+index 0a64d461f..725c8257d 100644
+--- a/backend/app/modules/knowledge/tests/test_distill.py
++++ b/backend/app/modules/knowledge/tests/test_distill.py
+@@ -789,7 +789,9 @@ def test_build_distill_prompt_session_fresh_requires_export_name() -> None:
+ def test_build_distill_prompt_spec_dir_propose_guidance() -> None:
+     """洞二回流指引（2026-11-03 加固）：propose 命令单引号 body + --from 来源标记；
+     spec_dir 段改 ls 核验回落（删「自动上行/无需手动同步」失实表述）；全形态（含
+-    spec_dir=None 旧形）含回流确认段与查重/幂等/数量指引。"""
++    spec_dir=None 旧形）含回流确认段与查重/幂等/数量指引。
++    2026-11-03 条目质量加固（distill-entry-quality）：字段扩展「适用条件与反例」+
++    编辑实录句（实际落盘差异而非修改意图）+ 断言实证纪律条目，全形态一致。"""
+     spec_dir = "~/.sillyhub/daemon/specs/ws-1"
+     fresh_session = build_distill_prompt(
+         "session", "sid-1", None, export_name="distill-source-sid-1.md", spec_dir=spec_dir
+@@ -820,6 +822,16 @@ def test_build_distill_prompt_spec_dir_propose_guidance() -> None:
+         # FR-03：回流确认段全形态存在（含未连接平台的留痕要求）。
+         assert "sillyspec platform sync" in prompt, label
+         assert "未回流" in prompt, label
++        # distill-entry-quality FR-01：字段清单扩展「适用条件与反例」+ 反例释义句。
++        assert "适用条件与反例" in prompt, label
++        assert "不能推广到的场景" in prompt, label
++        assert "无条件规则" in prompt, label
++        # distill-entry-quality FR-02：编辑实录——实际落盘差异而非修改意图。
++        assert "以实际落盘的编辑与最终差异为准" in prompt, label
++        assert "不得只写修改意图" in prompt, label
++        # distill-entry-quality FR-03：断言实证纪律（查重条目顺延不丢）。
++        assert "会话事实支撑" in prompt, label
++        assert "推测性断言" in prompt, label
+     for label, prompt in (
+         ("fresh_session", fresh_session),
+         ("resume_session", resume_session),
